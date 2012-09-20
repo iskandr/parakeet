@@ -1,4 +1,4 @@
-parakeet
-========
+parakeet2
+=========
 
-Parallelizing runtime compiler for numerical Python 
+Parakeet in All Python
