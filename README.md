@@ -1,4 +1,5 @@
-parakeet2
-=========
+Parakeet: Parallelizing runtime compiler for numerical Python
 
-Parakeet in All Python
+=========
+Rewritten in pure Python for sanity (so long OCaml, we'll miss you). 
+ 
