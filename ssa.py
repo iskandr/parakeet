@@ -8,7 +8,7 @@ class Assign(Stmt):
     self.lhs = lhs
     self.rhs = rhs
 
-class If(stmt):
+class If(Stmt):
   def __init__(self, cond, true, false, merge=None):
     self.cond = cond
     self.true = true
@@ -17,7 +17,7 @@ class If(stmt):
     self.merge = merge 
     
 
-class While(stmt):
+class While(Stmt):
   """A loop consists of a header, which runs 
      before each iteration, a condition for 
      continuing, the body of the loop, 
@@ -25,13 +25,12 @@ class While(stmt):
      nodes for incoming and outgoing variables
      of the form [(new_var1, (old_var1,old_var2)]
    """
-  def __init__(self, 
-    header, cond_expr, body, merge_before = None, merge_after = None):
+  def __init__(self, header, cond, body, phi_before = None, phi_after = None):
     self.header 
-    self.cond_expr = cond_expr
+    self.cond = cond
     self.body = body
-    self.merge_before = merge_before
-    self.merge_after = merge_after 
+    self.phi_before = phi_before
+    self.phi_after = phi_after 
  
 class Expr:
   pass
@@ -54,19 +53,19 @@ class Binop(Expr):
 
 
 class Const(Expr):
-  def __init__(self, value, type = None):
+  def __init__(self, value, t = None):
     self.value = value
-    self.type = type
+    self.type = t
 
 class Var(Expr):
-  def __init__(self, id, type = None):
-    self.id = id
-    self.type = type
+  def __init__(self, name, t = None):
+    self.name = name
+    self.type = t
 
 class Tuple(Expr):
-  def __init__(self, elts, type = None):
+  def __init__(self, elts, t = None):
     self.elts = elts 
-    self.type = type 
+    self.type = t 
 
 class Fn:
   def __init__(self, body, arg_names, defaults, global_vars, types = None):

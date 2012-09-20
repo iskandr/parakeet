@@ -1,17 +1,12 @@
 import numpy as np 
+from tree import TreeLike
 
-class Type:
-  def __init__(self):
-    raise RuntimeError("Can't create abstract base type")
- 
-  def dtype(self):
-    raise RuntimeError("dtype not implemented")
-  
+class Type(TreeLike):  
   def nbytes(self):
     raise RuntimeError("nbytes not implemented")
     
 
-def byte_sizes = { 
+byte_sizes = { 
   np.int8 : 1, 
   np.int16 : 2, 
   np.int32 : 4, 
@@ -28,14 +23,12 @@ def byte_sizes = {
 # don't actually tag any values with this
 class Scalar(Type):
   rank = 0
-  def __init__(self, dtype):
-    self.dtype = dtype 
-
+  _members = ['dtype']
+  
   def __eq__(self, other):
-    return isinstance(other, Scalar) and \
-      other.dtype == self.dtype 
+    return isinstance(other, Scalar) and other.dtype == self.dtype 
 
-  def __str__(self):
+  def __repr__(self):
     return str(self.dtype)
 
   def is_float(self):
@@ -51,18 +44,19 @@ class CompoundType(Type):
   pass 
 
 class Array(CompoundType):
+  _members = ['elt_type', 'rank']
+  
   def __init__(self, elt_type, rank):
-    assert elt_t.is_scalar
-    self.elt_type = elt_type 
-    self.rank = rank 
+    assert isinstance(elt_type, Scalar)
+    CompoundType.__init__(elt_type, rank)
 
   def nbytes(self):
     raise RuntimeError("Can't get size of an array just from its type")  
 
   def dtype(self):
-    return elt_type.dtype()
+    return self.elt_type.dtype()
  
-  def __str__(self):
+  def __repr__(self):
     return "array(%s, %d)" % (self.elt_type, self.rank)
 
   def __eq__(self, other): 
@@ -71,8 +65,7 @@ class Array(CompoundType):
 
 class Tuple(CompoundType):
   rank = 0 
-  def __init__(self, elt_types) 
-    self.elt_types = elt_types
+  _members = ['elt_types']
   
   def nbytes(self):
     return sum([t.nbytes() for t in self.elt_types])
@@ -84,8 +77,9 @@ class Tuple(CompoundType):
     return isinstance(other, Tuple) and self.elt_types == other.elt_types 
 
 def is_scalar_subtype(t1, t2):
-  return (t1 == t2) or t1.nbytes() < t2.nbytes() or \
-    (isinstance(t1, TInt) and isinstance(t2, TFloat))
+  return isinstance(t1, Scalar) and \
+    isinstance(t2, Scalar) and \
+    ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or (t1.is_int() and t2.is_float()))
 
 # preallocate all the scalar types
 # as an optimiztion so we don't 
@@ -103,8 +97,8 @@ _dtype_to_type = {
   np.int16 : Int16, 
   np.int32 : Int32, 
   np.int64 : Int64, 
-  np.float32 : float32, 
-  np.float64 : float64
+  np.float32 : Float32, 
+  np.float64 : Float64
 }
 
 def dtype_to_type(dtype):
