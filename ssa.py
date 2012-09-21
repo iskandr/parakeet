@@ -1,22 +1,17 @@
+from tree import TreeLike
 
-
-class Stmt:
+class Stmt(TreeLike):
   pass 
 
 class Assign(Stmt):
-  def __init__(self, lhs, rhs):
-    self.lhs = lhs
-    self.rhs = rhs
+  _members = ['lhs', 'rhs']
+  
+class Return(Stmt):
+  _members = ['value'] 
 
 class If(Stmt):
-  def __init__(self, cond, true, false, merge=None):
-    self.cond = cond
-    self.true = true
-    self.false = false
-    # only gets used after conversion to SSA
-    self.merge = merge 
-    
-
+  _members = ['cond', 'true', 'false', 'merge']
+  
 class While(Stmt):
   """A loop consists of a header, which runs 
      before each iteration, a condition for 
@@ -25,14 +20,9 @@ class While(Stmt):
      nodes for incoming and outgoing variables
      of the form [(new_var1, (old_var1,old_var2)]
    """
-  def __init__(self, header, cond, body, phi_before = None, phi_after = None):
-    self.header 
-    self.cond = cond
-    self.body = body
-    self.phi_before = phi_before
-    self.phi_after = phi_after 
- 
-class Expr:
+  _members = ['header', 'cond', 'body', 'phi_before', 'phi_after']
+  
+class Expr(TreeLike):
   pass
 
 class Adverb(Expr):
