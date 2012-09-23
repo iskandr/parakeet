@@ -43,20 +43,18 @@ class Binop(Expr):
 
 
 class Const(Expr):
-  def __init__(self, value, t = None):
-    self.value = value
-    self.type = t
-
+  _members = ['value']
+  
 class Var(Expr):
-  def __init__(self, name, t = None):
-    self.name = name
-    self.type = t
+  _members = ['name']
+  
+class Prim(Expr):
+  _members = ['name']
 
 class Tuple(Expr):
-  def __init__(self, elts, t = None):
-    self.elts = elts 
-    self.type = t 
-
+  _members = ['elts']
+  
+  
 class Fn:
   def __init__(self, body, arg_names, defaults, global_vars, types = None):
     self.body = body

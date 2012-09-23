@@ -28,20 +28,13 @@ class NameSupply:
 
 
 class ScopedEnv:  
-  def __init__(self, current_scope = None,  outer_env = None):
+  def __init__(self, current_scope = None, outer_env = None):
     if current_scope is None:
       current_scope = {}
-    
-    if outer_env is None:
-      outer_env = {}
-      
-    self.scopes = [current_scope]
-    
-    # a top-level function will point to an environment for globals
-    # and a nested function points to the environment of its enclosing fn
-    self.outer_env = outer_env
-     
 
+    self.scopes = [current_scope]
+    # link together environments of nested functions
+    self.outer_env = outer_env
     
   def fresh(self, name):
     fresh_name = NameSupply.fresh(name)
@@ -67,42 +60,55 @@ class ScopedEnv:
       if key in scope: 
         return True
     return False 
-
-  def is_nonlocal(self, key):
-    """Recursively move up the chain of 'outer_env' links to find if
-    a variable has been bound outside the current function
-    """
-    if self.outer_env is None:
-      return False
-    elif key in self.outer_env:
-      return True
-    elif isinstance(self.outer_env, ScopedEnv):
-      return self.outer_env.is_nonlocal(key)
+  
+  def recursive_lookup(self, key, skip_current = False):
+    if not skip_current and key in self:
+      return self[key]
     else:
-      return False 
+      if self.outer_env:
+        self.outer_env.recursive_lookup(key)
+      else:
+        return None
 
 
-def translate_FunctionDef(node, outer_env = None):
-  name, body, args = node.name, node.body, node.args 
+def translate_FunctionDef(name, body, args, global_values, outer_env = None):
+   
   nonlocals =  set([])
   ssa_args = dict(zip(args, map(NameSupply.fresh, args)))
   env = ScopedEnv(current_scope = ssa_args, outer_env = outer_env)
-         
+  
+  
+  def global_fn_ref(global_value):
+    if global_value in prims: 
+      return ssa.
+  
+  def global_ref(name):
+    if name in global_values:
+      global_value = global_values[name]
+      if hasattr(global_value, '__call__'):
+        return global_fn_ref(global_value)
+       
+    else:
+      raise NameNotFound(name)
   def translate_Name(name):
     """
     Convert a variable name to its versioned SSA identifier and 
-    if the name isn't local return it in a one-element set denoting
-    which nonlocals get accessed
+    if the name isn't local it must be one of:
+      (a) global data which needs to be added as an argument to this fn
+      (b) a user-defined function which needs to be registered with parakeet
+      (c) a primitive fn 
     """
     if name in env:
       return ssa.Var(env[name])
     # is it at least somewhere in the chain of outer scopes?  
-    elif env.is_nonlocal(name):
-      nonlocals.add(name)
-      ssa_name = env.fresh(name) 
-      return ssa.Var(ssa_name)
     else:
-      raise NameNotFound(name)
+      outer = env.recursive_lookup(name, skip_current = True)
+      if outer:
+        nonlocals.add(name)  
+        ssa_name = env.fresh(name) 
+        return ssa.Var(ssa_name)
+      else:
+        return global_ref(name)
       
   def translate_BinOp(name, op, left, right, env):
     ssa_left = translate_expr(left)
@@ -133,7 +139,8 @@ def translate_FunctionDef(node, outer_env = None):
     by this statment
     """
     if isinstance(stmt, ast.FunctionDef):
-      fundef = translate_FunctionDef(stmt.name, stmt.args, stmt.body)
+      name, args, body = stmt.name, stmt.args, stmt.body
+      fundef = translate_FunctionDef(name, args, body, global_values, env)
       nonlocals.update(fundef.nonlocals)
       # update some global table of defined functions? 
       # give the function a unique SSA ID? 
@@ -146,16 +153,15 @@ def translate_FunctionDef(node, outer_env = None):
   ssa_body = [translate_stmt(stmt) for stmt in body]
   # should I register the function globally now? 
   return {'body': body, 'nonlocals':nonlocals}
-  
-  
-
     
   
 
 
-def translate_module(m, outer_env = None):
+def translate_module(m, global_values, outer_env = None):
   assert isinstance(m, ast.Module)
   assert len(m.body) == 1
   assert isinstance(m.body[0], ast.FunctionDef)
-  return translate_FunctionDef(m.body[0], outer_env)
+  fundef = m.body[0]
+  name, args, body = fundef.name, fundef.args, fundef.body 
+  return translate_FunctionDef(name, args, body, global_values, outer_env)
   
