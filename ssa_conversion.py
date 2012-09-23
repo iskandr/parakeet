@@ -78,31 +78,46 @@ known_functions = {}
 
 def translate_FunctionDef(name, body, args, global_values, outer_env = None):
    
-  nonlocals =  set([])
-  ssa_args = dict(zip(args, map(NameSupply.fresh, args)))
-  env = ScopedEnv(current_scope = ssa_args, outer_env = outer_env)
+  # external names of the nonlocals we use
+  nonlocal_original_names =  []
+  # ssa names for nonlocals which should get passed in
+   
+  nonlocal_args = []
+  init_scope = dict(zip(args, map(NameSupply.fresh, args)))
+  env = ScopedEnv(current_scope = init_scope, outer_env = outer_env)
   
-  
-  def global_fn_ref(global_value):
-    if global_value in prims: 
-      return ssa.Prim(global_value.__name__)
-    elif global_value in known_functions:
-      ssa_name = known_functions[global_value].ssa_name 
-      return ssa.FnRef (ssa_name)
-    else:
-      ssa_fundef = translate_function_value(global_value)
-      known_functions[global_value] = ssa_fundef  
-      return ssa.FnRef (ssa_fundef.ssa_name)
     
   def global_ref(name):
+    """
+    A global is:
+      (1) data which needs to be added to the list of nonlocals we depend on 
+      (2) a primitive fn
+      (3) a user-defined fn which should be translated
+    """ 
     if name in global_values:
       global_value = global_values[name]
       if hasattr(global_value, '__call__'):
-        return global_fn_ref(global_value)
+        if global_value in prims: 
+          return ssa.Prim(global_value.__name__)
+        elif global_value in known_functions:
+          ssa_name = known_functions[global_value].ssa_name 
+          return ssa.FnRef (ssa_name)
+        else:
+          # we expect that translate_function_value will add 
+          # the function to the global lookup table known_functions
+          ssa_fundef = translate_function_value(global_value)
+
+          return ssa.FnRef (ssa_fundef.ssa_name)
+        
       else:
-        raise RuntimeError("global value not a function")   
+        # if it's global data... 
+        ssa_name = env.fresh(name)
+        nonlocal_original_names.append(name)
+        nonlocal_args.append(ssa_name)
+        return ssa.Var (ssa_name)
     else:
       raise NameNotFound(name)
+    
   def translate_Name(name):
     """
     Convert a variable name to its versioned SSA identifier and 
@@ -117,8 +132,9 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
     else:
       outer = env.recursive_lookup(name, skip_current = True)
       if outer:
-        nonlocals.add(name)  
+        nonlocal_original_names.add(name)  
         ssa_name = env.fresh(name) 
+        nonlocal_args.append(ssa_name)
         return ssa.Var(ssa_name)
       else:
         return global_ref(name)
@@ -154,9 +170,9 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
     if isinstance(stmt, ast.FunctionDef):
       name, args, body = stmt.name, stmt.args, stmt.body
       fundef = translate_FunctionDef(name, args, body, global_values, env)
-      nonlocals.update(fundef.nonlocals)
-      # update some global table of defined functions? 
-      # give the function a unique SSA ID? 
+      closure_args = map(translate_Name, fundef.nonlocals)
+      ssa_fn_name = env.fresh(name) 
+      # TODO: When does the function get globally registered? 
     elif isinstance(stmt, ast.Assign):     
       return translate_Assign(stmt.target[0], stmt.value)
     elif isinstance(stmt, ast.Return):
@@ -164,8 +180,9 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
   
   
   ssa_body = [translate_stmt(stmt) for stmt in body]
-  # should I register the function globally now? 
-  return {'body': body, 'nonlocals':nonlocals}
+  ssa_args = nonlocal_args + map(translate_Name, args)
+  fundef = ssa.Fn(name, ssa_args, ssa_body, nonlocal_original_names)
+  return fundef
 
 def translate_module(m, global_values, outer_env = None):
   assert isinstance(m, ast.Module)
@@ -181,7 +198,9 @@ def translate_function_source(source):
 
 def translate_function_value(fn):
   source = inspect.getsource(fn)
-  return translate_function_source(source)
+  fundef = translate_function_source(source)
+  known_functions[fn] = fundef
+  return fundef   
   
 
   

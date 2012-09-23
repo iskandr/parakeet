@@ -58,15 +58,9 @@ class Tuple(Expr):
   _members = ['elts']
   
   
-class Fn:
-  def __init__(self, body, arg_names, defaults, global_vars, types = None):
-    self.body = body
-    self.args = arg_names
-    self.kwds = defaults
-    self.global_vars = global_vars
-    self.types = types 
-
-    
+class Fn(TreeLike):
+  _members = ['name', 'body', 'args', 'nonlocals']
+      
 class SyntaxTraversal:
   def visit_block(self, block, *args, **kwds):
     for stmt in block:
