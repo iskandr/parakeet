@@ -45,6 +45,9 @@ class Binop(Expr):
 class Const(Expr):
   _members = ['value']
   
+class FnRef(Expr):
+  _members = ['name']
+  
 class Var(Expr):
   _members = ['name']
   

@@ -1,5 +1,7 @@
-import ast 
+import ast
+import inspect  
 import ssa 
+from prims import prims 
 
 class NameNotFound(Exception):
   def __init__(self, name):
@@ -70,6 +72,9 @@ class ScopedEnv:
       else:
         return None
 
+# maps python value of a user-defined function 
+# to a FunDef 
+known_functions = {}
 
 def translate_FunctionDef(name, body, args, global_values, outer_env = None):
    
@@ -80,14 +85,22 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
   
   def global_fn_ref(global_value):
     if global_value in prims: 
-      return ssa.
-  
+      return ssa.Prim(global_value.__name__)
+    elif global_value in known_functions:
+      ssa_name = known_functions[global_value].ssa_name 
+      return ssa.FnRef (ssa_name)
+    else:
+      ssa_fundef = translate_function_value(global_value)
+      known_functions[global_value] = ssa_fundef  
+      return ssa.FnRef (ssa_fundef.ssa_name)
+    
   def global_ref(name):
     if name in global_values:
       global_value = global_values[name]
       if hasattr(global_value, '__call__'):
         return global_fn_ref(global_value)
-       
+      else:
+        raise RuntimeError("global value not a function")   
     else:
       raise NameNotFound(name)
   def translate_Name(name):
@@ -153,9 +166,6 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
   ssa_body = [translate_stmt(stmt) for stmt in body]
   # should I register the function globally now? 
   return {'body': body, 'nonlocals':nonlocals}
-    
-  
-
 
 def translate_module(m, global_values, outer_env = None):
   assert isinstance(m, ast.Module)
@@ -164,4 +174,16 @@ def translate_module(m, global_values, outer_env = None):
   fundef = m.body[0]
   name, args, body = fundef.name, fundef.args, fundef.body 
   return translate_FunctionDef(name, args, body, global_values, outer_env)
+
+def translate_function_source(source):
+  syntax = ast.parse(source)
+  return translate_module(syntax)
+
+def translate_function_value(fn):
+  source = inspect.getsource(fn)
+  return translate_function_source(source)
+  
+
+  
+  
   
