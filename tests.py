@@ -2,16 +2,24 @@ import ast_conversion
 import parakeet 
 import unittest
 import interp
+import numpy as np
 
-def f(x):
+ 
+def add1(x):
   return x + 1
 
+def call_add1(x):
+  return add1(x)
+
+def call_nested_ident(x):
+  def ident(x):
+    return x
+  return ident(x)
 
 class TestInterp(unittest.TestCase):
-  def test_interp(self):
-    untyped, _ = ast_conversion.translate_function_value(f)
-    print untyped 
-    result = interp.eval_fn(untyped, 1)
-    self.assert_(result == 2, "Russ fucked up") 
+  def test_add1(self):
+    assert interp.run(add1, 1) == 2 
 
+  def test_call_add1(self):
+    assert interp.run(call_add1, 1) == 2 
 

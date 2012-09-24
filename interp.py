@@ -1,5 +1,5 @@
 import syntax
-
+import ast_conversion 
 
 
 class ReturnValue(Exception):
@@ -13,7 +13,7 @@ class NotImplemented(Exception):
 def eval_fn(fn, *args):
   
   env = dict(zip(fn.args, args)) 
-  def eval_expr(expr):
+  def eval_expr(expr):    
     def expr_Const():
       return expr.value
     def expr_Binop():
@@ -25,6 +25,7 @@ def eval_fn(fn, *args):
       return expr.value.fn
     def expr_Var():
       return env[expr.name]
+
     nodetype = expr.__class__.__name__ 
     return locals()['expr_' + nodetype]()
     
@@ -44,4 +45,8 @@ def eval_fn(fn, *args):
   except ReturnValue as r:
     return r.value 
   except:
-    raise 
+    raise
+  
+def run(python_fn, *args):
+  untyped, _ = ast_conversion.translate_function_value(python_fn)
+  return eval_fn(untyped, *args) 

@@ -172,7 +172,7 @@ class TreeLike(object):
           rv += '%s: %s\n' % (k, elem)
       else:
         rv += '%s: %s\n' % (k, v)
-    
+    rv = rv.strip()
     return rv.replace('\n', '\n  |')
   
 def find_all(tree, node_type):

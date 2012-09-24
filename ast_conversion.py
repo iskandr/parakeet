@@ -164,7 +164,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
     else:
       raise NameNotFound(name)
     
-  def translate_Name(name):
+  def translate_Name(name):     
     """
     Convert a variable name to its versioned SSA identifier and 
     if the name isn't local it must be one of:
@@ -184,28 +184,34 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
         return syntax.Var(ssa_name)
       else:
         return global_ref(name)
-
-  def translate_BinOp(op, left, right):
-    ssa_left = translate_expr(left)
-    ssa_right = translate_expr(right)
-    ssa_op = translate_expr(op)
-    return syntax.Binop(ssa_op, ssa_left, ssa_right)
-    
-  
+      
   def translate_expr(expr):
+    def translate_BinOp():
+      ssa_left = translate_expr(expr.left)
+      ssa_right = translate_expr(expr.right)
+      ssa_op = translate_expr(expr.op)
+      return syntax.Binop(ssa_op, ssa_left, ssa_right)
+     
+   
 
-    if isinstance(expr, ast.BinOp):
-      return translate_BinOp(expr.op, expr.left, expr.right)
+    def translate_Call():
+
+      fn, args, kwargs, starargs = \
+        expr.func, expr.args, expr.kwargs, expr.starargs
       
-    elif isinstance(expr, ast.Name):
+      #return translate_Call(fn, args, kwargs, starargs): 
+      #raise TypeError, dir(expr)
+    nodetype = expr.__class__.__name__
+    if isinstance(expr, ast.Name):
       return translate_Name(expr.id)
-      
     elif isinstance(expr, ast.Num):
-      return syntax.Const(expr.n) 
+      return syntax.Const(expr.n)
     elif is_op(expr):
       return syntax.Prim(op_to_prim(expr))
     else:
-      raise RuntimeError("Not implemented: %s" % expr)
+      translator_fn_name = 'translate_' + nodetype
+      translate_fn = locals()[translator_fn_name]
+      return translate_fn()
       
   def translate_Assign(lhs, rhs):
     assert isinstance(lhs, ast.Name)
