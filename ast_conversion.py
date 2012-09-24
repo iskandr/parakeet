@@ -2,6 +2,7 @@ import ast
 import inspect  
 import ssa 
 from prims import prims 
+from global_state import untyped_functions, known_python_functions
 
 class NameNotFound(Exception):
   def __init__(self, name):
@@ -169,9 +170,9 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
     """
     if isinstance(stmt, ast.FunctionDef):
       name, args, body = stmt.name, stmt.args, stmt.body
-      fundef = translate_FunctionDef(name, args, body, global_values, env)
-      closure_args = map(translate_Name, fundef.nonlocals)
-      ssa_fn_name = env.fresh(name) 
+      fundef, nonlocals = translate_FunctionDef(name, args, body, global_values, env)
+      closure_args = map(translate_Name, nonlocals)
+      ssa_fn_name = fundef.name 
       # TODO: When does the function get globally registered? 
     elif isinstance(stmt, ast.Assign):     
       return translate_Assign(stmt.target[0], stmt.value)
@@ -181,8 +182,10 @@ def translate_FunctionDef(name, body, args, global_values, outer_env = None):
   
   ssa_body = [translate_stmt(stmt) for stmt in body]
   ssa_args = nonlocal_args + map(translate_Name, args)
-  fundef = ssa.Fn(name, ssa_args, ssa_body, nonlocal_original_names)
-  return fundef
+  ssa_fn_name = NameSupply.fresh(name)
+  fundef = ssa.Fn(ssa_fn_name, ssa_args, ssa_body, nonlocal_original_names)
+  untyped_functions[ssa_fn_name]  = fundef 
+  return fundef, nonlocal_original_names
 
 def translate_module(m, global_values, outer_env = None):
   assert isinstance(m, ast.Module)
@@ -192,14 +195,15 @@ def translate_module(m, global_values, outer_env = None):
   name, args, body = fundef.name, fundef.args, fundef.body 
   return translate_FunctionDef(name, args, body, global_values, outer_env)
 
-def translate_function_source(source):
+def translate_function_source(source, global_values):
   syntax = ast.parse(source)
-  return translate_module(syntax)
+  return translate_module(syntax, global_values)
 
 def translate_function_value(fn):
+  assert hasattr(fn, 'func_globals')
   source = inspect.getsource(fn)
-  fundef = translate_function_source(source)
-  known_functions[fn] = fundef
+  fundef = translate_function_source(source, fn.func_globals)
+  known_python_functions[fn] = fundef
   return fundef   
   
 

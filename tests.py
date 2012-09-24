@@ -1,6 +1,12 @@
 
 
-import parakeet
 
-fn = parakeet.compile_string("def f(x):\n  return x + 1")
-assert parakeet.run_compiled(fn, 1) == 1
+def f(x):
+  return x + 1
+
+
+def test_interp():
+  untyped = ast_conversion.translate_function_value(f)
+  result = parakeet.interp(untyped, 1)
+  assert result == 2
+

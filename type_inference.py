@@ -1,8 +1,8 @@
-from ssa import Set, Op, Var, Const
+from ssa import Assign, Op, Var, Const
 from ssa import SyntaxTraversal
 from types import type_of_value 
 
-class InferTypes(Traversal):
+class InferTypes(SyntaxTraversal):
   def stmt_Set(self, stmt, tenv): 
     rhs_type = self.visit_expr(stmt.rhs, tenv)
     tenv[stmt.lhs] = rhs_type

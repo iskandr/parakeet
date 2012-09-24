@@ -8,6 +8,8 @@ def translate_function_from_source(s):
   return None
 
 
+def interp_untyped(untyped_fn, args):
+
 def run_compiled(fn, args):
   arg_types = map(types.type_of_value, args)
   specialized = specialize(fn, types)
