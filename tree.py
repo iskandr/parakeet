@@ -40,7 +40,8 @@ class TreeLike(object):
     for i in range(len(args), len(self._members)):
       arg = self._members[i]
       if not arg in kw:
-        logging.debug("Missing initializer for %s.%s", self.node_type(), self._members[i])
+        logging.fatal("Missing initializer for %s.%s",  
+          self.node_type(), self._members[i])
 
     for field in self._members:
       setattr(self, field, None)
@@ -163,7 +164,10 @@ class TreeLike(object):
   def __repr__(self):
     rv = self.node_type() + ':\n'
     for k, v in self.child_dict().items():
-      if hasattr(v, '__iter__'):
+      if dict_like(v):
+        for kk, vv in v.iteritems():
+          rv += "%s.%s: %s\n" % (k, kk, vv)
+      elif list_like(v):
         for elem in v:
           rv += '%s: %s\n' % (k, elem)
       else:

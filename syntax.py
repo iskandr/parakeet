@@ -29,18 +29,11 @@ class Adverb(Expr):
   pass
 
 class Unop(Expr):
-  def __init__(self, op, arg, nonlocal = set([])):
-    self.op = op
-    self.arg = arg 
-    self.nonlocal = nonlocal 
-    
+  _members = ['op', 'value']
+  
 class Binop(Expr):
-  def __init__(self, op, left, right, nonlocal = set([])):
-    self.op = op
-    self.left = left
-    self.right = right
-    self.nonlocal = nonlocal
-
+  _members = ['op', 'left', 'right']
+  
 
 class Const(Expr):
   _members = ['value']
@@ -59,9 +52,9 @@ class Tuple(Expr):
   
   
 class Fn(TreeLike):
-  _members = ['name', 'body', 'args', 'nonlocals']
+  _members = ['name',  'args', 'body', 'nonlocals']
       
-class SyntaxTraversal:
+class Traversal:
   def visit_block(self, block, *args, **kwds):
     for stmt in block:
       self.visit_stmt(stmt, *args, **kwds)
