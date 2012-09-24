@@ -12,15 +12,19 @@ class NotImplemented(Exception):
 
 def eval_fn(fn, *args):
   
-  #assert False, (fn, args)
   env = dict(zip(fn.args, args)) 
-  
-  
   def eval_expr(expr):
     def expr_Const():
       return expr.value
     def expr_Binop():
-      return expr.op.fn(eval_expr(expr.left), eval_expr(expr.right)) 
+      fn = eval_expr(expr.op)
+      left = eval_expr(expr.left)
+      right = eval_expr(expr.right)
+      return fn(left, right) 
+    def expr_Prim():
+      return expr.value.fn
+    def expr_Var():
+      return env[expr.name]
     nodetype = expr.__class__.__name__ 
     return locals()['expr_' + nodetype]()
     

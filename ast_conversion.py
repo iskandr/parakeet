@@ -1,7 +1,8 @@
 import ast
 import inspect  
 import syntax 
-from prims import prims 
+import prims 
+from prims import is_prim, find_prim
 from global_state import untyped_functions, known_python_functions
 
 class NameNotFound(Exception):
@@ -79,6 +80,45 @@ def extract_arg_names(args):
   assert not args.defaults
   return [arg.id for arg in args.args]
 
+python_ops_to_prims = {
+ ast.And : prims.logical_and,
+ ast.Or : prims.logical_or, 
+ ast.Add : prims.add, 
+ ast.Sub : prims.subtract, 
+ ast.Mult : prims.multiply, 
+ ast.Div :  prims.divide, 
+ #ast.Mod : None, 
+ #ast.Pow : None, 
+ #ast.LShift : None, 
+ #ast.RShift : None, 
+ # BitOr : None, 
+ # BitXor : None, 
+ # BitAnd : None, 
+ # FloorDiv : None 
+ # Invert : None, 
+ # Not : None, 
+ # UAdd : None, 
+ # USub : None, 
+ ast.Eq : prims.equal, 
+ ast.NotEq : prims.not_equal, 
+ ast.Lt : prims.less, 
+ ast.LtE : prims.less_equal, 
+ ast.Gt : prims.greater, 
+ ast.GtE : prims.greater_equal, 
+ #ast.Is : None, 
+ #ast.IsNot : None, 
+ # In : None, | NotIn                        
+}
+
+def is_op(op):
+  return type(op) in python_ops_to_prims
+
+def op_to_prim(op):
+  if is_op(op):
+    return python_ops_to_prims[type(op)]
+  else:
+    raise RuntimeError("Operator not implemented: %s" % op)
+
 def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
    
   # external names of the nonlocals we use
@@ -103,8 +143,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
     if name in global_values:
       global_value = global_values[name]
       if hasattr(global_value, '__call__'):
-        if global_value in prims: 
-          return syntax.Prim(global_value.__name__)
+        if is_prim(global_value): 
+          return syntax.Prim(find_prim(global_value))
         elif global_value in known_python_functions:
           ssa_name = known_python_functions[global_value].name 
           return syntax.FnRef (ssa_name)
@@ -144,14 +184,16 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
         return syntax.Var(ssa_name)
       else:
         return global_ref(name)
-      
+
   def translate_BinOp(op, left, right):
     ssa_left = translate_expr(left)
     ssa_right = translate_expr(right)
-    return syntax.Binop(op, ssa_left, ssa_right)
+    ssa_op = translate_expr(op)
+    return syntax.Binop(ssa_op, ssa_left, ssa_right)
     
   
   def translate_expr(expr):
+
     if isinstance(expr, ast.BinOp):
       return translate_BinOp(expr.op, expr.left, expr.right)
       
@@ -160,8 +202,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
       
     elif isinstance(expr, ast.Num):
       return syntax.Const(expr.n) 
+    elif is_op(expr):
+      return syntax.Prim(op_to_prim(expr))
     else:
-      assert False 
+      raise RuntimeError("Not implemented: %s" % expr)
       
   def translate_Assign(lhs, rhs):
     assert isinstance(lhs, ast.Name)

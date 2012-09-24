@@ -45,7 +45,7 @@ class Var(Expr):
   _members = ['name']
   
 class Prim(Expr):
-  _members = ['name']
+  _members = ['value']
 
 class Tuple(Expr):
   _members = ['elts']
