@@ -28,12 +28,12 @@ class Expr(TreeLike):
 class Adverb(Expr):
   pass
 
-class Unop(Expr):
-  _members = ['op', 'value']
+#class Unop(Expr):
+#  _members = ['op', 'value']
   
-class Binop(Expr):
-  _members = ['op', 'left', 'right']
-  
+#class Binop(Expr):
+#  _members = ['op', 'left', 'right']
+
 
 class Const(Expr):
   _members = ['value']
@@ -42,7 +42,6 @@ class Const(Expr):
   
 class Var(Expr):
   _members = ['name']
-  
   def __repr__(self):
     return self.name 
   
@@ -77,7 +76,7 @@ class Fn(TreeLike):
   """
   Function definition
   """
-  _members = ['name',  'args', 'body']
+  _members = ['name',  'args', 'body', 'nonlocals']
       
 class Traversal:
   def visit_block(self, block, *args, **kwds):

@@ -3,7 +3,8 @@ import inspect
 import syntax 
 import prims 
 from prims import is_prim, find_prim
-from global_state import untyped_functions, known_python_functions
+from function_registry import untyped_functions, already_registered_python_fn
+from function_registry import register_python_fn, lookup_python_fn 
 
 class NameNotFound(Exception):
   def __init__(self, name):
@@ -32,11 +33,9 @@ class NameSupply:
 
 
 class ScopedEnv:  
-  def __init__(self, current_scope = None, outer_env = None):
-    if current_scope is None:
-      current_scope = {}
-
-    self.scopes = [current_scope]
+  def __init__(self, outer_env = None):
+    self.scopes = [{}]
+    self.blocks = [[]]
     # link together environments of nested functions
     self.outer_env = outer_env
     
@@ -45,13 +44,24 @@ class ScopedEnv:
     self.scopes[-1][name] = fresh_name 
     return fresh_name
   
-  def push_scope(self, scope = None):
+  def push(self, scope = None, block = None):
     if scope is None:
       scope = {}
+    if block is None:
+      block = []
     self.scopes.append(scope)
+    self.blocks.append(block)
   
-  def pop_scope(self):
-    return self.scopes.pop()
+  def pop(self):
+    scope = self.scopes.pop()
+    block = self.blocks.pop()
+    return scope, block 
+  
+  def current_scope(self):
+    return self.scopes[-1]
+  
+  def current_block(self):
+    return self.blocks[-1]
   
   def __getitem__(self, key):
     for scope in reversed(self.scopes):
@@ -80,44 +90,9 @@ def extract_arg_names(args):
   assert not args.defaults
   return [arg.id for arg in args.args]
 
-python_ops_to_prims = {
- ast.And : prims.logical_and,
- ast.Or : prims.logical_or, 
- ast.Add : prims.add, 
- ast.Sub : prims.subtract, 
- ast.Mult : prims.multiply, 
- ast.Div :  prims.divide, 
- #ast.Mod : None, 
- #ast.Pow : None, 
- #ast.LShift : None, 
- #ast.RShift : None, 
- # BitOr : None, 
- # BitXor : None, 
- # BitAnd : None, 
- # FloorDiv : None 
- # Invert : None, 
- # Not : None, 
- # UAdd : None, 
- # USub : None, 
- ast.Eq : prims.equal, 
- ast.NotEq : prims.not_equal, 
- ast.Lt : prims.less, 
- ast.LtE : prims.less_equal, 
- ast.Gt : prims.greater, 
- ast.GtE : prims.greater_equal, 
- #ast.Is : None, 
- #ast.IsNot : None, 
- # In : None, | NotIn                        
-}
 
-def is_op(op):
-  return type(op) in python_ops_to_prims
 
-def op_to_prim(op):
-  if is_op(op):
-    return python_ops_to_prims[type(op)]
-  else:
-    raise RuntimeError("Operator not implemented: %s" % op)
+
 
 def translate_FunctionDef(name,  args, body, global_values, outer_value_env = None):
    
@@ -125,16 +100,13 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
   nonlocal_original_names =  []
   # syntax names for nonlocals which should get passed in
    
-  nonlocal_args = []
-
+  nonlocal_arg_names = []
   arg_names = extract_arg_names(args)
-  ssa_arg_names = [NameSupply.fresh(arg_name) for arg_name in arg_names]
-  init_scope = dict(zip(arg_names, ssa_arg_names))
-  env = ScopedEnv(current_scope = init_scope, outer_env = outer_value_env)
+  env = ScopedEnv()
+  ssa_arg_names = [env.fresh(n) for n in arg_names]
+  
   # maps a local SSA ID to a global fn id paired with some closure values
 
-  
-      
   def global_ref(name):
     """
     A global is:
@@ -144,12 +116,15 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     """ 
     if name in global_values:
       global_value = global_values[name]
+   
       if hasattr(global_value, '__call__'):
         if is_prim(global_value): 
           return syntax.Prim(find_prim(global_value))
-        elif global_value in known_python_functions:
-          ssa_name = known_python_functions[global_value].name 
-          return syntax.Closure(ssa_name, [])
+        elif already_registered_python_fn(global_value):
+          fundef = lookup_python_fn(global_value)
+          ssa_name = fundef.name 
+          closure_args = map(translate_Name, fundef.nonlocals)
+          return syntax.Closure(ssa_name, closure_args)
         else:
           # we expect that translate_function_value will add 
           # the function to the global lookup table known_functions
@@ -160,7 +135,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         # if it's global data... 
         ssa_name = env.fresh(name)
         nonlocal_original_names.append(name)
-        nonlocal_args.append(ssa_name)
+        nonlocal_arg_names.append(ssa_name)
+
         return syntax.Var (ssa_name)
     else:
       raise NameNotFound(name)
@@ -183,7 +159,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       if outer:
         nonlocal_original_names.add(name)  
         ssa_name = env.fresh(name) 
-        nonlocal_args.append(ssa_name)
+        nonlocal_arg_names.append(ssa_name)
         return syntax.Var(ssa_name)
       else:
         return global_ref(name)
@@ -193,12 +169,19 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       ssa_left = translate_expr(expr.left)
       ssa_right = translate_expr(expr.right)
       ssa_op = translate_expr(expr.op)
-      return syntax.Binop(ssa_op, ssa_left, ssa_right)
+      return syntax.Call(ssa_op, [ssa_left, ssa_right] )
+      
      
-   
+    def translate_Compare():
+      lhs = translate_expr(expr.left)   
+      assert len(expr.ops) == 1
+      prim = prims.find_ast_op(expr.ops[0])
+      assert len(expr.comparators) == 1
+      rhs = translate_expr(expr.comparators[0])
 
+      return syntax.Call(syntax.Prim (prim), [lhs, rhs])
+    
     def translate_Call():
-
       fn, args, kwargs, starargs = \
         expr.func, expr.args, expr.kwargs, expr.starargs
       assert kwargs is None, "Dictionary of keyword args not supported"
@@ -206,16 +189,25 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       fn_val = translate_expr(fn)
       arg_vals = map(translate_expr, args)
       return syntax.Invoke(fn_val, arg_vals) 
+    
+    def translate_IfExp():
+      temp1, temp2, result = \
+         map(env.fresh, ["if_true", "if_false", "if_result"])
+      cond = translate_expr(expr.test)
+      true_block = [syntax.Assign(temp1, translate_expr(expr.body))]
+      false_block = [syntax.Assign(temp2, translate_expr(expr.orelse))]
+      merge = [(result, syntax.Var (temp1), syntax.Var(temp2))]
+      if_stmt = syntax.If(cond, true_block, false_block, merge) 
+      env.current_block().append(if_stmt)
+      return syntax.Var(result)
       
-      #return translate_Call(fn, args, kwargs, starargs): 
-      #raise TypeError, dir(expr)
     nodetype = expr.__class__.__name__
     if isinstance(expr, ast.Name):
       return translate_Name(expr.id)
     elif isinstance(expr, ast.Num):
       return syntax.Const(expr.n)
-    elif is_op(expr):
-      return syntax.Prim(op_to_prim(expr))
+    elif prims.is_ast_op(expr):
+      return syntax.Prim(prims.find_ast_op(expr))
     else:
       translator_fn_name = 'translate_' + nodetype
       translate_fn = locals()[translator_fn_name]
@@ -238,9 +230,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     """
     if isinstance(stmt, ast.FunctionDef):
       name, args, body = stmt.name, stmt.args, stmt.body
-      fundef, nonlocals = \
+      fundef = \
         translate_FunctionDef(name, args, body, global_values, env)
-      closure_args = map(translate_Name, nonlocals)
+      closure_args = map(translate_Name, fundef.nonlocals)
       local_name = env.fresh(name)
       closure = syntax.Closure(fundef.name, closure_args)
       return syntax.Assign(local_name, closure)
@@ -250,13 +242,38 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     elif isinstance(stmt, ast.Return):
       rhs = syntax.Return(translate_expr(stmt.value))
       return rhs 
+    elif isinstance(stmt, ast.If):
+      cond = translate_expr(stmt.test)
+      env.push()
+      translate_block(stmt.body)
+      true_scope, true_block = env.pop() 
+      env.push()
+      translate_block(stmt.orelse)
+      false_scope, false_block = env.pop()
+      return syntax.If(cond, true_block, false_block, {})
+   
+    elif isinstance(stmt, ast.While):
+      raise RuntimeError("While loops not implemented")
+    elif isinstance(stmt, ast.For):
+      return RuntimeError("For loops not implemneted")
+    else:
+      raise RuntimeError("Not implemented: %s"  % stmt)
   
+
   
-  ssa_body = [translate_stmt(stmt) for stmt in body]
+  def translate_block(stmts):
+    env.push()
+    curr_block = env.current_block()
+    for stmt in stmts:
+      curr_block.append(translate_stmt(stmt))
+    return env.pop()
+  
   ssa_fn_name = NameSupply.fresh(name)
-  fundef = syntax.Fn(ssa_fn_name, ssa_arg_names, ssa_body)
+  full_args = nonlocal_arg_names + ssa_arg_names
+  _, ssa_body = translate_block(body)   
+  fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
   untyped_functions[ssa_fn_name]  = fundef 
-  return fundef, nonlocal_original_names
+  return fundef
 
 def translate_module(m, global_values, outer_env = None):
   assert isinstance(m, ast.Module)
@@ -271,11 +288,14 @@ def translate_function_source(source, global_values):
   return translate_module(syntax, global_values)
 
 def translate_function_value(fn):
-  assert hasattr(fn, 'func_globals')
-  source = inspect.getsource(fn)
-  fundef, _ = translate_function_source(source, fn.func_globals)
-  known_python_functions[fn] = fundef
-  return fundef   
+  if already_registered_python_fn(fn):
+    return lookup_python_fn(fn)
+  else:
+    assert hasattr(fn, 'func_globals')
+    source = inspect.getsource(fn)
+    fundef = translate_function_source(source, fn.func_globals)
+    register_python_fn(fn, fundef)
+    return fundef   
   
 
   
