@@ -129,7 +129,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
           # we expect that translate_function_value will add 
           # the function to the global lookup table known_functions
           ssa_fundef = translate_function_value(global_value)
-          return syntax.Closure (ssa_fundef.ssa_name, [])
+          return syntax.Closure (ssa_fundef.name, [])
         
       else:
         
@@ -137,7 +137,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         ssa_name = env.fresh(name)
         nonlocal_original_names.append(name)
         nonlocal_arg_names.append(ssa_name)
-        print name, ssa_name, nonlocal_arg_names 
+        #print name, ssa_name, nonlocal_arg_names 
         return syntax.Var (ssa_name)
     else:
       raise NameNotFound(name)
@@ -197,7 +197,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       cond = translate_expr(expr.test)
       true_block = [syntax.Assign(temp1, translate_expr(expr.body))]
       false_block = [syntax.Assign(temp2, translate_expr(expr.orelse))]
-      merge = [(result, syntax.Var (temp1), syntax.Var(temp2))]
+      merge = {result :  (syntax.Var (temp1), syntax.Var(temp2))}
       if_stmt = syntax.If(cond, true_block, false_block, merge) 
       env.current_block().append(if_stmt)
       return syntax.Var(result)
@@ -246,10 +246,25 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     elif isinstance(stmt, ast.If):
       cond = translate_expr(stmt.test)
       true_scope, true_block  = translate_block(stmt.body)
-      print true_block  
+      #print true_block  
       false_scope, false_block = translate_block(stmt.orelse)
-      # TODO: Actually combine the scopes! 
-      return syntax.If(cond, true_block, false_block, {})
+      merge = {}
+      
+      for (name, ssa_name) in true_scope.iteritems():
+        new_var = env.fresh(name)
+        left = syntax.Var(ssa_name)
+        if name in false_scope:
+          right = syntax.Var (false_scope[name])
+        else:
+          right = syntax.Var (translate_Name(name))
+        merge[new_var] = (left,right)
+      for (name, ssa_name) in false_scope.iteritems():
+        if name not in true_scope:
+          new_var = env.fresh(name)
+          left = syntax.Var (translate_Name(name))
+          right = syntax.Var(ssa_name)
+          merge[new_var] = (left, right)
+      return syntax.If(cond, true_block, false_block, merge)
    
     elif isinstance(stmt, ast.While):
       raise RuntimeError("While loops not implemented")
@@ -270,7 +285,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
   _, ssa_body = translate_block(body)   
   ssa_fn_name = NameSupply.fresh(name)
   full_args = nonlocal_arg_names + ssa_arg_names
-  print ssa_fn_name, full_args 
+  #print ssa_fn_name, full_args 
   fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
   untyped_functions[ssa_fn_name]  = fundef 
   return fundef

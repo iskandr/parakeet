@@ -53,11 +53,11 @@ def eval_fn(fn, *args):
     return functions[fn_name]()
       
   def eval_merge_left(phi_nodes):
-    for result, left, _ in phi_nodes:
+    for result, (left, _) in phi_nodes.iteritems():
       env[result] = eval_expr(left)
       
   def eval_merge_right(phi_nodes):
-    for result, _, right in phi_nodes:
+    for result, (_, right) in phi_nodes.iteritems():
       env[result] = eval_expr(right)
        
   def eval_stmt(stmt):

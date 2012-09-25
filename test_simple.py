@@ -51,6 +51,19 @@ def test_simple_branch():
   result2 = interp.run(simple_branch, 10)
   assert  result2 == 2, "Expected 2, got %s" % result2  
 
+def simple_merge(x):
+  if x == 0:
+    y = 1
+  else:
+    y = x
+  return y 
+
+def test_simple_merge():
+  result1 = simple_merge(0)
+  assert result1 == 1, "Expected 1, got %s" % result1
+  result2 = simple_merge(2)
+  assert result2 == 2, "Expected 2, got %s" % result2 
+
 if __name__ == '__main__':
   for k,v in locals().items():
     if k.startswith('test_'):
