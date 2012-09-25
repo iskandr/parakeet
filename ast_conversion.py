@@ -119,7 +119,7 @@ def op_to_prim(op):
   else:
     raise RuntimeError("Operator not implemented: %s" % op)
 
-def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
+def translate_FunctionDef(name,  args, body, global_values, outer_value_env = None):
    
   # external names of the nonlocals we use
   nonlocal_original_names =  []
@@ -130,9 +130,11 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
   arg_names = extract_arg_names(args)
   ssa_arg_names = [NameSupply.fresh(arg_name) for arg_name in arg_names]
   init_scope = dict(zip(arg_names, ssa_arg_names))
-  env = ScopedEnv(current_scope = init_scope, outer_env = outer_env)
+  env = ScopedEnv(current_scope = init_scope, outer_env = outer_value_env)
+  # maps a local SSA ID to a global fn id paired with some closure values
+
   
-    
+      
   def global_ref(name):
     """
     A global is:
@@ -147,13 +149,12 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
           return syntax.Prim(find_prim(global_value))
         elif global_value in known_python_functions:
           ssa_name = known_python_functions[global_value].name 
-          return syntax.FnRef (ssa_name)
+          return syntax.Closure(ssa_name, [])
         else:
           # we expect that translate_function_value will add 
           # the function to the global lookup table known_functions
           ssa_fundef = translate_function_value(global_value)
-
-          return syntax.FnRef (ssa_fundef.ssa_name)
+          return syntax.Closure (ssa_fundef.ssa_name, [])
         
       else:
         # if it's global data... 
@@ -163,6 +164,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
         return syntax.Var (ssa_name)
     else:
       raise NameNotFound(name)
+  
+ 
     
   def translate_Name(name):     
     """
@@ -198,6 +201,11 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
 
       fn, args, kwargs, starargs = \
         expr.func, expr.args, expr.kwargs, expr.starargs
+      assert kwargs is None, "Dictionary of keyword args not supported"
+      assert starargs is None, "List of varargs not supported"
+      fn_val = translate_expr(fn)
+      arg_vals = map(translate_expr, args)
+      return syntax.Invoke(fn_val, arg_vals) 
       
       #return translate_Call(fn, args, kwargs, starargs): 
       #raise TypeError, dir(expr)
@@ -211,7 +219,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
     else:
       translator_fn_name = 'translate_' + nodetype
       translate_fn = locals()[translator_fn_name]
-      return translate_fn()
+      result = translate_fn()
+      assert isinstance(result, syntax.Expr), "%s not an expr" % result 
+      return result 
       
   def translate_Assign(lhs, rhs):
     assert isinstance(lhs, ast.Name)
@@ -231,8 +241,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
       fundef, nonlocals = \
         translate_FunctionDef(name, args, body, global_values, env)
       closure_args = map(translate_Name, nonlocals)
-      ssa_fn_name = fundef.name 
-      # TODO: When does the function get globally registered? 
+      local_name = env.fresh(name)
+      closure = syntax.Closure(fundef.name, closure_args)
+      return syntax.Assign(local_name, closure)
+    
     elif isinstance(stmt, ast.Assign):     
       return translate_Assign(stmt.target[0], stmt.value)
     elif isinstance(stmt, ast.Return):
@@ -242,7 +254,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_env = None):
   
   ssa_body = [translate_stmt(stmt) for stmt in body]
   ssa_fn_name = NameSupply.fresh(name)
-  fundef = syntax.Fn(ssa_fn_name, ssa_arg_names, ssa_body, nonlocal_original_names)
+  fundef = syntax.Fn(ssa_fn_name, ssa_arg_names, ssa_body)
   untyped_functions[ssa_fn_name]  = fundef 
   return fundef, nonlocal_original_names
 
@@ -261,7 +273,7 @@ def translate_function_source(source, global_values):
 def translate_function_value(fn):
   assert hasattr(fn, 'func_globals')
   source = inspect.getsource(fn)
-  fundef = translate_function_source(source, fn.func_globals)
+  fundef, _ = translate_function_source(source, fn.func_globals)
   known_python_functions[fn] = fundef
   return fundef   
   

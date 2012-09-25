@@ -1,3 +1,5 @@
+import numpy as np 
+
 from llvm import *
 from llvm.core import *
 from llvm.ee import *

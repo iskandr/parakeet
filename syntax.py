@@ -37,22 +37,47 @@ class Binop(Expr):
 
 class Const(Expr):
   _members = ['value']
-  
-class FnRef(Expr):
-  _members = ['name']
+  def __repr__(self):
+    return repr(self.value)
   
 class Var(Expr):
   _members = ['name']
+  
+  def __repr__(self):
+    return self.name 
   
 class Prim(Expr):
   _members = ['value']
 
 class Tuple(Expr):
   _members = ['elts']
+
+class Closure(Expr):
+  """
+  Create a closure which points to a global fn 
+  with a list of partial args
+  """
+  _members = ['fn', 'args']
   
+class Invoke(Expr):
+  """
+  Invoke a closure with extra args 
+  """
+  _members = ['closure', 'args']
+  
+
+class Call(Expr):
+  """
+  Call a function directly--- the first argument
+  should be a global fn name and not a closure
+  """
+  _members = ['fn', 'args']
   
 class Fn(TreeLike):
-  _members = ['name',  'args', 'body', 'nonlocals']
+  """
+  Function definition
+  """
+  _members = ['name',  'args', 'body']
       
 class Traversal:
   def visit_block(self, block, *args, **kwds):
