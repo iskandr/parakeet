@@ -58,12 +58,21 @@ def simple_merge(x):
     y = x
   return y 
 
+
 def test_simple_merge():
-  result1 = simple_merge(0)
+  result1 = interp.run(simple_merge, 0)
   assert result1 == 1, "Expected 1, got %s" % result1
-  result2 = simple_merge(2)
+  result2 = interp.run(simple_merge, 2)
   assert result2 == 2, "Expected 2, got %s" % result2 
 
+#def call_sqrt(x):
+#  return np.sqrt(x)
+
+#def test_sqrt():
+  #result = interp.run(call_sqrt, 100)
+  #assert result == 10, "Expected 10, got %s" % result 
+  
+  
 if __name__ == '__main__':
   for k,v in locals().items():
     if k.startswith('test_'):

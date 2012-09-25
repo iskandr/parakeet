@@ -219,7 +219,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
   def translate_Assign(lhs, rhs):
     assert isinstance(lhs, ast.Name)
     ssa_lhs_id = env.fresh(lhs.id) 
-    ssa_rhs = translate_expr(rhs, env)
+    ssa_rhs = translate_expr(rhs)
     return syntax.Assign(ssa_lhs_id, ssa_rhs)
       
 
@@ -239,7 +239,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       return syntax.Assign(local_name, closure)
     
     elif isinstance(stmt, ast.Assign):     
-      return translate_Assign(stmt.target[0], stmt.value)
+      return translate_Assign(stmt.targets[0], stmt.value)
     elif isinstance(stmt, ast.Return):
       rhs = syntax.Return(translate_expr(stmt.value))
       return rhs 
