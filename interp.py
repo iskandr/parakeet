@@ -40,7 +40,7 @@ def eval_fn(fn, *args):
       clos = eval_expr(expr.closure)
       arg_vals = map(eval_expr, expr.args)
       combined_arg_vals = clos.fixed_args + arg_vals
-      return eval_fn(clos.fn, combined_arg_vals)
+      return eval_fn(clos.fn, *combined_arg_vals)
       
     def expr_Closure():
       fundef = untyped_functions[expr.fn]
@@ -63,6 +63,7 @@ def eval_fn(fn, *args):
   def eval_stmt(stmt):
     if isinstance(stmt, syntax.Return):
       v = eval_expr(stmt.value)
+
       raise ReturnValue(v)
     elif isinstance(stmt, syntax.Assign):
       env[stmt.lhs] = eval_expr(stmt.rhs)
@@ -74,16 +75,17 @@ def eval_fn(fn, *args):
       else:
         eval_block(stmt.false)
         eval_merge_right(stmt.merge)
-       
     else: 
       raise RuntimeError("Not implemented: %s" % stmt)
+    
   def eval_block(stmts):
+    #print "eval", stmts 
     for stmt in stmts:
       eval_stmt(stmt)
+
   try:
-    
-    #assert False, fn
     eval_block(fn.body)
+   
   except ReturnValue as r:
     return r.value 
   except:

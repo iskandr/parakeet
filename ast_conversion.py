@@ -132,11 +132,12 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
           return syntax.Closure (ssa_fundef.ssa_name, [])
         
       else:
+        
         # if it's global data... 
         ssa_name = env.fresh(name)
         nonlocal_original_names.append(name)
         nonlocal_arg_names.append(ssa_name)
-
+        print name, ssa_name, nonlocal_arg_names 
         return syntax.Var (ssa_name)
     else:
       raise NameNotFound(name)
@@ -244,12 +245,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       return rhs 
     elif isinstance(stmt, ast.If):
       cond = translate_expr(stmt.test)
-      env.push()
-      translate_block(stmt.body)
-      true_scope, true_block = env.pop() 
-      env.push()
-      translate_block(stmt.orelse)
-      false_scope, false_block = env.pop()
+      true_scope, true_block  = translate_block(stmt.body)
+      print true_block  
+      false_scope, false_block = translate_block(stmt.orelse)
+      # TODO: Actually combine the scopes! 
       return syntax.If(cond, true_block, false_block, {})
    
     elif isinstance(stmt, ast.While):
@@ -267,10 +266,11 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     for stmt in stmts:
       curr_block.append(translate_stmt(stmt))
     return env.pop()
-  
+    
+  _, ssa_body = translate_block(body)   
   ssa_fn_name = NameSupply.fresh(name)
   full_args = nonlocal_arg_names + ssa_arg_names
-  _, ssa_body = translate_block(body)   
+  print ssa_fn_name, full_args 
   fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
   untyped_functions[ssa_fn_name]  = fundef 
   return fundef

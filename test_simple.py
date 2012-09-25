@@ -39,17 +39,20 @@ def test_if_exp():
   assert interp.run(use_if_exp, 9) == 1
   assert interp.run(use_if_exp, 10) == 2
   
-def simple_control_flow(x):
+def simple_branch(x):
   if x < 10:
     return 1
   else: 
     return 2
     
-def test_simple_control_flow():
-  result1 = interp.run(simple_control_flow, 9)
+def test_simple_branch():
+  result1 = interp.run(simple_branch, 9)
   assert result1 == 1, "Expected 1, got %s" % result1
-  result2 = interp.run(simple_control_flow, 10)
+  result2 = interp.run(simple_branch, 10)
   assert  result2 == 2, "Expected 2, got %s" % result2  
 
-
+if __name__ == '__main__':
+  for k,v in locals().items():
+    if k.startswith('test_'):
+      v()
     
