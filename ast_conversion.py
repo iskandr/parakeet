@@ -8,7 +8,8 @@ from function_registry import register_python_fn, lookup_python_fn
 
 class NameNotFound(Exception):
   def __init__(self, name):
-    self.name = name 
+    self.name = name
+     
     
 class NameSupply:
   versions = {}
@@ -92,8 +93,6 @@ def extract_arg_names(args):
 
 
 
-
-
 def translate_FunctionDef(name,  args, body, global_values, outer_value_env = None):
    
   # external names of the nonlocals we use
@@ -166,12 +165,16 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         return global_ref(name)
       
   def translate_expr(expr):
+    def translate_UnaryOp():
+      ssa_val = translate_expr(expr.operand)
+      prim = prims.find_ast_op(expr.op)
+      return syntax.PrimCall(prim, [ssa_val])
+    
     def translate_BinOp():
       ssa_left = translate_expr(expr.left)
       ssa_right = translate_expr(expr.right)
-      ssa_op = translate_expr(expr.op)
-      return syntax.Call(ssa_op, [ssa_left, ssa_right] )
-      
+      prim = prims.find_ast_op(expr.op)
+      return syntax.PrimCall(prim, [ssa_left, ssa_right] )
      
     def translate_Compare():
       lhs = translate_expr(expr.left)   
@@ -179,8 +182,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       prim = prims.find_ast_op(expr.ops[0])
       assert len(expr.comparators) == 1
       rhs = translate_expr(expr.comparators[0])
-
-      return syntax.Call(syntax.Prim (prim), [lhs, rhs])
+      return syntax.PrimCall(prim, [lhs, rhs])
     
     def translate_Call():
       fn, args, kwargs, starargs = \
@@ -207,8 +209,6 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       return translate_Name(expr.id)
     elif isinstance(expr, ast.Num):
       return syntax.Const(expr.n)
-    elif prims.is_ast_op(expr):
-      return syntax.Prim(prims.find_ast_op(expr))
     else:
       translator_fn_name = 'translate_' + nodetype
       translate_fn = locals()[translator_fn_name]

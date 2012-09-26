@@ -46,6 +46,7 @@ class Var(Expr):
     return self.name 
   
 class Prim(Expr):
+  """Lift primitive to the value level by creating a PrimClosure"""
   _members = ['value']
 
 class Tuple(Expr):
@@ -64,7 +65,13 @@ class Invoke(Expr):
   """
   _members = ['closure', 'args']
   
-
+class PrimCall(Expr):
+  """
+  Call a primitive function, the "prim" field should be a 
+  prims.Prim object
+  """
+  _members = ['prim', 'args']
+  
 class Call(Expr):
   """
   Call a function directly--- the first argument

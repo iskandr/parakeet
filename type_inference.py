@@ -1,8 +1,8 @@
-from ssa import Assign, Op, Var, Const
-from ssa import SyntaxTraversal
-from types import type_of_value 
+from parakeet_types import type_of_value 
+import syntax 
+from function_registry import typed_functions, untyped_functions
 
-class InferTypes(SyntaxTraversal):
+class InferTypes(syntax.Traversal):
   def stmt_Set(self, stmt, tenv): 
     rhs_type = self.visit_expr(stmt.rhs, tenv)
     tenv[stmt.lhs] = rhs_type
@@ -23,7 +23,7 @@ class InferTypes(SyntaxTraversal):
     kwd_types = dict([ (k, self.visit_expr(v)) for \
       (k,v) in expr.kwds.iteritems()])
        
-    if isinstance(fn, Var):
+    if isinstance(fn, syntax.Var):
       untyped_fn = find_fn(fn_expr.id)
       global_types =  
       combine_args(untyped_fn.arg_names,

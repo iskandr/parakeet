@@ -8,6 +8,7 @@ class Type(TreeLike):
     
 
 byte_sizes = { 
+  np.bool8 : 1, 
   np.int8 : 1, 
   np.int16 : 2, 
   np.int32 : 4, 
@@ -86,6 +87,7 @@ def is_scalar_subtype(t1, t2):
 # as an optimiztion so we don't 
 # end up allocating lots of identical
 # objects 
+Bool = Scalar(np.bool8)
 Int8 = Scalar(np.int8)
 Int16 = Scalar(np.int16)
 Int32 = Scalar(np.int32)
@@ -94,6 +96,7 @@ Float32 = Scalar(np.float32)
 Float64 = Scalar(np.float64)
 
 _dtype_to_type = { 
+  np.bool8 : Bool, 
   np.int8 : Int8, 
   np.int16 : Int16, 
   np.int32 : Int32, 

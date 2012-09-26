@@ -23,16 +23,23 @@ def eval_fn(fn, *args):
   def eval_expr(expr):    
     def expr_Const():
       return expr.value
-    def expr_Call():
-      fn = eval_expr(expr.fn)
+    
+    def expr_PrimCall():
+      fn = expr.prim.fn 
       arg_vals = map(eval_expr, expr.args)
-      return fn(*arg_vals) 
+      return fn(*arg_vals)
+    
+    def expr_Call():
+      fundef = untyped_functions[expr.fn]
+      arg_vals = map(eval_expr, expr.args)
+      return eval_fn(fundef, *arg_vals) 
+    
     def expr_Prim():
-      #assert False, expr.value.fn
-       
       return expr.value.fn
+    
     def expr_Var():
       return env[expr.name]
+    
     def expr_Invoke():
       # for the interpreter Invoke and Call are identical since
       # we're dealing with runtime reprs for functions, prims, and 

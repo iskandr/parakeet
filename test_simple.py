@@ -1,8 +1,18 @@
-
-
 import unittest
 import interp
 import numpy as np
+
+class TestResult:
+  def __init__(self, value):
+    self.value = value 
+    
+  def __eq__(self, other):
+    assert self.value == other, "Expected %s, got %s" % (other, self.value)
+
+ 
+def expect(fn, *args):
+  actual = interp.run(fn, *args)
+  return TestResult(actual)
  
 def add1(x):
   return x + 1
@@ -60,11 +70,9 @@ def simple_merge(x):
 
 
 def test_simple_merge():
-  result1 = interp.run(simple_merge, 0)
-  assert result1 == 1, "Expected 1, got %s" % result1
-  result2 = interp.run(simple_merge, 2)
-  assert result2 == 2, "Expected 2, got %s" % result2 
-
+  expect(simple_merge, 0) == 1
+  expect(simple_merge, 2) == 2
+ 
 #def call_sqrt(x):
 #  return np.sqrt(x)
 
