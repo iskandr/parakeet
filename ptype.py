@@ -83,6 +83,23 @@ def is_scalar_subtype(t1, t2):
     isinstance(t2, Scalar) and \
     ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or (t1.is_int() and t2.is_float()))
 
+
+class Closure(Type): 
+  """
+  Closures statically refer to the untyped function id they close over 
+  """
+  _members = ['fn', 'args']
+  
+
+class ClosureSet(Type):
+  """
+  If multiple closures meet along control flow paths then join them into a closure set
+  """
+  _members = ['closures'] 
+  
+  def __init__(self, *closure_types):
+    self.closures = set(closure_types)
+  
 # preallocate all the scalar types
 # as an optimiztion so we don't 
 # end up allocating lots of identical
