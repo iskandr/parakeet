@@ -24,24 +24,22 @@ class Type(TreeLike):
   
 
 class Any(Type):
-  """Top of the type lattice, absorbs all other types"""
-
-  def __init__(self):
-    pass 
-  
+  """top of the type lattice, absorbs all types"""
+  _members = []
   def combine(self, other):
     return self
-
+  
+# since there's only one Any type, just create an instance of the same name
+Any = Any()
 
 class Unknown(Type):
-  """Bottom of the type lattice, gets absorbed by all other types"""
+  """Bottom of the type lattice, absorbed by all other types"""
   _members = []
-  
-  def combine(self, other):
+  def  combine(self, other):
     return other
-  
-  
 
+#single instance of the Unknown type with same name
+Unknown = Unknown()
 
 ## look up types by their number of bytes
 #def find_float_dtype_by_nbytes(nbytes):

@@ -2,6 +2,7 @@ import syntax
 import ptype
 import names 
 from function_registry import typed_functions
+from common import dispatch 
 
 
 def match(pattern, t, env):
@@ -79,15 +80,17 @@ def specialize(fn, type_env, return_type):
   return None 
 
 
+
 def _infer_types(fn, arg_types):
   """
   Actual implementation of type inference which doesn't attempt to 
   look up cached version of typed function
   """ 
   tenv = match_args(fn.args, arg_types)
-  return_type = ptype.Unknown  
+  return_type = ptype.Unknown 
   
   def expr_type(expr):
+    
     def expr_Closure():
       arg_types = map(expr_type, expr.args)
       closure_type = ptype.Closure(expr.fn, arg_types)
@@ -110,13 +113,8 @@ def _infer_types(fn, arg_types):
           raise InferenceFailed("Call might result in either %s or %s" % (result_type, ret) )
       return result_type
     
-    nodetype = expr.__class__.__name__   
-    fn_name = 'expr_' + nodetype   
-    local_fns = locals()
-    if fn_name not in local_fns:
-      raise RuntimeError("Unsupported node type %s" % nodetype)
-    else:
-      result_type = local_fns[fn_name]
+    result_type = dispatch(expr, prefix="expr")
+
       
       
       
