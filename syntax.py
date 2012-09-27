@@ -20,19 +20,13 @@ class While(Stmt):
      nodes for incoming and outgoing variables
      of the form [(new_var1, (old_var1,old_var2)]
    """
-  _members = ['header', 'cond', 'body', 'phi_before', 'phi_after']
+  _members = ['header', 'cond', 'body', 'merge_before', 'merge_after']
   
 class Expr(TreeLike):
   pass
 
 class Adverb(Expr):
   pass
-
-#class Unop(Expr):
-#  _members = ['op', 'value']
-  
-#class Binop(Expr):
-#  _members = ['op', 'left', 'right']
 
 
 class Const(Expr):
@@ -84,6 +78,12 @@ class Fn(TreeLike):
   Function definition
   """
   _members = ['name',  'args', 'body', 'nonlocals']
+  
+class TypedFn(TreeLike):
+  """The body of a TypedFn should contain Expr nodes
+  which have been extended with a 'type' attribute
+  """
+  _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
       
 class Traversal:
   def visit_block(self, block, *args, **kwds):

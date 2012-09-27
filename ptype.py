@@ -1,46 +1,109 @@
 import numpy as np 
+import numpy_type_info 
 
 from tree import TreeLike
+
+class TypeFailure(Exception):
+  def __init__(self, msg):
+    self.msg = msg 
+
+class IncompatibleTypes(Exception):
+  def __init__(self, t1, t2):
+    self.t1 = t1
+    self.t2 = t2
+    
+  def __repr__(self):
+    return "IncompatibleTypes(%s, %s)" % (self.t1, self.t2)
 
 class Type(TreeLike):  
   def nbytes(self):
     raise RuntimeError("nbytes not implemented")
-    
 
-byte_sizes = { 
-  np.bool8 : 1, 
-  np.int8 : 1, 
-  np.int16 : 2, 
-  np.int32 : 4, 
-  np.int64 : 8, 
-  np.float32 : 4, 
-  np.float64 : 8, 
-  np.uint8 : 1, 
-  np.uint16 : 2, 
-  np.uint32 : 4, 
-  np.uint64 : 8
-}
+  def combine(self, other):
+    raise IncompatibleTypes(self, other)
+  
+
+class Any(Type):
+  """Top of the type lattice, absorbs all other types"""
+
+  def __init__(self):
+    pass 
+  
+  def combine(self, other):
+    return self
+
+
+class Unknown(Type):
+  """Bottom of the type lattice, gets absorbed by all other types"""
+  _members = []
+  
+  def combine(self, other):
+    return other
+  
+  
+
+
+## look up types by their number of bytes
+#def find_float_dtype_by_nbytes(nbytes):
+#  if nbytes <= 4:
+#    return np.float32
+#  else:
+#    return np.float64
+
+  
+
 
 # base class for all concrete scalar types
 # don't actually tag any values with this
 class Scalar(Type):
   rank = 0
-  _members = ['dtype']
+  #_members = ['dtype']
+  
+  def __init__(self, dtype, name = None):
+    self.dtype = dtype 
+    
+    if name is None:
+      name = dtype.__name__
+    self.name = name   
   
   def __eq__(self, other):
     return isinstance(other, Scalar) and other.dtype == self.dtype 
-
+ 
+  def __hash__(self):
+    return hash(self.dtype)
+  
   def __repr__(self):
-    return str(self.dtype)
+    return self.name 
 
   def is_float(self):
     return self.dtype in [np.float32, np.float64]
 
+  def is_signed(self):
+    return self.dtype in [np.uint8, np.uint16, np.uint32, np.uint64]
+  
   def is_int(self):
     return not self.is_float()
 
   def nbytes(self):
-    return byte_sizes[self.dtype]
+    return numpy_type_info.byte_sizes[self.dtype]
+
+  def combine(self, other):
+    if isinstance(other, Scalar):
+      combined_type = numpy_type_info.combine(self.dtype, other.dtype)
+      if combined_type:
+        return combined_type
+      else:
+        raise IncompatibleTypes(self, other)
+    elif isinstance(other, Array):
+      raise RuntimeError("Array not implemented")
+    else:
+      raise IncompatibleTypes(self, other)
+      
+def is_scalar_subtype(t1, t2):
+  return isinstance(t1, Scalar) and \
+    isinstance(t2, Scalar) and \
+    ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or (t1.is_int() and t2.is_float()))
+
 
 class CompoundType(Type):
   pass 
@@ -65,6 +128,11 @@ class Array(CompoundType):
     return isinstance(other, Array) and \
       self.elt_type == other.elt_type and self.rank == other.rank
 
+  def combine(self, other):
+    if self == other:
+      return self
+    else:
+      raise TypeFailure()
 class Tuple(CompoundType):
   rank = 0 
   _members = ['elt_types']
@@ -78,10 +146,9 @@ class Tuple(CompoundType):
   def __eq__(self, other):
     return isinstance(other, Tuple) and self.elt_types == other.elt_types 
 
-def is_scalar_subtype(t1, t2):
-  return isinstance(t1, Scalar) and \
-    isinstance(t2, Scalar) and \
-    ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or (t1.is_int() and t2.is_float()))
+  def __hash__(self):
+    return hash(self.elt_types)
+
 
 
 class Closure(Type): 
@@ -100,11 +167,14 @@ class ClosureSet(Type):
   def __init__(self, *closure_types):
     self.closures = set(closure_types)
   
+  
+
+
 # preallocate all the scalar types
 # as an optimiztion so we don't 
 # end up allocating lots of identical
 # objects 
-Bool = Scalar(np.bool8)
+Bool = Scalar(np.bool8, 'bool')
 Int8 = Scalar(np.int8)
 Int16 = Scalar(np.int16)
 Int32 = Scalar(np.int32)

@@ -5,33 +5,10 @@ import prims
 from prims import is_prim, find_prim
 from function_registry import untyped_functions, already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn 
+import names
+from names import NameNotFound
 
-class NameNotFound(Exception):
-  def __init__(self, name):
-    self.name = name
-     
-    
-class NameSupply:
-  versions = {}
-  original_names = {}
   
-  @classmethod
-  def get(cls, name):
-    version = cls.versions.get(name)
-    if version is None:
-      raise NameNotFound(name)
-    else:
-      return "%s.%d" % (name, version)
-    
-  @classmethod  
-  def fresh(cls, name):
-    version = cls.versions.get(name, 0) + 1 
-    cls.versions[name] = version
-    ssa_name = "%s.%d" % (name, version)
-    cls.original_names[ssa_name] = name
-    return ssa_name 
-  
-
 
 class ScopedEnv:  
   def __init__(self, outer_env = None):
@@ -41,7 +18,7 @@ class ScopedEnv:
     self.outer_env = outer_env
     
   def fresh(self, name):
-    fresh_name = NameSupply.fresh(name)
+    fresh_name = names.fresh(name)
     self.scopes[-1][name] = fresh_name 
     return fresh_name
   
@@ -283,7 +260,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     return env.pop()
     
   _, ssa_body = translate_block(body)   
-  ssa_fn_name = NameSupply.fresh(name)
+  ssa_fn_name = names.fresh(name)
   full_args = nonlocal_arg_names + ssa_arg_names
   #print ssa_fn_name, full_args 
   fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
