@@ -15,6 +15,10 @@ class IncompatibleTypes(Exception):
   def __repr__(self):
     return "IncompatibleTypes(%s, %s)" % (self.t1, self.t2)
 
+  def __str__(self):
+    return repr(self)
+  
+  
 class Type(TreeLike):  
   def nbytes(self):
     raise RuntimeError("nbytes not implemented")
@@ -55,13 +59,16 @@ Unknown = Unknown()
 # don't actually tag any values with this
 class Scalar(Type):
   rank = 0
-  #_members = ['dtype']
+  _members = ['dtype']
   
   def __init__(self, dtype, name = None):
+    if not isinstance(dtype, np.dtype):
+      dtype = np.dtype(dtype)
+    
     self.dtype = dtype 
     
     if name is None:
-      name = dtype.__name__
+      name = dtype.type.__name__
     self.name = name   
   
   def __eq__(self, other):
@@ -73,8 +80,9 @@ class Scalar(Type):
   def __repr__(self):
     return self.name 
 
+
   def is_float(self):
-    return self.dtype in [np.float32, np.float64]
+    return self.dtype in [np.dtype(np.float32), np.dtype(np.float64)]
 
   def is_signed(self):
     return self.dtype in [np.uint8, np.uint16, np.uint32, np.uint64]
@@ -83,12 +91,12 @@ class Scalar(Type):
     return not self.is_float()
 
   def nbytes(self):
-    return numpy_type_info.byte_sizes[self.dtype]
+    return self.dtype.itemsize
 
   def combine(self, other):
     if isinstance(other, Scalar):
       combined_type = numpy_type_info.combine(self.dtype, other.dtype)
-      if combined_type:
+      if combined_type is not None:
         return combined_type
       else:
         raise IncompatibleTypes(self, other)
@@ -130,7 +138,8 @@ class Array(CompoundType):
     if self == other:
       return self
     else:
-      raise TypeFailure()
+      raise IncompatibleTypes(self, other)
+    
 class Tuple(CompoundType):
   rank = 0 
   _members = ['elt_types']
@@ -146,16 +155,23 @@ class Tuple(CompoundType):
 
   def __hash__(self):
     return hash(self.elt_types)
-
-
-
-class Closure(Type): 
-  """
-  Closures statically refer to the untyped function id they close over 
-  """
-  _members = ['fn', 'args']
   
+  def combine(self, other):
+    if isinstance(other, Tuple) and len(other.elt_types) == len(self.elt_types):
+      combined_elt_types = [t1.combine(t2) for \
+                            (t1, t2) in zip(self.elt_types, other.elt_tyepes)]
+      if combined_elt_types != self.elt_types:
+        return Tuple(combined_elt_types)
+      else:
+        return self
+    else:
+      raise IncompatibleTypes(self, other)
 
+class Closure:
+  def __init__(self, fn, args):
+    self.fn = fn
+    self.args = args 
+    
 class ClosureSet(Type):
   """
   If multiple closures meet along control flow paths then join them into a closure set
@@ -165,43 +181,51 @@ class ClosureSet(Type):
   def __init__(self, *closure_types):
     self.closures = set(closure_types)
   
+  def combine(self, other):
+    if isinstance(other, ClosureSet):
+      combined_closures = self.closures.union(other.closures)
+      if combined_closures != self.closures:
+        return ClosureSet(combined_closures)
+      else:
+        return self 
+    else:
+      raise IncompatibleTypes(self, other)
   
 
 
-# preallocate all the scalar types
-# as an optimiztion so we don't 
-# end up allocating lots of identical
-# objects 
-Bool = Scalar(np.bool8, 'bool')
-Int8 = Scalar(np.int8)
-Int16 = Scalar(np.int16)
-Int32 = Scalar(np.int32)
-Int64 = Scalar(np.int64)
-Float32 = Scalar(np.float32)
-Float64 = Scalar(np.float64)
+_dtype_to_parakeet = {}
+_parakeet_to_dtype = {}
+def register_scalar_type(dtype, name = None):
+  if not isinstance(dtype, np.dtype):
+    dtype = np.dtype(dtype)
+  parakeet_type = Scalar(dtype, name)
+  _dtype_to_parakeet[dtype] = parakeet_type
+  _parakeet_to_dtype[parakeet_type] = dtype
+  return parakeet_type
 
-_dtype_to_type = { 
-  np.bool8 : Bool, 
-  np.int8 : Int8, 
-  np.int16 : Int16, 
-  np.int32 : Int32, 
-  np.int64 : Int64, 
-  np.float32 : Float32, 
-  np.float64 : Float64
-}
+def from_dtype (dtype):
+  return _dtype_to_parakeet[dtype] 
 
-def dtype_to_type(dtype):
-  return _dtype_to_type[dtype] 
+Bool = register_scalar_type(np.bool8, 'bool')
+Int8 = register_scalar_type(np.int8)
+Int16 = register_scalar_type(np.int16)
+Int32 = register_scalar_type(np.int32)
+Int64 = register_scalar_type(np.int64)
+Float32 = register_scalar_type(np.float32)
+Float64 = register_scalar_type(np.float64)
+
+
+
   
 def type_of_scalar(x):
   assert np.isscalar(x)
   if isinstance(x, int):
-    x = np.int64(x)
+      x = np.int64(x)
   elif isinstance(x, float):
     x = np.float64(x)
   else:
     assert hasattr(x, 'dtype')
-  return dtype_to_type(x.dtype)
+  return from_dtype(x.dtype)
 
 def type_of_value(x):
   if np.isscalar(x):
@@ -210,6 +234,14 @@ def type_of_value(x):
     elt_types = map(type_of_value, x)
     return Tuple(elt_types)
   elif isinstance(x, np.ndarray):
-    return Array(dtype_to_type(x.dtype), np.rank(x))
+    return Array(from_dtype(x.dtype), np.rank(x))
   else:
     raise RuntimeError("Unsupported type " + str(type(x)))
+  
+def combine_type_list(types):
+  common_type = Unknown 
+
+  for t in types:
+    common_type = common_type.combine(t)
+  return common_type
+

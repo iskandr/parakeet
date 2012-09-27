@@ -4,60 +4,53 @@ import numpy as np
 def _find_all_dtypes():
   all_dtypes = []
   # collect all the numpy scalar types 
-  for (category, dtypes) in np.sctypes.iteritems():
-    if category != 'others':
-      all_dtypes.extend(dtypes)
+  for (category, numpy_types) in np.sctypes.iteritems():
+    # skip currently unsupported types like 'unicode' 
+    if category == 'others':
+      numpy_types = [np.bool8]
+    dtypes = map(np.dtype, numpy_types)
+    all_dtypes.extend(dtypes)
   return all_dtypes 
 
 dtypes = _find_all_dtypes()
+float_dtypes = map(np.dtype, np.sctypes['float'])
+int_dtypes = map(np.dtype, np.sctypes['int'])
+uint_dtypes = map(np.dtype, np.sctypes['uint'])
 
-def _generate_byte_sizes():
-  byte_sizes = {}
-  for dtype in dtypes:
-    x = dtype(0)
-    # look up the buffer storing this numpy scalar instance
-    # and get its length in bytes
-    if hasattr(x, 'data'):
-      byte_sizes[dtype] = len(x.data)
-  return byte_sizes
+ 
+def is_int(dt):
+  return dt in int_dtypes
 
-byte_sizes = _generate_byte_sizes()
+def is_uint(dt):
+  return dt in uint_dtypes
+
+def is_float(dt):
+  return dt in float_dtypes 
 
 
 def _generate_conversion_table():
-  conversions = {}
+  conversions  = {}
+  
   # for all pairs of dtypes, 
   # create instances of that type
   # and add them together
   # the type of result type should be what we
   # always convert that combination of types to
-  for t1 in dtypes:
-    x = t1(1)
-    for t2 in dtypes:
-      result = x + t2(1)
+  for dtype1 in dtypes:
+    
+    x = dtype1.type(1)  
+    for dtype2 in dtypes:
+      result = x + dtype2.type(1)
       try:
-        conversions[ (t1, t2) ] = result.dtype 
+        conversions[ (dtype1, dtype2) ] = result.dtype 
       except:
         pass    
-  return conversions
+  return conversions 
 
+# map pairs of numpy type objects to result of operations between them 
 conversion_table = _generate_conversion_table()
   
   
-   
-def is_int(dtype):
-  return dtype in np.sctypes['int']
-
-def is_uint(dtype):
-  return dtype in np.sctypes['uint']
-
-def is_floating(dtype):
-  return dtype in np.sctypes['float']
-
-def nbytes(dtype):
-  return byte_sizes[dtype]
-
-def combine(t1, t2):
-  return conversion_table.get( (t1, t2) )
+def combine(dt1, dt2):
+  return conversion_table.get( (dt1, dt2) )
   
-

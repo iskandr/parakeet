@@ -35,6 +35,7 @@ def match_args(arg_patterns, types):
     if isinstance(p, str):
       # TODO: get rid of this branch once all arg lists are uniformly either
       # Var or Tuple lists 
+
       match(syntax.Var(p), t, tenv)
     else:
       match(p, t, tenv)
@@ -43,13 +44,6 @@ def match_args(arg_patterns, types):
 class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg 
-
-import copy 
-def typed(untyped_obj, t):
-  typed_obj = copy.deepcopy(untyped_obj)
-  setattr(typed_obj, 'type', t)
-  return typed_obj 
-
 
 
 def infer_types(fn, arg_types):
@@ -65,7 +59,8 @@ def infer_types(fn, arg_types):
     typed_fundef = typed_functions[key]
     return typed_fundef.return_type, typed_fundef.type_env
   else:
-    return_type, type_env =  _infer_types(fn, arg_types) 
+    type_env =  _infer_types(fn, arg_types) 
+    return_type = type_env["$return"]
     typed_body = specialize(fn, type_env, return_type)
     typed_arg_names = map(names.refresh, fn.args)
     typed_id = names.refresh(fn.name)
@@ -87,8 +82,9 @@ def _infer_types(fn, arg_types):
   look up cached version of typed function
   """ 
   tenv = match_args(fn.args, arg_types)
-  return_type = ptype.Unknown 
-  
+  # keep track of the return 
+  tenv['$return'] = ptype.Unknown
+   
   def expr_type(expr):
     
     def expr_Closure():
@@ -100,21 +96,46 @@ def _infer_types(fn, arg_types):
     def expr_Invoke():
       closure_set = expr_type(expr.closure)
       arg_types = map(expr_type, expr.args)
-      
+      invoke_result_type = ptype.Unknown
       for closure_type in closure_set.closures:
         untyped_id, closure_arg_types = closure_type.fn, closure_type.args
-        _, ret = infer_types(untyped_id, closure_arg_types + arg_types)
-        if result_type is None:
-          result_type = ret
-        elif isinstance(result_type, ptype.ClosureSet) and \
-             isinstance(ret, ptype.ClosureSet):
-          result_type = ptype.ClosureSet(result_type.closures.union(ret.closures))
-        elif result_type != ret: 
-          raise InferenceFailed("Call might result in either %s or %s" % (result_type, ret) )
-      return result_type
+        ret, _ = infer_types(untyped_id, closure_arg_types + arg_types)
+        invoke_result_type.combine(ret)
+      return invoke_result_type
+  
+    def expr_PrimCall():
+      arg_types = map(expr_type, expr.args)
+     
+      return ptype.combine_type_list(arg_types)
+  
+    def expr_Var():
+      if expr.name in tenv:
+        t = tenv[expr.name]
+        return t
+      else:
+        raise names.NameNotFound(expr.name)
     
-    result_type = dispatch(expr, prefix="expr")
-
+    def expr_Const():
+      return ptype.type_of_value(expr.value)
+    
+    return dispatch(expr, prefix="expr")
+       
+  def analyze_stmt(stmt):
+    def stmt_Assign():
+      pass
+    def stmt_If():
+      pass
+    def stmt_Return():
+      t = expr_type(stmt.value)
+      curr_return_type = tenv["$return"]
+      tenv["$return"] = curr_return_type.combine(t)
+    dispatch(stmt, prefix="stmt")
+  
+  def analyze_block(stmts):
+    for stmt in stmts:
+      analyze_stmt(stmt)
+  analyze_block(fn.body)
+  return tenv
       
       
       

@@ -55,17 +55,6 @@ class TreeLike(object):
       setattr(self, k, v)
       
     self.finalize_init()
-    
-    # if any attributes are also treelike, then mark this object as their parent
-    self.mark_children()
-
-  def mark_children(self):
-    'Mark this node as the parent of any child nodes.'
-    for v in flatten(self.expand_children(depth=2)):
-      if v != self and v.parent != self:
-        v.parent = self
-        v.mark_children()
-        #logging.info('%s -> %s', self.node_type(), v.node_type())
         
   def ancestor(self, filter_fn = lambda n: True):
     'Return the first ancestor of this node matching filter_fn'
