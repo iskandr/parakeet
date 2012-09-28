@@ -114,35 +114,37 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       else:
         return global_ref(name)
   
-  def create_phi_nodes(left_scope, right_scope = {}, new_names = {}):
+  def create_phi_nodes(left_scope, right_scope, new_names = {}):
     """
     Phi nodes make explicit the possible sources of each variable's values and 
     are needed when either two branches merge or when one was optionally taken. 
     """
     merge = {}
-    for (name, ssa_name) in left_scope.iteritems():
-      if name in new_names:
-        new_name = new_names[name]
-      else:
-        new_name = env.fresh(name)
-      
+    for (name, ssa_name) in left_scope.iteritems():      
       left = syntax.Var(ssa_name)
       if name in right_scope:
         right = syntax.Var (right_scope[name])
       else:
         right = translate_Name(name)
-      merge[new_name] = (left,right)
+        
+      if name in new_names:
+        new_name = new_names[name]
+      else:
+        new_name = env.fresh(name)
+      merge[new_name] = (left, right)
+      
     for (name, ssa_name) in right_scope.iteritems():
-      if name not in right_scope:
+      if name not in left_scope:
+        left = translate_Name(name)
+        right = syntax.Var(ssa_name)
+    
         if name in new_names:
           new_name = new_names[name]
         else:
           new_name = env.fresh(name)
-        left = translate_Name(name)
-        right = syntax.Var(ssa_name)
         merge[new_name] = (left, right)
     return merge 
-  
+   
   def translate_expr(expr):
     def translate_UnaryOp():
       ssa_val = translate_expr(expr.operand)
@@ -195,13 +197,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       assert isinstance(result, syntax.Expr), "%s not an expr" % result 
       return result 
       
-  def translate_Assign(lhs, rhs):
-    assert isinstance(lhs, ast.Name)
-    
-    ssa_lhs = env.fresh_var(lhs.id) 
-    ssa_rhs = translate_expr(rhs)
-    return syntax.Assign(ssa_lhs, ssa_rhs)
-      
+
 
   def translate_stmt(stmt):
     """
@@ -219,7 +215,12 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       return syntax.Assign(local_name, closure)
     
     elif isinstance(stmt, ast.Assign):     
-      return translate_Assign(stmt.targets[0], stmt.value)
+      lhs = stmt.targets[0]
+      assert isinstance(lhs, ast.Name)
+      # important to evaluate RHS before LHS for statements like 'x = x + 1' 
+      ssa_rhs = translate_expr(stmt.value)
+      ssa_lhs = env.fresh_var(lhs.id) 
+      return syntax.Assign(ssa_lhs, ssa_rhs)
     elif isinstance(stmt, ast.Return):
       rhs = syntax.Return(translate_expr(stmt.value))
       return rhs 
@@ -233,24 +234,30 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
    
     elif isinstance(stmt, ast.While):
       assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
-      cond = translate_expr(stmt.test)
+
 
       # push a scope for the version of variables appearing within the loop 
-      env.push()
       # create a new version for each var defined in the loop 
+      env.push()
       for lhs_var in collect_defs_from_list(stmt.body):
         env.fresh(lhs_var)
+      # evaluate the condition in the context of the version of loop variables we see 
+      # at the start of the loop 
+      cond = translate_expr(stmt.test)
       # translate_block pushes an additional env which will track 
       # the versions of variables throughout the loop, so we get back
       # a dict with the last version of each variable 
       loop_end_scope, body = translate_block(stmt.body)
-      loop_start_scope = env.pop()
+      loop_start_scope, _ = env.pop()
       # given empty scope for right branch so we always merge with version of variable 
       # before loop started 
-      merge_before = create_phi_nodes(loop_end_scope, {}, new_names = loop_start_scope)
+      #assert "counter" not in env, [translate_Name("counter"), body]
+      merge_before = create_phi_nodes( {}, loop_end_scope, new_names = loop_start_scope)
+     
       # don't provide a new_names dict so that fresh versions after the loop are created 
       # for each var in the current env
-      merge_after = create_phi_nodes(loop_end_scope, {})
+      merge_after = create_phi_nodes({}, loop_end_scope)
+
       return syntax.While(cond, body, merge_before, merge_after)
     elif isinstance(stmt, ast.For):
       return RuntimeError("For loops not implemneted")

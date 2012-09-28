@@ -121,11 +121,25 @@ def _infer_types(fn, arg_types):
     
     return dispatch(expr, prefix="expr")
   
+  def merge_left_branch(phi_nodes):
+    for result_var, (left_val, _) in phi_nodes.iteritems():
+      left_type = expr_type(left_val)
+      old_type = tenv.get(result_var, ptype.Unknown)
+      tenv[result_var] = old_type.combine(left_type)
+  
+  def merge_right_branch(phi_nodes):
+    for result_var, (_, right_val) in phi_nodes.iteritems():
+      right_type = expr_type(right_val)
+      old_type = tenv.get(result_var, ptype.Unknown)
+      tenv[result_var] = old_type.combine(right_type)
+  
+      
   def merge_branches(phi_nodes):
     for result_var, (left_val, right_val) in phi_nodes.iteritems():
       left_type = expr_type(left_val)
       right_type = expr_type(right_val)
-      tenv[result_var]  = left_type.combine(right_type)
+      old_type = tenv.get(result_var, ptype.Unknown)
+      tenv[result_var]  = old_type.combine(left_type).combine(right_type)
   
   def analyze_stmt(stmt):
     def stmt_Assign():
@@ -144,11 +158,18 @@ def _infer_types(fn, arg_types):
       t = expr_type(stmt.value)
       curr_return_type = tenv["$return"]
       tenv["$return"] = curr_return_type.combine(t)
+    
+    def stmt_While():
+      merge_left_branch(stmt.merge_before)
+      analyze_block(stmt.body)
+      merge_right_branch(stmt.merge_after)
+      merge_branches(stmt.merge_after)
+    
     dispatch(stmt, prefix="stmt")
-  
+    
+    
   def analyze_block(stmts):
     for stmt in stmts:
-      print stmt 
       analyze_stmt(stmt)
   analyze_block(fn.body)
   return tenv

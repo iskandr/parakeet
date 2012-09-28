@@ -62,5 +62,11 @@ def test_incr_loop():
   expect_type(incr_loop, [Float64], Int64)
   
 
+if __name__ == '__main__':
+  for k,v in locals().items():
+    if k.startswith('test_'):
+      v()
+    
+
 
 
