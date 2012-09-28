@@ -1,7 +1,7 @@
 import syntax
 import ptype
 import names 
-from function_registry import typed_functions
+from function_registry import untyped_functions, typed_functions
 from common import dispatch 
 
 
@@ -99,8 +99,9 @@ def _infer_types(fn, arg_types):
       invoke_result_type = ptype.Unknown
       for closure_type in closure_set.closures:
         untyped_id, closure_arg_types = closure_type.fn, closure_type.args
-        ret, _ = infer_types(untyped_id, closure_arg_types + arg_types)
-        invoke_result_type.combine(ret)
+        untyped_fundef = untyped_functions[untyped_id]
+        ret, _ = infer_types(untyped_fundef, closure_arg_types + arg_types)
+        invoke_result_type = invoke_result_type.combine(ret)
       return invoke_result_type
   
     def expr_PrimCall():

@@ -16,17 +16,20 @@ def expect_type(fn, input_type, output_type):
 def add1(x):
   return x + 1
 
+def call_add1(x):
+  return add1(x)
 
-def test_add1_int32():
+def test_add1():
   """ The constant 1 is an int64, so the return type should be int64"""
   expect_type(add1, Int32, Int64)
-
-def test_add1_int64():
+  expect_type(add1, Bool, Int64)
   expect_type(add1, Int64, Int64)
-
-def test_add1_float32():
   expect_type(add1, Float32, Float64)
 
-def test_add1_bool():
-  expect_type(add1, Bool, Int64)
+def test_call_add1():
+  expect_type(call_add1, Int32, Int64) 
+  expect_type(call_add1, Float32, Float64)
+  expect_type(call_add1, Bool, Int64)
+  expect_type(add1, Float32, Float64)
+  
   
