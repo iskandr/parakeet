@@ -6,64 +6,9 @@ from prims import is_prim, find_prim
 from function_registry import untyped_functions, already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn 
 import names
-from names import NameNotFound
-
-  
-
-class ScopedEnv:  
-  def __init__(self, outer_env = None):
-    self.scopes = [{}]
-    self.blocks = [[]]
-    # link together environments of nested functions
-    self.outer_env = outer_env
-    
-  def fresh(self, name):
-    fresh_name = names.fresh(name)
-    self.scopes[-1][name] = fresh_name 
-    return fresh_name
-  
-  def fresh_var(self, name):
-    return syntax.Var(self.fresh(name))
-  
-  def push(self, scope = None, block = None):
-    if scope is None:
-      scope = {}
-    if block is None:
-      block = []
-    self.scopes.append(scope)
-    self.blocks.append(block)
-  
-  def pop(self):
-    scope = self.scopes.pop()
-    block = self.blocks.pop()
-    return scope, block 
-  
-  def current_scope(self):
-    return self.scopes[-1]
-  
-  def current_block(self):
-    return self.blocks[-1]
-  
-  def __getitem__(self, key):
-    for scope in reversed(self.scopes):
-      if key in scope:
-        return scope[key]
-    raise NameNotFound(key)
-
-  def __contains__(self, key):
-    for scope in reversed(self.scopes):
-      if key in scope: 
-        return True
-    return False 
-  
-  def recursive_lookup(self, key, skip_current = False):
-    if not skip_current and key in self:
-      return self[key]
-    else:
-      if self.outer_env:
-        self.outer_env.recursive_lookup(key)
-      else:
-        return None
+from names import NameNotFound 
+from scoped_env import ScopedEnv 
+from common import dispatch
 
 def extract_arg_names(args):
   assert not args.vararg
@@ -71,6 +16,31 @@ def extract_arg_names(args):
   assert not args.defaults
   return [arg.id for arg in args.args]
 
+def collect_defs_from_node(node):
+  """
+  Recursively traverse nested statements and collect 
+  variable names from the left-hand-sides of assignments,
+  ignoring variables if they appear within a slice or index
+  """
+  if isinstance(node, ast.While):
+    return collect_defs_from_list(node.body + node.orelse)
+  elif isinstance(node, ast.If):
+    return collect_defs_from_list(node.body + node.orelse)
+  elif isinstance(node, ast.Assign):
+    return collect_defs_from_list(node.targets)
+  elif isinstance(node, ast.Name):
+    return set([node.id])
+  elif isinstance(node, ast.Tuple):
+    return collect_defs_from_list(node.elts)
+  else:
+    return set([])
+        
+def collect_defs_from_list(nodes):
+  assert isinstance(nodes, list)
+  defs = set([])
+  for node in nodes:
+    defs.update(collect_defs_from_node(node))
+  return defs 
 
 
 def translate_FunctionDef(name,  args, body, global_values, outer_value_env = None):
@@ -143,7 +113,36 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         return syntax.Var(ssa_name)
       else:
         return global_ref(name)
+  
+  def create_phi_nodes(left_scope, right_scope = {}, new_names = {}):
+    """
+    Phi nodes make explicit the possible sources of each variable's values and 
+    are needed when either two branches merge or when one was optionally taken. 
+    """
+    merge = {}
+    for (name, ssa_name) in left_scope.iteritems():
+      if name in new_names:
+        new_name = new_names[name]
+      else:
+        new_name = env.fresh(name)
       
+      left = syntax.Var(ssa_name)
+      if name in right_scope:
+        right = syntax.Var (right_scope[name])
+      else:
+        right = translate_Name(name)
+      merge[new_name] = (left,right)
+    for (name, ssa_name) in right_scope.iteritems():
+      if name not in right_scope:
+        if name in new_names:
+          new_name = new_names[name]
+        else:
+          new_name = env.fresh(name)
+        left = translate_Name(name)
+        right = syntax.Var(ssa_name)
+        merge[new_name] = (left, right)
+    return merge 
+  
   def translate_expr(expr):
     def translate_UnaryOp():
       ssa_val = translate_expr(expr.operand)
@@ -173,6 +172,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       arg_vals = map(translate_expr, args)
       return syntax.Invoke(fn_val, arg_vals) 
     
+    def translate_Num():
+      return syntax.Const(expr.n)
+    
     def translate_IfExp():
       temp1, temp2, result = \
          map(env.fresh_var, ["if_true", "if_false", "if_result"])
@@ -183,16 +185,13 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       if_stmt = syntax.If(cond, true_block, false_block, merge) 
       env.current_block().append(if_stmt)
       return syntax.Var(result)
-      
-    nodetype = expr.__class__.__name__
+    
     if isinstance(expr, ast.Name):
+      # name is a special case since its translation function needs to be accessed
+      # from outside translate_expr 
       return translate_Name(expr.id)
-    elif isinstance(expr, ast.Num):
-      return syntax.Const(expr.n)
     else:
-      translator_fn_name = 'translate_' + nodetype
-      translate_fn = locals()[translator_fn_name]
-      result = translate_fn()
+      result = dispatch(expr, 'translate')
       assert isinstance(result, syntax.Expr), "%s not an expr" % result 
       return result 
       
@@ -229,26 +228,30 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       true_scope, true_block  = translate_block(stmt.body)
       #print true_block  
       false_scope, false_block = translate_block(stmt.orelse)
-      merge = {}
-      
-      for (name, ssa_name) in true_scope.iteritems():
-        new_name = env.fresh(name)
-        left = syntax.Var(ssa_name)
-        if name in false_scope:
-          right = syntax.Var (false_scope[name])
-        else:
-          right = translate_Name(name)
-        merge[new_name] = (left,right)
-      for (name, ssa_name) in false_scope.iteritems():
-        if name not in true_scope:
-          new_name = env.fresh(name)
-          left = translate_Name(name)
-          right = syntax.Var(ssa_name)
-          merge[new_name] = (left, right)
+      merge = create_phi_nodes(true_scope, false_scope)
       return syntax.If(cond, true_block, false_block, merge)
    
     elif isinstance(stmt, ast.While):
-      raise RuntimeError("While loops not implemented")
+      assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
+      cond = translate_expr(stmt.test)
+
+      # push a scope for the version of variables appearing within the loop 
+      env.push()
+      # create a new version for each var defined in the loop 
+      for lhs_var in collect_defs_from_list(stmt.body):
+        env.fresh(lhs_var)
+      # translate_block pushes an additional env which will track 
+      # the versions of variables throughout the loop, so we get back
+      # a dict with the last version of each variable 
+      loop_end_scope, body = translate_block(stmt.body)
+      loop_start_scope = env.pop()
+      # given empty scope for right branch so we always merge with version of variable 
+      # before loop started 
+      merge_before = create_phi_nodes(loop_end_scope, {}, new_names = loop_start_scope)
+      # don't provide a new_names dict so that fresh versions after the loop are created 
+      # for each var in the current env
+      merge_after = create_phi_nodes(loop_end_scope, {})
+      return syntax.While(cond, body, merge_before, merge_after)
     elif isinstance(stmt, ast.For):
       return RuntimeError("For loops not implemneted")
     else:

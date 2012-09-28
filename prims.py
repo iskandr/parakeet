@@ -59,6 +59,9 @@ class Prim:
   
   def __call__(self, *args, **kwds):
     return self.fn(*args, **kwds)
+  
+  def __repr__(self):
+    return "prim(%s)" % self.name 
 
 class Float(Prim):
   """Always returns a float"""

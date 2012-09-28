@@ -148,6 +148,7 @@ def _infer_types(fn, arg_types):
   
   def analyze_block(stmts):
     for stmt in stmts:
+      print stmt 
       analyze_stmt(stmt)
   analyze_block(fn.body)
   return tenv

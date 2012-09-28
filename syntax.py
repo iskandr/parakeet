@@ -20,7 +20,7 @@ class While(Stmt):
      nodes for incoming and outgoing variables
      of the form [(new_var1, (old_var1,old_var2)]
    """
-  _members = ['header', 'cond', 'body', 'merge_before', 'merge_after']
+  _members = ['cond', 'body', 'merge_before', 'merge_after']
   
 class Expr(TreeLike):
   pass

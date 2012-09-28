@@ -50,6 +50,17 @@ def branch_assign(b):
 
 def test_branch_assign():
   expect_type(branch_assign, [Bool], Float64)
+  
+def incr_loop(x):
+  counter = 0 
+  while counter < x:
+    counter = counter + 1
+  return counter
+
+def test_incr_loop():
+  expect_type(incr_loop, [Int32], Int64)
+  expect_type(incr_loop, [Float64], Int64)
+  
 
 
 
