@@ -2,29 +2,21 @@ import unittest
 import interp
 import numpy as np
 
-class TestResult:
-  def __init__(self, value):
-    self.value = value 
-    
-  def __eq__(self, other):
-    assert self.value == other, "Expected %s, got %s" % (other, self.value)
-
- 
-def expect(fn, *args):
+def expect(fn, args, expected):
   actual = interp.run(fn, *args)
-  return TestResult(actual)
+  assert actual == expected, "Expected %s but got %s" % (expected, actual)
  
 def add1(x):
   return x + 1
 
 def test_add1():
-  assert interp.run(add1, 1) == 2 
+  expect(add1, [1],  2) 
 
 def call_add1(x):
   return add1(x)
 
 def test_call_add1():
-  assert interp.run(call_add1, 1) == 2 
+  expect(call_add1, [1],  2) 
 
 def call_nested_ident(x):
   def ident(x):
@@ -32,22 +24,21 @@ def call_nested_ident(x):
   return ident(x)
 
 def test_nested_ident():
-  result = interp.run(call_nested_ident, 1)
-  assert result == 1, "Expected 1, got %s" % result 
-
+  expect(call_nested_ident, [1], 1)
+  
 global_val = 5 
 def use_global(x):
   return x + global_val 
 
 def test_use_global():
-  assert interp.run(use_global, 3) == 8
+  expect(use_global, [3], 8)
 
 def use_if_exp(x):
   return 1 if x < 10 else 2 
 
 def test_if_exp():
-  assert interp.run(use_if_exp, 9) == 1
-  assert interp.run(use_if_exp, 10) == 2
+  expect(use_if_exp, [9], 1)
+  expect(use_if_exp, [10], 2)
   
 def simple_branch(x):
   if x < 10:
@@ -70,8 +61,8 @@ def simple_merge(x):
 
 
 def test_simple_merge():
-  expect(simple_merge, 0) == 1
-  expect(simple_merge, 2) == 2
+  expect(simple_merge, [0], 1)
+  expect(simple_merge, [2], 2)
  
 #def call_sqrt(x):
 #  return np.sqrt(x)

@@ -37,7 +37,7 @@ class Const(Expr):
 class Var(Expr):
   _members = ['name']
   def __repr__(self):
-    return self.name 
+    return "var(%s)" % self.name 
   
 class Prim(Expr):
   """Lift primitive to the value level by creating a PrimClosure"""

@@ -22,6 +22,9 @@ class ScopedEnv:
     self.scopes[-1][name] = fresh_name 
     return fresh_name
   
+  def fresh_var(self, name):
+    return syntax.Var(self.fresh(name))
+  
   def push(self, scope = None, block = None):
     if scope is None:
       scope = {}
@@ -172,11 +175,11 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     
     def translate_IfExp():
       temp1, temp2, result = \
-         map(env.fresh, ["if_true", "if_false", "if_result"])
+         map(env.fresh_var, ["if_true", "if_false", "if_result"])
       cond = translate_expr(expr.test)
       true_block = [syntax.Assign(temp1, translate_expr(expr.body))]
       false_block = [syntax.Assign(temp2, translate_expr(expr.orelse))]
-      merge = {result :  (syntax.Var (temp1), syntax.Var(temp2))}
+      merge = {result :  (temp1, temp2)}
       if_stmt = syntax.If(cond, true_block, false_block, merge) 
       env.current_block().append(if_stmt)
       return syntax.Var(result)
@@ -195,9 +198,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       
   def translate_Assign(lhs, rhs):
     assert isinstance(lhs, ast.Name)
-    ssa_lhs_id = env.fresh(lhs.id) 
+    
+    ssa_lhs = env.fresh_var(lhs.id) 
     ssa_rhs = translate_expr(rhs)
-    return syntax.Assign(ssa_lhs_id, ssa_rhs)
+    return syntax.Assign(ssa_lhs, ssa_rhs)
       
 
   def translate_stmt(stmt):
@@ -211,7 +215,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       fundef = \
         translate_FunctionDef(name, args, body, global_values, env)
       closure_args = map(translate_Name, fundef.nonlocals)
-      local_name = env.fresh(name)
+      local_name = env.fresh_var(name)
       closure = syntax.Closure(fundef.name, closure_args)
       return syntax.Assign(local_name, closure)
     
@@ -228,19 +232,19 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       merge = {}
       
       for (name, ssa_name) in true_scope.iteritems():
-        new_var = env.fresh(name)
+        new_name = env.fresh(name)
         left = syntax.Var(ssa_name)
         if name in false_scope:
           right = syntax.Var (false_scope[name])
         else:
-          right = syntax.Var (translate_Name(name))
-        merge[new_var] = (left,right)
+          right = translate_Name(name)
+        merge[new_name] = (left,right)
       for (name, ssa_name) in false_scope.iteritems():
         if name not in true_scope:
-          new_var = env.fresh(name)
-          left = syntax.Var (translate_Name(name))
+          new_name = env.fresh(name)
+          left = translate_Name(name)
           right = syntax.Var(ssa_name)
-          merge[new_var] = (left, right)
+          merge[new_name] = (left, right)
       return syntax.If(cond, true_block, false_block, merge)
    
     elif isinstance(stmt, ast.While):

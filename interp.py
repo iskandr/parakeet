@@ -39,7 +39,6 @@ def eval_fn(fn, *args):
     
     def expr_Var():
       return env[expr.name]
-    
     def expr_Invoke():
       # for the interpreter Invoke and Call are identical since
       # we're dealing with runtime reprs for functions, prims, and 
@@ -73,7 +72,7 @@ def eval_fn(fn, *args):
 
       raise ReturnValue(v)
     elif isinstance(stmt, syntax.Assign):
-      env[stmt.lhs] = eval_expr(stmt.rhs)
+      env[stmt.lhs.name] = eval_expr(stmt.rhs)
     elif isinstance(stmt, syntax.If):
       cond_val = eval_expr(stmt.cond)
       if cond_val:

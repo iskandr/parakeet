@@ -82,24 +82,33 @@ class Scalar(Type):
 
 
   def is_float(self):
-    return self.dtype in [np.dtype(np.float32), np.dtype(np.float64)]
-
+    return self.dtype.type in np.sctypes['float']
+  
   def is_signed(self):
-    return self.dtype in [np.uint8, np.uint16, np.uint32, np.uint64]
+    return self.dtype.type in np.sctypes['int']
+  
+  def is_unsigned(self):
+    return self.dtype.type in np.sctypes['uint']
+  
+  def is_bool(self):
+    return self.dtype == np.bool8 
   
   def is_int(self):
-    return not self.is_float()
-
+    return self.is_bool() or self.is_signed() or self.is_unsigned()
+  
   def nbytes(self):
     return self.dtype.itemsize
 
   def combine(self, other):
     if isinstance(other, Scalar):
-      combined_type = numpy_type_info.combine(self.dtype, other.dtype)
-      if combined_type is not None:
-        return combined_type
+      combined_dtype = np.promote_types(self.dtype, other.dtype)
+      if combined_dtype == self.dtype:
+        return self
+      elif combined_dtype == other.dtype:
+        return other
       else:
-        raise IncompatibleTypes(self, other)
+        return Scalar(combined_dtype)
+      
     elif isinstance(other, Array):
       raise RuntimeError("Array not implemented")
     else:

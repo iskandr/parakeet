@@ -120,12 +120,26 @@ def _infer_types(fn, arg_types):
       return ptype.type_of_value(expr.value)
     
     return dispatch(expr, prefix="expr")
-       
+  
+  def merge_branches(phi_nodes):
+    for result_var, (left_val, right_val) in phi_nodes.iteritems():
+      left_type = expr_type(left_val)
+      right_type = expr_type(right_val)
+      tenv[result_var]  = left_type.combine(right_type)
+  
   def analyze_stmt(stmt):
     def stmt_Assign():
-      pass
+      rhs_type = expr_type(stmt.rhs)
+      match(stmt.lhs, rhs_type, tenv)
+      
     def stmt_If():
-      pass
+      cond_type = expr_type(stmt.cond)
+      assert isinstance(cond_type, ptype.Scalar), \
+        "Condition has type %s but must be convertible to bool" % cond_type
+      analyze_block(stmt.true)
+      analyze_block(stmt.false)
+      merge_branches(stmt.merge)
+      
     def stmt_Return():
       t = expr_type(stmt.value)
       curr_return_type = tenv["$return"]
