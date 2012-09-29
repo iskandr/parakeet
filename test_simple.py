@@ -1,11 +1,7 @@
 import unittest
 import interp
 import numpy as np
-
-def expect(fn, args, expected):
-  actual = interp.run(fn, *args)
-  assert actual == expected, "Expected %s but got %s" % (expected, actual)
- 
+from parakeet import expect
 def add1(x):
   return x + 1
 

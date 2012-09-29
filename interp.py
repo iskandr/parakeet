@@ -108,11 +108,18 @@ def eval_fn(fn, *args):
   except:
     raise
   
-def run(python_fn, *args):
+def run(python_fn, args, type_specialization = False):
   untyped  = ast_conversion.translate_function_value(python_fn)
   # should eventually roll this up into something cleaner, since 
   # top-level functions are really acting like closures over their
   # global dependencies 
   global_args = [python_fn.func_globals[n] for n in untyped.nonlocals]
   all_args = global_args + list(args)
-  return eval_fn(untyped, *all_args) 
+  if not type_specialization:
+    return eval_fn(untyped, *all_args) 
+  else:
+    import type_analysis
+    import ptype 
+    input_types = map(ptype.type_of_value, all_args)
+    typed = type_analysis.specialize(untyped, input_types)
+    return eval_fn(typed, *all_args)
