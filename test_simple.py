@@ -74,6 +74,15 @@ def test_count_loop():
   expect(count_loop, [0, 2], 2)
   expect(count_loop, [0.0, 2], 2.0)
  
+def if_true():
+  if True:
+    return 1
+  else:
+    return 2
+
+def test_if_true():
+  expect(if_true, [], 1)
+ 
 #def call_sqrt(x):
 #  return np.sqrt(x)
 

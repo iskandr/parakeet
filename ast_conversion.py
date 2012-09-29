@@ -88,6 +88,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         nonlocal_arg_names.append(ssa_name)
         #print name, ssa_name, nonlocal_arg_names 
         return syntax.Var (ssa_name)
+    elif name == 'True':
+      return syntax.Const(True)
+    elif name == 'False':
+      return syntax.Const(False)
     else:
       raise NameNotFound(name)
   
