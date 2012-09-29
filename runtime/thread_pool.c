@@ -116,8 +116,6 @@ void launch_job(thread_pool_t *thread_pool,
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
   for (i = thread_pool->num_active; i < thread_pool->num_workers; ++i) {
-    assert(job->task_lists[i].num_tasks == 0);
-
     pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
     thread_pool->worker_data[i].status = THREAD_IDLE;
     thread_pool->worker_data[i].task_list = NULL;
