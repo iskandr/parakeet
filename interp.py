@@ -81,6 +81,17 @@ def eval_fn(fn, *args):
       else:
         eval_block(stmt.false)
         eval_merge_right(stmt.merge)
+    elif isinstance(stmt, syntax.While):
+      eval_merge_left(stmt.merge_before)
+      ran_once = False
+      while eval_expr(stmt.cond):
+        ran_once = True
+        eval_block(stmt.body)
+        eval_merge_right(stmt.merge_before)
+      if ran_once:
+        eval_merge_right(stmt.merge_after)
+      else:
+        eval_merge_left(stmt.merge_after)
     else: 
       raise RuntimeError("Not implemented: %s" % stmt)
     

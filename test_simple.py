@@ -64,6 +64,16 @@ def test_simple_merge():
   expect(simple_merge, [0], 1)
   expect(simple_merge, [2], 2)
  
+def count_loop(init, count):
+  x = init
+  while x < count:
+    x = x + 1
+  return x
+ 
+def test_count_loop():
+  expect(count_loop, [0, 2], 2)
+  expect(count_loop, [0.0, 2], 2.0)
+ 
 #def call_sqrt(x):
 #  return np.sqrt(x)
 
