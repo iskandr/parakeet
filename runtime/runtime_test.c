@@ -62,7 +62,7 @@ void test_pause_threads(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 50000;
+  int len = 500000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
   int i;
@@ -98,7 +98,7 @@ void test_reconfigure_threads(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 50000;
+  int len = 500000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
   int i;

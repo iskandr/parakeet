@@ -130,6 +130,7 @@ void pause_job(thread_pool_t *thread_pool) {
   for (i = 0; i < thread_pool->num_active; ++i) {
     pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
     thread_pool->worker_data[i].status = THREAD_PAUSE;
+    pthread_cond_signal(&thread_pool->worker_data[i].cond);
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
   pthread_barrier_wait(&thread_pool->job->barrier);
