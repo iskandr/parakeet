@@ -12,3 +12,6 @@ runtime: threadpool
 
 tests: runtime threadpool
 	gcc -o runtime_test $(FLAGS) -lcunit runtime_test.c runtime.o thread_pool.o
+
+clean:
+	rm runtime_test *.o *~

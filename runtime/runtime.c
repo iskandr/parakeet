@@ -7,39 +7,44 @@
 
 #include "runtime.h"
 
-task_list_t *make_task_lists(int len, int max_threads, int num_threads) {
+job_t *make_job(int len, int max_threads, int num_threads) {
   int chunk_len = 32;
   int num_chunks = len / chunk_len + (len % chunk_len ? 1 : 0);
-  task_list_t *task_lists =
-    (task_list_t*)malloc(sizeof(task_list_t) * max_threads);
+  job_t *job = (job_t*)malloc(sizeof(job_t));
+  job->task_lists = (task_list_t*)malloc(sizeof(task_list_t) * max_threads);
+  job->num_lists = num_threads;
+  pthread_barrier_init(&job->barrier, NULL, num_threads + 1);
+  int last_thread =
+    ((num_chunks % num_threads - 1) + num_threads) % num_threads;
   int i, j;
   for (i = 0; i < num_threads; ++i) {
     int num_tasks = num_chunks / num_threads;
-    num_tasks += i < num_chunks % num_threads ? 1 : 0;
-    task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
-    task_lists[i].num_tasks = num_tasks;
-    task_lists[i].cur_task = 0;
+    num_tasks += i < num_chunks % num_threads;
+    job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
+    job->task_lists[i].num_tasks = num_tasks;
+    job->task_lists[i].cur_task = 0;
+    job->task_lists[i].barrier = &job->barrier;
     int cur_iter = chunk_len * i;
     int step = chunk_len * num_threads;
     for (j = 0; j < num_tasks; ++j) {
-      task_lists[i].tasks[j].next_iteration = cur_iter;
-      task_lists[i].tasks[j].last_iteration = cur_iter + chunk_len - 1;
+      job->task_lists[i].tasks[j].next_iteration = cur_iter;
+      job->task_lists[i].tasks[j].last_iteration = cur_iter + chunk_len - 1;
       cur_iter += step;
+    }
+    if (i == last_thread) {
+      job->task_lists[i].tasks[num_tasks - 1].last_iteration = len - 1;
     }
   }
   for (i = num_threads; i < max_threads; ++i) {
-    task_lists[i].tasks = NULL;
-    task_lists[i].num_tasks = 0;
-    task_lists[i].cur_task = 0;
+    job->task_lists[i].tasks = NULL;
+    job->task_lists[i].num_tasks = 0;
+    job->task_lists[i].cur_task = 0;
+    job->task_lists[i].barrier = NULL;
   }
-  
-  int last = num_threads - 1;
-  task_lists[last].tasks[task_lists[last].num_tasks - 1].last_iteration =
-    len - 1;
 
-  return task_lists;
+  return job;
 }
-
+/*
 task_list_t *reconfigure_task_lists(task_list_t *task_lists, int num_lists,
                                     int num_threads) {
   task_list_t *new_task_lists =
@@ -69,8 +74,6 @@ task_list_t *reconfigure_task_lists(task_list_t *task_lists, int num_lists,
       int tasks_left_to_do = num_tasks - tasks_done;
       task_t *src = task_lists[cur_list].tasks + cur_task;
       int num_to_copy;
-      int old_cur_task = cur_task;
-      int old_cur_list = cur_list;
       
       if (tasks_left_in_cur_list > tasks_left_to_do) {
         num_to_copy = tasks_left_to_do;
@@ -100,4 +103,14 @@ task_list_t *reconfigure_task_lists(task_list_t *task_lists, int num_lists,
   free(task_lists);
 
   return new_task_lists;
+}*/
+
+void free_job(job_t *job) {
+  int i;
+  for (i = 0; i < job->num_lists; ++i) {
+    free(job->task_lists[i].tasks);
+  }
+  free(job->task_lists);
+  pthread_barrier_destroy(&job->barrier);
+  free(job);
 }
