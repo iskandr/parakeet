@@ -2,86 +2,54 @@ import syntax
 import ptype
 import names 
 from function_registry import untyped_functions, typed_functions
-from common import dispatch 
+from common import dispatch
+from match import match, match_list
 
-
-def match(pattern, t, env):
-  """
-  Given a left-hand-side of tuples & vars, 
-  a right-hand-side of tuples & types, 
-  traverse the tuple structure recursively and
-  put the matched variable names in an environment
-  """
-  if isinstance(pattern, syntax.Var):
-    env[pattern.name] = t
-  elif isinstance(pattern, syntax.Tuple):
-    assert isinstance(t, ptype.Tuple)
-    pat_elts = pattern.elts
-    type_elts = t.elts 
-    assert len(pat_elts) == len(type_elts), \
-      "Mismatch between expected and given number of values"
-    for (pi , ti) in zip(pat_elts, type_elts):
-      match(pi, ti, env)
-  else:
-    raise RuntimeError("Unexpected pattern %s %s : %s" % (pattern.__class__.__name__, pattern, t) )    
-
-def match_args(arg_patterns, types):
-  tenv = {}
-  nargs = len(arg_patterns)
-  ntypes = len(types)
-  assert nargs == ntypes, \
-    "Mismatch between %d args and %d input types" % (nargs, ntypes)
-  for (p,t) in zip(arg_patterns, types):
-    if isinstance(p, str):
-      # TODO: get rid of this branch once all arg lists are uniformly either
-      # Var or Tuple lists 
-
-      match(syntax.Var(p), t, tenv)
-    else:
-      match(p, t, tenv)
-  return tenv     
+   
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg 
 
 
-def infer_types(fn, arg_types):
+def infer_return_type(untyped, arg_types):
   """
   Given a function definition and some input types, 
-  return a type environment mapping variables to types
-  and a return type. 
-  This also implicitly specializes the function for the given
-  types and caches this typed version. 
-  """ 
-  key = (fn.name, tuple(arg_types))
+  gives back the return type 
+  and implicitly generates a specialized version of the
+  function. 
+  """
+  typed = specialize(untyped, arg_types)
+  return typed.return_type 
+
+def specialize(untyped, arg_types): 
+  key = (untyped.name, tuple(arg_types))
   if key in typed_functions:
-    typed_fundef = typed_functions[key]
-    return typed_fundef.return_type, typed_fundef.type_env
+    return typed_functions[key]
   else:
-    type_env =  _infer_types(fn, arg_types) 
-    return_type = type_env["$return"]
-    typed_body = specialize(fn, type_env, return_type)
-    typed_arg_names = map(names.refresh, fn.args)
-    typed_id = names.refresh(fn.name)
+    type_env =  infer_types(untyped, arg_types)  
+    typed_body = rewrite(untyped, type_env)
+    typed_arg_names = map(names.refresh, untyped.args)
+    typed_id = names.refresh(untyped.name)
     typed_fundef = syntax.TypedFn(name = typed_id, args = typed_arg_names, 
-      body = typed_body, input_types = arg_types, return_type = return_type, 
+      body = typed_body, input_types = arg_types, return_type = type_env["$return"], 
       type_env = type_env)
     typed_functions[key] = typed_fundef 
-    return return_type, type_env 
+    return typed_fundef 
     
 
-def specialize(fn, type_env, return_type):
+def rewrite(fn, type_env):
+  return_type = type_env["$return"]
   return None 
 
 
 
-def _infer_types(fn, arg_types):
+def infer_types(fn, arg_types):
   """
   Actual implementation of type inference which doesn't attempt to 
   look up cached version of typed function
   """ 
-  tenv = match_args(fn.args, arg_types)
+  tenv = match_list(fn.args, arg_types)
   # keep track of the return 
   tenv['$return'] = ptype.Unknown
    
@@ -100,13 +68,13 @@ def _infer_types(fn, arg_types):
       for closure_type in closure_set.closures:
         untyped_id, closure_arg_types = closure_type.fn, closure_type.args
         untyped_fundef = untyped_functions[untyped_id]
-        ret, _ = infer_types(untyped_fundef, closure_arg_types + arg_types)
+        ret = infer_return_type(untyped_fundef, closure_arg_types + arg_types)
         invoke_result_type = invoke_result_type.combine(ret)
       return invoke_result_type
   
     def expr_PrimCall():
       arg_types = map(expr_type, expr.args)
-     
+      # TODO: make this actually figure out the return type of a ufunc 
       return ptype.combine_type_list(arg_types)
   
     def expr_Var():

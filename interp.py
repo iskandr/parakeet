@@ -118,8 +118,8 @@ def run(python_fn, args, type_specialization = False):
   if not type_specialization:
     return eval_fn(untyped, *all_args) 
   else:
-    import type_analysis
+    import specialization
     import ptype 
     input_types = map(ptype.type_of_value, all_args)
-    typed = type_analysis.specialize(untyped, input_types)
+    typed = specialization.specialize(untyped, input_types)
     return eval_fn(typed, *all_args)
