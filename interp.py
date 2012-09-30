@@ -12,14 +12,14 @@ class Closure:
     self.fn = fn 
     self.fixed_args = fixed_args
 
-  
+from match import match, match_list 
   
 def eval_fn(fn, *args):
   n_expected = len(fn.args)
   n_given = len(args)
   assert n_expected == n_given , \
     "Expected %d args, given %d: %s" % (n_expected, n_given, args)
-  env = dict(zip(fn.args, args)) 
+  env = match_list(fn.args, args)  
   def eval_expr(expr):    
     def expr_Const():
       return expr.value
@@ -72,7 +72,7 @@ def eval_fn(fn, *args):
 
       raise ReturnValue(v)
     elif isinstance(stmt, syntax.Assign):
-      env[stmt.lhs.name] = eval_expr(stmt.rhs)
+      match(stmt.lhs, eval_expr(stmt.rhs), env)
     elif isinstance(stmt, syntax.If):
       cond_val = eval_expr(stmt.cond)
       if cond_val:

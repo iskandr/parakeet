@@ -32,3 +32,16 @@ def match_list(arg_patterns, vals, env = None):
     else:
       match(p, v, env)
   return env  
+#
+#def flatten_expr_vars(expr):
+#  result = set([])
+#  def _flatten_list(exprs):
+#    for expr in exprs:
+#      _flatten(expr)
+#      
+#  def _flatten(expr):
+#    if isinstance(expr, syntax.Var):
+#      result.add(expr.name)
+#    else:
+#      _flatten_list(expr.children())
+#  return result       

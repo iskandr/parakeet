@@ -12,39 +12,21 @@ class InferenceFailed(Exception):
     self.msg = msg 
 
 
-def infer_return_type(untyped, arg_types):
-  """
-  Given a function definition and some input types, 
-  gives back the return type 
-  and implicitly generates a specialized version of the
-  function. 
-  """
-  typed = specialize(untyped, arg_types)
-  return typed.return_type 
+class NestedBlocks:
+  def __init__(self):
+    self.blocks = []
+  
+  def push(self):
+    self.blocks.append([])
+  
+  def pop(self):
+    return self.blocks.pop()
+  
+  def current(self):
+    return self.blocks[-1]
+     
 
-def specialize(untyped, arg_types): 
-  key = (untyped.name, tuple(arg_types))
-  if key in typed_functions:
-    return typed_functions[key]
-  else:
-    type_env =  infer_types(untyped, arg_types)  
-    typed_body = rewrite(untyped, type_env)
-    typed_arg_names = map(names.refresh, untyped.args)
-    typed_id = names.refresh(untyped.name)
-    typed_fundef = syntax.TypedFn(name = typed_id, args = typed_arg_names, 
-      body = typed_body, input_types = arg_types, return_type = type_env["$return"], 
-      type_env = type_env)
-    typed_functions[key] = typed_fundef 
-    return typed_fundef 
-    
-
-def rewrite(fn, type_env):
-  return_type = type_env["$return"]
-  return None 
-
-
-
-def infer_types(fn, arg_types):
+def _infer_types(fn, arg_types):
   """
   Actual implementation of type inference which doesn't attempt to 
   look up cached version of typed function
@@ -141,93 +123,124 @@ def infer_types(fn, arg_types):
       analyze_stmt(stmt)
   analyze_block(fn.body)
   return tenv
+  
+
+def rewrite_typed(fn, old_type_env):
+  
+  blocks = NestedBlocks()
+  
+  var_map = {}
+  new_type_env = {}
+  for (old_name, t) in old_type_env.iteritems():
+    # don't try to rename '$return' 
+    if not old_name.startswith("$"):
+      new_name = names.refresh(old_name)
+      var_map[old_name] = new_name
+      new_type_env[new_name] = t
+  
+  def typeof(expr):
+    if isinstance(expr, syntax.Var):
+      return new_type_env[expr.name]
+    elif isinstance(expr, syntax.Tuple):
+      return ptype.Tuple(map(typeof, expr.elts))
+    elif isinstance(expr, syntax.Const):
+      return ptype.type_of_value(expr.value)
+    else:
+      raise RuntimeError("Can't get type of %s" % expr)
+    
+  def rewrite_arg(arg):
+    # handle both the case when args are a flat list of strings
+    # and a nested tree of expressions
+    if isinstance(arg, str):
+      return var_map[arg]
+    elif isinstance(arg, syntax.Var):
+      return syntax.Var(var_map[arg.name])
+    elif isinstance(arg, syntax.Tuple):
+      return syntax.Tuple(rewrite_args(arg.elts))
+  
+  def rewrite_args(args):
+    return map(rewrite_arg, args)
+  
+  def tag(expr, t):
+    expr.type = t 
+    return expr 
+  
+  def rewrite_lhs_expr(expr):
+    def rewrite_Var():
+      old_name = expr.name
+      new_name = var_map[old_name]
+      var_type = new_type_env[new_name]
+      return syntax.Var(new_name), var_type
+    
+    def rewrite_Tuple():
+      new_elts = map(rewrite_lhs_expr, expr.elts)
+      new_types = map(lambda e: e.type, new_elts)
+      return syntax.Tuple(new_elts), ptype.Tuple(new_types)
       
+    new_expr, expr_type = dispatch(expr, 'rewrite')
+    new_expr.type = expr_type
+    return new_expr 
+    
+  
+  def cast(expr, t):
+    return None
+  
+  def coerce_expr(expr, t):
+    return None
+  
+  def rewrite_stmt(stmt):
+    if isinstance(stmt, syntax.Assign):
+      new_lhs = rewrite_lhs_expr(stmt.lhs)
+      expected_type = new_lhs.type
+      new_rhs = coerce_expr(stmt.rhs, expected_type)
+      return syntax.Assign(new_lhs, new_rhs)
+    
+    
+  def rewrite_block(stmts):
+    blocks.push()
+    curr_block = blocks.current()
+    for stmt in stmts:
+      curr_block.append(rewrite_stmt(stmt))
+    return blocks.pop()
+  
+  new_args = rewrite_args(fn.args)
+  new_body = rewrite_block(fn.body)
+  
+  typed_id = names.refresh(fn.name)
+  # this helper only exists since args are currently either strings or expressions
+  # TODO: make args always expressions 
+  def arg_type(arg):
+    if isinstance(arg, str):
+      return new_type_env[arg]
+    else:
+      return typeof(arg)
+     
+  arg_types = map(arg_type, new_args)
+  return_type = old_type_env["$return"]
+  typed_fundef = syntax.TypedFn(name = typed_id, args = new_args, 
+    body = new_body, input_types = arg_types, return_type = return_type, 
+    type_env = new_type_env)
+  return typed_fundef 
+
+
+def specialize(untyped, arg_types): 
+  key = (untyped.name, tuple(arg_types))
+  if key in typed_functions:
+    return typed_functions[key]
+  else:
+    type_env = _infer_types(untyped, arg_types)  
+    typed_fundef = rewrite_typed(untyped, type_env)
+
+    typed_functions[key] = typed_fundef 
+    return typed_fundef 
+ 
+def infer_return_type(untyped, arg_types):
+  """
+  Given a function definition and some input types, 
+  gives back the return type 
+  and implicitly generates a specialized version of the
+  function. 
+  """
+  typed = specialize(untyped, arg_types)
+  return typed.return_type 
       
-      
-      
-#      
-#      
-#from parakeet_types import type_of_value 
-#import syntax 
-#from function_registry import typed_functions, untyped_functions
-#
-#class InferTypes(syntax.Traversal):
-#  def stmt_Set(self, stmt, tenv): 
-#    rhs_type = self.visit_expr(stmt.rhs, tenv)
-#    tenv[stmt.lhs] = rhs_type
-#
-#  def expr_Const(self, expr, tenv):
-#    return type_of_value(expr.value)
-#
-#  def expr_Var(self, expr, tenv):
-#    assert expr.id in tenv, \
-#      "Unknown variable " + expr.id  
-#    return tenv[expr.id]
-#  
-#  def expr_Call(self, expr, tenv):
-#    fn_expr = expr.fn
-#    # list of types 
-#    arg_types = map(self.visit_expr, expr.args)
-#    # dict of string name -> type mappings
-#    kwd_types = dict([ (k, self.visit_expr(v)) for \
-#      (k,v) in expr.kwds.iteritems()])
-#       
-#    if isinstance(fn, syntax.Var):
-#      untyped_fn = find_fn(fn_expr.id)
-#      global_types =  
-#      combine_args(untyped_fn.arg_names,
-#        arg_types, 
-#        untyped_fn.kwds, 
-#        kwd_types, 
-#        untyped_fn.global
-#         
-#      typed_fn = specialize(fn,   
-#    
-#    # if it's an operator  
-#    # then create a typed operator node
-#    # if it's a function then specialize it
-#    # otherwise, throw an error since 
-#    # only globally known functions are kosher...?
-#    # what if it was defined in the local scope?
-#    # def f(x):
-#    #   def g(y):
-#    #     return x + y
-#    #   return g(3)
-#    # called with f(2.0)
-#    # ....
-#    # - give f and g unique IDs like any other
-#    #    variable
-#    # - What about the bound closure variables 
-#    #    of a function? 
-#    # We can't just put "g" in a global lookup
-#    # since it depends on references to variables
-#    # of f's scope. 
-#    # What if we include in a function's description
-#    # the names of other variables it relies on
-#    # and their types? 
-#    # ...could a function then be returned? 
-#    # def f(x):
-#    #   def g(y):
-#    #     return x + y
-#    #   return g(3)
-#    # What if we just do a simple closure conversion?
-#    # CODE f(closure_f, x):
-#    #   CODE g(closure_g, y):
-#    #     x = closure_x[0]
-#    #     return x + y
-#    #   g = <package_fn g, x>
-#    #   CALL(g, 3)
-#    #   
-#    # ...but this goes too far, since we're 
-#    # giving functions first-class representation
-#    # What if we instead just say:
-#    #   g.code = "...", 
-#    #   g.globals = "id1, id2, etc..."
-#    #   and when typed
-#    #   g.globals = "id1: t1, id2: t2"
-#    # later we keep scoped  
-#   
-#   
-#
-#
-#        
