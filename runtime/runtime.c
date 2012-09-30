@@ -46,7 +46,7 @@ job_t *reconfigure_job(job_t *job, int num_threads) {
   pthread_barrier_init(&new_job->barrier, NULL, num_threads + 1);
   int total_tasks = 0;
   int i;
-  for (i = 0; i < num_threads; ++i) {    
+  for (i = 0; i < job->num_lists; ++i) {    
     total_tasks += job->task_lists[i].num_tasks - job->task_lists[i].cur_task;
   }
 

@@ -15,6 +15,8 @@ void add1(int iter, void *args) {
   add1_args_t *my_args = (add1_args_t*)args;
   
   my_args->out[iter] = my_args->in[iter] + 1;
+  if (iter > 500000 - 1)
+    printf("Too big iter: %d\n", iter);
 }
 
 void test_create_destroy(void) {
@@ -119,11 +121,17 @@ void test_reconfigure_threads(void) {
   launch_job(thread_pool, &add1, &add1_args, job);
   wait_for_job(thread_pool);
 
+  int num_bad = 0;
   int pass = 1;
   for (i = 0; i < len && pass; ++i) {
     pass &= out[i] == in[i] + 1;
+    if (out[i] != in[i] + 1) {
+      num_bad++;
+      printf("Bad at index %d with value %d\n", i, out[i]);
+    }
   }
   CU_ASSERT(pass);
+  printf("Num bad: %d\n", num_bad);
   
   destroy_thread_pool(thread_pool);
   free_job(job);
