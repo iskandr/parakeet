@@ -17,33 +17,42 @@ void add1(int iter, void *args) {
   my_args->out[iter] = my_args->in[iter] + 1;
 }
 
-void test_run_threads(void) {
-  int num_threads = 8;
+void test_create_destroy(void) {
+  int num_threads = 1;
   thread_pool_t *thread_pool = create_thread_pool(num_threads);
+  destroy_thread_pool(thread_pool);
+  CU_ASSERT(1);
+}
+
+void test_run_threads(void) {
+  int max_threads = 8;
+  thread_pool_t *thread_pool = create_thread_pool(max_threads);
   
-  int len = 5000000;
+  int len = 5000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
+  int i;
+  for (i = 0; i < len; ++i) {
+    in[i] = i;
+  }
 
-  task_list_t *task_lists = make_task_lists(len, num_threads, num_threads);
+  int num_threads = 8;
+  job_t *job = make_job(len, num_threads);
   
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
-  launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists);
-  wait_for_tasks(thread_pool);
+  launch_job(thread_pool, &add1, &add1_args, job);
+  wait_for_job(thread_pool);
 
   int pass = 1;
-  int i;
-  for (i = 0; i < len && pass; ++i) {
-    CU_ASSERT(out[i] == in[i] + 1);
+  for (i = 0; (i < len) && pass; ++i) {
+    pass &= out[i] == in[i] + 1;
   }
+  CU_ASSERT(pass);
   
   destroy_thread_pool(thread_pool);
-  for (i = 0; i < num_threads; ++i) {
-    free(task_lists[i].tasks);
-  }
-  free(task_lists);
+  free_job(job);
   free(in);
   free(out);
 }
@@ -53,33 +62,33 @@ void test_pause_threads(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 500000000;
+  int len = 500000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
+  int i;
+  for (i = 0; i < len; ++i) {
+    in[i] = i;
+  }
 
-  task_list_t *task_lists = make_task_lists(len, max_threads, num_threads);
-  
+  job_t *job = make_job(len, num_threads);
+
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
   
-  launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists);
-  pause_tasks(thread_pool);
-  launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists);
-  wait_for_tasks(thread_pool);
+  launch_job(thread_pool, &add1, &add1_args, job);
+  pause_job(thread_pool);
+  launch_job(thread_pool, &add1, &add1_args, job);
+  wait_for_job(thread_pool);
 
-  int i;
-  for (i = 0; i < len; ++i) {
-    CU_ASSERT(out[i] == in[i] + 1);
+  int pass = 1;
+  for (i = 0; i < len && pass; ++i) {
+    pass &= out[i] == in[i] + 1;
   }
+  CU_ASSERT(pass);
   
   destroy_thread_pool(thread_pool);
-  for (i = 0; i < max_threads; ++i) {
-    if (task_lists[i].tasks) {
-      free(task_lists[i].tasks);
-    }
-  }
-  free(task_lists);
+  free_job(job);
   free(in);
   free(out);
 }
@@ -89,35 +98,35 @@ void test_reconfigure_threads(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 500000000;
+  int len = 500000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
+  int i;
+  for (i = 0; i < len; ++i) {
+    in[i] = i;
+  }
 
-  task_list_t *task_lists = make_task_lists(len, max_threads, num_threads);
+  job_t *job = make_job(len, num_threads);
   
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
   
-  launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists); 
-  pause_tasks(thread_pool);
+  launch_job(thread_pool, &add1, &add1_args, job); 
+  pause_job(thread_pool);
   num_threads = 3;
-  task_lists = reconfigure_task_lists(task_lists, max_threads, num_threads);
-  launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists);
-  wait_for_tasks(thread_pool);
+  job = reconfigure_job(job, num_threads);
+  launch_job(thread_pool, &add1, &add1_args, job);
+  wait_for_job(thread_pool);
 
-  int i;
-  for (i = 0; i < len; ++i) {
-    CU_ASSERT(out[i] == in[i] + 1);
+  int pass = 1;
+  for (i = 0; i < len && pass; ++i) {
+    pass &= out[i] == in[i] + 1;
   }
+  CU_ASSERT(pass);
   
   destroy_thread_pool(thread_pool);
-  for (i = 0; i < max_threads; ++i) {
-    if (task_lists[i].tasks) {
-      free(task_lists[i].tasks);
-    }
-  }
-  free(task_lists);
+  free_job(job);
   free(in);
   free(out);
 }
@@ -127,38 +136,35 @@ void test_sequence_of_jobs(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 500000000;
+  int len = 50000000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
 
-  task_list_t *task_lists;
+  job_t *job;
   
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
 
   int i;
-  num_threads = 4;
-  for (i = 0; i < 4; ++i) {
-    task_lists = make_task_lists(len, max_threads, num_threads);
-    launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists); 
-    pause_tasks(thread_pool);
+  num_threads = 2;
+  for (i = 0; i < 2; ++i) {
+    job = make_job(len, num_threads);
+    launch_job(thread_pool, &add1, &add1_args, job); 
+    pause_job(thread_pool);
     num_threads++;
-    task_lists = reconfigure_task_lists(task_lists, max_threads, num_threads);
-    launch_tasks(thread_pool, num_threads, &add1, &add1_args, 2, task_lists);
-    wait_for_tasks(thread_pool);
+//     task_job = reconfigure_task_lists(job, num_threads);
+    launch_job(thread_pool, &add1, &add1_args, job);
+    wait_for_job(thread_pool);
 
+    int pass = 1;
     int i;
     for (i = 0; i < len; ++i) {
-      CU_ASSERT(out[i] == in[i] + 1);
+      pass &= out[i] == in[i] + 1;
     }
+    CU_ASSERT(pass);
 
-    for (i = 0; i < max_threads; ++i) {
-      if (task_lists[i].tasks) {
-        free(task_lists[i].tasks);
-      }
-    }
-    free(task_lists);
+    free_job(job);
   }
   
   destroy_thread_pool(thread_pool);
@@ -188,28 +194,32 @@ int main(int argc, char **argv) {
     return CU_get_error();
   }
 
+  if ((NULL == CU_add_test(pSuite, "Create & Destroy", test_create_destroy))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
   /* add the tests to the suite */
-//   if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads)) {
-//     CU_cleanup_registry();
-//     return CU_get_error();
-//   }
-/*  
+  if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
+  
   if ((NULL == CU_add_test(pSuite, "Pause tasks", test_pause_threads))) {
     CU_cleanup_registry();
     return CU_get_error();
-  }*/
-/*  
+  }
+  
   if ((NULL == CU_add_test(pSuite, "Reconfigure tasks",
                            test_reconfigure_threads))) {
     CU_cleanup_registry();
     return CU_get_error();
-  }*/
-  
-  if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
-                           test_sequence_of_jobs))) {
-    CU_cleanup_registry();
-    return CU_get_error();
   }
+  
+//   if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
+//                            test_sequence_of_jobs))) {
+//     CU_cleanup_registry();
+//     return CU_get_error();
+//   }
   
   /* Run all tests using the CUnit Basic interface */
   CU_basic_set_mode(CU_BRM_VERBOSE);
