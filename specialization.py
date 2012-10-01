@@ -145,6 +145,11 @@ def rewrite_typed(fn, old_type_env):
       var_map[old_name] = new_name
       new_type_env[new_name] = t
   
+  def gen_temp(t, prefix = "temp"):
+    temp = names.fresh(prefix)
+    new_type_env[temp] = t
+    return syntax.Var(temp, type = t)
+      
   def typeof(expr):
     if isinstance(expr, syntax.Var):
       return new_type_env[expr.name]
@@ -177,50 +182,69 @@ def rewrite_typed(fn, old_type_env):
       old_name = expr.name
       new_name = var_map[old_name]
       var_type = new_type_env[new_name]
-      return syntax.Var(new_name), var_type
+      return syntax.Var(new_name, type = var_type)
     
     def rewrite_Tuple():
       new_elts = map(rewrite_expr, expr.elts)
       new_types = map(lambda e: e.type, new_elts)
-      return syntax.Tuple(new_elts), ptype.Tuple(new_types)
+      return syntax.Tuple(new_elts, type = ptype.Tuple(new_types))
       
     new_expr, expr_type = dispatch(expr, 'rewrite')
     new_expr.type = expr_type
     return new_expr 
-    
+
   
-  def cast(expr, t):
-    return None
+  def cast(expr, t, curr_block = None):
+    if curr_block is None:
+      curr_block = blocks.current()
+    assert isinstance(t, ptype.Scalar), "Can't cast %s into %s" % (expr.type, t)  
+    if hasattr(expr, 'name'):
+      prefix = "%.cast.%s" % (expr.name, t)
+    else:
+      prefix = "temp.cast.%s" % t
+           
+    temp = gen_temp(t, prefix = prefix) 
+    cast =  syntax.Cast(expr, type = t)
+    curr_block.append(syntax.Assign(temp, cast))
+    return temp
   
-  def coerce_expr(expr, t):
+  def coerce_expr(expr, t, curr_block = None):
     if expr.type == t:
       return expr
-    def coerce_Tuple():
+    elif isinstance(expr, syntax.Tuple):
       if not isinstance(t, ptype.Tuple) or len(expr.type.elt_types) != t.elt_types:
         raise ptype.IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
         for elt, elt_t in zip(expr.elts, t.elt_types):
-          new_elts.append(coerce_expr(elt, elt_t))
-        new_tuple = syntax.Tuple(new_elts)
-        new_tuple.type = t 
-        return new_tuple
-    def coerce_Var():
-      assert isinstance(t, ptype.Scalar), "Can't cast %s into %s" % (expr.type, t)       
-      
-    def coerce_Var():
-       
-    curr_t = typeof(expr)
-    if curr_t == t:
-      return 
+          new_elts.append(coerce_expr(elt, elt_t, curr_block))
+        return syntax.Tuple(new_elts, type = t)
+    else:
+      return cast(expr, t, curr_block)
     
+  def rewrite_merge(merge, left_block, right_block):
+    typed_merge = {}
+    for (old_var, (left, right)) in merge.iteritems():
+      new_var = var_map[old_var]
+      t = new_type_env[new_var]
+      typed_left = coerce_expr(rewrite_expr(left), t, left_block)
+      typed_right = coerce_expr(rewrite_expr(right), t, right_block)
+      typed_merge[new_var] = (typed_left, typed_right) 
+    return typed_merge 
+  
   def rewrite_stmt(stmt):
     if isinstance(stmt, syntax.Assign):
       new_lhs = rewrite_expr(stmt.lhs)
-      expected_type = new_lhs.type
-      
-      new_rhs = coerce_expr(rewrite_expr(stmt.rhs), expected_type)
+      new_rhs = coerce_expr(rewrite_expr(stmt.rhs), new_lhs.type)
       return syntax.Assign(new_lhs, new_rhs)
+    elif isinstance(stmt, syntax.If):
+      new_cond = coerce_expr(rewrite_expr(stmt.cond), ptype.Bool)
+      new_true_block = rewrite_block(stmt.true)
+      new_false_block = rewrite_block(stmt.false)
+      new_merge = rewrite_merge(stmt.merge, new_true_block, new_false_block)
+      return syntax.If(new_cond, new_true_block, new_false_block, new_merge)
+    else:
+      raise RuntimeError("Not implemented: %s" % stmt)
     
     
   def rewrite_block(stmts):

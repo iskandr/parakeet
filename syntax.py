@@ -26,7 +26,9 @@ class Expr(TreeLike):
   pass
 
 class Adverb(Expr):
-  pass
+  # the type field is initialized to None for untyped syntax nodes
+  # but should be set once code gets specialized 
+  _memebers = ['type']
 
 
 class Const(Expr):
@@ -44,7 +46,8 @@ class Prim(Expr):
   _members = ['value']
 
 class Cast(Expr):
-  _members = ['value', 'type']
+  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
+  _members = ['value']
 
 class Tuple(Expr):
   _members = ['elts']
