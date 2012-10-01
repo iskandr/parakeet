@@ -121,17 +121,11 @@ void test_reconfigure_threads(void) {
   launch_job(thread_pool, &add1, &add1_args, job);
   wait_for_job(thread_pool);
 
-  int num_bad = 0;
   int pass = 1;
   for (i = 0; i < len && pass; ++i) {
     pass &= out[i] == in[i] + 1;
-    if (out[i] != in[i] + 1) {
-      num_bad++;
-      printf("Bad at index %d with value %d\n", i, out[i]);
-    }
   }
   CU_ASSERT(pass);
-  printf("Num bad: %d\n", num_bad);
   
   destroy_thread_pool(thread_pool);
   free_job(job);
@@ -144,7 +138,7 @@ void test_sequence_of_jobs(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 50000000;
+  int len = 100000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
 
@@ -161,7 +155,7 @@ void test_sequence_of_jobs(void) {
     launch_job(thread_pool, &add1, &add1_args, job); 
     pause_job(thread_pool);
     num_threads++;
-//     task_job = reconfigure_task_lists(job, num_threads);
+    job = reconfigure_job(job, num_threads);
     launch_job(thread_pool, &add1, &add1_args, job);
     wait_for_job(thread_pool);
 
@@ -223,11 +217,11 @@ int main(int argc, char **argv) {
     return CU_get_error();
   }
   
-//   if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
-//                            test_sequence_of_jobs))) {
-//     CU_cleanup_registry();
-//     return CU_get_error();
-//   }
+  if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
+                           test_sequence_of_jobs))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
   
   /* Run all tests using the CUnit Basic interface */
   CU_basic_set_mode(CU_BRM_VERBOSE);
