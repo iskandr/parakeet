@@ -214,11 +214,23 @@ def register_scalar_type(dtype, name = None):
 def from_dtype (dtype):
   return _dtype_to_parakeet[dtype] 
 
+def from_char_code(c):
+  numpy_type = np.typeDict[c]
+  return from_dtype(np.dtype(numpy_type))
+
 Bool = register_scalar_type(np.bool8, 'bool')
+
+UInt8 = register_scalar_type(np.uint8)
+UInt16 = register_scalar_type(np.uint16)
+UInt32 = register_scalar_type(np.uint32)
+UInt64 = register_scalar_type(np.uint64)
+
 Int8 = register_scalar_type(np.int8)
 Int16 = register_scalar_type(np.int16)
 Int32 = register_scalar_type(np.int32)
 Int64 = register_scalar_type(np.int64)
+
+Float16 = register_scalar_type(np.float16 )
 Float32 = register_scalar_type(np.float32)
 Float64 = register_scalar_type(np.float64)
 
@@ -226,15 +238,8 @@ Float64 = register_scalar_type(np.float64)
 
   
 def type_of_scalar(x):
-  assert np.isscalar(x)
-  if isinstance(x, int):
-      x = np.int64(x)
-  elif isinstance(x, float):
-    x = np.float64(x)
-  else:
-    assert hasattr(x, 'dtype')
-  return from_dtype(x.dtype)
-
+  return from_dtype(np.min_scalar_type(x))
+ 
 def type_of_value(x):
   if np.isscalar(x):
     return type_of_scalar(x)

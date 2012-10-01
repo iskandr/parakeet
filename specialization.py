@@ -31,7 +31,8 @@ class NestedBlocks:
   def extend_current(self, stmts):
     self.current().extend(stmts)
     
-     
+
+import prims 
 
 def _infer_types(fn, arg_types):
   """
@@ -63,8 +64,8 @@ def _infer_types(fn, arg_types):
   
     def expr_PrimCall():
       arg_types = map(expr_type, expr.args)
-      # TODO: make this actually figure out the return type of a ufunc 
-      return ptype.combine_type_list(arg_types)
+      upcast_types = expr.prim.expected_input_types(arg_types)
+      return expr.prim.result_type(upcast_types)
   
     def expr_Var():
       if expr.name in tenv:
@@ -139,6 +140,8 @@ def rewrite_typed(fn, old_type_env):
   
   var_map = {}
   new_type_env = {}
+  for name in old_type_env.keys():
+    assert isinstance(name, str), old_type_env 
   for (old_name, t) in old_type_env.iteritems():
     # don't try to rename '$return' 
     if not old_name.startswith("$"):
@@ -161,7 +164,7 @@ def rewrite_typed(fn, old_type_env):
     else:
       raise RuntimeError("Can't get type of %s" % expr)
     
-  def rewrite_arg(arg):
+  def rewrite_formal_arg(arg):
     # handle both the case when args are a flat list of strings
     # and a nested tree of expressions
     if isinstance(arg, str):
@@ -169,10 +172,10 @@ def rewrite_typed(fn, old_type_env):
     elif isinstance(arg, syntax.Var):
       return syntax.Var(var_map[arg.name])
     elif isinstance(arg, syntax.Tuple):
-      return syntax.Tuple(rewrite_args(arg.elts))
+      return syntax.Tuple(rewrite_formal_args(arg.elts))
   
-  def rewrite_args(args):
-    return map(rewrite_arg, args)
+  def rewrite_formal_args(args):
+    return map(rewrite_formal_arg, args)
   
   def tag(expr, t):
     expr.type = t 
@@ -193,6 +196,18 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Const():
       return syntax.Const(expr.value, type = ptype.type_of_value(expr.value))
     
+    def rewrite_PrimCall():
+      # TODO: This awkwardly infers the types we need to cast args up to
+      # but then dont' actually coerce them, since that's left as distinct work
+      # for a later stage 
+      new_args = map(rewrite_expr, expr.args)
+      arg_types = map(lambda x: x.type, new_args)
+      upcast_types = expr.prim.expected_input_types(arg_types)
+      result_type = expr.prim.result_type(upcast_types)
+      upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
+
+      return syntax.PrimCall(expr.prim, upcast_args, type = result_type )
+    
     return  dispatch(expr, 'rewrite')
   
   
@@ -201,7 +216,7 @@ def rewrite_typed(fn, old_type_env):
       curr_block = blocks.current()
     assert isinstance(t, ptype.Scalar), "Can't cast %s into %s" % (expr.type, t)  
     if hasattr(expr, 'name'):
-      prefix = "%.cast.%s" % (expr.name, t)
+      prefix = "%s.cast.%s" % (expr.name, t)
     else:
       prefix = "temp.cast.%s" % t
            
@@ -271,7 +286,7 @@ def rewrite_typed(fn, old_type_env):
       curr_block.append(rewrite_stmt(stmt))
     return blocks.pop()
   
-  new_args = rewrite_args(fn.args)
+  new_args = rewrite_formal_args(fn.args)
   new_body = rewrite_block(fn.body)
   
   typed_id = names.refresh(fn.name)

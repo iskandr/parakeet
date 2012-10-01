@@ -187,10 +187,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       cond = translate_expr(expr.test)
       true_block = [syntax.Assign(temp1, translate_expr(expr.body))]
       false_block = [syntax.Assign(temp2, translate_expr(expr.orelse))]
-      merge = {result :  (temp1, temp2)}
+      merge = {result.name :  (temp1, temp2)}
       if_stmt = syntax.If(cond, true_block, false_block, merge) 
       env.current_block().append(if_stmt)
-      return syntax.Var(result)
+      return result
     
     if isinstance(expr, ast.Name):
       # name is a special case since its translation function needs to be accessed

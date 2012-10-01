@@ -43,11 +43,9 @@ def simple_branch(x):
     return 2
     
 def test_simple_branch():
-  result1 = interp.run(simple_branch, 9)
-  assert result1 == 1, "Expected 1, got %s" % result1
-  result2 = interp.run(simple_branch, 10)
-  assert  result2 == 2, "Expected 2, got %s" % result2  
-
+  expect(simple_branch, [9], 1)
+  expect(simple_branch, [10], 1)
+  
 def simple_merge(x):
   if x == 0:
     y = 1

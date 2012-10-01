@@ -62,7 +62,6 @@ def eval_fn(fn, *args):
       # use numpy's conversion function 
       return t.dtype.type(x)
 
-      
     return dispatch(expr, 'expr')
       
   def eval_merge_left(phi_nodes):
@@ -121,7 +120,11 @@ def run(python_fn, args, type_specialization = False):
   # top-level functions are really acting like closures over their
   # global dependencies 
   global_args = [python_fn.func_globals[n] for n in untyped.nonlocals]
-  all_args = global_args + list(args)
+  try:
+    all_args = global_args + list(args)
+  except:
+    print global_args, args 
+    raise 
   if not type_specialization:
     return eval_fn(untyped, *all_args) 
   else:
