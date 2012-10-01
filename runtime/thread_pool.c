@@ -23,23 +23,27 @@ static void *worker(void *args) {
     thread_status_t status = worker_data->status;
     pthread_mutex_unlock(&worker_data->mutex);
     if (status == THREAD_RUN) {
-      // get_time();
       pthread_mutex_lock(&worker_data->mutex);
       task_list_t *task_list = worker_data->task_list;
-      task_t *task = &task_list->tasks[task_list->cur_task];
-      (*worker_data->work_function)(task->next_iteration++, worker_data->args);
-      // get_time();
-      // update local time accumulator();
-      
-      // If I'm done with this task, move to the next one or move to the
-      // finished state.  For now, don't do any work stealing.
-      if (task->next_iteration > task->last_iteration) {
-        if (task_list->cur_task == task_list->num_tasks - 1) {
-          worker_data->status = THREAD_FINISHED;
-          if (worker_data->notify_when_done) {
-            pthread_cond_signal(worker_data->master_cond);
-          }
-        } else {
+
+      // Check whether we're done.
+      if (task_list->cur_task == task_list->num_tasks) {
+        worker_data->status = THREAD_FINISHED;
+        if (worker_data->notify_when_done) {
+          pthread_cond_signal(worker_data->master_cond);
+        }
+      } else {
+        // We know now that we have an iteration to perform for this task, so
+        // do it.
+        task_t *task = &task_list->tasks[task_list->cur_task];
+        // get_time();
+        (*worker_data->work_function)(task->next_iteration++,
+                                      worker_data->args);
+        // get_time();
+        // update local time accumulator();
+
+        // If this was the last iteration of this task, move to the next one.
+        if (task->next_iteration > task->last_iteration) {
           task_list->cur_task++;
         }
       }
@@ -104,12 +108,15 @@ void launch_job(thread_pool_t *thread_pool,
   // configuration.
   int i;
   for (i = 0; i < thread_pool->num_active; ++i) {
-    assert(job->task_lists[i].num_tasks > 0);
-
     pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
-    thread_pool->worker_data[i].status = THREAD_RUN;
+    if (job->task_lists[i].num_tasks > 0) {
+      thread_pool->worker_data[i].status = THREAD_RUN;
+      thread_pool->worker_data[i].task_list = &job->task_lists[i];
+    } else {
+      thread_pool->worker_data[i].status = THREAD_FINISHED;
+      thread_pool->worker_data[i].task_list = NULL;
+    }
     thread_pool->worker_data[i].notify_when_done = 0;
-    thread_pool->worker_data[i].task_list = &job->task_lists[i];
     thread_pool->worker_data[i].work_function = work_function;
     thread_pool->worker_data[i].args = args;
     pthread_cond_signal(&thread_pool->worker_data[i].cond);

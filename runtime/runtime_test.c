@@ -15,8 +15,6 @@ void add1(int iter, void *args) {
   add1_args_t *my_args = (add1_args_t*)args;
   
   my_args->out[iter] = my_args->in[iter] + 1;
-  if (iter > 500000 - 1)
-    printf("Too big iter: %d\n", iter);
 }
 
 void test_create_destroy(void) {
@@ -138,9 +136,13 @@ void test_sequence_of_jobs(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 100000;
+  int len = 500000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
+  int i;
+  for (i = 0; i < len; ++i) {
+    in[i] = i;
+  }
 
   job_t *job;
   
@@ -148,21 +150,23 @@ void test_sequence_of_jobs(void) {
   add1_args.in = in;
   add1_args.out = out;
 
-  int i;
   num_threads = 2;
-  for (i = 0; i < 2; ++i) {
+  for (i = 0; i < 4; ++i) {
     job = make_job(len, num_threads);
     launch_job(thread_pool, &add1, &add1_args, job); 
     pause_job(thread_pool);
-    num_threads++;
-    job = reconfigure_job(job, num_threads);
+    int num_tasks = num_unfinished_tasks(job);
+    if (num_tasks > num_threads) {
+      num_threads++;
+      job = reconfigure_job(job, num_threads);
+    }
     launch_job(thread_pool, &add1, &add1_args, job);
     wait_for_job(thread_pool);
 
     int pass = 1;
-    int i;
-    for (i = 0; i < len; ++i) {
-      pass &= out[i] == in[i] + 1;
+    int j;
+    for (j = 0; j < len; ++j) {
+      pass &= out[j] == in[j] + 1;
     }
     CU_ASSERT(pass);
 
@@ -196,26 +200,26 @@ int main(int argc, char **argv) {
     return CU_get_error();
   }
 
-  if ((NULL == CU_add_test(pSuite, "Create & Destroy", test_create_destroy))) {
-    CU_cleanup_registry();
-    return CU_get_error();
-  }
-  /* add the tests to the suite */
-  if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads))) {
-    CU_cleanup_registry();
-    return CU_get_error();
-  }
-  
-  if ((NULL == CU_add_test(pSuite, "Pause tasks", test_pause_threads))) {
-    CU_cleanup_registry();
-    return CU_get_error();
-  }
-  
+//   if ((NULL == CU_add_test(pSuite, "Create & Destroy", test_create_destroy))) {
+//     CU_cleanup_registry();
+//     return CU_get_error();
+//   }
+//   /* add the tests to the suite */
+//   if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads))) {
+//     CU_cleanup_registry();
+//     return CU_get_error();
+//   }
+//   
+//   if ((NULL == CU_add_test(pSuite, "Pause tasks", test_pause_threads))) {
+//     CU_cleanup_registry();
+//     return CU_get_error();
+//   }
+/*  
   if ((NULL == CU_add_test(pSuite, "Reconfigure tasks",
                            test_reconfigure_threads))) {
     CU_cleanup_registry();
     return CU_get_error();
-  }
+  }*/
   
   if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
                            test_sequence_of_jobs))) {
