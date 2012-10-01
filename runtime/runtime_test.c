@@ -189,37 +189,36 @@ int clean_suite1(void) {
 int main(int argc, char **argv) {
   CU_pSuite pSuite = NULL;
 
-  /* initialize the CUnit test registry */
-  if (CUE_SUCCESS != CU_initialize_registry())
+  if (CUE_SUCCESS != CU_initialize_registry()) {
     return CU_get_error();
+  }
   
-  /* add a suite to the registry */
   pSuite = CU_add_suite("Runtime Tests", init_suite1, clean_suite1);
   if (NULL == pSuite) {
     CU_cleanup_registry();
     return CU_get_error();
   }
 
-//   if ((NULL == CU_add_test(pSuite, "Create & Destroy", test_create_destroy))) {
-//     CU_cleanup_registry();
-//     return CU_get_error();
-//   }
-//   /* add the tests to the suite */
-//   if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads))) {
-//     CU_cleanup_registry();
-//     return CU_get_error();
-//   }
-//   
-//   if ((NULL == CU_add_test(pSuite, "Pause tasks", test_pause_threads))) {
-//     CU_cleanup_registry();
-//     return CU_get_error();
-//   }
-/*  
+  if ((NULL == CU_add_test(pSuite, "Create & Destroy", test_create_destroy))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
+
+  if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
+  
+  if ((NULL == CU_add_test(pSuite, "Pause tasks", test_pause_threads))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
+  
   if ((NULL == CU_add_test(pSuite, "Reconfigure tasks",
                            test_reconfigure_threads))) {
     CU_cleanup_registry();
     return CU_get_error();
-  }*/
+  }
   
   if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
                            test_sequence_of_jobs))) {
@@ -227,7 +226,6 @@ int main(int argc, char **argv) {
     return CU_get_error();
   }
   
-  /* Run all tests using the CUnit Basic interface */
   CU_basic_set_mode(CU_BRM_VERBOSE);
   CU_basic_run_tests();
   CU_cleanup_registry();
