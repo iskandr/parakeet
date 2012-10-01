@@ -135,6 +135,7 @@ def _infer_types(fn, arg_types):
 def rewrite_typed(fn, old_type_env):
   
   blocks = NestedBlocks()
+  fn_return_type = old_type_env["$return"]
   
   var_map = {}
   new_type_env = {}
@@ -188,11 +189,12 @@ def rewrite_typed(fn, old_type_env):
       new_elts = map(rewrite_expr, expr.elts)
       new_types = map(lambda e: e.type, new_elts)
       return syntax.Tuple(new_elts, type = ptype.Tuple(new_types))
-      
-    new_expr, expr_type = dispatch(expr, 'rewrite')
-    new_expr.type = expr_type
-    return new_expr 
-
+    
+    def rewrite_Const():
+      return syntax.Const(expr.value, type = ptype.type_of_value(expr.value))
+    
+    return  dispatch(expr, 'rewrite')
+  
   
   def cast(expr, t, curr_block = None):
     if curr_block is None:
@@ -209,6 +211,9 @@ def rewrite_typed(fn, old_type_env):
     return temp
   
   def coerce_expr(expr, t, curr_block = None):
+    if expr.type is None:
+      expr = rewrite_expr(expr)
+      
     if expr.type == t:
       return expr
     elif isinstance(expr, syntax.Tuple):
@@ -227,22 +232,34 @@ def rewrite_typed(fn, old_type_env):
     for (old_var, (left, right)) in merge.iteritems():
       new_var = var_map[old_var]
       t = new_type_env[new_var]
-      typed_left = coerce_expr(rewrite_expr(left), t, left_block)
-      typed_right = coerce_expr(rewrite_expr(right), t, right_block)
+      typed_left = coerce_expr(left, t, left_block)
+      typed_right = coerce_expr(right, t, right_block)
       typed_merge[new_var] = (typed_left, typed_right) 
     return typed_merge 
   
   def rewrite_stmt(stmt):
     if isinstance(stmt, syntax.Assign):
       new_lhs = rewrite_expr(stmt.lhs)
-      new_rhs = coerce_expr(rewrite_expr(stmt.rhs), new_lhs.type)
+      new_rhs = coerce_expr(stmt.rhs, new_lhs.type)
       return syntax.Assign(new_lhs, new_rhs)
     elif isinstance(stmt, syntax.If):
-      new_cond = coerce_expr(rewrite_expr(stmt.cond), ptype.Bool)
+      new_cond = coerce_expr(stmt.cond, ptype.Bool)
       new_true_block = rewrite_block(stmt.true)
       new_false_block = rewrite_block(stmt.false)
       new_merge = rewrite_merge(stmt.merge, new_true_block, new_false_block)
       return syntax.If(new_cond, new_true_block, new_false_block, new_merge)
+    elif isinstance(stmt, syntax.Return):
+      return syntax.Return(coerce_expr(stmt.value, fn_return_type))
+    elif isinstance(stmt, syntax.While):
+      new_cond = coerce_expr(stmt.cond, ptype.Bool)
+      new_body = rewrite_block(stmt.body)
+      # insert coercions for left-branch values into the current block before
+      # the while-loop and coercions for the right-branch to the end of the loop body
+      new_merge_before = rewrite_merge(stmt.merge_before, 
+        left_block = blocks.current(), right_block = new_body)
+      new_merge_after = rewrite_merge(stmt.merge_after, 
+        left_block = blocks.current(), right_block = new_body)
+      return syntax.While(new_cond, new_body, new_merge_before, new_merge_after)
     else:
       raise RuntimeError("Not implemented: %s" % stmt)
     
@@ -267,9 +284,8 @@ def rewrite_typed(fn, old_type_env):
       return typeof(arg)
      
   arg_types = map(arg_type, new_args)
-  return_type = old_type_env["$return"]
   typed_fundef = syntax.TypedFn(name = typed_id, args = new_args, 
-    body = new_body, input_types = arg_types, return_type = return_type, 
+    body = new_body, input_types = arg_types, return_type = fn_return_type, 
     type_env = new_type_env)
   return typed_fundef 
 

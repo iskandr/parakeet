@@ -46,12 +46,20 @@ class ScopedMap(object):
       combined.update(d.locals)
     return combined.items()
   
-  def __setitem__(self, k, v):
+  def get(self, k, defval):
     if k in self:
-      raise TypeError, 'Duplicate binding for name: %s (assigning %s).  Previously: %s' % (k, v, self[k])
-    if not isinstance(k, str):
-      logging.warn('Non-string key in binding map? %s', k)
-#    logging.info('Bound %s.', k)
+      return self[k]
+    return defval
+  
+  def __setitem__(self, k, v):
+    assert isinstance(k, str), 'Non-string key in binding map? %s' % k
+    # check parent scopes first
+    p = self.parent
+    while p:
+      if k in p.locals: 
+        p.locals[k] = v
+        return
+      p = p.parent
     self.locals[k] = v
   
   def __contains__(self, k):
@@ -88,10 +96,10 @@ class TreeLike(object):
       raise Exception('Too many arguments for ' + self.__class__.__name__ + 
                       '.  Expected: ' + str(all_members(self)))
     
-    for i in range(len(args), len(all_members(self))):
-      arg = all_members(self)[i]
-      if not arg in kw:
-        logging.debug("Missing initializer for %s.%s", self.node_type(), all_members(self)[i])
+    #for i in range(len(args), len(all_members(self))):
+      #arg = all_members(self)[i]
+      #assert arg in kw, \
+      #  "Missing initializer for %s.%s" % (self.node_type(), all_members(self)[i])
 
     for field in all_members(self):
       setattr(self, field, None)
@@ -202,26 +210,32 @@ class TreeLike(object):
     yourkids = o.children()
     return cmp(mykids, yourkids)
   
-  def __hash__(self):
-    h = 0x123123
-    for c in flatten(self.children()):
-      h ^= hash(c)
-    return h
-  
-  def __str__(self):
-    return repr(self)
-
-  def __repr__(self):
+  def repr(self, only_once):
+    def _(node):
+      if tree_like(node):
+        return node.repr(only_once)
+      return repr(node)
+    
+    if id(self) in only_once: return only_once[id(self)]
+    only_once[id(self)] = '<circular reference>'
+    
     rv = self.node_type() + ':\n'
     for k, v in self.child_dict().items():
       if dict_like(v):
-        for kk, vv in v.iteritems(): rv += '%s.%s : %s\n' % (k, kk, vv)
+        for kk, vv in v.iteritems(): rv += '%s.%s : %s\n' % (k, kk, _(vv))
       elif list_like(v):
-        for elem in v: rv += '%s: %s\n' % (k, elem)
+        for elem in v: rv += '%s: %s\n' % (k, _(elem))
       else:
-        rv += '%s: %s\n' % (k, v)
+        rv += '%s: %s\n' % (k, _(v))
     rv = rv.strip()
-    return rv.replace('\n', '\n  |')
+    only_once[id(self)] = rv.replace('\n', '\n  |')
+    return only_once[id(self)]
+  
+  def __str__(self):
+    return self.repr({})
+  
+  def __repr__(self):
+    return self.repr({})
   
 def find_all(tree, node_type):
   #logging.info('Looking for %s', node_type)    

@@ -1,6 +1,8 @@
 import syntax
 import ast_conversion 
 from function_registry import untyped_functions
+from common import dispatch 
+import ptype 
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -53,10 +55,15 @@ def eval_fn(fn, *args):
       closure_arg_vals = map(eval_expr, expr.args) 
       return Closure(fundef, closure_arg_vals)
     
-    functions = locals()
-    nodetype =  expr.__class__.__name__
-    fn_name = 'expr_' + nodetype
-    return functions[fn_name]()
+    def expr_Cast():
+      x = eval_expr(expr.value)
+      t = expr.type
+      assert isinstance(t, ptype.Scalar)
+      # use numpy's conversion function 
+      return t.dtype.type(x)
+
+      
+    return dispatch(expr, 'expr')
       
   def eval_merge_left(phi_nodes):
     for result, (left, _) in phi_nodes.iteritems():

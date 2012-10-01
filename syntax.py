@@ -23,12 +23,12 @@ class While(Stmt):
   _members = ['cond', 'body', 'merge_before', 'merge_after']
   
 class Expr(TreeLike):
-  pass
-
-class Adverb(Expr):
   # the type field is initialized to None for untyped syntax nodes
   # but should be set once code gets specialized 
-  _memebers = ['type']
+  _members = ['type']
+
+class Adverb(Expr):
+  pass
 
 
 class Const(Expr):
