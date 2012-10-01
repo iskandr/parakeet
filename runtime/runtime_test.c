@@ -15,6 +15,8 @@ void add1(int iter, void *args) {
   add1_args_t *my_args = (add1_args_t*)args;
   
   my_args->out[iter] = my_args->in[iter] + 1;
+  if (iter > 500000 - 1)
+    printf("Too big iter: %d\n", iter);
 }
 
 void test_create_destroy(void) {
@@ -136,7 +138,7 @@ void test_sequence_of_jobs(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 50000000;
+  int len = 100000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
 
@@ -153,7 +155,7 @@ void test_sequence_of_jobs(void) {
     launch_job(thread_pool, &add1, &add1_args, job); 
     pause_job(thread_pool);
     num_threads++;
-//     task_job = reconfigure_task_lists(job, num_threads);
+    job = reconfigure_job(job, num_threads);
     launch_job(thread_pool, &add1, &add1_args, job);
     wait_for_job(thread_pool);
 
@@ -215,11 +217,11 @@ int main(int argc, char **argv) {
     return CU_get_error();
   }
   
-//   if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
-//                            test_sequence_of_jobs))) {
-//     CU_cleanup_registry();
-//     return CU_get_error();
-//   }
+  if ((NULL == CU_add_test(pSuite, "Sequence of jobs",
+                           test_sequence_of_jobs))) {
+    CU_cleanup_registry();
+    return CU_get_error();
+  }
   
   /* Run all tests using the CUnit Basic interface */
   CU_basic_set_mode(CU_BRM_VERBOSE);
