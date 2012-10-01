@@ -43,6 +43,9 @@ class Prim(Expr):
   """Lift primitive to the value level by creating a PrimClosure"""
   _members = ['value']
 
+class Cast(Expr):
+  _members = ['value', 'type']
+
 class Tuple(Expr):
   _members = ['elts']
 

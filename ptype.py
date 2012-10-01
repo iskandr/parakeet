@@ -1,5 +1,4 @@
 import numpy as np 
-import numpy_type_info 
 
 from tree import TreeLike
 

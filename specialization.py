@@ -24,6 +24,13 @@ class NestedBlocks:
   
   def current(self):
     return self.blocks[-1]
+  
+  def append_to_current(self, stmt):
+    self.current().append(stmt)
+  
+  def extend_current(self, stmts):
+    self.current().extend(stmts)
+    
      
 
 def _infer_types(fn, arg_types):
@@ -165,7 +172,7 @@ def rewrite_typed(fn, old_type_env):
     expr.type = t 
     return expr 
   
-  def rewrite_lhs_expr(expr):
+  def rewrite_expr(expr):
     def rewrite_Var():
       old_name = expr.name
       new_name = var_map[old_name]
@@ -173,7 +180,7 @@ def rewrite_typed(fn, old_type_env):
       return syntax.Var(new_name), var_type
     
     def rewrite_Tuple():
-      new_elts = map(rewrite_lhs_expr, expr.elts)
+      new_elts = map(rewrite_expr, expr.elts)
       new_types = map(lambda e: e.type, new_elts)
       return syntax.Tuple(new_elts), ptype.Tuple(new_types)
       
@@ -186,13 +193,33 @@ def rewrite_typed(fn, old_type_env):
     return None
   
   def coerce_expr(expr, t):
-    return None
-  
+    if expr.type == t:
+      return expr
+    def coerce_Tuple():
+      if not isinstance(t, ptype.Tuple) or len(expr.type.elt_types) != t.elt_types:
+        raise ptype.IncompatibleTypes(expr.type, t)
+      else:
+        new_elts = []
+        for elt, elt_t in zip(expr.elts, t.elt_types):
+          new_elts.append(coerce_expr(elt, elt_t))
+        new_tuple = syntax.Tuple(new_elts)
+        new_tuple.type = t 
+        return new_tuple
+    def coerce_Var():
+      assert isinstance(t, ptype.Scalar), "Can't cast %s into %s" % (expr.type, t)       
+      
+    def coerce_Var():
+       
+    curr_t = typeof(expr)
+    if curr_t == t:
+      return 
+    
   def rewrite_stmt(stmt):
     if isinstance(stmt, syntax.Assign):
-      new_lhs = rewrite_lhs_expr(stmt.lhs)
+      new_lhs = rewrite_expr(stmt.lhs)
       expected_type = new_lhs.type
-      new_rhs = coerce_expr(stmt.rhs, expected_type)
+      
+      new_rhs = coerce_expr(rewrite_expr(stmt.rhs), expected_type)
       return syntax.Assign(new_lhs, new_rhs)
     
     
