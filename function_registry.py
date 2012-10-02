@@ -1,11 +1,28 @@
-
+import names
+import syntax 
 # SSA ID -> untyped FunDef
 untyped_functions = {}
 
 # SSA ID -> typed FunDef
 typed_functions = {}
 
-
+# every prim is associated with an untyped function 
+# whose body consists only of calling that prim 
+untyped_prim_functions = {}
+    
+def lookup_prim_fn(p):
+  """Given a primitive, return an untyped function which calls that prim"""
+  if p in untyped_prim_functions:
+    return untyped_prim_functions
+  else:
+    fn_name = names.fresh(p.name)
+    args = [syntax.Var(x) for x in names.fresh_list(p.nin)]
+    result = names.fresh("result")
+    body = [syntax.Assign(syntax.Var(result), syntax.PrimCall(p, args))]
+    fundef = syntax.Fn(fn_name, args, body, [])
+    untyped_prim_functions[p] = fundef
+    untyped_functions[fn_name] = fundef
+    return fundef 
 
 class PythonFnInfo:
   """Information necessary to actually run a python function which has 

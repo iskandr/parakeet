@@ -23,6 +23,15 @@ def fresh(name):
   original_names[ssa_name] = name
   return ssa_name 
 
+lcase_chars = [chr(i + 97) for i in xrange(26)]
+def fresh_list(count):
+  prefixes = lcase_chars[:count]
+  while len(prefixes) < count:
+    count -= 26
+    prefixes += lcase_chars[:count]
+  return map(fresh, prefixes)
+
+
 def original(unique_name):
   original_name = original_names.get(unique_name)
   if original_name is None:

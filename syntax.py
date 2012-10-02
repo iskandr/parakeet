@@ -23,7 +23,9 @@ class While(Stmt):
   _members = ['cond', 'body', 'merge_before', 'merge_after']
   
 class Expr(TreeLike):
-  pass
+  # the type field is initialized to None for untyped syntax nodes
+  # but should be set once code gets specialized 
+  _members = ['type']
 
 class Adverb(Expr):
   pass
@@ -39,8 +41,12 @@ class Var(Expr):
   def __repr__(self):
     return "var(%s)" % self.name 
   
-class Prim(Expr):
-  """Lift primitive to the value level by creating a PrimClosure"""
+#class Prim(Expr):
+#  """Lift primitive to the value level by creating a PrimClosure"""
+#  _members = ['value']
+
+class Cast(Expr):
+  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
 
 class Tuple(Expr):

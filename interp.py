@@ -1,6 +1,8 @@
 import syntax
 import ast_conversion 
 from function_registry import untyped_functions
+from common import dispatch 
+import ptype 
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -53,10 +55,14 @@ def eval_fn(fn, *args):
       closure_arg_vals = map(eval_expr, expr.args) 
       return Closure(fundef, closure_arg_vals)
     
-    functions = locals()
-    nodetype =  expr.__class__.__name__
-    fn_name = 'expr_' + nodetype
-    return functions[fn_name]()
+    def expr_Cast():
+      x = eval_expr(expr.value)
+      t = expr.type
+      assert isinstance(t, ptype.Scalar)
+      # use numpy's conversion function 
+      return t.dtype.type(x)
+
+    return dispatch(expr, 'expr')
       
   def eval_merge_left(phi_nodes):
     for result, (left, _) in phi_nodes.iteritems():
@@ -114,7 +120,11 @@ def run(python_fn, args, type_specialization = False):
   # top-level functions are really acting like closures over their
   # global dependencies 
   global_args = [python_fn.func_globals[n] for n in untyped.nonlocals]
-  all_args = global_args + list(args)
+  try:
+    all_args = global_args + list(args)
+  except:
+    print global_args, args 
+    raise 
   if not type_specialization:
     return eval_fn(untyped, *all_args) 
   else:
