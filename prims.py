@@ -5,7 +5,7 @@ import ptype
 
 prim_lookup_by_value = {}
 
-def find_prim(fn):
+def find_prim_from_python_value(fn):
   return prim_lookup_by_value[fn]
 
 prim_lookup_by_op_name = {}

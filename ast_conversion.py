@@ -2,9 +2,9 @@ import ast
 import inspect  
 import syntax 
 import prims 
-from prims import is_prim, find_prim
+from prims import is_prim, find_prim_from_python_value
 from function_registry import untyped_functions, already_registered_python_fn
-from function_registry import register_python_fn, lookup_python_fn 
+from function_registry import register_python_fn, lookup_python_fn, lookup_prim_fn 
 import names
 from names import NameNotFound 
 from scoped_env import ScopedEnv 
@@ -68,7 +68,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
    
       if hasattr(global_value, '__call__'):
         if is_prim(global_value): 
-          return syntax.Prim(find_prim(global_value))
+          prim = find_prim_from_python_value(global_value)
+          prim_fundef = lookup_prim_fn(prim)
+          return syntax.Closure(prim_fundef.name, [])
         elif already_registered_python_fn(global_value):
           fundef = lookup_python_fn(global_value)
           ssa_name = fundef.name 
