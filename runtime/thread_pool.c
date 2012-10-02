@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 #include "thread_pool.h"
 
@@ -17,6 +18,8 @@ static void *worker(void *args) {
   worker_data_t *worker_data = my_args->worker_data;
   free(args);
 
+  struct timeval start, end, result;
+
   // Do work forever
   for (;;) {
     pthread_mutex_lock(&worker_data->mutex);
@@ -27,7 +30,9 @@ static void *worker(void *args) {
       task_list_t *task_list = worker_data->task_list;
 
       // Check whether we're done.
-      if (task_list->cur_task == task_list->num_tasks) {
+      if (task_list->cur_task == task_list->num_tasks ||
+          (worker_data->fixed_num_iters > 0 &&
+           worker_data->fixed_num_iters == worker_data->iters_done)) {
         worker_data->status = THREAD_FINISHED;
         if (worker_data->notify_when_done) {
           pthread_cond_signal(worker_data->master_cond);
@@ -36,11 +41,13 @@ static void *worker(void *args) {
         // We know now that we have an iteration to perform for this task, so
         // do it.
         task_t *task = &task_list->tasks[task_list->cur_task];
-        // get_time();
+        gettimeofday(&start, NULL);
         (*worker_data->work_function)(task->next_iteration++,
                                       worker_data->args);
-        // get_time();
-        // update local time accumulator();
+        gettimeofday(&end, NULL);
+        timersub(&end, &start, &result);
+        worker_data->time_spent += result.tv_sec + result.tv_usec / 1000000.0;
+        worker_data->iters_done++;
 
         // If this was the last iteration of this task, move to the next one.
         if (task->next_iteration > task->last_iteration) {
@@ -98,7 +105,8 @@ thread_pool_t *create_thread_pool(int max_threads) {
 
 // This function should only ever be called when all of the threads are paused.
 void launch_job(thread_pool_t *thread_pool,
-                work_function_t work_function, void *args, job_t *job) {
+                work_function_t work_function, void *args, job_t *job,
+                int fixed_num_iters) {
   assert(job->num_lists <= thread_pool->num_workers);
 
   thread_pool->job = job;
@@ -119,6 +127,9 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].notify_when_done = 0;
     thread_pool->worker_data[i].work_function = work_function;
     thread_pool->worker_data[i].args = args;
+    thread_pool->worker_data[i].fixed_num_iters = fixed_num_iters;
+    thread_pool->worker_data[i].iters_done = 0;
+    thread_pool->worker_data[i].time_spent = 0.0;
     pthread_cond_signal(&thread_pool->worker_data[i].cond);
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
@@ -128,6 +139,9 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].task_list = NULL;
     thread_pool->worker_data[i].work_function = NULL;
     thread_pool->worker_data[i].args = NULL;
+    thread_pool->worker_data[i].fixed_num_iters = fixed_num_iters;
+    thread_pool->worker_data[i].iters_done = 0;
+    thread_pool->worker_data[i].time_spent = 0.0;
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
 }
@@ -143,6 +157,33 @@ void pause_job(thread_pool_t *thread_pool) {
   pthread_barrier_wait(&thread_pool->job->barrier);
 
   thread_pool->num_active = 0;
+}
+
+int job_finished(thread_pool_t *thread_pool) {
+  int all_done = 1;
+  int i;
+  for (i = 0; i < thread_pool->num_active && all_done; ++i) {
+    pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
+    all_done =
+      all_done && THREAD_FINISHED == thread_pool->worker_data[i].status;
+    pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
+  }
+  return all_done;
+}
+
+double get_throughput(thread_pool_t *thread_pool) {
+  int total_iters = 0;
+  double total_time = 0.0;
+  int i;
+  for (i = 0; i < thread_pool->num_active; ++i) {
+    pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
+    total_iters += thread_pool->worker_data[i].iters_done;
+    total_time += thread_pool->worker_data[i].time_spent;
+    thread_pool->worker_data[i].iters_done = 0;
+    thread_pool->worker_data[i].time_spent = 0.0;
+    pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
+  }
+  return total_iters / total_time;
 }
 
 void wait_for_job(thread_pool_t *thread_pool) {

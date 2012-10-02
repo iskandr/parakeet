@@ -3,25 +3,9 @@
 
 #include <pthread.h>
 
+#include "job.h"
+
 typedef void (*work_function_t)(int, void*);
-
-typedef struct {
-  long            next_iteration;
-  long            last_iteration;
-} task_t;
-
-typedef struct {
-  task_t            *tasks;
-  int                num_tasks;
-  int                cur_task;
-  pthread_barrier_t *barrier;
-} task_list_t;
-
-typedef struct {
-  task_list_t      *task_lists;
-  int               num_lists;
-  pthread_barrier_t barrier;
-} job_t;
 
 typedef enum {
   THREAD_RUN = 0,
@@ -40,6 +24,9 @@ typedef struct {
   int              notify_when_done;
   work_function_t  work_function;
   void            *args;
+  int              fixed_num_iters;
+  int              iters_done;
+  double           time_spent;
 } worker_data_t;
 
 typedef struct {
@@ -53,8 +40,11 @@ typedef struct {
 
 thread_pool_t *create_thread_pool(int max_threads);
 void launch_job(thread_pool_t *thread_pool,
-                work_function_t work_function, void *args, job_t *job);
+                work_function_t work_function, void *args, job_t *job,
+                int fixed_num_iters);
 void pause_job(thread_pool_t *thread_pool);
+int job_finished(thread_pool_t *thread_pool);
+double get_throughput(thread_pool_t *thread_pool);
 void wait_for_job(thread_pool_t *thread_pool);
 job_t *get_job(thread_pool_t *thread_pool);
 void destroy_thread_pool(thread_pool_t *thread_pool);

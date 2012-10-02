@@ -1,113 +1,145 @@
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #include "thread_pool.h"
 
 #include "runtime.h"
 
-job_t *make_job(int len, int num_threads) {
-  int chunk_len = 32;
-  int num_chunks = len / chunk_len + (len % chunk_len ? 1 : 0);
-  job_t *job = (job_t*)malloc(sizeof(job_t));
-  job->task_lists = (task_list_t*)malloc(sizeof(task_list_t) * num_threads);
-  job->num_lists = num_threads;
-  pthread_barrier_init(&job->barrier, NULL, num_threads + 1);
-  int last_thread =
-    ((num_chunks % num_threads - 1) + num_threads) % num_threads;
-  int i, j;
-  for (i = 0; i < num_threads; ++i) {
-    int num_tasks = num_chunks / num_threads;
-    num_tasks += i < num_chunks % num_threads;
-    job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
-    job->task_lists[i].num_tasks = num_tasks;
-    job->task_lists[i].cur_task = 0;
-    job->task_lists[i].barrier = &job->barrier;
-    int cur_iter = chunk_len * i;
-    int step = chunk_len * num_threads;
-    for (j = 0; j < num_tasks; ++j) {
-      job->task_lists[i].tasks[j].next_iteration = cur_iter;
-      job->task_lists[i].tasks[j].last_iteration = cur_iter + chunk_len - 1;
-      cur_iter += step;
-    }
-    if (i == last_thread) {
-      job->task_lists[i].tasks[num_tasks - 1].last_iteration = len - 1;
-    }
-  }
+const int n_seq = 840;
+int d_par = 7; // TODO: Explore other ways of setting this.
 
-  return job;
+runtime_t *create_runtime(int max_threads) {
+  runtime_t *runtime = (runtime_t*)malloc(sizeof(runtime_t));
+  runtime->thread_pool = create_thread_pool(max_threads);
+  return runtime;
 }
 
-job_t *reconfigure_job(job_t *job, int num_threads) {
-  job_t *new_job = (job_t*)malloc(sizeof(job_t));
-  new_job->task_lists = (task_list_t*)malloc(sizeof(task_list_t) * num_threads);
-  new_job->num_lists = num_threads;
-  pthread_barrier_init(&new_job->barrier, NULL, num_threads + 1);
-  int total_tasks = num_unfinished_tasks(job);
+void run_job(runtime_t *runtime,
+             work_function_t work_function, void *args, int arg_len) {
+  // Calibrate the parallel version
+  printf("Calibrating parallel version\n");
+  job_t *job = make_job(0, arg_len, d_par);
+  double par_tp = calibrate_par(runtime, work_function, args, job);
+  job = get_job(runtime->thread_pool);
+  int num_threads = job->num_lists;
+  printf("Parallel version to have %d threads\n", num_threads);
 
-  int cur_list = 0;
-  int cur_task = job->task_lists[0].cur_task;
-  int i;
-  for (i = 0; i < num_threads; ++i) {
-    int num_tasks = total_tasks / num_threads;
-    num_tasks += i < total_tasks % num_threads;
-    new_job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
-    new_job->task_lists[i].num_tasks = num_tasks;
-    new_job->task_lists[i].cur_task = 0;
-    
-    int tasks_done = 0;
-    while(tasks_done < num_tasks) {
-      int tasks_left_in_cur_list =
-        job->task_lists[cur_list].num_tasks - cur_task;
-
-      // Skip any empty lists
-      if (tasks_left_in_cur_list < 1) {
-        cur_list++;
-        cur_task = job->task_lists[cur_list].cur_task;
-        continue;
-      }
-
-      int tasks_left_to_do = num_tasks - tasks_done;
-      task_t *src = job->task_lists[cur_list].tasks + cur_task;
-      int num_to_copy;
-      
-      if (tasks_left_in_cur_list > tasks_left_to_do) {
-        num_to_copy = tasks_left_to_do;
-        cur_task += tasks_left_to_do;
-      } else {
-        num_to_copy = tasks_left_in_cur_list;
-        cur_list++;
-        if (cur_list < job->num_lists) {
-          cur_task = job->task_lists[cur_list].cur_task;
-        }
-      }
-      
-      memcpy(&new_job->task_lists[i].tasks[tasks_done], src,             
-             sizeof(task_t) * num_to_copy);
-      tasks_done += num_to_copy;
+  // TODO: For now, we only consider parallel versions.
+  while (!job_finished(runtime->thread_pool)) {
+    usleep(20000);
+    double tp = get_throughput(runtime->thread_pool);
+    if (abs(tp - par_tp) / par_tp > 0.5) {
+      printf("Throughput changed.\n");
+      printf("Old throughput: %f\n", par_tp);
+      printf("New throughput: %f\n", tp);
+      pause_job(runtime->thread_pool);
+      par_tp = calibrate_par(runtime, work_function, args, job);
+      job = get_job(runtime->thread_pool);
     }
   }
   free_job(job);
-
-  return new_job;
 }
 
-int num_unfinished_tasks(job_t *job) {
-  int total_tasks = 0;
-  int i;
-  for (i = 0; i < job->num_lists; ++i) {    
-    total_tasks += job->task_lists[i].num_tasks - job->task_lists[i].cur_task;
-  }
-  return total_tasks;
+void destroy_runtime(runtime_t *runtime) {
+  destroy_thread_pool(runtime->thread_pool);
+  free(runtime);
 }
 
-void free_job(job_t *job) {
-  int i;
-  for (i = 0; i < job->num_lists; ++i) {
-    free(job->task_lists[i].tasks);
+static double calibrate_par(runtime_t *runtime,
+                            work_function_t work_function, void *args,
+                            job_t *job) {
+  int dop = job->num_lists;
+  double dop_tp, dop_m1_tp, dop_p1_tp;
+
+  // Get throughput for DOP - 1 # of threads
+  if (dop > 1) {
+    job = reconfigure_job(job, dop - 1);
+    dop_m1_tp = get_par_throughput(runtime, work_function, args, job, dop - 1);
+    printf("TP with %d threads: %f\n", dop - 1, dop_m1_tp);
+  } else {
+    dop_m1_tp = dop_tp + 1;
   }
-  free(job->task_lists);
-  pthread_barrier_destroy(&job->barrier);
-  free(job);
+
+  // Get throughput for DOP + 1 # of threads
+  if (dop < runtime->thread_pool->num_workers) {
+    job = reconfigure_job(job, dop + 1);
+    dop_p1_tp = get_par_throughput(runtime, work_function, args, job, dop + 1);
+    printf("TP with %d threads: %f\n", dop + 1, dop_p1_tp);
+  } else {
+    dop_p1_tp = dop_tp + 1;
+  }
+
+  // Get throughput for DOP # of threads
+  job = reconfigure_job(job, dop);
+  dop_tp = get_par_throughput(runtime, work_function, args, job, dop);
+  printf("TP with %d threads: %f\n", dop, dop_tp);
+
+  int increasing = 1;
+  if (dop_m1_tp > dop_tp && dop_m1_tp > dop_p1_tp) {
+    increasing = 0;
+  } else if (dop_p1_tp <= dop_tp) {
+    job = reconfigure_job(job, dop);
+    launch_job(runtime->thread_pool, work_function, args, job, 0);
+    return dop_tp;
+  }
+
+  int not_done = 1;
+  while (not_done) {
+    if (increasing) {
+      job = reconfigure_job(job, dop + 1);
+      dop_p1_tp = get_par_throughput(runtime, work_function, args, job, dop+1);
+      printf("TP with %d threads: %f\n", dop + 1, dop_p1_tp);
+      if (dop_p1_tp <= dop_tp) {
+        job = reconfigure_job(job, dop);
+        not_done = 0;
+      } else {
+        dop += 1;
+        dop_tp = dop_p1_tp;
+      }
+    } else {
+      job = reconfigure_job(job, dop - 1);
+      dop_m1_tp = get_par_throughput(runtime, work_function, args, job, dop-1);
+      printf("TP with %d threads: %f\n", dop - 1, dop_m1_tp);
+      if (dop_m1_tp < dop_tp) {
+        job = reconfigure_job(job, dop);
+        not_done = 0;
+      } else {
+        dop -= 1;
+        dop_tp = dop_m1_tp;
+      }
+    }
+    not_done = not_done && dop > 1 && dop < runtime->thread_pool->num_workers;
+  }
+  launch_job(runtime->thread_pool, work_function, args, job, 0);
+
+  return dop_tp;
+}
+
+static double get_seq_throughput(work_function_t work_function, void *args,
+                                 int num_iters) {
+  struct timeval start, stop, result;
+  int i;
+  gettimeofday(&start, NULL);
+  for (i = 0; i < num_iters; ++i) {
+    (*work_function)(i, args);
+  }
+  gettimeofday(&stop, NULL);
+  timersub(&stop, &start, &result);
+  return num_iters / (result.tv_sec + result.tv_usec / 1000000.0);
+}
+
+static double get_par_throughput(runtime_t *runtime,
+                                 work_function_t work_function, void *args,
+                                 job_t *job, int num_threads) {
+  launch_job(runtime->thread_pool, work_function, args, job,
+             get_npar(num_threads));
+  wait_for_job(runtime->thread_pool);
+  return get_throughput(runtime->thread_pool);
+}
+
+static int get_npar(int num_threads) {
+//   return n_seq > 2 * num_threads ? n_seq : 2 * num_threads;
+  return n_seq / num_threads;
 }
