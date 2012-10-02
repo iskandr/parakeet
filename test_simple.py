@@ -44,7 +44,7 @@ def simple_branch(x):
     
 def test_simple_branch():
   expect(simple_branch, [9], 1)
-  expect(simple_branch, [10], 1)
+  expect(simple_branch, [10], 2)
   
 def simple_merge(x):
   if x == 0:

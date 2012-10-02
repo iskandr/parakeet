@@ -48,7 +48,11 @@ def _infer_types(fn, arg_types):
     def expr_Closure():
       arg_types = map(expr_type, expr.args)
       closure_type = ptype.Closure(expr.fn, arg_types)
-      closure_set = ptype.ClosureSet(closure_type)
+      try:
+        closure_set = ptype.ClosureSet(closure_type)
+      except:
+        print closure_type 
+        raise 
       return closure_set 
     
     def expr_Invoke():
@@ -58,7 +62,7 @@ def _infer_types(fn, arg_types):
       for closure_type in closure_set.closures:
         untyped_id, closure_arg_types = closure_type.fn, closure_type.args
         untyped_fundef = untyped_functions[untyped_id]
-        ret = infer_return_type(untyped_fundef, closure_arg_types + arg_types)
+        ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
         invoke_result_type = invoke_result_type.combine(ret)
       return invoke_result_type
   
@@ -177,9 +181,10 @@ def rewrite_typed(fn, old_type_env):
   def rewrite_formal_args(args):
     return map(rewrite_formal_arg, args)
   
-  def tag(expr, t):
-    expr.type = t 
-    return expr 
+  def get_type(expr):
+    return expr.type
+  def get_types(exprs):
+    return map(get_type, exprs)
   
   def rewrite_expr(expr):
     def rewrite_Var():
@@ -190,7 +195,7 @@ def rewrite_typed(fn, old_type_env):
     
     def rewrite_Tuple():
       new_elts = map(rewrite_expr, expr.elts)
-      new_types = map(lambda e: e.type, new_elts)
+      new_types = get_types(new_elts)
       return syntax.Tuple(new_elts, type = ptype.Tuple(new_types))
     
     def rewrite_Const():
@@ -201,12 +206,31 @@ def rewrite_typed(fn, old_type_env):
       # but then dont' actually coerce them, since that's left as distinct work
       # for a later stage 
       new_args = map(rewrite_expr, expr.args)
-      arg_types = map(lambda x: x.type, new_args)
+      arg_types = map(get_type, new_args)
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
 
       return syntax.PrimCall(expr.prim, upcast_args, type = result_type )
+    def rewrite_Closure():
+      new_args = map(rewrite_expr, expr.args)
+      arg_types = map(get_type, new_args)
+      closure_signature = ptype.Closure(fn = expr.fn, args = arg_types)
+      closure_set = ptype.ClosureSet(closure_signature)
+      return syntax.Closure(fn = expr.fn, args = new_args, type = closure_set)
+    
+    def rewrite_Invoke():
+      new_args = map(rewrite_expr, expr.args)
+      arg_types = map(get_type, new_args)
+      closure = rewrite_expr(expr.closure)
+      assert isinstance(closure.type, ptype.ClosureSet), \
+        "Expected closure set, got %s" % expr.closure.type
+      return_type = ptype.Unknown
+      for clos_sig in closure.type.closures:
+        full_arg_types = clos_sig.args + tuple(arg_types)
+        curr_return_type = infer_return_type(clos_sig.fn, full_arg_types)
+        return_type = return_type.combine(curr_return_type)
+      return syntax.Invoke(closure, new_args, type=return_type)
     
     return  dispatch(expr, 'rewrite')
   
@@ -306,7 +330,13 @@ def rewrite_typed(fn, old_type_env):
 
 
 def specialize(untyped, arg_types): 
-  key = (untyped.name, tuple(arg_types))
+  if isinstance(untyped, str):
+    untyped_id = untyped
+    untyped = untyped_functions[untyped_id]
+  else:
+    assert isinstance(untyped, syntax.Fn)
+    untyped_id = untyped.name 
+  key = (untyped_id, tuple(arg_types))
   if key in typed_functions:
     return typed_functions[key]
   else:

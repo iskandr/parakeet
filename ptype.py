@@ -176,9 +176,18 @@ class Tuple(CompoundType):
       raise IncompatibleTypes(self, other)
 
 class Closure:
-  def __init__(self, fn, args):
+  def __init__(self, fn, args = ()):
     self.fn = fn
-    self.args = args 
+    self.args = tuple(args) 
+    
+  def __repr__(self):
+    return "Closure(fn=%s, args=%s)" % (self.fn, self.args)
+  
+  def __hash__(self):
+    return hash(repr(self))
+  
+  def __eq__(self, other):
+    return self.fn == other.fn and self.args == other.args
     
 class ClosureSet(Type):
   """
@@ -199,6 +208,8 @@ class ClosureSet(Type):
     else:
       raise IncompatibleTypes(self, other)
   
+  def __eq__(self, other):
+    return self.closures == other.closures 
 
 
 _dtype_to_parakeet = {}
