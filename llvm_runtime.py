@@ -38,11 +38,18 @@ def scalar_to_generic_value(x, t):
 #def convert_args_to_generic_values(python_values):
 """
 
+#def make_tuple_buffer(elts):
+#  n = len(elts)
+#  arr = np.zeros(n, dtype=np.int64)
+#  for i in xrange(n):
+    
+
 def run(llvm_fn_info, python_values):
   inputs = []  
   for (v, t) in zip(python_values, llvm_fn_info.parakeet_input_types):
-
+    # TODO: make arrays just a tuple! 
     if isinstance(v, np.ndarray):
+      
       assert isinstance(t, ptype.Array)
       # convert the shape and strides tuples
       # into uniform arrays so we can pass them

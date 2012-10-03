@@ -7,7 +7,8 @@ from llvm.core import Type as lltype
 import llvm.passes as passes
 
 import ptype
-import syntax 
+import syntax
+from common import dispatch  
 
 void_t = lltype.void()
 int1_t = lltype.int(1)
@@ -70,8 +71,18 @@ def init_llvm_fn(fundef):
   llvm_output_type = to_llvm_output_type(fundef.result_type)
   llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
   llvm_fn = global_module.add_function(llvm_fn_t, fundef.name)
-  n_inputs = len(llvm_input_types)
+  
+  bb = llvm_fn.append_basic_block("entry")
+  builder = Builder.new(bb)
+
   env = {}
+  
+  for (name, t) in fundef.type_env.iteritems():
+    llvm_t = to_lltype(t)
+    stack_val = builder.alloca(llvm_t, name)
+    env[name] = stack_val 
+
+  n_inputs = len(llvm_input_types)  
   for i, llvm_arg in enumerate(llvm_fn.args):
     if i < n_inputs:
       parakeet_arg = fundef.args[i]
@@ -82,19 +93,32 @@ def init_llvm_fn(fundef):
       else:
         assert False, "Tuple arg patterns not yet implemented"
       llvm_arg.name = name
-      env[name] = llvm_arg 
+      # store the value of the input in the stack value we've already allocated
+      # for the input var 
+      builder.store(llvm_arg, env[name])
     else:
       assert False, "Output args not yet implemented"
-  bb = llvm_fn.append_basic_block("entry")
-  builder = Builder.new(bb)
-  return llvm_fn, builder 
+  
+  
+  # tell the builder to start inserting 
+  return llvm_fn, builder, env  
  
 def compile_fn(fundef):
   fn, init_builder, env  = init_llvm_fn(fundef)
   
   def compile_expr(expr):
-    return None 
-  
+    def compile_Var():
+      return env[expr.name]
+    def compile_Const():
+      assert isinstance(expr.type, ptype.Scalar)
+      llvm_type = to_lltype(expr.type)
+      if expr.type.is_int():
+        return llcore.Constant.int(llvm_type, expr.value)
+      elif expr.type.is_float():
+        return llcore.Constant.real(llvm_type, expr.value)
+      else:
+        assert False, "Unsupported constant %s" % expr
+    return dispatch(expr, "compile")
   def compile_stmt(stmt, builder):
     if isinstance(stmt, syntax.Assign):
       assert False
