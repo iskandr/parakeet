@@ -1,21 +1,23 @@
 import numpy as np
 
-from llvm import *
-from llvm.core import *
+
 import llvm.core as llcore
 from llvm.core import Type as lltype
+from llvm.core import Builder 
 import llvm.passes as passes
+
+import ptype
+import prims 
+import syntax
+from common import dispatch  
 
 from llvm_types import to_lltype
 from llvm_state import global_module
 from llvm_compiled_fn import CompiledFn
+import llvm_prims 
 
-import ptype
-import syntax
-from common import dispatch  
 
 def init_llvm_vars(fundef, llvm_fn, builder):
-
   env = {}  
   for (name, t) in fundef.type_env.iteritems():
     llvm_t = to_lltype(t)
@@ -32,12 +34,11 @@ def init_llvm_vars(fundef, llvm_fn, builder):
     llvm_arg.name = name
     # store the value of the input in the stack value we've already allocated
     # for the input var 
-    builder.store(llvm_arg, env[name])
+    store = builder.store(llvm_arg, env[name])
+    print store 
     
   # tell the builder to start inserting 
   return env 
-
-
 
 
 def compile_fn(fundef):
@@ -45,9 +46,7 @@ def compile_fn(fundef):
   llvm_output_type = to_lltype(fundef.return_type)
   llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
   llvm_fn = global_module.add_function(llvm_fn_t, fundef.name)
-  
-
-  
+    
   def new_block(name):
     bb = llvm_fn.append_basic_block(name)
     builder = Builder.new(bb)
@@ -56,9 +55,15 @@ def compile_fn(fundef):
   _, start_builder = new_block("entry")
   env = init_llvm_vars(fundef, llvm_fn, start_builder)
   
-  def compile_expr(expr):
+  def compile_expr(expr, builder):
     def compile_Var():
-      return env[expr.name]
+      ref =  env[expr.name]
+      print "compile_Var, ref: ", ref 
+      print "compile_Var, ref type:", ref.type
+      val = builder.load(ref, expr.name + "_val")
+      print "compile_Var, val: ", val
+      print "compile_Var, val type:", val.type
+      return val 
     def compile_Const():
       assert isinstance(expr.type, ptype.Scalar)
       llvm_type = to_lltype(expr.type)
@@ -68,22 +73,73 @@ def compile_fn(fundef):
         return llcore.Constant.real(llvm_type, expr.value)
       else:
         assert False, "Unsupported constant %s" % expr
-    return dispatch(expr, "compile")
+    def compile_PrimCall():
+      prim = expr.prim
+      args = expr.args 
+      
+      # type specialization should have made types of arguments uniform, 
+      # so we only need to check the type of the first arg 
+      t = args[0].type
+      
+      llvm_args = [compile_expr(arg, builder) for arg in args]
+      
+      result_name = prim.name + "_result"
+      print prim 
+      print args
+      print map(lambda e: e.type, args)
+      print llvm_args
+      
+      if isinstance(prim, prims.Cmp):
+        x, y = llvm_args 
+        if t.is_float():
+          cmp_op = llvm_prims.float_comparisons[prim]
+          return builder.fcmp(cmp_op, x, y, result_name)
+        elif t.is_signed():
+          cmp_op = llvm_prims.signed_int_comparisons[prim]
+          return builder.icmp(cmp_op, x, y, result_name)
+        else:
+          assert t.is_unsigned(), "Unexpected type: %s" % t
+          cmp_op = llvm_prims.unsigned_int_comparisons[prim]
+          return builder.icmp(cmp_op, x, y, result_name)
+      else:
+        assert False, expr 
+      
+    print "Dispatching %s" % expr 
+    result = dispatch(expr, "compile")
+    print "expr: %s, result: %s" % (expr, result)
+    print result
+    return result  
+  
+  def get_ref(expr):
+    # for now only get references to variables
+    assert isinstance(expr, syntax.Var)
+    return env[expr.name]
+      
   def compile_merge_left(phi_nodes, builder):
     for name, (left, _) in phi_nodes.iteritems():
-      builder.store(env[name], compile_expr(left))
+      ref = env[name]
+      value = compile_expr(left, builder)
+      builder.store(value, ref)
       
   def compile_merge_right(phi_nodes, builder):
     for name, (_, right) in phi_nodes.iteritems():
-      builder.store(env[name], compile_expr(right))
+      ref = env[name]
+      value = compile_expr(right, builder)
+      builder.store(value, ref)
     
   def compile_stmt(stmt, builder):
     if isinstance(stmt, syntax.Assign):
+      ref = get_ref(stmt.lhs)
+      value = compile_expr(stmt.rhs, builder)
+      builder.store(value, ref)
       return builder 
     elif isinstance(stmt, syntax.While):
-      return builder
+      assert False 
+    elif isinstance(stmt, syntax.Return):
+      builder.ret(compile_expr(stmt.value, builder))
+      return builder 
     elif isinstance(stmt, syntax.If):
-      cond = compile_expr(stmt.cond)
+      cond = compile_expr(stmt.cond, builder)
       
       # compile the two possible branches as distinct basic blocks
       # and then wire together the control flow with branches
@@ -100,7 +156,7 @@ def compile_fn(fundef):
       compile_merge_left(stmt.merge, true_builder)
       compile_merge_right(stmt.merge, false_builder)
       
-      after_bb, after_builder = new_block("if_merge")
+      after_bb, after_builder = new_block("if_after")
       true_builder.branch(after_bb)
       false_builder.branch(after_bb)      
       
