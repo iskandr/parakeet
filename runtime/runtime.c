@@ -7,8 +7,8 @@
 
 #include "runtime.h"
 
-const int n_seq = 840;
-int d_par = 7; // TODO: Explore other ways of setting this.
+const int n_seq = 1680;
+int d_par = 4; // TODO: Explore other ways of setting this.
 
 runtime_t *create_runtime(int max_threads) {
   runtime_t *runtime = (runtime_t*)malloc(sizeof(runtime_t));
@@ -30,7 +30,7 @@ void run_job(runtime_t *runtime,
   while (!job_finished(runtime->thread_pool)) {
     usleep(20000);
     double tp = get_throughput(runtime->thread_pool);
-    if (abs(tp - par_tp) / par_tp > 0.5) {
+    if (abs(tp - par_tp) / par_tp > 0.2) {
       printf("Throughput changed.\n");
       printf("Old throughput: %f\n", par_tp);
       printf("New throughput: %f\n", tp);
@@ -140,6 +140,6 @@ static double get_par_throughput(runtime_t *runtime,
 }
 
 static int get_npar(int num_threads) {
-//   return n_seq > 2 * num_threads ? n_seq : 2 * num_threads;
+  //return n_seq > 2 * num_threads ? n_seq : 2 * num_threads;
   return n_seq / num_threads;
 }

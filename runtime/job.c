@@ -8,7 +8,7 @@
 #include "runtime.h"
 
 job_t *make_job(int start, int stop, int num_threads) {
-  int chunk_len = 32;
+  int chunk_len = 128;
   int num_iters = stop - start;
   int num_chunks = num_iters / chunk_len + (num_iters % chunk_len ? 1 : 0);
   job_t *job = (job_t*)malloc(sizeof(job_t));

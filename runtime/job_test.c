@@ -136,7 +136,7 @@ void test_sequence_of_jobs(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 500000;
+  int len = 50000000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
   int i;

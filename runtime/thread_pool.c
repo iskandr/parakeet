@@ -1,5 +1,7 @@
+#define _GNU_SOURCE
 #include <assert.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -18,15 +20,10 @@ static void *worker(void *args) {
   worker_data_t *worker_data = my_args->worker_data;
   free(args);
 
-  struct timeval start, end, result;
-
   // Do work forever
   for (;;) {
-    pthread_mutex_lock(&worker_data->mutex);
     thread_status_t status = worker_data->status;
-    pthread_mutex_unlock(&worker_data->mutex);
     if (status == THREAD_RUN) {
-      pthread_mutex_lock(&worker_data->mutex);
       task_list_t *task_list = worker_data->task_list;
 
       // Check whether we're done.
@@ -41,12 +38,8 @@ static void *worker(void *args) {
         // We know now that we have an iteration to perform for this task, so
         // do it.
         task_t *task = &task_list->tasks[task_list->cur_task];
-        gettimeofday(&start, NULL);
         (*worker_data->work_function)(task->next_iteration++,
                                       worker_data->args);
-        gettimeofday(&end, NULL);
-        timersub(&end, &start, &result);
-        worker_data->time_spent += result.tv_sec + result.tv_usec / 1000000.0;
         worker_data->iters_done++;
 
         // If this was the last iteration of this task, move to the next one.
@@ -54,7 +47,6 @@ static void *worker(void *args) {
           task_list->cur_task++;
         }
       }
-      pthread_mutex_unlock(&worker_data->mutex);
     } else if (status == THREAD_STOP) {
       break;
     } else {
@@ -81,7 +73,12 @@ thread_pool_t *create_thread_pool(int max_threads) {
   pthread_cond_init(&thread_pool->master_cond, NULL);
   thread_pool->worker_data =
     (worker_data_t*)malloc(sizeof(worker_data_t)*max_threads);
+  thread_pool->iters_done = (int*)malloc(sizeof(int) * max_threads);
   thread_pool->job = NULL;
+
+  cpu_set_t cpu_set;
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
 
   for (i = 0; i < max_threads; ++i) {
     thread_pool->worker_data[i].task_list = NULL;
@@ -90,16 +87,20 @@ thread_pool_t *create_thread_pool(int max_threads) {
     thread_pool->worker_data[i].status = THREAD_IDLE;
     thread_pool->worker_data[i].master_cond =
       &thread_pool->master_cond;
+    thread_pool->iters_done[i] = 0;
     worker_args_t *args = (worker_args_t*)malloc(sizeof(worker_args_t));
     args->id = i;
     args->worker_data = &thread_pool->worker_data[i];
-    rc = pthread_create(&thread_pool->workers[i], NULL, worker, (void*)args);
+    CPU_ZERO(&cpu_set);
+    CPU_SET(i, &cpu_set);
+    pthread_attr_setaffinity_np(&attr, 8, &cpu_set);
+    rc = pthread_create(&thread_pool->workers[i], &attr, worker, (void*)args);
     if (rc) {
       printf("Couldn't create worker %d (Error code %d). Exiting.\n", i, rc);
       exit(-1);
     }
   }
-  
+
   return thread_pool;
 }
 
@@ -111,6 +112,7 @@ void launch_job(thread_pool_t *thread_pool,
 
   thread_pool->job = job;
   thread_pool->num_active = job->num_lists;
+  gettimeofday(&thread_pool->timestamp, NULL);
 
   // Update the threads' data with the current batch of work and parallelism
   // configuration.
@@ -130,6 +132,7 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].fixed_num_iters = fixed_num_iters;
     thread_pool->worker_data[i].iters_done = 0;
     thread_pool->worker_data[i].time_spent = 0.0;
+    thread_pool->iters_done[i] = 0;
     pthread_cond_signal(&thread_pool->worker_data[i].cond);
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
@@ -173,17 +176,18 @@ int job_finished(thread_pool_t *thread_pool) {
 
 double get_throughput(thread_pool_t *thread_pool) {
   int total_iters = 0;
-  double total_time = 0.0;
-  int i;
+  int i, iters;
   for (i = 0; i < thread_pool->num_active; ++i) {
-    pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
-    total_iters += thread_pool->worker_data[i].iters_done;
-    total_time += thread_pool->worker_data[i].time_spent;
-    thread_pool->worker_data[i].iters_done = 0;
-    thread_pool->worker_data[i].time_spent = 0.0;
-    pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
+    iters = thread_pool->worker_data[i].iters_done;
+    total_iters += iters - thread_pool->iters_done[i];
+    thread_pool->iters_done[i] = iters;
   }
-  return total_iters / total_time;
+  struct timeval end, result;
+  gettimeofday(&end, NULL);
+  timersub(&end, &thread_pool->timestamp, &result);
+  thread_pool->timestamp = end;
+
+  return total_iters * 1000000.0 / (result.tv_sec + result.tv_usec);
 }
 
 void wait_for_job(thread_pool_t *thread_pool) {
@@ -217,6 +221,7 @@ void destroy_thread_pool(thread_pool_t *thread_pool) {
 
   pthread_cond_destroy(&thread_pool->master_cond);
   free(thread_pool->worker_data);
+  free(thread_pool->iters_done);
   free(thread_pool->workers);
   free(thread_pool);
 }

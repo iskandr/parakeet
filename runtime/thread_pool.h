@@ -35,6 +35,8 @@ typedef struct {
   int             num_active;
   pthread_cond_t  master_cond;
   worker_data_t  *worker_data;
+  int            *iters_done;
+  struct timeval  timestamp;
   job_t          *job;
 } thread_pool_t;
 
