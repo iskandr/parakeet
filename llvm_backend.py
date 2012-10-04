@@ -11,7 +11,8 @@ import prims
 import syntax
 from common import dispatch  
 
-from llvm_types import to_lltype, convert 
+import llvm_types
+from llvm_types import to_lltype
 from llvm_state import global_module
 from llvm_compiled_fn import CompiledFn
 import llvm_prims 
@@ -74,7 +75,14 @@ def compile_fn(fundef):
         assert False, "Unsupported constant %s" % expr
     def compile_Cast():
       llvm_value = compile_expr(expr.value, builder)
-      return convert(llvm_value, expr.value.type, expr.type, builder)
+      return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
+    
+    def compile_Closure():
+      # allocate a length 3 array
+      # - the first element is a distinct id for each (untyped function, type list) pair
+      # - the second element is array partially applied arguments
+      return builder.malloc(llvm_types.closure_t, "closure")
+    
     def compile_PrimCall():
       prim = expr.prim
       args = expr.args 

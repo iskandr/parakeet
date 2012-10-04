@@ -17,6 +17,13 @@ ptr_int8_t = lltype.pointer(int8_t)
 ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
+# unlike conventional closures, we don't carry around a function pointer 
+# but rather call different typed specializations in different argument-type contexts
+# so the first element is a number uniquely identifying the untyped function and its
+# partially applied argument types
+closure_signature_t = int64_t
+closure_t = lltype.struct([closure_signature_t, ptr_int8_t], "closure")     
+    
 dtype_to_llvm_types = {
   np.dtype('bool') : int1_t, 
   np.dtype('int8') : int8_t,
@@ -42,12 +49,8 @@ def to_lltype(t):
     llvm_elt_types = map(to_lltype, t.elt_types)
     return lltype.struct(llvm_elt_types)
   elif isinstance(t, ptype.ClosureSet):
-    # unlike conventional closures, we dont' carry around a function pointer 
-    # but rather call different typed specializations in different argument-type contexts
-    untyped_fn_id = int64_t
-    # need to use an opaque pointer since the number and types of args might vary 
-    opaque_args = ptr_int8_t 
-    return lltype.struct([untyped_fn_id, opaque_args], "closure")
+    return llcore.Type.pointer(closure_t)
+
   else:
     elt_t = dtype_to_lltype(t.dtype)
     arr_t = lltype.pointer(elt_t)
