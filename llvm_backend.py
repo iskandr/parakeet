@@ -132,41 +132,51 @@ def compile_fn(fundef):
       ref = get_ref(stmt.lhs)
       value = compile_expr(stmt.rhs, builder)
       builder.store(value, ref)
-      return builder 
+      return builder, False 
     elif isinstance(stmt, syntax.While):
       assert False 
     elif isinstance(stmt, syntax.Return):
       builder.ret(compile_expr(stmt.value, builder))
-      return builder 
+      return builder, True 
     elif isinstance(stmt, syntax.If):
       cond = compile_expr(stmt.cond, builder)
       
       # compile the two possible branches as distinct basic blocks
       # and then wire together the control flow with branches
       true_bb, true_builder = new_block("if_true")
-      compile_block(stmt.true, true_builder)
+      _, true_returns = compile_block(stmt.true, true_builder)
       
       false_bb, false_builder = new_block("if_false")
-      compile_block(stmt.false, false_builder)
+      _, false_returns = compile_block(stmt.false, false_builder)
       
-      builder.cbranch(cond, true_bb, false_bb)
+      # did both branches end in a return? 
+      both_return = true_returns or false_returns 
 
+      builder.cbranch(cond, true_bb, false_bb)
       # compile phi nodes as assignments and then branch
       # to the continuation block 
       compile_merge_left(stmt.merge, true_builder)
       compile_merge_right(stmt.merge, false_builder)
       
-      after_bb, after_builder = new_block("if_after")
-      true_builder.branch(after_bb)
-      false_builder.branch(after_bb)      
-      
-      return after_builder 
+      # if both branches return then there is no point
+      # making a new block for more code 
+      if both_return:
+        return None, True 
+      else:
+        after_bb, after_builder = new_block("if_after")
+        if not true_returns:
+          true_builder.branch(after_bb)
+        if not false_returns:
+          false_builder.branch(after_bb)      
+        return after_builder, False  
   
   def compile_block(stmts, builder = None):
     
     for stmt in stmts:
-      builder = compile_stmt(stmt, builder)
-    return builder
+      builder, always_returns = compile_stmt(stmt, builder)
+      if always_returns:
+        return builder, True 
+    return builder, False
 
   compile_block(fundef.body, start_builder)
   print llvm_fn
