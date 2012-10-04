@@ -58,7 +58,7 @@ def eval_fn(fn, *args):
     def expr_Cast():
       x = eval_expr(expr.value)
       t = expr.type
-      assert isinstance(t, ptype.Scalar)
+      assert isinstance(t, ptype.ScalarT)
       # use numpy's conversion function 
       return t.dtype.type(x)
 

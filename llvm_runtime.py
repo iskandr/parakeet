@@ -7,21 +7,21 @@ from llvm.ee import GenericValue
 from llvm_types import dtype_to_lltype, int8_t, float32_t, float64_t 
 
 def scalar_to_generic_value(x, t):
-  if t.is_float():
+  if isinstance(t, ptype.FloatT):
     return GenericValue.real(dtype_to_lltype(t.dtype), x)
-  elif t.is_bool():
+  elif t == ptype.Bool:
     return GenericValue.int(int8_t, x)
   else:
-    assert t.is_int()
+    assert isinstance(t, ptype.IntT)
     # assume it's an integer
     return GenericValue.int(dtype_to_lltype(t.dtype), x)
   
 def generic_value_to_scalar(gv, t):
-  assert isinstance(t, ptype.Scalar), "Expected %s to be scalar" % t
-  if t.is_int():
+  assert isinstance(t, ptype.ScalarT), "Expected %s to be scalar" % t
+  if isinstance(t, ptype.IntT):
     x = gv.as_int()
   else:
-    assert t.is_float()
+    assert isinstance(t, ptype.FloatT)
     x = gv.as_real(dtype_to_lltype(t.dtype))
   return t.dtype.type(x)
   

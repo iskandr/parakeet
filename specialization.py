@@ -47,7 +47,7 @@ def _infer_types(fn, arg_types):
     
     def expr_Closure():
       arg_types = map(expr_type, expr.args)
-      closure_type = ptype.Closure(expr.fn, arg_types)
+      closure_type = ptype.ClosureT(expr.fn, arg_types)
       try:
         closure_set = ptype.ClosureSet(closure_type)
       except:
@@ -110,7 +110,7 @@ def _infer_types(fn, arg_types):
       
     def stmt_If():
       cond_type = expr_type(stmt.cond)
-      assert isinstance(cond_type, ptype.Scalar), \
+      assert isinstance(cond_type, ptype.ScalarT), \
         "Condition has type %s but must be convertible to bool" % cond_type
       analyze_block(stmt.true)
       analyze_block(stmt.false)
@@ -162,7 +162,7 @@ def rewrite_typed(fn, old_type_env):
     if isinstance(expr, syntax.Var):
       return new_type_env[expr.name]
     elif isinstance(expr, syntax.Tuple):
-      return ptype.Tuple(map(typeof, expr.elts))
+      return ptype.TupleT(map(typeof, expr.elts))
     elif isinstance(expr, syntax.Const):
       return ptype.type_of_value(expr.value)
     else:
@@ -196,7 +196,7 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Tuple():
       new_elts = map(rewrite_expr, expr.elts)
       new_types = get_types(new_elts)
-      return syntax.Tuple(new_elts, type = ptype.Tuple(new_types))
+      return syntax.Tuple(new_elts, type = ptype.TupleT(new_types))
     
     def rewrite_Const():
       return syntax.Const(expr.value, type = ptype.type_of_value(expr.value))
@@ -215,7 +215,7 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Closure():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
-      closure_signature = ptype.Closure(fn = expr.fn, args = arg_types)
+      closure_signature = ptype.ClosureT(fn = expr.fn, args = arg_types)
       closure_set = ptype.ClosureSet(closure_signature)
       return syntax.Closure(fn = expr.fn, args = new_args, type = closure_set)
     
@@ -238,7 +238,7 @@ def rewrite_typed(fn, old_type_env):
   def cast(expr, t, curr_block = None):
     if curr_block is None:
       curr_block = blocks.current()
-    assert isinstance(t, ptype.Scalar), "Can't cast %s into %s" % (expr.type, t)  
+    assert isinstance(t, ptype.ScalarT), "Can't cast %s into %s" % (expr.type, t)  
     if hasattr(expr, 'name'):
       prefix = "%s.cast.%s" % (expr.name, t)
     else:
@@ -256,7 +256,7 @@ def rewrite_typed(fn, old_type_env):
     if expr.type == t:
       return expr
     elif isinstance(expr, syntax.Tuple):
-      if not isinstance(t, ptype.Tuple) or len(expr.type.elt_types) != t.elt_types:
+      if not isinstance(t, ptype.TupleT) or len(expr.type.elt_types) != t.elt_types:
         raise ptype.IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
