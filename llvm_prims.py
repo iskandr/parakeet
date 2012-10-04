@@ -30,6 +30,25 @@ float_comparisons = {
   prims.less_equal : llc.FCMP_OLE                     
 }
 
-int_binops = { 
-              
+
+signed_binops = { 
+  prims.add : 'add',  
+  prims.subtract : 'sub', 
+  prims.multiply : 'mul', 
+  prims.divide : 'sdiv'
 }
+
+unsigned_binops = { 
+  prims.add : 'add',  
+  prims.subtract : 'sub', 
+  prims.multiply : 'mul', 
+  prims.divide : 'udiv'
+}
+
+float_binops = { 
+  prims.add : 'fadd',  
+  prims.subtract : 'fsub', 
+  prims.multiply : 'fmul', 
+  prims.divide : 'fdiv'
+}
+ 

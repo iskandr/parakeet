@@ -56,13 +56,10 @@ def compile_fn(fundef):
   env = init_llvm_vars(fundef, llvm_fn, start_builder)
   
   def compile_expr(expr, builder):
+    print "compile_expr", expr 
     def compile_Var():
       ref =  env[expr.name]
-      print "compile_Var, ref: ", ref 
-      print "compile_Var, ref type:", ref.type
       val = builder.load(ref, expr.name + "_val")
-      print "compile_Var, val: ", val
-      print "compile_Var, val type:", val.type
       return val 
     def compile_Const():
       assert isinstance(expr.type, ptype.Scalar)
@@ -84,10 +81,6 @@ def compile_fn(fundef):
       llvm_args = [compile_expr(arg, builder) for arg in args]
       
       result_name = prim.name + "_result"
-      print prim 
-      print args
-      print map(lambda e: e.type, args)
-      print llvm_args
       
       if isinstance(prim, prims.Cmp):
         x, y = llvm_args 
@@ -101,15 +94,19 @@ def compile_fn(fundef):
           assert t.is_unsigned(), "Unexpected type: %s" % t
           cmp_op = llvm_prims.unsigned_int_comparisons[prim]
           return builder.icmp(cmp_op, x, y, result_name)
+      elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
+        if t.is_float():
+          instr = llvm_prims.float_binops[prim]
+        elif t.is_signed():
+          instr = llvm_prims.signed_binops[prim]
+        elif t.is_unsigned():
+          instr = llvm_prims.unsigned_binops[prim]  
+        return getattr(builder, instr)(*llvm_args)
       else:
-        assert False, expr 
-      
-    print "Dispatching %s" % expr 
-    result = dispatch(expr, "compile")
-    print "expr: %s, result: %s" % (expr, result)
-    print result
-    return result  
-  
+        assert False, "UNSUPPORTED PRIMITIVE: %s" % expr 
+     
+    return dispatch(expr, "compile")
+    
   def get_ref(expr):
     # for now only get references to variables
     assert isinstance(expr, syntax.Var)
@@ -128,13 +125,40 @@ def compile_fn(fundef):
       builder.store(value, ref)
     
   def compile_stmt(stmt, builder):
+    """Translate an SSA statement into llvm. Every translation
+    function returns a builder pointing to the end of the current 
+    basic block and a boolean indicating whether every branch of 
+    control flow in that statement ends in a return. 
+    The latter is needed to avoid creating empty basic blocks, 
+    which were causing some mysterious crashes inside LLVM"""
     if isinstance(stmt, syntax.Assign):
       ref = get_ref(stmt.lhs)
       value = compile_expr(stmt.rhs, builder)
       builder.store(value, ref)
       return builder, False 
     elif isinstance(stmt, syntax.While):
-      assert False 
+      # current flow ----> loop --------> exit--> after  
+      #    |                       skip------------|
+      #    |----------------------/
+      compile_merge_left(stmt.merge_before, builder)
+      loop_bb, loop_builder = new_block("loop_body")
+      
+      skip_bb, skip_builder = new_block("skip_loop")
+      after_bb, after_builder = new_block("after_loop")
+      enter_cond = compile_expr(stmt.cond, builder)
+      builder.cbranch(enter_cond, loop_bb, skip_bb)
+      _, body_always_returns = compile_block(stmt.body, loop_builder)
+      if not body_always_returns:
+        exit_bb, exit_builder = new_block("loop_exit")
+        compile_merge_right(stmt.merge_before, loop_builder)
+        repeat_cond = compile_expr(stmt.cond, loop_builder)
+        loop_builder.cbranch(repeat_cond, loop_bb, exit_bb)
+        compile_merge_right(stmt.merge_after, exit_builder)
+        exit_builder.branch(after_bb)
+      compile_merge_left(stmt.merge_after, skip_builder)
+      skip_builder.branch(after_bb)
+      return after_builder, False 
+ 
     elif isinstance(stmt, syntax.Return):
       builder.ret(compile_expr(stmt.value, builder))
       return builder, True 
@@ -144,13 +168,13 @@ def compile_fn(fundef):
       # compile the two possible branches as distinct basic blocks
       # and then wire together the control flow with branches
       true_bb, true_builder = new_block("if_true")
-      _, true_returns = compile_block(stmt.true, true_builder)
+      _, true_always_returns = compile_block(stmt.true, true_builder)
       
       false_bb, false_builder = new_block("if_false")
-      _, false_returns = compile_block(stmt.false, false_builder)
+      _, false_always_returns = compile_block(stmt.false, false_builder)
       
       # did both branches end in a return? 
-      both_return = true_returns or false_returns 
+      both_always_return = true_always_returns and false_always_returns 
 
       builder.cbranch(cond, true_bb, false_bb)
       # compile phi nodes as assignments and then branch
@@ -160,18 +184,19 @@ def compile_fn(fundef):
       
       # if both branches return then there is no point
       # making a new block for more code 
-      if both_return:
+      if both_always_return:
+        print "RETURNING NONE"
         return None, True 
       else:
         after_bb, after_builder = new_block("if_after")
-        if not true_returns:
+        if not true_always_returns:
           true_builder.branch(after_bb)
-        if not false_returns:
+        if not false_always_returns:
           false_builder.branch(after_bb)      
         return after_builder, False  
   
   def compile_block(stmts, builder = None):
-    
+    print "compile_block", stmts
     for stmt in stmts:
       builder, always_returns = compile_stmt(stmt, builder)
       if always_returns:

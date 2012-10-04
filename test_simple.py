@@ -86,15 +86,19 @@ def test_if_true():
   
   
 if __name__ == '__main__':
-  n_good = 0
-  n_bad = 0
+  import sys
+  
+  good = set([])
+  bad = set([])
   for k,v in locals().items():
     if k.startswith('test_'):
       try:
         v()
         print "\n --- %s passed\n" % k
-        n_good += 1
+        good.add(k)
       except:
+        print sys.exc_info()
         print "\n --- %s failed\n" % k
-        n_bad += 1
-  print "\n %d tests passed, %d failed" % (n_good, n_bad)
+        bad.add(k)
+  print "\n%d tests passed: %s\n" % (len(good), ", ".join(good))
+  print "%d failed: %s" % (len(bad),", ".join(bad))
