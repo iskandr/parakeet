@@ -25,8 +25,8 @@ def expect(fn, args, expected):
   typed_result = interp.eval_fn(typed, *all_args)
   assert typed_result == expected, "Expected %s but got %s" % (expected, typed_result)
 
-  llvm_fn = llvm_backend.compile_fn(typed)
-  llvm_result = llvm_runtime.run(llvm_fn, all_args)
+  compiled = llvm_backend.compile_fn(typed)
+  llvm_result = compiled(*all_args)
   assert llvm_result == expected, "Expected %s but got %s" % (expected, llvm_result)
   
 

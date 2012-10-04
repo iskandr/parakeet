@@ -6,105 +6,55 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 import llvm.passes as passes
 
+from llvm_types import to_lltype
+from llvm_state import global_module
+from llvm_compiled_fn import CompiledFn
+
 import ptype
 import syntax
 from common import dispatch  
 
-void_t = lltype.void()
-int1_t = lltype.int(1)
-int8_t = lltype.int(8)
-int16_t = lltype.int(16)
-int32_t = lltype.int(32)
-int64_t = lltype.int(64)
-float32_t = lltype.float()
-float64_t = lltype.double()
-float128_t = lltype.fp128()
+def init_llvm_vars(fundef, llvm_fn, builder):
 
-ptr_int32_t = lltype.pointer(int32_t)
-ptr_int64_t = lltype.pointer(int64_t)
-
-dtype_to_llvm_types = {
-  
-  np.dtype('int8') : int8_t,
-  np.dtype('uint8') : int8_t,
-  np.dtype('uint16') : int16_t, 
-  np.dtype('int16') : int16_t,
-  np.dtype('uint32') : int32_t, 
-  np.dtype('int32') : int32_t,
-  np.dtype('uint64') : int64_t, 
-  np.dtype('int64') : int64_t,
-  np.dtype('float16') : float32_t, 
-  np.dtype('float32') : float32_t,
-  np.dtype('float64') : float64_t,
-}
-
-def dtype_to_lltype(dt):
-  return dtype_to_llvm_types[dt]
-
-def to_lltype(t):
-  if isinstance(t, ptype.Scalar):
-    return dtype_to_lltype(t.dtype)
-  elif isinstance(t, ptype.Tuple):
-    llvm_elt_types = map(to_lltype, t.elt_types)
-    return lltype.struct(llvm_elt_types)
-  else:
-    elt_t = dtype_to_lltype(t.dtype)
-    arr_t = lltype.pointer(elt_t)
-    # arrays are a pointer to their data and
-    # pointers to shape and strides arrays
-    return lltype.struct([arr_t, ptr_int64_t, ptr_int64_t])
-
-# we allocate heap slots for output scalars before entering the
-# function
-def to_llvm_output_type(t):
-  llvm_type = to_lltype(t)
-  if isinstance(t, ptype.Scalar):
-    return lltype.pointer(llvm_type)
-  else:
-    return llvm_type
-
-global_module = llcore.Module.new("global_module")
-
-
-def init_llvm_fn(fundef):
-  llvm_input_types = map(to_lltype, fundef.input_types)
-  llvm_output_type = to_llvm_output_type(fundef.result_type)
-  llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
-  llvm_fn = global_module.add_function(llvm_fn_t, fundef.name)
-  
-  bb = llvm_fn.append_basic_block("entry")
-  builder = Builder.new(bb)
-
-  env = {}
-  
+  env = {}  
   for (name, t) in fundef.type_env.iteritems():
     llvm_t = to_lltype(t)
     stack_val = builder.alloca(llvm_t, name)
     env[name] = stack_val 
 
-  n_inputs = len(llvm_input_types)  
-  for i, llvm_arg in enumerate(llvm_fn.args):
-    if i < n_inputs:
-      parakeet_arg = fundef.args[i]
-      if isinstance(parakeet_arg, str):
-        name = parakeet_arg
-      elif isinstance(parakeet_arg, syntax.Var):
-        name = parakeet_arg.name
-      else:
-        assert False, "Tuple arg patterns not yet implemented"
-      llvm_arg.name = name
-      # store the value of the input in the stack value we've already allocated
-      # for the input var 
-      builder.store(llvm_arg, env[name])
+  for llvm_arg, parakeet_arg in zip(llvm_fn.args, fundef.args):
+    if isinstance(parakeet_arg, str):
+      name = parakeet_arg
+    elif isinstance(parakeet_arg, syntax.Var):
+      name = parakeet_arg.name
     else:
-      assert False, "Output args not yet implemented"
-  
-  
+      assert False, "Tuple arg patterns not yet implemented"
+    llvm_arg.name = name
+    # store the value of the input in the stack value we've already allocated
+    # for the input var 
+    builder.store(llvm_arg, env[name])
+    
   # tell the builder to start inserting 
-  return llvm_fn, builder, env  
- 
+  return env 
+
+
+
+
 def compile_fn(fundef):
-  fn, init_builder, env  = init_llvm_fn(fundef)
+  llvm_input_types = map(to_lltype, fundef.input_types)
+  llvm_output_type = to_lltype(fundef.return_type)
+  llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
+  llvm_fn = global_module.add_function(llvm_fn_t, fundef.name)
+  
+
+  
+  def new_block(name):
+    bb = llvm_fn.append_basic_block(name)
+    builder = Builder.new(bb)
+    return bb, builder 
+ 
+  _, start_builder = new_block("entry")
+  env = init_llvm_vars(fundef, llvm_fn, start_builder)
   
   def compile_expr(expr):
     def compile_Var():
@@ -119,20 +69,53 @@ def compile_fn(fundef):
       else:
         assert False, "Unsupported constant %s" % expr
     return dispatch(expr, "compile")
+  def compile_merge_left(phi_nodes, builder):
+    for name, (left, _) in phi_nodes.iteritems():
+      builder.store(env[name], compile_expr(left))
+      
+  def compile_merge_right(phi_nodes, builder):
+    for name, (_, right) in phi_nodes.iteritems():
+      builder.store(env[name], compile_expr(right))
+    
   def compile_stmt(stmt, builder):
     if isinstance(stmt, syntax.Assign):
-      assert False
+      return builder 
     elif isinstance(stmt, syntax.While):
-      assert False
-    elif isinstance(stmt, syntax.If): 
-      assert False
+      return builder
+    elif isinstance(stmt, syntax.If):
+      cond = compile_expr(stmt.cond)
+      
+      # compile the two possible branches as distinct basic blocks
+      # and then wire together the control flow with branches
+      true_bb, true_builder = new_block("if_true")
+      compile_block(stmt.true, true_builder)
+      
+      false_bb, false_builder = new_block("if_false")
+      compile_block(stmt.false, false_builder)
+      
+      builder.cbranch(cond, true_bb, false_bb)
+
+      # compile phi nodes as assignments and then branch
+      # to the continuation block 
+      compile_merge_left(stmt.merge, true_builder)
+      compile_merge_right(stmt.merge, false_builder)
+      
+      after_bb, after_builder = new_block("if_merge")
+      true_builder.branch(after_bb)
+      false_builder.branch(after_bb)      
+      
+      return after_builder 
   
-  def compile_block(stmts, builder):
+  def compile_block(stmts, builder = None):
+    
     for stmt in stmts:
-      compile_stmt(stmt, builder)
+      builder = compile_stmt(stmt, builder)
+    return builder
+
+  compile_block(fundef.body, start_builder)
+  print llvm_fn
   
-  compile_block(fundef.body, init_builder)
-  return fn
+  return CompiledFn(llvm_fn, fundef)
 
 """
   let init_local_var (fnInfo:fn_info) (id:ID.t) =
