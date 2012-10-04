@@ -66,7 +66,8 @@ def convert_float(llvm_value, old_ptype, new_ptype, builder):
     return llvm_value
   
   dest_llvm_type = to_lltype(new_ptype)
-  dest_name = "%s.cast_%s" % new_ptype
+  dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
+  
   
   if isinstance(new_ptype, ptype.FloatT):
     if old_ptype.nbytes() <= new_ptype.nbytes():
@@ -91,7 +92,8 @@ def convert_signed(llvm_value, old_ptype, new_ptype, builder):
     return llvm_value
   
   dest_llvm_type = to_lltype(new_ptype)
-  dest_name = "%s.cast.%s" % new_ptype
+  dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
+  
   
   if isinstance(new_ptype, ptype.FloatT):
     return builder.sitofp(llvm_value, dest_llvm_type, dest_name)
@@ -114,7 +116,7 @@ def convert_unsigned(llvm_value, old_ptype, new_ptype, builder):
     return llvm_value
   
   dest_llvm_type = to_lltype(new_ptype)
-  dest_name = "%s.cast_%s" % new_ptype
+  dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
   
   if isinstance(new_ptype, ptype.FloatT):
     return builder.uitofp(llvm_value, dest_llvm_type, dest_name)
