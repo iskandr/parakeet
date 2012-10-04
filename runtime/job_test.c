@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "runtime.h"
+#include "job.h"
 #include "thread_pool.h"
 
 typedef struct {
@@ -15,8 +15,6 @@ void add1(int iter, void *args) {
   add1_args_t *my_args = (add1_args_t*)args;
   
   my_args->out[iter] = my_args->in[iter] + 1;
-  if (iter > 500000 - 1)
-    printf("Too big iter: %d\n", iter);
 }
 
 void test_create_destroy(void) {
@@ -39,12 +37,12 @@ void test_run_threads(void) {
   }
 
   int num_threads = 8;
-  job_t *job = make_job(len, num_threads);
+  job_t *job = make_job(0, len, num_threads);
   
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
-  launch_job(thread_pool, &add1, &add1_args, job);
+  launch_job(thread_pool, &add1, &add1_args, job, 0);
   wait_for_job(thread_pool);
 
   int pass = 1;
@@ -72,15 +70,15 @@ void test_pause_threads(void) {
     in[i] = i;
   }
 
-  job_t *job = make_job(len, num_threads);
+  job_t *job = make_job(0, len, num_threads);
 
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
   
-  launch_job(thread_pool, &add1, &add1_args, job);
+  launch_job(thread_pool, &add1, &add1_args, job, 0);
   pause_job(thread_pool);
-  launch_job(thread_pool, &add1, &add1_args, job);
+  launch_job(thread_pool, &add1, &add1_args, job, 0);
   wait_for_job(thread_pool);
 
   int pass = 1;
@@ -108,17 +106,17 @@ void test_reconfigure_threads(void) {
     in[i] = i;
   }
 
-  job_t *job = make_job(len, num_threads);
+  job_t *job = make_job(0, len, num_threads);
   
   add1_args_t add1_args;
   add1_args.in = in;
   add1_args.out = out;
   
-  launch_job(thread_pool, &add1, &add1_args, job); 
+  launch_job(thread_pool, &add1, &add1_args, job, 0); 
   pause_job(thread_pool);
   num_threads = 3;
   job = reconfigure_job(job, num_threads);
-  launch_job(thread_pool, &add1, &add1_args, job);
+  launch_job(thread_pool, &add1, &add1_args, job, 0);
   wait_for_job(thread_pool);
 
   int pass = 1;
@@ -138,9 +136,13 @@ void test_sequence_of_jobs(void) {
   thread_pool_t *thread_pool = create_thread_pool(max_threads);
   int num_threads = max_threads;
   
-  int len = 100000;
+  int len = 50000000;
   int *in = (int*)malloc(sizeof(int) * len);
   int *out = (int*)malloc(sizeof(int) * len);
+  int i;
+  for (i = 0; i < len; ++i) {
+    in[i] = i;
+  }
 
   job_t *job;
   
@@ -148,21 +150,23 @@ void test_sequence_of_jobs(void) {
   add1_args.in = in;
   add1_args.out = out;
 
-  int i;
   num_threads = 2;
-  for (i = 0; i < 2; ++i) {
-    job = make_job(len, num_threads);
-    launch_job(thread_pool, &add1, &add1_args, job); 
+  for (i = 0; i < 4; ++i) {
+    job = make_job(0, len, num_threads);
+    launch_job(thread_pool, &add1, &add1_args, job, 0); 
     pause_job(thread_pool);
-    num_threads++;
-    job = reconfigure_job(job, num_threads);
-    launch_job(thread_pool, &add1, &add1_args, job);
+    int num_tasks = num_unfinished_tasks(job);
+    if (num_tasks > num_threads) {
+      num_threads++;
+      job = reconfigure_job(job, num_threads);
+    }
+    launch_job(thread_pool, &add1, &add1_args, job, 0);
     wait_for_job(thread_pool);
 
     int pass = 1;
-    int i;
-    for (i = 0; i < len; ++i) {
-      pass &= out[i] == in[i] + 1;
+    int j;
+    for (j = 0; j < len; ++j) {
+      pass &= out[j] == in[j] + 1;
     }
     CU_ASSERT(pass);
 
@@ -185,11 +189,10 @@ int clean_suite1(void) {
 int main(int argc, char **argv) {
   CU_pSuite pSuite = NULL;
 
-  /* initialize the CUnit test registry */
-  if (CUE_SUCCESS != CU_initialize_registry())
+  if (CUE_SUCCESS != CU_initialize_registry()) {
     return CU_get_error();
+  }
   
-  /* add a suite to the registry */
   pSuite = CU_add_suite("Runtime Tests", init_suite1, clean_suite1);
   if (NULL == pSuite) {
     CU_cleanup_registry();
@@ -200,7 +203,7 @@ int main(int argc, char **argv) {
     CU_cleanup_registry();
     return CU_get_error();
   }
-  /* add the tests to the suite */
+
   if ((NULL == CU_add_test(pSuite, "Run add1", test_run_threads))) {
     CU_cleanup_registry();
     return CU_get_error();
@@ -223,7 +226,6 @@ int main(int argc, char **argv) {
     return CU_get_error();
   }
   
-  /* Run all tests using the CUnit Basic interface */
   CU_basic_set_mode(CU_BRM_VERBOSE);
   CU_basic_run_tests();
   CU_cleanup_registry();
