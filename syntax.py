@@ -36,10 +36,20 @@ class Const(Expr):
   def __repr__(self):
     return repr(self.value)
   
+  def __str__(self):
+    return repr(self)
+  
 class Var(Expr):
   _members = ['name']
+  
   def __repr__(self):
-    return "var(%s)" % self.name 
+    if hasattr(self, 'type'):
+      return "var(%s, type=%s)" % (self.name, self.type)
+    else:
+      return "var(%s)" % self.name 
+  
+  def __str__(self):
+    return self.name 
   
 #class Prim(Expr):
 #  """Lift primitive to the value level by creating a PrimClosure"""
@@ -71,6 +81,12 @@ class PrimCall(Expr):
   prims.Prim object
   """
   _members = ['prim', 'args']
+  
+  def __repr__(self):
+    return "primcall[%s](%s)" % (self.prim, ", ".join(map(str, self.args)))
+  
+  def __str__(self):
+    return repr(self)
   
 class Call(Expr):
   """

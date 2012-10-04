@@ -114,7 +114,7 @@ def eval_fn(fn, *args):
   except:
     raise
   
-def run(python_fn, args, type_specialization = False):
+def run_python_fn(python_fn, args, type_specialization = False):
   untyped  = ast_conversion.translate_function_value(python_fn)
   # should eventually roll this up into something cleaner, since 
   # top-level functions are really acting like closures over their
@@ -129,7 +129,6 @@ def run(python_fn, args, type_specialization = False):
     return eval_fn(untyped, *all_args) 
   else:
     import specialization
-    import ptype 
     input_types = map(ptype.type_of_value, all_args)
     typed = specialization.specialize(untyped, input_types)
     return eval_fn(typed, *all_args)

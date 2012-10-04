@@ -1,6 +1,4 @@
-from tree import TreeLike
 import numpy as np
-import math 
 import ptype 
 
 prim_lookup_by_value = {}
@@ -104,6 +102,11 @@ class Float(Prim):
   """Always returns a float"""
   pass   
 
+class Arith(Prim):
+  """Basic arithmetic operators"""
+  pass 
+
+
 class Logical(Prim):
   """Expects boolean inputs, returns a boolean"""
   pass 
@@ -154,10 +157,10 @@ bitwise_and = Bitwise(np.bitwise_and, 'BitAnd')
 bitwise_or = Bitwise(np.bitwise_or, 'BitOr')
 bitwise_xor = Bitwise(np.bitwise_xor, 'BitXor') 
 
-add = Prim(np.add, 'Add') 
-subtract = Prim(np.subtract, 'Sub') 
-multiply = Prim(np.multiply, 'Mult') 
-divide = Prim(np.divide, 'Div')
+add = Arith(np.add, 'Add') 
+subtract = Arith(np.subtract, 'Sub') 
+multiply = Arith(np.multiply, 'Mult') 
+divide = Arith(np.divide, 'Div')
 
 equal = Cmp(np.equal, 'Eq')
 not_equal = Cmp(np.not_equal, 'NotEq')

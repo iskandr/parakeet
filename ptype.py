@@ -78,7 +78,9 @@ class Scalar(Type):
   
   def __repr__(self):
     return self.name 
-
+  
+  def __str__(self):
+    return str(self.name)
 
   def is_float(self):
     return self.dtype.type in np.sctypes['float']
