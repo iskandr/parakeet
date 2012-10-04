@@ -253,7 +253,7 @@ class TupleT(CompoundType):
     else:
       raise IncompatibleTypes(self, other)
 
-class ClosureT:
+class ClosureSig:
   def __init__(self, fn, args = ()):
     self.fn = fn
     self.args = tuple(args) 

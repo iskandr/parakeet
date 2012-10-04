@@ -47,11 +47,11 @@ def _infer_types(fn, arg_types):
     
     def expr_Closure():
       arg_types = map(expr_type, expr.args)
-      closure_type = ptype.ClosureT(expr.fn, arg_types)
+      closure_sig = ptype.ClosureSig(expr.fn, arg_types)
       try:
-        closure_set = ptype.ClosureSet(closure_type)
+        closure_set = ptype.ClosureSet(closure_sig)
       except:
-        print closure_type 
+        print closure_sig 
         raise 
       return closure_set 
     
@@ -215,7 +215,7 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Closure():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
-      closure_signature = ptype.ClosureT(fn = expr.fn, args = arg_types)
+      closure_signature = ptype.ClosureSig(fn = expr.fn, args = arg_types)
       closure_set = ptype.ClosureSet(closure_signature)
       return syntax.Closure(fn = expr.fn, args = new_args, type = closure_set)
     

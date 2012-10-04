@@ -12,8 +12,8 @@ int32_t = lltype.int(32)
 int64_t = lltype.int(64)
 float32_t = lltype.float()
 float64_t = lltype.double()
-float128_t = lltype.fp128()
 
+ptr_int8_t = lltype.pointer(int8_t)
 ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
@@ -41,6 +41,13 @@ def to_lltype(t):
   elif isinstance(t, ptype.TupleT):
     llvm_elt_types = map(to_lltype, t.elt_types)
     return lltype.struct(llvm_elt_types)
+  elif isinstance(t, ptype.ClosureSet):
+    # unlike conventional closures, we dont' carry around a function pointer 
+    # but rather call different typed specializations in different argument-type contexts
+    untyped_fn_id = int64_t
+    # need to use an opaque pointer since the number and types of args might vary 
+    opaque_args = ptr_int8_t 
+    return lltype.struct([untyped_fn_id, opaque_args], "closure")
   else:
     elt_t = dtype_to_lltype(t.dtype)
     arr_t = lltype.pointer(elt_t)
