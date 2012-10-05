@@ -7,8 +7,7 @@
 
 #include "runtime.h"
 
-job_t *make_job(int start, int stop, int num_threads) {
-  int chunk_len = 128;
+job_t *make_job(int start, int stop, int num_threads, int chunk_len) {
   int num_iters = stop - start;
   int num_chunks = num_iters / chunk_len + (num_iters % chunk_len ? 1 : 0);
   job_t *job = (job_t*)malloc(sizeof(job_t));
@@ -61,7 +60,7 @@ job_t *reconfigure_job(job_t *job, int num_threads) {
     new_job->task_lists[i].num_tasks = num_tasks;
     new_job->task_lists[i].cur_task = 0;
     new_job->task_lists[i].barrier = &new_job->barrier;
-    
+
     int tasks_done = 0;
     while(tasks_done < num_tasks) {
       int tasks_left_in_cur_list =
@@ -77,7 +76,7 @@ job_t *reconfigure_job(job_t *job, int num_threads) {
       int tasks_left_to_do = num_tasks - tasks_done;
       task_t *src = job->task_lists[cur_list].tasks + cur_task;
       int num_to_copy;
-      
+
       if (tasks_left_in_cur_list > tasks_left_to_do) {
         num_to_copy = tasks_left_to_do;
         cur_task += tasks_left_to_do;
@@ -88,8 +87,8 @@ job_t *reconfigure_job(job_t *job, int num_threads) {
           cur_task = job->task_lists[cur_list].cur_task;
         }
       }
-      
-      memcpy(&new_job->task_lists[i].tasks[tasks_done], src,             
+
+      memcpy(&new_job->task_lists[i].tasks[tasks_done], src,
              sizeof(task_t) * num_to_copy);
       tasks_done += num_to_copy;
     }
@@ -102,10 +101,14 @@ job_t *reconfigure_job(job_t *job, int num_threads) {
 int num_unfinished_tasks(job_t *job) {
   int total_tasks = 0;
   int i;
-  for (i = 0; i < job->num_lists; ++i) {    
+  for (i = 0; i < job->num_lists; ++i) {
     total_tasks += job->task_lists[i].num_tasks - job->task_lists[i].cur_task;
   }
   return total_tasks;
+}
+
+int num_threads(job_t *job) {
+  return job->num_lists;
 }
 
 void free_job(job_t *job) {
