@@ -10,18 +10,37 @@ import ptype
 import prims 
 import syntax
 from common import dispatch  
+from function_registry import typed_functions
 
 import llvm_types
-from llvm_types import to_lltype
-from llvm_state import global_module
+from llvm_types import llvm_value_type, llvm_ref_type
+from llvm_state import global_module, ClosureSignatures
 from llvm_compiled_fn import CompiledFn
 import llvm_prims 
+ 
 
 
+def const(python_scalar, parakeet_type = None):
+  if parakeet_type is None:
+    if isinstance(python_scalar, int):
+      parakeet_type = ptype.Int32
+    elif isinstance(python_scalar, float):
+      parakeet_type = ptype.Float32
+    elif isinstance(python_scalar, bool):
+      parakeet_type = ptype.Bool
+    else:
+      raise RuntimeError("Don't know how to create LLVM constant from %s" % python_scalar)
+  assert isinstance(parakeet_type, ptype.ScalarT)
+  llvm_type = llvm_value_type(parakeet_type)
+  if isinstance(parakeet_type, ptype.FloatT):
+    return llcore.Constant.real(llvm_type, python_scalar)
+  else:
+    return llcore.Constant.int(llvm_type, python_scalar)
+  
 def init_llvm_vars(fundef, llvm_fn, builder):
   env = {}  
   for (name, t) in fundef.type_env.iteritems():
-    llvm_t = to_lltype(t)
+    llvm_t = llvm_ref_type(t)
     stack_val = builder.alloca(llvm_t, name)
     env[name] = stack_val 
 
@@ -36,15 +55,20 @@ def init_llvm_vars(fundef, llvm_fn, builder):
     # store the value of the input in the stack value we've already allocated
     # for the input var 
     store = builder.store(llvm_arg, env[name])
+    print "init", store 
 
   # tell the builder to start inserting 
   return env 
 
 
+compiled_functions = {}
 
 def compile_fn(fundef):
-  llvm_input_types = map(to_lltype, fundef.input_types)
-  llvm_output_type = to_lltype(fundef.return_type)
+  if fundef.name in compiled_functions:
+    return compiled_functions[fundef.name]
+  
+  llvm_input_types = map(llvm_ref_type, fundef.input_types)
+  llvm_output_type = llvm_ref_type(fundef.return_type)
   llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
   llvm_fn = global_module.add_function(llvm_fn_t, fundef.name)
     
@@ -56,9 +80,11 @@ def compile_fn(fundef):
   _, start_builder = new_block("entry")
   env = init_llvm_vars(fundef, llvm_fn, start_builder)
   
- 
+
+
   
   def compile_expr(expr, builder):
+    
     print "compile_expr", expr 
     def compile_Var():
       ref =  env[expr.name]
@@ -66,13 +92,8 @@ def compile_fn(fundef):
       return val 
     def compile_Const():
       assert isinstance(expr.type, ptype.ScalarT)
-      llvm_type = to_lltype(expr.type)
-      if isinstance(expr.type, ptype.IntT):
-        return llcore.Constant.int(llvm_type, expr.value)
-      elif isinstance(expr.type, ptype.FloatT):
-        return llcore.Constant.real(llvm_type, expr.value)
-      else:
-        assert False, "Unsupported constant %s" % expr
+      return const(expr.value, expr.type)
+    
     def compile_Cast():
       llvm_value = compile_expr(expr.value, builder)
       return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
@@ -81,7 +102,57 @@ def compile_fn(fundef):
       # allocate a length 3 array
       # - the first element is a distinct id for each (untyped function, type list) pair
       # - the second element is array partially applied arguments
-      return builder.malloc(llvm_types.closure_t, "closure")
+      
+      closure_t = expr.type
+      assert isinstance(closure_t, ptype.ClosureT)
+      llvm_closure_t = llvm_value_type(closure_t)
+      closure_object =  builder.malloc(llvm_closure_t, "closure_object")
+      print "malloc closure", closure_object
+      id_slot = builder.gep(closure_object, [const(0), const(0)], "closure_id_slot")
+      print "get id slot", id_slot
+      closure_num = ClosureSignatures.get_id(closure_t)
+      store = builder.store(const(closure_num, ptype.Int64), id_slot)
+      print "store", store 
+      assert len(closure_t.args) == 0, "Code generation for closure args not yet implemented"
+      print "Created closure"
+      return closure_object  
+    
+    def compile_Invoke():
+      closure_object = compile_expr(expr.closure, builder)
+
+      arg_types = [arg.type for arg in expr.args] 
+      
+      closure_t = expr.closure.type
+      assert isinstance(closure_t, ptype.ClosureT)
+      
+      #closure_id_slot = builder.gep(llvm_closure_object, [const(0), const(0)], "closure_id_slot")
+      #actual_closure_id = builder.load(closure_id_slot)
+      
+      # get the int64 identifier which maps to an untyped_fn/arg_types pairs
+      
+      untyped_fn_id = closure_t.fn
+      assert isinstance(untyped_fn_id, str), "Expected %s to be string identifier" % (untyped_fn_id)
+      full_arg_types = closure_t.args + tuple(arg_types)
+      # either compile the function we're about to invoke or get its compiled form from a cache
+      key = (untyped_fn_id, full_arg_types)
+      typed_fundef = typed_functions[key]
+      target_fn_info = compile_fn(typed_fundef)
+      target_fn = target_fn_info.llvm_fn 
+        
+      llvm_closure_args = []
+      
+      closure_args_slot = builder.gep(closure_object, [const(0), const(1)], "closure_args_slot")
+      closure_args_array = builder.load(closure_args_slot, "closure_args")
+      for (closure_arg_idx, _) in enumerate(closure_t.args):
+        arg_ptr = builder.gep(closure_args_array, [const(closure_arg_idx)], "closure_arg%d_ptr" % closure_arg_idx)
+        arg = builder.load(arg_ptr, "closure_arg%d" % closure_arg_idx)
+        llvm_closure_args.append(arg)
+      
+      full_args_list = llvm_closure_args + [compile_expr(arg, builder) for arg in expr.args]
+      assert len(full_args_list) == len(full_arg_types)  
+      call =  builder.call(target_fn, full_args_list, "invoke_result")
+      print "Call", call 
+      return call 
     
     def compile_PrimCall():
       prim = expr.prim
@@ -129,13 +200,15 @@ def compile_fn(fundef):
     for name, (left, _) in phi_nodes.iteritems():
       ref = env[name]
       value = compile_expr(left, builder)
-      builder.store(value, ref)
+      store = builder.store(value, ref)
+      print "merge_left", store 
       
   def compile_merge_right(phi_nodes, builder):
     for name, (_, right) in phi_nodes.iteritems():
       ref = env[name]
       value = compile_expr(right, builder)
-      builder.store(value, ref)
+      store = builder.store(value, ref)
+      print "merge_right", store 
     
   def compile_stmt(stmt, builder):
     """Translate an SSA statement into llvm. Every translation
@@ -145,9 +218,14 @@ def compile_fn(fundef):
     The latter is needed to avoid creating empty basic blocks, 
     which were causing some mysterious crashes inside LLVM"""
     if isinstance(stmt, syntax.Assign):
+      
       ref = get_ref(stmt.lhs)
       value = compile_expr(stmt.rhs, builder)
-      builder.store(value, ref)
+      print "ASSIGN"
+      print "LHS %s : %s" % (ref, ref.type)
+      print "RHS %s : %s" % (value, value.type)
+      store = builder.store(value, ref)
+      print "assign", store 
       return builder, False 
     elif isinstance(stmt, syntax.While):
       # current flow ----> loop --------> exit--> after  
@@ -212,11 +290,12 @@ def compile_fn(fundef):
     print "compile_block", stmts
     for stmt in stmts:
       builder, always_returns = compile_stmt(stmt, builder)
+
       if always_returns:
         return builder, True 
     return builder, False
 
   compile_block(fundef.body, start_builder)
-  print llvm_fn
-  
-  return CompiledFn(llvm_fn, fundef)
+  result = CompiledFn(llvm_fn, fundef) 
+  compiled_functions[fundef.name] = result 
+  return result 

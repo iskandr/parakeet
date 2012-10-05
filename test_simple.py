@@ -2,6 +2,13 @@ import unittest
 import interp
 import numpy as np
 from parakeet import expect
+
+def always1():
+  return 1
+
+def test_always1():
+  expect(always1, [], 1)
+
 def add1(x):
   return x + 1
 

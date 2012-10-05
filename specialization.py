@@ -47,16 +47,17 @@ def _infer_types(fn, arg_types):
     
     def expr_Closure():
       arg_types = map(expr_type, expr.args)
-      closure_sig = ptype.ClosureSig(expr.fn, arg_types)
-      try:
-        closure_set = ptype.ClosureSet(closure_sig)
-      except:
-        print closure_sig 
-        raise 
-      return closure_set 
-    
+      return ptype.ClosureT(expr.fn, arg_types)
+      
     def expr_Invoke():
-      closure_set = expr_type(expr.closure)
+      closure_t = expr_type(expr.closure)
+      if isinstance(closure_t, ptype.ClosureT):
+        closure_set = ptype.ClosureSet(closure_t)
+      elif isinstance(closure_set, ptype.ClosureSet):
+        closure_set = closure_t
+      else:
+        raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
+      
       arg_types = map(expr_type, expr.args)
       invoke_result_type = ptype.Unknown
       for closure_type in closure_set.closures:
@@ -215,22 +216,25 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Closure():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
-      closure_signature = ptype.ClosureSig(fn = expr.fn, args = arg_types)
-      closure_set = ptype.ClosureSet(closure_signature)
-      return syntax.Closure(fn = expr.fn, args = new_args, type = closure_set)
+      closure_signature = ptype.ClosureT(fn = expr.fn, args = arg_types)
+      return syntax.Closure(fn = expr.fn, args = new_args, type = closure_signature)
     
     def rewrite_Invoke():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
       closure = rewrite_expr(expr.closure)
-      assert isinstance(closure.type, ptype.ClosureSet), \
-        "Expected closure set, got %s" % expr.closure.type
+      if isinstance(closure.type, ptype.ClosureSet):
+        closure_set = closure.type
+      elif isinstance(closure.type, ptype.ClosureT):
+        closure_set = ptype.ClosureSet(closure.type)
+      else:
+        raise InferenceFailed("Expected closure set, got %s" % expr.closure.type)
       return_type = ptype.Unknown
-      for clos_sig in closure.type.closures:
+      for clos_sig in closure_set.closures:
         full_arg_types = clos_sig.args + tuple(arg_types)
         curr_return_type = infer_return_type(clos_sig.fn, full_arg_types)
         return_type = return_type.combine(curr_return_type)
-      return syntax.Invoke(closure, new_args, type=return_type)
+      return syntax.Invoke(closure, new_args, type = return_type)
     
     return  dispatch(expr, 'rewrite')
   

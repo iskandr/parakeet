@@ -1,6 +1,7 @@
 import numpy as np 
 
-from tree import TreeLike
+
+from node import Node
 
 class TypeFailure(Exception):
   def __init__(self, msg):
@@ -18,7 +19,7 @@ class IncompatibleTypes(Exception):
     return repr(self)
   
   
-class Type(TreeLike):  
+class Type(Node):  
   def nbytes(self):
     raise RuntimeError("nbytes not implemented")
 
@@ -28,10 +29,12 @@ class Type(TreeLike):
 
 class AnyT(Type):
   """top of the type lattice, absorbs all types"""
-  _members = []
+
   def combine(self, other):
     return self
   
+
+    
 # since there's only one Any type, just create an instance of the same name
 Any = AnyT()
 
@@ -40,6 +43,8 @@ class UnknownT(Type):
   _members = []
   def  combine(self, other):
     return other
+
+
 
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
@@ -58,8 +63,7 @@ Unknown = UnknownT()
 # don't actually tag any values with this
 class ScalarT(Type):
   rank = 0
-  _members = ['dtype']
-  
+
   def __init__(self, dtype, name = None):
     assert False, "Should not be called directly"
     
@@ -203,19 +207,15 @@ class CompoundType(Type):
 class ArrayT(CompoundType):
   _members = ['elt_type', 'rank']
   
-  def __init__(self, elt_type, rank):
-    assert isinstance(elt_type, ScalarT)
-    CompoundType.__init__(elt_type, rank)
-
+  def finalize_init(self):
+    assert isinstance(self.elt_type, ScalarT)
+    
   def nbytes(self):
     raise RuntimeError("Can't get size of an array just from its type")  
 
   def dtype(self):
     return self.elt_type.dtype()
  
-  def __repr__(self):
-    return "array(%s, %d)" % (self.elt_type, self.rank)
-
   def __eq__(self, other): 
     return isinstance(other, ArrayT) and \
       self.elt_type == other.elt_type and self.rank == other.rank
@@ -253,29 +253,49 @@ class TupleT(CompoundType):
     else:
       raise IncompatibleTypes(self, other)
 
-class ClosureSig:
-  def __init__(self, fn, args = ()):
-    self.fn = fn
-    self.args = tuple(args) 
-    
-  def __repr__(self):
-    return "Closure(fn=%s, args=%s)" % (self.fn, self.args)
+class ClosureT(Type):
+  _members = ['fn', 'args']
   
+  def finalize_init(self):
+    if self.args is None:
+      self.args = ()
+    elif not hasattr(self.args, '__iter__'):
+      self.args = tuple([self.args])
+    elif not isinstance(self.args, tuple):
+      self.args = tuple(self.args)
+
   def __hash__(self):
     return hash(repr(self))
   
   def __eq__(self, other):
     return self.fn == other.fn and self.args == other.args
+  
+  def combine(self, other):
+    if isinstance(other, ClosureSet):
+      return other.combine(self)
+    elif isinstance(other, ClosureT):
+      if self == other:
+        return self
+      else:
+        return ClosureSet(self, other)
+    else:
+      raise IncompatibleTypes(self, other)
     
 class ClosureSet(Type):
   """
   If multiple closures meet along control flow paths then join them into a closure set
   """
   _members = ['closures'] 
-  
+
   def __init__(self, *closure_types):
-    self.closures = set(closure_types)
-  
+    self.closures = set([])
+    for clos_t in closure_types:
+      if isinstance(clos_t, ClosureSet):
+        self.closures.update(clos_t.closures)
+      else:
+        assert isinstance(clos_t, ClosureT)
+        self.closures.add(clos_t)
+        
   def combine(self, other):
     if isinstance(other, ClosureSet):
       combined_closures = self.closures.union(other.closures)
@@ -288,7 +308,12 @@ class ClosureSet(Type):
   
   def __eq__(self, other):
     return self.closures == other.closures 
-
+  
+  def __iter__(self):
+    return iter(self.closures)
+  
+  def __len__(self):
+    return len(self.closures)
 
   
 def type_of_scalar(x):

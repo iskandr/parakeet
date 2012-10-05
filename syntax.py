@@ -1,6 +1,6 @@
-from tree import TreeLike
+from node import Node 
 
-class Stmt(TreeLike):
+class Stmt(Node):
   pass 
 
 class Assign(Stmt):
@@ -22,10 +22,12 @@ class While(Stmt):
    """
   _members = ['cond', 'body', 'merge_before', 'merge_after']
   
-class Expr(TreeLike):
+class Expr(Node):
   # the type field is initialized to None for untyped syntax nodes
   # but should be set once code gets specialized 
   _members = ['type']
+  
+
 
 class Adverb(Expr):
   pass
@@ -33,6 +35,7 @@ class Adverb(Expr):
 
 class Const(Expr):
   _members = ['value']
+  
   def __repr__(self):
     return repr(self.value)
   
@@ -69,6 +72,8 @@ class Closure(Expr):
   """
   _members = ['fn', 'args']
   
+
+  
 class Invoke(Expr):
   """
   Invoke a closure with extra args 
@@ -95,13 +100,13 @@ class Call(Expr):
   """
   _members = ['fn', 'args']
   
-class Fn(TreeLike):
+class Fn(Node):
   """
   Function definition
   """
   _members = ['name',  'args', 'body', 'nonlocals']
   
-class TypedFn(TreeLike):
+class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
   """

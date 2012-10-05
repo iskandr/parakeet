@@ -3,8 +3,9 @@ import syntax
 # SSA ID -> untyped FunDef
 untyped_functions = {}
 
-# SSA ID -> typed FunDef
+# (untyped ID, arg types) -> typed FunDef
 typed_functions = {}
+
 
 # every prim is associated with an untyped function 
 # whose body consists only of calling that prim 
@@ -56,5 +57,4 @@ def lookup_python_fn_dependencies(fn_val):
   info = known_python_functions[fn_val]
   return [info.globals_dict[n] for n in info.dependency_names]
    
-
 

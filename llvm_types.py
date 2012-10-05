@@ -17,12 +17,6 @@ ptr_int8_t = lltype.pointer(int8_t)
 ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
-# unlike conventional closures, we don't carry around a function pointer 
-# but rather call different typed specializations in different argument-type contexts
-# so the first element is a number uniquely identifying the untyped function and its
-# partially applied argument types
-closure_signature_t = int64_t
-closure_t = lltype.struct([closure_signature_t, ptr_int8_t], "closure")     
     
 dtype_to_llvm_types = {
   np.dtype('bool') : int1_t, 
@@ -42,27 +36,60 @@ dtype_to_llvm_types = {
 def dtype_to_lltype(dt):
   return dtype_to_llvm_types[dt]
 
-def to_lltype(t):
+tuple_struct_cache = {}
+
+def tuple_type(parakeet_elt_types):
+  parakeet_elt_types = tuple(parakeet_elt_types)
+  if parakeet_elt_types in tuple_struct_cache:
+    return tuple_struct_cache[parakeet_elt_types]
+  else:  
+    n = len(parakeet_elt_types)
+    llvm_elt_types = [llvm_ref_type(t) for t in parakeet_elt_types]
+    llvm_t = lltype.struct(llvm_elt_types, "tuple%d" % n)
+    tuple_struct_cache[parakeet_elt_types] = llvm_t
+    return llvm_t
+
+# unlike conventional closures, we don't carry around a function pointer 
+# but rather call different typed specializations in different argument-type contexts
+# so the first element is a number uniquely identifying the untyped function and its
+# partially applied argument types
+closure_id_t = int64_t
+opaque_closure_t = lltype.struct([closure_id_t, ptr_int8_t], "opaque_closure")
+
+def closure_type(parakeet_arg_types):
+  arg_tuple_t = tuple_type(parakeet_arg_types)
+  return lltype.struct([closure_id_t, lltype.pointer(arg_tuple_t)])
+
+
+def llvm_value_type(t):
   if isinstance(t, ptype.ScalarT):
     return dtype_to_lltype(t.dtype)
   elif isinstance(t, ptype.TupleT):
-    llvm_elt_types = map(to_lltype, t.elt_types)
-    return lltype.struct(llvm_elt_types)
+    return tuple_type(t.elt_types)
+    
+  elif isinstance(t, ptype.ClosureT):
+    return closure_type(t.args)
+  
   elif isinstance(t, ptype.ClosureSet):
-    return llcore.Type.pointer(closure_t)
-
+    return opaque_closure_t  
   else:
     elt_t = dtype_to_lltype(t.dtype)
     arr_t = lltype.pointer(elt_t)
     # arrays are a pointer to their data and
     # pointers to shape and strides arrays
     return lltype.struct([arr_t, ptr_int64_t, ptr_int64_t])
-  
+
+def llvm_ref_type(t):
+  llvm_value_t = llvm_value_type(t)
+  if isinstance(t, ptype.ScalarT):
+    return llvm_value_t
+  else:
+    return lltype.pointer(llvm_value_t)
 
 # we allocate heap slots for output scalars before entering the
 # function
 def to_llvm_output_type(t):
-  llvm_type = to_lltype(t)
+  llvm_type = llvm_value_type(t)
   if isinstance(t, ptype.ScalarT):
     return lltype.pointer(llvm_type)
   else:
@@ -75,7 +102,7 @@ def convert_float(llvm_value, old_ptype, new_ptype, builder):
   if old_ptype == new_ptype:
     return llvm_value
   
-  dest_llvm_type = to_lltype(new_ptype)
+  dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
   
   
@@ -92,7 +119,7 @@ def convert_float(llvm_value, old_ptype, new_ptype, builder):
     assert isinstance(new_ptype, ptype.BoolT), \
       "Unexpected type %s when casting from %s" % (new_ptype, old_ptype)
     # float->bool is just a check whether it's != 0 
-    return builder.fcmp(llcore.FCMP_ONE, llcore.Constant(to_lltype(old_ptype), 0.0))
+    return builder.fcmp(llcore.FCMP_ONE, llcore.Constant(llvm_value_type(old_ptype), 0.0))
 
 
 
@@ -101,14 +128,14 @@ def convert_signed(llvm_value, old_ptype, new_ptype, builder):
   if old_ptype == new_ptype:
     return llvm_value
   
-  dest_llvm_type = to_lltype(new_ptype)
+  dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
   
   
   if isinstance(new_ptype, ptype.FloatT):
     return builder.sitofp(llvm_value, dest_llvm_type, dest_name)
   elif isinstance(new_ptype, ptype.BoolT):
-    return builder.fcmp(llcore.ICMP_NE, llcore.Constant(to_lltype(old_ptype), 0))
+    return builder.fcmp(llcore.ICMP_NE, llcore.Constant(llvm_value_type(old_ptype), 0))
   else:
     assert isinstance(new_ptype, ptype.SignedT) or isinstance(new_ptype, ptype.UnsignedT)
   
@@ -125,13 +152,13 @@ def convert_unsigned(llvm_value, old_ptype, new_ptype, builder):
   if old_ptype == new_ptype:
     return llvm_value
   
-  dest_llvm_type = to_lltype(new_ptype)
+  dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
   
   if isinstance(new_ptype, ptype.FloatT):
     return builder.uitofp(llvm_value, dest_llvm_type, dest_name)
   elif isinstance(new_ptype, ptype.BoolT):
-    return builder.fcmp(llcore.ICMP_NE, llcore.Constant(to_lltype(old_ptype), 0))
+    return builder.fcmp(llcore.ICMP_NE, llcore.Constant(llvm_value_type(old_ptype), 0))
   else:
     assert isinstance(new_ptype, ptype.SignedT) or isinstance(new_ptype, ptype.UnsignedT)
   
@@ -143,7 +170,7 @@ def convert_unsigned(llvm_value, old_ptype, new_ptype, builder):
       return builder.trunc(llvm_value, dest_llvm_type, dest_name)
   
 def convert_bool(llvm_value, new_ptype, builder):
-  dest_llvm_type = to_lltype(new_ptype)
+  dest_llvm_type = llvm_value_type(new_ptype)
   one = llcore.Constant(dest_llvm_type, 1.0 if isinstance(new_ptype, ptype.FloatT) else 1)
   zero = llcore.Constant(dest_llvm_type, 0.0 if isinstance(new_ptype, ptype.FloatT) else 0)
   return builder.select(llvm_value, one, zero, "%s.cast.%s" % (llvm_value.name, new_ptype))
