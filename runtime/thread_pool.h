@@ -5,7 +5,7 @@
 
 #include "job.h"
 
-typedef void (*work_function_t)(int, void*);
+typedef void (*work_function_t)(int, int, void*, int*);
 
 typedef enum {
   THREAD_RUN = 0,
@@ -16,34 +16,35 @@ typedef enum {
 } thread_status_t;
 
 typedef struct {
-  task_list_t     *task_list;
-  pthread_mutex_t  mutex;
-  pthread_cond_t   cond;
-  thread_status_t  status;
-  pthread_cond_t  *master_cond;
-  int              notify_when_done;
-  work_function_t  work_function;
-  void            *args;
-  int              fixed_num_iters;
-  int              iters_done;
-  double           time_spent;
+  task_list_t       *task_list;
+  pthread_mutex_t    mutex;
+  pthread_cond_t     cond;
+  thread_status_t    status;
+  pthread_cond_t    *master_cond;
+  int                notify_when_done;
+  work_function_t    work_function;
+  void              *args;
+  int               *tile_sizes;
+  int                fixed_num_iters;
+  int                iters_done;
+  unsigned long long timestamp;
 } worker_data_t;
 
 typedef struct {
-  pthread_t      *workers;
-  int             num_workers;
-  int             num_active;
-  pthread_cond_t  master_cond;
-  worker_data_t  *worker_data;
-  int            *iters_done;
-  struct timeval  timestamp;
-  job_t          *job;
+  pthread_t          *workers;
+  int                 num_workers;
+  int                 num_active;
+  pthread_cond_t      master_cond;
+  worker_data_t      *worker_data;
+  int                *iters_done;
+  unsigned long long *timestamps;
+  job_t              *job;
 } thread_pool_t;
 
 thread_pool_t *create_thread_pool(int max_threads);
 void launch_job(thread_pool_t *thread_pool,
                 work_function_t work_function, void *args, job_t *job,
-                int fixed_num_iters);
+                int *tile_sizes, int fixed_num_iters);
 void pause_job(thread_pool_t *thread_pool);
 int job_finished(thread_pool_t *thread_pool);
 double get_throughput(thread_pool_t *thread_pool);

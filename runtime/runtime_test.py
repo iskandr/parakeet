@@ -10,30 +10,26 @@ class vm_args_t(Structure):
               ("out", POINTER(c_double)),
               ("m", c_int),
               ("n", c_int),
-              ("k", c_int),
-              ("tile_sizes", POINTER(c_int))]
+              ("k", c_int)]
 
 libVM = cdll.LoadLibrary("vm.so")
 libVM.make_array.restype = POINTER(c_double)
 
-m = 10000
-n = 800
-k = 800
+m = 8192
+n = 1024
+k = 1024
 a = libVM.make_array(m, k)
 b = libVM.make_array(n, k)
 o = libVM.make_array(m, n)
 
-tile_sizes = (c_int * 2)(1,1)
-args = pointer(vm_args_t(a, b, o, m, n, k, cast(tile_sizes, POINTER(c_int))))
-job = runtime.make_job(0, 10000, 8)
+args = pointer(vm_args_t(a, b, o, m, n, k))
 
+r = runtime.Runtime()
 print "Launching parallel job"
 start = time.time()
-runtime.launch_job(cast(libVM.vm, c_void_p), cast(args, c_void_p), job)
-runtime.wait_for_job()
+r.run_job(cast(libVM.vm, c_void_p), cast(args, c_void_p), m, [800, 800])
 stop = time.time()
-runtime.free_job(job)
-runtime.cleanup()
+r.cleanup()
 print "Time to run job:", stop - start, "secs"
 
 npa = np.reshape(np.fromiter(a, dtype=np.float, count=m*k), (m, k))
@@ -41,6 +37,11 @@ npb = np.reshape(np.fromiter(b, dtype=np.float, count=n*k), (n, k))
 npo = np.reshape(np.fromiter(o, dtype=np.float, count=m*n), (m, n))
 
 start = time.time()
-print np.dot(npa, npb)
+npr = np.dot(npa, npb)
 stop = time.time()
 print "Time for numpy:", stop - start, "secs"
+
+if (npr == npo).all():
+  print "Passed"
+else:
+  print "Failed"
