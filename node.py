@@ -24,11 +24,11 @@ class Node(object):
       raise Exception('Too many arguments for ' + self.__class__.__name__ + 
                       '.  Expected: ' + str(all_members(self)))
     
-    for i in range(len(args), len(all_members(self))):
-      arg = all_members(self)[i]
-      if not arg in kw:
-        logging.debug("Missing initializer for %s.%s", self.node_type(), all_members(self)[i])
-
+    #for i in range(len(args), len(all_members(self))):
+      #arg = all_members(self)[i]
+      #if not arg in kw:
+      #  logging.debug("Missing initializer for %s.%s", self.node_type(), all_members(self)[i])
+      
     for field in all_members(self):
       setattr(self, field, None)
 

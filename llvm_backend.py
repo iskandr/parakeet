@@ -1,20 +1,16 @@
-import numpy as np
-
-
 import llvm.core as llcore
 from llvm.core import Type as lltype
 from llvm.core import Builder 
-import llvm.passes as passes
 
 import ptype
 import prims 
 import syntax
 from common import dispatch  
-from function_registry import typed_functions
+from function_registry import typed_functions, ClosureSignatures 
 
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
-from llvm_state import global_module, ClosureSignatures, global_fpm 
+import llvm_context 
 from llvm_compiled_fn import CompiledFn
 import llvm_prims 
  
@@ -48,8 +44,8 @@ def init_llvm_vars(fundef, llvm_fn, builder):
     llvm_arg.name = name
     # store the value of the input in the stack value we've already allocated
     # for the input var 
-    store = builder.store(llvm_arg, env[name])
-    print "init", store 
+    builder.store(llvm_arg, env[name])
+     
 
   # tell the builder to start inserting 
   return env 
@@ -61,10 +57,15 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   
+  # contexts bundle together the module and pass manager
+  # just be sure to use the same context when you register
+  # the function and run optimizations! 
+  context = llvm_context.opt_context
+  
   llvm_input_types = map(llvm_ref_type, fundef.input_types)
   llvm_output_type = llvm_ref_type(fundef.return_type)
   llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
-  llvm_fn = global_module.add_function(llvm_fn_t, fundef.name)
+  llvm_fn = context.module.add_function(llvm_fn_t, fundef.name)
     
   def new_block(name):
     bb = llvm_fn.append_basic_block(name)
@@ -79,7 +80,7 @@ def compile_fn(fundef):
   
   def compile_expr(expr, builder):
     
-    print "compile_expr", expr 
+    #print "compile_expr", expr 
     def compile_Var():
       ref =  env[expr.name]
       val = builder.load(ref, expr.name + "_val")
@@ -101,14 +102,13 @@ def compile_fn(fundef):
       assert isinstance(closure_t, ptype.ClosureT)
       llvm_closure_t = llvm_value_type(closure_t)
       closure_object =  builder.malloc(llvm_closure_t, "closure_object")
-      print "malloc closure", closure_object
+      #print "malloc closure", closure_object
       id_slot = builder.gep(closure_object, [int32(0), int32(0)], "closure_id_slot")
-      print "get id slot", id_slot
+      #print "get id slot", id_slot
       closure_num = ClosureSignatures.get_id(closure_t)
-      store = builder.store(const(closure_num, ptype.Int64), id_slot)
-      print "store", store 
+      builder.store(const(closure_num, ptype.Int64), id_slot)
+       
       assert len(closure_t.args) == 0, "Code generation for closure args not yet implemented"
-      print "Created closure"
       return closure_object  
     
     def compile_Invoke():
@@ -145,7 +145,7 @@ def compile_fn(fundef):
       full_args_list = llvm_closure_args + [compile_expr(arg, builder) for arg in expr.args]
       assert len(full_args_list) == len(full_arg_types)  
       call =  builder.call(target_fn, full_args_list, "invoke_result")
-      print "Call", call 
+      # print "Call", call 
       return call 
     
     def compile_PrimCall():
@@ -194,15 +194,15 @@ def compile_fn(fundef):
     for name, (left, _) in phi_nodes.iteritems():
       ref = env[name]
       value = compile_expr(left, builder)
-      store = builder.store(value, ref)
-      print "merge_left", store 
+      builder.store(value, ref)
+       
       
   def compile_merge_right(phi_nodes, builder):
     for name, (_, right) in phi_nodes.iteritems():
       ref = env[name]
       value = compile_expr(right, builder)
-      store = builder.store(value, ref)
-      print "merge_right", store 
+      builder.store(value, ref)
+       
     
   def compile_stmt(stmt, builder):
     """Translate an SSA statement into llvm. Every translation
@@ -215,11 +215,11 @@ def compile_fn(fundef):
       
       ref = get_ref(stmt.lhs)
       value = compile_expr(stmt.rhs, builder)
-      print "ASSIGN"
-      print "LHS %s : %s" % (ref, ref.type)
-      print "RHS %s : %s" % (value, value.type)
-      store = builder.store(value, ref)
-      print "assign", store 
+      #print "ASSIGN"
+      #print "LHS %s : %s" % (ref, ref.type)
+      #print "RHS %s : %s" % (value, value.type)
+      builder.store(value, ref)
+       
       return builder, False 
     elif isinstance(stmt, syntax.While):
       # current flow ----> loop --------> exit--> after  
@@ -281,7 +281,7 @@ def compile_fn(fundef):
         return after_builder, False  
   
   def compile_block(stmts, builder = None):
-    print "compile_block", stmts
+    # print "compile_block", stmts
     for stmt in stmts:
       builder, always_returns = compile_stmt(stmt, builder)
 
@@ -290,12 +290,10 @@ def compile_fn(fundef):
     return builder, False
 
   compile_block(fundef.body, start_builder)
-  # optimize the generated code 
-  for _ in range(5): 
-    global_fpm.run(llvm_fn)
+  context.run_passes(llvm_fn)
   
   result = CompiledFn(llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
-  print result.llvm_fn  
+  #print result.llvm_fn  
   
   return result 

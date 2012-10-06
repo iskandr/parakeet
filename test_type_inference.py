@@ -19,16 +19,16 @@ def call_add1(x):
   return add1(x)
 
 def test_add1():
-  expect_type(add1, [Int32], Int32)
-  expect_type(add1, [Bool], UInt8)
+  expect_type(add1, [Int32], Int64)
+  expect_type(add1, [Bool], Int64)
   expect_type(add1, [Int64], Int64)
-  expect_type(add1, [Float32], Float32)
+  expect_type(add1, [Float32], Float64)
 
 def test_call_add1():
-  expect_type(call_add1, [Int32], Int32) 
-  expect_type(call_add1, [Float32], Float32)
-  expect_type(call_add1, [Bool], UInt8)
-  expect_type(add1, [Float32], Float32)
+  expect_type(call_add1, [Int32], Int64) 
+  expect_type(call_add1, [Float32], Float64)
+  expect_type(call_add1, [Bool], Int64)
+  expect_type(add1, [Float32], Float64)
   
 def branch_return(b):
   if b:
@@ -37,7 +37,7 @@ def branch_return(b):
     return 1.0
   
 def test_branch_return():
-  expect_type(branch_return, [Bool], Float16)
+  expect_type(branch_return, [Bool], Float64)
 
 def branch_assign(b):
   if b:
@@ -47,7 +47,7 @@ def branch_assign(b):
   return x
 
 def test_branch_assign():
-  expect_type(branch_assign, [Bool], Float16)
+  expect_type(branch_assign, [Bool], Float64)
   
 def incr_loop(init, count):
   x = init  
@@ -56,7 +56,7 @@ def incr_loop(init, count):
   return x
 
 def test_incr_loop():
-  expect_type(incr_loop, [Int32, Int32], Int32)
+  expect_type(incr_loop, [Int32, Int32], Int64)
   expect_type(incr_loop, [Float64, Int32], Float64)
   
 

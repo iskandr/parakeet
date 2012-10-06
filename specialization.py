@@ -259,6 +259,7 @@ def rewrite_typed(fn, old_type_env):
       
     if expr.type == t:
       return expr
+    
     elif isinstance(expr, syntax.Tuple):
       if not isinstance(t, ptype.TupleT) or len(expr.type.elt_types) != t.elt_types:
         raise ptype.IncompatibleTypes(expr.type, t)
