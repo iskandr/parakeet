@@ -16,6 +16,12 @@ def scalar_to_generic_value(x, t):
     # assume it's an integer
     return GenericValue.int(dtype_to_lltype(t.dtype), x)
   
+def python_to_generic_value(x, t):
+  if isinstance(t, ptype.ScalarT):
+    return scalar_to_generic_value(x,t)
+  elif isinstance(t, ptype.TupleT):
+    raise RuntimeError("I CAN HAZ TUPLE?")
+  
 def generic_value_to_scalar(gv, t):
   assert isinstance(t, ptype.ScalarT), "Expected %s to be scalar" % t
   if isinstance(t, ptype.IntT):
@@ -25,29 +31,18 @@ def generic_value_to_scalar(gv, t):
     x = gv.as_real(dtype_to_lltype(t.dtype))
   return t.dtype.type(x)
   
-  #if isinstance(x, int) or isinstance(x, long):
-  #  return gv.int(int64_t, x)
-  #elif isinstance(x, float):
-  #  return gv.real(float64_t, x)
-  #elif isinstance(x, bool):
-  #  return gv.int(int8_t, x)
-  # if it's a numpy scalar integer
-  #elif isinstance(x, np.integer):
-  #  return gv.int(dtype_to_lltype(x.dtype()), x)
-  #elif isinstance(x, np.floating):
-  #  return gv.real(dtype_to_lltype(x.dtype()), x)
-  #else:
-  #  raise RuntimeError("Don't know how to convert value " + str(x))
-"""
-# Given a list of Python values, return a list of generic values
-# which will be understood by the LLVM execution engine
-# The returned list might possibly be longer since array arguments
-# are passed in as the data pointer followed by shape and strides pointers
-#def convert_args_to_generic_values(python_values):
-"""
 
-#def make_tuple_buffer(elts):
-#  n = len(elts)
-#  arr = np.zeros(n, dtype=np.int64)
-#  for i in xrange(n):
-    
+def generic_value_to_python(gv, t):
+  if isinstance(t, ptype.ScalarT):
+    return generic_value_to_scalar(gv, t)
+  addr = gv.as_pointer()
+   
+  if isinstance(t, ptype.TupleT):
+    elts = []
+    for elt_t in t.elt_types:
+      elt_ptr = addr 
+      elt_gv = GenericValue.pointer(elt_ptr)
+      elts.append(generic_value_to_python(elt_gv, elt_t))
+    return tuple(elts)
+  else:
+    raise RuntimeError("Don't know how to convert values of %s to python" % t)

@@ -182,7 +182,11 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     
     def translate_Num():
       return syntax.Const(expr.n)
-    
+
+    def translate_Tuple():
+      elts = map(translate_expr, expr.elts)
+      return syntax.Tuple(elts)
+
     def translate_IfExp():
       temp1, temp2, result = \
          map(env.fresh_var, ["if_true", "if_false", "if_result"])
@@ -193,6 +197,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       if_stmt = syntax.If(cond, true_block, false_block, merge) 
       env.current_block().append(if_stmt)
       return result
+    
+      
     
     if isinstance(expr, ast.Name):
       # name is a special case since its translation function needs to be accessed

@@ -79,6 +79,9 @@ def _infer_types(fn, arg_types):
       else:
         raise names.NameNotFound(expr.name)
     
+    def expr_Tuple():
+      return ptype.TupleT(map(expr_type, expr.elts))
+    
     def expr_Const():
       return ptype.type_of_value(expr.value)
     
@@ -201,6 +204,7 @@ def rewrite_typed(fn, old_type_env):
     
     def rewrite_Const():
       return syntax.Const(expr.value, type = ptype.type_of_value(expr.value))
+    
     
     def rewrite_PrimCall():
       # TODO: This awkwardly infers the types we need to cast args up to

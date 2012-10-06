@@ -25,9 +25,15 @@ def const(python_scalar, parakeet_type):
     return llcore.Constant.int(llvm_type, python_scalar)
 
 def int32(x):
+  """Make LLVM constants of type int32"""
   return const(x, ptype.Int32)
 
 def init_llvm_vars(fundef, llvm_fn, builder):
+  """
+  Create a mapping from variable names to stack locations,  
+  these will later be converted to SSA variables by the mem2reg pass
+  """
+  
   env = {}  
   for (name, t) in fundef.type_env.iteritems():
     llvm_t = llvm_ref_type(t)
@@ -75,8 +81,6 @@ def compile_fn(fundef):
   _, start_builder = new_block("entry")
   env = init_llvm_vars(fundef, llvm_fn, start_builder)
   
-
-
   
   def compile_expr(expr, builder):
     
@@ -92,6 +96,15 @@ def compile_fn(fundef):
     def compile_Cast():
       llvm_value = compile_expr(expr.value, builder)
       return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
+    
+    def compile_Tuple():
+      llvm_elts = [compile_expr(elt, builder) for elt in expr.elts]
+      llvm_tuple_t = llvm_value_type(expr.type)
+      tuple_object = builder.malloc(llvm_tuple_t)
+      for (i, llvm_elt)  in enumerate(llvm_elts):
+        elt_ptr = builder.gep(tuple_object, [int32(0), int32(i)])
+        builder.store(llvm_elt, elt_ptr)
+      return tuple_object 
     
     def compile_Closure():
       # allocate a length 3 array

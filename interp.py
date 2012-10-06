@@ -22,7 +22,8 @@ def eval_fn(fn, *args):
   assert n_expected == n_given , \
     "Expected %d args, given %d: %s" % (n_expected, n_given, args)
   env = match_list(fn.args, args)  
-  def eval_expr(expr):    
+  def eval_expr(expr): 
+    assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    
     def expr_Const():
       return expr.value
     
@@ -61,7 +62,10 @@ def eval_fn(fn, *args):
       assert isinstance(t, ptype.ScalarT)
       # use numpy's conversion function 
       return t.dtype.type(x)
-
+    
+    def expr_Tuple():
+      return tuple(map(eval_expr, expr.elts))
+    
     return dispatch(expr, 'expr')
       
   def eval_merge_left(phi_nodes):
