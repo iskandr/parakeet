@@ -317,8 +317,15 @@ class ClosureSet(Type):
 
   
 def type_of_scalar(x):
-  return from_dtype(np.min_scalar_type(x))
- 
+  if isinstance(x, bool):
+    return Bool 
+  elif isinstance(x, (int, long)):
+    return Int64
+  elif isinstance(x, float):
+    return Float64
+  else:
+    raise RuntimeError("Unsupported scalar type: %s" % x)
+  
 def type_of_value(x):
   if np.isscalar(x):
     return type_of_scalar(x)

@@ -72,7 +72,7 @@ def count_loop(init, count):
   return x
  
 def test_count_loop():
-  expect(count_loop, [0, 2], 2)
+  expect(count_loop, [0, 10**9], 10**9 )
   expect(count_loop, [0.0, 2], 2.0)
  
 def if_true():

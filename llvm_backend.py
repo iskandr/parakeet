@@ -14,29 +14,23 @@ from function_registry import typed_functions
 
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
-from llvm_state import global_module, ClosureSignatures
+from llvm_state import global_module, ClosureSignatures, global_fpm 
 from llvm_compiled_fn import CompiledFn
 import llvm_prims 
  
 
 
-def const(python_scalar, parakeet_type = None):
-  if parakeet_type is None:
-    if isinstance(python_scalar, int):
-      parakeet_type = ptype.Int32
-    elif isinstance(python_scalar, float):
-      parakeet_type = ptype.Float32
-    elif isinstance(python_scalar, bool):
-      parakeet_type = ptype.Bool
-    else:
-      raise RuntimeError("Don't know how to create LLVM constant from %s" % python_scalar)
+def const(python_scalar, parakeet_type):
   assert isinstance(parakeet_type, ptype.ScalarT)
   llvm_type = llvm_value_type(parakeet_type)
   if isinstance(parakeet_type, ptype.FloatT):
     return llcore.Constant.real(llvm_type, python_scalar)
   else:
     return llcore.Constant.int(llvm_type, python_scalar)
-  
+
+def int32(x):
+  return const(x, ptype.Int32)
+
 def init_llvm_vars(fundef, llvm_fn, builder):
   env = {}  
   for (name, t) in fundef.type_env.iteritems():
@@ -108,7 +102,7 @@ def compile_fn(fundef):
       llvm_closure_t = llvm_value_type(closure_t)
       closure_object =  builder.malloc(llvm_closure_t, "closure_object")
       print "malloc closure", closure_object
-      id_slot = builder.gep(closure_object, [const(0), const(0)], "closure_id_slot")
+      id_slot = builder.gep(closure_object, [int32(0), int32(0)], "closure_id_slot")
       print "get id slot", id_slot
       closure_num = ClosureSignatures.get_id(closure_t)
       store = builder.store(const(closure_num, ptype.Int64), id_slot)
@@ -141,7 +135,7 @@ def compile_fn(fundef):
         
       llvm_closure_args = []
       
-      closure_args_slot = builder.gep(closure_object, [const(0), const(1)], "closure_args_slot")
+      closure_args_slot = builder.gep(closure_object, [int32(0), int32(1)], "closure_args_slot")
       closure_args_array = builder.load(closure_args_slot, "closure_args")
       for (closure_arg_idx, _) in enumerate(closure_t.args):
         arg_ptr = builder.gep(closure_args_array, [const(closure_arg_idx)], "closure_arg%d_ptr" % closure_arg_idx)
@@ -185,7 +179,7 @@ def compile_fn(fundef):
           instr = llvm_prims.signed_binops[prim]
         elif isinstance(t, ptype.UnsignedT):
           instr = llvm_prims.unsigned_binops[prim]  
-        return getattr(builder, instr)(*llvm_args)
+        return getattr(builder, instr)(name = "%s_result" % prim.name, *llvm_args)
       else:
         assert False, "UNSUPPORTED PRIMITIVE: %s" % expr 
      
@@ -296,6 +290,12 @@ def compile_fn(fundef):
     return builder, False
 
   compile_block(fundef.body, start_builder)
+  # optimize the generated code 
+  for _ in range(5): 
+    global_fpm.run(llvm_fn)
+  
   result = CompiledFn(llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
+  print result.llvm_fn  
+  
   return result 

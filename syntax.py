@@ -37,7 +37,7 @@ class Const(Expr):
   _members = ['value']
   
   def __repr__(self):
-    return repr(self.value)
+    return "const(%s : %s)" % (self.value, self.type)
   
   def __str__(self):
     return repr(self)
