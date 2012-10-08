@@ -2,7 +2,7 @@
 # Copied from Russel's TreeLike but siginificantly 
 # stripped down to fit in my underpowered brain 
 
-import logging 
+#import logging 
 
 __member_cache = {}
 def all_members(tree):
@@ -39,11 +39,10 @@ class Node(object):
       if not k in all_members(self):
         raise Exception('Keyword argument %s not recognized for %s: %s', k, self.node_type(), all_members(self))
       setattr(self, k, v)
-      
-    self.finalize_init()
-    
-  def finalize_init(self):
-    pass
+     
+    for C in reversed(self.__class__.mro()):
+      if 'finalize_init' in C.__dict__:
+        C.finalize_init(self)
 
   def node_type(self):
     return self.__class__.__name__

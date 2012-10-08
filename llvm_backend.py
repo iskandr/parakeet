@@ -98,10 +98,12 @@ def compile_fn(fundef):
       return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
     
     def compile_Tuple():
-      llvm_elts = [compile_expr(elt, builder) for elt in expr.elts]
+      
       llvm_tuple_t = llvm_value_type(expr.type)
-      tuple_object = builder.malloc(llvm_tuple_t)
-      for (i, llvm_elt)  in enumerate(llvm_elts):
+      
+      tuple_object = builder.alloca(llvm_tuple_t)
+      for (i, elt)  in enumerate(expr.elts):
+        llvm_elt = compile_expr(elt, builder)
         elt_ptr = builder.gep(tuple_object, [int32(0), int32(i)])
         builder.store(llvm_elt, elt_ptr)
       return tuple_object 
@@ -307,6 +309,6 @@ def compile_fn(fundef):
   
   result = CompiledFn(llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
-  #print result.llvm_fn  
+  print result.llvm_fn  
   
   return result 
