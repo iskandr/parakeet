@@ -3,6 +3,7 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 import ptype 
 import numpy as np 
+import ctypes 
 
 void_t = lltype.void()
 int1_t = lltype.int(1)
@@ -10,6 +11,7 @@ int8_t = lltype.int(8)
 int16_t = lltype.int(16)
 int32_t = lltype.int(32)
 int64_t = lltype.int(64)
+
 float32_t = lltype.float()
 float64_t = lltype.double()
 
@@ -17,7 +19,39 @@ ptr_int8_t = lltype.pointer(int8_t)
 ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
+  
+ctypes_scalars_to_llvm_types = {
+  ctypes.c_bool : int1_t, 
+  ctypes.c_int8 : int8_t,
+  ctypes.c_int16 : int16_t, 
+  ctypes.c_int32 : int32_t, 
+  ctypes.c_int64 : int64_t,
+  ctypes.c_float : float32_t,
+  ctypes.c_double : float64_t, 
+}
+
+_struct_cache = {}
+def ctypes_struct_to_lltype(S):
+  key = tuple(S._fields_)
+  if key in _struct_cache:
+    return _struct_cache[key]
+  else:
+    llvm_field_types = []
+    for (_, field_type) in S._fields_:
+      llvm_field_types.append(ctypes_to_lltype(field_type))
+    return lltype.struct(llvm_field_types, S.__class__.__name__)
     
+    
+    
+def ctypes_to_lltype(ct):
+  if isinstance(ct, ctypes.Structure):
+    return ctypes_struct_to_lltype(ct)
+  elif isinstance(ct, ctypes.POINTER):
+    return lltype.ptr(ctypes_to_lltype(ct._type_))
+  else:
+    assert ct in ctypes_scalars_to_llvm_types
+    return ctypes_scalars_to_llvm_types[ct]
+
 dtype_to_llvm_types = {
   np.dtype('bool') : int1_t, 
   np.dtype('int8') : int8_t,
