@@ -26,7 +26,7 @@ class LLVM_Context:
         self.pass_manager.add(p)
     if verify:
       self.pass_manager.add("verify")
-  
+      
   def run_passes(self, llvm_fn, n_iters = 3):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)

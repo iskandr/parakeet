@@ -28,30 +28,51 @@ def int32(x):
   """Make LLVM constants of type int32"""
   return const(x, ptype.Int32)
 
-def init_llvm_vars(fundef, llvm_fn, builder):
+def init_llvm_vars(fundef, llvm_fn, builder, sret = True):
   """
   Create a mapping from variable names to stack locations,  
-  these will later be converted to SSA variables by the mem2reg pass
+  these will later be converted to SSA variables by the mem2reg pass.
+   
+  The optional arg 'sret' controls whether we expect the destination
+  for the returned value to be explicitly passed in as the first arg.
   """
   
-  env = {}  
+    # the first arg of the llvm_fn should be the return value 
+  
+  if sret:
+    n_expected = len(fundef.args) + 1
+  else:
+    n_expected = len(fundef.args)
+  assert len(llvm_fn.args) == n_expected
+  
+  env = {}
+  if sret:
+    return_arg = llvm_fn.args[0]
+    return_arg.name = "return_dest"
+    return_arg.add_attribute(llcore.ATTR_STRUCT_RET)
+    env["$return"] = return_arg
+      
   for (name, t) in fundef.type_env.iteritems():
     llvm_t = llvm_ref_type(t)
     stack_val = builder.alloca(llvm_t, name)
     env[name] = stack_val 
-
-  for llvm_arg, parakeet_arg in zip(llvm_fn.args, fundef.args):
+  
+  if sret:
+    llvm_inputs = llvm_fn.args[1:]
+  else:
+    llvm_inputs = llvm_fn.args
+  for llvm_arg, parakeet_arg in zip(llvm_inputs, fundef.args):
     if isinstance(parakeet_arg, str):
       name = parakeet_arg
     elif isinstance(parakeet_arg, syntax.Var):
       name = parakeet_arg.name
     else:
       assert False, "Tuple arg patterns not yet implemented"
+    print name, llvm_arg, llvm_arg.type 
     llvm_arg.name = name
     # store the value of the input in the stack value we've already allocated
     # for the input var 
     builder.store(llvm_arg, env[name])
-     
 
   # tell the builder to start inserting 
   return env 
@@ -63,14 +84,17 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   
+  print "Compiling", fundef.name 
   # contexts bundle together the module and pass manager
   # just be sure to use the same context when you register
   # the function and run optimizations! 
   context = llvm_context.opt_context
   
+  # calling convention for parakeet function is to pass in a pointer 
+  # to the preallocated return value 
   llvm_input_types = map(llvm_ref_type, fundef.input_types)
-  llvm_output_type = llvm_ref_type(fundef.return_type)
-  llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
+  llvm_output_type = lltype.pointer(llvm_value_type(fundef.return_type))   
+  llvm_fn_t = lltype.function(llvm_types.void_t, [llvm_output_type] + llvm_input_types)
   llvm_fn = context.module.add_function(llvm_fn_t, fundef.name)
     
   def new_block(name):
@@ -127,6 +151,8 @@ def compile_fn(fundef):
       return closure_object  
     
     def compile_Invoke():
+      print "INVOKE_START"
+      
       closure_object = compile_expr(expr.closure, builder)
 
       arg_types = [arg.type for arg in expr.args] 
@@ -157,11 +183,17 @@ def compile_fn(fundef):
         arg = builder.load(arg_ptr, "closure_arg%d" % closure_arg_idx)
         llvm_closure_args.append(arg)
       
-      full_args_list = llvm_closure_args + [compile_expr(arg, builder) for arg in expr.args]
-      assert len(full_args_list) == len(full_arg_types)  
-      call =  builder.call(target_fn, full_args_list, "invoke_result")
-      # print "Call", call 
-      return call 
+      invoke_result_ptr = builder.alloca(llvm_value_type(expr.type), "invoke_result_ptr")
+      llvm_direct_args = [compile_expr(arg, builder) for arg in expr.args]
+      full_args_list = [invoke_result_ptr] + llvm_closure_args + llvm_direct_args 
+      assert len(full_args_list) == (len(full_arg_types) + 1)  
+
+      print "pre-call"
+      builder.call(target_fn, full_args_list)
+      print "done with call"
+      invoke_result_value = builder.load(invoke_result_ptr)
+      print "done with load"
+      return invoke_result_value 
     
     def compile_PrimCall():
       prim = expr.prim
@@ -220,6 +252,7 @@ def compile_fn(fundef):
        
     
   def compile_stmt(stmt, builder):
+    print ">> ", stmt 
     """Translate an SSA statement into llvm. Every translation
     function returns a builder pointing to the end of the current 
     basic block and a boolean indicating whether every branch of 
@@ -260,8 +293,13 @@ def compile_fn(fundef):
       return after_builder, False 
  
     elif isinstance(stmt, syntax.Return):
-      builder.ret(compile_expr(stmt.value, builder))
+      ret_val = compile_expr(stmt.value, builder)
+      print "dest:", env["$return"]
+      print "src:", ret_val 
+      builder.store(ret_val, env["$return"])
+      builder.ret_void()
       return builder, True 
+    
     elif isinstance(stmt, syntax.If):
       cond = compile_expr(stmt.cond, builder)
       
