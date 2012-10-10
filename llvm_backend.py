@@ -2,12 +2,13 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-import ptype
+from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32
+from struct_types import ClosureT 
+ 
 import prims 
 import syntax
 from common import dispatch  
-from function_registry import typed_functions, ClosureSignatures 
-
+from function_registry import typed_functions
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
 import llvm_context 
@@ -17,16 +18,16 @@ import llvm_prims
 
 
 def const(python_scalar, parakeet_type):
-  assert isinstance(parakeet_type, ptype.ScalarT)
+  assert isinstance(parakeet_type, ScalarT)
   llvm_type = llvm_value_type(parakeet_type)
-  if isinstance(parakeet_type, ptype.FloatT):
+  if isinstance(parakeet_type, FloatT):
     return llcore.Constant.real(llvm_type, python_scalar)
   else:
     return llcore.Constant.int(llvm_type, python_scalar)
 
 def int32(x):
   """Make LLVM constants of type int32"""
-  return const(x, ptype.Int32)
+  return const(x, Int32)
 
 def init_llvm_vars(fundef, llvm_fn, builder, sret = True):
   """
@@ -117,14 +118,14 @@ def compile_fn(fundef):
       val = builder.load(ref, expr.name + "_val")
       return val 
     def compile_Const():
-      assert isinstance(expr.type, ptype.ScalarT)
+      assert isinstance(expr.type, ScalarT)
       return const(expr.value, expr.type)
     
     def compile_Cast():
       llvm_value = compile_expr(expr.value, builder)
       return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
     
-      
+    """  
     def compile_Tuple():
     
       llvm_tuple_t = llvm_value_type(expr.type)
@@ -142,27 +143,43 @@ def compile_fn(fundef):
       # - the second element is array partially applied arguments
       
       closure_t = expr.type
-      assert isinstance(closure_t, ptype.ClosureT)
+      assert isinstance(closure_t, ClosureT)
       llvm_closure_t = llvm_value_type(closure_t)
       closure_object =  builder.malloc(llvm_closure_t, "closure_object")
       #print "malloc closure", closure_object
       id_slot = builder.gep(closure_object, [int32(0), int32(0)], "closure_id_slot")
       #print "get id slot", id_slot
       closure_num = ClosureSignatures.get_id(closure_t)
-      builder.store(const(closure_num, ptype.Int64), id_slot)
+      builder.store(const(closure_num, Int64), id_slot)
        
       assert len(closure_t.args) == 0, "Code generation for closure args not yet implemented"
       return closure_object  
+    """
+    def compile_Struct():
+      llvm_struct_t = llvm_value_type(expr.type)
+      print llvm_struct_t
+      name = str(expr.type.node_type()) + "_struct"
+      struct_object = builder.alloca(llvm_struct_t, name)
+      print struct_object
+      for (i, elt)  in enumerate(expr.args):
+        llvm_elt = compile_expr(elt, builder)
+        print llvm_elt 
+        elt_ptr = builder.gep(struct_object, [int32(0), int32(i)])
+        print elt_ptr
+        store = builder.store(llvm_elt, elt_ptr)
+        print store 
+      return struct_object
     
     def compile_Invoke():
       print "INVOKE_START"
+      closure_t = expr.closure.type
+      assert isinstance(closure_t, ClosureT)
+      arg_types = [arg.type for arg in expr.args] 
       
       closure_object = compile_expr(expr.closure, builder)
 
-      arg_types = [arg.type for arg in expr.args] 
       
-      closure_t = expr.closure.type
-      assert isinstance(closure_t, ptype.ClosureT)
+
       
       #closure_id_slot = builder.gep(llvm_closure_object, [const(0), const(0)], "closure_id_slot")
       #actual_closure_id = builder.load(closure_id_slot)
@@ -180,10 +197,8 @@ def compile_fn(fundef):
         
       llvm_closure_args = []
       
-      closure_args_slot = builder.gep(closure_object, [int32(0), int32(1)], "closure_args_slot")
-      closure_args_array = builder.load(closure_args_slot, "closure_args")
       for (closure_arg_idx, _) in enumerate(closure_t.args):
-        arg_ptr = builder.gep(closure_args_array, [const(closure_arg_idx)], "closure_arg%d_ptr" % closure_arg_idx)
+        arg_ptr = builder.gep(closure_object, [int32(0), int32(closure_arg_idx)], "closure_arg%d_ptr" % closure_arg_idx)
         arg = builder.load(arg_ptr, "closure_arg%d" % closure_arg_idx)
         llvm_closure_args.append(arg)
       
@@ -195,7 +210,7 @@ def compile_fn(fundef):
       print "pre-call"
       builder.call(target_fn, full_args_list)
       print "done with call"
-      invoke_result_value = builder.load(invoke_result_ptr)
+      invoke_result_value = builder.load(invoke_result_ptr, 'invoke_result')
       print "done with load"
       return invoke_result_value 
     
@@ -213,22 +228,22 @@ def compile_fn(fundef):
       
       if isinstance(prim, prims.Cmp):
         x, y = llvm_args 
-        if isinstance(t, ptype.FloatT):
+        if isinstance(t, FloatT):
           cmp_op = llvm_prims.float_comparisons[prim]
           return builder.fcmp(cmp_op, x, y, result_name)
-        elif isinstance(t, ptype.SignedT):
+        elif isinstance(t, SignedT):
           cmp_op = llvm_prims.signed_int_comparisons[prim]
           return builder.icmp(cmp_op, x, y, result_name)
         else:
-          assert isinstance(t, ptype.UnsignedT), "Unexpected type: %s" % t
+          assert isinstance(t, UnsignedT), "Unexpected type: %s" % t
           cmp_op = llvm_prims.unsigned_int_comparisons[prim]
           return builder.icmp(cmp_op, x, y, result_name)
       elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
-        if isinstance(t, ptype.FloatT):
+        if isinstance(t, FloatT):
           instr = llvm_prims.float_binops[prim]
-        elif isinstance(t, ptype.SignedT):
+        elif isinstance(t, SignedT):
           instr = llvm_prims.signed_binops[prim]
-        elif isinstance(t, ptype.UnsignedT):
+        elif isinstance(t, UnsignedT):
           instr = llvm_prims.unsigned_binops[prim]  
         return getattr(builder, instr)(name = "%s_result" % prim.name, *llvm_args)
       else:
@@ -266,12 +281,14 @@ def compile_fn(fundef):
     if isinstance(stmt, syntax.Assign):
       
       ref = get_ref(stmt.lhs)
+
       value = compile_expr(stmt.rhs, builder)
-      #print "ASSIGN"
-      #print "LHS %s : %s" % (ref, ref.type)
-      #print "RHS %s : %s" % (value, value.type)
+      print "ASSIGN"
+      print "LHS %s : %s" % (ref, ref.type)
+      print "RHS %s : %s" % (value, value.type)
+      
       builder.store(value, ref)
-       
+
       return builder, False 
     elif isinstance(stmt, syntax.While):
       # current flow ----> loop --------> exit--> after  
@@ -307,6 +324,7 @@ def compile_fn(fundef):
     elif isinstance(stmt, syntax.If):
       cond = compile_expr(stmt.cond, builder)
       
+      
       # compile the two possible branches as distinct basic blocks
       # and then wire together the control flow with branches
       true_bb, true_builder = new_block("if_true")
@@ -318,7 +336,7 @@ def compile_fn(fundef):
       # did both branches end in a return? 
       both_always_return = true_always_returns and false_always_returns 
 
-      builder.cbranch(cond, true_bb, false_bb)
+      builder.cbranch(llvm_types.convert_to_bit(cond, builder), true_bb, false_bb)
       # compile phi nodes as assignments and then branch
       # to the continuation block 
       compile_merge_left(stmt.merge, true_builder)

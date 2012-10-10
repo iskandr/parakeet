@@ -8,6 +8,7 @@ def create_simple_transform(transform_expr):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():
       result[k] = (transform_expr(left), transform_expr(right))
+    return result 
   
   def transform_stmt(stmt):
     
@@ -55,10 +56,11 @@ def make_structs_explicit(fundef):
       closure_id_node = syntax.Const(closure_id, type = ptype.Int64)
       return syntax.Struct([closure_id_node] + closure_args, type = expr.type)
     
-    dispatch(expr, 'transform', default = lambda expr: expr)
+    return dispatch(expr, 'transform', default = lambda expr: expr)
   
   transform_block = create_simple_transform(transform_expr)
   body = transform_block(fundef.body)
-  
-  return fundef.clone(body = body)
-  
+  import copy 
+  fundef2 = copy.deepcopy(fundef)
+  fundef2.body = body 
+  return fundef2 
