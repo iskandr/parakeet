@@ -3,7 +3,8 @@
 # stripped down to fit in my underpowered brain 
 
 #import logging 
-
+import copy 
+    
 __member_cache = {}
 def all_members(tree):
   'Walk through classes in mro order, accumulating member names.'
@@ -46,6 +47,14 @@ class Node(object):
 
   def node_type(self):
     return self.__class__.__name__
+  
+  def clone(self, **kwds):
+
+    cloned = copy.deepcopy(self)
+    for (k,v) in kwds.values():
+      setattr(cloned, k, v)
+    return cloned 
+    
   
   def __str__(self):
     members = ["%s = %s" % (m, getattr(self, m)) for m in all_members(self)]

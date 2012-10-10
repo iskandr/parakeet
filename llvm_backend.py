@@ -85,6 +85,9 @@ def compile_fn(fundef):
     return compiled_functions[fundef.name]
   
   print "Compiling", fundef.name 
+  
+  import transforms
+  fundef = transforms.make_structs_explicit(fundef)
   # contexts bundle together the module and pass manager
   # just be sure to use the same context when you register
   # the function and run optimizations! 
@@ -121,8 +124,9 @@ def compile_fn(fundef):
       llvm_value = compile_expr(expr.value, builder)
       return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
     
-    def compile_Tuple():
       
+    def compile_Tuple():
+    
       llvm_tuple_t = llvm_value_type(expr.type)
       
       tuple_object = builder.alloca(llvm_tuple_t)
@@ -130,7 +134,7 @@ def compile_fn(fundef):
         llvm_elt = compile_expr(elt, builder)
         elt_ptr = builder.gep(tuple_object, [int32(0), int32(i)])
         builder.store(llvm_elt, elt_ptr)
-      return tuple_object 
+      return tuple_object
     
     def compile_Closure():
       # allocate a length 3 array

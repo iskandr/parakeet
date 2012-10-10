@@ -99,7 +99,16 @@ class Call(Expr):
   should be a global fn name and not a closure
   """
   _members = ['fn', 'args']
-  
+
+
+class Struct(Expr):
+  """
+  Eventually all non-scalar data should be transformed to be created 
+  with this syntax node, signifying explicit struct allocation
+  """
+  _members = ['args']
+
+
 class Fn(Node):
   """
   Function definition
@@ -111,6 +120,9 @@ class TypedFn(Node):
   which have been extended with a 'type' attribute
   """
   _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
+
+
+  
       
 class Traversal:
   def visit_block(self, block, *args, **kwds):

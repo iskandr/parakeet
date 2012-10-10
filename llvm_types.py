@@ -42,11 +42,12 @@ def ctypes_struct_to_lltype(S):
     return lltype.struct(llvm_field_types, S.__class__.__name__)
     
     
-    
+
+ctypes_pointer_class = type(ctypes.POINTER(ctypes.c_int32))
 def ctypes_to_lltype(ct):
   if isinstance(ct, ctypes.Structure):
     return ctypes_struct_to_lltype(ct)
-  elif isinstance(ct, ctypes.POINTER):
+  elif isinstance(ct, ctypes_pointer_class):
     return lltype.ptr(ctypes_to_lltype(ct._type_))
   else:
     assert ct in ctypes_scalars_to_llvm_types
@@ -70,18 +71,18 @@ dtype_to_llvm_types = {
 def dtype_to_lltype(dt):
   return dtype_to_llvm_types[dt]
 
-tuple_struct_cache = {}
+#tuple_struct_cache = {}
 
-def tuple_type(parakeet_elt_types):
-  parakeet_elt_types = tuple(parakeet_elt_types)
-  if parakeet_elt_types in tuple_struct_cache:
-    return tuple_struct_cache[parakeet_elt_types]
-  else:  
-    n = len(parakeet_elt_types)
-    llvm_elt_types = [llvm_ref_type(t) for t in parakeet_elt_types]
-    llvm_t = lltype.struct(llvm_elt_types, "tuple%d" % n)
-    tuple_struct_cache[parakeet_elt_types] = llvm_t
-    return llvm_t
+#def tuple_type(parakeet_elt_types):
+#  parakeet_elt_types = tuple(parakeet_elt_types)
+#  if parakeet_elt_types in tuple_struct_cache:
+#    return tuple_struct_cache[parakeet_elt_types]
+#  else:  
+#    n = len(parakeet_elt_types)
+#    llvm_elt_types = [llvm_ref_type(t) for t in parakeet_elt_types]
+#    llvm_t = lltype.struct(llvm_elt_types, "tuple%d" % n)
+#    tuple_struct_cache[parakeet_elt_types] = llvm_t
+#    return llvm_t
 
 # unlike conventional closures, we don't carry around a function pointer 
 # but rather call different typed specializations in different argument-type contexts
@@ -90,28 +91,31 @@ def tuple_type(parakeet_elt_types):
 closure_id_t = int64_t
 opaque_closure_t = lltype.struct([closure_id_t, ptr_int8_t], "opaque_closure")
 
-def closure_type(parakeet_arg_types):
-  arg_tuple_t = tuple_type(parakeet_arg_types)
-  return lltype.struct([closure_id_t, lltype.pointer(arg_tuple_t)])
+#def closure_type(parakeet_arg_types):
+#  arg_tuple_t = tuple_type(parakeet_arg_types)
+#  return lltype.struct([closure_id_t, lltype.pointer(arg_tuple_t)])
+
 
 
 def llvm_value_type(t):
   if isinstance(t, ptype.ScalarT):
     return dtype_to_lltype(t.dtype)
-  elif isinstance(t, ptype.TupleT):
-    return tuple_type(t.elt_types)
+  #elif isinstance(t, ptype.TupleT):
+  #  return tuple_type(t.elt_types)
     
-  elif isinstance(t, ptype.ClosureT):
-    return closure_type(t.args)
+  #elif isinstance(t, ptype.ClosureT):
+  #  return closure_type(t.args)
   
   elif isinstance(t, ptype.ClosureSet):
     return opaque_closure_t  
   else:
-    elt_t = dtype_to_lltype(t.dtype)
-    arr_t = lltype.pointer(elt_t)
+    return ctypes_struct_to_lltype(t.internal_repr)
+        
+#    elt_t = dtype_to_lltype(t.dtype)
+#    arr_t = lltype.pointer(elt_t)
     # arrays are a pointer to their data and
     # pointers to shape and strides arrays
-    return lltype.struct([arr_t, ptr_int64_t, ptr_int64_t])
+#    return lltype.struct([arr_t, ptr_int64_t, ptr_int64_t])
 
 def llvm_ref_type(t):
   llvm_value_t = llvm_value_type(t)

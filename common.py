@@ -1,5 +1,5 @@
 import sys
-def dispatch(node, prefix = "", locals_dict = None):
+def dispatch(node, prefix = "",  default = None, locals_dict = None):
   if locals_dict is None:
     last_frame = sys._getframe() 
     locals_dict = last_frame.f_back.f_locals
@@ -11,6 +11,8 @@ def dispatch(node, prefix = "", locals_dict = None):
 
   if fn_name in locals_dict:
     return locals_dict[fn_name]()
+  elif default:
+    return default(node)
   else:
     available = [k.split(prefix + "_")[1] for k in locals_dict.keys() if k.startswith(prefix + "_")]
     raise RuntimeError("Unsupported node type %s, available: %s" % (node_type, available))
