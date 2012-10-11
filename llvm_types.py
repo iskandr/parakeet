@@ -2,8 +2,8 @@
 import llvm.core as llcore 
 from llvm.core import Type as lltype
 from core_types import ScalarT, FloatT, BoolT, IntT, UnsignedT, SignedT
-from ctypes_repr import to_ctypes  
 import ctypes 
+import type_conv 
 
 void_t = lltype.void()
 int1_t = lltype.int(1)
@@ -20,7 +20,7 @@ ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
   
-ctypes_scalars_to_llvm_types = {
+_ctypes_scalars_to_llvm_types = {
   ctypes.c_bool : int1_t,
   
   ctypes.c_uint8 : int8_t,  
@@ -58,18 +58,22 @@ def ctypes_struct_to_lltype(S, name = None):
     
 
 ctypes_pointer_class = type(ctypes.POINTER(ctypes.c_int32))
+
+def ctypes_scalar_to_lltype(ct):
+  assert ct in _ctypes_scalars_to_llvm_types, "%s isn't a convertible to an LLVM scalar type" % ct 
+  return _ctypes_scalars_to_llvm_types[ct]
+
 def ctypes_to_lltype(ct, name = None):
   if isinstance(ct, ctypes.Structure):
     return ctypes_struct_to_lltype(ct, name)
   elif isinstance(ct, ctypes_pointer_class):
     return lltype.ptr(ctypes_to_lltype(ct._type_))
   else:
-    assert ct in ctypes_scalars_to_llvm_types
-    return ctypes_scalars_to_llvm_types[ct]
+    return ctypes_scalar_to_lltype(ct) 
 
 
 def llvm_value_type(t):
-  return ctypes_to_lltype(to_ctypes(t), t.node_type())
+  return ctypes_to_lltype(type_conv.ctypes_repr(t), t.node_type())
 
 def llvm_ref_type(t):
   llvm_value_t = llvm_value_type(t)

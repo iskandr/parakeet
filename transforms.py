@@ -1,7 +1,7 @@
 import syntax
 from common import dispatch 
 import closure_signatures
-import ptype 
+import core_types 
 
 def create_simple_transform(transform_expr):
   def transform_phi_nodes(phi_nodes):
@@ -13,7 +13,7 @@ def create_simple_transform(transform_expr):
   def transform_stmt(stmt):
     
     def transform_Assign():
-      # TODO: flatten tuple assignment
+      # TODO: flatten tuple assignmentptype
       assert isinstance(stmt.lhs, (str, syntax.Var)), "Pattern-matching assignment not implemented" 
       rhs = transform_expr(stmt.rhs)
       return syntax.Assign(stmt.lhs, rhs)
@@ -53,7 +53,7 @@ def make_structs_explicit(fundef):
     def transform_Closure():
       closure_args = map(transform_expr, expr.args)
       closure_id = closure_signatures.get_id(expr.type)
-      closure_id_node = syntax.Const(closure_id, type = ptype.Int64)
+      closure_id_node = syntax.Const(closure_id, type = core_types.Int64)
       return syntax.Struct([closure_id_node] + closure_args, type = expr.type)
     
     return dispatch(expr, 'transform', default = lambda expr: expr)

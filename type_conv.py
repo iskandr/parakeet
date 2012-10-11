@@ -1,4 +1,36 @@
-import ctypes_repr  
+import ctypes 
+import dtypes   
+
+_ctypes_cache = {}
+
+def ctypes_repr(parakeet_type):
+  if parakeet_type in _ctypes_cache:
+    return _ctypes_cache[parakeet_type]
+  
+  
+  if hasattr(parakeet_type, '_fields_'):
+    ctypes_fields = []
+    
+    for (field_name, parakeet_field_type) in parakeet_type._fields_:
+      pair = field_name, ctypes_repr(parakeet_field_type)
+      ctypes_fields.append(pair)
+
+    class Repr(ctypes.Structure):
+      _fields_ = ctypes_fields
+    Repr.__name__ = parakeet_type.node_type()
+    result = Repr 
+    
+  elif hasattr(parakeet_type, 'dtype'):
+    result = dtypes.to_ctypes(parakeet_type.dtype)
+    
+  else:
+    assert hasattr(parakeet_type, 'elt_type')
+    ctypes_elt_t = ctypes_repr(parakeet_type.elt_type)
+    result = ctypes.POINTER(ctypes_elt_t)
+    
+  _ctypes_cache[parakeet_type] = result
+  return result 
+  
  
 _typeof = {}
 def typeof(python_value):
@@ -15,7 +47,7 @@ def from_python(python_value):
   converter with the ctypes class and python value
   """
   parakeet_type = typeof(python_value)
-  ctypes_class = ctypes_repr.to_ctypes(parakeet_type)
+  ctypes_class = ctypes_repr(parakeet_type)
   python_type = type(python_value)
   converter = _from_python[python_type]
   return converter(ctypes_class, python_value)

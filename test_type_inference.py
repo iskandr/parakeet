@@ -1,5 +1,4 @@
 import ast_conversion 
-import ptype 
 from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
 import specialization 
 

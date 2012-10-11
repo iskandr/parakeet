@@ -1,5 +1,5 @@
 import numpy as np
-import ptype 
+import core_types  
 
 prim_lookup_by_value = {}
 
@@ -57,21 +57,25 @@ class Prim:
       self.nout = 1
     
 
-    self.type_table = {}
+    
     # for now only support ufuncs which describe their own type behavior 
     if hasattr(fn, 'types'):
-      "Primitive function %s doesn't supply type signatures" % self.name   
+      "Primitive function %s doesn't supply type signatures" % self.name
+      
+      self.type_table = {}   
       for signature in fn.types:
         # numpy type signatures look like 'ff->f' where each character
         # represents a single type 
-        arg_codes, result_code = signature.split('->') 
+        
+        arg_codes, result_code = signature.split('->')
         try:
-          input_types = tuple([ptype.from_char_code(c) for c in arg_codes])
-          result_type = ptype.from_char_code(result_code)
-          self.type_table[input_types] = result_type 
+          input_types = tuple([core_types.from_char_code(c) for c in arg_codes])
+        
+          result_type = core_types.from_char_code(result_code)
+          self.type_table[input_types] = result_type
         except:
-          pass 
-  
+          pass
+        
   def __call__(self, *args, **kwds):
     return self.fn(*args, **kwds)
   
@@ -84,7 +88,7 @@ class Prim:
     n_inputs = len(arg_types)
     assert n_inputs == self.nin, \
       "Incorrect number of argument types, expected %s but given %d" % (self.nin, n_inputs)
-    common_type = ptype.combine_type_list(arg_types)
+    common_type = core_types.combine_type_list(arg_types)
     return [common_type] * n_inputs 
   
   def result_type(self, arg_types):
@@ -94,7 +98,7 @@ class Prim:
     """
     key = tuple(arg_types)
     if key not in self.type_table:
-      raise RuntimeError("Primitives %s doesn't support input types %s"  % (self.name, arg_types))
+      raise RuntimeError("Primitives %s doesn't support input types %s || %s"  % (self.name, key, self.type_table))
     else:
       return self.type_table[key]
 
@@ -119,19 +123,7 @@ class Cmp(Prim):
   """Takes two arguments of any type, returns a boolean"""
   pass 
 
-class ArrayProp(Prim):
-  """Array properties: shape and strides, return tuples of ints"""
-  def required_input_types(self, arg_types):
-    assert len(arg_types) == 1
-    t = arg_types[0]
-    assert isinstance(t, ptype.Array)
-    return [t]
-  def result_type(self, arg_types):
-    t = arg_types[0]
-    # by default we're using ArrayProp for shape & strides, which 
-    # return tuples of ints with as many elements as array dims 
-    return ptype.Tuple([ptype.Int64] * t.rank)
-  
+
 sqrt = Float(np.sqrt)
 log = Float(np.log)
 sqrt = Float(np.sqrt) 
@@ -169,6 +161,6 @@ less_equal = Cmp(np.less_equal, 'LtE')
 greater = Cmp(np.greater, 'Gt')
 greater_equal = Cmp(np.greater_equal, 'GtE')
 
-shape = ArrayProp(np.shape)
-strides = ArrayProp(lambda x: x.strides, name="strides") 
+#shape = ArrayProp(np.shape)
+#strides = ArrayProp(lambda x: x.strides, name="strides") 
   
