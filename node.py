@@ -42,8 +42,8 @@ class Node(object):
       setattr(self, k, v)
      
     for C in reversed(self.__class__.mro()):
-      if 'finalize_init' in C.__dict__:
-        C.finalize_init(self)
+      if 'node_init' in C.__dict__:
+        C.node_init(self)
 
   def node_type(self):
     return self.__class__.__name__

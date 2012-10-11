@@ -1,6 +1,6 @@
 import ast_conversion 
 import ptype 
-from ptype import UInt8, Int8, Int32, Int64, Float16, Float32, Float64, Bool
+from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
 import specialization 
 
 

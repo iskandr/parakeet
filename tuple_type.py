@@ -57,27 +57,21 @@ def make_tuple_type(elt_types):
     return t
   
 
-def to_ctypes(self, python_tuple):
-  assert isinstance(python_tuple, tuple)
-  
-  
-  assert len(python_tuple) == len(self.elt_types)
-    
-  converted_elts = []
-  for (elt_type, elt_value) in zip(self.elt_types, python_tuple):
-    converted_elts.append( elt_type.to_ctypes(elt_value) )
-      
-  ctypes_struct_t = ctypes_repr.to_ctypes()
-  assert len(self.ctypes_repr._fields_) == len(converted_elts)
-  return self.ctypes_repr(*converted_elts)
-  
-def from_ctypes(self, struct):
+import type_conv 
+
+def typeof(python_tuple):
+  return make_tuple_type(map(type_conv.typeof, python_tuple))
+
+def from_python(struct_repr, python_tuple):  
+  converted_elts = [type_conv.from_python(elt) for elt in python_tuple]
+  return struct_repr(*converted_elts)
+
+def to_python(struct_obj, parakeet_type):
   python_elt_values = []
-  for (i, elt_t) in enumerate(self.elt_types):
-    field_name = "elt%d" % i
-    internal_field_value = getattr(struct, field_name)
-    python_elt_value = elt_t.from_ctypes(internal_field_value)
+  for (field_name, elt_t) in parakeet_type._fields_:
+    internal_field_value = getattr(struct_obj, field_name)
+    python_elt_value = type_conv.to_python(internal_field_value, elt_t)
     python_elt_values.append(python_elt_value)
   return tuple(python_elt_values)
 
- 
+type_conv.register(tuple, TupleT, typeof, from_python, to_python)

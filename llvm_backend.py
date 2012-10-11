@@ -2,8 +2,8 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32
-from struct_types import ClosureT 
+from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32, ClosureT
+
  
 import prims 
 import syntax

@@ -1,9 +1,14 @@
 import syntax
-import ptype
+
+
+import core_types
+import tuple_type
+import type_conv
 import names 
 from function_registry import untyped_functions, typed_functions
 from common import dispatch
 from match import match, match_list
+
 
    
 
@@ -41,25 +46,25 @@ def _infer_types(fn, arg_types):
   """ 
   tenv = match_list(fn.args, arg_types)
   # keep track of the return 
-  tenv['$return'] = ptype.Unknown
+  tenv['$return'] = core_types.Unknown
    
   def expr_type(expr):
     
     def expr_Closure():
       arg_types = map(expr_type, expr.args)
-      return ptype.ClosureT(expr.fn, arg_types)
+      return core_types.ClosureT(expr.fn, arg_types)
       
     def expr_Invoke():
       closure_t = expr_type(expr.closure)
-      if isinstance(closure_t, ptype.ClosureT):
-        closure_set = ptype.ClosureSet(closure_t)
-      elif isinstance(closure_set, ptype.ClosureSet):
+      if isinstance(closure_t, core_types.ClosureT):
+        closure_set = core_types.ClosureSet(closure_t)
+      elif isinstance(closure_set, core_types.ClosureSet):
         closure_set = closure_t
       else:
         raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
       
       arg_types = map(expr_type, expr.args)
-      invoke_result_type = ptype.Unknown
+      invoke_result_type = core_types.Unknown
       for closure_type in closure_set.closures:
         untyped_id, closure_arg_types = closure_type.fn, closure_type.args
         untyped_fundef = untyped_functions[untyped_id]
@@ -80,23 +85,23 @@ def _infer_types(fn, arg_types):
         raise names.NameNotFound(expr.name)
     
     def expr_Tuple():
-      return ptype.TupleT(map(expr_type, expr.elts))
+      return tuple_type.TupleT(map(expr_type, expr.elts))
     
     def expr_Const():
-      return ptype.type_of_value(expr.value)
+      return type_conv.typeof(expr.value)
     
     return dispatch(expr, prefix="expr")
   
   def merge_left_branch(phi_nodes):
     for result_var, (left_val, _) in phi_nodes.iteritems():
       left_type = expr_type(left_val)
-      old_type = tenv.get(result_var, ptype.Unknown)
+      old_type = tenv.get(result_var, core_types.Unknown)
       tenv[result_var] = old_type.combine(left_type)
   
   def merge_right_branch(phi_nodes):
     for result_var, (_, right_val) in phi_nodes.iteritems():
       right_type = expr_type(right_val)
-      old_type = tenv.get(result_var, ptype.Unknown)
+      old_type = tenv.get(result_var, core_types.Unknown)
       tenv[result_var] = old_type.combine(right_type)
   
       
@@ -104,7 +109,7 @@ def _infer_types(fn, arg_types):
     for result_var, (left_val, right_val) in phi_nodes.iteritems():
       left_type = expr_type(left_val)
       right_type = expr_type(right_val)
-      old_type = tenv.get(result_var, ptype.Unknown)
+      old_type = tenv.get(result_var, core_types.Unknown)
       tenv[result_var]  = old_type.combine(left_type).combine(right_type)
   
   def analyze_stmt(stmt):
@@ -114,7 +119,7 @@ def _infer_types(fn, arg_types):
       
     def stmt_If():
       cond_type = expr_type(stmt.cond)
-      assert isinstance(cond_type, ptype.ScalarT), \
+      assert isinstance(cond_type, core_types.ScalarT), \
         "Condition has type %s but must be convertible to bool" % cond_type
       analyze_block(stmt.true)
       analyze_block(stmt.false)
@@ -166,9 +171,9 @@ def rewrite_typed(fn, old_type_env):
     if isinstance(expr, syntax.Var):
       return new_type_env[expr.name]
     elif isinstance(expr, syntax.Tuple):
-      return ptype.TupleT(map(typeof, expr.elts))
+      return tuple_type.TupleT(map(typeof, expr.elts))
     elif isinstance(expr, syntax.Const):
-      return ptype.type_of_value(expr.value)
+      return type_conv.typeof(expr.value)
     else:
       raise RuntimeError("Can't get type of %s" % expr)
     
@@ -200,10 +205,10 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Tuple():
       new_elts = map(rewrite_expr, expr.elts)
       new_types = get_types(new_elts)
-      return syntax.Tuple(new_elts, type = ptype.TupleT(new_types))
+      return syntax.Tuple(new_elts, type = tuple_type.TupleT(new_types))
     
     def rewrite_Const():
-      return syntax.Const(expr.value, type = ptype.type_of_value(expr.value))
+      return syntax.Const(expr.value, type = type_conv.typeof(expr.value))
     
     
     def rewrite_PrimCall():
@@ -220,20 +225,20 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Closure():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
-      closure_signature = ptype.ClosureT(fn = expr.fn, args = arg_types)
+      closure_signature = core_types.ClosureT(fn = expr.fn, args = arg_types)
       return syntax.Closure(fn = expr.fn, args = new_args, type = closure_signature)
     
     def rewrite_Invoke():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
       closure = rewrite_expr(expr.closure)
-      if isinstance(closure.type, ptype.ClosureSet):
+      if isinstance(closure.type, core_types.ClosureSet):
         closure_set = closure.type
-      elif isinstance(closure.type, ptype.ClosureT):
-        closure_set = ptype.ClosureSet(closure.type)
+      elif isinstance(closure.type, core_types.ClosureT):
+        closure_set = core_types.ClosureSet(closure.type)
       else:
         raise InferenceFailed("Expected closure set, got %s" % expr.closure.type)
-      return_type = ptype.Unknown
+      return_type = core_types.Unknown
       for clos_sig in closure_set.closures:
         full_arg_types = clos_sig.args + tuple(arg_types)
         curr_return_type = infer_return_type(clos_sig.fn, full_arg_types)
@@ -246,7 +251,7 @@ def rewrite_typed(fn, old_type_env):
   def cast(expr, t, curr_block = None):
     if curr_block is None:
       curr_block = blocks.current()
-    assert isinstance(t, ptype.ScalarT), "Can't cast %s into %s" % (expr.type, t)  
+    assert isinstance(t, core_types.ScalarT), "Can't cast %s into %s" % (expr.type, t)  
     if hasattr(expr, 'name'):
       prefix = "%s.cast.%s" % (expr.name, t)
     else:
@@ -265,8 +270,8 @@ def rewrite_typed(fn, old_type_env):
       return expr
     
     elif isinstance(expr, syntax.Tuple):
-      if not isinstance(t, ptype.TupleT) or len(expr.type.elt_types) != t.elt_types:
-        raise ptype.IncompatibleTypes(expr.type, t)
+      if not isinstance(t, tuple_type.TupleT) or len(expr.type.elt_types) != t.elt_types:
+        raise core_types.IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
         for elt, elt_t in zip(expr.elts, t.elt_types):
@@ -291,7 +296,7 @@ def rewrite_typed(fn, old_type_env):
       new_rhs = coerce_expr(stmt.rhs, new_lhs.type)
       return syntax.Assign(new_lhs, new_rhs)
     elif isinstance(stmt, syntax.If):
-      new_cond = coerce_expr(stmt.cond, ptype.Bool)
+      new_cond = coerce_expr(stmt.cond, core_types.Bool)
       new_true_block = rewrite_block(stmt.true)
       new_false_block = rewrite_block(stmt.false)
       new_merge = rewrite_merge(stmt.merge, new_true_block, new_false_block)
@@ -299,7 +304,7 @@ def rewrite_typed(fn, old_type_env):
     elif isinstance(stmt, syntax.Return):
       return syntax.Return(coerce_expr(stmt.value, fn_return_type))
     elif isinstance(stmt, syntax.While):
-      new_cond = coerce_expr(stmt.cond, ptype.Bool)
+      new_cond = coerce_expr(stmt.cond, core_types.Bool)
       new_body = rewrite_block(stmt.body)
       # insert coercions for left-branch values into the current block before
       # the while-loop and coercions for the right-branch to the end of the loop body

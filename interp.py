@@ -2,7 +2,8 @@ import syntax
 import ast_conversion 
 from function_registry import untyped_functions
 from common import dispatch 
-import ptype 
+from core_types import ScalarT
+import type_conv
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -33,6 +34,7 @@ def eval_fn(fn, *args):
       return fn(*arg_vals)
     
     def expr_Call():
+      
       fundef = untyped_functions[expr.fn]
       arg_vals = map(eval_expr, expr.args)
       return eval_fn(fundef, *arg_vals) 
@@ -42,6 +44,7 @@ def eval_fn(fn, *args):
     
     def expr_Var():
       return env[expr.name]
+    
     def expr_Invoke():
       # for the interpreter Invoke and Call are identical since
       # we're dealing with runtime reprs for functions, prims, and 
@@ -59,7 +62,7 @@ def eval_fn(fn, *args):
     def expr_Cast():
       x = eval_expr(expr.value)
       t = expr.type
-      assert isinstance(t, ptype.ScalarT)
+      assert isinstance(t, ScalarT)
       # use numpy's conversion function 
       return t.dtype.type(x)
     
@@ -83,6 +86,7 @@ def eval_fn(fn, *args):
       raise ReturnValue(v)
     elif isinstance(stmt, syntax.Assign):
       match(stmt.lhs, eval_expr(stmt.rhs), env)
+      
     elif isinstance(stmt, syntax.If):
       cond_val = eval_expr(stmt.cond)
       if cond_val:
@@ -91,6 +95,8 @@ def eval_fn(fn, *args):
       else:
         eval_block(stmt.false)
         eval_merge_right(stmt.merge)
+        
+        
     elif isinstance(stmt, syntax.While):
       eval_merge_left(stmt.merge_before)
       ran_once = False
@@ -118,21 +124,12 @@ def eval_fn(fn, *args):
   except:
     raise
   
-def run_python_fn(python_fn, args, type_specialization = False):
+def run_python_fn(python_fn, args):
   untyped  = ast_conversion.translate_function_value(python_fn)
   # should eventually roll this up into something cleaner, since 
   # top-level functions are really acting like closures over their
   # global dependencies 
   global_args = [python_fn.func_globals[n] for n in untyped.nonlocals]
-  try:
-    all_args = global_args + list(args)
-  except:
-    print global_args, args 
-    raise 
-  if not type_specialization:
-    return eval_fn(untyped, *all_args) 
-  else:
-    import specialization
-    input_types = map(ptype.type_of_value, all_args)
-    typed = specialization.specialize(untyped, input_types)
-    return eval_fn(typed, *all_args)
+  all_args = global_args + list(args)
+  return eval_fn(untyped, *all_args) 
+  

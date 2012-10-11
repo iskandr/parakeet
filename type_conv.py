@@ -26,7 +26,7 @@ def to_python(internal_value, parakeet_type):
   parakeet_type_class = type(parakeet_type)
   assert parakeet_type_class in _to_python, \
     "Don't know how to converet type %s back to python" % parakeet_type_class.__name__ 
-  return _to_python[parakeet_type_class](internal_value)
+  return _to_python[parakeet_type_class](internal_value, parakeet_type)
 
 
 def register(python_type, parakeet_type_class, typeof = None, from_python = None, to_python = None):
@@ -50,13 +50,13 @@ def register(python_type, parakeet_type_class, typeof = None, from_python = None
   if from_python is None:
     def default_from_python(ctypes_class, python_value):
       if hasattr(python_value, '__iter__'):
-        return ctypes_class(*python_value)
+        return ctypes_class(*[from_python(elt) for elt in python_value])
       else:
         return ctypes_class(python_value)
     from_python = default_from_python
   
   if to_python is None:
-    def default_to_python(x):
+    def default_to_python(x, _):
       assert hasattr(x, 'value'), "Default to_python converter failed"
       return x.value 
     to_python = default_to_python
