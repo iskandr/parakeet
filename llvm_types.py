@@ -57,23 +57,27 @@ def ctypes_struct_to_lltype(S, name = None):
     return llvm_struct 
     
 
-ctypes_pointer_class = type(ctypes.POINTER(ctypes.c_int32))
+PyCPointerType = type(ctypes.POINTER(ctypes.c_int32))
+PyCStructType = type(ctypes.Structure)
 
 def ctypes_scalar_to_lltype(ct):
   assert ct in _ctypes_scalars_to_llvm_types, "%s isn't a convertible to an LLVM scalar type" % ct 
   return _ctypes_scalars_to_llvm_types[ct]
 
-def ctypes_to_lltype(ct, name = None):
-  if isinstance(ct, ctypes.Structure):
-    return ctypes_struct_to_lltype(ct, name)
-  elif isinstance(ct, ctypes_pointer_class):
-    return lltype.ptr(ctypes_to_lltype(ct._type_))
+def ctypes_to_lltype(ctypes_repr, name = None):
+  if type(ctypes_repr) == PyCStructType:
+    return ctypes_struct_to_lltype(ctypes_repr, name)
+  elif type(ctypes_repr) == PyCPointerType:
+    return lltype.ptr(ctypes_to_lltype(ctypes_repr._type_))
   else:
-    return ctypes_scalar_to_lltype(ct) 
+    return ctypes_scalar_to_lltype(ctypes_repr) 
 
 
 def llvm_value_type(t):
-  return ctypes_to_lltype(type_conv.ctypes_repr(t), t.node_type())
+  print "parakeet_type ", t
+  ctypes_repr = type_conv.ctypes_repr(t)
+  print "ctypes_repr", ctypes_repr
+  return ctypes_to_lltype(ctypes_repr, t.node_type())
 
 def llvm_ref_type(t):
   llvm_value_t = llvm_value_type(t)

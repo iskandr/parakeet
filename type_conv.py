@@ -9,6 +9,7 @@ def ctypes_repr(parakeet_type):
   
   
   if hasattr(parakeet_type, '_fields_'):
+    print "PT", parakeet_type
     ctypes_fields = []
     
     for (field_name, parakeet_field_type) in parakeet_type._fields_:
@@ -17,7 +18,7 @@ def ctypes_repr(parakeet_type):
 
     class Repr(ctypes.Structure):
       _fields_ = ctypes_fields
-    Repr.__name__ = parakeet_type.node_type()
+    Repr.__name__ = parakeet_type.node_type() +"_Repr"
     result = Repr 
     
   elif hasattr(parakeet_type, 'dtype'):

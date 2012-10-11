@@ -12,7 +12,7 @@ from function_registry import typed_functions
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
 import llvm_context 
-from llvm_compiled_fn import CompiledFn
+from compiled_fn import CompiledFn
 import llvm_prims 
  
 
@@ -96,6 +96,7 @@ def compile_fn(fundef):
   
   # calling convention for parakeet function is to pass in a pointer 
   # to the preallocated return value 
+  print fundef.input_types
   llvm_input_types = map(llvm_ref_type, fundef.input_types)
   llvm_output_type = lltype.pointer(llvm_value_type(fundef.return_type))   
   llvm_fn_t = lltype.function(llvm_types.void_t, [llvm_output_type] + llvm_input_types)
