@@ -4,8 +4,9 @@
 #include <pthread.h>
 
 typedef struct {
-  long            next_iteration;
-  long            last_iteration;
+  int next_start;
+  int step;
+  int end;
 } task_t;
 
 typedef struct {
@@ -21,9 +22,9 @@ typedef struct {
   pthread_barrier_t barrier;
 } job_t;
 
-job_t *make_job(int start, int stop, int num_threads, int chunk_len);
-job_t *reconfigure_job(job_t *old_job, int num_threads);
-int num_unfinished_tasks(job_t *job);
+job_t *make_job(int start, int stop, int step, int num_threads,
+                int task_len);
+//job_t *reconfigure_job(job_t *old_job, int num_threads);
 int num_threads(job_t *job);
 void free_job(job_t *job);
 

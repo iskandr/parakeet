@@ -8,6 +8,9 @@
 #include "thread_pool.h"
 
 static inline unsigned long long get_cpu_time();
+static inline int min(a, b) {
+  return a < b ? a : b;
+}
 
 typedef struct {
   int               id;
@@ -28,9 +31,7 @@ static void *worker(void *args) {
       task_list_t *task_list = worker_data->task_list;
 
       // Check whether we're done.
-      if (task_list->cur_task == task_list->num_tasks ||
-          (worker_data->fixed_num_iters > 0 &&
-           worker_data->fixed_num_iters == worker_data->iters_done)) {
+      if (task_list->cur_task == task_list->num_tasks) {
         pthread_mutex_lock(&worker_data->mutex);
         worker_data->status = THREAD_FINISHED;
         if (worker_data->notify_when_done) {
@@ -41,16 +42,17 @@ static void *worker(void *args) {
         // We know now that we have an iteration to perform for this task, so
         // do it.
         task_t *task = &task_list->tasks[task_list->cur_task];
-        (*worker_data->work_function)(task->next_iteration,
-                                      task->next_iteration,
+        int end = min(task->next_start + task->step, task->end);
+        (*worker_data->work_function)(task->next_start,
+                                      end,
                                       worker_data->args,
                                       worker_data->tile_sizes);
-        task->next_iteration++;
-        worker_data->iters_done++;
+        worker_data->iters_done += (end - task->next_start);
+        task->next_start += task->step;
         worker_data->timestamp = get_cpu_time();
 
         // If this was the last iteration of this task, move to the next one.
-        if (task->next_iteration > task->last_iteration) {
+        if (task->next_start >= task->end) {
           task_list->cur_task++;
         }
       }
@@ -118,7 +120,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
 // This function should only ever be called when all of the threads are paused.
 void launch_job(thread_pool_t *thread_pool,
                 work_function_t work_function, void *args, job_t *job,
-                int *tile_sizes, int fixed_num_iters) {
+                int *tile_sizes) {
   assert(job->num_lists <= thread_pool->num_workers);
 
   thread_pool->job = job;
@@ -140,7 +142,6 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].work_function = work_function;
     thread_pool->worker_data[i].args = args;
     thread_pool->worker_data[i].tile_sizes = tile_sizes;
-    thread_pool->worker_data[i].fixed_num_iters = fixed_num_iters;
     thread_pool->worker_data[i].iters_done = 0;
     thread_pool->worker_data[i].timestamp =
       thread_pool->timestamps[i] = get_cpu_time();
@@ -156,7 +157,6 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].work_function = NULL;
     thread_pool->worker_data[i].args = NULL;
     thread_pool->worker_data[i].tile_sizes = NULL;
-    thread_pool->worker_data[i].fixed_num_iters = 0;
     thread_pool->worker_data[i].iters_done = 0;
     thread_pool->worker_data[i].timestamp = 0;
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);

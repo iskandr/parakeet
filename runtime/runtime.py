@@ -34,14 +34,14 @@ class Runtime():
 
     # job.h
     self.libParRuntime.make_job.restype = job_p
-    self.libParRuntime.reconfigure_job.restype = job_p
+#    self.libParRuntime.reconfigure_job.restype = job_p
     self.libParRuntime.num_threads.argtypes = [job_p]
     self.libParRuntime.num_threads.restype = c_int
 
     # thread_pool.h
     self.libParRuntime.create_thread_pool.restype = thread_pool_p
     self.libParRuntime.launch_job.argtypes = \
-      [thread_pool_p, c_void_p, c_void_p, job_p, POINTER(c_int), c_int]
+      [thread_pool_p, c_void_p, c_void_p, job_p, POINTER(c_int)]
     self.libParRuntime.launch_job.restype = None
     self.libParRuntime.job_finished.argtypes = [thread_pool_p]
     self.libParRuntime.job_finished.restype = c_int
@@ -54,40 +54,76 @@ class Runtime():
     self.libParRuntime.destroy_thread_pool.argtypes = [thread_pool_p]
     self.libParRuntime.destroy_thread_pool.restype = None
 
-    self.max_threads = 8
-    self.chunk_len = 128
-    self.d_par = 4
-    self.n_seq = 840
-    self.time_per_calibration = 0.1
+    self.MAX_THREADS = 8
+    self.DEFAULT_CHUNK_LEN = 128
+    self.D_PAR = 4
 
-    self.thread_pool = self.libParRuntime.create_thread_pool(self.max_threads)
+    self.cur_iter = 0
+    self.time_per_calibration = 0.15
+    self.dop = self.MAX_THREADS
 
-  def run_job(self, work_function, args, num_iters, tiled_loop_iters):
+    self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
+
+  def run_job(self, work_function, args, num_iters,
+              tiled_loop_iters, tiled_loop_parents):
+    self.work_function = work_function
+    self.args = args
+    self.num_iters = num_iters
+
     # Create the tile sizes array
     tile_sizes_t = c_int * len(tiled_loop_iters)
-    tile_sizes = tile_sizes_t()
+    self.tile_sizes = tile_sizes_t()
     for i in range(len(tiled_loop_iters)):
-      tile_sizes[i] = 1
-
-    # Create the task
-    job = self.make_job(0, num_iters, self.max_threads)
-    self.task = self.Task(work_function, args, job, tile_sizes, 0)
+      self.tile_sizes[i] = 1
 
     # Configure the iters per calibration step
-    self.calibrate_iters_per_step()
+    #self.calibrate_iters_per_step()
+    #print "Iters per calibration:", self.iters_per_calibration
 
     # Configure the degree of parallelism
     #self.tp = self.calibrate_par()
     #print "Parallel version to have", self.libParRuntime.num_threads(job), \
     #      "threads"
-    self.tp = self.get_fixed_throughput()
 
     # Configure the tile sizes
-    self.calibrate_tile_sizes(tiled_loop_iters)
+    #self.calibrate_tile_sizes(tiled_loop_iters, tiled_loop_parents)
 
-    # Run the job to completion, monitoring its progress
-    self.launch_job()
-    self.wait_for_job()
+    # Create the final job to execute the remaining iterations
+    #print "Cur iter after calibration:", self.cur_iter
+
+    def mod_tiles(n):
+      for i in range(len(self.tile_sizes)):
+        self.tile_sizes[i] += n
+
+    times = {}
+    self.task_size = 18
+    bestt = float("inf")
+    bests = ()
+    while self.task_size < 81:
+      self.tile_sizes[0] = 18
+      while self.tile_sizes[0] < 81:
+        self.job = self.libParRuntime.make_job(0, num_iters,
+                                               self.task_size,
+                                               self.dop, 1)
+        start = time.time()
+        self.launch_job()
+        self.wait_for_job()
+        t = time.time() - start
+        self.free_job()
+        print "Time for tile sizes", self.task_size,\
+              ",", tuple(self.tile_sizes), ":", t
+        times[(self.task_size,) + tuple(self.tile_sizes)] = t
+        if t < bestt:
+          bestt = t
+          bests = (self.task_size,) + tuple(self.tile_sizes)
+        self.tile_sizes[0] += 6
+      self.task_size += 6
+
+    f = open('times-6000-2400-600-vm3.txt', 'w')
+    for k, v in times.iteritems():
+      f.write('%s %f\n' % (str(k), v))
+    f.close()
+    print "Best time for sizes", bests, ":", bestt
 #    while not self.job_finished():
 #      time.sleep(0.02)
 #      new_tp = self.get_throughput()
@@ -98,34 +134,67 @@ class Runtime():
 #        self.pause_job()
 #        self.tp = self.calibrate_par()
 #        self.launch_job()
-
-    self.delete_task()
+#
+#    self.free_job()
 
   def calibrate_iters_per_step(self):
+    self.make_job(1, 1, 1, 1)
     start = time.time()
-    self.launch_job(1)
+    self.launch_job()
     self.wait_for_job()
     iter_time = time.time() - start
     self.iters_per_calibration =\
       int(round(self.time_per_calibration / iter_time))
 
-  def calibrate_tile_sizes(self, tiled_loop_iters):
+  def calibrate_tile_sizes(self, tiled_loop_iters, tiled_loop_parents):
+    # First, calibrate the outer map loop's tile/chunk size
+    max_chunk = next_smaller_power_2(self.iters_per_calibration)
+    print "Max chunk:", max_chunk
+    cur_size = 1
+    best = 1
+    self.tp = self.get_throughput()
+    while cur_size <= max_chunk:
+      self.make_job(cur_size * self.dop, cur_size, self.dop, 1)
+      self.launch_job()
+      self.wait_for_job()
+      tp = self.get_throughput()
+      print "TP with chunk size", cur_size, ":", tp
+      if tp > self.tp:
+        best = cur_size
+        self.tp = tp
+      cur_size *= 2
+    self.task_size = best
+    print "Best map loop chunk size:", self.task_size
+
+    def get_max(iter):
+      ret = 3
+      if tiled_loop_parents[iter] == -2:
+        ret = tiled_loop_iters[iter]
+      elif tiled_loop_parents[iter] == -1:
+        ret = self.task_size
+      else:
+        ret = self.tile_sizes[tiled_loop_parents[iter]]
+      return next_smaller_power_2(ret)
+
     num_loops = len(tiled_loop_iters)
     for i in range(num_loops):
-      loop_iters = tiled_loop_iters[i]
-      max_size = next_smaller_power_2(loop_iters)
+      max_size = get_max(i)
       cur_size = 2
       best = 1
       while cur_size <= max_size:
-        self.task.tile_sizes[i] = cur_size
-        tp = self.get_fixed_throughput()
+        self.tile_sizes[i] = cur_size
+        self.make_job(self.task_size * self.dop, self.task_size, self.dop, 1)
+        self.launch_job()
+        self.wait_for_job()
+        tp = self.get_throughput()
         if tp > self.tp:
           best = cur_size
           self.tp = tp
         cur_size *= 2
-      self.task.tile_sizes[i] = best
+        print "TP with loop", i, "tile size", cur_size, ":", tp
+      self.tile_sizes[i] = best
     for i in range(num_loops):
-      print "Tile size for loop", i, ":", self.task.tile_sizes[i]
+      print "Tile size for loop", i, ":", self.tile_sizes[i]
 
   def calibrate_par(self):
     self.reconfigure_job(self.d_par)
@@ -183,28 +252,25 @@ class Runtime():
 
     return dop_tp
 
-  def get_fixed_throughput(self):
-    self.launch_job(self.iters_per_calibration)
-    self.wait_for_job()
-    return self.get_throughput()
+  def make_job(self, num_iters, step, num_threads, chunk_len):
+    self.job = self.libParRuntime.make_job(self.cur_iter,
+                                           self.cur_iter + num_iters,
+                                           step, num_threads, chunk_len)
+    self.cur_iter += num_iters
 
-  def make_job(self, start, stop, num_threads):
-    return self.libParRuntime.make_job(start, stop, num_threads, self.chunk_len)
+#  def reconfigure_job(self, num_threads):
+#    self.task.job =\
+#      self.libParRuntime.reconfigure_job(self.task.job, num_threads)
 
-  def reconfigure_job(self, num_threads):
-    self.task.job =\
-      self.libParRuntime.reconfigure_job(self.task.job, num_threads)
+  def free_job(self):
+    self.libParRuntime.free_job(self.job)
 
-  def delete_task(self):
-    self.libParRuntime.free_job(self.task.job)
-
-  def launch_job(self, fixed_num_iters=0):
+  def launch_job(self):
     self.libParRuntime.launch_job(self.thread_pool,
-                                  self.task.work_function,
-                                  self.task.args,
-                                  self.task.job,
-                                  cast(self.task.tile_sizes, POINTER(c_int)),
-                                  fixed_num_iters)
+                                  self.work_function,
+                                  self.args,
+                                  self.job,
+                                  cast(self.tile_sizes, POINTER(c_int)))
 
   def pause_job(self):
     self.libParRuntime.pause_job(self.thread_pool)
