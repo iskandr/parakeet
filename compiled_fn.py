@@ -31,19 +31,19 @@ def generic_value_to_python(gv, t):
   ctypes_repr = type_conv.ctypes_repr(t)
   
   if isinstance(t, core_types.IntT):
-    x = gv.as_int()
+    return t.dtype.type(gv.as_int())
   elif isinstance(t, core_types.FloatT):
     llvm_t = llvm_types.ctypes_scalar_to_lltype(ctypes_repr)
-    
-    x = gv.as_real(gv, llvm_t)
-    return t.dtype.type(x)
+    return t.dtype.type(gv.as_real(llvm_t))
   else:
+    print "gv", gv
     addr = gv.as_pointer()
-    
-    ptr_t = ctypes.POINTER(t.ctypes_repr)
-    ptr = ptr_t.from_address(addr)
-    struct = ptr.contents
-    return t.from_ctypes(struct)
+    print "addr", addr
+    struct = ctypes_repr.from_address(addr)
+    print "struct", struct
+    print "fields", struct._fields_ 
+    print "elt0", struct.elt0  
+    return type_conv.to_python(struct, t)
     
     
 class CompiledFn:
@@ -56,20 +56,6 @@ class CompiledFn:
   def __call__(self, *args):
     # calling conventions are that output must be preallocated by the caller'
     gv_inputs = [python_to_generic_value(v, t) for (v,t) in zip(args, self.parakeet_fn.input_types)]
-      
-        
-    
-    if self.sret:
-      # if the function's calling conventions expect a pointer to the returned value
-      # then we construct it via ctypes before calling into LLVM 
-      return_t = self.parakeet_fn.return_type
-      ctypes_repr = type_conv.ctypes_repr(return_t)
-      return_obj = ctypes_repr()
-      return_obj_addr = ctypes.addressof(return_obj)
-      gv_return = GenericValue.pointer(return_obj_addr)    
-      self.exec_engine.run_function(self.llvm_fn, [gv_return] + gv_inputs)
-      return type_conv.to_python(return_obj, return_t)
-    else:
-      gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
-      return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
+    gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
+    return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
     
