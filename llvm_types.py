@@ -42,6 +42,9 @@ _ctypes_scalars_to_llvm_types = {
   ctypes.c_double : float64_t, 
 }
 
+PyCPointerType = type(ctypes.POINTER(ctypes.c_int32))
+PyCStructType = type(ctypes.Structure)
+
 _struct_cache = {}
 def ctypes_struct_to_lltype(S, name = None):
   if not name:
@@ -52,16 +55,10 @@ def ctypes_struct_to_lltype(S, name = None):
   if key in _struct_cache:
     return _struct_cache[key]
   else:
-    llvm_field_types = []
-    for (_, field_type) in S._fields_:
-      llvm_field_types.append(ctypes_to_lltype(field_type))
+    llvm_field_types = [ctypes_to_lltype(field_type) for (_, field_type) in S._fields_]
     llvm_struct = lltype.struct(llvm_field_types, name)
     _struct_cache[key] = llvm_struct
     return llvm_struct 
-    
-
-PyCPointerType = type(ctypes.POINTER(ctypes.c_int32))
-PyCStructType = type(ctypes.Structure)
 
 def ctypes_scalar_to_lltype(ct):
   assert ct in _ctypes_scalars_to_llvm_types, "%s isn't a convertible to an LLVM scalar type" % ct 
@@ -71,14 +68,14 @@ def ctypes_to_lltype(ctypes_repr, name = None):
   if type(ctypes_repr) == PyCStructType:
     return ctypes_struct_to_lltype(ctypes_repr, name)
   elif type(ctypes_repr) == PyCPointerType:
-    return lltype.ptr(ctypes_to_lltype(ctypes_repr._type_))
+    return lltype.pointer(ctypes_to_lltype(ctypes_repr._type_))
+  
   else:
     return ctypes_scalar_to_lltype(ctypes_repr) 
 
 
 def llvm_value_type(t):
-  ctypes_repr = type_conv.ctypes_repr(t)
-  return ctypes_to_lltype(ctypes_repr, t.node_type())
+  return ctypes_to_lltype(t.ctypes_repr, t.node_type())
 
 def llvm_ref_type(t):
   llvm_value_t = llvm_value_type(t)

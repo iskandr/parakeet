@@ -1,3 +1,4 @@
+import numpy as np 
 from parakeet import expect
 
 def return_pair():
@@ -10,7 +11,7 @@ def create_tuple(x,y):
     return (x,y)
 
 def test_create_tuple():
-  ints = (1,2)
+  ints = (np.int16(1), np.int32(2))
   expect(create_tuple, ints, ints)
   mixed = (1.0, 200L)
   expect(create_tuple, mixed, mixed)

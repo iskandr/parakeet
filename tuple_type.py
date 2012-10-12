@@ -1,4 +1,8 @@
+import ctypes 
+ 
 from core_types import IncompatibleTypes, StructT
+import type_conv 
+
 
  
 class TupleT(StructT):
@@ -15,7 +19,27 @@ class TupleT(StructT):
     self._fields_ = [
       ("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)
     ]
-                             
+
+  def from_python(self, python_tuple):  
+    converted_elts = []
+    for elt in python_tuple:
+      parakeet_type = type_conv.typeof(elt)
+      c_elt = parakeet_type.from_python(elt)
+      if isinstance(parakeet_type, StructT):
+        c_elt = ctypes.pointer(c_elt)
+      converted_elts.append(c_elt)
+    return self.ctypes_repr(*converted_elts)
+
+  def to_python(self, struct_obj):
+    elt_values = []
+    for (field_name, field_type) in self._fields_:
+      c_elt = getattr(struct_obj, field_name)
+      if isinstance(field_type, StructT):
+        c_elt = c_elt.contents 
+      py_elt = field_type.to_python(c_elt)
+      elt_values.append(py_elt)
+    return tuple(elt_values)
+ 
   def dtype(self):
     raise RuntimeError("Do tuples have dtypes?")
   
@@ -63,23 +87,12 @@ def make_tuple_type(elt_types):
     return t
   
 
-import type_conv 
 
 def typeof(python_tuple):
   return make_tuple_type(map(type_conv.typeof, python_tuple))
 
-def from_python(struct_repr, python_tuple):  
-  converted_elts = [type_conv.from_python(elt) for elt in python_tuple]
-  return struct_repr(*converted_elts)
+type_conv.register(tuple, typeof)
 
-def to_python(struct_obj, parakeet_type):
-  python_elt_values = []
-  for (field_name, elt_t) in parakeet_type._fields_:
-    internal_field_value = getattr(struct_obj, field_name)
-    if type(internal_field_value) in (bool, int, float, long, complex):
-      python_elt_values.append(internal_field_value)
-    else:
-      python_elt_values.append(type_conv.to_python(internal_field_value, elt_t))
-  return tuple(python_elt_values)
 
-type_conv.register(tuple, TupleT, typeof, from_python, to_python)
+
+

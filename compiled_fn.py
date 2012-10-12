@@ -9,7 +9,8 @@ import type_conv
 import ctypes
 
 
-  
+
+
 def python_to_generic_value(x, t):
 
   
@@ -28,22 +29,22 @@ def python_to_generic_value(x, t):
 
 
 def generic_value_to_python(gv, t):
-  ctypes_repr = type_conv.ctypes_repr(t)
+  
   
   if isinstance(t, core_types.IntT):
     return t.dtype.type(gv.as_int())
   elif isinstance(t, core_types.FloatT):
-    llvm_t = llvm_types.ctypes_scalar_to_lltype(ctypes_repr)
+    llvm_t = llvm_types.ctypes_scalar_to_lltype(t.ctypes_repr)
     return t.dtype.type(gv.as_real(llvm_t))
   else:
     print "gv", gv
     addr = gv.as_pointer()
     print "addr", addr
-    struct = ctypes_repr.from_address(addr)
+    struct = t.ctypes_repr.from_address(addr)
     print "struct", struct
     print "fields", struct._fields_ 
     print "elt0", struct.elt0  
-    return type_conv.to_python(struct, t)
+    return t.to_python(struct)
     
     
 class CompiledFn:

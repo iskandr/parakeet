@@ -128,9 +128,9 @@ def compile_expr(expr, env, builder):
     
     for (i, elt)  in enumerate(expr.args):
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
-      print "FIELD PTR", elt_ptr
+      print "FIELD PTR", elt_ptr, ":", elt_ptr.type
       llvm_elt = compile_expr(elt, env, builder)
-      print "ELT", llvm_elt
+      print "ELT", llvm_elt, ":", llvm_elt.type 
       
       store = builder.store(llvm_elt, elt_ptr)
       print "STORE", store 
