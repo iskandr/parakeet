@@ -184,8 +184,12 @@ class Tiler():
                      adverb.f.rankchange)
         self.add(map_red_partials)
         last = map_red_partials
-      tiled_args = [Group(arg, axis+1)
-                    for (arg, axis) in zip(adverb.args, adverb.axes)]      
+      tiled_args = []
+      for i in range(len(adverb.args)):
+        axis = adverb.axes[i]
+        if i in expanded:
+          axis += 1
+        tiled_args.append(Group(adverb.args[i], axis))
       return [Set(Var(f.name + "_Partials"), Call(tiled_partials, tiled_args)),
               Call(last, [Var(f.name + "_Partials")])]
 
