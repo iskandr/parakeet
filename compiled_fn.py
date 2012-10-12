@@ -8,12 +8,9 @@ import core_types
 import type_conv  
 import ctypes
 
-
-
-
 def python_to_generic_value(x, t):
 
-  
+
   if isinstance(t, core_types.FloatT):
     llvm_t = llvm_types.llvm_value_type(t)
     return GenericValue.real(llvm_t, x)
@@ -26,6 +23,18 @@ def python_to_generic_value(x, t):
     ctypes_obj = type_conv.from_python(x)
     return GenericValue.pointer(ctypes.addressof(ctypes_obj))
 
+def ctypes_to_generic_value(cval, t):
+  if isinstance(t, core_types.FloatT):
+    llvm_t = llvm_types.llvm_value_type(t)
+    return GenericValue.real(llvm_t, cval.value)
+  elif isinstance(t, core_types.IntT):
+    llvm_t = llvm_types.llvm_value_type(t)
+    return GenericValue.int(llvm_t, cval.value)
+  elif isinstance(t, core_types.PtrT):
+    return GenericValue.pointer(ctypes.addressof(cval.contents))
+  else:
+    return GenericValue.pointer(ctypes.addressof(cval))
+  
 
 
 def generic_value_to_python(gv, t):
@@ -55,8 +64,14 @@ class CompiledFn:
     self.sret = sret # calling conventions 
   
   def __call__(self, *args):
+    actual_types = map(type_conv.typeof, args)
+    expected_types = self.parakeet_fn.input_types
+    assert actual_types == expected_types, \
+      "Arg type mismatch, expected %s but got %s" % (expected_types, actual_types)
+      
     # calling conventions are that output must be preallocated by the caller'
-    gv_inputs = [python_to_generic_value(v, t) for (v,t) in zip(args, self.parakeet_fn.input_types)]
+    ctypes_inputs = [t.from_python(v) for (v,t) in zip(args, expected_types)]
+    gv_inputs = [ctypes_to_generic_value(cv, t) for (cv,t) in zip(ctypes_inputs, expected_types)]
     gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
     

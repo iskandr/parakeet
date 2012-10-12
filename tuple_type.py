@@ -20,23 +20,40 @@ class TupleT(StructT):
       ("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)
     ]
 
-  def from_python(self, python_tuple):  
+  def from_python(self, python_tuple, _keep_forever = []):
+    _keep_forever.append(python_tuple)  
     converted_elts = []
+    print "<<<"
     for elt in python_tuple:
+      
       parakeet_type = type_conv.typeof(elt)
+      print "FROM_PYTHON elt", elt, ":",  parakeet_type
       c_elt = parakeet_type.from_python(elt)
+      print "FROM_PYTHON c_elt", c_elt
       if isinstance(parakeet_type, StructT):
         c_elt = ctypes.pointer(c_elt)
+        print "FROM_PYTHON make that a pointer", c_elt
       converted_elts.append(c_elt)
-    return self.ctypes_repr(*converted_elts)
+      print 
+    print "FROM_PYTHON ALL ELTS", converted_elts
+    result = self.ctypes_repr(*converted_elts)
+    print "FROM_PYTHON RESULT", result
+    print result.elt0 
+    print ">>>"
+    return result  
 
   def to_python(self, struct_obj):
     elt_values = []
     for (field_name, field_type) in self._fields_:
       c_elt = getattr(struct_obj, field_name)
+      print "TO_PYTHON c_elt", field_name, field_type, c_elt
       if isinstance(field_type, StructT):
+        print "TO_PYTHON deref", c_elt.contents
         c_elt = c_elt.contents 
+        
       py_elt = field_type.to_python(c_elt)
+      print "TO_PYTHON py_elt", py_elt
+      print 
       elt_values.append(py_elt)
     return tuple(elt_values)
  
