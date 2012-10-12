@@ -126,50 +126,20 @@ def compile_fn(fundef):
       llvm_value = compile_expr(expr.value, builder)
       return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
     
-    """  
-    def compile_Tuple():
-    
-      llvm_tuple_t = llvm_value_type(expr.type)
-      
-      tuple_object = builder.alloca(llvm_tuple_t)
-      for (i, elt)  in enumerate(expr.elts):
-        llvm_elt = compile_expr(elt, builder)
-        elt_ptr = builder.gep(tuple_object, [int32(0), int32(i)])
-        builder.store(llvm_elt, elt_ptr)
-      return tuple_object
-    
-    def compile_Closure():
-      # allocate a length 3 array
-      # - the first element is a distinct id for each (untyped function, type list) pair
-      # - the second element is array partially applied arguments
-      
-      closure_t = expr.type
-      assert isinstance(closure_t, ClosureT)
-      llvm_closure_t = llvm_value_type(closure_t)
-      closure_object =  builder.malloc(llvm_closure_t, "closure_object")
-      #print "malloc closure", closure_object
-      id_slot = builder.gep(closure_object, [int32(0), int32(0)], "closure_id_slot")
-      #print "get id slot", id_slot
-      closure_num = ClosureSignatures.get_id(closure_t)
-      builder.store(const(closure_num, Int64), id_slot)
-       
-      assert len(closure_t.args) == 0, "Code generation for closure args not yet implemented"
-      return closure_object  
-    """
+
     def compile_Struct():
       llvm_struct_t = llvm_value_type(expr.type)
       print llvm_struct_t
-      name = str(expr.type.node_type()) + "_struct"
-      struct_object = builder.alloca(llvm_struct_t, name)
-      print struct_object
+      name = expr.type.node_type() 
+      struct_ptr = builder.alloca(llvm_struct_t, name + "_ptr")
+      
       for (i, elt)  in enumerate(expr.args):
         llvm_elt = compile_expr(elt, builder)
-        print llvm_elt 
-        elt_ptr = builder.gep(struct_object, [int32(0), int32(i)])
-        print elt_ptr
-        store = builder.store(llvm_elt, elt_ptr)
-        print store 
-      return struct_object
+        elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
+        builder.store(llvm_elt, elt_ptr)
+
+      return builder.load(struct_ptr, name + "_obj")
+      
     
     def compile_Invoke():
       print "INVOKE_START"
@@ -315,6 +285,7 @@ def compile_fn(fundef):
       return after_builder, False 
  
     elif isinstance(stmt, syntax.Return):
+      print "About to compile return rhs: ", stmt.value 
       ret_val = compile_expr(stmt.value, builder)
       print "dest:", env["$return"]
       print "src:", ret_val 

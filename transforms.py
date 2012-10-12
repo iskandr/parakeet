@@ -56,11 +56,17 @@ def make_structs_explicit(fundef):
       closure_id_node = syntax.Const(closure_id, type = core_types.Int64)
       return syntax.Struct([closure_id_node] + closure_args, type = expr.type)
     
+    
+    def transform_Invoke():
+      new_closure = transform_expr(expr.closure)
+      new_args =  map(transform_expr, expr.args) 
+      return syntax.Invoke(new_closure, new_args, type = expr.type) 
+        
     return dispatch(expr, 'transform', default = lambda expr: expr)
   
   transform_block = create_simple_transform(transform_expr)
   body = transform_block(fundef.body)
-  import copy 
-  fundef2 = copy.deepcopy(fundef)
-  fundef2.body = body 
-  return fundef2 
+  new_fundef_args = dict([ (m, getattr(fundef,m)) for m in fundef._members])
+  new_fundef_args['body'] = body
+  return syntax.TypedFn(**new_fundef_args)
+  

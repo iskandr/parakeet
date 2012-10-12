@@ -98,6 +98,8 @@ def to_llvm_output_type(t):
 
 def convert_to_bit(llvm_value, builder):
   llvm_t = llvm_value.type 
+  if llvm_t == int1_t:
+    return llvm_value 
   if isinstance(llvm_t, llcore.IntegerType):
     return builder.icmp(llcore.ICMP_NE, llcore.Constant(llvm_t, 0), "ne_zero")
   else:

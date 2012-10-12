@@ -5,8 +5,14 @@ class TupleT(StructT):
   rank = 0 
   _members = ['elt_types']
   
-  def finalize_init(self):
-    self._fields_ = [ 
+  def node_init(self):
+    if self.elt_types is None:
+      self.elt_types = ()
+      
+    if type(self) != tuple:
+      self.elt_types = tuple(self.elt_types)
+      
+    self._fields_ = [
       ("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)
     ]
                              
@@ -70,8 +76,10 @@ def to_python(struct_obj, parakeet_type):
   python_elt_values = []
   for (field_name, elt_t) in parakeet_type._fields_:
     internal_field_value = getattr(struct_obj, field_name)
-    python_elt_value = type_conv.to_python(internal_field_value, elt_t)
-    python_elt_values.append(python_elt_value)
+    if type(internal_field_value) in (bool, int, float, long, complex):
+      python_elt_values.append(internal_field_value)
+    else:
+      python_elt_values.append(type_conv.to_python(internal_field_value, elt_t))
   return tuple(python_elt_values)
 
 type_conv.register(tuple, TupleT, typeof, from_python, to_python)
