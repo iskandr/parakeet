@@ -9,6 +9,7 @@ import prims
 import syntax
 from common import dispatch  
 from function_registry import typed_functions
+import core_types 
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
 import llvm_context 
@@ -54,7 +55,7 @@ def init_llvm_vars(fundef, llvm_fn, builder, sret = True):
     env["$return"] = return_arg
       
   for (name, t) in fundef.type_env.iteritems():
-    llvm_t = llvm_ref_type(t)
+    llvm_t = llvm_value_type(t)
     stack_val = builder.alloca(llvm_t, name)
     env[name] = stack_val 
   
@@ -62,18 +63,25 @@ def init_llvm_vars(fundef, llvm_fn, builder, sret = True):
     llvm_inputs = llvm_fn.args[1:]
   else:
     llvm_inputs = llvm_fn.args
+    
   for llvm_arg, parakeet_arg in zip(llvm_inputs, fundef.args):
+    
     if isinstance(parakeet_arg, str):
       name = parakeet_arg
     elif isinstance(parakeet_arg, syntax.Var):
       name = parakeet_arg.name
     else:
       assert False, "Tuple arg patterns not yet implemented"
-    print name, llvm_arg, llvm_arg.type 
+    
     llvm_arg.name = name
+    print "INITIALIZING INPUT",  name, "->", llvm_arg, ":", llvm_arg.type 
     # store the value of the input in the stack value we've already allocated
-    # for the input var 
-    builder.store(llvm_arg, env[name])
+    # for the input var
+    
+    if not llvm_types.is_scalar(llvm_arg.type): 
+      llvm_arg = builder.load(llvm_arg, name + "_value")
+    store = builder.store(llvm_arg, env[name])
+    print store 
 
   # tell the builder to start inserting 
   return env 
@@ -129,13 +137,17 @@ def compile_fn(fundef):
 
     def compile_Struct():
       llvm_struct_t = llvm_value_type(expr.type)
-      print llvm_struct_t
+      print "STRUCT TYPE", llvm_struct_t
       name = expr.type.node_type() 
       struct_ptr = builder.alloca(llvm_struct_t, name + "_ptr")
+      print "ALLOC", struct_ptr 
       
       for (i, elt)  in enumerate(expr.args):
-        llvm_elt = compile_expr(elt, builder)
         elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
+        print "FIELD PTR", elt_ptr
+        llvm_elt = compile_expr(elt, builder)
+        print "ELT", llvm_elt
+        
         builder.store(llvm_elt, elt_ptr)
 
       return builder.load(struct_ptr, name + "_obj")

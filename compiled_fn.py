@@ -55,13 +55,9 @@ class CompiledFn:
   
   def __call__(self, *args):
     # calling conventions are that output must be preallocated by the caller'
-    gv_inputs = []
-          
-    for (v, t) in zip(args, self.parakeet_fn.input_types):
-      if np.isscalar(v):
-        gv_inputs.append(python_to_generic_value(v, t))
-      else:
-        assert False, (v,t)
+    gv_inputs = [python_to_generic_value(v, t) for (v,t) in zip(args, self.parakeet_fn.input_types)]
+      
+        
     
     if self.sret:
       # if the function's calling conventions expect a pointer to the returned value

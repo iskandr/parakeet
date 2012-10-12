@@ -9,7 +9,7 @@ def ctypes_repr(parakeet_type):
   
   
   if hasattr(parakeet_type, '_fields_'):
-    print "PT", parakeet_type
+    
     ctypes_fields = []
     
     for (field_name, parakeet_field_type) in parakeet_type._fields_:
@@ -51,7 +51,11 @@ def from_python(python_value):
   ctypes_class = ctypes_repr(parakeet_type)
   python_type = type(python_value)
   converter = _from_python[python_type]
-  return converter(ctypes_class, python_value)
+  try:
+    return converter(ctypes_class, python_value)
+  except:
+    print "Couldn't use %s with converter %s for python value %s" % (converter, ctypes_class, python_value)
+    raise 
   
 
 _to_python = {}

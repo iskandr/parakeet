@@ -19,6 +19,9 @@ ptr_int8_t = lltype.pointer(int8_t)
 ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
+def is_scalar(llvm_t):
+  return isinstance(llvm_t, llcore.IntegerType) or llvm_t in (float32_t, float64_t)
+
   
 _ctypes_scalars_to_llvm_types = {
   ctypes.c_bool : int1_t,
@@ -74,9 +77,7 @@ def ctypes_to_lltype(ctypes_repr, name = None):
 
 
 def llvm_value_type(t):
-  print "parakeet_type ", t
   ctypes_repr = type_conv.ctypes_repr(t)
-  print "ctypes_repr", ctypes_repr
   return ctypes_to_lltype(ctypes_repr, t.node_type())
 
 def llvm_ref_type(t):
@@ -85,6 +86,8 @@ def llvm_ref_type(t):
     return llvm_value_t
   else:
     return lltype.pointer(llvm_value_t)
+  
+
 
 # we allocate heap slots for output scalars before entering the
 # function
