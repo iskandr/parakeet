@@ -1,4 +1,4 @@
-IFLAGS = -g
+IFLAGS = -O3
 LFLAGS = -pthread -lm -lprofiler
 FLAGS = $(IFLAGS) $(LFLAGS)
 OBJS = thread_pool.o job.o
