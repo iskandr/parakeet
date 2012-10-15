@@ -32,8 +32,8 @@ def test_create_tuple():
 def tuple_bind((x,y)):
   return (x,y)
 
-def test_tuple_bind():
-  test_all_tuples(tuple_bind, unpack_args = False)
+#def test_tuple_bind():
+#  test_all_tuples(tuple_bind, unpack_args = False)
 
 
 def tuple_indexing(t):

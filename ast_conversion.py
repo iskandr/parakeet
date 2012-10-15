@@ -150,6 +150,31 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
           new_name = env.fresh(name)
         merge[new_name] = (left, right)
     return merge 
+  
+  def translate_slice(expr):
+    def translate_Index():
+      return translate_expr(expr.value)
+    
+    def translate_Ellipsis():
+      raise RuntimeError("Ellipsis operator unsupported")
+    
+    def translate_Slice():
+      """
+      x[l:u:s]
+      Optional fields
+        expr.lower
+        expr.upper
+        expr.step
+      """
+      raise RuntimeError("Slice unsupported")
+    
+    def translate_ExtSlice():
+      slice_elts = map(translate_slice, expr.dims) 
+      if len(slice_elts) > 1:
+        return syntax.Tuple(slice_elts)
+      else:
+        return slice_elts[0]
+    return dispatch(expr, 'translate')
    
   def translate_expr(expr):
     def translate_UnaryOp():
@@ -170,6 +195,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       assert len(expr.comparators) == 1
       rhs = translate_expr(expr.comparators[0])
       return syntax.PrimCall(prim, [lhs, rhs])
+    
+    def translate_Subscript():
+      return syntax.Subscript(translate_expr(expr.value), translate_slice(expr.slice))
     
     def translate_Call():
       fn, args, kwargs, starargs = \

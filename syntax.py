@@ -54,9 +54,9 @@ class Var(Expr):
   def __str__(self):
     return self.name 
   
-#class Prim(Expr):
-#  """Lift primitive to the value level by creating a PrimClosure"""
-#  _members = ['value']
+
+class Subscript(Expr):
+  _members = ['value', 'index']
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory

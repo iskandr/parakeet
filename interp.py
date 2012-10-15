@@ -28,19 +28,25 @@ def eval_fn(fn, *args):
     def expr_Const():
       return expr.value
     
+    
+    def expr_Subscript():
+      print expr 
+      return eval_expr(expr.value)[eval_expr(expr.index)]
+    
     def expr_PrimCall():
-      fn = expr.prim.fn 
       arg_vals = map(eval_expr, expr.args)
-      return fn(*arg_vals)
+      return expr.prim.fn (*arg_vals)
     
     def expr_Call():
-      
       fundef = untyped_functions[expr.fn]
       arg_vals = map(eval_expr, expr.args)
       return eval_fn(fundef, *arg_vals) 
     
     def expr_Prim():
       return expr.value.fn
+    
+    def expr_Slice():
+      return slice(eval_expr(expr.lower), eval_expr(expr.upper), eval_expr(expr.step)) 
     
     def expr_Var():
       return env[expr.name]

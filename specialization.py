@@ -90,6 +90,8 @@ def _infer_types(fn, arg_types):
     def expr_Const():
       return type_conv.typeof(expr.value)
     
+  
+    
     return dispatch(expr, prefix="expr")
   
   def merge_left_branch(phi_nodes):
