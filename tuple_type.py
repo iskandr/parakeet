@@ -2,12 +2,17 @@ import ctypes
  
 from core_types import IncompatibleTypes, StructT
 import type_conv 
+from syntax import Expr, Const 
 
 
  
 class TupleT(StructT):
   rank = 0 
   _members = ['elt_types']
+  
+  # signals to type inference algorithm to pass the value of an index into index_type
+  # rather than its type 
+  static_indexing = True 
   
   def node_init(self):
     if self.elt_types is None:
@@ -55,6 +60,14 @@ class TupleT(StructT):
   def __hash__(self):
     return hash(self.elt_types)
   
+  def __getitem__(self, idx):
+    assert isinstance(idx, Expr), \
+      "Tuple indices must be computed statically, so expected index to be expression"
+    assert isinstance(idx, Const), "Unsupported expression: %s" % idx
+    idx = int(idx.value)
+    assert 0 <= idx < len(self.elt_types), \
+      "Can't get element %d from tuple of length %d" % (idx, len(self.elt_types))
+    return self.elt_types[idx] 
     
   def combine(self, other):
     if isinstance(other, TupleT) and len(other.elt_types) == len(self.elt_types):
@@ -92,13 +105,11 @@ def make_tuple_type(elt_types):
     t = TupleT(key)
     _tuple_types[key] = t
     return t
-  
-
 
 def typeof(python_tuple):
   return make_tuple_type(map(type_conv.typeof, python_tuple))
 
-type_conv.register(tuple, typeof)
+type_conv.register(tuple, TupleT, typeof)
 
 
 

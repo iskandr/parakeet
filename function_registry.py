@@ -1,5 +1,5 @@
 import names
-import syntax 
+import syntax as untyped_ast 
 # SSA ID -> untyped FunDef
 untyped_functions = {}
 
@@ -17,10 +17,10 @@ def lookup_prim_fn(p):
     return untyped_prim_functions
   else:
     fn_name = names.fresh(p.name)
-    args = [syntax.Var(x) for x in names.fresh_list(p.nin)]
+    args = [untyped_ast.Var(x) for x in names.fresh_list(p.nin)]
     result = names.fresh("result")
-    body = [syntax.Assign(syntax.Var(result), syntax.PrimCall(p, args))]
-    fundef = syntax.Fn(fn_name, args, body, [])
+    body = [untyped_ast.Assign(untyped_ast.Var(result), untyped_ast.PrimCall(p, args))]
+    fundef = untyped_ast.Fn(fn_name, args, body, [])
     untyped_prim_functions[p] = fundef
     untyped_functions[fn_name] = fundef
     return fundef 

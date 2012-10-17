@@ -1,10 +1,11 @@
 from node import Node 
 
 class Stmt(Node):
-  pass 
-
+  pass
+   
 class Assign(Stmt):
   _members = ['lhs', 'rhs']
+  
   
 class Return(Stmt):
   _members = ['value'] 
@@ -23,15 +24,10 @@ class While(Stmt):
   _members = ['cond', 'body', 'merge_before', 'merge_after']
   
 class Expr(Node):
-  # the type field is initialized to None for untyped syntax nodes
-  # but should be set once code gets specialized 
-  _members = ['type']
-  
-
+  _members = ['type'] 
 
 class Adverb(Expr):
   pass
-
 
 class Const(Expr):
   _members = ['value']
@@ -53,14 +49,9 @@ class Var(Expr):
   
   def __str__(self):
     return self.name 
-  
 
-class Subscript(Expr):
+class Index(Expr):
   _members = ['value', 'index']
-
-class Cast(Expr):
-  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
-  _members = ['value']
 
 class Tuple(Expr):
   _members = ['elts']
@@ -71,15 +62,16 @@ class Closure(Expr):
   with a list of partial args
   """
   _members = ['fn', 'args']
-  
 
-  
 class Invoke(Expr):
   """
   Invoke a closure with extra args 
   """
   _members = ['closure', 'args']
-  
+
+class Slice(Expr):
+  _members = ['lower', 'upper', 'step']
+
 class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a 
@@ -92,14 +84,12 @@ class PrimCall(Expr):
   
   def __str__(self):
     return repr(self)
-  
-class Call(Expr):
-  """
-  Call a function directly--- the first argument
-  should be a global fn name and not a closure
-  """
-  _members = ['fn', 'args']
 
+class Fn(Node):
+  """
+  Function definition
+  """
+  _members = ['name',  'args', 'body', 'nonlocals']
 
 class Struct(Expr):
   """
@@ -108,21 +98,16 @@ class Struct(Expr):
   """
   _members = ['args']
 
+class Cast(Expr):
+  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
+  _members = ['value']
 
-class Fn(Node):
-  """
-  Function definition
-  """
-  _members = ['name',  'args', 'body', 'nonlocals']
-  
 class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
   """
   _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
 
-
-  
       
 class Traversal:
   def visit_block(self, block, *args, **kwds):

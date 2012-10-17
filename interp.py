@@ -2,7 +2,7 @@ import syntax
 import ast_conversion 
 from function_registry import untyped_functions
 from common import dispatch 
-from core_types import ScalarT
+from core_types import ScalarT, StructT
 import type_conv
 
 class ReturnValue(Exception):
@@ -29,8 +29,7 @@ def eval_fn(fn, *args):
       return expr.value
     
     
-    def expr_Subscript():
-      print expr 
+    def expr_Index():
       return eval_expr(expr.value)[eval_expr(expr.index)]
     
     def expr_PrimCall():
@@ -71,6 +70,12 @@ def eval_fn(fn, *args):
       assert isinstance(t, ScalarT)
       # use numpy's conversion function 
       return t.dtype.type(x)
+    
+    def expr_Struct():
+      assert expr.type, "Expected type on %s!" % expr 
+      assert isinstance(expr.type, StructT), "Expected %s : %s to be a struct" % (expr, expr.type)
+      elts = map(eval_expr, expr.args)
+      return expr.type.ctypes_repr(elts)
     
     def expr_Tuple():
       return tuple(map(eval_expr, expr.elts))

@@ -197,7 +197,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       return syntax.PrimCall(prim, [lhs, rhs])
     
     def translate_Subscript():
-      return syntax.Subscript(translate_expr(expr.value), translate_slice(expr.slice))
+      value = translate_expr(expr.value)
+      index = translate_slice(expr.slice)
+      return syntax.Index(value, index)
     
     def translate_Call():
       fn, args, kwargs, starargs = \

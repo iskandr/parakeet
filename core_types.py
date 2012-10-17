@@ -189,7 +189,7 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
   python_types = [dtype.type] + equiv_python_types 
   
   for python_type in python_types:
-      type_conv.register(python_type, lambda _: parakeet_type) 
+      type_conv.register(python_type, parakeet_type) 
 
   return parakeet_type 
    
@@ -251,6 +251,23 @@ class ComplexT(ScalarT):
 Complex64 = ComplexT(dtypes.float32, dtypes.complex64)
 Complex128 = ComplexT(dtypes.float64, dtypes.complex128)
 
+
+class ConstIntT(IntT):
+  """
+  Integer constants get a special type all to their lonesome selves, 
+  so we can assign types to expressions like "(1,2,3)[0]". 
+  """
+  _members = ['value']
+  
+  def __init__(self, value):
+    self.dtype = dtypes.int64
+    self.value = value 
+
+  def combine(self, other):
+    if isinstance(other, ConstIntT) and other.value == self.value:
+      return self
+    else:
+      return IntT.combine(self, other)
 
 def is_scalar_subtype(t1, t2):
   return isinstance(t1, ScalarT) and \
