@@ -13,7 +13,7 @@ def create_simple_transform(transform_expr):
   def transform_stmt(stmt):
     
     def transform_Assign():
-      # TODO: flatten tuple assignmentptype
+      # TODO: flatten tuple assignment ptype
       assert isinstance(stmt.lhs, (str, typed_ast.Var)), "Pattern-matching assignment not implemented" 
       rhs = transform_expr(stmt.rhs)
       return typed_ast.Assign(stmt.lhs, rhs)

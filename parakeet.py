@@ -1,6 +1,6 @@
 import interp 
 import ast_conversion
-import type_analysis
+import type_inference
 import type_conv 
 import llvm_backend 
 
@@ -20,7 +20,7 @@ def expect(fn, args, expected):
   assert untyped_result == expected, "Expected %s but got %s" % (expected, untyped_result)
 
   input_types = map(type_conv.typeof, all_args)
-  typed = type_analysis.specialize(untyped, input_types)
+  typed = type_inference.specialize(untyped, input_types)
   typed_result = interp.eval_fn(typed, *all_args)
   assert typed_result == expected, "Expected %s but got %s" % (expected, typed_result)
 

@@ -50,11 +50,21 @@ class Var(Expr):
   def __str__(self):
     return self.name 
 
+class Attribute(Expr):
+  _members = ['value', 'attr']
+
 class Index(Expr):
   _members = ['value', 'index']
 
 class Tuple(Expr):
   _members = ['elts']
+  
+class TupleProj(Expr):
+  _members = ['tuple', 'index']
+  
+class Array(Expr):
+  _members = ['elts']
+
 
 class Closure(Expr):
   """

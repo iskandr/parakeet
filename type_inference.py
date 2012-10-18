@@ -4,11 +4,12 @@ import syntax as typed_ast
 
 import core_types
 import tuple_type
+from tuple_type import TupleT
 import type_conv
 import names 
 from function_registry import untyped_functions, typed_functions
 from common import dispatch
-from match import match, match_list
+from args import Args, match, match_list, transform 
 
 
    
@@ -36,33 +37,54 @@ class NestedBlocks:
   
   def extend_current(self, stmts):
     self.current().extend(stmts)
-    
 
-def _infer_types(fn, arg_types):
-  """
-  Actual implementation of type inference which doesn't attempt to 
-  look up cached version of typed function
-  """ 
-  tenv = match_list(fn.args, arg_types)
-  # keep track of the return 
-  tenv['$return'] = core_types.Unknown
 
-  def expr_type(expr):
+
+class VarMap:
+  def __init__(self):
+    self._vars = {}
     
-    def expr_Closure():
-      arg_types = map(expr_type, expr.args)
-      return core_types.ClosureT(expr.fn, arg_types)
+  def rename(self, old_name):
+    new_name = names.refresh(old_name)
+    self._vars[old_name] = new_name
+    return new_name
+  
+  def lookup(self, old_name):
+    if old_name in self._vars:
+      return self._vars[old_name]
+    else:
+      return self.rename(old_name)
+
+def get_type(expr):
+  return expr.type
+
+def get_types(exprs):
+  return [expr.type for expr in exprs]
+
+def annotate_expr(expr, tenv, var_map):
+  def annotate_child(child_expr):
+    return annotate_expr(expr, tenv, var_map)
+  
+  def annotate_children(child_exprs):
+    return [annotate_expr(e, tenv, var_map) for e in child_exprs]
+  
+  def expr_Closure():
+    new_args = annotate_child(expr.args)
+    t = core_types.ClosureT(expr.fn, get_types(new_args))
+    return typed_ast.Closure(expr.fn, new_args, type = t)
       
-    def expr_Invoke():
-      closure_t = expr_type(expr.closure)
-      if isinstance(closure_t, core_types.ClosureT):
-        closure_set = core_types.ClosureSet(closure_t)
-      elif isinstance(closure_set, core_types.ClosureSet):
-        closure_set = closure_t
-      else:
-        raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
+  def expr_Invoke():
+    closure = annotate_child(expr.closure)
+    args = annotate_children(expr.args)
+    closure_t = closure.type 
+    if isinstance(closure_t, core_types.ClosureT):
+      closure_set = core_types.ClosureSet(closure_t)
+    elif isinstance(closure_set, core_types.ClosureSet):
+      closure_set = closure_t
+    else:
+      raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
       
-      arg_types = map(expr_type, expr.args)
+      arg_types = get_types(args)
       invoke_result_type = core_types.Unknown
       for closure_type in closure_set.closures:
         print invoke_result_type
@@ -70,92 +92,166 @@ def _infer_types(fn, arg_types):
         untyped_fundef = untyped_functions[untyped_id]
         ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
         invoke_result_type = invoke_result_type.combine(ret)
-      print invoke_result_type
-      return invoke_result_type
+    return typed_ast.Invoke(closure, args, type = invoke_result_type) 
+      
   
     def expr_PrimCall():
-      arg_types = map(expr_type, expr.args)
+      args = annotate_children(expr.args)
+      arg_types = get_types(args)
       upcast_types = expr.prim.expected_input_types(arg_types)
-      return expr.prim.result_type(upcast_types)
+      result_type = expr.prim.result_type(upcast_types)
+      return typed_ast.PrimCall(expr.prim, args, type = result_type)
   
     def expr_Index():
-      value_type = expr_type(expr.value)
-      if hasattr(value_type, 'static_indexing') and value_type.static_indexing:
-        return value_type[expr.index]
+      value = annotate_child(expr.value)
+      index = annotate_child(expr.index)
+      if isinstance(value.type, tuple_type.TupleT):
+        assert isinstance(index.type, core_types.IntT)
+        assert isinstance(index, untyped_ast.Const)
+        i = index.value
+        return typed_ast.TupleProj(value, i)
       else:
-        return value_type[expr_type(expr.index)]
+        result_type = value.type.index_type(index.type)
+        return typed_ast.Index(value, index, type = result_type)
       
     def expr_Var():
-      if expr.name in tenv:
-        t = tenv[expr.name]
-        print "expr_var", expr, t 
-        return t
-      else:
-        raise names.NameNotFound(expr.name)
-    
+      old_name = expr.name
+      if old_name not in var_map._vars:
+        raise names.NameNotFound(old_name)
+      new_name = var_map.lookup(old_name)
+      assert new_name in tenv 
+      return typed_ast.Var(new_name, type = tenv[new_name])
+      
     def expr_Tuple():
-      return tuple_type.TupleT(map(expr_type, expr.elts))
+      elts = annotate_children(expr.elts)
+      elt_types = get_types(elts)
+      t = tuple_type.make_tuple_type(elt_types)
+      return typed_ast.Tuple(elts, type = t)
     
     def expr_Const():
-      return type_conv.typeof(expr.value)
+      return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
+  return dispatch(expr, prefix = "expr")
     
+
+
+
+def annotate_stmt(stmt, tenv, var_map ):
   
-    t = dispatch(expr, prefix = "expr")
-    assert isinstance(t, core_types.Type), "Assigned invalid type %s to %s" % (t, expr)
-    return t 
   
-  def merge_left_branch(phi_nodes):
-    for result_var, (left_val, _) in phi_nodes.iteritems():
-      left_type = expr_type(left_val)
-      old_type = tenv.get(result_var, core_types.Unknown)
-      tenv[result_var] = old_type.combine(left_type)
   
-  def merge_right_branch(phi_nodes):
-    for result_var, (_, right_val) in phi_nodes.iteritems():
-      right_type = expr_type(right_val)
-      old_type = tenv.get(result_var, core_types.Unknown)
-      tenv[result_var] = old_type.combine(right_type)
+  def infer_phi(result_var, val):
+    """
+    Don't actually rewrite the phi node, just 
+    add any necessary types to the type environment
+    """
+    new_val = annotate_expr(val, tenv, var_map)
+    new_type = new_val.type 
+    old_type = tenv.get(result_var, core_types.Unknown)
+    new_result_var = var_map.lookup(result_var)
+    tenv[new_result_var]  = old_type.combine(new_type)
   
+  def infer_phi_nodes(nodes, direction):
+    for (var, values) in nodes:
+      infer_phi(var, direction(values))
+  
+  def infer_left_flow(nodes):
+    return infer_phi_nodes(nodes, lambda (x,_): x)
+  
+  def infer_right_flow(nodes):
+    return infer_phi_nodes(nodes, lambda (_, x): x)
       
-  def merge_branches(phi_nodes):
-    for result_var, (left_val, right_val) in phi_nodes.iteritems():
-      left_type = expr_type(left_val)
-      right_type = expr_type(right_val)
-      old_type = tenv.get(result_var, core_types.Unknown)
-      tenv[result_var]  = old_type.combine(left_type).combine(right_type)
   
-  def analyze_stmt(stmt):
-    def stmt_Assign():
-      rhs_type = expr_type(stmt.rhs)
-      match(stmt.lhs, rhs_type, tenv)
+  def annotate_phi_node(result_var, (left_val, right_val)):
+    """
+    Rewrite the phi node by rewriting the values from either branch,
+    renaming the result variable, recording its new type, 
+    and returning the new name paired with the annotated branch values
+     
+    """  
+    new_left = annotate_expr(left_val, tenv, var_map)
+    new_right = annotate_expr(right_val, tenv, var_map)
+    old_type = tenv.get(result_var, core_types.Unknown)
+    new_type = old_type.combine(new_left.type).combine(new_right.type)
+    new_var = var_map.lookup(result_var)
+    tenv[new_var] = new_type
+    return (new_var, (new_left, new_right))  
+  
+  def annotate_phi_nodes(nodes, flow_direction = None):
+    return [annotate_phi_node(v, (l, r), flow_direction) for (v, (l,r)) in nodes]
+  
+  def stmt_Assign():
+    rhs = annotate_expr(stmt.rhs, tenv, var_map)
+    
+    def annotate_lhs(lhs, rhs_type):
+      if isinstance(lhs, untyped_ast.Tuple):
+        assert isinstance(rhs_type, tuple_type.TupleT)
+        assert len(lhs.elts) == len(rhs_type.elt_types)
+        new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in 
+                    zip(lhs.elts, rhs_type.elt_types)]
+        tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
+        return typed_ast.Tuple(new_elts, type = tuple_t)
+      else:
+        assert isinstance(lhs, untyped_ast.Var)
+        new_name = var_map.lookup(lhs.name)
+        old_type = tenv.get(new_name, core_types.Unknown)
+        new_type = old_type.combine(rhs_type)
+        tenv[new_name] = new_type
+        return typed_ast.Var(new_name, type = new_type)
       
-    def stmt_If():
-      cond_type = expr_type(stmt.cond)
-      assert isinstance(cond_type, core_types.ScalarT), \
-        "Condition has type %s but must be convertible to bool" % cond_type
-      analyze_block(stmt.true)
-      analyze_block(stmt.false)
-      merge_branches(stmt.merge)
-      
-    def stmt_Return():
-      t = expr_type(stmt.value)
-      curr_return_type = tenv["$return"]
-      tenv["$return"] = curr_return_type.combine(t)
+    lhs = annotate_lhs(stmt.lhs, rhs.type)
+    return typed_ast.Assign(lhs, rhs)
+
+  def stmt_If():
+    cond = annotate_expr(stmt.cond, tenv, var_map)
+    assert isinstance(cond.type, core_types.ScalarT), \
+      "Condition has type %s but must be convertible to bool" % cond.type
+    true = annotate_block(stmt.true, tenv, var_map)
+    false = annotate_block(stmt.false, tenv, var_map)
+    merge = annotate_phi_nodes(stmt.merge)
+    return typed_ast.If(cond, true, false, merge) 
+   
+  def stmt_Return():
+    ret_val = annotate_expr(stmt.value, tenv, var_map)
+    curr_return_type = tenv["$return"]
+    tenv["$return"] = curr_return_type.combine(ret_val.type)
+    return typed_ast.Return(ret_val)
     
-    def stmt_While():
-      merge_left_branch(stmt.merge_before)
-      analyze_block(stmt.body)
-      merge_right_branch(stmt.merge_after)
-      merge_branches(stmt.merge_after)
+  def stmt_While():
+    infer_left_flow(stmt.merge_before)
+    cond = annotate_expr(stmt.cond, tenv, var_map) 
+    body = annotate_block(stmt.body)
+    merge_before = annotate_phi_nodes(stmt.merge_before)
+    merge_after = annotate_phi_nodes(stmt.merge_after)
+    return typed_ast.While(cond, body, merge_before, merge_after)
     
-    dispatch(stmt, prefix="stmt")
-    
-    
-  def analyze_block(stmts):
-    for stmt in stmts:
-      analyze_stmt(stmt)
-  analyze_block(fn.body)
-  return tenv
+  return dispatch(stmt, prefix="stmt")  
+
+def annotate_block(stmts, tenv, var_map):
+  return [annotate_stmt(s, tenv, var_map) for s in stmts]
+
+def _infer_types(untyped_fn, arg_types):
+  """
+  Given an untyped function and input types, 
+  propagate the types through the body, 
+  annotating the AST with type annotations.
+   
+  NOTE: The AST won't be in a correct state
+  until a rewrite pass back-propagates inferred 
+  types throughout the program and inserts
+  adverbs for scalar operators applied to arrays
+  """
+  
+  
+  var_map = VarMap()
+  
+  typed_args = untyped_fn.args.transform(var_map.rename)
+  assert isinstance(typed_args, Args)
+  tenv = typed_args.bind(typed_args, arg_types)
+  
+  # keep track of the return 
+  tenv['$return'] = core_types.Unknown 
+  
+  
   
 
 def rewrite_typed(fn, old_type_env):
@@ -204,6 +300,7 @@ def rewrite_typed(fn, old_type_env):
   
   def get_type(expr):
     return expr.type
+  
   def get_types(exprs):
     return map(get_type, exprs)
   
@@ -215,9 +312,11 @@ def rewrite_typed(fn, old_type_env):
       return typed_ast.Var(new_name, type = var_type)
     
     def rewrite_Tuple():
+      
       new_elts = map(rewrite_expr, expr.elts)
       new_types = get_types(new_elts)
-      return typed_ast.Tuple(new_elts, type = tuple_type.TupleT(new_types))
+      print expr, new_elts, new_types
+      return typed_ast.Tuple(new_elts, type = tuple_type.make_tuple_type(new_types))
     
     def rewrite_Const():
       return typed_ast.Const(expr.value, type = type_conv.typeof(expr.value))
@@ -225,7 +324,7 @@ def rewrite_typed(fn, old_type_env):
     def rewrite_Index():
       ###
       ### HOW DO TO THIS WITHOUT DUPLICATING THE CHECK AGAINST Type.static_indexing
-      return typed_ast.Index()
+      assert False 
     
     def rewrite_PrimCall():
       # TODO: This awkwardly infers the types we need to cast args up to
@@ -319,6 +418,8 @@ def rewrite_typed(fn, old_type_env):
       return typed_ast.If(new_cond, new_true_block, new_false_block, new_merge)
     elif isinstance(stmt, untyped_ast.Return):
       return typed_ast.Return(coerce_expr(stmt.value, fn_return_type))
+    
+    
     elif isinstance(stmt, untyped_ast.While):
       new_cond = coerce_expr(stmt.cond, core_types.Bool)
       new_body = rewrite_block(stmt.body)

@@ -15,14 +15,11 @@ class Closure:
     self.fn = fn 
     self.fixed_args = fixed_args
 
-from match import match, match_list 
+from args import match 
   
-def eval_fn(fn, *args):
-  n_expected = len(fn.args)
-  n_given = len(args)
-  assert n_expected == n_given , \
-    "Expected %d args, given %d: %s" % (n_expected, n_given, args)
-  env = match_list(fn.args, args)  
+def eval_fn(fn, *args, **kwds):
+  env = fn.args.bind(args, kwds)
+    
   def eval_expr(expr): 
     assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    
     def expr_Const():
