@@ -24,7 +24,7 @@ typedef struct {
 
 job_t *make_job(int start, int stop, int step, int num_threads,
                 int task_len);
-//job_t *reconfigure_job(job_t *old_job, int num_threads);
+job_t *reconfigure_job(job_t *old_job, int step);
 int num_threads(job_t *job);
 void free_job(job_t *job);
 

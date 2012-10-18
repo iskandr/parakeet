@@ -13,8 +13,8 @@ static inline int min(a, b) {
 }
 
 typedef struct {
-  int               id;
-  worker_data_t    *worker_data;
+  int            id;
+  worker_data_t *worker_data;
 } worker_args_t;
 
 static void *worker(void *args) {
@@ -106,7 +106,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
     args->worker_data = &thread_pool->worker_data[i];
     CPU_ZERO(&cpu_set);
     CPU_SET(i, &cpu_set);
-    pthread_attr_setaffinity_np(&attr, 8, &cpu_set);
+    pthread_attr_setaffinity_np(&attr, max_threads, &cpu_set);
     rc = pthread_create(&thread_pool->workers[i], &attr, worker, (void*)args);
     if (rc) {
       printf("Couldn't create worker %d (Error code %d). Exiting.\n", i, rc);
@@ -120,7 +120,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
 // This function should only ever be called when all of the threads are paused.
 void launch_job(thread_pool_t *thread_pool,
                 work_function_t work_function, void *args, job_t *job,
-                int *tile_sizes) {
+                int *tile_sizes, int reset_tps) {
   assert(job->num_lists <= thread_pool->num_workers);
 
   thread_pool->job = job;
@@ -142,12 +142,14 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].work_function = work_function;
     thread_pool->worker_data[i].args = args;
     thread_pool->worker_data[i].tile_sizes = tile_sizes;
-    thread_pool->worker_data[i].iters_done = 0;
-    thread_pool->worker_data[i].timestamp =
-      thread_pool->timestamps[i] = get_cpu_time();
+    if (reset_tps) {
+      thread_pool->worker_data[i].iters_done = 0;
+      thread_pool->worker_data[i].timestamp =
+          thread_pool->timestamps[i] = get_cpu_time();
+      thread_pool->iters_done[i] = 0;
+    }
     pthread_cond_signal(&thread_pool->worker_data[i].cond);
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
-    thread_pool->iters_done[i] = 0;
   }
   for (i = thread_pool->num_active; i < thread_pool->num_workers; ++i) {
     pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
@@ -157,8 +159,10 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].work_function = NULL;
     thread_pool->worker_data[i].args = NULL;
     thread_pool->worker_data[i].tile_sizes = NULL;
-    thread_pool->worker_data[i].iters_done = 0;
-    thread_pool->worker_data[i].timestamp = 0;
+    if (reset_tps) {
+      thread_pool->worker_data[i].iters_done = 0;
+      thread_pool->worker_data[i].timestamp = 0;
+    }
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
 }
@@ -186,6 +190,17 @@ int job_finished(thread_pool_t *thread_pool) {
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
   }
   return all_done;
+}
+
+int get_iters_done(thread_pool_t *thread_pool) {
+  int total = 0;
+  unsigned long long timestamp;
+  int i, iters;
+  for (i = 0; i < thread_pool->num_active; ++i) {
+    total += thread_pool->worker_data[i].iters_done;
+  }
+
+  return total;
 }
 
 double get_throughput(thread_pool_t *thread_pool) {

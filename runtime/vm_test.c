@@ -183,7 +183,7 @@ void test_mm(void) {
 
   struct timeval start, end, result;
   gettimeofday(&start, NULL);
-  launch_job(thread_pool, &vm2, &vm_args, job, tile_sizes);
+  launch_job(thread_pool, &vm2, &vm_args, job, tile_sizes, 1);
   wait_for_job(thread_pool);
   gettimeofday(&end, NULL);
 
