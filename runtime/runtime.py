@@ -111,8 +111,8 @@ class Runtime():
     return cast(getattr(tiled_ast, fname), c_void_p)  
 
   def get_initial_reg_block_sizes(self, num_loops):
-    block_sizes = [1 for _ in range(num_loops - 2)]
-    block_sizes.extend([6, 1])
+    block_sizes = [1 for _ in range(num_loops - 3)]
+    block_sizes.extend([2, 3, 1])
     return block_sizes
 
   def greedily_find_best_tiles(self):
