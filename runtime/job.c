@@ -44,6 +44,34 @@ job_t *make_job(int start, int stop, int step, int num_threads,
   return job;
 }
 
+// TODO: If we ever want to use task_len, this needs to be updated.
+job_t *reconfigure_job(job_t *job, int step) {
+  int i;
+  for (i = 0; i < job->num_lists; ++i) {
+    if (job->task_lists[i].cur_task != job->task_lists[i].num_tasks) {
+      int start =
+          job->task_lists[i].tasks[job->task_lists[i].cur_task].next_start;
+      int end = job->task_lists[i].tasks[job->task_lists[i].num_tasks - 1].end;
+      int num_tasks = safe_div(end - start, step);
+      free(job->task_lists[i].tasks);
+      job->task_lists[i].num_tasks = num_tasks;
+      job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
+      job->task_lists[i].cur_task = 0;
+      int cur_iter = start;
+      int j;
+      for (j = 0; j < num_tasks; ++j) {
+        job->task_lists[i].tasks[j].next_start = cur_iter;
+        job->task_lists[i].tasks[j].step = step;
+        cur_iter += step;
+        job->task_lists[i].tasks[j].end = cur_iter;
+      }
+      job->task_lists[i].tasks[num_tasks - 1].end = end;
+    }
+  }
+
+  return job;
+}
+
 //job_t *reconfigure_job(job_t *job, int num_threads) {
 //  if (num_threads == job->num_lists) {
 //    return job;

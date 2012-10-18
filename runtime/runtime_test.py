@@ -15,9 +15,9 @@ class vm_args_t(Structure):
 libVM = cdll.LoadLibrary("vm.so")
 libVM.make_array.restype = POINTER(c_double)
 
-m = 6000
-n = 2400
-k = 600
+m = 24000
+n = 7200
+k = 1200
 a = libVM.make_array(m, k)
 b = libVM.make_array(n, k)
 o = libVM.make_array(m, n)
@@ -27,8 +27,7 @@ args = pointer(vm_args_t(a, b, o, m, n, k))
 r = runtime.Runtime()
 print "Launching parallel job"
 start = time.time()
-r.run_job(cast(libVM.vm3, c_void_p), cast(args, c_void_p),
-          m, [n], [-2])
+r.run_job(libVM, cast(args, c_void_p), m, [n, k], [-2, -2])
 stop = time.time()
 r.cleanup()
 print "Time to run job:", stop - start, "secs"
@@ -36,11 +35,13 @@ print "Time to run job:", stop - start, "secs"
 npa = np.reshape(np.fromiter(a, dtype=np.float, count=m*k), (m, k))
 npb = np.reshape(np.fromiter(b, dtype=np.float, count=n*k), (n, k))
 npo = np.reshape(np.fromiter(o, dtype=np.float, count=m*n), (m, n))
+print npo
 
 start = time.time()
 npr = np.dot(npa, npb.T)
 stop = time.time()
 print "Time for numpy:", stop - start, "secs"
+print npr
 
 if (npr == npo).all():
   print "Passed"
