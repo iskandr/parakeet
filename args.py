@@ -73,20 +73,24 @@ def transform_list(pats, atom_fn, tuple_fn = tuple, extract_name = True):
  
  
 class Args:
-  def __init__(self, *args, **kwds):
+  def __init__(self, args, kwds):
     self.positional = args
     self.kwds = kwds     
 
-  def bind(self, actuals):
+  def __str__(self):
+    return "Args(positional = %s, kwds=%s)" % (self.positional, self.kwds)
+  def bind(self, actuals, actual_kwds = {}):
     env = {}
-    if hasattr(actuals, 'kwds'):
-      kwds = actuals.kwds 
-      
-    if hasattr(actuals, 'positional'):
-      positional = actuals.positional 
+    
+    if isinstance(actuals, Args):
+      assert len(actual_kwds) == 0
+      kwds = actuals.kwds
+      positional = actuals.positional
     else:
-      # assume that we've just been given a list 
       positional = list(actuals)
+      kwds = dict(actual_kwds) 
+    
+
     
     for k,v in kwds.iteritems():
       env[k] = v
@@ -95,7 +99,9 @@ class Args:
       if k not in env:
         env[k] = v
     
+
     remaining_formals = [arg for arg in self.positional if is_tuple(arg) or name(arg) not in env]
+    print remaining_formals 
     assert len(positional) == len(remaining_formals), \
       "Unexpected actual arguments (%s) for positional formals (%s)" % (positional, remaining_formals)
     
@@ -117,6 +123,7 @@ class Args:
   
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True,
                   kwd_key_fn = None, kwd_value_fn = None):
+    
     positional = transform_list(self.positional, name_fn, tuple_fn, extract_name)
     kwds = {}
     for (k,v) in self.kwds.iteritems():
@@ -124,5 +131,6 @@ class Args:
       new_key = kwd_key_fn(old_key) if kwd_key_fn else name_fn(old_key)
       new_value = kwd_value_fn(v) if kwd_value_fn else v
       kwds[new_key] = new_value
-    return Args(positional, kwds)
+
+    return Args(positional, kwds) 
   

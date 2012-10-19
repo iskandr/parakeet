@@ -9,12 +9,50 @@ import names
 from names import NameNotFound 
 from scoped_env import ScopedEnv 
 from common import dispatch
+from args import Args 
 
-def extract_arg_names(args):
+
+def translate_reserved_name(name):
+  if name == 'True':
+    return syntax.Const(True)
+  elif name == 'False':
+    return syntax.Const(False)
+  elif name == 'None':
+    return syntax.Const(None)
+  else:
+    raise NameNotFound(name)
+
+
+def translate_default_arg_value(arg):
+  if isinstance(arg, ast.Num):
+    return syntax.Const (arg.n)
+  else:
+    assert isinstance(arg, ast.Name)
+    return translate_reserved_name(arg.id)
+  
+  
+def translate_positional(arg):
+  if isinstance(arg, ast.Name):
+    return syntax.Var(arg.id)
+  elif isinstance(arg, ast.Tuple):
+    return syntax.Tuple(translate_positional_args(arg.elts))  
+  
+def translate_positional_args(args):
+  return map(translate_positional, args) 
+
+def translate_args(args):
   assert not args.vararg
   assert not args.kwarg
   assert not args.defaults
-  return [arg.id for arg in args.args]
+  
+  positional = translate_positional_args(args.args)
+  defaults = {}
+  for (k,v) in args.defaults:
+    assert isinstance(k, ast.Name)
+    defaults[k] = translate_default_arg_value(v)
+  return Args(positional, defaults)
+
+  
 
 def collect_defs_from_node(node):
   """
@@ -31,6 +69,8 @@ def collect_defs_from_node(node):
   elif isinstance(node, ast.Name):
     return set([node.id])
   elif isinstance(node, ast.Tuple):
+    return collect_defs_from_list(node.elts)
+  elif isinstance(node, ast.List):
     return collect_defs_from_list(node.elts)
   else:
     return set([])
@@ -50,9 +90,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
   # syntax names for nonlocals which should get passed in
    
   nonlocal_arg_names = []
-  arg_names = extract_arg_names(args)
   env = ScopedEnv()
-  ssa_arg_names = [env.fresh(n) for n in arg_names]
+  
+  args_obj = translate_args(args)
+  ssa_args = args_obj.transform(env.fresh, extract_name = True)
   
   # maps a local SSA ID to a global fn id paired with some closure values
 
@@ -88,14 +129,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         ssa_name = env.fresh(name)
         nonlocal_original_names.append(name)
         nonlocal_arg_names.append(ssa_name)
-        #print name, ssa_name, nonlocal_arg_names 
         return syntax.Var (ssa_name)
-    elif name == 'True':
-      return syntax.Const(True)
-    elif name == 'False':
-      return syntax.Const(False)
     else:
-      raise NameNotFound(name)
+      translate_reserved_name(name)
   
  
     
@@ -269,7 +305,6 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     elif isinstance(stmt, ast.If):
       cond = translate_expr(stmt.test)
       true_scope, true_block  = translate_block(stmt.body)
-      #print true_block  
       false_scope, false_block = translate_block(stmt.orelse)
       merge = create_phi_nodes(true_scope, false_scope)
       return syntax.If(cond, true_block, false_block, merge)
@@ -317,8 +352,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     
   _, ssa_body = translate_block(body)   
   ssa_fn_name = names.fresh(name)
-  full_args = nonlocal_arg_names + ssa_arg_names
-  #print ssa_fn_name, full_args 
+
+  full_args = Args(nonlocal_arg_names + ssa_args.positional, ssa_args.kwds)
+
   fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
   untyped_functions[ssa_fn_name]  = fundef 
   return fundef
