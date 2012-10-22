@@ -12,8 +12,6 @@ from common import dispatch
 from args import Args, match, match_list, transform 
 
 
-   
-
 class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg 
@@ -95,41 +93,41 @@ def annotate_expr(expr, tenv, var_map):
     return typed_ast.Invoke(closure, args, type = invoke_result_type) 
       
   
-    def expr_PrimCall():
-      args = annotate_children(expr.args)
-      arg_types = get_types(args)
-      upcast_types = expr.prim.expected_input_types(arg_types)
-      result_type = expr.prim.result_type(upcast_types)
-      return typed_ast.PrimCall(expr.prim, args, type = result_type)
+  def expr_PrimCall():
+    args = annotate_children(expr.args)
+    arg_types = get_types(args)
+    upcast_types = expr.prim.expected_input_types(arg_types)
+    result_type = expr.prim.result_type(upcast_types)
+    return typed_ast.PrimCall(expr.prim, args, type = result_type)
   
-    def expr_Index():
-      value = annotate_child(expr.value)
-      index = annotate_child(expr.index)
-      if isinstance(value.type, tuple_type.TupleT):
-        assert isinstance(index.type, core_types.IntT)
-        assert isinstance(index, untyped_ast.Const)
-        i = index.value
-        return typed_ast.TupleProj(value, i)
-      else:
-        result_type = value.type.index_type(index.type)
-        return typed_ast.Index(value, index, type = result_type)
+  def expr_Index():
+    value = annotate_child(expr.value)
+    index = annotate_child(expr.index)
+    if isinstance(value.type, tuple_type.TupleT):
+      assert isinstance(index.type, core_types.IntT)
+      assert isinstance(index, untyped_ast.Const)
+      i = index.value
+      return typed_ast.TupleProj(value, i)
+    else:
+      result_type = value.type.index_type(index.type)
+      return typed_ast.Index(value, index, type = result_type)
       
-    def expr_Var():
-      old_name = expr.name
-      if old_name not in var_map._vars:
-        raise names.NameNotFound(old_name)
-      new_name = var_map.lookup(old_name)
-      assert new_name in tenv 
-      return typed_ast.Var(new_name, type = tenv[new_name])
-      
-    def expr_Tuple():
-      elts = annotate_children(expr.elts)
-      elt_types = get_types(elts)
-      t = tuple_type.make_tuple_type(elt_types)
-      return typed_ast.Tuple(elts, type = t)
+  def expr_Var():
+    old_name = expr.name
+    if old_name not in var_map._vars:
+      raise names.NameNotFound(old_name)
+    new_name = var_map.lookup(old_name)
+    assert new_name in tenv 
+    return typed_ast.Var(new_name, type = tenv[new_name])
     
-    def expr_Const():
-      return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
+  def expr_Tuple():
+    elts = annotate_children(expr.elts)
+    elt_types = get_types(elts)
+    t = tuple_type.make_tuple_type(elt_types)
+    return typed_ast.Tuple(elts, type = t)
+  
+  def expr_Const():
+    return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
   return dispatch(expr, prefix = "expr")
     
 
@@ -244,19 +242,38 @@ def _infer_types(untyped_fn, arg_types):
   
   var_map = VarMap()
   
+  arg_patterns = untyped_fn.args.positional + untyped_fn.args.kwds.keys() 
   typed_args = untyped_fn.args.transform(var_map.rename)
+
+  
   assert isinstance(typed_args, Args)
   tenv = typed_args.bind(typed_args, arg_types)
   
   # keep track of the return 
   tenv['$return'] = core_types.Unknown 
   
+  body = annotate_block(untyped_fn.body, tenv, var_map)
+  return_type = tenv['$return']
+  # if nothing ever gets returned, then set the return type to None
+  if return_type == core_types.Unknown:
+    assert False, "TO DO: Implement a none type"
+    
+  return typed_ast.TypedFn(
+    name = names.refresh(untyped_fn.name), 
+    body = body, 
+    args = typed_args, 
+    input_types = arg_types, 
+    return_type = return_type, 
+    type_env = tenv)
+
+  
   
   
 
-def rewrite_typed(fn, old_type_env):
-  
+def rewrite_typed(fn):
+  print fn
   blocks = NestedBlocks()
+  old_type_env = fn.type_env
   fn_return_type = old_type_env["$return"]
   
   var_map = {}
@@ -441,24 +458,8 @@ def rewrite_typed(fn, old_type_env):
       curr_block.append(rewrite_stmt(stmt))
     return blocks.pop()
   
-  new_args = rewrite_formal_args(fn.args)
-  new_body = rewrite_block(fn.body)
+  fn.body = rewrite_block(fn.body)
   
-  typed_id = names.refresh(fn.name)
-  # this helper only exists since args are currently either strings or expressions
-  # TODO: make args always expressions 
-  def arg_type(arg):
-    if isinstance(arg, str):
-      return new_type_env[arg]
-    else:
-      return typeof(arg)
-     
-  arg_types = map(arg_type, new_args)
-  typed_fundef = typed_ast.TypedFn(name = typed_id, args = new_args, 
-    body = new_body, input_types = arg_types, return_type = fn_return_type, 
-    type_env = new_type_env)
-  return typed_fundef 
-
 
 def specialize(untyped, arg_types): 
   if isinstance(untyped, str):
@@ -471,8 +472,8 @@ def specialize(untyped, arg_types):
   if key in typed_functions:
     return typed_functions[key]
   else:
-    type_env = _infer_types(untyped, arg_types)  
-    typed_fundef = rewrite_typed(untyped, type_env)
+    typed_fundef = _infer_types(untyped, arg_types)  
+    rewrite_typed(typed_fundef)
 
     typed_functions[key] = typed_fundef 
     return typed_fundef 

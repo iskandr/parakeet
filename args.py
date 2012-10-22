@@ -15,7 +15,20 @@ def tuple_elts(arg):
   except:
     # hope that it has an __iter__ implementation
     return tuple(arg)
-  
+
+
+def flatten(arg):
+  if is_tuple(arg):
+    return flatten_list(tuple_elts(arg))
+  else:
+    return [arg]
+
+def flatten_list(args):
+  result = []
+  for arg in args:
+    result += flatten(arg)
+  return result 
+
 def match(pattern, val, env):
   """
   Given a left-hand-side of tuples & vars, 
@@ -70,17 +83,84 @@ def transform(pat, atom_fn, tuple_fn = tuple, extract_name = True):
    
 def transform_list(pats, atom_fn, tuple_fn = tuple, extract_name = True):
   return [transform(p, atom_fn, tuple_fn, extract_name) for p in pats]
+
+def bind(lhs, rhs):
+  if isinstance(lhs, Args):
+    return lhs.bind(rhs)
+  
+  if isinstance(lhs, (tuple, list)):
+    keys = flatten_list(lhs)
+  else:
+    keys = flatten(lhs)
+    
+  if isinstance(rhs, (list, tuple)):
+    values = flatten_list(rhs)
+  else:
+    values = flatten(rhs)
+  
+  return dict(*zip(keys, values)) 
  
- 
+class KeyValueList:
+  
+  def __init__(self, *elts):
+    self.elts = elts
+    self.positions = {}
+    for (i, (k, _)) in elts:
+      self.positions[k] = i
+    
+  def pos(self, k):
+    return self.positions[k]
+  
+  def __iter__(self):
+    return iter(self.keys())
+  
+  def iteritems(self):
+    return iter(self.elts)
+  
+  def iterkeys(self):
+    return (k for (k, _) in self.elts)
+  
+  def itervalues(self):
+    return (v for (_, v) in self.elts)
+   
+  def keys(self):
+    return [k for (k,_) in self.elts]
+  
+  def values(self):
+    return [v for (_, v) in self.elts]
+   
+  def __contains__(self, k):
+    return k in self.keys() 
+  
+  def __str__(self):
+    return str(self.elts)
+  
+  def __len__(self):
+    return len(self.elts)
+  
 class Args:
-  def __init__(self, args, kwds):
-    self.positional = args
+  def __init__(self, positional, kwds = KeyValueList()):
+    assert isinstance(positional, (list, tuple))
+    self.positional = positional
+    assert isinstance(kwds, KeyValueList)
     self.kwds = kwds     
 
   def __str__(self):
     return "Args(positional = %s, kwds=%s)" % (self.positional, self.kwds)
-  def bind(self, actuals, actual_kwds = {}):
+  
+  def flatten(self, default_keys = True):
+    return flatten(self.positional) + (self.kwds.keys() if default_keys else self.kwds.values()) 
+  
+  def bind(self, actuals, actual_kwds = None):
+    """
+    Like combine_with_actuals but returns a dictionary
+    """
     env = {}
+    for (formal, actual) in self.combine(actuals, actual_kwds):
+      match(formal, actual, env)
+    return env 
+  
+  def combine_with_actuals(self, actuals, actual_kwds = None):
     
     if isinstance(actuals, Args):
       assert len(actual_kwds) == 0
@@ -88,25 +168,37 @@ class Args:
       positional = actuals.positional
     else:
       positional = list(actuals)
-      kwds = dict(actual_kwds) 
     
-
+    if actual_kwds is None:
+      kwds = KeyValueList()
+    elif isinstance(actual_kwds, (list, tuple)):
+      kwds = KeyValueList(actual_kwds)
     
-    for k,v in kwds.iteritems():
+    formals_list = []
+    actuals_list = []
+    
+    n_positional = len(self.positional)
+    used = set([])
+    for (i, arg) in enumerate(positional):
+      if i < n_positional:
+        formal = self.positional[i]
+      else:
+        formal = self.kwds[i - n_positional][0]
+      formals_list[i] = formal
+      actuals_list[i] = arg 
+      used.add(formal)
+    
+    for (k,v) in kwds.iteritems():
+      assert k not in used
+      used.add(k)
+      self.kwds.pos(k)
       env[k] = v
       
-    for k,v in self.kwds.iteritems():
+    for (k,v) in self.kwds.iteritems():
       if k not in env:
-        env[k] = v
-    
-
-    remaining_formals = [arg for arg in self.positional if is_tuple(arg) or name(arg) not in env]
-    print remaining_formals 
-    assert len(positional) == len(remaining_formals), \
-      "Unexpected actual arguments (%s) for positional formals (%s)" % (positional, remaining_formals)
-    
-    match_list(remaining_formals, positional, env)
+        env[k] = v 
     return env   
+   
   
   def iter_collect(self, name_fn, kwd_item_fn = None):
     """ 
@@ -121,14 +213,14 @@ class Args:
       env[k] = new_v
     return env
   
-  def transform(self, name_fn, tuple_fn = tuple, extract_name = True,
+  def transform(self, positional_fn, tuple_fn = tuple, extract_name = True,
                   kwd_key_fn = None, kwd_value_fn = None):
     
-    positional = transform_list(self.positional, name_fn, tuple_fn, extract_name)
+    positional = transform_list(self.positional, positional_fn, tuple_fn, extract_name)
     kwds = {}
     for (k,v) in self.kwds.iteritems():
       old_key = name(k) if extract_name else k
-      new_key = kwd_key_fn(old_key) if kwd_key_fn else name_fn(old_key)
+      new_key = kwd_key_fn(old_key) if kwd_key_fn else positional_fn(old_key)
       new_value = kwd_value_fn(v) if kwd_value_fn else v
       kwds[new_key] = new_value
 

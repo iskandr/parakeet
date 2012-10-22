@@ -5,6 +5,7 @@ from common import dispatch
 from core_types import ScalarT, StructT
 import type_conv
 
+
 class ReturnValue(Exception):
   def __init__(self, value):
     self.value = value 
@@ -17,8 +18,9 @@ class Closure:
 
 from args import match 
   
-def eval_fn(fn, *args, **kwds):
-  env = fn.args.bind(args, kwds)
+def eval_fn(fn, actuals):
+
+  env = fn.args.bind(actuals)
     
   def eval_expr(expr): 
     assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    
@@ -132,12 +134,13 @@ def eval_fn(fn, *args, **kwds):
   except:
     raise
   
-def run_python_fn(python_fn, args):
+def run_python_fn(python_fn, args, kwds):
   untyped  = ast_conversion.translate_function_value(python_fn)
   # should eventually roll this up into something cleaner, since 
   # top-level functions are really acting like closures over their
   # global dependencies 
   global_args = [python_fn.func_globals[n] for n in untyped.nonlocals]
-  all_args = global_args + list(args)
-  return eval_fn(untyped, *all_args) 
+  all_positional = global_args + list(args)
+  actuals = args.Args(all_positional, kwds)
+  return eval_fn(untyped, actuals) 
   

@@ -35,6 +35,12 @@ class CompilationEnv:
     """
     Initializes the variables dictionary and returns a builder object
     """
+    
+    llvm_input_types = fundef.input_types.transform(
+      positional_fn = llvm_ref_type,
+      tuple_fn = llvm_types.
+      kwd_key_fn = lambda k: k, 
+      kwd_value_fn = llvm_ref_type) 
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
     llvm_output_type = llvm_ref_type(fundef.return_type)   
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
@@ -42,6 +48,8 @@ class CompilationEnv:
     _, builder = self.new_block("entry")
     self._init_vars(fundef, builder)
     return builder 
+  
+  
   
   def _init_vars(self, fundef, builder):  
 
@@ -116,24 +124,18 @@ def compile_expr(expr, env, builder):
 
   def compile_Struct():
     llvm_struct_t = llvm_value_type(expr.type)
-    
-    print "STRUCT TYPE", llvm_struct_t
-    print llvm_struct_t.elements
+
     
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
     
-    print "ALLOC", struct_ptr
-    print "ALLOC TYPE", struct_ptr.type  
+
     
     for (i, elt)  in enumerate(expr.args):
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
-      print "FIELD PTR", elt_ptr, ":", elt_ptr.type
       llvm_elt = compile_expr(elt, env, builder)
-      print "ELT", llvm_elt, ":", llvm_elt.type 
-      
-      store = builder.store(llvm_elt, elt_ptr)
-      print "STORE", store 
+      builder.store(llvm_elt, elt_ptr)
+
     return struct_ptr
     
   
