@@ -118,6 +118,9 @@ class Args:
     return "Args(positional = %s, defaults=%s)" % (self.positional, self.defaults.items())
   
 
+  def __iter__(self):
+    return iter(self.arg_slots)
+
   def bind(self, actuals, actual_kwds = {}, default_fn = None):
     """
     Like combine_with_actuals but returns a dictionary

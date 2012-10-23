@@ -118,8 +118,6 @@ def compile_expr(expr, env, builder):
 
   def compile_Struct():
     llvm_struct_t = llvm_value_type(expr.type)
-
-    
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
     
@@ -131,10 +129,28 @@ def compile_expr(expr, env, builder):
       builder.store(llvm_elt, elt_ptr)
 
     return struct_ptr
-    
   
+  def compile_Attribute():
+    llvm_value = compile_expr(expr.value, env, builder)
+    idx = None
+    
+    fields = expr.value.type._fields_
+    field_names = [k for (k, _) in fields]
+    for (i, field_name) in enumerate(field_names):
+      if field_name == expr.name:
+        idx = i
+    assert idx is not None, "Attribute %s not found, valid attributes: %s" % (expr.name, field_names)
+    print "Attr lhs", llvm_value
+    print "-- type",  llvm_value.type
+    field_ptr =  builder.gep(llvm_value, [int32(0), int32(idx)], "%s_ptr" % expr.name)
+    print "Attr ptr", field_ptr
+    print "-- type",  field_ptr.type
+    field_value = builder.load(field_ptr, "%s_value" % expr.name) 
+    print "Attr value", field_value
+    print "-- type", field_value.type 
+    return field_value  
   def compile_Invoke():
-    print "INVOKE_START"
+
     closure_t = expr.closure.type
     assert isinstance(closure_t, ClosureT)
     arg_types = [arg.type for arg in expr.args] 
@@ -169,11 +185,8 @@ def compile_expr(expr, env, builder):
     llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
     full_args_list = llvm_closure_args + llvm_direct_args 
     assert len(full_args_list) == len(full_arg_types)  
-
-    print "pre-call"
-    invoke_result = builder.call(target_fn, full_args_list, 'invoke_result')
-    print "done with call"
-    return invoke_result 
+    return builder.call(target_fn, full_args_list, 'invoke_result')
+ 
     
   def compile_PrimCall():
     prim = expr.prim

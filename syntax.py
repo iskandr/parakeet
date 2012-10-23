@@ -51,7 +51,7 @@ class Var(Expr):
     return self.name 
 
 class Attribute(Expr):
-  _members = ['value', 'attr']
+  _members = ['value', 'name']
 
 class Index(Expr):
   _members = ['value', 'index']

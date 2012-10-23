@@ -61,15 +61,8 @@ def get_type(expr):
 def get_types(exprs):
   return [expr.type for expr in exprs]
 
-count = 0
-
 def annotate_expr(expr, tenv, var_map):
-  """
-  global count
-  count = count + 1 
-  print expr 
-  assert count < 19
-  """
+
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
   
@@ -117,7 +110,9 @@ def annotate_expr(expr, tenv, var_map):
       assert isinstance(index.type, core_types.IntT)
       assert isinstance(index, untyped_ast.Const)
       i = index.value
-      return typed_ast.TupleProj(value, i)
+      assert isinstance(i, int)
+      elt_t = value.type.elt_types[i]
+      return typed_ast.TupleProj(value, i, type = elt_t)
     else:
       result_type = value.type.index_type(index.type)
       return typed_ast.Index(value, index, type = result_type)
@@ -138,8 +133,9 @@ def annotate_expr(expr, tenv, var_map):
   
   def expr_Const():
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
-  return dispatch(expr, prefix = "expr")
-    
+  result = dispatch(expr, prefix = "expr")
+  assert result.type, "Missing type on %s" % result
+  return result    
 
 
 
@@ -363,8 +359,8 @@ def rewrite_typed(fn):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
-
       return typed_ast.PrimCall(expr.prim, upcast_args, type = result_type )
+    
     def rewrite_Closure():
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
@@ -483,8 +479,9 @@ def specialize(untyped, arg_types):
   if key in typed_functions:
     return typed_functions[key]
   else:
-    typed_fundef = _infer_types(untyped, arg_types)  
-    rewrite_typed(typed_fundef)
+    typed_fundef = _infer_types(untyped, arg_types)
+    print typed_fundef  
+    # rewrite_typed(typed_fundef)
 
     typed_functions[key] = typed_fundef 
     return typed_fundef 
