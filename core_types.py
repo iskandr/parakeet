@@ -397,3 +397,12 @@ class PtrT(ConcreteT):
   def ctypes_repr(self):
     return self._ctypes_repr
 
+_ptr_types = {}
+def ptr_type(t):
+  if t in _ptr_types:
+    return _ptr_types[t]
+  else:
+    ptr_t = PtrT(t)
+    _ptr_types[t] = ptr_t
+    return ptr_t 
+

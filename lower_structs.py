@@ -1,14 +1,16 @@
 import syntax
 import core_types 
-import buffer_type 
-from array_type import ArrayT
+
+from array_type import ArrayT, ScalarT
 import closure_signatures 
 from transform import Transform
 
 from typed_syntax_helpers import const_tuple, const_int 
 
 class LowerStructs(Transform):
-  
+  """
+  The only non-scalar objects should all be created as explicit Structs
+  """  
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
     return syntax.Struct(struct_args, type = expr.type)
@@ -18,7 +20,6 @@ class LowerStructs(Transform):
     closure_id = closure_signatures.get_id(expr.type)
     closure_id_node = syntax.Const(closure_id, type = core_types.Int64)
     return syntax.Struct([closure_id_node] + closure_args, type = expr.type)
-    
     
   def transform_Invoke(self, expr):
     new_closure = self.transform_expr(expr.closure)
@@ -34,21 +35,23 @@ class LowerStructs(Transform):
     return syntax.Attribute(new_tuple, field_name, type = field_type)
     
   def transform_Array(self, expr):
+    n = len(expr.elts)    
     array_t = expr.type
-    assert isinstance(array_t, ArrayT) 
+    assert isinstance(array_t, ArrayT)
+
     elt_t = array_t.elt_type
-    buffer_t = buffer_type.make_buffer_type(elt_t)
-    buffer_var = self.fresh_var(buffer_t, 'buffer')
-    n = len(expr.elts)
-    alloc_buffer = syntax.AllocBuffer(elt_t, const_int(n), type = buffer_t)
-    self.insert_stmt(syntax.Assign(buffer_var, alloc_buffer))
+    assert isinstance(elt_t, ScalarT)
+    ptr_t = core_types.ptr_type(elt_t)
+    alloc = syntax.Alloc(elt_t, const_int(n), type = ptr_t)
+    ptr_var = self.fresh_var(ptr_t, "data")
+    self.insert_stmt(syntax.Assign(ptr_var, alloc))
     for (i, elt) in enumerate(self.transform_expr_list(expr.elts)):
       idx = syntax.Const(i, type = core_types.Int32)
-      lhs = syntax.Index(buffer_var, idx)
+      lhs = syntax.Index(ptr_var, idx)
       self.insert_stmt(syntax.Assign(lhs, elt))
     shape = const_tuple(n)
     strides = const_tuple(elt_t.nbytes)
-    return syntax.Struct([buffer_var, shape, strides], type = expr.type)
+    return syntax.Struct([ptr_var, shape, strides], type = expr.type)
   
 def make_structs_explicit(fn):
   return LowerStructs(fn).apply()

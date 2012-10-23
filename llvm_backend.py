@@ -2,7 +2,7 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT
+from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT, PtrT
 
  
 import prims 
@@ -266,13 +266,17 @@ def compile_stmt(stmt, env, builder):
   print ">> ", stmt 
   
   def compile_Assign():
-    ref = env[stmt.lhs.name]
+    
     
     value = compile_expr(stmt.rhs, env, builder)
     print "ASSIGN"
-    print "LHS %s : %s" % (ref, ref.type)
+    print "LHS %s : %s" % stmt.lhs
     print "RHS %s : %s" % (value, value.type)
-    builder.store(value, ref)
+    if isinstance(stmt.lhs, syntax.Var):
+      ref = env[stmt.lhs.name]
+      builder.store(value, ref)
+    elif isinstance(stmt.lhs, syntax.Index):
+      assert isinstance(stmt.rhs.type, PtrT)
     return builder, False 
   
   def compile_While():
@@ -354,7 +358,6 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   
-  print "Compiling", fundef.name 
   
   import lower_structs
   fundef = lower_structs.make_structs_explicit(fundef)

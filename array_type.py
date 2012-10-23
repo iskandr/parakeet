@@ -1,20 +1,19 @@
 
-import numpy as np 
-from buffer_type import make_buffer_type
+# import numpy as np 
+
 from tuple_type import repeat_tuple
-from core_types import StructT, IncompatibleTypes, ScalarT, Int64 
+from core_types import StructT, IncompatibleTypes, ScalarT, Int64, ptr_type 
 
 class ArrayT(StructT):
   _members = ['elt_type', 'rank']
 
   def finalize_init(self):
     assert isinstance(self.elt_type, ScalarT)
-    tuple_t = repeat_tuple(Int64, self.rank)
     
     self._field_types = [
-      ('data', make_buffer_type(self.elt_type)), 
-      ('shape', tuple_t), 
-      ('strides', tuple_t),
+      ('data', ptr_type(self.elt_type)), 
+      ('shape', repeat_tuple(Int64, self.rank)), 
+      ('strides', repeat_tuple(Int64, self.rank)),
     ]
 
   def dtype(self):

@@ -187,7 +187,10 @@ class TupleProj(Expr):
 class Array(Expr):
   _members = ['elts']
 
-class AllocBuffer(Expr):
+class Alloc(Expr):
+  """
+  Allocates a block of data, returns a pointer
+  """
   _members = ['elt_type', 'count']
 
 class Closure(Expr):
