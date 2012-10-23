@@ -183,6 +183,9 @@ class TupleProj(Expr):
 class Array(Expr):
   _members = ['elts']
 
+class AllocBuffer(Expr):
+  _members = ['elt_type', 'count']
+
 class Closure(Expr):
   """
   Create a closure which points to a global fn

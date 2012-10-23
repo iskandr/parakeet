@@ -17,7 +17,6 @@ class ArrayT(StructT):
       ('strides', tuple_t),
     ]
 
-  @property
   def dtype(self):
     return self.elt_type.dtype
  
