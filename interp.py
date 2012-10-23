@@ -56,7 +56,7 @@ def eval_fn(fn, actuals):
       clos = eval_expr(expr.closure)
       arg_vals = map(eval_expr, expr.args)
       combined_arg_vals = clos.fixed_args + arg_vals
-      return eval_fn(clos.fn, *combined_arg_vals)
+      return eval_fn(clos.fn, combined_arg_vals)
       
     def expr_Closure():
       fundef = untyped_functions[expr.fn]

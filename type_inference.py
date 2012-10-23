@@ -70,7 +70,7 @@ def annotate_expr(expr, tenv, var_map):
     return [annotate_expr(e, tenv, var_map) for e in child_exprs]
   
   def expr_Closure():
-    new_args = annotate_child(expr.args)
+    new_args = annotate_children(expr.args)
     t = core_types.ClosureT(expr.fn, get_types(new_args))
     return typed_ast.Closure(expr.fn, new_args, type = t)
       
@@ -85,14 +85,14 @@ def annotate_expr(expr, tenv, var_map):
     else:
       raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
       
-      arg_types = get_types(args)
-      invoke_result_type = core_types.Unknown
-      for closure_type in closure_set.closures:
-        print invoke_result_type
-        untyped_id, closure_arg_types = closure_type.fn, closure_type.args
-        untyped_fundef = untyped_functions[untyped_id]
-        ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
-        invoke_result_type = invoke_result_type.combine(ret)
+    arg_types = get_types(args)
+    invoke_result_type = core_types.Unknown
+    for closure_type in closure_set.closures:
+      print invoke_result_type
+      untyped_id, closure_arg_types = closure_type.fn, closure_type.args
+      untyped_fundef = untyped_functions[untyped_id]
+      ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
+      invoke_result_type = invoke_result_type.combine(ret)
     return typed_ast.Invoke(closure, args, type = invoke_result_type) 
       
   
@@ -155,7 +155,8 @@ def annotate_stmt(stmt, tenv, var_map ):
     tenv[new_result_var]  = old_type.combine(new_type)
   
   def infer_phi_nodes(nodes, direction):
-    for (var, values) in nodes:
+    print "infer_phi_nodes", nodes
+    for (var, values) in nodes.iteritems():
       infer_phi(var, direction(values))
   
   def infer_left_flow(nodes):
@@ -180,8 +181,13 @@ def annotate_stmt(stmt, tenv, var_map ):
     tenv[new_var] = new_type
     return (new_var, (new_left, new_right))  
   
-  def annotate_phi_nodes(nodes, flow_direction = None):
-    return [annotate_phi_node(v, (l, r), flow_direction) for (v, (l,r)) in nodes]
+  def annotate_phi_nodes(nodes):
+    print "annotate_phi_nodes", nodes
+    new_nodes = {}
+    for old_k, (old_left, old_right) in nodes.iteritems():
+      new_name, (left, right) = annotate_phi_node(old_k, (old_left, old_right))
+      new_nodes[new_name] = (left, right)
+    return new_nodes 
   
   def stmt_Assign():
     rhs = annotate_expr(stmt.rhs, tenv, var_map)
@@ -223,7 +229,7 @@ def annotate_stmt(stmt, tenv, var_map ):
   def stmt_While():
     infer_left_flow(stmt.merge_before)
     cond = annotate_expr(stmt.cond, tenv, var_map) 
-    body = annotate_block(stmt.body)
+    body = annotate_block(stmt.body, tenv, var_map)
     merge_before = annotate_phi_nodes(stmt.merge_before)
     merge_after = annotate_phi_nodes(stmt.merge_after)
     return typed_ast.While(cond, body, merge_before, merge_after)

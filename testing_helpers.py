@@ -9,7 +9,9 @@ def run_local_functions(prefix, locals_dict = None):
   good = set([])
   bad = set([])
   for k, test in locals_dict.iteritems():
+    
     if k.startswith(prefix):
+      print "Running %s..." % k
       try:
         test()
         print "\n --- %s passed\n" % k
