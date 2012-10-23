@@ -26,11 +26,9 @@ class Expr(Node):
   _members = ['type']
 
 class Adverb(Expr):
-  pass
-
-class Map(Adverb):
   _members = ['fn', 'args', 'axes']
 
+class Map(Adverb):
   def __init__(self, args, fn, axes=[]):
     self.fn = fn
     self.args = args
@@ -54,8 +52,6 @@ class Map(Adverb):
     return repr(self)
 
 class AllPairs(Adverb):
-  _members = ['fn', 'args', 'axes']
-
   def __init__(self, args, fn, axes=[0,0]):
     self.fn = fn
     self.args = args
@@ -70,7 +66,7 @@ class AllPairs(Adverb):
     return repr(self)
 
 class Reduce(Adverb):
-  _members = ['fn', 'args', 'combiner', 'init', 'axes']
+  _members = ['combiner', 'init']
   def __init__(self, args, fn, combiner, init, axes=[]):
     self.args = args
     self.fn = fn

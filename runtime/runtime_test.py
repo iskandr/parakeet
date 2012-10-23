@@ -27,7 +27,7 @@ args = pointer(vm_args_t(a, b, o, m, n, k))
 r = runtime.Runtime()
 print "Launching parallel job"
 start = time.time()
-r.run_job(libVM, cast(args, c_void_p), m, [n, k], [-2, -2])
+r.run_job(libVM, cast(args, c_void_p), m, [n, k], [None, None])
 stop = time.time()
 r.cleanup()
 print "Time to run job:", stop - start, "secs"

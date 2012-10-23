@@ -119,58 +119,8 @@ thread_pool_t *create_thread_pool(int max_threads) {
 
 // This function should only ever be called when all of the threads are paused.
 void launch_job(thread_pool_t *thread_pool,
-                work_function_t work_function, void *args, job_t *job,
-                int *tile_sizes, int reset_tps) {
-  assert(job->num_lists <= thread_pool->num_workers);
-
-  thread_pool->job = job;
-  thread_pool->num_active = job->num_lists;
-
-  // Update the threads' data with the current batch of work and parallelism
-  // configuration.
-  int i;
-  for (i = 0; i < thread_pool->num_active; ++i) {
-    pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
-    if (job->task_lists[i].num_tasks > 0) {
-      thread_pool->worker_data[i].status = THREAD_RUN;
-      thread_pool->worker_data[i].task_list = &job->task_lists[i];
-    } else {
-      thread_pool->worker_data[i].status = THREAD_FINISHED;
-      thread_pool->worker_data[i].task_list = NULL;
-    }
-    thread_pool->worker_data[i].notify_when_done = 0;
-    thread_pool->worker_data[i].work_function = work_function;
-    thread_pool->worker_data[i].args = args;
-    thread_pool->worker_data[i].tile_sizes = tile_sizes;
-    if (reset_tps) {
-      thread_pool->worker_data[i].iters_done = 0;
-      thread_pool->worker_data[i].timestamp =
-          thread_pool->timestamps[i] = get_cpu_time();
-      thread_pool->iters_done[i] = 0;
-    }
-    pthread_cond_signal(&thread_pool->worker_data[i].cond);
-    pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
-  }
-  for (i = thread_pool->num_active; i < thread_pool->num_workers; ++i) {
-    pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
-    thread_pool->worker_data[i].status = THREAD_IDLE;
-    thread_pool->worker_data[i].task_list = NULL;
-    thread_pool->worker_data[i].notify_when_done = 0;
-    thread_pool->worker_data[i].work_function = NULL;
-    thread_pool->worker_data[i].args = NULL;
-    thread_pool->worker_data[i].tile_sizes = NULL;
-    if (reset_tps) {
-      thread_pool->worker_data[i].iters_done = 0;
-      thread_pool->worker_data[i].timestamp = 0;
-    }
-    pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
-  }
-}
-
-// This function should only ever be called when all of the threads are paused.
-void launch_multi_job(thread_pool_t *thread_pool,
-                      work_function_t *work_functions, void **args, job_t *job,
-                      int **tile_sizes, int reset_tps) {
+                work_function_t *work_functions, void *args, job_t *job,
+                int **tile_sizes, int reset_tps) {
   assert(job->num_lists <= thread_pool->num_workers);
 
   thread_pool->job = job;
@@ -190,8 +140,12 @@ void launch_multi_job(thread_pool_t *thread_pool,
     }
     thread_pool->worker_data[i].notify_when_done = 0;
     thread_pool->worker_data[i].work_function = work_functions[i];
-    thread_pool->worker_data[i].args = args[i];
+    thread_pool->worker_data[i].args = args;
     thread_pool->worker_data[i].tile_sizes = tile_sizes[i];
+    int j;
+    for (j = 0; j < 2; ++j) {
+      printf("Tile_sizes[%d][%d]: %d\n", i, j, tile_sizes[i][j]);
+    }
     if (reset_tps) {
       thread_pool->worker_data[i].iters_done = 0;
       thread_pool->worker_data[i].timestamp =
@@ -267,10 +221,6 @@ double *get_throughputs(thread_pool_t *thread_pool) {
   }
 
   return tps;
-}
-
-void free_throughputs(double *tps) {
-  free(tps);
 }
 
 void wait_for_job(thread_pool_t *thread_pool) {
