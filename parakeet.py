@@ -4,6 +4,13 @@ import type_inference
 import type_conv 
 import llvm_backend 
 
+import numpy as np
+
+def eq(x,y):
+  if isinstance(y, np.ndarray):
+    return isinstance(x, np.ndarray) and x.shape == y.shape and np.all(x == y)
+  else:
+    return x == y
 
 def expect(fn, args, expected):
   """
@@ -17,15 +24,15 @@ def expect(fn, args, expected):
   global_args = [fn.func_globals[n] for n in untyped.nonlocals]
   all_args = global_args + list(args)
   untyped_result = interp.eval_fn(untyped, all_args) 
-  assert untyped_result == expected, "Expected %s but got %s" % (expected, untyped_result)
+  assert eq(untyped_result, expected), "Expected %s but got %s" % (expected, untyped_result)
 
   input_types = map(type_conv.typeof, all_args)
   typed = type_inference.specialize(untyped, input_types)
   typed_result = interp.eval_fn(typed, all_args)
-  assert typed_result == expected, "Expected %s but got %s" % (expected, typed_result)
+  assert eq(typed_result, expected), "Expected %s but got %s" % (expected, typed_result)
 
   compiled = llvm_backend.compile_fn(typed)
   llvm_result = compiled(*all_args)
-  assert llvm_result == expected, "Expected %s but got %s" % (expected, llvm_result)
+  assert eq(llvm_result, expected), "Expected %s but got %s" % (expected, llvm_result)
 
   

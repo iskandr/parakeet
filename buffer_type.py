@@ -36,7 +36,7 @@ def buffer_info(buf, ptr_type = ctypes.c_void_p):
   ctypes.pythonapi.PyObject_AsReadBuffer(obj, ctypes.byref(address), ctypes.byref(length))
   return address, length   
 
-import ctypes_repr 
+
 def buffer_from_python(x, parakeet_buffer_type):
   assert isinstance(x, buffer)
   parakeet_elt_t = parakeet_buffer_type.elt_type

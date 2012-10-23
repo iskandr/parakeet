@@ -250,6 +250,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       arg_vals = map(translate_expr, args)
       return syntax.Invoke(fn_val, arg_vals) 
     
+    def translate_List():
+      return syntax.Array(map(translate_expr, expr.elts))
+    
     def translate_Num():
       return syntax.Const(expr.n)
 

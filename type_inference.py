@@ -6,7 +6,7 @@ import syntax as typed_ast
 
 import core_types
 import tuple_type
-from tuple_type import TupleT
+from array_type import ArrayT
 import type_conv
 import names 
 from function_registry import untyped_functions, typed_functions
@@ -117,7 +117,14 @@ def annotate_expr(expr, tenv, var_map):
     else:
       result_type = value.type.index_type(index.type)
       return typed_ast.Index(value, index, type = result_type)
-      
+  
+  def expr_Array():
+    new_elts = annotate_children(expr.elts)
+    elt_types = get_types(new_elts)
+    common_t = core_types.combine_type_list(elt_types)
+    array_t = ArrayT(common_t, 1)
+    return typed_ast.Array(new_elts, type = array_t)
+  
   def expr_Var():
     old_name = expr.name
     if old_name not in var_map._vars:
@@ -313,8 +320,8 @@ def rewrite_typed(fn):
     """
     TODO: Make this recursive!
     """
-    if isinstance(expr, typed_ast.PrimCall):
-      print expr 
+    def rewrite_PrimCall():
+
       # TODO: This awkwardly infers the types we need to cast args up to
       # but then dont' actually coerce them, since that's left as distinct work
       # for a later stage 
@@ -324,8 +331,15 @@ def rewrite_typed(fn):
       result_type = expr.prim.result_type(upcast_types)
       upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
       return typed_ast.PrimCall(expr.prim, upcast_args, type = result_type )
-    else:
-      return expr
+    
+    def rewrite_Array():
+      array_t = expr.type
+      elt_t = array_t.elt_type 
+      new_elts = [coerce_expr(elt, elt_t) for elt in expr.elts]
+      return typed_ast.Array(new_elts, type = array_t)
+    
+    return dispatch(expr, "rewrite", default = lambda x: x)
+      
      
   def coerce_expr(expr, t):
     expr = rewrite_expr(expr)

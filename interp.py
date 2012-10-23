@@ -1,3 +1,5 @@
+import numpy as np 
+
 import syntax
 import ast_conversion 
 from function_registry import untyped_functions
@@ -28,9 +30,15 @@ def eval_fn(fn, actuals):
       return expr.value
     
     
-    def expr_Index():
-      return eval_expr(expr.value)[eval_expr(expr.index)]
+    def expr_Array():
+      elt_values = map(eval_expr, expr.elts)
+      return np.array(elt_values)
     
+    def expr_Index():
+      array = eval_expr(expr.value)
+      index = eval_expr(expr.index) 
+      return array[index]
+        
     def expr_PrimCall():
       arg_vals = map(eval_expr, expr.args)
       return expr.prim.fn (*arg_vals)
