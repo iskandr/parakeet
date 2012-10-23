@@ -228,11 +228,24 @@ def annotate_stmt(stmt, tenv, var_map ):
     return typed_ast.Return(ret_val)
     
   def stmt_While():
+    print stmt 
+    print 1, tenv
+    print 
     infer_left_flow(stmt.merge_before)
-    cond = annotate_expr(stmt.cond, tenv, var_map) 
+    print 2, tenv
+    print 
+    cond = annotate_expr(stmt.cond, tenv, var_map)
+    print 3, tenv
+    print  
     body = annotate_block(stmt.body, tenv, var_map)
+    print 4, tenv
+    print 
     merge_before = annotate_phi_nodes(stmt.merge_before)
+    print 5, tenv
+    print 
     merge_after = annotate_phi_nodes(stmt.merge_after)
+    print 6, tenv
+    print 
     return typed_ast.While(cond, body, merge_before, merge_after)
     
   return dispatch(stmt, prefix="stmt")  
@@ -296,7 +309,27 @@ def rewrite_typed(fn):
     assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
     return typed_ast.Cast(expr, type = t)
   
+  def rewrite_expr(expr):
+    """
+    TODO: Make this recursive!
+    """
+    if isinstance(expr, typed_ast.PrimCall):
+      print expr 
+      # TODO: This awkwardly infers the types we need to cast args up to
+      # but then dont' actually coerce them, since that's left as distinct work
+      # for a later stage 
+      new_args = map(rewrite_expr, expr.args)
+      arg_types = map(get_type, new_args)
+      upcast_types = expr.prim.expected_input_types(arg_types)
+      result_type = expr.prim.result_type(upcast_types)
+      upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
+      return typed_ast.PrimCall(expr.prim, upcast_args, type = result_type )
+    else:
+      return expr
+     
   def coerce_expr(expr, t):
+    expr = rewrite_expr(expr)
+    
     if expr.type == t:
       return expr
     

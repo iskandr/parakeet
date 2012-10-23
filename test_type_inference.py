@@ -1,11 +1,11 @@
 import ast_conversion 
 from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
-import type_analysis 
+import type_inference 
 
 
 def return_type(fn, input_types):
   untyped_fundef = ast_conversion.translate_function_value(fn)
-  return type_analysis.infer_return_type(untyped_fundef, input_types)
+  return type_inference.infer_return_type(untyped_fundef, input_types)
  
 def expect_type(fn, input_types, output_type):
   actual = return_type(fn, input_types) 
