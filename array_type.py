@@ -3,7 +3,8 @@ import numpy as np
 import ctypes
  
 from tuple_type import repeat_tuple
-from core_types import StructT, IncompatibleTypes, ScalarT, Int64, ptr_type 
+from core_types import StructT, IncompatibleTypes, ScalarT, Int64, ptr_type
+import core_types 
 
 
 
@@ -48,12 +49,15 @@ class ArrayT(StructT):
 
   def from_python(self, x):
     assert isinstance(x, np.ndarray)
-    
-    data = x.data 
-    ctypes_elt_t = self.elt_t.ctypes_repr
-    ctypes_ptr_t = ctypes.POINTER(ctypes_elt_t) 
-    ptr, length = buffer_info(data, ctypes_ptr_t)
-    return self.ctypes_repr(ptr, length)
+         
+    ptr, length = buffer_info(x.data, self.ptr_t.ctypes_repr)
+    assert sum(x.shape) == length, \
+      "Shape %s has %d elements but buffer has length %d"  % \
+        (x.shape, sum(x.shape), length)
+    ctypes_shape = self.tuple_t.from_python(x.shape)
+    ctypes_strides = self.tuple_t.from_python(x.strides)
+
+    return self.ctypes_repr(ptr, ctypes_shape, ctypes_strides)
     
   def to_python(self, obj):
     """
@@ -72,8 +76,8 @@ class ArrayT(StructT):
     # copy data from pointer
     ctypes.memmove(dest_ptr, self.data, n_bytes)
     
-    return np.ndarray(shape, dtype = self.elt_type.dtype, dest_buf, strides = strides) 
-    
+    return np.ndarray(shape, dtype = self.elt_type.dtype, dest_buf, strides = strides)
+   
 _array_types = {}
 def array_type(elt_t, rank):
   key = (elt_t, rank) 
@@ -81,3 +85,12 @@ def array_type(elt_t, rank):
     return _array_types[key]
   else:
     _array_types[key] = ArrayT(elt_t, rank)
+
+import type_conv
+def typeof(x):
+  elt_t = core_types.from_dtype(x.dtype)
+  rank = len(x.shape)
+  return array_type(elt_t, rank)
+ 
+type_conv.register(np.ndarray, ArrayT, typeof)
+
