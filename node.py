@@ -38,7 +38,7 @@ class Node(object):
 
     for k, v in kw.items():
       if not k in all_members(self):
-        raise Exception('Keyword argument %s not recognized for %s: %s', k, self.node_type(), all_members(self))
+        raise Exception("Keyword argument '%s' not recognized for %s: %s" % (k, self.node_type(), all_members(self)))
       setattr(self, k, v)
      
     for C in reversed(self.__class__.mro()):

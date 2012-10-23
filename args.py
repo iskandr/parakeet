@@ -118,17 +118,17 @@ class Args:
     return "Args(positional = %s, defaults=%s)" % (self.positional, self.defaults.items())
   
 
-  def bind(self, actuals, actual_kwds = {}):
+  def bind(self, actuals, actual_kwds = {}, default_fn = None):
     """
     Like combine_with_actuals but returns a dictionary
     """
     env = {}
-    values = self.linearize_values(actuals, actual_kwds)
+    values = self.linearize_values(actuals, actual_kwds, default_fn)
     for (formal, actual) in zip(self.arg_slots, values):
       match(formal, actual, env)
     return env 
   
-  def linearize_values(self, positional_values, keyword_values = {}):
+  def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
@@ -147,7 +147,7 @@ class Args:
     for  (k, v) in self.defaults.iteritems():
       i = self.positions[k]
       if not bound[i]:
-        assign(i, v)
+        assign(i, default_fn(v) if default_fn else v)
     assert all(bound), "Missing args: %s" % [self.arg_slots[i] for i in xrange(n) if not bound[i]]
     return result 
   

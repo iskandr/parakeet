@@ -79,6 +79,9 @@ def eval_fn(fn, actuals):
     def expr_Tuple():
       return tuple(map(eval_expr, expr.elts))
     
+    def expr_TupleProj():
+      return eval_expr(expr.tuple)[expr.index]
+    
     return dispatch(expr, 'expr')
       
   def eval_merge_left(phi_nodes):

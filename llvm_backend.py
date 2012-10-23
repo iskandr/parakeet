@@ -53,7 +53,7 @@ class CompilationEnv:
    """
   
    
-    n_expected = len(fundef.args)
+    n_expected = len(fundef.args.arg_slots)
     assert len(self.llvm_fn.args) == n_expected
   
     for (name, t) in fundef.type_env.iteritems():
@@ -61,7 +61,7 @@ class CompilationEnv:
       stack_val = builder.alloca(llvm_t, name)
       self.vars[name] = stack_val 
   
-    for llvm_arg, parakeet_arg in zip(self.llvm_fn.args, fundef.args):
+    for llvm_arg, parakeet_arg in zip(self.llvm_fn.args, fundef.args.arg_slots):
       if isinstance(parakeet_arg, str):
         name = parakeet_arg
       elif isinstance(parakeet_arg, syntax.Var):
