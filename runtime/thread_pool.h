@@ -44,10 +44,14 @@ thread_pool_t *create_thread_pool(int max_threads);
 void launch_job(thread_pool_t *thread_pool,
                 work_function_t work_function, void *args, job_t *job,
                 int *tile_sizes, int reset_tps);
+void launch_multi_job(thread_pool_t *thread_pool,
+                      work_function_t *work_functions, void **args, job_t *job,
+                      int **tile_sizes, int reset_tps);
 void pause_job(thread_pool_t *thread_pool);
 int job_finished(thread_pool_t *thread_pool);
 int get_iters_done(thread_pool_t *thread_pool);
-double get_throughput(thread_pool_t *thread_pool);
+double *get_throughputs(thread_pool_t *thread_pool);
+void free_throughputs(double *tps);
 void wait_for_job(thread_pool_t *thread_pool);
 job_t *get_job(thread_pool_t *thread_pool);
 void destroy_thread_pool(thread_pool_t *thread_pool);
