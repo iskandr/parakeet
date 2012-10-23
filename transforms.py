@@ -61,7 +61,15 @@ def make_structs_explicit(fundef):
       new_closure = transform_expr(expr.closure)
       new_args =  map(transform_expr, expr.args) 
       return typed_ast.Invoke(new_closure, new_args, type = expr.type) 
-        
+    
+    def transform_TupleProj():
+      new_tuple = transform_expr(expr.tuple)
+      assert isinstance(expr.index, int)
+      tuple_t = expr.tuple.type
+
+      field_name, field_type  = tuple_t._fields_[expr.index]
+      return typed_ast.Attribute(new_tuple, field_name, type = field_type)
+       
     return dispatch(expr, 'transform', default = lambda expr: expr)
   
   transform_block = create_simple_transform(transform_expr)

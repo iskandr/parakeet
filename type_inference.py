@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import syntax as untyped_ast
 import syntax as typed_ast
 
@@ -59,9 +61,17 @@ def get_type(expr):
 def get_types(exprs):
   return [expr.type for expr in exprs]
 
+count = 0
+
 def annotate_expr(expr, tenv, var_map):
+  """
+  global count
+  count = count + 1 
+  print expr 
+  assert count < 19
+  """
   def annotate_child(child_expr):
-    return annotate_expr(expr, tenv, var_map)
+    return annotate_expr(child_expr, tenv, var_map)
   
   def annotate_children(child_exprs):
     return [annotate_expr(e, tenv, var_map) for e in child_exprs]
@@ -227,7 +237,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
-def _infer_types(untyped_fn, positional_types, keyword_types):
+def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   """
   Given an untyped function and input types, 
   propagate the types through the body, 
@@ -241,15 +251,12 @@ def _infer_types(untyped_fn, positional_types, keyword_types):
   
   
   var_map = VarMap()
-  
-  
-  arg_patterns = untyped_fn.args.positional + untyped_fn.args.kwds.keys()
-   
   typed_args = untyped_fn.args.transform(var_map.rename)
-
-  
-  assert isinstance(typed_args, Args)
-  tenv = typed_args.bind(typed_args, arg_types)
+  # flatten the positional, keyword, and default args into their
+  # linear order, and use default_fn to get the type of default values
+  input_types = typed_args.linearize_values(positional_types, keyword_types, default_fn = type_conv.typeof)
+  tenv = {}
+  match_list(typed_args.arg_slots, input_types, tenv)
   
   # keep track of the return 
   tenv['$return'] = core_types.Unknown 
@@ -259,12 +266,14 @@ def _infer_types(untyped_fn, positional_types, keyword_types):
   # if nothing ever gets returned, then set the return type to None
   if return_type == core_types.Unknown:
     assert False, "TO DO: Implement a none type"
+  
+  
     
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name), 
     body = body, 
     args = typed_args, 
-    input_types = arg_types, 
+    input_types = input_types, 
     return_type = return_type, 
     type_env = tenv)
 

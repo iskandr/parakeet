@@ -116,7 +116,7 @@ class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
   """
-  _members = ['name', 'flat_args', 'original_args', 'body', 'input_types', 'return_type', 'type_env']
+  _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
 
       
 class Traversal:
