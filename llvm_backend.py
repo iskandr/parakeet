@@ -35,12 +35,6 @@ class CompilationEnv:
     """
     Initializes the variables dictionary and returns a builder object
     """
-    
-    llvm_input_types = fundef.input_types.transform(
-      positional_fn = llvm_ref_type,
-      tuple_fn = llvm_types.
-      kwd_key_fn = lambda k: k, 
-      kwd_value_fn = llvm_ref_type) 
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
     llvm_output_type = llvm_ref_type(fundef.return_type)   
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)

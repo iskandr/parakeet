@@ -1,5 +1,5 @@
 import syntax 
-
+from collections import OrderedDict
 def has_name(arg):
   return isinstance(arg, str) or isinstance(arg, syntax.Var)
 
@@ -100,129 +100,77 @@ def bind(lhs, rhs):
   
   return dict(*zip(keys, values)) 
  
-class KeyValueList:
-  
-  def __init__(self, *elts):
-    self.elts = elts
-    self.positions = {}
-    for (i, (k, _)) in elts:
-      self.positions[k] = i
-    
-  def pos(self, k):
-    return self.positions[k]
-  
-  def __iter__(self):
-    return iter(self.keys())
-  
-  def iteritems(self):
-    return iter(self.elts)
-  
-  def iterkeys(self):
-    return (k for (k, _) in self.elts)
-  
-  def itervalues(self):
-    return (v for (_, v) in self.elts)
-   
-  def keys(self):
-    return [k for (k,_) in self.elts]
-  
-  def values(self):
-    return [v for (_, v) in self.elts]
-   
-  def __contains__(self, k):
-    return k in self.keys() 
-  
-  def __str__(self):
-    return str(self.elts)
-  
-  def __len__(self):
-    return len(self.elts)
   
 class Args:
-  def __init__(self, positional, kwds = KeyValueList()):
+  def __init__(self, positional, defaults = OrderedDict()):
     assert isinstance(positional, (list, tuple))
+    assert isinstance(defaults, OrderedDict)
     self.positional = positional
-    assert isinstance(kwds, KeyValueList)
-    self.kwds = kwds     
+    self.defaults = defaults
+     
+    self.arg_slots = list(positional) + defaults.keys()
+    self.positions = {}
+    for (i, p) in enumerate(self.arg_slots):
+      self.positions[p] = i
+         
 
   def __str__(self):
-    return "Args(positional = %s, kwds=%s)" % (self.positional, self.kwds)
+    return "Args(positional = %s, defaults=%s)" % (self.positional, self.defaults.items())
   
-  def flatten(self, default_keys = True):
-    return flatten(self.positional) + (self.kwds.keys() if default_keys else self.kwds.values()) 
-  
-  def bind(self, actuals, actual_kwds = None):
+
+  def bind(self, actuals, actual_kwds = {}):
     """
     Like combine_with_actuals but returns a dictionary
     """
     env = {}
-    for (formal, actual) in self.combine(actuals, actual_kwds):
+    values = self.linearize_values(actuals, actual_kwds)
+    for (formal, actual) in zip(self.arg_slots, values):
       match(formal, actual, env)
     return env 
   
-  def combine_with_actuals(self, actuals, actual_kwds = None):
-    
-    if isinstance(actuals, Args):
-      assert len(actual_kwds) == 0
-      kwds = actuals.kwds
-      positional = actuals.positional
-    else:
-      positional = list(actuals)
-    
-    if actual_kwds is None:
-      kwds = KeyValueList()
-    elif isinstance(actual_kwds, (list, tuple)):
-      kwds = KeyValueList(actual_kwds)
-    
-    formals_list = []
-    actuals_list = []
-    
-    n_positional = len(self.positional)
-    used = set([])
-    for (i, arg) in enumerate(positional):
-      if i < n_positional:
-        formal = self.positional[i]
-      else:
-        formal = self.kwds[i - n_positional][0]
-      formals_list[i] = formal
-      actuals_list[i] = arg 
-      used.add(formal)
-    
-    for (k,v) in kwds.iteritems():
-      assert k not in used
-      used.add(k)
-      self.kwds.pos(k)
-      env[k] = v
+  def linearize_values(self, positional_values, keyword_values = {}):
+    n = len(self.arg_slots)
+    result = [None] * n
+    bound = [False] * n
+    def assign(i, v):
+      result[i] = v
+      assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
+      bound[i] = True  
       
-    for (k,v) in self.kwds.iteritems():
-      if k not in env:
-        env[k] = v 
-    return env   
-   
+    for (i,p) in enumerate(positional_values):
+      assign(i, p)
+      
+    for (k,v) in keyword_values.iteritems():
+      assert k in self.positions, "Unknown keyword %s" % k
+      assign(self.positions[k], v)
+      
+    for  (k, v) in self.defaults.iteritems():
+      i = self.positions[k]
+      if not bound[i]:
+        assign(i, v)
+    assert all(bound), "Missing args: %s" % [self.arg_slots[i] for i in xrange(n) if not bound[i]]
+    return result 
   
-  def iter_collect(self, name_fn, kwd_item_fn = None):
+  def iter_collect(self, pattern_fn):
     """ 
     Apply given function to every arg and accumulate the outputs
     associated with arg names in a dictionary
     """
     env = {}
-    iter_collect_list(self.positional, name_fn, env)
-    for (k, v) in self.kwds.iteritems():
-      k = name(k)
-      new_v = kwd_item_fn(k, v) if kwd_item_fn else name_fn(k) 
-      env[k] = new_v
-    return env
+    iter_collect_list(self.arg_slots, pattern_fn, env)
+    return env 
   
-  def transform(self, positional_fn, tuple_fn = tuple, extract_name = True,
-                  kwd_key_fn = None, kwd_value_fn = None):
+  def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
     
-    positional = transform_list(self.positional, positional_fn, tuple_fn, extract_name)
-    kwds = {}
-    for (k,v) in self.kwds.iteritems():
+    
+    positional = transform_list(self.positional, name_fn, tuple_fn, extract_name)
+    defaults = OrderedDict()
+    for (k,v) in self.defaults.iteritems():
       old_key = name(k) if extract_name else k
-      new_key = kwd_key_fn(old_key) if kwd_key_fn else positional_fn(old_key)
-      new_value = kwd_value_fn(v) if kwd_value_fn else v
-      kwds[new_key] = new_value
-
-    return Args(positional, kwds) 
+      new_key = name_fn(old_key)
+      new_value = keyword_value_fn(v) if keyword_value_fn else v
+      defaults[new_key] = new_value
+    return Args(positional, defaults)
+    
+    
   

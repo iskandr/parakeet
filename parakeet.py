@@ -16,12 +16,12 @@ def expect(fn, args, expected):
   # global dependencies 
   global_args = [fn.func_globals[n] for n in untyped.nonlocals]
   all_args = global_args + list(args)
-  untyped_result = interp.eval_fn(untyped, *all_args) 
+  untyped_result = interp.eval_fn(untyped, all_args) 
   assert untyped_result == expected, "Expected %s but got %s" % (expected, untyped_result)
 
   input_types = map(type_conv.typeof, all_args)
   typed = type_inference.specialize(untyped, input_types)
-  typed_result = interp.eval_fn(typed, *all_args)
+  typed_result = interp.eval_fn(typed, all_args)
   assert typed_result == expected, "Expected %s but got %s" % (expected, typed_result)
 
   compiled = llvm_backend.compile_fn(typed)

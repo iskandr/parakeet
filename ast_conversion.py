@@ -1,7 +1,10 @@
 import ast
-import inspect  
+import inspect
+from collections import OrderedDict 
+  
 import syntax 
-import prims 
+import prims
+
 from prims import is_prim, find_prim_from_python_value
 from function_registry import untyped_functions, already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn, lookup_prim_fn 
@@ -10,6 +13,7 @@ from names import NameNotFound
 from scoped_env import ScopedEnv 
 from common import dispatch
 from args import Args 
+
 
 
 def translate_reserved_name(name):
@@ -43,10 +47,9 @@ def translate_positional_args(args):
 def translate_args(args):
   assert not args.vararg
   assert not args.kwarg
-  assert not args.defaults
   
   positional = translate_positional_args(args.args)
-  defaults = {}
+  defaults = OrderedDict()
   for (k,v) in args.defaults:
     assert isinstance(k, ast.Name)
     defaults[k] = translate_default_arg_value(v)
@@ -353,7 +356,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
   _, ssa_body = translate_block(body)   
   ssa_fn_name = names.fresh(name)
 
-  full_args = Args(nonlocal_arg_names + ssa_args.positional, ssa_args.kwds)
+  full_args = Args(nonlocal_arg_names + ssa_args.positional, ssa_args.defaults)
 
   fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
   untyped_functions[ssa_fn_name]  = fundef 

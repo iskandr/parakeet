@@ -227,7 +227,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
-def _infer_types(untyped_fn, arg_types):
+def _infer_types(untyped_fn, positional_types, keyword_types):
   """
   Given an untyped function and input types, 
   propagate the types through the body, 
@@ -242,7 +242,9 @@ def _infer_types(untyped_fn, arg_types):
   
   var_map = VarMap()
   
-  arg_patterns = untyped_fn.args.positional + untyped_fn.args.kwds.keys() 
+  
+  arg_patterns = untyped_fn.args.positional + untyped_fn.args.kwds.keys()
+   
   typed_args = untyped_fn.args.transform(var_map.rename)
 
   
