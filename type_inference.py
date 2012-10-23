@@ -11,7 +11,8 @@ import type_conv
 import names 
 from function_registry import untyped_functions, typed_functions
 from common import dispatch
-from args import Args, match, match_list, transform 
+import args 
+ 
 
 
 class InferenceFailed(Exception):
@@ -258,7 +259,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   # linear order, and use default_fn to get the type of default values
   input_types = typed_args.linearize_values(positional_types, keyword_types, default_fn = type_conv.typeof)
   tenv = {}
-  match_list(typed_args.arg_slots, input_types, tenv)
+  args.match_list(typed_args.arg_slots, input_types, tenv)
   
   # keep track of the return 
   tenv['$return'] = core_types.Unknown 
@@ -284,133 +285,18 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   
 
 def rewrite_typed(fn):
-  print fn
-  blocks = NestedBlocks()
-  old_type_env = fn.type_env
-  fn_return_type = old_type_env["$return"]
   
-  var_map = {}
-  new_type_env = {}
-  for name in old_type_env.keys():
-    assert isinstance(name, str), old_type_env 
-  for (old_name, t) in old_type_env.iteritems():
-    # don't try to rename '$return' 
-    if not old_name.startswith("$"):
-      new_name = names.refresh(old_name)
-      var_map[old_name] = new_name
-      new_type_env[new_name] = t
+  type_env = fn.type_env
+  def lookup(var):
+    return type_env[var]
   
-  def gen_temp(t, prefix = "temp"):
-    temp = names.fresh(prefix)
-    new_type_env[temp] = t
-    return typed_ast.Var(temp, type = t)
-      
-  def typeof(expr):
-    if isinstance(expr, untyped_ast.Var):
-      return new_type_env[expr.name]
-    elif isinstance(expr, untyped_ast.Tuple):
-      return tuple_type.TupleT(map(typeof, expr.elts))
-    elif isinstance(expr, untyped_ast.Const):
-      return type_conv.typeof(expr.value)
-    else:
-      raise RuntimeError("Can't get type of %s" % expr)
-    
-  def rewrite_formal_arg(arg):
-    # handle both the case when args are a flat list of strings
-    # and a nested tree of expressions
-    if isinstance(arg, str):
-      return var_map[arg]
-    elif isinstance(arg, untyped_ast.Var):
-      return typed_ast.Var(var_map[arg.name])
-    elif isinstance(arg, untyped_ast.Tuple):
-      return typed_ast.Tuple(rewrite_formal_args(arg.elts))
+  fn_return_type = lookup("$return")
   
-  def rewrite_formal_args(args):
-    return map(rewrite_formal_arg, args)
+  def cast(expr, t):
+    assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
+    return typed_ast.Cast(expr, type = t)
   
-  def get_type(expr):
-    return expr.type
-  
-  def get_types(exprs):
-    return map(get_type, exprs)
-  
-  def rewrite_expr(expr):
-    def rewrite_Var():
-      old_name = expr.name
-      new_name = var_map[old_name]
-      var_type = new_type_env[new_name]
-      return typed_ast.Var(new_name, type = var_type)
-    
-    def rewrite_Tuple():
-      
-      new_elts = map(rewrite_expr, expr.elts)
-      new_types = get_types(new_elts)
-      print expr, new_elts, new_types
-      return typed_ast.Tuple(new_elts, type = tuple_type.make_tuple_type(new_types))
-    
-    def rewrite_Const():
-      return typed_ast.Const(expr.value, type = type_conv.typeof(expr.value))
-    
-    def rewrite_Index():
-      ###
-      ### HOW DO TO THIS WITHOUT DUPLICATING THE CHECK AGAINST Type.static_indexing
-      assert False 
-    
-    def rewrite_PrimCall():
-      # TODO: This awkwardly infers the types we need to cast args up to
-      # but then dont' actually coerce them, since that's left as distinct work
-      # for a later stage 
-      new_args = map(rewrite_expr, expr.args)
-      arg_types = map(get_type, new_args)
-      upcast_types = expr.prim.expected_input_types(arg_types)
-      result_type = expr.prim.result_type(upcast_types)
-      upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
-      return typed_ast.PrimCall(expr.prim, upcast_args, type = result_type )
-    
-    def rewrite_Closure():
-      new_args = map(rewrite_expr, expr.args)
-      arg_types = map(get_type, new_args)
-      closure_signature = core_types.ClosureT(fn = expr.fn, args = arg_types)
-      return typed_ast.Closure(fn = expr.fn, args = new_args, type = closure_signature)
-    
-    def rewrite_Invoke():
-      new_args = map(rewrite_expr, expr.args)
-      arg_types = map(get_type, new_args)
-      closure = rewrite_expr(expr.closure)
-      if isinstance(closure.type, core_types.ClosureSet):
-        closure_set = closure.type
-      elif isinstance(closure.type, core_types.ClosureT):
-        closure_set = core_types.ClosureSet(closure.type)
-      else:
-        raise InferenceFailed("Expected closure set, got %s" % expr.closure.type)
-      return_type = core_types.Unknown
-      for clos_sig in closure_set.closures:
-        full_arg_types = clos_sig.args + tuple(arg_types)
-        curr_return_type = infer_return_type(clos_sig.fn, full_arg_types)
-        return_type = return_type.combine(curr_return_type)
-      return typed_ast.Invoke(closure, new_args, type = return_type)
-    
-    return  dispatch(expr, 'rewrite')
-  
-  
-  def cast(expr, t, curr_block = None):
-    if curr_block is None:
-      curr_block = blocks.current()
-    assert isinstance(t, core_types.ScalarT), "Can't cast %s into %s" % (expr.type, t)  
-    if hasattr(expr, 'name'):
-      prefix = "%s.cast.%s" % (expr.name, t)
-    else:
-      prefix = "temp.cast.%s" % t
-           
-    temp = gen_temp(t, prefix = prefix) 
-    cast =  typed_ast.Cast(expr, type = t)
-    curr_block.append(typed_ast.Assign(temp, cast))
-    return temp
-  
-  def coerce_expr(expr, t, curr_block = None):
-    if expr.type is None:
-      expr = rewrite_expr(expr)
-      
+  def coerce_expr(expr, t):
     if expr.type == t:
       return expr
     
@@ -420,32 +306,49 @@ def rewrite_typed(fn):
       else:
         new_elts = []
         for elt, elt_t in zip(expr.elts, t.elt_types):
-          new_elts.append(coerce_expr(elt, elt_t, curr_block))
+          new_elts.append(coerce_expr(elt, elt_t))
         return typed_ast.Tuple(new_elts, type = t)
     else:
-      return cast(expr, t, curr_block)
+      return cast(expr, t)
     
-  def rewrite_merge(merge, left_block, right_block):
-    typed_merge = {}
-    for (old_var, (left, right)) in merge.iteritems():
-      new_var = var_map[old_var]
-      t = new_type_env[new_var]
-      typed_left = coerce_expr(left, t, left_block)
-      typed_right = coerce_expr(right, t, right_block)
-      typed_merge[new_var] = (typed_left, typed_right) 
-    return typed_merge 
+  def rewrite_merge(merge):
+    new_merge = {}
+    for (var, (left, right)) in merge.iteritems():
+      t = type_env[var]
+      new_left = coerce_expr(left, t)
+      new_right = coerce_expr(right, t)
+      new_merge[var] = (new_left, new_right) 
+    return new_merge 
+  
+  def rewrite_lhs(lhs):
+    if isinstance(lhs, typed_ast.Var):
+      t = lookup(lhs.name)
+      if t == lhs.type:
+        return lhs
+      else:
+        return typed_ast.Var(lhs.name, type = t)
+    elif isinstance(lhs, typed_ast.Tuple):
+      elts = map(rewrite_lhs, lhs.elts)
+      elt_types = map(get_type, elts)
+      if elt_types != lhs.type.elt_types:
+        return typed_ast.Tuple(elts, type = tuple_type.make_tuple_type(elt_types))
+      else:
+        return lhs 
   
   def rewrite_stmt(stmt):
-    if isinstance(stmt, untyped_ast.Assign):
-      new_lhs = rewrite_expr(stmt.lhs)
-      new_rhs = coerce_expr(stmt.rhs, new_lhs.type)
-      return typed_ast.Assign(new_lhs, new_rhs)
-    elif isinstance(stmt, untyped_ast.If):
+    if isinstance(stmt, typed_ast.Assign):
+      new_lhs = rewrite_lhs(stmt.lhs)
+      lhs_t = new_lhs.type 
+      new_rhs = coerce_expr(stmt.rhs, lhs_t)
+      return typed_ast.Assign(stmt.lhs, new_rhs)
+    
+    elif isinstance(stmt, typed_ast.If):
       new_cond = coerce_expr(stmt.cond, core_types.Bool)
       new_true_block = rewrite_block(stmt.true)
       new_false_block = rewrite_block(stmt.false)
-      new_merge = rewrite_merge(stmt.merge, new_true_block, new_false_block)
+      new_merge = rewrite_merge(stmt.merge)
       return typed_ast.If(new_cond, new_true_block, new_false_block, new_merge)
+    
     elif isinstance(stmt, untyped_ast.Return):
       return typed_ast.Return(coerce_expr(stmt.value, fn_return_type))
     
@@ -455,21 +358,15 @@ def rewrite_typed(fn):
       new_body = rewrite_block(stmt.body)
       # insert coercions for left-branch values into the current block before
       # the while-loop and coercions for the right-branch to the end of the loop body
-      new_merge_before = rewrite_merge(stmt.merge_before, 
-        left_block = blocks.current(), right_block = new_body)
-      new_merge_after = rewrite_merge(stmt.merge_after, 
-        left_block = blocks.current(), right_block = new_body)
+      new_merge_before = rewrite_merge(stmt.merge_before)
+      new_merge_after = rewrite_merge(stmt.merge_after)
       return typed_ast.While(new_cond, new_body, new_merge_before, new_merge_after)
     else:
       raise RuntimeError("Not implemented: %s" % stmt)
     
     
   def rewrite_block(stmts):
-    blocks.push()
-    curr_block = blocks.current()
-    for stmt in stmts:
-      curr_block.append(rewrite_stmt(stmt))
-    return blocks.pop()
+    return map(rewrite_stmt, stmts)
   
   fn.body = rewrite_block(fn.body)
   
@@ -486,9 +383,10 @@ def specialize(untyped, arg_types):
     return typed_functions[key]
   else:
     typed_fundef = _infer_types(untyped, arg_types)
-    print typed_fundef  
-    # rewrite_typed(typed_fundef)
-
+    print "Before rewriting", typed_fundef  
+    rewrite_typed(typed_fundef)
+    print "After rewriting", typed_fundef 
+    
     typed_functions[key] = typed_fundef 
     return typed_fundef 
  
