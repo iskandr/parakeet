@@ -151,7 +151,10 @@ class ScalarT(ConcreteT):
   def ctypes_repr(self):
     return dtypes.to_ctypes(self.dtype)      
 
-
+  @property
+  def nbytes(self):
+    return self.dtype.itemsize 
+  
   def __eq__(self, other):
     return isinstance(other, ScalarT) and other.dtype == self.dtype 
  

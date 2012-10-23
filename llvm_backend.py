@@ -2,21 +2,20 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32, ClosureT
+from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT
 
  
 import prims 
 import syntax
 from common import dispatch  
 from function_registry import typed_functions
-import core_types 
+
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
 import llvm_context 
 from compiled_fn import CompiledFn
 import llvm_prims 
  
-
 
 class CompilationEnv:
   def __init__(self, llvm_cxt = llvm_context.verify_context):
@@ -99,6 +98,8 @@ def int32(x):
   """Make LLVM constants of type int32"""
   return const(x, Int32)
 
+def int64(x):
+  return const(x, Int64)
 
 
 def compile_expr(expr, env, builder):
@@ -130,6 +131,19 @@ def compile_expr(expr, env, builder):
 
     return struct_ptr
   
+  def compile_AllocBuffer():
+    elt_t = expr.elt_type
+    llvm_elt_t = llvm_types.llvm_value_type(elt_t)
+    n_elts = compile_expr(expr.count, env, builder)
+    ptr = builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
+    llvm_buffer_t = llvm_types.llvm_value_type(expr.type)
+    buffer_obj = builder.alloca(llvm_buffer_t, "buffer_obj")
+    ptr_field = builder.gep(buffer_obj, [int32(0), int32(0)], "buffer.data_ptr")
+    builder.store(ptr, ptr_field)
+    length_field = builder.gep(buffer_obj, [int32(0), int32(1)], "buffer.count")
+    builder.store(n_elts, length_field)
+    return buffer_obj 
+  
   def compile_Attribute():
     llvm_value = compile_expr(expr.value, env, builder)
     idx = None
@@ -149,6 +163,8 @@ def compile_expr(expr, env, builder):
     print "Attr value", field_value
     print "-- type", field_value.type 
     return field_value  
+  
+  
   def compile_Invoke():
 
     closure_t = expr.closure.type
@@ -340,8 +356,8 @@ def compile_fn(fundef):
   
   print "Compiling", fundef.name 
   
-  import transforms
-  fundef = transforms.make_structs_explicit(fundef)
+  import lower_structs
+  fundef = lower_structs.make_structs_explicit(fundef)
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)   
   compile_block(fundef.body, env, start_builder)

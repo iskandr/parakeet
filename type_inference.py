@@ -12,6 +12,7 @@ import names
 from function_registry import untyped_functions, typed_functions
 from common import dispatch
 import args 
+from typed_syntax_helpers import get_type, get_types
  
 
 
@@ -19,25 +20,6 @@ class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg 
 
-
-class NestedBlocks:
-  def __init__(self):
-    self.blocks = []
-  
-  def push(self):
-    self.blocks.append([])
-  
-  def pop(self):
-    return self.blocks.pop()
-  
-  def current(self):
-    return self.blocks[-1]
-  
-  def append_to_current(self, stmt):
-    self.current().append(stmt)
-  
-  def extend_current(self, stmts):
-    self.current().extend(stmts)
 
 
 
@@ -56,11 +38,6 @@ class VarMap:
     else:
       return self.rename(old_name)
 
-def get_type(expr):
-  return expr.type
-
-def get_types(exprs):
-  return [expr.type for expr in exprs]
 
 def annotate_expr(expr, tenv, var_map):
 
