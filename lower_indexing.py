@@ -19,7 +19,9 @@ class LowerIndexing(transform.Transform):
     elt_size = arr.type.elt_type.dtype.itemsize
     offset_elts = self.div(offset_bytes, elt_size, "offset_elt")
     data_ptr = self.get_struct_field(arr, "data")
-    return self.get_index(data_ptr, offset_elts)
+    result = self.get_index(data_ptr, offset_elts)
+    print "LOWER INDEXING", result, result.type 
+    return result 
     
 
 def lower_indexing(fn):

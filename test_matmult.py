@@ -1,8 +1,8 @@
 from parakeet import expect 
 def loop_dot(x,y):
-  i = 0
-  result = 0
   n = x.shape[0]
+  result = x[0] * y[0]
+  i = 1
   while i < n:
       result = result + x[i] * y[i]
       i = i + 1

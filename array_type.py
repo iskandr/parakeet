@@ -40,6 +40,9 @@ class ArrayT(StructT):
   def dtype(self):
     return self.elt_type.dtype
  
+  def __str__(self):
+    return "array%d(%s)" % (self.rank, self.elt_type)
+  
   def __eq__(self, other): 
     return isinstance(other, ArrayT) and \
       self.elt_type == other.elt_type and self.rank == other.rank

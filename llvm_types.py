@@ -23,8 +23,8 @@ def is_scalar(llvm_t):
 
   
 _ctypes_scalars_to_llvm_types = {
-  ctypes.c_bool : int1_t,
-  
+  # ctypes.c_bool : int1_t,
+  ctypes.c_bool : int8_t, 
   ctypes.c_uint8 : int8_t,  
   ctypes.c_int8 : int8_t,
   
@@ -60,6 +60,7 @@ def ctypes_struct_to_lltype(S, name = None):
     return llvm_struct 
 
 def ctypes_scalar_to_lltype(ct):
+  
   assert ct in _ctypes_scalars_to_llvm_types, "%s isn't a convertible to an LLVM scalar type" % ct 
   return _ctypes_scalars_to_llvm_types[ct]
 
@@ -67,7 +68,11 @@ def ctypes_to_lltype(ctypes_repr, name = None):
   if type(ctypes_repr) == PyCStructType:
     return ctypes_struct_to_lltype(ctypes_repr, name)
   elif type(ctypes_repr) == PyCPointerType:
-    return lltype.pointer(ctypes_to_lltype(ctypes_repr._type_))
+    elt_t = ctypes_repr._type_
+    if elt_t == ctypes.c_bool:
+      return lltype.pointer(int8_t)
+    else:
+      return lltype.pointer(ctypes_to_lltype(elt_t))
   
   else:
     return ctypes_scalar_to_lltype(ctypes_repr) 
@@ -96,6 +101,7 @@ def to_llvm_output_type(t):
   
 
 def convert_to_bit(llvm_value, builder):
+
   llvm_t = llvm_value.type 
   if llvm_t == int1_t:
     return llvm_value 
@@ -143,7 +149,7 @@ def convert_from_float(llvm_value, new_ptype, builder):
 
 def convert_from_signed(llvm_value, new_ptype, builder):
   """Convert from an LLVM float value to some other LLVM scalar type"""
-  
+  print "convert_from_signed"
   dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
   
@@ -164,6 +170,7 @@ def convert_from_signed(llvm_value, new_ptype, builder):
     
 
 def convert_from_unsigned(llvm_value, new_ptype, builder):
+
   """Convert from an LLVM float value to some other LLVM scalar type"""
   dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
@@ -174,7 +181,8 @@ def convert_from_unsigned(llvm_value, new_ptype, builder):
     return convert_to_bool(llvm_value, builder)
   else:
     assert isinstance(new_ptype, IntT)
-    nbytes = llvm_value.type.width 
+    nbytes = llvm_value.type.width / 8 
+    print nbytes  
     if nbytes == new_ptype.nbytes:
       return builder.bitcast(llvm_value, dest_llvm_type, dest_name)
     elif nbytes < new_ptype.nbytes:

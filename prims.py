@@ -75,7 +75,13 @@ class Prim:
           self.type_table[input_types] = result_type
         except:
           pass
-        
+  
+  def __eq__(self, other):
+    return self.fn == other.fn 
+  
+  def __hash__(self):
+    return hash(self.name)
+       
   def __call__(self, *args, **kwds):
     return self.fn(*args, **kwds)
   

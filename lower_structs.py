@@ -5,7 +5,7 @@ from array_type import ArrayT, ScalarT
 import closure_signatures 
 from transform import Transform
 
-from typed_syntax_helpers import const_tuple, const_int 
+from syntax_helpers import const_tuple, const_int 
 
 class LowerStructs(Transform):
   """

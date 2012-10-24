@@ -51,4 +51,11 @@ float_binops = {
   prims.multiply : 'fmul', 
   prims.divide : 'fdiv'
 }
- 
+
+# Note: there is no division instruction between booleans
+# so b1 / b2 should be translated to int(b1) / int(b2) 
+bool_binops = { 
+  prims.add : 'or_',
+  prims.multiply : 'and_', 
+  prims.subtract : 'xor'
+}

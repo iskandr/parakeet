@@ -21,6 +21,10 @@ class Closure:
 from args import match 
   
 def eval_fn(fn, actuals):
+  print 
+  print "Eval_fn", fn
+  print 
+  print " -- args: ", actuals 
 
   env = fn.args.bind(actuals)
     
@@ -44,6 +48,7 @@ def eval_fn(fn, actuals):
         
     def expr_PrimCall():
       arg_vals = map(eval_expr, expr.args)
+      print "prim_call", expr.prim.fn, arg_vals
       return expr.prim.fn (*arg_vals)
     
     def expr_Call():

@@ -3,9 +3,27 @@ from node import Node
 class Stmt(Node):
   pass
 
+def block_to_str(stmts):
+  body_str = '\n'.join(['\n'] + [str(stmt) for stmt in stmts])
+  return body_str.replace('\n', '\n  ')
+
+def phi_nodes_to_str(phi_nodes):
+  parts = ["%s <- phi(%s, %s)" % (var, left, right) for (var, (left, right)) in phi_nodes.items()]
+  whole = "\n" + "\n".join(parts)
+  # add tabs
+  return whole.replace("\n", "\n  ") 
+  
+
 class Assign(Stmt):
   _members = ['lhs', 'rhs']
 
+  def __str__(self):
+    
+    if hasattr(self.lhs, 'type') and self.lhs.type:
+      return "%s : %s = %s" % (self.lhs, self.lhs.type, self.rhs)
+    else:
+      return "%s = %s" % (self.lhs, self.rhs)
+    
 class Return(Stmt):
   _members = ['value']
 
@@ -21,7 +39,16 @@ class While(Stmt):
      of the form [(new_var1, (old_var1,old_var2)]
    """
   _members = ['cond', 'body', 'merge_before', 'merge_after']
-
+  
+  def __repr__(self):
+    before = phi_nodes_to_str(self.merge_before)
+    after = phi_nodes_to_str(self.merge_after)
+    body = block_to_str(self.body)
+    return "while:\n(merge-before) %s\ncond: %s\nbody:%s\n(merge-after)%s" %\
+      ( before, self.cond, body, after)
+  
+  def __str__(self):
+    return repr(self)
 class Expr(Node):
   _members = ['type']
 
@@ -213,7 +240,7 @@ class PrimCall(Expr):
   _members = ['prim', 'args']
 
   def __repr__(self):
-    return "primcall[%s](%s)" % (self.prim, ", ".join(map(str, self.args)))
+    return "prim<%s>(%s)" % (self.prim.name, ", ".join(map(str, self.args)))
 
   def __str__(self):
     return repr(self)
@@ -241,6 +268,14 @@ class TypedFn(Node):
   """
   _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
 
+  
+  def __repr__(self):
+    args_str = ', '.join(self.args.arg_slots)
+    
+    return "function %s(%s):%s" % (self.name, args_str, block_to_str(self.body))
+    
+  def __str__(self):
+    return repr(self)
 class Traversal:
   def visit_block(self, block, *args, **kwds):
     for stmt in block:

@@ -422,6 +422,12 @@ class PtrT(ConcreteT):
   def node_init(self):
     self._ctypes_repr = ctypes.POINTER(self.elt_type.ctypes_repr)
   
+  def __str__(self):
+    return "ptr(%s)" % self.elt_type
+  
+  def __repr__(self):
+    return str(self)
+  
   @property
   def ctypes_repr(self):
     return self._ctypes_repr

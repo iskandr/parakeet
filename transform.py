@@ -4,7 +4,7 @@ import core_types
 import tuple_type 
 import prims 
 
-from typed_syntax_helpers import get_type, get_types, wrap_constant, wrap_constants
+from syntax_helpers import get_type, get_types, wrap_constant, wrap_constants
 
 
 class NestedBlocks:
@@ -59,7 +59,10 @@ class Transform:
   
   def cast(self, expr, t):
     assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
-    return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
+    if expr.type == t:
+      return expr
+    else:
+      return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
      
   
   
@@ -69,7 +72,6 @@ class Transform:
     return self.assign_temp(syntax.Attribute(struct, attr_name, type = field_type), attr_name)
   
   def get_index(self, arr, idx):
-    print "get_index", arr, idx
     idx = wrap_constant(idx)
     arr_t = arr.type 
     if isinstance(arr_t, tuple_type.TupleT):
@@ -91,10 +93,6 @@ class Transform:
     upcast_args = [self.cast(x, t) for (x,t) in zip(args, upcast_types)]
     
     prim_call = syntax.PrimCall(prim_fn, upcast_args, type = result_type)
-    print 
-    print "prim_fn", prim_fn 
-    print "original_args", args 
-    print "upcast_args", upcast_args 
     return self.assign_temp(prim_call, name)
     
   def add(self, x, y, name = "add"):
@@ -109,17 +107,22 @@ class Transform:
   def div(self, x, y, name = "div"):
     return self.prim(prims.divide, [x,y], name)
     
-  #def cast(expr, t):
-  #  assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
-  #  return typed_ast.Cast(expr, type = t)    
+  
+  def transform_if_expr(self, maybe_expr):
+    if isinstance(maybe_expr, syntax.Expr):
+      return self.transform_expr(maybe_expr)
+    elif isinstance(maybe_expr, tuple):
+      return tuple([self.transform_if_expr(x) for x in maybe_expr])
+    elif isinstance(maybe_expr, list):
+      return [self.transform_if_expr(x) for x in maybe_expr]
+    else:
+      return maybe_expr
   
   def transform_generic_expr(self, expr):
     args = {}
     for member_name in expr.members:
       member_value = getattr(expr, member_name)
-      if isinstance(member_value, syntax.Expr):
-        member_value = self.transform_expr(member_value)
-      args[member_name] = member_value
+      args[member_name] = self.transform_if_expr(member_value)
     return expr.__class__(**args)
   
   def transform_expr(self, expr):
@@ -207,5 +210,8 @@ class Transform:
 
 def apply_pipeline(fn, transforms):
   for T in transforms:
+    print 
+    print "Applying %s" % T
     fn = T(fn).apply()
+    print fn 
   return fn 

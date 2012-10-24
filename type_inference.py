@@ -12,7 +12,7 @@ import names
 from function_registry import untyped_functions, typed_functions
 from common import dispatch
 import args 
-from typed_syntax_helpers import get_type, get_types
+from syntax_helpers import get_type, get_types
  
 
 

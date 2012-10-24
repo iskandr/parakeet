@@ -60,6 +60,12 @@ class TupleT(StructT):
   def __hash__(self):
     return hash(self.elt_types)
   
+  def __str__(self):
+    return "tuple(%s)" % ", ".join([str(t) for t in self.elt_types])
+  
+  def __repr__(self):
+    return str(self)
+  
   def index_type(self, idx):
     assert isinstance(idx, Expr), \
       "Tuple indices must be computed statically, so expected index to be expression"
