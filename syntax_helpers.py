@@ -21,6 +21,18 @@ def const_scalar(x):
     assert isinstance(x, float)
     return const_float(x)
   
+def wrap_constant(x):
+  """
+  If given value isn't already an expression
+  turn it into one with the const helper
+  """
+  if isinstance(x, syntax.Expr):
+    return x
+  else:
+    return const_scalar(x)
+  
+def wrap_constants(xs):
+  return map(wrap_constant, xs)
   
 def get_type(expr):
   return expr.type
@@ -35,3 +47,21 @@ def make_tuple(elts):
 
 def const_tuple(*numbers):
   return make_tuple(map(const_scalar, numbers))
+
+def is_zero(expr):
+  return isinstance(expr, syntax.Const) and expr.value == 0
+
+def is_one(expr):
+  return isinstance(expr, syntax.Const) and expr.value == 1
+
+def is_constant(expr):
+  return isinstance(expr, syntax.Const)
+
+def all_constants(exprs):
+  return all(map(is_constant, exprs))
+
+def collect_constant(expr):
+  return expr.value
+
+def collect_constants(exprs):
+  return map(collect_constant, exprs)

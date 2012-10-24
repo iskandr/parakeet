@@ -146,7 +146,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       (b) a user-defined function which needs to be registered with parakeet
       (c) a primitive fn 
     """
-    print "translate_Name", name
+    
     if name in env:
       return syntax.Var(env[name])
     # is it at least somewhere in the chain of outer scopes?  
@@ -253,6 +253,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     def translate_List():
       return syntax.Array(map(translate_expr, expr.elts))
     
+    def translate_Attribute():
+      value = translate_expr(expr.value)
+      return syntax.Attribute(value, expr.attr)
+    
     def translate_Num():
       return syntax.Const(expr.n)
 
@@ -276,7 +280,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     if isinstance(expr, ast.Name):
       # name is a special case since its translation function needs to be accessed
       # from outside translate_expr 
-      print expr.id
+      
       result = translate_Name(expr.id)
     else:
       result = dispatch(expr, 'translate')
@@ -399,7 +403,7 @@ def translate_function_value(fn):
     source = inspect.getsource(fn)
     fundef = translate_function_source(source, fn.func_globals)
     register_python_fn(fn, fundef)
-    print "Translated", fundef 
+    # print "Translated", fundef 
     return fundef   
   
 

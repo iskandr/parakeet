@@ -1,6 +1,10 @@
 import syntax 
 import names 
+import core_types 
+import tuple_type 
+import prims 
 
+from syntax_helpers import get_type, get_types, wrap_constant, wrap_constants
 
 
 class NestedBlocks:
@@ -28,7 +32,6 @@ class Transform:
   def __init__(self, fn):
     self.blocks = NestedBlocks()
     self.fn = fn
-    self.require_types = isinstance(fn, syntax.TypedFn) 
     self.type_env = None 
   
   
@@ -36,9 +39,12 @@ class Transform:
     assert self.type_env is not None
   
   def fresh_var(self, t, prefix = "temp"):
+    assert t is not None, "Type required for new variable %s" % prefix
     ssa_id = names.fresh(prefix)
     self.type_env[ssa_id] = t
-    return syntax.Var(ssa_id, t)
+    return syntax.Var(ssa_id, type = t)
+  
+  
   
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
@@ -46,13 +52,77 @@ class Transform:
   def insert_assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
   
+  def assign_temp(self, expr, name = "temp"):
+    var = self.fresh_var(expr.type, name)
+    self.insert_assign(var, expr)
+    return var 
+  
+  def cast(self, expr, t):
+    assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
+    if expr.type == t:
+      return expr
+    else:
+      return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
+     
+  
+  
+  def get_struct_field(self, struct, attr_name):
+    assert isinstance(struct.type, core_types.StructT)
+    field_type = struct.type.field_type(attr_name)
+    return self.assign_temp(syntax.Attribute(struct, attr_name, type = field_type), attr_name)
+  
+  def get_index(self, arr, idx):
+    idx = wrap_constant(idx)
+    arr_t = arr.type 
+    if isinstance(arr_t, tuple_type.TupleT):
+      if isinstance(idx, syntax.Const):
+        idx = idx.value
+      assert isinstance(idx, (int, long))
+      t = arr_t.elt_types[idx]
+      return self.assign_temp(syntax.TupleProj(arr, idx, type = t), "tuple_elt%d" % idx)
+    else:
+      t = arr_t.index_type(idx.type)
+      return self.assign_temp(syntax.Index(arr, idx, type = t), "array_elt")
+      
+  
+  def prim(self, prim_fn, args, name = "temp"):
+    args = wrap_constants(args)
+    arg_types = get_types(args)
+    upcast_types = prim_fn.expected_input_types(arg_types)
+    result_type = prim_fn.result_type(upcast_types)
+    upcast_args = [self.cast(x, t) for (x,t) in zip(args, upcast_types)]
+    
+    prim_call = syntax.PrimCall(prim_fn, upcast_args, type = result_type)
+    return self.assign_temp(prim_call, name)
+    
+  def add(self, x, y, name = "add"):
+    return self.prim(prims.add, [x,y], name)
+  
+  def sub(self, x, y, name = "sub"):
+    return self.prim(prims.subtract, [x,y], name)
+ 
+  def mul(self, x, y, name = "mul"):
+    return self.prim(prims.multiply, [x,y], name)
+  
+  def div(self, x, y, name = "div"):
+    return self.prim(prims.divide, [x,y], name)
+    
+  
+  def transform_if_expr(self, maybe_expr):
+    if isinstance(maybe_expr, syntax.Expr):
+      return self.transform_expr(maybe_expr)
+    elif isinstance(maybe_expr, tuple):
+      return tuple([self.transform_if_expr(x) for x in maybe_expr])
+    elif isinstance(maybe_expr, list):
+      return [self.transform_if_expr(x) for x in maybe_expr]
+    else:
+      return maybe_expr
+  
   def transform_generic_expr(self, expr):
     args = {}
     for member_name in expr.members:
       member_value = getattr(expr, member_name)
-      if isinstance(member_value, syntax.Expr):
-        member_value = self.transform_expr(member_value)
-      args[member_name] = member_value
+      args[member_name] = self.transform_if_expr(member_value)
     return expr.__class__(**args)
   
   def transform_expr(self, expr):
@@ -64,9 +134,7 @@ class Transform:
       result = getattr(self, method_name)(expr)
     else:
       result = self.transform_generic_expr(expr)
-    
-    if self.require_types:
-      assert result.type is not None, "Missing type for %s" % result 
+    assert result.type is not None, "Missing type for %s" % result 
     return result 
   
   def transform_expr_list(self, exprs):
@@ -80,12 +148,23 @@ class Transform:
       result[k] = new_left, new_right 
     return result 
   
+  def transform_lhs(self, lhs):
+    """
+    Overload this is you want different behavior
+    for transformation of left-hand side of assignments
+    """ 
+    
+    return self.transform_expr(lhs)
+  
   def transform_Assign(self, stmt):
     # TODO: flatten tuple assignment ptype
-    assert isinstance(stmt.lhs, (str, syntax.Var)), \
-      "Pattern-matching assignment not implemented" 
+    #assert isinstance(stmt.lhs, (str, syntax.Var)), \
+    #  "Pattern-matching assignment not implemented" 
     rhs = self.transform_expr(stmt.rhs)
-    return syntax.Assign(stmt.lhs, rhs)
+    lhs = self.transform_lhs(stmt.lhs) 
+    # if isinstance(lhs, syntax.Var):
+    return syntax.Assign(lhs, rhs)
+    
     
   def transform_Return(self, stmt):
     return syntax.Return(self.transform_expr(stmt.value))
@@ -120,11 +199,19 @@ class Transform:
     return self.blocks.pop() 
   
   def apply(self):
-    if self.require_types:
-      self.type_env = self.fn.type_env.copy()
+    
+    self.type_env = self.fn.type_env.copy()
     body = self.transform_block(self.fn.body)
     new_fundef_args = dict([ (m, getattr(self.fn, m)) for m in self.fn._members])
     new_fundef_args['body'] = body
-    if self.require_types:
-      new_fundef_args['type_env'] = self.type_env 
+    new_fundef_args['type_env'] = self.type_env 
     return syntax.TypedFn(**new_fundef_args)
+  
+
+def apply_pipeline(fn, transforms):
+  for T in transforms:
+    #print 
+    #print "Applying %s" % T
+    fn = T(fn).apply()
+    # print fn 
+  return fn 

@@ -16,6 +16,8 @@ def tuple_elts(arg):
     # hope that it has an __iter__ implementation
     return tuple(arg)
 
+def is_index(arg):
+  return isinstance(arg, syntax.Index)
 
 def flatten(arg):
   if is_tuple(arg):
@@ -29,7 +31,11 @@ def flatten_list(args):
     result += flatten(arg)
   return result 
 
-def match(pattern, val, env):
+
+def match_nothing(pattern, val, env):
+  pass
+
+def match(pattern, val, env, index_fn = match_nothing):
   """
   Given a left-hand-side of tuples & vars, 
   a right-hand-side of tuples & types, 
@@ -43,11 +49,14 @@ def match(pattern, val, env):
     val_elts = val.elts 
     assert len(pat_elts) == len(val_elts), \
       "Mismatch between expected and given number of values"
-    match_list(pat_elts, val_elts, env)
+    match_list(pat_elts, val_elts, env, index_fn)
+  elif is_index(pattern):
+    index_fn(pattern, val, env)
+      
   else:
     raise RuntimeError("Unexpected pattern %s %s : %s" % (pattern.__class__.__name__, pattern, val) )    
 
-def match_list(arg_patterns, vals, env = None):
+def match_list(arg_patterns, vals, env = None, index_fn = match_nothing):
   if env is None:
     env = {}
   nargs = len(arg_patterns)
@@ -55,34 +64,39 @@ def match_list(arg_patterns, vals, env = None):
   assert nargs == nvals, \
     "Mismatch between %d args and %d input types" % (nargs, nvals)
   for (p,v) in zip(arg_patterns, vals):
-    match(p, v, env)
+    match(p, v, env, index_fn)
   return env  
 
 
-def iter_collect(pattern, fn, env):
-  if has_name(pattern):
-    n = name(pattern)
-    env[n] = fn(n)
-  else:
-    assert is_tuple(pattern)
-    iter_collect_list(tuple_elts(pattern), fn, env)
-
-def iter_collect_list(patterns, fn, env):
-  for p in patterns:
-    iter_collect(p, fn, env)
+#def iter_collect(pattern, fn, env, index_fn = match_nothing):
+#  if has_name(pattern):
+#    n = name(pattern)
+#    env[n] = fn(n)
+#  else:
+#    assert is_tuple(pattern)
+#    iter_collect_list(tuple_elts(pattern), fn, env)
+#
+#def iter_collect_list(patterns, fn, env):
+#  for p in patterns:
+#    iter_collect(p, fn, env)
   
-def transform(pat, atom_fn, tuple_fn = tuple, extract_name = True):
+def transform_nothing(x):
+  return x
+  
+def transform(pat, atom_fn, extract_name = True, tuple_fn = tuple, index_fn = transform_nothing):
   if is_tuple(pat):
-    new_elts = transform_list(tuple_elts(pat), atom_fn, tuple_fn, extract_name)
+    new_elts = transform_list(tuple_elts(pat), atom_fn, extract_name, tuple_fn, index_fn)
     return tuple_fn(new_elts)
+  elif is_index(pat):
+    return transform_nothing(pat)
   elif extract_name:
     assert has_name(pat)
     return atom_fn(name(pat))
   else:
     return atom_fn(pat)
    
-def transform_list(pats, atom_fn, tuple_fn = tuple, extract_name = True):
-  return [transform(p, atom_fn, tuple_fn, extract_name) for p in pats]
+def transform_list(pats, atom_fn,  extract_name = True, tuple_fn = tuple, index_fn = transform_nothing):
+  return [transform(p, atom_fn,  extract_name, tuple_fn, index_fn) for p in pats]
 
 def bind(lhs, rhs):
   if isinstance(lhs, Args):
@@ -132,7 +146,7 @@ class Args:
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
-    print positional_values 
+
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
@@ -155,19 +169,19 @@ class Args:
     assert all(bound), "Missing args: %s" % [self.arg_slots[i] for i in xrange(n) if not bound[i]]
     return result 
   
-  def iter_collect(self, pattern_fn):
-    """ 
-    Apply given function to every arg and accumulate the outputs
-    associated with arg names in a dictionary
-    """
-    env = {}
-    iter_collect_list(self.arg_slots, pattern_fn, env)
-    return env 
+#  def iter_collect(self, pattern_fn):
+#    """ 
+#    Apply given function to every arg and accumulate the outputs
+#    associated with arg names in a dictionary
+#    """
+#    env = {}
+#    iter_collect_list(self.arg_slots, pattern_fn, env)
+#    return env 
   
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
     
     
-    positional = transform_list(self.positional, name_fn, tuple_fn, extract_name)
+    positional = transform_list(self.positional, name_fn,  extract_name, tuple_fn)
     defaults = OrderedDict()
     for (k,v) in self.defaults.iteritems():
       old_key = name(k) if extract_name else k

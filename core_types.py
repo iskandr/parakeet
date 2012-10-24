@@ -47,6 +47,18 @@ class UnknownT(Type):
 Unknown = UnknownT()
 
 
+class NoneT(Type):
+  _members = []
+  def combine(self, other):
+    if isinstance(other, NoneT):
+      return self
+    else:
+      raise IncompatibleTypes(self, other)
+  
+  
+
+NoneType = NoneT()
+
 def combine_type_list(types):
   common_type = Unknown 
 
@@ -90,6 +102,19 @@ class StructT(Type):
   _fields_ = []
   
   _repr_cache = {}
+  
+  
+  def field_type(self, name):
+    for (field_name, field_type) in self._fields_:
+      if field_name == name:
+        return field_type
+    raise RuntimeError("Couldn't find field named '%s' for %s" % (name, self))
+  
+  def field_pos(self, name):
+    for (i, (field_name, _)) in enumerate(self._fields_):
+      if field_name == name:
+        return i
+    raise RuntimeError("Couldn't find field named '%s' for %s" % (name, self))
   
   @property
   def ctypes_repr(self):
@@ -390,12 +415,18 @@ class PtrT(ConcreteT):
   """
   _members = ['elt_type']
   
-  def __getitem__(self, idx):
-    assert isinstance(idx, IntT)
+  def index_type(self, idx):
+    assert isinstance(idx, IntT), "Index into pointer must be of type int, got %s" % (idx)
     return self.elt_type
   
   def node_init(self):
     self._ctypes_repr = ctypes.POINTER(self.elt_type.ctypes_repr)
+  
+  def __str__(self):
+    return "ptr(%s)" % self.elt_type
+  
+  def __repr__(self):
+    return str(self)
   
   @property
   def ctypes_repr(self):

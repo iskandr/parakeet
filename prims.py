@@ -75,7 +75,13 @@ class Prim:
           self.type_table[input_types] = result_type
         except:
           pass
-        
+  
+  def __eq__(self, other):
+    return self.fn == other.fn 
+  
+  def __hash__(self):
+    return hash(self.name)
+       
   def __call__(self, *args, **kwds):
     return self.fn(*args, **kwds)
   
@@ -162,7 +168,4 @@ greater = Cmp(np.greater, 'Gt')
 greater_equal = Cmp(np.greater_equal, 'GtE')
 
 
-
-#shape = ArrayProp(np.shape)
-#strides = ArrayProp(lambda x: x.strides, name="strides") 
   

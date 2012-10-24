@@ -2,7 +2,7 @@ import llvm.core as llcore
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT, PtrT
+from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT, PtrT
 
  
 import prims 
@@ -15,6 +15,7 @@ from llvm_types import llvm_value_type, llvm_ref_type
 import llvm_context 
 from compiled_fn import CompiledFn
 import llvm_prims 
+
  
 
 class CompilationEnv:
@@ -104,7 +105,7 @@ def int64(x):
 
 
 def compile_expr(expr, env, builder):
-  print "EXPR: ", expr 
+  # print "EXPR: ", expr 
   def compile_Var():
     ref =  env[expr.name]
     val = builder.load(ref, expr.name + "_val")
@@ -123,12 +124,8 @@ def compile_expr(expr, env, builder):
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
     
-    print 
-    print "%s : %s -> %s" % (struct_ptr, struct_ptr.type, llvm_struct_t)
-    print
       
     for (i, elt)  in enumerate(expr.args):
-      print (i, elt)
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
@@ -141,26 +138,29 @@ def compile_expr(expr, env, builder):
     n_elts = compile_expr(expr.count, env, builder)
     return builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
     
+  
+  def compile_Index():
+    llvm_arr = compile_expr(expr.value, env, builder)
+    llvm_index = compile_expr(expr.index, env, builder)
+     
+    index_t = expr.index.type 
+    llvm_idx = llvm_types.convert(llvm_index, index_t, Int32, builder)
+    
+    pointer = builder.gep(llvm_arr, [ llvm_idx], "elt_pointer")
+    elt = builder.load(pointer, "elt")
+    return elt 
     
   def compile_Attribute():
     llvm_value = compile_expr(expr.value, env, builder)
-    idx = None
-    
-    fields = expr.value.type._fields_
-    field_names = [k for (k, _) in fields]
-    for (i, field_name) in enumerate(field_names):
-      if field_name == expr.name:
-        idx = i
-    assert idx is not None, "Attribute %s not found, valid attributes: %s" % (expr.name, field_names)
-    print "Attr lhs", llvm_value
-    print "-- type",  llvm_value.type
-    field_ptr =  builder.gep(llvm_value, [int32(0), int32(idx)], "%s_ptr" % expr.name)
-    print "Attr ptr", field_ptr
-    print "-- type",  field_ptr.type
-    field_value = builder.load(field_ptr, "%s_value" % expr.name) 
-    print "Attr value", field_value
-    print "-- type", field_value.type 
-    return field_value  
+    struct_type = expr.value.type 
+    field_pos = struct_type.field_pos(expr.name)
+    field_type = struct_type.field_type(expr.name)
+    field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)], "%s_ptr" % expr.name)
+    field_value = builder.load(field_ptr, "%s_value" % expr.name)
+    if isinstance(field_type, BoolT):
+      return llvm_types.convert_to_bit(field_value)
+    else:
+      return field_value  
   
   
   def compile_Invoke():
@@ -233,7 +233,11 @@ def compile_expr(expr, env, builder):
         instr = llvm_prims.signed_binops[prim]
       elif isinstance(t, UnsignedT):
         instr = llvm_prims.unsigned_binops[prim]  
-      return getattr(builder, instr)(name = "%s_result" % prim.name, *llvm_args)
+      else:
+        assert isinstance(t, BoolT) 
+        instr = llvm_prims.bool_binops[prim]
+      op = getattr(builder, instr)
+      return op(name = "%s_result" % prim.name, *llvm_args)
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % expr 
    
@@ -261,20 +265,18 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks, 
   which were causing some mysterious crashes inside LLVM"""
   
-  print ">> ", stmt 
+  # print ">> ", stmt 
   
   def compile_Assign():
     
-    print "LHS VALUE TYPE", llvm_types.llvm_value_type(stmt.lhs.type)
-    print "LHS REF TYPE", llvm_types.llvm_ref_type(stmt.lhs.type)
     
     value = compile_expr(stmt.rhs, env, builder)
 
     if isinstance(stmt.lhs, syntax.Var):
       ref = env[stmt.lhs.name]
-      print "ASSIGN - store"
-      print "LHS %s : %s" % (ref, ref.type) 
-      print "RHS %s : %s" % (value, value.type)
+      #print "ASSIGN - store"
+      #print "LHS %s : %s" % (ref, ref.type) 
+      #print "RHS %s : %s" % (value, value.type)
       
       builder.store(value, ref)
     elif isinstance(stmt.lhs, syntax.Index):
@@ -284,11 +286,11 @@ def compile_stmt(stmt, env, builder):
       index = compile_expr(stmt.lhs.index, env, builder)
       index = llvm_types.convert_from_signed(index, Int32, builder)  
       elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
-      print "ASSIGN - index"
-      print "base_ptr %s : %s" % (base_ptr, base_ptr.type)
-      print "elt_ptr %s : %s" % (elt_ptr, elt_ptr.type)
-      print "index %s : %s" % (index, index.type)
-      print "value %s : %s" % (value, value.type )
+      #print "ASSIGN - index"
+      #print "base_ptr %s : %s" % (base_ptr, base_ptr.type)
+      #print "elt_ptr %s : %s" % (elt_ptr, elt_ptr.type)
+      #print "index %s : %s" % (index, index.type)
+      #print "value %s : %s" % (value, value.type )
       builder.store(value, elt_ptr)
       
       
@@ -320,9 +322,7 @@ def compile_stmt(stmt, env, builder):
     return after_builder, False 
   
   def compile_Return():
-    print 
-    print "About to compile return rhs: ", stmt.value
-    print  
+    
     ret_val = compile_expr(stmt.value, env, builder)
     builder.ret(ret_val)
     return builder, True 
@@ -371,19 +371,29 @@ def compile_block(stmts, env, builder):
 
 compiled_functions = {}
 
+from transform import apply_pipeline
+from lower_structs import LowerStructs
+from lower_indexing import LowerIndexing
+from simplify import Simplify
+
+def prepare_fn(fundef):
+  return apply_pipeline(fundef, [LowerIndexing, LowerStructs, Simplify])
+    
+
 def compile_fn(fundef):
+  
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   
-  
-  import lower_structs
-  fundef = lower_structs.make_structs_explicit(fundef)
+  fundef = prepare_fn(fundef)
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)   
   compile_block(fundef.body, env, start_builder)
   env.llvm_context.run_passes(env.llvm_fn)
+
+  # print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
-  print result.llvm_fn  
+  # print result.llvm_fn  
   
   return result 

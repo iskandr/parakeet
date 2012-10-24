@@ -47,7 +47,7 @@ class TupleT(StructT):
         c_elt = c_elt.contents 
         
       py_elt = field_type.to_python(c_elt)
-      print 
+      
       elt_values.append(py_elt)
     return tuple(elt_values)
  
@@ -60,7 +60,13 @@ class TupleT(StructT):
   def __hash__(self):
     return hash(self.elt_types)
   
-  def __getitem__(self, idx):
+  def __str__(self):
+    return "tuple(%s)" % ", ".join([str(t) for t in self.elt_types])
+  
+  def __repr__(self):
+    return str(self)
+  
+  def index_type(self, idx):
     assert isinstance(idx, Expr), \
       "Tuple indices must be computed statically, so expected index to be expression"
     assert isinstance(idx, Const), "Unsupported expression: %s" % idx
