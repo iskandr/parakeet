@@ -99,14 +99,27 @@ def eval_fn(fn, actuals):
   def eval_merge_right(phi_nodes):
     for result, (_, right) in phi_nodes.iteritems():
       env[result] = eval_expr(right)
-       
+
+  def assign(lhs, rhs, env):
+    if isinstance(lhs, syntax.Var):
+      env[lhs.name] = rhs
+    elif isinstance(lhs, syntax.Tuple):
+      assert isinstance(rhs, tuple)
+      for (elt, v) in zip(lhs.elts, rhs):
+        assign(elt, v, env)
+    elif isinstance(lhs, syntax.Index):
+      arr = eval_expr(lhs.value)
+      idx = eval_expr(lhs.index)
+      arr[idx] = rhs 
+      
+             
   def eval_stmt(stmt):
     if isinstance(stmt, syntax.Return):
       v = eval_expr(stmt.value)
 
       raise ReturnValue(v)
     elif isinstance(stmt, syntax.Assign):
-      match(stmt.lhs, eval_expr(stmt.rhs), env)
+      assign(stmt.lhs, eval_expr(stmt.rhs), env)
       
     elif isinstance(stmt, syntax.If):
       cond_val = eval_expr(stmt.cond)

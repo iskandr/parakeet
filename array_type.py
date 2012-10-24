@@ -87,12 +87,15 @@ def array_type(elt_t, rank):
   if key in _array_types:
     return _array_types[key]
   else:
-    _array_types[key] = ArrayT(elt_t, rank)
+    t = ArrayT(elt_t, rank)
+    _array_types[key] = t
+    return t 
 
 import type_conv
 def typeof(x):
   elt_t = core_types.from_dtype(x.dtype)
   rank = len(x.shape)
+
   return array_type(elt_t, rank)
  
 type_conv.register(np.ndarray, ArrayT, typeof)

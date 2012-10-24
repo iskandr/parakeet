@@ -185,6 +185,15 @@ def annotate_stmt(stmt, tenv, var_map ):
                     zip(lhs.elts, rhs_type.elt_types)]
         tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
         return typed_ast.Tuple(new_elts, type = tuple_t)
+      elif isinstance(lhs, untyped_ast.Index):
+        print lhs 
+        new_arr = annotate_expr(lhs.value, tenv, var_map)
+        new_idx = annotate_expr(lhs.index, tenv, var_map)
+        
+        assert isinstance(new_arr.type, ArrayT), "Expected array, got %s" % new_arr.type
+        assert isinstance(new_idx.type, core_types.IntT), "Expected int, got %s" % new_idx.type 
+        elt_t = new_arr.type.elt_type 
+        return typed_ast.Index(new_arr, new_idx, type = elt_t)
       else:
         assert isinstance(lhs, untyped_ast.Var)
         new_name = var_map.lookup(lhs.name)
@@ -358,6 +367,9 @@ def rewrite_typed(fn):
         return typed_ast.Tuple(elts, type = tuple_type.make_tuple_type(elt_types))
       else:
         return lhs 
+    else:
+      return lhs 
+      
   
   def rewrite_stmt(stmt):
     if isinstance(stmt, typed_ast.Assign):
