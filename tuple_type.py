@@ -60,7 +60,7 @@ class TupleT(StructT):
   def __hash__(self):
     return hash(self.elt_types)
   
-  def __getitem__(self, idx):
+  def index_type(self, idx):
     assert isinstance(idx, Expr), \
       "Tuple indices must be computed statically, so expected index to be expression"
     assert isinstance(idx, Const), "Unsupported expression: %s" % idx

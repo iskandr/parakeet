@@ -141,7 +141,13 @@ def compile_expr(expr, env, builder):
     n_elts = compile_expr(expr.count, env, builder)
     return builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
     
-    
+  
+  def compile_Index():
+    arr = compile_expr(expr.value, env, builder)
+    idx = compile_expr(expr.index, env, builder)
+    pointer = builder.gep(arr, [idx], "elt_pointer")
+    return builder.load(pointer, "elt")
+  
   def compile_Attribute():
     llvm_value = compile_expr(expr.value, env, builder)
     idx = None
@@ -371,13 +377,19 @@ def compile_block(stmts, env, builder):
 
 compiled_functions = {}
 
+from transform import apply_pipeline
+from lower_structs import LowerStructs
+from lower_indexing import LowerIndexing
+
+def prepare_fn(fundef):
+  return apply_pipeline(fundef, [LowerIndexing, LowerStructs])
+    
+
 def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   
-  
-  import lower_structs
-  fundef = lower_structs.make_structs_explicit(fundef)
+  fundef = prepare_fn(fundef)
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)   
   compile_block(fundef.body, env, start_builder)

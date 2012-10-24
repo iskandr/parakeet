@@ -21,6 +21,18 @@ def const_scalar(x):
     assert isinstance(x, float)
     return const_float(x)
   
+def wrap_constant(x):
+  """
+  If given value isn't already an expression
+  turn it into one with the const helper
+  """
+  if isinstance(x, syntax.Expr):
+    return x
+  else:
+    return const_scalar(x)
+  
+def wrap_constants(xs):
+  return map(wrap_constant, xs)
   
 def get_type(expr):
   return expr.type

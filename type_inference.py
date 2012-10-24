@@ -21,8 +21,6 @@ class InferenceFailed(Exception):
     self.msg = msg 
 
 
-
-
 class VarMap:
   def __init__(self):
     self._vars = {}
@@ -221,24 +219,24 @@ def annotate_stmt(stmt, tenv, var_map ):
     return typed_ast.Return(ret_val)
     
   def stmt_While():
-    print stmt 
-    print 1, tenv
-    print 
+    #print stmt 
+    #print 1, tenv
+    #print 
     infer_left_flow(stmt.merge_before)
-    print 2, tenv
-    print 
+    #print 2, tenv
+    #print 
     cond = annotate_expr(stmt.cond, tenv, var_map)
-    print 3, tenv
-    print  
+    #print 3, tenv
+    #print  
     body = annotate_block(stmt.body, tenv, var_map)
-    print 4, tenv
-    print 
+    #print 4, tenv
+    #print 
     merge_before = annotate_phi_nodes(stmt.merge_before)
-    print 5, tenv
-    print 
+    #print 5, tenv
+    #print 
     merge_after = annotate_phi_nodes(stmt.merge_after)
-    print 6, tenv
-    print 
+    #print 6, tenv
+    #print 
     return typed_ast.While(cond, body, merge_before, merge_after)
     
   return dispatch(stmt, prefix="stmt")  

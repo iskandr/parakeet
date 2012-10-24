@@ -20,12 +20,7 @@ class LowerStructs(Transform):
     closure_id = closure_signatures.get_id(expr.type)
     closure_id_node = syntax.Const(closure_id, type = core_types.Int64)
     return syntax.Struct([closure_id_node] + closure_args, type = expr.type)
-    
-  def transform_Invoke(self, expr):
-    new_closure = self.transform_expr(expr.closure)
-    new_args =  self.transform_expr_list(expr.args) 
-    return syntax.Invoke(new_closure, new_args, type = expr.type) 
-    
+
   def transform_TupleProj(self, expr):
     new_tuple = self.transform_expr(expr.tuple)
     assert isinstance(expr.index, int)
@@ -33,7 +28,7 @@ class LowerStructs(Transform):
 
     field_name, field_type  = tuple_t._fields_[expr.index]
     return syntax.Attribute(new_tuple, field_name, type = field_type)
-    
+  
   def transform_Array(self, expr):
 
     n = len(expr.elts)    
@@ -58,7 +53,6 @@ class LowerStructs(Transform):
     strides = self.transform_Tuple(const_tuple(elt_t.nbytes))
     strides_var = self.fresh_var(strides.type, "strides")
     self.insert_assign(strides_var, strides)
-    
     return syntax.Struct([ptr_var, shape_var, strides_var], type = expr.type)
   
 def make_structs_explicit(fn):

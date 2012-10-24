@@ -2,7 +2,7 @@
 import numpy as np 
 import ctypes
  
-from tuple_type import repeat_tuple
+import tuple_type 
 from core_types import StructT, IncompatibleTypes, ScalarT, Int64, ptr_type
 import core_types 
 
@@ -15,7 +15,7 @@ def buffer_info(buf, ptr_type = ctypes.c_void_p):
   length = ctypes.c_ssize_t() 
   obj =  ctypes.py_object(buf) 
   ctypes.pythonapi.PyObject_AsReadBuffer(obj, ctypes.byref(address), ctypes.byref(length))
-  return address, length   
+  return address, length.value  
 
 ctypes.pythonapi.PyBuffer_New.argtypes = (ctypes.c_ulong,)
 ctypes.pythonapi.PyBuffer_New.restype = ctypes.py_object
@@ -26,7 +26,8 @@ class ArrayT(StructT):
 
   def node_init(self):
     assert isinstance(self.elt_type, ScalarT)
-    tuple_t = repeat_tuple(Int64, self.rank)
+    tuple_t = tuple_type.repeat_tuple(Int64, self.rank)
+    
     self.shape_t = tuple_t
     self.strides_t = tuple_t
     self.ptr_t = ptr_type(self.elt_type) 
@@ -46,21 +47,52 @@ class ArrayT(StructT):
   def combine(self, other):
     if self == other:
       return self
+    elif isinstance(other, core_types.ScalarT):
+      elt_t = self.elt_type 
+      combined_elt_t = elt_t.combine(other)
+      return array_type(combined_elt_t, self.rank)
+    elif isinstance(other, ArrayT):
+      assert self.rank == other.rank
+      combined_elt_t = self.elt_type.combine(other.elt_type)
+      return array_type(combined_elt_t, self.rank)
     else:
       raise IncompatibleTypes(self, other)
 
+  def index_type(self, idx):
+    """
+    Given the type of my indices, what type of array will result?
+    """
+    if not isinstance(idx, core_types.Type):
+      idx = idx.type 
+      
+    if isinstance(idx, core_types.IntT):
+      return array_type(self.elt_type, self.rank - 1) 
+    elif isinstance(idx, core_types.NoneT):
+      return array_type(self.elt_type, 1)
+    elif isinstance(idx, ArrayT):
+      assert idx.rank == 1
+      # slicing out a subset of my rows doesn't change my type 
+      return self 
+    elif isinstance(idx, tuple_type.TupleT):
+      raise RuntimeError("Indexing by tuples not yet supported")
+    else:
+      raise RuntimeError("Unsupported index type: %s" % idx)
 
   def from_python(self, x):
     assert isinstance(x, np.ndarray)
          
-    ptr, length = buffer_info(x.data, self.ptr_t.ctypes_repr)
-    assert sum(x.shape) == length, \
-      "Shape %s has %d elements but buffer has length %d"  % \
-        (x.shape, sum(x.shape), length)
-    ctypes_shape = self.tuple_t.from_python(x.shape)
+    ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
+    nelts = sum(x.shape)
+    elt_size = x.dtype.itemsize
+    total_bytes = nelts * elt_size 
+    assert total_bytes == buffer_length, \
+      "Shape %s has %d elements of size %d (total = %d) but buffer has length %d bytes"  % \
+        (x.shape, nelts, elt_size, total_bytes, buffer_length)
+    ctypes_shape = self.shape_t.from_python(x.shape)
     
-    ctypes_strides = self.tuple_t.from_python(x.strides)
-    return self.ctypes_repr(ptr, ctypes_shape, ctypes_strides)
+    ctypes_strides = self.strides_t.from_python(x.strides)
+
+    return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape), ctypes.pointer(ctypes_strides))
     
   def to_python(self, obj):
     """
@@ -87,7 +119,10 @@ def array_type(elt_t, rank):
   if key in _array_types:
     return _array_types[key]
   else:
-    t = ArrayT(elt_t, rank)
+    if rank == 0:
+      t = elt_t
+    else:
+      t = ArrayT(elt_t, rank)
     _array_types[key] = t
     return t 
 
