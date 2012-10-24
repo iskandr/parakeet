@@ -1,4 +1,5 @@
-from parakeet import expect 
+import parakeet as par 
+from parakeet import expect  
 def loop_dot(x,y):
   n = x.shape[0]
   result = x[0] * y[0]
@@ -7,6 +8,9 @@ def loop_dot(x,y):
       result = result + x[i] * y[i]
       i = i + 1
   return result
+
+def adverb_dot(x,y):
+  return par.sum(x*y)
 
 import numpy as np 
 bool_vec = np.array([True, False, True, False, True])

@@ -1,28 +1,25 @@
+from prims import *
 
-import numpy as np 
-from function_mapping import remap
-from adverbs import map, reduce, scan 
-@remap(np.alen)
-def alen(arr):
+# from adverbs import map, reduce, scan 
+def len(arr):
   return arr.shape[0]
     
-@remap(np.shape)
 def shape(arr):
   return arr.shape 
 
-@remap(np.asarray)
-def asarray(a, dtype = None, order = None):
-  pass
+def reduce(f, combine, xs, init):
+  start_idx = 0
+  n = len(xs)
+  while start_idx < n:
+    init = f(init, xs[start_idx])
+    start_idx += 1
+  return init 
 
-@remap(np.ndim)
-def ndim(arr):
-  return len(asarray(arr).shape)
+def sum(x):
+  return reduce(add, add, x[1:], x[0])
 
-@remap(np.zeros_like)
-def zeros_like(arr, dtype = None):
-  arr = asarray(arr)
-  if dtype is None:
-    dtype = arr.dtype
-  zero = dtype.type(0)
-  return map(lambda _: zero, arr, axis = None)
-  
+def prod(x):
+  return reduce(multiply, multiply, x[1:], x[0])
+
+def mean(x):
+  return sum(x) / len(x)

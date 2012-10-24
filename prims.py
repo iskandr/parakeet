@@ -168,7 +168,4 @@ greater = Cmp(np.greater, 'Gt')
 greater_equal = Cmp(np.greater_equal, 'GtE')
 
 
-
-#shape = ArrayProp(np.shape)
-#strides = ArrayProp(lambda x: x.strides, name="strides") 
   
