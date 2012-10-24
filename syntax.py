@@ -38,15 +38,9 @@ class Map(Adverb):
       self.axes = axes
 
   def __repr__(self):
-    output = "map(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, axes=%s)" %
-               (self.fn.name, str(self.axes)))
-    return output
+    return ("map([%s], %s, axes=%s, group_axes=%s)" %
+            (", ".join(map(str, self.args)), self.fn.name, str(self.axes),
+             str(self.group_axes)))
 
   def __str__(self):
     return repr(self)
@@ -59,8 +53,8 @@ class AllPairs(Adverb):
 
   def __repr__(self):
     return ("allpairs([%s, %s], %s, axes=[%d,%d])" %
-           (self.args[0], self.args[1], self.fn.name,
-            self.axes[0], self.axes[1]))
+            (self.args[0], self.args[1], self.fn.name,
+             self.axes[0], self.axes[1]))
 
   def __str__(self):
     return repr(self)
@@ -78,15 +72,9 @@ class Reduce(Adverb):
       self.axes = axes
 
   def __repr__(self):
-    output = "reduce(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, combiner=%s, init=%d, axes=%s)" %
-               (self.fn.name, self.combiner.name, self.init, str(self.axes)))
-    return output
+    return ("reduce([%s], %s, combiner=%s, init=%d, axes=%s)" %
+            (", ".join(map(str, self.args)), self.fn.name, self.combiner.name,
+             self.init, str(self.axes)))
 
   def __str__(self):
     return repr(self)
@@ -100,15 +88,9 @@ class TiledMap(Map):
     Map.__init__(self, args, fn, axes)
 
   def __repr__(self):
-    output = "tiledmap(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, axes=%s, group_axes=%s)" %
-               (self.fn.name, str(self.axes), str(self.group_axes)))
-    return output
+    return ("tiledmap([%s], %s, axes=%s, group_axes=%s)" %
+            (", ".join(map(str, self.args)), self.fn.name, str(self.axes),
+             str(self.group_axes)))
 
 class TiledAllPairs(AllPairs):
   def __init__(self, args, fn, axes=[0,0], group_axes=[0,0]):
@@ -133,16 +115,10 @@ class TiledReduce(Reduce):
     Reduce.__init__(self, args, fn, combiner, init, axes)
 
   def __repr__(self):
-    output = "tiledreduce(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, combiner=%s, init=%d, axes=%s, group_axes=%s)" %
-               (self.fn.name, self.combiner.name, self.init, str(self.axes),
-                str(self.group_axes)))
-    return output
+    return (
+      "tiledreduce([%s], %s, combiner=%s, init=%d, axes=%s, group_axes=%s)" %
+      (", ".join(map(str(self.args))), self.fn.name, self.combiner.name,
+       self.init, str(self.axes), str(self.group_axes)))
 
   def __str__(self):
     return repr(self)
