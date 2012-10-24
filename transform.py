@@ -28,6 +28,7 @@ class Transform:
   def __init__(self, fn):
     self.blocks = NestedBlocks()
     self.fn = fn
+    self.require_types = isinstance(fn, syntax.TypedFn) 
     self.type_env = None 
   
   
@@ -42,15 +43,17 @@ class Transform:
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
   
+  def insert_assign(self, lhs, rhs):
+    self.insert_stmt(syntax.Assign(lhs, rhs))
+  
   def transform_generic_expr(self, expr):
     args = {}
-    for member_name in expr._members:
+    for member_name in expr.members:
       member_value = getattr(expr, member_name)
       if isinstance(member_value, syntax.Expr):
         member_value = self.transform_expr(member_value)
       args[member_name] = member_value
     return expr.__class__(**args)
-      
   
   def transform_expr(self, expr):
     """
@@ -58,9 +61,13 @@ class Transform:
     """
     method_name = "transform_" + expr.node_type()
     if hasattr(self, method_name):
-      return getattr(self, method_name)(expr)
+      result = getattr(self, method_name)(expr)
     else:
-      return self.transform_generic_expr(expr)
+      result = self.transform_generic_expr(expr)
+    
+    if self.require_types:
+      assert result.type is not None, "Missing type for %s" % result 
+    return result 
   
   def transform_expr_list(self, exprs):
     return [self.transform_expr(e) for e in exprs]
@@ -97,13 +104,14 @@ class Transform:
     merge_after = self.transform_phi_nodes(stmt.merge_after)
     return syntax.While(cond, body, merge_before, merge_after)
   
-
-  
   def transform_stmt(self, stmt):
     method_name = "transform_" + stmt.node_type()
     if hasattr(self, method_name):
-      getattr(self, method_name)(stmt)
-    
+      result = getattr(self, method_name)(stmt)
+    assert isinstance(result, syntax.Stmt), \
+      "Expected statement: %s" % result 
+    return result 
+  
   def transform_block(self, stmts):
     self.blocks.push()
     for old_stmt in stmts:
@@ -112,9 +120,11 @@ class Transform:
     return self.blocks.pop() 
   
   def apply(self):
-    self.type_env = self.fn.type_env.copy()
+    if self.require_types:
+      self.type_env = self.fn.type_env.copy()
     body = self.transform_block(self.fn.body)
     new_fundef_args = dict([ (m, getattr(self.fn, m)) for m in self.fn._members])
     new_fundef_args['body'] = body
-    new_fundef_args['type_env'] = self.type_env 
+    if self.require_types:
+      new_fundef_args['type_env'] = self.type_env 
     return syntax.TypedFn(**new_fundef_args)

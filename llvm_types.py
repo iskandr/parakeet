@@ -1,9 +1,8 @@
 
 import llvm.core as llcore 
 from llvm.core import Type as lltype
-from core_types import ScalarT, FloatT, BoolT, IntT, UnsignedT, SignedT
+from core_types import ScalarT, FloatT, BoolT, IntT, UnsignedT, SignedT, PtrT
 import ctypes 
-import type_conv 
 
 void_t = lltype.void()
 int1_t = lltype.int(1)
@@ -79,7 +78,7 @@ def llvm_value_type(t):
 
 def llvm_ref_type(t):
   llvm_value_t = llvm_value_type(t)
-  if isinstance(t, ScalarT):
+  if isinstance(t, (PtrT, ScalarT)):
     return llvm_value_t
   else:
     return lltype.pointer(llvm_value_t)
@@ -156,9 +155,9 @@ def convert_from_signed(llvm_value, new_ptype, builder):
   else:
     assert isinstance(new_ptype, IntT)
     nbytes = llvm_value.type.width 
-    if nbytes == new_ptype.nbytes():
+    if nbytes == new_ptype.nbytes:
       return builder.bitcast(llvm_value, dest_llvm_type, dest_name)
-    elif nbytes < new_ptype.nbytes():
+    elif nbytes < new_ptype.nbytes:
       return builder.zext(llvm_value, dest_llvm_type, dest_name)
     else:
       return builder.trunc(llvm_value, dest_llvm_type, dest_name)
@@ -176,9 +175,9 @@ def convert_from_unsigned(llvm_value, new_ptype, builder):
   else:
     assert isinstance(new_ptype, IntT)
     nbytes = llvm_value.type.width 
-    if nbytes == new_ptype.nbytes():
+    if nbytes == new_ptype.nbytes:
       return builder.bitcast(llvm_value, dest_llvm_type, dest_name)
-    elif nbytes < new_ptype.nbytes():
+    elif nbytes < new_ptype.nbytes:
       return builder.zext(llvm_value, dest_llvm_type, dest_name)
     else:
       return builder.trunc(llvm_value, dest_llvm_type, dest_name)

@@ -52,7 +52,7 @@ def generic_value_to_python(gv, t):
     struct = t.ctypes_repr.from_address(addr)
     print "struct", struct
     print "fields", struct._fields_ 
-    print "elt0", struct.elt0  
+    
     return t.to_python(struct)
     
     

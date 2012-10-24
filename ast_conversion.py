@@ -285,7 +285,17 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     return result 
       
 
-
+  def translate_lhs(lhs):
+    if isinstance(lhs, ast.Name):
+      return env.fresh_var(lhs.id)
+    elif isinstance(lhs, ast.Tuple):
+      return syntax.Tuple( map(translate_lhs, lhs.elts))
+    else:
+      # in case of slicing or attributes
+      return translate_expr(lhs)
+      
+      
+      
   def translate_stmt(stmt):
     """
     Given a stmt, dispatch based on its class type to a particular
@@ -302,12 +312,13 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       return syntax.Assign(local_name, closure)
     
     elif isinstance(stmt, ast.Assign):     
-      lhs = stmt.targets[0]
-      assert isinstance(lhs, ast.Name)
-      # important to evaluate RHS before LHS for statements like 'x = x + 1' 
+
+      # important to evaluate RHS before LHS for statements like 'x = x + 1'
       ssa_rhs = translate_expr(stmt.value)
-      ssa_lhs = env.fresh_var(lhs.id) 
+      ssa_lhs = translate_lhs(stmt.targets[0])
       return syntax.Assign(ssa_lhs, ssa_rhs)
+      
+        
     elif isinstance(stmt, ast.Return):
       rhs = syntax.Return(translate_expr(stmt.value))
       return rhs 

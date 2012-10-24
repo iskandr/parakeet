@@ -35,6 +35,7 @@ class LowerStructs(Transform):
     return syntax.Attribute(new_tuple, field_name, type = field_type)
     
   def transform_Array(self, expr):
+
     n = len(expr.elts)    
     array_t = expr.type
     assert isinstance(array_t, ArrayT)
@@ -46,12 +47,19 @@ class LowerStructs(Transform):
     ptr_var = self.fresh_var(ptr_t, "data")
     self.insert_stmt(syntax.Assign(ptr_var, alloc))
     for (i, elt) in enumerate(self.transform_expr_list(expr.elts)):
+ 
       idx = syntax.Const(i, type = core_types.Int32)
-      lhs = syntax.Index(ptr_var, idx)
-      self.insert_stmt(syntax.Assign(lhs, elt))
-    shape = const_tuple(n)
-    strides = const_tuple(elt_t.nbytes)
-    return syntax.Struct([ptr_var, shape, strides], type = expr.type)
+      lhs = syntax.Index(ptr_var, idx, type = elt_t)
+      self.insert_assign(lhs, elt)
+    
+    shape = self.transform_Tuple(const_tuple(n))
+    shape_var = self.fresh_var(shape.type, "shape")
+    self.insert_assign(shape_var, shape)
+    strides = self.transform_Tuple(const_tuple(elt_t.nbytes))
+    strides_var = self.fresh_var(strides.type, "strides")
+    self.insert_assign(strides_var, strides)
+    
+    return syntax.Struct([ptr_var, shape_var, strides_var], type = expr.type)
   
 def make_structs_explicit(fn):
   return LowerStructs(fn).apply()

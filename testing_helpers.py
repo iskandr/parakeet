@@ -1,5 +1,4 @@
 import sys
-import traceback 
 
 def run_local_functions(prefix, locals_dict = None):   
   if locals_dict is None:

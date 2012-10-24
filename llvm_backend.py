@@ -56,9 +56,10 @@ class CompilationEnv:
     assert len(self.llvm_fn.args) == n_expected
   
     for (name, t) in fundef.type_env.iteritems():
-      llvm_t = llvm_ref_type(t)
-      stack_val = builder.alloca(llvm_t, name)
-      self.vars[name] = stack_val 
+      if not name.startswith("$"):
+        llvm_t = llvm_ref_type(t)
+        stack_val = builder.alloca(llvm_t, name)
+        self.vars[name] = stack_val 
   
     for llvm_arg, parakeet_arg in zip(self.llvm_fn.args, fundef.args.arg_slots):
       if isinstance(parakeet_arg, str):
@@ -103,7 +104,7 @@ def int64(x):
 
 
 def compile_expr(expr, env, builder):
-  
+  print "EXPR: ", expr 
   def compile_Var():
     ref =  env[expr.name]
     val = builder.load(ref, expr.name + "_val")
@@ -122,28 +123,25 @@ def compile_expr(expr, env, builder):
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
     
-
-    
+    print 
+    print "%s : %s -> %s" % (struct_ptr, struct_ptr.type, llvm_struct_t)
+    print
+      
     for (i, elt)  in enumerate(expr.args):
+      print (i, elt)
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
 
     return struct_ptr
   
-  def compile_AllocBuffer():
+  def compile_Alloc():
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
     n_elts = compile_expr(expr.count, env, builder)
-    ptr = builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
-    llvm_buffer_t = llvm_types.llvm_value_type(expr.type)
-    buffer_obj = builder.alloca(llvm_buffer_t, "buffer_obj")
-    ptr_field = builder.gep(buffer_obj, [int32(0), int32(0)], "buffer.data_ptr")
-    builder.store(ptr, ptr_field)
-    length_field = builder.gep(buffer_obj, [int32(0), int32(1)], "buffer.count")
-    builder.store(n_elts, length_field)
-    return buffer_obj 
-  
+    return builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
+    
+    
   def compile_Attribute():
     llvm_value = compile_expr(expr.value, env, builder)
     idx = None
@@ -267,16 +265,33 @@ def compile_stmt(stmt, env, builder):
   
   def compile_Assign():
     
+    print "LHS VALUE TYPE", llvm_types.llvm_value_type(stmt.lhs.type)
+    print "LHS REF TYPE", llvm_types.llvm_ref_type(stmt.lhs.type)
     
     value = compile_expr(stmt.rhs, env, builder)
-    print "ASSIGN"
-    print "LHS %s : %s" % stmt.lhs
-    print "RHS %s : %s" % (value, value.type)
+
     if isinstance(stmt.lhs, syntax.Var):
       ref = env[stmt.lhs.name]
+      print "ASSIGN - store"
+      print "LHS %s : %s" % (ref, ref.type) 
+      print "RHS %s : %s" % (value, value.type)
+      
       builder.store(value, ref)
     elif isinstance(stmt.lhs, syntax.Index):
-      assert isinstance(stmt.rhs.type, PtrT)
+      assert isinstance(stmt.lhs.value.type, PtrT), \
+        "Expected pointer, got %s" % stmt.lhs.value.type
+      base_ptr = compile_expr(stmt.lhs.value, env, builder)
+      index = compile_expr(stmt.lhs.index, env, builder)
+      index = llvm_types.convert_from_signed(index, Int32, builder)  
+      elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
+      print "ASSIGN - index"
+      print "base_ptr %s : %s" % (base_ptr, base_ptr.type)
+      print "elt_ptr %s : %s" % (elt_ptr, elt_ptr.type)
+      print "index %s : %s" % (index, index.type)
+      print "value %s : %s" % (value, value.type )
+      builder.store(value, elt_ptr)
+      
+      
     return builder, False 
   
   def compile_While():
@@ -305,7 +320,9 @@ def compile_stmt(stmt, env, builder):
     return after_builder, False 
   
   def compile_Return():
-    print "About to compile return rhs: ", stmt.value 
+    print 
+    print "About to compile return rhs: ", stmt.value
+    print  
     ret_val = compile_expr(stmt.value, env, builder)
     builder.ret(ret_val)
     return builder, True 

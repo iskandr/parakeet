@@ -99,12 +99,16 @@ class StructT(Type):
     ctypes_fields = []
     
     for (field_name, parakeet_field_type) in self._fields_:
+      
       field_repr = parakeet_field_type.ctypes_repr
       # nested structures will be heap allocated 
-      if isinstance(parakeet_field_type, StructT):
-        field_repr = ctypes.POINTER(field_repr)
-      pair = field_name, field_repr 
-      ctypes_fields.append(pair)
+      if isinstance(parakeet_field_type,  StructT):
+        # print "POINTER", field_name, field_repr
+        ptr_t = ctypes.POINTER(field_repr) 
+        ctypes_fields.append( (field_name, ptr_t) )
+      else:
+        # print "NOT A POINTER", field_name, field_repr 
+        ctypes_fields.append( (field_name, field_repr) )
 
     class Repr(ctypes.Structure):
       _fields_ = ctypes_fields
