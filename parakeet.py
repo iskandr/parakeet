@@ -53,3 +53,5 @@ def expect(fn, args, expected):
 def run(fn, args):
   _, _, all_args, compiled = specialize_and_compile(fn, args)
   return compiled(*all_args)
+
+from prelude import * 
