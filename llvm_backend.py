@@ -211,6 +211,9 @@ def compile_expr(expr, env, builder):
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args 
+    print 
+    print "PRIM", prim
+    print "ARGS", args
     
     # type specialization should have made types of arguments uniform, 
     # so we only need to check the type of the first arg 
