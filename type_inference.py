@@ -71,6 +71,11 @@ def annotate_expr(expr, tenv, var_map):
       invoke_result_type = invoke_result_type.combine(ret)
     return typed_ast.Invoke(closure, args, type = invoke_result_type) 
       
+  def expr_Attribute():
+    value = annotate_child(expr.value)
+    assert isinstance(value.type, core_types.StructT)
+    result_type = value.type.field_type(expr.name)
+    return typed_ast.Attribute(value, expr.name, type = result_type)
   
   def expr_PrimCall():
     args = annotate_children(expr.args)

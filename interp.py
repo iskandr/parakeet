@@ -29,6 +29,9 @@ def eval_fn(fn, actuals):
     def expr_Const():
       return expr.value
     
+    def expr_Attribute():
+      value = eval_expr(expr.value)
+      return getattr(value, expr.name)
     
     def expr_Array():
       elt_values = map(eval_expr, expr.elts)

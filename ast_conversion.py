@@ -253,6 +253,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     def translate_List():
       return syntax.Array(map(translate_expr, expr.elts))
     
+    def translate_Attribute():
+      value = translate_expr(expr.value)
+      return syntax.Attribute(value, expr.attr)
+    
     def translate_Num():
       return syntax.Const(expr.n)
 
