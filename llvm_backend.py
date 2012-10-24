@@ -15,8 +15,7 @@ from llvm_types import llvm_value_type, llvm_ref_type
 import llvm_context 
 from compiled_fn import CompiledFn
 import llvm_prims 
-from MySQLdb.constants.FIELD_TYPE import BIT
-from checkbox.lib import bit
+
  
 
 class CompilationEnv:
@@ -106,7 +105,7 @@ def int64(x):
 
 
 def compile_expr(expr, env, builder):
-  print "EXPR: ", expr 
+  # print "EXPR: ", expr 
   def compile_Var():
     ref =  env[expr.name]
     val = builder.load(ref, expr.name + "_val")
@@ -125,12 +124,8 @@ def compile_expr(expr, env, builder):
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
     
-    print 
-    print "%s : %s -> %s" % (struct_ptr, struct_ptr.type, llvm_struct_t)
-    print
       
     for (i, elt)  in enumerate(expr.args):
-      print (i, elt)
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
@@ -151,9 +146,7 @@ def compile_expr(expr, env, builder):
     index_t = expr.index.type 
     llvm_idx = llvm_types.convert(llvm_index, index_t, Int32, builder)
     
-    print "compile_Index arr = %s, idx = %s" % (llvm_arr, llvm_idx) 
     pointer = builder.gep(llvm_arr, [ llvm_idx], "elt_pointer")
-    print pointer 
     elt = builder.load(pointer, "elt")
     return elt 
     
@@ -212,9 +205,6 @@ def compile_expr(expr, env, builder):
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args 
-    print 
-    print "PRIM", prim
-    print "ARGS", args
     
     # type specialization should have made types of arguments uniform, 
     # so we only need to check the type of the first arg 
@@ -247,7 +237,6 @@ def compile_expr(expr, env, builder):
         assert isinstance(t, BoolT) 
         instr = llvm_prims.bool_binops[prim]
       op = getattr(builder, instr)
-      print instr, op, llvm_args, args,  [x.type for x in  llvm_args]
       return op(name = "%s_result" % prim.name, *llvm_args)
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % expr 
@@ -276,7 +265,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks, 
   which were causing some mysterious crashes inside LLVM"""
   
-  print ">> ", stmt 
+  # print ">> ", stmt 
   
   def compile_Assign():
     
@@ -297,11 +286,11 @@ def compile_stmt(stmt, env, builder):
       index = compile_expr(stmt.lhs.index, env, builder)
       index = llvm_types.convert_from_signed(index, Int32, builder)  
       elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
-      print "ASSIGN - index"
-      print "base_ptr %s : %s" % (base_ptr, base_ptr.type)
-      print "elt_ptr %s : %s" % (elt_ptr, elt_ptr.type)
-      print "index %s : %s" % (index, index.type)
-      print "value %s : %s" % (value, value.type )
+      #print "ASSIGN - index"
+      #print "base_ptr %s : %s" % (base_ptr, base_ptr.type)
+      #print "elt_ptr %s : %s" % (elt_ptr, elt_ptr.type)
+      #print "index %s : %s" % (index, index.type)
+      #print "value %s : %s" % (value, value.type )
       builder.store(value, elt_ptr)
       
       
@@ -333,9 +322,7 @@ def compile_stmt(stmt, env, builder):
     return after_builder, False 
   
   def compile_Return():
-    print 
-    print "About to compile return rhs: ", stmt.value
-    print  
+    
     ret_val = compile_expr(stmt.value, env, builder)
     builder.ret(ret_val)
     return builder, True 
@@ -404,9 +391,9 @@ def compile_fn(fundef):
   compile_block(fundef.body, env, start_builder)
   env.llvm_context.run_passes(env.llvm_fn)
 
-  print env.llvm_fn 
+  # print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
-  print result.llvm_fn  
+  # print result.llvm_fn  
   
   return result 

@@ -46,12 +46,9 @@ def generic_value_to_python(gv, t):
     llvm_t = llvm_types.ctypes_scalar_to_lltype(t.ctypes_repr)
     return t.dtype.type(gv.as_real(llvm_t))
   else:
-    print "gv", gv
+    
     addr = gv.as_pointer()
-    print "addr", addr
     struct = t.ctypes_repr.from_address(addr)
-    print "struct", struct
-    print "fields", struct._fields_ 
     
     return t.to_python(struct)
     

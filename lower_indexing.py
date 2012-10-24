@@ -20,7 +20,6 @@ class LowerIndexing(transform.Transform):
     offset_elts = self.div(offset_bytes, elt_size, "offset_elt")
     data_ptr = self.get_struct_field(arr, "data")
     result = self.get_index(data_ptr, offset_elts)
-    print "LOWER INDEXING", result, result.type 
     return result 
     
 

@@ -64,7 +64,6 @@ def annotate_expr(expr, tenv, var_map):
     arg_types = get_types(args)
     invoke_result_type = core_types.Unknown
     for closure_type in closure_set.closures:
-      print invoke_result_type
       untyped_id, closure_arg_types = closure_type.fn, closure_type.args
       untyped_fundef = untyped_functions[untyped_id]
       ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
@@ -143,7 +142,6 @@ def annotate_stmt(stmt, tenv, var_map ):
     tenv[new_result_var]  = old_type.combine(new_type)
   
   def infer_phi_nodes(nodes, direction):
-    print "infer_phi_nodes", nodes
     for (var, values) in nodes.iteritems():
       infer_phi(var, direction(values))
   
@@ -170,7 +168,6 @@ def annotate_stmt(stmt, tenv, var_map ):
     return (new_var, (new_left, new_right))  
   
   def annotate_phi_nodes(nodes):
-    print "annotate_phi_nodes", nodes
     new_nodes = {}
     for old_k, (old_left, old_right) in nodes.iteritems():
       new_name, (left, right) = annotate_phi_node(old_k, (old_left, old_right))
@@ -189,7 +186,6 @@ def annotate_stmt(stmt, tenv, var_map ):
         tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
         return typed_ast.Tuple(new_elts, type = tuple_t)
       elif isinstance(lhs, untyped_ast.Index):
-        print lhs 
         new_arr = annotate_expr(lhs.value, tenv, var_map)
         new_idx = annotate_expr(lhs.index, tenv, var_map)
         
@@ -224,24 +220,17 @@ def annotate_stmt(stmt, tenv, var_map ):
     return typed_ast.Return(ret_val)
     
   def stmt_While():
-    #print stmt 
-    #print 1, tenv
-    #print 
+
     infer_left_flow(stmt.merge_before)
-    #print 2, tenv
-    #print 
+
     cond = annotate_expr(stmt.cond, tenv, var_map)
-    #print 3, tenv
-    #print  
+
     body = annotate_block(stmt.body, tenv, var_map)
-    #print 4, tenv
-    #print 
+
     merge_before = annotate_phi_nodes(stmt.merge_before)
-    #print 5, tenv
-    #print 
+
     merge_after = annotate_phi_nodes(stmt.merge_after)
-    #print 6, tenv
-    #print 
+
     return typed_ast.While(cond, body, merge_before, merge_after)
     
   return dispatch(stmt, prefix="stmt")  
@@ -422,9 +411,7 @@ def specialize(untyped, arg_types):
     return typed_functions[key]
   else:
     typed_fundef = _infer_types(untyped, arg_types)
-    print "Before rewriting", typed_fundef  
     rewrite_typed(typed_fundef)
-    print "After rewriting", typed_fundef 
     
     typed_functions[key] = typed_fundef 
     return typed_fundef 

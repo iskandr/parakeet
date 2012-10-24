@@ -47,7 +47,7 @@ class TupleT(StructT):
         c_elt = c_elt.contents 
         
       py_elt = field_type.to_python(c_elt)
-      print 
+      
       elt_values.append(py_elt)
     return tuple(elt_values)
  

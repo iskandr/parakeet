@@ -146,7 +146,7 @@ class Args:
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
-    print positional_values 
+
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n

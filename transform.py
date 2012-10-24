@@ -210,8 +210,8 @@ class Transform:
 
 def apply_pipeline(fn, transforms):
   for T in transforms:
-    print 
-    print "Applying %s" % T
+    #print 
+    #print "Applying %s" % T
     fn = T(fn).apply()
-    print fn 
+    # print fn 
   return fn 
