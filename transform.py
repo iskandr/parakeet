@@ -6,6 +6,7 @@ import prims
 
 from syntax_helpers import get_type, get_types, wrap_constant, wrap_constants
 
+import function_registry
 
 class NestedBlocks:
   def __init__(self):
@@ -203,15 +204,36 @@ class Transform:
     self.type_env = self.fn.type_env.copy()
     body = self.transform_block(self.fn.body)
     new_fundef_args = dict([ (m, getattr(self.fn, m)) for m in self.fn._members])
+    # create a fresh function with a distinct name and the 
+    # transformed body and type environment 
+    new_fundef_args['name'] = names.refresh(self.fn.name)
     new_fundef_args['body'] = body
     new_fundef_args['type_env'] = self.type_env 
-    return syntax.TypedFn(**new_fundef_args)
-  
+    new_fundef = syntax.TypedFn(**new_fundef_args)
+    # register this function so if anyone tries to call it they'll be
+    # able to find its definition later 
+    function_registry.typed_functions[new_fundef.name] = new_fundef 
+    return new_fundef 
 
+
+
+
+_transform_cache = {}
+def cached_apply(T, fn):
+  """
+  Applies the transformation, caches the result,
+  and registers the new function in the global registry  
+  """
+  key = (T, fn.name)
+  if key in _transform_cache:
+    return _transform_cache[key]
+  else:
+    new_fn = T(fn).apply()
+    _transform_cache[key] = new_fn
+    return new_fn
+  
 def apply_pipeline(fn, transforms):
   for T in transforms:
-    #print 
-    #print "Applying %s" % T
-    fn = T(fn).apply()
-    # print fn 
+    fn = cached_apply(T, fn) 
   return fn 
+

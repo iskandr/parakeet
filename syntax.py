@@ -49,130 +49,10 @@ class While(Stmt):
   
   def __str__(self):
     return repr(self)
+
 class Expr(Node):
   _members = ['type']
 
-class Adverb(Expr):
-  _members = ['fn', 'args', 'axes']
-
-class Map(Adverb):
-  def __init__(self, args, fn, axes=[]):
-    self.fn = fn
-    self.args = args
-    if len(axes) == 0:
-      self.axes = [0 for _ in args]
-    else:
-      self.axes = axes
-
-  def __repr__(self):
-    output = "map(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, axes=%s)" %
-               (self.fn.name, str(self.axes)))
-    return output
-
-  def __str__(self):
-    return repr(self)
-
-class AllPairs(Adverb):
-  def __init__(self, args, fn, axes=[0,0]):
-    self.fn = fn
-    self.args = args
-    self.axes = axes
-
-  def __repr__(self):
-    return ("allpairs([%s, %s], %s, axes=[%d,%d])" %
-           (self.args[0], self.args[1], self.fn.name,
-            self.axes[0], self.axes[1]))
-
-  def __str__(self):
-    return repr(self)
-
-class Reduce(Adverb):
-  _members = ['combiner', 'init']
-  def __init__(self, args, fn, combiner, init, axes=[]):
-    self.args = args
-    self.fn = fn
-    self.combiner = combiner
-    self.init = init
-    if len(axes) == 0:
-      self.axes = [0 for _ in args]
-    else:
-      self.axes = axes
-
-  def __repr__(self):
-    output = "reduce(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, combiner=%s, init=%d, axes=%s)" %
-               (self.fn.name, self.combiner.name, self.init, str(self.axes)))
-    return output
-
-  def __str__(self):
-    return repr(self)
-
-class TiledMap(Map):
-  def __init__(self, args, fn, axes=[], group_axes=[]):
-    if len(group_axes) == 0:
-      self.group_axes = [0 for _ in args]
-    else:
-      self.group_axes = group_axes
-    Map.__init__(self, args, fn, axes)
-
-  def __repr__(self):
-    output = "tiledmap(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, axes=%s, group_axes=%s)" %
-               (self.fn.name, str(self.axes), str(self.group_axes)))
-    return output
-
-class TiledAllPairs(AllPairs):
-  def __init__(self, args, fn, axes=[0,0], group_axes=[0,0]):
-    self.group_axes = group_axes
-    AllPairs.__init__(self, args, fn, axes)
-
-  def __repr__(self):
-    return ("tiledallpairs([%s, %s], %s, axes=[%d,%d], group_axes=[%d,%d])" %
-            (str(self.args[0]), str(self.args[1]), self.fn.name,
-             self.axes[0], self.axes[1],
-             self.group_axes[0], self.group_axes[1]))
-
-  def __str__(self):
-    return repr(self)
-
-class TiledReduce(Reduce):
-  def __init__(self, args, fn, combiner, init, axes=[], group_axes=[]):
-    if len(group_axes) == 0:
-      self.group_axes = [0 for _ in args]
-    else:
-      self.group_axes = group_axes
-    Reduce.__init__(self, args, fn, combiner, init, axes)
-
-  def __repr__(self):
-    output = "tiledreduce(["
-    if len(self.args) > 0:
-      output += str(self.args[0])
-    if len(self.args) > 1:
-      for arg in self.args[1:]:
-        output += ", " + str(arg)
-    output += ("], %s, combiner=%s, init=%d, axes=%s, group_axes=%s)" %
-               (self.fn.name, self.combiner.name, self.init, str(self.axes),
-                str(self.group_axes)))
-    return output
-
-  def __str__(self):
-    return repr(self)
 
 class Const(Expr):
   _members = ['value']
@@ -276,17 +156,4 @@ class TypedFn(Node):
     
   def __str__(self):
     return repr(self)
-class Traversal:
-  def visit_block(self, block, *args, **kwds):
-    for stmt in block:
-      self.visit_stmt(stmt, *args, **kwds)
 
-  def visit_stmt(self, stmt, *args, **kwds):
-    method_name = "stmt_" + stmt.__class__.__name__
-    method = getattr(self, method_name)
-    method(stmt, *args, **kwds)
-
-  def visit_expr(self, expr, *args, **kwds):
-    method_name = "expr_" + expr.__class__.__name__
-    method = getattr(self, method_name)
-    return method(expr, *args, **kwds)

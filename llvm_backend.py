@@ -184,7 +184,7 @@ def compile_expr(expr, env, builder):
     full_arg_types = closure_t.args + tuple(arg_types)
     # either compile the function we're about to invoke or get its compiled form from a cache
     key = (untyped_fn_id, full_arg_types)
-    typed_fundef = typed_functions[key]
+    typed_fundef = specializations[key]
     target_fn_info = compile_fn(typed_fundef)
     target_fn = target_fn_info.llvm_fn 
       

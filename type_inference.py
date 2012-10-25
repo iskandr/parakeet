@@ -9,7 +9,7 @@ import tuple_type
 from array_type import ArrayT
 import type_conv
 import names 
-from function_registry import untyped_functions, typed_functions
+from function_registry import untyped_functions, find_specialization, add_specialization
 from common import dispatch
 import args 
 from syntax_helpers import get_type, get_types
@@ -406,14 +406,13 @@ def specialize(untyped, arg_types):
   else:
     assert isinstance(untyped, untyped_ast.Fn)
     untyped_id = untyped.name 
-  key = (untyped_id, tuple(arg_types))
-  if key in typed_functions:
-    return typed_functions[key]
-  else:
+  
+  try:
+    return find_specialization(untyped_id, arg_types)
+  except:
     typed_fundef = _infer_types(untyped, arg_types)
     rewrite_typed(typed_fundef)
-    
-    typed_functions[key] = typed_fundef 
+    add_specialization(untyped_id, arg_types, typed_fundef)
     return typed_fundef 
  
 def infer_return_type(untyped, arg_types):

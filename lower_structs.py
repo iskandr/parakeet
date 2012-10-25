@@ -3,7 +3,7 @@ import core_types
 
 from array_type import ArrayT, ScalarT
 import closure_signatures 
-from transform import Transform
+from transform import Transform, cached_apply
 
 from syntax_helpers import const_tuple, const_int 
 
@@ -56,4 +56,4 @@ class LowerStructs(Transform):
     return syntax.Struct([ptr_var, shape_var, strides_var], type = expr.type)
   
 def make_structs_explicit(fn):
-  return LowerStructs(fn).apply()
+  return cached_apply(LowerStructs, fn)
