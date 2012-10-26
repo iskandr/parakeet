@@ -1,5 +1,7 @@
 import numpy as np 
-from parakeet import expect
+
+from testing_helpers import expect, run_local_tests
+
 
 def return_pair():
     return (-1.0, 200)
@@ -40,5 +42,4 @@ def test_tuple_indexing():
   all_tuples(tuple_indexing, unpack_args = False )
 
 if __name__ == '__main__':
-    import testing_helpers
-    testing_helpers.run_local_tests()
+  run_local_tests()

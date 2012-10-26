@@ -82,7 +82,7 @@ class ArrayT(StructT):
       raise RuntimeError("Unsupported index type: %s" % idx)
 
   def from_python(self, x):
-    assert isinstance(x, np.ndarray)
+    x = np.asarray(x)
          
     ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
     nelts = sum(x.shape)
@@ -136,5 +136,5 @@ def typeof(x):
 
   return array_type(elt_t, rank)
  
-type_conv.register(np.ndarray, ArrayT, typeof)
+type_conv.register( (np.ndarray, list),  ArrayT, typeof)
 

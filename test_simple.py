@@ -1,7 +1,4 @@
-import unittest
-import interp
-import numpy as np
-from parakeet import expect
+from testing_helpers import expect, run_local_tests
 
 def always1():
   return 1
@@ -94,6 +91,5 @@ def test_if_true():
   
   
 if __name__ == '__main__':
-  import testing_helpers
-  testing_helpers.run_local_tests()
+  run_local_tests()
   

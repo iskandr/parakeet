@@ -1,15 +1,8 @@
 import ast_conversion 
 from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
 import type_inference 
+from testing_helpers import expect_type, run_local_tests
 
-
-def return_type(fn, input_types):
-  untyped_fundef = ast_conversion.translate_function_value(fn)
-  return type_inference.infer_return_type(untyped_fundef, input_types)
- 
-def expect_type(fn, input_types, output_type):
-  actual = return_type(fn, input_types) 
-  assert actual == output_type, "Expected type %s, actual %s" % (output_type, actual)
 
 def add1(x):
   return x + 1
@@ -60,9 +53,7 @@ def test_incr_loop():
   
 
 if __name__ == '__main__':
-  for k,v in locals().items():
-    if k.startswith('test_'):
-      v()
+  run_local_tests()
     
 
 

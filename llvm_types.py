@@ -2,7 +2,6 @@
 import llvm.core as llcore 
 from llvm.core import Type as lltype
 from core_types import ScalarT, PtrT
-
 import ctypes 
 
 void_t = lltype.void()
