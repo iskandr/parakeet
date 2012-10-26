@@ -36,12 +36,12 @@ def run(fn, args):
   _, _, all_args, compiled = specialize_and_compile(fn, args)
   return compiled(*all_args)
 
-import adverbs 
+import adverb_helpers 
 
 
 def map(fn, *args):
   untyped  = ast_conversion.translate_function_value(fn)
-  wrapper = adverbs.untyped_wrapper(adverbs.Map, untyped)
+  wrapper = adverb_helpers.untyped_map_wrapper(untyped)
   return run(wrapper, args)
 
 from prelude import * 

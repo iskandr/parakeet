@@ -53,11 +53,11 @@ class ArrayT(StructT):
     elif isinstance(other, core_types.ScalarT):
       elt_t = self.elt_type 
       combined_elt_t = elt_t.combine(other)
-      return array_type(combined_elt_t, self.rank)
+      return make_array_type(combined_elt_t, self.rank)
     elif isinstance(other, ArrayT):
       assert self.rank == other.rank
       combined_elt_t = self.elt_type.combine(other.elt_type)
-      return array_type(combined_elt_t, self.rank)
+      return make_array_type(combined_elt_t, self.rank)
     else:
       raise IncompatibleTypes(self, other)
 
@@ -69,9 +69,9 @@ class ArrayT(StructT):
       idx = idx.type 
       
     if isinstance(idx, core_types.IntT):
-      return array_type(self.elt_type, self.rank - 1) 
+      return make_array_type(self.elt_type, self.rank - 1) 
     elif isinstance(idx, core_types.NoneT):
-      return array_type(self.elt_type, 1)
+      return make_array_type(self.elt_type, 1)
     elif isinstance(idx, ArrayT):
       assert idx.rank == 1
       # slicing out a subset of my rows doesn't change my type 
@@ -117,7 +117,7 @@ class ArrayT(StructT):
     return np.ndarray(shape, dtype = self.elt_type.dtype, buffer = dest_buf, strides = strides)
    
 _array_types = {}
-def array_type(elt_t, rank):
+def make_array_type(elt_t, rank):
   key = (elt_t, rank) 
   if key in _array_types:
     return _array_types[key]
@@ -134,8 +134,7 @@ def typeof(x):
   x = np.asarray(x)
   elt_t = core_types.from_dtype(x.dtype)
   rank = len(x.shape)
-
-  return array_type(elt_t, rank)
+  return make_array_type(elt_t, rank)
  
 type_conv.register( (np.ndarray, list),  ArrayT, typeof)
 

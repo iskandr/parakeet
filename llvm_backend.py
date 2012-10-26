@@ -344,12 +344,14 @@ def compile_block(stmts, env, builder):
 compiled_functions = {}
 
 from transform import apply_pipeline
+from lower_adverbs import LowerAdverbs
 from lower_structs import LowerStructs
 from lower_indexing import LowerIndexing
 from simplify import Simplify
 
+
 def prepare_fn(fundef):
-  return apply_pipeline(fundef, [LowerIndexing, LowerStructs, Simplify])
+  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing, LowerStructs, Simplify])
     
 
 def compile_fn(fundef):

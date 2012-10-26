@@ -84,17 +84,9 @@ class Index(Expr):
 class Tuple(Expr):
   _members = ['elts']
 
-class TupleProj(Expr):
-  _members = ['tuple', 'index']
-
 class Array(Expr):
   _members = ['elts']
 
-class Alloc(Expr):
-  """
-  Allocates a block of data, returns a pointer
-  """
-  _members = ['elt_type', 'count']
 
 class Closure(Expr):
   """
@@ -125,11 +117,53 @@ class PrimCall(Expr):
   def __str__(self):
     return repr(self)
 
+############################################################################
+#
+#  Array Operators: It's not scalable to keep adding first-order operators
+#  at the syntactic level, so eventually we'll need some more extensible 
+#  way to describe the type/shape/compilation semantics of array operators
+#
+#############################################################################
+
+class Ravel(Expr):
+  # given an array, return its data in 1D form 
+  _members = ['array']
+
+class ConstArray(Expr):
+  _members = ['shape', 'value']
+
+class ConstArrayLike(Expr):
+  """
+  Create an array with the same shape as the first arg, but with all values 
+  set to the second arg
+  """
+  _members = ['array', 'value']
+
 class Fn(Node):
   """
   Function definition
   """
   _members = ['name',  'args', 'body', 'nonlocals']
+
+
+##################################################################################
+#
+#  Constructs below here are only used in the typed representation 
+#
+##################################################################################
+
+class TupleProj(Expr):
+  _members = ['tuple', 'index']
+
+class Cast(Expr):
+  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
+  _members = ['value']
+
+class Call(Expr):
+  """
+  Call a function directly, without having to create/invoke a closure
+  """
+  _members = ['fn', 'args']
 
 class Struct(Expr):
   """
@@ -138,9 +172,12 @@ class Struct(Expr):
   """
   _members = ['args']
 
-class Cast(Expr):
-  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
-  _members = ['value']
+class Alloc(Expr):
+  """
+  Allocates a block of data, returns a pointer
+  """
+  _members = ['elt_type', 'count']
+
 
 class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
