@@ -44,8 +44,6 @@ class Transform(object):
     self.type_env = None 
     self.fn = fn
 
-  
-  
   def lookup_type(self, name):
     assert self.type_env is not None
   

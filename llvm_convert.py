@@ -1,6 +1,6 @@
 from core_types import FloatT, SignedT, UnsignedT, BoolT, IntT
 from llvm_types import int1_t, int8_t, llvm_value_type 
-from llvm_helpers import zero 
+from llvm_helpers import zero, one 
 
 import llvm.core as llcore 
 
@@ -17,13 +17,11 @@ def to_bit(llvm_value, builder):
     return builder.fcmp(llcore.FCMP_ONE, llvm_value, zero(llvm_t), "ne_zero")
 
 def from_bit(llvm_value, new_ptype, builder):
-  dest_llvm_type = llvm_value_type(new_ptype)
-  one = llcore.Constant(dest_llvm_type, 1.0 if isinstance(new_ptype, FloatT) else 1)
-  zero = llcore.Constant(dest_llvm_type, 0.0 if isinstance(new_ptype, FloatT) else 0)
-  return builder.select(llvm_value, one, zero, "%s.cast.%s" % (llvm_value.name, new_ptype))
+  llvm_t = llvm_value_type(new_ptype)
+  name = "%s.cast.%s" % (llvm_value.name, new_ptype)
+  return builder.select(llvm_value, one(llvm_t), zero(llvm_t), name)
 
-
-def to_bool(llvm_value, old_ptype, builder):
+def to_bool(llvm_value, builder):
   """
   bools are stored as bytes, if you need to use a boolean
   value for control flow convert it to a bit instead

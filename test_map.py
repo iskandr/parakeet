@@ -1,6 +1,6 @@
 import numpy as np 
 import parakeet as par 
-from testing_helpers import run_local_tests, expect_each 
+from testing_helpers import run_local_tests, expect_each, eq
 
 ints_1d = np.arange(100, dtype='int')
 floats_1d = np.arange(100, dtype='float')
@@ -15,13 +15,15 @@ def add1_scalar(x):
   return x+1
 
 def test_add1_external_map():
-  assert par.map(add1_scalar, [1,2,3]) == np.array([2,3,4])
+  parakeet_result = par.map(add1_scalar, ints_1d) 
+  python_result = ints_1d +1
+  assert eq(parakeet_result, python_result), "Python %s != Parakeet %s" % (python_result, parakeet_result)
 
-def add1_map(x_vec):
-  return par.map(add1_scalar, x_vec)
+#def add1_map(x_vec):
+#  return par.map(add1_scalar, x_vec)
 
-def test_add1_internal_map():
-  expect_each(add1_map, add1_scalar, all_arrays)
+#def test_add1_internal_map():
+#  expect_each(add1_map, add1_scalar, all_arrays)
   
 if __name__ == '__main__':
   run_local_tests()

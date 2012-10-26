@@ -2,7 +2,7 @@
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT, PtrT
+from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Bool, Int32, Int64, ClosureT, PtrT
 import prims 
 import syntax
 from common import dispatch  
@@ -20,7 +20,7 @@ from compiled_fn import CompiledFn
  
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -198,14 +198,15 @@ def compile_expr(expr, env, builder):
       x, y = llvm_args 
       if isinstance(t, FloatT):
         cmp_op = llvm_prims.float_comparisons[prim]
-        return builder.fcmp(cmp_op, x, y, result_name)
+        bit = builder.fcmp(cmp_op, x, y, result_name)
       elif isinstance(t, SignedT):
         cmp_op = llvm_prims.signed_int_comparisons[prim]
-        return builder.icmp(cmp_op, x, y, result_name)
+        bit = builder.icmp(cmp_op, x, y, result_name)
       else:
         assert isinstance(t, UnsignedT), "Unexpected type: %s" % t
         cmp_op = llvm_prims.unsigned_int_comparisons[prim]
-        return builder.icmp(cmp_op, x, y, result_name)
+        bit = builder.icmp(cmp_op, x, y, result_name)
+      return llvm_convert.to_bool(bit,builder)
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
       if isinstance(t, FloatT):
         instr = llvm_prims.float_binops[prim]
@@ -279,12 +280,14 @@ def compile_stmt(stmt, env, builder):
     skip_bb, skip_builder = env.new_block("skip_loop")
     after_bb, after_builder = env.new_block("after_loop")
     enter_cond = compile_expr(stmt.cond, env, builder)
+    enter_cond = llvm_convert.to_bit(enter_cond, builder)
     builder.cbranch(enter_cond, loop_bb, skip_bb)
     _, body_always_returns = compile_block(stmt.body, env, loop_builder)
     if not body_always_returns:
       exit_bb, exit_builder = env.new_block("loop_exit")
       compile_merge_right(stmt.merge_before, env, loop_builder)
       repeat_cond = compile_expr(stmt.cond, env, loop_builder)
+      repeat_cond = llvm_convert.to_bit(repeat_cond, loop_builder)
       loop_builder.cbranch(repeat_cond, loop_bb, exit_bb)
       compile_merge_right(stmt.merge_after, env, exit_builder)
       exit_builder.branch(after_bb)

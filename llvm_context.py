@@ -35,3 +35,4 @@ class LLVM_Context:
 opt_context = LLVM_Context("opt_module", optimize = True, verify = False)
 no_opt_context = LLVM_Context("no_opt_module", optimize = False, verify = False)
 verify_context = LLVM_Context("verify_module", optimize = False, verify = True)
+opt_and_verify_context = LLVM_Context("opt_and_verify_module", optimize = True, verify = True)
