@@ -75,7 +75,7 @@ We evaluate our system on a suite of benchmark programs written in Parakeet+Pyth
 %keyword1, keyword2
 
 \section{Introduction}
-
+We extend the work of \cite{Rubi12} with support for parallel execution on CPUs.
 
 \section{The Parakeet API and Compiler}
 
@@ -89,8 +89,7 @@ We evaluate our system on a suite of benchmark programs written in Parakeet+Pyth
 Evaluate System on MM, K-Means, some Map-based Programs, maybe Natural Join or SVM
 
 \section{Related Work}
-We extend the work of \cite{Rubi12} with support for parallel execution on CPUs.
-This stuff needs manual annotations: \cite{Tiwa11}.
+Active Harmony is a system for performing online auto-tuning~\cite{Tiwa11, Tiwa09}.  While Active Harmony's search is online, it differs from our system in a number of respects.  First, it requires the programmer to annotate programs manually with transformation strategies and constraints.  This limits is usefulness to domain experts who are knowledgable enough about performance optimization to understand when to insert these annotations and what are sensible values for them.  Second, Active Harmony targets loop-based programs written in C and Fortran.  In our system, programmers write code in Parakeet+Python, and thus we are able to target programmers that prefer the ease of use of productivity languages and high-level constructs like adverbs.  Finally, Active Harmony targets distributed clusters where it is possible to have dedicate code-generation servers.  In our system, code generation and program execution are co-located on a single shared-memory node.
 
 %\appendix
 %\section{Appendix Title}
