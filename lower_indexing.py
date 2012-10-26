@@ -24,6 +24,6 @@ class LowerIndexing(transform.Transform):
     
 
 def lower_indexing(fn):
-  return LowerIndexing(fn).apply()
+  return transform.cached_apply(LowerIndexing, fn)
   
 

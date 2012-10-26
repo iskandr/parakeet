@@ -1,15 +1,19 @@
 import names
 import syntax as untyped_ast 
-# SSA ID -> untyped FunDef
+
+# SSA ID -> untyped function 
 untyped_functions = {}
-
-# (untyped ID, arg types) -> typed FunDef
-typed_functions = {}
-
 
 # every prim is associated with an untyped function 
 # whose body consists only of calling that prim 
 untyped_prim_functions = {}
+
+# SSA ID -> typed function  
+typed_functions = {}
+
+
+# (untyped ID, arg types) -> typed FunDef
+specializations = {} 
     
 def lookup_prim_fn(p):
   """Given a primitive, return an untyped function which calls that prim"""
@@ -56,7 +60,17 @@ def lookup_python_fn(fn_val):
 def lookup_python_fn_dependencies(fn_val):
   info = known_python_functions[fn_val]
   return [info.globals_dict[n] for n in info.dependency_names]
-   
+
+
+def add_specialization(untyped_id, arg_types, typed_fundef):
+  key = (untyped_id, tuple(arg_types))
+  assert key not in specializations
+  specializations[key] = typed_fundef 
+  typed_functions[typed_fundef.name] = typed_fundef  
+
+def find_specialization(untyped_id, arg_types):
+  key = (untyped_id, tuple(arg_types))
+  return specializations[key]
 
 class ClosureSignatures:
   """

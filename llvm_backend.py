@@ -1,20 +1,21 @@
-import llvm.core as llcore
+
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Int32, Int64, ClosureT, PtrT
-
- 
 import prims 
 import syntax
 from common import dispatch  
-from function_registry import typed_functions
+from function_registry import find_specialization
 
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
+from llvm_helpers import const, int32 #, zero, one 
+import llvm_convert 
+import llvm_prims 
 import llvm_context 
 from compiled_fn import CompiledFn
-import llvm_prims 
+
 
  
 
@@ -88,20 +89,6 @@ class CompilationEnv:
   
 
 
-def const(python_scalar, parakeet_type):
-  assert isinstance(parakeet_type, ScalarT)
-  llvm_type = llvm_value_type(parakeet_type)
-  if isinstance(parakeet_type, FloatT):
-    return llcore.Constant.real(llvm_type, python_scalar)
-  else:
-    return llcore.Constant.int(llvm_type, python_scalar)
-
-def int32(x):
-  """Make LLVM constants of type int32"""
-  return const(x, Int32)
-
-def int64(x):
-  return const(x, Int64)
 
 
 def compile_expr(expr, env, builder):
@@ -116,7 +103,7 @@ def compile_expr(expr, env, builder):
   
   def compile_Cast():
     llvm_value = compile_expr(expr.value, env, builder)
-    return llvm_types.convert(llvm_value, expr.value.type, expr.type, builder)
+    return llvm_convert.convert(llvm_value, expr.value.type, expr.type, builder)
   
 
   def compile_Struct():
@@ -144,7 +131,7 @@ def compile_expr(expr, env, builder):
     llvm_index = compile_expr(expr.index, env, builder)
      
     index_t = expr.index.type 
-    llvm_idx = llvm_types.convert(llvm_index, index_t, Int32, builder)
+    llvm_idx = llvm_convert.convert(llvm_index, index_t, Int32, builder)
     
     pointer = builder.gep(llvm_arr, [ llvm_idx], "elt_pointer")
     elt = builder.load(pointer, "elt")
@@ -158,7 +145,7 @@ def compile_expr(expr, env, builder):
     field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)], "%s_ptr" % expr.name)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     if isinstance(field_type, BoolT):
-      return llvm_types.convert_to_bit(field_value)
+      return llvm_convert.to_bit(field_value)
     else:
       return field_value  
   
@@ -171,20 +158,13 @@ def compile_expr(expr, env, builder):
     
     closure_object = compile_expr(expr.closure, env, builder)
 
-    
-
-    
-    #closure_id_slot = builder.gep(llvm_closure_object, [const(0), const(0)], "closure_id_slot")
-    #actual_closure_id = builder.load(closure_id_slot)
-    
     # get the int64 identifier which maps to an untyped_fn/arg_types pairs
     
     untyped_fn_id = closure_t.fn
     assert isinstance(untyped_fn_id, str), "Expected %s to be string identifier" % (untyped_fn_id)
     full_arg_types = closure_t.args + tuple(arg_types)
     # either compile the function we're about to invoke or get its compiled form from a cache
-    key = (untyped_fn_id, full_arg_types)
-    typed_fundef = typed_functions[key]
+    typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
     target_fn_info = compile_fn(typed_fundef)
     target_fn = target_fn_info.llvm_fn 
       
@@ -274,23 +254,14 @@ def compile_stmt(stmt, env, builder):
 
     if isinstance(stmt.lhs, syntax.Var):
       ref = env[stmt.lhs.name]
-      #print "ASSIGN - store"
-      #print "LHS %s : %s" % (ref, ref.type) 
-      #print "RHS %s : %s" % (value, value.type)
-      
       builder.store(value, ref)
     elif isinstance(stmt.lhs, syntax.Index):
       assert isinstance(stmt.lhs.value.type, PtrT), \
         "Expected pointer, got %s" % stmt.lhs.value.type
       base_ptr = compile_expr(stmt.lhs.value, env, builder)
       index = compile_expr(stmt.lhs.index, env, builder)
-      index = llvm_types.convert_from_signed(index, Int32, builder)  
+      index = llvm_convert.from_signed(index, Int32, builder)  
       elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
-      #print "ASSIGN - index"
-      #print "base_ptr %s : %s" % (base_ptr, base_ptr.type)
-      #print "elt_ptr %s : %s" % (elt_ptr, elt_ptr.type)
-      #print "index %s : %s" % (index, index.type)
-      #print "value %s : %s" % (value, value.type )
       builder.store(value, elt_ptr)
       
       
@@ -329,6 +300,7 @@ def compile_stmt(stmt, env, builder):
   
   def compile_If():
     cond = compile_expr(stmt.cond, env, builder)
+    cond = llvm_convert.to_bit(cond, builder)
     
     
     # compile the two possible branches as distinct basic blocks
@@ -342,7 +314,7 @@ def compile_stmt(stmt, env, builder):
     # did both branches end in a return? 
     both_always_return = true_always_returns and false_always_returns 
     
-    builder.cbranch(llvm_types.convert_to_bit(cond, builder), true_bb, false_bb)
+    builder.cbranch(cond, true_bb, false_bb)
     # compile phi nodes as assignments and then branch
     # to the continuation block 
     compile_merge_left(stmt.merge, env, true_builder)
@@ -394,6 +366,6 @@ def compile_fn(fundef):
   # print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
-  # print result.llvm_fn  
+  print result.llvm_fn  
   
   return result 

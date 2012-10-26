@@ -49,9 +49,11 @@ class While(Stmt):
   
   def __str__(self):
     return repr(self)
+
 class Expr(Node):
   _members = ['type']
 
+<<<<<<< HEAD
 class Adverb(Expr):
   _members = ['fn', 'args', 'axes']
 
@@ -149,6 +151,8 @@ class TiledReduce(Reduce):
 
   def __str__(self):
     return repr(self)
+=======
+>>>>>>> 1ece76f3685f232dec3ddb2ebff0bff94856a1e7
 
 class Const(Expr):
   _members = ['value']
@@ -252,17 +256,4 @@ class TypedFn(Node):
     
   def __str__(self):
     return repr(self)
-class Traversal:
-  def visit_block(self, block, *args, **kwds):
-    for stmt in block:
-      self.visit_stmt(stmt, *args, **kwds)
 
-  def visit_stmt(self, stmt, *args, **kwds):
-    method_name = "stmt_" + stmt.__class__.__name__
-    method = getattr(self, method_name)
-    method(stmt, *args, **kwds)
-
-  def visit_expr(self, expr, *args, **kwds):
-    method_name = "expr_" + expr.__class__.__name__
-    method = getattr(self, method_name)
-    return method(expr, *args, **kwds)

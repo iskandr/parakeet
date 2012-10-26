@@ -109,7 +109,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     """ 
     if name in global_values:
       global_value = global_values[name]
-   
+      
       if hasattr(global_value, '__call__'):
         if is_prim(global_value): 
           prim = find_prim_from_python_value(global_value)
