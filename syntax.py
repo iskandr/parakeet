@@ -8,22 +8,21 @@ def block_to_str(stmts):
   return body_str.replace('\n', '\n  ')
 
 def phi_nodes_to_str(phi_nodes):
-  parts = ["%s <- phi(%s, %s)" % (var, left, right) for (var, (left, right)) in phi_nodes.items()]
+  parts = ["%s <- phi(%s, %s)" %
+           (var, left, right) for (var, (left, right)) in phi_nodes.items()]
   whole = "\n" + "\n".join(parts)
   # add tabs
-  return whole.replace("\n", "\n  ") 
-  
+  return whole.replace("\n", "\n  ")
 
 class Assign(Stmt):
   _members = ['lhs', 'rhs']
 
   def __str__(self):
-    
     if hasattr(self.lhs, 'type') and self.lhs.type:
       return "%s : %s = %s" % (self.lhs, self.lhs.type, self.rhs)
     else:
       return "%s = %s" % (self.lhs, self.rhs)
-    
+
 class Return(Stmt):
   _members = ['value']
 
@@ -39,120 +38,19 @@ class While(Stmt):
      of the form [(new_var1, (old_var1,old_var2)]
    """
   _members = ['cond', 'body', 'merge_before', 'merge_after']
-  
+
   def __repr__(self):
     before = phi_nodes_to_str(self.merge_before)
     after = phi_nodes_to_str(self.merge_after)
     body = block_to_str(self.body)
     return "while:\n(merge-before) %s\ncond: %s\nbody:%s\n(merge-after)%s" %\
-      ( before, self.cond, body, after)
-  
+           (before, self.cond, body, after)
+
   def __str__(self):
     return repr(self)
 
 class Expr(Node):
   _members = ['type']
-
-<<<<<<< HEAD
-class Adverb(Expr):
-  _members = ['fn', 'args', 'axes']
-
-class Map(Adverb):
-  def __init__(self, args, fn, axes=[]):
-    self.fn = fn
-    self.args = args
-    if len(axes) == 0:
-      self.axes = [0 for _ in args]
-    else:
-      self.axes = axes
-
-  def __repr__(self):
-    return ("map([%s], %s, axes=%s, group_axes=%s)" %
-            (", ".join(map(str, self.args)), self.fn.name, str(self.axes),
-             str(self.group_axes)))
-
-  def __str__(self):
-    return repr(self)
-
-class AllPairs(Adverb):
-  def __init__(self, args, fn, axes=[0,0]):
-    self.fn = fn
-    self.args = args
-    self.axes = axes
-
-  def __repr__(self):
-    return ("allpairs([%s, %s], %s, axes=[%d,%d])" %
-            (self.args[0], self.args[1], self.fn.name,
-             self.axes[0], self.axes[1]))
-
-  def __str__(self):
-    return repr(self)
-
-class Reduce(Adverb):
-  _members = ['combiner', 'init']
-  def __init__(self, args, fn, combiner, init, axes=[]):
-    self.args = args
-    self.fn = fn
-    self.combiner = combiner
-    self.init = init
-    if len(axes) == 0:
-      self.axes = [0 for _ in args]
-    else:
-      self.axes = axes
-
-  def __repr__(self):
-    return ("reduce([%s], %s, combiner=%s, init=%d, axes=%s)" %
-            (", ".join(map(str, self.args)), self.fn.name, self.combiner.name,
-             self.init, str(self.axes)))
-
-  def __str__(self):
-    return repr(self)
-
-class TiledMap(Map):
-  def __init__(self, args, fn, axes=[], group_axes=[]):
-    if len(group_axes) == 0:
-      self.group_axes = [0 for _ in args]
-    else:
-      self.group_axes = group_axes
-    Map.__init__(self, args, fn, axes)
-
-  def __repr__(self):
-    return ("tiledmap([%s], %s, axes=%s, group_axes=%s)" %
-            (", ".join(map(str, self.args)), self.fn.name, str(self.axes),
-             str(self.group_axes)))
-
-class TiledAllPairs(AllPairs):
-  def __init__(self, args, fn, axes=[0,0], group_axes=[0,0]):
-    self.group_axes = group_axes
-    AllPairs.__init__(self, args, fn, axes)
-
-  def __repr__(self):
-    return ("tiledallpairs([%s, %s], %s, axes=[%d,%d], group_axes=[%d,%d])" %
-            (str(self.args[0]), str(self.args[1]), self.fn.name,
-             self.axes[0], self.axes[1],
-             self.group_axes[0], self.group_axes[1]))
-
-  def __str__(self):
-    return repr(self)
-
-class TiledReduce(Reduce):
-  def __init__(self, args, fn, combiner, init, axes=[], group_axes=[]):
-    if len(group_axes) == 0:
-      self.group_axes = [0 for _ in args]
-    else:
-      self.group_axes = group_axes
-    Reduce.__init__(self, args, fn, combiner, init, axes)
-
-  def __repr__(self):
-    return (
-      "tiledreduce([%s], %s, combiner=%s, init=%d, axes=%s, group_axes=%s)" %
-      (", ".join(map(str(self.args))), self.fn.name, self.combiner.name,
-       self.init, str(self.axes), str(self.group_axes)))
-
-  def __str__(self):
-    return repr(self)
-=======
->>>>>>> 1ece76f3685f232dec3ddb2ebff0bff94856a1e7
 
 class Const(Expr):
   _members = ['value']
@@ -248,12 +146,10 @@ class TypedFn(Node):
   """
   _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
 
-  
   def __repr__(self):
     args_str = ', '.join(self.args.arg_slots)
-    
+
     return "function %s(%s):%s" % (self.name, args_str, block_to_str(self.body))
-    
+
   def __str__(self):
     return repr(self)
-

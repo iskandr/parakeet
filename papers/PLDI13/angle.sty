@@ -1,0 +1,39 @@
+\NeedsTeXFormat{LaTeX2e}[2.09]
+\ProvidesPackage{angle}
+%
+% "angle" package:
+% Make < and > produce angle brackets in both normal and math mode.
+% The original definitions of < and > are captured in \angle@lt and
+% angle@gt.
+%
+% The macros \lt and \gt may be used to obtain the original less-than
+% and greater-than symbols in both math mode and normal mode.
+% 
+% -- Andrew Myers (andru@cs.cornell.edu)
+%
+\let\angle@lt=<%
+\let\angle@gt=>%
+
+\catcode`\<=\active%
+\catcode`\>=\active%
+\def<{\ifmmode\langle\else$<$\fi}%
+\def>{\ifmmode\rangle\else$>$\fi}%
+\def\lt{\ifmmode\angle@lt\else$\lt$\fi}
+\def\gt{\ifmmode\angle@gt\else$\gt$\fi}
+\def\textlt{\angle@lt}
+\def\textgt{\angle@gt}
+
+\gdef\angle@activate{%
+\catcode`\<=\active%
+\catcode`\>=\active%
+}
+
+\gdef\angle@deactivate{%
+\catcode`\<=12
+\catcode`\>=12
+}
+
+\catcode`\<=12
+\catcode`\>=12
+
+\AtBeginDocument{\angle@activate}
