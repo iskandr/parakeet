@@ -6,19 +6,24 @@ import syntax as typed_ast
 
 import core_types
 import tuple_type
-from array_type import ArrayT
+import array_type 
+
 import type_conv
 import names 
 from function_registry import untyped_functions, find_specialization, add_specialization
 from common import dispatch
 import args 
-from syntax_helpers import get_type, get_types
+from syntax_helpers import get_type, get_types, unwrap_constant
+
+import adverbs 
+import adverb_helpers 
  
 
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg 
+
 
 
 class VarMap:
@@ -37,8 +42,33 @@ class VarMap:
       return self.rename(old_name)
 
 
+_invoke_type_cache = {}
+def invoke_result_type(closure, arg_types):
+  closure_t = closure.type 
+  key = (closure_t, tuple(arg_types))
+  if key in _invoke_type_cache:
+    return _invoke_type_cache[key]
+  else:
+    if isinstance(closure_t, core_types.ClosureT):
+      closure_set = core_types.ClosureSet(closure_t)
+    elif isinstance(closure_set, core_types.ClosureSet):
+      closure_set = closure_t
+    else:
+      raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
+      
+    result_type = core_types.Unknown
+    for closure_type in closure_set.closures:
+      untyped_id, closure_arg_types = closure_type.fn, closure_type.args
+      untyped_fundef = untyped_functions[untyped_id]
+      ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
+      result_type = result_type.combine(ret)
+    _invoke_type_cache[key] = result_type 
+    return result_type 
+
+
 def annotate_expr(expr, tenv, var_map):
 
+  
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
   
@@ -53,22 +83,8 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Invoke():
     closure = annotate_child(expr.closure)
     args = annotate_children(expr.args)
-    closure_t = closure.type 
-    if isinstance(closure_t, core_types.ClosureT):
-      closure_set = core_types.ClosureSet(closure_t)
-    elif isinstance(closure_set, core_types.ClosureSet):
-      closure_set = closure_t
-    else:
-      raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
-      
-    arg_types = get_types(args)
-    invoke_result_type = core_types.Unknown
-    for closure_type in closure_set.closures:
-      untyped_id, closure_arg_types = closure_type.fn, closure_type.args
-      untyped_fundef = untyped_functions[untyped_id]
-      ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
-      invoke_result_type = invoke_result_type.combine(ret)
-    return typed_ast.Invoke(closure, args, type = invoke_result_type) 
+    result_type = invoke_result_type(closure, args)
+    return typed_ast.Invoke(closure, get_types(args), type = result_type) 
       
   def expr_Attribute():
     value = annotate_child(expr.value)
@@ -101,7 +117,7 @@ def annotate_expr(expr, tenv, var_map):
     new_elts = annotate_children(expr.elts)
     elt_types = get_types(new_elts)
     common_t = core_types.combine_type_list(elt_types)
-    array_t = ArrayT(common_t, 1)
+    array_t = array_type.make_array_type(common_t, 1)
     return typed_ast.Array(new_elts, type = array_t)
   
   def expr_Var():
@@ -120,6 +136,22 @@ def annotate_expr(expr, tenv, var_map):
   
   def expr_Const():
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
+  
+  def expr_Map():
+    closure = annotate_child(expr.fn)
+    new_args = annotate_children(expr.args)
+    
+    arg_types = get_types(new_args)
+    
+    max_arg_rank = adverb_helpers.max_rank(arg_types)
+     
+    axis = unwrap_constant(expr.axis)
+    n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
+    nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
+    nested_result_type = invoke_result_type(closure, nested_types)
+    result_type = adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+    return adverbs.Map(fn = closure, args = new_args, axis = axis, type = result_type)
+  
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
   return result    
@@ -189,7 +221,7 @@ def annotate_stmt(stmt, tenv, var_map ):
         new_arr = annotate_expr(lhs.value, tenv, var_map)
         new_idx = annotate_expr(lhs.index, tenv, var_map)
         
-        assert isinstance(new_arr.type, ArrayT), "Expected array, got %s" % new_arr.type
+        assert isinstance(new_arr.type, array_type.ArrayT), "Expected array, got %s" % new_arr.type
         assert isinstance(new_idx.type, core_types.IntT), "Expected int, got %s" % new_idx.type 
         elt_t = new_arr.type.elt_type 
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
@@ -239,6 +271,8 @@ def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
 def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
+  
+  
   """
   Given an untyped function and input types, 
   propagate the types through the body, 

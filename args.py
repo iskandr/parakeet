@@ -168,15 +168,7 @@ class Args:
         assign(i, default_fn(v) if default_fn else v)
     assert all(bound), "Missing args: %s" % [self.arg_slots[i] for i in xrange(n) if not bound[i]]
     return result 
-  
-#  def iter_collect(self, pattern_fn):
-#    """ 
-#    Apply given function to every arg and accumulate the outputs
-#    associated with arg names in a dictionary
-#    """
-#    env = {}
-#    iter_collect_list(self.arg_slots, pattern_fn, env)
-#    return env 
+
   
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
     
@@ -189,6 +181,9 @@ class Args:
       new_value = keyword_value_fn(v) if keyword_value_fn else v
       defaults[new_key] = new_value
     return Args(positional, defaults)
-    
+  
+  def fresh_copy(self):
+    import names 
+    return self.transform(name_fn = names.refresh, extract_name = True)
     
   

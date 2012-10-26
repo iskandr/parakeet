@@ -52,8 +52,9 @@ class Node(object):
       if 'node_init' in C.__dict__:
         C.node_init(self)
 
-  def node_type(self):
-    return self.__class__.__name__
+  @classmethod
+  def node_type(cls):
+    return cls.__name__
   
   def clone(self, **kwds):
 

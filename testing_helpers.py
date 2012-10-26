@@ -1,4 +1,9 @@
 import sys
+import numpy as np
+
+import interp
+from parakeet import specialize_and_compile
+
 
 def run_local_functions(prefix, locals_dict = None):   
   if locals_dict is None:
@@ -33,3 +38,47 @@ def run_local_tests(locals_dict = None):
     locals_dict = last_frame.f_back.f_locals
   return run_local_functions("test_", locals_dict)
   
+
+def eq(x,y):
+  if isinstance(y, np.ndarray):
+    return isinstance(x, np.ndarray) and x.shape == y.shape and np.all(x == y)
+  else:
+    return x == y
+
+def expect(fn, args, expected):
+  """
+  Helper function used for testing, assert that Parakeet evaluates given code to
+  the correct result
+  """
+  untyped,  typed, all_args, compiled = specialize_and_compile(fn, args)
+   
+  untyped_result = interp.eval_fn(untyped, all_args) 
+  assert eq(untyped_result, expected), "Expected %s but got %s" % (expected, untyped_result)
+
+  typed_result = interp.eval_fn(typed, all_args)
+  assert eq(typed_result, expected), "Expected %s but got %s" % (expected, typed_result)
+
+  llvm_result = compiled(*all_args)
+  assert eq(llvm_result, expected), "Expected %s but got %s" % (expected, llvm_result)
+
+
+def expect_each(parakeet_fn, python_fn, inputs):
+  for x in inputs:
+    expect(parakeet_fn, [x], python_fn(x))
+    
+def expect_allpairs(parakeet_fn, python_fn, inputs):
+  for x in inputs:
+    for y in inputs:
+      expect(parakeet_fn, [x,y], python_fn(x,y))
+
+
+import ast_conversion 
+import type_inference 
+
+def return_type(fn, input_types):
+  untyped_fundef = ast_conversion.translate_function_value(fn)
+  return type_inference.infer_return_type(untyped_fundef, input_types)
+ 
+def expect_type(fn, input_types, output_type):
+  actual = return_type(fn, input_types) 
+  assert actual == output_type, "Expected type %s, actual %s" % (output_type, actual)

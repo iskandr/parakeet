@@ -1,41 +1,49 @@
 import syntax 
 import names 
 import core_types 
-import tuple_type 
+import tuple_type
+import array_type  
 import prims 
 
-from syntax_helpers import get_type, get_types, wrap_constant, wrap_constants
+
+from syntax_helpers import get_type, get_types, wrap_constant, wrap_constants, zero
 
 import function_registry
+import syntax_helpers
 
-class NestedBlocks:
+class NestedBlocks(object):
   def __init__(self):
-    self.blocks = []
-     
+    self._blocks = []
   
   def push(self):
-    self.blocks.append([])
+    self._blocks.append([])
   
   def pop(self):
-    return self.blocks.pop()
+    return self._blocks.pop()
   
   def current(self):
-    return self.blocks[-1]
+    return self._blocks[-1]
   
   def append_to_current(self, stmt):
     self.current().append(stmt)
   
+      
   def extend_current(self, stmts):
     self.current().extend(stmts)
 
+  def __iadd__(self, stmts):
+    if not isinstance(stmts, (list, tuple)):
+      stmts = [stmts]
+    self.extend_current(stmts)
+    return self 
 
-class Transform:
+
+class Transform(object):
   def __init__(self, fn):
     self.blocks = NestedBlocks()
-    self.fn = fn
     self.type_env = None 
-  
-  
+    self.fn = fn
+
   def lookup_type(self, name):
     assert self.type_env is not None
   
@@ -45,18 +53,32 @@ class Transform:
     self.type_env[ssa_id] = t
     return syntax.Var(ssa_id, type = t)
   
+  def fresh_i32(self, prefix = "temp"):
+    return self.fresh_var(core_types.Int32, prefix)
   
+  def fresh_i64(self, prefix = "temp"):
+    return self.fresh_var(core_types.Int64, prefix)
   
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
   
-  def insert_assign(self, lhs, rhs):
+  def assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
   
   def assign_temp(self, expr, name = "temp"):
     var = self.fresh_var(expr.type, name)
-    self.insert_assign(var, expr)
+    self.assign(var, expr)
     return var 
+  
+  def zero(self, t = core_types.Int32, name = "counter"):
+    return self.assign_temp(zero(t), name)
+  
+  def zero_i32(self, name = "counter"):
+    return self.zero(t = core_types.Int32, name = name)
+  
+  def zero_i64(self, name = "counter"):
+    return self.zero(t = core_types.Int64, name = name)
+  
   
   def cast(self, expr, t):
     assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
@@ -64,18 +86,21 @@ class Transform:
       return expr
     else:
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
-     
   
-  
-  def get_struct_field(self, struct, attr_name):
-    assert isinstance(struct.type, core_types.StructT)
-    field_type = struct.type.field_type(attr_name)
-    return self.assign_temp(syntax.Attribute(struct, attr_name, type = field_type), attr_name)
-  
-  def get_index(self, arr, idx):
+  def index(self, arr, idx):
+    """
+    Index into array or tuple differently depending on the type
+    """
     idx = wrap_constant(idx)
     arr_t = arr.type 
-    if isinstance(arr_t, tuple_type.TupleT):
+    if isinstance(arr_t, core_types.ScalarT):
+      # even though it's not correct externally, it's 
+      # often more convenient to treat indexing 
+      # into scalars as the identity function. 
+      # Just be sure to catch this as an error in 
+      # the user's code earlier in the pipeline. 
+      return arr
+    elif isinstance(arr_t, tuple_type.TupleT):
       if isinstance(idx, syntax.Const):
         idx = idx.value
       assert isinstance(idx, (int, long))
@@ -85,7 +110,6 @@ class Transform:
       t = arr_t.index_type(idx.type)
       return self.assign_temp(syntax.Index(arr, idx, type = t), "array_elt")
       
-  
   def prim(self, prim_fn, args, name = "temp"):
     args = wrap_constants(args)
     arg_types = get_types(args)
@@ -108,7 +132,67 @@ class Transform:
   def div(self, x, y, name = "div"):
     return self.prim(prims.divide, [x,y], name)
     
+  def lt(self, x, y, name = "lt"):
+    return self.prim(prims.less, [x,y], name)
+
+  def lte(self, x, y, name = "lte"):
+    return self.prim(prims.less_equal, [x,y], name)
+
+  def gt(self, x, y, name = "gt"):
+    return self.prim(prims.greater, [x,y], name)
+
+  def gte(self, x, y, name = "gte"):
+    return self.prim(prims.greater_equal, [x,y], name)
+
+  def eq(self, x, y, name = "eq"):
+    return self.prim(prims.equal, [x,y], name)
   
+  def neq(self, x, y, name = "neq"):  
+    return self.prim(prims.not_equal, [x,y, name])
+  
+  def attr(self, obj, field, name = None):
+    if name is None:
+      name = field
+    obj_t = obj.type 
+    assert isinstance(obj_t, core_types.StructT), \
+      "Can't get attribute '%s' from type %s" % (field, obj_t)
+    field_t = obj.type.field_type(field)
+    return self.assign_temp(syntax.Attribute(obj, field, type = field_t), name)
+  
+  def shape(self, array, dim = None):
+    assert isinstance(array.type, array_type.ArrayT)
+    shape = self.attr(array, "shape")
+    if dim is None:
+      return shape
+    else:
+      dim_t = shape.type.elt_types[dim]
+      dim_value = syntax.TupleProj(shape, dim, type = dim_t)
+      return self.assign_temp(dim_value, "dim%d" % dim) 
+  
+  def strides(self, array, dim = None):
+    assert isinstance(array.type, array_type.ArrayT)
+    strides = self.attr(array, "strides")
+    if dim is None:
+      return strides
+    else:
+      elt_t = strides.type.elt_types[dim]
+      elt_value = syntax.TupleProj(strides, dim, type = elt_t)
+      return self.assign_temp(elt_value, "stride%d" % dim) 
+  
+  def tuple(self, elts, name = "tuple"):
+    tuple_t = tuple_type.make_tuple_type(get_types(elts))
+    return self.assign_temp(syntax.Tuple(elts, type = tuple_t), name)
+  
+  def alloc_array(self, elt_t, nelts, name = "temp_array"):
+    array_t = array_type.make_array_type(elt_t, 1)
+    ptr_t = core_types.ptr_type(elt_t)
+    ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t), "data_ptr")
+    shape = self.tuple( [nelts], "shape")
+    stride = syntax_helpers.const(elt_t.nbytes)
+    strides = self.tuple( [stride], "strides")
+    array = syntax.Struct([ptr_var, shape, strides], type = array_t) 
+    return self.assign_temp(array, name) 
+    
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
       return self.transform_expr(maybe_expr)
@@ -201,7 +285,10 @@ class Transform:
   
   def apply(self):
     
-    self.type_env = self.fn.type_env.copy()
+    if isinstance(self.fn, syntax.TypedFn): 
+      self.type_env = self.fn.type_env.copy()
+    else:
+      self.type_env = {}
     body = self.transform_block(self.fn.body)
     new_fundef_args = dict([ (m, getattr(self.fn, m)) for m in self.fn._members])
     # create a fresh function with a distinct name and the 

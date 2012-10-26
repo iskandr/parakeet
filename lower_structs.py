@@ -45,14 +45,14 @@ class LowerStructs(Transform):
  
       idx = syntax.Const(i, type = core_types.Int32)
       lhs = syntax.Index(ptr_var, idx, type = elt_t)
-      self.insert_assign(lhs, elt)
+      self.assign(lhs, elt)
     
     shape = self.transform_Tuple(const_tuple(n))
     shape_var = self.fresh_var(shape.type, "shape")
-    self.insert_assign(shape_var, shape)
+    self.assign(shape_var, shape)
     strides = self.transform_Tuple(const_tuple(elt_t.nbytes))
     strides_var = self.fresh_var(strides.type, "strides")
-    self.insert_assign(strides_var, strides)
+    self.assign(strides_var, strides)
     return syntax.Struct([ptr_var, shape_var, strides_var], type = expr.type)
   
 def make_structs_explicit(fn):

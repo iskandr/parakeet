@@ -1,6 +1,6 @@
-from syntax import Expr
+import syntax
 
-class Adverb(Expr):
+class Adverb(syntax.Expr):
   _members = ['fn', 'args', 'axis']
 
   def node_init(self):
@@ -8,7 +8,7 @@ class Adverb(Expr):
     assert self.args is not None
 
   def __repr__(self):
-    args_str = ", ".join(self.args)
+    args_str = ", ".join([str(arg) for arg in self.args])
     return "%s(%s, %s, axis = %s)" % \
       (self.node_type(), self.fn, args_str, self.axis)
 

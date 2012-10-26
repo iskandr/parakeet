@@ -2,7 +2,6 @@
 import llvm.core as llcore 
 from llvm.core import Type as lltype
 from core_types import ScalarT, PtrT
-
 import ctypes 
 
 void_t = lltype.void()
@@ -22,9 +21,10 @@ ptr_int64_t = lltype.pointer(int64_t)
 def is_scalar(llvm_t):
   return isinstance(llvm_t, llcore.IntegerType) or llvm_t in (float32_t, float64_t)
 
-  
+
+
 _ctypes_scalars_to_llvm_types = {
-  # ctypes.c_bool : int1_t,
+
   ctypes.c_bool : int8_t, 
   ctypes.c_uint8 : int8_t,  
   ctypes.c_int8 : int8_t,
