@@ -55,11 +55,13 @@ class Runtime():
     self.INITIAL_TASK_SIZE = 16
     self.ADAPTIVE_THRESHOLD = 0.3
     self.SLEEP_TIME = 0.05
-    self.SEARCH_CUTOFF_RATIO = 1.0
+    self.SEARCH_CUTOFF_RATIO = 0.5
     self.TILE_SEARCH_STEP = 6
     self.GENETIC_NUM_FOR_CONVERGENCE = 4
-    self.CROSSOVER_PROB = 0.8
-    self.L1SIZE = pow(2, 14)
+    self.CROSSOVER_PROB = 0.5
+    self.MUTATION_PROB = 0.1
+    self.L1SIZE = 2**14
+    self.NUM_FP_REGS = 16
 
     self.cur_iter = 0
     self.time_per_calibration = 0.15
@@ -83,7 +85,7 @@ class Runtime():
     self.args = args
     self.num_iters = num_iters
 
-    self.genetic_find_best_tiles(tiled_loop_iters, tiled_loop_parents)
+    self.gradient_find_best_tiles(tiled_loop_iters, tiled_loop_parents)
 
     self.free_job()
 
@@ -94,8 +96,100 @@ class Runtime():
 
   def get_initial_reg_block_sizes(self, num_loops):
     block_sizes = [1 for _ in range(num_loops - 3)]
-    block_sizes.extend([2, 4, 1])
+    block_sizes.extend([1, 6, 1])
     return block_sizes
+
+  def gradient_find_best_tiles(self, tiled_loop_iters, tiled_loop_parents):
+    num_tiled = len(tiled_loop_iters)
+    tile_sizes_t = POINTER(c_int) * self.dop
+    self.tile_sizes = tile_sizes_t()
+    single_tile_sizes_t = c_int * num_tiled
+    step = 4
+
+    def get_candidates(best_tile_sizes, step):
+      def _get_candidates(prefix, pos, step):
+        cur_pos_best = best_tile_sizes[pos]
+        if pos == num_tiled - 1:
+          step0 = (single_tile_sizes_t)(*(prefix + [cur_pos_best]))
+          step1 = (single_tile_sizes_t)(*(prefix + [cur_pos_best + step]))
+          step2 = (single_tile_sizes_t)(*(prefix + [cur_pos_best - step]))
+          return [step0, step1, step2]
+        else:
+          candidates = _get_candidates(prefix + [cur_pos_best], pos + 1, step)
+          candidates.extend(_get_candidates(prefix + [cur_pos_best + step],
+                                            pos + 1, step))
+          candidates.extend(_get_candidates(prefix + [cur_pos_best - step],
+                                            pos + 1, step))
+          return candidates
+
+      return _get_candidates([], 0, step)
+
+    def set_task(candidates, best_tile_sizes):
+      if len(candidates) < self.dop:
+        for i in range(len(candidates)):
+          self.tile_sizes[i] = cast(candidates[i], POINTER(c_int))
+        for i in range(len(candidates), self.dop):
+          self.tile_sizes[i] = cast(best_tile_sizes, POINTER(c_int))
+        return []
+      else:
+        for i in range(self.dop):
+          self.tile_sizes[i] = cast(candidates.pop(), POINTER(c_int))
+        return candidates
+
+    # Start off a job using the WS estimator's initial tile settings
+    best_tile_sizes = single_tile_sizes_t()
+    for i in range(num_tiled):
+      best_tile_sizes[i] = 44 # Hand calculated best for mm
+    self.task_size = 44
+    candidates = get_candidates(best_tile_sizes, step)
+    candidates = set_task(candidates, best_tile_sizes)
+
+    # Calibrate time to sleep between throughput measurements
+    self.sleep_time = self.SLEEP_TIME
+    self.task_size = self.INITIAL_TASK_SIZE
+    self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
+                                           self.dop, 1)
+    self.launch_job()
+    time.sleep(self.SLEEP_TIME)
+    while self.get_iters_done() < 2:
+      self.sleep_time += self.SLEEP_TIME
+      time.sleep(self.SLEEP_TIME)
+    time.sleep(self.sleep_time)
+    best_tp = -1.0
+
+    # If there's still enough work to do, enter adaptive search
+    pct_done = self.get_percentage_done()
+    while not self.job_finished() and pct_done < self.ADAPTIVE_THRESHOLD:
+      tps = self.get_throughputs()
+      for i in range(self.dop):
+        if tps[i] > best_tp:
+          changed = True
+          best_tp = tps[i]
+          best_tile_sizes = self.tile_sizes[i]
+      if len(candidates) == 0:
+        if not changed:
+          if step > 1:
+            print "Switching to step 1"
+            step = 1
+            candidates = get_candidates(best_tile_sizes, step)
+          else:
+            for i in range(num_tiled):
+              print "BestTiles", i, ":", best_tile_sizes[i]
+            for i in range(self.dop):
+              self.tile_sizes[i] = best_tile_sizes
+              self.pause_job()
+              self.relaunch_job()
+            break
+        else:
+          changed = False
+          candidates = get_candidates(best_tile_sizes, step)
+      candidates = set_task(candidates, best_tile_sizes)
+      self.pause_job()
+      self.relaunch_job()
+      time.sleep(self.sleep_time)
+      pct_done = self.get_percentage_done()
+    if not self.job_finished():
+      self.wait_for_job()
 
   def genetic_find_best_tiles(self, tiled_loop_iters, tiled_loop_parents):
     num_tiled = len(tiled_loop_iters)
@@ -108,27 +202,21 @@ class Runtime():
       self.tile_sizes[i] = cast(single_tile_sizes_t(), POINTER(c_int))
       for j in range(num_tiled):
         self.tile_sizes[i][j] = random.randint(1, tiled_loop_iters[j])
-        print "Tile sizes", i, j, ":", self.tile_sizes[i][j]
 
     # Sanity check to make sure we have enough work to do to make it worth
     # performing an adaptive search
-    print "About to start job"
     self.sleep_time = self.SLEEP_TIME
     self.task_size = self.INITIAL_TASK_SIZE
     self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
                                            self.dop, 1)
     self.launch_job()
-    print "Job launched"
 
     # Calibrate time to sleep between throughput measurements
-    print "Calibrating sleep time"
     time.sleep(self.SLEEP_TIME)
     while self.get_iters_done() < 2:
       self.sleep_time += self.SLEEP_TIME
       time.sleep(self.SLEEP_TIME)
-    print "Sleep time calibrated"
     time.sleep(self.sleep_time)
-    print "Slept once"
 
     def is_cur_best(tps, best_tp, best_tiles, num_same):
       # Check whether we have a new best setting of sizes
@@ -151,7 +239,6 @@ class Runtime():
       return best_tp, best_tiles, num_same
 
     def update_population(tps):
-      print "Updating population"
       # Create new population of tile size settings
       total_tp = 0.0
       for i in range(self.dop):
@@ -160,23 +247,22 @@ class Runtime():
       for i in range(self.dop):
         pps.append(tps[i] / total_tp)
       p = 0.0
-      print "Summed tps"
       new_tile_sizes = tile_sizes_t()
-      for i in range(self.dop):
-        p += pps[i]
+      for i in range(self.dop - 1):
+        p += pps[i] * (2.0 / (8-i))
         pps[i] = p
+      pps[self.dop - 1] = 1.0
       for i in range(self.dop):
-        print "Making new child", i
         p1 = random.random()
         for j in range(self.dop):
-          if p1 < pps[j]:
+          if p1 < pps[j] or j == self.dop - 1:
             p1 = j
             break
         if random.random() < self.CROSSOVER_PROB:
           new_tile_sizes[i] = cast(single_tile_sizes_t(), POINTER(c_int))
           p2 = random.random()
           for j in range(self.dop):
-            if p2 < pps[j]:
+            if p2 < pps[j] or j == self.dop - 1:
               p2 = j
               break
           cross_idx = random.randint(0, num_tiled)
@@ -186,6 +272,9 @@ class Runtime():
             new_tile_sizes[i][j] = self.tile_sizes[p2][j]
         else:
           new_tile_sizes[i] = self.tile_sizes[i]
+        for j in range(num_tiled):
+          if random.random() < self.MUTATION_PROB:
+            new_tile_sizes[i][j] = random.randint(1, tiled_loop_iters[j])
       return new_tile_sizes
 
     # If there's still enough work to do, enter adaptive search
@@ -202,21 +291,11 @@ class Runtime():
             best_tp = tps[i]
             best_tiles = self.tile_sizes[i]
         num_same = 0
-
-        print "Updating population for the first time"
         self.tile_sizes = update_population(tps)
-
-        print "Pausing job"
         self.pause_job()
-
-        print "Relaunching job"
         self.relaunch_job()
-
-        print "Sleeping"
         time.sleep(self.sleep_time)
         pct_done = self.get_percentage_done()
-
-        print "Looping"
         while not self.job_finished() and pct_done < self.SEARCH_CUTOFF_RATIO \
               and num_same < self.GENETIC_NUM_FOR_CONVERGENCE:
           tps = self.get_throughputs()

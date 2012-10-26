@@ -1,5 +1,9 @@
 import copy, sys
+from adverbs import *
 from syntax import *
+
+def estimate_ws_sizes(ast):
+  pass
 
 class Tiler():
   def __init__(self):

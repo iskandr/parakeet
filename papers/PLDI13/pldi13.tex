@@ -1,0 +1,116 @@
+\documentclass[preprint,9pt]{sigplanconf}
+
+\usepackage{graphicx,listings,fixltx2e,lambda,array,times, color}
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage{color}
+
+\definecolor{lightgray}{rgb}{0.92,0.92,0.92}
+
+\lstset{ 
+  language=Python,                % the language of the code
+  linewidth=220pt, 
+  xleftmargin=8pt,
+  basicstyle=\footnotesize\ttfamily, % Standardschrift
+  numbers=none,                   % where to put the line-numbers
+  numberstyle=\footnotesize,          % the size of the fonts that are used for the line-numbers
+  stepnumber=1,                   % the step between two line-numbers. If it's 1, each line 
+                                  % will be numbered
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  showspaces=false,               % show spaces adding particular underscores
+  showstringspaces=false,         % underline spaces within strings
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,                   % adds a frame around the code
+  tabsize=2,                      % sets default tabsize to 2 spaces
+  captionpos=b,                   % sets the caption-position to bottom
+  breaklines=true,                % sets automatic line breaking
+  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+  title=\lstname,                   % show the filename of files included with \lstinputlisting;
+                                  % also try caption instead of title
+  numberstyle=\tiny\color{gray},        % line number style
+  keywordstyle=\color{blue},          % keyword style
+  commentstyle=\color{dkgreen},       % comment style
+  backgroundcolor=\color{lightgray}, 
+  belowskip=-10pt, 
+  aboveskip=6pt, 
+}
+
+\begin{document}
+
+\conferenceinfo{PLDI '13}{16--21 June 2013, Seattle, WA.} 
+\copyrightyear{2013} 
+\copyrightdata{[to be supplied]} 
+
+\titlebanner{}        % These are ignored unless
+\preprintfooter{PLDI 2013}   % 'preprint' option specified.
+
+\title{Automated, Online Tuning of High Level Numerical Programs}
+
+\authorinfo{Name Omitted For Review}
+           {Affiliation Omitted For Review}
+           {omitted@omitted.com}
+
+% define some useful commands to use in language specification 
+\newcommand{\MAP}{\impfnt{map}}
+\newcommand{\REDUCE}{\impfnt{reduce}}
+\newcommand{\SCAN}{\impfnt{scan}}
+\newcommand{\ALLPAIRS}{\impfnt{allpairs}}
+\newcommand{\concat}{\ensuremath{+\!\!\!\!+\,}}
+
+\maketitle
+
+\begin{abstract}
+In order to tune numerical code for performance, the current best practice involves offline auto-tuning to find optimal settings of various parameters including tile sizes and loop unrolling factors.  However, this approach burdens programmers in at least one of two ways: (1) it requires users either to annotate their code mannually with information about its tunable parameters, or to implement by hand the hooks which an auto-tuner can use to explore different parameter settings; or (2) it involves a time-consuming offline search that may not be worth the cost for code not reused extensively.  These approaches are thus poorly suited for both non-expert programmers (who cannot annotate their code in the necessary way) and rapid prototyping (a common use case of numerical programming).
+
+We present a system for accelerating high level numerical Python programs that suffers from neither of these drawbacks. Programmers write code using Parakeet, a NumPy-like DSL for numerical programming embedded in Python that includes higher-order data parallel primitives (referred to as \emph{adverbs}) such as $\MAP$, $\REDUCE$, and $\SCAN$.  We extend Parakeet's JIT compiler with a novel code transformation that facilitates automatically inserting auto-tuning hooks into the code generated for adverbs.  These hooks enable an efficient online search across different parameter settings for cache tiling, register blocking, and loop unrolling.  The search begins with settings determined by an analytic model, and is conducted such that every step involves useful work.
+
+We evaluate our system on a suite of benchmark programs written in Parakeet+Python and show an average XX\% performance improvement over code that uses an analytic model to determine the best settings of the tuning parameters statically, and only an average YY\% performance degredation from expert-tuned C code.
+\end{abstract}
+
+%\category{CR-number}{subcategory}{third-level}
+
+%\terms
+%term1, term2
+
+%\keywords
+%keyword1, keyword2
+
+\section{Introduction}
+We extend the work of \cite{Rubi12} with support for parallel execution on CPUs.
+
+\section{The Parakeet API and Compiler}
+
+\section{Loop Tiling Optimizations}
+
+\section{Loop Unrolling Optimizations}
+
+\section{Online Tuning}
+
+\section{Evaluation}
+Evaluate System on MM, K-Means, some Map-based Programs, maybe Natural Join or SVM
+
+\section{Related Work}
+Active Harmony is a system for performing online auto-tuning~\cite{Tiwa11, Tiwa09}.  While Active Harmony's search is online, it differs from our system in a number of respects.  First, it requires the programmer to annotate programs manually with transformation strategies and constraints.  This limits is usefulness to domain experts who are knowledgable enough about performance optimization to understand when to insert these annotations and what are sensible values for them.  Second, Active Harmony targets loop-based programs written in C and Fortran.  In our system, programmers write code in Parakeet+Python, and thus we are able to target programmers that prefer the ease of use of productivity languages and high-level constructs like adverbs.  Finally, Active Harmony targets distributed clusters where it is possible to have dedicate code-generation servers.  In our system, code generation and program execution are co-located on a single shared-memory node.
+
+%\appendix
+%\section{Appendix Title}
+
+%This is the text of the appendix, if you need one.
+
+%\acks
+
+%Acknowledgments, if needed.
+
+\bibliographystyle{abbrvnat}
+\bibliography{../Parallelism}{}
+
+% The bibliography should be embedded for final submission.
+
+%\begin{thebibliography}{}
+%\softraggedright
+
+%\bibitem[Smith et~al.(2009)Smith, Jones]{smith02}
+%P. Q. Smith, and X. Y. Jones. ...reference text...
+
+%\end{thebibliography}
+
+\end{document}

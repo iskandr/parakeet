@@ -142,10 +142,6 @@ void launch_job(thread_pool_t *thread_pool,
     thread_pool->worker_data[i].work_function = work_functions[i];
     thread_pool->worker_data[i].args = args;
     thread_pool->worker_data[i].tile_sizes = tile_sizes[i];
-    int j;
-    for (j = 0; j < 2; ++j) {
-      printf("Tile_sizes[%d][%d]: %d\n", i, j, tile_sizes[i][j]);
-    }
     if (reset_tps) {
       thread_pool->worker_data[i].iters_done = 0;
       thread_pool->worker_data[i].timestamp =

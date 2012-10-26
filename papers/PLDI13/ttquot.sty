@@ -1,0 +1,162 @@
+\NeedsTeXFormat{LaTeX2e}[2.09]
+\ProvidesPackage{ttquot}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% ttquot.sty
+%
+% This style is intended to make it easier to write text on technical
+% subjects, so that the text is readable even when it is TeX source.
+%
+% One of the most common problems is switching conveniently into the
+% typewriter font and back. This style file makes the ordinary double
+% quotation mark (") serve this function. Note that the meaning of \tt
+% may be different in math and text mode, for example if the "times"
+% package is being used.
+%
+% This package also makes underscore characters (_) switch into
+% emphasized mode and back, unless inside " quotes or in math mode. This
+% makes ordinary variable names easier to type in typewriter font, and
+% makes emphasized mode obey a common ASCII text convention.
+%
+% Options:
+%   sfcode
+%       Makes text inside quotation marks come out in \sf font.
+%   small
+%       Makes text inside quotation marks come out \small (except in math
+%       mode.) This is especially useful when using the times package, because
+%       the Courier and Helvetica fonts are larger than Times.
+%   stdbraces
+%       By default, the commands \{ and \} emit ordinary characters 123 and
+%       125 inside quotation marks. This works well if you are in \tt font,
+%       but not so well in a font (e.g., \sf) lacking these characters. Use
+%       stdbraces to defeat it.
+%   bfemph
+%       Make underscore turn on boldface instead of italics.
+%
+% The following macros are defined and may be used or overridden.
+%
+% \ttquot@activate       Turn on ttquot processing. On by default.
+% \ttquot@deactivate     Turn off ttquot processing.
+% \ttquot@ttmode         The 'code' environment introduced by "
+% \ttquot@emmode         The 'emphasized' environment introduced by _
+% \ttquot@setup          Commands that are emitted in the " environment.
+% \ttquot@ttfont         The font part of tt@setup, By default, \tt.
+% \ttquot@ttsize         The font size part of tt@setup, By default, nothing.
+% \ttquot@emfont         The commands that are emitted in the _ environment.
+%                        By default, \em
+% \ttquot@braces         Another command emitted in the " environment.
+%                        By default, changes braces to use tt font chars.
+%                        The "stdbraces" option defeats this.
+% \ttquot@mark           Always represents the plain character (")
+% \ttquot@us             Represents the original meaning of (_)
+%
+% This style file is maintained by Andrew Myers (andru@cs.cornell.edu)
+%
+% Change log:
+%  Fri Nov  6 14:35:49 EST 1992         Added this documentation        andru
+%  Tue Nov 10 23:05:44 EST 1992         Changed underscore to do \em    andru
+%  Wed Nov 11 17:00:00 EST 1992         Fixed various bugs, added *     andru
+%  Tue Feb 16 23:48:20 EST 1993         Fixed "number" bug, added \*    andru
+%  Tue Mar 23 13:39:39 EST 1993         Got rid of a little cruft       andru
+%  Tue Apr 26 16:07:18 EDT 1994         Made _ work in other fonts      andru
+%  Wed Oct 12 17:39:49 EDT 1994         Made activate/deactivate work   andru
+%  Wed Feb 08 15:00:31 EST 1995         Made * work again               andru
+%  Wed Jun  7 18:08:23 EDT 1995         Got rid of *                    andru
+%  Sun Aug  4 15:58:16 EDT 2002         Rewrite using environments      andru
+%  Thu Aug 15 11:39:12 EDT 2002         More documentation              andru
+% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Options
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\DeclareOption{sfcode}{\def\ttquot@ttfont{\sf}}
+\DeclareOption{small}{\def\ttquot@ttsize{\ifmmode\else\small\fi}}
+\DeclareOption{stdbraces}{\def\ttquot@braces{}}
+\DeclareOption{bfemph}{\def\ttquot@emfont{\bf}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Save original definitions
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\let\ttquot@mark="% Catch original definition of quotation mark
+\let\ttquot@us=_% Catch original definition of underscore
+
+% Change character codes to make them active temporarily.
+\catcode`\"=\active%
+\catcode`\_=\active%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Change " to place its contents inside {\ttquot@ttfont ... }
+% Also, underscores are underscores, not subscripts
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newenvironment{ttquot@ttmode}{%
+\ttquot@setup%
+\def_{\ifmmode\ttquot@us\else\_\fi}%
+\def"{\end{ttquot@ttmode}}%
+}%
+{}
+
+\def\ttquot@setup{\ttquot@ttfont\ttquot@ttsize\ttquot@braces}
+
+\def\ttquot@ttfont{\tt}
+\def\ttquot@braces{\def\{{\char123}\def\}{\char125}}
+\def\ttquot@ttsize{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Change _ to place its contents inside {\ttquot@emfont ... }
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newenvironment{ttquot@emmode}{%
+\ttquot@emfont%
+\def_{\end{ttquot@emmode}}%
+}%
+{}
+
+\gdef\ttquot@emfont{\em}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Change LaTeX's verbatim mode to use \ttquot@ttfont
+% instead of \tt; also, do right thing with _
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\def\@verbatim{\trivlist \item[]\if@minipage\else\vskip\parskip\fi
+\leftskip\@totalleftmargin\rightskip\z@
+\parindent\z@\parfillskip\@flushglue\parskip\z@
+\@tempswafalse \def\par{\if@tempswa\hbox{}\fi\@tempswatrue\@@par}
+\obeylines \ttquot@ttfont
+\@noligs \let\do\@makeother \dospecials
+\catcode`\_=13%
+\def_{\_}%
+\catcode``=13%
+}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Macros to turn the package on and off
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\gdef\ttquot@activate{%
+\catcode`\"=\active%
+\catcode`\_=\active%
+\def"{\begin{ttquot@ttmode}}%
+\def_{\ifmmode\ttquot@us\else\begin{ttquot@emmode}\fi}%
+}
+
+\gdef\ttquot@deactivate{%
+\def"{\ttquot@mark}%
+\def_{\ttquot@us}%
+\catcode`\"=12%
+\catcode`\_=8%
+}
+
+% Restore character codes to avoid messing up other packages.
+% Character codes will be turned back on at beginning of document.
+\catcode`\"=12
+\catcode`\_=8
+
+\ProcessOptions
+\AtBeginDocument{\ttquot@activate}
