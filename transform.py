@@ -14,7 +14,6 @@ import syntax_helpers
 class NestedBlocks(object):
   def __init__(self):
     self._blocks = []
-     
   
   def push(self):
     self._blocks.append([])
@@ -29,7 +28,6 @@ class NestedBlocks(object):
     self.current().append(stmt)
   
       
-  
   def extend_current(self, stmts):
     self.current().extend(stmts)
 
@@ -37,6 +35,7 @@ class NestedBlocks(object):
     if not isinstance(stmts, (list, tuple)):
       stmts = [stmts]
     self.extend_current(stmts)
+    return self 
 
 
 class Transform(object):
@@ -65,12 +64,12 @@ class Transform(object):
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
   
-  def insert_assign(self, lhs, rhs):
+  def assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
   
   def assign_temp(self, expr, name = "temp"):
     var = self.fresh_var(expr.type, name)
-    self.insert_assign(var, expr)
+    self.assign(var, expr)
     return var 
   
   def zero(self, t = core_types.Int32, name = "counter"):
@@ -78,6 +77,10 @@ class Transform(object):
   
   def zero_i32(self, name = "counter"):
     return self.zero(t = core_types.Int32, name = name)
+  
+  def zero_i64(self, name = "counter"):
+    return self.zero(t = core_types.Int64, name = name)
+  
   
   def cast(self, expr, t):
     assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"

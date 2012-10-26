@@ -106,7 +106,7 @@ def wrap_constant(x):
   if is_python_constant(x):
     return const(x)
   else:
-    assert isinstance(x, syntax.Const), "Expected constant expression, got %s" % x 
+    assert isinstance(x, syntax.Expr), "Expected expression, got %s" % x 
     return x
   
 def wrap_constants(xs):

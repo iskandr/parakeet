@@ -92,7 +92,7 @@ class CompilationEnv:
 
 
 def compile_expr(expr, env, builder):
-  # print "EXPR: ", expr 
+  print "  EXPR: ", expr 
   def compile_Var():
     ref =  env[expr.name]
     val = builder.load(ref, expr.name + "_val")
@@ -245,7 +245,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks, 
   which were causing some mysterious crashes inside LLVM"""
   
-  # print ">> ", stmt 
+  print "STMT ", stmt 
   
   def compile_Assign():
     

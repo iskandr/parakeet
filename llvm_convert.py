@@ -56,6 +56,7 @@ def from_float(llvm_value, new_ptype, builder):
 def from_signed(llvm_value, new_ptype, builder):
   """Convert from an LLVM float value to some other LLVM scalar type"""
   
+
   dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
   
@@ -66,7 +67,9 @@ def from_signed(llvm_value, new_ptype, builder):
     return to_bool(llvm_value, builder)
   else:
     assert isinstance(new_ptype, IntT)
-    nbytes = llvm_value.type.width 
+    nbits = llvm_value.type.width
+    nbytes = nbits / 8 
+   
     if nbytes == new_ptype.nbytes:
       return builder.bitcast(llvm_value, dest_llvm_type, dest_name)
     elif nbytes < new_ptype.nbytes:

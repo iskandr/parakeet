@@ -42,22 +42,28 @@ class VarMap:
       return self.rename(old_name)
 
 
+_invoke_type_cache = {}
 def invoke_result_type(closure, arg_types):
   closure_t = closure.type 
-  if isinstance(closure_t, core_types.ClosureT):
-    closure_set = core_types.ClosureSet(closure_t)
-  elif isinstance(closure_set, core_types.ClosureSet):
-    closure_set = closure_t
+  key = (closure_t, tuple(arg_types))
+  if key in _invoke_type_cache:
+    return _invoke_type_cache[key]
   else:
-    raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
+    if isinstance(closure_t, core_types.ClosureT):
+      closure_set = core_types.ClosureSet(closure_t)
+    elif isinstance(closure_set, core_types.ClosureSet):
+      closure_set = closure_t
+    else:
+      raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
       
-  result_type = core_types.Unknown
-  for closure_type in closure_set.closures:
-    untyped_id, closure_arg_types = closure_type.fn, closure_type.args
-    untyped_fundef = untyped_functions[untyped_id]
-    ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
-    result_type = result_type.combine(ret)
-  return result_type 
+    result_type = core_types.Unknown
+    for closure_type in closure_set.closures:
+      untyped_id, closure_arg_types = closure_type.fn, closure_type.args
+      untyped_fundef = untyped_functions[untyped_id]
+      ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
+      result_type = result_type.combine(ret)
+    _invoke_type_cache[key] = result_type 
+    return result_type 
 
 
 def annotate_expr(expr, tenv, var_map):
@@ -132,13 +138,8 @@ def annotate_expr(expr, tenv, var_map):
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
   
   def expr_Map():
-    print "fn", expr.fn 
     closure = annotate_child(expr.fn)
-    print " -- ", closure 
-    print "args", expr.args
     new_args = annotate_children(expr.args)
-    
-    print " -- ", new_args 
     
     arg_types = get_types(new_args)
     
@@ -147,7 +148,8 @@ def annotate_expr(expr, tenv, var_map):
     axis = unwrap_constant(expr.axis)
     n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
     nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
-    result_type = invoke_result_type(closure, nested_types)
+    nested_result_type = invoke_result_type(closure, nested_types)
+    result_type = adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
     return adverbs.Map(fn = closure, args = new_args, axis = axis, type = result_type)
   
   result = dispatch(expr, prefix = "expr")

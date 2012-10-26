@@ -77,6 +77,13 @@ def lower_arg_rank(t, r):
     assert isinstance(t, array_type.ArrayT)
     assert t.rank >= r
     return array_type.make_array_type(t.elt_type, t.rank - r)
+
+def increase_rank(t, r):
+  if isinstance(t, core_types.ScalarT):
+    return array_type.make_array_type(t, r)
+  else:
+    assert isinstance(t, array_type.ArrayT)
+    return array_type.make_array_type(t.elt_type, t.rank + r)
         
 def lower_arg_ranks(arg_types, r):
   return [lower_arg_rank(t, r) for t in arg_types]
