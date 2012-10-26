@@ -138,7 +138,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
   
  
     
-  def translate_Name(name):     
+  def translate_Name(name):  
+
     """
     Convert a variable name to its versioned SSA identifier and 
     if the name isn't local it must be one of:
@@ -217,6 +218,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     return dispatch(expr, 'translate')
    
   def translate_expr(expr):
+
     def translate_UnaryOp():
       ssa_val = translate_expr(expr.operand)
       prim = prims.find_ast_op(expr.op)
@@ -286,6 +288,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       result = dispatch(expr, 'translate')
        
     assert isinstance(result, syntax.Expr), "Invalid translation %s -> %s" % (expr, result)
+   
     return result 
       
 
@@ -396,11 +399,13 @@ def translate_function_source(source, global_values):
   return translate_module(syntax, global_values)
 
 def translate_function_value(fn):
+
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
   else:
-    assert hasattr(fn, 'func_globals')
+    assert hasattr(fn, 'func_globals'), "Exepcted function to have globals: %s" % fn
     source = inspect.getsource(fn)
+
     fundef = translate_function_source(source, fn.func_globals)
     register_python_fn(fn, fundef)
     # print "Translated", fundef 

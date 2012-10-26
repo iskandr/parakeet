@@ -131,6 +131,7 @@ def array_type(elt_t, rank):
 
 import type_conv
 def typeof(x):
+  x = np.asarray(x)
   elt_t = core_types.from_dtype(x.dtype)
   rank = len(x.shape)
 

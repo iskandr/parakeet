@@ -184,20 +184,6 @@ class Args:
   
   def fresh_copy(self):
     import names 
-    
-    def name_fn(arg_var):
-      new_name = names.refresh(arg_var.name)
-      return syntax.Var(name = new_name, type = arg_var.type)
-    
-    import syntax_helpers 
-    import tuple_type 
-    def tuple_fn(elts):
-      elt_types = syntax_helpers.get_types(elts)
-      if any([t is None for t in elt_types]):
-        tuple_t = None
-      else:
-        tuple_t = tuple_type.make_tuple_type(elt_types)
-      return syntax.Tuple(elts, type = tuple_t)
-    return self.transform(name_fn, tuple_fn, extract_name = False)
+    return self.transform(name_fn = names.refresh, extract_name = True)
     
   

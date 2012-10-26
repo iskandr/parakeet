@@ -62,9 +62,9 @@ def expect(fn, args, expected):
   assert eq(llvm_result, expected), "Expected %s but got %s" % (expected, llvm_result)
 
 
-def expect_each(parakeet_fn, python_fn, *input_lists):
-  for xs in zip(input_lists):
-    expect(parakeet_fn, list(xs), python_fn(*xs))
+def expect_each(parakeet_fn, python_fn, inputs):
+  for x in inputs:
+    expect(parakeet_fn, [x], python_fn(x))
     
 def expect_allpairs(parakeet_fn, python_fn, inputs):
   for x in inputs:
