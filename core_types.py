@@ -363,7 +363,16 @@ class ClosureT(StructT):
         return ClosureSet(self, other)
     else:
       raise IncompatibleTypes(self, other)
+  
+
+from types import FunctionType
+def typeof_python_fn(f):
+  
     
+
+
+type_conv.register(FunctionType)
+  
 class ClosureSet(Type):
   """
   If multiple closures meet along control flow paths then join them into a closure set.

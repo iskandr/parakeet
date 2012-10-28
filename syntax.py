@@ -136,12 +136,12 @@ class ConstArrayLike(Expr):
   set to the second arg
   """
   _members = ['array', 'value']
-
+  
 class Fn(Node):
   """
   Function definition
   """
-  _members = ['name',  'args', 'body', 'closure_cells', 'global_names']
+  _members = ['name',  'args', 'body', 'closure_cells', 'global_values', 'global_names']
 
 
 ##################################################################################
