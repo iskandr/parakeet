@@ -86,14 +86,23 @@ def collect_defs_from_list(nodes):
   return defs 
 
 
-def translate_FunctionDef(name,  args, body, global_values, outer_value_env = None):
-   
-  # external names of the nonlocals we use
-  nonlocal_original_names =  []
-  # syntax names for nonlocals which should get passed in
-   
-  nonlocal_arg_names = []
+def translate_FunctionDef(name, args, body, closure_vars, globals_dict, outer_value_env = None):
+  print "translate_FunctionDef", name
+  
   env = ScopedEnv()
+  # at the very least we'll need all the closure variables python
+  # told us about, but Python doesn't include references to globals
+  # so we'll have to accumulate those as we got along 
+  closure_arg_names = map(env.fresh, closure_vars)
+  
+  
+  # to look up the globals used by this function we'll have to keep 
+  # track of their original names used by python 
+  global_original_names =  []
+  
+  # accumualte these as we encounter references to them 
+  global_arg_names = []
+  
   
   args_obj = translate_args(args)
   ssa_args = args_obj.transform(env.fresh, extract_name = True)
@@ -107,8 +116,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
       (2) a primitive fn
       (3) a user-defined fn which should be translated
     """ 
-    if name in global_values:
-      global_value = global_values[name]
+    if name in globals_dict:
+      global_value = globals_dict[name]
       
       if hasattr(global_value, '__call__'):
         if is_prim(global_value): 
@@ -118,8 +127,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         elif already_registered_python_fn(global_value):
           fundef = lookup_python_fn(global_value)
           ssa_name = fundef.name 
-          closure_args = map(translate_Name, fundef.nonlocals)
-          return syntax.Closure(ssa_name, closure_args)
+          global_args = map(translate_Name, fundef.global_names)
+          # WHAT TO DO WITH FUNCTION THAT ALREADY HAS CLOSURE ARGS? 
+          return syntax.Closure(ssa_name, global_args)
         else:
           # we expect that translate_function_value will add 
           # the function to the global lookup table known_functions
@@ -130,8 +140,8 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
         
         # if it's global data... 
         ssa_name = env.fresh(name)
-        nonlocal_original_names.append(name)
-        nonlocal_arg_names.append(ssa_name)
+        global_original_names.append(name)
+        global_arg_names.append(ssa_name)
         return syntax.Var (ssa_name)
     else:
       return translate_reserved_name(name)
@@ -154,9 +164,9 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     else:
       outer = env.recursive_lookup(name, skip_current = True)
       if outer:
-        nonlocal_original_names.add(name)  
+        global_original_names.add(name)  
         ssa_name = env.fresh(name) 
-        nonlocal_arg_names.append(ssa_name)
+        global_arg_names.append(ssa_name)
         return syntax.Var(ssa_name)
       else:
         return global_ref(name)
@@ -312,7 +322,7 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     if isinstance(stmt, ast.FunctionDef):
       name, args, body = stmt.name, stmt.args, stmt.body
       fundef = \
-        translate_FunctionDef(name, args, body, global_values, env)
+        translate_FunctionDef(name, args, body, globals_dict, env)
       closure_args = map(translate_Name, fundef.nonlocals)
       local_name = env.fresh_var(name)
       closure = syntax.Closure(fundef.name, closure_args)
@@ -379,10 +389,10 @@ def translate_FunctionDef(name,  args, body, global_values, outer_value_env = No
     
   _, ssa_body = translate_block(body)   
   ssa_fn_name = names.fresh(name)
+  all_positional = global_arg_names + closure_arg_names + ssa_args.positional
+  full_args = Args(all_positional, ssa_args.defaults)
 
-  full_args = Args(nonlocal_arg_names + ssa_args.positional, ssa_args.defaults)
-
-  fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, nonlocal_original_names)
+  fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, global_original_names)
   untyped_functions[ssa_fn_name]  = fundef 
   return fundef
 

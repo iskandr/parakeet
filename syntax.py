@@ -141,7 +141,7 @@ class Fn(Node):
   """
   Function definition
   """
-  _members = ['name',  'args', 'body', 'nonlocals']
+  _members = ['name',  'args', 'body', 'closure_cells', 'global_names']
 
 
 ##################################################################################

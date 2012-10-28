@@ -34,7 +34,7 @@ def untyped_wrapper(adverb_class, untyped_fn, **adverb_params):
   # constant syntax nodes 
   adverb_param_exprs = {}
   for (k,v) in adverb_params.items():
-    adverb_param_exprs[k] = syntax_helpers.const(v)
+    adverb_param_exprs[k] = syntax_helpers.wrap_if_constant(v)
   adverb_args = syntax_helpers.wrap_vars(fn_args.positional[n_nonlocals:])
   adverb = adverb_class(closure_var, adverb_args, **adverb_param_exprs)
   body += [syntax.Return(adverb)]
@@ -43,6 +43,18 @@ def untyped_wrapper(adverb_class, untyped_fn, **adverb_params):
 
 def untyped_map_wrapper(untyped_fn, axis = None):
   return untyped_wrapper(adverbs.Map, untyped_fn, axis = axis)
+
+def untyped_allpairs_wrapper(untyped_fn, axis = None):
+  return untyped_wrapper(adverbs.AllPairs, untyped_fn, axis = axis)
+
+def untyped_reduce_wrapper(untyped_fn,  axis = None, init = None):
+  # TODO: Add options for a combiner! 
+  return untyped_wrapper(adverbs.Reduce, untyped_fn, axis = axis, init = init)
+
+def untyped_scan_wrapper(untyped_fn,  axis = None, init = None):
+  # TODO: Add options for a combiner! 
+  return untyped_wrapper(adverbs.Scan, untyped_fn, axis = axis, init = init)
+
 
 import core_types 
 import array_type

@@ -15,7 +15,7 @@ def add1_scalar(x):
   return x+1
 
 def test_add1_external_map():
-  parakeet_result = par.map(add1_scalar, ints_1d) 
+  parakeet_result = par.each(add1_scalar, ints_1d) 
   python_result = ints_1d +1
   assert eq(parakeet_result, python_result), "Python %s != Parakeet %s" % (python_result, parakeet_result)
 

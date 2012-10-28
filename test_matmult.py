@@ -1,5 +1,5 @@
 import parakeet as par 
-from parakeet import sum 
+from parakeet import sum, allpairs
 from testing_helpers import expect_allpairs, run_local_tests
 
 import numpy as np 
@@ -22,18 +22,24 @@ def loop_dot(x,y):
 def test_loopdot():
   expect_allpairs(loop_dot, np.dot, vectors)
 
-def adverb_dot(x,y):
+def dot(x,y):
   return sum(x*y)
 
 def test_adverb_dot():
-  expect_allpairs(adverb_dot, np.dot, vectors)
+  expect_allpairs(dot, np.dot, vectors)
 
+def adverb_matmult(X,Y):
+  return allpairs(dot, X, Y, axis = 0)
 
-def zeros(shape):
-  size = 1
-  for dim in shape:
-    size = size * dim 
-  
+int_mat = np.reshape(np.arange(100), (10,10))
+float_mat = np.sqrt(int_mat)
+bool_mat = int_mat % 2
+
+matrices = [int_mat, float_mat, bool_mat]
+
+def test_adveb_matmult():
+  expect_allpairs(adverb_matmult, np.dot, matrices)
+
 
 #def loop_matmult(X, Y):
 #  n_rows = X.shape[0]

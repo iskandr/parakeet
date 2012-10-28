@@ -98,7 +98,7 @@ def unwrap_constant(x):
     assert is_python_constant(x)
 
 
-def wrap_constant(x):
+def wrap_if_constant(x):
   """
   If given value isn't already an expression
   turn it into one with the const helper
@@ -110,7 +110,7 @@ def wrap_constant(x):
     return x
   
 def wrap_constants(xs):
-  return map(wrap_constant, xs)
+  return map(wrap_if_constant, xs)
 
 def wrap_var(x):
   if isinstance(x, str):

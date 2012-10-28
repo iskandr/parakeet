@@ -6,7 +6,7 @@ import array_type
 import prims 
 
 
-from syntax_helpers import get_type, get_types, wrap_constant, wrap_constants, zero
+from syntax_helpers import get_type, get_types, wrap_if_constant, wrap_constants, zero
 
 import function_registry
 import syntax_helpers
@@ -91,7 +91,7 @@ class Transform(object):
     """
     Index into array or tuple differently depending on the type
     """
-    idx = wrap_constant(idx)
+    idx = wrap_if_constant(idx)
     arr_t = arr.type 
     if isinstance(arr_t, core_types.ScalarT):
       # even though it's not correct externally, it's 
