@@ -141,7 +141,12 @@ class Fn(Node):
   """
   Function definition
   """
-  _members = ['name',  'args', 'body', 'closure_cells', 'global_values', 'global_names']
+  _members = ['name',  'args', 'body', 'closure_cells', 'globals_dict', 'global_names']
+  
+  def get_closure_args(self):
+    global_values = [self.globals_dict[n] for n in self.global_names] 
+    closure_values = [cell.cell_contents for cell in self.closure_cells]  
+    return global_values + closure_values
 
 
 ##################################################################################

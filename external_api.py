@@ -13,12 +13,7 @@ def specialize_and_compile(fn, args):
     # translate from the Python AST to Parakeet's untyped format 
     untyped  = ast_conversion.translate_function_value(fn)
 
-  # should eventually roll this up into something cleaner, since 
-  # top-level functions are really acting like closures over their
-  # global dependencies 
-  global_args = [fn.func_globals[n] for n in untyped.nonlocals]
-  all_args = global_args + list(args)
-  
+  all_args = untyped.get_closure_args() + list(args)
   # get types of all inputs
   input_types = [type_conv.typeof(arg) for arg in  all_args]
   

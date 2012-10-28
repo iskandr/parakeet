@@ -363,10 +363,30 @@ class ClosureT(StructT):
         return ClosureSet(self, other)
     else:
       raise IncompatibleTypes(self, other)
-  
 
+
+_closure_type_cache = {}
+def make_closure_type(untyped_fn, closure_arg_types = []):
+  name = untyped_fn.name
+  closure_arg_types = tuple(closure_arg_types)
+  key = (name, closure_arg_types)
+  if key in _closure_type_cache:
+    return _closure_type_cache[key]
+  else:
+    t = ClosureT(name, closure_arg_types)
+    _closure_type_cache[key] = t 
+    return t
+  
 from types import FunctionType
-def typeof_python_fn(f):
+import ast_conversion 
+
+def typeof(f):
+  untyped_fn = ast_conversion.translate_function_value(f)
+  closure_args = untyped_fn.get_closure_args(untyped_fn)
+  closure_arg_types = map(type_conv.typeof, closure_args)
+  return make_closure_type(untyped_fn, closure_arg_types)
+  
+   
   
     
 
