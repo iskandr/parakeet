@@ -8,30 +8,42 @@ Macros:
 Conferences/Workshops/Journals:
 ------------
 @STRING{ASPLOS  = "International Conference on Architectural Support for
-                   Programming Languages and Operating Systems (ASPLOS)"}
+                   Programming Languages and Operating Systems"}
+@STRING{CC      = "International Conference on Compiler Construction (CC)"}
+@STRING{CGO     = "International Symposium on Code Generation and Optimization
+                   (CGO)"}
 @STRING{DAMP    = "Workshop on Declarative Aspects of Multicore Programming
                    (DAMP)"}
 @STRING{Haskell = "Haskell Workshop"}
 @STRING{HOTPAR  = "USENIX Conference on Hot Topics in Parallelism (HotPar)"}
-@STRING{IFL     = "Implementation and Application of Functional Languages (IFL)"
-                  }
+@STRING{IFL     = "Implementation and Application of Functional Languages"}
 @STRING{IPDPS   = "International Parallel And Distributed Computing Symposium
                    (IPDPS)"}
 @STRING{ISCA    = "International Symposium on Computer Architecture (ISCA)"}
+@STRING{MICRO   = "ACM/IEEE International Symposium on Microarchitecture
+                   (MICRO)"}
 @STRING{OOPSLA  = "ACM SIGPLAN conference on Object-Oriented Programming,
-                   Systems, Languages, and Applications (OOPSLA)"}
+                   Systems, Languages, and Applications"}
 @STRING{PACT    = "International Conference on Processors, Architectures, and
-                   Compilation Techniques (PACT)"}
+                   Compilation Techniques"}
 @STRING{PC      = "Parallel Computing"}
-@STRING{PLDI    = "ACM SIGPLAN conference on Programming Languages Design and
-                   Implementation (PLDI)"}
+@STRING{PLDI    = "ACM SIGPLAN Conference on Programming Languages Design and
+                   Implementation"}
 @STRING{PPOPP   = "ACM Symposium on Principles and Practice of Parallel
                    Programming (PPoPP)"}
+@STRING{SC      = "ACM/IEEE Conference on Supercomputing (SC)"}
 
 Conference Years:
 -----------------
 ASPLOS
+@STRING{ASPLOS91 = "ASPLOS '91: Proceedings of the 4th " # ASPLOS}
 @STRING{ASPLOS06 = "ASPLOS '06: Proceedings of the 12th " # ASPLOS}
+
+CC
+@STRING{CC12 = "Proceedings of the 21st " # CC}
+
+CGO
+@STRING{CGO05 = "Proceedings of the 2005 " # CGO}
 
 DAMP
 @STRING{DAMP11 = "Proceedings of the Sixth " # DAMP}
@@ -51,10 +63,14 @@ IFL
 
 IPDPS
 @STRING{IPDPS09 = "Proceedings of the 23rd IEEE " # IPDPS}
+@STRING{IPDPS10 = "Proceedings of the 24th IEEE " # IPDPS}
 @STRING{IPDPS11 = "Proceedings of the 25th IEEE " # IPDPS}
 
 ISCA
 @STRING{ISCA10 = "Proceedings of the 37th annual " # ISCA}
+
+MICRO
+@STRING{MICRO96 = "Proceedings of the 29th annual " # MICRO}
 
 OOPSLA
 @STRING{OOPSLA05 = "OOPSLA '05: Proceedings of the 20th annual " # OOPSLA}
@@ -68,10 +84,18 @@ PACT
 
 PLDI
 @STRING{PLDI91 = "PLDI '91: Proceedings of the 1991 " # PLDI}
+@STRING{PLDI95 = "PLDI '95: Proceedings of the 1995 " # PLDI}
 @STRING{PLDI02 = "PLDI '02: Proceedings of the 2002 " # PLDI}
+@STRING{PLDI03 = "PLDI '03: Proceedings of the 2003 " # PLDI}
+@STRING{PLDI03 = "PLDI '08: Proceedings of the 2008 " # PLDI}
+@STRING{PLDI12 = "PLDI '12: Proceedings of the 2012 " # PLDI}
 
 PPOPP
 @STRING{PPOPP11 = "Proceedings of the 16th " # PPOPP}
+
+SC
+@STRING{SC04 = "Proceedings of the 2004 " # SC}
+@STRING{SC08 = "Proceedings of the 2008 " # SC}
 
 Entry Templates:
 ----------------
@@ -150,64 +174,59 @@ Entry Templates:
 AAAA
 ----
 @PHDTHESIS{Abrams70,
- author = {Abrams, Philip Samuel},
- title = {An {APL} machine},
- year = {1970},
- note = {AAI7022146},
- publisher = {Stanford University},
- address = {Stanford, CA, USA},
+  Author    = {Abrams, Philip Samuel},
+  Title     = {An {APL} machine},
+  Year      = {1970},
+  Publisher = {Stanford University},
+  Address   = {Stanford, CA, USA},
 }
 
 @PHDTHESIS{AbuSufah79,
- author = {Abu-Sufah, Walid Abdul-Karim},
- title = {Improving the performance of virtual memory computers.},
- year = {1979},
- note = {AAI7915307},
- publisher = {University of Illinois at Urbana-Champaign},
- address = {Champaign, IL, USA},
+  Author    = {Abu-Sufah, Walid Abdul-Karim},
+  Title     = {Improving the performance of virtual memory computers.},
+  Year      = {1979},
+  Publisher = {University of Illinois at Urbana-Champaign},
+  Address   = {Champaign, IL, USA},
 } 
 
 @MISC{AcceJa,
-  Author      = {Accelereyes},
-  Title       = {Jacket},
-  Note        = {{\tt http://www.accelereyes.com}}
+  Author = {Accelereyes},
+  Title  = {Jacket},
+  Note   = {{\tt http://www.accelereyes.com}}
 }
 
 @ARTICLE{Ald01,
-  author    = {Aldinucci, Marco and
-               Gorlatch, Sergei and
-               Lengauer, Christian and
-               Pelagatti, Susanna},
-  title     = {Towards parallel programming by transformation: the {FAN}
-               skeleton framework},
-  journal   = {Parallel Algorithms Appl.},
-  volume    = {16},
-  number    = {2-3},
-  year      = {2001},
-  pages     = {87-121},
-  bibsource = {DBLP, http://dblp.uni-trier.de},
+  author  = {Aldinucci, Marco and
+             Gorlatch, Sergei and
+             Lengauer, Christian and
+             Pelagatti, Susanna},
+  title   = {Towards parallel programming by transformation: the {FAN}
+             skeleton framework},
+  journal = {Parallel Algorithms Appl.},
+  volume  = {16},
+  number  = {2-3},
+  year    = {2001},
+  pages   = {87-121},
 }
 
 @MISC{Alle08,
-  Author      = {Allen, Eric and Chase, David and Hallet, Joe and
-                 Luchangco, Victor and Maessen, Jan-Willem and
-                 Ryu, Sukyoung and Steele Jr., Guy and Tobin-Hochstadt, Sam},
-  Title       = {The {F}ortress Language Specification Version 1.0},
-  Note        = {{\tt http://research.sun.com/projects/plrg/fortress.pdf}},
-  Month       = {March},
-  Year        = {2008}
+  Author = {Allen, Eric and Chase, David and Hallet, Joe and
+            Luchangco, Victor and Maessen, Jan-Willem and
+            Ryu, Sukyoung and Steele Jr., Guy and Tobin-Hochstadt, Sam},
+  Title  = {The {F}ortress Language Specification Version 1.0},
+  Note   = {{\tt http://research.sun.com/projects/plrg/fortress.pdf}},
+  Month  = {March},
+  Year   = {2008}
 }
 
 @INPROCEEDINGS{Alma02,
-  Author      = {Alm\'{a}si, George and Padua, David},
-  Title       = {MaJIC: Compiling MATLAB for Speed and Responsiveness},
-  Booktitle   = PLDI02,
-  Year        = {2002},
-  Location    = {Berlin, Germany},
-  Pages       = {294--303},
-  Numpages    = {10},
-  Publisher   = {ACM},
-  Address     = {New York, NY, USA},
+  Author    = {Alm\'{a}si, George and Padua, David},
+  Title     = {{MaJIC}: Compiling {MATLAB} for Speed and Responsiveness},
+  Booktitle = PLDI02,
+  Year      = {2002},
+  Location  = {Berlin, Germany},
+  Pages     = {294--303},
+  Numpages  = {10},
 } 
 
 @TECHREPORT{Asan06,
@@ -224,6 +243,11 @@ AAAA
   URL         = {{\tt http://www.eecs.berkeley.edu/Pubs/TechRpts/2006/
                  EECS-2006-183.html}},
   Number      = {UCB/EECS-2006-183}
+}
+
+@MISC{Atlas,
+  Title       = {{ATLAS homepage}},
+  Note        = {{\tt http://math-atlas.sourceforge.net}}
 }
 
 BBBB
@@ -313,6 +337,16 @@ BBBB
   Title       = {Q For Mortals: A Tutorial In Q Programming},
   Publisher   = {CreateSpace},
   Year        = {2008},
+}
+
+@INPROCEEDINGS{Bond08,
+  Author    = {Bondhugula, Uday and Hartono, Albert and Ramanujam, J. and
+               Sadayappan, P.},
+  Title     = {A practical automatic polyhedral parallelizer and locality
+               optimizer},
+  Booktitle = PLDI08,
+  Year      = {2008},
+  Pages     = {101--113},
 }
 
 @INPROCEEDINGS{Brown11, 
@@ -426,7 +460,7 @@ CCCC
   Month      = {October}
 }
 
-@INPROCEEDINGS{Chen05,
+@INPROCEEDINGS{Chen05a,
   Author     = {Chen, Wei-Yu and Iancu, Costin and Yelick, Katherine},
   Title      = {Communication Optimizations for Fine-Grained {UPC}
                 Applications},
@@ -438,6 +472,31 @@ CCCC
   Publisher  = {IEEE Computer Society},
   Address    = {Washington, DC, USA},
 }
+
+@INPROCEEDINGS{Chen05b,
+  Author    = {Chen, Chun and Chame, Jacqueline and Hall, Mary},
+  Title     = {Combining Models and Guided Empirical Search to Optimize for
+               Multiple Levels of the Memory Hierarchy},
+  Booktitle = CGO05,
+  Year      = {2005},
+  Pages     = {111--122},
+}
+
+@INPROCEEDINGS{Chun04,
+  Author    = {Chung, I-Hsin and Hollingsworth, Jeffrey K.},
+  Title     = {Using Information from Prior Runs to Improve Automated Tuning Systems},
+  Booktitle = SC04,
+  Year      = {2004},
+  Pages     = {30--},
+}
+
+@INPROCEEDINGS{Cole95,
+  Author    = {Coleman, Stephanie and McKinley, Kathryn S.},
+  Title     = {Tile size selection using cache organization and data layout},
+  Booktitle = PLDI95,
+  Year      = {1995},
+  Pages     = {279--290},
+} 
 
 @ARTICLE{Cole04,
   Author      = {Cole, Murray},
@@ -528,24 +587,34 @@ DDDD
  keywords = {CPS transformation, ML, Scheme, church encoding, closure conversion, continuation-passing style (CPS), continuations, defunctionalization, direct-style transformation, first-order programs, higher-order programs, lambda-lifting, regular expressions, supercombinator conversion, syntactic theories},
 }
 
-@ARTICLE{dubo96,
-   author  = {Dubois, Paul F. and Konrad Hinsen and James Hugunin},
-      year    = {1996},
-         title   = {Numerical Python},
-            journal = {Computers in Physics},
-               volume  = 10,
-                  number  = 3,
-                     month   = {May/June},
-                        keywords = {numpy}
-                        }
+@INPROCEEDINGS{Datt08,
+  Author    = {Datta, Kaushik and Murphy, Mark and Volkov, Vasily and
+               Williams, Samuel and Carter, Jonathan and Oliker, Leonid and
+               Patterson, David and Shalf, John and Yelick, Katherine},
+  Title     = {Stencil computation optimization and auto-tuning on
+               state-of-the-art multicore architectures},
+  Booktitle = SC08,
+  Year      = {2008},
+  Pages     = {4:1--4:12},
+} 
+
+@ARTICLE{Dubo96,
+  Author  = {Dubois, Paul F. and Konrad Hinsen and James Hugunin},
+  Year    = {1996},
+  Title   = {Numerical Python},
+  Journal = {Computers in Physics},
+  Volume  = 10,
+  Number  = 3,
+  Month   = {May/June},
+}
 
 @INPROCEEDINGS{DeRose95,
-    author = {L. DeRose and K. Gallivan and E. Gallopoulos and B. Marsolf and D. Padua},
-    title = {FALCON: A MATLAB Interactive Restructuring Compiler},
-    booktitle = {IN LANGUAGES AND COMPILERS FOR PARALLEL COMPUTING},
-    year = {1995},
-    pages = {269--288},
-    publisher = {Springer-Verlag}
+  author = {L. DeRose and K. Gallivan and E. Gallopoulos and B. Marsolf and D. Padua},
+  title = {FALCON: A MATLAB Interactive Restructuring Compiler},
+  booktitle = {IN LANGUAGES AND COMPILERS FOR PARALLEL COMPUTING},
+  year = {1995},
+  pages = {269--288},
+  publisher = {Springer-Verlag}
 }
 
 EEEE
@@ -561,13 +630,25 @@ EEEE
 
 FFFF
 ----
-@InProceedings{feng10,
-	author =	{Feng, Wu-chun and Xiao, Shucai},
-	title = 	"{To GPU Synchronize or Not GPU Synchronize?}",
-	booktitle =	{IEEE International Symposium on Circuits and Systems (ISCAS)},
-	address =	{Paris, France},
-	month =	{May},
-	year =	{2010},
+@INPROCEEDINGS{Feng10,
+  Author    = {Feng, Wu-chun and Xiao, Shucai},
+  Title     = {To {GPU} Synchronize or Not {GPU} Synchronize?},
+  Booktitle = {IEEE International Symposium on Circuits and Systems (ISCAS)},
+  Address   = {Paris, France},
+  Month     = {May},
+  Year      = {2010},
+}
+
+@ARTICLE{Frig05,
+  Author  = {Frigo, Matteo and Johnson, Steven G.},
+  Title   = {The design and implementation of {FFTW3}},
+  Journal = {Proceedings of the IEEE},
+  Volume  = 93,
+  Issue   = 2,
+  Year    = 2005,
+  Pages   = {216--231},
+  Note    = {Special Issue on "Program Generation, Optimization, and
+             Adaptation"}
 }
 
 HHHH
@@ -583,45 +664,38 @@ HHHH
 IIII
 ----
 @inproceedings{Iverson62,
- author = {Iverson, Kenneth E.},
- title = {A programming language},
- booktitle = {Proceedings of the May 1-3, 1962, spring joint computer conference},
- series = {AIEE-IRE '62 (Spring)},
- year = {1962},
- location = {San Francisco, California},
- pages = {345--351},
- numpages = {7},
- url = {http://doi.acm.org/10.1145/1460833.1460872},
- doi = {http://doi.acm.org/10.1145/1460833.1460872},
- acmid = {1460872},
- publisher = {ACM},
- address = {New York, NY, USA},
+  author = {Iverson, Kenneth E.},
+  title = {A programming language},
+  booktitle = {Proceedings of the May 1-3, 1962, spring joint computer conference},
+  series = {AIEE-IRE '62 (Spring)},
+  year = {1962},
+  pages = {345--351},
 }
 
 
 JJJJ
 ----
-
 @TECHREPORT{Jay97,
-    author = {Jay, C. Barry and Sekanina, Milan},
-    title = {Shape Checking of Array Programs},
-    institution = {In Computing: the Australasian Theory Seminar, Proceedings},
-    year = {1997}
+  author = {Jay, C. Barry and Sekanina, Milan},
+  title = {Shape Checking of Array Programs},
+  institution = {In Computing: the Australasian Theory Seminar, Proceedings},
+  year = {1997}
 }
 
 @INPROCEEDINGS{Jay99,
-    author = {Jay, C. Barry},
-    title = {Costing Parallel Programs as a Function of Shapes},
-    booktitle = {Science of Computer Programming},
-    year = {1999},
-    pages = {37--207}
+  author = {Jay, C. Barry},
+  title = {Costing Parallel Programs as a Function of Shapes},
+  booktitle = {Science of Computer Programming},
+  year = {1999},
+  pages = {37--207}
 }
 
 @INPROCEEDINGS{Jones01,
-    author = {Jones, Simon Peyton and Tolmach, Andrew  and Hoare, Tony},
-    title = {Playing by the rules: rewriting as a practical optimisation technique in {GHC} },
-    year = {2001}, 
-    Booktitle = Haskell01,
+  author    = {Jones, Simon Peyton and Tolmach, Andrew  and Hoare, Tony},
+  title     = {Playing by the rules: rewriting as a practical optimisation
+               technique in {GHC}},
+  year      = {2001}, 
+  Booktitle = Haskell01,
 }
 
 @ARTICLE{Ju94,
@@ -638,8 +712,16 @@ JJJJ
 }
 
 
-JJJJ
+KKKK
 ----
+@INPROCEEDINGS{Kami10,
+  Author    = {Shoaib Kamil and Cy Chan and Leonid Oliker and John Shalf
+               and Samuel Williams},
+  Title     = {An auto-tuning framework for parallel multicore stencil
+               computations},
+  Booktitle = IPDPS10,
+  Year      = {2010}
+}
 
 @TECHREPORT{Kennedy93,
     author = {Ken Kennedy and Kathryn S. Mckinley},
@@ -648,8 +730,28 @@ JJJJ
     year = {1993}
 }
 
+@ARTICLE{Knij04,
+  Author  = {Knijnenburg, P. M. W. and Kisuki, T. and Gallivan, K. and
+             O'Boyle, M. F. P.},
+  Title   = {The effect of cache models on iterative compilation for combined
+             tiling and unrolling},
+  Journal = {Concurrency and Computation: Practice and Experience},
+  Volume  = {16},
+  Issue   = {2--3},
+  Pages   = {247--270},
+  Year    = {2004}
+}
+
 LLLL
 ----
+@INPROCEEDINGS{Lam91,
+  Author    = {Lam, Monica D. and Rothberg, Edward E. and Wolf, Michael E.},
+  Title     = {The cache performance and optimizations of blocked algorithms},
+  Booktitle = ASPLOS91,
+  Year      = {1991},
+  Pages     = {63--74},
+}
+
 @MASTERSTHESIS{Latt02,
   Author      = {Lattner, Chris},
   Title       = {{LLVM}: An Infrastructure for Multi-Stage Optimization},
@@ -817,6 +919,14 @@ PPPP
 
 RRRR
 ----
+@INPROCEEDINGS{Rama12,
+  Author    = {Raman, Arun and Zaks, Ayal and Lee, Jae W. and August, David I.},
+  Title     = {Parcae: a system for flexible parallel execution},
+  Booktitle = PLDI12,
+  Year      = {2012},
+  Pages     = {133--144},
+}
+
 @INPROCEEDINGS{Rigo06,
   Author    = {Rigo, Armin and Pedroni, Samuele},
   Title     = {{PyPy}'s approach to virtual machine construction},
@@ -847,19 +957,29 @@ RRRR
 @INPROCEEDINGS{Rubi12,
   author    = {Rubinsteyn, Alex and Hielscher, Eric and Weinman, Nathaniel and
                Shasha, Dennis},
-  title     = {Parakeet: A Just-In-Time Parallel Accelerator For Python},
+  title     = {Parakeet: A Just-In-Time Parallel Accelerator For {P}ython},
   booktitle = HOTPAR12,
   year      = {2012},
 } 
 
 SSSS
 ----
+@INPROCEEDINGS{Shir12,
+  Author    = {Shirako, Jun and Sharma, Kamal and Fauzia, Naznin and
+               Pouchet, Louis-No\"{e}l and Ramanujam, J. and
+               Sadayappan, P. and Sarkar, Vivek},
+  Title     = {Analytical bounds for optimal tile size selection},
+  Booktitle = CC12,
+  Year      = {2012},
+  Pages     = {101--121},
+}
+
 @INPROCEEDINGS{Sip91,
-    author = {Sipelstein, Jay and Blelloch, Guy E.},
-    title = {{C}ollection-{O}riented Languages},
-    booktitle = {Proceedings of the IEEE},
-    year = {1991},
-    pages = {504--523}
+  author = {Sipelstein, Jay and Blelloch, Guy E.},
+  title = {{C}ollection-{O}riented Languages},
+  booktitle = {Proceedings of the IEEE},
+  year = {1991},
+  pages = {504--523}
 }
 
 @INPROCEEDINGS{Sven08,
@@ -949,15 +1069,45 @@ ____
   Address     = {New York, NY, USA}
 }
 
-VVVV
-____
-
-@article{VanDyke77,
-author = "Van Dyke, E. J.",
-title = "A Dynamic Incremental Compiler For an Interpretive Language",
-journal = "Hewlett-Packard Journal",
-month = jul,
-year = 1977,
-pages = "17--24"
+@INPROCEEDINGS{Wolf96,
+  Author    = {Wolf, Michael E. and Maydan, Dror E. and Chen, Ding-Kai},
+  Title     = {Combining loop transformations considering caches and scheduling},
+  Booktitle = MICRO96,
+  Year      = {1996},
+  Pages     = {274--286},
 }
 
+VVVV
+____
+@ARTICLE{VanD77,
+  Author  = "Van Dyke, E. J.",
+  Title   = "A Dynamic Incremental Compiler For an Interpretive Language",
+  Journal = "Hewlett-Packard Journal",
+  Month   = jul,
+  Year    = {1977},
+  Pages   = {17--24}
+}
+
+YYYY
+____
+@INPROCEEDINGS{Yoto03,
+  Author    = {Yotov, Kamen and Li, Xiaoming and Ren, Gang and
+               Cibulskis, Michael and DeJong, Gerald and Garzaran, Maria and
+               Padua, David and Pingali, Keshav and Stodghill, Paul and
+               Wu, Peng},
+  Title     = {A comparison of empirical and model-driven optimization},
+  Booktitle = PLDI03,
+  Year      = {2003},
+  Pages     = {63--76},
+}
+
+@ARTICLE{Yoto05,
+  Author  = {Yotov, Kamen and Li, Xiaoming and Ren, Gang and Garzaran, Maria and
+             Padua, David and Pingali, Keshav and Stodghill, Paul},
+  Title   = {Is Search Really Necessary to Generate High-Performance {BLAS}?},
+  Journal = {Proceedings of the IEEE},
+  Volume  = {93},
+  Number  = {2},
+  Year    = {2005},
+  Pages   = {358--386},
+}
