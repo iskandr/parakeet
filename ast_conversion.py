@@ -16,13 +16,13 @@ from scoped_env import ScopedEnv
 from common import dispatch
 from args import Args 
 
-
-
 reserved_names = { 
   'True' : syntax.Const(True), 
   'False' : syntax.Const(False), 
   'None' : syntax.Const(None), 
 }
+
+
 
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
@@ -183,7 +183,6 @@ class AST_Translator(ast.NodeVisitor):
       else:
         return slice_elts[0]
     result = dispatch(expr, 'visit')
-    print "SLICE", expr, result
     return result 
   def visit_UnaryOp(self, expr):
     ssa_val = self.visit(expr.operand)
@@ -207,7 +206,6 @@ class AST_Translator(ast.NodeVisitor):
   def visit_Subscript(self, expr):
     value = self.visit(expr.value)
     index = self.visit_slice(expr.slice)
-    print "SUBSCRIPT", value, index 
     return syntax.Index(value, index)
   
   def generic_visit(self, expr):
@@ -250,12 +248,13 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(lhs, ast.Name):
       return self.fresh_var(lhs.id)
     elif isinstance(lhs, ast.Tuple):
-      return syntax.Tuple( map(self.translate_lhs, lhs.elts))
+      return syntax.Tuple( map(self.visit_lhs, lhs.elts))
     else:
       # in case of slicing or attributes
       return self.visit(lhs)
     
-  def visit_Assign(self, stmt):     
+  def visit_Assign(self, stmt):  
+    print ast.dump(stmt)
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
     ssa_rhs = self.visit(stmt.value)
     ssa_lhs = self.visit_lhs(stmt.targets[0])
@@ -272,7 +271,11 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.If(cond, true_block, false_block, merge)
    
   def visit_While(self, stmt):
+    print 
+    print 
+    print ast.dump(stmt)
     assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
+    
     # push a scope for the version of variables appearing within the loop 
     # create a new version for each var defined in the loop 
     self.env.push()
@@ -293,7 +296,7 @@ class AST_Translator(ast.NodeVisitor):
      
     # don't provide a new_names dict so that fresh versions after the loop are created 
     # for each var in the current env
-    merge_after = self.create_phi_nodes({}, loop_end_scope)
+    merge_after = self.create_phi_nodes({},  loop_end_scope)
 
     return syntax.While(cond, body, merge_before, merge_after)
   

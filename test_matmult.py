@@ -1,6 +1,6 @@
 import parakeet as par 
 from parakeet import sum, allpairs
-from testing_helpers import expect_allpairs, run_local_tests
+from testing_helpers import  expect, expect_allpairs, run_local_tests
 
 import numpy as np 
 bool_vec = np.array([True, False, True, False, True])
@@ -25,8 +25,8 @@ def test_loopdot():
 def dot(x,y):
   return sum(x*y)
 
-def test_adverb_dot():
-  expect_allpairs(dot, np.dot, vectors)
+#def test_adverb_dot():
+#  expect_allpairs(dot, np.dot, vectors)
 
 def adverb_matmult(X,Y):
   return allpairs(dot, X, Y, axis = 0)
@@ -37,23 +37,36 @@ bool_mat = int_mat % 2
 
 matrices = [int_mat, float_mat, bool_mat]
 
-def test_adverb_matmult():
-  expect_allpairs(adverb_matmult, np.dot, matrices)
+#def test_adverb_matmult():
+#  expect_allpairs(adverb_matmult, np.dot, matrices)
 
 
-#def loop_matmult(X, Y):
-#  n_rows = X.shape[0]
-#  n_cols = Y.shape[1]
-#  
+def loop_matmult(X, Y, Z):
+  n_rows, row_length = X.shape
+  n_cols = Y.shape[1]  
 #  result_shape = (n_rows, n_cols)
 #  Z = zeros( (n_rows, n_cols), dtype = (X[0,0] * Y[0,0]).dtype)
-#  i = 0
-#  while i < n_rows:
-#    i = i + 1
-#    j = 0
-#    while j < n_cols:
-#      j = j + 1 
+  i = 0
+  while i < n_rows:
+    j = 0
+    while j < n_cols:
+      total = X[i, 0] * Y[0, j] 
+      k = 1
+      while k < row_length:
+        total = total + X[i, k] * Y[k, j]
+        k = k + 1
+      Z[i, j] = total
+      j = j + 1 
+    i = i + 1
+  return Z
 
+def test_loop_matmult():
+  for X in matrices:
+    for Y in matrices:
+      res = np.dot(X, Y)
+      Z = np.zeros_like(res)
+      expect(loop_matmult, [X,Y,Z], res)
+      
 if __name__ == '__main__':
   run_local_tests()
     
