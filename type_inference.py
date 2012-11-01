@@ -266,7 +266,6 @@ def annotate_stmt(stmt, tenv, var_map ):
         new_idx = annotate_expr(lhs.index, tenv, var_map)
         
         assert isinstance(new_arr.type, array_type.ArrayT), "Expected array, got %s" % new_arr.type
-        assert isinstance(new_idx.type, core_types.IntT), "Expected int, got %s" % new_idx.type 
         elt_t = new_arr.type.elt_type 
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
       else:
@@ -296,7 +295,9 @@ def annotate_stmt(stmt, tenv, var_map ):
     return typed_ast.Return(ret_val)
     
   def stmt_While():
-
+    #print "WHILE"
+    #print stmt 
+    #print stmt.merge_before 
     infer_left_flow(stmt.merge_before)
 
     cond = annotate_expr(stmt.cond, tenv, var_map)

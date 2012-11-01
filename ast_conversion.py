@@ -61,11 +61,11 @@ def collect_defs_from_node(node):
   variable names from the left-hand-sides of assignments,
   ignoring variables if they appear within a slice or index
   """
-  if isinstance(node, ast.While):
-    return collect_defs_from_list(node.body + node.orelse)
-  elif isinstance(node, ast.If):
-    return collect_defs_from_list(node.body + node.orelse)
-  elif isinstance(node, ast.Assign):
+  #if isinstance(node, ast.While):
+  #  return collect_defs_from_list(node.body + node.orelse)
+  #elif isinstance(node, ast.If):
+  #  return collect_defs_from_list(node.body + node.orelse)
+  if isinstance(node, ast.Assign):
     return collect_defs_from_list(node.targets)
   elif isinstance(node, ast.Name):
     return set([node.id])
@@ -149,14 +149,21 @@ class AST_Translator(ast.NodeVisitor):
       
     for (name, ssa_name) in right_scope.iteritems():
       if name not in left_scope:
-        left = self.get_name(name)
-        right = syntax.Var(ssa_name)
+        try: 
+          left = self.get_name(name)
+          right = syntax.Var(ssa_name)
     
-        if name in new_names:
-          new_name = new_names[name]
-        else:
-          new_name = self.env.fresh(name)
-        merge[new_name] = (left, right)
+          if name in new_names:
+            new_name = new_names[name]
+          else:
+            new_name = self.env.fresh(name)
+          merge[new_name] = (left, right)
+        except names.NameNotFound:
+          # for now skip over variables which weren't defined before 
+          # a control flow split, which means that loop-local variables
+          # can't be used after the loop. 
+          # TODO: Fix this. Maybe with 'undef' nodes? 
+          pass 
     return merge 
   
   def visit_slice(self, expr):
@@ -292,6 +299,9 @@ class AST_Translator(ast.NodeVisitor):
     loop_start_scope, _ = self.env.pop()
     # given empty scope for right branch so we always merge with version of variable 
     # before loop started 
+    print "env", self.env 
+    print "loop_start_scope", loop_start_scope
+    print "loop_end_scope", loop_end_scope 
     merge_before = self.create_phi_nodes( {}, loop_end_scope, new_names = loop_start_scope)
      
     # don't provide a new_names dict so that fresh versions after the loop are created 

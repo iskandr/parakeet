@@ -54,11 +54,10 @@ def generic_value_to_python(gv, t):
     
     
 class CompiledFn:
-  def __init__(self, llvm_fn, parakeet_fn, exec_engine = opt_context.exec_engine, sret = True):
+  def __init__(self, llvm_fn, parakeet_fn, exec_engine = opt_context.exec_engine):
     self.llvm_fn = llvm_fn
     self.parakeet_fn = parakeet_fn
     self.exec_engine = exec_engine
-    self.sret = sret # calling conventions 
   
   def __call__(self, *args):
     actual_types = map(type_conv.typeof, args)

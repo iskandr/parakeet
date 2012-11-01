@@ -19,7 +19,13 @@ class ScopedEnv:
     self.closure_cell_dict = closure_cell_dict 
     self.globals_dict = globals_dict 
     self.python_refs = OrderedDict()
+  
+  def __str__(self):
+    return "ScopedEnv(blocks = %s, scopes = %s)" % (self.blocks, self.scopes)
     
+  def __repr__(self):
+    return str(self)
+  
   def fresh(self, name):
     fresh_name = names.fresh(name)
     self.scopes[-1][name] = fresh_name 

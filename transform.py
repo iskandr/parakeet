@@ -12,6 +12,7 @@ import function_registry
 import syntax_helpers
 
 
+
 from nested_blocks import NestedBlocks
 
 
@@ -43,10 +44,12 @@ class Transform(object):
     self.insert_stmt(syntax.Assign(lhs, rhs))
   
   def assign_temp(self, expr, name = "temp"):
-    var = self.fresh_var(expr.type, name)
-    self.assign(var, expr)
-    return var 
-  
+    if isinstance(expr, syntax.Var):
+      return expr
+    else:
+      var = self.fresh_var(expr.type, name)
+      self.assign(var, expr)
+      return var 
   def zero(self, t = core_types.Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
   
@@ -83,9 +86,11 @@ class Transform(object):
     elif isinstance(arr_t, tuple_type.TupleT):
       if isinstance(idx, syntax.Const):
         idx = idx.value
-      assert isinstance(idx, (int, long))
-      t = arr_t.elt_types[idx]
-      return self.assign_temp(syntax.TupleProj(arr, idx, type = t), "tuple_elt%d" % idx)
+      proj = self.tuple_proj(arr, idx)
+      if temp:
+        return self.assign_temp(proj, "tuple_elt%d" % idx)
+      else:
+        return proj 
     else:
       t = arr_t.index_type(idx.type)
       idx_expr = syntax.Index(arr, idx, type = t)
@@ -93,46 +98,53 @@ class Transform(object):
         return self.assign_temp(idx_expr, "array_elt")
       else:
         return idx_expr
-      
-  def prim(self, prim_fn, args, name = "temp"):
+  def tuple_proj(self, tup, idx):
+    assert isinstance(idx, (int, long))
+    t = tup.type.elt_types[idx]
+    return syntax.TupleProj(tup, idx, type = t)
+        
+  def prim(self, prim_fn, args, name = None):
+    print "PRIM ARGS", args
     args = wrap_constants(args)
     arg_types = get_types(args)
     upcast_types = prim_fn.expected_input_types(arg_types)
     result_type = prim_fn.result_type(upcast_types)
     upcast_args = [self.cast(x, t) for (x,t) in zip(args, upcast_types)]
+    prim_call = syntax.PrimCall(prim_fn, upcast_args, type = result_type)
+    if name:
+      return self.assign_temp(prim_call, name)
+    else:
+      return prim_call
     
-    return syntax.PrimCall(prim_fn, upcast_args, type = result_type)
-    # return self.assign_temp(prim_call, name)
-    
-  def add(self, x, y, name = "add"):
+  def add(self, x, y, name = None):
     return self.prim(prims.add, [x,y], name)
   
-  def sub(self, x, y, name = "sub"):
+  def sub(self, x, y, name = None):
     return self.prim(prims.subtract, [x,y], name)
  
-  def mul(self, x, y, name = "mul"):
+  def mul(self, x, y, name = None):
     return self.prim(prims.multiply, [x,y], name)
   
-  def div(self, x, y, name = "div"):
+  def div(self, x, y, name = None):
     return self.prim(prims.divide, [x,y], name)
     
-  def lt(self, x, y, name = "lt"):
+  def lt(self, x, y, name = None):
     return self.prim(prims.less, [x,y], name)
 
-  def lte(self, x, y, name = "lte"):
+  def lte(self, x, y, name = None):
     return self.prim(prims.less_equal, [x,y], name)
 
-  def gt(self, x, y, name = "gt"):
+  def gt(self, x, y, name = None):
     return self.prim(prims.greater, [x,y], name)
 
-  def gte(self, x, y, name = "gte"):
+  def gte(self, x, y, name = None):
     return self.prim(prims.greater_equal, [x,y], name)
 
-  def eq(self, x, y, name = "eq"):
+  def eq(self, x, y, name = None):
     return self.prim(prims.equal, [x,y], name)
   
-  def neq(self, x, y, name = "neq"):  
-    return self.prim(prims.not_equal, [x,y, name])
+  def neq(self, x, y, name = None):  
+    return self.prim(prims.not_equal, [x,y], name)
   
   def attr(self, obj, field, name = None):
     if name is None:
@@ -141,7 +153,11 @@ class Transform(object):
     assert isinstance(obj_t, core_types.StructT), \
       "Can't get attribute '%s' from type %s" % (field, obj_t)
     field_t = obj.type.field_type(field)
-    return self.assign_temp(syntax.Attribute(obj, field, type = field_t), name)
+    attr_expr = syntax.Attribute(obj, field, type = field_t)
+    if name:
+      return self.assign_temp(attr_expr, name)
+    else:
+      return attr_expr
   
   def shape(self, array, dim = None):
     assert isinstance(array.type, array_type.ArrayT)
@@ -165,7 +181,11 @@ class Transform(object):
   
   def tuple(self, elts, name = "tuple"):
     tuple_t = tuple_type.make_tuple_type(get_types(elts))
-    return self.assign_temp(syntax.Tuple(elts, type = tuple_t), name)
+    tuple_expr = syntax.Tuple(elts, type = tuple_t)
+    if name:
+      return self.assign_temp(tuple_expr, name)
+    else:
+      return tuple_expr
   
   def alloc_array(self, elt_t, dims, name = "temp_array"):
     if not isinstance(dims, (list, tuple)):
@@ -234,16 +254,11 @@ class Transform(object):
     Overload this is you want different behavior
     for transformation of left-hand side of assignments
     """ 
-    
     return self.transform_expr(lhs)
   
   def transform_Assign(self, stmt):
-    # TODO: flatten tuple assignment ptype
-    #assert isinstance(stmt.lhs, (str, syntax.Var)), \
-    #  "Pattern-matching assignment not implemented" 
     rhs = self.transform_expr(stmt.rhs)
     lhs = self.transform_lhs(stmt.lhs) 
-    # if isinstance(lhs, syntax.Var):
     return syntax.Assign(lhs, rhs)
     
     

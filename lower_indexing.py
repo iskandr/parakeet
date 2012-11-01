@@ -12,7 +12,7 @@ class LowerIndexing(transform.Transform):
     arr = self.transform_expr(expr.value)
     arr_t = arr.type 
     assert isinstance(arr_t, array_type.ArrayT), "Unexpected array %s : %s" % (arr, arr.type) 
-    idx = self.transform_expr(expr.index)
+    idx = self.assign_temp(self.transform_expr(expr.index), "idx")
     
     data_ptr = self.attr(arr, "data")
     idx_t = idx.type
@@ -24,7 +24,7 @@ class LowerIndexing(transform.Transform):
     else:
       offset_elts = self.zero_i64("offset")
       for i in xrange(len(idx_t.elt_types)):
-        idx_i = syntax.TupleProj(idx, syntax.Const(i, type=core_types.Int64))
+        idx_i = self.assign_temp(self.tuple_proj(idx, i), "idx_%d" % i)
         stride = self.strides(arr, i)
         offset_bytes = self.mul(stride, idx_i, "offset_bytes")
         elt_size = arr_t.elt_type.dtype.itemsize

@@ -82,13 +82,20 @@ def if_true():
 def test_if_true():
   expect(if_true, [], 1)
  
-#def call_sqrt(x):
-#  return np.sqrt(x)
+def nested_loops(x,y):
+  total_count = 0
+  i = 0
+  while i < x:
+    j = 0
+    while j < y:
+      total_count = total_count + 1
+      j = j + 1
+    i = i + 1
+  return total_count 
 
-#def test_sqrt():
-  #result = interp.run(call_sqrt, 100)
-  #assert result == 10, "Expected 10, got %s" % result 
-  
+def test_nested_loops():
+  expect(nested_loops, [10, 11], 110) 
+   
   
 if __name__ == '__main__':
   run_local_tests()
