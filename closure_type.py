@@ -5,9 +5,7 @@ import type_conv
 from types import FunctionType
 import ast_conversion 
 import closure_signatures 
-import prims
-import function_registry
-import type_inference 
+
 
 ###########################################
 #
@@ -15,9 +13,7 @@ import type_inference
 #
 ###########################################
 
-import external_api
-import adverb_helpers
-import adverbs 
+
 
 class ClosureT(StructT):
   _members = ['fn', 'args']
@@ -90,6 +86,7 @@ def typeof_fn(f):
 type_conv.register(FunctionType, ClosureT, typeof_fn)
 
 import prims
+
 def typeof_prim(p):
   untyped_fn = prims.prim_wrapper(p)
   return make_closure_type(untyped_fn, [])
