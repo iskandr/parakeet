@@ -174,7 +174,11 @@ def eval_fn(fn, actuals):
     elif isinstance(stmt, syntax.While):
       eval_merge_left(stmt.merge_before)
       ran_once = False
+      # counter = 0
       while eval_expr(stmt.cond):
+        # counter = counter + 1
+        # print "Running counter = ", counter
+        # print env 
         ran_once = True
         eval_block(stmt.body)
         eval_merge_right(stmt.merge_before)

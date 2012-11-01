@@ -276,20 +276,21 @@ def compile_stmt(stmt, env, builder):
     #    |----------------------/
     
     compile_merge_left(stmt.merge_before, env, builder)
-    loop_bb, loop_builder = env.new_block("loop_body")
+    loop_bb, body_start_builder = env.new_block("loop_body")
     
     skip_bb, skip_builder = env.new_block("skip_loop")
     after_bb, after_builder = env.new_block("after_loop")
     enter_cond = compile_expr(stmt.cond, env, builder)
     enter_cond = llvm_convert.to_bit(enter_cond, builder)
     builder.cbranch(enter_cond, loop_bb, skip_bb)
-    _, body_always_returns = compile_block(stmt.body, env, loop_builder)
+    body_end_builder, body_always_returns = \
+      compile_block(stmt.body, env, body_start_builder)
     if not body_always_returns:
       exit_bb, exit_builder = env.new_block("loop_exit")
-      compile_merge_right(stmt.merge_before, env, loop_builder)
-      repeat_cond = compile_expr(stmt.cond, env, loop_builder)
-      repeat_cond = llvm_convert.to_bit(repeat_cond, loop_builder)
-      loop_builder.cbranch(repeat_cond, loop_bb, exit_bb)
+      compile_merge_right(stmt.merge_before, env, body_end_builder)
+      repeat_cond = compile_expr(stmt.cond, env, body_end_builder)
+      repeat_cond = llvm_convert.to_bit(repeat_cond, body_end_builder)
+      body_end_builder.cbranch(repeat_cond, loop_bb, exit_bb)
       compile_merge_right(stmt.merge_after, env, exit_builder)
       exit_builder.branch(after_bb)
     compile_merge_left(stmt.merge_after, env, skip_builder)

@@ -278,9 +278,9 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.If(cond, true_block, false_block, merge)
    
   def visit_While(self, stmt):
-    print 
-    print 
-    print ast.dump(stmt)
+    #print 
+    #print 
+    #print ast.dump(stmt)
     assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
     
     # push a scope for the version of variables appearing within the loop 
