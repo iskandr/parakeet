@@ -61,7 +61,7 @@ def is_python_constant(x):
   if isinstance(x, tuple):
     return all(map(is_python_constant, x))
   else:
-    return is_python_scalar(x)
+    return x is None or is_python_scalar(x)
 
 def const_scalar(x):
   if is_python_int(x):
@@ -106,7 +106,7 @@ def wrap_if_constant(x):
   if is_python_constant(x):
     return const(x)
   else:
-    assert isinstance(x, syntax.Expr), "Expected expression, got %s" % x 
+    assert isinstance(x, syntax.Expr), "Expected expression, got " + str(x) 
     return x
   
 def wrap_constants(xs):

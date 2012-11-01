@@ -77,7 +77,8 @@ class ArrayT(StructT):
       # slicing out a subset of my rows doesn't change my type 
       return self 
     elif isinstance(idx, tuple_type.TupleT):
-      raise RuntimeError("Indexing by tuples not yet supported")
+      assert len(idx.elt_types) == self.rank
+      return self.elt_type 
     else:
       raise RuntimeError("Unsupported index type: %s" % idx)
 

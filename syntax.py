@@ -137,17 +137,34 @@ class ConstArrayLike(Expr):
   """
   _members = ['array', 'value']
   
+
+
 class Fn(Node):
   """
-  Function definition
-  """
-  _members = ['name',  'args', 'body', 'closure_cells', 'globals_dict', 'global_names']
+  Function definition. 
+  A top-level function can have a references to python values from its enclosing
+  scope, which are stored in the 'python_refs' field. 
   
-  def get_closure_args(self):
-    global_values = [self.globals_dict[n] for n in self.global_names] 
-    closure_values = [cell.cell_contents for cell in self.closure_cells]  
-    return global_values + closure_values
-
+  A nested function, on the other hand, might refer to some variables from 
+  its enclosing Parakeet scope, whose original names are stored in 'parakeet_nonlocals'
+  """
+  _members = ['name',  'args', 'body', 'python_refs', 'parakeet_nonlocals']
+  
+  def node_init(self):
+    
+    assert isinstance(self.name, str), \
+      "Expected string for fn name, got %s" % self.name
+    import args 
+    assert isinstance(self.args, args.Args), \
+      "Expected arguments to fn to be Args object, got %s" % self.args
+    assert isinstance(self.body, list), \
+      "Expected body of fn to be list of statements, got " + str(self.body)
+  
+  def python_nonlocals(self):
+    if self.python_refs:
+      return [ref.deref() for ref in self.python_refs]
+    else:
+      return []
 
 ##################################################################################
 #

@@ -15,6 +15,6 @@ def dispatch(node, prefix = "",  default = None, locals_dict = None):
     return default(node)
   else:
     available = [k.split(prefix + "_")[1] for k in locals_dict.keys() if k.startswith(prefix + "_")]
-    raise RuntimeError("Unsupported node type %s, available: %s" % (node_type, available))
+    raise RuntimeError("Unsupported node %s with type %s, available: %s" % (node, node_type, available))
 
 

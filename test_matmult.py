@@ -37,7 +37,7 @@ bool_mat = int_mat % 2
 
 matrices = [int_mat, float_mat, bool_mat]
 
-def test_adveb_matmult():
+def test_adverb_matmult():
   expect_allpairs(adverb_matmult, np.dot, matrices)
 
 

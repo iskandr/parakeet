@@ -8,9 +8,9 @@ def const(python_scalar, parakeet_type):
   assert isinstance(parakeet_type, ScalarT)
   llvm_type = llvm_value_type(parakeet_type)
   if isinstance(parakeet_type, FloatT):
-    return llcore.Constant.real(llvm_type, python_scalar)
+    return llcore.Constant.real(llvm_type, float(python_scalar))
   else:
-    return llcore.Constant.int(llvm_type, python_scalar)
+    return llcore.Constant.int(llvm_type, int(python_scalar))
 
 def int32(x):
   """Make LLVM constants of type int32"""

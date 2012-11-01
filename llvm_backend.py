@@ -2,7 +2,8 @@
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Bool, Int32, Int64, ClosureT, PtrT
+from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Bool, Int32, Int64, PtrT
+from closure_type import ClosureT
 import prims 
 import syntax
 from common import dispatch  
@@ -92,7 +93,7 @@ class CompilationEnv:
 
 
 def compile_expr(expr, env, builder):
-  print "  EXPR: ", expr 
+  # print "  EXPR: ", expr 
   def compile_Var():
     ref =  env[expr.name]
     val = builder.load(ref, expr.name + "_val")
@@ -246,7 +247,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks, 
   which were causing some mysterious crashes inside LLVM"""
   
-  print "STMT ", stmt 
+  # print "STMT ", stmt 
   
   def compile_Assign():
     
@@ -355,7 +356,6 @@ from simplify import Simplify
 
 def prepare_fn(fundef):
   return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing, LowerStructs, Simplify])
-    
 
 def compile_fn(fundef):
   
@@ -371,6 +371,5 @@ def compile_fn(fundef):
   # print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
-  print result.llvm_fn  
   
   return result 

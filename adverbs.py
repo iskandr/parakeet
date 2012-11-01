@@ -40,16 +40,16 @@ class Accumulative(Adverb):
   to merge the accumulators resulting
   from parallel sub-computations.
   """
-  _members = ['init', 'combine']
+  _members = ['combine', 'init']
   def __repr__(self):
     args_str = ", ".join(self.args)
     return "%s(%s, %s, axis = %s, init = %s, combine = %s)" % \
       (self.node_type(), self.fn, args_str, self.axis, self.init, self.combine)
 
   def node_init(self):
-    assert self.init is not None
-    assert self.combine is not None
-
+    # assert self.init is not None
+    # assert self.combine is not None
+    pass 
 class Reduce(Adverb):
   pass
 

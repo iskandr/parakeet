@@ -124,7 +124,7 @@ class StructT(Type):
     ctypes_fields = []
     
     for (field_name, parakeet_field_type) in self._fields_:
-      
+      print field_name, parakeet_field_type 
       field_repr = parakeet_field_type.ctypes_repr
       # nested structures will be heap allocated 
       if isinstance(parakeet_field_type,  StructT):
@@ -173,7 +173,7 @@ class ScalarT(ConcreteT):
   ] 
     
   def node_init(self):
-    assert isinstance(self.dtype, np.dtype)
+    assert isinstance(self.dtype, np.dtype), "Expected dtype, got %s" % self.dtype
     self.name = self.dtype.name
 
   @property
@@ -227,7 +227,7 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
    
 class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""
-  pass
+  _members = []
 
   
 class BoolT(IntT):
@@ -260,6 +260,7 @@ Int64 = register_scalar_type(SignedT, dtypes.int64, equiv_python_types = [int, l
 
 
 class FloatT(ScalarT):
+  _members = []
   def node_init(self):
     assert dtypes.is_float(self.dtype)
 
@@ -272,16 +273,17 @@ def complex_conj(x):
   np.complex(x.real, -x.imag)
 
 class ComplexT(ScalarT):
-  _members = ['elt_type', 'dtype']
+  _members = ['elt_type']
   _props_ = [('conjugate', complex_conj)]
   
   def node_init(self):
-    assert dtypes.is_float(self.elt_type)
+    assert dtypes.is_float(self.elt_type), \
+      "Expected fields of complex to be floating, got %s" % self.elt_type
     assert dtypes.is_complex(self.dtype)
     self._fields_ = [('real', self.elt_type), ('imag', self.elt_type)]
       
-Complex64 = ComplexT(dtypes.float32, dtypes.complex64)
-Complex128 = ComplexT(dtypes.float64, dtypes.complex128)
+Complex64 = ComplexT(dtypes.float32, dtypes.complex64 )
+Complex128 = ComplexT(dtypes.float64, dtypes.complex128  )
 
 
 class ConstIntT(IntT):
@@ -324,109 +326,6 @@ def from_char_code(c):
   return from_dtype(np.dtype(numpy_type))
 
 
-
-###########################################
-#
-#  Closures! 
-#
-###########################################
-
-
-class ClosureT(StructT):
-  _members = ['fn', 'args']
-  
-  def node_init(self):
-    if self.args is None:
-      self.args = ()
-    elif not hasattr(self.args, '__iter__'):
-      self.args = tuple([self.args])
-    elif not isinstance(self.args, tuple):
-      self.args = tuple(self.args)
-      
-    self._fields_ = [('fn_id', Int64)] 
-    for (i, t) in enumerate(self.args):
-      self._fields_.append( ('arg%d' % i, t.ctypes_repr) )
-    
-  def __hash__(self):
-    return hash(repr(self))
-  
-  def __eq__(self, other):
-    return self.fn == other.fn and self.args == other.args
-  
-  def combine(self, other):
-    if isinstance(other, ClosureSet):
-      return other.combine(self)
-    elif isinstance(other, ClosureT):
-      if self == other:
-        return self
-      else:
-        return ClosureSet(self, other)
-    else:
-      raise IncompatibleTypes(self, other)
-
-
-_closure_type_cache = {}
-def make_closure_type(untyped_fn, closure_arg_types = []):
-  name = untyped_fn.name
-  closure_arg_types = tuple(closure_arg_types)
-  key = (name, closure_arg_types)
-  if key in _closure_type_cache:
-    return _closure_type_cache[key]
-  else:
-    t = ClosureT(name, closure_arg_types)
-    _closure_type_cache[key] = t 
-    return t
-  
-from types import FunctionType
-import ast_conversion 
-
-def typeof(f):
-  untyped_fn = ast_conversion.translate_function_value(f)
-  closure_args = untyped_fn.get_closure_args(untyped_fn)
-  closure_arg_types = map(type_conv.typeof, closure_args)
-  return make_closure_type(untyped_fn, closure_arg_types)
-  
-   
-  
-    
-
-
-type_conv.register(FunctionType)
-  
-class ClosureSet(Type):
-  """
-  If multiple closures meet along control flow paths then join them into a closure set.
-  This type should not appear by the time we're generating LLVM code.
-  """
-  _members = ['closures'] 
-  
-  def __init__(self, *closures):
-    self.closures = set([])
-    for clos_t in closures:
-      if isinstance(clos_t, ClosureSet):
-        self.closures.update(clos_t.closures)
-      else:
-        assert isinstance(clos_t, ClosureT)
-        self.closures.add(clos_t)
-
-  def combine(self, other):
-    if isinstance(other, ClosureSet):
-      combined_closures = self.closures.union(other.closures)
-      if combined_closures != self.closures:
-        return ClosureSet(combined_closures)
-      else:
-        return self 
-    else:
-      raise IncompatibleTypes(self, other)
-  
-  def __eq__(self, other):
-    return self.closures == other.closures 
-  
-  def __iter__(self):
-    return iter(self.closures)
-  
-  def __len__(self):
-    return len(self.closures)
 
 
 

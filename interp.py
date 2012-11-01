@@ -5,23 +5,23 @@ import ast_conversion
 from function_registry import untyped_functions
 from common import dispatch 
 from core_types import ScalarT, StructT
-
-
+import types 
 
 class ReturnValue(Exception):
   def __init__(self, value):
     self.value = value 
 
 
-class Closure:
+class ClosureVal:
   def __init__(self, fn, fixed_args):
     self.fn = fn 
     self.fixed_args = fixed_args
 
 from args import match 
-  
-def eval_fn(fn, actuals):
 
+import adverb_helpers
+
+def eval_fn(fn, actuals):
   env = fn.args.bind(actuals)
     
   def eval_expr(expr): 
@@ -73,7 +73,7 @@ def eval_fn(fn, actuals):
     def expr_Closure():
       fundef = untyped_functions[expr.fn]
       closure_arg_vals = map(eval_expr, expr.args) 
-      return Closure(fundef, closure_arg_vals)
+      return ClosureVal(fundef, closure_arg_vals)
     
     def expr_Cast():
       x = eval_expr(expr.value)
@@ -94,7 +94,43 @@ def eval_fn(fn, actuals):
     def expr_TupleProj():
       return eval_expr(expr.tuple)[expr.index]
     
-    return dispatch(expr, 'expr')
+    def expr_Map():
+      fn = eval_expr(expr.fn)
+      args = map(eval_expr, expr.args)
+      max_shape = ()
+      for arg in args:
+        if isinstance(arg, np.ndarray):
+          assert max_shape == () or max_shape == arg.shape
+          max_shape = arg.shape
+      assert len(max_shape) == 1
+      n = max_shape[0]
+      result = [None] * n 
+      def call(args):
+        if isinstance(fn, ClosureVal):
+          return eval_fn(fn.fn, fn.fixed_args + args)
+        else:
+          return fn(args)
+        
+      for i in xrange(n):
+        nested_args = []
+        for arg in args:
+          if isinstance(arg, np.ndarray):
+            nested_args.append(arg[i])
+          else:
+            nested_args.append(arg)
+        result[i]  = call(nested_args)
+      return np.array(result)
+    
+    
+    
+    result = dispatch(expr, 'expr')
+    # we don't support python function's inside parakeet, 
+    # they have to be translated into Parakeet functions
+    if isinstance(result, types.FunctionType):
+      fundef = ast_conversion.translate_function_value(result)
+      return ClosureVal(fundef, fundef.python_nonlocals())
+    else:
+      return result 
       
   def eval_merge_left(phi_nodes):
     for result, (left, _) in phi_nodes.iteritems():

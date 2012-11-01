@@ -19,7 +19,11 @@ class Node(object):
     
     m = []
     for c in klass.mro():
-      m.extend(getattr(c, '_members', []))
+      
+      curr_members = getattr(c, '_members', []) 
+      for name in curr_members:
+        if name not in m:
+          m.append(name)  
     self._members_cache[klass] = m
     return m
   
@@ -30,12 +34,6 @@ class Node(object):
     if len(args) > len(members):
       raise Exception('Too many arguments for ' + self.__class__.__name__ + 
                       '.  Expected: ' + str(members))
-    
-    #for i in range(len(args), len(all_members(self))):
-      #arg = all_members(self)[i]
-      #if not arg in kw:
-      #  logging.debug("Missing initializer for %s.%s", self.node_type(), all_members(self)[i])
-      
     for field in members:
       setattr(self, field, None)
 

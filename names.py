@@ -41,4 +41,8 @@ def original(unique_name):
   
 def refresh(unique_name):
   """Given an existing unique name, create another versioned name with the same root"""
-  return fresh(original(unique_name))
+  try:
+    return fresh(original(unique_name))
+  except NameNotFound:
+    # it wasn't really an SSA name but keep going anyway 
+    return fresh(unique_name)

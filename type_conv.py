@@ -22,7 +22,6 @@ def equiv_type(python_type):
     "No type mapping found for %s" % python_type
   return _type_mapping[python_type]
   
-  
 def typeof(python_value):
   python_type = type(python_value)
   assert python_type in _typeof_functions, \

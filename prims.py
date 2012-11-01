@@ -21,11 +21,33 @@ def find_ast_op(op):
   else:
     raise RuntimeError("Operator not implemented: %s" % name)
 
+def is_prim(numpy_fn):
+  return numpy_fn in prim_lookup_by_value
 
-def is_prim(fn):
-  return fn in prim_lookup_by_value
 
-class Prim:
+import names
+import syntax
+from args import Args
+
+from function_registry import untyped_functions
+_untyped_prim_wrappers = {}
+
+def prim_wrapper(p):
+  """Given a primitive, return an untyped function which calls that prim"""
+  if p in _untyped_prim_wrappers:
+    return _untyped_prim_wrappers
+  else:
+    fn_name = names.fresh(p.name)
+    arg_names = names.fresh_list(p.nin)
+    args_obj = Args(positional = arg_names)
+    arg_vars = map(syntax.Var, arg_names)
+    body = [syntax.Return(syntax.PrimCall(p, arg_vars))]
+    fundef = syntax.Fn(fn_name, args_obj, body, [])
+    _untyped_prim_wrappers[p] = fundef
+    untyped_functions[fn_name] = fundef
+    return fundef 
+
+class Prim(object):
     
   def __init__(self, fn, python_op_name = None,  
                name = None, nin = None, nout = None):
@@ -129,6 +151,7 @@ class Cmp(Prim):
   """Takes two arguments of any type, returns a boolean"""
   pass 
 
+class_list = [Cmp, Bitwise, Logical, Arith, Float]
 
 sqrt = Float(np.sqrt)
 log = Float(np.log)
@@ -166,6 +189,3 @@ less = Cmp(np.less, 'Lt')
 less_equal = Cmp(np.less_equal, 'LtE')
 greater = Cmp(np.greater, 'Gt')
 greater_equal = Cmp(np.greater_equal, 'GtE')
-
-
-  

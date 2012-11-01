@@ -3,37 +3,35 @@ import inspect
 from collections import OrderedDict 
   
 import syntax 
-import prims
 
-from prims import is_prim, find_prim_from_python_value
+import prims
+from prims import Prim, prim_wrapper
+
 from function_registry import untyped_functions, already_registered_python_fn
-from function_registry import register_python_fn, lookup_python_fn, lookup_prim_fn 
+from function_registry import register_python_fn, lookup_python_fn
+
 import names
-from names import NameNotFound 
 from scoped_env import ScopedEnv 
+
 from common import dispatch
 from args import Args 
 
 
 
-def translate_reserved_name(name):
-  if name == 'True':
-    return syntax.Const(True)
-  elif name == 'False':
-    return syntax.Const(False)
-  elif name == 'None':
-    return syntax.Const(None)
-  else:
-    raise NameNotFound(name)
-
+reserved_names = { 
+  'True' : syntax.Const(True), 
+  'False' : syntax.Const(False), 
+  'None' : syntax.Const(None), 
+}
 
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
     return syntax.Const (arg.n)
   else:
     assert isinstance(arg, ast.Name)
-    return translate_reserved_name(arg.id)
-  
+    name = arg.id 
+    assert name in reserved_names
+    return reserved_names[name]
   
 def translate_positional(arg):
   if isinstance(arg, ast.Name):
@@ -86,92 +84,51 @@ def collect_defs_from_list(nodes):
   return defs 
 
 
-def translate_FunctionDef(name, args, body, closure_vars, globals_dict, outer_value_env = None):
-  print "translate_FunctionDef", name
-  
-  env = ScopedEnv()
-  # at the very least we'll need all the closure variables python
-  # told us about, but Python doesn't include references to globals
-  # so we'll have to accumulate those as we got along 
-  closure_arg_names = map(env.fresh, closure_vars)
-  
-  
-  # to look up the globals used by this function we'll have to keep 
-  # track of their original names used by python 
-  global_original_names =  []
-  
-  # accumualte these as we encounter references to them 
-  global_arg_names = []
-  
-  
-  args_obj = translate_args(args)
-  ssa_args = args_obj.transform(env.fresh, extract_name = True)
-  
-  # maps a local SSA ID to a global fn id paired with some closure values
+class AST_Translator(ast.NodeVisitor):
 
-  def global_ref(name):
-    """
-    A global is:
-      (1) data which needs to be added to the list of nonlocals we depend on 
-      (2) a primitive fn
-      (3) a user-defined fn which should be translated
-    """ 
-    if name in globals_dict:
-      global_value = globals_dict[name]
-      
-      if hasattr(global_value, '__call__'):
-        if is_prim(global_value): 
-          prim = find_prim_from_python_value(global_value)
-          prim_fundef = lookup_prim_fn(prim)
-          return syntax.Closure(prim_fundef.name, [])
-        elif already_registered_python_fn(global_value):
-          fundef = lookup_python_fn(global_value)
-          ssa_name = fundef.name 
-          global_args = map(translate_Name, fundef.global_names)
-          # WHAT TO DO WITH FUNCTION THAT ALREADY HAS CLOSURE ARGS? 
-          return syntax.Closure(ssa_name, global_args)
-        else:
-          # we expect that translate_function_value will add 
-          # the function to the global lookup table known_functions
-          ssa_fundef = translate_function_value(global_value)
-          return syntax.Closure (ssa_fundef.name, [])
-        
-      else:
-        
-        # if it's global data... 
-        ssa_name = env.fresh(name)
-        global_original_names.append(name)
-        global_arg_names.append(ssa_name)
-        return syntax.Var (ssa_name)
-    else:
-      return translate_reserved_name(name)
+  def __init__(self, globals_dict = None, closure_cell_dict = None, outer_env = None):
+    self.env = \
+      ScopedEnv(outer_env = outer_env, 
+                closure_cell_dict = closure_cell_dict, 
+                globals_dict = globals_dict)
+     
+  def fresh_name(self, original_name):
+    return self.env.fresh(original_name)
+
+  def fresh_names(self, original_names):
+    return map(self.env.fresh, original_names)
+
+  def fresh_var(self, original_name):
+    return self.env.fresh_var(original_name)
+
+  def fresh_vars(self, original_names):
+    return map(self.fresh_var, original_names)
   
+  def current_block(self):
+    return self.env.current_block()
+  
+  def current_scope(self):
+    return self.env.current_scope()
+  
+  def visit_list(self, nodes):
+    return map(self.visit, nodes)
+    
  
-    
-  def translate_Name(name):  
-
-    """
-    Convert a variable name to its versioned SSA identifier and 
-    if the name isn't local it must be one of:
-      (a) global data which needs to be added as an argument to this fn
-      (b) a user-defined function which needs to be registered with parakeet
-      (c) a primitive fn 
-    """
-    
-    if name in env:
-      return syntax.Var(env[name])
-    # is it at least somewhere in the chain of outer scopes?  
+  def get_name(self, name):
+    if name in reserved_names:
+      return reserved_names[name]
     else:
-      outer = env.recursive_lookup(name, skip_current = True)
-      if outer:
-        global_original_names.add(name)  
-        ssa_name = env.fresh(name) 
-        global_arg_names.append(ssa_name)
-        return syntax.Var(ssa_name)
-      else:
-        return global_ref(name)
+      return syntax.Var(self.env[name])
   
-  def create_phi_nodes(left_scope, right_scope, new_names = {}):
+
+  def visit_Name(self, expr):  
+   
+    assert isinstance(expr, ast.Name), "Expected AST Name object: %s" % expr
+    old_name = expr.id
+    return self.get_name(old_name)
+    
+  
+  def create_phi_nodes(self, left_scope, right_scope, new_names = {}):
     """
     Phi nodes make explicit the possible sources of each variable's values and 
     are needed when either two branches merge or when one was optionally taken. 
@@ -182,34 +139,34 @@ def translate_FunctionDef(name, args, body, closure_vars, globals_dict, outer_va
       if name in right_scope:
         right = syntax.Var (right_scope[name])
       else:
-        right = translate_Name(name)
+        right = self.get_name(name)
         
       if name in new_names:
         new_name = new_names[name]
       else:
-        new_name = env.fresh(name)
+        new_name = self.env.fresh(name)
       merge[new_name] = (left, right)
       
     for (name, ssa_name) in right_scope.iteritems():
       if name not in left_scope:
-        left = translate_Name(name)
+        left = self.get_name(name)
         right = syntax.Var(ssa_name)
     
         if name in new_names:
           new_name = new_names[name]
         else:
-          new_name = env.fresh(name)
+          new_name = self.env.fresh(name)
         merge[new_name] = (left, right)
     return merge 
   
-  def translate_slice(expr):
-    def translate_Index():
-      return translate_expr(expr.value)
+  def visit_slice(self, expr):
+    def visit_Index():
+      return self.visit(expr.value)
     
-    def translate_Ellipsis():
+    def visit_Ellipsis():
       raise RuntimeError("Ellipsis operator unsupported")
     
-    def translate_Slice():
+    def visit_Slice():
       """
       x[l:u:s]
       Optional fields
@@ -219,204 +176,227 @@ def translate_FunctionDef(name, args, body, closure_vars, globals_dict, outer_va
       """
       raise RuntimeError("Slice unsupported")
     
-    def translate_ExtSlice():
-      slice_elts = map(translate_slice, expr.dims) 
+    def visit_ExtSlice():
+      slice_elts = map(self.translate_slice, expr.dims) 
       if len(slice_elts) > 1:
         return syntax.Tuple(slice_elts)
       else:
         return slice_elts[0]
-    return dispatch(expr, 'translate')
-   
-  def translate_expr(expr):
-
-    def translate_UnaryOp():
-      ssa_val = translate_expr(expr.operand)
-      prim = prims.find_ast_op(expr.op)
-      return syntax.PrimCall(prim, [ssa_val])
-    
-    def translate_BinOp():
-      ssa_left = translate_expr(expr.left)
-      ssa_right = translate_expr(expr.right)
-      prim = prims.find_ast_op(expr.op)
-      return syntax.PrimCall(prim, [ssa_left, ssa_right] )
-     
-    def translate_Compare():
-      lhs = translate_expr(expr.left)   
-      assert len(expr.ops) == 1
-      prim = prims.find_ast_op(expr.ops[0])
-      assert len(expr.comparators) == 1
-      rhs = translate_expr(expr.comparators[0])
-      return syntax.PrimCall(prim, [lhs, rhs])
-    
-    def translate_Subscript():
-      value = translate_expr(expr.value)
-      index = translate_slice(expr.slice)
-      return syntax.Index(value, index)
-    
-    def translate_Call():
-      fn, args, kwargs, starargs = \
-        expr.func, expr.args, expr.kwargs, expr.starargs
-      assert kwargs is None, "Dictionary of keyword args not supported"
-      assert starargs is None, "List of varargs not supported"
-      fn_val = translate_expr(fn)
-      arg_vals = map(translate_expr, args)
-      return syntax.Invoke(fn_val, arg_vals) 
-    
-    def translate_List():
-      return syntax.Array(map(translate_expr, expr.elts))
-    
-    def translate_Attribute():
-      value = translate_expr(expr.value)
-      return syntax.Attribute(value, expr.attr)
-    
-    def translate_Num():
-      return syntax.Const(expr.n)
-
-    def translate_Tuple():
-      elts = map(translate_expr, expr.elts)
-      return syntax.Tuple(elts)
-
-    def translate_IfExp():
-      temp1, temp2, result = \
-         map(env.fresh_var, ["if_true", "if_false", "if_result"])
-      cond = translate_expr(expr.test)
-      true_block = [syntax.Assign(temp1, translate_expr(expr.body))]
-      false_block = [syntax.Assign(temp2, translate_expr(expr.orelse))]
-      merge = {result.name :  (temp1, temp2)}
-      if_stmt = syntax.If(cond, true_block, false_block, merge) 
-      env.current_block().append(if_stmt)
-      return result
-    
-      
-    
-    if isinstance(expr, ast.Name):
-      # name is a special case since its translation function needs to be accessed
-      # from outside translate_expr 
-      
-      result = translate_Name(expr.id)
-    else:
-      result = dispatch(expr, 'translate')
-       
-    assert isinstance(result, syntax.Expr), "Invalid translation %s -> %s" % (expr, result)
-   
+    result = dispatch(expr, 'visit')
+    print "SLICE", expr, result
     return result 
-      
+  def visit_UnaryOp(self, expr):
+    ssa_val = self.visit(expr.operand)
+    prim = prims.find_ast_op(expr.op)
+    return syntax.PrimCall(prim, [ssa_val])
+    
+  def visit_BinOp(self, expr):
+    ssa_left = self.visit(expr.left)
+    ssa_right = self.visit(expr.right)
+    prim = prims.find_ast_op(expr.op)
+    return syntax.PrimCall(prim, [ssa_left, ssa_right] )
+     
+  def visit_Compare(self, expr):
+    lhs = self.visit(expr.left)   
+    assert len(expr.ops) == 1
+    prim = prims.find_ast_op(expr.ops[0])
+    assert len(expr.comparators) == 1
+    rhs = self.visit(expr.comparators[0])
+    return syntax.PrimCall(prim, [lhs, rhs])
+    
+  def visit_Subscript(self, expr):
+    value = self.visit(expr.value)
+    index = self.visit_slice(expr.slice)
+    print "SUBSCRIPT", value, index 
+    return syntax.Index(value, index)
+  
+  def generic_visit(self, expr):
+    raise RuntimeError("Unsupported: %s" % expr) 
+  
+  def visit_Call(self, expr):
+    fn, args, kwargs, starargs = \
+      expr.func, expr.args, expr.kwargs, expr.starargs
+    assert kwargs is None, "Dictionary of keyword args not supported"
+    assert starargs is None, "List of varargs not supported"
+    fn_val = self.visit(fn)
+    arg_vals = self.visit_list(args)
+    return syntax.Invoke(fn_val, arg_vals) 
+    
+  def visit_List(self, expr):
+    return syntax.Array(self.visit_list(expr.elts))
+  
+  def visit_Attribute(self, expr):
+    value = self.visit(expr.value)
+    return syntax.Attribute(value, expr.attr)
+    
+  def visit_Num(self, expr):
+    return syntax.Const(expr.n)
 
-  def translate_lhs(lhs):
+  def visit_Tuple(self, expr):
+    return syntax.Tuple(self.visit_list(expr.elts))
+
+  def visit_IfExp(self, expr):
+    temp1, temp2, result = self.fresh_vars(["if_true", "if_false", "if_result"])
+    cond = self.visit(expr.test)
+    true_block = [syntax.Assign(temp1, self.visit(expr.body))]
+    false_block = [syntax.Assign(temp2, self.visit(expr.orelse))]
+    merge = {result.name :  (temp1, temp2)}
+    if_stmt = syntax.If(cond, true_block, false_block, merge) 
+    self.current_block().append(if_stmt)
+    return result
+    
+
+  def visit_lhs(self, lhs):
     if isinstance(lhs, ast.Name):
-      return env.fresh_var(lhs.id)
+      return self.fresh_var(lhs.id)
     elif isinstance(lhs, ast.Tuple):
-      return syntax.Tuple( map(translate_lhs, lhs.elts))
+      return syntax.Tuple( map(self.translate_lhs, lhs.elts))
     else:
       # in case of slicing or attributes
-      return translate_expr(lhs)
-      
-      
-      
-  def translate_stmt(stmt):
-    """
-    Given a stmt, dispatch based on its class type to a particular
-    translate_ function and return the set of nonlocal vars accessed
-    by this statment
-    """
-    if isinstance(stmt, ast.FunctionDef):
-      name, args, body = stmt.name, stmt.args, stmt.body
-      fundef = \
-        translate_FunctionDef(name, args, body, globals_dict, env)
-      closure_args = map(translate_Name, fundef.nonlocals)
-      local_name = env.fresh_var(name)
-      closure = syntax.Closure(fundef.name, closure_args)
-      return syntax.Assign(local_name, closure)
+      return self.visit(lhs)
     
-    elif isinstance(stmt, ast.Assign):     
-
-      # important to evaluate RHS before LHS for statements like 'x = x + 1'
-      ssa_rhs = translate_expr(stmt.value)
-      ssa_lhs = translate_lhs(stmt.targets[0])
-      return syntax.Assign(ssa_lhs, ssa_rhs)
-      
-        
-    elif isinstance(stmt, ast.Return):
-      rhs = syntax.Return(translate_expr(stmt.value))
-      return rhs 
-    elif isinstance(stmt, ast.If):
-      cond = translate_expr(stmt.test)
-      true_scope, true_block  = translate_block(stmt.body)
-      false_scope, false_block = translate_block(stmt.orelse)
-      merge = create_phi_nodes(true_scope, false_scope)
-      return syntax.If(cond, true_block, false_block, merge)
+  def visit_Assign(self, stmt):     
+    # important to evaluate RHS before LHS for statements like 'x = x + 1'
+    ssa_rhs = self.visit(stmt.value)
+    ssa_lhs = self.visit_lhs(stmt.targets[0])
+    return syntax.Assign(ssa_lhs, ssa_rhs)
+  
+  def visit_Return(self, stmt):
+    return syntax.Return(self.visit(stmt.value))
+    
+  def visit_If(self, stmt):
+    cond = self.visit(stmt.test)
+    true_scope, true_block  = self.visit_block(stmt.body)
+    false_scope, false_block = self.visit_block(stmt.orelse)
+    merge = self.create_phi_nodes(true_scope, false_scope)
+    return syntax.If(cond, true_block, false_block, merge)
    
-    elif isinstance(stmt, ast.While):
-      assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
-
-
-      # push a scope for the version of variables appearing within the loop 
-      # create a new version for each var defined in the loop 
-      env.push()
-      for lhs_var in collect_defs_from_list(stmt.body):
-        env.fresh(lhs_var)
-      # evaluate the condition in the context of the version of loop variables we see 
-      # at the start of the loop 
-      cond = translate_expr(stmt.test)
-      # translate_block pushes an additional env which will track 
-      # the versions of variables throughout the loop, so we get back
-      # a dict with the last version of each variable 
-      loop_end_scope, body = translate_block(stmt.body)
-      loop_start_scope, _ = env.pop()
-      # given empty scope for right branch so we always merge with version of variable 
-      # before loop started 
-      #assert "counter" not in env, [translate_Name("counter"), body]
-      merge_before = create_phi_nodes( {}, loop_end_scope, new_names = loop_start_scope)
+  def visit_While(self, stmt):
+    assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
+    # push a scope for the version of variables appearing within the loop 
+    # create a new version for each var defined in the loop 
+    self.env.push()
+    for lhs_name in collect_defs_from_list(stmt.body):
+      self.env.fresh(lhs_name)
+        
+    # evaluate the condition in the context of the version of loop variables we see 
+    # at the start of the loop 
+    cond = self.visit(stmt.test)
+    # translate_block pushes an additional env which will track 
+    # the versions of variables throughout the loop, so we get back
+    # a dict with the last version of each variable 
+    loop_end_scope, body = self.visit_block(stmt.body)
+    loop_start_scope, _ = self.env.pop()
+    # given empty scope for right branch so we always merge with version of variable 
+    # before loop started 
+    merge_before = self.create_phi_nodes( {}, loop_end_scope, new_names = loop_start_scope)
      
-      # don't provide a new_names dict so that fresh versions after the loop are created 
-      # for each var in the current env
-      merge_after = create_phi_nodes({}, loop_end_scope)
+    # don't provide a new_names dict so that fresh versions after the loop are created 
+    # for each var in the current env
+    merge_after = self.create_phi_nodes({}, loop_end_scope)
 
-      return syntax.While(cond, body, merge_before, merge_after)
-    elif isinstance(stmt, ast.For):
-      return RuntimeError("For loops not implemneted")
-    else:
-      raise RuntimeError("Not implemented: %s"  % stmt)
+    return syntax.While(cond, body, merge_before, merge_after)
   
-
-  
-  def translate_block(stmts):
-    env.push()
-    curr_block = env.current_block()
+  def visit_block(self, stmts):
+    self.env.push()
+    curr_block = self.current_block()
     for stmt in stmts:
-      curr_block.append(translate_stmt(stmt))
-    return env.pop()
+      parakeet_stmt = self.visit(stmt)
+      curr_block.append(parakeet_stmt)
+    return self.env.pop()
+   
+  def visit_FunctionDef(self, node):
+    """
+    Translate a nested function 
+    """
+    fundef = \
+      translate_function_ast(node, outer_env = self.env)
+    closure_args = map(self.get_name, fundef.parakeet_nonlocals)
+    local_name = self.env.fresh_var(node.name)
+    closure = syntax.Closure(fundef.name, closure_args)
+    return syntax.Assign(local_name, closure)
+  
+  
+def translate_function_ast(function_def_ast, globals_dict = None, 
+                           closure_vars = [], closure_cells = [], outer_env = None):
+  """
+  Helper to launch translation of a python function's AST, and then construct 
+  an untyped parakeet function from the arguments, refs, and translated body.
+  """
+  
+  assert len(closure_vars) == len(closure_cells)
+  closure_cell_dict = dict(*zip(closure_vars, closure_cells))
+  
+  translator = AST_Translator(globals_dict, closure_cell_dict, outer_env)
+
+  direct_args = translate_args(function_def_ast.args)
+  ssa_args = direct_args.transform(translator.env.fresh, extract_name = True) 
+  _, body = translator.visit_block(function_def_ast.body)
+  ssa_fn_name = names.fresh(function_def_ast.name)
+  
+  refs = []
+  ref_names = []
+  for (ssa_name, ref) in translator.env.python_refs.iteritems():
+    refs.append(ref)
+    ref_names.append(ssa_name)
     
-  _, ssa_body = translate_block(body)   
-  ssa_fn_name = names.fresh(name)
-  all_positional = global_arg_names + closure_arg_names + ssa_args.positional
-  full_args = Args(all_positional, ssa_args.defaults)
+  # if function was nested in parakeet, it can have references to its surrounding parakeet 
+  # scope, which can't be captured with a python ref cell 
+  original_outer_names = translator.env.original_outer_names
+  localized_outer_names = translator.env.localized_outer_names
+  
+  nonlocal_ssa_args = ref_names + localized_outer_names
+  full_args = Args(ssa_args.positional, ssa_args.defaults, nonlocals = nonlocal_ssa_args)
+  
+  fundef = syntax.Fn(ssa_fn_name, full_args, body,  refs, original_outer_names)
+  untyped_functions[fundef.name]  = fundef
+  return fundef   
 
-  fundef = syntax.Fn(ssa_fn_name, full_args, ssa_body, global_original_names)
-  untyped_functions[ssa_fn_name]  = fundef 
-  return fundef
-
-def translate_module(m, global_values, outer_env = None):
-  assert isinstance(m, ast.Module)
-  assert len(m.body) == 1
-  assert isinstance(m.body[0], ast.FunctionDef)
-  fundef = m.body[0]
-  name, args, body = fundef.name, fundef.args, fundef.body  
-  return translate_FunctionDef(name, args, body, global_values, outer_env)
-
-def translate_function_source(source, global_values):
+def translate_function_source(source, globals_dict, closure_vars = [], closure_cells = []):
+  assert len(closure_vars) == len(closure_cells)
   syntax = ast.parse(source)
-  return translate_module(syntax, global_values)
-
+  if isinstance(syntax, ast.Module):
+    assert len(syntax.body) == 1
+    syntax = syntax.body[0]
+  assert isinstance(syntax, ast.FunctionDef)
+  return translate_function_ast(syntax, globals_dict, closure_vars, closure_cells)
+ 
+import adverb_helpers
+ 
 def translate_function_value(fn):
-
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
+  elif isinstance(fn, Prim):
+    return prim_wrapper(fn)
+      
+  # TODO: Right now we can only deal with adverbs over a fixed axis and fixed 
+  # number of args due to lack of support for a few language constructs:
+  # - variable number of args packed as a tuple i.e. *args
+  # - keyword arguments packed as a...? ...struct of some kind? i.e. **kwds
+  # - unpacking tuples and unpacking structs
+  elif adverb_helpers.is_registered_adverb(fn):
+    return adverb_helpers.get_adverb_wrapper(fn)
   else:
-    assert hasattr(fn, 'func_globals'), "Exepcted function to have globals: %s" % fn
+    assert hasattr(fn, 'func_globals'), \
+      "Expected function to have globals: %s" % fn
+    assert hasattr(fn, 'func_closure'), \
+      "Expected function to have closure cells: %s" % fn
+    assert hasattr(fn, 'func_code'), \
+      "Expected function to have code object: %s" % fn
+       
     source = inspect.getsource(fn)
-
-    fundef = translate_function_source(source, fn.func_globals)
+    
+    globals_dict = fn.func_globals 
+    free_vars = fn.func_code.co_freevars
+    closure_cells = fn.func_closure
+    if closure_cells is None:
+      closure_cells = ()
+    print "TRANSLATING", fn
+    #print "globals", globals_dict
+    #print "free_vars", free_vars
+    #print "closure_cells", closure_cells
+    
+    fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
     register_python_fn(fn, fundef)
     # print "Translated", fundef 
     return fundef   

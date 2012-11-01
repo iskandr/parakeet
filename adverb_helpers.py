@@ -2,58 +2,70 @@
 import syntax 
 import syntax_helpers
 import names 
-
+import args
 import adverbs 
+import ast_conversion 
+import function_registry 
 
 _adverb_wrapper_cache = {}
-def untyped_wrapper(adverb_class, untyped_fn, **adverb_params):
-  """
-  Given an adverb and its untyped function argument, 
-  create a fresh function whose body consists of only 
-  the evaluation of the adverb.
-  
-  The wrapper should accept the same number of arguments 
-  as the parameterizing function and correctly forward any
-  global dependencies by creating a closure.  
-  """
-  
-  fn_args = untyped_fn.args.fresh_copy()
-  
-  nonlocals = untyped_fn.nonlocals
-  
-  # create a local closure to forward nonlocals into the adverb 
-  n_nonlocals = len(nonlocals)
-  # I'm still indecisive whether args to functions should be strings & tuples
-  # or syntax nodes so, to be defensive, just accomodate both cases here 
-  closure_args = syntax_helpers.wrap_vars(fn_args.positional[:n_nonlocals])
-  closure = syntax.Closure(untyped_fn.name, closure_args)
-  closure_var = syntax.Var(names.fresh("closure"))
-  body = [syntax.Assign(closure_var, closure)] 
-  
-  # the adverb parameters are given as python values, convert them to
-  # constant syntax nodes 
-  adverb_param_exprs = {}
-  for (k,v) in adverb_params.items():
-    adverb_param_exprs[k] = syntax_helpers.wrap_if_constant(v)
-  adverb_args = syntax_helpers.wrap_vars(fn_args.positional[n_nonlocals:])
-  adverb = adverb_class(closure_var, adverb_args, **adverb_param_exprs)
-  body += [syntax.Return(adverb)]
-  fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
-  return syntax.Fn(fn_name, fn_args, body, nonlocals)
+def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = None):
+  # print "untyped_wrapper", adverb_class, arg_names, axis 
+  axis = syntax_helpers.wrap_if_constant(axis)
+  key = adverb_class, tuple(arg_names), axis
+  if key in _adverb_wrapper_cache:
+    return _adverb_wrapper_cache[key]
+  else:
+    local_arg_names = map(names.refresh, arg_names)
+    
+    local_arg_vars = map(syntax.Var, local_arg_names)
+    fn_var = local_arg_vars[0]
+    data_vars = local_arg_vars[1:]
+    adverb = adverb_class(fn = fn_var, args = data_vars, axis = axis)
+    body = [syntax.Return(adverb)]
+    fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
+    fundef = syntax.Fn(fn_name, args.Args(positional = local_arg_names), body)
+    function_registry.untyped_functions[fn_name] = fundef 
+    _adverb_wrapper_cache[key] = fundef 
+    return fundef 
 
-def untyped_map_wrapper(untyped_fn, axis = None):
-  return untyped_wrapper(adverbs.Map, untyped_fn, axis = axis)
+_adverb_registry = {}
+def is_registered_adverb(fn):
+  return fn in _adverb_registry
 
-def untyped_allpairs_wrapper(untyped_fn, axis = None):
-  return untyped_wrapper(adverbs.AllPairs, untyped_fn, axis = axis)
+def register_adverb(python_fn, wrapper):
+  _adverb_registry[python_fn] = wrapper
+  
+def get_adverb_wrapper(python_fn):
+  return _adverb_registry[python_fn]
+  
+def untyped_map_wrapper(fundef, axis = None):
+  if not isinstance(fundef, syntax.Fn):
+    fundef = ast_conversion.translate_function_value(fundef)
+  assert len(fundef.args.defaults) == 0
+  arg_names = ['fn'] + list(fundef.args.positional)
+  return untyped_wrapper(adverbs.Map, arg_names, axis = axis)
 
-def untyped_reduce_wrapper(untyped_fn,  axis = None, init = None):
-  # TODO: Add options for a combiner! 
-  return untyped_wrapper(adverbs.Reduce, untyped_fn, axis = axis, init = init)
+def untyped_allpairs_wrapper(fundef, axis = None):
+  if not isinstance(fundef, syntax.Fn):
+    fundef = ast_conversion.translate_function_value(fundef)
+  assert len(fundef.args.defaults) == 0
+  assert len(fundef.args.positional) == 2
+  arg_names = ['fn'] + list(fundef.args.positional)
+  return untyped_wrapper(adverbs.AllPairs, arg_names, axis = axis)
 
-def untyped_scan_wrapper(untyped_fn,  axis = None, init = None):
-  # TODO: Add options for a combiner! 
-  return untyped_wrapper(adverbs.Scan, untyped_fn, axis = axis, init = init)
+def untyped_reduce_wrapper(fundef, axis = None):
+  if not isinstance(fundef, syntax.Fn):
+    fundef = ast_conversion.translate_function_value(fundef)
+  assert len(fundef.args.defaults) == 0
+  arg_names = ['fn'] + list(fundef.args.positional)
+  return untyped_wrapper(adverbs.Reduce, arg_names, axis = axis)
+
+def untyped_scan_wrapper(fundef, axis = None):
+  if not isinstance(fundef, syntax.Fn):
+    fundef = ast_conversion.translate_function_value(fundef)
+  assert len(fundef.args.defaults) == 0
+  arg_names = ['fn'] + list(fundef.args.positional)
+  return untyped_wrapper(adverbs.Scan, arg_names, axis = axis)
 
 
 import core_types 

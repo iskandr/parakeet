@@ -68,18 +68,6 @@ def match_list(arg_patterns, vals, env = None, index_fn = match_nothing):
   return env  
 
 
-#def iter_collect(pattern, fn, env, index_fn = match_nothing):
-#  if has_name(pattern):
-#    n = name(pattern)
-#    env[n] = fn(n)
-#  else:
-#    assert is_tuple(pattern)
-#    iter_collect_list(tuple_elts(pattern), fn, env)
-#
-#def iter_collect_list(patterns, fn, env):
-#  for p in patterns:
-#    iter_collect(p, fn, env)
-  
 def transform_nothing(x):
   return x
   
@@ -116,20 +104,22 @@ def bind(lhs, rhs):
  
   
 class Args:
-  def __init__(self, positional, defaults = OrderedDict()):
+  def __init__(self, positional, defaults = OrderedDict(), nonlocals = ()):
     assert isinstance(positional, (list, tuple))
     assert isinstance(defaults, OrderedDict)
-    self.positional = positional
+    self.nonlocals = tuple(nonlocals)
+    self.positional = tuple(positional)
     self.defaults = defaults
      
-    self.arg_slots = list(positional) + defaults.keys()
+    self.arg_slots = list(self.nonlocals) + list(positional) + defaults.keys()
     self.positions = {}
     for (i, p) in enumerate(self.arg_slots):
       self.positions[p] = i
          
 
   def __str__(self):
-    return "Args(positional = %s, defaults=%s)" % (self.positional, self.defaults.items())
+    return "Args(nonlocal = %s, positional = %s, defaults=%s)" % \
+      (self.nonlocals, self.positional, self.defaults.items())
   
 
   def __iter__(self):
@@ -146,15 +136,16 @@ class Args:
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
-
+    print "linearize", self.arg_slots, positional_values 
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
     def assign(i, v):
+      print i,v
       result[i] = v
       assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
       bound[i] = True  
-      
+
     for (i,p) in enumerate(positional_values):
       assign(i, p)
       
@@ -171,8 +162,7 @@ class Args:
 
   
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
-    
-    
+    nonlocals = transform_list(self.nonlocals, name_fn, extract_name, tuple_fn)
     positional = transform_list(self.positional, name_fn,  extract_name, tuple_fn)
     defaults = OrderedDict()
     for (k,v) in self.defaults.iteritems():
@@ -180,7 +170,7 @@ class Args:
       new_key = name_fn(old_key)
       new_value = keyword_value_fn(v) if keyword_value_fn else v
       defaults[new_key] = new_value
-    return Args(positional, defaults)
+    return Args(positional, defaults, nonlocals)
   
   def fresh_copy(self):
     import names 

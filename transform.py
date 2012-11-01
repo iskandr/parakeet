@@ -11,31 +11,8 @@ from syntax_helpers import get_type, get_types, wrap_if_constant, wrap_constants
 import function_registry
 import syntax_helpers
 
-class NestedBlocks(object):
-  def __init__(self):
-    self._blocks = []
-  
-  def push(self):
-    self._blocks.append([])
-  
-  def pop(self):
-    return self._blocks.pop()
-  
-  def current(self):
-    return self._blocks[-1]
-  
-  def append_to_current(self, stmt):
-    self.current().append(stmt)
-  
-      
-  def extend_current(self, stmts):
-    self.current().extend(stmts)
 
-  def __iadd__(self, stmts):
-    if not isinstance(stmts, (list, tuple)):
-      stmts = [stmts]
-    self.extend_current(stmts)
-    return self 
+from nested_blocks import NestedBlocks
 
 
 class Transform(object):
@@ -87,11 +64,14 @@ class Transform(object):
     else:
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
   
-  def index(self, arr, idx):
+  def index(self, arr, idx, temp = True):
     """
     Index into array or tuple differently depending on the type
     """
-    idx = wrap_if_constant(idx)
+    if isinstance(idx, (list, tuple)):
+      idx = self.tuple(map(wrap_if_constant,idx), "index_tuple")
+    else:
+      idx = wrap_if_constant(idx)
     arr_t = arr.type 
     if isinstance(arr_t, core_types.ScalarT):
       # even though it's not correct externally, it's 
@@ -108,7 +88,11 @@ class Transform(object):
       return self.assign_temp(syntax.TupleProj(arr, idx, type = t), "tuple_elt%d" % idx)
     else:
       t = arr_t.index_type(idx.type)
-      return self.assign_temp(syntax.Index(arr, idx, type = t), "array_elt")
+      idx_expr = syntax.Index(arr, idx, type = t)
+      if temp:
+        return self.assign_temp(idx_expr, "array_elt")
+      else:
+        return idx_expr
       
   def prim(self, prim_fn, args, name = "temp"):
     args = wrap_constants(args)
@@ -117,8 +101,8 @@ class Transform(object):
     result_type = prim_fn.result_type(upcast_types)
     upcast_args = [self.cast(x, t) for (x,t) in zip(args, upcast_types)]
     
-    prim_call = syntax.PrimCall(prim_fn, upcast_args, type = result_type)
-    return self.assign_temp(prim_call, name)
+    return syntax.PrimCall(prim_fn, upcast_args, type = result_type)
+    # return self.assign_temp(prim_call, name)
     
   def add(self, x, y, name = "add"):
     return self.prim(prims.add, [x,y], name)
@@ -183,13 +167,25 @@ class Transform(object):
     tuple_t = tuple_type.make_tuple_type(get_types(elts))
     return self.assign_temp(syntax.Tuple(elts, type = tuple_t), name)
   
-  def alloc_array(self, elt_t, nelts, name = "temp_array"):
-    array_t = array_type.make_array_type(elt_t, 1)
+  def alloc_array(self, elt_t, dims, name = "temp_array"):
+    if not isinstance(dims, (list, tuple)):
+      dims = [dims]
+    rank = len(dims)  
+    nelts = dims[0]
+    for d in dims[1:]:
+      nelts = self.mul(nelts, d, "nelts")
+        
+    array_t = array_type.make_array_type(elt_t, rank)
     ptr_t = core_types.ptr_type(elt_t)
     ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t), "data_ptr")
-    shape = self.tuple( [nelts], "shape")
-    stride = syntax_helpers.const(elt_t.nbytes)
-    strides = self.tuple( [stride], "strides")
+    shape = self.tuple( dims, "shape")
+    stride_elts = [syntax_helpers.const(elt_t.nbytes)]
+    # assume row-major for now!
+    for d in reversed(dims[1:]):
+      next_stride = self.mul(stride_elts[0], d, "dim")
+      stride_elts = [next_stride] + stride_elts
+      
+    strides = self.tuple(stride_elts, "strides")
     array = syntax.Struct([ptr_var, shape, strides], type = array_t) 
     return self.assign_temp(array, name) 
     

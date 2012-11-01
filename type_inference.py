@@ -7,6 +7,7 @@ import syntax as typed_ast
 import core_types
 import tuple_type
 import array_type 
+import closure_type 
 
 import type_conv
 import names 
@@ -18,7 +19,6 @@ from syntax_helpers import get_type, get_types, unwrap_constant
 import adverbs 
 import adverb_helpers 
  
-
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -43,22 +43,22 @@ class VarMap:
 
 
 _invoke_type_cache = {}
-def invoke_result_type(closure, arg_types):
-  closure_t = closure.type 
+def invoke_result_type(closure_t, arg_types):
+
   key = (closure_t, tuple(arg_types))
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
   else:
-    if isinstance(closure_t, core_types.ClosureT):
-      closure_set = core_types.ClosureSet(closure_t)
-    elif isinstance(closure_set, core_types.ClosureSet):
+    if isinstance(closure_t, closure_type.ClosureT):
+      closure_set = closure_type.ClosureSet(closure_t)
+    elif isinstance(closure_set, closure_type.ClosureSet):
       closure_set = closure_t
     else:
       raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
       
     result_type = core_types.Unknown
-    for closure_type in closure_set.closures:
-      untyped_id, closure_arg_types = closure_type.fn, closure_type.args
+    for closure_t in closure_set.closures:
+      untyped_id, closure_arg_types = closure_t.fn, closure_t.args
       untyped_fundef = untyped_functions[untyped_id]
       ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
       result_type = result_type.combine(ret)
@@ -77,14 +77,14 @@ def annotate_expr(expr, tenv, var_map):
   
   def expr_Closure():
     new_args = annotate_children(expr.args)
-    t = core_types.ClosureT(expr.fn, get_types(new_args))
+    t = closure_type.ClosureT(expr.fn, get_types(new_args))
     return typed_ast.Closure(expr.fn, new_args, type = t)
       
   def expr_Invoke():
     closure = annotate_child(expr.closure)
     args = annotate_children(expr.args)
-    result_type = invoke_result_type(closure, args)
-    return typed_ast.Invoke(closure, get_types(args), type = result_type) 
+    result_type = invoke_result_type(closure.type, get_types(args))
+    return typed_ast.Invoke(closure, args, type = result_type) 
       
   def expr_Attribute():
     value = annotate_child(expr.value)
@@ -95,10 +95,30 @@ def annotate_expr(expr, tenv, var_map):
   def expr_PrimCall():
     args = annotate_children(expr.args)
     arg_types = get_types(args)
-    upcast_types = expr.prim.expected_input_types(arg_types)
-    result_type = expr.prim.result_type(upcast_types)
-    return typed_ast.PrimCall(expr.prim, args, type = result_type)
-  
+    def get_elt_type(t):
+      if isinstance(t, array_type.ArrayT):
+        return t.elt_type
+      else:
+        return t
+    def get_elt_types(ts):
+      return map(get_elt_type, ts)
+    
+    if all([isinstance(t, core_types.ScalarT) for t in arg_types]):
+      upcast_types = expr.prim.expected_input_types(arg_types)
+      result_type = expr.prim.result_type(upcast_types)
+      return typed_ast.PrimCall(expr.prim, args, type = result_type)
+    else:
+      scalar_arg_types = get_elt_types(arg_types)
+      upcast_types = expr.prim.expected_input_types(scalar_arg_types)
+      import prims
+      prim_fn = prims.prim_wrapper(expr.prim)
+      closure_t = closure_type.make_closure_type(prim_fn, [])
+      
+      scalar_result_type = invoke_result_type(closure_t, upcast_types)
+      prim_closure = typed_ast.Closure(prim_fn, [], type = closure_t)
+      max_rank = adverb_helpers.max_rank(arg_types)
+      result_t = adverb_helpers.increase_rank(scalar_result_type, max_rank)
+      return adverbs.Map(prim_closure, args, type = result_t)
   def expr_Index():
     value = annotate_child(expr.value)
     index = annotate_child(expr.index)
@@ -148,10 +168,34 @@ def annotate_expr(expr, tenv, var_map):
     axis = unwrap_constant(expr.axis)
     n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
     nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
-    nested_result_type = invoke_result_type(closure, nested_types)
+    nested_result_type = invoke_result_type(closure.type, nested_types)
     result_type = adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
     return adverbs.Map(fn = closure, args = new_args, axis = axis, type = result_type)
   
+  def expr_Reduce():
+    closure = annotate_child(expr.fn)
+    new_args = annotate_children(expr.args)
+    arg_types = get_types(new_args)
+    max_arg_rank = adverb_helpers.max_rank(arg_types)
+    axis = unwrap_constant(expr.axis)
+    n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
+    nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
+    nested_result_type = invoke_result_type(closure.type, nested_types)
+    return adverbs.Reduce(fn = closure, args = new_args, axis = axis, type = nested_result_type)
+  
+  def expr_AllPairs():
+    closure = annotate_child(expr.fn)
+    new_args = annotate_children(expr.args)
+    arg_types = get_types(new_args)
+    
+     
+    axis = unwrap_constant(expr.axis)
+    n_outer_axes = 2
+    nested_types = adverb_helpers.lower_arg_ranks(arg_types, 1)
+    nested_result_type = invoke_result_type(closure.type, nested_types)
+    result_type = adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+    return adverbs.AllPairs(fn = closure, args = new_args, axis = axis, type = result_type)
+    
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
   return result    
@@ -159,7 +203,7 @@ def annotate_expr(expr, tenv, var_map):
 
 
 def annotate_stmt(stmt, tenv, var_map ):
-  
+  # print stmt
   
   
   def infer_phi(result_var, val):
@@ -271,7 +315,6 @@ def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
 def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
-  
   
   """
   Given an untyped function and input types, 
