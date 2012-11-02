@@ -320,19 +320,11 @@ class AST_Translator(ast.NodeVisitor):
   
   def visit_While(self, stmt, counter = [0]):
     counter[0] = counter[0] + 1
-    print "  " * counter[0], "ENV BEFORE", self.env.scopes
-    scope_before = self.env.current_scope()
-    print "  " * counter[0], "SCOPE BEFORE", scope_before
     cond = self.visit(stmt.test)
     scope_after, body = self.visit_block(stmt.body)
-    
-    print "  " * counter[0], "SCOPE AFTER", scope_after
-    
-    
     merge = {}
     substitutions = {}
     curr_scope = self.env.current_scope()
-    print "  " * counter[0], "CURR_SCOPE", curr_scope
     for (k, name_after) in scope_after.iteritems():
       if k in self.env:
         name_before = self.env[k]
@@ -342,7 +334,6 @@ class AST_Translator(ast.NodeVisitor):
         curr_scope[k] = name_after
     cond = subst(cond, substitutions)
     body = subst_list(body, substitutions)
-    print "  " * counter[0], "ENV AFTER", self.env.scopes
     return syntax.While(cond, body, merge)
    
   def visit_block(self, stmts):
