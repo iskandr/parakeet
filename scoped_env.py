@@ -27,8 +27,10 @@ class ScopedEnv:
     return str(self)
   
   def fresh(self, name):
+    
     fresh_name = names.fresh(name)
     self.scopes[-1][name] = fresh_name 
+    print "fresh", name, fresh_name, self.scopes
     return fresh_name
   
   def fresh_var(self, name):
@@ -48,7 +50,7 @@ class ScopedEnv:
     return scope, block 
   
   def top_scope(self):
-    self.scopes[0]
+    return self.scopes[0]
   
   def current_scope(self):
     return self.scopes[-1]

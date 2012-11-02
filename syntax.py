@@ -37,14 +37,11 @@ class While(Stmt):
      nodes for incoming and outgoing variables
      of the form [(new_var1, (old_var1,old_var2)]
    """
-  _members = ['cond', 'body', 'merge_before', 'merge_after']
+  _members = ['cond', 'body', 'merge']
 
   def __repr__(self):
-    before = phi_nodes_to_str(self.merge_before)
-    after = phi_nodes_to_str(self.merge_after)
-    body = block_to_str(self.body)
-    return "while %s:\n  (merge-before)%s\n  (body)%s\n  (merge-after)%s" %\
-           (self.cond, before,  body, after)
+    return "while %s:\n  (merge)%s\n  (body)%s\n" %\
+           (self.cond, phi_nodes_to_str(self.merge),  block_to_str(self.body))
 
   def __str__(self):
     return repr(self)

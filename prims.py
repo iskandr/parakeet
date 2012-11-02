@@ -80,8 +80,6 @@ class Prim(object):
     else:
       self.nout = 1
     
-
-    
     # for now only support ufuncs which describe their own type behavior 
     if hasattr(fn, 'types'):
       "Primitive function %s doesn't supply type signatures" % self.name

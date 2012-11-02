@@ -295,20 +295,11 @@ def annotate_stmt(stmt, tenv, var_map ):
     return typed_ast.Return(ret_val)
     
   def stmt_While():
-    #print "WHILE"
-    #print stmt 
-    #print stmt.merge_before 
-    infer_left_flow(stmt.merge_before)
-
+    infer_left_flow(stmt.merge)
     cond = annotate_expr(stmt.cond, tenv, var_map)
-
     body = annotate_block(stmt.body, tenv, var_map)
-
-    merge_before = annotate_phi_nodes(stmt.merge_before)
-
-    merge_after = annotate_phi_nodes(stmt.merge_after)
-
-    return typed_ast.While(cond, body, merge_before, merge_after)
+    merge = annotate_phi_nodes(stmt.merge)
+    return typed_ast.While(cond, body, merge)
     
   return dispatch(stmt, prefix="stmt")  
 
@@ -464,9 +455,8 @@ def rewrite_typed(fn):
       new_body = rewrite_block(stmt.body)
       # insert coercions for left-branch values into the current block before
       # the while-loop and coercions for the right-branch to the end of the loop body
-      new_merge_before = rewrite_merge(stmt.merge_before)
-      new_merge_after = rewrite_merge(stmt.merge_after)
-      return typed_ast.While(new_cond, new_body, new_merge_before, new_merge_after)
+      new_merge = rewrite_merge(stmt.merge)
+      return typed_ast.While(new_cond, new_body, new_merge)
     else:
       raise RuntimeError("Not implemented: %s" % stmt)
     

@@ -275,9 +275,8 @@ class Transform(object):
   def transform_While(self, stmt):
     cond = self.transform_expr(stmt.cond)
     body = self.transform_block(stmt.body)
-    merge_before = self.transform_phi_nodes(stmt.merge_before)
-    merge_after = self.transform_phi_nodes(stmt.merge_after)
-    return syntax.While(cond, body, merge_before, merge_after)
+    merge = self.transform_phi_nodes(stmt.merge)
+    return syntax.While(cond, body, merge)
   
   def transform_stmt(self, stmt):
     method_name = "transform_" + stmt.node_type()
