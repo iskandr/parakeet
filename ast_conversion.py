@@ -61,10 +61,10 @@ def collect_defs_from_node(node):
   variable names from the left-hand-sides of assignments,
   ignoring variables if they appear within a slice or index
   """
-  #if isinstance(node, ast.While):
-  #  return collect_defs_from_list(node.body + node.orelse)
-  #elif isinstance(node, ast.If):
-  #  return collect_defs_from_list(node.body + node.orelse)
+  if isinstance(node, ast.While):
+    return collect_defs_from_list(node.body + node.orelse)
+  elif isinstance(node, ast.If):
+    return collect_defs_from_list(node.body + node.orelse)
   if isinstance(node, ast.Assign):
     return collect_defs_from_list(node.targets)
   elif isinstance(node, ast.Name):
@@ -261,7 +261,7 @@ class AST_Translator(ast.NodeVisitor):
       return self.visit(lhs)
     
   def visit_Assign(self, stmt):  
-    print ast.dump(stmt)
+    #print ast.dump(stmt)
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
     ssa_rhs = self.visit(stmt.value)
     ssa_lhs = self.visit_lhs(stmt.targets[0])
@@ -277,7 +277,9 @@ class AST_Translator(ast.NodeVisitor):
     merge = self.create_phi_nodes(true_scope, false_scope)
     return syntax.If(cond, true_block, false_block, merge)
    
-  def visit_While(self, stmt):
+  def visit_While(self, stmt, counter = [0]):
+    curr_counter = counter[0]
+    counter[0] = curr_counter + 1
     #print 
     #print 
     #print ast.dump(stmt)
@@ -288,7 +290,7 @@ class AST_Translator(ast.NodeVisitor):
     self.env.push()
     for lhs_name in collect_defs_from_list(stmt.body):
       self.env.fresh(lhs_name)
-        
+    print "  " * curr_counter, "Curr_scope", self.env.current_scope()
     # evaluate the condition in the context of the version of loop variables we see 
     # at the start of the loop 
     cond = self.visit(stmt.test)
@@ -296,18 +298,18 @@ class AST_Translator(ast.NodeVisitor):
     # the versions of variables throughout the loop, so we get back
     # a dict with the last version of each variable 
     loop_end_scope, body = self.visit_block(stmt.body)
+    print "  " * curr_counter,"Loop End Scope", loop_end_scope
     loop_start_scope, _ = self.env.pop()
+    print "  " * curr_counter, "Loop Start Scope", loop_start_scope
     # given empty scope for right branch so we always merge with version of variable 
     # before loop started 
-    print "env", self.env 
-    print "loop_start_scope", loop_start_scope
-    print "loop_end_scope", loop_end_scope 
     merge_before = self.create_phi_nodes( {}, loop_end_scope, new_names = loop_start_scope)
+    print "  " * curr_counter, "Merge before", merge_before
      
     # don't provide a new_names dict so that fresh versions after the loop are created 
     # for each var in the current env
     merge_after = self.create_phi_nodes({},  loop_end_scope)
-
+    print "  " * curr_counter, "Merge after", merge_after
     return syntax.While(cond, body, merge_before, merge_after)
   
   def visit_block(self, stmts):
@@ -410,6 +412,7 @@ def translate_function_value(fn):
     #print "closure_cells", closure_cells
     
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
+    print fundef 
     register_python_fn(fn, fundef)
     # print "Translated", fundef 
     return fundef   

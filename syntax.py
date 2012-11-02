@@ -4,15 +4,15 @@ class Stmt(Node):
   pass
 
 def block_to_str(stmts):
-  body_str = '\n'.join(['\n'] + [str(stmt) for stmt in stmts])
-  return body_str.replace('\n', '\n  ')
+  body_str = '\n' + '\n'.join([str(stmt) for stmt in stmts])
+  return body_str.replace('\n', '\n    ')
 
 def phi_nodes_to_str(phi_nodes):
   parts = ["%s <- phi(%s, %s)" %
            (var, left, right) for (var, (left, right)) in phi_nodes.items()]
   whole = "\n" + "\n".join(parts)
   # add tabs
-  return whole.replace("\n", "\n  ")
+  return whole.replace("\n", "\n    ")
 
 class Assign(Stmt):
   _members = ['lhs', 'rhs']
@@ -43,8 +43,8 @@ class While(Stmt):
     before = phi_nodes_to_str(self.merge_before)
     after = phi_nodes_to_str(self.merge_after)
     body = block_to_str(self.body)
-    return "while:\n(merge-before) %s\ncond: %s\nbody:%s\n(merge-after)%s" %\
-           (before, self.cond, body, after)
+    return "while %s:\n  (merge-before)%s\n  (body)%s\n  (merge-after)%s" %\
+           (self.cond, before,  body, after)
 
   def __str__(self):
     return repr(self)
@@ -56,8 +56,11 @@ class Const(Expr):
   _members = ['value']
 
   def __repr__(self):
-    return "const(%s : %s)" % (self.value, self.type)
-
+    if self.type:
+      return "%s : %s" % (self.value, self.type)
+    else:
+      return str(self.value)
+    
   def __str__(self):
     return repr(self)
 
@@ -75,12 +78,29 @@ class Var(Expr):
 
 class Attribute(Expr):
   _members = ['value', 'name']
+  
+  def __str__(self):
+    if self.type:
+      return "%s.%s : %s" % (self.value, self.name, self.type)
+    else:
+      return "%s.%s" % (self.value, self.name)
 
 class Index(Expr):
   _members = ['value', 'index']
-
+  
+  def __str__(self):
+    if self.type:
+      return "%s[%s] : %s" % (self.value, self.index, self.type)
+    else:
+      return "%s[%s]" % (self.value, self.index)
+    
 class Tuple(Expr):
   _members = ['elts']
+  
+  def __str__(self):
+    return ", ".join([str(e) for e in self.elts])
+  
+  
 
 class Array(Expr):
   _members = ['elts']
@@ -110,7 +130,14 @@ class PrimCall(Expr):
   _members = ['prim', 'args']
 
   def __repr__(self):
-    return "prim<%s>(%s)" % (self.prim.name, ", ".join(map(str, self.args)))
+    if self.prim.symbol:
+      if len(self.args) == 1:
+        return "%s %s" % (self.prim.symbol)
+      else:
+        assert len(self.args) == 2
+        return "%s %s %s" % (self.args[0], self.prim.symbol, self.args[1])
+    else:
+      return "prim<%s>(%s)" % (self.prim.name, ", ".join(map(str, self.args)))
 
   def __str__(self):
     return repr(self)
@@ -150,6 +177,8 @@ class Fn(Node):
   """
   _members = ['name',  'args', 'body', 'python_refs', 'parakeet_nonlocals']
   
+  def __str__(self):
+    return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
   def node_init(self):
     
     assert isinstance(self.name, str), \
@@ -174,6 +203,9 @@ class Fn(Node):
 
 class TupleProj(Expr):
   _members = ['tuple', 'index']
+  
+  def __str__(self):
+    return "%s[%d]" % (self.tuple, self.index) 
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
