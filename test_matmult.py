@@ -22,18 +22,19 @@ def loop_dot(x,y):
 def test_loopdot():
   expect_allpairs(loop_dot, np.dot, vectors)
 
-def dot(x,y):
-  return sum(x*y)
+#def dot(x,y):
+#  return sum(x*y)
 
 #def test_adverb_dot():
 #  expect_allpairs(dot, np.dot, vectors)
 
-def adverb_matmult(X,Y):
-  return allpairs(dot, X, Y, axis = 0)
-
 int_mat = np.reshape(np.arange(100), (10,10))
 float_mat = np.sqrt(int_mat)
 bool_mat = int_mat % 2
+
+#def adverb_matmult(X,Y):
+#  return allpairs(dot, X, Y, axis = 0)
+
 
 matrices = [int_mat, float_mat, bool_mat]
 

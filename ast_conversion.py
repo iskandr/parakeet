@@ -86,10 +86,8 @@ def translate_args(args):
 
 def subst(node, rename_dict):
   if isinstance(node, syntax.Var):
-    #print "SUBST VAR", node
     return syntax.Var(rename_dict.get(node.name, node.name) )
   if isinstance(node, (syntax.Expr, syntax.Stmt)):
-    #print "SUBST NODE", node
     new_values = {}
     for member_name in node.members:
       old_v = getattr(node, member_name)
@@ -105,7 +103,6 @@ def subst(node, rename_dict):
   elif isinstance(node, dict):
     return subst_dict(node, rename_dict)
   else:
-    #print "SUBST not anything %s : %s" % (node, type(node))
     return node 
 
 def subst_dict(old_dict, rename_dict):
@@ -290,10 +287,7 @@ class AST_Translator(ast.NodeVisitor):
   def visit_lhs(self, lhs):
 
     if isinstance(lhs, ast.Name):
-      
-      new_var =  self.fresh_var(lhs.id)
-      print "LHS %s -> %s" % (lhs.id, new_var)
-      return new_var
+      return self.fresh_var(lhs.id)
     elif isinstance(lhs, ast.Tuple):
       return syntax.Tuple( map(self.visit_lhs, lhs.elts))
     else:
@@ -301,7 +295,6 @@ class AST_Translator(ast.NodeVisitor):
       return self.visit(lhs)
     
   def visit_Assign(self, stmt):  
-    #print ast.dump(stmt)
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
     ssa_rhs = self.visit(stmt.value)
     ssa_lhs = self.visit_lhs(stmt.targets[0])
@@ -430,13 +423,9 @@ def translate_function_value(fn):
     closure_cells = fn.func_closure
     if closure_cells is None:
       closure_cells = ()
-    print "TRANSLATING", fn
-    #print "globals", globals_dict
-    #print "free_vars", free_vars
-    #print "closure_cells", closure_cells
     
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
-    print fundef 
+    # print fundef 
     register_python_fn(fn, fundef)
     # print "Translated", fundef 
     return fundef   

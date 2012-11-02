@@ -16,10 +16,7 @@ import llvm_convert
 import llvm_prims 
 import llvm_context 
 from compiled_fn import CompiledFn
-
-
  
-
 class CompilationEnv:
   def __init__(self, llvm_cxt = llvm_context.verify_context):
     self.parakeet_fundef = None
@@ -44,8 +41,6 @@ class CompilationEnv:
     _, builder = self.new_block("entry")
     self._init_vars(fundef, builder)
     return builder 
-  
-  
   
   def _init_vars(self, fundef, builder):  
 
@@ -87,10 +82,7 @@ class CompilationEnv:
       name = name.name
     assert isinstance(name, str)
     self.vars[name] = val
-  
-
-
-
+ 
 
 def compile_expr(expr, env, builder):
   # print "  EXPR: ", expr 
@@ -350,10 +342,10 @@ from lower_adverbs import LowerAdverbs
 from lower_structs import LowerStructs
 from lower_indexing import LowerIndexing
 from simplify import Simplify
-
+from constant_propagation import ConstantPropagation 
 
 def prepare_fn(fundef):
-  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing, LowerStructs, Simplify])
+  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing, ConstantPropagation, Simplify, LowerStructs])
 
 def compile_fn(fundef):
   
@@ -361,18 +353,21 @@ def compile_fn(fundef):
     return compiled_functions[fundef.name]
   
   # print "FUNDEF"
-  # print fundef 
+  print fundef 
   fundef = prepare_fn(fundef)
   #print
-  # print "LOWERED"
-  # print fundef 
+  print "LOWERED"
+  print fundef 
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)   
   compile_block(fundef.body, env, start_builder)
-  # print env.llvm_fn 
+  print "RAW LLVM"
+  print env.llvm_fn 
   env.llvm_context.run_passes(env.llvm_fn)
-
-  # print env.llvm_fn 
+  
+  print "OPTIMIZIED"
+  
+  print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
   

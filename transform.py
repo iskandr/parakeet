@@ -104,7 +104,6 @@ class Transform(object):
     return syntax.TupleProj(tup, idx, type = t)
         
   def prim(self, prim_fn, args, name = None):
-    print "PRIM ARGS", args
     args = wrap_constants(args)
     arg_types = get_types(args)
     upcast_types = prim_fn.expected_input_types(arg_types)
@@ -311,8 +310,6 @@ class Transform(object):
     # able to find its definition later 
     function_registry.typed_functions[new_fundef.name] = new_fundef 
     return new_fundef 
-
-
 
 
 _transform_cache = {}

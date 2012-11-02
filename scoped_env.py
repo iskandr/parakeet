@@ -30,7 +30,6 @@ class ScopedEnv:
     
     fresh_name = names.fresh(name)
     self.scopes[-1][name] = fresh_name 
-    print "fresh", name, fresh_name, self.scopes
     return fresh_name
   
   def fresh_var(self, name):
