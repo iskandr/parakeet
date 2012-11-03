@@ -32,8 +32,19 @@ def create_tuple(x,y):
 def test_create_tuple():  
   all_tuples(create_tuple)
   
-def tuple_bind((x,y)):
-  return (x,y)
+#def tuple_arg((x,y)):
+#  return (x,y)
+
+#def test_tuple_arg():
+#  all_tuples(tuple_arg, unpack_args = False)
+  
+def tuple_lhs(t):
+  x,y = t
+  return x,y
+
+def test_tuple_lhs():
+  all_tuples(tuple_lhs, unpack_args = False)
+  
 
 def tuple_indexing(t):
   return (t[0], t[1])

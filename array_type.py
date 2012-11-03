@@ -77,14 +77,15 @@ class ArrayT(StructT):
       # slicing out a subset of my rows doesn't change my type 
       return self 
     elif isinstance(idx, tuple_type.TupleT):
-      assert len(idx.elt_types) == self.rank
+      n_indices = len(idx.elt_types)
+      assert n_indices == self.rank, \
+        "Can't use only %d indices with array of rank %d" % (n_indices, self.rank)
       return self.elt_type 
     else:
       raise RuntimeError("Unsupported index type: %s" % idx)
 
   def from_python(self, x):
     x = np.asarray(x)
-         
     ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
@@ -95,7 +96,6 @@ class ArrayT(StructT):
     ctypes_shape = self.shape_t.from_python(x.shape)
     
     ctypes_strides = self.strides_t.from_python(x.strides)
-
     return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape), ctypes.pointer(ctypes_strides))
     
   def to_python(self, obj):
@@ -107,14 +107,13 @@ class ArrayT(StructT):
     strides = self.strides_t.to_python(obj.strides.contents)
     elt_size = self.elt_type.nbytes
     assert any([stride == elt_size for stride in strides]), "Discontiguous array not yet supported"
-    n_elts = sum(shape)
+    n_elts = np.prod(shape)
     n_bytes = n_elts * elt_size 
     dest_buf = AllocateBuffer(n_bytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
     
     # copy data from pointer
     ctypes.memmove(dest_ptr, obj.data, n_bytes)
-    
     return np.ndarray(shape, dtype = self.elt_type.dtype, buffer = dest_buf, strides = strides)
    
 _array_types = {}

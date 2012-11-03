@@ -15,6 +15,16 @@ class LowerStructs(Transform):
     struct_args = self.transform_expr_list(expr.elts)
     return syntax.Struct(struct_args, type = expr.type)
     
+  
+  def transform_Assign(self, stmt):
+    lhs, rhs = stmt.lhs, stmt.rhs 
+    if isinstance(lhs, syntax.Tuple):
+      for (i, lhs_elt) in enumerate(lhs.elts):
+        self.assign(lhs_elt, self.tuple_proj(rhs, i), recursive = True)
+    else:
+      assert isinstance(lhs, (syntax.Var, syntax.Index))
+      return syntax.Assign(stmt.lhs, self.transform_expr(rhs))
+        
   def transform_Closure(self, expr):
     closure_args = self.transform_expr_list(expr.args)
     closure_id = closure_signatures.get_id(expr.type)

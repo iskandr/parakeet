@@ -41,21 +41,30 @@ def run_local_tests(locals_dict = None):
 
 def eq(x,y):
   if isinstance(y, np.ndarray):
-    return isinstance(x, np.ndarray) and x.shape == y.shape and np.all(x == y)
+    return isinstance(x, np.ndarray) and x.shape == y.shape and np.all(x[:] == y[:])
   else:
     return x == y
+
+def copy(x):
+  if isinstance(x, np.ndarray):
+    return x.copy()
+  else:
+    return x
+
+def copy_list(xs):
+  return [copy(x) for x in xs]
 
 def expect(fn, args, expected):
   """
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
   """
-  untyped,  typed, all_args, compiled = specialize_and_compile(fn, args)
-  print untyped 
-  untyped_result = interp.eval_fn(untyped, all_args) 
+  untyped,  typed, all_args, compiled = specialize_and_compile(fn, args) 
+  
+  untyped_result = interp.eval_fn(untyped, copy_list(all_args)) 
   assert eq(untyped_result, expected), "Expected %s but got %s" % (expected, untyped_result)
 
-  typed_result = interp.eval_fn(typed, all_args)
+  typed_result = interp.eval_fn(typed, copy_list(all_args))
   assert eq(typed_result, expected), "Expected %s but got %s" % (expected, typed_result)
 
   llvm_result = compiled(*all_args)
