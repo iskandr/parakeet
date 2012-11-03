@@ -17,9 +17,6 @@ import llvm_prims
 import llvm_context 
 from compiled_fn import CompiledFn
 
-
- 
-
 class CompilationEnv:
   def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
@@ -31,7 +28,6 @@ class CompilationEnv:
     bb = self.llvm_fn.append_basic_block(name)
     builder = Builder.new(bb)
     return bb, builder 
-
   
   def init_fn(self, fundef):
     """
@@ -45,16 +41,11 @@ class CompilationEnv:
     self._init_vars(fundef, builder)
     return builder 
   
-  
-  
   def _init_vars(self, fundef, builder):  
-
     """
     Create a mapping from variable names to stack locations,  
     these will later be converted to SSA variables by the mem2reg pass.
    """
-  
-   
     n_expected = len(fundef.args.arg_slots)
     assert len(self.llvm_fn.args) == n_expected
   
@@ -74,7 +65,6 @@ class CompilationEnv:
     
       llvm_arg.name = name
       builder.store(llvm_arg, self.vars[name])
-      
   
   def __getitem__(self, name):
     if isinstance(name, syntax.Var):
@@ -87,10 +77,6 @@ class CompilationEnv:
       name = name.name
     assert isinstance(name, str)
     self.vars[name] = val
-  
-
-
-
 
 def compile_expr(expr, env, builder):
   # print "  EXPR: ", expr 
@@ -105,13 +91,11 @@ def compile_expr(expr, env, builder):
   def compile_Cast():
     llvm_value = compile_expr(expr.value, env, builder)
     return llvm_convert.convert(llvm_value, expr.value.type, expr.type, builder)
-  
 
   def compile_Struct():
     llvm_struct_t = llvm_value_type(expr.type)
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
-    
       
     for (i, elt)  in enumerate(expr.args):
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
@@ -125,7 +109,6 @@ def compile_expr(expr, env, builder):
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
     n_elts = compile_expr(expr.count, env, builder)
     return builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
-    
   
   def compile_Index():
     llvm_arr = compile_expr(expr.value, env, builder)
@@ -143,16 +126,15 @@ def compile_expr(expr, env, builder):
     struct_type = expr.value.type 
     field_pos = struct_type.field_pos(expr.name)
     field_type = struct_type.field_type(expr.name)
-    field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)], "%s_ptr" % expr.name)
+    field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)],
+                             "%s_ptr" % expr.name)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
     else:
       return field_value  
   
-  
   def compile_Invoke():
-
     closure_t = expr.closure.type
     assert isinstance(closure_t, ClosureT)
     arg_types = [arg.type for arg in expr.args] 
@@ -162,9 +144,11 @@ def compile_expr(expr, env, builder):
     # get the int64 identifier which maps to an untyped_fn/arg_types pairs
     
     untyped_fn_id = closure_t.fn
-    assert isinstance(untyped_fn_id, str), "Expected %s to be string identifier" % (untyped_fn_id)
+    assert isinstance(untyped_fn_id, str), \
+           "Expected %s to be string identifier" % (untyped_fn_id)
     full_arg_types = closure_t.args + tuple(arg_types)
-    # either compile the function we're about to invoke or get its compiled form from a cache
+    # either compile the function we're about to invoke or get its compiled form
+    # from a cache
     typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
     target_fn_info = compile_fn(typed_fundef)
     target_fn = target_fn_info.llvm_fn 
@@ -172,16 +156,15 @@ def compile_expr(expr, env, builder):
     llvm_closure_args = []
     
     for (closure_arg_idx, _) in enumerate(closure_t.args):
-      arg_ptr = builder.gep(closure_object, [int32(0), int32(closure_arg_idx)], "closure_arg%d_ptr" % closure_arg_idx)
+      arg_ptr = builder.gep(closure_object, [int32(0), int32(closure_arg_idx)],
+                            "closure_arg%d_ptr" % closure_arg_idx)
       arg = builder.load(arg_ptr, "closure_arg%d" % closure_arg_idx)
       llvm_closure_args.append(arg)
-    
     
     llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
     full_args_list = llvm_closure_args + llvm_direct_args 
     assert len(full_args_list) == len(full_arg_types)  
     return builder.call(target_fn, full_args_list, 'invoke_result')
- 
     
   def compile_PrimCall():
     prim = expr.prim
@@ -238,7 +221,6 @@ def compile_merge_right(phi_nodes, env, builder):
     value = compile_expr(right, env, builder)
     builder.store(value, ref)
 
-
 def compile_stmt(stmt, env, builder):
   """Translate an SSA statement into llvm. Every translation
   function returns a builder pointing to the end of the current 
@@ -250,8 +232,6 @@ def compile_stmt(stmt, env, builder):
   # print "STMT ", stmt 
   
   def compile_Assign():
-    
-    
     value = compile_expr(stmt.rhs, env, builder)
 
     if isinstance(stmt.lhs, syntax.Var):
@@ -266,11 +246,9 @@ def compile_stmt(stmt, env, builder):
       elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
       builder.store(value, elt_ptr)
       
-      
     return builder, False 
   
   def compile_While():
-    
     # current flow ----> loop --------> exit--> after  
     #    |                       skip------------|
     #    |----------------------/
@@ -297,7 +275,6 @@ def compile_stmt(stmt, env, builder):
     return after_builder, False 
   
   def compile_Return():
-    
     ret_val = compile_expr(stmt.value, env, builder)
     builder.ret(ret_val)
     return builder, True 
@@ -305,7 +282,6 @@ def compile_stmt(stmt, env, builder):
   def compile_If():
     cond = compile_expr(stmt.cond, env, builder)
     cond = llvm_convert.to_bit(cond, builder)
-    
     
     # compile the two possible branches as distinct basic blocks
     # and then wire together the control flow with branches
@@ -353,12 +329,11 @@ from lower_structs import LowerStructs
 from lower_indexing import LowerIndexing
 from simplify import Simplify
 
-
 def prepare_fn(fundef):
-  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing, LowerStructs, Simplify])
+  return apply_pipeline(fundef,
+                        [LowerAdverbs, LowerIndexing, LowerStructs, Simplify])
 
 def compile_fn(fundef):
-  
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   

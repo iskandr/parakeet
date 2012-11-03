@@ -1,9 +1,9 @@
-
 import ast_conversion 
+import llvm_backend
+import runtime.runtime
 import syntax 
-import type_inference 
 import type_conv
-import llvm_backend 
+import type_inference 
 
 def specialize_and_compile(fn, args):
   if isinstance(fn, syntax.Fn):
@@ -46,12 +46,25 @@ def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
   # don't yet support unpacking a variable number of args
   default_wrapper_args = ['fn'] + default_args
   
-  default_wrapper = adverb_helpers.untyped_wrapper(adverb_class, default_wrapper_args, axis=default_axis)
+  default_wrapper = adverb_helpers.untyped_wrapper(adverb_class,
+                                                   default_wrapper_args,
+                                                   axis=default_axis)
   adverb_helpers.register_adverb(python_hook, default_wrapper)
   return python_hook
 
-
-each = create_adverb_hook(adverbs.Map)
-allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'], default_axis = 0)
+seq_each = create_adverb_hook(adverbs.Map)
+allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
+                              default_axis = 0)
 seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['acc', 'x'])
 seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['acc', 'x'])
+
+runtime = runtime.Runtime()
+
+def each(fn, *args, **kwds):
+  # Flow:
+  # 1. Create a sequential version of the adverb (that each thread will run).
+  # 2. Specialize and compile that
+  # 3. Execute that in the runtime
+  # 4. Get back a list of return values from the runtime
+  # 5. Convert those to Py values and concatenate them using NumPy
+

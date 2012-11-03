@@ -69,6 +69,9 @@ class Runtime():
 
     self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
 
+  def run_untiled_job(self, fn, args, num_iters):
+    
+
   def run_job(self, tiled_ast, args, num_iters,
               tiled_loop_iters, tiled_loop_parents):
     self.reg_block_sizes = \
