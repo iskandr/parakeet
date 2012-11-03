@@ -61,10 +61,44 @@ seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['acc', 'x'])
 runtime = runtime.Runtime()
 
 def each(fn, *args, **kwds):
-  # Flow:
-  # 1. Create a sequential version of the adverb (that each thread will run).
-  # 2. Specialize and compile that
-  # 3. Execute that in the runtime
-  # 4. Get back a list of return values from the runtime
-  # 5. Convert those to Py values and concatenate them using NumPy
+  # Create the closure that implements the mapped function
+  if not isinstance(fn, syntax.Fn):
+    fundef = ast_conversion.translate_function_value(fn)
 
+  # Don't handle outermost axis = None yet  
+  assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
+
+  # TODO: Should make sure that all the shapes conform here, 
+  # but we don't yet have anything like assertions or error handling
+  max_arg = adverb_helpers.max_rank_arg(args)
+  niters = self.shape(max_arg, axis)
+  
+  # UGH generating code into SSA form is annoying 
+  counter_before = self.zero_i64("i_before")
+  counter = self.fresh_i64("i_loop")
+  counter_after = self.fresh_i64("i_after")
+  
+  merge = { counter.name : (counter_before, counter_after) }
+  
+  cond = self.lt(counter, niters)
+  elt_t = expr.type.elt_type
+  array_result = self.alloc_array(elt_t, niters)
+  self.blocks.push()
+  nested_args = [self.index(arg, counter) for arg in args]
+  closure_t = fn.type
+  nested_arg_types = syntax_helpers.get_types(nested_args)
+  call_result_t = type_inference.invoke_result_type(closure_t,
+                                                    nested_arg_types)
+  call = syntax.Invoke(fn, nested_args, type = call_result_t)
+  call_result = self.assign_temp(call, "call_result")
+  output_idx = syntax.Index(array_result, counter, type = call_result.type)
+  self.assign(output_idx, call_result)
+  self.assign(counter_after, self.add(counter, syntax_helpers.one_i64))
+
+  body = self.blocks.pop()
+  self.blocks += syntax.While(cond, body, merge)
+  return array_result
+  
+  # Create the wrapper function that unpacks the args and executes the closure
+  wrapper_arg_names = ['fn', 'start', 'stop', 'args', 'tile_sizes']
+  

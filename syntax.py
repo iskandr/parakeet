@@ -96,12 +96,9 @@ class Tuple(Expr):
   
   def __str__(self):
     return ", ".join([str(e) for e in self.elts])
-  
-  
 
 class Array(Expr):
   _members = ['elts']
-
 
 class Closure(Expr):
   """
@@ -160,8 +157,6 @@ class ConstArrayLike(Expr):
   set to the second arg
   """
   _members = ['array', 'value']
-  
-
 
 class Fn(Node):
   """
@@ -170,9 +165,10 @@ class Fn(Node):
   scope, which are stored in the 'python_refs' field. 
   
   A nested function, on the other hand, might refer to some variables from 
-  its enclosing Parakeet scope, whose original names are stored in 'parakeet_nonlocals'
+  its enclosing Parakeet scope, whose original names are stored in
+  'parakeet_nonlocals'
   """
-  _members = ['name',  'args', 'body', 'python_refs', 'parakeet_nonlocals']
+  _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
   
   def __str__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
@@ -226,7 +222,6 @@ class Alloc(Expr):
   Allocates a block of data, returns a pointer
   """
   _members = ['elt_type', 'count']
-
 
 class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes

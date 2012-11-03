@@ -5,16 +5,13 @@ import tuple_type
 import array_type  
 import prims 
 
-
-from syntax_helpers import get_type, get_types, wrap_if_constant, wrap_constants, zero
+from syntax_helpers import get_type, get_types, wrap_if_constant, \
+                           wrap_constants, zero
 
 import function_registry
 import syntax_helpers
 
-
-
 from nested_blocks import NestedBlocks
-
 
 class Transform(object):
   def __init__(self, fn):
@@ -59,7 +56,6 @@ class Transform(object):
   def zero_i64(self, name = "counter"):
     return self.zero(t = core_types.Int64, name = name)
   
-  
   def cast(self, expr, t):
     assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
     if expr.type == t:
@@ -98,6 +94,7 @@ class Transform(object):
         return self.assign_temp(idx_expr, "array_elt")
       else:
         return idx_expr
+      
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
     t = tup.type.elt_types[idx]
@@ -260,7 +257,6 @@ class Transform(object):
     lhs = self.transform_lhs(stmt.lhs) 
     return syntax.Assign(lhs, rhs)
     
-    
   def transform_Return(self, stmt):
     return syntax.Return(self.transform_expr(stmt.value))
     
@@ -330,4 +326,3 @@ def apply_pipeline(fn, transforms):
   for T in transforms:
     fn = cached_apply(T, fn) 
   return fn 
-

@@ -22,8 +22,6 @@ reserved_names = {
   'None' : syntax.Const(None), 
 }
 
-
-
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
     return syntax.Const (arg.n)
@@ -52,8 +50,6 @@ def translate_args(args):
     assert isinstance(k, ast.Name)
     defaults[k] = translate_default_arg_value(v)
   return Args(positional, defaults)
-
-  
 
 #def collect_defs_from_node(node):
 #  """
@@ -145,21 +141,17 @@ class AST_Translator(ast.NodeVisitor):
   
   def visit_list(self, nodes):
     return map(self.visit, nodes)
-    
  
   def get_name(self, name):
     if name in reserved_names:
       return reserved_names[name]
     else:
       return syntax.Var(self.env[name])
-  
 
   def visit_Name(self, expr):  
-   
     assert isinstance(expr, ast.Name), "Expected AST Name object: %s" % expr
     old_name = expr.id
     return self.get_name(old_name)
-    
   
   def create_phi_nodes(self, left_scope, right_scope, new_names = {}):
     """
@@ -223,7 +215,8 @@ class AST_Translator(ast.NodeVisitor):
       else:
         return slice_elts[0]
     result = dispatch(expr, 'visit')
-    return result 
+    return result
+
   def visit_UnaryOp(self, expr):
     ssa_val = self.visit(expr.operand)
     prim = prims.find_ast_op(expr.op)
@@ -282,7 +275,6 @@ class AST_Translator(ast.NodeVisitor):
     if_stmt = syntax.If(cond, true_block, false_block, merge) 
     self.current_block().append(if_stmt)
     return result
-    
 
   def visit_lhs(self, lhs):
 
@@ -309,7 +301,6 @@ class AST_Translator(ast.NodeVisitor):
     false_scope, false_block = self.visit_block(stmt.orelse)
     merge = self.create_phi_nodes(true_scope, false_scope)
     return syntax.If(cond, true_block, false_block, merge)
-  
   
   def visit_While(self, stmt, counter = [0]):
     counter[0] = counter[0] + 1
@@ -429,8 +420,3 @@ def translate_function_value(fn):
     register_python_fn(fn, fundef)
     # print "Translated", fundef 
     return fundef   
-  
-
-  
-  
-  

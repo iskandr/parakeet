@@ -25,7 +25,7 @@ def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = None):
     fundef = syntax.Fn(fn_name, args.Args(positional = local_arg_names), body)
     function_registry.untyped_functions[fn_name] = fundef 
     _adverb_wrapper_cache[key] = fundef 
-    return fundef 
+    return fundef
 
 _adverb_registry = {}
 def is_registered_adverb(fn):
@@ -33,10 +33,10 @@ def is_registered_adverb(fn):
 
 def register_adverb(python_fn, wrapper):
   _adverb_registry[python_fn] = wrapper
-  
+
 def get_adverb_wrapper(python_fn):
   return _adverb_registry[python_fn]
-  
+
 def untyped_map_wrapper(fundef, axis = None):
   if not isinstance(fundef, syntax.Fn):
     fundef = ast_conversion.translate_function_value(fundef)

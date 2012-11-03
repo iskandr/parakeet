@@ -3,7 +3,7 @@ import numpy as np
 from llvm.ee import GenericValue
 
 import llvm_types
-from llvm_context import  opt_context
+from llvm_context import opt_context
 import core_types
 import type_conv
 import ctypes

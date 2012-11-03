@@ -1,8 +1,8 @@
-
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Bool, Int32, Int64, PtrT
+from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Bool, Int32,\
+                       Int64, PtrT
 from closure_type import ClosureT
 import prims 
 import syntax
@@ -329,7 +329,8 @@ from simplify import Simplify
 from constant_propagation import ConstantPropagation 
 
 def prepare_fn(fundef):
-  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing, ConstantPropagation, Simplify, LowerStructs])
+  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing,
+                                 ConstantPropagation, Simplify, LowerStructs])
 
 def compile_fn(fundef):
   if fundef.name in compiled_functions:

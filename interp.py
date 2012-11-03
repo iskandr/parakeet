@@ -121,8 +121,6 @@ def eval_fn(fn, actuals):
         result[i]  = call(nested_args)
       return np.array(result)
     
-    
-    
     result = dispatch(expr, 'expr')
     # we don't support python function's inside parakeet, 
     # they have to be translated into Parakeet functions
@@ -151,8 +149,7 @@ def eval_fn(fn, actuals):
       arr = eval_expr(lhs.value)
       idx = eval_expr(lhs.index)
       arr[idx] = rhs 
-      
-             
+
   def eval_stmt(stmt):
     if isinstance(stmt, syntax.Return):
       v = eval_expr(stmt.value)

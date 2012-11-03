@@ -7,12 +7,10 @@ import syntax_helpers
 import type_inference
 
 class LowerAdverbs(transform.Transform):
-  
   def flatten_array_arg(self, x):
     if isinstance(x.type, core_types.ScalarT):
       return x
     else:
-      
       assert isinstance(x.type, array_type.ArrayT), \
         "Arguments to adverbs must be scalars or arrays, got %s" % x
         
@@ -50,8 +48,6 @@ class LowerAdverbs(transform.Transform):
     
     merge = { counter.name : (counter_before, counter_after) }
     
-    
-    
     cond = self.lt(counter, niters)
     elt_t = expr.type.elt_type
     array_result = self.alloc_array(elt_t, niters)
@@ -59,17 +55,18 @@ class LowerAdverbs(transform.Transform):
     nested_args = [self.index(arg, counter) for arg in args]
     closure_t = fn.type
     nested_arg_types = syntax_helpers.get_types(nested_args)
-    call_result_t = type_inference.invoke_result_type(closure_t, nested_arg_types)
+    call_result_t = type_inference.invoke_result_type(closure_t,
+                                                      nested_arg_types)
     call = syntax.Invoke(fn, nested_args, type = call_result_t)
     call_result = self.assign_temp(call, "call_result")
     output_idx = syntax.Index(array_result, counter, type = call_result.type)
     self.assign(output_idx, call_result)
     self.assign(counter_after, self.add(counter, syntax_helpers.one_i64))
-  
+
     body = self.blocks.pop()
     self.blocks += syntax.While(cond, body, merge)
-    return array_result 
-  
+    return array_result
+
   def transform_AllPairs(self, expr):
     fn = self.transform_expr(expr.fn)
 
@@ -117,10 +114,7 @@ class LowerAdverbs(transform.Transform):
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
     body = self.blocks.pop()
     self.blocks += syntax.While(cond_i, body, merge_i)
-    return array_result 
-      
-  
+    return array_result
 
 def lower_adverbs(fn):
   return transform.cached_apply(LowerAdverbs, fn)
-  
