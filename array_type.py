@@ -77,7 +77,9 @@ class ArrayT(StructT):
       # slicing out a subset of my rows doesn't change my type 
       return self 
     elif isinstance(idx, tuple_type.TupleT):
-      assert len(idx.elt_types) == self.rank
+      n_indices = len(idx.elt_types)
+      assert n_indices == self.rank, \
+        "Can't use only %d indices with array of rank %d" % (n_indices, self.rank)
       return self.elt_type 
     else:
       raise RuntimeError("Unsupported index type: %s" % idx)

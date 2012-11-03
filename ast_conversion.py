@@ -53,36 +53,6 @@ def translate_args(args):
     defaults[k] = translate_default_arg_value(v)
   return Args(positional, defaults)
 
-  
-
-#def collect_defs_from_node(node):
-#  """
-#  Recursively traverse nested statements and collect 
-#  variable names from the left-hand-sides of assignments,
-#  ignoring variables if they appear within a slice or index
-#  """
-#  if isinstance(node, ast.While):
-#    return collect_defs_from_list(node.body + node.orelse)
-#  elif isinstance(node, ast.If):
-#    return collect_defs_from_list(node.body + node.orelse)
-#  if isinstance(node, ast.Assign):
-#    return collect_defs_from_list(node.targets)
-#  elif isinstance(node, ast.Name):
-#    return set([node.id])
-#  elif isinstance(node, ast.Tuple):
-#    return collect_defs_from_list(node.elts)
-#  elif isinstance(node, ast.List):
-#    return collect_defs_from_list(node.elts)
-#  else:
-#    return set([])
-        
-#def collect_defs_from_list(nodes):
-#  assert isinstance(nodes, list)
-#  defs = set([])
-#  for node in nodes:
-#    defs.update(collect_defs_from_node(node))
-#  return defs 
-
 
 def subst(node, rename_dict):
   if isinstance(node, syntax.Var):
@@ -249,7 +219,7 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.Index(value, index)
   
   def generic_visit(self, expr):
-    raise RuntimeError("Unsupported: %s" % expr) 
+    raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr), expr.__class__.__name__))
   
   def visit_Call(self, expr):
     fn, args, kwargs, starargs = \

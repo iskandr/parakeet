@@ -40,8 +40,15 @@ class Transform(object):
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
   
-  def assign(self, lhs, rhs):
-    self.insert_stmt(syntax.Assign(lhs, rhs))
+  def assign(self, lhs, rhs, recursive = False):
+    if recursive:
+      rhs = self.transform_expr(rhs)
+      lhs = self.transform_lhs(lhs)
+    stmt = syntax.Assign(lhs, rhs)
+    if recursive and \
+       self.transform_Assign.im_func != Transform.transform_Assign.im_func:
+      stmt = self.transform_Assign(stmt)
+    self.insert_stmt(stmt)
   
   def assign_temp(self, expr, name = "temp"):
     if isinstance(expr, syntax.Var):
@@ -50,6 +57,7 @@ class Transform(object):
       var = self.fresh_var(expr.type, name)
       self.assign(var, expr)
       return var 
+    
   def zero(self, t = core_types.Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
   
@@ -225,17 +233,40 @@ class Transform(object):
       args[member_name] = self.transform_if_expr(member_value)
     return expr.__class__(**args)
   
+  def find_method(self, expr, prefix = "transform_"):
+    method_name = prefix + expr.node_type()
+    if hasattr(self, method_name):
+      return getattr(self, method_name)
+    else:
+      return None
+  
+  
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
     """
-    method_name = "transform_" + expr.node_type()
-    if hasattr(self, method_name):
-      result = getattr(self, method_name)(expr)
+    method = self.find_method(expr, "transform_")
+    if method:
+      result = method(expr)
     else:
       result = self.transform_generic_expr(expr)
     assert result.type is not None, "Missing type for %s" % result 
     return result 
+  
+  def transform_lhs(self, lhs):
+    """
+    Overload this is you want different behavior
+    for transformation of left-hand side of assignments
+    """ 
+    lhs_method = self.find_method(lhs, prefix = "transform_lhs_")
+    if lhs_method:
+      return lhs_method(lhs)
+    
+    method = self.find_method(lhs, prefix = "transform_")
+    if method:
+      return method(lhs)
+    
+    return self.transform_expr(lhs)
   
   def transform_expr_list(self, exprs):
     return [self.transform_expr(e) for e in exprs]
@@ -248,12 +279,7 @@ class Transform(object):
       result[k] = new_left, new_right 
     return result 
   
-  def transform_lhs(self, lhs):
-    """
-    Overload this is you want different behavior
-    for transformation of left-hand side of assignments
-    """ 
-    return self.transform_expr(lhs)
+ 
   
   def transform_Assign(self, stmt):
     rhs = self.transform_expr(stmt.rhs)
@@ -281,7 +307,8 @@ class Transform(object):
     method_name = "transform_" + stmt.node_type()
     if hasattr(self, method_name):
       result = getattr(self, method_name)(stmt)
-    assert isinstance(result, syntax.Stmt), \
+    import types
+    assert isinstance(result, (syntax.Stmt, types.NoneType)), \
       "Expected statement: %s" % result 
     return result 
   
@@ -289,7 +316,8 @@ class Transform(object):
     self.blocks.push()
     for old_stmt in stmts:
       new_stmt = self.transform_stmt(old_stmt)
-      self.blocks.append_to_current(new_stmt)
+      if new_stmt:
+        self.blocks.append_to_current(new_stmt)
     return self.blocks.pop() 
   
   def apply(self):

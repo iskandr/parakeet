@@ -2,10 +2,12 @@ import transform
  
 import array_type 
 import core_types 
-import syntax
 
 class LowerIndexing(transform.Transform):
-  def transform_Index(self, expr):
+  
+  
+  
+  def transform_lhs_Index(self, expr):
     """
     For now assume we're only dealing with indexing by a single scalar
     """
@@ -30,6 +32,9 @@ class LowerIndexing(transform.Transform):
         elt_size = arr_t.elt_type.dtype.itemsize
         offset_elts = self.add(offset_elts, self.div(offset_bytes, elt_size, "offset_elt"))
     return self.index(data_ptr, offset_elts, temp = False)
+  
+  def transform_Index(self, expr):
+    return self.assign_temp(self.transform_lhs_Index(expr),"idx_result")
    
 def lower_indexing(fn):
   return transform.cached_apply(LowerIndexing, fn)

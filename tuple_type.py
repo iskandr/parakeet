@@ -66,6 +66,9 @@ class TupleT(StructT):
   def __repr__(self):
     return str(self)
   
+  def __iter__(self):
+    return iter(self.elt_types)
+  
   def index_type(self, idx):
     assert isinstance(idx, Expr), \
       "Tuple indices must be computed statically, so expected index to be expression"

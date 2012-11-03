@@ -1,5 +1,5 @@
 import parakeet as par 
-from parakeet import sum, allpairs
+from parakeet import sum, allpairs, multiply
 from testing_helpers import  expect, expect_allpairs, run_local_tests
 
 import numpy as np 
@@ -22,36 +22,23 @@ def loop_dot(x,y):
 def test_loopdot():
   expect_allpairs(loop_dot, np.dot, vectors)
 
-#def dot(x,y):
-#  return sum(x*y)
+def dot(x,y):
+  return sum(x*y)
 
-#def test_adverb_dot():
-#  expect_allpairs(dot, np.dot, vectors)
+def test_adverb_dot():
+  expect_allpairs(dot, np.dot, vectors)
 
-int_mat = np.reshape(np.arange(100), (10,10))
-float_mat = np.sqrt(int_mat)
-bool_mat = int_mat % 2
-
-#def adverb_matmult(X,Y):
-#  return allpairs(dot, X, Y, axis = 0)
-
-
-matrices = [int_mat, float_mat, bool_mat]
-
-#def test_adverb_matmult():
-#  expect_allpairs(adverb_matmult, np.dot, matrices)
-
-def loop_outer_prod(X,Y,Z):
-  nx = X.shape[0]
-  ny = Y.shape[0]  
+def loop_outer_prod(x,y,z):
+  nx = x.shape[0]
+  ny = y.shape[0]  
   i = 0
   while i < nx:
     j = 0 
     while j < ny:
-      Z[i,j] = X[i] * Y[j]
+      z[i,j] = x[i] * y[j]
       j = j + 1
     i = i + 1
-  return Z
+  return z
 
 def test_loop_outer_prod():
   for v1 in vectors:
@@ -60,7 +47,15 @@ def test_loop_outer_prod():
       v3 = np.zeros_like(res)
       expect(loop_outer_prod, [v1, v2, v3], res)
 
+def adverb_outer_prod(x,y):
+  return allpairs(multiply, x, y)
 
+def test_adverb_outer_prod():
+  expect_allpairs(adverb_outer_prod, np.multiply.outer, vectors)
+
+int_mat = np.reshape(np.arange(100), (10,10))
+float_mat = np.sqrt(int_mat)
+bool_mat = int_mat % 2
 
 def loop_matmult(X, Y, Z):
   n_rows = X.shape[0]
@@ -86,6 +81,16 @@ def test_loop_matmult():
       res = np.dot(X, Y)
       Z = np.zeros(res.shape, dtype = res.dtype)
       expect(loop_matmult, [X,Y,Z], res)
+
+
+def adverb_matmult(X,Y):
+  return allpairs(dot, X, Y, axis = 0)
+
+matrices = [int_mat, float_mat, bool_mat]
+
+#def test_adverb_matmult():
+#  expect_allpairs(adverb_matmult, np.dot, matrices)
+
       
 if __name__ == '__main__':
   run_local_tests()

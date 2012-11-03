@@ -46,7 +46,7 @@ def match(pattern, val, env, index_fn = match_nothing):
     env[name(pattern)] = val
   elif is_tuple(pattern):
     pat_elts = tuple_elts(pattern)
-    val_elts = val.elts 
+    val_elts = tuple_elts(val) 
     assert len(pat_elts) == len(val_elts), \
       "Mismatch between expected and given number of values"
     match_list(pat_elts, val_elts, env, index_fn)
