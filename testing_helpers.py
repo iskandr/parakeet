@@ -51,7 +51,7 @@ def expect(fn, args, expected):
   the correct result
   """
   untyped,  typed, all_args, compiled = specialize_and_compile(fn, args)
-   
+  print untyped 
   untyped_result = interp.eval_fn(untyped, all_args) 
   assert eq(untyped_result, expected), "Expected %s but got %s" % (expected, untyped_result)
 

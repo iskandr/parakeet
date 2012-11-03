@@ -49,12 +49,14 @@ def prim_wrapper(p):
 
 class Prim(object):
     
-  def __init__(self, fn, python_op_name = None,  
+  def __init__(self, fn, python_op_name = None,  symbol = None, 
                name = None, nin = None, nout = None):
     self.fn = fn
     prim_lookup_by_value[fn] = self
     
+    self.symbol = symbol 
     self.python_op_name = python_op_name
+    
     if python_op_name is not None:
       prim_lookup_by_op_name[python_op_name] = self
        
@@ -77,8 +79,6 @@ class Prim(object):
       self.nout = fn.nout 
     else:
       self.nout = 1
-    
-
     
     # for now only support ufuncs which describe their own type behavior 
     if hasattr(fn, 'types'):
@@ -173,19 +173,19 @@ logical_not = Logical(np.logical_not)
 logical_or = Logical(np.logical_or)
 #logical_xor = Logical(np.logical_xor, 'BitXor') 
 
-bitwise_not = Bitwise(np.bitwise_not, 'Invert')
-bitwise_and = Bitwise(np.bitwise_and, 'BitAnd')
-bitwise_or = Bitwise(np.bitwise_or, 'BitOr')
-bitwise_xor = Bitwise(np.bitwise_xor, 'BitXor') 
+bitwise_not = Bitwise(np.bitwise_not, 'Invert', '!')
+bitwise_and = Bitwise(np.bitwise_and, 'BitAnd', '&')
+bitwise_or = Bitwise(np.bitwise_or, 'BitOr', '|')
+bitwise_xor = Bitwise(np.bitwise_xor, 'BitXor', '^') 
 
-add = Arith(np.add, 'Add') 
-subtract = Arith(np.subtract, 'Sub') 
-multiply = Arith(np.multiply, 'Mult') 
-divide = Arith(np.divide, 'Div')
+add = Arith(np.add, 'Add', '+') 
+subtract = Arith(np.subtract, 'Sub', '-') 
+multiply = Arith(np.multiply, 'Mult', '*') 
+divide = Arith(np.divide, 'Div', '/')
 
-equal = Cmp(np.equal, 'Eq')
-not_equal = Cmp(np.not_equal, 'NotEq')
-less = Cmp(np.less, 'Lt')
-less_equal = Cmp(np.less_equal, 'LtE')
-greater = Cmp(np.greater, 'Gt')
-greater_equal = Cmp(np.greater_equal, 'GtE')
+equal = Cmp(np.equal, 'Eq', '==')
+not_equal = Cmp(np.not_equal, 'NotEq', '!=')
+less = Cmp(np.less, 'Lt', '<')
+less_equal = Cmp(np.less_equal, 'LtE', '<=')
+greater = Cmp(np.greater, 'Gt', '>')
+greater_equal = Cmp(np.greater_equal, 'GtE', '>=')

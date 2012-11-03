@@ -55,34 +55,67 @@ def translate_args(args):
 
   
 
-def collect_defs_from_node(node):
-  """
-  Recursively traverse nested statements and collect 
-  variable names from the left-hand-sides of assignments,
-  ignoring variables if they appear within a slice or index
-  """
-  if isinstance(node, ast.While):
-    return collect_defs_from_list(node.body + node.orelse)
-  elif isinstance(node, ast.If):
-    return collect_defs_from_list(node.body + node.orelse)
-  elif isinstance(node, ast.Assign):
-    return collect_defs_from_list(node.targets)
-  elif isinstance(node, ast.Name):
-    return set([node.id])
-  elif isinstance(node, ast.Tuple):
-    return collect_defs_from_list(node.elts)
-  elif isinstance(node, ast.List):
-    return collect_defs_from_list(node.elts)
-  else:
-    return set([])
+#def collect_defs_from_node(node):
+#  """
+#  Recursively traverse nested statements and collect 
+#  variable names from the left-hand-sides of assignments,
+#  ignoring variables if they appear within a slice or index
+#  """
+#  if isinstance(node, ast.While):
+#    return collect_defs_from_list(node.body + node.orelse)
+#  elif isinstance(node, ast.If):
+#    return collect_defs_from_list(node.body + node.orelse)
+#  if isinstance(node, ast.Assign):
+#    return collect_defs_from_list(node.targets)
+#  elif isinstance(node, ast.Name):
+#    return set([node.id])
+#  elif isinstance(node, ast.Tuple):
+#    return collect_defs_from_list(node.elts)
+#  elif isinstance(node, ast.List):
+#    return collect_defs_from_list(node.elts)
+#  else:
+#    return set([])
         
-def collect_defs_from_list(nodes):
-  assert isinstance(nodes, list)
-  defs = set([])
-  for node in nodes:
-    defs.update(collect_defs_from_node(node))
-  return defs 
+#def collect_defs_from_list(nodes):
+#  assert isinstance(nodes, list)
+#  defs = set([])
+#  for node in nodes:
+#    defs.update(collect_defs_from_node(node))
+#  return defs 
 
+
+def subst(node, rename_dict):
+  if isinstance(node, syntax.Var):
+    return syntax.Var(rename_dict.get(node.name, node.name) )
+  if isinstance(node, (syntax.Expr, syntax.Stmt)):
+    new_values = {}
+    for member_name in node.members:
+      old_v = getattr(node, member_name)
+      new_values[member_name] = subst(old_v, rename_dict)
+    new_node = node.__class__(**new_values)
+    return new_node
+
+  elif isinstance(node, list):
+    
+    return subst_list(node, rename_dict)
+  elif isinstance(node, tuple):
+    return subst_tuple(node, rename_dict)
+  elif isinstance(node, dict):
+    return subst_dict(node, rename_dict)
+  else:
+    return node 
+
+def subst_dict(old_dict, rename_dict):
+  new_dict = {}
+  for (k,v) in old_dict.iteritems():
+    new_dict[subst(k, rename_dict)] = subst(v, rename_dict)
+  return new_dict 
+
+def subst_list(nodes, rename_dict):
+  return [subst(node, rename_dict) for node in nodes]
+
+def subst_tuple(elts, rename_dict):
+  return tuple(subst_list(elts, rename_dict))
 
 class AST_Translator(ast.NodeVisitor):
 
@@ -149,14 +182,21 @@ class AST_Translator(ast.NodeVisitor):
       
     for (name, ssa_name) in right_scope.iteritems():
       if name not in left_scope:
-        left = self.get_name(name)
-        right = syntax.Var(ssa_name)
+        try: 
+          left = self.get_name(name)
+          right = syntax.Var(ssa_name)
     
-        if name in new_names:
-          new_name = new_names[name]
-        else:
-          new_name = self.env.fresh(name)
-        merge[new_name] = (left, right)
+          if name in new_names:
+            new_name = new_names[name]
+          else:
+            new_name = self.env.fresh(name)
+          merge[new_name] = (left, right)
+        except names.NameNotFound:
+          # for now skip over variables which weren't defined before 
+          # a control flow split, which means that loop-local variables
+          # can't be used after the loop. 
+          # TODO: Fix this. Maybe with 'undef' nodes? 
+          pass 
     return merge 
   
   def visit_slice(self, expr):
@@ -245,6 +285,7 @@ class AST_Translator(ast.NodeVisitor):
     
 
   def visit_lhs(self, lhs):
+
     if isinstance(lhs, ast.Name):
       return self.fresh_var(lhs.id)
     elif isinstance(lhs, ast.Tuple):
@@ -254,7 +295,6 @@ class AST_Translator(ast.NodeVisitor):
       return self.visit(lhs)
     
   def visit_Assign(self, stmt):  
-    print ast.dump(stmt)
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
     ssa_rhs = self.visit(stmt.value)
     ssa_lhs = self.visit_lhs(stmt.targets[0])
@@ -269,37 +309,26 @@ class AST_Translator(ast.NodeVisitor):
     false_scope, false_block = self.visit_block(stmt.orelse)
     merge = self.create_phi_nodes(true_scope, false_scope)
     return syntax.If(cond, true_block, false_block, merge)
-   
-  def visit_While(self, stmt):
-    print 
-    print 
-    print ast.dump(stmt)
-    assert stmt.orelse == [], "Expected empty orelse block, got: %s" % stmt.orelse 
-    
-    # push a scope for the version of variables appearing within the loop 
-    # create a new version for each var defined in the loop 
-    self.env.push()
-    for lhs_name in collect_defs_from_list(stmt.body):
-      self.env.fresh(lhs_name)
-        
-    # evaluate the condition in the context of the version of loop variables we see 
-    # at the start of the loop 
-    cond = self.visit(stmt.test)
-    # translate_block pushes an additional env which will track 
-    # the versions of variables throughout the loop, so we get back
-    # a dict with the last version of each variable 
-    loop_end_scope, body = self.visit_block(stmt.body)
-    loop_start_scope, _ = self.env.pop()
-    # given empty scope for right branch so we always merge with version of variable 
-    # before loop started 
-    merge_before = self.create_phi_nodes( {}, loop_end_scope, new_names = loop_start_scope)
-     
-    # don't provide a new_names dict so that fresh versions after the loop are created 
-    # for each var in the current env
-    merge_after = self.create_phi_nodes({},  loop_end_scope)
-
-    return syntax.While(cond, body, merge_before, merge_after)
   
+  
+  def visit_While(self, stmt, counter = [0]):
+    counter[0] = counter[0] + 1
+    cond = self.visit(stmt.test)
+    scope_after, body = self.visit_block(stmt.body)
+    merge = {}
+    substitutions = {}
+    curr_scope = self.env.current_scope()
+    for (k, name_after) in scope_after.iteritems():
+      if k in self.env:
+        name_before = self.env[k]
+        new_name = names.fresh(k)
+        merge[new_name] = (syntax.Var(name_before), syntax.Var(name_after))
+        substitutions[name_before]  = new_name
+        curr_scope[k] = name_after
+    cond = subst(cond, substitutions)
+    body = subst_list(body, substitutions)
+    return syntax.While(cond, body, merge)
+   
   def visit_block(self, stmts):
     self.env.push()
     curr_block = self.current_block()
@@ -307,7 +336,7 @@ class AST_Translator(ast.NodeVisitor):
       parakeet_stmt = self.visit(stmt)
       curr_block.append(parakeet_stmt)
     return self.env.pop()
-   
+    
   def visit_FunctionDef(self, node):
     """
     Translate a nested function 
@@ -394,12 +423,9 @@ def translate_function_value(fn):
     closure_cells = fn.func_closure
     if closure_cells is None:
       closure_cells = ()
-    print "TRANSLATING", fn
-    #print "globals", globals_dict
-    #print "free_vars", free_vars
-    #print "closure_cells", closure_cells
     
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
+    # print fundef 
     register_python_fn(fn, fundef)
     # print "Translated", fundef 
     return fundef   

@@ -19,7 +19,7 @@ class LowerAdverbs(transform.Transform):
       if x.type.rank <= 1:
         return x
       else:        
-        print "RAVEL ARG", x, x.type 
+        #print "RAVEL ARG", x, x.type 
         ravel_t = array_type.make_array_type(x.type.elt_type, 1)
         # TODO: Replace this dummy string with an actual ravel primitive 
         return self.assign_temp(syntax.Ravel(x, type = ravel_t), "ravel")
@@ -67,7 +67,7 @@ class LowerAdverbs(transform.Transform):
     self.assign(counter_after, self.add(counter, syntax_helpers.one_i64))
   
     body = self.blocks.pop()
-    self.blocks += syntax.While(cond, body, merge, {})
+    self.blocks += syntax.While(cond, body, merge)
     return array_result 
   
   def transform_AllPairs(self, expr):
@@ -116,7 +116,7 @@ class LowerAdverbs(transform.Transform):
     self.assign(output_idx, call_result)
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
     body = self.blocks.pop()
-    self.blocks += syntax.While(cond_i, body, merge_i, {})
+    self.blocks += syntax.While(cond_i, body, merge_i)
     return array_result 
       
   

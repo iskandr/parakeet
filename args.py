@@ -136,12 +136,10 @@ class Args:
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
-    print "linearize", self.arg_slots, positional_values 
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
     def assign(i, v):
-      print i,v
       result[i] = v
       assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
       bound[i] = True  

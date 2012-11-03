@@ -86,7 +86,7 @@ class ArrayT(StructT):
     x = np.asarray(x)
          
     ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
-    nelts = sum(x.shape)
+    nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
     total_bytes = nelts * elt_size 
     assert total_bytes == buffer_length, \
