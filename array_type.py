@@ -84,7 +84,6 @@ class ArrayT(StructT):
 
   def from_python(self, x):
     x = np.asarray(x)
-         
     ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
@@ -95,7 +94,6 @@ class ArrayT(StructT):
     ctypes_shape = self.shape_t.from_python(x.shape)
     
     ctypes_strides = self.strides_t.from_python(x.strides)
-
     return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape), ctypes.pointer(ctypes_strides))
     
   def to_python(self, obj):
@@ -107,14 +105,13 @@ class ArrayT(StructT):
     strides = self.strides_t.to_python(obj.strides.contents)
     elt_size = self.elt_type.nbytes
     assert any([stride == elt_size for stride in strides]), "Discontiguous array not yet supported"
-    n_elts = sum(shape)
+    n_elts = np.prod(shape)
     n_bytes = n_elts * elt_size 
     dest_buf = AllocateBuffer(n_bytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
     
     # copy data from pointer
     ctypes.memmove(dest_ptr, obj.data, n_bytes)
-    
     return np.ndarray(shape, dtype = self.elt_type.dtype, buffer = dest_buf, strides = strides)
    
 _array_types = {}

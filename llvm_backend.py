@@ -18,7 +18,7 @@ import llvm_context
 from compiled_fn import CompiledFn
  
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -141,7 +141,6 @@ def compile_expr(expr, env, builder):
       return llvm_convert.to_bit(field_value)
     else:
       return field_value  
-  
   
   def compile_Invoke():
 
@@ -352,10 +351,10 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   
-  # print "FUNDEF"
+  print "FUNDEF"
   print fundef 
   fundef = prepare_fn(fundef)
-  #print
+  print
   print "LOWERED"
   print fundef 
   env = CompilationEnv()
@@ -365,8 +364,7 @@ def compile_fn(fundef):
   print env.llvm_fn 
   env.llvm_context.run_passes(env.llvm_fn)
   
-  print "OPTIMIZIED"
-  
+  print "OPTIMIZED"
   print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 

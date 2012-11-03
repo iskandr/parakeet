@@ -7,7 +7,6 @@ import llvm.core as llcore
 def to_bit(llvm_value, builder):
   
   llvm_t = llvm_value.type
-  print llvm_value, llvm_t 
    
   if llvm_t == int1_t:
     return llvm_value 

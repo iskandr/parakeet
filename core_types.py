@@ -124,7 +124,6 @@ class StructT(Type):
     ctypes_fields = []
     
     for (field_name, parakeet_field_type) in self._fields_:
-      print field_name, parakeet_field_type 
       field_repr = parakeet_field_type.ctypes_repr
       # nested structures will be heap allocated 
       if isinstance(parakeet_field_type,  StructT):
@@ -216,7 +215,6 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
    
   parakeet_type = ParakeetClass(dtype)
   _dtype_to_parakeet_type[dtype] = parakeet_type
-  # print "REGISTERING", dtype,  _dtype_to_parakeet_type
   
   python_types = [dtype.type] + equiv_python_types 
   
@@ -317,8 +315,6 @@ def register_numeric_type(klass, dtype):
   return parakeet_type 
 
 def from_dtype(dtype):
-  # print "Looking up", dtype 
-  # print "Current table:", _dtype_to_parakeet_type
   return _dtype_to_parakeet_type[dtype]
 
 def from_char_code(c):
