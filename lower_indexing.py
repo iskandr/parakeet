@@ -20,17 +20,14 @@ class LowerIndexing(transform.Transform):
     idx_t = idx.type
     if isinstance(idx_t, core_types.IntT):
       stride0 = self.strides(arr, 0)
-      offset_bytes = self.mul(stride0, idx, "offset_bytes")
-      elt_size = arr_t.elt_type.dtype.itemsize
-      offset_elts = self.div(offset_bytes, elt_size, "offset_elt")
+      offset_elts= self.mul(stride0, idx, "offset_elts")
     else:
       offset_elts = self.zero_i64("offset")
       for i in xrange(len(idx_t.elt_types)):
         idx_i = self.assign_temp(self.tuple_proj(idx, i), "idx_%d" % i)
         stride = self.strides(arr, i)
-        offset_bytes = self.mul(stride, idx_i, "offset_bytes")
-        elt_size = arr_t.elt_type.dtype.itemsize
-        offset_elts = self.add(offset_elts, self.div(offset_bytes, elt_size, "offset_elt"))
+        elts_i = self.mul(stride, idx_i, "offset_bytes")
+        offset_elts = self.add(offset_elts, elts_i)
     return self.index(data_ptr, offset_elts, temp = False)
   
   def transform_Index(self, expr):

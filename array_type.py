@@ -95,7 +95,8 @@ class ArrayT(StructT):
         (x.shape, nelts, elt_size, total_bytes, buffer_length)
     ctypes_shape = self.shape_t.from_python(x.shape)
     
-    ctypes_strides = self.strides_t.from_python(x.strides)
+    strides_in_elts = tuple([s / elt_size for s in x.strides])
+    ctypes_strides = self.strides_t.from_python(strides_in_elts)
     return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape), ctypes.pointer(ctypes_strides))
     
   def to_python(self, obj):
@@ -104,9 +105,13 @@ class ArrayT(StructT):
     we just always copy data on the way out of Parakeet
     """
     shape = self.shape_t.to_python(obj.shape.contents)
-    strides = self.strides_t.to_python(obj.strides.contents)
+    
     elt_size = self.elt_type.nbytes
-    assert any([stride == elt_size for stride in strides]), "Discontiguous array not yet supported"
+    strides_in_elts = self.strides_t.to_python(obj.strides.contents)
+    assert any([stride == 1 for stride in strides_in_elts]), \
+      "Discontiguous array not yet supported"
+    strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
+   
     n_elts = np.prod(shape)
     n_bytes = n_elts * elt_size 
     dest_buf = AllocateBuffer(n_bytes)
@@ -114,7 +119,8 @@ class ArrayT(StructT):
     
     # copy data from pointer
     ctypes.memmove(dest_ptr, obj.data, n_bytes)
-    return np.ndarray(shape, dtype = self.elt_type.dtype, buffer = dest_buf, strides = strides)
+    return np.ndarray(shape, dtype = self.elt_type.dtype, 
+                      buffer = dest_buf, strides = strides_in_bytes)
    
 _array_types = {}
 def make_array_type(elt_t, rank):
