@@ -40,7 +40,6 @@ class LowerStructs(Transform):
     return syntax.Attribute(new_tuple, field_name, type = field_type)
   
   def transform_Array(self, expr):
-
     n = len(expr.elts)    
     array_t = expr.type
     assert isinstance(array_t, ArrayT)

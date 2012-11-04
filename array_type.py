@@ -109,7 +109,7 @@ class ArrayT(StructT):
     elt_size = self.elt_type.nbytes
     strides_in_elts = self.strides_t.to_python(obj.strides.contents)
     assert any([stride == 1 for stride in strides_in_elts]), \
-      "Discontiguous array not yet supported"
+      "Discontiguous array not supported, strides = %s" % (strides_in_elts,)
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
    
     n_elts = np.prod(shape)

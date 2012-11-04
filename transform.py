@@ -206,7 +206,7 @@ class Transform(object):
     ptr_t = core_types.ptr_type(elt_t)
     ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t), "data_ptr")
     shape = self.tuple( dims, "shape")
-    stride_elts = [syntax_helpers.const(elt_t.nbytes)]
+    stride_elts = [syntax_helpers.const(1)]
     # assume row-major for now!
     for d in reversed(dims[1:]):
       next_stride = self.mul(stride_elts[0], d, "dim")
