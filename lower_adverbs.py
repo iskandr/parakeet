@@ -50,8 +50,6 @@ class LowerAdverbs(transform.Transform):
     
     merge = { counter.name : (counter_before, counter_after) }
     
-    
-    
     cond = self.lt(counter, niters)
     elt_t = expr.type.elt_type
     array_result = self.alloc_array(elt_t, niters)
@@ -105,7 +103,7 @@ class LowerAdverbs(transform.Transform):
     elt_t = expr.type.elt_type
     array_result = self.alloc_array(elt_t, (nx, ny))
     self.blocks.push()
-    nested_args = [self.index(arg, (i, j)) for arg in args]
+    nested_args = [self.index(x, i), self.index(y, j)]
     closure_t = fn.type
     nested_arg_types = syntax_helpers.get_types(nested_args)
     call_result_t = type_inference.invoke_result_type(closure_t, nested_arg_types)

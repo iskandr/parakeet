@@ -94,6 +94,27 @@ def eval_fn(fn, actuals):
     def expr_TupleProj():
       return eval_expr(expr.tuple)[expr.index]
     
+    def call(fn, args):
+      if isinstance(fn, ClosureVal):
+        return eval_fn(fn.fn, fn.fixed_args + args)
+      else:
+        return fn(*args)
+    
+    def create_slice_idx(ndims, dim, i):
+      return tuple([i if d == dim else None for d in range(ndims)])
+    
+    def nested_arg(arg, dim, i):
+      if isinstance(arg, np.ndarray):
+        idx = create_slice_idx(np.rank(arg), dim, i)
+        return arg[idx]
+      else:
+        return arg 
+
+    def tile(x, outer_shape):
+      if isinstance(x, np.ndarray):
+        return np.tile(x, tuple(outer_shape) + (1,))
+      return np.tile(x, tuple(outer_shape))
+    
     def expr_Map():
       fn = eval_expr(expr.fn)
       args = map(eval_expr, expr.args)
@@ -105,24 +126,41 @@ def eval_fn(fn, actuals):
       assert len(max_shape) == 1
       n = max_shape[0]
       result = [None] * n 
-      def call(args):
-        if isinstance(fn, ClosureVal):
-          return eval_fn(fn.fn, fn.fixed_args + args)
-        else:
-          return fn(args)
-        
+      axis = 0
       for i in xrange(n):
-        nested_args = []
-        for arg in args:
-          if isinstance(arg, np.ndarray):
-            nested_args.append(arg[i])
-          else:
-            nested_args.append(arg)
-        result[i]  = call(nested_args)
+        nested_args = [nested_arg(arg, axis, i) for arg in args]
+        result[i]  = call(fn, nested_args)
       return np.array(result)
     
-    
-    
+    def expr_AllPairs():
+      fn = eval_expr(expr.fn)
+      assert len(expr.args) == 2
+      x = eval_expr(expr.args[0])
+      y = eval_expr(expr.args[1])
+      
+      if expr.axis is None:
+        axis = 0
+        x = np.ravel(x)
+        y = np.ravel(y)
+      else:
+        import syntax_helpers
+        axis = syntax_helpers.unwrap_constant(expr.axis)
+         
+      nx = x.shape[axis]
+      ny = y.shape[axis]
+      first_x = nested_arg(x, axis, 0)
+      first_args = [first_x, nested_arg(y, axis, 0)]
+      print fn, first_args
+      first_elt = call(fn, first_args)
+      result = tile(first_elt, (nx, ny))
+      for j in xrange(ny):
+        result[0,j] = call(fn, [first_x, nested_arg(y, axis, j)])
+      for i in xrange(1, nx):
+        for j in xrange(0, ny):
+          args = [nested_arg(x, axis, i), nested_arg(y, axis, j)] 
+          result[i, j] = call(fn, args)
+      return result 
+      
     result = dispatch(expr, 'expr')
     # we don't support python function's inside parakeet, 
     # they have to be translated into Parakeet functions
