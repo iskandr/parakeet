@@ -85,24 +85,29 @@ class LowerAdverbs(transform.Transform):
     nx = self.shape(x, axis)
     ny = self.shape(y, axis)
     
-    i_before = self.zero_i64("i_before")
-    i = self.fresh_i64("i_loop")
-    i_after = self.fresh_i64("i_after")
+    elt_t = expr.type.elt_type
+    array_result = self.alloc_array(elt_t, (nx, ny))
+   
     
-    merge_i = { i.name : (i_before, i_after) }
+    
+    
     
     j_before = self.zero_i64("j_before")
     j = self.fresh_i64("j")
     j_after = self.fresh_i64("i_after")
-    
     merge_j = { j.name : (j_before, j_after) }
-    
-    cond_i = self.lt(i, nx)
     cond_j = self.lt(j, ny)
     
-    elt_t = expr.type.elt_type
-    array_result = self.alloc_array(elt_t, (nx, ny))
+    i_before = self.zero_i64("i_before")
+    i = self.fresh_i64("i_loop")
+    i_after = self.fresh_i64("i_after")
+    merge_i = { i.name : (i_before, i_after) }
+    cond_i = self.lt(i, nx)
+    
+    
     self.blocks.push()
+    self.blocks.push()
+    
     nested_args = [self.index(x, i), self.index(y, j)]
     closure_t = fn.type
     nested_arg_types = syntax_helpers.get_types(nested_args)
@@ -112,9 +117,15 @@ class LowerAdverbs(transform.Transform):
     indices = self.tuple([i, j], "indices")
     output_idx = syntax.Index(array_result, indices, type = call_result.type)
     self.assign(output_idx, call_result)
+    
+    self.assign(j_after, self.add(j, syntax_helpers.one_i64))
+    inner_body = self.blocks.pop()
+    self.blocks += syntax.While(cond_j, inner_body, merge_j )
+    
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
-    body = self.blocks.pop()
-    self.blocks += syntax.While(cond_i, body, merge_i)
+    outer_body = self.blocks.pop()
+    self.blocks += syntax.While(cond_i, outer_body, merge_i)
+    
     return array_result 
       
   
