@@ -1,4 +1,3 @@
-import numpy as np 
 
 from llvm.ee import GenericValue 
 

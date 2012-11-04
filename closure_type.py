@@ -45,6 +45,8 @@ class ClosureT(StructT):
     
     closure_t = make_closure_type(untyped_fundef, closure_arg_types)
     closure_id = closure_signatures.get_id(closure_t)
+    
+    
     converted_args = map(type_conv.from_python, closure_args)
     return closure_t.ctypes_repr(closure_id, *converted_args)
   
@@ -89,6 +91,7 @@ import prims
 
 def typeof_prim(p):
   untyped_fn = prims.prim_wrapper(p)
+  print untyped_fn 
   return make_closure_type(untyped_fn, [])
 
 type_conv.register(prims.class_list, ClosureT, typeof_prim)

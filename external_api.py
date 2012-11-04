@@ -5,6 +5,7 @@ import type_inference
 import type_conv
 import llvm_backend 
 
+
 def specialize_and_compile(fn, args):
   if isinstance(fn, syntax.Fn):
     untyped = fn 
@@ -19,14 +20,14 @@ def specialize_and_compile(fn, args):
   # propagate types through function representation and all
   # other functions it calls 
   typed = type_inference.specialize(untyped, input_types)
-  
+
   # compile to native code 
   compiled = llvm_backend.compile_fn(typed)
 
-  return untyped, typed, all_args, compiled 
+  return untyped, typed, compiled, all_args
   
 def run(fn, args):
-  _, _, all_args, compiled = specialize_and_compile(fn, args)
+  _, _,  compiled, all_args = specialize_and_compile(fn, args)
   return compiled(*all_args)
 
 import adverb_helpers
@@ -46,7 +47,10 @@ def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
   # don't yet support unpacking a variable number of args
   default_wrapper_args = ['fn'] + default_args
   
-  default_wrapper = adverb_helpers.untyped_wrapper(adverb_class, default_wrapper_args, axis=default_axis)
+  default_wrapper = \
+    adverb_helpers.untyped_wrapper(adverb_class, 
+                                   default_wrapper_args, 
+                                   axis=default_axis)
   adverb_helpers.register_adverb(python_hook, default_wrapper)
   return python_hook
 

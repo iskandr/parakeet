@@ -16,6 +16,9 @@ from scoped_env import ScopedEnv
 from common import dispatch
 from args import Args 
 
+
+from subst import subst, subst_list 
+
 reserved_names = { 
   'True' : syntax.Const(True), 
   'False' : syntax.Const(False), 
@@ -53,39 +56,6 @@ def translate_args(args):
     defaults[k] = translate_default_arg_value(v)
   return Args(positional, defaults)
 
-
-def subst(node, rename_dict):
-  if isinstance(node, syntax.Var):
-    return syntax.Var(rename_dict.get(node.name, node.name) )
-  if isinstance(node, (syntax.Expr, syntax.Stmt)):
-    new_values = {}
-    for member_name in node.members:
-      old_v = getattr(node, member_name)
-      new_values[member_name] = subst(old_v, rename_dict)
-    new_node = node.__class__(**new_values)
-    return new_node
-
-  elif isinstance(node, list):
-    
-    return subst_list(node, rename_dict)
-  elif isinstance(node, tuple):
-    return subst_tuple(node, rename_dict)
-  elif isinstance(node, dict):
-    return subst_dict(node, rename_dict)
-  else:
-    return node 
-
-def subst_dict(old_dict, rename_dict):
-  new_dict = {}
-  for (k,v) in old_dict.iteritems():
-    new_dict[subst(k, rename_dict)] = subst(v, rename_dict)
-  return new_dict 
-
-def subst_list(nodes, rename_dict):
-  return [subst(node, rename_dict) for node in nodes]
-
-def subst_tuple(elts, rename_dict):
-  return tuple(subst_list(elts, rename_dict))
 
 class AST_Translator(ast.NodeVisitor):
 
