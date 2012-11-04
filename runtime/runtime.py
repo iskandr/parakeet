@@ -23,7 +23,13 @@ class Runtime():
     job_p = POINTER(job_t)
     thread_pool_p = POINTER(thread_pool_t)
 
-    self.libParRuntime = cdll.LoadLibrary("libparakeetruntime.so")
+    lib_name = "libparakeetruntime.so"
+    try:
+      dll = cdll.LoadLibrary(lib_name)
+    except:
+      dll = cdll.LoadLibrary("runtime/" + lib_name)
+
+    self.libParRuntime = dll
 
     # job.h
     self.libParRuntime.make_job.restype = job_p
@@ -601,7 +607,7 @@ class Runtime():
   def launch_job(self):
     self.libParRuntime.launch_job(
         self.thread_pool, self.work_functions, self.args, self.job,
-        cast(self.tile_sizes, POINTER(POINTER(c_inter_data[i].args = args;))), c_int(1))
+        cast(self.tile_sizes, POINTER(POINTER(c_int))), c_int(1))
 
   def relaunch_job(self):
     self.libParRuntime.launch_job(

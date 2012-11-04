@@ -4,7 +4,7 @@ import ctypes
 from llvm.ee import GenericValue
 import llvm_backend
 import numpy as np
-import runtime.runtime
+import runtime.runtime as runtime 
 import syntax
 import type_conv
 import type_inference

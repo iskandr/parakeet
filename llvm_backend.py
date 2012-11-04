@@ -319,22 +319,7 @@ def compile_block(stmts, env, builder):
   return builder, False
 
 compiled_functions = {}
-<<<<<<< HEAD
-
-from transform import apply_pipeline
-from lower_adverbs import LowerAdverbs
-from lower_structs import LowerStructs
-from lower_indexing import LowerIndexing
-from simplify import Simplify
-from constant_propagation import ConstantPropagation 
-
-def prepare_fn(fundef):
-  return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing,
-                                 ConstantPropagation, Simplify, LowerStructs])
-
-=======
 import lowering 
->>>>>>> aa4eb42aec7c7ee138eb38051d832cdd635c197c
 def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
