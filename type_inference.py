@@ -3,7 +3,6 @@ from collections import OrderedDict
 import syntax as untyped_ast
 import syntax as typed_ast
 
-
 import core_types
 import tuple_type
 import array_type 
@@ -11,7 +10,8 @@ import closure_type
 
 import type_conv
 import names 
-from function_registry import untyped_functions, find_specialization, add_specialization
+from function_registry import untyped_functions, find_specialization, \
+                              add_specialization
 from common import dispatch
 import args 
 from syntax_helpers import get_type, get_types, unwrap_constant
@@ -19,12 +19,9 @@ from syntax_helpers import get_type, get_types, unwrap_constant
 import adverbs 
 import adverb_helpers 
  
-
 class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg 
-
-
 
 class VarMap:
   def __init__(self):
@@ -41,10 +38,8 @@ class VarMap:
     else:
       return self.rename(old_name)
 
-
 _invoke_type_cache = {}
 def invoke_result_type(closure_t, arg_types):
-
   key = (closure_t, tuple(arg_types))
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
@@ -65,10 +60,7 @@ def invoke_result_type(closure_t, arg_types):
     _invoke_type_cache[key] = result_type 
     return result_type 
 
-
 def annotate_expr(expr, tenv, var_map):
-
-  
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
   
@@ -187,7 +179,6 @@ def annotate_expr(expr, tenv, var_map):
     closure = annotate_child(expr.fn)
     new_args = annotate_children(expr.args)
     arg_types = get_types(new_args)
-    
      
     axis = unwrap_constant(expr.axis)
     n_outer_axes = 2
@@ -199,8 +190,6 @@ def annotate_expr(expr, tenv, var_map):
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
   return result    
-
-
 
 def annotate_stmt(stmt, tenv, var_map ):  
   def infer_phi(result_var, val):
@@ -316,7 +305,6 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   adverbs for scalar operators applied to arrays
   """
   
-  
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(var_map.rename)
   # flatten the positional, keyword, and default args into their
@@ -333,8 +321,6 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   # if nothing ever gets returned, then set the return type to None
   if return_type == core_types.Unknown:
     assert False, "TO DO: Implement a none type"
-  
-  
     
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name), 
@@ -344,12 +330,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     return_type = return_type, 
     type_env = tenv)
 
-  
-  
-  
-
 def rewrite_typed(fn):
-  
   type_env = fn.type_env
   def lookup(var):
     return type_env[var]
@@ -462,7 +443,6 @@ def rewrite_typed(fn):
     return map(rewrite_stmt, stmts)
   
   fn.body = rewrite_block(fn.body)
-  
 
 def specialize(untyped, arg_types): 
   if isinstance(untyped, str):
@@ -479,7 +459,7 @@ def specialize(untyped, arg_types):
     rewrite_typed(typed_fundef)
     add_specialization(untyped_id, arg_types, typed_fundef)
     return typed_fundef 
- 
+
 def infer_return_type(untyped, arg_types):
   """
   Given a function definition and some input types, 
@@ -489,4 +469,3 @@ def infer_return_type(untyped, arg_types):
   """
   typed = specialize(untyped, arg_types)
   return typed.return_type 
-      

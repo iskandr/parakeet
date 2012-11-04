@@ -201,8 +201,9 @@ class Transform(object):
         
     array_t = array_type.make_array_type(elt_t, rank)
     ptr_t = core_types.ptr_type(elt_t)
-    ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t), "data_ptr")
-    shape = self.tuple( dims, "shape")
+    ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t),
+                               "data_ptr")
+    shape = self.tuple(dims, "shape")
     stride_elts = [syntax_helpers.const(elt_t.nbytes)]
     # assume row-major for now!
     for d in reversed(dims[1:]):

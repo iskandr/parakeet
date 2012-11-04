@@ -1,17 +1,15 @@
-import ctypes 
- 
+import ctypes
+
 from core_types import IncompatibleTypes, StructT
-import type_conv 
-from syntax import Expr, Const 
-
-
+import type_conv
+from syntax import Expr, Const
  
 class TupleT(StructT):
   rank = 0 
   _members = ['elt_types']
   
-  # signals to type inference algorithm to pass the value of an index into index_type
-  # rather than its type 
+  # signals to type inference algorithm to pass the value of an index into
+  # index_type rather than its type 
   static_indexing = True 
   
   def node_init(self):
@@ -36,8 +34,6 @@ class TupleT(StructT):
         c_elt = ctypes.pointer(c_elt)
       converted_elts.append(c_elt)
     return self.ctypes_repr(*converted_elts)
-  
-  
 
   def to_python(self, struct_obj):
     elt_values = []
@@ -71,15 +67,18 @@ class TupleT(StructT):
   
   def index_type(self, idx):
     assert isinstance(idx, Expr), \
-      "Tuple indices must be computed statically, so expected index to be expression"
+      "Tuple indices must be computed statically, so expected index to be " +\
+      "expression"
     assert isinstance(idx, Const), "Unsupported expression: %s" % idx
     idx = int(idx.value)
     assert 0 <= idx < len(self.elt_types), \
-      "Can't get element %d from tuple of length %d" % (idx, len(self.elt_types))
+      "Can't get element %d from tuple of length %d" % \
+      (idx, len(self.elt_types))
     return self.elt_types[idx] 
     
   def combine(self, other):
-    if isinstance(other, TupleT) and len(other.elt_types) == len(self.elt_types):
+    if isinstance(other, TupleT) and \
+       len(other.elt_types) == len(self.elt_types):
       combined_elt_types = [t1.combine(t2) for \
                             (t1, t2) in zip(self.elt_types, other.elt_tyepes)]
       if combined_elt_types != self.elt_types:
@@ -100,7 +99,6 @@ def repeat_tuple(t, n):
     _tuple_types[elt_types] = tuple_t
     return tuple_t 
 
-
 def make_tuple_type(elt_types):
   """
   Use this memoized construct to avoid
@@ -119,7 +117,3 @@ def typeof(python_tuple):
   return make_tuple_type(map(type_conv.typeof, python_tuple))
 
 type_conv.register(tuple, TupleT, typeof)
-
-
-
-

@@ -1,8 +1,7 @@
 from node import Node 
 import numpy as np 
 import type_conv
-import dtypes 
-
+import dtypes
 
 class TypeFailure(Exception):
   def __init__(self, msg):
@@ -19,12 +18,9 @@ class IncompatibleTypes(Exception):
   def __str__(self):
     return repr(self)
   
-  
 class Type(Node):     
   def combine(self, other):
     raise IncompatibleTypes(self, other)
-  
-
 
 class AnyT(Type):
   """top of the type lattice, absorbs all types"""
@@ -41,11 +37,8 @@ class UnknownT(Type):
   def  combine(self, other):
     return other
 
-
-
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
-
 
 class NoneT(Type):
   _members = []
@@ -54,8 +47,6 @@ class NoneT(Type):
       return self
     else:
       raise IncompatibleTypes(self, other)
-  
-  
 
 NoneType = NoneT()
 
@@ -103,7 +94,6 @@ class StructT(Type):
   
   _repr_cache = {}
   
-  
   def field_type(self, name):
     for (field_name, field_type) in self._fields_:
       if field_name == name:
@@ -138,8 +128,7 @@ class StructT(Type):
       _fields_ = ctypes_fields
     Repr.__name__ = self.node_type() +"_Repr"
     self._repr_cache[self] = Repr
-    return Repr  
-  
+    return Repr
   
 ###################################################
 #                                                 #
@@ -212,14 +201,13 @@ class ScalarT(ConcreteT):
 
 _dtype_to_parakeet_type = {}
 def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
-   
   parakeet_type = ParakeetClass(dtype)
   _dtype_to_parakeet_type[dtype] = parakeet_type
   
   python_types = [dtype.type] + equiv_python_types 
   
   for python_type in python_types:
-      type_conv.register(python_type, parakeet_type) 
+    type_conv.register(python_type, parakeet_type) 
 
   return parakeet_type 
    
@@ -238,8 +226,8 @@ Bool = register_scalar_type(BoolT, dtypes.bool8, equiv_python_types = [bool])
 
 class UnsignedT(IntT):
   def node_init(self):
-    assert dtypes.is_unsigned(self.dtype), "Expected unsigned but got %s" % self.dtype
-
+    assert dtypes.is_unsigned(self.dtype), \
+           "Expected unsigned but got %s" % self.dtype
 
 UInt8 = register_scalar_type(UnsignedT, dtypes.uint8)
 
@@ -254,8 +242,8 @@ class SignedT(IntT):
 Int8 = register_scalar_type(SignedT, dtypes.int8)
 Int16 = register_scalar_type(SignedT, dtypes.int16)
 Int32 = register_scalar_type(SignedT, dtypes.int32)
-Int64 = register_scalar_type(SignedT, dtypes.int64, equiv_python_types = [int, long])
-
+Int64 = register_scalar_type(SignedT, dtypes.int64,
+                             equiv_python_types = [int, long])
 
 class FloatT(ScalarT):
   _members = []
@@ -263,9 +251,8 @@ class FloatT(ScalarT):
     assert dtypes.is_float(self.dtype)
 
 Float32 = register_scalar_type(FloatT, dtypes.float32)
-Float64 = register_scalar_type(FloatT, dtypes.float64, equiv_python_types = [float])
-
-
+Float64 = register_scalar_type(FloatT, dtypes.float64,
+                               equiv_python_types = [float])
 
 def complex_conj(x):
   np.complex(x.real, -x.imag)
@@ -280,9 +267,8 @@ class ComplexT(ScalarT):
     assert dtypes.is_complex(self.dtype)
     self._fields_ = [('real', self.elt_type), ('imag', self.elt_type)]
       
-Complex64 = ComplexT(dtypes.float32, dtypes.complex64 )
-Complex128 = ComplexT(dtypes.float64, dtypes.complex128  )
-
+Complex64 = ComplexT(dtypes.float32, dtypes.complex64)
+Complex128 = ComplexT(dtypes.float64, dtypes.complex128)
 
 class ConstIntT(IntT):
   """
@@ -307,8 +293,6 @@ def is_scalar_subtype(t1, t2):
     ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or \
      (isinstance(t1, IntT) and isinstance(t2, FloatT)))
 
-
-
 def register_numeric_type(klass, dtype):
   parakeet_type = klass(dtype)
   _dtype_to_parakeet_type[dtype] = parakeet_type
@@ -320,10 +304,6 @@ def from_dtype(dtype):
 def from_char_code(c):
   numpy_type = np.typeDict[c]
   return from_dtype(np.dtype(numpy_type))
-
-
-
-
 
 ###########################################
 #

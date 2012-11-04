@@ -81,7 +81,7 @@ class CompilationEnv:
 def compile_expr(expr, env, builder):
   # print "  EXPR: ", expr 
   def compile_Var():
-    ref =  env[expr.name]
+    ref = env[expr.name]
     val = builder.load(ref, expr.name + "_val")
     return val 
   def compile_Const():
@@ -97,7 +97,7 @@ def compile_expr(expr, env, builder):
     name = expr.type.node_type() 
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
       
-    for (i, elt)  in enumerate(expr.args):
+    for (i, elt) in enumerate(expr.args):
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
@@ -213,7 +213,6 @@ def compile_merge_left(phi_nodes, env, builder):
     ref = env[name]
     value = compile_expr(left, env, builder)
     builder.store(value, ref)
-     
     
 def compile_merge_right(phi_nodes, env, builder):
   for name, (_, right) in phi_nodes.iteritems():

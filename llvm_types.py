@@ -1,4 +1,3 @@
-
 import llvm.core as llcore 
 from llvm.core import Type as lltype
 from core_types import ScalarT, PtrT
@@ -19,9 +18,8 @@ ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
 def is_scalar(llvm_t):
-  return isinstance(llvm_t, llcore.IntegerType) or llvm_t in (float32_t, float64_t)
-
-
+  return isinstance(llvm_t, llcore.IntegerType) or \
+         llvm_t in (float32_t, float64_t)
 
 _ctypes_scalars_to_llvm_types = {
 
@@ -78,7 +76,6 @@ def ctypes_to_lltype(ctypes_repr, name = None):
   else:
     return ctypes_scalar_to_lltype(ctypes_repr) 
 
-
 def llvm_value_type(t):
   return ctypes_to_lltype(t.ctypes_repr, t.node_type())
 
@@ -88,8 +85,6 @@ def llvm_ref_type(t):
     return llvm_value_t
   else:
     return lltype.pointer(llvm_value_t)
-  
-
 
 # we allocate heap slots for output scalars before entering the
 # function
@@ -99,7 +94,3 @@ def to_llvm_output_type(t):
     return lltype.pointer(llvm_type)
   else:
     return llvm_type
-  
-
-         
-     

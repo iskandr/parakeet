@@ -1,5 +1,8 @@
-import ast_conversion 
+import ast_conversion
+import ctypes
+from llvm.ee import GenericValue
 import llvm_backend
+import numpy as np
 import runtime.runtime
 import syntax 
 import type_conv
@@ -52,53 +55,59 @@ def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
   adverb_helpers.register_adverb(python_hook, default_wrapper)
   return python_hook
 
-seq_each = create_adverb_hook(adverbs.Map)
+each = create_adverb_hook(adverbs.Map)
 allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
                               default_axis = 0)
 seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['acc', 'x'])
 seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['acc', 'x'])
 
-runtime = runtime.Runtime()
+rt = runtime.Runtime()
 
-def each(fn, *args, **kwds):
-  # Create the closure that implements the mapped function
-  if not isinstance(fn, syntax.Fn):
-    fundef = ast_conversion.translate_function_value(fn)
-
+def par_each(fn, *args, **kwds):
+  arg_types = map(type_conv.typeof, args)
+  nested_types = Map.nested_arg_types(arg_types)
+  untyped = ast_conversion.translate_function_value(fn)
+  typed = type_inference.specialize(untyped, nested_types)
+  compiled = llvm_backend.compile(typed)
+  
   # Don't handle outermost axis = None yet  
   assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-
-  # TODO: Should make sure that all the shapes conform here, 
-  # but we don't yet have anything like assertions or error handling
+  
+  # Allocate output storage
   max_arg = adverb_helpers.max_rank_arg(args)
   niters = self.shape(max_arg, axis)
+  output_array_t = typed.return_type * niters
+  output_array = output_array_t()
   
-  # UGH generating code into SSA form is annoying 
-  counter_before = self.zero_i64("i_before")
-  counter = self.fresh_i64("i_loop")
-  counter_after = self.fresh_i64("i_after")
+  # Create wrapper functions
+  wrappers = []
+  for i in range(rt.dop):
+    wrapper_arg_names = ["start", "stop", "args", "tile_sizes"]
+    wrapper_arg_vars = map(syntax.Var, wrapper_arg_names)
+    
+    # UGH generating code into SSA form is annoying 
+    counter_before = self.zero_i64("i_before")
+    counter = self.fresh_i64("i_loop")
+    counter_after = self.fresh_i64("i_after")
+    
+    merge = {counter.name : (counter_before, counter_after)}
+    
+    cond = self.lt(counter, niters)
+    elt_t = expr.type.elt_type
+    array_result = self.alloc_array(elt_t, niters)
+    self.blocks.push()
+    nested_args = [self.index(arg, counter) for arg in args]
+    closure_t = fn.type
+    nested_arg_types = syntax_helpers.get_types(nested_args)
+    call_result_t = type_inference.invoke_result_type(closure_t,
+                                                      nested_arg_types)
+    call = syntax.Invoke(fn, nested_args, type = call_result_t)
+    call_result = self.assign_temp(call, "call_result")
+    output_idx = syntax.Index(array_result, counter, type = call_result.type)
+    self.assign(output_idx, call_result)
+    self.assign(counter_after, self.add(counter, syntax_helpers.one_i64))
   
-  merge = { counter.name : (counter_before, counter_after) }
-  
-  cond = self.lt(counter, niters)
-  elt_t = expr.type.elt_type
-  array_result = self.alloc_array(elt_t, niters)
-  self.blocks.push()
-  nested_args = [self.index(arg, counter) for arg in args]
-  closure_t = fn.type
-  nested_arg_types = syntax_helpers.get_types(nested_args)
-  call_result_t = type_inference.invoke_result_type(closure_t,
-                                                    nested_arg_types)
-  call = syntax.Invoke(fn, nested_args, type = call_result_t)
-  call_result = self.assign_temp(call, "call_result")
-  output_idx = syntax.Index(array_result, counter, type = call_result.type)
-  self.assign(output_idx, call_result)
-  self.assign(counter_after, self.add(counter, syntax_helpers.one_i64))
-
-  body = self.blocks.pop()
-  self.blocks += syntax.While(cond, body, merge)
-  return array_result
-  
-  # Create the wrapper function that unpacks the args and executes the closure
-  wrapper_arg_names = ['fn', 'start', 'stop', 'args', 'tile_sizes']
+    body = self.blocks.pop()
+    self.blocks += syntax.While(cond, body, merge)
+    return array_result
   
