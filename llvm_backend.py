@@ -319,6 +319,7 @@ def compile_block(stmts, env, builder):
   return builder, False
 
 compiled_functions = {}
+<<<<<<< HEAD
 
 from transform import apply_pipeline
 from lower_adverbs import LowerAdverbs
@@ -331,25 +332,20 @@ def prepare_fn(fundef):
   return apply_pipeline(fundef, [LowerAdverbs, LowerIndexing,
                                  ConstantPropagation, Simplify, LowerStructs])
 
+=======
+import lowering 
+>>>>>>> aa4eb42aec7c7ee138eb38051d832cdd635c197c
 def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
-  
-  #print "FUNDEF"
-  #print fundef 
-  fundef = prepare_fn(fundef)
-  #print
-  #print "LOWERED"
-  #print fundef 
+  fundef = lowering.lower(fundef)
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)   
   compile_block(fundef.body, env, start_builder)
-  #print "RAW LLVM"
-  #print env.llvm_fn 
   env.llvm_context.run_passes(env.llvm_fn)
   
-  #print "OPTIMIZED"
-  #print env.llvm_fn 
+  print "OPTIMIZED"
+  print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
   

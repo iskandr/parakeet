@@ -70,7 +70,7 @@ class Runtime():
     self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
 
   def run_untiled_job(self, fn, args, num_iters):
-    
+    pass
 
   def run_job(self, tiled_ast, args, num_iters,
               tiled_loop_iters, tiled_loop_parents):
@@ -601,7 +601,7 @@ class Runtime():
   def launch_job(self):
     self.libParRuntime.launch_job(
         self.thread_pool, self.work_functions, self.args, self.job,
-        cast(self.tile_sizes, POINTER(POINTER(c_int))), c_int(1))
+        cast(self.tile_sizes, POINTER(POINTER(c_inter_data[i].args = args;))), c_int(1))
 
   def relaunch_job(self):
     self.libParRuntime.launch_job(

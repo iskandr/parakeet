@@ -51,7 +51,7 @@ def adverb_outer_prod(x,y):
   return allpairs(multiply, x, y)
 
 def test_adverb_outer_prod():
-  expect_allpairs(adverb_outer_prod, np.multiply.outer, vectors)
+  expect_allpairs(adverb_outer_prod, np.multiply.outer, [int_vec])
 
 int_mat = np.reshape(np.arange(100), (10,10))
 float_mat = np.sqrt(int_mat)

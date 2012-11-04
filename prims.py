@@ -35,7 +35,7 @@ _untyped_prim_wrappers = {}
 def prim_wrapper(p):
   """Given a primitive, return an untyped function which calls that prim"""
   if p in _untyped_prim_wrappers:
-    return _untyped_prim_wrappers
+    return _untyped_prim_wrappers[p]
   else:
     fn_name = names.fresh(p.name)
     arg_names = names.fresh_list(p.nin)

@@ -1,5 +1,3 @@
-import numpy as np
-
 from llvm.ee import GenericValue
 
 import llvm_types
@@ -51,7 +49,7 @@ class CompiledFn:
     self.llvm_fn = llvm_fn
     self.parakeet_fn = parakeet_fn
     self.exec_engine = exec_engine
-  
+
   def __call__(self, *args):
     actual_types = map(type_conv.typeof, args)
     expected_types = self.parakeet_fn.input_types

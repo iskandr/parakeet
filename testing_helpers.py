@@ -59,16 +59,19 @@ def expect(fn, args, expected):
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
   """
-  untyped,  typed, all_args, compiled = specialize_and_compile(fn, args) 
+  untyped,  typed, compiled, all_args = specialize_and_compile(fn, args) 
   
   untyped_result = interp.eval_fn(untyped, copy_list(all_args)) 
-  assert eq(untyped_result, expected), "Expected %s but got %s" % (expected, untyped_result)
+  assert eq(untyped_result, expected), \
+    "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
 
   typed_result = interp.eval_fn(typed, copy_list(all_args))
-  assert eq(typed_result, expected), "Expected %s but got %s" % (expected, typed_result)
+  assert eq(typed_result, expected), \
+    "Expected %s but typed fn returned %s" % (expected, typed_result)
 
   llvm_result = compiled(*all_args)
-  assert eq(llvm_result, expected), "Expected %s but got %s" % (expected, llvm_result)
+  assert eq(llvm_result, expected), \
+    "Expected %s but compiled fn return %s" % (expected, llvm_result)
 
 
 def expect_each(parakeet_fn, python_fn, inputs):

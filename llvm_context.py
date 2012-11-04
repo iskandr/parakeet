@@ -8,7 +8,7 @@ class LLVM_Context:
     'mem2reg', 
     'simplifycfg', 'dce', 'sccp', 'gvn',  
     'memcpyopt', 
-    'licm', 'loop-simplify', 'indvars'
+    'licm', 'loop-simplify', 'indvars',
   ]
 
   def __init__(self, module_name, optimize = True, verify = False):

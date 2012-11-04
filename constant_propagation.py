@@ -30,7 +30,6 @@ def match(lhs, rhs, env):
     for (lhs_elt, rhs_elt) in zip(lhs.elts, rhs.elts):
       match(lhs_elt, rhs_elt, env)
         
-    
 
 class ConstantPropagation(transform.Transform):
   def __init__(self, fn):

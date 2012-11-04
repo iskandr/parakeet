@@ -71,7 +71,10 @@ class Var(Expr):
       return "var(%s)" % self.name
 
   def __str__(self):
-    return self.name
+    if hasattr(self, 'type'):
+      return "%s : %s" % (self.name, self.type)
+    else:
+      return self.name
 
 class Attribute(Expr):
   _members = ['value', 'name']

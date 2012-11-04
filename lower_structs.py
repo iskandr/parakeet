@@ -60,7 +60,7 @@ class LowerStructs(Transform):
     shape = self.transform_Tuple(const_tuple(n))
     shape_var = self.fresh_var(shape.type, "shape")
     self.assign(shape_var, shape)
-    strides = self.transform_Tuple(const_tuple(elt_t.nbytes))
+    strides = self.transform_Tuple(const_tuple(1))
     strides_var = self.fresh_var(strides.type, "strides")
     self.assign(strides_var, strides)
     return syntax.Struct([ptr_var, shape_var, strides_var], type = expr.type)
