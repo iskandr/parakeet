@@ -305,6 +305,13 @@ def from_char_code(c):
   numpy_type = np.typeDict[c]
   return from_dtype(np.dtype(numpy_type))
 
+def is_scalar(t):
+  return isinstance(t, ScalarT)
+
+def all_scalars(ts):
+  return all(map(is_scalar, ts))
+
+
 ###########################################
 #
 #  Pointers! 

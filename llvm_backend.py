@@ -104,6 +104,15 @@ def compile_expr(expr, env, builder):
 
     return struct_ptr
   
+  def compile_IntToPtr():
+    addr = compile_expr(expr.value, env, builder)
+    llvm_t = llvm_types.llvm_value_type(expr.type)
+    return builder.inttoptr(addr, llvm_t, "int_to_ptr")
+  
+  def compile_PtrToInt():
+    ptr = compile_expr(expr.value, env, builder)
+    return builder.ptrtoint(ptr, llvm_types.int64_t, "ptr_to_int")
+  
   def compile_Alloc():
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)

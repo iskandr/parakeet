@@ -146,3 +146,9 @@ def collect_constant(expr):
 
 def collect_constants(exprs):
   return map(collect_constant, exprs)
+
+def is_scalar(expr):
+  return isinstance(expr.type, core_types.ScalarT)
+
+def all_scalars(exprs):
+  return all(map(is_scalar, exprs))

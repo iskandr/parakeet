@@ -12,6 +12,8 @@ import function_registry
 import syntax_helpers
 
 from nested_blocks import NestedBlocks
+from llvm_types import ptr_int32_t
+
 
 class Transform(object):
   def __init__(self, fn):
@@ -71,6 +73,25 @@ class Transform(object):
     else:
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
   
+  def ptr_to_int(self, ptr):
+    return syntax.PtrToInt(ptr, type = core_types.Int64)
+  
+  def int_to_ptr(self, addr, ptr_t):
+    addr = self.cast(addr, core_types.Int64)
+    return syntax.IntToPtr(addr, type = ptr_t)
+  
+  def incr_ptr(self, ptr, offset):
+    """
+    Add an offset to a pointer to yield a new pointer
+    """
+    offset = syntax_helpers.wrap_if_constant(offset)
+    if syntax_helpers.is_zero(offset):
+      return ptr
+    else:
+      old_addr = self.ptr_to_int(ptr)
+      new_addr = self.add(old_addr, self.cast(offset, core_types.Int64))
+      return self.int_to_ptr(new_addr, ptr.type)
+  
   def index(self, arr, idx, temp = True):
     """
     Index into array or tuple differently depending on the type
@@ -114,8 +135,12 @@ class Transform(object):
       
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
-    t = tup.type.elt_types[idx]
-    return syntax.TupleProj(tup, idx, type = t)
+    
+    if isinstance(tup, syntax.Tuple):
+      return tup.elts[idx]
+    else:
+      t = tup.type.elt_types[idx] 
+      return syntax.TupleProj(tup, idx, type = t)
         
   def prim(self, prim_fn, args, name = None):
     args = wrap_constants(args)

@@ -102,7 +102,7 @@ class Tuple(Expr):
 
 class Array(Expr):
   _members = ['elts']
-
+  
 class Closure(Expr):
   """
   Create a closure which points to a global fn
@@ -160,6 +160,13 @@ class ConstArrayLike(Expr):
   set to the second arg
   """
   _members = ['array', 'value']
+
+class ArrayView(Expr):
+  """
+  Create a new view on already allocated underlying data
+  """
+  _members = ['data', 'shape', 'strides']
+  
 
 class Fn(Node):
   """
@@ -225,6 +232,20 @@ class Alloc(Expr):
   Allocates a block of data, returns a pointer
   """
   _members = ['elt_type', 'count']
+  
+class IntToPtr(Expr):
+  """
+  Reinterpret an integer as a pointer to the specified type
+  """ 
+  _members = ['value']
+
+
+class PtrToInt(Expr):
+  """
+  Convert the address of a pointer into an integer
+  """  
+  _members = ['value']
+
 
 class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
