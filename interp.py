@@ -172,16 +172,20 @@ def eval_fn(fn, actuals):
       fn, args, axis = adverb_prelude()
       shape = max_shape(args)
       n = shape[axis]
-      if expr.init:
+      if hasattr(expr, 'init') and expr.init:
         acc = eval_expr(expr.init)
         start = 0
       else:
         assert len(args) == 1
+        x = args[0]
+        assert n == x.shape[axis]
         assert n >= 2
-        acc = call(fn, [args[0], args[1]])
+        
+        
+        acc = call(fn, [nested_arg(x, axis, 0), nested_arg(x, axis, 1)])
         start = 2
       for i in xrange(start, n):
-        acc = call(fn, [acc] + nested_args(args, axis, i))
+        acc = call(fn, [acc, nested_arg(x, axis, i)])
       return acc   
       
     result = dispatch(expr, 'expr')

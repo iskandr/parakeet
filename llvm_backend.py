@@ -161,37 +161,57 @@ def compile_expr(expr, env, builder):
       return field_value  
   
   def compile_Invoke():
+    print "INVOKE"
     closure_t = expr.closure.type
+    print "CLOSURE_TYPE", closure_t
     assert isinstance(closure_t, ClosureT)
     arg_types = [arg.type for arg in expr.args] 
     
+    print "ARG_TYPES", arg_types 
     closure_object = compile_expr(expr.closure, env, builder)
-
+    print "CLOSURE OBJECT", closure_object, closure_object.type 
+    
     # get the int64 identifier which maps to an untyped_fn/arg_types pairs
     
     untyped_fn_id = closure_t.fn
+    print "UNTYPED FN ID", untyped_fn_id
     assert isinstance(untyped_fn_id, str), \
            "Expected %s to be string identifier" % (untyped_fn_id)
+    
     full_arg_types = closure_t.args + tuple(arg_types)
+    print "FULL ARG TYPES", full_arg_types
     # either compile the function we're about to invoke or get its compiled form
     # from a cache
     typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
+    print "found typed_fundef: %s" % typed_fundef.name 
     target_fn_info = compile_fn(typed_fundef)
-    target_fn = target_fn_info.llvm_fn 
-      
+    print "Compiled fundef"
+    target_fn = target_fn_info.llvm_fn
+    
     llvm_closure_args = []
     
-    for (closure_arg_idx, _) in enumerate(closure_t.args):
-      arg_ptr = builder.gep(closure_object, [int32(0), int32(closure_arg_idx)],
-                            "closure_arg%d_ptr" % closure_arg_idx)
-      arg = builder.load(arg_ptr, "closure_arg%d" % closure_arg_idx)
+    for (closure_arg_idx, t) in enumerate(closure_t.args):
+      print "building closure_arg %d : %s" % (closure_arg_idx, t) 
+      name = "closure_arg%d" % closure_arg_idx
+      # the first slot is actually the closure's ID, so 
+      # each data arg is found at one position above its index
+      gep_indices = [int32(0), int32(closure_arg_idx+1)]
+      arg_ptr = builder.gep(closure_object, gep_indices, name + "_ptr")
+      arg = builder.load(arg_ptr, name)
       llvm_closure_args.append(arg)
-    
+    print "built closure args"
     llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
-    full_args_list = llvm_closure_args + llvm_direct_args 
-    assert len(full_args_list) == len(full_arg_types)  
-    return builder.call(target_fn, full_args_list, 'invoke_result')
     
+    full_args_list = llvm_closure_args + llvm_direct_args
+    print expr 
+    print "full_args_list", full_args_list
+    print "arg types", [arg.type for arg in full_args_list] 
+    print "target_fn", target_fn 
+    assert len(full_args_list) == len(full_arg_types)  
+    res = builder.call(target_fn, full_args_list, 'invoke_result')
+    print "DONE", res
+    return res 
+  
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args 
