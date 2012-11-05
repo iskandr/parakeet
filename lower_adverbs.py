@@ -34,10 +34,13 @@ class LowerAdverbs(transform.Transform):
       axis = 0
     return fn, args, axis
   
+
+  
+  
   def transform_Map(self, expr):
     fn, args, axis = self.adverb_prelude(expr)
       
-    if all( [arg.type.rank == 0 for arg in args] ):
+    if all( arg.type.rank == 0 for arg in args ):
       return syntax.Invoke(expr.fn, args, type = expr.type)
     
       
@@ -46,27 +49,18 @@ class LowerAdverbs(transform.Transform):
     max_arg = adverb_helpers.max_rank_arg(args)
     niters = self.shape(max_arg, axis)
     
-    # UGH generating code into SSA form is annoying 
-    counter_before = self.zero_i64("i_before")
-    counter = self.fresh_i64("i_loop")
-    counter_after = self.fresh_i64("i_after")
+    i, i_after, merge = self.loop_counter("i")
     
-    merge = { counter.name : (counter_before, counter_after) }
-    
-    cond = self.lt(counter, niters)
+    cond = self.lt(i, niters)
     elt_t = expr.type.elt_type
     array_result = self.alloc_array(elt_t, niters)
     self.blocks.push()
-    nested_args = [self.index(arg, counter) for arg in args]
-    closure_t = fn.type
-    nested_arg_types = syntax_helpers.get_types(nested_args)
-    call_result_t = type_inference.invoke_result_type(closure_t,
-                                                      nested_arg_types)
-    call = syntax.Invoke(fn, nested_args, type = call_result_t)
-    call_result = self.assign_temp(call, "call_result")
-    output_idx = syntax.Index(array_result, counter, type = call_result.type)
+    nested_args = [self.index_along_axis(arg, axis, i) for arg in args]
+
+    call_result = self.invoke(fn, nested_args)    
+    output_idx = syntax.Index(array_result, i, type = call_result.type)
     self.assign(output_idx, call_result)
-    self.assign(counter_after, self.add(counter, syntax_helpers.one_i64))
+    self.assign(i_after, self.add(i, syntax_helpers.one_i64))
 
     body = self.blocks.pop()
     self.blocks += syntax.While(cond, body, merge)
@@ -74,12 +68,39 @@ class LowerAdverbs(transform.Transform):
   
   
   def transform_Reduce(self, expr):
-    pass  
+    fn, args, axis = self.adverb_prelude(expr)
+    # For now we only work with a single array 
+    # and ignore init parameters 
+    assert len(args) == 1, \
+      "Reduce currently can't handle more than one input, given: %s" % (args,)
+    x = args[0]
+    n = self.shape(x, axis)
+    x0 = self.index_along_axis(x, axis, 0, "first_elt")
+    x1 = self.index_along_axis(x, axis, 0, "second_elt")
+    init = self.invoke(fn, [x0, x1])
+    
+    i, i_after, merge = self.loop_counter("i", syntax_helpers.const(2))
+    acc = self.fresh_var(init.type, "acc")
+    
+    cond = self.lt(i, n)
+    self.blocks.push()
+    curr_elt = self.index_along_axis(x, axis, i, "curr_elt")
+    new_acc = self.invoke(fn, [acc, curr_elt])
+    assert new_acc.type == acc.type, \
+      "Inconsistent accumulator type in reduction: %s != %s" % \
+      (acc.type, new_acc.type)
+    merge[acc.name] = (init, new_acc)
+    self.assign(i_after, self.add(i, syntax_helpers.one_i64))
+    body = self.blocks.pop()
+    self.blocks += syntax.While(cond, body, merge)
+    return acc   
+      
   
   def transform_AllPairs(self, expr):
+
     fn, args, axis = self.adverb_prelude(expr)
     
-    if all( [arg.type.rank == 0 for arg in args] ):
+    if all( arg.type.rank == 0 for arg in args ):
       return syntax.Invoke(expr.fn, args, type = expr.type)
     
     x, y = args 
@@ -89,30 +110,20 @@ class LowerAdverbs(transform.Transform):
     elt_t = expr.type.elt_type
     array_result = self.alloc_array(elt_t, (nx, ny))
     
-    j_before = self.zero_i64("j_before")
-    j = self.fresh_i64("j")
-    j_after = self.fresh_i64("i_after")
-    merge_j = { j.name : (j_before, j_after) }
-    cond_j = self.lt(j, ny)
-    
-    i_before = self.zero_i64("i_before")
-    i = self.fresh_i64("i_loop")
-    i_after = self.fresh_i64("i_after")
-    merge_i = { i.name : (i_before, i_after) }
+    i, i_after, merge_i = self.loop_counter("i")
     cond_i = self.lt(i, nx)
-    
-    self.blocks.push()
     self.blocks.push()
     
-    nested_args = [self.index(x, i), self.index(y, j)]
-    closure_t = fn.type
-    nested_arg_types = syntax_helpers.get_types(nested_args)
-    call_result_t = type_inference.invoke_result_type(closure_t, nested_arg_types)
-    call = syntax.Invoke(fn, nested_args, type = call_result_t)
-    call_result = self.assign_temp(call, "call_result")
+    j, j_after, merge_j = self.loop_counter("j")
+    cond_j = self.lt(j, ny)
+    self.blocks.push()
+    
+    nested_args = [self.index_along_axis(x, axis, i), 
+                   self.index_along_axis(y, axis, j)]
+    invoke = self.invoke(fn, nested_args)
     indices = self.tuple([i, j], "indices")
-    output_idx = syntax.Index(array_result, indices, type = call_result.type)
-    self.assign(output_idx, call_result)
+    output_idx = syntax.Index(array_result, indices, type = invoke.type)
+    self.assign(output_idx, invoke)
     
     self.assign(j_after, self.add(j, syntax_helpers.one_i64))
     inner_body = self.blocks.pop()

@@ -95,7 +95,7 @@ def annotate_expr(expr, tenv, var_map):
     def get_elt_types(ts):
       return map(get_elt_type, ts)
     
-    if all([isinstance(t, core_types.ScalarT) for t in arg_types]):
+    if all(isinstance(t, core_types.ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       return typed_ast.PrimCall(expr.prim, args, type = result_type)
@@ -172,7 +172,13 @@ def annotate_expr(expr, tenv, var_map):
     axis = unwrap_constant(expr.axis)
     n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
     nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
-    nested_result_type = invoke_result_type(closure.type, nested_types)
+    assert len(nested_types) == 1, \
+      "Can't yet handle more than 1 input to Reduce, given: %s" % (nested_types,)
+    input_type = nested_types[0]
+    nested_result_type = invoke_result_type(closure.type, [input_type, input_type])
+    assert input_type == nested_result_type, \
+      "Can't yet handle accumulator type %s which differs from input %s" % \
+      (nested_result_type, input_type)
     return adverbs.Reduce(fn = closure, args = new_args, axis = axis, type = nested_result_type)
   
   def expr_AllPairs():
@@ -467,5 +473,6 @@ def infer_return_type(untyped, arg_types):
   and implicitly generates a specialized version of the
   function. 
   """
+  print "Specializing for %s: %s" % (arg_types, untyped )
   typed = specialize(untyped, arg_types)
   return typed.return_type 

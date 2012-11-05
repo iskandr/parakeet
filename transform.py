@@ -1,9 +1,11 @@
 import syntax 
 import names 
 import core_types 
+from core_types import Int32, Int64 
 import tuple_type
 import array_type  
 import prims 
+import type_inference 
 
 from syntax_helpers import get_type, get_types, wrap_if_constant, \
                            wrap_constants, zero
@@ -12,7 +14,7 @@ import function_registry
 import syntax_helpers
 
 from nested_blocks import NestedBlocks
-from llvm_types import ptr_int32_t
+
 
 
 class Transform(object):
@@ -31,10 +33,10 @@ class Transform(object):
     return syntax.Var(ssa_id, type = t)
   
   def fresh_i32(self, prefix = "temp"):
-    return self.fresh_var(core_types.Int32, prefix)
+    return self.fresh_var(Int32, prefix)
   
   def fresh_i64(self, prefix = "temp"):
-    return self.fresh_var(core_types.Int64, prefix)
+    return self.fresh_var(Int64, prefix)
   
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
@@ -57,14 +59,14 @@ class Transform(object):
       self.assign(var, expr)
       return var 
     
-  def zero(self, t = core_types.Int32, name = "counter"):
+  def zero(self, t = Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
   
   def zero_i32(self, name = "counter"):
-    return self.zero(t = core_types.Int32, name = name)
+    return self.zero(t = Int32, name = name)
   
   def zero_i64(self, name = "counter"):
-    return self.zero(t = core_types.Int64, name = name)
+    return self.zero(t = Int64, name = name)
   
   def cast(self, expr, t):
     assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
@@ -74,10 +76,10 @@ class Transform(object):
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
   
   def ptr_to_int(self, ptr):
-    return syntax.PtrToInt(ptr, type = core_types.Int64)
+    return syntax.PtrToInt(ptr, type = Int64)
   
   def int_to_ptr(self, addr, ptr_t):
-    addr = self.cast(addr, core_types.Int64)
+    addr = self.cast(addr, Int64)
     return syntax.IntToPtr(addr, type = ptr_t)
   
   def incr_ptr(self, ptr, offset):
@@ -89,7 +91,7 @@ class Transform(object):
       return ptr
     else:
       old_addr = self.ptr_to_int(ptr)
-      new_addr = self.add(old_addr, self.cast(offset, core_types.Int64))
+      new_addr = self.add(old_addr, self.cast(offset, Int64))
       return self.int_to_ptr(new_addr, ptr.type)
   
   def index(self, arr, idx, temp = True):
@@ -132,7 +134,26 @@ class Transform(object):
         return self.assign_temp(idx_expr, "array_elt")
       else:
         return idx_expr
-      
+  
+  def index_along_axis(self, arr, axis, idx, name = None):
+    assert isinstance(axis, int), \
+      "Axis must be a known constant int, got: " + str(axis)
+    indices = []
+    for i in xrange(arr.type.rank):
+      if i == axis:
+        indices.append(syntax_helpers.wrap_if_constant(idx))
+      else:
+        indices.append(syntax_helpers.const_none)
+    
+    index_tuple = self.tuple(indices, "indices")
+    result_t = arr.type.index_type(index_tuple.type)
+    idx_expr = syntax.Index(arr, index_tuple, type = result_t)
+    if name:
+      return self.assign_temp(idx_expr, name)
+    else:
+      return idx_expr  
+    
+  
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
     
@@ -302,7 +323,36 @@ class Transform(object):
     strides = self.tuple(stride_elts, "strides")
     array = syntax.Struct([ptr_var, shape, strides], type = array_t) 
     return self.assign_temp(array, name) 
+  
+  def loop_counter(self, name = "i", start_val = syntax_helpers.zero_i64):
+    """
+    Generate three SSA variables to use as the before/during/after values
+    of a loop counter throughout some loop. 
     
+    By default initialize the counter to zero, but optionally start at different
+    values using the 'start_val' keyword. 
+    """
+    start_val = syntax_helpers.wrap_if_constant(start_val)
+    counter_type = start_val.type 
+    
+    counter_before = self.assign_temp(start_val, name + "_before") 
+    counter = self.fresh_var(counter_type, name)
+    counter_after = self.fresh_var(counter_type, name + "_after")
+    merge = { counter.name : (counter_before, counter_after) }
+    return counter, counter_after, merge 
+    
+  def invoke_type(self, closure, args):
+    closure_t = closure.type 
+    arg_types = syntax_helpers.get_types(args)
+    assert all( isinstance(t, core_types.Type) for t in arg_types), \
+      "Invalid types: %s" % (arg_types, )
+    return type_inference.invoke_result_type(closure_t, arg_types)
+  
+  def invoke(self, closure, args):
+    call_result_t = self.invoke_type(closure, args)
+    call = syntax.Invoke(closure, args, type = call_result_t)
+    return self.assign_temp(call, "invoke_result")
+  
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
       return self.transform_expr(maybe_expr)

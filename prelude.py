@@ -13,11 +13,11 @@ def shape(arr):
 
 def sum(x):
   # should be reduce(add, add, x[1:], x[0])
-  return seq_reduce(add, x, 0)
+  return seq_reduce(add, x)
 
 def prod(x):
   # should be reduce(add, add, x[1:], x[0])
-  return seq_reduce(multiply,  x, 1)
+  return seq_reduce(multiply,  x)
 
 def mean(x):
   return sum(x) / len(x)

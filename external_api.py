@@ -59,8 +59,8 @@ def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
 each = create_adverb_hook(adverbs.Map)
 allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
                               default_axis = 0)
-seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['acc', 'x'])
-seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['acc', 'x'])
+seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['x'])
+seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['x'])
 
 
 try:
