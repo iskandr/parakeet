@@ -96,6 +96,7 @@ def unwrap_constant(x):
     return x.value
   else:
     assert is_python_constant(x)
+    return x
 
 
 def wrap_if_constant(x):

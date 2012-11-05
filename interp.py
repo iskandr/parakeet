@@ -6,6 +6,9 @@ from function_registry import untyped_functions
 from common import dispatch 
 from core_types import ScalarT, StructT
 import types 
+import syntax_helpers
+from args import match 
+import adverb_helpers
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -16,10 +19,42 @@ class ClosureVal:
   def __init__(self, fn, fixed_args):
     self.fn = fn 
     self.fixed_args = fixed_args
+ 
+ 
+def call(fn, args):
+  if isinstance(fn, ClosureVal):
+    return eval_fn(fn.fn, fn.fixed_args + args)
+  else:
+    return fn(*args)
 
-from args import match 
+def create_slice_idx(ndims, dim, i):
+  return tuple([i if d == dim else None for d in range(ndims)])
+    
+def nested_arg(arg, dim, i):
+  if isinstance(arg, np.ndarray):
+    idx = create_slice_idx(np.rank(arg), dim, i)
+    return arg[idx]
+  else:
+    return arg 
 
-import adverb_helpers
+def nested_args(args, dim, i):
+  return [nested_arg(arg, dim, i) for arg in args]
+
+def tile_array(x, outer_shape):
+  if isinstance(x, np.ndarray):
+    return np.tile(x, tuple(outer_shape) + (1,))
+  return np.tile(x, tuple(outer_shape))
+    
+def max_shape(vals):
+  result = ()
+  for arg in vals:
+    if isinstance(arg, np.ndarray):
+      assert result == () or result == arg.shape
+      result = arg.shape
+  return result 
+    
+def ravel_list(xs):
+  return [np.ravel(x) if isinstance(x, np.ndarray) else x for x in xs]  
 
 def eval_fn(fn, actuals):
   env = fn.args.bind(actuals)
@@ -94,65 +129,37 @@ def eval_fn(fn, actuals):
     def expr_TupleProj():
       return eval_expr(expr.tuple)[expr.index]
     
-    def call(fn, args):
-      if isinstance(fn, ClosureVal):
-        return eval_fn(fn.fn, fn.fixed_args + args)
-      else:
-        return fn(*args)
-    
-    def create_slice_idx(ndims, dim, i):
-      return tuple([i if d == dim else None for d in range(ndims)])
-    
-    def nested_arg(arg, dim, i):
-      if isinstance(arg, np.ndarray):
-        idx = create_slice_idx(np.rank(arg), dim, i)
-        return arg[idx]
-      else:
-        return arg 
-
-    def tile(x, outer_shape):
-      if isinstance(x, np.ndarray):
-        return np.tile(x, tuple(outer_shape) + (1,))
-      return np.tile(x, tuple(outer_shape))
-    
-    def expr_Map():
+   
+    def adverb_prelude():
       fn = eval_expr(expr.fn)
       args = map(eval_expr, expr.args)
-      max_shape = ()
-      for arg in args:
-        if isinstance(arg, np.ndarray):
-          assert max_shape == () or max_shape == arg.shape
-          max_shape = arg.shape
-      assert len(max_shape) == 1
-      n = max_shape[0]
+      axis = syntax_helpers.unwrap_constant(expr.axis)
+      if axis is None:
+        args = ravel_list(args)
+        axis = 0 
+      return fn, args, axis
+     
+    def expr_Map():
+      fn, args, axis = adverb_prelude()
+      shape = max_shape(args)
+      n = shape[axis]
       result = [None] * n 
-      axis = 0
+      
       for i in xrange(n):
-        nested_args = [nested_arg(arg, axis, i) for arg in args]
-        result[i]  = call(fn, nested_args)
+        result[i]  = call(fn, nested_args(args, axis, i))
       return np.array(result)
     
     def expr_AllPairs():
-      fn = eval_expr(expr.fn)
-      assert len(expr.args) == 2
-      x = eval_expr(expr.args[0])
-      y = eval_expr(expr.args[1])
-      
-      if expr.axis is None:
-        axis = 0
-        x = np.ravel(x)
-        y = np.ravel(y)
-      else:
-        import syntax_helpers
-        axis = syntax_helpers.unwrap_constant(expr.axis)
-         
+      fn, args, axis = adverb_prelude()
+      assert len(args) == 2
+      [x,y] = args
       nx = x.shape[axis]
       ny = y.shape[axis]
       first_x = nested_arg(x, axis, 0)
       first_args = [first_x, nested_arg(y, axis, 0)]
       print fn, first_args
       first_elt = call(fn, first_args)
-      result = tile(first_elt, (nx, ny))
+      result = tile_array(first_elt, (nx, ny))
       for j in xrange(ny):
         result[0,j] = call(fn, [first_x, nested_arg(y, axis, j)])
       for i in xrange(1, nx):
@@ -160,6 +167,22 @@ def eval_fn(fn, actuals):
           args = [nested_arg(x, axis, i), nested_arg(y, axis, j)] 
           result[i, j] = call(fn, args)
       return result 
+    
+    def expr_Reduce():
+      fn, args, axis = adverb_prelude()
+      shape = max_shape(args)
+      n = shape[axis]
+      if expr.init:
+        acc = eval_expr(expr.init)
+        start = 0
+      else:
+        assert len(args) == 1
+        assert n >= 2
+        acc = call(fn, [args[0], args[1]])
+        start = 2
+      for i in xrange(start, n):
+        acc = call(fn, [acc] + nested_args(args, axis, i))
+      return acc   
       
     result = dispatch(expr, 'expr')
     # we don't support python function's inside parakeet, 

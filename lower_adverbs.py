@@ -68,6 +68,10 @@ class LowerAdverbs(transform.Transform):
     self.blocks += syntax.While(cond, body, merge)
     return array_result 
   
+  
+  def transform_Reduce(self, expr):
+    pass 
+  
   def transform_AllPairs(self, expr):
     fn = self.transform_expr(expr.fn)
 
@@ -87,10 +91,6 @@ class LowerAdverbs(transform.Transform):
     
     elt_t = expr.type.elt_type
     array_result = self.alloc_array(elt_t, (nx, ny))
-   
-    
-    
-    
     
     j_before = self.zero_i64("j_before")
     j = self.fresh_i64("j")
@@ -103,7 +103,6 @@ class LowerAdverbs(transform.Transform):
     i_after = self.fresh_i64("i_after")
     merge_i = { i.name : (i_before, i_after) }
     cond_i = self.lt(i, nx)
-    
     
     self.blocks.push()
     self.blocks.push()
@@ -125,7 +124,6 @@ class LowerAdverbs(transform.Transform):
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
     outer_body = self.blocks.pop()
     self.blocks += syntax.While(cond_i, outer_body, merge_i)
-    
     return array_result 
       
   
