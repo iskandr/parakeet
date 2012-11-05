@@ -27,16 +27,21 @@ class LowerAdverbs(transform.Transform):
   def flatten_array_args(self, xs):
     return map(self.flatten_array_arg, xs)
 
-  def transform_Map(self, expr):
+  def adverb_prelude(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
-    if all( [arg.type.rank == 0 for arg in args] ):
-      return syntax.Invoke(expr.fn, args, type = expr.type)
-    
-    axis = expr.axis 
+    axis = syntax_helpers.unwrap_constant(expr.axis) 
     if axis is None:
       args = self.flatten_array_args(args)
       axis = 0
+    return fn, args, axis
+  
+  def transform_Map(self, expr):
+    fn, args, axis = self.adverb_prelude(expr)
+      
+    if all( [arg.type.rank == 0 for arg in args] ):
+      return syntax.Invoke(expr.fn, args, type = expr.type)
+    
       
     # TODO: Should make sure that all the shapes conform here, 
     # but we don't yet have anything like assertions or error handling
@@ -73,19 +78,12 @@ class LowerAdverbs(transform.Transform):
     pass 
   
   def transform_AllPairs(self, expr):
-    fn = self.transform_expr(expr.fn)
-
-    args = self.transform_expr_list(expr.args)
+    fn, args, axis = self.adverb_prelude(expr)
+    
     if all( [arg.type.rank == 0 for arg in args] ):
       return syntax.Invoke(expr.fn, args, type = expr.type)
     
     x, y = args 
-    
-    axis = expr.axis 
-    if axis is None:
-      args = self.flatten_array_args(args)
-      axis = 0
-      
     nx = self.shape(x, axis)
     ny = self.shape(y, axis)
     
