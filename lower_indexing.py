@@ -6,25 +6,18 @@ import tuple_type
 import syntax 
 import syntax_helpers
 class LowerIndexing(transform.Transform):
-  
-  
-  def process_index(self, data_ptr, shape, strides, idx, i):
-    if 
-      
-      
       
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data") 
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
     
-    
     new_strides = []
     new_shape = []
     elt_offset = syntax_helpers.zero_i64
     for (i, idx) in enumerate(indices):
-      stride_i = self.strides(arr, i)
-      shape_i = self.shape(arr, i)
+      stride_i = self.tuple_proj(strides, i)
+      shape_i = self.tuple_proj(shape, i)
       idx_t = idx.type 
       if isinstance(idx_t, core_types.ScalarT):
         offset_i = self.mul(idx, stride_i, "offset_%d" % i)
@@ -40,8 +33,11 @@ class LowerIndexing(transform.Transform):
         elt_offset = self.add(elt_offset, offset_i)
         dim_i = self.sub(stop, start, "dim_%d" % i)
         new_shape.append(dim_i)
-        
-    elt_size = syntax_helpers.const_int(arr.nbytes(), core_types.Int64)
+        new_strides.append(self.mul(stride_i, step))
+      else:
+        raise RuntimeError("Unsupported index type: %s" % idx_t)
+
+    elt_size = syntax_helpers.const_int(arr.type.nbytes(), core_types.Int64)
     byte_offset = self.mul(elt_offset, elt_size, "byte_offset") 
     new_data_ptr = self.incr_ptr(data_ptr, byte_offset)
     new_rank = len(new_strides)
@@ -74,13 +70,11 @@ class LowerIndexing(transform.Transform):
     # by all scalars to retrieve a scalar result 
     if syntax_helpers.all_scalars(indices):
       data_ptr = self.attr(arr, "data")
-      stride0 = self.strides(arr, 0)
-      idx0 = self.assign_temp(self.tuple_proj(idx, 0), "idx_0" % i)
-      offset_elts = self.mul(stride0, idx0, "total_offset")
-      for i in xrange(1, n_required):
-        idx_i = self.assign_temp(self.tuple_proj(idx, i), "idx_%d" % i)
-        stride = self.strides(arr, i)
-        elts_i = self.mul(stride, idx_i, "offset_elts_%d" % i)
+      strides = self.attr(arr, "strides")
+      offset_elts = syntax_helpers.zero_i64
+      for (i, idx_i) in enumerate(indices):
+        stride_i = self.tuple_proj(strides, i)
+        elts_i = self.mul(stride_i, idx_i, "offset_elts_%d" % i)
         offset_elts = self.add(offset_elts, elts_i, "total_offset")
       return self.index(data_ptr, offset_elts, temp = False)
     else:

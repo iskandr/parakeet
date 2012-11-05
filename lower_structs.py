@@ -41,7 +41,7 @@ class LowerStructs(Transform):
     field_name, field_type  = tuple_t._fields_[expr.index]
     return syntax.Attribute(new_tuple, field_name, type = field_type)
   
-  def array_view(self, data, shape, strides, array_t):
+  def array_view(self, data, shape, strides):
     """
     Helper function used by multiple array-related transformations
     """
@@ -60,7 +60,7 @@ class LowerStructs(Transform):
     assert isinstance(strides_t, tuple_type.TupleT), \
       "Strides of array must be a tuple, got: %s" % strides_t
     
-    rank = len(shape_t.elt_type)
+    rank = len(shape_t.elt_types)
     strides_rank = len(strides_t.elt_types)
     assert rank == strides_rank, \
       "Shape and strides must be of same length, but got %d and %d" % \
