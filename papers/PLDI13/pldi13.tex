@@ -43,7 +43,7 @@
 \titlebanner{}        % These are ignored unless
 \preprintfooter{PLDI 2013}   % 'preprint' option specified.
 
-\title{Automated Online Tuning and Parallelization of High Level Numerical Programs}
+\title{Automated Online Tuning of High Level Numerical Programs}
 
 \authorinfo{Name Omitted For Review}
            {Affiliation Omitted For Review}
@@ -61,7 +61,7 @@
 \begin{abstract}
 The current best practice for tuning numerical code performance involves offline auto-tuning to find optimal settings of various parameters including tile sizes and loop unrolling factors.  However, this approach burdens programmers in at least one of two ways: (1) it requires users either to annotate their code mannually with information about its tunable parameters, or to implement by hand the hooks which an auto-tuner can use to explore different parameter settings; or (2) it involves a time-consuming offline search that may not be worth the cost for code not reused extensively.  These approaches are thus poorly suited for both non-expert programmers (who cannot annotate their code in the necessary way) and rapid prototyping (a common use case of numerical programming).
 
-We present a system for accelerating numerical Python programs that suffers from neither of these drawbacks. Programmers write code using Parakeet, a NumPy-like DSL for numerical programming embedded in Python that includes higher-order data parallel primitives (referred to as \emph{adverbs}) including $\MAP$, $\REDUCE$, and $\SCAN$.  For each nesting of adverbs, one adverb is parallelized by executing multiple iterations on different threads while all others are sequentialized into loops.  For sequentialized adverbs, we extend Parakeet's JIT compiler with a novel code transformation that facilitates automatically inserting auto-tuning hooks.  These hooks enable an efficient online search across different parameter settings for cache tiling, register blocking, and loop unrolling.  The search begins with initial settings determined by an analytic model, and is conducted such that every step involves useful work.
+We present a system for accelerating numerical Python programs that suffers from neither of these drawbacks. Programmers write code using Parakeet, a NumPy-like DSL for numerical programming embedded in Python that includes higher-order data parallel primitives (referred to as \emph{adverbs}) including $\MAP$, $\REDUCE$, and $\SCAN$.  For each nesting of adverbs, one adverb is parallelized by executing multiple iterations on different threads while all others are sequentialized into loops.  For sequentialized adverbs, we extend Parakeet's JIT compiler with a novel code transformation that facilitates automatically inserting auto-tuning hooks.  These hooks enable an efficient online search across different parameter settings for cache tiling, register blocking, and loop unrolling.  Our system thus introduces the benefits of auto-tuning to an environment suited to both non-expert programmers and rapid prototyping.
 
 We evaluate our system on a suite of benchmark programs written in Parakeet+Python and show an average XX\% performance improvement over code that uses an analytic model to determine the best settings of the tuning parameters statically, and only an average YY\% performance degredation from expert-tuned C code.
 \end{abstract}

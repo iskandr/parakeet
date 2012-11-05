@@ -23,7 +23,13 @@ class Runtime():
     job_p = POINTER(job_t)
     thread_pool_p = POINTER(thread_pool_t)
 
-    self.libParRuntime = cdll.LoadLibrary("libparakeetruntime.so")
+    lib_name = "libparakeetruntime.so"
+    try:
+      dll = cdll.LoadLibrary(lib_name)
+    except:
+      dll = cdll.LoadLibrary("runtime/" + lib_name)
+
+    self.libParRuntime = dll
 
     # job.h
     self.libParRuntime.make_job.restype = job_p
@@ -68,6 +74,9 @@ class Runtime():
     self.dop = self.MAX_THREADS
 
     self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
+
+  def run_untiled_job(self, fn, args, num_iters):
+    pass
 
   def run_job(self, tiled_ast, args, num_iters,
               tiled_loop_iters, tiled_loop_parents):

@@ -212,8 +212,7 @@ def eval_fn(fn, actuals):
       arr = eval_expr(lhs.value)
       idx = eval_expr(lhs.index)
       arr[idx] = rhs 
-      
-             
+
   def eval_stmt(stmt):
     if isinstance(stmt, syntax.Return):
       v = eval_expr(stmt.value)

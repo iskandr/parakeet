@@ -1,22 +1,21 @@
-
-import syntax 
+import syntax
 import syntax_helpers
-import names 
+import names
 import args
-import adverbs 
-import ast_conversion 
-import function_registry 
+import adverbs
+import ast_conversion
+import function_registry
 
 _adverb_wrapper_cache = {}
 def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = None):
-  # print "untyped_wrapper", adverb_class, arg_names, axis 
+  # print "untyped_wrapper", adverb_class, arg_names, axis
   axis = syntax_helpers.wrap_if_constant(axis)
   key = adverb_class, tuple(arg_names), axis
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
     local_arg_names = map(names.refresh, arg_names)
-    
+
     local_arg_vars = map(syntax.Var, local_arg_names)
     fn_var = local_arg_vars[0]
     data_vars = local_arg_vars[1:]
@@ -24,9 +23,9 @@ def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = None):
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
     fundef = syntax.Fn(fn_name, args.Args(positional = local_arg_names), body)
-    function_registry.untyped_functions[fn_name] = fundef 
-    _adverb_wrapper_cache[key] = fundef 
-    return fundef 
+    function_registry.untyped_functions[fn_name] = fundef
+    _adverb_wrapper_cache[key] = fundef
+    return fundef
 
 _adverb_registry = {}
 def is_registered_adverb(fn):
@@ -34,10 +33,10 @@ def is_registered_adverb(fn):
 
 def register_adverb(python_fn, wrapper):
   _adverb_registry[python_fn] = wrapper
-  
+
 def get_adverb_wrapper(python_fn):
   return _adverb_registry[python_fn]
-  
+
 def untyped_map_wrapper(fundef, axis = None):
   if not isinstance(fundef, syntax.Fn):
     fundef = ast_conversion.translate_function_value(fundef)
@@ -68,11 +67,11 @@ def untyped_scan_wrapper(fundef, axis = None):
   return untyped_wrapper(adverbs.Scan, arg_names, axis = axis)
 
 
-import core_types 
+import core_types
 import array_type
 def max_rank(arg_types):
   """
-  Given a list of types, find the maximum rank of the list 
+  Given a list of types, find the maximum rank of the list
   and also check that all other types have either the same rank
   or are scalars
   """
@@ -80,7 +79,7 @@ def max_rank(arg_types):
   for t in arg_types:
     if isinstance(t, array_type.ArrayT):
       assert curr_max == 0 or curr_max == t.rank,  \
-       "Adverb can't accept inputs of rank %d and %d" % (curr_max, t.rank) 
+       "Adverb can't accept inputs of rank %d and %d" % (curr_max, t.rank)
       curr_max = t.rank
     return curr_max
 
@@ -91,9 +90,8 @@ def max_rank_arg(args):
   r = max_rank(syntax_helpers.get_types(args))
   for arg in args:
     if arg.type.rank == r:
-      return arg 
-  
-    
+      return arg
+
 def lower_arg_rank(t, r):
   if isinstance(t, core_types.ScalarT):
     return t
@@ -108,7 +106,7 @@ def increase_rank(t, r):
   else:
     assert isinstance(t, array_type.ArrayT)
     return array_type.make_array_type(t.elt_type, t.rank + r)
-        
+
 def lower_arg_ranks(arg_types, r):
   return [lower_arg_rank(t, r) for t in arg_types]
-    
+
