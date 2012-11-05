@@ -41,11 +41,13 @@ class ConstantPropagation(transform.Transform):
     if name in self.env:
       val = self.env[name]
       if val != top_val:
+        print "substituting %s with %s" % (name, val) 
         return val
     return expr
       
   def transform_Assign(self, stmt):
     match(stmt.lhs, stmt.rhs, self.env)
+
     return stmt     
 
 def constant_propagation(fn):

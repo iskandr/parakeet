@@ -91,13 +91,15 @@ class NoneT(ConcreteT):
     else:
       raise IncompatibleTypes(self, other)
 
+  def __str__(self):
+    return "NoneT"
+  
+  def __repr__(self):
+    return str(self)
+  
 NoneType = NoneT()
 
   
-
-
-
-
 def is_struct(c_repr):
   return type(c_repr) == type(ctypes.Structure)
 

@@ -7,9 +7,11 @@ from constant_propagation import ConstantPropagation
 from inline import Inliner
 pipeline = [
   Inliner,
+  #ConstantPropagation, Simplify, 
   LowerAdverbs, LowerIndexing, 
-  ConstantPropagation, Simplify, 
+  #ConstantPropagation, Simplify, 
   LowerStructs, 
+  #ConstantPropagation, Simplify,
 ]
 
 def lower(fundef):

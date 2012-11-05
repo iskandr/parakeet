@@ -1,6 +1,6 @@
 import llvm.core as llcore 
 from llvm.core import Type as lltype
-from core_types import ScalarT, PtrT
+from core_types import ScalarT, PtrT, NoneT
 import ctypes 
 
 void_t = lltype.void()
@@ -81,7 +81,7 @@ def llvm_value_type(t):
 
 def llvm_ref_type(t):
   llvm_value_t = llvm_value_type(t)
-  if isinstance(t, (PtrT, ScalarT)):
+  if isinstance(t, (PtrT, ScalarT, NoneT)):
     return llvm_value_t
   else:
     return lltype.pointer(llvm_value_t)

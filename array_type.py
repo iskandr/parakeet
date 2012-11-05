@@ -2,7 +2,7 @@
 import numpy as np 
 import ctypes
  
-import tuple_type 
+from tuple_type import TupleT, repeat_tuple
 from core_types import StructT, IncompatibleTypes, ScalarT, Int64, ptr_type
 import core_types 
 
@@ -86,7 +86,7 @@ class ArrayT(StructT):
 
   def node_init(self):
     assert isinstance(self.elt_type, ScalarT)
-    tuple_t = tuple_type.repeat_tuple(Int64, self.rank)
+    tuple_t = repeat_tuple(Int64, self.rank)
     
     self.shape_t = tuple_t
     self.strides_t = tuple_t
@@ -127,22 +127,32 @@ class ArrayT(StructT):
     """
     if not isinstance(idx, core_types.Type):
       idx = idx.type 
-      
-    if isinstance(idx, core_types.IntT):
-      return make_array_type(self.elt_type, self.rank - 1) 
-    elif isinstance(idx, core_types.NoneT):
-      return make_array_type(self.elt_type, 1)
-    elif isinstance(idx, ArrayT):
-      assert idx.rank == 1
-      # slicing out a subset of my rows doesn't change my type 
-      return self 
-    elif isinstance(idx, tuple_type.TupleT):
-      n_indices = len(idx.elt_types)
-      assert n_indices == self.rank, \
-        "Can't use only %d indices with array of rank %d" % (n_indices, self.rank)
-      return self.elt_type 
+    
+    if isinstance(idx, TupleT):
+      indices = idx.elt_types
     else:
-      raise RuntimeError("Unsupported index type: %s" % idx)
+      indices = [idx]
+    
+    n_indices = len(indices)
+    n_required = self.rank
+    if n_required > n_indices:
+      n_missing = n_required - n_indices  
+      extra_indices = [core_types.NoneType] * n_missing
+      indices = indices + extra_indices 
+    
+    # we lose one result dimension for each int in the index set 
+    result_rank = n_required
+    for t in indices:
+      if isinstance(t, core_types.IntT):
+        result_rank -= 1
+      else:
+        assert isinstance(t, (core_types.NoneT, SliceT, ArrayT, TupleT) ), \
+          "Unexpected index type: %s " % t
+    if result_rank > 0:
+      return make_array_type(self.elt_type, result_rank)
+    else:
+      return self.elt_type 
+    
 
   def from_python(self, x):
     x = np.asarray(x)

@@ -1,5 +1,5 @@
 from node import Node
-
+import core_types 
 class Stmt(Node):
   pass
 
@@ -53,7 +53,7 @@ class Const(Expr):
   _members = ['value']
 
   def __repr__(self):
-    if self.type:
+    if self.type and not isinstance(self.type, core_types.NoneT):
       return "%s : %s" % (self.value, self.type)
     else:
       return str(self.value)

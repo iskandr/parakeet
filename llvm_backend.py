@@ -1,8 +1,9 @@
 from llvm.core import Type as lltype
 from llvm.core import Builder 
 
-from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, Bool, Int32,\
-                       Int64, PtrT
+from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
+from core_types import Bool, Int32, Int64, PtrT
+
 from closure_type import ClosureT
 import prims 
 import syntax
@@ -79,13 +80,20 @@ class CompilationEnv:
     self.vars[name] = val
 
 def compile_expr(expr, env, builder):
-  # print "  EXPR: ", expr 
+  print "  EXPR: ", expr 
   def compile_Var():
     ref = env[expr.name]
     val = builder.load(ref, expr.name + "_val")
     return val 
+  
   def compile_Const():
-    assert isinstance(expr.type, ScalarT)
+    t = expr.type 
+    
+    if isinstance(t, NoneT):
+      return const(0, Int64)
+    else:
+      assert isinstance(expr.type, ScalarT), \
+        "Expected scalar constant but got %s" % expr.type 
     return const(expr.value, expr.type)
   
   def compile_Cast():
@@ -135,12 +143,21 @@ def compile_expr(expr, env, builder):
     struct_type = expr.value.type 
     field_pos = struct_type.field_pos(expr.name)
     field_type = struct_type.field_type(expr.name)
+    
+    print "llvm_value", llvm_value
+    print "struct_type", struct_type 
+    print "field_pos", field_pos
+    print "field_type", field_type 
+    
     field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)],
                              "%s_ptr" % expr.name)
+    print "field_ptr", field_ptr
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
+    print "field_value", field_value 
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
     else:
+
       return field_value  
   
   def compile_Invoke():
@@ -244,7 +261,10 @@ def compile_stmt(stmt, env, builder):
 
     if isinstance(stmt.lhs, syntax.Var):
       ref = env[stmt.lhs.name]
+      print "ref", ref, ref.type 
+      print "value", value, value.type 
       builder.store(value, ref)
+      print "done"
     elif isinstance(stmt.lhs, syntax.Index):
       assert isinstance(stmt.lhs.value.type, PtrT), \
         "Expected pointer, got %s" % stmt.lhs.value.type

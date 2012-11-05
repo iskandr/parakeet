@@ -74,7 +74,7 @@ class LowerAdverbs(transform.Transform):
   
   
   def transform_Reduce(self, expr):
-    pass 
+    pass  
   
   def transform_AllPairs(self, expr):
     fn, args, axis = self.adverb_prelude(expr)
