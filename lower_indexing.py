@@ -17,25 +17,39 @@ class LowerIndexing(transform.Transform):
     data_ptr = self.attr(arr, "data") 
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
-    elt_size = syntax_helpers.const_int(arr.nbytes(), core_types.Int64)
+    
     
     new_strides = []
     new_shape = []
     elt_offset = syntax_helpers.zero_i64
-    n_indices = enumerate(indices)
     for (i, idx) in enumerate(indices):
       stride_i = self.strides(arr, i)
       shape_i = self.shape(arr, i)
-      if syntax_helpers.is_scalar(idx):
-        elt_offset = self.mul(idx, stride_i, "elt_offset")
-        byte_offset = self.mul(elt_offset, elt_size)
-        data_ptr = self.incr_ptr(data_ptr, byte_offset)
-        shape_
-      else:
-        final_rank += 1
-      data_ptr, shape, strides = self.process_index(data_ptr, shape, strides, idx, i) 
-    
-    return data_ptr, shape, strides
+      idx_t = idx.type 
+      if isinstance(idx_t, core_types.ScalarT):
+        offset_i = self.mul(idx, stride_i, "offset_%d" % i)
+        elt_offset = self.add(elt_offset, offset_i)
+      elif isinstance(idx_t, core_types.NoneT):
+        new_strides.append(stride_i)
+        new_shape.append(shape_i)
+      elif isinstance(idx_t, array_type.SliceT):
+        start = self.attr(idx, "start")
+        stop = self.attr(idx, "stop")
+        step = self.attr(idx, "step")
+        offset_i = self.mul(start, stride_i, "offset_%d" % i)
+        elt_offset = self.add(elt_offset, offset_i)
+        dim_i = self.sub(stop, start, "dim_%d" % i)
+        new_shape.append(dim_i)
+        
+    elt_size = syntax_helpers.const_int(arr.nbytes(), core_types.Int64)
+    byte_offset = self.mul(elt_offset, elt_size, "byte_offset") 
+    new_data_ptr = self.incr_ptr(data_ptr, byte_offset)
+    new_rank = len(new_strides)
+    new_array_t = array_type.make_array_type(data_ptr.elt_type, new_rank)
+    new_strides = self.tuple(new_strides, "strides")
+    new_shape = self.tuple(new_shape, "shape")
+    return syntax.ArrayView(new_data_ptr, new_shape, new_strides, type = new_array_t)
+  
       
   def transform_lhs_Index(self, expr):
     arr = self.transform_expr(expr.value)
