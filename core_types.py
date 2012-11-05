@@ -319,6 +319,7 @@ class PtrT(ConcreteT):
   """
   _members = ['elt_type']
   
+  rank = 1
   def index_type(self, idx):
     assert isinstance(idx, IntT), "Index into pointer must be of type int, got %s" % (idx)
     return self.elt_type

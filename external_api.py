@@ -62,8 +62,13 @@ allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
 seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['acc', 'x'])
 seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['acc', 'x'])
 
-rt = runtime.Runtime()
 
+try:
+  rt = runtime.Runtime()
+except:
+  print "Warning: Failed to load parallel runtime"
+  rt = None 
+  
 import args, array_type, function_registry, names
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, fn, arg_types):

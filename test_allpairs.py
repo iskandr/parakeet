@@ -51,7 +51,7 @@ def adverb_outer_prod(x,y):
   return allpairs(multiply, x, y)
 
 def test_adverb_outer_prod():
-  expect_allpairs(adverb_outer_prod, np.multiply.outer, [int_vec])
+  expect_allpairs(adverb_outer_prod, np.multiply.outer, vectors)
 
 int_mat = np.reshape(np.arange(100), (10,10))
 float_mat = np.sqrt(int_mat)
@@ -88,8 +88,8 @@ def adverb_matmult(X,Y):
 
 matrices = [int_mat, float_mat, bool_mat]
 
-#def test_adverb_matmult():
-#  expect_allpairs(adverb_matmult, np.dot, matrices)
+def test_adverb_matmult():
+  expect_allpairs(adverb_matmult, np.dot, matrices)
 
       
 if __name__ == '__main__':

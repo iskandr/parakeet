@@ -75,7 +75,16 @@ class Transform(object):
     """
     Index into array or tuple differently depending on the type
     """
-    if isinstance(idx, (list, tuple)):
+    n_required = arr.type.rank 
+    n_indices = len(idx) if hasattr(idx, '__len__') else 1
+  
+    if n_indices < n_required:
+      # all unspecified dimensions are considered fully sliced 
+      extra = (None,) * (n_required - n_indices)
+      first_indices = tuple(idx) if hasattr(idx, '__iter__') else (idx,)
+      idx = first_indices + extra
+      
+    if isinstance(idx, tuple):
       idx = self.tuple(map(wrap_if_constant,idx), "index_tuple")
     else:
       idx = wrap_if_constant(idx)
