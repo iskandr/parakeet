@@ -2,6 +2,7 @@ from node import Node
 import numpy as np 
 import type_conv
 import dtypes
+import ctypes 
 
 class TypeFailure(Exception):
   def __init__(self, msg):
@@ -40,15 +41,6 @@ class UnknownT(Type):
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
 
-class NoneT(Type):
-  _members = []
-  def combine(self, other):
-    if isinstance(other, NoneT):
-      return self
-    else:
-      raise IncompatibleTypes(self, other)
-
-NoneType = NoneT()
 
 def combine_type_list(types):
   common_type = Unknown 
@@ -78,7 +70,33 @@ class ConcreteT(Type):
   def to_python(self, internal):
     return internal
   
-import ctypes 
+# None is fully described by its type, so the 
+# runtime representation can just be the number zero  
+
+class NoneT(ConcreteT):
+  _members = []
+  ctypes_repr = ctypes.c_int64
+  
+  def from_python(self, val):
+    assert val is None
+    return ctypes.c_int64(0)
+  
+  def to_python(self, obj):
+    assert obj == ctypes.c_int64(0)
+    return None 
+  
+  def combine(self, other):
+    if isinstance(other, NoneT):
+      return self
+    else:
+      raise IncompatibleTypes(self, other)
+
+NoneType = NoneT()
+
+  
+
+
+
 
 def is_struct(c_repr):
   return type(c_repr) == type(ctypes.Structure)
@@ -129,7 +147,10 @@ class StructT(Type):
     Repr.__name__ = self.node_type() +"_Repr"
     self._repr_cache[self] = Repr
     return Repr
-  
+
+
+
+
 ###################################################
 #                                                 #
 #             SCALAR NUMERIC TYPES                #

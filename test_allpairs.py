@@ -53,7 +53,7 @@ def adverb_outer_prod(x,y):
 def test_adverb_outer_prod():
   expect_allpairs(adverb_outer_prod, np.multiply.outer, vectors)
 
-int_mat = np.reshape(np.arange(100), (10,10))
+int_mat = np.reshape(np.arange(25), (5,5))
 float_mat = np.sqrt(int_mat)
 bool_mat = int_mat % 2
 

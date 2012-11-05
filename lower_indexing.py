@@ -37,11 +37,13 @@ class LowerIndexing(transform.Transform):
       else:
         raise RuntimeError("Unsupported index type: %s" % idx_t)
 
-    elt_size = syntax_helpers.const_int(arr.type.nbytes(), core_types.Int64)
+    elt_t = arr.type.elt_type 
+    
+    elt_size = syntax_helpers.const_int(elt_t.nbytes, core_types.Int64)
     byte_offset = self.mul(elt_offset, elt_size, "byte_offset") 
     new_data_ptr = self.incr_ptr(data_ptr, byte_offset)
     new_rank = len(new_strides)
-    new_array_t = array_type.make_array_type(data_ptr.elt_type, new_rank)
+    new_array_t = array_type.make_array_type(elt_t, new_rank)
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
     return syntax.ArrayView(new_data_ptr, new_shape, new_strides, type = new_array_t)

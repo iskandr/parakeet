@@ -9,7 +9,7 @@ def test_create_const():
   expect(create_const, [1.0], np.array([1.0, 1.0, 1.0, 1.0]))
   expect(create_const, [True], np.array([True, True, True, True]))
 
-shape_1d = 100
+shape_1d = 40
 ints_1d = np.arange(shape_1d)
 floats_1d = np.arange(shape_1d, dtype='float')
 bools_1d = ints_1d % 2
@@ -21,9 +21,9 @@ def index_1d(x, i):
 
 def test_index_1d():
   for vec in vecs:
-    expect(index_1d, [vec, 50], vec[50])
+    expect(index_1d, [vec, 20], vec[20])
     
-shape_2d = (10,10)
+shape_2d = (4,10)
 matrices = [np.reshape(vec, shape_2d) for vec in vecs]
 
 def index_2d(x, i, j):
@@ -31,17 +31,17 @@ def index_2d(x, i, j):
 
 def test_index_2d():
   for mat in matrices:
-    expect(index_2d, [mat, 5, 5], mat[5,5])
+    expect(index_2d, [mat, 2, 5], mat[2,5])
     
 def index_3d(x, i, j, k):
   return x[i, j, k]  
 
-shape_3d = (2,5,10)
+shape_3d = (4,5,2)
 tensors = [np.reshape(mat, shape_3d) for mat in matrices]
 
 def test_index_3d():
   for x in tensors:
-    expect(index_3d, [x, 1, 2, 3], x[1,2,3])
+    expect(index_3d, [x, 2, 2, 1], x[2,2,1])
     
 
 def set_idx_1d(arr,i,val):
@@ -75,9 +75,9 @@ def set_idx_3d(arr, i, j, k, val):
   return arr 
 
 def test_set_idx_3d():
-  i = 1
+  i = 2
   j = 3
-  k = 5
+  k = 1
   for x in tensors:
     x1, x2 = x.copy(), x.copy()
     val = -x[i, j, k]
