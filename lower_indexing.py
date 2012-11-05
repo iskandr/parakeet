@@ -9,17 +9,32 @@ class LowerIndexing(transform.Transform):
   
   
   def process_index(self, data_ptr, shape, strides, idx, i):
-    if syntax_helpers.is_scalar(idx):
-      stride_i = 
-      data_ptr = self.add(data_ptr)
+    if 
       
       
-  def process_indices(self, arr, indices):
+      
+  def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data") 
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
+    elt_size = syntax_helpers.const_int(arr.nbytes(), core_types.Int64)
+    
+    new_strides = []
+    new_shape = []
+    elt_offset = syntax_helpers.zero_i64
+    n_indices = enumerate(indices)
     for (i, idx) in enumerate(indices):
+      stride_i = self.strides(arr, i)
+      shape_i = self.shape(arr, i)
+      if syntax_helpers.is_scalar(idx):
+        elt_offset = self.mul(idx, stride_i, "elt_offset")
+        byte_offset = self.mul(elt_offset, elt_size)
+        data_ptr = self.incr_ptr(data_ptr, byte_offset)
+        shape_
+      else:
+        final_rank += 1
       data_ptr, shape, strides = self.process_index(data_ptr, shape, strides, idx, i) 
+    
     return data_ptr, shape, strides
       
   def transform_lhs_Index(self, expr):
@@ -55,8 +70,7 @@ class LowerIndexing(transform.Transform):
         offset_elts = self.add(offset_elts, elts_i, "total_offset")
       return self.index(data_ptr, offset_elts, temp = False)
     else:
-      data_ptr, shape, strides = self.process_indices(arr, indices)
-      return syntax
+      return self.array_slice(arr, indices)
       
   def transform_Index(self, expr):
     return self.assign_temp(self.transform_lhs_Index(expr),"idx_result")

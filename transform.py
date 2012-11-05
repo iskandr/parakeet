@@ -141,7 +141,7 @@ class Transform(object):
     else:
       t = tup.type.elt_types[idx] 
       return syntax.TupleProj(tup, idx, type = t)
-        
+  
   def prim(self, prim_fn, args, name = None):
     args = wrap_constants(args)
     arg_types = get_types(args)
@@ -153,35 +153,89 @@ class Transform(object):
       return self.assign_temp(prim_call, name)
     else:
       return prim_call
+  
+  def pick_first(self, x, y):
+    """
+    Return x but first cast it to the common type of both args
+    """
+    return self.cast(x, x.type.combine(y.type))
+  
+  def pick_second(self, x, y):
+    """
+    Return y but first cast it to the common type of both args
+    """
+    return self.cast(y, x.type.combine(y.type))
+    
+  def pick_const(self, x, y, c):
+    """
+    Return a constant cast to the common type of both args
+    """
+    return self.cast(syntax_helpers.wrap_if_constant(c), x.type.combine(y.type))
     
   def add(self, x, y, name = None):
-    return self.prim(prims.add, [x,y], name)
+    
+    if syntax_helpers.is_zero(x):
+      return self.pick_second(x,y)
+    elif syntax_helpers.is_zero(y):
+      return self.pick_first(x,y)
+    else:
+      return self.prim(prims.add, [x,y], name)
   
   def sub(self, x, y, name = None):
-    return self.prim(prims.subtract, [x,y], name)
+    if syntax_helpers.is_zero(y):
+      return self.pick_first(x,y) 
+    else:
+      return self.prim(prims.subtract, [x,y], name)
  
   def mul(self, x, y, name = None):
-    return self.prim(prims.multiply, [x,y], name)
+    if syntax_helpers.is_one(x):
+      return self.pick_second(x,y)
+    elif syntax_helpers.is_one(y):
+      return self.pick_first(x,y)
+    elif syntax_helpers.is_zero(x) or syntax_helpers.is_zero(y):
+      return self.pick_const(x, y, 0)
+    else:
+      return self.prim(prims.multiply, [x,y], name)
   
   def div(self, x, y, name = None):
-    return self.prim(prims.divide, [x,y], name)
+    if syntax_helpers.is_one(y):
+      return self.pick_first(x,y)
+    else:
+      return self.prim(prims.divide, [x,y], name)
     
   def lt(self, x, y, name = None):
-    return self.prim(prims.less, [x,y], name)
+    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+      return syntax_helpers.const_bool(False)
+    else:
+      return self.prim(prims.less, [x,y], name)
 
   def lte(self, x, y, name = None):
-    return self.prim(prims.less_equal, [x,y], name)
+    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+      return syntax_helpers.const_bool(True)
+    else:
+      return self.prim(prims.less_equal, [x,y], name)
 
   def gt(self, x, y, name = None):
-    return self.prim(prims.greater, [x,y], name)
+    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+      return syntax_helpers.const_bool(False)
+    else:
+      return self.prim(prims.greater, [x,y], name)
 
   def gte(self, x, y, name = None):
-    return self.prim(prims.greater_equal, [x,y], name)
+    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+      return syntax_helpers.const_bool(True)
+    else:
+      return self.prim(prims.greater_equal, [x,y], name)
 
   def eq(self, x, y, name = None):
-    return self.prim(prims.equal, [x,y], name)
+    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+      return syntax_helpers.const_bool(True)
+    else:
+      return self.prim(prims.equal, [x,y], name)
   
-  def neq(self, x, y, name = None):  
+  def neq(self, x, y, name = None):
+    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+      return syntax_helpers.const_bool(False)
     return self.prim(prims.not_equal, [x,y], name)
   
   def attr(self, obj, field, name = None):
