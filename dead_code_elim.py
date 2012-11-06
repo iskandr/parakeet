@@ -5,11 +5,11 @@ def is_live_lhs(lhs, live_vars):
   if isinstance(lhs, syntax.Var):
     return lhs.name in live_vars
   elif isinstance(lhs, syntax.Tuple):
-    return any(is_live_lhs(elt) for elt in lhs.elts)
+    return any(is_live_lhs(elt, live_vars) for elt in lhs.elts)
   elif isinstance(lhs, str):
     return lhs in live_vars
   elif isinstance(lhs, tuple):
-    return any(is_live_lhs(elt) for elt in lhs)
+    return any(is_live_lhs(elt, live_vars) for elt in lhs)
   else:
     return True 
   

@@ -34,6 +34,8 @@ class Simplify(transform.Transform):
     elif isinstance(expr, syntax.Index):
       self.collect_live_vars(expr.value)
       self.collect_live_vars(expr.index)
+    elif isinstance(expr, syntax.Const):
+      pass 
     else:
       assert False, \
         "Unexpected left-hand-side expression: " + str(expr) 
