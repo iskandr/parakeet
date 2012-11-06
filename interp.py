@@ -28,12 +28,14 @@ def call(fn, args):
     return fn(*args)
 
 def create_slice_idx(ndims, dim, i):
-  return tuple([i if d == dim else None for d in range(ndims)])
+  return tuple([i if d == dim else Ellipsis for d in range(ndims)])
     
 def nested_arg(arg, dim, i):
   if isinstance(arg, np.ndarray):
     idx = create_slice_idx(np.rank(arg), dim, i)
-    return arg[idx]
+    
+    result = arg[idx]
+    return result 
   else:
     return arg 
 
@@ -106,7 +108,11 @@ def eval_fn(fn, actuals):
       return eval_fn(clos.fn, combined_arg_vals)
       
     def expr_Closure():
-      fundef = untyped_functions[expr.fn]
+      if isinstance(expr.fn, syntax.Fn):
+        fn_name = expr.fn.name
+      else:
+        fn_name = expr.fn
+      fundef = untyped_functions[fn_name]
       closure_arg_vals = map(eval_expr, expr.args) 
       return ClosureVal(fundef, closure_arg_vals)
     
@@ -157,19 +163,20 @@ def eval_fn(fn, actuals):
       ny = y.shape[axis]
       first_x = nested_arg(x, axis, 0)
       first_args = [first_x, nested_arg(y, axis, 0)]
-      print fn, first_args
+
       first_elt = call(fn, first_args)
       result = tile_array(first_elt, (nx, ny))
       for j in xrange(ny):
         result[0,j] = call(fn, [first_x, nested_arg(y, axis, j)])
       for i in xrange(1, nx):
         for j in xrange(0, ny):
-          args = [nested_arg(x, axis, i), nested_arg(y, axis, j)] 
+          args = [nested_arg(x, axis, i), nested_arg(y, axis, j)]
           result[i, j] = call(fn, args)
-      return result 
+      return result
     
     def expr_Reduce():
       fn, args, axis = adverb_prelude()
+
       shape = max_shape(args)
       n = shape[axis]
       if hasattr(expr, 'init') and expr.init:
@@ -180,12 +187,11 @@ def eval_fn(fn, actuals):
         x = args[0]
         assert n == x.shape[axis]
         assert n >= 2
-        
-        
         acc = call(fn, [nested_arg(x, axis, 0), nested_arg(x, axis, 1)])
         start = 2
       for i in xrange(start, n):
         acc = call(fn, [acc, nested_arg(x, axis, i)])
+  
       return acc   
       
     result = dispatch(expr, 'expr')

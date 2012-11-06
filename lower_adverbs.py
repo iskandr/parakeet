@@ -76,7 +76,7 @@ class LowerAdverbs(transform.Transform):
     x = args[0]
     n = self.shape(x, axis)
     x0 = self.index_along_axis(x, axis, 0, "first_elt")
-    x1 = self.index_along_axis(x, axis, 0, "second_elt")
+    x1 = self.index_along_axis(x, axis, 1, "second_elt")
     init = self.invoke(fn, [x0, x1])
     
     i, i_after, merge = self.loop_counter("i", syntax_helpers.const(2))

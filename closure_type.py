@@ -1,11 +1,12 @@
 from core_types import Type, IncompatibleTypes, StructT, Int64
 import type_conv
 
+
 # python's function type
 from types import FunctionType
 import ast_conversion
 import closure_signatures
-
+import ctypes 
 
 ###########################################
 #
@@ -26,8 +27,6 @@ class ClosureT(StructT):
     elif not isinstance(self.args, tuple):
       self.args = tuple(self.args)
 
-    print "CLOSURE CREATE", self.fn, self.args
-
     self._fields_ = [('fn_id', Int64)]
     for (i, t) in enumerate(self.args):
       self._fields_.append( ('arg%d' % i, t) )
@@ -38,6 +37,7 @@ class ClosureT(StructT):
   def __eq__(self, other):
     return self.fn == other.fn and self.args == other.args
 
+
   def from_python(self, python_fn):
     untyped_fundef = ast_conversion.translate_function_value(python_fn)
     closure_args = untyped_fundef.python_nonlocals()
@@ -45,9 +45,16 @@ class ClosureT(StructT):
 
     closure_t = make_closure_type(untyped_fundef, closure_arg_types)
     closure_id = closure_signatures.get_id(closure_t)
-
-
-    converted_args = map(type_conv.from_python, closure_args)
+    
+    def field_value(closure_arg):
+      obj = type_conv.from_python(closure_arg)
+      parakeet_type = type_conv.typeof(closure_arg)
+      if isinstance(parakeet_type, StructT):  
+        return ctypes.pointer(obj)
+      else:
+        return obj
+      
+    converted_args = [field_value(closure_arg) for closure_arg in closure_args]
     return closure_t.ctypes_repr(closure_id, *converted_args)
 
   def to_python(self, parakeet_fn):

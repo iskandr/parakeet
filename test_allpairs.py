@@ -25,6 +25,7 @@ def test_loopdot():
 def dot(x,y):
   return sum(x*y)
 
+
 def test_adverb_dot():
   expect_allpairs(dot, np.dot, vectors)
 
@@ -75,6 +76,8 @@ def loop_matmult(X, Y, Z):
     i = i + 1
   return Z
 
+
+
 def test_loop_matmult():
   for X in matrices:
     for Y in matrices:
@@ -88,8 +91,12 @@ def adverb_matmult(X,Y):
 
 matrices = [int_mat, float_mat, bool_mat]
 
+def transposed_np_dot(x,y):
+  return np.dot(x, y.T)
+
+
 def test_adverb_matmult():
-  expect_allpairs(adverb_matmult, np.dot, matrices)
+  expect_allpairs(adverb_matmult, transposed_np_dot, matrices)
 
       
 if __name__ == '__main__':

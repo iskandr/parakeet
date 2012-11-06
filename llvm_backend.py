@@ -80,7 +80,7 @@ class CompilationEnv:
     self.vars[name] = val
 
 def compile_expr(expr, env, builder):
-  print "  EXPR: ", expr 
+  # print "  EXPR: ", expr 
   def compile_Var():
     ref = env[expr.name]
     val = builder.load(ref, expr.name + "_val")
@@ -144,16 +144,10 @@ def compile_expr(expr, env, builder):
     field_pos = struct_type.field_pos(expr.name)
     field_type = struct_type.field_type(expr.name)
     
-    print "llvm_value", llvm_value
-    print "struct_type", struct_type 
-    print "field_pos", field_pos
-    print "field_type", field_type 
     
     field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)],
                              "%s_ptr" % expr.name)
-    print "field_ptr", field_ptr
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
-    print "field_value", field_value 
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
     else:
@@ -161,37 +155,28 @@ def compile_expr(expr, env, builder):
       return field_value  
   
   def compile_Invoke():
-    print "INVOKE"
     closure_t = expr.closure.type
-    print "CLOSURE_TYPE", closure_t
     assert isinstance(closure_t, ClosureT)
     arg_types = [arg.type for arg in expr.args] 
     
-    print "ARG_TYPES", arg_types 
     closure_object = compile_expr(expr.closure, env, builder)
-    print "CLOSURE OBJECT", closure_object, closure_object.type 
     
     # get the int64 identifier which maps to an untyped_fn/arg_types pairs
     
     untyped_fn_id = closure_t.fn
-    print "UNTYPED FN ID", untyped_fn_id
     assert isinstance(untyped_fn_id, str), \
            "Expected %s to be string identifier" % (untyped_fn_id)
     
     full_arg_types = closure_t.args + tuple(arg_types)
-    print "FULL ARG TYPES", full_arg_types
     # either compile the function we're about to invoke or get its compiled form
     # from a cache
     typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
-    print "found typed_fundef: %s" % typed_fundef.name 
     target_fn_info = compile_fn(typed_fundef)
-    print "Compiled fundef"
     target_fn = target_fn_info.llvm_fn
     
     llvm_closure_args = []
     
-    for (closure_arg_idx, t) in enumerate(closure_t.args):
-      print "building closure_arg %d : %s" % (closure_arg_idx, t) 
+    for (closure_arg_idx, _) in enumerate(closure_t.args):
       name = "closure_arg%d" % closure_arg_idx
       # the first slot is actually the closure's ID, so 
       # each data arg is found at one position above its index
@@ -199,17 +184,11 @@ def compile_expr(expr, env, builder):
       arg_ptr = builder.gep(closure_object, gep_indices, name + "_ptr")
       arg = builder.load(arg_ptr, name)
       llvm_closure_args.append(arg)
-    print "built closure args"
     llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
     
     full_args_list = llvm_closure_args + llvm_direct_args
-    print expr 
-    print "full_args_list", full_args_list
-    print "arg types", [arg.type for arg in full_args_list] 
-    print "target_fn", target_fn 
     assert len(full_args_list) == len(full_arg_types)  
     res = builder.call(target_fn, full_args_list, 'invoke_result')
-    print "DONE", res
     return res 
   
   def compile_PrimCall():
@@ -274,17 +253,14 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks, 
   which were causing some mysterious crashes inside LLVM"""
   
-  print "STMT ", stmt 
+  # print "STMT ", stmt 
   
   def compile_Assign():
     value = compile_expr(stmt.rhs, env, builder)
 
     if isinstance(stmt.lhs, syntax.Var):
       ref = env[stmt.lhs.name]
-      print "ref", ref, ref.type 
-      print "value", value, value.type 
       builder.store(value, ref)
-      print "done"
     elif isinstance(stmt.lhs, syntax.Index):
       assert isinstance(stmt.lhs.value.type, PtrT), \
         "Expected pointer, got %s" % stmt.lhs.value.type
@@ -378,8 +354,8 @@ def compile_fn(fundef):
   compile_block(fundef.body, env, start_builder)
   env.llvm_context.run_passes(env.llvm_fn)
   
-  print "OPTIMIZED"
-  print env.llvm_fn 
+  # print "OPTIMIZED"
+  # print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
   
