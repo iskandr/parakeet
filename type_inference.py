@@ -473,6 +473,6 @@ def infer_return_type(untyped, arg_types):
   and implicitly generates a specialized version of the
   function. 
   """
-  print "Specializing for %s: %s" % (arg_types, untyped )
+  # print "Specializing for %s: %s" % (arg_types, untyped )
   typed = specialize(untyped, arg_types)
   return typed.return_type 

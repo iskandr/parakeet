@@ -7,16 +7,16 @@ from constant_propagation import ConstantPropagation
 from inline import Inliner
 pipeline = [
   Inliner,
-  #ConstantPropagation, Simplify, 
+  ConstantPropagation, Simplify, 
   LowerAdverbs, LowerIndexing, 
-  #ConstantPropagation, Simplify, 
+  ConstantPropagation, Simplify, 
   LowerStructs, 
-  #ConstantPropagation, Simplify,
+  ConstantPropagation, Simplify,
 ]
 
 def lower(fundef):
   
-  print "BEFORE LOWERING", fundef
+  # print "BEFORE LOWERING", fundef
   fundef2 = apply_pipeline(fundef, pipeline)
-  print "AFTER LOWERING", fundef2
+  # print "AFTER LOWERING", fundef2
   return fundef2 

@@ -9,6 +9,7 @@ from transform import Transform, cached_apply
 
 from syntax_helpers import const_tuple, const_int 
 
+
 class LowerStructs(Transform):
   """
   The only non-scalar objects should all be created as explicit Structs
