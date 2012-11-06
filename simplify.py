@@ -4,7 +4,7 @@ from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 import type_inference
 import syntax 
 import syntax_helpers 
-
+import dead_code_elim
 
 
 class Simplify(transform.Transform):
@@ -22,7 +22,7 @@ class Simplify(transform.Transform):
   
   def collect_live_vars(self, expr):
     if isinstance(expr, syntax.Var):
-      print "LIVE VAR", expr.name 
+      
       self.live_vars.add(expr.name)
     elif isinstance(expr, syntax.Tuple):
       for e in expr.elts:
@@ -132,11 +132,11 @@ class Simplify(transform.Transform):
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
   
   def post_apply(self, new_fn):
-    import dead_code_elim
-    print "before DCE", new_fn
-    print "live vars", self.live_vars 
+    
+    # print "before DCE", new_fn
+    # print "live vars", self.live_vars 
     new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)
-    print "after DCE", new_fn 
+    # print "after DCE", new_fn 
     return new_fn 
   
 def simplify(fn):

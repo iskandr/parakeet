@@ -18,7 +18,7 @@ def elim_stmt(stmt, live_vars):
     if is_live_lhs(stmt.lhs, live_vars):
       return stmt 
     else:
-      print "Killing ", stmt 
+      # print "Killing ", stmt 
       return None
     
   def elim_While():
