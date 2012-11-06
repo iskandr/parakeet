@@ -415,9 +415,7 @@ class Transform(object):
       new_right = self.transform_expr(right)
       result[k] = new_left, new_right 
     return result 
-  
- 
-  
+
   def transform_Assign(self, stmt):
     rhs = self.transform_expr(stmt.rhs)
     lhs = self.transform_lhs(stmt.lhs) 
@@ -456,14 +454,20 @@ class Transform(object):
         self.blocks.append_to_current(new_stmt)
     return self.blocks.pop() 
   
+  def pre_apply(self, old_fn):
+    return old_fn 
+  
+  def post_apply(self, new_fn):
+    return new_fn 
+  
   def apply(self):
-    
-    if isinstance(self.fn, syntax.TypedFn): 
-      self.type_env = self.fn.type_env.copy()
+    old_fn = self.pre_apply(self.fn)
+    if isinstance(old_fn, syntax.TypedFn): 
+      self.type_env = old_fn.type_env.copy()
     else:
       self.type_env = {}
-    body = self.transform_block(self.fn.body)
-    new_fundef_args = dict([ (m, getattr(self.fn, m)) for m in self.fn._members])
+    body = self.transform_block(old_fn.body)
+    new_fundef_args = dict([ (m, getattr(old_fn, m)) for m in old_fn._members])
     # create a fresh function with a distinct name and the 
     # transformed body and type environment 
     new_fundef_args['name'] = names.refresh(self.fn.name)
@@ -472,7 +476,8 @@ class Transform(object):
     new_fundef = syntax.TypedFn(**new_fundef_args)
     # register this function so if anyone tries to call it they'll be
     # able to find its definition later 
-    function_registry.typed_functions[new_fundef.name] = new_fundef 
+    new_fundef = self.post_apply(new_fundef) 
+    function_registry.typed_functions[new_fundef.name] = new_fundef
     return new_fundef 
 
 
