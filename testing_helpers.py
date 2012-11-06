@@ -41,7 +41,9 @@ def run_local_tests(locals_dict = None):
 
 def eq(x,y):
   if isinstance(y, np.ndarray):
-    return isinstance(x, np.ndarray) and x.shape == y.shape and np.all(x[:] == y[:])
+    return isinstance(x, np.ndarray) and x.shape == y.shape and \
+      (np.all(np.ravel(x) == np.ravel(y)) or \
+       np.mean(np.ravel(x) - np.ravel(y)) <= 0.000001)
   else:
     return x == y
 
