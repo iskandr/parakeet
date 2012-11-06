@@ -80,19 +80,13 @@ class Attribute(Expr):
   _members = ['value', 'name']
   
   def __str__(self):
-    if self.type:
-      return "%s.%s : %s" % (self.value, self.name, self.type)
-    else:
-      return "%s.%s" % (self.value, self.name)
+    return "%s.%s" % (self.value, self.name)
 
 class Index(Expr):
   _members = ['value', 'index']
   
   def __str__(self):
-    if self.type:
-      return "%s[%s] : %s" % (self.value, self.index, self.type)
-    else:
-      return "%s[%s]" % (self.value, self.index)
+    return "%s[%s]" % (self.value, self.index)
     
 class Tuple(Expr):
   _members = ['elts']

@@ -7,6 +7,7 @@ from core_types import Bool, Int32, Int64, PtrT
 from closure_type import ClosureT
 import prims 
 import syntax
+import syntax_helpers 
 from common import dispatch  
 from function_registry import find_specialization
 
@@ -17,13 +18,15 @@ import llvm_convert
 import llvm_prims 
 import llvm_context 
 from compiled_fn import CompiledFn
+import function_registry
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.opt_context):
+  def __init__(self, llvm_cxt = llvm_context.verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
     self.vars = {}
+    self.initialized = set([])
   
   def new_block(self, name):
     bb = self.llvm_fn.append_basic_block(name)
@@ -63,7 +66,7 @@ class CompilationEnv:
         name = parakeet_arg.name
       else:
         assert False, "Tuple arg patterns not yet implemented"
-    
+      self.initialized.add(name)
       llvm_arg.name = name
       builder.store(llvm_arg, self.vars[name])
   
@@ -80,8 +83,10 @@ class CompilationEnv:
     self.vars[name] = val
 
 def compile_expr(expr, env, builder):
-  # print "  EXPR: ", expr 
+
   def compile_Var():
+    name = expr.name 
+    assert name in env.initialized, "%s uninitialized" % name 
     ref = env[expr.name]
     val = builder.load(ref, expr.name + "_val")
     return val 
@@ -154,6 +159,33 @@ def compile_expr(expr, env, builder):
 
       return field_value  
   
+  
+  def compile_Call():
+    
+    if isinstance(expr.fn, syntax.Fn):
+      # sometimes functions seem to sneak into this field
+      fn_id = expr.fn.name
+    else:
+      fn_id = expr.fn
+      assert isinstance(fn_id, str), \
+        "Expected function name, got: %s" + str(fn_id)
+    
+    assert fn_id in function_registry.typed_functions, \
+      "Can only call typed function, got: " + str(fn_id)
+    typed_fundef = function_registry.typed_functions[fn_id]
+    
+    target_fn = compile_fn(typed_fundef).llvm_fn
+     
+    arg_types = syntax_helpers.get_types(expr.args)
+    llvm_args = [compile_expr(arg, env, builder) for arg in expr.args]
+    assert len(arg_types) == len(llvm_args) 
+  
+     
+    return builder.call(target_fn, llvm_args, 'call_result')
+    
+    
+  # TODO: get rid of this branch in the code generator 
+  # and lower all invocations instead in lower_structs
   def compile_Invoke():
     closure_t = expr.closure.type
     assert isinstance(closure_t, ClosureT)
@@ -173,7 +205,7 @@ def compile_expr(expr, env, builder):
     typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
     target_fn_info = compile_fn(typed_fundef)
     target_fn = target_fn_info.llvm_fn
-    
+    # print "GOT FN FOR INVOKE..."
     llvm_closure_args = []
     
     for (closure_arg_idx, _) in enumerate(closure_t.args):
@@ -188,8 +220,13 @@ def compile_expr(expr, env, builder):
     
     full_args_list = llvm_closure_args + llvm_direct_args
     assert len(full_args_list) == len(full_arg_types)  
+    # print "ABOUT TO INVOKE"
+    # print "-- ", target_fn
+    # print "-- ", [str(a) for a in full_args_list] 
+    # print "-- ", [str(a.type) for a in full_args_list]
     res = builder.call(target_fn, full_args_list, 'invoke_result')
-    return res 
+    # print res
+    return res
   
   def compile_PrimCall():
     prim = expr.prim
@@ -236,12 +273,14 @@ def compile_expr(expr, env, builder):
 def compile_merge_left(phi_nodes, env, builder):
   for name, (left, _) in phi_nodes.iteritems():
     ref = env[name]
+    env.initialized.add(name)
     value = compile_expr(left, env, builder)
     builder.store(value, ref)
     
 def compile_merge_right(phi_nodes, env, builder):
   for name, (_, right) in phi_nodes.iteritems():
     ref = env[name]
+    env.initialized.add(name)
     value = compile_expr(right, env, builder)
     builder.store(value, ref)
 
@@ -259,7 +298,9 @@ def compile_stmt(stmt, env, builder):
     value = compile_expr(stmt.rhs, env, builder)
 
     if isinstance(stmt.lhs, syntax.Var):
-      ref = env[stmt.lhs.name]
+      name = stmt.lhs.name
+      env.initialized.add(name)
+      ref = env[name]
       builder.store(value, ref)
     elif isinstance(stmt.lhs, syntax.Index):
       assert isinstance(stmt.lhs.value.type, PtrT), \
@@ -354,8 +395,8 @@ def compile_fn(fundef):
   compile_block(fundef.body, env, start_builder)
   env.llvm_context.run_passes(env.llvm_fn)
   
-  # print "OPTIMIZED"
-  # print env.llvm_fn 
+  #print "OPTIMIZED"
+  #print env.llvm_fn 
   result = CompiledFn(env.llvm_fn, fundef) 
   compiled_functions[fundef.name] = result 
   

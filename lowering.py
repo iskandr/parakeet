@@ -3,19 +3,17 @@ from lower_adverbs import LowerAdverbs
 from lower_structs import LowerStructs
 from lower_indexing import LowerIndexing
 from simplify import Simplify
-from constant_propagation import ConstantPropagation 
-from inline import Inliner
+import optimize 
+
 pipeline = [
-  Inliner,
-  ConstantPropagation, Simplify, 
   LowerAdverbs, LowerIndexing, 
-  ConstantPropagation, Simplify, 
+  Simplify, 
   LowerStructs, 
-  ConstantPropagation, Simplify,
+  Simplify,
 ]
 
 def lower(fundef):
-  
+  fundef = optimize.optimize(fundef)
   # print "BEFORE LOWERING", fundef
   fundef2 = apply_pipeline(fundef, pipeline)
   # print "AFTER LOWERING", fundef2

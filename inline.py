@@ -74,7 +74,9 @@ class Inliner(transform.Transform):
   def transform_Call(self, expr):
     target = function_registry.typed_functions[expr.fn]
     if can_inline(target):
-      return self.do_inline(target, expr.args)
+      # do nested inlining to avoid having to re-run this optimization
+      opt_target = inline(target)
+      return self.do_inline(opt_target, expr.args)
     else:
       return expr
     
@@ -88,10 +90,14 @@ class Inliner(transform.Transform):
         return self.do_inline(typed_fundef, expr.args)
     return expr 
   
+  def pre_apply(self, old_fn):
+    print "Before inlining", old_fn 
+    return old_fn 
   
-_inline_cache = {}
+  def post_apply(self, new_fn):
+    print "After inlining", new_fn
+    return new_fn 
+  
+
 def inline(fn):
-  if fn.name in _inline_cache:
-    return _inline_cache[fn.name]
-  else:
-    return Inliner(fn).apply()    
+  return transform.cached_apply(Inliner, fn)
