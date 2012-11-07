@@ -5,7 +5,6 @@ import type_conv
 # python's function type
 from types import FunctionType
 import ast_conversion
-import closure_signatures
 import ctypes 
 
 ###########################################
@@ -44,7 +43,7 @@ class ClosureT(StructT):
     closure_arg_types = map(type_conv.typeof, closure_args)
 
     closure_t = make_closure_type(untyped_fundef, closure_arg_types)
-    closure_id = closure_signatures.get_id(closure_t)
+    closure_id = id_of_closure_type(closure_t)
     
     def field_value(closure_arg):
       obj = type_conv.from_python(closure_arg)
@@ -101,6 +100,33 @@ def typeof_prim(p):
   return make_closure_type(untyped_fn, [])
 
 type_conv.register(prims.class_list, ClosureT, typeof_prim)
+
+"""
+Map each (untyped fn id, fixed arg) types to a distinct integer
+so that the runtime representation of closures just need to 
+carry this ID
+"""
+closure_type_to_id = {}
+id_to_closure_type = {}
+max_id = 0  
+
+def id_of_closure_type(closure_t):
+  global max_id
+  assert isinstance(closure_t, ClosureT), \
+    "Expected closure type, got: " + str(closure_t) 
+  if closure_t in closure_type_to_id:
+    return closure_type_to_id[closure_t]
+  else:
+    num = max_id
+    max_id += 1
+    closure_type_to_id[closure_t] = num
+    return num 
+  
+def closure_type_from_id(num):
+  assert num in id_to_closure_type 
+  return id_to_closure_type[num]
+
+
 
 class ClosureSet(Type):
   """

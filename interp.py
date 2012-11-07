@@ -93,7 +93,7 @@ def eval_fn(fn, actuals):
       return expr.value.fn
     
     def expr_Slice():
-      return slice(eval_expr(expr.lower), eval_expr(expr.upper), eval_expr(expr.step)) 
+      return slice(eval_expr(expr.start), eval_expr(expr.stop), eval_expr(expr.step)) 
     
     def expr_Var():
       return env[expr.name]
@@ -135,6 +135,8 @@ def eval_fn(fn, actuals):
     def expr_TupleProj():
       return eval_expr(expr.tuple)[expr.index]
     
+    def expr_ClosureElt():
+      return eval_expr(expr.closure).fixed_args[expr.index]
    
     def adverb_prelude():
       fn = eval_expr(expr.fn)

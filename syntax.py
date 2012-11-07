@@ -66,21 +66,18 @@ class Var(Expr):
 
   def __repr__(self):
     if hasattr(self, 'type'):
-      return "var(%s, type=%s)" % (self.name, self.type)
+      return "%s : %s" % (self.name, self.type)
     else:
-      return "var(%s)" % self.name
+      return "%s" % self.name
 
   def __str__(self):
-    #if hasattr(self, 'type'):
-    #  return "%s : %s" % (self.name, self.type)
-    #else:
-    #  return self.name
     return self.name 
+  
 class Attribute(Expr):
   _members = ['value', 'name']
   
   def __str__(self):
-    return "%s.%s" % (self.value, self.name)
+    return "attr(%s, '%s')" % (self.value, self.name)
 
 class Index(Expr):
   _members = ['value', 'index']
@@ -111,7 +108,7 @@ class Invoke(Expr):
   _members = ['closure', 'args']
 
 class Slice(Expr):
-  _members = ['lower', 'upper', 'step']
+  _members = ['start', 'stop', 'step']
 
 class PrimCall(Expr):
   """
@@ -201,8 +198,11 @@ class Fn(Node):
 class TupleProj(Expr):
   _members = ['tuple', 'index']
   
+class ClosureElt(Expr):
+  _members = ['closure', 'index']
+  
   def __str__(self):
-    return "%s[%d]" % (self.tuple, self.index) 
+    return "ClosureElt(%s, %d)" % (self.closure, self.index) 
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
@@ -232,7 +232,6 @@ class IntToPtr(Expr):
   Reinterpret an integer as a pointer to the specified type
   """ 
   _members = ['value']
-
 
 class PtrToInt(Expr):
   """

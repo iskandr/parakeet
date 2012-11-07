@@ -1,3 +1,9 @@
+import ast_conversion
+import llvm_backend
+import syntax
+ 
+import type_inference
+
 from llvm.ee import GenericValue
 
 import llvm_types
@@ -5,6 +11,7 @@ from llvm_context import opt_context
 import core_types
 import type_conv
 import ctypes
+
 
 def python_to_generic_value(x, t):
   if isinstance(t, core_types.FloatT):
@@ -63,3 +70,40 @@ class CompiledFn:
                  zip(ctypes_inputs, expected_types)]
     gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
+
+def specialize_and_compile(fn, args):
+  """
+  Translate, specialize, optimize, and compile the given 
+  function for the types of the supplies arguments. 
+  
+  Return the untyped, typed, and compiled representation,
+  along with all the arguments needed to actually execute. 
+  """
+  if isinstance(fn, syntax.Fn):
+    untyped = fn
+  else:
+    # translate from the Python AST to Parakeet's untyped format
+    untyped  = ast_conversion.translate_function_value(fn)
+  all_args = untyped.python_nonlocals() + list(args)
+
+  # get types of all inputs
+  input_types = [type_conv.typeof(arg) for arg in all_args]
+
+  # propagate types through function representation and all
+  # other functions it calls
+  typed = type_inference.specialize(untyped, input_types)
+
+  # compile to native code
+  llvm_fn, parakeet_fn, exec_engine = \
+    llvm_backend.compile_fn(typed)
+  compiled_fn_wrapper = CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  return untyped, typed, compiled_fn_wrapper, all_args
+
+def run(fn, *args):
+  """
+  Given a python function, run it in Parakeet on the supplied args
+  """
+  _, _,  compiled, all_args = specialize_and_compile(fn, args)
+  return compiled(*all_args)
+
+

@@ -74,20 +74,25 @@ class Inliner(transform.Transform):
   def transform_Call(self, expr):
     target = function_registry.typed_functions[expr.fn]
     if can_inline(target):
-      # do nested inlining to avoid having to re-run this optimization
-      opt_target = inline(target)
-      return self.do_inline(opt_target, expr.args)
+      return self.do_inline(target, expr.args)
     else:
       return expr
     
   def transform_Invoke(self, expr):
-    closure_t = expr.closure.type 
-    
-    if len(closure_t.args) == 0:
-      arg_types = get_types(expr.args)
-      typed_fundef = type_inference.specialize(closure_t.fn, arg_types)
-      if can_inline(typed_fundef):
-        return self.do_inline(typed_fundef, expr.args)
+    closure = self.transform_expr(expr.closure)
+    args = self.transform_expr_list(expr.args)
+    closure_t = closure.type 
+    n_closure_args = len(closure_t.args)
+    closure_args = \
+      [self.closure_elt(closure, i) for i in xrange(n_closure_args)]
+    all_args = closure_args + args 
+    arg_types = get_types(all_args)  
+    typed_fundef = type_inference.specialize(closure_t.fn, arg_types)
+    if can_inline(typed_fundef):
+      return self.do_inline(typed_fundef, all_args)
+    else:
+        print "CAN'T INLINE", self.fn.name
+    print "DONE WITHOUT INLINE", self.fn.name 
     return expr 
   
   def pre_apply(self, old_fn):
@@ -99,5 +104,5 @@ class Inliner(transform.Transform):
     return new_fn 
   
 
-def inline(fn):
-  return transform.cached_apply(Inliner, fn)
+#def inline(fn):
+#  return transform.cached_apply(Inliner, fn)

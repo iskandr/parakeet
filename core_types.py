@@ -104,6 +104,11 @@ def is_struct(c_repr):
   return type(c_repr) == type(ctypes.Structure)
 
 
+class FieldNotFound(Exception):
+  def __init__(self, struct_t, field_name):
+    self.struct_t = struct_t 
+    self.field_name = field_name 
+
 class StructT(Type):
   """
   All concrete types excluding scalars and pointers
@@ -118,13 +123,14 @@ class StructT(Type):
     for (field_name, field_type) in self._fields_:
       if field_name == name:
         return field_type
-    raise RuntimeError("Couldn't find field named '%s' for %s" % (name, self))
+    raise FieldNotFound(self, name)
   
   def field_pos(self, name):
     for (i, (field_name, _)) in enumerate(self._fields_):
       if field_name == name:
         return i
-    raise RuntimeError("Couldn't find field named '%s' for %s" % (name, self))
+    raise FieldNotFound(self, name)
+          
   
   @property
   def ctypes_repr(self):

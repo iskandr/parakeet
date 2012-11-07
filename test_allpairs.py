@@ -75,7 +75,6 @@ def loop_matmult(X, Y, Z):
   return Z
 
 
-
 def test_loop_matmult():
   for X in matrices:
     for Y in matrices:

@@ -2,7 +2,7 @@ import sys
 import numpy as np
 
 import interp
-from external_api import specialize_and_compile
+from run_function import specialize_and_compile
 
 
 def run_local_functions(prefix, locals_dict = None):   

@@ -17,7 +17,6 @@ from llvm_helpers import const, int32 #, zero, one
 import llvm_convert
 import llvm_prims
 import llvm_context
-from compiled_fn import CompiledFn
 import function_registry
 
 class CompilationEnv:
@@ -171,14 +170,14 @@ def compile_expr(expr, env, builder):
       "Can only call typed function, got: " + str(fn_id)
     typed_fundef = function_registry.typed_functions[fn_id]
 
-    target_fn = compile_fn(typed_fundef).llvm_fn
+    (target_fn, _, _) = compile_fn(typed_fundef)
 
     arg_types = syntax_helpers.get_types(expr.args)
     llvm_args = [compile_expr(arg, env, builder) for arg in expr.args]
     assert len(arg_types) == len(llvm_args)
 
     return builder.call(target_fn, llvm_args, 'call_result')
-
+ 
   # TODO: get rid of this branch in the code generator
   # and lower all invocations instead in lower_structs
   def compile_Invoke():
@@ -198,8 +197,8 @@ def compile_expr(expr, env, builder):
     # either compile the function we're about to invoke or get its compiled form
     # from a cache
     typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
-    target_fn_info = compile_fn(typed_fundef)
-    target_fn = target_fn_info.llvm_fn
+    (target_fn, _, _) = compile_fn(typed_fundef)
+    
     # print "GOT FN FOR INVOKE..."
     llvm_closure_args = []
 
@@ -222,7 +221,7 @@ def compile_expr(expr, env, builder):
     res = builder.call(target_fn, full_args_list, 'invoke_result')
     # print res
     return res
-
+  
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args
@@ -392,7 +391,6 @@ def compile_fn(fundef):
 
   #print "OPTIMIZED"
   #print env.llvm_fn
-  result = CompiledFn(env.llvm_fn, fundef)
+  result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
   compiled_functions[fundef.name] = result
-
   return result

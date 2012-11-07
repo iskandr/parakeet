@@ -156,12 +156,19 @@ class Transform(object):
   
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
-    
     if isinstance(tup, syntax.Tuple):
       return tup.elts[idx]
     else:
-      t = tup.type.elt_types[idx] 
-      return syntax.TupleProj(tup, idx, type = t)
+      return syntax.TupleProj(tup, idx, type = tup.type.elt_types[idx])
+  
+  def closure_elt(self, clos, idx):
+    assert isinstance(idx, (int, long))
+    
+    if isinstance(clos, syntax.Closure):
+      return clos.args[idx]
+    else:
+      return syntax.ClosureElt(clos, idx, type = clos.type.args[idx])
+  
   
   def prim(self, prim_fn, args, name = None):
     args = wrap_constants(args)
@@ -460,29 +467,33 @@ class Transform(object):
   def post_apply(self, new_fn):
     return new_fn 
   
-  def apply(self):
+  def apply(self, copy = False):
     old_fn = self.pre_apply(self.fn)
     if isinstance(old_fn, syntax.TypedFn): 
       self.type_env = old_fn.type_env.copy()
     else:
       self.type_env = {}
-    body = self.transform_block(old_fn.body)
-    new_fundef_args = dict([ (m, getattr(old_fn, m)) for m in old_fn._members])
-    # create a fresh function with a distinct name and the 
-    # transformed body and type environment 
-    new_fundef_args['name'] = names.refresh(self.fn.name)
-    new_fundef_args['body'] = body
-    new_fundef_args['type_env'] = self.type_env 
-    new_fundef = syntax.TypedFn(**new_fundef_args)
-    # register this function so if anyone tries to call it they'll be
-    # able to find its definition later 
-    new_fundef = self.post_apply(new_fundef) 
-    function_registry.typed_functions[new_fundef.name] = new_fundef
-    return new_fundef 
+    new_body = self.transform_block(old_fn.body)
+    if copy:
+      new_fundef_args = dict([ (m, getattr(old_fn, m)) for m in old_fn._members])
+      # create a fresh function with a distinct name and the 
+      # transformed body and type environment 
+      new_fundef_args['name'] = names.refresh(self.fn.name)
+      new_fundef_args['body'] = new_body
+      new_fundef_args['type_env'] = self.type_env 
+      new_fundef = syntax.TypedFn(**new_fundef_args)
+      # register this function so if anyone tries to call it they'll be
+      # able to find its definition later
+      function_registry.typed_functions[new_fundef.name] = new_fundef
+      return self.post_apply(new_fundef)
+    else:
+      old_fn.type_env = self.type_env
+      old_fn.body = new_body 
+      return self.post_apply(old_fn)
 
 
 _transform_cache = {}
-def cached_apply(T, fn):
+def cached_apply(T, fn, copy= False):
   """
   Applies the transformation, caches the result,
   and registers the new function in the global registry  
@@ -491,11 +502,18 @@ def cached_apply(T, fn):
   if key in _transform_cache:
     return _transform_cache[key]
   else:
-    new_fn = T(fn).apply()
+    new_fn = T(fn).apply(copy = copy)
     _transform_cache[key] = new_fn
     return new_fn
   
-def apply_pipeline(fn, transforms):
+def apply_pipeline(fn, transforms, copy = False,  memoize = False):
   for T in transforms:
-    fn = cached_apply(T, fn) 
+    if memoize:
+      fn = cached_apply(T, fn, copy = copy)
+    else:
+      fn = T(fn).apply(copy = copy)
+      
+    # only copy the function on the first iteration, 
+    # if you're going to copy it at all  
+    copy = False 
   return fn 

@@ -1,8 +1,6 @@
 
-
 from prims import *
-
-from external_api import each, seq_reduce 
+from adverb_api  import each, seq_reduce 
 
 # from adverbs import map, reduce, scan 
 def len(arr):

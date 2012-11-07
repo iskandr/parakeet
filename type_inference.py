@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import syntax as untyped_ast
 import syntax as typed_ast
+import syntax_helpers 
 
 import core_types
 import tuple_type
@@ -18,8 +19,7 @@ from syntax_helpers import get_type, get_types, unwrap_constant
 
 import adverbs 
 import adverb_helpers 
-from checkbox.job import PASS
-import function_registry
+
  
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -134,6 +134,13 @@ def annotate_expr(expr, tenv, var_map):
     array_t = array_type.make_array_type(common_t, 1)
     return typed_ast.Array(new_elts, type = array_t)
   
+  def expr_Slice():
+    start = annotate_child(expr.start)
+    stop = annotate_child(expr.stop)
+    step = annotate_child(expr.step)
+    slice_t = array_type.make_slice_type(start.type, stop.type, step.type)
+    return typed_ast.Slice(start, stop, step, type = slice_t)
+
   def expr_Var():
     old_name = expr.name
     if old_name not in var_map._vars:
@@ -255,8 +262,18 @@ def annotate_stmt(stmt, tenv, var_map ):
         assert isinstance(new_arr.type, array_type.ArrayT), "Expected array, got %s" % new_arr.type
         elt_t = new_arr.type.elt_type 
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
+      elif isinstance(lhs, untyped_ast.Attribute):
+        name = lhs.name 
+        struct = annotate_expr(lhs.value, tenv, var_map)
+        struct_t = struct.type 
+        assert isinstance(struct_t, core_types.StructT), \
+          "Can't access fields on value %s of type %s" % \
+          (struct, struct_t)
+        field_t = struct_t.field_type(name)
+        return typed_ast.Attribute(struct, name, field_t)
       else:
-        assert isinstance(lhs, untyped_ast.Var)
+        assert isinstance(lhs, untyped_ast.Var), \
+          "Unexpected LHS: " + str(lhs)
         new_name = var_map.lookup(lhs.name)
         old_type = tenv.get(new_name, core_types.Unknown)
         new_type = old_type.combine(rhs_type)
@@ -310,7 +327,9 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   typed_args = untyped_fn.args.transform(var_map.rename)
   # flatten the positional, keyword, and default args into their
   # linear order, and use default_fn to get the type of default values
-  input_types = typed_args.linearize_values(positional_types, keyword_types, default_fn = type_conv.typeof)
+  input_types = typed_args.linearize_values(positional_types, 
+                                            keyword_types, 
+                                            default_fn = type_conv.typeof)
   tenv = {}
   args.match_list(typed_args.arg_slots, input_types, tenv)
   
@@ -321,7 +340,8 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   return_type = tenv['$return']
   # if nothing ever gets returned, then set the return type to None
   if return_type == core_types.Unknown:
-    assert False, "TO DO: Implement a none type"
+    body.append(typed_ast.Return(syntax_helpers.const_none))
+    return_type = core_types.NoneType
     
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name), 
@@ -347,10 +367,6 @@ def rewrite_typed(fn):
     TODO: Make this recursive!
     """
     def rewrite_PrimCall():
-
-      # TODO: This awkwardly infers the types we need to cast args up to
-      # but then dont' actually coerce them, since that's left as distinct work
-      # for a later stage 
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
       upcast_types = expr.prim.expected_input_types(arg_types)
@@ -364,6 +380,17 @@ def rewrite_typed(fn):
       new_elts = [coerce_expr(elt, elt_t) for elt in expr.elts]
       return typed_ast.Array(new_elts, type = array_t)
     
+    def rewrite_Slice():
+      # None step defaults to 1
+      if isinstance(expr.step.type, core_types.NoneT):
+        start_t = expr.start.type
+        stop_t = expr.stop.type 
+        step = syntax_helpers.one_i64
+        step_t = step.type 
+        slice_t = array_type.make_slice_type(start_t, stop_t, step_t)
+        return typed_ast.Slice(expr.start, expr.stop, step, type = slice_t)  
+      else:
+        return expr 
     return dispatch(expr, "rewrite", default = lambda x: x)
       
      
@@ -458,8 +485,12 @@ def specialize(untyped, arg_types):
   except:
     typed_fundef = _infer_types(untyped, arg_types)
     rewrite_typed(typed_fundef)
-    add_specialization(untyped_id, arg_types, typed_fundef)
-    return typed_fundef 
+    import optimize 
+    # TODO: Also store the unoptimized version 
+    # so we can do adaptive recompilation  
+    opt = optimize.optimize(typed_fundef, copy = False)
+    add_specialization(untyped_id, arg_types, opt)
+    return opt 
 
 def infer_return_type(untyped, arg_types):
   """
