@@ -93,7 +93,7 @@ def eval_fn(fn, actuals):
       return expr.value.fn
     
     def expr_Slice():
-      return slice(eval_expr(expr.lower), eval_expr(expr.upper), eval_expr(expr.step)) 
+      return slice(eval_expr(expr.start), eval_expr(expr.stop), eval_expr(expr.step)) 
     
     def expr_Var():
       return env[expr.name]

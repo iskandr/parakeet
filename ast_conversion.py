@@ -147,7 +147,10 @@ class AST_Translator(ast.NodeVisitor):
         expr.upper
         expr.step
       """
-      raise RuntimeError("Slice unsupported")
+      start = self.visit_expr(expr.lower)
+      stop = self.visit_expr(expr.upper)
+      step = self.visit_expr(expr.step)
+      return syntax.Slice(start, stop, step) 
 
     def visit_ExtSlice():
       slice_elts = map(self.translate_slice, expr.dims)
