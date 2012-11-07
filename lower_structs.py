@@ -4,7 +4,7 @@ import core_types
 from array_type import ArrayT, ScalarT, make_array_type
 
 import tuple_type 
-import closure_signatures 
+import closure_type
 from transform import Transform, cached_apply
 
 from syntax_helpers import const_tuple, const_int 
@@ -30,7 +30,7 @@ class LowerStructs(Transform):
         
   def transform_Closure(self, expr):
     closure_args = self.transform_expr_list(expr.args)
-    closure_id = closure_signatures.get_id(expr.type)
+    closure_id = closure_type.id_of_closure_type(expr.type)
     closure_id_node = syntax.Const(closure_id, type = core_types.Int64)
     return syntax.Struct([closure_id_node] + closure_args, type = expr.type)
 
@@ -38,9 +38,16 @@ class LowerStructs(Transform):
     new_tuple = self.transform_expr(expr.tuple)
     assert isinstance(expr.index, int)
     tuple_t = expr.tuple.type
-
     field_name, field_type  = tuple_t._fields_[expr.index]
     return syntax.Attribute(new_tuple, field_name, type = field_type)
+  
+  def transform_ClosureElt(self, expr):
+    new_closure = self.transform_expr(expr.closure)
+    assert isinstance(expr.index, int)
+    # first field is always the closure ID, so we have to 
+    # index 1 higher 
+    field_name, field_type = new_closure.type._fields_[expr.index + 1]
+    return syntax.Attribute(new_closure, field_name, type = field_type)
   
   def array_view(self, data, shape, strides):
     """

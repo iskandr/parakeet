@@ -135,6 +135,8 @@ def eval_fn(fn, actuals):
     def expr_TupleProj():
       return eval_expr(expr.tuple)[expr.index]
     
+    def expr_ClosureElt():
+      return eval_expr(expr.closure).fixed_args[expr.index]
    
     def adverb_prelude():
       fn = eval_expr(expr.fn)

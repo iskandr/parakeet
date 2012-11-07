@@ -177,7 +177,7 @@ def compile_expr(expr, env, builder):
     assert len(arg_types) == len(llvm_args)
 
     return builder.call(target_fn, llvm_args, 'call_result')
-
+ 
   # TODO: get rid of this branch in the code generator
   # and lower all invocations instead in lower_structs
   def compile_Invoke():
@@ -221,7 +221,7 @@ def compile_expr(expr, env, builder):
     res = builder.call(target_fn, full_args_list, 'invoke_result')
     # print res
     return res
-
+  
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args
