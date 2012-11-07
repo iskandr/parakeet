@@ -198,8 +198,11 @@ class Fn(Node):
 class TupleProj(Expr):
   _members = ['tuple', 'index']
   
+class ClosureElt(Expr):
+  _members = ['closure', 'index']
+  
   def __str__(self):
-    return "%s[%d]" % (self.tuple, self.index) 
+    return "ClosureElt(%s, %d)" % (self.closure, self.index) 
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
@@ -229,7 +232,6 @@ class IntToPtr(Expr):
   Reinterpret an integer as a pointer to the specified type
   """ 
   _members = ['value']
-
 
 class PtrToInt(Expr):
   """

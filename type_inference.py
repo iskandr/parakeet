@@ -18,8 +18,7 @@ from syntax_helpers import get_type, get_types, unwrap_constant
 
 import adverbs 
 import adverb_helpers 
-from checkbox.job import PASS
-import function_registry
+
  
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -310,7 +309,9 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   typed_args = untyped_fn.args.transform(var_map.rename)
   # flatten the positional, keyword, and default args into their
   # linear order, and use default_fn to get the type of default values
-  input_types = typed_args.linearize_values(positional_types, keyword_types, default_fn = type_conv.typeof)
+  input_types = typed_args.linearize_values(positional_types, 
+                                            keyword_types, 
+                                            default_fn = type_conv.typeof)
   tenv = {}
   args.match_list(typed_args.arg_slots, input_types, tenv)
   

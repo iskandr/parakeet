@@ -156,12 +156,19 @@ class Transform(object):
   
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
-    
     if isinstance(tup, syntax.Tuple):
       return tup.elts[idx]
     else:
-      t = tup.type.elt_types[idx] 
-      return syntax.TupleProj(tup, idx, type = t)
+      return syntax.TupleProj(tup, idx, type = tup.type.elt_types[idx])
+  
+  def closure_elt(self, clos, idx):
+    assert isinstance(idx, (int, long))
+    
+    if isinstance(clos, syntax.Closure):
+      return clos.args[idx]
+    else:
+      return syntax.ClosureElt(clos, idx, type = clos.type.args[idx])
+  
   
   def prim(self, prim_fn, args, name = None):
     args = wrap_constants(args)

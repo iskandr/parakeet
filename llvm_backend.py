@@ -170,7 +170,7 @@ def compile_expr(expr, env, builder):
       "Can only call typed function, got: " + str(fn_id)
     typed_fundef = function_registry.typed_functions[fn_id]
 
-    target_fn = compile_fn(typed_fundef).llvm_fn
+    (target_fn, _, _) = compile_fn(typed_fundef)
 
     arg_types = syntax_helpers.get_types(expr.args)
     llvm_args = [compile_expr(arg, env, builder) for arg in expr.args]
@@ -197,8 +197,8 @@ def compile_expr(expr, env, builder):
     # either compile the function we're about to invoke or get its compiled form
     # from a cache
     typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
-    target_fn_info = compile_fn(typed_fundef)
-    target_fn = target_fn_info.llvm_fn
+    (target_fn, _, _) = compile_fn(typed_fundef)
+    
     # print "GOT FN FOR INVOKE..."
     llvm_closure_args = []
 

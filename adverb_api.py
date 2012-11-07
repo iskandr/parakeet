@@ -23,7 +23,7 @@ def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
     return adverb_helpers.untyped_wrapper(adverb_class, arg_names, **kwds)
   def python_hook(fn, *args, **kwds):
     wrapper = create_wrapper(fn, **kwds)
-    return run(wrapper, [fn] + list(args))
+    return run(wrapper, *[fn] + list(args))
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
   default_wrapper_args = ['fn'] + default_args
