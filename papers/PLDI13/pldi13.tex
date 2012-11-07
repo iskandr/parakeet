@@ -1,6 +1,6 @@
 \documentclass[preprint,9pt]{sigplanconf}
 
-\usepackage{graphicx,listings,fixltx2e,lambda,array,times, color}
+\usepackage{graphicx,listings,fixltx2e,lambda,array,times,color,algpseudocode}
 \usepackage[usenames,dvipsnames]{xcolor}
 
 \definecolor{lightgray}{rgb}{0.96,0.96,0.96}
@@ -256,7 +256,17 @@ def tiled_dgemm(X, Y):
 
 The difference between this code and the last is that it's organized in the way we want: all of the tiling happens first, and the inner computation is performed on the cache-friendly pieces of the inputs. This solves both problems with the first version: the tiling of the \lstinline{TiledAllPairs} is now relevant in fitting the inner computation into cache, and all axes of the cache-relevant tiles' shapes are now free parameters that are settable at runtime.
 
-While this 
+While the transformation ``nest all tilings, then all original computation'' is legal in the case of matrix multiply, the case of general code is more complicated.  This is due to various factors such as the presence of additional non-adverb statements in functions which are tiled and control flow.  The full algorithm for our tiling transformation is given if Figure \ref{tiling_algorithm}.
+
+\begin{figure}
+\begin{algorithmic}
+\If {$i\geq maxval$}
+  \State $i\gets 0$
+\EndIf
+\end{algorithmic}
+\caption{Tiling Transformation Algorithm}
+\label{tiling_algorithm}
+\end{figure}
 
 \section{Parallelization and Online Tuning}
 \label{online_tuning}

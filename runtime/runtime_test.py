@@ -15,19 +15,27 @@ class vm_args_t(Structure):
 libVM = cdll.LoadLibrary("vm.so")
 libVM.make_array.restype = POINTER(c_double)
 
-m = 24000
-n = 7200
-k = 1200
+#m = 24000
+#n = 7200
+#k = 1200
+m = 2000
+n = 2000
+k = 2000
 a = libVM.make_array(m, k)
 b = libVM.make_array(n, k)
 o = libVM.make_array(m, n)
 
-args = pointer(vm_args_t(a, b, o, m, n, k))
+args_t = POINTER(vm_args_t) * 1
+args = args_t()
+arg = pointer(vm_args_t(a, b, o, m, n, k))
+for i in range(1):
+  args[i] = arg
 
 r = runtime.Runtime()
 print "Launching parallel job"
 start = time.time()
-r.run_job(libVM, cast(args, c_void_p), m, [n, k], [None, None])
+#r.run_job(libVM, cast(args, c_void_p), m, [n, k], [None, None])
+r.run_untiled_job(libVM.vm_untiled, cast(args, c_void_p), m)
 stop = time.time()
 r.cleanup()
 print "Time to run job:", stop - start, "secs"

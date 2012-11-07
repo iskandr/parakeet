@@ -1,22 +1,22 @@
 from llvm.core import Type as lltype
-from llvm.core import Builder 
+from llvm.core import Builder
 
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Bool, Int32, Int64, PtrT
 
 from closure_type import ClosureT
-import prims 
+import prims
 import syntax
-import syntax_helpers 
-from common import dispatch  
+import syntax_helpers
+from common import dispatch
 from function_registry import find_specialization
 
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
-from llvm_helpers import const, int32 #, zero, one 
-import llvm_convert 
-import llvm_prims 
-import llvm_context 
+from llvm_helpers import const, int32 #, zero, one
+import llvm_convert
+import llvm_prims
+import llvm_context
 from compiled_fn import CompiledFn
 import function_registry
 
@@ -27,38 +27,38 @@ class CompilationEnv:
     self.llvm_context = llvm_cxt
     self.vars = {}
     self.initialized = set([])
-  
+
   def new_block(self, name):
     bb = self.llvm_fn.append_basic_block(name)
     builder = Builder.new(bb)
-    return bb, builder 
-  
+    return bb, builder
+
   def init_fn(self, fundef):
     """
     Initializes the variables dictionary and returns a builder object
     """
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
-    llvm_output_type = llvm_ref_type(fundef.return_type)   
+    llvm_output_type = llvm_ref_type(fundef.return_type)
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
     _, builder = self.new_block("entry")
     self._init_vars(fundef, builder)
-    return builder 
-  
-  def _init_vars(self, fundef, builder):  
+    return builder
+
+  def _init_vars(self, fundef, builder):
     """
-    Create a mapping from variable names to stack locations,  
+    Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.
    """
     n_expected = len(fundef.args.arg_slots)
     assert len(self.llvm_fn.args) == n_expected
-  
+
     for (name, t) in fundef.type_env.iteritems():
       if not name.startswith("$"):
         llvm_t = llvm_ref_type(t)
         stack_val = builder.alloca(llvm_t, name)
-        self.vars[name] = stack_val 
-  
+        self.vars[name] = stack_val
+
     for llvm_arg, parakeet_arg in zip(self.llvm_fn.args, fundef.args.arg_slots):
       if isinstance(parakeet_arg, str):
         name = parakeet_arg
@@ -69,13 +69,13 @@ class CompilationEnv:
       self.initialized.add(name)
       llvm_arg.name = name
       builder.store(llvm_arg, self.vars[name])
-  
+
   def __getitem__(self, name):
     if isinstance(name, syntax.Var):
       name = name.name
     assert isinstance(name, str)
     return self.vars[name]
-  
+
   def __setitem__(self, name, val):
     if isinstance(name, syntax.Var):
       name = name.name
@@ -85,83 +85,80 @@ class CompilationEnv:
 def compile_expr(expr, env, builder):
 
   def compile_Var():
-    name = expr.name 
-    assert name in env.initialized, "%s uninitialized" % name 
+    name = expr.name
+    assert name in env.initialized, "%s uninitialized" % name
     ref = env[expr.name]
     val = builder.load(ref, expr.name + "_val")
-    return val 
-  
+    return val
+
   def compile_Const():
-    t = expr.type 
-    
+    t = expr.type
+
     if isinstance(t, NoneT):
       return const(0, Int64)
     else:
       assert isinstance(expr.type, ScalarT), \
-        "Expected scalar constant but got %s" % expr.type 
+        "Expected scalar constant but got %s" % expr.type
     return const(expr.value, expr.type)
-  
+
   def compile_Cast():
     llvm_value = compile_expr(expr.value, env, builder)
     return llvm_convert.convert(llvm_value, expr.value.type, expr.type, builder)
 
   def compile_Struct():
     llvm_struct_t = llvm_value_type(expr.type)
-    name = expr.type.node_type() 
+    name = expr.type.node_type()
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
-      
+
     for (i, elt) in enumerate(expr.args):
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
 
     return struct_ptr
-  
+
   def compile_IntToPtr():
     addr = compile_expr(expr.value, env, builder)
     llvm_t = llvm_types.llvm_value_type(expr.type)
     return builder.inttoptr(addr, llvm_t, "int_to_ptr")
-  
+
   def compile_PtrToInt():
     ptr = compile_expr(expr.value, env, builder)
     return builder.ptrtoint(ptr, llvm_types.int64_t, "ptr_to_int")
-  
+
   def compile_Alloc():
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
     n_elts = compile_expr(expr.count, env, builder)
     return builder.malloc_array(llvm_elt_t, n_elts, "data_ptr")
-  
+
   def compile_Index():
     llvm_arr = compile_expr(expr.value, env, builder)
     llvm_index = compile_expr(expr.index, env, builder)
-     
-    index_t = expr.index.type 
+
+    index_t = expr.index.type
     llvm_idx = llvm_convert.convert(llvm_index, index_t, Int32, builder)
-    
+
     pointer = builder.gep(llvm_arr, [ llvm_idx], "elt_pointer")
     elt = builder.load(pointer, "elt")
-    return elt 
-    
+    return elt
+
   def compile_Attribute():
     llvm_value = compile_expr(expr.value, env, builder)
-    struct_type = expr.value.type 
+    struct_type = expr.value.type
     field_pos = struct_type.field_pos(expr.name)
     field_type = struct_type.field_type(expr.name)
-    
-    
+
     field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)],
                              "%s_ptr" % expr.name)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
     else:
+      return field_value
 
-      return field_value  
-  
-  
   def compile_Call():
-    
+
     if isinstance(expr.fn, syntax.Fn):
       # sometimes functions seem to sneak into this field
       fn_id = expr.fn.name
@@ -169,36 +166,34 @@ def compile_expr(expr, env, builder):
       fn_id = expr.fn
       assert isinstance(fn_id, str), \
         "Expected function name, got: %s" + str(fn_id)
-    
+
     assert fn_id in function_registry.typed_functions, \
       "Can only call typed function, got: " + str(fn_id)
     typed_fundef = function_registry.typed_functions[fn_id]
-    
+
     target_fn = compile_fn(typed_fundef).llvm_fn
-     
+
     arg_types = syntax_helpers.get_types(expr.args)
     llvm_args = [compile_expr(arg, env, builder) for arg in expr.args]
-    assert len(arg_types) == len(llvm_args) 
-  
-     
+    assert len(arg_types) == len(llvm_args)
+
     return builder.call(target_fn, llvm_args, 'call_result')
-    
-    
-  # TODO: get rid of this branch in the code generator 
+
+  # TODO: get rid of this branch in the code generator
   # and lower all invocations instead in lower_structs
   def compile_Invoke():
     closure_t = expr.closure.type
     assert isinstance(closure_t, ClosureT)
-    arg_types = [arg.type for arg in expr.args] 
-    
+    arg_types = [arg.type for arg in expr.args]
+
     closure_object = compile_expr(expr.closure, env, builder)
-    
+
     # get the int64 identifier which maps to an untyped_fn/arg_types pairs
-    
+
     untyped_fn_id = closure_t.fn
     assert isinstance(untyped_fn_id, str), \
            "Expected %s to be string identifier" % (untyped_fn_id)
-    
+
     full_arg_types = closure_t.args + tuple(arg_types)
     # either compile the function we're about to invoke or get its compiled form
     # from a cache
@@ -207,41 +202,41 @@ def compile_expr(expr, env, builder):
     target_fn = target_fn_info.llvm_fn
     # print "GOT FN FOR INVOKE..."
     llvm_closure_args = []
-    
+
     for (closure_arg_idx, _) in enumerate(closure_t.args):
       name = "closure_arg%d" % closure_arg_idx
-      # the first slot is actually the closure's ID, so 
+      # the first slot is actually the closure's ID, so
       # each data arg is found at one position above its index
       gep_indices = [int32(0), int32(closure_arg_idx+1)]
       arg_ptr = builder.gep(closure_object, gep_indices, name + "_ptr")
       arg = builder.load(arg_ptr, name)
       llvm_closure_args.append(arg)
     llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
-    
+
     full_args_list = llvm_closure_args + llvm_direct_args
-    assert len(full_args_list) == len(full_arg_types)  
+    assert len(full_args_list) == len(full_arg_types)
     # print "ABOUT TO INVOKE"
     # print "-- ", target_fn
-    # print "-- ", [str(a) for a in full_args_list] 
+    # print "-- ", [str(a) for a in full_args_list]
     # print "-- ", [str(a.type) for a in full_args_list]
     res = builder.call(target_fn, full_args_list, 'invoke_result')
     # print res
     return res
-  
+
   def compile_PrimCall():
     prim = expr.prim
-    args = expr.args 
-    
-    # type specialization should have made types of arguments uniform, 
-    # so we only need to check the type of the first arg 
+    args = expr.args
+
+    # type specialization should have made types of arguments uniform,
+    # so we only need to check the type of the first arg
     t = args[0].type
-    
+
     llvm_args = [compile_expr(arg, env, builder) for arg in args]
-    
+
     result_name = prim.name + "_result"
-    
+
     if isinstance(prim, prims.Cmp):
-      x, y = llvm_args 
+      x, y = llvm_args
       if isinstance(t, FloatT):
         cmp_op = llvm_prims.float_comparisons[prim]
         bit = builder.fcmp(cmp_op, x, y, result_name)
@@ -259,15 +254,15 @@ def compile_expr(expr, env, builder):
       elif isinstance(t, SignedT):
         instr = llvm_prims.signed_binops[prim]
       elif isinstance(t, UnsignedT):
-        instr = llvm_prims.unsigned_binops[prim]  
+        instr = llvm_prims.unsigned_binops[prim]
       else:
-        assert isinstance(t, BoolT) 
+        assert isinstance(t, BoolT)
         instr = llvm_prims.bool_binops[prim]
       op = getattr(builder, instr)
       return op(name = "%s_result" % prim.name, *llvm_args)
     else:
-      assert False, "UNSUPPORTED PRIMITIVE: %s" % expr 
-   
+      assert False, "UNSUPPORTED PRIMITIVE: %s" % expr
+
   return dispatch(expr, "compile")
 
 def compile_merge_left(phi_nodes, env, builder):
@@ -276,7 +271,7 @@ def compile_merge_left(phi_nodes, env, builder):
     env.initialized.add(name)
     value = compile_expr(left, env, builder)
     builder.store(value, ref)
-    
+
 def compile_merge_right(phi_nodes, env, builder):
   for name, (_, right) in phi_nodes.iteritems():
     ref = env[name]
@@ -286,14 +281,14 @@ def compile_merge_right(phi_nodes, env, builder):
 
 def compile_stmt(stmt, env, builder):
   """Translate an SSA statement into llvm. Every translation
-  function returns a builder pointing to the end of the current 
-  basic block and a boolean indicating whether every branch of 
-  control flow in that statement ends in a return. 
-  The latter is needed to avoid creating empty basic blocks, 
+  function returns a builder pointing to the end of the current
+  basic block and a boolean indicating whether every branch of
+  control flow in that statement ends in a return.
+  The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
-  
-  # print "STMT ", stmt 
-  
+
+  # print "STMT ", stmt
+
   def compile_Assign():
     value = compile_expr(stmt.rhs, env, builder)
 
@@ -307,20 +302,20 @@ def compile_stmt(stmt, env, builder):
         "Expected pointer, got %s" % stmt.lhs.value.type
       base_ptr = compile_expr(stmt.lhs.value, env, builder)
       index = compile_expr(stmt.lhs.index, env, builder)
-      index = llvm_convert.from_signed(index, Int32, builder)  
+      index = llvm_convert.from_signed(index, Int32, builder)
       elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
       builder.store(value, elt_ptr)
-      
-    return builder, False 
-  
+
+    return builder, False
+
   def compile_While():
-    # current flow ----> loop --------> exit--> after  
+    # current flow ----> loop --------> exit--> after
     #    |                       skip------------|
     #    |----------------------/
-    
+
     compile_merge_left(stmt.merge, env, builder)
     loop_bb, body_start_builder = env.new_block("loop_body")
-    
+
     after_bb, after_builder = env.new_block("after_loop")
     enter_cond = compile_expr(stmt.cond, env, builder)
     enter_cond = llvm_convert.to_bit(enter_cond, builder)
@@ -335,69 +330,69 @@ def compile_stmt(stmt, env, builder):
       body_end_builder.cbranch(repeat_cond, loop_bb, exit_bb)
       exit_builder.branch(after_bb)
 
-    return after_builder, False 
-  
+    return after_builder, False
+
   def compile_Return():
     ret_val = compile_expr(stmt.value, env, builder)
     builder.ret(ret_val)
-    return builder, True 
-  
+    return builder, True
+
   def compile_If():
     cond = compile_expr(stmt.cond, env, builder)
     cond = llvm_convert.to_bit(cond, builder)
-    
+
     # compile the two possible branches as distinct basic blocks
     # and then wire together the control flow with branches
     true_bb, true_builder = env.new_block("if_true")
     _, true_always_returns = compile_block(stmt.true, env, true_builder)
-    
+
     false_bb, false_builder = env.new_block("if_false")
     _, false_always_returns = compile_block(stmt.false, env, false_builder)
-    
-    # did both branches end in a return? 
-    both_always_return = true_always_returns and false_always_returns 
-    
+
+    # did both branches end in a return?
+    both_always_return = true_always_returns and false_always_returns
+
     builder.cbranch(cond, true_bb, false_bb)
     # compile phi nodes as assignments and then branch
-    # to the continuation block 
+    # to the continuation block
     compile_merge_left(stmt.merge, env, true_builder)
     compile_merge_right(stmt.merge, env, false_builder)
-    
+
     # if both branches return then there is no point
-    # making a new block for more code 
+    # making a new block for more code
     if both_always_return:
-      return None, True 
+      return None, True
     else:
       after_bb, after_builder = env.new_block("if_after")
       if not true_always_returns:
         true_builder.branch(after_bb)
       if not false_always_returns:
-        false_builder.branch(after_bb)      
-    return after_builder, False  
-  
+        false_builder.branch(after_bb)
+    return after_builder, False
+
   return dispatch(stmt, 'compile')
 
 def compile_block(stmts, env, builder):
   for stmt in stmts:
     builder, always_returns = compile_stmt(stmt, env, builder)
     if always_returns:
-      return builder, always_returns 
+      return builder, always_returns
   return builder, False
 
 compiled_functions = {}
-import lowering 
+import lowering
 def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   fundef = lowering.lower(fundef)
   env = CompilationEnv()
-  start_builder = env.init_fn(fundef)   
+  start_builder = env.init_fn(fundef)
   compile_block(fundef.body, env, start_builder)
   env.llvm_context.run_passes(env.llvm_fn)
-  
+
   #print "OPTIMIZED"
-  #print env.llvm_fn 
-  result = CompiledFn(env.llvm_fn, fundef) 
-  compiled_functions[fundef.name] = result 
-  
-  return result 
+  #print env.llvm_fn
+  result = CompiledFn(env.llvm_fn, fundef)
+  compiled_functions[fundef.name] = result
+
+  return result

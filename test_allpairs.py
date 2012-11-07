@@ -1,14 +1,13 @@
-import parakeet as par 
+import parakeet as par
 from parakeet import sum, allpairs, multiply
 from testing_helpers import  expect, expect_allpairs, run_local_tests
 
-import numpy as np 
+import numpy as np
 bool_vec = np.array([True, False, True, False, True])
 int_vec = np.array([1,2,3,4,5])
 float_vec = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
 
 vectors = [bool_vec, int_vec, float_vec]
-
 
 def loop_dot(x,y):
   n = x.shape[0]
@@ -25,16 +24,15 @@ def test_loopdot():
 def dot(x,y):
   return sum(x*y)
 
-
 def test_adverb_dot():
   expect_allpairs(dot, np.dot, vectors)
 
 def loop_outer_prod(x,y,z):
   nx = x.shape[0]
-  ny = y.shape[0]  
+  ny = y.shape[0]
   i = 0
   while i < nx:
-    j = 0 
+    j = 0
     while j < ny:
       z[i,j] = x[i] * y[j]
       j = j + 1
@@ -61,18 +59,18 @@ bool_mat = int_mat % 2
 def loop_matmult(X, Y, Z):
   n_rows = X.shape[0]
   row_length = X.shape[1]
-  n_cols = Y.shape[1]  
+  n_cols = Y.shape[1]
   i = 0
   while i < n_rows:
     j = 0
     while j < n_cols:
-      total = X[i, 0] * Y[0, j] 
+      total = X[i, 0] * Y[0, j]
       k = 1
       while k < row_length:
         total = total + X[i, k] * Y[k, j]
         k = k + 1
       Z[i, j] = total
-      j = j + 1 
+      j = j + 1
     i = i + 1
   return Z
 
@@ -98,7 +96,7 @@ def transposed_np_dot(x,y):
 def test_adverb_matmult():
   expect_allpairs(adverb_matmult, transposed_np_dot, matrices)
 
-      
+
 if __name__ == '__main__':
   run_local_tests()
-    
+

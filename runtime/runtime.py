@@ -71,12 +71,30 @@ class Runtime():
 
     self.cur_iter = 0
     self.time_per_calibration = 0.15
-    self.dop = self.MAX_THREADS
+    self.dop = 1
 
     self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
 
   def run_untiled_job(self, fn, args, num_iters):
-    pass
+    # TODO: For now, we're assuming fn is actually a pointer to a runnable
+    # function. In the future, we'll need to change that to be an AST that we
+    # can compile with a particular setting of register tile sizes and loop
+    # unrollings.
+    dummy_tile_sizes_t = c_int * self.dop
+    dummy_tile_sizes = dummy_tile_sizes_t()
+    self.work_functions = (c_void_p * self.dop)()
+    self.args = args
+    self.tile_sizes = (dummy_tile_sizes_t * self.dop)()
+    for i in range(self.dop):
+      self.work_functions[i] = cast(fn, c_void_p)
+      self.tile_sizes[i] = dummy_tile_sizes
+    self.num_iters = num_iters
+    self.task_size = self.INITIAL_TASK_SIZE
+    self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
+                                           self.dop, 1)
+    self.launch_job()
+    self.wait_for_job()
+    self.free_job()
 
   def run_job(self, tiled_ast, args, num_iters,
               tiled_loop_iters, tiled_loop_parents):
