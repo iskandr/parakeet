@@ -1,3 +1,2 @@
-from external_api import run, each, seq_reduce, seq_scan, allpairs
-from external_api import par_each 
-from prelude import * 
+from adverb_api import each, seq_reduce, seq_scan, allpairs, par_each 
+from prelude import *

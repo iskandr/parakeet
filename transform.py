@@ -493,18 +493,19 @@ def cached_apply(T, fn, copy= False):
   """
   key = (T, fn.name)
   if key in _transform_cache:
-    print "FOUND", key
     return _transform_cache[key]
   else:
-    print "NOT FOUND", key
     new_fn = T(fn).apply(copy = copy)
     _transform_cache[key] = new_fn
     return new_fn
   
-def apply_pipeline(fn, transforms, copy = False):
+def apply_pipeline(fn, transforms, copy = False,  memoize = False):
   for T in transforms:
-
-    fn = cached_apply(T, fn, copy = copy)
+    if memoize:
+      fn = cached_apply(T, fn, copy = copy)
+    else:
+      fn = T(fn).apply(copy = copy)
+      
     # only copy the function on the first iteration, 
     # if you're going to copy it at all  
     copy = False 

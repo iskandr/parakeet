@@ -139,5 +139,5 @@ class Simplify(transform.Transform):
     # print "after DCE", new_fn 
     return new_fn 
   
-def simplify(fn):
-  return transform.cached_apply(Simplify, fn) 
+#def simplify(fn):
+#  return transform.cached_apply(Simplify, fn) 

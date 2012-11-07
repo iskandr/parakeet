@@ -458,8 +458,12 @@ def specialize(untyped, arg_types):
   except:
     typed_fundef = _infer_types(untyped, arg_types)
     rewrite_typed(typed_fundef)
-    add_specialization(untyped_id, arg_types, typed_fundef)
-    return typed_fundef 
+    import optimize 
+    # TODO: Also store the unoptimized version 
+    # so we can do adaptive recompilation  
+    opt = optimize.optimize(typed_fundef, copy = False)
+    add_specialization(untyped_id, arg_types, opt)
+    return opt 
 
 def infer_return_type(untyped, arg_types):
   """

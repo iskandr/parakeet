@@ -17,7 +17,6 @@ from llvm_helpers import const, int32 #, zero, one
 import llvm_convert
 import llvm_prims
 import llvm_context
-from compiled_fn import CompiledFn
 import function_registry
 
 class CompilationEnv:
@@ -392,7 +391,6 @@ def compile_fn(fundef):
 
   #print "OPTIMIZED"
   #print env.llvm_fn
-  result = CompiledFn(env.llvm_fn, fundef)
+  result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
   compiled_functions[fundef.name] = result
-
   return result
