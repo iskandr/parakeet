@@ -262,8 +262,18 @@ def annotate_stmt(stmt, tenv, var_map ):
         assert isinstance(new_arr.type, array_type.ArrayT), "Expected array, got %s" % new_arr.type
         elt_t = new_arr.type.elt_type 
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
+      elif isinstance(lhs, untyped_ast.Attribute):
+        name = lhs.name 
+        struct = annotate_expr(lhs.value, tenv, var_map)
+        struct_t = struct.type 
+        assert isinstance(struct_t, core_types.StructT), \
+          "Can't access fields on value %s of type %s" % \
+          (struct, struct_t)
+        field_t = struct_t.field_type(name)
+        return typed_ast.Attribute(struct, name, field_t)
       else:
-        assert isinstance(lhs, untyped_ast.Var)
+        assert isinstance(lhs, untyped_ast.Var), \
+          "Unexpected LHS: " + str(lhs)
         new_name = var_map.lookup(lhs.name)
         old_type = tenv.get(new_name, core_types.Unknown)
         new_type = old_type.combine(rhs_type)
@@ -330,7 +340,8 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   return_type = tenv['$return']
   # if nothing ever gets returned, then set the return type to None
   if return_type == core_types.Unknown:
-    assert False, "TO DO: Implement a none type"
+    body.append(typed_ast.Return(syntax_helpers.const_none))
+    return_type = core_types.NoneType
     
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name), 

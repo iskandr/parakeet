@@ -77,7 +77,7 @@ class Attribute(Expr):
   _members = ['value', 'name']
   
   def __str__(self):
-    return "%s.%s" % (self.value, self.name)
+    return "attr(%s, '%s')" % (self.value, self.name)
 
 class Index(Expr):
   _members = ['value', 'index']
