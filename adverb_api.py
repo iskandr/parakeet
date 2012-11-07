@@ -98,14 +98,12 @@ def translate_fn(python_fn):
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
   
-  
   closure_t, untyped = translate_fn(fn)
   
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis', 0)
   
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-   
    
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
   # Create args struct type
@@ -154,7 +152,9 @@ def par_each(fn, *args, **kwds):
 
   # Concatenate results
   output_ptrs = [args_obj.output for args_obj in c_args_list]
-  outputs = [typed.return_type.to_python(output_ptr) \
+  print output_ptrs 
+
+  outputs = [map_result_type.to_python(output_ptr.contents) \
              for output_ptr in output_ptrs]
   #TODO: Have to handle concatenation axis
   return np.concatenate(outputs) 

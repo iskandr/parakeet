@@ -85,7 +85,8 @@ class NoneT(ConcreteT):
     return ctypes.c_int64(0)
   
   def to_python(self, obj):
-    assert obj == ctypes.c_int64(0)
+    assert obj == ctypes.c_int64(0), \
+      "Expected runtime representation of None to be 0, but got: %s" % obj
     return None 
   
   def combine(self, other):

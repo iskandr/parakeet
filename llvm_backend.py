@@ -97,7 +97,7 @@ def attribute_lookup(struct, name, env, builder):
                              
 
 def compile_expr(expr, env, builder):
-  print "  EXPR", expr 
+  # print "  EXPR", expr 
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -165,10 +165,7 @@ def compile_expr(expr, env, builder):
   def compile_Attribute():
     field_ptr, field_type = \
       attribute_lookup(expr.value, expr.name, env, builder)
-    print "field_ptr", field_ptr 
-    print "field_type", field_type 
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
-    print "done with load"
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
     else:
@@ -196,50 +193,6 @@ def compile_expr(expr, env, builder):
 
     return builder.call(target_fn, llvm_args, 'call_result')
  
-  # TODO: get rid of this branch in the code generator
-  # and lower all invocations instead in lower_structs
-  def compile_Invoke():
-    closure_t = expr.closure.type
-    assert isinstance(closure_t, ClosureT)
-    arg_types = [arg.type for arg in expr.args]
-
-    closure_object = compile_expr(expr.closure, env, builder)
-
-    # get the int64 identifier which maps to an untyped_fn/arg_types pairs
-
-    untyped_fn_id = closure_t.fn
-    assert isinstance(untyped_fn_id, str), \
-           "Expected %s to be string identifier" % (untyped_fn_id)
-
-    full_arg_types = closure_t.args + tuple(arg_types)
-    # either compile the function we're about to invoke or get its compiled form
-    # from a cache
-    typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
-    (target_fn, _, _) = compile_fn(typed_fundef)
-    
-    # print "GOT FN FOR INVOKE..."
-    llvm_closure_args = []
-
-    for (closure_arg_idx, _) in enumerate(closure_t.args):
-      name = "closure_arg%d" % closure_arg_idx
-      # the first slot is actually the closure's ID, so
-      # each data arg is found at one position above its index
-      gep_indices = [int32(0), int32(closure_arg_idx+1)]
-      arg_ptr = builder.gep(closure_object, gep_indices, name + "_ptr")
-      arg = builder.load(arg_ptr, name)
-      llvm_closure_args.append(arg)
-    llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
-
-    full_args_list = llvm_closure_args + llvm_direct_args
-    assert len(full_args_list) == len(full_arg_types)
-    # print "ABOUT TO INVOKE"
-    # print "-- ", target_fn
-    # print "-- ", [str(a) for a in full_args_list]
-    # print "-- ", [str(a.type) for a in full_args_list]
-    res = builder.call(target_fn, full_args_list, 'invoke_result')
-    # print res
-    return res
-  
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args
@@ -304,7 +257,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
 
-  print "STMT ", stmt
+  # print "STMT ", stmt
 
   def compile_Assign():
     rhs_t = stmt.rhs.type 
@@ -331,7 +284,7 @@ def compile_stmt(stmt, env, builder):
       
     assert lhs_t == rhs_t, \
       "Type mismatch between LHS %s and RHS %s" % (lhs_t, rhs_t)
-    print "store", value, ":", rhs_t, "in", ref, ":", lhs_t  
+    # print "store", value, ":", rhs_t, "in", ref, ":", lhs_t  
     builder.store(value, ref)
     return builder, False
 

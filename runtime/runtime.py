@@ -15,6 +15,16 @@ def next_power_2(n):
 def next_smaller_power_2(n):
   return 2**int(math.log(n, 2))
 
+def list_to_ctypes_array(ctypes_object_list, elt_type = None):
+  if elt_type is None:
+    elt = ctypes_object_list[0]
+    elt_type = elt.__class__ 
+  array_t = elt_type * len(ctypes_object_list)
+  array_object = array_t() 
+  for (i, x) in enumerate(ctypes_object_list):
+    array_object[i] = x
+  return array_object 
+
 class Runtime():
   def __init__(self):
     class job_t(Structure): pass
@@ -83,7 +93,14 @@ class Runtime():
     dummy_tile_sizes_t = c_int * self.dop
     dummy_tile_sizes = dummy_tile_sizes_t()
     self.work_functions = (c_void_p * self.dop)()
-    self.args = args
+    
+    # args is a list of arg objects assumed to 
+    # all have the same type, though not necesarily same 
+    # elements 
+    if isinstance(args, (list, tuple)):
+      self.args = list_to_ctypes_array(args)
+    else:
+      self.args = args 
     self.tile_sizes = (dummy_tile_sizes_t * self.dop)()
     for i in range(self.dop):
       self.work_functions[i] = cast(fn, c_void_p)
@@ -623,9 +640,16 @@ class Runtime():
     self.libParRuntime.free_job(self.job)
 
   def launch_job(self):
+    tile_sizes = cast(self.tile_sizes, POINTER(POINTER(c_int)))
+    print "Args:"
+    print "  thread pool", self.thread_pool
+    print "  work functions", self.work_functions
+    print "  args", self.args 
+    print "  job", self.job 
+    print "  tile sizes", tile_sizes 
     self.libParRuntime.launch_job(
         self.thread_pool, self.work_functions, self.args, self.job,
-        cast(self.tile_sizes, POINTER(POINTER(c_int))), c_int(1))
+        tile_sizes, c_int(1))
 
   def relaunch_job(self):
     self.libParRuntime.launch_job(
