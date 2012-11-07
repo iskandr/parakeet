@@ -4,7 +4,7 @@ import ctypes
 from llvm.ee import GenericValue
 import llvm_backend
 import numpy as np
-import runtime.runtime as runtime 
+import runtime.runtime as runtime
 import syntax
 import type_conv
 import type_inference
@@ -62,13 +62,12 @@ allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
 seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['x'])
 seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['x'])
 
-
 try:
   rt = runtime.Runtime()
 except:
   print "Warning: Failed to load parallel runtime"
-  rt = None 
-  
+  rt = None
+
 import args, array_type, function_registry, names
 _par_wrapper_cache = {}
 
@@ -103,29 +102,26 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     _par_wrapper_cache[key] = fundef
     return fundef
 
-import closure_type 
+import closure_type
 
 def translate_fn(python_fn):
   """
-  Given a python function, return its closure type 
-  and the definition of its untyped representation 
+  Given a python function, return its closure type
+  and the definition of its untyped representation
   """
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
   untyped = function_registry.untyped_functions[closure_t.fn]
   return closure_t, untyped
- 
+
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
-  
-  
   closure_t, untyped = translate_fn(fn)
-  
+
   # Don't handle outermost axis = None yet
   axis = kwds['axis']
   assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-   
-   
+
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
   # Create args struct type
   fields = []
@@ -135,7 +131,7 @@ def par_each(fn, *args, **kwds):
 
   class Args(core_types.StructT):
     _fields_ = fields
-    
+
   args_t = Args()
   c_args = args_t.ctypes_repr()
   for i, arg in enumerate(args):
@@ -146,9 +142,9 @@ def par_each(fn, *args, **kwds):
       setattr(c_args, field_name, ctypes.pointer(obj))
     else:
       setattr(c_args, field_name, obj)
-    
+
   c_args_list = [c_args]
-  
+
   for i in range(rt.dop - 1):
     c_args_new = args_t.ctypes_repr()
     ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
