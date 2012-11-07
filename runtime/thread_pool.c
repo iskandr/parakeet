@@ -119,7 +119,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
 
 // This function should only ever be called when all of the threads are paused.
 void launch_job(thread_pool_t *thread_pool,
-                work_function_t *work_functions, void *args, job_t *job,
+                work_function_t *work_functions, void **args, job_t *job,
                 int **tile_sizes, int reset_tps) {
   assert(job->num_lists <= thread_pool->num_workers);
 
@@ -140,7 +140,7 @@ void launch_job(thread_pool_t *thread_pool,
     }
     thread_pool->worker_data[i].notify_when_done = 0;
     thread_pool->worker_data[i].work_function = work_functions[i];
-    thread_pool->worker_data[i].args = args;
+    thread_pool->worker_data[i].args = args[i];
     thread_pool->worker_data[i].tile_sizes = tile_sizes[i];
     if (reset_tps) {
       thread_pool->worker_data[i].iters_done = 0;

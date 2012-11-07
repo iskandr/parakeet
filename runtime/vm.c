@@ -845,3 +845,28 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
     }
   }
 }
+
+void vm_untiled(int start, int end, void *args, int *tile_sizes) {
+  vm_args_t *my_args = (vm_args_t*)args;
+  double *A = my_args->a;
+  double *B = my_args->b;
+  double *O = my_args->out;
+  int m = my_args->m;
+  int n = my_args->n;
+  int k = my_args->k;
+  int i, j, l;
+  int aOff, bOff, oOff;
+
+  int is, js;
+  for (i = start; i < end; ++i) {
+    aOff = i * k;
+    oOff = i * n;
+    for (j = 0; j < n; ++j) {
+      bOff = j * k;
+      O[oOff + j] = 0.0;
+      for (l = 0; l < k; ++l) {
+        O[oOff + j] += A[aOff + l] * B[bOff + l];
+      }
+    }
+  }
+}

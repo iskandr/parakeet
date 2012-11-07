@@ -42,7 +42,7 @@ typedef struct {
 
 thread_pool_t *create_thread_pool(int max_threads);
 void launch_job(thread_pool_t *thread_pool,
-                work_function_t *work_functions, void *args, job_t *job,
+                work_function_t *work_functions, void **args, job_t *job,
                 int **tile_sizes, int reset_tps);
 void pause_job(thread_pool_t *thread_pool);
 int job_finished(thread_pool_t *thread_pool);
