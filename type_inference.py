@@ -337,10 +337,12 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   tenv['$return'] = core_types.Unknown 
   
   body = annotate_block(untyped_fn.body, tenv, var_map)
-  return_type = tenv['$return']
+  return_type = tenv["$return"]
   # if nothing ever gets returned, then set the return type to None
-  if return_type == core_types.Unknown:
+  if isinstance(return_type,  core_types.UnknownT):
+
     body.append(typed_ast.Return(syntax_helpers.const_none))
+    tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
     
   return typed_ast.TypedFn(
@@ -359,7 +361,8 @@ def rewrite_typed(fn):
   fn_return_type = lookup("$return")
   
   def cast(expr, t):
-    assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
+    assert isinstance(t, core_types.ScalarT), \
+      "Casts not yet implemented for non-scalar type: %s" % t
     return typed_ast.Cast(expr, type = t)
   
   def rewrite_expr(expr):

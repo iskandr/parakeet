@@ -37,6 +37,9 @@ class UnknownT(Type):
   _members = []
   def  combine(self, other):
     return other
+  
+  def __eq__(self, other):
+    return isinstance(other, UnknownT)
 
 #single instance of the Unknown type with same name
 Unknown = UnknownT()

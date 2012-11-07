@@ -304,6 +304,7 @@ def compile_stmt(stmt, env, builder):
       index = llvm_convert.from_signed(index, Int32, builder)
       elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
       builder.store(value, elt_ptr)
+      
 
     return builder, False
 
