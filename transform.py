@@ -460,42 +460,52 @@ class Transform(object):
   def post_apply(self, new_fn):
     return new_fn 
   
-  def apply(self):
+  def apply(self, copy = False):
     old_fn = self.pre_apply(self.fn)
     if isinstance(old_fn, syntax.TypedFn): 
       self.type_env = old_fn.type_env.copy()
     else:
       self.type_env = {}
-    body = self.transform_block(old_fn.body)
-    new_fundef_args = dict([ (m, getattr(old_fn, m)) for m in old_fn._members])
-    # create a fresh function with a distinct name and the 
-    # transformed body and type environment 
-    new_fundef_args['name'] = names.refresh(self.fn.name)
-    new_fundef_args['body'] = body
-    new_fundef_args['type_env'] = self.type_env 
-    new_fundef = syntax.TypedFn(**new_fundef_args)
-    # register this function so if anyone tries to call it they'll be
-    # able to find its definition later 
-    new_fundef = self.post_apply(new_fundef) 
-    function_registry.typed_functions[new_fundef.name] = new_fundef
-    return new_fundef 
+    new_body = self.transform_block(old_fn.body)
+    if copy:
+      new_fundef_args = dict([ (m, getattr(old_fn, m)) for m in old_fn._members])
+      # create a fresh function with a distinct name and the 
+      # transformed body and type environment 
+      new_fundef_args['name'] = names.refresh(self.fn.name)
+      new_fundef_args['body'] = new_body
+      new_fundef_args['type_env'] = self.type_env 
+      new_fundef = syntax.TypedFn(**new_fundef_args)
+      # register this function so if anyone tries to call it they'll be
+      # able to find its definition later
+      function_registry.typed_functions[new_fundef.name] = new_fundef
+      return self.post_apply(new_fundef)
+    else:
+      old_fn.type_env = self.type_env
+      old_fn.body = new_body 
+      return self.post_apply(old_fn)
 
 
 _transform_cache = {}
-def cached_apply(T, fn):
+def cached_apply(T, fn, copy= False):
   """
   Applies the transformation, caches the result,
   and registers the new function in the global registry  
   """
   key = (T, fn.name)
   if key in _transform_cache:
+    print "FOUND", key
     return _transform_cache[key]
   else:
-    new_fn = T(fn).apply()
+    print "NOT FOUND", key
+    new_fn = T(fn).apply(copy = copy)
     _transform_cache[key] = new_fn
     return new_fn
   
-def apply_pipeline(fn, transforms):
+def apply_pipeline(fn, transforms, copy = False):
   for T in transforms:
-    fn = cached_apply(T, fn) 
+
+    fn = cached_apply(T, fn, copy = copy)
+    # only copy the function on the first iteration, 
+    # if you're going to copy it at all  
+    copy = False 
   return fn 

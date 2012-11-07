@@ -119,7 +119,7 @@ class Args:
 
   def __str__(self):
     return "Args(nonlocal = %s, positional = %s, defaults=%s)" % \
-      (self.nonlocals, self.positional, self.defaults.items())
+      (self.nonlocals, map(repr, self.positional), map(repr, self.defaults.items()))
   
 
   def __iter__(self):

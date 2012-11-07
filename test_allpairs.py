@@ -76,7 +76,7 @@ def loop_matmult(X, Y, Z):
 
 
 
-def test_loop_matmult():
+def Ztest_loop_matmult():
   for X in matrices:
     for Y in matrices:
       res = np.dot(X, Y)

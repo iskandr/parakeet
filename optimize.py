@@ -5,12 +5,11 @@ import transform
 from simplify import Simplify
 from inline import Inliner
 
-pipeline = [Simplify] #, Inliner, Simplify] 
-
+pipeline = [Simplify, Inliner] 
 
 # map names of unoptimized typed functions to 
 # names of optimized 
-_optimized_functions = {}
+already_optimized = set([])
 def optimize(fn):
   if isinstance(fn, syntax.Fn):
     raise RuntimeError("Can't optimize untyped functions")
@@ -19,17 +18,10 @@ def optimize(fn):
   else:
     assert isinstance(fn, str)
     fn_name = fn
-    
-  if fn_name in _optimized_functions:
-    opt_name = _optimized_functions[fn_name]
-    return function_registry.typed_functions[opt_name]
+  fundef = function_registry.typed_functions[fn_name]
+  if fn_name in already_optimized:
+    return fundef 
   else:
-    assert fn_name in function_registry.typed_functions
-    unopt = function_registry.typed_functions[fn_name]
-    opt = transform.apply_pipeline(unopt, pipeline)
-    _optimized_functions[fn_name] = opt.name
-    # also register the optimized function with itself
-    # so trying to optimize an already optimized fn
-    # acts like the identity 
-    _optimized_functions[opt.name] = opt.name
+    opt = transform.apply_pipeline(fundef, pipeline)
+    already_optimized.add(fn_name)
     return opt 
