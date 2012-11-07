@@ -18,6 +18,8 @@ from syntax_helpers import get_type, get_types, unwrap_constant
 
 import adverbs 
 import adverb_helpers 
+from checkbox.job import PASS
+import function_registry
  
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -152,46 +154,32 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Map():
     closure = annotate_child(expr.fn)
     new_args = annotate_children(expr.args)
-    
-    arg_types = get_types(new_args)
-    
-    max_arg_rank = adverb_helpers.max_rank(arg_types)
-     
     axis = unwrap_constant(expr.axis)
-    n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
-    nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
-    nested_result_type = invoke_result_type(closure.type, nested_types)
-    result_type = adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+    result_type = infer_map_type(closure.type, get_types(new_args), axis)
     return adverbs.Map(fn = closure, args = new_args, axis = axis, type = result_type)
   
   def expr_Reduce():
     closure = annotate_child(expr.fn)
     new_args = annotate_children(expr.args)
     arg_types = get_types(new_args)
-    max_arg_rank = adverb_helpers.max_rank(arg_types)
     axis = unwrap_constant(expr.axis)
-    n_outer_axes = 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
-    nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
-    assert len(nested_types) == 1, \
-      "Can't yet handle more than 1 input to Reduce, given: %s" % (nested_types,)
-    input_type = nested_types[0]
-    nested_result_type = invoke_result_type(closure.type, [input_type, input_type])
-    assert input_type == nested_result_type, \
-      "Can't yet handle accumulator type %s which differs from input %s" % \
-      (nested_result_type, input_type)
-    return adverbs.Reduce(fn = closure, args = new_args, axis = axis, type = nested_result_type)
+    result_type = infer_reduce_type(closure.type, arg_types, axis, None, None)
+    return adverbs.Reduce(fn = closure, 
+                          args = new_args, 
+                          axis = axis, 
+                          type = result_type)
   
   def expr_AllPairs():
     closure = annotate_child(expr.fn)
     new_args = annotate_children(expr.args)
     arg_types = get_types(new_args)
-     
+    assert len(arg_types) == 2
     axis = unwrap_constant(expr.axis)
-    n_outer_axes = 2
-    nested_types = adverb_helpers.lower_arg_ranks(arg_types, 1)
-    nested_result_type = invoke_result_type(closure.type, nested_types)
-    result_type = adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
-    return adverbs.AllPairs(fn = closure, args = new_args, axis = axis, type = result_type)
+    result_type = infer_allpairs_type(closure.type, arg_types[0], arg_types[1], axis)
+    return adverbs.AllPairs(fn = closure, 
+                            args = new_args, 
+                            axis = axis, 
+                            type = result_type)
     
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
@@ -476,3 +464,55 @@ def infer_return_type(untyped, arg_types):
   # print "Specializing for %s: %s" % (arg_types, untyped )
   typed = specialize(untyped, arg_types)
   return typed.return_type 
+
+
+
+def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
+  if init is None:
+    #
+    #The simplest reductions assume the initial value, 
+    #the carried accumulator, and the element type
+    #are all the same (and there's only one element type
+    #since there's only one array input
+    #
+    assert len(arg_types) == 1
+    input_type = arg_types[0]
+    n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
+    nested_type = adverb_helpers.lower_arg_rank(input_type, n_outer_axes)
+    nested_result_type = invoke_result_type(closure_t, [nested_type, nested_type])
+    assert nested_type == nested_result_type, \
+      "Can't yet handle accumulator type %s which differs from input %s" % \
+      (nested_result_type, nested_type)
+    
+    if combine is not None:
+      combine_result_t = invoke_result_type(combine, [nested_type, nested_type])
+      assert combine_result_t == nested_type, \
+        "Wrong type for combiner result, expected %s but got %s" % \
+        (nested_type, combine_result_t)
+    return nested_result_type 
+  else:
+    raise RuntimeError("Type inference not implemented for complex reductions")
+
+def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
+  n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
+  acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)
+  return adverb_helpers.increase_rank(acc_t, n_outer_axes) 
+
+def infer_map_type(closure_t, arg_types, axis):
+  n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
+  nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
+  nested_result_type = invoke_result_type(closure_t, nested_types)
+  return adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+
+def infer_allpairs_type(closure_t, xtype, ytype, axis):
+  axis = unwrap_constant(axis)
+  n_outer_axes = 2
+  arg_types = [xtype, ytype]
+  if axis is None:
+    nested_types = adverb_helpers.elt_types(arg_types)
+  else:
+    nested_types = adverb_helpers.lower_arg_ranks(arg_types, 1)
+  nested_result_type = invoke_result_type(closure_t, nested_types)
+  return adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+  
+  

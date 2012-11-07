@@ -92,6 +92,15 @@ def max_rank_arg(args):
     if arg.type.rank == r:
       return arg
 
+def elt_type(t):
+  if isinstance(t, array_type.ArrayT):
+    return t.elt_type
+  else:
+    return t 
+  
+def elt_types(ts):
+  return map(elt_type, ts) 
+
 def lower_arg_rank(t, r):
   if isinstance(t, core_types.ScalarT):
     return t
@@ -110,3 +119,15 @@ def increase_rank(t, r):
 def lower_arg_ranks(arg_types, r):
   return [lower_arg_rank(t, r) for t in arg_types]
 
+def num_outer_axes(arg_types, axis):
+  """
+  Helper for adverb type inference to figure out
+  how many axes it will loop over -- either 1 particular
+  one or all of them when axis is None. 
+  """
+  axis = syntax_helpers.unwrap_constant(axis)
+  if isinstance(arg_types, core_types.Type):
+    max_arg_rank = arg_types.rank 
+  else:
+    max_arg_rank = max_rank(arg_types)
+  return 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank

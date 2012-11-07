@@ -21,7 +21,7 @@ from compiled_fn import CompiledFn
 import function_registry
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
