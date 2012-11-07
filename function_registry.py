@@ -4,11 +4,14 @@
 untyped_functions = {}
 
 
-
-
 # SSA ID -> typed function  
 typed_functions = {}
 
+def is_typed(fn_name):
+  assert isinstance(fn_name, str), \
+    "Expected function name, got: " + str(fn_name)
+  return fn_name in typed_functions
+  
 # (untyped ID, arg types) -> typed FunDef
 specializations = {} 
     

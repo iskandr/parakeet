@@ -21,7 +21,7 @@ from compiled_fn import CompiledFn
 import function_registry
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.opt_context):
+  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -149,16 +149,13 @@ def compile_expr(expr, env, builder):
     field_pos = struct_type.field_pos(expr.name)
     field_type = struct_type.field_type(expr.name)
 
-
     field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)],
                              "%s_ptr" % expr.name)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
     else:
-
       return field_value
-
 
   def compile_Call():
 
@@ -180,9 +177,7 @@ def compile_expr(expr, env, builder):
     llvm_args = [compile_expr(arg, env, builder) for arg in expr.args]
     assert len(arg_types) == len(llvm_args)
 
-
     return builder.call(target_fn, llvm_args, 'call_result')
-
 
   # TODO: get rid of this branch in the code generator
   # and lower all invocations instead in lower_structs

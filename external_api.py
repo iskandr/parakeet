@@ -71,6 +71,7 @@ except:
   
 import args, array_type, function_registry, names
 _par_wrapper_cache = {}
+
 def gen_par_work_function(adverb_class, fn, arg_types):
   key = (adverb_class, fn.name, tuple(arg_types))
   if key in _par_wrapper_cache:
@@ -109,20 +110,24 @@ def par_each(fn, *args, **kwds):
   # Don't handle outermost axis = None yet
   axis = kwds['axis']
   assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-
+   
+  map_result_type = type_inference.infer_map_type(untyped, arg_types, axis)
   # Create args struct type
   fields = []
   for i, arg_type in enumerate(arg_types):
     fields.append((("arg%d" % i), arg_type))
-  fields.append(("output", typed.return_type))
+  fields.append(("output", map_result_type))
 
   class Args(core_types.StructT):
     _fields_ = fields
+    
   args_t = Args()
   c_args = args_t.ctypes_repr()
   for i, arg in enumerate(args):
     setattr(c_args, ("arg%d" % i), type_conv.from_python(arg))
+    
   c_args_list = [c_args]
+  
   for i in range(rt.dop - 1):
     c_args_new = args_t.ctypes_repr()
     ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),

@@ -50,6 +50,8 @@ class Accumulative(Adverb):
     # assert self.init is not None
     # assert self.combine is not None
     pass 
+  
+  
 class Reduce(Adverb):
   pass
 
@@ -61,3 +63,4 @@ class Scan(Accumulative):
 
 class TiledScan(Scan, Tiled):
   pass
+
