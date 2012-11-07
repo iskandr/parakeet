@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import syntax as untyped_ast
 import syntax as typed_ast
+import syntax_helpers 
 
 import core_types
 import tuple_type
@@ -133,6 +134,13 @@ def annotate_expr(expr, tenv, var_map):
     array_t = array_type.make_array_type(common_t, 1)
     return typed_ast.Array(new_elts, type = array_t)
   
+  def expr_Slice():
+    start = annotate_child(expr.start)
+    stop = annotate_child(expr.stop)
+    step = annotate_child(expr.step)
+    slice_t = array_type.make_slice_type(start.type, stop.type, step.type)
+    return typed_ast.Slice(start, stop, step, type = slice_t)
+
   def expr_Var():
     old_name = expr.name
     if old_name not in var_map._vars:
@@ -348,10 +356,6 @@ def rewrite_typed(fn):
     TODO: Make this recursive!
     """
     def rewrite_PrimCall():
-
-      # TODO: This awkwardly infers the types we need to cast args up to
-      # but then dont' actually coerce them, since that's left as distinct work
-      # for a later stage 
       new_args = map(rewrite_expr, expr.args)
       arg_types = map(get_type, new_args)
       upcast_types = expr.prim.expected_input_types(arg_types)
@@ -365,6 +369,17 @@ def rewrite_typed(fn):
       new_elts = [coerce_expr(elt, elt_t) for elt in expr.elts]
       return typed_ast.Array(new_elts, type = array_t)
     
+    def rewrite_Slice():
+      # None step defaults to 1
+      if isinstance(expr.step.type, core_types.NoneT):
+        start_t = expr.start.type
+        stop_t = expr.stop.type 
+        step = syntax_helpers.one_i64
+        step_t = step.type 
+        slice_t = array_type.make_slice_type(start_t, stop_t, step_t)
+        return typed_ast.Slice(expr.start, expr.stop, step, type = slice_t)  
+      else:
+        return expr 
     return dispatch(expr, "rewrite", default = lambda x: x)
       
      

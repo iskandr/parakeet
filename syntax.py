@@ -108,7 +108,7 @@ class Invoke(Expr):
   _members = ['closure', 'args']
 
 class Slice(Expr):
-  _members = ['lower', 'upper', 'step']
+  _members = ['start', 'stop', 'step']
 
 class PrimCall(Expr):
   """

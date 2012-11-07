@@ -63,17 +63,19 @@ def gen_par_work_function(adverb_class, fn, arg_types):
 
     nested_arg_names = ['fn'] + list(fn.args.positional)
     nested_wrapper = adverb_helpers.untyped_wrapper(adverb_class,
-                                                    nested_arg_names, axis = 0)
+                                                    nested_arg_names, 
+                                                    axis = 0)
     # TODO: Closure args should go here.
     unpacked_args = [syntax.Closure(fn.name, [])]
     for i, t in enumerate(arg_types):
-      attr = syntax.Attribute(args_var, ("args%d" % i))
+      attr = syntax.Attribute(args_var, ("arg%d" % i))
       if isinstance(t, array_type.ArrayT):
         s = syntax.Slice(start_var, stop_var, syntax.Const(1))
         unpacked_args.append(syntax.Index(attr, s))
       else:
         unpacked_args.append(attr)
-    call = syntax.Call(nested_wrapper.name, unpacked_args)
+    nested_closure = syntax.Closure(nested_wrapper.name, [])
+    call = syntax.Invoke(nested_closure, unpacked_args)
     body = [syntax.Assign(syntax.Attribute(args_var, "output"), call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_par_wrapper")
     fundef = syntax.Fn(fn_name, args.Args(positional = inputs), body)
@@ -100,8 +102,8 @@ def par_each(fn, *args, **kwds):
   closure_t, untyped = translate_fn(fn)
   
   # Don't handle outermost axis = None yet
-  axis = kwds['axis']
-  assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
+  axis = kwds.get('axis')
+  # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
    
    
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
@@ -111,10 +113,10 @@ def par_each(fn, *args, **kwds):
     fields.append((("arg%d" % i), arg_type))
   fields.append(("output", map_result_type))
 
-  class Args(core_types.StructT):
+  class ParEachArgsType(core_types.StructT):
     _fields_ = fields
-    
-  args_t = Args()
+
+  args_t = ParEachArgsType()
   c_args = args_t.ctypes_repr()
   for i, arg in enumerate(args):
     obj = type_conv.from_python(arg)
