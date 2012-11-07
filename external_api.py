@@ -103,15 +103,30 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     _par_wrapper_cache[key] = fundef
     return fundef
 
+import closure_type 
+
+def translate_fn(python_fn):
+  """
+  Given a python function, return its closure type 
+  and the definition of its untyped representation 
+  """
+  closure_t = type_conv.typeof(python_fn)
+  assert isinstance(closure_t, closure_type.ClosureT)
+  untyped = function_registry.untyped_functions[closure_t.fn]
+  return closure_t, untyped
+ 
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
-  untyped = ast_conversion.translate_function_value(fn)
-
+  
+  
+  closure_t, untyped = translate_fn(fn)
+  
   # Don't handle outermost axis = None yet
   axis = kwds['axis']
   assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
    
-  map_result_type = type_inference.infer_map_type(untyped, arg_types, axis)
+   
+  map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
   # Create args struct type
   fields = []
   for i, arg_type in enumerate(arg_types):

@@ -4,8 +4,6 @@
 
 #import logging 
 import copy 
-    
-
 
 class Node(object):
   _members_cache = {}  

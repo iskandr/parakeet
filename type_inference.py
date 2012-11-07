@@ -466,7 +466,6 @@ def infer_return_type(untyped, arg_types):
   return typed.return_type 
 
 
-
 def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
   if init is None:
     #
