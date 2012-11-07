@@ -139,7 +139,13 @@ def par_each(fn, *args, **kwds):
   args_t = Args()
   c_args = args_t.ctypes_repr()
   for i, arg in enumerate(args):
-    setattr(c_args, ("arg%d" % i), type_conv.from_python(arg))
+    obj = type_conv.from_python(arg)
+    field_name = "arg%d" % i
+    t = type_conv.typeof(arg)
+    if isinstance(t, core_types.StructT):
+      setattr(c_args, field_name, ctypes.pointer(obj))
+    else:
+      setattr(c_args, field_name, obj)
     
   c_args_list = [c_args]
   

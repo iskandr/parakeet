@@ -155,7 +155,10 @@ def annotate_expr(expr, tenv, var_map):
     closure = annotate_child(expr.fn)
     new_args = annotate_children(expr.args)
     axis = unwrap_constant(expr.axis)
-    result_type = infer_map_type(closure.type, get_types(new_args), axis)
+    arg_types = get_types(new_args)
+    result_type = infer_map_type(closure.type, arg_types, axis)
+    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
+      axis = 0
     return adverbs.Map(fn = closure, args = new_args, axis = axis, type = result_type)
   
   def expr_Reduce():
@@ -164,6 +167,8 @@ def annotate_expr(expr, tenv, var_map):
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     result_type = infer_reduce_type(closure.type, arg_types, axis, None, None)
+    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
+      axis = 0
     return adverbs.Reduce(fn = closure, 
                           args = new_args, 
                           axis = axis, 
@@ -176,6 +181,8 @@ def annotate_expr(expr, tenv, var_map):
     assert len(arg_types) == 2
     axis = unwrap_constant(expr.axis)
     result_type = infer_allpairs_type(closure.type, arg_types[0], arg_types[1], axis)
+    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
+      axis = 0
     return adverbs.AllPairs(fn = closure, 
                             args = new_args, 
                             axis = axis, 
