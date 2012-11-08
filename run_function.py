@@ -1,7 +1,7 @@
 import ast_conversion
 import llvm_backend
 import syntax
- 
+
 import type_inference
 
 from llvm.ee import GenericValue
@@ -11,7 +11,6 @@ from llvm_context import opt_context
 import core_types
 import type_conv
 import ctypes
-
 
 def python_to_generic_value(x, t):
   if isinstance(t, core_types.FloatT):
@@ -73,11 +72,11 @@ class CompiledFn:
 
 def specialize_and_compile(fn, args):
   """
-  Translate, specialize, optimize, and compile the given 
-  function for the types of the supplies arguments. 
-  
+  Translate, specialize, optimize, and compile the given
+  function for the types of the supplies arguments.
+
   Return the untyped, typed, and compiled representation,
-  along with all the arguments needed to actually execute. 
+  along with all the arguments needed to actually execute.
   """
   if isinstance(fn, syntax.Fn):
     untyped = fn
@@ -105,5 +104,3 @@ def run(fn, *args):
   """
   _, _,  compiled, all_args = specialize_and_compile(fn, args)
   return compiled(*all_args)
-
-

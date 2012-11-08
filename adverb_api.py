@@ -1,18 +1,17 @@
-import ctypes 
-import numpy as np 
+import ctypes
+import numpy as np
 
 import ast_conversion
 import syntax
-import core_types 
+import core_types
 import type_inference
 import adverbs
 import adverb_helpers
-import type_conv 
-import llvm_backend 
+import type_conv
+import llvm_backend
 
-from run_function import run 
+from run_function import run
 from runtime import runtime
-
 
 def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
   def create_wrapper(fundef, **kwds):
@@ -40,13 +39,12 @@ allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
 seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['x'])
 seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['x'])
 
-
 try:
   rt = runtime.Runtime()
 except:
   print "Warning: Failed to load parallel runtime"
-  rt = None 
-  
+  rt = None
+
 import args, array_type, function_registry, names
 _par_wrapper_cache = {}
 
@@ -63,7 +61,7 @@ def gen_par_work_function(adverb_class, fn, arg_types):
 
     nested_arg_names = ['fn'] + list(fn.args.positional)
     nested_wrapper = adverb_helpers.untyped_wrapper(adverb_class,
-                                                    nested_arg_names, 
+                                                    nested_arg_names,
                                                     axis = 0)
     # TODO: Closure args should go here.
     unpacked_args = [syntax.Closure(fn.name, [])]
@@ -83,29 +81,27 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     _par_wrapper_cache[key] = fundef
     return fundef
 
-import closure_type 
+import closure_type
 
 def translate_fn(python_fn):
   """
-  Given a python function, return its closure type 
-  and the definition of its untyped representation 
+  Given a python function, return its closure type
+  and the definition of its untyped representation
   """
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
   untyped = function_registry.untyped_functions[closure_t.fn]
   return closure_t, untyped
- 
+
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
-  
-  
+
   closure_t, untyped = translate_fn(fn)
-  
+
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis')
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-   
-   
+
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
   # Create args struct type
   fields = []
@@ -126,9 +122,9 @@ def par_each(fn, *args, **kwds):
       setattr(c_args, field_name, ctypes.pointer(obj))
     else:
       setattr(c_args, field_name, obj)
-    
+
   c_args_list = [c_args]
-  
+
   for i in range(rt.dop - 1):
     c_args_new = args_t.ctypes_repr()
     ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
@@ -155,4 +151,4 @@ def par_each(fn, *args, **kwds):
   outputs = [typed.return_type.to_python(output_ptr) \
              for output_ptr in output_ptrs]
   #TODO: Have to handle concatenation axis
-  return np.concatenate(outputs) 
+  return np.concatenate(outputs)
