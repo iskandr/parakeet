@@ -7,6 +7,19 @@ import syntax_helpers
 import dead_code_elim
 import closure_type
 
+# classes of expressions known to have no side effects 
+# and to be unaffected by changes in mutable state as long 
+# as all their arguments are SSA variables or constants 
+# 
+# examples of unsafe expressions: 
+#  - Index: the underlying array is mutable, thus the expression depends on 
+#    any data modifications
+#  - Call: Unless the function is known to contain only safe expressions it 
+#    might depend on mutable state or modify it itself 
+ 
+pure_exprs = (syntax.Var, syntax.Tuple, syntax.Const, syntax.Closure, 
+              syntax.IntToPtr, syntax.PtrToInt, syntax.PrimCall, 
+              syntax.TupleProj, syntax.ClosureElt, syntax.Slice)
 
 class Simplify(transform.Transform):
   def __init__(self, fn):
@@ -44,11 +57,12 @@ class Simplify(transform.Transform):
   def match_var(self, name, rhs):
     if isinstance(rhs, syntax.Var):
       old_val = self.env.get(rhs.name)
-      if old_val:
+      if isinstance(old_val, (syntax.Const, syntax.Var)):
         self.env[name] = old_val 
       else:
         self.env[name] = rhs
-    elif isinstance(rhs, (syntax.Tuple, syntax.Const, syntax.Closure)):
+    
+    elif isinstance(rhs, pure_exprs):
       self.env[name] = rhs 
       
   def match(self, lhs, rhs):
@@ -59,26 +73,41 @@ class Simplify(transform.Transform):
         self.match(lhs_elt, rhs_elt)
     else:
       self.collect_live_vars(lhs)
-  def transform_Var(self, expr):
-    name = expr.name
-    if name in self.env:
-      stored_val = self.env[name]
-      if isinstance(stored_val, syntax.Const):
-        return stored_val 
-      elif isinstance(stored_val, syntax.Var):
-        # we're replacing one variable for another, so 
-        # mark the new one as used 
-        self.live_vars.add(stored_val.name)
-        return stored_val 
-    # if we're still using this variable, so mark it as used
-    self.live_vars.add(name)
-    return expr
-    
+  
+  
   def transform_Assign(self, stmt):
     new_rhs = self.transform_expr(stmt.rhs)
     self.match(stmt.lhs, new_rhs)
     return syntax.Assign(stmt.lhs, new_rhs)
   
+      
+  def transform_Var(self, expr):
+    print 
+    print "transform_Var", expr
+    print "env = ", self.env 
+    name = expr.name
+    original_expr = expr 
+    
+    while name in self.env: 
+        
+      expr = self.env[name]
+      if isinstance(expr, syntax.Var):
+        name = expr.name 
+      else:
+        break  
+    # if we're still using this variable, so mark it as used
+    self.live_vars.add(name)
+    if isinstance(expr, syntax.Const):
+      print "Returning const ", expr
+      return expr 
+    elif name == original_expr.name:
+      print "returning original"
+      return original_expr
+    else:
+      new_var = syntax.Var(name = name, type = original_expr.type)
+      print "returning new var", new_var
+      return new_var
+    
   def transform_Invoke(self, expr):
     new_closure = self.transform_expr(expr.closure)
     new_args = self.transform_expr_list(expr.args)
@@ -120,6 +149,17 @@ class Simplify(transform.Transform):
       return new_tuple.elts[idx] 
     else:
       return syntax.TupleProj(tuple = new_tuple, index = idx, type = expr.type)
+  
+  def transform_IntToPtr(self, expr):
+    intval = self.transform_expr(expr.value)
+    if isinstance(intval, syntax.Var) and intval.name in self.env:
+      intval = self.env[expr.name]
+      
+    # casting a pointer to an integer and casting it back should be a no-op
+    if isinstance(intval, syntax.IntToPtr) and expr.type == intval.value.type:
+      return intval.value
+    else:
+      return syntax.IntToPtr(intval, type = expr.type)
   
   def transform_PrimCall(self, expr):
     args = self.transform_expr_list(expr.args)
