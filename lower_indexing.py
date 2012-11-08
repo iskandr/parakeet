@@ -32,7 +32,8 @@ class LowerIndexing(transform.Transform):
         offset_i = self.mul(start, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
         dim_i = self.sub(stop, start, "dim_%d" % i)
-        new_shape.append(dim_i)
+        # don't forget to cast shape elements to int64 
+        new_shape.append(self.cast(dim_i, core_types.Int64))
         new_strides.append(self.mul(stride_i, step))
       else:
         raise RuntimeError("Unsupported index type: %s" % idx_t)

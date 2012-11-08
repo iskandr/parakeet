@@ -99,9 +99,9 @@ def par_each(fn, *args, **kwds):
   closure_t, untyped = translate_fn(fn)
 
   # Don't handle outermost axis = None yet
-  axis = kwds.get('axis')
-  # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
+  axis = kwds.get('axis', 0)
 
+  # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
   # Create args struct type
   fields = []
@@ -134,13 +134,14 @@ def par_each(fn, *args, **kwds):
   wf = gen_par_work_function(adverbs.Map, untyped, arg_types)
   wf_types = [core_types.Int32, core_types.Int32, args_t, core_types.Int32]
   typed = type_inference.specialize(wf, wf_types)
-  compiled = llvm_backend.compile_fn(typed)
-  wf_ptr = compiled.exec_engine.get_pointer_to_function(compiled.llvm_fn)
+  (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(typed)
+  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):
     if t.rank == r:
       max_arg = arg
       break
+
   num_iters = max_arg.shape[axis]
 
   # Execute on thread pool
@@ -148,7 +149,9 @@ def par_each(fn, *args, **kwds):
 
   # Concatenate results
   output_ptrs = [args_obj.output for args_obj in c_args_list]
-  outputs = [typed.return_type.to_python(output_ptr) \
+  print output_ptrs
+
+  outputs = [map_result_type.to_python(output_ptr.contents) \
              for output_ptr in output_ptrs]
   #TODO: Have to handle concatenation axis
   return np.concatenate(outputs)

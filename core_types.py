@@ -37,6 +37,9 @@ class UnknownT(Type):
   _members = []
   def  combine(self, other):
     return other
+  
+  def __eq__(self, other):
+    return isinstance(other, UnknownT)
 
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
@@ -82,7 +85,8 @@ class NoneT(ConcreteT):
     return ctypes.c_int64(0)
   
   def to_python(self, obj):
-    assert obj == ctypes.c_int64(0)
+    assert obj == ctypes.c_int64(0), \
+      "Expected runtime representation of None to be 0, but got: %s" % obj
     return None 
   
   def combine(self, other):

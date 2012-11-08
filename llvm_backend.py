@@ -81,8 +81,23 @@ class CompilationEnv:
     assert isinstance(name, str)
     self.vars[name] = val
 
-def compile_expr(expr, env, builder):
+def attribute_lookup(struct, name, env, builder):
+  """
+  Helper for getting the address of an attribute lookup, 
+  used both when setting and getting attributes
+  """
+  llvm_struct = compile_expr(struct, env, builder)
+  struct_t = struct.type 
+  field_pos = struct_t.field_pos(name)
+  field_type = struct_t.field_type(name)
+  indices = [int32(0), int32(field_pos)]
+  ptr_name = "%s_ptr" % name
+  ptr = builder.gep(llvm_struct, indices, ptr_name)
+  return ptr, field_type  
+                             
 
+def compile_expr(expr, env, builder):
+  # print "  EXPR", expr 
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -105,11 +120,16 @@ def compile_expr(expr, env, builder):
     return llvm_convert.convert(llvm_value, expr.value.type, expr.type, builder)
 
   def compile_Struct():
-    llvm_struct_t = llvm_value_type(expr.type)
+    struct_t = expr.type
+    llvm_struct_t = llvm_value_type(struct_t)
     name = expr.type.node_type()
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
 
     for (i, elt) in enumerate(expr.args):
+      field_name, field_type = struct_t._fields_[i] 
+      assert elt.type == field_type, \
+        "Mismatch between expected type %s and given %s for field '%s' " % \
+        (field_type, elt.type, field_name )
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
@@ -143,13 +163,8 @@ def compile_expr(expr, env, builder):
     return elt
 
   def compile_Attribute():
-    llvm_value = compile_expr(expr.value, env, builder)
-    struct_type = expr.value.type
-    field_pos = struct_type.field_pos(expr.name)
-    field_type = struct_type.field_type(expr.name)
-
-    field_ptr =  builder.gep(llvm_value, [int32(0), int32(field_pos)],
-                             "%s_ptr" % expr.name)
+    field_ptr, field_type = \
+      attribute_lookup(expr.value, expr.name, env, builder)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
@@ -178,50 +193,6 @@ def compile_expr(expr, env, builder):
 
     return builder.call(target_fn, llvm_args, 'call_result')
  
-  # TODO: get rid of this branch in the code generator
-  # and lower all invocations instead in lower_structs
-  def compile_Invoke():
-    closure_t = expr.closure.type
-    assert isinstance(closure_t, ClosureT)
-    arg_types = [arg.type for arg in expr.args]
-
-    closure_object = compile_expr(expr.closure, env, builder)
-
-    # get the int64 identifier which maps to an untyped_fn/arg_types pairs
-
-    untyped_fn_id = closure_t.fn
-    assert isinstance(untyped_fn_id, str), \
-           "Expected %s to be string identifier" % (untyped_fn_id)
-
-    full_arg_types = closure_t.args + tuple(arg_types)
-    # either compile the function we're about to invoke or get its compiled form
-    # from a cache
-    typed_fundef = find_specialization(untyped_fn_id, full_arg_types)
-    (target_fn, _, _) = compile_fn(typed_fundef)
-    
-    # print "GOT FN FOR INVOKE..."
-    llvm_closure_args = []
-
-    for (closure_arg_idx, _) in enumerate(closure_t.args):
-      name = "closure_arg%d" % closure_arg_idx
-      # the first slot is actually the closure's ID, so
-      # each data arg is found at one position above its index
-      gep_indices = [int32(0), int32(closure_arg_idx+1)]
-      arg_ptr = builder.gep(closure_object, gep_indices, name + "_ptr")
-      arg = builder.load(arg_ptr, name)
-      llvm_closure_args.append(arg)
-    llvm_direct_args = [compile_expr(arg, env, builder) for arg in expr.args]
-
-    full_args_list = llvm_closure_args + llvm_direct_args
-    assert len(full_args_list) == len(full_arg_types)
-    # print "ABOUT TO INVOKE"
-    # print "-- ", target_fn
-    # print "-- ", [str(a) for a in full_args_list]
-    # print "-- ", [str(a.type) for a in full_args_list]
-    res = builder.call(target_fn, full_args_list, 'invoke_result')
-    # print res
-    return res
-  
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args
@@ -289,22 +260,32 @@ def compile_stmt(stmt, env, builder):
   # print "STMT ", stmt
 
   def compile_Assign():
+    rhs_t = stmt.rhs.type 
     value = compile_expr(stmt.rhs, env, builder)
-
     if isinstance(stmt.lhs, syntax.Var):
       name = stmt.lhs.name
+      lhs_t = stmt.lhs.type 
       env.initialized.add(name)
       ref = env[name]
-      builder.store(value, ref)
     elif isinstance(stmt.lhs, syntax.Index):
-      assert isinstance(stmt.lhs.value.type, PtrT), \
-        "Expected pointer, got %s" % stmt.lhs.value.type
+      ptr_t = stmt.lhs.value.type
+      assert isinstance(ptr_t, PtrT), \
+        "Expected pointer, got %s" % ptr_t
+      lhs_t = ptr_t.elt_type 
       base_ptr = compile_expr(stmt.lhs.value, env, builder)
       index = compile_expr(stmt.lhs.index, env, builder)
       index = llvm_convert.from_signed(index, Int32, builder)
-      elt_ptr = builder.gep(base_ptr, [index], "elt_ptr")
-      builder.store(value, elt_ptr)
-
+      ref = builder.gep(base_ptr, [index], "elt_ptr")
+    else:
+      assert isinstance(stmt.lhs, syntax.Attribute), \
+        "Unexpected LHS: %s" % stmt.lhs
+      struct = stmt.lhs.value 
+      ref, lhs_t = attribute_lookup(struct, stmt.lhs.name, env, builder)
+      
+    assert lhs_t == rhs_t, \
+      "Type mismatch between LHS %s and RHS %s" % (lhs_t, rhs_t)
+    # print "store", value, ":", rhs_t, "in", ref, ":", lhs_t  
+    builder.store(value, ref)
     return builder, False
 
   def compile_While():

@@ -135,6 +135,15 @@ def is_zero(expr):
 def is_one(expr):
   return isinstance(expr, syntax.Const) and expr.value == 1
 
+def is_false(expr):
+  return isinstance(expr, syntax.Const) and expr.value == False
+
+def is_true(expr):
+  return isinstance(expr, syntax.Const) and expr.value == True 
+
+def is_none(expr):
+  return isinstance(expr, syntax.Const) and expr.value == None 
+
 def is_constant(expr):
   return isinstance(expr, syntax.Const)
 

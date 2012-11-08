@@ -25,6 +25,9 @@ class Assign(Stmt):
 
 class Return(Stmt):
   _members = ['value']
+  
+  def __str__(self):
+    return "Return %s" % self.value
 
 class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
@@ -220,12 +223,19 @@ class Struct(Expr):
   with this syntax node, signifying explicit struct allocation
   """
   _members = ['args']
+  
+  def __str__(self):
+    return "Struct(%s) : %s" % \
+        (", ".join(str(arg) for arg in self.args), self.type)
 
 class Alloc(Expr):
   """
   Allocates a block of data, returns a pointer
   """
   _members = ['elt_type', 'count']
+  
+  def __str__(self):
+    return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)  
   
 class IntToPtr(Expr):
   """
