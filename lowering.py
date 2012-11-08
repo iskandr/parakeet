@@ -11,9 +11,15 @@ pipeline = [
   Simplify,
 ]
 
+
+_lowered_functions = {}
 def lower(fundef):
-  
-  print "BEFORE LOWERING", fundef
-  fundef2 = apply_pipeline(fundef, pipeline, copy = True)
-  print "AFTER LOWERING", fundef2
-  return fundef2 
+  if fundef.name in _lowered_functions:
+    return _lowered_functions[fundef.name]
+  else:
+    print "BEFORE LOWERING", fundef
+    lowered_fn = apply_pipeline(fundef, pipeline, copy = True)
+    print "AFTER LOWERING", lowered_fn
+    _lowered_functions[fundef.name] = lowered_fn
+    _lowered_functions[lowered_fn.name] = lowered_fn
+    return lowered_fn
