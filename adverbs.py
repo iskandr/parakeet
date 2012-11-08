@@ -15,22 +15,14 @@ class Adverb(syntax.Expr):
   def __str__(self):
     return repr(self)
 
-class Tiled(object):
-  pass
 
 class Map(Adverb):
-  pass
-
-class TiledMap(Map, Tiled):
   pass
 
 class AllPairs(Adverb):
   def node_init(self):
     if self.axis is None:
       self.axis = 0
-
-class TiledAllPairs(AllPairs, Tiled):
-  pass
 
 class Accumulative(Adverb):
   """
@@ -55,10 +47,20 @@ class Accumulative(Adverb):
 class Reduce(Adverb):
   pass
 
-class TiledReduce(Reduce, Tiled):
+class Scan(Accumulative):
   pass
 
-class Scan(Accumulative):
+class Tiled(object):
+  pass
+
+class TiledMap(Map, Tiled):
+  pass
+
+
+class TiledAllPairs(AllPairs, Tiled):
+  pass
+
+class TiledReduce(Reduce, Tiled):
   pass
 
 class TiledScan(Scan, Tiled):
