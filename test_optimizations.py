@@ -56,11 +56,27 @@ def lots_of_arith(x):
   b = x * a
   return b
 
-def test_constant_folding():
+def test_simple_constant_folding():
+  testing_helpers.expect(lots_of_arith, [1], 1)
   typed_fn = parakeet.typed_repr(lots_of_arith, [1])  
   assert len(typed_fn.body) == 1, \
     "Insufficiently simplified body: %s" % typed_fn
-  testing_helpers.expect(lots_of_arith, [1], 1)
-    
+
+
+def const_across_control_flow(b):
+  if b:
+    x = 1
+  else:
+    x = 1
+  return x  
+
+def test_constants_across_control_flow():
+  testing_helpers.expect(const_across_control_flow, [True], 1) 
+  typed_fn = parakeet.typed_repr(const_across_control_flow, [True]) 
+  assert len(typed_fn.body) == 1, "Fn body too long: " + str(typed_fn.body)
+  stmt = typed_fn.body[0]
+  assert isinstance(stmt, syntax.Return)
+  assert isinstance(stmt.value, syntax.Const)
+
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

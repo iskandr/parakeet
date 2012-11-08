@@ -82,9 +82,6 @@ class Simplify(transform.Transform):
   
       
   def transform_Var(self, expr):
-    print 
-    print "transform_Var", expr
-    print "env = ", self.env 
     name = expr.name
     original_expr = expr 
     
@@ -95,17 +92,17 @@ class Simplify(transform.Transform):
         name = expr.name 
       else:
         break  
-    # if we're still using this variable, so mark it as used
-    self.live_vars.add(name)
+
     if isinstance(expr, syntax.Const):
-      print "Returning const ", expr
       return expr 
     elif name == original_expr.name:
-      print "returning original"
+      # if we're still using this variable, so mark it as used
+      self.live_vars.add(name)
       return original_expr
     else:
+      # if we're still using this variable, so mark it as used
+      self.live_vars.add(name)
       new_var = syntax.Var(name = name, type = original_expr.type)
-      print "returning new var", new_var
       return new_var
     
   def transform_Invoke(self, expr):
@@ -181,6 +178,25 @@ class Simplify(transform.Transform):
     elif prim == prims.divide and is_one(args[1]):
       return args[0]
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
+  
+  def transform_phi_nodes(self, phi_nodes):
+    result = {}
+    for (k, (left, right)) in phi_nodes.iteritems():
+      new_left = self.transform_expr(left)
+      new_right = self.transform_expr(right)
+      if isinstance(new_left, syntax.Const) and \
+         isinstance(new_right, syntax.Const)  and \
+         new_left.value == new_right.value:
+        self.env[k] = new_left
+      # WARNING: THIS IS SUSPICIOUS! 
+      # How does it interact with loops? 
+      elif isinstance(new_left, syntax.Var) and \
+           isinstance(new_right, syntax.Var) and \
+           new_left.name == new_right.name:
+        self.env[k] = new_left
+      else:
+        result[k] = new_left, new_right 
+    return result 
   
   def post_apply(self, new_fn):
     
