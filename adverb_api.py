@@ -94,6 +94,12 @@ def translate_fn(python_fn):
   assert isinstance(closure_t, closure_type.ClosureT)
   untyped = function_registry.untyped_functions[closure_t.fn]
   return closure_t, untyped
+
+from common import list_to_ctypes_array 
+from run_function import ctypes_to_generic_value, generic_value_to_python
+from llvm.ee import GenericValue
+import llvm_types 
+
  
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
@@ -106,6 +112,15 @@ def par_each(fn, *args, **kwds):
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
    
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
+  
+  
+  r = adverb_helpers.max_rank(arg_types)
+  for (arg, t) in zip(args, arg_types):
+    if t.rank == r:
+      max_arg = arg
+      break
+  num_iters = max_arg.shape[axis]  
+  
   # Create args struct type
   fields = []
   for i, arg_type in enumerate(arg_types):
@@ -133,28 +148,43 @@ def par_each(fn, *args, **kwds):
     ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
                    ctypes.sizeof(args_t.ctypes_repr))
     c_args_list.append(c_args_new)
-
+    
+  c_args = list_to_ctypes_array(c_args_list)
+  
   wf = gen_par_work_function(adverbs.Map, untyped, arg_types)
-  wf_types = [core_types.Int32, core_types.Int32, args_t, core_types.Int32]
+  wf_types = [core_types.Int32, core_types.Int32, args_t, core_types.ptr_type(core_types.Int32)]
   typed = type_inference.specialize(wf, wf_types)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(typed)
-  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
-  r = adverb_helpers.max_rank(arg_types)
-  for (arg, t) in zip(args, arg_types):
-    if t.rank == r:
-      max_arg = arg
-      break
-  
-  num_iters = max_arg.shape[axis]  
+  parallel = True 
+  if parallel: 
+    wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)  
+    # Execute on thread pool
+    rt.run_untiled_job(wf_ptr, c_args, num_iters)
+  else:
+    
+    start = GenericValue.int( llvm_types.int32_t, 0)
+    stop = GenericValue.int(llvm_types.int32_t, num_iters)
+    # print "Addr1", ctypes.addressof(c_args)
+    # print "Addr2", ctypes.addressof(ctypes.cast(c_args, ctypes.POINTER(args_t.ctypes_repr)).contents)
+    fn_args_array =  GenericValue.pointer(ctypes.addressof(c_args))
+    dummy_tile_sizes_t = ctypes.c_int * 1
+    dummy_tile_sizes = dummy_tile_sizes_t()
+    arr_tile_sizes = (dummy_tile_sizes_t * rt.dop)()
+    # tile_sizes = ctypes.cast(arr_tile_sizes, ctypes.POINTER(ctypes.POINTER(ctypes.c_int)))
+    tile_sizes = GenericValue.pointer(ctypes.addressof(arr_tile_sizes)) 
+    gv_inputs = [start, stop, fn_args_array,tile_sizes]
 
-  # Execute on thread pool
-  rt.run_untiled_job(wf_ptr, c_args_list, num_iters)
-
+    exec_engine.run_function(llvm_fn, gv_inputs)
   # Concatenate results
-  output_ptrs = [args_obj.output for args_obj in c_args_list]
+  output_ptrs = [args_obj.output for args_obj in c_args]
   print output_ptrs 
-
-  outputs = [map_result_type.to_python(output_ptr.contents) \
-             for output_ptr in output_ptrs]
+  output_contents = [ptr.contents for ptr in output_ptrs]
+  print output_contents 
+  
+  outputs = [map_result_type.to_python(x) for x in output_contents]
+  print outputs 
+  
   #TODO: Have to handle concatenation axis
-  return np.concatenate(outputs) 
+  result = np.concatenate(outputs)
+  print result
+  return result 
