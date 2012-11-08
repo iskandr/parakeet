@@ -9,9 +9,11 @@ def add1(xi):
 int_vec = np.arange(100)
 
 def test_add1():
+  
   result = parakeet.par_each(add1, int_vec)
-  assert testing_helpers.eq(result, int_vec + 1), \
-    "Unexpected result: " % result 
+  expected  = int_vec + 1
+  assert testing_helpers.eq(result, expected), \
+    "Expected %s, got %s" % (expected, result) 
   
   
 if __name__ == '__main__':

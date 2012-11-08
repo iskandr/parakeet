@@ -81,7 +81,6 @@ def eval_fn(fn, actuals):
         
     def expr_PrimCall():
       arg_vals = map(eval_expr, expr.args)
-
       return expr.prim.fn (*arg_vals)
     
     def expr_Call():

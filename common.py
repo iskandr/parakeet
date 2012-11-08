@@ -18,3 +18,12 @@ def dispatch(node, prefix = "",  default = None, locals_dict = None):
     raise RuntimeError("Unsupported node %s with type %s, available: %s" % (node, node_type, available))
 
 
+def list_to_ctypes_array(ctypes_object_list, elt_type = None):
+  if elt_type is None:
+    elt = ctypes_object_list[0]
+    elt_type = elt.__class__ 
+  array_t = elt_type * len(ctypes_object_list)
+  array_object = array_t() 
+  for (i, x) in enumerate(ctypes_object_list):
+    array_object[i] = x
+  return array_object 
