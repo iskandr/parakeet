@@ -31,7 +31,7 @@ def elim_stmt(stmt, live_vars):
     
   def elim_While():
     new_body = elim_block(stmt.body, live_vars)
-    new_merge = elim_merge(stmt.merge)
+    new_merge = elim_merge(stmt.merge, live_vars)
     if len(new_merge) == 0 and \
        (len(new_body) == 0 or syntax_helpers.is_false(stmt.cond)):
       return None
