@@ -137,28 +137,39 @@ def par_each(fn, *args, **kwds):
     else:
       setattr(c_args, field_name, obj)
 
-  c_args_list = [c_args]
-
-  for i in range(rt.dop - 1):
-    c_args_new = args_t.ctypes_repr()
-    ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
-                   ctypes.sizeof(args_t.ctypes_repr))
-    c_args_list.append(c_args_new)
-
-  c_args = list_to_ctypes_array(c_args_list)
-
   wf = gen_par_work_function(adverbs.Map, untyped, arg_types)
-  wf_types = [core_types.Int32, core_types.Int32, args_t, core_types.ptr_type(core_types.Int32)]
+  wf_types = [core_types.Int32, core_types.Int32, args_t,
+              core_types.ptr_type(core_types.Int32)]
   typed = type_inference.specialize(wf, wf_types)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(typed)
   parallel = True
   if parallel:
+    c_args_list = [c_args]
+
+    for i in range(rt.dop - 1):
+      c_args_new = args_t.ctypes_repr()
+      ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
+                     ctypes.sizeof(args_t.ctypes_repr))
+      c_args_list.append(c_args_new)
+
+    c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
     # Execute on thread pool
-    rt.run_untiled_job(wf_ptr, c_args, num_iters)
-  else:
+    rt.run_untiled_job(wf_ptr, c_args_array, num_iters)
+    output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
+    print output_ptrs
+    for ptr in output_ptrs:
+      print ptr.contents
+    output_contents = [ptr.contents for ptr in output_ptrs]
+    print output_contents
 
-    start = GenericValue.int( llvm_types.int32_t, 0)
+    outputs = [map_result_type.to_python(x) for x in output_contents]
+    print outputs
+
+    #TODO: Have to handle concatenation axis
+    result = np.concatenate(outputs)
+  else:
+    start = GenericValue.int(llvm_types.int32_t, 0)
     stop = GenericValue.int(llvm_types.int32_t, num_iters)
     # print "Addr1", ctypes.addressof(c_args)
     # print "Addr2", ctypes.addressof(ctypes.cast(c_args, ctypes.POINTER(args_t.ctypes_repr)).contents)
@@ -168,19 +179,21 @@ def par_each(fn, *args, **kwds):
     arr_tile_sizes = (dummy_tile_sizes_t * rt.dop)()
     # tile_sizes = ctypes.cast(arr_tile_sizes, ctypes.POINTER(ctypes.POINTER(ctypes.c_int)))
     tile_sizes = GenericValue.pointer(ctypes.addressof(arr_tile_sizes))
-    gv_inputs = [start, stop, fn_args_array,tile_sizes]
-
-    exec_engine.run_function(llvm_fn, gv_inputs)
-  # Concatenate results
-  output_ptrs = [args_obj.output for args_obj in c_args]
-  print output_ptrs
-  output_contents = [ptr.contents for ptr in output_ptrs]
-  print output_contents
-
-  outputs = [map_result_type.to_python(x) for x in output_contents]
-  print outputs
-
-  #TODO: Have to handle concatenation axis
-  result = np.concatenate(outputs)
+    gv_inputs = [start, stop, fn_args_array, tile_sizes]
+    c_fn_ptr = exec_engine.get_pointer_to_function(llvm_fn)
+    c_input_types = [ctypes.c_int, ctypes.c_int,
+                     ctypes.POINTER(args_t.ctypes_repr),
+                     ctypes.POINTER(ctypes.c_int)]
+    c_fn_type = ctypes.CFUNCTYPE(None, *tuple(c_input_types))
+    c_fn = c_fn_type(c_fn_ptr)
+    print hex(c_fn_ptr)
+    c_fn(ctypes.c_int(0), ctypes.c_int(num_iters),
+         ctypes.byref(c_args),
+         arr_tile_sizes[0])
+    #exec_engine.run_function(llvm_fn, gv_inputs)
+    print c_args
+    print c_args.output
+    print c_args.output.contents
+    result = map_result_type.to_python(c_args.output.contents)
   print result
   return result

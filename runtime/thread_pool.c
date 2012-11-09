@@ -28,6 +28,7 @@ static void *worker(void *args) {
   for (;;) {
     thread_status_t status = worker_data->status;
     if (status == THREAD_RUN) {
+      printf("Running.\n");
       task_list_t *task_list = worker_data->task_list;
 
       // Check whether we're done.
@@ -43,10 +44,12 @@ static void *worker(void *args) {
         // do it.
         task_t *task = &task_list->tasks[task_list->cur_task];
         int end = min(task->next_start + task->step, task->end);
+        printf("About to exec iter %d to %d\n", task->next_start, end);
         (*worker_data->work_function)(task->next_start,
                                       end,
                                       worker_data->args,
                                       worker_data->tile_sizes);
+        printf("Ran func.\n");
         worker_data->iters_done += (end - task->next_start);
         task->next_start += task->step;
         worker_data->timestamp = get_cpu_time();
@@ -125,6 +128,14 @@ void launch_job(thread_pool_t *thread_pool,
 
   thread_pool->job = job;
   thread_pool->num_active = job->num_lists;
+
+  printf("Thread_pool: %p\n", thread_pool);
+  int j;
+  for (j = 0; j < thread_pool->num_active; ++j) {
+    printf("Work_function[%d]: %p\n", j, work_functions[j]);
+    printf("args[%d]: %p\n", j, args[j]);
+    printf("tile_sizes[%d]: %p\n", j, tile_sizes[j]);
+  }
 
   // Update the threads' data with the current batch of work and parallelism
   // configuration.

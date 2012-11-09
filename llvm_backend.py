@@ -83,21 +83,21 @@ class CompilationEnv:
 
 def attribute_lookup(struct, name, env, builder):
   """
-  Helper for getting the address of an attribute lookup, 
+  Helper for getting the address of an attribute lookup,
   used both when setting and getting attributes
   """
   llvm_struct = compile_expr(struct, env, builder)
-  struct_t = struct.type 
+  struct_t = struct.type
   field_pos = struct_t.field_pos(name)
   field_type = struct_t.field_type(name)
   indices = [int32(0), int32(field_pos)]
   ptr_name = "%s_ptr" % name
   ptr = builder.gep(llvm_struct, indices, ptr_name)
-  return ptr, field_type  
-                             
+  return ptr, field_type
+
 
 def compile_expr(expr, env, builder):
-  # print "  EXPR", expr 
+  # print "  EXPR", expr
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -126,7 +126,7 @@ def compile_expr(expr, env, builder):
     struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
 
     for (i, elt) in enumerate(expr.args):
-      field_name, field_type = struct_t._fields_[i] 
+      field_name, field_type = struct_t._fields_[i]
       assert elt.type == field_type, \
         "Mismatch between expected type %s and given %s for field '%s' " % \
         (field_type, elt.type, field_name )
@@ -192,7 +192,7 @@ def compile_expr(expr, env, builder):
     assert len(arg_types) == len(llvm_args)
 
     return builder.call(target_fn, llvm_args, 'call_result')
- 
+
   def compile_PrimCall():
     prim = expr.prim
     args = expr.args
@@ -260,18 +260,18 @@ def compile_stmt(stmt, env, builder):
   # print "STMT ", stmt
 
   def compile_Assign():
-    rhs_t = stmt.rhs.type 
+    rhs_t = stmt.rhs.type
     value = compile_expr(stmt.rhs, env, builder)
     if isinstance(stmt.lhs, syntax.Var):
       name = stmt.lhs.name
-      lhs_t = stmt.lhs.type 
+      lhs_t = stmt.lhs.type
       env.initialized.add(name)
       ref = env[name]
     elif isinstance(stmt.lhs, syntax.Index):
       ptr_t = stmt.lhs.value.type
       assert isinstance(ptr_t, PtrT), \
         "Expected pointer, got %s" % ptr_t
-      lhs_t = ptr_t.elt_type 
+      lhs_t = ptr_t.elt_type
       base_ptr = compile_expr(stmt.lhs.value, env, builder)
       index = compile_expr(stmt.lhs.index, env, builder)
       index = llvm_convert.from_signed(index, Int32, builder)
@@ -279,12 +279,12 @@ def compile_stmt(stmt, env, builder):
     else:
       assert isinstance(stmt.lhs, syntax.Attribute), \
         "Unexpected LHS: %s" % stmt.lhs
-      struct = stmt.lhs.value 
+      struct = stmt.lhs.value
       ref, lhs_t = attribute_lookup(struct, stmt.lhs.name, env, builder)
-      
+
     assert lhs_t == rhs_t, \
       "Type mismatch between LHS %s and RHS %s" % (lhs_t, rhs_t)
-    # print "store", value, ":", rhs_t, "in", ref, ":", lhs_t  
+    # print "store", value, ":", rhs_t, "in", ref, ":", lhs_t
     builder.store(value, ref)
     return builder, False
 
@@ -371,7 +371,7 @@ def compile_fn(fundef):
   env.llvm_context.run_passes(env.llvm_fn)
 
   #print "OPTIMIZED"
-  #print env.llvm_fn
+  print env.llvm_fn
   result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
   compiled_functions[fundef.name] = result
   return result

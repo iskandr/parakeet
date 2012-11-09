@@ -73,7 +73,7 @@ class Runtime():
 
     self.cur_iter = 0
     self.time_per_calibration = 0.15
-    self.dop = 1
+    self.dop = 5
 
     self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
 
@@ -85,19 +85,19 @@ class Runtime():
     dummy_tile_sizes_t = c_int * 1
     dummy_tile_sizes = dummy_tile_sizes_t()
     self.work_functions = (c_void_p * self.dop)()
-    
-    # args is a list of arg objects assumed to 
-    # all have the same type, though not necesarily same 
-    # elements 
-    self.args = args 
+
+    self.args = args
     self.tile_sizes = (dummy_tile_sizes_t * self.dop)()
+    print hex(fn)
     for i in range(self.dop):
       self.work_functions[i] = cast(fn, c_void_p)
       self.tile_sizes[i] = dummy_tile_sizes
     self.num_iters = num_iters
-    self.task_size = self.INITIAL_TASK_SIZE
+    self.task_size = num_iters / self.dop
+    print "Making job"
     self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
                                            self.dop, 1)
+    print "Launching job"
     self.launch_job()
     self.wait_for_job()
     self.free_job()
@@ -633,9 +633,9 @@ class Runtime():
     print "Args:"
     print "  thread pool", self.thread_pool
     print "  work functions", self.work_functions
-    print "  args", self.args 
-    print "  job", self.job 
-    print "  tile sizes", tile_sizes 
+    print "  args", self.args
+    print "  job", self.job
+    print "  tile sizes", tile_sizes
     self.libParRuntime.launch_job(
         self.thread_pool, self.work_functions, self.args, self.job,
         tile_sizes, c_int(1))
