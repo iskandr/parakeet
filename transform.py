@@ -447,7 +447,7 @@ class Transform(object):
   def transform_stmt(self, stmt):
     method_name = "transform_" + stmt.node_type()
     if hasattr(self, method_name):
-      result = getattr(self, method_name)(stmt)
+      result = getattr(self, method_name)(stmt)  
     import types
     assert isinstance(result, (syntax.Stmt, types.NoneType)), \
       "Expected statement: %s" % result 
