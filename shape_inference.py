@@ -114,13 +114,20 @@ class DimSize(AbstractValue):
   """
   The value producted by x.shape[d]
   """
-  def __init__(self, var, dim):
-    self.var = var
+  def __init__(self, array_name, dim):
+    self.array_name = array_name
     self.dim = dim 
     
   def __eq__(self, other):
     return isinstance(other, DimSize) and \
-      self.var == other.var and self.dim == other.dim
+      self.array_name == other.array_name and \
+      self.dim == other.dim
+  
+  def __str__(self):
+    return "DimSize(%s, %d)" % (self.array_name, self.dim)
+  
+  def __repr__(self):
+    return str(self)
   
   def __hash__(self):
     return hash("%s!%d" % (self.var, self.dim))
@@ -133,7 +140,7 @@ class DimSize(AbstractValue):
 
 class ArrayValue(AbstractValue):
   def __init__(self, dims):
-    self.dims = dims 
+    self.dims = [const(d) if isinstance(d, int) else d for d in dims] 
     self.rank = len(dims)
       
   def __eq__(self, other):
@@ -145,7 +152,10 @@ class ArrayValue(AbstractValue):
     if self.rank == 0:
       return "Scalar"
     else:
-      return "Array(%s)" % ", ".join(str(d) for d in self.dims)
+      return "Array(%s)" % (", ".join(str(d) for d in self.dims))
+  
+  def __repr__(self):
+    return str(self)
   
   def combine(self, other):
     if is_scalar(other):
@@ -164,6 +174,9 @@ def array(*dims):
 scalar = array() 
 
 def increase_rank(x, axis, dim_expr):
+  if isinstance(dim_expr, int):
+    dim_expr = const(dim_expr)
+    
   if isinstance(x, ArrayValue):
     # we're taking dims d1...dm and constructing a 
     # new shape d1...d_new...dm by inserting d_new
@@ -263,12 +276,29 @@ def combine_list(xs):
 def combine_pairs(xs, ys):
   return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]
 
+import core_types 
+import array_type 
+import tuple_type
 
+def input_shape(arg_name, arg_type):
+  if isinstance(arg_type, array_type.ArrayT):
+    rank = arg_type.rank
+    dims = [DimSize(arg_name, i) for i in xrange(rank)]
+    return array(*dims)
+  elif isinstance(arg_type, array_type.ScalarT):
+    return ScalarVar(arg_name) 
+  else:
+    raise RuntimeError("Input type not handled: %s" % arg_type)
+  
 class ShapeInference(SyntaxVisitor):
   
   def __init__(self):
+    self._clear()
+
+  def _clear(self):
     self.value_env = {}
     self.equivalence_classes = {}
+    
   
   def unify_scalar_var(self, unknown, y):
     """
@@ -351,12 +381,12 @@ class ShapeInference(SyntaxVisitor):
   def visit_Var(self, expr):
     name = expr.name
     if name in self.value_env: 
-      return self.value_env 
+      return self.value_env[name]
     elif name in self.equivalence_classes:
       for other_name in self.equivalence_classes[name]:
         if other_name in self.value_env:
           return self.value_env[other_name] 
-    return expr 
+    raise RuntimeError("Unknown variable: %s" %  expr)
   
   def visit_Tuple(self, expr):
     return TupleValue(self.visit_expr_list(expr.elts))
@@ -365,7 +395,11 @@ class ShapeInference(SyntaxVisitor):
     elts = self.visit_expr_list(expr.elts)
     elt = combine_list(elts)
     n = len(elts)
+    print "elts", elts
+    print "elt", elt
+    print "n", n
     res = increase_rank(elt, 0, const(n))
+    print "res", res 
     return res 
     
   def visit_Map(self, expr):
@@ -389,14 +423,31 @@ class ShapeInference(SyntaxVisitor):
     self.bind(self.lhs, rhs) 
     
   def visit_Return(self, stmt):
+    
     new_value = self.visit_expr(stmt.value)
+    print "new_value", new_value
     old_value = self.value_env.get("$return", unknown_value)
-    self.value_env["$return"] = old_value.combine(new_value)
+    print "old_value", old_value 
+    combined = old_value.combine(new_value)
+    print "combined", combined 
+    self.value_env["$return"] = combined 
+    
+  def visit_fn(self, fn):
+    self._clear()
+    for arg_name in fn.args.arg_slots:
+      arg_type = fn.type_env[arg_name]
+      s = input_shape(arg_name, arg_type)
+      print "input", arg_name, arg_type, s 
+      self.value_env[arg_name] = s 
+    self.visit_block(fn.body)
+
+    return self.value_env["$return"] 
+  
+
     
 def symbolic_call_shape(typed_fn):
   shape_inference = ShapeInference()
-  shape_inference.visit_block(typed_fn.body)
-  return shape_inference.value_env["$return"] 
+  return shape_inference.visit_fn(typed_fn)
   
       
   
