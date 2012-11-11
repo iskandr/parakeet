@@ -1,8 +1,7 @@
 import syntax
 from syntax_visitor import SyntaxVisitor 
 from node import Node  
-from twisted.test.process_twisted import pos
-from numpy.core.fromnumeric import rank
+
 
 
 
@@ -59,7 +58,7 @@ class UnknownScalar(Scalar):
   def __str__(self):
     return "Scalar"
   
-unknown_scalar = UnknownScalar
+unknown_scalar = UnknownScalar()
 
 class Const(Scalar):
   def __init__(self, value):
@@ -112,7 +111,7 @@ class Var(Scalar):
     self.num = num 
     
   def __eq__(self, other):
-    return self.num == other.num
+    return isinstance(other, Var) and self.num == other.num
   
   def __hash__(self):
     return hash(self.num)
@@ -168,7 +167,7 @@ def dim(a, d):
 
 
 def array_of_unknown_shape(rank):
-  return array([unknown_scalar] * rank)
+  return Shape([unknown_scalar] * rank)
 
 def increase_rank(x, axis, dim_expr):
   if isinstance(dim_expr, int):
@@ -307,7 +306,7 @@ def value_from_type(t, counter):
   elif isinstance(t, array_type.ArrayT):
     new_counter = counter + t.rank 
     dim_vars = [Var(c) for c in xrange(counter, new_counter)]
-    return array(dim_vars), new_counter 
+    return Shape(dim_vars), new_counter 
   elif isinstance(t, tuple_type.TupleT):
     elt_values, counter  = values_from_types(t.elt_types, counter, True)
     return Tuple(elt_values), counter 
@@ -479,7 +478,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_fn(self, fn):
     self._clear()
     arg_names = fn.args.arg_slots
-    arg_types = [self.type_env[name] for name in arg_names]
+    arg_types = [fn.type_env[name] for name in arg_names]
     input_values = values_from_types(arg_types)
     for n,v in zip(arg_names, input_values):
       self.value_env[n] = v 

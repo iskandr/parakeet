@@ -7,6 +7,23 @@ import syntax_helpers
 import type_inference
 
 class LowerAdverbs(transform.Transform):
+  
+   
+  # Can't put type inference related methods inside Transform
+  # since this create a cyclic dependency with InsertCoercions 
+  
+  def invoke_type(self, closure, args):
+    closure_t = closure.type 
+    arg_types = syntax_helpers.get_types(args)
+    assert all( isinstance(t, core_types.Type) for t in arg_types), \
+      "Invalid types: %s" % (arg_types, )
+    return type_inference.invoke_result_type(closure_t, arg_types)
+  
+  def invoke(self, closure, args):
+    call_result_t = self.invoke_type(closure, args)
+    call = syntax.Invoke(closure, args, type = call_result_t)
+    return self.assign_temp(call, "invoke_result")
+  
   def flatten_array_arg(self, x):
     if isinstance(x.type, core_types.ScalarT):
       return x

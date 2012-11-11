@@ -111,7 +111,7 @@ def annotate_expr(expr, tenv, var_map):
       scalar_result_type = invoke_result_type(closure_t, upcast_types)
       prim_closure = typed_ast.Closure(prim_fn, [], type = closure_t)
       max_rank = adverb_helpers.max_rank(arg_types)
-      result_t = adverb_helpers.increase_rank(scalar_result_type, max_rank)
+      result_t = array_type.increase_rank(scalar_result_type, max_rank)
       return adverbs.Map(prim_closure, args, type = result_t)
   def expr_Index():
     value = annotate_child(expr.value)
@@ -131,7 +131,7 @@ def annotate_expr(expr, tenv, var_map):
     new_elts = annotate_children(expr.elts)
     elt_types = get_types(new_elts)
     common_t = core_types.combine_type_list(elt_types)
-    array_t = array_type.make_array_type(common_t, 1)
+    array_t = array_type.increase_rank(common_t, 1)
     return typed_ast.Array(new_elts, type = array_t)
   
   def expr_Slice():
@@ -197,6 +197,8 @@ def annotate_expr(expr, tenv, var_map):
     
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
+  assert isinstance(result.type, core_types.Type), \
+    "Unexpected type annotation on %s: %s" % (expr, result.type)
   return result    
 
 def annotate_stmt(stmt, tenv, var_map ):  
@@ -353,127 +355,8 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     return_type = return_type, 
     type_env = tenv)
 
-def rewrite_typed(fn):
-  type_env = fn.type_env
-  def lookup(var):
-    return type_env[var]
-  
-  fn_return_type = lookup("$return")
-  
-  def cast(expr, t):
-    assert isinstance(t, core_types.ScalarT), \
-      "Casts not yet implemented for non-scalar type: %s" % t
-    return typed_ast.Cast(expr, type = t)
-  
-  def rewrite_expr(expr):
-    """
-    TODO: Make this recursive!
-    """
-    def rewrite_PrimCall():
-      new_args = map(rewrite_expr, expr.args)
-      arg_types = map(get_type, new_args)
-      upcast_types = expr.prim.expected_input_types(arg_types)
-      result_type = expr.prim.result_type(upcast_types)
-      upcast_args = [coerce_expr(x, t) for (x,t) in zip(new_args, upcast_types)]
-      return typed_ast.PrimCall(expr.prim, upcast_args, type = result_type )
-    
-    def rewrite_Array():
-      array_t = expr.type
-      elt_t = array_t.elt_type 
-      new_elts = [coerce_expr(elt, elt_t) for elt in expr.elts]
-      return typed_ast.Array(new_elts, type = array_t)
-    
-    def rewrite_Slice():
-      # None step defaults to 1
-      if isinstance(expr.step.type, core_types.NoneT):
-        start_t = expr.start.type
-        stop_t = expr.stop.type 
-        step = syntax_helpers.one_i64
-        step_t = step.type 
-        slice_t = array_type.make_slice_type(start_t, stop_t, step_t)
-        return typed_ast.Slice(expr.start, expr.stop, step, type = slice_t)  
-      else:
-        return expr 
-    return dispatch(expr, "rewrite", default = lambda x: x)
-      
-     
-  def coerce_expr(expr, t):
-    expr = rewrite_expr(expr)
-    
-    if expr.type == t:
-      return expr
-    
-    elif isinstance(expr, untyped_ast.Tuple):
-      if not isinstance(t, tuple_type.TupleT) or len(expr.type.elt_types) != t.elt_types:
-        raise core_types.IncompatibleTypes(expr.type, t)
-      else:
-        new_elts = []
-        for elt, elt_t in zip(expr.elts, t.elt_types):
-          new_elts.append(coerce_expr(elt, elt_t))
-        return typed_ast.Tuple(new_elts, type = t)
-    else:
-      return cast(expr, t)
-    
-  def rewrite_merge(merge):
-    new_merge = {}
-    for (var, (left, right)) in merge.iteritems():
-      t = type_env[var]
-      new_left = coerce_expr(left, t)
-      new_right = coerce_expr(right, t)
-      new_merge[var] = (new_left, new_right) 
-    return new_merge 
-  
-  def rewrite_lhs(lhs):
-    if isinstance(lhs, typed_ast.Var):
-      t = lookup(lhs.name)
-      if t == lhs.type:
-        return lhs
-      else:
-        return typed_ast.Var(lhs.name, type = t)
-    elif isinstance(lhs, typed_ast.Tuple):
-      elts = map(rewrite_lhs, lhs.elts)
-      elt_types = map(get_type, elts)
-      if elt_types != lhs.type.elt_types:
-        return typed_ast.Tuple(elts, type = tuple_type.make_tuple_type(elt_types))
-      else:
-        return lhs 
-    else:
-      return lhs 
-      
-  
-  def rewrite_stmt(stmt):
-    if isinstance(stmt, typed_ast.Assign):
-      new_lhs = rewrite_lhs(stmt.lhs)
-      lhs_t = new_lhs.type 
-      new_rhs = coerce_expr(stmt.rhs, lhs_t)
-      return typed_ast.Assign(stmt.lhs, new_rhs)
-    
-    elif isinstance(stmt, typed_ast.If):
-      new_cond = coerce_expr(stmt.cond, core_types.Bool)
-      new_true_block = rewrite_block(stmt.true)
-      new_false_block = rewrite_block(stmt.false)
-      new_merge = rewrite_merge(stmt.merge)
-      return typed_ast.If(new_cond, new_true_block, new_false_block, new_merge)
-    
-    elif isinstance(stmt, untyped_ast.Return):
-      return typed_ast.Return(coerce_expr(stmt.value, fn_return_type))
-    
-    
-    elif isinstance(stmt, untyped_ast.While):
-      new_cond = coerce_expr(stmt.cond, core_types.Bool)
-      new_body = rewrite_block(stmt.body)
-      # insert coercions for left-branch values into the current block before
-      # the while-loop and coercions for the right-branch to the end of the loop body
-      new_merge = rewrite_merge(stmt.merge)
-      return typed_ast.While(new_cond, new_body, new_merge)
-    else:
-      raise RuntimeError("Not implemented: %s" % stmt)
-    
-    
-  def rewrite_block(stmts):
-    return map(rewrite_stmt, stmts)
-  
-  fn.body = rewrite_block(fn.body)
+
+from insert_coercions import insert_coercions 
 
 def specialize(untyped, arg_types): 
   if isinstance(untyped, str):
@@ -487,11 +370,12 @@ def specialize(untyped, arg_types):
     return find_specialization(untyped_id, arg_types)
   except:
     typed_fundef = _infer_types(untyped, arg_types)
-    rewrite_typed(typed_fundef)
+    coerced_fundef = insert_coercions(typed_fundef) 
+    
     import optimize 
     # TODO: Also store the unoptimized version 
     # so we can do adaptive recompilation  
-    opt = optimize.optimize(typed_fundef, copy = False)
+    opt = optimize.optimize(coerced_fundef, copy = False)
     add_specialization(untyped_id, arg_types, opt)
     return opt 
 
@@ -518,7 +402,7 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
     assert len(arg_types) == 1
     input_type = arg_types[0]
     n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
-    nested_type = adverb_helpers.lower_arg_rank(input_type, n_outer_axes)
+    nested_type = array_type.lower_rank(input_type, n_outer_axes)
     nested_result_type = invoke_result_type(closure_t, [nested_type, nested_type])
     assert nested_type == nested_result_type, \
       "Can't yet handle accumulator type %s which differs from input %s" % \
@@ -536,23 +420,23 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)
-  return adverb_helpers.increase_rank(acc_t, n_outer_axes) 
+  return array_type.increase_rank(acc_t, n_outer_axes) 
 
 def infer_map_type(closure_t, arg_types, axis):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
-  nested_types = adverb_helpers.lower_arg_ranks(arg_types, n_outer_axes)
+  nested_types = array_type.lower_ranks(arg_types, n_outer_axes)
   nested_result_type = invoke_result_type(closure_t, nested_types)
-  return adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+  return array_type.increase_rank(nested_result_type, n_outer_axes)
 
 def infer_allpairs_type(closure_t, xtype, ytype, axis):
   axis = unwrap_constant(axis)
   n_outer_axes = 2
   arg_types = [xtype, ytype]
   if axis is None:
-    nested_types = adverb_helpers.elt_types(arg_types)
+    nested_types = array_type.elt_types(arg_types)
   else:
-    nested_types = adverb_helpers.lower_arg_ranks(arg_types, 1)
+    nested_types = array_type.lower_ranks(arg_types, 1)
   nested_result_type = invoke_result_type(closure_t, nested_types)
-  return adverb_helpers.increase_rank(nested_result_type, n_outer_axes)
+  return array_type.increase_rank(nested_result_type, n_outer_axes)
   
   

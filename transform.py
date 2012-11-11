@@ -5,10 +5,9 @@ from core_types import Int32, Int64
 import tuple_type
 import array_type  
 import prims 
-import type_inference 
 
-from syntax_helpers import get_type, get_types, wrap_if_constant, \
-                           wrap_constants, zero
+
+from syntax_helpers import get_types, wrap_if_constant, wrap_constants, zero
 
 import function_registry
 import syntax_helpers
@@ -25,6 +24,7 @@ class Transform(object):
 
   def lookup_type(self, name):
     assert self.type_env is not None
+    return self.type_env[name]
   
   def fresh_var(self, t, prefix = "temp"):
     assert t is not None, "Type required for new variable %s" % prefix
@@ -69,7 +69,8 @@ class Transform(object):
     return self.zero(t = Int64, name = name)
   
   def cast(self, expr, t):
-    assert isinstance(t, core_types.ScalarT), "Casts not yet implemented for non-scalar types"
+    assert isinstance(t, core_types.ScalarT), \
+      "Can't cast %s to non-scalar type %s" % (expr, t)
     if expr.type == t:
       return expr
     else:
@@ -347,18 +348,8 @@ class Transform(object):
     counter_after = self.fresh_var(counter_type, name + "_after")
     merge = { counter.name : (counter_before, counter_after) }
     return counter, counter_after, merge 
-    
-  def invoke_type(self, closure, args):
-    closure_t = closure.type 
-    arg_types = syntax_helpers.get_types(args)
-    assert all( isinstance(t, core_types.Type) for t in arg_types), \
-      "Invalid types: %s" % (arg_types, )
-    return type_inference.invoke_result_type(closure_t, arg_types)
   
-  def invoke(self, closure, args):
-    call_result_t = self.invoke_type(closure, args)
-    call = syntax.Invoke(closure, args, type = call_result_t)
-    return self.assign_temp(call, "invoke_result")
+ 
   
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):

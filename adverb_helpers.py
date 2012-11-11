@@ -92,32 +92,7 @@ def max_rank_arg(args):
     if arg.type.rank == r:
       return arg
 
-def elt_type(t):
-  if isinstance(t, array_type.ArrayT):
-    return t.elt_type
-  else:
-    return t 
-  
-def elt_types(ts):
-  return map(elt_type, ts) 
 
-def lower_arg_rank(t, r):
-  if isinstance(t, core_types.ScalarT):
-    return t
-  else:
-    assert isinstance(t, array_type.ArrayT)
-    assert t.rank >= r
-    return array_type.make_array_type(t.elt_type, t.rank - r)
-
-def increase_rank(t, r):
-  if isinstance(t, core_types.ScalarT):
-    return array_type.make_array_type(t, r)
-  else:
-    assert isinstance(t, array_type.ArrayT)
-    return array_type.make_array_type(t.elt_type, t.rank + r)
-
-def lower_arg_ranks(arg_types, r):
-  return [lower_arg_rank(t, r) for t in arg_types]
 
 def num_outer_axes(arg_types, axis):
   """

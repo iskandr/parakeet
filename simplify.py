@@ -34,22 +34,40 @@ class Simplify(transform.Transform):
     self.live_vars = set([])
     transform.Transform.__init__(self, fn)
   
-  def collect_live_vars(self, expr):
-    if isinstance(expr, syntax.Var):
+  def collect_live_vars_list(self, exprs):
+    for e in exprs:
+      self.collect_live_vars(e)
       
+  def collect_live_vars(self, expr):
+    """
+    This function collects variables who appear on the LHS for 
+    stateful assignments (i.e. copies to arrays or fields of structs
+    """
+    if isinstance(expr, syntax.Var):
       self.live_vars.add(expr.name)
     elif isinstance(expr, syntax.Tuple):
-      for e in expr.elts:
-        self.collect_live_vars(e)
+      self.collect_live_vars_list(expr.elts)
     elif isinstance(expr, syntax.Attribute):
       self.collect_live_vars(expr.value)
+    elif isinstance(expr, syntax.ArrayView):
+      self.collect_live_vars(expr.data)
+      self.collect_live_vars(expr.shape)
+      self.collect_live_vars(expr.strides)
     elif isinstance(expr, syntax.TupleProj):
       self.collect_live_vars(expr.tuple)
     elif isinstance(expr, syntax.Index):
       self.collect_live_vars(expr.value)
       self.collect_live_vars(expr.index)
+    elif isinstance(expr, syntax.IntToPtr):
+      self.collect_live_vars(expr.value)
+    elif isinstance(expr, syntax.PtrToInt):
+      self.collect_live_vars(expr.value)
+    elif isinstance(expr, syntax.PrimCall):
+      self.collect_live_vars_list(expr.args)
     elif isinstance(expr, syntax.Const):
       pass 
+    
+      
     else:
       assert False, \
         "Unexpected left-hand-side expression: " + str(expr) 

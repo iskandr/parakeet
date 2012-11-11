@@ -83,6 +83,7 @@ class LowerIndexing(transform.Transform):
     else:
       return self.array_slice(arr, indices)
       
+      
   def transform_Index(self, expr):
     return self.assign_temp(self.transform_lhs_Index(expr),"idx_result")
    
