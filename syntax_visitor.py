@@ -9,7 +9,8 @@ class SyntaxVisitor(object):
     pass 
 
   def visit_expr(self, expr):
-    method_name = 'vist_' + expr.node_type()
+    method_name = 'visit_' + expr.node_type()
+
     if hasattr(self, method_name):
       method = getattr(self, method_name)
       return method(expr)
@@ -79,7 +80,7 @@ class SyntaxVisitor(object):
     
     
   def visit_stmt(self, stmt):
-    method_name = 'vist_' + stmt.node_type()
+    method_name = 'visit_' + stmt.node_type()
     if hasattr(self, method_name):
       method = getattr(self, method_name)
       return method(stmt)
