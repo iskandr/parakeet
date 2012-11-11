@@ -70,15 +70,23 @@ class ConstValue(AbstractValue):
   def __init__(self, value):
     self.value = value 
     
+  def __eq__(self, other):
+    return isinstance(other, ConstValue) and other.value == self.value
+    
   def __str__(self):
-    return "%d" % self.value 
+    return "Const(%d)" % self.value 
 
   def combine(self, other):
-    if isinstance(other, ConstValue) and other.value == self.value:
+    if self == other:
       return self
+    elif is_scalar(other):
+      return scalar
     else:
-      return unknown_scalar
-    
+      raise ValueMismatch(self, other)
+
+def const(x):
+  return ConstValue(x)
+
 def is_zero(d):
   return isinstance(d, ConstValue) and d.value == 0
 
@@ -92,6 +100,15 @@ class ScalarVar(AbstractValue):
   
   def __hash__(self):
     return hash(self.name)
+
+  def __eq__(self, other):
+    return self.name == other.name 
+
+  def combine(self, other):
+    if self == other:
+      return self
+    else:
+      return scalar 
   
 class DimSize(AbstractValue):
   """
@@ -124,19 +141,27 @@ class ArrayValue(AbstractValue):
       len(self.dims) == len(other.dims) and \
       all(d1 == d2 for (d1,d2) in zip(self.dims, other.dims) )
   
-  def combine(self, other):
-    if isinstance(other, ArrayValue):
-      if is_scalar(other):
-        return self
-      elif is_scalar(self):
-        return other
-      elif other.rank == self.rank:
-        
-        assert False, "Shouldn't the logic of unifying dim variables be in the interpreter?"
-    raise ValueMismatch(self, other)
+  def __str__(self):
+    if self.rank == 0:
+      return "Scalar"
+    else:
+      return "Array(%s)" % ", ".join(str(d) for d in self.dims)
   
+  def combine(self, other):
+    if is_scalar(other):
+      return self
+    elif is_scalar(self):
+      return other
+    elif isinstance(other, ArrayValue) and other.rank == self.rank:
+      dims = combine_pairs(self.dims, other.dims)
+      return array(*dims)
+    raise ValueMismatch(self, other)
+
+def array(*dims):
+  return ArrayValue(dims) 
+
 # represent scalars with 0-rank array s
-unknown_scalar = ArrayValue(())
+scalar = array() 
 
 def increase_rank(x, axis, dim_expr):
   if isinstance(x, ArrayValue):
@@ -144,12 +169,16 @@ def increase_rank(x, axis, dim_expr):
     # new shape d1...d_new...dm by inserting d_new
     # in the slot of the given axis 
     assert axis <= x.rank 
-    new_dims = []
-    for (i,d) in x.dims:
-      if i == axis:
-        new_dims.append(dim_expr)
-      new_dims.append(d)
-    return ArrayValue(new_dims)
+    if axis < len(x.dims):
+      new_dims = []
+      for (i,d) in enumerate(x.dims):
+        if i == axis:
+          new_dims.append(dim_expr)
+        new_dims.append(d)
+    else:
+      new_dims = [d for d in x.dims]
+      new_dims.append(dim_expr)
+    return array(*new_dims)
   elif is_scalar(x):
     return ArrayValue([dim_expr])        
   else:
@@ -180,8 +209,8 @@ class SliceValue(AbstractValue):
     else:
       raise ValueMismatch(self, other)
 
-def combine_value_lists(xs, ys):
-  return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]
+
+
 
 class TupleValue(AbstractValue):
   def __init__(self, elts):
@@ -198,7 +227,7 @@ class TupleValue(AbstractValue):
   def combine(self, other):
     if isinstance(other, TupleValue):
       if len(self.elts) == len(other.elts):
-        return TupleValue(combine_value_lists(self.elts, other.elts))
+        return TupleValue(combine_pairs(self.elts, other.elts))
     raise ValueMismatch(self, other)
   
 class ClosureValue(AbstractValue):
@@ -221,9 +250,18 @@ class ClosureValue(AbstractValue):
       # TODO: Implement sets of closures like we have in the type system 
       if self.untyped_fn == other.untyped_fn and \
          len(self.args) == len(other.args) :
-        combined_args = combine_value_lists(self.args, other.args)
+        combined_args = combine_pairs(self.args, other.args)
         return ClosureValue(self.untyped_fn, combined_args)
     raise ValueMismatch(self, other)  
+
+def combine_list(xs):
+  acc = unknown_value
+  for x in xs:
+    acc = acc.combine(x)
+  return acc 
+
+def combine_pairs(xs, ys):
+  return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]
 
 
 class ShapeInference(SyntaxVisitor):
@@ -251,11 +289,17 @@ class ShapeInference(SyntaxVisitor):
     else:
       return unknown
     
-  def unify_lists(self, xs, ys):
+  def unify_pairs(self, xs, ys):
     result_elts = []
     for xi, yi in zip(xs.elts, ys.elts):
       result_elts.append(self.unify(xi, yi))
-    return TupleValue(result_elts)
+    return result_elts 
+  
+  def unify_list(self, values):
+    acc = values[0]
+    for v in values[1:]:
+      acc = self.unify(acc, v)  
+    return acc 
   
   def unify(self, x, y):
     if isinstance(x, UnknownValue):
@@ -267,16 +311,26 @@ class ShapeInference(SyntaxVisitor):
     elif isinstance(y, (DimSize, ScalarVar)):
       return self.unify_scalar_var(y, x)
     elif isinstance(x, ArrayValue):
-      return self.unify_array(x,y)
+      assert isinstance(y, ArrayValue), \
+        "Expected array, got: %s" % y
+      x_rank = len(x.dims)
+      y_rank = len(y.dims)
+      assert x_rank == y_rank, \
+        "Can't unify arrays of rank %d and %d" % \
+        (x_rank, y_rank)
+      return array(*self.unify_pairs(x.dims, y.dims))
+    elif isinstance(y, ArrayValue):
+      return self.unify_arrays(y,x)
+    
     elif isinstance(x, ClosureValue):
       assert isinstance(y, ClosureValue), "Expected closure, got " + str(y)
       assert (x.untyped_fn == y.untyped_fn) and len(x.args) == len(y.args), \
         "Can't yet support joining different closures"
-      return ClosureValue(self.unify_lists(x.args, y.args))
+      return ClosureValue(self.unify_pairs(x.args, y.args))
     elif isinstance(x, TupleValue):
       assert isinstance(y, TupleValue), "Expected tuple, got " + str(y)
       assert len(x.elts) == len(y.elts)
-      return TupleValue(self.unify_lists(x.elts, y.elts))
+      return TupleValue(self.unify_pairs(x.elts, y.elts))
     elif isinstance(x, SliceValue):
       assert isinstance(y, SliceValue), "Expected slice, got " + str(y)
       start = self.unify(x.start, y.start)
@@ -309,8 +363,10 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_Array(self, expr):
     elts = self.visit_expr_list(expr.elts)
-    elt = self.unify_list(elts)
-    return increase_rank(elt, 0, ConstValue(len(elts)))
+    elt = combine_list(elts)
+    n = len(elts)
+    res = increase_rank(elt, 0, const(n))
+    return res 
     
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
@@ -330,7 +386,6 @@ class ShapeInference(SyntaxVisitor):
       
   def visit_Assign(self, stmt):
     rhs = self.visit_expr(stmt.rhs)
-    print rhs
     self.bind(self.lhs, rhs) 
     
   def visit_Return(self, stmt):

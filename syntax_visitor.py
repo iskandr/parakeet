@@ -10,11 +10,13 @@ class SyntaxVisitor(object):
 
   def visit_expr(self, expr):
     method_name = 'visit_' + expr.node_type()
-
+    print method_name 
     if hasattr(self, method_name):
       method = getattr(self, method_name)
+      print "...found"
       return method(expr)
     else:
+      print "...not found"
       return self.visit_generic_expr(expr)
   
   def visit_expr_list(self, exprs):
