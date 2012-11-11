@@ -1,34 +1,8 @@
 import syntax
 from syntax_visitor import SyntaxVisitor 
 from node import Node  
-
-   
-"""
-class Max(ShapeElt):
-  def __init__(self, d1, d2):
-    self.d1 = d1
-    self.d2 = d2
-    
-  def __eq__(self, other):
-    return \
-      (self.d1 == other.d1 and self.d2 == other.d2) or \
-      (self.d2 == other.d1 and self.d1 == other.d1)  
-
-def max_dim(d1, d2):
-  if d1 == d2:
-    return d1
-  elif is_zero(d1):
-    return d2 
-  elif is_zero(d2):
-    return d1 
-  elif isinstance(d1, Const) and isinstance(d2, Const):
-    if d1.value < d2.value:
-      return d2 
-    else:
-      return d1 
-  else:
-    return Max(d1, d2)
-"""
+from twisted.test.process_twisted import pos
+from numpy.core.fromnumeric import rank
 
 
 
@@ -51,9 +25,9 @@ class ValueMismatch(Exception):
 class AbstractValue(Node):
   pass 
 
-class UnknownValue(Node):
+class Unknown(Node):
   def __eq__(self, other):
-    return isinstance(other, UnknownValue)
+    return isinstance(other, Unknown)
   
   def combine(self, other):
     return other 
@@ -64,14 +38,35 @@ class UnknownValue(Node):
   def __repr__(self):
     return str(self)
 
-unknown_value = UnknownValue()
+unknown_value = Unknown()
 
-class ConstValue(AbstractValue):
+
+class Scalar(AbstractValue):
+  """
+  Base class for all scalar operations
+  """
+  rank = 0
+  
+class UnknownScalar(Scalar):
+  def __eq__(self, other):
+    return isinstance(other, UnknownScalar)
+  
+  def combine(self, other):
+    assert isinstance(other, Scalar), \
+      "Can't combine scalar with %s" % other 
+    return self 
+  
+  def __str__(self):
+    return "Scalar"
+  
+unknown_scalar = UnknownScalar
+
+class Const(Scalar):
   def __init__(self, value):
     self.value = value 
     
   def __eq__(self, other):
-    return isinstance(other, ConstValue) and other.value == self.value
+    return isinstance(other, Const) and other.value == self.value
     
   def __str__(self):
     return "Const(%d)" % self.value 
@@ -79,105 +74,107 @@ class ConstValue(AbstractValue):
   def combine(self, other):
     if self == other:
       return self
-    elif is_scalar(other):
-      return scalar
+    elif isinstance(other, Scalar):
+      return unknown_scalar
     else:
       raise ValueMismatch(self, other)
 
 def const(x):
-  return ConstValue(x)
+  return Const(x)
 
 def is_zero(d):
-  return isinstance(d, ConstValue) and d.value == 0
+  return isinstance(d, Const) and d.value == 0
 
 def is_one(d):
-  return isinstance(d, ConstValue) and d.value == 1
+  return isinstance(d, Const) and d.value == 1
 
+class Sub(Scalar):
+  def __init__(self, x, y):
+    self.x = x
+    self.y = y
+
+  def __eq__(self, other):
+    return isinstance(other, Sub) and \
+      self.x == other.x and \
+      self.y == other.y
       
-class ScalarVar(AbstractValue):
-  def __init__(self, name):
-    self.name = name 
+  def __str__(self):
+    return "%s - %s" % (self.x, self.y)
+  
+  def __repr__(self):
+    return str(self) 
   
   def __hash__(self):
-    return hash(self.name)
-
-  def __eq__(self, other):
-    return self.name == other.name 
-
-  def combine(self, other):
-    if self == other:
-      return self
-    else:
-      return scalar 
+    return hash( (self.x, self.y) )
   
-class DimSize(AbstractValue):
-  """
-  The value producted by x.shape[d]
-  """
-  def __init__(self, array_name, dim):
-    self.array_name = array_name
-    self.dim = dim 
+class Var(Scalar):
+  def __init__(self, num):
+    self.num = num 
     
   def __eq__(self, other):
-    return isinstance(other, DimSize) and \
-      self.array_name == other.array_name and \
-      self.dim == other.dim
+    return self.num == other.num
+  
+  def __hash__(self):
+    return hash(self.num)
   
   def __str__(self):
-    return "DimSize(%s, %d)" % (self.array_name, self.dim)
+    return "x%d" % self.num 
   
   def __repr__(self):
     return str(self)
-  
-  def __hash__(self):
-    return hash("%s!%d" % (self.var, self.dim))
   
   def combine(self, other):
     if self == other:
       return self 
     else:
-      raise ValueMismatch(self, other)
+      # combining two different variables returns an unknown scalar 
+      return unknown_scalar 
 
-class ArrayValue(AbstractValue):
+
+class Shape(AbstractValue):
   def __init__(self, dims):
+    assert len(dims) > 0
     self.dims = [const(d) if isinstance(d, int) else d for d in dims] 
     self.rank = len(dims)
       
   def __eq__(self, other):
-    return isinstance(other, ArrayValue) and \
+    return isinstance(other, Shape) and \
       len(self.dims) == len(other.dims) and \
       all(d1 == d2 for (d1,d2) in zip(self.dims, other.dims) )
   
   def __str__(self):
-    if self.rank == 0:
-      return "Scalar"
-    else:
-      return "Array(%s)" % (", ".join(str(d) for d in self.dims))
+    return "Shape(%s)" % (", ".join(str(d) for d in self.dims))
   
   def __repr__(self):
     return str(self)
   
   def combine(self, other):
-    if is_scalar(other):
-      return self
-    elif is_scalar(self):
-      return other
-    elif isinstance(other, ArrayValue) and other.rank == self.rank:
+    if isinstance(other, Shape) and other.rank == self.rank:
       dims = combine_pairs(self.dims, other.dims)
       return array(*dims)
     raise ValueMismatch(self, other)
 
 def array(*dims):
-  return ArrayValue(dims) 
+  return Shape(dims) 
 
-# represent scalars with 0-rank array s
-scalar = array() 
+
+def dim(a, d):
+  if isinstance(a, Shape):
+    return a.dims[d]
+  else:
+    # if the shape isn't available, getting the d'th 
+    # dimension returns an unknown scalar 
+    return unknown_scalar 
+
+
+def array_of_unknown_shape(rank):
+  return array([unknown_scalar] * rank)
 
 def increase_rank(x, axis, dim_expr):
   if isinstance(dim_expr, int):
     dim_expr = const(dim_expr)
     
-  if isinstance(x, ArrayValue):
+  if isinstance(x, Shape):
     # we're taking dims d1...dm and constructing a 
     # new shape d1...d_new...dm by inserting d_new
     # in the slot of the given axis 
@@ -193,44 +190,42 @@ def increase_rank(x, axis, dim_expr):
       new_dims.append(dim_expr)
     return array(*new_dims)
   elif is_scalar(x):
-    return ArrayValue([dim_expr])        
+    return Shape([dim_expr])        
   else:
     raise RuntimeError("Don't know how to raise rank of value %s" % x)
-    
-def is_scalar(v):
-  return isinstance(v, (ConstValue, ScalarVar, DimSize)) or \
-    (isinstance(v, ArrayValue) and v.rank == 0)
+   
 
-class SliceValue(AbstractValue):
+def is_scalar(v):
+  return isinstance(v, Scalar) 
+
+class Slice(AbstractValue):
   def __init__(self, start, stop, step):
     self.start = start
     self.stop = stop 
     self.step = step 
     
   def __eq__(self, other):
-    return isinstance(other, SliceValue) and \
+    return isinstance(other, Slice) and \
       self.start == other.start and \
       self.stop == other.stop and \
       self.step == other.step 
   
   def combine(self, other):
-    if isinstance(other, SliceValue):
+    if isinstance(other, Slice):
       start = self.start.combine(other.start)
       stop = self.stop.combine(other.stop)
       step = self.step.combine(other.step)
-      return SliceValue(start, stop, step)
+      return Slice(start, stop, step)
     else:
       raise ValueMismatch(self, other)
 
 
-
-
-class TupleValue(AbstractValue):
+class Tuple(AbstractValue):
   def __init__(self, elts):
     self.elts = elts 
     
   def __eq__(self, other):
-    return isinstance(other, TupleValue) and \
+    return isinstance(other, Tuple) and \
       len(self.elts) == len(other.elts) and \
       all(e1 == e2 for (e1, e2) in zip(self.elts, other.elts))
   
@@ -238,12 +233,12 @@ class TupleValue(AbstractValue):
     return "Tuple(%s)" % ", ".join(str(e) for e in self.elts)
   
   def combine(self, other):
-    if isinstance(other, TupleValue):
+    if isinstance(other, Tuple):
       if len(self.elts) == len(other.elts):
-        return TupleValue(combine_pairs(self.elts, other.elts))
+        return Tuple(combine_pairs(self.elts, other.elts))
     raise ValueMismatch(self, other)
-  
-class ClosureValue(AbstractValue):
+
+class Closure(AbstractValue):
   def __init__(self, untyped_fn, args):
     self.untyped_fn = untyped_fn 
     self.args = args 
@@ -253,19 +248,46 @@ class ClosureValue(AbstractValue):
       (self.untyped_fn, ", ".join(str(e) for e in self.elts))
   
   def __eq__(self, other):
-    return isinstance(other, ClosureValue) and \
+    return isinstance(other, Closure) and \
       self.untyped_fn == other.untyped_fn and \
       len(self.arg_shapes) == len(other.arg_shapes) and \
       all(v1 == v2 for (v1,v2) in zip(self.args, other.args))
   
   def combine(self, other):
-    if isinstance(other, ClosureValue):
+    if isinstance(other, Closure):
       # TODO: Implement sets of closures like we have in the type system 
       if self.untyped_fn == other.untyped_fn and \
          len(self.args) == len(other.args) :
         combined_args = combine_pairs(self.args, other.args)
-        return ClosureValue(self.untyped_fn, combined_args)
+        return Closure(self.untyped_fn, combined_args)
     raise ValueMismatch(self, other)  
+""""
+class Elt(AbstractValue):
+  #Either the elt of a tuple, or the 
+  #start/stop/step of a slice
+  
+  def __init__(self, value, pos):
+    self.value = value 
+    self.pos = pos 
+    
+  
+  def __eq__(self, other):
+    return isinstance(other, Elt) and \
+      self.value == other.value  and \
+      self.pos == other.pos  
+
+  def __hash__(self):
+    return hash((self.value, self.pos))
+  
+  def __str__(self):
+    return "elt(%s, %d)" % (self.value, self.pos)
+  
+  def __repr__(self):
+    return str(self)
+  
+  def combine(self, other):
+    raise RuntimeError("What do you mean?")
+"""
 
 def combine_list(xs):
   acc = unknown_value
@@ -278,18 +300,41 @@ def combine_pairs(xs, ys):
 
 import core_types 
 import array_type 
-import tuple_type
-
-def input_shape(arg_name, arg_type):
-  if isinstance(arg_type, array_type.ArrayT):
-    rank = arg_type.rank
-    dims = [DimSize(arg_name, i) for i in xrange(rank)]
-    return array(*dims)
-  elif isinstance(arg_type, array_type.ScalarT):
-    return ScalarVar(arg_name) 
+import tuple_type 
+def value_from_type(t, counter):
+  if isinstance(t, core_types.ScalarT):
+    return Var(counter), counter + 1
+  elif isinstance(t, array_type.ArrayT):
+    new_counter = counter + t.rank 
+    dim_vars = [Var(c) for c in xrange(counter, new_counter)]
+    return array(dim_vars), new_counter 
+  elif isinstance(t, tuple_type.TupleT):
+    elt_values, counter  = values_from_types(t.elt_types, counter, True)
+    return Tuple(elt_values), counter 
+  elif isinstance(t, array_type.SliceT):
+    start, counter = value_from_type(t.start_type, counter)
+    stop, counter = value_from_type(t.stop_type, counter)
+    step, counter = value_from_type(t.step_type, counter)
+    return Slice(start, stop, step), counter 
   else:
-    raise RuntimeError("Input type not handled: %s" % arg_type)
+    assert False, "Unsupported type: %s" % t
+    
+def values_from_types(arg_types, counter = 0, return_counter = False):
+  """
+  Turn a list of input types into a list of abstract values, 
+  numbering the input arrays and scalars but preserving the 
+  structure of tuples, closures, and slices
+  """
+  values = []
+  for t in arg_types:
+    v, counter = value_from_type(t, counter)
+    values.append(v)
+  if return_counter:
+    return values, counter
+  else:
+    return values   
   
+
 class ShapeInference(SyntaxVisitor):
   
   def __init__(self):
@@ -300,7 +345,7 @@ class ShapeInference(SyntaxVisitor):
     self.equivalence_classes = {}
     
   
-  def unify_scalar_var(self, unknown, y):
+  def unify_scalar_var(self, var, y):
     """
     The first argument is already known to a be DimSize node, 
     add the other arg to the equivalence class and, 
@@ -308,16 +353,16 @@ class ShapeInference(SyntaxVisitor):
     everyone's value with the constant. 
     """
     assert is_scalar(y), "Expected dim size to be scalar: " + str(y)
-    equivs = self.equivalence_classes.get(unknown, set([]))
+    equivs = self.equivalence_classes.get(var, set([]))
     equivs.add(y)
     for var in equivs:
       self.equivalence_classes[var] = equivs
-    if isinstance(y, ConstValue):
+    if isinstance(y, Const):
       for var in equivs:
         self.value_env[var] = y
       return y
     else:
-      return unknown
+      return var
     
   def unify_pairs(self, xs, ys):
     result_elts = []
@@ -332,16 +377,16 @@ class ShapeInference(SyntaxVisitor):
     return acc 
   
   def unify(self, x, y):
-    if isinstance(x, UnknownValue):
+    if isinstance(x, Unknown):
       return y
-    elif isinstance(y, UnknownValue):
+    elif isinstance(y, Unknown):
       return x
-    elif isinstance(x, (DimSize, ScalarVar)):
+    elif isinstance(x, Var):
       return self.unify_scalar_var(x, y)
-    elif isinstance(y, (DimSize, ScalarVar)):
+    elif isinstance(y, Var):
       return self.unify_scalar_var(y, x)
-    elif isinstance(x, ArrayValue):
-      assert isinstance(y, ArrayValue), \
+    elif isinstance(x, Shape):
+      assert isinstance(y, Shape), \
         "Expected array, got: %s" % y
       x_rank = len(x.dims)
       y_rank = len(y.dims)
@@ -349,24 +394,23 @@ class ShapeInference(SyntaxVisitor):
         "Can't unify arrays of rank %d and %d" % \
         (x_rank, y_rank)
       return array(*self.unify_pairs(x.dims, y.dims))
-    elif isinstance(y, ArrayValue):
+    elif isinstance(y, Shape):
       return self.unify_arrays(y,x)
-    
-    elif isinstance(x, ClosureValue):
-      assert isinstance(y, ClosureValue), "Expected closure, got " + str(y)
+    elif isinstance(x, Closure):
+      assert isinstance(y, Closure), "Expected closure, got " + str(y)
       assert (x.untyped_fn == y.untyped_fn) and len(x.args) == len(y.args), \
         "Can't yet support joining different closures"
-      return ClosureValue(self.unify_pairs(x.args, y.args))
-    elif isinstance(x, TupleValue):
-      assert isinstance(y, TupleValue), "Expected tuple, got " + str(y)
+      return Closure(self.unify_pairs(x.args, y.args))
+    elif isinstance(x, Tuple):
+      assert isinstance(y, Tuple), "Expected tuple, got " + str(y)
       assert len(x.elts) == len(y.elts)
-      return TupleValue(self.unify_pairs(x.elts, y.elts))
-    elif isinstance(x, SliceValue):
-      assert isinstance(y, SliceValue), "Expected slice, got " + str(y)
+      return Tuple(self.unify_pairs(x.elts, y.elts))
+    elif isinstance(x, Slice):
+      assert isinstance(y, Slice), "Expected slice, got " + str(y)
       start = self.unify(x.start, y.start)
       stop = self.unify(x.stop, y.stop)
       step = self.unify(x.step, y.step)
-      return SliceValue(start, stop, step)
+      return Slice(start, stop, step)
     else:
       return x.combine(y)
   
@@ -376,7 +420,7 @@ class ShapeInference(SyntaxVisitor):
       
   def visit_Const(self, expr):
 
-    return ConstValue(expr.value)
+    return Const(expr.value)
   
   def visit_Var(self, expr):
     name = expr.name
@@ -389,7 +433,7 @@ class ShapeInference(SyntaxVisitor):
     raise RuntimeError("Unknown variable: %s" %  expr)
   
   def visit_Tuple(self, expr):
-    return TupleValue(self.visit_expr_list(expr.elts))
+    return Tuple(self.visit_expr_list(expr.elts))
 
   def visit_Array(self, expr):
     elts = self.visit_expr_list(expr.elts)
@@ -407,7 +451,7 @@ class ShapeInference(SyntaxVisitor):
   
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
-      assert isinstance(rhs, TupleValue)
+      assert isinstance(rhs, Tuple)
       for l,r in zip(lhs.elts, rhs.elts):
         self.bind(l,r)
     else:
@@ -434,20 +478,83 @@ class ShapeInference(SyntaxVisitor):
     
   def visit_fn(self, fn):
     self._clear()
-    for arg_name in fn.args.arg_slots:
-      arg_type = fn.type_env[arg_name]
-      s = input_shape(arg_name, arg_type)
-      print "input", arg_name, arg_type, s 
-      self.value_env[arg_name] = s 
+    arg_names = fn.args.arg_slots
+    arg_types = [self.type_env[name] for name in arg_names]
+    input_values = values_from_types(arg_types)
+    for n,v in zip(arg_names, input_values):
+      self.value_env[n] = v 
     self.visit_block(fn.body)
 
     return self.value_env["$return"] 
   
 
-    
 def symbolic_call_shape(typed_fn):
   shape_inference = ShapeInference()
   return shape_inference.visit_fn(typed_fn)
+
+import types 
+import numpy as np 
+from common import dispatch
+
+
+
+
+def eval_shape(symbolic_shape, inputs):
+  """
+  Evaluate symbolic shapes into concrete shapes
+  """
   
+  def transform_value(x):
+    """
+    Replace arrays with their shapes, 
+    and recursively replace any instances of arrays
+    in data structures like tuples also with their shapes
+    """
+    if isinstance(x, np.ndarray):
+      return x.shape 
+    elif isinstance(x, list):
+      return np.array(x).shape 
+    elif isinstance(x, tuple):
+      return tuple(transform_value(elt) for elt in x)
+    else:
+      assert isinstance(x, (int, long, float, complex, types.NoneType)), \
+        "Unexpected value " + str(x)
+      return x
+  input_shapes = [transform_value(x) for x in inputs]
+
+  
+  def eval_abstract_value(v):
+    def eval_Input():
+      return input_shapes[v.pos]
+    
+    def eval_Const():
+      return v.value 
+    
+    def eval_Shape():
+      return tuple(eval_abstract_values(v.dims))
+    
+    def eval_Dim():
+      return eval_abstract_value(v.array)[v.dim]
+    
+    def eval_Tuple():
+      return Tuple(eval_abstract_values(v.elts))
+    
+    def eval_Sub():
+      x = eval_abstract_value(v.x)
+      y = eval_abstract_value(v.y)
+      return x - y
+    
+    def eval_Closure():
+      return  Closure(v.untyped_fn, eval_abstract_values(v.args))
+    
+    return dispatch(v, "eval")
+    
+  def eval_abstract_values(xs):
+    return [eval_abstract_value(x) for x in xs]
+  return eval_abstract_value(symbolic_shape)
+
+
+    
+      
       
   
