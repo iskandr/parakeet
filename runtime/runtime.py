@@ -630,12 +630,12 @@ class Runtime():
 
   def launch_job(self):
     tile_sizes = cast(self.tile_sizes, POINTER(POINTER(c_int)))
-    print "Args:"
-    print "  thread pool", self.thread_pool
-    print "  work functions", self.work_functions
-    print "  args", self.args
-    print "  job", self.job
-    print "  tile sizes", tile_sizes
+    # print "Args:"
+    # print "  thread pool", self.thread_pool
+    # print "  work functions", self.work_functions
+    # print "  args", self.args
+    # print "  job", self.job
+    # print "  tile sizes", tile_sizes
     self.libParRuntime.launch_job(
         self.thread_pool, self.work_functions, self.args, self.job,
         tile_sizes, c_int(1))

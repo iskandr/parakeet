@@ -40,6 +40,20 @@ class VarMap:
     else:
       return self.rename(old_name)
 
+def get_invoke_specialization(closure_t, arg_types):
+  # for a given closure and the direct argument types it
+  # receives when invokes, return the specialization which 
+  # will ultimately get called 
+  if isinstance(arg_types, list):
+    arg_types = tuple(arg_types)
+  # for a given invocation of a ClosureT
+  # what is the typed_fn that gets called? 
+  untyped_id, closure_arg_types = closure_t.fn, closure_t.arg_types
+  untyped_fundef = untyped_functions[untyped_id]
+  full_arg_types = closure_arg_types + arg_types 
+  return specialize(untyped_fundef, full_arg_types)
+   
+
 _invoke_type_cache = {}
 def invoke_result_type(closure_t, arg_types):
   key = (closure_t, tuple(arg_types))
@@ -55,13 +69,11 @@ def invoke_result_type(closure_t, arg_types):
       
     result_type = core_types.Unknown
     for closure_t in closure_set.closures:
-      untyped_id, closure_arg_types = closure_t.fn, closure_t.args
-      untyped_fundef = untyped_functions[untyped_id]
-      ret = infer_return_type(untyped_fundef, closure_arg_types + tuple(arg_types))
-      result_type = result_type.combine(ret)
+      typed_fundef = get_invoke_specialization(closure_t, arg_types)
+      result_type = result_type.combine(typed_fundef.return_type)
     _invoke_type_cache[key] = result_type 
     return result_type 
-
+  
 def annotate_expr(expr, tenv, var_map):
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
@@ -389,7 +401,6 @@ def infer_return_type(untyped, arg_types):
   # print "Specializing for %s: %s" % (arg_types, untyped )
   typed = specialize(untyped, arg_types)
   return typed.return_type 
-
 
 def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
   if init is None:

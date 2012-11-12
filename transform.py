@@ -168,7 +168,7 @@ class Transform(object):
     if isinstance(clos, syntax.Closure):
       return clos.args[idx]
     else:
-      return syntax.ClosureElt(clos, idx, type = clos.type.args[idx])
+      return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
   
   
   def prim(self, prim_fn, args, name = None):

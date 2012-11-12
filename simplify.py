@@ -139,7 +139,7 @@ class Simplify(transform.Transform):
       if isinstance(new_closure, syntax.Closure):
         closure_args = new_closure.args 
       else:
-        n_closure_args = len(closure_t.args)
+        n_closure_args = len(closure_t.arg_types)
         closure_args = \
           [self.closure_elt(new_closure, i) for i in xrange(n_closure_args)]
       combined_args = closure_args + new_args

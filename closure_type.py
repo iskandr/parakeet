@@ -16,25 +16,25 @@ import ctypes
 
 
 class ClosureT(StructT):
-  _members = ['fn', 'args']
+  _members = ['fn', 'arg_types']
 
   def node_init(self):
-    if self.args is None:
-      self.args = ()
-    elif not hasattr(self.args, '__iter__'):
-      self.args = tuple([self.args])
-    elif not isinstance(self.args, tuple):
-      self.args = tuple(self.args)
+    if self.arg_types is None:
+      self.arg_types = ()
+    elif not hasattr(self.arg_types, '__iter__'):
+      self.arg_types = tuple([self.arg_types])
+    elif not isinstance(self.arg_types, tuple):
+      self.arg_types = tuple(self.arg_types)
 
     self._fields_ = [('fn_id', Int64)]
-    for (i, t) in enumerate(self.args):
+    for (i, t) in enumerate(self.arg_types):
       self._fields_.append( ('arg%d' % i, t) )
 
   def __hash__(self):
     return hash(repr(self))
 
   def __eq__(self, other):
-    return self.fn == other.fn and self.args == other.args
+    return self.fn == other.fn and self.arg_types == other.arg_types
 
 
   def from_python(self, python_fn):
