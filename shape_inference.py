@@ -1,6 +1,7 @@
 import syntax
 from syntax_visitor import SyntaxVisitor
-from syntax_helpers import get_types  
+from syntax_helpers import get_types
+import type_inference  
 from node import Node  
 
 
@@ -282,33 +283,7 @@ class Closure(AbstractValue):
         combined_args = combine_pairs(self.args, other.args)
         return Closure(self.untyped_fn, combined_args)
     raise ValueMismatch(self, other)  
-""""
-class Elt(AbstractValue):
-  #Either the elt of a tuple, or the 
-  #start/stop/step of a slice
-  
-  def __init__(self, value, pos):
-    self.value = value 
-    self.pos = pos 
-    
-  
-  def __eq__(self, other):
-    return isinstance(other, Elt) and \
-      self.value == other.value  and \
-      self.pos == other.pos  
 
-  def __hash__(self):
-    return hash((self.value, self.pos))
-  
-  def __str__(self):
-    return "elt(%s, %d)" % (self.value, self.pos)
-  
-  def __repr__(self):
-    return str(self)
-  
-  def combine(self, other):
-    raise RuntimeError("What do you mean?")
-"""
 
 def combine_list(xs):
   acc = unknown_value
@@ -363,8 +338,8 @@ class InputConverter():
     for t in arg_types:
       v = self.value_from_type(t)
       values.append(v)
-    return values   
-
+    return values
+     
 
 class ShapeInference(SyntaxVisitor):
   def __init__(self):
@@ -453,6 +428,9 @@ class ShapeInference(SyntaxVisitor):
 
     return Const(expr.value)
   
+  def visit_PrimCall(self, expr):
+    return unknown_scalar 
+  
   def visit_Var(self, expr):
     name = expr.name
     if name in self.value_env: 
@@ -481,9 +459,16 @@ class ShapeInference(SyntaxVisitor):
     niters_list = dim_list(arg_shapes, axis, exclude_scalars=True)
     outer_dim = self.unify_scalar_list(niters_list)
     elt_shapes = lower_ranks(arg_shapes, axis)
-    # result in terms of input scalar variables 
-    symbolic_result = symbolic_call_shape(expr.typed_fn)
-    elt_result_shape = subst(symbolic_result, elt_shapes)
+   
+    # result in terms of input scalar variables
+    closure_t = expr.fn.type
+    arg_types = get_types(expr.args)
+    elt_types = array_type.lower_ranks(arg_types, 1)
+    
+    typed_fn = type_inference.get_invoke_specialization(closure_t, elt_types)
+
+   
+    elt_result_shape = symbolic_call(typed_fn, elt_shapes)
     return increase_rank(elt_result_shape, axis, outer_dim) 
   
   def bind(self, lhs, rhs):
@@ -517,7 +502,8 @@ class ShapeInference(SyntaxVisitor):
     return self.value_env["$return"] 
   
 _symbolic_shape_cache = {}
-def symbolic_call_shape(typed_fn):
+def call_shape_expr(typed_fn):
+  print typed_fn 
   if isinstance(typed_fn, str):
     import function_registry
     typed_fn = function_registry.typed_functions[typed_fn]
@@ -526,8 +512,66 @@ def symbolic_call_shape(typed_fn):
   else:
     shape_inference = ShapeInference()
     result_abstract_value = shape_inference.visit_fn(typed_fn)
+
     _symbolic_shape_cache[typed_fn.name] = result_abstract_value
     return result_abstract_value
+
+
+
+def bind(lhs, rhs, env):
+  if isinstance(lhs, Var):
+    env[lhs.num] = rhs 
+  elif isinstance(lhs, Shape):
+    assert isinstance(rhs, Shape)
+    bind_pairs(lhs.dims, rhs.dims, env)
+  elif isinstance(lhs, Closure):
+    assert isinstance(rhs, Closure)
+    bind_pairs(lhs.args, rhs.args, env)
+  elif isinstance(lhs, Tuple):
+    assert isinstance(rhs, Tuple)
+    bind_pairs(lhs.elts, rhs.elts)
+  else:
+    raise RuntimeError("Unexpected shape LHS: %s" % lhs)
+    
+def bind_pairs(xs, ys, env):
+  assert len(xs) == len(ys), \
+    "Can't bind %s and %s due to unequal lengths" % (xs, ys)
+  for (x,y) in zip(xs,ys):
+    bind(x,y,env)
+  
+def subst(x, env):
+  if isinstance(x, Var):
+    assert x in env, "Unknown variable %s" % x
+    return env[x]
+  elif isinstance(x, Scalar):
+    return x 
+  elif isinstance(x, Shape):
+    return array(*subst_list(x.dims, env))
+  elif isinstance(x, Tuple):
+    return tuple(*subst_list(x.elts, env))
+  elif isinstance(x, Closure):
+    return Closure(x.fn, subst_list(x.args, env))
+  else:
+    raise RuntimeError("Unexpected abstract expression: %s" % x)
+    
+def subst_list(xs, env):
+  return [subst(x, env) for x in xs]
+
+
+
+def symbolic_call(typed_fn, abstract_inputs):
+  # result in terms of variables like input0, (shape: input1, input2), etc..
+  abstract_result_value = call_shape_expr(typed_fn)
+  shape_formals = InputConverter().values_from_types(typed_fn.input_types)
+  env = {}
+  bind_pairs(shape_formals, abstract_inputs, env)
+  
+  return subst(abstract_result_value, env)
+  
+  
+  
+  
+
 
 import types 
 import numpy as np 

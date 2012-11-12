@@ -7,7 +7,7 @@ import ast_conversion
 import function_registry
 
 _adverb_wrapper_cache = {}
-def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = None):
+def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = 0):
   # print "untyped_wrapper", adverb_class, arg_names, axis
   axis = syntax_helpers.wrap_if_constant(axis)
   key = adverb_class, tuple(arg_names), axis

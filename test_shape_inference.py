@@ -1,7 +1,7 @@
 import numpy as np 
 
 import shape_inference
-from shape_inference import symbolic_call_shape, unknown_scalar, const, array
+from shape_inference import call_shape_expr, unknown_scalar, const, array
 from shape_inference import Shape, Var 
 import parakeet 
 import testing_helpers
@@ -13,7 +13,7 @@ def expect_shape(python_fn, args_list, expected):
   print " -- args: ", args_list 
   typed_fn = parakeet.typed_repr(python_fn, args_list)
   print " -- types: ", typed_fn.input_types 
-  result_shape = symbolic_call_shape(typed_fn)
+  result_shape = call_shape_expr(typed_fn)
   assert result_shape == expected, \
     "Expected shape %s, but got: %s" % (expected, result_shape) 
 
@@ -65,17 +65,18 @@ def incr(xi):
 from parakeet import each 
 
 def simple_map(x):
-  return each(incr, x)
+  return each(incr, x, axis = 0)
 
 def test_simple_map():
   expect_shape(simple_map, [vec], array(Var(0)))
-  expect_shape(simple_map, [mat], array(Var(0), Var(1)))
+  # TODO: Make axis = None result in nested maps 
+  # expect_shape(simple_map, [mat], array(Var(0), Var(1)))
 
 def map_increase_rank(x):
-  return each(increase_rank, x)
+  return each(increase_rank, x, axis = 0)
 
-#def test_map_increase_rank():
-#  expect_shape(simple_map, [vec], array(Var(0), 2))
+def test_map_increase_rank():
+  expect_shape(map_increase_rank, [vec], array(Var(0), 2))
   # TODO: this will work when slice assignment on LHS works 
   # expect_shape(simple_map, [mat], array(Var(0), Var(1)))
 

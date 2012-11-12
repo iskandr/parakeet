@@ -402,6 +402,7 @@ def infer_return_type(untyped, arg_types):
   typed = specialize(untyped, arg_types)
   return typed.return_type 
 
+
 def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
   if init is None:
     #
@@ -427,6 +428,8 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
     return nested_result_type 
   else:
     raise RuntimeError("Type inference not implemented for complex reductions")
+
+
 
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
