@@ -257,7 +257,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
 
-  # print "STMT ", stmt
+  print "STMT ", stmt
 
   def compile_Assign():
     rhs_t = stmt.rhs.type
