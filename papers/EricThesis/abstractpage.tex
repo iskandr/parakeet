@@ -1,0 +1,46 @@
+%% This file creates a "stand-alone" title and abstract page. NYU requires several
+%% copies of this.
+
+%\documentclass[12pt,draft,letterpaper]{article}
+\documentclass[12pt,letterpaper]{article}
+
+\usepackage{setspace} % spacing between lines of text (\doublespacing, \onehalfspacing, etc.)
+\doublespacing % from package setspace
+
+%% Replace the title, name and advisor name below with
+%% your own.
+\newcommand{\thesistitle}{Proof of the Riemann Hypothesis}
+\newcommand{\thesisauthor}{Jane Doe}
+\newcommand{\thesisadvisor}{Professor Fulana de Tal}
+
+%% If you like, you can include your definitions here as well:
+%\input{definitions}
+
+\setlength{\oddsidemargin}{.6in}
+\setlength{\textwidth}{5.8in}
+\setlength{\topmargin}{.1in}
+\setlength{\headheight}{0in}
+\setlength{\headsep}{0in}
+\setlength{\textheight}{8.3in}
+\setlength{\footskip}{.5in}
+\pagestyle{empty}
+
+\begin{document}
+  \begin{center}
+    Abstract of the Dissertation\bigskip
+
+    \textbf{\thesistitle}\bigskip
+
+    by\bigskip
+
+    \thesisauthor\bigskip
+
+    New York University\bigskip
+
+    \thesisadvisor, Advisor
+  \end{center}
+\bigskip
+
+\input{abstract}
+
+\end{document}

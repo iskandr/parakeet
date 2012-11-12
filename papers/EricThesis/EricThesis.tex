@@ -1,0 +1,170 @@
+%% NYU PhD thesis format. Created by José Koiller 2007--2008.
+
+%% Use the first of the following lines during production to
+%% easily spot "overfull boxes" in the output. Use the second
+%% line for the final version.
+%\documentclass[12pt,draft,letterpaper]{report}
+\documentclass[12pt,letterpaper]{report}
+
+%% Replace the title, name, advisor name, graduation date and dedication below with
+%% your own. Graduation months must be January, May or September.
+\newcommand{\thesistitle}{Compilation and Tuning of High Level Numerical Programs}
+\newcommand{\thesisauthor}{Eric Mann-Hielscher}
+\newcommand{\thesisadvisor}{Professor Dennis Shasha}
+\newcommand{\graddate}{December 2012}
+%% If you do not want a dedication, scroll down and comment out
+%% the appropriate lines in this file.
+\newcommand{\thesisdedication}{To my dog Weierstra\ss, with affection.}
+
+%% The following makes chapters and sections, but not subsections,
+%% appear in the TOC (table of contents). Increase to 2 or 3 to
+%% make subsections or subsubsections appear, respectively. It seems
+%% to be usual to use the "1" setting, however.
+\setcounter{tocdepth}{1}
+
+%% Sectional units up to subsubsections are numbered. To number
+%% subsections, but not subsubsections, decrease this counter to 2.
+\setcounter{secnumdepth}{3}
+
+%% Page layout (customized to letter paper and NYU requirements):
+\setlength{\oddsidemargin}{.6in}
+\setlength{\textwidth}{5.8in}
+\setlength{\topmargin}{.1in}
+\setlength{\headheight}{0in}
+\setlength{\headsep}{0in}
+\setlength{\textheight}{8.3in}
+\setlength{\footskip}{.5in}
+
+%% Use the following commands, if desired, during production.
+%% Comment them out for final version.
+%\usepackage{layout} % defines the \layout command, see below
+%\setlength{\hoffset}{-.75in} % creates a large right margin for notes and \showlabels
+
+%% Controls spacing between lines (\doublespacing, \onehalfspacing, etc.):
+\usepackage{setspace}
+
+%% Use the line below for official NYU version, which requires
+%% double line spacing. For all other uses, this is unnecessary,
+%% so the line can be commented out.
+\doublespacing % requires package setspace, invoked above
+
+%% Each of the following lines defines the \com command, which produces
+%% a comment (notes for yourself, for instance) in the output file.
+%% Example:    \com{this will appear as a comment in the output}
+%% Choose (uncomment) only one of the three forms:
+%\newcommand{\com}[1]{[/// {#1} ///]}       % between [/// and ///].
+\newcommand{\com}[1]{\marginpar{\tiny #1}} % as (tiny) margin notes
+%\newcommand{\com}[1]{}                     % suppress all comments.
+
+%% This inputs your auxiliary file with \usepackage's and \newcommand's:
+%% It is assumed that that file is called "definitions.tex".
+\input{definitions}
+
+%% Cross-referencing utilities. Use one or the other--whichever you prefer--
+%% but comment out both lines for final version.
+%\usepackage{showlabels}
+%\usepackage{showkeys}
+
+\begin{document}
+%% Produces a test "layout" page, for "debugging" purposes only.
+%% Comment out for final version.
+%\layout % requires package layout (see above, on this same file)
+
+%%%%%% Title page %%%%%%%%%%%
+%% Sets page numbering to "roman style" i, ii, iii, iv, etc:
+\pagenumbering{roman}
+%
+%% No numbering in the title page:
+\thispagestyle{empty}
+%
+\begin{center}
+  {\large\textbf{\thesistitle}}
+  \vspace{.7in}
+
+  by
+  \vspace{.7in}
+
+  \thesisauthor
+  \vfill
+
+\begin{doublespace}
+  A dissertation submitted in partial fulfillment\\
+  of the requirements for the degree of\\
+  Doctor of Philosophy\\
+  Department of Mathematics\\
+  New York University\\
+  \graddate
+\end{doublespace}
+\end{center}
+\vfill
+
+\noindent\makebox[\textwidth]{\hfill\makebox[2.5in]{\hrulefill}}\\
+\makebox[\textwidth]{\hfill\makebox[2.5in]{\hfill\thesisadvisor\hfill}}
+\newpage
+%%%%%%%%%%%%% Blank page %%%%%%%%%%%%%%%%%%
+\thispagestyle{empty}
+\vspace*{0in}
+\newpage
+
+%%%%%%%%%%%%%% Dedication %%%%%%%%%%%%%%%%%
+%% Comment out the following lines if you do not want to dedicate
+%% this to anyone...
+%\vspace*{\fill}
+%\begin{center}
+%  \thesisdedication\addcontentsline{toc}{section}{Dedication}
+%\end{center}
+%\vfill
+%\newpage
+%%%%%%%%%%%%%% Acknowledgements %%%%%%%%%%%%
+%% Comment out the following lines if you do not want to acknowledge
+%% anyone's help...
+\section*{Acknowledgements}\addcontentsline{toc}{section}{Acknowledgements}
+\input{acknowledge}
+\newpage
+%%%% Abstract %%%%%%%%%%%%%%%%%%
+\section*{Abstract}\addcontentsline{toc}{section}{Abstract}
+\input{abstract}
+\newpage
+%%%% Table of Contents %%%%%%%%%%%%
+\tableofcontents
+
+%%%%% List of Figures %%%%%%%%%%%%%
+%% Comment out the following two lines if your thesis does not
+%% contain any figures. The list of figures contains only
+%% those figures included withing the "figure" environment.
+\listoffigures\addcontentsline{toc}{section}{List of Figures}
+\newpage
+
+%%%%% List of Tables %%%%%%%%%%%%%
+%% Comment out the following two lines if your thesis does not
+%% contain any tables. The list of tables contains only
+%% those tables included withing the "table" environment.
+\listoftables\addcontentsline{toc}{section}{List of Tables}
+\newpage
+
+%%%%% Body of thesis starts %%%%%%%%%%%%
+\pagenumbering{arabic} % switches page numbering to arabic: 1, 2, 3, etc.
+%% Introduction. If your thesis has no introduction, or chapter 1 is
+%% meant to be the introduction, then comment out the lines below.
+\section*{Introduction}\addcontentsline{toc}{section}{Introduction}
+\input{intro}
+%% If your thesis has different "Parts", use commands such as the following:
+%\part{First Part\label{part:one}}%
+\input{parakeet}
+\input{optimizations}
+\input{tilingadverbs}
+\input{evaluation}
+%%%%% Appendices start %%%%%%%%%%%%%%%%
+%% Comment out the following line if your thesis has no appendix
+%\appendix
+%\input{app1}
+%% Note: If your thesis has more than one appendix, NYU requires a "list of
+%% appendices" page before the body of the thesis. I don't provide the tools
+%% to create that here, so you're on your own for that one... Sorry.
+%\input{app2}
+%%%% Input bibliography file %%%%%%%%%%%%%%%
+
+\bibliographystyle{abbrv}
+\bibliography{../Parakeet}{}
+
+\end{document}
