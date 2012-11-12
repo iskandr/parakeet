@@ -1,0 +1,100 @@
+%%
+%% Place here your \usepackage's. Some recommended packages are already included.
+%%
+
+% Graphics:
+\usepackage[final]{graphicx}
+%\usepackage{graphicx} % use this line instead of the above to suppress graphics in draft copies
+%\usepackage{graphpap} % \defines the \graphpaper command
+
+% Indent first line of each section:
+\usepackage{indentfirst}
+
+% Good AMS stuff:
+%\usepackage{amsthm} % facilities for theorem-like environments
+%\usepackage[tbtags]{amsmath} % a lot of good stuff!
+
+% Fonts and symbols:
+%\usepackage{amsfonts}
+%\usepackage{amssymb}
+
+\usepackage{listings,fixltx2e,lambda,array,times,color,algpseudocode}
+\usepackage{stmaryrd}
+\usepackage[usenames,dvipsnames]{xcolor}
+
+\definecolor{lightgray}{rgb}{0.96,0.96,0.96}
+
+\lstset{ 
+  language=Python,                % the language of the code
+  linewidth=1.0\linewidth, 
+  xleftmargin=8pt,
+  basicstyle=\footnotesize\ttfamily, % Standardschrift
+  numbers=none,                   % where to put the line-numbers
+  numberstyle=\footnotesize,          % the size of the fonts that are used for the line-numbers
+  stepnumber=1,                   % the step between two line-numbers. If it's 1, each line 
+                                  % will be numbered
+  numbersep=5pt,                  % how far the line-numbers are from the code
+  showspaces=false,               % show spaces adding particular underscores
+  showstringspaces=false,         % underline spaces within strings
+  showtabs=false,                 % show tabs within strings adding particular underscores
+  frame=single,                   % adds a frame around the code
+  tabsize=2,                      % sets default tabsize to 2 spaces
+  captionpos=b,                   % sets the caption-position to bottom
+  breaklines=true,                % sets automatic line breaking
+  breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+  %title=\lstname,                   % show the filename of files included with \lstinputlisting;
+                                  % also try caption instead of title
+  numberstyle=\tiny\color{gray},        % line number style
+  keywordstyle=\color{blue},          % keyword style
+  commentstyle=\color{dkgreen},       % comment style
+  backgroundcolor=\color{lightgray}, 
+  belowskip=0pt, 
+  aboveskip=6pt, 
+}
+
+% Formatting tools:
+%\usepackage{relsize} % relative font size selection, provides commands \textsmalle, \textlarger
+%\usepackage{xspace} % gentle spacing in macros, such as \newcommand{\acims}{\textsc{acim}s\xspace}
+
+% Page formatting utility:
+%\usepackage{geometry}
+
+%%
+%% Place here your \newcommand's and \renewcommand's. Some examples already included.
+%%
+% \renewcommand{\le}{\leqslant}
+% \renewcommand{\ge}{\geqslant}
+% \renewcommand{\emptyset}{\ensuremath{\varnothing}}
+% \newcommand{\ds}{\displaystyle}
+% \newcommand{\R}{\ensuremath{\mathbb{R}}}
+% \newcommand{\Q}{\ensuremath{\mathbb{Q}}}
+% \newcommand{\Z}{\ensuremath{\mathbb{Z}}}
+% \newcommand{\N}{\ensuremath{\mathbb{N}}}
+% \newcommand{\T}{\ensuremath{\mathbb{T}}}
+% \newcommand{\eps}{\varepsilon}
+% \newcommand{\closure}[1]{\ensuremath{\overline{#1}}}
+%\newcommand{\acim}{\textsc{acim}\xspace}
+%\newcommand{\acims}{\textsc{acim}s\xspace}
+
+%%
+%% Place here your \newtheorem's:
+%%
+
+%% Some examples commented out below. Create your own or use these...
+%%%%%%%%%\swapnumbers % this makes the numbers appear before the statement name.
+%\theoremstyle{plain}
+%\newtheorem{thm}{Theorem}[chapter]
+%\newtheorem{prop}[thm]{Proposition}
+%\newtheorem{lemma}[thm]{Lemma}
+%\newtheorem{cor}[thm]{Corollary}
+
+%\theoremstyle{definition}
+%\newtheorem{define}{Definition}[chapter]
+
+%\theoremstyle{remark}
+%\newtheorem*{rmk*}{Remark}
+%\newtheorem*{rmks*}{Remarks}
+
+%% This defines the "proo" environment, which is the same as proof, but
+%% with "Proof:" instead of "Proof.". I prefer the former.
+%\newenvironment{proo}{\begin{proof}[Proof:]}{\end{proof}}

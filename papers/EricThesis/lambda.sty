@@ -1,0 +1,294 @@
+\usepackage{amsfonts}
+\usepackage{proof}
+%\usepackage[sfcode]{ttquot}
+%\usepackage{angle}
+\usepackage{code}
+\usepackage{mathpartir}
+
+%%% Make sections usable for problems.
+
+%{ \renewcommand\section{\@startsection {section}{1}{\z@}%
+%{-3.5ex \@plus -1ex \@minus -.2ex}%
+%{2.3ex \@plus.2ex}%
+%{\flushleft\large\textsf}}
+
+%\renewcommand\subsection{\@startsection {subsection}{1}{\z@}%
+%{-3.5ex \@plus -1ex \@minus -.2ex}%
+%{2.3ex \@plus.2ex}%
+%{\flushleft\normalsize\textsf}}
+
+%\renewcommand\subsubsection{\@startsection {subsubsection}{1}{\z@}%
+%{-3.5ex \@plus -1ex \@minus -.2ex}%
+%{2.3ex \@plus.2ex}%
+%{\flushleft\normalsize\textsf}}
+
+%\renewcommand{\labelenumii}{\theenumii}
+%\renewcommand{\theenumii}{(\alph{enumii})}
+%%% Set up for fullpage 8.5x11 paper
+%\topmargin 0pt
+%\advance \topmargin by -\headheight
+%\advance \topmargin by -\headsep
+     
+%\textheight 8.9in
+     
+%\oddsidemargin 0pt
+%\evensidemargin \oddsidemargin
+%\marginparwidth 0.5in
+     
+%\textwidth 6.5in
+%}}
+
+%%% This puts in the header on homeworks (use instead of maketitle)
+\newcommand\hwheader{
+\begin{center}
+{\large
+\textsf{CSCI B522 Homework \homework}  \hfill \textsf{DUE: \due}}\\
+\hrulefill
+\end{center}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Programming language macros
+
+\newcommand{\bnfdef}{\ensuremath{::=}}
+\newcommand{\bnfsep}{\ensuremath{\ \ | \ \ }}
+\newcommand{\sep}{\bnfsep}
+
+\newcommand{\implies}{\Longrightarrow} % logical implication
+%\newcommand{\iff}{\Longleftrightarrow} 
+\newcommand{\fv}[1]{\nm{FV}(#1)}  % free variables
+\newcommand{\subst}[3]{{\ensuremath #1\{#2/#3\}}}  % substitution
+%\newcommand{\defeq}{\stackrel{\triangle}{=}} % "defined-as"
+\newcommand{\defeq}{\stackrel{\mathrm{def}}{=}} % "defined-as"
+\newcommand{\iffdef}{\stackrel{\triangle}{\Longleftrightarrow}} 
+\newcommand{\sqleq}{\ensuremath\sqsubseteq}
+
+\newcommand{\hole}{\ensuremath [\cdot]}
+
+
+%%% MACROS for lambda calculus terms
+\newcommand\lam[2]{\lambda#1.\,#2}
+\newcommand\app[2]{#1~#2}
+
+%%% MACROS for typesetting program constructs
+% used for lec1-lec3: \newcommand\impfnt[1]{\mbox{\textsf{#1}}}
+\newcommand\impfnt[1]{\mbox{\textbf{#1}}}
+\newcommand{\ID}{\impfnt{id}}
+
+\newcommand{\IFE}{\impfnt{ife}}
+\newcommand{\TRU}{\impfnt{tru}}
+\newcommand{\FLS}{\impfnt{fls}}
+
+\newcommand{\IF}{\impfnt{if}}
+\newcommand{\THEN}{\impfnt{then}}
+\newcommand{\ELSE}{\impfnt{else}}
+\newcommand{\TRUE}{\impfnt{true}}
+\newcommand{\FALSE}{\impfnt{false}}
+\newcommand{\ifexp}[3]{\ensuremath{\IF \: #1 \:\THEN\: #2 \:\ELSE\: #3}}
+
+\newcommand{\ISZERO}{\impfnt{zero?}}
+\newcommand{\SUCC}{\impfnt{succ}}
+\newcommand{\PRED}{\impfnt{pred}}
+\newcommand{\PAIR}{\impfnt{pair}}
+\newcommand{\FST}{\impfnt{fst}}
+\newcommand{\SND}{\impfnt{snd}}
+\newcommand{\NIL}{\impfnt{nil}}
+\newcommand{\CONS}{\impfnt{cons}}
+\newcommand{\ISNIL}{\impfnt{nil?}}
+\newcommand{\HEAD}{\impfnt{head}}
+\newcommand{\TAIL}{\impfnt{tail}}
+
+\newcommand{\SKIP}{\impfnt{skip}}
+\newcommand{\WHILE}{\impfnt{while}}
+\newcommand{\DO}{\impfnt{do}}
+\newcommand{\whilexp}[2]{\ensuremath{\WHILE \: #1 \:\DO\: #2}}
+
+\newcommand{\BREAK}{\impfnt{break}}
+\newcommand{\UNTIL}{\impfnt{until}}
+
+\newcommand{\FOR}{\impfnt{for}}
+\newcommand{\TO}{\impfnt{to}}
+\newcommand{\forexp}[4]{\ensuremath{\FOR \: #1 = #2 \:\TO\: #3\:\DO\: #4}}
+
+\newcommand{\aop}{\oplus}
+\newcommand{\bop}{\odot}
+\newcommand{\lop}{\oslash}
+
+\newcommand{\Z}{\impfnt{Z}}
+\newcommand{\Su}{\impfnt{S}}
+
+\newcommand{\NULL}{\impfnt{null}}
+\newcommand{\REF}{\impfnt{ref}}
+\newcommand{\refexp}[1]{\REF\:{#1}}
+\newcommand{\derefexp}[1]{!\,#1}
+\newcommand{\asgnexp}[2]{\ensuremath{#1 := #2}}
+\newcommand{\seqexp}[2]{\ensuremath{#1 ; #2}}
+\newcommand{\letexp}[3]{\ensuremath{\impfnt{let} ~ #1 = #2 ~\impfnt{in}~ #3}}
+\newcommand{\pairexp}[2]{(#1,\,#2)}
+\newcommand{\fstexp}[1]{\FST~{#1}}
+\newcommand{\sndexp}[1]{\SND~{#1}}
+\newcommand{\loc}{\ell}
+\newcommand{\locs}{\nm{loc}}
+\newcommand{\locset}{\impfnt{Loc}}
+
+\newcommand{\TRANS}{\impfnt{transaction}}
+\newcommand{\ABORT}{\impfnt{abort}}
+\newcommand{\transexp}[1]{\TRANS~{#1}}
+\newcommand{\abortexp}[1]{\ABORT~{#1}}
+
+\newcommand{\HALT}{\impfnt{halt}}
+
+\newcommand{\INL}{\impfnt{inl}}
+\newcommand{\INR}{\impfnt{inr}}
+\newcommand{\CASE}{\impfnt{case}}
+\newcommand{\inlexp}[1]{\INL~{#1}}
+\newcommand{\inrexp}[1]{\INR~{#1}}
+\newcommand{\casexp}[5]{\ensuremath{\CASE~{#1}~\impfnt{of}~\INL\:{#2}
+    \:\Rightarrow\:{#3} \mid \INR\:{#4} \:\Rightarrow\:{#5}}} 
+\newcommand{\IFZERO}{\impfnt{if0}}
+\newcommand{\ifzero}[3]{\ensuremath{\IFZERO (#1, #2, #3)}}
+\newcommand\klam[2]{\underline{\lambda}#1.\,#2}
+\newcommand{\cps}[1]{{\cal C}\SB{#1}}
+\newcommand{\cpsprog}[1]{{\cal C^{\mathrm{prog}}}\SB{#1}}
+
+\newcommand{\tjudg}[3]{{#1} \vdash {#2} : {#3}}
+\newcommand{\twf}[2]{{#1} \vdash {#2}}
+\newcommand\tlam[3]{\lambda#1{:}#2.\,#3}
+\newcommand{\tinlexp}[2]{\INL_{#1}\,{#2}}
+\newcommand{\tinrexp}[2]{\INR_{#1}\,{#2}}
+\newcommand{\tapp}[2]{{#1}\,[{#2}]}
+
+\newcommand{\tyfnt}[1]{\mathbf{#1}}
+\newcommand{\boolty}{\tyfnt{Bool}}
+\newcommand{\unitty}{\tyfnt{Unit}}
+\newcommand{\intty}{\tyfnt{Int}}
+\newcommand{\fnty}[2]{{#1} \rightarrow {#2}}
+\newcommand{\pairty}[2]{{#1} \times {#2}}
+\newcommand{\sumty}[2]{{#1} + {#2}}
+\newcommand{\allty}[2]{\forall {#1}.{#2}}
+\newcommand{\existy}[2]{\exists {#1}.{#2}}
+
+\newcommand{\MALLOC}{\impfnt{malloc}}
+\newcommand{\mallocexp}[1]{\MALLOC~#1}
+
+\newcommand{\MAYBE}{\tyfnt{maybe}}
+\newcommand{\maybety}[1]{\MAYBE~{#1}}
+\newcommand{\maybenull}{\langle \rangle}
+\newcommand{\maybexp}[1]{\langle {#1} \rangle}
+
+\newcommand{\Fsum}{\mathbf{F^{+}}}
+\newcommand{\Fprod}{\mathbf{F^{\times}}}
+
+\newcommand{\Ttrans}[1]{{\cal T}\SB{#1}}
+\newcommand{\Gtrans}[1]{{\cal G}\SB{#1}}
+\newcommand{\Etrans}[1]{{\cal E}\SB{#1}}
+
+\newcommand{\Tsum}[1]{{\cal T}^{+}\SB{#1}}
+\newcommand{\Tprod}[1]{{\cal T}^{\times}\SB{#1}}
+\newcommand{\Gsum}[1]{{\cal G}^{+}\SB{#1}}
+\newcommand{\Gprod}[1]{{\cal G}^{\times}\SB{#1}}
+\newcommand{\Esum}[1]{{\cal E}^{+}\SB{#1}}
+\newcommand{\Eprod}[1]{{\cal E}^{\times}\SB{#1}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% some Java specific macros
+\newcommand\javafnt\impfnt
+\newcommand{\CLASS}{\javafnt{class}}
+\newcommand{\EXTENDS}{\javafnt{extends}}
+\newcommand{\RETURN}{\javafnt{return}}
+\newcommand{\INT}{\javafnt{int}}
+\newcommand{\BOOLEAN}{\javafnt{boolean}}
+\newcommand{\FLOAT}{\javafnt{float}}
+\newcommand{\IMPLEMENTS}{\javafnt{implements}}
+\newcommand{\PROTECTED}{\javafnt{protected}}
+\newcommand{\PUBLIC}{\javafnt{public}}
+\newcommand{\INTERFACE}{\javafnt{interface}}
+\newcommand{\ABSTRACT}{\javafnt{abstract}}
+\newcommand{\return}[1]{\RETURN \: #1}
+\newcommand{\jint}{\INT \: }
+\newcommand{\jfloat}{\FLOAT \:}
+\newcommand{\jbool}{\BOOLEAN \:}
+\newcommand{\jclass}[3]{
+\ensuremath{
+\begin{array}{l}
+\CLASS \: #1 \:\EXTENDS \: #2 \; \{\\
+\:\:\:\: #3 \\
+\}
+\end{array}
+}}
+\newcommand{\jaclass}[3]{
+\ensuremath{
+\begin{array}{l}
+\ABSTRACT \: \CLASS \: #1 \:\IMPLEMENTS \: #2 \; \{\\
+\:\:\:\: #3 \\
+\}
+\end{array}
+}}
+
+
+\newcommand{\jfunc}[2]{#1\: \{ #2 \}}
+\newcommand{\jinter}[2]{
+\ensuremath{
+\begin{array}{l}
+\INTERFACE \: #1 \; \{\\
+\:\:\:\: #2 \\
+\}
+\end{array}
+}}
+
+\newcommand{\jbclass}[2]{
+\ensuremath{
+\begin{array}{l}
+\CLASS \: #1 \; \{\\
+\:\:\:\: #2 \\
+\}
+\end{array}
+}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\T}[1]{\texttt{#1}}
+\newcommand{\caret}{\ensuremath{^\wedge}}
+
+%%% MACROS for evaluation / operational semantics
+\newcommand{\evalsto}{\Downarrow}
+\newcommand{\stepsto}{\longrightarrow}
+
+%%% MACROS for typesetting configurations
+\newcommand{\config}[2]{\ensuremath{\langle #1,\, #2 \rangle}}
+\newcommand{\configB}[4]{\ensuremath{\langle #1,\, #2,\, #3,\, #4 \rangle}}
+\newcommand\sub[1]{_{\mbox{\scriptsize #1}}}
+\newcommand\translatesto{\;\;\longmapsto\;\;}
+\newcommand\fn{\ensuremath\lambda}
+
+%%% Some things useful for denotational semantics
+\newcommand\SB[1]{[\![#1]\!]} % put double brackets around the argument
+\newenvironment{SBE}{\left[\!\!\!\!\left[\begin{array}{c}}%
+{\end{array}\right]\!\!\!\!\right]}
+\newcommand\bigSB[1]{\begin{SBE}#1\end{SBE}}
+\newcommand\Tr[2]{\ensuremath{{\cal #1}\SB{#2}}}
+\newcommand\C[1]{{\cal C}\SB{#1}}
+\newcommand\Cr[1]{{\cal C}\SB{#1}\rho}
+\newcommand\mathif[3]{\mathit{if}~#1~\mathit{then}~#2~\mathit{else}~#3}
+\newcommand\ini[1]{\nm{in}_{\mbox{\scriptsize{#1}}}}
+\newcommand\inj[2]{\nm{in}_{\mbox{\scriptsize\nm{#1}$\leftarrow$\nm{#2}}}}
+\newcommand\nm[1]{\mbox{\sl #1}}
+\newcommand\lm[3]{\lambda#1\in#2\,.\,#3}
+\newcommand\fnm[1]{\fbox{\sl #1}\,}
+\newcommand{\Te}[1]{\ensuremath{\mathcal{T}\SB{#1}}} % "translation of"
+\newcommand\join{\ensuremath\bigsqcup}
+\newcommand\dq[1]{\mbox{``}#1\mbox{''}}
+\newcommand\sidecond[1]{\qquad\mbox{(#1)}}
+\newcommand\lift[1]{\ensuremath{\lfloor #1 \rfloor}}
+\newcommand{\Set}[1]{{\textbf{#1}}}
+\newcommand{\set}[1]{\{#1\}}
+\newcommand{\dom}{\mbox{dom}}
+\newcommand{\Nat}{\mathbb{N}}
+\newcommand\mquote[1]{\textrm{``}#1\textrm{''}}
+
+%%% macros for types
+\newcommand\Lam[2]{\Lambda#1.\,#2}
+\newcommand\arrow{\ensuremath\rightarrow}
+\newcommand{\ty}{\ensuremath{\!:\!}}
+\newcommand{\proves}{\ensuremath{\vdash}}
+
+%\newcommand{\Rule}[2]{\infer{#2}{#1}}
+%\newcommand{\RuleSide}[3]{\infer[#3]{#2}{#1}}
+
