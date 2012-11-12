@@ -15,7 +15,6 @@ def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = 0):
     return _adverb_wrapper_cache[key]
   else:
     local_arg_names = map(names.refresh, arg_names)
-
     local_arg_vars = map(syntax.Var, local_arg_names)
     fn_var = local_arg_vars[0]
     data_vars = local_arg_vars[1:]

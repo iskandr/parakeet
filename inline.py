@@ -96,11 +96,11 @@ class Inliner(transform.Transform):
     return expr 
   
   def pre_apply(self, old_fn):
-    print "Before inlining", old_fn 
+    # print "Before inlining", old_fn 
     return old_fn 
   
   def post_apply(self, new_fn):
-    print "After inlining", new_fn
+    # print "After inlining", new_fn
     return new_fn 
   
 

@@ -62,7 +62,7 @@ def match_list(arg_patterns, vals, env = None, index_fn = match_nothing):
   nargs = len(arg_patterns)
   nvals = len(vals)
   assert nargs == nvals, \
-    "Mismatch between %d args and %d input types" % (nargs, nvals)
+    "Mismatch between %d args %s and %d inputs %s" % (nargs, arg_patterns, nvals, vals)
   for (p,v) in zip(arg_patterns, vals):
     match(p, v, env, index_fn)
   return env  
@@ -104,18 +104,21 @@ def bind(lhs, rhs):
  
   
 class Args:
-  def __init__(self, positional, defaults = OrderedDict(), nonlocals = ()):
+  def __init__(self, positional, 
+                      defaults = OrderedDict(),  
+                      nonlocals = (), 
+                      varargs = None):
     assert isinstance(positional, (list, tuple))
     assert isinstance(defaults, OrderedDict)
     self.nonlocals = tuple(nonlocals)
     self.positional = tuple(positional)
     self.defaults = defaults
+    self.varargs = varargs 
      
     self.arg_slots = list(self.nonlocals) + list(positional) + defaults.keys()
     self.positions = {}
     for (i, p) in enumerate(self.arg_slots):
       self.positions[p] = i
-         
 
   def __str__(self):
     return "Args(nonlocal = %s, positional = %s, defaults=%s)" % \
@@ -125,25 +128,38 @@ class Args:
   def __iter__(self):
     return iter(self.arg_slots)
 
-  def bind(self, actuals, actual_kwds = {}, default_fn = None):
+  def bind(self, actuals, actual_kwds = {}, default_fn = None, varargs_fn = tuple):
     """
     Like combine_with_actuals but returns a dictionary
     """
     env = {}
-    values = self.linearize_values(actuals, actual_kwds, default_fn)
+    values, extra = self.linearize_values(actuals, actual_kwds, default_fn)
     for (formal, actual) in zip(self.arg_slots, values):
       match(formal, actual, env)
+    if self.varargs:
+      env[self.varargs] = varargs_fn(extra)
+    else:
+      print "Too many args: %s" % extra 
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
+   
     def assign(i, v):
       result[i] = v
       assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
       bound[i] = True  
 
+    if len(positional_values) > n:
+      
+      extra = positional_values[n:]
+      print "pos", positional_values, "extra",extra 
+      positional_values = positional_values[:n]
+    else:
+      extra = []
+      
     for (i,p) in enumerate(positional_values):
       assign(i, p)
       
@@ -156,7 +172,7 @@ class Args:
       if not bound[i]:
         assign(i, default_fn(v) if default_fn else v)
     assert all(bound), "Missing args: %s" % [self.arg_slots[i] for i in xrange(n) if not bound[i]]
-    return result 
+    return result, extra  
 
   
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):

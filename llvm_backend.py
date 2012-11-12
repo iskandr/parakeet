@@ -257,7 +257,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
 
-  print "STMT ", stmt
+  # print "STMT ", stmt
 
   def compile_Assign():
     rhs_t = stmt.rhs.type
@@ -371,7 +371,7 @@ def compile_fn(fundef):
   env.llvm_context.run_passes(env.llvm_fn)
 
   #print "OPTIMIZED"
-  print env.llvm_fn
+  # print env.llvm_fn
   result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
   compiled_functions[fundef.name] = result
   return result

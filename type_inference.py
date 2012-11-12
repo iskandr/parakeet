@@ -75,6 +75,7 @@ def invoke_result_type(closure_t, arg_types):
     return result_type 
   
 def annotate_expr(expr, tenv, var_map):
+  print "expr", expr 
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
   
@@ -339,13 +340,14 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(var_map.rename)
-  # flatten the positional, keyword, and default args into their
-  # linear order, and use default_fn to get the type of default values
-  input_types = typed_args.linearize_values(positional_types, 
-                                            keyword_types, 
-                                            default_fn = type_conv.typeof)
-  tenv = {}
-  args.match_list(typed_args.arg_slots, input_types, tenv)
+  
+  tenv = typed_args.bind(positional_types, keyword_types, 
+                         default_fn = type_conv.typeof,
+                         varargs_fn = tuple_type.make_tuple_type)
+  
+  input_types = [tenv[arg_name] for arg_name in typed_args.arg_slots]
+  if typed_args.varargs:
+    input_types.append(tenv[typed_args.vararg])
   
   # keep track of the return 
   tenv['$return'] = core_types.Unknown 
@@ -437,6 +439,9 @@ def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   return array_type.increase_rank(acc_t, n_outer_axes) 
 
 def infer_map_type(closure_t, arg_types, axis):
+  print "infer_map_type"
+  print "-- closure", closure_t 
+  print "-- arg_types", arg_types 
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   nested_types = array_type.lower_ranks(arg_types, n_outer_axes)
   nested_result_type = invoke_result_type(closure_t, nested_types)
