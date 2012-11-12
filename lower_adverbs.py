@@ -50,10 +50,7 @@ class LowerAdverbs(transform.Transform):
       args = self.flatten_array_args(args)
       axis = 0
     return fn, args, axis
-  
-
-  
-  
+    
   def transform_Map(self, expr):
     fn, args, axis = self.adverb_prelude(expr)
       
@@ -70,10 +67,14 @@ class LowerAdverbs(transform.Transform):
     
     cond = self.lt(i, niters)
     elt_t = expr.type.elt_type
+
+    
+    
+    nested_args = [self.index_along_axis(arg, axis, i) for arg in args]
+    # TODO: Use shape inference to figure out how large of an array     
+    # I need to allocate here! 
     array_result = self.alloc_array(elt_t, niters)
     self.blocks.push()
-    nested_args = [self.index_along_axis(arg, axis, i) for arg in args]
-
     call_result = self.invoke(fn, nested_args)    
     output_idx = syntax.Index(array_result, i, type = call_result.type)
     self.assign(output_idx, call_result)
