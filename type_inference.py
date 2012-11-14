@@ -347,7 +347,8 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   
   input_types = [tenv[arg_name] for arg_name in typed_args.arg_slots]
   if typed_args.varargs:
-    input_types.append(tenv[typed_args.vararg])
+    varargs_tuple_t = tenv[typed_args.varargs]
+    input_types += varargs_tuple_t.elt_types 
   
   # keep track of the return 
   tenv['$return'] = core_types.Unknown 

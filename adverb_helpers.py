@@ -7,14 +7,17 @@ import ast_conversion
 import function_registry
 
 _adverb_wrapper_cache = {}
-def untyped_wrapper(adverb_class, arg_names = ['fn', 'x'],  axis = 0):
+def untyped_wrapper(adverb_class, args = ['fn']):
   # print "untyped_wrapper", adverb_class, arg_names, axis
   axis = syntax_helpers.wrap_if_constant(axis)
-  key = adverb_class, tuple(arg_names), axis
+  key = adverb_class, tuple(args), axis
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
-    local_arg_names = map(names.refresh, arg_names)
+    # make a single vararg for all the array arguments at the end 
+    arrays_arg = names.fresh("arrays")
+    axis_arg = names.fresh("axis")
+    local_arg_names = map(names.refresh, args)
     local_arg_vars = map(syntax.Var, local_arg_names)
     fn_var = local_arg_vars[0]
     data_vars = local_arg_vars[1:]
