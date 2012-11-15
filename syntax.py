@@ -1,5 +1,5 @@
 from node import Node
-import core_types 
+import core_types
 class Stmt(Node):
   pass
 
@@ -25,7 +25,7 @@ class Assign(Stmt):
 
 class Return(Stmt):
   _members = ['value']
-  
+
   def __str__(self):
     return "Return %s" % self.value
 
@@ -60,7 +60,7 @@ class Const(Expr):
       return "%s : %s" % (self.value, self.type)
     else:
       return str(self.value)
-    
+
   def __str__(self):
     return repr(self)
 
@@ -74,29 +74,29 @@ class Var(Expr):
       return "%s" % self.name
 
   def __str__(self):
-    return self.name 
-  
+    return self.name
+
 class Attribute(Expr):
   _members = ['value', 'name']
-  
+
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
 
 class Index(Expr):
   _members = ['value', 'index']
-  
+
   def __str__(self):
     return "%s[%s]" % (self.value, self.index)
-    
+
 class Tuple(Expr):
   _members = ['elts']
-  
+
   def __str__(self):
     return ", ".join([str(e) for e in self.elts])
 
 class Array(Expr):
   _members = ['elts']
-  
+
 class Closure(Expr):
   """
   Create a closure which points to a global fn
@@ -136,13 +136,13 @@ class PrimCall(Expr):
 ############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
-#  at the syntactic level, so eventually we'll need some more extensible 
+#  at the syntactic level, so eventually we'll need some more extensible
 #  way to describe the type/shape/compilation semantics of array operators
 #
 #############################################################################
 
 class Ravel(Expr):
-  # given an array, return its data in 1D form 
+  # given an array, return its data in 1D form
   _members = ['array']
 
 class ConstArray(Expr):
@@ -150,7 +150,7 @@ class ConstArray(Expr):
 
 class ConstArrayLike(Expr):
   """
-  Create an array with the same shape as the first arg, but with all values 
+  Create an array with the same shape as the first arg, but with all values
   set to the second arg
   """
   _members = ['array', 'value']
@@ -160,32 +160,31 @@ class ArrayView(Expr):
   Create a new view on already allocated underlying data
   """
   _members = ['data', 'shape', 'strides']
-  
 
 class Fn(Node):
   """
-  Function definition. 
+  Function definition.
   A top-level function can have a references to python values from its enclosing
-  scope, which are stored in the 'python_refs' field. 
-  
-  A nested function, on the other hand, might refer to some variables from 
+  scope, which are stored in the 'python_refs' field.
+
+  A nested function, on the other hand, might refer to some variables from
   its enclosing Parakeet scope, whose original names are stored in
   'parakeet_nonlocals'
   """
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
-  
+
   def __str__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
   def node_init(self):
-    
+
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
-    import args 
+    import args
     assert isinstance(self.args, args.Args), \
       "Expected arguments to fn to be Args object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
-  
+
   def python_nonlocals(self):
     if self.python_refs:
       return [ref.deref() for ref in self.python_refs]
@@ -194,18 +193,18 @@ class Fn(Node):
 
 ##################################################################################
 #
-#  Constructs below here are only used in the typed representation 
+#  Constructs below here are only used in the typed representation
 #
 ##################################################################################
 
 class TupleProj(Expr):
   _members = ['tuple', 'index']
-  
+
 class ClosureElt(Expr):
   _members = ['closure', 'index']
-  
+
   def __str__(self):
-    return "ClosureElt(%s, %d)" % (self.closure, self.index) 
+    return "ClosureElt(%s, %d)" % (self.closure, self.index)
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
@@ -223,7 +222,7 @@ class Struct(Expr):
   with this syntax node, signifying explicit struct allocation
   """
   _members = ['args']
-  
+
   def __str__(self):
     return "Struct(%s) : %s" % \
         (", ".join(str(arg) for arg in self.args), self.type)
@@ -233,22 +232,21 @@ class Alloc(Expr):
   Allocates a block of data, returns a pointer
   """
   _members = ['elt_type', 'count']
-  
+
   def __str__(self):
-    return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)  
-  
+    return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)
+
 class IntToPtr(Expr):
   """
   Reinterpret an integer as a pointer to the specified type
-  """ 
+  """
   _members = ['value']
 
 class PtrToInt(Expr):
   """
   Convert the address of a pointer into an integer
-  """  
+  """
   _members = ['value']
-
 
 class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
@@ -257,7 +255,7 @@ class TypedFn(Node):
   _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
 
   def __repr__(self):
-    args_str = ', '.join(["%s : %s" % (slot, self.type_env[slot]) 
+    args_str = ', '.join(["%s : %s" % (slot, self.type_env[slot])
                           for slot in self.args.arg_slots])
 
     return "function %s(%s):%s" % (self.name, args_str, block_to_str(self.body))
