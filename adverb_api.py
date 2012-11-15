@@ -171,29 +171,13 @@ def par_each(fn, *args, **kwds):
   else:
     start = GenericValue.int(llvm_types.int32_t, 0)
     stop = GenericValue.int(llvm_types.int32_t, num_iters)
-    # print "Addr1", ctypes.addressof(c_args)
-    # print "Addr2", ctypes.addressof(ctypes.cast(c_args, ctypes.POINTER(args_t.ctypes_repr)).contents)
     fn_args_array =  GenericValue.pointer(ctypes.addressof(c_args))
     dummy_tile_sizes_t = ctypes.c_int * 1
     dummy_tile_sizes = dummy_tile_sizes_t()
     arr_tile_sizes = (dummy_tile_sizes_t * rt.dop)()
-    # tile_sizes = ctypes.cast(arr_tile_sizes, ctypes.POINTER(ctypes.POINTER(ctypes.c_int)))
     tile_sizes = GenericValue.pointer(ctypes.addressof(arr_tile_sizes))
     gv_inputs = [start, stop, fn_args_array, tile_sizes]
-    c_fn_ptr = exec_engine.get_pointer_to_function(llvm_fn)
-    c_input_types = [ctypes.c_int, ctypes.c_int,
-                     ctypes.POINTER(args_t.ctypes_repr),
-                     ctypes.POINTER(ctypes.c_int)]
-    c_fn_type = ctypes.CFUNCTYPE(None, *tuple(c_input_types))
-    c_fn = c_fn_type(c_fn_ptr)
-    print hex(c_fn_ptr)
-    c_fn(ctypes.c_int(0), ctypes.c_int(num_iters),
-         ctypes.byref(c_args),
-         arr_tile_sizes[0])
-    #exec_engine.run_function(llvm_fn, gv_inputs)
-    print c_args
-    print c_args.output
-    print c_args.output.contents
+    exec_engine.run_function(llvm_fn, gv_inputs)
     result = map_result_type.to_python(c_args.output.contents)
   print result
   return result
