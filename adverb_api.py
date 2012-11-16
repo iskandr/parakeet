@@ -13,31 +13,49 @@ import llvm_backend
 from run_function import run
 from runtime import runtime
 
-def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
-  def create_wrapper(fundef, **kwds):
-    if not isinstance(fundef, syntax.Fn):
-      fundef = ast_conversion.translate_function_value(fundef)
-    assert len(fundef.args.defaults) == 0
-    arg_names = ['fn'] + list(fundef.args.positional)
-    return adverb_helpers.untyped_wrapper(adverb_class, arg_names, **kwds)
-  def python_hook(fn, *args, **kwds):
-    wrapper = create_wrapper(fn, **kwds)
-    return run(wrapper, *[fn] + list(args))
-  # for now we register with the default number of args since our wrappers
-  # don't yet support unpacking a variable number of args
-  default_wrapper_args = ['fn'] + default_args
+
+def one_is_none(f,g):
+  assert (f is None and g is not None) or (f is not None and g is None)
+  
+def create_adverb_hook(adverb_class, map_fn = None, combine_fn = None, args = None):
+  assert one_is_none(map_fn, combine_fn)
+  wrapper_args = []
+  if map_fn is not None:
+    wrapper_args.append(map_fn) 
+  if combine_fn is not None: 
+    wrapper_args.append(combine_fn)
+  wrapper_args.append('axis') 
+  if args is None:
+    varargs = 'values'
+  else:
+    wrapper_args.extend(args)
+    varargs = None
   default_wrapper = \
     adverb_helpers.untyped_wrapper(adverb_class,
-                                   default_wrapper_args,
+                                   
+                                   wrapper_args,
                                    axis=default_axis)
+  
+  #def create_wrapper(fundef, axis, **kwds):
+  #  if not isinstance(fundef, syntax.Fn):
+  #    fundef = ast_conversion.translate_function_value(fundef)
+  #  assert len(fundef.args.defaults) == 0
+  #  arg_names = ['fn'] + list(fundef.args.positional)
+  #  return adverb_helpers.untyped_wrapper(adverb_class, arg_names, **kwds)
+
+  def python_hook(fn, *args, **kwds):
+    axis = kwds.get('axis', 0)
+    wrapper = adverb_helpers.untyped_wrapper(adverb_class, map_fn, combine_fn, axis)
+    return run(wrapper, *([fn] + list(args)))
+  # for now we register with the default number of args since our wrappers
+  # don't yet support unpacking a variable number of args
   adverb_helpers.register_adverb(python_hook, default_wrapper)
   return python_hook
 
-each = create_adverb_hook(adverbs.Map)
-allpairs = create_adverb_hook(adverbs.AllPairs, default_args = ['x','y'],
-                              default_axis = 0)
-seq_reduce = create_adverb_hook(adverbs.Reduce, default_args = ['x'])
-seq_scan = create_adverb_hook(adverbs.Scan, default_args = ['x'])
+each = create_adverb_hook(adverbs.Map, map_fn = 'f')
+allpairs = create_adverb_hook(adverbs.AllPairs, map_fn = 'f')
+reduce = create_adverb_hook(adverbs.Reduce, combine_fn = 'f')
+scan = create_adverb_hook(adverbs.Scan, combine_fn = 'f')
 
 try:
   rt = runtime.Runtime()

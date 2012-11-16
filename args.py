@@ -138,8 +138,8 @@ class Args:
       match(formal, actual, env)
     if self.varargs:
       env[self.varargs] = varargs_fn(extra)
-    else:
-      print "Too many args: %s" % extra 
+    elif len(extra) > 0:
+      raise RuntimeError("Too many args: %s" % extra) 
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
