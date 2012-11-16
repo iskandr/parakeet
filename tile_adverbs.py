@@ -8,6 +8,8 @@ from core_types import Int32, Int64
 from lower_adverbs import LowerAdverbs
 from transform import Transform
 
+int32_array_t = array_type.make_array_type(Int32, 1)
+
 class TileAdverbs(Transform):
   pass
 

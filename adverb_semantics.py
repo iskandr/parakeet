@@ -55,6 +55,9 @@ class BaseSemantics:
     return tuple(elts)
 
   def setidx(self, arr, idx, v):
+    print "arr", arr
+    print "idx", idx
+    print "value", v
     arr[idx] = v
 
   def loop(self, start_idx, stop_idx, body):
@@ -100,7 +103,8 @@ class AdverbSemantics(BaseSemantics):
       if i == axis:
         indices.append(idx)
       else:
-        indices.append(self.slice(self.none, self.none, self.const_int(1)))
+        s = self.slice_value(self.none, self.none, self.const_int(1))
+        indices.append(s)
     return self.tuple(indices)
 
   def slice_along_axis(self, arr, axis, idx):
@@ -127,89 +131,48 @@ class AdverbSemantics(BaseSemantics):
       return self.apply_to_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
 
-  def eval_map(self, f,  xs, axis):
+  def eval_map(self, f,  values, axis):
     return self.eval_scan(
       map_fn = f,
       combine = self.trivial_combiner,
       emit = self.identity_function,
       init = None,
-      inclusive = True,
-      values = xs,
+      values = values,
       axis = axis)
 
-
-  def eval_reduce(self, f, combine, init, xs, axis):
+  def eval_reduce(self, map_fn, combine, init, values, axis):
     prefixes = self.eval_scan(
-      map_fn = f,
+      map_fn = map_fn,
       combine = combine,
       emit = self.identity_function,
       init = init,
-      inclusive = False,
-      values = xs,
+      values = values,
       axis = axis )
     return self.index(prefixes, self.const_int(-1))
 
-  def eval_scan(self, map_fn, combine, emit, init, inclusive, values, axis):
+  def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_map_result = self.adverb_prelude(map_fn, values, axis)
-    zero = self.const_int(0)
-    one = self.const_int(1)
+
     if init is None:
       init = delayed_map_result(0)
-      start_idx = one
     else:
-      start_idx = zero
-    result_size = self.sub(niters, start_idx)
-    if inclusive:
-      result = self.array(self.add(result_size, one), init)
-      # start_idx = self.add(start_idx, one)
-    else:
-      result = self.array(result_size, init)
+      # combine the provided initializer with
+      # transformed first value of the data
+      # in case we need to coerce up
+      init = self.apply(combine, [init, delayed_map_result(0)])
+    start_idx = self.const_int(1)
+    first_output = self.apply(emit, [init])
+    result = self.array(niters, first_output)
 
     acc = self.accumulator(init)
     emitted_elt_repr = lambda idx: self.apply(emit, [self.get_acc(acc)])
     def loop_body(idx):
+      output_indices = self.build_slice_indices(self.rank(result), axis, idx)
+
       return [
         self.set_acc(acc,
           self.apply(combine, [self.get_acc(acc), delayed_map_result(idx)])),
-        self.setidx(result, idx, emitted_elt_repr(idx))
+        self.setidx(result, output_indices, emitted_elt_repr(idx))
       ]
     self.loop(start_idx, niters, loop_body)
     return result
-
-if __name__ == '__main__':
-  interp = AdverbSemantics()
-  x = np.array([1,4,9])
-  y = interp.eval_map(np.sqrt, [x], 0)
-  print "Map Input", np.sqrt, x
-  print "Output", y
-  print "Expected output", np.sqrt(x)
-  print
-
-  total = interp.eval_reduce(lambda x: x, np.add,  0, [x], 0)
-  print "Reduce Input", np.add, 0, x
-  print "Reduce output", total
-  print "Expected output", np.sum(x)
-  print
-
-  prefixes = interp.eval_scan(
-    map_fn = lambda x:x,
-    combine = np.add,
-    emit = lambda x: x,
-    init = 0,
-    inclusive = False,
-    values = [x],
-    axis = 0)
-  print "Scan Input", x
-  print "Scan output", prefixes
-  print "Expected Scan output", np.cumsum(x)
-
-
-
-
-
-
-
-
-
-
-

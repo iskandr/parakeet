@@ -333,7 +333,7 @@ def translate_function_source(source, globals_dict, closure_vars = [],
   return translate_function_ast(syntax, globals_dict, closure_vars,
                                 closure_cells)
 
-import adverb_helpers
+import adverb_wrapper
 
 def translate_function_value(fn):
   if already_registered_python_fn(fn):
@@ -346,8 +346,8 @@ def translate_function_value(fn):
   # - variable number of args packed as a tuple i.e. *args
   # - keyword arguments packed as a...? ...struct of some kind? i.e. **kwds
   # - unpacking tuples and unpacking structs
-  elif adverb_helpers.is_registered_adverb(fn):
-    return adverb_helpers.get_adverb_wrapper(fn)
+  elif adverb_wrapper.is_registered_adverb(fn):
+    return adverb_wrapper.get_adverb_wrapper(fn)
   else:
     assert hasattr(fn, 'func_globals'), \
       "Expected function to have globals: %s" % fn

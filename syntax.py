@@ -133,6 +133,19 @@ class PrimCall(Expr):
   def __str__(self):
     return repr(self)
 
+class Unpack(Expr):
+  """
+  Unpack a varargs tuple into an argument list
+  """
+  _members = ['value']
+  
+  def __str__(self):
+    return "*%s" % self.value
+  
+  def __repr__(self):
+    return str(self)
+
+  
 ############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
