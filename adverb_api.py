@@ -7,6 +7,7 @@ import core_types
 import type_inference
 import adverbs
 import adverb_helpers
+import adverb_wrapper 
 import type_conv
 import llvm_backend
 
@@ -17,39 +18,34 @@ from runtime import runtime
 def one_is_none(f,g):
   assert (f is None and g is not None) or (f is not None and g is None)
   
-def create_adverb_hook(adverb_class, map_fn = None, combine_fn = None, args = None):
-  assert one_is_none(map_fn, combine_fn)
-  wrapper_args = []
-  if map_fn is not None:
-    wrapper_args.append(map_fn) 
-  if combine_fn is not None: 
-    wrapper_args.append(combine_fn)
-  wrapper_args.append('axis') 
-  if args is None:
-    varargs = 'values'
-  else:
-    wrapper_args.extend(args)
-    varargs = None
-  default_wrapper = \
-    adverb_helpers.untyped_wrapper(adverb_class,
-                                   
-                                   wrapper_args,
-                                   axis=default_axis)
+def create_adverb_hook(adverb_class, 
+                         map_fn_name = None, 
+                         combine_fn_name = None, 
+                         arg_names = None):
   
-  #def create_wrapper(fundef, axis, **kwds):
-  #  if not isinstance(fundef, syntax.Fn):
-  #    fundef = ast_conversion.translate_function_value(fundef)
-  #  assert len(fundef.args.defaults) == 0
-  #  arg_names = ['fn'] + list(fundef.args.positional)
-  #  return adverb_helpers.untyped_wrapper(adverb_class, arg_names, **kwds)
-
+  assert one_is_none(map_fn_name, combine_fn_name), \
+    "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
+  if arg_names is None:
+    data_names = []
+    varargs_name = 'xs'
+  else:
+    data_names = arg_names
+    varargs_name = None 
+    
   def python_hook(fn, *args, **kwds):
     axis = kwds.get('axis', 0)
-    wrapper = adverb_helpers.untyped_wrapper(adverb_class, map_fn, combine_fn, axis)
+    
+    wrapper = adverb_wrapper.untyped_wrapper(
+      adverb_class, 
+      map_fn_name = map_fn_name, 
+      combine_fn_name = combine_fn_name,
+      data_names = data_names, 
+      varargs_name = varargs_name,  
+      axis=axis)
     return run(wrapper, *([fn] + list(args)))
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
-  adverb_helpers.register_adverb(python_hook, default_wrapper)
+  adverb_wrapper.register_adverb(python_hook, default_wrapper)
   return python_hook
 
 each = create_adverb_hook(adverbs.Map, map_fn = 'f')
