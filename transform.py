@@ -144,7 +144,7 @@ class Transform(object):
       if i == axis:
         indices.append(syntax_helpers.wrap_if_constant(idx))
       else:
-        indices.append(syntax_helpers.const_none)
+        indices.append(syntax_helpers.none)
     
     index_tuple = self.tuple(indices, "indices")
     result_t = arr.type.index_type(index_tuple.type)

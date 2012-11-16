@@ -1,8 +1,9 @@
 import syntax 
 import core_types 
+import array_type 
 import tuple_type 
 
-const_none = syntax.Const(None, type = core_types.NoneType)
+
 
 def const_int(n, t = core_types.Int64):
   return syntax.Const(n, type = t)
@@ -45,6 +46,12 @@ one_i64 = one(core_types.Int64)
 one_f32 = one(core_types.Float32)
 one_f64 = one(core_types.Float64)
 
+none_t = core_types.NoneType
+none = syntax.Const(None, type = none_t)
+
+slice_none_t = array_type.make_slice_type(none_t, none_t, none_t) 
+slice_none = syntax.Slice(none, none, none, type = slice_none_t)
+
 def is_python_int(x):
   return isinstance(x, (int, long))
 
@@ -80,6 +87,7 @@ def make_tuple(elts):
 def const_tuple(*python_values):
   return make_tuple(map(const, python_values))
 
+
 def const(x):
   if is_python_scalar(x):
     return const_scalar(x)
@@ -88,7 +96,7 @@ def const(x):
   else:
     assert x is None, \
       "Can't convert Python value %s into a Parakeet constant" % x
-    return const_none 
+    return none  
 
 def unwrap_constant(x):
   if isinstance(x, syntax.Expr):

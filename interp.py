@@ -251,7 +251,6 @@ def eval_fn(fn, actuals):
       raise RuntimeError("Not implemented: %s" % stmt)
     
   def eval_block(stmts):
-    #print "eval", stmts 
     for stmt in stmts:
       eval_stmt(stmt)
 
