@@ -4,7 +4,6 @@ import array_type
 import tuple_type 
 
 
-
 def const_int(n, t = core_types.Int64):
   return syntax.Const(n, type = t)
 
@@ -106,7 +105,6 @@ def unwrap_constant(x):
     assert is_python_constant(x)
     return x
 
-
 def wrap_if_constant(x):
   """
   If given value isn't already an expression
@@ -115,9 +113,9 @@ def wrap_if_constant(x):
   if is_python_constant(x):
     return const(x)
   else:
-    assert isinstance(x, syntax.Expr), "Expected expression, got " + str(x) 
+    assert isinstance(x, syntax.Expr), "Expected expression, got " + str(x)
     return x
-  
+
 def wrap_constants(xs):
   return map(wrap_if_constant, xs)
 
@@ -129,13 +127,12 @@ def wrap_var(x):
 
 def wrap_vars(xs):
   return map(wrap_var, xs)
-  
+
 def get_type(expr):
   return expr.type
 
 def get_types(exprs):
   return [expr.type for expr in exprs]
-
 
 def is_zero(expr):
   return isinstance(expr, syntax.Const) and expr.value == 0
@@ -147,10 +144,10 @@ def is_false(expr):
   return isinstance(expr, syntax.Const) and expr.value == False
 
 def is_true(expr):
-  return isinstance(expr, syntax.Const) and expr.value == True 
+  return isinstance(expr, syntax.Const) and expr.value == True
 
 def is_none(expr):
-  return isinstance(expr, syntax.Const) and expr.value == None 
+  return isinstance(expr, syntax.Const) and expr.value == None
 
 def is_constant(expr):
   return isinstance(expr, syntax.Const)
