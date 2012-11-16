@@ -73,9 +73,6 @@ class BaseSemantics:
   def apply(self, fn, args):
     return fn(*args)
   
-  def apply_to_delayed(self, fn, args, idx):
-    curr_args = [x(idx) for x in args]
-    return self.apply(fn, curr_args)
   
   none = None 
   null_slice = slice(None, None, None)
@@ -94,6 +91,9 @@ class AdverbSemantics(BaseSemantics):
   and make them work for some other domain (such as types, 
   shapes, or compiled expressions)
   """
+  def apply_to_delayed(self, fn, args, idx):
+    curr_args = [x(idx) for x in args]
+    return self.apply(fn, curr_args)
 
   def build_slice_indices(self, rank, axis, idx):
     indices = []
@@ -112,7 +112,7 @@ class AdverbSemantics(BaseSemantics):
   def delayed_elt(self, x, axis):
     return lambda idx: self.slice_along_axis(x, axis, idx)
   
-  def adverb_prelude(self, xs, axis):
+  def adverb_prelude(self, map_fn, xs, axis):
     if not isinstance(xs, (list, tuple)):
       xs = [xs]
     axis_sizes = [self.size_along_axis(x, axis) 
@@ -124,11 +124,13 @@ class AdverbSemantics(BaseSemantics):
     # axis we're iterating over 
     self.check_equal_sizes(axis_sizes)
     elts = [self.delayed_elt(x, axis) for x in xs]
-    return axis_sizes[0], elts
+    def delayed_map_result(idx):
+      return self.apply_to_delayed(map_fn, elts, idx)
+    return axis_sizes[0], delayed_map_result
   
   def eval_map(self, f,  xs, axis):
     return self.eval_scan(
-      mapper = f, 
+      map_fn = f, 
       combine = self.trivial_combiner,  
       emit = self.identity_function,  
       init = None,
@@ -139,18 +141,17 @@ class AdverbSemantics(BaseSemantics):
   
   def eval_reduce(self, f, combine, init, xs, axis):
     prefixes = self.eval_scan(
-      mapper = f, 
+      map_fn = f, 
       combine = combine, 
       emit = self.identity_function,  
       init = init, 
       inclusive = False, 
       values = xs, 
       axis = axis )
-    return prefixes[-1]
+    return self.index(prefixes, self.const_int(-1))
   
-  def eval_scan(self, mapper, combine, emit, init, inclusive, values, axis):
-    niters, elts = self.adverb_prelude(values, axis)
-    delayed_map_result = lambda idx: self.apply_to_delayed(mapper, elts, idx)
+  def eval_scan(self, map_fn, combine, emit, init, inclusive, values, axis):
+    niters, delayed_map_result = self.adverb_prelude(map_fn, values, axis)
     zero = self.const_int(0)
     one = self.const_int(1)
     if init is None:
@@ -176,7 +177,6 @@ class AdverbSemantics(BaseSemantics):
     self.loop(start_idx, niters, loop_body)
     return result 
   
-
 if __name__ == '__main__':
   interp = AdverbSemantics()
   x = np.array([1,4,9])
@@ -193,7 +193,7 @@ if __name__ == '__main__':
   print 
   
   prefixes = interp.eval_scan(
-    mapper = lambda x:x, 
+    map_fn = lambda x:x, 
     combine = np.add, 
     emit = lambda x: x, 
     init = 0, 
