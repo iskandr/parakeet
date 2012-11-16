@@ -14,7 +14,7 @@ def untyped_wrapper(adverb_class, args = ['fn']):
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
-    # make a single vararg for all the array arguments at the end 
+    # make a single vararg for all the array arguments at the end
     arrays_arg = names.fresh("arrays")
     axis_arg = names.fresh("axis")
     local_arg_names = map(names.refresh, args)
@@ -100,11 +100,11 @@ def num_outer_axes(arg_types, axis):
   """
   Helper for adverb type inference to figure out
   how many axes it will loop over -- either 1 particular
-  one or all of them when axis is None. 
+  one or all of them when axis is None.
   """
   axis = syntax_helpers.unwrap_constant(axis)
   if isinstance(arg_types, core_types.Type):
-    max_arg_rank = arg_types.rank 
+    max_arg_rank = arg_types.rank
   else:
     max_arg_rank = max_rank(arg_types)
   return 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank

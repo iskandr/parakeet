@@ -1,14 +1,13 @@
-import ctypes
-import numpy as np
-
-import ast_conversion
-import syntax
-import core_types
-import type_inference
 import adverbs
 import adverb_helpers
-import type_conv
+import ast_conversion
+import core_types
+import ctypes
 import llvm_backend
+import numpy as np
+import syntax
+import type_conv
+import type_inference
 
 from run_function import run
 from runtime import runtime
@@ -17,6 +16,7 @@ def create_adverb_hook(adverb_class, default_args = ['x'], default_axis = None):
   def create_wrapper(fundef, **kwds):
     if not isinstance(fundef, syntax.Fn):
       fundef = ast_conversion.translate_function_value(fundef)
+    print fundef
     assert len(fundef.args.defaults) == 0
     arg_names = ['fn'] + list(fundef.args.positional)
     return adverb_helpers.untyped_wrapper(adverb_class, arg_names, **kwds)
@@ -93,10 +93,10 @@ def translate_fn(python_fn):
   untyped = function_registry.untyped_functions[closure_t.fn]
   return closure_t, untyped
 
-from common import list_to_ctypes_array
-from run_function import ctypes_to_generic_value, generic_value_to_python
-from llvm.ee import GenericValue
 import llvm_types
+from common import list_to_ctypes_array
+from llvm.ee import GenericValue
+from run_function import ctypes_to_generic_value, generic_value_to_python
 
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
@@ -108,7 +108,6 @@ def par_each(fn, *args, **kwds):
 
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
-
 
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):

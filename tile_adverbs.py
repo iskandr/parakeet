@@ -1,9 +1,12 @@
+import adverb_helpers
+import array_type
+import syntax
+import syntax_helpers
+import tuple_type
+
 from core_types import Int32, Int64
-import adverb_helpers, array_type, syntax, syntax_helpers, tuple_type
 from lower_adverbs import LowerAdverbs
 from transform import Transform
-
-int32_array_t = array_type.make_array_type(Int32)
 
 class TileAdverbs(Transform):
   pass
@@ -67,6 +70,7 @@ class LowerTiledAdverbs(LowerAdverbs):
     return array_result
 
   def post_apply(self, fn):
+    int32_array_t = array_type.make_array_type(Int32, self.num_tiled_adverbs)
     tile_param_array = self.fresh_var(int32_array_t, "tile_params")
     fn.args.argslots.append(tile_param_array.name)
     assignments = []

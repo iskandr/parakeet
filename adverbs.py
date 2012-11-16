@@ -15,7 +15,6 @@ class Adverb(syntax.Expr):
   def __str__(self):
     return repr(self)
 
-
 class Map(Adverb):
   pass
 
@@ -41,9 +40,8 @@ class Accumulative(Adverb):
   def node_init(self):
     # assert self.init is not None
     # assert self.combine is not None
-    pass 
-  
-  
+    pass
+
 class Reduce(Adverb):
   pass
 
@@ -56,7 +54,6 @@ class Tiled(object):
 class TiledMap(Map, Tiled):
   pass
 
-
 class TiledAllPairs(AllPairs, Tiled):
   pass
 
@@ -65,4 +62,3 @@ class TiledReduce(Reduce, Tiled):
 
 class TiledScan(Scan, Tiled):
   pass
-

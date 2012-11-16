@@ -12,10 +12,10 @@ floats_2d = np.reshape(ints_2d, (10,10))
 bools_1d = ints_1d % 2 == 0
 bools_2d = ints_2d % 2 == 0
 
-
 vecs = [ints_1d, floats_1d, bools_1d,]
 matrices = [ints_2d, floats_2d,  bools_2d]
-all_arrays = vecs + matrices 
+all_arrays = vecs + matrices
+
 def add1_scalar(x):
   return x+1
 
@@ -48,25 +48,22 @@ def test_explicit_add_vec():
 
 def test_explicit_add_mat():
   expect_allpairs(each_add, np.add, matrices)
-  
+
 def conditional_div(x,y):
   if y == 0:
     return 0
   else:
-    return x / y 
+    return x / y
 
 def python_conditional_div(x,y):
   result = [xi / yi if yi != 0 else 0 for (xi,yi) in zip(x,y)]
   return np.array(result)
 
 def each_conditional_div(x,y):
-  return each(conditional_div, x, y) 
+  return each(conditional_div, x, y)
 
 def test_conditional_div():
     expect_allpairs(each_conditional_div, python_conditional_div, vecs)
-
- 
-
 
 if __name__ == '__main__':
   run_local_tests()
