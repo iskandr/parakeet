@@ -10,8 +10,34 @@ from transform import Transform
 
 int32_array_t = array_type.make_array_type(Int32, 1)
 
+def free_vars_list(expr_list):
+  rslt = set()
+  for expr in expr_list:
+    rslt.update(free_vars(expr))
+  return rslt
+
+def free_vars(expr):
+  if isinstance(expr, syntax.Var):
+    return set([expr.name])
+  elif isinstance(expr, (syntax.PrimCall,syntax.Call,syntax.Invoke)):
+    return free_vars_list(expr.args)
+  elif isinstance(expr, syntax.Index):
+    return free_vars(expr.value).union(free_vars(expr.index))
+  else:
+    assert isinstance(expr, syntax.Const), ("%s is not a Const" % expr)
+    return set()
+
 class TileAdverbs(Transform):
-  pass
+  def __init__(self, fn, adverbs_visited=[], expansions={}):
+    Transform.__init__(self, fn)
+    self.adverbs_visited = adverbs_visited
+    self.expansions = expansions
+
+  def transform_Assign(self, stmt):
+    fv = free_vars(stmt.rhs)
+    exps = list(set([self.expansions[x] for x in fv]))
+    exps.sort()
+
 
 class LowerTiledAdverbs(LowerAdverbs):
   def __init__(self, fn):
@@ -72,12 +98,12 @@ class LowerTiledAdverbs(LowerAdverbs):
     return array_result
 
   def post_apply(self, fn):
-    int32_array_t = array_type.make_array_type(Int32, self.num_tiled_adverbs)
     tile_param_array = self.fresh_var(int32_array_t, "tile_params")
-    fn.args.argslots.append(tile_param_array.name)
+    fn.args.arg_slots.append(tile_param_array.name)
     assignments = []
     for var, counter in self.tile_params:
       assignments.append(
           syntax.Assign(var,
                         self.index(tile_param_array, counter, temp=False)))
     fn.body = assignments + fn.body
+    return fn
