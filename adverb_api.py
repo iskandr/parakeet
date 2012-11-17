@@ -34,20 +34,37 @@ def create_adverb_hook(adverb_class,
     data_names = arg_names
     varargs_name = None
 
-  def python_hook(fn, *args, **kwds):
-    axis = kwds.get('axis', 0)
 
-    wrapper = adverb_wrapper.untyped_wrapper(
+  def mk_wrapper(axis):
+    """
+    An awkward mismatch between treating adverbs as 
+    functions is that their axis parameter is really 
+    fixed as part of the syntax of Parakeet. 
+    Thus, when you're calling an  adverb from 
+    outside Parakeet you can generate new syntax for
+    any axis you want, but if you use an adverb 
+    as a function value within Parakeet:
+      r = par.reduce
+      return r(f, xs)
+    ...then we hackishly force the adverb to go 
+    along the default axis of 0. 
+    """ 
+    return adverb_wrapper.untyped_wrapper(
       adverb_class,
       map_fn_name = map_fn_name,
       combine_fn_name = combine_fn_name,
       data_names = data_names,
       varargs_name = varargs_name,
       axis=axis)
+    
+  def python_hook(fn, *args, **kwds):
+    axis = kwds.get('axis', 0)
+    wrapper = mk_wrapper(axis)
     return run(wrapper, *([fn] + list(args)))
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
-  adverb_wrapper.register_adverb(python_hook, default_wrapper)
+  default_wrapper = mk_wrapper(axis = 0)
+  adverb_wrapper.AdverbRegistry.register(python_hook, default_wrapper)
   return python_hook
 
 each = create_adverb_hook(adverbs.Map, map_fn = 'f')
@@ -76,7 +93,7 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     inputs = [start_var, stop_var, args_var, tile_sizes_var]
 
     nested_arg_names = ['fn'] + list(fn.args.positional)
-    nested_wrapper = adverb_helpers.untyped_wrapper(adverb_class,
+    nested_wrapper = adverb_wrapper.untyped_wrapper(adverb_class,
                                                     nested_arg_names,
                                                     axis = 0)
     # TODO: Closure args should go here.

@@ -7,6 +7,27 @@ import function_registry
 import ast_conversion
 
 
+class AdverbRegistry:
+  """
+  When the adverb_api creates python functions which can be called from 
+  outside of Parakeet to run an adverb, they should be registered 
+  through this class to prevent the ast_translator from trying to 
+  parse their source
+  """
+  _registered_functions = {}
+  
+  @classmethod 
+  def is_registered(cls, python_fn):
+    return python_fn in cls.registered_functions
+  
+  @classmethod 
+  def register(cls, python_fn, wrapper):
+    cls._registered_functions[python_fn] = wrapper 
+  
+  @classmethod   
+  def get_wrapper(cls, python_fn):
+    return cls._registered_functions[python_fn]
+  
 _adverb_wrapper_cache = {}
 def untyped_wrapper(adverb_class, 
                       map_fn_name = None, 
@@ -60,15 +81,6 @@ def untyped_wrapper(adverb_class,
     _adverb_wrapper_cache[key] = fundef
     return fundef
 
-_adverb_registry = {}
-def is_registered_adverb(fn):
-  return fn in _adverb_registry
-
-def register_adverb(python_fn, wrapper):
-  _adverb_registry[python_fn] = wrapper
-
-def get_adverb_wrapper(python_fn):
-  return _adverb_registry[python_fn]
 
 
 def gen_arg_names(n, base_names):
