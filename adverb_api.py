@@ -10,6 +10,7 @@ import core_types
 import type_inference
 import adverbs
 import adverb_helpers
+import adverb_registry 
 import adverb_wrapper
 import type_conv
 import type_inference
@@ -18,8 +19,8 @@ from run_function import run
 from runtime import runtime
 
 def one_is_none(f,g):
-  assert (f is None and g is not None) or (f is not None and g is None)
-
+  return int(f is None) + int(g is None) == 1
+  
 def create_adverb_hook(adverb_class,
                          map_fn_name = None,
                          combine_fn_name = None,
@@ -64,13 +65,13 @@ def create_adverb_hook(adverb_class,
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
   default_wrapper = mk_wrapper(axis = 0)
-  adverb_wrapper.AdverbRegistry.register(python_hook, default_wrapper)
+  adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 
-each = create_adverb_hook(adverbs.Map, map_fn = 'f')
-allpairs = create_adverb_hook(adverbs.AllPairs, map_fn = 'f')
-reduce = create_adverb_hook(adverbs.Reduce, combine_fn = 'f')
-scan = create_adverb_hook(adverbs.Scan, combine_fn = 'f')
+each = create_adverb_hook(adverbs.Map, map_fn_name = 'f')
+allpairs = create_adverb_hook(adverbs.AllPairs, map_fn_name = 'f')
+reduce = create_adverb_hook(adverbs.Reduce, combine_fn_name = 'f')
+scan = create_adverb_hook(adverbs.Scan, combine_fn_name = 'f')
 
 try:
   rt = runtime.Runtime()

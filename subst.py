@@ -6,7 +6,7 @@ def subst(node, rename_dict):
     return syntax.Var(rename_dict.get(node.name, node.name), type = node.type)
   if isinstance(node, (syntax.Expr, syntax.Stmt)):
     new_values = {}
-    for member_name in node.members:
+    for member_name in node.members():
       old_v = getattr(node, member_name)
       if member_name == 'merge':
         new_v = subst_phi_nodes(old_v, rename_dict)

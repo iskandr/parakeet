@@ -3,7 +3,6 @@
 # SSA ID -> untyped function 
 untyped_functions = {}
 
-
 # SSA ID -> typed function  
 typed_functions = {}
 

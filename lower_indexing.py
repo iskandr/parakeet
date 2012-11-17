@@ -66,7 +66,7 @@ class LowerIndexing(transform.Transform):
     n_given = len(indices)
     n_required = arr_t.rank 
     if n_given < n_required:
-      extra_indices = [syntax_helpers.const_none] * (n_required - n_given)
+      extra_indices = [syntax_helpers.none] * (n_required - n_given)
       indices.extend(extra_indices)
     
     # fast-path for the common case when we're indexing 

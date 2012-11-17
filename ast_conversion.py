@@ -24,6 +24,8 @@ reserved_names = {
   'None' : syntax.Const(None),
 }
 
+
+
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
     return syntax.Const (arg.n)
@@ -333,9 +335,10 @@ def translate_function_source(source, globals_dict, closure_vars = [],
   return translate_function_ast(syntax, globals_dict, closure_vars,
                                 closure_cells)
 
-import adverb_wrapper
+import adverb_registry 
 
 def translate_function_value(fn):
+
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
   elif isinstance(fn, Prim):
@@ -346,8 +349,8 @@ def translate_function_value(fn):
   # - variable number of args packed as a tuple i.e. *args
   # - keyword arguments packed as a...? ...struct of some kind? i.e. **kwds
   # - unpacking tuples and unpacking structs
-  elif adverb_wrapper.is_registered_adverb(fn):
-    return adverb_wrapper.get_adverb_wrapper(fn)
+  elif adverb_registry.is_registered(fn):
+    return adverb_registry.get_wrapper(fn)
   else:
     assert hasattr(fn, 'func_globals'), \
       "Expected function to have globals: %s" % fn
@@ -369,3 +372,4 @@ def translate_function_value(fn):
     register_python_fn(fn, fundef)
     # print "Translated", fundef
     return fundef
+

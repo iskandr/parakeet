@@ -1,19 +1,18 @@
 
 # Copied from Russel's TreeLike but siginificantly 
 # stripped down to fit in my underpowered brain 
-
-#import logging 
+ 
 import copy 
+
 
 class Node(object):
   _members_cache = {}  
   
-  @property
-  def members(self):
+  @classmethod
+  def members(klass):
     'Walk through classes in mro order, accumulating member names.'
-    klass = self.__class__
-    if klass in self._members_cache:
-      return self._members_cache[klass]
+    if klass in klass._members_cache:
+      return klass._members_cache[klass]
     
     m = []
     for c in klass.mro():
@@ -22,13 +21,13 @@ class Node(object):
       for name in curr_members:
         if name not in m:
           m.append(name)  
-    self._members_cache[klass] = m
+    klass._members_cache[klass] = m
     return m
   
   
   def __init__(self, *args, **kw):
     self.parent = None
-    members = self.members 
+    members = self.members()
     if len(args) > len(members):
       raise Exception('Too many arguments for ' + self.__class__.__name__ + 
                       '.  Expected: ' + str(members))
@@ -61,7 +60,7 @@ class Node(object):
     
   
   def __str__(self):
-    members = ["%s = %s" % (m, getattr(self, m)) for m in self.members]
+    members = ["%s = %s" % (m, getattr(self, m)) for m in self.members()]
     return "%s(%s)" % (self.node_type(), ", ".join(members))
   
   def __repr__(self):

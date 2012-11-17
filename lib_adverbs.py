@@ -1,21 +1,19 @@
 
 from prims import *
-from adverb_api  import each, seq_reduce 
+from lib_simple import len 
+from adverb_api  import each, reduce 
 
 # from adverbs import map, reduce, scan 
-def len(arr):
-  return arr.shape[0]
-    
-def shape(arr):
-  return arr.shape 
+
 
 def sum(x):
   # should be reduce(add, add, x[1:], x[0])
-  return seq_reduce(add, x)
+  return reduce(add, x)
 
 def prod(x):
   # should be reduce(add, add, x[1:], x[0])
-  return seq_reduce(multiply,  x)
+  return reduce(multiply,  x)
 
 def mean(x):
   return sum(x) / len(x)
+

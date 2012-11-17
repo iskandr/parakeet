@@ -355,7 +355,7 @@ class Transform(object):
 
   def transform_generic_expr(self, expr):
     args = {}
-    for member_name in expr.members:
+    for member_name in expr.members():
       member_value = getattr(expr, member_name)
       args[member_name] = self.transform_if_expr(member_value)
     return expr.__class__(**args)

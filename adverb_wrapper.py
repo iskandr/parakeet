@@ -6,28 +6,10 @@ import adverbs
 import function_registry
 import ast_conversion
 
+from lib_simple import identity 
+untyped_identity_function = ast_conversion.translate_function_value(identity)
 
-class AdverbRegistry:
-  """
-  When the adverb_api creates python functions which can be called from 
-  outside of Parakeet to run an adverb, they should be registered 
-  through this class to prevent the ast_translator from trying to 
-  parse their source
-  """
-  _registered_functions = {}
-  
-  @classmethod 
-  def is_registered(cls, python_fn):
-    return python_fn in cls.registered_functions
-  
-  @classmethod 
-  def register(cls, python_fn, wrapper):
-    cls._registered_functions[python_fn] = wrapper 
-  
-  @classmethod   
-  def get_wrapper(cls, python_fn):
-    return cls._registered_functions[python_fn]
-  
+ 
 _adverb_wrapper_cache = {}
 def untyped_wrapper(adverb_class, 
                       map_fn_name = None, 
@@ -53,7 +35,7 @@ def untyped_wrapper(adverb_class,
   else:
     
     positional_arg_names = []
-    def mk_input(name):
+    def mk_input_var(name):
       if name is None:
         return None
       else:
@@ -62,21 +44,33 @@ def untyped_wrapper(adverb_class,
         name = names.refresh(name)
         positional_arg_names.append(name) 
         return syntax.Var(name)
-    map_fn = mk_input(map_fn_name)
-    combine_fn = mk_input(combine_fn_name)
-    emit_fn = mk_input(emit_fn_name)
+    map_fn = mk_input_var(map_fn_name)
+    combine_fn = mk_input_var(combine_fn_name)
+    emit_fn = mk_input_var(emit_fn_name)
     
-    value_args = map(mk_input, data_names)
+    data_args = map(mk_input_var, data_names)
     if varargs_name:
       varargs_name = names.refresh(varargs_name)
       unpack = syntax.Unpack(syntax.Var(varargs_name))
-      value_args.append(unpack)
-    args_obj = Args(positional = positional_arg_names, varargs = varargs_name)
-    adverb = adverb_class(map_fn = map_fn, combine_fn = combine_fn, emit_fn = emit_fn,  
-                          args = value_args, axis = axis)
+      data_args.append(unpack)
+    
+    adverb_parameters = adverb_class.members()
+    print adverb_parameters 
+    adverb_args = {'axis': axis, 'args': data_args}
+    def add_fn_arg(field, value):
+      if value:
+        adverb_args[field] = value
+      elif field in adverb_parameters:
+        adverb_args[field] = untyped_identity_function
+    add_fn_arg('fn', map_fn)
+    add_fn_arg('combine', combine_fn)
+    add_fn_arg('emit', emit_fn)
+   
+    adverb = adverb_class(*adverb_args)
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
-    fundef = syntax.Fn(fn_name, args_obj, body)
+    fn_args_obj = Args(positional = positional_arg_names, varargs = varargs_name)
+    fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef
     return fundef

@@ -1,5 +1,6 @@
-from adverb_api import each, seq_reduce, seq_scan, allpairs, par_each
-from prelude import *
+from lib_simple import *
+from adverb_api import each, reduce, scan, allpairs, par_each
+from lib_adverbs import * 
 from run_function import run, specialize_and_compile
 
 def typed_repr(fn, args):
