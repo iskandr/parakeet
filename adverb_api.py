@@ -65,6 +65,8 @@ def create_adverb_hook(adverb_class,
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
   default_wrapper = mk_wrapper(axis = 0)
+  print "DEFAULT WRAPPER FOR", adverb_class
+  print default_wrapper 
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 

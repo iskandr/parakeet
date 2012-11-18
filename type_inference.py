@@ -336,7 +336,8 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   types throughout the program and inserts
   adverbs for scalar operators applied to arrays
   """
-
+  print "Inferring for %s:\n pos = %s, kwds = %s" % (untyped_fn, positional_types, keyword_types)
+  
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(var_map.rename)
 
@@ -357,7 +358,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   # if nothing ever gets returned, then set the return type to None
   if isinstance(return_type,  core_types.UnknownT):
 
-    body.append(typed_ast.Return(syntax_helpers.const_none))
+    body.append(typed_ast.Return(syntax_helpers.none))
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
 
@@ -400,7 +401,6 @@ def infer_return_type(untyped, arg_types):
   and implicitly generates a specialized version of the
   function.
   """
-  # print "Specializing for %s: %s" % (arg_types, untyped )
   typed = specialize(untyped, arg_types)
   return typed.return_type
 

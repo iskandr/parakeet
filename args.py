@@ -152,8 +152,6 @@ class Args:
     if self.varargs:
       env[self.varargs] = varargs_fn(extra)
     else:
-      print self.varargs 
-      print varargs_fn 
       assert len(extra) == 0, "Too many args: %s" % (extra, )
     return env 
   
@@ -194,13 +192,14 @@ class Args:
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
     nonlocals = transform_list(self.nonlocals, name_fn, extract_name, tuple_fn)
     positional = transform_list(self.positional, name_fn,  extract_name, tuple_fn)
+    varargs = name_fn(self.varargs) if self.varargs else None 
     defaults = OrderedDict()
     for (k,v) in self.defaults.iteritems():
       old_key = name(k) if extract_name else k
       new_key = name_fn(old_key)
       new_value = keyword_value_fn(v) if keyword_value_fn else v
       defaults[new_key] = new_value
-    return Args(positional, defaults, nonlocals)
+    return Args(positional, defaults, nonlocals, varargs)
   
   def fresh_copy(self):
     import names 
