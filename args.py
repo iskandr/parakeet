@@ -152,6 +152,8 @@ class Args:
     if self.varargs:
       env[self.varargs] = varargs_fn(extra)
     else:
+      print self.varargs 
+      print varargs_fn 
       assert len(extra) == 0, "Too many args: %s" % (extra, )
     return env 
   
