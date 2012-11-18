@@ -121,8 +121,21 @@ class Args:
       self.positions[p] = i
 
   def __str__(self):
-    return "Args(nonlocal = %s, positional = %s, defaults=%s)" % \
-      (self.nonlocals, map(repr, self.positional), map(repr, self.defaults.items()))
+    pos_strs =  map(str, self.positional) 
+    default_strs = ["%s = %s" % (k,v) for k,v in self.defaults]
+    vararg_strs = ["*" + self.varargs] if self.varargs else []
+    nonlocal_strs = \
+      ["nonlocals = (%s)" % ", ".join(map(str, self.nonlocals))] \
+      if self.nonlocals else []
+    return ", ".join(pos_strs + default_strs + vararg_strs + nonlocal_strs)
+  def __repr__(self):
+    return "Args( positional = %s, defaults=%s, varargs = %s, nonlocal = %s)" % \
+      (
+       map(repr, self.positional), 
+       map(repr, self.defaults.items()), 
+       self.nonlocals, 
+       self.varargs
+      )
   
 
   def __iter__(self):
@@ -138,8 +151,8 @@ class Args:
       match(formal, actual, env)
     if self.varargs:
       env[self.varargs] = varargs_fn(extra)
-    elif len(extra) > 0:
-      raise RuntimeError("Too many args: %s" % extra) 
+    else:
+      assert len(extra) == 0, "Too many args: %s" % (extra, )
     return env 
   
   def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
@@ -171,7 +184,8 @@ class Args:
       i = self.positions[k]
       if not bound[i]:
         assign(i, default_fn(v) if default_fn else v)
-    assert all(bound), "Missing args: %s" % [self.arg_slots[i] for i in xrange(n) if not bound[i]]
+    missing_args = [self.arg_slots[i] for i in xrange(n) if not bound[i]]
+    assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra  
 
   

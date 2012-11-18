@@ -30,6 +30,7 @@ def untyped_wrapper(adverb_class,
   """
   axis = syntax_helpers.wrap_if_constant(axis)
   key = adverb_class, map_fn_name, combine_fn_name, emit_fn_name, axis
+  print "key", key
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
@@ -47,7 +48,8 @@ def untyped_wrapper(adverb_class,
     map_fn = mk_input_var(map_fn_name)
     combine_fn = mk_input_var(combine_fn_name)
     emit_fn = mk_input_var(emit_fn_name)
-    
+    print map_fn_name, combine_fn_name, emit_fn_name 
+    print map_fn, combine_fn, emit_fn 
     data_args = map(mk_input_var, data_names)
     if varargs_name:
       varargs_name = names.refresh(varargs_name)
@@ -65,14 +67,16 @@ def untyped_wrapper(adverb_class,
     add_fn_arg('fn', map_fn)
     add_fn_arg('combine', combine_fn)
     add_fn_arg('emit', emit_fn)
+    print adverb_args 
    
-    adverb = adverb_class(*adverb_args)
+    adverb = adverb_class(**adverb_args)
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
     fn_args_obj = Args(positional = positional_arg_names, varargs = varargs_name)
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef
+    print "Created wrapper", fundef 
     return fundef
 
 

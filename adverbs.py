@@ -32,7 +32,7 @@ class Accumulative(Adverb):
   """
   _members = ['combine', 'init']
   def __repr__(self):
-    args_str = ", ".join(self.args)
+    args_str = ", ".join([str(x) for x in self.args])
     return "%s(axis = %s, map_fn = %s, combine = %s, init = %s, %s)" % \
       (self.node_type(), self.axis, self.fn, self.combine, self.init, args_str)
   
@@ -41,14 +41,14 @@ class Accumulative(Adverb):
     # assert self.combine is not None
     pass
 
-class Reduce(Adverb):
+class Reduce(Accumulative):
   pass
 
 class Scan(Accumulative):
   _members = ['emit']
   
   def __repr__(self):
-    args_str = ", ".join(self.args)
+    args_str = ", ".join([str(x) for x in self.args])
     return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)" % \
       (self.node_type(), self.axis, self.fn, self.combine, self.emit, 
        self.init, args_str)

@@ -187,7 +187,11 @@ class Fn(Node):
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
 
   def __str__(self):
+
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
+  
+  def __repr__(self):
+    return str(self)
   def node_init(self):
 
     assert isinstance(self.name, str), \

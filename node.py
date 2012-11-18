@@ -16,7 +16,6 @@ class Node(object):
     
     m = []
     for c in klass.mro():
-      
       curr_members = getattr(c, '_members', []) 
       for name in curr_members:
         if name not in m:
