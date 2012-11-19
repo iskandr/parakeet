@@ -225,6 +225,7 @@ def lower_rank(t, r):
     assert t.rank >= r
     return make_array_type(t.elt_type, t.rank - r)
 
+#TODO: Doesn't handle tuples
 def increase_rank(t, r):
   if isinstance(t, core_types.ScalarT):
     return make_array_type(t, r)

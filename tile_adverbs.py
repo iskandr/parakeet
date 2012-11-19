@@ -1,8 +1,12 @@
 import adverb_helpers
+import adverbs
+import args
 import array_type
+import names
 import syntax
 import syntax_helpers
 import tuple_type
+import type_inference
 
 from core_types import Int32, Int64
 from lower_adverbs import LowerAdverbs
@@ -18,11 +22,13 @@ def free_vars_list(expr_list):
 
 def free_vars(expr):
   if isinstance(expr, syntax.Var):
-    return set([expr.name])
+    return set([expr])
   elif isinstance(expr, (syntax.PrimCall,syntax.Call,syntax.Invoke)):
     return free_vars_list(expr.args)
   elif isinstance(expr, syntax.Index):
     return free_vars(expr.value).union(free_vars(expr.index))
+  elif isinstance(expr, syntax.Tuple):
+    return free_vars_list(expr.elts)
   else:
     assert isinstance(expr, syntax.Const), ("%s is not a Const" % expr)
     return set()
@@ -33,11 +39,137 @@ class TileAdverbs(Transform):
     self.adverbs_visited = adverbs_visited
     self.expansions = expansions
 
-  def transform_Assign(self, stmt):
-    fv = free_vars(stmt.rhs)
-    exps = list(set([self.expansions[x] for x in fv]))
-    exps.sort()
+  def gen_unpack_tree(self, adverb_tree, exps, v_names, block):
+    exps_left = {}
+    for arg in v_names:
+      exps_left[arg] = len(self.expansions[arg])
 
+    def make_type_env(names):
+      new_type_env = {}
+      for name in names:
+        new_type_env[name] = array_type.increase_rank(self.fn.type_env[name],
+                                                      exps_left[name])
+      return new_type_env
+
+    def order_args(depth):
+      cur_depth_args = []
+      other_args = []
+      for arg in v_names:
+        arg_exps = self.expansions[arg]
+        if depth in arg_exps:
+          cur_depth_args.append(arg)
+          exps_left[arg] -= 1
+        else:
+          other_args.append(arg)
+      return (cur_depth_args, other_args)
+
+    def gen_unpack_fn(depth_idx, arg_order):
+      if depth_idx > len(exps):
+        # Create type env for innermost fn
+        inner_arg_types = [self.fn.type_env[name] for name in arg_order]
+        inner_type_env = dict(*zip(arg_order, inner_arg_types))
+
+        # For each stmt in body, add its lhs free vars to the type env
+        return_t = [] # <- Need to make this a dummy type?
+        for s in block:
+          if isinstance(s, syntax.Assign):
+            lhs_vars = free_vars(s.lhs)
+            lhs_names = [var.name for var in lhs_vars]
+            lhs_types = [self.fn.type_env[name] for name in lhs_names]
+            for name, t in zip(lhs_names, lhs_types):
+              inner_type_env[name] = t
+          elif isinstance(s, syntax.Return):
+            return_t = s.rhs.type # <- Need to look this up in some type env
+        inner_args = args.Args(position=arg_order)
+        return syntax.TypedFn(name=names.fresh("expanded_assign"),
+                              args=inner_args,
+                              body=block,
+                              input_types=inner_arg_types,
+                              return_type=return_t,
+                              type_env=inner_type_env)
+      else:
+        depth = exps[depth_idx]
+        new_type_env = make_type_env(arg_order)
+        (cur_depth_args, other_args) = order_args(depth)
+        new_arg_order = other_args + cur_depth_args
+        nested_fn = gen_unpack_fn(depth_idx+1, new_arg_order)
+        closure_args = [syntax.Var(name, type=new_type_env[name])
+                        for name in other_args]
+        closure = syntax.Closure(nested_fn.name, closure_args)
+        direct_args = [syntax.Var(name, type=new_type_env[name])
+                       for name in cur_depth_args]
+        axis = 0 # When unpacking a non-adverb assignment, all axes are 0
+        new_adverb = adverb_tree[depth_idx](closure, direct_args, axis)
+        body = [syntax.Return(new_adverb)]
+        outer_args = args.Args(position=direct_args)
+        outer_arg_types = [new_type_env[name] for name in outer_args]
+        return_t = type_inference.infer_map_type(closure.return_type,
+                                                 outer_arg_types,
+                                                 axis)
+        return syntax.TypedFn(name=names.fresh("expanded_assign"),
+                              args=outer_args,
+                              body=body,
+                              input_types=outer_arg_types,
+                              return_type=return_t,
+                              type_env=new_type_env)
+
+    (cur_depth_args, other_args) = order_args(exps[0])
+    return (cur_depth_args, gen_unpack_fn(0, other_args + cur_depth_args))
+
+  def get_names_and_exps(self, vs):
+    v_names = [v.name for v in vs]
+    exps = list(set([self.expansions[name] for name in v_names]))
+    exps.sort()
+    return (v_names, exps)
+
+  def transform_Assign(self, stmt):
+    # Do nothing unless we're inside a tree of adverbs being tiled
+    if len(self.adverbs_visited) < 1:
+      return stmt
+
+    if isinstance(stmt.rhs, adverbs.Adverb):
+      new_rhs = self.transform_expr(stmt.rhs)
+      return syntax.Assign(stmt.lhs, new_rhs)
+    else:
+      fv = free_vars(stmt.rhs)
+      (fv_names, exps) = self.get_names_and_exps(fv)
+      map_tree = [adverbs.Map for _ in exps]
+      inner_body = [stmt, syntax.Return(stmt.lhs)]
+      cur_depth_args, unpack_fn = \
+          self.gen_unpack_tree(map_tree, exps, fv_names, inner_body)
+      new_rhs = syntax.Invoke(unpack_fn, cur_depth_args)
+      return syntax.Assign(stmt.lhs, new_rhs)
+
+  def transform_Return(self, stmt):
+    if isinstance(stmt.rhs, adverbs.Adverb):
+      new_rhs = self.transform_expr(stmt.rhs)
+      return syntax.Return(stmt.lhs, new_rhs)
+
+    return stmt
+
+  def transform_Map(self, expr):
+    # TODO: Have to handle naming collisions in the expansions dict
+    depth = len(self.adverbs_visited)
+    for fn_arg, map_arg in zip(expr.fn.args, expr.args):
+      self.expansions[fn_arg] = self.expansions[map_arg] + [depth]
+    self.adverbs_visited += [adverbs.Map]
+    # Depends on inlining for this to work
+    has_adverbs = False
+    new_fn = syntax.TypedFn
+    for stmt in expr.fn.body:
+      if isinstance(stmt.rhs, adverbs.Adverb):
+        has_adverbs = True
+        break
+    if has_adverbs:
+      new_body = self.transform_block(expr.fn.body)
+      # What should the type_env for this be? Should I transform_Fn instead?
+      new_fn = syntax.TypedFn()
+    else:
+      fv_names, exps = self.get_names_and_exps(expr.fn.args)
+      new_body =
+    axis = [len(self.expansions[arg]) + a - 1
+            for arg, a in zip(expr.args, expr.axis)]
+    return adverbs.TiledMap(new_fn, expr.args, axis)
 
 class LowerTiledAdverbs(LowerAdverbs):
   def __init__(self, fn):

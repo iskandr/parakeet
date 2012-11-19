@@ -125,6 +125,7 @@ def annotate_expr(expr, tenv, var_map):
       max_rank = adverb_helpers.max_rank(arg_types)
       result_t = array_type.increase_rank(scalar_result_type, max_rank)
       return adverbs.Map(prim_closure, args, type = result_t)
+
   def expr_Index():
     value = annotate_child(expr.value)
     index = annotate_child(expr.index)
@@ -369,7 +370,6 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     return_type = return_type,
     type_env = tenv)
 
-
 from insert_coercions import insert_coercions
 
 def specialize(untyped, arg_types):
@@ -404,7 +404,6 @@ def infer_return_type(untyped, arg_types):
   typed = specialize(untyped, arg_types)
   return typed.return_type
 
-
 def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
   if init is None:
     #
@@ -431,8 +430,6 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
   else:
     raise RuntimeError("Type inference not implemented for complex reductions")
 
-
-
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)
@@ -457,4 +454,3 @@ def infer_allpairs_type(closure_t, xtype, ytype, axis):
     nested_types = array_type.lower_ranks(arg_types, 1)
   nested_result_type = invoke_result_type(closure_t, nested_types)
   return array_type.increase_rank(nested_result_type, n_outer_axes)
-
