@@ -7,8 +7,6 @@ from common import dispatch
 from core_types import ScalarT, StructT
 import types 
 import syntax_helpers
-from args import match 
-import adverb_helpers
 
 class ReturnValue(Exception):
   def __init__(self, value):

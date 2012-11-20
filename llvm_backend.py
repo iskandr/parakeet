@@ -4,12 +4,10 @@ from llvm.core import Builder
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Bool, Int32, Int64, PtrT
 
-from closure_type import ClosureT
 import prims
 import syntax
 import syntax_helpers
 from common import dispatch
-from function_registry import find_specialization
 
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
@@ -45,6 +43,7 @@ class CompilationEnv:
     return builder
 
   def _init_vars(self, fundef, builder):
+    print "init compilation", fundef 
     """
     Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.

@@ -12,6 +12,8 @@ def call_add1(x):
 
 def test_add1():
   expect_type(add1, [Int32], Int64)
+  expect_type(add1, [Int8], Int64)
+  expect_type(add1, [UInt8], Int64)
   expect_type(add1, [Bool], Int64)
   expect_type(add1, [Int64], Int64)
   expect_type(add1, [Float32], Float64)

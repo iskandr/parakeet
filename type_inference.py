@@ -81,6 +81,20 @@ def annotate_expr(expr, tenv, var_map):
   def annotate_children(child_exprs):
     return [annotate_expr(e, tenv, var_map) for e in child_exprs]
 
+  def annotate_args(arg_exprs):
+    """
+    Collect argument types, splicing in the contents of Unpack expressions 
+    """
+    new_args = []
+    for untyped_expr in arg_exprs:
+      if isinstance(untyped_expr, untyped_ast.Unpack):
+        typed_tuple = annotate_child(untyped_expr.value)
+        for (i, elt_t) in enumerate(typed_tuple.type.elt_types):
+          new_args.append(typed_ast.TupleProj(typed_tuple, i, type = elt_t))
+      else:
+        new_args.append(annotate_child(untyped_expr))
+    return new_args
+        
   def expr_Closure():
     new_args = annotate_children(expr.args)
     t = closure_type.ClosureT(expr.fn, get_types(new_args))
@@ -88,7 +102,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_Invoke():
     closure = annotate_child(expr.closure)
-    args = annotate_children(expr.args)
+    args = annotate_args(expr.args)
     result_type = invoke_result_type(closure.type, get_types(args))
     return typed_ast.Invoke(closure, args, type = result_type)
 
@@ -99,7 +113,7 @@ def annotate_expr(expr, tenv, var_map):
     return typed_ast.Attribute(value, expr.name, type = result_type)
 
   def expr_PrimCall():
-    args = annotate_children(expr.args)
+    args = annotate_args(expr.args)
     arg_types = get_types(args)
     def get_elt_type(t):
       if isinstance(t, array_type.ArrayT):
@@ -140,7 +154,7 @@ def annotate_expr(expr, tenv, var_map):
       return typed_ast.Index(value, index, type = result_type)
 
   def expr_Array():
-    new_elts = annotate_children(expr.elts)
+    new_elts = annotate_args(expr.elts)
     elt_types = get_types(new_elts)
     common_t = core_types.combine_type_list(elt_types)
     array_t = array_type.increase_rank(common_t, 1)
@@ -172,7 +186,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_Map():
     closure = annotate_child(expr.fn)
-    new_args = annotate_children(expr.args)
+    new_args = annotate_args(expr.args)
     axis = unwrap_constant(expr.axis)
     arg_types = get_types(new_args)
     result_type = infer_map_type(closure.type, arg_types, axis)
@@ -182,7 +196,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_Reduce():
     closure = annotate_child(expr.fn)
-    new_args = annotate_children(expr.args)
+    new_args = annotate_args(expr.args)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     result_type = infer_reduce_type(closure.type, arg_types, axis, None, None)
@@ -195,7 +209,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_AllPairs():
     closure = annotate_child(expr.fn)
-    new_args = annotate_children(expr.args)
+    new_args = annotate_args (expr.args)
     arg_types = get_types(new_args)
     assert len(arg_types) == 2
     axis = unwrap_constant(expr.axis)
@@ -339,16 +353,17 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   print "Inferring for %s:\n pos = %s, kwds = %s" % (untyped_fn, positional_types, keyword_types)
   
   var_map = VarMap()
+  
   typed_args = untyped_fn.args.transform(var_map.rename)
 
   tenv = typed_args.bind(positional_types, keyword_types,
                          default_fn = type_conv.typeof,
                          varargs_fn = tuple_type.make_tuple_type)
-
+  
   input_types = [tenv[arg_name] for arg_name in typed_args.arg_slots]
-  if typed_args.varargs:
-    varargs_tuple_t = tenv[typed_args.varargs]
-    input_types += varargs_tuple_t.elt_types
+  #if typed_args.varargs:
+  #  varargs_tuple_t = tenv[typed_args.varargs]
+  #  input_types += varargs_tuple_t.elt_types
 
   # keep track of the return
   tenv['$return'] = core_types.Unknown
@@ -362,6 +377,12 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
 
+  print "typed_args", typed_args 
+  print "tenv", tenv 
+  print "typed_args.arg_slots", typed_args.arg_slots 
+  print "input_types", input_types 
+  
+   
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,

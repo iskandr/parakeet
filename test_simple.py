@@ -112,7 +112,17 @@ def nested_mult(x,y):
 def test_nested_mult():
   expect(nested_mult, [10, 11], 110) 
 
-  
+def varargs_return(*x):
+  return x 
+
+def test_varargs_return():
+  expect(varargs_return, [1,2], (1,2))  
+
+def varargs_add(*x):
+  return x[0] + x[1]
+
+def test_varargs_add():
+  expect(varargs_add, [1,2], 3)
 
 if __name__ == '__main__':
   run_local_tests()

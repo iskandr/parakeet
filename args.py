@@ -115,7 +115,14 @@ class Args:
     self.defaults = defaults
     self.varargs = varargs 
      
-    self.arg_slots = list(self.nonlocals) + list(positional) + defaults.keys()
+    arg_slots = [name(x) for x in self.nonlocals]
+    arg_slots += [name(x) for x in positional]
+    arg_slots += [name(x) for x in defaults.keys()]
+    if varargs:
+      arg_slots.append(name(varargs))
+    print arg_slots 
+    self.arg_slots = arg_slots 
+      
     self.positions = {}
     for (i, p) in enumerate(self.arg_slots):
       self.positions[p] = i
