@@ -118,9 +118,9 @@ class Args:
     arg_slots = [name(x) for x in self.nonlocals]
     arg_slots += [name(x) for x in positional]
     arg_slots += [name(x) for x in defaults.keys()]
-    if varargs:
-      arg_slots.append(name(varargs))
-    print arg_slots 
+    #if varargs:
+    #  arg_slots.append(name(varargs))
+
     self.arg_slots = arg_slots 
       
     self.positions = {}
@@ -156,6 +156,7 @@ class Args:
     values, extra = self.linearize_values(actuals, actual_kwds, default_fn)
     for (formal, actual) in zip(self.arg_slots, values):
       match(formal, actual, env)
+
     if self.varargs:
       env[self.varargs] = varargs_fn(extra)
     else:
@@ -199,7 +200,10 @@ class Args:
   def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
     nonlocals = transform_list(self.nonlocals, name_fn, extract_name, tuple_fn)
     positional = transform_list(self.positional, name_fn,  extract_name, tuple_fn)
+    
     varargs = name_fn(self.varargs) if self.varargs else None 
+    print "old varargs", self.varargs
+    print "new varargs", varargs
     defaults = OrderedDict()
     for (k,v) in self.defaults.iteritems():
       old_key = name(k) if extract_name else k

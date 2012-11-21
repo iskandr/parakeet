@@ -360,7 +360,13 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
                          default_fn = type_conv.typeof,
                          varargs_fn = tuple_type.make_tuple_type)
   
-  input_types = [tenv[arg_name] for arg_name in typed_args.arg_slots]
+  arg_names = typed_args.arg_slots 
+  if typed_args.varargs:
+    arg_names.append(typed_args.varargs)
+    
+  input_types = [tenv[arg_name] for arg_name in arg_names]
+  
+
   #if typed_args.varargs:
   #  varargs_tuple_t = tenv[typed_args.varargs]
   #  input_types += varargs_tuple_t.elt_types
@@ -386,7 +392,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
-    args = typed_args,
+    args = arg_names,
     input_types = input_types,
     return_type = return_type,
     type_env = tenv)

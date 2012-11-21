@@ -122,7 +122,16 @@ def varargs_add(*x):
   return x[0] + x[1]
 
 def test_varargs_add():
-  expect(varargs_add, [1,2], 3)
+  expect(varargs_add, [(1,2)], 3)
+
+def call_varargs_add(x,y):
+  local_tuple = (x,y)
+  return varargs_add(*local_tuple)
+
+def test_call_varargs_add():
+  expect(call_varargs_add, [1,2], 3)
+  expect(call_varargs_add, [True,2.0], 3.0)
+
 
 if __name__ == '__main__':
   run_local_tests()

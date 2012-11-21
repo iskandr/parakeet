@@ -45,7 +45,6 @@ def translate_positional_args(args):
   return map(translate_positional, args)
 
 def translate_args(args):
-  assert not args.vararg
   assert not args.kwarg
 
   positional = translate_positional_args(args.args)
@@ -53,7 +52,8 @@ def translate_args(args):
   for (k,v) in args.defaults:
     assert isinstance(k, ast.Name)
     defaults[k] = translate_default_arg_value(v)
-  return Args(positional, defaults)
+  print "VARARG", args.vararg 
+  return Args(positional, defaults, varargs = args.vararg)
 
 class AST_Translator(ast.NodeVisitor):
 
@@ -195,9 +195,13 @@ class AST_Translator(ast.NodeVisitor):
     fn, args, kwargs, starargs = \
       expr.func, expr.args, expr.kwargs, expr.starargs
     assert kwargs is None, "Dictionary of keyword args not supported"
-    assert starargs is None, "List of varargs not supported"
+    
     fn_val = self.visit(fn)
     arg_vals = self.visit_list(args)
+    if starargs:
+      print starargs
+      starargs_expr = self.visit(starargs)
+      arg_vals.append(syntax.Unpack(starargs_expr))
     return syntax.Invoke(fn_val, arg_vals)
 
   def visit_List(self, expr):
@@ -318,10 +322,12 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 
   nonlocal_ssa_args = ref_names + localized_outer_names
   full_args = Args(ssa_args.positional, ssa_args.defaults,
-                   nonlocals = nonlocal_ssa_args)
+                   nonlocals = nonlocal_ssa_args, 
+                   varargs = ssa_args.varargs)
 
   fundef = syntax.Fn(ssa_fn_name, full_args, body,  refs, original_outer_names)
   untyped_functions[fundef.name]  = fundef
+  print "TRANSLATED", fundef 
   return fundef
 
 def translate_function_source(source, globals_dict, closure_vars = [],

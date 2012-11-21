@@ -493,10 +493,9 @@ class ShapeInference(SyntaxVisitor):
     
   def visit_fn(self, fn):
     self._clear()
-    arg_names = fn.args.arg_slots
-    arg_types = [fn.type_env[name] for name in arg_names]
+    arg_types = [fn.type_env[name] for name in fn.args]
     input_values = InputConverter().values_from_types(arg_types)
-    for n,v in zip(arg_names, input_values):
+    for n,v in zip(fn.args, input_values):
       self.value_env[n] = v 
     self.visit_block(fn.body)
     return self.value_env["$return"] 

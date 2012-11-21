@@ -7,6 +7,7 @@ from common import dispatch
 from core_types import ScalarT, StructT
 import types 
 import syntax_helpers
+from args import match_list
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -57,7 +58,13 @@ def ravel_list(xs):
   return [np.ravel(x) if isinstance(x, np.ndarray) else x for x in xs]  
 
 def eval_fn(fn, actuals):
-  env = fn.args.bind(actuals)
+  if isinstance(fn.args, (list, tuple)):
+    # typed functions just have a list of argument names
+    env = match_list(fn.args, actuals)
+  else:
+    # untyped functions have a more complicated args object
+    # which deals with named args, variable arity, etc.. 
+    env = fn.args.bind(actuals)
     
   def eval_expr(expr): 
     assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    

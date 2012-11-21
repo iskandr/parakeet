@@ -272,10 +272,8 @@ class TypedFn(Node):
   _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
 
   def __repr__(self):
-    args_str = ', '.join(["%s : %s" % (slot, self.type_env[slot])
-                          for slot in self.args.arg_slots])
 
-    return "function %s(%s):%s" % (self.name, args_str, block_to_str(self.body))
+    return "function %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
 
   def __str__(self):
     return repr(self)

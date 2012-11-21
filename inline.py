@@ -59,12 +59,10 @@ class Inliner(transform.Transform):
       self.type_env[new_name] = t
       
     old_formals = fundef.args
-    new_formals = old_formals.transform(
-      name_fn = lambda k: rename_dict[k], extract_name = True)
-    arg_slots = map(self.wrap_formal, new_formals.arg_slots)
+    new_formal_names = [rename_dict[x] for x in old_formals]
     
-    for (formal, actual) in zip(arg_slots, args):
-      self.assign(formal, actual)
+    for (arg_name, actual) in zip(new_formal_names, args):
+      self.assign(self.wrap_formal(arg_name), actual)
     renamed_body = subst_list(fundef.body, rename_dict)
     result_var = self.fresh_var(fundef.return_type, "result")
     inlined_body = replace_returns(renamed_body, result_var)
