@@ -141,7 +141,7 @@ class Transform(object):
         indices.append(syntax_helpers.wrap_if_constant(idx))
       else:
         indices.append(syntax_helpers.none)
-    
+
     index_tuple = self.tuple(indices, "indices")
     result_t = arr.type.index_type(index_tuple.type)
     idx_expr = syntax.Index(arr, index_tuple, type = result_t)
@@ -196,7 +196,6 @@ class Transform(object):
     return self.cast(syntax_helpers.wrap_if_constant(c), x.type.combine(y.type))
 
   def add(self, x, y, name = None):
-
     if syntax_helpers.is_zero(x):
       return self.pick_second(x,y)
     elif syntax_helpers.is_zero(y):
