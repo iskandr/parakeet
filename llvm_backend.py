@@ -48,11 +48,11 @@ class CompilationEnv:
     Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.
    """
-    n_expected = len(fundef.args)
+    n_expected = len(fundef.arg_names)
     n_compiled = len(self.llvm_fn.args)
     assert n_compiled == n_expected, \
       "Expected %d args (%s) but compiled code had %d args (%s)" % \
-      (n_expected, fundef.args, n_compiled, self.llvm_fn.args)
+      (n_expected, fundef.arg_names, n_compiled, self.llvm_fn.args)
 
     for (name, t) in fundef.type_env.iteritems():
       if not name.startswith("$"):
@@ -60,7 +60,7 @@ class CompilationEnv:
         stack_val = builder.alloca(llvm_t, name)
         self.vars[name] = stack_val
 
-    for llvm_arg, name in zip(self.llvm_fn.args, fundef.args):
+    for llvm_arg, name in zip(self.llvm_fn.args, fundef.arg_names):
       self.initialized.add(name)
       llvm_arg.name = name
       builder.store(llvm_arg, self.vars[name])

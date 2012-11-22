@@ -58,13 +58,13 @@ class Inliner(transform.Transform):
       new_name = names.refresh(name)
       rename_dict[name] = new_name
       self.type_env[new_name] = t
-      
-    n_expected = len(fundef.args)
+    arg_names = fundef.arg_names 
+    n_expected = len(arg_names)
     n_given = len(args)
-    assert len(fundef.args) == len(args), \
+    assert n_expected ==  n_given, \
       "Function to be inlined expects %d args but given %d" % \
       (n_expected, n_given)
-    new_formal_names = [rename_dict[x] for x in fundef.args]
+    new_formal_names = [rename_dict[x] for x in arg_names]
     
     for (arg_name, actual) in zip(new_formal_names, args):
       self.assign(self.wrap_formal(arg_name), actual)

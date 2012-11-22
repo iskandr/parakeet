@@ -122,7 +122,7 @@ def varargs_add(*x):
   return x[0] + x[1]
 
 def test_varargs_add():
-  expect(varargs_add, [(1,2)], 3)
+  expect(varargs_add, [1,2], 3)
 
 def call_varargs_add(x,y):
   local_tuple = (x,y)

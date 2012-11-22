@@ -63,7 +63,7 @@ def each_conditional_div(x,y):
   return each(conditional_div, x, y)
 
 def test_conditional_div():
-    expect_allpairs(each_conditional_div, python_conditional_div, vecs)
+    expect_allpairs(each_conditional_div, python_conditional_div, [ints_1d, floats_1d])
 
 if __name__ == '__main__':
   run_local_tests()

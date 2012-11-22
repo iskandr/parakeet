@@ -269,11 +269,18 @@ class TypedFn(Node):
   """The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
   """
-  _members = ['name', 'args', 'body', 'input_types', 'return_type', 'type_env']
+  _members = ['name', 
+              'arg_names', 
+              #'num_varargs',  
+              'body', 
+              'input_types', 
+              'return_type', 
+              'type_env']
 
   def __repr__(self):
 
-    return "function %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
+    return "function %s(%s):%s" % \
+      (self.name, self.arg_names, block_to_str(self.body))
 
   def __str__(self):
     return repr(self)

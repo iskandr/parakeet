@@ -364,21 +364,37 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
                          default_fn = type_conv.typeof,
                          varargs_fn = tuple_type.make_tuple_type)
   
-  arg_names = typed_args.arg_slots 
+    # keep track of the return
+  tenv['$return'] = core_types.Unknown
+  print "tenv", tenv 
+  body = annotate_block(untyped_fn.body, tenv, var_map)
   
-  if typed_args.varargs:
-    arg_names.append(typed_args.varargs)
-    
+  arg_names = typed_args.arg_slots 
   input_types = [tenv[arg_name] for arg_name in arg_names]
   
-  # keep track of the return
-  tenv['$return'] = core_types.Unknown
+  varargs_name = typed_args.varargs
+  # varargs are all passed individually and then packaged up 
+  # into a tuple on the first line of the function
+  if typed_args.varargs:
+    varargs_t = tenv[varargs_name]
+    assert isinstance(varargs_t, tuple_type.TupleT), \
+      "Unexpected varargs type %s" % varargs_t
+    extra_arg_vars = []
+    for (i, elt_t) in enumerate(varargs_t.elt_types):
+      arg_name = "%s_elt%d" % (varargs_name, i)
+      tenv[arg_name] = elt_t
+      input_types.append(elt_t)
+      arg_var = typed_ast.Var(name = arg_name, type = elt_t)    
+      arg_names.append(arg_name)
+      extra_arg_vars.append(arg_var)
+    tuple_lhs = typed_ast.Var(name = varargs_name, type = varargs_t)
+    tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = varargs_t)
+    tuple_assign = typed_ast.Assign(tuple_lhs, tuple_rhs)
+    body = [tuple_assign] + body
 
-  body = annotate_block(untyped_fn.body, tenv, var_map)
   return_type = tenv["$return"]
   # if nothing ever gets returned, then set the return type to None
   if isinstance(return_type,  core_types.UnknownT):
-
     body.append(typed_ast.Return(syntax_helpers.none))
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
@@ -388,11 +404,13 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   print "typed_args.arg_slots", typed_args.arg_slots 
   print "input_types", input_types 
   
-   
+  # num_varargs = len(input_types[-1].elt_types) if typed_args.varargs else 0
+  
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
-    args = arg_names,
+    arg_names = arg_names,
+    # num_varargs = num_varargs, 
     input_types = input_types,
     return_type = return_type,
     type_env = tenv)

@@ -8,6 +8,10 @@ from core_types import ScalarT, StructT
 import types 
 import syntax_helpers
 from args import match_list
+import adverb_semantics 
+
+adverb_eval = adverb_semantics.AdverbSemantics()
+
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -18,6 +22,9 @@ class ClosureVal:
   def __init__(self, fn, fixed_args):
     self.fn = fn 
     self.fixed_args = fixed_args
+    
+  def __call__(self, *args):
+    return call(self, list(args))
  
  
 def call(fn, args):
@@ -58,9 +65,8 @@ def ravel_list(xs):
   return [np.ravel(x) if isinstance(x, np.ndarray) else x for x in xs]  
 
 def eval_fn(fn, actuals):
-  if isinstance(fn.args, (list, tuple)):
-    # typed functions just have a list of argument names
-    env = match_list(fn.args, actuals)
+  if hasattr(fn, 'arg_names'):
+    env = match_list(fn.arg_names, actuals)
   else:
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 
@@ -150,7 +156,7 @@ def eval_fn(fn, actuals):
    
     def adverb_prelude():
       fn = eval_expr(expr.fn)
-      args = map(eval_expr, expr.args)
+      args = eval_args(expr.args)
       axis = syntax_helpers.unwrap_constant(expr.axis)
       if axis is None:
         args = ravel_list(args)
@@ -158,15 +164,8 @@ def eval_fn(fn, actuals):
       return fn, args, axis
      
     def expr_Map():
-      fn, args, axis = adverb_prelude()
-      shape = max_shape(args)
-      n = shape[axis]
-      result = [None] * n 
+      return adverb_eval.eval_map(*adverb_prelude())
       
-      for i in xrange(n):
-        result[i]  = call(fn, nested_args(args, axis, i))
-      return np.array(result)
-    
     def expr_AllPairs():
       fn, args, axis = adverb_prelude()
       assert len(args) == 2
