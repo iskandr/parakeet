@@ -52,20 +52,26 @@ class Inliner(transform.Transform):
       return arg 
 
   def do_inline(self, fundef, args):
+    print "fundef before", fundef 
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)
       rename_dict[name] = new_name
       self.type_env[new_name] = t
       
-    old_formals = fundef.args
-    new_formal_names = [rename_dict[x] for x in old_formals]
+    n_expected = len(fundef.args)
+    n_given = len(args)
+    assert len(fundef.args) == len(args), \
+      "Function to be inlined expects %d args but given %d" % \
+      (n_expected, n_given)
+    new_formal_names = [rename_dict[x] for x in fundef.args]
     
     for (arg_name, actual) in zip(new_formal_names, args):
       self.assign(self.wrap_formal(arg_name), actual)
     renamed_body = subst_list(fundef.body, rename_dict)
     result_var = self.fresh_var(fundef.return_type, "result")
     inlined_body = replace_returns(renamed_body, result_var)
+    print "inlined_body", inlined_body
     self.blocks.current().extend(inlined_body)
     return result_var
   
@@ -75,12 +81,16 @@ class Inliner(transform.Transform):
       return self.do_inline(target, expr.args)
     else:
       return expr
-    
+  """
+  Instead of trying to inline invocations, 
+  I should instead rely on Simplification 
+  to get rid of all invokes 
+  ---  
   def transform_Invoke(self, expr):
     closure = self.transform_expr(expr.closure)
     args = self.transform_expr_list(expr.args)
     closure_t = closure.type 
-    n_closure_args = len(closure_t.args)
+    n_closure_args = len(closure_t.arg_types)
     closure_args = \
       [self.closure_elt(closure, i) for i in xrange(n_closure_args)]
     all_args = closure_args + args 
@@ -92,9 +102,9 @@ class Inliner(transform.Transform):
         print "CAN'T INLINE", self.fn.name
     print "DONE WITHOUT INLINE", self.fn.name 
     return expr 
-  
+  """
   def pre_apply(self, old_fn):
-    # print "Before inlining", old_fn 
+    print "Before inlining", old_fn 
     return old_fn 
   
   def post_apply(self, new_fn):

@@ -147,6 +147,10 @@ def annotate_expr(expr, tenv, var_map):
       assert isinstance(index, untyped_ast.Const)
       i = index.value
       assert isinstance(i, int)
+      elt_types = value.type.elt_types 
+      assert i < len(elt_types), \
+        "Can't get element %d of length %d tuple %s : %s" % \
+        (i, len(elt_types), value, value.type)
       elt_t = value.type.elt_types[i]
       return typed_ast.TupleProj(value, i, type = elt_t)
     else:
@@ -361,16 +365,12 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
                          varargs_fn = tuple_type.make_tuple_type)
   
   arg_names = typed_args.arg_slots 
+  
   if typed_args.varargs:
     arg_names.append(typed_args.varargs)
     
   input_types = [tenv[arg_name] for arg_name in arg_names]
   
-
-  #if typed_args.varargs:
-  #  varargs_tuple_t = tenv[typed_args.varargs]
-  #  input_types += varargs_tuple_t.elt_types
-
   # keep track of the return
   tenv['$return'] = core_types.Unknown
 

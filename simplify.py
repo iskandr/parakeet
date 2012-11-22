@@ -6,6 +6,7 @@ import syntax
 import syntax_helpers 
 import dead_code_elim
 import closure_type
+from function_registry import lookup_untyped 
 
 # classes of expressions known to have no side effects 
 # and to be unaffected by changes in mutable state as long 
@@ -144,9 +145,18 @@ class Simplify(transform.Transform):
           [self.closure_elt(new_closure, i) for i in xrange(n_closure_args)]
       combined_args = closure_args + new_args
       arg_types = syntax_helpers.get_types(combined_args)
-      typed_fundef = type_inference.specialize(closure_t.fn, arg_types)
-      call_name = typed_fundef.name
-      return syntax.Call(call_name, combined_args, type = expr.type)
+      untyped_fundef = lookup_untyped(closure_t.fn)
+      typed_fundef = type_inference.specialize(untyped_fundef, arg_types)
+      if untyped_fundef.args.varargs:
+        min_arity = len(untyped_fundef.args.arg_slots)
+        min_args = combined_args[:min_arity]
+        extra_args = combined_args[min_arity:]
+        varargs_tuple = self.tuple(extra_args, "varargs")
+        self.live_vars.add(varargs_tuple.name)
+        full_args = min_args + [varargs_tuple]
+      else:
+        full_args = combined_args 
+      return syntax.Call(typed_fundef.name, full_args, type = expr.type)
     else:
       return syntax.Invoke(new_closure, new_args, type = expr.type)
     
@@ -218,8 +228,8 @@ class Simplify(transform.Transform):
   
   def post_apply(self, new_fn):
     
-    # print "before DCE", new_fn
-    # print "live vars", self.live_vars 
+    print "before DCE", new_fn
+    print "live vars", self.live_vars 
     new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)
     # print "after DCE", new_fn 
     return new_fn 

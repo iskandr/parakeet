@@ -65,7 +65,17 @@ def eval_fn(fn, actuals):
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 
     env = fn.args.bind(actuals)
-    
+  
+  def eval_args(exprs):
+    values = []
+    for e in exprs:
+      if isinstance(e, syntax.Unpack):
+        tuple_val = eval_expr(e.value)
+        values.extend(tuple_val)
+      else:
+        values.append(eval_expr(e))
+    return values 
+  
   def eval_expr(expr): 
     assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    
     def expr_Const():
@@ -85,13 +95,10 @@ def eval_fn(fn, actuals):
       return array[index]
         
     def expr_PrimCall():
-      arg_vals = map(eval_expr, expr.args)
-      return expr.prim.fn (*arg_vals)
+      return expr.prim.fn (*eval_args(expr.args))
     
     def expr_Call():
-      fundef = untyped_functions[expr.fn]
-      arg_vals = map(eval_expr, expr.args)
-      return eval_fn(fundef, *arg_vals) 
+      return eval_fn(untyped_functions[expr.fn], *eval_args(expr.args)) 
     
     def expr_Prim():
       return expr.value.fn
@@ -107,8 +114,7 @@ def eval_fn(fn, actuals):
       # we're dealing with runtime reprs for functions, prims, and 
       # closures which are just python Callables
       clos = eval_expr(expr.closure)
-      arg_vals = map(eval_expr, expr.args)
-      combined_arg_vals = clos.fixed_args + arg_vals
+      combined_arg_vals = clos.fixed_args + eval_args(expr.args)
       return eval_fn(clos.fn, combined_arg_vals)
       
     def expr_Closure():

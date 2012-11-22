@@ -42,7 +42,8 @@ class Transform(object):
       lhs = self.transform_lhs(lhs)
     stmt = syntax.Assign(lhs, rhs)
     if recursive and \
-       self.transform_Assign.im_func != Transform.transform_Assign.im_func:
+       self.transform_Assign.im_func != \
+       Transform.transform_Assign.im_func:
       stmt = self.transform_Assign(stmt)
     self.insert_stmt(stmt)
 

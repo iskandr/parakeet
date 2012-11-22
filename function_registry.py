@@ -3,6 +3,14 @@
 # SSA ID -> untyped function 
 untyped_functions = {}
 
+def lookup_untyped(untyped_name):
+  if isinstance(untyped_name, str):
+    return untyped_functions[untyped_name]
+  else:
+    assert hasattr(untyped_name, 'body'), \
+      'Expected a function, got %s' % untyped_name
+    return untyped_name 
+
 # SSA ID -> typed function  
 typed_functions = {}
 

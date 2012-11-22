@@ -114,13 +114,11 @@ class Args:
     self.positional = tuple(positional)
     self.defaults = defaults
     self.varargs = varargs 
-     
+    
+    # note that the varargs variable is excluded from arg_slots  
     arg_slots = [name(x) for x in self.nonlocals]
     arg_slots += [name(x) for x in positional]
     arg_slots += [name(x) for x in defaults.keys()]
-    #if varargs:
-    #  arg_slots.append(name(varargs))
-
     self.arg_slots = arg_slots 
       
     self.positions = {}

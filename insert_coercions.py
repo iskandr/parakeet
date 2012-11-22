@@ -5,6 +5,7 @@ from syntax_helpers import get_types
 import core_types
 import array_type 
 import tuple_type  
+from function_registry import typed_functions
 
 class InsertCoercions(Transform):
   def __init__(self, fn):
@@ -56,6 +57,17 @@ class InsertCoercions(Transform):
     else:
       return lhs 
   
+  #def transform_Call(self, expr):
+  #  """
+  #  Annotation never actually transformed the varargs of a call into something 
+  #  explicit, so we have to do it here
+  #  """
+  #  if isinstance(expr.fn, str):
+  #    typed_fundef = typed_functions[expr.fn]
+  #  else:
+  #    typed_fundef = expr.fn 
+  #  n_expected = len(typed_fundef.args)
+    
   def transform_PrimCall(self, expr):
       arg_types = get_types(expr.args)
       upcast_types = expr.prim.expected_input_types(arg_types)
