@@ -138,7 +138,7 @@ def annotate_expr(expr, tenv, var_map):
         adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
       result_t = typed_broadcast_fn.return_type 
-      return typed_ast.Call(typed_broadcast_fn.name, arg_types, type = result_t) 
+      return typed_ast.Call(typed_broadcast_fn.name, args, type = result_t) 
                          
   def expr_Index():
     value = annotate_child(expr.value)

@@ -376,6 +376,8 @@ class Transform(object):
       result = method(expr)
     else:
       result = self.transform_generic_expr(expr)
+    print "old expr", expr
+    print "new expr", result 
     assert result.type is not None, "Missing type for %s" % result
     return result
 

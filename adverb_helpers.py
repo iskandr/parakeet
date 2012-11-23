@@ -52,8 +52,9 @@ def nested_maps(inner_fn, depth, arg_names):
   key = inner_fn.name, depth, tuple(arg_names) 
   if key in _nested_map_cache:
     return _nested_map_cache[key]
-  arg_vars = [syntax.Var(x) for x in arg_names]
-  args_obj = args.Args(positional = arg_vars)
+  local_names = map(names.refresh, arg_names)
+  arg_vars = [syntax.Var(x) for x in local_names]
+  args_obj = args.Args(positional = local_names)
   name = names.fresh(inner_fn.name + "_broadcast%d" % depth)
   nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
   closure = syntax.Closure(nested_fn.name, [])

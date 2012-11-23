@@ -63,7 +63,8 @@ class CompilationEnv:
     for llvm_arg, name in zip(self.llvm_fn.args, fundef.arg_names):
       self.initialized.add(name)
       llvm_arg.name = name
-      builder.store(llvm_arg, self.vars[name])
+      if name in self.vars:
+        builder.store(llvm_arg, self.vars[name])
 
   def __getitem__(self, name):
     if isinstance(name, syntax.Var):
@@ -253,7 +254,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
 
-  # print "STMT ", stmt
+  print "STMT ", stmt
 
   def compile_Assign():
     rhs_t = stmt.rhs.type
