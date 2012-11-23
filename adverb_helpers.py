@@ -37,3 +37,32 @@ def num_outer_axes(arg_types, axis):
   else:
     max_arg_rank = max_rank(arg_types)
   return 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
+
+import syntax 
+import args 
+import names
+import adverbs 
+import function_registry 
+_nested_map_cache = {}
+
+def nested_maps(inner_fn, depth, arg_names):
+  if depth <= 0:
+    return inner_fn
+  
+  key = inner_fn.name, depth, tuple(arg_names) 
+  if key in _nested_map_cache:
+    return _nested_map_cache[key]
+  arg_vars = [syntax.Var(x) for x in arg_names]
+  args_obj = args.Args(positional = arg_vars)
+  name = names.fresh(inner_fn.name + "_broadcast%d" % depth)
+  nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
+  closure = syntax.Closure(nested_fn.name, [])
+  map_expr = adverbs.Map(closure, axis = 0, args = arg_vars)
+  fn = syntax.Fn(
+    name = name, 
+    args = args_obj,  
+    body = [syntax.Return(map_expr)]
+  )
+  function_registry.untyped_functions[name] = fn
+  _nested_map_cache[key] = fn
+  return fn 

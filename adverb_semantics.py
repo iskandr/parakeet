@@ -55,9 +55,9 @@ class BaseSemantics:
     return tuple(elts)
 
   def setidx(self, arr, idx, v):
-    print "arr", arr
-    print "idx", idx
-    print "value", v
+    #print "arr", arr
+    #print "idx", idx
+    #print "value", v
     arr[idx] = v
 
   def loop(self, start_idx, stop_idx, body):
