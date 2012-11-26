@@ -15,8 +15,6 @@ def next_power_2(n):
 def next_smaller_power_2(n):
   return 2**int(math.log(n, 2))
 
-
-
 class Runtime():
   def __init__(self):
     class job_t(Structure): pass
@@ -88,16 +86,13 @@ class Runtime():
 
     self.args = args
     self.tile_sizes = (dummy_tile_sizes_t * self.dop)()
-    print hex(fn)
     for i in range(self.dop):
       self.work_functions[i] = cast(fn, c_void_p)
       self.tile_sizes[i] = dummy_tile_sizes
     self.num_iters = num_iters
     self.task_size = num_iters / self.dop
-    print "Making job"
     self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
                                            self.dop, 1)
-    print "Launching job"
     self.launch_job()
     self.wait_for_job()
     self.free_job()
