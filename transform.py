@@ -474,7 +474,7 @@ class Transform(object):
       return self.post_apply(old_fn)
 
 _transform_cache = {}
-def cached_apply(T, fn, copy= False):
+def cached_apply(T, fn, copy = False):
   """
   Applies the transformation, caches the result,
   and registers the new function in the global registry
@@ -487,7 +487,7 @@ def cached_apply(T, fn, copy= False):
     _transform_cache[key] = new_fn
     return new_fn
 
-def apply_pipeline(fn, transforms, copy = False,  memoize = False):
+def apply_pipeline(fn, transforms, copy = False, memoize = False):
   for T in transforms:
     if memoize:
       fn = cached_apply(T, fn, copy = copy)

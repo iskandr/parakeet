@@ -182,31 +182,6 @@ class TileAdverbs(Transform):
     self.pop_exp()
     return adverbs.TiledMap(new_fn, expr.args, axis)
 
-  def transform_Reduce(self, expr):
-    # TODO: Have to handle naming collisions in the expansions dict
-    depth = len(self.adverbs_visited)
-    self.push_exp(adverbs.Reduce)
-    for fn_arg, map_arg in zip(expr.fn.args, expr.args):
-      self.expansions[fn_arg] = self.expansions[map_arg] + [depth]
-    # Depends on inlining for this to work
-    has_adverbs = False
-    new_fn = syntax.TypedFn
-    for stmt in expr.fn.body:
-      if isinstance(stmt.rhs, adverbs.Adverb):
-        has_adverbs = True
-        break
-    exps = self.get_exps(expr.fn.arg_names)
-    if has_adverbs:
-      new_body = self.transform_block(expr.fn.body)
-      new_fn = self.gen_unpack_tree([], exps, expr.fn.arg_names, new_body)
-    else:
-      new_fn = self.gen_unpack_tree(self.adverbs_visited, exps,
-                                    expr.fn.arg_names, expr.fn.body)
-    axis = [len(self.expansions[arg]) + a - 1
-            for arg, a in zip(expr.args, expr.axis)]
-    self.pop_exp()
-    return adverbs.TiledReduce(new_fn, expr.args, axis)
-
 class LowerTiledAdverbs(LowerAdverbs):
   def __init__(self, fn):
     Transform.__init__(self, fn)

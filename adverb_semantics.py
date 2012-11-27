@@ -75,7 +75,6 @@ class BaseSemantics:
   def apply(self, fn, args):
     return fn(*args)
 
-
   none = None
   null_slice = slice(None, None, None)
   def identity_function(self, x):
@@ -131,7 +130,7 @@ class AdverbSemantics(BaseSemantics):
       return self.apply_to_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
 
-  def eval_map(self, f,  values, axis):
+  def eval_map(self, f, values, axis):
     return self.eval_scan(
       map_fn = f,
       combine = self.trivial_combiner,
@@ -147,7 +146,7 @@ class AdverbSemantics(BaseSemantics):
       emit = self.identity_function,
       init = init,
       values = values,
-      axis = axis )
+      axis = axis)
     return self.index(prefixes, self.const_int(-1))
 
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
