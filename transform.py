@@ -1,20 +1,11 @@
-import array_type
-import core_types
 import function_registry
 import names
-import prims
 import syntax
-import syntax_helpers
-import tuple_type
-
-from core_types import Int32, Int64
-from nested_blocks import NestedBlocks
-from syntax_helpers import get_types, wrap_constants, wrap_if_constant, zero
+from codegen import Codegen
 
 class Transform(Codegen):
   def __init__(self, fn):
-    self.blocks = NestedBlocks()
-    self.type_env = None
+    Codegen.__init__(self)
     self.fn = fn
 
   def lookup_type(self, name):

@@ -54,6 +54,9 @@ class Codegen(object):
       self.assign(var, expr)
       return var
 
+  def int(self, x):
+    return syntax_helpers.const(x)
+  
   def zero(self, t = Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
 

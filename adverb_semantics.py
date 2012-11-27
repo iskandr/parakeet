@@ -1,86 +1,5 @@
-import numpy as np
 
-class InterpSemantics:
-  """
-  Gosh, I really wish I had OCaml functors or Haskell's type classes
-  so I could more cleanly parameterize all this code by these abstract types:
-    Fn       -- representations of functions
-                i.e. the interpreter domain might
-                have a function "lambda x: x+1" whereas
-                in the type domain this function is represented
-                by "Int -> Int"
-    Value    -- arrays, scalars, and tuples
-    DimSize  -- abstract representation of shape elements
-
-  Also, for code generation of loops we need
-    Idx          -- representation of loop indices (possibly same as DimSize?)
-    DelayedValue -- mapping from index to abstract value
-    Acc          -- object with
-  """
-
-  def size_along_axis(self, value, axis):
-    return value.shape[axis]
-
-  def rank(self, value):
-    return np.rank(value)
-
-  def accumulator(self, v):
-    return [v]
-
-  def get_acc(self, acc):
-    return acc[0]
-
-  def set_acc(self, acc, v):
-    acc[0] = v
-
-  def const_int(self, x):
-    return int(x)
-
-  def add(self, x, y):
-    return x + y
-
-  def sub(self, x, y):
-    return x - y
-
-  def array(self, size, elt):
-    return np.array([elt] * size)
-
-  def shift_array(self, arr, offset):
-    return arr[offset:]
-
-  def index(self, arr, idx):
-    return arr[idx]
-
-  def tuple(self, elts, name = None):
-    return tuple(elts)
-
-  def setidx(self, arr, idx, v):
-    arr[idx] = v
-
-  def loop(self, start_idx, stop_idx, body):
-    for i in xrange(start_idx, stop_idx):
-      body(i)
-
-  def check_equal_sizes(self, sizes):
-    assert len(sizes) > 0
-    first = sizes[0]
-    assert all(sz == first for sz in sizes[1:])
-
-  def slice_value(self, start, stop, step):
-    return slice(start, stop, step)
-
-  def invoke(self, fn, args):
-    return fn(*args)
-
-
-  none = None
-  null_slice = slice(None, None, None)
-  def identity_function(self, x):
-    return x
-  def trivial_combiner(self, x, y):
-    return y
-
-class AdverbSemantics(InterpSemantics):
+class AdverbSemantics(object):
   """
   Describe the behavior of adverbs in terms of
   lower-level value and iteration constructs.
@@ -100,7 +19,7 @@ class AdverbSemantics(InterpSemantics):
       if i == axis:
         indices.append(idx)
       else:
-        s = self.slice_value(self.none, self.none, self.const_int(1))
+        s = self.slice_value(self.none, self.none, self.int(1))
         indices.append(s)
     return self.tuple(indices)
 
@@ -112,7 +31,7 @@ class AdverbSemantics(InterpSemantics):
   def delayed_elt(self, x, axis):
     return lambda idx: self.slice_along_axis(x, axis, idx)
 
-  def adverb_prelude(self, map_fn, xs, axis):
+  def map_prelude(self, map_fn, xs, axis):
     if not isinstance(xs, (list, tuple)):
       xs = [xs]
     axis_sizes = [self.size_along_axis(x, axis)
@@ -128,48 +47,48 @@ class AdverbSemantics(InterpSemantics):
       return self.invoke_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
 
-  def eval_map(self, f,  values, axis):
-    return self.eval_scan(
-      map_fn = f,
-      combine = self.trivial_combiner,
-      emit = self.identity_function,
-      init = None,
-      values = values,
-      axis = axis)
-
-  def eval_reduce(self, map_fn, combine, init, values, axis):
-    prefixes = self.eval_scan(
-      map_fn = map_fn,
-      combine = combine,
-      emit = self.identity_function,
-      init = init,
-      values = values,
-      axis = axis )
-    return self.index(prefixes, self.const_int(-1))
-
-  def eval_scan(self, map_fn, combine, emit, init, values, axis):
-    niters, delayed_map_result = self.adverb_prelude(map_fn, values, axis)
-
+  def acc_prelude(self, init, combine, delayed_map_result):
     if init is None:
-      init = delayed_map_result(0)
+      init = delayed_map_result(self.int(0))
     else:
       # combine the provided initializer with
       # transformed first value of the data
       # in case we need to coerce up
-      init = self.invoke(combine, [init, delayed_map_result(0)])
-    start_idx = self.const_int(1)
-    first_output = self.invoke(emit, [init])
-    result = self.array(niters, first_output)
-
-    acc = self.accumulator(init)
-    emitted_elt_repr = lambda idx: self.invoke(emit, [self.get_acc(acc)])
+      init = self.invoke(combine, [init, delayed_map_result(self.int(0))])
+    return self.accumulator(init), self.int(1)
+    
+  def eval_map(self, f,  values, axis):
+    niters, delayed_map_result = self.map_prelude(f, values, axis)
+    first_output = delayed_map_result(self.int(0))
+    result = self.repeat_array(niters, first_output)
+    
     def loop_body(idx):
       output_indices = self.build_slice_indices(self.rank(result), axis, idx)
+      self.setidx(result, output_indices, delayed_map_result(idx))
+    self.loop(0, niters, loop_body)
+    return result 
 
-      return [
-        self.set_acc(acc,
-          self.invoke(combine, [self.get_acc(acc), delayed_map_result(idx)])),
-        self.setidx(result, output_indices, emitted_elt_repr(idx))
-      ]
+  def eval_reduce(self, map_fn, combine, init, values, axis):
+    niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
+    acc, start_idx = self.acc_prelude(init, combine, delayed_map_result)
+    def loop_body(idx):
+      old_acc_value = self.get_acc(acc)
+      new_acc_value = self.invoke(combine, [old_acc_value, delayed_map_result(idx)]) 
+      self.set_acc(acc, new_acc_value)
+    self.loop(start_idx, niters, loop_body)
+    return self.get_acc(acc)
+  
+  def eval_scan(self, map_fn, combine, emit, init, values, axis):
+    niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
+    acc, start_idx = self.acc_prelude(init, combine, delayed_map_result)
+    emitted_elt_repr = lambda idx: self.invoke(emit, [self.get_acc(acc)])
+    first_output = emitted_elt_repr(self.int(0))
+    result = self.repeat_array(niters, first_output)
+    
+    def loop_body(idx):
+      output_indices = self.build_slice_indices(self.rank(result), axis, idx)
+      self.set_acc(acc,
+        self.invoke(combine, [self.get_acc(acc), delayed_map_result(idx)]))
+      self.setidx(result, output_indices, emitted_elt_repr(idx))
     self.loop(start_idx, niters, loop_body)
     return result
