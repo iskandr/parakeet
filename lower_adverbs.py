@@ -30,26 +30,10 @@ class CodegenSemantics(Transform):
   def size_along_axis(self, value, axis):
     return self.shape(value, axis)
     
-  def rank(self, value):
-    return value.type.rank 
-  
-  def repeat_array(self, size, elt):
-    assert isinstance(size.type, core_types.ScalarT), \
-      "Expected scalar for size: %s" % (size,)
-    return self.alloc_array(elt.type, size)
-    
-  def shift_array(self, arr, offset):
-    assert False 
-    # return arr[offset:]
-
-  def setidx(self, arr, idx, v):
-    self.assign(self.index(arr, idx, temp=False), v)
     
   def check_equal_sizes(self, sizes):
     pass  
   
-  def slice_value(self, start, stop, step):
-    return syntax.Slice(start, stop, step)
     
   none = syntax_helpers.none
   null_slice = syntax_helpers.slice_none
@@ -63,7 +47,6 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     return self.eval_map(fn, args, axis)
     
   def transform_Reduce(self, expr):
-    
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
     init = self.transform_expr(expr.init)

@@ -33,13 +33,13 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
     return x - y
 
   def shape(self, x):
-    return x.shape 
+    return np.shape(x) 
     
   def elt_type(self, x):
     return x.dtype if hasattr(x, 'dtype') else type(x) 
   
-  def alloc_array(self, size, elt_type):
-    return np.zeros(size, dtype = elt_type)
+  def alloc_array(self, elt_type, dims):
+    return np.zeros(dims, dtype = elt_type)
 
   def shift_array(self, arr, offset):
     return arr[offset:]

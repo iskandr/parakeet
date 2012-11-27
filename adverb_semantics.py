@@ -66,7 +66,7 @@ class AdverbSemantics(object):
        
     inner_shape = self.shape(first_elt)
     result_shape = self.concat_tuples(outer_shape, inner_shape)    
-    result = self.alloc_array(result_shape, self.elt_type(first_elt))
+    result = self.alloc_array(self.elt_type(first_elt), result_shape)
 
     return result   
   

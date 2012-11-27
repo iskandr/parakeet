@@ -8,6 +8,7 @@ import syntax_helpers
 class LowerIndexing(transform.Transform):
       
   def array_slice(self, arr, indices):
+    print indices 
     data_ptr = self.attr(arr, "data") 
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
@@ -55,8 +56,9 @@ class LowerIndexing(transform.Transform):
     arr_t = arr.type
     assert isinstance(arr_t, array_type.ArrayT), "Unexpected array %s : %s" % (arr, arr.type) 
     idx = self.assign_temp(self.transform_expr(expr.index), "idx")
-    idx_t = idx.type    
-    if isinstance(idx_t, tuple_type.TupleT):
+    
+    if self.is_tuple(idx):
+      idx_t = idx.type
       n_elts = len(idx_t.elt_types)
       indices = [self.assign_temp(self.tuple_proj(idx, i), "idx_%d" % i) 
                  for i in xrange(n_elts)]
@@ -66,7 +68,7 @@ class LowerIndexing(transform.Transform):
     n_given = len(indices)
     n_required = arr_t.rank 
     if n_given < n_required:
-      extra_indices = [syntax_helpers.none] * (n_required - n_given)
+      extra_indices = [syntax_helpers.slice_none] * (n_required - n_given)
       indices.extend(extra_indices)
     
     # fast-path for the common case when we're indexing 
@@ -81,6 +83,7 @@ class LowerIndexing(transform.Transform):
         offset_elts = self.add(offset_elts, elts_i, "total_offset")
       return self.index(data_ptr, offset_elts, temp = False)
     else:   
+
       result = self.array_slice(arr, indices)
       return result
       

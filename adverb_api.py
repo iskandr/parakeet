@@ -1,19 +1,14 @@
 import adverbs
 import adverb_helpers
-import ast_conversion
 import core_types
 import ctypes
 import llvm_backend
 import numpy as np
 import syntax
-import core_types
-import type_inference
-import adverbs
-import adverb_helpers
-import adverb_registry 
+import adverb_registry
+import type_inference 
 import adverb_wrapper
 import type_conv
-import type_inference
 
 from run_function import run
 from runtime import runtime
@@ -132,7 +127,7 @@ def translate_fn(python_fn):
 import llvm_types
 from common import list_to_ctypes_array
 from llvm.ee import GenericValue
-from run_function import ctypes_to_generic_value, generic_value_to_python
+# from run_function import ctypes_to_generic_value, generic_value_to_python
 
 def par_each(fn, *args, **kwds):
   arg_types = map(type_conv.typeof, args)
