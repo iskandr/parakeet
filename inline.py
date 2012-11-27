@@ -52,7 +52,7 @@ class Inliner(transform.Transform):
       return arg 
 
   def do_inline(self, fundef, args):
-    print "fundef before", fundef 
+    # print "fundef before", fundef 
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)
@@ -71,7 +71,7 @@ class Inliner(transform.Transform):
     renamed_body = subst_list(fundef.body, rename_dict)
     result_var = self.fresh_var(fundef.return_type, "result")
     inlined_body = replace_returns(renamed_body, result_var)
-    print "inlined_body", inlined_body
+    # print "inlined_body", inlined_body
     self.blocks.current().extend(inlined_body)
     return result_var
   
@@ -80,6 +80,7 @@ class Inliner(transform.Transform):
     if can_inline(target):
       return self.do_inline(target, expr.args)
     else:
+      print "CAN'T INLINE", expr 
       return expr
   """
   Instead of trying to inline invocations, 
@@ -108,7 +109,7 @@ class Inliner(transform.Transform):
     return old_fn 
   
   def post_apply(self, new_fn):
-    # print "After inlining", new_fn
+    print "After inlining", new_fn
     return new_fn 
   
 

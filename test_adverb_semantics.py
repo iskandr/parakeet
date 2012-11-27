@@ -1,8 +1,7 @@
 import testing_helpers
 import numpy as np 
-import adverb_semantics
+from adverb_interp import adverb_evaluator as interp 
 
-interp = adverb_semantics.AdverbSemantics()
 
 vec = np.array([1,4,9,16])
 mat = np.array([vec, vec+100, vec+200])

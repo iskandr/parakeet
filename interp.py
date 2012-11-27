@@ -8,9 +8,8 @@ from core_types import ScalarT, StructT
 import types 
 import syntax_helpers
 from args import match_list
-import adverb_semantics 
 
-adverb_eval = adverb_semantics.AdverbSemantics()
+from adverb_interp import adverb_evaluator
 
 
 class ReturnValue(Exception):
@@ -153,21 +152,18 @@ def eval_fn(fn, actuals):
     
     def expr_ClosureElt():
       return eval_expr(expr.closure).fixed_args[expr.index]
-   
-    def adverb_prelude():
+
+    def expr_Map():
       fn = eval_expr(expr.fn)
       args = eval_args(expr.args)
       axis = syntax_helpers.unwrap_constant(expr.axis)
-      if axis is None:
-        args = ravel_list(args)
-        axis = 0 
-      return fn, args, axis
-     
-    def expr_Map():
-      return adverb_eval.eval_map(*adverb_prelude())
+      return adverb_evaluator.eval_map(fn, args, axis)
       
     def expr_AllPairs():
-      fn, args, axis = adverb_prelude()
+      fn = eval_expr(expr.fn)
+      args = eval_args(expr.args)
+      axis = syntax_helpers.unwrap_constant(expr.axis)
+      
       assert len(args) == 2
       [x,y] = args
       nx = x.shape[axis]
@@ -186,24 +182,21 @@ def eval_fn(fn, actuals):
       return result
     
     def expr_Reduce():
-      fn, args, axis = adverb_prelude()
+      map_fn = eval_expr(expr.fn)
+      combine_fn = eval_expr(expr.combine)
+      args = eval_args(expr.args)
+      init = eval_expr(expr.init)
+      axis = syntax_helpers.unwrap_constant(expr.axis)
+      return adverb_evaluator.eval_reduce(map_fn, combine_fn, init, args, axis)
 
-      shape = max_shape(args)
-      n = shape[axis]
-      if hasattr(expr, 'init') and expr.init:
-        acc = eval_expr(expr.init)
-        start = 0
-      else:
-        assert len(args) == 1
-        x = args[0]
-        assert n == x.shape[axis]
-        assert n >= 2
-        acc = call(fn, [nested_arg(x, axis, 0), nested_arg(x, axis, 1)])
-        start = 2
-      for i in xrange(start, n):
-        acc = call(fn, [acc, nested_arg(x, axis, i)])
-  
-      return acc   
+    def expr_Scan():
+      map_fn = eval_expr(expr.fn)
+      combine = eval_expr(expr.combine)
+      emit = eval_expr(expr.emit)
+      args = eval_args(expr.args)
+      init = eval_expr(expr.init)
+      axis = syntax_helpers.unwrap_constant(expr.axis)    
+      return adverb_evaluator.eval_scan(map_fn, combine, emit, init, args, axis)
       
     result = dispatch(expr, 'expr')
     # we don't support python function's inside parakeet, 

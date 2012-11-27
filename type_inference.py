@@ -16,9 +16,12 @@ from function_registry import untyped_functions, find_specialization, \
 from common import dispatch
 import args
 from syntax_helpers import get_type, get_types, unwrap_constant
+import prims 
 
 import adverbs
 import adverb_helpers
+import adverb_wrapper 
+
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -128,18 +131,15 @@ def annotate_expr(expr, tenv, var_map):
       result_type = expr.prim.result_type(upcast_types)
       return typed_ast.PrimCall(expr.prim, args, type = result_type)
     else:
-      scalar_arg_types = get_elt_types(arg_types)
-      upcast_types = expr.prim.expected_input_types(scalar_arg_types)
-      import prims
       prim_fn = prims.prim_wrapper(expr.prim)
-      closure_t = closure_type.make_closure_type(prim_fn, [])
-
-      scalar_result_type = invoke_result_type(closure_t, upcast_types)
-      prim_closure = typed_ast.Closure(prim_fn, [], type = closure_t)
       max_rank = adverb_helpers.max_rank(arg_types)
-      result_t = array_type.increase_rank(scalar_result_type, max_rank)
-      return adverbs.Map(prim_closure, args, type = result_t)
-
+      arg_names = adverb_wrapper.gen_data_arg_names(len(arg_types))
+      untyped_broadcast_fn = \
+        adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
+      typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
+      result_t = typed_broadcast_fn.return_type 
+      return typed_ast.Call(typed_broadcast_fn.name, args, type = result_t) 
+                         
   def expr_Index():
     value = annotate_child(expr.value)
     index = annotate_child(expr.index)

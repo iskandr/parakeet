@@ -1,3 +1,4 @@
+from inline import Inliner
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
@@ -9,8 +10,11 @@ tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
 
-pipeline = [
-  LowerAdverbs, LowerIndexing,
+no_tiling = [LowerAdverbs]
+
+lowering_pipeline = [
+  Simplify,
+  LowerIndexing,
   Simplify,
   LowerStructs,
   Simplify,
@@ -24,8 +28,10 @@ def lower(fundef, tile=False):
   else:
     if tile:
       fundef = apply_pipeline(fundef, tiling_pipeline, copy = True)
+    else:
+      fundef = apply_pipeline(fundef, no_tiling, copy = True)
     # print "BEFORE LOWERING", fundef
-    lowered_fn = apply_pipeline(fundef, pipeline, copy = True)
+    lowered_fn = apply_pipeline(fundef, lowering_pipeline, copy = False)
     # print "AFTER LOWERING", lowered_fn
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn.name,tile)] = lowered_fn

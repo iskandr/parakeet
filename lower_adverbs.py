@@ -4,9 +4,18 @@ import core_types
 import syntax
 import syntax_helpers
 import transform
+from transform import Transform 
+from adverb_semantics import AdverbSemantics
 import type_inference
+import function_registry 
+from syntax_helpers import zero_i64, one_i64
 
-class LowerAdverbs(transform.Transform):
+
+
+
+
+class CodegenSemantics(Transform):
+  
   # Can't put type inference related methods inside Transform
   # since this create a cyclic dependency with InsertCoercions
 
@@ -21,92 +30,85 @@ class LowerAdverbs(transform.Transform):
     call_result_t = self.invoke_type(closure, args)
     call = syntax.Invoke(closure, args, type = call_result_t)
     return self.assign_temp(call, "invoke_result")
+  
+  def size_along_axis(self, value, axis):
+    return self.shape(value, axis)
+    
+  def rank(self, value):
+    return value.type.rank 
+  
+  def accumulator(self, v):
+    return self.loop_counter("acc", v)
+    
+  def get_acc(self, (var_before, var_after, merge)):
+    return var_before
 
-  def flatten_array_arg(self, x):
-    if isinstance(x.type, core_types.ScalarT):
-      return x
-    else:
-      assert isinstance(x.type, array_type.ArrayT), \
-        "Arguments to adverbs must be scalars or arrays, got %s" % x
+  def set_acc(self, (var_before, var_after, merge), v):
+    self.assign(var_after, v)
 
-      if x.type.rank <= 1:
-        return x
-      else:
-        #print "RAVEL ARG", x, x.type
-        ravel_t = array_type.make_array_type(x.type.elt_type, 1)
-        # TODO: Replace this dummy string with an actual ravel primitive
-        return self.assign_temp(syntax.Ravel(x, type = ravel_t), "ravel")
+  def const_int(self, x):
+    return syntax_helpers.const_int(x)
 
-  def flatten_array_args(self, xs):
-    return map(self.flatten_array_arg, xs)
 
-  def adverb_prelude(self, expr):
+  def array(self, size, elt):
+    assert isinstance(size, syntax.Const)
+    return self.alloc_array(self, elt.type, size)
+    
+  def shift_array(self, arr, offset):
+    assert False 
+    # return arr[offset:]
+
+
+  def setidx(self, arr, idx, v):
+    #print "arr", arr
+    #print "idx", idx
+    #print "value", v
+  
+    # arr[idx] = v
+    assert False 
+    
+
+    
+  def check_equal_sizes(self, sizes):
+    pass  
+  
+  def slice_value(self, start, stop, step):
+    return syntax.Slice(start, stop, step)
+  
+  
+  none = syntax_helpers.none
+  null_slice = syntax_helpers.slice_none
+  identity_function = None #function_registry.identity_function 
+  trivial_combiner = None #function_registry.return_second 
+ 
+
+class LowerAdverbs(CodegenSemantics, AdverbSemantics):
+
+
+  def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    if axis is None:
-      args = self.flatten_array_args(args)
-      axis = 0
-    return fn, args, axis
-
-  def transform_Map(self, expr):
-    fn, args, axis = self.adverb_prelude(expr)
-
-    if all( arg.type.rank == 0 for arg in args ):
-      return syntax.Invoke(expr.fn, args, type = expr.type)
-
-    # TODO: Should make sure that all the shapes conform here,
-    # but we don't yet have anything like assertions or error handling
-    max_arg = adverb_helpers.max_rank_arg(args)
-    niters = self.shape(max_arg, axis)
-
-    i, i_after, merge = self.loop_counter("i")
-
-    cond = self.lt(i, niters)
-    elt_t = expr.type.elt_type
-
-    nested_args = [self.index_along_axis(arg, axis, i) for arg in args]
-    # TODO: Use shape inference to figure out how large of an array
-    # I need to allocate here!
-    array_result = self.alloc_array(elt_t, niters)
-    self.blocks.push()
-    call_result = self.invoke(fn, nested_args)
-    output_idx = syntax.Index(array_result, i, type = call_result.type)
-    self.assign(output_idx, call_result)
-    self.assign(i_after, self.add(i, syntax_helpers.one_i64))
-
-    body = self.blocks.pop()
-    self.blocks += syntax.While(cond, body, merge)
-    return array_result
-
+    return self.eval_map(fn, args, axis)
+    
   def transform_Reduce(self, expr):
-    fn, args, axis = self.adverb_prelude(expr)
-    # For now we only work with a single array
-    # and ignore init parameters
-    assert len(args) == 1, \
-      "Reduce currently can't handle more than one input, given: %s" % (args,)
-    x = args[0]
-    n = self.shape(x, axis)
-    x0 = self.index_along_axis(x, axis, 0, "first_elt")
-    x1 = self.index_along_axis(x, axis, 1, "second_elt")
-    init = self.invoke(fn, [x0, x1])
-
-    i, i_after, merge = self.loop_counter("i", syntax_helpers.const(2))
-    acc = self.fresh_var(init.type, "acc")
-
-    cond = self.lt(i, n)
-    self.blocks.push()
-    curr_elt = self.index_along_axis(x, axis, i, "curr_elt")
-    new_acc = self.invoke(fn, [acc, curr_elt])
-    assert new_acc.type == acc.type, \
-      "Inconsistent accumulator type in reduction: %s != %s" % \
-      (acc.type, new_acc.type)
-    merge[acc.name] = (init, new_acc)
-    self.assign(i_after, self.add(i, syntax_helpers.one_i64))
-    body = self.blocks.pop()
-    self.blocks += syntax.While(cond, body, merge)
-    return acc
-
+    
+    fn = self.transform_expr(expr.fn)
+    combine = self.transform_expr(expr.combine)
+    init = self.transform_expr(expr.init)
+    args = self.transform_expr_list(expr.args)
+    axis = syntax_helpers.unwrap_constant(expr.axis)
+    return self.eval_reduce(fn, combine, init, args, axis)
+  
+  def transform_Scan(self, expr):
+    fn = self.transform_expr(expr.fn)
+    combine = self.transform_expr(expr.combine)
+    emit = self.transform_expr(expr.emit)
+    init = self.transform_expr(expr.init)
+    args = self.transform_expr_list(expr.args)
+    axis = syntax_helpers.unwrap_constant(expr.axis)
+    return self.eval_reduce(fn, combine, emit, init, args, axis)
+    
   def transform_AllPairs(self, expr):
     fn, args, axis = self.adverb_prelude(expr)
 
