@@ -50,11 +50,9 @@ class Scan(Accumulative):
 
   def __repr__(self):
     args_str = ", ".join([str(x) for x in self.args])
-    return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)" % \
-      (self.node_type(), self.axis, self.fn, self.combine, self.emit, 
-       self.init, args_str)
-  
-
+    return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)"\
+        % (self.node_type(), self.axis, self.fn, self.combine, self.emit,
+           self.init, args_str)
 
 class Tiled(object):
   pass

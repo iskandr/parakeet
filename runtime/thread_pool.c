@@ -4,6 +4,7 @@
 #include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "thread_pool.h"
 
@@ -88,6 +89,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
     (unsigned long long*)malloc(sizeof(unsigned long long) * max_threads);
   thread_pool->job = NULL;
 
+  int num_procs = sysconf(_SC_NPROCESSORS_ONLN);
   cpu_set_t cpu_set;
   pthread_attr_t attr;
   pthread_attr_init(&attr);
@@ -105,7 +107,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
     args->id = i;
     args->worker_data = &thread_pool->worker_data[i];
     CPU_ZERO(&cpu_set);
-    CPU_SET(i, &cpu_set);
+    CPU_SET(i % num_procs, &cpu_set);
     pthread_attr_setaffinity_np(&attr, max_threads, &cpu_set);
     rc = pthread_create(&thread_pool->workers[i], &attr, worker, (void*)args);
     if (rc) {

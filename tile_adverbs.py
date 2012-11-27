@@ -2,10 +2,10 @@ import adverb_helpers
 import adverbs
 import args
 import array_type
+import copy
 import names
 import syntax
 import syntax_helpers
-import tuple_type
 import type_inference
 
 from core_types import Int32, Int64
@@ -38,6 +38,16 @@ class TileAdverbs(Transform):
     Transform.__init__(self, fn)
     self.adverbs_visited = adverbs_visited
     self.expansions = expansions
+    self.exp_stack = []
+
+  def push_exp(self, adv):
+    self.exp_stack.append(self.expansions)
+    self.expansions = copy.deepcopy(self.expansions)
+    self.adverbs_visited.append(adv)
+
+  def pop_exp(self):
+    self.expansions = self.exp_stack.pop()
+    self.adverbs_visited.pop()
 
   def gen_unpack_tree(self, adverb_tree, exps, v_names, block):
     exps_left = {}
@@ -70,7 +80,7 @@ class TileAdverbs(Transform):
         inner_type_env = dict(*zip(arg_order, inner_arg_types))
 
         # For each stmt in body, add its lhs free vars to the type env
-        return_t = [] # <- Need to make this a dummy type?
+        return_t = Int32 # Dummy type
         for s in block:
           if isinstance(s, syntax.Assign):
             lhs_vars = free_vars(s.lhs)
@@ -79,10 +89,10 @@ class TileAdverbs(Transform):
             for name, t in zip(lhs_names, lhs_types):
               inner_type_env[name] = t
           elif isinstance(s, syntax.Return):
-            return_t = s.rhs.type # <- Need to look this up in some type env
+            return_t = self.fn.type_env[s.rhs]
         inner_args = args.Args(position=arg_order)
         return syntax.TypedFn(name=names.fresh("expanded_assign"),
-                              args=inner_args,
+                              arg_names=inner_args,
                               body=block,
                               input_types=inner_arg_types,
                               return_type=return_t,
@@ -107,7 +117,7 @@ class TileAdverbs(Transform):
                                                  outer_arg_types,
                                                  axis)
         return syntax.TypedFn(name=names.fresh("expanded_assign"),
-                              args=outer_args,
+                              arg_names=outer_args,
                               body=body,
                               input_types=outer_arg_types,
                               return_type=return_t,
@@ -116,11 +126,10 @@ class TileAdverbs(Transform):
     (cur_depth_args, other_args) = order_args(exps[0])
     return (cur_depth_args, gen_unpack_fn(0, other_args + cur_depth_args))
 
-  def get_names_and_exps(self, vs):
-    v_names = [v.name for v in vs]
+  def get_exps(self, v_names):
     exps = list(set([self.expansions[name] for name in v_names]))
     exps.sort()
-    return (v_names, exps)
+    return exps
 
   def transform_Assign(self, stmt):
     # Do nothing unless we're inside a tree of adverbs being tiled
@@ -132,7 +141,8 @@ class TileAdverbs(Transform):
       return syntax.Assign(stmt.lhs, new_rhs)
     else:
       fv = free_vars(stmt.rhs)
-      (fv_names, exps) = self.get_names_and_exps(fv)
+      fv_names = [v.name for v in fv]
+      exps = self.get_exps(fv_names)
       map_tree = [adverbs.Map for _ in exps]
       inner_body = [stmt, syntax.Return(stmt.lhs)]
       cur_depth_args, unpack_fn = \
@@ -150,9 +160,9 @@ class TileAdverbs(Transform):
   def transform_Map(self, expr):
     # TODO: Have to handle naming collisions in the expansions dict
     depth = len(self.adverbs_visited)
+    self.push_exp(adverbs.Map)
     for fn_arg, map_arg in zip(expr.fn.args, expr.args):
       self.expansions[fn_arg] = self.expansions[map_arg] + [depth]
-    self.adverbs_visited += [adverbs.Map]
     # Depends on inlining for this to work
     has_adverbs = False
     new_fn = syntax.TypedFn
@@ -160,16 +170,42 @@ class TileAdverbs(Transform):
       if isinstance(stmt.rhs, adverbs.Adverb):
         has_adverbs = True
         break
+    exps = self.get_exps(expr.fn.arg_names)
     if has_adverbs:
       new_body = self.transform_block(expr.fn.body)
-      # What should the type_env for this be? Should I transform_Fn instead?
-      new_fn = syntax.TypedFn()
+      new_fn = self.gen_unpack_tree([], exps, expr.fn.arg_names, new_body)
     else:
-      fv_names, exps = self.get_names_and_exps(expr.fn.args)
-      new_body = []
+      new_fn = self.gen_unpack_tree(self.adverbs_visited, exps,
+                                    expr.fn.arg_names, expr.fn.body)
     axis = [len(self.expansions[arg]) + a - 1
             for arg, a in zip(expr.args, expr.axis)]
+    self.pop_exp()
     return adverbs.TiledMap(new_fn, expr.args, axis)
+
+  def transform_Reduce(self, expr):
+    # TODO: Have to handle naming collisions in the expansions dict
+    depth = len(self.adverbs_visited)
+    self.push_exp(adverbs.Reduce)
+    for fn_arg, map_arg in zip(expr.fn.args, expr.args):
+      self.expansions[fn_arg] = self.expansions[map_arg] + [depth]
+    # Depends on inlining for this to work
+    has_adverbs = False
+    new_fn = syntax.TypedFn
+    for stmt in expr.fn.body:
+      if isinstance(stmt.rhs, adverbs.Adverb):
+        has_adverbs = True
+        break
+    exps = self.get_exps(expr.fn.arg_names)
+    if has_adverbs:
+      new_body = self.transform_block(expr.fn.body)
+      new_fn = self.gen_unpack_tree([], exps, expr.fn.arg_names, new_body)
+    else:
+      new_fn = self.gen_unpack_tree(self.adverbs_visited, exps,
+                                    expr.fn.arg_names, expr.fn.body)
+    axis = [len(self.expansions[arg]) + a - 1
+            for arg, a in zip(expr.args, expr.axis)]
+    self.pop_exp()
+    return adverbs.TiledReduce(new_fn, expr.args, axis)
 
 class LowerTiledAdverbs(LowerAdverbs):
   def __init__(self, fn):
