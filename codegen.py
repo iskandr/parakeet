@@ -302,7 +302,9 @@ class Codegen(object):
       return self.assign_temp(tuple_expr, name)
     else:
       return tuple_expr
-
+  
+  
+  
   def alloc_array(self, elt_t, dims, name = "temp_array"):
     if not isinstance(dims, (list, tuple)):
       dims = [dims]

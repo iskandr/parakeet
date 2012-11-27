@@ -10,10 +10,6 @@ import type_inference
 import function_registry 
 from syntax_helpers import zero_i64, one_i64
 
-
-
-
-
 class CodegenSemantics(Transform):
   
   # Can't put type inference related methods inside Transform
@@ -37,54 +33,29 @@ class CodegenSemantics(Transform):
   def rank(self, value):
     return value.type.rank 
   
-  def accumulator(self, v):
-    return self.loop_counter("acc", v)
-    
-  def get_acc(self, (var_before, var_after, merge)):
-    return var_before
-
-  def set_acc(self, (var_before, var_after, merge), v):
-    self.assign(var_after, v)
-
-  def const_int(self, x):
-    return syntax_helpers.const_int(x)
-
-
-  def array(self, size, elt):
-    assert isinstance(size, syntax.Const)
-    return self.alloc_array(self, elt.type, size)
+  def repeat_array(self, size, elt):
+    assert isinstance(size.type, core_types.ScalarT), \
+      "Expected scalar for size: %s" % (size,)
+    return self.alloc_array(elt.type, size)
     
   def shift_array(self, arr, offset):
     assert False 
     # return arr[offset:]
 
-
   def setidx(self, arr, idx, v):
-    #print "arr", arr
-    #print "idx", idx
-    #print "value", v
-  
-    # arr[idx] = v
-    assert False 
-    
-
+    self.assign(self.index(arr, idx, temp=False), v)
     
   def check_equal_sizes(self, sizes):
     pass  
   
   def slice_value(self, start, stop, step):
     return syntax.Slice(start, stop, step)
-  
-  
+    
   none = syntax_helpers.none
   null_slice = syntax_helpers.slice_none
-  identity_function = None #function_registry.identity_function 
-  trivial_combiner = None #function_registry.return_second 
  
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
-
-
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
