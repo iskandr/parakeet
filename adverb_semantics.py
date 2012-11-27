@@ -1,6 +1,6 @@
 import numpy as np
 
-class BaseSemantics:
+class InterpSemantics:
   """
   Gosh, I really wish I had OCaml functors or Haskell's type classes
   so I could more cleanly parameterize all this code by these abstract types:
@@ -51,13 +51,10 @@ class BaseSemantics:
   def index(self, arr, idx):
     return arr[idx]
 
-  def tuple(self, elts):
+  def tuple(self, elts, name = None):
     return tuple(elts)
 
   def setidx(self, arr, idx, v):
-    #print "arr", arr
-    #print "idx", idx
-    #print "value", v
     arr[idx] = v
 
   def loop(self, start_idx, stop_idx, body):
@@ -72,7 +69,7 @@ class BaseSemantics:
   def slice_value(self, start, stop, step):
     return slice(start, stop, step)
 
-  def apply(self, fn, args):
+  def invoke(self, fn, args):
     return fn(*args)
 
 
@@ -83,7 +80,7 @@ class BaseSemantics:
   def trivial_combiner(self, x, y):
     return y
 
-class AdverbSemantics(BaseSemantics):
+class AdverbSemantics(InterpSemantics):
   """
   Describe the behavior of adverbs in terms of
   lower-level value and iteration constructs.
@@ -93,9 +90,9 @@ class AdverbSemantics(BaseSemantics):
   and make them work for some other domain (such as types,
   shapes, or compiled expressions)
   """
-  def apply_to_delayed(self, fn, args, idx):
+  def invoke_delayed(self, fn, args, idx):
     curr_args = [x(idx) for x in args]
-    return self.apply(fn, curr_args)
+    return self.invoke(fn, curr_args)
 
   def build_slice_indices(self, rank, axis, idx):
     indices = []
@@ -128,7 +125,7 @@ class AdverbSemantics(BaseSemantics):
     self.check_equal_sizes(axis_sizes)
     elts = [self.delayed_elt(x, axis) for x in xs]
     def delayed_map_result(idx):
-      return self.apply_to_delayed(map_fn, elts, idx)
+      return self.invoke_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
 
   def eval_map(self, f,  values, axis):
@@ -159,19 +156,19 @@ class AdverbSemantics(BaseSemantics):
       # combine the provided initializer with
       # transformed first value of the data
       # in case we need to coerce up
-      init = self.apply(combine, [init, delayed_map_result(0)])
+      init = self.invoke(combine, [init, delayed_map_result(0)])
     start_idx = self.const_int(1)
-    first_output = self.apply(emit, [init])
+    first_output = self.invoke(emit, [init])
     result = self.array(niters, first_output)
 
     acc = self.accumulator(init)
-    emitted_elt_repr = lambda idx: self.apply(emit, [self.get_acc(acc)])
+    emitted_elt_repr = lambda idx: self.invoke(emit, [self.get_acc(acc)])
     def loop_body(idx):
       output_indices = self.build_slice_indices(self.rank(result), axis, idx)
 
       return [
         self.set_acc(acc,
-          self.apply(combine, [self.get_acc(acc), delayed_map_result(idx)])),
+          self.invoke(combine, [self.get_acc(acc), delayed_map_result(idx)])),
         self.setidx(result, output_indices, emitted_elt_repr(idx))
       ]
     self.loop(start_idx, niters, loop_body)

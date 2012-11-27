@@ -80,10 +80,21 @@ class LowerIndexing(transform.Transform):
         elts_i = self.mul(stride_i, idx_i, "offset_elts_%d" % i)
         offset_elts = self.add(offset_elts, elts_i, "total_offset")
       return self.index(data_ptr, offset_elts, temp = False)
-    else:
-      return self.array_slice(arr, indices)
+    else:   
+      result = self.array_slice(arr, indices)
+      return result
       
-      
+  def transform_Assign(self, stmt):
+
+    lhs = self.transform_lhs(stmt.lhs)
+    rhs = self.transform_expr(stmt.rhs)
+    assert not isinstance(lhs, syntax.Tuple), \
+      "Too late in the compilation process to have tuples on the LHS"
+    if isinstance(lhs.type, array_type.ArrayT) and isinstance(lhs, syntax.ArrayView):
+      print "ARRAY LHS", lhs 
+    return syntax.Assign(lhs, rhs)
+  
+  
   def transform_Index(self, expr):
     return self.assign_temp(self.transform_lhs_Index(expr),"idx_result")
    

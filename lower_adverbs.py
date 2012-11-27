@@ -4,10 +4,17 @@ import core_types
 import syntax
 import syntax_helpers
 import transform
+from transform import Transform 
+from adverb_semantics import AdverbSemantics
 import type_inference
+import function_registry 
+from syntax_helpers import zero_i64, one_i64
 
-class LowerAdverbs(transform.Transform):
-  # Can't put type inference related methods inside Transform
+
+
+
+class TransformWithInvoke(Transform):
+    # Can't put type inference related methods inside Transform
   # since this create a cyclic dependency with InsertCoercions
 
   def invoke_type(self, closure, args):
@@ -22,30 +29,75 @@ class LowerAdverbs(transform.Transform):
     call = syntax.Invoke(closure, args, type = call_result_t)
     return self.assign_temp(call, "invoke_result")
 
-  def flatten_array_arg(self, x):
-    if isinstance(x.type, core_types.ScalarT):
-      return x
-    else:
-      assert isinstance(x.type, array_type.ArrayT), \
-        "Arguments to adverbs must be scalars or arrays, got %s" % x
 
-      if x.type.rank <= 1:
-        return x
-      else:
-        #print "RAVEL ARG", x, x.type
-        ravel_t = array_type.make_array_type(x.type.elt_type, 1)
-        # TODO: Replace this dummy string with an actual ravel primitive
-        return self.assign_temp(syntax.Ravel(x, type = ravel_t), "ravel")
+class AdverbCompilerSemantics(AdverbSemantics, TransformWithInvoke):
+  
+  def size_along_axis(self, value, axis):
+    return Transform.shape(self, value, axis)
+    
+  def rank(self, value):
+    return value.type.rank 
+  
+  def accumulator(self, v):
+    return [v]
 
-  def flatten_array_args(self, xs):
-    return map(self.flatten_array_arg, xs)
+  def get_acc(self, acc):
+    return acc[0]
+
+  def set_acc(self, acc, v):
+    acc[0] = v
+
+  def const_int(self, x):
+    return int(x)
+
+  def add(self, x, y):
+    return x + y
+
+  def sub(self, x, y):
+    return x - y
+
+  def array(self, size, elt):
+    assert isinstance(size, syntax.Const)
+    return Transform.alloc_array(self, elt.type, size)
+    
+  def shift_array(self, arr, offset):
+    assert False 
+    # return arr[offset:]
+
+
+  def setidx(self, arr, idx, v):
+    #print "arr", arr
+    #print "idx", idx
+    #print "value", v
+  
+    # arr[idx] = v
+    assert False 
+    
+
+    
+  def check_equal_sizes(self, sizes):
+    assert len(sizes) > 0
+    first = sizes[0]
+    assert all(sz == first for sz in sizes[1:])
+
+  def slice_value(self, start, stop, step):
+    return syntax.Slice(start, stop, step)
+  
+  
+  none = syntax_helpers.none
+  null_slice = syntax_helpers.slice_none
+  identity_function = None #function_registry.identity_function 
+  trivial_combiner = None #function_registry.return_second 
+ 
+
+class LowerAdverbs(AdverbCompilerSemantics):
+
 
   def adverb_prelude(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     if axis is None:
-      args = self.flatten_array_args(args)
       axis = 0
     return fn, args, axis
 
@@ -60,23 +112,17 @@ class LowerAdverbs(transform.Transform):
     max_arg = adverb_helpers.max_rank_arg(args)
     niters = self.shape(max_arg, axis)
 
-    i, i_after, merge = self.loop_counter("i")
-
-    cond = self.lt(i, niters)
     elt_t = expr.type.elt_type
-
-    nested_args = [self.index_along_axis(arg, axis, i) for arg in args]
-    # TODO: Use shape inference to figure out how large of an array
-    # I need to allocate here!
     array_result = self.alloc_array(elt_t, niters)
-    self.blocks.push()
-    call_result = self.invoke(fn, nested_args)
-    output_idx = syntax.Index(array_result, i, type = call_result.type)
-    self.assign(output_idx, call_result)
-    self.assign(i_after, self.add(i, syntax_helpers.one_i64))
-
-    body = self.blocks.pop()
-    self.blocks += syntax.While(cond, body, merge)
+    
+    def loop_body(idx):
+      nested_args = [self.index_along_axis(arg, axis, idx) 
+                     for arg in args]
+    
+      call_result = self.invoke(fn, nested_args)     
+      output_idx = syntax.Index(array_result, idx, type = call_result.type)
+      self.assign(output_idx, call_result)
+    self.loop(zero_i64, niters, loop_body)
     return array_result
 
   def transform_Reduce(self, expr):

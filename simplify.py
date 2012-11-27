@@ -218,8 +218,8 @@ class Simplify(transform.Transform):
   
   def post_apply(self, new_fn):
     
-    print "before DCE", new_fn
-    print "live vars", self.live_vars 
+    #print "before DCE", new_fn
+    # print "live vars", self.live_vars 
     new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)
     new_fn.type_env = \
       dict([(name, new_fn.type_env[name]) for name in self.live_vars])
