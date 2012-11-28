@@ -1,6 +1,7 @@
 import adverb_helpers
 import adverbs
 import array_type
+import closure_type
 import copy
 import names
 import syntax
@@ -130,9 +131,8 @@ class TileAdverbs(Transform):
         new_adverb = adverb_tree[depth_idx](closure, direct_args, axis)
         body = [syntax.Return(new_adverb)]
         outer_arg_types = [new_type_env[arg.name] for arg in direct_args]
-        return_t = type_inference.infer_map_type(nested_fn.return_type,
-                                                 outer_arg_types,
-                                                 axis)
+        n_outer_axes = adverb_helpers.num_outer_axes(outer_arg_types, axis)
+        return_t = array_type.increase_rank(nested_fn.return_type, n_outer_axes)
         return syntax.TypedFn(name=names.fresh("expanded_assign"),
                               arg_names=cur_depth_args,
                               body=body,
@@ -201,10 +201,11 @@ class TileAdverbs(Transform):
       new_fn = self.gen_unpack_tree(self.adverbs_visited, exps,
                                     expr.fn.arg_names, expr.fn.body,
                                     expr.fn.type_env)
-    axis = [len(self.get_expansions(arg)) + a - 1
-            for arg, a in zip(expr.args, expr.axis)]
+    #TODO: below is for when we have multiple axes
+    #axis = [len(self.get_expansions(arg)) + a - 1
+    #        for arg, a in zip(expr.args, expr.axis)]
     self.pop_exp()
-    return adverbs.TiledMap(new_fn, expr.args, axis)
+    return adverbs.TiledMap(new_fn, expr.args, expr.axis, type=expr.type)
 
 class LowerTiledAdverbs(LowerAdverbs):
   def __init__(self, fn):

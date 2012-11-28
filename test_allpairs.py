@@ -1,8 +1,8 @@
-import parakeet as par
+import numpy as np
+
 from parakeet import sum, allpairs, multiply
 from testing_helpers import  expect, expect_allpairs, run_local_tests
 
-import numpy as np
 bool_vec = np.array([True, False, True, False, True])
 int_vec = np.array([1,2,3,4,5])
 float_vec = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
@@ -74,14 +74,12 @@ def loop_matmult(X, Y, Z):
     i = i + 1
   return Z
 
-
 def test_loop_matmult():
   for X in matrices:
     for Y in matrices:
       res = np.dot(X, Y)
       Z = np.zeros(res.shape, dtype = res.dtype)
       expect(loop_matmult, [X,Y,Z], res)
-
 
 def adverb_matmult(X,Y):
   return allpairs(dot, X, Y, axis = 0)
@@ -91,10 +89,8 @@ matrices = [int_mat, float_mat, bool_mat]
 def transposed_np_dot(x,y):
   return np.dot(x, y.T)
 
-
 def test_adverb_matmult():
   expect_allpairs(adverb_matmult, transposed_np_dot, matrices)
-
 
 if __name__ == '__main__':
   run_local_tests()

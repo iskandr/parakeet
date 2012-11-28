@@ -1,5 +1,7 @@
-from node import Node
 import core_types
+
+from node import Node
+
 class Stmt(Node):
   pass
 
@@ -93,7 +95,6 @@ class Tuple(Expr):
 
   def __str__(self):
     return ", ".join([str(e) for e in self.elts])
-    
 
 class Array(Expr):
   _members = ['elts']
@@ -207,11 +208,11 @@ class Fn(Node):
     else:
       return []
 
-##################################################################################
+################################################################################
 #
 #  Constructs below here are only used in the typed representation
 #
-##################################################################################
+################################################################################
 
 class TupleProj(Expr):
   _members = ['tuple', 'index']
@@ -265,7 +266,8 @@ class PtrToInt(Expr):
   _members = ['value']
 
 class TypedFn(Node):
-  """The body of a TypedFn should contain Expr nodes
+  """
+  The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
   """
   _members = ['name',

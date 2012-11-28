@@ -1,19 +1,16 @@
-from core_types import Type, IncompatibleTypes, StructT, Int64
+import ast_conversion
+import ctypes
 import type_conv
 
-
+from core_types import Type, IncompatibleTypes, StructT, Int64
 # python's function type
 from types import FunctionType
-import ast_conversion
-import ctypes 
 
 ###########################################
 #
 #  Closures!
 #
 ###########################################
-
-
 
 class ClosureT(StructT):
   _members = ['fn', 'arg_types']
@@ -36,7 +33,6 @@ class ClosureT(StructT):
   def __eq__(self, other):
     return self.fn == other.fn and self.arg_types == other.arg_types
 
-
   def from_python(self, python_fn):
     untyped_fundef = ast_conversion.translate_function_value(python_fn)
     closure_args = untyped_fundef.python_nonlocals()
@@ -44,15 +40,15 @@ class ClosureT(StructT):
 
     closure_t = make_closure_type(untyped_fundef, closure_arg_types)
     closure_id = id_of_closure_type(closure_t)
-    
+
     def field_value(closure_arg):
       obj = type_conv.from_python(closure_arg)
       parakeet_type = type_conv.typeof(closure_arg)
-      if isinstance(parakeet_type, StructT):  
+      if isinstance(parakeet_type, StructT):
         return ctypes.pointer(obj)
       else:
         return obj
-      
+
     converted_args = [field_value(closure_arg) for closure_arg in closure_args]
     return closure_t.ctypes_repr(closure_id, *converted_args)
 
@@ -70,7 +66,6 @@ class ClosureT(StructT):
     else:
       raise IncompatibleTypes(self, other)
 
-
 _closure_type_cache = {}
 def make_closure_type(untyped_fn, closure_arg_types = []):
   name = untyped_fn.name
@@ -83,13 +78,11 @@ def make_closure_type(untyped_fn, closure_arg_types = []):
     _closure_type_cache[key] = t
     return t
 
-
 def typeof_fn(f):
   untyped_fn = ast_conversion.translate_function_value(f)
   closure_args = untyped_fn.python_nonlocals()
   closure_arg_types = map(type_conv.typeof, closure_args)
   return make_closure_type(untyped_fn, closure_arg_types)
-
 
 type_conv.register(FunctionType, ClosureT, typeof_fn)
 
@@ -103,35 +96,34 @@ type_conv.register(prims.class_list, ClosureT, typeof_prim)
 
 """
 Map each (untyped fn id, fixed arg) types to a distinct integer
-so that the runtime representation of closures just need to 
+so that the runtime representation of closures just need to
 carry this ID
 """
 closure_type_to_id = {}
 id_to_closure_type = {}
-max_id = 0  
+max_id = 0
 
 def id_of_closure_type(closure_t):
   global max_id
   assert isinstance(closure_t, ClosureT), \
-    "Expected closure type, got: " + str(closure_t) 
+    "Expected closure type, got: " + str(closure_t)
   if closure_t in closure_type_to_id:
     return closure_type_to_id[closure_t]
   else:
     num = max_id
     max_id += 1
     closure_type_to_id[closure_t] = num
-    return num 
-  
+    return num
+
 def closure_type_from_id(num):
-  assert num in id_to_closure_type 
+  assert num in id_to_closure_type
   return id_to_closure_type[num]
-
-
 
 class ClosureSet(Type):
   """
-  If multiple closures meet along control flow paths then join them into a closure set.
-  This type should not appear by the time we're generating LLVM code.
+  If multiple closures meet along control flow paths then join them into a
+  closure set. This type should not appear by the time we're generating LLVM
+  code.
   """
   _members = ['closures']
 
