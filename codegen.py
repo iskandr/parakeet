@@ -14,7 +14,6 @@ class Codegen(object):
   def __init__(self):
     self.type_env = {}
     self.blocks = NestedBlocks()
-    
 
   def fresh_var(self, t, prefix = "temp"):
     assert t is not None, "Type required for new variable %s" % prefix
@@ -30,7 +29,7 @@ class Codegen(object):
 
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
-   
+
   """
   def assign(self, lhs, rhs, recursive = False):
     if recursive:
@@ -45,7 +44,7 @@ class Codegen(object):
   """
   def assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
-    
+
   def assign_temp(self, expr, name = "temp"):
     if isinstance(expr, syntax.Var):
       return expr
@@ -56,7 +55,7 @@ class Codegen(object):
 
   def int(self, x):
     return syntax_helpers.const(x)
-  
+
   def zero(self, t = Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
 
@@ -344,7 +343,7 @@ class Codegen(object):
     counter_after = self.fresh_var(counter_type, name + "_after")
     merge = { counter.name : (counter_before, counter_after) }
     return counter, counter_after, merge
-  
+
   def loop(self, start, niters, loop_body):
     i, i_after, merge = self.loop_counter("i", start)
     cond = self.lt(i, niters)
@@ -352,4 +351,4 @@ class Codegen(object):
     loop_body(i)
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
     body = self.blocks.pop()
-    self.blocks += syntax.While(cond, body, merge) 
+    self.blocks += syntax.While(cond, body, merge)

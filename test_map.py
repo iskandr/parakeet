@@ -12,8 +12,8 @@ floats_2d = np.reshape(ints_2d, (10,10))
 bools_1d = ints_1d % 2 == 0
 bools_2d = ints_2d % 2 == 0
 
-vecs = [ints_1d, floats_1d, bools_1d,]
-matrices = [ints_2d, floats_2d,  bools_2d]
+vecs = [ints_1d, floats_1d, bools_1d]
+matrices = [ints_2d, floats_2d, bools_2d]
 all_arrays = vecs + matrices
 
 def add1_scalar(x):
@@ -21,7 +21,7 @@ def add1_scalar(x):
 
 def test_add1_external_map():
   parakeet_result = par.each(add1_scalar, ints_1d)
-  python_result = ints_1d +1
+  python_result = ints_1d + 1
   assert eq(parakeet_result, python_result), \
          "Python %s != Parakeet %s" % (python_result, parakeet_result)
 
@@ -63,7 +63,8 @@ def each_conditional_div(x,y):
   return each(conditional_div, x, y)
 
 def test_conditional_div():
-    expect_allpairs(each_conditional_div, python_conditional_div, [ints_1d, floats_1d])
+    expect_allpairs(each_conditional_div, python_conditional_div,
+                    [ints_1d, floats_1d])
 
 if __name__ == '__main__':
   run_local_tests()

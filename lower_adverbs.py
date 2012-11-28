@@ -1,21 +1,13 @@
-import adverb_helpers
-import array_type
 import core_types
 import syntax
 import syntax_helpers
 import transform
-from transform import Transform 
-from adverb_semantics import AdverbSemantics
 import type_inference
-import function_registry 
-from syntax_helpers import zero_i64, one_i64
 
-
-
-
+from adverb_semantics import AdverbSemantics
+from transform import Transform
 
 class CodegenSemantics(Transform):
-  
   # Can't put type inference related methods inside Transform
   # since this create a cyclic dependency with InsertCoercions
 
@@ -30,16 +22,16 @@ class CodegenSemantics(Transform):
     call_result_t = self.invoke_type(closure, args)
     call = syntax.Invoke(closure, args, type = call_result_t)
     return self.assign_temp(call, "invoke_result")
-  
+
   def size_along_axis(self, value, axis):
     return self.shape(value, axis)
-    
+
   def rank(self, value):
-    return value.type.rank 
-  
+    return value.type.rank
+
   def accumulator(self, v):
     return self.loop_counter("acc", v)
-    
+
   def get_acc(self, (var_before, var_after, merge)):
     return var_before
 
@@ -49,57 +41,49 @@ class CodegenSemantics(Transform):
   def const_int(self, x):
     return syntax_helpers.const_int(x)
 
-
   def array(self, size, elt):
     assert isinstance(size, syntax.Const)
     return self.alloc_array(self, elt.type, size)
-    
-  def shift_array(self, arr, offset):
-    assert False 
-    # return arr[offset:]
 
+  def shift_array(self, arr, offset):
+    assert False
+    # return arr[offset:]
 
   def setidx(self, arr, idx, v):
     #print "arr", arr
     #print "idx", idx
     #print "value", v
-  
-    # arr[idx] = v
-    assert False 
-    
 
-    
+    # arr[idx] = v
+    assert False
+
   def check_equal_sizes(self, sizes):
-    pass  
-  
+    pass
+
   def slice_value(self, start, stop, step):
     return syntax.Slice(start, stop, step)
-  
-  
+
   none = syntax_helpers.none
   null_slice = syntax_helpers.slice_none
-  identity_function = None #function_registry.identity_function 
-  trivial_combiner = None #function_registry.return_second 
- 
+  identity_function = None #function_registry.identity_function
+  trivial_combiner = None #function_registry.return_second
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
-
-
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_map(fn, args, axis)
-    
+
   def transform_Reduce(self, expr):
-    
+
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
     init = self.transform_expr(expr.init)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, init, args, axis)
-  
+
   def transform_Scan(self, expr):
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
@@ -108,7 +92,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, emit, init, args, axis)
-    
+
   def transform_AllPairs(self, expr):
     fn, args, axis = self.adverb_prelude(expr)
 
