@@ -96,13 +96,14 @@ class LowerIndexing(transform.Transform):
     lhs = stmt.lhs 
     rhs = self.transform_expr(stmt.rhs)
     if isinstance(lhs, syntax.Tuple):
-      for (i, t) in enumerate(lhs.type.elt_types):
-        lhs_i = syntax.TupleProj(lhs, i, type = t)
+      for (i, _) in enumerate(lhs.type.elt_types):
+        lhs_i = self.tuple_proj(lhs, i)
         rhs_i = self.tuple_proj(rhs, i)
         # TODO: make this recursive, otherwise nested
         # complex assignments won't get implemented
         assert lhs_i not in (syntax.ArrayView, syntax.Tuple)
-        return syntax.Assign(lhs_i, rhs_i)
+        self.assign(lhs_i, rhs_i)
+      return None 
         
     elif isinstance(lhs, syntax.Index):
       print "old lhs", lhs

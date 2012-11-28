@@ -340,6 +340,8 @@ class Codegen(object):
     assert isinstance(idx, (int, long))
     if isinstance(tup, syntax.Tuple):
       return tup.elts[idx]
+    elif isinstance(tup, tuple):
+      return tup[idx]
     else:
       return syntax.TupleProj(tup, idx, type = tup.type.elt_types[idx])
   
