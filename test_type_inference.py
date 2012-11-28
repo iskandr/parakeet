@@ -1,8 +1,5 @@
-import ast_conversion 
 from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
-import type_inference 
 from testing_helpers import expect_type, run_local_tests
-
 
 def add1(x):
   return x + 1
@@ -19,17 +16,17 @@ def test_add1():
   expect_type(add1, [Float32], Float64)
 
 def test_call_add1():
-  expect_type(call_add1, [Int32], Int64) 
+  expect_type(call_add1, [Int32], Int64)
   expect_type(call_add1, [Float32], Float64)
   expect_type(call_add1, [Bool], Int64)
   expect_type(add1, [Float32], Float64)
-  
+
 def branch_return(b):
   if b:
     return 1
   else:
     return 1.0
-  
+
 def test_branch_return():
   expect_type(branch_return, [Bool], Float64)
 
@@ -42,9 +39,9 @@ def branch_assign(b):
 
 def test_branch_assign():
   expect_type(branch_assign, [Bool], Float64)
-  
+
 def incr_loop(init, count):
-  x = init  
+  x = init
   while x < count:
     x = x + 1
   return x
@@ -52,11 +49,6 @@ def incr_loop(init, count):
 def test_incr_loop():
   expect_type(incr_loop, [Int32, Int32], Int64)
   expect_type(incr_loop, [Float64, Int32], Float64)
-  
 
 if __name__ == '__main__':
   run_local_tests()
-    
-
-
-

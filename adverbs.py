@@ -10,7 +10,8 @@ class Adverb(syntax.Expr):
   def __repr__(self):
     args_str = ", ".join([str(arg) for arg in self.args])
     return "%s(axis = %s, fn = %s, %s)" % \
-        (self.node_type(), self.axis, self.fn,  args_str)
+        (self.node_type(), self.axis, self.fn, args_str)
+
   def __str__(self):
     return repr(self)
 
@@ -31,6 +32,7 @@ class Accumulative(Adverb):
   from parallel sub-computations.
   """
   _members = ['combine', 'init']
+
   def __repr__(self):
     args_str = ", ".join([str(x) for x in self.args])
     return "%s(axis = %s, map_fn = %s, combine = %s, init = %s, %s)" % \

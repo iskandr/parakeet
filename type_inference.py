@@ -1,27 +1,22 @@
-from collections import OrderedDict
-
+import adverbs
+import adverb_helpers
+import adverb_wrapper
+import array_type
+import closure_type
+import core_types
+import names
+import prims
 import syntax as untyped_ast
 import syntax as typed_ast
 import syntax_helpers
-
-import core_types
 import tuple_type
-import array_type
-import closure_type
-
 import type_conv
-import names
+
+from collections import OrderedDict
+from common import dispatch
 from function_registry import untyped_functions, find_specialization, \
                               add_specialization
-from common import dispatch
-import args
 from syntax_helpers import get_type, get_types, unwrap_constant
-import prims 
-
-import adverbs
-import adverb_helpers
-import adverb_wrapper 
-
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -55,7 +50,6 @@ def get_invoke_specialization(closure_t, arg_types):
   full_arg_types = closure_arg_types + arg_types
   return specialize(untyped_fundef, full_arg_types)
 
-
 _invoke_type_cache = {}
 def invoke_result_type(closure_t, arg_types):
   key = (closure_t, tuple(arg_types))
@@ -64,7 +58,7 @@ def invoke_result_type(closure_t, arg_types):
   else:
     if isinstance(closure_t, closure_type.ClosureT):
       closure_set = closure_type.ClosureSet(closure_t)
-    elif isinstance(closure_set, closure_type.ClosureSet):
+    elif isinstance(closure_t, closure_type.ClosureSet):
       closure_set = closure_t
     else:
       raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
@@ -86,7 +80,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def annotate_args(arg_exprs):
     """
-    Collect argument types, splicing in the contents of Unpack expressions 
+    Collect argument types, splicing in the contents of Unpack expressions
     """
     new_args = []
     for untyped_expr in arg_exprs:
@@ -97,7 +91,7 @@ def annotate_expr(expr, tenv, var_map):
       else:
         new_args.append(annotate_child(untyped_expr))
     return new_args
-        
+
   def expr_Closure():
     new_args = annotate_children(expr.args)
     t = closure_type.ClosureT(expr.fn, get_types(new_args))
@@ -137,9 +131,9 @@ def annotate_expr(expr, tenv, var_map):
       untyped_broadcast_fn = \
         adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
-      result_t = typed_broadcast_fn.return_type 
-      return typed_ast.Call(typed_broadcast_fn.name, args, type = result_t) 
-                         
+      result_t = typed_broadcast_fn.return_type
+      return typed_ast.Call(typed_broadcast_fn.name, args, type = result_t)
+
   def expr_Index():
     value = annotate_child(expr.value)
     index = annotate_child(expr.index)
@@ -148,7 +142,7 @@ def annotate_expr(expr, tenv, var_map):
       assert isinstance(index, untyped_ast.Const)
       i = index.value
       assert isinstance(i, int)
-      elt_types = value.type.elt_types 
+      elt_types = value.type.elt_types
       assert i < len(elt_types), \
         "Can't get element %d of length %d tuple %s : %s" % \
         (i, len(elt_types), value, value.type)
@@ -197,7 +191,8 @@ def annotate_expr(expr, tenv, var_map):
     result_type = infer_map_type(closure.type, arg_types, axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
-    return adverbs.Map(fn = closure, args = new_args, axis = axis, type = result_type)
+    return adverbs.Map(fn = closure, args = new_args, axis = axis,
+                       type = result_type)
 
   def expr_Reduce():
     closure = annotate_child(expr.fn)
@@ -218,7 +213,8 @@ def annotate_expr(expr, tenv, var_map):
     arg_types = get_types(new_args)
     assert len(arg_types) == 2
     axis = unwrap_constant(expr.axis)
-    result_type = infer_allpairs_type(closure.type, arg_types[0], arg_types[1], axis)
+    result_type = infer_allpairs_type(closure.type, arg_types[0], arg_types[1],
+                                      axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
     return adverbs.AllPairs(fn = closure,
@@ -253,7 +249,6 @@ def annotate_stmt(stmt, tenv, var_map ):
 
   def infer_right_flow(nodes):
     return infer_phi_nodes(nodes, lambda (_, x): x)
-
 
   def annotate_phi_node(result_var, (left_val, right_val)):
     """
@@ -292,7 +287,8 @@ def annotate_stmt(stmt, tenv, var_map ):
         new_arr = annotate_expr(lhs.value, tenv, var_map)
         new_idx = annotate_expr(lhs.index, tenv, var_map)
 
-        assert isinstance(new_arr.type, array_type.ArrayT), "Expected array, got %s" % new_arr.type
+        assert isinstance(new_arr.type, array_type.ArrayT), \
+            "Expected array, got %s" % new_arr.type
         elt_t = new_arr.type.elt_type
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
       elif isinstance(lhs, untyped_ast.Attribute):
@@ -300,13 +296,13 @@ def annotate_stmt(stmt, tenv, var_map ):
         struct = annotate_expr(lhs.value, tenv, var_map)
         struct_t = struct.type
         assert isinstance(struct_t, core_types.StructT), \
-          "Can't access fields on value %s of type %s" % \
-          (struct, struct_t)
+            "Can't access fields on value %s of type %s" % \
+            (struct, struct_t)
         field_t = struct_t.field_type(name)
         return typed_ast.Attribute(struct, name, field_t)
       else:
         assert isinstance(lhs, untyped_ast.Var), \
-          "Unexpected LHS: " + str(lhs)
+            "Unexpected LHS: " + str(lhs)
         new_name = var_map.lookup(lhs.name)
         old_type = tenv.get(new_name, core_types.Unknown)
         new_type = old_type.combine(rhs_type)
@@ -344,7 +340,6 @@ def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
 def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
-
   """
   Given an untyped function and input types,
   propagate the types through the body,
@@ -355,26 +350,27 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   types throughout the program and inserts
   adverbs for scalar operators applied to arrays
   """
-  print "Inferring for %s:\n pos = %s, kwds = %s" % (untyped_fn, positional_types, keyword_types)
-  
+  print "Inferring for %s:\n pos = %s, kwds = %s" % \
+      (untyped_fn, positional_types, keyword_types)
+
   var_map = VarMap()
-  
+
   typed_args = untyped_fn.args.transform(var_map.rename)
 
   tenv = typed_args.bind(positional_types, keyword_types,
                          default_fn = type_conv.typeof,
                          varargs_fn = tuple_type.make_tuple_type)
-  
+
     # keep track of the return
   tenv['$return'] = core_types.Unknown
-  print "tenv", tenv 
+  print "tenv", tenv
   body = annotate_block(untyped_fn.body, tenv, var_map)
-  
-  arg_names = typed_args.arg_slots 
+
+  arg_names = typed_args.arg_slots
   input_types = [tenv[arg_name] for arg_name in arg_names]
-  
+
   varargs_name = typed_args.varargs
-  # varargs are all passed individually and then packaged up 
+  # varargs are all passed individually and then packaged up
   # into a tuple on the first line of the function
   if typed_args.varargs:
     varargs_t = tenv[varargs_name]
@@ -385,7 +381,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
       arg_name = "%s_elt%d" % (varargs_name, i)
       tenv[arg_name] = elt_t
       input_types.append(elt_t)
-      arg_var = typed_ast.Var(name = arg_name, type = elt_t)    
+      arg_var = typed_ast.Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
     tuple_lhs = typed_ast.Var(name = varargs_name, type = varargs_t)
@@ -400,18 +396,18 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
 
-  print "typed_args", typed_args 
-  print "tenv", tenv 
-  print "typed_args.arg_slots", typed_args.arg_slots 
-  print "input_types", input_types 
-  
+  print "typed_args", typed_args
+  print "tenv", tenv
+  print "typed_args.arg_slots", typed_args.arg_slots
+  print "input_types", input_types
+
   # num_varargs = len(input_types[-1].elt_types) if typed_args.varargs else 0
-  
+
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
     arg_names = arg_names,
-    # num_varargs = num_varargs, 
+    # num_varargs = num_varargs,
     input_types = input_types,
     return_type = return_type,
     type_env = tenv)
@@ -461,7 +457,8 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
     input_type = arg_types[0]
     n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
     nested_type = array_type.lower_rank(input_type, n_outer_axes)
-    nested_result_type = invoke_result_type(closure_t, [nested_type, nested_type])
+    nested_result_type = invoke_result_type(closure_t,
+                                            [nested_type, nested_type])
     assert nested_type == nested_result_type, \
       "Can't yet handle accumulator type %s which differs from input %s" % \
       (nested_result_type, nested_type)

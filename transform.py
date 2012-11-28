@@ -1,6 +1,7 @@
 import function_registry
 import names
 import syntax
+
 from codegen import Codegen
 
 class Transform(Codegen):
@@ -11,7 +12,6 @@ class Transform(Codegen):
   def lookup_type(self, name):
     assert self.type_env is not None
     return self.type_env[name]
-
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
@@ -47,7 +47,7 @@ class Transform(Codegen):
     else:
       result = self.transform_generic_expr(expr)
     #print "old expr", expr
-    #print "new expr", result 
+    #print "new expr", result
     assert result.type is not None, "Missing type for %s" % result
     return result
 
@@ -150,7 +150,7 @@ class Transform(Codegen):
       return self.post_apply(old_fn)
 
 _transform_cache = {}
-def cached_apply(T, fn, copy= False):
+def cached_apply(T, fn, copy = False):
   """
   Applies the transformation, caches the result,
   and registers the new function in the global registry
@@ -163,7 +163,7 @@ def cached_apply(T, fn, copy= False):
     _transform_cache[key] = new_fn
     return new_fn
 
-def apply_pipeline(fn, transforms, copy = False,  memoize = False):
+def apply_pipeline(fn, transforms, copy = False, memoize = False):
   for T in transforms:
     if memoize:
       fn = cached_apply(T, fn, copy = copy)

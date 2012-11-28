@@ -1,10 +1,12 @@
-import syntax 
+import syntax
+
 from collections import OrderedDict
+
 def has_name(arg):
   return isinstance(arg, str) or isinstance(arg, syntax.Var)
 
 def name(arg):
-  return arg if isinstance(arg, str) else arg.name 
+  return arg if isinstance(arg, str) else arg.name
 
 def is_tuple(arg):
   return hasattr(arg, 'elts') or hasattr(arg, '__iter__')
@@ -29,16 +31,15 @@ def flatten_list(args):
   result = []
   for arg in args:
     result += flatten(arg)
-  return result 
-
+  return result
 
 def match_nothing(pattern, val, env):
   pass
 
 def match(pattern, val, env, index_fn = match_nothing):
   """
-  Given a left-hand-side of tuples & vars, 
-  a right-hand-side of tuples & types, 
+  Given a left-hand-side of tuples & vars,
+  a right-hand-side of tuples & types,
   traverse the tuple structure recursively and
   put the matched variable names in an environment
   """
@@ -46,15 +47,16 @@ def match(pattern, val, env, index_fn = match_nothing):
     env[name(pattern)] = val
   elif is_tuple(pattern):
     pat_elts = tuple_elts(pattern)
-    val_elts = tuple_elts(val) 
+    val_elts = tuple_elts(val)
     assert len(pat_elts) == len(val_elts), \
       "Mismatch between expected and given number of values"
     match_list(pat_elts, val_elts, env, index_fn)
   elif is_index(pattern):
     index_fn(pattern, val, env)
-      
+
   else:
-    raise RuntimeError("Unexpected pattern %s %s : %s" % (pattern.__class__.__name__, pattern, val) )    
+    raise RuntimeError("Unexpected pattern %s %s : %s" %
+                       (pattern.__class__.__name__, pattern, val))
 
 def match_list(arg_patterns, vals, env = None, index_fn = match_nothing):
   if env is None:
@@ -62,18 +64,20 @@ def match_list(arg_patterns, vals, env = None, index_fn = match_nothing):
   nargs = len(arg_patterns)
   nvals = len(vals)
   assert nargs == nvals, \
-    "Mismatch between %d args %s and %d inputs %s" % (nargs, arg_patterns, nvals, vals)
+    "Mismatch between %d args %s and %d inputs %s" % (nargs, arg_patterns,
+                                                      nvals, vals)
   for (p,v) in zip(arg_patterns, vals):
     match(p, v, env, index_fn)
-  return env  
-
+  return env
 
 def transform_nothing(x):
   return x
-  
-def transform(pat, atom_fn, extract_name = True, tuple_fn = tuple, index_fn = transform_nothing):
+
+def transform(pat, atom_fn, extract_name = True, tuple_fn = tuple,
+              index_fn = transform_nothing):
   if is_tuple(pat):
-    new_elts = transform_list(tuple_elts(pat), atom_fn, extract_name, tuple_fn, index_fn)
+    new_elts = transform_list(tuple_elts(pat), atom_fn, extract_name, tuple_fn,
+                              index_fn)
     return tuple_fn(new_elts)
   elif is_index(pat):
     return transform_nothing(pat)
@@ -82,71 +86,73 @@ def transform(pat, atom_fn, extract_name = True, tuple_fn = tuple, index_fn = tr
     return atom_fn(name(pat))
   else:
     return atom_fn(pat)
-   
-def transform_list(pats, atom_fn,  extract_name = True, tuple_fn = tuple, index_fn = transform_nothing):
-  return [transform(p, atom_fn,  extract_name, tuple_fn, index_fn) for p in pats]
+
+def transform_list(pats, atom_fn,  extract_name = True, tuple_fn = tuple,
+                   index_fn = transform_nothing):
+  return [transform(p, atom_fn,  extract_name, tuple_fn, index_fn)
+          for p in pats]
 
 def bind(lhs, rhs):
   if isinstance(lhs, Args):
     return lhs.bind(rhs)
-  
+
   if isinstance(lhs, (tuple, list)):
     keys = flatten_list(lhs)
   else:
     keys = flatten(lhs)
-    
+
   if isinstance(rhs, (list, tuple)):
     values = flatten_list(rhs)
   else:
     values = flatten(rhs)
-  
-  return dict(*zip(keys, values)) 
- 
-  
+
+  return dict(*zip(keys, values))
+
 class Args:
-  def __init__(self, positional, 
-                      defaults = OrderedDict(),  
-                      nonlocals = (), 
-                      varargs = None):
+  def __init__(self, positional,
+                     defaults = OrderedDict(),
+                     nonlocals = (),
+                     varargs = None):
     assert isinstance(positional, (list, tuple))
     assert isinstance(defaults, OrderedDict)
     self.nonlocals = tuple(nonlocals)
     self.positional = tuple(positional)
     self.defaults = defaults
-    self.varargs = varargs 
-    
-    # note that the varargs variable is excluded from arg_slots  
+    self.varargs = varargs
+
+    # note that the varargs variable is excluded from arg_slots
     arg_slots = [name(x) for x in self.nonlocals]
     arg_slots += [name(x) for x in positional]
     arg_slots += [name(x) for x in defaults.keys()]
-    self.arg_slots = arg_slots 
-      
+    self.arg_slots = arg_slots
+
     self.positions = {}
     for (i, p) in enumerate(self.arg_slots):
       self.positions[p] = i
 
   def __str__(self):
-    pos_strs =  map(str, self.positional) 
+    pos_strs =  map(str, self.positional)
     default_strs = ["%s = %s" % (k,v) for k,v in self.defaults]
     vararg_strs = ["*" + self.varargs] if self.varargs else []
     nonlocal_strs = \
       ["nonlocals = (%s)" % ", ".join(map(str, self.nonlocals))] \
       if self.nonlocals else []
     return ", ".join(pos_strs + default_strs + vararg_strs + nonlocal_strs)
+
   def __repr__(self):
-    return "Args( positional = %s, defaults=%s, varargs = %s, nonlocal = %s)" % \
+    return "Args(positional = %s, defaults=%s, varargs = %s, nonlocal = %s)" % \
       (
-       map(repr, self.positional), 
-       map(repr, self.defaults.items()), 
-       self.nonlocals, 
+       map(repr, self.positional),
+       map(repr, self.defaults.items()),
+       self.nonlocals,
        self.varargs
       )
-  
 
   def __iter__(self):
     return iter(self.arg_slots)
 
-  def bind(self, actuals, actual_kwds = {}, default_fn = None, varargs_fn = tuple):
+  def bind(self, actuals, actual_kwds = {}, default_fn = None,
+           varargs_fn = tuple):
     """
     Like combine_with_actuals but returns a dictionary
     """
@@ -159,47 +165,49 @@ class Args:
       env[self.varargs] = varargs_fn(extra)
     else:
       assert len(extra) == 0, "Too many args: %s" % (extra, )
-    return env 
-  
-  def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
+    return env
+
+  def linearize_values(self, positional_values, keyword_values = {},
+                       default_fn = None):
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
-   
+
     def assign(i, v):
       result[i] = v
       assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
-      bound[i] = True  
+      bound[i] = True
 
     if len(positional_values) > n:
-      
+
       extra = positional_values[n:]
-      print "pos", positional_values, "extra",extra 
+      print "pos", positional_values, "extra",extra
       positional_values = positional_values[:n]
     else:
       extra = []
-      
+
     for (i,p) in enumerate(positional_values):
       assign(i, p)
-      
+
     for (k,v) in keyword_values.iteritems():
       assert k in self.positions, "Unknown keyword %s" % k
       assign(self.positions[k], v)
-      
+
     for  (k, v) in self.defaults.iteritems():
       i = self.positions[k]
       if not bound[i]:
         assign(i, default_fn(v) if default_fn else v)
     missing_args = [self.arg_slots[i] for i in xrange(n) if not bound[i]]
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
-    return result, extra  
+    return result, extra
 
-  
-  def transform(self, name_fn, tuple_fn = tuple, extract_name = True, keyword_value_fn = None):
+  def transform(self, name_fn, tuple_fn = tuple, extract_name = True,
+                keyword_value_fn = None):
     nonlocals = transform_list(self.nonlocals, name_fn, extract_name, tuple_fn)
-    positional = transform_list(self.positional, name_fn,  extract_name, tuple_fn)
-    
-    varargs = name_fn(self.varargs) if self.varargs else None 
+    positional = transform_list(self.positional, name_fn,
+                                extract_name, tuple_fn)
+
+    varargs = name_fn(self.varargs) if self.varargs else None
     print "old varargs", self.varargs
     print "new varargs", varargs
     defaults = OrderedDict()
@@ -209,9 +217,7 @@ class Args:
       new_value = keyword_value_fn(v) if keyword_value_fn else v
       defaults[new_key] = new_value
     return Args(positional, defaults, nonlocals, varargs)
-  
+
   def fresh_copy(self):
-    import names 
+    import names
     return self.transform(name_fn = names.refresh, extract_name = True)
-    
-  

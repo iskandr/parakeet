@@ -1,10 +1,10 @@
-from transform import apply_pipeline
+from inline import Inliner
 from lower_adverbs import LowerAdverbs
-from tile_adverbs import TileAdverbs, LowerTiledAdverbs
-from lower_structs import LowerStructs
 from lower_indexing import LowerIndexing
+from lower_structs import LowerStructs
 from simplify import Simplify
-from inline import Inliner 
+from tile_adverbs import TileAdverbs, LowerTiledAdverbs
+from transform import apply_pipeline
 
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
@@ -13,7 +13,7 @@ tiling_pipeline = [
 no_tiling = [LowerAdverbs]
 
 lowering_pipeline = [
-  Inliner, 
+  Inliner,
   Simplify,
   LowerIndexing,
   Simplify,

@@ -1,21 +1,19 @@
-from llvm.core import Type as lltype
-from llvm.core import Builder
-
-from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
-from core_types import Bool, Int32, Int64, PtrT
-
+import function_registry
+import llvm_context
+import llvm_convert
+import llvm_prims
+import llvm_types
 import prims
 import syntax
 import syntax_helpers
-from common import dispatch
 
-import llvm_types
-from llvm_types import llvm_value_type, llvm_ref_type
+from common import dispatch
+from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
+from core_types import Int32, Int64, PtrT
+from llvm.core import Type as lltype
+from llvm.core import Builder
 from llvm_helpers import const, int32 #, zero, one
-import llvm_convert
-import llvm_prims
-import llvm_context
-import function_registry
+from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
   def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
@@ -43,7 +41,7 @@ class CompilationEnv:
     return builder
 
   def _init_vars(self, fundef, builder):
-    print "init compilation", fundef 
+    print "init compilation", fundef
     """
     Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.
@@ -91,7 +89,6 @@ def attribute_lookup(struct, name, env, builder):
   ptr_name = "%s_ptr" % name
   ptr = builder.gep(llvm_struct, indices, ptr_name)
   return ptr, field_type
-
 
 def compile_expr(expr, env, builder):
   # print "  EXPR", expr

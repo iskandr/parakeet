@@ -1,4 +1,3 @@
-
 class AdverbSemantics(object):
   """
   Describe the behavior of adverbs in terms of
@@ -39,7 +38,7 @@ class AdverbSemantics(object):
     # all arrays should agree in their dimensions along the
     # axis we're iterating over
     self.check_equal_sizes(axis_sizes)
-    return axis_sizes 
+    return axis_sizes
 
   def map_prelude(self, map_fn, xs, axis):
     if not isinstance(xs, (list, tuple)):
@@ -59,54 +58,54 @@ class AdverbSemantics(object):
       # in case we need to coerce up
       init = self.invoke(combine, [init, delayed_map_result(self.int(0))])
     return init, self.int(1)
-  
+
   def create_result(self, first_elt, outer_shape):
     if not self.is_tuple(outer_shape):
       outer_shape = self.tuple([outer_shape])
-       
+
     inner_shape = self.shape(first_elt)
-    result_shape = self.concat_tuples(outer_shape, inner_shape)    
+    result_shape = self.concat_tuples(outer_shape, inner_shape)
     result = self.alloc_array(self.elt_type(first_elt), result_shape)
 
-    return result   
-  
+    return result
+
   def eval_map(self, f,  values, axis):
     niters, delayed_map_result = self.map_prelude(f, values, axis)
     zero = self.int(0)
     first_output = delayed_map_result(zero)
     result = self.create_result(first_output, niters)
     self.setidx(result, self.int(0), first_output)
-        
+
     def loop_body(idx):
       output_indices = self.build_slice_indices(self.rank(result), axis, idx)
       self.setidx(result, output_indices, delayed_map_result(idx))
     self.loop(self.int(1), niters, loop_body)
-    return result 
+    return result
 
   def eval_reduce(self, map_fn, combine, init, values, axis):
     niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
     init, start_idx = self.acc_prelude(init, combine, delayed_map_result)
     def loop_body(acc, idx):
       new_acc_value = self.invoke(combine, [acc.get(), delayed_map_result(idx)])
-      acc.update(new_acc_value)   
+      acc.update(new_acc_value)
     return self.accumulate_loop(start_idx, niters, loop_body, init)
-    
+
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
     init, start_idx = self.acc_prelude(init, combine, delayed_map_result)
     first_output = self.invoke(emit, [init])
     result = self.create_result(first_output, niters)
     self.setidx(result, self.int(0), first_output)
-    
+
     def loop_body(acc, idx):
       output_indices = self.build_slice_indices(self.rank(result), axis, idx)
       new_acc_value = self.invoke(combine, [acc.get(), delayed_map_result(idx)])
-      acc.update(new_acc_value)      
+      acc.update(new_acc_value)
       output_value = self.invoke(emit, [new_acc_value])
       self.setidx(result, output_indices, output_value)
     self.accumulate_loop(start_idx, niters, loop_body, init)
-    return result 
-  
+    return result
+
   def eval_allpairs(self, fn, x, y, axis):
     nx = self.size_along_axis(x, axis)
     ny = self.size_along_axis(y, axis)
@@ -125,6 +124,4 @@ class AdverbSemantics(object):
         self.setidx(result, out_idx, self.invoke(fn, [xi, yj]))
       self.loop(zero, ny, inner_loop_body)
     self.loop(zero, nx, outer_loop_body)
-    return result 
-    
-    
+    return result

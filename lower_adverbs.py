@@ -1,17 +1,13 @@
-import adverb_helpers
-import array_type
 import core_types
 import syntax
 import syntax_helpers
 import transform
-from transform import Transform 
-from adverb_semantics import AdverbSemantics
 import type_inference
-import function_registry 
-from syntax_helpers import zero_i64, one_i64
+
+from adverb_semantics import AdverbSemantics
+from transform import Transform
 
 class CodegenSemantics(Transform):
-  
   # Can't put type inference related methods inside Transform
   # since this create a cyclic dependency with InsertCoercions
 
@@ -26,18 +22,15 @@ class CodegenSemantics(Transform):
     call_result_t = self.invoke_type(closure, args)
     call = syntax.Invoke(closure, args, type = call_result_t)
     return self.assign_temp(call, "invoke_result")
-  
+
   def size_along_axis(self, value, axis):
     return self.shape(value, axis)
-    
-    
+
   def check_equal_sizes(self, sizes):
-    pass  
-  
-    
+    pass
+
   none = syntax_helpers.none
   null_slice = syntax_helpers.slice_none
- 
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_Map(self, expr):
@@ -45,7 +38,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_map(fn, args, axis)
-    
+
   def transform_Reduce(self, expr):
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
@@ -53,7 +46,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, init, args, axis)
-  
+
   def transform_Scan(self, expr):
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
@@ -62,7 +55,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, emit, init, args, axis)
-    
+
   def transform_AllPairs(self, expr):
     fn, args, axis = self.adverb_prelude(expr)
 

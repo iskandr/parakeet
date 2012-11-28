@@ -1,5 +1,7 @@
-from node import Node
 import core_types
+
+from node import Node
+
 class Stmt(Node):
   pass
 
@@ -93,7 +95,6 @@ class Tuple(Expr):
 
   def __str__(self):
     return ", ".join([str(e) for e in self.elts])
-    
 
 class Array(Expr):
   _members = ['elts']
@@ -187,13 +188,12 @@ class Fn(Node):
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
 
   def __str__(self):
-
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
-  
+
   def __repr__(self):
     return str(self)
-  def node_init(self):
 
+  def node_init(self):
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
     import args
@@ -208,11 +208,11 @@ class Fn(Node):
     else:
       return []
 
-##################################################################################
+################################################################################
 #
 #  Constructs below here are only used in the typed representation
 #
-##################################################################################
+################################################################################
 
 class TupleProj(Expr):
   _members = ['tuple', 'index']
@@ -266,19 +266,19 @@ class PtrToInt(Expr):
   _members = ['value']
 
 class TypedFn(Node):
-  """The body of a TypedFn should contain Expr nodes
+  """
+  The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
   """
-  _members = ['name', 
-              'arg_names', 
-              #'num_varargs',  
-              'body', 
-              'input_types', 
-              'return_type', 
+  _members = ['name',
+              'arg_names',
+              #'num_varargs',
+              'body',
+              'input_types',
+              'return_type',
               'type_env']
 
   def __repr__(self):
-
     return "function %s(%s):%s" % \
       (self.name, self.arg_names, block_to_str(self.body))
 
