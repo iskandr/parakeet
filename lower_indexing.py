@@ -28,8 +28,15 @@ class LowerIndexing(transform.Transform):
         new_shape.append(shape_i)
       elif isinstance(idx_t, array_type.SliceT):
         start = self.attr(idx, "start")
+        if isinstance(start.type, core_types.NoneT):
+          start = syntax_helpers.zero_i64
         stop = self.attr(idx, "stop")
+        if isinstance(stop.type, core_types.NoneT):
+          stop = shape_i 
         step = self.attr(idx, "step")
+        if isinstance(step.type, core_types.NoneT):
+          step = syntax_helpers.one_i64
+              
         offset_i = self.mul(start, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
         dim_i = self.sub(stop, start, "dim_%d" % i)

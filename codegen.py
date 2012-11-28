@@ -97,19 +97,6 @@ class Codegen(object):
     """
     Index into array or tuple differently depending on the type
     """
-    n_required = arr.type.rank
-    n_indices = len(idx) if hasattr(idx, '__len__') else 1
-
-    if n_indices < n_required:
-      # all unspecified dimensions are considered fully sliced
-      extra = (None,) * (n_required - n_indices)
-      first_indices = tuple(idx) if hasattr(idx, '__iter__') else (idx,)
-      idx = first_indices + extra
-
-    if isinstance(idx, tuple):
-      idx = self.tuple(map(wrap_if_constant,idx), "index_tuple")
-    else:
-      idx = wrap_if_constant(idx)
     arr_t = arr.type
     if isinstance(arr_t, core_types.ScalarT):
       # even though it's not correct externally, it's
@@ -120,6 +107,11 @@ class Codegen(object):
       return arr
     elif isinstance(arr_t, tuple_type.TupleT):
       if isinstance(idx, syntax.Const):
+        idx = idx.value 
+        
+      assert isinstance(idx, int), \
+        "Index into tuple must be an integer, got %s" % idx
+      if isinstance(idx, syntax.Const):
         idx = idx.value
       proj = self.tuple_proj(arr, idx)
       if temp:
@@ -127,6 +119,26 @@ class Codegen(object):
       else:
         return proj
     else:
+      n_required = arr_t.rank
+      if self.is_tuple(idx):
+        n_indices = len(idx.type.elt_types)
+        if n_indices < n_required:
+          elts = self.tuple_elts(idx)
+          extra = syntax_helpers.slice_none * (n_required - n_indices)
+          idx = self.tuple(elts + extra)
+      else:
+        n_indices = len(idx) if hasattr(idx, '__len__') else 1
+        if n_indices < n_required:
+          # all unspecified dimensions are considered fully sliced
+          extra = (None,) * (n_required - n_indices)
+          first_indices = tuple(idx) if hasattr(idx, '__iter__') else (idx,)
+          idx = first_indices + extra
+    
+      if isinstance(idx, tuple):
+        idx = self.tuple(map(wrap_if_constant,idx), "index_tuple")
+      else:
+        idx = wrap_if_constant(idx)
+
       t = arr_t.index_type(idx.type)
       idx_expr = syntax.Index(arr, idx, type = t)
       if temp:
@@ -264,7 +276,8 @@ class Codegen(object):
       return attr_expr
 
   def is_array(self, x):
-    return isinstance(x.type, array_type.ArrayT)
+    return hasattr(x, 'type') and \
+      isinstance(x.type, array_type.ArrayT)
   
   def elt_type(self, x):
     if self.is_array(x):
@@ -304,7 +317,8 @@ class Codegen(object):
       return tuple_expr
 
   def is_tuple(self, x):
-    return isinstance(x.type, tuple_type.TupleT)  
+    return hasattr(x, 'type') and \
+      isinstance(x.type, tuple_type.TupleT)  
   
   def concat_tuples(self, x, y):
     assert self.is_tuple(x)
