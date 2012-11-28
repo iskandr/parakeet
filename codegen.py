@@ -226,6 +226,13 @@ class Codegen(object):
     else:
       return self.prim(prims.divide, [x,y], name)
 
+  def mod(self, x, y, name = None):
+    if syntax_helpers.is_one(y):
+      return self.pick_const(x, y, 0)
+    else:
+      return self.prim(prims.mod, [x,y], name)
+      
+
   def lt(self, x, y, name = None):
     if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
       return syntax_helpers.const_bool(False)
@@ -349,6 +356,13 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   
+  
+  def prod(self, elts, name = None):
+    result = elts[0]
+    for e in elts[1:]:
+      result = self.mul(result, e, name = name)
+    return result 
+  
   def alloc_array(self, elt_t, dims, name = "temp_array"):
     if self.is_tuple(dims):
       shape = dims 
@@ -359,9 +373,7 @@ class Codegen(object):
       shape = self.tuple(dims, "shape")
     
     rank = len(dims)
-    nelts = dims[0]
-    for d in dims[1:]:
-      nelts = self.mul(nelts, d, "nelts")
+    nelts = self.prod(dims, name = "nelts")
 
     array_t = array_type.make_array_type(elt_t, rank)
     ptr_t = core_types.ptr_type(elt_t)
@@ -408,11 +420,48 @@ class Codegen(object):
     merge = { counter.name : (counter_before, counter_after) }
     return counter, counter_after, merge
 
-  def loop(self, start, niters, loop_body):
+  def loop(self, start, niters, loop_body, return_stmt = False):
     i, i_after, merge = self.loop_counter("i", start)
     cond = self.lt(i, niters)
     self.blocks.push()
     loop_body(i)
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
     body = self.blocks.pop()
-    self.blocks += syntax.While(cond, body, merge)
+    loop_stmt = syntax.While(cond, body, merge)
+    if return_stmt:
+      return loop_stmt  
+    else:
+      self.blocks += loop_stmt 
+    
+  def nelts(self, array):
+    shape_elts = self.tuple_elts(self.shape(array))
+    return self.prod(shape_elts, name = "nelts")
+  
+  def linear_to_indices(self, linear_idx, shape):
+    """
+    Return tuple of dimension-wise indices from linear index
+    """
+    dim_sizes = self.tuple_elts(shape)
+    rank = len(dim_sizes)
+    slice_sizes = [syntax_helpers.one_i64]
+    for (i, d) in enumerate(reversed(dim_sizes[:-1])):
+      slice_sizes.append(self.mul(slice_sizes, d, "slice_size_%d" % i))
+    slice_sizes.reverse()
+    remainder = linear_idx
+    indices = []
+    for i in xrange(rank):
+      s = slice_sizes[i]
+      indices.append(self.div(remainder, s))
+      remainder = self.mod(remainder, s)
+    print "linear to indices", indices 
+    return self.tuple(indices)
+  
+  def array_copy(self, src, dest, return_stmt = False):
+    assert self.is_array(dest)
+    nelts = self.nelts(dest)  
+    def loop_body(i):
+      idx = self.linear_to_indices(i, self.shape(dest))
+      self.assign(self.index(dest, idx, temp=False), self.index(src, idx, temp=True))
+      
+    return self.loop(syntax_helpers.zero_i64, nelts, loop_body, return_stmt)
+      

@@ -57,11 +57,8 @@ class TupleT(StructT):
     return hash(self.elt_types)
   
   def __str__(self):
-    s = "tuple(%s)" % ", ".join([str(t) for t in self.elt_types])
-    if hasattr(self, 'metadata'):
-      s += " !!! " + self.metadata 
-    return s  
-  
+    return "tuple(%s)" % ", ".join([str(t) for t in self.elt_types])
+      
   def __repr__(self):
     return str(self)
   

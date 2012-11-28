@@ -182,6 +182,7 @@ add = Arith(np.add, 'Add', '+')
 subtract = Arith(np.subtract, 'Sub', '-') 
 multiply = Arith(np.multiply, 'Mult', '*') 
 divide = Arith(np.divide, 'Div', '/')
+mod = Arith(np.mod, 'Mod', '%')
 
 equal = Cmp(np.equal, 'Eq', '==')
 not_equal = Cmp(np.not_equal, 'NotEq', '!=')
