@@ -26,47 +26,11 @@ class CodegenSemantics(Transform):
   def size_along_axis(self, value, axis):
     return self.shape(value, axis)
 
-  def rank(self, value):
-    return value.type.rank
-
-  def accumulator(self, v):
-    return self.loop_counter("acc", v)
-
-  def get_acc(self, (var_before, var_after, merge)):
-    return var_before
-
-  def set_acc(self, (var_before, var_after, merge), v):
-    self.assign(var_after, v)
-
-  def const_int(self, x):
-    return syntax_helpers.const_int(x)
-
-  def array(self, size, elt):
-    assert isinstance(size, syntax.Const)
-    return self.alloc_array(self, elt.type, size)
-
-  def shift_array(self, arr, offset):
-    assert False
-    # return arr[offset:]
-
-  def setidx(self, arr, idx, v):
-    #print "arr", arr
-    #print "idx", idx
-    #print "value", v
-
-    # arr[idx] = v
-    assert False
-
   def check_equal_sizes(self, sizes):
     pass
 
-  def slice_value(self, start, stop, step):
-    return syntax.Slice(start, stop, step)
-
   none = syntax_helpers.none
   null_slice = syntax_helpers.slice_none
-  identity_function = None #function_registry.identity_function
-  trivial_combiner = None #function_registry.return_second
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_Map(self, expr):
@@ -76,7 +40,6 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     return self.eval_map(fn, args, axis)
 
   def transform_Reduce(self, expr):
-
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
     init = self.transform_expr(expr.init)

@@ -116,9 +116,13 @@ class Transform(Codegen):
     return self.blocks.pop()
 
   def pre_apply(self, old_fn):
+    print "pre_apply", self.__class__.__name__
+    print old_fn 
     return old_fn
 
   def post_apply(self, new_fn):
+    print "post_apply", self.__class__.__name__
+    print new_fn
     return new_fn
 
   def apply(self, copy = False):

@@ -4,7 +4,7 @@ from adverb_interp import adverb_evaluator as interp
 
 
 vec = np.array([1,4,9,16])
-mat = np.array([vec, vec+100, vec+200])
+mat = np.array([vec, vec+100, vec+200, vec + 300])
 
 expected_sqrt_vec = np.sqrt(vec)
 expected_sqrt_mat = np.sqrt(mat)
@@ -72,7 +72,19 @@ def test_scan():
   assert testing_helpers.eq(mat_prefixes, expected_cumsum_mat), \
     "Expected %s from Scan but got %s" % (expected_cumsum_mat, mat_prefixes)
 
+def test_allpairs():
+  times_table = interp.eval_allpairs(np.multiply, vec, vec, 0)
+  np_times_table = np.multiply.outer(vec, vec)
+  assert testing_helpers.eq(times_table, np_times_table), \
+    "Expected %s for AllPairs but got %s" % \
+    (np_times_table, times_table)
   
+  inner_products = interp.eval_allpairs(np.dot, mat, mat.T, 0)
+  np_inner_products = np.dot(mat, mat)
+  assert testing_helpers.eq(inner_products, np_inner_products), \
+    "Expected %s for AllPairs but got %s" % \
+    (inner_products, np_inner_products)
+    
   
 
 if __name__ == '__main__':

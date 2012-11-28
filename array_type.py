@@ -81,7 +81,10 @@ class ArrayT(StructT):
   _members = ['elt_type', 'rank']
 
   def node_init(self):
-    assert isinstance(self.elt_type, ScalarT)
+    
+    assert isinstance(self.elt_type, ScalarT), \
+      "Element type of array must be a scalar: %s" % (self.elt_type,)
+
     tuple_t = repeat_tuple(Int64, self.rank)
 
     self.shape_t = tuple_t
