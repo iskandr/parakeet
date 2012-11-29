@@ -132,7 +132,7 @@ class Args:
 
   def __str__(self):
     pos_strs =  map(str, self.positional)
-    default_strs = ["%s = %s" % (k,v) for k,v in self.defaults]
+    default_strs = ["%s = %s" % (k,v) for k,v in self.defaults.items()]
     vararg_strs = ["*" + self.varargs] if self.varargs else []
     nonlocal_strs = \
       ["nonlocals = (%s)" % ", ".join(map(str, self.nonlocals))] \
@@ -151,6 +151,10 @@ class Args:
   def __iter__(self):
     return iter(self.arg_slots)
 
+  def keywords(self):
+    return map(name, self.defaults.keys())
+  
+  
   def bind(self, actuals, actual_kwds = {}, default_fn = None,
            varargs_fn = tuple):
     """
@@ -167,8 +171,7 @@ class Args:
       assert len(extra) == 0, "Too many args: %s" % (extra, )
     return env
 
-  def linearize_values(self, positional_values, keyword_values = {},
-                       default_fn = None):
+  def linearize_values(self, positional_values, keyword_values = {}, default_fn = None):
     n = len(self.arg_slots)
     result = [None] * n
     bound = [False] * n
@@ -194,9 +197,10 @@ class Args:
       assign(self.positions[k], v)
 
     for  (k, v) in self.defaults.iteritems():
+ 
       i = self.positions[k]
       if not bound[i]:
-        assign(i, default_fn(v) if default_fn else v)
+        assign(i, default_fn(k,v) if default_fn else v)
     missing_args = [self.arg_slots[i] for i in xrange(n) if not bound[i]]
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra

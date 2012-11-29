@@ -146,7 +146,7 @@ def call_add_defaults():
     return add_defaults(10)
 
 def test_call_add_defaults():
-    expect(call_add_defaults, 12)
+    expect(call_add_defaults, [], 12)
 
 if __name__ == '__main__':
   run_local_tests()
