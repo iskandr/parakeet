@@ -133,6 +133,21 @@ def test_call_varargs_add():
   expect(call_varargs_add, [True,2.0], 3.0)
 
 
+def add_defaults(x = 1, y = 2):
+    return x + y 
+
+def test_add_defaults():
+    expect(add_defaults, [], 3)
+    expect(add_defaults, [10], 12)
+    expect(add_defaults, [10, 20], 30)
+    expect(add_defaults, [10, 20.0], 30.0)
+
+def call_add_defaults():
+    return add_defaults(10)
+
+def test_call_add_defaults():
+    expect(call_add_defaults, 12)
+
 if __name__ == '__main__':
   run_local_tests()
   

@@ -44,6 +44,21 @@ def test_reduce():
   assert testing_helpers.eq(mat_sum, expected_sum_mat), \
     "Expected %s from Reduce but got %s" % (expected_sum_mat, mat_sum)
 
+bool_vec = np.array([True, False, True, False, True])
+
+def test_bool_sum():
+  print "Testing sum of boolean vector..."
+  vec_sum = interp.eval_reduce(
+    map_fn = interp.identity_function, 
+    combine = (lambda x,y: x + y), 
+    init = False, 
+    values = [bool_vec],
+    axis = 0)
+  assert vec_sum == np.sum(bool_vec), \
+    "Expected %s but got %s" % (np.sum(bool_vec), vec_sum)
+
+
+
 expected_cumsum_vec = np.cumsum(vec)
 expected_cumsum_mat = np.cumsum(mat, axis=1)
 

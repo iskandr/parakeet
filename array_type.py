@@ -221,20 +221,18 @@ def elt_types(ts):
   return map(elt_type, ts)
 
 def lower_rank(t, r):
-  if isinstance(t, core_types.ScalarT):
-    return t
-  else:
-    assert isinstance(t, ArrayT), "Expected array, but got %s" % t
+  if isinstance(t, ArrayT):
     assert t.rank >= r
     return make_array_type(t.elt_type, t.rank - r)
-
+  else:
+    return t 
+      
 #TODO: Doesn't handle tuples
 def increase_rank(t, r):
-  if isinstance(t, core_types.ScalarT):
-    return make_array_type(t, r)
-  else:
-    assert isinstance(t, ArrayT), "Expected array, but got %s" % t
+  if isinstance(t, ArrayT):
     return make_array_type(t.elt_type, t.rank + r)
-
+  else:
+    return make_array_type(t, r)
+  
 def lower_ranks(arg_types, r):
   return [lower_rank(t, r) for t in arg_types]

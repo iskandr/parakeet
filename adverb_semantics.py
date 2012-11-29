@@ -93,7 +93,13 @@ class AdverbSemantics(object):
     niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
     init, start_idx = self.acc_prelude(init, combine, delayed_map_result)
     def loop_body(acc, idx):
-      new_acc_value = self.invoke(combine, [acc.get(), delayed_map_result(idx)])
+      elt = delayed_map_result(idx)
+      #print idx, acc.get(), elt
+    
+      #print "1+1 = ", self.invoke(combine, [self.int(1), self.int(1)])
+      #print "T+T = ", self.invoke(combine, [self.bool(True), self.bool(True)])
+      #print "%s:%s + %s:%s = %s" % (elt, type(elt), acc.get(), type(acc.get()), self.invoke(combine, [acc.get(), elt]))
+      new_acc_value = self.invoke(combine, [acc.get(), elt])
       acc.update(new_acc_value)
     return self.accumulate_loop(start_idx, niters, loop_body, init)
 

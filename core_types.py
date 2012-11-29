@@ -139,6 +139,9 @@ class NoneT(ConcreteT):
     return str(self)
 
 NoneType = NoneT()
+def typeof_none(_):
+  return NoneType 
+type_conv.register(type(None), NoneT, typeof_none)
 
 def is_struct(c_repr):
   return type(c_repr) == type(ctypes.Structure)

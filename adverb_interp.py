@@ -26,6 +26,9 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
   def int(self, x):
     return int(x)
 
+  def bool(self, x):
+    return bool(x)
+
   def add(self, x, y):
     return x + y
 
