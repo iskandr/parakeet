@@ -13,7 +13,6 @@ class AdverbSemantics(object):
     return self.invoke(fn, curr_args)
 
   def build_slice_indices(self, rank, axis, idx):
-    print "idx:", idx
     if rank == 1:
       assert axis == 0
       return idx
@@ -25,13 +24,11 @@ class AdverbSemantics(object):
       else:
         s = self.slice_value(self.none, self.none, self.int(1))
         indices.append(s)
-    print "indices", indices
     return self.tuple(indices)
 
   def slice_along_axis(self, arr, axis, idx):
     r = self.rank(arr)
     index_tuple = self.build_slice_indices(r, axis, idx)
-    print "index_tuple:", index_tuple
     return self.index(arr, index_tuple)
 
   def delayed_elt(self, x, axis):
@@ -95,7 +92,7 @@ class AdverbSemantics(object):
     def loop_body(acc, idx):
       elt = delayed_map_result(idx)
       #print idx, acc.get(), elt
-    
+
       #print "1+1 = ", self.invoke(combine, [self.int(1), self.int(1)])
       #print "T+T = ", self.invoke(combine, [self.bool(True), self.bool(True)])
       #print "%s:%s + %s:%s = %s" % (elt, type(elt), acc.get(), type(acc.get()), self.invoke(combine, [acc.get(), elt]))
