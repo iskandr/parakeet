@@ -28,12 +28,12 @@ reserved_names = {
 
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
-    return syntax.Const (arg.n)
+    return arg.n # syntax.Const(arg.n)
   else:
     assert isinstance(arg, ast.Name)
     name = arg.id
     assert name in reserved_names
-    return reserved_names[name]
+    return reserved_names[name].value  
 
 def translate_positional(arg):
   if isinstance(arg, ast.Name):
@@ -49,10 +49,15 @@ def translate_args(args):
 
   positional = translate_positional_args(args.args)
   defaults = OrderedDict()
-  for (k,v) in args.defaults:
-    assert isinstance(k, ast.Name)
-    defaults[k] = translate_default_arg_value(v)
-  #print "VARARG", args.vararg 
+  
+  n_defaults = len(args.defaults)
+  if n_defaults > 0:
+    default_vars = positional[-n_defaults:]
+    positional = positional[:-n_defaults]
+    for (k,v) in zip(default_vars, args.defaults):
+      defaults[k] = translate_default_arg_value(v)
+  print args.defaults 
+  print defaults  
   return Args(positional, defaults, varargs = args.vararg)
 
 class AST_Translator(ast.NodeVisitor):

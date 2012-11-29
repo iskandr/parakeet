@@ -390,19 +390,36 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   var_map = VarMap()
 
   typed_args = untyped_fn.args.transform(var_map.rename)
-
-  tenv = typed_args.bind(positional_types, keyword_types,
-                         default_fn = type_conv.typeof,
+  
+  unbound_keywords = []
+  def default_fn(k, value):
+    unbound_keywords.append(k)
+    return type_conv.typeof(value)
+  
+  tenv = typed_args.bind(positional_types, 
+                         keyword_types,
+                         default_fn = default_fn,  
                          varargs_fn = tuple_type.make_tuple_type)
-
     # keep track of the return
   tenv['$return'] = core_types.Unknown
   # print "tenv", tenv
   body = annotate_block(untyped_fn.body, tenv, var_map)
-
-  arg_names = typed_args.arg_slots
+  
+  arg_names = [x for x in typed_args.arg_slots 
+               if x not in unbound_keywords]
+  if len(unbound_keywords) > 0:
+    default_assignments = []
+    for k in unbound_keywords:
+      t = tenv[k]
+      python_value = typed_args.defaults[k]
+      var = typed_ast.Var(k, type = t)
+      typed_val = typed_ast.Const(python_value, type =t)
+      stmt = typed_ast.Assign(var, typed_val)
+      default_assignments.append(stmt)
+    body = default_assignments + body 
+    
+  
   input_types = [tenv[arg_name] for arg_name in arg_names]
-
   varargs_name = typed_args.varargs
   # varargs are all passed individually and then packaged up
   # into a tuple on the first line of the function

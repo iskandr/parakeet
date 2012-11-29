@@ -227,7 +227,6 @@ def lower_rank(t, r):
   else:
     return t 
       
-#TODO: Doesn't handle tuples
 def increase_rank(t, r):
   if isinstance(t, ArrayT):
     return make_array_type(t.elt_type, t.rank + r)
