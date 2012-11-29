@@ -17,6 +17,7 @@ from common import dispatch
 from function_registry import untyped_functions, find_specialization, \
                               add_specialization
 from syntax_helpers import get_type, get_types, unwrap_constant
+import function_registry
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -55,20 +56,23 @@ def invoke_result_type(closure_t, arg_types):
   key = (closure_t, tuple(arg_types))
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
+  
+  if isinstance(closure_t, untyped_ast.Fn):
+    closure_t = closure_type.ClosureT(closure_t.name, ())
+    
+  if isinstance(closure_t, closure_type.ClosureT):
+    closure_set = closure_type.ClosureSet(closure_t)
   else:
-    if isinstance(closure_t, closure_type.ClosureT):
-      closure_set = closure_type.ClosureSet(closure_t)
-    elif isinstance(closure_t, closure_type.ClosureSet):
-      closure_set = closure_t
-    else:
-      raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
-
-    result_type = core_types.Unknown
-    for closure_t in closure_set.closures:
-      typed_fundef = get_invoke_specialization(closure_t, arg_types)
-      result_type = result_type.combine(typed_fundef.return_type)
-    _invoke_type_cache[key] = result_type
-    return result_type
+    assert isinstance(closure_t, closure_type.ClosureSet), \
+      "Invoke expected closure, but got %s" % (closure_t,)
+    closure_set = closure_t
+      
+  result_type = core_types.Unknown
+  for closure_t in closure_set.closures:
+    typed_fundef = get_invoke_specialization(closure_t, arg_types)
+    result_type = result_type.combine(typed_fundef.return_type)
+  _invoke_type_cache[key] = result_type
+  return result_type
 
 def annotate_expr(expr, tenv, var_map):
   print "expr", expr
@@ -97,6 +101,10 @@ def annotate_expr(expr, tenv, var_map):
     t = closure_type.ClosureT(expr.fn, get_types(new_args))
     return typed_ast.Closure(expr.fn, new_args, type = t)
 
+  def expr_Fn():
+    t = closure_type.ClosureT(expr.name, [])
+    return typed_ast.Closure(expr.name, [], type = t)
+  
   def expr_Invoke():
     closure = annotate_child(expr.closure)
     args = annotate_args(expr.args)
@@ -191,18 +199,44 @@ def annotate_expr(expr, tenv, var_map):
     result_type = infer_map_type(closure.type, arg_types, axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
-    return adverbs.Map(fn = closure, args = new_args, axis = axis,
+    return adverbs.Map(fn = closure, 
+                       args = new_args, 
+                       axis = axis,
                        type = result_type)
 
   def expr_Reduce():
-    closure = annotate_child(expr.fn)
+    map_fn = annotate_child(expr.fn)
+    combine_fn = annotate_child(expr.combine)
     new_args = annotate_args(expr.args)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
-    result_type = infer_reduce_type(closure.type, arg_types, axis, None, None)
+    result_type = infer_reduce_type(
+      map_fn.type, 
+      combine_fn.type, 
+      arg_types, 
+      axis, 
+      None)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
-    return adverbs.Reduce(fn = closure,
+    return adverbs.Reduce(fn = map_fn, 
+                          combine = combine_fn,
+                          args = new_args,
+                          axis = axis,
+                          type = result_type)
+
+  def expr_Scan():
+    map_fn = annotate_child(expr.fn)
+    combine_fn = annotate_child(expr.combine)
+    emit_fn = annotate_child(expr.emit)
+    new_args = annotate_args(expr.args)
+    arg_types = get_types(new_args)
+    axis = unwrap_constant(expr.axis)
+    result_type = infer_scan_type(map_fn, combine_fn, arg_types, axis)
+    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
+      axis = 0
+    return adverbs.Scan(fn = map_fn, 
+                          combine = combine_fn,
+                          emit = emit_fn, 
                           args = new_args,
                           axis = axis,
                           type = result_type)
@@ -445,7 +479,68 @@ def infer_return_type(untyped, arg_types):
   typed = specialize(untyped, arg_types)
   return typed.return_type
 
-def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
+import adverb_semantics
+
+class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
+  def invoke(self, fn, arg_types):
+    if isinstance(fn, typed_ast.TypedFn):
+      input_types = fn.input_types
+      assert all(in_t == arg_t for (in_t, arg_t) in zip(input_types,arg_types)), \
+         "Expected types %s but got %s" % (input_types, arg_types)
+      return fn.return_type 
+    if isinstance(fn, str):
+      assert fn in function_registry.untyped_functions, \
+      "Unknown function name %s" % (fn,)
+      fn = function_registry.untyped_functions[fn]
+    
+    if isinstance(fn, untyped_ast.Fn):
+      fn = closure_type.ClosureT(fn.name, ())
+    return invoke_result_type(fn, arg_types)
+  
+  def size_along_axis(self, t, _):
+    return core_types.Int64
+  
+  def int(self, _):
+    return core_types.Int64
+  
+  def tuple(self, elt_types):
+    return tuple_type.make_tuple_type(elt_types)
+  
+  def index(self, arr, idx):
+    return arr.index_type(idx)
+  
+  def check_equal_sizes(self, _):
+    pass 
+  
+  def rank(self, t):
+    return t.rank if hasattr(t, 'rank') else 0
+  
+  def loop(self, start, _, loop_body):
+    loop_body(start)
+  
+  class Accumulator:
+    def __init__(self, v):
+      self.value = v
+       
+    def get(self):
+      return self.value 
+    
+    def update(self, new_v):
+      self.value = self.value.combine(new_v) 
+      
+  def accumulate_loop(self, start, _, loop_body, init):
+    acc = self.Accumulator(init)
+    loop_body(acc, start)
+    return acc.get() 
+  
+  
+adverb_type_semantics = AdverbTypeSemantics()    
+
+def infer_reduce_type(map_fn, combine_fn, arg_types, axis, init = None):
+  result = adverb_type_semantics.eval_reduce(map_fn, combine_fn, init, arg_types, axis)
+  print "reduce result", result 
+  return result 
+  """
   if init is None:
     #
     #The simplest reductions assume the initial value,
@@ -471,7 +566,8 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
     return nested_result_type
   else:
     raise RuntimeError("Type inference not implemented for complex reductions")
-
+  """
+  
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)

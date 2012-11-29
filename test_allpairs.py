@@ -82,7 +82,7 @@ def test_loop_matmult():
       expect(loop_matmult, [X,Y,Z], res)
 
 def adverb_matmult(X,Y):
-  return allpairs(dot, X, Y, axis = 0)
+  return allpairs(dot, X, Y)
 
 matrices = [int_mat, float_mat, bool_mat]
 

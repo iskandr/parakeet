@@ -25,7 +25,8 @@ class LowerStructs(Transform):
       for (i, lhs_elt) in enumerate(lhs.elts):
         self.assign(lhs_elt, self.tuple_proj(rhs, i), recursive = True)
     else:
-      assert isinstance(lhs, (syntax.Var, syntax.Index, syntax.Attribute))
+      assert isinstance(lhs, (syntax.Var, syntax.Index, syntax.Attribute)), \
+        "Invalid LHS: %s" % (lhs,)
       return syntax.Assign(stmt.lhs, self.transform_expr(rhs))
 
   def transform_Closure(self, expr):

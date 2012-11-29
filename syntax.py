@@ -175,7 +175,7 @@ class ArrayView(Expr):
   """
   _members = ['data', 'shape', 'strides']
 
-class Fn(Node):
+class Fn(Expr):
   """
   Function definition.
   A top-level function can have a references to python values from its enclosing
@@ -265,7 +265,7 @@ class PtrToInt(Expr):
   """
   _members = ['value']
 
-class TypedFn(Node):
+class TypedFn(Expr):
   """
   The body of a TypedFn should contain Expr nodes
   which have been extended with a 'type' attribute
@@ -278,6 +278,9 @@ class TypedFn(Node):
               'return_type',
               'type_env']
 
+  def node_init(self):
+    self.type = core_types.make_fn_type(self.input_types, self.return_type)
+    
   def __repr__(self):
     return "function %s(%s):%s" % \
       (self.name, self.arg_names, block_to_str(self.body))

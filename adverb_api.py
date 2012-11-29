@@ -58,15 +58,21 @@ def create_adverb_hook(adverb_class,
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
   default_wrapper = mk_wrapper(axis = 0)
-  print "DEFAULT WRAPPER FOR", adverb_class
-  print default_wrapper
+  #print "DEFAULT WRAPPER FOR", adverb_class
+  #print default_wrapper
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 
 each = create_adverb_hook(adverbs.Map, map_fn_name = 'f')
-allpairs = create_adverb_hook(adverbs.AllPairs, map_fn_name = 'f')
-reduce = create_adverb_hook(adverbs.Reduce, combine_fn_name = 'f')
-scan = create_adverb_hook(adverbs.Scan, combine_fn_name = 'f')
+allpairs = create_adverb_hook(adverbs.AllPairs, 
+                              map_fn_name = 'f', 
+                              arg_names = ['x', 'y'])
+reduce = create_adverb_hook(adverbs.Reduce, 
+                            combine_fn_name = 'f', 
+                            arg_names = ['x'])
+scan = create_adverb_hook(adverbs.Scan, 
+                          combine_fn_name = 'f', 
+                          arg_names = ['x'])
 
 try:
   rt = runtime.Runtime()

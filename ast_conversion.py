@@ -52,7 +52,7 @@ def translate_args(args):
   for (k,v) in args.defaults:
     assert isinstance(k, ast.Name)
     defaults[k] = translate_default_arg_value(v)
-  print "VARARG", args.vararg 
+  #print "VARARG", args.vararg 
   return Args(positional, defaults, varargs = args.vararg)
 
 class AST_Translator(ast.NodeVisitor):

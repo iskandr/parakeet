@@ -181,7 +181,7 @@ class Args:
     if len(positional_values) > n:
 
       extra = positional_values[n:]
-      print "pos", positional_values, "extra",extra
+      #print "pos", positional_values, "extra",extra
       positional_values = positional_values[:n]
     else:
       extra = []
@@ -208,8 +208,8 @@ class Args:
                                 extract_name, tuple_fn)
 
     varargs = name_fn(self.varargs) if self.varargs else None
-    print "old varargs", self.varargs
-    print "new varargs", varargs
+    #print "old varargs", self.varargs
+    #print "new varargs", varargs
     defaults = OrderedDict()
     for (k,v) in self.defaults.iteritems():
       old_key = name(k) if extract_name else k

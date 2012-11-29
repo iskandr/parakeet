@@ -13,6 +13,10 @@ class AdverbSemantics(object):
     return self.invoke(fn, curr_args)
 
   def build_slice_indices(self, rank, axis, idx):
+    if rank == 1:
+      assert axis == 0
+      return idx 
+    
     indices = []
     for i in xrange(rank):
       if i == axis:
