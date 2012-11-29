@@ -434,7 +434,39 @@ class Codegen(object):
       return loop_stmt  
     else:
       self.blocks += loop_stmt 
+  
+  class Accumulator:
+    def __init__(self, acc_type, fresh_var, assign):
+      self.acc_type = acc_type
+      self.fresh_var = fresh_var   
+      self.assign = assign 
+      self.start_var = fresh_var(acc_type, "acc")
+      self.curr_var = self.start_var 
+       
+    def get(self):
+      return self.curr_var 
+     
+    def update(self, new_value):
+      new_var = self.fresh_var(self.acc_type, "acc")
+
+      self.assign(new_var, new_value)
+   
+      self.curr_var = new_var 
+  
+  def accumulate_loop(self, start, stop, loop_body, init, return_stmt = False):
+    acc = self.Accumulator(init.type, self.fresh_var, self.assign)
+    def loop_body_with_acc(i):
+      loop_body(acc, i)
+    loop_stmt = self.loop(start, stop, loop_body_with_acc, return_stmt = True)
+    loop_stmt.merge[acc.start_var.name] = (init, acc.curr_var)
+    if return_stmt:
+      return loop_stmt, acc.get() 
+    else:
+      self.blocks += loop_stmt 
+      return acc.get()
     
+    
+  
   def nelts(self, array):
     shape_elts = self.tuple_elts(self.shape(array))
     return self.prod(shape_elts, name = "nelts")

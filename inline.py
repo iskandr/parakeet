@@ -82,28 +82,7 @@ class Inliner(transform.Transform):
     else:
       print "CAN'T INLINE", expr 
       return expr
-  """
-  Instead of trying to inline invocations, 
-  I should instead rely on Simplification 
-  to get rid of all invokes 
-  ---  
-  def transform_Invoke(self, expr):
-    closure = self.transform_expr(expr.closure)
-    args = self.transform_expr_list(expr.args)
-    closure_t = closure.type 
-    n_closure_args = len(closure_t.arg_types)
-    closure_args = \
-      [self.closure_elt(closure, i) for i in xrange(n_closure_args)]
-    all_args = closure_args + args 
-    arg_types = get_types(all_args)  
-    typed_fundef = type_inference.specialize(closure_t.fn, arg_types)
-    if can_inline(typed_fundef):
-      return self.do_inline(typed_fundef, all_args)
-    else:
-        print "CAN'T INLINE", self.fn.name
-    print "DONE WITHOUT INLINE", self.fn.name 
-    return expr 
-  """
+  
   def pre_apply(self, old_fn):
     print "Before inlining", old_fn 
     return old_fn 

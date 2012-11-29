@@ -17,6 +17,7 @@ from common import dispatch
 from function_registry import untyped_functions, find_specialization, \
                               add_specialization
 from syntax_helpers import get_type, get_types, unwrap_constant
+import function_registry
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -214,7 +215,6 @@ def annotate_expr(expr, tenv, var_map):
       combine_fn.type, 
       arg_types, 
       axis, 
-      None, 
       None)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
@@ -482,11 +482,65 @@ def infer_return_type(untyped, arg_types):
 import adverb_semantics
 
 class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
-  def invoke(self, closure, arg_types):
-    return invoke_result_type(closure, arg_types)
+  def invoke(self, fn, arg_types):
+    if isinstance(fn, typed_ast.TypedFn):
+      input_types = fn.input_types
+      assert all(in_t == arg_t for (in_t, arg_t) in zip(input_types,arg_types)), \
+         "Expected types %s but got %s" % (input_types, arg_types)
+      return fn.return_type 
+    if isinstance(fn, str):
+      assert fn in function_registry.untyped_functions, \
+      "Unknown function name %s" % (fn,)
+      fn = function_registry.untyped_functions[fn]
     
+    if isinstance(fn, untyped_ast.Fn):
+      fn = closure_type.ClosureT(fn.name, ())
+    return invoke_result_type(fn, arg_types)
+  
+  def size_along_axis(self, t, _):
+    return core_types.Int64
+  
+  def int(self, _):
+    return core_types.Int64
+  
+  def tuple(self, elt_types):
+    return tuple_type.make_tuple_type(elt_types)
+  
+  def index(self, arr, idx):
+    return arr.index_type(idx)
+  
+  def check_equal_sizes(self, _):
+    pass 
+  
+  def rank(self, t):
+    return t.rank if hasattr(t, 'rank') else 0
+  
+  def loop(self, start, _, loop_body):
+    loop_body(start)
+  
+  class Accumulator:
+    def __init__(self, v):
+      self.value = v
+       
+    def get(self):
+      return self.value 
+    
+    def update(self, new_v):
+      self.value = self.value.combine(new_v) 
+      
+  def accumulate_loop(self, start, _, loop_body, init):
+    acc = self.Accumulator(init)
+    loop_body(acc, start)
+    return acc.get() 
+  
+  
+adverb_type_semantics = AdverbTypeSemantics()    
 
-def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
+def infer_reduce_type(map_fn, combine_fn, arg_types, axis, init = None):
+  result = adverb_type_semantics.eval_reduce(map_fn, combine_fn, init, arg_types, axis)
+  print "reduce result", result 
+  return result 
+  """
   if init is None:
     #
     #The simplest reductions assume the initial value,
@@ -512,7 +566,8 @@ def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
     return nested_result_type
   else:
     raise RuntimeError("Type inference not implemented for complex reductions")
-
+  """
+  
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)

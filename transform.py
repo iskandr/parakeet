@@ -46,8 +46,8 @@ class Transform(Codegen):
       result = method(expr)
     else:
       result = self.transform_generic_expr(expr)
-    #print "old expr", expr
-    #print "new expr", result
+    assert result is not None, \
+      "Transformation turned %s into None" % (expr,)
     assert result.type is not None, "Missing type for %s" % result
     return result
 
@@ -78,6 +78,7 @@ class Transform(Codegen):
     return result
 
   def transform_Assign(self, stmt):
+
     rhs = self.transform_expr(stmt.rhs)
     lhs = self.transform_lhs(stmt.lhs)
     return syntax.Assign(lhs, rhs)
@@ -116,17 +117,16 @@ class Transform(Codegen):
     return self.blocks.pop()
 
   def pre_apply(self, old_fn):
-    # print "pre_apply", self.__class__.__name__
-    # print old_fn 
-    return old_fn
+    pass
 
   def post_apply(self, new_fn):
-    # print "post_apply", self.__class__.__name__
-    # print new_fn
-    return new_fn
-
+    pass 
+  
   def apply(self, copy = False):
     old_fn = self.pre_apply(self.fn)
+    if old_fn is None:
+      old_fn = self.fn 
+    
     if isinstance(old_fn, syntax.TypedFn):
       self.type_env = old_fn.type_env.copy()
     else:
@@ -143,11 +143,22 @@ class Transform(Codegen):
       # register this function so if anyone tries to call it they'll be
       # able to find its definition later
       function_registry.typed_functions[new_fundef.name] = new_fundef
-      return self.post_apply(new_fundef)
+      new_fn = self.post_apply(new_fundef)
+      if new_fn:
+        return new_fn 
+      else: 
+        return new_fundef 
+      
     else:
       old_fn.type_env = self.type_env
       old_fn.body = new_body
-      return self.post_apply(old_fn)
+      new_fn = self.post_apply(old_fn)
+    
+      if new_fn:
+        return new_fn 
+      else:
+        return old_fn 
+     
 
 _transform_cache = {}
 def cached_apply(T, fn, copy = False):
