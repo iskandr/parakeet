@@ -178,7 +178,7 @@ class ArrayView(Expr):
 class Fn(Expr):
   """
   Function definition.
-  A top-level function can have a references to python values from its enclosing
+  A top-level function can have references to python values from its enclosing
   scope, which are stored in the 'python_refs' field.
 
   A nested function, on the other hand, might refer to some variables from
@@ -280,7 +280,7 @@ class TypedFn(Expr):
 
   def node_init(self):
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
-    
+
   def __repr__(self):
     return "function %s(%s):%s" % \
       (self.name, self.arg_names, block_to_str(self.body))

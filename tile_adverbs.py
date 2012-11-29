@@ -230,6 +230,8 @@ class TileAdverbs(Transform):
     depths = self.get_depths_list(expr.fn.arg_names)
     if find_adverbs.has_adverbs:
       new_body = self.transform_block(expr.fn.body)
+      # TODO: do we really want to use gen_unpack_tree here, or simply make
+      #       a function ourselves?
       nested_args, new_fn = self.gen_unpack_tree([], depths, expr.fn.arg_names,
                                                  new_body, expr.fn.type_env)
     else:
@@ -248,6 +250,10 @@ class LowerTiledAdverbs(LowerAdverbs):
     LowerAdverbs.__init__(self, fn)
     self.tile_params = []
     self.num_tiled_adverbs = 0
+
+  def transform_TypedFn(self, fn):
+    new_lower_transform = LowerTiledAdverbs(fn)
+    return new_lower_transform.apply()
 
   def transform_TiledMap(self, expr):
     fn = expr.fn # Should never be a Closure
