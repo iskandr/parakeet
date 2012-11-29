@@ -75,7 +75,7 @@ def invoke_result_type(closure_t, arg_types):
   return result_type
 
 def annotate_expr(expr, tenv, var_map):
-  print "expr", expr
+
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
 
@@ -384,8 +384,8 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   types throughout the program and inserts
   adverbs for scalar operators applied to arrays
   """
-  print "Inferring for %s:\n pos = %s, kwds = %s" % \
-      (untyped_fn, positional_types, keyword_types)
+  #print "Inferring for %s:\n pos = %s, kwds = %s" % \
+  #    (untyped_fn, positional_types, keyword_types)
 
   var_map = VarMap()
 
@@ -397,7 +397,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
 
     # keep track of the return
   tenv['$return'] = core_types.Unknown
-  print "tenv", tenv
+  # print "tenv", tenv
   body = annotate_block(untyped_fn.body, tenv, var_map)
 
   arg_names = typed_args.arg_slots
@@ -430,10 +430,10 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
 
-  print "typed_args", typed_args
-  print "tenv", tenv
-  print "typed_args.arg_slots", typed_args.arg_slots
-  print "input_types", input_types
+  # print "typed_args", typed_args
+  # print "tenv", tenv
+  # print "typed_args.arg_slots", typed_args.arg_slots
+  # print "input_types", input_types
 
   # num_varargs = len(input_types[-1].elt_types) if typed_args.varargs else 0
 
@@ -503,6 +503,9 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
   def int(self, _):
     return core_types.Int64
   
+  def bool(self, _):
+    return core_types.Bool
+  
   def tuple(self, elt_types):
     return tuple_type.make_tuple_type(elt_types)
   
@@ -538,35 +541,9 @@ adverb_type_semantics = AdverbTypeSemantics()
 
 def infer_reduce_type(map_fn, combine_fn, arg_types, axis, init = None):
   result = adverb_type_semantics.eval_reduce(map_fn, combine_fn, init, arg_types, axis)
-  print "reduce result", result 
-  return result 
-  """
-  if init is None:
-    #
-    #The simplest reductions assume the initial value,
-    #the carried accumulator, and the element type
-    #are all the same (and there's only one element type
-    #since there's only one array input
-    #
-    assert len(arg_types) == 1
-    input_type = arg_types[0]
-    n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
-    nested_type = array_type.lower_rank(input_type, n_outer_axes)
-    nested_result_type = invoke_result_type(closure_t,
-                                            [nested_type, nested_type])
-    assert nested_type == nested_result_type, \
-      "Can't yet handle accumulator type %s which differs from input %s" % \
-      (nested_result_type, nested_type)
 
-    if combine is not None:
-      combine_result_t = invoke_result_type(combine, [nested_type, nested_type])
-      assert combine_result_t == nested_type, \
-        "Wrong type for combiner result, expected %s but got %s" % \
-        (nested_type, combine_result_t)
-    return nested_result_type
-  else:
-    raise RuntimeError("Type inference not implemented for complex reductions")
-  """
+  return result 
+  
   
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
@@ -574,9 +551,7 @@ def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   return array_type.increase_rank(acc_t, n_outer_axes)
 
 def infer_map_type(closure_t, arg_types, axis):
-  print "infer_map_type"
-  print "-- closure", closure_t
-  print "-- arg_types", arg_types
+
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   nested_types = array_type.lower_ranks(arg_types, n_outer_axes)
   nested_result_type = invoke_result_type(closure_t, nested_types)

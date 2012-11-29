@@ -5,7 +5,7 @@ import syntax_helpers
 import adverbs 
 import function_registry
 import ast_conversion
-
+from collections import OrderedDict 
 from lib_simple import identity 
 untyped_identity_function = ast_conversion.translate_function_value(identity)
 
@@ -29,8 +29,15 @@ def untyped_wrapper(adverb_class,
   the data args and unpacked varargs tuple. 
   """
   axis = syntax_helpers.wrap_if_constant(axis)
-  key = adverb_class, map_fn_name, combine_fn_name, emit_fn_name, axis
-  print "key", key
+  key = adverb_class, \
+        map_fn_name, \
+        combine_fn_name, \
+        emit_fn_name, \
+        axis, \
+        tuple(data_names), \
+        varargs_name
+        
+  # print "key", key
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
@@ -48,8 +55,6 @@ def untyped_wrapper(adverb_class,
     map_fn = mk_input_var(map_fn_name)
     combine_fn = mk_input_var(combine_fn_name)
     emit_fn = mk_input_var(emit_fn_name)
-    print map_fn_name, combine_fn_name, emit_fn_name 
-    print map_fn, combine_fn, emit_fn 
     data_args = map(mk_input_var, data_names)
     if varargs_name:
       varargs_name = names.refresh(varargs_name)
@@ -57,8 +62,15 @@ def untyped_wrapper(adverb_class,
       data_args.append(unpack)
     
     adverb_parameters = adverb_class.members()
-    print adverb_parameters 
     adverb_args = {'axis': axis, 'args': data_args}
+    optional_args = OrderedDict()
+    
+    if 'init' in adverb_parameters:
+      init_name = names.fresh('init')
+      optional_args[init_name] = None 
+      init_var = syntax.Var(init_name)
+      adverb_args['init'] = init_var 
+    
     def add_fn_arg(field, value):
       if value:
         adverb_args[field] = value
@@ -67,16 +79,18 @@ def untyped_wrapper(adverb_class,
     add_fn_arg('fn', map_fn)
     add_fn_arg('combine', combine_fn)
     add_fn_arg('emit', emit_fn)
-    print adverb_args 
+    
    
     adverb = adverb_class(**adverb_args)
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
-    fn_args_obj = Args(positional = positional_arg_names, varargs = varargs_name)
+    fn_args_obj = Args(positional = positional_arg_names,
+                       defaults = optional_args,  
+                       varargs = varargs_name)
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef
-    print "Created wrapper", fundef 
+    # print "Created wrapper", fundef 
     return fundef
 
 

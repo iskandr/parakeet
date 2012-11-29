@@ -192,14 +192,16 @@ class AST_Translator(ast.NodeVisitor):
                                                  expr.__class__.__name__))
 
   def visit_Call(self, expr):
-    fn, args, kwargs, starargs = \
-      expr.func, expr.args, expr.kwargs, expr.starargs
+    
+    fn, args, keywords, starargs, kwargs = \
+      expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
     assert kwargs is None, "Dictionary of keyword args not supported"
     
     fn_val = self.visit(fn)
     arg_vals = self.visit_list(args)
+    print "KEYWORDS", keywords 
     if starargs:
-      print starargs
+      print "CALL :: STARARGS",  starargs
       starargs_expr = self.visit(starargs)
       arg_vals.append(syntax.Unpack(starargs_expr))
     return syntax.Invoke(fn_val, arg_vals)

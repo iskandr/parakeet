@@ -52,7 +52,8 @@ class Inliner(transform.Transform):
       return arg 
 
   def do_inline(self, fundef, args):
-    # print "fundef before", fundef 
+    print "fundef before inline", fundef
+    print "args", args  
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)
@@ -84,11 +85,11 @@ class Inliner(transform.Transform):
       return expr
   
   def pre_apply(self, old_fn):
-    print "Before inlining", old_fn 
+    #print "Before inlining", old_fn 
     return old_fn 
   
   def post_apply(self, new_fn):
-    print "After inlining", new_fn
+    # print "After inlining", new_fn
     return new_fn 
   
 

@@ -41,7 +41,7 @@ class CompilationEnv:
     return builder
 
   def _init_vars(self, fundef, builder):
-    print "init compilation", fundef
+    # print "init compilation", fundef
     """
     Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.

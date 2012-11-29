@@ -21,6 +21,17 @@ def test_call_add1():
   expect_type(call_add1, [Bool], Int64)
   expect_type(add1, [Float32], Float64)
 
+def add(x,y):
+  return x + y
+
+def test_add_bools():
+  """
+  Parakeet booleans don't behave like the default
+  Python type but rather like numpy.bool8, 
+  where (+) == (or) and (*) == (and) 
+  """
+  expect_type(add, [Bool, Bool], Bool)
+
 def branch_return(b):
   if b:
     return 1

@@ -65,7 +65,8 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     return self.eval_allpairs(fn, x, y, axis)
 
   def post_apply(self, fn):
-    print "POST ADVERB LOWERING"
-    print fn 
+    # print "POST ADVERB LOWERING"
+    # print fn
+    pass  
 def lower_adverbs(fn):
   return transform.cached_apply(LowerAdverbs, fn)
