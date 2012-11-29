@@ -28,8 +28,11 @@ def test_add1_external_map():
 def add1_map(x_vec):
   return each(add1_scalar, x_vec)
 
-def test_add1_internal_map():
+def test_add1_internal_map_vecs():
   expect_each(add1_map, add1_scalar, vecs)
+
+def test_add1_internal_map_matrices():
+  expect_each(add1_map, add1_scalar, matrices)
 
 def add(x,y):
   return x + y

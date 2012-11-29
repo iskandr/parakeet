@@ -55,20 +55,23 @@ def invoke_result_type(closure_t, arg_types):
   key = (closure_t, tuple(arg_types))
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
+  
+  if isinstance(closure_t, untyped_ast.Fn):
+    closure_t = closure_type.ClosureT(closure_t.name, ())
+    
+  if isinstance(closure_t, closure_type.ClosureT):
+    closure_set = closure_type.ClosureSet(closure_t)
   else:
-    if isinstance(closure_t, closure_type.ClosureT):
-      closure_set = closure_type.ClosureSet(closure_t)
-    elif isinstance(closure_t, closure_type.ClosureSet):
-      closure_set = closure_t
-    else:
-      raise InferenceFailed("Invoke expected closure, but got %s" % closure_t)
-
-    result_type = core_types.Unknown
-    for closure_t in closure_set.closures:
-      typed_fundef = get_invoke_specialization(closure_t, arg_types)
-      result_type = result_type.combine(typed_fundef.return_type)
-    _invoke_type_cache[key] = result_type
-    return result_type
+    assert isinstance(closure_t, closure_type.ClosureSet), \
+      "Invoke expected closure, but got %s" % (closure_t,)
+    closure_set = closure_t
+      
+  result_type = core_types.Unknown
+  for closure_t in closure_set.closures:
+    typed_fundef = get_invoke_specialization(closure_t, arg_types)
+    result_type = result_type.combine(typed_fundef.return_type)
+  _invoke_type_cache[key] = result_type
+  return result_type
 
 def annotate_expr(expr, tenv, var_map):
   print "expr", expr
@@ -97,6 +100,10 @@ def annotate_expr(expr, tenv, var_map):
     t = closure_type.ClosureT(expr.fn, get_types(new_args))
     return typed_ast.Closure(expr.fn, new_args, type = t)
 
+  def expr_Fn():
+    t = closure_type.ClosureT(expr.name, [])
+    return typed_ast.Closure(expr.name, [], type = t)
+  
   def expr_Invoke():
     closure = annotate_child(expr.closure)
     args = annotate_args(expr.args)
@@ -191,18 +198,45 @@ def annotate_expr(expr, tenv, var_map):
     result_type = infer_map_type(closure.type, arg_types, axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
-    return adverbs.Map(fn = closure, args = new_args, axis = axis,
+    return adverbs.Map(fn = closure, 
+                       args = new_args, 
+                       axis = axis,
                        type = result_type)
 
   def expr_Reduce():
-    closure = annotate_child(expr.fn)
+    map_fn = annotate_child(expr.fn)
+    combine_fn = annotate_child(expr.combine)
     new_args = annotate_args(expr.args)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
-    result_type = infer_reduce_type(closure.type, arg_types, axis, None, None)
+    result_type = infer_reduce_type(
+      map_fn.type, 
+      combine_fn.type, 
+      arg_types, 
+      axis, 
+      None, 
+      None)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
-    return adverbs.Reduce(fn = closure,
+    return adverbs.Reduce(fn = map_fn, 
+                          combine = combine_fn,
+                          args = new_args,
+                          axis = axis,
+                          type = result_type)
+
+  def expr_Scan():
+    map_fn = annotate_child(expr.fn)
+    combine_fn = annotate_child(expr.combine)
+    emit_fn = annotate_child(expr.emit)
+    new_args = annotate_args(expr.args)
+    arg_types = get_types(new_args)
+    axis = unwrap_constant(expr.axis)
+    result_type = infer_scan_type(map_fn, combine_fn, arg_types, axis)
+    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
+      axis = 0
+    return adverbs.Scan(fn = map_fn, 
+                          combine = combine_fn,
+                          emit = emit_fn, 
                           args = new_args,
                           axis = axis,
                           type = result_type)
@@ -444,6 +478,13 @@ def infer_return_type(untyped, arg_types):
   """
   typed = specialize(untyped, arg_types)
   return typed.return_type
+
+import adverb_semantics
+
+class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
+  def invoke(self, closure, arg_types):
+    return invoke_result_type(closure, arg_types)
+    
 
 def infer_reduce_type(closure_t, arg_types, axis, init = None, combine = None):
   if init is None:

@@ -7,11 +7,10 @@ from adverb_api  import each, reduce
 
 
 def sum(x):
-  # should be reduce(add, add, x[1:], x[0])
+
   return reduce(add, x)
 
 def prod(x):
-  # should be reduce(add, add, x[1:], x[0])
   return reduce(multiply,  x)
 
 def mean(x):
