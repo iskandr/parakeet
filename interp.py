@@ -131,6 +131,9 @@ def eval_fn(fn, actuals):
       closure_arg_vals = map(eval_expr, expr.args) 
       return ClosureVal(fundef, closure_arg_vals)
     
+    def expr_Fn():
+      return ClosureVal(expr, [])
+    
     def expr_Cast():
       x = eval_expr(expr.value)
       t = expr.type
@@ -185,7 +188,7 @@ def eval_fn(fn, actuals):
       map_fn = eval_expr(expr.fn)
       combine_fn = eval_expr(expr.combine)
       args = eval_args(expr.args)
-      init = eval_expr(expr.init)
+      init = eval_expr(expr.init) if expr.init else None 
       axis = syntax_helpers.unwrap_constant(expr.axis)
       return adverb_evaluator.eval_reduce(map_fn, combine_fn, init, args, axis)
 
