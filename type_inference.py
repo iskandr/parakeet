@@ -446,11 +446,12 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     body.append(typed_ast.Return(syntax_helpers.none))
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
-
-  # print "typed_args", typed_args
-  # print "tenv", tenv
-  # print "typed_args.arg_slots", typed_args.arg_slots
-  # print "input_types", input_types
+    
+  print "untyped_fn", untyped_fn  
+  print "typed_args", typed_args
+  print "tenv", tenv
+  print "typed_args.arg_slots", typed_args.arg_slots
+  print "input_types", input_types
 
   # num_varargs = len(input_types[-1].elt_types) if typed_args.varargs else 0
 

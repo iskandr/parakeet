@@ -28,8 +28,11 @@ class AdverbSemantics(object):
 
   def slice_along_axis(self, arr, axis, idx):
     r = self.rank(arr)
-    index_tuple = self.build_slice_indices(r, axis, idx)
-    return self.index(arr, index_tuple)
+    if r > axis:
+      index_tuple = self.build_slice_indices(r, axis, idx)
+      return self.index(arr, index_tuple)
+    else:
+      return arr 
 
   def delayed_elt(self, x, axis):
     return lambda idx: self.slice_along_axis(x, axis, idx)
@@ -37,7 +40,7 @@ class AdverbSemantics(object):
   def sizes_along_axis(self, xs, axis):
     axis_sizes = [self.size_along_axis(x, axis)
                   for x in xs
-                  if self.rank(x) >= axis]
+                  if self.rank(x) > axis]
     assert len(axis_sizes) > 0
     # all arrays should agree in their dimensions along the
     # axis we're iterating over
@@ -64,6 +67,7 @@ class AdverbSemantics(object):
     return init, self.int(1)
 
   def create_result(self, first_elt, outer_shape):
+
     if not self.is_tuple(outer_shape):
       outer_shape = self.tuple([outer_shape])
 

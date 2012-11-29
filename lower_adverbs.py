@@ -37,6 +37,9 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
+    print "fn", fn
+    print "args", args
+    print "axis", axis 
     return self.eval_map(fn, args, axis)
 
   def transform_Reduce(self, expr):
