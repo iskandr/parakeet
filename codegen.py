@@ -264,13 +264,13 @@ class Codegen(object):
 
   def is_array(self, x):
     return isinstance(x.type, array_type.ArrayT)
-  
+
   def elt_type(self, x):
     if self.is_array(x):
       return x.type.elt_type
     else:
-      return x.type  
-    
+      return x.type
+
   def shape(self, array, dim = None):
     if isinstance(array.type, array_type.ArrayT):
       shape = self.attr(array, "shape")
@@ -282,7 +282,7 @@ class Codegen(object):
         return self.assign_temp(dim_value, "dim%d" % dim)
     else:
       return self.tuple([])
-    
+
   def strides(self, array, dim = None):
     assert isinstance(array.type, array_type.ArrayT)
     strides = self.attr(array, "strides")
@@ -295,7 +295,7 @@ class Codegen(object):
 
   def tuple(self, elts, name = "tuple"):
     tuple_t = tuple_type.make_tuple_type(get_types(elts))
-    tuple_t.metadata = self.__class__.__name__  
+    tuple_t.metadata = self.__class__.__name__
     tuple_expr = syntax.Tuple(elts, type = tuple_t)
     if name:
       return self.assign_temp(tuple_expr, name)
@@ -303,8 +303,8 @@ class Codegen(object):
       return tuple_expr
 
   def is_tuple(self, x):
-    return isinstance(x.type, tuple_type.TupleT)  
-  
+    return isinstance(x.type, tuple_type.TupleT)
+
   def concat_tuples(self, x, y):
     assert self.is_tuple(x)
     assert self.is_tuple(y)
@@ -314,18 +314,18 @@ class Codegen(object):
     for i in xrange(len(y.type.elt_types)):
       elts.append(self.tuple_proj(y, i))
     return self.tuple(elts)
-  
+
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
     if isinstance(tup, syntax.Tuple):
       return tup.elts[idx]
     else:
       return syntax.TupleProj(tup, idx, type = tup.type.elt_types[idx])
-  
+
   def tuple_elts(self, tup):
     nelts = len(tup.type.elt_types)
     return [self.tuple_proj(tup, i) for i in xrange(nelts)]
-  
+
   def closure_elt(self, clos, idx):
     assert isinstance(idx, (int, long))
 
@@ -334,16 +334,15 @@ class Codegen(object):
     else:
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
-  
   def alloc_array(self, elt_t, dims, name = "temp_array"):
     if self.is_tuple(dims):
-      shape = dims 
+      shape = dims
       dims = self.tuple_elts(shape)
     else:
       if not isinstance(dims, (list, tuple)):
         dims = [dims]
       shape = self.tuple(dims, "shape")
-    
+
     rank = len(dims)
     nelts = dims[0]
     for d in dims[1:]:
@@ -354,7 +353,7 @@ class Codegen(object):
 
     ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t),
                                "data_ptr")
-    
+
     stride_elts = [syntax_helpers.const(1)]
 
     # assume row-major for now!
@@ -370,12 +369,11 @@ class Codegen(object):
     if self.is_array(value):
       return value.type.rank
     else:
-      return 0     
-  
+      return 0
+
   def slice_value(self, start, stop, step):
     slice_t = array_type.make_slice_type(start.type, stop.type, step.type)
     return syntax.Slice(start, stop, step, type = slice_t)
-
 
   def loop_counter(self, name = "i", start_val = syntax_helpers.zero_i64):
     """

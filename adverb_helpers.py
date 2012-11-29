@@ -1,6 +1,6 @@
-import syntax_helpers
-import core_types
 import array_type
+import core_types
+import syntax_helpers
 
 def max_rank(arg_types):
   """
@@ -14,7 +14,7 @@ def max_rank(arg_types):
       assert curr_max == 0 or curr_max == t.rank,  \
        "Adverb can't accept inputs of rank %d and %d" % (curr_max, t.rank)
       curr_max = t.rank
-    return curr_max
+  return curr_max
 
 def max_rank_arg(args):
   """
@@ -38,18 +38,17 @@ def num_outer_axes(arg_types, axis):
     max_arg_rank = max_rank(arg_types)
   return 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
 
-import syntax 
-import args 
+import adverbs
+import args
+import function_registry
 import names
-import adverbs 
-import function_registry 
+import syntax
 _nested_map_cache = {}
-
 def nested_maps(inner_fn, depth, arg_names):
   if depth <= 0:
     return inner_fn
-  
-  key = inner_fn.name, depth, tuple(arg_names) 
+
+  key = inner_fn.name, depth, tuple(arg_names)
   if key in _nested_map_cache:
     return _nested_map_cache[key]
   local_names = map(names.refresh, arg_names)
@@ -60,10 +59,10 @@ def nested_maps(inner_fn, depth, arg_names):
   closure = syntax.Closure(nested_fn.name, [])
   map_expr = adverbs.Map(closure, axis = 0, args = arg_vars)
   fn = syntax.Fn(
-    name = name, 
-    args = args_obj,  
+    name = name,
+    args = args_obj,
     body = [syntax.Return(map_expr)]
   )
   function_registry.untyped_functions[name] = fn
   _nested_map_cache[key] = fn
-  return fn 
+  return fn

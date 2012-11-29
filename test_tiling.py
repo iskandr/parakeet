@@ -1,13 +1,15 @@
 import adverbs
 import array_type
 import core_types
+import lower_adverbs
 import numpy as np
 import syntax
 import syntax_helpers
 import testing_helpers
 import tile_adverbs
 
-from function_registry import untyped_functions
+from parakeet import each
+from run_function import specialize_and_compile
 
 id_fn = syntax.TypedFn(
   name = "id_fn",
@@ -29,11 +31,29 @@ id_fn_2 = syntax.TypedFn(
 map_fn = syntax.TypedFn(
   name = "map_fn",
   arg_names = ["X"],
-  body = [syntax.Return(adverbs.Map(id_fn_2, ["X"], 0, type=x_array_t))],
+  body = [syntax.Return(adverbs.Map(id_fn_2, [syntax.Var("X", type=x_array_t)],
+                                    0, type=x_array_t))],
   return_type = x_array_t,
   type_env = {"X":x_array_t})
 
+def identity(x):
+  return x
+
+def map_id(X):
+  return each(identity, X)
+
+#def vm(x, y):
+#  tmp = each(lambda x,y: x*y, x, y)
+#  return reduce(lambda x,y: x+y, tmp)
+#
+#def test_vm_tiling():
+#  _, typed, _, _ = specialize_and_compile(vm, [x_array, x_array])
+#  print typed
+#  tiling_transform = tile_adverbs.TileAdverbs()
+
 def test_map_tiling():
+  _, typed, _, _ = specialize_and_compile(map_id, [x_array])
+  print typed
   tiling_transform = tile_adverbs.TileAdverbs(map_fn)
   new_fn = tiling_transform.apply(copy=True)
   assert isinstance(new_fn, syntax.TypedFn)
@@ -44,9 +64,16 @@ def test_id_tiling():
   assert isinstance(new_fn, syntax.TypedFn)
 
 def test_lowering():
-  lower_tiling = tile_adverbs.LowerTiledAdverbs(id_fn)
-  new_fn = lower_tiling.apply(copy=True)
-  assert isinstance(new_fn, syntax.TypedFn)
+  tiling_transform = tile_adverbs.TileAdverbs(map_fn)
+  new_fn = tiling_transform.apply(copy=True)
+  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
+  new_fn_2 = lower_tiling.apply(copy=True)
+  assert isinstance(new_fn_2, syntax.TypedFn)
+  print new_fn_2
+  la = lower_adverbs.LowerAdverbs(new_fn_2)
+  new_fn_3 = la.apply(copy=True)
+  assert isinstance(new_fn_3, syntax.TypedFn)
+  print new_fn_3
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

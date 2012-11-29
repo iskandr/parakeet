@@ -92,7 +92,7 @@ def const(x):
     return const_tuple(*map(const, x))
   else:
     assert x is None, \
-      "Can't convert Python value %s into a Parakeet constant" % x
+        "Can't convert Python value %s into a Parakeet constant" % x
     return none
 
 def unwrap_constant(x):

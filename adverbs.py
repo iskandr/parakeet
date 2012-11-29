@@ -9,8 +9,8 @@ class Adverb(syntax.Expr):
 
   def __repr__(self):
     args_str = ", ".join([str(arg) for arg in self.args])
-    return "%s(axis = %s, fn = %s, %s)" % \
-        (self.node_type(), self.axis, self.fn, args_str)
+    return "%s(axis = %s, fn = %s, %s, type=%s)" % \
+        (self.node_type(), self.axis, self.fn, args_str, self.type)
 
   def __str__(self):
     return repr(self)
