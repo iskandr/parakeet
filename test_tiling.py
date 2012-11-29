@@ -14,6 +14,7 @@ from run_function import specialize_and_compile
 id_fn = syntax.TypedFn(
   name = "id_fn",
   arg_names = ["x"],
+  input_types = [core_types.Int32],
   body = [syntax.Return(syntax_helpers.const(1))],
   return_type = core_types.Int32,
   type_env = {})
@@ -24,6 +25,7 @@ x_array_t = array_type.make_array_type(core_types.Int32, 1)
 id_fn_2 = syntax.TypedFn(
   name = "id_fn_2",
   arg_names = ["x"],
+  input_types = [core_types.Int32],
   body = [syntax.Return(syntax.Var("x", type=core_types.Int32))],
   return_type = core_types.Int32,
   type_env = {"x":core_types.Int32})
@@ -31,6 +33,7 @@ id_fn_2 = syntax.TypedFn(
 map_fn = syntax.TypedFn(
   name = "map_fn",
   arg_names = ["X"],
+  input_types = [x_array_t],
   body = [syntax.Return(adverbs.Map(id_fn_2, [syntax.Var("X", type=x_array_t)],
                                     0, type=x_array_t))],
   return_type = x_array_t,
