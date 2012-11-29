@@ -148,6 +148,21 @@ def call_add_defaults():
 def test_call_add_defaults():
     expect(call_add_defaults, [], 12)
 
+def call_add_defaults_with_names():
+    return add_defaults(y = 10, x = 20)
+
+def test_call_defaults_with_names():
+    expect(call_add_defaults_with_names, [], 30)
+
+def sub(x,y):
+    return x - y
+
+def call_pos_with_names():
+    return sub(y = 10, x = 20)
+
+def test_call_pos_with_names():
+    expect(call_pos_with_names, [], 10)
+
 if __name__ == '__main__':
   run_local_tests()
   

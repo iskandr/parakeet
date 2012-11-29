@@ -31,9 +31,9 @@ def lower(fundef, tile=False):
       fundef = apply_pipeline(fundef, tiling_pipeline, copy = True)
     else:
       fundef = apply_pipeline(fundef, no_tiling, copy = True)
-    # print "BEFORE LOWERING", fundef
+
     lowered_fn = apply_pipeline(fundef, lowering_pipeline, copy = False)
-    # print "AFTER LOWERING", lowered_fn
+
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn.name,tile)] = lowered_fn
     return lowered_fn

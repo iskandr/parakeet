@@ -58,8 +58,7 @@ def create_adverb_hook(adverb_class,
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
   default_wrapper = mk_wrapper(axis = 0)
-  #print "DEFAULT WRAPPER FOR", adverb_class
-  #print default_wrapper
+
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 
@@ -191,14 +190,13 @@ def par_each(fn, *args, **kwds):
     # Execute on thread pool
     rt.run_untiled_job(wf_ptr, c_args_array, num_iters)
     output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
-    print output_ptrs
-    for ptr in output_ptrs:
-      print ptr.contents
+
+
     output_contents = [ptr.contents for ptr in output_ptrs]
-    print output_contents
+
 
     outputs = [map_result_type.to_python(x) for x in output_contents]
-    print outputs
+
 
     #TODO: Have to handle concatenation axis
     result = np.concatenate(outputs)
@@ -213,5 +211,5 @@ def par_each(fn, *args, **kwds):
     gv_inputs = [start, stop, fn_args_array, tile_sizes]
     exec_engine.run_function(llvm_fn, gv_inputs)
     result = map_result_type.to_python(c_args.output.contents)
-  print result
+
   return result

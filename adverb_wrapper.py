@@ -90,7 +90,7 @@ def untyped_wrapper(adverb_class,
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef
-    # print "Created wrapper", fundef 
+    print "Created wrapper", fundef 
     return fundef
 
 

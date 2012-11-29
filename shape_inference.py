@@ -502,7 +502,7 @@ class ShapeInference(SyntaxVisitor):
   
 _symbolic_shape_cache = {}
 def call_shape_expr(typed_fn):
-  print typed_fn 
+
   if isinstance(typed_fn, str):
     import function_registry
     typed_fn = function_registry.typed_functions[typed_fn]

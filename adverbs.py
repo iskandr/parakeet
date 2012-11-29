@@ -7,10 +7,18 @@ class Adverb(syntax.Expr):
     assert self.fn is not None
     assert self.args is not None
 
+  def fn_to_str(self, fn):
+    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
+      return fn.name
+    else:
+      return str(fn)
+    
   def __repr__(self):
     args_str = ", ".join([str(arg) for arg in self.args])
     return "%s(axis = %s, fn = %s, %s, type=%s)" % \
-        (self.node_type(), self.axis, self.fn, args_str, self.type)
+        (self.node_type(), self.axis, 
+         self.fn_to_str(self.fn), 
+         args_str, self.type)
 
   def __str__(self):
     return repr(self)
@@ -36,7 +44,9 @@ class Accumulative(Adverb):
   def __repr__(self):
     args_str = ", ".join([str(x) for x in self.args])
     return "%s(axis = %s, map_fn = %s, combine = %s, init = %s, %s)" % \
-        (self.node_type(), self.axis, self.fn, self.combine,
+        (self.node_type(), self.axis, 
+         self.fn_to_str(self.fn),
+         self.fn_to_str(self.combine),
          self.init, args_str)
 
   def node_init(self):
@@ -53,7 +63,10 @@ class Scan(Accumulative):
   def __repr__(self):
     args_str = ", ".join([str(x) for x in self.args])
     return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)"\
-        % (self.node_type(), self.axis, self.fn, self.combine, self.emit,
+        % (self.node_type(), self.axis, 
+           self.fn_to_str(self.fn),
+           self.fn_to_str(self.combine),
+           self.fn_to_str(self.emit),
            self.init, args_str)
 
 class Tiled(object):

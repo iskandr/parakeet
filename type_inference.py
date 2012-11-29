@@ -384,8 +384,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
   types throughout the program and inserts
   adverbs for scalar operators applied to arrays
   """
-  #print "Inferring for %s:\n pos = %s, kwds = %s" % \
-  #    (untyped_fn, positional_types, keyword_types)
+
 
   var_map = VarMap()
 
@@ -402,7 +401,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
                          varargs_fn = tuple_type.make_tuple_type)
     # keep track of the return
   tenv['$return'] = core_types.Unknown
-  # print "tenv", tenv
+
   body = annotate_block(untyped_fn.body, tenv, var_map)
   
   arg_names = [x for x in typed_args.arg_slots 
@@ -447,11 +446,7 @@ def _infer_types(untyped_fn, positional_types, keyword_types = OrderedDict()):
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
     
-  print "untyped_fn", untyped_fn  
-  print "typed_args", typed_args
-  print "tenv", tenv
-  print "typed_args.arg_slots", typed_args.arg_slots
-  print "input_types", input_types
+  
 
   # num_varargs = len(input_types[-1].elt_types) if typed_args.varargs else 0
 

@@ -56,8 +56,7 @@ def translate_args(args):
     positional = positional[:-n_defaults]
     for (k,v) in zip(default_vars, args.defaults):
       defaults[k] = translate_default_arg_value(v)
-  print args.defaults 
-  print defaults  
+
   return Args(positional, defaults, varargs = args.vararg)
 
 class AST_Translator(ast.NodeVisitor):
@@ -204,9 +203,9 @@ class AST_Translator(ast.NodeVisitor):
     
     fn_val = self.visit(fn)
     arg_vals = self.visit_list(args)
-    print "KEYWORDS", keywords 
+ 
     if starargs:
-      print "CALL :: STARARGS",  starargs
+   
       starargs_expr = self.visit(starargs)
       arg_vals.append(syntax.Unpack(starargs_expr))
     return syntax.Invoke(fn_val, arg_vals)
@@ -334,7 +333,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 
   fundef = syntax.Fn(ssa_fn_name, full_args, body,  refs, original_outer_names)
   untyped_functions[fundef.name]  = fundef
-  print "TRANSLATED", fundef 
+
   return fundef
 
 def translate_function_source(source, globals_dict, closure_vars = [],
@@ -381,8 +380,8 @@ def translate_function_value(fn):
       closure_cells = ()
 
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
-    # print fundef
+
     register_python_fn(fn, fundef)
-    # print "Translated", fundef
+
     return fundef
 

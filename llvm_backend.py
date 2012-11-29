@@ -41,7 +41,7 @@ class CompilationEnv:
     return builder
 
   def _init_vars(self, fundef, builder):
-    # print "init compilation", fundef
+
     """
     Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.
@@ -91,7 +91,7 @@ def attribute_lookup(struct, name, env, builder):
   return ptr, field_type
 
 def compile_expr(expr, env, builder):
-  # print "  EXPR", expr
+
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -251,7 +251,7 @@ def compile_stmt(stmt, env, builder):
   The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
 
-  # print "STMT ", stmt
+
 
   def compile_Assign():
     rhs_t = stmt.rhs.type
@@ -278,7 +278,7 @@ def compile_stmt(stmt, env, builder):
 
     assert lhs_t == rhs_t, \
       "Type mismatch between LHS %s and RHS %s" % (lhs_t, rhs_t)
-    # print "store", value, ":", rhs_t, "in", ref, ":", lhs_t
+
     builder.store(value, ref)
     return builder, False
 
@@ -364,8 +364,6 @@ def compile_fn(fundef):
   compile_block(fundef.body, env, start_builder)
   env.llvm_context.run_passes(env.llvm_fn)
 
-  #print "OPTIMIZED"
-  # print env.llvm_fn
   result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
   compiled_functions[fundef.name] = result
   return result

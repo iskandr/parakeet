@@ -8,10 +8,15 @@ class Transform(Codegen):
   def __init__(self, fn):
     Codegen.__init__(self)
     self.fn = fn
+    self.copy = None 
 
   def lookup_type(self, name):
     assert self.type_env is not None
     return self.type_env[name]
+
+  def transform_TypedFn(self, fn):
+    nested_transform = self.__class__(fn)
+    return nested_transform.apply(copy = self.copy)
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
@@ -123,6 +128,7 @@ class Transform(Codegen):
     pass 
   
   def apply(self, copy = False):
+    self.copy = copy 
     old_fn = self.pre_apply(self.fn)
     if old_fn is None:
       old_fn = self.fn 

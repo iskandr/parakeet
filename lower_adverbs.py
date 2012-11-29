@@ -37,9 +37,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    print "fn", fn
-    print "args", args
-    print "axis", axis 
+ 
     return self.eval_map(fn, args, axis)
 
   def transform_Reduce(self, expr):
@@ -67,10 +65,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_allpairs(fn, x, y, axis)
 
-  def post_apply(self, fn):
-    # print "POST ADVERB LOWERING"
-    # print fn
-    pass
+
 
 def lower_adverbs(fn):
   return transform.cached_apply(LowerAdverbs, fn)
