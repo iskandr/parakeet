@@ -182,9 +182,7 @@ class Args:
       bound[i] = True
 
     if len(positional_values) > n:
-
       extra = positional_values[n:]
-
       positional_values = positional_values[:n]
     else:
       extra = []
@@ -193,15 +191,17 @@ class Args:
       assign(i, p)
 
     for (k,v) in keyword_values.iteritems():
+      print self.positions
       assert k in self.positions, "Unknown keyword %s" % k
       assign(self.positions[k], v)
 
     for  (k, v) in self.defaults.iteritems():
- 
       i = self.positions[k]
       if not bound[i]:
         assign(i, default_fn(k,v) if default_fn else v)
+        
     missing_args = [self.arg_slots[i] for i in xrange(n) if not bound[i]]
+    
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
 

@@ -110,7 +110,19 @@ class Invoke(Expr):
   """
   Invoke a closure with extra args
   """
-  _members = ['closure', 'args']
+  _members = ['closure', 'args', 'keywords'] #, 'starargs']
+  
+  def __str__(self):
+    arg_strings = [str(x) for x in self.args]
+    if self.keywords:
+      for (k,v) in self.keywords.items():
+        arg_strings.append("%s = %s" % (k,v))
+    #if self.starargs:
+    # self.arg_strings.append("*%s" % self.starargs)
+    return "%s(%s)" % (self.closure, arg_strings)
+   
+  def __repr__(self):
+    return str(self)
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']

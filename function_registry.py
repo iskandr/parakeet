@@ -38,14 +38,14 @@ def lookup_python_fn_dependencies(fn_val):
   info = known_python_functions[fn_val]
   return [info.globals_dict[n] for n in info.dependency_names]
 
-def add_specialization(untyped_id, arg_types, typed_fundef):
-  key = (untyped_id, tuple(arg_types))
+def add_specialization(untyped_id, arg_types, keyword_types, typed_fundef):
+  key = (untyped_id, tuple(arg_types), tuple(keyword_types.keys()))
   assert key not in specializations
   specializations[key] = typed_fundef
   typed_functions[typed_fundef.name] = typed_fundef
 
-def find_specialization(untyped_id, arg_types):
-  key = (untyped_id, tuple(arg_types))
+def find_specialization(untyped_id, arg_types, keyword_types = {}):
+  key = (untyped_id, tuple(arg_types), tuple(keyword_types.keys()))
   return specializations[key]
 
 class ClosureSignatures:
