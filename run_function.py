@@ -1,7 +1,7 @@
 import ast_conversion
 import llvm_backend
 import syntax
-
+from args import ActualArgs
 import type_inference
 
 from llvm.ee import GenericValue
@@ -90,7 +90,7 @@ def specialize_and_compile(fn, args):
 
   # propagate types through function representation and all
   # other functions it calls
-  typed = type_inference.specialize(untyped, input_types)
+  typed = type_inference.specialize(untyped, ActualArgs(input_types))
 
   # compile to native code
   llvm_fn, parakeet_fn, exec_engine = \

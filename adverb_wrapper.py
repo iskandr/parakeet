@@ -1,6 +1,6 @@
 import names 
 import syntax 
-from args import Args 
+from args import FormalArgs, ActualArgs
 import syntax_helpers 
 import adverbs 
 import function_registry
@@ -61,30 +61,30 @@ def untyped_wrapper(adverb_class,
       unpack = syntax.Unpack(syntax.Var(varargs_name))
       data_args.append(unpack)
     
-    adverb_parameters = adverb_class.members()
-    adverb_args = {'axis': axis, 'args': data_args}
-    optional_args = OrderedDict()
+    adverb_param_names = adverb_class.members()
     
-    if 'init' in adverb_parameters:
+    adverb_params = {'axis': axis, 'params': ActualArgs(data_args)}
+    optional_args = {}
+    
+    if 'init' in adverb_param_names:
       init_name = names.fresh('init')
       optional_args[init_name] = None 
       init_var = syntax.Var(init_name)
-      adverb_args['init'] = init_var 
+      adverb_params['init'] = init_var 
     
     def add_fn_arg(field, value):
       if value:
-        adverb_args[field] = value
-      elif field in adverb_parameters:
-        adverb_args[field] = untyped_identity_function
+        adverb_params[field] = value
+      elif field in adverb_param_names:
+        adverb_params[field] = untyped_identity_function
     add_fn_arg('fn', map_fn)
     add_fn_arg('combine', combine_fn)
     add_fn_arg('emit', emit_fn)
     
-   
-    adverb = adverb_class(**adverb_args)
+    adverb = adverb_class(**adverb_params)
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
-    fn_args_obj = Args(positional = positional_arg_names,
+    fn_args_obj = FormalArgs(positional = positional_arg_names,
                        defaults = optional_args,  
                        varargs = varargs_name)
     fundef = syntax.Fn(fn_name, fn_args_obj, body)

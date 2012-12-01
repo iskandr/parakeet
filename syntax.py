@@ -1,5 +1,5 @@
 import core_types
-
+import args 
 from node import Node
 
 class Stmt(Node):
@@ -110,16 +110,10 @@ class Invoke(Expr):
   """
   Invoke a closure with extra args
   """
-  _members = ['closure', 'args', 'keywords'] #, 'starargs']
-  
+  _members = ['closure', 'args'] 
+        
   def __str__(self):
-    arg_strings = [str(x) for x in self.args]
-    if self.keywords:
-      for (k,v) in self.keywords.items():
-        arg_strings.append("%s = %s" % (k,v))
-    #if self.starargs:
-    # self.arg_strings.append("*%s" % self.starargs)
-    return "%s(%s)" % (self.closure, arg_strings)
+    return "%s(%s)" % (self.closure, self.args)
    
   def __repr__(self):
     return str(self)
@@ -208,9 +202,9 @@ class Fn(Expr):
   def node_init(self):
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
-    import args
-    assert isinstance(self.args, args.Args), \
-      "Expected arguments to fn to be Args object, got %s" % self.args
+
+    assert isinstance(self.args, args.FormalArgs), \
+      "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
 

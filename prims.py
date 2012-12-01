@@ -27,7 +27,7 @@ def is_prim(numpy_fn):
 
 import names
 import syntax
-from args import Args
+from args import FormalArgs
 
 from function_registry import untyped_functions
 _untyped_prim_wrappers = {}
@@ -39,7 +39,7 @@ def prim_wrapper(p):
   else:
     fn_name = names.fresh(p.name)
     arg_names = names.fresh_list(p.nin)
-    args_obj = Args(positional = arg_names)
+    args_obj = FormalArgs(positional = arg_names)
     arg_vars = map(syntax.Var, arg_names)
     body = [syntax.Return(syntax.PrimCall(p, arg_vars))]
     fundef = syntax.Fn(fn_name, args_obj, body, [])

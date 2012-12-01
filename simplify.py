@@ -1,4 +1,4 @@
-import transform
+import transform 
 import prims 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 import type_inference
@@ -124,31 +124,7 @@ class Simplify(transform.Transform):
       new_var = syntax.Var(name = name, type = original_expr.type)
       return new_var
     
-  def transform_Invoke(self, expr):
-    new_closure = self.transform_expr(expr.closure)
-    new_args = self.transform_expr_list(expr.args)
-    
-    if isinstance(new_closure, syntax.Var) and \
-        new_closure.name in self.env:
-      new_closure = self.env[new_closure.name]
-    
-    closure_t = new_closure.type
-    # TODO: Implement an enumeration over ClosureSet, but 
-    # for now we just leave the invoke alone when it has 
-    # multiple targets 
-    if isinstance(closure_t, closure_type.ClosureT): 
-      if isinstance(new_closure, syntax.Closure):
-        closure_args = new_closure.args 
-      else:
-        n_closure_args = len(closure_t.arg_types)
-        closure_args = \
-          [self.closure_elt(new_closure, i) for i in xrange(n_closure_args)]
-      combined_args = closure_args + new_args
-      arg_types = syntax_helpers.get_types(combined_args)
-      typed_fundef = type_inference.specialize(closure_t.fn, arg_types)
-      return syntax.Call(typed_fundef.name, combined_args, type = expr.type)
-    else:
-      return syntax.Invoke(new_closure, new_args, type = expr.type)
+
     
   def transform_TupleProj(self, expr):
 

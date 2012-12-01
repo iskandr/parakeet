@@ -2,6 +2,7 @@ import array_type
 import core_types
 import syntax
 import tuple_type
+import args 
 
 def const_int(n, t = core_types.Int64):
   return syntax.Const(n, type = t)
@@ -130,7 +131,10 @@ def get_type(expr):
   return expr.type
 
 def get_types(exprs):
-  return [expr.type for expr in exprs]
+  if isinstance(exprs, args.ActualArgs):
+    return exprs.transform(get_type)
+  else:
+    return [expr.type for expr in exprs]
 
 def is_zero(expr):
   return isinstance(expr, syntax.Const) and expr.value == 0

@@ -110,7 +110,7 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     call = syntax.Invoke(nested_closure, unpacked_args)
     body = [syntax.Assign(syntax.Attribute(args_var, "output"), call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_par_wrapper")
-    fundef = syntax.Fn(fn_name, args.Args(positional = inputs), body)
+    fundef = syntax.Fn(fn_name, args.FormalArgs(positional = inputs), body)
     function_registry.untyped_functions[fn_name] = fundef
     _par_wrapper_cache[key] = fundef
     return fundef

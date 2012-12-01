@@ -37,26 +37,26 @@ class VarMap:
       return self._vars[old_name]
     else:
       return self.rename(old_name)
+  
+  def __str__(self):
+    return "VarMap(%s)" % self._vars
 
-def get_invoke_specialization(closure_t, 
-                                  arg_types, 
-                                  keyword_types = OrderedDict()):
+def get_invoke_specialization(closure_t, arg_types):
   # for a given closure and the direct argument types it
   # receives when invokes, return the specialization which
   # will ultimately get called
-  if isinstance(arg_types, list):
-    arg_types = tuple(arg_types)
   
   # for a given invocation of a ClosureT
   # what is the typed_fn that gets called?
   untyped_id, closure_arg_types = closure_t.fn, closure_t.arg_types
   untyped_fundef = untyped_functions[untyped_id]
-  full_arg_types = closure_arg_types + arg_types
-  return specialize(untyped_fundef, full_arg_types, keyword_types)
+  full_arg_types = arg_types.prepend_positional(closure_arg_types)
+  return specialize(untyped_fundef, full_arg_types)
 
 _invoke_type_cache = {}
-def invoke_result_type(closure_t, arg_types, keyword_types = OrderedDict()):
-  key = (closure_t, tuple(arg_types), tuple(keyword_types.items()))
+
+def invoke_result_type(closure_t, arg_types):
+  key = (closure_t, arg_types)
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
   
@@ -72,7 +72,7 @@ def invoke_result_type(closure_t, arg_types, keyword_types = OrderedDict()):
       
   result_type = core_types.Unknown
   for closure_t in closure_set.closures:
-    typed_fundef = get_invoke_specialization(closure_t, arg_types, keyword_types)
+    typed_fundef = get_invoke_specialization(closure_t, arg_types)
     result_type = result_type.combine(typed_fundef.return_type)
   _invoke_type_cache[key] = result_type
   return result_type
@@ -85,19 +85,11 @@ def annotate_expr(expr, tenv, var_map):
   def annotate_children(child_exprs):
     return [annotate_expr(e, tenv, var_map) for e in child_exprs]
 
-  def annotate_args(arg_exprs):
-    """
-    Collect argument types, splicing in the contents of Unpack expressions
-    """
-    new_args = []
-    for untyped_expr in arg_exprs:
-      if isinstance(untyped_expr, untyped_ast.Unpack):
-        typed_tuple = annotate_child(untyped_expr.value)
-        for (i, elt_t) in enumerate(typed_tuple.type.elt_types):
-          new_args.append(typed_ast.TupleProj(typed_tuple, i, type = elt_t))
-      else:
-        new_args.append(annotate_child(untyped_expr))
-    return new_args
+  def annotate_args(args):
+    if isinstance(args, (list, tuple)):
+      return map(annotate_child, args)
+    else:
+      return args.transform(annotate_child)
   
   def annotate_keywords(kwds_dict):
     if kwds_dict is None: 
@@ -126,11 +118,11 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Invoke():
     closure = annotate_child(expr.closure)
     args = annotate_args(expr.args)
-    keywords = annotate_keywords(expr.keywords)
       
-    result_type = invoke_result_type(closure.type, 
-                                     get_types(args), 
-                                     keyword_types(keywords))
+    result_type = invoke_result_type(closure.type, get_types(args))
+    
+    # HERE YOU SHOULD FLATTEN THE ARGS! ... hopefully into the same 
+    # order as the underlying function? 
     return typed_ast.Invoke(closure, args, type = result_type)
 
   def expr_Attribute():
@@ -142,13 +134,6 @@ def annotate_expr(expr, tenv, var_map):
   def expr_PrimCall():
     args = annotate_args(expr.args)
     arg_types = get_types(args)
-    def get_elt_type(t):
-      if isinstance(t, array_type.ArrayT):
-        return t.elt_type
-      else:
-        return t
-    def get_elt_types(ts):
-      return map(get_elt_type, ts)
 
     if all(isinstance(t, core_types.ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
@@ -395,9 +380,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
-def _infer_types(untyped_fn, 
-                   positional_types, 
-                   keyword_types = OrderedDict()):
+def _infer_types(untyped_fn, types):
   """
   Given an untyped function and input types,
   propagate the types through the body,
@@ -411,19 +394,25 @@ def _infer_types(untyped_fn,
 
 
   var_map = VarMap()
-
-  typed_args = untyped_fn.args.transform(var_map.rename)
+  def rename_arg(visible_name):
+    old_name = untyped_fn.args.local_names[visible_name]
+    return var_map.rename(old_name)
   
+  typed_args = untyped_fn.args.fresh_copy(local_name_fn = rename_arg)
+  
+  print "untyped_args", untyped_fn.args 
+  print "typed_args", typed_args 
+  print "var_map", var_map 
   unbound_keywords = []
   def default_fn(k, value):
     unbound_keywords.append(k)
     return type_conv.typeof(value)
   
-  tenv = typed_args.bind(positional_types, 
-                         keyword_types,
+  tenv = typed_args.bind(types, 
                          default_fn = default_fn,  
-                         varargs_fn = tuple_type.make_tuple_type)
-    # keep track of the return
+                         starargs_fn = tuple_type.make_tuple_type)
+  print "tenv", tenv 
+  # keep track of the return
   tenv['$return'] = core_types.Unknown
 
   body = annotate_block(untyped_fn.body, tenv, var_map)
@@ -443,23 +432,23 @@ def _infer_types(untyped_fn,
     
   
   input_types = [tenv[arg_name] for arg_name in arg_names]
-  varargs_name = typed_args.varargs
-  # varargs are all passed individually and then packaged up
+  starargs_name = typed_args.starargs
+  # starargs are all passed individually and then packaged up
   # into a tuple on the first line of the function
-  if typed_args.varargs:
-    varargs_t = tenv[varargs_name]
-    assert isinstance(varargs_t, tuple_type.TupleT), \
-      "Unexpected varargs type %s" % varargs_t
+  if typed_args.starargs:
+    starargs_t = tenv[starargs_name]
+    assert isinstance(starargs_t, tuple_type.TupleT), \
+      "Unexpected starargs type %s" % starargs_t
     extra_arg_vars = []
-    for (i, elt_t) in enumerate(varargs_t.elt_types):
-      arg_name = "%s_elt%d" % (varargs_name, i)
+    for (i, elt_t) in enumerate(starargs_t.elt_types):
+      arg_name = "%s_elt%d" % (starargs_name, i)
       tenv[arg_name] = elt_t
       input_types.append(elt_t)
       arg_var = typed_ast.Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
-    tuple_lhs = typed_ast.Var(name = varargs_name, type = varargs_t)
-    tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = varargs_t)
+    tuple_lhs = typed_ast.Var(name = starargs_name, type = starargs_t)
+    tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = starargs_t)
     tuple_assign = typed_ast.Assign(tuple_lhs, tuple_rhs)
     body = [tuple_assign] + body
 
@@ -472,20 +461,19 @@ def _infer_types(untyped_fn,
     
   
 
-  # num_varargs = len(input_types[-1].elt_types) if typed_args.varargs else 0
+  # num_starargs = len(input_types[-1].elt_types) if typed_args.starargs else 0
 
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
     arg_names = arg_names,
-    # num_varargs = num_varargs,
+
     input_types = input_types,
     return_type = return_type,
     type_env = tenv)
 
-from insert_coercions import insert_coercions
 
-def specialize(untyped, arg_types, keyword_types = OrderedDict()):
+def specialize(untyped, arg_types):
   if isinstance(untyped, str):
     untyped_id = untyped
     untyped = untyped_functions[untyped_id]
@@ -494,16 +482,23 @@ def specialize(untyped, arg_types, keyword_types = OrderedDict()):
     untyped_id = untyped.name
 
   try:
-    return find_specialization(untyped_id, arg_types, keyword_types)
+    return find_specialization(untyped_id, arg_types)
   except:
-    typed_fundef = _infer_types(untyped, arg_types, keyword_types)
-    coerced_fundef = insert_coercions(typed_fundef)
+    typed_fundef = _infer_types(untyped, arg_types)
+    from rewrite_typed import rewrite_typed  
+    coerced_fundef = rewrite_typed(typed_fundef)
 
     import optimize
     # TODO: Also store the unoptimized version
     # so we can do adaptive recompilation
     opt = optimize.optimize(coerced_fundef, copy = False)
-    add_specialization(untyped_id, arg_types, keyword_types, opt)
+    add_specialization(untyped_id, arg_types, opt)
+    
+    # import lowering 
+    # lowered = lowering.lower(opt, copy = True, tile = False) 
+    # tiled = lowering.lower(opt, copy = True, tile = True)
+    # opt.lowered = lowered
+    # opt.tiled = tiled 
     return opt
 
 def infer_return_type(untyped, arg_types):

@@ -14,7 +14,7 @@ import names
 from scoped_env import ScopedEnv
 
 from common import dispatch
-from args import Args
+from args import FormalArgs, ActualArgs
 
 from subst import subst, subst_list
 
@@ -23,8 +23,6 @@ reserved_names = {
   'False' : syntax.Const(False),
   'None' : syntax.Const(None),
 }
-
-
 
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
@@ -44,7 +42,7 @@ def translate_positional(arg):
 def translate_positional_args(args):
   return map(translate_positional, args)
 
-def translate_args(args):
+def translate_args(args, local_name_fn):
   assert not args.kwarg
 
   positional = translate_positional_args(args.args)
@@ -57,7 +55,9 @@ def translate_args(args):
     for (k,v) in zip(default_vars, args.defaults):
       defaults[k] = translate_default_arg_value(v)
 
-  return Args(positional, defaults, varargs = args.vararg)
+  return FormalArgs(positional, 
+                    defaults, starargs = args.vararg, 
+                    local_name_fn = local_name_fn)
 
 class AST_Translator(ast.NodeVisitor):
 
@@ -202,7 +202,8 @@ class AST_Translator(ast.NodeVisitor):
     assert kwargs is None, "Dictionary of keyword args not supported"
 
     fn_val = self.visit(fn)
-    arg_vals = self.visit_list(args)
+    
+    positional = self.visit_list(args)
     
     keywords_dict = {}
     for kwd in keywords_list:
@@ -210,14 +211,24 @@ class AST_Translator(ast.NodeVisitor):
     
     if starargs:
       starargs_expr = self.visit(starargs)
-      arg_vals.append(syntax.Unpack(starargs_expr))
+    else:
+      starargs_expr = None
+      
+    actuals = ActualArgs(positional, keywords_dict, starargs_expr) 
        
-    return syntax.Invoke(fn_val, arg_vals, keywords_dict)
+    return syntax.Invoke(fn_val, actuals)
 
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
 
   def visit_Attribute(self, expr):
+    # TODO: 
+    # Recursive lookup to see if:
+    #  (1) base object is local, if so-- create chain of attributes
+    #  (2) base object is global but an adverb primitive-- use it locally
+    #      without adding it to nonlocals
+    #  (3) not local at all-- in which case, add the whole chain of strings
+    #      to nonlocals            
     value = self.visit(expr.value)
     return syntax.Attribute(value, expr.attr)
 
@@ -314,8 +325,9 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 
   translator = AST_Translator(globals_dict, closure_cell_dict, outer_env)
 
-  direct_args = translate_args(function_def_ast.args)
-  ssa_args = direct_args.transform(translator.env.fresh, extract_name = True)
+  ssa_args = translate_args(function_def_ast.args, translator.env.fresh)
+  print ssa_args 
+    
   _, body = translator.visit_block(function_def_ast.body)
   ssa_fn_name = names.fresh(function_def_ast.name)
 
@@ -330,12 +342,10 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   original_outer_names = translator.env.original_outer_names
   localized_outer_names = translator.env.localized_outer_names
 
-  nonlocal_ssa_args = ref_names + localized_outer_names
-  full_args = Args(ssa_args.positional, ssa_args.defaults,
-                   nonlocals = nonlocal_ssa_args, 
-                   varargs = ssa_args.varargs)
-
-  fundef = syntax.Fn(ssa_fn_name, full_args, body,  refs, original_outer_names)
+  
+  ssa_args.prepend_nonlocal_args(localized_outer_names + ref_names)
+  
+  fundef = syntax.Fn(ssa_fn_name, ssa_args, body,  refs, original_outer_names)
   untyped_functions[fundef.name]  = fundef
 
   return fundef

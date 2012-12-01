@@ -88,6 +88,10 @@ class ScopedEnv:
     local_name = names.fresh(key)
     self.python_refs[local_name] = ref
     return local_name 
+  
+  def __setitem__(self, k, v):
+    scope = self.top_scope()
+    scope[k] = v 
       
   def __contains__(self, key):
     for scope in reversed(self.scopes):
