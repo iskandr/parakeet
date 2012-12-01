@@ -12,13 +12,20 @@ class Adverb(syntax.Expr):
       return fn.name
     else:
       return str(fn)
-    
+  
+  def args_to_str(self):
+    if isinstance(self.args, (list, tuple)):
+      return ", ".join([str(arg) for arg in self.args])
+    else:
+      return str(self.args)
+  
   def __repr__(self):
-    args_str = ", ".join([str(arg) for arg in self.args])
+    
     return "%s(axis = %s, fn = %s, %s, type=%s)" % \
         (self.node_type(), self.axis, 
          self.fn_to_str(self.fn), 
-         args_str, self.type)
+         self.args_to_str(), 
+         self.type)
 
   def __str__(self):
     return repr(self)
@@ -42,12 +49,13 @@ class Accumulative(Adverb):
   _members = ['combine', 'init']
 
   def __repr__(self):
-    args_str = ", ".join([str(x) for x in self.args])
+    
     return "%s(axis = %s, map_fn = %s, combine = %s, init = %s, %s)" % \
         (self.node_type(), self.axis, 
          self.fn_to_str(self.fn),
          self.fn_to_str(self.combine),
-         self.init, args_str)
+         self.init, 
+         self.args_to_str())
 
   def node_init(self):
     # assert self.init is not None
@@ -61,13 +69,14 @@ class Scan(Accumulative):
   _members = ['emit']
 
   def __repr__(self):
-    args_str = ", ".join([str(x) for x in self.args])
+   
     return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)"\
         % (self.node_type(), self.axis, 
            self.fn_to_str(self.fn),
            self.fn_to_str(self.combine),
            self.fn_to_str(self.emit),
-           self.init, args_str)
+           self.init, 
+           self.args_to_str())
 
 class Tiled(object):
   pass

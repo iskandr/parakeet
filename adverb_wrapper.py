@@ -55,16 +55,19 @@ def untyped_wrapper(adverb_class,
     map_fn = mk_input_var(map_fn_name)
     combine_fn = mk_input_var(combine_fn_name)
     emit_fn = mk_input_var(emit_fn_name)
-    data_args = map(mk_input_var, data_names)
+    data_arg_vars = map(mk_input_var, data_names)
+    
     if varargs_name:
       varargs_name = names.refresh(varargs_name)
-      unpack = syntax.Unpack(syntax.Var(varargs_name))
-      data_args.append(unpack)
+      unpack = syntax.Var(varargs_name)
+    else:
+      unpack = None 
     
+    data_args = ActualArgs(data_arg_vars, starargs = unpack)
     adverb_param_names = adverb_class.members()
     
-    adverb_params = {'axis': axis, 'params': ActualArgs(data_args)}
-    optional_args = {}
+    adverb_params = {'axis': axis, 'args': data_args }
+    optional_args = OrderedDict()
     
     if 'init' in adverb_param_names:
       init_name = names.fresh('init')
@@ -86,7 +89,7 @@ def untyped_wrapper(adverb_class,
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
     fn_args_obj = FormalArgs(positional = positional_arg_names,
                        defaults = optional_args,  
-                       varargs = varargs_name)
+                       starargs = varargs_name)
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef

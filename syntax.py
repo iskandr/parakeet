@@ -141,10 +141,9 @@ class PrimCall(Expr):
   def __str__(self):
     return repr(self)
 
+"""
 class Unpack(Expr):
-  """
-  Unpack a varargs tuple into an argument list
-  """
+  # Unpack a varargs tuple into an argument list
   _members = ['value']
 
   def __str__(self):
@@ -152,7 +151,7 @@ class Unpack(Expr):
 
   def __repr__(self):
     return str(self)
-
+"""
 ############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
@@ -160,10 +159,11 @@ class Unpack(Expr):
 #  way to describe the type/shape/compilation semantics of array operators
 #
 #############################################################################
-
+"""
 class Ravel(Expr):
   # given an array, return its data in 1D form
   _members = ['array']
+"""
 
 class ConstArray(Expr):
   _members = ['shape', 'value']
