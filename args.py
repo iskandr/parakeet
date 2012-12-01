@@ -91,23 +91,41 @@ def transform_list(pats, atom_fn,  extract_name = True, tuple_fn = tuple,
                    index_fn = transform_nothing):
   return [transform(p, atom_fn,  extract_name, tuple_fn, index_fn)
           for p in pats]
-"""
-def bind(lhs, rhs):
-  if isinstance(lhs, FormalArgs):
-    return lhs.bind(rhs)
 
-  if isinstance(lhs, (tuple, list)):
-    keys = flatten_list(lhs)
+
+class CombinedIters:
+  def __init__(self, i1, i2):
+    self.i1 = i1
+    self.i2 = i2
+    self.first_iter = True 
+    
+  def next(self):
+    if self.first_iter:
+      try:
+        return self.i1.next()
+      except:
+        self.first_iter = False
+        return self.i2.next()
+    else:
+      return self.i2.next()
+
+def combine_iters(*iters):
+  assert len(iters) > 0
+  curr_iter = iters[0]
+  for i in iters[1:]:
+    curr_iter = CombinedIters(curr_iter, i)
+  return curr_iter 
+
+class NullIter(object):
+  def next(self):
+    raise StopIteration
+
+def maybe_iter(obj):
+
+  if obj is None:
+    return NullIter()
   else:
-    keys = flatten(lhs)
-
-  if isinstance(rhs, (list, tuple)):
-    values = flatten_list(rhs)
-  else:
-    values = flatten(rhs)
-
-  return dict(*zip(keys, values))
-"""
+    return iter(obj)
 
 class ActualArgs(object):
   def __init__(self, positional, keywords = {}, starargs = None):
@@ -140,9 +158,11 @@ class ActualArgs(object):
     return hash(self.positional + kwd_tuple + (self.starargs,))
     
   def __iter__(self):
-    assert len(self.keywords) is 0
-    assert self.starargs is None 
-    return iter(self.positional)
+    return combine_iters(
+      iter(self.positional), 
+      self.keywords.itervalues(), 
+      maybe_iter(self.starargs))
+        
   
   def prepend_positional(self, more_args):
     new_pos = tuple(more_args) + self.positional 
@@ -151,35 +171,26 @@ class ActualArgs(object):
 import names 
 
 class FormalArgs(object):
-  def prepend_nonlocal_args(self, more_nonlocals, local_name_fn = lambda x:x):
-    localized_names = map(local_name_fn, more_nonlocals)
-    self.nonlocals = tuple(more_nonlocals) + self.nonlocals 
-    self.arg_slots = list(localized_names) + self.arg_slots
-    n = len(more_nonlocals)
-    for k in self.positions:
-      self.positions[k] += n
-    for (i,(l,k)) in enumerate(zip(localized_names, more_nonlocals)):
-      self.positions[k] = i
-      self.local_names[k] = l 
+
   
   def __init__(self, positional,
                      defaults = OrderedDict(),
                      nonlocals = (),
                      starargs = None, 
                      local_name_fn = lambda x: x):
+    
     assert isinstance(positional, (list, tuple))
     assert isinstance(defaults, OrderedDict)
+    
     self.nonlocals = tuple(nonlocals)
     self.positional = tuple(positional)
     self.defaults = defaults
     self.starargs = starargs
     
-    self.local_names = OrderedDict()
-    
-    # note that the starargs variable is excluded from arg_slots
-    
+    self.local_names = {}
     self.arg_slots = []
     self.positions = {}
+    
     self.prepend_nonlocal_args(self.nonlocals, local_name_fn)
     pos = len(self.positions)
       
@@ -202,9 +213,22 @@ class FormalArgs(object):
     if starargs:
       visible_name = name(starargs)
       self.local_names[visible_name] = local_name_fn(visible_name)
+      
 
     self.visible_names = list(reversed(self.local_names.keys()))
     
+  
+  def prepend_nonlocal_args(self, more_nonlocals, local_name_fn = lambda x:x):
+    localized_names = map(local_name_fn, more_nonlocals)
+    self.nonlocals = tuple(more_nonlocals) + self.nonlocals 
+    self.arg_slots = list(localized_names) + self.arg_slots
+    n = len(more_nonlocals)
+    for k in self.positions:
+      self.positions[k] += n
+    for (i,(l,k)) in enumerate(zip(localized_names, more_nonlocals)):
+      self.positions[k] = i
+      self.local_names[k] = l 
+  
   def __str__(self):
     
     def arg_to_str(arg):
@@ -213,7 +237,10 @@ class FormalArgs(object):
       else:
         visible_name = name(arg)
         local_name = self.local_names[visible_name]
-        return "%s {%s}" % (visible_name, local_name)  
+        if visible_name == local_name:
+          return visible_name
+        else:
+          return "%s{%s}" % (visible_name, local_name)  
     arg_strings = []
     for pos_arg in self.positional:
       arg_strings.append(arg_to_str(pos_arg))
@@ -224,7 +251,10 @@ class FormalArgs(object):
     if self.starargs:
       visible_name = name(self.starargs)
       local_name = self.local_names[visible_name]
-      arg_strings.append("*%s{%s}" % (visible_name, local_name))
+      if visible_name == local_name:
+        arg_strings.append("*%s" % visible_name)
+      else:
+        arg_strings.append("*%s{%s}" % (visible_name, local_name))
     
     arg_strings += \
       ["nonlocals = (%s)" % ", ".join(map(str, self.nonlocals))] \
@@ -241,7 +271,10 @@ class FormalArgs(object):
       )
 
   def __iter__(self):
-    return iter(self.arg_slots)
+    if self.starargs:
+      return iter(self.arg_slots + [self.starargs])
+    else:
+      return iter(self.arg_slots)
 
   def keywords(self):
     return map(name, self.defaults.keys())
@@ -257,7 +290,7 @@ class FormalArgs(object):
       match(formal, actual, env)
 
     if self.starargs:
-      env[self.starargs] = starargs_fn(extra)
+      env[self.local_names[self.starargs]] = starargs_fn(extra)
     else:
       assert len(extra) == 0, "Too many args: %s" % (extra, )
     return env
@@ -267,6 +300,8 @@ class FormalArgs(object):
       actuals = ActualArgs(actuals)
     positional_values = actuals.positional
     keyword_values = actuals.keywords 
+    starargs = actuals.starargs 
+    
     
     n = len(self.arg_slots)
     result = [None] * n
@@ -295,13 +330,23 @@ class FormalArgs(object):
       i = self.positions[k]
       if not bound[i]:
         assign(i, default_fn(k,v) if default_fn else v)
-        
+
+    if starargs:
+      unbound_positions = [i for i in xrange(n) if not bound[i]]
+      counter = 0 
+      for arg in starargs:
+        if counter < len(unbound_positions):
+          pos = unbound_positions[counter]
+          assign(pos, arg)
+          counter += 1
+        else:
+          extra.append(arg)
+          
     missing_args = [self.arg_slots[i] for i in xrange(n) if not bound[i]]
-    
+
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
 
-    
   def transform(self, 
                 name_fn, 
                 tuple_fn = tuple, 

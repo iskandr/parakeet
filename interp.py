@@ -71,15 +71,13 @@ def eval_fn(fn, actuals):
     # which deals with named args, variable arity, etc.. 
     env = fn.args.bind(actuals)
   
-  def eval_args(exprs):
-    values = []
-    for e in exprs:
-      if isinstance(e, syntax.Unpack):
-        tuple_val = eval_expr(e.value)
-        values.extend(tuple_val)
-      else:
-        values.append(eval_expr(e))
-    return values 
+  
+  def eval_args(args):
+    if isinstance(args, (list, tuple)):
+      return map(eval_expr, args)
+    else:
+      return args.transform(eval_expr)
+       
   
   def eval_expr(expr): 
     assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    

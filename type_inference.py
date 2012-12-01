@@ -186,7 +186,7 @@ def annotate_expr(expr, tenv, var_map):
     if old_name not in var_map._vars:
       raise names.NameNotFound(old_name)
     new_name = var_map.lookup(old_name)
-    assert new_name in tenv
+    assert new_name in tenv, "Unknown var %s (previously %s)" % (new_name, old_name) 
     return typed_ast.Var(new_name, type = tenv[new_name])
 
   def expr_Tuple():
@@ -397,12 +397,15 @@ def _infer_types(untyped_fn, types):
   def rename_arg(visible_name):
     old_name = untyped_fn.args.local_names[visible_name]
     return var_map.rename(old_name)
+  print
+  print "INFER TYPES"
+  
+  print "untyped_args", untyped_fn.args
   
   typed_args = untyped_fn.args.fresh_copy(local_name_fn = rename_arg)
-  
-  print "untyped_args", untyped_fn.args 
-  print "typed_args", typed_args 
-  print "var_map", var_map 
+  print "var_map", var_map
+  print "typed_args", typed_args
+   
   unbound_keywords = []
   def default_fn(k, value):
     unbound_keywords.append(k)
@@ -514,6 +517,8 @@ def infer_return_type(untyped, arg_types):
 import adverb_semantics
 
 class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
+  none = core_types.NoneType
+  
   def invoke(self, fn, arg_types):
     if isinstance(fn, typed_ast.TypedFn):
       input_types = fn.input_types
@@ -540,6 +545,9 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
   
   def tuple(self, elt_types):
     return tuple_type.make_tuple_type(elt_types)
+  
+  def slice_value(self, start_t, stop_t, step_t):
+    return array_type.make_slice_type(start_t, stop_t, step_t)
   
   def index(self, arr, idx):
     return arr.index_type(idx)
@@ -571,23 +579,30 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
   
 adverb_type_semantics = AdverbTypeSemantics()    
 
-def infer_reduce_type(map_fn, combine_fn, arg_types, axis, init = None):
-  result = adverb_type_semantics.eval_reduce(map_fn, combine_fn, init, arg_types, axis)
+def linearize_arg_types(closure_t, args):
+  untyped_fn = closure_t.fn
+  if isinstance(untyped_fn, str):
+    untyped_fn = function_registry.untyped_functions[untyped_fn] 
+  closure_args = closure_t.arg_types 
+  args = args.prepend_positional(closure_args)
+  print untyped_fn 
+  print args 
+  linear_args, _ = untyped_fn.args.linearize_values(args)
+  return untyped_fn, tuple(linear_args) 
 
-  return result 
+def infer_map_type(closure_t, arg_types, axis):
+  untyped_fn, linear_args = linearize_arg_types(closure_t, arg_types)
+  return adverb_type_semantics.eval_map(untyped_fn, linear_args, axis)
+
+def infer_reduce_type(map_closure_t, combine_closure_t, arg_types, axis, init = None):
+  untyped_map_fn, linear_args = linearize_arg_types(map_closure_t, arg_types)
+  return adverb_type_semantics.eval_reduce(untyped_map_fn, combine_closure_t, init, linear_args, axis)
   
   
 def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
   n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
   acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)
   return array_type.increase_rank(acc_t, n_outer_axes)
-
-def infer_map_type(closure_t, arg_types, axis):
-
-  n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
-  nested_types = array_type.lower_ranks(arg_types, n_outer_axes)
-  nested_result_type = invoke_result_type(closure_t, nested_types)
-  return array_type.increase_rank(nested_result_type, n_outer_axes)
 
 def infer_allpairs_type(closure_t, xtype, ytype, axis):
   axis = unwrap_constant(axis)

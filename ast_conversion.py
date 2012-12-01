@@ -55,9 +55,11 @@ def translate_args(args, local_name_fn):
     for (k,v) in zip(default_vars, args.defaults):
       defaults[k] = translate_default_arg_value(v)
 
-  return FormalArgs(positional, 
+  args = FormalArgs(positional, 
                     defaults, starargs = args.vararg, 
                     local_name_fn = local_name_fn)
+  print "::: formal args", args
+  return args  
 
 class AST_Translator(ast.NodeVisitor):
 
@@ -326,8 +328,6 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   translator = AST_Translator(globals_dict, closure_cell_dict, outer_env)
 
   ssa_args = translate_args(function_def_ast.args, translator.env.fresh)
-  print ssa_args 
-    
   _, body = translator.visit_block(function_def_ast.body)
   ssa_fn_name = names.fresh(function_def_ast.name)
 

@@ -96,6 +96,9 @@ class Tuple(Expr):
   def __str__(self):
     return ", ".join([str(e) for e in self.elts])
 
+  def __iter__(self):
+    return iter(self.elts)
+
 class Array(Expr):
   _members = ['elts']
 
