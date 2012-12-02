@@ -310,7 +310,8 @@ class FormalArgs(object):
     return map(name, self.defaults.keys())
   
   
-  def bind(self, actuals, keyword_fn = None, 
+  def bind(self, actuals, 
+           keyword_fn = None, 
            tuple_elts_fn = iter, 
            starargs_fn = tuple):
     """

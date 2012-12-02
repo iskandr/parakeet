@@ -75,7 +75,12 @@ def linearize_arg_types(closure_t, args):
   
   if len(closure_args) > 0:
     args = args.prepend_positional(closure_args)
-  linear_args, extra = untyped_fundef.args.linearize_values(args)
+  def keyword_fn(_, v):
+    return type_conv.typeof(v)
+  
+  linear_args, extra = untyped_fundef.args.linearize_values(args, keyword_fn = keyword_fn)
+  print "LINEAR ARGS", linear_args 
+  print "EXTRA", extra 
   return untyped_fundef, tuple(linear_args + extra) 
 
 def get_invoke_specialization(closure_t, arg_types):
@@ -85,8 +90,7 @@ def get_invoke_specialization(closure_t, arg_types):
   will ultimately get called
   """
   untyped_fundef, full_arg_types = linearize_arg_types(closure_t, arg_types)
-  print "ORIGINAL ARG TYPES", arg_types 
-  print "FULL ARG TYPES", full_arg_types 
+
   return specialize(untyped_fundef, full_arg_types)
 
 _invoke_type_cache = {}
@@ -428,13 +432,15 @@ def _infer_types(untyped_fn, types):
   adverbs for scalar operators applied to arrays
   """
 
-  print "_infer_types :: untyped_fn", untyped_fn 
+  print
+  print "INFER TYPES"
+  
+  print "_infer_types :: untyped_fn", untyped_fn
+  print "types", types 
   var_map = VarMap()
   def rename_arg(visible_name):
     old_name = untyped_fn.args.local_names[visible_name]
     return var_map.rename(old_name)
-  print
-  print "INFER TYPES"
   
   print "untyped_args", untyped_fn.args
   
@@ -448,7 +454,7 @@ def _infer_types(untyped_fn, types):
     unbound_keywords.append(k)
     return type_conv.typeof(value)
   
-  print "typed args", types 
+   
   tenv = typed_args.bind(types, 
                          keyword_fn = keyword_fn,  
                          starargs_fn = tuple_type.make_tuple_type)
@@ -459,9 +465,11 @@ def _infer_types(untyped_fn, types):
    
   body = annotate_block(untyped_fn.body, tenv, var_map)
   
-  arg_names = [local_name for (visible_name, local_name) 
-               in typed_args.local_names.iteritems() 
-               if visible_name not in unbound_keywords]
+  sorted_args = typed_args.local_names.items()
+  sorted_args.sort(key = lambda (k,_): typed_args.positions[k])
+  arg_names = [local_name for (visible_name, local_name) in sorted_args 
+               if (visible_name not in unbound_keywords) and 
+                  (visible_name != typed_args.starargs)]
   
   if len(unbound_keywords) > 0:
     default_assignments = []
