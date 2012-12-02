@@ -173,7 +173,7 @@ import names
 class FormalArgs(object):
 
   
-  def __init__(self, positional,
+  def __init__(self, positional = (),
                      defaults = OrderedDict(),
                      nonlocals = (),
                      starargs = None, 
@@ -192,32 +192,53 @@ class FormalArgs(object):
     self.positions = {}
     
     self.prepend_nonlocal_args(self.nonlocals, local_name_fn)
-    pos = len(self.positions)
-      
-    for x in positional:
-      visible_name = name(x)
-      local_name = local_name_fn(visible_name) 
-      self.arg_slots.append(local_name)
-      self.positions[visible_name] = pos
-      self.local_names[visible_name] = local_name 
-      pos += 1
     
-    for x in defaults.keys():
-      visible_name = name(x)
-      local_name = local_name_fn(visible_name)  
-      self.arg_slots.append(local_name)
-      self.positions[visible_name] = pos
-      self.local_names[visible_name] = local_name 
-      pos += 1
+    for x in positional:
+      self.add_positional(x, local_name_fn)
+    for (k,v) in defaults.iteritems():
+      self.add_keyword_arg(k, v, local_name_fn)
     
     if starargs:
-      visible_name = name(starargs)
-      self.local_names[visible_name] = local_name_fn(visible_name)
-      
+      self.add_starargs(starargs, local_name_fn)
 
     self.visible_names = list(reversed(self.local_names.keys()))
     
   
+  def add_positional(self, pos_arg, local_name_fn = lambda x:x):
+    assert len(self.defaults) == 0, \
+      "Can't add positional args after defaults"
+    assert self.starargs is None, \
+      "Can't add positional args after starargs" 
+    if is_tuple(pos_arg):
+      return tuple(self.add_positional(elt, local_name_fn) for elt in pos_arg)
+    else:
+      visible_name = name(pos_arg) 
+      self.positions[visible_name] = len(self.positions)
+      local_name = local_name_fn(visible_name)
+      self.local_names[visible_name] = local_name
+      self.arg_slots.append(local_name)
+      return local_name 
+  
+  def add_keyword_arg(self, key, value, local_name_fn = lambda x:x):
+    assert self.starargs is None 
+    assert isinstance(name, (str, syntax.Var))
+    visible_name = name(key)
+    local_name = local_name_fn(visible_name)  
+    self.arg_slots.append(local_name)
+    self.positions[visible_name] = len(self.positions)
+    self.local_names[visible_name] = local_name
+    return local_name 
+  
+  def add_starargs(self, starargs, local_name_fn = lambda x:x):
+    assert self.starargs is None, \
+      "Function can't have two starargs variables"
+    assert isinstance(starargs, (str, syntax.Var))
+    visible_name = name(starargs)
+    local_name = local_name_fn(visible_name)
+    self.local_names[visible_name] = local_name
+    self.positions[visible_name] = len(self.positions)
+    return local_name 
+    
   def prepend_nonlocal_args(self, more_nonlocals, local_name_fn = lambda x:x):
     localized_names = map(local_name_fn, more_nonlocals)
     self.nonlocals = tuple(more_nonlocals) + self.nonlocals 

@@ -42,24 +42,22 @@ def untyped_wrapper(adverb_class,
     return _adverb_wrapper_cache[key]
   else:
     
-    positional_arg_names = []
+    fn_args_obj = FormalArgs()
     def mk_input_var(name):
       if name is None:
         return None
       else:
-        assert isinstance(name, str), \
-          "Expected string for fn name, got:" + str(name)
-        name = names.refresh(name)
-        positional_arg_names.append(name) 
-        return syntax.Var(name)
+        local_name = fn_args_obj.add_positional(name, names.refresh)
+        return syntax.Var(local_name)
+      
     map_fn = mk_input_var(map_fn_name)
     combine_fn = mk_input_var(combine_fn_name)
     emit_fn = mk_input_var(emit_fn_name)
     data_arg_vars = map(mk_input_var, data_names)
     
     if varargs_name:
-      varargs_name = names.refresh(varargs_name)
-      unpack = syntax.Var(varargs_name)
+      local_name = fn_args_obj.add_starargs(varargs_name, names.refresh)
+      unpack = syntax.Var(local_name)
     else:
       unpack = None 
     
@@ -87,9 +85,7 @@ def untyped_wrapper(adverb_class,
     adverb = adverb_class(**adverb_params)
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
-    fn_args_obj = FormalArgs(positional = positional_arg_names,
-                       defaults = optional_args,  
-                       starargs = varargs_name)
+    
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef

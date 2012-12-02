@@ -18,6 +18,7 @@ from function_registry import untyped_functions, find_specialization, \
                               add_specialization
 from syntax_helpers import get_type, get_types, unwrap_constant
 import function_registry
+from args import ActualArgs
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -41,16 +42,49 @@ class VarMap:
   def __str__(self):
     return "VarMap(%s)" % self._vars
 
-def get_invoke_specialization(closure_t, arg_types):
-  # for a given closure and the direct argument types it
-  # receives when invokes, return the specialization which
-  # will ultimately get called
+def linearize_arg_types(closure_t, args):
+  """
+  Given a function object which might be one of:
+    (1) a closure type 
+    (2) the name of an untyped function 
+    (3) an untyped fn object
+  and some argument types which might
+    (1) a list
+    (2) a tuple
+    (3) an ActualArgs object
+  linearize the argument types with respect to 
+  the untyped function's argument order and return
+  both the untyped function and list of arguments
+  """ 
+  if isinstance(closure_t, untyped_ast.Fn):
+    untyped_fundef = closure_t 
+    closure_args = []
+  elif isinstance(closure_t, str):
+    untyped_fundef = function_registry.untyped_functions[closure_t]
+    closure_args = []
+  else:
+    assert isinstance(closure_t, closure_type.ClosureT)
+    if isinstance(closure_t.fn, str):
+      untyped_fundef = function_registry.untyped_functions[closure_t.fn]
+    else:
+      untyped_fundef = closure_t.fn 
+    closure_args = closure_t.arg_types 
   
-  # for a given invocation of a ClosureT
-  # what is the typed_fn that gets called?
-  untyped_id, closure_arg_types = closure_t.fn, closure_t.arg_types
-  untyped_fundef = untyped_functions[untyped_id]
-  full_arg_types = arg_types.prepend_positional(closure_arg_types)
+  if isinstance(args, (list, tuple)):
+    args = ActualArgs(args)
+  
+  if len(closure_args) > 0:
+    args = args.prepend_positional(closure_args)
+  linear_args, _ = untyped_fundef.args.linearize_values(args)
+  return untyped_fundef, tuple(linear_args) 
+
+def get_invoke_specialization(closure_t, arg_types):
+  """
+  for a given closure and the direct argument types it
+  receives when invokes, return the specialization which
+  will ultimately get called
+  """
+  untyped_fundef, full_arg_types = linearize_arg_types(closure_t, arg_types)
   return specialize(untyped_fundef, full_arg_types)
 
 _invoke_type_cache = {}
@@ -576,34 +610,29 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
     loop_body(acc, start)
     return acc.get() 
   
-  
 adverb_type_semantics = AdverbTypeSemantics()    
 
-def linearize_arg_types(closure_t, args):
-  untyped_fn = closure_t.fn
-  if isinstance(untyped_fn, str):
-    untyped_fn = function_registry.untyped_functions[untyped_fn] 
-  closure_args = closure_t.arg_types 
-  args = args.prepend_positional(closure_args)
-  print untyped_fn 
-  print args 
-  linear_args, _ = untyped_fn.args.linearize_values(args)
-  return untyped_fn, tuple(linear_args) 
-
 def infer_map_type(closure_t, arg_types, axis):
-  untyped_fn, linear_args = linearize_arg_types(closure_t, arg_types)
-  return adverb_type_semantics.eval_map(untyped_fn, linear_args, axis)
+  return adverb_type_semantics.eval_map(closure_t, arg_types, axis)
 
 def infer_reduce_type(map_closure_t, combine_closure_t, arg_types, axis, init = None):
-  untyped_map_fn, linear_args = linearize_arg_types(map_closure_t, arg_types)
-  return adverb_type_semantics.eval_reduce(untyped_map_fn, combine_closure_t, init, linear_args, axis)
+  return adverb_type_semantics.eval_reduce(map_closure_t, combine_closure_t, init, arg_types, axis)
   
   
-def infer_scan_type(closure_t, arg_types, axis, init = None, combine = None):
-  n_outer_axes = adverb_helpers.num_outer_axes(arg_types, axis)
-  acc_t = infer_reduce_type(closure_t, arg_types, axis, init, combine)
-  return array_type.increase_rank(acc_t, n_outer_axes)
-
+def infer_scan_type(
+      map_closure_t, 
+      combine_closure_t, 
+      emit_closure_t, 
+      init_t, 
+      arg_types,
+      axis):
+  return adverb_type_semantics.eval_scan(map_closure_t, 
+                                         combine_closure_t, 
+                                         emit_closure_t, 
+                                         init_t, 
+                                         arg_types, 
+                                         axis)
+  
 def infer_allpairs_type(closure_t, xtype, ytype, axis):
   axis = unwrap_constant(axis)
   n_outer_axes = 2
