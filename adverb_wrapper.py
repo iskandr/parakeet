@@ -44,6 +44,7 @@ def untyped_wrapper(adverb_class,
     
     fn_args_obj = FormalArgs()
     def mk_input_var(name):
+      print "-- ", name 
       if name is None:
         return None
       else:
@@ -86,6 +87,7 @@ def untyped_wrapper(adverb_class,
     body = [syntax.Return(adverb)]
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
     
+    print "FN ARGS", fn_args_obj 
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef

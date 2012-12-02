@@ -75,8 +75,8 @@ def linearize_arg_types(closure_t, args):
   
   if len(closure_args) > 0:
     args = args.prepend_positional(closure_args)
-  linear_args, _ = untyped_fundef.args.linearize_values(args)
-  return untyped_fundef, tuple(linear_args) 
+  linear_args, extra = untyped_fundef.args.linearize_values(args)
+  return untyped_fundef, tuple(linear_args + extra) 
 
 def get_invoke_specialization(closure_t, arg_types):
   """
@@ -85,6 +85,8 @@ def get_invoke_specialization(closure_t, arg_types):
   will ultimately get called
   """
   untyped_fundef, full_arg_types = linearize_arg_types(closure_t, arg_types)
+  print "ORIGINAL ARG TYPES", arg_types 
+  print "FULL ARG TYPES", full_arg_types 
   return specialize(untyped_fundef, full_arg_types)
 
 _invoke_type_cache = {}
@@ -426,7 +428,7 @@ def _infer_types(untyped_fn, types):
   adverbs for scalar operators applied to arrays
   """
 
-
+  print "_infer_types :: untyped_fn", untyped_fn 
   var_map = VarMap()
   def rename_arg(visible_name):
     old_name = untyped_fn.args.local_names[visible_name]
@@ -441,65 +443,69 @@ def _infer_types(untyped_fn, types):
   print "typed_args", typed_args
    
   unbound_keywords = []
-  def default_fn(k, value):
+  
+  def keyword_fn(k, value):
     unbound_keywords.append(k)
     return type_conv.typeof(value)
   
+  print "typed args", types 
   tenv = typed_args.bind(types, 
-                         default_fn = default_fn,  
+                         keyword_fn = keyword_fn,  
                          starargs_fn = tuple_type.make_tuple_type)
   print "tenv", tenv 
   # keep track of the return
   tenv['$return'] = core_types.Unknown
-
+   
+   
   body = annotate_block(untyped_fn.body, tenv, var_map)
   
-  arg_names = [x for x in typed_args.arg_slots 
-               if x not in unbound_keywords]
+  arg_names = [local_name for (visible_name, local_name) 
+               in typed_args.local_names.iteritems() 
+               if visible_name not in unbound_keywords]
+  
   if len(unbound_keywords) > 0:
     default_assignments = []
-    for k in unbound_keywords:
-      t = tenv[k]
-      python_value = typed_args.defaults[k]
-      var = typed_ast.Var(k, type = t)
+    for visible_name in unbound_keywords:
+      local_name = typed_args.local_names[visible_name]
+      t = tenv[local_name]
+      python_value = typed_args.defaults[visible_name]
+      var = typed_ast.Var(local_name, type = t)
       typed_val = typed_ast.Const(python_value, type =t)
       stmt = typed_ast.Assign(var, typed_val)
       default_assignments.append(stmt)
     body = default_assignments + body 
-    
   
   input_types = [tenv[arg_name] for arg_name in arg_names]
-  starargs_name = typed_args.starargs
+  
   # starargs are all passed individually and then packaged up
   # into a tuple on the first line of the function
   if typed_args.starargs:
-    starargs_t = tenv[starargs_name]
+    print "starargs", typed_args.starargs
+    visible_starargs_name = typed_args.starargs
+    local_starargs_name = typed_args.local_names[visible_starargs_name]
+    starargs_t = tenv[local_starargs_name]
     assert isinstance(starargs_t, tuple_type.TupleT), \
       "Unexpected starargs type %s" % starargs_t
     extra_arg_vars = []
     for (i, elt_t) in enumerate(starargs_t.elt_types):
-      arg_name = "%s_elt%d" % (starargs_name, i)
+      arg_name = "%s_elt%d" % (visible_starargs_name, i)
       tenv[arg_name] = elt_t
       input_types.append(elt_t)
       arg_var = typed_ast.Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
-    tuple_lhs = typed_ast.Var(name = starargs_name, type = starargs_t)
+    tuple_lhs = typed_ast.Var(name = local_starargs_name, type = starargs_t)
     tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = starargs_t)
     tuple_assign = typed_ast.Assign(tuple_lhs, tuple_rhs)
     body = [tuple_assign] + body
-
+  
   return_type = tenv["$return"]
   # if nothing ever gets returned, then set the return type to None
   if isinstance(return_type,  core_types.UnknownT):
     body.append(typed_ast.Return(syntax_helpers.none))
     tenv["$return"] = core_types.NoneType
     return_type = core_types.NoneType
-    
   
-
-  # num_starargs = len(input_types[-1].elt_types) if typed_args.starargs else 0
-
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,

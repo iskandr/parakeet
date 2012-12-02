@@ -10,7 +10,7 @@ import syntax_helpers
 from args import match_list
 
 from adverb_interp import adverb_evaluator
-
+from args import ActualArgs
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -64,6 +64,7 @@ def ravel_list(xs):
   return [np.ravel(x) if isinstance(x, np.ndarray) else x for x in xs]  
 
 def eval_fn(fn, actuals):
+  print fn 
   if hasattr(fn, 'arg_names'):
     env = match_list(fn.arg_names, actuals)
   else:
@@ -117,7 +118,12 @@ def eval_fn(fn, actuals):
       # we're dealing with runtime reprs for functions, prims, and 
       # closures which are just python Callables
       clos = eval_expr(expr.closure)
-      combined_arg_vals = clos.fixed_args + eval_args(expr.args)
+      arg_values = eval_args(expr.args)
+      if isinstance(arg_values, list):
+        combined_arg_vals = clos.fixed_args + arg_values  
+      else:
+        assert isinstance(expr.args, ActualArgs)
+        combined_arg_vals = arg_values.prepend_positional(clos.fixed_args) 
       return eval_fn(clos.fn, combined_arg_vals)
       
     def expr_Closure():
