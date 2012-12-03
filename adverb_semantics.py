@@ -43,8 +43,7 @@ class AdverbSemantics(object):
     axis_sizes = [self.size_along_axis(x, axis)
                   for x in xs
                   if self.rank(x) > axis]
-    print xs
-    print axis_sizes
+
     assert len(axis_sizes) > 0
     # all arrays should agree in their dimensions along the
     # axis we're iterating over

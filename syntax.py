@@ -33,6 +33,19 @@ class Return(Stmt):
 
 class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
+  
+  def __str__(self):
+    s = "if %s:%s\nelse:%s\n" %\
+           (self.cond, 
+            block_to_str(self.true), 
+            block_to_str(self.false),
+           )
+    if len(self.merge) > 0:
+      s+= "(merge-branches)%s\n" % (phi_nodes_to_str(self.merge))
+    return s 
+  
+  def __repr__(self):
+    return str(self) 
 
 class While(Stmt):
   """A loop consists of a header, which runs
@@ -45,7 +58,7 @@ class While(Stmt):
   _members = ['cond', 'body', 'merge']
 
   def __repr__(self):
-    return "while %s:\n  (merge)%s\n  (body)%s\n" %\
+    return "while %s:\n  (header)%s\n  (body)%s\n" %\
            (self.cond, phi_nodes_to_str(self.merge),  block_to_str(self.body))
 
   def __str__(self):
@@ -112,16 +125,6 @@ class Closure(Expr):
   """
   _members = ['fn', 'args']
 
-"""
-class Invoke(Expr):
-  _members = ['closure', 'args']
-
-  def __str__(self):
-    return "%s(%s)" % (self.closure, self.args)
-
-  def __repr__(self):
-    return str(self)
-"""
 
 
 class Call(Expr):
@@ -161,17 +164,6 @@ class PrimCall(Expr):
   def __str__(self):
     return repr(self)
 
-"""
-class Unpack(Expr):
-  # Unpack a varargs tuple into an argument list
-  _members = ['value']
-
-  def __str__(self):
-    return "*%s" % self.value
-
-  def __repr__(self):
-    return str(self)
-"""
 ############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
@@ -179,11 +171,7 @@ class Unpack(Expr):
 #  way to describe the type/shape/compilation semantics of array operators
 #
 #############################################################################
-"""
-class Ravel(Expr):
-  # given an array, return its data in 1D form
-  _members = ['array']
-"""
+
 
 class ConstArray(Expr):
   _members = ['shape', 'value']
@@ -333,8 +321,10 @@ class TypedFn(Expr):
     arg_strings = []
     for name in self.arg_names:
       arg_strings.append("%s : %s" % (name, self.type_env.get(name)))
-    return "function %s(%s):%s" % \
-      (self.name, ", ".join(arg_strings), block_to_str(self.body))
+    return "function %s(%s) => %s:%s" % \
+      (self.name, ", ".join(arg_strings),
+       self.return_type,  
+       block_to_str(self.body))
 
   def __str__(self):
     return repr(self)

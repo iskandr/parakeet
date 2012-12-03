@@ -513,7 +513,7 @@ def infer_types(untyped_fn, types):
   
   # keep track of the return
   tenv['$return'] = core_types.Unknown
-  print tenv 
+  
   body = annotate_block(untyped_fn.body, tenv, var_map)
   arg_names = [local_name for local_name
                in

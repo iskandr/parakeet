@@ -74,7 +74,7 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     return self.eval_allpairs(fn, x, y, axis)
 
   def pre_apply(self, fn):
-    print "before adverb lowering", fn
+    pass
 
 def lower_adverbs(fn):
   return transform.cached_apply(LowerAdverbs, fn)
