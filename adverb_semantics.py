@@ -49,14 +49,13 @@ class AdverbSemantics(object):
 
   def map_prelude(self, map_fn, xs, axis):
     axis_sizes = self.sizes_along_axis(xs, axis)
+    print "axis_sizes", axis_sizes
     def delay(x):
       return self.delayed_elt(x, axis)
-    if isinstance(xs, list):
-      elts = map(delay, xs)
-    else:
-      elts = xs.transform(delay)
+    elts = map(delay, xs)
     
     def delayed_map_result(idx):
+      print map_fn 
       return self.invoke_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
 
@@ -83,6 +82,7 @@ class AdverbSemantics(object):
 
   def eval_map(self, f, values, axis):
     niters, delayed_map_result = self.map_prelude(f, values, axis)
+    print niters, delayed_map_result 
     zero = self.int(0)
     first_output = delayed_map_result(zero)
     result = self.create_result(first_output, niters)

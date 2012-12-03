@@ -38,9 +38,13 @@ def prim_wrapper(p):
     return _untyped_prim_wrappers[p]
   else:
     fn_name = names.fresh(p.name)
-    arg_names = names.fresh_list(p.nin)
-    args_obj = FormalArgs(positional = arg_names)
-    arg_vars = map(syntax.Var, arg_names)
+
+    args_obj = FormalArgs()
+    
+    arg_vars = []
+    for name in names.fresh_list(p.nin):
+      args_obj.add_positional(name)
+      arg_vars.append(syntax.Var(name)) 
     body = [syntax.Return(syntax.PrimCall(p, arg_vars))]
     fundef = syntax.Fn(fn_name, args_obj, body, [])
     _untyped_prim_wrappers[p] = fundef

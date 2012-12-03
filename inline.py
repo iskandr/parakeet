@@ -52,8 +52,8 @@ class Inliner(transform.Transform):
       return arg 
 
   def do_inline(self, fundef, args):
-    print "INLINER.do_inline: ", fundef
-    print "-- args", args  
+    #print "INLINER.do_inline: ", fundef
+    #print "-- args", args  
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)

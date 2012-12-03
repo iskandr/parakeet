@@ -75,12 +75,11 @@ def linearize_arg_types(closure_t, args):
   
   if len(closure_args) > 0:
     args = args.prepend_positional(closure_args)
+    
   def keyword_fn(_, v):
     return type_conv.typeof(v)
   
   linear_args, extra = untyped_fundef.args.linearize_values(args, keyword_fn = keyword_fn)
-  print "LINEAR ARGS", linear_args 
-  print "EXTRA", extra 
   return untyped_fundef, tuple(linear_args + extra) 
 
 def get_invoke_specialization(closure_t, arg_types):
@@ -90,17 +89,24 @@ def get_invoke_specialization(closure_t, arg_types):
   will ultimately get called
   """
   untyped_fundef, full_arg_types = linearize_arg_types(closure_t, arg_types)
-
   return specialize(untyped_fundef, full_arg_types)
 
 _invoke_type_cache = {}
 
 def invoke_result_type(closure_t, arg_types):
+  if isinstance(arg_types, (list, tuple)):
+    arg_types = ActualArgs(arg_types)
+    
   key = (closure_t, arg_types)
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
-  
+  """
+  print "invoke_result_type"
+  print closure_t
+  print arg_types
+  """
   if isinstance(closure_t, untyped_ast.Fn):
+    
     closure_t = closure_type.ClosureT(closure_t.name, ())
     
   if isinstance(closure_t, closure_type.ClosureT):
@@ -434,7 +440,8 @@ def _infer_types(untyped_fn, types):
 
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(rename_fn = var_map.rename)
-  
+  if untyped_fn.args.starargs:
+    assert typed_args.starargs 
   
   unbound_keywords = []
   def keyword_fn(local_name, value):
@@ -445,6 +452,7 @@ def _infer_types(untyped_fn, types):
                          keyword_fn = keyword_fn,  
                          starargs_fn = tuple_type.make_tuple_type)
   
+  """
   print 
   print "----------------"
   print "old fn", untyped_fn
@@ -453,6 +461,9 @@ def _infer_types(untyped_fn, types):
   print "unbound keywords", unbound_keywords
   print "tenv", tenv 
   print "var map", var_map
+  """
+  
+  
   # keep track of the return
   tenv['$return'] = core_types.Unknown
   body = annotate_block(untyped_fn.body, tenv, var_map)
@@ -478,7 +489,9 @@ def _infer_types(untyped_fn, types):
   # into a tuple on the first line of the function
   if typed_args.starargs:
     local_starargs_name = typed_args.starargs 
+    
     starargs_t = tenv[local_starargs_name]
+    print "STARARGS", local_starargs_name, starargs_t 
     assert isinstance(starargs_t, tuple_type.TupleT), \
       "Unexpected starargs type %s" % starargs_t
     extra_arg_vars = []
@@ -491,8 +504,8 @@ def _infer_types(untyped_fn, types):
       extra_arg_vars.append(arg_var)
     tuple_lhs = typed_ast.Var(name = local_starargs_name, type = starargs_t)
     tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = starargs_t)
-    tuple_assign = typed_ast.Assign(tuple_lhs, tuple_rhs)
-    body = [tuple_assign] + body
+    stmt = typed_ast.Assign(tuple_lhs, tuple_rhs)
+    body = [stmt] + body
   
   return_type = tenv["$return"]
   # if nothing ever gets returned, then set the return type to None
@@ -518,7 +531,10 @@ def specialize(untyped, arg_types):
   else:
     assert isinstance(untyped, untyped_ast.Fn)
     untyped_id = untyped.name
-
+  
+  if isinstance(arg_types, (list, tuple)):
+    arg_types = ActualArgs(arg_types)
+      
   try:
     return find_specialization(untyped_id, arg_types)
   except:
@@ -582,6 +598,30 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
   def tuple(self, elt_types):
     return tuple_type.make_tuple_type(elt_types)
   
+  def is_tuple(self, t):
+    return isinstance(t, tuple_type.TupleT)
+  
+  def is_array(self, t):
+    return isinstance(t, array_type.ArrayT)
+  
+  def shape(self, t):
+    if self.is_array(t):
+      return tuple_type.make_tuple_type([core_types.Int64] * t.rank)
+    else:
+      return tuple_type.make_tuple_type([])
+  
+  def elt_type(self, t):
+    return t.elt_type if hasattr(t, 'elt_type') else t 
+  
+  def alloc_array(self, elt_t, shape):
+    return array_type.make_array_type(elt_t, len(shape))
+  
+  def setidx(self, arr, idx, val):
+    pass 
+  
+  def concat_tuples(self, t1, t2):
+    return tuple_type.make_tuple_type(t1.elt_types + t2.elt_types)
+    
   def slice_value(self, start_t, stop_t, step_t):
     return array_type.make_slice_type(start_t, stop_t, step_t)
   
@@ -615,7 +655,8 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
 adverb_type_semantics = AdverbTypeSemantics()    
 
 def infer_map_type(closure_t, arg_types, axis):
-  return adverb_type_semantics.eval_map(closure_t, arg_types, axis)
+  untyped_fn, arg_types = linearize_arg_types(closure_t, arg_types)
+  return adverb_type_semantics.eval_map(untyped_fn, arg_types, axis)
 
 def infer_reduce_type(map_closure_t, combine_closure_t, arg_types, axis, init = None):
   return adverb_type_semantics.eval_reduce(map_closure_t, combine_closure_t, init, arg_types, axis)

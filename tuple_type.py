@@ -62,6 +62,9 @@ class TupleT(StructT):
   def __repr__(self):
     return str(self)
 
+  def __len__(self):
+    return len(self.elt_types)
+  
   def __iter__(self):
     return iter(self.elt_types)
 

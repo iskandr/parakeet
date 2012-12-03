@@ -5,9 +5,10 @@ import transform
 import type_inference
 
 from adverb_semantics import AdverbSemantics
-from transform import Transform
+from simplify_invoke import SimplifyInvoke
 
-class CodegenSemantics(Transform):
+
+class CodegenSemantics(SimplifyInvoke):
   # Can't put type inference related methods inside Transform
   # since this create a cyclic dependency with InsertCoercions
 
@@ -34,32 +35,28 @@ class CodegenSemantics(Transform):
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_Map(self, expr):
-    fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args)
+    fn, args, _ = self.linearize_invoke(expr.fn, expr.args)
+    print fn, args 
     axis = syntax_helpers.unwrap_constant(expr.axis)
- 
     return self.eval_map(fn, args, axis)
 
   def transform_Reduce(self, expr):
-    fn = self.transform_expr(expr.fn)
+    fn, args, _ = self.linearize_invoke(expr.fn, expr.args)
     combine = self.transform_expr(expr.combine)
     init = self.transform_expr(expr.init) if expr.init else None
-    args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, init, args, axis)
 
   def transform_Scan(self, expr):
-    fn = self.transform_expr(expr.fn)
+    fn, args, _ = self.linearize_invoke(expr.fn, expr.args)
     combine = self.transform_expr(expr.combine)
     emit = self.transform_expr(expr.emit)
     init = self.transform_expr(expr.init) if expr.init else None
-    args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, emit, init, args, axis)
 
   def transform_AllPairs(self, expr):
-    fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args)
+    fn, args, _ = self.linearize_invoke(expr.fn, expr.args)
     assert len(args) == 2
     x,y = args
     axis = syntax_helpers.unwrap_constant(expr.axis)

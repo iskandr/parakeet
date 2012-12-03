@@ -12,7 +12,7 @@ class Adverb(syntax.Expr):
       return fn.name
     else:
       return str(fn)
-  
+    
   def args_to_str(self):
     if isinstance(self.args, (list, tuple)):
       return ", ".join([str(arg) for arg in self.args])

@@ -22,7 +22,9 @@ pure_exprs = (syntax.Var, syntax.Tuple, syntax.Const, syntax.Closure,
               syntax.IntToPtr, syntax.PtrToInt, syntax.PrimCall, 
               syntax.TupleProj, syntax.ClosureElt, syntax.Slice)
 
-class Simplify(transform.Transform):
+import rewrite_typed 
+
+class Simplify(rewrite_typed.SimplifyInvoke):
   def __init__(self, fn):
     # associate var names with
     #  1) constant values: these should always be replaced
@@ -193,11 +195,13 @@ class Simplify(transform.Transform):
     return result 
   
   def post_apply(self, new_fn):
-
+    print new_fn 
     new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)
     new_fn.type_env = \
       dict([(name, new_fn.type_env[name]) for name in self.live_vars])
-
+    print "---After---"
+    print new_fn 
+    print 
     return new_fn 
   
 #def simplify(fn):

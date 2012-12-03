@@ -156,7 +156,7 @@ class ActualArgs(object):
   def __hash__(self):
     kwd_tuple = tuple(self.keywords.items())
     return hash(self.positional + kwd_tuple + (self.starargs,))
-    
+  
   def __iter__(self):
     return combine_iters(
       iter(self.positional), 
@@ -199,10 +199,11 @@ class FormalArgs(object):
     self.positions[local_name] = 0
     self.positional = [local_name] + self.positional
   
-  def add_positional(self, local_name, visible_name):
+  def add_positional(self, local_name, visible_name = None):
     self.n_args += 1
-    self.local_names[visible_name] = local_name
-    self.visible_names[local_name] = visible_name
+    if visible_name:
+      self.local_names[visible_name] = local_name
+      self.visible_names[local_name] = visible_name
     self.positions[local_name] = len(self.positions)
     self.positional.append(local_name)
   

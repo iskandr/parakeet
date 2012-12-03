@@ -1,5 +1,6 @@
 
 import syntax
+from args import ActualArgs
 
 def subst(node, rename_dict):
   if isinstance(node, syntax.Var):
@@ -15,7 +16,8 @@ def subst(node, rename_dict):
       new_values[member_name] = new_v
     new_node = node.__class__(**new_values)
     return new_node
-
+  elif isinstance(node, ActualArgs):
+    return node.transform(lambda x: subst(x, rename_dict))
   elif isinstance(node, list):
     return subst_list(node, rename_dict)
   elif isinstance(node, tuple):

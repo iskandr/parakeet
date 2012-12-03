@@ -210,6 +210,9 @@ class Fn(Expr):
       "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
+    
+    import closure_type 
+    self.type = closure_type.ClosureT(self.name, ())
 
   def python_nonlocals(self):
     if self.python_refs:

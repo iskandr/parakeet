@@ -3,6 +3,7 @@ import names
 import syntax
 
 from codegen import Codegen
+from args import ActualArgs 
 
 class Transform(Codegen):
   def __init__(self, fn):
@@ -25,6 +26,8 @@ class Transform(Codegen):
       return tuple([self.transform_if_expr(x) for x in maybe_expr])
     elif isinstance(maybe_expr, list):
       return [self.transform_if_expr(x) for x in maybe_expr]
+    elif isinstance(maybe_expr, ActualArgs):
+      return maybe_expr.transform(self.transform_expr)
     else:
       return maybe_expr
 

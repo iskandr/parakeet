@@ -4,52 +4,16 @@ import tuple_type
 
 import syntax
 import syntax_helpers
-import closure_type 
-from syntax_helpers import get_types
-from transform import Transform
-import function_registry
-from args import ActualArgs
 
-class SimplifyInvoke(Transform):
-   
-  def transform_Invoke(self, expr):
-    new_closure = self.transform_expr(expr.closure)
-    closure_t = new_closure.type
-    if isinstance(closure_t, closure_type.ClosureT):
-      untyped_fn = closure_t.fn
-      if isinstance(untyped_fn, str):
-        untyped_fn = function_registry.untyped_functions[untyped_fn]
-      n_closure_args = len(closure_t.arg_types) 
-      closure_args = \
-        [self.closure_elt(new_closure, i) 
-         for i in xrange(n_closure_args)]
-    else:
-      assert isinstance(new_closure, syntax.Fn)
-      untyped_fn = new_closure
-      closure_args = []
-    old_args = expr.args
-    if isinstance(old_args, (list, tuple)):
-      old_args = ActualArgs(old_args)
-    old_args = old_args.prepend_positional(closure_args)
-    new_args = old_args.transform(self.transform_expr)
-    arg_types = new_args.transform(syntax_helpers.get_type)
-    import type_inference 
-    typed_fundef = type_inference.specialize(untyped_fn, arg_types)
-    
-    # Drop arguments that are assigned defaults, 
-    # since we're assuming those are set in the body 
-    # of the function 
-    linear_args, extra = untyped_fn.args.linearize_values(new_args, 
-                                                          tuple_elts_fn = self.tuple_elts, 
-                                                          keyword_fn = lambda k, v: None)
-    combined_args = [x for x in (linear_args + extra) if x] 
-    
-    return syntax.Call(typed_fundef.name, combined_args, type = expr.type)
+from syntax_helpers import get_types
+
+from simplify_invoke import SimplifyInvoke 
+
     
 
 class RewriteTyped(SimplifyInvoke):
   def __init__(self, fn):
-    Transform.__init__(self, fn)
+    SimplifyInvoke.__init__(self, fn)
     self.fn_return_type = self.fn.type_env["$return"]
 
   def coerce_expr(self, expr, t):
