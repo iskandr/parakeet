@@ -390,36 +390,7 @@ class ShapeInference(SyntaxVisitor):
       return self.unify_scalar_var(y, x)
     else:
       raise RuntimeError("Unsupported by unify: %s, %s" % (x,y))
-    """
-    elif isinstance(x, Shape):
-      assert isinstance(y, Shape), \
-        "Expected array, got: %s" % y
-      x_rank = len(x.dims)
-      y_rank = len(y.dims)
-      assert x_rank == y_rank, \
-        "Can't unify arrays of rank %d and %d" % \
-        (x_rank, y_rank)
-      return array(*self.unify_pairs(x.dims, y.dims))
-    elif isinstance(y, Shape):
-      return self.unify_arrays(y,x)
-    elif isinstance(x, Closure):
-      assert isinstance(y, Closure), "Expected closure, got " + str(y)
-      assert (x.untyped_fn == y.untyped_fn) and len(x.args) == len(y.args), \
-        "Can't yet support joining different closures"
-      return Closure(self.unify_pairs(x.args, y.args))
-    elif isinstance(x, Tuple):
-      assert isinstance(y, Tuple), "Expected tuple, got " + str(y)
-      assert len(x.elts) == len(y.elts)
-      return Tuple(self.unify_pairs(x.elts, y.elts))
-    elif isinstance(x, Slice):
-      assert isinstance(y, Slice), "Expected slice, got " + str(y)
-      start = self.unify(x.start, y.start)
-      stop = self.unify(x.stop, y.stop)
-      step = self.unify(x.step, y.step)
-      return Slice(start, stop, step)
-    else:
-      return x.combine(y)
-    """
+
   def visit_merge(self, merge):
     for (k, (l,r)) in merge.iteritems():
       self.value_env[k] = l.combine(r)

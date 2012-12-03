@@ -88,7 +88,6 @@ class Transform(Codegen):
   def transform_Assign(self, stmt):
 
     rhs = self.transform_expr(stmt.rhs)
-    print rhs 
     lhs = self.transform_lhs(stmt.lhs)
     return syntax.Assign(lhs, rhs)
 
@@ -127,9 +126,9 @@ class Transform(Codegen):
 
   def pre_apply(self, old_fn):
     pass
-
+  
   def post_apply(self, new_fn):
-    pass 
+    pass   
   
   def apply(self, copy = False):
     self.copy = copy 

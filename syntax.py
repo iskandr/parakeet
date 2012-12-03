@@ -294,8 +294,11 @@ class TypedFn(Expr):
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
 
   def __repr__(self):
+    arg_strings = []
+    for name in self.arg_names:
+      arg_strings.append("%s : %s" % (name, self.type_env.get(name)))
     return "function %s(%s):%s" % \
-      (self.name, self.arg_names, block_to_str(self.body))
+      (self.name, ", ".join(arg_strings), block_to_str(self.body))
 
   def __str__(self):
     return repr(self)

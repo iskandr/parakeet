@@ -167,26 +167,10 @@ def eval_fn(fn, actuals):
       
     def expr_AllPairs():
       fn = eval_expr(expr.fn)
-      args = eval_args(expr.args)
+      x,y = eval_args(expr.args)
       axis = syntax_helpers.unwrap_constant(expr.axis)
-      
-      assert len(args) == 2
-      [x,y] = args
-      nx = x.shape[axis]
-      ny = y.shape[axis]
-      first_x = nested_arg(x, axis, 0)
-      first_args = [first_x, nested_arg(y, axis, 0)]
-
-      first_elt = call(fn, first_args)
-      result = tile_array(first_elt, (nx, ny))
-      for j in xrange(ny):
-        result[0,j] = call(fn, [first_x, nested_arg(y, axis, j)])
-      for i in xrange(1, nx):
-        for j in xrange(0, ny):
-          args = [nested_arg(x, axis, i), nested_arg(y, axis, j)]
-          result[i, j] = call(fn, args)
-      return result
-    
+      return adverb_evaluator.eval_allpairs(fn, x, y, axis)
+        
     def expr_Reduce():
       map_fn = eval_expr(expr.fn)
       combine_fn = eval_expr(expr.combine)

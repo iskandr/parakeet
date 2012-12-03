@@ -8,7 +8,6 @@ import syntax_helpers
 class LowerIndexing(transform.Transform):
       
   def array_slice(self, arr, indices):
-    print indices 
     data_ptr = self.attr(arr, "data") 
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
@@ -63,7 +62,11 @@ class LowerIndexing(transform.Transform):
     idx = self.assign_temp(idx, "idx")
     
     arr_t = arr.type
-    assert isinstance(arr_t, array_type.ArrayT), \
+    if isinstance(arr_t, core_types.PtrT):
+      assert isinstance(idx.type, core_types.IntT)
+      return expr 
+    
+    assert isinstance(arr_t,  array_type.ArrayT), \
       "Unexpected array %s : %s" % (arr, arr.type) 
     
     if self.is_tuple(idx):
@@ -106,9 +109,7 @@ class LowerIndexing(transform.Transform):
       return None 
         
     elif isinstance(lhs, syntax.Index):
-      print "old lhs", lhs
       lhs = self.transform_Index(lhs)
-      print "new lhs", lhs 
       if isinstance(lhs, syntax.ArrayView):
         copy_loop = self.array_copy(src = rhs, dest = lhs, return_stmt = True)
         copy_loop = self.transform_stmt(copy_loop)

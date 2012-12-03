@@ -93,28 +93,34 @@ def get_invoke_specialization(closure_t, arg_types):
 
 _invoke_type_cache = {}
 
-def invoke_result_type(closure_t, arg_types):
+def invoke_result_type(fn, arg_types):
+  
+  if isinstance(fn, typed_ast.TypedFn):
+    assert isinstance(arg_types, (list, tuple))
+    assert len(arg_types) == len(fn.input_types), \
+      "Type mismatch between expected inputs %s and %s" % \
+        (fn.input_types, arg_types)
+    assert all(t1 == t2 for (t1,t2) in zip(arg_types, fn.input_types))
+    return fn.return_type 
+    
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
-    
-  key = (closure_t, arg_types)
+  
+  if isinstance(fn, untyped_ast.Fn):
+    fn = closure_type.ClosureT(fn.name, ())
+  
+  key = (fn, arg_types)
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
-  print 
-  print "invoke_result_type"
-  print "--", closure_t
-  print "--", arg_types
+ 
   
-  if isinstance(closure_t, untyped_ast.Fn):
-    
-    closure_t = closure_type.ClosureT(closure_t.name, ())
-    
-  if isinstance(closure_t, closure_type.ClosureT):
-    closure_set = closure_type.ClosureSet(closure_t)
+  
+  if isinstance(fn, closure_type.ClosureT):
+    closure_set = closure_type.ClosureSet(fn)  
   else:
-    assert isinstance(closure_t, closure_type.ClosureSet), \
-      "Invoke expected closure, but got %s" % (closure_t,)
-    closure_set = closure_t
+    assert isinstance(fn, closure_type.ClosureSet), \
+      "Invoke expected closure, but got %s" % (fn,)
+    closure_set = fn
       
   result_type = core_types.Unknown
   for closure_t in closure_set.closures:
@@ -265,9 +271,7 @@ def annotate_expr(expr, tenv, var_map):
     new_args = annotate_args(expr.args)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
-    print "about to annotate", expr.init 
     init = annotate_child(expr.init) if expr.init else None
-    print "calling infer reduce type"
     result_type = infer_reduce_type(
       map_fn.type, 
       combine_fn.type, 
@@ -292,8 +296,6 @@ def annotate_expr(expr, tenv, var_map):
     axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
     result_type = infer_scan_type(map_fn, combine_fn, arg_types, axis)
-    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
-      axis = 0
     return adverbs.Scan(fn = map_fn, 
                           combine = combine_fn,
                           emit = emit_fn, 
@@ -306,12 +308,8 @@ def annotate_expr(expr, tenv, var_map):
     closure = annotate_child(expr.fn)
     new_args = annotate_args (expr.args)
     arg_types = get_types(new_args)
-    assert len(arg_types) == 2
     axis = unwrap_constant(expr.axis)
-    result_type = infer_allpairs_type(closure.type, arg_types[0], arg_types[1],
-                                      axis)
-    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
-      axis = 0
+    result_type = infer_allpairs_type(closure.type, arg_types, axis)
     return adverbs.AllPairs(fn = closure,
                             args = new_args,
                             axis = axis,
@@ -681,13 +679,11 @@ def infer_scan_type(
                                          arg_types, 
                                          axis)
   
-def infer_allpairs_type(closure_t, xtype, ytype, axis):
+def infer_allpairs_type(closure_t, arg_types, axis):
+  if isinstance(arg_types, ActualArgs):
+    arg_types = arg_types.positional 
+  assert len(arg_types) == 2
+  [xtype, ytype] = arg_types
   axis = unwrap_constant(axis)
-  n_outer_axes = 2
-  arg_types = [xtype, ytype]
-  if axis is None:
-    nested_types = array_type.elt_types(arg_types)
-  else:
-    nested_types = array_type.lower_ranks(arg_types, 1)
-  nested_result_type = invoke_result_type(closure_t, nested_types)
-  return array_type.increase_rank(nested_result_type, n_outer_axes)
+  return adverb_type_semantics.eval_allpairs(closure_t, xtype, ytype, axis)
+  

@@ -5,6 +5,7 @@ from lower_structs import LowerStructs
 from simplify import Simplify
 from tile_adverbs import TileAdverbs, LowerTiledAdverbs
 from transform import apply_pipeline
+import function_registry 
 
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
@@ -13,8 +14,9 @@ tiling_pipeline = [
 no_tiling = [LowerAdverbs]
 
 lowering_pipeline = [
-  Inliner,
+  
   Simplify,
+  Inliner,
   LowerIndexing,
   Simplify,
   LowerStructs,
@@ -23,6 +25,9 @@ lowering_pipeline = [
 
 _lowered_functions = {}
 def lower(fundef, tile=False):
+  if isinstance(fundef, str):
+    fundef = function_registry.typed_functions[fundef]
+    
   key = (fundef.name, tile)
   if key in _lowered_functions:
     return _lowered_functions[key]

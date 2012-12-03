@@ -34,7 +34,7 @@ class Simplify(rewrite_typed.SimplifyInvoke):
     #  3) closures: later convert invoke to direct fn calls 
      
     self.env = {}
-    self.live_vars = set([])
+    self.live_vars = set(fn.arg_names)
     transform.Transform.__init__(self, fn)
   
   def collect_live_vars_list(self, exprs):
@@ -195,7 +195,6 @@ class Simplify(rewrite_typed.SimplifyInvoke):
     return result 
   
   def post_apply(self, new_fn):
-    print new_fn 
     new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)
     new_fn.type_env = \
       dict([(name, new_fn.type_env[name]) for name in self.live_vars])

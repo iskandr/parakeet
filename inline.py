@@ -17,22 +17,25 @@ def replace_return(stmt, output_var):
   if isinstance(stmt, syntax.Return):
     return syntax.Assign(output_var, stmt.value)
   else:
-    # to lift this restriction we'd have to track which branches 
-    # returned of If statements and Loops, and deal with merging
-    # returned values and/or simulating unstructured control flow
-    # with guard values like "if !returned: ..." 
-    assert isinstance(stmt, syntax.Assign), \
-      "Only straight-line code can be inlined (for now)"
     return stmt   
 
 def replace_returns(stmts, output_var):
   return [replace_return(stmt, output_var) for stmt in stmts]  
   
-def no_control_flow(stmt):
-  return isinstance(stmt, (syntax.Assign, syntax.Return))
+def can_inline_block(stmts, outer = False):
+  for stmt in stmts:
+    if isinstance(stmt, syntax.If):
+      return can_inline_block(stmt.true) and can_inline_block(stmt.false)
+    elif isinstance(stmt, syntax.While):
+      return can_inline_block(stmt.body)
+    elif isinstance(stmt, syntax.Return):
+      return outer
+    else:
+      assert isinstance(stmt, syntax.Assign)
+      return True  
   
 def can_inline(fundef):
-  return all(map(no_control_flow, fundef.body))
+  return can_inline_block(fundef.body, outer = True)
 
 class Inliner(transform.Transform):
   
@@ -52,8 +55,6 @@ class Inliner(transform.Transform):
       return arg 
 
   def do_inline(self, fundef, args):
-    #print "INLINER.do_inline: ", fundef
-    #print "-- args", args  
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)
@@ -72,25 +73,20 @@ class Inliner(transform.Transform):
     renamed_body = subst_list(fundef.body, rename_dict)
     result_var = self.fresh_var(fundef.return_type, "result")
     inlined_body = replace_returns(renamed_body, result_var)
-    # print "inlined_body", inlined_body
     self.blocks.current().extend(inlined_body)
     return result_var
   
   def transform_Call(self, expr):
-    target = function_registry.typed_functions[expr.fn]
+    if isinstance(expr.fn, str):
+      target = function_registry.typed_functions[expr.fn]
+    else:
+      target = expr.fn 
     if can_inline(target):
       return self.do_inline(target, expr.args)
     else:
       print "CAN'T INLINE", expr 
       return expr
   
-  def pre_apply(self, old_fn):
-
-    return old_fn 
-  
-  def post_apply(self, new_fn):
-
-    return new_fn 
   
 
 #def inline(fn):
