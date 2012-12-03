@@ -19,15 +19,17 @@ class CodegenSemantics(Transform):
     return type_inference.invoke_result_type(closure_t, arg_types)
 
   def invoke(self, closure, args):
-    #print 
-    #print "invoking", closure, args 
     arg_types = syntax_helpers.get_types(args)
-    typed_fn = type_inference.get_invoke_specialization(closure.type, arg_types)
-    #print "typed_fn", typed_fn 
+    closure_t = closure.type 
+    if isinstance(closure_t, core_types.FnT):
+      typed_fn = closure
+      closure_args = [] 
+    else:
+      typed_fn = type_inference.get_invoke_specialization(closure.type, arg_types)
+      closure_args = self.closure_elts(closure)
+      
     import lowering
     lowered_fn = lowering.lower(typed_fn)
-    #print "lowered_fn", lowered_fn
-    closure_args = self.closure_elts(closure)
     combined_args = closure_args + args  
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
     return self.assign_temp(call, "call_result")

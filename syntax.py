@@ -304,6 +304,10 @@ class TypedFn(Expr):
       "Invalid typed function arguments: %s" % (self.arg_names,)
     assert isinstance(self.name, str), \
       "Invalid typed function name: %s" % (self.name,)
+    
+    if isinstance(self.input_types, list):
+      self.input_types = tuple(self.input_types)
+      
     assert isinstance(self.input_types, tuple), \
       "Invalid input types: %s" % (self.input_types,)
     assert isinstance(self.return_type, core_types.Type), \
