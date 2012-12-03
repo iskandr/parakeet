@@ -105,7 +105,7 @@ class AdverbSemantics(object):
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
     init, start_idx = self.acc_prelude(init, combine, delayed_map_result)
-    first_output = self.call(emit, [init])
+    first_output = self.invoke(emit, [init])
     result = self.create_result(first_output, niters)
     self.setidx(result, self.int(0), first_output)
 

@@ -69,7 +69,7 @@ def eval_fn(fn, actuals):
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 
     env = fn.args.bind(actuals)
-  print "interp", fn 
+
   
   def eval_args(args):
     if isinstance(args, (list, tuple)):
