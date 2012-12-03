@@ -7,10 +7,9 @@ from args import ActualArgs
 from adverb_semantics import AdverbSemantics
 from simplify_invoke import SimplifyInvoke
 
-
 class CodegenSemantics(SimplifyInvoke):
   # Can't put type inference related methods inside Transform
-  # since this create a cyclic dependency with InsertCoercions
+  # since this creates a cyclic dependency with RewriteTyped
 
   def invoke_type(self, closure, args):
     closure_t = closure.type
@@ -25,10 +24,10 @@ class CodegenSemantics(SimplifyInvoke):
     print "untyped_fn", untyped_fn
 
     typed_fn = type_inference.specialize(untyped_fn, arg_types)
-    print "high level", typed_fn 
-    import lowering 
+    print "high level", typed_fn
+    import lowering
     fn = lowering.lower(typed_fn)
-    print "lower level", fn 
+    print "lower level", fn
     call = syntax.Call(fn, args, type = call_result_t)
     return self.assign_temp(call, "call_result")
 
@@ -42,16 +41,20 @@ class CodegenSemantics(SimplifyInvoke):
   null_slice = syntax_helpers.slice_none
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
-  
   def transform_TypedFn(self, expr):
-    import lowering 
+    import lowering
     return lowering.lower(expr)
-  
 
   def transform_Map(self, expr):
     print "TRANSFORM MAP", expr
-    fn, args, _ = self.linearize_invoke(expr.fn, expr.args)
+    print expr.fn
+    fn, args, arg_types = self.linearize_invoke(expr.fn, expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
+    print expr
+    for t in arg_types:
+      print t
+    for arg in args:
+      print "arg_type:", arg.type
     return self.eval_map(fn, args, axis)
 
   def transform_Reduce(self, expr):
@@ -73,20 +76,16 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_AllPairs(self, expr):
     fn = self.transform_expr(expr.fn)
     if isinstance(expr.args, ActualArgs):
-      args = expr.args.positional 
+      args = expr.args.positional
     else:
-      args = expr.arg 
+      args = expr.arg
     assert len(args) == 2
-    x,y = self.transform_expr_list(args) 
+    x,y = self.transform_expr_list(args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_allpairs(fn, x, y, axis)
-  
+
   def pre_apply(self, fn):
     print "before adverb lowering", fn
-    
-    
-
-
 
 def lower_adverbs(fn):
   return transform.cached_apply(LowerAdverbs, fn)

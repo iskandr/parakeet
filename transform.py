@@ -2,14 +2,14 @@ import function_registry
 import names
 import syntax
 
+from args import ActualArgs
 from codegen import Codegen
-from args import ActualArgs 
 
 class Transform(Codegen):
   def __init__(self, fn):
     Codegen.__init__(self)
     self.fn = fn
-    self.copy = None 
+    self.copy = None
 
   def lookup_type(self, name):
     assert self.type_env is not None
@@ -126,16 +126,16 @@ class Transform(Codegen):
 
   def pre_apply(self, old_fn):
     pass
-  
+
   def post_apply(self, new_fn):
-    pass   
-  
+    pass
+
   def apply(self, copy = False):
-    self.copy = copy 
+    self.copy = copy
     old_fn = self.pre_apply(self.fn)
     if old_fn is None:
-      old_fn = self.fn 
-    
+      old_fn = self.fn
+
     if isinstance(old_fn, syntax.TypedFn):
       self.type_env = old_fn.type_env.copy()
     else:
@@ -154,20 +154,18 @@ class Transform(Codegen):
       function_registry.typed_functions[new_fundef.name] = new_fundef
       new_fn = self.post_apply(new_fundef)
       if new_fn:
-        return new_fn 
-      else: 
-        return new_fundef 
-      
+        return new_fn
+      else:
+        return new_fundef
     else:
       old_fn.type_env = self.type_env
       old_fn.body = new_body
       new_fn = self.post_apply(old_fn)
-    
+
       if new_fn:
-        return new_fn 
+        return new_fn
       else:
-        return old_fn 
-     
+        return old_fn
 
 _transform_cache = {}
 def cached_apply(T, fn, copy = False):

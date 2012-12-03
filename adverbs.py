@@ -8,23 +8,22 @@ class Adverb(syntax.Expr):
     assert self.args is not None
 
   def fn_to_str(self, fn):
-    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
-      return fn.name
-    else:
-      return str(fn)
-    
+#    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
+#      return fn.name
+#    else:
+    return str(fn)
+
   def args_to_str(self):
     if isinstance(self.args, (list, tuple)):
-      return ", ".join([str(arg) for arg in self.args])
+      return ", ".join([str(arg) + ":" + str(arg.type) for arg in self.args])
     else:
       return str(self.args)
-  
+
   def __repr__(self):
-    
     return "%s(axis = %s, fn = %s, %s, type=%s)" % \
-        (self.node_type(), self.axis, 
-         self.fn_to_str(self.fn), 
-         self.args_to_str(), 
+        (self.node_type(), self.axis,
+         self.fn_to_str(self.fn),
+         self.args_to_str(),
          self.type)
 
   def __str__(self):
@@ -40,21 +39,18 @@ class AllPairs(Adverb):
 
 class Accumulative(Adverb):
   """
-  Adverbs such as Reduce and Scan
-  which carry an accumulated value
-  and require a 'combine' function
-  to merge the accumulators resulting
-  from parallel sub-computations.
+  Adverbs such as Reduce and Scan which carry an accumulated value and require a
+  'combine' function to merge the accumulators resulting from parallel
+  sub-computations.
   """
   _members = ['combine', 'init']
 
   def __repr__(self):
-    
     return "%s(axis = %s, map_fn = %s, combine = %s, init = %s, %s)" % \
-        (self.node_type(), self.axis, 
+        (self.node_type(), self.axis,
          self.fn_to_str(self.fn),
          self.fn_to_str(self.combine),
-         self.init, 
+         self.init,
          self.args_to_str())
 
   def node_init(self):
@@ -69,13 +65,12 @@ class Scan(Accumulative):
   _members = ['emit']
 
   def __repr__(self):
-   
     return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)"\
-        % (self.node_type(), self.axis, 
+        % (self.node_type(), self.axis,
            self.fn_to_str(self.fn),
            self.fn_to_str(self.combine),
            self.fn_to_str(self.emit),
-           self.init, 
+           self.init,
            self.args_to_str())
 
 class Tiled(object):

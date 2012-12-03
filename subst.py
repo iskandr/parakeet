@@ -1,4 +1,3 @@
-
 import syntax
 from args import ActualArgs
 
@@ -25,13 +24,13 @@ def subst(node, rename_dict):
   elif isinstance(node, dict):
     return subst_dict(node, rename_dict)
   else:
-    return node 
+    return node
 
 def subst_dict(old_dict, rename_dict):
   new_dict = {}
   for (k,v) in old_dict.iteritems():
     new_dict[subst(k, rename_dict)] = subst(v, rename_dict)
-  return new_dict 
+  return new_dict
 
 def subst_list(nodes, rename_dict):
   return [subst(node, rename_dict) for node in nodes]

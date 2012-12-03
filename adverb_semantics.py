@@ -1,3 +1,5 @@
+import syntax
+
 class AdverbSemantics(object):
   """
   Describe the behavior of adverbs in terms of
@@ -10,7 +12,13 @@ class AdverbSemantics(object):
   """
   def invoke_delayed(self, fn, args, idx):
     curr_args = [x(idx) for x in args]
-    return self.invoke(fn, curr_args)
+    if isinstance(fn, (syntax.Closure, syntax.Fn)):
+      return self.invoke(fn, curr_args)
+    elif isinstance(fn, syntax.TypedFn):
+      call = syntax.Call(fn, args, type = fn.return_type)
+      return self.assign_temp(call, "call_result")
+    else:
+      assert False, "Expected Fn or Closure, got:" + str(fn.__class__)
 
   def build_slice_indices(self, rank, axis, idx):
     if rank == 1:
@@ -32,7 +40,7 @@ class AdverbSemantics(object):
       index_tuple = self.build_slice_indices(r, axis, idx)
       return self.index(arr, index_tuple)
     else:
-      return arr 
+      return arr
 
   def delayed_elt(self, x, axis):
     return lambda idx: self.slice_along_axis(x, axis, idx)
@@ -41,6 +49,8 @@ class AdverbSemantics(object):
     axis_sizes = [self.size_along_axis(x, axis)
                   for x in xs
                   if self.rank(x) > axis]
+    print xs
+    print axis_sizes
     assert len(axis_sizes) > 0
     # all arrays should agree in their dimensions along the
     # axis we're iterating over
@@ -52,7 +62,7 @@ class AdverbSemantics(object):
     def delay(x):
       return self.delayed_elt(x, axis)
     elts = map(delay, xs)
-    
+
     def delayed_map_result(idx):
       return self.invoke_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
@@ -68,7 +78,6 @@ class AdverbSemantics(object):
     return init, self.int(1)
 
   def create_result(self, first_elt, outer_shape):
-
     if not self.is_tuple(outer_shape):
       outer_shape = self.tuple([outer_shape])
 

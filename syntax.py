@@ -1,5 +1,5 @@
 import core_types
-import args 
+import args
 from node import Node
 
 class Stmt(Node):
@@ -113,11 +113,11 @@ class Invoke(Expr):
   """
   Invoke a closure with extra args
   """
-  _members = ['closure', 'args'] 
-        
+  _members = ['closure', 'args']
+
   def __str__(self):
     return "%s(%s)" % (self.closure, self.args)
-   
+
   def __repr__(self):
     return str(self)
 
@@ -205,13 +205,12 @@ class Fn(Expr):
   def node_init(self):
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
-
     assert isinstance(self.args, args.FormalArgs), \
       "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
-    
-    import closure_type 
+
+    import closure_type
     self.type = closure_type.ClosureT(self.name, ())
 
   def python_nonlocals(self):

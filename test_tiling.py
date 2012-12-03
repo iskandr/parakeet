@@ -59,6 +59,7 @@ def test_map_tiling():
   print typed
   tiling_transform = tile_adverbs.TileAdverbs(map_fn)
   new_fn = tiling_transform.apply(copy=True)
+  print new_fn
   assert isinstance(new_fn, syntax.TypedFn)
 
 def test_id_tiling():

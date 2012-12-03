@@ -67,10 +67,6 @@ class TileAdverbs(Transform):
     for arg in v_names:
       exps_left[arg] = len(self.get_expansions(arg))
 
-    def make_type_env(names):
-      new_type_env = {}
-      return new_type_env
-
     def order_args(depth):
       cur_depth_args = []
       other_args = []
@@ -78,14 +74,17 @@ class TileAdverbs(Transform):
         arg_exps = self.get_expansions(arg)
         if depth in arg_exps:
           cur_depth_args.append(arg)
-          exps_left[arg] -= 1
         else:
           other_args.append(arg)
       return (cur_depth_args, other_args)
 
     def gen_unpack_fn(depth_idx):
       def make_args(type_env, cur_depth_args, other_args):
-        cur_arg_types = [type_env[arg] for arg in cur_depth_args]
+        # We know that the caller is always going to be an adverb (in which case
+        # the type needs to increase its rank by 1) or a Tiled adverb (in which
+        # case the types are ignored).
+        cur_arg_types = [array_type.increase_rank(type_env[arg], 1)
+                         for arg in cur_depth_args]
         cur_vars = [syntax.Var(name, type=t)
                     for name, t in zip(cur_depth_args, cur_arg_types)]
 
@@ -122,6 +121,7 @@ class TileAdverbs(Transform):
 
         args = [fixed_args] + cur_vars
         arg_types = [fixed_args_t] + cur_arg_types
+        inner_type_env["$fixed_args"] = fixed_args_t
 
         arg_names = ["$fixed_args"] + v_names
         fn = syntax.TypedFn(name=names.fresh("expanded_assign"),
@@ -144,11 +144,15 @@ class TileAdverbs(Transform):
         for arg in cur_depth_args + other_args:
           new_type_env[arg] = array_type.increase_rank(type_env[arg],
                                                        exps_left[arg])
+        print "new_type_env:", new_type_env
+        for arg in cur_depth_args:
+          exps_left[arg] -= 1
 
         # Get the current arg types and great a list of Vars for them
         cur_vars, cur_arg_types, fixed_args, fixed_args_t, other_vars = \
             make_args(new_type_env, cur_depth_args, other_args)
         args = [fixed_args] + cur_vars
+        new_type_env["$fixed_args"] = fixed_args_t
 
         # Pull out all of the fixed args from the current fn's tuple arg and
         # place them in local Vars
@@ -228,10 +232,12 @@ class TileAdverbs(Transform):
     find_adverbs = FindAdverbs(expr.fn)
     find_adverbs.apply(copy=False)
     depths = self.get_depths_list(expr.fn.arg_names)
+    print "depths:", depths
+    print "expansions:", self.expansions
     if find_adverbs.has_adverbs:
+      # I think we probably want to generate our own Fn here rather than calling
+      # gen_unpack_tree
       new_body = self.transform_block(expr.fn.body)
-      # TODO: do we really want to use gen_unpack_tree here, or simply make
-      #       a function ourselves?
       nested_args, new_fn = self.gen_unpack_tree([], depths, expr.fn.arg_names,
                                                  new_body, expr.fn.type_env)
     else:
@@ -250,10 +256,6 @@ class LowerTiledAdverbs(LowerAdverbs):
     LowerAdverbs.__init__(self, fn)
     self.tile_params = []
     self.num_tiled_adverbs = 0
-
-  def transform_TypedFn(self, fn):
-    new_lower_transform = LowerTiledAdverbs(fn)
-    return new_lower_transform.apply()
 
   def transform_TiledMap(self, expr):
     fn = expr.fn # Should never be a Closure
@@ -284,6 +286,10 @@ class LowerTiledAdverbs(LowerAdverbs):
                                type=slice_t)
     nested_args = [args[0]] + [self.index_along_axis(arg, axis, tile_bounds)
                                for arg in args[1:]]
+    print "nested_args:", nested_args
+    for n, arg in enumerate(nested_args):
+      print "nested_arg[" + str(n) + "].type:", arg.type
+    print fn.type_env
 
     # TODO: Use shape inference to figure out how large of an array
     # I need to allocate here!
