@@ -57,7 +57,7 @@ class CompiledFn:
     self.exec_engine = exec_engine
 
   def __call__(self, *args):
-    actual_types = map(type_conv.typeof, args)
+    actual_types = tuple(map(type_conv.typeof, args))
     expected_types = self.parakeet_fn.input_types
     assert actual_types == expected_types, \
       "Arg type mismatch, expected %s but got %s" % \
@@ -86,7 +86,7 @@ def specialize_and_compile(fn, args):
   all_args = untyped.python_nonlocals() + list(args)
 
   # get types of all inputs
-  input_types = [type_conv.typeof(arg) for arg in all_args]
+  input_types = tuple([type_conv.typeof(arg) for arg in all_args])
 
   # propagate types through function representation and all
   # other functions it calls

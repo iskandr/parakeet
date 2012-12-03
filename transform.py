@@ -16,8 +16,9 @@ class Transform(Codegen):
     return self.type_env[name]
 
   def transform_TypedFn(self, fn):
-    nested_transform = self.__class__(fn)
-    return nested_transform.apply(copy = self.copy)
+    return fn 
+    #nested_transform = self.__class__(fn)
+    #return nested_transform.apply(copy = self.copy)
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):

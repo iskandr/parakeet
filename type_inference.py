@@ -104,7 +104,7 @@ def linearize_args(fn, args):
     arg_types = args.transform(syntax_helpers.get_type)
     def tuple_elts(tup):
       return [typed_ast.TupleProj(tup, i, t) 
-              for (i,t) in enumerate(tup.elt_types)]
+              for (i,t) in enumerate(tup.type.elt_types)]
       
     # Drop arguments that are assigned defaults,
     # since we're assuming those are set in the body
@@ -465,7 +465,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
-def _infer_types(untyped_fn, types):
+def infer_types(untyped_fn, types):
   """
   Given an untyped function and input types,
   propagate the types through the body,
@@ -490,9 +490,11 @@ def _infer_types(untyped_fn, types):
   tenv = typed_args.bind(types,
                          keyword_fn = keyword_fn,
                          starargs_fn = tuple_type.make_tuple_type)
-
+  
+  
   # keep track of the return
   tenv['$return'] = core_types.Unknown
+  print tenv 
   body = annotate_block(untyped_fn.body, tenv, var_map)
   arg_names = [local_name for local_name
                in
@@ -524,10 +526,10 @@ def _infer_types(untyped_fn, types):
     for (i, elt_t) in enumerate(starargs_t.elt_types):
       arg_name = "%s_elt%d" % (names.original(local_starargs_name), i)
       tenv[arg_name] = elt_t
-      input_types.append(elt_t)
       arg_var = typed_ast.Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
+    input_types = input_types + starargs_t.elt_types 
     tuple_lhs = typed_ast.Var(name = local_starargs_name, type = starargs_t)
     tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = starargs_t)
     stmt = typed_ast.Assign(tuple_lhs, tuple_rhs)
@@ -563,7 +565,7 @@ def specialize(untyped, arg_types):
   try:
     return untyped.specializations[arg_types]
   except:
-    typed_fundef = _infer_types(untyped, arg_types)
+    typed_fundef = infer_types(untyped, arg_types)
     from rewrite_typed import rewrite_typed
     coerced_fundef = rewrite_typed(typed_fundef)
 

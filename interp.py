@@ -140,7 +140,7 @@ def eval_fn(fn, actuals):
         fundef = expr.fn
       else:
         assert isinstance(expr.fn, str)
-        fundef = expr.Fn.registry[expr.fn]
+        fundef = syntax.Fn.registry[expr.fn]
       closure_arg_vals = map(eval_expr, expr.args) 
       return ClosureVal(fundef, closure_arg_vals)
     
