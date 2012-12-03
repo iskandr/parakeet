@@ -69,7 +69,7 @@ def eval_fn(fn, actuals):
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 
     env = fn.args.bind(actuals)
-  
+  print "interp", fn 
   
   def eval_args(args):
     if isinstance(args, (list, tuple)):
@@ -79,7 +79,7 @@ def eval_fn(fn, actuals):
        
   
   def eval_expr(expr): 
-    assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    
+    assert isinstance(expr, syntax.Expr), "Not an expression-- %s : %s" % (expr, type(expr))    
     def expr_Const():
       return expr.value
     
@@ -113,6 +113,8 @@ def eval_fn(fn, actuals):
       # for the interpreter Invoke and Call are identical since
       # we're dealing with runtime reprs for functions, prims, and 
       # closures which are just python Callables
+ 
+        
       clos = eval_expr(expr.fn)
       arg_values = eval_args(expr.args)
       
@@ -147,6 +149,9 @@ def eval_fn(fn, actuals):
     def expr_Fn():
       return ClosureVal(expr, [])
     
+    def expr_TypedFn():
+      return ClosureVal(expr, [])
+    
     def expr_Cast():
       x = eval_expr(expr.value)
       t = expr.type
@@ -167,7 +172,10 @@ def eval_fn(fn, actuals):
       return eval_expr(expr.tuple)[expr.index]
     
     def expr_ClosureElt():
-      return eval_expr(expr.closure).fixed_args[expr.index]
+      assert isinstance(expr.closure, syntax.Expr), \
+        "Invalid closure expression-- %s : %s" % (expr.closure, type(expr.closure))
+      clos = eval_expr(expr.closure)
+      return clos.fixed_args[expr.index]
 
     def expr_Map():
       fn = eval_expr(expr.fn)

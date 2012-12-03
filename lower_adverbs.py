@@ -19,10 +19,14 @@ class CodegenSemantics(Transform):
     return type_inference.invoke_result_type(closure_t, arg_types)
 
   def invoke(self, closure, args):
+    #print 
+    #print "invoking", closure, args 
     arg_types = syntax_helpers.get_types(args)
     typed_fn = type_inference.get_invoke_specialization(closure.type, arg_types)
+    #print "typed_fn", typed_fn 
     import lowering
     lowered_fn = lowering.lower(typed_fn)
+    #print "lowered_fn", lowered_fn
     closure_args = self.closure_elts(closure)
     combined_args = closure_args + args  
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
@@ -41,6 +45,8 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_TypedFn(self, expr):
     import lowering
     return lowering.lower(expr)
+  
+
 
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)

@@ -165,6 +165,10 @@ def compile_expr(expr, env, builder):
     else:
       return field_value
 
+  def compile_TypedFn():
+    (target_fn, _, _) = compile_fn(expr)
+    return target_fn 
+  
   def compile_Call():
 
     if isinstance(expr.fn, str):

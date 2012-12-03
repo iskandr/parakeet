@@ -42,22 +42,23 @@ class VarMap:
 
 
 
-def unpack_closure(fn):
+def unpack_closure(closure):
   """
   Given an object which could be either a function,  
   a function's name, a closure, or a closure type:
   Return the underlying untyped funciton and the 
   closure arguments
   """
-  if isinstance(fn, closure_type.ClosureT):
-    fn, closure_args = fn.fn, fn.arg_types  
+  if isinstance(closure, closure_type.ClosureT):
+    fn, closure_args = closure.fn, closure.arg_types  
     
-  elif isinstance(fn.type, closure_type.ClosureT):
-    fn, arg_types = fn.type.fn, fn.type.arg_types  
+  elif isinstance(closure.type, closure_type.ClosureT):
+    fn, arg_types = closure.type.fn, closure.type.arg_types  
     closure_args = \
-      [typed_ast.ClosureElt(fn, i, type = arg_t)
+      [typed_ast.ClosureElt(closure, i, type = arg_t)
        for (i, arg_t) in enumerate(arg_types)]
   else:
+    fn = closure 
     closure_args = []
   if isinstance(fn, str):
     fn = untyped_ast.Fn.registry[fn]
@@ -252,7 +253,7 @@ def annotate_expr(expr, tenv, var_map):
         adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
       result_t = typed_broadcast_fn.return_type
-      return typed_ast.Call(typed_broadcast_fn.name, args, type = result_t)
+      return typed_ast.Call(typed_broadcast_fn, args, type = result_t)
 
   def expr_Index():
     value = annotate_child(expr.value)
