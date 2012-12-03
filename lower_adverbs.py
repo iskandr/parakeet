@@ -24,7 +24,7 @@ class CodegenSemantics(Transform):
     import lowering
     lowered_fn = lowering.lower(typed_fn)
     closure_args = self.closure_elts(closure)
-    combined_args = closure_args + closure_args 
+    combined_args = closure_args + args  
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
     return self.assign_temp(call, "call_result")
 

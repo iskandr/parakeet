@@ -50,8 +50,8 @@ def unpack_closure(fn):
   closure arguments
   """
   if isinstance(fn, closure_type.ClosureT):
-    fn = fn.fn 
-    closure_args = fn.arg_types 
+    fn, closure_args = fn.fn, fn.arg_types  
+    
   elif isinstance(fn.type, closure_type.ClosureT):
     fn, arg_types = fn.type.fn, fn.type.arg_types  
     closure_args = \
@@ -93,7 +93,23 @@ def linearize_arg_types(fn, args):
   linear_args, extra = untyped_fundef.args.linearize_values(args, keyword_fn = keyword_fn)
   return untyped_fundef, tuple(linear_args + extra)
 
-def linearize_args(fn, args):
+def tuple_elts(tup):
+  return [typed_ast.TupleProj(tup, i, t) 
+          for (i,t) in enumerate(tup.type.elt_types)]
+
+
+def flatten_actual_args(args):
+  if isinstance(args, (list,tuple)):
+    return args 
+  assert isinstance(args, ActualArgs), \
+    "Unexpected args: %s" % (args,)
+  assert len(args.keywords) == 0
+  result = list(args.positional)
+  if args.starargs:
+    result.extend(tuple_elts(args.starargs))
+  return result 
+
+def linearize_actual_args(fn, args):
     
     untyped_fn, closure_args = unpack_closure(fn)
          
@@ -102,9 +118,7 @@ def linearize_args(fn, args):
     args = args.prepend_positional(closure_args)
     
     arg_types = args.transform(syntax_helpers.get_type)
-    def tuple_elts(tup):
-      return [typed_ast.TupleProj(tup, i, t) 
-              for (i,t) in enumerate(tup.type.elt_types)]
+
       
     # Drop arguments that are assigned defaults,
     # since we're assuming those are set in the body
@@ -173,11 +187,15 @@ def annotate_expr(expr, tenv, var_map):
   def annotate_children(child_exprs):
     return [annotate_expr(e, tenv, var_map) for e in child_exprs]
 
-  def annotate_args(args):
+  def annotate_args(args, flat = False):
     if isinstance(args, (list, tuple)):
       return map(annotate_child, args)
     else:
-      return args.transform(annotate_child)
+      new_args = args.transform(annotate_child)
+      if flat:
+        return flatten_actual_args(new_args)
+      else:
+        return new_args 
 
   def annotate_keywords(kwds_dict):
     if kwds_dict is None:
@@ -206,7 +224,7 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Call():
     closure = annotate_child(expr.fn)
     args = annotate_args(expr.args)
-    untyped_fn, args, arg_types = linearize_args(closure, args)
+    untyped_fn, args, arg_types = linearize_actual_args(closure, args)
     typed_fn = specialize(untyped_fn, arg_types)
     return typed_ast.Call(typed_fn, args, typed_fn.return_type)
   
@@ -285,9 +303,10 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Const():
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
 
+      
   def expr_Map():
     closure = annotate_child(expr.fn)
-    new_args = annotate_args(expr.args)
+    new_args = annotate_args(expr.args, flat = True)
     axis = unwrap_constant(expr.axis)
     arg_types = get_types(new_args)
     result_type = infer_map_type(closure.type, arg_types, axis)
@@ -301,7 +320,7 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Reduce():
     map_fn = annotate_child(expr.fn)
     combine_fn = annotate_child(expr.combine)
-    new_args = annotate_args(expr.args)
+    new_args = annotate_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
@@ -324,7 +343,7 @@ def annotate_expr(expr, tenv, var_map):
     map_fn = annotate_child(expr.fn)
     combine_fn = annotate_child(expr.combine)
     emit_fn = annotate_child(expr.emit)
-    new_args = annotate_args(expr.args)
+    new_args = annotate_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
@@ -339,7 +358,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_AllPairs():
     closure = annotate_child(expr.fn)
-    new_args = annotate_args (expr.args)
+    new_args = annotate_args (expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     result_type = infer_allpairs_type(closure.type, arg_types, axis)

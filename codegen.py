@@ -365,7 +365,8 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
-    return [self.closure_elt(clos, i) for i in xrange(len(clos.arg_types))]
+    return [self.closure_elt(clos, i) 
+            for i in xrange(len(clos.type.arg_types))]
 
   def prod(self, elts, name = None):
     result = elts[0]

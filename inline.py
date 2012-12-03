@@ -7,7 +7,7 @@ import transform
 
 from syntax_helpers import get_types 
 from tuple_type import make_tuple_type
-import function_registry 
+
 import type_inference 
 
 def replace_return(stmt, output_var):
@@ -55,6 +55,8 @@ class Inliner(transform.Transform):
       return arg 
 
   def do_inline(self, fundef, args):
+    print "INLINE", fundef 
+    print "-- args", args 
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)
@@ -78,7 +80,7 @@ class Inliner(transform.Transform):
   
   def transform_Call(self, expr):
     if isinstance(expr.fn, str):
-      target = function_registry.typed_functions[expr.fn]
+      target = syntax.TypedFn.registry[expr.fn]
     else:
       target = expr.fn 
     if can_inline(target):
@@ -87,7 +89,8 @@ class Inliner(transform.Transform):
       print "CAN'T INLINE", expr 
       return expr
   
-  
+  def pre_apply(self, fn):
+    print "inlining", fn   
 
 #def inline(fn):
 #  return transform.cached_apply(Inliner, fn)

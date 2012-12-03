@@ -94,7 +94,10 @@ class Tuple(Expr):
   _members = ['elts']
 
   def __str__(self):
-    return ", ".join([str(e) for e in self.elts])
+    if len(self.elts) > 0:
+      return ", ".join([str(e) for e in self.elts])
+    else:
+      return "()"
 
   def __iter__(self):
     return iter(self.elts)
@@ -124,7 +127,11 @@ class Invoke(Expr):
 class Call(Expr):
 
   def __str__(self):
-    return "%s(%s)" % (self.closure, self.args)
+    if isinstance(self.fn, (Fn, TypedFn)):
+      fn_name = self.fn.name 
+    else:
+      fn_name = str(self.fn)
+    return "%s(%s)" % (fn_name, ", ".join(str(arg) for arg in self.args))
 
   def __repr__(self):
     return str(self)
