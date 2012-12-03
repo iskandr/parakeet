@@ -79,7 +79,8 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-import args, array_type,  names
+import array_type,  names
+from args import FormalArgs
 _par_wrapper_cache = {}
 
 def gen_par_work_function(adverb_class, fn, arg_types):
@@ -92,10 +93,15 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     args_var = syntax.Var(names.fresh("args"))
     tile_sizes_var = syntax.Var(names.fresh("tile_sizes"))
     inputs = [start_var, stop_var, args_var, tile_sizes_var]
+    fn_args_obj = FormalArgs()
+    for var in inputs:
+      name = var.name 
+      fn_args_obj.add_positional(name)
 
-    nested_arg_names = ['fn'] + list(fn.args.positional)
     nested_wrapper = adverb_wrapper.untyped_wrapper(adverb_class,
-                                                    nested_arg_names,
+                                                    map_fn_name = 'fn',
+                                                    data_names = fn.args.positional,
+                                                    varargs_name = None, 
                                                     axis = 0)
     # TODO: Closure args should go here.
     unpacked_args = [syntax.Closure(fn.name, [])]
@@ -110,7 +116,8 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     call = syntax.Call(nested_closure, unpacked_args)
     body = [syntax.Assign(syntax.Attribute(args_var, "output"), call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_par_wrapper")
-    fundef = syntax.Fn(fn_name, args.FormalArgs(positional = inputs), body)
+    
+    fundef = syntax.Fn(fn_name, fn_args_obj, body)
 
     _par_wrapper_cache[key] = fundef
     return fundef
