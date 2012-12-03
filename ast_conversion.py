@@ -33,43 +33,19 @@ def translate_default_arg_value(arg):
     assert name in reserved_names
     return reserved_names[name].value  
 
-def translate_positional(arg):
-  if isinstance(arg, ast.Name):
-    return syntax.Var(arg.id)
-  elif isinstance(arg, ast.Tuple):
-    return syntax.Tuple(translate_positional_args(arg.elts))
-
-def translate_positional_args(args):
-  return map(translate_positional, args)
-
-def translate_args(args, local_name_fn):
-  assert not args.kwarg
-
-  positional = translate_positional_args(args.args)
-  defaults = OrderedDict()
   
-  n_defaults = len(args.defaults)
-  if n_defaults > 0:
-    default_vars = positional[-n_defaults:]
-    positional = positional[:-n_defaults]
-    for (k,v) in zip(default_vars, args.defaults):
-      defaults[k] = translate_default_arg_value(v)
-
-  args = FormalArgs(positional, 
-                    defaults, starargs = args.vararg, 
-                    local_name_fn = local_name_fn)
-  print "::: formal args", args
-  return args  
 
 class AST_Translator(ast.NodeVisitor):
 
   def __init__(self, globals_dict = None, closure_cell_dict = None,
                outer_env = None):
+    # assignments which need to get prepended at the beginning of the 
+    # function 
     self.env = \
       ScopedEnv(outer_env = outer_env,
                 closure_cell_dict = closure_cell_dict,
                 globals_dict = globals_dict)
-
+    
   def fresh_name(self, original_name):
     return self.env.fresh(original_name)
 
@@ -90,6 +66,64 @@ class AST_Translator(ast.NodeVisitor):
 
   def visit_list(self, nodes):
     return map(self.visit, nodes)
+  
+  def tuple_arg_assignments(self, elts, var):
+    """
+    Recursively decompose a nested tuple argument like
+      def f((x,(y,z))):
+        ...
+    into a single name and a series of assignments:
+      def f(tuple_arg):
+        x = tuple_arg[0]
+        tuple_arg_elt = tuple_arg[1]
+        y = tuple_arg_elt[0]
+        z = tuple_arg_elt[1]
+    """
+    assignments = []
+    for (i, sub_arg) in enumerate(elts):
+      if isinstance(sub_arg, ast.Tuple):
+        name = "tuple_arg_elt"
+      else:
+        assert isinstance(sub_arg, ast.Name)
+        name = sub_arg.id
+      lhs = self.fresh_var(name)
+      stmt = syntax.Assign(lhs, syntax.TupleProj(var, i))
+      assignments.append(stmt)
+      if isinstance(sub_arg, ast.Tuple):
+        more_stmts = self.tuple_arg_assignments(sub_arg.elts, lhs)
+        assignments.extend(more_stmts)
+    return assignments 
+  
+    
+  def translate_args(self, args):
+    assert not args.kwarg
+    formals = FormalArgs()
+    assignments = []
+    for arg in args.args:
+      if isinstance(arg, ast.Name):
+        visible_name = arg.id 
+        local_name = self.fresh_name(visible_name)
+        formals.add_positional(local_name, visible_name)
+        
+      else:
+        assert isinstance(arg, ast.Tuple)
+        arg_name = self.fresh_name("tuple_arg")
+        formals.add_positional(local_name)
+        var = syntax.Var(arg_name)
+        stmts = self.tuple_arg_assignments(arg.elts, var)   
+        assignments.extend(stmts)
+    
+    n_defaults = len(args.defaults)
+    if n_defaults > 0:
+      local_names = formals.positional[-n_defaults:]
+      for (k,v) in zip(local_names, args.defaults):
+        formals.defaults[k] = translate_default_arg_value(v)
+    
+    if args.vararg:
+      assert isinstance(args.vararg, str)
+      formals.starargs = self.fresh_name(args.vararg)
+       
+    return formals, assignments    
 
   def get_name(self, name):
     if name in reserved_names:
@@ -327,8 +361,9 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 
   translator = AST_Translator(globals_dict, closure_cell_dict, outer_env)
 
-  ssa_args = translate_args(function_def_ast.args, translator.env.fresh)
+  ssa_args, assignments = translator.translate_args(function_def_ast.args)
   _, body = translator.visit_block(function_def_ast.body)
+  body = assignments + body 
   ssa_fn_name = names.fresh(function_def_ast.name)
 
   refs = []
@@ -345,7 +380,10 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   
   ssa_args.prepend_nonlocal_args(localized_outer_names + ref_names)
   
-  fundef = syntax.Fn(ssa_fn_name, ssa_args, body,  refs, original_outer_names)
+  fundef = syntax.Fn(ssa_fn_name, ssa_args, 
+                     body,  
+                     refs, original_outer_names)
+  
   untyped_functions[fundef.name]  = fundef
 
   return fundef

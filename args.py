@@ -168,129 +168,72 @@ class ActualArgs(object):
     new_pos = tuple(more_args) + self.positional 
     return ActualArgs(new_pos, self.keywords, self.starargs)
 
-import names 
 
 class FormalArgs(object):
-
-  
-  def __init__(self, positional = (),
-                     defaults = OrderedDict(),
-                     nonlocals = (),
-                     starargs = None, 
-                     local_name_fn = lambda x: x):
+  def __init__(self):
+    self.n_args = 0
+    self.nonlocals = ()
+    self.positional = []
+     
+    self.defaults = {}
+    self.starargs = None 
     
-    assert isinstance(positional, (list, tuple))
-    assert isinstance(defaults, OrderedDict)
-    
-    self.nonlocals = () # tuple(nonlocals)
-    self.positional = [] #tuple(positional)
-    self.defaults = OrderedDict() #defaults
-    self.starargs = None #starargs
-    
+    # map visible name to local SSA name
     self.local_names = {}
-    self.arg_slots = []
+    # map SSA name to visible (keyword) name
+    self.visible_names = {}
+    
+    # position of each local name in the bound args list 
     self.positions = {}
     
-    self.prepend_nonlocal_args(nonlocals, local_name_fn)
     
-    for x in positional:
-      self.add_positional(x, local_name_fn)
-      
-    for (k,v) in defaults.iteritems():
-      self.add_keyword_arg(k, v, local_name_fn)
-
-    if starargs:
-      self.add_starargs(starargs, local_name_fn)
-
-    self.visible_names = list(reversed(self.local_names.keys()))
     
-  
-  def add_positional(self, pos_arg, local_name_fn = lambda x:x):
-    assert len(self.defaults) == 0, \
-      "Can't add positional args after defaults"
-    assert self.starargs is None, \
-      "Can't add positional args after starargs" 
-    if is_tuple(pos_arg):
-      return tuple(self.add_positional(elt, local_name_fn) for elt in pos_arg)
-    else:
-      self.positional.append(pos_arg)
-      visible_name = name(pos_arg) 
-      self.positions[visible_name] = len(self.positions)
-      local_name = local_name_fn(visible_name)
+  def _prepend(self, local_name, visible_name = None):
+    self.n_args += 1
+    if visible_name:
       self.local_names[visible_name] = local_name
-      self.arg_slots.append(local_name)
-      return local_name 
-  
-  def add_keyword_arg(self, key, value, local_name_fn = lambda x:x):
-    assert self.starargs is None 
-    assert isinstance(key, (str, syntax.Var)), \
-      "Unexpected keyword name %s : %s" % (key, type(key))
-     
-    visible_name = name(key)
-    self.defaults[visible_name] = value
-    local_name = local_name_fn(visible_name)  
-    self.arg_slots.append(local_name)
-    self.positions[visible_name] = len(self.positions)
-    self.local_names[visible_name] = local_name
-     
-    return local_name 
-  
-  def add_starargs(self, starargs, local_name_fn = lambda x:x):
-    assert self.starargs is None, \
-      "Function can't have two starargs variables"
-    assert isinstance(starargs, (str, syntax.Var))
-    self.starargs = starargs 
-    visible_name = name(starargs)
-    local_name = local_name_fn(visible_name)
-    self.local_names[visible_name] = local_name
-    self.positions[visible_name] = len(self.positions)
-    return local_name 
-  
-    
-  
-  def prepend_nonlocal_args(self, more_nonlocals, local_name_fn = lambda x:x):
-    localized_names = map(local_name_fn, more_nonlocals)
-    self.nonlocals = tuple(more_nonlocals) + self.nonlocals 
-    self.arg_slots = list(localized_names) + self.arg_slots
-    n = len(more_nonlocals)
+      self.visible_names[local_name] = visible_name
+    self.arg_slots = [local_name] + self.arg_slots 
     for k in self.positions:
-      self.positions[k] += n
-    for (i,(l,k)) in enumerate(zip(localized_names, more_nonlocals)):
-      self.positions[k] = i
-      self.local_names[k] = l 
+      self.positions[k] += 1
+    self.positions[local_name] = 0
+    self.positional = [local_name] + self.positional
   
+  def add_positional(self, local_name, visible_name):
+    self.n_args += 1
+    self.local_names[visible_name] = local_name
+    self.visible_names[local_name] = visible_name
+    self.positions[local_name] = len(self.positions)
+    self.positional.append(local_name)
+  
+    
+  def prepend_nonlocal_args(self, localized_names):
+    n_old_nonlocals = len(self.nonlocals)
+    n_new_nonlocals = len(localized_names)
+    total_nonlocals = n_old_nonlocals + n_new_nonlocals
+    self.n_args += n_new_nonlocals
+    self.nonlocals = self.nonlocals  + tuple(localized_names)
+    
+    for (k,p) in self.positions.items():
+      if p < n_old_nonlocals:
+        self.positions[k] = p + n_new_nonlocals
+      else:
+        self.positions[k] = p + total_nonlocals
+    
   def __str__(self):
-    
-    def arg_to_str(arg):
-      if is_tuple(arg):
-        return "(%s)" % ", ".join([arg_to_str(e) for e in tuple_elts(arg)])
+    strs = []
+    for local_name in self.positional:
+      if local_name in self.visible_names:
+        s = "%s{%s}" % (local_name, self.visible_names[local_name])
       else:
-        visible_name = name(arg)
-        local_name = self.local_names[visible_name]
-        if visible_name == local_name:
-          return visible_name
-        else:
-          return "%s{%s}" % (visible_name, local_name)  
-    arg_strings = []
-    for pos_arg in self.positional:
-      arg_strings.append(arg_to_str(pos_arg))
-    for (k,v) in self.defaults.items():
-      visible_name = name(k)
-      local_name = self.local_names[visible_name]
-      arg_strings.append("%s{%s} = %s" % (visible_name, local_name, v))
+        s = local_name
+      if local_name in self.defaults:
+        s += " = %s" % self.defaults[local_name]
+      strs.append(s)
     if self.starargs:
-      visible_name = name(self.starargs)
-      local_name = self.local_names[visible_name]
-      if visible_name == local_name:
-        arg_strings.append("*%s" % visible_name)
-      else:
-        arg_strings.append("*%s{%s}" % (visible_name, local_name))
-    
-    arg_strings += \
-      ["nonlocals = (%s)" % ", ".join(map(str, self.nonlocals))] \
-      if self.nonlocals else []
-    return "Args(%s)" % ",".join(arg_strings)
-
+      strs.append("*%s" % self.starargs)
+    return ", ".join(strs)
+  
   def __repr__(self):
     return "Args(positional = %s, defaults=%s, starargs = %s, nonlocal = %s)" % \
       (
@@ -319,11 +262,12 @@ class FormalArgs(object):
     """
     env = {}
     values, extra = self.linearize_values(actuals, keyword_fn, tuple_elts_fn)
-    for (formal, actual) in zip(self.arg_slots, values):
-      match(formal, actual, env)
-
+    
+    for (k,v) in zip(self.nonlocals + tuple(self.positional), values):
+      env[k] = v
+    
     if self.starargs:
-      env[self.local_names[self.starargs]] = starargs_fn(extra)
+      env[self.starargs] = starargs_fn(extra)
     else:
       assert len(extra) == 0, "Too many args: %s" % (extra, )
     return env
@@ -331,20 +275,27 @@ class FormalArgs(object):
   def linearize_values(self, actuals, keyword_fn = None, tuple_elts_fn = iter):
     if isinstance(actuals, (list, tuple)):
       actuals = ActualArgs(actuals)
-    positional_values = actuals.positional
+      
+    positional_values =  actuals.positional
+    
+    if actuals.starargs:
+      starargs_elts = tuple(tuple_elts_fn(actuals.starargs))
+      positional_values = positional_values + starargs_elts
+       
     keyword_values = actuals.keywords 
-    starargs = actuals.starargs 
-    n = len(self.arg_slots)
+    
+    n = self.n_args
     result = [None] * n
     bound = [False] * n
 
     def assign(i, v):
+      print "-- %d = %s" % (i, v)
       result[i] = v
       assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
       bound[i] = True
 
     if len(positional_values) > n:
-      extra = positional_values[n:]
+      extra = list(positional_values[n:])
       positional_values = positional_values[:n]
     else:
       extra = []
@@ -353,61 +304,36 @@ class FormalArgs(object):
       assign(i, p)
 
     for (k,v) in keyword_values.iteritems():
-      print self.positions
-      assert k in self.positions, "Unknown keyword %s" % k
-      assign(self.positions[k], v)
+      assert k in self.local_names, \
+        "Unknown keyword: %s" % k
+      local_name = self.local_names[k]
+      assign(self.positions[local_name], v)
 
-    for  (k, v) in self.defaults.iteritems():
-      visible_name = name(k)
-      
-      i = self.positions[visible_name]
+    for  (local_name, v) in self.defaults.iteritems():
+      i = self.positions[local_name]
       if not bound[i]:
-        assign(i, keyword_fn(visible_name, v) if keyword_fn else v)
+        assign(i, keyword_fn(local_name, v) if keyword_fn else v)
 
-    if starargs:
-      unbound_positions = [i for i in xrange(n) if not bound[i]]
-      counter = 0 
-      for arg in tuple_elts_fn(starargs):
-        if counter < len(unbound_positions):
-          pos = unbound_positions[counter]
-          assign(pos, arg)
-          counter += 1
-        else:
-          extra.append(arg)
-          
-    missing_args = [self.arg_slots[i] for i in xrange(n) if not bound[i]]
-
+    missing_args = [self.positional[i] for i in xrange(n) if not bound[i]]
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
 
   def transform(self, 
-                name_fn, 
-                tuple_fn = tuple, 
-                extract_name = True,
-                keyword_value_fn = None, 
-                local_name_fn = None):
+                rename_fn = lambda x: x, 
+                keyword_value_fn = None):
     
-    nonlocals = transform_list(self.nonlocals, name_fn, extract_name, tuple_fn)
-    positional = transform_list(self.positional, name_fn,
-                                extract_name, tuple_fn)
-
-    starargs = name_fn(self.starargs) if self.starargs else None
-
-    defaults = OrderedDict()
-    for (k,v) in self.defaults.iteritems():
-      old_key = name(k) if extract_name else k
-      new_key = name_fn(old_key)
-      new_value = keyword_value_fn(v) if keyword_value_fn else v
-      defaults[new_key] = new_value
-      
-    if local_name_fn is None:
-      local_name_fn = lambda visible_name: self.local_names[visible_name]
-    return FormalArgs(positional, defaults, nonlocals, starargs, local_name_fn)
-
-  def fresh_copy(self, local_name_fn = names.refresh):
-
-    return FormalArgs(positional = self.positional, 
-               defaults = self.defaults, 
-               nonlocals = self.nonlocals, 
-               starargs = self.starargs, 
-               local_name_fn = local_name_fn)
+    args = FormalArgs()
+    
+    args.prepend_nonlocal_args(map(rename_fn, self.nonlocals))
+    
+    for old_local_name in self.positional:
+      new_local_name = rename_fn(old_local_name)
+      visible_name = self.visible_names.get(old_local_name)
+      args.add_positional(new_local_name, visible_name)
+      if old_local_name in self.defaults:
+        v = self.defaults[old_local_name]
+        if keyword_value_fn:
+          v = keyword_value_fn(new_local_name, v)
+        args.defaults[new_local_name] = v
+    args.starargs = rename_fn(self.starargs) if self.starargs else None
+    return args 

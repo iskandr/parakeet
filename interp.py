@@ -66,6 +66,8 @@ def ravel_list(xs):
 def eval_fn(fn, actuals):
   print fn 
   if hasattr(fn, 'arg_names'):
+    print "fn", fn
+    print "actuals", actuals 
     env = match_list(fn.arg_names, actuals)
   else:
     # untyped functions have a more complicated args object

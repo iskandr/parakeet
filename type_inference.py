@@ -432,53 +432,42 @@ def _infer_types(untyped_fn, types):
   adverbs for scalar operators applied to arrays
   """
 
-  print
-  print "INFER TYPES"
-  
-  print "_infer_types :: untyped_fn", untyped_fn
-  print "types", types 
   var_map = VarMap()
-  def rename_arg(visible_name):
-    old_name = untyped_fn.args.local_names[visible_name]
-    return var_map.rename(old_name)
+  typed_args = untyped_fn.args.transform(rename_fn = var_map.rename)
   
-  print "untyped_args", untyped_fn.args
   
-  typed_args = untyped_fn.args.fresh_copy(local_name_fn = rename_arg)
-  print "var_map", var_map
-  print "typed_args", typed_args
-   
   unbound_keywords = []
-  
-  def keyword_fn(k, value):
-    unbound_keywords.append(k)
+  def keyword_fn(local_name, value):
+    unbound_keywords.append(local_name)
     return type_conv.typeof(value)
-  
    
   tenv = typed_args.bind(types, 
                          keyword_fn = keyword_fn,  
                          starargs_fn = tuple_type.make_tuple_type)
+  
+  print 
+  print "----------------"
+  print "old fn", untyped_fn
+  print "input types", types
+  print "new args", typed_args
+  print "unbound keywords", unbound_keywords
   print "tenv", tenv 
+  print "var map", var_map
   # keep track of the return
   tenv['$return'] = core_types.Unknown
-   
-   
   body = annotate_block(untyped_fn.body, tenv, var_map)
-  
-  sorted_args = typed_args.local_names.items()
-  sorted_args.sort(key = lambda (k,_): typed_args.positions[k])
-  arg_names = [local_name for (visible_name, local_name) in sorted_args 
-               if (visible_name not in unbound_keywords) and 
-                  (visible_name != typed_args.starargs)]
+  arg_names = [local_name for local_name 
+               in 
+               typed_args.nonlocals + tuple(typed_args.positional)
+               if local_name not in unbound_keywords]
   
   if len(unbound_keywords) > 0:
     default_assignments = []
-    for visible_name in unbound_keywords:
-      local_name = typed_args.local_names[visible_name]
+    for local_name in unbound_keywords:
       t = tenv[local_name]
-      python_value = typed_args.defaults[visible_name]
+      python_value = typed_args.defaults[local_name]
       var = typed_ast.Var(local_name, type = t)
-      typed_val = typed_ast.Const(python_value, type =t)
+      typed_val = typed_ast.Const(python_value, type = t)
       stmt = typed_ast.Assign(var, typed_val)
       default_assignments.append(stmt)
     body = default_assignments + body 
@@ -488,15 +477,13 @@ def _infer_types(untyped_fn, types):
   # starargs are all passed individually and then packaged up
   # into a tuple on the first line of the function
   if typed_args.starargs:
-    print "starargs", typed_args.starargs
-    visible_starargs_name = typed_args.starargs
-    local_starargs_name = typed_args.local_names[visible_starargs_name]
+    local_starargs_name = typed_args.starargs 
     starargs_t = tenv[local_starargs_name]
     assert isinstance(starargs_t, tuple_type.TupleT), \
       "Unexpected starargs type %s" % starargs_t
     extra_arg_vars = []
     for (i, elt_t) in enumerate(starargs_t.elt_types):
-      arg_name = "%s_elt%d" % (visible_starargs_name, i)
+      arg_name = "%s_elt%d" % (names.original(local_starargs_name), i)
       tenv[arg_name] = elt_t
       input_types.append(elt_t)
       arg_var = typed_ast.Var(name = arg_name, type = elt_t)
@@ -537,6 +524,7 @@ def specialize(untyped, arg_types):
   except:
     typed_fundef = _infer_types(untyped, arg_types)
     from rewrite_typed import rewrite_typed  
+    
     coerced_fundef = rewrite_typed(typed_fundef)
 
     import optimize
