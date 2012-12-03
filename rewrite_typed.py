@@ -7,13 +7,11 @@ import syntax_helpers
 
 from syntax_helpers import get_types
 
-from simplify_invoke import SimplifyInvoke 
+from transform import Transform    
 
-    
-
-class RewriteTyped(SimplifyInvoke):
+class RewriteTyped(Transform):
   def __init__(self, fn):
-    SimplifyInvoke.__init__(self, fn)
+    Transform.__init__(self, fn)
     self.fn_return_type = self.fn.type_env["$return"]
 
   def coerce_expr(self, expr, t):

@@ -1,13 +1,13 @@
 import ast
 import inspect
-from collections import OrderedDict
+
 
 import syntax
 
 import prims
 from prims import Prim, prim_wrapper
 
-from function_registry import untyped_functions, already_registered_python_fn
+from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 
 import names
@@ -252,7 +252,7 @@ class AST_Translator(ast.NodeVisitor):
       
     actuals = ActualArgs(positional, keywords_dict, starargs_expr) 
        
-    return syntax.Invoke(fn_val, actuals)
+    return syntax.Call(fn_val, actuals)
 
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
@@ -384,8 +384,6 @@ def translate_function_ast(function_def_ast, globals_dict = None,
                      body,  
                      refs, original_outer_names)
   
-  untyped_functions[fundef.name]  = fundef
-
   return fundef
 
 def translate_function_source(source, globals_dict, closure_vars = [],

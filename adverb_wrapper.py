@@ -3,13 +3,13 @@ import syntax
 from args import FormalArgs, ActualArgs
 import syntax_helpers 
 import adverbs 
-import function_registry
 import ast_conversion
 from collections import OrderedDict 
 from lib_simple import identity 
+
+
 untyped_identity_function = ast_conversion.translate_function_value(identity)
 
- 
 _adverb_wrapper_cache = {}
 def untyped_wrapper(adverb_class, 
                       map_fn_name = None, 
@@ -92,8 +92,6 @@ def untyped_wrapper(adverb_class,
     fn_name = names.fresh(adverb_class.node_type() + "_wrapper")
     
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
-    
-    function_registry.untyped_functions[fn_name] = fundef
     _adverb_wrapper_cache[key] = fundef
     print "Created wrapper", fundef 
     return fundef
@@ -127,9 +125,9 @@ def get_fundef(fn):
   python fn. 
   """
   if isinstance(fn, str):
-    assert fn  in function_registry.untyped_functions, \
+    assert fn  in syntax.Fn.registry, \
       "Function not found: %s" % fn
-    return function_registry.untyped_functions[fn]    
+    return syntax.Fn.registry[fn]    
   elif not isinstance(fn, syntax.Fn):
     return ast_conversion.translate_function_value(fn) 
   else:

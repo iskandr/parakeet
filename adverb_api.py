@@ -79,7 +79,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-import args, array_type, function_registry, names
+import args, array_type,  names
 _par_wrapper_cache = {}
 
 def gen_par_work_function(adverb_class, fn, arg_types):
@@ -107,11 +107,11 @@ def gen_par_work_function(adverb_class, fn, arg_types):
       else:
         unpacked_args.append(attr)
     nested_closure = syntax.Closure(nested_wrapper.name, [])
-    call = syntax.Invoke(nested_closure, unpacked_args)
+    call = syntax.Call(nested_closure, unpacked_args)
     body = [syntax.Assign(syntax.Attribute(args_var, "output"), call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_par_wrapper")
     fundef = syntax.Fn(fn_name, args.FormalArgs(positional = inputs), body)
-    function_registry.untyped_functions[fn_name] = fundef
+
     _par_wrapper_cache[key] = fundef
     return fundef
 
@@ -124,7 +124,11 @@ def translate_fn(python_fn):
   """
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
-  untyped = function_registry.untyped_functions[closure_t.fn]
+  if isinstance(closure_t.fn, str):
+    untyped = syntax.Fn.registry[closure_t.fn]
+  else:
+    untyped = closure_t.fn 
+  
   return closure_t, untyped
 
 import llvm_types

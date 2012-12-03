@@ -12,14 +12,8 @@ class AdverbSemantics(object):
   """
   def invoke_delayed(self, fn, args, idx):
     curr_args = [x(idx) for x in args]
-    if isinstance(fn, (syntax.Closure, syntax.Fn)):
-      return self.invoke(fn, curr_args)
-    elif isinstance(fn, syntax.TypedFn):
-      call = syntax.Call(fn, args, type = fn.return_type)
-      return self.assign_temp(call, "call_result")
-    else:
-      assert False, "Expected Fn or Closure, got:" + str(fn.__class__)
-
+    return self.invoke(fn, curr_args)
+    
   def build_slice_indices(self, rank, axis, idx):
     if rank == 1:
       assert axis == 0
@@ -112,7 +106,7 @@ class AdverbSemantics(object):
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_map_result = self.map_prelude(map_fn, values, axis)
     init, start_idx = self.acc_prelude(init, combine, delayed_map_result)
-    first_output = self.invoke(emit, [init])
+    first_output = self.call(emit, [init])
     result = self.create_result(first_output, niters)
     self.setidx(result, self.int(0), first_output)
 

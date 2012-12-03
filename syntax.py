@@ -109,10 +109,8 @@ class Closure(Expr):
   """
   _members = ['fn', 'args']
 
+"""
 class Invoke(Expr):
-  """
-  Invoke a closure with extra args
-  """
   _members = ['closure', 'args']
 
   def __str__(self):
@@ -120,6 +118,18 @@ class Invoke(Expr):
 
   def __repr__(self):
     return str(self)
+"""
+
+
+class Call(Expr):
+
+  def __str__(self):
+    return "%s(%s)" % (self.closure, self.args)
+
+  def __repr__(self):
+    return str(self)
+
+  _members = ['fn', 'args']
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']
@@ -194,25 +204,34 @@ class Fn(Expr):
   its enclosing Parakeet scope, whose original names are stored in
   'parakeet_nonlocals'
   """
+  
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
-
+  registry = {}
+  
   def __str__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
 
   def __repr__(self):
     return str(self)
 
+  def __hash__(self):
+    return hash(self.name)
+  
   def node_init(self):
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
+      
     assert isinstance(self.args, args.FormalArgs), \
       "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
 
+    
+    self.specializations = {}
     import closure_type
     self.type = closure_type.ClosureT(self.name, ())
-
+    self.registry[self.name]  = self 
+    
   def python_nonlocals(self):
     if self.python_refs:
       return [ref.deref() for ref in self.python_refs]
@@ -237,12 +256,6 @@ class ClosureElt(Expr):
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
-
-class Call(Expr):
-  """
-  Call a function directly, without having to create/invoke a closure
-  """
-  _members = ['fn', 'args']
 
 class Struct(Expr):
   """
@@ -283,14 +296,31 @@ class TypedFn(Expr):
   """
   _members = ['name',
               'arg_names',
-              #'num_varargs',
               'body',
               'input_types',
               'return_type',
               'type_env']
 
+  registry = {}
   def node_init(self):
+    assert isinstance(self.body, list), \
+      "Invalid body for typed function: %s" % (self.body,) 
+    assert isinstance(self.arg_names, (list, tuple)), \
+      "Invalid typed function arguments: %s" % (self.arg_names,)
+    assert isinstance(self.name, str), \
+      "Invalid typed function name: %s" % (self.name,)
+    assert isinstance(self.input_types, tuple), \
+      "Invalid input types: %s" % (self.input_types,)
+    assert isinstance(self.return_type, core_types.Type), \
+      "Invalid return type: %s" % (self.return_type,)
+    assert isinstance(self.type_env, dict), \
+      "Invalid type environment: %s" % (self.type_env,)
+    
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
+    
+    assert self.name not in self.registry, \
+      "Typed function already registered: %s" % self.name 
+    self.registry[self.name] = self
 
   def __repr__(self):
     arg_strings = []
@@ -301,3 +331,6 @@ class TypedFn(Expr):
 
   def __str__(self):
     return repr(self)
+  
+  def __hash__(self):
+    return hash(self.name)

@@ -1,4 +1,4 @@
-import function_registry
+
 import names
 import syntax
 
@@ -149,9 +149,7 @@ class Transform(Codegen):
       new_fundef_args['body'] = new_body
       new_fundef_args['type_env'] = self.type_env
       new_fundef = syntax.TypedFn(**new_fundef_args)
-      # register this function so if anyone tries to call it they'll be
-      # able to find its definition later
-      function_registry.typed_functions[new_fundef.name] = new_fundef
+
       new_fn = self.post_apply(new_fundef)
       if new_fn:
         return new_fn
