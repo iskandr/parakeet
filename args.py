@@ -290,7 +290,6 @@ class FormalArgs(object):
     bound = [False] * n
 
     def assign(i, v):
-      print "-- %d = %s" % (i, v)
       result[i] = v
       assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
       bound[i] = True

@@ -45,9 +45,7 @@ def untyped_wrapper(adverb_class,
     fn_args_obj = FormalArgs()
     
     def mk_input_var(name):
-      print "-- ", name 
       if name is None:
-        print "NONNNNNE"
         return None
       else:
         local_name = names.refresh(name)
@@ -70,11 +68,13 @@ def untyped_wrapper(adverb_class,
     adverb_param_names = adverb_class.members()
     
     adverb_params = {'axis': axis, 'args': data_args }
-    optional_args = OrderedDict()
+
     
     if 'init' in adverb_param_names:
+      
       init_name = names.fresh('init')
-      optional_args[init_name] = None 
+      fn_args_obj.add_positional(init_name, 'init')
+      fn_args_obj.defaults[init_name] = None 
       init_var = syntax.Var(init_name)
       adverb_params['init'] = init_var 
     

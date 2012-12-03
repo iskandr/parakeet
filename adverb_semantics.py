@@ -49,18 +49,16 @@ class AdverbSemantics(object):
 
   def map_prelude(self, map_fn, xs, axis):
     axis_sizes = self.sizes_along_axis(xs, axis)
-    print "axis_sizes", axis_sizes
     def delay(x):
       return self.delayed_elt(x, axis)
     elts = map(delay, xs)
     
     def delayed_map_result(idx):
-      print map_fn 
       return self.invoke_delayed(map_fn, elts, idx)
     return axis_sizes[0], delayed_map_result
 
   def acc_prelude(self, init, combine, delayed_map_result):
-    if init is None:
+    if init is None or self.is_none(init):
       init = delayed_map_result(self.int(0))
     else:
       # combine the provided initializer with
@@ -82,7 +80,6 @@ class AdverbSemantics(object):
 
   def eval_map(self, f, values, axis):
     niters, delayed_map_result = self.map_prelude(f, values, axis)
-    print niters, delayed_map_result 
     zero = self.int(0)
     first_output = delayed_map_result(zero)
     result = self.create_result(first_output, niters)
@@ -99,11 +96,6 @@ class AdverbSemantics(object):
     init, start_idx = self.acc_prelude(init, combine, delayed_map_result)
     def loop_body(acc, idx):
       elt = delayed_map_result(idx)
-      #print idx, acc.get(), elt
-
-      #print "1+1 = ", self.invoke(combine, [self.int(1), self.int(1)])
-      #print "T+T = ", self.invoke(combine, [self.bool(True), self.bool(True)])
-      #print "%s:%s + %s:%s = %s" % (elt, type(elt), acc.get(), type(acc.get()), self.invoke(combine, [acc.get(), elt]))
       new_acc_value = self.invoke(combine, [acc.get(), elt])
       acc.update(new_acc_value)
     return self.accumulate_loop(start_idx, niters, loop_body, init)

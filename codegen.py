@@ -284,6 +284,10 @@ class Codegen(object):
     else:
       return attr_expr
 
+  def is_none(self, x):
+    return hasattr(x, 'type') and \
+      isinstance(x.type, core_types.NoneT)
+      
   def is_array(self, x):
     return hasattr(x, 'type') and \
       isinstance(x.type, array_type.ArrayT)
@@ -460,10 +464,10 @@ class Codegen(object):
     loop_stmt = self.loop(start, stop, loop_body_with_acc, return_stmt = True)
     loop_stmt.merge[acc.start_var.name] = (init, acc.curr_var)
     if return_stmt:
-      return loop_stmt, acc.get()
+      return loop_stmt, acc.start_var
     else:
       self.blocks += loop_stmt
-      return acc.get()
+      return acc.start_var
 
   def nelts(self, array):
     shape_elts = self.tuple_elts(self.shape(array))
@@ -485,7 +489,6 @@ class Codegen(object):
       s = slice_sizes[i]
       indices.append(self.div(remainder, s))
       remainder = self.mod(remainder, s)
-    print "linear to indices", indices
     return self.tuple(indices)
 
   def array_copy(self, src, dest, return_stmt = False):

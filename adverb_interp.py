@@ -20,6 +20,9 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
   def is_tuple(self, x):
     return isinstance(x, tuple)
 
+  def is_none(self, x):
+    return x is None
+
   def rank(self, value):
     return np.rank(value)
 

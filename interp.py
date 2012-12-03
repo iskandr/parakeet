@@ -64,10 +64,7 @@ def ravel_list(xs):
   return [np.ravel(x) if isinstance(x, np.ndarray) else x for x in xs]  
 
 def eval_fn(fn, actuals):
-  print fn 
   if hasattr(fn, 'arg_names'):
-    print "fn", fn
-    print "actuals", actuals 
     env = match_list(fn.arg_names, actuals)
   else:
     # untyped functions have a more complicated args object

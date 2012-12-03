@@ -100,11 +100,11 @@ def invoke_result_type(closure_t, arg_types):
   key = (closure_t, arg_types)
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
-  """
+  print 
   print "invoke_result_type"
-  print closure_t
-  print arg_types
-  """
+  print "--", closure_t
+  print "--", arg_types
+  
   if isinstance(closure_t, untyped_ast.Fn):
     
     closure_t = closure_type.ClosureT(closure_t.name, ())
@@ -186,7 +186,9 @@ def annotate_expr(expr, tenv, var_map):
       result_type = expr.prim.result_type(upcast_types)
       return typed_ast.PrimCall(expr.prim, args, type = result_type)
     else:
+      assert all(not isinstance(t, core_types.NoneT) for t in arg_types)
       prim_fn = prims.prim_wrapper(expr.prim)
+ 
       max_rank = adverb_helpers.max_rank(arg_types)
       arg_names = adverb_wrapper.gen_data_arg_names(len(arg_types))
       untyped_broadcast_fn = \
@@ -263,19 +265,23 @@ def annotate_expr(expr, tenv, var_map):
     new_args = annotate_args(expr.args)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
+    print "about to annotate", expr.init 
+    init = annotate_child(expr.init) if expr.init else None
+    print "calling infer reduce type"
     result_type = infer_reduce_type(
       map_fn.type, 
       combine_fn.type, 
       arg_types, 
-      axis, 
-      None)
+      axis,
+      get_type(init) if init else None)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
     return adverbs.Reduce(fn = map_fn, 
                           combine = combine_fn,
                           args = new_args,
                           axis = axis,
-                          type = result_type)
+                          type = result_type, 
+                          init = init)
 
   def expr_Scan():
     map_fn = annotate_child(expr.fn)
@@ -284,6 +290,7 @@ def annotate_expr(expr, tenv, var_map):
     new_args = annotate_args(expr.args)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
+    init = annotate_child(expr.init) if expr.init else None
     result_type = infer_scan_type(map_fn, combine_fn, arg_types, axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
@@ -292,7 +299,8 @@ def annotate_expr(expr, tenv, var_map):
                           emit = emit_fn, 
                           args = new_args,
                           axis = axis,
-                          type = result_type)
+                          type = result_type, 
+                          init = get_type(init) if init else None)
 
   def expr_AllPairs():
     closure = annotate_child(expr.fn)
@@ -452,17 +460,6 @@ def _infer_types(untyped_fn, types):
                          keyword_fn = keyword_fn,  
                          starargs_fn = tuple_type.make_tuple_type)
   
-  """
-  print 
-  print "----------------"
-  print "old fn", untyped_fn
-  print "input types", types
-  print "new args", typed_args
-  print "unbound keywords", unbound_keywords
-  print "tenv", tenv 
-  print "var map", var_map
-  """
-  
   
   # keep track of the return
   tenv['$return'] = core_types.Unknown
@@ -491,7 +488,6 @@ def _infer_types(untyped_fn, types):
     local_starargs_name = typed_args.starargs 
     
     starargs_t = tenv[local_starargs_name]
-    print "STARARGS", local_starargs_name, starargs_t 
     assert isinstance(starargs_t, tuple_type.TupleT), \
       "Unexpected starargs type %s" % starargs_t
     extra_arg_vars = []
@@ -604,6 +600,9 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
   def is_array(self, t):
     return isinstance(t, array_type.ArrayT)
   
+  def is_none(self, t):
+    return isinstance(t, core_types.NoneT)
+  
   def shape(self, t):
     if self.is_array(t):
       return tuple_type.make_tuple_type([core_types.Int64] * t.rank)
@@ -659,7 +658,13 @@ def infer_map_type(closure_t, arg_types, axis):
   return adverb_type_semantics.eval_map(untyped_fn, arg_types, axis)
 
 def infer_reduce_type(map_closure_t, combine_closure_t, arg_types, axis, init = None):
-  return adverb_type_semantics.eval_reduce(map_closure_t, combine_closure_t, init, arg_types, axis)
+  map_fn, arg_types = linearize_arg_types(map_closure_t, arg_types)
+  
+  return adverb_type_semantics.eval_reduce(map_fn, 
+                                           combine_closure_t, 
+                                           init, 
+                                           arg_types, 
+                                           axis)
   
   
 def infer_scan_type(
