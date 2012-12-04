@@ -1,6 +1,6 @@
 import testing_helpers
 import numpy as np 
-from adverb_interp import adverb_evaluator as interp 
+from interp import adverb_evaluator as interp 
 
 
 vec = np.array([1,4,9,16])
@@ -61,6 +61,7 @@ def test_bool_sum():
 
 expected_cumsum_vec = np.cumsum(vec)
 expected_cumsum_mat = np.cumsum(mat, axis=1)
+
 
 def test_scan():
   print "Testing vector scan..."

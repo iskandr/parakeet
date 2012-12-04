@@ -7,62 +7,121 @@ from core_types import ScalarT, StructT
 import types 
 import syntax_helpers
 
-
-from adverb_interp import adverb_evaluator
+import adverb_semantics
 from args import ActualArgs
+
 
 class ReturnValue(Exception):
   def __init__(self, value):
     self.value = value 
 
 
+
+
+class InterpSemantics(adverb_semantics.AdverbSemantics):
+  def size_along_axis(self, value, axis):
+    assert len(value.shape) > axis, \
+      "Can't get %d'th element of %s with shape %s" % (axis, value, value.shape)
+    return value.shape[axis]
+
+  def is_tuple(self, x):
+    return isinstance(x, tuple)
+
+  def is_none(self, x):
+    return x is None
+
+  def rank(self, value):
+    return np.rank(value)
+
+  def int(self, x):
+    return int(x)
+
+  def bool(self, x):
+    return bool(x)
+
+  def add(self, x, y):
+    return x + y
+
+  def sub(self, x, y):
+    return x - y
+
+  def shape(self, x):
+    return np.shape(x) 
+    
+  def elt_type(self, x):
+    return x.dtype if hasattr(x, 'dtype') else type(x) 
+  
+  def alloc_array(self, elt_type, dims):
+    return np.zeros(dims, dtype = elt_type)
+
+  def shift_array(self, arr, offset):
+    return arr[offset:]
+
+  def index(self, arr, idx):
+    return arr[idx]
+
+  def tuple(self, elts):
+    return tuple(elts)
+
+  def concat_tuples(self, t1, t2):
+    return tuple(t1) + tuple(t2)
+  
+  def setidx(self, arr, idx, v):
+    arr[idx] = v
+
+  def loop(self, start_idx, stop_idx, body):
+    for i in xrange(start_idx, stop_idx):
+      body(i)
+
+  class Accumulator:
+    def __init__(self, value):
+      self.value = value 
+  
+    def get(self):
+      return self.value 
+  
+    def update(self, new_value):
+      self.value = new_value 
+
+  def accumulate_loop(self, start_idx, stop_idx, body, init):
+    acc = self.Accumulator(init)
+    for i in xrange(start_idx, stop_idx):
+      body(acc, i)
+    return acc.get()    
+
+  def check_equal_sizes(self, sizes):
+    assert len(sizes) > 0
+    first = sizes[0]
+    assert all(sz == first for sz in sizes[1:])
+
+  def slice_value(self, start, stop, step):
+    return slice(start, stop, step)
+
+  def invoke(self, fn, args):
+    return fn(*args)
+  
+  none = None
+  null_slice = slice(None, None, None)
+  def identity_function(self, x):
+    return x 
+   
+
+adverb_evaluator = InterpSemantics() 
+
 class ClosureVal:
   def __init__(self, fn, fixed_args):
     self.fn = fn 
-    self.fixed_args = fixed_args
+    self.fixed_args = tuple(fixed_args)
     
-  def __call__(self, *args):
-    return call(self, list(args))
- 
- 
-def call(fn, args):
-  if isinstance(fn, ClosureVal):
-    return eval_fn(fn.fn, fn.fixed_args + args)
-  else:
-    return fn(*args)
-
-def create_slice_idx(ndims, dim, i):
-  return tuple([i if d == dim else Ellipsis for d in range(ndims)])
-    
-def nested_arg(arg, dim, i):
-  if isinstance(arg, np.ndarray):
-    idx = create_slice_idx(np.rank(arg), dim, i)
-    
-    result = arg[idx]
-    return result 
-  else:
-    return arg 
-
-def nested_args(args, dim, i):
-  return [nested_arg(arg, dim, i) for arg in args]
-
-def tile_array(x, outer_shape):
-  if isinstance(x, np.ndarray):
-    return np.tile(x, tuple(outer_shape) + (1,))
-  return np.tile(x, tuple(outer_shape))
-    
-def max_shape(vals):
-  result = ()
-  for arg in vals:
-    if isinstance(arg, np.ndarray):
-      assert result == () or result == arg.shape
-      result = arg.shape
-  return result 
-    
-def ravel_list(xs):
-  return [np.ravel(x) if isinstance(x, np.ndarray) else x for x in xs]  
+  def __call__(self, args):
+    if isinstance(args, ActualArgs):
+      args = args.prepend_positional(self.fixed_args)
+    else:
+      args = self.fixed_args + tuple(args)  
+    return eval_fn(self.fn, args)
 
 def eval_fn(fn, actuals):
+
   if hasattr(fn, 'arg_names'):
     env = {}
     for (k,v) in zip(fn.arg_names, actuals): 
@@ -112,33 +171,16 @@ def eval_fn(fn, actuals):
       return env[expr.name]
     
     def expr_Call():
-      # for the interpreter Invoke and Call are identical since
-      # we're dealing with runtime reprs for functions, prims, and 
-      # closures which are just python Callables
- 
-        
-      clos = eval_expr(expr.fn)
+      fn = eval_expr(expr.fn)
       arg_values = eval_args(expr.args)
-      
-      if isinstance(clos, ClosureVal):
-        fn = clos.fn 
-        closure_args = clos.fixed_args
+
+      if isinstance(fn, (syntax.TypedFn, syntax.Fn)):
+        return eval_fn(fn, arg_values)
+      elif isinstance(fn, ClosureVal):
+        return fn(arg_values)
       else:
-        fn = clos 
-        closure_args = []
-      
-      if isinstance(arg_values, list):
-        combined_arg_vals = closure_args + arg_values  
-      else:
-        assert isinstance(expr.args, ActualArgs)
-        combined_arg_vals = arg_values.prepend_positional(closure_args)
-      if isinstance(fn, (syntax.TypedFn, syntax.Fn)): 
-        return eval_fn(fn, combined_arg_vals)
-      else:
-        assert hasattr(fn, '__call__'), \
-          "Unexpected function %s" % (fn,)
-        fn(*combined_arg_vals)
-      
+        return fn(*arg_values)
+        
     def expr_Closure():
       if isinstance(expr.fn, syntax.Fn):
         fundef = expr.fn
