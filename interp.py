@@ -11,13 +11,6 @@ import adverb_semantics
 from args import ActualArgs
 
 
-class ReturnValue(Exception):
-  def __init__(self, value):
-    self.value = value 
-
-
-
-
 class InterpSemantics(adverb_semantics.AdverbSemantics):
   def size_along_axis(self, value, axis):
     assert len(value.shape) > axis, \
@@ -98,7 +91,7 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
     return slice(start, stop, step)
 
   def invoke(self, fn, args):
-    return fn(*args)
+    return eval_fn(fn, args)
   
   none = None
   null_slice = slice(None, None, None)
@@ -107,6 +100,12 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
    
 
 adverb_evaluator = InterpSemantics() 
+
+
+class ReturnValue(Exception):
+  def __init__(self, value):
+    self.value = value 
+
 
 class ClosureVal:
   def __init__(self, fn, fixed_args):
@@ -121,16 +120,19 @@ class ClosureVal:
     return eval_fn(self.fn, args)
 
 def eval_fn(fn, actuals):
-
-  if hasattr(fn, 'arg_names'):
+  
+  if isinstance(fn, syntax.TypedFn):
     env = {}
     for (k,v) in zip(fn.arg_names, actuals): 
       env[k] = v
-  else:
+  elif isinstance(fn, syntax.Fn):
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 
     env = fn.args.bind(actuals)
-
+  elif isinstance(fn, ClosureVal):
+    return fn(actuals)
+  else:
+    return fn(*actuals)
   
   def eval_args(args):
     if isinstance(args, (list, tuple)):
@@ -173,13 +175,7 @@ def eval_fn(fn, actuals):
     def expr_Call():
       fn = eval_expr(expr.fn)
       arg_values = eval_args(expr.args)
-
-      if isinstance(fn, (syntax.TypedFn, syntax.Fn)):
-        return eval_fn(fn, arg_values)
-      elif isinstance(fn, ClosureVal):
-        return fn(arg_values)
-      else:
-        return fn(*arg_values)
+      return eval_fn(fn, arg_values)
         
     def expr_Closure():
       if isinstance(expr.fn, syntax.Fn):

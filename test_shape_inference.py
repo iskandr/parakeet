@@ -44,20 +44,23 @@ mat = np.array([[1,2,3],[4,5,6],[7,8,9]])
 def ident(x):
   return x  
 
-def test_ident():
+def test_ident_1d():
   expect_shape(ident, [vec], array(Var(0)))
+
+def test_ident_2d():
   expect_shape(ident, [mat], array(Var(0), Var(1)))
   
 def increase_rank(x):
   return [x,x]
 
-def test_increase_rank():
+def test_increase_rank_1d():
   expect_shape(increase_rank, [1], array(2))
-  # TODO: 
-  # Make these work by fixing assignment to slices 
-  #
-  # expect_shape(increase_rank, [vec], array(1, Var(0)))
-  # expect_shape(increase_rank, [mat], array(1, Var(0), Var(1)))
+
+def test_increase_rank_2d():
+  expect_shape(increase_rank, [vec], array(2, Var(0)))
+
+def test_increase_rank_3d():
+  expect_shape(increase_rank, [mat], array(2, Var(0), Var(1)))
 
 def incr(xi):
   return xi + 1
@@ -67,18 +70,20 @@ from parakeet import each
 def simple_map(x):
   return each(incr, x, axis = 0)
 
-def test_simple_map():
+def test_simple_map_1d():
   expect_shape(simple_map, [vec], array(Var(0)))
-  # TODO: Make axis = None result in nested maps 
-  # expect_shape(simple_map, [mat], array(Var(0), Var(1)))
+
+def test_simple_map_2d():
+  expect_shape(simple_map, [mat], array(Var(0), Var(1)))
 
 def map_increase_rank(x):
   return each(increase_rank, x, axis = 0)
 
-def test_map_increase_rank():
+def test_map_increase_rank_1d():
   expect_shape(map_increase_rank, [vec], array(Var(0), 2))
-  # TODO: this will work when slice assignment on LHS works 
-  # expect_shape(simple_map, [mat], array(Var(0), Var(1)))
+
+def test_map_increase_rank_2d():  
+  expect_shape(simple_map, [mat], array(Var(0), Var(1)))
 
 
 if __name__ == '__main__':
