@@ -6,7 +6,7 @@ from common import dispatch
 from core_types import ScalarT, StructT
 import types 
 import syntax_helpers
-from args import match_list
+
 
 from adverb_interp import adverb_evaluator
 from args import ActualArgs
@@ -64,7 +64,9 @@ def ravel_list(xs):
 
 def eval_fn(fn, actuals):
   if hasattr(fn, 'arg_names'):
-    env = match_list(fn.arg_names, actuals)
+    env = {}
+    for (k,v) in zip(fn.arg_names, actuals): 
+      env[k] = v
   else:
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 

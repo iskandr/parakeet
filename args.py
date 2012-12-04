@@ -1,96 +1,3 @@
-import syntax
-
-from collections import OrderedDict
-
-def has_name(arg):
-  return isinstance(arg, str) or isinstance(arg, syntax.Var)
-
-def name(arg):
-  return arg if isinstance(arg, str) else arg.name
-
-def is_tuple(arg):
-  return hasattr(arg, 'elts') or hasattr(arg, '__iter__')
-
-def tuple_elts(arg):
-  try:
-    return arg.elts
-  except:
-    # hope that it has an __iter__ implementation
-    return tuple(arg)
-
-def is_index(arg):
-  return isinstance(arg, syntax.Index)
-
-def flatten(arg):
-  if is_tuple(arg):
-    return flatten_list(tuple_elts(arg))
-  else:
-    return [arg]
-
-def flatten_list(args):
-  result = []
-  for arg in args:
-    result += flatten(arg)
-  return result
-
-def match_nothing(pattern, val, env):
-  pass
-
-def match(pattern, val, env, index_fn = match_nothing):
-  """
-  Given a left-hand-side of tuples & vars,
-  a right-hand-side of tuples & types,
-  traverse the tuple structure recursively and
-  put the matched variable names in an environment
-  """
-  if has_name(pattern):
-    env[name(pattern)] = val
-  elif is_tuple(pattern):
-    pat_elts = tuple_elts(pattern)
-    val_elts = tuple_elts(val)
-    assert len(pat_elts) == len(val_elts), \
-      "Mismatch between expected and given number of values"
-    match_list(pat_elts, val_elts, env, index_fn)
-  elif is_index(pattern):
-    index_fn(pattern, val, env)
-
-  else:
-    raise RuntimeError("Unexpected pattern %s %s : %s" %
-                       (pattern.__class__.__name__, pattern, val))
-
-def match_list(arg_patterns, vals, env = None, index_fn = match_nothing):
-  if env is None:
-    env = {}
-  nargs = len(arg_patterns)
-  nvals = len(vals)
-  assert nargs == nvals, \
-    "Mismatch between %d args %s and %d inputs %s" % (nargs, arg_patterns,
-                                                      nvals, vals)
-  for (p,v) in zip(arg_patterns, vals):
-    match(p, v, env, index_fn)
-  return env
-
-def transform_nothing(x):
-  return x
-
-def transform(pat, atom_fn, extract_name = True, tuple_fn = tuple,
-              index_fn = transform_nothing):
-  if is_tuple(pat):
-    new_elts = transform_list(tuple_elts(pat), atom_fn, extract_name, tuple_fn,
-                              index_fn)
-    return tuple_fn(new_elts)
-  elif is_index(pat):
-    return transform_nothing(pat)
-  elif extract_name:
-    assert has_name(pat)
-    return atom_fn(name(pat))
-  else:
-    return atom_fn(pat)
-
-def transform_list(pats, atom_fn,  extract_name = True, tuple_fn = tuple,
-                   index_fn = transform_nothing):
-  return [transform(p, atom_fn,  extract_name, tuple_fn, index_fn)
-          for p in pats]
 
 class CombinedIters:
   def __init__(self, i1, i2):
@@ -244,8 +151,6 @@ class FormalArgs(object):
     else:
       return iter(self.arg_slots)
 
-  def keywords(self):
-    return map(name, self.defaults.keys())
 
   def bind(self, actuals,
            keyword_fn = None,
