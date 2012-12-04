@@ -15,6 +15,10 @@ from types import FunctionType
 class ClosureT(StructT):
   _members = ['fn', 'arg_types']
 
+  max_id = 0 
+  # map each distinct closure_type to an integer id 
+  id_numbers = {}
+  
   def node_init(self):
     if self.arg_types is None:
       self.arg_types = ()
@@ -26,9 +30,17 @@ class ClosureT(StructT):
     self._fields_ = [('fn_id', Int64)]
     for (i, t) in enumerate(self.arg_types):
       self._fields_.append( ('arg%d' % i, t) )
+    
+    self.specializations = {}
+    if self in self.id_numbers:
+      self.id = self.id_numbers[self]
+    else:
+      self.id = self.max_id  
+      self.id_numbers[self] = self.id
+      self.max_id += 1
 
   def __hash__(self):
-    return hash(repr(self))
+    return hash(self.fn) + hash(self.arg_types)
 
   def __eq__(self, other):
     return self.fn == other.fn and self.arg_types == other.arg_types

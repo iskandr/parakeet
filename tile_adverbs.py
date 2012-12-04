@@ -22,7 +22,7 @@ def free_vars_list(expr_list):
 def free_vars(expr):
   if isinstance(expr, syntax.Var):
     return set([expr])
-  elif isinstance(expr, (syntax.PrimCall,syntax.Call,syntax.Invoke)):
+  elif isinstance(expr, (syntax.PrimCall,syntax.Call)):
     return free_vars_list(expr.args)
   elif isinstance(expr, syntax.Index):
     return free_vars(expr.value).union(free_vars(expr.index))

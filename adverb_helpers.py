@@ -40,7 +40,6 @@ def num_outer_axes(arg_types, axis):
 
 import adverbs
 import args
-import function_registry
 import names
 import syntax
 _nested_map_cache = {}
@@ -67,6 +66,6 @@ def nested_maps(inner_fn, depth, arg_names):
     args = args_obj,
     body = [syntax.Return(map_expr)]
   )
-  function_registry.untyped_functions[name] = fn
+
   _nested_map_cache[key] = fn
   return fn

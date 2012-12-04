@@ -51,7 +51,7 @@ def test_bool_sum():
   vec_sum = interp.eval_reduce(
     map_fn = interp.identity_function, 
     combine = (lambda x,y: x + y), 
-    init = False, 
+    init = 0, 
     values = [bool_vec],
     axis = 0)
   assert vec_sum == np.sum(bool_vec), \

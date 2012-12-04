@@ -12,12 +12,10 @@ import syntax_helpers
 import tuple_type
 import type_conv
 
-from collections import OrderedDict
 from common import dispatch
-from function_registry import untyped_functions, find_specialization, \
-                              add_specialization
+
 from syntax_helpers import get_type, get_types, unwrap_constant
-import function_registry
+
 from args import ActualArgs
 
 class InferenceFailed(Exception):
@@ -42,7 +40,33 @@ class VarMap:
   def __str__(self):
     return "VarMap(%s)" % self._vars
 
-def linearize_arg_types(closure_t, args):
+
+
+def unpack_closure(closure):
+  """
+  Given an object which could be either a function,  
+  a function's name, a closure, or a closure type:
+  Return the underlying untyped funciton and the 
+  closure arguments
+  """
+  if isinstance(closure, closure_type.ClosureT):
+    fn, closure_args = closure.fn, closure.arg_types  
+    
+  elif isinstance(closure.type, closure_type.ClosureT):
+    fn, arg_types = closure.type.fn, closure.type.arg_types  
+    closure_args = \
+      [typed_ast.ClosureElt(closure, i, type = arg_t)
+       for (i, arg_t) in enumerate(arg_types)]
+  else:
+    fn = closure 
+    closure_args = []
+  if isinstance(fn, str):
+    fn = untyped_ast.Fn.registry[fn]
+  return fn, closure_args   
+  
+
+
+def linearize_arg_types(fn, args):
   """
   Given a function object which might be one of:
     (1) a closure type
@@ -56,20 +80,8 @@ def linearize_arg_types(closure_t, args):
   the untyped function's argument order and return
   both the untyped function and list of arguments
   """
-  if isinstance(closure_t, untyped_ast.Fn):
-    untyped_fundef = closure_t
-    closure_args = []
-  elif isinstance(closure_t, str):
-    untyped_fundef = function_registry.untyped_functions[closure_t]
-    closure_args = []
-  else:
-    assert isinstance(closure_t, closure_type.ClosureT)
-    if isinstance(closure_t.fn, str):
-      untyped_fundef = function_registry.untyped_functions[closure_t.fn]
-    else:
-      untyped_fundef = closure_t.fn
-    closure_args = closure_t.arg_types
 
+  untyped_fundef, closure_args = unpack_closure(fn)
   if isinstance(args, (list, tuple)):
     args = ActualArgs(args)
 
@@ -82,14 +94,59 @@ def linearize_arg_types(closure_t, args):
   linear_args, extra = untyped_fundef.args.linearize_values(args, keyword_fn = keyword_fn)
   return untyped_fundef, tuple(linear_args + extra)
 
+def tuple_elts(tup):
+  return [typed_ast.TupleProj(tup, i, t) 
+          for (i,t) in enumerate(tup.type.elt_types)]
+
+
+def flatten_actual_args(args):
+  if isinstance(args, (list,tuple)):
+    return args 
+  assert isinstance(args, ActualArgs), \
+    "Unexpected args: %s" % (args,)
+  assert len(args.keywords) == 0
+  result = list(args.positional)
+  if args.starargs:
+    result.extend(tuple_elts(args.starargs))
+  return result 
+
+def linearize_actual_args(fn, args):
+    
+    untyped_fn, closure_args = unpack_closure(fn)
+         
+    if isinstance(args, (list, tuple)):
+      args = ActualArgs(args)
+    args = args.prepend_positional(closure_args)
+    
+    arg_types = args.transform(syntax_helpers.get_type)
+
+      
+    # Drop arguments that are assigned defaults,
+    # since we're assuming those are set in the body
+    # of the function
+    linear_args, extra = \
+        untyped_fn.args.linearize_values(args,
+                                         tuple_elts_fn = tuple_elts,
+                                         keyword_fn = lambda k, v: None)
+    combined_args = [x for x in (linear_args + extra) if x]
+    return untyped_fn, combined_args, arg_types
+
+
 def get_invoke_specialization(closure_t, arg_types):
   """
   for a given closure and the direct argument types it
   receives when invokes, return the specialization which
   will ultimately get called
   """
+  if isinstance(arg_types, (list, tuple)):
+    arg_types = ActualArgs(arg_types)
+  if arg_types in closure_t.specializations:
+    return closure_t.specializations[arg_types]
+    
   untyped_fundef, full_arg_types = linearize_arg_types(closure_t, arg_types)
-  return specialize(untyped_fundef, full_arg_types)
+  typed =  specialize(untyped_fundef, full_arg_types)
+  closure_t.specializations[arg_types] = typed 
+  return typed 
 
 _invoke_type_cache = {}
 
@@ -101,12 +158,9 @@ def invoke_result_type(fn, arg_types):
         (fn.input_types, arg_types)
     assert all(t1 == t2 for (t1,t2) in zip(arg_types, fn.input_types))
     return fn.return_type
-
+    
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
-
-  if isinstance(fn, untyped_ast.Fn):
-    fn = closure_type.ClosureT(fn.name, ())
 
   key = (fn, arg_types)
   if key in _invoke_type_cache:
@@ -134,11 +188,15 @@ def annotate_expr(expr, tenv, var_map):
   def annotate_children(child_exprs):
     return [annotate_expr(e, tenv, var_map) for e in child_exprs]
 
-  def annotate_args(args):
+  def annotate_args(args, flat = False):
     if isinstance(args, (list, tuple)):
       return map(annotate_child, args)
     else:
-      return args.transform(annotate_child)
+      new_args = args.transform(annotate_child)
+      if flat:
+        return flatten_actual_args(new_args)
+      else:
+        return new_args 
 
   def annotate_keywords(kwds_dict):
     if kwds_dict is None:
@@ -164,16 +222,13 @@ def annotate_expr(expr, tenv, var_map):
     t = closure_type.ClosureT(expr.name, [])
     return typed_ast.Closure(expr.name, [], type = t)
 
-  def expr_Invoke():
-    closure = annotate_child(expr.closure)
+  def expr_Call():
+    closure = annotate_child(expr.fn)
     args = annotate_args(expr.args)
-
-    result_type = invoke_result_type(closure.type, get_types(args))
-
-    # HERE YOU SHOULD FLATTEN THE ARGS! ... hopefully into the same
-    # order as the underlying function?
-    return typed_ast.Invoke(closure, args, type = result_type)
-
+    untyped_fn, args, arg_types = linearize_actual_args(closure, args)
+    typed_fn = specialize(untyped_fn, arg_types)
+    return typed_ast.Call(typed_fn, args, typed_fn.return_type)
+  
   def expr_Attribute():
     value = annotate_child(expr.value)
     assert isinstance(value.type, core_types.StructT)
@@ -198,7 +253,7 @@ def annotate_expr(expr, tenv, var_map):
         adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
       result_t = typed_broadcast_fn.return_type
-      return typed_ast.Call(typed_broadcast_fn.name, args, type = result_t)
+      return typed_ast.Call(typed_broadcast_fn, args, type = result_t)
 
   def expr_Index():
     value = annotate_child(expr.value)
@@ -249,9 +304,10 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Const():
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
 
+      
   def expr_Map():
     closure = annotate_child(expr.fn)
-    new_args = annotate_args(expr.args)
+    new_args = annotate_args(expr.args, flat = True)
     axis = unwrap_constant(expr.axis)
     arg_types = get_types(new_args)
     result_type = infer_map_type(closure.type, arg_types, axis)
@@ -265,7 +321,7 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Reduce():
     map_fn = annotate_child(expr.fn)
     combine_fn = annotate_child(expr.combine)
-    new_args = annotate_args(expr.args)
+    new_args = annotate_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
@@ -288,7 +344,7 @@ def annotate_expr(expr, tenv, var_map):
     map_fn = annotate_child(expr.fn)
     combine_fn = annotate_child(expr.combine)
     emit_fn = annotate_child(expr.emit)
-    new_args = annotate_args(expr.args)
+    new_args = annotate_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
@@ -303,7 +359,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_AllPairs():
     closure = annotate_child(expr.fn)
-    new_args = annotate_args (expr.args)
+    new_args = annotate_args (expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     result_type = infer_allpairs_type(closure.type, arg_types, axis)
@@ -429,7 +485,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
-def _infer_types(untyped_fn, types):
+def infer_types(untyped_fn, types):
   """
   Given an untyped function and input types,
   propagate the types through the body,
@@ -454,9 +510,11 @@ def _infer_types(untyped_fn, types):
   tenv = typed_args.bind(types,
                          keyword_fn = keyword_fn,
                          starargs_fn = tuple_type.make_tuple_type)
-
+  
+  
   # keep track of the return
   tenv['$return'] = core_types.Unknown
+  
   body = annotate_block(untyped_fn.body, tenv, var_map)
   arg_names = [local_name for local_name
                in
@@ -474,7 +532,7 @@ def _infer_types(untyped_fn, types):
       default_assignments.append(stmt)
     body = default_assignments + body
 
-  input_types = [tenv[arg_name] for arg_name in arg_names]
+  input_types = tuple([tenv[arg_name] for arg_name in arg_names])
 
   # starargs are all passed individually and then packaged up
   # into a tuple on the first line of the function
@@ -488,10 +546,10 @@ def _infer_types(untyped_fn, types):
     for (i, elt_t) in enumerate(starargs_t.elt_types):
       arg_name = "%s_elt%d" % (names.original(local_starargs_name), i)
       tenv[arg_name] = elt_t
-      input_types.append(elt_t)
       arg_var = typed_ast.Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
+    input_types = input_types + starargs_t.elt_types 
     tuple_lhs = typed_ast.Var(name = local_starargs_name, type = starargs_t)
     tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = starargs_t)
     stmt = typed_ast.Assign(tuple_lhs, tuple_rhs)
@@ -514,30 +572,29 @@ def _infer_types(untyped_fn, types):
     type_env = tenv)
 
 def specialize(untyped, arg_types):
+  
   if isinstance(untyped, str):
-    untyped_id = untyped
-    untyped = untyped_functions[untyped_id]
+    untyped = untyped_ast.Fn.registry[untyped]
+
   else:
     assert isinstance(untyped, untyped_ast.Fn)
-    untyped_id = untyped.name
-
+  
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
 
   try:
-    return find_specialization(untyped_id, arg_types)
+    return untyped.specializations[arg_types]
   except:
-    typed_fundef = _infer_types(untyped, arg_types)
+    typed_fundef = infer_types(untyped, arg_types)
     from rewrite_typed import rewrite_typed
-
     coerced_fundef = rewrite_typed(typed_fundef)
 
     import optimize
     # TODO: Also store the unoptimized version
     # so we can do adaptive recompilation
     opt = optimize.optimize(coerced_fundef, copy = False)
-    add_specialization(untyped_id, arg_types, opt)
-
+    untyped.specializations[arg_types] = opt 
+    
     # import lowering
     # lowered = lowering.lower(opt, copy = True, tile = False)
     # tiled = lowering.lower(opt, copy = True, tile = True)
@@ -561,18 +618,6 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
   none = core_types.NoneType
 
   def invoke(self, fn, arg_types):
-    if isinstance(fn, typed_ast.TypedFn):
-      input_types = fn.input_types
-      assert all(in_t == arg_t for (in_t, arg_t) in zip(input_types,arg_types)), \
-         "Expected types %s but got %s" % (input_types, arg_types)
-      return fn.return_type
-    if isinstance(fn, str):
-      assert fn in function_registry.untyped_functions, \
-      "Unknown function name %s" % (fn,)
-      fn = function_registry.untyped_functions[fn]
-
-    if isinstance(fn, untyped_ast.Fn):
-      fn = closure_type.ClosureT(fn.name, ())
     return invoke_result_type(fn, arg_types)
 
   def size_along_axis(self, t, _):
@@ -646,38 +691,33 @@ class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
 
 adverb_type_semantics = AdverbTypeSemantics()
 
-def infer_map_type(closure_t, arg_types, axis):
-  untyped_fn, arg_types = linearize_arg_types(closure_t, arg_types)
-  return adverb_type_semantics.eval_map(untyped_fn, arg_types, axis)
+def infer_map_type(fn, arg_types, axis, fixed_arg_types = ()):
+  
+  return adverb_type_semantics.eval_map(fn, arg_types, axis)
 
-def infer_reduce_type(map_closure_t, combine_closure_t, arg_types, axis, init = None):
-  map_fn, arg_types = linearize_arg_types(map_closure_t, arg_types)
-
-  return adverb_type_semantics.eval_reduce(map_fn,
-                                           combine_closure_t,
+def infer_reduce_type(map_fn, combine_fn, arg_types, axis, init = None, fixed_arg_types = ()):
+    return adverb_type_semantics.eval_reduce(map_fn,
+                                           combine_fn, 
                                            init,
                                            arg_types,
                                            axis)
 
-
 def infer_scan_type(
-      map_closure_t,
-      combine_closure_t,
-      emit_closure_t,
+      map_fn, 
+      combine_fn, 
+      emit_fn, 
       init_t,
       arg_types,
       axis):
-  return adverb_type_semantics.eval_scan(map_closure_t,
-                                         combine_closure_t,
-                                         emit_closure_t,
+  return adverb_type_semantics.eval_scan(map_fn,
+                                         combine_fn, 
+                                         emit_fn, 
                                          init_t,
                                          arg_types,
                                          axis)
 
-def infer_allpairs_type(closure_t, arg_types, axis):
-  if isinstance(arg_types, ActualArgs):
-    arg_types = arg_types.positional
+def infer_allpairs_type(fn, arg_types, axis):
   assert len(arg_types) == 2
   [xtype, ytype] = arg_types
   axis = unwrap_constant(axis)
-  return adverb_type_semantics.eval_allpairs(closure_t, xtype, ytype, axis)
+  return adverb_type_semantics.eval_allpairs(fn, xtype, ytype, axis)

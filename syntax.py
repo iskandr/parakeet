@@ -34,6 +34,19 @@ class Return(Stmt):
 
 class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
+  
+  def __str__(self):
+    s = "if %s:%s\nelse:%s\n" %\
+           (self.cond, 
+            block_to_str(self.true), 
+            block_to_str(self.false),
+           )
+    if len(self.merge) > 0:
+      s+= "(merge-branches)%s\n" % (phi_nodes_to_str(self.merge))
+    return s 
+  
+  def __repr__(self):
+    return str(self) 
 
 class While(Stmt):
   """A loop consists of a header, which runs
@@ -46,7 +59,7 @@ class While(Stmt):
   _members = ['cond', 'body', 'merge']
 
   def __repr__(self):
-    return "while %s:\n  (merge)%s\n  (body)%s\n" %\
+    return "while %s:\n  (header)%s\n  (body)%s\n" %\
            (self.cond, phi_nodes_to_str(self.merge),  block_to_str(self.body))
 
   def __str__(self):
@@ -95,7 +108,10 @@ class Tuple(Expr):
   _members = ['elts']
 
   def __str__(self):
-    return ", ".join([str(e) for e in self.elts])
+    if len(self.elts) > 0:
+      return ", ".join([str(e) for e in self.elts])
+    else:
+      return "()"
 
   def __iter__(self):
     return iter(self.elts)
@@ -110,17 +126,21 @@ class Closure(Expr):
   """
   _members = ['fn', 'args']
 
-class Invoke(Expr):
-  """
-  Invoke a closure with extra args
-  """
-  _members = ['closure', 'args']
+
+
+class Call(Expr):
 
   def __str__(self):
-    return "%s(%s)" % (self.closure, self.args)
+    if isinstance(self.fn, (Fn, TypedFn)):
+      fn_name = self.fn.name 
+    else:
+      fn_name = str(self.fn)
+    return "%s(%s)" % (fn_name, ", ".join(str(arg) for arg in self.args))
 
   def __repr__(self):
     return str(self)
+
+  _members = ['fn', 'args']
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']
@@ -145,17 +165,6 @@ class PrimCall(Expr):
   def __str__(self):
     return repr(self)
 
-"""
-class Unpack(Expr):
-  # Unpack a varargs tuple into an argument list
-  _members = ['value']
-
-  def __str__(self):
-    return "*%s" % self.value
-
-  def __repr__(self):
-    return str(self)
-"""
 ############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
@@ -163,11 +172,7 @@ class Unpack(Expr):
 #  way to describe the type/shape/compilation semantics of array operators
 #
 #############################################################################
-"""
-class Ravel(Expr):
-  # given an array, return its data in 1D form
-  _members = ['array']
-"""
+
 
 class ConstArray(Expr):
   _members = ['shape', 'value']
@@ -195,25 +200,34 @@ class Fn(Expr):
   its enclosing Parakeet scope, whose original names are stored in
   'parakeet_nonlocals'
   """
+  
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
-
+  registry = {}
+  
   def __str__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
 
   def __repr__(self):
     return str(self)
 
+  def __hash__(self):
+    return hash(self.name)
+  
   def node_init(self):
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
+      
     assert isinstance(self.args, args.FormalArgs), \
       "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
 
+    
+    self.specializations = {}
     import closure_type
     self.type = closure_type.ClosureT(self.name, ())
-
+    self.registry[self.name]  = self 
+    
   def python_nonlocals(self):
     if self.python_refs:
       return [ref.deref() for ref in self.python_refs]
@@ -238,12 +252,6 @@ class ClosureElt(Expr):
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
-
-class Call(Expr):
-  """
-  Call a function directly, without having to create/invoke a closure
-  """
-  _members = ['fn', 'args']
 
 class Struct(Expr):
   """
@@ -284,21 +292,47 @@ class TypedFn(Expr):
   """
   _members = ['name',
               'arg_names',
-              #'num_varargs',
               'body',
               'input_types',
               'return_type',
               'type_env']
 
+  registry = {}
   def node_init(self):
+    assert isinstance(self.body, list), \
+      "Invalid body for typed function: %s" % (self.body,) 
+    assert isinstance(self.arg_names, (list, tuple)), \
+      "Invalid typed function arguments: %s" % (self.arg_names,)
+    assert isinstance(self.name, str), \
+      "Invalid typed function name: %s" % (self.name,)
+    
+    if isinstance(self.input_types, list):
+      self.input_types = tuple(self.input_types)
+      
+    assert isinstance(self.input_types, tuple), \
+      "Invalid input types: %s" % (self.input_types,)
+    assert isinstance(self.return_type, core_types.Type), \
+      "Invalid return type: %s" % (self.return_type,)
+    assert isinstance(self.type_env, dict), \
+      "Invalid type environment: %s" % (self.type_env,)
+    
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
+    
+    assert self.name not in self.registry, \
+      "Typed function already registered: %s" % self.name 
+    self.registry[self.name] = self
 
   def __repr__(self):
     arg_strings = []
     for name in self.arg_names:
       arg_strings.append("%s : %s" % (name, self.type_env.get(name)))
-    return "function %s(%s):%s" % \
-      (self.name, ", ".join(arg_strings), block_to_str(self.body))
+    return "function %s(%s) => %s:%s" % \
+      (self.name, ", ".join(arg_strings),
+       self.return_type,  
+       block_to_str(self.body))
 
   def __str__(self):
     return repr(self)
+  
+  def __hash__(self):
+    return hash(self.name)

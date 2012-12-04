@@ -12,14 +12,8 @@ class AdverbSemantics(object):
   """
   def invoke_delayed(self, fn, args, idx):
     curr_args = [x(idx) for x in args]
-    if isinstance(fn, (syntax.Closure, syntax.Fn)):
-      return self.invoke(fn, curr_args)
-    elif isinstance(fn, syntax.TypedFn):
-      call = syntax.Call(fn, args, type = fn.return_type)
-      return self.assign_temp(call, "call_result")
-    else:
-      assert False, "Expected Fn or Closure, got:" + str(fn.__class__)
-
+    return self.invoke(fn, curr_args)
+    
   def build_slice_indices(self, rank, axis, idx):
     if rank == 1:
       assert axis == 0
@@ -49,8 +43,7 @@ class AdverbSemantics(object):
     axis_sizes = [self.size_along_axis(x, axis)
                   for x in xs
                   if self.rank(x) > axis]
-    print xs
-    print axis_sizes
+
     assert len(axis_sizes) > 0
     # all arrays should agree in their dimensions along the
     # axis we're iterating over

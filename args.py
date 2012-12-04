@@ -149,7 +149,7 @@ class ActualArgs(object):
     for (k,v) in self.keywords.items():
       arg_strings.append("%s = %s" % (k,v))
     if self.starargs:
-      arg_strings.append("*%s" % self.starargs)
+      arg_strings.append("*" + str(self.starargs))
     return ", ".join(arg_strings)
 
   def __hash__(self):
@@ -226,7 +226,7 @@ class FormalArgs(object):
         s += " = %s" % self.defaults[local_name]
       strs.append(s)
     if self.starargs:
-      strs.append("*%s" % self.starargs)
+      strs.append("*" + str(self.starargs))
     return ", ".join(strs)
 
   def __repr__(self):

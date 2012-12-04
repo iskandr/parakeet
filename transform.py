@@ -1,4 +1,4 @@
-import function_registry
+
 import names
 import syntax
 
@@ -16,8 +16,9 @@ class Transform(Codegen):
     return self.type_env[name]
 
   def transform_TypedFn(self, fn):
-    nested_transform = self.__class__(fn)
-    return nested_transform.apply(copy = self.copy)
+    return fn 
+    #nested_transform = self.__class__(fn)
+    #return nested_transform.apply(copy = self.copy)
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
@@ -149,9 +150,7 @@ class Transform(Codegen):
       new_fundef_args['body'] = new_body
       new_fundef_args['type_env'] = self.type_env
       new_fundef = syntax.TypedFn(**new_fundef_args)
-      # register this function so if anyone tries to call it they'll be
-      # able to find its definition later
-      function_registry.typed_functions[new_fundef.name] = new_fundef
+
       new_fn = self.post_apply(new_fundef)
       if new_fn:
         return new_fn

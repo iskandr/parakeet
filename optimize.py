@@ -1,5 +1,4 @@
 import syntax 
-import function_registry
 
 import transform
 from simplify import Simplify
@@ -14,10 +13,10 @@ def optimize(fn, copy = False):
   if isinstance(fn, syntax.Fn):
     raise RuntimeError("Can't optimize untyped functions")
   elif isinstance(fn, str):
-    assert fn in function_registry.typed_functions, \
+    assert fn in syntax.TypedFn.registry, \
       "Unknown typed function: " + str(fn)
       
-    fn = function_registry.typed_functions[fn]
+    fn = syntax.TypedFn.registry[fn]
   else:
     assert isinstance(fn, syntax.TypedFn)
       

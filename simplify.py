@@ -5,8 +5,7 @@ import type_inference
 import syntax 
 import syntax_helpers 
 import dead_code_elim
-import closure_type
-from function_registry import lookup_untyped 
+
 
 # classes of expressions known to have no side effects 
 # and to be unaffected by changes in mutable state as long 
@@ -22,9 +21,9 @@ pure_exprs = (syntax.Var, syntax.Tuple, syntax.Const, syntax.Closure,
               syntax.IntToPtr, syntax.PtrToInt, syntax.PrimCall, 
               syntax.TupleProj, syntax.ClosureElt, syntax.Slice)
 
-import rewrite_typed 
+from transform import Transform
 
-class Simplify(rewrite_typed.SimplifyInvoke):
+class Simplify(Transform):
   def __init__(self, fn):
     # associate var names with
     #  1) constant values: these should always be replaced

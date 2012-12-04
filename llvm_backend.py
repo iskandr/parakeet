@@ -1,4 +1,4 @@
-import function_registry
+
 import llvm_context
 import llvm_convert
 import llvm_prims
@@ -165,20 +165,19 @@ def compile_expr(expr, env, builder):
     else:
       return field_value
 
+  def compile_TypedFn():
+    (target_fn, _, _) = compile_fn(expr)
+    return target_fn 
+  
   def compile_Call():
 
-    if isinstance(expr.fn, syntax.Fn):
-      # sometimes functions seem to sneak into this field
-      fn_id = expr.fn.name
+    if isinstance(expr.fn, str):
+      assert expr.fn in syntax.TypedFn.registry
+      typed_fundef = syntax.TypedFn.registry[expr.fn]
     else:
-      fn_id = expr.fn
-      assert isinstance(fn_id, str), \
-        "Expected function name, got: %s" + str(fn_id)
-
-    assert fn_id in function_registry.typed_functions, \
-      "Can only call typed function, got: " + str(fn_id)
-    typed_fundef = function_registry.typed_functions[fn_id]
-
+      assert isinstance(expr.fn, syntax.TypedFn)
+      typed_fundef = expr.fn 
+      
     (target_fn, _, _) = compile_fn(typed_fundef)
 
     arg_types = syntax_helpers.get_types(expr.args)
@@ -356,9 +355,13 @@ def compile_block(stmts, env, builder):
 compiled_functions = {}
 import lowering
 def compile_fn(fundef):
+  print 
+  print "Compiling", fundef 
+  print 
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   fundef = lowering.lower(fundef)
+  print "...lowered:", fundef 
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)
   compile_block(fundef.body, env, start_builder)

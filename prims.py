@@ -29,7 +29,7 @@ import names
 import syntax
 from args import FormalArgs
 
-from function_registry import untyped_functions
+
 _untyped_prim_wrappers = {}
 
 def prim_wrapper(p):
@@ -48,7 +48,7 @@ def prim_wrapper(p):
     body = [syntax.Return(syntax.PrimCall(p, arg_vars))]
     fundef = syntax.Fn(fn_name, args_obj, body, [])
     _untyped_prim_wrappers[p] = fundef
-    untyped_functions[fn_name] = fundef
+
     return fundef 
 
 class Prim(object):

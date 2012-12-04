@@ -2,7 +2,6 @@ import numpy as np
 
 import syntax
 import ast_conversion 
-from function_registry import untyped_functions
 from common import dispatch 
 from core_types import ScalarT, StructT
 import types 
@@ -70,7 +69,7 @@ def eval_fn(fn, actuals):
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc.. 
     env = fn.args.bind(actuals)
-  
+
   
   def eval_args(args):
     if isinstance(args, (list, tuple)):
@@ -80,7 +79,7 @@ def eval_fn(fn, actuals):
        
   
   def eval_expr(expr): 
-    assert isinstance(expr, syntax.Expr), "Not an expression: %s" % expr    
+    assert isinstance(expr, syntax.Expr), "Not an expression-- %s : %s" % (expr, type(expr))    
     def expr_Const():
       return expr.value
     
@@ -99,9 +98,7 @@ def eval_fn(fn, actuals):
         
     def expr_PrimCall():
       return expr.prim.fn (*eval_args(expr.args))
-    
-    def expr_Call():
-      return eval_fn(untyped_functions[expr.fn], *eval_args(expr.args)) 
+
     
     def expr_Prim():
       return expr.value.fn
@@ -112,29 +109,47 @@ def eval_fn(fn, actuals):
     def expr_Var():
       return env[expr.name]
     
-    def expr_Invoke():
+    def expr_Call():
       # for the interpreter Invoke and Call are identical since
       # we're dealing with runtime reprs for functions, prims, and 
       # closures which are just python Callables
-      clos = eval_expr(expr.closure)
+ 
+        
+      clos = eval_expr(expr.fn)
       arg_values = eval_args(expr.args)
+      
+      if isinstance(clos, ClosureVal):
+        fn = clos.fn 
+        closure_args = clos.fixed_args
+      else:
+        fn = clos 
+        closure_args = []
+      
       if isinstance(arg_values, list):
-        combined_arg_vals = clos.fixed_args + arg_values  
+        combined_arg_vals = closure_args + arg_values  
       else:
         assert isinstance(expr.args, ActualArgs)
-        combined_arg_vals = arg_values.prepend_positional(clos.fixed_args) 
-      return eval_fn(clos.fn, combined_arg_vals)
+        combined_arg_vals = arg_values.prepend_positional(closure_args)
+      if isinstance(fn, (syntax.TypedFn, syntax.Fn)): 
+        return eval_fn(fn, combined_arg_vals)
+      else:
+        assert hasattr(fn, '__call__'), \
+          "Unexpected function %s" % (fn,)
+        fn(*combined_arg_vals)
       
     def expr_Closure():
       if isinstance(expr.fn, syntax.Fn):
-        fn_name = expr.fn.name
+        fundef = expr.fn
       else:
-        fn_name = expr.fn
-      fundef = untyped_functions[fn_name]
+        assert isinstance(expr.fn, str)
+        fundef = syntax.Fn.registry[expr.fn]
       closure_arg_vals = map(eval_expr, expr.args) 
       return ClosureVal(fundef, closure_arg_vals)
     
     def expr_Fn():
+      return ClosureVal(expr, [])
+    
+    def expr_TypedFn():
       return ClosureVal(expr, [])
     
     def expr_Cast():
@@ -157,7 +172,10 @@ def eval_fn(fn, actuals):
       return eval_expr(expr.tuple)[expr.index]
     
     def expr_ClosureElt():
-      return eval_expr(expr.closure).fixed_args[expr.index]
+      assert isinstance(expr.closure, syntax.Expr), \
+        "Invalid closure expression-- %s : %s" % (expr.closure, type(expr.closure))
+      clos = eval_expr(expr.closure)
+      return clos.fixed_args[expr.index]
 
     def expr_Map():
       fn = eval_expr(expr.fn)
