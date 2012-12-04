@@ -2,302 +2,18 @@ import syntax
 from syntax_visitor import SyntaxVisitor
 from syntax_helpers import get_types
 import type_inference  
-from node import Node  
-
-
-
-
-class ValueMismatch(Exception):
-  """
-  Raise this exception whenever two incompatible
-  abstract values get combined
-  """
-  def __init__(self, v1, v2):
-    self.v1 = v1
-    self.v2 = v2 
-
-  def __str__(self):
-    return "ValueMismatch(%s, %s)" % (self.v1, self.v2)
-
-  def __repr__(self):
-    return str(self)
-  
-  
-class AbstractValue(Node):
-  pass 
-
-class Unknown(Node):
-  def __eq__(self, other):
-    return isinstance(other, Unknown)
-  
-  def combine(self, other):
-    return other 
-  
-  def __str__(self):
-    return "<unknown>"
-  
-  def __repr__(self):
-    return str(self)
-
-unknown_value = Unknown()
-
-
-class Scalar(AbstractValue):
-  """
-  Base class for all scalar operations
-  """
-  rank = 0
-  
-class UnknownScalar(Scalar):
-  def __eq__(self, other):
-    return isinstance(other, UnknownScalar)
-  
-  def combine(self, other):
-    assert isinstance(other, Scalar), \
-      "Can't combine scalar with %s" % other 
-    return self 
-  
-  def __str__(self):
-    return "Scalar"
-  
-unknown_scalar = UnknownScalar()
-
-class Const(Scalar):
-  def __init__(self, value):
-    self.value = value 
-    
-  def __eq__(self, other):
-    return isinstance(other, Const) and other.value == self.value
-    
-  def __str__(self):
-    return "Const(%d)" % self.value 
-
-  def combine(self, other):
-    if self == other:
-      return self
-    elif isinstance(other, Scalar):
-      return unknown_scalar
-    else:
-      raise ValueMismatch(self, other)
-
-def const(x):
-  return Const(x)
-
-def is_zero(d):
-  return isinstance(d, Const) and d.value == 0
-
-def is_one(d):
-  return isinstance(d, Const) and d.value == 1
-
-class Sub(Scalar):
-  def __init__(self, x, y):
-    self.x = x
-    self.y = y
-
-  def __eq__(self, other):
-    return isinstance(other, Sub) and \
-      self.x == other.x and \
-      self.y == other.y
-      
-  def __str__(self):
-    return "%s - %s" % (self.x, self.y)
-  
-  def __repr__(self):
-    return str(self) 
-  
-  def __hash__(self):
-    return hash( (self.x, self.y) )
-  
-class Var(Scalar):
-  def __init__(self, num):
-    self.num = num 
-    
-  def __eq__(self, other):
-    return isinstance(other, Var) and self.num == other.num
-  
-  def __hash__(self):
-    return hash(self.num)
-  
-  def __str__(self):
-    return "x%d" % self.num 
-  
-  def __repr__(self):
-    return str(self)
-  
-  def combine(self, other):
-    if self == other:
-      return self 
-    else:
-      # combining two different variables returns an unknown scalar 
-      return unknown_scalar 
-
-
-class Shape(AbstractValue):
-  def __init__(self, dims):
-    assert len(dims) > 0
-    self.dims = [const(d) if isinstance(d, int) else d for d in dims] 
-    self.rank = len(dims)
-      
-  def __eq__(self, other):
-    return isinstance(other, Shape) and \
-      len(self.dims) == len(other.dims) and \
-      all(d1 == d2 for (d1,d2) in zip(self.dims, other.dims) )
-  
-  def __str__(self):
-    return "Shape(%s)" % (", ".join(str(d) for d in self.dims))
-  
-  def __repr__(self):
-    return str(self)
-  
-  def combine(self, other):
-    if isinstance(other, Shape) and other.rank == self.rank:
-      dims = combine_pairs(self.dims, other.dims)
-      return array(*dims)
-    raise ValueMismatch(self, other)
-
-def array(*dims):
-  return Shape(dims) 
-
-
-def dim(shape, d):
-  if isinstance(shape, Shape):
-    return shape.dims[d]
-  else:
-    # if the shape isn't available, getting the d'th 
-    # dimension returns an unknown scalar 
-    return unknown_scalar 
-  
-def dim_list(shapes, d, exclude_scalars=False):
-  if exclude_scalars:
-    shapes = [s for s in shapes if not is_scalar(s)]
-  return [dim(s,d) for s in shapes]
-
-
-def array_of_unknown_shape(rank):
-  return Shape([unknown_scalar] * rank)
-
-def lower_rank(x, axis):
-  assert isinstance(x, Shape), \
-    "Can't decrease rank of %s" % x
-  # by convention, lowering a scalar returns a scalar 
-  if  axis >= x.rank or x.rank == 1:
-    return unknown_scalar
-
-  new_dims = []
-  for (i,d) in enumerate(x.dims):
-    if i != axis:
-      new_dims.append(d)
-  return array(*new_dims)
-
-def lower_ranks(xs, axis):
-  return [lower_rank(x, axis) for x in xs]
-    
-def increase_rank(x, axis, dim_expr):
-  if isinstance(dim_expr, int):
-    dim_expr = const(dim_expr)
-    
-  if isinstance(x, Shape):
-    # we're taking dims d1...dm and constructing a 
-    # new shape d1...d_new...dm by inserting d_new
-    # in the slot of the given axis 
-    assert axis <= x.rank 
-    if axis < len(x.dims):
-      new_dims = []
-      for (i,d) in enumerate(x.dims):
-        if i == axis:
-          new_dims.append(dim_expr)
-        new_dims.append(d)
-    else:
-      new_dims = [d for d in x.dims]
-      new_dims.append(dim_expr)
-    return array(*new_dims)
-  elif is_scalar(x):
-    return Shape([dim_expr])        
-  else:
-    raise RuntimeError("Don't know how to raise rank of value %s" % x)
-   
-
-def is_scalar(v):
-  return isinstance(v, Scalar) 
-
-class Slice(AbstractValue):
-  def __init__(self, start, stop, step):
-    self.start = start
-    self.stop = stop 
-    self.step = step 
-    
-  def __eq__(self, other):
-    return isinstance(other, Slice) and \
-      self.start == other.start and \
-      self.stop == other.stop and \
-      self.step == other.step 
-  
-  def combine(self, other):
-    if isinstance(other, Slice):
-      start = self.start.combine(other.start)
-      stop = self.stop.combine(other.stop)
-      step = self.step.combine(other.step)
-      return Slice(start, stop, step)
-    else:
-      raise ValueMismatch(self, other)
-
-
-class Tuple(AbstractValue):
-  def __init__(self, elts):
-    self.elts = elts 
-    
-  def __eq__(self, other):
-    return isinstance(other, Tuple) and \
-      len(self.elts) == len(other.elts) and \
-      all(e1 == e2 for (e1, e2) in zip(self.elts, other.elts))
-  
-  def __str__(self):
-    return "Tuple(%s)" % ", ".join(str(e) for e in self.elts)
-  
-  def combine(self, other):
-    if isinstance(other, Tuple):
-      if len(self.elts) == len(other.elts):
-        return Tuple(combine_pairs(self.elts, other.elts))
-    raise ValueMismatch(self, other)
-
-class Closure(AbstractValue):
-  def __init__(self, untyped_fn, args):
-    self.untyped_fn = untyped_fn 
-    self.args = args 
-  
-  def __str__(self):
-    return "Closure(fn = %s, %s)" % \
-      (self.untyped_fn, ", ".join(str(e) for e in self.elts))
-  
-  def __eq__(self, other):
-    return isinstance(other, Closure) and \
-      self.untyped_fn == other.untyped_fn and \
-      len(self.arg_shapes) == len(other.arg_shapes) and \
-      all(v1 == v2 for (v1,v2) in zip(self.args, other.args))
-  
-  def combine(self, other):
-    if isinstance(other, Closure):
-      # TODO: Implement sets of closures like we have in the type system 
-      if self.untyped_fn == other.untyped_fn and \
-         len(self.args) == len(other.args) :
-        combined_args = combine_pairs(self.args, other.args)
-        return Closure(self.untyped_fn, combined_args)
-    raise ValueMismatch(self, other)  
-
-
-def combine_list(xs):
-  acc = unknown_value
-  for x in xs:
-    acc = acc.combine(x)
-  return acc 
-
-def combine_pairs(xs, ys):
-  return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]
 
 import core_types 
 import array_type 
 import tuple_type 
 import closure_type 
+from symbolic_shape import \
+  Var, Const, Shape, Tuple, Closure, Slice, Scalar, UnknownScalar, Unknown 
+from symbolic_shape import unknown_scalar, unknown_value, const, array 
+from symbolic_shape import combine_list, increase_rank, lower_ranks, dim_list 
+from symbolic_shape import is_one, is_zero 
+
+import symbolic_shape  
 
 class InputConverter():
   """
@@ -339,7 +55,102 @@ class InputConverter():
       v = self.value_from_type(t)
       values.append(v)
     return values
-     
+
+import adverb_semantics
+
+class ShapeSemantics(adverb_semantics.AdverbSemantics):
+  def size_along_axis(self, value, axis):
+    assert isinstance(value, Shape)
+    return value.dims[axis]
+    
+  def is_tuple(self, x):
+    return isinstance(x, Tuple)
+
+  def is_none(self, x):
+    return isinstance(x, Const) and x.value is None 
+
+  def rank(self, value):
+    if isinstance(value, Shape):
+      return const(value.rank)
+    else:
+      return const(0) 
+
+  def int(self, x):
+    return const(x)
+
+  def bool(self, x):
+    return const(x)
+
+  def add(self, x, y):
+    if is_zero(x):
+      return y 
+    elif is_zero(y):
+      return x
+    elif isinstance(x, Const) and isinstance(y, Const):
+      return const(x.value + y.value)
+    else:
+      return symbolic_shape.Add(x,y)
+
+  def sub(self, x, y):
+    if is_zero(y):
+      return x
+    elif isinstance(x, Const) and isinstance(y, Const):
+      return const(x.value - y.value)
+
+  def shape(self, x):
+    return Tuple(x.dims)
+    
+  def elt_type(self, x):
+    return "DON'T CARE ABOUT ELT TYPES"
+  
+  def alloc_array(self, _, dims):
+    return Shape(dims)
+  
+  def index(self, arr, idx):
+    return unknown_scalar
+
+  def tuple(self, elts):
+    return Tuple(tuple(elts))
+
+  def concat_tuples(self, t1, t2):
+    return Tuple(t1.elts + t2.elts)
+  
+  def setidx(self, arr, idx, v):
+    pass 
+
+  def loop(self, start_idx, stop_idx, body):
+    body(start_idx)
+  
+  class Accumulator(object):
+    def __init__(self, v):
+      self.v = v 
+      
+    def update(self, new_v):
+      self.v = new_v 
+  
+    def get(self):
+      return self.v 
+    
+  def accumulate_loop(self, start_idx, stop_idx, body, init):
+    acc = self.Accumulator(init)
+    body(acc, start_idx)
+    return acc.get()    
+
+  def check_equal_sizes(self, sizes):
+    pass 
+  
+  def slice_value(self, start, stop, step):
+    Slice(start, stop, step)
+
+  def invoke(self, fn, args):
+    assert False     
+  
+  none = None
+  null_slice = slice(None, None, None)
+  def identity_function(self, x):
+    return x
+  
+shape_semantics = ShapeSemantics()
 
 class ShapeInference(SyntaxVisitor):
   def __init__(self):
@@ -423,24 +234,17 @@ class ShapeInference(SyntaxVisitor):
     return res 
   
   def visit_Map(self, expr):
-    assert expr.axis is not None 
     axis = expr.axis 
     arg_shapes = self.visit_expr_list(expr.args)
-    # collect the dim size of all array arguments along the adverb axis
-    niters_list = dim_list(arg_shapes, axis, exclude_scalars=True)
-    outer_dim = self.unify_scalar_list(niters_list)
-    elt_shapes = lower_ranks(arg_shapes, axis)
-   
-    # result in terms of input scalar variables
-    closure_t = expr.fn.type
-    arg_types = get_types(expr.args)
-    elt_types = array_type.lower_ranks(arg_types, 1)
-    
-    typed_fn = type_inference.get_invoke_specialization(closure_t, elt_types)
-
-   
-    elt_result_shape = symbolic_call(typed_fn, elt_shapes)
-    return increase_rank(elt_result_shape, axis, outer_dim) 
+    return shape_semantics.eval_map(expr.fn, arg_shapes, axis)
+  
+  def visit_Reduce(self, expr):
+    axis = expr.axis 
+    fn = expr.fn 
+    combine = expr.combine 
+    arg_shapes = self.visit_expr_list(expr.args)
+    init = self.visit_expr(self.init) if self.init else None 
+    shape_semantics.eval_reduce(fn, combine, init, arg_shapes, axis)
   
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
@@ -475,8 +279,8 @@ _symbolic_shape_cache = {}
 def call_shape_expr(typed_fn):
 
   if isinstance(typed_fn, str):
-    import function_registry
-    typed_fn = function_registry.typed_functions[typed_fn]
+    typed_fn = syntax.TypedFn.registry[typed_fn]
+    
   if typed_fn.name in _symbolic_shape_cache:
     return _symbolic_shape_cache[typed_fn.name]
   else:

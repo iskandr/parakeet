@@ -2,6 +2,7 @@ import args
 import core_types
 
 from node import Node
+from args import ActualArgs
 
 class Stmt(Node):
   pass
@@ -135,7 +136,11 @@ class Call(Expr):
       fn_name = self.fn.name 
     else:
       fn_name = str(self.fn)
-    return "%s(%s)" % (fn_name, ", ".join(str(arg) for arg in self.args))
+    if isinstance(self.args, ActualArgs):
+      arg_str = str(self.args)
+    else:
+      arg_str = ", ".join(str(arg) for arg in self.args)
+    return "%s(%s)" % (fn_name, arg_str)
 
   def __repr__(self):
     return str(self)
