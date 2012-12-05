@@ -25,7 +25,7 @@ lowering_pipeline = [
 
 _lowered_functions = {}
 def lower(fundef, tile=False):
-  print "LOWERING", fundef 
+
   if isinstance(fundef, str):
     fundef = syntax.TypedFn.registry[fundef]
 
@@ -42,6 +42,5 @@ def lower(fundef, tile=False):
 
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
-    print "...modified?", repr(fundef)
-    print "...returning", repr(lowered_fn)
+
     return lowered_fn

@@ -85,7 +85,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
       old_dim = arr.dims[i]
       if curr_idx is None or \
         (isinstance(curr_idx, Scalar) and curr_idx.value is None):
-        print "old dim survives", old_dim 
+ 
         result_dims.append(old_dim)
       elif isinstance(curr_idx, Scalar):
         pass 
@@ -106,7 +106,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     n_idx= len(indices)
     if n_original > n_idx:
       result_dims.extend(arr.dims[n_idx:])
-    print "Result of indexing into", arr, "with", idx, "is", result_dims 
+
     return make_shape(result_dims) 
       
   def tuple(self, elts):
@@ -324,9 +324,6 @@ class ShapeInference(SyntaxVisitor):
   
 _symbolic_shape_cache = {}
 def call_shape_expr(typed_fn):
-  print 
-  print "Symbolic call into ", typed_fn
-  print repr(typed_fn)
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
     
@@ -365,7 +362,7 @@ def bind_pairs(xs, ys, env):
   
 def subst(x, env):
   if isinstance(x, Var):
-    print type(x)
+
     
     assert x in env, "Unknown variable %s" % x
     return env[x]
@@ -435,15 +432,13 @@ def symbolic_call(typed_fn, abstract_inputs):
   # result in terms of variables like input0, (shape: input1, input2), etc..
   abstract_result_value = call_shape_expr(typed_fn)
   
-  print "result", abstract_result_value 
+
   
   shape_formals = InputConverter().values_from_types(typed_fn.input_types)
   env = {}
-  
-  print "shape_formals", shape_formals
-  print "inputs", abstract_inputs
+
   bind_pairs(shape_formals, abstract_inputs, env)
-  print env 
+
   return subst(abstract_result_value, env)
   
   
