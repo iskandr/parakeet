@@ -210,10 +210,10 @@ class Fn(Expr):
   registry = {}
 
   def __str__(self):
-    return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
+    return "Fn(%s)" % self.name 
 
   def __repr__(self):
-    return str(self)
+    return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
 
   def __hash__(self):
     return hash(self.name)
@@ -337,7 +337,7 @@ class TypedFn(Expr):
        block_to_str(self.body))
 
   def __str__(self):
-    return repr(self)
-
+    return "TypedFn(%s)" % self.name 
+      
   def __hash__(self):
     return hash(self.name)

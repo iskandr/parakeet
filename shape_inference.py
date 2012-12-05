@@ -70,9 +70,9 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
 
   def rank(self, value):
     if isinstance(value, Shape):
-      return const(value.rank)
+      return value.rank
     else:
-      return const(0) 
+      return 0
 
   def int(self, x):
     return const(x)
@@ -97,7 +97,10 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
       return const(x.value - y.value)
 
   def shape(self, x):
-    return Tuple(x.dims)
+    if isinstance(x, Shape):
+      return Tuple(x.dims)
+    else:
+      return Tuple(())
     
   def elt_type(self, x):
     return "DON'T CARE ABOUT ELT TYPES"
@@ -142,10 +145,11 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     Slice(start, stop, step)
 
   def invoke(self, fn, args):
-    assert False     
+    return symbolic_call(fn, args)  
   
   none = None
   null_slice = slice(None, None, None)
+  
   def identity_function(self, x):
     return x
   
@@ -206,13 +210,13 @@ class ShapeInference(SyntaxVisitor):
       self.value_env[k] = l.combine(r)
       
   def visit_Const(self, expr):
-
-    return Const(expr.value)
+    return const(expr.value)
+  
+  
   
   def visit_PrimCall(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     return symbolic_shape.combine_list(arg_shapes, preserve_const = False)
-    
     
   def visit_Var(self, expr):
     name = expr.name
@@ -234,10 +238,19 @@ class ShapeInference(SyntaxVisitor):
     res = increase_rank(elt, 0, const(n))
     return res 
   
+  def visit_Closure(self, clos):
+    fn = self.visit_expr(clos.fn)
+    closure_arg_shapes = self.visit_expr_list(clos.args)
+    return Closure(fn, closure_arg_shapes)
+  
+  def visit_TypedFn(self, fn):
+    return fn
+    
   def visit_Map(self, expr):
     axis = expr.axis 
     arg_shapes = self.visit_expr_list(expr.args)
-    return shape_semantics.eval_map(expr.fn, arg_shapes, axis)
+    fn = self.visit_expr(expr.fn)
+    return shape_semantics.eval_map(fn, arg_shapes, axis)
   
   def visit_Reduce(self, expr):
     axis = expr.axis 
@@ -298,7 +311,8 @@ def bind(lhs, rhs, env):
   if isinstance(lhs, Var):
     env[lhs.num] = rhs 
   elif isinstance(lhs, Shape):
-    assert isinstance(rhs, Shape)
+    assert isinstance(rhs, Shape), \
+      "Expected %s, got %s" % (lhs, rhs)
     bind_pairs(lhs.dims, rhs.dims, env)
   elif isinstance(lhs, Closure):
     assert isinstance(rhs, Closure)
@@ -341,7 +355,6 @@ def symbolic_call(typed_fn, abstract_inputs):
   shape_formals = InputConverter().values_from_types(typed_fn.input_types)
   env = {}
   bind_pairs(shape_formals, abstract_inputs, env)
-  
   return subst(abstract_result_value, env)
   
   

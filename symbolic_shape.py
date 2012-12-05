@@ -266,6 +266,12 @@ class Tuple(AbstractValue):
       len(self.elts) == len(other.elts) and \
       all(e1 == e2 for (e1, e2) in zip(self.elts, other.elts))
   
+  def __len__(self):
+    return len(self.elts)
+  
+  def __iter__(self):
+    return iter(self.elts)
+  
   def __str__(self):
     return "Tuple(%s)" % ", ".join(str(e) for e in self.elts)
   
@@ -276,27 +282,27 @@ class Tuple(AbstractValue):
     raise ValueMismatch(self, other)
 
 class Closure(AbstractValue):
-  def __init__(self, untyped_fn, args):
-    self.untyped_fn = untyped_fn 
+  def __init__(self, fn, args):
+    self.fn = fn 
     self.args = args 
   
   def __str__(self):
     return "Closure(fn = %s, %s)" % \
-      (self.untyped_fn, ", ".join(str(e) for e in self.elts))
+      (self.fn, ", ".join(str(e) for e in self.elts))
   
   def __eq__(self, other):
     return isinstance(other, Closure) and \
-      self.untyped_fn == other.untyped_fn and \
+      self.fn == other.fn and \
       len(self.arg_shapes) == len(other.arg_shapes) and \
       all(v1 == v2 for (v1,v2) in zip(self.args, other.args))
   
   def combine(self, other):
     if isinstance(other, Closure):
       # TODO: Implement sets of closures like we have in the type system 
-      if self.untyped_fn == other.untyped_fn and \
-         len(self.args) == len(other.args) :
+      if self.fn == other.fn and \
+         len(self.args) == len(other.args):
         combined_args = combine_pairs(self.args, other.args)
-        return Closure(self.untyped_fn, combined_args)
+        return Closure(self.fn, combined_args)
     raise ValueMismatch(self, other)  
 
 

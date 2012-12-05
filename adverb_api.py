@@ -152,7 +152,7 @@ def par_each(fn, *args, **kwds):
   axis = kwds.get('axis', 0)
 
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-  map_result_type = type_inference.infer_map_type(closure_t, arg_types, axis)
+  map_result_type = type_inference.infer_Map(closure_t, arg_types)
 
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):
