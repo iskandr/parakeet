@@ -308,7 +308,8 @@ def annotate_expr(expr, tenv, var_map):
     new_args = annotate_args(expr.args, flat = True)
     axis = unwrap_constant(expr.axis)
     arg_types = get_types(new_args)
-    result_type = infer_map_type(closure.type, arg_types, axis)
+    result_type, typed_fn = specialize_Map(closure.type, arg_types)
+    closure.fn = typed_fn 
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
     return adverbs.Map(fn = closure,
@@ -321,14 +322,15 @@ def annotate_expr(expr, tenv, var_map):
     combine_fn = annotate_child(expr.combine)
     new_args = annotate_args(expr.args, flat = True)
     arg_types = get_types(new_args)
-    axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
-    result_type = infer_reduce_type(
-      map_fn.type,
-      combine_fn.type,
-      arg_types,
-      axis,
-      get_type(init) if init else None)
+    init_type = init.type if init else None 
+    result_type, typed_map_fn, typed_combine_fn = \
+      specialize_Reduce(map_fn.type, 
+                        combine_fn.type, 
+                        arg_types, init_type)
+    map_fn.fn = typed_map_fn
+    combine_fn.fn = typed_combine_fn 
+    axis = unwrap_constant(expr.axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
     return adverbs.Reduce(fn = map_fn,
@@ -344,12 +346,15 @@ def annotate_expr(expr, tenv, var_map):
     emit_fn = annotate_child(expr.emit)
     new_args = annotate_args(expr.args, flat = True)
     arg_types = get_types(new_args)
-    axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
-    result_type = infer_scan_type(
-                    map_fn.type, combine_fn.type, emit_fn.type, 
-                    get_type(init) if init else None, 
-                    arg_types, axis)
+    init_type = get_type(init) if init else None
+    result_type, typed_map_fn, typed_combine_fn, typed_emit_fn = \
+      specialize_Scan(map_fn.type, combine_fn.type, emit_fn.type, 
+                      arg_types, init_type)
+    map_fn.fn = typed_map_fn 
+    combine_fn.fn = typed_combine_fn 
+    emit_fn.fn = typed_emit_fn 
+    axis = unwrap_constant(expr.axis)
     return adverbs.Scan(fn = map_fn,
                           combine = combine_fn,
                           emit = emit_fn,
@@ -362,8 +367,13 @@ def annotate_expr(expr, tenv, var_map):
     closure = annotate_child(expr.fn)
     new_args = annotate_args (expr.args, flat = True)
     arg_types = get_types(new_args)
+    assert len(arg_types) == 2
+    xt,yt = arg_types 
+    
+    result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
+    closure.fn = typed_fn
     axis = unwrap_constant(expr.axis)
-    result_type = infer_allpairs_type(closure.type, arg_types, axis)
+    
     return adverbs.AllPairs(fn = closure,
                             args = new_args,
                             axis = axis,
@@ -592,7 +602,8 @@ def _get_fundef(fn):
   if isinstance(fn, untyped_ast.Fn):
     return fn
   else:
-    assert isinstance(fn, str)   
+    assert isinstance(fn, str), \
+      "Unexpected function " + str(fn)    
     return untyped_ast.Fn.registry[fn]
 
 def _get_closure_type(fn):
@@ -606,6 +617,10 @@ def _get_closure_type(fn):
   
 
 def specialize(fn, arg_types):
+  if isinstance(fn, typed_ast.TypedFn):
+    assert all(t1 == t2 for (t1,t2) in zip(fn.input_types, arg_types))
+    return fn
+  
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
   closure_t = _get_closure_type(fn)
@@ -617,7 +632,6 @@ def specialize(fn, arg_types):
   typed =  _specialize(fundef, full_arg_types)
   #untyped_fundef.specializations[arg_types] = opt 
   closure_t.specializations[arg_types] = typed
-  print "SPECIALIZED", typed 
   return typed 
     
 def infer_return_type(untyped, arg_types):
@@ -629,118 +643,59 @@ def infer_return_type(untyped, arg_types):
   """
   typed = specialize(untyped, arg_types)
   return typed.return_type
-"""
-def specialize_Map(map_fn, array_types, axis):
+
+
+def specialize_Map(map_fn, array_types):
   elt_types = array_type.lower_ranks(array_types, 1)
-  typed_map_fn = specialize(map_fn)
+  typed_map_fn = specialize(map_fn, elt_types)
+  elt_result_t = typed_map_fn.return_type 
+  result_t = array_type.increase_rank(elt_result_t, 1)
+  return result_t, typed_map_fn 
+
+def infer_Map(map_fn, array_types):
+  t, _ = specialize_Map(map_fn, array_types)
+  return t 
+
+def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
+  _, typed_map_fn = specialize_Map(map_fn, array_types)
+  elt_type = typed_map_fn.return_type 
+  if init_type is None or isinstance(init_type, core_types.NoneT):
+    acc_type = elt_type
+  else:
+    acc_type = elt_type.combine(init_type)
+    
+  typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
+  new_acc_type = typed_combine_fn.return_type
+  if new_acc_type != acc_type:
+    new_acc_type, typed_combine_fn = specialize(combine_fn, [new_acc_type, elt_type])
+  assert new_acc_type == acc_type 
+  return new_acc_type, typed_map_fn, typed_combine_fn 
+
+def infer_Reduce(map_fn, combine_fn, array_types, init_type = None):
+  t, _, _ = specialize_Reduce(map_fn, combine_fn, array_types, init_type)
+  return t 
+
+def specialize_Scan(map_fn, combine_fn, emit_fn, array_types, init_type = None):
+  acc_type, typed_map_fn, typed_combine_fn = \
+   specialize_Reduce(map_fn, combine_fn, array_types, init_type)
+  typed_emit_fn = specialize(emit_fn, [acc_type])
+  result_type = array_type.increase_rank(typed_emit_fn.return_type, 1) 
+  return result_type, typed_map_fn, typed_combine_fn, typed_emit_fn 
+
+def infer_Scan(map_fn, combine_fn, emit_fn, array_types, init_type = None):
+  t, _, _, _ = specialize_Scan(map_fn, combine_fn, emit_fn, array_types, init_type)
+  return t 
+
+def specialize_AllPairs(fn, xtype, ytype):
+  x_elt_t = array_type.lower_rank(xtype, 1)
+  y_elt_t = array_type.lower_rank(ytype, 1)
+  typed_map_fn = specialize(fn, [x_elt_t, y_elt_t])
+  elt_result_t = typed_map_fn.return_type 
+  result_t = array_type.increase_rank(elt_result_t, 2)
+  return result_t, typed_map_fn 
+
+def infer_AllPairs(fn, xtype, ytype):
+  t, _ = specialize_AllPairs(fn, xtype, ytype)
+  return t   
   
-"""  
-import adverb_semantics
 
-class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):
-  none = core_types.NoneType
-
-  def invoke(self, fn, arg_types):
-    return invoke_result_type(fn, arg_types)
-
-  def size_along_axis(self, t, _):
-    return core_types.Int64
-
-  def int(self, _):
-    return core_types.Int64
-
-  def bool(self, _):
-    return core_types.Bool
-
-  def tuple(self, elt_types):
-    return tuple_type.make_tuple_type(elt_types)
-
-  def is_tuple(self, t):
-    return isinstance(t, tuple_type.TupleT)
-
-  def is_array(self, t):
-    return isinstance(t, array_type.ArrayT)
-
-  def is_none(self, t):
-    return isinstance(t, core_types.NoneT)
-
-  def shape(self, t):
-    if self.is_array(t):
-      return tuple_type.make_tuple_type([core_types.Int64] * t.rank)
-    else:
-      return tuple_type.make_tuple_type([])
-
-  def elt_type(self, t):
-    return t.elt_type if hasattr(t, 'elt_type') else t
-
-  def alloc_array(self, elt_t, shape):
-    return array_type.make_array_type(elt_t, len(shape))
-
-  def setidx(self, arr, idx, val):
-    pass
-
-  def concat_tuples(self, t1, t2):
-    return tuple_type.make_tuple_type(t1.elt_types + t2.elt_types)
-
-  def slice_value(self, start_t, stop_t, step_t):
-    return array_type.make_slice_type(start_t, stop_t, step_t)
-
-  def index(self, arr, idx):
-    return arr.index_type(idx)
-
-  def check_equal_sizes(self, _):
-    pass
-
-  def rank(self, t):
-    return t.rank if hasattr(t, 'rank') else 0
-
-  def loop(self, start, _, loop_body):
-    loop_body(start)
-
-  class Accumulator:
-    def __init__(self, v):
-      self.value = v
-
-    def get(self):
-      return self.value
-
-    def update(self, new_v):
-      self.value = self.value.combine(new_v)
-
-  def accumulate_loop(self, start, _, loop_body, init):
-    acc = self.Accumulator(init)
-    loop_body(acc, start)
-    return acc.get()
-
-adverb_type_semantics = AdverbTypeSemantics()
-
-def infer_map_type(fn, arg_types, axis, fixed_arg_types = ()):
-  
-  return adverb_type_semantics.eval_map(fn, arg_types, axis)
-
-def infer_reduce_type(map_fn, combine_fn, arg_types, axis, init = None, fixed_arg_types = ()):
-    return adverb_type_semantics.eval_reduce(map_fn,
-                                           combine_fn, 
-                                           init,
-                                           arg_types,
-                                           axis)
-
-def infer_scan_type(
-      map_fn, 
-      combine_fn, 
-      emit_fn, 
-      init_t,
-      arg_types,
-      axis):
-  return adverb_type_semantics.eval_scan(map_fn,
-                                         combine_fn, 
-                                         emit_fn, 
-                                         init_t,
-                                         arg_types,
-                                         axis)
-
-def infer_allpairs_type(fn, arg_types, axis):
-  assert len(arg_types) == 2
-  [xtype, ytype] = arg_types
-  axis = unwrap_constant(axis)
-  return adverb_type_semantics.eval_allpairs(fn, xtype, ytype, axis)

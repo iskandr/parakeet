@@ -4,6 +4,9 @@ from args import ActualArgs
 def subst(node, rename_dict):
   if isinstance(node, syntax.Var):
     return syntax.Var(rename_dict.get(node.name, node.name), type = node.type)
+  if isinstance(node, (syntax.Fn, syntax.TypedFn)):
+    return node 
+  
   if isinstance(node, (syntax.Expr, syntax.Stmt)):
     new_values = {}
     for member_name in node.members():
