@@ -1,7 +1,6 @@
 import syntax
 from syntax_visitor import SyntaxVisitor
-from syntax_helpers import get_types
-import type_inference  
+ 
 
 import core_types 
 import array_type 
@@ -269,10 +268,11 @@ class ShapeInference(SyntaxVisitor):
     self.value_env["$return"] = combined 
     
   def visit_fn(self, fn):
+    assert isinstance(fn, syntax.TypedFn)
     self._clear()
-    arg_types = [fn.type_env[name] for name in fn.args]
+    arg_types = [fn.type_env[name] for name in fn.arg_names]
     input_values = InputConverter().values_from_types(arg_types)
-    for n,v in zip(fn.args, input_values):
+    for n,v in zip(fn.arg_names, input_values):
       self.value_env[n] = v 
     self.visit_block(fn.body)
     return self.value_env["$return"] 
@@ -352,8 +352,6 @@ def symbolic_call(typed_fn, abstract_inputs):
 import types 
 import numpy as np 
 from common import dispatch
-
-
 
 
 def eval_shape(symbolic_shape, inputs):

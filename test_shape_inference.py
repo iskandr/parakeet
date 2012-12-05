@@ -68,7 +68,7 @@ def incr(xi):
 from parakeet import each 
 
 def simple_map(x):
-  return each(incr, x, axis = 0)
+  return each(incr, x)
 
 def test_simple_map_1d():
   expect_shape(simple_map, [vec], array(Var(0)))
@@ -77,7 +77,7 @@ def test_simple_map_2d():
   expect_shape(simple_map, [mat], array(Var(0), Var(1)))
 
 def map_increase_rank(x):
-  return each(increase_rank, x, axis = 0)
+  return each(increase_rank, x)
 
 def test_map_increase_rank_1d():
   expect_shape(map_increase_rank, [vec], array(Var(0), 2))
