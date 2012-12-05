@@ -131,13 +131,9 @@ def linearize_actual_args(fn, args):
     combined_args = [x for x in (linear_args + extra) if x]
     return untyped_fn, combined_args, arg_types
 
-
+"""
 def get_invoke_specialization(closure_t, arg_types):
-  """
-  for a given closure and the direct argument types it
-  receives when invokes, return the specialization which
-  will ultimately get called
-  """
+
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
   if arg_types in closure_t.specializations:
@@ -147,6 +143,7 @@ def get_invoke_specialization(closure_t, arg_types):
   typed =  specialize(untyped_fundef, full_arg_types)
   closure_t.specializations[arg_types] = typed 
   return typed 
+"""
 
 _invoke_type_cache = {}
 
@@ -175,7 +172,7 @@ def invoke_result_type(fn, arg_types):
 
   result_type = core_types.Unknown
   for closure_t in closure_set.closures:
-    typed_fundef = get_invoke_specialization(closure_t, arg_types)
+    typed_fundef = specialize(closure_t, arg_types)
     result_type = result_type.combine(typed_fundef.return_type)
   _invoke_type_cache[key] = result_type
   return result_type
@@ -575,37 +572,54 @@ def infer_types(untyped_fn, types):
     return_type = return_type,
     type_env = tenv)
 
-def specialize(untyped, arg_types):
-  
-  if isinstance(untyped, str):
-    untyped = untyped_ast.Fn.registry[untyped]
+def _specialize(untyped_fundef, arg_types):
+  """
+  Do the actual work of type specialization, 
+  whereas the wrapper 'specialize' pulls out 
+  untyped functions from closures, wraps
+  argument lists in ActualArgs objects and 
+  performs memoization
+  """
+  typed_fundef = infer_types(untyped_fundef, arg_types)
+  from rewrite_typed import rewrite_typed
+  coerced_fundef = rewrite_typed(typed_fundef)
 
-  else:
-    assert isinstance(untyped, untyped_ast.Fn)
+  import optimize
+  return optimize.optimize(coerced_fundef, copy = False)
   
+
+def _get_fundef(fn):
+  if isinstance(fn, untyped_ast.Fn):
+    return fn
+  else:
+    assert isinstance(fn, str)   
+    return untyped_ast.Fn.registry[fn]
+
+def _get_closure_type(fn):
+  if isinstance(fn, closure_type.ClosureT):
+    return fn
+  else:
+    print fn 
+    fundef = _get_fundef(fn)
+    print fundef 
+    return fundef.type 
+  
+
+def specialize(fn, arg_types):
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
-
-  try:
-    return untyped.specializations[arg_types]
-  except:
-    typed_fundef = infer_types(untyped, arg_types)
-    from rewrite_typed import rewrite_typed
-    coerced_fundef = rewrite_typed(typed_fundef)
-
-    import optimize
-    # TODO: Also store the unoptimized version
-    # so we can do adaptive recompilation
-    opt = optimize.optimize(coerced_fundef, copy = False)
-    untyped.specializations[arg_types] = opt 
+  closure_t = _get_closure_type(fn)
+  if arg_types in closure_t.specializations:
+    return closure_t.specializations[arg_types]
+  full_arg_types = arg_types.prepend_positional(closure_t.arg_types)
+  fundef = _get_fundef(closure_t.fn)
+  # untyped_fundef, full_arg_types = linearize_arg_types(closure_t, arg_types)
+  typed =  _specialize(fundef, full_arg_types)
+  #untyped_fundef.specializations[arg_types] = opt 
+  closure_t.specializations[arg_types] = typed
+  print "SPECIALIZED", typed 
+  return typed 
     
-    # import lowering
-    # lowered = lowering.lower(opt, copy = True, tile = False)
-    # tiled = lowering.lower(opt, copy = True, tile = True)
-    # opt.lowered = lowered
-    # opt.tiled = tiled
-    return opt
-
 def infer_return_type(untyped, arg_types):
   """
   Given a function definition and some input types,
@@ -615,7 +629,12 @@ def infer_return_type(untyped, arg_types):
   """
   typed = specialize(untyped, arg_types)
   return typed.return_type
-
+"""
+def specialize_Map(map_fn, array_types, axis):
+  elt_types = array_type.lower_ranks(array_types, 1)
+  typed_map_fn = specialize(map_fn)
+  
+"""  
 import adverb_semantics
 
 class AdverbTypeSemantics(adverb_semantics.AdverbSemantics):

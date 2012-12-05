@@ -25,7 +25,7 @@ class CodegenSemantics(Transform):
       typed_fn = closure
       closure_args = [] 
     else:
-      typed_fn = type_inference.get_invoke_specialization(closure.type, arg_types)
+      typed_fn = type_inference.specialize(closure.type, arg_types)
       closure_args = self.closure_elts(closure)
       
     import lowering

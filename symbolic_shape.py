@@ -300,11 +300,14 @@ class Closure(AbstractValue):
     raise ValueMismatch(self, other)  
 
 
-def combine_list(xs):
+def combine_list(xs, preserve_const = True):
   acc = unknown_value
   for x in xs:
     acc = acc.combine(x)
+  if not preserve_const and isinstance(acc, Const):
+    acc = unknown_scalar 
   return acc 
+    
 
 def combine_pairs(xs, ys):
   return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]

@@ -48,7 +48,20 @@ class ActualArgs(object):
       new_keywords[new_name] = new_value
     new_starargs = fn(self.starargs) if self.starargs else None
     return ActualArgs(new_pos, new_keywords, new_starargs)
-
+  
+  def __eq__(self, other):
+    if len(self.positional) != len(other.positional) or \
+       len(self.keywords) != len(other.keywords) or \
+       self.starargs != other.starargs or \
+       any(t1 != t2 for (t1, t2) in zip(self.positional, other.positional)):
+      return False 
+    for (k,v) in self.keywords.iteritems():
+      if k not in other.keywords:
+        return False 
+      if other.keywords[k] != v:
+        return False 
+    return True 
+  
   def __str__(self):
     arg_strings = []
     for p in self.positional:

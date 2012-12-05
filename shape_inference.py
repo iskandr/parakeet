@@ -211,8 +211,10 @@ class ShapeInference(SyntaxVisitor):
     return Const(expr.value)
   
   def visit_PrimCall(self, expr):
-    return unknown_scalar 
-  
+    arg_shapes = self.visit_expr_list(expr.args)
+    return symbolic_shape.combine_list(arg_shapes, preserve_const = False)
+    
+    
   def visit_Var(self, expr):
     name = expr.name
     if name in self.value_env: 
