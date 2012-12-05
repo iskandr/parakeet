@@ -1,7 +1,7 @@
 import adverbs
 import array_type
 import core_types
-import lower_adverbs
+import lowering
 import numpy as np
 import syntax
 import syntax_helpers
@@ -63,31 +63,29 @@ def map_id(X):
 #  _, typed, _, _ = specialize_and_compile(vm, [x_array, x_array])
 #  print typed
 #  tiling_transform = tile_adverbs.TileAdverbs()
-
-def test_map_tiling():
-  _, typed, _, _ = specialize_and_compile(map_id, [x_array])
-  print typed
-  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
-  new_fn = tiling_transform.apply(copy=True)
-  print new_fn
-  assert isinstance(new_fn, syntax.TypedFn)
+#
+#def test_map_tiling():
+#  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
+#  new_fn = tiling_transform.apply(copy=True)
+#  print new_fn
+#  assert isinstance(new_fn, syntax.TypedFn)
 #
 #def test_id_tiling():
 #  tiling_transform = tile_adverbs.TileAdverbs(id_fn_2)
 #  new_fn = tiling_transform.apply(copy=True)
 #  assert isinstance(new_fn, syntax.TypedFn)
 
-#def test_lowering():
+def test_lowering():
 #  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
 #  new_fn = tiling_transform.apply(copy=True)
+#  print new_fn
 #  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
 #  new_fn_2 = lower_tiling.apply(copy=True)
 #  assert isinstance(new_fn_2, syntax.TypedFn)
 #  print new_fn_2
-#  la = lower_adverbs.LowerAdverbs(new_fn_2)
-#  new_fn_3 = la.apply(copy=True)
-#  assert isinstance(new_fn_3, syntax.TypedFn)
-#  print new_fn_3
+  new_fn = lowering.lower(map2_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  print new_fn
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
