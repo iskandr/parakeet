@@ -1,7 +1,7 @@
 import numpy as np 
 
 import shape_inference
-from shape_inference import call_shape_expr, unknown_scalar, const, array
+from shape_inference import call_shape_expr, unknown_scalar, const
 from shape_inference import Shape, Var 
 import parakeet 
 import testing_helpers
@@ -36,7 +36,7 @@ def array_literal():
   return [1,2,3]
 
 def test_array_literal():
-  expect_shape(array_literal, [], array(3))
+  expect_shape(array_literal, [], Shape([3]))
 
 vec = np.array([1,2,3])
 mat = np.array([[1,2,3],[4,5,6],[7,8,9]])
@@ -45,22 +45,22 @@ def ident(x):
   return x  
 
 def test_ident_1d():
-  expect_shape(ident, [vec], array(Var(0)))
+  expect_shape(ident, [vec], Shape([Var(0)]))
 
 def test_ident_2d():
-  expect_shape(ident, [mat], array(Var(0), Var(1)))
+  expect_shape(ident, [mat], Shape([Var(0), Var(1)]))
   
 def increase_rank(x):
   return [x,x]
 
 def test_increase_rank_1d():
-  expect_shape(increase_rank, [1], array(2))
+  expect_shape(increase_rank, [1], Shape([2]))
 
 def test_increase_rank_2d():
-  expect_shape(increase_rank, [vec], array(2, Var(0)))
+  expect_shape(increase_rank, [vec], Shape([2, Var(0)]))
 
 def test_increase_rank_3d():
-  expect_shape(increase_rank, [mat], array(2, Var(0), Var(1)))
+  expect_shape(increase_rank, [mat], Shape([2, Var(0), Var(1)]))
 
 def incr(xi):
   return xi + 1
@@ -71,19 +71,19 @@ def simple_map(x):
   return each(incr, x)
 
 def test_simple_map_1d():
-  expect_shape(simple_map, [vec], array(Var(0)))
+  expect_shape(simple_map, [vec], Shape([Var(0)]))
 
 def test_simple_map_2d():
-  expect_shape(simple_map, [mat], array(Var(0), Var(1)))
+  expect_shape(simple_map, [mat], Shape([Var(0), Var(1)]))
 
 def map_increase_rank(x):
   return each(increase_rank, x)
 
 def test_map_increase_rank_1d():
-  expect_shape(map_increase_rank, [vec], array(Var(0), 2))
+  expect_shape(map_increase_rank, [vec], Shape([Var(0), 2]))
 
 def test_map_increase_rank_2d():  
-  expect_shape(simple_map, [mat], array(Var(0), Var(1)))
+  expect_shape(simple_map, [mat], Shape([Var(0), Var(1)]))
 
 
 if __name__ == '__main__':

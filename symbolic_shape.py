@@ -167,10 +167,12 @@ class Shape(AbstractValue):
   def combine(self, other):
     if isinstance(other, Shape) and other.rank == self.rank:
       dims = combine_pairs(self.dims, other.dims)
-      return array(*dims)
+      return make_shape(dims)
     raise ValueMismatch(self, other)
 
-def array(*dims):
+def make_shape(dims):
+  if len(dims) == 0:
+    return unknown_scalar
   return Shape(dims) 
 
 
@@ -202,7 +204,7 @@ def lower_rank(x, axis):
   for (i,d) in enumerate(x.dims):
     if i != axis:
       new_dims.append(d)
-  return array(*new_dims)
+  return make_shape(new_dims)
 
 def lower_ranks(xs, axis):
   return [lower_rank(x, axis) for x in xs]
@@ -225,7 +227,7 @@ def increase_rank(x, axis, dim_expr):
     else:
       new_dims = [d for d in x.dims]
       new_dims.append(dim_expr)
-    return array(*new_dims)
+    return make_shape(new_dims)
   elif is_scalar(x):
     return Shape([dim_expr])        
   else:

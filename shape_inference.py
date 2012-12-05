@@ -7,12 +7,13 @@ import array_type
 import tuple_type 
 import closure_type 
 from symbolic_shape import \
-  Var, Const, Shape, Tuple, Closure, Slice, Scalar, UnknownScalar, Unknown 
-from symbolic_shape import unknown_scalar, unknown_value, const, array 
+  Var, Const, Shape, Tuple, Closure, Slice, Scalar, UnknownScalar, Unknown
+from symbolic_shape import unknown_scalar, unknown_value, const 
 from symbolic_shape import combine_list, increase_rank, lower_ranks, dim_list 
-from symbolic_shape import is_one, is_zero 
+from symbolic_shape import is_one, is_zero, make_shape 
 
 import symbolic_shape  
+from scipy.stats.distributions import arr
 
 class InputConverter():
   """
@@ -61,6 +62,9 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
   def size_along_axis(self, value, axis):
     assert isinstance(value, Shape)
     return value.dims[axis]
+  
+  #def slice_along_axis(self, arr, axis, idx):
+  #  assert False, (arr, axis, idx)
     
   def is_tuple(self, x):
     return isinstance(x, Tuple)
@@ -109,8 +113,43 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     return Shape(dims)
   
   def index(self, arr, idx):
-    return unknown_scalar
 
+    if isinstance(arr, Scalar):
+      return arr
+    assert isinstance(arr, Shape )
+    if isinstance(idx, Scalar):
+      indices = [idx]
+    elif isinstance(idx, Tuple):
+      indices = idx.elts 
+    result_dims = [] 
+    for (i, curr_idx) in enumerate(indices):
+      old_dim = arr.dims[i]
+      if curr_idx is None or \
+        (isinstance(curr_idx, Scalar) and curr_idx.value is None):
+        print "old dim survives", old_dim 
+        result_dims.append(old_dim)
+      elif isinstance(curr_idx, Scalar):
+        pass 
+      else:
+        assert isinstance(curr_idx, Slice), "Unsupported index %s" % curr_idx
+
+        lower = curr_idx.start if curr_idx.start else const(0)
+        if isinstance(lower, Const) and lower.value < 0:
+          lower = self.sub(old_dim, lower)
+        upper = idx.stop if curr_idx.stop else old_dim 
+        if isinstance(upper, Const) and upper.value < 0:
+          upper = self.sub(old_dim, upper)
+        n = self.sub(curr_idx.stop, curr_idx.start)
+        if idx.step:
+          n = self.div(curr_idx.step)
+        result_dims.append(n)
+    n_original = len(arr.dims)
+    n_idx= len(indices)
+    if n_original > n_idx:
+      result_dims.extend(arr.dims[n_idx:])
+    print "Result of indexing into", arr, "with", idx, "is", result_dims 
+    return make_shape(result_dims) 
+      
   def tuple(self, elts):
     return Tuple(tuple(elts))
 
@@ -292,7 +331,7 @@ class ShapeInference(SyntaxVisitor):
   
 _symbolic_shape_cache = {}
 def call_shape_expr(typed_fn):
-
+  
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
     
@@ -336,7 +375,7 @@ def subst(x, env):
   elif isinstance(x, Scalar):
     return x 
   elif isinstance(x, Shape):
-    return array(*subst_list(x.dims, env))
+    return make_shape(subst_list(x.dims, env))
   elif isinstance(x, Tuple):
     return tuple(*subst_list(x.elts, env))
   elif isinstance(x, Closure):
@@ -354,6 +393,12 @@ def symbolic_call(typed_fn, abstract_inputs):
   abstract_result_value = call_shape_expr(typed_fn)
   shape_formals = InputConverter().values_from_types(typed_fn.input_types)
   env = {}
+  print 
+  print "Symbolic call into ", typed_fn
+  print repr(typed_fn)
+  print "result", abstract_result_value 
+  print "shape_formals", shape_formals
+  print "inputs", abstract_inputs
   bind_pairs(shape_formals, abstract_inputs, env)
   return subst(abstract_result_value, env)
   
