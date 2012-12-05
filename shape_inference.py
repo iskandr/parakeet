@@ -15,47 +15,6 @@ from symbolic_shape import is_one, is_zero, make_shape
 import symbolic_shape  
 from scipy.stats.distributions import arr
 
-class InputConverter():
-  """
-  Turn a list of input types into a list of abstract values, 
-  numbering the input arrays and scalars but preserving the 
-  structure of tuples, closures, and slices
-  """
-  def __init__(self):
-    self.counter = 0
-  
-  def fresh_var(self):
-    n = self.counter 
-    self.counter += 1
-    return Var(n)
-    
-  def value_from_type(self, t):
-    if isinstance(t, core_types.ScalarT):
-      return self.fresh_var()
-    elif isinstance(t, array_type.ArrayT):
-      dim_vars = [self.fresh_var() for _ in range(t.rank)]
-      return Shape(dim_vars) 
-    elif isinstance(t, tuple_type.TupleT):
-      elt_values = self.values_from_types(t.elt_types)
-      return Tuple(elt_values) 
-    elif isinstance(t, array_type.SliceT):
-      start = self.value_from_type(t.start_type)
-      stop = self.value_from_type(t.stop_type)
-      step = self.value_from_type(t.step_type)
-      return Slice(start, stop, step)
-    elif isinstance(t, closure_type.ClosureT):
-      arg_vals = self.values_from_types(t.arg_types)
-      return Closure(t.fn, arg_vals) 
-    else:
-      assert False, "Unsupported type: %s" % t
-    
-  def values_from_types(self, arg_types):
-    values = []
-    for t in arg_types:
-      v = self.value_from_type(t)
-      values.append(v)
-    return values
-
 import adverb_semantics
 
 class ShapeSemantics(adverb_semantics.AdverbSemantics):
@@ -247,12 +206,34 @@ class ShapeInference(SyntaxVisitor):
   def visit_merge(self, merge):
     for (k, (l,r)) in merge.iteritems():
       self.value_env[k] = l.combine(r)
-      
+
+  def visit_Alloc(self, expr):
+    # alloc doesn't return an array but rather 
+    # a pointer whose shape properties 
+    # we don't yet care about here
+    return unknown_value 
+  
+  def visit_Struct(self, expr):
+    assert isinstance(expr.type, array_type.ArrayT) 
+    shape_tuple = self.visit_expr(expr.args[1])
+    return make_shape(shape_tuple.elts)
+    
   def visit_Const(self, expr):
     return const(expr.value)
   
+  def visit_TupleProj(self, expr):
+    t = self.visit_expr(expr.tuple) 
+    assert isinstance(t, Tuple)
+    return t.elts[expr.index]
   
-  
+  def visit_Attribute(self, expr):
+    v = self.visit_expr(expr.value)
+
+    if isinstance(v, Shape) and expr.name =='shape':
+      return Tuple(v.dims)
+    else:
+      return unknown_value
+    
   def visit_PrimCall(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     return symbolic_shape.combine_list(arg_shapes, preserve_const = False)
@@ -286,27 +267,39 @@ class ShapeInference(SyntaxVisitor):
     return fn
     
   def visit_Map(self, expr):
-    axis = expr.axis 
+
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
-    return shape_semantics.eval_map(fn, arg_shapes, axis)
+    return shape_semantics.eval_map(fn, arg_shapes, expr.axis)
   
   def visit_Reduce(self, expr):
-    axis = expr.axis 
-    fn = expr.fn 
-    combine = expr.combine 
+    fn = self.visit_expr(expr.fn) 
+    combine = self.visit_expr(expr.combine) 
     arg_shapes = self.visit_expr_list(expr.args)
     init = self.visit_expr(self.init) if self.init else None 
-    shape_semantics.eval_reduce(fn, combine, init, arg_shapes, axis)
+    shape_semantics.eval_reduce(fn, combine, init, arg_shapes, expr.axis)
+  
+  def visit_Scan(self, expr):
+
+    fn = self.visit_expr(expr.fn) 
+    combine = self.visit_expr(expr.combine) 
+    emit = self.visit_expr(expr.emit)
+    arg_shapes = self.visit_expr_list(expr.args)
+    init = self.visit_expr(self.init) if self.init else None 
+    shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes, expr.axis)
+  
+  def visit_AllPairs(self, expr):
+    axis = self.visit_expr(expr.axis) 
+    arg_shapes = self.visit_expr_list(expr.args)
+    fn = self.visit_expr(expr.fn)
+    return shape_semantics.eval_allpairs(fn, arg_shapes, axis)
   
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
       assert isinstance(rhs, Tuple)
       for l,r in zip(lhs.elts, rhs.elts):
         self.bind(l,r)
-    else:
-      assert isinstance(lhs, syntax.Var), \
-        "Unexpected LHS: " + str(lhs)
+    elif isinstance(lhs, syntax.Var):
       self.value_env[lhs.name] = rhs 
       
   def visit_Assign(self, stmt):
@@ -331,7 +324,9 @@ class ShapeInference(SyntaxVisitor):
   
 _symbolic_shape_cache = {}
 def call_shape_expr(typed_fn):
-  
+  print 
+  print "Symbolic call into ", typed_fn
+  print repr(typed_fn)
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
     
@@ -348,7 +343,7 @@ def call_shape_expr(typed_fn):
 
 def bind(lhs, rhs, env):
   if isinstance(lhs, Var):
-    env[lhs.num] = rhs 
+    env[lhs] = rhs 
   elif isinstance(lhs, Shape):
     assert isinstance(rhs, Shape), \
       "Expected %s, got %s" % (lhs, rhs)
@@ -370,11 +365,14 @@ def bind_pairs(xs, ys, env):
   
 def subst(x, env):
   if isinstance(x, Var):
+    print type(x)
+    
     assert x in env, "Unknown variable %s" % x
     return env[x]
   elif isinstance(x, Scalar):
     return x 
   elif isinstance(x, Shape):
+
     return make_shape(subst_list(x.dims, env))
   elif isinstance(x, Tuple):
     return tuple(*subst_list(x.elts, env))
@@ -387,19 +385,65 @@ def subst_list(xs, env):
   return [subst(x, env) for x in xs]
 
 
+class InputConverter():
+  """
+  Turn a list of input types into a list of abstract values, 
+  numbering the input arrays and scalars but preserving the 
+  structure of tuples, closures, and slices
+  """
+  def __init__(self):
+    self.counter = 0
+  
+  def fresh_var(self):
+    n = self.counter 
+    self.counter += 1
+    return Var(n)
+    
+  def value_from_type(self, t):
+    if isinstance(t, core_types.ScalarT):
+      return self.fresh_var()
+    elif isinstance(t, array_type.ArrayT):
+      dim_vars = [self.fresh_var() for _ in range(t.rank)]
+      return Shape(dim_vars) 
+    elif isinstance(t, tuple_type.TupleT):
+      elt_values = self.values_from_types(t.elt_types)
+      return Tuple(elt_values) 
+    elif isinstance(t, array_type.SliceT):
+      start = self.value_from_type(t.start_type)
+      stop = self.value_from_type(t.stop_type)
+      step = self.value_from_type(t.step_type)
+      return Slice(start, stop, step)
+    elif isinstance(t, closure_type.ClosureT):
+      arg_vals = self.values_from_types(t.arg_types)
+      return Closure(t.fn, arg_vals) 
+    else:
+      assert False, "Unsupported type: %s" % t
+    
+  def values_from_types(self, arg_types):
+    values = []
+    for t in arg_types:
+      v = self.value_from_type(t)
+      values.append(v)
+    return values
+
+
 
 def symbolic_call(typed_fn, abstract_inputs):
+
+  
+  
   # result in terms of variables like input0, (shape: input1, input2), etc..
   abstract_result_value = call_shape_expr(typed_fn)
+  
+  print "result", abstract_result_value 
+  
   shape_formals = InputConverter().values_from_types(typed_fn.input_types)
   env = {}
-  print 
-  print "Symbolic call into ", typed_fn
-  print repr(typed_fn)
-  print "result", abstract_result_value 
+  
   print "shape_formals", shape_formals
   print "inputs", abstract_inputs
   bind_pairs(shape_formals, abstract_inputs, env)
+  print env 
   return subst(abstract_result_value, env)
   
   

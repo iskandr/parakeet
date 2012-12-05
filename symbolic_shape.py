@@ -173,7 +173,7 @@ class Shape(AbstractValue):
 def make_shape(dims):
   if len(dims) == 0:
     return unknown_scalar
-  return Shape(dims) 
+  return Shape(tuple(dims)) 
 
 
 def dim(shape, d):
@@ -261,7 +261,7 @@ class Slice(AbstractValue):
 
 class Tuple(AbstractValue):
   def __init__(self, elts):
-    self.elts = elts 
+    self.elts = tuple(elts) 
     
   def __eq__(self, other):
     return isinstance(other, Tuple) and \
