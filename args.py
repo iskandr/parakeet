@@ -117,11 +117,11 @@ class FormalArgs(object):
     self.nonlocals = self.nonlocals  + tuple(localized_names)
 
     for (k,p) in self.positions.items():
-      if p < n_old_nonlocals:
-        self.positions[k] = p + n_new_nonlocals
-      else:
+      if p > n_old_nonlocals:
         self.positions[k] = p + total_nonlocals
-
+    for (i, k) in enumerate(localized_names):
+      self.positions[k] = n_old_nonlocals + i 
+    
   def __str__(self):
     strs = []
     for local_name in self.positional:
@@ -134,6 +134,8 @@ class FormalArgs(object):
       strs.append(s)
     if self.starargs:
       strs.append("*" + str(self.starargs))
+    if self.nonlocals:
+      strs.append("nonlocals = (%s)" % ", ".join(self.nonlocals))
     return ", ".join(strs)
 
   def __repr__(self):
@@ -175,7 +177,7 @@ class FormalArgs(object):
     if isinstance(actuals, (list, tuple)):
       actuals = ActualArgs(actuals)
 
-    positional_values =  actuals.positional
+    positional_values = actuals.positional
 
     if actuals.starargs:
       starargs_elts = tuple(tuple_elts_fn(actuals.starargs))
@@ -211,8 +213,8 @@ class FormalArgs(object):
       i = self.positions[local_name]
       if not bound[i]:
         assign(i, keyword_fn(local_name, v) if keyword_fn else v)
-
-    missing_args = [self.positional[i] for i in xrange(n) if not bound[i]]
+    arg_slots = self.nonlocals + tuple(self.positional)
+    missing_args = [arg_slots[i] for i in xrange(n) if not bound[i]]
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
 
@@ -222,7 +224,7 @@ class FormalArgs(object):
     args = FormalArgs()
 
     args.prepend_nonlocal_args(map(rename_fn, self.nonlocals))
-
+    
     for old_local_name in self.positional:
       new_local_name = rename_fn(old_local_name)
       visible_name = self.visible_names.get(old_local_name)

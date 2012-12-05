@@ -355,9 +355,9 @@ def compile_block(stmts, env, builder):
 compiled_functions = {}
 import lowering
 def compile_fn(fundef):
-  print 
-  print "Compiling", fundef 
-  print 
+  #print 
+  #print "Compiling", fundef 
+  #print 
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   fundef = lowering.lower(fundef)

@@ -10,10 +10,7 @@ class AdverbSemantics(object):
   and make them work for some other domain (such as types,
   shapes, or compiled expressions)
   """
-  def invoke_delayed(self, fn, args, idx):
-    curr_args = [x(idx) for x in args]
-    return self.invoke(fn, curr_args)
-    
+  
   def build_slice_indices(self, rank, axis, idx):
     if rank == 1:
       assert axis == 0
@@ -57,10 +54,13 @@ class AdverbSemantics(object):
     elts = map(delay, xs)
 
     def delayed_map_result(idx):
-      return self.invoke_delayed(map_fn, elts, idx)
+      curr_args = [x(idx) for x in elts]
+      return self.invoke(map_fn, curr_args)
+      
     return axis_sizes[0], delayed_map_result
 
   def acc_prelude(self, init, combine, delayed_map_result):
+     
     if init is None or self.is_none(init):
       init = delayed_map_result(self.int(0))
     else:

@@ -226,6 +226,7 @@ def annotate_expr(expr, tenv, var_map):
     closure = annotate_child(expr.fn)
     args = annotate_args(expr.args)
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
+    
     typed_fn = specialize(untyped_fn, arg_types)
     return typed_ast.Call(typed_fn, args, typed_fn.return_type)
   
@@ -348,14 +349,17 @@ def annotate_expr(expr, tenv, var_map):
     arg_types = get_types(new_args)
     axis = unwrap_constant(expr.axis)
     init = annotate_child(expr.init) if expr.init else None
-    result_type = infer_scan_type(map_fn, combine_fn, arg_types, axis)
+    result_type = infer_scan_type(
+                    map_fn.type, combine_fn.type, emit_fn.type, 
+                    get_type(init) if init else None, 
+                    arg_types, axis)
     return adverbs.Scan(fn = map_fn,
                           combine = combine_fn,
                           emit = emit_fn,
                           args = new_args,
                           axis = axis,
                           type = result_type,
-                          init = get_type(init) if init else None)
+                          init = init)
 
   def expr_AllPairs():
     closure = annotate_child(expr.fn)
