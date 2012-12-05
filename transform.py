@@ -1,4 +1,3 @@
-
 import names
 import syntax
 
@@ -16,7 +15,7 @@ class Transform(Codegen):
     return self.type_env[name]
 
   def transform_TypedFn(self, fn):
-    return fn 
+    return fn
     #nested_transform = self.__class__(fn)
     #return nested_transform.apply(copy = self.copy)
 
@@ -87,7 +86,6 @@ class Transform(Codegen):
     return result
 
   def transform_Assign(self, stmt):
-
     rhs = self.transform_expr(stmt.rhs)
     lhs = self.transform_lhs(stmt.lhs)
     return syntax.Assign(lhs, rhs)

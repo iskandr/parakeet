@@ -63,14 +63,14 @@ def create_adverb_hook(adverb_class,
   return python_hook
 
 each = create_adverb_hook(adverbs.Map, map_fn_name = 'f')
-allpairs = create_adverb_hook(adverbs.AllPairs, 
-                              map_fn_name = 'f', 
+allpairs = create_adverb_hook(adverbs.AllPairs,
+                              map_fn_name = 'f',
                               arg_names = ['x', 'y'])
-reduce = create_adverb_hook(adverbs.Reduce, 
-                            combine_fn_name = 'f', 
+reduce = create_adverb_hook(adverbs.Reduce,
+                            combine_fn_name = 'f',
                             arg_names = ['x'])
-scan = create_adverb_hook(adverbs.Scan, 
-                          combine_fn_name = 'f', 
+scan = create_adverb_hook(adverbs.Scan,
+                          combine_fn_name = 'f',
                           arg_names = ['x'])
 
 try:
@@ -202,12 +202,9 @@ def par_each(fn, *args, **kwds):
     rt.run_untiled_job(wf_ptr, c_args_array, num_iters)
     output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
 
-
     output_contents = [ptr.contents for ptr in output_ptrs]
 
-
     outputs = [map_result_type.to_python(x) for x in output_contents]
-
 
     #TODO: Have to handle concatenation axis
     result = np.concatenate(outputs)

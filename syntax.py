@@ -1,7 +1,8 @@
-import core_types
 import args
-from node import Node
+import core_types
+
 from args import ActualArgs
+from node import Node
 
 class Stmt(Node):
   pass
@@ -34,19 +35,19 @@ class Return(Stmt):
 
 class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
-  
+
   def __str__(self):
     s = "if %s:%s\nelse:%s\n" %\
-           (self.cond, 
-            block_to_str(self.true), 
+           (self.cond,
+            block_to_str(self.true),
             block_to_str(self.false),
            )
     if len(self.merge) > 0:
       s+= "(merge-branches)%s\n" % (phi_nodes_to_str(self.merge))
-    return s 
-  
+    return s
+
   def __repr__(self):
-    return str(self) 
+    return str(self)
 
 class While(Stmt):
   """A loop consists of a header, which runs
@@ -132,7 +133,7 @@ class Call(Expr):
 
   def __str__(self):
     if isinstance(self.fn, (Fn, TypedFn)):
-      fn_name = self.fn.name 
+      fn_name = self.fn.name
     else:
       fn_name = str(self.fn)
     if isinstance(self.args, ActualArgs):
@@ -204,10 +205,10 @@ class Fn(Expr):
   its enclosing Parakeet scope, whose original names are stored in
   'parakeet_nonlocals'
   """
-  
+
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
   registry = {}
-  
+
   def __str__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
 
@@ -216,22 +217,22 @@ class Fn(Expr):
 
   def __hash__(self):
     return hash(self.name)
-  
+
   def node_init(self):
     assert isinstance(self.name, str), \
       "Expected string for fn name, got %s" % self.name
-      
+
     assert isinstance(self.args, args.FormalArgs), \
       "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
       "Expected body of fn to be list of statements, got " + str(self.body)
 
-    
+
     self.specializations = {}
     import closure_type
     self.type = closure_type.ClosureT(self.name, ())
-    self.registry[self.name]  = self 
-    
+    self.registry[self.name]  = self
+
   def python_nonlocals(self):
     if self.python_refs:
       return [ref.deref() for ref in self.python_refs]
@@ -304,26 +305,26 @@ class TypedFn(Expr):
   registry = {}
   def node_init(self):
     assert isinstance(self.body, list), \
-      "Invalid body for typed function: %s" % (self.body,) 
+      "Invalid body for typed function: %s" % (self.body,)
     assert isinstance(self.arg_names, (list, tuple)), \
       "Invalid typed function arguments: %s" % (self.arg_names,)
     assert isinstance(self.name, str), \
       "Invalid typed function name: %s" % (self.name,)
-    
+
     if isinstance(self.input_types, list):
       self.input_types = tuple(self.input_types)
-      
+
     assert isinstance(self.input_types, tuple), \
       "Invalid input types: %s" % (self.input_types,)
     assert isinstance(self.return_type, core_types.Type), \
       "Invalid return type: %s" % (self.return_type,)
     assert isinstance(self.type_env, dict), \
       "Invalid type environment: %s" % (self.type_env,)
-    
+
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
-    
+
     assert self.name not in self.registry, \
-      "Typed function already registered: %s" % self.name 
+      "Typed function already registered: %s" % self.name
     self.registry[self.name] = self
 
   def __repr__(self):
@@ -332,11 +333,11 @@ class TypedFn(Expr):
       arg_strings.append("%s : %s" % (name, self.type_env.get(name)))
     return "function %s(%s) => %s:%s" % \
       (self.name, ", ".join(arg_strings),
-       self.return_type,  
+       self.return_type,
        block_to_str(self.body))
 
   def __str__(self):
     return repr(self)
-  
+
   def __hash__(self):
     return hash(self.name)

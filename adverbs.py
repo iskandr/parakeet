@@ -7,7 +7,6 @@ class Adverb(syntax.Expr):
     assert self.fn is not None
     assert self.args is not None
 
-
   def fn_to_str(self, fn):
 #    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
 #      return fn.name
