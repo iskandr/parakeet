@@ -160,6 +160,7 @@ class Shape(AbstractValue):
   
   def __repr__(self):
     return str(self)
+
   
   def combine(self, other):
     if isinstance(other, Shape) and other.rank == self.rank:
@@ -274,6 +275,9 @@ class Tuple(AbstractValue):
   def __str__(self):
     return "Tuple(%s)" % ", ".join(str(e) for e in self.elts)
   
+  def __getitem__(self, idx):
+    return self.elts[idx]
+  
   def combine(self, other):
     if isinstance(other, Tuple):
       if len(self.elts) == len(other.elts):
@@ -307,7 +311,7 @@ class Closure(AbstractValue):
 
 def combine_list(xs, preserve_const = True):
   acc = unknown_value
-  for x in xs:
+  for x in xs: 
     acc = acc.combine(x)
   if not preserve_const and isinstance(acc, Const):
     acc = unknown_scalar 

@@ -1,7 +1,9 @@
 import syntax
 from syntax_visitor import SyntaxVisitor
  
+import core_types 
 import array_type 
+import tuple_type 
 
 import shape  
 from shape import Var, Const, Shape, Tuple, Closure
@@ -12,6 +14,7 @@ from shape import is_zero, make_shape
 
 import shape_from_type 
 import adverb_semantics
+
 
 class ShapeSemantics(adverb_semantics.AdverbSemantics):
   def size_along_axis(self, value, axis):
@@ -199,9 +202,18 @@ class ShapeInference(SyntaxVisitor):
     else:
       raise RuntimeError("Unsupported by unify: %s, %s" % (x,y))
 
-  def visit_merge(self, merge):
-    for (k, (l,r)) in merge.iteritems():
-      self.value_env[k] = l.combine(r)
+  def visit_merge(self, merge, both_branches = True):
+    if both_branches:
+      for (k, (l,r)) in merge.iteritems():
+        new_l = self.visit_expr(l)
+        new_r = self.visit_expr(r)
+        print 
+        print l, new_l 
+        print r, new_r 
+        self.value_env[k] = new_l.combine(new_r)
+    else:
+      for (k, (l, _)) in merge.iteritems():
+        self.value_env[k] = self.visit_expr(l)
 
   def visit_Alloc(self, expr):
     # alloc doesn't return an array but rather 
@@ -210,10 +222,13 @@ class ShapeInference(SyntaxVisitor):
     return unknown_value 
   
   def visit_Struct(self, expr):
-    assert isinstance(expr.type, array_type.ArrayT) 
-    shape_tuple = self.visit_expr(expr.args[1])
-    return make_shape(shape_tuple.elts)
-  
+    if isinstance(expr.type, array_type.ArrayT):
+      shape_tuple = self.visit_expr(expr.args[1])
+      return make_shape(shape_tuple.elts)
+    elif isinstance(expr.type, tuple_type.TupleT):
+      return Tuple(self.visit_expr_list(expr.args))
+    else:
+      assert False, "Unexpected struct: %s" % (expr,)
   def visit_Slice(self, expr):
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)
@@ -230,14 +245,25 @@ class ShapeInference(SyntaxVisitor):
   
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
-
-    if isinstance(v, Shape) and expr.name =='shape':
+    name = expr.name 
+    if isinstance(v, Shape) and name =='shape':
       return Tuple(v.dims)
-    else:
+    elif isinstance(v, Tuple) and name.startswith('elt'):
+      idx = int(name[3:])
+      return v[idx]
+    
+    try:
+      t = expr.value.type.field_type(name)
+      if isinstance(t, core_types.ScalarT):
+        return unknown_scalar 
+    except: 
+      print "UNKNOWN ATTRIBUTE", expr 
       return unknown_value
     
   def visit_PrimCall(self, expr):
+
     arg_shapes = self.visit_expr_list(expr.args)
+
     return shape.combine_list(arg_shapes, preserve_const = False)
     
   def visit_Var(self, expr):
@@ -264,6 +290,14 @@ class ShapeInference(SyntaxVisitor):
     fn = self.visit_expr(clos.fn)
     closure_arg_shapes = self.visit_expr_list(clos.args)
     return Closure(fn, closure_arg_shapes)
+  
+  def visit_Index(self, expr):
+    arr = self.visit_expr(expr.value)
+    idx = self.visit_expr(expr.index)
+    if isinstance(arr, Tuple) and isinstance(idx, Const):
+      return arr[idx.value]
+    else:
+      assert False, (expr, arr, idx)
   
   def visit_TypedFn(self, fn):
     return fn
@@ -313,6 +347,7 @@ class ShapeInference(SyntaxVisitor):
     old_value = self.value_env.get("$return", unknown_value)
     combined = old_value.combine(new_value)
     self.value_env["$return"] = combined 
+
     
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)

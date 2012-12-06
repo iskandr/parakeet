@@ -93,14 +93,13 @@ def combine_type_list(types):
 import abc
 
 class ConcreteT(Type):
-  __meta__ = abc.ABCMeta
+
 
   """
   Type which actually have some corresponding runtime values,
   as opposed to "Any" and "Unknown"
   """
 
-  @abc.abstractproperty
   def ctypes_repr(self):
     pass
 

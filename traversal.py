@@ -20,5 +20,5 @@ class Traversal(object):
       method = getattr(self, method_name)
       return method(x)
     else:
-      return self.visit_generic_expr(x)
+      return self.visit_generic(x)
       

@@ -56,28 +56,44 @@ class SyntaxVisitor(object):
       for s in stmts:
         self.visit_stmt(s)
   
-  def visit_generic_stmt(self, stmt):
-    if isinstance(stmt, syntax.Assign):
-      lhs = self.visit_lhs(stmt.lhs)
-      rhs = self.visit_expr(stmt.rhs)
-      return self.after_Assign(lhs, rhs)
-    elif isinstance(stmt, syntax.If):
-      cond = self.visit_expr(stmt.cond)
-      true = self.visit_block(stmt.true)
-      false = self.visit_block(stmt.false)
-      merge = self.visit_merge(stmt.merge)
-      return self.after_If(cond, true, false, merge)
-    elif isinstance(stmt, syntax.Return):
-      value = self.visit_expr(stmt.value)
-      return self.after_Return(value)
-    else:
-      assert isinstance(stmt, syntax.While), \
-        "Unexpected statement: " + str(stmt)
-      cond = self.visit_expr(stmt.cond)
-      body = self.visit_block(stmt.body)
-      merge = self.visit_merge(stmt.merge)
-      return self.after_While(cond, body, merge)
-    
+  def visit_Assign(self, stmt):
+    lhs = self.visit_lhs(stmt.lhs)
+    rhs = self.visit_expr(stmt.rhs)
+    return self.after_Assign(lhs, rhs)
+  
+  
+  def combine(self, left_value, right_value):
+    assert False, "Combine not implemented"
+  
+  def visit_merge(self, phi_nodes, both_branches = True):
+    new_merge = {}
+    for (k, (l,r)) in phi_nodes.iteritems():
+      new_left = self.visit_expr(l)
+      if both_branches:
+        new_right = self.visit_expr(r)
+        new_merge[k] = self.combine(new_left, new_right)    
+      else:
+        new_merge[k] = new_left 
+    return new_merge 
+  
+  def visit_If(self, stmt):
+    _ = self.visit_merge(stmt.merge, both_branches = False)
+    cond = self.visit_expr(stmt.cond)
+    true = self.visit_block(stmt.true)
+    false = self.visit_block(stmt.false)
+    merge = self.visit_merge(stmt.merge, both_branches = True)
+    return self.after_If(cond, true, false, merge)
+  
+  def visit_Return(self, stmt):
+    value = self.visit_expr(stmt.value)
+    return self.after_Return(value)
+  
+  def visit_While(self, stmt):
+    _ = self.visit_merge(stmt.merge, both_branches = False)
+    cond = self.visit_expr(stmt.cond)
+    body = self.visit_block(stmt.body)
+    merge = self.visit_merge(stmt.merge, both_branches = True)
+    return self.after_While(cond, body, merge)
     
   def visit_stmt(self, stmt):
     method_name = 'visit_' + stmt.node_type()

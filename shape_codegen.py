@@ -51,22 +51,26 @@ class ShapeCodegen(Traversal):
   def __init__(self, codegen, exprs):
     self.codegen = codegen
     conv = ArgConverter(codegen)
+    self.exprs = exprs 
     conv.convert_list(exprs)
     self.env = conv.env 
     
   def visit_Var(self, v):
     return self.env[v]  
   
-  def eval_Const(self, v):
+  def visit_Const(self, v):
     return syntax_helpers.const(v.value) 
     
-  def eval_Shape(self, v):
+  def visit_Shape(self, v):
     return self.visit_tuple(v.dims)
     
-  def eval_Dim(self, v):
+  def visit_Dim(self, v):
     return self.visit(v.array)[v.dim]
+  
+  def visit_UnknownScalar(self, v):
+    return self.codegen.tuple(())
     
-  def eval_Tuple(self, v):
+  def visit_Tuple(self, v):
     return self.visit_tuple(v.elts)
     
   def binop(self, op_name, v):
@@ -75,23 +79,26 @@ class ShapeCodegen(Traversal):
     op = getattr(self.codegen, op_name)
     return op(x,y)
    
-  def eval_Sub(self, v):
+  def visit_Sub(self, v):
     return self.binop('sub', v)
     
-  def eval_Add(self, v):
+  def visit_Add(self, v):
     return self.binop('add', v)
     
-  def eval_Mult(self, v):
+  def visit_Mult(self, v):
     return self.binop('mult', v)
       
-  
-  def eval_Div(self, v):
+  def visit(self, shape):
+    print "Visiting", shape 
+    return Traversal.visit(self, shape)
+    
+  def visit_Div(self, v):
     return self.binop('div', v)
    
-  def eval_Mod(self, v):
+  def visit_Mod(self, v):
     return self.binop('mod', v)
   
-  def eval_Closure(self, v):
+  def visit_Closure(self, v):
     assert False, "Unexpected closure in result shape: %s" % (v,)
     
 def make_shape_expr(codegen, symbolic_shape, input_exprs):
