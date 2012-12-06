@@ -10,6 +10,10 @@ from core_types import Int32, Int64
 from nested_blocks import NestedBlocks
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, zero
 
+import shape_inference
+import shape_codegen
+    
+
 class Codegen(object):
   def __init__(self):
     self.type_env = {}
@@ -419,6 +423,16 @@ class Codegen(object):
     array = syntax.Struct([ptr_var, shape, strides], type = array_t)
     return self.assign_temp(array, name)
 
+  def alloc_output_array(self, fn, args, name = "output"):
+    """
+    Given a function and its argument, use shape inference
+    to figure out the result shape of the array and preallocate it 
+    """
+
+    symbolic_shape = shape_inference.call_shape_expr(fn)
+    shape_expr = shape_codegen.make_shape_expr(self, symbolic_shape, args)
+    elt_t = self.elt_type(fn.return_type)
+    return self.alloc_array(elt_t, shape_expr, name)
 
   def rank(self, value):
     if self.is_array(value):

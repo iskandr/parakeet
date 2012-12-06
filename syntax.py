@@ -81,6 +81,14 @@ class Const(Expr):
   def __str__(self):
     return repr(self)
 
+  def __hash__(self):
+    return hash(self.value)
+  
+  def __eq__(self, other):
+    return self.__class__ == other.__class__ and \
+      self.type == other.type and \
+      self.value == other.value 
+  
 class Var(Expr):
   _members = ['name']
 
@@ -92,6 +100,14 @@ class Var(Expr):
 
   def __str__(self):
     return self.name
+  
+  def __hash__(self):
+    return hash(self.name)
+  
+  def __eq__(self, other):
+    return self.__class__ == other.__class__ and \
+      self.type == other.type and \
+      self.name == other.name
 
 class Attribute(Expr):
   _members = ['value', 'name']

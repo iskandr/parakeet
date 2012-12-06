@@ -29,7 +29,7 @@ def untyped_wrapper(adverb_class,
   the data args and unpacked varargs tuple. 
   """
   axis = syntax_helpers.wrap_if_constant(axis)
-  key = adverb_class, \
+  key = adverb_class.__name__, \
         map_fn_name, \
         combine_fn_name, \
         emit_fn_name, \
@@ -37,13 +37,11 @@ def untyped_wrapper(adverb_class,
         tuple(data_names), \
         varargs_name
         
-  print key 
+
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
-    
     fn_args_obj = FormalArgs()
-    
     def mk_input_var(name):
       if name is None:
         return None
@@ -93,10 +91,8 @@ def untyped_wrapper(adverb_class,
     
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
     _adverb_wrapper_cache[key] = fundef
-    print "Created wrapper", fundef 
+
     return fundef
-
-
 
 def gen_arg_names(n, base_names):
   results = []

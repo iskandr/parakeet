@@ -152,9 +152,18 @@ class ArrayT(StructT):
     else:
       return self.elt_type
 
+  # WARNING: 
+  # until we have garbage collection figured out, we'll 
+  # leak memory from arrays we allocate in the conversion routine 
+  _store_forever = []
   def from_python(self, x):
-    x = np.asarray(x)
+    
+    if not isinstance(x, np.ndarray):
+      x = np.asarray(x)
+      self._store_forever.append(x)
+  
     ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
+     
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
     total_bytes = nelts * elt_size

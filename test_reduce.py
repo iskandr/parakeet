@@ -3,7 +3,7 @@ import testing_helpers
 import numpy as np 
 
 
-int_vec = np.arange(100, dtype=int)
+int_vec = 100 + np.arange(100, dtype=int)
 float_vec = int_vec.astype(float)
 bool_vec = float_vec < np.mean(float_vec)
 
