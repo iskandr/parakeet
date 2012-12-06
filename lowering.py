@@ -25,20 +25,22 @@ lowering_pipeline = [
 
 _lowered_functions = {}
 def lower(fundef, tile=False):
+
   if isinstance(fundef, str):
     fundef = syntax.TypedFn.registry[fundef]
 
-  key = (fundef.name, tile)
+  key = (fundef, tile)
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
     if tile:
-      fundef = apply_pipeline(fundef, tiling_pipeline, copy = True)
+      lowered_fn = apply_pipeline(fundef, tiling_pipeline, copy = True)
     else:
-      fundef = apply_pipeline(fundef, no_tiling, copy = True)
+      lowered_fn = apply_pipeline(fundef, no_tiling, copy = True)
 
-    lowered_fn = apply_pipeline(fundef, lowering_pipeline, copy = False)
+    lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
 
     _lowered_functions[key] = lowered_fn
-    _lowered_functions[(lowered_fn.name,tile)] = lowered_fn
+    _lowered_functions[(lowered_fn,tile)] = lowered_fn
+
     return lowered_fn

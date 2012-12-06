@@ -361,11 +361,11 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   fundef = lowering.lower(fundef)
-  print "...lowered:", fundef 
+  #print "...lowered:", fundef 
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)
   compile_block(fundef.body, env, start_builder)
-  print env.llvm_fn 
+  # print env.llvm_fn 
   env.llvm_context.run_passes(env.llvm_fn)
 
   result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)

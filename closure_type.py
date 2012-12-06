@@ -45,6 +45,10 @@ class ClosureT(StructT):
   def __eq__(self, other):
     return self.fn == other.fn and self.arg_types == other.arg_types
 
+  def __str__(self):
+    fn_name = self.fn if isinstance(self.fn, str) else self.fn.name 
+    return "ClosT(%s, (%s))" % (fn_name, ", ".join(str(t) for t in self.arg_types))
+                           
   def from_python(self, python_fn):
     untyped_fundef = ast_conversion.translate_function_value(python_fn)
     closure_args = untyped_fundef.python_nonlocals()
@@ -79,14 +83,15 @@ class ClosureT(StructT):
       raise IncompatibleTypes(self, other)
 
 _closure_type_cache = {}
-def make_closure_type(untyped_fn, closure_arg_types = []):
-  name = untyped_fn.name
+def make_closure_type(fn, closure_arg_types = []):
+ 
+  
   closure_arg_types = tuple(closure_arg_types)
-  key = (name, closure_arg_types)
+  key = (fn, closure_arg_types)
   if key in _closure_type_cache:
     return _closure_type_cache[key]
   else:
-    t = ClosureT(name, closure_arg_types)
+    t = ClosureT(fn, closure_arg_types)
     _closure_type_cache[key] = t
     return t
 

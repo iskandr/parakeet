@@ -221,6 +221,7 @@ class Codegen(object):
     elif syntax_helpers.is_zero(x) or syntax_helpers.is_zero(y):
       return self.pick_const(x, y, 0)
     else:
+      
       return self.prim(prims.multiply, [x,y], name)
 
   def div(self, x, y, name = None):
@@ -365,6 +366,9 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
+    print "closure_elts", clos 
+    if isinstance(clos, syntax.TypedFn):
+      return []
     return [self.closure_elt(clos, i) 
             for i in xrange(len(clos.type.arg_types))]
 
@@ -485,7 +489,7 @@ class Codegen(object):
     rank = len(dim_sizes)
     slice_sizes = [syntax_helpers.one_i64]
     for (i, d) in enumerate(reversed(dim_sizes[:-1])):
-      slice_sizes.append(self.mul(slice_sizes, d, "slice_size_%d" % i))
+      slice_sizes.append(self.mul(slice_sizes[-1], d, "slice_size_%d" % i))
     slice_sizes.reverse()
     remainder = linear_idx
     indices = []

@@ -179,6 +179,7 @@ def cached_apply(T, fn, copy = False):
     return new_fn
 
 def apply_pipeline(fn, transforms, copy = False, memoize = False):
+
   for T in transforms:
     if memoize:
       fn = cached_apply(T, fn, copy = copy)

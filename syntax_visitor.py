@@ -6,11 +6,11 @@ class SyntaxVisitor(object):
   optionally collecting values 
   """
   def visit_generic_expr(self, expr):
-    pass 
+    assert False, "Unsupported expression %s" % (expr,)
 
   def visit_expr(self, expr):
     method_name = 'visit_' + expr.node_type()
-    print method_name 
+
     if hasattr(self, method_name):
       method = getattr(self, method_name)
       return method(expr)

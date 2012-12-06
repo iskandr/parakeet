@@ -1,4 +1,5 @@
 import core_types
+import closure_type 
 import syntax
 import syntax_helpers
 import transform
@@ -18,18 +19,19 @@ class CodegenSemantics(Transform):
       "Invalid types: %s" % (arg_types, )
     return type_inference.invoke_result_type(closure_t, arg_types)
 
-  def invoke(self, closure, args):
-    arg_types = syntax_helpers.get_types(args)
-    closure_t = closure.type 
-    if isinstance(closure_t, core_types.FnT):
-      typed_fn = closure
-      closure_args = [] 
+  def invoke(self, fn, args):
+
+    if isinstance(fn, syntax.TypedFn):
+      closure_args = []
+
     else:
-      typed_fn = type_inference.specialize(closure.type, arg_types)
-      closure_args = self.closure_elts(closure)
-      
+      assert isinstance(fn.type, closure_type.ClosureT)
+      closure_args = self.closure_elts(fn)
+      arg_types = syntax_helpers.get_types(args)
+      fn = type_inference.specialize(fn.type, arg_types)
+
     import lowering
-    lowered_fn = lowering.lower(typed_fn)
+    lowered_fn = lowering.lower(fn)
     combined_args = closure_args + args  
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
     return self.assign_temp(call, "call_result")

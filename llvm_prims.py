@@ -35,21 +35,24 @@ signed_binops = {
   prims.add : 'add',  
   prims.subtract : 'sub', 
   prims.multiply : 'mul', 
-  prims.divide : 'sdiv'
+  prims.divide : 'sdiv', 
+  prims.mod : 'srem'
 }
 
 unsigned_binops = { 
   prims.add : 'add',  
   prims.subtract : 'sub', 
   prims.multiply : 'mul', 
-  prims.divide : 'udiv'
+  prims.divide : 'udiv', 
+  prims.mod : 'urem', 
 }
 
 float_binops = { 
   prims.add : 'fadd',  
   prims.subtract : 'fsub', 
   prims.multiply : 'fmul', 
-  prims.divide : 'fdiv'
+  prims.divide : 'fdiv', 
+  prims.mod : 'frem', 
 }
 
 # Note: there is no division instruction between booleans
