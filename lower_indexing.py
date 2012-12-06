@@ -3,7 +3,7 @@ import core_types
 import syntax
 import syntax_helpers
 import transform
-import tuple_type
+
 
 class LowerIndexing(transform.Transform):
   def array_slice(self, arr, indices):
@@ -115,5 +115,4 @@ class LowerIndexing(transform.Transform):
         return copy_loop
     return syntax.Assign(lhs, rhs)
 
-def lower_indexing(fn):
-  return transform.cached_apply(LowerIndexing, fn)
+

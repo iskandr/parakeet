@@ -124,13 +124,14 @@ class Transform(Codegen):
     return self.blocks.pop()
 
   def pre_apply(self, old_fn):
-    pass
-
+    # print "%s : %s" % (self.__class__.__name__, repr(old_fn))
+    pass 
   def post_apply(self, new_fn):
     pass
 
   def apply(self, copy = False):
     self.copy = copy
+    
     old_fn = self.pre_apply(self.fn)
     if old_fn is None:
       old_fn = self.fn
@@ -164,27 +165,25 @@ class Transform(Codegen):
       else:
         return old_fn
 
-_transform_cache = {}
-def cached_apply(T, fn, copy = False):
-  """
-  Applies the transformation, caches the result,
-  and registers the new function in the global registry
-  """
-  key = (T, fn.name)
-  if key in _transform_cache:
-    return _transform_cache[key]
-  else:
-    new_fn = T(fn).apply(copy = copy)
-    _transform_cache[key] = new_fn
+
+class MemoizedTransform(Transform):
+  _cache = {}
+  
+  def apply(self, copy = False):
+    key = (self.__class__.__name__, self.fn.name)
+    if key in self._cache and not copy:
+      return self._cache[key]
+    else:
+      
+      new_fn = Transform.apply(self, copy = copy)
+      self._cache[key] = new_fn
     return new_fn
 
-def apply_pipeline(fn, transforms, copy = False, memoize = False):
 
+def apply_pipeline(fn, transforms, copy = False):
   for T in transforms:
-    if memoize:
-      fn = cached_apply(T, fn, copy = copy)
-    else:
-      fn = T(fn).apply(copy = copy)
+    t = T(fn)
+    fn = t.apply(copy = copy)
 
     # only copy the function on the first iteration,
     # if you're going to copy it at all

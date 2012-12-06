@@ -89,7 +89,7 @@ class ShapeCodegen(Traversal):
     return self.binop('mult', v)
       
   def visit(self, shape):
-    print "Visiting", shape 
+
     return Traversal.visit(self, shape)
     
   def visit_Div(self, v):

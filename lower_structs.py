@@ -5,9 +5,9 @@ import syntax
 
 from array_type import ArrayT, make_array_type, ScalarT
 from syntax_helpers import const_int, const_tuple
-from transform import cached_apply, Transform
+from transform import MemoizedTransform
 
-class LowerStructs(Transform):
+class LowerStructs(MemoizedTransform):
   """
   The only non-scalar objects should all be created as explicit Structs
   """
@@ -105,5 +105,4 @@ class LowerStructs(Transform):
 
     return self.array_view(ptr_var, const_tuple(n), const_tuple(1))
 
-def make_structs_explicit(fn):
-  return cached_apply(LowerStructs, fn)
+

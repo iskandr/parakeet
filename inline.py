@@ -87,5 +87,4 @@ class Inliner(transform.Transform):
       return expr
 
 
-#def inline(fn):
-#  return transform.cached_apply(Inliner, fn)
+

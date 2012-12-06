@@ -2,11 +2,11 @@ import core_types
 import closure_type 
 import syntax
 import syntax_helpers
-import transform
+
 import type_inference
-from args import ActualArgs
+
 from adverb_semantics import AdverbSemantics
-from transform import Transform 
+from transform import Transform, MemoizedTransform 
 
 class CodegenSemantics(Transform):
   # Can't put type inference related methods inside Transform
@@ -47,10 +47,9 @@ class CodegenSemantics(Transform):
 
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_TypedFn(self, expr):
-    import lowering
+    import lowering 
     return lowering.lower(expr)
-  
-
+    # return LowerAdverbs(expr).apply(self.copy)
 
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)
@@ -83,8 +82,6 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_allpairs(fn, x, y, axis)
 
-  def pre_apply(self, fn):
-    pass
 
-def lower_adverbs(fn):
-  return transform.cached_apply(LowerAdverbs, fn)
+
+

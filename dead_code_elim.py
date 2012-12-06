@@ -27,6 +27,7 @@ def elim_stmt(stmt, live_vars):
     if is_live_lhs(stmt.lhs, live_vars):
       return stmt
     else:
+
       return None
 
   def elim_While():

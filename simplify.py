@@ -57,6 +57,8 @@ class Simplify(Transform):
       self.collect_live_vars(expr.strides)
     elif isinstance(expr, syntax.TupleProj):
       self.collect_live_vars(expr.tuple)
+    elif isinstance(expr, syntax.ClosureElt):
+      self.collect_live_vars(expr.closure)
     elif isinstance(expr, syntax.Index):
       self.collect_live_vars(expr.value)
       self.collect_live_vars(expr.index)
@@ -104,7 +106,8 @@ class Simplify(Transform):
     self.match(stmt.lhs, new_rhs)
     return syntax.Assign(stmt.lhs, new_rhs)
   
-      
+  
+  
   def transform_Var(self, expr):
     name = expr.name
     original_expr = expr 
@@ -128,7 +131,6 @@ class Simplify(Transform):
       self.live_vars.add(name)
       new_var = syntax.Var(name = name, type = original_expr.type)
       return new_var
-    
 
     
   def transform_TupleProj(self, expr):
@@ -156,6 +158,21 @@ class Simplify(Transform):
       return intval.value
     else:
       return syntax.IntToPtr(intval, type = expr.type)
+  
+  def transform_Call(self, expr):
+    import closure_type
+    fn = self.transform_expr(expr.fn)
+    args = self.transform_expr_list(expr.args) 
+    if isinstance(fn.type, closure_type.ClosureT) and \
+        isinstance(fn.type.fn, syntax.TypedFn):
+      closure_elts = self.closure_elts(fn)
+      combined_args = closure_elts + tuple(args)
+      return syntax.Call(fn.type.fn, combined_args, type = expr.type)
+    elif fn != expr.fn or any(e1 != e2 for (e1, e2) in zip(args, expr.args)):
+      return syntax.Call(fn, args, type = expr.type)
+    else:
+      return expr  
+      
   
   def transform_PrimCall(self, expr):
     args = self.transform_expr_list(expr.args)
@@ -202,6 +219,3 @@ class Simplify(Transform):
     new_fn.type_env = \
       dict([(name, new_fn.type_env[name]) for name in self.live_vars])
     return new_fn 
-  
-#def simplify(fn):
-#  return transform.cached_apply(Simplify, fn) 

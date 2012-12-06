@@ -428,6 +428,15 @@ class Codegen(object):
     array = syntax.Struct([ptr_var, shape, strides], type = array_t)
     return self.assign_temp(array, name)
 
+  def return_type(self, fn):
+    if isinstance(fn, syntax.TypedFn):
+      return fn.return_type 
+    else:
+      import closure_type 
+      
+      assert isinstance(fn.type, closure_type.ClosureT)
+      assert isinstance(fn.type.fn, syntax.TypedFn)
+      return fn.type.fn.return_type 
   # TODO: get rid of that leading underscore to enable this function once 
   # shape inference works for all the weird and wacky constructs in our 
   # syntax zoo 
@@ -436,14 +445,21 @@ class Codegen(object):
     Given a function and its argument, use shape inference
     to figure out the result shape of the array and preallocate it 
     """
-
-    symbolic_shape = shape_inference.call_shape_expr(fn)
-    inner_shape_tuple = shape_codegen.make_shape_expr(self, symbolic_shape, args)
+    try:
+      symbolic_shape = shape_inference.call_shape_expr(fn)
+      inner_shape_tuple = shape_codegen.make_shape_expr(self, symbolic_shape, args)
+      print "-- Shape inference succeeded when calling %s with %s" % \
+        (fn, args)
+    except:
+      print "[Warning] Shape inference failed when calling %s with %s" % \
+        (fn, args)
+      result = self.invoke(fn, args)
+      inner_shape_tuple = self.shape(result)
     if not hasattr(extra_dims, '__iter__'):
       extra_dims = (extra_dims,)
     outer_shape_tuple = self.tuple(extra_dims)
     shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple) 
-    elt_t = self.elt_type(fn.return_type)
+    elt_t = self.elt_type(self.return_type(fn))
     return self.alloc_array(elt_t, shape, name)
 
   def rank(self, value):

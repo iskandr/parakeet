@@ -207,9 +207,7 @@ class ShapeInference(SyntaxVisitor):
       for (k, (l,r)) in merge.iteritems():
         new_l = self.visit_expr(l)
         new_r = self.visit_expr(r)
-        print 
-        print l, new_l 
-        print r, new_r 
+
         self.value_env[k] = new_l.combine(new_r)
     else:
       for (k, (l, _)) in merge.iteritems():
@@ -257,7 +255,7 @@ class ShapeInference(SyntaxVisitor):
       if isinstance(t, core_types.ScalarT):
         return unknown_scalar 
     except: 
-      print "UNKNOWN ATTRIBUTE", expr 
+
       return unknown_value
     
   def visit_PrimCall(self, expr):
