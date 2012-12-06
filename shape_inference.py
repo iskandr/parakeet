@@ -217,7 +217,13 @@ class ShapeInference(SyntaxVisitor):
     assert isinstance(expr.type, array_type.ArrayT) 
     shape_tuple = self.visit_expr(expr.args[1])
     return make_shape(shape_tuple.elts)
-    
+  
+  def visit_Slice(self, expr):
+    start = self.visit_expr(expr.start)
+    stop = self.visit_expr(expr.stop)
+    step = self.visit_expr(expr.step)
+    return Slice(start, stop, step)
+  
   def visit_Const(self, expr):
     return const(expr.value)
   

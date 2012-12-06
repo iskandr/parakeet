@@ -66,6 +66,10 @@ class Simplify(Transform):
       self.collect_live_vars(expr.value)
     elif isinstance(expr, syntax.PrimCall):
       self.collect_live_vars_list(expr.args)
+    elif isinstance(expr, syntax.Slice):
+      self.collect_live_vars(expr.start)
+      self.collect_live_vars(expr.stop)
+      self.collect_live_vars(expr.step)
     elif isinstance(expr, syntax.Const):
       pass 
     
