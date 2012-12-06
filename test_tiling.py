@@ -2,9 +2,11 @@ import adverbs
 import array_type
 import core_types
 import interp
+import llvm_backend
 import lowering
 import numpy as np
 import parakeet
+import run_function
 import syntax
 import syntax_helpers
 import testing_helpers
@@ -17,23 +19,23 @@ from run_function import specialize_and_compile
 id_fn = syntax.TypedFn(
   name = "id_fn",
   arg_names = ["x"],
-  input_types = [core_types.Int32],
+  input_types = [core_types.Int64],
   body = [syntax.Return(syntax_helpers.const(1))],
-  return_type = core_types.Int32,
+  return_type = core_types.Int64,
   type_env = {})
 
-x_array = np.arange(100)
+x_array = np.arange(100, dtype = np.int64)
 x2_array = np.arange(100).reshape(10,10)
-x_array_t = array_type.make_array_type(core_types.Int32, 1)
-x_2_array_t = array_type.make_array_type(core_types.Int32, 2)
+x_array_t = array_type.make_array_type(core_types.Int64, 1)
+x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
 
 id_fn_2 = syntax.TypedFn(
   name = "id_fn_2",
   arg_names = ["x"],
-  input_types = [core_types.Int32],
-  body = [syntax.Return(syntax.Var("x", type=core_types.Int32))],
-  return_type = core_types.Int32,
-  type_env = {"x":core_types.Int32})
+  input_types = [core_types.Int64],
+  body = [syntax.Return(syntax.Var("x", type=core_types.Int64))],
+  return_type = core_types.Int64,
+  type_env = {"x":core_types.Int64})
 
 map_fn = syntax.TypedFn(
   name = "map_fn",
@@ -96,7 +98,10 @@ def test_lowering():
   new_fn = lowering.lower(map_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
   print new_fn
-  interp.eval_fn(new_fn, [x2_array, np.array([3,3])])
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper([x2_array, np.array([3,3], dtype=np.int64)])
+  print rslt
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

@@ -101,5 +101,5 @@ def run(fn, *args):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-  _, _,  compiled, all_args = specialize_and_compile(fn, args)
+  _, _, compiled, all_args = specialize_and_compile(fn, args)
   return compiled(*all_args)

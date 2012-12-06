@@ -12,7 +12,7 @@ from core_types import Int32, Int64
 from lower_adverbs import LowerAdverbs
 from transform import Transform
 
-int32_array_t = array_type.make_array_type(Int32, 1)
+int64_array_t = array_type.make_array_type(Int64, 1)
 
 def free_vars_list(expr_list):
   rslt = set()
@@ -331,8 +331,7 @@ class LowerTiledAdverbs(LowerAdverbs):
     return array_result
 
   def post_apply(self, fn):
-    print "Post applying lower tiled adverbs to", fn
-    tile_param_array = self.fresh_var(int32_array_t, "tile_params")
+    tile_param_array = self.fresh_var(int64_array_t, "tile_params")
     fn.arg_names.append(tile_param_array.name)
     assignments = []
     for var, counter in self.tile_params:
@@ -340,4 +339,5 @@ class LowerTiledAdverbs(LowerAdverbs):
           syntax.Assign(var,
                         self.index(tile_param_array, counter, temp=False)))
     fn.body = assignments + fn.body
+    fn.input_types += (int64_array_t,)
     return fn
