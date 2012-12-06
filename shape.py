@@ -1,8 +1,5 @@
 from node import Node  
 
-
-
-
 class ValueMismatch(Exception):
   """
   Raise this exception whenever two incompatible
@@ -319,3 +316,4 @@ def combine_list(xs, preserve_const = True):
 
 def combine_pairs(xs, ys):
   return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]
+

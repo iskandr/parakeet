@@ -382,6 +382,15 @@ class Codegen(object):
     return result
 
   def alloc_array(self, elt_t, dims, name = "temp_array"):
+    """
+    Given an element type and sequence of expressions 
+    denoting each dimension size, generate code to allocate an array 
+    and its shape/strides metadata. For now I'm assuming that 
+    all arrays are in row-major, eventually we should make
+    the layout an option
+    """ 
+    
+     
     if self.is_tuple(dims):
       shape = dims
       dims = self.tuple_elts(shape)
@@ -409,6 +418,7 @@ class Codegen(object):
     strides = self.tuple(stride_elts, "strides")
     array = syntax.Struct([ptr_var, shape, strides], type = array_t)
     return self.assign_temp(array, name)
+
 
   def rank(self, value):
     if self.is_array(value):

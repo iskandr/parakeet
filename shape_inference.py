@@ -1,20 +1,16 @@
 import syntax
 from syntax_visitor import SyntaxVisitor
  
-
-import core_types 
 import array_type 
-import tuple_type 
-import closure_type 
-from symbolic_shape import \
-  Var, Const, Shape, Tuple, Closure, Slice, Scalar, UnknownScalar, Unknown
-from symbolic_shape import unknown_scalar, unknown_value, const 
-from symbolic_shape import combine_list, increase_rank, lower_ranks, dim_list 
-from symbolic_shape import is_one, is_zero, make_shape 
 
-import symbolic_shape  
-from scipy.stats.distributions import arr
+import shape  
+from shape import Var, Const, Shape, Tuple, Closure
+from shape import Slice, Scalar, UnknownScalar, Unknown
+from shape import unknown_scalar, unknown_value, const 
+from shape import combine_list, increase_rank
+from shape import is_zero, make_shape
 
+import shape_from_type 
 import adverb_semantics
 
 class ShapeSemantics(adverb_semantics.AdverbSemantics):
@@ -51,7 +47,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     elif isinstance(x, Const) and isinstance(y, Const):
       return const(x.value + y.value)
     else:
-      return symbolic_shape.Add(x,y)
+      return shape.Add(x,y)
 
   def sub(self, x, y):
     if is_zero(y):
@@ -242,7 +238,7 @@ class ShapeInference(SyntaxVisitor):
     
   def visit_PrimCall(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
-    return symbolic_shape.combine_list(arg_shapes, preserve_const = False)
+    return shape.combine_list(arg_shapes, preserve_const = False)
     
   def visit_Var(self, expr):
     name = expr.name
@@ -322,24 +318,25 @@ class ShapeInference(SyntaxVisitor):
     assert isinstance(fn, syntax.TypedFn)
     self._clear()
     arg_types = [fn.type_env[name] for name in fn.arg_names]
-    input_values = InputConverter().values_from_types(arg_types)
+    conv = shape_from_type.Converter()
+    input_values = conv.from_types(arg_types)
     for n,v in zip(fn.arg_names, input_values):
       self.value_env[n] = v 
     self.visit_block(fn.body)
     return self.value_env["$return"] 
   
-_symbolic_shape_cache = {}
+_shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
     
-  if typed_fn.name in _symbolic_shape_cache:
-    return _symbolic_shape_cache[typed_fn.name]
+  if typed_fn.name in _shape_cache:
+    return _shape_cache[typed_fn.name]
   else:
     shape_inference = ShapeInference()
     result_abstract_value = shape_inference.visit_fn(typed_fn)
 
-    _symbolic_shape_cache[typed_fn.name] = result_abstract_value
+    _shape_cache[typed_fn.name] = result_abstract_value
     return result_abstract_value
 
 
@@ -388,131 +385,12 @@ def subst_list(xs, env):
   return [subst(x, env) for x in xs]
 
 
-class InputConverter():
-  """
-  Turn a list of input types into a list of abstract values, 
-  numbering the input arrays and scalars but preserving the 
-  structure of tuples, closures, and slices
-  """
-  def __init__(self):
-    self.counter = 0
-  
-  def fresh_var(self):
-    n = self.counter 
-    self.counter += 1
-    return Var(n)
-    
-  def value_from_type(self, t):
-    if isinstance(t, core_types.ScalarT):
-      return self.fresh_var()
-    elif isinstance(t, array_type.ArrayT):
-      dim_vars = [self.fresh_var() for _ in range(t.rank)]
-      return Shape(dim_vars) 
-    elif isinstance(t, tuple_type.TupleT):
-      elt_values = self.values_from_types(t.elt_types)
-      return Tuple(elt_values) 
-    elif isinstance(t, array_type.SliceT):
-      start = self.value_from_type(t.start_type)
-      stop = self.value_from_type(t.stop_type)
-      step = self.value_from_type(t.step_type)
-      return Slice(start, stop, step)
-    elif isinstance(t, closure_type.ClosureT):
-      arg_vals = self.values_from_types(t.arg_types)
-      return Closure(t.fn, arg_vals) 
-    else:
-      assert False, "Unsupported type: %s" % t
-    
-  def values_from_types(self, arg_types):
-    values = []
-    for t in arg_types:
-      v = self.value_from_type(t)
-      values.append(v)
-    return values
-
-
-
 def symbolic_call(typed_fn, abstract_inputs):
-
-  
-  
   # result in terms of variables like input0, (shape: input1, input2), etc..
   abstract_result_value = call_shape_expr(typed_fn)
-  
-
-  
-  shape_formals = InputConverter().values_from_types(typed_fn.input_types)
+  conv = shape_from_type.Converter()
+  shape_formals = conv.from_types(typed_fn.input_types)
   env = {}
-
   bind_pairs(shape_formals, abstract_inputs, env)
-
   return subst(abstract_result_value, env)
-  
-  
-  
-  
-
-
-import types 
-import numpy as np 
-from common import dispatch
-
-
-def eval_shape(symbolic_shape, inputs):
-  """
-  Evaluate symbolic shapes into concrete shapes
-  """
-  
-  def transform_value(x):
-    """
-    Replace arrays with their shapes, 
-    and recursively replace any instances of arrays
-    in data structures like tuples also with their shapes
-    """
-    if isinstance(x, np.ndarray):
-      return x.shape 
-    elif isinstance(x, list):
-      return np.array(x).shape 
-    elif isinstance(x, tuple):
-      return tuple(transform_value(elt) for elt in x)
-    else:
-      assert isinstance(x, (int, long, float, complex, types.NoneType)), \
-        "Unexpected value " + str(x)
-      return x
-  input_shapes = [transform_value(x) for x in inputs]
-
-  
-  def eval_abstract_value(v):
-    def eval_Input():
-      return input_shapes[v.pos]
-    
-    def eval_Const():
-      return v.value 
-    
-    def eval_Shape():
-      return tuple(eval_abstract_values(v.dims))
-    
-    def eval_Dim():
-      return eval_abstract_value(v.array)[v.dim]
-    
-    def eval_Tuple():
-      return Tuple(eval_abstract_values(v.elts))
-    
-    def eval_Sub():
-      x = eval_abstract_value(v.x)
-      y = eval_abstract_value(v.y)
-      return x - y
-    
-    def eval_Closure():
-      return  Closure(v.untyped_fn, eval_abstract_values(v.args))
-    
-    return dispatch(v, "eval")
-    
-  def eval_abstract_values(xs):
-    return [eval_abstract_value(x) for x in xs]
-  return eval_abstract_value(symbolic_shape)
-
-
-    
-      
-      
   
