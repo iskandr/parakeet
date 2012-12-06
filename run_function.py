@@ -1,16 +1,15 @@
 import ast_conversion
+import core_types
+import ctypes
 import llvm_backend
+import llvm_types
 import syntax
-from args import ActualArgs
+import type_conv
 import type_inference
 
-from llvm.ee import GenericValue
-
-import llvm_types
+from args import ActualArgs
 from llvm_context import opt_context
-import core_types
-import type_conv
-import ctypes
+from llvm.ee import GenericValue
 
 def python_to_generic_value(x, t):
   if isinstance(t, core_types.FloatT):
@@ -102,5 +101,5 @@ def run(fn, *args):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-  _, _,  compiled, all_args = specialize_and_compile(fn, args)
+  _, _, compiled, all_args = specialize_and_compile(fn, args)
   return compiled(*all_args)

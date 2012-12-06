@@ -1,4 +1,3 @@
-
 import llvm_context
 import llvm_convert
 import llvm_prims
@@ -10,8 +9,8 @@ import syntax_helpers
 from common import dispatch
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
-from llvm.core import Type as lltype
 from llvm.core import Builder
+from llvm.core import Type as lltype
 from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
@@ -41,11 +40,10 @@ class CompilationEnv:
     return builder
 
   def _init_vars(self, fundef, builder):
-
     """
     Create a mapping from variable names to stack locations,
     these will later be converted to SSA variables by the mem2reg pass.
-   """
+    """
     n_expected = len(fundef.arg_names)
     n_compiled = len(self.llvm_fn.args)
     assert n_compiled == n_expected, \
@@ -91,7 +89,6 @@ def attribute_lookup(struct, name, env, builder):
   return ptr, field_type
 
 def compile_expr(expr, env, builder):
-
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -122,8 +119,8 @@ def compile_expr(expr, env, builder):
     for (i, elt) in enumerate(expr.args):
       field_name, field_type = struct_t._fields_[i]
       assert elt.type == field_type, \
-        "Mismatch between expected type %s and given %s for field '%s' " % \
-        (field_type, elt.type, field_name )
+             "Mismatch between expected type %s and given %s for field '%s' " %\
+             (field_type, elt.type, field_name)
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
@@ -167,17 +164,16 @@ def compile_expr(expr, env, builder):
 
   def compile_TypedFn():
     (target_fn, _, _) = compile_fn(expr)
-    return target_fn 
-  
-  def compile_Call():
+    return target_fn
 
+  def compile_Call():
     if isinstance(expr.fn, str):
       assert expr.fn in syntax.TypedFn.registry
       typed_fundef = syntax.TypedFn.registry[expr.fn]
     else:
       assert isinstance(expr.fn, syntax.TypedFn)
-      typed_fundef = expr.fn 
-      
+      typed_fundef = expr.fn
+
     (target_fn, _, _) = compile_fn(typed_fundef)
 
     arg_types = syntax_helpers.get_types(expr.args)
@@ -249,8 +245,6 @@ def compile_stmt(stmt, env, builder):
   control flow in that statement ends in a return.
   The latter is needed to avoid creating empty basic blocks,
   which were causing some mysterious crashes inside LLVM"""
-
-
 
   def compile_Assign():
     rhs_t = stmt.rhs.type
@@ -355,17 +349,17 @@ def compile_block(stmts, env, builder):
 compiled_functions = {}
 import lowering
 def compile_fn(fundef):
-  #print 
-  #print "Compiling", fundef 
-  #print 
+  #print
+  #print "Compiling", fundef
+  #print
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
-  fundef = lowering.lower(fundef)
-  #print "...lowered:", fundef 
+  fundef = lowering.lower(fundef, tile=False)
+  #print "...lowered:", fundef
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)
   compile_block(fundef.body, env, start_builder)
-  # print env.llvm_fn 
+  # print env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
 
   result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)

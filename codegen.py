@@ -62,7 +62,7 @@ class Codegen(object):
 
   def bool(self, x):
     return syntax_helpers.const_bool(x)
-  
+
   def zero(self, t = Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
 
@@ -104,7 +104,7 @@ class Codegen(object):
     Index into array or tuple differently depending on the type
     """
     arr_t = arr.type
-    
+
     if isinstance(arr_t, core_types.ScalarT):
       # even though it's not correct externally, it's
       # often more convenient to treat indexing
@@ -125,27 +125,27 @@ class Codegen(object):
         return self.assign_temp(proj, "tuple_elt%d" % idx)
       else:
         return proj
-      
+
     if self.is_tuple(idx):
       indices = self.tuple_elts(idx)
     elif hasattr(idx, '__iter__'):
       indices = tuple(map(wrap_if_constant,idx))
     else:
       indices = (wrap_if_constant(idx),)
-    
-    
+
+
     n_required = arr_t.rank
     n_indices = len(indices)
     if n_indices < n_required:
       # all unspecified dimensions are considered fully sliced
       extra = (syntax_helpers.slice_none,) * (n_required - n_indices)
       indices = indices + extra
-          
+
     if len(indices) > 1:
       idx = self.tuple(indices, "index_tuple")
     else:
       idx = indices[0]
-        
+
     t = arr_t.index_type(idx.type)
     idx_expr = syntax.Index(arr, idx, type = t)
     if temp:
@@ -226,7 +226,7 @@ class Codegen(object):
     elif syntax_helpers.is_zero(x) or syntax_helpers.is_zero(y):
       return self.pick_const(x, y, 0)
     else:
-      
+
       return self.prim(prims.multiply, [x,y], name)
 
   def div(self, x, y, name = None):
@@ -293,7 +293,7 @@ class Codegen(object):
   def is_none(self, x):
     return hasattr(x, 'type') and \
       isinstance(x.type, core_types.NoneT)
-      
+
   def is_array(self, x):
     return hasattr(x, 'type') and \
       isinstance(x.type, array_type.ArrayT)
@@ -378,10 +378,10 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
-    print "closure_elts", clos 
+    print "closure_elts", clos
     if isinstance(clos, syntax.TypedFn):
       return []
-    return [self.closure_elt(clos, i) 
+    return [self.closure_elt(clos, i)
             for i in xrange(len(clos.type.arg_types))]
 
   def prod(self, elts, name = None):
@@ -559,7 +559,7 @@ class Codegen(object):
     nelts = self.nelts(dest)
     def loop_body(i):
       idx = self.linear_to_indices(i, self.shape(dest))
-      self.assign(self.index(dest, idx, temp=False), 
+      self.assign(self.index(dest, idx, temp=False),
                   self.index(src, idx, temp=True))
 
     return self.loop(syntax_helpers.zero_i64, nelts, loop_body, return_stmt)

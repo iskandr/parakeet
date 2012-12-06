@@ -25,7 +25,6 @@ lowering_pipeline = [
 
 _lowered_functions = {}
 def lower(fundef, tile=False):
-
   if isinstance(fundef, str):
     fundef = syntax.TypedFn.registry[fundef]
 

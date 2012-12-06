@@ -15,10 +15,10 @@ from types import FunctionType
 class ClosureT(StructT):
   _members = ['fn', 'arg_types']
 
-  max_id = 0 
-  # map each distinct closure_type to an integer id 
+  max_id = 0
+  # map each distinct closure_type to an integer id
   id_numbers = {}
-  
+
   def node_init(self):
     if self.arg_types is None:
       self.arg_types = ()
@@ -30,12 +30,12 @@ class ClosureT(StructT):
     self._fields_ = [('fn_id', Int64)]
     for (i, t) in enumerate(self.arg_types):
       self._fields_.append( ('arg%d' % i, t) )
-    
+
     self.specializations = {}
     if self in self.id_numbers:
       self.id = self.id_numbers[self]
     else:
-      self.id = self.max_id  
+      self.id = self.max_id
       self.id_numbers[self] = self.id
       self.max_id += 1
 
@@ -46,9 +46,10 @@ class ClosureT(StructT):
     return self.fn == other.fn and self.arg_types == other.arg_types
 
   def __str__(self):
-    fn_name = self.fn if isinstance(self.fn, str) else self.fn.name 
-    return "ClosT(%s, (%s))" % (fn_name, ", ".join(str(t) for t in self.arg_types))
-                           
+    fn_name = self.fn if isinstance(self.fn, str) else self.fn.name
+    return "ClosT(%s, (%s))" % (fn_name, ", ".join(str(t)
+                                                   for t in self.arg_types))
+
   def from_python(self, python_fn):
     untyped_fundef = ast_conversion.translate_function_value(python_fn)
     closure_args = untyped_fundef.python_nonlocals()
@@ -84,8 +85,6 @@ class ClosureT(StructT):
 
 _closure_type_cache = {}
 def make_closure_type(fn, closure_arg_types = []):
- 
-  
   closure_arg_types = tuple(closure_arg_types)
   key = (fn, closure_arg_types)
   if key in _closure_type_cache:

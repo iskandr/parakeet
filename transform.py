@@ -55,7 +55,7 @@ class Transform(Codegen):
     else:
       result = self.transform_generic_expr(expr)
     assert result is not None, \
-      "Transformation turned %s into None" % (expr,)
+           "Transformation turned %s into None" % (expr,)
     assert result.type is not None, "Missing type for %s" % result
     return result
 
@@ -181,6 +181,7 @@ class MemoizedTransform(Transform):
 
 
 def apply_pipeline(fn, transforms, copy = False):
+
   for T in transforms:
     t = T(fn)
     fn = t.apply(copy = copy)
