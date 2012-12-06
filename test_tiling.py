@@ -1,12 +1,14 @@
 import adverbs
 import array_type
 import core_types
+import interp
 import lowering
 import numpy as np
 import syntax
 import syntax_helpers
 import testing_helpers
 import tile_adverbs
+import transform
 
 from parakeet import each
 from run_function import specialize_and_compile
@@ -20,6 +22,7 @@ id_fn = syntax.TypedFn(
   type_env = {})
 
 x_array = np.arange(100)
+x2_array = np.arange(100).reshape(10,10)
 x_array_t = array_type.make_array_type(core_types.Int32, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int32, 2)
 
@@ -76,16 +79,19 @@ def map_id(X):
 #  assert isinstance(new_fn, syntax.TypedFn)
 
 def test_lowering():
-#  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
-#  new_fn = tiling_transform.apply(copy=True)
-#  print new_fn
-#  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
-#  new_fn_2 = lower_tiling.apply(copy=True)
-#  assert isinstance(new_fn_2, syntax.TypedFn)
-#  print new_fn_2
-  new_fn = lowering.lower(map2_fn, True)
-  assert isinstance(new_fn, syntax.TypedFn)
+  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
+  new_fn = tiling_transform.apply(copy=True)
   print new_fn
+  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
+  new_fn_2 = lower_tiling.apply(copy=True)
+  assert isinstance(new_fn_2, syntax.TypedFn)
+  print new_fn_2
+  new_fn_3 = transform.apply_pipeline(new_fn_2, lowering.lowering_pipeline)
+  print new_fn_3
+#  new_fn = lowering.lower(map2_fn, True)
+#  assert isinstance(new_fn, syntax.TypedFn)
+#  print new_fn
+#  interp.eval_fn(new_fn, [x2_array, np.array([2,2])])
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

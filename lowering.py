@@ -15,7 +15,7 @@ tiling_pipeline = [
 no_tiling = [LowerAdverbs]
 
 lowering_pipeline = [
-  #Simplify,
+  Simplify,
   Inliner,
   LowerIndexing,
   Simplify,

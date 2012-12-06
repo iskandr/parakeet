@@ -1,9 +1,8 @@
-import sys
-import numpy as np
-
 import interp
-from run_function import specialize_and_compile
+import numpy as np
+import sys
 
+from run_function import specialize_and_compile
 
 def run_local_functions(prefix, locals_dict = None):
   if locals_dict is None:
@@ -37,7 +36,6 @@ def run_local_tests(locals_dict = None):
     last_frame = sys._getframe()
     locals_dict = last_frame.f_back.f_locals
   return run_local_functions("test_", locals_dict)
-
 
 def eq(x,y):
   if isinstance(y, np.ndarray):
@@ -75,7 +73,6 @@ def expect(fn, args, expected):
   assert eq(llvm_result, expected), \
     "Expected %s but compiled fn return %s" % (expected, llvm_result)
 
-
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:
     expect(parakeet_fn, [x], python_fn(x))
@@ -85,7 +82,6 @@ def expect_allpairs(parakeet_fn, python_fn, inputs):
     for y in inputs:
       expect(parakeet_fn, [x,y], python_fn(x,y))
 
-
 import ast_conversion
 import type_inference
 import type_conv
@@ -93,8 +89,10 @@ def return_type(fn, input_types):
   untyped_fundef = ast_conversion.translate_function_value(fn)
   closure_args = untyped_fundef.python_nonlocals()
   closure_arg_types = map(type_conv.typeof, closure_args)
-  return type_inference.infer_return_type(untyped_fundef, closure_arg_types + input_types)
+  return type_inference.infer_return_type(untyped_fundef,
+                                          closure_arg_types + input_types)
 
 def expect_type(fn, input_types, output_type):
   actual = return_type(fn, input_types)
-  assert actual == output_type, "Expected type %s, actual %s" % (output_type, actual)
+  assert actual == output_type, "Expected type %s, actual %s" % \
+                                (output_type, actual)
