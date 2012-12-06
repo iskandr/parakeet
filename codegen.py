@@ -100,6 +100,7 @@ class Codegen(object):
     Index into array or tuple differently depending on the type
     """
     arr_t = arr.type
+
     if isinstance(arr_t, core_types.ScalarT):
       # even though it's not correct externally, it's
       # often more convenient to treat indexing
@@ -107,7 +108,7 @@ class Codegen(object):
       # Just be sure to catch this as an error in
       # the user's code earlier in the pipeline.
       return arr
-    elif isinstance(arr_t, tuple_type.TupleT):
+    if isinstance(arr_t, tuple_type.TupleT):
       if isinstance(idx, syntax.Const):
         idx = idx.value
 
@@ -120,33 +121,33 @@ class Codegen(object):
         return self.assign_temp(proj, "tuple_elt%d" % idx)
       else:
         return proj
+
+    if self.is_tuple(idx):
+      indices = self.tuple_elts(idx)
+    elif hasattr(idx, '__iter__'):
+      indices = tuple(map(wrap_if_constant,idx))
     else:
-      n_required = arr_t.rank
-      if self.is_tuple(idx):
-        n_indices = len(idx.type.elt_types)
-        if n_indices < n_required:
-          elts = self.tuple_elts(idx)
-          extra = syntax_helpers.slice_none * (n_required - n_indices)
-          idx = self.tuple(elts + extra)
-      else:
-        n_indices = len(idx) if hasattr(idx, '__len__') else 1
-        if n_indices < n_required:
-          # all unspecified dimensions are considered fully sliced
-          extra = (None,) * (n_required - n_indices)
-          first_indices = tuple(idx) if hasattr(idx, '__iter__') else (idx,)
-          idx = first_indices + extra
+      indices = (wrap_if_constant(idx),)
 
-      if isinstance(idx, tuple):
-        idx = self.tuple(map(wrap_if_constant,idx), "index_tuple")
-      else:
-        idx = wrap_if_constant(idx)
 
-      t = arr_t.index_type(idx.type)
-      idx_expr = syntax.Index(arr, idx, type = t)
-      if temp:
-        return self.assign_temp(idx_expr, "array_elt")
-      else:
-        return idx_expr
+    n_required = arr_t.rank
+    n_indices = len(indices)
+    if n_indices < n_required:
+      # all unspecified dimensions are considered fully sliced
+      extra = (syntax_helpers.slice_none,) * (n_required - n_indices)
+      indices = indices + extra
+
+    if len(indices) > 1:
+      idx = self.tuple(indices, "index_tuple")
+    else:
+      idx = indices[0]
+
+    t = arr_t.index_type(idx.type)
+    idx_expr = syntax.Index(arr, idx, type = t)
+    if temp:
+      return self.assign_temp(idx_expr, "array_elt")
+    else:
+      return idx_expr
 
   def index_along_axis(self, arr, axis, idx, name = None):
     assert isinstance(axis, int), \
@@ -322,6 +323,8 @@ class Codegen(object):
       return self.assign_temp(elt_value, "stride%d" % dim)
 
   def tuple(self, elts, name = "tuple"):
+    if not isinstance(elts, (list, tuple)):
+      elts = [elts]
     tuple_t = tuple_type.make_tuple_type(get_types(elts))
     tuple_t.metadata = self.__class__.__name__
     tuple_expr = syntax.Tuple(elts, type = tuple_t)
@@ -355,7 +358,7 @@ class Codegen(object):
 
   def tuple_elts(self, tup):
     nelts = len(tup.type.elt_types)
-    return [self.tuple_proj(tup, i) for i in xrange(nelts)]
+    return tuple([self.tuple_proj(tup, i) for i in xrange(nelts)])
 
   def closure_elt(self, clos, idx):
     assert isinstance(idx, (int, long))
