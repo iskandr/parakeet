@@ -58,7 +58,7 @@ class Codegen(object):
 
   def bool(self, x):
     return syntax_helpers.const_bool(x)
-  
+
   def zero(self, t = Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
 
@@ -221,7 +221,7 @@ class Codegen(object):
     elif syntax_helpers.is_zero(x) or syntax_helpers.is_zero(y):
       return self.pick_const(x, y, 0)
     else:
-      
+
       return self.prim(prims.multiply, [x,y], name)
 
   def div(self, x, y, name = None):
@@ -288,7 +288,7 @@ class Codegen(object):
   def is_none(self, x):
     return hasattr(x, 'type') and \
       isinstance(x.type, core_types.NoneT)
-      
+
   def is_array(self, x):
     return hasattr(x, 'type') and \
       isinstance(x.type, array_type.ArrayT)
@@ -366,10 +366,10 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
-    print "closure_elts", clos 
+    print "closure_elts", clos
     if isinstance(clos, syntax.TypedFn):
       return []
-    return [self.closure_elt(clos, i) 
+    return [self.closure_elt(clos, i)
             for i in xrange(len(clos.type.arg_types))]
 
   def prod(self, elts, name = None):
@@ -504,6 +504,7 @@ class Codegen(object):
     nelts = self.nelts(dest)
     def loop_body(i):
       idx = self.linear_to_indices(i, self.shape(dest))
-      self.assign(self.index(dest, idx, temp=False), self.index(src, idx, temp=True))
+      self.assign(self.index(dest, idx, temp=False),
+                  self.index(src, idx, temp=True))
 
     return self.loop(syntax_helpers.zero_i64, nelts, loop_body, return_stmt)

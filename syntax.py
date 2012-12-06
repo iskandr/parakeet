@@ -127,8 +127,6 @@ class Closure(Expr):
   """
   _members = ['fn', 'args']
 
-
-
 class Call(Expr):
 
   def __str__(self):
@@ -210,7 +208,7 @@ class Fn(Expr):
   registry = {}
 
   def __str__(self):
-    return "Fn(%s)" % self.name 
+    return "Fn(%s)" % self.name
 
   def __repr__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
@@ -337,7 +335,8 @@ class TypedFn(Expr):
        block_to_str(self.body))
 
   def __str__(self):
-    return "TypedFn(%s)" % self.name 
-      
+    #return "TypedFn(%s)" % self.name
+    return self.__repr__()
+
   def __hash__(self):
     return hash(self.name)
