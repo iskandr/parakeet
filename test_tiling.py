@@ -4,6 +4,7 @@ import core_types
 import interp
 import lowering
 import numpy as np
+import parakeet
 import syntax
 import syntax_helpers
 import testing_helpers
@@ -58,6 +59,10 @@ def identity(x):
 def map_id(X):
   return each(identity, X)
 
+#def test_tiling():
+#  rslt = parakeet.run(map_id, x_array)
+#  print rslt
+
 #def vm(x, y):
 #  tmp = each(lambda x,y: x*y, x, y)
 #  return reduce(lambda x,y: x+y, tmp)
@@ -79,19 +84,19 @@ def map_id(X):
 #  assert isinstance(new_fn, syntax.TypedFn)
 
 def test_lowering():
-  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
-  new_fn = tiling_transform.apply(copy=True)
-  print new_fn
-  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
-  new_fn_2 = lower_tiling.apply(copy=True)
-  assert isinstance(new_fn_2, syntax.TypedFn)
-  print new_fn_2
-  new_fn_3 = transform.apply_pipeline(new_fn_2, lowering.lowering_pipeline)
-  print new_fn_3
-#  new_fn = lowering.lower(map2_fn, True)
-#  assert isinstance(new_fn, syntax.TypedFn)
+#  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
+#  new_fn = tiling_transform.apply(copy=True)
 #  print new_fn
-#  interp.eval_fn(new_fn, [x2_array, np.array([2,2])])
+#  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
+#  new_fn_2 = lower_tiling.apply(copy=True)
+#  assert isinstance(new_fn_2, syntax.TypedFn)
+#  print new_fn_2
+#  new_fn_3 = transform.apply_pipeline(new_fn_2, lowering.lowering_pipeline)
+#  print new_fn_3
+  new_fn = lowering.lower(map_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  print new_fn
+  interp.eval_fn(new_fn, [x2_array, np.array([3,3])])
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

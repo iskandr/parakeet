@@ -1,12 +1,13 @@
+import closure_type
 import core_types
-import closure_type 
 import syntax
 import syntax_helpers
 import transform
 import type_inference
-from args import ActualArgs
+
 from adverb_semantics import AdverbSemantics
-from transform import Transform 
+from args import ActualArgs
+from transform import Transform
 
 class CodegenSemantics(Transform):
   # Can't put type inference related methods inside Transform
@@ -20,10 +21,8 @@ class CodegenSemantics(Transform):
     return type_inference.invoke_result_type(closure_t, arg_types)
 
   def invoke(self, fn, args):
-
     if isinstance(fn, syntax.TypedFn):
       closure_args = []
-
     else:
       assert isinstance(fn.type, closure_type.ClosureT)
       closure_args = self.closure_elts(fn)
@@ -32,7 +31,7 @@ class CodegenSemantics(Transform):
 
     import lowering
     lowered_fn = lowering.lower(fn)
-    combined_args = closure_args + args  
+    combined_args = closure_args + args
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
     return self.assign_temp(call, "call_result")
 
@@ -49,8 +48,6 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_TypedFn(self, expr):
     import lowering
     return lowering.lower(expr)
-  
-
 
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)

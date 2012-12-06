@@ -60,7 +60,7 @@ class While(Stmt):
   _members = ['cond', 'body', 'merge']
 
   def __repr__(self):
-    return "while %s:\n  (header)%s\n  (body)%s\n" %\
+    return "while %s:\n  (header)%s\n  (body)%s\n" % \
            (self.cond, phi_nodes_to_str(self.merge),  block_to_str(self.body))
 
   def __str__(self):
@@ -122,8 +122,7 @@ class Array(Expr):
 
 class Closure(Expr):
   """
-  Create a closure which points to a global fn
-  with a list of partial args
+  Create a closure which points to a global fn with a list of partial args
   """
   _members = ['fn', 'args']
 
@@ -176,7 +175,6 @@ class PrimCall(Expr):
 #
 #############################################################################
 
-
 class ConstArray(Expr):
   _members = ['shape', 'value']
 
@@ -218,13 +216,12 @@ class Fn(Expr):
 
   def node_init(self):
     assert isinstance(self.name, str), \
-      "Expected string for fn name, got %s" % self.name
+        "Expected string for fn name, got %s" % self.name
 
     assert isinstance(self.args, args.FormalArgs), \
-      "Expected arguments to fn to be FormalArgs object, got %s" % self.args
+        "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
-      "Expected body of fn to be list of statements, got " + str(self.body)
-
+        "Expected body of fn to be list of statements, got " + str(self.body)
 
     self.specializations = {}
     import closure_type
@@ -265,7 +262,7 @@ class Struct(Expr):
 
   def __str__(self):
     return "Struct(%s) : %s" % \
-        (", ".join(str(arg) for arg in self.args), self.type)
+           (", ".join(str(arg) for arg in self.args), self.type)
 
 class Alloc(Expr):
   """
@@ -290,8 +287,8 @@ class PtrToInt(Expr):
 
 class TypedFn(Expr):
   """
-  The body of a TypedFn should contain Expr nodes
-  which have been extended with a 'type' attribute
+  The body of a TypedFn should contain Expr nodes which have been extended with
+  a 'type' attribute
   """
   _members = ['name',
               'arg_names',
