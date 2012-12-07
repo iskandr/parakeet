@@ -66,8 +66,8 @@ class Verify(syntax_visitor.SyntaxVisitor):
   def visit_Assign(self, stmt):
     self.visit_expr(stmt.rhs)
     assert stmt.lhs.type == stmt.rhs.type, \
-      "Mismatch between LHS type %s and RHS %s" % \
-       (stmt.lhs.type, stmt.rhs.type)
+      "Mismatch between LHS type %s and RHS %s in '%s'" % \
+       (stmt.lhs.type, stmt.rhs.type, stmt)
        
 
 def verify(fn):
