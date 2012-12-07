@@ -7,7 +7,7 @@ import closure_type
 class Verify(syntax_visitor.SyntaxVisitor):
   def __init__(self, fn):
     self.fn = fn 
-  
+
   def run(self):
     self.visit_block(self.fn.body)
   
@@ -16,6 +16,14 @@ class Verify(syntax_visitor.SyntaxVisitor):
       v = getattr(expr, k)
       if v and isinstance(v, syntax.Expr):
         self.visit_expr(v)
+  """
+  def visit_If(self, stmt):
+
+    self.visit_merge(stmt.merge)
+    self.visit_expr(stmt.cond)
+    self.visit_block(stmt.true)
+    self.visit_block(stmt.false)
+  """
   
   def visit_merge(self, phi_nodes, both_branches = False):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
@@ -29,15 +37,10 @@ class Verify(syntax_visitor.SyntaxVisitor):
       assert k in self.fn.type_env 
       assert self.fn.type_env[k] == left_value.type 
 
-  def visit_block(self, stmts):
-    assert len(stmts) > 0, \
-      "Unexpected empty block"
-    for stmt in stmts:
-      self.visit_stmt(stmt)
-    
   def visit_Var(self, expr):
     assert expr.name in self.fn.type_env, \
-      "Unknown variable %s" % expr.name 
+      "Unknown variable %s" % expr.name
+       
     assert expr.type == self.fn.type_env[expr.name], \
       "Variable %s should have type %s but annotated with type %s" % \
       (expr.name, self.fn.type_env[expr.name], expr.type)
@@ -51,6 +54,11 @@ class Verify(syntax_visitor.SyntaxVisitor):
       assert isinstance(arg.type, core_types.ScalarT), \
         "Can't call primitive %s with argument %s of non-scalar type %s" % \
         (expr.fn, arg, arg.type)
+  
+  def visit_Return(self, stmt):
+    self.visit_expr(stmt.value)
+    assert stmt.value.type and stmt.value.type == self.fn.return_type, \
+      "Inccorect type for returned value %s" % (stmt.value)
   
   def visit_TypedFn(self, fn):
     return verify(fn)
