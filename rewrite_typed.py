@@ -1,13 +1,11 @@
+import array_type
 import core_types
-import array_type 
-import tuple_type  
-
 import syntax
 import syntax_helpers
+import tuple_type
 
 from syntax_helpers import get_types
-
-from transform import Transform    
+from transform import Transform
 
 class RewriteTyped(Transform):
   def __init__(self, fn):
@@ -63,7 +61,7 @@ class RewriteTyped(Transform):
       result_type = expr.prim.result_type(upcast_types)
       upcast_args = [self.coerce_expr(x, t)
                      for (x,t) in zip(expr.args, upcast_types)]
-      return syntax.PrimCall(expr.prim, upcast_args, type = result_type )
+      return syntax.PrimCall(expr.prim, upcast_args, type = result_type)
 
   def transform_Array(self, expr):
     array_t = expr.type
@@ -105,7 +103,7 @@ class RewriteTyped(Transform):
       assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
       new_rhs = self.coerce_expr(stmt.rhs, lhs_t)
       assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
-        "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
+          "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
       return syntax.Assign(stmt.lhs, new_rhs)
 
     elif isinstance(stmt, syntax.If):
