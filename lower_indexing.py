@@ -5,7 +5,7 @@ import syntax_helpers
 import transform
 
 
-class LowerIndexing(transform.Transform):
+class LowerIndexing(transform.MemoizedTransform):
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data")
     shape = self.attr(arr, "shape")

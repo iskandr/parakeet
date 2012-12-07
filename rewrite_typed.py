@@ -11,7 +11,7 @@ from transform import Transform
 
 class RewriteTyped(Transform):
   def __init__(self, fn):
-    Transform.__init__(self, fn)
+    Transform.__init__(self, fn, verify = False)
     self.fn_return_type = self.fn.type_env["$return"]
 
   def coerce_expr(self, expr, t):

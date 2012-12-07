@@ -5,9 +5,10 @@ from args import ActualArgs
 from codegen import Codegen
 
 class Transform(Codegen):
-  def __init__(self, fn):
+  def __init__(self, fn, verify = True):
     Codegen.__init__(self)
     self.fn = fn
+    self.verify = verify   
     self.copy = None
 
   def lookup_type(self, name):
@@ -151,19 +152,20 @@ class Transform(Codegen):
       new_fundef = syntax.TypedFn(**new_fundef_args)
 
       new_fn = self.post_apply(new_fundef)
-      if new_fn:
-        return new_fn
-      else:
-        return new_fundef
+      if new_fn is None:
+        new_fn = new_fundef 
+      
     else:
       old_fn.type_env = self.type_env
       old_fn.body = new_body
       new_fn = self.post_apply(old_fn)
 
-      if new_fn:
-        return new_fn
-      else:
-        return old_fn
+      if new_fn is None:
+        new_fn = old_fn
+    if self.verify:  
+      import verify 
+      verify.verify(new_fn)
+    return new_fn 
 
 
 class MemoizedTransform(Transform):

@@ -34,18 +34,6 @@ class Codegen(object):
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
 
-  """
-  def assign(self, lhs, rhs, recursive = False):
-    if recursive:
-      rhs = self.transform_expr(rhs)
-      lhs = self.transform_lhs(lhs)
-    stmt = syntax.Assign(lhs, rhs)
-    if recursive and \
-       self.transform_Assign.im_func != \
-       Transform.transform_Assign.im_func:
-      stmt = self.transform_Assign(stmt)
-    self.insert_stmt(stmt)
-  """
   def assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
 
@@ -378,7 +366,7 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
-    print "closure_elts", clos
+
     if isinstance(clos, syntax.TypedFn):
       return []
     return [self.closure_elt(clos, i)

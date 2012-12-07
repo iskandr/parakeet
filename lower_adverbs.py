@@ -7,10 +7,10 @@ import type_inference
 
 from adverb_semantics import AdverbSemantics
 
-from transform import Transform, MemoizedTransform 
+from transform import MemoizedTransform 
 
 
-class CodegenSemantics(Transform):
+class CodegenSemantics(MemoizedTransform):
   # Can't put type inference related methods inside Transform
   # since this creates a cyclic dependency with RewriteTyped
 
