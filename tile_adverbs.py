@@ -72,12 +72,16 @@ class TileAdverbs(Transform):
     else:
       return []
 
-  def gen_unpack_tree(self, adverb_tree, depths, v_names, block, type_env):
-    print "depths:", depths
-    exps_left = {}
-    for arg in v_names:
-      exps_left[arg] = len(self.get_expansions(arg))
+  def get_num_expansions_at_depth(self, arg, depth):
+    exps = self.get_expansions(arg)
 
+    for i,v in enumerate(exps):
+      if v >= depth:
+        return len(exps) - i
+
+    return 0
+
+  def gen_unpack_tree(self, adverb_tree, depths, v_names, block, type_env):
     def order_args(depth):
       cur_depth_args = []
       other_args = []
@@ -136,15 +140,16 @@ class TileAdverbs(Transform):
         new_type_env = {}
         for arg in cur_arg_names + fixed_arg_names:
           print "arg, arg.type:", arg, type_env[arg]
-          new_type_env[arg] = array_type.increase_rank(type_env[arg],
-                                                       exps_left[arg])
+          rank_increase = self.get_num_expansions_at_depth(arg, depth)
+          print "rank increase for", arg, ":", rank_increase
+          new_type_env[arg] = \
+              array_type.increase_rank(type_env[arg], rank_increase)
         print "new_type_env:", new_type_env
-        for arg in cur_arg_names:
-          exps_left[arg] -= 1
 
-        cur_arg_types = [array_type.increase_rank(type_env[arg], 1)
-                         for arg in cur_arg_names]
-        fixed_arg_types = [type_env[arg.type] for arg in fixed_arg_names]
+        cur_arg_types = []
+        for arg in cur_arg_names:
+          cur_arg_types.append(array_type.increase_rank(new_type_env[arg], 1))
+        fixed_arg_types = [type_env[arg] for arg in fixed_arg_names]
 
         # Generate the nested fn and its fixed and normal args
         nested_arg_names, nested_arg_types, \
@@ -220,6 +225,7 @@ class TileAdverbs(Transform):
       new_expansions = copy.deepcopy(self.get_expansions(map_arg.name))
       new_expansions.append(depth)
       self.expansions[fn_arg] = new_expansions
+      print self.expansions
 
     new_fn = syntax.TypedFn
     arg_names = fixed_arg_names = []
@@ -258,6 +264,13 @@ class TileAdverbs(Transform):
     arg_idxs = [expr.fn.arg_names.index(arg)
                 for arg in fixed_arg_names + arg_names]
     args = [expr.args[idx] for idx in arg_idxs]
+    print "args:", args
+    for arg in args:
+      rank_increase = len(self.get_expansions(arg.name))
+      if depth in self.get_expansions(arg.name):
+        rank_increase -= 1
+      arg.type = array_type.increase_rank(arg.type, rank_increase)
+    print "args after rank increase:", args
     axis = len(self.get_expansions(expr.fn.arg_names[0])) + expr.axis - 1
     #axis = expr.axis
     self.pop_exp()
@@ -313,7 +326,7 @@ class LowerTiledAdverbs(LowerAdverbs):
 
     # TODO: Use shape inference to figure out how large of an array
     # I need to allocate here!
-    array_result = self.alloc_array(elt_t, niters)
+    array_result = self.alloc_array(elt_t, self.shape(max_arg))
     self.blocks.push()
     self.assign(i_after, self.add(i, tile_size))
     output_idxs = syntax.Index(array_result, tile_bounds, type=fn.return_type)
@@ -335,7 +348,7 @@ class LowerTiledAdverbs(LowerAdverbs):
     nested_call = syntax.Call(fn, straggler_args, type=fn.return_type)
     self.assign(straggler_output, self.transform_expr(nested_call))
     body = self.blocks.pop()
-    #self.blocks += syntax.If(cond, body, [], {})
+    self.blocks += syntax.If(cond, body, [], {})
     return array_result
 
   def post_apply(self, fn):

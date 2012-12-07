@@ -2,6 +2,8 @@ import array_type
 import core_types
 import names
 import prims
+import shape_codegen
+import shape_inference
 import syntax
 import syntax_helpers
 import tuple_type
@@ -9,10 +11,6 @@ import tuple_type
 from core_types import Int32, Int64
 from nested_blocks import NestedBlocks
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, zero
-
-import shape_inference
-import shape_codegen
-    
 
 class Codegen(object):
   def __init__(self):
@@ -120,7 +118,6 @@ class Codegen(object):
       indices = tuple(map(wrap_if_constant,idx))
     else:
       indices = (wrap_if_constant(idx),)
-
 
     n_required = arr_t.rank
     n_indices = len(indices)
@@ -270,7 +267,7 @@ class Codegen(object):
       name = field
     obj_t = obj.type
     assert isinstance(obj_t, core_types.StructT), \
-      "Can't get attribute '%s' from type %s" % (field, obj_t)
+        "Can't get attribute '%s' from type %s" % (field, obj_t)
     field_t = obj.type.field_type(field)
     attr_expr = syntax.Attribute(obj, field, type = field_t)
     if name:
@@ -289,9 +286,9 @@ class Codegen(object):
   def elt_type(self, x):
     if isinstance(x, core_types.Type):
       if hasattr(x, 'elt_type'):
-        return x.elt_type 
+        return x.elt_type
       else:
-        return x 
+        return x
     elif self.is_array(x):
       return x.type.elt_type
     else:
@@ -331,8 +328,7 @@ class Codegen(object):
       return tuple_expr
 
   def is_tuple(self, x):
-    return hasattr(x, 'type') and \
-      isinstance(x.type, tuple_type.TupleT)
+    return hasattr(x, 'type') and isinstance(x.type, tuple_type.TupleT)
 
   def concat_tuples(self, x, y):
     assert self.is_tuple(x)
@@ -366,7 +362,6 @@ class Codegen(object):
       return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
-
     if isinstance(clos, syntax.TypedFn):
       return []
     return [self.closure_elt(clos, i)
@@ -380,14 +375,12 @@ class Codegen(object):
 
   def alloc_array(self, elt_t, dims, name = "temp_array"):
     """
-    Given an element type and sequence of expressions 
-    denoting each dimension size, generate code to allocate an array 
-    and its shape/strides metadata. For now I'm assuming that 
-    all arrays are in row-major, eventually we should make
-    the layout an option
-    """ 
-    
-     
+    Given an element type and sequence of expressions denoting each dimension
+    size, generate code to allocate an array and its shape/strides metadata. For
+    now I'm assuming that all arrays are in row-major, eventually we should make
+    the layout an option.
+    """
+
     if self.is_tuple(dims):
       shape = dims
       dims = self.tuple_elts(shape)
@@ -418,35 +411,37 @@ class Codegen(object):
 
   def return_type(self, fn):
     if isinstance(fn, syntax.TypedFn):
-      return fn.return_type 
+      return fn.return_type
     else:
-      import closure_type 
-      
+      import closure_type
+
       assert isinstance(fn.type, closure_type.ClosureT)
       assert isinstance(fn.type.fn, syntax.TypedFn)
-      return fn.type.fn.return_type 
-  # TODO: get rid of that leading underscore to enable this function once 
-  # shape inference works for all the weird and wacky constructs in our 
-  # syntax zoo 
+      return fn.type.fn.return_type
+
+  # TODO: get rid of that leading underscore to enable this function once
+  # shape inference works for all the weird and wacky constructs in our
+  # syntax zoo
   def _create_output_array(self, fn, args, extra_dims, name = "output"):
     """
     Given a function and its argument, use shape inference
-    to figure out the result shape of the array and preallocate it 
+    to figure out the result shape of the array and preallocate it
     """
     try:
       symbolic_shape = shape_inference.call_shape_expr(fn)
-      inner_shape_tuple = shape_codegen.make_shape_expr(self, symbolic_shape, args)
+      inner_shape_tuple = shape_codegen.make_shape_expr(self, symbolic_shape,
+                                                        args)
       print "-- Shape inference succeeded when calling %s with %s" % \
-        (fn, args)
+            (fn, args)
     except:
       print "[Warning] Shape inference failed when calling %s with %s" % \
-        (fn, args)
+            (fn, args)
       result = self.invoke(fn, args)
       inner_shape_tuple = self.shape(result)
     if not hasattr(extra_dims, '__iter__'):
       extra_dims = (extra_dims,)
     outer_shape_tuple = self.tuple(extra_dims)
-    shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple) 
+    shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
     elt_t = self.elt_type(self.return_type(fn))
     return self.alloc_array(elt_t, shape, name)
 
@@ -503,9 +498,7 @@ class Codegen(object):
 
     def update(self, new_value):
       new_var = self.fresh_var(self.acc_type, "acc")
-
       self.assign(new_var, new_value)
-
       self.curr_var = new_var
 
   def accumulate_loop(self, start, stop, loop_body, init, return_stmt = False):

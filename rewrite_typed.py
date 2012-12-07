@@ -127,7 +127,7 @@ class RewriteTyped(Transform):
     assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
     new_rhs = self.coerce_expr(stmt.rhs, lhs_t)
     assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
-      "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
+        "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
     stmt.lhs = new_lhs
     stmt.rhs = new_rhs
     return stmt
