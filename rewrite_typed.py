@@ -21,7 +21,7 @@ class RewriteTyped(Transform):
       return expr
     elif isinstance(expr, syntax.Tuple):
       if not isinstance(t, tuple_type.TupleT) or \
-         len(expr.type.elt_types) != t.elt_types:
+          len(expr.type.elt_types) != t.elt_types:
         raise core_types.IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
@@ -97,8 +97,8 @@ class RewriteTyped(Transform):
   def transform_Reduce(self, expr):
     acc_type = self.return_type(expr.combine)
     if expr.init and \
-       not self.is_none(expr.init) and \
-       expr.init.type != acc_type:
+        not self.is_none(expr.init) and \
+        expr.init.type != acc_type:
       expr.init = self.coerce_expr(expr.init, acc_type)
      
     return expr 
@@ -106,8 +106,8 @@ class RewriteTyped(Transform):
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)
     if expr.init and \
-       not self.is_none(expr.init) and \
-       expr.init.type != acc_type:
+        not self.is_none(expr.init) and \
+        expr.init.type != acc_type:
       expr.init = self.coerce_expr(expr.init, acc_type)
     return expr  
   

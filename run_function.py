@@ -59,8 +59,8 @@ class CompiledFn:
     actual_types = tuple(map(type_conv.typeof, args))
     expected_types = self.parakeet_fn.input_types
     assert actual_types == expected_types, \
-      "Arg type mismatch, expected %s but got %s" % \
-      (expected_types, actual_types)
+        "Arg type mismatch, expected %s but got %s" % \
+        (expected_types, actual_types)
 
     # calling conventions are that output must be preallocated by the caller'
     ctypes_inputs = [t.from_python(v) for (v,t) in zip(args, expected_types)]
