@@ -15,7 +15,7 @@ from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
+  def __init__(self, llvm_cxt = llvm_context.verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -288,6 +288,7 @@ def compile_stmt(stmt, env, builder):
     enter_cond = compile_expr(stmt.cond, env, builder)
     enter_cond = llvm_convert.to_bit(enter_cond, builder)
     builder.cbranch(enter_cond, loop_bb, after_bb)
+    
     body_end_builder, body_always_returns = \
       compile_block(stmt.body, env, body_start_builder)
     if not body_always_returns:
@@ -312,30 +313,33 @@ def compile_stmt(stmt, env, builder):
     # compile the two possible branches as distinct basic blocks
     # and then wire together the control flow with branches
     true_bb, true_builder = env.new_block("if_true")
-    _, true_always_returns = compile_block(stmt.true, env, true_builder)
+    after_true, true_always_returns = \
+      compile_block(stmt.true, env, true_builder)
 
     false_bb, false_builder = env.new_block("if_false")
-    _, false_always_returns = compile_block(stmt.false, env, false_builder)
+    after_false, false_always_returns = \
+      compile_block(stmt.false, env, false_builder)
 
-    # did both branches end in a return?
-    both_always_return = true_always_returns and false_always_returns
-
+    
     builder.cbranch(cond, true_bb, false_bb)
+    
     # compile phi nodes as assignments and then branch
     # to the continuation block
-    compile_merge_left(stmt.merge, env, true_builder)
-    compile_merge_right(stmt.merge, env, false_builder)
+    compile_merge_left(stmt.merge, env, after_true)
+    compile_merge_right(stmt.merge, env, after_false)
 
     # if both branches return then there is no point
     # making a new block for more code
+    # did both branches end in a return?
+    both_always_return = true_always_returns and false_always_returns
     if both_always_return:
       return None, True
     else:
       after_bb, after_builder = env.new_block("if_after")
       if not true_always_returns:
-        true_builder.branch(after_bb)
+        after_true.branch(after_bb)
       if not false_always_returns:
-        false_builder.branch(after_bb)
+        after_false.branch(after_bb)
     return after_builder, False
 
   return dispatch(stmt, 'compile')
@@ -360,7 +364,7 @@ def compile_fn(fundef):
   env = CompilationEnv()
   start_builder = env.init_fn(fundef)
   compile_block(fundef.body, env, start_builder)
-  # print env.llvm_fn
+  print env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
 
   result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)

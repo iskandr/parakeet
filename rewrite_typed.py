@@ -19,7 +19,7 @@ class RewriteTyped(Transform):
       return expr
     elif isinstance(expr, syntax.Tuple):
       if not isinstance(t, tuple_type.TupleT) or \
-         len(expr.type.elt_types) != t.elt_types:
+          len(expr.type.elt_types) != t.elt_types:
         raise core_types.IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
@@ -27,6 +27,10 @@ class RewriteTyped(Transform):
           new_elts.append(self.coerce_expr(elt, elt_t))
         return syntax.Tuple(new_elts, type = t)
     else:
+      assert \
+          isinstance(expr.type, core_types.ScalarT) and \
+          isinstance(t, core_types.ScalarT), \
+          "Can't cast type %s into %s" % (expr.type, t)
       return self.cast(expr, t)
 
   def transform_merge(self, merge):
@@ -54,6 +58,10 @@ class RewriteTyped(Transform):
         return lhs
     else:
       return lhs
+
+  def transform_Var(self, expr):
+    expr.type = self.fn.type_env[expr.name]
+    return expr
 
   def transform_PrimCall(self, expr):
       arg_types = get_types(expr.args)
@@ -84,6 +92,23 @@ class RewriteTyped(Transform):
         self.assign(idx_expr, expr.elts[i])
       return array
 
+  def transform_Reduce(self, expr):
+    acc_type = self.return_type(expr.combine)
+    if expr.init and \
+        not self.is_none(expr.init) and \
+        expr.init.type != acc_type:
+      expr.init = self.coerce_expr(expr.init, acc_type)
+
+    return expr
+
+  def transform_Scan(self, expr):
+    acc_type = self.return_type(expr.combine)
+    if expr.init and \
+        not self.is_none(expr.init) and \
+        expr.init.type != acc_type:
+      expr.init = self.coerce_expr(expr.init, acc_type)
+    return expr
+
   def transform_Slice(self, expr):
     # None step defaults to 1
     if isinstance(expr.step.type, core_types.NoneT):
@@ -92,41 +117,37 @@ class RewriteTyped(Transform):
       step = syntax_helpers.one_i64
       step_t = step.type
       slice_t = array_type.make_slice_type(start_t, stop_t, step_t)
-      return syntax.Slice(expr.start, expr.stop, step, type = slice_t)
-    else:
-      return expr
+      expr.step = step
+      expr.type = slice_t
+    return expr
 
-  def transform_stmt(self, stmt):
-    if isinstance(stmt, syntax.Assign):
-      new_lhs = self.transform_lhs(stmt.lhs)
-      lhs_t = new_lhs.type
-      assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
-      new_rhs = self.coerce_expr(stmt.rhs, lhs_t)
-      assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
-          "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
-      return syntax.Assign(stmt.lhs, new_rhs)
+  def transform_Assign(self, stmt):
+    new_lhs = self.transform_lhs(stmt.lhs)
+    lhs_t = new_lhs.type
+    assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
+    new_rhs = self.coerce_expr(stmt.rhs, lhs_t)
+    assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
+      "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
+    stmt.lhs = new_lhs
+    stmt.rhs = new_rhs
+    return stmt
 
-    elif isinstance(stmt, syntax.If):
-      new_cond = self.coerce_expr(stmt.cond, core_types.Bool)
-      new_true_block = self.transform_block(stmt.true)
-      new_false_block = self.transform_block(stmt.false)
-      new_merge = self.transform_merge(stmt.merge)
-      return syntax.If(new_cond, new_true_block, new_false_block, new_merge)
+  def transform_If(self, stmt):
+    stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
+    stmt.true = self.transform_block(stmt.true)
+    stmt.false = self.transform_block(stmt.false)
+    stmt.merge = self.transform_merge(stmt.merge)
+    return stmt
 
-    elif isinstance(stmt, syntax.Return):
-      new_value = self.coerce_expr(stmt.value, self.fn_return_type)
-      return syntax.Return(new_value)
+  def transform_Return(self, stmt):
+    stmt.value = self.coerce_expr(stmt.value, self.fn_return_type)
+    return stmt
 
-    elif isinstance(stmt, syntax.While):
-      new_cond = self.coerce_expr(stmt.cond, core_types.Bool)
-      new_body = self.transform_block(stmt.body)
-      # insert coercions for left-branch values into the current block before
-      # the while-loop and coercions for the right-branch to the end of the loop
-      # body
-      new_merge = self.transform_merge(stmt.merge)
-      return syntax.While(new_cond, new_body, new_merge)
-    else:
-      raise RuntimeError("Not implemented: %s" % stmt)
+  def transform_While(self, stmt):
+    stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge)
+    return stmt
 
 def rewrite_typed(typed_fundef):
   return RewriteTyped(typed_fundef).apply(copy=False)
