@@ -12,7 +12,8 @@ def buffer_info(buf, ptr_type = ctypes.c_void_p):
   address = ptr_type()
   length = ctypes.c_ssize_t()
   obj =  ctypes.py_object(buf)
-  ctypes.pythonapi.PyObject_AsReadBuffer(obj, ctypes.byref(address), ctypes.byref(length))
+  ctypes.pythonapi.PyObject_AsReadBuffer(obj, ctypes.byref(address),
+                                         ctypes.byref(length))
   return address, length.value
 
 ctypes.pythonapi.PyBuffer_New.argtypes = (ctypes.c_ulong,)
@@ -42,7 +43,8 @@ class SliceT(StructT):
       raise IncompatibleTypes(self, other)
 
   def __str__(self):
-    return "SliceT(%s, %s, %s)" % (self.start_type, self.stop_type, self.step_type)
+    return "SliceT(%s, %s, %s)" % (self.start_type, self.stop_type,
+                                   self.step_type)
 
   def __repr__(self):
     return str(self)
@@ -141,36 +143,38 @@ class ArrayT(StructT):
       if isinstance(t, core_types.IntT):
         result_rank -= 1
       else:
-        assert isinstance(t, (core_types.NoneT, SliceT, ArrayT, TupleT) ), \
-          "Unexpected index type: %s " % t
+        assert isinstance(t, (core_types.NoneT, SliceT, ArrayT, TupleT)), \
+            "Unexpected index type: %s " % t
     if result_rank > 0:
       return make_array_type(self.elt_type, result_rank)
     else:
       return self.elt_type
 
-  # WARNING: 
-  # until we have garbage collection figured out, we'll 
-  # leak memory from arrays we allocate in the conversion routine 
+  # WARNING:
+  # until we have garbage collection figured out, we'll
+  # leak memory from arrays we allocate in the conversion routine
   _store_forever = []
   def from_python(self, x):
-    
+
     if not isinstance(x, np.ndarray):
       x = np.asarray(x)
       self._store_forever.append(x)
-  
+
     ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
-     
+
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
     total_bytes = nelts * elt_size
     assert total_bytes == buffer_length, \
-      "Shape %s has %d elements of size %d (total = %d) but buffer has length %d bytes"  % \
+        "Shape %s has %d elements of size %d (total = %d) but buffer has" + \
+        " length %d bytes" % \
         (x.shape, nelts, elt_size, total_bytes, buffer_length)
     ctypes_shape = self.shape_t.from_python(x.shape)
 
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
-    return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape), ctypes.pointer(ctypes_strides))
+    return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape),
+                            ctypes.pointer(ctypes_strides))
 
   def to_python(self, obj):
     """
@@ -182,7 +186,7 @@ class ArrayT(StructT):
     elt_size = self.elt_type.nbytes
     strides_in_elts = self.strides_t.to_python(obj.strides.contents)
     assert any([stride == 1 for stride in strides_in_elts]), \
-      "Discontiguous array not supported, strides = %s" % (strides_in_elts,)
+        "Discontiguous array not supported, strides = %s" % (strides_in_elts,)
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
 
     n_elts = np.prod(shape)
@@ -214,7 +218,7 @@ def typeof_array(x):
   rank = len(x.shape)
   return make_array_type(elt_t, rank)
 
-type_conv.register( (np.ndarray, list),  ArrayT, typeof_array)
+type_conv.register((np.ndarray, list),  ArrayT, typeof_array)
 
 def elt_type(t):
   if isinstance(t, ArrayT):

@@ -1,13 +1,11 @@
+import array_type
 import core_types
-import array_type 
-import tuple_type  
-
 import syntax
 import syntax_helpers
+import tuple_type
 
 from syntax_helpers import get_types
-
-from transform import Transform    
+from transform import Transform
 
 class RewriteTyped(Transform):
   def __init__(self, fn):
@@ -30,9 +28,9 @@ class RewriteTyped(Transform):
         return syntax.Tuple(new_elts, type = t)
     else:
       assert \
-        isinstance(expr.type, core_types.ScalarT) and \
-        isinstance(t, core_types.ScalarT), \
-        "Can't cast type %s into %s" % (expr.type, t)
+          isinstance(expr.type, core_types.ScalarT) and \
+          isinstance(t, core_types.ScalarT), \
+          "Can't cast type %s into %s" % (expr.type, t)
       return self.cast(expr, t)
 
   def transform_merge(self, merge):
@@ -60,18 +58,18 @@ class RewriteTyped(Transform):
         return lhs
     else:
       return lhs
-  
+
   def transform_Var(self, expr):
     expr.type = self.fn.type_env[expr.name]
     return expr
-   
+
   def transform_PrimCall(self, expr):
       arg_types = get_types(expr.args)
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       upcast_args = [self.coerce_expr(x, t)
                      for (x,t) in zip(expr.args, upcast_types)]
-      return syntax.PrimCall(expr.prim, upcast_args, type = result_type )
+      return syntax.PrimCall(expr.prim, upcast_args, type = result_type)
 
   def transform_Array(self, expr):
     array_t = expr.type
@@ -100,58 +98,56 @@ class RewriteTyped(Transform):
         not self.is_none(expr.init) and \
         expr.init.type != acc_type:
       expr.init = self.coerce_expr(expr.init, acc_type)
-     
-    return expr 
-  
+
+    return expr
+
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)
     if expr.init and \
         not self.is_none(expr.init) and \
         expr.init.type != acc_type:
       expr.init = self.coerce_expr(expr.init, acc_type)
-    return expr  
-  
+    return expr
+
   def transform_Slice(self, expr):
-    # None step defaults to 1  
+    # None step defaults to 1
     if isinstance(expr.step.type, core_types.NoneT):
       start_t = expr.start.type
       stop_t = expr.stop.type
       step = syntax_helpers.one_i64
       step_t = step.type
       slice_t = array_type.make_slice_type(start_t, stop_t, step_t)
-      expr.step = step 
-      expr.type = slice_t 
-    return expr 
-  
+      expr.step = step
+      expr.type = slice_t
+    return expr
+
   def transform_Assign(self, stmt):
     new_lhs = self.transform_lhs(stmt.lhs)
     lhs_t = new_lhs.type
     assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
     new_rhs = self.coerce_expr(stmt.rhs, lhs_t)
     assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
-      "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
-    stmt.lhs = new_lhs 
-    stmt.rhs = new_rhs 
-    return stmt 
-    
-  def transform_If(self, stmt):    
+        "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
+    stmt.lhs = new_lhs
+    stmt.rhs = new_rhs
+    return stmt
+
+  def transform_If(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
     stmt.true = self.transform_block(stmt.true)
     stmt.false = self.transform_block(stmt.false)
-    stmt.merge = self.transform_merge(stmt.merge) 
-    return stmt 
+    stmt.merge = self.transform_merge(stmt.merge)
+    return stmt
 
   def transform_Return(self, stmt):
     stmt.value = self.coerce_expr(stmt.value, self.fn_return_type)
-    return stmt 
+    return stmt
 
   def transform_While(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)
     return stmt
-
-      
 
 def rewrite_typed(typed_fundef):
   return RewriteTyped(typed_fundef).apply(copy=False)

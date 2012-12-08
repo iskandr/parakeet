@@ -239,12 +239,13 @@ def compile_merge_right(phi_nodes, env, builder):
     builder.store(value, ref)
 
 def compile_stmt(stmt, env, builder):
-  """Translate an SSA statement into llvm. Every translation
-  function returns a builder pointing to the end of the current
-  basic block and a boolean indicating whether every branch of
-  control flow in that statement ends in a return.
-  The latter is needed to avoid creating empty basic blocks,
-  which were causing some mysterious crashes inside LLVM"""
+  """
+  Translate an SSA statement into LLVM. Every translation function returns a
+  builder pointing to the end of the current basic block and a boolean
+  indicating whether every branch of control flow in that statement ends in a
+  return. The latter is needed to avoid creating empty basic blocks, which were
+  causing some mysterious crashes inside LLVM.
+  """
 
   def compile_Assign():
     rhs_t = stmt.rhs.type
