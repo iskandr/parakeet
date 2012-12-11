@@ -140,7 +140,7 @@ class Codegen(object):
 
   def index_along_axis(self, arr, axis, idx, name = None):
     assert isinstance(axis, int), \
-      "Axis must be a known constant int, got: " + str(axis)
+        "Axis must be a known constant int, got: " + str(axis)
     indices = []
     for i in xrange(arr.type.rank):
       if i == axis:

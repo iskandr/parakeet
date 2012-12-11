@@ -210,11 +210,11 @@ class TileAdverbs(Transform):
       return syntax.Return(self.transform_expr(stmt.value))
 
     return stmt
-
-  def transform_Map(self, expr):
+  
+  def tile_adverb(self, expr, adverb, tiledAdverb):
     # TODO: Have to handle naming collisions in the expansions dict
     depth = len(self.adverbs_visited)
-    self.push_exp(adverbs.Map)
+    self.push_exp(adverb)
     for fn_arg, map_arg in zip(expr.fn.arg_names, expr.args):
       new_expansions = copy.deepcopy(self.get_expansions(map_arg.name))
       new_expansions.append(depth)
@@ -236,7 +236,7 @@ class TileAdverbs(Transform):
         input_types.append(new_type)
         new_type_env[arg] = new_type
       return_t = array_type.increase_rank(expr.fn.return_type, 1)
-      new_fn = syntax.TypedFn(name=names.fresh("expanded_map_fn"),
+      new_fn = syntax.TypedFn(name=names.fresh("expanded_adverb_fn"),
                               arg_names=arg_names,
                               body=self.transform_block(expr.fn.body),
                               input_types=input_types,
@@ -261,7 +261,16 @@ class TileAdverbs(Transform):
     axis = len(self.get_expansions(expr.fn.arg_names[0])) + expr.axis - 1
     #axis = expr.axis
     self.pop_exp()
-    return adverbs.TiledMap(new_fn, args, axis, type=new_fn.return_type)
+    return tiledAdverb(new_fn, args, axis, type=new_fn.return_type)
+
+  def transform_Map(self, expr):
+    return self.tile_adverb(expr, adverbs.Map, adverbs.TiledMap)
+  
+  def transform_Reduce(self, expr):
+    return self.tile_adverb(expr, adverbs.Reduce, adverbs.TiledReduce)
+  
+  def transform_Scan(self, expr):
+    return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
 class LowerTiledAdverbs(LowerAdverbs):
   def __init__(self, fn, nesting_idx=-1, tile_param_array=None):
@@ -280,6 +289,14 @@ class LowerTiledAdverbs(LowerAdverbs):
     return nested_lower.apply()
 
   def transform_Map(self, expr):
+    self.tiling = False
+    return expr
+  
+  def transform_Reduce(self, expr):
+    self.tiling = False
+    return expr
+  
+  def transform_Scan(self, expr):
     self.tiling = False
     return expr
 
@@ -316,7 +333,8 @@ class LowerTiledAdverbs(LowerAdverbs):
     array_result = self.alloc_array(elt_t, self.shape(max_arg))
     self.blocks.push()
     self.assign(i_after, self.add(i, tile_size))
-    output_idxs = syntax.Index(array_result, tile_bounds, type=fn.return_type)
+    output_idxs = self.index_along_axis(array_result, axis, tile_bounds)
+    #syntax.Index(array_result, tile_bounds, type=fn.return_type)
     transformed_fn = self.transform_expr(fn)
     if transformed_fn.arg_names[-1] == self.tile_param_array.name:
       nested_args.append(self.tile_param_array)
@@ -333,8 +351,10 @@ class LowerTiledAdverbs(LowerAdverbs):
     straggler_args = [self.index_along_axis(arg, axis, straggler_bounds)
                       for arg in args]
     self.blocks.push()
-    straggler_output = syntax.Index(array_result, straggler_bounds,
-                                    type=fn.return_type)
+    straggler_output = self.index_along_axis(array_result, axis,
+                                             straggler_bounds) 
+    #syntax.Index(array_result, straggler_bounds,
+    #                                type=fn.return_type)
     nested_call = syntax.Call(transformed_fn, straggler_args,
                               type=fn.return_type)
     if transformed_fn.arg_names[-1] == self.tile_param_array.name:

@@ -24,7 +24,7 @@ id_fn = syntax.TypedFn(
   return_type = core_types.Int64,
   type_env = {})
 
-x_array = np.arange(100, dtype = np.int64)
+x_array = np.arange(10, dtype = np.int64)
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
@@ -79,28 +79,19 @@ def map_id(X):
 #  new_fn = tiling_transform.apply(copy=True)
 #  print new_fn
 #  assert isinstance(new_fn, syntax.TypedFn)
-#
+
 #def test_id_tiling():
 #  tiling_transform = tile_adverbs.TileAdverbs(id_fn_2)
 #  new_fn = tiling_transform.apply(copy=True)
 #  assert isinstance(new_fn, syntax.TypedFn)
 
 def test_lowering():
-#  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
-#  new_fn = tiling_transform.apply(copy=True)
-#  print new_fn
-#  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
-#  new_fn_2 = lower_tiling.apply(copy=True)
-#  assert isinstance(new_fn_2, syntax.TypedFn)
-#  print new_fn_2
-#  new_fn_3 = transform.apply_pipeline(new_fn_2, lowering.lowering_pipeline)
-#  print new_fn_3
   new_fn = lowering.lower(map2_fn, True)
-  assert isinstance(new_fn, syntax.TypedFn)
   print new_fn
+  assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x2_array, np.array([2,2], dtype=np.int64))
+  rslt = wrapper(x2_array, np.array([10,5], dtype=np.int64))
   print rslt
 
 if __name__ == '__main__':
