@@ -30,7 +30,7 @@ def free_vars(expr):
   elif isinstance(expr, syntax.Tuple):
     return free_vars_list(expr.elts)
   else:
-    assert isinstance(expr, syntax.Const), ("%s is not a Const" % expr)
+    assert isinstance(expr, syntax.Const), "%s is not a Const" % expr
     return set()
 
 class FindAdverbs(Transform):
@@ -127,9 +127,6 @@ class TileAdverbs(Transform):
         return (v_names, arg_types, [], [], fn)
       else:
         # Get the current depth
-        print "depth_idx:", depth_idx
-        print "depths:", depths
-        print "adverb_tree:", adverb_tree
         depth = depths[depth_idx]
 
         # Order the arguments for the current depth, i.e. for the nested fn
@@ -139,12 +136,9 @@ class TileAdverbs(Transform):
         # left for each arg
         new_type_env = {}
         for arg in cur_arg_names + fixed_arg_names:
-          print "arg, arg.type:", arg, type_env[arg]
           rank_increase = self.get_num_expansions_at_depth(arg, depth)
-          print "rank increase for", arg, ":", rank_increase
           new_type_env[arg] = \
               array_type.increase_rank(type_env[arg], rank_increase)
-        print "new_type_env:", new_type_env
 
         cur_arg_types = []
         for arg in cur_arg_names:
@@ -230,10 +224,6 @@ class TileAdverbs(Transform):
     new_fn = syntax.TypedFn
     arg_names = fixed_arg_names = []
     depths = self.get_depths_list(expr.fn.arg_names)
-    print "depths:", depths
-    print "expansions:", self.expansions
-    print "fn:", expr.fn
-    print "fn.input_types:", expr.fn.input_types
     find_adverbs = FindAdverbs(expr.fn)
     find_adverbs.apply(copy=False)
 
@@ -246,7 +236,6 @@ class TileAdverbs(Transform):
         input_types.append(new_type)
         new_type_env[arg] = new_type
       return_t = array_type.increase_rank(expr.fn.return_type, 1)
-      print "tiled input types:", input_types
       new_fn = syntax.TypedFn(name=names.fresh("expanded_map_fn"),
                               arg_names=arg_names,
                               body=self.transform_block(expr.fn.body),
@@ -264,31 +253,38 @@ class TileAdverbs(Transform):
     arg_idxs = [expr.fn.arg_names.index(arg)
                 for arg in fixed_arg_names + arg_names]
     args = [expr.args[idx] for idx in arg_idxs]
-    print "args:", args
     for arg in args:
       rank_increase = len(self.get_expansions(arg.name))
       if depth in self.get_expansions(arg.name):
         rank_increase -= 1
       arg.type = array_type.increase_rank(arg.type, rank_increase)
-    print "args after rank increase:", args
     axis = len(self.get_expansions(expr.fn.arg_names[0])) + expr.axis - 1
     #axis = expr.axis
     self.pop_exp()
-    tiled_map = adverbs.TiledMap(new_fn, args, axis, type=new_fn.return_type)
-    print tiled_map
-    return tiled_map
+    return adverbs.TiledMap(new_fn, args, axis, type=new_fn.return_type)
 
 class LowerTiledAdverbs(LowerAdverbs):
-  def __init__(self, fn):
+  def __init__(self, fn, nesting_idx=-1, tile_param_array=None):
     LowerAdverbs.__init__(self, fn)
-    self.tile_params = []
     self.num_tiled_adverbs = 0
+    self.nesting_idx = nesting_idx
+    self.tiling = True
+    if tile_param_array == None:
+      self.tile_param_array = self.fresh_var(int64_array_t, "tile_params")
+    else:
+      self.tile_param_array = tile_param_array
 
   def transform_TypedFn(self, expr):
-    import lowering
-    return lowering.lower(expr, tile=False)
+    nested_lower = LowerTiledAdverbs(expr, nesting_idx=self.nesting_idx,
+                                     tile_param_array=self.tile_param_array)
+    return nested_lower.apply()
+
+  def transform_Map(self, expr):
+    self.tiling = False
+    return expr
 
   def transform_TiledMap(self, expr):
+    self.nesting_idx += 1
     fn = expr.fn # TODO: could be a Closure
     args = expr.args
     axis = syntax_helpers.unwrap_constant(expr.axis)
@@ -296,15 +292,11 @@ class LowerTiledAdverbs(LowerAdverbs):
     # TODO: Should make sure that all the shapes conform here,
     # but we don't yet have anything like assertions or error handling
     max_arg = adverb_helpers.max_rank_arg(args)
-    print "max_arg:", max_arg
-    print "max_arg.type:", max_arg.type
     niters = self.shape(max_arg, axis)
-    print "niters:", niters
-    print "axis:", axis
 
     # Create the tile size variable and find the number of tiles
     tile_size = self.fresh_i64("tile_size")
-    self.tile_params.append((tile_size, self.num_tiled_adverbs))
+    self.assign(tile_size, self.index(self.tile_param_array, self.nesting_idx))
     self.num_tiled_adverbs += 1
     num_tiles = self.div(niters, tile_size, name="num_tiles")
     loop_bound = self.mul(num_tiles, tile_size, "loop_bound")
@@ -316,13 +308,8 @@ class LowerTiledAdverbs(LowerAdverbs):
     slice_t = array_type.make_slice_type(i.type, i_after.type, Int64)
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
-    for arg in args:
-      print "arg rank:", arg.type.rank
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
-    print "nested_args:", nested_args
-    for n, arg in enumerate(nested_args):
-      print "nested_arg[" + str(n) + "].type:", arg.type
 
     # TODO: Use shape inference to figure out how large of an array
     # I need to allocate here!
@@ -330,8 +317,11 @@ class LowerTiledAdverbs(LowerAdverbs):
     self.blocks.push()
     self.assign(i_after, self.add(i, tile_size))
     output_idxs = syntax.Index(array_result, tile_bounds, type=fn.return_type)
-    nested_call = syntax.Call(fn, nested_args, type=fn.return_type)
-    self.assign(output_idxs, self.transform_expr(nested_call))
+    transformed_fn = self.transform_expr(fn)
+    if transformed_fn.arg_names[-1] == self.tile_param_array.name:
+      nested_args.append(self.tile_param_array)
+    nested_call = syntax.Call(transformed_fn, nested_args, type=fn.return_type)
+    self.assign(output_idxs, nested_call)
 
     body = self.blocks.pop()
     self.blocks += syntax.While(cond, body, merge)
@@ -345,20 +335,17 @@ class LowerTiledAdverbs(LowerAdverbs):
     self.blocks.push()
     straggler_output = syntax.Index(array_result, straggler_bounds,
                                     type=fn.return_type)
-    nested_call = syntax.Call(fn, straggler_args, type=fn.return_type)
-    self.assign(straggler_output, self.transform_expr(nested_call))
+    nested_call = syntax.Call(transformed_fn, straggler_args,
+                              type=fn.return_type)
+    if transformed_fn.arg_names[-1] == self.tile_param_array.name:
+      straggler_args.append(self.tile_param_array)
+    self.assign(straggler_output, nested_call)
     body = self.blocks.pop()
     self.blocks += syntax.If(cond, body, [], {})
     return array_result
 
   def post_apply(self, fn):
-    tile_param_array = self.fresh_var(int64_array_t, "tile_params")
-    fn.arg_names.append(tile_param_array.name)
-    assignments = []
-    for var, counter in self.tile_params:
-      assignments.append(
-          syntax.Assign(var,
-                        self.index(tile_param_array, counter, temp=False)))
-    fn.body = assignments + fn.body
-    fn.input_types += (int64_array_t,)
-    return fn
+    if self.tiling:
+      fn.arg_names.append(self.tile_param_array.name)
+      fn.input_types += (int64_array_t,)
+      fn.type_env[self.tile_param_array.name] = int64_array_t

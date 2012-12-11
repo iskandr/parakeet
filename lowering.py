@@ -12,9 +12,8 @@ tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
 
-no_tiling = [LowerAdverbs]
-
 lowering_pipeline = [
+  LowerAdverbs,
   Simplify,
   Inliner,
   LowerIndexing,
@@ -32,10 +31,11 @@ def lower(fundef, tile=False):
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
+    lowered_fn = fundef
     if tile:
       lowered_fn = apply_pipeline(fundef, tiling_pipeline, copy = True)
-    else:
-      lowered_fn = apply_pipeline(fundef, no_tiling, copy = True)
+    
+    print lowered_fn
 
     lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
 

@@ -95,7 +95,6 @@ def test_lowering():
 #  print new_fn_2
 #  new_fn_3 = transform.apply_pipeline(new_fn_2, lowering.lowering_pipeline)
 #  print new_fn_3
-  print map2_fn
   new_fn = lowering.lower(map2_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
   print new_fn
