@@ -5,6 +5,8 @@ import core_types
 import array_type 
 import tuple_type 
 
+
+
 import shape  
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, UnknownScalar, Unknown

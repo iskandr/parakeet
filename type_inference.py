@@ -135,11 +135,7 @@ def linearize_actual_args(fn, args):
     # Drop arguments that are assigned defaults,
     # since we're assuming those are set in the body
     # of the function
-    linear_args, extra = \
-        untyped_fn.args.linearize_values(args,
-                                         tuple_elts_fn = tuple_elts,
-                                         keyword_fn = lambda k, v: None)
-    combined_args = [x for x in (linear_args + extra) if x]
+    combined_args = untyped_fn.args.linearize_without_defaults(args, tuple_elts)
     return untyped_fn, combined_args, arg_types
 
 _invoke_type_cache = {}

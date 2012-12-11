@@ -51,8 +51,6 @@ def copy(x):
   else:
     return x
 
-def copy_list(xs):
-  return [copy(x) for x in xs]
 
 def expect(fn, args, expected):
   """
@@ -61,15 +59,18 @@ def expect(fn, args, expected):
   """
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
 
-  untyped_result = interp.eval_fn(untyped, copy_list(all_args))
+  untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \
     "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
-
-  typed_result = interp.eval_fn(typed, copy_list(all_args))
+  print "-- all args", all_args
+  linear_args = untyped.args.linearize_without_defaults(all_args)
+  print "-- linear args", linear_args 
+  typed_result = interp.eval_fn(typed, map(copy, linear_args))
   assert eq(typed_result, expected), \
     "Expected %s but typed fn returned %s" % (expected, typed_result)
 
-  llvm_result = compiled(*all_args)
+
+  llvm_result = compiled(*linear_args)
   assert eq(llvm_result, expected), \
     "Expected %s but compiled fn return %s" % (expected, llvm_result)
 

@@ -231,6 +231,15 @@ class FormalArgs(object):
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
 
+  def linearize_without_defaults(self, actuals, tuple_elts_fn = tuple):
+    linear_args, extra = \
+      self.linearize_values(actuals, tuple_elts_fn = tuple_elts_fn, \
+                            keyword_fn = lambda k, v: None)
+    print "actuals", actuals 
+    print "linear args", linear_args
+    print "extra", extra 
+    return [x for x in (linear_args + extra) if x is not None]
+  
   def transform(self,
                 rename_fn = lambda x: x,
                 keyword_value_fn = None):
