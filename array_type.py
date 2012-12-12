@@ -32,10 +32,14 @@ class SliceT(StructT):
 
   def __eq__(self, other):
     return self is other or \
-      (self.start_type == other.start_type and
+      (isinstance(other, SliceT) and
+       self.start_type == other.start_type and
        self.stop_type == other.stop_type and
        self.step_type == other.step_type)
 
+  def __hash__(self):
+    return hash((self.start_type, self.stop_type, self.step_type))
+  
   def combine(self, other):
     if self == other:
       return self
@@ -104,6 +108,9 @@ class ArrayT(StructT):
     return isinstance(other, ArrayT) and \
       self.elt_type == other.elt_type and self.rank == other.rank
 
+  def __hash__(self, other):
+    return hash((self.elt_type, self.rank))
+  
   def combine(self, other):
     if self == other:
       return self

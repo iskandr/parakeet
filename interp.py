@@ -116,7 +116,6 @@ class ClosureVal:
     return eval_fn(self.fn, args)
 
 def eval_fn(fn, actuals):
-  # print "EVAL", fn, actuals
   if isinstance(fn, syntax.TypedFn):
     assert len(fn.arg_names) == len(actuals), \
       "Wrong number of args, expected %s but given %s" % \

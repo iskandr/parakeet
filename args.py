@@ -235,9 +235,6 @@ class FormalArgs(object):
     linear_args, extra = \
       self.linearize_values(actuals, tuple_elts_fn = tuple_elts_fn, \
                             keyword_fn = lambda k, v: None)
-    print "actuals", actuals 
-    print "linear args", linear_args
-    print "extra", extra 
     return [x for x in (linear_args + extra) if x is not None]
   
   def transform(self,

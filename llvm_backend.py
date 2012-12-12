@@ -15,7 +15,7 @@ from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -354,20 +354,18 @@ def compile_block(stmts, env, builder):
 compiled_functions = {}
 import lowering
 def compile_fn(fundef):
-  #print
-  #print "Compiling", fundef
-  #print
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
-  fundef = lowering.lower(fundef, tile=False)
-  #print "...lowered:", fundef
+  lowered = lowering.lower(fundef, tile=False)
+  print "Lowered", lowered 
   env = CompilationEnv()
-  start_builder = env.init_fn(fundef)
-  compile_block(fundef.body, env, start_builder)
-  print env.llvm_fn
+  start_builder = env.init_fn(lowered)
+  compile_block(lowered.body, env, start_builder)
+  print "Before opt", env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
-
-  result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
+  print "After opt", env.llvm_fn
+  
+  result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 
   compiled_functions[fundef.name] = result
   return result

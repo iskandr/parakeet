@@ -36,11 +36,11 @@ def untyped_wrapper(adverb_class,
         axis, \
         tuple(data_names), \
         varargs_name
-        
-
+    
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
+   
     fn_args_obj = FormalArgs()
     def mk_input_var(name):
       if name is None:

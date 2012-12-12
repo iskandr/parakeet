@@ -7,7 +7,7 @@ import ctypes
 class TypeFailure(Exception):
   def __init__(self, msg):
     self.msg = msg
-
+  
 class IncompatibleTypes(Exception):
   def __init__(self, t1, t2):
     self.t1 = t1
@@ -23,11 +23,20 @@ class Type(Node):
   def combine(self, other):
     raise IncompatibleTypes(self, other)
 
+  def __hash__(self):
+    assert False, "Hash function not implemented for type %s" % (self,)
+  
+  def __eq__(self, _):
+    assert False, "Equality not implemented for type %s" % (self,)
+    
 class AnyT(Type):
   """top of the type lattice, absorbs all types"""
 
   def combine(self, other):
     return self
+  
+  def __eq__(self, other):
+    return isinstance(other, AnyT)
 
 # since there's only one Any type, just create an instance of the same name
 Any = AnyT()
@@ -49,7 +58,7 @@ class FnT(Type):
   Type of a typed function 
   """
   def __init__(self, input_types, return_type):
-    self.input_types = input_types 
+    self.input_types = tuple(input_types )
     self.return_type = return_type 
     
   def __str__(self):
@@ -71,6 +80,9 @@ class FnT(Type):
       return self
     else:
       raise IncompatibleTypes(self, other)
+    
+  def __hash__(self):
+    return hash(self.input_types + (self.return_type,))
 
 _fn_type_cache = {}
 def make_fn_type(input_types, return_type):
@@ -133,7 +145,12 @@ class NoneT(ConcreteT):
 
   def __str__(self):
     return "NoneT"
-
+  
+  def __hash__(self):
+    return 0
+  
+  def __eq__(self, other):
+    return isinstance(other, NoneT)
   def __repr__(self):
     return str(self)
 
@@ -404,6 +421,9 @@ class PtrT(ConcreteT):
   def __str__(self):
     return "ptr(%s)" % self.elt_type
 
+  def __eq__(self, other):
+    return isinstance(other, PtrT) and self.elt_type == other.elt_type 
+  
   def __repr__(self):
     return str(self)
 
