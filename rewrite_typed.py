@@ -123,6 +123,7 @@ class RewriteTyped(Transform):
 
   def transform_Assign(self, stmt):
     new_lhs = self.transform_lhs(stmt.lhs)
+    print new_lhs, new_lhs.type 
     lhs_t = new_lhs.type
     assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
     new_rhs = self.coerce_expr(stmt.rhs, lhs_t)

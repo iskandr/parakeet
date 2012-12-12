@@ -101,6 +101,27 @@ def test_slice_second_axis_matrices():
   for m in matrices:
     expect(slice_second_axis, [m,2], m[:,2])    
 
+def assign_first_axis(x, i, j):
+  x[i] = x[j]
+  return x 
+
+def test_assign_first_axis():
+  for m in matrices:
+      m_expect = m.copy()
+      m_input = m.copy()
+      m_expect[1] = m_expect[2]
+      expect(assign_first_axis, [m_input, 1, 2], m_expect)
+
+def assign_second_axis(x, i, j):
+  x[:, i] = x[:, j]
+  return x
+
+def test_assign_second_axis():
+  for m in matrices:
+      m_expect = m.copy()
+      m_input = m.copy()
+      m_expect[:,1] = m_expect[:,2]
+      expect(assign_second_axis, [m_input, 1, 2], m_expect)
 
 if __name__ == '__main__':
   run_local_tests()

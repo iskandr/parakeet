@@ -117,8 +117,8 @@ def test_axes():
   print parakeet_fn 
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   rslt = wrapper(x2_array)
-  assert testing_helpers.eq(rslt, x2_array), \
-      "Expected %s but got %s" % (x2_array, rslt)
+  assert testing_helpers.eq(rslt, x2_array.T), \
+      "Expected %s but got %s" % (x2_array.T, rslt)
   print rslt
 
 def test_lowering():

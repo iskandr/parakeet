@@ -435,7 +435,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 
         assert isinstance(new_arr.type, array_type.ArrayT), \
             "Expected array, got %s" % new_arr.type
-        elt_t = new_arr.type.elt_type
+        elt_t = new_arr.type.index_type(new_idx.type)
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
       elif isinstance(lhs, untyped_ast.Attribute):
         name = lhs.name
