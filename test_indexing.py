@@ -91,7 +91,7 @@ def slice_first_axis(x,i):
 
 def test_slice_first_axis_matrices():
   for m in matrices:
-    expect(implicit_slice_first_axis, [m,2], m[2])    
+    expect(implicit_slice_first_axis, [m, 2], m[2])    
 
 
 def slice_second_axis(x,i):

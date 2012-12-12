@@ -192,12 +192,13 @@ class ArrayT(StructT):
 
     elt_size = self.elt_type.nbytes
     strides_in_elts = self.strides_t.to_python(obj.strides.contents)
-    assert any([stride == 1 for stride in strides_in_elts]), \
-        "Discontiguous array not supported, strides = %s" % (strides_in_elts,)
+    #assert any([stride == 1 for stride in strides_in_elts]), \
+    #    "Discontiguous array not supported, strides = %s" % (strides_in_elts,)
+    min_stride = min(strides_in_elts)
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
 
     n_elts = np.prod(shape)
-    n_bytes = n_elts * elt_size
+    n_bytes = n_elts * elt_size * min_stride 
     dest_buf = AllocateBuffer(n_bytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
 

@@ -114,9 +114,11 @@ def test_axes():
   new_fn = lowering.lower(axis_fn, False)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  print parakeet_fn 
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   rslt = wrapper(x2_array)
-  assert testing_helpers.eq(rslt, x2_array)
+  assert testing_helpers.eq(rslt, x2_array), \
+      "Expected %s but got %s" % (x2_array, rslt)
   print rslt
 
 def test_lowering():

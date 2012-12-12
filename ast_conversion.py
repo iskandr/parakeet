@@ -11,11 +11,13 @@ from function_registry import register_python_fn, lookup_python_fn
 from prims import Prim, prim_wrapper
 from scoped_env import ScopedEnv
 from subst import subst, subst_list
+from syntax_helpers import none, true, false
+from macro import macro 
 
 reserved_names = {
-  'True' : syntax.Const(True),
-  'False' : syntax.Const(False),
-  'None' : syntax.Const(None),
+  'True' : true,
+  'False' : false,
+  'None' : none,
 }
 
 def translate_default_arg_value(arg):
@@ -27,15 +29,32 @@ def translate_default_arg_value(arg):
     assert name in reserved_names
     return reserved_names[name].value
 
+class Globals(object):
+  def __init__(self, globals_dict):
+    self.globals_dict = globals_dict 
+    
+  def __getattr__(self, name):
+    if hasattr(__builtins__, name):
+      return getattr(__builtins__, name)
+    else:
+      return self.globals_dict[name]
+
+  def __getitem__(self, name):
+    assert isinstance(name, str), \
+        "Not a string: %s" % name
+    return getattr(self, name)
+  
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict = None, closure_cell_dict = None,
                outer_env = None):
     # assignments which need to get prepended at the beginning of the
     # function
+    self.globals = Globals(globals_dict)
     self.env = \
         ScopedEnv(outer_env = outer_env,
                   closure_cell_dict = closure_cell_dict,
                   globals_dict = globals_dict)
+    
 
   def fresh_name(self, original_name):
     return self.env.fresh(original_name)
@@ -179,13 +198,13 @@ class AST_Translator(ast.NodeVisitor):
         expr.upper
         expr.step
       """
-      start = self.visit_expr(expr.lower)
-      stop = self.visit_expr(expr.upper)
-      step = self.visit_expr(expr.step)
+      start = self.visit(expr.lower) if expr.lower else none
+      stop = self.visit(expr.upper) if expr.upper else none 
+      step = self.visit(expr.step) if expr.step else none 
       return syntax.Slice(start, stop, step)
 
     def visit_ExtSlice():
-      slice_elts = map(self.translate_slice, expr.dims)
+      slice_elts = map(self.visit_slice, expr.dims)
       if len(slice_elts) > 1:
         return syntax.Tuple(slice_elts)
       else:
@@ -220,7 +239,7 @@ class AST_Translator(ast.NodeVisitor):
   def generic_visit(self, expr):
     raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr),
                                                  expr.__class__.__name__))
-  def attribute_chain(self, expr):
+  def build_attribute_chain(self, expr):
     assert isinstance(expr, (ast.Name, ast.Attribute))
     if isinstance(expr, ast.Name):
       return [expr.id]
@@ -228,17 +247,18 @@ class AST_Translator(ast.NodeVisitor):
       left = self.attribute_chain(expr.value) 
       left.append (expr.attr)
       return left
-    
+  
+  def lookup_attribute_chain(self, attr_chain):
+    assert len(attr_chain) > 0
+    value = self.globals
+    for name in attr_chain:
+      value = getattr(value, name)
+    return value 
+  
   def visit_Call(self, expr):
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
     assert kwargs is None, "Dictionary of keyword args not supported"
-
-    try:
-      attr_chain = self.attribute_chain(fn)
-      fn_val = self.visit(fn)
-    except:
-      fn_val = self.visit(fn)
 
     positional = self.visit_list(args)
 
@@ -246,14 +266,24 @@ class AST_Translator(ast.NodeVisitor):
     for kwd in keywords_list:
       keywords_dict[kwd.arg] = self.visit(kwd.value)
 
+    
+    try:
+      attr_chain = self.build_attribute_chain(fn)
+      python_value = self.lookup_attribute_chain(attr_chain)
+      if isinstance(python_value, macro):
+        return python_value(positional, **keywords_dict)
+      else:
+        fn_val = self.visit(fn)
+    except:
+      fn_val = self.visit(fn)
     if starargs:
       starargs_expr = self.visit(starargs)
     else:
       starargs_expr = None
 
     actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-
     return syntax.Call(fn_val, actuals)
+
 
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
