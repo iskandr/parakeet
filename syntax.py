@@ -143,7 +143,6 @@ class Closure(Expr):
   _members = ['fn', 'args']
 
 class Call(Expr):
-
   def __str__(self):
     if isinstance(self.fn, (Fn, TypedFn)):
       fn_name = self.fn.name
@@ -233,7 +232,6 @@ class Fn(Expr):
   def node_init(self):
     assert isinstance(self.name, str), \
         "Expected string for fn name, got %s" % self.name
-
     assert isinstance(self.args, args.FormalArgs), \
         "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \

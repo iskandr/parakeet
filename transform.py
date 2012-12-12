@@ -163,7 +163,7 @@ class Transform(Codegen):
       if new_fn is None:
         new_fn = old_fn
     if self.verify:  
-      import verify 
+      import verify
       verify.verify(new_fn)
     return new_fn 
 

@@ -59,8 +59,8 @@ class CompiledFn:
     actual_types = tuple(map(type_conv.typeof, args))
     expected_types = self.parakeet_fn.input_types
     assert actual_types == expected_types, \
-      "Arg type mismatch, expected %s but got %s" % \
-      (expected_types, actual_types)
+        "Arg type mismatch, expected %s but got %s" % \
+        (expected_types, actual_types)
 
     # calling conventions are that output must be preallocated by the caller'
     ctypes_inputs = [t.from_python(v) for (v,t) in zip(args, expected_types)]
@@ -95,7 +95,7 @@ def specialize_and_compile(fn, args, kwargs = {}):
 
   # compile to native code
   llvm_fn, parakeet_fn, exec_engine = \
-    llvm_backend.compile_fn(typed)
+      llvm_backend.compile_fn(typed)
   compiled_fn_wrapper = CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   return untyped, typed, compiled_fn_wrapper, args_obj
 
