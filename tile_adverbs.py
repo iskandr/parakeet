@@ -272,10 +272,6 @@ class TileAdverbs(Transform):
   def transform_Scan(self, expr):
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
-  def post_apply(self, fn):
-    print fn
-    return fn
-
 class LowerTiledAdverbs(Transform):
   def __init__(self, fn, nesting_idx=-1, tile_param_array=None):
     Transform.__init__(self, fn)

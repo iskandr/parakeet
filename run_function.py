@@ -82,20 +82,19 @@ def specialize_and_compile(fn, args, kwargs = {}):
   else:
     # translate from the Python AST to Parakeet's untyped format
     untyped  = ast_conversion.translate_function_value(fn)
-    
+
   nonlocals = list(untyped.python_nonlocals())
   args_obj = ActualArgs(nonlocals + list(args), kwargs)
-  
+
   # get types of all inputs
   input_types = args_obj.transform(type_conv.typeof)
-                                    
+
   # propagate types through function representation and all
   # other functions it calls
   typed = type_inference.specialize(untyped, input_types)
 
   # compile to native code
-  llvm_fn, parakeet_fn, exec_engine = \
-      llvm_backend.compile_fn(typed)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(typed)
   compiled_fn_wrapper = CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   return untyped, typed, compiled_fn_wrapper, args_obj
 

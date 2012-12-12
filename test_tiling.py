@@ -67,16 +67,9 @@ axis_fn = syntax.TypedFn(
   name = "axis_fn",
   arg_names = ["X"],
   input_types = [x_2_array_t],
-  body = [syntax.Return(adverbs.Map(id_fn_3, [syntax.Var("X", type=x_2_array_t)],
+  body = [syntax.Return(adverbs.Map(id_fn_3,
+                                    [syntax.Var("X", type=x_2_array_t)],
                                     1, type=x_2_array_t))],
-  return_type = x_2_array_t,
-  type_env = {"X":x_2_array_t})
-
-axis_assign_fn = syntax.TypedFn(
-  name = "axis_assign_fn",
-  arg_names = ["X", "Y"],
-  input_types = [x_2_array_t, x_2_array_t],
-  body = [syntax.Return()],
   return_type = x_2_array_t,
   type_env = {"X":x_2_array_t})
 
@@ -86,46 +79,34 @@ def identity(x):
 def map_id(X):
   return each(identity, X)
 
-#def test_tiling():
-#  rslt = parakeet.run(map_id, x_array)
+def map2_id(X):
+  return each(map_id, X)
+
+#def test_axes():
+#  new_fn = lowering.lower(axis_fn, False)
+#  assert isinstance(new_fn, syntax.TypedFn)
+#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+#  rslt = wrapper(x2_array)
 #  print rslt
-
-#def vm(x, y):
-#  tmp = each(lambda x,y: x*y, x, y)
-#  return reduce(lambda x,y: x+y, tmp)
+#  assert testing_helpers.eq(rslt, x2_array)
 #
-#def test_vm_tiling():
-#  _, typed, _, _ = specialize_and_compile(vm, [x_array, x_array])
-#  print typed
-#  tiling_transform = tile_adverbs.TileAdverbs()
-#
-#def test_map_tiling():
-#  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
-#  new_fn = tiling_transform.apply(copy=True)
-#  print new_fn
+#def test_nested_tiling():
+#  new_fn = lowering.lower(axis_fn, True)
 #  assert isinstance(new_fn, syntax.TypedFn)
+#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+#  rslt = wrapper(x2_array, np.array([5,4], dtype=np.int64))
+#  print rslt
+#  assert testing_helpers.eq(rslt, x2_array)
 
-#def test_id_tiling():
-#  tiling_transform = tile_adverbs.TileAdverbs(id_fn_2)
-#  new_fn = tiling_transform.apply(copy=True)
-#  assert isinstance(new_fn, syntax.TypedFn)
-
-def test_axes():
-  new_fn = lowering.lower(axis_fn, False)
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x2_array)
+def test_nested_tiling2():
+  untyped, _, compiled_fn, args = specialize_and_compile(map2_id, [x2_array])
+  linear_args = untyped.args.linearize_without_defaults(args)
+  print linear_args
+  rslt = compiled_fn(x2_array, np.array([5,4]))
+  print rslt
   assert testing_helpers.eq(rslt, x2_array)
-  print rslt
-
-def test_lowering():
-  new_fn = lowering.lower(axis_fn, False)
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x2_array)#, np.array([5,4], dtype=np.int64))
-  print rslt
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
