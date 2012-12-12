@@ -37,13 +37,13 @@ class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
 
   def __str__(self):
-    s = "if %s:%s\nelse:%s\n" %\
-           (self.cond,
-            block_to_str(self.true),
-            block_to_str(self.false),
-           )
+    s = "if %s:%s\nelse:%s\n" % \
+        (self.cond,
+         block_to_str(self.true),
+         block_to_str(self.false),
+        )
     if len(self.merge) > 0:
-      s+= "(merge-branches)%s\n" % (phi_nodes_to_str(self.merge))
+      s += "(merge-branches)%s\n" % (phi_nodes_to_str(self.merge))
     return s
 
   def __repr__(self):
@@ -83,12 +83,12 @@ class Const(Expr):
 
   def __hash__(self):
     return hash(self.value)
-  
+
   def __eq__(self, other):
     return self.__class__ == other.__class__ and \
-      self.type == other.type and \
-      self.value == other.value 
-  
+           self.type == other.type and \
+           self.value == other.value
+
 class Var(Expr):
   _members = ['name']
 
@@ -100,10 +100,10 @@ class Var(Expr):
 
   def __str__(self):
     return self.name
-  
+
   def __hash__(self):
     return hash(self.name)
-  
+
   def __eq__(self, other):
     return self.__class__ == other.__class__ and \
       self.type == other.type and \
@@ -314,36 +314,38 @@ class TypedFn(Expr):
   registry = {}
   def node_init(self):
     assert isinstance(self.body, list), \
-      "Invalid body for typed function: %s" % (self.body,)
+        "Invalid body for typed function: %s" % (self.body,)
     assert isinstance(self.arg_names, (list, tuple)), \
-      "Invalid typed function arguments: %s" % (self.arg_names,)
+        "Invalid typed function arguments: %s" % (self.arg_names,)
     assert isinstance(self.name, str), \
-      "Invalid typed function name: %s" % (self.name,)
+        "Invalid typed function name: %s" % (self.name,)
 
     if isinstance(self.input_types, list):
       self.input_types = tuple(self.input_types)
 
     assert isinstance(self.input_types, tuple), \
-      "Invalid input types: %s" % (self.input_types,)
+        "Invalid input types: %s" % (self.input_types,)
     assert isinstance(self.return_type, core_types.Type), \
-      "Invalid return type: %s" % (self.return_type,)
+        "Invalid return type: %s" % (self.return_type,)
     assert isinstance(self.type_env, dict), \
-      "Invalid type environment: %s" % (self.type_env,)
+        "Invalid type environment: %s" % (self.type_env,)
 
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
 
     assert self.name not in self.registry, \
-      "Typed function already registered: %s" % self.name
+        "Typed function already registered: %s" % self.name
     self.registry[self.name] = self
 
   def __repr__(self):
     arg_strings = []
+
     for name in self.arg_names:
       arg_strings.append("%s : %s" % (name, self.type_env.get(name)))
+
     return "function %s(%s) => %s:%s" % \
-      (self.name, ", ".join(arg_strings),
-       self.return_type,
-       block_to_str(self.body))
+           (self.name, ", ".join(arg_strings),
+            self.return_type,
+            block_to_str(self.body))
 
   def __str__(self):
     #return "TypedFn(%s)" % self.name

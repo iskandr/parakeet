@@ -210,7 +210,7 @@ class TileAdverbs(Transform):
       return syntax.Return(self.transform_expr(stmt.value))
 
     return stmt
-  
+
   def tile_adverb(self, expr, adverb, tiledAdverb):
     # TODO: Have to handle naming collisions in the expansions dict
     depth = len(self.adverbs_visited)
@@ -265,16 +265,20 @@ class TileAdverbs(Transform):
 
   def transform_Map(self, expr):
     return self.tile_adverb(expr, adverbs.Map, adverbs.TiledMap)
-  
+
   def transform_Reduce(self, expr):
     return self.tile_adverb(expr, adverbs.Reduce, adverbs.TiledReduce)
-  
+
   def transform_Scan(self, expr):
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
-class LowerTiledAdverbs(LowerAdverbs):
+  def post_apply(self, fn):
+    print fn
+    return fn
+
+class LowerTiledAdverbs(Transform):
   def __init__(self, fn, nesting_idx=-1, tile_param_array=None):
-    LowerAdverbs.__init__(self, fn)
+    Transform.__init__(self, fn)
     self.num_tiled_adverbs = 0
     self.nesting_idx = nesting_idx
     self.tiling = True
@@ -291,11 +295,11 @@ class LowerTiledAdverbs(LowerAdverbs):
   def transform_Map(self, expr):
     self.tiling = False
     return expr
-  
+
   def transform_Reduce(self, expr):
     self.tiling = False
     return expr
-  
+
   def transform_Scan(self, expr):
     self.tiling = False
     return expr
@@ -312,8 +316,7 @@ class LowerTiledAdverbs(LowerAdverbs):
     niters = self.shape(max_arg, axis)
 
     # Create the tile size variable and find the number of tiles
-    tile_size = self.fresh_i64("tile_size")
-    self.assign(tile_size, self.index(self.tile_param_array, self.nesting_idx))
+    tile_size = self.index(self.tile_param_array, self.nesting_idx)
     self.num_tiled_adverbs += 1
     num_tiles = self.div(niters, tile_size, name="num_tiles")
     loop_bound = self.mul(num_tiles, tile_size, "loop_bound")
@@ -322,45 +325,50 @@ class LowerTiledAdverbs(LowerAdverbs):
 
     cond = self.lt(i, loop_bound)
     elt_t = expr.type.elt_type
-    slice_t = array_type.make_slice_type(i.type, i_after.type, Int64)
-    tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
-                               type=slice_t)
-    nested_args = [self.index_along_axis(arg, axis, tile_bounds)
-                   for arg in args]
+    slice_t = array_type.make_slice_type(i.type, i.type, Int64)
 
     # TODO: Use shape inference to figure out how large of an array
     # I need to allocate here!
     array_result = self.alloc_array(elt_t, self.shape(max_arg))
+
     self.blocks.push()
     self.assign(i_after, self.add(i, tile_size))
+    tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
+                               type=slice_t)
+    nested_args = [self.index_along_axis(arg, axis, tile_bounds)
+                   for arg in args]
     output_idxs = self.index_along_axis(array_result, axis, tile_bounds)
     #syntax.Index(array_result, tile_bounds, type=fn.return_type)
     transformed_fn = self.transform_expr(fn)
-    if transformed_fn.arg_names[-1] == self.tile_param_array.name:
+    nested_has_tiles = \
+        transformed_fn.arg_names[-1] == self.tile_param_array.name
+    if nested_has_tiles:
       nested_args.append(self.tile_param_array)
     nested_call = syntax.Call(transformed_fn, nested_args, type=fn.return_type)
     self.assign(output_idxs, nested_call)
-
     body = self.blocks.pop()
+
     self.blocks += syntax.While(cond, body, merge)
 
     # Handle the straggler sub-tile
     cond = self.lt(loop_bound, niters)
+
+    self.blocks.push()
     straggler_bounds = syntax.Slice(loop_bound, niters,
                                     syntax_helpers.one(Int64), type=slice_t)
     straggler_args = [self.index_along_axis(arg, axis, straggler_bounds)
                       for arg in args]
-    self.blocks.push()
     straggler_output = self.index_along_axis(array_result, axis,
-                                             straggler_bounds) 
+                                             straggler_bounds)
     #syntax.Index(array_result, straggler_bounds,
     #                                type=fn.return_type)
     nested_call = syntax.Call(transformed_fn, straggler_args,
                               type=fn.return_type)
-    if transformed_fn.arg_names[-1] == self.tile_param_array.name:
+    if nested_has_tiles:
       straggler_args.append(self.tile_param_array)
     self.assign(straggler_output, nested_call)
     body = self.blocks.pop()
+
     self.blocks += syntax.If(cond, body, [], {})
     return array_result
 
@@ -369,3 +377,4 @@ class LowerTiledAdverbs(LowerAdverbs):
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
+    print fn

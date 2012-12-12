@@ -8,7 +8,7 @@ class Transform(Codegen):
   def __init__(self, fn, verify = True):
     Codegen.__init__(self)
     self.fn = fn
-    self.verify = verify   
+    self.verify = verify
     self.copy = None
 
   def lookup_type(self, name):
@@ -17,8 +17,6 @@ class Transform(Codegen):
 
   def transform_TypedFn(self, fn):
     return fn
-    #nested_transform = self.__class__(fn)
-    #return nested_transform.apply(copy = self.copy)
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
@@ -113,7 +111,7 @@ class Transform(Codegen):
       result = getattr(self, method_name)(stmt)
     import types
     assert isinstance(result, (syntax.Stmt, types.NoneType)), \
-      "Expected statement: %s" % result
+        "Expected statement: %s" % result
     return result
 
   def transform_block(self, stmts):
@@ -125,14 +123,14 @@ class Transform(Codegen):
     return self.blocks.pop()
 
   def pre_apply(self, old_fn):
-    # print "%s : %s" % (self.__class__.__name__, repr(old_fn))
-    pass 
+    pass
+
   def post_apply(self, new_fn):
     pass
 
   def apply(self, copy = False):
     self.copy = copy
-    
+
     old_fn = self.pre_apply(self.fn)
     if old_fn is None:
       old_fn = self.fn
@@ -153,8 +151,7 @@ class Transform(Codegen):
 
       new_fn = self.post_apply(new_fundef)
       if new_fn is None:
-        new_fn = new_fundef 
-      
+        new_fn = new_fundef
     else:
       old_fn.type_env = self.type_env
       old_fn.body = new_body
@@ -162,28 +159,24 @@ class Transform(Codegen):
 
       if new_fn is None:
         new_fn = old_fn
-    if self.verify:  
+    if self.verify:
       import verify
       verify.verify(new_fn)
-    return new_fn 
-
+    return new_fn
 
 class MemoizedTransform(Transform):
   _cache = {}
-  
+
   def apply(self, copy = False):
     key = (self.__class__.__name__, self.fn.name)
     if key in self._cache and not copy:
       return self._cache[key]
     else:
-      
       new_fn = Transform.apply(self, copy = copy)
       self._cache[key] = new_fn
     return new_fn
 
-
 def apply_pipeline(fn, transforms, copy = False):
-
   for T in transforms:
     t = T(fn)
     fn = t.apply(copy = copy)
