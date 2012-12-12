@@ -61,9 +61,7 @@ def expect(fn, args, expected):
   untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \
       "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
-  print "-- all args", all_args
   linear_args = untyped.args.linearize_without_defaults(all_args)
-  print "-- linear args", linear_args 
   typed_result = interp.eval_fn(typed, map(copy, linear_args))
   assert eq(typed_result, expected), \
       "Expected %s but typed fn returned %s" % (expected, typed_result)

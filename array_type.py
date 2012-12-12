@@ -108,7 +108,7 @@ class ArrayT(StructT):
     return isinstance(other, ArrayT) and \
       self.elt_type == other.elt_type and self.rank == other.rank
 
-  def __hash__(self, other):
+  def __hash__(self):
     return hash((self.elt_type, self.rank))
   
   def combine(self, other):

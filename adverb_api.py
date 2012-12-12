@@ -169,7 +169,12 @@ def par_each(fn, *args, **kwds):
 
   class ParEachArgsType(core_types.StructT):
     _fields_ = fields
-
+    
+    def __hash__(self):
+      return hash(tuple(fields))
+    def __eq__(self, other):
+      return isinstance(other, ParEachArgsType)
+    
   args_t = ParEachArgsType()
   c_args = args_t.ctypes_repr()
   for i, arg in enumerate(args):
