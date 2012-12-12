@@ -220,13 +220,25 @@ class AST_Translator(ast.NodeVisitor):
   def generic_visit(self, expr):
     raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr),
                                                  expr.__class__.__name__))
-
+  def attribute_chain(self, expr):
+    assert isinstance(expr, (ast.Name, ast.Attribute))
+    if isinstance(expr, ast.Name):
+      return [expr.id]
+    else:
+      left = self.attribute_chain(expr.value) 
+      left.append (expr.attr)
+      return left
+    
   def visit_Call(self, expr):
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
     assert kwargs is None, "Dictionary of keyword args not supported"
 
-    fn_val = self.visit(fn)
+    try:
+      attr_chain = self.attribute_chain(fn)
+      fn_val = self.visit(fn)
+    except:
+      fn_val = self.visit(fn)
 
     positional = self.visit_list(args)
 
