@@ -10,7 +10,7 @@ class AdverbSemantics(object):
   and make them work for some other domain (such as types,
   shapes, or compiled expressions)
   """
-  
+
   def build_slice_indices(self, rank, axis, idx):
     if rank == 1:
       assert axis == 0
@@ -36,7 +36,6 @@ class AdverbSemantics(object):
   def delayed_elt(self, x, axis):
     return lambda idx: self.slice_along_axis(x, axis, idx)
 
-  
   def delay_list(self, xs, axis):
     return [self.delayed_elt(x, axis) for x in xs]
 
@@ -54,8 +53,6 @@ class AdverbSemantics(object):
     self.check_equal_sizes(axis_sizes)
     return axis_sizes
 
-
-  
   def map_prelude(self, map_fn, xs, axis):
     axis_sizes = self.sizes_along_axis(xs, axis)
     return axis_sizes[0], self.delay_list(xs, axis)
@@ -68,7 +65,6 @@ class AdverbSemantics(object):
       # transformed first value of the data
       # in case we need to coerce up
       return self.invoke(combine, [init, delayed_map_result(self.int(0))])
-    
 
   def create_result(self, elt_type, inner_shape, outer_shape):
     if not self.is_tuple(outer_shape):
@@ -76,13 +72,13 @@ class AdverbSemantics(object):
     result_shape = self.concat_tuples(outer_shape, inner_shape)
     result = self.alloc_array(elt_type, result_shape)
     return result
-  
+
   def create_output_array(self, fn, inputs, extra_dims):
     inner_result = self.invoke(fn, inputs)
     inner_shape = self.shape(inner_result)
     elt_t = self.elt_type(inner_result)
     return self.create_result(elt_t, inner_shape, extra_dims)
-  
+
   def eval_map(self, f, values, axis):
     niters, delayed_elts = self.map_prelude(f, values, axis)
     zero = self.int(0)
@@ -98,7 +94,7 @@ class AdverbSemantics(object):
   def eval_reduce(self, map_fn, combine, init, values, axis):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):
-      return self.invoke(map_fn, self.force_list(delayed_elts, idx)) 
+      return self.invoke(map_fn, self.force_list(delayed_elts, idx))
     init = self.acc_prelude(init, combine, delayed_map_result)
     def loop_body(acc, idx):
       elt = delayed_map_result(idx)
@@ -109,7 +105,7 @@ class AdverbSemantics(object):
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):
-      return self.invoke(map_fn, self.force_list(delayed_elts, idx)) 
+      return self.invoke(map_fn, self.force_list(delayed_elts, idx))
     init = self.acc_prelude(init, combine, delayed_map_result)
     output = self.create_output_array(emit, [init], niters)
     self.setidx(output, self.int(0), self.invoke(emit, [init]))
@@ -130,7 +126,7 @@ class AdverbSemantics(object):
     first_x = self.slice_along_axis(x, axis, zero)
     first_y = self.slice_along_axis(y, axis, zero)
     result =  self.create_output_array(fn, [first_x, first_y], outer_shape)
-    
+
     def outer_loop_body(i):
       xi = self.slice_along_axis(x, axis, i)
       def inner_loop_body(j):

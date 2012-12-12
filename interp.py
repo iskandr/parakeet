@@ -116,7 +116,6 @@ class ClosureVal:
     return eval_fn(self.fn, args)
 
 def eval_fn(fn, actuals):
-  # print "EVAL", fn, actuals
   if isinstance(fn, syntax.TypedFn):
     assert len(fn.arg_names) == len(actuals), \
       "Wrong number of args, expected %s but given %s" % \
@@ -204,6 +203,8 @@ def eval_fn(fn, actuals):
       assert isinstance(expr.type, StructT), \
           "Expected %s : %s to be a struct" % (expr, expr.type)
       elts = map(eval_expr, expr.args)
+      print expr.type.ctypes_repr
+      print expr.type.ctypes_repr._fields_ 
       return expr.type.ctypes_repr(elts)
 
     def expr_Tuple():

@@ -24,6 +24,10 @@ class SyntaxVisitor(object):
     return tuple(self.visit_expr_list(exprs))
   
   def visit_lhs(self, lhs):
+    method_name = 'visit_lhs_' + lhs.node_type()
+    if hasattr(self, method_name):
+      method = getattr(self, method_name)
+      return method(lhs)
     return self.visit_expr(lhs)
   
   def after_Assign(self, new_lhs, new_rhs):

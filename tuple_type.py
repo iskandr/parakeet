@@ -15,10 +15,7 @@ class TupleT(StructT):
   def node_init(self):
     if self.elt_types is None:
       self.elt_types = ()
-
-    if type(self) != tuple:
-      self.elt_types = tuple(self.elt_types)
-
+    self.elt_types = tuple(self.elt_types)
     self._fields_ = [
       ("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)
     ]
@@ -83,7 +80,7 @@ class TupleT(StructT):
     if isinstance(other, TupleT) and \
        len(other.elt_types) == len(self.elt_types):
       combined_elt_types = [t1.combine(t2) for \
-                            (t1, t2) in zip(self.elt_types, other.elt_tyepes)]
+                            (t1, t2) in zip(self.elt_types, other.elt_types)]
       if combined_elt_types != self.elt_types:
         return TupleT(combined_elt_types)
       else:

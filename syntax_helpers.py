@@ -1,8 +1,8 @@
+import args
 import array_type
 import core_types
 import syntax
 import tuple_type
-import args 
 
 def const_int(n, t = core_types.Int64):
   return syntax.Const(n, type = t)

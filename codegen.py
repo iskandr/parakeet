@@ -140,7 +140,7 @@ class Codegen(object):
 
   def index_along_axis(self, arr, axis, idx, name = None):
     assert isinstance(axis, int), \
-      "Axis must be a known constant int, got: " + str(axis)
+        "Axis must be a known constant int, got: " + str(axis)
     indices = []
     for i in xrange(arr.type.rank):
       if i == axis:
@@ -211,7 +211,6 @@ class Codegen(object):
     elif syntax_helpers.is_zero(x) or syntax_helpers.is_zero(y):
       return self.pick_const(x, y, 0)
     else:
-
       return self.prim(prims.multiply, [x,y], name)
 
   def div(self, x, y, name = None):
@@ -225,7 +224,6 @@ class Codegen(object):
       return self.pick_const(x, y, 0)
     else:
       return self.prim(prims.mod, [x,y], name)
-
 
   def lt(self, x, y, name = None):
     if isinstance(x, (syntax.Var, syntax.Const)) and x == y:

@@ -40,7 +40,7 @@ class ClosureT(StructT):
       self.max_id += 1
 
   def __hash__(self):
-    return hash(self.fn) + hash(self.arg_types)
+    return hash( (self.fn,) + self.arg_types)
 
   def __eq__(self, other):
     return self.fn == other.fn and self.arg_types == other.arg_types

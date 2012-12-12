@@ -12,7 +12,6 @@ def run_local_functions(prefix, locals_dict = None):
   good = set([])
   bad = set([])
   for k, test in locals_dict.iteritems():
-
     if k.startswith(prefix):
       print "Running %s..." % k
       try:
@@ -28,6 +27,7 @@ def run_local_functions(prefix, locals_dict = None):
         #print sys.exc_info()[1]
         print "\n --- %s failed\n" % k
         bad.add(k)
+
   print "\n%d tests passed: %s\n" % (len(good), ", ".join(good))
   print "%d failed: %s" % (len(bad),", ".join(bad))
 
@@ -40,8 +40,8 @@ def run_local_tests(locals_dict = None):
 def eq(x,y):
   if isinstance(y, np.ndarray):
     return isinstance(x, np.ndarray) and x.shape == y.shape and \
-      (np.all(np.ravel(x) == np.ravel(y)) or \
-       np.mean(np.ravel(x) - np.ravel(y)) <= 0.000001)
+        (np.all(np.ravel(x) == np.ravel(y)) or \
+         np.mean(np.ravel(x) - np.ravel(y)) <= 0.000001)
   else:
     return x == y
 
@@ -51,9 +51,6 @@ def copy(x):
   else:
     return x
 
-def copy_list(xs):
-  return [copy(x) for x in xs]
-
 def expect(fn, args, expected):
   """
   Helper function used for testing, assert that Parakeet evaluates given code to
@@ -61,17 +58,17 @@ def expect(fn, args, expected):
   """
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
 
-  untyped_result = interp.eval_fn(untyped, copy_list(all_args))
+  untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \
-    "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
-
-  typed_result = interp.eval_fn(typed, copy_list(all_args))
+      "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
+  linear_args = untyped.args.linearize_without_defaults(all_args)
+  typed_result = interp.eval_fn(typed, map(copy, linear_args))
   assert eq(typed_result, expected), \
-    "Expected %s but typed fn returned %s" % (expected, typed_result)
+      "Expected %s but typed fn returned %s" % (expected, typed_result)
 
-  llvm_result = compiled(*all_args)
+  llvm_result = compiled(*linear_args)
   assert eq(llvm_result, expected), \
-    "Expected %s but compiled fn return %s" % (expected, llvm_result)
+      "Expected %s but compiled fn return %s" % (expected, llvm_result)
 
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

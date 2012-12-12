@@ -35,9 +35,11 @@ def maybe_iter(obj):
 
 class ActualArgs(object):
   def __init__(self, positional, keywords = {}, starargs = None):
-    self.positional = tuple(positional)
+    positional = tuple(positional)
+    self.positional = positional
     self.keywords = keywords
     self.starargs = starargs
+    
 
   def transform(self, fn, keyword_name_fn = None, keyword_value_fn = None):
     new_pos = map(fn, self.positional)
@@ -74,8 +76,9 @@ class ActualArgs(object):
 
   def __hash__(self):
     kwd_tuple = tuple(self.keywords.items())
-    return hash(self.positional + kwd_tuple + (self.starargs,))
-
+    full_tuple = self.positional + kwd_tuple + (self.starargs,)
+    return hash(full_tuple)
+    
   def __iter__(self):
     return combine_iters(
       iter(self.positional),
@@ -231,6 +234,12 @@ class FormalArgs(object):
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
 
+  def linearize_without_defaults(self, actuals, tuple_elts_fn = tuple):
+    linear_args, extra = \
+      self.linearize_values(actuals, tuple_elts_fn = tuple_elts_fn, \
+                            keyword_fn = lambda k, v: None)
+    return [x for x in (linear_args + extra) if x is not None]
+  
   def transform(self,
                 rename_fn = lambda x: x,
                 keyword_value_fn = None):

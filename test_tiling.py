@@ -24,8 +24,8 @@ id_fn = syntax.TypedFn(
   return_type = core_types.Int64,
   type_env = {})
 
-x_array = np.arange(100, dtype = np.int64)
-x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
+x_array = np.arange(10, dtype = np.int64)
+x2_array = np.arange(80, dtype = np.int64).reshape(10,8)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
 
@@ -55,6 +55,31 @@ map2_fn = syntax.TypedFn(
   return_type = x_2_array_t,
   type_env = {"X":x_2_array_t})
 
+id_fn_3 = syntax.TypedFn(
+  name = "id_fn_3",
+  arg_names = ["x"],
+  input_types = [x_array_t],
+  body = [syntax.Return(syntax.Var("x", type=x_array_t))],
+  return_type = x_array_t,
+  type_env = {"x":x_array_t})
+
+axis_fn = syntax.TypedFn(
+  name = "axis_fn",
+  arg_names = ["X"],
+  input_types = [x_2_array_t],
+  body = [syntax.Return(adverbs.Map(id_fn_3, [syntax.Var("X", type=x_2_array_t)],
+                                    1, type=x_2_array_t))],
+  return_type = x_2_array_t,
+  type_env = {"X":x_2_array_t})
+
+axis_assign_fn = syntax.TypedFn(
+  name = "axis_assign_fn",
+  arg_names = ["X", "Y"],
+  input_types = [x_2_array_t, x_2_array_t],
+  body = [syntax.Return()],
+  return_type = x_2_array_t,
+  type_env = {"X":x_2_array_t})
+
 def identity(x):
   return x
 
@@ -79,29 +104,29 @@ def map_id(X):
 #  new_fn = tiling_transform.apply(copy=True)
 #  print new_fn
 #  assert isinstance(new_fn, syntax.TypedFn)
-#
+
 #def test_id_tiling():
 #  tiling_transform = tile_adverbs.TileAdverbs(id_fn_2)
 #  new_fn = tiling_transform.apply(copy=True)
 #  assert isinstance(new_fn, syntax.TypedFn)
 
-def test_lowering():
-#  tiling_transform = tile_adverbs.TileAdverbs(map2_fn)
-#  new_fn = tiling_transform.apply(copy=True)
-#  print new_fn
-#  lower_tiling = tile_adverbs.LowerTiledAdverbs(new_fn)
-#  new_fn_2 = lower_tiling.apply(copy=True)
-#  assert isinstance(new_fn_2, syntax.TypedFn)
-#  print new_fn_2
-#  new_fn_3 = transform.apply_pipeline(new_fn_2, lowering.lowering_pipeline)
-#  print new_fn_3
-  print map2_fn
-  new_fn = lowering.lower(map2_fn, True)
+def test_axes():
+  new_fn = lowering.lower(axis_fn, False)
   assert isinstance(new_fn, syntax.TypedFn)
-  print new_fn
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  print parakeet_fn 
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper(x2_array)
+  assert testing_helpers.eq(rslt, x2_array), \
+      "Expected %s but got %s" % (x2_array, rslt)
+  print rslt
+
+def test_lowering():
+  new_fn = lowering.lower(axis_fn, False)
+  assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x2_array, np.array([2,2], dtype=np.int64))
+  rslt = wrapper(x2_array)#, np.array([5,4], dtype=np.int64))
   print rslt
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -47,8 +47,8 @@ class CompilationEnv:
     n_expected = len(fundef.arg_names)
     n_compiled = len(self.llvm_fn.args)
     assert n_compiled == n_expected, \
-      "Expected %d args (%s) but compiled code had %d args (%s)" % \
-      (n_expected, fundef.arg_names, n_compiled, self.llvm_fn.args)
+        "Expected %d args (%s) but compiled code had %d args (%s)" % \
+        (n_expected, fundef.arg_names, n_compiled, self.llvm_fn.args)
 
     for (name, t) in fundef.type_env.iteritems():
       if not name.startswith("$"):
@@ -103,7 +103,7 @@ def compile_expr(expr, env, builder):
       return const(0, Int64)
     else:
       assert isinstance(expr.type, ScalarT), \
-        "Expected scalar constant but got %s" % expr.type
+          "Expected scalar constant but got %s" % expr.type
     return const(expr.value, expr.type)
 
   def compile_Cast():
@@ -119,8 +119,8 @@ def compile_expr(expr, env, builder):
     for (i, elt) in enumerate(expr.args):
       field_name, field_type = struct_t._fields_[i]
       assert elt.type == field_type, \
-             "Mismatch between expected type %s and given %s for field '%s' " %\
-             (field_type, elt.type, field_name)
+          "Mismatch between expected type %s and given %s for field '%s' " % \
+          (field_type, elt.type, field_name)
       elt_ptr = builder.gep(struct_ptr, [int32(0), int32(i)], "field%d_ptr" % i)
       llvm_elt = compile_expr(elt, env, builder)
       builder.store(llvm_elt, elt_ptr)
@@ -149,13 +149,13 @@ def compile_expr(expr, env, builder):
     index_t = expr.index.type
     llvm_idx = llvm_convert.convert(llvm_index, index_t, Int32, builder)
 
-    pointer = builder.gep(llvm_arr, [ llvm_idx], "elt_pointer")
+    pointer = builder.gep(llvm_arr, [llvm_idx], "elt_pointer")
     elt = builder.load(pointer, "elt")
     return elt
 
   def compile_Attribute():
     field_ptr, field_type = \
-      attribute_lookup(expr.value, expr.name, env, builder)
+        attribute_lookup(expr.value, expr.name, env, builder)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     if isinstance(field_type, BoolT):
       return llvm_convert.to_bit(field_value)
@@ -258,7 +258,7 @@ def compile_stmt(stmt, env, builder):
     elif isinstance(stmt.lhs, syntax.Index):
       ptr_t = stmt.lhs.value.type
       assert isinstance(ptr_t, PtrT), \
-        "Expected pointer, got %s" % ptr_t
+          "Expected pointer, got %s" % ptr_t
       lhs_t = ptr_t.elt_type
       base_ptr = compile_expr(stmt.lhs.value, env, builder)
       index = compile_expr(stmt.lhs.index, env, builder)
@@ -266,12 +266,12 @@ def compile_stmt(stmt, env, builder):
       ref = builder.gep(base_ptr, [index], "elt_ptr")
     else:
       assert isinstance(stmt.lhs, syntax.Attribute), \
-        "Unexpected LHS: %s" % stmt.lhs
+          "Unexpected LHS: %s" % stmt.lhs
       struct = stmt.lhs.value
       ref, lhs_t = attribute_lookup(struct, stmt.lhs.name, env, builder)
 
     assert lhs_t == rhs_t, \
-      "Type mismatch between LHS %s and RHS %s" % (lhs_t, rhs_t)
+        "Type mismatch between LHS %s and RHS %s" % (lhs_t, rhs_t)
 
     builder.store(value, ref)
     return builder, False
@@ -288,9 +288,9 @@ def compile_stmt(stmt, env, builder):
     enter_cond = compile_expr(stmt.cond, env, builder)
     enter_cond = llvm_convert.to_bit(enter_cond, builder)
     builder.cbranch(enter_cond, loop_bb, after_bb)
-    
+
     body_end_builder, body_always_returns = \
-      compile_block(stmt.body, env, body_start_builder)
+        compile_block(stmt.body, env, body_start_builder)
     if not body_always_returns:
       exit_bb, exit_builder = env.new_block("loop_exit")
       compile_merge_right(stmt.merge, env, body_end_builder)
@@ -314,15 +314,14 @@ def compile_stmt(stmt, env, builder):
     # and then wire together the control flow with branches
     true_bb, true_builder = env.new_block("if_true")
     after_true, true_always_returns = \
-      compile_block(stmt.true, env, true_builder)
+        compile_block(stmt.true, env, true_builder)
 
     false_bb, false_builder = env.new_block("if_false")
     after_false, false_always_returns = \
-      compile_block(stmt.false, env, false_builder)
+        compile_block(stmt.false, env, false_builder)
 
-    
     builder.cbranch(cond, true_bb, false_bb)
-    
+
     # compile phi nodes as assignments and then branch
     # to the continuation block
     compile_merge_left(stmt.merge, env, after_true)
@@ -354,20 +353,18 @@ def compile_block(stmts, env, builder):
 compiled_functions = {}
 import lowering
 def compile_fn(fundef):
-  #print
-  #print "Compiling", fundef
-  #print
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
-  fundef = lowering.lower(fundef, tile=False)
-  #print "...lowered:", fundef
+  lowered = lowering.lower(fundef, tile=False)
+  #print "Lowered", lowered
   env = CompilationEnv()
-  start_builder = env.init_fn(fundef)
-  compile_block(fundef.body, env, start_builder)
-  print env.llvm_fn
+  start_builder = env.init_fn(lowered)
+  compile_block(lowered.body, env, start_builder)
+  #print "Before opt", env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
+  #print "After opt", env.llvm_fn
 
-  result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
+  result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 
   compiled_functions[fundef.name] = result
   return result
