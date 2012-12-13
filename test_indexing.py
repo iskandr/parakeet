@@ -117,9 +117,9 @@ def test_assign_second_axis():
     m_expect[:,1] = m_expect[:,2]
     expect(assign_second_axis, [m_input, 1, 2], m_expect)
 
-def assign_slices(x, idxs1, idxs2):
-  x[idxs1[0]:idxs1[1],idxs1[2]:idxs1[3]] = \
-      x[idxs2[0]:idxs2[1],idxs2[2]:idxs2[3]]
+def assign_slices(x, idxs1 idxs2):
+  x[idxs1[0]:idxs1[1], idxs1[2]:idxs1[3]] = \
+      x[idxs2[0]:idxs2[1], idxs2[2]:idxs2[3]]
   return x
 
 def test_assign_slices():
