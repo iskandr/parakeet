@@ -98,7 +98,8 @@ def const(x):
 
 def unwrap_constant(x):
   if isinstance(x, syntax.Expr):
-    assert isinstance(x, syntax.Const)
+    assert isinstance(x, syntax.Const), \
+        "Expected constant, got %s" % (x,)
     return x.value
   else:
     assert is_python_constant(x)

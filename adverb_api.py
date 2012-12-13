@@ -2,6 +2,7 @@ import adverbs
 import adverb_helpers
 import adverb_registry
 import adverb_wrapper
+from adverb_wrapper import untyped_identity_function as ident
 import core_types
 import ctypes
 import llvm_backend
@@ -9,7 +10,8 @@ import numpy as np
 import syntax
 import type_conv
 import type_inference
-
+from macro import macro, staged_macro
+import syntax_helpers
 from run_function import run
 from runtime import runtime
 
@@ -62,6 +64,37 @@ def create_adverb_hook(adverb_class,
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 
+def get_axis(kwargs):
+  axis = kwargs.get('axis', 0)
+  return syntax_helpers.unwrap_constant(axis)
+  
+@staged_macro("axis")
+def each(f, *xs, **kwargs):
+  return adverbs.Map(f, args = xs, axis = get_axis(kwargs)) 
+
+@staged_macro("axis")
+def allpairs(f, x, y, **kwargs):
+  return adverbs.AllPairs(fn = f, args = [x,y], axis = get_axis(kwargs))
+
+
+@staged_macro("axis") 
+def reduce(f, x, **kwargs):
+  axis = get_axis(kwargs)
+  init = kwargs.get('init')
+  return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init, axis = axis)
+
+# TODO: Called from the outside maybe macros should generate wrapper functions 
+
+@staged_macro("axis")
+def scan(f, x, **kwargs):
+  axis = get_axis(kwargs)
+  init = kwargs.get('init')
+  if init is None:
+    init = syntax_helpers.none 
+  return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x], 
+                      init = init, axis = axis)
+
+"""
 each = create_adverb_hook(adverbs.Map, map_fn_name = 'f')
 allpairs = create_adverb_hook(adverbs.AllPairs,
                               map_fn_name = 'f',
@@ -72,7 +105,7 @@ reduce = create_adverb_hook(adverbs.Reduce,
 scan = create_adverb_hook(adverbs.Scan,
                           combine_fn_name = 'f',
                           arg_names = ['x'])
-
+"""
 try:
   rt = runtime.Runtime()
 except:

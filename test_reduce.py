@@ -10,7 +10,7 @@ bool_vec = float_vec < np.mean(float_vec)
 
 
 def sum(xs):
-    return reduce(add, xs, 0)
+    return reduce(add, xs, init=0)
 
 def test_int_sum():
     testing_helpers.expect(sum, [int_vec], np.sum(int_vec))

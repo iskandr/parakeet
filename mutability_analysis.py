@@ -20,25 +20,25 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
     self.mutable_types = set([])
   
   def _mark_type(self, t):
-    self.mutable_types.add(t)
-    self._mark_children(t)
+    if self._has_mutable_fields(t):
+      self.mutable_types.add(t)
+      self._mark_children(t)
 
   def _has_mutable_fields(self, t):
     return isinstance(t, core_types.StructT) and \
-        t.__class__ not in (tuple_type.TupleT, closure_type.ClosureT)
+        not isinstance(t, (tuple_type.TupleT, closure_type.ClosureT))
     
   def _mark_children(self, t):
     """
     For any type other than a Tuple or Closure, try 
     marking all its children 
     """
-    if self._has_mutable_fields(t):
-      for name in t.members():
-        v = getattr(t, name)
-        self._mark(v)
-      if isinstance(t, core_types.StructT):
-        for (_, field_type) in t._fields_:
-          self._mark_type(field_type) 
+    for name in t.members():
+      v = getattr(t, name)
+      self._mark(v)
+    if isinstance(t, core_types.StructT):
+      for (_, field_type) in t._fields_:
+        self._mark_type(field_type) 
   
       
   def _mark(self, obj):
@@ -56,20 +56,10 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
       self.visit_lhs(e)
   
   def visit_lhs_Attribute(self, expr):
-    assert expr.type 
-    self._mark_type(expr.type)
+    self._mark_type(expr.value.type)
   
   def visit_lhs_Index(self, expr):
-    elt_type = expr.value.type.index_type(expr.index.type)
-    self._mark_type(elt_type)
-  
-  def visit_lhs_TupleProj(self, expr):
-    elt_type = expr.tuple.elt_types[expr.index]
-    self._mark_type(elt_type)
-    
-  def visit_lhs_ClosureElt(self, expr):
-    elt_type = expr.closure.arg_types[expr.index]
-    self._mark_type(elt_type)
+    self._mark_type(expr.value.type)
   
   def visit_Call(self, expr):
     for arg in expr.args:
@@ -78,7 +68,7 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
       but since we pass by value the argument itself
       isn't made mutable
       """
-      self._mark_children(arg.type)
+      self._mark_type(arg.type)
     
   def visit_fn(self, fn):
     self.mutable_types.clear()

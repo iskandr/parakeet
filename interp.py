@@ -203,8 +203,6 @@ def eval_fn(fn, actuals):
       assert isinstance(expr.type, StructT), \
           "Expected %s : %s to be a struct" % (expr, expr.type)
       elts = map(eval_expr, expr.args)
-      print expr.type.ctypes_repr
-      print expr.type.ctypes_repr._fields_ 
       return expr.type.ctypes_repr(elts)
 
     def expr_Tuple():

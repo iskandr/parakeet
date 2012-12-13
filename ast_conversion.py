@@ -28,7 +28,7 @@ def translate_default_arg_value(arg):
     name = arg.id
     assert name in reserved_names
     return reserved_names[name].value
-
+"""
 class Globals(object):
   def __init__(self, globals_dict):
     self.globals_dict = globals_dict 
@@ -43,13 +43,14 @@ class Globals(object):
     assert isinstance(name, str), \
         "Not a string: %s" % name
     return getattr(self, name)
-  
+"""
+
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict = None, closure_cell_dict = None,
                outer_env = None):
     # assignments which need to get prepended at the beginning of the
     # function
-    self.globals = Globals(globals_dict)
+    self.globals = globals_dict
     self.env = \
         ScopedEnv(outer_env = outer_env,
                   closure_cell_dict = closure_cell_dict,
@@ -252,7 +253,12 @@ class AST_Translator(ast.NodeVisitor):
     assert len(attr_chain) > 0
     value = self.globals
     for name in attr_chain:
-      value = getattr(value, name)
+      if hasattr(value, '__getitem__') and name in value:
+        value = value[name]
+      elif hasattr(value, '__dict__') and name in value.__dict__:
+        value = value.__dict__[name]
+      else:    
+        value = getattr(value, name)
     return value 
   
   def visit_Call(self, expr):
@@ -269,13 +275,25 @@ class AST_Translator(ast.NodeVisitor):
     
     try:
       attr_chain = self.build_attribute_chain(fn)
-      python_value = self.lookup_attribute_chain(attr_chain)
-      if isinstance(python_value, macro):
-        return python_value(positional, **keywords_dict)
-      else:
-        fn_val = self.visit(fn)
     except:
-      fn_val = self.visit(fn)
+      attr_chain = None 
+    if attr_chain:
+      root = attr_chain[0]
+      if root not in self.env: 
+        if root in self.globals:
+          value = self.lookup_attribute_chain(attr_chain)
+          if isinstance(value, macro):
+            return value.transform(positional, keywords_dict)
+          elif isinstance(value, prims.Prim):
+            return syntax.PrimCall(value, args)
+        elif len(attr_chain) == 1 and root in __builtins__:
+          value = __builtins__[root]
+          assert value == slice 
+          assert len(keywords_dict) == 0
+          return syntax.Slice(*positional)
+    # if we didn't evaluate a Prim or macro...
+    fn_val = self.visit(fn)
+    
     if starargs:
       starargs_expr = self.visit(starargs)
     else:
