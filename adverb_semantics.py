@@ -85,7 +85,7 @@ class AdverbSemantics(object):
     first_elts = self.force_list(delayed_elts, zero)
     output = self.create_output_array(f, first_elts, niters)
     def loop_body(idx):
-      output_indices = self.build_slice_indices(self.rank(output), axis, idx)
+      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
       elt_result = self.invoke(f, self.force_list(delayed_elts, idx))
       self.setidx(output, output_indices, elt_result)
     self.loop(zero, niters, loop_body)
@@ -110,7 +110,7 @@ class AdverbSemantics(object):
     output = self.create_output_array(emit, [init], niters)
     self.setidx(output, self.int(0), self.invoke(emit, [init]))
     def loop_body(acc, idx):
-      output_indices = self.build_slice_indices(self.rank(output), axis, idx)
+      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
       new_acc_value = self.invoke(combine, [acc.get(), delayed_map_result(idx)])
       acc.update(new_acc_value)
       output_value = self.invoke(emit, [new_acc_value])

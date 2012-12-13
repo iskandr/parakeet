@@ -25,7 +25,7 @@ id_fn = syntax.TypedFn(
   type_env = {})
 
 x_array = np.arange(10, dtype = np.int64)
-x2_array = np.arange(80, dtype = np.int64).reshape(10,8)
+x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
 
@@ -100,11 +100,23 @@ def map2_id(X):
 #  print rslt
 #  assert testing_helpers.eq(rslt, x2_array)
 
-def test_nested_tiling2():
-  untyped, _, compiled_fn, args = specialize_and_compile(map2_id, [x2_array])
-  linear_args = untyped.args.linearize_without_defaults(args)
-  print linear_args
-  rslt = compiled_fn(x2_array, np.array([5,4]))
+def test_axes():
+  new_fn = lowering.lower(axis_fn, False)
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  print parakeet_fn
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper(x2_array)
+  assert testing_helpers.eq(rslt, x2_array.T), \
+      "Expected %s but got %s" % (x2_array.T, rslt)
+  print rslt
+
+def test_lowering():
+  new_fn = lowering.lower(map2_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper(x2_array, np.array([10,10], dtype=np.int64))
   print rslt
   assert testing_helpers.eq(rslt, x2_array)
 

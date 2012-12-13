@@ -132,7 +132,15 @@ class Simplify(Transform):
       new_var = syntax.Var(name = name, type = original_expr.type)
       return new_var
 
-    
+  
+  def transform_Attribute(self, expr):
+    v = self.transform_expr(expr.value)
+    if isinstance(v, syntax.Struct):
+      idx = v.type.field_pos(expr.name)
+      return v.args[idx]
+    else:
+      return syntax.Attribute(v, expr.name, type = expr.type)
+  
   def transform_TupleProj(self, expr):
 
     idx = expr.index

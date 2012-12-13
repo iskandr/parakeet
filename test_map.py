@@ -1,7 +1,7 @@
 import numpy as np
 import parakeet as par
 from parakeet import each
-from testing_helpers import run_local_tests, expect_each, eq, expect_allpairs
+from testing_helpers import run_local_tests, expect, expect_each, eq, expect_allpairs
 
 ints_1d = np.arange(100, dtype='int')
 floats_1d = np.arange(100, dtype='float')
@@ -68,6 +68,23 @@ def each_conditional_div(x,y):
 def test_conditional_div():
     expect_allpairs(each_conditional_div, python_conditional_div,
                     [ints_1d, floats_1d])
+
+def second_elt(x):
+  return x[1]
+
+X = np.array([[1,2,3],[4,5,6]])
+
+def second_of_columns(X):
+  return each(second_elt, X, axis=1)
+
+def test_second_of_columns():
+  expect(second_of_columns, [X], np.array([4,5,6]))
+
+def second_of_rows(X):
+  return each(second_elt, X, axis=0)
+
+def test_second_of_rows():
+  expect(second_of_rows, [X], np.array([2,5]))
 
 if __name__ == '__main__':
   run_local_tests()
