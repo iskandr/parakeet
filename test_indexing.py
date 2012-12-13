@@ -1,6 +1,5 @@
 from testing_helpers import expect, run_local_tests
-import numpy as np 
-
+import numpy as np
 
 shape_1d = 40
 ints_1d = np.arange(shape_1d)
@@ -9,10 +8,8 @@ bools_1d = ints_1d % 2
 
 vecs = [ints_1d, floats_1d, bools_1d]
 
-
 shape_2d = (4,10)
 matrices = [np.reshape(vec, shape_2d) for vec in vecs]
-
 
 shape_3d = (4,5,2)
 tensors = [np.reshape(mat, shape_3d) for mat in matrices]
@@ -24,7 +21,6 @@ def test_index_1d():
   for vec in vecs:
     expect(index_1d, [vec, 20], vec[20])
 
-
 def index_2d(x, i, j):
   return x[i, j]
 
@@ -34,7 +30,6 @@ def test_index_2d():
 
 def index_3d(x, i, j, k):
   return x[i, j, k]
-
 
 def test_index_3d():
   for x in tensors:
@@ -84,33 +79,32 @@ def implicit_slice_first_axis(x,i):
 
 def test_implicit_slice_first_axis_matrices():
   for m in matrices:
-    expect(implicit_slice_first_axis, [m,2], m[2])    
+    expect(implicit_slice_first_axis, [m,2], m[2])
 
 def slice_first_axis(x,i):
   return x[i,:]
 
 def test_slice_first_axis_matrices():
   for m in matrices:
-    expect(implicit_slice_first_axis, [m, 2], m[2])    
-
+    expect(implicit_slice_first_axis, [m, 2], m[2])
 
 def slice_second_axis(x,i):
   return x[:,i]
 
 def test_slice_second_axis_matrices():
   for m in matrices:
-    expect(slice_second_axis, [m,2], m[:,2])    
+    expect(slice_second_axis, [m,2], m[:,2])
 
 def assign_first_axis(x, i, j):
   x[i] = x[j]
-  return x 
+  return x
 
 def test_assign_first_axis():
   for m in matrices:
-      m_expect = m.copy()
-      m_input = m.copy()
-      m_expect[1] = m_expect[2]
-      expect(assign_first_axis, [m_input, 1, 2], m_expect)
+    m_expect = m.copy()
+    m_input = m.copy()
+    m_expect[1] = m_expect[2]
+    expect(assign_first_axis, [m_input, 1, 2], m_expect)
 
 def assign_second_axis(x, i, j):
   x[:, i] = x[:, j]
@@ -118,10 +112,22 @@ def assign_second_axis(x, i, j):
 
 def test_assign_second_axis():
   for m in matrices:
-      m_expect = m.copy()
-      m_input = m.copy()
-      m_expect[:,1] = m_expect[:,2]
-      expect(assign_second_axis, [m_input, 1, 2], m_expect)
+    m_expect = m.copy()
+    m_input = m.copy()
+    m_expect[:,1] = m_expect[:,2]
+    expect(assign_second_axis, [m_input, 1, 2], m_expect)
+
+def assign_slices(x, idxs1, idxs2):
+  x[idxs1[0]:idxs1[1],idxs1[2]:idxs1[3]] = \
+      x[idxs2[0]:idxs2[1],idxs2[2]:idxs2[3]]
+  return x
+
+def test_assign_slices():
+  for m in matrices:
+    m_expect = m.copy()
+    m_input = m.copy()
+    m_expect[0:2,0:5] = m_expect[0:2,5:10]
+    expect(assign_slices, [m_input, (0,2,0,5), (0,2,5,10)], m_expect)
 
 if __name__ == '__main__':
   run_local_tests()

@@ -273,7 +273,7 @@ class TileAdverbs(Transform):
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
   def post_apply(self, fn):
-    print fn
+    #print fn
     return fn
 
 class LowerTiledAdverbs(Transform):
@@ -372,9 +372,12 @@ class LowerTiledAdverbs(Transform):
     self.blocks += syntax.If(cond, body, [], {})
     return array_result
 
+  def transform_TiledReduce(self, expr):
+    return expr
+
   def post_apply(self, fn):
     if self.tiling:
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
-    print fn
+    #print fn
