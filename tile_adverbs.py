@@ -272,6 +272,10 @@ class TileAdverbs(Transform):
   def transform_Scan(self, expr):
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
+  def post_apply(self, fn):
+    #print fn
+    return fn
+
 class LowerTiledAdverbs(Transform):
   def __init__(self, fn, nesting_idx=-1, tile_param_array=None):
     Transform.__init__(self, fn)
@@ -373,4 +377,4 @@ class LowerTiledAdverbs(Transform):
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
-    print fn
+    #print fn
