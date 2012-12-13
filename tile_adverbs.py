@@ -372,6 +372,9 @@ class LowerTiledAdverbs(Transform):
     self.blocks += syntax.If(cond, body, [], {})
     return array_result
 
+  def transform_TiledReduce(self, expr):
+    return expr
+
   def post_apply(self, fn):
     if self.tiling:
       fn.arg_names.append(self.tile_param_array.name)
