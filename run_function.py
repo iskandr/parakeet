@@ -82,6 +82,7 @@ def specialize_and_compile(fn, args, kwargs = {}):
   else:
     # translate from the Python AST to Parakeet's untyped format
     untyped  = ast_conversion.translate_function_value(fn)
+  print repr(untyped) 
   nonlocals = list(untyped.python_nonlocals())
   args_obj = ActualArgs(nonlocals + list(args), kwargs)
 

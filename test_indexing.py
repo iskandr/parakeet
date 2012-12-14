@@ -117,17 +117,22 @@ def test_assign_second_axis():
     m_expect[:,1] = m_expect[:,2]
     expect(assign_second_axis, [m_input, 1, 2], m_expect)
 
-def assign_slices(x, idxs1 idxs2):
-  x[idxs1[0]:idxs1[1], idxs1[2]:idxs1[3]] = \
-      x[idxs2[0]:idxs2[1], idxs2[2]:idxs2[3]]
+def assign_slices(x, (i, j, k, l), (a,b,c,d)):
+  x[i:j, k:l] = x[a:b, c:d]
   return x
 
 def test_assign_slices():
   for m in matrices:
     m_expect = m.copy()
     m_input = m.copy()
-    m_expect[0:2,0:5] = m_expect[0:2,5:10]
-    expect(assign_slices, [m_input, (0,2,0,5), (0,2,5,10)], m_expect)
+    (i,j,k,l) = (0,2,0,4)
+    (a,b,c,d) = (1,3,5,9) 
+    m_expect[i:j, k:l] = m_expect[a:b, c:d]
+    print "Running test for %s" % m.dtype
+    expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
+    print "OK #1"
+    expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
+    print "OK #2"
 
 if __name__ == '__main__':
   run_local_tests()

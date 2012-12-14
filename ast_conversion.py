@@ -98,7 +98,7 @@ class AST_Translator(ast.NodeVisitor):
         assert isinstance(sub_arg, ast.Name)
         name = sub_arg.id
       lhs = self.fresh_var(name)
-      stmt = syntax.Assign(lhs, syntax.TupleProj(var, i))
+      stmt = syntax.Assign(lhs, syntax.Index(var, syntax.Const(i)))
       assignments.append(stmt)
       if isinstance(sub_arg, ast.Tuple):
         more_stmts = self.tuple_arg_assignments(sub_arg.elts, lhs)
@@ -118,7 +118,7 @@ class AST_Translator(ast.NodeVisitor):
       else:
         assert isinstance(arg, ast.Tuple)
         arg_name = self.fresh_name("tuple_arg")
-        formals.add_positional(local_name)
+        formals.add_positional(arg_name)
         var = syntax.Var(arg_name)
         stmts = self.tuple_arg_assignments(arg.elts, var)
         assignments.extend(stmts)
