@@ -8,11 +8,11 @@ from args import FormalArgs, ActualArgs
 from common import dispatch
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
+from macro import macro
 from prims import Prim, prim_wrapper
 from scoped_env import ScopedEnv
 from subst import subst, subst_list
 from syntax_helpers import none, true, false
-from macro import macro 
 
 reserved_names = {
   'True' : true,
@@ -31,8 +31,8 @@ def translate_default_arg_value(arg):
 """
 class Globals(object):
   def __init__(self, globals_dict):
-    self.globals_dict = globals_dict 
-    
+    self.globals_dict = globals_dict
+
   def __getattr__(self, name):
     if hasattr(__builtins__, name):
       return getattr(__builtins__, name)
@@ -55,7 +55,7 @@ class AST_Translator(ast.NodeVisitor):
         ScopedEnv(outer_env = outer_env,
                   closure_cell_dict = closure_cell_dict,
                   globals_dict = globals_dict)
-    
+
 
   def fresh_name(self, original_name):
     return self.env.fresh(original_name)
@@ -200,8 +200,8 @@ class AST_Translator(ast.NodeVisitor):
         expr.step
       """
       start = self.visit(expr.lower) if expr.lower else none
-      stop = self.visit(expr.upper) if expr.upper else none 
-      step = self.visit(expr.step) if expr.step else none 
+      stop = self.visit(expr.upper) if expr.upper else none
+      step = self.visit(expr.step) if expr.step else none
       return syntax.Slice(start, stop, step)
 
     def visit_ExtSlice():
@@ -245,10 +245,10 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(expr, ast.Name):
       return [expr.id]
     else:
-      left = self.attribute_chain(expr.value) 
+      left = self.attribute_chain(expr.value)
       left.append (expr.attr)
       return left
-  
+
   def lookup_attribute_chain(self, attr_chain):
     assert len(attr_chain) > 0
     value = self.globals
@@ -257,10 +257,10 @@ class AST_Translator(ast.NodeVisitor):
         value = value[name]
       elif hasattr(value, '__dict__') and name in value.__dict__:
         value = value.__dict__[name]
-      else:    
+      else:
         value = getattr(value, name)
-    return value 
-  
+    return value
+
   def visit_Call(self, expr):
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
@@ -272,14 +272,13 @@ class AST_Translator(ast.NodeVisitor):
     for kwd in keywords_list:
       keywords_dict[kwd.arg] = self.visit(kwd.value)
 
-    
     try:
       attr_chain = self.build_attribute_chain(fn)
     except:
-      attr_chain = None 
+      attr_chain = None
     if attr_chain:
       root = attr_chain[0]
-      if root not in self.env: 
+      if root not in self.env:
         if root in self.globals:
           value = self.lookup_attribute_chain(attr_chain)
           if isinstance(value, macro):
@@ -288,12 +287,12 @@ class AST_Translator(ast.NodeVisitor):
             return syntax.PrimCall(value, args)
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
-          assert value == slice 
+          assert value == slice
           assert len(keywords_dict) == 0
           return syntax.Slice(*positional)
     # if we didn't evaluate a Prim or macro...
     fn_val = self.visit(fn)
-    
+
     if starargs:
       starargs_expr = self.visit(starargs)
     else:
@@ -301,7 +300,6 @@ class AST_Translator(ast.NodeVisitor):
 
     actuals = ActualArgs(positional, keywords_dict, starargs_expr)
     return syntax.Call(fn_val, actuals)
-
 
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))

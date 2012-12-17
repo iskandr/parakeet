@@ -6,6 +6,7 @@ import llvm_backend
 import lowering
 import numpy as np
 import parakeet
+import prims
 import run_function
 import syntax
 import syntax_helpers
@@ -73,6 +74,27 @@ axis_fn = syntax.TypedFn(
   return_type = x_2_array_t,
   type_env = {"X":x_2_array_t})
 
+add_x_y = syntax.TypedFn(
+  name = "add_x_y",
+  arg_names = ["x", "y"],
+  input_types = [core_types.Int64, core_types.Int64],
+  body = [syntax.Return(syntax.PrimCall(prims.add,
+                                        [syntax.Var("x", type=core_types.Int64),
+                                         syntax.Var("y", type=core_types.Int64)
+                                        ], type=core_types.Int64))],
+  return_type = core_types.Int64,
+  type_env = {"x":core_types.Int64, "y":core_types.Int64})
+
+red_fn = syntax.TypedFn(
+  name = "red_fn",
+  arg_names = ["X"],
+  input_types = [x_array_t],
+  body = [syntax.Return(adverbs.Reduce(add_x_y, 0, add_x_y,
+                                       [syntax.Var("X", type=x_array_t)],
+                                       0, type=core_types.Int64))],
+  return_type = core_types.Int64,
+  type_env = {"X":x_array_t})
+
 def identity(x):
   return x
 
@@ -111,14 +133,24 @@ def map2_id(X):
 #      "Expected %s but got %s" % (x2_array.T, rslt)
 #  print rslt
 
-def test_lowering():
-  new_fn = lowering.lower(map2_fn, True)
+def test_1d_map():
+  new_fn = lowering.lower(map_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x2_array, np.array([5,10], dtype=np.int64))
+  rslt = wrapper(x_array, np.array([6], dtype=np.int64))
   print rslt
   #assert testing_helpers.eq(rslt, x2_array)
+
+def test_1d_reduce():
+  print red_fn
+  new_fn = lowering.lower(red_fn, True)
+  print new_fn
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper(x_array, np.array([6], dtype=np.int64))
+  print rslt
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

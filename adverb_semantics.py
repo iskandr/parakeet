@@ -2,13 +2,12 @@ import syntax
 
 class AdverbSemantics(object):
   """
-  Describe the behavior of adverbs in terms of
-  lower-level value and iteration constructs.
+  Describe the behavior of adverbs in terms of lower-level value and iteration
+  constructs.
 
-  To get something other than an unfathomably slow
-  interpreter, override all the methods of BaseSemantics
-  and make them work for some other domain (such as types,
-  shapes, or compiled expressions)
+  To get something other than an unfathomably slow interpreter, override all the
+  methods of BaseSemantics and make them work for some other domain (such as
+  types, shapes, or compiled expressions)
   """
 
   def build_slice_indices(self, rank, axis, idx):

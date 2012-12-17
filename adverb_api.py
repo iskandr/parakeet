@@ -2,16 +2,17 @@ import adverbs
 import adverb_helpers
 import adverb_registry
 import adverb_wrapper
-from adverb_wrapper import untyped_identity_function as ident
 import core_types
 import ctypes
 import llvm_backend
 import numpy as np
 import syntax
+import syntax_helpers
 import type_conv
 import type_inference
+
+from adverb_wrapper import untyped_identity_function as ident
 from macro import macro, staged_macro
-import syntax_helpers
 from run_function import run
 from runtime import runtime
 
@@ -23,7 +24,7 @@ def create_adverb_hook(adverb_class,
                          combine_fn_name = None,
                          arg_names = None):
   assert one_is_none(map_fn_name, combine_fn_name), \
-    "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
+      "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
   if arg_names is None:
     data_names = []
     varargs_name = 'xs'
@@ -33,17 +34,14 @@ def create_adverb_hook(adverb_class,
 
   def mk_wrapper(axis):
     """
-    An awkward mismatch between treating adverbs as
-    functions is that their axis parameter is really
-    fixed as part of the syntax of Parakeet.
-    Thus, when you're calling an adverb from
-    outside Parakeet you can generate new syntax for
-    any axis you want, but if you use an adverb
-    as a function value within Parakeet:
+    An awkward mismatch between treating adverbs as functions is that their axis
+    parameter is really fixed as part of the syntax of Parakeet. Thus, when
+    you're calling an adverb from outside Parakeet you can generate new syntax
+    for any axis you want, but if you use an adverb as a function value within
+    Parakeet:
       r = par.reduce
       return r(f, xs)
-    ...then we hackishly force the adverb to go
-    along the default axis of 0.
+    ...then we hackishly force the adverb to go along the default axis of 0.
     """
     return adverb_wrapper.untyped_wrapper(
       adverb_class,
@@ -67,31 +65,31 @@ def create_adverb_hook(adverb_class,
 def get_axis(kwargs):
   axis = kwargs.get('axis', 0)
   return syntax_helpers.unwrap_constant(axis)
-  
+
 @staged_macro("axis")
 def each(f, *xs, **kwargs):
-  return adverbs.Map(f, args = xs, axis = get_axis(kwargs)) 
+  return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 
 @staged_macro("axis")
 def allpairs(f, x, y, **kwargs):
   return adverbs.AllPairs(fn = f, args = [x,y], axis = get_axis(kwargs))
 
-
-@staged_macro("axis") 
+@staged_macro("axis")
 def reduce(f, x, **kwargs):
   axis = get_axis(kwargs)
   init = kwargs.get('init')
-  return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init, axis = axis)
+  return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
+                        axis = axis)
 
-# TODO: Called from the outside maybe macros should generate wrapper functions 
+# TODO: Called from the outside maybe macros should generate wrapper functions
 
 @staged_macro("axis")
 def scan(f, x, **kwargs):
   axis = get_axis(kwargs)
   init = kwargs.get('init')
   if init is None:
-    init = syntax_helpers.none 
-  return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x], 
+    init = syntax_helpers.none
+  return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x],
                       init = init, axis = axis)
 
 """
@@ -112,7 +110,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-import array_type,  names
+import array_type, names
 from args import FormalArgs
 _par_wrapper_cache = {}
 
@@ -128,14 +126,15 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     inputs = [start_var, stop_var, args_var, tile_sizes_var]
     fn_args_obj = FormalArgs()
     for var in inputs:
-      name = var.name 
+      name = var.name
       fn_args_obj.add_positional(name)
 
-    nested_wrapper = adverb_wrapper.untyped_wrapper(adverb_class,
-                                                    map_fn_name = 'fn',
-                                                    data_names = fn.args.positional,
-                                                    varargs_name = None, 
-                                                    axis = 0)
+    nested_wrapper = \
+        adverb_wrapper.untyped_wrapper(adverb_class,
+                                       map_fn_name = 'fn',
+                                       data_names = fn.args.positional,
+                                       varargs_name = None,
+                                       axis = 0)
     # TODO: Closure args should go here.
     unpacked_args = [syntax.Closure(fn.name, [])]
     for i, t in enumerate(arg_types):
@@ -149,7 +148,7 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     call = syntax.Call(nested_closure, unpacked_args)
     body = [syntax.Assign(syntax.Attribute(args_var, "output"), call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_par_wrapper")
-    
+
     fundef = syntax.Fn(fn_name, fn_args_obj, body)
 
     _par_wrapper_cache[key] = fundef
@@ -159,16 +158,16 @@ import closure_type
 
 def translate_fn(python_fn):
   """
-  Given a python function, return its closure type
-  and the definition of its untyped representation
+  Given a python function, return its closure type and the definition of its
+  untyped representation
   """
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
   if isinstance(closure_t.fn, str):
     untyped = syntax.Fn.registry[closure_t.fn]
   else:
-    untyped = closure_t.fn 
-  
+    untyped = closure_t.fn
+
   return closure_t, untyped
 
 import llvm_types
@@ -202,12 +201,12 @@ def par_each(fn, *args, **kwds):
 
   class ParEachArgsType(core_types.StructT):
     _fields_ = fields
-    
+
     def __hash__(self):
       return hash(tuple(fields))
     def __eq__(self, other):
       return isinstance(other, ParEachArgsType)
-    
+
   args_t = ParEachArgsType()
   c_args = args_t.ctypes_repr()
   for i, arg in enumerate(args):

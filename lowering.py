@@ -4,8 +4,9 @@ from inline import Inliner
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
+from lower_tiled_adverbs import LowerTiledAdverbs
 from simplify import Simplify
-from tile_adverbs import TileAdverbs, LowerTiledAdverbs
+from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
 tiling_pipeline = [
@@ -35,9 +36,9 @@ def lower(fundef, tile=False):
     if tile:
       lowered_fn = apply_pipeline(fundef, tiling_pipeline, copy = True)
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
-    else:  
+    else:
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = True)
-    
+
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
 

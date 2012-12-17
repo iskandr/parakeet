@@ -1,36 +1,31 @@
+import adverb_semantics
+import array_type
+import core_types
+import shape
+import shape_from_type
 import syntax
-from syntax_visitor import SyntaxVisitor
- 
-import core_types 
-import array_type 
-import tuple_type 
+import tuple_type
 
-
-
-import shape  
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, UnknownScalar, Unknown
-from shape import unknown_scalar, unknown_value, const 
+from shape import unknown_scalar, unknown_value, const
 from shape import combine_list, increase_rank
 from shape import is_zero, make_shape
-
-import shape_from_type 
-import adverb_semantics
-
+from syntax_visitor import SyntaxVisitor
 
 class ShapeSemantics(adverb_semantics.AdverbSemantics):
   def size_along_axis(self, value, axis):
     assert isinstance(value, Shape)
     return value.dims[axis]
-  
+
   #def slice_along_axis(self, arr, axis, idx):
   #  assert False, (arr, axis, idx)
-    
+
   def is_tuple(self, x):
     return isinstance(x, Tuple)
 
   def is_none(self, x):
-    return isinstance(x, Const) and x.value is None 
+    return isinstance(x, Const) and x.value is None
 
   def rank(self, value):
     if isinstance(value, Shape):
@@ -46,7 +41,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
 
   def add(self, x, y):
     if is_zero(x):
-      return y 
+      return y
     elif is_zero(y):
       return x
     elif isinstance(x, Const) and isinstance(y, Const):
@@ -65,38 +60,37 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
       return Tuple(x.dims)
     else:
       return Tuple(())
-    
+
   def elt_type(self, x):
     return "DON'T CARE ABOUT ELT TYPES"
-  
+
   def alloc_array(self, _, dims):
     return Shape(dims)
-  
-  def index(self, arr, idx):
 
+  def index(self, arr, idx):
     if isinstance(arr, Scalar):
       return arr
     assert isinstance(arr, Shape )
     if isinstance(idx, Scalar):
       indices = [idx]
     elif isinstance(idx, Tuple):
-      indices = idx.elts 
-    result_dims = [] 
+      indices = idx.elts
+    result_dims = []
     for (i, curr_idx) in enumerate(indices):
       old_dim = arr.dims[i]
       if curr_idx is None or \
         (isinstance(curr_idx, Scalar) and curr_idx.value is None):
- 
+
         result_dims.append(old_dim)
       elif isinstance(curr_idx, Scalar):
-        pass 
+        pass
       else:
         assert isinstance(curr_idx, Slice), "Unsupported index %s" % curr_idx
 
         lower = curr_idx.start if curr_idx.start else const(0)
         if isinstance(lower, Const) and lower.value < 0:
           lower = self.sub(old_dim, lower)
-        upper = idx.stop if curr_idx.stop else old_dim 
+        upper = idx.stop if curr_idx.stop else old_dim
         if isinstance(upper, Const) and upper.value < 0:
           upper = self.sub(old_dim, upper)
         n = self.sub(curr_idx.stop, curr_idx.start)
@@ -108,50 +102,50 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     if n_original > n_idx:
       result_dims.extend(arr.dims[n_idx:])
 
-    return make_shape(result_dims) 
-      
+    return make_shape(result_dims)
+
   def tuple(self, elts):
     return Tuple(tuple(elts))
 
   def concat_tuples(self, t1, t2):
     return Tuple(t1.elts + t2.elts)
-  
+
   def setidx(self, arr, idx, v):
-    pass 
+    pass
 
   def loop(self, start_idx, stop_idx, body):
     body(start_idx)
-  
+
   class Accumulator(object):
     def __init__(self, v):
-      self.v = v 
-      
+      self.v = v
+
     def update(self, new_v):
-      self.v = new_v 
-  
+      self.v = new_v
+
     def get(self):
-      return self.v 
-    
+      return self.v
+
   def accumulate_loop(self, start_idx, stop_idx, body, init):
     acc = self.Accumulator(init)
     body(acc, start_idx)
-    return acc.get()    
+    return acc.get()
 
   def check_equal_sizes(self, sizes):
-    pass 
-  
+    pass
+
   def slice_value(self, start, stop, step):
     Slice(start, stop, step)
 
   def invoke(self, fn, args):
-    return symbolic_call(fn, args)  
-  
+    return symbolic_call(fn, args)
+
   none = None
   null_slice = slice(None, None, None)
-  
+
   def identity_function(self, x):
     return x
-  
+
 shape_semantics = ShapeSemantics()
 
 class ShapeInference(SyntaxVisitor):
@@ -161,8 +155,7 @@ class ShapeInference(SyntaxVisitor):
   def _clear(self):
     self.value_env = {}
     self.equivalence_classes = {}
-    
-  
+
   def unify_scalar_var(self, x, y):
     assert isinstance(x, Var), "Expected scalar variable, but got: " + str(x)
     assert isinstance(y, Scalar), "Expected scalar, but got: " + str(y)
@@ -178,20 +171,20 @@ class ShapeInference(SyntaxVisitor):
       return y
     else:
       return var
-    
+
   def unify_scalar_pairs(self, xs, ys):
     result_elts = []
     for xi, yi in zip(xs.elts, ys.elts):
       result_elts.append(self.unify_scalars(xi, yi))
-    return result_elts 
-  
+    return result_elts
+
   def unify_scalar_list(self, values):
     assert len(values) > 0
-    acc = unknown_scalar 
+    acc = unknown_scalar
     for v in values:
-      acc = self.unify_scalars(acc, v)  
-    return acc 
-  
+      acc = self.unify_scalars(acc, v)
+    return acc
+
   def unify_scalars(self, x, y):
     if isinstance(x, Unknown):
       return y
@@ -216,11 +209,11 @@ class ShapeInference(SyntaxVisitor):
         self.value_env[k] = self.visit_expr(l)
 
   def visit_Alloc(self, expr):
-    # alloc doesn't return an array but rather 
-    # a pointer whose shape properties 
+    # alloc doesn't return an array but rather
+    # a pointer whose shape properties
     # we don't yet care about here
-    return unknown_value 
-  
+    return unknown_value
+
   def visit_Struct(self, expr):
     if isinstance(expr.type, array_type.ArrayT):
       shape_tuple = self.visit_expr(expr.args[1])
@@ -234,48 +227,45 @@ class ShapeInference(SyntaxVisitor):
     stop = self.visit_expr(expr.stop)
     step = self.visit_expr(expr.step)
     return Slice(start, stop, step)
-  
+
   def visit_Const(self, expr):
     return const(expr.value)
-  
+
   def visit_TupleProj(self, expr):
-    t = self.visit_expr(expr.tuple) 
+    t = self.visit_expr(expr.tuple)
     assert isinstance(t, Tuple)
     return t.elts[expr.index]
-  
+
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
-    name = expr.name 
+    name = expr.name
     if isinstance(v, Shape) and name =='shape':
       return Tuple(v.dims)
     elif isinstance(v, Tuple) and name.startswith('elt'):
       idx = int(name[3:])
       return v[idx]
-    
+
     try:
       t = expr.value.type.field_type(name)
       if isinstance(t, core_types.ScalarT):
-        return unknown_scalar 
-    except: 
-
+        return unknown_scalar
+    except:
       return unknown_value
-    
+
   def visit_PrimCall(self, expr):
-
     arg_shapes = self.visit_expr_list(expr.args)
-
     return shape.combine_list(arg_shapes, preserve_const = False)
-    
+
   def visit_Var(self, expr):
     name = expr.name
-    if name in self.value_env: 
+    if name in self.value_env:
       return self.value_env[name]
     elif name in self.equivalence_classes:
       for other_name in self.equivalence_classes[name]:
         if other_name in self.value_env:
-          return self.value_env[other_name] 
+          return self.value_env[other_name]
     raise RuntimeError("Unknown variable: %s" %  expr)
-  
+
   def visit_Tuple(self, expr):
     return Tuple(self.visit_expr_list(expr.elts))
 
@@ -284,13 +274,13 @@ class ShapeInference(SyntaxVisitor):
     elt = combine_list(elts)
     n = len(elts)
     res = increase_rank(elt, 0, const(n))
-    return res 
-  
+    return res
+
   def visit_Closure(self, clos):
     fn = self.visit_expr(clos.fn)
     closure_arg_shapes = self.visit_expr_list(clos.args)
     return Closure(fn, closure_arg_shapes)
-  
+
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
@@ -298,57 +288,54 @@ class ShapeInference(SyntaxVisitor):
       return arr[idx.value]
     else:
       assert False, (expr, arr, idx)
-  
+
   def visit_TypedFn(self, fn):
     return fn
-    
-  def visit_Map(self, expr):
 
+  def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     return shape_semantics.eval_map(fn, arg_shapes, expr.axis)
-  
-  def visit_Reduce(self, expr):
-    fn = self.visit_expr(expr.fn) 
-    combine = self.visit_expr(expr.combine) 
-    arg_shapes = self.visit_expr_list(expr.args)
-    init = self.visit_expr(self.init) if self.init else None 
-    shape_semantics.eval_reduce(fn, combine, init, arg_shapes, expr.axis)
-  
-  def visit_Scan(self, expr):
 
-    fn = self.visit_expr(expr.fn) 
-    combine = self.visit_expr(expr.combine) 
+  def visit_Reduce(self, expr):
+    fn = self.visit_expr(expr.fn)
+    combine = self.visit_expr(expr.combine)
+    arg_shapes = self.visit_expr_list(expr.args)
+    init = self.visit_expr(self.init) if self.init else None
+    shape_semantics.eval_reduce(fn, combine, init, arg_shapes, expr.axis)
+
+  def visit_Scan(self, expr):
+    fn = self.visit_expr(expr.fn)
+    combine = self.visit_expr(expr.combine)
     emit = self.visit_expr(expr.emit)
     arg_shapes = self.visit_expr_list(expr.args)
-    init = self.visit_expr(self.init) if self.init else None 
+    init = self.visit_expr(self.init) if self.init else None
     shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes, expr.axis)
-  
+
   def visit_AllPairs(self, expr):
-    axis = self.visit_expr(expr.axis) 
+    axis = self.visit_expr(expr.axis)
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     return shape_semantics.eval_allpairs(fn, arg_shapes, axis)
-  
+
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
       assert isinstance(rhs, Tuple)
       for l,r in zip(lhs.elts, rhs.elts):
         self.bind(l,r)
     elif isinstance(lhs, syntax.Var):
-      self.value_env[lhs.name] = rhs 
-      
+      self.value_env[lhs.name] = rhs
+
   def visit_Assign(self, stmt):
     rhs = self.visit_expr(stmt.rhs)
-    self.bind(stmt.lhs, rhs) 
-    
+    self.bind(stmt.lhs, rhs)
+
   def visit_Return(self, stmt):
     new_value = self.visit_expr(stmt.value)
     old_value = self.value_env.get("$return", unknown_value)
     combined = old_value.combine(new_value)
-    self.value_env["$return"] = combined 
+    self.value_env["$return"] = combined
 
-    
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)
     self._clear()
@@ -356,15 +343,15 @@ class ShapeInference(SyntaxVisitor):
     conv = shape_from_type.Converter()
     input_values = conv.from_types(arg_types)
     for n,v in zip(fn.arg_names, input_values):
-      self.value_env[n] = v 
+      self.value_env[n] = v
     self.visit_block(fn.body)
-    return self.value_env["$return"] 
-  
+    return self.value_env["$return"]
+
 _shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
-    
+
   if typed_fn.name in _shape_cache:
     return _shape_cache[typed_fn.name]
   else:
@@ -374,14 +361,11 @@ def call_shape_expr(typed_fn):
     _shape_cache[typed_fn.name] = result_abstract_value
     return result_abstract_value
 
-
-
 def bind(lhs, rhs, env):
   if isinstance(lhs, Var):
-    env[lhs] = rhs 
+    env[lhs] = rhs
   elif isinstance(lhs, Shape):
-    assert isinstance(rhs, Shape), \
-      "Expected %s, got %s" % (lhs, rhs)
+    assert isinstance(rhs, Shape), "Expected %s, got %s" % (lhs, rhs)
     bind_pairs(lhs.dims, rhs.dims, env)
   elif isinstance(lhs, Closure):
     assert isinstance(rhs, Closure)
@@ -391,23 +375,20 @@ def bind(lhs, rhs, env):
     bind_pairs(lhs.elts, rhs.elts)
   else:
     raise RuntimeError("Unexpected shape LHS: %s" % lhs)
-    
+
 def bind_pairs(xs, ys, env):
   assert len(xs) == len(ys), \
-    "Can't bind %s and %s due to unequal lengths" % (xs, ys)
+      "Can't bind %s and %s due to unequal lengths" % (xs, ys)
   for (x,y) in zip(xs,ys):
     bind(x,y,env)
-  
+
 def subst(x, env):
   if isinstance(x, Var):
-
-    
     assert x in env, "Unknown variable %s" % x
     return env[x]
   elif isinstance(x, Scalar):
-    return x 
+    return x
   elif isinstance(x, Shape):
-
     return make_shape(subst_list(x.dims, env))
   elif isinstance(x, Tuple):
     return tuple(*subst_list(x.elts, env))
@@ -415,10 +396,9 @@ def subst(x, env):
     return Closure(x.fn, subst_list(x.args, env))
   else:
     raise RuntimeError("Unexpected abstract expression: %s" % x)
-    
+
 def subst_list(xs, env):
   return [subst(x, env) for x in xs]
-
 
 def symbolic_call(typed_fn, abstract_inputs):
   # result in terms of variables like input0, (shape: input1, input2), etc..
@@ -428,4 +408,3 @@ def symbolic_call(typed_fn, abstract_inputs):
   env = {}
   bind_pairs(shape_formals, abstract_inputs, env)
   return subst(abstract_result_value, env)
-  

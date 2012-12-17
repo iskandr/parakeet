@@ -63,8 +63,8 @@ class Inliner(transform.Transform):
     n_expected = len(arg_names)
     n_given = len(args)
     assert n_expected ==  n_given, \
-      "Function %s expects %d args (%s) but given %d" % \
-      (fundef, n_expected, ",".join(fundef.arg_names), n_given)
+        "Function %s expects %d args (%s) but given %d" % \
+        (fundef, n_expected, ",".join(fundef.arg_names), n_given)
     new_formal_names = [rename_dict[x] for x in arg_names]
 
     for (arg_name, actual) in zip(new_formal_names, args):
@@ -85,6 +85,3 @@ class Inliner(transform.Transform):
     else:
       print "CAN'T INLINE", expr
       return expr
-
-
-
