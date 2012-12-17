@@ -139,7 +139,6 @@ def map2_id(X):
 #  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
 #  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
 #  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
-#  print rslt
 #  assert testing_helpers.eq(rslt, x_array)
 
 def test_1d_reduce():
@@ -149,9 +148,9 @@ def test_1d_reduce():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x_array, np.array([10], dtype=np.int64))
-  print x_array
+  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
   print rslt
+  assert testing_helpers.eq(rslt, sum(x_array))
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
