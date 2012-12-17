@@ -531,16 +531,33 @@ class Codegen(object):
     indices = []
     for i in xrange(rank):
       s = slice_sizes[i]
-      indices.append(self.div(remainder, s))
-      remainder = self.mod(remainder, s)
+      indices.append(self.div(remainder, s, "idx%d" % i))
+      remainder = self.mod(remainder, s, "rem%d" % i)
     return self.tuple(indices)
 
   def array_copy(self, src, dest, return_stmt = False):
     assert self.is_array(dest)
-    nelts = self.nelts(dest)
-    def loop_body(i):
-      idx = self.linear_to_indices(i, self.shape(dest))
-      self.assign(self.index(dest, idx, temp=False),
-                  self.index(src, idx, temp=True))
-
-    return self.loop(syntax_helpers.zero_i64, nelts, loop_body, return_stmt)
+    # nelts = self.nelts(dest)
+    shape = self.shape(dest)
+    dims = self.tuple_elts(shape)
+    rank = len(dims)
+    index_vars = []
+    def create_loops():
+      i = len(index_vars)
+      def loop_body(index_var):
+        index_vars.append(index_var) 
+        if i+1 == rank:
+          index_tuple = self.tuple(index_vars, "idx")
+          lhs = self.index(dest, index_tuple, temp=False)
+          rhs = self.index(src, index_tuple, temp=True)
+          self.assign(lhs, rhs)
+        else:
+          create_loops()
+      start = syntax_helpers.zero_i64
+      stop = dims[i]
+      if i > 0 or return_stmt:
+        return self.loop(start, stop, loop_body, True)
+      else:
+        return self.loop(start, stop, loop_body, return_stmt)      
+    
+    return create_loops() 

@@ -53,13 +53,15 @@ class RedundancyElimination(Transform):
   
   def transform_While(self, stmt):
     self.available_expressions.push()
-    Transform.transform_While(self, stmt)
+    stmt = Transform.transform_While(self, stmt)
     self.available_expressions.pop()
+    return stmt 
   
   def transform_If(self, stmt):
     self.available_expressions.push()
-    Transform.transform_If(self, stmt)
+    stmt = Transform.transform_If(self, stmt)
     self.available_expressions.pop()
+    return stmt 
   
   def transform_Assign(self, stmt):
     lhs = stmt.lhs 
@@ -78,5 +80,9 @@ class RedundancyElimination(Transform):
         self.available_expressions[rhs] = lhs
     return syntax.Assign(lhs, rhs)
   
+  def pre_apply(self, fn):
+    pass 
+  
   def post_apply(self, fn):
     print "RedundancyElim removed %d expressions" % self.counter 
+    # print repr(fn)

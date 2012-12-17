@@ -22,8 +22,8 @@ lowering_pipeline = [
   Simplify,
   LowerStructs,
   Simplify,
-  # RedundancyElimination,
-  
+  RedundancyElimination,
+  Simplify, 
   
 ]
 

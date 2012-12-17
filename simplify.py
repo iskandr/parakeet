@@ -106,8 +106,6 @@ class Simplify(Transform):
     self.match(stmt.lhs, new_rhs)
     return syntax.Assign(stmt.lhs, new_rhs)
   
-  
-  
   def transform_Var(self, expr):
     name = expr.name
     original_expr = expr 
@@ -200,6 +198,7 @@ class Simplify(Transform):
   def transform_Struct(self, expr):
     new_args = self.transform_args(expr.args)
     return syntax.Struct(new_args, type = expr.type)
+  
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
     prim = expr.prim  
@@ -239,6 +238,7 @@ class Simplify(Transform):
       else:
         result[k] = new_left, new_right 
     return result 
+  
   
   def post_apply(self, new_fn):
     new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)

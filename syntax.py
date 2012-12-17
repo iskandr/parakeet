@@ -3,7 +3,7 @@ import core_types
 
 from args import ActualArgs
 from node import Node
-from pickle import TUPLE
+
 
 class Stmt(Node):
   pass
@@ -70,14 +70,6 @@ class While(Stmt):
 class Expr(Node):
   _members = ['type']
   
-  def __hash__(self):
-    hash_values = []
-    for m in self.members():
-      v = getattr(self, m)
-      if hasattr(v, '__iter__'):
-        v = tuple(v)
-      hash_values.append(v)
-    return hash(tuple(hash_values))
 
 class Const(Expr):
   _members = ['value']
@@ -125,11 +117,15 @@ class Attribute(Expr):
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
   
-  def node_init(self):
-    self._hash = hash ((self.value, self.name))
-    
+
   def __hash__(self):
-    return self._hash
+    return hash ((self.value, self.name))
+  
+  def __eq__(self, other):
+    return isinstance(other, Attribute) and \
+        self.name == other.name and \
+        self.value == other.value 
+         
 
 class Index(Expr):
   _members = ['value', 'index']
@@ -212,6 +208,10 @@ class PrimCall(Expr):
   
   def node_init(self):
     self.args = tuple(self.args)
+  
+  def __hash__(self):
+    return hash((self.prim, self.args))
+   
 
 
 ############################################################################

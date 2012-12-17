@@ -23,6 +23,12 @@ class Node(object):
     klass._members_cache[klass] = m
     return m
   
+  def iteritems(self):
+    for k in self.members():
+      yield (k, getattr(self, k))
+  
+  def items(self):
+    [(k,getattr(self,k)) for k in self.members()]
   
   def __init__(self, *args, **kw):
     self.parent = None
@@ -45,6 +51,27 @@ class Node(object):
     for C in reversed(self.__class__.mro()):
       if 'node_init' in C.__dict__:
         C.node_init(self)
+
+  def __hash__(self):
+    hash_values = []
+    for m in self.members():
+      v = getattr(self, m)
+      if hasattr(v, '__iter__'):
+        v = tuple(v)
+      hash_values.append(v)
+    return hash(tuple(hash_values))
+  
+  def eq_members(self, other):
+    for (k,v) in self.iteritems():
+      if not hasattr(other, k):
+        return False
+      if getattr(other, k) != v:
+        return False
+    return True 
+      
+  
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.eq_members(other)
 
   @classmethod
   def node_type(cls):
