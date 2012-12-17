@@ -133,14 +133,14 @@ def map2_id(X):
 #      "Expected %s but got %s" % (x2_array.T, rslt)
 #  print rslt
 
-def test_1d_map():
-  new_fn = lowering.lower(map_fn, True)
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x_array, np.array([5], dtype=np.int64))
-  print rslt
-  assert testing_helpers.eq(rslt, x_array)
+#def test_1d_map():
+#  new_fn = lowering.lower(map_fn, True)
+#  assert isinstance(new_fn, syntax.TypedFn)
+#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+#  rslt = wrapper(x_array, np.array([5], dtype=np.int64))
+#  print rslt
+#  assert testing_helpers.eq(rslt, x_array)
 
 def test_2d_map():
   new_fn = lowering.lower(map2_fn, True)
@@ -151,16 +151,16 @@ def test_2d_map():
   print rslt
   assert testing_helpers.eq(rslt, x2_array)
 
-def test_1d_reduce():
-  print red_fn
-  new_fn = lowering.lower(red_fn, True)
-  print new_fn
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
-  print rslt
-  assert testing_helpers.eq(rslt, sum(x_array))
+#def test_1d_reduce():
+#  print red_fn
+#  new_fn = lowering.lower(red_fn, True)
+#  print new_fn
+#  assert isinstance(new_fn, syntax.TypedFn)
+#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+#  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
+#  print rslt
+#  assert testing_helpers.eq(rslt, sum(x_array))
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
