@@ -204,10 +204,16 @@ class ArrayT(StructT):
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
     src_ptr = obj.data 
     if obj.offset:
+      print "OFFSET", obj.offset
       P = src_ptr.__class__
-      addr = ctypes.addressof(src_ptr.contents) + obj.offset
-      src_ptr = P.from_address(addr)
-      
+      old_addr = ctypes.addressof(src_ptr.contents)
+      print "old addr", old_addr
+      print "IS IT EQUAL TO...", ctypes.addressof(src_ptr.contents)
+      new_addr = old_addr + (obj.offset * elt_size)
+      print "new_addr #1", new_addr
+      print "class", P
+      src_ptr = ctypes.cast(new_addr, P)
+      print "new addr #2", ctypes.addressof(src_ptr.contents) 
     # copy data from pointer
     ctypes.memmove(dest_ptr, src_ptr, n_bytes)
     return np.ndarray(shape, dtype = self.elt_type.dtype,
