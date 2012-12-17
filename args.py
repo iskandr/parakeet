@@ -163,11 +163,7 @@ class FormalArgs(object):
        self.starargs
       )
 
-  def __iter__(self):
-    if self.starargs:
-      return iter(self.arg_slots + [self.starargs])
-    else:
-      return iter(self.arg_slots)
+
 
 
   def bind(self, actuals,

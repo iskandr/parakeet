@@ -26,8 +26,13 @@ class ScopedEnv:
   def __repr__(self):
     return str(self)
   
+  def items(self):
+    all_items = []
+    for s in self.scopes:
+      all_items.extend(s.items())
+    return all_items 
+  
   def fresh(self, name):
-    
     fresh_name = names.fresh(name)
     self.scopes[-1][name] = fresh_name 
     return fresh_name

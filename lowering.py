@@ -5,10 +5,11 @@ from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from lower_tiled_adverbs import LowerTiledAdverbs
+
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
-
+from redundancy_elim import RedundancyElimination
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
@@ -21,6 +22,9 @@ lowering_pipeline = [
   Simplify,
   LowerStructs,
   Simplify,
+  # RedundancyElimination,
+  
+  
 ]
 
 _lowered_functions = {}

@@ -3,6 +3,7 @@ import core_types
 
 from args import ActualArgs
 from node import Node
+from pickle import TUPLE
 
 class Stmt(Node):
   pass
@@ -68,6 +69,15 @@ class While(Stmt):
 
 class Expr(Node):
   _members = ['type']
+  
+  def __hash__(self):
+    hash_values = []
+    for m in self.members():
+      v = getattr(self, m)
+      if hasattr(v, '__iter__'):
+        v = tuple(v)
+      hash_values.append(v)
+    return hash(tuple(hash_values))
 
 class Const(Expr):
   _members = ['value']
@@ -114,6 +124,12 @@ class Attribute(Expr):
 
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
+  
+  def node_init(self):
+    self._hash = hash ((self.value, self.name))
+    
+  def __hash__(self):
+    return self._hash
 
 class Index(Expr):
   _members = ['value', 'index']
@@ -130,17 +146,29 @@ class Tuple(Expr):
     else:
       return "()"
 
+  def node_init(self):
+    self.elts = tuple(self.elts)
+
   def __iter__(self):
     return iter(self.elts)
 
+    
+
 class Array(Expr):
   _members = ['elts']
+  
+  def node_init(self):
+    self.elts = tuple(self.elts)
+
 
 class Closure(Expr):
   """
   Create a closure which points to a global fn with a list of partial args
   """
   _members = ['fn', 'args']
+  
+  def node_init(self):
+    self.args = tuple(self.args)
 
 class Call(Expr):
   def __str__(self):
@@ -181,6 +209,10 @@ class PrimCall(Expr):
 
   def __str__(self):
     return repr(self)
+  
+  def node_init(self):
+    self.args = tuple(self.args)
+
 
 ############################################################################
 #

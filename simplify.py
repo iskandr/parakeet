@@ -170,7 +170,7 @@ class Simplify(Transform):
   def transform_Call(self, expr):
     import closure_type
     fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args) 
+    args = self.transform_args(expr.args) 
     if isinstance(fn.type, closure_type.ClosureT) and \
         isinstance(fn.type.fn, syntax.TypedFn):
       closure_elts = self.closure_elts(fn)
@@ -182,8 +182,26 @@ class Simplify(Transform):
       return expr  
       
   
+  def is_simple(self, expr):
+    return isinstance(expr, (syntax.Const, syntax.Var))
+  
+  def transform_args(self, args):
+    new_args = []
+    for arg in args:
+      new_arg = self.transform_expr(arg)
+      if self.is_simple(new_arg):
+        new_args.append(new_arg)
+      else:
+        new_var = self.assign_temp(new_arg)
+        self.live_vars.add(new_var.name)
+        new_args.append(new_var)
+    return new_args 
+  
+  def transform_Struct(self, expr):
+    new_args = self.transform_args(expr.args)
+    return syntax.Struct(new_args, type = expr.type)
   def transform_PrimCall(self, expr):
-    args = self.transform_expr_list(expr.args)
+    args = self.transform_args(expr.args)
     prim = expr.prim  
     if all_constants(args):
       return syntax.Const(value = prim.fn(*collect_constants(args)), type = expr.type)
