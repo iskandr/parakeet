@@ -132,10 +132,23 @@ class TileAdverbs(Transform):
         # Make a type env for this function based on the number of expansions
         # left for each arg
         new_type_env = {}
-        for arg in cur_arg_names + fixed_arg_names:
-          rank_increase = self.get_num_expansions_at_depth(arg, depth)
-          new_type_env[arg] = \
-              array_type.increase_rank(type_env[arg], rank_increase)
+        new_adverb = adverb_tree[depth_idx]
+        print "fixed_arg_names:", fixed_arg_names
+        print "cur_arg_names:", cur_arg_names
+        if isinstance(new_adverb, adverbs.Reduce):
+          arg = fixed_arg_names[0]
+          print "expansions:", self.get_num_expansions_at_depth(arg, depth)
+          print "type:", type_env[arg]
+          new_type_env[arg] = type_env[arg]
+          for arg in cur_arg_names + fixed_arg_names[1:]:
+            rank_increase = self.get_num_expansions_at_depth(arg, depth)
+            new_type_env[arg] = \
+                array_type.increase_rank(type_env[arg], rank_increase)
+        else:
+          for arg in cur_arg_names + fixed_arg_names:
+            rank_increase = self.get_num_expansions_at_depth(arg, depth)
+            new_type_env[arg] = \
+                array_type.increase_rank(type_env[arg], rank_increase)
 
         cur_arg_types = []
         for arg in cur_arg_names:
@@ -159,14 +172,15 @@ class TileAdverbs(Transform):
         # Make an adverb that wraps the nested fn
         axis = 0 # When unpacking a non-adverb assignment, all axes are 0
         return_t = array_type.increase_rank(nested_fn.return_type, 1)
-        new_adverb = adverb_tree[depth_idx]
         if isinstance(new_adverb, adverbs.Reduce):
           new_adverb.combine = nested_closure
-          new_adverb.args = nested_args[1:]
           return_t = nested_fn.return_type
+          new_adverb.init = syntax.Var(fixed_arg_names[0], type=return_t)
+          new_type_env[nested_args[0].name] = return_t
+          new_adverb.args = nested_args[1:]
         else:
-          new_adverb.fn = nested_closure
           new_adverb.args = nested_args
+          new_adverb.fn = nested_closure
         new_adverb.type=return_t
         new_adverb.axis = axis
 
@@ -329,6 +343,7 @@ class TileAdverbs(Transform):
       if depth in self.get_expansions(arg.name):
         rank_increase -= 1
       arg.type = array_type.increase_rank(arg.type, rank_increase)
+      print "increasing rank of", arg, "by", rank_increase
     axis = len(self.get_expansions(expr.combine.arg_names[1])) + expr.axis - 1
     init = expr.init # TODO: lift init
     self.pop_exp()

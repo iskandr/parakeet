@@ -120,7 +120,6 @@ class LowerTiledAdverbs(Transform):
     fn = expr.combine # TODO: could be a Closure
     args = expr.args
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    combine = self.transform_expr(expr.combine)
 
     # TODO: Should make sure that all the shapes conform here,
     # but we don't yet have anything like assertions or error handling

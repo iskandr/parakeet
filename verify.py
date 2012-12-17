@@ -41,8 +41,8 @@ class Verify(syntax_visitor.SyntaxVisitor):
         "Unknown variable %s" % expr.name
 
     assert expr.type == self.fn.type_env[expr.name], \
-        "Variable %s should have type %s but annotated with type %s" % \
-        (expr.name, self.fn.type_env[expr.name], expr.type)
+        "Variable %s in fn %s should have type %s but annotated with %s" % \
+        (expr.name, self.fn, self.fn.type_env[expr.name], expr.type)
 
   def visit_PrimCall(self, expr):
     self.visit_expr_list(expr.args)
