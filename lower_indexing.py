@@ -45,15 +45,11 @@ class LowerIndexing(transform.MemoizedTransform):
         raise RuntimeError("Unsupported index type: %s" % idx_t)
 
     elt_t = arr.type.elt_type
-
-    elt_size = syntax_helpers.const_int(elt_t.nbytes, core_types.Int64)
-    byte_offset = self.mul(elt_offset, elt_size, "byte_offset")
-    new_data_ptr = self.incr_ptr(data_ptr, byte_offset)
     new_rank = len(new_strides)
     new_array_t = array_type.make_array_type(elt_t, new_rank)
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
-    return syntax.ArrayView(new_data_ptr, new_shape, new_strides,
+    return syntax.ArrayView(data_ptr, new_shape, new_strides, elt_offset, 
                             type = new_array_t)
 
   def transform_Index(self, expr):
@@ -85,7 +81,7 @@ class LowerIndexing(transform.MemoizedTransform):
     if syntax_helpers.all_scalars(indices):
       data_ptr = self.attr(arr, "data")
       strides = self.attr(arr, "strides")
-      offset_elts = syntax_helpers.zero_i64
+      offset_elts = self.attr(arr, "offset")
       for (i, idx_i) in enumerate(indices):
         stride_i = self.tuple_proj(strides, i)
         elts_i = self.mul(stride_i, idx_i, "offset_elts_%d" % i)

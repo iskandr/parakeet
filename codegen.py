@@ -10,7 +10,7 @@ import tuple_type
 
 from core_types import Int32, Int64
 from nested_blocks import NestedBlocks
-from syntax_helpers import get_types, wrap_constants, wrap_if_constant, zero
+from syntax_helpers import get_types, wrap_constants, wrap_if_constant, zero, zero_i64
 
 class Codegen(object):
   def __init__(self):
@@ -66,13 +66,15 @@ class Codegen(object):
     else:
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
 
+  """
   def ptr_to_int(self, ptr):
     return syntax.PtrToInt(ptr, type = Int64)
 
   def int_to_ptr(self, addr, ptr_t):
     addr = self.cast(addr, Int64)
     return syntax.IntToPtr(addr, type = ptr_t)
-
+  """
+ 
   def incr_ptr(self, ptr, offset):
     """
     Add an offset to a pointer to yield a new pointer
@@ -404,7 +406,7 @@ class Codegen(object):
       stride_elts = [next_stride] + stride_elts
 
     strides = self.tuple(stride_elts, "strides")
-    array = syntax.Struct([ptr_var, shape, strides], type = array_t)
+    array = syntax.Struct([ptr_var, shape, strides, zero_i64], type = array_t)
     return self.assign_temp(array, name)
 
   def return_type(self, fn):

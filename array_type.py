@@ -96,6 +96,7 @@ class ArrayT(StructT):
       ('data', self.ptr_t),
       ('shape', tuple_t),
       ('strides', tuple_t),
+      ('offset', Int64), 
     ]
 
   def dtype(self):
@@ -181,7 +182,7 @@ class ArrayT(StructT):
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
     return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape),
-                            ctypes.pointer(ctypes_strides))
+                            ctypes.pointer(ctypes_strides), 0)
 
   def to_python(self, obj):
     """
@@ -201,9 +202,14 @@ class ArrayT(StructT):
     n_bytes = n_elts * elt_size * min_stride 
     dest_buf = AllocateBuffer(n_bytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
-
+    src_ptr = obj.data 
+    if obj.offset:
+      P = src_ptr.__class__
+      addr = ctypes.addressof(src_ptr.contents) + obj.offset
+      src_ptr = P.from_address(addr)
+      
     # copy data from pointer
-    ctypes.memmove(dest_ptr, obj.data, n_bytes)
+    ctypes.memmove(dest_ptr, src_ptr, n_bytes)
     return np.ndarray(shape, dtype = self.elt_type.dtype,
                       buffer = dest_buf, strides = strides_in_bytes)
 
