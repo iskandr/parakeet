@@ -40,7 +40,8 @@ class macro(object):
     result_expr = self.f(*pos_vars, **keyword_vars)
     body = [syntax.Return(result_expr)]
 
-    wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos, len(dynamic_keywords))
+    wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
+                                         len(dynamic_keywords))
     wrapper_name = names.fresh(wrapper_name)
 
     return syntax.Fn(name = wrapper_name, args = args, body = body)

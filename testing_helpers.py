@@ -56,7 +56,9 @@ def expect(fn, args, expected):
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
   """
+  print "fn:", fn
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
+  print "typed:", typed
 
   untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \
@@ -80,8 +82,8 @@ def expect_allpairs(parakeet_fn, python_fn, inputs):
       expect(parakeet_fn, [x,y], python_fn(x,y))
 
 import ast_conversion
-import type_inference
 import type_conv
+import type_inference
 def return_type(fn, input_types):
   untyped_fundef = ast_conversion.translate_function_value(fn)
   closure_args = untyped_fundef.python_nonlocals()

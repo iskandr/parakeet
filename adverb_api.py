@@ -16,13 +16,13 @@ from macro import macro, staged_macro
 from run_function import run
 from runtime import runtime
 
-def one_is_none(f,g):
+def one_is_none(f, g):
   return int(f is None) + int(g is None) == 1
 
 def create_adverb_hook(adverb_class,
-                         map_fn_name = None,
-                         combine_fn_name = None,
-                         arg_names = None):
+                       map_fn_name = None,
+                       combine_fn_name = None,
+                       arg_names = None):
   assert one_is_none(map_fn_name, combine_fn_name), \
       "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
   if arg_names is None:
@@ -43,13 +43,12 @@ def create_adverb_hook(adverb_class,
       return r(f, xs)
     ...then we hackishly force the adverb to go along the default axis of 0.
     """
-    return adverb_wrapper.untyped_wrapper(
-      adverb_class,
-      map_fn_name = map_fn_name,
-      combine_fn_name = combine_fn_name,
-      data_names = data_names,
-      varargs_name = varargs_name,
-      axis=axis)
+    return adverb_wrapper.untyped_wrapper(adverb_class,
+                                          map_fn_name = map_fn_name,
+                                          combine_fn_name = combine_fn_name,
+                                          data_names = data_names,
+                                          varargs_name = varargs_name,
+                                          axis=axis)
 
   def python_hook(fn, *args, **kwds):
     axis = kwds.get('axis', 0)
@@ -78,6 +77,7 @@ def allpairs(f, x, y, **kwargs):
 def reduce(f, x, **kwargs):
   axis = get_axis(kwargs)
   init = kwargs.get('init')
+  print "f:", f
   return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
                         axis = axis)
 

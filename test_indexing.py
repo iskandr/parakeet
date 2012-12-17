@@ -117,22 +117,22 @@ def test_assign_second_axis():
     m_expect[:,1] = m_expect[:,2]
     expect(assign_second_axis, [m_input, 1, 2], m_expect)
 
-def assign_slices(x, (i, j, k, l), (a,b,c,d)):
+def assign_slices(x, (i,j,k,l), (a,b,c,d)):
   x[i:j, k:l] = x[a:b, c:d]
   return x
 
-#def test_assign_slices():
-#  for m in matrices:
-#    m_expect = m.copy()
-#    m_input = m.copy()
-#    (i,j,k,l) = (0,2,0,4)
-#    (a,b,c,d) = (1,3,5,9)
-#    m_expect[i:j, k:l] = m_expect[a:b, c:d]
-#    print "Running test for %s" % m.dtype
-#    expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
-#    print "OK #1"
-#    expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
-#    print "OK #2"
+def test_assign_slices():
+  for m in matrices:
+    m_expect = m.copy()
+    m_input = m.copy()
+    (i,j,k,l) = (0,2,0,4)
+    (a,b,c,d) = (1,3,5,9)
+    m_expect[i:j, k:l] = m_expect[a:b, c:d]
+    print "Running test for %s" % m.dtype
+    expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
+    print "OK #1"
+    expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
+    print "OK #2"
 
 def assign_all_slices(x, y):
   y[0:2,0:5] = x[0:2,0:5]

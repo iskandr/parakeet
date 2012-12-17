@@ -33,7 +33,7 @@ class Verify(syntax_visitor.SyntaxVisitor):
       assert isinstance(right_value, syntax.Expr), \
           "Invalid expression in phi node: %s" % right_value
       assert left_value.type == right_value.type
-      assert k in self.fn.type_env
+      assert k in self.fn.type_env, "%s not in type env" % k
       assert self.fn.type_env[k] == left_value.type
 
   def visit_Var(self, expr):
@@ -57,7 +57,8 @@ class Verify(syntax_visitor.SyntaxVisitor):
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type == self.fn.return_type, \
-        "Inccorect type for returned value %s" % (stmt.value)
+        "Incorrect type for returned value %s, types=(%s,%s)" % \
+        (stmt.value, stmt.value.type, self.fn.return_type)
 
   def visit_TypedFn(self, fn):
     return verify(fn)
