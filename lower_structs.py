@@ -6,6 +6,7 @@ import syntax
 from array_type import ArrayT, make_array_type, ScalarT
 from syntax_helpers import const_int, const_tuple
 from transform import MemoizedTransform
+from syntax_helpers import zero_i64
 
 class LowerStructs(MemoizedTransform):
   """
@@ -50,7 +51,7 @@ class LowerStructs(MemoizedTransform):
     field_name, field_type = new_closure.type._fields_[expr.index + 1]
     return syntax.Attribute(new_closure, field_name, type = field_type)
 
-  def array_view(self, data, shape, strides):
+  def array_view(self, data, shape, strides, offset = zero_i64):
     """
     Helper function used by multiple array-related transformations
     """
@@ -75,10 +76,10 @@ class LowerStructs(MemoizedTransform):
       "Shape and strides must be of same length, but got %d and %d" % \
       (rank, strides_rank)
     array_t = make_array_type(data_t.elt_type, rank)
-    return syntax.Struct([data, shape, strides], type = array_t)
+    return syntax.Struct([data, shape, strides, offset], type = array_t)
 
   def transform_ArrayView(self, expr):
-    array_struct = self.array_view(expr.data, expr.shape, expr.strides)
+    array_struct = self.array_view(expr.data, expr.shape, expr.strides, expr.offset)
     assert expr.type == array_struct.type, \
       "Mismatch between original type %s and transformed type %s" % \
       (expr.type, array_struct.type)

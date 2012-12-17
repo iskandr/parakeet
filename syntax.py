@@ -204,7 +204,7 @@ class ArrayView(Expr):
   """
   Create a new view on already allocated underlying data
   """
-  _members = ['data', 'shape', 'strides']
+  _members = ['data', 'shape', 'strides', 'offset']
 
 class Fn(Expr):
   """

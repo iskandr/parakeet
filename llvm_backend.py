@@ -356,7 +356,7 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   lowered = lowering.lower(fundef, tile=False)
-  #print "Lowered", lowered
+  print "Lowered", lowered
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
