@@ -95,16 +95,16 @@ class Transform(Codegen):
     return syntax.Return(self.transform_expr(stmt.value))
 
   def transform_If(self, stmt):
-    cond = self.transform_expr(stmt.cond)
     true = self.transform_block(stmt.true)
     false = self.transform_block(stmt.false)
     merge = self.transform_phi_nodes(stmt.merge)
+    cond = self.transform_expr(stmt.cond)
     return syntax.If(cond, true, false, merge)
 
   def transform_While(self, stmt):
-    cond = self.transform_expr(stmt.cond)
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
+    cond = self.transform_expr(stmt.cond)
     return syntax.While(cond, body, merge)
 
   def transform_stmt(self, stmt):
@@ -132,24 +132,19 @@ class Transform(Codegen):
     return new_block 
 
   def pre_apply(self, old_fn):
-    """
+
     print 
     print "Running %s" % self.__class__.__name__
     print 
     print "-- before" 
     print repr(old_fn) 
     print
-    """
-    pass 
   
   def post_apply(self, new_fn):
-    """
     print 
     print "-- after"
     print repr(new_fn)
     print 
-    """
-    pass 
   
   def apply(self, copy = False):
     self.copy = copy

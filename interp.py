@@ -140,6 +140,8 @@ def eval_fn(fn, actuals):
       return args.transform(eval_expr)
 
   def eval_expr(expr):
+    if hasattr(expr, 'wrapper'):
+      expr = expr.wrapper 
     assert isinstance(expr, syntax.Expr), "Not an expression-- %s : %s" % \
          (expr, type(expr))
     def expr_Const():
@@ -160,9 +162,6 @@ def eval_fn(fn, actuals):
 
     def expr_PrimCall():
       return expr.prim.fn (*eval_args(expr.args))
-
-    def expr_Prim():
-      return expr.value.fn
 
     def expr_Slice():
       return slice(eval_expr(expr.start), eval_expr(expr.stop),

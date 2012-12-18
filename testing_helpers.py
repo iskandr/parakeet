@@ -56,9 +56,9 @@ def expect(fn, args, expected):
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
   """
-  print "fn:", fn
+
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
-  print "typed:", typed
+
 
   untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \

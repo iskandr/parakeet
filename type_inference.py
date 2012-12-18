@@ -205,9 +205,17 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_Closure():
     new_args = annotate_children(expr.args)
-    t = closure_type.ClosureT(expr.fn, get_types(new_args))
+    t = closure_type.make_closure_type(expr.fn, get_types(new_args))
     return typed_ast.Closure(expr.fn, new_args, type = t)
 
+  def prim_to_closure(p):
+    untyped_fn = prims.prim_wrapper(p)
+    t = closure_type.make_closure_type(untyped_fn, ())
+    return typed_ast.Closure(untyped_fn, (), type = t)
+    
+  def expr_Arith():
+    return prim_to_closure(expr)
+    
   def expr_Fn():
     t = closure_type.ClosureT(expr.name, [])
     return typed_ast.Closure(expr.name, [], type = t)

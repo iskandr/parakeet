@@ -1,11 +1,12 @@
 import transform 
 import prims 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
-import type_inference
 import syntax 
-import syntax_helpers 
 import dead_code_elim
-
+from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt
+from syntax import Slice, Array, Cast, PrimCall, Call, Attribute, Struct 
+from mutability_analysis import TypeBasedMutabilityAnalysis
+from scoped_env import ScopedEnv 
 
 # classes of expressions known to have no side effects 
 # and to be unaffected by changes in mutable state as long 
@@ -23,6 +24,7 @@ from transform import Transform
 
 class Simplify(Transform):
   def __init__(self, fn):
+    transform.Transform.__init__(self, fn)
     # associate var names with
     #  1) constant values: these should always be replaced
     # 
@@ -31,50 +33,42 @@ class Simplify(Transform):
     #  3) closures: later convert invoke to direct fn calls 
      
     self.env = {}
-    transform.Transform.__init__(self, fn)
-    
+    ma = TypeBasedMutabilityAnalysis() 
+    self.mutable_types = ma.visit_fn(fn)
+    self.available_expressions = ScopedEnv() 
+
   def is_simple(self, expr):
-    return isinstance(expr, (syntax.Const, syntax.Var))
+    c = expr.__class__ 
+    return c is Const or c is Var 
   
   def all_safe(self, exprs):
-    return all(self.is_safe(e) for e in exprs)
+    return all(e is None or self.is_safe(e) for e in exprs)
   
   def is_safe(self, expr):
-    return self.is_simple(expr) or expr is None or \
-        (isinstance(expr, syntax.PrimCall) and self.all_safe(expr.args)) or \
-        (isinstance(expr, syntax.Tuple) and self.all_safe(expr.elts)) or \
-        (isinstance(expr, syntax.Closure) and self.all_safe(expr.args)) or \
-        (isinstance(expr, syntax.ClosureElt) 
-         and self.is_safe(expr.closure)) or \
-        (isinstance(expr, syntax.TupleProj) and self.is_safe(expr.tuple)) or \
-        (isinstance(expr, syntax.Slice) and 
-         self.all_safe((expr.start, expr.stop, expr.step)))  or \
-        (isinstance(expr, syntax.Array) and self.all_safe(expr.elts)) or \
-        (isinstance(expr, syntax.Cast) and self.is_safe(expr.value))
+    c = expr.__class__ 
+    return c is Const or c is Var or \
+        (c is PrimCall and self.all_safe(expr.args)) or \
+        (c is Tuple and self.all_safe(expr.elts)) or \
+        (c is Closure and self.all_safe(expr.args)) or \
+        (c is ClosureElt and self.is_safe(expr.closure)) or \
+        (c is TupleProj and self.is_safe(expr.tuple)) or \
+        (c is Slice and self.all_safe((expr.start, expr.stop, expr.step))) or \
+        (c is Array and self.all_safe(expr.elts)) or \
+        (c is Cast and self.is_safe(expr.value)) or \
+        (c is Struct and expr.type not in self.mutable_types and 
+         self.all_safe(expr.args)) or \
+        (c is Attribute and expr.type not in self.mutable_types and 
+         self.is_safe(expr.value))
   
   
-  def match_var(self, name, rhs):
-    if isinstance(rhs, syntax.Var):
-      old_val = self.env.get(rhs.name)
-      if self.is_simple(old_val):
-        self.env[name] = old_val
-      else:
-        self.env[name] = rhs
+
+  def transform_expr(self, expr):
+    stored = self.available_expressions.get(expr)
+    if stored: 
+      return stored
+    else:
+      return Transform.transform_expr(self, expr )
     
-    elif self.is_safe(rhs):
-      self.env[name] = rhs 
-      
-  def match(self, lhs, rhs):
-    if isinstance(lhs, syntax.Var):
-      self.match_var(lhs.name, rhs)      
-    elif isinstance(lhs, syntax.Tuple) and isinstance(rhs, syntax.Tuple):
-      for (lhs_elt, rhs_elt) in zip(lhs.elts, rhs.elts):
-        self.match(lhs_elt, rhs_elt)
-        
-  def transform_Assign(self, stmt):
-    new_rhs = self.transform_expr(stmt.rhs)
-    self.match(stmt.lhs, new_rhs)
-    return syntax.Assign(stmt.lhs, new_rhs)
   
   def transform_Var(self, expr):
     name = expr.name
@@ -90,8 +84,10 @@ class Simplify(Transform):
 
     if isinstance(expr, syntax.Const):
       return expr 
+    
     elif name == original_expr.name:
       return original_expr
+    
     else:
       new_var = syntax.Var(name = name, type = original_expr.type)
       return new_var
@@ -99,11 +95,16 @@ class Simplify(Transform):
   
   def transform_Attribute(self, expr):
     v = self.transform_expr(expr.value)
-    if isinstance(v, syntax.Struct):
+    if v.__class__ is syntax.Var and v.name in self.env:
+      stored_v = self.env[v.name]
+      if v.__class__ is Var or v.__class__ is Struct:
+        v = stored_v 
+      
+    if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
       return v.args[idx]
     else:
-      return syntax.Attribute(v, expr.name, type = expr.type)
+      return Attribute(v, expr.name, type = expr.type)
   
   def transform_TupleProj(self, expr):
 
@@ -139,9 +140,9 @@ class Simplify(Transform):
         isinstance(fn.type.fn, syntax.TypedFn):
       closure_elts = self.closure_elts(fn)
       combined_args = closure_elts + tuple(args)
-      return syntax.Call(fn.type.fn, combined_args, type = expr.type)
+      return Call(fn.type.fn, combined_args, type = expr.type)
     elif fn != expr.fn or any(e1 != e2 for (e1, e2) in zip(args, expr.args)):
-      return syntax.Call(fn, args, type = expr.type)
+      return Call(fn, args, type = expr.type)
     else:
       return expr  
   
@@ -188,19 +189,58 @@ class Simplify(Transform):
     for (k, (left, right)) in phi_nodes.iteritems():
       new_left = self.transform_expr(left)
       new_right = self.transform_expr(right)
-      if isinstance(new_left, syntax.Const) and \
-         isinstance(new_right, syntax.Const)  and \
-         new_left.value == new_right.value:
+      print "%s : (%s,%s) => %s,%s" % (k, left, right, new_left, new_right)
+      if new_left == new_right:
         self.env[k] = new_left
-      # WARNING: THIS IS SUSPICIOUS! 
-      # How does it interact with loops? 
-      elif isinstance(new_left, syntax.Var) and \
-           isinstance(new_right, syntax.Var) and \
-           new_left.name == new_right.name:
-        self.env[k] = new_left
+        if not isinstance(new_left, (syntax.Const, syntax.Var)):
+          result[k] = new_left, new_right 
       else:
-        result[k] = new_left, new_right 
+        result[k] = new_left, new_right
     return result 
+  def match_var(self, name, rhs):
+    if isinstance(rhs, syntax.Var):
+      old_val = self.env.get(rhs.name)
+      if old_val and self.is_simple(old_val):
+        self.env[name] = old_val
+      else:
+        self.env[name] = rhs
+    
+    elif self.is_safe(rhs):
+      self.env[name] = rhs 
+      
+  def match(self, lhs, rhs):
+    if isinstance(lhs, syntax.Var):
+      self.match_var(lhs.name, rhs)      
+    elif isinstance(lhs, syntax.Tuple) and isinstance(rhs, syntax.Tuple):
+      for (lhs_elt, rhs_elt) in zip(lhs.elts, rhs.elts):
+        self.match(lhs_elt, rhs_elt)
+        
+  def transform_Assign(self, stmt):
+    lhs = stmt.lhs 
+    rhs = self.transform_expr(stmt.rhs)
+    self.match(lhs, rhs)
+    if lhs.__class__ is Var and not self.is_simple(rhs):
+      if rhs not in self.available_expressions and self.is_safe(rhs):   
+        self.available_expressions[rhs] = lhs
+    
+    if rhs == stmt.rhs:
+      return stmt 
+    else:
+      return syntax.Assign(lhs, rhs)
+  
+  def transform_If(self, stmt):
+    self.available_expressions.push()
+    stmt = Transform.transform_If(self, stmt)
+    self.available_expressions.pop()
+    return stmt 
+  
+  def transform_While(self, stmt):
+    self.available_expressions.push()
+    stmt = Transform.transform_While(self, stmt)
+    self.available_expressions.pop()
+    return stmt 
+  
+
   
   def post_apply(self, new_fn):
     new_fn = dead_code_elim.dead_code_elim(new_fn)

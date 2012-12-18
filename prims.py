@@ -1,5 +1,8 @@
 import core_types
 import numpy as np
+import names
+import syntax
+from args import FormalArgs
 
 prim_lookup_by_value = {}
 
@@ -24,9 +27,7 @@ def find_ast_op(op):
 def is_prim(numpy_fn):
   return numpy_fn in prim_lookup_by_value
 
-import names
-import syntax
-from args import FormalArgs
+
 
 _untyped_prim_wrappers = {}
 
@@ -54,7 +55,6 @@ class Prim(object):
                name = None, nin = None, nout = None):
     self.fn = fn
     prim_lookup_by_value[fn] = self
-
     self.symbol = symbol
     self.python_op_name = python_op_name
 
@@ -80,13 +80,18 @@ class Prim(object):
       self.nout = fn.nout
     else:
       self.nout = 1
-
+    
+    self._create_type_table()
+    self.wrapper = prim_wrapper(self)
+   
+  
+  def _create_type_table(self):
     # for now only support ufuncs which describe their own type behavior
-    if hasattr(fn, 'types'):
+    if hasattr(self.fn, 'types'):
       "Primitive function %s doesn't supply type signatures" % self.name
 
       self.type_table = {}
-      for signature in fn.types:
+      for signature in self.fn.types:
         # numpy type signatures look like 'ff->f' where each character
         # represents a single type
 
