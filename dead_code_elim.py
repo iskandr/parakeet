@@ -159,6 +159,7 @@ class DCE(Transform):
       return syntax.If(cond, new_true, new_false, new_merge)
 
   def transform_Return(self, stmt):
+
     return stmt
   
   def post_apply(self, fn):

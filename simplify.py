@@ -17,9 +17,7 @@ import dead_code_elim
 #  - Call: Unless the function is known to contain only safe expressions it 
 #    might depend on mutable state or modify it itself 
  
-pure_exprs = (syntax.Var, syntax.Tuple, syntax.Const, syntax.Closure, 
-              syntax.IntToPtr, syntax.PtrToInt, syntax.PrimCall, 
-              syntax.TupleProj, syntax.ClosureElt, syntax.Slice)
+
 
 from transform import Transform
 
@@ -34,24 +32,36 @@ class Simplify(Transform):
      
     self.env = {}
     transform.Transform.__init__(self, fn)
+    
+  def is_simple(self, expr):
+    return isinstance(expr, (syntax.Const, syntax.Var))
   
-
+  def all_safe(self, exprs):
+    return all(self.is_safe(e) for e in exprs)
   
   def is_safe(self, expr):
-    return isinstance(expr, (syntax.Const, syntax.Var)) or \
-        (isinstance(expr, syntax.PrimCall) and 
-         all(self.is_safe(arg) for arg in expr.args))
-      
+    return self.is_simple(expr) or expr is None or \
+        (isinstance(expr, syntax.PrimCall) and self.all_safe(expr.args)) or \
+        (isinstance(expr, syntax.Tuple) and self.all_safe(expr.elts)) or \
+        (isinstance(expr, syntax.Closure) and self.all_safe(expr.args)) or \
+        (isinstance(expr, syntax.ClosureElt) 
+         and self.is_safe(expr.closure)) or \
+        (isinstance(expr, syntax.TupleProj) and self.is_safe(expr.tuple)) or \
+        (isinstance(expr, syntax.Slice) and 
+         self.all_safe((expr.start, expr.stop, expr.step)))  or \
+        (isinstance(expr, syntax.Array) and self.all_safe(expr.elts)) or \
+        (isinstance(expr, syntax.Cast) and self.is_safe(expr.value))
+  
   
   def match_var(self, name, rhs):
     if isinstance(rhs, syntax.Var):
       old_val = self.env.get(rhs.name)
-      if self.is_safe(old_val):
-        self.env[name] = old_val 
+      if self.is_simple(old_val):
+        self.env[name] = old_val
       else:
         self.env[name] = rhs
     
-    elif isinstance(rhs, pure_exprs):
+    elif self.is_safe(rhs):
       self.env[name] = rhs 
       
   def match(self, lhs, rhs):
@@ -135,8 +145,7 @@ class Simplify(Transform):
     else:
       return expr  
   
-  def is_simple(self, expr):
-    return isinstance(expr, (syntax.Const, syntax.Var))
+
   
   def transform_args(self, args):
     new_args = []
