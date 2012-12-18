@@ -5,11 +5,12 @@ from args import ActualArgs
 from codegen import Codegen
 
 class Transform(Codegen):
-  def __init__(self, fn, verify = True):
+  def __init__(self, fn, verify = True, reverse = False):
     Codegen.__init__(self)
     self.fn = fn
     self.verify = verify
     self.copy = None
+    self.reverse = reverse 
 
   def lookup_type(self, name):
     assert self.type_env is not None
@@ -53,6 +54,7 @@ class Transform(Codegen):
       result = method(expr)
     else:
       result = self.transform_generic_expr(expr)
+
     assert result is not None, \
            "Transformation turned %s into None" % (expr,)
     assert result.type is not None, "Missing type for %s" % result
@@ -116,11 +118,18 @@ class Transform(Codegen):
 
   def transform_block(self, stmts):
     self.blocks.push()
+    if self.reverse:
+      stmts = reversed(stmts)
+
+
     for old_stmt in stmts:
       new_stmt = self.transform_stmt(old_stmt)
       if new_stmt:
         self.blocks.append_to_current(new_stmt)
-    return self.blocks.pop()
+    new_block = self.blocks.pop()
+    if self.reverse:
+      new_block.reverse()
+    return new_block 
 
   def pre_apply(self, old_fn):
     """
@@ -131,8 +140,8 @@ class Transform(Codegen):
     print repr(old_fn) 
     print
     """
-    pass  
-
+    pass 
+  
   def post_apply(self, new_fn):
     """
     print 
@@ -141,7 +150,7 @@ class Transform(Codegen):
     print 
     """
     pass 
-
+  
   def apply(self, copy = False):
     self.copy = copy
 

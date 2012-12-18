@@ -77,5 +77,42 @@ def test_constants_across_control_flow():
   assert isinstance(stmt, syntax.Return)
   assert isinstance(stmt.value, syntax.Const)
 
+def always_true_branch():
+    x = 1 + 1
+    if x == 2:
+        res = 0 + 0 
+        return res
+    else:
+        res = 1 * 1 + 0 
+        return res
+
+
+def test_always_true():
+  testing_helpers.expect(always_true_branch, [], 0)
+  typed_fn = parakeet.typed_repr(always_true_branch, [])
+  assert len(typed_fn.body) == 1, "Fn body too long: " + str(typed_fn.body)
+  stmt = typed_fn.body[0]
+  assert isinstance(stmt, syntax.Return)
+  assert isinstance(stmt.value, syntax.Const)
+ 
+def always_false_branch():
+    x = 1 + 2
+    if x == 2:
+        res = 1 * 0 + 0 
+        return res
+    else:
+        res = 0 + 1 * 1
+        return res 
+
+
+
+def test_always_false():
+  testing_helpers.expect(always_false_branch, [], 1)
+  typed_fn = parakeet.typed_repr(always_false_branch, [])
+  assert len(typed_fn.body) == 1, "Fn body too long: " + str(typed_fn.body)
+  stmt = typed_fn.body[0]
+  assert isinstance(stmt, syntax.Return)
+  assert isinstance(stmt.value, syntax.Const)
+
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

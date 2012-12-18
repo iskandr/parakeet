@@ -232,5 +232,5 @@ class LowerTiledAdverbs(Transform):
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
-      print fn
+      # print fn
     return fn

@@ -33,39 +33,100 @@ class FindLiveVars(SyntaxVisitor):
       self.live_vars.add(name)
     self.visit_block(fn.body)
     return self.live_vars
+
+
+
+
+class VarUseCount(SyntaxVisitor):
+  
+  def __init__(self):
+    self.counts = {}
     
+  def visit_Var(self, expr):
+    old_count = self.counts.get(expr.name, 0)
+    self.counts[expr.name] = old_count + 1 
+    
+  def visit_merge(self, merge, both_branches=True):
+    for (_, (l,r)) in merge.iteritems():
+      self.visit_expr(l)
+      self.visit_expr(r)
+       
+  def visit_lhs(self, expr):
+    if isinstance(expr, syntax.Var):
+      pass 
+    elif isinstance(expr, syntax.Tuple):
+      for elt in expr.elts:
+        self.visit_lhs(elt)
+    else:
+      self.visit_expr(expr)
+      
+  def visit_fn(self, fn):
+    self.counts.clear()
+    for name in fn.arg_names:
+      self.counts[name] = 1
+    self.visit_block(fn.body)
+    return self.counts 
+  
+
 
 class DCE(Transform):
   def __init__(self, fn):
-    Transform.__init__(self, fn)
-    self.live_vars = FindLiveVars().visit_fn(fn)
-  
+    Transform.__init__(self, fn, reverse = True)
+    # self.live_vars = FindLiveVars().visit_fn(fn)
+    self.use_counts = VarUseCount().visit_fn(fn)
+    """
+    print
+    print "USE COUNTS"
+    for k,v in sorted(self.use_counts.items()):
+      print "  %s ==> %d" % (k,v)
+    """
     
+  def is_live(self, name):
+    return name in self.use_counts and self.use_counts[name] > 0
+         
   def is_live_lhs(self, lhs):
     if isinstance(lhs, syntax.Var):
-      return lhs.name in self.live_vars
+      return self.is_live(lhs.name)
     elif isinstance(lhs, syntax.Tuple):
       return any(self.is_live_lhs(elt) for elt in lhs.elts)
-    elif isinstance(lhs, str):
-      return lhs in self.live_vars
-    elif isinstance(lhs, tuple):
-      return any(self.is_live_lhs(elt) for elt in lhs)
+    elif isinstance(lhs, (str, tuple)):
+      assert False, "Raw data? This ain't the stone age, you know."
     else:
       return True
 
   def transform_phi_nodes(self, phi_nodes):
     new_merge = {}
-    for var in phi_nodes:
-      if var in self.live_vars:
-        new_merge[var] = phi_nodes[var]
+    for (var_name, (l,r)) in phi_nodes.iteritems():
+      if self.is_live(var_name):
+        new_merge[var_name] = phi_nodes[var_name]
+      else:
+        self.transform_expr(l)
+        self.transform_expr(r)
     return new_merge
+  
+  def transform_Var(self, expr):
+    """
+    We should only reach this method if it's part of an 
+    explicit call to transform_expr from the removal of 
+    a statement or phi-node
+    """
+    self.use_counts[expr.name] -= 1 
+    return expr 
   
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
+      """
+      print "LIVE", stmt 
+      if isinstance(stmt.lhs, syntax.Var):
+        print "   -- count  %s => %d" % (stmt.lhs.name, self.use_counts[stmt.lhs.name])
+      """
       return stmt
     else:
+      self.transform_expr(stmt.rhs)
       return None
 
+  
+  
   def transform_While(self, stmt):
     # expressions don't get changed by this transform
     cond = stmt.cond
@@ -84,14 +145,15 @@ class DCE(Transform):
     if len(new_merge) == 0 and len(new_true) == 0 and len(new_false) == 0:
       return None  
     elif syntax_helpers.is_true(cond):
-      self.blocks.extend_current(stmt.true)
       for name, (_, v) in new_merge.items():
         self.assign(syntax.Var(name, type = v.type), v)
+      self.blocks.extend_current(reversed(stmt.true))
       return None 
     elif syntax_helpers.is_false(cond):
-      self.blocks.extend_current(stmt.false)
       for name, (v, _) in new_merge.items():
         self.assign(syntax.Var(name, type = v.type), v)
+      self.blocks.extend_current(reversed(stmt.false))
+
       return None 
     else:
       return syntax.If(cond, new_true, new_false, new_merge)
@@ -100,8 +162,17 @@ class DCE(Transform):
     return stmt
   
   def post_apply(self, fn):
-    fn.type_env = \
-      dict([(name, fn.type_env[name]) for name in self.live_vars])
+    """
+    print
+    print "AFTER USE COUNTS"
+    for k,v in sorted(self.use_counts.items()):
+      print "  %s ==> %d" % (k,v)
+    """
+    type_env = {} 
+    for (name,t) in fn.type_env.iteritems():
+      if self.is_live(name):
+        type_env[name] = t
+    fn.type_env = type_env 
     Transform.post_apply(self, fn)
     return fn 
   
