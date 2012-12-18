@@ -66,15 +66,7 @@ class RedundancyElimination(Transform):
   def transform_Assign(self, stmt):
     lhs = stmt.lhs 
     rhs = self.transform_expr(stmt.rhs)
-    if isinstance(lhs, syntax.Var):
-      print 
-      print "LHS", lhs 
-      print "RHS", rhs
-      print "in avail?", rhs in self.available_expressions
-      print "safe?", self.is_safe(rhs)
-      for (k,v) in sorted(self.available_expressions.items()):
-        print "    %s => %s" % (k,v)
-        
+    if isinstance(lhs, syntax.Var):  
       if rhs not in self.available_expressions \
           and (not isinstance(rhs, syntax.Var)) and self.is_safe(rhs):   
         self.available_expressions[rhs] = lhs

@@ -10,19 +10,7 @@ class Verify(syntax_visitor.SyntaxVisitor):
   def run(self):
     self.visit_block(self.fn.body)
 
-  def visit_generic_expr(self, expr):
-    for k in expr.members():
-      v = getattr(expr, k)
-      if v and isinstance(v, syntax.Expr):
-        self.visit_expr(v)
-  """
-  def visit_If(self, stmt):
 
-    self.visit_merge(stmt.merge)
-    self.visit_expr(stmt.cond)
-    self.visit_block(stmt.true)
-    self.visit_block(stmt.false)
-  """
 
   def visit_merge(self, phi_nodes, both_branches = False):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():

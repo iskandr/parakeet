@@ -123,10 +123,24 @@ class Transform(Codegen):
     return self.blocks.pop()
 
   def pre_apply(self, old_fn):
-    pass
+    """
+    print 
+    print "Running %s" % self.__class__.__name__
+    print 
+    print "-- before" 
+    print repr(old_fn) 
+    print
+    """
+    pass  
 
   def post_apply(self, new_fn):
-    pass
+    """
+    print 
+    print "-- after"
+    print repr(new_fn)
+    print 
+    """
+    pass 
 
   def apply(self, copy = False):
     self.copy = copy

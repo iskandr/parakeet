@@ -6,8 +6,16 @@ class SyntaxVisitor(object):
   optionally collecting values 
   """
   def visit_generic_expr(self, expr):
-    assert False, "Unsupported expression %s" % (expr,)
-
+    
+    for k in expr.members():
+      v = getattr(expr, k)
+      if v and isinstance(v, syntax.Expr):
+        self.visit_expr(v)
+      elif hasattr(v, '__iter__'):
+        for child in v:
+          if isinstance(child, syntax.Expr):
+            self.visit_expr(child)
+            
   def visit_expr(self, expr):
     method_name = 'visit_' + expr.node_type()
 

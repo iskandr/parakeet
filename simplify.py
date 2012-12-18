@@ -33,57 +33,20 @@ class Simplify(Transform):
     #  3) closures: later convert invoke to direct fn calls 
      
     self.env = {}
-    self.live_vars = set(fn.arg_names)
     transform.Transform.__init__(self, fn)
   
-  def collect_live_vars_list(self, exprs):
-    for e in exprs:
-      self.collect_live_vars(e)
+
+  
+  def is_safe(self, expr):
+    return isinstance(expr, (syntax.Const, syntax.Var)) or \
+        (isinstance(expr, syntax.PrimCall) and 
+         all(self.is_safe(arg) for arg in expr.args))
       
-  def collect_live_vars(self, expr):
-    """
-    This function collects variables who appear on the LHS for 
-    stateful assignments (i.e. copies to arrays or fields of structs
-    """
-    if isinstance(expr, syntax.Var):
-      self.live_vars.add(expr.name)
-    elif isinstance(expr, syntax.Tuple):
-      self.collect_live_vars_list(expr.elts)
-    elif isinstance(expr, syntax.Attribute):
-      self.collect_live_vars(expr.value)
-    elif isinstance(expr, syntax.ArrayView):
-      self.collect_live_vars(expr.data)
-      self.collect_live_vars(expr.shape)
-      self.collect_live_vars(expr.strides)
-    elif isinstance(expr, syntax.TupleProj):
-      self.collect_live_vars(expr.tuple)
-    elif isinstance(expr, syntax.ClosureElt):
-      self.collect_live_vars(expr.closure)
-    elif isinstance(expr, syntax.Index):
-      self.collect_live_vars(expr.value)
-      self.collect_live_vars(expr.index)
-    elif isinstance(expr, syntax.IntToPtr):
-      self.collect_live_vars(expr.value)
-    elif isinstance(expr, syntax.PtrToInt):
-      self.collect_live_vars(expr.value)
-    elif isinstance(expr, syntax.PrimCall):
-      self.collect_live_vars_list(expr.args)
-    elif isinstance(expr, syntax.Slice):
-      self.collect_live_vars(expr.start)
-      self.collect_live_vars(expr.stop)
-      self.collect_live_vars(expr.step)
-    elif isinstance(expr, syntax.Const):
-      pass 
-    
-      
-    else:
-      assert False, \
-        "Unexpected left-hand-side expression: " + str(expr) 
   
   def match_var(self, name, rhs):
     if isinstance(rhs, syntax.Var):
       old_val = self.env.get(rhs.name)
-      if isinstance(old_val, (syntax.Const, syntax.Var)):
+      if self.is_safe(old_val):
         self.env[name] = old_val 
       else:
         self.env[name] = rhs
@@ -97,10 +60,7 @@ class Simplify(Transform):
     elif isinstance(lhs, syntax.Tuple) and isinstance(rhs, syntax.Tuple):
       for (lhs_elt, rhs_elt) in zip(lhs.elts, rhs.elts):
         self.match(lhs_elt, rhs_elt)
-    else:
-      self.collect_live_vars(lhs)
-  
-  
+        
   def transform_Assign(self, stmt):
     new_rhs = self.transform_expr(stmt.rhs)
     self.match(stmt.lhs, new_rhs)
@@ -121,12 +81,8 @@ class Simplify(Transform):
     if isinstance(expr, syntax.Const):
       return expr 
     elif name == original_expr.name:
-      # if we're still using this variable, so mark it as used
-      self.live_vars.add(name)
       return original_expr
     else:
-      # if we're still using this variable, so mark it as used
-      self.live_vars.add(name)
       new_var = syntax.Var(name = name, type = original_expr.type)
       return new_var
 
@@ -178,7 +134,6 @@ class Simplify(Transform):
       return syntax.Call(fn, args, type = expr.type)
     else:
       return expr  
-      
   
   def is_simple(self, expr):
     return isinstance(expr, (syntax.Const, syntax.Var))
@@ -191,7 +146,6 @@ class Simplify(Transform):
         new_args.append(new_arg)
       else:
         new_var = self.assign_temp(new_arg)
-        self.live_vars.add(new_var.name)
         new_args.append(new_var)
     return new_args 
   
@@ -239,9 +193,7 @@ class Simplify(Transform):
         result[k] = new_left, new_right 
     return result 
   
-  
   def post_apply(self, new_fn):
-    new_fn.body = dead_code_elim.elim_block(new_fn.body, self.live_vars)
-    new_fn.type_env = \
-      dict([(name, new_fn.type_env[name]) for name in self.live_vars])
+    new_fn = dead_code_elim.dead_code_elim(new_fn)
+    Transform.post_apply(self, new_fn)
     return new_fn 
