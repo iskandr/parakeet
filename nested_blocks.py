@@ -18,6 +18,9 @@ class NestedBlocks(object):
   def extend_current(self, stmts):
     self.current().extend(stmts)
 
+  def depth(self):
+    return len(self._blocks)
+
   def __iadd__(self, stmts):
     if not isinstance(stmts, (list, tuple)):
       stmts = [stmts]

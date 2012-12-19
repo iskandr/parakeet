@@ -23,7 +23,6 @@ lowering_pipeline = [
   LowerStructs,
   Simplify, 
   LoopInvariantCodeMotion,
-  LoopInvariantCodeMotion,
   Simplify,
   
 ]

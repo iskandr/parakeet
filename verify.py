@@ -12,7 +12,7 @@ class Verify(syntax_visitor.SyntaxVisitor):
 
 
 
-  def visit_merge(self, phi_nodes, both_branches = False):
+  def visit_merge(self, phi_nodes):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
       self.visit_expr(left_value)
       self.visit_expr(right_value)

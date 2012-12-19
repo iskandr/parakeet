@@ -1,7 +1,8 @@
 import parakeet
 import syntax
 import testing_helpers
-
+from testing_helpers import expect 
+import numpy as np 
 def A(x):
   return x + 1
 
@@ -104,8 +105,6 @@ def always_false_branch():
         res = 0 + 1 * 1
         return res 
 
-
-
 def test_always_false():
   testing_helpers.expect(always_false_branch, [], 1)
   typed_fn = parakeet.typed_repr(always_false_branch, [])
@@ -113,6 +112,22 @@ def test_always_false():
   stmt = typed_fn.body[0]
   assert isinstance(stmt, syntax.Return)
   assert isinstance(stmt.value, syntax.Const)
+
+def volatile_licm_mistake():
+    i = 0 
+    x = [0]
+    while i < 10:
+        alloc = [1]
+        if i == 5:
+          x = alloc 
+        else:
+          alloc[0] = 100
+        i = i + 1
+    return x
+
+
+def test_volatile_licm_mistake():
+    expect(volatile_licm_mistake, [], np.array([1]))
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

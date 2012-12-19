@@ -2,7 +2,7 @@ import transform
 import prims 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 import syntax 
-import core_types 
+
 import dead_code_elim
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
@@ -23,9 +23,7 @@ from scoped_env import ScopedEnv
 
 from transform import Transform
 
-"""
-rhs.__class__ not in (Var, Const)
-"""
+
 class Simplify(Transform):
   def __init__(self, fn):
     transform.Transform.__init__(self, fn)
@@ -95,11 +93,13 @@ class Simplify(Transform):
     
   
   def transform_Var(self, expr):
+
     name = expr.name
+
     original_expr = expr 
     
     while name in self.bindings: 
-        
+
       expr = self.bindings[name]
       if expr.__class__ is syntax.Var:
         name = expr.name 
@@ -118,7 +118,7 @@ class Simplify(Transform):
   
   def transform_Attribute(self, expr):
     v = self.transform_expr(expr.value)
-    if v.__class__ is syntax.Var and v.name in self.bindings:
+    if v.__class__ is Var and v.name in self.bindings:
       stored_v = self.bindings[v.name]
       c = stored_v.__class__
       if c is Var or c is Struct:
@@ -127,8 +127,9 @@ class Simplify(Transform):
     if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
       return v.args[idx]
-    else:
-      return Attribute(v, expr.name, type = expr.type)
+    elif v.__class__ is not Var:
+      v = self.assign_temp(v, "struct_temp")
+    return Attribute(v, expr.name, type = expr.type)
   
   def transform_TupleProj(self, expr):
 
@@ -204,23 +205,30 @@ class Simplify(Transform):
       new_left = self.transform_expr(left)
       new_right = self.transform_expr(right)
       if new_left == new_right:
-        self.bindings[k] = new_left
+        self.set_binding(k, new_left)
         if not isinstance(new_left, (syntax.Const, syntax.Var)):
           result[k] = new_left, new_right 
       else:
         result[k] = new_left, new_right
     return result 
   
+  def set_binding(self, name, value):
+    assert value.__class__ is not Var or \
+        value.name != name, \
+        "Can't set name %s bound to itself" % name 
+    self.bindings[name] = value 
+  
+  
   def bind_var(self, name, rhs):
     if isinstance(rhs, syntax.Var):
       old_val = self.bindings.get(rhs.name)
       if old_val and self.is_simple(old_val):
-        self.bindings[name] = old_val
+        self.set_binding(name, old_val)
       else:
-        self.bindings[name] = rhs
+        self.set_binding(name, rhs)
     
     elif self.immutable(rhs):
-      self.bindings[name] = rhs 
+      self.set_binding(name, rhs) 
       
   def bind(self, lhs, rhs):
     lhs_class = lhs.__class__ 
@@ -230,14 +238,34 @@ class Simplify(Transform):
       assert len(lhs.elts) == len(rhs.elts)
       for lhs_elt, rhs_elt in zip(lhs.elts, rhs.elts):
         self.bind(lhs_elt, rhs_elt)
-    
+  
+  def transform_lhs_Index(self, lhs):
+    old_idx = lhs.index 
+    new_idx = self.transform_expr(old_idx)
+    if lhs.value.__class__ is Var:
+      stored = self.bindings.get(lhs.value.name)
+      if stored and stored.__class__ is Var: 
+        return Index(stored, new_idx, type = lhs.type)
+    elif new_idx != old_idx:
+      return Index(lhs.value, new_idx, type = lhs.type)
+    return lhs
+     
+  def transform_lhs_Attribute(self, lhs):
+    return lhs 
+  
   def transform_Assign(self, stmt):
     lhs = stmt.lhs 
     old_rhs = stmt.rhs 
     rhs = self.transform_expr(old_rhs)
-    self.bind(lhs, rhs)
+    lhs_class = lhs.__class__ 
+    if lhs_class is Index:
+      lhs = self.transform_lhs_Index(lhs)
+    elif lhs_class is Attribute:
+      lhs = self.transform_lhs_Attribute(lhs)
+    else:
+      self.bind(lhs, rhs)
      
-    if lhs.__class__ is Var and \
+    if lhs_class is Var and \
        rhs.__class__ not in (Var, Const) and \
         self.immutable(rhs) and \
         rhs not in self.available_expressions:
@@ -257,6 +285,17 @@ class Simplify(Transform):
     stmt = Transform.transform_While(self, stmt)
     _ = self.available_expressions.pop()
     return stmt 
+    
+  def transform_Return(self, stmt):
+    new_value = self.transform_expr(stmt.value)
+    value_class = new_value.__class__
+    if value_class not in (Var, Const):
+      return syntax.Return(self.assign_temp(new_value, "return_value"))
+    elif new_value == stmt.value:
+      return stmt 
+    else:
+      return syntax.Return (new_value)  
+    
     
   def post_apply(self, new_fn):
     new_fn = dead_code_elim.dead_code_elim(new_fn)
