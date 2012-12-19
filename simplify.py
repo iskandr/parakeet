@@ -2,9 +2,12 @@ import transform
 import prims 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 import syntax 
+import core_types 
 import dead_code_elim
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt
-from syntax import Slice, Array, Cast, PrimCall, Call, Attribute, Struct 
+from syntax import Slice, Array, ArrayView, Cast, Attribute, Struct
+from syntax import PrimCall, Call
+ 
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_env import ScopedEnv 
 
@@ -25,42 +28,68 @@ from transform import Transform
 class Simplify(Transform):
   def __init__(self, fn):
     transform.Transform.__init__(self, fn)
-    # associate var names with
-    #  1) constant values: these should always be replaced
-    # 
-    #  2) tuples: we can replace these only where accessing elts of the tuple
-    #
-    #  3) closures: later convert invoke to direct fn calls 
-     
-    self.env = {}
-    ma = TypeBasedMutabilityAnalysis() 
-    self.mutable_types = ma.visit_fn(fn)
-    self.available_expressions = ScopedEnv() 
+    # associate var names with any immutable values
+    # they are bound to 
+    self.bindings = {}
 
-  def is_simple(self, expr):
-    c = expr.__class__ 
-    return c is Const or c is Var 
+    # which expressions have already been computed
+    # and stored in some variable? 
+    self.available_expressions = ScopedEnv()
+    
+    ma = TypeBasedMutabilityAnalysis()
+    
+    # which types have elements that might 
+    # change between two accesses?  
+    self.mutable_types = ma.visit_fn(fn)
+      
+    # which variables might change in this scope between
+    # loop iterations? 
+    self.volatile_vars = set(self.fn.arg_names)
+      
+
+  def immutable_type(self, t):
+    return t not in self.mutable_types
   
+  def children(self, expr, allow_mutable = False):
+    c = expr.__class__ 
+    if c is Const or c is Var:
+      return ()
+    elif c is PrimCall or c is Closure:
+      return expr.args 
+    elif c is ClosureElt:
+      return (expr.closure,)
+    elif c is Tuple:
+      return expr.elts
+    elif c is TupleProj:
+      return (expr.tuple,)
+    elif c is Slice:
+      return (expr.start, expr.stop, expr.step)
+    elif c is Cast:
+      return (expr.value,)
+     
+    if allow_mutable or self.immutable_type(expr.type):
+      if c is Array :
+        return expr.elts
+      elif c is ArrayView:
+        return (expr.data, expr.shape, expr.strides, expr.offset)    
+      elif c is Struct:
+        return expr.args
+      elif c is Attribute:
+        return (expr.value,)
+    return None 
+  
+  def is_simple(self, expr):
+    return self.children(expr) is ()
+    
   def all_safe(self, exprs):
     return all(e is None or self.is_safe(e) for e in exprs)
   
   def is_safe(self, expr):
-    c = expr.__class__ 
-    return c is Const or c is Var or \
-        (c is PrimCall and self.all_safe(expr.args)) or \
-        (c is Tuple and self.all_safe(expr.elts)) or \
-        (c is Closure and self.all_safe(expr.args)) or \
-        (c is ClosureElt and self.is_safe(expr.closure)) or \
-        (c is TupleProj and self.is_safe(expr.tuple)) or \
-        (c is Slice and self.all_safe((expr.start, expr.stop, expr.step))) or \
-        (c is Array and self.all_safe(expr.elts)) or \
-        (c is Cast and self.is_safe(expr.value)) or \
-        (c is Struct and expr.type not in self.mutable_types and 
-         self.all_safe(expr.args)) or \
-        (c is Attribute and expr.type not in self.mutable_types and 
-         self.is_safe(expr.value))
-  
-  
+    child_nodes = self.children(expr, allow_mutable = False)
+    if child_nodes is None:
+      return False 
+    else:
+      return all(self.is_safe(child) for child in child_nodes)
 
   def transform_expr(self, expr):
     stored = self.available_expressions.get(expr)
@@ -74,30 +103,30 @@ class Simplify(Transform):
     name = expr.name
     original_expr = expr 
     
-    while name in self.env: 
+    while name in self.bindings: 
         
-      expr = self.env[name]
-      if isinstance(expr, syntax.Var):
+      expr = self.bindings[name]
+      if expr.__class__ is syntax.Var:
         name = expr.name 
       else:
         break  
 
-    if isinstance(expr, syntax.Const):
+    if expr.__class__ is syntax.Const:
       return expr 
     
     elif name == original_expr.name:
       return original_expr
     
     else:
-      new_var = syntax.Var(name = name, type = original_expr.type)
-      return new_var
-
+      return syntax.Var(name = name, type = original_expr.type)
+      
   
   def transform_Attribute(self, expr):
     v = self.transform_expr(expr.value)
-    if v.__class__ is syntax.Var and v.name in self.env:
-      stored_v = self.env[v.name]
-      if v.__class__ is Var or v.__class__ is Struct:
+    if v.__class__ is syntax.Var and v.name in self.bindings:
+      stored_v = self.bindings[v.name]
+      c = stored_v.__class__
+      if c is Var or c is Struct:
         v = stored_v 
       
     if v.__class__ is Struct:
@@ -113,8 +142,8 @@ class Simplify(Transform):
       "TupleProj index must be an integer, got: " + str(idx) 
     new_tuple = self.transform_expr(expr.tuple)
 
-    if isinstance(new_tuple, syntax.Var) and new_tuple.name in self.env:
-      new_tuple = self.env[new_tuple.name]
+    if isinstance(new_tuple, syntax.Var) and new_tuple.name in self.bindings:
+      new_tuple = self.bindings[new_tuple.name]
       
     if isinstance(new_tuple, syntax.Tuple):
       return new_tuple.elts[idx] 
@@ -123,8 +152,8 @@ class Simplify(Transform):
   
   def transform_IntToPtr(self, expr):
     intval = self.transform_expr(expr.value)
-    if isinstance(intval, syntax.Var) and intval.name in self.env:
-      intval = self.env[expr.name]
+    if isinstance(intval, syntax.Var) and intval.name in self.bindings:
+      intval = self.bindings[expr.name]
       
     # casting a pointer to an integer and casting it back should be a no-op
     if isinstance(intval, syntax.IntToPtr) and expr.type == intval.value.type:
@@ -191,7 +220,7 @@ class Simplify(Transform):
       new_right = self.transform_expr(right)
       print "%s : (%s,%s) => %s,%s" % (k, left, right, new_left, new_right)
       if new_left == new_right:
-        self.env[k] = new_left
+        self.bindings[k] = new_left
         if not isinstance(new_left, (syntax.Const, syntax.Var)):
           result[k] = new_left, new_right 
       else:
@@ -199,14 +228,14 @@ class Simplify(Transform):
     return result 
   def match_var(self, name, rhs):
     if isinstance(rhs, syntax.Var):
-      old_val = self.env.get(rhs.name)
+      old_val = self.bindings.get(rhs.name)
       if old_val and self.is_simple(old_val):
-        self.env[name] = old_val
+        self.bindings[name] = old_val
       else:
-        self.env[name] = rhs
+        self.bindings[name] = rhs
     
     elif self.is_safe(rhs):
-      self.env[name] = rhs 
+      self.bindings[name] = rhs 
       
   def match(self, lhs, rhs):
     if isinstance(lhs, syntax.Var):
@@ -234,14 +263,13 @@ class Simplify(Transform):
     self.available_expressions.pop()
     return stmt 
   
+  
   def transform_While(self, stmt):
     self.available_expressions.push()
     stmt = Transform.transform_While(self, stmt)
-    self.available_expressions.pop()
+    _ = self.available_expressions.pop()
     return stmt 
-  
-
-  
+    
   def post_apply(self, new_fn):
     new_fn = dead_code_elim.dead_code_elim(new_fn)
     Transform.post_apply(self, new_fn)

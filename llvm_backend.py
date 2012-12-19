@@ -360,9 +360,9 @@ def compile_fn(fundef):
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
-  #print "Before opt", env.llvm_fn
+  print "Before opt", env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
-  #print "After opt", env.llvm_fn
+  print "After opt", env.llvm_fn
 
   result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 

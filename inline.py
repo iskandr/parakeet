@@ -83,5 +83,5 @@ class Inliner(transform.Transform):
     if can_inline(target):
       return self.do_inline(target, expr.args)
     else:
-      print "CAN'T INLINE", expr
+
       return expr
