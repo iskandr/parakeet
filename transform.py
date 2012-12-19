@@ -10,7 +10,7 @@ class Transform(Codegen):
     self.fn = fn
     self.verify = verify
     self.copy = None
-    self.reverse = reverse 
+    self.reverse = reverse
 
   def lookup_type(self, name):
     assert self.type_env is not None
@@ -121,7 +121,6 @@ class Transform(Codegen):
     if self.reverse:
       stmts = reversed(stmts)
 
-
     for old_stmt in stmts:
       new_stmt = self.transform_stmt(old_stmt)
       if new_stmt:
@@ -129,28 +128,28 @@ class Transform(Codegen):
     new_block = self.blocks.pop()
     if self.reverse:
       new_block.reverse()
-    return new_block 
+    return new_block
 
   def pre_apply(self, old_fn):
     """
-    print 
+    print
     print "Running %s" % self.__class__.__name__
-    print 
-    print "-- before" 
-    print repr(old_fn) 
+    print
+    print "-- before"
+    print repr(old_fn)
     print
     """
-    pass 
-  
+    pass
+
   def post_apply(self, new_fn):
     """
-    print 
+    print
     print "-- after"
     print repr(new_fn)
-    print 
+    print
     """
-    pass 
-  
+    pass
+
   def apply(self, copy = False):
     self.copy = copy
 
@@ -182,6 +181,7 @@ class Transform(Codegen):
 
       if new_fn is None:
         new_fn = old_fn
+    print new_fn
     if self.verify:
       import verify
       verify.verify(new_fn)

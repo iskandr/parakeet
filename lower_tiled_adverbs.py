@@ -117,7 +117,6 @@ class LowerTiledAdverbs(Transform):
         return self.fresh_var(t)
 
     self.nesting_idx += 1
-    fn = expr.combine # TODO: could be a Closure
     args = expr.args
     axis = syntax_helpers.unwrap_constant(expr.axis)
 
@@ -135,7 +134,8 @@ class LowerTiledAdverbs(Transform):
     #       For now, assuming that the reduction causes the reduced axis to
     #       disappear, leaving the others untouched.
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
-    transformed_fn = self.transform_expr(fn)
+    transformed_fn = self.transform_expr(expr.fn)
+    transformed_combine = self.transform_expr(expr.combine)
     nested_has_tiles = \
         transformed_fn.arg_names[-1] == self.tile_param_array.name
     arg_shape = self.shape(max_arg)
@@ -151,43 +151,34 @@ class LowerTiledAdverbs(Transform):
     out_shape = self.concat_tuples(left_shape, right_shape)
 
     elt_t = array_type.elt_type(expr.type)
-    output = alloc_maybe_array(isarray, elt_t, out_shape)
 
-    init = syntax_helpers.const_scalar(expr.init)
-    if init.type.rank < output.type.rank:
-      print "Yo!! Gotta lift the init val dawg"
-
-    self.blocks.push()
-    initial_slice = syntax.Slice(syntax_helpers.zero_i64, tile_size,
-                                 syntax_helpers.one(Int64), type=slice_t)
-    initial_args = [init] + [self.index_along_axis(arg, axis, initial_slice)
-                             for arg in args]
-    if nested_has_tiles:
-      initial_args.append(self.tile_param_array)
-    initial_call = syntax.Call(transformed_fn, initial_args,
-                               type=fn.return_type)
-
-    rslt_before = alloc_maybe_array(isarray, elt_t, out_shape)
     loop_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
-    self.assign(rslt_before, initial_call)
-
     num_tiles = self.div(niters, tile_size, name="num_tiles")
     loop_bound = self.mul(num_tiles, tile_size, "loop_bound")
-    i, i_after, merge = self.loop_counter("i", tile_size)
+    i, i_after, merge = self.loop_counter("i")
     loop_cond = self.lt(i, loop_bound)
+    rslt_tmp = alloc_maybe_array(isarray, elt_t, out_shape)
     rslt_after = alloc_maybe_array(isarray, elt_t, out_shape)
-    merge[loop_rslt.name] = (rslt_before, rslt_after)
+    init = syntax_helpers.const_scalar(expr.init)
+    if init.type.rank < loop_rslt.type.rank:
+      print "Yo!! Gotta lift the init val dawg"
+    merge[loop_rslt.name] = (init, rslt_after)
 
     self.blocks.push()
     self.assign(i_after, self.add(i, tile_size))
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
-    nested_args = [loop_rslt] + [self.index_along_axis(arg, axis, tile_bounds)
-                                 for arg in args]
+    nested_args = [self.index_along_axis(arg, axis, tile_bounds)
+                   for arg in args]
     if nested_has_tiles:
       nested_args.append(self.tile_param_array)
-    nested_call = syntax.Call(transformed_fn, nested_args, type=fn.return_type)
-    self.assign(rslt_after, nested_call)
+    nested_call = syntax.Call(transformed_fn, nested_args,
+                              type=transformed_fn.return_type)
+    self.assign(rslt_tmp, nested_call)
+    nested_combine = syntax.Call(transformed_combine,
+                                 [loop_rslt, rslt_tmp],
+                                 type=transformed_combine.return_type)
+    self.assign(rslt_after, nested_combine)
     loop_body = self.blocks.pop()
     self.blocks += syntax.While(loop_cond, loop_body, merge)
 
@@ -196,36 +187,26 @@ class LowerTiledAdverbs(Transform):
     self.blocks.push()
     straggler_slice = syntax.Slice(loop_bound, niters, syntax_helpers.one_i64,
                                    type=slice_t)
-    straggler_args = \
-        [loop_rslt] + [self.index_along_axis(arg, axis, straggler_slice)
-                       for arg in args]
+    straggler_args = [self.index_along_axis(arg, axis, straggler_slice)
+                      for arg in args]
     if nested_has_tiles:
       straggler_args.append(self.tile_param_array)
     straggler_call = syntax.Call(transformed_fn, straggler_args,
-                                 type=fn.return_type)
+                                 type=transformed_fn.return_type)
+    straggler_tmp = alloc_maybe_array(isarray, elt_t, out_shape)
     straggler_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
-    self.assign(straggler_rslt, straggler_call)
+    self.assign(straggler_tmp, straggler_call)
+    straggler_combine = syntax.Call(transformed_combine,
+                                    [loop_rslt, straggler_tmp],
+                                    type=transformed_combine.return_type)
+    self.assign(straggler_rslt, straggler_combine)
     straggler_body = self.blocks.pop()
 
     main_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
     main_merge = {main_rslt.name : (straggler_rslt, loop_rslt)}
     self.blocks += syntax.If(straggler_cond, straggler_body, [], main_merge)
-    main_body = self.blocks.pop()
 
-    self.blocks.push()
-    else_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
-    else_args = [init] + copy.copy(args)
-    if nested_has_tiles:
-      else_args.append(self.tile_param_array)
-    else_call = syntax.Call(transformed_fn, else_args, type=fn.return_type)
-    self.assign(else_rslt, else_call)
-    else_body = self.blocks.pop()
-
-    init_cond = self.lte(tile_size, niters)
-    outer_merge = {output.name : (main_rslt, else_rslt)}
-    self.blocks += syntax.If(init_cond, main_body, else_body, outer_merge)
-
-    return output
+    return main_rslt
 
   def post_apply(self, fn):
     if self.tiling:

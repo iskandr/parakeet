@@ -1,7 +1,7 @@
 import syntax
 
 class Adverb(syntax.Expr):
-  _members = ['fn', 'args', 'axis',]
+  _members = ['fn', 'args', 'axis']
 
   def node_init(self):
     assert self.fn is not None

@@ -1,12 +1,11 @@
-import tuple_type
 import closure_type
 import core_types
 import syntax
+import tuple_type
 
 from array_type import ArrayT, make_array_type, ScalarT
-from syntax_helpers import const_int, const_tuple
+from syntax_helpers import const_int, const_tuple, zero_i64
 from transform import MemoizedTransform
-from syntax_helpers import zero_i64
 
 class LowerStructs(MemoizedTransform):
   """
@@ -27,7 +26,7 @@ class LowerStructs(MemoizedTransform):
         self.assign(lhs_elt, self.tuple_proj(rhs, i), recursive = True)
     else:
       assert isinstance(lhs, (syntax.Var, syntax.Index, syntax.Attribute)), \
-        "Invalid LHS: %s" % (lhs,)
+          "Invalid LHS: %s" % (lhs,)
       return syntax.Assign(stmt.lhs, self.transform_expr(rhs))
 
   def transform_Closure(self, expr):
@@ -58,31 +57,32 @@ class LowerStructs(MemoizedTransform):
     data = self.assign_temp(self.transform_expr(data), "data_ptr")
     data_t = data.type
     assert isinstance(data_t, core_types.PtrT), \
-      "Data field of array must be a pointer, got %s" % data_t
+        "Data field of array must be a pointer, got %s" % data_t
 
     shape = self.assign_temp(self.transform_expr(shape), "shape")
     shape_t = shape.type
     assert isinstance(shape_t, tuple_type.TupleT), \
-      "Shape of array must be a tuple, got: %s" % shape_t
+        "Shape of array must be a tuple, got: %s" % shape_t
 
     strides = self.assign_temp(self.transform_expr(strides), "strides")
     strides_t = strides.type
     assert isinstance(strides_t, tuple_type.TupleT), \
-      "Strides of array must be a tuple, got: %s" % strides_t
+        "Strides of array must be a tuple, got: %s" % strides_t
 
     rank = len(shape_t.elt_types)
     strides_rank = len(strides_t.elt_types)
     assert rank == strides_rank, \
-      "Shape and strides must be of same length, but got %d and %d" % \
-      (rank, strides_rank)
+        "Shape and strides must be of same length, but got %d and %d" % \
+        (rank, strides_rank)
     array_t = make_array_type(data_t.elt_type, rank)
     return syntax.Struct([data, shape, strides, offset], type = array_t)
 
   def transform_ArrayView(self, expr):
-    array_struct = self.array_view(expr.data, expr.shape, expr.strides, expr.offset)
+    array_struct = self.array_view(expr.data, expr.shape, expr.strides,
+                                   expr.offset)
     assert expr.type == array_struct.type, \
-      "Mismatch between original type %s and transformed type %s" % \
-      (expr.type, array_struct.type)
+        "Mismatch between original type %s and transformed type %s" % \
+        (expr.type, array_struct.type)
     return array_struct
 
   def transform_Array(self, expr):
@@ -105,5 +105,3 @@ class LowerStructs(MemoizedTransform):
       self.assign(lhs, elt)
 
     return self.array_view(ptr_var, const_tuple(n), const_tuple(1))
-
-
