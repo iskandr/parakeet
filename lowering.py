@@ -9,7 +9,7 @@ from lower_tiled_adverbs import LowerTiledAdverbs
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
-
+from licm import LoopInvariantCodeMotion
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
@@ -21,8 +21,10 @@ lowering_pipeline = [
   LowerIndexing,
   Simplify,
   LowerStructs,
+  Simplify, 
+  LoopInvariantCodeMotion,
+  LoopInvariantCodeMotion,
   Simplify,
-
   
 ]
 

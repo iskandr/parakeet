@@ -4,12 +4,12 @@ from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 import syntax 
 import core_types 
 import dead_code_elim
-from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt
-from syntax import Slice, Array, ArrayView, Cast, Attribute, Struct
+from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
+from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
- 
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_env import ScopedEnv 
+
 
 # classes of expressions known to have no side effects 
 # and to be unaffected by changes in mutable state as long 
@@ -20,11 +20,12 @@ from scoped_env import ScopedEnv
 #    any data modifications
 #  - Call: Unless the function is known to contain only safe expressions it 
 #    might depend on mutable state or modify it itself 
- 
-
 
 from transform import Transform
 
+"""
+rhs.__class__ not in (Var, Const)
+"""
 class Simplify(Transform):
   def __init__(self, fn):
     transform.Transform.__init__(self, fn)
@@ -42,11 +43,8 @@ class Simplify(Transform):
     # change between two accesses?  
     self.mutable_types = ma.visit_fn(fn)
       
-    # which variables might change in this scope between
-    # loop iterations? 
-    self.volatile_vars = set(self.fn.arg_names)
-      
-
+  
+  
   def immutable_type(self, t):
     return t not in self.mutable_types
   
@@ -80,16 +78,13 @@ class Simplify(Transform):
   
   def is_simple(self, expr):
     return self.children(expr) is ()
-    
-  def all_safe(self, exprs):
-    return all(e is None or self.is_safe(e) for e in exprs)
   
-  def is_safe(self, expr):
+  def immutable(self, expr):
     child_nodes = self.children(expr, allow_mutable = False)
     if child_nodes is None:
       return False 
     else:
-      return all(self.is_safe(child) for child in child_nodes)
+      return all(self.immutable(child) for child in child_nodes)
 
   def transform_expr(self, expr):
     stored = self.available_expressions.get(expr)
@@ -234,27 +229,31 @@ class Simplify(Transform):
       else:
         self.bindings[name] = rhs
     
-    elif self.is_safe(rhs):
+    elif self.immutable(rhs):
       self.bindings[name] = rhs 
       
   def bind(self, lhs, rhs):
-    if isinstance(lhs, syntax.Var):
-      self.bind_var(lhs.name, rhs)      
-    elif isinstance(lhs, syntax.Tuple) and isinstance(rhs, syntax.Tuple):
-      for (lhs_elt, rhs_elt) in zip(lhs.elts, rhs.elts):
+    lhs_class = lhs.__class__ 
+    if lhs_class is Var:
+      self.bind_var(lhs.name, rhs)
+    elif lhs_class is Tuple and rhs.__class__ is Tuple:
+      assert len(lhs.elts) == len(rhs.elts)
+      for lhs_elt, rhs_elt in zip(lhs.elts, rhs.elts):
         self.bind(lhs_elt, rhs_elt)
-        
+    
   def transform_Assign(self, stmt):
     lhs = stmt.lhs 
-    rhs = self.transform_expr(stmt.rhs)
+    old_rhs = stmt.rhs 
+    rhs = self.transform_expr(old_rhs)
     self.bind(lhs, rhs)
-    if lhs.__class__ is Var and rhs.__class__ not in (Var, Const):
-      if self.is_safe(rhs) and rhs not in self.available_expressions:   
-        self.available_expressions[rhs] = lhs
-    if rhs == stmt.rhs:
-      return stmt 
-    else:
-      return syntax.Assign(lhs, rhs)
+     
+    if lhs.__class__ is Var and \
+       rhs.__class__ not in (Var, Const) and \
+        self.immutable(rhs) and \
+        rhs not in self.available_expressions:
+      self.available_expressions[rhs] = lhs
+    new_stmt = syntax.Assign(lhs, rhs) if rhs != old_rhs else stmt
+    return new_stmt 
   
   def transform_If(self, stmt):
     self.available_expressions.push()
