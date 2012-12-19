@@ -1,7 +1,8 @@
 import core_types
-import numpy as np
 import names
+import numpy as np
 import syntax
+
 from args import FormalArgs
 
 prim_lookup_by_value = {}
@@ -27,10 +28,7 @@ def find_ast_op(op):
 def is_prim(numpy_fn):
   return numpy_fn in prim_lookup_by_value
 
-
-
 _untyped_prim_wrappers = {}
-
 def prim_wrapper(p):
   """Given a primitive, return an untyped function which calls that prim"""
   if p in _untyped_prim_wrappers:
@@ -80,11 +78,10 @@ class Prim(object):
       self.nout = fn.nout
     else:
       self.nout = 1
-    
+
     self._create_type_table()
     self.wrapper = prim_wrapper(self)
-   
-  
+
   def _create_type_table(self):
     # for now only support ufuncs which describe their own type behavior
     if hasattr(self.fn, 'types'):
@@ -173,7 +170,6 @@ sinh = Float(np.sinh)
 # sinc = Float(np.sinc)
 tan = Float(np.tan)
 tanh = Float(np.tanh)
-
 
 logical_and = Logical(np.logical_and, "And")
 logical_not = Logical(np.logical_not, "Not")

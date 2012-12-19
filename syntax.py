@@ -61,7 +61,7 @@ class While(Stmt):
 
   def __repr__(self):
     return "while %s:\n  (header)%s\n  (body)%s\n" % \
-           (self.cond, phi_nodes_to_str(self.merge),  block_to_str(self.body))
+           (self.cond, phi_nodes_to_str(self.merge), block_to_str(self.body))
 
   def __str__(self):
     return repr(self)
@@ -114,7 +114,6 @@ class Attribute(Expr):
 
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
-
 
   def __hash__(self):
     return hash ((self.value, self.name))

@@ -39,7 +39,7 @@ class SliceT(StructT):
 
   def __hash__(self):
     return hash((self.start_type, self.stop_type, self.step_type))
-  
+
   def combine(self, other):
     if self == other:
       return self
@@ -96,7 +96,7 @@ class ArrayT(StructT):
       ('data', self.ptr_t),
       ('shape', tuple_t),
       ('strides', tuple_t),
-      ('offset', Int64), 
+      ('offset', Int64),
     ]
 
   def dtype(self):
@@ -111,7 +111,7 @@ class ArrayT(StructT):
 
   def __hash__(self):
     return hash((self.elt_type, self.rank))
-  
+
   def combine(self, other):
     if self == other:
       return self
@@ -199,10 +199,10 @@ class ArrayT(StructT):
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
 
     n_elts = np.prod(shape)
-    n_bytes = n_elts * elt_size * min_stride 
+    n_bytes = n_elts * elt_size * min_stride
     dest_buf = AllocateBuffer(n_bytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
-    src_ptr = obj.data 
+    src_ptr = obj.data
     if obj.offset:
       P = src_ptr.__class__
       old_addr = ctypes.addressof(src_ptr.contents)
@@ -259,3 +259,9 @@ def increase_rank(t, r):
 
 def lower_ranks(arg_types, r):
   return [lower_rank(t, r) for t in arg_types]
+
+def get_rank(t):
+  if isinstance(t, ArrayT):
+    return t.rank
+  else:
+    return 0

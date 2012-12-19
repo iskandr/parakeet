@@ -4,7 +4,6 @@ import syntax
 import syntax_helpers
 import transform
 
-
 class LowerIndexing(transform.MemoizedTransform):
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data")
@@ -49,7 +48,7 @@ class LowerIndexing(transform.MemoizedTransform):
     new_array_t = array_type.make_array_type(elt_t, new_rank)
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
-    return syntax.ArrayView(data_ptr, new_shape, new_strides, elt_offset, 
+    return syntax.ArrayView(data_ptr, new_shape, new_strides, elt_offset,
                             type = new_array_t)
 
   def transform_Index(self, expr):
@@ -110,5 +109,3 @@ class LowerIndexing(transform.MemoizedTransform):
         copy_loop = self.transform_stmt(copy_loop)
         return copy_loop
     return syntax.Assign(lhs, rhs)
-
-
