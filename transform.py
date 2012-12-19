@@ -155,14 +155,12 @@ class Transform(Codegen):
     pass 
   
   def post_apply(self, new_fn):
-    """
+    
     print 
-    print "-- after"
+    print "-- after %s" % self.__class__.__name__
     print repr(new_fn)
     print 
-    """
-    pass 
-  
+    
   def apply(self, copy = False):
     self.copy = copy
 

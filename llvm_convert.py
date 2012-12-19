@@ -13,6 +13,7 @@ def to_bit(llvm_value, builder):
   if isinstance(llvm_t, llcore.IntegerType):
     return builder.icmp(llcore.ICMP_NE, llvm_value, zero(llvm_t), "ne_zero")
   else:
+
     return builder.fcmp(llcore.FCMP_ONE, llvm_value, zero(llvm_t), "ne_zero")
 
 def from_bit(llvm_value, new_ptype, builder):

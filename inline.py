@@ -38,6 +38,11 @@ def can_inline(fundef):
   return can_inline_block(fundef.body, outer = True)
 
 class Inliner(transform.Transform):
+  
+  def __init__(self, fn):
+    transform.Transform.__init__(self, fn)
+    self.count = 0 
+    
   def wrap_formal(self, arg):
     """
     Args might be strings & tuples, whereas
@@ -54,6 +59,7 @@ class Inliner(transform.Transform):
       return arg
 
   def do_inline(self, fundef, args):
+    self.count += 1 
     rename_dict = {}
     for (name, t) in fundef.type_env.iteritems():
       new_name = names.refresh(name)

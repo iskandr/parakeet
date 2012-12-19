@@ -214,6 +214,11 @@ class AST_Translator(ast.NodeVisitor):
     prim = prims.find_ast_op(expr.op)
     return syntax.PrimCall(prim, [ssa_left, ssa_right] )
 
+  def visit_BoolOp(self, expr):
+    values = map(self.visit, expr.values)
+    prim = prims.find_ast_op(expr.op)
+    return syntax.PrimCall(prim, values)
+  
   def visit_Compare(self, expr):
     lhs = self.visit(expr.left)
     assert len(expr.ops) == 1

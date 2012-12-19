@@ -174,10 +174,10 @@ sinh = Float(np.sinh)
 tan = Float(np.tan)
 tanh = Float(np.tanh)
 
-# TODO: How to represent short-circuiting operators?
-logical_and = Logical(np.logical_and)
-logical_not = Logical(np.logical_not)
-logical_or = Logical(np.logical_or)
+
+logical_and = Logical(np.logical_and, "And")
+logical_not = Logical(np.logical_not, "Not")
+logical_or = Logical(np.logical_or, "Or")
 #logical_xor = Logical(np.logical_xor, 'BitXor')
 
 bitwise_not = Bitwise(np.bitwise_not, 'Invert', '!')

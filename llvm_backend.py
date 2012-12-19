@@ -89,6 +89,7 @@ def attribute_lookup(struct, name, env, builder):
   return ptr, field_type
 
 def compile_expr(expr, env, builder):
+
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -157,11 +158,13 @@ def compile_expr(expr, env, builder):
     field_ptr, field_type = \
         attribute_lookup(expr.value, expr.name, env, builder)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
+    return field_value 
+    """
     if isinstance(field_type, BoolT):
-      return llvm_convert.to_bit(field_value)
+      return llvm_convert.to_bit(field_value, builder)
     else:
       return field_value
-
+    """
   def compile_TypedFn():
     (target_fn, _, _) = compile_fn(expr)
     return target_fn
@@ -219,6 +222,14 @@ def compile_expr(expr, env, builder):
         instr = llvm_prims.bool_binops[prim]
       op = getattr(builder, instr)
       return op(name = "%s_result" % prim.name, *llvm_args)
+    elif isinstance(prim, prims.Logical):
+      if prim == prims.logical_and:
+        return builder.and_(name = "logical_and_result", *llvm_args)
+      elif prim == prims.logical_not:
+        return builder.not_(name = "logical_not_result", *llvm_args)
+      else:
+        assert prim == prims.logical_or
+        return builder.or_(name = "logical_or_result", *llvm_args)
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % expr
 

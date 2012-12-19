@@ -30,6 +30,11 @@ class Node(object):
   def iteritems(self):
     for k in self.members():
       yield (k, getattr(self, k))
+      
+  def itervalues(self):
+    for (_,v) in self.iteritems():
+      yield v 
+  
   
   def items(self):
     [(k,getattr(self,k)) for k in self.members()]
