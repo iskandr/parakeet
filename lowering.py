@@ -6,7 +6,6 @@ from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from lower_tiled_adverbs import LowerTiledAdverbs
-from redundancy_elim import RedundancyElimination
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
@@ -23,7 +22,6 @@ lowering_pipeline = [
   Simplify,
   LowerStructs,
   Simplify,
-  LoopInvariantCodeMotion,
   LoopInvariantCodeMotion,
   Simplify,
 ]

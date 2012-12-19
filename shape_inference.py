@@ -197,16 +197,17 @@ class ShapeInference(SyntaxVisitor):
     else:
       raise RuntimeError("Unsupported by unify: %s, %s" % (x,y))
 
-  def visit_merge(self, merge, both_branches = True):
-    if both_branches:
-      for (k, (l,r)) in merge.iteritems():
-        new_l = self.visit_expr(l)
-        new_r = self.visit_expr(r)
+  def visit_merge_left(self, merge):
+    for (k, (l, _)) in merge.iteritems():
+      self.value_env[k] = self.visit_expr(l)
+      
+  def visit_merge(self, merge):
+    for (k, (l,r)) in merge.iteritems():
+      new_l = self.visit_expr(l)
+      new_r = self.visit_expr(r)
+      self.value_env[k] = new_l.combine(new_r)
 
-        self.value_env[k] = new_l.combine(new_r)
-    else:
-      for (k, (l, _)) in merge.iteritems():
-        self.value_env[k] = self.visit_expr(l)
+
 
   def visit_Alloc(self, expr):
     # alloc doesn't return an array but rather

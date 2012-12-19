@@ -51,6 +51,7 @@ class LLVM_Context:
       self.engine_builder.opt(0)
     self.exec_engine = self.engine_builder.create()
     self.pass_manager = passes.FunctionPassManager.new(self.module)
+    
     self.pass_manager.add(self.exec_engine.target_data)
     for p in self._verify_passes: 
       self.pass_manager.add(p)

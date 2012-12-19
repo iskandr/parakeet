@@ -11,13 +11,6 @@ class FindLiveVars(SyntaxVisitor):
   def visit_Var(self, expr):
     self.live_vars.add(expr.name)
     
-  def visit_merge(self, merge, both_branches=True):
-    for (_, (l,r)) in merge.iteritems():
-      self.visit_expr(l)
-      self.visit_expr(r) 
-      
-    
-
   def visit_lhs(self, expr):
     if isinstance(expr, syntax.Var):
       pass 
@@ -46,11 +39,6 @@ class VarUseCount(SyntaxVisitor):
     old_count = self.counts.get(expr.name, 0)
     self.counts[expr.name] = old_count + 1 
     
-  def visit_merge(self, merge, both_branches=True):
-    for (_, (l,r)) in merge.iteritems():
-      self.visit_expr(l)
-      self.visit_expr(r)
-       
   def visit_lhs(self, expr):
     if isinstance(expr, syntax.Var):
       pass 

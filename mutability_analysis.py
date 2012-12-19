@@ -48,7 +48,7 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
       for child in obj:
         self._mark(child)
         
-  def visit_merge(self, phi_nodes, both_branches = False):
+  def visit_merge(self, phi_nodes):
     pass 
     
   def visit_generic_expr(self, expr):

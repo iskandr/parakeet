@@ -52,6 +52,6 @@ def optimize(fn, copy = False):
     if not simple_fn(fn):
       inliner = Inliner(opt)
       opt = inliner.apply(copy=False)
-    opt = Simplify(opt).apply(copy=False)
+    opt =  Simplify(opt).apply(copy=False)
     _optimized_cache[fn.name] = opt
     return opt 
