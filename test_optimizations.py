@@ -125,7 +125,6 @@ def volatile_licm_mistake():
         i = i + 1
     return x
 
-
 def test_volatile_licm_mistake():
     expect(volatile_licm_mistake, [], np.array([1]))
 

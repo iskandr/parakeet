@@ -144,7 +144,7 @@ class Transform(Codegen):
     return new_block
 
   def pre_apply(self, old_fn):
-    """
+    """ 
     print
     print "Running %s" % self.__class__.__name__
     print
@@ -152,8 +152,7 @@ class Transform(Codegen):
     print repr(old_fn)
     print
     """
-    pass 
-
+    pass
 
   def post_apply(self, new_fn):
     """

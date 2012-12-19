@@ -6,7 +6,6 @@ from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from lower_tiled_adverbs import LowerTiledAdverbs
-
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline

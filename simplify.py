@@ -40,6 +40,9 @@ class Simplify(Transform):
     # which types have elements that might 
     # change between two accesses?  
     self.mutable_types = ma.visit_fn(fn)
+    
+    use_counter = dead_code_elim.VarUseCount()
+    self.use_counts = use_counter.visit_fn(fn)
       
   
   
@@ -50,7 +53,7 @@ class Simplify(Transform):
     c = expr.__class__ 
     if c is Const or c is Var:
       return ()
-    elif c is PrimCall or c is Closure:
+    elif c is PrimCall or c is Closure or c is Call:
       return expr.args 
     elif c is ClosureElt:
       return (expr.closure,)
@@ -84,6 +87,17 @@ class Simplify(Transform):
     else:
       return all(self.immutable(child) for child in child_nodes)
 
+
+  def temp(self, expr,   use_count = 1):
+    """
+    Wrapper around Codegen.assign_temp 
+    which also updates bindings and use_counts
+    """
+    new_var = self.assign_temp(expr)
+    self.bindings[new_var.name] = expr
+    self.use_counts[new_var.name] = use_count 
+    return new_var
+   
   def transform_expr(self, expr):
     stored = self.available_expressions.get(expr)
     if stored: 
@@ -93,25 +107,20 @@ class Simplify(Transform):
     
   
   def transform_Var(self, expr):
-
     name = expr.name
-
     original_expr = expr 
-    
     while name in self.bindings: 
-
       expr = self.bindings[name]
       if expr.__class__ is syntax.Var:
         name = expr.name 
       else:
         break  
 
-    if expr.__class__ is syntax.Const:
+    if expr.__class__ is Const:
       return expr 
     
-    elif name == original_expr.name:
+    elif expr == original_expr.name:
       return original_expr
-    
     else:
       return syntax.Var(name = name, type = original_expr.type)
       
@@ -128,7 +137,7 @@ class Simplify(Transform):
       idx = v.type.field_pos(expr.name)
       return v.args[idx]
     elif v.__class__ is not Var:
-      v = self.assign_temp(v, "struct_temp")
+      v = self.temp(v, "struct_temp")
     return Attribute(v, expr.name, type = expr.type)
   
   def transform_TupleProj(self, expr):
@@ -170,8 +179,7 @@ class Simplify(Transform):
       if self.is_simple(new_arg):
         new_args.append(new_arg)
       else:
-        new_var = self.assign_temp(new_arg)
-        new_args.append(new_var)
+        new_args.append(self.temp(new_arg))
     return new_args 
   
   def transform_Struct(self, expr):
@@ -226,8 +234,8 @@ class Simplify(Transform):
         self.set_binding(name, old_val)
       else:
         self.set_binding(name, rhs)
+    else:
     
-    elif self.immutable(rhs):
       self.set_binding(name, rhs) 
       
   def bind(self, lhs, rhs):
@@ -255,9 +263,11 @@ class Simplify(Transform):
   
   def transform_Assign(self, stmt):
     lhs = stmt.lhs 
+    lhs_class = lhs.__class__
     old_rhs = stmt.rhs 
     rhs = self.transform_expr(old_rhs)
-    lhs_class = lhs.__class__ 
+    rhs_class = rhs.__class__ 
+     
     if lhs_class is Index:
       lhs = self.transform_lhs_Index(lhs)
     elif lhs_class is Attribute:
@@ -266,10 +276,16 @@ class Simplify(Transform):
       self.bind(lhs, rhs)
      
     if lhs_class is Var and \
-       rhs.__class__ not in (Var, Const) and \
+       rhs_class not in (Var, Const) and \
         self.immutable(rhs) and \
         rhs not in self.available_expressions:
       self.available_expressions[rhs] = lhs
+    elif rhs_class is Var:
+      rhs_name = rhs.name
+      if rhs_name in self.bindings and \
+          self.use_counts.get(rhs.name, 1) == 1:
+        rhs = self.bindings[rhs_name]
+        self.use_counts[rhs_name] = 0    
     new_stmt = syntax.Assign(lhs, rhs) if rhs != old_rhs else stmt
     return new_stmt 
   
@@ -290,7 +306,7 @@ class Simplify(Transform):
     new_value = self.transform_expr(stmt.value)
     value_class = new_value.__class__
     if value_class not in (Var, Const):
-      return syntax.Return(self.assign_temp(new_value, "return_value"))
+      return syntax.Return(self.temp(new_value))
     elif new_value == stmt.value:
       return stmt 
     else:
