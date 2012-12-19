@@ -330,7 +330,7 @@ class TileAdverbs(Transform):
     #TODO: below is for when we have multiple axes
     #axis = [len(self.get_expansions(arg)) + a
     #        for arg, a in zip(expr.args, expr.axis)]
-    print new_fn
+    print "[tile adverbs] new fn:", new_fn
     arg_idxs = [expr.combine.arg_names.index(arg)
                 for arg in fixed_arg_names + arg_names]
     print "arg_idxs:", arg_idxs

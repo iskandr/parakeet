@@ -15,7 +15,7 @@ from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -360,9 +360,9 @@ def compile_fn(fundef):
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
-  print "Before opt", env.llvm_fn
+  # print "Before opt", env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
-  print "After opt", env.llvm_fn
+  # print "After opt", env.llvm_fn
 
   result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 

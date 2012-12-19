@@ -218,7 +218,6 @@ class Simplify(Transform):
     for (k, (left, right)) in phi_nodes.iteritems():
       new_left = self.transform_expr(left)
       new_right = self.transform_expr(right)
-      print "%s : (%s,%s) => %s,%s" % (k, left, right, new_left, new_right)
       if new_left == new_right:
         self.bindings[k] = new_left
         if not isinstance(new_left, (syntax.Const, syntax.Var)):
@@ -226,7 +225,8 @@ class Simplify(Transform):
       else:
         result[k] = new_left, new_right
     return result 
-  def match_var(self, name, rhs):
+  
+  def bind_var(self, name, rhs):
     if isinstance(rhs, syntax.Var):
       old_val = self.bindings.get(rhs.name)
       if old_val and self.is_simple(old_val):
@@ -237,21 +237,20 @@ class Simplify(Transform):
     elif self.is_safe(rhs):
       self.bindings[name] = rhs 
       
-  def match(self, lhs, rhs):
+  def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Var):
-      self.match_var(lhs.name, rhs)      
+      self.bind_var(lhs.name, rhs)      
     elif isinstance(lhs, syntax.Tuple) and isinstance(rhs, syntax.Tuple):
       for (lhs_elt, rhs_elt) in zip(lhs.elts, rhs.elts):
-        self.match(lhs_elt, rhs_elt)
+        self.bind(lhs_elt, rhs_elt)
         
   def transform_Assign(self, stmt):
     lhs = stmt.lhs 
     rhs = self.transform_expr(stmt.rhs)
-    self.match(lhs, rhs)
-    if lhs.__class__ is Var and not self.is_simple(rhs):
-      if rhs not in self.available_expressions and self.is_safe(rhs):   
+    self.bind(lhs, rhs)
+    if lhs.__class__ is Var and rhs.__class__ not in (Var, Const):
+      if self.is_safe(rhs) and rhs not in self.available_expressions:   
         self.available_expressions[rhs] = lhs
-    
     if rhs == stmt.rhs:
       return stmt 
     else:

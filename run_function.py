@@ -8,7 +8,7 @@ import type_conv
 import type_inference
 
 from args import ActualArgs
-from llvm_context import opt_context
+from llvm_context import opt as opt_context 
 from llvm.ee import GenericValue
 
 def python_to_generic_value(x, t):
@@ -91,7 +91,7 @@ def specialize_and_compile(fn, args, kwargs = {}):
   else:
     # translate from the Python AST to Parakeet's untyped format
     untyped  = ast_conversion.translate_function_value(fn)
-  print repr(untyped) 
+
   nonlocals = list(untyped.python_nonlocals())
   args_obj = ActualArgs(nonlocals + list(args), kwargs)
 
