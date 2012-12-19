@@ -11,7 +11,6 @@ class Verify(syntax_visitor.SyntaxVisitor):
     self.visit_block(self.fn.body)
 
 
-
   def visit_merge(self, phi_nodes):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
       self.visit_expr(left_value)

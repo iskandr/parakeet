@@ -4,7 +4,6 @@ import core_types
 from args import ActualArgs
 from node import Node
 
-
 class Stmt(Node):
   pass
 
@@ -69,7 +68,6 @@ class While(Stmt):
 
 class Expr(Node):
   _members = ['type']
-  
 
 class Const(Expr):
   _members = ['value']
@@ -108,24 +106,23 @@ class Var(Expr):
 
   def __eq__(self, other):
     return self.__class__ == other.__class__ and \
-      self.type == other.type and \
-      self.name == other.name
+           self.type == other.type and \
+           self.name == other.name
 
 class Attribute(Expr):
   _members = ['value', 'name']
 
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
-  
+
 
   def __hash__(self):
     return hash ((self.value, self.name))
-  
+
   def __eq__(self, other):
     return isinstance(other, Attribute) and \
-        self.name == other.name and \
-        self.value == other.value 
-         
+           self.name == other.name and \
+           self.value == other.value
 
 class Index(Expr):
   _members = ['value', 'index']
@@ -148,21 +145,18 @@ class Tuple(Expr):
   def __iter__(self):
     return iter(self.elts)
 
-    
-
 class Array(Expr):
   _members = ['elts']
-  
+
   def node_init(self):
     self.elts = tuple(self.elts)
-
 
 class Closure(Expr):
   """
   Create a closure which points to a global fn with a list of partial args
   """
   _members = ['fn', 'args']
-  
+
   def node_init(self):
     self.args = tuple(self.args)
 
@@ -205,14 +199,12 @@ class PrimCall(Expr):
 
   def __str__(self):
     return repr(self)
-  
+
   def node_init(self):
     self.args = tuple(self.args)
-  
+
   def __hash__(self):
     return hash((self.prim, self.args))
-   
-
 
 ############################################################################
 #
@@ -273,7 +265,7 @@ class Fn(Expr):
     self.specializations = {}
     import closure_type
     self.type = closure_type.ClosureT(self.name, ())
-    self.registry[self.name]  = self
+    self.registry[self.name] = self
 
   def python_nonlocals(self):
     if self.python_refs:

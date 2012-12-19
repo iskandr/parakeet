@@ -5,7 +5,6 @@ import closure_type
 import copy
 import names
 import syntax
-import tuple_type
 
 from core_types import Int32, Int64
 from transform import Transform
@@ -46,6 +45,16 @@ class FindAdverbs(Transform):
     self.has_adverbs = True
     return expr
 
+class AdverbArgs():
+  def __init__(self, fn=None, args=None, axis=0, combine=None, init=None,
+               emit=None):
+    self.fn = fn
+    self.args = args
+    self.axis = axis
+    self.combine = combine
+    self.init = init
+    self.emit = emit
+
 class TileAdverbs(Transform):
   def __init__(self, fn):
     Transform.__init__(self, fn)
@@ -54,14 +63,16 @@ class TileAdverbs(Transform):
     self.expansions = {}
     self.exp_stack = []
 
-  def push_exp(self, adv):
+  def push_exp(self, adv, adv_args):
     self.exp_stack.append(self.expansions)
     self.expansions = copy.deepcopy(self.expansions)
     self.adverbs_visited.append(adv)
+    self.adverb_args.append(adv_args)
 
   def pop_exp(self):
     self.expansions = self.exp_stack.pop()
     self.adverbs_visited.pop()
+    self.adverb_args.pop()
 
   def get_expansions(self, arg):
     if arg in self.expansions:
@@ -90,7 +101,7 @@ class TileAdverbs(Transform):
           other_args.append(arg)
       return (cur_depth_args, other_args)
 
-    def gen_unpack_fn(depth_idx):
+    def gen_unpack_fn(depth_idx, arg_order):
       if depth_idx >= len(depths):
         # Create type env for innermost fn - just the original types
         inner_type_env = {}
@@ -114,87 +125,68 @@ class TileAdverbs(Transform):
 
         # The innermost function always uses all the variables
         arg_types = [array_type.increase_rank(type_env[arg], 1)
-                     for arg in v_names]
-        fn = syntax.TypedFn(name=names.fresh("expanded_assign"),
-                            arg_names=v_names,
-                            body=block,
-                            input_types=arg_types,
-                            return_type=return_t,
-                            type_env=inner_type_env)
-        return (v_names, arg_types, [], [], fn)
+                     for arg in arg_order]
+        return syntax.TypedFn(name=names.fresh("inner_block"),
+                              arg_names=v_names,
+                              body=block,
+                              input_types=arg_types,
+                              return_type=return_t,
+                              type_env=inner_type_env)
       else:
         # Get the current depth
         depth = depths[depth_idx]
 
         # Order the arguments for the current depth, i.e. for the nested fn
         cur_arg_names, fixed_arg_names = order_args(depth)
+        nested_arg_names = fixed_arg_names + cur_arg_names
 
         # Make a type env for this function based on the number of expansions
         # left for each arg
         new_type_env = {}
-        new_adverb = adverb_tree[depth_idx]
-        print "fixed_arg_names:", fixed_arg_names
-        print "cur_arg_names:", cur_arg_names
-        if isinstance(new_adverb, adverbs.Reduce):
-          arg = fixed_arg_names[0]
-          print "expansions:", self.get_num_expansions_at_depth(arg, depth)
-          print "type:", type_env[arg]
-          new_type_env[arg] = type_env[arg]
-          for arg in cur_arg_names + fixed_arg_names[1:]:
-            rank_increase = self.get_num_expansions_at_depth(arg, depth)
-            new_type_env[arg] = \
-                array_type.increase_rank(type_env[arg], rank_increase)
-        else:
-          for arg in cur_arg_names + fixed_arg_names:
-            rank_increase = self.get_num_expansions_at_depth(arg, depth)
-            new_type_env[arg] = \
-                array_type.increase_rank(type_env[arg], rank_increase)
+        adv_args = self.adverb_args[depth_idx]
+        new_adverb = adverb_tree[depth_idx](fn=adv_args.fn, args=adv_args.args,
+                                            axis=adv_args.axis)
+        for arg in nested_arg_names:
+          rank_increase = self.get_num_expansions_at_depth(arg, depth)
+          new_type_env[arg] = \
+              array_type.increase_rank(type_env[arg], rank_increase)
 
-        cur_arg_types = []
-        for arg in cur_arg_names:
-          cur_arg_types.append(array_type.increase_rank(new_type_env[arg], 1))
-        fixed_arg_types = [type_env[arg] for arg in fixed_arg_names]
+        cur_arg_types = [new_type_env[arg] for arg in cur_arg_names]
+        fixed_arg_types = [new_type_env[arg] for arg in fixed_arg_names]
 
-        # Generate the nested fn and its fixed and normal args
-        nested_arg_names, nested_arg_types, \
-            nested_fixed_names, nested_fixed_types, nested_fn = \
-            gen_unpack_fn(depth_idx+1)
+        nested_fn = gen_unpack_fn(depth_idx+1, nested_arg_names)
         nested_args = [syntax.Var(name, type=t)
-                       for name, t in zip(nested_arg_names, nested_arg_types)]
+                       for name, t in zip(cur_arg_names, cur_arg_types)]
         nested_fixed_args = \
             [syntax.Var(name, type=t)
-             for name, t in zip(nested_fixed_names, nested_fixed_types)]
+             for name, t in zip(fixed_arg_names, fixed_arg_types)]
         closure_t = closure_type.make_closure_type(nested_fn,
-                                                   nested_fixed_types)
+                                                   fixed_arg_types)
         nested_closure = syntax.Closure(nested_fn, nested_fixed_args,
                                         type=closure_t)
 
         # Make an adverb that wraps the nested fn
-        axis = 0 # When unpacking a non-adverb assignment, all axes are 0
-        return_t = array_type.increase_rank(nested_fn.return_type, 1)
+        new_adverb.fn = nested_closure
+        new_adverb.args = nested_args
+        return_t = nested_fn.return_type
         if isinstance(new_adverb, adverbs.Reduce):
-          new_adverb.combine = nested_closure
-          return_t = nested_fn.return_type
-          new_adverb.init = syntax.Var(fixed_arg_names[0], type=return_t)
-          new_type_env[nested_args[0].name] = return_t
-          new_adverb.args = nested_args[1:]
+          new_adverb.combine = adv_args.combine
+          new_adverb.init = adv_args.init
         else:
-          new_adverb.args = nested_args
-          new_adverb.fn = nested_closure
-        new_adverb.type=return_t
-        new_adverb.axis = axis
+          return_t = array_type.increase_rank(nested_fn.return_type, 1)
+        new_adverb.type = return_t
 
         # Add the adverb to the body of the current fn and return the fn
-        fn = syntax.TypedFn(name=names.fresh("expanded_assign"),
-                            arg_names=fixed_arg_names + cur_arg_names,
+        arg_types = [new_type_env[arg] for arg in arg_order]
+        fn = syntax.TypedFn(name=names.fresh("intermediate_depth"),
+                            arg_names=arg_order,
                             body=[syntax.Return(new_adverb)],
-                            input_types=fixed_arg_types + cur_arg_types,
+                            input_types=arg_types,
                             return_type=return_t,
                             type_env=new_type_env)
-        return (cur_arg_names, cur_arg_types,
-                fixed_arg_names, fixed_arg_types, fn)
+        return fn
 
-    return gen_unpack_fn(0)
+    return gen_unpack_fn(0, v_names)
 
   def get_depths_list(self, v_names):
     depths = set()
@@ -233,123 +225,126 @@ class TileAdverbs(Transform):
   def transform_Map(self, expr):
     # TODO: Have to handle naming collisions in the expansions dict
     depth = len(self.adverbs_visited)
-    self.push_exp(adverbs.Map(expr.fn, expr.args, expr.axis))
-    for fn_arg, adverb_arg in zip(expr.fn.arg_names, expr.args):
+    closure = expr.fn
+    closure_args = []
+    fn = closure
+    if isinstance(fn, syntax.Closure):
+      closure_args = closure.args
+      fn = closure.fn
+    self.push_exp(adverbs.Map, AdverbArgs(expr.fn, expr.args, expr.axis))
+    for fn_arg, adverb_arg in zip(fn.arg_names[:len(closure_args)],
+                                  closure_args):
+      new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
+      self.expansions[fn_arg] = new_expansions
+    for fn_arg, adverb_arg in zip(fn.arg_names[len(closure_args):], expr.args):
       new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
       new_expansions.append(depth)
       self.expansions[fn_arg] = new_expansions
-      print self.expansions
 
     new_fn = syntax.TypedFn
-    arg_names = fixed_arg_names = []
-    depths = self.get_depths_list(expr.fn.arg_names)
-    find_adverbs = FindAdverbs(expr.fn)
+    depths = self.get_depths_list(fn.arg_names)
+    find_adverbs = FindAdverbs(fn)
     find_adverbs.apply(copy=False)
 
     if find_adverbs.has_adverbs:
-      arg_names = expr.fn.arg_names
+      arg_names = fn.arg_names
       input_types = []
-      new_type_env = copy.copy(expr.fn.type_env)
-      for arg, t in zip(arg_names, expr.fn.input_types):
-        new_type = array_type.increase_rank(t, 1)
+      new_type_env = copy.copy(fn.type_env)
+      for arg, t in zip(arg_names, fn.input_types):
+        new_type = array_type.increase_rank(t, len(self.get_expansions(arg)))
         input_types.append(new_type)
         new_type_env[arg] = new_type
-      return_t = array_type.increase_rank(expr.fn.return_type, 1)
-      new_fn = syntax.TypedFn(name=names.fresh("expanded_adverb_fn"),
+      exps = self.get_depths_list(fn.arg_names)
+      rank_inc = 0
+      for i, exp in enumerate(exps):
+        if exp >= depth:
+          rank_inc = i
+          break
+      return_t = array_type.increase_rank(expr.type, rank_inc)
+      new_fn = syntax.TypedFn(name=names.fresh("expanded_map_fn"),
                               arg_names=arg_names,
-                              body=self.transform_block(expr.fn.body),
+                              body=self.transform_block(fn.body),
                               input_types=input_types,
                               return_type=return_t,
                               type_env=new_type_env)
     else:
-      arg_names, _, fixed_arg_names, _, new_fn = \
-          self.gen_unpack_tree(self.adverbs_visited, depths, expr.fn.arg_names,
-                               expr.fn.body, expr.fn.type_env)
+      new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
+                                    fn.body, fn.type_env)
 
     #TODO: below is for when we have multiple axes
     #axis = [len(self.get_expansions(arg)) + a
     #        for arg, a in zip(expr.args, expr.axis)]
-    # print new_fn
-    arg_idxs = [expr.fn.arg_names.index(arg)
-                for arg in fixed_arg_names + arg_names]
-    print "arg_idxs:", arg_idxs
-    print "expr.args:", expr.args
-    args = [expr.args[idx] for idx in arg_idxs]
-    for arg in args:
-      rank_increase = len(self.get_expansions(arg.name))
-      if depth in self.get_expansions(arg.name):
-        rank_increase -= 1
-      arg.type = array_type.increase_rank(arg.type, rank_increase)
-    axis = len(self.get_expansions(expr.fn.arg_names[0])) + expr.axis - 1
-    #axis = expr.axis
+    for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
+      arg.type = t
+    axis = len(self.get_expansions(expr.args[0].name)) + expr.axis
     self.pop_exp()
-    return adverbs.TiledMap(new_fn, args, axis, type=new_fn.return_type)
+    return_t = new_fn.return_type
+    if isinstance(closure, syntax.Closure):
+      for c_arg, arg in zip(closure.args, expr.args):
+        c_arg.type = arg.type
+      closure_arg_types = [arg.type for arg in closure.args]
+      closure.fn = new_fn
+      closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
+      new_fn = closure
+    return adverbs.TiledMap(new_fn, expr.args, axis, type=return_t)
 
+  # For now, reductions end the tiling chain.
   def transform_Reduce(self, expr):
     depth = len(self.adverbs_visited)
-    new_adverb = adverbs.Reduce(expr.combine, expr.init, expr.fn, expr.args,
-                                expr.axis)
-    self.push_exp(new_adverb)
-    # TODO: assuming all inputs to a multi-input reduce have the same number
-    #       of expansions.  Is this true?
-    exps = self.get_expansions(expr.args[0])
-    for fn_arg in expr.combine.arg_names[1:]:
-      new_expansions = copy.deepcopy(exps)
+    closure = expr.fn
+    closure_args = []
+    fn = closure
+    if isinstance(fn, syntax.Closure):
+      closure_args = closure.args
+      fn = closure.fn
+    self.push_exp(adverbs.Reduce, AdverbArgs(combine=expr.combine,
+                                             init=expr.init, fn=expr.fn,
+                                             args=expr.args, axis=expr.axis))
+    for fn_arg, adverb_arg in zip(fn.arg_names[:len(closure_args)],
+                                  closure_args):
+      new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
+      self.expansions[fn_arg] = new_expansions
+    for fn_arg, adverb_arg in zip(fn.arg_names[len(closure_args):], expr.args):
+      new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
       new_expansions.append(depth)
       self.expansions[fn_arg] = new_expansions
-      print self.expansions
 
-    new_fn = syntax.TypedFn
-    arg_names = fixed_arg_names = []
-    depths = self.get_depths_list(expr.combine.arg_names)
-    find_adverbs = FindAdverbs(expr.combine)
-    find_adverbs.apply(copy=False)
-
-    if find_adverbs.has_adverbs:
-      arg_names = expr.combine.arg_names
-      input_types = []
-      new_type_env = copy.copy(expr.combine.type_env)
-      for arg, t in zip(arg_names, expr.combine.input_types):
-        new_type = array_type.increase_rank(t, 1)
-        input_types.append(new_type)
-        new_type_env[arg] = new_type
-      return_t = array_type.increase_rank(expr.combine.return_type, 1)
-      new_fn = syntax.TypedFn(name=names.fresh("expanded_adverb_fn"),
-                              arg_names=arg_names,
-                              body=self.transform_block(expr.combine.body),
-                              input_types=input_types,
-                              return_type=return_t,
-                              type_env=new_type_env)
-    else:
-      arg_names, _, fixed_arg_names, _, new_fn = \
-          self.gen_unpack_tree(self.adverbs_visited, depths,
-                               expr.combine.arg_names,
-                               expr.combine.body,
-                               expr.combine.type_env)
+    depths = self.get_depths_list(fn.arg_names)
+    new_fn = self.gen_unpack_tree(self.adverbs_visited, depths,
+                                  fn.arg_names,
+                                  fn.body,
+                                  fn.type_env)
 
     #TODO: below is for when we have multiple axes
     #axis = [len(self.get_expansions(arg)) + a
     #        for arg, a in zip(expr.args, expr.axis)]
-    print "[tile adverbs] new fn:", new_fn
-    arg_idxs = [expr.combine.arg_names.index(arg)
-                for arg in fixed_arg_names + arg_names]
-    print "arg_idxs:", arg_idxs
-    print "expr.args:", expr.args
-    args = []
-    for i, _ in enumerate(expr.args):
-      args.append(expr.args[arg_idxs[i]])
-    for arg in args:
-      rank_increase = len(self.get_expansions(arg.name))
-      if depth in self.get_expansions(arg.name):
-        rank_increase -= 1
-      arg.type = array_type.increase_rank(arg.type, rank_increase)
-      print "increasing rank of", arg, "by", rank_increase
-    axis = len(self.get_expansions(expr.combine.arg_names[1])) + expr.axis - 1
-    init = expr.init # TODO: lift init
+    for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
+      arg.type = t
+    # Assuming uniformity in expansions across args.  I think this has to be
+    # true for reductions, but not sure.
+    axis = len(self.get_expansions(expr.args[0].name)) + expr.axis
+    init = expr.init # Initial value lifted to proper shape in lowering
+    combine_depths = range(len(self.get_expansions(fn.arg_names[0])))
+    self.push_exp(None, None)
+    for arg in expr.combine.arg_names:
+      self.expansions[arg] = combine_depths
+    combine_maps = [adverbs.Map for _ in combine_depths]
+    new_combine = self.gen_unpack_tree(combine_maps, combine_depths,
+                                       expr.combine.arg_names,
+                                       expr.combine.body,
+                                       expr.combine.type_env)
     self.pop_exp()
-    print "return type:", new_fn.return_type
-    return adverbs.TiledReduce(new_fn, init, expr.fn, args, axis,
-                               type=new_fn.return_type)
+    return_t = new_fn.return_type
+    if isinstance(closure, syntax.Closure):
+      for c_arg, arg in zip(closure.args, expr.args):
+        c_arg.type = arg.type
+      closure_arg_types = [arg.type for arg in closure.args]
+      closure.fn = new_fn
+      closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
+      new_fn = closure
+    self.pop_exp()
+    return adverbs.TiledReduce(new_combine, init, new_fn, expr.args, axis,
+                               type=return_t)
 
   def transform_Scan(self, expr):
     self.adverb_args.append((expr.combine, expr.init, expr.emit))

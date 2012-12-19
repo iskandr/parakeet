@@ -10,7 +10,7 @@ class Transform(Codegen):
     self.fn = fn
     self.verify = verify
     self.copy = None
-    self.reverse = reverse 
+    self.reverse = reverse
 
   def lookup_type(self, name):
     assert self.type_env is not None
@@ -33,16 +33,16 @@ class Transform(Codegen):
 
   def transform_generic_expr(self, expr):
     args = {}
-    changed = False 
+    changed = False
     for member_name in expr.members():
       old_value = getattr(expr, member_name)
       new_value = self.transform_if_expr(old_value)
-      args[member_name] = new_value 
+      args[member_name] = new_value
       changed = changed or (old_value != new_value)
     if changed:
       return expr.__class__(**args)
     else:
-      return expr 
+      return expr
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
@@ -93,22 +93,22 @@ class Transform(Codegen):
     return result
 
   def transform_Assign(self, stmt):
-    old_lhs = stmt.lhs 
-    old_rhs = stmt.rhs 
+    old_lhs = stmt.lhs
+    old_rhs = stmt.rhs
     new_rhs = self.transform_expr(stmt.rhs)
     new_lhs = self.transform_lhs(stmt.lhs)
-    if old_lhs !=  new_lhs or old_rhs != new_rhs: 
+    if old_lhs !=  new_lhs or old_rhs != new_rhs:
       return syntax.Assign(new_lhs, new_rhs)
     else:
-      return stmt 
+      return stmt
 
   def transform_Return(self, stmt):
-    old_value = stmt.value 
+    old_value = stmt.value
     new_value = self.transform_expr(stmt.value)
     if old_value != new_value:
       return syntax.Return(new_value)
     else:
-      return stmt 
+      return stmt
 
   def transform_If(self, stmt):
     true = self.transform_block(stmt.true)
@@ -132,7 +132,7 @@ class Transform(Codegen):
         "Expected statement: %s" % result
     return result
 
-  def transform_block(self, stmts):  
+  def transform_block(self, stmts):
     self.blocks.push()
     for old_stmt in (reversed(stmts) if self.reverse else stmts):
       new_stmt = self.transform_stmt(old_stmt)
@@ -142,26 +142,28 @@ class Transform(Codegen):
     if self.reverse:
       new_block.reverse()
     return new_block
-    
+
   def pre_apply(self, old_fn):
     """
-    print 
+    print
     print "Running %s" % self.__class__.__name__
-    print 
-    print "-- before" 
-    print repr(old_fn) 
+    print
+    print "-- before"
+    print repr(old_fn)
     print
     """
     pass 
+
+
   def post_apply(self, new_fn):
     """
-    print 
+    print
     print "-- after %s" % self.__class__.__name__
     print repr(new_fn)
-    print 
+    print
     """
-    pass 
-  
+    pass
+
   def apply(self, copy = False):
     self.copy = copy
 
