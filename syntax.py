@@ -320,18 +320,6 @@ class Alloc(Expr):
   def __str__(self):
     return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)
 
-class IntToPtr(Expr):
-  """
-  Reinterpret an integer as a pointer to the specified type
-  """
-  _members = ['value']
-
-class PtrToInt(Expr):
-  """
-  Convert the address of a pointer into an integer
-  """
-  _members = ['value']
-
 class TypedFn(Expr):
   """
   The body of a TypedFn should contain Expr nodes which have been extended with

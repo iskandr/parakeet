@@ -66,26 +66,7 @@ class Codegen(object):
     else:
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
 
-  """
-  def ptr_to_int(self, ptr):
-    return syntax.PtrToInt(ptr, type = Int64)
 
-  def int_to_ptr(self, addr, ptr_t):
-    addr = self.cast(addr, Int64)
-    return syntax.IntToPtr(addr, type = ptr_t)
-  """
- 
-  def incr_ptr(self, ptr, offset):
-    """
-    Add an offset to a pointer to yield a new pointer
-    """
-    offset = syntax_helpers.wrap_if_constant(offset)
-    if syntax_helpers.is_zero(offset):
-      return ptr
-    else:
-      old_addr = self.ptr_to_int(ptr)
-      new_addr = self.add(old_addr, self.cast(offset, Int64))
-      return self.int_to_ptr(new_addr, ptr.type)
 
   def index(self, arr, idx, temp = True):
     """

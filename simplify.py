@@ -145,16 +145,6 @@ class Simplify(Transform):
     else:
       return syntax.TupleProj(tuple = new_tuple, index = idx, type = expr.type)
   
-  def transform_IntToPtr(self, expr):
-    intval = self.transform_expr(expr.value)
-    if isinstance(intval, syntax.Var) and intval.name in self.bindings:
-      intval = self.bindings[expr.name]
-      
-    # casting a pointer to an integer and casting it back should be a no-op
-    if isinstance(intval, syntax.IntToPtr) and expr.type == intval.value.type:
-      return intval.value
-    else:
-      return syntax.IntToPtr(intval, type = expr.type)
   
   def transform_Call(self, expr):
     import closure_type

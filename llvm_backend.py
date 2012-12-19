@@ -128,15 +128,7 @@ def compile_expr(expr, env, builder):
 
     return struct_ptr
 
-  def compile_IntToPtr():
-    addr = compile_expr(expr.value, env, builder)
-    llvm_t = llvm_types.llvm_value_type(expr.type)
-    return builder.inttoptr(addr, llvm_t, "int_to_ptr")
-
-  def compile_PtrToInt():
-    ptr = compile_expr(expr.value, env, builder)
-    return builder.ptrtoint(ptr, llvm_types.int64_t, "ptr_to_int")
-
+  
   def compile_Alloc():
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
@@ -155,16 +147,11 @@ def compile_expr(expr, env, builder):
     return elt
 
   def compile_Attribute():
-    field_ptr, field_type = \
+    field_ptr, _ = \
         attribute_lookup(expr.value, expr.name, env, builder)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
     return field_value 
-    """
-    if isinstance(field_type, BoolT):
-      return llvm_convert.to_bit(field_value, builder)
-    else:
-      return field_value
-    """
+ 
   def compile_TypedFn():
     (target_fn, _, _) = compile_fn(expr)
     return target_fn
