@@ -222,6 +222,8 @@ class ShapeInference(SyntaxVisitor):
       return Tuple(self.visit_expr_list(expr.args))
     else:
       assert False, "Unexpected struct: %s" % (expr,)
+      
+      
   def visit_Slice(self, expr):
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)

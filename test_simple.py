@@ -3,8 +3,15 @@ from testing_helpers import expect, run_local_tests
 def always1():
   return 1
 
+
 def test_always1():
   expect(always1, [], 1)
+
+def always_neg10():
+    return -10
+
+def test_always_neg10():
+    expect(always_neg10, [], -10)
 
 def add1(x):
   return x + 1

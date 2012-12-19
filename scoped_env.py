@@ -65,6 +65,13 @@ class ScopedEnv:
   def current_block(self):
     return self.blocks[-1]
   
+  def get(self, key):
+    for scope in self.scopes:
+      res = scope.get(key)
+      if res:
+        return res
+    return None 
+  
   def __getitem__(self, key):
     for scope in reversed(self.scopes):
       if key in scope:

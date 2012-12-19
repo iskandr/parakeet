@@ -201,11 +201,9 @@ class StructT(Type):
       field_repr = parakeet_field_type.ctypes_repr
       # nested structures will be heap allocated
       if isinstance(parakeet_field_type,  StructT):
-        # print "POINTER", field_name, field_repr
         ptr_t = ctypes.POINTER(field_repr)
         ctypes_fields.append( (field_name, ptr_t) )
       else:
-        # print "NOT A POINTER", field_name, field_repr
         ctypes_fields.append( (field_name, field_repr) )
 
     class Repr(ctypes.Structure):

@@ -77,7 +77,7 @@ def allpairs(f, x, y, **kwargs):
 def reduce(f, x, **kwargs):
   axis = get_axis(kwargs)
   init = kwargs.get('init')
-  print "f:", f
+
   return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
                         axis = axis)
 

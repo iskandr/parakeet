@@ -106,8 +106,8 @@ class Var(Expr):
 
   def __eq__(self, other):
     return self.__class__ == other.__class__ and \
-      self.type == other.type and \
-      self.name == other.name
+           self.type == other.type and \
+           self.name == other.name
 
 class Attribute(Expr):
   _members = ['value', 'name']
@@ -121,8 +121,8 @@ class Attribute(Expr):
 
   def __eq__(self, other):
     return isinstance(other, Attribute) and \
-        self.name == other.name and \
-        self.value == other.value
+           self.name == other.name and \
+           self.value == other.value
 
 class Index(Expr):
   _members = ['value', 'index']
@@ -206,8 +206,6 @@ class PrimCall(Expr):
   def __hash__(self):
     return hash((self.prim, self.args))
 
-
-
 ############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
@@ -267,7 +265,7 @@ class Fn(Expr):
     self.specializations = {}
     import closure_type
     self.type = closure_type.ClosureT(self.name, ())
-    self.registry[self.name]  = self
+    self.registry[self.name] = self
 
   def python_nonlocals(self):
     if self.python_refs:
@@ -313,18 +311,6 @@ class Alloc(Expr):
 
   def __str__(self):
     return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)
-
-class IntToPtr(Expr):
-  """
-  Reinterpret an integer as a pointer to the specified type
-  """
-  _members = ['value']
-
-class PtrToInt(Expr):
-  """
-  Convert the address of a pointer into an integer
-  """
-  _members = ['value']
 
 class TypedFn(Expr):
   """

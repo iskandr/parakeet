@@ -9,24 +9,6 @@ float_vec = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
 
 vectors = [bool_vec, int_vec, float_vec]
 
-def loop_dot(x,y):
-  n = x.shape[0]
-  result = x[0] * y[0]
-  i = 1
-  while i < n:
-      result = result + x[i] * y[i]
-      i = i + 1
-  return result
-
-def test_loopdot():
-  expect_allpairs(loop_dot, np.dot, vectors)
-
-def dot(x,y):
-  return sum(x*y)
-
-def test_adverb_dot():
-  expect_allpairs(dot, lambda x,y: np.sum(x*y), vectors)
-
 def loop_outer_prod(x,y,z):
   nx = x.shape[0]
   ny = y.shape[0]
@@ -80,6 +62,9 @@ def test_loop_matmult():
       res = np.dot(X, Y)
       Z = np.zeros(res.shape, dtype = res.dtype)
       expect(loop_matmult, [X,Y,Z], res)
+
+def dot(x,y):
+  return sum(x*y)
 
 def adverb_matmult(X,Y):
   return allpairs(dot, X, Y)

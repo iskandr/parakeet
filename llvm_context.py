@@ -4,15 +4,42 @@ import llvm.passes as passes
 
 class LLVM_Context:
   """Combine a module, exec engine, and pass manager into a single object"""
-  _default_passes = [
-    'mem2reg',
-    'simplifycfg', 'dce', 'sccp', 'gvn',
-    'memcpyopt',
-    'licm', 'loop-simplify', 'indvars',
-    'bb-vectorize', 'loop-unroll',
-    'loop-reduce', 'scalar-evolution', 'scalarrepl', 'scalarrepl-ssa', 'loops',
-    'loop-idiom', 'memdep', 'iv-users', 'tbaa', 'loop-simplify'
+  
+  _verify_passes = [
+    'preverify', 
+    'domtree', 
+    'verify'
   ]
+  _opt_passes = [
+    'mem2reg', 
+    'targetlibinfo', 
+    'no-aa', 'tbaa', 'basicaa',
+    'instcombine', 'simplifycfg', 'basiccg',
+    'scalarrepl-ssa',
+    'domtree',
+    'early-cse',
+    'simplify-libcalls',
+    'lazy-value-info',
+    'jump-threading',
+    'correlated-propagation', 
+    'simplifycfg', 'instcombine', 'reassociate', 'domtree',
+    'loops', 'loop-simplify', 'lcssa', 
+    'loop-rotate', 'licm', 'lcssa', 
+    'loop-unswitch', 
+    'instcombine', 
+    'scalar-evolution',
+    'loop-simplify',
+    'lcssa', 'indvars',
+    'loop-idiom', 'loop-deletion', 'loop-unroll',
+    'bb-vectorize',
+    'memdep', 'gvn', 'memdep', 'memcpyopt', 
+    'sccp',
+    'instcombine', 'lazy-value-info', 'jump-threading',
+    'correlated-propagation', 'domtree', 'memdep', 'dse', 'adce',
+    'simplifycfg', 'instcombine', 
+
+  ]
+
 
   def __init__(self, module_name, optimize = True, verify = False):
     self.module = core.Module.new(module_name)
@@ -24,18 +51,16 @@ class LLVM_Context:
       self.engine_builder.opt(0)
     self.exec_engine = self.engine_builder.create()
     self.pass_manager = passes.FunctionPassManager.new(self.module)
+    self.pass_manager.add(self.exec_engine.target_data)
+    for p in self._verify_passes: 
+      self.pass_manager.add(p)
     if optimize:
-      for p in self._default_passes:
+      for p in (self._opt_passes + self._verify_passes):
         self.pass_manager.add(p)
-    if verify:
-      self.pass_manager.add("verify")
 
   def run_passes(self, llvm_fn, n_iters = 3):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)
 
-opt_context = LLVM_Context("opt_module", optimize = True, verify = False)
-no_opt_context = LLVM_Context("no_opt_module", optimize = False, verify = False)
-verify_context = LLVM_Context("verify_module", optimize = False, verify = True)
-opt_and_verify_context = LLVM_Context("opt_and_verify_module", optimize = True,
-                                      verify = True)
+opt = LLVM_Context("opt_module", optimize = True)
+no_opt = LLVM_Context("no_opt_module", optimize = False)

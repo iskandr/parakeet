@@ -9,10 +9,15 @@ from common import dispatch
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from macro import macro
+
+import prims 
 from prims import Prim, prim_wrapper
+
 from scoped_env import ScopedEnv
 from subst import subst, subst_list
 from syntax_helpers import none, true, false
+ 
+ 
 
 reserved_names = {
   'True' : true,
@@ -28,22 +33,7 @@ def translate_default_arg_value(arg):
     name = arg.id
     assert name in reserved_names
     return reserved_names[name].value
-"""
-class Globals(object):
-  def __init__(self, globals_dict):
-    self.globals_dict = globals_dict
 
-  def __getattr__(self, name):
-    if hasattr(__builtins__, name):
-      return getattr(__builtins__, name)
-    else:
-      return self.globals_dict[name]
-
-  def __getitem__(self, name):
-    assert isinstance(name, str), \
-        "Not a string: %s" % name
-    return getattr(self, name)
-"""
 
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict = None, closure_cell_dict = None,
@@ -224,6 +214,11 @@ class AST_Translator(ast.NodeVisitor):
     prim = prims.find_ast_op(expr.op)
     return syntax.PrimCall(prim, [ssa_left, ssa_right] )
 
+  def visit_BoolOp(self, expr):
+    values = map(self.visit, expr.values)
+    prim = prims.find_ast_op(expr.op)
+    return syntax.PrimCall(prim, values)
+  
   def visit_Compare(self, expr):
     lhs = self.visit(expr.left)
     assert len(expr.ops) == 1
@@ -261,6 +256,19 @@ class AST_Translator(ast.NodeVisitor):
         value = getattr(value, name)
     return value
 
+  def translate_builtin(self, value, positional, keywords_dict):
+    if value == sum:
+      import adverb_wrapper 
+      sum_wrapper = \
+        adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
+      args = ActualArgs(positional = [prims.add] + list(positional), 
+                        keywords = {'init': syntax.Const(0)})
+      return syntax.Call(sum_wrapper, args) 
+    else:
+      assert value == slice
+      assert len(keywords_dict) == 0
+      return syntax.Slice(*positional)
+    
   def visit_Call(self, expr):
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
@@ -287,9 +295,8 @@ class AST_Translator(ast.NodeVisitor):
             return syntax.PrimCall(value, args)
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
-          assert value == slice
-          assert len(keywords_dict) == 0
-          return syntax.Slice(*positional)
+          return self.translate_builtin(value, positional, keywords_dict)
+        
     # if we didn't evaluate a Prim or macro...
     fn_val = self.visit(fn)
 

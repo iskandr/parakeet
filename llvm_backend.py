@@ -15,7 +15,7 @@ from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.opt_and_verify_context):
+  def __init__(self, llvm_cxt = llvm_context.opt):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt
@@ -89,6 +89,7 @@ def attribute_lookup(struct, name, env, builder):
   return ptr, field_type
 
 def compile_expr(expr, env, builder):
+
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -127,15 +128,7 @@ def compile_expr(expr, env, builder):
 
     return struct_ptr
 
-  def compile_IntToPtr():
-    addr = compile_expr(expr.value, env, builder)
-    llvm_t = llvm_types.llvm_value_type(expr.type)
-    return builder.inttoptr(addr, llvm_t, "int_to_ptr")
-
-  def compile_PtrToInt():
-    ptr = compile_expr(expr.value, env, builder)
-    return builder.ptrtoint(ptr, llvm_types.int64_t, "ptr_to_int")
-
+  
   def compile_Alloc():
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
@@ -154,14 +147,11 @@ def compile_expr(expr, env, builder):
     return elt
 
   def compile_Attribute():
-    field_ptr, field_type = \
+    field_ptr, _ = \
         attribute_lookup(expr.value, expr.name, env, builder)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
-    if isinstance(field_type, BoolT):
-      return llvm_convert.to_bit(field_value)
-    else:
-      return field_value
-
+    return field_value 
+ 
   def compile_TypedFn():
     (target_fn, _, _) = compile_fn(expr)
     return target_fn
@@ -219,6 +209,14 @@ def compile_expr(expr, env, builder):
         instr = llvm_prims.bool_binops[prim]
       op = getattr(builder, instr)
       return op(name = "%s_result" % prim.name, *llvm_args)
+    elif isinstance(prim, prims.Logical):
+      if prim == prims.logical_and:
+        return builder.and_(name = "logical_and_result", *llvm_args)
+      elif prim == prims.logical_not:
+        return builder.not_(name = "logical_not_result", *llvm_args)
+      else:
+        assert prim == prims.logical_or
+        return builder.or_(name = "logical_or_result", *llvm_args)
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % expr
 
@@ -360,9 +358,9 @@ def compile_fn(fundef):
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
-  #print "Before opt", env.llvm_fn
+  # print "Before opt", env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
-  #print "After opt", env.llvm_fn
+  # print "After opt", env.llvm_fn
 
   result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 

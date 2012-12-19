@@ -7,11 +7,10 @@ class SyntaxVisitor(object):
   """
   def visit_generic_expr(self, expr):
     
-    for k in expr.members():
-      v = getattr(expr, k)
+    for v in expr.itervalues():
       if v and isinstance(v, syntax.Expr):
         self.visit_expr(v)
-      elif hasattr(v, '__iter__'):
+      elif isinstance(v, (list,tuple)):
         for child in v:
           if isinstance(child, syntax.Expr):
             self.visit_expr(child)

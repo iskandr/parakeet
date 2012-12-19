@@ -1,6 +1,7 @@
 import syntax
 
 from inline import Inliner
+from licm import LoopInvariantCodeMotion
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
@@ -22,7 +23,8 @@ lowering_pipeline = [
   Simplify,
   LowerStructs,
   Simplify,
-  RedundancyElimination,
+  LoopInvariantCodeMotion,
+  LoopInvariantCodeMotion,
   Simplify,
 ]
 

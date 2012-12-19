@@ -74,12 +74,7 @@ class DCE(Transform):
     Transform.__init__(self, fn, reverse = True)
     # self.live_vars = FindLiveVars().visit_fn(fn)
     self.use_counts = VarUseCount().visit_fn(fn)
-    """
-    print
-    print "USE COUNTS"
-    for k,v in sorted(self.use_counts.items()):
-      print "  %s ==> %d" % (k,v)
-    """
+
     
   def is_live(self, name):
     return name in self.use_counts and self.use_counts[name] > 0
@@ -115,11 +110,6 @@ class DCE(Transform):
   
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
-      """
-      print "LIVE", stmt 
-      if isinstance(stmt.lhs, syntax.Var):
-        print "   -- count  %s => %d" % (stmt.lhs.name, self.use_counts[stmt.lhs.name])
-      """
       return stmt
     else:
       self.transform_expr(stmt.rhs)
@@ -163,12 +153,6 @@ class DCE(Transform):
     return stmt
   
   def post_apply(self, fn):
-    """
-    print
-    print "AFTER USE COUNTS"
-    for k,v in sorted(self.use_counts.items()):
-      print "  %s ==> %d" % (k,v)
-    """
     type_env = {} 
     for (name,t) in fn.type_env.iteritems():
       if self.is_live(name):

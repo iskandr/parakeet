@@ -33,10 +33,16 @@ class Transform(Codegen):
 
   def transform_generic_expr(self, expr):
     args = {}
+    changed = False
     for member_name in expr.members():
-      member_value = getattr(expr, member_name)
-      args[member_name] = self.transform_if_expr(member_value)
-    return expr.__class__(**args)
+      old_value = getattr(expr, member_name)
+      new_value = self.transform_if_expr(old_value)
+      args[member_name] = new_value
+      changed = changed or (old_value != new_value)
+    if changed:
+      return expr.__class__(**args)
+    else:
+      return expr
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
@@ -87,24 +93,34 @@ class Transform(Codegen):
     return result
 
   def transform_Assign(self, stmt):
-    rhs = self.transform_expr(stmt.rhs)
-    lhs = self.transform_lhs(stmt.lhs)
-    return syntax.Assign(lhs, rhs)
+    old_lhs = stmt.lhs
+    old_rhs = stmt.rhs
+    new_rhs = self.transform_expr(stmt.rhs)
+    new_lhs = self.transform_lhs(stmt.lhs)
+    if old_lhs !=  new_lhs or old_rhs != new_rhs:
+      return syntax.Assign(new_lhs, new_rhs)
+    else:
+      return stmt
 
   def transform_Return(self, stmt):
-    return syntax.Return(self.transform_expr(stmt.value))
+    old_value = stmt.value
+    new_value = self.transform_expr(stmt.value)
+    if old_value != new_value:
+      return syntax.Return(new_value)
+    else:
+      return stmt
 
   def transform_If(self, stmt):
-    cond = self.transform_expr(stmt.cond)
     true = self.transform_block(stmt.true)
     false = self.transform_block(stmt.false)
     merge = self.transform_phi_nodes(stmt.merge)
+    cond = self.transform_expr(stmt.cond)
     return syntax.If(cond, true, false, merge)
 
   def transform_While(self, stmt):
-    cond = self.transform_expr(stmt.cond)
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
+    cond = self.transform_expr(stmt.cond)
     return syntax.While(cond, body, merge)
 
   def transform_stmt(self, stmt):
@@ -118,10 +134,7 @@ class Transform(Codegen):
 
   def transform_block(self, stmts):
     self.blocks.push()
-    if self.reverse:
-      stmts = reversed(stmts)
-
-    for old_stmt in stmts:
+    for old_stmt in (reversed(stmts) if self.reverse else stmts):
       new_stmt = self.transform_stmt(old_stmt)
       if new_stmt:
         self.blocks.append_to_current(new_stmt)
@@ -144,7 +157,7 @@ class Transform(Codegen):
   def post_apply(self, new_fn):
     """
     print
-    print "-- after"
+    print "-- after %s" % self.__class__.__name__
     print repr(new_fn)
     print
     """
@@ -181,7 +194,6 @@ class Transform(Codegen):
 
       if new_fn is None:
         new_fn = old_fn
-    print new_fn
     if self.verify:
       import verify
       verify.verify(new_fn)

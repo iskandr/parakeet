@@ -16,7 +16,7 @@ def f():
 def test_mutable_slice():
   _, typed, _, _ =  testing_helpers.specialize_and_compile(f, [])
   mutable_types = mutability_analysis.find_mutable_types(typed)
-  print "mutable types", mutable_types 
+
   assert len(mutable_types) == 1, mutable_types 
   lowered = lowering.lower(typed)
   mutable_types = mutability_analysis.find_mutable_types(lowered)

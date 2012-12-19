@@ -137,7 +137,7 @@ def equiv_arg_names(fn):
   
   assert len(fundef.args.defaults) == 0
   data_names = gen_data_arg_names(len(fundef.args.positional)) 
-  varargs_name = 'xs' if fundef.args.varargs else None
+  varargs_name = 'xs' if fundef.args.starargs else None
   return data_names, varargs_name   
 
 

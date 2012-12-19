@@ -65,11 +65,9 @@ def test_assign_slices():
     (i,j,k,l) = (0,2,0,4)
     (a,b,c,d) = (1,3,5,9)
     m_expect[i:j, k:l] = m_expect[a:b, c:d]
-    print "Running test for %s" % m.dtype
     expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
-    print "OK #1"
     expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
-    print "OK #2"
+
 
 def assign_all_slices(x, y):
   y[0:2,0:5] = x[0:2,0:5]
@@ -83,9 +81,8 @@ def test_assign_all_slices():
     m_expect = m.copy()
     m_input = m.copy()
     m_zeros = np.zeros_like(m_input)
-    print "input shape:", m_input.shape
-    print "Running test for %s" % m.dtype
     expect(assign_all_slices, [m_input, m_zeros], m_expect)
     
 if __name__ == '__main__':
   run_local_tests()
+  
