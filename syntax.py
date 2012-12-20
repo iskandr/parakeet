@@ -352,7 +352,7 @@ class TypedFn(Expr):
         "Typed function already registered: %s" % self.name
     self.registry[self.name] = self
 
-    self.has_tiles = False
+    self.num_tiles = 0
 
   def __repr__(self):
     arg_strings = []

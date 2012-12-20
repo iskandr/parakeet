@@ -165,7 +165,8 @@ def test_2d_map():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x2_array, np.array([2], dtype=np.int64))
+  tile_array = np.array([2] * new_fn.num_tiles, dtype=np.int64)
+  rslt = wrapper(x2_array, tile_array)
   print rslt
   assert testing_helpers.eq(rslt, x2_array)
 

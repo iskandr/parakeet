@@ -1,7 +1,4 @@
-print_untyped_function = True 
-print_functions_before_transforms = True 
-print_functions_after_transforms = True 
-print_lowered_function = True 
-
-
-
+print_untyped_function = False
+print_functions_before_transforms = False
+print_functions_after_transforms = False
+print_lowered_function = False

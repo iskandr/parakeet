@@ -27,18 +27,6 @@ class LowerTiledAdverbs(Transform):
                                      tile_param_array=self.tile_param_array)
     return nested_lower.apply()
 
-  def transform_Map(self, expr):
-    #self.tiling = False
-    return expr
-
-  def transform_Reduce(self, expr):
-    #self.tiling = False
-    return expr
-
-  def transform_Scan(self, expr):
-    #self.tiling = False
-    return expr
-
   def transform_TiledMap(self, expr):
     self.tiling = True
     self.fn.has_tiles = True
@@ -57,7 +45,7 @@ class LowerTiledAdverbs(Transform):
     fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(fn)
     return_t = inner_fn.return_type
-    nested_has_tiles = inner_fn.has_tiles
+    nested_has_tiles = inner_fn.num_tiles > 0
 
     elt_t = expr.type.elt_type
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
@@ -139,7 +127,7 @@ class LowerTiledAdverbs(Transform):
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     callable_fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(callable_fn)
-    nested_has_tiles = inner_fn.has_tiles
+    nested_has_tiles = inner_fn.num_tiles > 0
     callable_combine = self.transform_expr(expr.combine)
     inner_combine = self.get_fn(callable_combine)
     isarray = isinstance(expr.type, array_type.ArrayT)
@@ -225,4 +213,5 @@ class LowerTiledAdverbs(Transform):
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
+      fn.num_tiles = self.nesting_idx + 1
     return fn

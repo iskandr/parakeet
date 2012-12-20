@@ -536,7 +536,7 @@ class Codegen(object):
           rhs = self.index(src, index_tuple, temp=True)
           self.assign(lhs, rhs)
         else:
-          create_loops()
+          self.blocks += create_loops()
       start = syntax_helpers.zero_i64
       stop = dims[i]
       if i > 0 or return_stmt:
