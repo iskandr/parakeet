@@ -31,7 +31,7 @@ class RewriteTyped(Transform):
           isinstance(expr.type, core_types.ScalarT) and \
           isinstance(t, core_types.ScalarT), \
           "Can't cast type %s into %s" % (expr.type, t)
-      return self.cast(expr, t)
+      return syntax.Cast(expr, type=t)
 
   def transform_merge(self, merge):
     new_merge = {}
@@ -144,6 +144,7 @@ class RewriteTyped(Transform):
     return stmt
 
   def transform_While(self, stmt):
+    # TODO: Where do the coercion expressions from phi nodes go to? 
     stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)

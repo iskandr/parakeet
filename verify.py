@@ -2,11 +2,11 @@ import closure_type
 import core_types
 import syntax
 from syntax import Expr
-import syntax_visitor
+from syntax_visitor import SyntaxVisitor
 from collect_vars import collect_binding_names
 
 
-class Verify(syntax_visitor.SyntaxVisitor):
+class Verify(SyntaxVisitor):
   def __init__(self, fn):
     print fn 
     self.fn = fn
@@ -32,14 +32,19 @@ class Verify(syntax_visitor.SyntaxVisitor):
     assert v.type == t, \
        "Invalid type annotation on %v, expected %s but got %s" % (v,t,v.type)
  
-  def visit_left_merge(self, phi_nodes):
+  def visit_merge_left(self, phi_nodes):
+    print "MERGE LEFT", phi_nodes 
     for (k, (v,_)) in phi_nodes.iteritems():
       self.bind_var(k)
       self.phi_value_ok(k,v)
-      
+  
+  def visit_stmt(self, stmt):
+    print ">>>", stmt
+    SyntaxVisitor.visit_stmt(self, stmt)
+  
   def visit_merge(self, phi_nodes):
+    print "VISIT MERGE", phi_nodes 
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
-      self.bind_var(k)
       self.phi_value_ok(k, left_value)
       self.phi_value_ok(k, right_value)
 
@@ -69,9 +74,6 @@ class Verify(syntax_visitor.SyntaxVisitor):
         "Incorrect type for returned value %s, types=(%s,%s)" % \
         (stmt.value, stmt.value.type, self.fn.return_type)
 
-  def visit_TypedFn(self, fn):
-    return verify(fn)
-
   def visit_Assign(self, stmt):
     lhs_names = collect_binding_names(stmt.lhs)
     for lhs_name in lhs_names:
@@ -80,6 +82,9 @@ class Verify(syntax_visitor.SyntaxVisitor):
     assert stmt.lhs.type == stmt.rhs.type, \
         "Mismatch between LHS type %s and RHS %s in '%s'" % \
         (stmt.lhs.type, stmt.rhs.type, stmt)
+
+  def visit_TypedFn(self, fn):
+    return verify(fn)
 
 def verify(fn):
   Verify(fn).run()

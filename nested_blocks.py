@@ -2,8 +2,10 @@ class NestedBlocks(object):
   def __init__(self):
     self._blocks = []
 
-  def push(self):
-    self._blocks.append([])
+  def push(self, block = None):
+    if block is None:
+      block = []
+    self._blocks.append(block)
 
   def pop(self):
     return self._blocks.pop()
