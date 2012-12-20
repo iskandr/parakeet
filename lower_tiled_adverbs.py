@@ -65,11 +65,8 @@ class LowerTiledAdverbs(Transform):
     # Hackishly execute the first tile to get the output shape
     init_slice_bound = self.fresh_i64("init_slice_bound")
     init_slice_cond = self.lt(tile_size, niters, "init_slice_cond")
-    full_slice_body = [syntax.Assign(init_slice_bound, tile_size)]
-    part_slice_body = [syntax.Assign(init_slice_bound, niters)]
     init_merge = {init_slice_bound.name:(tile_size, niters)}
-    self.blocks += syntax.If(init_slice_cond, full_slice_body, part_slice_body,
-                             init_merge)
+    self.blocks += syntax.If(init_slice_cond, [], [], init_merge)
     init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
                               syntax_helpers.one_i64, slice_t)
     init_slice_args = [self.index_along_axis(arg, axis, init_slice)
@@ -80,6 +77,8 @@ class LowerTiledAdverbs(Transform):
                                              type=inner_fn.return_type),
                                  "rslt_init")
 
+    # Allocate the output based on shape of the initial tile and assign the
+    # first result to the appropriate slice of the output.
     init_shape = self.shape(rslt_init)
     other_shape_els = [self.tuple_proj(init_shape, i)
                        for i in range(1, len(init_shape.type.elt_types))]
@@ -88,6 +87,7 @@ class LowerTiledAdverbs(Transform):
     init_output_idxs = self.index_along_axis(array_result, 0, init_slice)
     self.assign(init_output_idxs, rslt_init)
 
+    # Loop over the remaining tiles.
     i, i_after, merge = self.loop_counter("i", tile_size)
     cond = self.lt(i, loop_bound)
 
@@ -96,10 +96,7 @@ class LowerTiledAdverbs(Transform):
     next_bound = self.add(i, tile_size, "next_bound")
     tile_cond = self.lte(next_bound, niters)
     tile_merge = {i_after.name:(next_bound, niters)}
-    full_slice_body = [syntax.Assign(i_after, next_bound)]
-    part_slice_body = [syntax.Assign(i_after, niters)]
-    self.blocks += syntax.If(tile_cond, full_slice_body, part_slice_body,
-                             tile_merge)
+    self.blocks += syntax.If(tile_cond, [], [], tile_merge)
 
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
@@ -136,7 +133,6 @@ class LowerTiledAdverbs(Transform):
     max_arg = adverb_helpers.max_rank_arg(args)
     niters = self.shape(max_arg, axis)
 
-    # Create the tile size variable and find the number of tiles
     tile_size = self.index(self.tile_param_array, self.nesting_idx)
     self.num_tiled_adverbs += 1
 
@@ -152,11 +148,8 @@ class LowerTiledAdverbs(Transform):
     # Hackishly execute the first tile to get the output shape
     init_slice_bound = self.fresh_i64("init_slice_bound")
     init_slice_cond = self.lt(tile_size, niters, "init_slice_cond")
-    full_slice_body = [syntax.Assign(init_slice_bound, tile_size)]
-    part_slice_body = [syntax.Assign(init_slice_bound, niters)]
     init_merge = {init_slice_bound.name:(tile_size, niters)}
-    self.blocks += syntax.If(init_slice_cond, full_slice_body, part_slice_body,
-                             init_merge)
+    self.blocks += syntax.If(init_slice_cond, [], [], init_merge)
     init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
                               syntax_helpers.one_i64, slice_t)
     init_slice_args = [self.index_along_axis(arg, axis, init_slice)
@@ -187,22 +180,27 @@ class LowerTiledAdverbs(Transform):
                array_type.get_rank(expr.init.type)
     self.blocks += init_unpack(num_exps, init)
 
+    # Combine the initial value with the initial tile result.
+    rslt_before = self.fresh_var(rslt_t, "rslt_before")
+    init_combine = syntax.Call(callable_combine,
+                               [init, rslt_init],
+                               type=inner_combine.return_type)
+    self.assign(rslt_before, init_combine)
+
+    # Loop over the remaining tiles.
     loop_rslt = self.fresh_var(rslt_t, "loop_rslt")
     rslt_tmp = self.fresh_var(rslt_t, "rslt_tmp")
     rslt_after = self.fresh_var(rslt_t, "rslt_after")
     i, i_after, merge = self.loop_counter("i", init_slice_bound)
     loop_cond = self.lt(i, niters)
-    merge[loop_rslt.name] = (init, rslt_after)
+    merge[loop_rslt.name] = (rslt_before, rslt_after)
 
     self.blocks.push()
     # Take care of stragglers via checking bound every iteration.
     next_bound = self.add(i, tile_size, "next_bound")
     tile_cond = self.lte(next_bound, niters)
     tile_merge = {i_after.name:(next_bound, niters)}
-    full_slice_body = [syntax.Assign(i_after, next_bound)]
-    part_slice_body = [syntax.Assign(i_after, niters)]
-    self.blocks += syntax.If(tile_cond, full_slice_body, part_slice_body,
-                             tile_merge)
+    self.blocks += syntax.If(tile_cond, [], [], tile_merge)
 
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)

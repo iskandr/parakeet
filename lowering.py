@@ -1,5 +1,6 @@
 import syntax
 
+from fusion import Fusion
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from lower_adverbs import LowerAdverbs
@@ -9,24 +10,23 @@ from lower_tiled_adverbs import LowerTiledAdverbs
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
-from fusion import Fusion 
 
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
 
 lowering_pipeline = [
-  Simplify, 
-  Fusion,                    
+#  Simplify,
+  Fusion,
   LowerAdverbs,
-  Simplify,
+#  Simplify,
   Inliner,
   LowerIndexing,
-  Simplify,
+#  Simplify,
   LowerStructs,
-  Simplify,
-  LoopInvariantCodeMotion,
-  Simplify,
+#  Simplify,
+#  LoopInvariantCodeMotion,
+#  Simplify,
 ]
 
 _lowered_functions = {}
@@ -40,9 +40,7 @@ def lower(fundef, tile=False):
   else:
     lowered_fn = fundef
     if tile:
-      lowered_fn = apply_pipeline(fundef, tiling_pipeline, copy = True)
-      print "After Lowering Tiling:"
-      print lowered_fn
+      lowered_fn = apply_pipeline(lowered_fn, tiling_pipeline, copy = True)
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
     else:
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = True)

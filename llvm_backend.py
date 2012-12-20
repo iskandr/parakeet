@@ -89,7 +89,6 @@ def attribute_lookup(struct, name, env, builder):
   return ptr, field_type
 
 def compile_expr(expr, env, builder):
-
   def compile_Var():
     name = expr.name
     assert name in env.initialized, "%s uninitialized" % name
@@ -128,7 +127,6 @@ def compile_expr(expr, env, builder):
 
     return struct_ptr
 
-  
   def compile_Alloc():
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
@@ -150,8 +148,8 @@ def compile_expr(expr, env, builder):
     field_ptr, _ = \
         attribute_lookup(expr.value, expr.name, env, builder)
     field_value = builder.load(field_ptr, "%s_value" % expr.name)
-    return field_value 
- 
+    return field_value
+
   def compile_TypedFn():
     (target_fn, _, _) = compile_fn(expr)
     return target_fn
@@ -358,11 +356,11 @@ def compile_fn(fundef):
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
-  # print "Module", env.llvm_context.module 
+  # print "Module", env.llvm_context.module
   # print "Before opt", env.llvm_fn
   env.llvm_context.run_passes(env.llvm_fn)
   # print "After opt", env.llvm_fn
-  
+
   result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 
   compiled_functions[fundef.name] = result

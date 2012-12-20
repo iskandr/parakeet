@@ -324,16 +324,19 @@ class TileAdverbs(Transform):
     # true for reductions, but not sure.
     axis = len(self.get_expansions(expr.args[0].name)) + expr.axis
     init = expr.init # Initial value lifted to proper shape in lowering
-    combine_depths = range(len(self.get_expansions(fn.arg_names[0])))
-    self.push_exp(None, None)
-    for arg in expr.combine.arg_names:
-      self.expansions[arg] = combine_depths
-    combine_maps = [adverbs.Map for _ in combine_depths]
-    new_combine = self.gen_unpack_tree(combine_maps, combine_depths,
-                                       expr.combine.arg_names,
-                                       expr.combine.body,
-                                       expr.combine.type_env)
-    self.pop_exp()
+    if len(depths) > 1:
+      depths.remove(depth)
+      self.push_exp(None, None)
+      for arg in expr.combine.arg_names:
+        self.expansions[arg] = depths
+      combine_maps = [adverbs.Map for _ in depths]
+      new_combine = self.gen_unpack_tree(combine_maps, depths,
+                                         expr.combine.arg_names,
+                                         expr.combine.body,
+                                         expr.combine.type_env)
+      self.pop_exp()
+    else:
+      new_combine = expr.combine
     return_t = new_fn.return_type
     if isinstance(closure, syntax.Closure):
       for c_arg, arg in zip(closure.args, expr.args):

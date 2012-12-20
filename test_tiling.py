@@ -89,7 +89,8 @@ red_fn = syntax.TypedFn(
   name = "red_fn",
   arg_names = ["X"],
   input_types = [x_array_t],
-  body = [syntax.Return(adverbs.Reduce(add_x_y, 0, id_fn_2,
+  body = [syntax.Return(adverbs.Reduce(add_x_y, syntax_helpers.zero_i64,
+                                       id_fn_2,
                                        [syntax.Var("X", type=x_array_t)],
                                        0, type=core_types.Int64))],
   return_type = core_types.Int64,
@@ -158,7 +159,7 @@ def test_1d_reduce():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
+  rslt = wrapper(x_array, np.array([2], dtype=np.int64))
   print rslt
   assert testing_helpers.eq(rslt, sum(x_array))
 
