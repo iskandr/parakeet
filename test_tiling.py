@@ -167,6 +167,7 @@ def test_2d_map():
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   tile_array = np.array([2] * new_fn.num_tiles, dtype=np.int64)
   rslt = wrapper(x2_array, tile_array)
+  print x2_array
   print rslt
   assert testing_helpers.eq(rslt, x2_array)
 

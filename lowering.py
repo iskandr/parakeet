@@ -17,17 +17,17 @@ tiling_pipeline = [
 ]
 
 lowering_pipeline = [
-#  Simplify,
-#  Fusion,
+  Simplify,
+  Fusion,
   LowerAdverbs,
-#  Simplify,
+  Simplify,
   Inliner,
   LowerIndexing,
-#  Simplify,
+  Simplify,
   LowerStructs,
-#  Simplify,
-#  LoopInvariantCodeMotion,
-#  Simplify,
+  Simplify,
+  LoopInvariantCodeMotion,
+  Simplify,
 ]
 
 _lowered_functions = {}
