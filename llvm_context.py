@@ -73,7 +73,7 @@ class LLVM_Context:
       for p in (self._opt_passes + self._verify_passes):
         self.pass_manager.add(p)
 
-  def run_passes(self, llvm_fn, n_iters = 2):
+  def run_passes(self, llvm_fn, n_iters = 4):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)
 
