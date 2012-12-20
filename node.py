@@ -96,8 +96,10 @@ class Node(object):
     
   
   def __str__(self):
-    members = ["%s = %s" % (m, getattr(self, m)) for m in self.members()]
-    return "%s(%s)" % (self.node_type(), ", ".join(members))
+    member_strings = []
+    for (k,v) in self.iteritems():
+      member_strings.append("%s = %s" % (k, v)) 
+    return "%s(%s)" % (self.node_type(), ", ".join(member_strings))
   
   def __repr__(self):
     return self.__str__()

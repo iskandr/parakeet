@@ -8,7 +8,9 @@ class Stmt(Node):
   pass
 
 def block_to_str(stmts):
-  body_str = '\n' + '\n'.join([str(stmt) for stmt in stmts])
+  body_str = '\n'
+  body_str += '\n'.join([str(stmt) for stmt in stmts])
+
   return body_str.replace('\n', '\n    ')
 
 def phi_nodes_to_str(phi_nodes):
@@ -41,7 +43,7 @@ class If(Stmt):
     if len(self.true) or len(self.false) > 0:
       s += "%s\n" % block_to_str(self.true)
     if len(self.false) > 0:
-      s += "else:%s" % block_to_str(self.false)
+      s += "else:%s\n" % block_to_str(self.false)
     if len(self.merge) > 0:
       s += "(merge-if)%s" % phi_nodes_to_str(self.merge)
     return s
@@ -294,6 +296,7 @@ class ClosureElt(Expr):
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
+  
 
 class Struct(Expr):
   """

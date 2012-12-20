@@ -1,8 +1,6 @@
 
 
-import transform
-
-
+from transform import Transform 
 import syntax
 from syntax import If, Assign, While, Return, Var   
 import names 
@@ -87,10 +85,10 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
   return result_var 
   
 
-class Inliner(transform.Transform):
+class Inliner(Transform):
   
   def __init__(self, fn):
-    transform.Transform.__init__(self, fn)
+    Transform.__init__(self, fn)
     self.count = 0 
 
   def transform_Call(self, expr):
@@ -105,3 +103,9 @@ class Inliner(transform.Transform):
       return result_var 
     else:
       return expr
+    
+  def apply(self, copy = False):
+    if contains_calls(self.fn):
+      return Transform.apply(self, copy = copy)
+    else:
+      return self.fn 

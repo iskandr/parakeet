@@ -8,6 +8,7 @@ from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from lower_tiled_adverbs import LowerTiledAdverbs
 from simplify import Simplify
+from dead_code_elim import DCE 
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 import config 
@@ -18,16 +19,21 @@ tiling_pipeline = [
 
 lowering_pipeline = [
 #  Simplify,
+# DCE, 
   Fusion,
   LowerAdverbs,
 #  Simplify,
+# DCE, 
   Inliner,
   LowerIndexing,
 #  Simplify,
+#  DCE, 
   LowerStructs,
 #  Simplify,
+#  DCE, 
 #  LoopInvariantCodeMotion,
 #  Simplify,
+#  DCE
 ]
 
 _lowered_functions = {}

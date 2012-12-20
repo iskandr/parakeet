@@ -25,7 +25,7 @@ class DCE(Transform):
     else:
       return True
 
-  def transform_phi_nodes(self, phi_nodes):
+  def transform_merge(self, phi_nodes):
     new_merge = {}
     for (var_name, (l,r)) in phi_nodes.iteritems():
       if self.is_live(var_name):
@@ -57,17 +57,21 @@ class DCE(Transform):
     # expressions don't get changed by this transform
     cond = stmt.cond
     new_body = self.transform_block(stmt.body) 
-    new_merge = self.transform_phi_nodes(stmt.merge)
+    new_merge = self.transform_merge(stmt.merge)
     if len(new_merge) == 0 and len(new_body) == 0:
       return None
-    else:
+    elif self.copy:
       return syntax.While(cond, new_body, new_merge)
+    else:
+      stmt.body = new_body 
+      stmt.merge = new_merge 
+      return stmt 
 
   def transform_If(self, stmt):
     cond = stmt.cond 
     new_true = self.transform_block(stmt.true) 
     new_false = self.transform_block(stmt.false)
-    new_merge = self.transform_phi_nodes(stmt.merge)
+    new_merge = self.transform_merge(stmt.merge)
     if len(new_merge) == 0 and len(new_true) == 0 and len(new_false) == 0:
       return None  
     elif syntax_helpers.is_true(cond):
@@ -79,13 +83,16 @@ class DCE(Transform):
       for name, (v, _) in new_merge.items():
         self.assign(syntax.Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.false))
-
       return None 
-    else:
+    elif self.copy:
       return syntax.If(cond, new_true, new_false, new_merge)
+    else:
+      stmt.true = new_true 
+      stmt.false = new_false 
+      stmt.merge = new_merge 
+      return stmt 
 
   def transform_Return(self, stmt):
-
     return stmt
   
   def post_apply(self, fn):
