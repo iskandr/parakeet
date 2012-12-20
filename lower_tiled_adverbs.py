@@ -41,6 +41,7 @@ class LowerTiledAdverbs(Transform):
 
   def transform_TiledMap(self, expr):
     self.tiling = True
+    self.fn.has_tiles = True
     self.nesting_idx += 1
     args = expr.args
     axis = syntax_helpers.unwrap_constant(expr.axis)
@@ -54,10 +55,9 @@ class LowerTiledAdverbs(Transform):
     tile_size = self.index(self.tile_param_array, self.nesting_idx)
     self.num_tiled_adverbs += 1
     fn = self.transform_expr(expr.fn)
-    return_t = self.get_fn(self.get_fn(fn).return_type)
-    # TODO: Should just add a has_tiles field to functions.
-    nested_has_tiles = self.get_fn(fn).arg_names[-1] == \
-                       self.tile_param_array.name
+    inner_fn = self.get_fn(fn)
+    return_t = inner_fn.return_type
+    nested_has_tiles = inner_fn.has_tiles
 
     elt_t = expr.type.elt_type
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
@@ -117,6 +117,7 @@ class LowerTiledAdverbs(Transform):
 
   def transform_TiledReduce(self, expr):
     self.tiling = True
+    self.fn.has_tiles = True
     def alloc_maybe_array(isarray, t, shape, name=None):
       if isarray:
         return self.alloc_array(t, shape, name)
@@ -138,10 +139,10 @@ class LowerTiledAdverbs(Transform):
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     callable_fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(callable_fn)
+    nested_has_tiles = inner_fn.has_tiles
     callable_combine = self.transform_expr(expr.combine)
     inner_combine = self.get_fn(callable_combine)
     isarray = isinstance(expr.type, array_type.ArrayT)
-    nested_has_tiles = inner_fn.arg_names[-1] == self.tile_param_array.name
     elt_t = array_type.elt_type(expr.type)
 
     # Hackishly execute the first tile to get the output shape
