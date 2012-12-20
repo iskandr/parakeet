@@ -1,5 +1,6 @@
 from core_types import FloatT, SignedT, UnsignedT, BoolT, IntT
-from llvm_types import int1_t, int8_t, llvm_value_type 
+import llvm_types 
+from llvm_types import int1_t, int8_t, llvm_value_type, nbytes 
 from llvm_helpers import zero, one 
 
 import llvm.core as llcore 
@@ -36,8 +37,7 @@ def from_float(llvm_value, new_ptype, builder):
   
   
   if isinstance(new_ptype, FloatT):
-    nbytes = llvm_value.type.width 
-    if nbytes <= new_ptype.nbytes():
+    if llvm_types.nbytes(llvm_value.type) <= new_ptype.nbytes():
       return builder.fpext(llvm_value, dest_llvm_type, dest_name)
     else:
       return builder.fptrunc(llvm_value, dest_llvm_type, dest_name)

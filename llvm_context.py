@@ -13,31 +13,45 @@ class LLVM_Context:
   _opt_passes = [
     'mem2reg', 
     'targetlibinfo', 
-    'no-aa', 'tbaa', 'basicaa',
-    'instcombine', 'simplifycfg', 'basiccg',
+    'tbaa', 
+    'basicaa',
+    'instcombine', 
+    'simplifycfg', 
+    'basiccg',
+    'memdep', 
     'scalarrepl-ssa',
     'domtree',
     'early-cse',
     'simplify-libcalls',
     'lazy-value-info',
-    'jump-threading',
     'correlated-propagation', 
-    'simplifycfg', 'instcombine', 'reassociate', 'domtree',
-    'loops', 'loop-simplify', 'lcssa', 
-    'loop-rotate', 'licm', 'lcssa', 
+    'simplifycfg', 
+    'instcombine', 
+    'reassociate', 
+    'domtree',
+    'loops', 
+    'loop-simplify', 
+    'lcssa', 
+    'loop-rotate', 
+    'licm', 
+    'lcssa', 
     'loop-unswitch', 
     'instcombine', 
     'scalar-evolution',
     'loop-simplify',
     'lcssa', 'indvars',
-    'loop-idiom', 'loop-deletion', 'loop-unroll',
+    'loop-idiom', 
+    'loop-deletion', 
+    'loop-unroll',
     'bb-vectorize',
-    'memdep', 'gvn', 'memdep', 'memcpyopt', 
+    'gvn',  
     'sccp',
-    'instcombine', 'lazy-value-info', 'jump-threading',
-    'correlated-propagation', 'domtree', 'memdep', 'dse', 'adce',
-    'simplifycfg', 'instcombine', 
-
+    'correlated-propagation', 
+    'jump-threading',
+    'dse', 
+    'adce',
+    'simplifycfg', 
+    'instcombine', 
   ]
 
 
@@ -59,7 +73,7 @@ class LLVM_Context:
       for p in (self._opt_passes + self._verify_passes):
         self.pass_manager.add(p)
 
-  def run_passes(self, llvm_fn, n_iters = 3):
+  def run_passes(self, llvm_fn, n_iters = 2):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)
 

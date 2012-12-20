@@ -2,8 +2,8 @@ from parakeet import scan, add
 import numpy as np 
 from testing_helpers import run_local_tests, expect, expect_each 
 
-int_1d = np.arange(10)
-float_1d = np.arange(10, dtype='float')
+int_1d = np.arange(5)
+float_1d = np.arange(5, dtype='float')
 int_2d = np.array([int_1d, int_1d, int_1d])
 float_2d = np.array([float_1d, float_1d, float_1d])
 

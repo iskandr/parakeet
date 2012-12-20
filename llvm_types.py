@@ -17,6 +17,14 @@ ptr_int8_t = lltype.pointer(int8_t)
 ptr_int32_t = lltype.pointer(int32_t)
 ptr_int64_t = lltype.pointer(int64_t)
 
+def nbytes(t):
+  if t.kind == llcore.TYPE_FLOAT:
+    return 4 
+  elif t.kind == llcore.TYPE_DOUBLE:
+    return 8 
+  else:
+    return t.width / 8  
+
 def is_scalar(llvm_t):
   return isinstance(llvm_t, llcore.IntegerType) or \
          llvm_t in (float32_t, float64_t)

@@ -3,11 +3,11 @@ import parakeet as par
 from parakeet import each
 from testing_helpers import run_local_tests, expect, expect_each, eq, expect_allpairs
 
-ints_1d = np.arange(100, dtype='int')
-floats_1d = np.arange(100, dtype='float')
+ints_1d = np.arange(16, dtype='int')
+floats_1d = np.arange(16, dtype='float')
 
-ints_2d = np.reshape(ints_1d, (10,10))
-floats_2d = np.reshape(ints_2d, (10,10))
+ints_2d = np.reshape(ints_1d, (4,4))
+floats_2d = np.reshape(ints_2d, (4,4))
 
 bools_1d = ints_1d % 2 == 0
 bools_2d = ints_2d % 2 == 0

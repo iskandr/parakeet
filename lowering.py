@@ -9,12 +9,15 @@ from lower_tiled_adverbs import LowerTiledAdverbs
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
+from fusion import Fusion 
 
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
 
 lowering_pipeline = [
+  Simplify, 
+  Fusion,                    
   LowerAdverbs,
   Simplify,
   Inliner,
@@ -38,6 +41,7 @@ def lower(fundef, tile=False):
     lowered_fn = fundef
     if tile:
       lowered_fn = apply_pipeline(fundef, tiling_pipeline, copy = True)
+      print "After Lowering Tiling:"
       print lowered_fn
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
     else:

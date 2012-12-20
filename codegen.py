@@ -10,7 +10,8 @@ import tuple_type
 
 from core_types import Int32, Int64
 from nested_blocks import NestedBlocks
-from syntax_helpers import get_types, wrap_constants, wrap_if_constant, zero, zero_i64
+from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
+                           zero, zero_i64
 
 class Codegen(object):
   def __init__(self):
@@ -60,13 +61,11 @@ class Codegen(object):
 
   def cast(self, expr, t):
     assert isinstance(t, core_types.ScalarT), \
-      "Can't cast %s to non-scalar type %s" % (expr, t)
+        "Can't cast %s to non-scalar type %s" % (expr, t)
     if expr.type == t:
       return expr
     else:
       return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
-
-
 
   def index(self, arr, idx, temp = True):
     """
@@ -86,7 +85,7 @@ class Codegen(object):
         idx = idx.value
 
       assert isinstance(idx, int), \
-        "Index into tuple must be an integer, got %s" % idx
+          "Index into tuple must be an integer, got %s" % idx
       if isinstance(idx, syntax.Const):
         idx = idx.value
       proj = self.tuple_proj(arr, idx)
@@ -348,6 +347,12 @@ class Codegen(object):
     return [self.closure_elt(clos, i)
             for i in xrange(len(clos.type.arg_types))]
 
+  def get_fn(self, maybe_clos):
+    if isinstance(maybe_clos, syntax.Closure):
+      return maybe_clos.fn
+    else:
+      return maybe_clos
+
   def prod(self, elts, name = None):
     result = elts[0]
     for e in elts[1:]:
@@ -526,7 +531,7 @@ class Codegen(object):
     def create_loops():
       i = len(index_vars)
       def loop_body(index_var):
-        index_vars.append(index_var) 
+        index_vars.append(index_var)
         if i+1 == rank:
           index_tuple = self.tuple(index_vars, "idx")
           lhs = self.index(dest, index_tuple, temp=False)
@@ -539,6 +544,6 @@ class Codegen(object):
       if i > 0 or return_stmt:
         return self.loop(start, stop, loop_body, True)
       else:
-        return self.loop(start, stop, loop_body, return_stmt)      
-    
-    return create_loops() 
+        return self.loop(start, stop, loop_body, return_stmt)
+
+    return create_loops()

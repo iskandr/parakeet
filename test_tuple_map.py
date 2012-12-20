@@ -5,7 +5,7 @@ import testing_helpers
 def add_tuple_el(t, xi):
   return xi+t[0]
 
-int_vec = np.arange(100)
+int_vec = np.arange(10)
 
 def test_add1():
   result = parakeet.each(add_tuple_el, (1, 2), int_vec)

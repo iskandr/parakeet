@@ -3,38 +3,64 @@
 import transform
 
 
-import syntax 
+import syntax
+from syntax import If, Assign, While, Return, Var   
 import names 
 from subst import subst_list
 
-def replace_return(stmt, output_var):
-  """
-  Change any returns into assignments to the output var
-  """
-  if isinstance(stmt, syntax.Return):
-    return syntax.Assign(output_var, stmt.value)
-  else:
-    return stmt
+import syntax_visitor 
+
+class FoundCall(Exception):
+  pass 
+
+class ContainsCalls(syntax_visitor.SyntaxVisitor):
+  def visit_expr(self, expr):
+    if expr.__class__ is syntax.Call:
+      raise FoundCall 
+  
+  def visit_fn(self, fn):
+    try:
+      self.visit_block(fn.body)
+    except FoundCall:
+      return True 
+    return False 
+  
+def contains_calls(fn):
+  return ContainsCalls().visit_fn(fn)
 
 def replace_returns(stmts, output_var):
-  return [replace_return(stmt, output_var) for stmt in stmts]
-
+  """
+  Change any returns at the outer scope 
+  into assignments to the output var
+  """
+  for (i,stmt) in enumerate(stmts):
+    if stmt.__class__ is Return:
+      stmts[i] = syntax.Assign(output_var, stmt.value)
+  
 def can_inline_block(stmts, outer = False):
   for stmt in stmts:
-    if isinstance(stmt, syntax.If):
+    stmt_class = stmt.__class__ 
+    if stmt_class is If: 
       return can_inline_block(stmt.true) and can_inline_block(stmt.false)
-    elif isinstance(stmt, syntax.While):
+    elif stmt_class is While:
       if not can_inline_block(stmt.body):
         return False
-    elif isinstance(stmt, syntax.Return):
+    elif stmt_class is Return:
       if not outer:
         return False
     else:
-      assert isinstance(stmt, syntax.Assign)
+      assert stmt_class is Assign
   return True
 
 def can_inline(fundef):
   return can_inline_block(fundef.body, outer = True)
+
+def replace_return_with_var(body, type_env, return_type):
+  result_name = names.fresh("result")
+  type_env[result_name] = return_type 
+  result_var = Var(result_name, type = return_type)
+  replace_returns(body, result_var)
+  return result_var 
 
 def do_inline(src_fundef, args, dest_type_env, dest_block):
   rename_dict = {}
@@ -55,11 +81,8 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
     var = syntax.Var(arg_name, type = t )
     dest_block.append(syntax.Assign(var, actual))
     
-  renamed_body = subst_list(src_fundef.body, rename_dict)
-  result_name = names.fresh("result")
-  dest_type_env[result_name] = src_fundef.return_type 
-  result_var = syntax.Var(result_name, type = src_fundef.return_type)
-  new_body = replace_returns(renamed_body, result_var)
+  new_body = subst_list(src_fundef.body, rename_dict)
+  result_var = replace_return_with_var(new_body, dest_type_env, src_fundef.return_type) 
   dest_block.extend(new_body) 
   return result_var 
   

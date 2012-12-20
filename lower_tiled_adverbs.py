@@ -42,7 +42,6 @@ class LowerTiledAdverbs(Transform):
   def transform_TiledMap(self, expr):
     self.tiling = True
     self.nesting_idx += 1
-    fn = expr.fn # TODO: could be a Closure
     args = expr.args
     axis = syntax_helpers.unwrap_constant(expr.axis)
 
@@ -56,65 +55,77 @@ class LowerTiledAdverbs(Transform):
     self.num_tiled_adverbs += 1
     num_tiles = self.div(niters, tile_size, name="num_tiles")
     loop_bound = self.mul(num_tiles, tile_size, "loop_bound")
+    callable_fn = self.transform_expr(expr.fn)
+    inner_fn = self.get_fn(callable_fn)
+    nested_has_tiles = inner_fn.arg_names[-1] == self.tile_param_array.name
 
-    i, i_after, merge = self.loop_counter("i")
-
-    cond = self.lt(i, loop_bound)
     elt_t = expr.type.elt_type
-    slice_t = array_type.make_slice_type(i.type, i.type, Int64)
+    slice_t = array_type.make_slice_type(Int64, Int64, Int64)
 
-    # TODO: Use shape inference to figure out how large of an array
-    # I need to allocate here!
-    array_result = self.alloc_array(elt_t, self.shape(max_arg))
+    # Hackishly execute the first tile to get the output shape
+    init_slice_bound = self.fresh_i64("init_slice_bound")
+    init_slice_cond = self.lt(tile_size, niters, "init_slice_cond")
+    full_slice_body = [syntax.Assign(init_slice_bound, tile_size)]
+    part_slice_body = [syntax.Assign(init_slice_bound, niters)]
+    init_merge = {init_slice_bound.name:(tile_size, niters)}
+    self.blocks += syntax.If(init_slice_cond, full_slice_body, part_slice_body,
+                             init_merge)
+    init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
+                              syntax_helpers.one_i64, slice_t)
+    init_slice_args = [self.index_along_axis(arg, axis, init_slice)
+                       for arg in args]
+    if nested_has_tiles:
+      init_slice_args.append(self.tile_param_array)
+    rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
+                                             type=inner_fn.return_type),
+                                 "rslt_init")
+
+    init_shape = self.shape(rslt_init)
+    other_shape_els = [self.tuple_proj(init_shape, i)
+                       for i in range(1, len(init_shape.type.elt_types))]
+    out_shape = self.tuple([niters] + other_shape_els)
+    array_result = self.alloc_array(elt_t, out_shape, "array_result")
+    init_output_idxs = self.index_along_axis(array_result, 0, init_slice)
+    self.assign(init_output_idxs, rslt_init)
+
+    i, i_after, merge = self.loop_counter("i", tile_size)
+    cond = self.lt(i, loop_bound)
 
     self.blocks.push()
-    self.assign(i_after, self.add(i, tile_size))
+    # Take care of stragglers via checking bound every iteration.
+    next_bound = self.add(i, tile_size, "next_bound")
+    tile_cond = self.lte(next_bound, niters)
+    tile_merge = {i_after.name:(next_bound, niters)}
+    full_slice_body = [syntax.Assign(i_after, next_bound)]
+    part_slice_body = [syntax.Assign(i_after, niters)]
+    self.blocks += syntax.If(tile_cond, full_slice_body, part_slice_body,
+                             tile_merge)
+
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
-    output_idxs = self.index_along_axis(array_result, axis, tile_bounds)
-    #syntax.Index(array_result, tile_bounds, type=fn.return_type)
-    transformed_fn = self.transform_expr(fn)
-    nested_has_tiles = \
-        transformed_fn.arg_names[-1] == self.tile_param_array.name
+    # Output always to the 0 axis, as per discussion.
+    output_idxs = self.index_along_axis(array_result, 0, tile_bounds)
+
     if nested_has_tiles:
       nested_args.append(self.tile_param_array)
-    nested_call = syntax.Call(transformed_fn, nested_args, type=fn.return_type)
+    nested_call = syntax.Call(callable_fn, nested_args,
+                              type=inner_fn.return_type)
     self.assign(output_idxs, nested_call)
     body = self.blocks.pop()
 
     self.blocks += syntax.While(cond, body, merge)
 
-    # Handle the straggler sub-tile
-    cond = self.lt(loop_bound, niters)
-
-    self.blocks.push()
-    straggler_bounds = syntax.Slice(loop_bound, niters,
-                                    syntax_helpers.one(Int64), type=slice_t)
-    straggler_args = [self.index_along_axis(arg, axis, straggler_bounds)
-                      for arg in args]
-    straggler_output = self.index_along_axis(array_result, axis,
-                                             straggler_bounds)
-    #syntax.Index(array_result, straggler_bounds,
-    #                                type=fn.return_type)
-    nested_call = syntax.Call(transformed_fn, straggler_args,
-                              type=fn.return_type)
-    if nested_has_tiles:
-      straggler_args.append(self.tile_param_array)
-    self.assign(straggler_output, nested_call)
-    body = self.blocks.pop()
-
-    self.blocks += syntax.If(cond, body, [], {})
     return array_result
 
   def transform_TiledReduce(self, expr):
     self.tiling = True
-    def alloc_maybe_array(isarray, t, shape):
+    def alloc_maybe_array(isarray, t, shape, name=None):
       if isarray:
-        return self.alloc_array(t, shape)
+        return self.alloc_array(t, shape, name)
       else:
-        return self.fresh_var(t)
+        return self.fresh_var(t, name)
 
     self.nesting_idx += 1
     args = expr.args
@@ -129,89 +140,91 @@ class LowerTiledAdverbs(Transform):
     tile_size = self.index(self.tile_param_array, self.nesting_idx)
     self.num_tiled_adverbs += 1
 
-    isarray = isinstance(expr.type, array_type.ArrayT)
-    # TODO: Use shape inference so that I can preallocate an output array!
-    #       For now, assuming that the reduction causes the reduced axis to
-    #       disappear, leaving the others untouched.
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
-    transformed_fn = self.transform_expr(expr.fn)
-    transformed_combine = self.transform_expr(expr.combine)
-    nested_has_tiles = \
-        transformed_fn.arg_names[-1] == self.tile_param_array.name
-    arg_shape = self.shape(max_arg)
-    left_shape_slice = syntax.Slice(syntax_helpers.zero_i64, axis,
-                                    syntax_helpers.one_i64, type=slice_t)
-    left_type = tuple_type.make_tuple_type([Int64 for _ in range(axis)])
-    left_shape = syntax.Index(arg_shape, left_shape_slice, type=left_type)
-    right_shape_slice = syntax.Slice(axis, max_arg.type.rank,
-                                     syntax_helpers.one_i64, type=slice_t)
-    right_type = tuple_type.make_tuple_type([Int64 for _ in
-                                             range(max_arg.type.rank - axis)])
-    right_shape = syntax.Index(arg_shape, right_shape_slice, type=right_type)
-    out_shape = self.concat_tuples(left_shape, right_shape)
-
+    callable_fn = self.transform_expr(expr.fn)
+    inner_fn = self.get_fn(callable_fn)
+    callable_combine = self.transform_expr(expr.combine)
+    inner_combine = self.get_fn(callable_combine)
+    isarray = isinstance(expr.type, array_type.ArrayT)
+    nested_has_tiles = inner_fn.arg_names[-1] == self.tile_param_array.name
     elt_t = array_type.elt_type(expr.type)
 
-    loop_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
-    num_tiles = self.div(niters, tile_size, name="num_tiles")
-    loop_bound = self.mul(num_tiles, tile_size, "loop_bound")
-    i, i_after, merge = self.loop_counter("i")
-    loop_cond = self.lt(i, loop_bound)
-    rslt_tmp = alloc_maybe_array(isarray, elt_t, out_shape)
-    rslt_after = alloc_maybe_array(isarray, elt_t, out_shape)
-    init = syntax_helpers.const_scalar(expr.init)
-    if init.type.rank < loop_rslt.type.rank:
-      print "Yo!! Gotta lift the init val dawg"
+    # Hackishly execute the first tile to get the output shape
+    init_slice_bound = self.fresh_i64("init_slice_bound")
+    init_slice_cond = self.lt(tile_size, niters, "init_slice_cond")
+    full_slice_body = [syntax.Assign(init_slice_bound, tile_size)]
+    part_slice_body = [syntax.Assign(init_slice_bound, niters)]
+    init_merge = {init_slice_bound.name:(tile_size, niters)}
+    self.blocks += syntax.If(init_slice_cond, full_slice_body, part_slice_body,
+                             init_merge)
+    init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
+                              syntax_helpers.one_i64, slice_t)
+    init_slice_args = [self.index_along_axis(arg, axis, init_slice)
+                       for arg in args]
+    if nested_has_tiles:
+      init_slice_args.append(self.tile_param_array)
+    rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
+                                             type=callable_fn.return_type),
+                                 "rslt_init")
+    out_shape = self.shape(rslt_init)
+    rslt_t = rslt_init.type
+
+    # Lift the initial value and fill it
+    init = alloc_maybe_array(isarray, elt_t, out_shape, "init")
+    def init_unpack(i, cur):
+      if i == 0:
+        return syntax.Assign(cur, expr.init)
+      else:
+        self.blocks.push()
+        j, j_after, merge = self.loop_counter("j")
+        init_cond = self.lt(j, self.shape(cur, 0))
+        n = self.index_along_axis(cur, 0, j)
+        self.blocks += init_unpack(i-1, n)
+        self.assign(j_after, self.add(j, syntax_helpers.one_i64))
+        body = self.blocks.pop()
+        return syntax.While(init_cond, body, merge)
+    num_exps = array_type.get_rank(init.type) - \
+               array_type.get_rank(expr.init.type)
+    self.blocks += init_unpack(num_exps, init)
+
+    loop_rslt = self.fresh_var(rslt_t, "loop_rslt")
+    rslt_tmp = self.fresh_var(rslt_t, "rslt_tmp")
+    rslt_after = self.fresh_var(rslt_t, "rslt_after")
+    i, i_after, merge = self.loop_counter("i", init_slice_bound)
+    loop_cond = self.lt(i, niters)
     merge[loop_rslt.name] = (init, rslt_after)
 
     self.blocks.push()
-    self.assign(i_after, self.add(i, tile_size))
+    # Take care of stragglers via checking bound every iteration.
+    next_bound = self.add(i, tile_size, "next_bound")
+    tile_cond = self.lte(next_bound, niters)
+    tile_merge = {i_after.name:(next_bound, niters)}
+    full_slice_body = [syntax.Assign(i_after, next_bound)]
+    part_slice_body = [syntax.Assign(i_after, niters)]
+    self.blocks += syntax.If(tile_cond, full_slice_body, part_slice_body,
+                             tile_merge)
+
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
     if nested_has_tiles:
       nested_args.append(self.tile_param_array)
-    nested_call = syntax.Call(transformed_fn, nested_args,
-                              type=transformed_fn.return_type)
+    nested_call = syntax.Call(callable_fn, nested_args,
+                              type=inner_fn.return_type)
     self.assign(rslt_tmp, nested_call)
-    nested_combine = syntax.Call(transformed_combine,
+    nested_combine = syntax.Call(callable_combine,
                                  [loop_rslt, rslt_tmp],
-                                 type=transformed_combine.return_type)
+                                 type=inner_combine.return_type)
     self.assign(rslt_after, nested_combine)
     loop_body = self.blocks.pop()
     self.blocks += syntax.While(loop_cond, loop_body, merge)
 
-    straggler_cond = self.lt(loop_bound, niters)
-
-    self.blocks.push()
-    straggler_slice = syntax.Slice(loop_bound, niters, syntax_helpers.one_i64,
-                                   type=slice_t)
-    straggler_args = [self.index_along_axis(arg, axis, straggler_slice)
-                      for arg in args]
-    if nested_has_tiles:
-      straggler_args.append(self.tile_param_array)
-    straggler_call = syntax.Call(transformed_fn, straggler_args,
-                                 type=transformed_fn.return_type)
-    straggler_tmp = alloc_maybe_array(isarray, elt_t, out_shape)
-    straggler_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
-    self.assign(straggler_tmp, straggler_call)
-    straggler_combine = syntax.Call(transformed_combine,
-                                    [loop_rslt, straggler_tmp],
-                                    type=transformed_combine.return_type)
-    self.assign(straggler_rslt, straggler_combine)
-    straggler_body = self.blocks.pop()
-
-    main_rslt = alloc_maybe_array(isarray, elt_t, out_shape)
-    main_merge = {main_rslt.name : (straggler_rslt, loop_rslt)}
-    self.blocks += syntax.If(straggler_cond, straggler_body, [], main_merge)
-
-    return main_rslt
+    return loop_rslt
 
   def post_apply(self, fn):
     if self.tiling:
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
-      # print fn
     return fn

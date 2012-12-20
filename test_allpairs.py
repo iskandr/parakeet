@@ -3,9 +3,9 @@ import numpy as np
 from parakeet import sum, allpairs, multiply
 from testing_helpers import  expect, expect_allpairs, run_local_tests
 
-bool_vec = np.array([True, False, True, False, True])
-int_vec = np.array([1,2,3,4,5])
-float_vec = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+bool_vec = np.array([True, False, True])
+int_vec = np.array([1,2,3])
+float_vec = np.array([10.0, 20.0, 30.0])
 
 vectors = [bool_vec, int_vec, float_vec]
 
@@ -34,7 +34,7 @@ def adverb_outer_prod(x,y):
 def test_adverb_outer_prod():
   expect_allpairs(adverb_outer_prod, np.multiply.outer, vectors)
 
-int_mat = np.reshape(np.arange(25), (5,5))
+int_mat = np.reshape(np.arange(9), (3,3))
 float_mat = np.sqrt(int_mat)
 bool_mat = int_mat % 2
 
