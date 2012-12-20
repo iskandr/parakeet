@@ -4,7 +4,7 @@ from simplify import Simplify
 from dead_code_elim import DCE
 from inline import Inliner
 import transform   
-pipeline = [Simplify, DCE, Inliner, Simplify, DCE]
+pipeline = [Simplify] # [Simplify, DCE, Inliner, Simplify, DCE]
 
 # map names of unoptimized typed functions to 
 # names of optimized 

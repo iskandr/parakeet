@@ -61,6 +61,7 @@ def replace_return_with_var(body, type_env, return_type):
   return result_var 
 
 def do_inline(src_fundef, args, dest_type_env, dest_block):
+
   rename_dict = {}
   for (name, t) in src_fundef.type_env.iteritems():
     new_name = names.refresh(name)

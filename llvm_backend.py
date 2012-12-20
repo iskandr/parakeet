@@ -1,3 +1,4 @@
+import config 
 import llvm_context
 import llvm_convert
 import llvm_prims
@@ -352,14 +353,23 @@ def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
   lowered = lowering.lower(fundef, tile=False)
-  print "Lowered", lowered
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
-  # print "Module", env.llvm_context.module
-  # print "Before opt", env.llvm_fn
+  
+  if config.print_unoptimized_llvm: 
+    print "=== LLVM before optimizations =="
+    print 
+    print env.llvm_fn
+    print 
   env.llvm_context.run_passes(env.llvm_fn)
-  # print "After opt", env.llvm_fn
+  
+  if config.print_optimized_llvm:
+    print "=== LLVM after optimizations =="
+    print 
+    print env.llvm_fn
+    print 
+    
 
   result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 

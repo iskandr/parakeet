@@ -4,7 +4,7 @@ from adverbs import Adverb, Scan, Reduce, Map, AllPairs
 from transform import Transform 
 from use_analysis import use_count
 import inline 
-import dead_code_elim
+
 
 def fuse(prev_fn, next_fn):
   type_env = prev_fn.type_env.copy()
@@ -51,8 +51,5 @@ class Fusion(Transform):
 
       self.adverb_bindings[stmt.lhs.name] = rhs 
     return stmt
-  
-  def post_apply(self, fn):
-    return dead_code_elim.dead_code_elim(fn)
 
     

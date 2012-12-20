@@ -266,6 +266,12 @@ class Transform(Codegen):
     
     self.copy = copy
 
+    if copy: 
+      old_body_length = len(self.fn.body)
+      old_first_statement = self.fn.body[0]
+      old_nvars = len(self.fn.type_env)
+      
+
     old_fn = self.pre_apply(self.fn)
     if old_fn is None:
       old_fn = self.fn
@@ -301,6 +307,20 @@ class Transform(Codegen):
       print "--- after ---"
       print repr(new_fn)
       print
+      
+    if copy:
+      # sanity check to make sure copying is actually obeyed 
+      assert len(self.fn.body) == old_body_length, \
+          "Read-only optimization %s changed body length of %s from %d to %d" % \
+          (self.__class__.__name__, self.fn.name, old_body_length, len(self.fn.body)) 
+      assert len(self.fn.type_env) == old_nvars, \
+          "Read-only optimization %s changed # vars in %s from %d to %d" % \
+          (self.__class__.__name__, self.fn.name, old_nvars, len(self.fn.type_env))
+             
+      assert self.fn.body[0] == old_first_statement, \
+          "Read-only optimization %s changed first stmt of %s from %s to %s" % \
+          (self.__class__.__name__, self.fn.name, old_first_statement, self.fn.body[0])
+      
     if self.verify:
       verify.verify(new_fn)
     return new_fn
@@ -320,8 +340,9 @@ class MemoizedTransform(Transform):
 def apply_pipeline(fn, transforms, copy = False):
   for T in transforms:
     t = T(fn)
-    fn = t.apply(copy = copy)
 
+    fn = t.apply(copy = copy)
+    
     # only copy the function on the first iteration,
     # if you're going to copy it at all
     copy = False

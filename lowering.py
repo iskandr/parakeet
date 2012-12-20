@@ -18,13 +18,13 @@ tiling_pipeline = [
 ]
 
 lowering_pipeline = [
-#  Simplify,
+  Simplify,
 # DCE, 
-  Fusion,
+  # Fusion,
   LowerAdverbs,
 #  Simplify,
 # DCE, 
-  Inliner,
+  # Inliner,
   LowerIndexing,
 #  Simplify,
 #  DCE, 
@@ -58,6 +58,7 @@ def lower(fundef, tile=False):
     if config.print_lowered_function: 
       print 
       print "=== Lowered function ==="
+      print 
       print repr(lowered_fn)
       print 
     return lowered_fn

@@ -60,13 +60,9 @@ class DCE(Transform):
     new_merge = self.transform_merge(stmt.merge)
     if len(new_merge) == 0 and len(new_body) == 0:
       return None
-    elif self.copy:
-      return syntax.While(cond, new_body, new_merge)
     else:
-      stmt.body = new_body 
-      stmt.merge = new_merge 
-      return stmt 
-
+      return self.make_While(stmt, new_body, new_merge, cond)
+    
   def transform_If(self, stmt):
     cond = stmt.cond 
     new_true = self.transform_block(stmt.true) 
@@ -84,14 +80,9 @@ class DCE(Transform):
         self.assign(syntax.Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.false))
       return None 
-    elif self.copy:
-      return syntax.If(cond, new_true, new_false, new_merge)
     else:
-      stmt.true = new_true 
-      stmt.false = new_false 
-      stmt.merge = new_merge 
-      return stmt 
-
+      return self.make_If(stmt, new_true, new_false, new_merge, cond)
+    
   def transform_Return(self, stmt):
     return stmt
   

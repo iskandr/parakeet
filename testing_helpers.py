@@ -58,12 +58,14 @@ def expect(fn, args, expected):
   """
 
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
-
-
+  
+  print "UNTYPED EVAL", untyped.name
   untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \
       "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
   linear_args = untyped.args.linearize_without_defaults(all_args)
+  
+  print "TYPED EVAL", typed.name
   typed_result = interp.eval_fn(typed, map(copy, linear_args))
   assert eq(typed_result, expected), \
       "Expected %s but typed fn returned %s" % (expected, typed_result)
