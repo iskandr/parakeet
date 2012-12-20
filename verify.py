@@ -1,14 +1,14 @@
 import closure_type
 import core_types
 import syntax
-from syntax import Expr
 import syntax_visitor
-from collect_vars import collect_binding_names
 
+from collect_vars import collect_binding_names
+from syntax import Expr
 
 class Verify(syntax_visitor.SyntaxVisitor):
   def __init__(self, fn):
-    print fn 
+    print fn
     self.fn = fn
     self.bound = set(fn.arg_names)
 
@@ -24,19 +24,19 @@ class Verify(syntax_visitor.SyntaxVisitor):
 
   def phi_value_ok(self, lhs_name, v):
     assert isinstance(v, Expr), \
-       "Invalid expression in phi node: %s" % v     
+       "Invalid expression in phi node: %s" % v
     self.visit_expr(v)
     assert v.type is not None, \
        "Error in phi node: value %s has no type annotation" % v
     t = self.fn.type_env[lhs_name]
     assert v.type == t, \
        "Invalid type annotation on %v, expected %s but got %s" % (v,t,v.type)
- 
+
   def visit_left_merge(self, phi_nodes):
     for (k, (v,_)) in phi_nodes.iteritems():
       self.bind_var(k)
       self.phi_value_ok(k,v)
-      
+
   def visit_merge(self, phi_nodes):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
       self.bind_var(k)
@@ -45,10 +45,9 @@ class Verify(syntax_visitor.SyntaxVisitor):
 
   def visit_Var(self, expr):
     assert expr.name in self.bound, \
-      "Variable %s used before assignment" % expr.name
+        "Variable %s used before assignment" % expr.name
     assert expr.name in self.fn.type_env, \
         "Variable %s has no entry in the type dictionary" % expr.name
-
     assert expr.type == self.fn.type_env[expr.name], \
         "Variable %s in fn %s should have type %s but annotated with %s" % \
         (expr.name, self.fn, self.fn.type_env[expr.name], expr.type)
