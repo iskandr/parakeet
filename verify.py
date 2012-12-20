@@ -28,15 +28,22 @@ class Verify(SyntaxVisitor):
     assert v.type == t, \
        "Invalid type annotation on %v, expected %s but got %s" % (v,t,v.type)
  
-  def visit_merge_left(self, phi_nodes):
+  def visit_merge_loop_start(self, phi_nodes):
     for (k, (v,_)) in phi_nodes.iteritems():
       self.bind_var(k)
       self.phi_value_ok(k,v)
   
-  def visit_merge(self, phi_nodes):
+  def visit_merge_loop_repeat(self, phi_nodes):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
       self.phi_value_ok(k, left_value)
       self.phi_value_ok(k, right_value)
+      
+  def visit_merge_if(self, phi_nodes):
+    for (k, (left_value, right_value)) in phi_nodes.iteritems():
+      self.bind_var(k)
+      self.phi_value_ok(k, left_value)
+      self.phi_value_ok(k, right_value)
+    
 
   def visit_Var(self, expr):
     assert expr.name in self.bound, \

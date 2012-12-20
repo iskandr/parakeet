@@ -37,13 +37,13 @@ class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
 
   def __str__(self):
-    s = "if %s:%s\nelse:%s\n" % \
-        (self.cond,
-         block_to_str(self.true),
-         block_to_str(self.false),
-        )
+    s = "if %s:" % self.cond 
+    if len(self.true) or len(self.false) > 0:
+      s += "%s\n" % block_to_str(self.true)
+    if len(self.false) > 0:
+      s += "else:%s" % block_to_str(self.false)
     if len(self.merge) > 0:
-      s += "(merge-branches)%s\n" % (phi_nodes_to_str(self.merge))
+      s += "(merge-if)%s" % phi_nodes_to_str(self.merge)
     return s
 
   def __repr__(self):
@@ -58,11 +58,15 @@ class While(Stmt):
      of the form [(new_var1, (old_var1,old_var2)]
    """
   _members = ['cond', 'body', 'merge']
-
+  
   def __repr__(self):
-    return "while %s:\n  (header)%s\n  (body)%s\n" % \
-           (self.cond, phi_nodes_to_str(self.merge), block_to_str(self.body))
-
+    s = "while %s:\n  "  % self.cond 
+    if len(self.merge) > 0:
+      s += "(header)%s\n  " % phi_nodes_to_str(self.merge)
+    if len(self.body) > 0:
+      s +=  "(body)%s" % block_to_str(self.body)
+    return s 
+  
   def __str__(self):
     return repr(self)
 

@@ -16,7 +16,7 @@ from prims import Prim, prim_wrapper
 from scoped_env import ScopedEnv
 from subst import subst, subst_list
 from syntax_helpers import none, true, false
- 
+import config 
  
 
 reserved_names = {
@@ -369,14 +369,17 @@ class AST_Translator(ast.NodeVisitor):
     scope_after, body = self.visit_block(stmt.body)
     merge = {}
     substitutions = {}
+    
     curr_scope = self.env.current_scope()
+
     for (k, name_after) in scope_after.iteritems():
+
       if k in self.env:
         name_before = self.env[k]
         new_name = names.fresh(k)
         merge[new_name] = (syntax.Var(name_before), syntax.Var(name_after))
         substitutions[name_before]  = new_name
-        curr_scope[k] = name_after
+        curr_scope[k] = new_name #name_after
     cond = subst(cond, substitutions)
     body = subst_list(body, substitutions)
     return syntax.While(cond, body, merge)
@@ -395,9 +398,13 @@ class AST_Translator(ast.NodeVisitor):
     """
     fundef = \
         translate_function_ast(node, outer_env = self.env)
-    closure_args = map(self.get_name, fundef.parakeet_nonlocals)
     local_name = self.env.fresh_var(node.name)
-    closure = syntax.Closure(fundef.name, closure_args)
+
+    if len(fundef.parakeet_nonlocals) > 0:
+      closure_args = map(self.get_name, fundef.parakeet_nonlocals)
+      closure = syntax.Closure(fundef.name, closure_args)
+    else:
+      closure = fundef 
     return syntax.Assign(local_name, closure)
 
 def translate_function_ast(function_def_ast, globals_dict = None,
@@ -432,6 +439,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   ssa_args.prepend_nonlocal_args(localized_outer_names + ref_names)
 
   fundef = syntax.Fn(ssa_fn_name, ssa_args, body, refs, original_outer_names)
+
   return fundef
 
 def translate_function_source(source, globals_dict, closure_vars = [],
@@ -478,4 +486,7 @@ def translate_function_value(fn):
     fundef = translate_function_source(source, globals_dict, free_vars,
                                        closure_cells)
     register_python_fn(fn, fundef)
+
+    if config.print_untyped_function:
+      print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef)) 
     return fundef
