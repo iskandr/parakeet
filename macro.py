@@ -63,8 +63,6 @@ class macro(object):
     if key in self.wrappers:
       untyped = self.wrappers[key]
     else:
-      print "KEY NOT FOUND", key 
-      print "WRAPPER CACHE", self.wrappers
       untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
       self.wrappers[key] = untyped
     import run_function

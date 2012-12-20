@@ -7,8 +7,7 @@ from codegen import Codegen
 class Transform(Codegen):
   def __init__(self, fn, verify = True, reverse = False):
     Codegen.__init__(self)
-    print "CREATING", self.__class__
-    print "...for...", fn.name 
+
     self.fn = fn
     self.verify = verify
     self.copy = None
