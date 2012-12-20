@@ -1,10 +1,11 @@
-import names
-import syntax
+
+
 import transform
 
+
+import syntax 
+import names 
 from subst import subst_list
-from syntax_helpers import get_types
-from tuple_type import make_tuple_type
 
 def replace_return(stmt, output_var):
   """
@@ -21,9 +22,7 @@ def replace_returns(stmts, output_var):
 def can_inline_block(stmts, outer = False):
   for stmt in stmts:
     if isinstance(stmt, syntax.If):
-      both_ok = can_inline_block(stmt.true) and can_inline_block(stmt.false)
-      if not both_ok:
-        return False
+      return can_inline_block(stmt.true) and can_inline_block(stmt.false)
     elif isinstance(stmt, syntax.While):
       if not can_inline_block(stmt.body):
         return False
@@ -37,49 +36,39 @@ def can_inline_block(stmts, outer = False):
 def can_inline(fundef):
   return can_inline_block(fundef.body, outer = True)
 
+def do_inline(src_fundef, args, dest_type_env, dest_block):
+  rename_dict = {}
+  for (name, t) in src_fundef.type_env.iteritems():
+    new_name = names.refresh(name)
+    rename_dict[name] = new_name
+    dest_type_env[new_name] = t
+  arg_names = src_fundef.arg_names
+  n_expected = len(arg_names)
+  n_given = len(args)
+  assert n_expected ==  n_given, \
+      "Function %s expects %d args (%s) but given %d" % \
+      (src_fundef, n_expected, ",".join(src_fundef.arg_names), n_given)
+  new_formal_names = [rename_dict[x] for x in arg_names]
+
+  for (arg_name, actual) in zip(new_formal_names, args):
+    t = dest_type_env[arg_name]
+    var = syntax.Var(arg_name, type = t )
+    dest_block.append(syntax.Assign(var, actual))
+    
+  renamed_body = subst_list(src_fundef.body, rename_dict)
+  result_name = names.fresh("result")
+  dest_type_env[result_name] = src_fundef.return_type 
+  result_var = syntax.Var(result_name, type = src_fundef.return_type)
+  new_body = replace_returns(renamed_body, result_var)
+  dest_block.extend(new_body) 
+  return result_var 
+  
+
 class Inliner(transform.Transform):
   
   def __init__(self, fn):
     transform.Transform.__init__(self, fn)
     self.count = 0 
-    
-  def wrap_formal(self, arg):
-    """
-    Args might be strings & tuples, whereas
-    we want them to be syntax nodes
-    """
-    if isinstance(arg, str):
-      return syntax.Var(arg, self.type_env[arg])
-    elif isinstance(arg, tuple):
-      elts = map(self.wrap_formal, arg)
-      elt_types = get_types(elts)
-      tuple_t = make_tuple_type(elt_types)
-      return syntax.Tuple(elts, type = tuple_t)
-    else:
-      return arg
-
-  def do_inline(self, fundef, args):
-    self.count += 1 
-    rename_dict = {}
-    for (name, t) in fundef.type_env.iteritems():
-      new_name = names.refresh(name)
-      rename_dict[name] = new_name
-      self.type_env[new_name] = t
-    arg_names = fundef.arg_names
-    n_expected = len(arg_names)
-    n_given = len(args)
-    assert n_expected ==  n_given, \
-        "Function %s expects %d args (%s) but given %d" % \
-        (fundef, n_expected, ",".join(fundef.arg_names), n_given)
-    new_formal_names = [rename_dict[x] for x in arg_names]
-
-    for (arg_name, actual) in zip(new_formal_names, args):
-      self.assign(self.wrap_formal(arg_name), actual)
-    renamed_body = subst_list(fundef.body, rename_dict)
-    result_var = self.fresh_var(fundef.return_type, "result")
-    inlined_body = replace_returns(renamed_body, result_var)
-    self.blocks.current().extend(inlined_body)
-    return result_var
 
   def transform_Call(self, expr):
     if isinstance(expr.fn, str):
@@ -87,7 +76,9 @@ class Inliner(transform.Transform):
     else:
       target = expr.fn
     if can_inline(target):
-      return self.do_inline(target, expr.args)
+      self.count += 1
+      curr_block = self.blocks.current()
+      result_var = do_inline(target, expr.args, self.type_env, curr_block)
+      return result_var 
     else:
-
       return expr

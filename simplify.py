@@ -4,6 +4,7 @@ from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 import syntax 
 
 import dead_code_elim
+from use_analysis import use_count
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
@@ -40,9 +41,7 @@ class Simplify(Transform):
     # which types have elements that might 
     # change between two accesses?  
     self.mutable_types = ma.visit_fn(fn)
-    
-    use_counter = dead_code_elim.VarUseCount()
-    self.use_counts = use_counter.visit_fn(fn)
+    self.use_counts = use_count(fn)
       
   
   

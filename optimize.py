@@ -12,6 +12,7 @@ def simple_expr(expr):
     return all(not isinstance(child, syntax.Expr) or simple_expr(child)
                for child in expr.itervalues())
     
+    
 def simple_stmt(stmt):
   c = stmt.__class__ 
   if c is syntax.Return:

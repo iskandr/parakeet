@@ -162,7 +162,7 @@ def eval_fn(fn, actuals):
 
     def expr_PrimCall():
       return expr.prim.fn (*eval_args(expr.args))
-
+    
     def expr_Slice():
       return slice(eval_expr(expr.start), eval_expr(expr.stop),
                    eval_expr(expr.step))

@@ -3,66 +3,14 @@ from common import dispatch
 from transform import Transform
 import syntax_helpers 
 from syntax_visitor import SyntaxVisitor 
-
-class FindLiveVars(SyntaxVisitor):
-  def __init__(self):
-    self.live_vars = set([])
-    
-  def visit_Var(self, expr):
-    self.live_vars.add(expr.name)
-    
-  def visit_lhs(self, expr):
-    if isinstance(expr, syntax.Var):
-      pass 
-    elif isinstance(expr, syntax.Tuple):
-      for elt in expr.elts:
-        self.visit_lhs(elt)
-    else:
-      self.visit_expr(expr)
-      
-  def visit_fn(self, fn):
-    self.live_vars.clear()
-    for name in fn.arg_names:
-      self.live_vars.add(name)
-    self.visit_block(fn.body)
-    return self.live_vars
-
-
-
-
-class VarUseCount(SyntaxVisitor):
-  
-  def __init__(self):
-    self.counts = {}
-    
-  def visit_Var(self, expr):
-    old_count = self.counts.get(expr.name, 0)
-    self.counts[expr.name] = old_count + 1 
-    
-  def visit_lhs(self, expr):
-    if isinstance(expr, syntax.Var):
-      pass 
-    elif isinstance(expr, syntax.Tuple):
-      for elt in expr.elts:
-        self.visit_lhs(elt)
-    else:
-      self.visit_expr(expr)
-      
-  def visit_fn(self, fn):
-    self.counts.clear()
-    for name in fn.arg_names:
-      self.counts[name] = 1
-    self.visit_block(fn.body)
-    return self.counts 
-  
+from use_analysis import use_count
 
 
 class DCE(Transform):
   def __init__(self, fn):
     Transform.__init__(self, fn, reverse = True)
     # self.live_vars = FindLiveVars().visit_fn(fn)
-    self.use_counts = VarUseCount().visit_fn(fn)
-
+    self.use_counts = use_count(fn)
     
   def is_live(self, name):
     return name in self.use_counts and self.use_counts[name] > 0
