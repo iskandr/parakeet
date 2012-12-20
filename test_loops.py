@@ -1,5 +1,6 @@
 from testing_helpers import run_local_tests, expect
 
+
 def count_loop(init, count):
   x = init
   while x < count:

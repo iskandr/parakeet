@@ -64,21 +64,29 @@ def simple_merge(x):
     y = x
   return y 
 
-
 def test_simple_merge():
   expect(simple_merge, [0], 1)
   expect(simple_merge, [2], 2)
- 
+
+def one_sided_merge(x,b):
+  if b:
+      x = 1
+  return x
+
+def test_one_sided_merge():
+  expect(one_sided_merge, [100,True], 1)
+  expect(one_sided_merge, [100,False], 100)
+
 
  
-def if_true():
+def if_true_const():
   if True:
     return 1
   else:
     return 2
 
-def test_if_true():
-  expect(if_true, [], 1)
+def test_if_true_const():
+  expect(if_true_const, [], 1)
 
 
 def varargs_return(*x):

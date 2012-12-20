@@ -51,25 +51,30 @@ class SyntaxVisitor(object):
       self.visit_expr(l)
       self.visit_expr(r)
   
-  def visit_merge_left(self, phi_nodes):
+  def visit_merge_loop_start(self, phi_nodes):
     pass 
+  
+  def visit_merge_loop_repeat(self, phi_nodes):
+    return self.visit_merge(phi_nodes)
+  
+  def visit_merge_if(self, phi_nodes):
+    return self.visit_merge(phi_nodes)
     
     
   def visit_If(self, stmt):
-    self.visit_merge_left(stmt.merge)
-    self.visit_expr(stmt.cond)
     self.visit_block(stmt.true)
     self.visit_block(stmt.false)
-    self.visit_merge(stmt.merge)
+    self.visit_merge_if(stmt.merge)
+    self.visit_expr(stmt.cond)
     
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
     
   def visit_While(self, stmt):
-    self.visit_merge_left(stmt.merge)
+    self.visit_merge_loop_start(stmt.merge)
     self.visit_expr(stmt.cond)
     self.visit_block(stmt.body)
-    self.visit_merge(stmt.merge)
+    self.visit_merge_loop_repeat(stmt.merge)
     
     
   def visit_stmt(self, stmt):

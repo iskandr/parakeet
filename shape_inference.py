@@ -197,7 +197,7 @@ class ShapeInference(SyntaxVisitor):
     else:
       raise RuntimeError("Unsupported by unify: %s, %s" % (x,y))
 
-  def visit_merge_left(self, merge):
+  def visit_merge_loop_start(self, merge):
     for (k, (l, _)) in merge.iteritems():
       self.value_env[k] = self.visit_expr(l)
       
