@@ -145,20 +145,19 @@ class Transform(Codegen):
     return new_block
 
   def pre_apply(self, old_fn):
-    
-    print
-    print "Running %s" % self.__class__.__name__
-    print
-    print "-- before"
-    print repr(old_fn)
-    print
+#    print
+#    print "Running %s" % self.__class__.__name__
+#    print
+#    print "-- before"
+#    print repr(old_fn)
+#    print
     pass
 
   def post_apply(self, new_fn):
-    print
-    print "-- after %s" % self.__class__.__name__
-    print repr(new_fn)
-    print
+#    print
+#    print "-- after %s" % self.__class__.__name__
+#    print repr(new_fn)
+#    print
     pass
 
   def apply(self, copy = False):

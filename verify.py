@@ -1,7 +1,8 @@
 import core_types
+
+from collect_vars import collect_binding_names
 from syntax import Expr
 from syntax_visitor import SyntaxVisitor
-from collect_vars import collect_binding_names
 
 class Verify(SyntaxVisitor):
   def __init__(self, fn):
@@ -27,12 +28,12 @@ class Verify(SyntaxVisitor):
     t = self.fn.type_env[lhs_name]
     assert v.type == t, \
        "Invalid type annotation on %v, expected %s but got %s" % (v,t,v.type)
- 
+
   def visit_merge_left(self, phi_nodes):
     for (k, (v,_)) in phi_nodes.iteritems():
       self.bind_var(k)
       self.phi_value_ok(k,v)
-  
+
   def visit_merge(self, phi_nodes):
     for (k, (left_value, right_value)) in phi_nodes.iteritems():
       self.phi_value_ok(k, left_value)

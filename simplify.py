@@ -1,19 +1,16 @@
 import dead_code_elim
-
-from use_analysis import use_count
-
 import prims
 import syntax
 import transform
 
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_env import ScopedEnv
-
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from transform import Transform
+from use_analysis import use_count
 
 # classes of expressions known to have no side effects
 # and to be unaffected by changes in mutable state as long
@@ -24,7 +21,6 @@ from transform import Transform
 #    any data modifications
 #  - Call: Unless the function is known to contain only safe expressions it
 #    might depend on mutable state or modify it itself
-
 
 class Simplify(Transform):
   def __init__(self, fn):

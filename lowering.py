@@ -17,7 +17,7 @@ tiling_pipeline = [
 
 lowering_pipeline = [
 #  Simplify,
-  Fusion,
+#  Fusion,
   LowerAdverbs,
 #  Simplify,
   Inliner,

@@ -85,9 +85,9 @@ class TileAdverbs(Transform):
 
     for i,v in enumerate(exps):
       if v >= depth:
-        return len(exps) - i
+        return max(i-1,0)
 
-    return 0
+    return len(exps)
 
   def gen_unpack_tree(self, adverb_tree, depths, v_names, block, type_env):
     def order_args(depth):
@@ -146,14 +146,23 @@ class TileAdverbs(Transform):
         adv_args = self.adverb_args[depth_idx]
         new_adverb = adverb_tree[depth_idx](fn=adv_args.fn, args=adv_args.args,
                                             axis=adv_args.axis)
+        # Increase the rank of each arg by the number of nested expansions
+        # (i.e. the expansions of that arg that occur deeper in the nesting)
         for arg in nested_arg_names:
-          rank_increase = self.get_num_expansions_at_depth(arg, depth)
+          exps = self.get_expansions(arg)
+          rank_increase = 0
+          for i, e in enumerate(exps):
+            if e >= depth:
+              rank_increase = len(exps) - i
+              break
           new_type_env[arg] = \
               array_type.increase_rank(type_env[arg], rank_increase)
 
         cur_arg_types = [new_type_env[arg] for arg in cur_arg_names]
         fixed_arg_types = [new_type_env[arg] for arg in fixed_arg_names]
 
+        # Generate the nested function with the proper arg order and wrap it
+        # in a closure
         nested_fn = gen_unpack_fn(depth_idx+1, nested_arg_names)
         nested_args = [syntax.Var(name, type=t)
                        for name, t in zip(cur_arg_names, cur_arg_types)]
@@ -271,12 +280,15 @@ class TileAdverbs(Transform):
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
 
-    #TODO: below is for when we have multiple axes
-    #axis = [len(self.get_expansions(arg)) + a
+    #TODO: below is for when we have multiple axes.  For now just assuming
+    #      that all args have the same expansions but that isn't necessarily
+    #      true.
+    #axis = [len(self.get_num_expansions_at_depth(arg.name, depth) + a
     #        for arg, a in zip(expr.args, expr.axis)]
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
-    axis = len(self.get_expansions(expr.args[0].name)) + expr.axis
+    axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
+           expr.axis
     self.pop_exp()
     return_t = new_fn.return_type
     if isinstance(closure, syntax.Closure):
@@ -315,14 +327,15 @@ class TileAdverbs(Transform):
                                   fn.body,
                                   fn.type_env)
 
-    #TODO: below is for when we have multiple axes
-    #axis = [len(self.get_expansions(arg)) + a
+    #TODO: below is for when we have multiple axes.  For now just assuming
+    #      that all args have the same expansions but that isn't necessarily
+    #      true.
+    #axis = [len(self.get_num_expansions_at_depth(arg.name, depth) + a
     #        for arg, a in zip(expr.args, expr.axis)]
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
-    # Assuming uniformity in expansions across args.  I think this has to be
-    # true for reductions, but not sure.
-    axis = len(self.get_expansions(expr.args[0].name)) + expr.axis
+    axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
+           expr.axis
     init = expr.init # Initial value lifted to proper shape in lowering
     if len(depths) > 1:
       depths.remove(depth)

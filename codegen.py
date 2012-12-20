@@ -256,12 +256,10 @@ class Codegen(object):
       return attr_expr
 
   def is_none(self, x):
-    return hasattr(x, 'type') and \
-      isinstance(x.type, core_types.NoneT)
+    return hasattr(x, 'type') and isinstance(x.type, core_types.NoneT)
 
   def is_array(self, x):
-    return hasattr(x, 'type') and \
-      isinstance(x.type, array_type.ArrayT)
+    return hasattr(x, 'type') and isinstance(x.type, array_type.ArrayT)
 
   def elt_type(self, x):
     if isinstance(x, core_types.Type):
