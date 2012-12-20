@@ -8,7 +8,6 @@ from syntax import Expr
 
 class Verify(syntax_visitor.SyntaxVisitor):
   def __init__(self, fn):
-    print fn
     self.fn = fn
     self.bound = set(fn.arg_names)
 

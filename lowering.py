@@ -40,9 +40,7 @@ def lower(fundef, tile=False):
   else:
     lowered_fn = fundef
     if tile:
-      lowered_fn = apply_pipeline(fundef, tiling_pipeline, copy = True)
-      print "After Lowering Tiling:"
-      print lowered_fn
+      lowered_fn = apply_pipeline(lowered_fn, tiling_pipeline, copy = True)
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
     else:
       lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = True)

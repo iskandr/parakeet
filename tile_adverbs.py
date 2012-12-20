@@ -354,5 +354,4 @@ class TileAdverbs(Transform):
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
   def post_apply(self, fn):
-    print fn
     return fn
