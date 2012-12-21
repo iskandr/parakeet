@@ -29,7 +29,7 @@ class DCE(Transform):
   def decref(self, expr):
     for var_name in collect_var_names_list(expr):
       self.use_counts[var_name] -= 1
-      print "decr"
+
     
   def transform_merge(self, phi_nodes):
     new_merge = {}
@@ -44,7 +44,7 @@ class DCE(Transform):
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
       return stmt
-    print "KILLING", stmt
+
     self.decref(stmt.rhs) 
     return None
   
@@ -61,18 +61,18 @@ class DCE(Transform):
   def transform_If(self, stmt):
     cond = stmt.cond 
     stmt.true = self.transform_block(stmt.true) 
-    print "NEW TRUE", stmt.true
+
     stmt.false = self.transform_block(stmt.false)
-    print "NEW FALSE", stmt.false 
+
     new_merge = self.transform_merge(stmt.merge)
-    print "NEW MERGE", new_merge 
+
     if len(new_merge) == 0 and len(stmt.true) == 0 and \
         len(stmt.false) == 0:
       return None  
     elif syntax_helpers.is_true(cond):
-      print "IS TRUE"
+
       for name, (_, v) in new_merge.iteritems():
-        print "ITEM", name, v 
+
         self.assign(syntax.Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.true))
       return None 

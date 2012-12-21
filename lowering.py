@@ -25,21 +25,21 @@ tiling_pipeline = [
 
 after_tiling = [
   Simplify,
-# DCE, 
-  # Fusion,
+  DCE, 
+  Fusion,
   LowerAdverbs,
-#  Simplify,
-# DCE, 
-  # Inliner,
+  Simplify,
+  DCE, 
+  Inliner,
   LowerIndexing,
-#  Simplify,
-#  DCE, 
+  Simplify,
+  DCE, 
   LowerStructs,
-#  Simplify,
-#  DCE, 
-#  LoopInvariantCodeMotion,
-#  Simplify,
-#  DCE
+  Simplify,
+  DCE, 
+  LoopInvariantCodeMotion,
+  Simplify,
+  DCE
 ]
 
 _lowered_functions = {}
