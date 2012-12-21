@@ -17,18 +17,18 @@ import transform
 from parakeet import each
 from run_function import specialize_and_compile
 
-id_fn = syntax.TypedFn(
-  name = "id_fn",
-  arg_names = ["x"],
-  input_types = [core_types.Int64],
-  body = [syntax.Return(syntax_helpers.const(1))],
-  return_type = core_types.Int64,
-  type_env = {})
-
 x_array = np.arange(10, dtype = np.int64)
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
+
+id_fn = syntax.TypedFn(
+  name = "id_fn",
+  arg_names = ["x"],
+  input_types = [core_types.Int64],
+  body = [syntax.Return(syntax.Var("x", type=core_types.Int64))],
+  return_type = core_types.Int64,
+  type_env = {"x":core_types.Int64})
 
 id_fn_2 = syntax.TypedFn(
   name = "id_fn_2",
@@ -42,7 +42,25 @@ map_fn = syntax.TypedFn(
   name = "map_fn",
   arg_names = ["X"],
   input_types = [x_array_t],
-  body = [syntax.Return(adverbs.Map(id_fn_2, [syntax.Var("X", type=x_array_t)],
+  body = [syntax.Return(adverbs.Map(id_fn, [syntax.Var("X", type=x_array_t)],
+                                    0, type=x_array_t))],
+  return_type = x_array_t,
+  type_env = {"X":x_array_t})
+
+nested_id_fn = syntax.TypedFn(
+  name = "nested_id_fn",
+  arg_names = ["x"],
+  input_types = [core_types.Int64],
+  body = [syntax.Return(syntax.Var("x", type=core_types.Int64))],
+  return_type = core_types.Int64,
+  type_env = {"x":core_types.Int64})
+
+nested_map_fn = syntax.TypedFn(
+  name = "nested_map_fn",
+  arg_names = ["X"],
+  input_types = [x_array_t],
+  body = [syntax.Return(adverbs.Map(nested_id_fn,
+                                    [syntax.Var("X", type=x_array_t)],
                                     0, type=x_array_t))],
   return_type = x_array_t,
   type_env = {"X":x_array_t})
@@ -51,7 +69,8 @@ map2_fn = syntax.TypedFn(
   name = "map2_fn",
   arg_names = ["X"],
   input_types = [x_2_array_t],
-  body = [syntax.Return(adverbs.Map(map_fn, [syntax.Var("X", type=x_2_array_t)],
+  body = [syntax.Return(adverbs.Map(nested_map_fn,
+                                    [syntax.Var("X", type=x_2_array_t)],
                                     0, type=x_2_array_t))],
   return_type = x_2_array_t,
   type_env = {"X":x_2_array_t})
@@ -68,26 +87,9 @@ map2d_1map_fn = syntax.TypedFn(
   name = "map2d_1map_fn",
   arg_names = ["X"],
   input_types = [x_2_array_t],
-  body = [syntax.Return(adverbs.Map(id_fn_2d, [syntax.Var("X", type=x_2_array_t)],
-                                    0, type=x_2_array_t))],
-  return_type = x_2_array_t,
-  type_env = {"X":x_2_array_t})
-
-id_fn_3 = syntax.TypedFn(
-  name = "id_fn_3",
-  arg_names = ["x"],
-  input_types = [x_array_t],
-  body = [syntax.Return(syntax.Var("x", type=x_array_t))],
-  return_type = x_array_t,
-  type_env = {"x":x_array_t})
-
-axis_fn = syntax.TypedFn(
-  name = "axis_fn",
-  arg_names = ["X"],
-  input_types = [x_2_array_t],
-  body = [syntax.Return(adverbs.Map(id_fn_3,
+  body = [syntax.Return(adverbs.Map(id_fn_2d,
                                     [syntax.Var("X", type=x_2_array_t)],
-                                    1, type=x_2_array_t))],
+                                    0, type=x_2_array_t))],
   return_type = x_2_array_t,
   type_env = {"X":x_2_array_t})
 
@@ -113,74 +115,39 @@ red_fn = syntax.TypedFn(
   return_type = core_types.Int64,
   type_env = {"X":x_array_t})
 
-def identity(x):
-  return x
-
-def map_id(X):
-  return each(identity, X)
-
-def map2_id(X):
-  return each(map_id, X)
-
-#def test_axes():
-#  new_fn = lowering.lower(axis_fn, False)
-#  assert isinstance(new_fn, syntax.TypedFn)
-#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-#  rslt = wrapper(x2_array)
-#  print rslt
-#  assert testing_helpers.eq(rslt, x2_array)
-#
-#def test_nested_tiling():
-#  new_fn = lowering.lower(axis_fn, True)
-#  assert isinstance(new_fn, syntax.TypedFn)
-#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-#  rslt = wrapper(x2_array, np.array([5,4], dtype=np.int64))
-#  print rslt
-#  assert testing_helpers.eq(rslt, x2_array)
-
-#def test_axes():
-#  new_fn = lowering.lower(axis_fn, False)
-#  assert isinstance(new_fn, syntax.TypedFn)
-#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-#  print parakeet_fn
-#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-#  rslt = wrapper(x2_array)
-#  assert testing_helpers.eq(rslt, x2_array.T), \
-#      "Expected %s but got %s" % (x2_array.T, rslt)
-#  print rslt
-
-#def test_1d_map():
-#  new_fn = lowering.lower(map_fn, True)
-#  assert isinstance(new_fn, syntax.TypedFn)
-#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-#  rslt = wrapper(x_array, np.array([5], dtype=np.int64))
-#  print rslt
-#  assert testing_helpers.eq(rslt, x_array)
+def test_1d_map():
+  new_fn = lowering.lower(map_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper(x_array, np.array([5], dtype=np.int64))
+  assert testing_helpers.eq(rslt, x_array)
 
 def test_2d_map():
   new_fn = lowering.lower(map2d_1map_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  tile_array = np.array([2] * new_fn.num_tiles, dtype=np.int64)
+  tile_array = np.array([3] * new_fn.num_tiles, dtype=np.int64)
   rslt = wrapper(x2_array, tile_array)
-  print x2_array
-  print rslt
   assert testing_helpers.eq(rslt, x2_array)
 
-#def test_1d_reduce():
-#  print red_fn
-#  new_fn = lowering.lower(red_fn, True)
-#  print new_fn
-#  assert isinstance(new_fn, syntax.TypedFn)
-#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-#  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
-#  print rslt
-#  assert testing_helpers.eq(rslt, sum(x_array))
+def test_2_maps():
+  new_fn = lowering.lower(map2_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  tile_array = np.array([3] * new_fn.num_tiles, dtype=np.int64)
+  rslt = wrapper(x2_array, tile_array)
+  assert testing_helpers.eq(rslt, x2_array)
+
+def test_1d_reduce():
+  new_fn = lowering.lower(red_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
+  assert testing_helpers.eq(rslt, sum(x_array))
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
