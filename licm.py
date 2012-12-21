@@ -136,11 +136,9 @@ class LoopInvariantCodeMotion(Transform):
             target_level = max(self.binding_depth[d] for d in deps)
           else:
             target_level = 0  
-          assert target_level >= 0 and target_level < self.blocks.depth(), \
-              "Invalid target depth %d, valid range is 0 to %d for stmt %s" % \
-              (target_level, self.blocks.depth(), stmt)
-          self.blocks._blocks[target_level].append(stmt)
-          self.binding_depth[name] = target_level 
-          return None
+          if target_level >= 0 and target_level < self.blocks.depth():
+            self.blocks._blocks[target_level].append(stmt)
+            self.binding_depth[name] = target_level 
+            return None
     self.mark_binding_depths(collect_binding_names(stmt.lhs))
     return stmt 

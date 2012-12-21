@@ -202,7 +202,7 @@ class Simplify(Transform):
       return args[0]
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
   
-  def temp_in_block(self, expr, block):
+  def temp_in_block(self, expr, block, name = None):
     """
     If we need a temporary variable not in 
     the current top scope but in a particular block, 
@@ -210,7 +210,7 @@ class Simplify(Transform):
     (this function also modifies the bindings
     dictionary)
     """ 
-    var = self.fresh_var(expr.type)
+    var = self.fresh_var(expr.type, name)
     block.append(syntax.Assign(var, expr))
     self.bindings[var.name] = expr 
     return var 
@@ -328,9 +328,9 @@ class Simplify(Transform):
       left_values = [merge[name][0] for name in loop_carried_vars]
       right_values = [merge[name][1] for name in loop_carried_vars]
       left_cond = subst.subst(expr, dict(zip(loop_carried_vars, left_values)))
-      left_var = self.temp_in_block(left_cond, outer_block)
+      left_var = self.temp_in_block(left_cond, outer_block, name = "cond")
       right_cond = subst.subst(expr, dict(zip(loop_carried_vars, right_values)))
-      right_var = self.temp_in_block(right_cond, loop_body)
+      right_var = self.temp_in_block(right_cond, loop_body, name = "cond")
       cond_var = self.fresh_var(left_var.type, "cond")
       merge[cond_var.name] = (left_var, right_var)
       return cond_var 

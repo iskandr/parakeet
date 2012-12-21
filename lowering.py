@@ -1,6 +1,5 @@
-import config
-import syntax
 
+import syntax
 from fusion import Fusion
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
@@ -13,34 +12,40 @@ from dead_code_elim import DCE
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 from clone_function import CloneFunction
-# import config 
+import config 
 
-before_tiling = [
-  CloneFunction
-]
 
-tiling_pipeline = [
-  TileAdverbs, LowerTiledAdverbs
-]
 
-after_tiling = [
-  Simplify,
-  DCE, 
-  Fusion,
-  LowerAdverbs,
-  Simplify,
-  DCE, 
-  Inliner,
-  LowerIndexing,
-  Simplify,
-  DCE, 
-  LowerStructs,
-  Simplify,
-  DCE, 
-  # LoopInvariantCodeMotion,
-  Simplify,
-  DCE
-]
+def build_pipeline(copy = True,
+                     tile = False,
+                     simplify = config.opt_simplify_when_lowering,
+                     inline = config.opt_inline_when_lowering, 
+                     fusion = config.opt_fusion, 
+                     licm = config.opt_licm):
+  p = [CloneFunction] if copy else []
+  def add(t):
+    p.append(t)
+    if simplify:
+      p.append(Simplify)
+      p.append(DCE)
+      
+  if tile:
+    add(TileAdverbs)
+    add(LowerTiledAdverbs)
+    
+  if fusion:
+    add(Fusion)
+    
+  add(LowerAdverbs)
+  if inline: 
+    add(Inliner)
+    
+  add(LowerIndexing)
+  add(LowerStructs)
+  
+  if licm:
+    add(LoopInvariantCodeMotion)    
+  return p 
 
 _lowered_functions = {}
 def lower(fundef, tile=False):
@@ -51,7 +56,7 @@ def lower(fundef, tile=False):
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
-    pipeline = before_tiling + (tiling_pipeline if tile else []) + after_tiling
+    pipeline = build_pipeline(copy = True, tile = tile)
     lowered_fn = apply_pipeline(fundef, pipeline)
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
