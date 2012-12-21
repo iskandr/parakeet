@@ -1,5 +1,6 @@
 import prims
 import syntax
+
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
@@ -26,7 +27,6 @@ from use_analysis import use_count
 #    any data modifications
 #  - Call: Unless the function is known to contain only safe expressions it
 #    might depend on mutable state or modify it itself
-
 
 class Simplify(Transform):
   def __init__(self, fn):

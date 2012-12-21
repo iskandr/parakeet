@@ -39,7 +39,7 @@ class If(Stmt):
   _members = ['cond', 'true', 'false', 'merge']
 
   def __str__(self):
-    s = "if %s:" % self.cond 
+    s = "if %s:" % self.cond
     if len(self.true) or len(self.false) > 0:
       s += "%s\n" % block_to_str(self.true)
     if len(self.false) > 0:
@@ -60,15 +60,15 @@ class While(Stmt):
      of the form [(new_var1, (old_var1,old_var2)]
    """
   _members = ['cond', 'body', 'merge']
-  
+
   def __repr__(self):
-    s = "while %s:\n  "  % self.cond 
+    s = "while %s:\n  "  % self.cond
     if len(self.merge) > 0:
       s += "(header)%s\n  " % phi_nodes_to_str(self.merge)
     if len(self.body) > 0:
       s +=  "(body)%s" % block_to_str(self.body)
-    return s 
-  
+    return s
+
   def __str__(self):
     return repr(self)
 
@@ -356,6 +356,8 @@ class TypedFn(Expr):
         "Typed function already registered: %s" % self.name
     self.registry[self.name] = self
 
+    self.num_tiles = 0
+
   def __repr__(self):
     arg_strings = []
 
@@ -368,7 +370,6 @@ class TypedFn(Expr):
             block_to_str(self.body))
 
   def __str__(self):
-    #return "TypedFn(%s)" % self.name
     return self.__repr__()
 
   def __hash__(self):

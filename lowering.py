@@ -1,3 +1,4 @@
+import config
 import syntax
 
 from fusion import Fusion
@@ -13,7 +14,6 @@ from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 from clone_function import CloneFunction
 import config 
-
 
 before_tiling = [
   CloneFunction
@@ -55,11 +55,11 @@ def lower(fundef, tile=False):
     lowered_fn = apply_pipeline(fundef, pipeline)
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
-     
-    if config.print_lowered_function: 
-      print 
+
+    if config.print_lowered_function:
+      print
       print "=== Lowered function ==="
       print 
       print repr(lowered_fn)
-      print 
+      print
     return lowered_fn

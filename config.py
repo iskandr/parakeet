@@ -1,3 +1,4 @@
+
 # show untyped IR after it's translated from Python?  
 print_untyped_function = False 
 
@@ -20,5 +21,4 @@ print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations 
 print_optimized_llvm = False 
-
 

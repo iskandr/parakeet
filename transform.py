@@ -1,19 +1,18 @@
 
+import config
+import verify
+
 import syntax
 from syntax import If, Assign, While, Return 
 from syntax import Var, Tuple, Index, Attribute, Const  
 from args import ActualArgs
 from codegen import Codegen
-import config 
-import verify
 
 class Transform(Codegen):
   def __init__(self, fn, verify = True, reverse = False):
     Codegen.__init__(self)
-
     self.fn = fn
     self.verify = verify
-    self.copy = None
     self.reverse = reverse
 
   def lookup_type(self, name):
@@ -196,10 +195,10 @@ class Transform(Codegen):
     return new_block
 
   def pre_apply(self, old_fn):
-    pass 
+    pass
 
   def post_apply(self, new_fn):
-    pass 
+    pass
 
   def apply(self):
     if config.print_functions_before_transforms:
@@ -208,7 +207,7 @@ class Transform(Codegen):
       print "--- before ---"
       print repr(self.fn)
       print 
-
+      
     fn = self.pre_apply(self.fn)
     if fn is None:
       fn = self.fn
@@ -219,7 +218,7 @@ class Transform(Codegen):
     new_fn = self.post_apply(fn)
     if new_fn is None:
       new_fn = fn
-     
+      
     if config.print_functions_after_transforms:
       print
       print "Done with  %s" % self.__class__.__name__

@@ -27,20 +27,9 @@ class LowerTiledAdverbs(Transform):
                                      tile_param_array=self.tile_param_array)
     return nested_lower.apply()
 
-  def transform_Map(self, expr):
-    #self.tiling = False
-    return expr
-
-  def transform_Reduce(self, expr):
-    #self.tiling = False
-    return expr
-
-  def transform_Scan(self, expr):
-    #self.tiling = False
-    return expr
-
   def transform_TiledMap(self, expr):
     self.tiling = True
+    self.fn.has_tiles = True
     self.nesting_idx += 1
     args = expr.args
     axis = syntax_helpers.unwrap_constant(expr.axis)
@@ -53,11 +42,10 @@ class LowerTiledAdverbs(Transform):
     # Create the tile size variable and find the number of tiles
     tile_size = self.index(self.tile_param_array, self.nesting_idx)
     self.num_tiled_adverbs += 1
-    num_tiles = self.div(niters, tile_size, name="num_tiles")
-    loop_bound = self.mul(num_tiles, tile_size, "loop_bound")
-    callable_fn = self.transform_expr(expr.fn)
-    inner_fn = self.get_fn(callable_fn)
-    nested_has_tiles = inner_fn.arg_names[-1] == self.tile_param_array.name
+    fn = self.transform_expr(expr.fn)
+    inner_fn = self.get_fn(fn)
+    return_t = inner_fn.return_type
+    nested_has_tiles = inner_fn.num_tiles > 0
 
     elt_t = expr.type.elt_type
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
@@ -73,23 +61,24 @@ class LowerTiledAdverbs(Transform):
                        for arg in args]
     if nested_has_tiles:
       init_slice_args.append(self.tile_param_array)
-    rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
-                                             type=inner_fn.return_type),
-                                 "rslt_init")
+    init_call = syntax.Call(fn, init_slice_args, type=return_t)
+    rslt_init = self.assign_temp(init_call, "rslt_init")
 
     # Allocate the output based on shape of the initial tile and assign the
     # first result to the appropriate slice of the output.
     init_shape = self.shape(rslt_init)
-    other_shape_els = [self.tuple_proj(init_shape, i)
-                       for i in range(1, len(init_shape.type.elt_types))]
-    out_shape = self.tuple([niters] + other_shape_els)
+    shape_els = [self.tuple_proj(init_shape, i) for i in range(axis)]
+    shape_els += [niters]
+    shape_els += [self.tuple_proj(init_shape, i)
+                  for i in range(axis + 1, len(init_shape.type.elt_types))]
+    out_shape = self.tuple(shape_els, "out_shape")
     array_result = self.alloc_array(elt_t, out_shape, "array_result")
-    init_output_idxs = self.index_along_axis(array_result, 0, init_slice)
+    init_output_idxs = self.index_along_axis(array_result, axis, init_slice)
     self.assign(init_output_idxs, rslt_init)
 
     # Loop over the remaining tiles.
     i, i_after, merge = self.loop_counter("i", tile_size)
-    cond = self.lt(i, loop_bound)
+    cond = self.lt(i, niters)
 
     self.blocks.push()
     # Take care of stragglers via checking bound every iteration.
@@ -102,14 +91,12 @@ class LowerTiledAdverbs(Transform):
                                type=slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
-    # Output always to the 0 axis, as per discussion.
-    output_idxs = self.index_along_axis(array_result, 0, tile_bounds)
+    # TODO: Output always to the 0 axis, as per discussion?
+    output_region = self.index_along_axis(array_result, axis, tile_bounds)
 
     if nested_has_tiles:
       nested_args.append(self.tile_param_array)
-    nested_call = syntax.Call(callable_fn, nested_args,
-                              type=inner_fn.return_type)
-    self.assign(output_idxs, nested_call)
+    self.assign(output_region, syntax.Call(fn, nested_args, type=return_t))
     body = self.blocks.pop()
 
     self.blocks += syntax.While(cond, body, merge)
@@ -118,6 +105,7 @@ class LowerTiledAdverbs(Transform):
 
   def transform_TiledReduce(self, expr):
     self.tiling = True
+    self.fn.has_tiles = True
     def alloc_maybe_array(isarray, t, shape, name=None):
       if isarray:
         return self.alloc_array(t, shape, name)
@@ -139,10 +127,10 @@ class LowerTiledAdverbs(Transform):
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     callable_fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(callable_fn)
+    nested_has_tiles = inner_fn.num_tiles > 0
     callable_combine = self.transform_expr(expr.combine)
     inner_combine = self.get_fn(callable_combine)
     isarray = isinstance(expr.type, array_type.ArrayT)
-    nested_has_tiles = inner_fn.arg_names[-1] == self.tile_param_array.name
     elt_t = array_type.elt_type(expr.type)
 
     # Hackishly execute the first tile to get the output shape
@@ -225,4 +213,6 @@ class LowerTiledAdverbs(Transform):
       fn.arg_names.append(self.tile_param_array.name)
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
+      fn.num_tiles = self.nesting_idx + 1
+      print fn
     return fn
