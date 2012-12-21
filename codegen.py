@@ -36,7 +36,22 @@ class Codegen(object):
   def assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
 
-  def assign_temp(self, expr, name = "temp"):
+
+  def temp_name(self, expr):
+    c = expr.__class__ 
+    if c is syntax.PrimCall:
+      return expr.prim.name
+    elif c is syntax.Attribute:
+      if expr.value.__class__ is syntax.Var:
+        return names.original(expr.value.name) + "_" + expr.name 
+      else:
+        return expr.name 
+    else:
+      return "temp"
+
+  def assign_temp(self, expr, name = None):
+    if name is None:
+      name = self.temp_name(expr)
     if isinstance(expr, syntax.Var):
       return expr
     else:

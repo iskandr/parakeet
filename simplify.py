@@ -1,3 +1,4 @@
+import names 
 import prims
 import syntax
 
@@ -88,11 +89,12 @@ class Simplify(Transform):
     else:
       return all(self.immutable(child) for child in child_nodes)
 
-  def temp(self, expr,   use_count = 1):
+  def temp(self, expr, use_count = 1):
     """
     Wrapper around Codegen.assign_temp
     which also updates bindings and use_counts
     """
+
     new_var = self.assign_temp(expr)
     self.bindings[new_var.name] = expr
     self.use_counts[new_var.name] = use_count

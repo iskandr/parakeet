@@ -9,10 +9,11 @@ class LowerIndexing(transform.MemoizedTransform):
     data_ptr = self.attr(arr, "data")
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
-
+    elt_offset = self.attr(arr, "offset")
+    
     new_strides = []
     new_shape = []
-    elt_offset = syntax_helpers.zero_i64
+
     for (i, idx) in enumerate(indices):
       stride_i = self.tuple_proj(strides, i)
       shape_i = self.tuple_proj(shape, i)
