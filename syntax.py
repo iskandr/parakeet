@@ -40,8 +40,10 @@ class If(Stmt):
 
   def __str__(self):
     s = "if %s:" % self.cond
-    if len(self.true) or len(self.false) > 0:
+    if (len(self.true) + len(self.false)) > 0:
       s += "%s\n" % block_to_str(self.true)
+    else:
+      s += "\n"
     if len(self.false) > 0:
       s += "else:%s\n" % block_to_str(self.false)
     if len(self.merge) > 0:
