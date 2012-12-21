@@ -60,7 +60,7 @@ def test_bool_sum():
 
 
 expected_cumsum_vec = np.cumsum(vec)
-expected_cumsum_mat = np.cumsum(mat, axis=1)
+expected_cumsum_mat = np.cumsum(mat, axis=0)
 
 
 def test_scan():

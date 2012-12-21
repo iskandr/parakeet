@@ -1,4 +1,5 @@
 import syntax
+from syntax import Var, Tuple 
 from common import dispatch
 from transform import Transform
 import syntax_helpers 
@@ -14,12 +15,14 @@ class DCE(Transform):
     self.use_counts = use_count(fn)
     
   def is_live(self, name):
+    
     return name in self.use_counts and self.use_counts[name] > 0
          
   def is_live_lhs(self, lhs):
-    if isinstance(lhs, syntax.Var):
+    c = lhs.__class__
+    if c is Var:
       return self.is_live(lhs.name)
-    elif isinstance(lhs, syntax.Tuple):
+    elif c is Tuple:
       return any(self.is_live_lhs(elt) for elt in lhs.elts)
     elif isinstance(lhs, (str, tuple)):
       assert False, "Raw data? This ain't the stone age, you know."
@@ -42,9 +45,9 @@ class DCE(Transform):
     return new_merge
   
   def transform_Assign(self, stmt):
+
     if self.is_live_lhs(stmt.lhs):
       return stmt
-
     self.decref(stmt.rhs) 
     return None
   

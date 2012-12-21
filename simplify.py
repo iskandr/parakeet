@@ -110,7 +110,7 @@ class Simplify(Transform):
     original_expr = expr
     while name in self.bindings:
       expr = self.bindings[name]
-      if expr.__class__ is syntax.Var:
+      if expr.__class__ is Var:
         name = expr.name
       else:
         break
@@ -118,7 +118,7 @@ class Simplify(Transform):
     if expr.__class__ is Const:
       return expr
 
-    elif expr == original_expr.name:
+    elif expr == original_expr:
       return original_expr
     else:
       return syntax.Var(name = name, type = original_expr.type)
@@ -276,30 +276,34 @@ class Simplify(Transform):
 
   def transform_Assign(self, stmt):
     lhs = stmt.lhs
-    lhs_class = lhs.__class__
-    old_rhs = stmt.rhs
-    rhs = self.transform_expr(old_rhs)
-    rhs_class = rhs.__class__
+    rhs = self.transform_expr(stmt.rhs)
+    
 
+    lhs_class = lhs.__class__
+    rhs_class = rhs.__class__
     if lhs_class is Index:
       lhs = self.transform_lhs_Index(lhs)
     elif lhs_class is Attribute:
       lhs = self.transform_lhs_Attribute(lhs)
     else:
+      # lhs is Var or tuple 
       self.bind(lhs, rhs)
-
-    if lhs_class is Var and \
-       rhs_class not in (Var, Const) and \
-       self.immutable(rhs) and \
-       rhs not in self.available_expressions:
-      self.available_expressions[rhs] = lhs
-    elif rhs_class is Var:
-      rhs_name = rhs.name
-      if rhs_name in self.bindings and self.use_counts.get(rhs.name, 1) == 1:
-        rhs = self.bindings[rhs_name]
-        self.use_counts[rhs_name] = 0
-    new_stmt = syntax.Assign(lhs, rhs) if rhs != old_rhs else stmt
-    return new_stmt
+      if lhs_class is Var and \
+           rhs_class not in (Var, Const) and \
+           self.immutable(rhs) and \
+           rhs not in self.available_expressions:
+        self.available_expressions[rhs] = lhs
+    
+    if rhs_class is Var and \
+        rhs.name in self.bindings and \
+        self.use_counts.get(rhs.name, 1) == 1:
+      self.use_counts[rhs.name] = 0
+      rhs = self.bindings[rhs.name]
+      
+    
+    stmt.lhs = lhs 
+    stmt.rhs = rhs  
+    return stmt 
 
   def transform_If(self, stmt):
     self.available_expressions.push()

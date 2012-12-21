@@ -68,21 +68,21 @@ def test_assign_slices():
     expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
     expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
 
-def assign_all_slices(x, y):
+def copy_four_rows_by_slices(x, y):
   y[0:2,0:5] = x[0:2,0:5]
   y[0:2,5:10] = x[0:2,5:10]
   y[2:4,0:5] = x[2:4,0:5]
   y[2:4,5:10] = x[2:4,5:10]
   return y
 
-def test_assign_all_slices():
+def test_copy_four_rows_by_slices():
   for m in matrices:
     m_expect = m.copy()
     m_input = m.copy()
     m_zeros = np.zeros_like(m_input)
-    expect(assign_all_slices, [m_input, m_zeros], m_expect)
+    expect(copy_four_rows_by_slices, [m_input, m_zeros], m_expect)
 
-def id_slice(x, y):
+def copy_first_two_rows(x, y):
   # Fill y with the elements of x to try to get an identical copy
   i = 0
   while i < 10:
@@ -91,20 +91,24 @@ def id_slice(x, y):
     i = i + 1
   return y
 
-def loop_slice(x, y, z):
+
+
+def copy_with_slice_loop(x, y, z):
   i = 0
   while i < 10:
     i_next = i + 2
-    z[i:i_next,:] = id_slice(x[i:i_next,:], y[i:i_next,:])
+    z[i:i_next,:] = copy_first_two_rows(x[i:i_next,:], y[i:i_next,:])
     i = i_next
   return z
 
-def test_loop_slices():
+def test_copy_with_slice_loop():
   m_input = np.arange(100).reshape(10,10)
   m_zeros = np.zeros_like(m_input)
   m_z = m_zeros.copy()
   m_expect = np.arange(100).reshape(10,10)
-  expect(loop_slice, [m_input, m_zeros, m_z], m_expect)
+  expect(copy_with_slice_loop, [m_input, m_zeros, m_z], m_expect)
+
+
 
 if __name__ == '__main__':
   run_local_tests()
