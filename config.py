@@ -1,3 +1,7 @@
+#####################################
+#            DEBUG OUTPUT           #
+#####################################
+
 # show untyped IR after it's translated from Python?
 print_untyped_function = False
 
@@ -21,8 +25,23 @@ print_unoptimized_llvm = False
 # show LLVM bytecode after optimizations
 print_optimized_llvm = False
 
+######################################
+#        PARAKEET OPTIMIZATIONS      #
+######################################
 opt_simplify_when_lowering = True
 opt_inline_when_lowering = True
 opt_fusion = True
 opt_licm = True
 
+######################################
+#           LLVM OPTIONS             #
+######################################
+
+# run LLVM optimization passes 
+llvm_optimize = True
+
+# number of times to run optimizations  
+llvm_num_passes = 4
+
+# run verifier over generated LLVM code? 
+llvm_verify = True 

@@ -8,7 +8,7 @@ import type_conv
 import type_inference
 
 from args import ActualArgs
-from llvm_context import opt as opt_context 
+from llvm_context import global_context  
 from llvm.ee import GenericValue
 
 def python_to_generic_value(x, t):
@@ -58,7 +58,7 @@ def generic_value_to_python(gv, t):
 
 class CompiledFn:
   def __init__(self, llvm_fn, parakeet_fn,
-               exec_engine = opt_context.exec_engine):
+               exec_engine = global_context.exec_engine):
     self.llvm_fn = llvm_fn
     self.parakeet_fn = parakeet_fn
     self.exec_engine = exec_engine

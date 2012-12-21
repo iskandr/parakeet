@@ -2,40 +2,52 @@ import parakeet
 from testing_helpers import expect, expect_each, run_local_tests
 import numpy as np
 
-float_mat = np.random.uniform(0,1,size=(10,10))
+size = (7,7)
+float_mat = np.random.uniform(0,1,size=size)
 bool_mat = float_mat > 0.5 
-int_mat = np.random.random_integers(0,255,size=(10,10))
+int_mat = np.random.random_integers(0,255,size=size)
 
 matrices = [float_mat, bool_mat, int_mat]
 
-def diff_x(M):
-  n = M.shape[0]
-  return M[1:, :] - M[:n-1, :]
+def diff_x(I):
+  m,n = I.shape
+  
+  return (I[2:, :] - I[:m-2, :])[:, :n-2]
 
 def test_diff_x():
   expect_each(diff_x, diff_x, matrices)
   
-def diff_y(M):
-  n = M.shape[1]
-  return M[:, 1:] - M[:, :n-1]
+def diff_y(I):
+  m,n = I.shape
+  return (I[:, 2:] - I[:, :n-2])[:m-2, :]
 
 def test_diff_y():
   expect_each(diff_x, diff_x, matrices)
   
-def harris(M):
-  dx = diff_x(M)[:, 1:]
-  dy = diff_y(M)[1:, :]
-  dx2 = dx*dx
-  dy2 = dy*dy
-  dxdy = dx * dy
-  trace = dx2 + dy2 
-  det = dx2 * dy2 - (dxdy*dxdy)
-  k = 0.05
-  return det -  k * trace * trace
+def harris(I):
+  dx = diff_x(I)
+  dy = diff_y(I)
+  #
+  #   At each point we build a matrix 
+  #   of derivative products 
+  #   M = 
+  #   | A = dx^2     C = dx * dy |
+  #   | C = dy * dx  B = dy * dy |
+  #   
+  #   and the score at that point is: 
+  #      det(M) - k*trace(M)^2
+  #
+  A = dx*dx
+  B = dy*dy
+  C = dx * dy
+  tr = A + B 
+  det = A *B - C * C 
+  k = 0.04
+  return det -  k * tr * tr
 
 def test_harris():
   expect_each(harris, harris, matrices)
    
 if __name__ == '__main__':
-  run_local_tests()  
+  run_local_tests()
   

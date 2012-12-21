@@ -16,7 +16,7 @@ from llvm_helpers import const, int32 #, zero, one
 from llvm_types import llvm_value_type, llvm_ref_type
 
 class CompilationEnv:
-  def __init__(self, llvm_cxt = llvm_context.opt):
+  def __init__(self, llvm_cxt = llvm_context.global_context):
     self.parakeet_fundef = None
     self.llvm_fn = None
     self.llvm_context = llvm_cxt

@@ -193,26 +193,27 @@ class ArrayT(StructT):
 
     elt_size = self.elt_type.nbytes
     strides_in_elts = self.strides_t.to_python(obj.strides.contents)
-    #assert any([stride == 1 for stride in strides_in_elts]), \
-    #    "Discontiguous array not supported, strides = %s" % (strides_in_elts,)
-    min_stride = min(strides_in_elts)
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
 
-    n_elts = np.prod(shape)
-    n_bytes = n_elts * elt_size * min_stride
-    dest_buf = AllocateBuffer(n_bytes)
-    dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
-    src_ptr = obj.data
+    base_ptr = obj.data 
     if obj.offset:
-      P = src_ptr.__class__
-      old_addr = ctypes.addressof(src_ptr.contents)
+      P = base_ptr.__class__
+      old_addr = ctypes.addressof(base_ptr.contents)
       new_addr = old_addr + (obj.offset * elt_size)
-      src_ptr = ctypes.cast(new_addr, P)
-
-    # copy data from pointer
-    ctypes.memmove(dest_ptr, src_ptr, n_bytes)
+      base_ptr = ctypes.cast(new_addr, P)
+    # TODO: 
+    # look up size of allocated underlying memory from 
+    # a gc table 
+    # nbytes = memory.sizeof(base_ptr)
+    nbytes = np.prod(shape) * min(strides_in_elts) * elt_size 
+   
+    dest_buf = AllocateBuffer(nbytes)
+    dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
+    # copy data 
+    ctypes.memmove(dest_ptr, base_ptr, nbytes)
     return np.ndarray(shape, dtype = self.elt_type.dtype,
-                      buffer = dest_buf, strides = strides_in_bytes)
+                      buffer = dest_buf, 
+                      strides = strides_in_bytes, )
 
 _array_types = {}
 def make_array_type(elt_t, rank):

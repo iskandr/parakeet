@@ -1,3 +1,4 @@
+import config 
 import llvm.core as core
 import llvm.ee as ee
 import llvm.passes as passes
@@ -55,7 +56,7 @@ class LLVM_Context:
   ]
 
 
-  def __init__(self, module_name, optimize = True, verify = False):
+  def __init__(self, module_name, optimize = config.llvm_optimize, verify = config.llvm_verify):
     self.module = core.Module.new(module_name)
     self.engine_builder = ee.EngineBuilder.new(self.module)
     self.engine_builder.force_jit()
@@ -73,9 +74,9 @@ class LLVM_Context:
       for p in (self._opt_passes + self._verify_passes):
         self.pass_manager.add(p)
 
-  def run_passes(self, llvm_fn, n_iters = 4):
+  def run_passes(self, llvm_fn, n_iters = config.llvm_num_passes):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)
 
-opt = LLVM_Context("opt_module", optimize = True)
-no_opt = LLVM_Context("no_opt_module", optimize = False)
+global_context = LLVM_Context("module")
+
