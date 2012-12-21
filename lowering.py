@@ -13,7 +13,7 @@ from dead_code_elim import DCE
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 from clone_function import CloneFunction
-import config 
+# import config 
 
 before_tiling = [
   CloneFunction
@@ -37,7 +37,7 @@ after_tiling = [
   LowerStructs,
   Simplify,
   DCE, 
-  LoopInvariantCodeMotion,
+  # LoopInvariantCodeMotion,
   Simplify,
   DCE
 ]

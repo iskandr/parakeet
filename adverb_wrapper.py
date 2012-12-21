@@ -39,9 +39,6 @@ def untyped_wrapper(adverb_class,
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
   else:
-    print "KEY NOT FOUND"
-    print "key=", key 
-    print "cache = ", _adverb_wrapper_cache
     fn_args_obj = FormalArgs()
     def mk_input_var(name):
       if name is None:

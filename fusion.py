@@ -45,7 +45,6 @@ class Fusion(Transform):
             # since we're modifying the RHS of the assignment
             # we better make sure the caller doesn't expect us 
             # to return a fresh copy of the AST 
-            assert not self.copy
             rhs.fn = fuse(prev_adverb.fn, rhs.fn)
             rhs.args = prev_adverb.args
 
