@@ -59,7 +59,6 @@ def expect(fn, args, expected):
 
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
 
-
   untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
   assert eq(untyped_result, expected), \
       "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
@@ -68,7 +67,9 @@ def expect(fn, args, expected):
   assert eq(typed_result, expected), \
       "Expected %s but typed fn returned %s" % (expected, typed_result)
 
+  print typed
   llvm_result = compiled(*linear_args)
+  print llvm_result
   assert eq(llvm_result, expected), \
       "Expected %s but compiled fn return %s" % (expected, llvm_result)
 

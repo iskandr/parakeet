@@ -1,13 +1,14 @@
-from node import Node
+import ctypes
+import dtypes
 import numpy as np
 import type_conv
-import dtypes
-import ctypes
+
+from node import Node
 
 class TypeFailure(Exception):
   def __init__(self, msg):
     self.msg = msg
-  
+
 class IncompatibleTypes(Exception):
   def __init__(self, t1, t2):
     self.t1 = t1
@@ -25,16 +26,16 @@ class Type(Node):
 
   def __hash__(self):
     assert False, "Hash function not implemented for type %s" % (self,)
-  
+
   def __eq__(self, _):
     assert False, "Equality not implemented for type %s" % (self,)
-    
+
 class AnyT(Type):
   """top of the type lattice, absorbs all types"""
 
   def combine(self, other):
     return self
-  
+
   def __eq__(self, other):
     return isinstance(other, AnyT)
 
@@ -55,45 +56,45 @@ Unknown = UnknownT()
 
 class FnT(Type):
   """
-  Type of a typed function 
+  Type of a typed function
   """
   def __init__(self, input_types, return_type):
     self.input_types = tuple(input_types )
-    self.return_type = return_type 
-    
+    self.return_type = return_type
+
   def __str__(self):
     input_str = ", ".join(str(t) for t in self.input_types)
     return "(%s)->%s" % (input_str, self.return_type)
-  
+
   def __repr__(self):
     return str(self)
-  
+
   def __eq__(self, other):
     return isinstance(other, FnT) and  \
         self.return_type == other.return_type and \
         len(self.input_types) == len(other.input_types) and \
-        all(t1 == t2 for (t1, t2) in 
+        all(t1 == t2 for (t1, t2) in
             zip(self.input_types, other.input_types))
-        
+
   def combine(self, other):
     if self == other:
       return self
     else:
       raise IncompatibleTypes(self, other)
-    
+
   def __hash__(self):
     return hash(self.input_types + (self.return_type,))
 
 _fn_type_cache = {}
 def make_fn_type(input_types, return_type):
   input_types = tuple(input_types)
-  key = input_types, return_type 
+  key = input_types, return_type
   if key in _fn_type_cache:
     return _fn_type_cache[key]
   else:
     t = FnT(input_types, return_type)
     _fn_type_cache[key] = t
-    return t 
+    return t
 
 def combine_type_list(types):
   common_type = Unknown
@@ -105,11 +106,9 @@ def combine_type_list(types):
 import abc
 
 class ConcreteT(Type):
-
-
   """
-  Type which actually have some corresponding runtime values,
-  as opposed to "Any" and "Unknown"
+  Type which actually have some corresponding runtime values, as opposed to
+  "Any" and "Unknown"
   """
 
   def ctypes_repr(self):
@@ -145,10 +144,10 @@ class NoneT(ConcreteT):
 
   def __str__(self):
     return "NoneT"
-  
+
   def __hash__(self):
     return 0
-  
+
   def __eq__(self, other):
     return isinstance(other, NoneT)
   def __repr__(self):
@@ -156,7 +155,7 @@ class NoneT(ConcreteT):
 
 NoneType = NoneT()
 def typeof_none(_):
-  return NoneType 
+  return NoneType
 type_conv.register(type(None), NoneT, typeof_none)
 
 def is_struct(c_repr):
@@ -189,7 +188,6 @@ class StructT(Type):
         return i
     raise FieldNotFound(self, name)
 
-
   @property
   def ctypes_repr(self):
     if self in self._repr_cache:
@@ -217,7 +215,6 @@ class StructT(Type):
 #             SCALAR NUMERIC TYPES                #
 #                                                 #
 ###################################################
-
 
 ###################################################
 # helper functions to implement properties of
@@ -275,11 +272,8 @@ class ScalarT(ConcreteT):
         return other
       else:
         return from_dtype(combined_dtype)
-
-
     else:
       raise IncompatibleTypes(self, other)
-
 
 _dtype_to_parakeet_type = {}
 def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
@@ -297,9 +291,11 @@ class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""
   _members = []
 
-
 class BoolT(IntT):
-  """The type is called BoolT to distinguish it from its only instantiation called Bool."""
+  """
+  The type is called BoolT to distinguish it from its only instantiation
+  called Bool.
+  """
   def node_init(self):
     assert dtypes.is_bool(self.dtype)
     self.name = 'bool'
@@ -345,7 +341,7 @@ class ComplexT(ScalarT):
 
   def node_init(self):
     assert dtypes.is_float(self.elt_type), \
-      "Expected fields of complex to be floating, got %s" % self.elt_type
+        "Expected fields of complex to be floating, got %s" % self.elt_type
     assert dtypes.is_complex(self.dtype)
     self._fields_ = [('real', self.elt_type), ('imag', self.elt_type)]
 
@@ -371,9 +367,9 @@ class ConstIntT(IntT):
 
 def is_scalar_subtype(t1, t2):
   return isinstance(t1, ScalarT) and \
-    isinstance(t2, ScalarT) and \
-    ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or \
-     (isinstance(t1, IntT) and isinstance(t2, FloatT)))
+         isinstance(t2, ScalarT) and \
+         ((t1 == t2) or (t1.nbytes() < t2.nbytes()) or \
+          (isinstance(t1, IntT) and isinstance(t2, FloatT)))
 
 def register_numeric_type(klass, dtype):
   parakeet_type = klass(dtype)
@@ -393,7 +389,6 @@ def is_scalar(t):
 def all_scalars(ts):
   return all(map(is_scalar, ts))
 
-
 ###########################################
 #
 #  Pointers!
@@ -410,7 +405,8 @@ class PtrT(ConcreteT):
 
   rank = 1
   def index_type(self, idx):
-    assert isinstance(idx, IntT), "Index into pointer must be of type int, got %s" % (idx)
+    assert isinstance(idx, IntT), \
+        "Index into pointer must be of type int, got %s" % (idx)
     return self.elt_type
 
   def node_init(self):
@@ -420,11 +416,11 @@ class PtrT(ConcreteT):
     return "ptr(%s)" % self.elt_type
 
   def __eq__(self, other):
-    return isinstance(other, PtrT) and self.elt_type == other.elt_type 
-  
+    return isinstance(other, PtrT) and self.elt_type == other.elt_type
+
   def __hash__(self):
     return hash(self.elt_type)
-  
+
   def __repr__(self):
     return str(self)
 
@@ -440,4 +436,3 @@ def ptr_type(t):
     ptr_t = PtrT(t)
     _ptr_types[t] = ptr_t
     return ptr_t
-

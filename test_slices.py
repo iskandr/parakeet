@@ -68,7 +68,6 @@ def test_assign_slices():
     expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
     expect(assign_slices, [m_input, (i,j,k,l), (a,b,c,d)], m_expect)
 
-
 def assign_all_slices(x, y):
   y[0:2,0:5] = x[0:2,0:5]
   y[0:2,5:10] = x[0:2,5:10]
@@ -82,7 +81,20 @@ def test_assign_all_slices():
     m_input = m.copy()
     m_zeros = np.zeros_like(m_input)
     expect(assign_all_slices, [m_input, m_zeros], m_expect)
-    
+
+def slice_first(x, y):
+  y[0:2,:] = x[0:2,:]
+  y[2:4,:] = x[2:4,:]
+  return y
+
+def test_slice_first():
+  for m in matrices:
+    m_expect = m.copy()
+    m_y = m.copy()
+    for i in range(4):
+      m_y[i] = m_expect[3-i]
+    m_input = m.copy()
+    expect(slice_first, [m_input, m_y], m_expect)
+
 if __name__ == '__main__':
   run_local_tests()
-  
