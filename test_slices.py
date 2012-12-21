@@ -1,4 +1,4 @@
-from testing_helpers import expect, run_local_tests
+from testing_helpers import expect, run_local_tests, expect_each 
 import numpy as np
 
 shape_1d = 40
@@ -105,6 +105,14 @@ def test_loop_slices():
   m_z = np.zeros_like(m_input)
   m_expect = m_input.copy()
   expect(loop_slice, [m_input, m_zeros, m_z], m_expect)
+
+def lower_right_corner(X):
+  m,n = X.shape
+  return X[m/2:m, n/2:n]
+
+def test_lower_right_corner():
+  expect_each(lower_right_corner, lower_right_corner, matrices)
+
 
 if __name__ == '__main__':
   run_local_tests()

@@ -10,23 +10,22 @@ int_mat = np.random.random_integers(0,255,size=size)
 matrices = [float_mat, bool_mat, int_mat]
 
 def diff_x(I):
-  m,n = I.shape
-  
-  return (I[2:, :] - I[:m-2, :])[:, :n-2]
+  m = I.shape[0]
+  return (I[1:, :] - I[:m-1, :])
 
 def test_diff_x():
   expect_each(diff_x, diff_x, matrices)
   
 def diff_y(I):
-  m,n = I.shape
-  return (I[:, 2:] - I[:, :n-2])[:m-2, :]
+  n = I.shape[1]
+  return (I[:, 1:] - I[:, :n-1])
 
 def test_diff_y():
   expect_each(diff_x, diff_x, matrices)
   
 def harris(I):
-  dx = diff_x(I)
-  dy = diff_y(I)
+  dx = diff_x(I)[:, 1:]
+  dy = diff_y(I)[1:, :]
   #
   #   At each point we build a matrix 
   #   of derivative products 
@@ -42,7 +41,7 @@ def harris(I):
   C = dx * dy
   tr = A + B 
   det = A *B - C * C 
-  k = 0.04
+  k = 0.05
   return det -  k * tr * tr
 
 def test_harris():
