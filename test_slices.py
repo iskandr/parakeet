@@ -82,19 +82,29 @@ def test_assign_all_slices():
     m_zeros = np.zeros_like(m_input)
     expect(assign_all_slices, [m_input, m_zeros], m_expect)
 
-def slice_first(x, y):
-  y[0:2,:] = x[0:2,:]
-  y[2:4,:] = x[2:4,:]
+def id_slice(x, y):
+  # Fill y with the elements of x to try to get an identical copy
+  i = 0
+  while i < 10:
+    y[0][i] = x[0][i]
+    y[1][i] = x[1][i]
+    i = i + 1
   return y
 
-def test_slice_first():
-  for m in matrices:
-    m_expect = m.copy()
-    m_y = m.copy()
-    for i in range(4):
-      m_y[i] = m_expect[3-i]
-    m_input = m.copy()
-    expect(slice_first, [m_input, m_y], m_expect)
+def loop_slice(x, y, z):
+  i = 0
+  while i < 10:
+    i_next = i + 2
+    z[i:i_next,:] = id_slice(x[i:i_next,:], y[i:i_next,:])
+    i = i_next
+  return z
+
+def test_loop_slices():
+  m_input = np.arange(100).reshape(10,10)
+  m_zeros = np.zeros_like(m_input)
+  m_z = m_zeros.copy()
+  m_expect = np.arange(100).reshape(10,10)
+  expect(loop_slice, [m_input, m_zeros, m_z], m_expect)
 
 if __name__ == '__main__':
   run_local_tests()

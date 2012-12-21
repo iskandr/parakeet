@@ -253,7 +253,7 @@ class TileAdverbs(Transform):
     new_fn = syntax.TypedFn
     depths = self.get_depths_list(fn.arg_names)
     find_adverbs = FindAdverbs(fn)
-    find_adverbs.apply(copy=False)
+    find_adverbs.apply()
 
     if find_adverbs.has_adverbs:
       arg_names = fn.arg_names

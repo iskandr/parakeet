@@ -41,7 +41,7 @@ def eq(x,y):
   if isinstance(y, np.ndarray):
     return isinstance(x, np.ndarray) and x.shape == y.shape and \
         (np.all(np.ravel(x) == np.ravel(y)) or \
-         np.mean(np.ravel(x) - np.ravel(y)) <= 0.000001)
+         abs(np.mean(np.ravel(x) - np.ravel(y))) <= 0.000001)
   else:
     return x == y
 
@@ -63,15 +63,15 @@ def expect(fn, args, expected):
   assert eq(untyped_result, expected), \
       "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
   linear_args = untyped.args.linearize_without_defaults(all_args)
+
+
   typed_result = interp.eval_fn(typed, map(copy, linear_args))
   assert eq(typed_result, expected), \
       "Expected %s but typed fn returned %s" % (expected, typed_result)
 
-  print typed
   llvm_result = compiled(*linear_args)
-  print llvm_result
   assert eq(llvm_result, expected), \
-      "Expected %s but compiled fn return %s" % (expected, llvm_result)
+      "Expected %s but compiled fn returned %s" % (expected, llvm_result)
 
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

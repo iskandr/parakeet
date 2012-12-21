@@ -1,16 +1,22 @@
-import dead_code_elim
 import prims
 import syntax
-import transform
 
-from mutability_analysis import TypeBasedMutabilityAnalysis
-from scoped_env import ScopedEnv
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
+
+from scoped_env import ScopedEnv
+
+import transform
 from transform import Transform
+import subst
+from mutability_analysis import TypeBasedMutabilityAnalysis
+
+
+from collect_vars import collect_var_names
 from use_analysis import use_count
+ 
 
 # classes of expressions known to have no side effects
 # and to be unaffected by changes in mutable state as long
@@ -195,16 +201,36 @@ class Simplify(Transform):
     elif prim == prims.divide and is_one(args[1]):
       return args[0]
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
-
-  def transform_phi_nodes(self, phi_nodes):
+  
+  def temp_in_block(self, expr, block, name = None):
+    """
+    If we need a temporary variable not in 
+    the current top scope but in a particular block, 
+    then use this function.
+    (this function also modifies the bindings
+    dictionary)
+    """ 
+    var = self.fresh_var(expr.type, name)
+    block.append(syntax.Assign(var, expr))
+    self.bindings[var.name] = expr 
+    return var 
+    
+  def transform_merge(self, phi_nodes, left_block, right_block):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():
       new_left = self.transform_expr(left)
       new_right = self.transform_expr(right)
+      
+      if not isinstance(new_left, (Const, Var)):
+        new_left = self.temp_in_block(new_left, left_block)
+      if not isinstance(new_right, (Const, Var)):
+        new_right = self.temp_in_block(new_right, right_block)
+        
       if new_left == new_right:
+        # if both control flows yield the same value then 
+        # we don't actually need the phi-bound variable, we can just
+        # replace the left value everywhere 
         self.set_binding(k, new_left)
-        if not isinstance(new_left, (syntax.Const, syntax.Var)):
-          result[k] = new_left, new_right
       else:
         result[k] = new_left, new_right
     return result
@@ -269,8 +295,7 @@ class Simplify(Transform):
       self.available_expressions[rhs] = lhs
     elif rhs_class is Var:
       rhs_name = rhs.name
-      if rhs_name in self.bindings and \
-         self.use_counts.get(rhs.name, 1) == 1:
+      if rhs_name in self.bindings and self.use_counts.get(rhs.name, 1) == 1:
         rhs = self.bindings[rhs_name]
         self.use_counts[rhs_name] = 0
     new_stmt = syntax.Assign(lhs, rhs) if rhs != old_rhs else stmt
@@ -278,15 +303,52 @@ class Simplify(Transform):
 
   def transform_If(self, stmt):
     self.available_expressions.push()
-    stmt = Transform.transform_If(self, stmt)
+    stmt.true = self.transform_block(stmt.true)
+    stmt.false = self.transform_block(stmt.false)
+    stmt.merge = self.transform_merge(stmt.merge, 
+                                      left_block = stmt.true, 
+                                      right_block = stmt.false)
+    stmt.cond = self.transform_expr(stmt.cond)
     self.available_expressions.pop()
-    return stmt
+    return stmt 
+ 
+  def transform_loop_condition(self, expr, outer_block, loop_body, merge):
+    """
+    Normalize loop conditions so they are just simple variables
+    """  
+  
+    if isinstance(expr, (Var, Const)):
+      return self.transform_expr(expr)
+    else:
+      loop_carried_vars = [name for name in collect_var_names(expr) 
+                           if name in merge]
+      if len(loop_carried_vars) == 0:
+        return expr  
+      
+      left_values = [merge[name][0] for name in loop_carried_vars]
+      right_values = [merge[name][1] for name in loop_carried_vars]
+      left_cond = subst.subst(expr, dict(zip(loop_carried_vars, left_values)))
+      left_var = self.temp_in_block(left_cond, outer_block, name = "cond")
+      right_cond = subst.subst(expr, dict(zip(loop_carried_vars, right_values)))
+      right_var = self.temp_in_block(right_cond, loop_body, name = "cond")
+      cond_var = self.fresh_var(left_var.type, "cond")
+      merge[cond_var.name] = (left_var, right_var)
+      return cond_var 
 
   def transform_While(self, stmt):
     self.available_expressions.push()
-    stmt = Transform.transform_While(self, stmt)
+    
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge, 
+                                 left_block = self.blocks.current(), 
+                                 right_block = stmt.body)
+    
+    stmt.cond = self.transform_loop_condition(stmt.cond,
+        outer_block = self.blocks.current(),
+        loop_body = stmt.body, 
+        merge = stmt.merge)
     _ = self.available_expressions.pop()
-    return stmt
+    return stmt 
 
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
@@ -297,8 +359,3 @@ class Simplify(Transform):
       return stmt
     else:
       return syntax.Return(new_value)
-
-  def post_apply(self, new_fn):
-    new_fn = dead_code_elim.dead_code_elim(new_fn)
-    Transform.post_apply(self, new_fn)
-    return new_fn

@@ -305,6 +305,7 @@ def eval_fn(fn, actuals):
       eval_stmt(stmt)
 
   try:
+   
     eval_block(fn.body)
 
   except ReturnValue as r:

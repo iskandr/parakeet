@@ -1,3 +1,4 @@
+import config 
 import adverbs
 import adverb_helpers
 import adverb_wrapper
@@ -586,7 +587,7 @@ def _specialize(fn, arg_types):
   from rewrite_typed import rewrite_typed
   coerced_fundef = rewrite_typed(typed_fundef)
   import optimize
-  return optimize.optimize(coerced_fundef, copy = False)
+  return optimize.optimize(coerced_fundef)
 
 def _get_fundef(fn):
   if isinstance(fn, (untyped_ast.Fn, typed_ast.TypedFn)):
@@ -615,8 +616,15 @@ def specialize(fn, arg_types):
   fundef = _get_fundef(closure_t.fn)
 
   typed =  _specialize(fundef, full_arg_types)
-
   closure_t.specializations[arg_types] = typed
+  
+  if config.print_specialized_function:
+    print "=== Specialized %s for input types %s ===" % (fundef.name, full_arg_types)
+    print
+    print repr(typed)
+    print 
+    
+  
   return typed
 
 def infer_return_type(untyped, arg_types):

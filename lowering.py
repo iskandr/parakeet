@@ -1,6 +1,8 @@
 import config
 import syntax
 
+from clone_function import CloneFunction
+from dead_code_elim import DCE
 from fusion import Fusion
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
@@ -12,23 +14,36 @@ from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
-tiling_pipeline = [
-  TileAdverbs, LowerTiledAdverbs
-]
+def build_pipeline(copy = True,
+                     tile = False,
+                     simplify = config.opt_simplify_when_lowering,
+                     inline = config.opt_inline_when_lowering,
+                     fusion = config.opt_fusion,
+                     licm = config.opt_licm):
+  p = [CloneFunction] if copy else []
+  def add(t):
+    p.append(t)
+    if simplify:
+      p.append(Simplify)
+      p.append(DCE)
 
-lowering_pipeline = [
-  Simplify,
-  Fusion,
-  LowerAdverbs,
-  Simplify,
-  Inliner,
-  LowerIndexing,
-  Simplify,
-  LowerStructs,
-  Simplify,
-  LoopInvariantCodeMotion,
-  Simplify,
-]
+  if tile:
+    add(TileAdverbs)
+    add(LowerTiledAdverbs)
+
+  if fusion:
+    add(Fusion)
+
+  add(LowerAdverbs)
+  if inline:
+    add(Inliner)
+
+  add(LowerIndexing)
+  add(LowerStructs)
+
+  if licm:
+    add(LoopInvariantCodeMotion)
+  return p
 
 _lowered_functions = {}
 def lower(fundef, tile=False):
@@ -39,19 +54,15 @@ def lower(fundef, tile=False):
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
-    lowered_fn = fundef
-    if tile:
-      lowered_fn = apply_pipeline(lowered_fn, tiling_pipeline, copy = True)
-      lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
-    else:
-      lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = True)
-
+    pipeline = build_pipeline(copy = True, tile = tile)
+    lowered_fn = apply_pipeline(fundef, pipeline)
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
 
     if config.print_lowered_function:
       print
       print "=== Lowered function ==="
+      print
       print repr(lowered_fn)
       print
     return lowered_fn

@@ -1,18 +1,18 @@
+
 import config
-import names
-import syntax
 import verify
 
+import syntax
+from syntax import If, Assign, While, Return 
+from syntax import Var, Tuple, Index, Attribute, Const  
 from args import ActualArgs
 from codegen import Codegen
 
 class Transform(Codegen):
   def __init__(self, fn, verify = True, reverse = False):
     Codegen.__init__(self)
-
     self.fn = fn
     self.verify = verify
-    self.copy = None
     self.reverse = reverse
 
   def lookup_type(self, name):
@@ -35,17 +35,12 @@ class Transform(Codegen):
       return maybe_expr
 
   def transform_generic_expr(self, expr):
-    args = {}
-    changed = False
     for member_name in expr.members():
       old_value = getattr(expr, member_name)
       new_value = self.transform_if_expr(old_value)
-      args[member_name] = new_value
-      changed = changed or (old_value != new_value)
-    if changed:
-      return expr.__class__(**args)
-    else:
-      return expr
+      setattr(expr, member_name, new_value)
+    return expr 
+    
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
@@ -53,41 +48,98 @@ class Transform(Codegen):
       return getattr(self, method_name)
     else:
       return None
-
+ 
+ 
+  """
+  Common cases for expression transforms: 
+  we don't need to create a method for every
+  sort of expression but these run faster 
+  and allocate less memory than transform_generic_expr
+  """
+  def transform_Var(self, expr):
+    return expr 
+  
+  def transform_Tuple(self, expr):
+    expr.elts = tuple(self.transform_expr(elt) for elt in expr.elts) 
+    return expr 
+  
+  def transform_Const(self, expr):
+    return expr 
+  
+  def transform_Index(self, expr):
+    expr.value = self.transform_expr(expr.value)
+    expr.index = self.transform_expr(expr.index) 
+    return expr 
+  
+  def transform_Attribute(self, expr):
+    expr.value = self.transform_expr(expr.value)
+    return expr 
+  
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
     """
-    method = self.find_method(expr, "transform_")
-    if method:
-      result = method(expr)
+    expr_class = expr.__class__ 
+    if expr_class is Var:
+      result = self.transform_Var(expr)
+    elif expr_class is Const:
+      result = self.transform_Const(expr)
+    elif expr_class is Tuple:
+      result = self.transform_Tuple(expr)
+    elif expr_class is Index:
+      result = self.transform_Index(expr)
+    elif expr_class is Attribute:
+      result = self.transform_Attribute(expr)
     else:
-      result = self.transform_generic_expr(expr)
-
+      method = self.find_method(expr, "transform_")
+      if method:
+        result = method(expr)
+      else:
+        result = self.transform_generic_expr(expr)
     assert result is not None, \
            "Transformation turned %s into None" % (expr,)
     assert result.type is not None, "Missing type for %s" % result
     return result
 
+  def transform_lhs_Var(self, expr):
+    return self.transform_Var(expr)
+  
+  def transform_lhs_Tuple(self, expr):
+    return self.transform_Tuple(expr)
+  
+  def transform_lhs_Index(self, expr):
+    return self.transform_Index(expr)
+
+  def transform_lhs_Attribute(self, expr):
+    return self.transform_Attribute(expr)
+  
   def transform_lhs(self, lhs):
     """
     Overload this is you want different behavior
     for transformation of left-hand side of assignments
     """
+    lhs_class = lhs.__class__
+    if lhs_class is Var:
+      return self.transform_lhs_Var(lhs)
+    elif lhs_class is Tuple:
+      return self.transform_lhs_Tuple(lhs)
+    elif lhs_class is Index:
+      return self.transform_lhs_Index(lhs)
+    elif lhs_class is Attribute:
+      return self.transform_lhs_Attribute(lhs)
+    
     lhs_method = self.find_method(lhs, prefix = "transform_lhs_")
     if lhs_method:
       return lhs_method(lhs)
 
     method = self.find_method(lhs, prefix = "transform_")
-    if method:
-      return method(lhs)
-
-    return self.transform_expr(lhs)
-
+    assert method, "Unknown expression of type %s" % lhs_class 
+    return method(lhs)
+    
   def transform_expr_list(self, exprs):
     return [self.transform_expr(e) for e in exprs]
 
-  def transform_phi_nodes(self, phi_nodes):
+  def transform_merge(self, phi_nodes):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():
       new_left = self.transform_expr(left)
@@ -95,51 +147,47 @@ class Transform(Codegen):
       result[k] = new_left, new_right
     return result
 
+   
   def transform_Assign(self, stmt):
-    old_lhs = stmt.lhs
-    old_rhs = stmt.rhs
-    new_rhs = self.transform_expr(stmt.rhs)
-    new_lhs = self.transform_lhs(stmt.lhs)
-    if old_lhs !=  new_lhs or old_rhs != new_rhs:
-      return syntax.Assign(new_lhs, new_rhs)
-    else:
-      return stmt
+    stmt.rhs = self.transform_expr(stmt.rhs)
+    stmt.lhs =self.transform_lhs(stmt.lhs)
+    return stmt 
 
   def transform_Return(self, stmt):
-    old_value = stmt.value
-    new_value = self.transform_expr(stmt.value)
-    if old_value != new_value:
-      return syntax.Return(new_value)
-    else:
-      return stmt
-
+    stmt.value = self.transform_expr(stmt.value)
+    return stmt 
+  
   def transform_If(self, stmt):
-    true = self.transform_block(stmt.true)
-    false = self.transform_block(stmt.false)
-    merge = self.transform_phi_nodes(stmt.merge)
-    cond = self.transform_expr(stmt.cond)
-    return syntax.If(cond, true, false, merge)
-
+    stmt.true = self.transform_block(stmt.true)
+    stmt.false = self.transform_block(stmt.false)
+    stmt.merge = self.transform_merge(stmt.merge)
+    stmt.cond = self.transform_expr(stmt.cond)
+    return stmt 
+  
   def transform_While(self, stmt):
-    body = self.transform_block(stmt.body)
-    merge = self.transform_phi_nodes(stmt.merge)
-    cond = self.transform_expr(stmt.cond)
-    return syntax.While(cond, body, merge)
-
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge)
+    stmt.cond = self.transform_expr(stmt.cond)
+    return stmt 
+  
   def transform_stmt(self, stmt):
-    method_name = "transform_" + stmt.node_type()
-    if hasattr(self, method_name):
-      result = getattr(self, method_name)(stmt)
-    import types
-    assert isinstance(result, (syntax.Stmt, types.NoneType)), \
-        "Expected statement: %s" % result
-    return result
-
+    stmt_class = stmt.__class__ 
+    if stmt_class is Assign:
+      return self.transform_Assign(stmt)
+    elif stmt_class is While:
+      return self.transform_While(stmt)
+    elif stmt_class is If:
+      return self.transform_If(stmt)
+    else:
+      assert stmt_class is Return, \
+          "Unexpected statement %s" % stmt_class 
+      return self.transform_Return(stmt)
+     
   def transform_block(self, stmts):
     self.blocks.push()
     for old_stmt in (reversed(stmts) if self.reverse else stmts):
       new_stmt = self.transform_stmt(old_stmt)
-      if new_stmt:
+      if new_stmt is not None:
         self.blocks.append_to_current(new_stmt)
     new_block = self.blocks.pop()
     if self.reverse:
@@ -152,74 +200,50 @@ class Transform(Codegen):
   def post_apply(self, new_fn):
     pass
 
-  def apply(self, copy = False):
+  def apply(self):
     if config.print_functions_before_transforms:
       print
       print "Running transform %s" % self.__class__.__name__
       print "--- before ---"
       print repr(self.fn)
-      print
+      print 
+      
+    fn = self.pre_apply(self.fn)
+    if fn is None:
+      fn = self.fn
 
-    self.copy = copy
-
-    old_fn = self.pre_apply(self.fn)
-    if old_fn is None:
-      old_fn = self.fn
-
-    if isinstance(old_fn, syntax.TypedFn):
-      self.type_env = old_fn.type_env.copy()
-    else:
-      self.type_env = {}
-    new_body = self.transform_block(old_fn.body)
-    if copy:
-      new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])
-      # create a fresh function with a distinct name and the
-      # transformed body and type environment
-      new_fundef_args['name'] = names.refresh(self.fn.name)
-      new_fundef_args['body'] = new_body
-      new_fundef_args['type_env'] = self.type_env
-      new_fundef = syntax.TypedFn(**new_fundef_args)
-
-      new_fn = self.post_apply(new_fundef)
-      if new_fn is None:
-        new_fn = new_fundef
-    else:
-      old_fn.type_env = self.type_env
-      old_fn.body = new_body
-      new_fn = self.post_apply(old_fn)
-
-      if new_fn is None:
-        new_fn = old_fn
-    if self.verify:
-
-      verify.verify(new_fn)
-
+    self.type_env = fn.type_env
+    fn.body = self.transform_block(fn.body)
+    fn.type_env = self.type_env
+    new_fn = self.post_apply(fn)
+    if new_fn is None:
+      new_fn = fn
+      
     if config.print_functions_after_transforms:
       print
       print "Done with  %s" % self.__class__.__name__
       print "--- after ---"
       print repr(new_fn)
       print
+   
+    if self.verify:
+      verify.verify(new_fn)
     return new_fn
 
 class MemoizedTransform(Transform):
   _cache = {}
 
-  def apply(self, copy = False):
+  def apply(self):
     key = (self.__class__.__name__, self.fn.name)
-    if key in self._cache and not copy:
+    if key in self._cache:
       return self._cache[key]
     else:
-      new_fn = Transform.apply(self, copy = copy)
+      new_fn = Transform.apply(self)
       self._cache[key] = new_fn
-    return new_fn
+      return new_fn
 
-def apply_pipeline(fn, transforms, copy = False):
+def apply_pipeline(fn, transforms):
   for T in transforms:
-    t = T(fn)
-    fn = t.apply(copy = copy)
-
-    # only copy the function on the first iteration,
-    # if you're going to copy it at all
-    copy = False
+    fn = T(fn).apply()
+    
   return fn

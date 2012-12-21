@@ -3,7 +3,16 @@ from args import ActualArgs
 
 def subst(node, rename_dict):
   if isinstance(node, syntax.Var):
-    return syntax.Var(rename_dict.get(node.name, node.name), type = node.type)
+    new_value = rename_dict.get(node.name, node.name)
+    if isinstance(new_value, str):
+      return syntax.Var(new_value, type = node.type)
+    else:
+      assert isinstance(new_value, syntax.Expr), \
+          "Unexpected replacement value %s" % (new_value,)
+      assert new_value.type == node.type, \
+          "Can't replace %s with %s since it changes type %s intp %s" % \
+          (node, new_value, node.type, new_value.type)
+      return new_value 
   if isinstance(node, (syntax.Fn, syntax.TypedFn)):
     return node 
   

@@ -110,6 +110,7 @@ class RewriteTyped(Transform):
     return expr
 
   def transform_Slice(self, expr):
+    """
     # None step defaults to 1
     if isinstance(expr.step.type, core_types.NoneT):
       start_t = expr.start.type
@@ -119,6 +120,7 @@ class RewriteTyped(Transform):
       slice_t = array_type.make_slice_type(start_t, stop_t, step_t)
       expr.step = step
       expr.type = slice_t
+    """
     return expr
 
   def transform_Assign(self, stmt):
@@ -151,4 +153,4 @@ class RewriteTyped(Transform):
     return stmt
 
 def rewrite_typed(typed_fundef):
-  return RewriteTyped(typed_fundef).apply(copy=False)
+  return RewriteTyped(typed_fundef).apply()
