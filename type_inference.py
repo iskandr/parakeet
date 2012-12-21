@@ -587,7 +587,7 @@ def _specialize(fn, arg_types):
   from rewrite_typed import rewrite_typed
   coerced_fundef = rewrite_typed(typed_fundef)
   import optimize
-  return optimize.optimize(coerced_fundef, copy = False)
+  return optimize.optimize(coerced_fundef)
 
 def _get_fundef(fn):
   if isinstance(fn, (untyped_ast.Fn, typed_ast.TypedFn)):

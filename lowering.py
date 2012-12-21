@@ -11,13 +11,19 @@ from simplify import Simplify
 from dead_code_elim import DCE 
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
+from clone_function import CloneFunction
 import config 
+
+
+before_tiling = [
+  CloneFunction
+]
 
 tiling_pipeline = [
   TileAdverbs, LowerTiledAdverbs
 ]
 
-lowering_pipeline = [
+after_tiling = [
   Simplify,
 # DCE, 
   # Fusion,
@@ -45,13 +51,8 @@ def lower(fundef, tile=False):
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
-    lowered_fn = fundef
-    if tile:
-      lowered_fn = apply_pipeline(lowered_fn, tiling_pipeline, copy = True)
-      lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = False)
-    else:
-      lowered_fn = apply_pipeline(lowered_fn, lowering_pipeline, copy = True)
-
+    pipeline = before_tiling + (tiling_pipeline if tile else []) + after_tiling
+    lowered_fn = apply_pipeline(fundef, pipeline)
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
      

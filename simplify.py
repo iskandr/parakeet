@@ -295,8 +295,7 @@ class Simplify(Transform):
       self.available_expressions[rhs] = lhs
     elif rhs_class is Var:
       rhs_name = rhs.name
-      if rhs_name in self.bindings and \
-         self.use_counts.get(rhs.name, 1) == 1:
+      if rhs_name in self.bindings and self.use_counts.get(rhs.name, 1) == 1:
         rhs = self.bindings[rhs_name]
         self.use_counts[rhs_name] = 0
     new_stmt = syntax.Assign(lhs, rhs) if rhs != old_rhs else stmt
@@ -304,12 +303,14 @@ class Simplify(Transform):
 
   def transform_If(self, stmt):
     self.available_expressions.push()
-    true = self.transform_block(stmt.true)
-    false = self.transform_block(stmt.false)
-    merge = self.transform_merge(stmt.merge, left_block = true, right_block = false)
-    cond = self.transform_expr(stmt.cond)
+    stmt.true = self.transform_block(stmt.true)
+    stmt.false = self.transform_block(stmt.false)
+    stmt.merge = self.transform_merge(stmt.merge, 
+                                      left_block = stmt.true, 
+                                      right_block = stmt.false)
+    stmt.cond = self.transform_expr(stmt.cond)
     self.available_expressions.pop()
-    return self.make_If(stmt, true, false, merge, cond)
+    return stmt 
  
   def transform_loop_condition(self, expr, outer_block, loop_body, merge):
     """
@@ -337,17 +338,17 @@ class Simplify(Transform):
   def transform_While(self, stmt):
     self.available_expressions.push()
     
-    body = self.transform_block(stmt.body)
-    merge = self.transform_merge(stmt.merge, 
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge, 
                                  left_block = self.blocks.current(), 
-                                 right_block = body)
+                                 right_block = stmt.body)
     
-    cond = self.transform_loop_condition(stmt.cond,
+    stmt.cond = self.transform_loop_condition(stmt.cond,
         outer_block = self.blocks.current(),
-        loop_body = body, 
-        merge = merge)
+        loop_body = stmt.body, 
+        merge = stmt.merge)
     _ = self.available_expressions.pop()
-    return self.make_While(stmt, body, merge, cond)
+    return stmt 
 
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)

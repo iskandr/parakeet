@@ -1,7 +1,7 @@
-import names
+
 import syntax
 from syntax import If, Assign, While, Return 
-from syntax import Var, Tuple, Index, Attribute 
+from syntax import Var, Tuple, Index, Attribute, Const  
 from args import ActualArgs
 from codegen import Codegen
 import config 
@@ -36,17 +36,12 @@ class Transform(Codegen):
       return maybe_expr
 
   def transform_generic_expr(self, expr):
-    args = {}
-    changed = False
     for member_name in expr.members():
       old_value = getattr(expr, member_name)
       new_value = self.transform_if_expr(old_value)
-      args[member_name] = new_value
-      changed = changed or (old_value != new_value)
-    if changed:
-      return expr.__class__(**args)
-    else:
-      return expr
+      setattr(expr, member_name, new_value)
+    return expr 
+    
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
@@ -65,57 +60,43 @@ class Transform(Codegen):
   def transform_Var(self, expr):
     return expr 
   
-  def make_Tuple(self, expr, new_elts):
-    if self.copy:
-      return Tuple(elts = new_elts, type = expr.type)
-    if expr.elts != new_elts: 
-      expr.elts = new_elts 
+  def transform_Tuple(self, expr):
+    expr.elts = tuple(self.transform_expr(elt) for elt in expr.elts) 
     return expr 
   
-  def transform_Tuple(self, expr):
-    new_elts = tuple(self.transform_expr(elt) for elt in expr.elts)
-    return self.make_Tuple(expr, new_elts)
-    
   def transform_Const(self, expr):
     return expr 
   
-  def make_Index(self, expr, value, index):
-    if self.copy:
-      return Index(value, index, type = expr.type)
-    
-    if expr.value != value:
-      expr.value = value
-    if expr.index != index:
-      expr.index = index 
-    return expr 
-  
   def transform_Index(self, expr):
-    new_value = self.transform_expr(expr.value)
-    new_index = self.transform_expr(expr.index)
-    return self.make_Index(expr, new_value, new_index)
-  
-  
-  def make_Attribute(self, expr, value):
-    if self.copy:
-      return Attribute(value, expr.name, type = expr.type)
-    
-    if expr.value != value:
-      expr.value = value
+    expr.value = self.transform_expr(expr.value)
+    expr.index = self.transform_expr(expr.index) 
     return expr 
   
   def transform_Attribute(self, expr):
-    return self.make_Attribute(expr, self.transform_expr(expr.value))
+    expr.value = self.transform_expr(expr.value)
+    return expr 
   
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
     """
-    method = self.find_method(expr, "transform_")
-    if method:
-      result = method(expr)
+    expr_class = expr.__class__ 
+    if expr_class is Var:
+      result = self.transform_Var(expr)
+    elif expr_class is Const:
+      result = self.transform_Const(expr)
+    elif expr_class is Tuple:
+      result = self.transform_Tuple(expr)
+    elif expr_class is Index:
+      result = self.transform_Index(expr)
+    elif expr_class is Attribute:
+      result = self.transform_Attribute(expr)
     else:
-      result = self.transform_generic_expr(expr)
-
+      method = self.find_method(expr, "transform_")
+      if method:
+        result = method(expr)
+      else:
+        result = self.transform_generic_expr(expr)
     assert result is not None, \
            "Transformation turned %s into None" % (expr,)
     assert result.type is not None, "Missing type for %s" % result
@@ -167,64 +148,28 @@ class Transform(Codegen):
       result[k] = new_left, new_right
     return result
 
-  def make_Assign(self, stmt, lhs, rhs):
-    if self.copy:
-      stmt = syntax.Assign(lhs, rhs)
-    else:
-      if stmt.lhs !=  lhs:
-        stmt.lhs = lhs 
-      if stmt.rhs != rhs:
-        stmt.rhs = rhs 
-    return stmt
    
   def transform_Assign(self, stmt):
-    new_rhs = self.transform_expr(stmt.rhs)
-    new_lhs = self.transform_lhs(stmt.lhs)
-    return self.make_Assign(stmt, new_lhs, new_rhs)
-
-  
-  def make_Return(self, stmt, value):
-    if self.copy: 
-      return syntax.Return(value)
-    else:
-      if stmt.value != value:
-        stmt.value = value 
-      return stmt
+    stmt.rhs = self.transform_expr(stmt.rhs)
+    stmt.lhs =self.transform_lhs(stmt.lhs)
+    return stmt 
 
   def transform_Return(self, stmt):
-    return self.make_Return(stmt, self.transform_expr(stmt.value))
-  
-  def make_If(self, old_stmt, true, false, merge, cond):  
-    if self.copy:
-      return syntax.If(cond, true, false, merge)
-    else:
-      old_stmt.true = true 
-      old_stmt.false = false
-      old_stmt.merge = merge  
-      old_stmt.cond = cond
-      return old_stmt 
+    stmt.value = self.transform_expr(stmt.value)
+    return stmt 
   
   def transform_If(self, stmt):
-    true = self.transform_block(stmt.true)
-    false = self.transform_block(stmt.false)
-    merge = self.transform_merge(stmt.merge)
-    cond = self.transform_expr(stmt.cond)
-    return self.make_If(stmt, true, false, merge, cond)
-     
-  def make_While(self, old_stmt, body, merge, cond):
-    if self.copy:
-      return syntax.While(cond, body, merge)
-    else:
-      old_stmt.body = body 
-      old_stmt.merge = merge 
-      old_stmt.cond = cond 
-      return old_stmt 
+    stmt.true = self.transform_block(stmt.true)
+    stmt.false = self.transform_block(stmt.false)
+    stmt.merge = self.transform_merge(stmt.merge)
+    stmt.cond = self.transform_expr(stmt.cond)
+    return stmt 
   
   def transform_While(self, stmt):
-    body = self.transform_block(stmt.body)
-    merge = self.transform_merge(stmt.merge)
-    cond = self.transform_expr(stmt.cond)
-    return self.make_While(stmt, body, merge, cond)
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge)
+    stmt.cond = self.transform_expr(stmt.cond)
+    return stmt 
   
   def transform_stmt(self, stmt):
     stmt_class = stmt.__class__ 
@@ -256,50 +201,24 @@ class Transform(Codegen):
   def post_apply(self, new_fn):
     pass 
 
-  def apply(self, copy = False):
+  def apply(self):
     if config.print_functions_before_transforms:
       print
       print "Running transform %s" % self.__class__.__name__
       print "--- before ---"
       print repr(self.fn)
       print 
-    
-    self.copy = copy
 
-    if copy: 
-      old_body_length = len(self.fn.body)
-      old_first_statement = self.fn.body[0]
-      old_nvars = len(self.fn.type_env)
-      
+    fn = self.pre_apply(self.fn)
+    if fn is None:
+      fn = self.fn
 
-    old_fn = self.pre_apply(self.fn)
-    if old_fn is None:
-      old_fn = self.fn
-
-    if isinstance(old_fn, syntax.TypedFn):
-      self.type_env = old_fn.type_env.copy()
-    else:
-      self.type_env = {}
-    new_body = self.transform_block(old_fn.body)
-    if copy:
-      new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])
-      # create a fresh function with a distinct name and the
-      # transformed body and type environment
-      new_fundef_args['name'] = names.refresh(self.fn.name)
-      new_fundef_args['body'] = new_body
-      new_fundef_args['type_env'] = self.type_env
-      new_fundef = syntax.TypedFn(**new_fundef_args)
-
-      new_fn = self.post_apply(new_fundef)
-      if new_fn is None:
-        new_fn = new_fundef
-    else:
-      old_fn.type_env = self.type_env
-      old_fn.body = new_body
-      new_fn = self.post_apply(old_fn)
-
-      if new_fn is None:
-        new_fn = old_fn
+    self.type_env = fn.type_env
+    fn.body = self.transform_block(fn.body)
+    fn.type_env = self.type_env
+    new_fn = self.post_apply(fn)
+    if new_fn is None:
+      new_fn = fn
      
     if config.print_functions_after_transforms:
       print
@@ -307,20 +226,7 @@ class Transform(Codegen):
       print "--- after ---"
       print repr(new_fn)
       print
-      
-    if copy:
-      # sanity check to make sure copying is actually obeyed 
-      assert len(self.fn.body) == old_body_length, \
-          "Read-only optimization %s changed body length of %s from %d to %d" % \
-          (self.__class__.__name__, self.fn.name, old_body_length, len(self.fn.body)) 
-      assert len(self.fn.type_env) == old_nvars, \
-          "Read-only optimization %s changed # vars in %s from %d to %d" % \
-          (self.__class__.__name__, self.fn.name, old_nvars, len(self.fn.type_env))
-             
-      assert self.fn.body[0] == old_first_statement, \
-          "Read-only optimization %s changed first stmt of %s from %s to %s" % \
-          (self.__class__.__name__, self.fn.name, old_first_statement, self.fn.body[0])
-      
+   
     if self.verify:
       verify.verify(new_fn)
     return new_fn
@@ -328,22 +234,17 @@ class Transform(Codegen):
 class MemoizedTransform(Transform):
   _cache = {}
 
-  def apply(self, copy = False):
+  def apply(self):
     key = (self.__class__.__name__, self.fn.name)
-    if key in self._cache and not copy:
+    if key in self._cache:
       return self._cache[key]
     else:
-      new_fn = Transform.apply(self, copy = copy)
+      new_fn = Transform.apply(self)
       self._cache[key] = new_fn
-    return new_fn
+      return new_fn
 
-def apply_pipeline(fn, transforms, copy = False):
+def apply_pipeline(fn, transforms):
   for T in transforms:
-    t = T(fn)
-
-    fn = t.apply(copy = copy)
+    fn = T(fn).apply()
     
-    # only copy the function on the first iteration,
-    # if you're going to copy it at all
-    copy = False
   return fn

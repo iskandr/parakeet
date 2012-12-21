@@ -105,8 +105,8 @@ class Inliner(Transform):
     else:
       return expr
     
-  def apply(self, copy = False):
+  def apply(self):
     if contains_calls(self.fn):
-      return Transform.apply(self, copy = copy)
+      return Transform.apply(self)
     else:
       return self.fn 

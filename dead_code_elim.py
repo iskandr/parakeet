@@ -55,13 +55,13 @@ class DCE(Transform):
   
   def transform_While(self, stmt):
     # expressions don't get changed by this transform
-    cond = stmt.cond
     new_body = self.transform_block(stmt.body) 
     new_merge = self.transform_merge(stmt.merge)
     if len(new_merge) == 0 and len(new_body) == 0:
       return None
-    else:
-      return self.make_While(stmt, new_body, new_merge, cond)
+    stmt.body = new_body
+    stmt.merge = new_merge 
+    return stmt 
     
   def transform_If(self, stmt):
     cond = stmt.cond 
@@ -81,7 +81,10 @@ class DCE(Transform):
       self.blocks.extend_current(reversed(stmt.false))
       return None 
     else:
-      return self.make_If(stmt, new_true, new_false, new_merge, cond)
+      stmt.true = new_true 
+      stmt.false = new_false 
+      stmt.merge = new_merge 
+      return stmt 
     
   def transform_Return(self, stmt):
     return stmt
@@ -97,5 +100,5 @@ class DCE(Transform):
   
 def dead_code_elim(fn):
   dce = DCE(fn)
-  return dce.apply(copy = False)
+  return dce.apply()
   
