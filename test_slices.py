@@ -95,15 +95,15 @@ def loop_slice(x, y, z):
   i = 0
   while i < 10:
     i_next = i + 2
-    z[i:i_next,:] = id_slice(x[i:i_next,:], y[i:i_next,:])
+    z[i:i_next,:] = id_slice(x[i:i_next,:], y)
     i = i_next
   return z
 
 def test_loop_slices():
-  m_input = np.arange(100).reshape(10,10)
-  m_zeros = np.zeros_like(m_input)
-  m_z = m_zeros.copy()
-  m_expect = np.arange(100).reshape(10,10)
+  m_input = np.arange(100, dtype=np.int64).reshape(10,10)
+  m_zeros = np.zeros((2,10), dtype=np.int64)
+  m_z = np.zeros_like(m_input)
+  m_expect = m_input.copy()
   expect(loop_slice, [m_input, m_zeros, m_z], m_expect)
 
 if __name__ == '__main__':
