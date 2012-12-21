@@ -269,6 +269,7 @@ class Fn(Expr):
 
     self.specializations = {}
     import closure_type
+
     self.type = closure_type.ClosureT(self.name, ())
     self.registry[self.name] = self
 

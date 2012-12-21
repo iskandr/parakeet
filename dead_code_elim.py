@@ -4,6 +4,7 @@ from transform import Transform
 import syntax_helpers 
 from syntax_visitor import SyntaxVisitor 
 from use_analysis import use_count
+from collect_vars import collect_var_names_list
 
 
 class DCE(Transform):
@@ -25,33 +26,27 @@ class DCE(Transform):
     else:
       return True
 
+  def decref(self, expr):
+    for var_name in collect_var_names_list(expr):
+      self.use_counts[var_name] -= 1
+      print "decr"
+    
   def transform_merge(self, phi_nodes):
     new_merge = {}
     for (var_name, (l,r)) in phi_nodes.iteritems():
       if self.is_live(var_name):
-        new_merge[var_name] = phi_nodes[var_name]
+        new_merge[var_name] = (l,r)
       else:
-        self.transform_expr(l)
-        self.transform_expr(r)
+        self.decref(l)
+        self.decref(r)
     return new_merge
-  
-  def transform_Var(self, expr):
-    """
-    We should only reach this method if it's part of an 
-    explicit call to transform_expr from the removal of 
-    a statement or phi-node
-    """
-    self.use_counts[expr.name] -= 1 
-    return expr 
   
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
       return stmt
-    else:
-      self.transform_expr(stmt.rhs)
-      return None
-
-  
+    print "KILLING", stmt
+    self.decref(stmt.rhs) 
+    return None
   
   def transform_While(self, stmt):
     # expressions don't get changed by this transform
@@ -65,13 +60,19 @@ class DCE(Transform):
     
   def transform_If(self, stmt):
     cond = stmt.cond 
-    new_true = self.transform_block(stmt.true) 
-    new_false = self.transform_block(stmt.false)
+    stmt.true = self.transform_block(stmt.true) 
+    print "NEW TRUE", stmt.true
+    stmt.false = self.transform_block(stmt.false)
+    print "NEW FALSE", stmt.false 
     new_merge = self.transform_merge(stmt.merge)
-    if len(new_merge) == 0 and len(new_true) == 0 and len(new_false) == 0:
+    print "NEW MERGE", new_merge 
+    if len(new_merge) == 0 and len(stmt.true) == 0 and \
+        len(stmt.false) == 0:
       return None  
     elif syntax_helpers.is_true(cond):
-      for name, (_, v) in new_merge.items():
+      print "IS TRUE"
+      for name, (_, v) in new_merge.iteritems():
+        print "ITEM", name, v 
         self.assign(syntax.Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.true))
       return None 
@@ -80,12 +81,8 @@ class DCE(Transform):
         self.assign(syntax.Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.false))
       return None 
-    else:
-      stmt.true = new_true 
-      stmt.false = new_false 
-      stmt.merge = new_merge 
-      return stmt 
-    
+    return stmt 
+   
   def transform_Return(self, stmt):
     return stmt
   

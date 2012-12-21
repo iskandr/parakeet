@@ -112,7 +112,7 @@ class Transform(Codegen):
     return self.transform_Index(expr)
 
   def transform_lhs_Attribute(self, expr):
-    return self.transform_Attribute(self, expr)
+    return self.transform_Attribute(expr)
   
   def transform_lhs(self, lhs):
     """
@@ -188,7 +188,7 @@ class Transform(Codegen):
     self.blocks.push()
     for old_stmt in (reversed(stmts) if self.reverse else stmts):
       new_stmt = self.transform_stmt(old_stmt)
-      if new_stmt:
+      if new_stmt is not None:
         self.blocks.append_to_current(new_stmt)
     new_block = self.blocks.pop()
     if self.reverse:

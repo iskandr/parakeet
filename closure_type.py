@@ -1,4 +1,4 @@
-import ast_conversion
+
 import ctypes
 import type_conv
 
@@ -51,6 +51,7 @@ class ClosureT(StructT):
                                                    for t in self.arg_types))
 
   def from_python(self, python_fn):
+    import ast_conversion
     untyped_fundef = ast_conversion.translate_function_value(python_fn)
     closure_args = untyped_fundef.python_nonlocals()
     closure_arg_types = map(type_conv.typeof, closure_args)
@@ -95,6 +96,7 @@ def make_closure_type(fn, closure_arg_types = []):
     return t
 
 def typeof_fn(f):
+  import ast_conversion
   untyped_fn = ast_conversion.translate_function_value(f)
   closure_args = untyped_fn.python_nonlocals()
   closure_arg_types = map(type_conv.typeof, closure_args)

@@ -1,6 +1,6 @@
 import syntax_visitor
 
-class Collector(syntax_visitor.SyntaxVisitor):
+class SetCollector(syntax_visitor.SyntaxVisitor):
   def __init__(self):
     self.var_names = set([])
     
@@ -8,9 +8,22 @@ class Collector(syntax_visitor.SyntaxVisitor):
     self.var_names.add(expr.name)
     
 def collect_var_names(expr):
-  collector = Collector()
+  collector = SetCollector()
   collector.visit_expr(expr)
   return collector.var_names
+
+class ListCollector(syntax_visitor.SyntaxVisitor):
+  def __init__(self):
+    self.var_names = []
+    
+  def visit_Var(self, expr):
+    self.var_names.append(expr.name)
+  
+def collect_var_names_list(expr):
+  collector = ListCollector()
+  collector.visit_expr(expr)
+  return collector.var_names 
+
 
 from syntax import Var, Tuple 
 
