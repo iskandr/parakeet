@@ -405,7 +405,7 @@ class Codegen(object):
       stride_elts = [next_stride] + stride_elts
 
     strides = self.tuple(stride_elts, "strides")
-    array = syntax.Struct([ptr_var, shape, strides, zero_i64], type = array_t)
+    array = syntax.Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
     return self.assign_temp(array, name)
 
   def return_type(self, fn):
@@ -515,11 +515,11 @@ class Codegen(object):
   def nelts(self, array):
     shape_elts = self.tuple_elts(self.shape(array))
     return self.prod(shape_elts, name = "nelts")
-
+  """
   def linear_to_indices(self, linear_idx, shape):
-    """
-    Return tuple of dimension-wise indices from linear index
-    """
+    
+    # Return tuple of dimension-wise indices from linear index
+    
     dim_sizes = self.tuple_elts(shape)
     rank = len(dim_sizes)
     slice_sizes = [syntax_helpers.one_i64]
@@ -533,7 +533,7 @@ class Codegen(object):
       indices.append(self.div(remainder, s, "idx%d" % i))
       remainder = self.mod(remainder, s, "rem%d" % i)
     return self.tuple(indices)
-
+  """
   def array_copy(self, src, dest, return_stmt = False):
     assert self.is_array(dest)
     # nelts = self.nelts(dest)

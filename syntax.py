@@ -235,7 +235,7 @@ class ArrayView(Expr):
   """
   Create a new view on already allocated underlying data
   """
-  _members = ['data', 'shape', 'strides', 'offset']
+  _members = ['data', 'shape', 'strides', 'offset', 'total_elts']
 
 class Fn(Expr):
   """

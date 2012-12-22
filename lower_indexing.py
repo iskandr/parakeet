@@ -10,6 +10,7 @@ class LowerIndexing(transform.MemoizedTransform):
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
     elt_offset = self.attr(arr, "offset")
+    total_elts = self.attr(arr, "total_elts")
     
     new_strides = []
     new_shape = []
@@ -49,7 +50,8 @@ class LowerIndexing(transform.MemoizedTransform):
     new_array_t = array_type.make_array_type(elt_t, new_rank)
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
-    return syntax.ArrayView(data_ptr, new_shape, new_strides, elt_offset,
+    return syntax.ArrayView(data_ptr, new_shape, new_strides, 
+                            elt_offset, total_elts, 
                             type = new_array_t)
 
   def transform_Index(self, expr):
