@@ -186,12 +186,13 @@ class Call(Expr):
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']
-  
+
   def __str__(self):
     return "slice(%s,%s,%s)"  % (self.start, self.stop, self.step)
-  
+
   def __repr__(self):
     return str(self)
+
 class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a
@@ -304,7 +305,6 @@ class ClosureElt(Expr):
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
-  
 
 class Struct(Expr):
   """

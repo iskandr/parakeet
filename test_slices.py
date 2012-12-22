@@ -113,6 +113,5 @@ def lower_right_corner(X):
 def test_lower_right_corner():
   expect_each(lower_right_corner, lower_right_corner, matrices)
 
-
 if __name__ == '__main__':
   run_local_tests()

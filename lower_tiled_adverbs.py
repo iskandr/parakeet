@@ -156,9 +156,9 @@ class LowerTiledAdverbs(Transform):
       if i == 0:
         return syntax.Assign(cur, expr.init)
       else:
-        self.blocks.push()
         j, j_after, merge = self.loop_counter("j")
         init_cond = self.lt(j, self.shape(cur, 0))
+        self.blocks.push()
         n = self.index_along_axis(cur, 0, j)
         self.blocks += init_unpack(i-1, n)
         self.assign(j_after, self.add(j, syntax_helpers.one_i64))

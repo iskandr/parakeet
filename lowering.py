@@ -15,11 +15,11 @@ from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
 def build_pipeline(copy = True,
-                     tile = False,
-                     simplify = config.opt_simplify_when_lowering,
-                     inline = config.opt_inline_when_lowering,
-                     fusion = config.opt_fusion,
-                     licm = config.opt_licm):
+                   tile = False,
+                   simplify = config.opt_simplify_when_lowering,
+                   inline = config.opt_inline_when_lowering,
+                   fusion = config.opt_fusion,
+                   licm = config.opt_licm):
   p = [CloneFunction] if copy else []
   def add(t):
     p.append(t)
