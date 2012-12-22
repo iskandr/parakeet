@@ -199,7 +199,6 @@ class ArrayT(StructT):
     base_ptr = obj.data 
     
     nbytes = obj.total_elts * elt_size 
-    print "nbytes", nbytes
     dest_buf = AllocateBuffer(nbytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
     # copy data 

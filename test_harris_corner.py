@@ -11,21 +11,21 @@ matrices = [float_mat, bool_mat, int_mat]
 
 def diff_x(I):
   m = I.shape[0]
-  return (I[1:, :] - I[:m-1, :])
+  return (I[1:, :] - I[:m-1, :])[:, 1:]
 
 def test_diff_x():
   expect_each(diff_x, diff_x, matrices)
   
 def diff_y(I):
   n = I.shape[1]
-  return (I[:, 1:] - I[:, :n-1])
+  return (I[:, 1:] - I[:, :n-1])[1:, :]
 
 def test_diff_y():
   expect_each(diff_x, diff_x, matrices)
   
 def harris(I):
-  dx = diff_x(I)[:, 1:]
-  dy = diff_y(I)[1:, :]
+  dx = diff_x(I)
+  dy = diff_y(I)
   #
   #   At each point we build a matrix 
   #   of derivative products 
