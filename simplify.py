@@ -178,6 +178,17 @@ class Simplify(Transform):
         new_args.append(self.temp(new_arg))
     return new_args
 
+  def transform_Index(self, expr):
+    expr.value = self.transform_expr(expr.value)
+    expr.index = self.transform_expr(expr.index)
+    if expr.value.__class__ is Array and expr.index.__class__ is Const:
+      assert isinstance(expr.index.value, (int, long)) and \
+          len(expr.value.elts) > expr.index.value
+      return expr.value.eltas[expr.index.value]
+    if expr.value.__class__ is not Var:
+      expr.value = self.temp(expr.value)
+    return expr 
+
   def transform_Struct(self, expr):
     new_args = self.transform_args(expr.args)
     return syntax.Struct(new_args, type = expr.type)
