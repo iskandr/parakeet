@@ -3,6 +3,7 @@ from syntax_visitor import SyntaxVisitor
 
 class FindLiveVars(SyntaxVisitor):
   def __init__(self):
+    SyntaxVisitor.__init__(self)
     self.live_vars = set([])
     
   def visit_Var(self, expr):
@@ -30,6 +31,8 @@ def find_live_vars(fn):
 class VarUseCount(SyntaxVisitor):
   
   def __init__(self):
+    
+    SyntaxVisitor.__init__(self)
     self.counts = {}
     
   def visit_Var(self, expr):

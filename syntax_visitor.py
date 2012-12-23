@@ -1,13 +1,16 @@
 import syntax 
 from syntax import Assign, Return, If, While 
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
+from syntax import Call, TypedFn, Struct, Alloc 
+from syntax import ArrayView, Slice, TupleProj, Cast
+from adverbs import Map, Scan, Reduce, AllPairs 
 
 class SyntaxVisitor(object):  
   """
   Traverse the statement structure of a syntax block,
   optionally collecting values 
   """
-  
+
   def visit_Var(self, expr):
     pass
    
@@ -15,18 +18,83 @@ class SyntaxVisitor(object):
     pass 
   
   def visit_Tuple(self, expr):
-    self.visit_expr_list(expr.elts)
-  
+    for elt in expr.elts:
+      self.visit_expr(elt)
+      
   def visit_PrimCall(self, expr):
-    self.visit_expr_list(expr.args)
-  
+    for arg in expr.args:
+      self.visit_expr(arg)
+      
   def visit_Attribute(self, expr):
     self.visit_expr(expr.value)
     
   def visit_Index(self, expr):
     self.visit_expr(expr.value)
     self.visit_expr(expr.index)
-    
+   
+  def visit_TypedFn(self, expr):
+    pass 
+  
+  def visit_Alloc(self, expr):
+    self.visit_expr(expr.count) 
+  
+  def visit_Struct(self, expr):
+    for arg in expr.args:
+      self.visit_expr(arg) 
+      
+  def visit_ArrayView(self, expr):
+    self.visit_expr(expr.data)
+    self.visit_expr(expr.shape)
+    self.visit_expr(expr.strides)
+    self.visit_expr(expr.offset)
+    self.visit_expr(expr.total_elts)
+      
+  def visit_Slice(self, expr):
+    self.visit_expr(expr.start)
+    self.visit_expr(expr.stop)
+    self.visit_expr(expr.step)
+  
+  def visit_Map(self, expr):
+    self.visit_expr(expr.fn)
+    for arg in expr.args:
+      self.visit_expr(arg)
+   
+  def visit_AllPairs(self, expr):
+    self.visit_expr(expr.fn)
+    for arg in expr.args:
+      self.visit_expr(arg)
+         
+  def visit_Reduce(self, expr):
+    self.visit_expr(expr.fn)
+    if expr.init: 
+      self.visit_expr(expr.init)
+    for arg in expr.args:
+      self.visit_expr(arg)
+
+  def visit_Scan(self, expr):
+    self.visit_expr(expr.fn)
+    if expr.init: 
+      self.visit_expr(expr.init)
+    for arg in expr.args:
+      self.visit_expr(arg)
+      
+      
+  def visit_TupleProj(self, expr):
+    return self.visit_expr(expr.tuple)
+
+  def visit_Call(self, expr):
+    self.visit_expr(expr.fn)
+    for arg in expr.args:
+      self.visit_expr(arg)
+      
+  def visit_Cast(self, expr):
+    return self.visit_expr(expr.value)
+
+
+  def visit_generic_expr(self, expr):
+    for v in expr.children(): 
+      self.visit_expr(v)
+  
   def visit_expr(self, expr):
     c = expr.__class__ 
     if c is Var:
@@ -41,20 +109,31 @@ class SyntaxVisitor(object):
       return self.visit_PrimCall(expr)
     elif c is Attribute:
       return self.visit_Attribute(expr)
+    elif c is Struct:
+      return self.visit_Struct(expr)
+    elif c is Alloc:
+      return self.visit_Alloc(expr)
+    elif c is TypedFn:
+      return self.visit_TypedFn(expr)
+    elif c is Call:
+      return self.visit_Call(expr)
+    elif c is ArrayView:
+      return self.visit_ArrayView(expr)
+    elif c is Cast:
+      return self.visit_Cast(expr)
+    elif c is Slice:
+      return self.visit_Slice(expr)
+    elif c is Map:
+      return self.visit_Map(expr)
+    elif c is TupleProj:
+      return self.visit_TupleProj(expr)
     else:
-      
       method_name = 'visit_' + expr.node_type()
       method = getattr(self, method_name, None)
       if method:
         return method(expr)
       else:
-        for v in expr.itervalues():
-          if v and isinstance(v, syntax.Expr):
-            self.visit_expr(v)
-          elif isinstance(v, (list,tuple)):
-            for child in v:
-              if isinstance(child, syntax.Expr):
-                self.visit_expr(child)
+        self.visit_generic_expr(expr)
             
   def visit_expr_list(self, exprs):
     return [self.visit_expr(expr) for expr in exprs]
@@ -123,6 +202,7 @@ class SyntaxVisitor(object):
     
     
   def visit_stmt(self, stmt):
+    # print stmt 
     c = stmt.__class__ 
     if c is Assign: 
       self.visit_Assign(stmt)

@@ -17,6 +17,7 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
   """
   
   def __init__(self):
+    SyntaxVisitor.__init__(self)
     self.mutable_types = set([])
   
   def _mark_type(self, t):

@@ -6,6 +6,7 @@ from syntax_visitor import SyntaxVisitor
 
 class Verify(SyntaxVisitor):
   def __init__(self, fn):
+    SyntaxVisitor.__init__(self)
     self.fn = fn
     self.bound = set(fn.arg_names)
 

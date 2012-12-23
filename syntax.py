@@ -76,10 +76,22 @@ class While(Stmt):
 
 class Expr(Node):
   _members = ['type']
+  
+  def children(self):
+    for v in self.itervalues():
+      if v and isinstance(v, Expr):
+        yield v
+      elif isinstance(v, (list,tuple)):
+        for child in v:
+          if isinstance(child, Expr):
+            yield child 
 
 class Const(Expr):
   _members = ['value']
-
+  
+  def children(self):
+    return (self.value,)
+  
   def __repr__(self):
     if self.type and not isinstance(self.type, core_types.NoneT):
       return "%s : %s" % (self.value, self.type)
@@ -116,10 +128,16 @@ class Var(Expr):
     return self.__class__ == other.__class__ and \
            self.type == other.type and \
            self.name == other.name
+  
+  def children(self):
+    return ()
 
 class Attribute(Expr):
   _members = ['value', 'name']
-
+  
+  def children(self):
+    yield self.value 
+  
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
 
@@ -134,12 +152,16 @@ class Attribute(Expr):
 class Index(Expr):
   _members = ['value', 'index']
 
+  def children(self):
+    yield self.value 
+    yield self.index 
+    
   def __str__(self):
     return "%s[%s]" % (self.value, self.index)
 
 class Tuple(Expr):
   _members = ['elts']
-
+  
   def __str__(self):
     if len(self.elts) > 0:
       return ", ".join([str(e) for e in self.elts])
@@ -149,14 +171,19 @@ class Tuple(Expr):
   def node_init(self):
     self.elts = tuple(self.elts)
 
-  def __iter__(self):
-    return iter(self.elts)
+  def children(self):
+    return self.elts 
+
 
 class Array(Expr):
   _members = ['elts']
-
+  
   def node_init(self):
     self.elts = tuple(self.elts)
+    
+  def children(self):
+    return self.elts 
+
 
 class Closure(Expr):
   """
@@ -166,8 +193,16 @@ class Closure(Expr):
 
   def node_init(self):
     self.args = tuple(self.args)
+  
+  def children(self):
+    if isinstance(self.fn, Expr):
+      yield self.fn 
+    for arg in self.args:
+      yield arg 
 
 class Call(Expr):
+  _members = ['fn', 'args']
+  
   def __str__(self):
     if isinstance(self.fn, (Fn, TypedFn)):
       fn_name = self.fn.name
@@ -182,7 +217,10 @@ class Call(Expr):
   def __repr__(self):
     return str(self)
 
-  _members = ['fn', 'args']
+  def children(self):
+    yield self.fn 
+    for arg in self.args:
+      yield arg 
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']
@@ -192,6 +230,12 @@ class Slice(Expr):
   
   def __repr__(self):
     return str(self)
+  
+  def children(self):
+    yield self.start 
+    yield self.stop 
+    yield self.step 
+    
 class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a
@@ -212,11 +256,14 @@ class PrimCall(Expr):
   def __str__(self):
     return repr(self)
 
-  def node_init(self):
-    self.args = tuple(self.args)
-
   def __hash__(self):
     return hash((self.prim, self.args))
+
+  def node_init(self):
+    self.args = tuple(self.args)
+  
+  def children(self):
+    return self.args 
 
 ############################################################################
 #
@@ -241,6 +288,13 @@ class ArrayView(Expr):
   Create a new view on already allocated underlying data
   """
   _members = ['data', 'shape', 'strides', 'offset', 'total_elts']
+  
+  def children(self):
+    yield self.data 
+    yield self.shape 
+    yield self.strides 
+    yield self.offset 
+    yield self.total_elts 
 
 class Fn(Expr):
   """
@@ -285,6 +339,9 @@ class Fn(Expr):
       return [ref.deref() for ref in self.python_refs]
     else:
       return []
+  
+  def children(self):
+    return ()
 
 ################################################################################
 #
@@ -294,13 +351,19 @@ class Fn(Expr):
 
 class TupleProj(Expr):
   _members = ['tuple', 'index']
-
+  
+  def children(self):
+    return (self.tuple,)
+  
 class ClosureElt(Expr):
   _members = ['closure', 'index']
 
   def __str__(self):
     return "ClosureElt(%s, %d)" % (self.closure, self.index)
 
+  def children(self):
+    return (self.closure,)
+    
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
@@ -316,7 +379,10 @@ class Struct(Expr):
   def __str__(self):
     return "Struct(%s) : %s" % \
            (", ".join(str(arg) for arg in self.args), self.type)
-
+  
+  def children(self):
+    return self.args
+  
 class Alloc(Expr):
   """
   Allocates a block of data, returns a pointer
@@ -325,6 +391,9 @@ class Alloc(Expr):
 
   def __str__(self):
     return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)
+  
+  def children(self):
+    return (self.count,)
 
 class TypedFn(Expr):
   """
@@ -381,3 +450,6 @@ class TypedFn(Expr):
 
   def __hash__(self):
     return hash(self.name)
+  
+  def children(self):
+    return ()

@@ -2,7 +2,7 @@
 
 from transform import Transform 
 import syntax
-from syntax import If, Assign, While, Return, Var   
+from syntax import If, Assign, While, Return, Var, TypedFn  
 import names 
 from subst import subst_list
 
@@ -97,7 +97,7 @@ class Inliner(Transform):
       target = syntax.TypedFn.registry[expr.fn]
     else:
       target = expr.fn
-    if can_inline(target):
+    if target.__class__ is TypedFn and can_inline(target):
       self.count += 1
       curr_block = self.blocks.current()
       result_var = do_inline(target, expr.args, self.type_env, curr_block)

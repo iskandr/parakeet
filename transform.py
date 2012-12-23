@@ -9,7 +9,7 @@ from args import ActualArgs
 from codegen import Codegen
 
 class Transform(Codegen):
-  def __init__(self, fn, verify = True, reverse = False):
+  def __init__(self, fn, verify = config.opt_verify, reverse = False):
     Codegen.__init__(self)
     self.fn = fn
     self.verify = verify

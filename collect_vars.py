@@ -1,7 +1,9 @@
-import syntax_visitor
+from syntax_visitor import SyntaxVisitor
 
-class SetCollector(syntax_visitor.SyntaxVisitor):
+class SetCollector(SyntaxVisitor):
   def __init__(self):
+    
+    SyntaxVisitor.__init__(self)
     self.var_names = set([])
     
   def visit_Var(self, expr):
@@ -12,8 +14,9 @@ def collect_var_names(expr):
   collector.visit_expr(expr)
   return collector.var_names
 
-class ListCollector(syntax_visitor.SyntaxVisitor):
+class ListCollector(SyntaxVisitor):
   def __init__(self):
+    SyntaxVisitor.__init__(self)
     self.var_names = []
     
   def visit_Var(self, expr):

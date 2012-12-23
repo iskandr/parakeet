@@ -9,6 +9,7 @@ from closure_type import ClosureT
  
 class Find_LICM_Candidates(SyntaxVisitor):
   def __init__(self):
+    SyntaxVisitor.__init__(self)
     self.mutable_types = None
     self.volatile_vars = ScopedSet()
     self.depends_on = {}
