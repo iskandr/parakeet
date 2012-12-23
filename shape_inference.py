@@ -5,13 +5,13 @@ import shape
 import shape_from_type
 import syntax
 import tuple_type
+from syntax_visitor import SyntaxVisitor
 
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, UnknownScalar, Unknown
 from shape import unknown_scalar, unknown_value, const
 from shape import combine_list, increase_rank
 from shape import is_zero, make_shape
-from syntax_visitor import SyntaxVisitor
 
 class ShapeSemantics(adverb_semantics.AdverbSemantics):
   def size_along_axis(self, value, axis):

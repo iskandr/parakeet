@@ -14,7 +14,7 @@ from transform import Transform
 import subst
 from mutability_analysis import TypeBasedMutabilityAnalysis
 
-
+from adverbs import Map, Reduce, Scan, AllPairs
 from collect_vars import collect_var_names
 from use_analysis import use_count
  
@@ -67,7 +67,13 @@ class Simplify(Transform):
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
-
+    elif c is Map:
+      return expr.args 
+    elif c is AllPairs:
+      return expr.args
+    elif c is Scan or c is Reduce:
+      return ((expr.init,) if expr.init else ()) + tuple(expr.args)
+      
     if allow_mutable or self.immutable_type(expr.type):
       if c is Array :
         return expr.elts

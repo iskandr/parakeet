@@ -2,7 +2,7 @@ import parakeet
 from testing_helpers import expect, expect_each, run_local_tests
 import numpy as np
 
-size = (7,7)
+size = (5,5)
 float_mat = np.random.uniform(0,1,size=size)
 bool_mat = float_mat > 0.5 
 int_mat = np.random.random_integers(0,255,size=size)
