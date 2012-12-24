@@ -145,7 +145,7 @@ class LowerTiledAdverbs(Transform):
     if nested_has_tiles:
       init_slice_args.append(self.tile_param_array)
     rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
-                                             type=callable_fn.return_type),
+                                             type=inner_fn.return_type),
                                  "rslt_init")
     out_shape = self.shape(rslt_init)
     rslt_t = rslt_init.type

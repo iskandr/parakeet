@@ -96,12 +96,15 @@ map_mul_fn = syntax.TypedFn(
 def test_tiled_mm():
   new_fn = lowering.lower(map_mul_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
+  print new_fn
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   a2_array = np.arange(9).reshape(3,3)
   b2_array = np.arange(9,18).reshape(3,3)
   rslt = wrapper(a2_array, b2_array, np.array([3,3], dtype=np.int64))
   nprslt = np.array([np.dot(a2_array[i], b2_array[i]) for i in range(3)])
+  print "Parakeet Result:", rslt
+  print "NumPy Result:", nprslt
   assert(testing_helpers.eq(rslt, nprslt))
 
 if __name__ == '__main__':

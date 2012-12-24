@@ -354,6 +354,7 @@ class TileAdverbs(Transform):
     if isinstance(closure, syntax.Closure):
       for c_arg, arg in zip(closure.args, expr.args):
         c_arg.type = arg.type
+      closure_arg_types = [arg.type for arg in closure.args]
       closure.fn = new_fn
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
@@ -364,3 +365,7 @@ class TileAdverbs(Transform):
   def transform_Scan(self, expr):
     self.adverb_args.append((expr.combine, expr.init, expr.emit))
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
+
+  def post_apply(self, fn):
+    print fn
+    return fn
