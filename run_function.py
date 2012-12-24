@@ -98,7 +98,7 @@ def prepare_args(fn, args, kwargs):
 
   # get types of all inputs
   arg_types = arg_values.transform(type_conv.typeof)
-  return fn, arg_values, arg_types   
+  return untyped, arg_values, arg_types   
 
 def specialize_and_compile(fn, args, kwargs = {}):
   """
