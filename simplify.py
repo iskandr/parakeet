@@ -8,6 +8,7 @@ from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 
 from scoped_env import ScopedEnv
+from scoped_dict import ScopedDictionary 
 
 import transform
 from transform import Transform
@@ -38,7 +39,7 @@ class Simplify(Transform):
 
     # which expressions have already been computed
     # and stored in some variable?
-    self.available_expressions = ScopedEnv()
+    self.available_expressions = ScopedDictionary()
 
     ma = TypeBasedMutabilityAnalysis()
 
@@ -320,18 +321,17 @@ class Simplify(Transform):
 
   def transform_block(self, stmts):
     self.available_expressions.push()
-    new_stmts = Transform.transform_block(stmts)
+    new_stmts = Transform.transform_block(self, stmts)
     self.available_expressions.pop()
     return new_stmts 
+  
   def transform_If(self, stmt):
-
     stmt.true = self.transform_block(stmt.true)
     stmt.false = self.transform_block(stmt.false)
     stmt.merge = self.transform_merge(stmt.merge, 
                                       left_block = stmt.true, 
                                       right_block = stmt.false)
     stmt.cond = self.transform_expr(stmt.cond)
-
     return stmt 
  
   def transform_loop_condition(self, expr, outer_block, loop_body, merge):
