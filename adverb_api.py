@@ -113,7 +113,6 @@ except:
 import array_type, names
 from args import FormalArgs
 _par_wrapper_cache = {}
-
 def gen_par_work_function(adverb_class, fn, arg_types):
   key = (adverb_class, fn.name, tuple(arg_types))
   if key in _par_wrapper_cache:

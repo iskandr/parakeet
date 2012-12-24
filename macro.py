@@ -3,8 +3,6 @@ import syntax
 
 from args import FormalArgs
 
-
-
 class macro(object):
   def __init__(self, f, static_names = set([])):
     self.f = f
@@ -14,10 +12,9 @@ class macro(object):
       self.name = f.__name__
     else:
       self.name = "f"
-      
+
   _macro_wrapper_cache = {}
   def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
-
     args = FormalArgs()
     pos_vars = []
     keyword_vars = {}
@@ -49,7 +46,7 @@ class macro(object):
     wrapper_name = names.fresh(wrapper_name)
 
     return syntax.Fn(name = wrapper_name, args = args, body = body)
-    
+
   def __call__(self, *args, **kwargs):
     n_pos = len(args)
     keywords = kwargs.keys()
