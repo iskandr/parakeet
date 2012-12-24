@@ -93,8 +93,8 @@ map2d_1map_fn = syntax.TypedFn(
   return_type = x_2_array_t,
   type_env = {"X":x_2_array_t})
 
-add_x_y = syntax.TypedFn(
-  name = "add_x_y",
+add_x_y2 = syntax.TypedFn(
+  name = "add_x_y2",
   arg_names = ["x", "y"],
   input_types = [core_types.Int64, core_types.Int64],
   body = [syntax.Return(syntax.PrimCall(prims.add,
@@ -104,11 +104,11 @@ add_x_y = syntax.TypedFn(
   return_type = core_types.Int64,
   type_env = {"x":core_types.Int64, "y":core_types.Int64})
 
-red_fn = syntax.TypedFn(
-  name = "red_fn",
+red_fn2 = syntax.TypedFn(
+  name = "red_fn2",
   arg_names = ["X"],
   input_types = [x_array_t],
-  body = [syntax.Return(adverbs.Reduce(add_x_y, syntax_helpers.zero_i64,
+  body = [syntax.Return(adverbs.Reduce(add_x_y2, syntax_helpers.zero_i64,
                                        id_fn_2,
                                        [syntax.Var("X", type=x_array_t)],
                                        0, type=core_types.Int64))],
@@ -142,7 +142,7 @@ def test_2_maps():
   assert testing_helpers.eq(rslt, x2_array)
 
 def test_1d_reduce():
-  new_fn = lowering.lower(red_fn, True)
+  new_fn = lowering.lower(red_fn2, True)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)

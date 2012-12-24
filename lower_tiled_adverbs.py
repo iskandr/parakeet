@@ -217,5 +217,4 @@ class LowerTiledAdverbs(Transform):
       fn.input_types += (int64_array_t,)
       fn.type_env[self.tile_param_array.name] = int64_array_t
       fn.num_tiles = self.nesting_idx + 1
-      print fn
     return fn

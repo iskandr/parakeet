@@ -22,19 +22,5 @@ def test_float_sum():
 def test_bool_sum():
   testing_helpers.expect(sum, [bool_vec], np.sum(bool_vec))
 
-def dot(x, y):
-  return reduce(add, x, y, init=0)
-
-def all_rows_dot(X, Y):
-  return each(dot, X, Y)
-
-def test_dot():
-  rslt = dot(a, b)
-  print rslt
-
-#def test_all_rows_dot():
-#  rslt = all_rows_dot(a,b)
-#  print rslt
-
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
