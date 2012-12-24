@@ -33,16 +33,17 @@ opt_inline_when_lowering = True
 opt_fusion = True
 opt_licm = True
 opt_verify = True
+opt_tile = True
 
 ######################################
 #           LLVM OPTIONS             #
 ######################################
 
-# run LLVM optimization passes 
+# run LLVM optimization passes
 llvm_optimize = True
 
-# number of times to run optimizations  
+# number of times to run optimizations
 llvm_num_passes = 4
 
-# run verifier over generated LLVM code? 
-llvm_verify = True 
+# run verifier over generated LLVM code?
+llvm_verify = True

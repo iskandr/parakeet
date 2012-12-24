@@ -36,16 +36,15 @@ class Codegen(object):
   def assign(self, lhs, rhs):
     self.insert_stmt(syntax.Assign(lhs, rhs))
 
-
   def temp_name(self, expr):
-    c = expr.__class__ 
+    c = expr.__class__
     if c is syntax.PrimCall:
       return expr.prim.name
     elif c is syntax.Attribute:
       if expr.value.__class__ is syntax.Var:
-        return names.original(expr.value.name) + "_" + expr.name 
+        return names.original(expr.value.name) + "_" + expr.name
       else:
-        return expr.name 
+        return expr.name
     else:
       return "temp"
 
@@ -517,9 +516,9 @@ class Codegen(object):
     return self.prod(shape_elts, name = "nelts")
   """
   def linear_to_indices(self, linear_idx, shape):
-    
+
     # Return tuple of dimension-wise indices from linear index
-    
+
     dim_sizes = self.tuple_elts(shape)
     rank = len(dim_sizes)
     slice_sizes = [syntax_helpers.one_i64]

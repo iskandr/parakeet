@@ -67,13 +67,16 @@ class LowerTiledAdverbs(Transform):
     # Allocate the output based on shape of the initial tile and assign the
     # first result to the appropriate slice of the output.
     init_shape = self.shape(rslt_init)
-    shape_els = [self.tuple_proj(init_shape, i) for i in range(axis)]
+    shape_els = [self.tuple_proj(init_shape, i)
+                 for i in range(self.nesting_idx)]
     shape_els += [niters]
     shape_els += [self.tuple_proj(init_shape, i)
-                  for i in range(axis + 1, len(init_shape.type.elt_types))]
+                  for i in range(self.nesting_idx + 1,
+                                 len(init_shape.type.elt_types))]
     out_shape = self.tuple(shape_els, "out_shape")
     array_result = self.alloc_array(elt_t, out_shape, "array_result")
-    init_output_idxs = self.index_along_axis(array_result, axis, init_slice)
+    init_output_idxs = self.index_along_axis(array_result, self.nesting_idx,
+                                             init_slice)
     self.assign(init_output_idxs, rslt_init)
 
     # Loop over the remaining tiles.
@@ -91,8 +94,8 @@ class LowerTiledAdverbs(Transform):
                                type=slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
-    # TODO: Output always to the 0 axis, as per discussion?
-    output_region = self.index_along_axis(array_result, axis, tile_bounds)
+    output_region = self.index_along_axis(array_result, self.nesting_idx,
+                                          tile_bounds)
 
     if nested_has_tiles:
       nested_args.append(self.tile_param_array)
@@ -145,7 +148,7 @@ class LowerTiledAdverbs(Transform):
     if nested_has_tiles:
       init_slice_args.append(self.tile_param_array)
     rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
-                                             type=callable_fn.return_type),
+                                             type=inner_fn.return_type),
                                  "rslt_init")
     out_shape = self.shape(rslt_init)
     rslt_t = rslt_init.type
@@ -156,9 +159,9 @@ class LowerTiledAdverbs(Transform):
       if i == 0:
         return syntax.Assign(cur, expr.init)
       else:
-        self.blocks.push()
         j, j_after, merge = self.loop_counter("j")
         init_cond = self.lt(j, self.shape(cur, 0))
+        self.blocks.push()
         n = self.index_along_axis(cur, 0, j)
         self.blocks += init_unpack(i-1, n)
         self.assign(j_after, self.add(j, syntax_helpers.one_i64))

@@ -28,7 +28,7 @@ class CodegenSemantics(MemoizedTransform):
       fn = type_inference.specialize(fn.type, arg_types)
 
     import lowering
-    lowered_fn = lowering.lower(fn)
+    lowered_fn = lowering.lower(fn, tile=False)
     combined_args = closure_args + args
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
     return self.assign_temp(call, "call_result")
@@ -45,7 +45,7 @@ class CodegenSemantics(MemoizedTransform):
 class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_TypedFn(self, expr):
     import lowering
-    return lowering.lower(expr)
+    return lowering.lower(expr, tile=False)
 
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)

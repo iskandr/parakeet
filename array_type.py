@@ -196,16 +196,17 @@ class ArrayT(StructT):
     strides_in_elts = self.strides_t.to_python(obj.strides.contents)
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
 
-    base_ptr = obj.data 
-    
-    nbytes = obj.total_elts * elt_size 
+    base_ptr = obj.data
+
+    nbytes = obj.total_elts * elt_size
     dest_buf = AllocateBuffer(nbytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
-    # copy data 
+    # copy data
     ctypes.memmove(dest_ptr, base_ptr, nbytes)
     return np.ndarray(shape, dtype = self.elt_type.dtype,
-                      buffer = dest_buf, 
-                      strides = strides_in_bytes, offset = obj.offset * elt_size)
+                      buffer = dest_buf,
+                      strides = strides_in_bytes,
+                      offset = obj.offset * elt_size)
 
 _array_types = {}
 def make_array_type(elt_t, rank):
