@@ -604,6 +604,7 @@ def _get_closure_type(fn):
     return closure_type.make_closure_type(fundef, [])
 
 def specialize(fn, arg_types):
+
   if isinstance(fn, typed_ast.TypedFn):
     return fn
   if isinstance(arg_types, (list, tuple)):
@@ -611,8 +612,16 @@ def specialize(fn, arg_types):
   closure_t = _get_closure_type(fn)
   if arg_types in closure_t.specializations:
     return closure_t.specializations[arg_types]
+   
   full_arg_types = arg_types.prepend_positional(closure_t.arg_types)
   fundef = _get_fundef(closure_t.fn)
+
+
+  print "Started type inference for", fundef.name   
+  print repr(fundef)
+   
+  print "--- Input types", arg_types
+  print "--- Full type list", full_arg_types
 
   typed =  _specialize(fundef, full_arg_types)
   closure_t.specializations[arg_types] = typed

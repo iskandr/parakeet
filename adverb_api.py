@@ -126,33 +126,43 @@ def gen_par_work_function(adverb_class, fn, arg_types):
 
 import closure_type
 
-def translate_fn(python_fn):
+
+import run_function
+import llvm_types
+from common import list_to_ctypes_array
+from llvm.ee import GenericValue
+from args import ActualArgs
+
+def prepare_adverb_args(python_fn, args, kwargs):
+  
   """
-  Given a python function, return its closure type and the definition of its
-  untyped representation
-  """
+  Fetch the function's nonlocals and return an 
+  ActualArgs object of both the arg values and
+  their types
+  """ 
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
   if isinstance(closure_t.fn, str):
     untyped = syntax.Fn.registry[closure_t.fn]
   else:
     untyped = closure_t.fn
+  
+  nonlocals = list(untyped.python_nonlocals())
+  adverb_arg_values = ActualArgs(args, kwargs)
 
-  return closure_t, untyped
+  # get types of all inputs
+  adverb_arg_types = adverb_arg_values.transform(type_conv.typeof)
+  return untyped, closure_t, nonlocals, adverb_arg_values, adverb_arg_types   
 
-import llvm_types
-from common import list_to_ctypes_array
-from llvm.ee import GenericValue
-# from run_function import ctypes_to_generic_value, generic_value_to_python
 
 def par_each(fn, *args, **kwds):
-  arg_types = map(type_conv.typeof, args)
-
-  closure_t, untyped = translate_fn(fn)
-
+  
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis', 0)
 
+  untyped, closure_t, nonlocals, args, arg_types = \
+      prepare_adverb_args(fn, args, kwds)
+    
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   map_result_type = type_inference.infer_Map(closure_t, arg_types)
 
@@ -234,7 +244,7 @@ def get_axis(kwargs):
   axis = kwargs.get('axis', 0)
   return syntax_helpers.unwrap_constant(axis)
 
-@staged_macro("axis", call_from_python=par_each)
+@staged_macro("axis") #, call_from_python=par_each)
 def each(f, *xs, **kwargs):
   return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 
