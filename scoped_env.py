@@ -83,7 +83,7 @@ class ScopedEnv:
       # to register any necessary python refs
       self.outer_env[key]
       local_name = names.fresh(key)
-      self.top_block()[key] = local_name
+      self.top_scope()[key] = local_name
       self.original_outer_names.append(key)
       self.localized_outer_names.append(local_name)
       return local_name
