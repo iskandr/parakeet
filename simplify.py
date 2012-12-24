@@ -307,15 +307,20 @@ class Simplify(Transform):
     stmt.rhs = rhs  
     return stmt 
 
-  def transform_If(self, stmt):
+  def transform_block(self, stmts):
     self.available_expressions.push()
+    new_stmts = Transform.transform_block(stmts)
+    self.available_expressions.pop()
+    return new_stmts 
+  def transform_If(self, stmt):
+
     stmt.true = self.transform_block(stmt.true)
     stmt.false = self.transform_block(stmt.false)
     stmt.merge = self.transform_merge(stmt.merge, 
                                       left_block = stmt.true, 
                                       right_block = stmt.false)
     stmt.cond = self.transform_expr(stmt.cond)
-    self.available_expressions.pop()
+
     return stmt 
  
   def transform_loop_condition(self, expr, outer_block, loop_body, merge):
@@ -342,8 +347,6 @@ class Simplify(Transform):
       return cond_var 
 
   def transform_While(self, stmt):
-    self.available_expressions.push()
-    
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge, 
                                  left_block = self.blocks.current(), 
@@ -353,7 +356,6 @@ class Simplify(Transform):
         outer_block = self.blocks.current(),
         loop_body = stmt.body, 
         merge = stmt.merge)
-    _ = self.available_expressions.pop()
     return stmt 
 
   def transform_Return(self, stmt):
