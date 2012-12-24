@@ -1,4 +1,4 @@
-import config 
+import config
 import llvm_context
 import llvm_convert
 import llvm_prims
@@ -42,8 +42,8 @@ class CompilationEnv:
 
   def _init_vars(self, fundef, builder):
     """
-    Create a mapping from variable names to stack locations,
-    these will later be converted to SSA variables by the mem2reg pass.
+    Create a mapping from variable names to stack locations, these will later be
+    converted to SSA variables by the mem2reg pass.
     """
     n_expected = len(fundef.arg_names)
     n_compiled = len(self.llvm_fn.args)
@@ -356,20 +356,19 @@ def compile_fn(fundef):
   env = CompilationEnv()
   start_builder = env.init_fn(lowered)
   compile_block(lowered.body, env, start_builder)
-  
-  if config.print_unoptimized_llvm: 
+
+  if config.print_unoptimized_llvm:
     print "=== LLVM before optimizations =="
-    print 
+    print
     print env.llvm_fn
-    print 
+    print
   env.llvm_context.run_passes(env.llvm_fn)
-  
+
   if config.print_optimized_llvm:
     print "=== LLVM after optimizations =="
-    print 
+    print
     print env.llvm_fn
-    print 
-    
+    print
 
   result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
 

@@ -94,7 +94,7 @@ map_mul_fn = syntax.TypedFn(
   type_env = {"X":x_2_array_t, "Y":x_2_array_t})
 
 def test_tiled_mm():
-  new_fn = lowering.lower(mm_fn)
+  new_fn = lowering.lower(mm_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)

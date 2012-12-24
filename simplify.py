@@ -4,6 +4,7 @@ import subst
 import syntax
 import transform
 
+from adverbs import Map, Reduce, Scan, AllPairs
 from collect_vars import collect_var_names
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_dict import ScopedDictionary
@@ -13,14 +14,6 @@ from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from transform import Transform
-<<<<<<< HEAD
-import subst
-from mutability_analysis import TypeBasedMutabilityAnalysis
-
-from adverbs import Map, Reduce, Scan, AllPairs
-from collect_vars import collect_var_names
-=======
->>>>>>> 22502c2952ed7dc5bfcc2b65464fecde152e0c44
 from use_analysis import use_count
 
 # classes of expressions known to have no side effects
@@ -72,12 +65,12 @@ class Simplify(Transform):
     elif c is Cast:
       return (expr.value,)
     elif c is Map:
-      return expr.args 
+      return expr.args
     elif c is AllPairs:
       return expr.args
     elif c is Scan or c is Reduce:
       return ((expr.init,) if expr.init else ()) + tuple(expr.args)
-      
+
     if allow_mutable or self.immutable_type(expr.type):
       if c is Array :
         return expr.elts
