@@ -28,7 +28,7 @@ print_optimized_llvm = False
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
-opt_simplify_when_lowering = False
+opt_simplify_when_lowering = True
 opt_inline_when_lowering = True
 opt_fusion = True
 opt_licm = True

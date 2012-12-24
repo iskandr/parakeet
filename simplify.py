@@ -6,6 +6,7 @@ import transform
 
 from collect_vars import collect_var_names
 from mutability_analysis import TypeBasedMutabilityAnalysis
+from scoped_dict import ScopedDictionary
 from scoped_env import ScopedEnv
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
@@ -33,7 +34,7 @@ class Simplify(Transform):
 
     # which expressions have already been computed
     # and stored in some variable?
-    self.available_expressions = ScopedEnv()
+    self.available_expressions = ScopedDictionary()
 
     ma = TypeBasedMutabilityAnalysis()
 
@@ -101,7 +102,7 @@ class Simplify(Transform):
     if stored:
       return stored
     else:
-      return Transform.transform_expr(self, expr )
+      return Transform.transform_expr(self, expr)
 
   def transform_Var(self, expr):
     name = expr.name
@@ -311,15 +312,19 @@ class Simplify(Transform):
     stmt.rhs = rhs
     return stmt
 
-  def transform_If(self, stmt):
+  def transform_block(self, stmts):
     self.available_expressions.push()
+    new_stmts = Transform.transform_block(self, stmts)
+    self.available_expressions.pop()
+    return new_stmts
+
+  def transform_If(self, stmt):
     stmt.true = self.transform_block(stmt.true)
     stmt.false = self.transform_block(stmt.false)
     stmt.merge = self.transform_merge(stmt.merge,
                                       left_block = stmt.true,
                                       right_block = stmt.false)
     stmt.cond = self.transform_expr(stmt.cond)
-    self.available_expressions.pop()
     return stmt
 
   def transform_loop_condition(self, expr, outer_block, loop_body, merge):
@@ -346,8 +351,6 @@ class Simplify(Transform):
       return cond_var
 
   def transform_While(self, stmt):
-    self.available_expressions.push()
-
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge,
                                       left_block = self.blocks.current(),
@@ -357,7 +360,6 @@ class Simplify(Transform):
                                       outer_block = self.blocks.current(),
                                       loop_body = stmt.body,
                                       merge = stmt.merge)
-    _ = self.available_expressions.pop()
     return stmt
 
   def transform_Return(self, stmt):

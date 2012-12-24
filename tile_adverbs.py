@@ -365,7 +365,3 @@ class TileAdverbs(Transform):
   def transform_Scan(self, expr):
     self.adverb_args.append((expr.combine, expr.init, expr.emit))
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
-
-  def post_apply(self, fn):
-    print fn
-    return fn
