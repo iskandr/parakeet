@@ -1,26 +1,24 @@
-import names
+
 import prims
 import subst
 import syntax
 import transform
 
-from collect_vars import collect_var_names
-from mutability_analysis import TypeBasedMutabilityAnalysis
+
 from scoped_dict import ScopedDictionary
-from scoped_env import ScopedEnv
+
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from transform import Transform
-<<<<<<< HEAD
-import subst
+
+
 from mutability_analysis import TypeBasedMutabilityAnalysis
 
 from adverbs import Map, Reduce, Scan, AllPairs
 from collect_vars import collect_var_names
-=======
->>>>>>> 22502c2952ed7dc5bfcc2b65464fecde152e0c44
+
 from use_analysis import use_count
 
 # classes of expressions known to have no side effects

@@ -445,11 +445,14 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)
-  syntax = ast.parse(source)
-  if isinstance(syntax, ast.Module):
+  syntax = ast.parse(source, mode = 'single')
+  if isinstance(syntax, (ast.Module, ast.Interactive)):
     assert len(syntax.body) == 1
     syntax = syntax.body[0]
-  assert isinstance(syntax, ast.FunctionDef)
+  elif isinstance(syntax, ast.Expression):
+    syntax = syntax.body 
+  assert isinstance(syntax, ast.FunctionDef), \
+    "Unexpected Python syntax node: %s" % syntax 
   return translate_function_ast(syntax, globals_dict, closure_vars,
                                 closure_cells)
 
