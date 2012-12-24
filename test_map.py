@@ -1,5 +1,4 @@
 import numpy as np
-import parakeet as par
 
 from parakeet import each
 from testing_helpers import run_local_tests, expect, expect_each, eq, \
@@ -22,7 +21,7 @@ def add1_scalar(x):
   return x+1
 
 def test_add1_external_map():
-  parakeet_result = par.each(add1_scalar, ints_1d)
+  parakeet_result = each(add1_scalar, ints_1d)
   python_result = ints_1d + 1
   assert eq(parakeet_result, python_result), \
          "Python %s != Parakeet %s" % (python_result, parakeet_result)
@@ -87,6 +86,16 @@ def second_of_rows(X):
 
 def test_second_of_rows():
   expect(second_of_rows, [X], np.array([2,5]))
+
+def nested_each(x):
+  def dummy(x):
+    def dummy2():
+      return x
+    return dummy2()
+  return each(dummy, x)
+
+def test_nested_each():
+  expect(nested_each, [X], X)
 
 if __name__ == '__main__':
   run_local_tests()

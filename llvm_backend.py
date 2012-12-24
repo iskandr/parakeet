@@ -348,14 +348,12 @@ def compile_block(stmts, env, builder):
   return builder, False
 
 compiled_functions = {}
-import lowering
 def compile_fn(fundef):
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
-  lowered = lowering.lower(fundef, tile=False)
   env = CompilationEnv()
-  start_builder = env.init_fn(lowered)
-  compile_block(lowered.body, env, start_builder)
+  start_builder = env.init_fn(fundef)
+  compile_block(fundef.body, env, start_builder)
 
   if config.print_unoptimized_llvm:
     print "=== LLVM before optimizations =="
@@ -370,7 +368,7 @@ def compile_fn(fundef):
     print env.llvm_fn
     print
 
-  result = (env.llvm_fn, lowered, env.llvm_context.exec_engine)
+  result = (env.llvm_fn, fundef, env.llvm_context.exec_engine)
 
   compiled_functions[fundef.name] = result
   return result

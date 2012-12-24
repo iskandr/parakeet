@@ -46,7 +46,7 @@ def build_pipeline(copy = True,
   return p
 
 _lowered_functions = {}
-def lower(fundef, tile=config.opt_tile):
+def lower(fundef, tile=False):
   if isinstance(fundef, str):
     fundef = syntax.TypedFn.registry[fundef]
 

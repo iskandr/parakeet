@@ -3,6 +3,7 @@ import core_types
 import ctypes
 import llvm_backend
 import llvm_types
+import lowering
 import syntax
 import type_conv
 import type_inference
@@ -102,8 +103,10 @@ def specialize_and_compile(fn, args, kwargs = {}):
   # other functions it calls
   typed = type_inference.specialize(untyped, input_types)
 
+  lowered = lowering.lower(typed, tile=False)
+
   # compile to native code
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(typed)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(lowered)
   compiled_fn_wrapper = CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   return untyped, typed, compiled_fn_wrapper, args_obj
 

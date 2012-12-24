@@ -4,10 +4,11 @@ import syntax
 from args import FormalArgs
 
 class macro(object):
-  def __init__(self, f, static_names = set([])):
+  def __init__(self, f, static_names=set([]), call_from_python=None):
     self.f = f
     self.static_names = static_names
     self.wrappers = {}
+    self.call_from_python = call_from_python
     if hasattr(self.f, "__name__"):
       self.name = f.__name__
     else:
@@ -48,22 +49,25 @@ class macro(object):
     return syntax.Fn(name = wrapper_name, args = args, body = body)
 
   def __call__(self, *args, **kwargs):
-    n_pos = len(args)
-    keywords = kwargs.keys()
+    if self.call_from_python is None:
+      n_pos = len(args)
+      keywords = kwargs.keys()
 
-    static_pairs = ((k,kwargs.get(k)) for k in self.static_names)
-    dynamic_keywords = tuple(k for k in keywords
-                             if k not in self.static_names)
+      static_pairs = ((k,kwargs.get(k)) for k in self.static_names)
+      dynamic_keywords = tuple(k for k in keywords
+                               if k not in self.static_names)
 
-    static_pairs = tuple(static_pairs)
-    key = (n_pos, static_pairs, dynamic_keywords)
-    if key in self.wrappers:
-      untyped = self.wrappers[key]
+      static_pairs = tuple(static_pairs)
+      key = (n_pos, static_pairs, dynamic_keywords)
+      if key in self.wrappers:
+        untyped = self.wrappers[key]
+      else:
+        untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
+        self.wrappers[key] = untyped
+      import run_function
+      return run_function.run(untyped, *args, **kwargs)
     else:
-      untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
-      self.wrappers[key] = untyped
-    import run_function
-    return run_function.run(untyped, *args, **kwargs)
+      return self.call_from_python(*args, **kwargs)
 
   def transform(self, args, kwargs):
     for arg in args:
@@ -83,8 +87,11 @@ class macro(object):
     return "macro(%s)" % self.name
 
 class staged_macro(object):
-  def __init__(self, *static_names):
+  def __init__(self, *static_names, **kwargs):
     self.static_names = tuple(static_names)
+    self.call_from_python = kwargs.get('call_from_python')
+    assert kwargs.keys() in [[], ['call_from_python']], \
+        "Unknown keywords: %s" % kwargs.keys()
 
   def __call__(self, fn):
-    return macro(fn, self.static_names)
+    return macro(fn, self.static_names, call_from_python=self.call_from_python)

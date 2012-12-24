@@ -10,14 +10,14 @@ from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from macro import macro
 
-import prims 
+import prims
 from prims import Prim, prim_wrapper
 
 from scoped_env import ScopedEnv
 from subst import subst, subst_list
 from syntax_helpers import none, true, false
-import config 
- 
+import config
+
 
 reserved_names = {
   'True' : true,
@@ -218,7 +218,7 @@ class AST_Translator(ast.NodeVisitor):
     values = map(self.visit, expr.values)
     prim = prims.find_ast_op(expr.op)
     return syntax.PrimCall(prim, values)
-  
+
   def visit_Compare(self, expr):
     lhs = self.visit(expr.left)
     assert len(expr.ops) == 1
@@ -258,17 +258,17 @@ class AST_Translator(ast.NodeVisitor):
 
   def translate_builtin(self, value, positional, keywords_dict):
     if value == sum:
-      import adverb_wrapper 
+      import adverb_wrapper
       sum_wrapper = \
         adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
-      args = ActualArgs(positional = [prims.add] + list(positional), 
+      args = ActualArgs(positional = [prims.add] + list(positional),
                         keywords = {'init': syntax.Const(0)})
-      return syntax.Call(sum_wrapper, args) 
+      return syntax.Call(sum_wrapper, args)
     else:
       assert value == slice
       assert len(keywords_dict) == 0
       return syntax.Slice(*positional)
-    
+
   def visit_Call(self, expr):
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
@@ -287,7 +287,7 @@ class AST_Translator(ast.NodeVisitor):
     if attr_chain:
       root = attr_chain[0]
       if root not in self.env:
-        if root in self.globals:
+        if self.globals and root in self.globals:
           value = self.lookup_attribute_chain(attr_chain)
           if isinstance(value, macro):
             return value.transform(positional, keywords_dict)
@@ -296,7 +296,7 @@ class AST_Translator(ast.NodeVisitor):
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
           return self.translate_builtin(value, positional, keywords_dict)
-        
+
     # if we didn't evaluate a Prim or macro...
     fn_val = self.visit(fn)
 
@@ -369,7 +369,7 @@ class AST_Translator(ast.NodeVisitor):
     scope_after, body = self.visit_block(stmt.body)
     merge = {}
     substitutions = {}
-    
+
     curr_scope = self.env.current_scope()
 
     for (k, name_after) in scope_after.iteritems():
@@ -404,7 +404,7 @@ class AST_Translator(ast.NodeVisitor):
       closure_args = map(self.get_name, fundef.parakeet_nonlocals)
       closure = syntax.Closure(fundef.name, closure_args)
     else:
-      closure = fundef 
+      closure = fundef
     return syntax.Assign(local_name, closure)
 
 def translate_function_ast(function_def_ast, globals_dict = None,
@@ -445,14 +445,15 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)
+  print source
   syntax = ast.parse(source, mode = 'single')
   if isinstance(syntax, (ast.Module, ast.Interactive)):
     assert len(syntax.body) == 1
     syntax = syntax.body[0]
   elif isinstance(syntax, ast.Expression):
-    syntax = syntax.body 
+    syntax = syntax.body
   assert isinstance(syntax, ast.FunctionDef), \
-    "Unexpected Python syntax node: %s" % syntax 
+    "Unexpected Python syntax node: %s" % syntax
   return translate_function_ast(syntax, globals_dict, closure_vars,
                                 closure_cells)
 
@@ -491,5 +492,5 @@ def translate_function_value(fn):
     register_python_fn(fn, fundef)
 
     if config.print_untyped_function:
-      print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef)) 
+      print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
     return fundef
