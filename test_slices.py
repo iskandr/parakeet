@@ -85,7 +85,7 @@ def test_assign_four_rows():
 def copy_two_rows(x, y):
   # Fill y with the elements of x to try to get an identical copy
   i = 0
-  while i < 10:
+  while i < x.shape[1]:
     y[0][i] = x[0][i]
     y[1][i] = x[1][i]
     i = i + 1
@@ -93,14 +93,14 @@ def copy_two_rows(x, y):
 
 def loop_slice(x, y, z):
   i = 0
-  while i < 10:
+  while i < z.shape[0]:
     i_next = i + 2
     z[i:i_next,:] = copy_two_rows(x[i:i_next,:], y)
     i = i_next
   return z
 
 def test_loop_slices():
-  m_input = np.arange(100, dtype=np.int64).reshape(10,10)
+  m_input = np.arange(40, dtype=np.int64).reshape(4,10)
   m_zeros = np.zeros((2,10), dtype=np.int64)
   m_z = np.zeros_like(m_input)
   m_expect = m_input.copy()
@@ -112,7 +112,6 @@ def lower_right_corner(X):
 
 def test_lower_right_corner():
   expect_each(lower_right_corner, lower_right_corner, matrices)
-
 
 if __name__ == '__main__':
   run_local_tests()

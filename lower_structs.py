@@ -50,7 +50,7 @@ class LowerStructs(MemoizedTransform):
     field_name, field_type = new_closure.type._fields_[expr.index + 1]
     return syntax.Attribute(new_closure, field_name, type = field_type)
 
-  def array_view(self, data, shape, strides, offset = zero_i64):
+  def array_view(self, data, shape, strides, offset, nelts):
     """
     Helper function used by multiple array-related transformations
     """
@@ -75,11 +75,11 @@ class LowerStructs(MemoizedTransform):
         "Shape and strides must be of same length, but got %d and %d" % \
         (rank, strides_rank)
     array_t = make_array_type(data_t.elt_type, rank)
-    return syntax.Struct([data, shape, strides, offset], type = array_t)
+    return syntax.Struct([data, shape, strides, offset, nelts], type = array_t)
 
   def transform_ArrayView(self, expr):
     array_struct = self.array_view(expr.data, expr.shape, expr.strides,
-                                   expr.offset)
+                                   expr.offset, expr.total_elts)
     assert expr.type == array_struct.type, \
         "Mismatch between original type %s and transformed type %s" % \
         (expr.type, array_struct.type)
@@ -104,4 +104,5 @@ class LowerStructs(MemoizedTransform):
       lhs = syntax.Index(ptr_var, idx, type = elt_t)
       self.assign(lhs, elt)
 
-    return self.array_view(ptr_var, const_tuple(n), const_tuple(1))
+    return self.array_view(ptr_var, const_tuple(n), const_tuple(1), 
+                           offset = const_int(0), nelts = const_int(n))

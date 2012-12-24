@@ -97,6 +97,7 @@ class ArrayT(StructT):
       ('shape', tuple_t),
       ('strides', tuple_t),
       ('offset', Int64),
+      ('total_elts', Int64)
     ]
 
   def dtype(self):
@@ -182,7 +183,7 @@ class ArrayT(StructT):
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
     return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape),
-                            ctypes.pointer(ctypes_strides), 0)
+                            ctypes.pointer(ctypes_strides), 0, nelts)
 
   def to_python(self, obj):
     """
@@ -196,24 +197,15 @@ class ArrayT(StructT):
     strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
 
     base_ptr = obj.data 
-    if obj.offset:
-      P = base_ptr.__class__
-      old_addr = ctypes.addressof(base_ptr.contents)
-      new_addr = old_addr + (obj.offset * elt_size)
-      base_ptr = ctypes.cast(new_addr, P)
-    # TODO: 
-    # look up size of allocated underlying memory from 
-    # a gc table 
-    # nbytes = memory.sizeof(base_ptr)
-    nbytes = np.prod(shape) * min(strides_in_elts) * elt_size 
-   
+    
+    nbytes = obj.total_elts * elt_size 
     dest_buf = AllocateBuffer(nbytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
     # copy data 
     ctypes.memmove(dest_ptr, base_ptr, nbytes)
     return np.ndarray(shape, dtype = self.elt_type.dtype,
                       buffer = dest_buf, 
-                      strides = strides_in_bytes, )
+                      strides = strides_in_bytes, offset = obj.offset * elt_size)
 
 _array_types = {}
 def make_array_type(elt_t, rank):

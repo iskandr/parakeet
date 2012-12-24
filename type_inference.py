@@ -1,9 +1,9 @@
-import config 
 import adverbs
 import adverb_helpers
 import adverb_wrapper
 import array_type
 import closure_type
+import config
 import core_types
 import names
 import prims
@@ -107,7 +107,6 @@ def tuple_elts(tup):
   return [typed_ast.TupleProj(tup, i, t)
           for (i,t) in enumerate(tup.type.elt_types)]
 
-
 def flatten_actual_args(args):
   if isinstance(args, (list,tuple)):
     return args
@@ -206,10 +205,10 @@ def annotate_expr(expr, tenv, var_map):
     untyped_fn = prims.prim_wrapper(p)
     t = closure_type.make_closure_type(untyped_fn, ())
     return typed_ast.Closure(untyped_fn, (), type = t)
-    
+
   def expr_Arith():
     return prim_to_closure(expr)
-    
+
   def expr_Fn():
     t = closure_type.ClosureT(expr.name, [])
     return typed_ast.Closure(expr.name, [], type = t)
@@ -617,14 +616,15 @@ def specialize(fn, arg_types):
 
   typed =  _specialize(fundef, full_arg_types)
   closure_t.specializations[arg_types] = typed
-  
+
   if config.print_specialized_function:
-    print "=== Specialized %s for input types %s ===" % (fundef.name, full_arg_types)
+    print "=== Specialized %s for input types %s ===" % \
+          (fundef.name, full_arg_types)
     print
     print repr(typed)
-    print 
-    
-  
+    print
+
+
   return typed
 
 def infer_return_type(untyped, arg_types):

@@ -72,7 +72,7 @@ class Simplify(Transform):
       if c is Array :
         return expr.elts
       elif c is ArrayView:
-        return (expr.data, expr.shape, expr.strides, expr.offset)
+        return (expr.data, expr.shape, expr.strides, expr.offset, expr.total_elts)
       elif c is Struct:
         return expr.args
       elif c is Attribute:
@@ -177,6 +177,17 @@ class Simplify(Transform):
       else:
         new_args.append(self.temp(new_arg))
     return new_args
+
+  def transform_Index(self, expr):
+    expr.value = self.transform_expr(expr.value)
+    expr.index = self.transform_expr(expr.index)
+    if expr.value.__class__ is Array and expr.index.__class__ is Const:
+      assert isinstance(expr.index.value, (int, long)) and \
+          len(expr.value.elts) > expr.index.value
+      return expr.value.eltas[expr.index.value]
+    if expr.value.__class__ is not Var:
+      expr.value = self.temp(expr.value)
+    return expr 
 
   def transform_Struct(self, expr):
     new_args = self.transform_args(expr.args)
