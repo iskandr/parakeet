@@ -7,7 +7,7 @@ def add1(xi):
 
 int_vec = np.arange(100)
 
-def test_add1():
+def notest_add1():
   result = parakeet.par_each(add1, int_vec)
   expected  = int_vec + 1
   assert testing_helpers.eq(result, expected), \
