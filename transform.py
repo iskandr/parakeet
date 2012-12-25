@@ -85,6 +85,7 @@ class Transform(Codegen):
     return expr 
   
   def transform_Call(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_tuple(expr.args)
     return expr 
   

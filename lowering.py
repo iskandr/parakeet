@@ -1,6 +1,7 @@
 import config
 import syntax
 
+from transform import Transform 
 from clone_function import CloneFunction
 from dead_code_elim import DCE
 from fusion import Fusion
@@ -14,11 +15,12 @@ from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
-def build_pipeline(copy = True,
-                   simplify = config.opt_simplify_when_lowering,
-                   inline = config.opt_inline_when_lowering,
-                   fusion = config.opt_fusion,
-                   licm = config.opt_licm):
+  
+def build_pipeline(copy = True, 
+                     simplify = config.opt_simplify_when_lowering,
+                     inline = config.opt_inline_when_lowering,
+                     fusion = config.opt_fusion,
+                     licm = config.opt_licm):
   p = [CloneFunction] if copy else []
 
   def add(t):
@@ -29,7 +31,7 @@ def build_pipeline(copy = True,
 
   if fusion:
     add(Fusion)
-
+  
   add(LowerAdverbs)
   if inline:
     add(Inliner)
@@ -59,7 +61,7 @@ def lower(fundef, tile=False):
       num_tiles = fundef.num_tiles
       print fundef
 
-    pipeline = build_pipeline(copy=True)
+    pipeline = build_pipeline(copy = not tile)
     lowered_fn = apply_pipeline(fundef, pipeline)
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
