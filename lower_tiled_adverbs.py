@@ -12,8 +12,8 @@ from transform import Transform
 int64_array_t = array_type.make_array_type(Int64, 1)
 
 class LowerTiledAdverbs(Transform):
-  def __init__(self, fn, nesting_idx=-1, tile_param_array=None):
-    Transform.__init__(self, fn)
+  def __init__(self, nesting_idx=-1, tile_param_array=None):
+    Transform.__init__(self)
     self.num_tiled_adverbs = 0
     self.nesting_idx = nesting_idx
     self.tiling = False
@@ -23,9 +23,9 @@ class LowerTiledAdverbs(Transform):
       self.tile_param_array = tile_param_array
 
   def transform_TypedFn(self, expr):
-    nested_lower = LowerTiledAdverbs(expr, nesting_idx=self.nesting_idx,
+    nested_lower = LowerTiledAdverbs(nesting_idx=self.nesting_idx,
                                      tile_param_array=self.tile_param_array)
-    return nested_lower.apply()
+    return nested_lower.apply(expr)
 
   def transform_TiledMap(self, expr):
     self.tiling = True

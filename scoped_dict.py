@@ -13,13 +13,18 @@ class ScopedDictionary(object):
   def top(self):
     return self.scopes[-1]
   
-  def get(self, key, default = None):
-    return self.top().get(key, default)
+  def get(self, key):
+    for scope in reversed(self.scopes):
+      res = scope.get(key)
+      if res:
+        return res 
+    return None
   
   def __getitem__(self, key):
     for scope in reversed(self.scopes):
-      if key in scope:
-        return scope[key]
+      res = scope.get(key)
+      if res:
+        return res 
     assert False, "Key %s not found" % key
     
   def __setitem__(self, key, value):

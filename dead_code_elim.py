@@ -1,21 +1,19 @@
-import syntax
+
 from syntax import Var, Tuple 
-from common import dispatch
 from transform import Transform
-import syntax_helpers 
-from syntax_visitor import SyntaxVisitor 
+import syntax_helpers  
 from use_analysis import use_count
 from collect_vars import collect_var_names_list
 
 
 class DCE(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn, reverse = True)
-    # self.live_vars = FindLiveVars().visit_fn(fn)
+  def __init__(self):
+    Transform.__init__(self, reverse = True)
+    
+  def pre_apply(self, fn):
     self.use_counts = use_count(fn)
     
   def is_live(self, name):
-    
     return name in self.use_counts and self.use_counts[name] > 0
          
   def is_live_lhs(self, lhs):
@@ -75,13 +73,12 @@ class DCE(Transform):
     elif syntax_helpers.is_true(cond):
 
       for name, (_, v) in new_merge.iteritems():
-
-        self.assign(syntax.Var(name, type = v.type), v)
+        self.assign(Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.true))
       return None 
     elif syntax_helpers.is_false(cond):
       for name, (v, _) in new_merge.items():
-        self.assign(syntax.Var(name, type = v.type), v)
+        self.assign(Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.false))
       return None 
     return stmt 
@@ -99,6 +96,5 @@ class DCE(Transform):
     return fn 
   
 def dead_code_elim(fn):
-  dce = DCE(fn)
-  return dce.apply()
+  return DCE().apply(fn)
   

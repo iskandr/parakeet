@@ -6,6 +6,7 @@ from inline import Inliner
 from clone_function import CloneFunction
 import transform   
 from fusion import Fusion 
+
 pipeline = [CloneFunction, Simplify, DCE, Inliner, Simplify, Fusion, Simplify, DCE] 
 
 # map names of unoptimized typed functions to 
@@ -25,6 +26,7 @@ def optimize(fn):
   if fn.name in _optimized_cache:
     return _optimized_cache[fn.name]
   else:
+
     opt = transform.apply_pipeline(fn, pipeline)
     _optimized_cache[fn.name] = opt
     return opt 

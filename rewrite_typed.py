@@ -8,10 +8,12 @@ from syntax_helpers import get_types
 from transform import Transform
 
 class RewriteTyped(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn, verify = False)
+  def __init__(self):
+    Transform.__init__(self, verify = False)
+  
+  def pre_apply(self, fn):
     self.fn_return_type = self.fn.type_env["$return"]
-
+    
   def coerce_expr(self, expr, t):
     assert t is not None
     expr = self.transform_expr(expr)
@@ -153,4 +155,4 @@ class RewriteTyped(Transform):
     return stmt
 
 def rewrite_typed(typed_fundef):
-  return RewriteTyped(typed_fundef).apply()
+  return RewriteTyped().apply(typed_fundef)

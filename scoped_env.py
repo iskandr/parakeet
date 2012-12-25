@@ -66,16 +66,16 @@ class ScopedEnv:
     return self.blocks[-1]
   
   def get(self, key):
-    for scope in self.scopes:
-      res = scope.get(key)
-      if res:
-        return res
+    for scope in reversed(self.scopes):
+      if key in scope:
+        return scope[key]
     return None 
   
   def __getitem__(self, key):
     for scope in reversed(self.scopes):
-      if key in scope:
-        return scope[key]
+      res = scope.get(key)
+      if res:
+        return res 
 
     if self.outer_env:
       # don't actually keep the outer binding name, we just

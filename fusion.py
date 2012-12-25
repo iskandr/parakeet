@@ -30,11 +30,12 @@ def fuse(prev_fn, next_fn, const_args = [None]):
                         type_env = type_env)
 
 class Fusion(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn)
+  def __init__(self):
+    Transform.__init__(self)
     # name of variable -> Map or Scan adverb  
     self.adverb_bindings = {}
-    
+  
+  def pre_apply(self, fn):
     # map each variable to 
     self.use_counts = use_count(fn)
       

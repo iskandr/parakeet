@@ -26,8 +26,8 @@ from use_analysis import use_count
 #    might depend on mutable state or modify it itself
 
 class Simplify(Transform):
-  def __init__(self, fn):
-    transform.Transform.__init__(self, fn)
+  def __init__(self):
+    transform.Transform.__init__(self)
     # associate var names with any immutable values
     # they are bound to
     self.bindings = {}
@@ -36,6 +36,7 @@ class Simplify(Transform):
     # and stored in some variable?
     self.available_expressions = ScopedDictionary()
 
+  def pre_apply(self, fn):
     ma = TypeBasedMutabilityAnalysis()
 
     # which types have elements that might
@@ -348,9 +349,9 @@ class Simplify(Transform):
 
       left_values = [merge[name][0] for name in loop_carried_vars]
       right_values = [merge[name][1] for name in loop_carried_vars]
-      left_cond = subst.subst(expr, dict(zip(loop_carried_vars, left_values)))
+      left_cond = subst.subst_expr(expr, dict(zip(loop_carried_vars, left_values)))
       left_var = self.temp_in_block(left_cond, outer_block, name = "cond")
-      right_cond = subst.subst(expr, dict(zip(loop_carried_vars, right_values)))
+      right_cond = subst.subst_expr(expr, dict(zip(loop_carried_vars, right_values)))
       right_var = self.temp_in_block(right_cond, loop_body, name = "cond")
       cond_var = self.fresh_var(left_var.type, "cond")
       merge[cond_var.name] = (left_var, right_var)

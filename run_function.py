@@ -109,9 +109,12 @@ def specialize_and_compile(fn, args, kwargs = {}):
   arguments needed to actually execute.
   """
   untyped, arg_values, arg_types = prepare_args(fn, args, kwargs)
+
+  
   # propagate types through function representation and all
   # other functions it calls
   typed = type_inference.specialize(untyped, arg_types)
+
 
   lowered = lowering.lower(typed, tile=False)
 

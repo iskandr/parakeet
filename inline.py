@@ -1,12 +1,10 @@
+import names 
+
 import syntax 
 from syntax import If, Assign, While, Return, Var, TypedFn  
-import names 
-from subst import subst_list
 import syntax_visitor
 
-
-from subst import subst_list
-from syntax import If, Assign, While, Return, Var
+from subst import subst_stmt_list
 from transform import Transform
 
 class FoundCall(Exception):
@@ -80,15 +78,15 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
     var = syntax.Var(arg_name, type = t )
     dest_block.append(syntax.Assign(var, actual))
 
-  new_body = subst_list(src_fundef.body, rename_dict)
+  new_body = subst_stmt_list(src_fundef.body, rename_dict)
   result_var = replace_return_with_var(new_body, dest_type_env,
                                        src_fundef.return_type)
   dest_block.extend(new_body)
   return result_var
 
 class Inliner(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn)
+  def __init__(self):
+    Transform.__init__(self)
     self.count = 0
 
   def transform_Call(self, expr):
@@ -104,8 +102,8 @@ class Inliner(Transform):
     else:
       return expr
 
-  def apply(self):
-    if contains_calls(self.fn):
-      return Transform.apply(self)
+  def apply(self, fn):
+    if contains_calls(fn):
+      return Transform.apply(self, fn)
     else:
-      return self.fn
+      return fn
