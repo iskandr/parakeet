@@ -1,4 +1,4 @@
-import syntax 
+
 from syntax import Assign, Return, If, While 
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
 from syntax import Call, TypedFn, Struct, Alloc 

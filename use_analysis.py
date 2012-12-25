@@ -1,4 +1,5 @@
 import syntax 
+from syntax import Var, Tuple 
 from syntax_visitor import SyntaxVisitor 
 
 class FindLiveVars(SyntaxVisitor):
@@ -10,9 +11,10 @@ class FindLiveVars(SyntaxVisitor):
     self.live_vars.add(expr.name)
     
   def visit_lhs(self, expr):
-    if isinstance(expr, syntax.Var):
+    expr_class = expr.__class__ 
+    if expr_class is Var:
       pass 
-    elif isinstance(expr, syntax.Tuple):
+    elif expr_class is Tuple:
       for elt in expr.elts:
         self.visit_lhs(elt)
     else:
@@ -40,9 +42,10 @@ class VarUseCount(SyntaxVisitor):
     self.counts[expr.name] = old_count + 1 
     
   def visit_lhs(self, expr):
-    if isinstance(expr, syntax.Var):
+    expr_class = expr.__class__ 
+    if expr_class is Var:
       pass 
-    elif isinstance(expr, syntax.Tuple):
+    elif expr_class is Tuple:
       for elt in expr.elts:
         self.visit_lhs(elt)
     else:

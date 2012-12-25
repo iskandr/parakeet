@@ -3,29 +3,58 @@
 # stripped down to fit in my underpowered brain 
  
 import copy 
+from itertools import izip 
 
+
+_members_cache = {}  
+_mro_cache = {}
+_reversed_mro_cache = {}
+  
 
 class Node(object):
-  _members_cache = {}  
-  _members_set_cache = {}
   
-  
+  @classmethod
+  def get_mro(klass):
+    class_name = klass.__name__ 
+    if class_name in _mro_cache:
+      return _mro_cache[class_name]
+    else:
+      mro = klass.mro()
+      rev_mro = list(reversed(mro))
+      _mro_cache[class_name] = mro
+      _reversed_mro_cache[class_name] = rev_mro
+      return mro 
+    
+  @classmethod
+  def get_reverse_mro(klass):
+    class_name = klass.__name__
+    if class_name in _reversed_mro_cache:
+      return _reversed_mro_cache[class_name]
+    else:
+      mro = klass.mro()
+      rev_mro = list(reversed(mro))
+      _mro_cache[class_name] = mro
+      _reversed_mro_cache[class_name] = rev_mro
+      return rev_mro 
+      
+      
   @classmethod
   def members(klass):
     'Walk through classes in mro order, accumulating member names.'
-    if klass in klass._members_cache:
-      return klass._members_cache[klass]
+    class_name = klass.__name__
+    if class_name  in _members_cache:
+      return _members_cache[class_name]
     
     m = []
-    for c in klass.mro():
+    for c in klass.get_mro():
       curr_members = getattr(c, '_members', []) 
       for name in curr_members:
         if name not in m:
           m.append(name)  
-    klass._members_cache[klass] = m
-    klass._members_set_cache[klass] = set(m)
+    _members_cache[class_name] = m
     return m
   
+
   
   def iteritems(self):
     for k in self.members():
@@ -35,31 +64,35 @@ class Node(object):
     for (_,v) in self.iteritems():
       yield v 
   
-  
   def items(self):
     [(k,getattr(self,k)) for k in self.members()]
   
   def __init__(self, *args, **kw):
     members = self.members()
-    if len(args) > len(members):
-      raise Exception('Too many arguments for ' + self.__class__.__name__ + 
-                      '.  Expected: ' + str(members))
-    
-    for field in members:
-      value = kw.get(field, None)
-      setattr(self, field, value)
+    n_args = len(args)
+    n_members = len(members)
+    class_name = self.__class__.__name__ 
+    self_dict = self.__dict__
+    if n_args == n_members:
+      assert len(kw) == 0
+      for (k,v) in zip(members,args):
+        self_dict[k] = v
+    elif n_args < n_members:
+      for field in members:
+        self_dict[field] = kw.get(field)
       
-    for field, value in zip(members, args):
-      setattr(self, field, value)
-
-    klass = self.__class__ 
-    members_set = self._members_set_cache[klass]
-    for k in kw.iterkeys():
-      assert k in members_set, \
+      for field, value in izip(members, args):
+        self_dict[field] = value
+        
+      for (k,v) in kw.iteritems():
+        assert k in members, \
           "Keyword argument '%s' not recognized for %s: %s" % \
           (k, self.node_type(), members)
-     
-    for C in reversed(klass.mro()):
+    else:
+      raise Exception('Too many arguments for %s, expected %s' % \
+                      (class_name, members)) 
+       
+    for C in _reversed_mro_cache[class_name]:
       if 'node_init' in C.__dict__:
         C.node_init(self)
 
@@ -88,13 +121,11 @@ class Node(object):
     return cls.__name__
   
   def clone(self, **kwds):
-
     cloned = copy.deepcopy(self)
     for (k,v) in kwds.values():
       setattr(cloned, k, v)
     return cloned 
     
-  
   def __str__(self):
     member_strings = []
     for (k,v) in self.iteritems():

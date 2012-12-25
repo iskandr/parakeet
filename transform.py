@@ -5,8 +5,12 @@ import verify
 import syntax
 from syntax import If, Assign, While, Return 
 from syntax import Var, Tuple, Index, Attribute, Const  
+from syntax import PrimCall, Struct, Alloc, Cast
+from syntax import TupleProj, Slice, ArrayView
+from syntax import Call, TypedFn 
 from args import ActualArgs
 from codegen import Codegen
+
 
 class Transform(Codegen):
   def __init__(self, fn, verify = config.opt_verify, reverse = False):
@@ -19,8 +23,6 @@ class Transform(Codegen):
     assert self.type_env is not None
     return self.type_env[name]
 
-  def transform_TypedFn(self, fn):
-    return fn
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
@@ -44,9 +46,11 @@ class Transform(Codegen):
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
+
     if hasattr(self, method_name):
       return getattr(self, method_name)
     else:
+
       return None
  
  
@@ -75,6 +79,51 @@ class Transform(Codegen):
     expr.value = self.transform_expr(expr.value)
     return expr 
   
+  def transform_PrimCall(self, expr):
+    expr.args = self.transform_expr_tuple(expr.args)
+    return expr 
+  
+  def transform_Call(self, expr):
+    expr.args = self.transform_expr_tuple(expr.args)
+    return expr 
+  
+  def transform_Alloc(self, expr):
+    expr.count = self.transform_expr(expr.count)
+    return expr 
+  
+  def transform_Struct(self, expr):
+    expr.args = self.transform_expr_tuple(expr.args)
+    return expr 
+  
+  def transform_Cast(self, expr):
+    expr.value = self.transform_expr(expr.value)
+    return expr 
+  
+  def transform_TupleProj(self, expr):
+    expr.tuple = self.transform_expr(expr.tuple)
+    return expr 
+  
+  def transform_TypedFn(self, expr):
+    """
+    By default, don't do recursive transformation of 
+    referenced functions
+    """
+    return expr 
+  
+  def transform_Slice(self, expr):
+    expr.start = self.transform_expr(expr.start) if expr.start else None
+    expr.stop = self.transform_expr(expr.stop) if expr.stop else None 
+    expr.step = self.transform_expr(expr.step) if expr.step else None 
+    return expr 
+  
+  def transform_ArrayView(self, expr):
+    expr.data = self.transform_expr(expr.data)
+    expr.shape = self.transform_expr(expr.shape)
+    expr.strides = self.transform_expr(expr.strides)
+    expr.offset = self.transform_expr(expr.offset)
+    expr.total_elts = self.transform_expr(expr.total_elts)
+    return expr 
+      
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
@@ -86,18 +135,37 @@ class Transform(Codegen):
       result = self.transform_Const(expr)
     elif expr_class is Tuple:
       result = self.transform_Tuple(expr)
+    elif expr_class is TupleProj:
+      result = self.transform_TupleProj(expr)
     elif expr_class is Index:
       result = self.transform_Index(expr)
+    elif expr_class is Slice:
+      result = self.transform_Slice(expr)
     elif expr_class is Attribute:
       result = self.transform_Attribute(expr)
+    elif expr_class is PrimCall:
+      result = self.transform_PrimCall(expr)
+    elif expr_class is Struct:
+      result = self.transform_Struct(expr)
+    elif expr_class is Alloc:
+      result = self.transform_Alloc(expr)
+    elif expr_class is Cast:
+      result = self.transform_Cast(expr)
+    elif expr_class is ArrayView:
+      result = self.transform_ArrayView(expr)
+    elif expr_class is TypedFn:
+      result = self.transform_TypedFn(expr)
+    elif expr_class is Call:
+      result = self.transform_Call(expr)
+    
     else:
       method = self.find_method(expr, "transform_")
       if method:
         result = method(expr)
       else:
         result = self.transform_generic_expr(expr)
-    assert result is not None, \
-           "Transformation turned %s into None" % (expr,)
+    if result is None:
+      result = expr 
     assert result.type is not None, "Missing type for %s" % result
     return result
 
@@ -139,6 +207,8 @@ class Transform(Codegen):
   def transform_expr_list(self, exprs):
     return [self.transform_expr(e) for e in exprs]
 
+  def transform_expr_tuple(self, exprs):
+    return tuple(self.transform_expr_list(exprs))
   def transform_merge(self, phi_nodes):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():

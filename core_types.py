@@ -252,7 +252,7 @@ class ScalarT(ConcreteT):
     return self.dtype.itemsize
 
   def __eq__(self, other):
-    return isinstance(other, ScalarT) and other.dtype == self.dtype
+    return other.__class__ is self.__class__ and other.dtype == self.dtype
 
   def __hash__(self):
     return hash(self.dtype)
@@ -290,6 +290,8 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
 class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""
   _members = []
+  
+
 
 class BoolT(IntT):
   """
@@ -299,6 +301,9 @@ class BoolT(IntT):
   def node_init(self):
     assert dtypes.is_bool(self.dtype)
     self.name = 'bool'
+    
+  def __eq__(self, other):
+    return other.__class__ is BoolT 
 
 Bool = register_scalar_type(BoolT, dtypes.bool8, equiv_python_types = [bool])
 

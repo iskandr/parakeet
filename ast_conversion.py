@@ -445,8 +445,8 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)
-  print source
-  syntax = ast.parse(source, mode = 'single')
+
+  syntax = ast.parse(source)
   if isinstance(syntax, (ast.Module, ast.Interactive)):
     assert len(syntax.body) == 1
     syntax = syntax.body[0]
