@@ -23,8 +23,8 @@ def build_pipeline(copy = True,
                      licm = config.opt_licm):
   p = [CloneFunction] if copy else []
 
-  def add(t):
-    p.append(t)
+  def add(*ts):
+    p.extend(ts)
     if simplify:
       p.append(Simplify)
       p.append(DCE)
@@ -36,8 +36,7 @@ def build_pipeline(copy = True,
   if inline:
     add(Inliner)
 
-  add(LowerIndexing)
-  add(LowerStructs)
+  add(LowerIndexing, LowerStructs)
 
   if licm:
     add(LoopInvariantCodeMotion)

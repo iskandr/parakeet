@@ -9,12 +9,13 @@ from collect_vars import collect_var_names_list
 class DCE(Transform):
   def __init__(self):
     Transform.__init__(self, reverse = True)
-    
+  
   def pre_apply(self, fn):
-    self.use_counts = use_count(fn)
+    self.use_counts = use_count(fn)  
     
   def is_live(self, name):
-    return name in self.use_counts and self.use_counts[name] > 0
+    count = self.use_counts.get(name)
+    return count and count > 0
          
   def is_live_lhs(self, lhs):
     c = lhs.__class__

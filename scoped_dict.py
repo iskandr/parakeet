@@ -28,8 +28,11 @@ class ScopedDictionary(object):
     assert False, "Key %s not found" % key
     
   def __setitem__(self, key, value):
-    self.top()[key] = value 
+    self.scopes[-1][key] = value 
     
+  def setdefault(self, key, value):
+    self.scopes[-1].setdefault(key, value)
+  
   def __contains__(self, key):
     for scope in reversed(self.scopes):
       if key in scope:

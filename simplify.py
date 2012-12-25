@@ -258,7 +258,7 @@ class Simplify(Transform):
     self.bindings[name] = value
 
   def bind_var(self, name, rhs):
-    if isinstance(rhs, syntax.Var):
+    if rhs.__class__ is Var:
       old_val = self.bindings.get(rhs.name)
       if old_val and self.is_simple(old_val):
         self.set_binding(name, old_val)
@@ -300,14 +300,13 @@ class Simplify(Transform):
       lhs = self.transform_lhs_Index(lhs)
     elif lhs_class is Attribute:
       lhs = self.transform_lhs_Attribute(lhs)
+    elif lhs_class is Var:
+      self.bind_var(lhs.name, rhs)
+      if rhs_class not in (Var, Const) and self.immutable(rhs):
+        self.available_expressions.setdefault(rhs, lhs)
     else:
-      # lhs is Var or tuple
       self.bind(lhs, rhs)
-      if lhs_class is Var and \
-         rhs_class not in (Var, Const) and \
-         self.immutable(rhs) and \
-         rhs not in self.available_expressions:
-        self.available_expressions[rhs] = lhs
+         
 
     if rhs_class is Var and \
        rhs.name in self.bindings and \

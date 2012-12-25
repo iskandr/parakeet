@@ -207,15 +207,15 @@ def compile_expr(expr, env, builder):
         assert isinstance(t, BoolT)
         instr = llvm_prims.bool_binops[prim]
       op = getattr(builder, instr)
-      return op(name = "%s_result" % prim.name, *llvm_args)
+      return op(name = result_name, *llvm_args)
     elif isinstance(prim, prims.Logical):
       if prim == prims.logical_and:
-        return builder.and_(name = "logical_and_result", *llvm_args)
+        return builder.and_(name = result_name, *llvm_args)
       elif prim == prims.logical_not:
-        return builder.not_(name = "logical_not_result", *llvm_args)
+        return builder.not_(name = result_name, *llvm_args)
       else:
         assert prim == prims.logical_or
-        return builder.or_(name = "logical_or_result", *llvm_args)
+        return builder.or_(name = result_name, *llvm_args)
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % expr
 
