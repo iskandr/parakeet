@@ -328,6 +328,7 @@ class MemoizedTransform(Transform):
 
 def apply_pipeline(fn, transforms):
   for T in transforms:
+    print "!!!", T
     if type(T) == type:
       fn = T().apply(fn)
     else:
