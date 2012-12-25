@@ -20,6 +20,7 @@ def phi_nodes_to_str(phi_nodes):
   # add tabs
   return whole.replace("\n", "\n    ")
 
+
 class Assign(Stmt):
   _members = ['lhs', 'rhs']
 
@@ -28,6 +29,16 @@ class Assign(Stmt):
       return "%s : %s = %s" % (self.lhs, self.lhs.type, self.rhs)
     else:
       return "%s = %s" % (self.lhs, self.rhs)
+
+
+class RunExpr(Stmt):
+  """
+  Run an expression without binding any new variables
+  """
+  _members = ['value']
+  
+  def __str__(self):
+    return str(self.value)
 
 class Return(Stmt):
   _members = ['value']

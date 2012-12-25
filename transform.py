@@ -2,7 +2,7 @@ import config
 import verify
 
 import syntax
-from syntax import If, Assign, While, Return 
+from syntax import If, Assign, While, Return, RunExpr 
 from syntax import Var, Tuple, Index, Attribute, Const  
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
@@ -13,11 +13,14 @@ from codegen import Codegen
 
 
 class Transform(Codegen):
-  def __init__(self, fn, verify = config.opt_verify, reverse = False):
+  def __init__(self, verify = config.opt_verify, 
+                      reverse = False, 
+                      require_types = True):
     Codegen.__init__(self)
-    self.fn = fn
+    self.fn = None 
     self.verify = verify
     self.reverse = reverse
+    self.require_types = require_types 
 
   def lookup_type(self, name):
     assert self.type_env is not None
@@ -166,9 +169,9 @@ class Transform(Codegen):
       else:
         result = self.transform_generic_expr(expr)
     if result is None:
-      result = expr 
-    assert result.type is not None, "Missing type for %s" % result
-    return result
+      return expr 
+    else:
+      return result
 
   def transform_lhs_Var(self, expr):
     return self.transform_Var(expr)
@@ -223,6 +226,11 @@ class Transform(Codegen):
     stmt.lhs =self.transform_lhs(stmt.lhs)
     return stmt
 
+
+  def transform_RunExpr(self, stmt):
+    stmt.value = self.transform_expr(stmt.value)
+    return stmt
+  
   def transform_Return(self, stmt):
     stmt.value = self.transform_expr(stmt.value)
     return stmt
@@ -248,9 +256,12 @@ class Transform(Codegen):
       return self.transform_While(stmt)
     elif stmt_class is If:
       return self.transform_If(stmt)
-    else:
-      assert stmt_class is Return, "Unexpected statement %s" % stmt_class
+    elif stmt_class is Return:
       return self.transform_Return(stmt)
+    elif stmt_class is RunExpr:
+      return self.transform_RunExpr(stmt)
+    else:
+      assert False, "Unexpected statement %s" % stmt_class
 
   def transform_block(self, stmts):
     self.blocks.push()
@@ -269,7 +280,9 @@ class Transform(Codegen):
   def post_apply(self, new_fn):
     pass
 
-  def apply(self):
+  def apply(self, fn):
+    self.fn = fn 
+    
     if config.print_functions_before_transforms:
       print
       print "Running transform %s" % self.__class__.__name__
@@ -278,6 +291,7 @@ class Transform(Codegen):
       print
 
     fn = self.pre_apply(self.fn)
+    
     if fn is None:
       fn = self.fn
 
@@ -302,17 +316,20 @@ class Transform(Codegen):
 class MemoizedTransform(Transform):
   _cache = {}
 
-  def apply(self):
-    key = (self.__class__.__name__, self.fn.name)
+  def apply(self, fn):
+    key = (self.__class__.__name__, fn.name)
     if key in self._cache:
       return self._cache[key]
     else:
-      new_fn = Transform.apply(self)
+      new_fn = Transform.apply(self, fn)
       self._cache[key] = new_fn
       return new_fn
 
 def apply_pipeline(fn, transforms):
   for T in transforms:
-    fn = T(fn).apply()
-
+    if type(T) == type:
+      fn = T().apply(fn)
+    else:
+      assert isinstance(T, Transform)
+      fn = T.apply(fn)
   return fn

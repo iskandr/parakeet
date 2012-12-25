@@ -14,7 +14,7 @@ import prims
 from prims import Prim, prim_wrapper
 
 from scoped_env import ScopedEnv
-from subst import subst, subst_list
+from subst import subst_expr, subst_stmt_list
 from syntax_helpers import none, true, false
 import config
 
@@ -380,8 +380,8 @@ class AST_Translator(ast.NodeVisitor):
         merge[new_name] = (syntax.Var(name_before), syntax.Var(name_after))
         substitutions[name_before]  = new_name
         curr_scope[k] = new_name #name_after
-    cond = subst(cond, substitutions)
-    body = subst_list(body, substitutions)
+    cond = subst_expr(cond, substitutions)
+    body = subst_stmt_list(body, substitutions)
     return syntax.While(cond, body, merge)
 
   def visit_block(self, stmts):

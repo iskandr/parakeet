@@ -103,8 +103,10 @@ class Find_LICM_Candidates(SyntaxVisitor):
 from transform import Transform  
 
 class LoopInvariantCodeMotion(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn)
+  def __init__(self):
+    Transform.__init__(self)
+  
+  def pre_apply(self, fn):
     self.analysis = Find_LICM_Candidates()
     self.safe_to_move = self.analysis.visit_fn(fn)
     self.binding_depth = {}

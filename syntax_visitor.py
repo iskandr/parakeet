@@ -1,5 +1,5 @@
 
-from syntax import Assign, Return, If, While 
+from syntax import Assign, Return, If, While, RunExpr 
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
 from syntax import Call, TypedFn, Struct, Alloc 
 from syntax import ArrayView, Slice, TupleProj, Cast
@@ -184,9 +184,14 @@ class SyntaxVisitor(object):
     self.visit_block(stmt.true)
     self.visit_block(stmt.false)
     self.visit_merge_if(stmt.merge)
-    
+  
+  def visit_RunExpr(self, stmt):
+    self.visit_expr(stmt.value)
+  
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
+  
+
   
   def visit_merge_loop_start(self, phi_nodes):
     pass 
@@ -212,6 +217,8 @@ class SyntaxVisitor(object):
       self.visit_While(stmt)
     elif c is If:
       self.visit_If(stmt)
+    elif c is RunExpr:
+      self.visit_RunExpr(stmt)
     else:
       assert False, "Statement not implemented: %s" % stmt      
     
