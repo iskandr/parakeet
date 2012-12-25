@@ -97,5 +97,17 @@ def nested_each(x):
 def test_nested_each():
   expect(nested_each, [X], X)
 
+def ident(x):
+  return x
+
+def each_ident(x):
+  return each(ident, x)
+
+def each_each_ident(x):
+  return each(each_ident, x)
+
+def test_map_map():
+  expect(each_each_ident, [X], X)
+
 if __name__ == '__main__':
   run_local_tests()

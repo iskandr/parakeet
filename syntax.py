@@ -54,13 +54,12 @@ class If(Stmt):
     return str(self)
 
 class While(Stmt):
-  """A loop consists of a header, which runs
-     before each iteration, a condition for
-     continuing, the body of the loop,
-     and optionally (if we're in SSA) merge
-     nodes for incoming and outgoing variables
-     of the form [(new_var1, (old_var1,old_var2)]
-   """
+  """
+  A loop consists of a header, which runs before each iteration, a condition for
+  continuing, the body of the loop, and optionally (if we're in SSA) merge nodes
+  for incoming and outgoing variables of the form
+  [(new_var1, (old_var1,old_var2)]
+  """
   _members = ['cond', 'body', 'merge']
 
   def __repr__(self):
@@ -76,7 +75,7 @@ class While(Stmt):
 
 class Expr(Node):
   _members = ['type']
-  
+
   def children(self):
     for v in self.itervalues():
       if v and isinstance(v, Expr):
@@ -84,14 +83,14 @@ class Expr(Node):
       elif isinstance(v, (list,tuple)):
         for child in v:
           if isinstance(child, Expr):
-            yield child 
+            yield child
 
 class Const(Expr):
   _members = ['value']
-  
+
   def children(self):
     return (self.value,)
-  
+
   def __repr__(self):
     if self.type and not isinstance(self.type, core_types.NoneT):
       return "%s : %s" % (self.value, self.type)
@@ -128,16 +127,16 @@ class Var(Expr):
     return self.__class__ == other.__class__ and \
            self.type == other.type and \
            self.name == other.name
-  
+
   def children(self):
     return ()
 
 class Attribute(Expr):
   _members = ['value', 'name']
-  
+
   def children(self):
-    yield self.value 
-  
+    yield self.value
+
   def __str__(self):
     return "attr(%s, '%s')" % (self.value, self.name)
 
@@ -153,15 +152,15 @@ class Index(Expr):
   _members = ['value', 'index']
 
   def children(self):
-    yield self.value 
-    yield self.index 
-    
+    yield self.value
+    yield self.index
+
   def __str__(self):
     return "%s[%s]" % (self.value, self.index)
 
 class Tuple(Expr):
   _members = ['elts']
-  
+
   def __str__(self):
     if len(self.elts) > 0:
       return ", ".join([str(e) for e in self.elts])
@@ -172,17 +171,17 @@ class Tuple(Expr):
     self.elts = tuple(self.elts)
 
   def children(self):
-    return self.elts 
+    return self.elts
 
 
 class Array(Expr):
   _members = ['elts']
-  
+
   def node_init(self):
     self.elts = tuple(self.elts)
-    
+
   def children(self):
-    return self.elts 
+    return self.elts
 
 
 class Closure(Expr):
@@ -193,16 +192,16 @@ class Closure(Expr):
 
   def node_init(self):
     self.args = tuple(self.args)
-  
+
   def children(self):
     if isinstance(self.fn, Expr):
-      yield self.fn 
+      yield self.fn
     for arg in self.args:
-      yield arg 
+      yield arg
 
 class Call(Expr):
   _members = ['fn', 'args']
-  
+
   def __str__(self):
     if isinstance(self.fn, (Fn, TypedFn)):
       fn_name = self.fn.name
@@ -218,9 +217,9 @@ class Call(Expr):
     return str(self)
 
   def children(self):
-    yield self.fn 
+    yield self.fn
     for arg in self.args:
-      yield arg 
+      yield arg
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']
@@ -230,16 +229,15 @@ class Slice(Expr):
 
   def __repr__(self):
     return str(self)
-  
+
   def children(self):
-    yield self.start 
-    yield self.stop 
-    yield self.step 
-   
+    yield self.start
+    yield self.stop
+    yield self.step
+
 class PrimCall(Expr):
   """
-  Call a primitive function, the "prim" field should be a
-  prims.Prim object
+  Call a primitive function, the "prim" field should be a prims.Prim object
   """
   _members = ['prim', 'args']
 
@@ -261,9 +259,9 @@ class PrimCall(Expr):
 
   def node_init(self):
     self.args = tuple(self.args)
-  
+
   def children(self):
-    return self.args 
+    return self.args
 
 ############################################################################
 #
@@ -278,8 +276,8 @@ class ConstArray(Expr):
 
 class ConstArrayLike(Expr):
   """
-  Create an array with the same shape as the first arg, but with all values
-  set to the second arg
+  Create an array with the same shape as the first arg, but with all values set
+  to the second arg
   """
   _members = ['array', 'value']
 
@@ -288,13 +286,13 @@ class ArrayView(Expr):
   Create a new view on already allocated underlying data
   """
   _members = ['data', 'shape', 'strides', 'offset', 'total_elts']
-  
+
   def children(self):
-    yield self.data 
-    yield self.shape 
-    yield self.strides 
-    yield self.offset 
-    yield self.total_elts 
+    yield self.data
+    yield self.shape
+    yield self.strides
+    yield self.offset
+    yield self.total_elts
 
 class Fn(Expr):
   """
@@ -302,8 +300,8 @@ class Fn(Expr):
   A top-level function can have references to python values from its enclosing
   scope, which are stored in the 'python_refs' field.
 
-  A nested function, on the other hand, might refer to some variables from
-  its enclosing Parakeet scope, whose original names are stored in
+  A nested function, on the other hand, might refer to some variables from its
+  enclosing Parakeet scope, whose original names are stored in
   'parakeet_nonlocals'
   """
 
@@ -339,7 +337,7 @@ class Fn(Expr):
       return [ref.deref() for ref in self.python_refs]
     else:
       return []
-  
+
   def children(self):
     return ()
 
@@ -351,10 +349,10 @@ class Fn(Expr):
 
 class TupleProj(Expr):
   _members = ['tuple', 'index']
-  
+
   def children(self):
     return (self.tuple,)
-  
+
 class ClosureElt(Expr):
   _members = ['closure', 'index']
 
@@ -363,25 +361,25 @@ class ClosureElt(Expr):
 
   def children(self):
     return (self.closure,)
-    
+
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
 
 class Struct(Expr):
   """
-  Eventually all non-scalar data should be transformed to be created
-  with this syntax node, signifying explicit struct allocation
+  Eventually all non-scalar data should be transformed to be created with this
+  syntax node, signifying explicit struct allocation
   """
   _members = ['args']
 
   def __str__(self):
     return "Struct(%s) : %s" % \
            (", ".join(str(arg) for arg in self.args), self.type)
-  
+
   def children(self):
     return self.args
-  
+
 class Alloc(Expr):
   """
   Allocates a block of data, returns a pointer
@@ -390,7 +388,7 @@ class Alloc(Expr):
 
   def __str__(self):
     return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)
-  
+
   def children(self):
     return (self.count,)
 
@@ -449,6 +447,6 @@ class TypedFn(Expr):
 
   def __hash__(self):
     return hash(self.name)
-  
+
   def children(self):
     return ()

@@ -5,7 +5,7 @@ import testing_helpers
 def add1(xi):
   return xi+1
 
-int_vec = np.arange(100)
+int_vec = np.arange(80)
 
 def test_add1():
   result = parakeet.each(add1, int_vec)

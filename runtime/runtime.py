@@ -103,6 +103,8 @@ class Runtime():
     # can compile with a particular setting of register tile sizes and loop
     # unrollings.
     print "num_tiles:", num_tiles
+    if num_tiles == 0:
+      num_tiles = 1
     tile_sizes_t = POINTER(c_int) * self.dop
     self.tile_sizes = tile_sizes_t()
     single_tile_sizes_t = c_int * num_tiles

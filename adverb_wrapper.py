@@ -28,13 +28,13 @@ def untyped_wrapper(adverb_class,
   unpacked varargs tuple.
   """
   axis = syntax_helpers.wrap_if_constant(axis)
-  key = adverb_class.__name__, \
-        map_fn_name, \
-        combine_fn_name, \
-        emit_fn_name, \
-        axis, \
-        tuple(data_names), \
-        varargs_name
+  key = (adverb_class.__name__,
+         map_fn_name,
+         combine_fn_name,
+         emit_fn_name,
+         axis,
+         tuple(data_names),
+         varargs_name)
 
   if key in _adverb_wrapper_cache:
     return _adverb_wrapper_cache[key]
@@ -140,7 +140,7 @@ def untyped_map_wrapper(fn, axis = 0):
   return untyped_wrapper(adverbs.Map,
                          map_fn_name = 'f',
                          data_names = data_names,
-                         varargs_name  = varargs_name,
+                         varargs_name = varargs_name,
                          axis = axis)
 
 def untyped_allpairs_wrapper(fn, axis = 0):

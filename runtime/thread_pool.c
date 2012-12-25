@@ -124,6 +124,9 @@ void launch_job(thread_pool_t *thread_pool,
                 work_function_t *work_functions, void **args, job_t *job,
                 int **tile_sizes, int reset_tps) {
   assert(job->num_lists <= thread_pool->num_workers);
+  printf("Launching job: %p\n", work_functions);
+  printf("args: %p\n", args);
+  printf("tiles_sizes[0][0]: %d\n", tile_sizes[0][0]);
 
   thread_pool->job = job;
   thread_pool->num_active = job->num_lists;
