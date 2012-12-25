@@ -15,21 +15,17 @@ from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
 def build_pipeline(copy = True,
-                   tile = False,
                    simplify = config.opt_simplify_when_lowering,
                    inline = config.opt_inline_when_lowering,
                    fusion = config.opt_fusion,
                    licm = config.opt_licm):
   p = [CloneFunction] if copy else []
+
   def add(t):
     p.append(t)
     if simplify:
       p.append(Simplify)
       p.append(DCE)
-
-  if tile:
-    add(TileAdverbs)
-    add(LowerTiledAdverbs)
 
   if fusion:
     add(Fusion)
@@ -54,10 +50,22 @@ def lower(fundef, tile=False):
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
-    pipeline = build_pipeline(copy = True, tile = tile)
+    num_tiles = 0
+    if tile:
+      p = [CloneFunction,
+           TileAdverbs, Simplify, DCE,
+           LowerTiledAdverbs, Simplify, DCE]
+      fundef = apply_pipeline(fundef, p)
+      num_tiles = fundef.num_tiles
+      print fundef
+
+    pipeline = build_pipeline(copy=True)
     lowered_fn = apply_pipeline(fundef, pipeline)
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
+
+    if tile:
+      lowered_fn.num_tiles = num_tiles
 
     if config.print_lowered_function:
       print

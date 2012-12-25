@@ -1,7 +1,7 @@
 import ast
 import inspect
 import names
-import prims
+
 import syntax
 
 from args import FormalArgs, ActualArgs
@@ -396,8 +396,7 @@ class AST_Translator(ast.NodeVisitor):
     """
     Translate a nested function
     """
-    fundef = \
-        translate_function_ast(node, outer_env = self.env)
+    fundef = translate_function_ast(node, outer_env = self.env)
     local_name = self.env.fresh_var(node.name)
 
     if len(fundef.parakeet_nonlocals) > 0:
@@ -445,15 +444,15 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)
-
   syntax = ast.parse(source)
+
   if isinstance(syntax, (ast.Module, ast.Interactive)):
     assert len(syntax.body) == 1
     syntax = syntax.body[0]
   elif isinstance(syntax, ast.Expression):
     syntax = syntax.body
   assert isinstance(syntax, ast.FunctionDef), \
-    "Unexpected Python syntax node: %s" % syntax
+      "Unexpected Python syntax node: %s" % syntax
   return translate_function_ast(syntax, globals_dict, closure_vars,
                                 closure_cells)
 
@@ -492,5 +491,6 @@ def translate_function_value(fn):
     register_python_fn(fn, fundef)
 
     if config.print_untyped_function:
-      print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
+      print "[ast_conversion] Translated %s into untyped function:\n%s" % \
+            (fn, repr(fundef))
     return fundef

@@ -1,4 +1,3 @@
-
 import config
 import verify
 
@@ -8,6 +7,7 @@ from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
 from syntax import Call, TypedFn 
+
 from args import ActualArgs
 from codegen import Codegen
 
@@ -41,8 +41,7 @@ class Transform(Codegen):
       old_value = getattr(expr, member_name)
       new_value = self.transform_if_expr(old_value)
       setattr(expr, member_name, new_value)
-    return expr 
-    
+    return expr
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
@@ -52,29 +51,28 @@ class Transform(Codegen):
     else:
 
       return None
- 
- 
+
   """
-  Common cases for expression transforms: 
+  Common cases for expression transforms:
   we don't need to create a method for every
-  sort of expression but these run faster 
+  sort of expression but these run faster
   and allocate less memory than transform_generic_expr
   """
   def transform_Var(self, expr):
-    return expr 
-  
+    return expr
+
   def transform_Tuple(self, expr):
-    expr.elts = tuple(self.transform_expr(elt) for elt in expr.elts) 
-    return expr 
-  
+    expr.elts = tuple(self.transform_expr(elt) for elt in expr.elts)
+    return expr
+
   def transform_Const(self, expr):
-    return expr 
-  
+    return expr
+
   def transform_Index(self, expr):
     expr.value = self.transform_expr(expr.value)
-    expr.index = self.transform_expr(expr.index) 
-    return expr 
-  
+    expr.index = self.transform_expr(expr.index)
+    return expr
+
   def transform_Attribute(self, expr):
     expr.value = self.transform_expr(expr.value)
     return expr 
@@ -124,11 +122,14 @@ class Transform(Codegen):
     expr.total_elts = self.transform_expr(expr.total_elts)
     return expr 
       
+
+
+
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
     """
-    expr_class = expr.__class__ 
+    expr_class = expr.__class__
     if expr_class is Var:
       result = self.transform_Var(expr)
     elif expr_class is Const:
@@ -171,16 +172,16 @@ class Transform(Codegen):
 
   def transform_lhs_Var(self, expr):
     return self.transform_Var(expr)
-  
+
   def transform_lhs_Tuple(self, expr):
     return self.transform_Tuple(expr)
-  
+
   def transform_lhs_Index(self, expr):
     return self.transform_Index(expr)
 
   def transform_lhs_Attribute(self, expr):
     return self.transform_Attribute(expr)
-  
+
   def transform_lhs(self, lhs):
     """
     Overload this is you want different behavior
@@ -195,15 +196,15 @@ class Transform(Codegen):
       return self.transform_lhs_Index(lhs)
     elif lhs_class is Attribute:
       return self.transform_lhs_Attribute(lhs)
-    
+
     lhs_method = self.find_method(lhs, prefix = "transform_lhs_")
     if lhs_method:
       return lhs_method(lhs)
 
     method = self.find_method(lhs, prefix = "transform_")
-    assert method, "Unknown expression of type %s" % lhs_class 
+    assert method, "Unknown expression of type %s" % lhs_class
     return method(lhs)
-    
+
   def transform_expr_list(self, exprs):
     return [self.transform_expr(e) for e in exprs]
 
@@ -217,31 +218,30 @@ class Transform(Codegen):
       result[k] = new_left, new_right
     return result
 
-   
   def transform_Assign(self, stmt):
     stmt.rhs = self.transform_expr(stmt.rhs)
     stmt.lhs =self.transform_lhs(stmt.lhs)
-    return stmt 
+    return stmt
 
   def transform_Return(self, stmt):
     stmt.value = self.transform_expr(stmt.value)
-    return stmt 
-  
+    return stmt
+
   def transform_If(self, stmt):
     stmt.true = self.transform_block(stmt.true)
     stmt.false = self.transform_block(stmt.false)
     stmt.merge = self.transform_merge(stmt.merge)
     stmt.cond = self.transform_expr(stmt.cond)
-    return stmt 
-  
+    return stmt
+
   def transform_While(self, stmt):
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)
     stmt.cond = self.transform_expr(stmt.cond)
-    return stmt 
-  
+    return stmt
+
   def transform_stmt(self, stmt):
-    stmt_class = stmt.__class__ 
+    stmt_class = stmt.__class__
     if stmt_class is Assign:
       return self.transform_Assign(stmt)
     elif stmt_class is While:
@@ -249,10 +249,9 @@ class Transform(Codegen):
     elif stmt_class is If:
       return self.transform_If(stmt)
     else:
-      assert stmt_class is Return, \
-          "Unexpected statement %s" % stmt_class 
+      assert stmt_class is Return, "Unexpected statement %s" % stmt_class
       return self.transform_Return(stmt)
-     
+
   def transform_block(self, stmts):
     self.blocks.push()
     for old_stmt in (reversed(stmts) if self.reverse else stmts):
@@ -276,8 +275,8 @@ class Transform(Codegen):
       print "Running transform %s" % self.__class__.__name__
       print "--- before ---"
       print repr(self.fn)
-      print 
-      
+      print
+
     fn = self.pre_apply(self.fn)
     if fn is None:
       fn = self.fn
@@ -288,14 +287,14 @@ class Transform(Codegen):
     new_fn = self.post_apply(fn)
     if new_fn is None:
       new_fn = fn
-      
+
     if config.print_functions_after_transforms:
       print
       print "Done with  %s" % self.__class__.__name__
       print "--- after ---"
       print repr(new_fn)
       print
-   
+
     if self.verify:
       verify.verify(new_fn)
     return new_fn
@@ -315,5 +314,5 @@ class MemoizedTransform(Transform):
 def apply_pipeline(fn, transforms):
   for T in transforms:
     fn = T(fn).apply()
-    
+
   return fn

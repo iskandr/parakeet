@@ -15,8 +15,6 @@ import type_inference
 
 from runtime import runtime
 
-
-
 try:
   rt = runtime.Runtime()
 except:
@@ -34,8 +32,8 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     start_var = syntax.Var(names.fresh("start"))
     stop_var = syntax.Var(names.fresh("stop"))
     args_var = syntax.Var(names.fresh("args"))
-    tile_sizes_var = syntax.Var(names.fresh("tile_sizes"))
-    inputs = [start_var, stop_var, args_var, tile_sizes_var]
+    #tile_sizes_var = syntax.Var(names.fresh("tile_sizes"))
+    inputs = [start_var, stop_var, args_var]#, tile_sizes_var]
     fn_args_obj = FormalArgs()
     for var in inputs:
       name = var.name
@@ -76,35 +74,35 @@ from llvm.ee import GenericValue
 from args import ActualArgs
 
 def prepare_adverb_args(python_fn, args, kwargs):
-  
+
   """
-  Fetch the function's nonlocals and return an 
+  Fetch the function's nonlocals and return an
   ActualArgs object of both the arg values and
   their types
-  """ 
+  """
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
   if isinstance(closure_t.fn, str):
     untyped = syntax.Fn.registry[closure_t.fn]
   else:
     untyped = closure_t.fn
-  
+
   nonlocals = list(untyped.python_nonlocals())
   adverb_arg_values = ActualArgs(args, kwargs)
 
   # get types of all inputs
   adverb_arg_types = adverb_arg_values.transform(type_conv.typeof)
-  return untyped, closure_t, nonlocals, adverb_arg_values, adverb_arg_types   
+  return untyped, closure_t, nonlocals, adverb_arg_values, adverb_arg_types
 
 
 def par_each(fn, *args, **kwds):
-  
+  print "par_each"
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis', 0)
 
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
-    
+
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   map_result_type = type_inference.infer_Map(closure_t, arg_types)
 
@@ -159,7 +157,8 @@ def par_each(fn, *args, **kwds):
     c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
     # Execute on thread pool
-    rt.run_untiled_job(wf_ptr, c_args_array, num_iters)
+    rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters,
+                                lowered.num_tiles)
     output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
 
     output_contents = [ptr.contents for ptr in output_ptrs]
@@ -232,12 +231,15 @@ def create_adverb_hook(adverb_class,
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 
-
 def get_axis(kwargs):
   axis = kwargs.get('axis', 0)
   return syntax_helpers.unwrap_constant(axis)
 
-@staged_macro("axis") #, call_from_python=par_each)
+call_from_python = None
+if config.call_from_python_in_parallel:
+  call_from_python = par_each
+
+@staged_macro("axis", call_from_python=call_from_python)
 def each(f, *xs, **kwargs):
   return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 

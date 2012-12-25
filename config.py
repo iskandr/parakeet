@@ -47,3 +47,10 @@ llvm_num_passes = 4
 
 # run verifier over generated LLVM code?
 llvm_verify = True
+
+######################################
+#         RUNTIME OPTIONS            #
+######################################
+
+# Run the adverbs called from Python in parallel
+call_from_python_in_parallel = False
