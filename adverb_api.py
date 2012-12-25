@@ -92,8 +92,8 @@ def gen_par_work_function(adverb_class, fn, arg_types):
     start_var = syntax.Var(names.fresh("start"))
     stop_var = syntax.Var(names.fresh("stop"))
     args_var = syntax.Var(names.fresh("args"))
-    tile_sizes_var = syntax.Var(names.fresh("tile_sizes"))
-    inputs = [start_var, stop_var, args_var, tile_sizes_var]
+    #tile_sizes_var = syntax.Var(names.fresh("tile_sizes"))
+    inputs = [start_var, stop_var, args_var]#, tile_sizes_var]
     fn_args_obj = FormalArgs()
     for var in inputs:
       name = var.name
@@ -146,6 +146,7 @@ from llvm.ee import GenericValue
 # from run_function import ctypes_to_generic_value, generic_value_to_python
 
 def par_each(fn, *args, **kwds):
+  print "par_each"
   arg_types = map(type_conv.typeof, args)
 
   closure_t, untyped = translate_fn(fn)
@@ -207,7 +208,8 @@ def par_each(fn, *args, **kwds):
     c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
     # Execute on thread pool
-    rt.run_untiled_job(wf_ptr, c_args_array, num_iters)
+    rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters,
+                                lowered.num_tiles)
     output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
 
     output_contents = [ptr.contents for ptr in output_ptrs]

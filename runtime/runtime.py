@@ -97,6 +97,30 @@ class Runtime():
     self.wait_for_job()
     self.free_job()
 
+  def run_job_with_dummy_tiles(self, fn, args, num_iters, num_tiles):
+    # TODO: For now, we're assuming fn is actually a pointer to a runnable
+    # function. In the future, we'll need to change that to be an AST that we
+    # can compile with a particular setting of register tile sizes and loop
+    # unrollings.
+    print "num_tiles:", num_tiles
+    tile_sizes_t = POINTER(c_int) * self.dop
+    self.tile_sizes = tile_sizes_t()
+    single_tile_sizes_t = c_int * num_tiles
+    for i in range(self.dop):
+      self.tile_sizes[i] = single_tile_sizes_t()
+      for j in range(num_tiles):
+        self.tile_sizes[i][j] = 1
+    self.work_functions = (c_void_p * self.dop)()
+
+    self.args = args
+    self.num_iters = num_iters
+    self.task_size = num_iters / self.dop
+    self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
+                                           self.dop, 1)
+    self.launch_job()
+    self.wait_for_job()
+    self.free_job()
+
   def run_job(self, tiled_ast, args, num_iters,
               tiled_loop_iters, tiled_loop_parents):
     self.reg_block_sizes = \
