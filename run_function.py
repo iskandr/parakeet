@@ -12,6 +12,7 @@ from args import ActualArgs
 from llvm_context import global_context
 from llvm.ee import GenericValue
 
+
 def python_to_generic_value(x, t):
   if isinstance(t, core_types.FloatT):
     llvm_t = llvm_types.llvm_value_type(t)
@@ -79,6 +80,26 @@ class CompiledFn:
     gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
 
+def prepare_args(fn, args, kwargs):
+  
+  """
+  Fetch the function's nonlocals and return an 
+  ActualArgs object of both the arg values and
+  their types
+  """ 
+  if isinstance(fn, syntax.Fn):
+    untyped = fn
+  else:
+    # translate from the Python AST to Parakeet's untyped format
+    untyped  = ast_conversion.translate_function_value(fn)
+
+  nonlocals = list(untyped.python_nonlocals())
+  arg_values = ActualArgs(nonlocals + list(args), kwargs)
+
+  # get types of all inputs
+  arg_types = arg_values.transform(type_conv.typeof)
+  return untyped, arg_values, arg_types   
+
 def specialize_and_compile(fn, args, kwargs = {}):
   """
   Translate, specialize, optimize, and compile the given function for the types
@@ -87,28 +108,17 @@ def specialize_and_compile(fn, args, kwargs = {}):
   Return the untyped, typed, and compiled representation, along with all the
   arguments needed to actually execute.
   """
-  if isinstance(fn, syntax.Fn):
-    untyped = fn
-  else:
-    # translate from the Python AST to Parakeet's untyped format
-    untyped  = ast_conversion.translate_function_value(fn)
-
-  nonlocals = list(untyped.python_nonlocals())
-  args_obj = ActualArgs(nonlocals + list(args), kwargs)
-
-  # get types of all inputs
-  input_types = args_obj.transform(type_conv.typeof)
-
+  untyped, arg_values, arg_types = prepare_args(fn, args, kwargs)
   # propagate types through function representation and all
   # other functions it calls
-  typed = type_inference.specialize(untyped, input_types)
+  typed = type_inference.specialize(untyped, arg_types)
 
   lowered = lowering.lower(typed, tile=False)
 
   # compile to native code
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(lowered)
   compiled_fn_wrapper = CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  return untyped, typed, compiled_fn_wrapper, args_obj
+  return untyped, typed, compiled_fn_wrapper, arg_values
 
 def run(fn, *args, **kwargs):
   """

@@ -13,68 +13,8 @@ import syntax_helpers
 import type_conv
 import type_inference
 
-from adverb_wrapper import untyped_identity_function as ident
-from macro import macro, staged_macro
-from run_function import run
 from runtime import runtime
 
-def one_is_none(f, g):
-  return int(f is None) + int(g is None) == 1
-
-def create_adverb_hook(adverb_class,
-                       map_fn_name = None,
-                       combine_fn_name = None,
-                       arg_names = None):
-  assert one_is_none(map_fn_name, combine_fn_name), \
-      "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
-  if arg_names is None:
-    data_names = []
-    varargs_name = 'xs'
-  else:
-    data_names = arg_names
-    varargs_name = None
-
-  def mk_wrapper(axis):
-    """
-    An awkward mismatch between treating adverbs as functions is that their axis
-    parameter is really fixed as part of the syntax of Parakeet. Thus, when
-    you're calling an adverb from outside Parakeet you can generate new syntax
-    for any axis you want, but if you use an adverb as a function value within
-    Parakeet:
-      r = par.reduce
-      return r(f, xs)
-    ...then we hackishly force the adverb to go along the default axis of 0.
-    """
-    return adverb_wrapper.untyped_wrapper(adverb_class,
-                                          map_fn_name = map_fn_name,
-                                          combine_fn_name = combine_fn_name,
-                                          data_names = data_names,
-                                          varargs_name = varargs_name,
-                                          axis=axis)
-
-  def python_hook(fn, *args, **kwds):
-    axis = kwds.get('axis', 0)
-    wrapper = mk_wrapper(axis)
-    return run(wrapper, *([fn] + list(args)))
-  # for now we register with the default number of args since our wrappers
-  # don't yet support unpacking a variable number of args
-  default_wrapper = mk_wrapper(axis = 0)
-
-  adverb_registry.register(python_hook, default_wrapper)
-  return python_hook
-
-"""
-each = create_adverb_hook(adverbs.Map, map_fn_name = 'f')
-allpairs = create_adverb_hook(adverbs.AllPairs,
-                              map_fn_name = 'f',
-                              arg_names = ['x', 'y'])
-reduce = create_adverb_hook(adverbs.Reduce,
-                            combine_fn_name = 'f',
-                            arg_names = ['x'])
-scan = create_adverb_hook(adverbs.Scan,
-                          combine_fn_name = 'f',
-                          arg_names = ['x'])
-"""
 try:
   rt = runtime.Runtime()
 except:
@@ -126,10 +66,19 @@ def gen_par_work_function(adverb_class, fn, arg_types):
 
 import closure_type
 
-def translate_fn(python_fn):
+
+import run_function
+import llvm_types
+from common import list_to_ctypes_array
+from llvm.ee import GenericValue
+from args import ActualArgs
+
+def prepare_adverb_args(python_fn, args, kwargs):
+
   """
-  Given a python function, return its closure type and the definition of its
-  untyped representation
+  Fetch the function's nonlocals and return an
+  ActualArgs object of both the arg values and
+  their types
   """
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
@@ -138,21 +87,21 @@ def translate_fn(python_fn):
   else:
     untyped = closure_t.fn
 
-  return closure_t, untyped
+  nonlocals = list(untyped.python_nonlocals())
+  adverb_arg_values = ActualArgs(args, kwargs)
 
-import llvm_types
-from common import list_to_ctypes_array
-from llvm.ee import GenericValue
-# from run_function import ctypes_to_generic_value, generic_value_to_python
+  # get types of all inputs
+  adverb_arg_types = adverb_arg_values.transform(type_conv.typeof)
+  return untyped, closure_t, nonlocals, adverb_arg_values, adverb_arg_types
+
 
 def par_each(fn, *args, **kwds):
   print "par_each"
-  arg_types = map(type_conv.typeof, args)
-
-  closure_t, untyped = translate_fn(fn)
-
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis', 0)
+
+  untyped, closure_t, nonlocals, args, arg_types = \
+      prepare_adverb_args(fn, args, kwds)
 
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   map_result_type = type_inference.infer_Map(closure_t, arg_types)
@@ -232,11 +181,65 @@ def par_each(fn, *args, **kwds):
 
   return result
 
+from adverb_wrapper import untyped_identity_function as ident
+from macro import staged_macro
+from run_function import run
+
+
+def one_is_none(f, g):
+  return int(f is None) + int(g is None) == 1
+
+def create_adverb_hook(adverb_class,
+                       map_fn_name = None,
+                       combine_fn_name = None,
+                       arg_names = None):
+  assert one_is_none(map_fn_name, combine_fn_name), \
+      "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
+  if arg_names is None:
+    data_names = []
+    varargs_name = 'xs'
+  else:
+    data_names = arg_names
+    varargs_name = None
+
+  def mk_wrapper(axis):
+    """
+    An awkward mismatch between treating adverbs as functions is that their axis
+    parameter is really fixed as part of the syntax of Parakeet. Thus, when
+    you're calling an adverb from outside Parakeet you can generate new syntax
+    for any axis you want, but if you use an adverb as a function value within
+    Parakeet:
+      r = par.reduce
+      return r(f, xs)
+    ...then we hackishly force the adverb to go along the default axis of 0.
+    """
+    return adverb_wrapper.untyped_wrapper(adverb_class,
+                                          map_fn_name = map_fn_name,
+                                          combine_fn_name = combine_fn_name,
+                                          data_names = data_names,
+                                          varargs_name = varargs_name,
+                                          axis=axis)
+
+  def python_hook(fn, *args, **kwds):
+    axis = kwds.get('axis', 0)
+    wrapper = mk_wrapper(axis)
+    return run(wrapper, *([fn] + list(args)))
+  # for now we register with the default number of args since our wrappers
+  # don't yet support unpacking a variable number of args
+  default_wrapper = mk_wrapper(axis = 0)
+
+  adverb_registry.register(python_hook, default_wrapper)
+  return python_hook
+
 def get_axis(kwargs):
   axis = kwargs.get('axis', 0)
   return syntax_helpers.unwrap_constant(axis)
 
-@staged_macro("axis", call_from_python=par_each)
+call_from_python = None
+if config.call_from_python_in_parallel:
+  call_from_python = par_each
+
+@staged_macro("axis", call_from_python=call_from_python)
 def each(f, *xs, **kwargs):
   return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 
