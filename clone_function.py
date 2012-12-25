@@ -1,5 +1,7 @@
 import names 
 import syntax 
+from syntax import TypedFn, Var, Const, Tuple, Attribute, Index 
+from syntax import Assign, Return, If, While  
 from syntax import Attribute
 from transform import Transform 
 
@@ -8,33 +10,33 @@ class CloneFunction(Transform):
   Copy all the objects in the AST of a function
   """
   
-  def transform_generic_expr(self, expr):
-    args = {}
-    for member_name in expr.members():
-      old_value = getattr(expr, member_name)
-      new_value = self.transform_if_expr(old_value)
-      args[member_name] = new_value
-    return expr.__class__(**args)
+  def transform_expr(self, expr):
+    c = expr.__class__
+    if c is Var:
+      return syntax.Var(expr.name, type = expr.type)
+    elif c is Const:
+      return syntax.Const(expr.value, type = expr.type)
+    elif c is Tuple:
+      new_elts = tuple(self.transform_expr(elt) for elt in expr.elts)
+      return syntax.Tuple(elts = new_elts, type = expr.type)
+    elif c is Attribute:
+      value = self.transform_expr(expr.value)
+      return Attribute(value, expr.name, type = expr.type)
+    elif c is Index:
+      value = self.transform_expr(expr.value)
+      index = self.transform_expr(expr.index)
+      return syntax.Index(value, index, type = expr.type)
+    elif c is TypedFn:
+      return expr 
+    else:
+      args = {}
+      for member_name in expr.members():
+        old_value = getattr(expr, member_name)
+        new_value = self.transform_if_expr(old_value)
+        args[member_name] = new_value
+      return expr.__class__(**args)
   
-  def transform_Var(self, expr):
-    return syntax.Var(expr.name, type = expr.type)
   
-  def transform_Const(self, expr):
-    return syntax.Const(expr.value, type = expr.type)
-
-  def transform_Tuple(self, expr):
-    new_elts = tuple(self.transform_expr(elt) for elt in expr.elts)
-    return syntax.Tuple(elts = new_elts, type = expr.type)
-  
-  def transform_Attribute(self, expr):
-    value = self.transform_expr(expr.value)
-    return Attribute(value, expr.name, type = expr.type)
-  
-  def transform_Index(self, expr):
-    value = self.transform_expr(expr.value)
-    index = self.transform_expr(expr.index)
-    return syntax.Index(value, index, type = expr.type)
-
   def transform_Assign(self, stmt):
     new_lhs = self.transform_expr(stmt.lhs)
     new_rhs = self.transform_expr(stmt.rhs)

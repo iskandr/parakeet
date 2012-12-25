@@ -141,7 +141,7 @@ def eval_fn(fn, actuals):
 
   def eval_expr(expr):
     if hasattr(expr, 'wrapper'):
-      expr = expr.wrapper 
+      expr = expr.wrapper
     assert isinstance(expr, syntax.Expr), "Not an expression-- %s : %s" % \
          (expr, type(expr))
     def expr_Const():
@@ -278,10 +278,10 @@ def eval_fn(fn, actuals):
   def eval_stmt(stmt):
     if isinstance(stmt, syntax.Return):
       v = eval_expr(stmt.value)
-
       raise ReturnValue(v)
     elif isinstance(stmt, syntax.Assign):
-      assign(stmt.lhs, eval_expr(stmt.rhs), env)
+      value = eval_expr(stmt.rhs)
+      assign(stmt.lhs, value, env)
 
     elif isinstance(stmt, syntax.If):
       cond_val = eval_expr(stmt.cond)
