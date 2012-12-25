@@ -72,10 +72,15 @@ class Verify(SyntaxVisitor):
         (stmt.value, stmt.value.type, self.fn.return_type)
 
   def visit_Assign(self, stmt):
+    assert stmt.lhs.type is not None, \
+        "Missing LHS type for assignment %s" % stmt
+    assert stmt.rhs.type is not None, \
+        "Missing RHS type for assignment %s" % stmt 
     lhs_names = collect_binding_names(stmt.lhs)
     for lhs_name in lhs_names:
       self.bind_var(lhs_name)
     self.visit_expr(stmt.rhs)
+    
     assert stmt.lhs.type == stmt.rhs.type, \
         "Mismatch between LHS type %s and RHS %s in '%s'" % \
         (stmt.lhs.type, stmt.rhs.type, stmt)

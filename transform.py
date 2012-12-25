@@ -169,10 +169,9 @@ class Transform(Codegen):
       else:
         result = self.transform_generic_expr(expr)
     if result is None:
-      result = expr 
-    assert result.type or not self.require_types, \
-      "Missing type for %s in %s" % (result, self.__class__.__name__)
-    return result
+      return expr 
+    else:
+      return result
 
   def transform_lhs_Var(self, expr):
     return self.transform_Var(expr)
@@ -329,6 +328,7 @@ class MemoizedTransform(Transform):
 def apply_pipeline(fn, transforms):
   for T in transforms:
     print "!!!", T
+    print fn 
     if type(T) == type:
       fn = T().apply(fn)
     else:
