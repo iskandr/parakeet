@@ -28,13 +28,16 @@ print_unoptimized_llvm = False
 # show LLVM bytecode after optimizations
 print_optimized_llvm = False
 
+# how long did each transform take? 
+print_transform_timings = False 
+
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
-opt_simplify_when_lowering = True
-opt_inline_when_lowering = True
+opt_inline = True
 opt_fusion = True
 opt_licm = True
+opt_cleanup_after_transforms = True
 opt_verify = True
 
 ######################################

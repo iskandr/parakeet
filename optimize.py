@@ -5,9 +5,23 @@ from dead_code_elim import DCE
 from inline import Inliner
 import transform   
 from fusion import Fusion 
+import config 
 
-pipeline = [Simplify, DCE, Inliner, Simplify, DCE, Fusion, Simplify, DCE] 
+def build_pipeline():
+  pipeline = [Simplify, DCE]
+  def add(t):
+    pipeline.append(t)
+    if config.opt_cleanup_after_transforms:
+      pipeline.append(Simplify)
+      pipeline.append(DCE)
 
+  if config.opt_inline:
+    add(Inliner)
+  
+  if config.opt_fusion:
+    add(Fusion)
+  return pipeline 
+    
 # map names of unoptimized typed functions to 
 # names of optimized 
 _optimized_cache = {}
@@ -25,7 +39,6 @@ def optimize(fn):
   if fn.name in _optimized_cache:
     return _optimized_cache[fn.name]
   else:
-
-    opt = transform.apply_pipeline(fn, pipeline)
+    opt = transform.apply_pipeline(fn, build_pipeline())
     _optimized_cache[fn.name] = opt
     return opt 

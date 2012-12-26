@@ -10,8 +10,26 @@ from syntax import Call, TypedFn
 
 from args import ActualArgs
 from codegen import Codegen
+import time 
 
+transform_timings = {}
+transform_counts = {}
+if config.print_transform_timings:
+  import atexit 
+  def print_timings():
+   
+    print "TRANSFORM TIMINGS"
+    items = transform_timings.items()
+    items.sort(key = lambda (_,t): t)
+    items.reverse()
+    for k, t in items:
+      count = transform_counts[k]
+      print "  %30s  Total = %6dms, Count = %4d, Avg = %3fms" % (k.__name__, t*1000, count, (t/count)*1000)
+  atexit.register(print_timings)
+  
 class Transform(Codegen):
+
+  
   def __init__(self, verify = config.opt_verify,
                      reverse = False,
                      require_types = True):
@@ -276,8 +294,11 @@ class Transform(Codegen):
     pass
 
   def apply(self, fn):
+    
+    if config.print_transform_timings:
+      start_time = time.time() 
+    
     self.fn = fn
-
     if config.print_functions_before_transforms:
       print
       print "Running transform %s" % self.__class__.__name__
@@ -306,6 +327,13 @@ class Transform(Codegen):
 
     if self.verify:
       verify.verify(new_fn)
+    
+    if config.print_transform_timings:
+      end_time = time.time()
+      c = self.__class__ 
+      total_time = transform_timings.get(c, 0)
+      transform_timings[c] = total_time + (end_time - start_time)
+      transform_counts[c] = transform_counts.get(c, 0) + 1 
     return new_fn
 
 class MemoizedTransform(Transform):

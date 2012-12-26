@@ -33,21 +33,24 @@ def fuse(prev_fn, next_fn, const_args = [None]):
                         type_env = type_env)
 
 class Fusion(Transform):
-  def __init__(self):
+  def __init__(self, recursive = True):
     Transform.__init__(self)
     # name of variable -> Map or Scan adverb
     self.adverb_bindings = {}
+    self.recursive = True
 
   def pre_apply(self, fn):
     # map each variable to
     self.use_counts = use_count(fn)
 
   def transform_TypedFn(self, fn):
-    return apply_pipeline(fn, [Simplify, DCE, Fusion])
+    return apply_pipeline(fn, [Simplify, DCE, Fusion(recursive=self.recursive)])
 
   def transform_Assign(self, stmt):
-    stmt.rhs = self.transform_expr(stmt.rhs)
-    rhs = stmt.rhs
+    if self.recursive: 
+      stmt.rhs = self.transform_expr(stmt.rhs)
+    rhs = stmt.rhs  
+     
     if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb) and \
        rhs.__class__ is not AllPairs:
       args = rhs.args

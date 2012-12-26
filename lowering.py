@@ -17,8 +17,8 @@ from transform import apply_pipeline
 from mapify_allpairs import MapifyAllPairs
 
 def build_pipeline(copy = False,
-                   simplify = config.opt_simplify_when_lowering,
-                   inline = config.opt_inline_when_lowering,
+                   simplify = config.opt_cleanup_after_transforms, 
+                   inline = config.opt_inline,
                    fusion = config.opt_fusion,
                    licm = config.opt_licm):
   p = [CloneFunction] if copy else []
