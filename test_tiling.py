@@ -141,7 +141,6 @@ def test_2d_map():
 def test_2_maps():
   new_fn = lowering.lower(map2_fn, True)
   assert isinstance(new_fn, syntax.TypedFn)
-  print new_fn
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   tile_array = (3,) * new_fn.num_tiles
