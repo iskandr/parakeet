@@ -14,6 +14,7 @@ from lower_tiled_adverbs import LowerTiledAdverbs
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
+from mapify_allpairs import MapifyAllPairs
 
 def build_pipeline(copy = False,
                    simplify = config.opt_simplify_when_lowering,
@@ -54,6 +55,7 @@ def lower(fundef, tile=False):
     num_tiles = 0
     if tile:
       p = [CloneFunction,
+           MapifyAllPairs, 
            TileAdverbs, Simplify, DCE,
            LowerTiledAdverbs, Simplify, DCE]
       fn = apply_pipeline(fundef, p)

@@ -19,10 +19,11 @@ class CodegenSemantics(MemoizedTransform):
     return type_inference.invoke_result_type(closure_t, arg_types)
 
   def invoke(self, fn, args):
-    if isinstance(fn, syntax.TypedFn):
+    if fn.__class__ is syntax.TypedFn:
       closure_args = []
     else:
-      assert isinstance(fn.type, closure_type.ClosureT)
+      assert isinstance(fn.type, closure_type.ClosureT), \
+        "Unexpected function %s with type: %s" % (fn, fn.type)
       closure_args = self.closure_elts(fn)
       arg_types = syntax_helpers.get_types(args)
       fn = type_inference.specialize(fn.type, arg_types)

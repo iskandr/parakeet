@@ -1,17 +1,25 @@
-import array_type
-import core_types
 import names
 import prims
+
+import array_type
+from array_type import ArrayT 
+import core_types
+from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT 
+from closure_type import ClosureT, make_closure_type
+from tuple_type import TupleT, make_tuple_type
+
+from syntax import Var, Assign, Closure, Attribute, PrimCall
+from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
+from syntax import TupleProj, Tuple, Alloc, Slice, While 
+
+import syntax_helpers
+from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
+                           zero, zero_i64, const_int, const_bool 
+
+from nested_blocks import NestedBlocks
+ 
 import shape_codegen
 import shape_inference
-import syntax
-import syntax_helpers
-import tuple_type
-
-from core_types import Int32, Int64
-from nested_blocks import NestedBlocks
-from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
-                           zero, zero_i64
 
 class Codegen(object):
   def __init__(self):
@@ -22,7 +30,7 @@ class Codegen(object):
     assert t is not None, "Type required for new variable %s" % prefix
     ssa_id = names.fresh(prefix)
     self.type_env[ssa_id] = t
-    return syntax.Var(ssa_id, type = t)
+    return Var(ssa_id, type = t)
 
   def fresh_i32(self, prefix = "temp"):
     return self.fresh_var(Int32, prefix)
@@ -34,14 +42,14 @@ class Codegen(object):
     self.blocks.append_to_current(stmt)
 
   def assign(self, lhs, rhs):
-    self.insert_stmt(syntax.Assign(lhs, rhs))
+    self.insert_stmt(Assign(lhs, rhs))
 
   def temp_name(self, expr):
     c = expr.__class__
-    if c is syntax.PrimCall:
+    if c is PrimCall:
       return expr.prim.name
-    elif c is syntax.Attribute:
-      if expr.value.__class__ is syntax.Var:
+    elif c is Attribute:
+      if expr.value.__class__ is Var:
         return names.original(expr.value.name) + "_" + expr.name
       else:
         return expr.name
@@ -51,7 +59,7 @@ class Codegen(object):
   def assign_temp(self, expr, name = None):
     if name is None:
       name = self.temp_name(expr)
-    if isinstance(expr, syntax.Var):
+    if expr.__class__ is Var:
       return expr
     else:
       var = self.fresh_var(expr.type, name)
@@ -59,10 +67,10 @@ class Codegen(object):
       return var
 
   def int(self, x):
-    return syntax_helpers.const_int(x)
+    return const_int(x)
 
   def bool(self, x):
-    return syntax_helpers.const_bool(x)
+    return const_bool(x)
 
   def zero(self, t = Int32, name = "counter"):
     return self.assign_temp(zero(t), name)
@@ -74,12 +82,12 @@ class Codegen(object):
     return self.zero(t = Int64, name = name)
 
   def cast(self, expr, t):
-    assert isinstance(t, core_types.ScalarT), \
+    assert isinstance(t, ScalarT), \
         "Can't cast %s to non-scalar type %s" % (expr, t)
     if expr.type == t:
       return expr
     else:
-      return self.assign_temp(syntax.Cast(expr, type = t), "cast_%s" % t)
+      return self.assign_temp(Cast(expr, type = t), "cast_%s" % t)
 
   def index(self, arr, idx, temp = True):
     """
@@ -87,20 +95,20 @@ class Codegen(object):
     """
     arr_t = arr.type
 
-    if isinstance(arr_t, core_types.ScalarT):
+    if isinstance(arr_t, ScalarT):
       # even though it's not correct externally, it's
       # often more convenient to treat indexing
       # into scalars as the identity function.
       # Just be sure to catch this as an error in
       # the user's code earlier in the pipeline.
       return arr
-    if isinstance(arr_t, tuple_type.TupleT):
-      if isinstance(idx, syntax.Const):
+    if isinstance(arr_t, TupleT):
+      if isinstance(idx, Const):
         idx = idx.value
 
       assert isinstance(idx, int), \
           "Index into tuple must be an integer, got %s" % idx
-      if isinstance(idx, syntax.Const):
+      if isinstance(idx, Const):
         idx = idx.value
       proj = self.tuple_proj(arr, idx)
       if temp:
@@ -128,7 +136,7 @@ class Codegen(object):
       idx = indices[0]
 
     t = arr_t.index_type(idx.type)
-    idx_expr = syntax.Index(arr, idx, type=t)
+    idx_expr = Index(arr, idx, type=t)
     if temp:
       return self.assign_temp(idx_expr, "array_elt")
     else:
@@ -146,7 +154,7 @@ class Codegen(object):
 
     index_tuple = self.tuple(indices, "indices")
     result_t = arr.type.index_type(index_tuple.type)
-    idx_expr = syntax.Index(arr, index_tuple, type=result_t)
+    idx_expr = Index(arr, index_tuple, type=result_t)
     if name:
       return self.assign_temp(idx_expr, name)
     else:
@@ -161,7 +169,7 @@ class Codegen(object):
     upcast_types = prim_fn.expected_input_types(arg_types)
     result_type = prim_fn.result_type(upcast_types)
     upcast_args = [self.cast(x, t) for (x,t) in zip(args, upcast_types)]
-    prim_call = syntax.PrimCall(prim_fn, upcast_args, type=result_type)
+    prim_call = PrimCall(prim_fn, upcast_args, type=result_type)
     if name:
       return self.assign_temp(prim_call, name)
     else:
@@ -222,37 +230,38 @@ class Codegen(object):
       return self.prim(prims.mod, [x,y], name)
 
   def lt(self, x, y, name = None):
-    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+    if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(False)
     else:
       return self.prim(prims.less, [x,y], name)
 
   def lte(self, x, y, name = None):
-    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+    if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(True)
     else:
       return self.prim(prims.less_equal, [x,y], name)
 
   def gt(self, x, y, name = None):
-    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+    if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(False)
     else:
       return self.prim(prims.greater, [x,y], name)
 
   def gte(self, x, y, name = None):
-    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+
+    if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(True)
     else:
       return self.prim(prims.greater_equal, [x,y], name)
 
   def eq(self, x, y, name = None):
-    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+    if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(True)
     else:
       return self.prim(prims.equal, [x,y], name)
 
   def neq(self, x, y, name = None):
-    if isinstance(x, (syntax.Var, syntax.Const)) and x == y:
+    if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(False)
     return self.prim(prims.not_equal, [x,y], name)
 
@@ -260,23 +269,27 @@ class Codegen(object):
     if name is None:
       name = field
     obj_t = obj.type
-    assert isinstance(obj_t, core_types.StructT), \
-        "Can't get attribute '%s' from type %s" % (field, obj_t)
-    field_t = obj.type.field_type(field)
-    attr_expr = syntax.Attribute(obj, field, type = field_t)
-    if name:
-      return self.assign_temp(attr_expr, name)
+    if obj.__class__ is Struct:
+      pos = obj_t.field_pos(name)
+      result =  obj.args[pos]
     else:
-      return attr_expr
+      assert isinstance(obj_t, StructT), \
+        "Can't get attribute '%s' from type %s" % (field, obj_t)
+      field_t = obj.type.field_type(field)
+      result = Attribute(obj, field, type = field_t)
+    if name:
+      return self.assign_temp(result, name)
+    else:
+      return result
 
   def is_none(self, x):
-    return hasattr(x, 'type') and isinstance(x.type, core_types.NoneT)
+    return x.type.__class__ is NoneT
 
   def is_array(self, x):
-    return hasattr(x, 'type') and isinstance(x.type, array_type.ArrayT)
+    return x.type.__class__ is  ArrayT
 
   def elt_type(self, x):
-    if isinstance(x, core_types.Type):
+    if isinstance(x, Type):
       if hasattr(x, 'elt_type'):
         return x.elt_type
       else:
@@ -287,40 +300,40 @@ class Codegen(object):
       return x.type
 
   def shape(self, array, dim = None):
-    if isinstance(array.type, array_type.ArrayT):
+    if isinstance(array.type, ArrayT):
       shape = self.attr(array, "shape")
       if dim is None:
         return shape
       else:
         dim_t = shape.type.elt_types[dim]
-        dim_value = syntax.TupleProj(shape, dim, type = dim_t)
+        dim_value = TupleProj(shape, dim, type = dim_t)
         return self.assign_temp(dim_value, "dim%d" % dim)
     else:
       return self.tuple([])
 
   def strides(self, array, dim = None):
-    assert isinstance(array.type, array_type.ArrayT)
+    assert array.type.__class__ is ArrayT
     strides = self.attr(array, "strides")
     if dim is None:
       return strides
     else:
       elt_t = strides.type.elt_types[dim]
-      elt_value = syntax.TupleProj(strides, dim, type = elt_t)
+      elt_value = TupleProj(strides, dim, type = elt_t)
       return self.assign_temp(elt_value, "stride%d" % dim)
 
   def tuple(self, elts, name = "tuple"):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
-    tuple_t = tuple_type.make_tuple_type(get_types(elts))
+    tuple_t = make_tuple_type(get_types(elts))
     tuple_t.metadata = self.__class__.__name__
-    tuple_expr = syntax.Tuple(elts, type = tuple_t)
+    tuple_expr = Tuple(elts, type = tuple_t)
     if name:
       return self.assign_temp(tuple_expr, name)
     else:
       return tuple_expr
 
   def is_tuple(self, x):
-    return hasattr(x, 'type') and isinstance(x.type, tuple_type.TupleT)
+    return hasattr(x, 'type') and isinstance(x.type, TupleT)
 
   def concat_tuples(self, x, y):
     assert self.is_tuple(x)
@@ -334,12 +347,12 @@ class Codegen(object):
 
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
-    if isinstance(tup, syntax.Tuple):
+    if isinstance(tup, Tuple):
       return tup.elts[idx]
     elif isinstance(tup, tuple):
       return tup[idx]
     else:
-      return syntax.TupleProj(tup, idx, type = tup.type.elt_types[idx])
+      return TupleProj(tup, idx, type = tup.type.elt_types[idx])
 
   def tuple_elts(self, tup):
     nelts = len(tup.type.elt_types)
@@ -348,23 +361,37 @@ class Codegen(object):
   def closure_elt(self, clos, idx):
     assert isinstance(idx, (int, long))
 
-    if isinstance(clos, syntax.Closure):
+    if isinstance(clos, Closure):
       return clos.args[idx]
     else:
-      return syntax.ClosureElt(clos, idx, type = clos.type.arg_types[idx])
+      return ClosureElt(clos, idx, type = clos.type.arg_types[idx])
 
   def closure_elts(self, clos):
-    if isinstance(clos, syntax.TypedFn):
+    if clos.__class__ is TypedFn:
       return []
     return [self.closure_elt(clos, i)
             for i in xrange(len(clos.type.arg_types))]
 
   def get_fn(self, maybe_clos):
-    if isinstance(maybe_clos, syntax.Closure):
+    if maybe_clos.__class__ is Closure:
       return maybe_clos.fn
+    elif maybe_clos.type.__class__ is ClosureT: 
+      return maybe_clos.type.fn 
     else:
       return maybe_clos
 
+  def closure(self, maybe_fn, extra_args, name = None):
+    fn = self.get_fn(maybe_fn)
+    old_closure_elts = self.closure_elts(maybe_fn)
+    closure_elts = old_closure_elts + extra_args 
+    closure_elt_types = [elt.type for elt in closure_elts]
+    closure_t = make_closure_type(fn, closure_elt_types)
+    result = Closure(fn, closure_elts, type = closure_t)
+    if name:
+      return self.assign_temp(result, name)
+    else:
+      return result 
+    
   def prod(self, elts, name = None):
     result = elts[0]
     for e in elts[1:]:
@@ -393,7 +420,7 @@ class Codegen(object):
     array_t = array_type.make_array_type(elt_t, rank)
     ptr_t = core_types.ptr_type(elt_t)
 
-    ptr_var = self.assign_temp(syntax.Alloc(elt_t, nelts, type = ptr_t),
+    ptr_var = self.assign_temp(Alloc(elt_t, nelts, type = ptr_t),
                                "data_ptr")
 
     stride_elts = [syntax_helpers.const(1)]
@@ -404,17 +431,17 @@ class Codegen(object):
       stride_elts = [next_stride] + stride_elts
 
     strides = self.tuple(stride_elts, "strides")
-    array = syntax.Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
+    array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
     return self.assign_temp(array, name)
 
   def return_type(self, fn):
-    if isinstance(fn, syntax.TypedFn):
+    if isinstance(fn, TypedFn):
       return fn.return_type
     else:
       import closure_type
 
       assert isinstance(fn.type, closure_type.ClosureT)
-      assert isinstance(fn.type.fn, syntax.TypedFn)
+      assert isinstance(fn.type.fn, TypedFn)
       return fn.type.fn.return_type
 
   # TODO: get rid of that leading underscore to enable this function once
@@ -451,7 +478,7 @@ class Codegen(object):
 
   def slice_value(self, start, stop, step):
     slice_t = array_type.make_slice_type(start.type, stop.type, step.type)
-    return syntax.Slice(start, stop, step, type = slice_t)
+    return Slice(start, stop, step, type = slice_t)
 
   def loop_counter(self, name = "i", start_val = syntax_helpers.zero_i64):
     """
@@ -477,7 +504,7 @@ class Codegen(object):
     loop_body(i)
     self.assign(i_after, self.add(i, syntax_helpers.one_i64))
     body = self.blocks.pop()
-    loop_stmt = syntax.While(cond, body, merge)
+    loop_stmt = While(cond, body, merge)
     if return_stmt:
       return loop_stmt
     else:
@@ -514,25 +541,7 @@ class Codegen(object):
   def nelts(self, array):
     shape_elts = self.tuple_elts(self.shape(array))
     return self.prod(shape_elts, name = "nelts")
-  """
-  def linear_to_indices(self, linear_idx, shape):
 
-    # Return tuple of dimension-wise indices from linear index
-
-    dim_sizes = self.tuple_elts(shape)
-    rank = len(dim_sizes)
-    slice_sizes = [syntax_helpers.one_i64]
-    for (i, d) in enumerate(reversed(dim_sizes[:-1])):
-      slice_sizes.append(self.mul(slice_sizes[-1], d, "slice_size_%d" % i))
-    slice_sizes.reverse()
-    remainder = linear_idx
-    indices = []
-    for i in xrange(rank):
-      s = slice_sizes[i]
-      indices.append(self.div(remainder, s, "idx%d" % i))
-      remainder = self.mod(remainder, s, "rem%d" % i)
-    return self.tuple(indices)
-  """
   def array_copy(self, src, dest, return_stmt = False):
     assert self.is_array(dest)
     # nelts = self.nelts(dest)
