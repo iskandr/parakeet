@@ -1,6 +1,7 @@
 import adverb_helpers
 import array_type
 import copy
+import core_types
 import syntax
 import syntax_helpers
 import tuple_type
@@ -9,7 +10,8 @@ from core_types import Int32, Int64
 from lower_adverbs import LowerAdverbs
 from transform import Transform
 
-int64_array_t = array_type.make_array_type(Int64, 1)
+int_ptr_t = core_types.ptr_type(Int64)
+#int_ptr_t = array_type.make_array_type(Int64, 1)
 
 class LowerTiledAdverbs(Transform):
   def __init__(self, nesting_idx=-1, tile_param_array=None):
@@ -18,7 +20,7 @@ class LowerTiledAdverbs(Transform):
     self.nesting_idx = nesting_idx
     self.tiling = False
     if tile_param_array == None:
-      self.tile_param_array = self.fresh_var(int64_array_t, "tile_params")
+      self.tile_param_array = self.fresh_var(int_ptr_t, "tile_params")
     else:
       self.tile_param_array = tile_param_array
 
@@ -142,7 +144,7 @@ class LowerTiledAdverbs(Transform):
     init_merge = {init_slice_bound.name:(tile_size, niters)}
     self.blocks += syntax.If(init_slice_cond, [], [], init_merge)
     init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
-                              syntax_helpers.one_i64, slice_t)
+                              syntax_helpers.one_i64, type=slice_t)
     init_slice_args = [self.index_along_axis(arg, axis, init_slice)
                        for arg in args]
     if nested_has_tiles:
@@ -214,7 +216,7 @@ class LowerTiledAdverbs(Transform):
   def post_apply(self, fn):
     if self.tiling:
       fn.arg_names.append(self.tile_param_array.name)
-      fn.input_types += (int64_array_t,)
-      fn.type_env[self.tile_param_array.name] = int64_array_t
+      fn.input_types += (int_ptr_t,)
+      fn.type_env[self.tile_param_array.name] = int_ptr_t
       fn.num_tiles = self.nesting_idx + 1
     return fn

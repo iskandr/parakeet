@@ -1,4 +1,3 @@
-
 class CombinedIters:
   def __init__(self, i1, i2):
     self.i1 = i1
@@ -27,7 +26,6 @@ class NullIter(object):
     raise StopIteration
 
 def maybe_iter(obj):
-
   if obj is None:
     return NullIter()
   else:
@@ -39,7 +37,6 @@ class ActualArgs(object):
     self.positional = positional
     self.keywords = keywords
     self.starargs = starargs
-    
 
   def transform(self, fn, keyword_name_fn = None, keyword_value_fn = None):
     new_pos = map(fn, self.positional)
@@ -50,20 +47,20 @@ class ActualArgs(object):
       new_keywords[new_name] = new_value
     new_starargs = fn(self.starargs) if self.starargs else None
     return ActualArgs(new_pos, new_keywords, new_starargs)
-  
+
   def __eq__(self, other):
     if len(self.positional) != len(other.positional) or \
        len(self.keywords) != len(other.keywords) or \
        self.starargs != other.starargs or \
        any(t1 != t2 for (t1, t2) in zip(self.positional, other.positional)):
-      return False 
+      return False
     for (k,v) in self.keywords.iteritems():
       if k not in other.keywords:
-        return False 
+        return False
       if other.keywords[k] != v:
-        return False 
-    return True 
-  
+        return False
+    return True
+
   def __str__(self):
     arg_strings = []
     for p in self.positional:
@@ -78,7 +75,7 @@ class ActualArgs(object):
     kwd_tuple = tuple(self.keywords.items())
     full_tuple = self.positional + kwd_tuple + (self.starargs,)
     return hash(full_tuple)
-    
+
   def __iter__(self):
     return combine_iters(
       iter(self.positional),
@@ -136,8 +133,8 @@ class FormalArgs(object):
       if p > n_old_nonlocals:
         self.positions[k] = p + total_nonlocals
     for (i, k) in enumerate(localized_names):
-      self.positions[k] = n_old_nonlocals + i 
-    
+      self.positions[k] = n_old_nonlocals + i
+
   def __str__(self):
     strs = []
     for local_name in self.positional:
@@ -156,15 +153,10 @@ class FormalArgs(object):
 
   def __repr__(self):
     return "Args(positional = %s, defaults=%s, starargs = %s, nonlocal = %s)"% \
-      (
-       map(repr, self.positional),
-       map(repr, self.defaults.items()),
-       self.nonlocals,
-       self.starargs
-      )
-
-
-
+           (map(repr, self.positional),
+            map(repr, self.defaults.items()),
+            self.nonlocals,
+            self.starargs)
 
   def bind(self, actuals,
            keyword_fn = None,
@@ -182,7 +174,7 @@ class FormalArgs(object):
     if self.starargs:
       env[self.starargs] = starargs_fn(extra)
     else:
-      assert len(extra) == 0, "Too many args: %s" % (extra, )
+      assert len(extra) == 0, "Too many args: %s" % (extra,)
     return env
 
   def linearize_values(self, actuals, keyword_fn = None, tuple_elts_fn = iter):
@@ -217,7 +209,7 @@ class FormalArgs(object):
 
     for (k,v) in keyword_values.iteritems():
       assert k in self.local_names, \
-        "Unknown keyword: %s" % k
+          "Unknown keyword: %s" % k
       local_name = self.local_names[k]
       assign(self.positions[local_name], v)
 
@@ -232,17 +224,15 @@ class FormalArgs(object):
 
   def linearize_without_defaults(self, actuals, tuple_elts_fn = tuple):
     linear_args, extra = \
-      self.linearize_values(actuals, tuple_elts_fn = tuple_elts_fn, \
-                            keyword_fn = lambda k, v: None)
+        self.linearize_values(actuals, tuple_elts_fn = tuple_elts_fn,
+                              keyword_fn = lambda k, v: None)
     return [x for x in (linear_args + extra) if x is not None]
-  
-  def transform(self,
-                rename_fn = lambda x: x,
-                keyword_value_fn = None):
+
+  def transform(self, rename_fn = lambda x: x, keyword_value_fn = None):
     args = FormalArgs()
 
     args.prepend_nonlocal_args(map(rename_fn, self.nonlocals))
-    
+
     for old_local_name in self.positional:
       new_local_name = rename_fn(old_local_name)
       visible_name = self.visible_names.get(old_local_name)

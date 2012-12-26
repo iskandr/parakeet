@@ -3,15 +3,16 @@ import ctypes
 import numpy as np
 import type_conv
 
-from core_types import StructT, IncompatibleTypes, ScalarT, Int64, ptr_type
+from core_types import StructT, IncompatibleTypes, Int64, ptr_type
 from tuple_type import TupleT, repeat_tuple
 
 def buffer_info(buf, ptr_type = ctypes.c_void_p):
   """Given a python buffer, return its address and length"""
+
   assert isinstance(buf, buffer)
   address = ptr_type()
   length = ctypes.c_ssize_t()
-  obj =  ctypes.py_object(buf)
+  obj = ctypes.py_object(buf)
   ctypes.pythonapi.PyObject_AsReadBuffer(obj, ctypes.byref(address),
                                          ctypes.byref(length))
   return address, length.value
@@ -132,6 +133,7 @@ class ArrayT(StructT):
     """
     Given the type of my indices, what type of array will result?
     """
+
     if not isinstance(idx, core_types.Type):
       idx = idx.type
 
@@ -165,7 +167,6 @@ class ArrayT(StructT):
   # leak memory from arrays we allocate in the conversion routine
   _store_forever = []
   def from_python(self, x):
-
     if not isinstance(x, np.ndarray):
       x = np.asarray(x)
       self._store_forever.append(x)
@@ -188,9 +189,10 @@ class ArrayT(StructT):
 
   def to_python(self, obj):
     """
-    For now, to avoid to dealing with the messiness of ownership,
-    we just always copy data on the way out of Parakeet
+    For now, to avoid to dealing with the messiness of ownership, we just always
+    copy data on the way out of Parakeet
     """
+
     shape = self.shape_t.to_python(obj.shape.contents)
 
     elt_size = self.elt_type.nbytes

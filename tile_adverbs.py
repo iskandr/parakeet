@@ -2,6 +2,7 @@ import adverb_helpers
 import adverbs
 import array_type
 import closure_type
+import config
 import copy
 import names
 import syntax
@@ -365,3 +366,8 @@ class TileAdverbs(Transform):
   def transform_Scan(self, expr):
     self.adverb_args.append((expr.combine, expr.init, expr.emit))
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
+
+  def post_apply(self, fn):
+    if config.print_tiled_adverbs:
+      print fn
+    return fn

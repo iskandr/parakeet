@@ -31,7 +31,9 @@ class Type(Node):
     assert False, "Equality not implemented for type %s" % (self,)
 
 class AnyT(Type):
-  """top of the type lattice, absorbs all types"""
+  """
+  top of the type lattice, absorbs all types
+  """
 
   def combine(self, other):
     return self
@@ -43,7 +45,10 @@ class AnyT(Type):
 Any = AnyT()
 
 class UnknownT(Type):
-  """Bottom of the type lattice, absorbed by all other types"""
+  """
+  Bottom of the type lattice, absorbed by all other types
+  """
+
   _members = []
   def  combine(self, other):
     return other
@@ -58,6 +63,7 @@ class FnT(Type):
   """
   Type of a typed function
   """
+
   def __init__(self, input_types, return_type):
     self.input_types = tuple(input_types )
     self.return_type = return_type
@@ -133,7 +139,7 @@ class NoneT(ConcreteT):
 
   def to_python(self, obj):
     assert obj == ctypes.c_int64(0), \
-      "Expected runtime representation of None to be 0, but got: %s" % obj
+        "Expected runtime representation of None to be 0, but got: %s" % obj
     return None
 
   def combine(self, other):
@@ -289,28 +295,28 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
 
 class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""
-  _members = []
-  
 
+  _members = []
 
 class BoolT(IntT):
   """
-  The type is called BoolT to distinguish it from its only instantiation
-  called Bool.
+  The type is called BoolT to distinguish it from its only instantiation called
+  Bool.
   """
+
   def node_init(self):
     assert dtypes.is_bool(self.dtype)
     self.name = 'bool'
-    
+
   def __eq__(self, other):
-    return other.__class__ is BoolT 
+    return other.__class__ is BoolT
 
 Bool = register_scalar_type(BoolT, dtypes.bool8, equiv_python_types = [bool])
 
 class UnsignedT(IntT):
   def node_init(self):
     assert dtypes.is_unsigned(self.dtype), \
-           "Expected unsigned but got %s" % self.dtype
+        "Expected unsigned but got %s" % self.dtype
 
 UInt8 = register_scalar_type(UnsignedT, dtypes.uint8)
 
@@ -355,9 +361,10 @@ Complex128 = ComplexT(dtypes.float64, dtypes.complex128)
 
 class ConstIntT(IntT):
   """
-  Integer constants get a special type all to their lonesome selves,
-  so we can assign types to expressions like "(1,2,3)[0]".
+  Integer constants get a special type all to their lonesome selves, so we can
+  assign types to expressions like "(1,2,3)[0]".
   """
+
   _members = ['value']
 
   def __init__(self, value):
@@ -402,10 +409,11 @@ def all_scalars(ts):
 
 class PtrT(ConcreteT):
   """
-  I'm not giving pointer a concrete to_python/from_python
-  conversions or any usable fields, so it's up to our ctypes_repr
-  and llvm_backend to appropriately interpret objects of this type.
+  I'm not giving pointer a concrete to_python/from_python conversion or any
+  usable fields, so it's up to our ctypes_repr and llvm_backend to appropriately
+  interpret objects of this type.
   """
+
   _members = ['elt_type']
 
   rank = 1

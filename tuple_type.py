@@ -61,19 +61,19 @@ class TupleT(StructT):
 
   def __len__(self):
     return len(self.elt_types)
-  
+
   def __iter__(self):
     return iter(self.elt_types)
 
   def index_type(self, idx):
     assert isinstance(idx, Expr), \
-      "Tuple indices must be computed statically, so expected index to be " +\
-      "expression"
+        "Tuple indices must be computed statically, so expected index to be" + \
+        " expression"
     assert isinstance(idx, Const), "Unsupported expression: %s" % idx
     idx = int(idx.value)
     assert 0 <= idx < len(self.elt_types), \
-      "Can't get element %d from tuple of length %d" % \
-      (idx, len(self.elt_types))
+        "Can't get element %d from tuple of length %d" % \
+        (idx, len(self.elt_types))
     return self.elt_types[idx]
 
   def combine(self, other):
@@ -101,8 +101,7 @@ def repeat_tuple(t, n):
 
 def make_tuple_type(elt_types):
   """
-  Use this memoized construct to avoid
-  constructing too many distinct tuple type
+  Use this memoized construct to avoid constructing too many distinct tuple type
   objects and speeding up equality checks
   """
   key = tuple(elt_types)

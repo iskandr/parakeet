@@ -1,7 +1,7 @@
-import names 
+import names
 
-import syntax 
-from syntax import If, Assign, While, Return, Var, TypedFn  
+import syntax
+from syntax import If, Assign, While, Return, Var, TypedFn
 import syntax_visitor
 
 from subst import subst_stmt_list
@@ -27,8 +27,7 @@ def contains_calls(fn):
 
 def replace_returns(stmts, output_var):
   """
-  Change any returns at the outer scope
-  into assignments to the output var
+  Change any returns at the outer scope into assignments to the output var
   """
   for (i,stmt) in enumerate(stmts):
     if stmt.__class__ is Return:

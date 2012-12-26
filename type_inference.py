@@ -343,8 +343,8 @@ def annotate_expr(expr, tenv, var_map):
     init = annotate_child(expr.init) if expr.init else None
     init_type = get_type(init) if init else None
     result_type, typed_map_fn, typed_combine_fn, typed_emit_fn = \
-      specialize_Scan(map_fn.type, combine_fn.type, emit_fn.type,
-                      arg_types, init_type)
+        specialize_Scan(map_fn.type, combine_fn.type, emit_fn.type,
+                        arg_types, init_type)
     map_fn.fn = typed_map_fn
     combine_fn.fn = typed_combine_fn
     emit_fn.fn = typed_emit_fn
@@ -380,8 +380,8 @@ def annotate_expr(expr, tenv, var_map):
 def annotate_stmt(stmt, tenv, var_map ):
   def infer_phi(result_var, val):
     """
-    Don't actually rewrite the phi node, just
-    add any necessary types to the type environment
+    Don't actually rewrite the phi node, just add any necessary types to the
+    type environment
     """
     new_val = annotate_expr(val, tenv, var_map)
     new_type = new_val.type
@@ -401,10 +401,9 @@ def annotate_stmt(stmt, tenv, var_map ):
 
   def annotate_phi_node(result_var, (left_val, right_val)):
     """
-    Rewrite the phi node by rewriting the values from either branch,
-    renaming the result variable, recording its new type,
-    and returning the new name paired with the annotated branch values
-
+    Rewrite the phi node by rewriting the values from either branch, renaming
+    the result variable, recording its new type, and returning the new name
+    paired with the annotated branch values
     """
     new_left = annotate_expr(left_val, tenv, var_map)
     new_right = annotate_expr(right_val, tenv, var_map)
@@ -490,14 +489,12 @@ def annotate_block(stmts, tenv, var_map):
 
 def infer_types(untyped_fn, types):
   """
-  Given an untyped function and input types,
-  propagate the types through the body,
-  annotating the AST with type annotations.
+  Given an untyped function and input types, propagate the types through the
+  body, annotating the AST with type annotations.
 
-  NOTE: The AST won't be in a correct state
-  until a rewrite pass back-propagates inferred
-  types throughout the program and inserts
-  adverbs for scalar operators applied to arrays
+  NOTE: The AST won't be in a correct state until a rewrite pass back-propagates
+  inferred types throughout the program and inserts adverbs for scalar operators
+  applied to arrays
   """
 
   var_map = VarMap()
@@ -574,11 +571,9 @@ def infer_types(untyped_fn, types):
 
 def _specialize(fn, arg_types):
   """
-  Do the actual work of type specialization,
-  whereas the wrapper 'specialize' pulls out
-  untyped functions from closures, wraps
-  argument lists in ActualArgs objects and
-  performs memoization
+  Do the actual work of type specialization, whereas the wrapper 'specialize'
+  pulls out untyped functions from closures, wraps argument lists in ActualArgs
+  objects and performs memoization
   """
   if isinstance(fn, typed_ast.TypedFn):
     return fn
@@ -604,7 +599,6 @@ def _get_closure_type(fn):
     return closure_type.make_closure_type(fundef, [])
 
 def specialize(fn, arg_types):
-
   if isinstance(fn, typed_ast.TypedFn):
     return fn
   if isinstance(arg_types, (list, tuple)):
@@ -612,7 +606,7 @@ def specialize(fn, arg_types):
   closure_t = _get_closure_type(fn)
   if arg_types in closure_t.specializations:
     return closure_t.specializations[arg_types]
-   
+
   full_arg_types = arg_types.prepend_positional(closure_t.arg_types)
   fundef = _get_fundef(closure_t.fn)
   typed =  _specialize(fundef, full_arg_types)
@@ -625,15 +619,12 @@ def specialize(fn, arg_types):
     print repr(typed)
     print
 
-
   return typed
 
 def infer_return_type(untyped, arg_types):
   """
-  Given a function definition and some input types,
-  gives back the return type
-  and implicitly generates a specialized version of the
-  function.
+  Given a function definition and some input types, gives back the return type
+  and implicitly generates a specialized version of the function.
   """
   typed = specialize(untyped, arg_types)
   return typed.return_type

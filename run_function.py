@@ -12,7 +12,6 @@ from args import ActualArgs
 from llvm_context import global_context
 from llvm.ee import GenericValue
 
-
 def python_to_generic_value(x, t):
   if isinstance(t, core_types.FloatT):
     llvm_t = llvm_types.llvm_value_type(t)
@@ -55,7 +54,6 @@ def generic_value_to_python(gv, t):
   else:
     addr = gv.as_pointer()
     struct = t.ctypes_repr.from_address(addr)
-
     return t.to_python(struct)
 
 class CompiledFn:
@@ -81,12 +79,11 @@ class CompiledFn:
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
 
 def prepare_args(fn, args, kwargs):
-  
   """
-  Fetch the function's nonlocals and return an 
-  ActualArgs object of both the arg values and
-  their types
-  """ 
+  Fetch the function's nonlocals and return an ActualArgs object of both the arg
+  values and their types
+  """
+
   if isinstance(fn, syntax.Fn):
     untyped = fn
   else:
@@ -98,7 +95,7 @@ def prepare_args(fn, args, kwargs):
 
   # get types of all inputs
   arg_types = arg_values.transform(type_conv.typeof)
-  return untyped, arg_values, arg_types   
+  return untyped, arg_values, arg_types
 
 def specialize_and_compile(fn, args, kwargs = {}):
   """
@@ -108,9 +105,10 @@ def specialize_and_compile(fn, args, kwargs = {}):
   Return the untyped, typed, and compiled representation, along with all the
   arguments needed to actually execute.
   """
+
   untyped, arg_values, arg_types = prepare_args(fn, args, kwargs)
 
-  
+
   # propagate types through function representation and all
   # other functions it calls
   typed = type_inference.specialize(untyped, arg_types)
@@ -127,6 +125,7 @@ def run(fn, *args, **kwargs):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
+
   untyped, _, compiled, all_args = specialize_and_compile(fn, args, kwargs)
   linear_args = untyped.args.linearize_without_defaults(all_args)
   return compiled(*linear_args)

@@ -2,17 +2,18 @@
 #define _JOB_H_
 
 #include <pthread.h>
+#include <stdint.h>
 
 typedef struct {
-  int next_start;
-  int step;
-  int end;
+  int64_t next_start;
+  int64_t step;
+  int64_t end;
 } task_t;
 
 typedef struct {
   task_t            *tasks;
-  int                num_tasks;
-  int                cur_task;
+  int64_t            num_tasks;
+  int64_t            cur_task;
   pthread_barrier_t *barrier;
 } task_list_t;
 
@@ -22,9 +23,9 @@ typedef struct {
   pthread_barrier_t barrier;
 } job_t;
 
-job_t *make_job(int start, int stop, int step, int num_threads,
-                int task_len);
-job_t *reconfigure_job(job_t *old_job, int step);
+job_t *make_job(int64_t start, int64_t stop, int64_t step, int num_threads,
+                int64_t task_len);
+job_t *reconfigure_job(job_t *old_job, int64_t step);
 int num_threads(job_t *job);
 void free_job(job_t *job);
 

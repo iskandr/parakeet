@@ -128,13 +128,13 @@ class Codegen(object):
       idx = indices[0]
 
     t = arr_t.index_type(idx.type)
-    idx_expr = syntax.Index(arr, idx, type = t)
+    idx_expr = syntax.Index(arr, idx, type=t)
     if temp:
       return self.assign_temp(idx_expr, "array_elt")
     else:
       return idx_expr
 
-  def index_along_axis(self, arr, axis, idx, name = None):
+  def index_along_axis(self, arr, axis, idx, name=None):
     assert isinstance(axis, int), \
         "Axis must be a known constant int, got: " + str(axis)
     indices = []
@@ -146,7 +146,7 @@ class Codegen(object):
 
     index_tuple = self.tuple(indices, "indices")
     result_t = arr.type.index_type(index_tuple.type)
-    idx_expr = syntax.Index(arr, index_tuple, type = result_t)
+    idx_expr = syntax.Index(arr, index_tuple, type=result_t)
     if name:
       return self.assign_temp(idx_expr, name)
     else:
@@ -155,13 +155,13 @@ class Codegen(object):
   def setidx(self, arr, idx, v):
     self.assign(self.index(arr, idx, temp=False), v)
 
-  def prim(self, prim_fn, args, name = None):
+  def prim(self, prim_fn, args, name=None):
     args = wrap_constants(args)
     arg_types = get_types(args)
     upcast_types = prim_fn.expected_input_types(arg_types)
     result_type = prim_fn.result_type(upcast_types)
     upcast_args = [self.cast(x, t) for (x,t) in zip(args, upcast_types)]
-    prim_call = syntax.PrimCall(prim_fn, upcast_args, type = result_type)
+    prim_call = syntax.PrimCall(prim_fn, upcast_args, type=result_type)
     if name:
       return self.assign_temp(prim_call, name)
     else:

@@ -11,20 +11,20 @@ static inline safe_div(n, d) {
   return n / d + (n % d ? 1 : 0);
 }
 
-job_t *make_job(int start, int stop, int step, int num_threads,
-                int task_len) {
-  int num_iters = stop - start;
-  int num_total_tasks = safe_div(num_iters, step);
-  int num_total_chunks = safe_div(num_total_tasks, task_len);
+job_t *make_job(int64_t start, int64_t stop, int64_t step, int num_threads,
+                int64_t task_len) {
+  int64_t num_iters = stop - start;
+  int64_t num_total_tasks = safe_div(num_iters, step);
+  int64_t num_total_chunks = safe_div(num_total_tasks, task_len);
   job_t *job = (job_t*)malloc(sizeof(job_t));
   job->task_lists = (task_list_t*)malloc(sizeof(task_list_t) * num_threads);
   job->num_lists = num_threads;
   pthread_barrier_init(&job->barrier, NULL, num_threads + 1);
   int i, j;
-  int cur_iter = start;
-  int chunk_step = task_len * step;
+  int64_t cur_iter = start;
+  int64_t chunk_step = task_len * step;
   for (i = 0; i < num_threads; ++i) {
-    int num_tasks = num_total_chunks / num_threads;
+    int64_t num_tasks = num_total_chunks / num_threads;
     num_tasks += i < num_total_chunks % num_threads;
     job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
     job->task_lists[i].num_tasks = num_tasks;
@@ -45,19 +45,20 @@ job_t *make_job(int start, int stop, int step, int num_threads,
 }
 
 // TODO: If we ever want to use task_len, this needs to be updated.
-job_t *reconfigure_job(job_t *job, int step) {
+job_t *reconfigure_job(job_t *job, int64_t step) {
   int i;
   for (i = 0; i < job->num_lists; ++i) {
     if (job->task_lists[i].cur_task != job->task_lists[i].num_tasks) {
-      int start =
+      int64_t start =
           job->task_lists[i].tasks[job->task_lists[i].cur_task].next_start;
-      int end = job->task_lists[i].tasks[job->task_lists[i].num_tasks - 1].end;
-      int num_tasks = safe_div(end - start, step);
+      int64_t end =
+          job->task_lists[i].tasks[job->task_lists[i].num_tasks - 1].end;
+      int64_t num_tasks = safe_div(end - start, step);
       free(job->task_lists[i].tasks);
       job->task_lists[i].num_tasks = num_tasks;
       job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
       job->task_lists[i].cur_task = 0;
-      int cur_iter = start;
+      int64_t cur_iter = start;
       int j;
       for (j = 0; j < num_tasks; ++j) {
         job->task_lists[i].tasks[j].next_start = cur_iter;
@@ -136,7 +137,7 @@ int num_threads(job_t *job) {
 }
 
 void free_job(job_t *job) {
-  int i;
+  int64_t i;
   for (i = 0; i < job->num_lists; ++i) {
     free(job->task_lists[i].tasks);
   }

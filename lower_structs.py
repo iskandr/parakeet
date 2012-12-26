@@ -3,14 +3,16 @@ import core_types
 import syntax
 import tuple_type
 
-from array_type import ArrayT, make_array_type, ScalarT
-from syntax_helpers import const_int, const_tuple, zero_i64
+from array_type import ArrayT, make_array_type
+from core_types import ScalarT
+from syntax_helpers import const_int, const_tuple
 from transform import MemoizedTransform
 
 class LowerStructs(MemoizedTransform):
   """
   The only non-scalar objects should all be created as explicit Structs
   """
+
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
     return syntax.Struct(struct_args, type = expr.type)
@@ -54,6 +56,7 @@ class LowerStructs(MemoizedTransform):
     """
     Helper function used by multiple array-related transformations
     """
+
     data = self.assign_temp(self.transform_expr(data), "data_ptr")
     data_t = data.type
     assert isinstance(data_t, core_types.PtrT), \
@@ -89,6 +92,7 @@ class LowerStructs(MemoizedTransform):
     """
     Array literal
     """
+
     n = len(expr.elts)
     array_t = expr.type
     assert isinstance(array_t, ArrayT)
@@ -104,5 +108,5 @@ class LowerStructs(MemoizedTransform):
       lhs = syntax.Index(ptr_var, idx, type = elt_t)
       self.assign(lhs, elt)
 
-    return self.array_view(ptr_var, const_tuple(n), const_tuple(1), 
+    return self.array_view(ptr_var, const_tuple(n), const_tuple(1),
                            offset = const_int(0), nelts = const_int(n))

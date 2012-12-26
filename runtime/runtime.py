@@ -45,7 +45,7 @@ class Runtime():
     self.libParRuntime.job_finished.argtypes = [thread_pool_p]
     self.libParRuntime.job_finished.restype = c_int
     self.libParRuntime.get_iters_done.argtypes = [thread_pool_p]
-    self.libParRuntime.get_iters_done.restype = c_int
+    self.libParRuntime.get_iters_done.restype = c_int64
     self.libParRuntime.get_throughputs.argtypes = [thread_pool_p]
     self.libParRuntime.get_throughputs.restype = POINTER(c_double)
     self.libParRuntime.get_job.argtypes = [thread_pool_p]
@@ -71,7 +71,7 @@ class Runtime():
 
     self.cur_iter = 0
     self.time_per_calibration = 0.15
-    self.dop = 5
+    self.dop = 8
 
     self.thread_pool = self.libParRuntime.create_thread_pool(self.MAX_THREADS)
 
@@ -102,15 +102,18 @@ class Runtime():
     # function. In the future, we'll need to change that to be an AST that we
     # can compile with a particular setting of register tile sizes and loop
     # unrollings.
-    print "num_tiles:", num_tiles
-    tile_sizes_t = POINTER(c_int) * self.dop
+    if num_tiles == 0:
+      num_tiles = 1
+    tile_sizes_t = POINTER(c_int64) * self.dop
     self.tile_sizes = tile_sizes_t()
-    single_tile_sizes_t = c_int * num_tiles
+    single_tile_sizes_t = c_int64 * num_tiles
     for i in range(self.dop):
       self.tile_sizes[i] = single_tile_sizes_t()
       for j in range(num_tiles):
         self.tile_sizes[i][j] = 1
     self.work_functions = (c_void_p * self.dop)()
+    for i in range(self.dop):
+      self.work_functions[i] = cast(fn, c_void_p)
 
     self.args = args
     self.num_iters = num_iters
