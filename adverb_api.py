@@ -14,7 +14,7 @@ import tuple_type
 import type_conv
 import type_inference
 
-from core_types import Int32, Int64
+from core_types import Int64
 from runtime import runtime
 
 try:
@@ -113,7 +113,7 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
                        type_env = type_env)
 
     lowered = lowering.lower(parallel_wrapper)
-
+    print lowered
     _par_wrapper_cache[key] = lowered
     return lowered, num_tiles
 
@@ -205,10 +205,10 @@ def par_each(fn, *args, **kwds):
 
     c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
+
     # Execute on thread pool
     rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
 
-    #TODO: Have to handle concatenation axis
     result = output
   else:
     start = GenericValue.int(llvm_types.int32_t, 0)

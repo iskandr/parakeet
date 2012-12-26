@@ -7,7 +7,7 @@ import copy
 import names
 import syntax
 
-from core_types import Int32, Int64
+from core_types import Int32
 from transform import Transform
 
 def free_vars_list(expr_list):
