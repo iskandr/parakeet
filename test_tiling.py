@@ -1,6 +1,7 @@
 import adverbs
 import array_type
 import core_types
+import ctypes
 import interp
 import llvm_backend
 import lowering
@@ -13,6 +14,7 @@ import syntax_helpers
 import testing_helpers
 import tile_adverbs
 import transform
+import type_conv
 
 from parakeet import each
 from run_function import specialize_and_compile
@@ -114,6 +116,10 @@ red_fn2 = syntax.TypedFn(
                                        0, type=core_types.Int64))],
   return_type = core_types.Int64,
   type_env = {"X":x_array_t})
+
+def get_np_ptr(arr):
+  obj = type_conv.from_python(arr)
+  return ctypes.pointer(obj)
 
 def test_1d_map():
   new_fn = lowering.lower(map_fn, True)

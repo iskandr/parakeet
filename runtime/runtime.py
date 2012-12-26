@@ -102,7 +102,6 @@ class Runtime():
     # function. In the future, we'll need to change that to be an AST that we
     # can compile with a particular setting of register tile sizes and loop
     # unrollings.
-    print "num_tiles:", num_tiles
     if num_tiles == 0:
       num_tiles = 1
     tile_sizes_t = POINTER(c_int64) * self.dop
@@ -113,11 +112,12 @@ class Runtime():
       for j in range(num_tiles):
         self.tile_sizes[i][j] = 1
     self.work_functions = (c_void_p * self.dop)()
+    for i in range(self.dop):
+      self.work_functions[i] = cast(fn, c_void_p)
 
     self.args = args
     self.num_iters = num_iters
     self.task_size = num_iters / self.dop
-    print "task_size", self.task_size
     self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
                                            self.dop, 1)
     self.launch_job()

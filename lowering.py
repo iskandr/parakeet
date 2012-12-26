@@ -1,6 +1,7 @@
 import config
 import syntax
 
+from transform import Transform
 from clone_function import CloneFunction
 from dead_code_elim import DCE
 from fusion import Fusion

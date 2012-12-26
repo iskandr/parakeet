@@ -11,6 +11,7 @@ from lower_adverbs import LowerAdverbs
 from transform import Transform
 
 int_ptr_t = core_types.ptr_type(Int64)
+#int_ptr_t = array_type.make_array_type(Int64, 1)
 
 class LowerTiledAdverbs(Transform):
   def __init__(self, nesting_idx=-1, tile_param_array=None):

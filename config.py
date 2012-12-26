@@ -36,7 +36,7 @@ opt_inline_when_lowering = True
 opt_fusion = True
 opt_licm = True
 opt_verify = True
-opt_tile = True
+opt_tile = False
 
 ######################################
 #           LLVM OPTIONS             #

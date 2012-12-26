@@ -30,8 +30,8 @@ def free_vars(expr):
     return set()
 
 class FindAdverbs(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn)
+  def __init__(self):
+    Transform.__init__(self)
     self.has_adverbs = False
 
   def transform_Map(self, expr):
@@ -57,8 +57,8 @@ class AdverbArgs():
     self.emit = emit
 
 class TileAdverbs(Transform):
-  def __init__(self, fn):
-    Transform.__init__(self, fn)
+  def __init__(self):
+    Transform.__init__(self)
     self.adverbs_visited = []
     self.adverb_args = []
     self.expansions = {}

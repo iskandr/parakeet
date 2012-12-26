@@ -43,16 +43,12 @@ static void *worker(void *args) {
       } else {
         // We know now that we have an iteration to perform for this task, so
         // do it.
-        printf("Thread %d running task %" PRId64 "\n", id, task_list->cur_task);
         task_t *task = &task_list->tasks[task_list->cur_task];
         int64_t end = min(task->next_start + task->step, task->end);
-        printf("Thread %d start, stop: %" PRId64 ",%" PRId64 "\n",
-               id, task->next_start, end);
         (*worker_data->work_function)(task->next_start,
                                       end,
                                       worker_data->args,
                                       worker_data->tile_sizes);
-        printf("Thread %d ran task %" PRId64 "\n", id, task_list->cur_task);
         worker_data->iters_done += (end - task->next_start);
         task->next_start += task->step;
         worker_data->timestamp = get_cpu_time();
@@ -129,8 +125,6 @@ void launch_job(thread_pool_t *thread_pool,
                 work_function_t *work_functions, void **args, job_t *job,
                 int64_t **tile_sizes, int reset_tps) {
   assert(job->num_lists <= thread_pool->num_workers);
-  printf("Launching job: %p\n", work_functions);
-  printf("args: %p\n", args);
 
   thread_pool->job = job;
   thread_pool->num_active = job->num_lists;

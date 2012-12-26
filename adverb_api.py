@@ -58,17 +58,17 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
     # arguments.
-    start_var = syntax.Var(names.fresh("start"), type=Int32)
-    stop_var = syntax.Var(names.fresh("stop"), type=Int32)
+    start_var = syntax.Var(names.fresh("start"), type=Int64)
+    stop_var = syntax.Var(names.fresh("stop"), type=Int64)
     args_var = syntax.Var(names.fresh("args"), type=args_t)
     tile_sizes_var = syntax.Var(names.fresh("tile_sizes"),
                                 type=core_types.ptr_type(Int64))
     inputs = [start_var, stop_var, args_var, tile_sizes_var]
 
     # Manually unpack the args into types Vars and slice into them.
-    slice_t = array_type.make_slice_type(Int32, Int32, Int32)
+    slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     arg_slice = \
-        syntax.Slice(start_var, stop_var, syntax_helpers.one_i32, type=slice_t)
+        syntax.Slice(start_var, stop_var, syntax_helpers.one_i64, type=slice_t)
     def slice_arg(arg):
       indices = [arg_slice]
       for _ in xrange(1, arg.type.rank):
@@ -112,9 +112,7 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
                        return_type = core_types.NoneType,
                        type_env = type_env)
 
-    print "parallel_wrapper:", parallel_wrapper
     lowered = lowering.lower(parallel_wrapper)
-    print "lowered:", lowered
 
     _par_wrapper_cache[key] = lowered
     return lowered, num_tiles
@@ -162,7 +160,6 @@ def par_each(fn, *args, **kwds):
   num_iters = max_arg.shape[axis]
 
   # Create args struct type
-  print "arg_types:", arg_types
   fields = []
   for i, arg_type in enumerate(arg_types):
     fields.append((("arg%d" % i), arg_type))
@@ -210,14 +207,9 @@ def par_each(fn, *args, **kwds):
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
     # Execute on thread pool
     rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
-    output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
-
-    output_contents = [ptr.contents for ptr in output_ptrs]
-
-    outputs = [map_result_type.to_python(x) for x in output_contents]
 
     #TODO: Have to handle concatenation axis
-    result = np.concatenate(outputs)
+    result = output
   else:
     start = GenericValue.int(llvm_types.int32_t, 0)
     stop = GenericValue.int(llvm_types.int32_t, num_iters)
