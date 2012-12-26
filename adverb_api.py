@@ -233,7 +233,7 @@ def par_allpairs(fn, x, y, **kwds):
       prepare_adverb_args(fn, args, kwds)
 
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-  map_result_type = type_inference.infer_Map(closure_t, arg_types)
+  ap_result_type = type_inference.infer_AllPairs(closure_t, arg_types)
 
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):
@@ -246,7 +246,7 @@ def par_allpairs(fn, x, y, **kwds):
   fields = []
   for i, arg_type in enumerate(arg_types):
     fields.append((("arg%d" % i), arg_type))
-  fields.append(("output", map_result_type))
+  fields.append(("output", ap_result_type))
 
   class ParEachArgsType(core_types.StructT):
     _fields_ = fields
@@ -303,7 +303,7 @@ def par_allpairs(fn, x, y, **kwds):
     tile_sizes = GenericValue.pointer(ctypes.addressof(arr_tile_sizes))
     gv_inputs = [start, stop, fn_args_array, tile_sizes]
     exec_engine.run_function(llvm_fn, gv_inputs)
-    result = map_result_type.to_python(c_args.output.contents)
+    result = ap_result_type.to_python(c_args.output.contents)
 
   return result
 
