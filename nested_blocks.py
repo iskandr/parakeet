@@ -14,10 +14,10 @@ class NestedBlocks(object):
     return self._blocks[-1]
 
   def append_to_current(self, stmt):
-    self.current().append(stmt)
+    self._blocks[-1].append(stmt)
 
   def extend_current(self, stmts):
-    self.current().extend(stmts)
+    self._blocks[-1].extend(stmts)
 
   def depth(self):
     return len(self._blocks)

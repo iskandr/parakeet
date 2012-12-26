@@ -1,4 +1,5 @@
 import parakeet
+from parakeet import each 
 import syntax
 import testing_helpers
 from testing_helpers import expect 
@@ -127,6 +128,41 @@ def volatile_licm_mistake():
 
 def test_volatile_licm_mistake():
     expect(volatile_licm_mistake, [], np.array([1]))
+
+
+def g(x):
+  def h(xi):
+    return xi + 1.0
+  return each(h,x)
+
+def nested_add1(X):
+  return each(g, X)
+
+from syntax_visitor import SyntaxVisitor
+class CountLoops(SyntaxVisitor):
+    def __init__(self):
+      SyntaxVisitor.__init__(self)
+      self.count = 0 
+
+    
+    def visit_While(self, stmt):
+      self.count += 1
+      SyntaxVisitor.visit_While(self, stmt)
+
+def count_loops(fn):
+    Counter = CountLoops()
+    Counter.visit_fn(fn)
+    return Counter.count 
+
+def test_copy_elimination():
+    x = np.array([[1,2,3],[4,5,6]])
+    expect(nested_add1, [x], x + 1.0)
+    typed_fn = parakeet.typed_repr(nested_add1, [x])
+    import lowering 
+    lowered = lowering.lower(typed_fn)
+    n_loops = count_loops(lowered)
+    assert n_loops <= 2, \
+        "Too many loops generated! Expected at most 2, got %d" % n_loops
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
