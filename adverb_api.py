@@ -61,8 +61,8 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
     start_var = syntax.Var(names.fresh("start"), type=Int64)
     stop_var = syntax.Var(names.fresh("stop"), type=Int64)
     args_var = syntax.Var(names.fresh("args"), type=args_t)
-    tile_sizes_var = syntax.Var(names.fresh("tile_sizes"),
-                                type=core_types.ptr_type(Int64))
+    tile_type = tuple_type.make_tuple_type([Int64 for _ in range(num_tiles)])
+    tile_sizes_var = syntax.Var(names.fresh("tile_sizes"), type=tile_type)
     inputs = [start_var, stop_var, args_var, tile_sizes_var]
 
     # Manually unpack the args into types Vars and slice into them.

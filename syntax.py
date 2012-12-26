@@ -33,6 +33,7 @@ class RunExpr(Stmt):
   """
   Run an expression without binding any new variables
   """
+
   _members = ['value']
 
   def __str__(self):
@@ -129,7 +130,7 @@ class Var(Expr):
 
   def __str__(self):
     return self.name
-  
+
   def __hash__(self):
     return hash(self.name)
 
@@ -397,6 +398,7 @@ class Alloc(Expr):
   """
   Allocates a block of data, returns a pointer
   """
+
   _members = ['elt_type', 'count']
 
   def __str__(self):
@@ -443,6 +445,7 @@ class TypedFn(Expr):
         "Typed function already registered: %s" % self.name
     self.registry[self.name] = self
 
+    self.has_tiles = False
     self.num_tiles = 0
 
   def __repr__(self):

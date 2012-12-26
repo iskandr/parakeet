@@ -100,7 +100,7 @@ def test_tiled_mm():
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   a2_array = np.arange(12).reshape(4,3)
   b2_array = np.arange(9,21).reshape(4,3)
-  rslt = wrapper(a2_array, b2_array, np.array([2,2,2], dtype=np.int64))
+  rslt = wrapper(a2_array, b2_array, (2,2,2))
   nprslt = np.dot(a2_array, b2_array.T)
   assert(testing_helpers.eq(rslt, nprslt))
 

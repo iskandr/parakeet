@@ -63,6 +63,7 @@ class TileAdverbs(Transform):
     self.adverb_args = []
     self.expansions = {}
     self.exp_stack = []
+    self.num_tiles = 0
 
   def push_exp(self, adv, adv_args):
     self.exp_stack.append(self.expansions)
@@ -233,6 +234,8 @@ class TileAdverbs(Transform):
     return stmt
 
   def transform_Map(self, expr):
+    self.num_tiles += 1
+
     # TODO: Have to handle naming collisions in the expansions dict
     depth = len(self.adverbs_visited)
     closure = expr.fn
@@ -277,6 +280,7 @@ class TileAdverbs(Transform):
                               input_types=input_types,
                               return_type=return_t,
                               type_env=new_type_env)
+      new_fn.has_tiles = True
     else:
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
@@ -303,6 +307,8 @@ class TileAdverbs(Transform):
 
   # For now, reductions end the tiling chain.
   def transform_Reduce(self, expr):
+    self.num_tiles += 1
+
     depth = len(self.adverbs_visited)
     closure = expr.fn
     closure_args = []
@@ -368,6 +374,8 @@ class TileAdverbs(Transform):
     return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
 
   def post_apply(self, fn):
+    fn.has_tiles = self.num_tiles > 0
+    fn.num_tiles = self.num_tiles
     if config.print_tiled_adverbs:
       print fn
     return fn
