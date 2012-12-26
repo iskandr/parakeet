@@ -36,7 +36,7 @@ opt_inline_when_lowering = True
 opt_fusion = True
 opt_licm = True
 opt_verify = True
-opt_tile = False
+opt_tile = True
 
 ######################################
 #           LLVM OPTIONS             #
@@ -56,4 +56,4 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False

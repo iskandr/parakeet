@@ -71,12 +71,12 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
         syntax.Slice(start_var, stop_var, syntax_helpers.one_i32, type=slice_t)
     def slice_arg(arg):
       indices = [arg_slice]
-      for i in xrange(1, arg.type.rank):
+      for _ in xrange(1, arg.type.rank):
         indices.append(syntax_helpers.slice_none)
       tuple_t = tuple_type.make_tuple_type(syntax_helpers.get_types(indices))
       index_tuple = syntax.Tuple(indices, tuple_t)
       result_t = t.index_type(tuple_t)
-      return syntax.Index(attr, index_tuple, type=result_t)
+      return syntax.Index(arg, index_tuple, type=result_t)
     unpacked_args = []
     for i, t in enumerate(arg_types):
       attr = syntax.Attribute(args_var, ("arg%d" % i), type=t)
@@ -189,6 +189,10 @@ def par_each(fn, *args, **kwds):
 
   # TODO: Have to use shape inference to determine output size so we can pre-
   #       allocate the output.
+  output = np.arange(80)
+  output_obj = type_conv.from_python(output)
+  gv_output = ctypes.pointer(output_obj)
+  setattr(c_args, "output", gv_output)
 
   wf, num_tiles = gen_par_work_function(adverbs.Map, untyped, args_t, arg_types)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
@@ -205,9 +209,7 @@ def par_each(fn, *args, **kwds):
     c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
     # Execute on thread pool
-    print "running job"
     rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
-    print "ran job"
     output_ptrs = [args_obj.contents.output for args_obj in c_args_array]
 
     output_contents = [ptr.contents for ptr in output_ptrs]

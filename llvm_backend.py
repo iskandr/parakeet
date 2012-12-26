@@ -32,6 +32,7 @@ class CompilationEnv:
     """
     Initializes the variables dictionary and returns a builder object
     """
+
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
     llvm_output_type = llvm_ref_type(fundef.return_type)
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
@@ -45,6 +46,7 @@ class CompilationEnv:
     Create a mapping from variable names to stack locations, these will later be
     converted to SSA variables by the mem2reg pass.
     """
+
     n_expected = len(fundef.arg_names)
     n_compiled = len(self.llvm_fn.args)
     assert n_compiled == n_expected, \
@@ -77,9 +79,10 @@ class CompilationEnv:
 
 def attribute_lookup(struct, name, env, builder):
   """
-  Helper for getting the address of an attribute lookup,
-  used both when setting and getting attributes
+  Helper for getting the address of an attribute lookup, used both when setting
+  and getting attributes
   """
+
   llvm_struct = compile_expr(struct, env, builder)
   struct_t = struct.type
   field_pos = struct_t.field_pos(name)

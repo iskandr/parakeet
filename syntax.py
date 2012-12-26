@@ -20,7 +20,6 @@ def phi_nodes_to_str(phi_nodes):
   # add tabs
   return whole.replace("\n", "\n    ")
 
-
 class Assign(Stmt):
   _members = ['lhs', 'rhs']
 
@@ -30,13 +29,12 @@ class Assign(Stmt):
     else:
       return "%s = %s" % (self.lhs, self.rhs)
 
-
 class RunExpr(Stmt):
   """
   Run an expression without binding any new variables
   """
   _members = ['value']
-  
+
   def __str__(self):
     return str(self.value)
 
@@ -71,6 +69,7 @@ class While(Stmt):
   for incoming and outgoing variables of the form
   [(new_var1, (old_var1,old_var2)]
   """
+
   _members = ['cond', 'body', 'merge']
 
   def __repr__(self):
@@ -184,7 +183,6 @@ class Tuple(Expr):
   def children(self):
     return self.elts
 
-
 class Array(Expr):
   _members = ['elts']
 
@@ -194,11 +192,11 @@ class Array(Expr):
   def children(self):
     return self.elts
 
-
 class Closure(Expr):
   """
   Create a closure which points to a global fn with a list of partial args
   """
+
   _members = ['fn', 'args']
 
   def node_init(self):
@@ -250,6 +248,7 @@ class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a prims.Prim object
   """
+
   _members = ['prim', 'args']
 
   def __repr__(self):
@@ -290,12 +289,14 @@ class ConstArrayLike(Expr):
   Create an array with the same shape as the first arg, but with all values set
   to the second arg
   """
+
   _members = ['array', 'value']
 
 class ArrayView(Expr):
   """
   Create a new view on already allocated underlying data
   """
+
   _members = ['data', 'shape', 'strides', 'offset', 'total_elts']
 
   def children(self):
@@ -382,6 +383,7 @@ class Struct(Expr):
   Eventually all non-scalar data should be transformed to be created with this
   syntax node, signifying explicit struct allocation
   """
+
   _members = ['args']
 
   def __str__(self):
@@ -408,6 +410,7 @@ class TypedFn(Expr):
   The body of a TypedFn should contain Expr nodes which have been extended with
   a 'type' attribute
   """
+
   _members = ['name',
               'arg_names',
               'body',

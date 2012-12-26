@@ -1,62 +1,65 @@
-import config 
+import config
 import llvm.core as core
 import llvm.ee as ee
 import llvm.passes as passes
 
 class LLVM_Context:
-  """Combine a module, exec engine, and pass manager into a single object"""
-  
+  """
+  Combine a module, exec engine, and pass manager into a single object
+  """
+
   _verify_passes = [
-    'preverify', 
-    'domtree', 
+    'preverify',
+    'domtree',
     'verify'
   ]
+
   _opt_passes = [
-    'mem2reg', 
-    'targetlibinfo', 
-    'tbaa', 
+    'mem2reg',
+    'targetlibinfo',
+    'tbaa',
     'basicaa',
-    'instcombine', 
-    'simplifycfg', 
+    'instcombine',
+    'simplifycfg',
     'basiccg',
-    'memdep', 
+    'memdep',
     'scalarrepl-ssa',
     'domtree',
     'early-cse',
     'simplify-libcalls',
     'lazy-value-info',
-    'correlated-propagation', 
-    'simplifycfg', 
-    'instcombine', 
-    'reassociate', 
+    'correlated-propagation',
+    'simplifycfg',
+    'instcombine',
+    'reassociate',
     'domtree',
-    'loops', 
-    'loop-simplify', 
-    'lcssa', 
-    'loop-rotate', 
-    'licm', 
-    'lcssa', 
-    'loop-unswitch', 
-    'instcombine', 
+    'loops',
+    'loop-simplify',
+    'lcssa',
+    'loop-rotate',
+    'licm',
+    'lcssa',
+    'loop-unswitch',
+    'instcombine',
     'scalar-evolution',
     'loop-simplify',
     'lcssa', 'indvars',
-    'loop-idiom', 
-    'loop-deletion', 
+    'loop-idiom',
+    'loop-deletion',
     'loop-unroll',
     'bb-vectorize',
-    'gvn',  
+    'gvn',
     'sccp',
-    'correlated-propagation', 
+    'correlated-propagation',
     'jump-threading',
-    'dse', 
+    'dse',
     'adce',
-    'simplifycfg', 
-    'instcombine', 
+    'simplifycfg',
+    'instcombine',
   ]
 
-
-  def __init__(self, module_name, optimize = config.llvm_optimize, verify = config.llvm_verify):
+  def __init__(self, module_name, optimize = config.llvm_optimize,
+               verify = config.llvm_verify):
     self.module = core.Module.new(module_name)
     self.engine_builder = ee.EngineBuilder.new(self.module)
     self.engine_builder.force_jit()
@@ -66,9 +69,9 @@ class LLVM_Context:
       self.engine_builder.opt(0)
     self.exec_engine = self.engine_builder.create()
     self.pass_manager = passes.FunctionPassManager.new(self.module)
-    
+
     self.pass_manager.add(self.exec_engine.target_data)
-    for p in self._verify_passes: 
+    for p in self._verify_passes:
       self.pass_manager.add(p)
     if optimize:
       for p in (self._opt_passes + self._verify_passes):
@@ -79,4 +82,3 @@ class LLVM_Context:
       self.pass_manager.run(llvm_fn)
 
 global_context = LLVM_Context("module")
-
