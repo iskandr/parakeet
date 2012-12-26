@@ -55,7 +55,8 @@ def lower(fundef, tile=False):
     num_tiles = 0
     if tile:
       p = [CloneFunction,
-           MapifyAllPairs, 
+           MapifyAllPairs,
+           Fusion, Simplify, DCE,
            TileAdverbs, Simplify, DCE,
            LowerTiledAdverbs, Simplify, DCE]
       fn = apply_pipeline(fundef, p)

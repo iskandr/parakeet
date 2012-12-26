@@ -1,6 +1,6 @@
 import names
 from transform import Transform
-from syntax import Assign, Var,  TypedFn, Return
+from syntax import Assign, Var, TypedFn, Return
 from adverbs import Map, AllPairs
 import array_type
 
@@ -62,12 +62,8 @@ class MapifyAllPairs(Transform):
       inner_arg_names.append(var.name)
       inner_input_types.append(var.type)
 
-    inner_closure_name = names.fresh('inner_closure')
     inner_closure_rhs = self.closure(fn, inner_closure_args + [x_elt_var])
-    inner_closure_t = inner_closure_rhs.type
-    inner_closure_var = Var(inner_closure_name, type = inner_closure_t)
 
-    type_env[inner_closure_name] = inner_closure_t
     inner_result_t = array_type.lower_rank(expr.type, 1)
     inner_fn = TypedFn(
       name = names.fresh('allpairs_into_maps_wrapper'),
@@ -76,13 +72,11 @@ class MapifyAllPairs(Transform):
       return_type = inner_result_t,
       type_env = type_env,
       body = [
-        Assign(inner_closure_var, inner_closure_rhs),
-        Return(Map(inner_closure_var,
+        Return(Map(inner_closure_rhs,
                    args=[y_inner],
                    axis = expr.axis,
                    type = inner_result_t))
       ]
     )
-    closure = self.closure(inner_fn, closure_elts + [y_outer],
-                           name = "outer_closure")
+    closure = self.closure(inner_fn, closure_elts + [y_outer])
     return Map(closure, [x], axis = expr.axis, type = expr.type)

@@ -54,6 +54,7 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
     typed = type_inference.specialize(untyped_wrapper, arg_types)
     payload = lowering.lower(typed, tile=config.opt_tile)
     num_tiles = payload.num_tiles
+    print payload
 
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
@@ -233,7 +234,8 @@ def par_allpairs(fn, x, y, **kwds):
       prepare_adverb_args(fn, args, kwds)
 
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-  ap_result_type = type_inference.infer_AllPairs(closure_t, arg_types)
+  xtype, ytype = arg_types
+  ap_result_type = type_inference.infer_AllPairs(closure_t, xtype, ytype)
 
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):
@@ -269,12 +271,13 @@ def par_allpairs(fn, x, y, **kwds):
 
   # TODO: Have to use shape inference to determine output size so we can pre-
   #       allocate the output.
-  output = np.arange(80)
+  print ap_result_type
+  output = np.arange(100).reshape(10,10)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
   setattr(c_args, "output", gv_output)
 
-  wf, num_tiles = gen_par_work_function(adverbs.Map, untyped, args_t, arg_types)
+  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped, args_t, arg_types)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
   parallel = True
   if parallel:
@@ -370,7 +373,10 @@ if config.call_from_python_in_parallel:
 def each(f, *xs, **kwargs):
   return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 
-@staged_macro("axis")
+if config.call_from_python_in_parallel:
+  call_from_python = par_allpairs
+
+@staged_macro("axis", call_from_python=call_from_python)
 def allpairs(f, x, y, **kwargs):
   return adverbs.AllPairs(fn = f, args = [x,y], axis = get_axis(kwargs))
 

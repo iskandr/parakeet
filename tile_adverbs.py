@@ -211,6 +211,8 @@ class TileAdverbs(Transform):
   def transform_Assign(self, stmt):
     if isinstance(stmt.rhs, adverbs.Adverb):
       new_rhs = self.transform_expr(stmt.rhs)
+      stmt.lhs.type = new_rhs.type
+      self.type_env[stmt.lhs.name] = stmt.lhs.type
       return syntax.Assign(stmt.lhs, new_rhs)
     elif len(self.adverbs_visited) > 0:
       fv = free_vars(stmt.rhs)
@@ -222,6 +224,8 @@ class TileAdverbs(Transform):
           self.gen_unpack_tree(map_tree, depths, fv_names, inner_body,
                                self.fn.type_env)
       new_rhs = syntax.Call(unpack_fn, nested_args)
+      stmt.lhs.type = new_rhs.type
+      self.type_env[stmt.lhs.name] = new_rhs.type
       return syntax.Assign(stmt.lhs, new_rhs)
     else:
       # Do nothing if we're not inside a nesting of tiled adverbs
