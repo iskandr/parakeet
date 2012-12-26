@@ -1,11 +1,12 @@
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "thread_pool.h"
-
+#include "job.h"
 #include "runtime.h"
+#include "thread_pool.h"
 
 static inline safe_div(n, d) {
   return n / d + (n % d ? 1 : 0);

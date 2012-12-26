@@ -9,11 +9,9 @@ import run_function
 import syntax
 import syntax_helpers
 import testing_helpers
-import tile_adverbs
 
 from closure_type import make_closure_type
-from parakeet import each
-from run_function import specialize_and_compile
+from parakeet import allpairs
 
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
 y2_array = np.arange(100, 200, dtype = np.int64).reshape(10,10)
@@ -93,29 +91,27 @@ map_mul_fn = syntax.TypedFn(
   return_type = x_array_t,
   type_env = {"X":x_2_array_t, "Y":x_2_array_t})
 
-def test_tiled_mm():
-  new_fn = lowering.lower(mm_fn, True)
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  a2_array = np.arange(12).reshape(4,3)
-  b2_array = np.arange(9,21).reshape(4,3)
-  rslt = wrapper(a2_array, b2_array, (2,2,2))
-  nprslt = np.dot(a2_array, b2_array.T)
-  assert(testing_helpers.eq(rslt, nprslt))
-
-#def mm_1(x):
-#  def dot_1(y):
-#    return sum(x*y)
-#  return each(dot_1, y2_array)
-#
-#def adverb_matmult():
-#  return each(mm_1, x2_array)
-#
-#def test_par_mm():
-#  rslt = adverb_matmult()
-#  nprslt = np.dot(x2_array, y2_array.T)
+#def test_tiled_mm():
+#  new_fn = lowering.lower(mm_fn, True)
+#  assert isinstance(new_fn, syntax.TypedFn)
+#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+#  a2_array = np.arange(12).reshape(4,3)
+#  b2_array = np.arange(9,21).reshape(4,3)
+#  rslt = wrapper(a2_array, b2_array, (2,2,2))
+#  nprslt = np.dot(a2_array, b2_array.T)
 #  assert(testing_helpers.eq(rslt, nprslt))
+
+def dot(x, y):
+  return sum(x*y)
+
+def adverb_matmult(X, Y):
+  return allpairs(dot, X, Y)
+
+def test_par_mm():
+  rslt = adverb_matmult(x2_array, y2_array)
+  nprslt = np.dot(x2_array, y2_array.T)
+  assert(testing_helpers.eq(rslt, nprslt))
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

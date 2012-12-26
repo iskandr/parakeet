@@ -1,9 +1,11 @@
 import names
 from syntax import Var, Const,  Return, TypedFn
 from adverbs import Adverb, Scan, Reduce, Map, AllPairs
-from transform import Transform
+from transform import Transform, apply_pipeline
 from use_analysis import use_count
 import inline
+from dead_code_elim import DCE
+from simplify import Simplify
 
 def fuse(prev_fn, next_fn, const_args = [None]):
   """
@@ -40,7 +42,11 @@ class Fusion(Transform):
     # map each variable to
     self.use_counts = use_count(fn)
 
+  def transform_TypedFn(self, fn):
+    return apply_pipeline(fn, [Simplify, DCE, Fusion])
+
   def transform_Assign(self, stmt):
+    stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
     if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb) and \
        rhs.__class__ is not AllPairs:
