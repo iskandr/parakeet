@@ -1,11 +1,7 @@
 import syntax
 
 class Adverb(syntax.Expr):
-  _members = ['fn', 'args', 'axis']
-
-  def node_init(self):
-    assert self.fn is not None
-    assert self.args is not None
+  _members = ['fn', 'args', 'axis', 'out']
 
   def fn_to_str(self, fn):
 #    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):

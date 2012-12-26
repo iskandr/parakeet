@@ -422,13 +422,13 @@ class PtrT(ConcreteT):
 
   def __eq__(self, other):
     return isinstance(other, PtrT) and self.elt_type == other.elt_type
-
+  
   def __hash__(self):
     return hash(self.elt_type)
 
   def __repr__(self):
     return str(self)
-
+    
   @property
   def ctypes_repr(self):
     return self._ctypes_repr

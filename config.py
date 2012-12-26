@@ -17,7 +17,7 @@ print_lowered_function = False
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False

@@ -46,18 +46,19 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
   def transform_TypedFn(self, expr):
     import lowering
     return lowering.lower(expr, tile=False)
-
+  
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    return self.eval_map(fn, args, axis)
+    output = self.transform_if_expr(expr.out)
+    return self.eval_map(fn, args, axis, output)
 
   def transform_Reduce(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     combine = self.transform_expr(expr.combine)
-    init = self.transform_expr(expr.init) if expr.init else None
+    init = self.transform_if_expr(expr.init) 
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_reduce(fn, combine, init, args, axis)
 
@@ -66,9 +67,10 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     args = self.transform_expr_list(expr.args)
     combine = self.transform_expr(expr.combine)
     emit = self.transform_expr(expr.emit)
-    init = self.transform_expr(expr.init) if expr.init else None
+    init = self.transform_if_expr(expr.init)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    return self.eval_scan(fn, combine, emit, init, args, axis)
+    output = self.transform_if_expr(expr.out)
+    return self.eval_scan(fn, combine, emit, init, args, axis, output)
 
   def transform_AllPairs(self, expr):
     fn = self.transform_expr(expr.fn)
@@ -76,4 +78,5 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     assert len(args) == 2
     x,y = self.transform_expr_list(args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    return self.eval_allpairs(fn, x, y, axis)
+    output = self.transform_if_expr(expr.out)
+    return self.eval_allpairs(fn, x, y, axis, output)

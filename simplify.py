@@ -1,10 +1,11 @@
 import prims
 import syntax
+from syntax import Assign, RunExpr 
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
-from adverbs import Map, Reduce, Scan, AllPairs
+from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
 
 import subst
 import transform
@@ -227,7 +228,7 @@ class Simplify(Transform):
     dictionary)
     """
     var = self.fresh_var(expr.type, name)
-    block.append(syntax.Assign(var, expr))
+    block.append(Assign(var, expr))
     self.bindings[var.name] = expr
     return var
 
@@ -298,22 +299,25 @@ class Simplify(Transform):
     rhs_class = rhs.__class__
     if lhs_class is Index:
       lhs = self.transform_lhs_Index(lhs)
+      if isinstance(rhs, Adverb) and rhs.out is None:
+        rhs.out = lhs 
+        return RunExpr(rhs)
     elif lhs_class is Attribute:
       lhs = self.transform_lhs_Attribute(lhs)
     elif lhs_class is Var:
       self.bind_var(lhs.name, rhs)
-      if rhs_class not in (Var, Const) and self.immutable(rhs):
-        self.available_expressions.setdefault(rhs, lhs)
+      if rhs_class not in (Var, Const) and \
+          self.immutable(rhs) and \
+          rhs not in self.available_expressions:
+        self.available_expressions[rhs] = lhs
     else:
       self.bind(lhs, rhs)
-         
 
     if rhs_class is Var and \
        rhs.name in self.bindings and \
        self.use_counts.get(rhs.name, 1) == 1:
       self.use_counts[rhs.name] = 0
       rhs = self.bindings[rhs.name]
-
     stmt.lhs = lhs
     stmt.rhs = rhs
     return stmt
