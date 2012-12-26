@@ -126,7 +126,7 @@ def test_1d_map():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x_array, np.array([5], dtype=np.int64))
+  rslt = wrapper(x_array, (5,))
   assert testing_helpers.eq(rslt, x_array)
 
 def test_2d_map():
@@ -134,7 +134,7 @@ def test_2d_map():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  tile_array = np.array([3] * new_fn.num_tiles, dtype=np.int64)
+  tile_array = (3,) * new_fn.num_tiles
   rslt = wrapper(x2_array, tile_array)
   assert testing_helpers.eq(rslt, x2_array)
 
@@ -143,7 +143,7 @@ def test_2_maps():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  tile_array = np.array([3] * new_fn.num_tiles, dtype=np.int64)
+  tile_array = (3,) * new_fn.num_tiles
   rslt = wrapper(x2_array, tile_array)
   assert testing_helpers.eq(rslt, x2_array)
 
@@ -152,7 +152,7 @@ def test_1d_reduce():
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  rslt = wrapper(x_array, np.array([3], dtype=np.int64))
+  rslt = wrapper(x_array, (3,) * new_fn.num_tiles)
   assert testing_helpers.eq(rslt, sum(x_array))
 
 if __name__ == '__main__':

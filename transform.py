@@ -2,30 +2,28 @@ import config
 import verify
 
 import syntax
-from syntax import If, Assign, While, Return, RunExpr 
-from syntax import Var, Tuple, Index, Attribute, Const  
+from syntax import If, Assign, While, Return, RunExpr
+from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
-from syntax import Call, TypedFn 
+from syntax import Call, TypedFn
 
 from args import ActualArgs
 from codegen import Codegen
 
-
 class Transform(Codegen):
-  def __init__(self, verify = config.opt_verify, 
-                      reverse = False, 
-                      require_types = True):
+  def __init__(self, verify = config.opt_verify,
+                     reverse = False,
+                     require_types = True):
     Codegen.__init__(self)
-    self.fn = None 
+    self.fn = None
     self.verify = verify
     self.reverse = reverse
-    self.require_types = require_types 
+    self.require_types = require_types
 
   def lookup_type(self, name):
     assert self.type_env is not None
     return self.type_env[name]
-
 
   def transform_if_expr(self, maybe_expr):
     if isinstance(maybe_expr, syntax.Expr):
@@ -52,14 +50,12 @@ class Transform(Codegen):
     if hasattr(self, method_name):
       return getattr(self, method_name)
     else:
-
       return None
 
   """
-  Common cases for expression transforms:
-  we don't need to create a method for every
-  sort of expression but these run faster
-  and allocate less memory than transform_generic_expr
+  Common cases for expression transforms: we don't need to create a method for
+  every sort of expression but these run faster and allocate less memory than
+  transform_generic_expr
   """
   def transform_Var(self, expr):
     return expr
@@ -78,61 +74,59 @@ class Transform(Codegen):
 
   def transform_Attribute(self, expr):
     expr.value = self.transform_expr(expr.value)
-    return expr 
-  
+    return expr
+
   def transform_PrimCall(self, expr):
     expr.args = self.transform_expr_tuple(expr.args)
-    return expr 
-  
+    return expr
+
   def transform_Call(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_tuple(expr.args)
-    return expr 
-  
+    return expr
+
   def transform_Alloc(self, expr):
     expr.count = self.transform_expr(expr.count)
-    return expr 
-  
+    return expr
+
   def transform_Struct(self, expr):
     expr.args = self.transform_expr_tuple(expr.args)
-    return expr 
-  
+    return expr
+
   def transform_Cast(self, expr):
     expr.value = self.transform_expr(expr.value)
-    return expr 
-  
+    return expr
+
   def transform_TupleProj(self, expr):
     expr.tuple = self.transform_expr(expr.tuple)
-    return expr 
-  
+    return expr
+
   def transform_TypedFn(self, expr):
     """
-    By default, don't do recursive transformation of 
-    referenced functions
+    By default, don't do recursive transformation of referenced functions
     """
-    return expr 
-  
+
+    return expr
+
   def transform_Slice(self, expr):
     expr.start = self.transform_expr(expr.start) if expr.start else None
-    expr.stop = self.transform_expr(expr.stop) if expr.stop else None 
-    expr.step = self.transform_expr(expr.step) if expr.step else None 
-    return expr 
-  
+    expr.stop = self.transform_expr(expr.stop) if expr.stop else None
+    expr.step = self.transform_expr(expr.step) if expr.step else None
+    return expr
+
   def transform_ArrayView(self, expr):
     expr.data = self.transform_expr(expr.data)
     expr.shape = self.transform_expr(expr.shape)
     expr.strides = self.transform_expr(expr.strides)
     expr.offset = self.transform_expr(expr.offset)
     expr.total_elts = self.transform_expr(expr.total_elts)
-    return expr 
-      
-
-
+    return expr
 
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
     """
+
     expr_class = expr.__class__
     if expr_class is Var:
       result = self.transform_Var(expr)
@@ -162,7 +156,7 @@ class Transform(Codegen):
       result = self.transform_TypedFn(expr)
     elif expr_class is Call:
       result = self.transform_Call(expr)
-    
+
     else:
       method = self.find_method(expr, "transform_")
       if method:
@@ -170,7 +164,7 @@ class Transform(Codegen):
       else:
         result = self.transform_generic_expr(expr)
     if result is None:
-      return expr 
+      return expr
     else:
       return result
 
@@ -188,9 +182,10 @@ class Transform(Codegen):
 
   def transform_lhs(self, lhs):
     """
-    Overload this is you want different behavior
-    for transformation of left-hand side of assignments
+    Overload this is you want different behavior for transformation of left-hand
+    side of assignments
     """
+
     lhs_class = lhs.__class__
     if lhs_class is Var:
       return self.transform_lhs_Var(lhs)
@@ -224,14 +219,13 @@ class Transform(Codegen):
 
   def transform_Assign(self, stmt):
     stmt.rhs = self.transform_expr(stmt.rhs)
-    stmt.lhs =self.transform_lhs(stmt.lhs)
+    stmt.lhs = self.transform_lhs(stmt.lhs)
     return stmt
-
 
   def transform_RunExpr(self, stmt):
     stmt.value = self.transform_expr(stmt.value)
     return stmt
-  
+
   def transform_Return(self, stmt):
     stmt.value = self.transform_expr(stmt.value)
     return stmt
@@ -282,8 +276,8 @@ class Transform(Codegen):
     pass
 
   def apply(self, fn):
-    self.fn = fn 
-    
+    self.fn = fn
+
     if config.print_functions_before_transforms:
       print
       print "Running transform %s" % self.__class__.__name__
@@ -292,7 +286,7 @@ class Transform(Codegen):
       print
 
     fn = self.pre_apply(self.fn)
-    
+
     if fn is None:
       fn = self.fn
 

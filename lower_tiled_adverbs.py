@@ -1,32 +1,30 @@
 import adverb_helpers
 import array_type
-import copy
 import core_types
 import syntax
 import syntax_helpers
 import tuple_type
 
-from core_types import Int32, Int64
-from lower_adverbs import LowerAdverbs
+from core_types import Int64
 from transform import Transform
 
-int_ptr_t = core_types.ptr_type(Int64)
-#int_ptr_t = array_type.make_array_type(Int64, 1)
-
 class LowerTiledAdverbs(Transform):
-  def __init__(self, nesting_idx=-1, tile_param_array=None):
+  def __init__(self, nesting_idx=-1):
     Transform.__init__(self)
-    self.num_tiled_adverbs = 0
     self.nesting_idx = nesting_idx
     self.tiling = False
-    if tile_param_array == None:
-      self.tile_param_array = self.fresh_var(int_ptr_t, "tile_params")
-    else:
-      self.tile_param_array = tile_param_array
+    self.tile_sizes_param = None
+
+  def pre_apply(self, fn):
+    if not self.tile_sizes_param:
+      tile_type = \
+          tuple_type.make_tuple_type([Int64 for _ in range(fn.num_tiles)])
+      self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
+    return fn
 
   def transform_TypedFn(self, expr):
-    nested_lower = LowerTiledAdverbs(nesting_idx=self.nesting_idx,
-                                     tile_param_array=self.tile_param_array)
+    nested_lower = LowerTiledAdverbs(nesting_idx=self.nesting_idx)
+    nested_lower.tile_sizes_param = self.tile_sizes_param
     return nested_lower.apply(expr)
 
   def transform_TiledMap(self, expr):
@@ -42,12 +40,11 @@ class LowerTiledAdverbs(Transform):
     niters = self.shape(max_arg, axis)
 
     # Create the tile size variable and find the number of tiles
-    tile_size = self.index(self.tile_param_array, self.nesting_idx)
-    self.num_tiled_adverbs += 1
+    tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
     fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(fn)
     return_t = inner_fn.return_type
-    nested_has_tiles = inner_fn.num_tiles > 0
+    nested_has_tiles = inner_fn.has_tiles
 
     elt_t = expr.type.elt_type
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
@@ -62,7 +59,7 @@ class LowerTiledAdverbs(Transform):
     init_slice_args = [self.index_along_axis(arg, axis, init_slice)
                        for arg in args]
     if nested_has_tiles:
-      init_slice_args.append(self.tile_param_array)
+      init_slice_args.append(self.tile_sizes_param)
     init_call = syntax.Call(fn, init_slice_args, type=return_t)
     rslt_init = self.assign_temp(init_call, "rslt_init")
 
@@ -100,7 +97,7 @@ class LowerTiledAdverbs(Transform):
                                           tile_bounds)
 
     if nested_has_tiles:
-      nested_args.append(self.tile_param_array)
+      nested_args.append(self.tile_sizes_param)
     self.assign(output_region, syntax.Call(fn, nested_args, type=return_t))
     body = self.blocks.pop()
 
@@ -126,13 +123,12 @@ class LowerTiledAdverbs(Transform):
     max_arg = adverb_helpers.max_rank_arg(args)
     niters = self.shape(max_arg, axis)
 
-    tile_size = self.index(self.tile_param_array, self.nesting_idx)
-    self.num_tiled_adverbs += 1
+    tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     callable_fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(callable_fn)
-    nested_has_tiles = inner_fn.num_tiles > 0
+    nested_has_tiles = inner_fn.has_tiles
     callable_combine = self.transform_expr(expr.combine)
     inner_combine = self.get_fn(callable_combine)
     isarray = isinstance(expr.type, array_type.ArrayT)
@@ -148,7 +144,7 @@ class LowerTiledAdverbs(Transform):
     init_slice_args = [self.index_along_axis(arg, axis, init_slice)
                        for arg in args]
     if nested_has_tiles:
-      init_slice_args.append(self.tile_param_array)
+      init_slice_args.append(self.tile_sizes_param)
     rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
                                              type=inner_fn.return_type),
                                  "rslt_init")
@@ -200,7 +196,7 @@ class LowerTiledAdverbs(Transform):
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
     if nested_has_tiles:
-      nested_args.append(self.tile_param_array)
+      nested_args.append(self.tile_sizes_param)
     nested_call = syntax.Call(callable_fn, nested_args,
                               type=inner_fn.return_type)
     self.assign(rslt_tmp, nested_call)
@@ -215,8 +211,7 @@ class LowerTiledAdverbs(Transform):
 
   def post_apply(self, fn):
     if self.tiling:
-      fn.arg_names.append(self.tile_param_array.name)
-      fn.input_types += (int_ptr_t,)
-      fn.type_env[self.tile_param_array.name] = int_ptr_t
-      fn.num_tiles = self.nesting_idx + 1
+      fn.arg_names.append(self.tile_sizes_param.name)
+      fn.input_types += (self.tile_sizes_param.type,)
+      fn.type_env[self.tile_sizes_param.name] = self.tile_sizes_param.type
     return fn
