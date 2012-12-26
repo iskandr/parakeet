@@ -3,11 +3,10 @@ import syntax
 from simplify import Simplify
 from dead_code_elim import DCE
 from inline import Inliner
-from clone_function import CloneFunction
 import transform   
 from fusion import Fusion 
 
-pipeline = [CloneFunction, Simplify, DCE, Inliner, Simplify, Fusion, Simplify, DCE] 
+pipeline = [Simplify, DCE, Inliner, Simplify, DCE, Fusion, Simplify, DCE] 
 
 # map names of unoptimized typed functions to 
 # names of optimized 

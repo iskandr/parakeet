@@ -85,8 +85,12 @@ class Simplify(Transform):
     return None
 
   def is_simple(self, expr):
-    return self.children(expr) is ()
-
+    c = expr.__class__ 
+    return c is Var or c is Const or \
+        (c is Tuple and len(expr.elts) == 0) or \
+        (c is Struct and len(expr.args) == 0) or \
+        (c is Closure and len(expr.args) == 0)
+        
   def immutable(self, expr):
     child_nodes = self.children(expr, allow_mutable = False)
     if child_nodes is None:
@@ -341,8 +345,7 @@ class Simplify(Transform):
     """
     Normalize loop conditions so they are just simple variables
     """
-
-    if isinstance(expr, (Var, Const)):
+    if self.is_simple(expr): 
       return self.transform_expr(expr)
     else:
       loop_carried_vars = [name for name in collect_var_names(expr)
@@ -352,12 +355,17 @@ class Simplify(Transform):
 
       left_values = [merge[name][0] for name in loop_carried_vars]
       right_values = [merge[name][1] for name in loop_carried_vars]
+      
       left_cond = subst.subst_expr(expr, dict(zip(loop_carried_vars, left_values)))
-      left_var = self.temp_in_block(left_cond, outer_block, name = "cond")
-      right_cond = subst.subst_expr(expr, dict(zip(loop_carried_vars, right_values)))
-      right_var = self.temp_in_block(right_cond, loop_body, name = "cond")
-      cond_var = self.fresh_var(left_var.type, "cond")
-      merge[cond_var.name] = (left_var, right_var)
+      if not self.is_simple(left_cond):
+        left_cond = self.temp_in_block(left_cond, outer_block, name = "cond")
+      
+      right_cond = subst.subst_expr(expr, dict(zip(loop_carried_vars, right_values))) 
+      if not self.is_simple(right_cond):
+        right_cond = self.temp_in_block(right_cond, loop_body, name = "cond")
+      
+      cond_var = self.fresh_var(left_cond.type, "cond")
+      merge[cond_var.name] = (left_cond, right_cond)
       return cond_var
 
   def transform_While(self, stmt):
@@ -374,10 +382,10 @@ class Simplify(Transform):
 
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
-    value_class = new_value.__class__
-    if value_class not in (Var, Const):
-      return syntax.Return(self.temp(new_value))
-    elif new_value == stmt.value:
-      return stmt
-    else:
-      return syntax.Return(new_value)
+    if new_value != stmt.value:
+      if self.is_simple(new_value):
+        stmt.value = new_value
+      else:
+        stmt.value = self.temp(new_value)
+    return stmt
+    
