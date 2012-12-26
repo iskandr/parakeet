@@ -57,13 +57,14 @@ class AdverbSemantics(object):
     return axis_sizes[0], self.delay_list(xs, axis)
 
   def acc_prelude(self, init, combine, delayed_map_result):
+    zero = self.int(0)
     if init is None or self.is_none(init):
-      return delayed_map_result(self.int(0))
+      return delayed_map_result(zero)
     else:
       # combine the provided initializer with
       # transformed first value of the data
       # in case we need to coerce up
-      return self.invoke(combine, [init, delayed_map_result(self.int(0))])
+      return self.invoke(combine, [init, delayed_map_result(zero)])
 
   def create_result(self, elt_type, inner_shape, outer_shape):
     if not self.is_tuple(outer_shape):
@@ -78,30 +79,67 @@ class AdverbSemantics(object):
     elt_t = self.elt_type(inner_result)
     return self.create_result(elt_t, inner_shape, extra_dims)
 
+  def output_slice(self, output, axis, idx):
+    r = self.rank(output)
+    if r > 1:
+      output_indices = self.build_slice_indices(r, axis, idx)
+    elif r == 1:
+      output_idx = self.slice_value(idx, self.none, self.int(1))
+      output_indices = self.tuple([output_idx])
+    else: 
+      output_idx = self.slice_value(self.none, self.none, self.none)
+      output_indices = self.tuple([output_idx])
+    return self.index(output, output_indices)
+  
+
+
   def eval_map(self, f, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(f, values, axis)
     zero = self.int(0)
     if output is None:
       first_elts = self.force_list(delayed_elts, zero)
       output = self.create_output_array(f, first_elts, niters)
-    def loop_body(idx):
-      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
-      elt_result = self.invoke(f, self.force_list(delayed_elts, idx))
-      self.setidx(output, output_indices, elt_result)
+      def loop_body(idx):
+        output_indices = self.build_slice_indices(self.rank(output), 0, idx)
+        elt_result = self.invoke(f, [elt(idx) for elt in delayed_elts])
+        self.setidx(output, output_indices, elt_result)
+    else: 
+      # assume the function has been transformed to take an explicit output parameter 
+      def loop_body(idx):
+        output_slice = self.output_slice(output, axis, idx)
+        input_slices = [array(idx) for array in delayed_elts]
+        self.invoke(f, input_slices + [output_slice])
     self.loop(zero, niters, loop_body)
     return output
 
-  def eval_reduce(self, map_fn, combine, init, values, axis):
+  def eval_reduce(self, map_fn, combine, init, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
-    def delayed_map_result(idx):
-      return self.invoke(map_fn, self.force_list(delayed_elts, idx))
-    init = self.acc_prelude(init, combine, delayed_map_result)
-    def loop_body(acc, idx):
-      elt = delayed_map_result(idx)
-      new_acc_value = self.invoke(combine, [acc.get(), elt])
-      acc.update(new_acc_value)
-    return self.accumulate_loop(self.int(1), niters, loop_body, init)
+    zero = self.int(0)  
+    one = self.int(1)
+    first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
+    if init is None or self.is_none(init):
+      init = first_acc_value  
+    else:
+      init = self.invoke(combine, [init, first_acc_value])
 
+    if output is None:
+      def loop_body(acc, idx):
+        elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
+        new_acc_value = self.invoke(combine, [acc.get(), elt])
+        acc.update(new_acc_value)
+      return self.accumulate_loop(one, niters, loop_body, init)
+    else: 
+      r = self.rank(output)
+      output_indices = [self.slice_value(self.none, self.none, self.none)] * r
+      output_indices = self.tuple(output_indices)
+      self.setidx(output, output_indices, init)
+      def loop_body(idx):
+        output_slice = self.output_slice(output, axis, idx)
+        elt = delayed_map_result(idx)
+        output_value = self.index(output, idx) if r == 1 else output 
+        self.invoke(combine, [output_value, elt, output_slice]) 
+      return self.loop(one, niters, loop_body)
+    
   def eval_scan(self, map_fn, combine, emit, init, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):

@@ -61,7 +61,8 @@ class LowerAdverbs(CodegenSemantics, AdverbSemantics):
     combine = self.transform_expr(expr.combine)
     init = self.transform_if_expr(expr.init) 
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    return self.eval_reduce(fn, combine, init, args, axis)
+    output = self.transform_if_expr(expr.out)
+    return self.eval_reduce(fn, combine, init, args, axis, output)
 
   def transform_Scan(self, expr):
     fn = self.transform_expr(expr.fn)
