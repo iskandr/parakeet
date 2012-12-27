@@ -18,7 +18,6 @@ from subst import subst_expr, subst_stmt_list
 from syntax_helpers import none, true, false
 import config
 
-
 reserved_names = {
   'True' : true,
   'False' : false,
@@ -415,7 +414,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   """
 
   assert len(closure_vars) == len(closure_cells)
-  closure_cell_dict = dict(*zip(closure_vars, closure_cells))
+  closure_cell_dict = dict(zip(closure_vars, closure_cells))
 
   translator = AST_Translator(globals_dict, closure_cell_dict, outer_env)
 
@@ -442,13 +441,13 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   return fundef
 def strip_leading_whitespace(source):
   lines = source.splitlines()
-  assert len(lines) > 0 
+  assert len(lines) > 0
   first_line = lines[0]
   n_removed = len(first_line) - len(first_line.lstrip())
   if n_removed > 0:
     return '\n'.join(line[n_removed:] for line in lines)
   else:
-    return source 
+    return source
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)
