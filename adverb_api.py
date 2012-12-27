@@ -253,12 +253,16 @@ def par_allpairs(fn, x, y, **kwds):
 
   # For now, only split up the larger of the 2 args amongst the threads,
   # passing the other through in toto.
-  if len(args.positional[0]) < len(args.positional[1]):
-    num_iters = len(args.positional[1])
-    closure_pos = [0]
-  else:
-    num_iters = len(args.positional[0])
-    closure_pos = [1]
+#  if len(args.positional[0]) > len(args.positional[1]):
+#    num_iters = len(args.positional[0])
+#    closure_pos = [1]
+#  else:
+#    num_iters = len(args.positional[1])
+#    closure_pos = [0]
+  # Actually, for now, just split the first one.  Otherwise we'd have to carve
+  # the output along axis = 1 and I don't feel like figuring that out.
+  num_iters = len(args.positional[0])
+  closure_pos = [1]
 
   # Create args struct type
   fields = []
