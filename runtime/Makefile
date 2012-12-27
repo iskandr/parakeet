@@ -18,7 +18,7 @@ tests: runtime threadpool
 	#gcc -o job_test $(FLAGS) -lcunit job_test.c $(OBJS)
 	gcc -fPIC -c vm.c $(FLAGS) -o vm.o
 	gcc -shared -o vm.so vm.o
-	gcc -o vm_test $(FLAGS) -lcunit vm_test.c $(OBJS)
+	#gcc -o vm_test $(FLAGS) -lcunit vm_test.c $(OBJS)
 
 clean:
 	rm -f *_test *.o *.so *.pyc *~

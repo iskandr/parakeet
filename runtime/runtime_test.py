@@ -18,17 +18,17 @@ libVM.make_array.restype = POINTER(c_double)
 #m = 24000
 #n = 7200
 #k = 1200
-m = 2000
-n = 2000
-k = 2000
+m = 1000
+n = 1000
+k = 1000
 a = libVM.make_array(m, k)
 b = libVM.make_array(n, k)
 o = libVM.make_array(m, n)
 
-args_t = POINTER(vm_args_t) * 1
+args_t = POINTER(vm_args_t) * 8
 args = args_t()
 arg = pointer(vm_args_t(a, b, o, m, n, k))
-for i in range(1):
+for i in range(8):
   args[i] = arg
 
 r = runtime.Runtime()
@@ -43,7 +43,7 @@ print "Time to run job:", stop - start, "secs"
 npa = np.reshape(np.fromiter(a, dtype=np.float, count=m*k), (m, k))
 npb = np.reshape(np.fromiter(b, dtype=np.float, count=n*k), (n, k))
 npo = np.reshape(np.fromiter(o, dtype=np.float, count=m*n), (m, n))
-print npo
+print "Output:", npo
 
 start = time.time()
 npr = np.dot(npa, npb.T)

@@ -9,13 +9,14 @@ import run_function
 import syntax
 import syntax_helpers
 import testing_helpers
+import time
 
 from closure_type import make_closure_type
 from parakeet import allpairs
 
 x = 1000
-x2_array = np.arange(x*x, dtype = np.int64).reshape(x,x)
-y2_array = np.arange(x*x, 2*x*x, dtype = np.int64).reshape(x,x)
+x2_array = np.arange(x*x, dtype = np.float).reshape(x,x)
+y2_array = np.arange(x*x, 2*x*x, dtype = np.float).reshape(x,x)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
 
@@ -110,11 +111,15 @@ def adverb_matmult(X, Y):
   return allpairs(dot, X, Y)
 
 def test_par_mm():
+  start = time.time()
   rslt = adverb_matmult(x2_array, y2_array)
+  par_time = time.time() - start
+  start = time.time()
   nprslt = np.dot(x2_array, y2_array.T)
-  print rslt
-  print nprslt
+  np_time = time.time() - start
   assert(testing_helpers.eq(rslt, nprslt))
+  print "Parakeet time:", par_time
+  print "NumPy time:", np_time
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

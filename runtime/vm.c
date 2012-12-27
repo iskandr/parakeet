@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -846,7 +847,7 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
   }
 }
 
-void vm_untiled(int start, int end, void *args, int *tile_sizes) {
+void vm_untiled(int64_t start, int64_t end, void *args, int *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
   double *A = my_args->a;
   double *B = my_args->b;
@@ -854,10 +855,9 @@ void vm_untiled(int start, int end, void *args, int *tile_sizes) {
   int m = my_args->m;
   int n = my_args->n;
   int k = my_args->k;
-  int i, j, l;
-  int aOff, bOff, oOff;
+  int64_t i, j, l;
+  int64_t aOff, bOff, oOff;
 
-  int is, js;
   for (i = start; i < end; ++i) {
     aOff = i * k;
     oOff = i * n;

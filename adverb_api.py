@@ -292,7 +292,8 @@ def par_allpairs(fn, x, y, **kwds):
     single_core_args = [args.positional[0], args.positional[1][0:1]]
   else:
     single_core_args = [args.positional[0][0:1], args.positional[1]]
-  single_core_args.append((1,) * num_tiles)
+  if config.opt_tile:
+    single_core_args.append((1,) * num_tiles)
   single_iter_rslt = single_core(*single_core_args)
   output = np.repeat(single_iter_rslt, num_iters, axis=0)
   output_obj = type_conv.from_python(output)
@@ -316,7 +317,11 @@ def par_allpairs(fn, x, y, **kwds):
     wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
     # Execute on thread pool
+    import time
+    start = time.time()
     rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+    t = time.time() - start
+    print "Time to execute:", t
 
     result = output
   else:
