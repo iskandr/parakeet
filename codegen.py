@@ -107,10 +107,11 @@ class Codegen(object):
     else:
       return self.assign_temp(Cast(expr, type = t), "cast_%s" % t)
 
-  def index(self, arr, idx, temp = True):
+  def index(self, arr, idx, temp = True, name = None):
     """
     Index into array or tuple differently depending on the type
     """
+    temp = temp or name is not None 
     arr_t = arr.type
 
     if isinstance(arr_t, ScalarT):
@@ -130,7 +131,7 @@ class Codegen(object):
         idx = idx.value
       proj = self.tuple_proj(arr, idx)
       if temp:
-        return self.assign_temp(proj, "tuple_elt%d" % idx)
+        return self.assign_temp(proj, "tuple_elt%d" % idx if name is None else name)
       else:
         return proj
 
@@ -149,14 +150,14 @@ class Codegen(object):
       indices = indices + extra
 
     if len(indices) > 1:
-      idx = self.tuple(indices, "index_tuple")
+      idx = self.tuple(indices, "index_tuple" if name is None else name)
     else:
       idx = indices[0]
 
     t = arr_t.index_type(idx.type)
     idx_expr = Index(arr, idx, type=t)
     if temp:
-      return self.assign_temp(idx_expr, "array_elt")
+      return self.assign_temp(idx_expr, "array_elt" if name is None else name)
     else:
       return idx_expr
 

@@ -212,7 +212,12 @@ class AST_Translator(ast.NodeVisitor):
   def visit_BoolOp(self, expr):
     values = map(self.visit, expr.values)
     prim = prims.find_ast_op(expr.op)
-    return syntax.PrimCall(prim, values)
+    # Python, strangely, allows more than two arguments to 
+    # Boolean operators
+    result = values[0]
+    for v in values[1:]:
+      result = syntax.PrimCall(prim, [result, v])  
+    return result 
 
   def visit_Compare(self, expr):
     lhs = self.visit(expr.left)

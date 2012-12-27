@@ -38,6 +38,8 @@ def run_local_tests(locals_dict = None):
   return run_local_functions("test_", locals_dict)
 
 def eq(x,y):
+  if isinstance(x, np.ndarray) and not isinstance(y, np.ndarray):
+    return False 
   if isinstance(y, np.ndarray):
     return isinstance(x, np.ndarray) and x.shape == y.shape and \
         (np.all(np.ravel(x) == np.ravel(y)) or \

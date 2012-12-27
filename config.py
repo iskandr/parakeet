@@ -17,7 +17,7 @@ print_lowered_function = False
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False  
+print_functions_after_transforms = False 
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False

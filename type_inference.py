@@ -1,21 +1,35 @@
+import config
+import names
+import prims
+from common import dispatch
+
+import type_conv
+
+
+from core_types import Type, IntT,  ScalarT 
+from core_types import NoneType, NoneT, Unknown, UnknownT
+from core_types import combine_type_list, StructT 
+
+import array_type
+from array_type import ArrayT
+import closure_type
+import tuple_type
+from tuple_type import TupleT 
+
+
 import adverbs
 import adverb_helpers
 import adverb_wrapper
-import array_type
-import closure_type
-import config
-import core_types
-import names
-import prims
-import syntax as untyped_ast
-import syntax as typed_ast
-import syntax_helpers
-import tuple_type
-import type_conv
 
 from args import ActualArgs
-from common import dispatch
+
+import syntax_helpers
 from syntax_helpers import get_type, get_types, unwrap_constant
+import syntax as untyped_ast
+import syntax as typed_ast
+
+
+
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -157,7 +171,7 @@ def invoke_result_type(fn, arg_types):
         "Invoke expected closure, but got %s" % (fn,)
     closure_set = fn
 
-  result_type = core_types.Unknown
+  result_type = Unknown
   for closure_t in closure_set.closures:
     typed_fundef = specialize(closure_t, arg_types)
     result_type = result_type.combine(typed_fundef.return_type)
@@ -223,7 +237,7 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_Attribute():
     value = annotate_child(expr.value)
-    assert isinstance(value.type, core_types.StructT)
+    assert isinstance(value.type, StructT)
     result_type = value.type.field_type(expr.name)
     return typed_ast.Attribute(value, expr.name, type = result_type)
 
@@ -231,12 +245,12 @@ def annotate_expr(expr, tenv, var_map):
     args = annotate_args(expr.args)
     arg_types = get_types(args)
 
-    if all(isinstance(t, core_types.ScalarT) for t in arg_types):
+    if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       return typed_ast.PrimCall(expr.prim, args, type = result_type)
     else:
-      assert all(not isinstance(t, core_types.NoneT) for t in arg_types)
+      assert all(not isinstance(t, NoneT) for t in arg_types)
       prim_fn = prims.prim_wrapper(expr.prim)
 
       max_rank = adverb_helpers.max_rank(arg_types)
@@ -250,8 +264,8 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Index():
     value = annotate_child(expr.value)
     index = annotate_child(expr.index)
-    if isinstance(value.type, tuple_type.TupleT):
-      assert isinstance(index.type, core_types.IntT)
+    if isinstance(value.type, TupleT):
+      assert isinstance(index.type, IntT)
       assert isinstance(index, untyped_ast.Const)
       i = index.value
       assert isinstance(i, int)
@@ -268,7 +282,7 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Array():
     new_elts = annotate_args(expr.elts)
     elt_types = get_types(new_elts)
-    common_t = core_types.combine_type_list(elt_types)
+    common_t = combine_type_list(elt_types)
     array_t = array_type.increase_rank(common_t, 1)
     return typed_ast.Array(new_elts, type = array_t)
 
@@ -373,7 +387,7 @@ def annotate_expr(expr, tenv, var_map):
 
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
-  assert isinstance(result.type, core_types.Type), \
+  assert isinstance(result.type, Type), \
       "Unexpected type annotation on %s: %s" % (expr, result.type)
   return result
 
@@ -385,7 +399,7 @@ def annotate_stmt(stmt, tenv, var_map ):
     """
     new_val = annotate_expr(val, tenv, var_map)
     new_type = new_val.type
-    old_type = tenv.get(result_var, core_types.Unknown)
+    old_type = tenv.get(result_var, Unknown)
     new_result_var = var_map.lookup(result_var)
     tenv[new_result_var]  = old_type.combine(new_type)
 
@@ -407,7 +421,7 @@ def annotate_stmt(stmt, tenv, var_map ):
     """
     new_left = annotate_expr(left_val, tenv, var_map)
     new_right = annotate_expr(right_val, tenv, var_map)
-    old_type = tenv.get(result_var, core_types.Unknown)
+    old_type = tenv.get(result_var, Unknown)
     new_type = old_type.combine(new_left.type).combine(new_right.type)
     new_var = var_map.lookup(result_var)
     tenv[new_var] = new_type
@@ -421,38 +435,47 @@ def annotate_stmt(stmt, tenv, var_map ):
     return new_nodes
 
   def stmt_Assign():
+
     rhs = annotate_expr(stmt.rhs, tenv, var_map)
 
     def annotate_lhs(lhs, rhs_type):
-      if isinstance(lhs, untyped_ast.Tuple):
-        assert isinstance(rhs_type, tuple_type.TupleT)
-        assert len(lhs.elts) == len(rhs_type.elt_types)
-        new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in
-                    zip(lhs.elts, rhs_type.elt_types)]
-        tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
+      
+      lhs_class = lhs.__class__ 
+      if lhs_class is untyped_ast.Tuple:
+        if rhs_type.__class__ is TupleT: 
+          
+          assert len(lhs.elts) == len(rhs_type.elt_types)
+          new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in
+                      zip(lhs.elts, rhs_type.elt_types)]          
+        else:   
+          assert rhs_type.__class__ is ArrayT, \
+              "Unexpected right hand side type %s on %s" % (rhs_type, rhs)
+          elt_type = array_type.lower_rank(rhs_type, 1)
+          new_elts = [annotate_lhs(elt, elt_type) for elt in lhs.elts]
+        tuple_t = tuple_type.make_tuple_type(get_types(new_elts))    
         return typed_ast.Tuple(new_elts, type = tuple_t)
-      elif isinstance(lhs, untyped_ast.Index):
+      
+      elif lhs_class is untyped_ast.Index:
         new_arr = annotate_expr(lhs.value, tenv, var_map)
         new_idx = annotate_expr(lhs.index, tenv, var_map)
 
-        assert isinstance(new_arr.type, array_type.ArrayT), \
+        assert isinstance(new_arr.type, ArrayT), \
             "Expected array, got %s" % new_arr.type
         elt_t = new_arr.type.index_type(new_idx.type)
         return typed_ast.Index(new_arr, new_idx, type = elt_t)
-      elif isinstance(lhs, untyped_ast.Attribute):
+      elif lhs_class is untyped_ast.Attribute:
         name = lhs.name
         struct = annotate_expr(lhs.value, tenv, var_map)
         struct_t = struct.type
-        assert isinstance(struct_t, core_types.StructT), \
+        assert isinstance(struct_t, StructT), \
             "Can't access fields on value %s of type %s" % \
             (struct, struct_t)
         field_t = struct_t.field_type(name)
         return typed_ast.Attribute(struct, name, field_t)
       else:
-        assert isinstance(lhs, untyped_ast.Var), \
-            "Unexpected LHS: " + str(lhs)
+        assert lhs_class is untyped_ast.Var, "Unexpected LHS: %s" % (lhs,)
         new_name = var_map.lookup(lhs.name)
-        old_type = tenv.get(new_name, core_types.Unknown)
+        old_type = tenv.get(new_name, Unknown)
         new_type = old_type.combine(rhs_type)
         tenv[new_name] = new_type
         return typed_ast.Var(new_name, type = new_type)
@@ -462,7 +485,7 @@ def annotate_stmt(stmt, tenv, var_map ):
 
   def stmt_If():
     cond = annotate_expr(stmt.cond, tenv, var_map)
-    assert isinstance(cond.type, core_types.ScalarT), \
+    assert isinstance(cond.type, ScalarT), \
         "Condition has type %s but must be convertible to bool" % cond.type
     true = annotate_block(stmt.true, tenv, var_map)
     false = annotate_block(stmt.false, tenv, var_map)
@@ -481,7 +504,6 @@ def annotate_stmt(stmt, tenv, var_map ):
     body = annotate_block(stmt.body, tenv, var_map)
     merge = annotate_phi_nodes(stmt.merge)
     return typed_ast.While(cond, body, merge)
-
   return dispatch(stmt, prefix="stmt")
 
 def annotate_block(stmts, tenv, var_map):
@@ -512,7 +534,7 @@ def infer_types(untyped_fn, types):
                          starargs_fn = tuple_type.make_tuple_type)
 
   # keep track of the return
-  tenv['$return'] = core_types.Unknown
+  tenv['$return'] = Unknown
 
   body = annotate_block(untyped_fn.body, tenv, var_map)
   arg_names = [local_name for local_name
@@ -539,7 +561,7 @@ def infer_types(untyped_fn, types):
     local_starargs_name = typed_args.starargs
 
     starargs_t = tenv[local_starargs_name]
-    assert isinstance(starargs_t, tuple_type.TupleT), \
+    assert starargs_t.__class__ is TupleT, \
         "Unexpected starargs type %s" % starargs_t
     extra_arg_vars = []
     for (i, elt_t) in enumerate(starargs_t.elt_types):
@@ -556,10 +578,10 @@ def infer_types(untyped_fn, types):
 
   return_type = tenv["$return"]
   # if nothing ever gets returned, then set the return type to None
-  if isinstance(return_type,  core_types.UnknownT):
+  if isinstance(return_type,  UnknownT):
     body.append(typed_ast.Return(syntax_helpers.none))
-    tenv["$return"] = core_types.NoneType
-    return_type = core_types.NoneType
+    tenv["$return"] = NoneType
+    return_type = NoneType
 
   return typed_ast.TypedFn(
     name = names.refresh(untyped_fn.name),
@@ -643,7 +665,7 @@ def infer_Map(map_fn, array_types):
 def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
   _, typed_map_fn = specialize_Map(map_fn, array_types)
   elt_type = typed_map_fn.return_type
-  if init_type is None or isinstance(init_type, core_types.NoneT):
+  if init_type is None or isinstance(init_type, NoneT):
     acc_type = elt_type
   else:
     acc_type = elt_type.combine(init_type)

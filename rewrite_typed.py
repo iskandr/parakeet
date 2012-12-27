@@ -1,10 +1,18 @@
-import array_type
-import core_types
-import syntax
-import syntax_helpers
-import tuple_type
+import names 
 
+import core_types
+from core_types import Int64 
+from array_type import ArrayT
+import tuple_type
+from tuple_type import TupleT 
+
+import syntax
+from syntax import Assign, Tuple, TupleProj, Var, Cast, Return, Index  
+import adverbs 
+
+import syntax_helpers
 from syntax_helpers import get_types
+
 from transform import Transform
 
 class RewriteTyped(Transform):
@@ -19,15 +27,15 @@ class RewriteTyped(Transform):
     expr = self.transform_expr(expr)
     if expr.type == t:
       return expr
-    elif isinstance(expr, syntax.Tuple):
-      if not isinstance(t, tuple_type.TupleT) or \
+    elif expr.__class__ is Tuple:
+      if t.__class__ is not TupleT or \
           len(expr.type.elt_types) != t.elt_types:
         raise core_types.IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
         for elt, elt_t in zip(expr.elts, t.elt_types):
           new_elts.append(self.coerce_expr(elt, elt_t))
-        return syntax.Tuple(new_elts, type = t)
+        return Tuple(new_elts, type = t)
     else:
       assert \
           isinstance(expr.type, core_types.ScalarT) and \
@@ -45,12 +53,12 @@ class RewriteTyped(Transform):
     return new_merge
 
   def transform_lhs(self, lhs):
-    if isinstance(lhs, syntax.Var):
+    if isinstance(lhs, Var):
       t = self.lookup_type(lhs.name)
       if t == lhs.type:
         return lhs
       else:
-        return syntax.Var(lhs.name, type = t)
+        return Var(lhs.name, type = t)
     elif isinstance(lhs, syntax.Tuple):
       elts = map(self.transform_lhs, lhs.elts)
       elt_types = get_types(elts)
@@ -124,17 +132,67 @@ class RewriteTyped(Transform):
       expr.type = slice_t
     """
     return expr
+  
+  index_function_cache = {}
+  def get_index_fn(self, array_t, idx_t):
+    key = (array_t, idx_t) 
+    if key in self.index_function_cache:
+      return self.index_function_cache[key]
+    array_name = names.fresh("array")
+    array_var = Var(array_name, type = array_t)
+    idx_name = names.fresh("idx")
+    idx_var = Var(idx_name, type = idx_t)
+    if idx_t is not Int64:
+      idx_var = Cast(value = idx_var,  type = Int64)
+    elt_t = array_t.index_type(idx_t)
 
+    fn = syntax.TypedFn(
+        name = names.fresh("idx"), 
+        arg_names = (array_name, idx_name),
+        input_types = (array_t, idx_t),
+        return_type = elt_t,
+        type_env = {array_name:array_t, idx_name:idx_t}, 
+        body = [Return (Index(array_var, idx_var, type = elt_t))]) 
+    self.index_function_cache[key] = fn 
+    return fn 
+    
+  def transform_Index(self, expr):
+    # Fancy indexing! 
+    index = expr.index
+    if index.type.__class__ is ArrayT:
+      assert index.type.rank == 1, \
+        "Don't yet support indexing by %s" % index.type 
+      index_elt_t = index.type.elt_type
+      index_fn = self.get_index_fn(expr.value.type, index_elt_t)
+      index_closure = self.closure(index_fn, [expr.value])
+      return adverbs.Map(fn = index_closure, args = [expr.index], type = expr.value.type, axis = 0)
+    else:
+      return expr 
+  
   def transform_Assign(self, stmt):
     new_lhs = self.transform_lhs(stmt.lhs)
     lhs_t = new_lhs.type
+    rhs = self.transform_expr(stmt.rhs)
     assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
-    new_rhs = self.coerce_expr(stmt.rhs, lhs_t)
-    assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
-        "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
-    stmt.lhs = new_lhs
-    stmt.rhs = new_rhs
-    return stmt
+    if new_lhs.__class__ is Tuple: 
+      rhs = self.assign_temp(rhs)
+      for (i, lhs_elt) in enumerate(new_lhs.elts):
+        if lhs_elt.__class__ is Var:
+          name = names.original(lhs_elt.name) 
+        else:
+          name = None 
+        idx = self.index(rhs, i, name = name )
+        elt_stmt = self.transform_Assign(Assign(lhs_elt, idx))
+        self.blocks.append_to_current(elt_stmt)
+      return None  
+    else:         
+      
+      new_rhs = self.coerce_expr(rhs, lhs_t)
+      assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
+          "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
+      stmt.lhs = new_lhs
+      stmt.rhs = new_rhs
+      return stmt
 
   def transform_If(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)

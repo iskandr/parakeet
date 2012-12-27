@@ -118,8 +118,8 @@ class Prim(object):
     # by default we just figure out the common type and expect every arg to be of that type
     n_inputs = len(arg_types)
     assert n_inputs == self.nin, \
-        "Incorrect number of argument types, expected %s but given %d" % \
-        (self.nin, n_inputs)
+        "Incorrect number of argument types for %s, expected %s but given %d" % \
+        (self.name, self.nin, n_inputs)
     common_type = core_types.combine_type_list(arg_types)
     return [common_type] * n_inputs
 
