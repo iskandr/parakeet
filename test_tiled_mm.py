@@ -93,16 +93,16 @@ map_mul_fn = syntax.TypedFn(
   return_type = x_array_t,
   type_env = {"X":x_2_array_t, "Y":x_2_array_t})
 
-#def test_tiled_mm():
-#  new_fn = lowering.lower(mm_fn, True)
-#  assert isinstance(new_fn, syntax.TypedFn)
-#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-#  a2_array = np.arange(12).reshape(4,3)
-#  b2_array = np.arange(9,21).reshape(4,3)
-#  rslt = wrapper(a2_array, b2_array, (2,2,2))
-#  nprslt = np.dot(a2_array, b2_array.T)
-#  assert(testing_helpers.eq(rslt, nprslt))
+def test_tiled_mm():
+  new_fn = lowering.lower(mm_fn, True)
+  assert isinstance(new_fn, syntax.TypedFn)
+  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+  a2_array = np.arange(12).reshape(4,3)
+  b2_array = np.arange(9,21).reshape(4,3)
+  rslt = wrapper(a2_array, b2_array, (2,2,2))
+  nprslt = np.dot(a2_array, b2_array.T)
+  assert(testing_helpers.eq(rslt, nprslt))
 
 def dot(x, y):
   return sum(x*y)

@@ -31,6 +31,9 @@ print_optimized_llvm = False
 # how long did each transform take?
 print_transform_timings = False
 
+# show execution time on parallel backend?
+print_parallel_exec_time = False
+
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
@@ -58,7 +61,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
 opt_tile = False

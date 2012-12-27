@@ -208,36 +208,27 @@ def par_each(fn, *args, **kwds):
   wf, num_tiles = \
       gen_par_work_function(adverbs.Map, lowered, args_t, arg_types, [])
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
-  parallel = True
-  if parallel:
-    c_args_list = [c_args]
 
-    for i in range(rt.dop - 1):
-      c_args_new = args_t.ctypes_repr()
-      ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
-                     ctypes.sizeof(args_t.ctypes_repr))
-      c_args_list.append(c_args_new)
+  c_args_list = [c_args]
+  for i in range(rt.dop - 1):
+    c_args_new = args_t.ctypes_repr()
+    ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
+                   ctypes.sizeof(args_t.ctypes_repr))
+    c_args_list.append(c_args_new)
 
-    c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
-    wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
+  c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
+  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
     # Execute on thread pool
-    rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+  if config.print_parallel_exec_time:
+    import time
+    start = time.time()
+  rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+  if config.print_parallel_exec_time:
+    t = time.time() - start
+    print "Time to execute:", t
 
-    result = output
-  else:
-    start = GenericValue.int(llvm_types.int32_t, 0)
-    stop = GenericValue.int(llvm_types.int32_t, num_iters)
-    fn_args_array = GenericValue.pointer(ctypes.addressof(c_args))
-    dummy_tile_sizes_t = ctypes.c_int * 1
-    dummy_tile_sizes = dummy_tile_sizes_t()
-    arr_tile_sizes = (dummy_tile_sizes_t * rt.dop)()
-    tile_sizes = GenericValue.pointer(ctypes.addressof(arr_tile_sizes))
-    gv_inputs = [start, stop, fn_args_array, tile_sizes]
-    exec_engine.run_function(llvm_fn, gv_inputs)
-    result = map_result_type.to_python(c_args.output.contents)
-
-  return result
+  return output
 
 def par_allpairs(fn, x, y, **kwds):
   # Don't handle outermost axis = None yet
@@ -300,6 +291,7 @@ def par_allpairs(fn, x, y, **kwds):
   if config.opt_tile:
     single_core_args.append((1,) * num_tiles)
   single_iter_rslt = single_core(*single_core_args)
+  # TODO: use np.shape instead of repeat.
   output = np.repeat(single_iter_rslt, num_iters, axis=0)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
@@ -308,40 +300,27 @@ def par_allpairs(fn, x, y, **kwds):
   wf, num_tiles = gen_par_work_function(adverbs.AllPairs, lowered,
                                         args_t, arg_types, closure_pos)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
-  parallel = True
-  if parallel:
-    c_args_list = [c_args]
 
-    for i in range(rt.dop - 1):
-      c_args_new = args_t.ctypes_repr()
-      ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
-                     ctypes.sizeof(args_t.ctypes_repr))
-      c_args_list.append(c_args_new)
+  c_args_list = [c_args]
+  for i in range(rt.dop - 1):
+    c_args_new = args_t.ctypes_repr()
+    ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
+                   ctypes.sizeof(args_t.ctypes_repr))
+    c_args_list.append(c_args_new)
 
-    c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
-    wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
+  c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
+  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
-    # Execute on thread pool
+  # Execute on thread pool
+  if config.print_parallel_exec_time:
     import time
     start = time.time()
-    rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+  rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+  if config.print_parallel_exec_time:
     t = time.time() - start
     print "Time to execute:", t
 
-    result = output
-  else:
-    start = GenericValue.int(llvm_types.int32_t, 0)
-    stop = GenericValue.int(llvm_types.int32_t, num_iters)
-    fn_args_array = GenericValue.pointer(ctypes.addressof(c_args))
-    dummy_tile_sizes_t = ctypes.c_int * 1
-    dummy_tile_sizes = dummy_tile_sizes_t()
-    arr_tile_sizes = (dummy_tile_sizes_t * rt.dop)()
-    tile_sizes = GenericValue.pointer(ctypes.addressof(arr_tile_sizes))
-    gv_inputs = [start, stop, fn_args_array, tile_sizes]
-    exec_engine.run_function(llvm_fn, gv_inputs)
-    result = ap_result_type.to_python(c_args.output.contents)
-
-  return result
+  return output
 
 from adverb_wrapper import untyped_identity_function as ident
 from macro import staged_macro
