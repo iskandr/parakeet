@@ -12,7 +12,6 @@ class LowerStructs(MemoizedTransform):
   """
   The only non-scalar objects should all be created as explicit Structs
   """
-
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
     return syntax.Struct(struct_args, type = expr.type)

@@ -440,11 +440,19 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   fundef = syntax.Fn(ssa_fn_name, ssa_args, body, refs, original_outer_names)
 
   return fundef
-
+def strip_leading_whitespace(source):
+  lines = source.splitlines()
+  assert len(lines) > 0 
+  first_line = lines[0]
+  n_removed = len(first_line) - len(first_line.lstrip())
+  if n_removed > 0:
+    return '\n'.join(line[n_removed:] for line in lines)
+  else:
+    return source 
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)
-  syntax = ast.parse(source)
+  syntax = ast.parse(strip_leading_whitespace(source))
 
   if isinstance(syntax, (ast.Module, ast.Interactive)):
     assert len(syntax.body) == 1

@@ -51,8 +51,9 @@ class Fusion(Transform):
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
 
-    if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb) and \
-       rhs.__class__ is not AllPairs:
+    if stmt.lhs.__class__ is Var and \
+        isinstance(rhs, Adverb) and \
+        rhs.__class__ is not AllPairs:
       args = rhs.args
       if all(arg.__class__ in (Var, Const) for arg in args):
         arg_names = [arg.name for arg in args if arg.__class__ is Var]
@@ -70,5 +71,6 @@ class Fusion(Transform):
                             for arg in args]
               rhs.fn = fuse(prev_adverb.fn, rhs.fn, const_args)
               rhs.args = prev_adverb.args
+
       self.adverb_bindings[stmt.lhs.name] = rhs
     return stmt

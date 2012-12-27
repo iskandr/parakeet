@@ -54,8 +54,6 @@ class Node(object):
     _members_cache[class_name] = m
     return m
   
-
-  
   def iteritems(self):
     for k in self.members():
       yield (k, getattr(self, k))
@@ -90,11 +88,15 @@ class Node(object):
           (k, self.node_type(), members)
     else:
       raise Exception('Too many arguments for %s, expected %s' % \
-                      (class_name, members)) 
+                      (class_name, members))
        
-    for C in _reversed_mro_cache[class_name]:
-      if 'node_init' in C.__dict__:
-        C.node_init(self)
+    # it's more common to not define a node initializer, 
+    # so add an extra check to avoid having to always
+    # traverse the full class hierarchy 
+    if hasattr(self, 'node_init'):
+      for C in _reversed_mro_cache[class_name]:
+        if 'node_init' in C.__dict__:
+          C.node_init(self)
 
   def __hash__(self):
     hash_values = []

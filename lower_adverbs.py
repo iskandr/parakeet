@@ -43,7 +43,7 @@ class CodegenSemantics(MemoizedTransform):
   none = syntax_helpers.none
   null_slice = syntax_helpers.slice_none
 
-class LowerAdverbs(CodegenSemantics, AdverbSemantics):
+class LowerAdverbs(AdverbSemantics, CodegenSemantics):
   def transform_TypedFn(self, expr):
     import lowering
     return lowering.lower(expr, tile=False)

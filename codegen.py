@@ -2,7 +2,7 @@ import names
 import prims
 
 import array_type
-from array_type import ArrayT 
+from array_type import ArrayT, SliceT  
 import core_types
 from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT 
 from closure_type import ClosureT, make_closure_type
@@ -53,18 +53,33 @@ class Codegen(object):
         return names.original(expr.value.name) + "_" + expr.name
       else:
         return expr.name
+    elif c is Index:  
+      idx_t = expr.index.type
+      if isinstance(idx_t, SliceT) or \
+         (isinstance(idx_t, TupleT) and \
+          any(isinstance(elt_t, SliceT) for elt_t in idx_t.elt_types)):
+        return "slice"
+      else:
+        return "elt" 
     else:
       return "temp"
 
+  def is_simple(self, expr):
+    c = expr.__class__ 
+    return c is Var or c is Const or \
+        (c is Tuple and len(expr.elts) == 0) or \
+        (c is Struct and len(expr.args) == 0) or \
+        (c is Closure and len(expr.args) == 0)
+
   def assign_temp(self, expr, name = None):
+    if self.is_simple(expr):
+      return expr
+    
     if name is None:
       name = self.temp_name(expr)
-    if expr.__class__ is Var:
-      return expr
-    else:
-      var = self.fresh_var(expr.type, name)
-      self.assign(var, expr)
-      return var
+    var = self.fresh_var(expr.type, name)
+    self.assign(var, expr)
+    return var
 
   def int(self, x):
     return const_int(x)
@@ -80,6 +95,9 @@ class Codegen(object):
 
   def zero_i64(self, name = "counter"):
     return self.zero(t = Int64, name = name)
+
+
+
 
   def cast(self, expr, t):
     assert isinstance(t, ScalarT), \
@@ -321,6 +339,7 @@ class Codegen(object):
       elt_value = TupleProj(strides, dim, type = elt_t)
       return self.assign_temp(elt_value, "stride%d" % dim)
 
+  
   def tuple(self, elts, name = "tuple"):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
@@ -380,6 +399,8 @@ class Codegen(object):
     else:
       return maybe_clos
 
+
+        
   def closure(self, maybe_fn, extra_args, name = None):
     fn = self.get_fn(maybe_fn)
     old_closure_elts = self.closure_elts(maybe_fn)
@@ -452,6 +473,7 @@ class Codegen(object):
     Given a function and its argument, use shape inference
     to figure out the result shape of the array and preallocate it
     """
+
     try:
       symbolic_shape = shape_inference.call_shape_expr(fn)
       inner_shape_tuple = shape_codegen.make_shape_expr(self, symbolic_shape,

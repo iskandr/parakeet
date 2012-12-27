@@ -93,7 +93,8 @@ class Find_LICM_Candidates(SyntaxVisitor):
     if any(x in self.volatile_vars for x in rhs_names) or \
         self.is_mutable_alloc(stmt.rhs):
       self.volatile_vars.update(lhs_names)
-      
+
+  
   def visit_fn(self, fn):
 
     self.volatile_vars.push(fn.arg_names)

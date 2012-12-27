@@ -295,19 +295,20 @@ class Transform(Codegen):
     if config.print_transform_timings:
       start_time = time.time()
 
-    self.fn = fn
     if config.print_functions_before_transforms:
       print
       print "Running transform %s" % self.__class__.__name__
       print "--- before ---"
-      print repr(self.fn)
+      print repr(fn)
       print
+   
+    self.fn = fn 
+    pre_fn = self.pre_apply(self.fn)
 
-    fn = self.pre_apply(self.fn)
-
-    if fn is None:
-      fn = self.fn
-
+    if pre_fn is not None:
+      fn = pre_fn 
+    
+    self.fn = fn 
     self.type_env = fn.type_env
     fn.body = self.transform_block(fn.body)
     fn.type_env = self.type_env

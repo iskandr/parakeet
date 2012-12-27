@@ -1,4 +1,4 @@
-from syntax import Expr 
+from syntax import Expr, Var 
 from transform import Transform 
 from clone_function import CloneFunction
 
@@ -11,6 +11,10 @@ class RewriteVars(Transform):
     new_merge = {}
     for (k,(l,r)) in old_merge.iteritems():
       new_name = self.rename_dict.get(k,k)
+      if type(new_name) != str:
+        assert new_name.__class__ is Var, \
+          "Unexpected substitution %s for %s" % (new_name, k)
+        new_name = new_name.name 
       new_left = self.transform_expr(l)
       new_right = self.transform_expr(r)
       new_merge[new_name] = new_left, new_right 

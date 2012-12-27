@@ -84,12 +84,7 @@ class Simplify(Transform):
         return (expr.value,)
     return None
 
-  def is_simple(self, expr):
-    c = expr.__class__ 
-    return c is Var or c is Const or \
-        (c is Tuple and len(expr.elts) == 0) or \
-        (c is Struct and len(expr.args) == 0) or \
-        (c is Closure and len(expr.args) == 0)
+
         
   def immutable(self, expr):
     child_nodes = self.children(expr, allow_mutable = False)
@@ -145,7 +140,7 @@ class Simplify(Transform):
       idx = v.type.field_pos(expr.name)
       return v.args[idx]
     elif v.__class__ is not Var:
-      v = self.temp(v, "struct_temp")
+      v = self.temp(v, "struct")
     return Attribute(v, expr.name, type = expr.type)
 
   def transform_TupleProj(self, expr):
@@ -154,14 +149,17 @@ class Simplify(Transform):
         "TupleProj index must be an integer, got: " + str(idx)
     new_tuple = self.transform_expr(expr.tuple)
 
-    if isinstance(new_tuple, syntax.Var) and new_tuple.name in self.bindings:
+    if new_tuple.__class__ is Var and new_tuple.name in self.bindings:
       new_tuple = self.bindings[new_tuple.name]
 
-    if isinstance(new_tuple, syntax.Tuple):
+    if new_tuple.__class__ is Tuple:
       return new_tuple.elts[idx]
-    else:
-      return syntax.TupleProj(tuple = new_tuple, index = idx, type = expr.type)
-
+    elif new_tuple.__class__ is Struct:
+      return new_tuple.args[idx]
+    if not self.is_simple(new_tuple):
+      new_tuple = self.assign_temp(new_tuple, "tuple")
+    return syntax.TupleProj(tuple = new_tuple, index = idx, type = expr.type)
+    
   def transform_Call(self, expr):
     import closure_type
     fn = self.transform_expr(expr.fn)
@@ -235,7 +233,7 @@ class Simplify(Transform):
     block.append(Assign(var, expr))
     self.bindings[var.name] = expr
     return var
-
+  
   def transform_merge(self, phi_nodes, left_block, right_block):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():

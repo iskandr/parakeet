@@ -36,7 +36,8 @@ def build_pipeline(copy = False,
   if inline:
     add(Inliner)
 
-  add(LowerIndexing, LowerStructs)
+  add(LowerIndexing)
+  add(LowerStructs)
 
   if licm:
     add(LoopInvariantCodeMotion)
