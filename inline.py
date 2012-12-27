@@ -32,7 +32,7 @@ def replace_returns(stmts, output_var):
   for (i,stmt) in enumerate(stmts):
     if stmt.__class__ is Return:
       stmts[i] = syntax.Assign(output_var, stmt.value)
-
+    
 def can_inline_block(stmts, outer = False):
   for stmt in stmts:
     stmt_class = stmt.__class__

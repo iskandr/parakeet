@@ -6,27 +6,28 @@ from testing_helpers import expect, expect_each, run_local_tests, eq
 size = 15
 init = np.array(([0] * (size/2)) + [1] + ([0] * (size - size/2 - 1)))
 
-def rule30(extended, (a,b,c)):
-  if ((a == 1 and b == 0 and c == 0) or
-      (a == 0 and b == 1 and c == 1) or
-      (a == 0 and b == 1 and c == 0) or
-      (a == 0 and b == 0 and c == 1)):
-    return 1
-  else:
-    return 0
+
+def rule30(extended, i):
+  a, b, c = extended[[i-1,i,i+1]]
+  return ((a == 1 and b == 0 and c == 0) or
+          (a == 0 and b == 1 and c == 1) or
+          (a == 0 and b == 1 and c == 0) or
+          (a == 0 and b == 0 and c == 1))
+    
 plot = False 
 
 def test_rule30():
   output = init.copy()
   cur = init
   zero_array = np.array([0])
-  idx_vecs = np.array([[i-1, i, i+1] for i in range(1,size+1)])
+  indices = np.arange(1,size+1)
   for _ in range(size/2):
     extended = np.concatenate((zero_array, cur, zero_array))
-    def run_rule30(idx):
-      return rule30(extended, idx)
-    parakeet_iter = parakeet.each(run_rule30, idx_vecs)
-    python_iter = np.array(map(run_rule30, idx_vecs))
+
+    def run_rule30(i):
+      return rule30(extended, i)
+    parakeet_iter = parakeet.each(run_rule30, indices)
+    python_iter = np.array(map(run_rule30, indices))
     assert eq(parakeet_iter, python_iter), \
        "Parakeet result (%s) didn't match Python result(%s)" % (parakeet_iter, python_iter)
     output = np.vstack((output,cur))
