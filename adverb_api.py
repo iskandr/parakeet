@@ -291,6 +291,7 @@ def par_allpairs(fn, x, y, **kwds):
   if config.opt_tile:
     single_core_args.append((1,) * num_tiles)
   single_iter_rslt = single_core(*single_core_args)
+  # TODO: use np.shape instead of repeat.
   output = np.repeat(single_iter_rslt, num_iters, axis=0)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
