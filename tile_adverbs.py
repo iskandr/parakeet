@@ -63,6 +63,7 @@ class TileAdverbs(Transform):
     self.adverb_args = []
     self.expansions = {}
     self.exp_stack = []
+    self.type_env_stack = []
     self.num_tiles = 0
 
   def push_exp(self, adv, adv_args):
@@ -75,6 +76,15 @@ class TileAdverbs(Transform):
     self.expansions = self.exp_stack.pop()
     self.adverbs_visited.pop()
     self.adverb_args.pop()
+
+  def push_type_env(self, type_env):
+    self.type_env_stack.append(self.type_env)
+    self.type_env = type_env
+
+  def pop_type_env(self):
+    old_type_env = self.type_env
+    self.type_env = self.type_env_stack.pop()
+    return old_type_env
 
   def get_expansions(self, arg):
     if arg in self.expansions:
@@ -234,7 +244,7 @@ class TileAdverbs(Transform):
   def transform_Return(self, stmt):
     if isinstance(stmt.value, adverbs.Adverb):
       return syntax.Return(self.transform_expr(stmt.value))
-
+    stmt.value.type = self.type_env[stmt.value.name]
     return stmt
 
   def transform_Map(self, expr):
@@ -264,13 +274,13 @@ class TileAdverbs(Transform):
     find_adverbs.apply(fn)
 
     if find_adverbs.has_adverbs:
-      arg_names = fn.arg_names
+      arg_names = list(fn.arg_names)
       input_types = []
-      new_type_env = copy.copy(fn.type_env)
+      self.push_type_env(fn.type_env)
       for arg, t in zip(arg_names, fn.input_types):
         new_type = array_type.increase_rank(t, len(self.get_expansions(arg)))
         input_types.append(new_type)
-        new_type_env[arg] = new_type
+        self.type_env[arg] = new_type
       exps = self.get_depths_list(fn.arg_names)
       rank_inc = 0
       for i, exp in enumerate(exps):
@@ -283,7 +293,7 @@ class TileAdverbs(Transform):
                               body=self.transform_block(fn.body),
                               input_types=input_types,
                               return_type=return_t,
-                              type_env=new_type_env)
+                              type_env=self.pop_type_env())
       new_fn.has_tiles = True
     else:
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,

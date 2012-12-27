@@ -28,8 +28,8 @@ print_unoptimized_llvm = False
 # show LLVM bytecode after optimizations
 print_optimized_llvm = False
 
-# how long did each transform take? 
-print_transform_timings = False 
+# how long did each transform take?
+print_transform_timings = False
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -58,7 +58,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
 opt_tile = True

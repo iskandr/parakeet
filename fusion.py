@@ -7,7 +7,7 @@ import inline
 from dead_code_elim import DCE
 from simplify import Simplify
 
-def fuse(prev_fn, next_fn, const_args = [None]):
+def fuse(prev_fn, next_fn, const_args=[None]):
   """
   Expects the prev_fn's returned value to be one or more of the arguments to
   next_fn. Any element in 'const_args' which is None gets replaced by the
@@ -33,7 +33,7 @@ def fuse(prev_fn, next_fn, const_args = [None]):
                         type_env = type_env)
 
 class Fusion(Transform):
-  def __init__(self, recursive = True):
+  def __init__(self, recursive=True):
     Transform.__init__(self)
     # name of variable -> Map or Scan adverb
     self.adverb_bindings = {}
@@ -47,10 +47,10 @@ class Fusion(Transform):
     return apply_pipeline(fn, [Simplify, DCE, Fusion(recursive=self.recursive)])
 
   def transform_Assign(self, stmt):
-    if self.recursive: 
+    if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)
-    rhs = stmt.rhs  
-     
+    rhs = stmt.rhs
+
     if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb) and \
        rhs.__class__ is not AllPairs:
       args = rhs.args
@@ -60,7 +60,6 @@ class Fusion(Transform):
         n_occurrences = len(arg_names)
         if n_unique_vars == 1:
           arg_name = arg_names[0]
-
           if self.use_counts[arg_name] == n_occurrences and \
              arg_name in self.adverb_bindings:
             prev_adverb = self.adverb_bindings[arg_name]

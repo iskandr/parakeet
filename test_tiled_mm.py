@@ -111,6 +111,8 @@ def adverb_matmult(X, Y):
 def test_par_mm():
   rslt = adverb_matmult(x2_array, y2_array)
   nprslt = np.dot(x2_array, y2_array.T)
+  print rslt
+  print nprslt
   assert(testing_helpers.eq(rslt, nprslt))
 
 if __name__ == '__main__':

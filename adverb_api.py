@@ -26,7 +26,7 @@ except:
 import array_type, names
 from args import FormalArgs
 _par_wrapper_cache = {}
-def gen_par_work_function(adverb_class, fn, args_t, arg_types):
+def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
   key = (adverb_class, fn.name, tuple(arg_types))
   if key in _par_wrapper_cache:
     return _par_wrapper_cache[key]
@@ -41,6 +41,7 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
                                        varargs_name = None,
                                        axis = 0)
     # TODO: Closure args should go here.
+    print "nested_wrapper:", nested_wrapper
     untyped_args = [syntax.Var(names.fresh("arg")) for _ in arg_types]
     fn_args_obj = FormalArgs()
     for arg in untyped_args:
@@ -52,9 +53,9 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_wrapper")
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
     typed = type_inference.specialize(untyped_wrapper, arg_types)
+    print "typed:", typed
     payload = lowering.lower(typed, tile=config.opt_tile)
     num_tiles = payload.num_tiles
-    print payload
 
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
@@ -81,7 +82,7 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
     unpacked_args = []
     for i, t in enumerate(arg_types):
       attr = syntax.Attribute(args_var, ("arg%d" % i), type=t)
-      if isinstance(t, array_type.ArrayT):
+      if isinstance(t, array_type.ArrayT) and i not in closure_pos:
         # TODO: Handle axis.
         unpacked_args.append(slice_arg(attr))
       else:
@@ -114,7 +115,6 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types):
                        type_env = type_env)
 
     lowered = lowering.lower(parallel_wrapper)
-    print lowered
     _par_wrapper_cache[key] = lowered
     return lowered, num_tiles
 
@@ -192,7 +192,8 @@ def par_each(fn, *args, **kwds):
   gv_output = ctypes.pointer(output_obj)
   setattr(c_args, "output", gv_output)
 
-  wf, num_tiles = gen_par_work_function(adverbs.Map, untyped, args_t, arg_types)
+  wf, num_tiles = \
+      gen_par_work_function(adverbs.Map, untyped, args_t, arg_types, [])
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
   parallel = True
   if parallel:
@@ -233,16 +234,23 @@ def par_allpairs(fn, x, y, **kwds):
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
 
+  print "untyped:", untyped
+  print "closure:", closure_t
+  print "args:", args
+  print "len(args[0])", len(args.positional[0])
+
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   xtype, ytype = arg_types
   ap_result_type = type_inference.infer_AllPairs(closure_t, xtype, ytype)
 
-  r = adverb_helpers.max_rank(arg_types)
-  for (arg, t) in zip(args, arg_types):
-    if t.rank == r:
-      max_arg = arg
-      break
-  num_iters = max_arg.shape[axis]
+  # For now, only split up the larger of the 2 args amongst the threads,
+  # passing the other through in toto.
+  if len(args.positional[0] < len(args.positional[1])):
+    num_iters = len(args.positional[1])
+    closure_pos = [0]
+  else:
+    num_iters = len(args.positional[0])
+    closure_pos = [1]
 
   # Create args struct type
   fields = []
@@ -269,15 +277,15 @@ def par_allpairs(fn, x, y, **kwds):
     else:
       setattr(c_args, field_name, obj)
 
-  # TODO: Have to use shape inference to determine output size so we can pre-
-  #       allocate the output.
+  # TODO: Use shape inference to determine output size.
   print ap_result_type
   output = np.arange(100).reshape(10,10)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
   setattr(c_args, "output", gv_output)
 
-  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped, args_t, arg_types)
+  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped,
+                                        args_t, arg_types, closure_pos)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
   parallel = True
   if parallel:
