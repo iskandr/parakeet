@@ -1,7 +1,6 @@
 import ast
 import inspect
 import names
-
 import syntax
 
 from args import FormalArgs, ActualArgs
@@ -33,18 +32,16 @@ def translate_default_arg_value(arg):
     assert name in reserved_names
     return reserved_names[name].value
 
-
 class AST_Translator(ast.NodeVisitor):
-  def __init__(self, globals_dict = None, closure_cell_dict = None,
-               outer_env = None):
+  def __init__(self, globals_dict=None, closure_cell_dict=None,
+               outer_env=None):
     # assignments which need to get prepended at the beginning of the
     # function
     self.globals = globals_dict
     self.env = \
-        ScopedEnv(outer_env = outer_env,
-                  closure_cell_dict = closure_cell_dict,
-                  globals_dict = globals_dict)
-
+        ScopedEnv(outer_env=outer_env,
+                  closure_cell_dict=closure_cell_dict,
+                  globals_dict=globals_dict)
 
   def fresh_name(self, original_name):
     return self.env.fresh(original_name)
@@ -103,7 +100,6 @@ class AST_Translator(ast.NodeVisitor):
         visible_name = arg.id
         local_name = self.fresh_name(visible_name)
         formals.add_positional(local_name, visible_name)
-
       else:
         assert isinstance(arg, ast.Tuple)
         arg_name = self.fresh_name("tuple_arg")
@@ -211,7 +207,7 @@ class AST_Translator(ast.NodeVisitor):
     ssa_left = self.visit(expr.left)
     ssa_right = self.visit(expr.right)
     prim = prims.find_ast_op(expr.op)
-    return syntax.PrimCall(prim, [ssa_left, ssa_right] )
+    return syntax.PrimCall(prim, [ssa_left, ssa_right])
 
   def visit_BoolOp(self, expr):
     values = map(self.visit, expr.values)
@@ -259,12 +255,12 @@ class AST_Translator(ast.NodeVisitor):
     if value == sum:
       import adverb_wrapper
       sum_wrapper = \
-        adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
+          adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
       args = ActualArgs(positional = [prims.add] + list(positional),
                         keywords = {'init': syntax.Const(0)})
       return syntax.Call(sum_wrapper, args)
     else:
-      assert value == slice
+      assert value == slice, "Value %s not slice %s" % (value, slice)
       assert len(keywords_dict) == 0
       return syntax.Slice(*positional)
 
@@ -372,7 +368,6 @@ class AST_Translator(ast.NodeVisitor):
     curr_scope = self.env.current_scope()
 
     for (k, name_after) in scope_after.iteritems():
-
       if k in self.env:
         name_before = self.env[k]
         new_name = names.fresh(k)
@@ -439,6 +434,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   fundef = syntax.Fn(ssa_fn_name, ssa_args, body, refs, original_outer_names)
 
   return fundef
+
 def strip_leading_whitespace(source):
   lines = source.splitlines()
   assert len(lines) > 0
@@ -448,6 +444,7 @@ def strip_leading_whitespace(source):
     return '\n'.join(line[n_removed:] for line in lines)
   else:
     return source
+
 def translate_function_source(source, globals_dict, closure_vars = [],
                               closure_cells = []):
   assert len(closure_vars) == len(closure_cells)

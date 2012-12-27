@@ -16,7 +16,7 @@ def rule30(idx_vec, extended):
   else:
     return 0
 
-use_parakeet = True
+use_parakeet = False
 def test_rule30():
   output = init.copy()
   cur = init
