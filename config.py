@@ -31,6 +31,9 @@ print_optimized_llvm = False
 # how long did each transform take?
 print_transform_timings = False
 
+# show execution time on parallel backend?
+print_parallel_exec_time = False
+
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
