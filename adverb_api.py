@@ -196,8 +196,9 @@ def par_each(fn, *args, **kwds):
   lowered = gen_lowered_wrapper(adverbs.Map, untyped, arg_types)
   num_tiles = lowered.num_tiles
   single_core = run_function.CompiledFn(*llvm_backend.compile_fn(lowered))
-  single_core_args = [arg[0:1] for arg in args.positional] + \
-                     [((1,) * num_tiles)]
+  single_core_args = [arg[0:1] for arg in args.positional]
+  if config.opt_tile:
+    single_core_args.append(((1,) * num_tiles))
   single_iter_rslt = single_core(*single_core_args)
   output = np.repeat(single_iter_rslt, num_iters, axis=0)
   output_obj = type_conv.from_python(output)
