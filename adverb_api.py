@@ -8,6 +8,7 @@ import ctypes
 import llvm_backend
 import lowering
 import numpy as np
+import run_function
 import syntax
 import syntax_helpers
 import tuple_type
@@ -25,11 +26,12 @@ except:
 
 import array_type, names
 from args import FormalArgs
-_par_wrapper_cache = {}
-def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
+
+_lowered_wrapper_cache = {}
+def gen_lowered_wrapper(adverb_class, fn, arg_types):
   key = (adverb_class, fn.name, tuple(arg_types))
-  if key in _par_wrapper_cache:
-    return _par_wrapper_cache[key]
+  if key in _lowered_wrapper_cache:
+    return _lowered_wrapper_cache[key]
   else:
     # Generate a wrapper for the payload function, and then type specialize it
     # as well as tile it.  Tiling needs to happen here, as we don't want to
@@ -41,7 +43,6 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
                                        varargs_name = None,
                                        axis = 0)
     # TODO: Closure args should go here.
-    print "nested_wrapper:", nested_wrapper
     untyped_args = [syntax.Var(names.fresh("arg")) for _ in arg_types]
     fn_args_obj = FormalArgs()
     for arg in untyped_args:
@@ -53,10 +54,15 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_wrapper")
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
     typed = type_inference.specialize(untyped_wrapper, arg_types)
-    print "typed:", typed
-    payload = lowering.lower(typed, tile=config.opt_tile)
-    num_tiles = payload.num_tiles
+    return lowering.lower(typed, tile=config.opt_tile)
 
+_par_wrapper_cache = {}
+def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
+  key = (adverb_class, fn.name, tuple(arg_types))
+  if key in _par_wrapper_cache:
+    return _par_wrapper_cache[key]
+  else:
+    num_tiles = fn.num_tiles
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
     # arguments.
@@ -93,9 +99,9 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
       unpacked_args.append(tile_sizes_var)
 
     # Make a typed closure that calls the payload function with the arg slices.
-    closure_t = closure_type.make_closure_type(payload, [])
-    nested_closure = syntax.Closure(payload.name, [], type=closure_t)
-    return_t = payload.return_type
+    closure_t = closure_type.make_closure_type(fn, [])
+    nested_closure = syntax.Closure(fn.name, [], type=closure_t)
+    return_t = fn.return_type
     call = syntax.Call(nested_closure, unpacked_args, type=return_t)
     output = slice_arg(syntax.Attribute(args_var, "output", type=return_t))
     body = [syntax.Assign(output, call),
@@ -116,6 +122,7 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
 
     lowered = lowering.lower(parallel_wrapper)
     _par_wrapper_cache[key] = lowered
+
     return lowered, num_tiles
 
 import closure_type
@@ -185,15 +192,20 @@ def par_each(fn, *args, **kwds):
     else:
       setattr(c_args, field_name, obj)
 
-  # TODO: Have to use shape inference to determine output size so we can pre-
-  #       allocate the output.
-  output = np.arange(80)
+  # TODO: Use shape inference to determine output size.
+  lowered = gen_lowered_wrapper(adverbs.Map, untyped, arg_types)
+  num_tiles = lowered.num_tiles
+  single_core = run_function.CompiledFn(*llvm_backend.compile_fn(lowered))
+  single_core_args = [arg[0:1] for arg in args.positional] + \
+                     [((1,) * num_tiles)]
+  single_iter_rslt = single_core(*single_core_args)
+  output = np.repeat(single_iter_rslt, num_iters, axis=0)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
   setattr(c_args, "output", gv_output)
 
   wf, num_tiles = \
-      gen_par_work_function(adverbs.Map, untyped, args_t, arg_types, [])
+      gen_par_work_function(adverbs.Map, lowered, args_t, arg_types, [])
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
   parallel = True
   if parallel:
@@ -234,18 +246,13 @@ def par_allpairs(fn, x, y, **kwds):
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
 
-  print "untyped:", untyped
-  print "closure:", closure_t
-  print "args:", args
-  print "len(args[0])", len(args.positional[0])
-
   # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   xtype, ytype = arg_types
   ap_result_type = type_inference.infer_AllPairs(closure_t, xtype, ytype)
 
   # For now, only split up the larger of the 2 args amongst the threads,
   # passing the other through in toto.
-  if len(args.positional[0] < len(args.positional[1])):
+  if len(args.positional[0]) < len(args.positional[1]):
     num_iters = len(args.positional[1])
     closure_pos = [0]
   else:
@@ -278,13 +285,21 @@ def par_allpairs(fn, x, y, **kwds):
       setattr(c_args, field_name, obj)
 
   # TODO: Use shape inference to determine output size.
-  print ap_result_type
-  output = np.arange(100).reshape(10,10)
+  lowered = gen_lowered_wrapper(adverbs.AllPairs, untyped, arg_types)
+  num_tiles = lowered.num_tiles
+  single_core = run_function.CompiledFn(*llvm_backend.compile_fn(lowered))
+  if closure_pos[0] == 0:
+    single_core_args = [args.positional[0], args.positional[1][0:1]]
+  else:
+    single_core_args = [args.positional[0][0:1], args.positional[1]]
+  single_core_args.append((1,) * num_tiles)
+  single_iter_rslt = single_core(*single_core_args)
+  output = np.repeat(single_iter_rslt, num_iters, axis=0)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
   setattr(c_args, "output", gv_output)
 
-  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped,
+  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, lowered,
                                         args_t, arg_types, closure_pos)
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
   parallel = True

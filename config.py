@@ -20,7 +20,7 @@ print_functions_before_transforms = False
 print_functions_after_transforms = False
 
 # show functions after tiling transformation?
-print_tiled_adverbs = True
+print_tiled_adverbs = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False

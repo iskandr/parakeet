@@ -13,8 +13,9 @@ import testing_helpers
 from closure_type import make_closure_type
 from parakeet import allpairs
 
-x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
-y2_array = np.arange(100, 200, dtype = np.int64).reshape(10,10)
+x = 1000
+x2_array = np.arange(x*x, dtype = np.int64).reshape(x,x)
+y2_array = np.arange(x*x, 2*x*x, dtype = np.int64).reshape(x,x)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
 
