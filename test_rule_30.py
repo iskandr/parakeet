@@ -21,7 +21,7 @@ def test_rule30():
   cur = init
   zero_array = np.array([0])
   idx_vecs = np.array([[i-1, i, i+1] for i in range(1,size+1)])
-  for _ in range(100):
+  for _ in range(size/2):
     extended = np.concatenate((zero_array, cur, zero_array))
     cur = np.array(map(lambda x: rule30(x, extended), idx_vecs))
     output = np.vstack((output,cur))
