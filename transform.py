@@ -143,6 +143,7 @@ class Transform(Codegen):
   def transform_Map(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)
+    expr.out = self.transform_if_expr(expr.out)
     return expr 
   
   def transform_expr(self, expr):
