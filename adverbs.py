@@ -16,11 +16,15 @@ class Adverb(syntax.Expr):
       return str(self.args)
 
   def __repr__(self):
-    return "%s(axis = %s, fn = %s, %s, type=%s)" % \
-        (self.node_type(), self.axis,
-         self.fn_to_str(self.fn),
-         self.args_to_str(),
-         self.type)
+    s = "%s(axis = %s, fn = %s, %s, type=%s)" % \
+          (self.node_type(), self.axis,
+           self.fn_to_str(self.fn),
+           self.args_to_str(),
+           self.type)
+    if self.out: 
+      s += ", out=%s" % self.out
+    s += ")"
+    return s 
 
   def __str__(self):
     return repr(self)

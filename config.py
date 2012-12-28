@@ -11,7 +11,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show the input function to each transformation?
 print_functions_before_transforms = False

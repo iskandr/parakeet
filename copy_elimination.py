@@ -1,14 +1,19 @@
 import names 
+
 from syntax import Assign, Index, Slice, Var, Return 
 from syntax_helpers import none, slice_none, zero_i64 
-from transform import Transform  
-from clone_function import CloneFunction
+
 from core_types import NoneT, NoneType 
+import array_type
 from array_type import ArrayT 
-import shape_inference
+
 from adverb_helpers import max_rank
 from adverbs import Map 
 
+import shape_inference
+
+from transform import Transform  
+from clone_function import CloneFunction
 
 class PreallocateAdverbOutputs(Transform):
   def niters(self, args, axis):
@@ -42,7 +47,7 @@ class PreallocateAdverbOutputs(Transform):
     expr.out = self.alloc_array(expr.fn.return_type, output_shape) 
     expr.fn  =  ExplicitOutputStorage().apply(expr.fn)
     return expr 
-    
+  
 
 class ExplicitOutputStorage(PreallocateAdverbOutputs):
   """
@@ -56,22 +61,27 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     fn = CloneFunction().apply(fn)
     output_name = names.fresh("output")
     output_t = fn.return_type
-    print "fn %s, output_t =" % fn.name, output_t 
-    output_var = Var(output_name, type=output_t)
-    self.output_type = output_t
+    
+    
     if output_t.__class__ is ArrayT and output_t.rank > 0: 
       idx = self.tuple([slice_none] * output_t.rank)
-      self.output_lhs_index = Index(output_var, idx)
-      #self.output_value = self.output_lhs_index 
+      elt_t = output_t 
+
     else:
-      self.output_lhs_index = Index(output_var, none, type = output_t)
-      #self.output_value = Index(output_var, zero_i64)
+      idx = zero_i64
+      elt_t = output_t 
+      output_t = array_type.increase_rank(output_t, 1)
+      
     
+    self.output_type = output_t
+    output_var = Var(output_name, type=output_t)
+    self.output_lhs_index = Index(output_var, idx, type = elt_t)
+    
+    print "[ExplicitOutputStorage] fn %s, input_types = %s, output_t =%s" % (fn.name, fn.input_types, output_t)
     fn.return_type = NoneType  
     fn.arg_names = tuple(fn.arg_names) + (output_name,)
     fn.input_types = tuple(fn.input_types) + (output_t,)
     fn.type_env[output_name]  = output_t 
-    print "input types", fn.input_types 
     self.return_none = Return(none)
     return fn 
 
@@ -81,4 +91,5 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     else:
       rhs = self.transform_expr(stmt.value)
       self.assign(self.output_lhs_index, rhs)
-    return self.return_none  
+    return self.return_none
+  

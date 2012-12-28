@@ -63,9 +63,13 @@ class Find_LICM_Candidates(SyntaxVisitor):
       self.block_contains_return()
     volatile_in_scope = self.volatile_vars.pop()
     self.mark_safe_assignments(stmt.body, volatile_in_scope)
+  
+  def visit_Var(self, expr):
+    self.volatile_vars.add(expr.name)
     
   def visit_If(self, stmt):
     self.volatile_vars.push(stmt.merge.keys())
+    self.visit_expr(stmt.cond)
     SyntaxVisitor.visit_If(self, stmt)
     if self.does_block_return(stmt.true) or self.does_block_return(stmt.false):
       self.mark_curr_block_returns()
@@ -114,6 +118,8 @@ class LoopInvariantCodeMotion(Transform):
     # initially we have no blocks so need to offset by 1 
     # so that input names end up at depth 0 
     self.mark_binding_depths(fn.arg_names, 1)
+  
+
   
   def mark_binding_depths(self, names, depth_offset = 0):
     curr_depth = len(self.blocks._blocks) - 1 + depth_offset

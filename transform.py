@@ -143,6 +143,7 @@ class Transform(Codegen):
   def transform_Map(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)
+    expr.out = self.transform_if_expr(expr.out)
     return expr 
   
   def transform_expr(self, expr):
@@ -333,7 +334,11 @@ class Transform(Codegen):
       print
 
     if self.verify:
-      verify.verify(new_fn)
+      try:
+        verify.verify(new_fn)
+      except:
+        print "ERROR after running %s" % self.__class__.__name__
+        raise 
 
     if config.print_transform_timings:
       end_time = time.time()

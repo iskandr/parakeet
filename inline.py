@@ -1,7 +1,7 @@
 import names
 
 import syntax
-from syntax import If, Assign, While, Return, Var, TypedFn, Const 
+from syntax import If, Assign, While, Return, Var, TypedFn, Const, RunExpr 
 import syntax_visitor
 
 from subst import subst_stmt_list
@@ -36,18 +36,19 @@ def replace_returns(stmts, output_var):
 def can_inline_block(stmts, outer = False):
   for stmt in stmts:
     stmt_class = stmt.__class__
-    if stmt_class is If:
+    if stmt_class is Assign or stmt_class is RunExpr: 
+      pass  
+    elif stmt_class is If:
       return can_inline_block(stmt.true) and can_inline_block(stmt.false)
     elif stmt_class is While:
       if not can_inline_block(stmt.body):
         return False
-    elif stmt_class is Return:
+    else:
+      assert stmt_class is Return, "Unexpected statement: %s" % stmt 
       if not outer:
         return False
-    else:
-      assert stmt_class is Assign
-  return True
-
+  return True 
+     
 def can_inline(fundef):
   return can_inline_block(fundef.body, outer = True)
 
