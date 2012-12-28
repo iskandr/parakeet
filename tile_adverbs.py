@@ -136,15 +136,12 @@ class TileAdverbs(Transform):
               return_t = s.value.type
 
         # The innermost function always uses all the variables
-        arg_types = [type_env[arg] for arg in arg_order]
-        fn = syntax.TypedFn(name=names.fresh("inner_block"),
+        return syntax.TypedFn(name=names.fresh("inner_block"),
                               arg_names=v_names,
                               body=block,
-                              input_types=arg_types,
+                              input_types=[type_env[arg] for arg in arg_order],
                               return_type=return_t,
                               type_env=inner_type_env)
-        print fn
-        return fn
       else:
         # Get the current depth
         depth = depths[depth_idx]
