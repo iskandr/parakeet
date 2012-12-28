@@ -43,6 +43,7 @@ class ClosureCellRef(Ref):
 
   def __eq__(self, other):
     if isinstance(other, ClosureCellRef):
+      # TODO: not sure this is what we want to do, but...
       if isinstance(self.cell.cell_contents, numpy.ndarray) and \
          isinstance(other.cell.cell_contents, numpy.ndarray):
         return (self.cell.cell_contents == other.cell.cell_contents).all()
