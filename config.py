@@ -17,7 +17,7 @@ print_lowered_function = True
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = True  
+print_functions_after_transforms = False
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -31,8 +31,8 @@ print_optimized_llvm = False
 # how long did each transform take?
 print_transform_timings = False
 
-# at exit, print the names of all specialized functions 
-print_specialized_function_names = False 
+# at exit, print the names of all specialized functions
+print_specialized_function_names = False
 
 # show execution time on parallel backend?
 print_parallel_exec_time = False
@@ -65,7 +65,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
 opt_tile = False

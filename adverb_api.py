@@ -25,10 +25,11 @@ except:
   rt = None
 
 import array_type, names
-from args import FormalArgs
+from args import ActualArgs, FormalArgs
 
+# TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
-def gen_lowered_wrapper(adverb_class, fn, arg_types):
+def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
   key = (adverb_class, fn.name, tuple(arg_types))
   if key in _lowered_wrapper_cache:
     return _lowered_wrapper_cache[key]
@@ -42,26 +43,32 @@ def gen_lowered_wrapper(adverb_class, fn, arg_types):
                                        data_names = fn.args.positional,
                                        varargs_name = None,
                                        axis = 0)
-    # TODO: Closure args should go here.
+    nonlocal_args = ActualArgs([syntax.Var(names.fresh("arg"))
+                                for _ in nonlocal_types])
     untyped_args = [syntax.Var(names.fresh("arg")) for _ in arg_types]
     fn_args_obj = FormalArgs()
+    for arg in nonlocal_args:
+      fn_args_obj.add_positional(arg.name)
     for arg in untyped_args:
       fn_args_obj.add_positional(arg.name)
     nested_closure = syntax.Closure(nested_wrapper.name, [])
     call = syntax.Call(nested_closure,
-                       [syntax.Closure(fn.name, [])] + untyped_args)
+                       [syntax.Closure(fn.name, nonlocal_args)] + untyped_args)
     body = [syntax.Return(call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_wrapper")
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
-    typed = type_inference.specialize(untyped_wrapper, arg_types)
+    all_types = arg_types.prepend_positional(nonlocal_types)
+    typed = type_inference.specialize(untyped_wrapper, all_types)
     return lowering.lower(typed, tile=config.opt_tile)
 
 _par_wrapper_cache = {}
-def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
-  key = (adverb_class, fn.name, tuple(arg_types))
+def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
+                          args_t, arg_types, closure_pos):
+  key = (adverb_class, f.name, tuple(arg_types))
   if key in _par_wrapper_cache:
     return _par_wrapper_cache[key]
   else:
+    fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocal_types)
     num_tiles = fn.num_tiles
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
@@ -86,13 +93,18 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
       result_t = t.index_type(tuple_t)
       return syntax.Index(arg, index_tuple, type=result_t)
     unpacked_args = []
-    for i, t in enumerate(arg_types):
+    i = 0
+    for t in nonlocal_types:
+      unpacked_args.append(syntax.Attribute(args_var, ("arg%d" % i), type=t))
+      i += 1
+    for t in arg_types:
       attr = syntax.Attribute(args_var, ("arg%d" % i), type=t)
       if isinstance(t, array_type.ArrayT) and i not in closure_pos:
         # TODO: Handle axis.
         unpacked_args.append(slice_arg(attr))
       else:
         unpacked_args.append(attr)
+      i += 1
 
     # If tiling, pass in the tile params array.
     if config.opt_tile:
@@ -119,23 +131,20 @@ def gen_par_work_function(adverb_class, fn, args_t, arg_types, closure_pos):
                        body = body,
                        return_type = core_types.NoneType,
                        type_env = type_env)
-
     lowered = lowering.lower(parallel_wrapper)
     _par_wrapper_cache[key] = lowered
 
     return lowered, num_tiles
 
 import closure_type
-import llvm_types
-from args import ActualArgs
 from common import list_to_ctypes_array
-from llvm.ee import GenericValue
 
 def prepare_adverb_args(python_fn, args, kwargs):
   """
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
   values and their types
   """
+
   closure_t = type_conv.typeof(python_fn)
   assert isinstance(closure_t, closure_type.ClosureT)
   if isinstance(closure_t.fn, str):
@@ -150,6 +159,82 @@ def prepare_adverb_args(python_fn, args, kwargs):
   adverb_arg_types = adverb_arg_values.transform(type_conv.typeof)
   return untyped, closure_t, nonlocals, adverb_arg_values, adverb_arg_types
 
+def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
+  # Create args struct type
+  fields = []
+  i = 0
+  for arg_type in nonlocal_types:
+    fields.append((("arg%d" % i), arg_type))
+    i += 1
+  for arg_type in arg_types:
+    fields.append((("arg%d" % i), arg_type))
+    i += 1
+  fields.append(("output", return_t))
+
+  class ParArgsType(core_types.StructT):
+    _fields_ = fields
+
+    def __hash__(self):
+      return hash(tuple(fields))
+    def __eq__(self, other):
+      return isinstance(other, ParArgsType)
+
+  args_t = ParArgsType()
+  c_args = args_t.ctypes_repr()
+  i = 0
+  for arg in nonlocals:
+    obj = type_conv.from_python(arg)
+    field_name = "arg%d" % i
+    t = type_conv.typeof(arg)
+    if isinstance(t, core_types.StructT):
+      setattr(c_args, field_name, ctypes.pointer(obj))
+    else:
+      setattr(c_args, field_name, obj)
+    i += 1
+  for arg in args:
+    obj = type_conv.from_python(arg)
+    field_name = "arg%d" % i
+    t = type_conv.typeof(arg)
+    if isinstance(t, core_types.StructT):
+      setattr(c_args, field_name, ctypes.pointer(obj))
+    else:
+      setattr(c_args, field_name, obj)
+    i += 1
+
+  return args_t, c_args
+
+def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
+  output_shape = adverb_shape + single_iter_rslt.shape
+  output = np.zeros(output_shape, dtype=array_type.elt_type(return_t).dtype)
+  output_obj = type_conv.from_python(output)
+  gv_output = ctypes.pointer(output_obj)
+  setattr(c_args, "output", gv_output)
+  return output
+
+def exec_in_parallel(fn, args_repr, c_args, num_iters, num_tiles):
+  (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(fn)
+
+  c_args_list = [c_args]
+  for _ in range(rt.dop - 1):
+    c_args_new = args_repr.ctypes_repr()
+    ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
+                   ctypes.sizeof(args_repr.ctypes_repr))
+    c_args_list.append(c_args_new)
+
+  c_args_array = list_to_ctypes_array(c_args_list, pointers=True)
+  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
+
+  if config.print_parallel_exec_time:
+    import time
+    start = time.time()
+
+  # For now, don't autotune the tile params.
+  rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+
+  if config.print_parallel_exec_time:
+    t = time.time() - start
+    print "Time to execute:", t
+
 def par_each(fn, *args, **kwds):
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis', 0)
@@ -157,8 +242,7 @@ def par_each(fn, *args, **kwds):
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
 
-  # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
-  map_result_type = type_inference.infer_Map(closure_t, arg_types)
+  return_t = type_inference.infer_Map(closure_t, arg_types)
 
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):
@@ -167,80 +251,30 @@ def par_each(fn, *args, **kwds):
       break
   num_iters = max_arg.shape[axis]
 
-  # Create args struct type
-  fields = []
-  for i, arg_type in enumerate(arg_types):
-    fields.append((("arg%d" % i), arg_type))
-  fields.append(("output", map_result_type))
+  nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
+  args_repr, c_args = get_par_args_repr(nonlocals, nonlocal_types, args,
+                                        arg_types, return_t)
 
-  class ParEachArgsType(core_types.StructT):
-    _fields_ = fields
+  # TODO: Use shape inference to determine output shape.
+  single_iter_rslt = run_function.run(fn, *[arg[0] for arg in args.positional])
+  output = allocate_output((num_iters,), single_iter_rslt, c_args, return_t)
 
-    def __hash__(self):
-      return hash(tuple(fields))
-    def __eq__(self, other):
-      return isinstance(other, ParEachArgsType)
-
-  args_t = ParEachArgsType()
-  c_args = args_t.ctypes_repr()
-  for i, arg in enumerate(args):
-    obj = type_conv.from_python(arg)
-    field_name = "arg%d" % i
-    t = type_conv.typeof(arg)
-    if isinstance(t, core_types.StructT):
-      setattr(c_args, field_name, ctypes.pointer(obj))
-    else:
-      setattr(c_args, field_name, obj)
-
-  # TODO: Use shape inference to determine output size.
-  lowered = gen_lowered_wrapper(adverbs.Map, untyped, arg_types)
-  num_tiles = lowered.num_tiles
-  single_core = run_function.CompiledFn(*llvm_backend.compile_fn(lowered))
-  single_core_args = [arg[0:1] for arg in args.positional]
-  if config.opt_tile:
-    single_core_args.append(((1,) * num_tiles))
-  single_iter_rslt = single_core(*single_core_args)
-  output = np.repeat(single_iter_rslt, num_iters, axis=0)
-  output_obj = type_conv.from_python(output)
-  gv_output = ctypes.pointer(output_obj)
-  setattr(c_args, "output", gv_output)
-
-  wf, num_tiles = \
-      gen_par_work_function(adverbs.Map, lowered, args_t, arg_types, [])
-  (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
-
-  c_args_list = [c_args]
-  for i in range(rt.dop - 1):
-    c_args_new = args_t.ctypes_repr()
-    ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
-                   ctypes.sizeof(args_t.ctypes_repr))
-    c_args_list.append(c_args_new)
-
-  c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
-  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
-
-    # Execute on thread pool
-  if config.print_parallel_exec_time:
-    import time
-    start = time.time()
-  rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
-  if config.print_parallel_exec_time:
-    t = time.time() - start
-    print "Time to execute:", t
+  wf, num_tiles = gen_par_work_function(adverbs.Map, untyped,
+                                        nonlocals, nonlocal_types,
+                                        args_repr, arg_types, [])
+  exec_in_parallel(wf, args_repr, c_args, num_iters, num_tiles)
 
   return output
 
 def par_allpairs(fn, x, y, **kwds):
   # Don't handle outermost axis = None yet
   axis = kwds.get('axis', 0)
-  args = [x, y]
 
   untyped, closure_t, nonlocals, args, arg_types = \
-      prepare_adverb_args(fn, args, kwds)
+      prepare_adverb_args(fn, [x, y], kwds)
 
-  # assert not axis is None, "Can't handle axis = None in outermost adverbs yet"
   xtype, ytype = arg_types
-  ap_result_type = type_inference.infer_AllPairs(closure_t, xtype, ytype)
+  return_t = type_inference.infer_AllPairs(closure_t, xtype, ytype)
 
   # For now, only split up the larger of the 2 args amongst the threads,
   # passing the other through in toto.
@@ -250,75 +284,24 @@ def par_allpairs(fn, x, y, **kwds):
 #  else:
 #    num_iters = len(args.positional[1])
 #    closure_pos = [0]
+
   # Actually, for now, just split the first one.  Otherwise we'd have to carve
   # the output along axis = 1 and I don't feel like figuring that out.
   num_iters = len(args.positional[0])
   closure_pos = [1]
 
-  # Create args struct type
-  fields = []
-  for i, arg_type in enumerate(arg_types):
-    fields.append((("arg%d" % i), arg_type))
-  fields.append(("output", ap_result_type))
+  nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
+  args_repr, c_args = get_par_args_repr(nonlocals, nonlocal_types, args,
+                                        arg_types, return_t)
 
-  class ParEachArgsType(core_types.StructT):
-    _fields_ = fields
+  # TODO: Use shape inference to determine output shape.
+  single_iter_rslt = run_function.run(fn, x[0], y[0])
+  output = allocate_output((len(x), len(y)), single_iter_rslt, c_args, return_t)
 
-    def __hash__(self):
-      return hash(tuple(fields))
-    def __eq__(self, other):
-      return isinstance(other, ParEachArgsType)
-
-  args_t = ParEachArgsType()
-  c_args = args_t.ctypes_repr()
-  for i, arg in enumerate(args):
-    obj = type_conv.from_python(arg)
-    field_name = "arg%d" % i
-    t = type_conv.typeof(arg)
-    if isinstance(t, core_types.StructT):
-      setattr(c_args, field_name, ctypes.pointer(obj))
-    else:
-      setattr(c_args, field_name, obj)
-
-  # TODO: Use shape inference to determine output size.
-  lowered = gen_lowered_wrapper(adverbs.AllPairs, untyped, arg_types)
-  num_tiles = lowered.num_tiles
-  single_core = run_function.CompiledFn(*llvm_backend.compile_fn(lowered))
-  if closure_pos[0] == 0:
-    single_core_args = [args.positional[0], args.positional[1][0:1]]
-  else:
-    single_core_args = [args.positional[0][0:1], args.positional[1]]
-  if config.opt_tile:
-    single_core_args.append((1,) * num_tiles)
-  single_iter_rslt = single_core(*single_core_args)
-  # TODO: use np.shape instead of repeat.
-  output = np.repeat(single_iter_rslt, num_iters, axis=0)
-  output_obj = type_conv.from_python(output)
-  gv_output = ctypes.pointer(output_obj)
-  setattr(c_args, "output", gv_output)
-
-  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, lowered,
-                                        args_t, arg_types, closure_pos)
-  (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(wf)
-
-  c_args_list = [c_args]
-  for i in range(rt.dop - 1):
-    c_args_new = args_t.ctypes_repr()
-    ctypes.memmove(ctypes.byref(c_args_new), ctypes.byref(c_args),
-                   ctypes.sizeof(args_t.ctypes_repr))
-    c_args_list.append(c_args_new)
-
-  c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
-  wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
-
-  # Execute on thread pool
-  if config.print_parallel_exec_time:
-    import time
-    start = time.time()
-  rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
-  if config.print_parallel_exec_time:
-    t = time.time() - start
-    print "Time to execute:", t
+  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped,
+                                        nonlocals, nonlocal_types,
+                                        args_repr, arg_types, closure_pos)
+  exec_in_parallel(wf, args_repr, c_args, num_iters, num_tiles)
 
   return output
 

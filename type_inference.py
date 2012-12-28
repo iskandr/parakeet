@@ -6,16 +6,15 @@ from common import dispatch
 import type_conv
 
 
-from core_types import Type, IntT,  ScalarT 
+from core_types import Type, IntT,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
-from core_types import combine_type_list, StructT 
+from core_types import combine_type_list, StructT
 
 import array_type
 from array_type import ArrayT
 import closure_type
 import tuple_type
-from tuple_type import TupleT 
-
+from tuple_type import TupleT
 
 import adverbs
 import adverb_helpers
@@ -27,9 +26,6 @@ import syntax_helpers
 from syntax_helpers import get_type, get_types, unwrap_constant
 import syntax as untyped_ast
 import syntax as typed_ast
-
-
-
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -55,11 +51,11 @@ class VarMap:
 
 def unpack_closure(closure):
   """
-  Given an object which could be either a function,
-  a function's name, a closure, or a closure type:
-  Return the underlying untyped funciton and the
-  closure arguments
+  Given an object which could be either a function, a function's name, a
+  closure, or a closure type:
+  Return the underlying untyped function and the closure arguments
   """
+
   if closure.__class__ is closure_type.ClosureT:
     fn, closure_args = closure.fn, closure.arg_types
 
@@ -224,7 +220,7 @@ def annotate_expr(expr, tenv, var_map):
     return prim_to_closure(expr)
 
   def expr_Fn():
-    
+
     t = closure_type.make_closure_type(expr.name, ())
     return typed_ast.Closure(expr.name, [], type = t)
 
@@ -398,6 +394,7 @@ def annotate_stmt(stmt, tenv, var_map ):
     Don't actually rewrite the phi node, just add any necessary types to the
     type environment
     """
+
     new_val = annotate_expr(val, tenv, var_map)
     new_type = new_val.type
     old_type = tenv.get(result_var, Unknown)
@@ -420,6 +417,7 @@ def annotate_stmt(stmt, tenv, var_map ):
     the result variable, recording its new type, and returning the new name
     paired with the annotated branch values
     """
+
     new_left = annotate_expr(left_val, tenv, var_map)
     new_right = annotate_expr(right_val, tenv, var_map)
     old_type = tenv.get(result_var, Unknown)
@@ -436,26 +434,25 @@ def annotate_stmt(stmt, tenv, var_map ):
     return new_nodes
 
   def stmt_Assign():
-
     rhs = annotate_expr(stmt.rhs, tenv, var_map)
 
     def annotate_lhs(lhs, rhs_type):
-      
-      lhs_class = lhs.__class__ 
+
+      lhs_class = lhs.__class__
       if lhs_class is untyped_ast.Tuple:
-        if rhs_type.__class__ is TupleT: 
-          
+        if rhs_type.__class__ is TupleT:
+
           assert len(lhs.elts) == len(rhs_type.elt_types)
           new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in
-                      zip(lhs.elts, rhs_type.elt_types)]          
-        else:   
+                      zip(lhs.elts, rhs_type.elt_types)]
+        else:
           assert rhs_type.__class__ is ArrayT, \
               "Unexpected right hand side type %s on %s" % (rhs_type, rhs)
           elt_type = array_type.lower_rank(rhs_type, 1)
           new_elts = [annotate_lhs(elt, elt_type) for elt in lhs.elts]
-        tuple_t = tuple_type.make_tuple_type(get_types(new_elts))    
+        tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
         return typed_ast.Tuple(new_elts, type = tuple_t)
-      
+
       elif lhs_class is untyped_ast.Index:
         new_arr = annotate_expr(lhs.value, tenv, var_map)
         new_idx = annotate_expr(lhs.index, tenv, var_map)
@@ -598,6 +595,7 @@ def _specialize(fn, arg_types):
   pulls out untyped functions from closures, wraps argument lists in ActualArgs
   objects and performs memoization
   """
+
   if isinstance(fn, typed_ast.TypedFn):
     return fn
   typed_fundef = infer_types(fn, arg_types)
@@ -649,6 +647,7 @@ def infer_return_type(untyped, arg_types):
   Given a function definition and some input types, gives back the return type
   and implicitly generates a specialized version of the function.
   """
+
   typed = specialize(untyped, arg_types)
   return typed.return_type
 
