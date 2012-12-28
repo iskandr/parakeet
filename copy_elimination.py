@@ -37,8 +37,11 @@ class PreallocateAdverbOutputs(Transform):
     import shape_codegen 
     combined_args = closure_args + nested_args 
     inner_shape = shape_codegen.make_shape_expr(self, nested_abstract_shape, combined_args)
+    print "inner shape", inner_shape, inner_shape.type 
     niters = self.niters(args, axis)
-    return self.tuple([niters] + list(self.tuple_elts(inner_shape)))
+    res = self.concat_tuples(niters, inner_shape)
+    print "result shape", res, res.type 
+    return res 
     
     
   def transform_Map(self, expr):

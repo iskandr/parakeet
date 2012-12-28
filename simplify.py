@@ -53,9 +53,10 @@ class Simplify(Transform):
 
   def children(self, expr, allow_mutable = False):
     c = expr.__class__
+    
     if c is Const or c is Var:
       return ()
-    elif c is PrimCall or c is Closure or c is Call:
+    elif c is PrimCall or c is Closure:
       return expr.args
     elif c is ClosureElt:
       return (expr.closure,)
@@ -67,15 +68,31 @@ class Simplify(Transform):
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
-    elif c is Map:
-      return expr.args
-    elif c is AllPairs:
-      return expr.args
-    elif c is Scan or c is Reduce:
-      return ((expr.init,) if expr.init else ()) + tuple(expr.args)
-
+    elif c in (Map, AllPairs):
+      if expr.out is None: 
+        return expr.args 
+      elif allow_mutable: 
+        return tuple(expr.args) + (expr.out,)
+      else:
+        return None  
+    elif c in (Scan, Reduce):  
+      args = tuple(expr.args)
+      init = (expr.init,) if expr.init else ()
+      if expr.out is None: 
+        return init + args 
+      elif allow_mutable:
+        return init + args + (expr.out,)
+      else:
+        return None
+    elif c is Call:
+      # assume all Calls might modify their arguments 
+      if allow_mutable or all(self.immutable(arg) for arg in expr.args):
+        return expr.args 
+      else:
+        return None 
+      
     if allow_mutable or self.immutable_type(expr.type):
-      if c is Array :
+      if c is Array:
         return expr.elts
       elif c is ArrayView:
         return (expr.data, expr.shape, expr.strides, expr.offset,
@@ -89,11 +106,16 @@ class Simplify(Transform):
 
         
   def immutable(self, expr):
+    if expr.__class__ is Const or expr.__class__ is Tuple:
+      return True 
+    elif expr.type in self.mutable_types:
+      return False 
     child_nodes = self.children(expr, allow_mutable = False)
     if child_nodes is None:
-      return False
+      result =  False
     else:
-      return all(self.immutable(child) for child in child_nodes)
+      result = all(self.immutable(child) for child in child_nodes)
+    return result  
 
   def temp(self, expr, use_count = 1):
     """
@@ -309,7 +331,18 @@ class Simplify(Transform):
 
   def transform_lhs_Attribute(self, lhs):
     return lhs
-
+  
+  def transform_RunExpr(self, stmt):
+    """
+    Don't run an expression unless it possibly has a side effect
+    """
+    v = self.transform_expr(stmt.value)
+    if self.immutable(v):
+      print "Dropping", v 
+      return None 
+    else:
+      stmt.value = v 
+      return stmt 
   def transform_Assign(self, stmt):
     lhs = stmt.lhs
     rhs = self.transform_expr(stmt.rhs)
@@ -325,7 +358,7 @@ class Simplify(Transform):
       lhs = self.transform_lhs_Attribute(lhs)
     elif lhs_class is Var:
       if rhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
-        return RunExpr(rhs)  
+        return self.transform_stmt(RunExpr(rhs))    
       else: 
         self.bind_var(lhs.name, rhs)
         if rhs_class not in (Var, Const) and \

@@ -14,7 +14,7 @@ from syntax import TupleProj, Tuple, Alloc, Slice, While
 
 import syntax_helpers
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
-                           zero, zero_i64, const_int, const_bool 
+                           one_i64, zero, zero_i64, const_int, const_bool 
 
 from nested_blocks import NestedBlocks
  
@@ -309,9 +309,9 @@ class Codegen(object):
 
   def elt_type(self, x):
     if isinstance(x, Type):
-      if hasattr(x, 'elt_type'):
+      try:
         return x.elt_type
-      else:
+      except:
         return x
     elif self.is_array(x):
       return x.type.elt_type
@@ -345,7 +345,6 @@ class Codegen(object):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
     tuple_t = make_tuple_type(get_types(elts))
-    tuple_t.metadata = self.__class__.__name__
     tuple_expr = Tuple(elts, type = tuple_t)
     if name:
       return self.assign_temp(tuple_expr, name)
@@ -353,18 +352,26 @@ class Codegen(object):
       return tuple_expr
 
   def is_tuple(self, x):
-    return hasattr(x, 'type') and isinstance(x.type, TupleT)
+    try: 
+      return x.type.__class__ is TupleT
+    except:
+      return False 
 
   def concat_tuples(self, x, y):
-    assert self.is_tuple(x)
-    assert self.is_tuple(y)
+    if self.is_tuple(x):
+      x_elts = self.tuple_elts(x)
+    else:
+      x_elts = (x,)
+    if self.is_tuple(y):
+      y_elts = self.tuple_elts(y)
+    else:
+      y_elts = (y,)
+      
     elts = []
-    for i in xrange(len(x.type.elt_types)):
-      elts.append(self.tuple_proj(x, i))
-    for i in xrange(len(y.type.elt_types)):
-      elts.append(self.tuple_proj(y, i))
+    elts.extend(x_elts)
+    elts.extend(y_elts)
     return self.tuple(elts)
-
+  
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
     if isinstance(tup, Tuple):
@@ -415,10 +422,15 @@ class Codegen(object):
       return result 
     
   def prod(self, elts, name = None):
-    result = elts[0]
-    for e in elts[1:]:
-      result = self.mul(result, e, name = name)
-    return result
+    if self.is_tuple(elts):
+      elts = self.tuple_elts(elts)
+    if len(elts) == 0:
+      return one_i64 
+    else:
+      result = elts[0]
+      for e in elts[1:]:
+        result = self.mul(result, e, name = name)
+      return result
 
   def alloc_array(self, elt_t, dims, name = "temp_array"):
     """

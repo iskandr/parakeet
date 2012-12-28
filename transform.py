@@ -313,18 +313,36 @@ class Transform(Codegen):
       print
    
     self.fn = fn 
+    self.type_env = fn.type_env
+    
+    # push an extra block onto the stack just in case 
+    # one of the pre_apply methods want to put statements somewhere 
+    self.blocks.push()
     pre_fn = self.pre_apply(self.fn)
+    pre_block = self.blocks.pop()
 
     if pre_fn is not None:
       fn = pre_fn 
     
     self.fn = fn 
-    self.type_env = fn.type_env
-    fn.body = self.transform_block(fn.body)
+    self.type_env = fn.type_env 
+    
+    # pop the outermost block, which have been written to by
+    new_body = self.transform_block(fn.body)
+    if len(pre_block) > 0:
+      new_body = pre_block  + new_body 
+    
+    fn.body = new_body  
     fn.type_env = self.type_env
+    
+    self.blocks.push()
     new_fn = self.post_apply(fn)
+    post_block = self.blocks.pop()
     if new_fn is None:
       new_fn = fn
+      
+    if len(post_block) > 0:
+      new_fn.body = new_fn.body + post_block
 
     if config.print_functions_after_transforms:
       print

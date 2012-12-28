@@ -17,7 +17,7 @@ print_lowered_function = True
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = True
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -45,7 +45,7 @@ opt_fusion = True
 opt_licm = True
 opt_cleanup_after_transforms = True
 opt_verify = True
-opt_copy_elimination = False
+opt_copy_elimination = True
 
 ######################################
 #           LLVM OPTIONS             #

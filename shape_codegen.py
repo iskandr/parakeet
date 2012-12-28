@@ -62,16 +62,16 @@ class ShapeCodegen(Traversal):
     return syntax_helpers.const(v.value) 
     
   def visit_Shape(self, v):
-    return self.visit_tuple(v.dims)
+    return self.codegen.tuple([self.visit(d) for d in v.dims])
     
   def visit_Dim(self, v):
-    return self.visit(v.array)[v.dim]
+    return self.codegen.tuple_proj(self.visit(v.array), v.dim)
   
   def visit_UnknownScalar(self, v):
-    return self.codegen.tuple(())
+    assert False, "Can't generate shape expression for unknown scalar"
     
   def visit_Tuple(self, v):
-    return self.visit_tuple(v.elts)
+    return self.codegen.tuple(self.visit(e) for e in v.elts)
     
   def binop(self, op_name, v):
     x = self.visit(v.x)
@@ -88,9 +88,6 @@ class ShapeCodegen(Traversal):
   def visit_Mult(self, v):
     return self.binop('mult', v)
       
-  def visit(self, shape):
-
-    return Traversal.visit(self, shape)
     
   def visit_Div(self, v):
     return self.binop('div', v)
@@ -108,9 +105,9 @@ def make_shape_expr(codegen, symbolic_shape, input_exprs):
   (along with the input expressions that went into the function)
   generate a code expression for the shape of the result 
   """
+  if symbolic_shape == unknown_scalar: 
+    return codegen.tuple([])
+  print "sym shape", symbolic_shape 
   shape_codegen = ShapeCodegen(codegen, input_exprs)
-  output_dim_exprs = shape_codegen.visit(symbolic_shape)
-  return codegen.shape(output_dim_exprs)
-  
-    
+  return shape_codegen.visit(symbolic_shape)
   

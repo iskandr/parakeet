@@ -37,8 +37,9 @@ class RunExpr(Stmt):
   _members = ['value']
 
   def __str__(self):
-    return str(self.value)
-
+    assert self.value is not None 
+    return "RunExpr(%s)" % self.value 
+  
 class Return(Stmt):
   _members = ['value']
 
