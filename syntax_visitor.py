@@ -104,6 +104,7 @@ class SyntaxVisitor(object):
       self.visit_expr(v)
   
   def visit_expr(self, expr):
+
     c = expr.__class__ 
     if c is Var:
       return self.visit_Var(expr)

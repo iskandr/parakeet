@@ -7,6 +7,8 @@ from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
 
+from core_types import NoneT, ScalarT 
+
 import subst
 import transform
 from transform import Transform
@@ -128,6 +130,16 @@ class Simplify(Transform):
     else:
       return syntax.Var(name = name, type = original_expr.type)
 
+  def transform_Cast(self, expr):
+    v = self.transform_expr(expr.value)
+    if v.type == expr.type:
+      return v
+    elif v.__class__ is Const and isinstance(expr.type, ScalarT):
+      return Const(expr.type.dtype.type(v.value), type = expr.type)
+    else:
+      expr.value = v 
+      return expr 
+      
   def transform_Attribute(self, expr):
     v = self.transform_expr(expr.value)
     if v.__class__ is Var and v.name in self.bindings:
@@ -312,11 +324,14 @@ class Simplify(Transform):
     elif lhs_class is Attribute:
       lhs = self.transform_lhs_Attribute(lhs)
     elif lhs_class is Var:
-      self.bind_var(lhs.name, rhs)
-      if rhs_class not in (Var, Const) and \
-          self.immutable(rhs) and \
-          rhs not in self.available_expressions:
-        self.available_expressions[rhs] = lhs
+      if rhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
+        return RunExpr(rhs)  
+      else: 
+        self.bind_var(lhs.name, rhs)
+        if rhs_class not in (Var, Const) and \
+            self.immutable(rhs) and \
+            rhs not in self.available_expressions:
+          self.available_expressions[rhs] = lhs
     else:
       self.bind(lhs, rhs)
 

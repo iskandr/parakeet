@@ -1,4 +1,5 @@
 import core_types
+from core_types import NoneT 
 
 from collect_vars import collect_binding_names
 from syntax import Expr
@@ -9,9 +10,6 @@ class Verify(SyntaxVisitor):
     SyntaxVisitor.__init__(self)
     self.fn = fn
     self.bound = set(fn.arg_names)
-
-  def run(self):
-    self.visit_block(self.fn.body)
 
   def bind_var(self, name):
     assert name not in self.bound, \
@@ -65,11 +63,19 @@ class Verify(SyntaxVisitor):
           "Can't call primitive %s with argument %s of non-scalar type %s" % \
           (expr.fn, arg, arg.type)
 
+  def visit_expr(self, expr):
+    assert expr is not None 
+    SyntaxVisitor.visit_expr(self, expr)
+    
+  def visit_RunExpr(self, stmt):
+    self.visit_expr(stmt.value)
+    assert stmt.value.type and stmt.value.type.__class__ is NoneT  
+    
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type == self.fn.return_type, \
-        "Incorrect type for returned value %s, types=(%s,%s)" % \
-        (stmt.value, stmt.value.type, self.fn.return_type)
+        "Incorrect type for returned value %s, expected %s but got %s" % \
+        (stmt.value, self.fn.return_type, stmt.value.type)
 
   def visit_Assign(self, stmt):
     assert stmt.lhs.type is not None, \
@@ -85,8 +91,25 @@ class Verify(SyntaxVisitor):
         "Mismatch between LHS type %s and RHS %s in '%s'" % \
         (stmt.lhs.type, stmt.rhs.type, stmt)
 
+  def visit_stmt(self, stmt):
+    assert stmt is not None 
+    SyntaxVisitor.visit_stmt(self, stmt)
+    
   def visit_TypedFn(self, fn):
     return verify(fn)
 
 def verify(fn):
-  Verify(fn).run()
+  n_input_types = len(fn.input_types)
+  n_arg_names = len(fn.arg_names)
+  assert n_input_types == n_arg_names, \
+     "Function %s has %d input types and %d input names" % \
+     (fn.name, n_input_types, n_arg_names)
+  for arg_name, input_t in zip(fn.arg_names, fn.input_types):
+    assert arg_name in fn.type_env, \
+        "Input %s has no entry in %s's type environment" % \
+        (arg_name, fn.name)
+    t = fn.type_env[arg_name]
+    assert input_t == t, \
+        "Mismatch between %s's input type %s and the arg %s's type %s" % \
+        (fn.name, input_t, arg_name, t)
+  Verify(fn).visit_block(fn.body)

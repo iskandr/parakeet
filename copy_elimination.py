@@ -48,12 +48,6 @@ class PreallocateAdverbOutputs(Transform):
     expr.fn  =  ExplicitOutputStorage().apply(expr.fn)
     return expr 
   
-  def post_apply(self, fn):
-    print 
-    print "DONE WITH PreallocateAdverbOutputs"
-    print fn 
-    print 
-    
 
 class ExplicitOutputStorage(PreallocateAdverbOutputs):
   """

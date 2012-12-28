@@ -63,9 +63,13 @@ class Find_LICM_Candidates(SyntaxVisitor):
       self.block_contains_return()
     volatile_in_scope = self.volatile_vars.pop()
     self.mark_safe_assignments(stmt.body, volatile_in_scope)
+  
+  def visit_Var(self, expr):
+    self.volatile_vars.add(expr.name)
     
   def visit_If(self, stmt):
     self.volatile_vars.push(stmt.merge.keys())
+    self.visit_expr(stmt.cond)
     SyntaxVisitor.visit_If(self, stmt)
     if self.does_block_return(stmt.true) or self.does_block_return(stmt.false):
       self.mark_curr_block_returns()
