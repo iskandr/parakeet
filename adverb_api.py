@@ -51,9 +51,9 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
       fn_args_obj.add_positional(arg.name)
     for arg in untyped_args:
       fn_args_obj.add_positional(arg.name)
-    nested_closure = syntax.Closure(nested_wrapper.name, [])
+    nested_closure = syntax.Closure(nested_wrapper, [])
     call = syntax.Call(nested_closure,
-                       [syntax.Closure(fn.name, nonlocal_args)] + untyped_args)
+                       [syntax.Closure(fn, nonlocal_args)] + untyped_args)
     body = [syntax.Return(call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_wrapper")
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
@@ -112,7 +112,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
 
     # Make a typed closure that calls the payload function with the arg slices.
     closure_t = closure_type.make_closure_type(fn, [])
-    nested_closure = syntax.Closure(fn.name, [], type=closure_t)
+    nested_closure = syntax.Closure(fn, [], type=closure_t)
     return_t = fn.return_type
     call = syntax.Call(nested_closure, unpacked_args, type=return_t)
     output = slice_arg(syntax.Attribute(args_var, "output", type=return_t))

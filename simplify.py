@@ -338,7 +338,6 @@ class Simplify(Transform):
     """
     v = self.transform_expr(stmt.value)
     if self.immutable(v):
-      print "Dropping", v 
       return None 
     else:
       stmt.value = v 

@@ -11,11 +11,11 @@ class Traversal(object):
   
   def visit_generic(self, x):
     assert False, \
-      "Unsupported %s" % (x,)
+      "Unsupported %s : %s" % (x, x.__class__)
   
   def visit(self, x):
     method_name = 'visit_' + x.__class__.__name__
-
+    print method_name 
     if hasattr(self, method_name):
       method = getattr(self, method_name)
       return method(x)

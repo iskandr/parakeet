@@ -405,7 +405,7 @@ class AST_Translator(ast.NodeVisitor):
 
     if len(fundef.parakeet_nonlocals) > 0:
       closure_args = map(self.get_name, fundef.parakeet_nonlocals)
-      closure = syntax.Closure(fundef.name, closure_args)
+      closure = syntax.Closure(fundef, closure_args)
     else:
       closure = fundef
     return syntax.Assign(local_name, closure)
