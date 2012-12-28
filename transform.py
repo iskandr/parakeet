@@ -8,7 +8,7 @@ from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
 from syntax import Call, TypedFn
 
-from adverbs import Map 
+from adverbs import Map
 
 from args import ActualArgs
 from codegen import Codegen
@@ -120,9 +120,7 @@ class Transform(Codegen):
     return expr
 
   def transform_TypedFn(self, expr):
-    """
-    By default, don't do recursive transformation of referenced functions
-    """
+    """By default, don't do recursive transformation of referenced functions"""
 
     return expr
 
@@ -144,8 +142,8 @@ class Transform(Codegen):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)
     expr.out = self.transform_if_expr(expr.out)
-    return expr 
-  
+    return expr
+
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
@@ -313,36 +311,36 @@ class Transform(Codegen):
       print "--- before ---"
       print repr(fn)
       print
-   
-    self.fn = fn 
+
+    self.fn = fn
     self.type_env = fn.type_env
-    
-    # push an extra block onto the stack just in case 
-    # one of the pre_apply methods want to put statements somewhere 
+
+    # push an extra block onto the stack just in case
+    # one of the pre_apply methods want to put statements somewhere
     self.blocks.push()
     pre_fn = self.pre_apply(self.fn)
     pre_block = self.blocks.pop()
-    
+
     if pre_fn is not None:
-      fn = pre_fn 
-    
-    self.fn = fn 
-    self.type_env = fn.type_env 
-    
+      fn = pre_fn
+
+    self.fn = fn
+    self.type_env = fn.type_env
+
     # pop the outermost block, which have been written to by
     new_body = self.transform_block(fn.body)
     if len(pre_block) > 0:
-      new_body = pre_block  + new_body 
-    
-    fn.body = new_body  
+      new_body = pre_block  + new_body
+
+    fn.body = new_body
     fn.type_env = self.type_env
-    
+
     self.blocks.push()
     new_fn = self.post_apply(fn)
     post_block = self.blocks.pop()
     if new_fn is None:
       new_fn = fn
-      
+
     if len(post_block) > 0:
       new_fn.body = new_fn.body + post_block
 
@@ -360,7 +358,7 @@ class Transform(Codegen):
         verify.verify(new_fn)
       except:
         print "ERROR after running %s on %s" % (self.__class__.__name__, new_fn)
-        raise 
+        raise
 
     if config.print_transform_timings:
       end_time = time.time()

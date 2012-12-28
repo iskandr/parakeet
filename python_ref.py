@@ -1,4 +1,6 @@
 import abc
+import numpy
+
 class Ref(object):
   __meta__ = abc.ABCMeta
 
@@ -40,4 +42,11 @@ class ClosureCellRef(Ref):
     return str(self)
 
   def __eq__(self, other):
-    return isinstance(other, ClosureCellRef) and self.cell == other.cell
+    if isinstance(other, ClosureCellRef):
+      # TODO: not sure this is what we want to do, but...
+      if isinstance(self.cell.cell_contents, numpy.ndarray) and \
+         isinstance(other.cell.cell_contents, numpy.ndarray):
+        return (self.cell.cell_contents == other.cell.cell_contents).all()
+      else:
+        return self.cell == other.cell
+    return False

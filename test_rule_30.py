@@ -37,7 +37,7 @@ def test_rule30():
     output = np.vstack((output,cur))
 
   if plot:
-    pylab.matshow(output,fignum=100,cmap=pylab.cm.gray)
+    pylab.matshow(output,cmap=pylab.cm.gray)
     pylab.show()
 
 if __name__ == '__main__':

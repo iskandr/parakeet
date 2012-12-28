@@ -2,22 +2,22 @@ import names
 import prims
 
 import array_type
-from array_type import ArrayT, SliceT  
+from array_type import ArrayT, SliceT
 import core_types
-from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT 
+from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT
 from closure_type import ClosureT, make_closure_type
 from tuple_type import TupleT, make_tuple_type
 
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
-from syntax import TupleProj, Tuple, Alloc, Slice, While 
+from syntax import TupleProj, Tuple, Alloc, Slice, While
 
 import syntax_helpers
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
-                           one_i64, zero, zero_i64, const_int, const_bool 
+                           one_i64, zero, zero_i64, const_int, const_bool
 
 from nested_blocks import NestedBlocks
- 
+
 import shape_codegen
 import shape_inference
 
@@ -25,10 +25,10 @@ class Codegen(object):
   def __init__(self):
     self.type_env = {}
     self.blocks = NestedBlocks()
-    
-    # cut down the number of created nodes by 
-    # remembering which tuple variables we've created 
-    # and looking up their elements directly 
+
+    # cut down the number of created nodes by
+    # remembering which tuple variables we've created
+    # and looking up their elements directly
     self.tuple_elt_cache = {}
 
   def fresh_var(self, t, prefix = "temp"):
@@ -58,28 +58,28 @@ class Codegen(object):
         return names.original(expr.value.name) + "_" + expr.name
       else:
         return expr.name
-    elif c is Index:  
+    elif c is Index:
       idx_t = expr.index.type
       if isinstance(idx_t, SliceT) or \
          (isinstance(idx_t, TupleT) and \
           any(isinstance(elt_t, SliceT) for elt_t in idx_t.elt_types)):
         return "slice"
       else:
-        return "elt" 
+        return "elt"
     else:
       return "temp"
 
   def is_simple(self, expr):
-    c = expr.__class__ 
+    c = expr.__class__
     return c is Var or c is Const or \
-        (c is Tuple and len(expr.elts) == 0) or \
-        (c is Struct and len(expr.args) == 0) or \
-        (c is Closure and len(expr.args) == 0)
+           (c is Tuple and len(expr.elts) == 0) or \
+           (c is Struct and len(expr.args) == 0) or \
+           (c is Closure and len(expr.args) == 0)
 
   def assign_temp(self, expr, name = None):
     if self.is_simple(expr):
       return expr
-    
+
     if name is None:
       name = self.temp_name(expr)
     var = self.fresh_var(expr.type, name)
@@ -101,9 +101,6 @@ class Codegen(object):
   def zero_i64(self, name = "counter"):
     return self.zero(t = Int64, name = name)
 
-
-
-
   def cast(self, expr, t):
     assert isinstance(t, ScalarT), \
         "Can't cast %s to non-scalar type %s" % (expr, t)
@@ -113,10 +110,9 @@ class Codegen(object):
       return self.assign_temp(Cast(expr, type = t), "cast_%s" % t)
 
   def index(self, arr, idx, temp = True, name = None):
-    """
-    Index into array or tuple differently depending on the type
-    """
-    temp = temp or name is not None 
+    """Index into array or tuple differently depending on the type"""
+
+    temp = temp or name is not None
     arr_t = arr.type
 
     if isinstance(arr_t, ScalarT):
@@ -200,21 +196,18 @@ class Codegen(object):
       return prim_call
 
   def pick_first(self, x, y):
-    """
-    Return x but first cast it to the common type of both args
-    """
+    """Return x but first cast it to the common type of both args"""
+
     return self.cast(x, x.type.combine(y.type))
 
   def pick_second(self, x, y):
-    """
-    Return y but first cast it to the common type of both args
-    """
+    """Return y but first cast it to the common type of both args"""
+
     return self.cast(y, x.type.combine(y.type))
 
   def pick_const(self, x, y, c):
-    """
-    Return a constant cast to the common type of both args
-    """
+    """Return a constant cast to the common type of both args"""
+
     return self.cast(syntax_helpers.wrap_if_constant(c), x.type.combine(y.type))
 
   def add(self, x, y, name = None):
@@ -345,8 +338,6 @@ class Codegen(object):
       elt_value = TupleProj(strides, dim, type = elt_t)
       return self.assign_temp(elt_value, "stride%d" % dim)
 
-  
-  
   def tuple(self, elts, name = "tuple"):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
@@ -358,15 +349,15 @@ class Codegen(object):
       for (i, elt) in enumerate(elts):
         if self.is_simple(elt):
           self.tuple_elt_cache[(result_var.name, i)] = elt
-      return result_var  
+      return result_var
     else:
       return tuple_expr
 
   def is_tuple(self, x):
-    try: 
+    try:
       return x.type.__class__ is TupleT
     except:
-      return False 
+      return False
 
   def concat_tuples(self, x, y, name = "concat_tuple"):
     if self.is_tuple(x):
@@ -377,12 +368,12 @@ class Codegen(object):
       y_elts = self.tuple_elts(y)
     else:
       y_elts = (y,)
-      
+
     elts = []
     elts.extend(x_elts)
     elts.extend(y_elts)
     return self.tuple(elts, name = name)
-  
+
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
     if isinstance(tup, Tuple):
@@ -415,30 +406,28 @@ class Codegen(object):
   def get_fn(self, maybe_clos):
     if maybe_clos.__class__ is Closure:
       return maybe_clos.fn
-    elif maybe_clos.type.__class__ is ClosureT: 
-      return maybe_clos.type.fn 
+    elif maybe_clos.type.__class__ is ClosureT:
+      return maybe_clos.type.fn
     else:
       return maybe_clos
 
-
-        
   def closure(self, maybe_fn, extra_args, name = None):
     fn = self.get_fn(maybe_fn)
     old_closure_elts = self.closure_elts(maybe_fn)
-    closure_elts = old_closure_elts + extra_args 
+    closure_elts = old_closure_elts + extra_args
     closure_elt_types = [elt.type for elt in closure_elts]
     closure_t = make_closure_type(fn, closure_elt_types)
     result = Closure(fn, closure_elts, type = closure_t)
     if name:
       return self.assign_temp(result, name)
     else:
-      return result 
-    
+      return result
+
   def prod(self, elts, name = None):
     if self.is_tuple(elts):
       elts = self.tuple_elts(elts)
     if len(elts) == 0:
-      return one_i64 
+      return one_i64
     else:
       result = elts[0]
       for e in elts[1:]:
@@ -496,8 +485,8 @@ class Codegen(object):
   # syntax zoo
   def _create_output_array(self, fn, args, extra_dims, name = "output"):
     """
-    Given a function and its argument, use shape inference
-    to figure out the result shape of the array and preallocate it
+    Given a function and its argument, use shape inference to figure out the
+    result shape of the array and preallocate it
     """
 
     try:
@@ -536,6 +525,7 @@ class Codegen(object):
     By default initialize the counter to zero, but optionally start at different
     values using the 'start_val' keyword.
     """
+
     start_val = syntax_helpers.wrap_if_constant(start_val)
     counter_type = start_val.type
 
