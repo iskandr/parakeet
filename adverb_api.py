@@ -29,7 +29,7 @@ from args import ActualArgs, FormalArgs
 
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
-def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocals):
+def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
   key = (adverb_class, fn.name, tuple(arg_types))
   if key in _lowered_wrapper_cache:
     return _lowered_wrapper_cache[key]
@@ -43,7 +43,8 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocals):
                                        data_names = fn.args.positional,
                                        varargs_name = None,
                                        axis = 0)
-    nonlocal_args = ActualArgs([syntax.Var(names.fresh("arg")) for _ in nonlocals])
+    nonlocal_args = ActualArgs([syntax.Var(names.fresh("arg"))
+                                for _ in nonlocal_types])
     untyped_args = [syntax.Var(names.fresh("arg")) for _ in arg_types]
     fn_args_obj = FormalArgs()
     for arg in nonlocal_args:
@@ -56,7 +57,6 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocals):
     body = [syntax.Return(call)]
     fn_name = names.fresh(adverb_class.node_type() + fn.name + "_wrapper")
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
-    nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
     all_types = arg_types.prepend_positional(nonlocal_types)
     typed = type_inference.specialize(untyped_wrapper, all_types)
     return lowering.lower(typed, tile=config.opt_tile)
@@ -68,7 +68,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
   if key in _par_wrapper_cache:
     return _par_wrapper_cache[key]
   else:
-    fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocals)
+    fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocal_types)
     num_tiles = fn.num_tiles
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
@@ -203,6 +203,14 @@ def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
 
   return args_t, c_args
 
+def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
+  output_shape = adverb_shape + single_iter_rslt.shape
+  output = np.zeros(output_shape, dtype=array_type.elt_type(return_t).dtype)
+  output_obj = type_conv.from_python(output)
+  gv_output = ctypes.pointer(output_obj)
+  setattr(c_args, "output", gv_output)
+  return output
+
 def exec_in_parallel(fn, args_repr, c_args, num_iters, num_tiles):
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(fn)
 
@@ -216,11 +224,13 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters, num_tiles):
   c_args_array = list_to_ctypes_array(c_args_list, pointers=True)
   wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
-    # Execute on thread pool
   if config.print_parallel_exec_time:
     import time
     start = time.time()
+
+  # For now, don't autotune the tile params.
   rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+
   if config.print_parallel_exec_time:
     t = time.time() - start
     print "Time to execute:", t
@@ -247,11 +257,7 @@ def par_each(fn, *args, **kwds):
 
   # TODO: Use shape inference to determine output shape.
   single_iter_rslt = run_function.run(fn, *[arg[0] for arg in args.positional])
-  output_shape = (num_iters,) + single_iter_rslt.shape
-  output = np.zeros(output_shape, dtype=array_type.elt_type(return_t).dtype)
-  output_obj = type_conv.from_python(output)
-  gv_output = ctypes.pointer(output_obj)
-  setattr(c_args, "output", gv_output)
+  output = allocate_output((num_iters,), single_iter_rslt, c_args, return_t)
 
   wf, num_tiles = gen_par_work_function(adverbs.Map, untyped,
                                         nonlocals, nonlocal_types,
@@ -290,11 +296,7 @@ def par_allpairs(fn, x, y, **kwds):
 
   # TODO: Use shape inference to determine output shape.
   single_iter_rslt = run_function.run(fn, x[0], y[0])
-  output_shape = (len(x), len(y)) + single_iter_rslt.shape
-  output = np.zeros(output_shape, dtype=array_type.elt_type(return_t).dtype)
-  output_obj = type_conv.from_python(output)
-  gv_output = ctypes.pointer(output_obj)
-  setattr(c_args, "output", gv_output)
+  output = allocate_output((len(x), len(y)), single_iter_rslt, c_args, return_t)
 
   wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped,
                                         nonlocals, nonlocal_types,
