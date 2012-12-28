@@ -77,10 +77,9 @@ class ActualArgs(object):
     return hash(full_tuple)
 
   def __iter__(self):
-    return combine_iters(
-      iter(self.positional),
-      self.keywords.itervalues(),
-      maybe_iter(self.starargs))
+    return combine_iters(iter(self.positional),
+                         self.keywords.itervalues(),
+                         maybe_iter(self.starargs))
 
   def prepend_positional(self, more_args):
     new_pos = tuple(more_args) + self.positional
@@ -127,7 +126,7 @@ class FormalArgs(object):
     n_new_nonlocals = len(localized_names)
     total_nonlocals = n_old_nonlocals + n_new_nonlocals
     self.n_args += n_new_nonlocals
-    self.nonlocals = self.nonlocals  + tuple(localized_names)
+    self.nonlocals = self.nonlocals + tuple(localized_names)
 
     for (k,p) in self.positions.items():
       if p > n_old_nonlocals:
@@ -165,6 +164,7 @@ class FormalArgs(object):
     """
     Like combine_with_actuals but returns a dictionary
     """
+
     env = {}
     values, extra = self.linearize_values(actuals, keyword_fn, tuple_elts_fn)
 

@@ -76,6 +76,7 @@ class AST_Translator(ast.NodeVisitor):
         y = tuple_arg_elt[0]
         z = tuple_arg_elt[1]
     """
+
     assignments = []
     for (i, sub_arg) in enumerate(elts):
       if isinstance(sub_arg, ast.Tuple):
@@ -136,6 +137,7 @@ class AST_Translator(ast.NodeVisitor):
     Phi nodes make explicit the possible sources of each variable's values and
     are needed when either two branches merge or when one was optionally taken.
     """
+
     merge = {}
     for (name, ssa_name) in left_scope.iteritems():
       left = syntax.Var(ssa_name)
@@ -184,6 +186,7 @@ class AST_Translator(ast.NodeVisitor):
         expr.upper
         expr.step
       """
+
       start = self.visit(expr.lower) if expr.lower else none
       stop = self.visit(expr.upper) if expr.upper else none
       step = self.visit(expr.step) if expr.step else none
@@ -212,12 +215,12 @@ class AST_Translator(ast.NodeVisitor):
   def visit_BoolOp(self, expr):
     values = map(self.visit, expr.values)
     prim = prims.find_ast_op(expr.op)
-    # Python, strangely, allows more than two arguments to 
+    # Python, strangely, allows more than two arguments to
     # Boolean operators
     result = values[0]
     for v in values[1:]:
-      result = syntax.PrimCall(prim, [result, v])  
-    return result 
+      result = syntax.PrimCall(prim, [result, v])
+    return result
 
   def visit_Compare(self, expr):
     lhs = self.visit(expr.left)
@@ -235,6 +238,7 @@ class AST_Translator(ast.NodeVisitor):
   def generic_visit(self, expr):
     raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr),
                                                  expr.__class__.__name__))
+
   def build_attribute_chain(self, expr):
     assert isinstance(expr, (ast.Name, ast.Attribute))
     if isinstance(expr, ast.Name):
@@ -395,6 +399,7 @@ class AST_Translator(ast.NodeVisitor):
     """
     Translate a nested function
     """
+
     fundef = translate_function_ast(node, outer_env = self.env)
     local_name = self.env.fresh_var(node.name)
 
@@ -436,9 +441,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 
   ssa_args.prepend_nonlocal_args(localized_outer_names + ref_names)
 
-  fundef = syntax.Fn(ssa_fn_name, ssa_args, body, refs, original_outer_names)
-
-  return fundef
+  return syntax.Fn(ssa_fn_name, ssa_args, body, refs, original_outer_names)
 
 def strip_leading_whitespace(source):
   lines = source.splitlines()

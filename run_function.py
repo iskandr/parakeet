@@ -88,7 +88,7 @@ def prepare_args(fn, args, kwargs):
     untyped = fn
   else:
     # translate from the Python AST to Parakeet's untyped format
-    untyped  = ast_conversion.translate_function_value(fn)
+    untyped = ast_conversion.translate_function_value(fn)
 
   nonlocals = list(untyped.python_nonlocals())
   arg_values = ActualArgs(nonlocals + list(args), kwargs)
@@ -108,11 +108,9 @@ def specialize_and_compile(fn, args, kwargs = {}):
 
   untyped, arg_values, arg_types = prepare_args(fn, args, kwargs)
 
-
   # propagate types through function representation and all
   # other functions it calls
   typed = type_inference.specialize(untyped, arg_types)
-
 
   lowered = lowering.lower(typed, tile=False)
 
