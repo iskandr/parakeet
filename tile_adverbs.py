@@ -64,6 +64,10 @@ class TileAdverbs(Transform):
     self.expansions = {}
     self.exp_stack = []
     self.type_env_stack = []
+
+    # For now, we'll assume that no closure variables have the same name.
+    self.closure_vars = {}
+
     self.num_tiles = 0
 
   def push_exp(self, adv, adv_args):
@@ -91,6 +95,19 @@ class TileAdverbs(Transform):
       return self.expansions[arg]
     else:
       return []
+
+  def get_closure_arg(self, closure_elt):
+    if isinstance(closure_elt, syntax.ClosureElt):
+      if isinstance(closure_elt.closure, syntax.Closure):
+        return closure_elt.closure.args[closure_elt.index]
+      elif isinstance(closure_elt.closure, syntax.Var):
+        return self.closure_vars[closure_elt.closure.name].args[closure_elt.index]
+      else:
+        assert False, "Unknown closure type for closure elt %s" % closure_elt
+    elif isinstance(closure_elt, syntax.Var):
+      return closure_elt.name
+    else:
+      assert False, "Unknown closure closure elt type %s" % closure_elt
 
   def get_num_expansions_at_depth(self, arg, depth):
     exps = self.get_expansions(arg)
@@ -136,12 +153,10 @@ class TileAdverbs(Transform):
               return_t = s.value.type
 
         # The innermost function always uses all the variables
-        arg_types = [array_type.increase_rank(type_env[arg], 1)
-                     for arg in arg_order]
         return syntax.TypedFn(name=names.fresh("inner_block"),
                               arg_names=v_names,
                               body=block,
-                              input_types=arg_types,
+                              input_types=[type_env[arg] for arg in arg_order],
                               return_type=return_t,
                               type_env=inner_type_env)
       else:
@@ -219,6 +234,9 @@ class TileAdverbs(Transform):
     return depths
 
   def transform_Assign(self, stmt):
+    if isinstance(stmt.rhs, syntax.Closure):
+      self.closure_vars[stmt.lhs.name] = stmt.rhs
+
     if isinstance(stmt.rhs, adverbs.Adverb):
       new_rhs = self.transform_expr(stmt.rhs)
       stmt.lhs.type = new_rhs.type
@@ -250,7 +268,6 @@ class TileAdverbs(Transform):
   def transform_Map(self, expr):
     self.num_tiles += 1
 
-    # TODO: Have to handle naming collisions in the expansions dict
     depth = len(self.adverbs_visited)
     closure = expr.fn
     closure_args = []
@@ -258,10 +275,12 @@ class TileAdverbs(Transform):
     if isinstance(fn, syntax.Closure):
       closure_args = closure.args
       fn = closure.fn
+
     self.push_exp(adverbs.Map, AdverbArgs(expr.fn, expr.args, expr.axis))
     for fn_arg, adverb_arg in zip(fn.arg_names[:len(closure_args)],
                                   closure_args):
-      new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
+      name = self.get_closure_arg(adverb_arg)
+      new_expansions = copy.deepcopy(self.get_expansions(name))
       self.expansions[fn_arg] = new_expansions
     for fn_arg, adverb_arg in zip(fn.arg_names[len(closure_args):], expr.args):
       new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
@@ -304,10 +323,10 @@ class TileAdverbs(Transform):
     #      true.
     #axis = [len(self.get_num_expansions_at_depth(arg.name, depth) + a
     #        for arg, a in zip(expr.args, expr.axis)]
-    for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
-      arg.type = t
     axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
            expr.axis
+    for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
+      arg.type = t
     self.pop_exp()
     return_t = new_fn.return_type
     if isinstance(closure, syntax.Closure):
@@ -335,7 +354,8 @@ class TileAdverbs(Transform):
                                              args=expr.args, axis=expr.axis))
     for fn_arg, adverb_arg in zip(fn.arg_names[:len(closure_args)],
                                   closure_args):
-      new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
+      name = self.get_closure_arg(adverb_arg)
+      new_expansions = copy.deepcopy(self.get_expansions(name))
       self.expansions[fn_arg] = new_expansions
     for fn_arg, adverb_arg in zip(fn.arg_names[len(closure_args):], expr.args):
       new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
@@ -383,9 +403,8 @@ class TileAdverbs(Transform):
     return adverbs.TiledReduce(new_combine, init, new_fn, expr.args, axis,
                                type=return_t)
 
-  def transform_Scan(self, expr):
-    self.adverb_args.append((expr.combine, expr.init, expr.emit))
-    return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
+  # TODO: Tiling scans should be very similar to tiling reductions.
+  #def transform_Scan(self, expr):
 
   def post_apply(self, fn):
     fn.has_tiles = self.num_tiles > 0

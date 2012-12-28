@@ -1,8 +1,7 @@
+from syntax import Fn
 
-from syntax import Fn 
-
-# python value of a user-defined function mapped to its 
-# untyped representation 
+# python value of a user-defined function mapped to its
+# untyped representation
 known_python_functions = {}
 
 def register_python_fn(fn_val, fundef):
@@ -13,5 +12,5 @@ def already_registered_python_fn(fn_val):
 
 def lookup_python_fn(fn_val):
   """Returns untyped function definition"""
-  return known_python_functions[fn_val]
 
+  return known_python_functions[fn_val]

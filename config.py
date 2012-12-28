@@ -11,7 +11,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = False
@@ -68,4 +68,4 @@ llvm_verify = True
 call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True

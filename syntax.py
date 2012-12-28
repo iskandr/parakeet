@@ -30,9 +30,7 @@ class Assign(Stmt):
       return "%s = %s" % (self.lhs, self.rhs)
 
 class RunExpr(Stmt):
-  """
-  Run an expression without binding any new variables
-  """
+  """Run an expression without binding any new variables"""
 
   _members = ['value']
 
@@ -195,9 +193,7 @@ class Array(Expr):
     return self.elts
 
 class Closure(Expr):
-  """
-  Create a closure which points to a global fn with a list of partial args
-  """
+  """Create a closure which points to a global fn with a list of partial args"""
 
   _members = ['fn', 'args']
 
@@ -295,9 +291,7 @@ class ConstArrayLike(Expr):
   _members = ['array', 'value']
 
 class ArrayView(Expr):
-  """
-  Create a new view on already allocated underlying data
-  """
+  """Create a new view on already allocated underlying data"""
 
   _members = ['data', 'shape', 'strides', 'offset', 'total_elts']
 
@@ -397,9 +391,7 @@ class Struct(Expr):
     return self.args
 
 class Alloc(Expr):
-  """
-  Allocates a block of data, returns a pointer
-  """
+  """Allocates a block of data, returns a pointer"""
 
   _members = ['elt_type', 'count']
 
