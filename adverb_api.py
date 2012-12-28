@@ -179,8 +179,8 @@ def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
     def __eq__(self, other):
       return isinstance(other, ParArgsType)
 
-  args_t = ParArgsType()
-  c_args = args_t.ctypes_repr()
+  args_repr = ParArgsType()
+  c_args = args_repr.ctypes_repr()
   i = 0
   for arg in nonlocals:
     obj = type_conv.from_python(arg)
@@ -201,7 +201,7 @@ def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
       setattr(c_args, field_name, obj)
     i += 1
 
-  return args_t, c_args
+  return args_repr, c_args
 
 def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
   output_shape = adverb_shape + single_iter_rslt.shape

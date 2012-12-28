@@ -383,9 +383,8 @@ class TileAdverbs(Transform):
     return adverbs.TiledReduce(new_combine, init, new_fn, expr.args, axis,
                                type=return_t)
 
-  def transform_Scan(self, expr):
-    self.adverb_args.append((expr.combine, expr.init, expr.emit))
-    return self.tile_adverb(expr, adverbs.Scan, adverbs.TiledScan)
+  # TODO: Tiling scans should be very similar to tiling reductions.
+  #def transform_Scan(self, expr):
 
   def post_apply(self, fn):
     fn.has_tiles = self.num_tiles > 0
