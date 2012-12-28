@@ -62,9 +62,10 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
   def pre_apply(self, fn):
     # create a fresh copy 
     fn = CloneFunction().apply(fn)
+    self.fn = fn 
+    self.type_env = fn.type_env 
     output_name = names.fresh("output")
     output_t = fn.return_type
-    
     
     if output_t.__class__ is ArrayT and output_t.rank > 0: 
       idx = self.tuple([slice_none] * output_t.rank)

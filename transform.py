@@ -320,7 +320,7 @@ class Transform(Codegen):
     self.blocks.push()
     pre_fn = self.pre_apply(self.fn)
     pre_block = self.blocks.pop()
-
+    
     if pre_fn is not None:
       fn = pre_fn 
     
