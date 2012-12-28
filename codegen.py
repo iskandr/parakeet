@@ -25,6 +25,11 @@ class Codegen(object):
   def __init__(self):
     self.type_env = {}
     self.blocks = NestedBlocks()
+    
+    # cut down the number of created nodes by 
+    # remembering which tuple variables we've created 
+    # and looking up their elements directly 
+    self.tuple_elt_cache = {}
 
   def fresh_var(self, t, prefix = "temp"):
     assert t is not None, "Type required for new variable %s" % prefix
@@ -341,13 +346,19 @@ class Codegen(object):
       return self.assign_temp(elt_value, "stride%d" % dim)
 
   
+  
   def tuple(self, elts, name = "tuple"):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
     tuple_t = make_tuple_type(get_types(elts))
     tuple_expr = Tuple(elts, type = tuple_t)
     if name:
-      return self.assign_temp(tuple_expr, name)
+      result_var = self.assign_temp(tuple_expr, name)
+      # cache the simple elements so we can look them up directly
+      for (i, elt) in enumerate(elts):
+        if self.is_simple(elt):
+          self.tuple_elt_cache[(result_var.name, i)] = elt
+      return result_var  
     else:
       return tuple_expr
 
@@ -357,7 +368,7 @@ class Codegen(object):
     except:
       return False 
 
-  def concat_tuples(self, x, y):
+  def concat_tuples(self, x, y, name = "concat_tuple"):
     if self.is_tuple(x):
       x_elts = self.tuple_elts(x)
     else:
@@ -370,7 +381,7 @@ class Codegen(object):
     elts = []
     elts.extend(x_elts)
     elts.extend(y_elts)
-    return self.tuple(elts)
+    return self.tuple(elts, name = name)
   
   def tuple_proj(self, tup, idx):
     assert isinstance(idx, (int, long))
@@ -378,6 +389,8 @@ class Codegen(object):
       return tup.elts[idx]
     elif isinstance(tup, tuple):
       return tup[idx]
+    elif tup.__class__ is Var and (tup.name, idx) in self.tuple_elt_cache:
+      return self.tuple_elt_cache[(tup.name, idx)]
     else:
       return TupleProj(tup, idx, type = tup.type.elt_types[idx])
 
