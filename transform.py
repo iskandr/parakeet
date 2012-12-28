@@ -305,7 +305,9 @@ class Transform(Codegen):
     if config.print_transform_timings:
       start_time = time.time()
 
-    if config.print_functions_before_transforms:
+    if config.print_functions_before_transforms == True or \
+        (isinstance(config.print_functions_before_transforms, list) and
+         self.__class__.__name__ in config.print_functions_before_transforms):
       print
       print "Running transform %s" % self.__class__.__name__
       print "--- before ---"
@@ -344,7 +346,9 @@ class Transform(Codegen):
     if len(post_block) > 0:
       new_fn.body = new_fn.body + post_block
 
-    if config.print_functions_after_transforms:
+    if config.print_functions_after_transforms == True or \
+        (isinstance(config.print_functions_after_transforms, list) and 
+         self.__class__.__name__ in config.print_functions_after_transforms):
       print
       print "Done with  %s" % self.__class__.__name__
       print "--- after ---"

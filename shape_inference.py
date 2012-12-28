@@ -4,6 +4,7 @@ import core_types
 import shape
 import shape_from_type
 import syntax
+from syntax import TypedFn 
 import tuple_type
 from syntax_visitor import SyntaxVisitor
 
@@ -138,6 +139,9 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     Slice(start, stop, step)
 
   def invoke(self, fn, args):
+    if fn.__class__ is Closure: 
+      args = tuple(fn.args) + tuple(args)
+      fn = fn.fn 
     return symbolic_call(fn, args)
 
   none = None
@@ -295,7 +299,13 @@ class ShapeInference(SyntaxVisitor):
     n = len(elts)
     res = increase_rank(elt, 0, const(n))
     return res
-
+  
+  def visit_Call(self, expr):
+    assert expr.fn.__class__ is TypedFn, \
+       "Calling %s not supported in shape inference"
+    return symbolic_call(expr.fn, self.visit_expr_list(expr.args)) 
+    
+    
   def visit_Closure(self, clos):
     if isinstance(clos.fn, str):
       assert False, "FN NAME " + clos.fn 

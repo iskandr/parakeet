@@ -1,3 +1,4 @@
+import config 
 from adverb_api import each, reduce, scan, allpairs, par_each
 from lib_simple import *
 from macro import macro
@@ -38,3 +39,10 @@ class jit:
 
   def __call__(self, *args, **kwargs):
     return run(self.f, args, kwargs)
+
+
+def clear_specializations():
+
+  import closure_type
+  for clos_t in closure_type._closure_type_cache.itervalues():
+    clos_t.specializations.clear()

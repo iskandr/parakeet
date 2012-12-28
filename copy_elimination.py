@@ -1,5 +1,6 @@
 import names 
 
+import syntax 
 from syntax import Assign, Index, Slice, Var, Return 
 from syntax_helpers import none, slice_none, zero_i64 
 
@@ -45,10 +46,14 @@ class PreallocateAdverbOutputs(MemoizedTransform):
     if expr.out is None: 
       # transform the function to take an additional output parameter 
       output_shape = self.map_shape(expr.fn, expr.args, expr.axis)
-      return_t = expr.fn.return_type 
+      return_t = self.return_type(expr.fn) 
       elt_t = return_t.elt_type if hasattr(return_t, 'elt_type') else return_t 
       expr.out = self.alloc_array(elt_t, output_shape) 
-      expr.fn  =  make_output_storage_explicit(expr.fn)
+      fn = make_output_storage_explicit(self.get_fn(expr.fn))
+      closure_args = self.closure_elts(expr.fn)
+      if len(closure_args) > 0:
+        fn = self.closure(fn, closure_args, name = "closure")
+      expr.fn  = fn 
     return expr 
   
 
@@ -94,5 +99,8 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     return self.return_none
   
 def make_output_storage_explicit(fn):
+  assert fn.__class__ is syntax.TypedFn, \
+      "Can't transform expression %s, expected a typed function" % fn
+  pipeline = [CloneFunction, ExplicitOutputStorage]
+  return apply_pipeline(fn, pipeline)
   
-  return apply_pipeline(fn, [CloneFunction, ExplicitOutputStorage])
