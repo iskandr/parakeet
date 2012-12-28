@@ -221,8 +221,8 @@ def annotate_expr(expr, tenv, var_map):
 
   def expr_Fn():
 
-    t = closure_type.make_closure_type(expr.name, ())
-    return typed_ast.Closure(expr.name, [], type = t)
+    t = closure_type.make_closure_type(expr, ())
+    return typed_ast.Closure(expr, [], type = t)
 
   def expr_Call():
     closure = annotate_child(expr.fn)

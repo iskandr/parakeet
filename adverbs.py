@@ -16,7 +16,7 @@ class Adverb(syntax.Expr):
       return str(self.args)
 
   def __repr__(self):
-    s = "%s(axis = %s, fn = %s, %s, type=%s)" % \
+    s = "%s(axis = %s, fn = %s, %s, type=%s" % \
           (self.node_type(), self.axis,
            self.fn_to_str(self.fn),
            self.args_to_str(),

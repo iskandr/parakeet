@@ -12,10 +12,10 @@ from adverbs import Map
 
 import shape_inference
 
-from transform import Transform  
+from transform import MemoizedTransform, apply_pipeline
 from clone_function import CloneFunction
 
-class PreallocateAdverbOutputs(Transform):
+class PreallocateAdverbOutputs(MemoizedTransform):
   def niters(self, args, axis):
     max_rank = -1
     biggest_arg = None 
@@ -38,16 +38,20 @@ class PreallocateAdverbOutputs(Transform):
     combined_args = closure_args + nested_args 
     inner_shape = shape_codegen.make_shape_expr(self, nested_abstract_shape, combined_args)
     niters = self.niters(args, axis)
-    return self.tuple([niters] + list(self.tuple_elts(inner_shape)))
+    return self.concat_tuples(niters, inner_shape)
     
     
   def transform_Map(self, expr):
-    # transform the function to take an additional output parameter 
-    output_shape = self.map_shape(expr.fn, expr.args, expr.axis)
-    expr.out = self.alloc_array(expr.fn.return_type, output_shape) 
-    expr.fn  =  ExplicitOutputStorage().apply(expr.fn)
+    if expr.out is None: 
+      # transform the function to take an additional output parameter 
+      output_shape = self.map_shape(expr.fn, expr.args, expr.axis)
+      return_t = expr.fn.return_type 
+      elt_t = return_t.elt_type if hasattr(return_t, 'elt_type') else return_t 
+      expr.out = self.alloc_array(elt_t, output_shape) 
+      expr.fn  =  make_output_storage_explicit(expr.fn)
     return expr 
   
+
 
 class ExplicitOutputStorage(PreallocateAdverbOutputs):
   """
@@ -57,11 +61,8 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
   by the parent class 'PreallocateAdverbOutputs'. 
   """
   def pre_apply(self, fn):
-    # create a fresh copy 
-    fn = CloneFunction().apply(fn)
     output_name = names.fresh("output")
     output_t = fn.return_type
-    
     
     if output_t.__class__ is ArrayT and output_t.rank > 0: 
       idx = self.tuple([slice_none] * output_t.rank)
@@ -76,8 +77,7 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     self.output_type = output_t
     output_var = Var(output_name, type=output_t)
     self.output_lhs_index = Index(output_var, idx, type = elt_t)
-    
-    print "[ExplicitOutputStorage] fn %s, input_types = %s, output_t =%s" % (fn.name, fn.input_types, output_t)
+
     fn.return_type = NoneType  
     fn.arg_names = tuple(fn.arg_names) + (output_name,)
     fn.input_types = tuple(fn.input_types) + (output_t,)
@@ -87,9 +87,12 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
 
   def transform_Return(self, stmt):
     if isinstance(stmt.value, Map):
-      stmt.rhs.out = self.output_lhs_index 
+      stmt.value.out = self.output_lhs_index 
     else:
-      rhs = self.transform_expr(stmt.value)
-      self.assign(self.output_lhs_index, rhs)
+      value = self.transform_expr(stmt.value)
+      self.assign(self.output_lhs_index, value)
     return self.return_none
   
+def make_output_storage_explicit(fn):
+  
+  return apply_pipeline(fn, [CloneFunction, ExplicitOutputStorage])

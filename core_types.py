@@ -270,6 +270,9 @@ class ScalarT(ConcreteT):
   def __str__(self):
     return str(self.name)
 
+  def index_type(self, _):
+    return self 
+  
   def combine(self, other):
     if isinstance(other, ScalarT):
       combined_dtype = np.promote_types(self.dtype, other.dtype)

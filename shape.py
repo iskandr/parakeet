@@ -64,7 +64,7 @@ class Const(Scalar):
     return isinstance(other, Const) and other.value == self.value
     
   def __str__(self):
-    return "Const(%d)" % self.value 
+    return "Const(%s)" % self.value 
 
   def combine(self, other):
     if self == other:

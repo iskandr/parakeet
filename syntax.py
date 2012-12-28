@@ -35,8 +35,9 @@ class RunExpr(Stmt):
   _members = ['value']
 
   def __str__(self):
-    return str(self.value)
-
+    assert self.value is not None 
+    return "RunExpr(%s)" % self.value 
+  
 class Return(Stmt):
   _members = ['value']
 
@@ -355,6 +356,9 @@ class Fn(Expr):
 class TupleProj(Expr):
   _members = ['tuple', 'index']
 
+  def __str__(self):
+    return "%s[%d]" % (self.tuple, self.index)
+  
   def children(self):
     return (self.tuple,)
 
