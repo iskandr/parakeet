@@ -15,7 +15,7 @@ class Traversal(object):
   
   def visit(self, x):
     method_name = 'visit_' + x.__class__.__name__
-    print method_name 
+    
     if hasattr(self, method_name):
       method = getattr(self, method_name)
       return method(x)

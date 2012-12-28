@@ -9,20 +9,47 @@ mat = np.array([vec, vec+100, vec+200, vec + 300])
 expected_sqrt_vec = np.sqrt(vec)
 expected_sqrt_mat = np.sqrt(mat)
 
-def test_map():
+def test_map_1d():
   sqrt_vec = interp.eval_map(np.sqrt, values=[vec], axis=0)
   assert testing_helpers.eq(sqrt_vec, expected_sqrt_vec), \
     "Expected %s from Map but got %s" % (expected_sqrt_vec, sqrt_vec)
-  
+
+def test_map_2d():
   sqrt_mat = interp.eval_map(np.sqrt, values=[mat], axis=0)
   assert testing_helpers.eq(sqrt_mat, expected_sqrt_mat), \
     "Expected %s from Map but got %s" % (expected_sqrt_mat, sqrt_mat)
 
-expected_sum_vec = np.sum(vec)
-expected_sum_mat = np.sum(mat, axis=0)
+def test_map_1d_output():
+  out = np.zeros_like(expected_sqrt_vec)
+  interp.eval_map(np.sqrt, values=[vec], axis=0, output=out)
+  assert testing_helpers.eq(out, expected_sqrt_vec), \
+    "Expected %s from Map with output param but got %s" % \
+    (expected_sqrt_vec, out)
 
-def test_reduce():
-  print "Testing vector reduction..."
+def test_map_2d_output():
+  out = np.zeros_like(expected_sqrt_mat)
+  interp.eval_map(np.sqrt, values=[mat], axis=0, output=out)
+  assert testing_helpers.eq(out, expected_sqrt_mat), \
+    "Expected %s from Map with output param but got %s" % \
+    (expected_sqrt_mat, out)
+
+def two_first_elts(x):
+    return [x[0], x[0]]
+
+def two_first_elts_with_output(x, out):
+    out[:] = two_first_elts(x)
+
+def test_complex_map_2d_output():
+  expected = np.array([two_first_elts(x) for x in mat])
+  out = np.zeros_like(expected)
+  interp.eval_map(two_first_elts_with_output, values=[mat], axis=0, output=out)
+  assert testing_helpers.eq(out, expected), \
+    "Expected %s from Map with output param but got %s" % \
+    (expected, out)
+
+expected_sum_vec = np.sum(vec)
+
+def test_reduce_1d():
   vec_sum = interp.eval_reduce(
     map_fn = interp.identity_function, 
     combine = np.add,  
@@ -33,7 +60,9 @@ def test_reduce():
   assert testing_helpers.eq(vec_sum, expected_sum_vec), \
     "Expected %s from Reduce but got %s" % (expected_sum_vec, vec_sum)
 
-  print "Testing matrix reduction..."
+expected_sum_mat = np.sum(mat, axis=0)
+
+def test_reduce_2d():
   mat_sum = interp.eval_reduce(
     map_fn = interp.identity_function, 
     combine = np.add,  
@@ -47,7 +76,6 @@ def test_reduce():
 bool_vec = np.array([True, False, True, False, True])
 
 def test_bool_sum():
-  print "Testing sum of boolean vector..."
   vec_sum = interp.eval_reduce(
     map_fn = interp.identity_function, 
     combine = (lambda x,y: x + y), 
@@ -60,11 +88,8 @@ def test_bool_sum():
 
 
 expected_cumsum_vec = np.cumsum(vec)
-expected_cumsum_mat = np.cumsum(mat, axis=0)
 
-
-def test_scan():
-  print "Testing vector scan..."
+def test_scan_1d():
   vec_prefixes = interp.eval_scan(
     map_fn = interp.identity_function,
     combine = np.add,
@@ -76,7 +101,9 @@ def test_scan():
   assert testing_helpers.eq(vec_prefixes, expected_cumsum_vec), \
     "Expected %s from Scan but got %s" % (expected_cumsum_vec, vec_prefixes)
 
-  print "Testing matrix scan..."
+expected_cumsum_mat = np.cumsum(mat, axis=0)
+
+def test_scan_2d():
   mat_prefixes = interp.eval_scan(
     map_fn = interp.identity_function,
     combine = np.add,
@@ -101,7 +128,5 @@ def test_allpairs():
     "Expected %s for AllPairs but got %s" % \
     (inner_products, np_inner_products)
     
-  
-
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

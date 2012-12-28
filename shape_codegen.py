@@ -107,7 +107,7 @@ def make_shape_expr(codegen, symbolic_shape, input_exprs):
   """
   if symbolic_shape == unknown_scalar: 
     return codegen.tuple([])
-  print "sym shape", symbolic_shape 
+
   shape_codegen = ShapeCodegen(codegen, input_exprs)
   return shape_codegen.visit(symbolic_shape)
   

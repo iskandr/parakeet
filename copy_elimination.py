@@ -16,9 +16,6 @@ from transform import MemoizedTransform, apply_pipeline
 from clone_function import CloneFunction
 
 class PreallocateAdverbOutputs(MemoizedTransform):
-  def pre_apply(self, fn):
-    print "[Prealloc] Running on %s" % fn 
-    
   def niters(self, args, axis):
     max_rank = -1
     biggest_arg = None 
@@ -54,9 +51,7 @@ class PreallocateAdverbOutputs(MemoizedTransform):
       expr.fn  =  make_output_storage_explicit(expr.fn)
     return expr 
   
-  def post_apply(self, fn):
-    print 
-    print "Prealloc done with", fn 
+
 
 class ExplicitOutputStorage(PreallocateAdverbOutputs):
   """
@@ -82,8 +77,7 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     self.output_type = output_t
     output_var = Var(output_name, type=output_t)
     self.output_lhs_index = Index(output_var, idx, type = elt_t)
-    
-    print "[ExplicitOutputStorage] fn %s, input_types = %s, output_t =%s" % (fn.name, fn.input_types, output_t)
+
     fn.return_type = NoneType  
     fn.arg_names = tuple(fn.arg_names) + (output_name,)
     fn.input_types = tuple(fn.input_types) + (output_t,)
