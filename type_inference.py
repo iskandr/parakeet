@@ -60,10 +60,10 @@ def unpack_closure(closure):
   Return the underlying untyped funciton and the
   closure arguments
   """
-  if isinstance(closure, closure_type.ClosureT):
+  if closure.__class__ is closure_type.ClosureT:
     fn, closure_args = closure.fn, closure.arg_types
 
-  elif isinstance(closure.type, closure_type.ClosureT):
+  elif closure.type.__class__ is closure_type.ClosureT:
     fn, arg_types = closure.type.fn, closure.type.arg_types
     closure_args = \
         [typed_ast.ClosureElt(closure, i, type = arg_t)
@@ -76,7 +76,7 @@ def unpack_closure(closure):
   return fn, closure_args
 
 def make_typed_closure(untyped_closure, typed_fn):
-  if isinstance(untyped_closure, untyped_ast.Fn):
+  if untyped_closure.__class__ is untyped_ast.Fn:
     return typed_fn
 
   assert isinstance(untyped_closure, untyped_ast.Expr) and \
@@ -224,7 +224,8 @@ def annotate_expr(expr, tenv, var_map):
     return prim_to_closure(expr)
 
   def expr_Fn():
-    t = closure_type.ClosureT(expr.name, [])
+    
+    t = closure_type.make_closure_type(expr.name, ())
     return typed_ast.Closure(expr.name, [], type = t)
 
   def expr_Call():
@@ -614,7 +615,7 @@ def _get_fundef(fn):
     return untyped_ast.Fn.registry[fn]
 
 def _get_closure_type(fn):
-  if isinstance(fn, closure_type.ClosureT):
+  if fn.__class__ is closure_type.ClosureT:
     return fn
   else:
     fundef = _get_fundef(fn)

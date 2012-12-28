@@ -339,10 +339,8 @@ class Fn(Expr):
     assert isinstance(self.body, list), \
         "Expected body of fn to be list of statements, got " + str(self.body)
 
-    self.specializations = {}
     import closure_type
-
-    self.type = closure_type.ClosureT(self.name, ())
+    self.type = closure_type.make_closure_type(self.name, ())
     self.registry[self.name] = self
 
   def python_nonlocals(self):

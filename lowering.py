@@ -15,6 +15,7 @@ from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 from mapify_allpairs import MapifyAllPairs
+from copy_elimination import PreallocateAdverbOutputs
 
 def build_pipeline(copy = False,
                    simplify = config.opt_cleanup_after_transforms, 
@@ -32,15 +33,21 @@ def build_pipeline(copy = False,
   if fusion:
     add(Fusion)
 
+  if config.opt_copy_elimination:
+    add(PreallocateAdverbOutputs)
+  
   add(LowerAdverbs)
+  
   if inline:
     add(Inliner)
 
   add(LowerIndexing)
   add(LowerStructs)
+  
 
   if licm:
     add(LoopInvariantCodeMotion)
+    
   return p
 
 _lowered_functions = {}

@@ -8,6 +8,8 @@ from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
 from syntax import Call, TypedFn
 
+from adverbs import Map 
+
 from args import ActualArgs
 from codegen import Codegen
 import time
@@ -138,6 +140,11 @@ class Transform(Codegen):
     expr.total_elts = self.transform_expr(expr.total_elts)
     return expr
 
+  def transform_Map(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.args = self.transform_expr_list(expr.args)
+    return expr 
+  
   def transform_expr(self, expr):
     """
     Dispatch on the node type and call the appropriate transform method
@@ -172,6 +179,8 @@ class Transform(Codegen):
       result = self.transform_TypedFn(expr)
     elif expr_class is Call:
       result = self.transform_Call(expr)
+    elif expr_class is Map:
+      result = self.transform_Map(expr)
     else:
       method = self.find_method(expr, "transform_")
       if method:

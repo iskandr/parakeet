@@ -287,11 +287,14 @@ class ShapeInference(SyntaxVisitor):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
-    if isinstance(arr, Tuple) and isinstance(idx, Const):
+    if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
-    else:
-      assert False, (expr, arr, idx)
+    elif isinstance(arr, Shape) and isinstance(idx, Scalar) and len(arr.dims) == 1:
+      return unknown_scalar
 
+    else:
+      assert False, "Indexing not yet support for %s with array shape %s and index shape %s" % (expr, arr, idx) 
+      
   def visit_TypedFn(self, fn):
     return fn
 
@@ -343,8 +346,7 @@ class ShapeInference(SyntaxVisitor):
     assert isinstance(fn, syntax.TypedFn)
     self._clear()
     arg_types = [fn.type_env[name] for name in fn.arg_names]
-    conv = shape_from_type.Converter()
-    input_values = conv.from_types(arg_types)
+    input_values = shape_from_type.Converter().from_types(arg_types)
     for n,v in zip(fn.arg_names, input_values):
       self.value_env[n] = v
     self.visit_block(fn.body)

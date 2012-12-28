@@ -95,6 +95,25 @@ def make_closure_type(fn, closure_arg_types = []):
     _closure_type_cache[key] = t
     return t
 
+def print_specializations():
+  import config 
+  if config.print_specialized_function_names:
+    print 
+    print "FUNCTION SPECIALIZATIONS"
+    count = 0 
+    for ((untyped,closure_types), clos_t) in sorted(_closure_type_cache.items()):
+      specializations = clos_t.specializations.items()
+      if len(specializations) > 0:
+        name = untyped.name if hasattr(untyped, 'name') else str(untyped)
+        print "Closure %s %s" % (name, closure_types)
+        for (arg_types, typed_fn) in sorted(specializations):
+          print "  -- %s ==> %s" % (arg_types, typed_fn.name)
+          count += 1 
+    print 
+    print "Total: %d function specializations" % count 
+        
+import atexit 
+atexit.register(print_specializations)
 def typeof_fn(f):
   import ast_conversion
   untyped_fn = ast_conversion.translate_function_value(f)

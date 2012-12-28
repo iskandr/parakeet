@@ -4,6 +4,10 @@ import tuple_type
 import closure_type 
 from shape import Shape, Tuple, Closure, Var, Slice 
 
+
+def from_types(types):
+  return Converter().from_types(types)
+
 class Converter(object):
   """
   Turn a list of input types into a list of abstract values, 
@@ -44,4 +48,3 @@ class Converter(object):
       v = self.from_type(t)
       values.append(v)
     return values
-

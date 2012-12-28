@@ -17,7 +17,7 @@ print_lowered_function = False
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = True 
+print_functions_after_transforms = False 
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -31,6 +31,9 @@ print_optimized_llvm = False
 # how long did each transform take?
 print_transform_timings = False
 
+# at exit, print the names of all specialized functions 
+print_specialized_function_names = False 
+
 # show execution time on parallel backend?
 print_parallel_exec_time = False
 
@@ -42,6 +45,7 @@ opt_fusion = True
 opt_licm = True
 opt_cleanup_after_transforms = True
 opt_verify = True
+opt_copy_elimination = False
 
 ######################################
 #           LLVM OPTIONS             #
