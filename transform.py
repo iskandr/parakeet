@@ -334,7 +334,11 @@ class Transform(Codegen):
       print
 
     if self.verify:
-      verify.verify(new_fn)
+      try:
+        verify.verify(new_fn)
+      except:
+        print "ERROR after running %s" % self.__class__.__name__
+        raise 
 
     if config.print_transform_timings:
       end_time = time.time()

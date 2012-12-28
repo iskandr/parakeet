@@ -31,9 +31,7 @@ class Compiler(object):
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
     llvm_output_type = llvm_ref_type(fundef.return_type)
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
-    print "INIT", fundef.name
-    print "  input types = %s" % (self.parakeet_fundef.input_types,) 
-    print "  llvm input types = %s" % (llvm_input_types,)
+  
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
     self.entry_block, self.entry_builder = self.new_block("entry")
     self._init_vars(self.parakeet_fundef, self.entry_builder)
@@ -59,17 +57,14 @@ class Compiler(object):
 
     for (name, t) in fundef.type_env.iteritems():
       if not name.startswith("$"):
-        
         llvm_t = llvm_ref_type(t)
         stack_val = builder.alloca(llvm_t, name)
-        print "  ", name, ":", t, "==>", stack_val, ":", llvm_t
         self.vars[name] = stack_val
 
     for llvm_arg, name in zip(self.llvm_fn.args, fundef.arg_names):
       self.initialized.add(name)
       llvm_arg.name = name
       if name in self.vars:
-        print "    STORING", llvm_arg , "in", self.vars[name]
         builder.store(llvm_arg, self.vars[name])
     
 
@@ -162,11 +157,11 @@ class Compiler(object):
       typed_fundef = expr.fn
 
     (target_fn, _, _) = compile_fn(typed_fundef)
-    print "target_fn", target_fn 
+
     arg_types = syntax_helpers.get_types(expr.args)
-    print "arg_types", arg_types 
+
     llvm_args = [self.compile_expr(arg, builder) for arg in expr.args]
-    print "llvm_args", llvm_args 
+
     assert len(arg_types) == len(llvm_args)
 
     return builder.call(target_fn, llvm_args, 'call_result')
@@ -346,7 +341,7 @@ class Compiler(object):
     return. The latter is needed to avoid creating empty basic blocks, which were
     causing some mysterious crashes inside LLVM.
     """
-    print stmt 
+
     method_name = "compile_" + stmt.node_type()
     return getattr(self, method_name)(stmt, builder)
   
@@ -364,10 +359,8 @@ class Compiler(object):
 
 compiled_functions = {}
 def compile_fn(fundef):
-  print "COMPILING", fundef
-  print "INPUT TYPES", fundef.input_types 
+
   if fundef.name in compiled_functions:
-    print "HIT"
     return compiled_functions[fundef.name]
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)

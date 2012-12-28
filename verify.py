@@ -74,8 +74,8 @@ class Verify(SyntaxVisitor):
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type == self.fn.return_type, \
-        "Incorrect type for returned value %s, expected %s but got %s" % \
-        (stmt.value, self.fn.return_type, stmt.value.type)
+        "Incorrect return type in %s: returned value %s, expected %s but got %s" % \
+        (self.fn.name, stmt.value, self.fn.return_type, stmt.value.type)
 
   def visit_Assign(self, stmt):
     assert stmt.lhs.type is not None, \

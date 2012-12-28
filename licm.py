@@ -119,6 +119,8 @@ class LoopInvariantCodeMotion(Transform):
     # so that input names end up at depth 0 
     self.mark_binding_depths(fn.arg_names, 1)
   
+
+  
   def mark_binding_depths(self, names, depth_offset = 0):
     curr_depth = len(self.blocks._blocks) - 1 + depth_offset
     for name in names:
