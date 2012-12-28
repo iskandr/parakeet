@@ -15,7 +15,12 @@ def minidx(C, x):
 def calc_centroid(X, a, i):
   cur_members = X[a == i]
   num_members = cur_members.shape[0]
-  return 0.0 if num_members == 0 else sum(cur_members) / num_members
+  if num_members == 0:
+    return 0.0 
+  else:
+    return sum(cur_members) / num_members
+
+
 
 def kmeans(X, assign, k):
   idxs = np.arange(k)
@@ -25,7 +30,8 @@ def kmeans(X, assign, k):
 
   par_C = parakeet.each(run_calc_centroid, idxs)
   C = map(run_calc_centroid, idxs)
-  #assert eq(C, par_C)
+  assert eq(C, par_C), \
+    "Expected %s but got %s (first iter)" % (C, par_C)
   converged = False
   while not converged:
     lastAssign = assign
@@ -35,9 +41,10 @@ def kmeans(X, assign, k):
     assign = map(run_minidx, X)
     converged = np.all(assign == lastAssign)
     #assert eq(par_assign, assign)
-    #par_C = parakeet.each(run_calc_centroid, idxs)
+    par_C = parakeet.each(run_calc_centroid, idxs)
     C = map(run_calc_centroid, idxs)
-    #assert eq(par_C, C)
+    assert eq(par_C, C), \
+      "Expected %s but got %s" % (C, par_C)
   return C, assign
 
 def test_kmeans():
