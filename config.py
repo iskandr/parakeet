@@ -17,7 +17,7 @@ print_lowered_function = False
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['PreallocateAdverbOutputs'] # False 
+print_functions_after_transforms = False #['PreallocateAdverbOutputs'] # False 
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -41,7 +41,7 @@ print_parallel_exec_time = False
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
 opt_inline = True
-opt_fusion = False
+opt_fusion = True
 opt_licm = True
 opt_cleanup_after_transforms = True 
 opt_verify = True

@@ -1,13 +1,20 @@
 import names
 from syntax import Var, Const,  Return, TypedFn
+import syntax_helpers 
+
 from adverbs import Adverb, Scan, Reduce, Map, AllPairs
+
 from transform import Transform, apply_pipeline
 from use_analysis import use_count
 import inline
 from dead_code_elim import DCE
 from simplify import Simplify
 
+
 def fuse(prev_fn, next_fn, const_args=[None]):
+  
+  if syntax_helpers.is_identity_fn(next_fn):
+    return prev_fn 
   """
   Expects the prev_fn's returned value to be one or more of the arguments to
   next_fn. Any element in 'const_args' which is None gets replaced by the
@@ -43,8 +50,16 @@ class Fusion(Transform):
     # map each variable to
     self.use_counts = use_count(fn)
 
+  _cache = {}
   def transform_TypedFn(self, fn):
-    return apply_pipeline(fn, [Simplify, DCE, Fusion(recursive=self.recursive)])
+    if fn.name in self._cache:
+      return self._cache[fn.name]
+    else: 
+      pipeline = [Simplify, DCE, Fusion(recursive=self.recursive)]
+      fused_fn = apply_pipeline(fn, pipeline) 
+      self._cache[fn.name] = fused_fn 
+      self._cache[fused_fn.name] = fused_fn 
+      return fused_fn  
 
   def transform_Assign(self, stmt):
     if self.recursive:

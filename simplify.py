@@ -149,7 +149,7 @@ class Simplify(Transform):
       return expr
     elif expr == original_expr:
       return original_expr
-    else:
+    else: 
       return syntax.Var(name = name, type = original_expr.type)
 
   def transform_Cast(self, expr):
@@ -198,8 +198,8 @@ class Simplify(Transform):
     import closure_type
     fn = self.transform_expr(expr.fn)
     args = self.transform_args(expr.args)
-    if isinstance(fn.type, closure_type.ClosureT) and \
-       isinstance(fn.type.fn, syntax.TypedFn):
+    if fn.type.__class__ is closure_type.ClosureT and \
+       fn.type.fn.__class__ is syntax.TypedFn:
       closure_elts = self.closure_elts(fn)
       combined_args = closure_elts + args
       return Call(fn.type.fn, combined_args, type = expr.type)

@@ -169,3 +169,10 @@ def is_scalar(expr):
 
 def all_scalars(exprs):
   return all(map(is_scalar, exprs))
+
+def is_identity_fn(fn):
+  return len(fn.arg_names) == 1 and len(fn.body) == 1 and \
+      fn.body[0].__class__ is syntax.Return and \
+      fn.body[0].value.__class__ is syntax.Var and \
+      fn.body[0].value.name == fn.arg_names[0] 
+

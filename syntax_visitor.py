@@ -104,7 +104,6 @@ class SyntaxVisitor(object):
       self.visit_expr(v)
   
   def visit_expr(self, expr):
-
     c = expr.__class__ 
     if c is Var:
       return self.visit_Var(expr)
@@ -114,28 +113,28 @@ class SyntaxVisitor(object):
       return self.visit_Tuple(expr)
     elif c is Index:
       return self.visit_Index(expr)
+    elif c is TupleProj:
+      return self.visit_TupleProj(expr)
     elif c is PrimCall:
       return self.visit_PrimCall(expr)
     elif c is Attribute:
       return self.visit_Attribute(expr)
     elif c is Struct:
       return self.visit_Struct(expr)
-    elif c is Alloc:
-      return self.visit_Alloc(expr)
-    elif c is TypedFn:
-      return self.visit_TypedFn(expr)
-    elif c is Call:
-      return self.visit_Call(expr)
-    elif c is ArrayView:
-      return self.visit_ArrayView(expr)
-    elif c is Cast:
-      return self.visit_Cast(expr)
     elif c is Slice:
       return self.visit_Slice(expr)
+    elif c is ArrayView:
+      return self.visit_ArrayView(expr)
+    elif c is Alloc:
+      return self.visit_Alloc(expr)
+    elif c is Cast:
+      return self.visit_Cast(expr)
+    elif c is Call:
+      return self.visit_Call(expr)
     elif c is Map:
       return self.visit_Map(expr)
-    elif c is TupleProj:
-      return self.visit_TupleProj(expr)
+    elif c is TypedFn:
+      return self.visit_TypedFn(expr)
     else:
       method_name = 'visit_' + expr.node_type()
       method = getattr(self, method_name, None)
