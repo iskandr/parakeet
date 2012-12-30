@@ -11,13 +11,13 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show the input function to each transformation?
-print_functions_before_transforms = False
+print_functions_before_transforms = False # ['PreallocateAdverbOutputs', 'LowerAdverbs', 'Simplify'] # False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False #['PreallocateAdverbOutputs'] # False 
+print_functions_after_transforms = False # ['PreallocateAdverbOutputs', 'LowerAdverbs', 'Simplify'] # False 
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -45,7 +45,7 @@ opt_fusion = True
 opt_licm = True
 opt_cleanup_after_transforms = True 
 opt_verify = True
-opt_copy_elimination = False 
+opt_copy_elimination = True 
 
 ######################################
 #           LLVM OPTIONS             #

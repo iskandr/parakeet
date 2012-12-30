@@ -1,7 +1,7 @@
 import names 
 
 import syntax 
-from syntax import Assign, Index, Slice, Var, Return 
+from syntax import Assign, Index, Slice, Var, Return, RunExpr  
 from syntax_helpers import none, slice_none, zero_i64 
 
 from core_types import NoneT, NoneType 
@@ -9,7 +9,7 @@ import array_type
 from array_type import ArrayT 
 
 from adverb_helpers import max_rank
-from adverbs import Map 
+from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
 
 import shape_inference
 
@@ -41,7 +41,6 @@ class PreallocateAdverbOutputs(MemoizedTransform):
     niters = self.niters(args, axis)
     return self.concat_tuples(niters, inner_shape)
     
-    
   def transform_Map(self, expr):
     if expr.out is None: 
       # transform the function to take an additional output parameter 
@@ -54,10 +53,11 @@ class PreallocateAdverbOutputs(MemoizedTransform):
       if len(closure_args) > 0:
         fn = self.closure(fn, closure_args, name = "closure")
       expr.fn  = fn 
-    return expr 
+      expr.type = NoneType
+      self.blocks.append_to_current(RunExpr(expr))
+      return expr.out 
+
   
-
-
 class ExplicitOutputStorage(PreallocateAdverbOutputs):
   """
   Transform a function so that instead of returning a value
@@ -91,11 +91,8 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     return fn 
 
   def transform_Return(self, stmt):
-    if isinstance(stmt.value, Map):
-      stmt.value.out = self.output_lhs_index 
-    else:
-      value = self.transform_expr(stmt.value)
-      self.assign(self.output_lhs_index, value)
+    new_value = self.transform_expr(stmt.value)
+    self.assign(self.output_lhs_index, new_value)
     return self.return_none
   
 def make_output_storage_explicit(fn):

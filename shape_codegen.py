@@ -7,8 +7,8 @@ from syntax import Const
 from tuple_type import TupleT 
 
 
-from shape import unknown_scalar, const
-from shape import Var 
+from shape import unknown_scalar, const, Scalar 
+from shape import Var, Closure 
 
 class ArgConverter(Traversal):
   def __init__(self, codegen):
@@ -37,8 +37,10 @@ class ArgConverter(Traversal):
     elif isinstance(t, TupleT):
       elts = self.codegen.tuple_elts(x)
       self.convert_list(elts)
+    elif isinstance(t, ClosureT):
+      return Closure(t.fn, self.convert_list(t.arg_types))
     else:
-      assert False, "Not supported: %s" % (x,)
+      assert False, "[shape_codegen] Not supported %s : %s" % (x,x.type)
 
   def convert_list(self, xs):
     for x in xs:
@@ -105,7 +107,7 @@ def make_shape_expr(codegen, symbolic_shape, input_exprs):
   (along with the input expressions that went into the function)
   generate a code expression for the shape of the result 
   """
-  if symbolic_shape == unknown_scalar: 
+  if isinstance(symbolic_shape, Scalar): 
     return codegen.tuple([])
 
   shape_codegen = ShapeCodegen(codegen, input_exprs)

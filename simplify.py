@@ -203,11 +203,11 @@ class Simplify(Transform):
       closure_elts = self.closure_elts(fn)
       combined_args = closure_elts + args
       return Call(fn.type.fn, combined_args, type = expr.type)
-    elif fn != expr.fn or any(e1 != e2 for (e1, e2) in zip(args, expr.args)):
-      return Call(fn, args, type = expr.type)
     else:
-      return expr
-
+      expr.fn = fn 
+      expr.args = args 
+      return expr 
+    
   def transform_args(self, args):
     new_args = []
     for arg in args:

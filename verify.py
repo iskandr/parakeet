@@ -1,5 +1,5 @@
 import core_types
-from core_types import NoneT 
+from core_types import NoneT, NoneType  
 
 from collect_vars import collect_binding_names
 from syntax import Expr
@@ -69,7 +69,9 @@ class Verify(SyntaxVisitor):
     
   def visit_RunExpr(self, stmt):
     self.visit_expr(stmt.value)
-    assert stmt.value.type and stmt.value.type.__class__ is NoneT  
+    assert stmt.value.type and stmt.value.type.__class__ is NoneT, \
+      "Expected effectful expression %s to have type %s but instead got %s" % \
+      (stmt.value, NoneType, stmt.value.type)
     
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)

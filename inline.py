@@ -95,7 +95,6 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
   result_var = replace_return_with_var(new_body, dest_type_env,
                                        src_fundef.return_type)
   dest_block.extend(new_body)
-
   return result_var
 
 class Inliner(Transform):
