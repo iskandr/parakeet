@@ -85,7 +85,7 @@ class AdverbSemantics(object):
     r = self.rank(output)
     output_indices = self.build_slice_indices(r, 0, idx)
     return self.index(output, output_indices)
-  
+
   def eval_map(self, f, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(f, values, axis)
     zero = self.int(0)
@@ -98,20 +98,26 @@ class AdverbSemantics(object):
         self.setidx(output, output_indices, elt_result)
       self.loop(zero, niters, loop_body)
       return output
-
-    else: 
-      # assume the function has been transformed to take an explicit output parameter 
+    else:
+      # assume the function has been transformed to take an explicit output
+      # parameter
       def loop_body(idx):
         output_slice = self.output_slice(output, idx)
         self.invoke(f, [array(idx) for array in delayed_elts] + [output_slice])
       self.loop(zero, niters, loop_body)
-      return self.none 
-      
+      return self.none
+
   def eval_reduce(self, map_fn, combine, init, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
-    zero = self.int(0)  
+    zero = self.int(0)
     one = self.int(1)
-    
+
+    first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
+    if init is None or self.is_none(init):
+      init = first_acc_value
+    else:
+      init = self.invoke(combine, [init, first_acc_value])
+
     if output is None:
       if init is None or self.is_none(init):
         init = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])  
@@ -124,8 +130,10 @@ class AdverbSemantics(object):
         elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
         new_acc_value = self.invoke(combine, [acc.get(), elt])
         acc.update(new_acc_value)
+
       return self.accumulate_loop(start, niters, loop_body, init)
     else: 
+
       r = self.rank(output)
       output_indices = [self.slice_value(self.none, self.none, self.none)] * r
       output_indices = self.tuple(output_indices)
@@ -139,16 +147,17 @@ class AdverbSemantics(object):
       
       def loop_body(idx):
         elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
+
         self.invoke(combine, [output, elt, output]) 
       self.loop(start, niters, loop_body)
       return self.none 
-    
+
   def eval_scan(self, map_fn, combine, emit, init, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):
       return self.invoke(map_fn, self.force_list(delayed_elts, idx))
     init = self.acc_prelude(init, combine, delayed_map_result)
-    if output is None: 
+    if output is None:
       output = self.create_output_array(emit, [init], niters)
       self.setidx(output, self.int(0), self.invoke(emit, [init]))
       def loop_body(acc, idx):
@@ -158,11 +167,10 @@ class AdverbSemantics(object):
         output_value = self.invoke(emit, [new_acc_value])
         self.setidx(output, output_indices, output_value)
       self.accumulate_loop(self.int(1), niters, loop_body, init)
-      return output 
+      return output
     else:
       assert False, "Scan with output location not implemented"
-      
-    
+
   def eval_allpairs(self, fn, x, y, axis, output = None):
     nx = self.size_along_axis(x, axis)
     ny = self.size_along_axis(y, axis)
@@ -189,8 +197,7 @@ class AdverbSemantics(object):
           yj = self.slice_along_axis(y, axis, j)
           out_y = self.output_slice(out_x, j)
           self.invoke(fn, [xi, yj, out_y])
-          
+
         self.loop(zero, ny, inner_loop_body)
       self.loop(zero, nx, outer_loop_body)
-      return self.none 
-
+      return self.none

@@ -76,11 +76,11 @@ class FnT(Type):
     return str(self)
 
   def __eq__(self, other):
-    return isinstance(other, FnT) and  \
-        self.return_type == other.return_type and \
-        len(self.input_types) == len(other.input_types) and \
-        all(t1 == t2 for (t1, t2) in
-            zip(self.input_types, other.input_types))
+    return isinstance(other, FnT) and \
+           self.return_type == other.return_type and \
+           len(self.input_types) == len(other.input_types) and \
+           all(t1 == t2 for (t1, t2) in
+               zip(self.input_types, other.input_types))
 
   def combine(self, other):
     if self == other:
@@ -271,8 +271,8 @@ class ScalarT(ConcreteT):
     return str(self.name)
 
   def index_type(self, _):
-    return self 
-  
+    return self
+
   def combine(self, other):
     if isinstance(other, ScalarT):
       combined_dtype = np.promote_types(self.dtype, other.dtype)

@@ -1,4 +1,5 @@
-import config 
+import config
+
 from adverb_api import each, reduce, scan, allpairs, par_each
 from lib_simple import *
 from macro import macro
@@ -10,10 +11,10 @@ def typed_repr(fn, args):
   return typed
 
 def sum(x):
-  return reduce(add, x, init = 0)
+  return reduce(add, x, init=0)
 
 def prod(x):
-  return reduce(multiply,  x, init = 1)
+  return reduce(multiply, x, init=1)
 
 def mean(x):
   return sum(x) / x.shape[0]
@@ -24,13 +25,14 @@ def cumsum(x):
 def cumprod(x):
   return scan(multiply, x)
 
-def diff(x, zero_fill = True):
+def diff(x, zero_fill=True):
   """
   TODO:
     - axis selection
     - preserve size by filling with zeros
     - allow n'th differences by recursion
   """
+
   return x[1:] - x[:-1]
 
 class jit:
@@ -40,9 +42,7 @@ class jit:
   def __call__(self, *args, **kwargs):
     return run(self.f, args, kwargs)
 
-
 def clear_specializations():
-
   import closure_type
   for clos_t in closure_type._closure_type_cache.itervalues():
     clos_t.specializations.clear()

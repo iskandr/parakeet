@@ -2,11 +2,13 @@ import adverbs
 import adverb_helpers
 import adverb_registry
 import adverb_wrapper
+import array_type
 import config
 import core_types
 import ctypes
 import llvm_backend
 import lowering
+import names
 import numpy as np
 import run_function
 import syntax
@@ -15,6 +17,7 @@ import tuple_type
 import type_conv
 import type_inference
 
+from args import ActualArgs, FormalArgs
 from core_types import Int64
 from runtime import runtime
 
@@ -23,9 +26,6 @@ try:
 except:
   print "Warning: Failed to load parallel runtime"
   rt = None
-
-import array_type, names
-from args import ActualArgs, FormalArgs
 
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
@@ -313,9 +313,9 @@ def one_is_none(f, g):
   return int(f is None) + int(g is None) == 1
 
 def create_adverb_hook(adverb_class,
-                       map_fn_name = None,
-                       combine_fn_name = None,
-                       arg_names = None):
+                       map_fn_name=None,
+                       combine_fn_name=None,
+                       arg_names=None):
   assert one_is_none(map_fn_name, combine_fn_name), \
       "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
   if arg_names is None:
@@ -337,10 +337,10 @@ def create_adverb_hook(adverb_class,
     ...then we hackishly force the adverb to go along the default axis of 0.
     """
     return adverb_wrapper.untyped_wrapper(adverb_class,
-                                          map_fn_name = map_fn_name,
-                                          combine_fn_name = combine_fn_name,
-                                          data_names = data_names,
-                                          varargs_name = varargs_name,
+                                          map_fn_name=map_fn_name,
+                                          combine_fn_name=combine_fn_name,
+                                          data_names=data_names,
+                                          varargs_name=varargs_name,
                                           axis=axis)
 
   def python_hook(fn, *args, **kwds):
@@ -366,22 +366,21 @@ if config.call_from_python_in_parallel:
 
 @staged_macro("axis", call_from_python=call_from_python)
 def each(f, *xs, **kwargs):
-  return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
+  return adverbs.Map(f, args=xs, axis=get_axis(kwargs))
 
 if config.call_from_python_in_parallel:
   call_from_python = par_allpairs
 
 @staged_macro("axis", call_from_python=call_from_python)
 def allpairs(f, x, y, **kwargs):
-  return adverbs.AllPairs(fn = f, args = [x,y], axis = get_axis(kwargs))
+  return adverbs.AllPairs(fn=f, args=[x,y], axis=get_axis(kwargs))
 
 @staged_macro("axis")
 def reduce(f, x, **kwargs):
   axis = get_axis(kwargs)
   init = kwargs.get('init')
 
-  return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
-                        axis = axis)
+  return adverbs.Reduce(fn=ident, combine=f, args=[x], init=init, axis=axis)
 
 @staged_macro("axis")
 def scan(f, x, **kwargs):
@@ -389,5 +388,5 @@ def scan(f, x, **kwargs):
   init = kwargs.get('init')
   if init is None:
     init = syntax_helpers.none
-  return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x],
-                      init = init, axis = axis)
+  return adverbs.Scan(fn=ident, combine=f, emit=ident, args=[x],
+                      init=init, axis=axis)

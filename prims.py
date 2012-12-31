@@ -49,7 +49,7 @@ def prim_wrapper(p):
     return fundef
 
 class Prim(object):
-  def __init__(self, fn, python_op_name = None,  symbol = None,
+  def __init__(self, fn, python_op_name = None, symbol = None,
                name = None, nin = None, nout = None):
     self.fn = fn
     prim_lookup_by_value[fn] = self
@@ -115,18 +115,19 @@ class Prim(object):
 
   def expected_input_types(self, arg_types):
     """Given some argument types, return the desired upcast types"""
-    # by default we just figure out the common type and expect every arg to be of that type
+    # by default we just figure out the common type and expect every arg to be
+    # of that type
     n_inputs = len(arg_types)
     assert n_inputs == self.nin, \
-        "Incorrect number of argument types for %s, expected %s but given %d" % \
-        (self.name, self.nin, n_inputs)
+        "Incorrect number of argument types for %s, expected %s but given %d" \
+        % (self.name, self.nin, n_inputs)
     common_type = core_types.combine_type_list(arg_types)
     return [common_type] * n_inputs
 
   def result_type(self, arg_types):
     """
-    Given some argument types, look up the result type in the type_table
-    we generated from numpy's given signatures
+    Given some argument types, look up the result type in the type_table we
+    generated from numpy's given signatures
     """
     key = tuple(arg_types)
     if key not in self.type_table:
@@ -158,6 +159,7 @@ class Cmp(Prim):
 class_list = [Cmp, Bitwise, Logical, Arith, Float]
 
 sqrt = Float(np.sqrt)
+exp = Float(np.exp)
 log = Float(np.log)
 sqrt = Float(np.sqrt)
 log10 = Float(np.log10)
@@ -186,6 +188,7 @@ subtract = Arith(np.subtract, 'Sub', '-')
 multiply = Arith(np.multiply, 'Mult', '*')
 divide = Arith(np.divide, 'Div', '/')
 mod = Arith(np.mod, 'Mod', '%')
+#negative = Arith(np.negative, 'USub', '-', None, 1, 1)
 
 equal = Cmp(np.equal, 'Eq', '==')
 not_equal = Cmp(np.not_equal, 'NotEq', '!=')
