@@ -4,7 +4,7 @@ import core_types
 import shape
 import shape_from_type
 import syntax
-from syntax import TypedFn 
+from syntax import TypedFn
 import tuple_type
 from syntax_visitor import SyntaxVisitor
 
@@ -80,8 +80,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     for (i, curr_idx) in enumerate(indices):
       old_dim = arr.dims[i]
       if curr_idx is None or \
-        (isinstance(curr_idx, Scalar) and curr_idx.value is None):
-
+         (isinstance(curr_idx, Scalar) and curr_idx.value is None):
         result_dims.append(old_dim)
       elif isinstance(curr_idx, Scalar):
         pass
@@ -139,9 +138,9 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     Slice(start, stop, step)
 
   def invoke(self, fn, args):
-    if fn.__class__ is Closure: 
+    if fn.__class__ is Closure:
       args = tuple(fn.args) + tuple(args)
-      fn = fn.fn 
+      fn = fn.fn
     return symbolic_call(fn, args)
 
   none = None
@@ -204,20 +203,19 @@ class ShapeInference(SyntaxVisitor):
   def visit_merge_loop_start(self, merge):
     for (k, (l, _)) in merge.iteritems():
       self.value_env[k] = self.visit_expr(l)
-      
+
   def visit_merge(self, merge):
     for (k, (l,r)) in merge.iteritems():
       new_l = self.visit_expr(l)
       new_r = self.visit_expr(r)
       self.value_env[k] = new_l.combine(new_r)
 
-
   def visit_expr(self, expr):
     abstract_shape = SyntaxVisitor.visit_expr(self, expr)
     assert abstract_shape is not None, \
         "Unsupported expression in shape inference: %s" % expr.node_type()
-    return abstract_shape 
-  
+    return abstract_shape
+
   def visit_Alloc(self, expr):
     # alloc doesn't return an array but rather
     # a pointer whose shape properties
@@ -232,14 +230,13 @@ class ShapeInference(SyntaxVisitor):
       return Tuple(self.visit_expr_list(expr.args))
     else:
       assert False, "Unexpected struct: %s" % (expr,)
-      
-  
+
   def visit_Fn(self, fn):
-    return fn 
-  
+    return fn
+
   def visit_TypedFn(self, fn):
-    return fn 
-  
+    return fn
+
   def visit_Slice(self, expr):
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)
@@ -254,7 +251,7 @@ class ShapeInference(SyntaxVisitor):
     assert clos.__class__ is Closure, \
         "Unexpected closure shape %s for expression %s" % (clos, expr)
     return clos.args[expr.index]
-  
+
   def visit_TupleProj(self, expr):
     t = self.visit_expr(expr.tuple)
     assert isinstance(t, Tuple)
@@ -299,17 +296,16 @@ class ShapeInference(SyntaxVisitor):
     n = len(elts)
     res = increase_rank(elt, 0, const(n))
     return res
-  
+
   def visit_Call(self, expr):
     assert expr.fn.__class__ is TypedFn, \
        "Calling %s not supported in shape inference"
-    return symbolic_call(expr.fn, self.visit_expr_list(expr.args)) 
-    
-    
+    return symbolic_call(expr.fn, self.visit_expr_list(expr.args))
+
   def visit_Closure(self, clos):
     if isinstance(clos.fn, str):
-      assert False, "FN NAME " + clos.fn 
-    
+      assert False, "FN NAME " + clos.fn
+
     fn = self.visit_expr(clos.fn)
     closure_arg_shapes = self.visit_expr_list(clos.args)
     return Closure(fn, closure_arg_shapes)
@@ -328,34 +324,33 @@ class ShapeInference(SyntaxVisitor):
             (len(arr.dims), len(idx.dims))
         dims = [d for d in arr.dims]
         for (i,d) in enumerate(idx.dims):
-          dims[i] = d 
+          dims[i] = d
         return shape.make_shape(dims)
     assert False, \
         "Can't index (%s) with array shape %s and index shape %s" % \
         (expr, arr, idx)
-      
 
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     res = shape_semantics.eval_map(fn, arg_shapes, expr.axis)
-    return res 
+    return res
 
   def visit_Reduce(self, expr):
-    
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     arg_shapes = self.visit_expr_list(expr.args)
     init = self.visit_expr(expr.init) if expr.init else None
     return shape_semantics.eval_reduce(fn, combine, init, arg_shapes, expr.axis)
-    
+
   def visit_Scan(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     emit = self.visit_expr(expr.emit)
     arg_shapes = self.visit_expr_list(expr.args)
     init = self.visit_expr(expr.init) if expr.init else None
-    return shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes, expr.axis)
+    return shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes,
+                                       expr.axis)
 
   def visit_AllPairs(self, expr):
     axis = self.visit_expr(expr.axis)
@@ -402,7 +397,7 @@ def call_shape_expr(typed_fn):
     shape_inference = ShapeInference()
     abstract_shape = shape_inference.visit_fn(typed_fn)
     if abstract_shape is None:
-      print typed_fn 
+      print typed_fn
     assert abstract_shape is not None, \
         "Shape inference returned None for %s" % typed_fn.name
     _shape_cache[typed_fn.name] = abstract_shape
@@ -419,7 +414,7 @@ def bind(lhs, rhs, env):
     bind_pairs(lhs.args, rhs.args, env)
   elif isinstance(lhs, Tuple):
     assert isinstance(rhs, Tuple)
-    bind_pairs(lhs.elts, rhs.elts)
+    bind_pairs(lhs.elts, rhs.elts, env)
   else:
     raise RuntimeError("Unexpected shape LHS: %s" % lhs)
 
@@ -438,7 +433,7 @@ def subst(x, env):
   elif isinstance(x, Shape):
     return make_shape(subst_list(x.dims, env))
   elif isinstance(x, Tuple):
-    return tuple(*subst_list(x.elts, env))
+    return shape_semantics.tuple(subst_list(x.elts, env))
   elif isinstance(x, Closure):
     return Closure(x.fn, subst_list(x.args, env))
   else:
