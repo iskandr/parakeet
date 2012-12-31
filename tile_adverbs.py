@@ -6,9 +6,9 @@ import config
 import copy
 import names
 import syntax
-from syntax_visitor import SyntaxVisitor
 
 from core_types import Int32
+from syntax_visitor import SyntaxVisitor
 from transform import Transform
 
 def free_vars_list(expr_list):
@@ -36,17 +36,17 @@ class FindAdverbs(SyntaxVisitor):
 
   def visit_Map(self, expr):
     self.has_adverbs = True
-    
+
   def visit_Reduce(self, expr):
     self.has_adverbs = True
-    
+
   def visit_Scan(self, expr):
     self.has_adverbs = True
-    
+
   def visit_AllPairs(self, expr):
     assert False, \
         "Expected AllPairs operators to have been lowered into Maps"
-    
+
 class AdverbArgs():
   def __init__(self, fn=None, args=None, axis=0, combine=None, init=None,
                emit=None):
@@ -102,7 +102,8 @@ class TileAdverbs(Transform):
       if isinstance(closure_elt.closure, syntax.Closure):
         return closure_elt.closure.args[closure_elt.index]
       elif isinstance(closure_elt.closure, syntax.Var):
-        return self.closure_vars[closure_elt.closure.name].args[closure_elt.index]
+        closure = self.closure_vars[closure_elt.closure.name]
+        return closure.args[closure_elt.index]
       else:
         assert False, "Unknown closure type for closure elt %s" % closure_elt
     elif isinstance(closure_elt, syntax.Var):
@@ -402,10 +403,10 @@ class TileAdverbs(Transform):
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
     self.pop_exp()
-    return adverbs.TiledReduce(fn = new_fn, 
-                               combine = new_combine, 
-                               init = init,  
-                               args = expr.args, 
+    return adverbs.TiledReduce(fn = new_fn,
+                               combine = new_combine,
+                               init = init,
+                               args = expr.args,
                                axis = axis,
                                type=return_t)
 

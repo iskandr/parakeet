@@ -16,11 +16,9 @@ def calc_centroid(X, a, i):
   cur_members = X[a == i]
   num_members = cur_members.shape[0]
   if num_members == 0:
-    return 0.0 
+    return 0.0
   else:
     return sum(cur_members) / num_members
-
-
 
 def kmeans(X, assign, k):
   idxs = np.arange(k)

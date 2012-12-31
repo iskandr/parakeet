@@ -17,7 +17,7 @@ print_lowered_function = False
 print_functions_before_transforms = ['TileAdverbs'] # ['PreallocateAdverbOutputs', 'LowerAdverbs', 'Simplify'] # False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['TileAdverbs'] # False # ['PreallocateAdverbOutputs', 'LowerAdverbs', 'Simplify'] # False 
+print_functions_after_transforms = ['TileAdverbs'] # False # ['PreallocateAdverbOutputs', 'LowerAdverbs', 'Simplify'] # False
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -43,9 +43,9 @@ print_parallel_exec_time = False
 opt_inline = True
 opt_fusion = True
 opt_licm = True
-opt_cleanup_after_transforms = True 
+opt_cleanup_after_transforms = True
 opt_verify = True
-opt_copy_elimination = True 
+opt_copy_elimination = True
 
 ######################################
 #           LLVM OPTIONS             #
