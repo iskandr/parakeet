@@ -319,11 +319,20 @@ class ShapeInference(SyntaxVisitor):
     idx = self.visit_expr(expr.index)
     if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
-    elif isinstance(arr, Shape) and isinstance(idx, Scalar) and len(arr.dims) == 1:
-      return unknown_scalar
-
-    else:
-      assert False, "Indexing not yet support for %s with array shape %s and index shape %s" % (expr, arr, idx) 
+    elif isinstance(arr, Shape):
+      if isinstance(idx, Scalar):
+        return shape.lower_rank(arr, 0)
+      elif isinstance(idx, Shape):
+        assert len(idx.dims) <= len(arr.dims), \
+            "Can't index into rank %d array with rank %d indices" % \
+            (len(arr.dims), len(idx.dims))
+        dims = [d for d in arr.dims]
+        for (i,d) in enumerate(idx.dims):
+          dims[i] = d 
+        return shape.make_shape(dims)
+    assert False, \
+        "Can't index (%s) with array shape %s and index shape %s" % \
+        (expr, arr, idx)
       
 
   def visit_Map(self, expr):
@@ -333,10 +342,11 @@ class ShapeInference(SyntaxVisitor):
     return res 
 
   def visit_Reduce(self, expr):
+    
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     arg_shapes = self.visit_expr_list(expr.args)
-    init = self.visit_expr(self.init) if self.init else None
+    init = self.visit_expr(expr.init) if expr.init else None
     return shape_semantics.eval_reduce(fn, combine, init, arg_shapes, expr.axis)
     
   def visit_Scan(self, expr):
@@ -344,7 +354,7 @@ class ShapeInference(SyntaxVisitor):
     combine = self.visit_expr(expr.combine)
     emit = self.visit_expr(expr.emit)
     arg_shapes = self.visit_expr_list(expr.args)
-    init = self.visit_expr(self.init) if self.init else None
+    init = self.visit_expr(expr.init) if expr.init else None
     return shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes, expr.axis)
 
   def visit_AllPairs(self, expr):

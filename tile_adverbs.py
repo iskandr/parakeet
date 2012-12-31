@@ -6,6 +6,7 @@ import config
 import copy
 import names
 import syntax
+from syntax_visitor import SyntaxVisitor
 
 from core_types import Int32
 from transform import Transform
@@ -29,23 +30,19 @@ def free_vars(expr):
     assert isinstance(expr, syntax.Const), "%s is not a Const" % expr
     return set()
 
-class FindAdverbs(Transform):
+class FindAdverbs(SyntaxVisitor):
   def __init__(self):
-    Transform.__init__(self)
     self.has_adverbs = False
 
-  def transform_Map(self, expr):
+  def visit_Map(self, expr):
     self.has_adverbs = True
-    return expr
-
+    
   def transform_Reduce(self, expr):
     self.has_adverbs = True
-    return expr
-
+    
   def transform_Scan(self, expr):
     self.has_adverbs = True
-    return expr
-
+    
 class AdverbArgs():
   def __init__(self, fn=None, args=None, axis=0, combine=None, init=None,
                emit=None):
@@ -291,7 +288,7 @@ class TileAdverbs(Transform):
     new_fn = syntax.TypedFn
     depths = self.get_depths_list(fn.arg_names)
     find_adverbs = FindAdverbs()
-    find_adverbs.apply(fn)
+    find_adverbs.visit(fn)
 
     if find_adverbs.has_adverbs:
       arg_names = list(fn.arg_names)
