@@ -22,5 +22,17 @@ def test_float_sum():
 def test_bool_sum():
   testing_helpers.expect(sum, [bool_vec], np.sum(bool_vec))
 
+def sqr_dist(x, y):
+  return sum((x-y)*(x-y))
+
+def test_sqr_dist():
+  y = a[0]
+  def run_sqr_dist(x):
+    return sqr_dist(x, y)
+  par_rslt = each(run_sqr_dist, a)
+  py_rslt = map(run_sqr_dist, a)
+  assert testing_helpers.eq(par_rslt, py_rslt), \
+      "Expected %s but got %s" % (py_rslt, par_rslt)
+
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

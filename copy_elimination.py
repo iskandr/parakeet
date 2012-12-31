@@ -89,8 +89,9 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     new_value = self.transform_expr(stmt.value)
 
     self.assign(self.output_lhs_index, new_value)
-    print "Transformed %s into %s" % \
-          (stmt, syntax.block_to_str(self.blocks.top()))
+    if False:
+      print "Transformed %s into %s" % \
+            (stmt, syntax.block_to_str(self.blocks.top()))
     return self.return_none
 
 def make_output_storage_explicit(fn):
