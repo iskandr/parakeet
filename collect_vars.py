@@ -64,3 +64,4 @@ class CollectBindings(SyntaxVisitor):
 
 def collect_bindings(fn):
   return CollectBindings().visit_fn(fn)
+

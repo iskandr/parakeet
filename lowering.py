@@ -2,7 +2,7 @@ import config
 import syntax
 
 from clone_function import CloneFunction
-from copy_elimination import PreallocAdverbOutput
+from copy_elimination import CopyElimination, PreallocAdverbOutput
 from dead_code_elim import DCE
 from fusion import Fusion
 from inline import Inliner
@@ -39,7 +39,7 @@ def build_pipeline(copy = False,
 
   if inline:
     add(Inliner)
-
+  add(CopyElimination)
   add(LowerIndexing)
   add(LowerStructs)
 

@@ -2,7 +2,7 @@ import names
 
 import syntax 
 from syntax import Assign, Index, Slice, Var, Return, RunExpr
-from syntax import ArrayView,  Alloc, Array    
+from syntax import ArrayView,  Alloc, Array, Struct, Tuple, Attribute      
 from syntax_helpers import none, slice_none, zero_i64 
 
 
@@ -41,24 +41,29 @@ class FindLocalArrays(SyntaxVisitor):
       elif rhs_class is ArrayView and \
           stmt.rhs.data.__class__ is Var and \
           stmt.rhs.data.name in self.local_allocs:
-        self.local_arrays[stmt.lhs.name] = stmt 
+        self.local_arrays[stmt.lhs.name] = stmt
+      elif rhs_class is Struct and \
+          stmt.rhs.type.__class__ is ArrayT and \
+          stmt.rhs.args[0].__class__ is Var and \
+          stmt.rhs.args[0].name in self.local_allocs:
+        self.local_arrays[stmt.lhs.name] = stmt
       elif rhs_class is Array:
         self.local_arrays[stmt.lhs.name] = stmt             
   
 empty = set([])
+
 class EscapeAnalysis(SyntaxVisitor):
   def visit_fn(self, fn):
     self.may_alias = {}
     # every name at least aliases it self
-    for name in self.type_env.iterkeys():
-      self.may_alias[name] = set([])
+    for name in fn.type_env.iterkeys():
+      self.may_alias[name] = set([name])
       
-    self.may_escape = set(fn.arg_name)
+    self.may_escape = set(fn.arg_names)
     self.visit_block(fn.body)
   
   def mark_escape(self, name):
-    self.may_escape.add(name)
-    for alias in self.may_alias.get(name, empty):
+    for alias in self.may_alias[name]:
       self.may_escape.add(alias)
       
   def mark_escape_list(self, names):
@@ -68,11 +73,23 @@ class EscapeAnalysis(SyntaxVisitor):
   def visit_Call(self, expr):
     self.mark_escape_list(collect_var_names_from_exprs(expr.args))
   
+  def collect_lhs_names(self, expr):
+    if expr.__class__ is Var:
+      return [expr.name]
+    elif expr.__class__ is Attribute:
+      return self.collect_lhs_names(expr.value)
+    elif expr.__class__ is Tuple:
+      combined = set([])
+      for elt in expr.elts:
+        combined.update(self.collect_lhs_names(elt))
+    else:
+      return []
+  
   def visit_Assign(self, stmt):  
-    lhs_names = collect_var_names(stmt.lhs)
+    lhs_names = self.collect_lhs_names(stmt.lhs)
     rhs_names = collect_var_names(stmt.rhs)
     for lhs_name in lhs_names:
-      self.may_alias.get[lhs_name].extend(rhs_names)
+      self.may_alias[lhs_name].update(rhs_names)
 
   def visit_Return(self, expr):
     self.mark_escape_list(collect_var_names(expr.value))
@@ -82,9 +99,9 @@ class EscapeAnalysis(SyntaxVisitor):
       left_aliases = self.may_alias[l.name] if l.__class__ is Var else empty 
       right_aliases = self.may_alias[r.name] if r.__class__ is Var else empty
       combined = left_aliases.union(right_aliases)
-      self.may_alias[name].extend(combined)
+      self.may_alias[name].update(combined)
       if any(alias in self.may_escape for alias in combined):
-        self.may_escape.extend(combined)
+        self.may_escape.update(combined)
         self.may_escape.add(name)
 
 class UseAnalysis(SyntaxVisitor):
@@ -126,7 +143,7 @@ class UseAnalysis(SyntaxVisitor):
     self.stmt_counter += 1
     count = self.stmt_counter 
     self.stmt_number[stmt_id] = count
-    SyntaxVisitor.visit_stmt(stmt) 
+    SyntaxVisitor.visit_stmt(self, stmt) 
     self.stmt_number_end[stmt_id] = self.stmt_counter 
         
 class CopyElimination(Transform):
@@ -158,21 +175,29 @@ class CopyElimination(Transform):
         stmt.lhs.type.__class__ is ArrayT and \
         stmt.lhs.value.__class__ is Var and \
         stmt.rhs.__class__ is Var:
+      
       stmt_number = self.use_analysis.stmt_number[id(stmt)]
       
       lhs_name = stmt.lhs.value.name  
-      rhs_name = stmt.rhs.name 
+      rhs_name = stmt.rhs.name
+      print "STMT_NUMBER", stmt_number
+      print "LHS NAME", lhs_name 
+      print "RHS NAME", rhs_name  
+      print "last use rhs", self.use_analysis.last_use[rhs_name]
+      print "first_use lhs", self.use_analysis.first_use[lhs_name]
+      print "rhs may escape?", rhs_name  in self.may_escape
+      print "rhs is local array?", rhs_name in self.local_arrays
       if self.use_analysis.last_use[rhs_name] == stmt_number and \
           self.use_analysis.first_use[lhs_name] > stmt_number and \
           rhs_name not in self.may_escape and \
           rhs_name in self.local_arrays:
         array_stmt = self.local_arrays[rhs_name]
-        if array_stmt.__class__ is ArrayView:
-          array_stmt.rhs = stmt.lhs  
+        print "array stmt", array_stmt 
+        if array_stmt.rhs.__class__ in (Struct, ArrayView):
+          print "UPDATING", array_stmt  
+          array_stmt.rhs = stmt.lhs
+          print array_stmt   
     return stmt 
-           
-        
-      
 
 
 class PreallocAdverbOutput(MemoizedTransform):

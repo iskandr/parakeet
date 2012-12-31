@@ -58,6 +58,7 @@ unknown_scalar = UnknownScalar()
 
 class Const(Scalar):
   def __init__(self, value):
+    
     self.value = value 
     
   def __eq__(self, other):
