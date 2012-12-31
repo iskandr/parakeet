@@ -24,7 +24,6 @@ def equiv_type(python_type):
 
 def typeof(python_value):
   python_type = type(python_value)
-  print "val, type: %s, %s" % (python_value, python_type)
   assert python_type in _typeof_functions, \
       "Don't know how to convert value %s : %s" % (python_value, python_type)
   return _typeof_functions[python_type](python_value)
