@@ -137,7 +137,7 @@ class AdverbSemantics(object):
       self.setidx(output, output_indices, init)
       def loop_body(idx):
         acc_slice = self.output_slice(output, idx)
-        elt = delayed_map_result(idx)
+        elt = delayed_elts(idx)
         acc_value = self.index(output, idx) if r == 1 else output 
         self.invoke(combine, [acc_value, elt, acc_slice]) 
       self.loop(one, niters, loop_body)
