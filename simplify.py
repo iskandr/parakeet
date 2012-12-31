@@ -7,7 +7,7 @@ from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
 
-from core_types import NoneT, ScalarT 
+from core_types import NoneT, NoneType, ScalarT 
 
 import subst
 import transform
@@ -341,7 +341,8 @@ class Simplify(Transform):
       return None 
     else:
       stmt.value = v 
-      return stmt 
+      return stmt
+     
   def transform_Assign(self, stmt):
     lhs = stmt.lhs
     rhs = self.transform_expr(stmt.rhs)
@@ -352,6 +353,7 @@ class Simplify(Transform):
       lhs = self.transform_lhs_Index(lhs)
       if isinstance(rhs, Adverb) and rhs.out is None:
         rhs.out = lhs 
+        rhs.type = NoneType 
         return RunExpr(rhs)
     elif lhs_class is Attribute:
       lhs = self.transform_lhs_Attribute(lhs)
@@ -433,9 +435,6 @@ class Simplify(Transform):
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
     if new_value != stmt.value:
-      if self.is_simple(new_value):
-        stmt.value = new_value
-      else:
-        stmt.value = self.temp(new_value)
+      stmt.value = new_value
     return stmt
     

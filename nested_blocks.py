@@ -10,9 +10,15 @@ class NestedBlocks(object):
   def pop(self):
     return self._blocks.pop()
 
+  def top(self):
+    return self._blocks[-1]
+  
   def current(self):
     return self._blocks[-1]
 
+  def append(self, stmt):
+    self._blocks[-1].append(stmt)
+    
   def append_to_current(self, stmt):
     self._blocks[-1].append(stmt)
 

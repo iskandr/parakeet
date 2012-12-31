@@ -16,11 +16,11 @@ class Adverb(syntax.Expr):
       return str(self.args)
 
   def __repr__(self):
-    s = "%s(axis = %s, fn = %s, %s, type=%s" % \
+    s = "%s(axis = %s, args = (%s), type=%s, fn = %s" % \
           (self.node_type(), self.axis,
-           self.fn_to_str(self.fn),
            self.args_to_str(),
-           self.type)
+           self.type, 
+           self.fn_to_str(self.fn),)
     if self.out: 
       s += ", out=%s" % self.out
     s += ")"
@@ -46,12 +46,18 @@ class Accumulative(Adverb):
   _members = ['combine', 'init']
 
   def __repr__(self):
-    return "%s(axis = %s, map_fn = %s, combine = %s, init = %s, %s)" % \
+    s = "%s(axis = %s, args = {%s}, type = %s, init = %s, map_fn = %s, combine = %s" % \
         (self.node_type(), self.axis,
+         self.args_to_str(),
+         self.type, 
+         self.init,
          self.fn_to_str(self.fn),
          self.fn_to_str(self.combine),
-         self.init,
-         self.args_to_str())
+        )
+    if self.out:
+      s += ", out = %s" % self.out 
+    s += ")"
+    return s 
 
   def node_init(self):
     # assert self.init is not None
@@ -65,13 +71,20 @@ class Scan(Accumulative):
   _members = ['emit']
 
   def __repr__(self):
-    return "%s(axis = %s, map_fn = %s, combine = %s, emit = %s, init = %s, %s)"\
+    s = "%s(axis = %s, args = {%s}, type = %s, " \
         % (self.node_type(), self.axis,
-           self.fn_to_str(self.fn),
-           self.fn_to_str(self.combine),
-           self.fn_to_str(self.emit),
-           self.init,
-           self.args_to_str())
+           self.args_to_str(),
+           self.type
+          )
+    s += "init = %s, map_fn = %s, combine = %s, emit = %s" % \
+         (self.init,
+          self.fn_to_str(self.fn),
+          self.fn_to_str(self.combine),
+          self.fn_to_str(self.emit))
+    if self.out: 
+      s += ", out = %s" % self.out 
+    s += ")"
+    return s 
 
 class Tiled(object):
   pass

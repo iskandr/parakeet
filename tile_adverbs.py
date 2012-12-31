@@ -37,11 +37,15 @@ class FindAdverbs(SyntaxVisitor):
   def visit_Map(self, expr):
     self.has_adverbs = True
     
-  def transform_Reduce(self, expr):
+  def visit_Reduce(self, expr):
     self.has_adverbs = True
     
-  def transform_Scan(self, expr):
+  def visit_Scan(self, expr):
     self.has_adverbs = True
+    
+  def visit_AllPairs(self, expr):
+    assert False, \
+        "Expected AllPairs operators to have been lowered into Maps"
     
 class AdverbArgs():
   def __init__(self, fn=None, args=None, axis=0, combine=None, init=None,
@@ -288,7 +292,7 @@ class TileAdverbs(Transform):
     new_fn = syntax.TypedFn
     depths = self.get_depths_list(fn.arg_names)
     find_adverbs = FindAdverbs()
-    find_adverbs.visit(fn)
+    find_adverbs.visit_fn(fn)
 
     if find_adverbs.has_adverbs:
       arg_names = list(fn.arg_names)
@@ -398,7 +402,11 @@ class TileAdverbs(Transform):
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
     self.pop_exp()
-    return adverbs.TiledReduce(new_combine, init, new_fn, expr.args, axis,
+    return adverbs.TiledReduce(fn = new_fn, 
+                               combine = new_combine, 
+                               init = init,  
+                               args = expr.args, 
+                               axis = axis,
                                type=return_t)
 
   # TODO: Tiling scans should be very similar to tiling reductions.

@@ -56,7 +56,6 @@ class PreallocateAdverbOutputs(MemoizedTransform):
       expr.type = NoneType
       self.blocks.append_to_current(RunExpr(expr))
       return expr.out 
-
   
 class ExplicitOutputStorage(PreallocateAdverbOutputs):
   """
@@ -92,7 +91,9 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
 
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
+    
     self.assign(self.output_lhs_index, new_value)
+    print "Transformed %s into %s" % (stmt, syntax.block_to_str(self.blocks.top()))
     return self.return_none
   
 def make_output_storage_explicit(fn):
