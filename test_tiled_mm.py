@@ -102,7 +102,8 @@ def test_tiled_mm():
   b2_array = np.arange(9,21).reshape(4,3)
   rslt = wrapper(a2_array, b2_array, (2,2,2))
   nprslt = np.dot(a2_array, b2_array.T)
-  assert(testing_helpers.eq(rslt, nprslt))
+  assert(testing_helpers.eq(rslt, nprslt)), \
+      "Expected %s but got %s" % (nprslt, rslt)
 
 def dot(x, y):
   return sum(x*y)
