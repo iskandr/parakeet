@@ -1,4 +1,3 @@
-#!/usr/bin/python
 import numpy as np
 import parakeet
 
@@ -34,8 +33,7 @@ def test_black_scholes():
   xs = np.array([x1, x2])
   par_rslt = parakeet.each(black_scholes, xs)
   py_rslt = black_scholes(xs)
-  print par_rslt
-  print py_rslt
+  assert eq(par_rslt, py_rslt)
 
 if __name__ == '__main__':
   run_local_tests()
