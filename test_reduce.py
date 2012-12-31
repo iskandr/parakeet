@@ -1,6 +1,7 @@
 import numpy as np
 import testing_helpers
 
+py_reduce = reduce
 from parakeet import reduce, add, each
 
 int_vec = 100 + np.arange(100, dtype=int)
@@ -31,6 +32,24 @@ def test_sqr_dist():
     return sqr_dist(x, y)
   par_rslt = each(run_sqr_dist, a)
   py_rslt = np.array(map(run_sqr_dist, a))
+  assert testing_helpers.eq(par_rslt, py_rslt), \
+      "Expected %s but got %s" % (py_rslt, par_rslt)
+
+def avg_along_axis_0(Xs):
+  assign = np.array([0,0,1,0,1,0,1,0,1,1])
+  Ys = Xs[assign == 1]
+  def zero(x):
+    return 0.0
+  zeros = each(zero, Xs[0])
+  s = reduce(add, Ys, init=zeros)
+  def d(s):
+    return s / Ys.shape[0]
+  return each(d, s)
+
+def test_avg_along_axis_0():
+  assign = np.array([0,0,1,0,1,0,1,0,1,1])
+  par_rslt = avg_along_axis_0(a)
+  py_rslt = np.mean(a[assign == 1], axis=0)
   assert testing_helpers.eq(par_rslt, py_rslt), \
       "Expected %s but got %s" % (py_rslt, par_rslt)
 
