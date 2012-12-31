@@ -81,7 +81,7 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     fn.return_type = NoneType
     fn.arg_names = tuple(fn.arg_names) + (output_name,)
     fn.input_types = tuple(fn.input_types) + (output_t,)
-    fn.type_env[output_name]  = output_t
+    fn.type_env[output_name] = output_t
     self.return_none = Return(none)
     return fn
 
