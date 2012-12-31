@@ -230,7 +230,7 @@ def typeof_array(x):
   rank = len(x.shape)
   return make_array_type(elt_t, rank)
 
-type_conv.register((np.ndarray, list),  ArrayT, typeof_array)
+type_conv.register((np.ndarray, list), ArrayT, typeof_array)
 
 def elt_type(t):
   if isinstance(t, ArrayT):
