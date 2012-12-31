@@ -10,17 +10,17 @@ bool_vec = float_vec < np.mean(float_vec)
 a = np.arange(100).reshape(10,10)
 b = np.arange(100,200).reshape(10,10)
 
-def sum(xs):
+def my_sum(xs):
   return reduce(add, xs, init=0)
 
 def test_int_sum():
-  testing_helpers.expect(sum, [int_vec], np.sum(int_vec))
+  testing_helpers.expect(my_sum, [int_vec], np.sum(int_vec))
 
 def test_float_sum():
-  testing_helpers.expect(sum, [float_vec], np.sum(float_vec))
+  testing_helpers.expect(my_sum, [float_vec], np.sum(float_vec))
 
 def test_bool_sum():
-  testing_helpers.expect(sum, [bool_vec], np.sum(bool_vec))
+  testing_helpers.expect(my_sum, [bool_vec], np.sum(bool_vec))
 
 def sqr_dist(x, y):
   return sum((x-y)*(x-y))
