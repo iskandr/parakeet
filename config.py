@@ -45,7 +45,7 @@ opt_fusion = True
 opt_licm = True
 opt_cleanup_after_transforms = True
 opt_verify = True
-opt_copy_elimination = True
+opt_copy_elimination = False
 
 ######################################
 #           LLVM OPTIONS             #

@@ -30,7 +30,7 @@ def test_sqr_dist():
   def run_sqr_dist(x):
     return sqr_dist(x, y)
   par_rslt = each(run_sqr_dist, a)
-  py_rslt = map(run_sqr_dist, a)
+  py_rslt = np.array(map(run_sqr_dist, a))
   assert testing_helpers.eq(par_rslt, py_rslt), \
       "Expected %s but got %s" % (py_rslt, par_rslt)
 

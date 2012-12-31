@@ -86,14 +86,6 @@ def kmeans(X, assign, k):
     def run_py_minidx(x):
       return py_minidx(C, idxs, x)
 
-    def run_py_dists(x):
-      return py_dists(C, x)
-    def run_par_dists(x):
-      return par_dists(C, x)
-    print "Py dists:", map(run_py_dists, X)
-    print "Par dists:", map(run_par_dists, X)
-    print "C:", C
-
     assign = np.array(map(run_py_minidx, X))
     par_assign = parakeet.each(run_minidx, X)
     converged = np.all(assign == lastAssign)
@@ -104,16 +96,11 @@ def test_kmeans():
   s = 10
   n = 50
   X = np.random.randn(n*s).reshape(n,s)
-  print "X:", X
   init_assign = np.random.randint(3, size=n)
-  print init_assign
   k = 3
   C, assign = kmeans(X, init_assign, k)
-  print C
-  print assign
-  #par_C, par_assign = par_kmeans(X, init_assign, k)
-  #print par_C
-  #print par_assign
+  par_C, par_assign = par_kmeans(X, init_assign, k)
+  assert eq(assign, par_assign)
 
 if __name__ == '__main__':
   run_local_tests()
