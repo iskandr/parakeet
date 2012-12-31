@@ -5,6 +5,7 @@ from syntax import Assign, Index, Slice, Var, Return, RunExpr
 from syntax import ArrayView,  Alloc, Array, Struct, Tuple, Attribute
 from syntax_helpers import none, slice_none, zero_i64
 
+
 from adverb_helpers import max_rank
 from adverbs import Map, Reduce, Scan, AllPairs, Adverb
 
@@ -197,6 +198,7 @@ class CopyElimination(Transform):
           array_stmt.rhs = stmt.lhs
           print array_stmt
     return stmt
+
 
 class PreallocAdverbOutput(MemoizedTransform):
   def niters(self, args, axis):
