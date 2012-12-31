@@ -7,19 +7,17 @@ print_untyped_function = False
 
 # show the higher level typed function after
 # specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['CopyElimination']
+print_functions_before_transforms = False# ['CopyElimination']
 
 # show the function produced by each transformation?
-
-print_functions_after_transforms = ['CopyElimination'] 
-
+print_functions_after_transforms = False#['CopyElimination']
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -47,8 +45,7 @@ opt_fusion = True
 opt_licm = True
 opt_cleanup_after_transforms = True
 opt_verify = True
-opt_copy_elimination = False 
-
+opt_copy_elimination = False
 
 ######################################
 #           LLVM OPTIONS             #
