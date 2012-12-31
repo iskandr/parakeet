@@ -69,12 +69,10 @@ class ExplicitOutputStorage(PreallocateAdverbOutputs):
     if output_t.__class__ is ArrayT and output_t.rank > 0:
       idx = self.tuple([slice_none] * output_t.rank)
       elt_t = output_t
-
     else:
       idx = zero_i64
       elt_t = output_t
       output_t = array_type.increase_rank(output_t, 1)
-
 
     self.output_type = output_t
     output_var = Var(output_name, type=output_t)
