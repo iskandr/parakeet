@@ -19,16 +19,12 @@ def test_map_2d():
   assert testing_helpers.eq(sqrt_mat, expected_sqrt_mat), \
     "Expected %s from Map but got %s" % (expected_sqrt_mat, sqrt_mat)
 
-def test_map_1d_output():
-  out = np.zeros_like(expected_sqrt_vec)
-  interp.eval_map(np.sqrt, values=[vec], axis=0, output=out)
-  assert testing_helpers.eq(out, expected_sqrt_vec), \
-    "Expected %s from Map with output param but got %s" % \
-    (expected_sqrt_vec, out)
+def sqrt_with_output(x, output):
+  output[:] = np.sqrt(x)
 
 def test_map_2d_output():
   out = np.zeros_like(expected_sqrt_mat)
-  interp.eval_map(np.sqrt, values=[mat], axis=0, output=out)
+  interp.eval_map(sqrt_with_output, values=[mat], axis=0, output=out)
   assert testing_helpers.eq(out, expected_sqrt_mat), \
     "Expected %s from Map with output param but got %s" % \
     (expected_sqrt_mat, out)
@@ -59,7 +55,7 @@ def test_reduce_1d():
 
   assert testing_helpers.eq(vec_sum, expected_sum_vec), \
     "Expected %s from Reduce but got %s" % (expected_sum_vec, vec_sum)
-
+ 
 expected_sum_mat = np.sum(mat, axis=0)
 
 def test_reduce_2d():
@@ -73,7 +69,25 @@ def test_reduce_2d():
   assert testing_helpers.eq(mat_sum, expected_sum_mat), \
     "Expected %s from Reduce but got %s" % (expected_sum_mat, mat_sum)
 
+
+def add_vec_with_output(x, y, out):
+    out[:] = x + y
+
+def test_reduce_2d_output():
+  output = np.zeros_like(expected_sum_mat)
+  mat_sum = interp.eval_reduce(
+    map_fn = interp.identity_function, 
+    combine = add_vec_with_output,  
+    init = 0, 
+    values = [mat], 
+    axis = 0, 
+    output = output) 
+
+  assert testing_helpers.eq(output, expected_sum_mat), \
+    "Expected %s from Reduce (with output) but got %s" % (expected_sum_mat, output)
+
 bool_vec = np.array([True, False, True, False, True])
+
 
 def test_bool_sum():
   vec_sum = interp.eval_reduce(

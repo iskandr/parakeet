@@ -83,14 +83,7 @@ class AdverbSemantics(object):
 
   def output_slice(self, output, idx):
     r = self.rank(output)
-    if r > 1:
-      output_indices = self.build_slice_indices(r, 0, idx)
-    elif r == 1:
-      output_idx = self.slice_value(idx, self.none, self.int(1))
-      output_indices = self.tuple([output_idx])
-    else: 
-      output_idx = self.slice_value(self.none, self.none, self.none)
-      output_indices = self.tuple([output_idx])
+    output_indices = self.build_slice_indices(r, 0, idx)
     return self.index(output, output_indices)
   
   def eval_map(self, f, values, axis, output = None):
@@ -118,29 +111,36 @@ class AdverbSemantics(object):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     zero = self.int(0)  
     one = self.int(1)
-    first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
-    if init is None or self.is_none(init):
-      init = first_acc_value  
-    else:
-      init = self.invoke(combine, [init, first_acc_value])
-
+    
     if output is None:
+      if init is None or self.is_none(init):
+        init = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])  
+        start = one 
+      else:
+        init = init 
+        start = zero 
+
       def loop_body(acc, idx):
         elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
         new_acc_value = self.invoke(combine, [acc.get(), elt])
         acc.update(new_acc_value)
-      return self.accumulate_loop(one, niters, loop_body, init)
+      return self.accumulate_loop(start, niters, loop_body, init)
     else: 
       r = self.rank(output)
       output_indices = [self.slice_value(self.none, self.none, self.none)] * r
       output_indices = self.tuple(output_indices)
-      self.setidx(output, output_indices, init)
+      if init is None or self.is_none(init):
+        first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
+        self.setidx(output, output_indices, first_acc_value)
+        start = one
+      else:
+        self.setidx(output, output_indices, init)
+        start = zero 
+      
       def loop_body(idx):
-        acc_slice = self.output_slice(output, idx)
         elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
-        acc_value = self.index(output, idx) if r == 1 else output 
-        self.invoke(combine, [acc_value, elt, acc_slice]) 
-      self.loop(one, niters, loop_body)
+        self.invoke(combine, [output, elt, output]) 
+      self.loop(start, niters, loop_body)
       return self.none 
     
   def eval_scan(self, map_fn, combine, emit, init, values, axis, output = None):

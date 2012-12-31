@@ -2,7 +2,7 @@ import config
 import syntax
 
 from clone_function import CloneFunction
-from copy_elimination import PreallocateAdverbOutputs
+from copy_elimination import PreallocAdverbOutput
 from dead_code_elim import DCE
 from fusion import Fusion
 from inline import Inliner
@@ -33,7 +33,7 @@ def build_pipeline(copy = False,
     add(Fusion)
 
   if config.opt_copy_elimination:
-    add(PreallocateAdverbOutputs)
+    add(PreallocAdverbOutput)
 
   add(LowerAdverbs)
 

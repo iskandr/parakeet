@@ -1,3 +1,4 @@
+from core_types import ScalarT
 from syntax import Var 
 from syntax_visitor import SyntaxVisitor 
 
@@ -13,23 +14,39 @@ class FlowAnalysis(SyntaxVisitor):
       4) which values may/must return from the function 
       5)   
     """
-    self.var_may_point_to_values = {}
-    self.var_must_point_to_values = {}
+    self.var_points_to = {}
     
     # need to track nested references along fields
-    self.value_may_point_to_values = {}
+    self.value_points_to = {}
     
-    self.value_may_be_aliased_by_vars = {}
-    self.value_must_be_aliased_by_vars = {}
+    self.value_named = {}
     
-    self.vars_must_return = set([])
-    self.vars_may_return = set([])
-    self.values_may_return = set([])
-    self.values_must_return = set([])
+    self.may_return_values = set([])
     
+    # only fill these in at the end of the 
+    # analysis 
     self.var_may_escape = set([])
     self.values_may_escape = set([])
   
+  def pre_apply(self, fn):
+    # associate value of input with the address of its string repr
+    # and accept possibility that all args of the same 
+    # type may actually be aliases for each other
+     
+    # group_by_types = {}
+    for arg_name, t in zip(fn.arg_names, fn.input_types):
+      value = id(arg_name)
+      self.var_points_to[arg_name] = value
+      self.value_named[value] = arg_name 
+       
+      #if not isinstance(t, ScalarT):
+      #  group_by_types.get(t, set([])).add(value)
+    #for value_set in group_by_types.itervalues():
+    #  for v in value_set:
+    #    self.value
+    
+    
+     
   def visit_Return(self, stmt):
     if stmt.rhs.__class__ is Var:
       name = stmt.rhs.name 

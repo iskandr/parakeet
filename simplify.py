@@ -8,6 +8,7 @@ from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
 
 from core_types import NoneT, NoneType, ScalarT 
+from array_type import ArrayT 
 
 import subst
 import transform
@@ -351,7 +352,7 @@ class Simplify(Transform):
     rhs_class = rhs.__class__
     if lhs_class is Index:
       lhs = self.transform_lhs_Index(lhs)
-      if isinstance(rhs, Adverb) and rhs.out is None:
+      if isinstance(rhs, Adverb) and rhs.out is None and isinstance(rhs.type, ArrayT):
         rhs.out = lhs 
         rhs.type = NoneType 
         return RunExpr(rhs)

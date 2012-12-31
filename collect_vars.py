@@ -14,6 +14,11 @@ def collect_var_names(expr):
   collector.visit_expr(expr)
   return collector.var_names
 
+def collect_var_names_from_exprs(exprs):
+  collector = SetCollector()
+  collector.visit_expr_list(exprs)
+  return collector.var_names   
+
 class ListCollector(SyntaxVisitor):
   def __init__(self):
     SyntaxVisitor.__init__(self)
