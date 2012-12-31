@@ -95,26 +95,19 @@ class AdverbSemantics(object):
   
 
 
-  def eval_map(self, f, values, axis, output = None):
+  def eval_map(self, f, values, axis):
     niters, delayed_elts = self.map_prelude(f, values, axis)
     zero = self.int(0)
-    if output is None:
-      first_elts = self.force_list(delayed_elts, zero)
-      output = self.create_output_array(f, first_elts, niters)
-      def loop_body(idx):
-        output_indices = self.build_slice_indices(self.rank(output), 0, idx)
-        elt_result = self.invoke(f, [elt(idx) for elt in delayed_elts])
-        self.setidx(output, output_indices, elt_result)
-    else: 
-      # assume the function has been transformed to take an explicit output parameter 
-      def loop_body(idx):
-        output_slice = self.output_slice(output, axis, idx)
-        input_slices = [array(idx) for array in delayed_elts]
-        self.invoke(f, input_slices + [output_slice])
+    first_elts = self.force_list(delayed_elts, zero)
+    output = self.create_output_array(f, first_elts, niters)
+    def loop_body(idx):
+      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
+      elt_result = self.invoke(f, [elt(idx) for elt in delayed_elts])
+      self.setidx(output, output_indices, elt_result)
     self.loop(zero, niters, loop_body)
     return output
 
-  def eval_reduce(self, map_fn, combine, init, values, axis, output = None):
+  def eval_reduce(self, map_fn, combine, init, values, axis):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     zero = self.int(0)  
     one = self.int(1)
@@ -123,32 +116,18 @@ class AdverbSemantics(object):
       init = first_acc_value  
     else:
       init = self.invoke(combine, [init, first_acc_value])
-
-    if output is None:
-      def loop_body(acc, idx):
-        elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
-        new_acc_value = self.invoke(combine, [acc.get(), elt])
-        acc.update(new_acc_value)
-      return self.accumulate_loop(one, niters, loop_body, init)
-    else: 
-      r = self.rank(output)
-      output_indices = [self.slice_value(self.none, self.none, self.none)] * r
-      output_indices = self.tuple(output_indices)
-      self.setidx(output, output_indices, init)
-      def loop_body(idx):
-        output_slice = self.output_slice(output, axis, idx)
-        elt = delayed_map_result(idx)
-        output_value = self.index(output, idx) if r == 1 else output 
-        self.invoke(combine, [output_value, elt, output_slice]) 
-      return self.loop(one, niters, loop_body)
-    
-  def eval_scan(self, map_fn, combine, emit, init, values, axis, output = None):
+    def loop_body(acc, idx):
+      elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
+      new_acc_value = self.invoke(combine, [acc.get(), elt])
+      acc.update(new_acc_value)
+    return self.accumulate_loop(one, niters, loop_body, init)
+   
+  def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):
       return self.invoke(map_fn, self.force_list(delayed_elts, idx))
     init = self.acc_prelude(init, combine, delayed_map_result)
-    if output is None: 
-      output = self.create_output_array(emit, [init], niters)
+    output = self.create_output_array(emit, [init], niters)
     self.setidx(output, self.int(0), self.invoke(emit, [init]))
     def loop_body(acc, idx):
       output_indices = self.build_slice_indices(self.rank(output), 0, idx)
@@ -159,16 +138,14 @@ class AdverbSemantics(object):
     self.accumulate_loop(self.int(1), niters, loop_body, init)
     return output
 
-  def eval_allpairs(self, fn, x, y, axis, output = None):
+  def eval_allpairs(self, fn, x, y, axis):
     nx = self.size_along_axis(x, axis)
     ny = self.size_along_axis(y, axis)
     outer_shape = self.tuple( [nx, ny] )
     zero = self.int(0)
-    if output is None:
-      first_x = self.slice_along_axis(x, axis, zero)
-      first_y = self.slice_along_axis(y, axis, zero)
-      output =  self.create_output_array(fn, [first_x, first_y], outer_shape)
-
+    first_x = self.slice_along_axis(x, axis, zero)
+    first_y = self.slice_along_axis(y, axis, zero)
+    output =  self.create_output_array(fn, [first_x, first_y], outer_shape)
     def outer_loop_body(i):
       xi = self.slice_along_axis(x, axis, i)
       def inner_loop_body(j):

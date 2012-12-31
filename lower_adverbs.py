@@ -5,7 +5,7 @@ import syntax_helpers
 import type_inference
 
 from adverb_semantics import AdverbSemantics
-from transform import MemoizedTransform
+from transform import MemoizedTransform, apply_pipeline
 
 class CodegenSemantics(MemoizedTransform):
   # Can't put type inference related methods inside Transform
@@ -28,8 +28,8 @@ class CodegenSemantics(MemoizedTransform):
       arg_types = syntax_helpers.get_types(args)
       fn = type_inference.specialize(fn.type, arg_types)
 
-    import lowering
-    lowered_fn = lowering.lower(fn, tile=False)
+
+    lowered_fn = lower_adverbs(fn)
     combined_args = closure_args + args
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
     return self.assign_temp(call, "call_result")
@@ -45,15 +45,13 @@ class CodegenSemantics(MemoizedTransform):
 
 class LowerAdverbs(AdverbSemantics, CodegenSemantics):
   def transform_TypedFn(self, expr):
-    import lowering
-    return lowering.lower(expr, tile=False)
+    return lower_adverbs(expr)
   
   def transform_Map(self, expr):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    output = self.transform_if_expr(expr.out)
-    return self.eval_map(fn, args, axis, output)
+    return self.eval_map(fn, args, axis)
 
   def transform_Reduce(self, expr):
     fn = self.transform_expr(expr.fn)
@@ -61,8 +59,7 @@ class LowerAdverbs(AdverbSemantics, CodegenSemantics):
     combine = self.transform_expr(expr.combine)
     init = self.transform_if_expr(expr.init) 
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    output = self.transform_if_expr(expr.out)
-    return self.eval_reduce(fn, combine, init, args, axis, output)
+    return self.eval_reduce(fn, combine, init, args, axis)
 
   def transform_Scan(self, expr):
     fn = self.transform_expr(expr.fn)
@@ -71,8 +68,7 @@ class LowerAdverbs(AdverbSemantics, CodegenSemantics):
     emit = self.transform_expr(expr.emit)
     init = self.transform_if_expr(expr.init)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    output = self.transform_if_expr(expr.out)
-    return self.eval_scan(fn, combine, emit, init, args, axis, output)
+    return self.eval_scan(fn, combine, emit, init, args, axis)
 
   def transform_AllPairs(self, expr):
     fn = self.transform_expr(expr.fn)
@@ -80,5 +76,29 @@ class LowerAdverbs(AdverbSemantics, CodegenSemantics):
     assert len(args) == 2
     x,y = self.transform_expr_list(args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    output = self.transform_if_expr(expr.out)
-    return self.eval_allpairs(fn, x, y, axis, output)
+    return self.eval_allpairs(fn, x, y, axis)
+  
+import config
+from simplify import Simplify 
+from dead_code_elim import DCE 
+import inline      
+from  clone_function import CloneFunction 
+_cache = {}
+
+def lower_adverbs(fn):
+  if fn.name in _cache:
+    return _cache[fn.name]
+  else:
+    pipeline = [CloneFunction, LowerAdverbs]
+    if config.opt_cleanup_after_transforms:
+      pipeline.append(Simplify)
+      pipeline.append(DCE)
+    if config.opt_inline:
+      pipeline.append(inline.Inliner)
+    if config.opt_cleanup_after_transforms:
+      pipeline.append(Simplify)
+      pipeline.append(DCE)
+    new_fn = apply_pipeline(fn, pipeline)
+    _cache[fn.name] = new_fn 
+    _cache[new_fn.name] = new_fn
+    return new_fn 
