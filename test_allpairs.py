@@ -1,7 +1,7 @@
 import numpy as np
 
 from parakeet import sum, allpairs, multiply
-from testing_helpers import expect, expect_allpairs, run_local_tests
+from testing_helpers import expect, expect_allpairs, run_local_ts
 
 bool_vec = np.array([True, False, True])
 int_vec = np.array([1,2,3])
@@ -78,4 +78,4 @@ def test_adverb_matmult():
   expect_allpairs(adverb_matmult, transposed_np_dot, matrices)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

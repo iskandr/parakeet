@@ -4,10 +4,10 @@ import core_types
 import shape
 import shape_from_type
 import syntax
-from syntax import TypedFn
 import tuple_type
 from syntax_visitor import SyntaxVisitor
 
+from syntax import TypedFn
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, UnknownScalar, Unknown
 from shape import unknown_scalar, unknown_value, const

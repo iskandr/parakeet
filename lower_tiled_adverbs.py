@@ -148,7 +148,7 @@ class LowerTiledAdverbs(Transform):
     out_shape = self.shape(rslt_init)
     rslt_t = rslt_init.type
 
-    # Lift the initial value and fill it
+    # Lift the initial value and fill it.
     init = alloc_maybe_array(isarray, elt_t, out_shape, "init")
     def init_unpack(i, cur):
       if i == 0:

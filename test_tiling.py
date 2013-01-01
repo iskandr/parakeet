@@ -156,4 +156,4 @@ def test_1d_reduce():
   assert testing_helpers.eq(rslt, sum(x_array))
 
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  testing_helpers.run_local_ts()

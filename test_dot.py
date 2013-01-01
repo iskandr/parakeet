@@ -1,5 +1,6 @@
-import numpy as np 
-from testing_helpers import  expect_allpairs, run_local_tests 
+import numpy as np
+
+from testing_helpers import  expect_allpairs, run_local_ts
 
 bool_vec = np.array([True, False, True, False, True])
 int_vec = np.array([1,2,3,4,5])
@@ -12,8 +13,8 @@ def loop_dot(x,y):
   result = x[0] * y[0]
   i = 1
   while i < n:
-      result = result + x[i] * y[i]
-      i = i + 1
+    result = result + x[i] * y[i]
+    i = i + 1
   return result
 
 def test_loopdot():
@@ -24,6 +25,6 @@ def dot(x,y):
 
 def test_adverb_dot():
   expect_allpairs(dot, lambda x,y: np.sum(x*y), vectors)
-  
+
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

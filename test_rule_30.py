@@ -2,7 +2,7 @@ import matplotlib.pylab as pylab
 import numpy as np
 import parakeet
 
-from testing_helpers import eq, run_local_tests
+from testing_helpers import eq, run_local_ts
 
 size = 21
 init = np.array(([0] * (size/2)) + [1] + ([0] * (size - size/2 - 1)))
@@ -41,4 +41,4 @@ def test_rule30():
     pylab.show()
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

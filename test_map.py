@@ -2,7 +2,7 @@ import config
 import numpy as np
 
 from parakeet import each
-from testing_helpers import run_local_tests, expect, expect_each, eq, \
+from testing_helpers import run_local_ts, expect, expect_each, eq, \
                             expect_allpairs
 
 ints_1d = np.arange(16, dtype='int')
@@ -117,4 +117,4 @@ def test_map_map():
   expect(each_each_ident, [X], X)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

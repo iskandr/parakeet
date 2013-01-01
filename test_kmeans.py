@@ -4,9 +4,9 @@ import parakeet
 py_reduce = reduce
 py_sum = sum
 
-from parakeet import mean, sum
+from parakeet import sum
 from prims import add
-from testing_helpers import eq, run_local_tests
+from testing_helpers import eq, run_local_ts
 
 def ident(x):
   return x
@@ -114,4 +114,4 @@ def test_kmeans():
   assert eq(assign, par_assign), "Expected %s but got %s" % (assign, par_assign)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

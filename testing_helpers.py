@@ -31,7 +31,7 @@ def run_local_functions(prefix, locals_dict = None):
   print "\n%d tests passed: %s\n" % (len(good), ", ".join(good))
   print "%d failed: %s" % (len(bad),", ".join(bad))
 
-def run_local_tests(locals_dict = None):
+def run_local_ts(locals_dict = None):
   if locals_dict is None:
     last_frame = sys._getframe()
     locals_dict = last_frame.f_back.f_locals
@@ -39,7 +39,7 @@ def run_local_tests(locals_dict = None):
 
 def eq(x,y):
   if isinstance(x, np.ndarray) and not isinstance(y, np.ndarray):
-    return False 
+    return False
   if isinstance(y, np.ndarray):
     return isinstance(x, np.ndarray) and x.shape == y.shape and \
         (np.all(np.ravel(x) == np.ravel(y)) or \

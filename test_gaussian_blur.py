@@ -33,7 +33,7 @@ def gaussian_7x7(i, j, d):
     it = it + 1
   return out / 49.0
 
-plot = True
+plot = False
 if not plot:
   iidxs = np.arange(565,615)
   jidxs = np.arange(737,800)
@@ -72,4 +72,4 @@ def test_sqr_dist():
         "Expected %s but got %s" % (np_blurred, par_blurred)
 
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  testing_helpers.run_local_ts()

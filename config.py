@@ -20,7 +20,7 @@ print_functions_before_transforms = [] # ['CopyElimination']
 print_functions_after_transforms = [] #['CopyElimination']
 
 # show functions before tiling transformation?
-print_functions_before_tiling = True
+print_functions_before_tiling = False
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -68,7 +68,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
