@@ -340,6 +340,9 @@ class ShapeInference(SyntaxVisitor):
         "[ShapeInference] Can't have untyped fn in closure: " + clos.fn.name
     fn = self.visit_expr(clos.fn)
     closure_arg_shapes = self.visit_expr_list(clos.args)
+    if fn.__class__ is Closure: 
+      closure_arg_shapes = tuple(fn.args) + tuple(closure_arg_shapes)
+      fn = fn.fn 
     return Closure(fn, closure_arg_shapes)
 
   def visit_Index(self, expr):
