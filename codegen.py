@@ -531,8 +531,8 @@ class Codegen(object):
       print "-- Shape inference succeeded when calling %s with %s" % \
             (fn, args)
     except:
-      assert False, \
-          "Shape inference failed when calling %s with %s" % (fn, args)
+      print "Shape inference failed when calling %s with %s" % (fn, args)
+      raise
     if not hasattr(extra_dims, '__iter__'):
       extra_dims = (extra_dims,)
     outer_shape_tuple = self.tuple(extra_dims)
@@ -565,7 +565,7 @@ class Codegen(object):
     counter_before = self.assign_temp(start_val, name + "_before")
     counter = self.fresh_var(counter_type, name)
     counter_after = self.fresh_var(counter_type, name + "_after")
-    merge = { counter.name : (counter_before, counter_after) }
+    merge = {counter.name:(counter_before, counter_after)}
     return counter, counter_after, merge
 
   def loop(self, start, niters, loop_body, return_stmt = False):

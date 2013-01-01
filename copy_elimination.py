@@ -110,8 +110,6 @@ class UseDefAnalysis(SyntaxVisitor):
   creation as well as first and last uses of variables
   """
   def __init__(self):
-
-
     # map from pointers of statement objects to
     # sequential numbering
     # where start is the current statement
@@ -138,7 +136,6 @@ class UseDefAnalysis(SyntaxVisitor):
     elif expr.__class__ is Tuple:
       for elt in expr.elts:
         self.visit_lhs(elt)
-
 
   def visit_If(self, stmt):
     for name in stmt.merge.iterkeys():
@@ -192,7 +189,7 @@ class CopyElimination(Transform):
     if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
       if lhs_name not in self.usedef.first_use and \
-          lhs_name not in self.may_escape:
+         lhs_name not in self.may_escape:
         # why assign to an array if it never gets used?
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
@@ -200,14 +197,14 @@ class CopyElimination(Transform):
         rhs_name = stmt.rhs.name
 
         if self.usedef.last_use[rhs_name] == curr_stmt_number and \
-            self.usedef.first_use[lhs_name] > curr_stmt_number and \
-            rhs_name not in self.may_escape and \
-            rhs_name in self.local_arrays:
+           self.usedef.first_use[lhs_name] > curr_stmt_number and \
+           rhs_name not in self.may_escape and \
+           rhs_name in self.local_arrays:
           array_stmt = self.local_arrays[rhs_name]
           prev_stmt_number = self.usedef.stmt_number[id(array_stmt)]
           if array_stmt.rhs.__class__ in (Struct, ArrayView) and \
-              all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number
-                  for lhs_depends_on in collect_var_names(stmt.lhs)):
+             all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number
+                 for lhs_depends_on in collect_var_names(stmt.lhs)):
             array_stmt.rhs = stmt.lhs
             return None
     return stmt
@@ -222,14 +219,6 @@ class PreallocAdverbOutput(MemoizedTransform):
         max_rank = r
         biggest_arg = arg
     return self.shape(biggest_arg, axis)
-
-
-  def call_shape(self, maybe_clos, args):
-    fn = self.get_fn(maybe_clos)
-    abstract_shape = shape_inference.call_shape_expr(fn)
-    closure_args = self.closure_elts(maybe_clos)
-    combined_args = closure_args + args
-    return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
 
   def map_elt_shape(self, maybe_clos, args, axis):
     nested_args = [self.index_along_axis(arg, axis, zero_i64) for arg in args]
@@ -258,8 +247,8 @@ class PreallocAdverbOutput(MemoizedTransform):
     return expr
 
   def transform_Map(self, expr):
-    if expr.out is None and isinstance(expr.type, ArrayT) and expr.type.rank > 1:
-
+    if expr.out is None and isinstance(expr.type, ArrayT) and \
+       expr.type.rank > 1:
       # transform the function to take an additional output parameter
       output_shape = self.map_shape(expr.fn, expr.args, expr.axis)
       return_t = self.return_type(expr.fn)
@@ -278,6 +267,7 @@ class PreallocAdverbOutput(MemoizedTransform):
 
   def reduce_shape(self, maybe_clos, args, axis):
     return self.map_elt_shape(maybe_clos, args, axis)
+
   """
   def transform_Reduce(self, expr):
     if expr.out is None:
@@ -295,7 +285,6 @@ class PreallocAdverbOutput(MemoizedTransform):
       self.blocks.append_to_current(RunExpr(expr))
       return expr.out
   """
-
 
 class PreallocFnOutput(PreallocAdverbOutput):
   """
@@ -316,7 +305,6 @@ class PreallocFnOutput(PreallocAdverbOutput):
       idx = zero_i64
       elt_t = output_t
       output_t = array_type.increase_rank(output_t, 1)
-
 
     self.output_type = output_t
     output_var = Var(output_name, type=output_t)

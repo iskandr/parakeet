@@ -1,11 +1,10 @@
-
 import array_type
 import core_types
 import tuple_type
 
 import syntax
 from syntax_visitor import SyntaxVisitor
-from syntax import TypedFn, Fn 
+from syntax import TypedFn, Fn
 
 import shape
 from shape import Var, Const, Shape, Tuple, Closure
@@ -371,14 +370,13 @@ class ShapeInference(SyntaxVisitor):
     args = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     return symbolic_call(fn, args)
-  
+
   def visit_TiledScan(self, expr):
     args = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     acc_shape = symbolic_call(fn, args)
-    emit = self.visit_expr(expr.emit)  
-    return symbolic_call(emit, [acc_shape]) 
-    
+    emit = self.visit_expr(expr.emit)
+    return symbolic_call(emit, [acc_shape])
 
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
@@ -412,7 +410,7 @@ _shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
-  
+
   if typed_fn.name in _shape_cache:
     return _shape_cache[typed_fn.name]
   else:
@@ -467,8 +465,8 @@ def subst_list(xs, env):
 def symbolic_call(typed_fn, abstract_inputs):
   # result in terms of variables like input0, (shape: input1, input2), etc..
   if typed_fn.__class__ is Closure:
-    closure_elts = tuple(typed_fn.arg_shapes) 
-    typed_fn = typed_fn 
+    closure_elts = tuple(typed_fn.arg_shapes)
+    typed_fn = typed_fn
   else:
     closure_elts = ()
   abstract_result_value = call_shape_expr(typed_fn)
