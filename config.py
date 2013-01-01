@@ -19,6 +19,9 @@ print_functions_before_transforms = [] # ['CopyElimination']
 # show the function produced by each transformation?
 print_functions_after_transforms = [] #['CopyElimination']
 
+# show functions before tiling transformation?
+print_functions_before_tiling = True
+
 # show functions after tiling transformation?
 print_tiled_adverbs = False
 
@@ -68,4 +71,4 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True

@@ -71,6 +71,11 @@ class TileAdverbs(Transform):
 
     self.num_tiles = 0
 
+  def pre_apply(self, fn):
+    if config.print_functions_before_tiling:
+      print fn
+    return fn
+
   def push_exp(self, adv, adv_args):
     self.exp_stack.append(self.expansions)
     self.expansions = copy.deepcopy(self.expansions)

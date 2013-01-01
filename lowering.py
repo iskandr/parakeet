@@ -23,8 +23,6 @@ def build_pipeline(copy = False,
                    licm = config.opt_licm):
   p = [CloneFunction] if copy else []
 
-
-
   if fusion:
     add(Fusion)
 
@@ -33,7 +31,6 @@ def build_pipeline(copy = False,
   return p
 
 _lowered_functions = {}
-
 
 def lower(fundef, tile=False):
   if isinstance(fundef, str):
@@ -47,11 +44,11 @@ def lower(fundef, tile=False):
     num_tiles = 0
     if tile:
       prelim = [CloneFunction,
-           MapifyAllPairs,
-           Fusion, Simplify, DCE,
-           TileAdverbs, Simplify, DCE,
-           LowerTiledAdverbs, Simplify, DCE,
-           Fusion, Simplify, DCE]
+                MapifyAllPairs,
+                Fusion, Simplify, DCE,
+                TileAdverbs, Simplify, DCE,
+                LowerTiledAdverbs, Simplify, DCE,
+                Fusion, Simplify, DCE]
       fn = apply_pipeline(fundef, prelim)
       num_tiles = fn.num_tiles
 

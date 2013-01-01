@@ -1,0 +1,7 @@
+For loops
+Parse module names in function uses
+Support for trancendentals
+Support for unary negation
+Closures with nested adverbs don't work right
+Logic to detect whether to tile a subtree of code
+Ability to tile only subtrees of a function
