@@ -169,35 +169,35 @@ class CopyElimination(Transform):
     #   1) dest hasn't been used before as a value
     #   2) src doesn't escape
     #   3) src was locally allocated
-    # ...then transform the code so instead of allocating src
-
-    if stmt.lhs.__class__ is Index and \
-        stmt.lhs.type.__class__ is ArrayT and \
-        stmt.lhs.value.__class__ is Var and \
-        stmt.rhs.__class__ is Var:
-
-      stmt_number = self.use_analysis.stmt_number[id(stmt)]
-
+    # ...then transform the code so instead of allocating src 
+    
+    if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
-      rhs_name = stmt.rhs.name
-      print "STMT_NUMBER", stmt_number
-      print "LHS NAME", lhs_name
-      print "RHS NAME", rhs_name
-      print "last use rhs", self.use_analysis.last_use[rhs_name]
-      print "first_use lhs", self.use_analysis.first_use[lhs_name]
-      print "rhs may escape?", rhs_name  in self.may_escape
-      print "rhs is local array?", rhs_name in self.local_arrays
-      if self.use_analysis.last_use[rhs_name] == stmt_number and \
-          self.use_analysis.first_use[lhs_name] > stmt_number and \
-          rhs_name not in self.may_escape and \
-          rhs_name in self.local_arrays:
-        array_stmt = self.local_arrays[rhs_name]
-        print "array stmt", array_stmt
-        if array_stmt.rhs.__class__ in (Struct, ArrayView):
-          print "UPDATING", array_stmt
-          array_stmt.rhs = stmt.lhs
-          print array_stmt
-    return stmt
+      if stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
+      
+        stmt_number = self.use_analysis.stmt_number[id(stmt)]
+        rhs_name = stmt.rhs.name
+        print "STMT_NUMBER", stmt_number
+        print "LHS NAME", lhs_name 
+        print "RHS NAME", rhs_name  
+        print "last use rhs", self.use_analysis.last_use[rhs_name]
+        print "first_use lhs", self.use_analysis.first_use[lhs_name]
+        print "rhs may escape?", rhs_name  in self.may_escape
+        print "rhs is local array?", rhs_name in self.local_arrays
+        if self.use_analysis.last_use[rhs_name] == stmt_number and \
+            self.use_analysis.first_use[lhs_name] > stmt_number and \
+            rhs_name not in self.may_escape and \
+            rhs_name in self.local_arrays:
+          array_stmt = self.local_arrays[rhs_name]
+          print "array stmt", array_stmt 
+          if array_stmt.rhs.__class__ in (Struct, ArrayView):
+            print "UPDATING", array_stmt
+            array_stmt.rhs = stmt.lhs
+            return None
+      elif lhs_name not in self.use_analysis.first_use and \
+          lhs_name not in self.may_escape:
+        # why assign to an array if it never gets used? 
+        return None 
 
 
 class PreallocAdverbOutput(MemoizedTransform):
