@@ -163,6 +163,8 @@ class Codegen(object):
       return idx_expr
 
   def index_along_axis(self, arr, axis, idx, name=None):
+    if arr.type.__class__ is not ArrayT:
+      return arr 
     assert isinstance(axis, int), \
         "Axis must be a known constant int, got: " + str(axis)
     indices = []
@@ -173,6 +175,8 @@ class Codegen(object):
         indices.append(syntax_helpers.slice_none)
 
     index_tuple = self.tuple(indices, "indices")
+
+    
     result_t = arr.type.index_type(index_tuple.type)
     idx_expr = Index(arr, index_tuple, type=result_t)
     if name:
@@ -505,7 +509,7 @@ class Codegen(object):
     lowered_fn = lower_adverbs.lower_adverbs(fn)
     combined_args = closure_args + args
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
-    print call
+
     return self.assign_temp(call, "call_result")
 
   def size_along_axis(self, value, axis):
