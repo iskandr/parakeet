@@ -42,38 +42,22 @@ class LowerTiledAdverbs(Transform):
     # Create the tile size variable and find the number of tiles
     tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
     fn = self.transform_expr(expr.fn)
+
     inner_fn = self.get_fn(fn)
     return_t = inner_fn.return_type
     nested_has_tiles = inner_fn.has_tiles
 
-    elt_t = expr.type.elt_type
+    # Increase the nesting_idx by the number of tiles in the nested fn
+    self.nesting_idx += inner_fn.num_tiles
+
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
 
-    # Hackishly execute the first tile to get the output shape
-    init_slice_bound = self.fresh_i64("init_slice_bound")
-    init_slice_cond = self.lt(tile_size, niters, "init_slice_cond")
-    init_merge = {init_slice_bound.name:(tile_size, niters)}
-    self.blocks += syntax.If(init_slice_cond, [], [], init_merge)
-    init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
-                              syntax_helpers.one_i64, slice_t)
-    init_slice_args = [self.index_along_axis(arg, axis, init_slice)
-                       for arg in args]
+    output_args = args
     if nested_has_tiles:
-      init_slice_args.append(self.tile_sizes_param)
-    init_call = syntax.Call(fn, init_slice_args, type=return_t)
-    rslt_init = self.assign_temp(init_call, "rslt_init")
-
-    # Allocate the output based on shape of the initial tile and assign the
-    # first result to the appropriate slice of the output.
-    init_shape = self.shape(rslt_init)
-    shape_els = [self.tuple_proj(init_shape, i)
-                 for i in range(self.nesting_idx)]
-    shape_els += [niters]
-    shape_els += [self.tuple_proj(init_shape, i)
-                  for i in range(self.nesting_idx + 1,
-                                 len(init_shape.type.elt_types))]
-    out_shape = self.tuple(shape_els, "out_shape")
-    array_result = self.alloc_array(elt_t, out_shape, "array_result")
+      output_args.append(self.tuple([syntax_helpers.one_i64] *
+                                    (self.nesting_idx + 1)))
+    array_result = self._create_output_array(fn, output_args, [],
+                                             "array_result")
 
     # Loop over the remaining tiles.
     i, i_after, merge = self.loop_counter("i")

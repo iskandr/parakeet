@@ -480,6 +480,43 @@ class Codegen(object):
       assert isinstance(fn.type.fn, TypedFn)
       return fn.type.fn.return_type
 
+  def invoke_type(self, closure, args):
+    import type_inference
+    closure_t = closure.type
+    arg_types = syntax_helpers.get_types(args)
+    assert all(isinstance(t, core_types.Type) for t in arg_types), \
+        "Invalid types: %s" % (arg_types, )
+    return type_inference.invoke_result_type(closure_t, arg_types)
+
+  def invoke(self, fn, args):
+    import closure_type
+    import lower_adverbs
+    import syntax
+    import type_inference
+    if fn.__class__ is syntax.TypedFn:
+      closure_args = []
+    else:
+      assert isinstance(fn.type, closure_type.ClosureT), \
+          "Unexpected function %s with type: %s" % (fn, fn.type)
+      closure_args = self.closure_elts(fn)
+      arg_types = syntax_helpers.get_types(args)
+      fn = type_inference.specialize(fn.type, arg_types)
+
+    lowered_fn = lower_adverbs.lower_adverbs(fn)
+    combined_args = closure_args + args
+    call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
+    print call
+    return self.assign_temp(call, "call_result")
+
+  def size_along_axis(self, value, axis):
+    return self.shape(value, axis)
+
+  def check_equal_sizes(self, sizes):
+    pass
+
+  none = syntax_helpers.none
+  null_slice = syntax_helpers.slice_none
+
   # TODO: get rid of that leading underscore to enable this function once
   # shape inference works for all the weird and wacky constructs in our
   # syntax zoo
@@ -490,16 +527,12 @@ class Codegen(object):
     """
 
     try:
-      symbolic_shape = shape_inference.call_shape_expr(fn)
-      inner_shape_tuple = shape_codegen.make_shape_expr(self, symbolic_shape,
-                                                        args)
+      inner_shape_tuple = self.call_shape(fn, args)
       print "-- Shape inference succeeded when calling %s with %s" % \
             (fn, args)
     except:
-      print "[Warning] Shape inference failed when calling %s with %s" % \
-            (fn, args)
-      result = self.invoke(fn, args)
-      inner_shape_tuple = self.shape(result)
+      assert False, \
+          "Shape inference failed when calling %s with %s" % (fn, args)
     if not hasattr(extra_dims, '__iter__'):
       extra_dims = (extra_dims,)
     outer_shape_tuple = self.tuple(extra_dims)
@@ -547,6 +580,13 @@ class Codegen(object):
       return loop_stmt
     else:
       self.blocks += loop_stmt
+
+  def call_shape(self, maybe_clos, args):
+    fn = self.get_fn(maybe_clos)
+    abstract_shape = shape_inference.call_shape_expr(fn)
+    closure_args = self.closure_elts(maybe_clos)
+    combined_args = closure_args + args
+    return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
 
   class Accumulator:
     def __init__(self, acc_type, fresh_var, assign):
