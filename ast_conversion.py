@@ -300,6 +300,7 @@ class AST_Translator(ast.NodeVisitor):
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
           return self.translate_builtin(value, positional, keywords_dict)
+        
 
     # if we didn't evaluate a Prim or macro...
     fn_val = self.visit(fn)

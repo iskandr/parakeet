@@ -56,7 +56,7 @@ class Node(object):
   
   def iteritems(self):
     for k in self.members():
-      yield (k, getattr(self, k))
+      yield (k, getattr(self, k, None))
       
   def itervalues(self):
     for (_,v) in self.iteritems():

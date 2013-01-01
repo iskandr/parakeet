@@ -11,7 +11,7 @@ from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, UnknownScalar, Unknown
 from shape import unknown_scalar, unknown_value, const
 from shape import combine_list, increase_rank
-from shape import is_zero, make_shape
+from shape import is_zero, is_one, make_shape
 import shape_from_type
 
 import adverb_semantics
@@ -57,7 +57,18 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
       return x
     elif isinstance(x, Const) and isinstance(y, Const):
       return const(x.value - y.value)
-
+    else:
+      return shape.Sub(x, y)
+    
+  def div(self, x, y):
+    assert not is_zero(y)
+    if is_one(y):
+      return x 
+    elif isinstance(x, Const) and isinstance(y, Const):
+      return const(int(x.value / y.value))
+    else:
+      return shape.Div(x, y)
+      
   def shape(self, x):
     if isinstance(x, Shape):
       return Tuple(x.dims)
@@ -73,10 +84,10 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
   def index(self, arr, idx):
     if isinstance(arr, Scalar):
       return arr
-    assert isinstance(arr, Shape )
+    assert arr.__class__ is Shape
     if isinstance(idx, Scalar):
       indices = [idx]
-    elif isinstance(idx, Tuple):
+    elif idx.__class__ is Tuple:
       indices = idx.elts
     result_dims = []
     for (i, curr_idx) in enumerate(indices):
@@ -87,17 +98,35 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
       elif isinstance(curr_idx, Scalar):
         pass
       else:
-        assert isinstance(curr_idx, Slice), "Unsupported index %s" % curr_idx
-
-        lower = curr_idx.start if curr_idx.start else const(0)
-        if isinstance(lower, Const) and lower.value < 0:
-          lower = self.sub(old_dim, lower)
-        upper = idx.stop if curr_idx.stop else old_dim
-        if isinstance(upper, Const) and upper.value < 0:
-          upper = self.sub(old_dim, upper)
-        n = self.sub(curr_idx.stop, curr_idx.start)
-        if idx.step:
-          n = self.div(curr_idx.step)
+        assert curr_idx.__class__ is Slice, \
+          "Unsupported index %s" % curr_idx
+        if isinstance(curr_idx.start, Const): 
+          if curr_idx.start.value is None: 
+            lower = const(0)
+          elif curr_idx.start.value < 0:
+            lower = self.sub(old_dim, curr_idx.start)
+          else:
+            lower = curr_idx.start 
+        else:
+          lower = unknown_scalar 
+        
+        if isinstance(curr_idx.stop, Const):
+          if curr_idx.stop.value is None: 
+            upper = old_dim
+          elif curr_idx.stop.value < 0:
+            upper = self.sub(old_dim, curr_idx.stop)
+          else:
+            upper = curr_idx.stop 
+        else:
+          upper = unknown_scalar 
+          
+        n = self.sub(upper, lower)
+        step = curr_idx.step 
+        if step and \
+            isinstance(step, Const) and \
+            step.value is not None and \
+            step.value != 1:
+          n = self.div(n, step)
         result_dims.append(n)
     n_original = len(arr.dims)
     n_idx= len(indices)
@@ -318,10 +347,10 @@ class ShapeInference(SyntaxVisitor):
     idx = self.visit_expr(expr.index)
     if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
-    elif isinstance(arr, Shape):
+    elif arr.__class__ is Shape:
       if isinstance(idx, Scalar):
         return shape.lower_rank(arr, 0)
-      elif isinstance(idx, Shape):
+      elif idx.__class__ is Shape:
         assert len(idx.dims) <= len(arr.dims), \
             "Can't index into rank %d array with rank %d indices" % \
             (len(arr.dims), len(idx.dims))
@@ -329,6 +358,8 @@ class ShapeInference(SyntaxVisitor):
         for (i,d) in enumerate(idx.dims):
           dims[i] = d
         return shape.make_shape(dims)
+      else:
+        return shape_semantics.index(arr, idx)
     assert False, \
         "Can't index (%s) with array shape %s and index shape %s" % \
         (expr, arr, idx)
@@ -410,7 +441,7 @@ _shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
-
+   
   if typed_fn.name in _shape_cache:
     return _shape_cache[typed_fn.name]
   else:
@@ -465,8 +496,8 @@ def subst_list(xs, env):
 def symbolic_call(typed_fn, abstract_inputs):
   # result in terms of variables like input0, (shape: input1, input2), etc..
   if typed_fn.__class__ is Closure:
-    closure_elts = tuple(typed_fn.arg_shapes)
-    typed_fn = typed_fn
+    closure_elts = tuple(typed_fn.args)
+    typed_fn = typed_fn.fn 
   else:
     closure_elts = ()
   abstract_result_value = call_shape_expr(typed_fn)

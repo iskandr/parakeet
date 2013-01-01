@@ -43,13 +43,17 @@ def calc_centroid(X, a, i):
   return each(d, s)
 
 from parakeet import each, reduce
+
+def parakeet_zip(xs, ys):
+  def make_pair(x, y):
+    return (x, y)
+  return each(make_pair, xs, ys)
+
 def par_minidx(C, idxs, x):
   def run_sqr_dist(c):
     return sqr_dist(c, x)
   dists = each(run_sqr_dist, C)
-  def z(x, y):
-    return (x, y)
-  zipped = each(z, dists, idxs)
+  zipped = parakeet_zip(dists, idxs)
   return reduce(argmin, zipped, init=(inf,-1))[1]
 
 def py_dists(C, x):
