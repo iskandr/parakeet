@@ -14,4 +14,4 @@ def test_add1():
       "Expected %s, got %s" % (expected, result)
 
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  testing_helpers.run_local_ts()

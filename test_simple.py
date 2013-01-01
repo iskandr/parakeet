@@ -1,4 +1,4 @@
-from testing_helpers import expect, run_local_tests
+from testing_helpers import expect, run_local_ts
 
 def always1():
   return 1
@@ -7,10 +7,10 @@ def test_always1():
   expect(always1, [], 1)
 
 def always_neg10():
-    return -10
+  return -10
 
 def test_always_neg10():
-    expect(always_neg10, [], -10)
+  expect(always_neg10, [], -10)
 
 def add1(x):
   return x + 1
@@ -109,31 +109,31 @@ def add_defaults(x = 1, y = 2):
     return x + y
 
 def test_add_defaults():
-    expect(add_defaults, [], 3)
-    expect(add_defaults, [10], 12)
-    expect(add_defaults, [10, 20], 30)
-    expect(add_defaults, [10, 20.0], 30.0)
+  expect(add_defaults, [], 3)
+  expect(add_defaults, [10], 12)
+  expect(add_defaults, [10, 20], 30)
+  expect(add_defaults, [10, 20.0], 30.0)
 
 def call_add_defaults():
-    return add_defaults(10)
+  return add_defaults(10)
 
 def test_call_add_defaults():
-    expect(call_add_defaults, [], 12)
+  expect(call_add_defaults, [], 12)
 
 def call_add_defaults_with_names():
-    return add_defaults(y = 10, x = 20)
+  return add_defaults(y = 10, x = 20)
 
 def test_call_defaults_with_names():
-    expect(call_add_defaults_with_names, [], 30)
+  expect(call_add_defaults_with_names, [], 30)
 
 def sub(x,y):
-    return x - y
+  return x - y
 
 def call_pos_with_names():
-    return sub(y = 10, x = 20)
+  return sub(y = 10, x = 20)
 
 def test_call_pos_with_names():
-    expect(call_pos_with_names, [], 10)
+  expect(call_pos_with_names, [], 10)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

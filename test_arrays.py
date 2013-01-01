@@ -1,6 +1,7 @@
 import numpy as np
 
-from testing_helpers import expect, run_local_tests
+from testing_helpers import expect, run_local_ts
+
 def create_const(x):
   return [x,x,x,x]
 
@@ -83,4 +84,4 @@ def test_set_idx_3d():
     expect(set_idx_3d, [x1, i, j, k, val], x2)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

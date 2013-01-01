@@ -1,5 +1,6 @@
-from testing_helpers import expect, run_local_tests, expect_each 
 import numpy as np
+
+from testing_helpers import expect, run_local_ts, expect_each
 
 shape_1d = 40
 ints_1d = np.arange(shape_1d)
@@ -114,4 +115,4 @@ def test_lower_right_corner():
   expect_each(lower_right_corner, lower_right_corner, matrices)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

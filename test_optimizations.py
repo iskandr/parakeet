@@ -1,9 +1,11 @@
+import numpy as np
 import parakeet
-from parakeet import each 
 import syntax
 import testing_helpers
-from testing_helpers import expect 
-import numpy as np 
+
+from parakeet import each
+from testing_helpers import expect
+
 def A(x):
   return x + 1
 
@@ -21,16 +23,15 @@ def simple_primcall(e):
 
 def simple_expr(expr):
   return isinstance(expr, (syntax.Const, syntax.Var)) or \
-    simple_primcall(expr)
+         simple_primcall(expr)
 
 def simple_stmt(stmt):
   """
-  Is this a statement from a simple
-  straightline function?
+  Is this a statement from a simple straightline function?
 
-  (can only contain scalar computations and
-   no control flow)
+  (can only contain scalar computations and no control flow)
   """
+
   if isinstance(stmt, syntax.Return):
     return simple_expr(stmt.value)
   elif isinstance(stmt, syntax.Assign):
@@ -47,7 +48,7 @@ def simple_fn(fn):
 def test_inline():
   typed_fn = parakeet.typed_repr(C, [1])
   assert len(typed_fn.body) in [1,2], \
-    "Expected body to be 1 or 2 statements, got %s" % typed_fn
+      "Expected body to be 1 or 2 statements, got %s" % typed_fn
   assert simple_fn(typed_fn)
   testing_helpers.expect(C, [1], 2)
 
@@ -62,7 +63,7 @@ def test_simple_constant_folding():
   testing_helpers.expect(lots_of_arith, [1], 1)
   typed_fn = parakeet.typed_repr(lots_of_arith, [1])
   assert len(typed_fn.body) == 1, \
-    "Insufficiently simplified body: %s" % typed_fn
+      "Insufficiently simplified body: %s" % typed_fn
 
 def const_across_control_flow(b):
   if b:
@@ -80,14 +81,13 @@ def test_constants_across_control_flow():
   assert isinstance(stmt.value, syntax.Const)
 
 def always_true_branch():
-    x = 1 + 1
-    if x == 2:
-        res = 0 + 0 
-        return res
-    else:
-        res = 1 * 1 + 0 
-        return res
-
+  x = 1 + 1
+  if x == 2:
+    res = 0 + 0
+    return res
+  else:
+    res = 1 * 1 + 0
+    return res
 
 def test_always_true():
   testing_helpers.expect(always_true_branch, [], 0)
@@ -96,15 +96,15 @@ def test_always_true():
   stmt = typed_fn.body[0]
   assert isinstance(stmt, syntax.Return)
   assert isinstance(stmt.value, syntax.Const)
- 
+
 def always_false_branch():
-    x = 1 + 2
-    if x == 2:
-        res = 1 * 0 + 0 
-        return res
-    else:
-        res = 0 + 1 * 1
-        return res 
+  x = 1 + 2
+  if x == 2:
+    res = 1 * 0 + 0
+    return res
+  else:
+    res = 0 + 1 * 1
+    return res
 
 def test_always_false():
   testing_helpers.expect(always_false_branch, [], 1)
@@ -115,20 +115,19 @@ def test_always_false():
   assert isinstance(stmt.value, syntax.Const)
 
 def volatile_licm_mistake():
-    i = 0 
-    x = [0]
-    while i < 10:
-        alloc = [1]
-        if i == 5:
-          x = alloc 
-        else:
-          alloc[0] = 100
-        i = i + 1
-    return x
+  i = 0
+  x = [0]
+  while i < 10:
+    alloc = [1]
+    if i == 5:
+      x = alloc
+    else:
+      alloc[0] = 100
+    i = i + 1
+  return x
 
 def test_volatile_licm_mistake():
-    expect(volatile_licm_mistake, [], np.array([1]))
-
+  expect(volatile_licm_mistake, [], np.array([1]))
 
 def g(x):
   def h(xi):
@@ -140,29 +139,28 @@ def nested_add1(X):
 
 from syntax_visitor import SyntaxVisitor
 class CountLoops(SyntaxVisitor):
-    def __init__(self):
-      SyntaxVisitor.__init__(self)
-      self.count = 0 
+  def __init__(self):
+    SyntaxVisitor.__init__(self)
+    self.count = 0
 
-    
-    def visit_While(self, stmt):
-      self.count += 1
-      SyntaxVisitor.visit_While(self, stmt)
+  def visit_While(self, stmt):
+    self.count += 1
+    SyntaxVisitor.visit_While(self, stmt)
 
 def count_loops(fn):
-    Counter = CountLoops()
-    Counter.visit_fn(fn)
-    return Counter.count 
+  Counter = CountLoops()
+  Counter.visit_fn(fn)
+  return Counter.count
 
 def test_copy_elimination():
-    x = np.array([[1,2,3],[4,5,6]])
-    expect(nested_add1, [x], x + 1.0)
-    typed_fn = parakeet.typed_repr(nested_add1, [x])
-    import lowering 
-    lowered = lowering.lower(typed_fn)
-    n_loops = count_loops(lowered)
-    assert n_loops <= 2, \
-        "Too many loops generated! Expected at most 2, got %d" % n_loops
+  x = np.array([[1,2,3],[4,5,6]])
+  expect(nested_add1, [x], x + 1.0)
+  typed_fn = parakeet.typed_repr(nested_add1, [x])
+  import lowering
+  lowered = lowering.lower(typed_fn)
+  n_loops = count_loops(lowered)
+  assert n_loops <= 2, \
+      "Too many loops generated! Expected at most 2, got %d" % n_loops
 
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  testing_helpers.run_local_ts()

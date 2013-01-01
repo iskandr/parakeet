@@ -74,12 +74,9 @@ class LowerTiledAdverbs(Transform):
                                  len(init_shape.type.elt_types))]
     out_shape = self.tuple(shape_els, "out_shape")
     array_result = self.alloc_array(elt_t, out_shape, "array_result")
-    init_output_idxs = self.index_along_axis(array_result, self.nesting_idx,
-                                             init_slice)
-    self.assign(init_output_idxs, rslt_init)
 
     # Loop over the remaining tiles.
-    i, i_after, merge = self.loop_counter("i", tile_size)
+    i, i_after, merge = self.loop_counter("i")
     cond = self.lt(i, niters)
 
     self.blocks.push()
@@ -151,7 +148,7 @@ class LowerTiledAdverbs(Transform):
     out_shape = self.shape(rslt_init)
     rslt_t = rslt_init.type
 
-    # Lift the initial value and fill it
+    # Lift the initial value and fill it.
     init = alloc_maybe_array(isarray, elt_t, out_shape, "init")
     def init_unpack(i, cur):
       if i == 0:
@@ -169,20 +166,13 @@ class LowerTiledAdverbs(Transform):
                array_type.get_rank(expr.init.type)
     self.blocks += init_unpack(num_exps, init)
 
-    # Combine the initial value with the initial tile result.
-    rslt_before = self.fresh_var(rslt_t, "rslt_before")
-    init_combine = syntax.Call(callable_combine,
-                               [init, rslt_init],
-                               type=inner_combine.return_type)
-    self.assign(rslt_before, init_combine)
-
     # Loop over the remaining tiles.
     loop_rslt = self.fresh_var(rslt_t, "loop_rslt")
     rslt_tmp = self.fresh_var(rslt_t, "rslt_tmp")
     rslt_after = self.fresh_var(rslt_t, "rslt_after")
-    i, i_after, merge = self.loop_counter("i", init_slice_bound)
+    i, i_after, merge = self.loop_counter("i")
     loop_cond = self.lt(i, niters)
-    merge[loop_rslt.name] = (rslt_before, rslt_after)
+    merge[loop_rslt.name] = (init, rslt_after)
 
     self.blocks.push()
     # Take care of stragglers via checking bound every iteration.

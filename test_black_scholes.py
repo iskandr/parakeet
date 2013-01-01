@@ -2,7 +2,7 @@ import numpy as np
 import parakeet
 
 from numpy import exp, log, sqrt
-from testing_helpers import eq, run_local_tests
+from testing_helpers import eq, run_local_ts
 
 def CND(x):
   a1 = 0.31938153
@@ -36,4 +36,4 @@ def test_black_scholes():
   assert eq(par_rslt, py_rslt)
 
 if __name__ == '__main__':
-  run_local_tests()
+  run_local_ts()

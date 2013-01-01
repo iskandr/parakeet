@@ -123,4 +123,4 @@ def test_par_mm():
   print "NumPy time:", np_time
 
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  testing_helpers.run_local_ts()
