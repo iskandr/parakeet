@@ -1,4 +1,4 @@
-from testing_helpers import expect, run_local_ts
+from testing_helpers import expect, run_local_tests
 
 def implicit_to_float(x):
   return x + 0.5
@@ -22,4 +22,4 @@ def test_implicit_to_bool():
   expect(implicit_to_bool, [0.0], -10)
 
 if __name__ == '__main__':
-    run_local_ts()
+    run_local_tests()

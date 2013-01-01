@@ -1,7 +1,7 @@
 import numpy as np
 
 from parakeet import each
-from testing_helpers import eq, expect, run_local_ts
+from testing_helpers import eq, expect, run_local_tests
 
 shape_1d = 40
 ints_1d = np.arange(shape_1d)
@@ -89,4 +89,4 @@ def test_bool_idx():
   assert eq(par_rslt, py_rslt), "Expected %s got %s" % (py_rslt, par_rslt)
 
 if __name__ == '__main__':
-  run_local_ts()
+  run_local_tests()

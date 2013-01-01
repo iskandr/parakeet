@@ -1,6 +1,6 @@
 import numpy as np
 
-from testing_helpers import expect, run_local_ts
+from testing_helpers import expect, run_local_tests
 
 def return_pair():
   return (-1.0, 200)
@@ -71,4 +71,4 @@ def test_or_elts():
   expect(or_elts, [(False, False)], 0)
 
 if __name__ == '__main__':
-  run_local_ts()
+  run_local_tests()

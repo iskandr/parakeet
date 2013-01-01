@@ -142,4 +142,4 @@ def test_allpairs():
       (inner_products, np_inner_products)
 
 if __name__ == '__main__':
-  testing_helpers.run_local_ts()
+  testing_helpers.run_local_tests()

@@ -85,4 +85,4 @@ def test_map_increase_rank_2d():
   expect_shape(simple_map, [mat], Shape([Var(0), Var(1)]))
 
 if __name__ == '__main__':
-  testing_helpers.run_local_ts()
+  testing_helpers.run_local_tests()

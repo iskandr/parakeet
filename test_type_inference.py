@@ -1,5 +1,5 @@
 from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
-from testing_helpers import expect_type, run_local_ts
+from testing_helpers import expect_type, run_local_tests
 
 def add1(x):
   return x + 1
@@ -61,4 +61,4 @@ def test_incr_loop():
   expect_type(incr_loop, [Float64, Int32], Float64)
 
 if __name__ == '__main__':
-  run_local_ts()
+  run_local_tests()

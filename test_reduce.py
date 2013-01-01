@@ -54,4 +54,4 @@ def test_avg_along_axis_0():
       "Expected %s but got %s" % (py_rslt, par_rslt)
 
 if __name__ == '__main__':
-  testing_helpers.run_local_ts()
+  testing_helpers.run_local_tests()
