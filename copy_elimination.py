@@ -5,7 +5,6 @@ from syntax import Assign, Index, Slice, Var, Return, RunExpr
 from syntax import ArrayView,  Alloc, Array, Struct, Tuple, Attribute
 from syntax_helpers import none, slice_none, zero_i64
 
-
 from adverb_helpers import max_rank
 from adverbs import Map, Reduce, Scan, AllPairs, Adverb
 
@@ -131,7 +130,7 @@ class UseDefAnalysis(SyntaxVisitor):
   def visit_fn(self, fn):
     for name in fn.arg_names:
       self.created_on[name] = 0
-    SyntaxVisitor.visit_fn(self, fn) 
+    SyntaxVisitor.visit_fn(self, fn)
 
   def visit_lhs(self, expr):
     if expr.__class__ is Var:
@@ -139,24 +138,24 @@ class UseDefAnalysis(SyntaxVisitor):
     elif expr.__class__ is Tuple:
       for elt in expr.elts:
         self.visit_lhs(elt)
-     
-  
+
+
   def visit_If(self, stmt):
     for name in stmt.merge.iterkeys():
-      self.created_on[name] = self.stmt_counter 
+      self.created_on[name] = self.stmt_counter
     SyntaxVisitor.visit_If(self, stmt)
-  
+
   def visit_While(self, stmt):
     for name in stmt.merge.iterkeys():
-      self.created_on[name] = self.stmt_counter 
+      self.created_on[name] = self.stmt_counter
     SyntaxVisitor.visit_While(self, stmt)
-    
+
   def visit_Var(self, expr):
     name = expr.name
     if name not in self.first_use:
       self.first_use[name] = self.stmt_counter
     self.last_use[name]= self.stmt_counter
-  
+
   def visit_stmt(self, stmt):
     stmt_id = id(stmt)
     self.stmt_counter += 1
@@ -188,17 +187,15 @@ class CopyElimination(Transform):
     #   1) dest hasn't been used before as a value
     #   2) src doesn't escape
     #   3) src was locally allocated
-    # ...then transform the code so instead of allocating src 
-    
+    # ...then transform the code so instead of allocating src
+
     if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
       if lhs_name not in self.usedef.first_use and \
           lhs_name not in self.may_escape:
-        # why assign to an array if it never gets used? 
-        print "DELETING", stmt 
+        # why assign to an array if it never gets used?
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
-      
         curr_stmt_number = self.usedef.stmt_number[id(stmt)]
         rhs_name = stmt.rhs.name
 
@@ -209,14 +206,11 @@ class CopyElimination(Transform):
           array_stmt = self.local_arrays[rhs_name]
           prev_stmt_number = self.usedef.stmt_number[id(array_stmt)]
           if array_stmt.rhs.__class__ in (Struct, ArrayView) and \
-              all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number 
+              all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number
                   for lhs_depends_on in collect_var_names(stmt.lhs)):
-            print "MOVING COPY", stmt
             array_stmt.rhs = stmt.lhs
-            print "NEW SOURCE", array_stmt 
             return None
-    return stmt  
-
+    return stmt
 
 class PreallocAdverbOutput(MemoizedTransform):
   def niters(self, args, axis):
@@ -349,4 +343,3 @@ def preallocate_function_output(fn):
       "Can't transform expression %s, expected a typed function" % fn
   pipeline = [CloneFunction, PreallocFnOutput]
   return apply_pipeline(fn, pipeline)
-
