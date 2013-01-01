@@ -63,9 +63,10 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
   arg_names = src_fundef.arg_names
   n_expected = len(arg_names)
   n_given = len(args)
+  arg_str = ",".join(src_fundef.arg_names)
   assert n_expected ==  n_given, \
-      "Function %s expects %d args (%s) but given %d" % \
-      (src_fundef.name, n_expected, ",".join(src_fundef.arg_names), n_given)
+      "Function %s expects %d args (%s) but given %d (%s)" % \
+      (src_fundef.name, n_expected, arg_str, n_given, args)
 
   rename_dict = {}
 
