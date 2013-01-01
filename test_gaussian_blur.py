@@ -72,4 +72,4 @@ def test_sqr_dist():
         "Expected %s but got %s" % (np_blurred, par_blurred)
 
 if __name__ == '__main__':
-  testing_helpers.run_local_ts()
+  testing_helpers.run_local_tests()

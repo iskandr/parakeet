@@ -1,18 +1,21 @@
-import adverb_semantics
+
 import array_type
 import core_types
-import shape
-import shape_from_type
-import syntax
 import tuple_type
-from syntax_visitor import SyntaxVisitor
 
-from syntax import TypedFn
+import syntax
+from syntax_visitor import SyntaxVisitor
+from syntax import TypedFn, Fn 
+
+import shape
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, UnknownScalar, Unknown
 from shape import unknown_scalar, unknown_value, const
 from shape import combine_list, increase_rank
 from shape import is_zero, make_shape
+import shape_from_type
+
+import adverb_semantics
 
 class ShapeSemantics(adverb_semantics.AdverbSemantics):
   def size_along_axis(self, value, axis):
@@ -232,10 +235,10 @@ class ShapeInference(SyntaxVisitor):
       assert False, "Unexpected struct: %s" % (expr,)
 
   def visit_Fn(self, fn):
-    return fn
+    return Closure(fn, [])
 
   def visit_TypedFn(self, fn):
-    return fn
+    return Closure(fn, [])
 
   def visit_Slice(self, expr):
     start = self.visit_expr(expr.start)
@@ -298,14 +301,15 @@ class ShapeInference(SyntaxVisitor):
     return res
 
   def visit_Call(self, expr):
-    assert expr.fn.__class__ is TypedFn, \
-       "Calling %s not supported in shape inference"
-    return symbolic_call(expr.fn, self.visit_expr_list(expr.args))
+    fn = self.visit_expr(expr.fn)
+    args = self.visit_expr_list(expr.args)
+    return symbolic_call(fn, args)
 
   def visit_Closure(self, clos):
-    if isinstance(clos.fn, str):
-      assert False, "FN NAME " + clos.fn
-
+    assert not isinstance(clos.fn, str), \
+        "[ShapeInference] Function names in closures not supported: " + clos.fn
+    assert not isinstance(clos.fn, Fn), \
+        "[ShapeInference] Can't have untyped fn in closure: " + clos.fn.name
     fn = self.visit_expr(clos.fn)
     closure_arg_shapes = self.visit_expr_list(clos.args)
     return Closure(fn, closure_arg_shapes)
@@ -358,6 +362,24 @@ class ShapeInference(SyntaxVisitor):
     fn = self.visit_expr(expr.fn)
     return shape_semantics.eval_allpairs(fn, arg_shapes, axis)
 
+  def visit_TiledMap(self, expr):
+    fn = self.visit_expr(expr.fn)
+    args = self.visit_expr_list(expr.args)
+    return symbolic_call(fn, args)
+
+  def visit_TiledReduce(self, expr):
+    args = self.visit_expr_list(expr.args)
+    fn = self.visit_expr(expr.fn)
+    return symbolic_call(fn, args)
+  
+  def visit_TiledScan(self, expr):
+    args = self.visit_expr_list(expr.args)
+    fn = self.visit_expr(expr.fn)
+    acc_shape = symbolic_call(fn, args)
+    emit = self.visit_expr(expr.emit)  
+    return symbolic_call(emit, [acc_shape]) 
+    
+
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
       assert isinstance(rhs, Tuple)
@@ -390,7 +412,7 @@ _shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
-
+  
   if typed_fn.name in _shape_cache:
     return _shape_cache[typed_fn.name]
   else:
@@ -444,9 +466,14 @@ def subst_list(xs, env):
 
 def symbolic_call(typed_fn, abstract_inputs):
   # result in terms of variables like input0, (shape: input1, input2), etc..
+  if typed_fn.__class__ is Closure:
+    closure_elts = tuple(typed_fn.arg_shapes) 
+    typed_fn = typed_fn 
+  else:
+    closure_elts = ()
   abstract_result_value = call_shape_expr(typed_fn)
   conv = shape_from_type.Converter()
   shape_formals = conv.from_types(typed_fn.input_types)
   env = {}
-  bind_pairs(shape_formals, abstract_inputs, env)
+  bind_pairs(shape_formals, closure_elts + tuple(abstract_inputs), env)
   return subst(abstract_result_value, env)
