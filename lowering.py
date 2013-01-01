@@ -23,28 +23,10 @@ def build_pipeline(copy = False,
                    licm = config.opt_licm):
   p = [CloneFunction] if copy else []
 
- 
+
 
   if fusion:
     add(Fusion)
-
-<<<<<<< HEAD
-  if config.opt_copy_elimination:
-    add(PreallocAdverbOutput)
-
-  add(LowerAdverbs)
-
-  if inline:
-    add(Inliner)
-  if config.opt_copy_elimination:
-    add(CopyElimination)
-  add(LowerIndexing)
-  add(LowerStructs)
-
-  if licm:
-    add(LoopInvariantCodeMotion)
-=======
->>>>>>> 799d02a606714c8b83a2fe5bef054762d3985947
 
   if config.opt_copy_elimination:
     add(CopyElimination)
@@ -68,42 +50,34 @@ def lower(fundef, tile=False):
            MapifyAllPairs,
            Fusion, Simplify, DCE,
            TileAdverbs, Simplify, DCE,
-           LowerTiledAdverbs, Simplify, DCE, 
+           LowerTiledAdverbs, Simplify, DCE,
            Fusion, Simplify, DCE]
       fn = apply_pipeline(fundef, prelim)
       num_tiles = fn.num_tiles
-   
+
     loopy_fn = lower_adverbs(fn)
-    
+
     final_pipeline = []
     def add(*ts):
       final_pipeline.extend(ts)
       if config.opt_cleanup_after_transforms:
         final_pipeline.append(Simplify)
         final_pipeline.append(DCE)
-    
+
     if config.opt_copy_elimination:
       add(CopyElimination)
-      
+
     add(LowerIndexing)
     add(LowerStructs)
     if config.opt_licm:
       add(LoopInvariantCodeMotion)
-    
+
     lowered_fn = apply_pipeline(loopy_fn, final_pipeline)
     lowered_fn.num_tiles = num_tiles
-    
+    lowered_fn.has_tiles = (num_tiles > 0)
 
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
-
-<<<<<<< HEAD
-    lowered_fn.num_tiles = num_tiles
-    lowered_fn.has_tiles = (num_tiles > 0)
-=======
-
-
->>>>>>> 799d02a606714c8b83a2fe5bef054762d3985947
 
     if config.print_lowered_function:
       print
