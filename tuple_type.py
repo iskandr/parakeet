@@ -67,8 +67,7 @@ class TupleT(StructT):
 
   def index_type(self, idx):
     assert isinstance(idx, Expr), \
-        "Tuple indices must be computed statically, so expected index to be" + \
-        " expression"
+        "Tuple index not an expression: %s" % idx 
     assert isinstance(idx, Const), "Unsupported expression: %s" % idx
     idx = int(idx.value)
     assert 0 <= idx < len(self.elt_types), \

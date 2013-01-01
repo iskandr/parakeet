@@ -79,7 +79,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     return "DON'T CARE ABOUT ELT TYPES"
 
   def alloc_array(self, _, dims):
-    return Shape(dims)
+    return make_shape(dims)
 
   def index(self, arr, idx):
     if isinstance(arr, Scalar):
@@ -447,8 +447,6 @@ def call_shape_expr(typed_fn):
   else:
     shape_inference = ShapeInference()
     abstract_shape = shape_inference.visit_fn(typed_fn)
-    if abstract_shape is None:
-      print typed_fn
     assert abstract_shape is not None, \
         "Shape inference returned None for %s" % typed_fn.name
     _shape_cache[typed_fn.name] = abstract_shape
