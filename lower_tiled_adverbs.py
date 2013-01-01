@@ -34,7 +34,6 @@ class LowerTiledAdverbs(Transform):
     self.fn.has_tiles = True
     self.nesting_idx += 1
     args = expr.args
-    print "args:", args
     axis = syntax_helpers.unwrap_constant(expr.axis)
 
     # TODO: Should make sure that all the shapes conform here,
@@ -55,11 +54,11 @@ class LowerTiledAdverbs(Transform):
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
 
-    output_args = args
+    output_args = self.closure_elts(fn) + args
     if nested_has_tiles:
       output_args.append(self.tuple([syntax_helpers.one_i64] *
                                     len(self.tile_sizes_param.type.elt_types)))
-    array_result = self._create_output_array(fn, output_args, [],
+    array_result = self._create_output_array(inner_fn, output_args, [],
                                              "array_result")
 
     # Loop over the remaining tiles.

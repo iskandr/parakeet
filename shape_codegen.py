@@ -63,7 +63,7 @@ class ShapeCodegen(Traversal):
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
     return self.codegen.tuple([self.visit(d) for d in v.dims])
-    
+
   def visit_Dim(self, v):
     return self.codegen.tuple_proj(self.visit(v.array), v.dim)
 
@@ -99,10 +99,10 @@ class ShapeCodegen(Traversal):
 
 def make_shape_expr(codegen, symbolic_shape, input_exprs):
   """
-  Given a codegen object we're currently using to create a
-  function, and a symbolic result shape of a function call
-  (along with the input expressions that went into the function)
-  generate a code expression for the shape of the result
+  Given a codegen object we're currently using to create a function, and a
+  symbolic result shape of a function call (along with the input expressions
+  that went into the function) generate a code expression for the shape of the
+  result
   """
   if isinstance(symbolic_shape, Scalar):
     return codegen.tuple([])
