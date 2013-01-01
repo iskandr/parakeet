@@ -14,11 +14,14 @@ class LowerTiledAdverbs(Transform):
     self.nesting_idx = nesting_idx
     self.tiling = False
     self.tile_sizes_param = None
+    self.dl_tile_estimates = []
+    self.ml_tile_estimates = []
 
   def pre_apply(self, fn):
     if not self.tile_sizes_param:
       tile_type = \
           tuple_type.make_tuple_type([Int64 for _ in range(fn.num_tiles)])
+      print "tile_type:", tile_type
       self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
     return fn
 
@@ -55,7 +58,7 @@ class LowerTiledAdverbs(Transform):
     output_args = args
     if nested_has_tiles:
       output_args.append(self.tuple([syntax_helpers.one_i64] *
-                                    (self.nesting_idx + 1)))
+                                    len(self.tile_sizes_param.type.elt_types)))
     array_result = self._create_output_array(fn, output_args, [],
                                              "array_result")
 

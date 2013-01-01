@@ -23,7 +23,7 @@ print_functions_after_transforms = False # ['CopyElimination']
 print_functions_before_tiling = False
 
 # show functions after tiling transformation?
-print_tiled_adverbs = False
+print_tiled_adverbs = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False

@@ -10,4 +10,5 @@ Eric:
  Logic to detect whether to tile a subtree of code
  Ability to tile only subtrees of a function
  Analysis to determine tile size estimates based on memory accesses
+ Proper handling of closure variables
 
