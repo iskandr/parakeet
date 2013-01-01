@@ -2,10 +2,9 @@ import config
 import syntax
 
 from clone_function import CloneFunction
-from copy_elimination import CopyElimination, PreallocAdverbOutput
+from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
-from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from lower_adverbs import lower_adverbs
 from lower_indexing import LowerIndexing
@@ -15,20 +14,6 @@ from mapify_allpairs import MapifyAllPairs
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
-
-def build_pipeline(copy = False,
-                   simplify = config.opt_cleanup_after_transforms,
-                   inline = config.opt_inline,
-                   fusion = config.opt_fusion,
-                   licm = config.opt_licm):
-  p = [CloneFunction] if copy else []
-
-  if fusion:
-    add(Fusion)
-
-  if config.opt_copy_elimination:
-    add(CopyElimination)
-  return p
 
 _lowered_functions = {}
 
@@ -57,9 +42,8 @@ def lower(fundef, tile=False):
     final_pipeline = []
     def add(*ts):
       final_pipeline.extend(ts)
-      if config.opt_cleanup_after_transforms:
-        final_pipeline.append(Simplify)
-        final_pipeline.append(DCE)
+      final_pipeline.append(Simplify)
+      final_pipeline.append(DCE)
 
     if config.opt_copy_elimination:
       add(CopyElimination)

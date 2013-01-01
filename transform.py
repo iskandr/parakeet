@@ -302,12 +302,14 @@ class Transform(Codegen):
   def apply(self, fn):
     if config.print_transform_timings:
       start_time = time.time()
-
+      
+    transform_name = self.__class__.__name__
+    
     if config.print_functions_before_transforms == True or \
         (isinstance(config.print_functions_before_transforms, list) and
-         self.__class__.__name__ in config.print_functions_before_transforms):
+         transform_name in config.print_functions_before_transforms):
       print
-      print "Running transform %s" % self.__class__.__name__
+      print "Running transform %s" % transform_name 
       print "--- before ---"
       print repr(fn)
       print
@@ -346,9 +348,9 @@ class Transform(Codegen):
 
     if config.print_functions_after_transforms == True or \
         (isinstance(config.print_functions_after_transforms, list) and 
-         self.__class__.__name__ in config.print_functions_after_transforms):
+         transform_name in config.print_functions_after_transforms):
       print
-      print "Done with  %s" % self.__class__.__name__
+      print "Done with  %s" % transform_name 
       print "--- after ---"
       print repr(new_fn)
       print
@@ -357,7 +359,7 @@ class Transform(Codegen):
       try:
         verify.verify(new_fn)
       except:
-        print "ERROR after running %s on %s" % (self.__class__.__name__, new_fn)
+        print "ERROR after running %s on %s" % (transform_name , new_fn)
         raise
 
     if config.print_transform_timings:

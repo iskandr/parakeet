@@ -173,7 +173,11 @@ class CopyElimination(Transform):
     
     if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
-      if stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
+      if lhs_name not in self.use_analysis.first_use and \
+          lhs_name not in self.may_escape:
+        # why assign to an array if it never gets used? 
+        return None
+      elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
       
         stmt_number = self.use_analysis.stmt_number[id(stmt)]
         rhs_name = stmt.rhs.name
@@ -194,10 +198,7 @@ class CopyElimination(Transform):
             print "UPDATING", array_stmt
             array_stmt.rhs = stmt.lhs
             return None
-      elif lhs_name not in self.use_analysis.first_use and \
-          lhs_name not in self.may_escape:
-        # why assign to an array if it never gets used? 
-        return None 
+    return stmt  
 
 
 class PreallocAdverbOutput(MemoizedTransform):
