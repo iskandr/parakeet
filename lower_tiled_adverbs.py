@@ -75,8 +75,10 @@ class LowerTiledAdverbs(Transform):
 
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
+
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg in args]
+
     output_region = self.index_along_axis(array_result, self.nesting_idx,
                                           tile_bounds)
 
