@@ -15,36 +15,52 @@ from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
+
+_tiled_functions = {}
+def tiling(old_fn):
+  if old_fn.name in _tiled_functions:
+    return _tiled_functions[old_fn.name]
+  pipeline = [
+    CloneFunction,
+    MapifyAllPairs
+  ]
+  if config.opt_fusion:
+    pipeline += [Fusion, Simplify, DCE]
+  
+  pipeline += [
+    TileAdverbs, Simplify, DCE,
+    LowerTiledAdverbs, Simplify, DCE
+  ]
+  if config.opt_fusion:
+    pipeline += [Fusion, Simplify, DCE]
+  new_fn = apply_pipeline(old_fn, pipeline)
+  _tiled_functions[new_fn.name] = new_fn
+  _tiled_functions[old_fn.name] = new_fn  
+  return new_fn
+
+
 _lowered_functions = {}
+def lower(old_fn, tile=False):
+  if isinstance(old_fn, str):
+    old_fn = syntax.TypedFn.registry[old_fn]
 
-def lower(fundef, tile=False):
-  if isinstance(fundef, str):
-    fundef = syntax.TypedFn.registry[fundef]
-
-  key = (fundef, tile)
+  key = (old_fn.name, tile)
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
-    fn = fundef
-    num_tiles = 0
+    
     if tile:
-      prelim = [CloneFunction,
-                MapifyAllPairs,
-                Fusion, Simplify, DCE,
-                TileAdverbs, Simplify, DCE,
-                LowerTiledAdverbs, Simplify, DCE,
-                Fusion, Simplify, DCE]
-      fn = apply_pipeline(fundef, prelim)
-      num_tiles = fn.num_tiles
+      old_fn = tiling(old_fn)
+      num_tiles = old_fn.num_tiles
+    else:
+      num_tiles = 0
+        
+    loopy_fn = lower_adverbs(old_fn)
 
-    loopy_fn = lower_adverbs(fn)
-
-    final_pipeline = []
+    final_pipeline = [CloneFunction]
     def add(*ts):
-      final_pipeline.extend(ts)
-      final_pipeline.append(Simplify)
-      final_pipeline.append(DCE)
-
+      final_pipeline.extend(ts + (Simplify, DCE))   
+         
     if config.opt_copy_elimination:
       add(CopyElimination)
 
@@ -58,7 +74,7 @@ def lower(fundef, tile=False):
     lowered_fn.has_tiles = (num_tiles > 0)
 
     _lowered_functions[key] = lowered_fn
-    _lowered_functions[(lowered_fn,tile)] = lowered_fn
+    _lowered_functions[(lowered_fn.name,tile)] = lowered_fn
 
     if config.print_lowered_function:
       print

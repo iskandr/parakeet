@@ -11,16 +11,16 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['CopyElimination']
+print_functions_before_transforms = False # ['CopyElimination']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['CopyElimination']
+print_functions_after_transforms = False # ['CopyElimination']
 
 # show functions before tiling transformation?
-print_functions_before_tiling = True
+print_functions_before_tiling = False
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -29,7 +29,7 @@ print_tiled_adverbs = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = True
+print_optimized_llvm = False
 
 # how long did each transform take?
 print_transform_timings = False
