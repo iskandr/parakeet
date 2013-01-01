@@ -33,7 +33,7 @@ def gaussian_7x7(i, j, d):
     it = it + 1
   return out / 49.0
 
-plot = False
+plot = True
 if not plot:
   iidxs = np.arange(565,615)
   jidxs = np.arange(737,800)
@@ -61,16 +61,15 @@ def par_blur():
   return each(do_par_row, iidxs)
 
 def test_sqr_dist():
-  np_blurred = np_blur().astype(np.uint8)
-  if plot:
-    np_imgplot = plt.imshow(np_blurred)
-    plt.show(np_imgplot)
+  if not plot:
+    np_blurred = np_blur().astype(np.uint8)
   par_blurred = par_blur().astype(np.uint8)
   if plot:
     par_imgplot = plt.imshow(par_blurred)
     plt.show(par_imgplot)
-  assert testing_helpers.eq(np_blurred, par_blurred), \
-      "Expected %s but got %s" % (np_blurred, par_blurred)
+  else:
+    assert testing_helpers.eq(np_blurred, par_blurred), \
+        "Expected %s but got %s" % (np_blurred, par_blurred)
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
