@@ -84,7 +84,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     arg_slice = \
         syntax.Slice(start_var, stop_var, syntax_helpers.one_i64, type=slice_t)
-    def slice_arg(arg):
+    def slice_arg(arg, t):
       indices = [arg_slice]
       for _ in xrange(1, arg.type.rank):
         indices.append(syntax_helpers.slice_none)
@@ -101,7 +101,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
       attr = syntax.Attribute(args_var, ("arg%d" % i), type=t)
       if isinstance(t, array_type.ArrayT) and i not in closure_pos:
         # TODO: Handle axis.
-        unpacked_args.append(slice_arg(attr))
+        unpacked_args.append(slice_arg(attr, t))
       else:
         unpacked_args.append(attr)
       i += 1
@@ -115,7 +115,8 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     nested_closure = syntax.Closure(fn, [], type=closure_t)
     return_t = fn.return_type
     call = syntax.Call(nested_closure, unpacked_args, type=return_t)
-    output = slice_arg(syntax.Attribute(args_var, "output", type=return_t))
+    output = slice_arg(syntax.Attribute(args_var, "output", type=return_t),
+                       return_t)
     body = [syntax.Assign(output, call),
             syntax.Return(syntax_helpers.none)]
     type_env = {}

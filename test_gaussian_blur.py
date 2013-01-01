@@ -35,8 +35,8 @@ def gaussian_7x7(i, j, d):
 
 plot = False
 if not plot:
-  iidxs = np.arange(100,130)
-  jidxs = np.arange(100,130)
+  iidxs = np.arange(565,615)
+  jidxs = np.arange(737,800)
 
 def np_blur():
   def do_row(i):
