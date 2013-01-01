@@ -528,8 +528,6 @@ class Codegen(object):
 
     try:
       inner_shape_tuple = self.call_shape(fn, args)
-      print "-- Shape inference succeeded when calling %s with %s" % \
-            (fn, args)
     except:
       print "Shape inference failed when calling %s with %s" % (fn, args)
       raise

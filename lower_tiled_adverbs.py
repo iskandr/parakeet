@@ -21,7 +21,6 @@ class LowerTiledAdverbs(Transform):
     if not self.tile_sizes_param:
       tile_type = \
           tuple_type.make_tuple_type([Int64 for _ in range(fn.num_tiles)])
-      print "tile_type:", tile_type
       self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
     return fn
 
@@ -35,6 +34,7 @@ class LowerTiledAdverbs(Transform):
     self.fn.has_tiles = True
     self.nesting_idx += 1
     args = expr.args
+    print "args:", args
     axis = syntax_helpers.unwrap_constant(expr.axis)
 
     # TODO: Should make sure that all the shapes conform here,
