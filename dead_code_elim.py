@@ -1,5 +1,5 @@
 
-from syntax import Var, Tuple 
+from syntax import Var, Tuple, Assign, PrimCall, Const, Index, TupleProj   
 from transform import Transform
 import syntax_helpers  
 from use_analysis import use_count
@@ -50,11 +50,52 @@ class DCE(Transform):
     self.decref(stmt.rhs) 
     return None
   
+  def is_dead_loop(self, cond, body, merge):
+    # pattern match to find loops which only 
+    # increment a counter without any visible effects 
+    if syntax_helpers.is_false(cond):
+      return True 
+
+    rhs_counts = {}
+    if cond.__class__ is not Var:
+      return False 
+    rhs_counts[cond.name] = 1
+    def process_rhs(expr):
+      if expr.__class__ is Var:
+        rhs_counts[expr.name] = rhs_counts.get(expr.name, 0) + 1
+      elif expr.__class__ is Const: 
+        pass
+      elif expr.__class__ is PrimCall:
+        for arg in expr.args:
+          process_rhs(arg) 
+      elif expr.__class__ is Tuple:
+        for elt in expr.elts:
+          process_rhs(elt)
+      elif expr.__class__ is TupleProj:
+        process_rhs(expr.tuple)
+      elif expr.__class__ is Index:
+        process_rhs(expr.value)
+        process_rhs(expr.index)
+      else:
+        return False  
+
+    for stmt in body:
+      # if statements are anything other than x = safe_expr then 
+      # there might be externally visible effects to this loop 
+      if stmt.__class__ is not Assign or stmt.lhs.__class__ is not Var:
+        return False
+      process_rhs(stmt.rhs)
+    
+    for output_name in merge.iterkeys():
+      if self.use_counts[output_name] != rhs_counts.get(output_name, 0):
+        return False 
+    return True   
+        
   def transform_While(self, stmt):
     # expressions don't get changed by this transform
     new_body = self.transform_block(stmt.body) 
     new_merge = self.transform_merge(stmt.merge)
-    if len(new_merge) == 0 and len(new_body) == 0:
+    if self.is_dead_loop(stmt.cond, new_body, new_merge):
       return None
     stmt.body = new_body
     stmt.merge = new_merge 

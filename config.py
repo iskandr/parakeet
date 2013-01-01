@@ -14,10 +14,10 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] # ['CopyElimination']
+print_functions_before_transforms = False # ['CopyElimination']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #['CopyElimination']
+print_functions_after_transforms = False # ['CopyElimination']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -46,9 +46,8 @@ print_parallel_exec_time = False
 opt_inline = True
 opt_fusion = True
 opt_licm = True
-opt_cleanup_after_transforms = True
 opt_verify = True
-opt_copy_elimination = False
+opt_copy_elimination = True 
 
 ######################################
 #           LLVM OPTIONS             #

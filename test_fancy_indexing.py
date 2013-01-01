@@ -28,4 +28,4 @@ def test_2d_by_idx():
     expect(idx, [m, indices], idx(m, indices))
 
 if __name__ == '__main__':
-    testing_helpers.run_local_ts()
+    testing_helpers.run_local_tests()

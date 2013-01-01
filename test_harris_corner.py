@@ -1,6 +1,6 @@
 import numpy as np
 
-from testing_helpers import expect_each, run_local_ts
+from testing_helpers import expect_each, run_local_tests
 
 size = (5,5)
 float_mat = np.random.uniform(0,1,size=size)
@@ -48,4 +48,4 @@ def test_harris():
   expect_each(harris, harris, matrices)
 
 if __name__ == '__main__':
-  run_local_ts()
+  run_local_tests()

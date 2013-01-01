@@ -20,6 +20,7 @@ from transform import MemoizedTransform, apply_pipeline, Transform
 from clone_function import CloneFunction
 
 from syntax_visitor import SyntaxVisitor
+from compiler.ast import Stmt
 
 class FindLocalArrays(SyntaxVisitor):
   def __init__(self):
@@ -103,15 +104,13 @@ class EscapeAnalysis(SyntaxVisitor):
         self.may_escape.update(combined)
         self.may_escape.add(name)
 
-class UseAnalysis(SyntaxVisitor):
+class UseDefAnalysis(SyntaxVisitor):
   """
   Number all the statements and track the
-  first and last uses of variables
+  creation as well as first and last uses of variables
   """
-  def __init__(self, lhs_vars = False):
-    # include uses of a variable on the LHS of an assignment?
+  def __init__(self):
 
-    self.lhs_vars = lhs_vars
 
     # map from pointers of statement objects to
     # sequential numbering
@@ -126,10 +125,30 @@ class UseAnalysis(SyntaxVisitor):
     # first/last usages
     self.first_use = {}
     self.last_use = {}
+    self.created_on = {}
 
-  def visit_lhs(self, lhs):
-    if self.lhs_vars:
-      SyntaxVisitor.visit_lhs(lhs)
+  def visit_fn(self, fn):
+    for name in fn.arg_names:
+      self.created_on[name] = 0
+    SyntaxVisitor.visit_fn(self, fn)
+
+  def visit_lhs(self, expr):
+    if expr.__class__ is Var:
+      self.created_on[expr.name] = self.stmt_counter
+    elif expr.__class__ is Tuple:
+      for elt in expr.elts:
+        self.visit_lhs(elt)
+
+
+  def visit_If(self, stmt):
+    for name in stmt.merge.iterkeys():
+      self.created_on[name] = self.stmt_counter
+    SyntaxVisitor.visit_If(self, stmt)
+
+  def visit_While(self, stmt):
+    for name in stmt.merge.iterkeys():
+      self.created_on[name] = self.stmt_counter
+    SyntaxVisitor.visit_While(self, stmt)
 
   def visit_Var(self, expr):
     name = expr.name
@@ -158,8 +177,8 @@ class CopyElimination(Transform):
 
     self.may_escape = escape_analysis.may_escape
 
-    self.use_analysis = UseAnalysis()
-    self.use_analysis.visit_fn(fn)
+    self.usedef = UseDefAnalysis()
+    self.usedef.visit_fn(fn)
 
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form
@@ -172,32 +191,26 @@ class CopyElimination(Transform):
 
     if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
-      if stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
-
-        stmt_number = self.use_analysis.stmt_number[id(stmt)]
-        rhs_name = stmt.rhs.name
-        print "STMT_NUMBER", stmt_number
-        print "LHS NAME", lhs_name
-        print "RHS NAME", rhs_name
-        print "last use rhs", self.use_analysis.last_use[rhs_name]
-        print "first_use lhs", self.use_analysis.first_use[lhs_name]
-        print "rhs may escape?", rhs_name  in self.may_escape
-        print "rhs is local array?", rhs_name in self.local_arrays
-        if self.use_analysis.last_use[rhs_name] == stmt_number and \
-            self.use_analysis.first_use[lhs_name] > stmt_number and \
-            rhs_name not in self.may_escape and \
-            rhs_name in self.local_arrays:
-          array_stmt = self.local_arrays[rhs_name]
-          print "array stmt", array_stmt
-          if array_stmt.rhs.__class__ in (Struct, ArrayView):
-            print "UPDATING", array_stmt
-            array_stmt.rhs = stmt.lhs
-            return None
-      elif lhs_name not in self.use_analysis.first_use and \
+      if lhs_name not in self.usedef.first_use and \
           lhs_name not in self.may_escape:
         # why assign to an array if it never gets used?
         return None
+      elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
+        curr_stmt_number = self.usedef.stmt_number[id(stmt)]
+        rhs_name = stmt.rhs.name
 
+        if self.usedef.last_use[rhs_name] == curr_stmt_number and \
+            self.usedef.first_use[lhs_name] > curr_stmt_number and \
+            rhs_name not in self.may_escape and \
+            rhs_name in self.local_arrays:
+          array_stmt = self.local_arrays[rhs_name]
+          prev_stmt_number = self.usedef.stmt_number[id(array_stmt)]
+          if array_stmt.rhs.__class__ in (Struct, ArrayView) and \
+              all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number
+                  for lhs_depends_on in collect_var_names(stmt.lhs)):
+            array_stmt.rhs = stmt.lhs
+            return None
+    return stmt
 
 class PreallocAdverbOutput(MemoizedTransform):
   def niters(self, args, axis):
@@ -330,4 +343,3 @@ def preallocate_function_output(fn):
       "Can't transform expression %s, expected a typed function" % fn
   pipeline = [CloneFunction, PreallocFnOutput]
   return apply_pipeline(fn, pipeline)
-

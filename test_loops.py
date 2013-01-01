@@ -1,4 +1,4 @@
-from testing_helpers import run_local_ts, expect
+from testing_helpers import run_local_tests, expect
 
 def count_loop(init, count):
   x = init
@@ -52,4 +52,4 @@ def test_conditional_loop():
   expect(conditional_loop, [False], 0)
 
 if __name__ == '__main__':
-  run_local_ts()
+  run_local_tests()

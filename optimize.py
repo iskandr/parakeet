@@ -11,9 +11,8 @@ def build_pipeline():
   pipeline = [Simplify, DCE]
   def add(t):
     pipeline.append(t)
-    if config.opt_cleanup_after_transforms:
-      pipeline.append(Simplify)
-      pipeline.append(DCE)
+    pipeline.append(Simplify)
+    pipeline.append(DCE)
 
   if config.opt_inline:
     add(Inliner)

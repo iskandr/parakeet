@@ -22,4 +22,4 @@ def test_mutable_slice():
   assert len(mutable_types) == 1, mutable_types
 
 if __name__ == '__main__':
-  testing_helpers.run_local_ts()
+  testing_helpers.run_local_tests()

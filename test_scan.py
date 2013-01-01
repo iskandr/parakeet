@@ -1,7 +1,7 @@
 import numpy as np
 
 from parakeet import scan, add
-from testing_helpers import run_local_ts, expect, expect_each
+from testing_helpers import run_local_tests, expect, expect_each
 
 int_1d = np.arange(5)
 float_1d = np.arange(5, dtype='float')
@@ -26,4 +26,4 @@ def test_scan_add_2d():
   expect_each(running_sum, loop_row_sums, [int_2d, float_2d])
 
 if __name__ == '__main__':
-  run_local_ts()
+  run_local_tests()

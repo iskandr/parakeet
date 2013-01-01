@@ -163,4 +163,4 @@ def test_copy_elimination():
       "Too many loops generated! Expected at most 2, got %d" % n_loops
 
 if __name__ == '__main__':
-  testing_helpers.run_local_ts()
+  testing_helpers.run_local_tests()

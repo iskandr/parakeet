@@ -89,13 +89,9 @@ def lower_adverbs(fn):
   if fn.name in _cache:
     return _cache[fn.name]
   else:
-    pipeline = [CloneFunction, LowerAdverbs]
-    if config.opt_cleanup_after_transforms:
-      pipeline.append(Simplify)
-      pipeline.append(DCE)
+    pipeline = [CloneFunction, LowerAdverbs, Simplify, DCE]
     if config.opt_inline:
       pipeline.append(inline.Inliner)
-    if config.opt_cleanup_after_transforms:
       pipeline.append(Simplify)
       pipeline.append(DCE)
     new_fn = apply_pipeline(fn, pipeline)

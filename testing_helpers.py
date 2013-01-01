@@ -1,6 +1,7 @@
 import interp
 import numpy as np
 import sys
+from nose.tools import nottest
 
 from run_function import specialize_and_compile
 
@@ -31,7 +32,8 @@ def run_local_functions(prefix, locals_dict = None):
   print "\n%d tests passed: %s\n" % (len(good), ", ".join(good))
   print "%d failed: %s" % (len(bad),", ".join(bad))
 
-def run_local_ts(locals_dict = None):
+@nottest
+def run_local_tests(locals_dict = None):
   if locals_dict is None:
     last_frame = sys._getframe()
     locals_dict = last_frame.f_back.f_locals
