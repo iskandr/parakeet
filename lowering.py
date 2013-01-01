@@ -39,7 +39,8 @@ def build_pipeline(copy = False,
 
   if inline:
     add(Inliner)
-  add(CopyElimination)
+  if config.opt_copy_elimination:
+    add(CopyElimination)
   add(LowerIndexing)
   add(LowerStructs)
 
@@ -73,10 +74,8 @@ def lower(fundef, tile=False):
     _lowered_functions[key] = lowered_fn
     _lowered_functions[(lowered_fn,tile)] = lowered_fn
 
-    if tile:
-      lowered_fn.num_tiles = num_tiles
-    else:
-      lowered_fn.num_tiles = 0
+    lowered_fn.num_tiles = num_tiles
+    lowered_fn.has_tiles = (num_tiles > 0)
 
     if config.print_lowered_function:
       print

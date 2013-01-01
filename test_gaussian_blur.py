@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import testing_helpers
 
-from numpy import uint8
 from parakeet import reduce, add, each
 from PIL import Image
 
@@ -12,14 +11,16 @@ iidxs = np.arange(3, len(np_sausage)-3)
 jidxs = np.arange(3, len(np_sausage[0])-3)
 didxs = np.arange(3)
 
-gaussian = np.array(
-  [[0.00000067 ,0.00002292 ,0.00019117 ,0.00038771 ,0.00019117 ,0.00002292 ,0.00000067],
-   [0.00002292 ,0.00078633 ,0.00655965 ,0.01330373 ,0.00655965 ,0.00078633 ,0.00002292],
-   [0.00019117 ,0.00655965 ,0.05472157 ,0.11098164 ,0.05472157 ,0.00655965 ,0.00019117],
-   [0.00038771 ,0.01330373 ,0.11098164 ,0.22508352 ,0.11098164 ,0.01330373 ,0.00038771],
-   [0.00019117 ,0.00655965 ,0.05472157 ,0.11098164 ,0.05472157 ,0.00655965 ,0.00019117],
-   [0.00002292 ,0.00078633 ,0.00655965 ,0.01330373 ,0.00655965 ,0.00078633 ,0.00002292],
-   [0.00000067 ,0.00002292 ,0.00019117 ,0.00038771 ,0.00019117 ,0.00002292 ,0.00000067]])
+a = [0.00000067, 0.00002292, 0.00019117, 0.00038771, 0.00019117, 0.00002292,
+     0.00000067]
+b = [0.00002292, 0.00078633, 0.00655965, 0.01330373, 0.00655965, 0.00078633,
+     0.00002292]
+c = [0.00019117, 0.00655965, 0.05472157, 0.11098164, 0.05472157, 0.00655965,
+     0.00019117]
+d = [0.00038771, 0.01330373, 0.11098164, 0.22508352, 0.11098164, 0.01330373,
+     0.00038771]
+
+gaussian = np.array([a,b,c,d,c,b,a])
 
 def gaussian_7x7(i, j, d):
   out = 0.0
@@ -31,6 +32,11 @@ def gaussian_7x7(i, j, d):
       jt = jt + 1
     it = it + 1
   return out / 49.0
+
+plot = False
+if not plot:
+  iidxs = np.arange(100,130)
+  jidxs = np.arange(100,130)
 
 def np_blur():
   def do_row(i):
@@ -55,14 +61,16 @@ def par_blur():
   return each(do_par_row, iidxs)
 
 def test_sqr_dist():
-  #blurred = np_blur()
-  par_blurred = par_blur()
-  print par_blurred
-  par_blurred = par_blurred.astype(uint8)
-  #imgplot = plt.imshow(blurred)
-  #plt.show(imgplot)
-  par_imgplot = plt.imshow(par_blurred)
-  plt.show(par_imgplot)
+  np_blurred = np_blur().astype(np.uint8)
+  if plot:
+    np_imgplot = plt.imshow(np_blurred)
+    plt.show(np_imgplot)
+  par_blurred = par_blur().astype(np.uint8)
+  if plot:
+    par_imgplot = plt.imshow(par_blurred)
+    plt.show(par_imgplot)
+  assert testing_helpers.eq(np_blurred, par_blurred), \
+      "Expected %s but got %s" % (np_blurred, par_blurred)
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
