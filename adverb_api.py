@@ -21,11 +21,12 @@ from args import ActualArgs, FormalArgs
 from core_types import Int64
 from runtime import runtime
 
-try:
-  rt = runtime.Runtime()
-except:
-  print "Warning: Failed to load parallel runtime"
-  rt = None
+#try:
+#  rt = runtime.Runtime()
+#except:
+#  print "Warning: Failed to load parallel runtime"
+#  rt = None
+rt = runtime.Runtime()
 
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}

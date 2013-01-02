@@ -1,6 +1,6 @@
-from ctypes import *
 import copy, math, random, time
-import numpy as np
+
+from ctypes import *
 
 def next_power_2(n):
   n -= 1

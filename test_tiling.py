@@ -2,22 +2,15 @@ import adverbs
 import array_type
 import core_types
 import ctypes
-import interp
 import llvm_backend
 import lowering
 import numpy as np
-import parakeet
 import prims
 import run_function
 import syntax
 import syntax_helpers
 import testing_helpers
-import tile_adverbs
-import transform
 import type_conv
-
-from parakeet import each
-from run_function import specialize_and_compile
 
 x_array = np.arange(10, dtype = np.int64)
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)

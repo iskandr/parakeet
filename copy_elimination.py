@@ -1,26 +1,19 @@
 import names
 
 import syntax
-from syntax import Assign, Index, Slice, Var, Return, RunExpr
+from syntax import Index, Var, Return, RunExpr
 from syntax import ArrayView,  Alloc, Array, Struct, Tuple, Attribute
 from syntax_helpers import none, slice_none, zero_i64
 
-from adverb_helpers import max_rank
-from adverbs import Map, Reduce, Scan, AllPairs, Adverb
-
-from core_types import NoneT, NoneType
+from core_types import NoneType
 import array_type
 from array_type import ArrayT
-
-import shape_inference
-import shape_codegen
 
 from collect_vars import collect_var_names, collect_var_names_from_exprs
 from transform import MemoizedTransform, apply_pipeline, Transform
 from clone_function import CloneFunction
 
 from syntax_visitor import SyntaxVisitor
-from compiler.ast import Stmt
 
 class FindLocalArrays(SyntaxVisitor):
   def __init__(self):
@@ -106,8 +99,8 @@ class EscapeAnalysis(SyntaxVisitor):
 
 class UseDefAnalysis(SyntaxVisitor):
   """
-  Number all the statements and track the
-  creation as well as first and last uses of variables
+  Number all the statements and track the creation as well as first and last
+  uses of variables
   """
   def __init__(self):
     # map from pointers of statement objects to
@@ -300,7 +293,6 @@ class PreallocFnOutput(PreallocAdverbOutput):
     if output_t.__class__ is ArrayT and output_t.rank > 0:
       idx = self.tuple([slice_none] * output_t.rank)
       elt_t = output_t
-
     else:
       idx = zero_i64
       elt_t = output_t

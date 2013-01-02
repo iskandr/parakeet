@@ -1,4 +1,3 @@
-import adverb_helpers
 import adverbs
 import array_type
 import closure_type
@@ -42,6 +41,45 @@ class FindAdverbs(SyntaxVisitor):
 
   def visit_Scan(self, expr):
     self.has_adverbs = True
+
+  def visit_AllPairs(self, expr):
+    assert False, \
+        "Expected AllPairs operators to have been lowered into Maps"
+
+class TileableAdverbsTagger(SyntaxVisitor):
+  def __init__(self):
+    self.adverbs_seen = 0
+
+  def get_fn(self, maybe_clos):
+    if isinstance(maybe_clos, syntax.Closure):
+      return maybe_clos.fn
+    else:
+      return maybe_clos
+
+  # We don't tile adverbs inside control flow for now.
+  def visit_If(self, stmt):
+    return
+
+  def visit_While(self, smt):
+    return
+
+  def visit_Map(self, expr):
+    if self.num_adverbs == 0:
+      nested_counter = NestedAdverbsCounter()
+      nested_counter.visit_fn(self.get_fn(expr.fn))
+      self.num_adverbs = nested_counter.num_adverbs + 1
+
+  def visit_Reduce(self, expr):
+    if self.num_adverbs == 0:
+      nested_counter = NestedAdverbsCounter()
+      nested_counter.visit_fn(self.get_fn(expr.fn))
+      self.num_adverbs = nested_counter.num_adverbs + 1
+
+  def visit_Scan(self, expr):
+    if self.num_adverbs == 0:
+      nested_counter = NestedAdverbsCounter()
+      nested_counter.visit_fn(self.get_fn(expr.fn))
+      self.num_adverbs = nested_counter.num_adverbs + 1
 
   def visit_AllPairs(self, expr):
     assert False, \

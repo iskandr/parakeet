@@ -1,12 +1,8 @@
 import config
-
 import prims
 import syntax
-from syntax import Var, PrimCall, Const 
 import syntax_helpers
-from syntax_visitor import SyntaxVisitor 
 
-from common import dispatch
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
 
@@ -20,7 +16,6 @@ import llvm_prims
 import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
 
-
 class Compiler(object):
   def __init__(self, fundef, llvm_cxt = llvm_context.global_context):
     self.parakeet_fundef = fundef
@@ -31,17 +26,15 @@ class Compiler(object):
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
     llvm_output_type = llvm_ref_type(fundef.return_type)
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
-  
+
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
     self.entry_block, self.entry_builder = self.new_block("entry")
     self._init_vars(self.parakeet_fundef, self.entry_builder)
-    
 
   def new_block(self, name):
     bb = self.llvm_fn.append_basic_block(name)
     builder = Builder.new(bb)
     return bb, builder
-
 
   def _init_vars(self, fundef, builder):
     """
@@ -66,12 +59,11 @@ class Compiler(object):
       llvm_arg.name = name
       if name in self.vars:
         builder.store(llvm_arg, self.vars[name])
-    
 
   def attribute_lookup(self, struct, name, builder):
     """
-    Helper for getting the address of an attribute lookup, used both when setting
-    and getting attributes
+    Helper for getting the address of an attribute lookup, used both when
+    setting and getting attributes
     """
 
     llvm_struct = self.compile_expr(struct, builder)
@@ -82,7 +74,7 @@ class Compiler(object):
     ptr_name = "%s_ptr" % name
     ptr = builder.gep(llvm_struct, indices, ptr_name)
     return ptr, field_type
-  
+
   def compile_Var(self, expr, builder):
     name = expr.name
     assert name in self.initialized, "%s uninitialized" % name
@@ -214,11 +206,10 @@ class Compiler(object):
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % expr
 
-
   def compile_expr(self, expr, builder):
     method_name = "compile_" + expr.node_type()
     return getattr(self, method_name)(expr, builder)
-  
+
   def compile_Assign(self, stmt, builder):
     rhs_t = stmt.rhs.type
     value = self.compile_expr(stmt.rhs, builder)
@@ -250,7 +241,7 @@ class Compiler(object):
 
   def compile_RunExpr(self, stmt, builder):
     self.compile_expr(stmt.value, builder)
-    return builder, False 
+    return builder, False
 
   def compile_Return(self, stmt, builder):
     ret_val = self.compile_expr(stmt.value, builder)
@@ -270,7 +261,6 @@ class Compiler(object):
       self.initialized.add(name)
       value = self.compile_expr(right, builder)
       builder.store(value, ref)
-
 
   def compile_While(self, stmt, builder):
     # current flow ----> loop --------> exit--> after
@@ -332,7 +322,6 @@ class Compiler(object):
         after_false.branch(after_bb)
     return after_builder, False
 
-
   def compile_stmt(self, stmt, builder):
     """
     Translate an SSA statement into LLVM. Every translation function returns a
@@ -344,16 +333,15 @@ class Compiler(object):
 
     method_name = "compile_" + stmt.node_type()
     return getattr(self, method_name)(stmt, builder)
-  
 
   def compile_block(self, stmts, builder):
- 
+
     for stmt in stmts:
       builder, always_returns = self.compile_stmt(stmt, builder)
       if always_returns:
         return builder, always_returns
     return builder, False
-  
+
   def compile_body(self, body):
     return self.compile_block(body, builder = self.entry_builder)
 
@@ -364,7 +352,7 @@ def compile_fn(fundef):
     return compiled_functions[fundef.name]
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
-  
+
   if config.print_unoptimized_llvm:
     print "=== LLVM before optimizations =="
     print
