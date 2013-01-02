@@ -206,7 +206,6 @@ class RewriteTyped(Transform):
     return stmt
 
   def transform_While(self, stmt):
-    # TODO: Where do the coercion expressions from phi nodes go to? 
     stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)

@@ -1,5 +1,5 @@
-import lowering
 import mutability_analysis
+from pipeline import lowering 
 import testing_helpers
 
 def f():
@@ -17,7 +17,7 @@ def test_mutable_slice():
   mutable_types = mutability_analysis.find_mutable_types(typed)
 
   assert len(mutable_types) == 1, mutable_types
-  lowered = lowering.lower(typed)
+  lowered = lowering.apply(typed)
   mutable_types = mutability_analysis.find_mutable_types(lowered)
   assert len(mutable_types) == 1, mutable_types
 

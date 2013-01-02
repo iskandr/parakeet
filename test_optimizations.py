@@ -1,9 +1,11 @@
 import numpy as np
-import parakeet
-import syntax
-import testing_helpers
 
+import parakeet
 from parakeet import each
+from pipeline import lowering 
+import syntax
+from syntax_visitor import SyntaxVisitor
+import testing_helpers
 from testing_helpers import expect
 
 def A(x):
@@ -31,7 +33,6 @@ def simple_stmt(stmt):
 
   (can only contain scalar computations and no control flow)
   """
-
   if isinstance(stmt, syntax.Return):
     return simple_expr(stmt.value)
   elif isinstance(stmt, syntax.Assign):
@@ -137,7 +138,7 @@ def g(x):
 def nested_add1(X):
   return each(g, X)
 
-from syntax_visitor import SyntaxVisitor
+
 class CountLoops(SyntaxVisitor):
   def __init__(self):
     SyntaxVisitor.__init__(self)
@@ -156,8 +157,7 @@ def test_copy_elimination():
   x = np.array([[1,2,3],[4,5,6]])
   expect(nested_add1, [x], x + 1.0)
   typed_fn = parakeet.typed_repr(nested_add1, [x])
-  import lowering
-  lowered = lowering.lower(typed_fn)
+  lowered = lowering.apply(typed_fn)
   n_loops = count_loops(lowered)
   assert n_loops <= 2, \
       "Too many loops generated! Expected at most 2, got %d" % n_loops

@@ -8,6 +8,9 @@ class CloneFunction(Transform):
   """
   Copy all the objects in the AST of a function
   """
+  def __init__(self, rename = False):
+    Transform.__init__(self)
+    self.rename = rename 
   
   def transform_expr(self, expr):
     c = expr.__class__
@@ -69,7 +72,11 @@ class CloneFunction(Transform):
     new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])
     # create a fresh function with a distinct name and the
     # transformed body and type environment
-    new_fundef_args['name'] = names.refresh(old_fn.name)
+    if self.rename: 
+      new_fundef_args['name'] = names.refresh(old_fn.name)
+    else:
+      new_fundef_args['name'] = old_fn.name
+      new_fundef_args['version'] = old_fn.next_version(old_fn.name) 
     new_fundef_args['type_env'] = old_fn.type_env.copy()
     # don't need to set a new body block since we're assuming 
     # that transform_block will at least allocate a new list 

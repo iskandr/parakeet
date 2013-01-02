@@ -1,9 +1,7 @@
 import names
-
 import syntax
 from syntax import If, Assign, While, Return, Var, TypedFn, Const, RunExpr
 import syntax_visitor
-
 from subst import subst_stmt_list
 from transform import Transform
 
@@ -102,11 +100,16 @@ class Inliner(Transform):
     Transform.__init__(self)
     self.count = 0
 
-  def transform_Call(self, expr):
-    if isinstance(expr.fn, str):
-      target = syntax.TypedFn.registry[expr.fn]
+  def transform_TypedFn(self, expr):
+    if self.fn.last_transformed_by is not None:
+      return self.fn.copied_by.apply(expr)
     else:
-      target = expr.fn
+      # at the very least, apply high level optimizations 
+      import pipeline 
+      return pipeline.high_level_optimizations.apply(expr)
+    
+  def transform_Call(self, expr):
+    target = self.visit_expr(expr.fn)
     if target.__class__ is TypedFn and can_inline(target):
       self.count += 1
       curr_block = self.blocks.current()

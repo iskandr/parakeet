@@ -412,9 +412,21 @@ class TypedFn(Expr):
               'body',
               'input_types',
               'return_type',
-              'type_env']
+              'type_env',
+              # these last two get filled by 
+              # transformation/optimizations later 
+              'last_transform_by', 
+              'version',
+              'has_tiles' 
+              'num_tiles']
 
   registry = {}
+  max_version = {}
+  def next_version(self, name):
+    n = self.max_version[name] + 1
+    self.max_version[name] = n 
+    return next 
+  
   def node_init(self):
     assert isinstance(self.body, list), \
         "Invalid body for typed function: %s" % (self.body,)
@@ -435,12 +447,19 @@ class TypedFn(Expr):
 
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
 
-    assert self.name not in self.registry, \
-        "Typed function already registered: %s" % self.name
-    self.registry[self.name] = self
-
-    self.has_tiles = False
-    self.num_tiles = 0
+    if self.version is None:
+      self.version = 0 
+      self.max_version[self.name] = 0
+      
+    registry_key = (self.name, self.version) 
+    assert registry_key not in self.registry, \
+        "Typed function %s version %d already registered" % (self.name, self.version)
+    self.registry[registry_key] = self
+    
+    if self.has_tiles is None:
+      self.has_tiles = False
+    if self.num_tiles is None:
+      self.num_tiles = 0
 
   def __repr__(self):
     arg_strings = []

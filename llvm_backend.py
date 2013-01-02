@@ -149,12 +149,8 @@ class Compiler(object):
     return target_fn
 
   def compile_Call(self, expr, builder):
-    if isinstance(expr.fn, str):
-      assert expr.fn in syntax.TypedFn.registry
-      typed_fundef = syntax.TypedFn.registry[expr.fn]
-    else:
-      assert isinstance(expr.fn, syntax.TypedFn)
-      typed_fundef = expr.fn
+    assert isinstance(expr.fn, syntax.TypedFn)
+    typed_fundef = expr.fn
 
     (target_fn, _, _) = compile_fn(typed_fundef)
 

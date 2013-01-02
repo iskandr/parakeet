@@ -2,9 +2,9 @@ import array_type
 import core_types
 import syntax
 import syntax_helpers
-import transform
+from transform import Transform
 
-class LowerIndexing(transform.MemoizedTransform):
+class LowerIndexing(Transform):
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data")
     shape = self.attr(arr, "shape")

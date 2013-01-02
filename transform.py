@@ -370,23 +370,3 @@ class Transform(Codegen):
       transform_counts[c] = transform_counts.get(c, 0) + 1
     return new_fn
 
-class MemoizedTransform(Transform):
-  _cache = {}
-
-  def apply(self, fn):
-    key = (self.__class__.__name__, fn.name)
-    if key in self._cache:
-      return self._cache[key]
-    else:
-      new_fn = Transform.apply(self, fn)
-      self._cache[key] = new_fn
-      return new_fn
-
-def apply_pipeline(fn, transforms):
-  for T in transforms:
-    if type(T) == type:
-      fn = T().apply(fn)
-    else:
-      assert isinstance(T, Transform)
-      fn = T.apply(fn)
-  return fn

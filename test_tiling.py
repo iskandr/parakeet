@@ -1,14 +1,17 @@
+import numpy as np
+
 import adverbs
 import array_type
 import core_types
 import ctypes
 import interp
 import llvm_backend
-import lowering
-import numpy as np
 import parakeet
+from parakeet import each
+from pipeline import lower_tiled
 import prims
 import run_function
+from run_function import specialize_and_compile
 import syntax
 import syntax_helpers
 import testing_helpers
@@ -16,8 +19,6 @@ import tile_adverbs
 import transform
 import type_conv
 
-from parakeet import each
-from run_function import specialize_and_compile
 
 x_array = np.arange(10, dtype = np.int64)
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)
@@ -122,7 +123,7 @@ def get_np_ptr(arr):
   return ctypes.pointer(obj)
 
 def test_1d_map():
-  new_fn = lowering.lower(map_fn, True)
+  new_fn = lower_tiled(map_fn)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
@@ -130,7 +131,7 @@ def test_1d_map():
   assert testing_helpers.eq(rslt, x_array)
 
 def test_2d_map():
-  new_fn = lowering.lower(map2d_1map_fn, True)
+  new_fn = lower_tiled(map2d_1map_fn)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
@@ -139,7 +140,7 @@ def test_2d_map():
   assert testing_helpers.eq(rslt, x2_array)
 
 def test_2_maps():
-  new_fn = lowering.lower(map2_fn, True)
+  new_fn = lower_tiled(map2_fn)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
@@ -148,7 +149,7 @@ def test_2_maps():
   assert testing_helpers.eq(rslt, x2_array)
 
 def test_1d_reduce():
-  new_fn = lowering.lower(red_fn2, True)
+  new_fn = lower_tiled(red_fn2)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)

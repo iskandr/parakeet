@@ -1,25 +1,25 @@
+import numpy as np
+
 import adverbs
 import adverb_helpers
 import adverb_registry
 import adverb_wrapper
+from args import ActualArgs, FormalArgs
 import array_type
 import config
 import core_types
+from core_types import Int64
 import ctypes
 import llvm_backend
-import lowering
 import names
-import numpy as np
+from pipeline import lowering, lower_tiled  
 import run_function
+from runtime import runtime
 import syntax
 import syntax_helpers
 import tuple_type
 import type_conv
 import type_inference
-
-from args import ActualArgs, FormalArgs
-from core_types import Int64
-from runtime import runtime
 
 try:
   rt = runtime.Runtime()
@@ -59,8 +59,11 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
     all_types = arg_types.prepend_positional(nonlocal_types)
     typed = type_inference.specialize(untyped_wrapper, all_types)
-    return lowering.lower(typed, tile=config.opt_tile)
-
+    if config.opt_tile:
+      return lower_tiled(typed)
+    else:
+      return lowering.apply(typed)
+    
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                           args_t, arg_types, closure_pos):

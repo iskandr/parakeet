@@ -1,31 +1,24 @@
-import config
-import names
-import prims
-from common import dispatch
-
-import type_conv
-
-
-from core_types import Type, IntT,  ScalarT
-from core_types import NoneType, NoneT, Unknown, UnknownT
-from core_types import combine_type_list, StructT
-
+import adverb_helpers
+import adverb_wrapper
+import adverbs
+from args import ActualArgs
 import array_type
 from array_type import ArrayT
 import closure_type
-import tuple_type
-from tuple_type import TupleT
-
-import adverbs
-import adverb_helpers
-import adverb_wrapper
-
-from args import ActualArgs
-
-import syntax_helpers
-from syntax_helpers import get_type, get_types, unwrap_constant
+from common import dispatch
+import config
+from core_types import Type, IntT,  ScalarT
+from core_types import NoneType, NoneT, Unknown, UnknownT
+from core_types import combine_type_list, StructT
+import names
+import prims
 import syntax as untyped_ast
 import syntax as typed_ast
+import syntax_helpers
+from syntax_helpers import get_type, get_types, unwrap_constant
+import tuple_type
+from tuple_type import TupleT
+import type_conv
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -601,8 +594,9 @@ def _specialize(fn, arg_types):
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
   coerced_fundef = rewrite_typed(typed_fundef)
-  import optimize
-  return optimize.optimize(coerced_fundef)
+  import simplify 
+  normalized = simplify.Simplify().apply(coerced_fundef)
+  return normalized 
 
 def _get_fundef(fn):
   if isinstance(fn, (untyped_ast.Fn, typed_ast.TypedFn)):

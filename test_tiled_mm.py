@@ -1,9 +1,12 @@
+import numpy as np
+
 import adverbs
 import array_type
+from closure_type import make_closure_type
 import core_types
 import llvm_backend
-import lowering
-import numpy as np
+from parakeet import allpairs
+import pipeline 
 import prims
 import run_function
 import syntax
@@ -11,8 +14,8 @@ import syntax_helpers
 import testing_helpers
 import time
 
-from closure_type import make_closure_type
-from parakeet import allpairs
+
+
 
 x = 1000
 x2_array = np.arange(x*x, dtype = np.float).reshape(x,x)
@@ -94,7 +97,7 @@ map_mul_fn = syntax.TypedFn(
   type_env = {"X":x_2_array_t, "Y":x_2_array_t})
 
 def test_tiled_mm():
-  new_fn = lowering.lower(mm_fn, True)
+  new_fn = pipeline.lower_tiled(mm_fn)
   assert isinstance(new_fn, syntax.TypedFn)
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)

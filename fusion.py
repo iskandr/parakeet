@@ -4,7 +4,7 @@ import syntax_helpers
 
 from adverbs import Adverb, Scan, Reduce, Map, AllPairs
 
-from transform import Transform, apply_pipeline
+from transform import Transform 
 from use_analysis import use_count
 import inline
 from dead_code_elim import DCE
@@ -49,18 +49,17 @@ class Fusion(Transform):
   def pre_apply(self, fn):
     # map each variable to
     self.use_counts = use_count(fn)
-
-  _cache = {}
+  
   def transform_TypedFn(self, fn):
-    if fn.name in self._cache:
-      return self._cache[fn.name]
-    else: 
-      pipeline = [Simplify, DCE, Fusion(recursive=self.recursive)]
-      fused_fn = apply_pipeline(fn, pipeline) 
-      self._cache[fn.name] = fused_fn 
-      self._cache[fused_fn.name] = fused_fn 
-      return fused_fn  
-
+    if self.fn.copied_by is not None:
+      return self.fn.copied_by.apply(fn)
+    else:
+      
+      # at the very least do high level optimizations
+      import pipeline 
+      return pipeline.high_level_optimizations.apply(fn) 
+  
+  
   def transform_Assign(self, stmt):
     if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)

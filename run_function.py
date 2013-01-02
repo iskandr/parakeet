@@ -1,16 +1,20 @@
-import ast_conversion
-import core_types
 import ctypes
+from llvm.ee import GenericValue
+
+import syntax
+from args import ActualArgs
+import ast_conversion
+import type_inference
+from pipeline import lowering 
+
+import type_conv
+import core_types
+
 import llvm_backend
 import llvm_types
-import lowering
-import syntax
-import type_conv
-import type_inference
-
-from args import ActualArgs
 from llvm_context import global_context
-from llvm.ee import GenericValue
+
+
 
 def python_to_generic_value(x, t):
   if isinstance(t, core_types.FloatT):
@@ -111,8 +115,7 @@ def specialize_and_compile(fn, args, kwargs = {}):
   # propagate types through function representation and all
   # other functions it calls
   typed = type_inference.specialize(untyped, arg_types)
-
-  lowered = lowering.lower(typed, tile=False)
+  lowered = lowering.apply(typed)
 
   # compile to native code
   llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(lowered)

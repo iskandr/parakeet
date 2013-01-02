@@ -6,16 +6,17 @@ import tuple_type
 from array_type import ArrayT, make_array_type
 from core_types import ScalarT
 from syntax_helpers import const_int, const_tuple
-from transform import MemoizedTransform
+from transform import Transform
 
-class LowerStructs(MemoizedTransform):
+class LowerStructs(Transform):
   """
   The only non-scalar objects should all be created as explicit Structs
   """
   
   def transform_TypedFn(self, expr):
-    import lowering 
-    return lowering.lower(expr)
+    import pipeline 
+    return pipeline.lowering.apply(expr) 
+    
   
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
