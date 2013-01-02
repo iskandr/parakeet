@@ -15,7 +15,6 @@ from simplify import Simplify
 from tile_adverbs import TileAdverbs
 from transform import apply_pipeline
 
-
 _tiled_functions = {}
 def tiling(old_fn):
   if old_fn.name in _tiled_functions:
@@ -26,7 +25,7 @@ def tiling(old_fn):
   ]
   if config.opt_fusion:
     pipeline += [Fusion, Simplify, DCE]
-  
+
   pipeline += [
     TileAdverbs, Simplify, DCE,
     LowerTiledAdverbs, Simplify, DCE
@@ -35,9 +34,8 @@ def tiling(old_fn):
     pipeline += [Fusion, Simplify, DCE]
   new_fn = apply_pipeline(old_fn, pipeline)
   _tiled_functions[new_fn.name] = new_fn
-  _tiled_functions[old_fn.name] = new_fn  
+  _tiled_functions[old_fn.name] = new_fn
   return new_fn
-
 
 _lowered_functions = {}
 def lower(old_fn, tile=False):
@@ -48,19 +46,18 @@ def lower(old_fn, tile=False):
   if key in _lowered_functions:
     return _lowered_functions[key]
   else:
-    
     if tile:
       old_fn = tiling(old_fn)
       num_tiles = old_fn.num_tiles
     else:
       num_tiles = 0
-        
+
     loopy_fn = lower_adverbs(old_fn)
 
     final_pipeline = [CloneFunction]
     def add(*ts):
-      final_pipeline.extend(ts + (Simplify, DCE))   
-         
+      final_pipeline.extend(ts + (Simplify, DCE))
+
     if config.opt_copy_elimination:
       add(CopyElimination)
 

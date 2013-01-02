@@ -93,17 +93,17 @@ map_mul_fn = syntax.TypedFn(
   return_type = x_array_t,
   type_env = {"X":x_2_array_t, "Y":x_2_array_t})
 
-def test_tiled_mm():
-  new_fn = lowering.lower(mm_fn, True)
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  a2_array = np.arange(12).reshape(4,3)
-  b2_array = np.arange(9,21).reshape(4,3)
-  rslt = wrapper(a2_array, b2_array, (2,2,2))
-  nprslt = np.dot(a2_array, b2_array.T)
-  assert(testing_helpers.eq(rslt, nprslt)), \
-      "Expected %s but got %s" % (nprslt, rslt)
+#def test_tiled_mm():
+#  new_fn = lowering.lower(mm_fn, True)
+#  assert isinstance(new_fn, syntax.TypedFn)
+#  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
+#  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
+#  a2_array = np.arange(12).reshape(4,3)
+#  b2_array = np.arange(9,21).reshape(4,3)
+#  rslt = wrapper(a2_array, b2_array, (2,2,2))
+#  nprslt = np.dot(a2_array, b2_array.T)
+#  assert(testing_helpers.eq(rslt, nprslt)), \
+#      "Expected %s but got %s" % (nprslt, rslt)
 
 def dot(x, y):
   return sum(x*y)
@@ -118,8 +118,12 @@ def test_par_mm():
   start = time.time()
   nprslt = np.dot(x2_array, y2_array.T)
   np_time = time.time() - start
+  start = time.time()
+  adverb_matmult(x2_array, y2_array)
+  no_comp_time = time.time() - start
   assert(testing_helpers.eq(rslt, nprslt))
-  print "Parakeet time:", par_time
+  print "Parakeet time with compilation:", par_time
+  print "Parakeet time without compilation:", no_comp_time
   print "NumPy time:", np_time
 
 if __name__ == '__main__':

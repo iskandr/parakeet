@@ -110,7 +110,7 @@ class Runtime():
     for i in range(self.dop):
       self.tile_sizes[i] = single_tile_sizes_t()
       for j in range(num_tiles):
-        self.tile_sizes[i][j] = num_iters
+        self.tile_sizes[i][j] = 50
     self.work_functions = (c_void_p * self.dop)()
     for i in range(self.dop):
       self.work_functions[i] = cast(fn, c_void_p)

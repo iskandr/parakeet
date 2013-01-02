@@ -133,7 +133,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        return_type = core_types.NoneType,
                        type_env = type_env)
     lowered = lowering.lower(parallel_wrapper)
-    _par_wrapper_cache[key] = lowered
+    _par_wrapper_cache[key] = (lowered, num_tiles)
 
     return lowered, num_tiles
 
