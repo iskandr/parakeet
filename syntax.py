@@ -419,7 +419,7 @@ class TypedFn(Expr):
               'version',
               'has_tiles' 
               'num_tiles']
-
+  
   registry = {}
   max_version = {}
   def next_version(self, name):
@@ -428,6 +428,7 @@ class TypedFn(Expr):
     return next 
   
   def node_init(self):
+    print self.members()
     assert isinstance(self.body, list), \
         "Invalid body for typed function: %s" % (self.body,)
     assert isinstance(self.arg_names, (list, tuple)), \
