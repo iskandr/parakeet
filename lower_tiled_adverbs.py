@@ -113,7 +113,12 @@ class LowerTiledAdverbs(Transform):
     output_args = self.closure_elts(callable_fn) + args
     loop_rslt = self._create_output_array(inner_fn, output_args, [],
                                           "loop_result")
+    init = loop_rslt
     rslt_t = loop_rslt.type
+    not_array = array_type.get_rank(rslt_t) == 0
+    if not_array:
+      loop_before = self.fresh_var(rslt_t, "loop_before")
+      init = loop_before
 
     # Lift the initial value and fill it.
     def init_unpack(i, cur):
@@ -128,14 +133,17 @@ class LowerTiledAdverbs(Transform):
         self.assign(j_after, self.add(j, syntax_helpers.one_i64))
         body = self.blocks.pop()
         return syntax.While(init_cond, body, merge)
-    num_exps = array_type.get_rank(loop_rslt.type) - \
+    num_exps = array_type.get_rank(init.type) - \
                array_type.get_rank(expr.init.type)
-    self.blocks += init_unpack(num_exps, loop_rslt)
+    self.blocks += init_unpack(num_exps, init)
 
     # Loop over the remaining tiles.
     rslt_tmp = self.fresh_var(rslt_t, "rslt_tmp")
     i, i_after, merge = self.loop_counter("i")
     loop_cond = self.lt(i, niters)
+    if not_array:
+      loop_after = self.fresh_var(rslt_t, "loop_after")
+      merge[loop_rslt.name] = (loop_before, loop_after)
 
     self.blocks.push()
     # Take care of stragglers via checking bound every iteration.
@@ -154,9 +162,12 @@ class LowerTiledAdverbs(Transform):
     nested_combine = syntax.Call(callable_combine,
                                  [loop_rslt, rslt_tmp],
                                  type=inner_combine.return_type)
-    outidx = \
-        self.tuple([syntax_helpers.slice_none] * loop_rslt.type.rank)
-    self.setidx(loop_rslt, outidx, nested_combine)
+    if not_array:
+      self.assign(loop_after, nested_combine)
+    else:
+      outidx = \
+          self.tuple([syntax_helpers.slice_none] * loop_rslt.type.rank)
+      self.setidx(loop_rslt, outidx, nested_combine)
     loop_body = self.blocks.pop()
     self.blocks += syntax.While(loop_cond, loop_body, merge)
 

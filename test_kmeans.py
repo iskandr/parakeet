@@ -32,6 +32,11 @@ def py_calc_centroid(X, a, i):
   cur_members = X[a == i]
   return np.mean(cur_members, axis=0)
 
+# TODO: At the moment, this won't work, as it generates a ragged array
+#       temporary.  In order to be able to do things like this, we'll need, as
+#       discussed, to fuse the indexing with the following reduction, allowing
+#       ragged arrays to exist temporarily in the hope that fusion will get rid
+#       of them.
 def calc_centroid(X, a, i):
   cur_members = X[a == i]
   def zero(x):
@@ -72,7 +77,8 @@ def par_kmeans(X, assign, k):
   def run_calc_centroid(i):
     return calc_centroid(X, assign, i)
 
-  C = parakeet.each(run_calc_centroid, idxs)
+  #C = parakeet.each(run_calc_centroid, idxs)
+  C = map(run_calc_centroid, idxs)
   print "Par C:", C
   converged = False
   j = 0
@@ -82,7 +88,8 @@ def par_kmeans(X, assign, k):
       return par_minidx(C, idxs, x)
     assign = parakeet.each(run_minidx, X)
     converged = np.all(assign == lastAssign)
-    C = parakeet.each(run_calc_centroid, idxs)
+    #C = parakeet.each(run_calc_centroid, idxs)
+    C = map(run_calc_centroid, idxs)
     j = j + 1
   return C, assign
 
