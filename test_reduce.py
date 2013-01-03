@@ -8,7 +8,7 @@ int_vec = 100 + np.arange(100, dtype=int)
 float_vec = int_vec.astype(float)
 bool_vec = float_vec < np.mean(float_vec)
 
-a = np.arange(100).reshape(10,10)
+a = np.arange(100, dtype=float).reshape(10,10)
 b = np.arange(100,200).reshape(10,10)
 
 def my_sum(xs):
@@ -23,13 +23,25 @@ def test_float_sum():
 def test_bool_sum():
   testing_helpers.expect(my_sum, [bool_vec], np.sum(bool_vec))
 
-def sqr_dist(x, y):
+def sqr_dist(y, x):
   return sum((x-y)*(x-y))
 
+def reduce_2d(Ys):
+  def zero(x):
+    return 0.0
+  zeros = each(zero, Ys[0])
+  return reduce(add, Ys, init=zeros)
+
+def test_2d_reduce():
+  par_rslt = reduce_2d(a)
+  np_rslt = np.sum(a, 0)
+  assert testing_helpers.eq(par_rslt, np_rslt), \
+      "Expected %s but got %s" % (np_rslt, par_rslt)
+
 def test_sqr_dist():
-  y = a[0]
-  def run_sqr_dist(x):
-    return sqr_dist(x, y)
+  z = a[0]
+  def run_sqr_dist(c):
+    return sqr_dist(z, c)
   par_rslt = each(run_sqr_dist, a)
   py_rslt = np.array(map(run_sqr_dist, a))
   assert testing_helpers.eq(par_rslt, py_rslt), \
@@ -38,6 +50,7 @@ def test_sqr_dist():
 def avg_along_axis_0(Xs):
   assign = np.array([0,0,1,0,1,0,1,0,1,1])
   Ys = Xs[assign == 1]
+  print Ys
   def zero(x):
     return 0.0
   zeros = each(zero, Xs[0])
@@ -46,12 +59,12 @@ def avg_along_axis_0(Xs):
     return s / Ys.shape[0]
   return each(d, s)
 
-def test_avg_along_axis_0():
-  assign = np.array([0,0,1,0,1,0,1,0,1,1])
-  par_rslt = avg_along_axis_0(a)
-  py_rslt = np.mean(a[assign == 1], axis=0)
-  assert testing_helpers.eq(par_rslt, py_rslt), \
-      "Expected %s but got %s" % (py_rslt, par_rslt)
+#def test_avg_along_axis_0():
+#  assign = np.array([0,0,1,0,1,0,1,0,1,1])
+#  par_rslt = avg_along_axis_0(a)
+#  py_rslt = np.mean(a[assign == 1], axis=0)
+#  assert testing_helpers.eq(par_rslt, py_rslt), \
+#      "Expected %s but got %s" % (py_rslt, par_rslt)
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

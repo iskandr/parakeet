@@ -1,4 +1,4 @@
-from adverbs import Map, Scan, Reduce, AllPairs
+from adverbs import Map, Scan, Reduce
 from syntax import Assign, Return, If, While, RunExpr
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
 from syntax import Call, TypedFn, Struct, Alloc
@@ -130,6 +130,10 @@ class SyntaxVisitor(object):
       return self.visit_Call(expr)
     elif c is Map:
       return self.visit_Map(expr)
+    elif c is Reduce:
+      return self.visit_Reduce(expr)
+    elif c is Scan:
+      return self.visit_Scan(expr)
     elif c is TypedFn:
       return self.visit_TypedFn(expr)
     else:
@@ -209,7 +213,6 @@ class SyntaxVisitor(object):
     self.visit_merge_loop_repeat(stmt.merge)
 
   def visit_stmt(self, stmt):
-    # print stmt
     c = stmt.__class__
     if c is Assign:
       self.visit_Assign(stmt)

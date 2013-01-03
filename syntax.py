@@ -1,7 +1,6 @@
 import args
-import core_types
-
 from args import ActualArgs
+import core_types
 from node import Node
 
 class Stmt(Node):
@@ -35,9 +34,9 @@ class RunExpr(Stmt):
   _members = ['value']
 
   def __str__(self):
-    assert self.value is not None 
-    return "RunExpr(%s)" % self.value 
-  
+    assert self.value is not None
+    return "RunExpr(%s)" % self.value
+
 class Return(Stmt):
   _members = ['value']
 
@@ -371,7 +370,7 @@ class TupleProj(Expr):
 
   def __str__(self):
     return "%s[%d]" % (self.tuple, self.index)
-  
+
   def children(self):
     return (self.tuple,)
   

@@ -162,7 +162,7 @@ class Codegen(object):
 
   def index_along_axis(self, arr, axis, idx, name=None):
     if arr.type.__class__ is not ArrayT:
-      return arr 
+      return arr
     assert isinstance(axis, int), \
         "Axis must be a known constant int, got: " + str(axis)
     indices = []
@@ -174,7 +174,7 @@ class Codegen(object):
 
     index_tuple = self.tuple(indices, "indices")
 
-    
+
     result_t = arr.type.index_type(index_tuple.type)
     idx_expr = Index(arr, index_tuple, type=result_t)
     if name:
@@ -523,13 +523,12 @@ class Codegen(object):
   def _create_output_array(self, fn, args, extra_dims, name = "output"):
     """
     Given a function and its argument, use shape inference to figure out the
-    result shape of the array and preallocate it
+    result shape of the array and preallocate it.  If the result should be a
+    scalar, just return a scalar variable.
     """
 
     try:
       inner_shape_tuple = self.call_shape(fn, args)
-      print "-- Shape inference succeeded when calling %s with %s" % \
-            (fn, args)
     except:
       print "Shape inference failed when calling %s with %s" % (fn, args)
       raise
@@ -538,7 +537,10 @@ class Codegen(object):
     outer_shape_tuple = self.tuple(extra_dims)
     shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
     elt_t = self.elt_type(self.return_type(fn))
-    return self.alloc_array(elt_t, shape, name)
+    if len(shape.type.elt_types) > 0:
+      return self.alloc_array(elt_t, shape, name)
+    else:
+      return self.fresh_var(elt_t, name)
 
   def rank(self, value):
     if self.is_array(value):

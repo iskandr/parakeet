@@ -1,8 +1,9 @@
 import names
 import syntax
-from syntax import If, Assign, While, Return, Var, TypedFn, Const, RunExpr
 import syntax_visitor
+
 from subst import subst_stmt_list
+from syntax import If, Assign, While, Return, Var, TypedFn, Const, RunExpr
 from transform import Transform
 
 class FoundCall(Exception):
@@ -62,7 +63,7 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
   n_expected = len(arg_names)
   n_given = len(args)
   arg_str = ",".join(src_fundef.arg_names)
-  assert n_expected ==  n_given, \
+  assert n_expected == n_given, \
       "Function %s expects %d args (%s) but given %d (%s)" % \
       (src_fundef.name, n_expected, arg_str, n_given, args)
 
@@ -87,7 +88,6 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
   for old_name in src_fundef.type_env.iterkeys():
     if old_name not in arg_names:
       rename_var(old_name)
-
 
   new_body = subst_stmt_list(src_fundef.body, rename_dict)
   result_var = replace_return_with_var(new_body, dest_type_env,
@@ -119,7 +119,8 @@ class Inliner(Transform):
       return expr
 
   def apply(self, fn):
+    #print "inlining:", fn
     if contains_calls(fn):
-      return  Transform.apply(self, fn)
+      return Transform.apply(self, fn)
     else:
       return fn

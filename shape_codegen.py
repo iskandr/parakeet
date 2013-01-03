@@ -1,13 +1,10 @@
-from traversal import Traversal
-
-from array_type import ArrayT, SliceT
+from array_type import ArrayT
 from closure_type import ClosureT
-from core_types import ScalarT, NoneT
-from syntax import Const
+from core_types import ScalarT
+from shape import Closure, Scalar, Var
+import syntax_helpers
+from traversal import Traversal
 from tuple_type import TupleT
-
-from shape import unknown_scalar, const, Scalar
-from shape import Var, Closure
 
 class ArgConverter(Traversal):
   def __init__(self, codegen):
@@ -44,8 +41,6 @@ class ArgConverter(Traversal):
     for x in xs:
       self.convert(x)
 
-import syntax_helpers
-
 class ShapeCodegen(Traversal):
   def __init__(self, codegen, exprs):
     self.codegen = codegen
@@ -63,7 +58,7 @@ class ShapeCodegen(Traversal):
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
     return self.codegen.tuple([self.visit(d) for d in v.dims])
-    
+
   def visit_Dim(self, v):
     return self.codegen.tuple_proj(self.visit(v.array), v.dim)
 
@@ -99,10 +94,10 @@ class ShapeCodegen(Traversal):
 
 def make_shape_expr(codegen, symbolic_shape, input_exprs):
   """
-  Given a codegen object we're currently using to create a
-  function, and a symbolic result shape of a function call
-  (along with the input expressions that went into the function)
-  generate a code expression for the shape of the result
+  Given a codegen object we're currently using to create a function, and a
+  symbolic result shape of a function call (along with the input expressions
+  that went into the function) generate a code expression for the shape of the
+  result
   """
   if isinstance(symbolic_shape, Scalar):
     return codegen.tuple([])

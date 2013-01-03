@@ -4,21 +4,15 @@ import adverbs
 import array_type
 import core_types
 import ctypes
-import interp
 import llvm_backend
-import parakeet
-from parakeet import each
-from pipeline import lower_tiled
 import prims
 import run_function
-from run_function import specialize_and_compile
 import syntax
 import syntax_helpers
 import testing_helpers
-import tile_adverbs
-import transform
 import type_conv
 
+from pipeline import lower_tiled
 
 x_array = np.arange(10, dtype = np.int64)
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)

@@ -1,6 +1,5 @@
 import adverb_helpers
 import array_type
-import core_types
 import syntax
 import syntax_helpers
 import tuple_type
@@ -17,13 +16,36 @@ class LowerTiledAdverbs(Transform):
     self.dl_tile_estimates = []
     self.ml_tile_estimates = []
 
+    # For now, we'll assume that no closure variables have the same name.
+    self.closure_vars = {}
+
   def pre_apply(self, fn):
     if not self.tile_sizes_param:
       tile_type = \
           tuple_type.make_tuple_type([Int64 for _ in range(fn.num_tiles)])
-      print "tile_type:", tile_type
       self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
     return fn
+
+  def get_closure_arg(self, closure_elt):
+    if isinstance(closure_elt, syntax.ClosureElt):
+      if isinstance(closure_elt.closure, syntax.Closure):
+        return closure_elt.closure.args[closure_elt.index]
+      elif isinstance(closure_elt.closure, syntax.Var):
+        closure = self.closure_vars[closure_elt.closure.name]
+        return closure.args[closure_elt.index]
+      else:
+        assert False, "Unknown closure type for closure elt %s" % closure_elt
+    elif isinstance(closure_elt, syntax.Var):
+      return closure_elt
+    else:
+      assert False, "Unknown closure closure elt type %s" % closure_elt
+
+  def transform_Assign(self, stmt):
+    if isinstance(stmt.rhs, syntax.Closure):
+      self.closure_vars[stmt.lhs.name] = stmt.rhs
+    stmt.rhs = self.transform_expr(stmt.rhs)
+    stmt.lhs = self.transform_lhs(stmt.lhs)
+    return stmt
 
   def transform_TypedFn(self, expr):
     nested_lower = LowerTiledAdverbs(nesting_idx=self.nesting_idx)
@@ -35,12 +57,11 @@ class LowerTiledAdverbs(Transform):
     self.fn.has_tiles = True
     self.nesting_idx += 1
     args = expr.args
-    axis = syntax_helpers.unwrap_constant(expr.axis)
+    axes = expr.axes
 
     # TODO: Should make sure that all the shapes conform here,
     # but we don't yet have anything like assertions or error handling
-    max_arg = adverb_helpers.max_rank_arg(args)
-    niters = self.shape(max_arg, axis)
+    niters = self.shape(args[0], syntax_helpers.unwrap_constant(axes[0]))
 
     # Create the tile size variable and find the number of tiles
     tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
@@ -55,11 +76,13 @@ class LowerTiledAdverbs(Transform):
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
 
-    output_args = args
+    closure_args = [self.get_closure_arg(e)
+                    for e in self.closure_elts(fn)]
+    output_args = closure_args + args
     if nested_has_tiles:
       output_args.append(self.tuple([syntax_helpers.one_i64] *
                                     len(self.tile_sizes_param.type.elt_types)))
-    array_result = self._create_output_array(fn, output_args, [],
+    array_result = self._create_output_array(inner_fn, output_args, [],
                                              "array_result")
 
     # Loop over the remaining tiles.
@@ -77,7 +100,7 @@ class LowerTiledAdverbs(Transform):
                                type=slice_t)
 
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
-                   for arg in args]
+                   for arg, axis in zip(args, axes)]
 
     output_region = self.index_along_axis(array_result, self.nesting_idx,
                                           tile_bounds)
@@ -94,51 +117,35 @@ class LowerTiledAdverbs(Transform):
   def transform_TiledReduce(self, expr):
     self.tiling = True
     self.fn.has_tiles = True
-    def alloc_maybe_array(isarray, t, shape, name=None):
-      if isarray:
-        return self.alloc_array(t, shape, name)
-      else:
-        return self.fresh_var(t, name)
-
     self.nesting_idx += 1
     args = expr.args
-    axis = syntax_helpers.unwrap_constant(expr.axis)
+    axes = expr.axes
 
     # TODO: Should make sure that all the shapes conform here,
-    # but we don't yet have anything like assertions or error handling
-    max_arg = adverb_helpers.max_rank_arg(args)
-    niters = self.shape(max_arg, axis)
+    # but we don't yet have anything like assertions or error handling.
+    niters = self.shape(args[0], syntax_helpers.unwrap_constant(axes[0]))
 
     tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     callable_fn = self.transform_expr(expr.fn)
     inner_fn = self.get_fn(callable_fn)
-    nested_has_tiles = inner_fn.has_tiles
     callable_combine = self.transform_expr(expr.combine)
     inner_combine = self.get_fn(callable_combine)
-    isarray = isinstance(expr.type, array_type.ArrayT)
-    elt_t = array_type.elt_type(expr.type)
 
-    # Hackishly execute the first tile to get the output shape
-    init_slice_bound = self.fresh_i64("init_slice_bound")
-    init_slice_cond = self.lt(tile_size, niters, "init_slice_cond")
-    init_merge = {init_slice_bound.name:(tile_size, niters)}
-    self.blocks += syntax.If(init_slice_cond, [], [], init_merge)
-    init_slice = syntax.Slice(syntax_helpers.zero_i64, init_slice_bound,
-                              syntax_helpers.one_i64, type=slice_t)
-    init_slice_args = [self.index_along_axis(arg, axis, init_slice)
-                       for arg in args]
-    if nested_has_tiles:
-      init_slice_args.append(self.tile_sizes_param)
-    rslt_init = self.assign_temp(syntax.Call(callable_fn, init_slice_args,
-                                             type=inner_fn.return_type),
-                                 "rslt_init")
-    out_shape = self.shape(rslt_init)
-    rslt_t = rslt_init.type
+    closure_args = [self.get_closure_arg(e)
+                    for e in self.closure_elts(callable_fn)]
+    output_args = closure_args + args
+    loop_rslt = self._create_output_array(inner_fn, output_args, [],
+                                          "loop_result")
+    init = loop_rslt
+    rslt_t = loop_rslt.type
+    not_array = array_type.get_rank(rslt_t) == 0
+    if not_array:
+      loop_before = self.fresh_var(rslt_t, "loop_before")
+      init = loop_before
 
     # Lift the initial value and fill it.
-    init = alloc_maybe_array(isarray, elt_t, out_shape, "init")
     def init_unpack(i, cur):
       if i == 0:
         return syntax.Assign(cur, expr.init)
@@ -156,12 +163,12 @@ class LowerTiledAdverbs(Transform):
     self.blocks += init_unpack(num_exps, init)
 
     # Loop over the remaining tiles.
-    loop_rslt = self.fresh_var(rslt_t, "loop_rslt")
     rslt_tmp = self.fresh_var(rslt_t, "rslt_tmp")
-    rslt_after = self.fresh_var(rslt_t, "rslt_after")
     i, i_after, merge = self.loop_counter("i")
     loop_cond = self.lt(i, niters)
-    merge[loop_rslt.name] = (init, rslt_after)
+    if not_array:
+      loop_after = self.fresh_var(rslt_t, "loop_after")
+      merge[loop_rslt.name] = (loop_before, loop_after)
 
     self.blocks.push()
     # Take care of stragglers via checking bound every iteration.
@@ -173,16 +180,19 @@ class LowerTiledAdverbs(Transform):
     tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
                                type=slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
-                   for arg in args]
-    if nested_has_tiles:
-      nested_args.append(self.tile_sizes_param)
+                   for arg, axis in zip(args, axes)]
     nested_call = syntax.Call(callable_fn, nested_args,
                               type=inner_fn.return_type)
     self.assign(rslt_tmp, nested_call)
     nested_combine = syntax.Call(callable_combine,
                                  [loop_rslt, rslt_tmp],
                                  type=inner_combine.return_type)
-    self.assign(rslt_after, nested_combine)
+    if not_array:
+      self.assign(loop_after, nested_combine)
+    else:
+      outidx = \
+          self.tuple([syntax_helpers.slice_none] * loop_rslt.type.rank)
+      self.setidx(loop_rslt, outidx, nested_combine)
     loop_body = self.blocks.pop()
     self.blocks += syntax.While(loop_cond, loop_body, merge)
 

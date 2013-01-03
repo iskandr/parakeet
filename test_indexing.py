@@ -76,17 +76,5 @@ def test_set_idx_3d():
     x2[i, j, k] = val
     expect(set_idx_3d, [x1, i, j, k, val], x2)
 
-def bool_idx(X, a, i):
-  return X[a == i]
-
-def test_bool_idx():
-  assign = np.random.randint(3, shape_1d)
-  idxs = np.arange(3)
-  def run_bool_idx(i):
-    return bool_idx(ints_1d, assign, i)
-  par_rslt = each(run_bool_idx, idxs)
-  py_rslt = np.array(map(run_bool_idx, idxs))
-  assert eq(par_rslt, py_rslt), "Expected %s got %s" % (py_rslt, par_rslt)
-
 if __name__ == '__main__':
   run_local_tests()

@@ -60,7 +60,7 @@ def do_par_row(i):
 def par_blur():
   return each(do_par_row, iidxs)
 
-def test_sqr_dist():
+def test_blur():
   if not plot:
     np_blurred = np_blur().astype(np.uint8)
   par_blurred = par_blur().astype(np.uint8)

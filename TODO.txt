@@ -1,14 +1,13 @@
 Alex:
  For loops
- Support more builtins like "range", "len", etc.. 
+ Support more builtins like "range", "len", etc..
  Parse module names in function uses, i.e. "np.dot", "parakeet.each"
  Support for trancendentals (log, exp, etc..)
  Support for unary negation
  Closures with nested adverbs don't work right
 
 Eric:
+ Analysis to determine tile size estimates based on memory accesses
  Logic to detect whether to tile a subtree of code
  Ability to tile only subtrees of a function
- Analysis to determine tile size estimates based on memory accesses
  Proper handling of closure variables
-

@@ -145,9 +145,7 @@ class Transform(Codegen):
     return expr
 
   def transform_expr(self, expr):
-    """
-    Dispatch on the node type and call the appropriate transform method
-    """
+    """Dispatch on the node type and call the appropriate transform method"""
 
     expr_class = expr.__class__
     if expr_class is Var:
@@ -302,14 +300,14 @@ class Transform(Codegen):
   def apply(self, fn):
     if config.print_transform_timings:
       start_time = time.time()
-      
+
     transform_name = self.__class__.__name__
-    
+
     if config.print_functions_before_transforms == True or \
         (isinstance(config.print_functions_before_transforms, list) and
          transform_name in config.print_functions_before_transforms):
       print
-      print "Running transform %s" % transform_name 
+      print "Running transform %s" % transform_name
       print "--- before ---"
       print repr(fn)
       print
@@ -347,10 +345,10 @@ class Transform(Codegen):
       new_fn.body = new_fn.body + post_block
 
     if config.print_functions_after_transforms == True or \
-        (isinstance(config.print_functions_after_transforms, list) and 
+        (isinstance(config.print_functions_after_transforms, list) and
          transform_name in config.print_functions_after_transforms):
       print
-      print "Done with  %s" % transform_name 
+      print "Done with  %s" % transform_name
       print "--- after ---"
       print repr(new_fn)
       print

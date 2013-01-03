@@ -4,22 +4,25 @@ import adverbs
 import adverb_helpers
 import adverb_registry
 import adverb_wrapper
-from args import ActualArgs, FormalArgs
 import array_type
 import config
 import core_types
-from core_types import Int64
+import closure_type 
 import ctypes
 import llvm_backend
 import names
-from pipeline import lowering, lower_tiled  
 import run_function
-from runtime import runtime
 import syntax
 import syntax_helpers
 import tuple_type
 import type_conv
 import type_inference
+
+from args import ActualArgs, FormalArgs
+from common import list_to_ctypes_array
+from core_types import Int64
+from pipeline import lowering, lower_tiled  
+from runtime import runtime
 
 try:
   rt = runtime.Runtime()
@@ -69,6 +72,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                           args_t, arg_types, closure_pos):
   key = (adverb_class, f.name, tuple(arg_types))
   if key in _par_wrapper_cache:
+
     return _par_wrapper_cache[key]
   else:
     fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocal_types)
@@ -140,8 +144,6 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
 
     return lowered, num_tiles
 
-import closure_type
-from common import list_to_ctypes_array
 
 def prepare_adverb_args(python_fn, args, kwargs):
   """
@@ -271,7 +273,8 @@ def par_each(fn, *args, **kwds):
   return output
 
 def par_allpairs(fn, x, y, **kwds):
-  # Don't handle outermost axis = None yet
+  # TODO: 
+  # Why isn't this axis param used????
   axis = kwds.get('axis', 0)
 
   untyped, closure_t, nonlocals, args, arg_types = \

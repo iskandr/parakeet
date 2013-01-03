@@ -121,8 +121,12 @@ def test_par_mm():
   start = time.time()
   nprslt = np.dot(x2_array, y2_array.T)
   np_time = time.time() - start
+  start = time.time()
+  adverb_matmult(x2_array, y2_array)
+  no_comp_time = time.time() - start
   assert(testing_helpers.eq(rslt, nprslt))
-  print "Parakeet time:", par_time
+  print "Parakeet time with compilation:", par_time
+  print "Parakeet time without compilation:", no_comp_time
   print "NumPy time:", np_time
 
 if __name__ == '__main__':

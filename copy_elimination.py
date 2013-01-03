@@ -1,26 +1,9 @@
-import names
-
-import syntax
-from syntax import Assign, Index, Slice, Var, Return, RunExpr
-from syntax import ArrayView,  Alloc, Array, Struct, Tuple, Attribute
-from syntax_helpers import none, slice_none, zero_i64
-
-from adverb_helpers import max_rank
-from adverbs import Map, Reduce, Scan, AllPairs, Adverb
-
-from core_types import NoneT, NoneType
-import array_type
 from array_type import ArrayT
-
-import shape_inference
-import shape_codegen
-
 from collect_vars import collect_var_names, collect_var_names_from_exprs
-from transform import Transform
-from clone_function import CloneFunction
-
+from syntax import Index, Var
+from syntax import ArrayView,  Alloc, Array, Struct, Tuple, Attribute
 from syntax_visitor import SyntaxVisitor
-from compiler.ast import Stmt
+from transform import Transform
 
 class FindLocalArrays(SyntaxVisitor):
   def __init__(self):
@@ -106,8 +89,8 @@ class EscapeAnalysis(SyntaxVisitor):
 
 class UseDefAnalysis(SyntaxVisitor):
   """
-  Number all the statements and track the
-  creation as well as first and last uses of variables
+  Number all the statements and track the creation as well as first and last
+  uses of variables
   """
   def __init__(self):
     # map from pointers of statement objects to
