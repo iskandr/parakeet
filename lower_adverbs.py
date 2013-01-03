@@ -1,8 +1,4 @@
-import closure_type
-import core_types
-import syntax
 import syntax_helpers
-import type_inference
 
 from adverb_semantics import AdverbSemantics
 from transform import Transform, apply_pipeline

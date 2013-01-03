@@ -1,13 +1,10 @@
-from traversal import Traversal
-
-from array_type import ArrayT, SliceT
+from array_type import ArrayT
 from closure_type import ClosureT
-from core_types import ScalarT, NoneT
-from syntax import Const
+from core_types import ScalarT
+from shape import Closure, Scalar, Var
+import syntax_helpers
+from traversal import Traversal
 from tuple_type import TupleT
-
-from shape import unknown_scalar, const, Scalar
-from shape import Var, Closure
 
 class ArgConverter(Traversal):
   def __init__(self, codegen):
@@ -43,8 +40,6 @@ class ArgConverter(Traversal):
   def convert_list(self, xs):
     for x in xs:
       self.convert(x)
-
-import syntax_helpers
 
 class ShapeCodegen(Traversal):
   def __init__(self, codegen, exprs):

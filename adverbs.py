@@ -19,12 +19,12 @@ class Adverb(syntax.Expr):
     s = "%s(axis = %s, args = (%s), type=%s, fn = %s" % \
           (self.node_type(), self.axis,
            self.args_to_str(),
-           self.type, 
+           self.type,
            self.fn_to_str(self.fn),)
-    if self.out: 
+    if self.out:
       s += ", out=%s" % self.out
     s += ")"
-    return s 
+    return s
 
   def __str__(self):
     return repr(self)
@@ -46,18 +46,18 @@ class Accumulative(Adverb):
   _members = ['combine', 'init']
 
   def __repr__(self):
-    s = "%s(axis = %s, args = {%s}, type = %s, init = %s, map_fn = %s, combine = %s" % \
+    s = ("%s(axis = %s, args = (%s), type = %s, init = %s, map_fn = %s, " + \
+         "combine = %s") % \
         (self.node_type(), self.axis,
          self.args_to_str(),
-         self.type, 
+         self.type,
          self.init,
          self.fn_to_str(self.fn),
-         self.fn_to_str(self.combine),
-        )
+         self.fn_to_str(self.combine))
     if self.out:
-      s += ", out = %s" % self.out 
+      s += ", out = %s" % self.out
     s += ")"
-    return s 
+    return s
 
   def node_init(self):
     # assert self.init is not None
@@ -81,22 +81,60 @@ class Scan(Accumulative):
           self.fn_to_str(self.fn),
           self.fn_to_str(self.combine),
           self.fn_to_str(self.emit))
-    if self.out: 
-      s += ", out = %s" % self.out 
+    if self.out:
+      s += ", out = %s" % self.out
     s += ")"
-    return s 
+    return s
 
 class Tiled(object):
+  _members = ['axes']
+
+  def __repr__(self):
+    s = "%s(axes = %s, args = (%s), type=%s, fn = %s" % \
+          (self.node_type(), self.axes,
+           self.args_to_str(),
+           self.type,
+           self.fn_to_str(self.fn),)
+    if self.out:
+      s += ", out=%s" % self.out
+    s += ")"
+    return s
+
+class TiledMap(Tiled, Map):
   pass
 
-class TiledMap(Map, Tiled):
+class TiledAllPairs(Tiled, AllPairs):
   pass
 
-class TiledAllPairs(AllPairs, Tiled):
-  pass
+class TiledReduce(Tiled, Reduce):
+  def __repr__(self):
+    s = ("%s(axes = %s, args = {%s}, type = %s, init = %s, map_fn = %s, " + \
+         "combine = %s") % \
+        (self.node_type(), self.axes,
+         self.args_to_str(),
+         self.type,
+         self.init,
+         self.fn_to_str(self.fn),
+         self.fn_to_str(self.combine),
+        )
+    if self.out:
+      s += ", out = %s" % self.out
+    s += ")"
+    return s
 
-class TiledReduce(Reduce, Tiled):
-  pass
-
-class TiledScan(Scan, Tiled):
-  pass
+class TiledScan(Tiled, Scan):
+  def __repr__(self):
+    s = "%s(axes = %s, args = {%s}, type = %s, " \
+        % (self.node_type(), self.axes,
+           self.args_to_str(),
+           self.type
+          )
+    s += "init = %s, map_fn = %s, combine = %s, emit = %s" % \
+         (self.init,
+          self.fn_to_str(self.fn),
+          self.fn_to_str(self.combine),
+          self.fn_to_str(self.emit))
+    if self.out:
+      s += ", out = %s" % self.out
+    s += ")"
+    return s

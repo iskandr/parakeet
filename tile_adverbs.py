@@ -1,8 +1,9 @@
+import copy
+
 import adverbs
 import array_type
 import closure_type
 import config
-import copy
 import names
 import syntax
 
@@ -150,7 +151,7 @@ class TileAdverbs(Transform):
       else:
         assert False, "Unknown closure type for closure elt %s" % closure_elt
     elif isinstance(closure_elt, syntax.Var):
-      return closure_elt.name
+      return closure_elt
     else:
       assert False, "Unknown closure closure elt type %s" % closure_elt
 
@@ -364,13 +365,10 @@ class TileAdverbs(Transform):
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
 
-    #TODO: below is for when we have multiple axes.  For now just assuming
-    #      that all args have the same expansions but that isn't necessarily
-    #      true.
-    #axis = [len(self.get_num_expansions_at_depth(arg.name, depth) + a
-    #        for arg, a in zip(expr.args, expr.axis)]
-    axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
-           expr.axis
+    axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
+            for arg in expr.args]
+    #axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
+    #       expr.axis
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
     self.pop_exp()
@@ -382,7 +380,8 @@ class TileAdverbs(Transform):
       closure.fn = new_fn
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
-    return adverbs.TiledMap(new_fn, expr.args, axis, type=return_t)
+    return adverbs.TiledMap(fn = new_fn, args = expr.args, axes = axes,
+                            type = return_t)
 
   # For now, reductions end the tiling chain.
   def transform_Reduce(self, expr):
@@ -414,15 +413,10 @@ class TileAdverbs(Transform):
                                   fn.body,
                                   fn.type_env)
 
-    #TODO: below is for when we have multiple axes.  For now just assuming
-    #      that all args have the same expansions but that isn't necessarily
-    #      true.
-    #axis = [len(self.get_num_expansions_at_depth(arg.name, depth) + a
-    #        for arg, a in zip(expr.args, expr.axis)]
+    axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
+            for arg in expr.args]
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
-    axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
-           expr.axis
     init = expr.init # Initial value lifted to proper shape in lowering
     if len(depths) > 1:
       depths.remove(depth)
@@ -450,7 +444,7 @@ class TileAdverbs(Transform):
                                combine = new_combine,
                                init = init,
                                args = expr.args,
-                               axis = axis,
+                               axes = axes,
                                type=return_t)
 
   # TODO: Tiling scans should be very similar to tiling reductions.
