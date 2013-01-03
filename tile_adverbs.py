@@ -26,6 +26,7 @@ def free_vars(expr):
   elif isinstance(expr, syntax.Tuple):
     return free_vars_list(expr.elts)
   else:
+    # TODO: Handle closure variables.
     assert isinstance(expr, syntax.Const), "%s is not a Const" % expr
     return set()
 
