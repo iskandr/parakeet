@@ -33,14 +33,20 @@ class EscapeAnalysis(SyntaxVisitor):
   def visit_fn(self, fn):
     self.scalars = set([])
     self.may_alias = {}
+    all_scalars = True 
     # every name at least aliases it selfcollect_var_names
     for (name,t) in fn.type_env.iteritems():
       if isinstance(t, ScalarT):
         self.scalars.add(name)
       else:
         self.may_alias[name] = set([name])
+        all_scalars = False 
     
     self.may_escape = set([])
+    
+    if all_scalars:
+      return  
+    
     self.visit_block(fn.body)
     
     # once we've accumulated all the aliases
