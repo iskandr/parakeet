@@ -4,25 +4,24 @@ import adverbs
 import adverb_helpers
 import adverb_registry
 import adverb_wrapper
+from args import ActualArgs, FormalArgs
 import array_type
+from common import list_to_ctypes_array
 import config
 import core_types
-import closure_type 
+from core_types import Int64
+import closure_type
 import ctypes
 import llvm_backend
 import names
+from pipeline import lowering, lower_tiled
 import run_function
+from runtime import runtime
 import syntax
 import syntax_helpers
 import tuple_type
 import type_conv
 import type_inference
-
-from args import ActualArgs, FormalArgs
-from common import list_to_ctypes_array
-from core_types import Int64
-from pipeline import lowering, lower_tiled  
-from runtime import runtime
 
 try:
   rt = runtime.Runtime()
@@ -66,13 +65,12 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
       return lower_tiled(typed)
     else:
       return lowering.apply(typed)
-    
+
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                           args_t, arg_types, closure_pos):
   key = (adverb_class, f.name, tuple(arg_types))
   if key in _par_wrapper_cache:
-
     return _par_wrapper_cache[key]
   else:
     fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocal_types)
@@ -133,17 +131,16 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     # Construct the typed wrapper.
     wrapper_name = adverb_class.node_type() + fn.name +"_par"
     parallel_wrapper = \
-        syntax.TypedFn(name = names.fresh(wrapper_name), 
+        syntax.TypedFn(name = names.fresh(wrapper_name),
                        arg_names = [var.name for var in inputs],
                        input_types = syntax_helpers.get_types(inputs),
                        body = body,
                        return_type = core_types.NoneType,
                        type_env = type_env)
     lowered = lowering(parallel_wrapper)
-    _par_wrapper_cache[key] = lowered
+    _par_wrapper_cache[key] = (lowered, num_tiles)
 
     return lowered, num_tiles
-
 
 def prepare_adverb_args(python_fn, args, kwargs):
   """
@@ -273,7 +270,7 @@ def par_each(fn, *args, **kwds):
   return output
 
 def par_allpairs(fn, x, y, **kwds):
-  # TODO: 
+  # TODO:
   # Why isn't this axis param used????
   axis = kwds.get('axis', 0)
 
@@ -368,7 +365,7 @@ def get_axis(kwargs):
 # TODO: Called from the outside maybe macros should generate wrapper functions
 
 call_from_python = None
-if config.call_from_python_in_parallel:
+if config.call_from_python_in_parallel and rt:
   call_from_python = par_each
 
 @staged_macro("axis", call_from_python=call_from_python)

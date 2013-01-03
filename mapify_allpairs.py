@@ -1,8 +1,8 @@
-import names
-from transform import Transform
-from syntax import Assign, Var, TypedFn, Return
-from adverbs import Map, AllPairs
+from adverbs import AllPairs, Map
 import array_type
+import names
+from syntax import Assign, Return, TypedFn, Var
+from transform import Transform
 
 class MapifyAllPairs(Transform):
   def transform_stmt(self, stmt):

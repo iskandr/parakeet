@@ -1,24 +1,18 @@
 import numpy as np
+import time
 
 import adverbs
 import array_type
-import config 
+from closure_type import make_closure_type
 import core_types
 import llvm_backend
-import pipeline 
+from parakeet import allpairs
+import pipeline
 import prims
 import run_function
 import syntax
 import syntax_helpers
 import testing_helpers
-import time
-
-
-from closure_type import make_closure_type
-from parakeet import allpairs
-
-config.call_from_python_in_parallel = True 
-config.opt_tile = True 
 
 x = 1000
 x2_array = np.arange(x*x, dtype = np.float).reshape(x,x)

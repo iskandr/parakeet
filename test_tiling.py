@@ -140,7 +140,8 @@ def test_2_maps():
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   tile_array = (3,) * new_fn.num_tiles
   rslt = wrapper(x2_array, tile_array)
-  assert testing_helpers.eq(rslt, x2_array)
+  assert testing_helpers.eq(rslt, x2_array), \
+      "Expected %s but got %s" % (x2_array, rslt)
 
 def test_1d_reduce():
   new_fn = lower_tiled(red_fn2)
