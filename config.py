@@ -11,7 +11,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False 
+print_lowered_function = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = False #['LowerAdverbs']
@@ -32,7 +32,7 @@ print_unoptimized_llvm = False
 print_optimized_llvm = False
 
 # show aliases and escape sets
-print_escape_analysis = False 
+print_escape_analysis = False
 
 # how long did each transform take?
 print_transform_timings = False
@@ -50,8 +50,8 @@ opt_inline = True
 opt_fusion = True
 opt_licm = True
 opt_verify = True
-opt_copy_elimination = True
-opt_stack_allocation = True 
+opt_copy_elimination = False
+opt_stack_allocation = True
 
 ######################################
 #           LLVM OPTIONS             #
@@ -71,7 +71,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True

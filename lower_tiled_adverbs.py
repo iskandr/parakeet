@@ -1,11 +1,9 @@
-import adverb_helpers
 import array_type
+from core_types import Int64
 import syntax
 import syntax_helpers
-import tuple_type
-
-from core_types import Int64
 from transform import Transform
+import tuple_type
 
 class LowerTiledAdverbs(Transform):
   def __init__(self, nesting_idx=-1):
