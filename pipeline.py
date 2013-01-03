@@ -14,14 +14,14 @@ from simplify import Simplify
 from tile_adverbs import TileAdverbs
 
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion')
-inline_opt = Phase(Inliner, config_param = 'opt_inline' )
+inline_opt = Phase(Inliner, config_param = 'opt_inline')
 high_level_optimizations = Phase([Simplify, inline_opt, fusion_opt],
                                  cleanup = [Simplify, DCE])
 
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
 post_tiling = Phase([fusion_opt], copy = True)
-tiling = Phase([pre_tiling, TileAdverbs,  LowerTiledAdverbs],
+tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs],
                config_param = 'opt_tile',
                depends_on = high_level_optimizations,
                rename = True,

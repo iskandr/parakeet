@@ -14,7 +14,7 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False #['LowerAdverbs']
+print_functions_before_transforms = False #['Inliner']
 
 # show the function produced by each transformation?
 print_functions_after_transforms = False # ['CopyElimination']
@@ -74,4 +74,4 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True

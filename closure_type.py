@@ -1,10 +1,9 @@
-
 import ctypes
-import type_conv
-
-from core_types import Type, IncompatibleTypes, StructT, Int64
 # python's function type
 from types import FunctionType
+
+from core_types import Type, IncompatibleTypes, StructT, Int64
+import type_conv
 
 ###########################################
 #
@@ -96,11 +95,11 @@ def make_closure_type(fn, closure_arg_types = []):
     return t
 
 def print_specializations():
-  import config 
+  import config
   if config.print_specialized_function_names:
-    print 
+    print
     print "FUNCTION SPECIALIZATIONS"
-    count = 0 
+    count = 0
     for ((untyped,closure_types), clos_t) in sorted(_closure_type_cache.items()):
       specializations = clos_t.specializations.items()
       if len(specializations) > 0:
@@ -108,11 +107,11 @@ def print_specializations():
         print "Closure %s %s" % (name, closure_types)
         for (arg_types, typed_fn) in sorted(specializations):
           print "  -- %s ==> %s" % (arg_types, typed_fn.name)
-          count += 1 
-    print 
-    print "Total: %d function specializations" % count 
-        
-import atexit 
+          count += 1
+    print
+    print "Total: %d function specializations" % count
+
+import atexit
 atexit.register(print_specializations)
 def typeof_fn(f):
   import ast_conversion
@@ -132,10 +131,10 @@ def typeof_prim(p):
 type_conv.register(prims.class_list, ClosureT, typeof_prim)
 
 """
-Map each (untyped fn id, fixed arg) types to a distinct integer
-so that the runtime representation of closures just need to
-carry this ID
+Map each (untyped fn id, fixed arg) types to a distinct integer so that the
+runtime representation of closures just need to carry this ID
 """
+
 closure_type_to_id = {}
 id_to_closure_type = {}
 max_id = 0
@@ -143,7 +142,7 @@ max_id = 0
 def id_of_closure_type(closure_t):
   global max_id
   assert isinstance(closure_t, ClosureT), \
-    "Expected closure type, got: " + str(closure_t)
+      "Expected closure type, got: " + str(closure_t)
   if closure_t in closure_type_to_id:
     return closure_type_to_id[closure_t]
   else:
@@ -162,6 +161,7 @@ class ClosureSet(Type):
   closure set. This type should not appear by the time we're generating LLVM
   code.
   """
+
   _members = ['closures']
 
   def __init__(self, *closures):

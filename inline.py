@@ -1,9 +1,8 @@
 import names
-import syntax
-import syntax_visitor
-
 from subst import subst_stmt_list
+import syntax
 from syntax import If, Assign, While, Return, Var, TypedFn, Const, RunExpr
+import syntax_visitor
 from transform import Transform
 
 class FoundCall(Exception):
@@ -28,6 +27,7 @@ def replace_returns(stmts, output_var):
   """
   Change any returns at the outer scope into assignments to the output var
   """
+
   for (i,stmt) in enumerate(stmts):
     if stmt.__class__ is Return:
       stmts[i] = syntax.Assign(output_var, stmt.value)
@@ -104,10 +104,10 @@ class Inliner(Transform):
     if self.fn.copied_by is not None:
       return self.fn.copied_by.apply(expr)
     else:
-      # at the very least, apply high level optimizations 
-      import pipeline 
+      # at the very least, apply high level optimizations
+      import pipeline
       return pipeline.high_level_optimizations.apply(expr)
-    
+
   def transform_Call(self, expr):
     target = self.transform_expr(expr.fn)
     if target.__class__ is TypedFn and can_inline(target):
@@ -119,7 +119,6 @@ class Inliner(Transform):
       return expr
 
   def apply(self, fn):
-    #print "inlining:", fn
     if contains_calls(fn):
       return Transform.apply(self, fn)
     else:

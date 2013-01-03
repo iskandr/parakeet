@@ -367,14 +367,12 @@ class TileAdverbs(Transform):
 
     axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
             for arg in expr.args]
-    #axis = self.get_num_expansions_at_depth(expr.args[0].name, depth) + \
-    #       expr.axis
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
     return_t = new_fn.return_type
     if isinstance(closure, syntax.Closure):
-      for c_arg, arg in zip(closure.args, expr.args):
-        c_arg.type = arg.type
+      for c_arg, t in zip(closure.args, new_fn.input_types):
+        c_arg.type = t
       closure_arg_types = [arg.type for arg in closure.args]
       closure.fn = new_fn
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
@@ -435,8 +433,8 @@ class TileAdverbs(Transform):
       new_combine = expr.combine
     return_t = new_fn.return_type
     if isinstance(closure, syntax.Closure):
-      for c_arg, arg in zip(closure.args, expr.args):
-        c_arg.type = arg.type
+      for c_arg, t in zip(closure.args, new_fn.input_types):
+        c_arg.type = t
       closure_arg_types = [arg.type for arg in closure.args]
       closure.fn = new_fn
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
