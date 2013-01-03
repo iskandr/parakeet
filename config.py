@@ -74,4 +74,4 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False

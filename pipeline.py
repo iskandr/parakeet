@@ -56,9 +56,6 @@ def lower_tiled(fn, ignore_config = True):
   """
 
   tiled = tiling.apply(fn, ignore_config = ignore_config)
-  print tiled
   loopy = loopify.apply(tiled, run_dependencies = False)
-  print loopy
   lowered = lowering.apply(loopy, run_dependencies = False)
-  print lowered
   return lowered
