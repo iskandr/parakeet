@@ -127,15 +127,15 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
       type_env[arg.name] = arg.type
 
     # Construct the typed wrapper.
+    wrapper_name = adverb_class.node_type() + fn.name +"_par"
     parallel_wrapper = \
-        syntax.TypedFn(name = names.fresh(adverb_class.node_type() + fn.name +
-                                          "_par_wrapper"),
+        syntax.TypedFn(name = names.fresh(wrapper_name), 
                        arg_names = [var.name for var in inputs],
                        input_types = syntax_helpers.get_types(inputs),
                        body = body,
                        return_type = core_types.NoneType,
                        type_env = type_env)
-    lowered = lowering.lower(parallel_wrapper)
+    lowered = lowering(parallel_wrapper)
     _par_wrapper_cache[key] = lowered
 
     return lowered, num_tiles

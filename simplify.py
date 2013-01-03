@@ -220,7 +220,7 @@ class Simplify(Transform):
     return new_args
 
   def transform_Array(self, expr):
-    expr.elts = self.transform_args(expr.elts)
+    expr.elts = tuple(self.transform_args(expr.elts))
     return expr 
   
   def transform_Index(self, expr):

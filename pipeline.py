@@ -19,6 +19,7 @@ inline_opt = Phase(Inliner, config_param = 'opt_inline' )
 high_level_optimizations = Phase([Simplify, inline_opt, fusion_opt], 
                                  cleanup = [Simplify, DCE])
 
+
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
 post_tiling = Phase([fusion_opt], copy = True)
@@ -57,6 +58,6 @@ def lower_tiled(fn):
   unseen functions
   """
   tiled = tiling.apply(fn)
-  loopy = loopify.apply(tiled, run_dependices = False)
+  loopy = loopify.apply(tiled, run_dependencies = False)
   lowered = lowering.apply(loopy, run_dependencies = False)
   return lowered 

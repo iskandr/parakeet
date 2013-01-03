@@ -1,25 +1,23 @@
 import names
 import prims
-
 import array_type
-from array_type import ArrayT, SliceT
 import core_types
+import closure_type 
+import syntax 
+import syntax_helpers
+
+from array_type import ArrayT, SliceT
 from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT
 from closure_type import ClosureT, make_closure_type
-from tuple_type import TupleT, make_tuple_type
-
+from nested_blocks import NestedBlocks
+import shape_codegen
+import shape_inference
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
 from syntax import TupleProj, Tuple, Alloc, Slice, While
-
-import syntax_helpers
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
                            one_i64, zero, zero_i64, const_int, const_bool
-
-from nested_blocks import NestedBlocks
-
-import shape_codegen
-import shape_inference
+from tuple_type import TupleT, make_tuple_type
 
 class Codegen(object):
   def __init__(self):
@@ -493,9 +491,6 @@ class Codegen(object):
     return type_inference.invoke_result_type(closure_t, arg_types)
 
   def invoke(self, fn, args):
-    import closure_type
-    import lower_adverbs
-    import syntax
     import type_inference
     if fn.__class__ is syntax.TypedFn:
       closure_args = []
@@ -506,7 +501,8 @@ class Codegen(object):
       arg_types = syntax_helpers.get_types(args)
       fn = type_inference.specialize(fn.type, arg_types)
 
-    lowered_fn = lower_adverbs.lower_adverbs(fn)
+    import pipeline 
+    lowered_fn = pipeline.loopify(fn)
     combined_args = closure_args + args
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
 

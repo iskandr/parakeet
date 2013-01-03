@@ -97,6 +97,7 @@ class Expr(Node):
 
 class Const(Expr):
   _members = ['value']
+  
 
   def children(self):
     return (self.value,)
@@ -182,6 +183,9 @@ class Tuple(Expr):
 
   def children(self):
     return self.elts
+  
+  def __hash__(self):
+    return hash(self.elts)
 
 class Array(Expr):
   _members = ['elts']
@@ -191,6 +195,9 @@ class Array(Expr):
 
   def children(self):
     return self.elts
+  
+  def __hash__(self):
+    return hash(self.elts)
 
 class Closure(Expr):
   """Create a closure which points to a global fn with a list of partial args"""
@@ -205,10 +212,13 @@ class Closure(Expr):
       yield self.fn
     for arg in self.args:
       yield arg
-
+  
+  def __hash__(self):
+    return hash((self.fn, tuple(self.args)))
+  
 class Call(Expr):
   _members = ['fn', 'args']
-
+  
   def __str__(self):
     if isinstance(self.fn, (Fn, TypedFn)):
       fn_name = self.fn.name
@@ -227,6 +237,9 @@ class Call(Expr):
     yield self.fn
     for arg in self.args:
       yield arg
+  
+  def __hash__(self):
+    return hash((self.fn, tuple(self.args)))
 
 class Slice(Expr):
   _members = ['start', 'stop', 'step']
@@ -241,6 +254,9 @@ class Slice(Expr):
     yield self.start
     yield self.stop
     yield self.step
+    
+  def __hash__(self):
+    return hash((self.start, self.stop, self.step))
 
 class PrimCall(Expr):
   """
@@ -261,9 +277,6 @@ class PrimCall(Expr):
 
   def __str__(self):
     return repr(self)
-
-  def __hash__(self):
-    return hash((self.prim, self.args))
 
   def node_init(self):
     self.args = tuple(self.args)
@@ -361,6 +374,9 @@ class TupleProj(Expr):
   
   def children(self):
     return (self.tuple,)
+  
+  def __hash__(self):
+    return hash((self.tuple, self.index))
 
 class ClosureElt(Expr):
   _members = ['closure', 'index']
@@ -370,10 +386,16 @@ class ClosureElt(Expr):
 
   def children(self):
     return (self.closure,)
+  
+  def __hash__(self):
+    return hash((self.closure, self.index))
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
+  
+  def __hash__(self):
+    return hash(self.value)
 
 class Struct(Expr):
   """
@@ -389,6 +411,9 @@ class Struct(Expr):
 
   def children(self):
     return self.args
+  
+  def __hash__(self):
+    return hash(tuple(self.args))
 
 class Alloc(Expr):
   """Allocates a block of data, returns a pointer"""
@@ -400,6 +425,9 @@ class Alloc(Expr):
 
   def children(self):
     return (self.count,)
+  
+  def __hash__(self):
+    return hash((self.elt_type, self.count))
 
 class TypedFn(Expr):
   """
@@ -415,9 +443,9 @@ class TypedFn(Expr):
               'type_env',
               # these last two get filled by 
               # transformation/optimizations later 
-              'last_transform_by', 
+              'copied_by', 
               'version',
-              'has_tiles' 
+              'has_tiles', 
               'num_tiles']
   
   registry = {}
@@ -425,10 +453,10 @@ class TypedFn(Expr):
   def next_version(self, name):
     n = self.max_version[name] + 1
     self.max_version[name] = n 
-    return next 
+    return n 
   
   def node_init(self):
-    print self.members()
+
     assert isinstance(self.body, list), \
         "Invalid body for typed function: %s" % (self.body,)
     assert isinstance(self.arg_names, (list, tuple)), \
@@ -454,7 +482,7 @@ class TypedFn(Expr):
       
     registry_key = (self.name, self.version) 
     assert registry_key not in self.registry, \
-        "Typed function %s version %d already registered" % (self.name, self.version)
+        "Typed function %s version %s already registered" % (self.name, self.version)
     self.registry[registry_key] = self
     
     if self.has_tiles is None:

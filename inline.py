@@ -101,7 +101,7 @@ class Inliner(Transform):
     self.count = 0
 
   def transform_TypedFn(self, expr):
-    if self.fn.last_transformed_by is not None:
+    if self.fn.copied_by is not None:
       return self.fn.copied_by.apply(expr)
     else:
       # at the very least, apply high level optimizations 
@@ -109,7 +109,7 @@ class Inliner(Transform):
       return pipeline.high_level_optimizations.apply(expr)
     
   def transform_Call(self, expr):
-    target = self.visit_expr(expr.fn)
+    target = self.transform_expr(expr.fn)
     if target.__class__ is TypedFn and can_inline(target):
       self.count += 1
       curr_block = self.blocks.current()
