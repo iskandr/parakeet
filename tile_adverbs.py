@@ -12,6 +12,7 @@ from core_types import Int32
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
 
+
 class FindAdverbs(SyntaxVisitor):
   def __init__(self):
     self.has_adverbs = False
@@ -48,19 +49,19 @@ class TileableAdverbsTagger(SyntaxVisitor):
 
   def visit_Map(self, expr):
     if self.num_adverbs == 0:
-      nested_counter = NestedAdverbsCounter()
+      nested_counter = TileableAdverbsTagger()
       nested_counter.visit_fn(self.get_fn(expr.fn))
       self.num_adverbs = nested_counter.num_adverbs + 1
 
   def visit_Reduce(self, expr):
     if self.num_adverbs == 0:
-      nested_counter = NestedAdverbsCounter()
+      nested_counter = TileableAdverbsTagger()
       nested_counter.visit_fn(self.get_fn(expr.fn))
       self.num_adverbs = nested_counter.num_adverbs + 1
 
   def visit_Scan(self, expr):
     if self.num_adverbs == 0:
-      nested_counter = NestedAdverbsCounter()
+      nested_counter = TileableAdverbsTagger()
       nested_counter.visit_fn(self.get_fn(expr.fn))
       self.num_adverbs = nested_counter.num_adverbs + 1
 
