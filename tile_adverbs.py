@@ -4,30 +4,13 @@ import adverbs
 import array_type
 import closure_type
 import config
-from core_types import Int32
 import names
 import syntax
+
+from collect_vars import collect_var_names as free_vars 
+from core_types import Int32
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
-
-def free_vars_list(expr_list):
-  rslt = set()
-  for expr in expr_list:
-    rslt.update(free_vars(expr))
-  return rslt
-
-def free_vars(expr):
-  if isinstance(expr, syntax.Var):
-    return set([expr])
-  elif isinstance(expr, (syntax.PrimCall,syntax.Call)):
-    return free_vars_list(expr.args)
-  elif isinstance(expr, syntax.Index):
-    return free_vars(expr.value).union(free_vars(expr.index))
-  elif isinstance(expr, syntax.Tuple):
-    return free_vars_list(expr.elts)
-  else:
-    assert isinstance(expr, syntax.Const), "%s is not a Const" % expr
-    return set()
 
 class FindAdverbs(SyntaxVisitor):
   def __init__(self):
@@ -186,8 +169,7 @@ class TileAdverbs(Transform):
         return_t = Int32 # Dummy type
         for s in block:
           if isinstance(s, syntax.Assign):
-            lhs_vars = free_vars(s.lhs)
-            lhs_names = [var.name for var in lhs_vars]
+            lhs_names = free_vars(s.lhs)
             lhs_types = [type_env[name] for name in lhs_names]
             for name, t in zip(lhs_names, lhs_types):
               inner_type_env[name] = t
@@ -290,8 +272,7 @@ class TileAdverbs(Transform):
       self.type_env[stmt.lhs.name] = stmt.lhs.type
       return syntax.Assign(stmt.lhs, new_rhs)
     elif len(self.adverbs_visited) > 0:
-      fv = free_vars(stmt.rhs)
-      fv_names = [v.name for v in fv]
+      fv_names = free_vars(stmt.rhs)
       depths = self.get_depths_list(fv_names)
       map_tree = [adverbs.Map for _ in depths]
       inner_body = [stmt, syntax.Return(stmt.lhs)]

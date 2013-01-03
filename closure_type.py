@@ -46,7 +46,7 @@ class ClosureT(StructT):
 
   def __str__(self):
     fn_name = self.fn if isinstance(self.fn, str) else self.fn.name
-    return "ClosT(%s, (%s))" % (fn_name, ", ".join(str(t)
+    return "ClosT(%s, {%s})" % (fn_name, ", ".join(str(t)
                                                    for t in self.arg_types))
 
   def from_python(self, python_fn):

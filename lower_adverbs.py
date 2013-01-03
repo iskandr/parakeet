@@ -1,6 +1,8 @@
 import syntax_helpers
 
+from adverbs import Adverb 
 from adverb_semantics import AdverbSemantics
+from syntax import Index 
 from transform import Transform
 
 class LowerAdverbs(AdverbSemantics, Transform):
@@ -38,3 +40,11 @@ class LowerAdverbs(AdverbSemantics, Transform):
     x,y = self.transform_expr_list(args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_allpairs(fn, x, y, axis)
+  
+  def transform_Assign(self, stmt):
+    if stmt.lhs.__class__ is Index and \
+       isinstance(stmt.rhs, Adverb):
+      print "Lowering adverb which immediately gets copied"
+      print ">>>", stmt  
+      print 
+    return Transform.transform_Assign(self, stmt)

@@ -1,21 +1,24 @@
 import ast
 import inspect
+
+
 import names
 import syntax
+import prims
 
+from adverbs import Map
 from args import FormalArgs, ActualArgs
 from common import dispatch
+import config
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from macro import macro
-
-import prims
 from prims import Prim, prim_wrapper
-
 from scoped_env import ScopedEnv
 from subst import subst_expr, subst_stmt_list
 from syntax_helpers import none, true, false
-import config
+
+
 
 reserved_names = {
   'True' : true,
@@ -268,6 +271,10 @@ class AST_Translator(ast.NodeVisitor):
       args = ActualArgs(positional = [prims.add] + list(positional),
                         keywords = {'init': syntax.Const(0)})
       return syntax.Call(sum_wrapper, args)
+    elif value == map:
+      assert len(keywords_dict) == 0
+      assert len(positional) > 1
+      return Map(fn = positional[0], args = positional[1:], axis = 0)
     else:
       assert value == slice, "Value %s not slice %s" % (value, slice)
       assert len(keywords_dict) == 0

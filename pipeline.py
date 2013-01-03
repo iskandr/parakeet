@@ -1,6 +1,5 @@
 import config
 
-
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
@@ -30,11 +29,9 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs],
                memoize = False,
                cleanup = [Simplify, DCE])
 
-
-
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 early_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
-loopify = Phase([LowerAdverbs, inline_opt, early_licm, copy_elim],
+loopify = Phase([LowerAdverbs, inline_opt, early_licm, Simplify, copy_elim],
                 depends_on = high_level_optimizations,
                 copy = True,
                 cleanup = [Simplify, DCE])
@@ -47,9 +44,8 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-
 late_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
-lowering = Phase([LowerIndexing, early_licm, LowerStructs, late_licm],
+lowering = Phase([LowerIndexing, early_licm, LowerStructs, copy_elim, late_licm],
                  depends_on = loopify,
                  copy = True,
                  run_after = print_lowered,
@@ -60,7 +56,7 @@ def lower_tiled(fn, ignore_config = True):
   Tiling is awkward to stick into the transformation graph since it's
   non-idempotent and generates lots of previously unseen functions
   """
-
+  
   tiled = tiling.apply(fn, ignore_config = ignore_config)
   loopy = loopify.apply(tiled, run_dependencies = False)
   lowered = lowering.apply(loopy, run_dependencies = False)

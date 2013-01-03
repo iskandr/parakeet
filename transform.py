@@ -6,7 +6,7 @@ from syntax import If, Assign, While, Return, RunExpr
 from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
-from syntax import Call, TypedFn
+from syntax import Call, TypedFn, AllocArray
 
 from adverbs import Map
 
@@ -137,11 +137,14 @@ class Transform(Codegen):
     expr.offset = self.transform_expr(expr.offset)
     expr.total_elts = self.transform_expr(expr.total_elts)
     return expr
+  
+  def transform_AllocArray(self, expr):
+    expr.shape = self.transform_expr(expr.shape)
+    return expr 
 
   def transform_Map(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)
-    expr.out = self.transform_if_expr(expr.out)
     return expr
 
   def transform_expr(self, expr):
@@ -166,6 +169,8 @@ class Transform(Codegen):
       result = self.transform_PrimCall(expr)
     elif expr_class is Struct:
       result = self.transform_Struct(expr)
+    elif expr_class is AllocArray:
+      result = self.transform_AllocArray(expr)
     elif expr_class is Alloc:
       result = self.transform_Alloc(expr)
     elif expr_class is Cast:
@@ -185,10 +190,11 @@ class Transform(Codegen):
       else:
         result = self.transform_generic_expr(expr)
     if result is None:
-      return expr
+      print "%s got turned into None" % expr
+      return expr 
     else:
-      return result
-
+      return result 
+  
   def transform_lhs_Var(self, expr):
     return self.transform_Var(expr)
 

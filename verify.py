@@ -2,7 +2,7 @@ import core_types
 from core_types import NoneT, NoneType  
 
 from collect_vars import collect_binding_names
-from syntax import Expr
+from syntax import Expr, Tuple, Var, Index 
 from syntax_visitor import SyntaxVisitor
 
 class Verify(SyntaxVisitor):
@@ -79,11 +79,20 @@ class Verify(SyntaxVisitor):
         "Incorrect return type in %s: returned value %s, expected %s but got %s" % \
         (self.fn.name, stmt.value, self.fn.return_type, stmt.value.type)
 
+  def visit_lhs(self, lhs):
+    c = lhs.__class__ 
+    assert c in (Var, Tuple, Index), \
+       "Invalid LHS of assignment"
+    if c is Tuple: 
+      for elt in lhs.elts:
+        self.visit_lhs(elt)
+        
   def visit_Assign(self, stmt):
     assert stmt.lhs.type is not None, \
         "Missing LHS type for assignment %s" % stmt
     assert stmt.rhs.type is not None, \
-        "Missing RHS type for assignment %s" % stmt 
+        "Missing RHS type for assignment %s" % stmt
+    self.visit_lhs(stmt.lhs) 
     lhs_names = collect_binding_names(stmt.lhs)
     for lhs_name in lhs_names:
       self.bind_var(lhs_name)

@@ -3,17 +3,18 @@ import subst
 import syntax
 import transform
 
-from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
-from array_type import ArrayT 
+from adverbs import Map, Reduce, Scan, AllPairs 
+from closure_type import ClosureT
 from collect_vars import collect_var_names
-from core_types import NoneT, NoneType, ScalarT 
+from core_types import NoneT,  ScalarT 
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_dict import ScopedDictionary
-from syntax import Assign, RunExpr 
+from syntax import Assign, RunExpr, AllocArray  
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
-from syntax import PrimCall, Call
+from syntax import PrimCall, Call, TypedFn, Fn 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
+from syntax_helpers import get_types 
 from transform import Transform
 from tuple_type import TupleT
 from use_analysis import use_count
@@ -64,26 +65,21 @@ class Simplify(Transform):
       return expr.elts
     elif c is TupleProj:
       return (expr.tuple,)
+    # WARNING: this is only valid 
+    # if attributes are immutable 
+    elif c is Attribute:
+      return (expr.value,) 
     elif c is Slice:
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
     elif c in (Map, AllPairs):
-      if expr.out is None: 
-        return expr.args 
-      elif allow_mutable: 
-        return tuple(expr.args) + (expr.out,)
-      else:
-        return None  
+      return expr.args 
     elif c in (Scan, Reduce):  
       args = tuple(expr.args)
       init = (expr.init,) if expr.init else ()
-      if expr.out is None: 
-        return init + args 
-      elif allow_mutable:
-        return init + args + (expr.out,)
-      else:
-        return None
+      return init + args 
+    
     elif c is Call:
       # assume all Calls might modify their arguments 
       if allow_mutable or all(self.immutable(arg) for arg in expr.args):
@@ -99,6 +95,8 @@ class Simplify(Transform):
                 expr.total_elts)
       elif c is Struct:
         return expr.args
+      elif c is AllocArray:
+        return (expr.shape,)
       elif c is Attribute:
         return (expr.value,)
     return None
@@ -107,10 +105,13 @@ class Simplify(Transform):
         
   def immutable(self, expr):
     c = expr.__class__ 
-    if c in (Const, Tuple, TupleProj, Closure, ClosureElt):
+    if c is Const:
       return True 
-    elif c is Attribute and expr.value.type.__class__ is TupleT:
+    elif c in (Tuple, TupleProj, Closure, ClosureElt, Attribute):
       return True 
+    # WARNING: making attributes always immutable 
+    # elif c is Attribute and expr.value.type.__class__ is TupleT:
+    #  return True 
     elif expr.type in self.mutable_types:
       return False
     child_nodes = self.children(expr, allow_mutable = False)
@@ -164,7 +165,8 @@ class Simplify(Transform):
     else:
       expr.value = v 
       return expr 
-      
+  
+  
   def transform_Attribute(self, expr):
     v = self.transform_expr(expr.value)
     if v.__class__ is Var and v.name in self.bindings:
@@ -172,6 +174,9 @@ class Simplify(Transform):
       c = stored_v.__class__
       if c is Var or c is Struct:
         v = stored_v
+      elif c is AllocArray and expr.name == 'shape':
+        return self.transform_expr(stored_v.shape)
+        
 
     if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
@@ -180,6 +185,11 @@ class Simplify(Transform):
       v = self.temp(v, "struct")
     return Attribute(v, expr.name, type = expr.type)
 
+  def transform_Closure(self, expr):
+    expr.args = tuple(self.transform_args(expr.args))
+    return expr
+  
+  
   def transform_Tuple(self, expr):
     expr.elts = tuple( self.transform_args(expr.elts))
     return expr 
@@ -191,30 +201,53 @@ class Simplify(Transform):
     new_tuple = self.transform_expr(expr.tuple)
 
     if new_tuple.__class__ is Var and new_tuple.name in self.bindings:
-      new_tuple = self.bindings[new_tuple.name]
-
-    if new_tuple.__class__ is Tuple:
-      return new_tuple.elts[idx]
-    elif new_tuple.__class__ is Struct:
-      return new_tuple.args[idx]
+      tuple_expr = self.bindings[new_tuple.name]
+      if tuple_expr.__class__ is Tuple:
+        return tuple_expr.elts[idx]
+      elif tuple_expr.__class__ is Struct:
+        return tuple_expr.args[idx]
+    
     if not self.is_simple(new_tuple):
       new_tuple = self.assign_temp(new_tuple, "tuple")
-    return syntax.TupleProj(tuple = new_tuple, index = idx, type = expr.type)
+    expr.tuple = new_tuple 
+    return expr
+  
+  def transform_ClosureElt(self, expr):
+    idx = expr.index
+    assert isinstance(idx, int), \
+        "ClosureElt index must be an integer, got: " + str(idx)
+    new_closure = self.transform_expr(expr.closure)
+    if new_closure.__class__ is Var and new_closure.name in self.bindings:
+      closure_expr = self.bindings[new_closure.name]
+      if closure_expr.__class__ is Closure:
+        return closure_expr.args[idx]
+      
+    if not self.is_simple(new_closure):
+      new_closure = self.assign_temp(new_closure, "closure")
+    expr.closure = new_closure 
+    return expr 
     
   def transform_Call(self, expr):
-    import closure_type
+    
     fn = self.transform_expr(expr.fn)
     args = self.transform_args(expr.args)
-    if fn.type.__class__ is closure_type.ClosureT and \
-       fn.type.fn.__class__ is syntax.TypedFn:
+    if fn.type.__class__ is ClosureT: 
       closure_elts = self.closure_elts(fn)
       combined_args = closure_elts + args
-      return Call(fn.type.fn, combined_args, type = expr.type)
+      if fn.type.fn.__class__ is TypedFn:
+        fn = fn.type.fn
+      else:
+        assert isinstance(fn.type.fn, Fn)  
+        import type_inference 
+        fn = type_inference.specialize(fn, get_types(combined_args))
+      assert fn.return_type == expr.type 
+      return Call(fn, combined_args, type = fn.return_type)
     else:
       expr.fn = fn 
       expr.args = args 
       return expr 
-    
+  
+  
   def transform_args(self, args):
     new_args = []
     for arg in args:
@@ -356,11 +389,7 @@ class Simplify(Transform):
 
     lhs_class = lhs.__class__
     rhs_class = rhs.__class__
-    if lhs_class is Index:
-      lhs = self.transform_lhs_Index(lhs)
-    elif lhs_class is Attribute:
-      lhs = self.transform_lhs_Attribute(lhs)
-    elif lhs_class is Var:
+    if lhs_class is Var:
       if rhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
         return self.transform_stmt(RunExpr(rhs))    
       else: 
@@ -369,9 +398,15 @@ class Simplify(Transform):
             self.immutable(rhs) and \
             rhs not in self.available_expressions:
           self.available_expressions[rhs] = lhs
-    else:
+    elif lhs_class is Tuple: 
       self.bind(lhs, rhs)
-
+    elif lhs_class is Index:
+      lhs = self.transform_lhs_Index(lhs)
+    else:
+      assert lhs_class is Attribute
+      assert False, "Considering making attributes immutable" 
+      lhs = self.transform_lhs_Attribute(lhs)
+    
     if rhs_class is Var and \
        rhs.name in self.bindings and \
        self.use_counts.get(rhs.name, 1) == 1:

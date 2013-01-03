@@ -2,7 +2,7 @@ from adverbs import Map, Scan, Reduce
 from syntax import Assign, Return, If, While, RunExpr
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
 from syntax import Call, TypedFn, Struct, Alloc
-from syntax import ArrayView, Slice, TupleProj, Cast
+from syntax import ArrayView, Slice, TupleProj, Cast, AllocArray
 
 class SyntaxVisitor(object):
   """
@@ -48,6 +48,9 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.offset)
     self.visit_expr(expr.total_elts)
 
+  def visit_AllocArray(self, expr):
+    self.visit_expr(expr.shape)
+    
   def visit_Slice(self, expr):
     self.visit_expr(expr.start)
     self.visit_expr(expr.stop)
@@ -120,10 +123,13 @@ class SyntaxVisitor(object):
       return self.visit_Slice(expr)
     elif c is Struct:
       return self.visit_Struct(expr)
+    elif c is AllocArray:
+      return self.visit_AllocArray(expr)
     elif c is ArrayView:
       return self.visit_ArrayView(expr)
     elif c is Alloc:
       return self.visit_Alloc(expr)
+    
     elif c is Cast:
       return self.visit_Cast(expr)
     elif c is Call:

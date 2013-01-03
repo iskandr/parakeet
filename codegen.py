@@ -12,9 +12,10 @@ from closure_type import ClosureT, make_closure_type
 from nested_blocks import NestedBlocks
 import shape_codegen
 import shape_inference
+from syntax import AllocArray  
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
-from syntax import TupleProj, Tuple, Alloc, Slice, While
+from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn 
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
                            one_i64, zero, zero_i64, const_int, const_bool
 from tuple_type import TupleT, make_tuple_type
@@ -340,11 +341,14 @@ class Codegen(object):
       elt_value = TupleProj(strides, dim, type = elt_t)
       return self.assign_temp(elt_value, "stride%d" % dim)
 
-  def tuple(self, elts, name = "tuple"):
+  def tuple(self, elts, name = "tuple", explicit_struct = False):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
     tuple_t = make_tuple_type(get_types(elts))
-    tuple_expr = Tuple(elts, type = tuple_t)
+    if explicit_struct:
+      tuple_expr = Struct(elts, type = tuple_t)
+    else:
+      tuple_expr = Tuple(elts, type = tuple_t)
     if name:
       result_var = self.assign_temp(tuple_expr, name)
       # cache the simple elements so we can look them up directly
@@ -360,7 +364,7 @@ class Codegen(object):
       return x.type.__class__ is TupleT
     except:
       return False
-
+    
   def concat_tuples(self, x, y, name = "concat_tuple"):
     if self.is_tuple(x):
       x_elts = self.tuple_elts(x)
@@ -376,7 +380,7 @@ class Codegen(object):
     elts.extend(y_elts)
     return self.tuple(elts, name = name)
 
-  def tuple_proj(self, tup, idx):
+  def tuple_proj(self, tup, idx, explicit_struct = False):
     assert isinstance(idx, (int, long))
     if isinstance(tup, Tuple):
       return tup.elts[idx]
@@ -384,12 +388,15 @@ class Codegen(object):
       return tup[idx]
     elif tup.__class__ is Var and (tup.name, idx) in self.tuple_elt_cache:
       return self.tuple_elt_cache[(tup.name, idx)]
+    elif explicit_struct:
+      return Attribute(tuple, "elt%d" % idx, type = tup.type.elt_types[idx])
     else:
       return TupleProj(tup, idx, type = tup.type.elt_types[idx])
 
-  def tuple_elts(self, tup):
+  def tuple_elts(self, tup, explicit_struct = False):
     nelts = len(tup.type.elt_types)
-    return tuple([self.tuple_proj(tup, i) for i in xrange(nelts)])
+    return tuple([self.tuple_proj(tup, i, explicit_struct = explicit_struct) 
+                  for i in xrange(nelts)])
 
   def closure_elt(self, clos, idx):
     assert isinstance(idx, (int, long))
@@ -436,7 +443,7 @@ class Codegen(object):
         result = self.mul(result, e, name = name)
       return result
 
-  def alloc_array(self, elt_t, dims, name = "temp_array"):
+  def alloc_array(self, elt_t, dims, name = "array", explicit_struct = False):
     """
     Given an element type and sequence of expressions denoting each dimension
     size, generate code to allocate an array and its shape/strides metadata. For
@@ -450,34 +457,30 @@ class Codegen(object):
     else:
       if not isinstance(dims, (list, tuple)):
         dims = [dims]
-      shape = self.tuple(dims, "shape")
-
+      shape = self.tuple(dims, "shape", explicit_struct = explicit_struct)
     rank = len(dims)
-    nelts = self.prod(dims, name = "nelts")
-
     array_t = array_type.make_array_type(elt_t, rank)
-    ptr_t = core_types.ptr_type(elt_t)
+    if explicit_struct:
+      nelts = self.prod(dims, name = "nelts")
+      ptr_t = core_types.ptr_type(elt_t)
+    
+      ptr_var = self.assign_temp(Alloc(elt_t, nelts, type = ptr_t), "data_ptr")
+      stride_elts = [syntax_helpers.const(1)]
 
-    ptr_var = self.assign_temp(Alloc(elt_t, nelts, type = ptr_t),
-                               "data_ptr")
-
-    stride_elts = [syntax_helpers.const(1)]
-
-    # assume row-major for now!
-    for d in reversed(dims[1:]):
-      next_stride = self.mul(stride_elts[0], d, "dim")
-      stride_elts = [next_stride] + stride_elts
-
-    strides = self.tuple(stride_elts, "strides")
-    array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
+      # assume row-major for now!
+      for d in reversed(dims[1:]):
+        next_stride = self.mul(stride_elts[0], d, "dim")
+        stride_elts = [next_stride] + stride_elts
+      strides = self.tuple(stride_elts, "strides", explicit_struct = True)
+      array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
+    else:
+      array = AllocArray(shape, type = array_t)
     return self.assign_temp(array, name)
 
   def return_type(self, fn):
     if isinstance(fn, TypedFn):
       return fn.return_type
     else:
-      import closure_type
-
       assert isinstance(fn.type, closure_type.ClosureT)
       assert isinstance(fn.type.fn, TypedFn)
       return fn.type.fn.return_type
@@ -526,15 +529,19 @@ class Codegen(object):
     result shape of the array and preallocate it.  If the result should be a
     scalar, just return a scalar variable.
     """
-
     try:
       inner_shape_tuple = self.call_shape(fn, args)
     except:
       print "Shape inference failed when calling %s with %s" % (fn, args)
       raise
-    if not hasattr(extra_dims, '__iter__'):
-      extra_dims = (extra_dims,)
-    outer_shape_tuple = self.tuple(extra_dims)
+    
+    if self.is_tuple(extra_dims):
+      outer_shape_tuple = extra_dims 
+    elif isinstance(extra_dims, (list, tuple)):
+      outer_shape_tuple = self.tuple(extra_dims)
+    else:
+      outer_shape_tuple = self.tuple((extra_dims,) if extra_dims else ())
+
     shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
     elt_t = self.elt_type(self.return_type(fn))
     if len(shape.type.elt_types) > 0:
@@ -585,9 +592,14 @@ class Codegen(object):
 
   def call_shape(self, maybe_clos, args):
     fn = self.get_fn(maybe_clos)
-    abstract_shape = shape_inference.call_shape_expr(fn)
     closure_args = self.closure_elts(maybe_clos)
     combined_args = closure_args + args
+
+    if isinstance(fn, Fn):
+      # if we're given an untyped function, first specialize it 
+      import type_inference
+      fn = type_inference.specialize(fn, get_types(combined_args))
+    abstract_shape = shape_inference.call_shape_expr(fn)
     return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
 
   class Accumulator:

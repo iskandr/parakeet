@@ -64,12 +64,12 @@ class EscapeAnalysis(SyntaxVisitor):
       print 
       print "aliases"
       print "-------"
-      for (k,aliases) in self.may_alias.iteritems():
-        print "%s => %s" % (k, aliases)
+      for (k,aliases) in sorted(self.may_alias.items(), key = lambda (k,_): k):
+        print "  %s => %s" % (k, aliases)
       print 
       print "escape set"
       print "----------"
-      print self.may_escape
+      print sorted(self.may_escape)
 
   def mark_escape(self, name):
     if name not in self.scalars:

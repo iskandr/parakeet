@@ -203,6 +203,10 @@ class Closure(Expr):
 
   _members = ['fn', 'args']
 
+  def __str__(self):
+    fn_str = str(self.fn) #self.fn.name if hasattr(self.fn, 'name') else str(self.fn)
+    args_str = ",".join(str(arg) for arg in self.args)
+    return "Closure(%s, args={%s})" % (fn_str, args_str) 
   def node_init(self):
     self.args = tuple(self.args)
 
@@ -219,10 +223,10 @@ class Call(Expr):
   _members = ['fn', 'args']
   
   def __str__(self):
-    if isinstance(self.fn, (Fn, TypedFn)):
-      fn_name = self.fn.name
-    else:
-      fn_name = str(self.fn)
+    #if isinstance(self.fn, (Fn, TypedFn)):
+    #  fn_name = self.fn.name
+    #else:
+    fn_name = str(self.fn)
     if isinstance(self.args, ActualArgs):
       arg_str = str(self.args)
     else:
@@ -301,6 +305,15 @@ class ConstArrayLike(Expr):
   """
 
   _members = ['array', 'value']
+
+class AllocArray(Expr):
+  """
+  Allocate an unfilled array of the given shape and type
+  """
+  _members = ['shape']
+  
+  def children(self):
+    yield self.shape 
 
 class ArrayView(Expr):
   """Create a new view on already allocated underlying data"""

@@ -93,22 +93,33 @@ class LowerStructs(Transform):
         (expr.type, array_struct.type)
     return array_struct
 
+  def transform_AllocArray(self, expr):
+    alloc = self.alloc_array(elt_t = expr.type.elt_type, 
+                            dims = expr.shape, 
+                            name = "array", 
+                            explicit_struct = True)
+    # recursively transform to turn shape and strides tuples into structs 
+    return self.transform_expr(alloc)
+    
   def transform_Array(self, expr):
     """
     Array literal
     """
-
-    n = len(expr.elts)
+    
+    
     array_t = expr.type
     assert isinstance(array_t, ArrayT)
-
     elt_t = array_t.elt_type
     assert isinstance(elt_t, ScalarT)
+    
+    elts = self.transform_expr_list(expr.elts)
+    n = len(elts)
+
     ptr_t = core_types.ptr_type(elt_t)
     alloc = syntax.Alloc(elt_t, const_int(n), type = ptr_t)
     ptr_var = self.assign_temp(alloc, "data")
 
-    for (i, elt) in enumerate(self.transform_expr_list(expr.elts)):
+    for (i, elt) in enumerate(elts):
       idx = syntax.Const(i, type = core_types.Int32)
       lhs = syntax.Index(ptr_var, idx, type = elt_t)
       self.assign(lhs, elt)

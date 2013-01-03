@@ -1,7 +1,7 @@
 from adverbs import Adverb
 from array_type import ArrayT 
 from core_types import PtrT
-from syntax import Var, Alloc, ArrayView, Array, Struct  
+from syntax import Var, Alloc, ArrayView, Array, Struct, AllocArray  
 from syntax_visitor import SyntaxVisitor
 
 class FindLocalArrays(SyntaxVisitor):
@@ -71,7 +71,7 @@ class FindLocalArrays(SyntaxVisitor):
         if data_name in self.local_allocs:
           self.local_arrays[lhs_name] = stmt
           self.array_to_alloc[lhs_name] = data_name 
-      elif rhs_class is Array:
+      elif rhs_class is Array or AllocArray:
         self.local_arrays[stmt.lhs.name] = stmt
       elif isinstance(stmt.rhs, Adverb):
         self.local_arrays[lhs_name] = stmt 

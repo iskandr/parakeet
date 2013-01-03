@@ -1,13 +1,17 @@
 import escape_analysis
 
+from adverbs import Map, Reduce, Scan, AllPairs 
 from array_type import ArrayT
 from collect_vars import collect_var_names
 from core_types import ScalarT  
 from find_local_arrays import FindLocalArrays
 from syntax import Index, Var
-from syntax import ArrayView, Struct
+from syntax import ArrayView, Struct, AllocArray
 from transform import Transform
 from usedef import UseDefAnalysis 
+
+array_constructors = [ArrayView, Struct, AllocArray, 
+                      Map, Reduce, Scan, AllPairs]
 
 class CopyElimination(Transform):
   def apply(self, fn):
@@ -29,7 +33,18 @@ class CopyElimination(Transform):
 
     self.usedef = UseDefAnalysis()
     self.usedef.visit_fn(fn)
-
+    
+    
+  def no_array_aliases(self, array_name):
+    alias_set = self.may_alias.get(array_name, [])
+    array_aliases = [name for name in alias_set 
+                     if self.type_env[name].__class__ is ArrayT]
+    # you're allowed one alias for yourself, but 
+    # any extras are other arrays with whom you share data
+    # BEWARE: this will get convoluted and probably broken
+    # if we ever have mutable compound objects in arrays 
+    return len(array_aliases) <= 1
+  
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form
     # dest[complex_indexing] = src
@@ -41,9 +56,10 @@ class CopyElimination(Transform):
 
     if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
+     
       if lhs_name not in self.usedef.first_use and \
          lhs_name not in self.may_escape and \
-         len(self.may_alias.get(lhs_name, [])) <= 1:
+         self.no_array_aliases(lhs_name):
         # why assign to an array if it never gets used?
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
@@ -56,7 +72,7 @@ class CopyElimination(Transform):
            rhs_name in self.local_arrays:
           array_stmt = self.local_arrays[rhs_name]
           prev_stmt_number = self.usedef.stmt_number[id(array_stmt)]
-          if array_stmt.rhs.__class__ in (Struct, ArrayView) and \
+          if array_stmt.rhs.__class__ in array_constructors and \
              all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number
                  for lhs_depends_on in collect_var_names(stmt.lhs)):
             array_stmt.rhs = stmt.lhs

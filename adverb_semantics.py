@@ -74,8 +74,12 @@ class AdverbSemantics(object):
     return result
 
   def create_output_array(self, fn, inputs, extra_dims):
-    #if hasattr(self, "_create_output_array"):
-    #  return self._create_output_array(fn, inputs, extra_dims)
+    if hasattr(self, "_create_output_array"):
+      try: 
+        return self._create_output_array(fn, inputs, extra_dims)
+      except:
+        print "Failed to allocate output array using shape inference" 
+        pass 
     inner_result = self.invoke(fn, inputs)
     inner_shape = self.shape(inner_result)
     elt_t = self.elt_type(inner_result)

@@ -1,8 +1,8 @@
-from syntax_visitor import SyntaxVisitor 
-import core_types 
-import tuple_type 
-import closure_type 
 
+from closure_type import ClosureT
+from core_types import StructT, Type, PtrT
+from syntax_visitor import SyntaxVisitor 
+from tuple_type import TupleT
 
 class TypeBasedMutabilityAnalysis(SyntaxVisitor):
   """
@@ -24,10 +24,13 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
     if self._has_mutable_fields(t):
       self.mutable_types.add(t)
       self._mark_children(t)
+    elif isinstance(t, PtrT):
+      self.mutable_types.add(t)
+      
 
   def _has_mutable_fields(self, t):
-    return isinstance(t, core_types.StructT) and \
-        not isinstance(t, (tuple_type.TupleT, closure_type.ClosureT))
+    if isinstance(t, StructT):
+      return not isinstance(t, (TupleT, ClosureT))
     
   def _mark_children(self, t):
     """
@@ -37,13 +40,13 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
     for name in t.members():
       v = getattr(t, name)
       self._mark(v)
-    if isinstance(t, core_types.StructT):
+    if isinstance(t, StructT):
       for (_, field_type) in t._fields_:
         self._mark_type(field_type) 
   
       
   def _mark(self, obj):
-    if isinstance(obj, core_types.Type):
+    if isinstance(obj, Type):
       self._mark_type(obj)
     elif isinstance(obj, (tuple, list)):
       for child in obj:
@@ -60,9 +63,11 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
       self.visit_lhs(e)
   
   def visit_lhs_Attribute(self, expr):
+    assert False, "Considering making attributes immutable"
     self._mark_type(expr.value.type)
   
   def visit_lhs_Index(self, expr):
+ 
     self._mark_type(expr.value.type)
   
   def visit_Call(self, expr):

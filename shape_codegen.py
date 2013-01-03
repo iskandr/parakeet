@@ -1,8 +1,10 @@
+import syntax_helpers
+from syntax_helpers import get_types 
+
 from array_type import ArrayT
 from closure_type import ClosureT
-from core_types import ScalarT
+from core_types import ScalarT, Type 
 from shape import Closure, Scalar, Var
-import syntax_helpers
 from traversal import Traversal
 from tuple_type import TupleT
 
@@ -20,9 +22,10 @@ class ArgConverter(Traversal):
   def bind(self, scalar_value):
     v = self.fresh_var()
     self.env[v] = scalar_value
-
+  
+  
   def convert(self, x):
-    t = x.type
+    t = x.type 
     if isinstance(t, ScalarT):
       self.bind(x)
     elif isinstance(t, ArrayT):
@@ -33,7 +36,8 @@ class ArgConverter(Traversal):
       elts = self.codegen.tuple_elts(x)
       self.convert_list(elts)
     elif isinstance(t, ClosureT):
-      return Closure(t.fn, self.convert_list(t.arg_types))
+      closure_elts = self.codegen.closure_elts(x)
+      return Closure(t.fn, self.convert_list(closure_elts))
     else:
       assert False, "[shape_codegen] Not supported %s : %s" % (x,x.type)
 
@@ -101,6 +105,5 @@ def make_shape_expr(codegen, symbolic_shape, input_exprs):
   """
   if isinstance(symbolic_shape, Scalar):
     return codegen.tuple([])
-
   shape_codegen = ShapeCodegen(codegen, input_exprs)
   return shape_codegen.visit(symbolic_shape)

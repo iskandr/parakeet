@@ -320,6 +320,10 @@ class ShapeInference(SyntaxVisitor):
   def visit_Tuple(self, expr):
     return Tuple(self.visit_expr_list(expr.elts))
 
+  def visit_AllocArray(self, expr):
+    shape_tuple = self.visit_expr(expr.shape)
+    return make_shape(shape_tuple.elts)
+     
   def visit_Array(self, expr):
     elts = self.visit_expr_list(expr.elts)
     elt = combine_list(elts)
@@ -335,8 +339,6 @@ class ShapeInference(SyntaxVisitor):
   def visit_Closure(self, clos):
     assert not isinstance(clos.fn, str), \
         "[ShapeInference] Function names in closures not supported: " + clos.fn
-    assert not isinstance(clos.fn, Fn), \
-        "[ShapeInference] Can't have untyped fn in closure: " + clos.fn.name
     fn = self.visit_expr(clos.fn)
     closure_arg_shapes = self.visit_expr_list(clos.args)
     if fn.__class__ is Closure:
@@ -493,16 +495,16 @@ def subst(x, env):
 def subst_list(xs, env):
   return [subst(x, env) for x in xs]
 
-def symbolic_call(typed_fn, abstract_inputs):
+def symbolic_call(fn, abstract_inputs):
   # result in terms of variables like input0, (shape: input1, input2), etc..
-  if typed_fn.__class__ is Closure:
-    closure_elts = tuple(typed_fn.args)
-    typed_fn = typed_fn.fn
+  if fn.__class__ is Closure:
+    closure_elts = tuple(fn.args)
+    fn = fn.fn
   else:
     closure_elts = ()
-  abstract_result_value = call_shape_expr(typed_fn)
+  abstract_result_value = call_shape_expr(fn)
   conv = shape_from_type.Converter()
-  shape_formals = conv.from_types(typed_fn.input_types)
+  shape_formals = conv.from_types(fn.input_types)
   env = {}
   bind_pairs(shape_formals, closure_elts + tuple(abstract_inputs), env)
   return subst(abstract_result_value, env)
