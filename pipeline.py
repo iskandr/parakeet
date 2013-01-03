@@ -44,8 +44,9 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-licm_opt = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
-lowering = Phase([LowerIndexing, LowerStructs, licm_opt], 
+early_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
+late_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
+lowering = Phase([LowerIndexing, early_licm, LowerStructs, late_licm], 
                  depends_on = loopify, 
                  copy = True, 
                  run_after = print_lowered, 

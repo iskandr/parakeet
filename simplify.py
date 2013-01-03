@@ -1,22 +1,21 @@
 import prims
+import subst
 import syntax
+import transform
+
+from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
+from array_type import ArrayT 
+from collect_vars import collect_var_names
+from core_types import NoneT, NoneType, ScalarT 
+from mutability_analysis import TypeBasedMutabilityAnalysis
+from scoped_dict import ScopedDictionary
 from syntax import Assign, RunExpr 
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
-from adverbs import Map, Reduce, Scan, AllPairs, Adverb 
-
-from core_types import NoneT, NoneType, ScalarT 
-from array_type import ArrayT 
-
-import subst
-import transform
 from transform import Transform
-from scoped_dict import ScopedDictionary
-
-from mutability_analysis import TypeBasedMutabilityAnalysis
-from collect_vars import collect_var_names
+from tuple_type import TupleT
 from use_analysis import use_count
 
 # classes of expressions known to have no side effects
@@ -107,10 +106,13 @@ class Simplify(Transform):
 
         
   def immutable(self, expr):
-    if expr.__class__ is Const or expr.__class__ is Tuple:
+    c = expr.__class__ 
+    if c in (Const, Tuple, TupleProj, Closure, ClosureElt):
+      return True 
+    elif c is Attribute and expr.value.type.__class__ is TupleT:
       return True 
     elif expr.type in self.mutable_types:
-      return False 
+      return False
     child_nodes = self.children(expr, allow_mutable = False)
     if child_nodes is None:
       result =  False
