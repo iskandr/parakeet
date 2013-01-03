@@ -1,4 +1,6 @@
 import config
+
+
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
@@ -28,8 +30,11 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs],
                memoize = False,
                cleanup = [Simplify, DCE])
 
+
+
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
-loopify = Phase([LowerAdverbs, inline_opt, copy_elim],
+early_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
+loopify = Phase([LowerAdverbs, inline_opt, early_licm, copy_elim],
                 depends_on = high_level_optimizations,
                 copy = True,
                 cleanup = [Simplify, DCE])
@@ -42,7 +47,7 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-early_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
+
 late_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
 lowering = Phase([LowerIndexing, early_licm, LowerStructs, late_licm],
                  depends_on = loopify,

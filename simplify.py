@@ -180,6 +180,10 @@ class Simplify(Transform):
       v = self.temp(v, "struct")
     return Attribute(v, expr.name, type = expr.type)
 
+  def transform_Tuple(self, expr):
+    expr.elts = tuple( self.transform_args(expr.elts))
+    return expr 
+  
   def transform_TupleProj(self, expr):
     idx = expr.index
     assert isinstance(idx, int), \

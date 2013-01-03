@@ -1,15 +1,21 @@
 import escape_analysis
 
 from array_type import ArrayT
-from collect_vars import collect_var_names  
+from collect_vars import collect_var_names
+from core_types import ScalarT  
 from find_local_arrays import FindLocalArrays
 from syntax import Index, Var
 from syntax import ArrayView, Struct
 from transform import Transform
 from usedef import UseDefAnalysis 
 
-
 class CopyElimination(Transform):
+  def apply(self, fn):
+    if all(isinstance(t, ScalarT) for t in fn.type_env.itervalues()):
+      return fn 
+    else:
+      return Transform.apply(self, fn)  
+  
   def pre_apply(self, fn):
     find_local_arrays = FindLocalArrays()
     find_local_arrays.visit_fn(fn)
@@ -17,7 +23,9 @@ class CopyElimination(Transform):
     self.local_alloc = find_local_arrays.local_allocs
     self.local_arrays = find_local_arrays.local_arrays
 
-    self.may_escape = escape_analysis.may_escape(fn)
+    escape_info = escape_analysis.run(fn)
+    self.may_escape = escape_info.may_escape
+    self.may_alias = escape_info.may_alias 
 
     self.usedef = UseDefAnalysis()
     self.usedef.visit_fn(fn)
@@ -34,7 +42,8 @@ class CopyElimination(Transform):
     if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
       lhs_name = stmt.lhs.value.name
       if lhs_name not in self.usedef.first_use and \
-         lhs_name not in self.may_escape:
+         lhs_name not in self.may_escape and \
+         len(self.may_alias.get(lhs_name, [])) <= 1:
         # why assign to an array if it never gets used?
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
