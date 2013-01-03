@@ -1,24 +1,30 @@
+from llvm.core import Builder
+from llvm.core import Type as lltype
+
 import config
+import escape_analysis
+import llvm_context
+import llvm_convert
+import llvm_prims
+import llvm_types
 import prims
-import syntax
 import syntax_helpers
 
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
 
-from llvm.core import Builder
-from llvm.core import Type as lltype
-
-import llvm_context
-import llvm_convert
 from llvm_helpers import const, int32 #, zero, one
-import llvm_prims
-import llvm_types
 from llvm_types import llvm_value_type, llvm_ref_type
+from syntax import Var, Struct, Index, TypedFn, Attribute 
 
+_escape_analysis_cache = {}
 class Compiler(object):
   def __init__(self, fundef, llvm_cxt = llvm_context.global_context):
     self.parakeet_fundef = fundef
+    if config.opt_stack_allocation:
+      self.may_escape = escape_analysis.may_escape(fundef)
+    else:
+      self.may_escape = None 
     self.llvm_context = llvm_cxt
     self.vars = {}
     self.initialized = set([])
@@ -96,11 +102,14 @@ class Compiler(object):
     llvm_value = self.compile_expr(expr.value, builder)
     return llvm_convert.convert(llvm_value, expr.value.type, expr.type, builder)
 
-  def compile_Struct(self, expr, builder):
+  def compile_Struct(self, expr, builder, local = False):
     struct_t = expr.type
     llvm_struct_t = llvm_value_type(struct_t)
     name = expr.type.node_type()
-    struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
+    if local:
+      struct_ptr = builder.alloca(llvm_struct_t, name + "_local_ptr")
+    else:
+      struct_ptr = builder.malloc(llvm_struct_t, name + "_ptr")
 
     for (i, elt) in enumerate(expr.args):
       field_name, field_type = struct_t._fields_[i]
@@ -141,7 +150,7 @@ class Compiler(object):
     return target_fn
 
   def compile_Call(self, expr, builder):
-    assert isinstance(expr.fn, syntax.TypedFn)
+    assert expr.fn.__class__ is TypedFn
     typed_fundef = expr.fn
 
     (target_fn, _, _) = compile_fn(typed_fundef)
@@ -208,13 +217,20 @@ class Compiler(object):
 
   def compile_Assign(self, stmt, builder):
     rhs_t = stmt.rhs.type
-    value = self.compile_expr(stmt.rhs, builder)
-    if isinstance(stmt.lhs, syntax.Var):
+    # special case for locally allocated structs
+    if self.may_escape is not None and \
+       stmt.lhs.__class__ is Var and \
+       stmt.rhs.__class__ is Struct and \
+       stmt.lhs.name  not in self.may_escape:
+      value = self.compile_Struct(stmt.rhs, builder, local = True)
+    else:
+      value = self.compile_expr(stmt.rhs, builder)
+    if stmt.lhs.__class__ is Var:
       name = stmt.lhs.name
       lhs_t = stmt.lhs.type
       self.initialized.add(name)
       ref = self.vars[name]
-    elif isinstance(stmt.lhs, syntax.Index):
+    elif stmt.lhs.__class__ is Index:
       ptr_t = stmt.lhs.value.type
       assert isinstance(ptr_t, PtrT), \
           "Expected pointer, got %s" % ptr_t
@@ -224,7 +240,7 @@ class Compiler(object):
       index = llvm_convert.from_signed(index, Int32, builder)
       ref = builder.gep(base_ptr, [index], "elt_ptr")
     else:
-      assert isinstance(stmt.lhs, syntax.Attribute), \
+      assert stmt.lhs.__class__ is Attribute, \
           "Unexpected LHS: %s" % stmt.lhs
       struct = stmt.lhs.value
       ref, lhs_t = self.attribute_lookup(struct, stmt.lhs.name, builder)

@@ -55,18 +55,30 @@ class Phase(object):
     self.memoize = memoize 
     self.name = name   
   
-    def __str__(self):
-      if self.name:
-        return self.name 
-      else:
-        return "Phase(%s)" % (",".join(str(t) for t in self.transforms))
+  def __str__(self):
+    if self.name:
+      return self.name 
+    else:
+      names = []
+      for t in self.transforms:
+        if type(t) == type:
+          names.append(t.__name__)
+        else:
+          names.append(str(t))
+      
+      return "Phase(%s)" % (",".join(names)) 
+      
+  def __repr__(self):
+    return str(self)
     
+  def __eq__(self, other):
+    return self is other 
   
-  def __call__(self, fn, run_dependencies = True):
-    return self.apply(fn, run_dependencies)
+  def __call__(self, fn, run_dependencies = True, ignore_config = False):
+    return self.apply(fn, run_dependencies, ignore_config)
   
-  def apply(self, fn, run_dependencies = True):
-    if self.config_param is not None and \
+  def apply(self, fn, run_dependencies = True, ignore_config = False):
+    if self.config_param is not None and not ignore_config and \
        getattr(config, self.config_param) == False:
       return fn 
     

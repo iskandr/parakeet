@@ -31,6 +31,9 @@ print_unoptimized_llvm = False
 # show LLVM bytecode after optimizations
 print_optimized_llvm = False
 
+# show aliases and escape sets
+print_escape_analysis = False 
+
 # how long did each transform take?
 print_transform_timings = False
 
@@ -48,6 +51,7 @@ opt_fusion = True
 opt_licm = True
 opt_verify = True
 opt_copy_elimination = True
+opt_stack_allocation = True 
 
 ######################################
 #           LLVM OPTIONS             #

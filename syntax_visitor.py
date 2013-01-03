@@ -106,20 +106,20 @@ class SyntaxVisitor(object):
       return self.visit_Var(expr)
     elif c is Const:
       return self.visit_Const(expr)
-    elif c is Tuple:
-      return self.visit_Tuple(expr)
-    elif c is Index:
-      return self.visit_Index(expr)
-    elif c is TupleProj:
-      return self.visit_TupleProj(expr)
     elif c is PrimCall:
       return self.visit_PrimCall(expr)
     elif c is Attribute:
       return self.visit_Attribute(expr)
-    elif c is Struct:
-      return self.visit_Struct(expr)
+    elif c is Index:
+      return self.visit_Index(expr)
+    elif c is Tuple:
+      return self.visit_Tuple(expr)
+    elif c is TupleProj:
+      return self.visit_TupleProj(expr)
     elif c is Slice:
       return self.visit_Slice(expr)
+    elif c is Struct:
+      return self.visit_Struct(expr)
     elif c is ArrayView:
       return self.visit_ArrayView(expr)
     elif c is Alloc:
@@ -229,3 +229,4 @@ class SyntaxVisitor(object):
 
   def visit_fn(self, fn):
     self.visit_block(fn.body)
+    

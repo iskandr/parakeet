@@ -352,10 +352,6 @@ class Simplify(Transform):
     rhs_class = rhs.__class__
     if lhs_class is Index:
       lhs = self.transform_lhs_Index(lhs)
-      if isinstance(rhs, Adverb) and rhs.out is None and isinstance(rhs.type, ArrayT):
-        rhs.out = lhs 
-        rhs.type = NoneType 
-        return RunExpr(rhs)
     elif lhs_class is Attribute:
       lhs = self.transform_lhs_Attribute(lhs)
     elif lhs_class is Var:

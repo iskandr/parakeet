@@ -57,7 +57,7 @@ class Fusion(Transform):
       
       # at the very least do high level optimizations
       import pipeline 
-      return pipeline.high_level_optimizations.apply(fn) 
+      return pipeline.high_level_optimizations(fn) 
   
   
   def transform_Assign(self, stmt):

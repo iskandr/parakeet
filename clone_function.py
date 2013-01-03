@@ -1,16 +1,18 @@
 import names 
 import syntax 
-from syntax import TypedFn, Var, Const, Tuple, Attribute, Index, PrimCall
-from syntax import If, Assign, While, RunExpr, Return  
+from syntax import TypedFn, Var, Const, Attribute, Index, PrimCall
+from syntax import If, Assign, While, RunExpr, Return, Slice, Struct
+from syntax import Tuple, TupleProj, Cast, Alloc     
 from transform import Transform 
 
 class CloneFunction(Transform):
   """
   Copy all the objects in the AST of a function
   """
-  def __init__(self, rename = False):
+  def __init__(self, rename = False, recursive = False):
     Transform.__init__(self)
     self.rename = rename 
+    self.recursive = recursive 
   
   def transform_expr(self, expr):
     c = expr.__class__
@@ -32,7 +34,28 @@ class CloneFunction(Transform):
       args = tuple(self.transform_expr(elt) for elt in expr.args)
       return PrimCall(expr.prim, args, type = expr.type)
     elif c is TypedFn:
-      return expr 
+      if self.recursive:
+        cloner = CloneFunction(rename = self.rename, recursive = True)
+        return cloner.apply(expr)
+      else:
+        return expr 
+    elif c is Slice: 
+      start = self.transform_if_expr(expr.start)
+      stop = self.transform_if_expr(expr.stop)
+      step = self.transform_if_expr(expr.step)
+      return Slice(start, stop, step, type = expr.type)
+    elif c is Struct: 
+      new_args = self.transform_expr_list(expr.args)
+      return Struct(args = new_args, type = expr.type)
+    elif c is TupleProj: 
+      new_tuple = self.transform_expr(expr.tuple)
+      return TupleProj(new_tuple, expr.index, type = expr.type)
+    elif c is Cast:
+      return Cast(self.transform_expr(expr.value), expr.type) 
+    elif c is Alloc:
+      return Alloc(count = self.transform_expr(expr.count), 
+                   elt_type = expr.elt_type, 
+                   type = expr.type)
     else:
       args = {}
       for member_name in expr.members():

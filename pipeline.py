@@ -51,13 +51,16 @@ lowering = Phase([LowerIndexing, LowerStructs, licm_opt],
                  run_after = print_lowered, 
                  cleanup = [Simplify, DCE])
 
-def lower_tiled(fn):
+def lower_tiled(fn, ignore_config = True):
   """
   Tiling is awkward to stick into the transformation graph 
   since it's non-idempotent and generates lots of previously 
   unseen functions
   """
-  tiled = tiling.apply(fn)
+  tiled = tiling.apply(fn, ignore_config = ignore_config)
+  print tiled 
   loopy = loopify.apply(tiled, run_dependencies = False)
+  print loopy 
   lowered = lowering.apply(loopy, run_dependencies = False)
+  print lowered 
   return lowered 
