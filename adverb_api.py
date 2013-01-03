@@ -365,7 +365,7 @@ def get_axis(kwargs):
 # TODO: Called from the outside maybe macros should generate wrapper functions
 
 call_from_python = None
-if config.call_from_python_in_parallel:
+if config.call_from_python_in_parallel and rt:
   call_from_python = par_each
 
 @staged_macro("axis", call_from_python=call_from_python)

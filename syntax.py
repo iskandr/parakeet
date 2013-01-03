@@ -154,7 +154,7 @@ class Attribute(Expr):
     return hash ((self.value, self.name))
 
   def __eq__(self, other):
-    return isinstance(other, Attribute) and \
+    return other.__class__ is Attribute and \
            self.name == other.name and \
            self.value == other.value
 

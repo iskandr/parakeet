@@ -1,10 +1,13 @@
 import syntax 
+
+
+from closure_type import ClosureT   
+from collect_vars import collect_var_names, collect_binding_names 
+from escape_analysis import may_alias 
+from scoped_set import ScopedSet
 from syntax import Var, Assign, Return, While, If, Tuple 
 from syntax_visitor import SyntaxVisitor 
-from scoped_set import ScopedSet
-from collect_vars import collect_var_names, collect_binding_names 
 from  tuple_type import TupleT  
-from closure_type import ClosureT   
     
  
 class Find_LICM_Candidates(SyntaxVisitor):
@@ -16,6 +19,15 @@ class Find_LICM_Candidates(SyntaxVisitor):
     self.safe_to_move = set([])
     self.curr_block_id = None 
     self.block_contains_return = set([])
+    self.may_alias = None 
+ 
+  
+  def visit_fn(self, fn):
+    
+    self.volatile_vars.push(fn.arg_names)
+    self.may_alias = may_alias(fn) 
+    SyntaxVisitor.visit_fn(self, fn)
+    return self.safe_to_move
   
   def mark_safe_assignments(self, block, volatile_set):
     for stmt in block:
@@ -94,16 +106,16 @@ class Find_LICM_Candidates(SyntaxVisitor):
       dependencies.update(rhs_names)
       self.depends_on[x] = dependencies
       
-    if any(x in self.volatile_vars for x in rhs_names) or \
-        self.is_mutable_alloc(stmt.rhs):
+    if any(x in self.volatile_vars for x in rhs_names):
       self.volatile_vars.update(lhs_names)
+    elif self.is_mutable_alloc(stmt.rhs):
+      if len(lhs_names) == 1 and \
+         len(self.may_alias.get(lhs_names[0], [])) <= 1:
+        pass 
+      else:
+        self.volatile_vars.update(lhs_names)
 
-  
-  def visit_fn(self, fn):
 
-    self.volatile_vars.push(fn.arg_names)
-    SyntaxVisitor.visit_fn(self, fn)
-    return self.safe_to_move
    
 from transform import Transform  
 

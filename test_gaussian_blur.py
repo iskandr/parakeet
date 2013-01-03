@@ -7,6 +7,7 @@ from PIL import Image
 
 sausage = Image.open("sausage.jpg")
 np_sausage = np.array(sausage)
+
 iidxs = np.arange(3, len(np_sausage)-3)
 jidxs = np.arange(3, len(np_sausage[0])-3)
 didxs = np.arange(3)

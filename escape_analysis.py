@@ -51,7 +51,8 @@ class EscapeAnalysis(SyntaxVisitor):
         self.may_escape.update(self.may_alias[name])
 
     if config.print_escape_analysis: 
-      print "[EscapeAnalysis] In function %s" % fn.name 
+      print "[EscapeAnalysis] In function %s (version %d)" % \
+         (fn.name, fn.version) 
       print "-------"
       print fn 
       print 
@@ -136,16 +137,17 @@ class EscapeAnalysis(SyntaxVisitor):
 
 _cache = {}
 def run(fundef):
-  key = (fundef.name, fundef.copied_by)
-
+  key = (fundef.name, fundef.copied_by, fundef.version)
   if key in _cache:
-
     return _cache[key]
   else: 
     analysis = EscapeAnalysis()
     analysis.visit_fn(fundef)
     _cache[key] = analysis
     return analysis
-    
+
+def may_alias(fundef):
+  return run(fundef).may_alias 
+
 def may_escape(fundef):
   return run(fundef).may_escape

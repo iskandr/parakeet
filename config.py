@@ -50,7 +50,7 @@ opt_inline = True
 opt_fusion = True
 opt_licm = True
 opt_verify = True
-opt_copy_elimination = False
+opt_copy_elimination = True
 opt_stack_allocation = True
 
 ######################################

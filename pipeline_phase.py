@@ -8,10 +8,7 @@ def apply_transforms(fn, transforms, cleanup = []):
     t = T() if type(T) == type else T
     fn = t.apply(fn)
     assert fn is not None, "%s transformed fn into None" % T
- 
-    if cleanup and \
-       (not isinstance(t, Phase) or t.cleanup != cleanup):
-      fn = apply_transforms(fn, cleanup, [])
+    fn = apply_transforms(fn, cleanup, [])
   return fn 
 
 class Phase(object):
@@ -95,6 +92,7 @@ class Phase(object):
 
     if (self.skip_if is None) or (not self.skip_if(fn)):
       fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup)
+      fn.version += 1
       
     if self.run_after:
       new_fn = self.run_after(fn)
