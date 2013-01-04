@@ -17,7 +17,7 @@ print_lowered_function = True
 print_functions_before_transforms = ['LoopFusion']
 
 # show the function produced by each transformation?
-print_functions_after_transforms =['LoopFusion'] 
+print_functions_after_transforms =['LoopFusion']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -72,7 +72,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True

@@ -95,7 +95,7 @@ class TileAdverbs(Transform):
 
   def pre_apply(self, fn):
     if config.print_functions_before_tiling:
-      print 
+      print
       print "BEFORE TILING"
       print "-----------------"
       print fn
@@ -180,8 +180,6 @@ class TileAdverbs(Transform):
               return_t = s.value.type
 
         # The innermost function always uses all the variables
-        print type_env
-        print inner_type_env
         fn = syntax.TypedFn(name = names.fresh("inner_block"),
                             arg_names = v_names,
                             body = block,
@@ -437,7 +435,7 @@ class TileAdverbs(Transform):
     fn.has_tiles = self.num_tiles > 0
     fn.num_tiles = self.num_tiles
     if config.print_tiled_adverbs:
-      print 
+      print
       print "DONE WITH TILING"
       print "-----------------"
       print fn
