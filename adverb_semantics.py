@@ -99,11 +99,12 @@ class AdverbSemantics(object):
   
 
 
-  def eval_map(self, f, values, axis):
+  def eval_map(self, f, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(f, values, axis)
     zero = self.int(0)
     first_elts = self.force_list(delayed_elts, zero)
-    output = self.create_output_array(f, first_elts, niters)
+    if output is None:
+      output = self.create_output_array(f, first_elts, niters)
     def loop_body(idx):
       output_indices = self.build_slice_indices(self.rank(output), 0, idx)
       elt_result = self.invoke(f, [elt(idx) for elt in delayed_elts])

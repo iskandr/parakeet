@@ -120,11 +120,16 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     nested_closure = syntax.Closure(fn, [], type=closure_t)
     return_t = fn.return_type
     call = syntax.Call(nested_closure, unpacked_args, type=return_t)
-    output = slice_arg(syntax.Attribute(args_var, "output", type=return_t),
-                       return_t)
-    body = [syntax.Assign(output, call),
+    
+    
+    output_name = names.fresh("output")
+    output_attr = syntax.Attribute(args_var, "output", type=return_t)
+    output_var = syntax.Var(output_name, type = output_attr.type)
+    output_slice = slice_arg(output_var, return_t)
+    body = [syntax.Assign(output_var, output_attr),
+            syntax.Assign(output_slice, call),
             syntax.Return(syntax_helpers.none)]
-    type_env = {}
+    type_env = {output_name:output_slice.type}
     for arg in inputs:
       type_env[arg.name] = arg.type
 

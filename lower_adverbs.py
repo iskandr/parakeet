@@ -1,6 +1,6 @@
 import syntax_helpers
 
-from adverbs import Adverb 
+from adverbs import Map 
 from adverb_semantics import AdverbSemantics
 from syntax import Index 
 from transform import Transform
@@ -10,11 +10,11 @@ class LowerAdverbs(AdverbSemantics, Transform):
     import pipeline 
     return pipeline.loopify(expr)
     
-  def transform_Map(self, expr):
+  def transform_Map(self, expr, output = None):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     axis = syntax_helpers.unwrap_constant(expr.axis)
-    return self.eval_map(fn, args, axis)
+    return self.eval_map(fn, args, axis, output = output)
 
   def transform_Reduce(self, expr):
     fn = self.transform_expr(expr.fn)
@@ -42,9 +42,7 @@ class LowerAdverbs(AdverbSemantics, Transform):
     return self.eval_allpairs(fn, x, y, axis)
   
   def transform_Assign(self, stmt):
-    if stmt.lhs.__class__ is Index and \
-       isinstance(stmt.rhs, Adverb):
-      print "Lowering adverb which immediately gets copied"
-      print ">>>", stmt  
-      print 
+    if stmt.lhs.__class__ is Index and isinstance(stmt.rhs, Map):
+      self.transform_Map(stmt.rhs, output = stmt.lhs)
+      return None 
     return Transform.transform_Assign(self, stmt)

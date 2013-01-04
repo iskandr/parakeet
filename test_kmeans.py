@@ -29,8 +29,7 @@ def py_minidx(C, idxs, x):
   return py_reduce(argmin, zipped, (inf,-1))[1]
 
 def py_calc_centroid(X, a, i):
-  cur_members = X[a == i]
-  return np.mean(cur_members, axis=0)
+  return np.mean(X[a == i], axis=0)
 
 # TODO: At the moment, this won't work, as it generates a ragged array
 #       temporary.  In order to be able to do things like this, we'll need, as
@@ -76,8 +75,8 @@ def par_kmeans(X, assign, k):
   def run_calc_centroid(i):
     return calc_centroid(X, assign, i)
 
-  #C = parakeet.each(run_calc_centroid, idxs)
-  C = np.array(map(run_calc_centroid, idxs))
+  C = parakeet.each(run_calc_centroid, idxs)
+  # C = np.array(map(run_calc_centroid, idxs))
   converged = False
   j = 0
   while not converged and j < 100:

@@ -14,16 +14,16 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False #['CopyElimination']
+print_functions_before_transforms = False 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False # ['CopyElimination']
+print_functions_after_transforms = False 
 
 # show functions before tiling transformation?
-print_functions_before_tiling = True
+print_functions_before_tiling = False
 
 # show functions after tiling transformation?
-print_tiled_adverbs = True
+print_tiled_adverbs = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -50,7 +50,7 @@ opt_inline = True
 opt_fusion = True
 opt_licm = True
 opt_verify = True
-opt_copy_elimination = False
+opt_copy_elimination = True
 opt_stack_allocation = True
 
 ######################################
@@ -74,4 +74,4 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True

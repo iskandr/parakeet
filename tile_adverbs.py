@@ -95,6 +95,9 @@ class TileAdverbs(Transform):
 
   def pre_apply(self, fn):
     if config.print_functions_before_tiling:
+      print 
+      print "BEFORE TILING"
+      print "-----------------"
       print fn
     return fn
 
@@ -436,5 +439,8 @@ class TileAdverbs(Transform):
     fn.has_tiles = self.num_tiles > 0
     fn.num_tiles = self.num_tiles
     if config.print_tiled_adverbs:
+      print 
+      print "DONE WITH TILING"
+      print "-----------------"
       print fn
     return fn
