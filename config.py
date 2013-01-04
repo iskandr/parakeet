@@ -52,6 +52,7 @@ opt_licm = True
 opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
+opt_loop_fusion = False
 
 ######################################
 #           LLVM OPTIONS             #

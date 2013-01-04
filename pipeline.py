@@ -5,6 +5,7 @@ from dead_code_elim import DCE
 from fusion import Fusion
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
+from loop_fusion import LoopFusion
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
@@ -52,11 +53,11 @@ def print_lowered(fn):
     print
 
 late_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
-from loop_fusion import AggressiveCodeMotion
-pointer_loop_optimizations = \
-  Phase([copy_elim, late_licm, AggressiveCodeMotion], cleanup = [Simplify, DCE])
+loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
+low_level_optimizations = \
+  Phase([copy_elim, late_licm, loop_fusion], cleanup = [Simplify, DCE])
   
-lowering = Phase([LowerIndexing, LowerStructs, pointer_loop_optimizations],
+lowering = Phase([LowerIndexing, LowerStructs, low_level_optimizations],
                  depends_on = array_loop_optimizations,
                  copy = True,
                  run_after = print_lowered,
