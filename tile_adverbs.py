@@ -7,7 +7,7 @@ import config
 import names
 import syntax
 
-from collect_vars import collect_var_names as free_vars 
+from collect_vars import collect_var_names as free_vars
 from core_types import Int32
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
@@ -161,11 +161,6 @@ class TileAdverbs(Transform):
 
     def gen_unpack_fn(depth_idx, arg_order):
       if depth_idx >= len(depths):
-        # Create type env for innermost fn - just the original types
-        inner_type_env = {}
-        for arg in v_names:
-          inner_type_env[arg] = type_env[arg]
-
         # For each stmt in body, add its lhs free vars to the type env
         return_t = Int32 # Dummy type
         for s in block:
@@ -181,12 +176,14 @@ class TileAdverbs(Transform):
               return_t = s.value.type
 
         # The innermost function always uses all the variables
+        print type_env
+        print inner_type_env
         fn = syntax.TypedFn(name = names.fresh("inner_block"),
                             arg_names = v_names,
                             body = block,
                             input_types = [type_env[arg] for arg in arg_order],
                             return_type = return_t,
-                            type_env = inner_type_env)
+                            type_env = copy.copy(type_env))
         return fn
       else:
         # Get the current depth
