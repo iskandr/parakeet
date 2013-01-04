@@ -31,18 +31,12 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs],
                cleanup = [Simplify, DCE])
 
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
-early_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
-loopify = Phase([LowerAdverbs, inline_opt],
-                      depends_on = high_level_optimizations,  
-                      copy = True, 
-                      cleanup = [Simplify, DCE])
- 
-# optimize loops while arrays are still n-dimensional structures 
-array_loop_optimizations = \
-  Phase([ early_licm, Simplify, copy_elim],
-          depends_on = loopify,
-          copy = True,
-          cleanup = [Simplify, DCE])
+licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm', memoize = False)
+loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
+loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
+                 depends_on = high_level_optimizations,  
+                 cleanup = [Simplify, DCE],
+                 copy = True)
 
 def print_lowered(fn):
   if config.print_lowered_function:
@@ -52,13 +46,10 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-late_licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm')
-loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-low_level_optimizations = \
-  Phase([copy_elim, late_licm, loop_fusion], cleanup = [Simplify, DCE])
+
   
-lowering = Phase([LowerIndexing, LowerStructs, low_level_optimizations],
-                 depends_on = array_loop_optimizations,
+lowering = Phase([LowerIndexing, LowerStructs, licm],
+                 depends_on = loopify,
                  copy = True,
                  run_after = print_lowered,
                  cleanup = [Simplify, DCE])

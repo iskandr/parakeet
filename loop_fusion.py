@@ -1,7 +1,6 @@
-from stmt_dependence import DependenceGraph
+from dependence_graph import DependenceGraph
 from transform import Transform 
 
-      
 class LoopFusion(Transform):
   def pre_apply(self, fn):    
     self.graph = DependenceGraph()
@@ -37,4 +36,3 @@ class LoopFusion(Transform):
           n_added += 1
     self.scopes.pop()
     return new_stmts 
-    

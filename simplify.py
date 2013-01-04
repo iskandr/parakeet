@@ -271,7 +271,7 @@ class Simplify(Transform):
       
       return expr.value.elts[expr.index.value]
     if expr.value.__class__ is not Var:
-      expr.value = self.temp(expr.value)
+      expr.value = self.temp(expr.value, "array")
     return expr
 
   def transform_Struct(self, expr):
