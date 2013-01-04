@@ -128,6 +128,12 @@ class DCE(Transform):
   def transform_Return(self, stmt):
     return stmt
   
+  def transform_ForLoop(self, stmt):
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge)
+    if len(stmt.body) > 0 or len(stmt.merge) > 0:
+      return stmt  
+  
   def post_apply(self, fn):
     type_env = {} 
     for (name,t) in fn.type_env.iteritems():

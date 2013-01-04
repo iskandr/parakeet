@@ -1,5 +1,5 @@
 from adverbs import Map, Scan, Reduce
-from syntax import Assign, Return, If, While, RunExpr
+from syntax import Assign, Return, If, While, ExprStmt, ForLoop
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
 from syntax import Call, TypedFn, Struct, Alloc
 from syntax import ArrayView, Slice, TupleProj, Cast, AllocArray
@@ -200,7 +200,7 @@ class SyntaxVisitor(object):
     self.visit_block(stmt.false)
     self.visit_merge_if(stmt.merge)
 
-  def visit_RunExpr(self, stmt):
+  def visit_ExprStmt(self, stmt):
     self.visit_expr(stmt.value)
 
   def visit_Return(self, stmt):
@@ -218,18 +218,29 @@ class SyntaxVisitor(object):
     self.visit_block(stmt.body)
     self.visit_merge_loop_repeat(stmt.merge)
 
+  def visit_ForLoop(self, stmt):
+    self.visit_expr(stmt.var)
+    self.visit_expr(stmt.start)
+    self.visit_merge_loop_start(stmt.merge)
+    self.visit_expr(stmt.stop)
+    self.visit_block(stmt.body)
+    self.visit_expr(stmt.step)
+    self.visit_merge_loop_repeat(stmt.merge)
+    
   def visit_stmt(self, stmt):
     c = stmt.__class__
     if c is Assign:
       self.visit_Assign(stmt)
     elif c is Return:
       self.visit_Return(stmt)
+    elif c is ForLoop:
+      self.visit_ForLoop(stmt)
     elif c is While:
       self.visit_While(stmt)
     elif c is If:
       self.visit_If(stmt)
-    elif c is RunExpr:
-      self.visit_RunExpr(stmt)
+    elif c is ExprStmt:
+      self.visit_ExprStmt(stmt)
     else:
       assert False, "Statement not implemented: %s" % stmt
 

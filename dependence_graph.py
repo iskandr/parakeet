@@ -223,9 +223,9 @@ class DependenceGraph(object):
     self.returns.update(consumes)
     return StmtNode(stmt, consumes, set([]), reads, {})
   
-  def visit_RunExpr(self, stmt):
+  def visit_ExprStmt(self, stmt):
     assert False, \
-       "Can't build dependence graphs with RunExpr yet"
+       "Can't build dependence graphs with ExprStmt yet"
       
   
   def visit_stmt(self, stmt, scope = None):
@@ -249,4 +249,3 @@ class DependenceGraph(object):
     self.may_alias = may_alias(fn)
     self.type_env = fn.type_env
     self.visit_block(fn.body)
-   

@@ -11,13 +11,13 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['LoopFusion']
+print_functions_before_transforms = False 
 
 # show the function produced by each transformation?
-print_functions_after_transforms =['LoopFusion'] 
+print_functions_after_transforms = True
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -47,11 +47,11 @@ print_parallel_exec_time = False
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
 opt_inline = True
-opt_fusion = True
-opt_licm = True
+opt_fusion = False
+opt_licm = False
 opt_verify = True
-opt_copy_elimination = True
-opt_stack_allocation = True
+opt_copy_elimination = False
+opt_stack_allocation = False
 opt_loop_fusion = False
 
 ######################################

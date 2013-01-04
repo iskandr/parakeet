@@ -581,7 +581,7 @@ class Codegen(object):
 
   def loop(self, start, niters, loop_body, 
             return_stmt = False, 
-            while_loop = True):
+            while_loop = False):
     if while_loop:
       i, i_after, merge = self.loop_counter("i", start)
       cond = self.lt(i, niters)
@@ -596,7 +596,8 @@ class Codegen(object):
       self.blocks.push()
       loop_body(var)
       body = self.blocks.pop()
-      loop_stmt = ForLoop(var, start, niters, one(var_t), body)
+      loop_stmt = ForLoop(var, start, niters, one(var_t), body, {})
+      print loop_stmt 
       
     if return_stmt:
       return loop_stmt
