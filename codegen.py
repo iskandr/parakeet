@@ -3,6 +3,9 @@ import prims
 import array_type
 import core_types
 import closure_type 
+import shape_codegen
+import shape_inference
+
 import syntax 
 import syntax_helpers
 
@@ -10,14 +13,13 @@ from array_type import ArrayT, SliceT
 from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT
 from closure_type import ClosureT, make_closure_type
 from nested_blocks import NestedBlocks
-import shape_codegen
-import shape_inference
-from syntax import AllocArray  
+from syntax import AllocArray, ForLoop   
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
 from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn 
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
-                           one_i64, zero, zero_i64, const_int, const_bool
+                           one_i64, zero, zero_i64, \
+                           one, const_int, const_bool
 from tuple_type import TupleT, make_tuple_type
 
 class Codegen(object):
@@ -577,14 +579,25 @@ class Codegen(object):
     merge = {counter.name:(counter_before, counter_after)}
     return counter, counter_after, merge
 
-  def loop(self, start, niters, loop_body, return_stmt = False):
-    i, i_after, merge = self.loop_counter("i", start)
-    cond = self.lt(i, niters)
-    self.blocks.push()
-    loop_body(i)
-    self.assign(i_after, self.add(i, syntax_helpers.one_i64))
-    body = self.blocks.pop()
-    loop_stmt = While(cond, body, merge)
+  def loop(self, start, niters, loop_body, 
+            return_stmt = False, 
+            while_loop = True):
+    if while_loop:
+      i, i_after, merge = self.loop_counter("i", start)
+      cond = self.lt(i, niters)
+      self.blocks.push()
+      loop_body(i)
+      self.assign(i_after, self.add(i, syntax_helpers.one_i64))
+      body = self.blocks.pop()
+      loop_stmt = While(cond, body, merge)
+    else:
+      var_t = start.type
+      var = self.fresh_var(var_t, "i")
+      self.blocks.push()
+      loop_body(var)
+      body = self.blocks.pop()
+      loop_stmt = ForLoop(var, start, niters, one(var_t), body)
+      
     if return_stmt:
       return loop_stmt
     else:

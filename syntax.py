@@ -82,6 +82,20 @@ class While(Stmt):
   def __str__(self):
     return repr(self)
 
+class ForLoop(Stmt):
+  """
+  Having only one loop construct started to become cumbersome, 
+  especially now that we're playing with loop optimizations. 
+  
+  So, here we have the stately and ancient for loop. 
+  """
+  _members = ['var', 'start', 'stop', 'step', 'body']
+  
+  def __str__(self):
+    s = "for %s in range(%s, %s, %s):\n" % (self.var, self.start, self.stop, self.step)
+    s += block_to_str(self.body)
+    return s
+
 class Expr(Node):
   _members = ['type']
 

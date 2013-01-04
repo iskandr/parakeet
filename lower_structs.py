@@ -18,6 +18,9 @@ class LowerStructs(Transform):
     return pipeline.lowering.apply(expr) 
     
   
+  def transform_ForLoop(self, stmt):
+    assert False
+  
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
     return syntax.Struct(struct_args, type = expr.type)
@@ -105,8 +108,6 @@ class LowerStructs(Transform):
     """
     Array literal
     """
-    
-    
     array_t = expr.type
     assert isinstance(array_t, ArrayT)
     elt_t = array_t.elt_type
