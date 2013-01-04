@@ -165,6 +165,7 @@ class TileAdverbs(Transform):
     def gen_unpack_fn(depth_idx, arg_order):
       if depth_idx >= len(depths):
         # For each stmt in body, add its lhs free vars to the type env
+        inner_type_env = copy.copy(type_env)
         return_t = Int32 # Dummy type
         for s in block:
           if isinstance(s, syntax.Assign):
@@ -186,7 +187,7 @@ class TileAdverbs(Transform):
                             body = block,
                             input_types = [type_env[arg] for arg in arg_order],
                             return_type = return_t,
-                            type_env = copy.copy(type_env))
+                            type_env = inner_type_env)
         return fn
       else:
         # Get the current depth
