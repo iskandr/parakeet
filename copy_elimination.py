@@ -65,9 +65,9 @@ class CopyElimination(Transform):
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
         curr_stmt_number = self.usedef.stmt_number[id(stmt)]
         rhs_name = stmt.rhs.name
-
-        if self.usedef.last_use[rhs_name] == curr_stmt_number and \
-           self.usedef.first_use[lhs_name] > curr_stmt_number and \
+        first_use = self.usedef.first_use.get(lhs_name, curr_stmt_number+1)
+        if first_use > curr_stmt_number and \
+           self.usedef.last_use[rhs_name] == curr_stmt_number and \
            rhs_name not in self.may_escape and \
            rhs_name in self.local_arrays:
           array_stmt = self.local_arrays[rhs_name]

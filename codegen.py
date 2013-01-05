@@ -535,6 +535,10 @@ class Codegen(object):
       inner_shape_tuple = self.call_shape(fn, args)
     except:
       print "Shape inference failed when calling %s with %s" % (fn, args)
+      import sys
+      print sys.exc_info()[0]
+      print "Error %s ==> %s" % (sys.exc_info()[:2])
+      
       raise
     
     if self.is_tuple(extra_dims):
@@ -597,7 +601,6 @@ class Codegen(object):
       loop_body(var)
       body = self.blocks.pop()
       loop_stmt = ForLoop(var, start, niters, one(var_t), body, {})
-      print loop_stmt 
       
     if return_stmt:
       return loop_stmt

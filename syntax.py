@@ -278,6 +278,7 @@ class Slice(Expr):
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 
+
 class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a prims.Prim object
@@ -322,6 +323,9 @@ class ConstArrayLike(Expr):
   """
 
   _members = ['array', 'value']
+
+class Range(Expr):
+  _members = ['start', 'stop', 'step']
 
 class AllocArray(Expr):
   """

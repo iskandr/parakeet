@@ -275,6 +275,10 @@ class AST_Translator(ast.NodeVisitor):
       assert len(keywords_dict) == 0
       assert len(positional) > 1
       return Map(fn = positional[0], args = positional[1:], axis = 0)
+    elif value == range:
+      assert len(keywords_dict) == 0
+      assert len(positional) == 3
+      return syntax.Range(*positional)
     else:
       assert value == slice, "Value %s not slice %s" % (value, slice)
       assert len(keywords_dict) == 0
@@ -322,7 +326,8 @@ class AST_Translator(ast.NodeVisitor):
 
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
-
+    
+     
   def visit_Attribute(self, expr):
     # TODO:
     # Recursive lookup to see if:
@@ -375,15 +380,12 @@ class AST_Translator(ast.NodeVisitor):
     merge = self.create_phi_nodes(true_scope, false_scope)
     return syntax.If(cond, true_block, false_block, merge)
 
-  def visit_While(self, stmt, counter = [0]):
-    counter[0] = counter[0] + 1
-    cond = self.visit(stmt.test)
-    scope_after, body = self.visit_block(stmt.body)
+  def visit_loop_body(self, body, *exprs):
     merge = {}
     substitutions = {}
-
     curr_scope = self.env.current_scope()
-
+    exprs = [self.visit(expr) for expr in exprs]
+    scope_after, body = self.visit_block(body)
     for (k, name_after) in scope_after.iteritems():
       if k in self.env:
         name_before = self.env[k]
@@ -391,9 +393,27 @@ class AST_Translator(ast.NodeVisitor):
         merge[new_name] = (syntax.Var(name_before), syntax.Var(name_after))
         substitutions[name_before]  = new_name
         curr_scope[k] = new_name #name_after
-    cond = subst_expr(cond, substitutions)
+    
+    exprs = [subst_expr(expr, substitutions) for expr in exprs]
     body = subst_stmt_list(body, substitutions)
+    return body, merge, exprs 
+
+  def visit_While(self, stmt):
+    assert not stmt.orelse
+    body, merge, (cond,) = self.visit_loop_body(stmt.body, stmt.test)
     return syntax.While(cond, body, merge)
+
+  def visit_For(self, stmt):
+    assert not stmt.orelse 
+    var = self.visit_lhs(stmt.target)
+    assert isinstance(var, syntax.Var)
+    seq = self.visit(stmt.iter)
+    assert isinstance(seq, syntax.Range)
+    body, merge, _ = \
+      self.visit_loop_body(stmt.body)
+    return syntax.ForLoop(var, seq.start, seq.stop, seq.step, 
+                          body, merge)
+
 
   def visit_block(self, stmts):
     self.env.push()

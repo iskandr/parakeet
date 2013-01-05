@@ -340,17 +340,18 @@ class Simplify(Transform):
         self.bind(lhs_elt, rhs_elt)
 
   def transform_lhs_Index(self, lhs):
-    old_idx = lhs.index
-    new_idx = self.transform_expr(old_idx)
+    # lhs.value = self.transform_expr(lhs.value)
+    lhs.index = self.transform_expr(lhs.index)
     if lhs.value.__class__ is Var:
       stored = self.bindings.get(lhs.value.name)
       if stored and stored.__class__ is Var:
-        return Index(stored, new_idx, type = lhs.type)
-    elif new_idx != old_idx:
-      return Index(lhs.value, new_idx, type = lhs.type)
+        lhs.value = stored
+    else:
+      lhs.value = self.assign_temp(lhs.value, "array")
     return lhs
 
   def transform_lhs_Attribute(self, lhs):
+    # lhs.value = self.transform_expr(lhs.value)
     return lhs
   
   def transform_ExprStmt(self, stmt):
@@ -489,4 +490,5 @@ class Simplify(Transform):
     if new_value != stmt.value:
       stmt.value = new_value
     return stmt
-    
+  
+  

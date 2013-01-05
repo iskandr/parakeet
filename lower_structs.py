@@ -26,8 +26,8 @@ class LowerStructs(Transform):
     loop_var = stmt.var 
     self.blocks.push(self.transform_block(stmt.body))
     
-    after_cond = self.lt(loop_var, stmt.stop, "after_cond")
     after_var = self.add(loop_var, stmt.step, "i_after")
+    after_cond = self.lt(after_var, stmt.stop, "after_cond")
     loop_cond = self.fresh_var(start_cond.type, "cond")
     merge = stmt.merge 
     merge[loop_cond.name] = (start_cond, after_cond)

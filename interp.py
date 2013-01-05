@@ -297,6 +297,15 @@ def eval_fn(fn, actuals):
       while eval_expr(stmt.cond):
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
+    elif isinstance(stmt, syntax.ForLoop):
+      start = eval_expr(stmt.start)
+      stop = eval_expr(stmt.stop)
+      step = eval_expr(stmt.step)
+      eval_merge_left(stmt.merge)
+      for i in xrange(start, stop, step):
+        env[stmt.var.name] = i
+        eval_block(stmt.body)
+        eval_merge_right(stmt.merge)
     else:
       raise RuntimeError("Not implemented: %s" % stmt)
 

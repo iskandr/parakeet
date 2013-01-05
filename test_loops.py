@@ -1,5 +1,14 @@
 from testing_helpers import run_local_tests, expect
 
+def for_range_loop(start, stop, step):
+  x = 0
+  for i in range(start, stop, step):
+    x = x + 1
+  return x 
+
+def test_for_range_loop():
+  expect(for_range_loop, [1,10,2], for_range_loop(1,10,2))
+
 def count_loop(init, count):
   x = init
   while x < count:
