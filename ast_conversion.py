@@ -413,8 +413,7 @@ class AST_Translator(ast.NodeVisitor):
       self.visit_loop_body(stmt.body)
     return syntax.ForLoop(var, seq.start, seq.stop, seq.step, 
                           body, merge)
-
-
+    
   def visit_block(self, stmts):
     self.env.push()
     curr_block = self.current_block()

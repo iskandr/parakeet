@@ -501,7 +501,9 @@ def annotate_stmt(stmt, tenv, var_map ):
     var = annotate_lhs(stmt.var, lhs_t)
     body = annotate_block(stmt.body, tenv, var_map)
     merge = annotate_phi_nodes(stmt.merge)
+
     return typed_ast.ForLoop(var, start, stop, step, body, merge)
+  
   return dispatch(stmt, prefix="stmt")
 
 def annotate_block(stmts, tenv, var_map):
