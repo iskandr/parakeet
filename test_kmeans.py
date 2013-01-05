@@ -4,7 +4,7 @@ import parakeet
 py_reduce = reduce
 py_sum = sum
 
-from parakeet import sum
+from parakeet import  sum
 from prims import add
 from testing_helpers import eq, run_local_tests
 
@@ -31,11 +31,6 @@ def py_minidx(C, idxs, x):
 def py_calc_centroid(X, a, i):
   return np.mean(X[a == i], axis=0)
 
-# TODO: At the moment, this won't work, as it generates a ragged array
-#       temporary.  In order to be able to do things like this, we'll need, as
-#       discussed, to fuse the indexing with the following reduction, allowing
-#       ragged arrays to exist temporarily in the hope that fusion will get rid
-#       of them.
 def calc_centroid(X, a, i):
   cur_members = X[a == i]
   def zero(x):

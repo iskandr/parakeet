@@ -14,13 +14,13 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False #['LoopFusion']
+print_functions_before_transforms = False 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False #['LoopFusion']
+print_functions_after_transforms = False
 
 # show functions before tiling transformation?
-print_functions_before_tiling = False
+print_functions_before_tiling = True
 
 # show functions after tiling transformation?
 print_tiled_adverbs = True

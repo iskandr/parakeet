@@ -311,6 +311,7 @@ class TileAdverbs(Transform):
       name = self.get_closure_arg(adverb_arg).name
       new_expansions = copy.deepcopy(self.get_expansions(name))
       self.expansions[fn_arg] = new_expansions
+    print expr.args
     for fn_arg, adverb_arg in zip(fn.arg_names[len(closure_args):], expr.args):
       new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
       new_expansions.append(depth)

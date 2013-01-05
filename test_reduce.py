@@ -50,7 +50,7 @@ def test_sqr_dist():
 def avg_along_axis_0(Xs):
   assign = np.array([0,0,1,0,1,0,1,0,1,1])
   Ys = Xs[assign == 1]
-  print Ys
+
   def zero(x):
     return 0.0
   zeros = each(zero, Xs[0])

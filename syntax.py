@@ -28,14 +28,14 @@ class Assign(Stmt):
     else:
       return "%s = %s" % (self.lhs, self.rhs)
 
-class RunExpr(Stmt):
+class ExprStmt(Stmt):
   """Run an expression without binding any new variables"""
 
   _members = ['value']
 
   def __str__(self):
     assert self.value is not None
-    return "RunExpr(%s)" % self.value
+    return "ExprStmt(%s)" % self.value
 
 class Return(Stmt):
   _members = ['value']
@@ -89,10 +89,14 @@ class ForLoop(Stmt):
 
   So, here we have the stately and ancient for loop.  All hail its glory.
   """
-  _members = ['var', 'start', 'stop', 'step', 'body']
 
+  _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
   def __str__(self):
-    s = "for %s in range(%s, %s, %s):\n" % (self.var, self.start, self.stop, self.step)
+    
+    s = "for %s from %s to %s by %s:" % (self.var, self.start, self.stop,
+                                         self.step)
+    if self.merge and len(self.merge) > 0:
+      s += "\n  (header)%s" % phi_nodes_to_str(self.merge)
     s += block_to_str(self.body)
     return s
 
@@ -275,6 +279,7 @@ class Slice(Expr):
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 
+
 class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a prims.Prim object
@@ -319,6 +324,9 @@ class ConstArrayLike(Expr):
   """
 
   _members = ['array', 'value']
+
+class Range(Expr):
+  _members = ['start', 'stop', 'step']
 
 class AllocArray(Expr):
   """Allocate an unfilled array of the given shape and type"""

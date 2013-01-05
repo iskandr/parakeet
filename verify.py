@@ -67,7 +67,7 @@ class Verify(SyntaxVisitor):
     assert expr is not None 
     SyntaxVisitor.visit_expr(self, expr)
     
-  def visit_RunExpr(self, stmt):
+  def visit_ExprStmt(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type.__class__ is NoneT, \
       "Expected effectful expression %s to have type %s but instead got %s" % \
@@ -102,6 +102,22 @@ class Verify(SyntaxVisitor):
         "Mismatch between LHS type %s and RHS %s in '%s'" % \
         (stmt.lhs.type, stmt.rhs.type, stmt)
 
+  def visit_ForLoop(self, stmt):
+    assert stmt.var.__class__ is Var
+    self.bind_var(stmt.var.name)
+    self.visit_expr(stmt.var)
+    
+    assert stmt.start.type == stmt.var.type
+    self.visit_expr(stmt.start)
+    self.visit_merge_loop_start(stmt.merge)
+    
+    assert stmt.stop.type == stmt.var.type
+    self.visit_expr(stmt.stop)
+    self.visit_block(stmt.body)
+    assert stmt.step.type == stmt.var.type
+    self.visit_expr(stmt.step)
+    self.visit_merge_loop_repeat(stmt.merge)
+    
   def visit_stmt(self, stmt):
     assert stmt is not None 
     SyntaxVisitor.visit_stmt(self, stmt)

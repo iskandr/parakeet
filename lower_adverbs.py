@@ -46,3 +46,4 @@ class LowerAdverbs(AdverbSemantics, Transform):
       self.transform_Map(stmt.rhs, output = stmt.lhs)
       return None 
     return Transform.transform_Assign(self, stmt)
+  

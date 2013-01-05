@@ -2,7 +2,7 @@ import config
 import verify
 
 import syntax
-from syntax import If, Assign, While, Return, RunExpr
+from syntax import If, Assign, While, Return, ExprStmt, ForLoop 
 from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
@@ -250,7 +250,7 @@ class Transform(Codegen):
     stmt.lhs = self.transform_lhs(stmt.lhs)
     return stmt
 
-  def transform_RunExpr(self, stmt):
+  def transform_ExprStmt(self, stmt):
     stmt.value = self.transform_expr(stmt.value)
     return stmt
 
@@ -270,19 +270,30 @@ class Transform(Codegen):
     stmt.merge = self.transform_merge(stmt.merge)
     stmt.cond = self.transform_expr(stmt.cond)
     return stmt
-
+  
+  def transform_ForLoop(self, stmt):
+    stmt.var = self.transform_expr(stmt.var)
+    stmt.start = self.transform_expr(stmt.start)
+    stmt.stop = self.transform_expr(stmt.stop)
+    stmt.step = self.transform_expr(stmt.step)
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge)
+    return stmt 
+    
   def transform_stmt(self, stmt):
     stmt_class = stmt.__class__
     if stmt_class is Assign:
       return self.transform_Assign(stmt)
+    elif stmt_class is ForLoop:
+      return self.transform_ForLoop(stmt)
     elif stmt_class is While:
       return self.transform_While(stmt)
     elif stmt_class is If:
       return self.transform_If(stmt)
     elif stmt_class is Return:
       return self.transform_Return(stmt)
-    elif stmt_class is RunExpr:
-      return self.transform_RunExpr(stmt)
+    elif stmt_class is ExprStmt:
+      return self.transform_ExprStmt(stmt)
     else:
       assert False, "Unexpected statement %s" % stmt_class
 

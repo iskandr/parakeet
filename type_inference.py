@@ -426,51 +426,47 @@ def annotate_stmt(stmt, tenv, var_map ):
       new_nodes[new_name] = (left, right)
     return new_nodes
 
+  def annotate_lhs(lhs, rhs_type):
+    lhs_class = lhs.__class__
+    if lhs_class is untyped_ast.Tuple:
+      if rhs_type.__class__ is TupleT:
+        assert len(lhs.elts) == len(rhs_type.elt_types)
+        new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in
+                      zip(lhs.elts, rhs_type.elt_types)]
+      else:
+        assert rhs_type.__class__ is ArrayT, \
+            "Unexpected right hand side type %s" % rhs_type
+        elt_type = array_type.lower_rank(rhs_type, 1)
+        new_elts = [annotate_lhs(elt, elt_type) for elt in lhs.elts]
+      tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
+      return typed_ast.Tuple(new_elts, type = tuple_t)
+
+    elif lhs_class is untyped_ast.Index:
+      new_arr = annotate_expr(lhs.value, tenv, var_map)
+      new_idx = annotate_expr(lhs.index, tenv, var_map)
+      assert isinstance(new_arr.type, ArrayT), \
+          "Expected array, got %s" % new_arr.type
+      elt_t = new_arr.type.index_type(new_idx.type)
+      return typed_ast.Index(new_arr, new_idx, type = elt_t)
+    elif lhs_class is untyped_ast.Attribute:
+      name = lhs.name
+      struct = annotate_expr(lhs.value, tenv, var_map)
+      struct_t = struct.type
+      assert isinstance(struct_t, StructT), \
+          "Can't access fields on value %s of type %s" % \
+          (struct, struct_t)
+      field_t = struct_t.field_type(name)
+      return typed_ast.Attribute(struct, name, field_t)
+    else:
+      assert lhs_class is untyped_ast.Var, "Unexpected LHS: %s" % (lhs,)
+      new_name = var_map.lookup(lhs.name)
+      old_type = tenv.get(new_name, Unknown)
+      new_type = old_type.combine(rhs_type)
+      tenv[new_name] = new_type
+      return typed_ast.Var(new_name, type = new_type)
+
   def stmt_Assign():
     rhs = annotate_expr(stmt.rhs, tenv, var_map)
-
-    def annotate_lhs(lhs, rhs_type):
-
-      lhs_class = lhs.__class__
-      if lhs_class is untyped_ast.Tuple:
-        if rhs_type.__class__ is TupleT:
-
-          assert len(lhs.elts) == len(rhs_type.elt_types)
-          new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in
-                      zip(lhs.elts, rhs_type.elt_types)]
-        else:
-          assert rhs_type.__class__ is ArrayT, \
-              "Unexpected right hand side type %s on %s" % (rhs_type, rhs)
-          elt_type = array_type.lower_rank(rhs_type, 1)
-          new_elts = [annotate_lhs(elt, elt_type) for elt in lhs.elts]
-        tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
-        return typed_ast.Tuple(new_elts, type = tuple_t)
-
-      elif lhs_class is untyped_ast.Index:
-        new_arr = annotate_expr(lhs.value, tenv, var_map)
-        new_idx = annotate_expr(lhs.index, tenv, var_map)
-
-        assert isinstance(new_arr.type, ArrayT), \
-            "Expected array, got %s" % new_arr.type
-        elt_t = new_arr.type.index_type(new_idx.type)
-        return typed_ast.Index(new_arr, new_idx, type = elt_t)
-      elif lhs_class is untyped_ast.Attribute:
-        name = lhs.name
-        struct = annotate_expr(lhs.value, tenv, var_map)
-        struct_t = struct.type
-        assert isinstance(struct_t, StructT), \
-            "Can't access fields on value %s of type %s" % \
-            (struct, struct_t)
-        field_t = struct_t.field_type(name)
-        return typed_ast.Attribute(struct, name, field_t)
-      else:
-        assert lhs_class is untyped_ast.Var, "Unexpected LHS: %s" % (lhs,)
-        new_name = var_map.lookup(lhs.name)
-        old_type = tenv.get(new_name, Unknown)
-        new_type = old_type.combine(rhs_type)
-        tenv[new_name] = new_type
-        return typed_ast.Var(new_name, type = new_type)
-
     lhs = annotate_lhs(stmt.lhs, rhs.type)
     return typed_ast.Assign(lhs, rhs)
 
@@ -495,6 +491,19 @@ def annotate_stmt(stmt, tenv, var_map ):
     body = annotate_block(stmt.body, tenv, var_map)
     merge = annotate_phi_nodes(stmt.merge)
     return typed_ast.While(cond, body, merge)
+  
+  def stmt_ForLoop():
+    infer_left_flow(stmt.merge)
+    start = annotate_expr(stmt.start, tenv, var_map)
+    stop = annotate_expr(stmt.stop, tenv, var_map)
+    step = annotate_expr(stmt.step, tenv, var_map)
+    lhs_t = start.type.combine(stop.type).combine(step.type)
+    var = annotate_lhs(stmt.var, lhs_t)
+    body = annotate_block(stmt.body, tenv, var_map)
+    merge = annotate_phi_nodes(stmt.merge)
+
+    return typed_ast.ForLoop(var, start, stop, step, body, merge)
+  
   return dispatch(stmt, prefix="stmt")
 
 def annotate_block(stmts, tenv, var_map):

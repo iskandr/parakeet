@@ -251,7 +251,7 @@ class Compiler(object):
     builder.store(value, ref)
     return builder, False
 
-  def compile_RunExpr(self, stmt, builder):
+  def compile_ExprStmt(self, stmt, builder):
     self.compile_expr(stmt.value, builder)
     return builder, False
 

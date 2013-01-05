@@ -9,7 +9,7 @@ from collect_vars import collect_var_names
 from core_types import NoneT,  ScalarT 
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_dict import ScopedDictionary
-from syntax import Assign, RunExpr, AllocArray  
+from syntax import Assign, ExprStmt, AllocArray  
 from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call, TypedFn, Fn 
@@ -313,25 +313,6 @@ class Simplify(Transform):
     self.bindings[var.name] = expr
     return var
   
-  def transform_merge(self, phi_nodes, left_block, right_block):
-    result = {}
-    for (k, (left, right)) in phi_nodes.iteritems():
-      new_left = self.transform_expr(left)
-      new_right = self.transform_expr(right)
-
-      if not isinstance(new_left, (Const, Var)):
-        new_left = self.temp_in_block(new_left, left_block)
-      if not isinstance(new_right, (Const, Var)):
-        new_right = self.temp_in_block(new_right, right_block)
-
-      if new_left == new_right:
-        # if both control flows yield the same value then
-        # we don't actually need the phi-bound variable, we can just
-        # replace the left value everywhere
-        self.set_binding(k, new_left)
-      else:
-        result[k] = new_left, new_right
-    return result
 
   def set_binding(self, name, value):
     assert value.__class__ is not Var or \
@@ -359,20 +340,21 @@ class Simplify(Transform):
         self.bind(lhs_elt, rhs_elt)
 
   def transform_lhs_Index(self, lhs):
-    old_idx = lhs.index
-    new_idx = self.transform_expr(old_idx)
+    # lhs.value = self.transform_expr(lhs.value)
+    lhs.index = self.transform_expr(lhs.index)
     if lhs.value.__class__ is Var:
       stored = self.bindings.get(lhs.value.name)
       if stored and stored.__class__ is Var:
-        return Index(stored, new_idx, type = lhs.type)
-    elif new_idx != old_idx:
-      return Index(lhs.value, new_idx, type = lhs.type)
+        lhs.value = stored
+    else:
+      lhs.value = self.assign_temp(lhs.value, "array")
     return lhs
 
   def transform_lhs_Attribute(self, lhs):
+    # lhs.value = self.transform_expr(lhs.value)
     return lhs
   
-  def transform_RunExpr(self, stmt):
+  def transform_ExprStmt(self, stmt):
     """
     Don't run an expression unless it possibly has a side effect
     """
@@ -391,7 +373,7 @@ class Simplify(Transform):
     rhs_class = rhs.__class__
     if lhs_class is Var:
       if rhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
-        return self.transform_stmt(RunExpr(rhs))    
+        return self.transform_stmt(ExprStmt(rhs))    
       else: 
         self.bind_var(lhs.name, rhs)
         if rhs_class not in (Var, Const) and \
@@ -421,6 +403,27 @@ class Simplify(Transform):
     new_stmts = Transform.transform_block(self, stmts)
     self.available_expressions.pop()
     return new_stmts
+
+
+  def transform_merge(self, phi_nodes, left_block, right_block):
+    result = {}
+    for (k, (left, right)) in phi_nodes.iteritems():
+      new_left = self.transform_expr(left)
+      new_right = self.transform_expr(right)
+
+      if not isinstance(new_left, (Const, Var)):
+        new_left = self.temp_in_block(new_left, left_block)
+      if not isinstance(new_right, (Const, Var)):
+        new_right = self.temp_in_block(new_right, right_block)
+
+      if new_left == new_right:
+        # if both control flows yield the same value then
+        # we don't actually need the phi-bound variable, we can just
+        # replace the left value everywhere
+        self.set_binding(k, new_left)
+      else:
+        result[k] = new_left, new_right
+    return result
 
   def transform_If(self, stmt):
     stmt.true = self.transform_block(stmt.true)
@@ -469,10 +472,23 @@ class Simplify(Transform):
                                       loop_body = stmt.body,
                                       merge = stmt.merge)
     return stmt
+  
+  
 
+  def transform_ForLoop(self, stmt):
+    stmt.start = self.transform_expr(stmt.start)
+    stmt.stop = self.transform_expr(stmt.stop)
+    stmt.step = self.transform_expr(stmt.step)
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge, 
+                                      left_block = self.blocks.current(),
+                                      right_block = stmt.body)
+    return stmt
+  
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
     if new_value != stmt.value:
       stmt.value = new_value
     return stmt
-    
+  
+  

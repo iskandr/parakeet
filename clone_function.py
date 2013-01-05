@@ -1,7 +1,8 @@
 import names 
 import syntax 
 from syntax import TypedFn, Var, Const, Attribute, Index, PrimCall
-from syntax import If, Assign, While, RunExpr, Return, Slice, Struct
+from syntax import If, Assign, While, ExprStmt, Return, ForLoop 
+from syntax import  Slice, Struct
 from syntax import Tuple, TupleProj, Cast, Alloc     
 from transform import Transform 
 
@@ -70,8 +71,8 @@ class CloneFunction(Transform):
     new_rhs = self.transform_expr(stmt.rhs)
     return Assign(new_lhs, new_rhs)
 
-  def transform_RunExpr(self, stmt):
-    return RunExpr(self.transform_expr(stmt.value))
+  def transform_ExprStmt(self, stmt):
+    return ExprStmt(self.transform_expr(stmt.value))
 
   def transform_Return(self, stmt):
     res = Return(self.transform_expr(stmt.value))
@@ -90,6 +91,14 @@ class CloneFunction(Transform):
     new_cond = self.transform_expr(stmt.cond)
     return While(new_cond, new_body, new_merge)
   
+  def transform_ForLoop(self, stmt):
+    new_var = self.transform_expr(stmt.var)
+    new_start = self.transform_expr(stmt.start)
+    new_stop = self.transform_expr(stmt.stop)
+    new_step = self.transform_expr(stmt.step)
+    new_body = self.transform_block(stmt.body)
+    new_merge = self.transform_merge(stmt.merge)
+    return ForLoop(new_var, new_start, new_stop, new_step, new_body, new_merge)  
   
   def pre_apply(self, old_fn):
     new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])

@@ -40,7 +40,11 @@ class VarUseCount(SyntaxVisitor):
   def visit_Var(self, expr):
     old_count = self.counts.get(expr.name, 0)
     self.counts[expr.name] = old_count + 1 
-    
+  
+  def visit_ForLoop(self, stmt):
+    self.visit_Var(stmt.var)
+    SyntaxVisitor.visit_ForLoop(self, stmt)
+  
   def visit_lhs(self, expr):
     expr_class = expr.__class__ 
     if expr_class is Var:

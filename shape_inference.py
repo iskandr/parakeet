@@ -430,7 +430,11 @@ class ShapeInference(SyntaxVisitor):
     old_value = self.value_env.get("$return", unknown_value)
     combined = old_value.combine(new_value)
     self.value_env["$return"] = combined
-
+  
+  def visit_ForLoop(self, stmt):
+    self.value_env[stmt.var.name] = unknown_scalar
+    SyntaxVisitor.visit_ForLoop(self, stmt)
+    
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)
     self._clear()

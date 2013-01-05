@@ -3,7 +3,7 @@ from collect_vars import collect_var_names, collect_binding_names
 from core_types import PtrT
 from escape_analysis import may_alias 
 from syntax import Const, Var, Expr  
-from syntax import Assign, Return, If, While
+from syntax import Assign, Return, If, While, ForLoop 
  
 
 node_counter = 0
@@ -71,7 +71,7 @@ class DependenceGraph(object):
     names.update(arg_names)
     
   def visit_Const(self, expr, names, locations):
-    return 
+    return                    
   
   def visit_Cast(self, expr, names, locations):
     self.visit_expr(expr.value, names, locations)
@@ -126,7 +126,7 @@ class DependenceGraph(object):
       method = getattr(self, method_name)
       method(expr, names, locations)
     else:
-      for child in expr.children():
+      for child in expr.children():                    
         if isinstance(child, Expr):
           self.visit_expr(child, names, locations)
     return names, locations 
@@ -175,7 +175,7 @@ class DependenceGraph(object):
     return block_consumes, block_reads, block_writes
    
   def visit_merge(self, merge, consumes, produces):
-    for (k,(l,r)) in merge.iteritems():
+    for (k,(l,r)) in merge.iteritems():                    
       produces.add(k)
       self.visit_expr(l, consumes, None)
       self.visit_expr(r, consumes, None) 
@@ -206,7 +206,8 @@ class DependenceGraph(object):
     self.visit_expr(stmt.cond, consumes, reads)
     produces = set([])
     self.visit_merge(stmt.merge, consumes, produces)
-    return StmtNode(stmt, consumes, produces, reads, writes, stmt_id = stmt_id)
+    return StmtNode(stmt, consumes, produces, reads, writes,
+                    stmt_id = stmt_id)
   
   def visit_While(self, stmt):
     stmt_id = next_id()
@@ -218,14 +219,27 @@ class DependenceGraph(object):
     return StmtNode(stmt, consumes, produces, reads, writes, 
                     stmt_id = stmt_id)
   
+  def visit_ForLoop(self, stmt):
+    stmt_id = next_id()
+    produces = set([stmt.var.name])
+    consumes, reads, writes = self.visit_block(stmt.body)
+    self.visit_expr(stmt.start, consumes, reads)
+    self.visit_expr(stmt.stop, consumes, reads)
+    self.visit_expr(stmt.step, consumes, reads)
+    self.visit_merge(stmt.merge, consumes, produces)
+    return StmtNode(stmt, consumes, produces, reads, writes, 
+                    stmt_id = stmt_id)
+    
+    
+  
   def visit_Return(self, stmt):
     consumes, reads = self.visit_expr(stmt.value)
     self.returns.update(consumes)
     return StmtNode(stmt, consumes, set([]), reads, {})
   
-  def visit_RunExpr(self, stmt):
+  def visit_ExprStmt(self, stmt):
     assert False, \
-       "Can't build dependence graphs with RunExpr yet"
+       "Can't build dependence graphs with ExprStmt yet"
       
   
   def visit_stmt(self, stmt, scope = None):
@@ -234,6 +248,8 @@ class DependenceGraph(object):
       node = self.visit_Assign(stmt)
     elif c is If:
       node = self.visit_If(stmt)
+    elif c is ForLoop:
+      node = self.visit_ForLoop(stmt)
     elif c is While:
       node = self.visit_While(stmt)
     elif c is Return: 
@@ -249,4 +265,3 @@ class DependenceGraph(object):
     self.may_alias = may_alias(fn)
     self.type_env = fn.type_env
     self.visit_block(fn.body)
-   
