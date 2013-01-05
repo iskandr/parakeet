@@ -87,6 +87,7 @@ class TileAdverbs(Transform):
     self.expansions = {}
     self.exp_stack = []
     self.type_env_stack = []
+    self.register_tiles_done = False
 
     # For now, we'll assume that no closure variables have the same name.
     self.closure_vars = {}
@@ -342,7 +343,10 @@ class TileAdverbs(Transform):
                               return_type = return_t,
                               type_env = self.pop_type_env())
       new_fn.has_tiles = True
+    #elif not self.register_tiles_done:
+    #  pass
     else:
+      self.register_tiles_done = True
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
 
