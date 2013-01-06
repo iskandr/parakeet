@@ -48,7 +48,7 @@ def print_lowered(fn):
 
 
   
-lowering = Phase([LowerIndexing, LowerStructs, licm],
+lowering = Phase([LowerIndexing, LowerStructs, licm,  copy_elim],
                  depends_on = loopify,
                  copy = True,
                  run_after = print_lowered,

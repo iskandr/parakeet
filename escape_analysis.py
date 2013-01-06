@@ -52,10 +52,11 @@ class EscapeAnalysis(SyntaxVisitor):
     # once we've accumulated all the aliases
     # anyone who points into the input data 
     # is also considered to be escaping 
+
     for name in fn.arg_names:
       if name not in self.scalars:
         self.may_escape.update(self.may_alias[name])
-
+    
     if config.print_escape_analysis: 
       print "[EscapeAnalysis] In function %s (version %d)" % \
          (fn.name, fn.version) 

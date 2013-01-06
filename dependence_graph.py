@@ -1,7 +1,8 @@
+import escape_analysis
+
 from array_type import ArrayT
 from collect_vars import collect_var_names, collect_binding_names
-from core_types import PtrT
-from escape_analysis import may_alias 
+from core_types import PtrT   
 from syntax import Const, Var, Expr  
 from syntax import Assign, Return, If, While, ForLoop 
  
@@ -38,11 +39,11 @@ class StmtNode:
   
   def __str__(self):
     s = "%s(id = %d, scope = %s," % (self.stmt.__class__.__name__, self.id, self.scope)
-    s += "\tdepends_on = %s,\n" % self.depends_on
-    s += "\tconsumes = %s,\n" % self.consumes 
-    s += "\tproduces = %s,\n" % self.produces
-    s += "\treads = %s,\n" % self.reads.keys()
-    s += "\twrites = %s)" % self.writes.keys()
+    s += "\tdepends_on = %s,\n" % sorted(self.depends_on)
+    s += "\tconsumes = %s,\n" % sorted(self.consumes)
+    s += "\tproduces = %s,\n" % sorted(self.produces)
+    s += "\treads = %s,\n" % sorted(self.reads.keys())
+    s += "\twrites = %s)" % sorted(self.writes.keys())
     return s 
  
   def __repr__(self):
@@ -262,6 +263,10 @@ class DependenceGraph(object):
     return node 
   
   def visit_fn(self, fn):
-    self.may_alias = may_alias(fn)
+    ee = escape_analysis.run(fn)
+    self.may_alias = ee.may_alias
+    
+    self.may_escape = ee.may_escape 
+    
     self.type_env = fn.type_env
     self.visit_block(fn.body)

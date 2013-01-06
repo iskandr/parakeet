@@ -5,7 +5,7 @@ from array_type import ArrayT
 from collect_vars import collect_var_names
 from core_types import ScalarT  
 from find_local_arrays import FindLocalArrays
-from syntax import Index, Var
+from syntax import Index, Var, Alloc 
 from syntax import ArrayView, Struct, AllocArray
 from transform import Transform
 from usedef import UseDefAnalysis 
@@ -34,6 +34,9 @@ class CopyElimination(Transform):
     self.usedef = UseDefAnalysis()
     self.usedef.visit_fn(fn)
     
+    self.pointers_by_size = {}
+    self.arrays_by_size = {}
+    
     
   def no_array_aliases(self, array_name):
     alias_set = self.may_alias.get(array_name, [])
@@ -44,6 +47,8 @@ class CopyElimination(Transform):
     # BEWARE: this will get convoluted and probably broken
     # if we ever have mutable compound objects in arrays 
     return len(array_aliases) <= 1
+  
+
   
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form
@@ -63,18 +68,36 @@ class CopyElimination(Transform):
         # why assign to an array if it never gets used?
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
-        curr_stmt_number = self.usedef.stmt_number[id(stmt)]
+        curr_path = self.usedef.stmt_paths[id(stmt)]
         rhs_name = stmt.rhs.name
-        first_use = self.usedef.first_use.get(lhs_name, curr_stmt_number+1)
-        if first_use > curr_stmt_number and \
-           self.usedef.last_use[rhs_name] == curr_stmt_number and \
-           rhs_name not in self.may_escape and \
-           rhs_name in self.local_arrays:
-          array_stmt = self.local_arrays[rhs_name]
-          prev_stmt_number = self.usedef.stmt_number[id(array_stmt)]
-          if array_stmt.rhs.__class__ in array_constructors and \
-             all(self.usedef.created_on[lhs_depends_on] < prev_stmt_number
-                 for lhs_depends_on in collect_var_names(stmt.lhs)):
-            array_stmt.rhs = stmt.lhs
-            return None
+        if lhs_name not in self.usedef.first_use or \
+          self.usedef.first_use[lhs_name] > curr_path:
+          if self.usedef.last_use[rhs_name] == curr_path and \
+              rhs_name not in self.may_escape and \
+              rhs_name in self.local_arrays:
+            array_stmt = self.local_arrays[rhs_name]
+            prev_path = self.usedef.stmt_paths[id(array_stmt)]
+            if array_stmt.rhs.__class__ in array_constructors and \
+               all(self.usedef.created_on[lhs_depends_on] < prev_path
+                   for lhs_depends_on in collect_var_names(stmt.lhs)):
+              array_stmt.rhs = stmt.lhs
+              return None
+    """
+    elif stmt.lhs.__class__ is Var and stmt.rhs.__class__ is Alloc:
+      lhs_name = stmt.lhs.name
+      curr_path = self.usedef.stmt_number[id(stmt)]
+      print stmt 
+      for prev_name in self.pointers_by_size.get(stmt.rhs.count, []):
+        if self.type_env[prev_name] == self.type_env[lhs_name] and \
+           prev_name in self.local_alloc and \
+           lhs_name in self.local_alloc and \
+           self.usedef.last_use[prev_name] <  curr_stmt_number:
+          stmt.rhs = Var(prev_name, type = self.type_env[prev_name])
+          self.usedef.last_use[prev_name] = curr_stmt_number
+          return stmt  
+      if lhs_name not in self.may_escape and \
+         len(self.may_alias.get(lhs_name, [])) <= 1:
+        alloc_set = self.pointers_by_size.setdefault(stmt.rhs.count, set([]))
+        alloc_set.add(lhs_name)
+    """
     return stmt
