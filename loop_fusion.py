@@ -10,7 +10,11 @@ class LoopFusion(Transform):
     self.scopes = []
     
   def post_apply(self, fn):
-    pass 
+    if len(self.waiting) != 0:
+      print "Statement nodes not added:"
+      for stmt_node in self.waiting:
+        print " -- ", stmt_node 
+      assert False, "Not all statements added back to program!"
     
   def transform_block(self, old_stmts):
     """
@@ -28,7 +32,8 @@ class LoopFusion(Transform):
       for node in sorted(list(self.waiting)):
         if node.id not in self.added and \
            node.scope == scope and \
-           all(node_id in self.added for node_id in node.depends_on):
+           all(node_id in self.added or node_id == node.id 
+               for node_id in node.depends_on):
           self.waiting.remove(node)
           stmt = self.transform_stmt(node.stmt)
           new_stmts.append(stmt)
@@ -36,3 +41,4 @@ class LoopFusion(Transform):
           n_added += 1
     self.scopes.pop()
     return new_stmts 
+  
