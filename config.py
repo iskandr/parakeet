@@ -14,13 +14,13 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False 
+print_functions_before_transforms = False #['LoopUnrolling'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = False #['LoopUnrolling']
 
 # show functions before tiling transformation?
-print_functions_before_tiling = False
+print_functions_before_tiling = False 
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -53,6 +53,7 @@ opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 opt_loop_fusion = False
+opt_loop_unrolling = False 
 
 ######################################
 #           LLVM OPTIONS             #
@@ -75,4 +76,4 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False

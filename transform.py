@@ -237,6 +237,8 @@ class Transform(Codegen):
   def transform_expr_tuple(self, exprs):
     return tuple(self.transform_expr_list(exprs))
 
+  
+
   def transform_merge(self, phi_nodes):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():
@@ -245,6 +247,12 @@ class Transform(Codegen):
       result[k] = new_left, new_right
     return result
 
+  def transform_merge_before_loop(self, phi_nodes):
+    return phi_nodes 
+  
+  def transform_merge_after_loop(self, phi_nodes):
+    return self.transform_merge(phi_nodes)
+  
   def transform_Assign(self, stmt):
     stmt.rhs = self.transform_expr(stmt.rhs)
     stmt.lhs = self.transform_lhs(stmt.lhs)
@@ -266,18 +274,20 @@ class Transform(Codegen):
     return stmt
 
   def transform_While(self, stmt):
-    stmt.body = self.transform_block(stmt.body)
-    stmt.merge = self.transform_merge(stmt.merge)
+    stmt.merge = self.transform_merge_before_loop(stmt.merge)
     stmt.cond = self.transform_expr(stmt.cond)
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge_after_loop(stmt.merge)
     return stmt
   
   def transform_ForLoop(self, stmt):
     stmt.var = self.transform_expr(stmt.var)
+    stmt.merge = self.transform_merge_before_loop(stmt.merge)
     stmt.start = self.transform_expr(stmt.start)
     stmt.stop = self.transform_expr(stmt.stop)
     stmt.step = self.transform_expr(stmt.step)
     stmt.body = self.transform_block(stmt.body)
-    stmt.merge = self.transform_merge(stmt.merge)
+    stmt.merge = self.transform_merge_after_loop(stmt.merge)
     return stmt 
     
   def transform_stmt(self, stmt):
@@ -309,10 +319,10 @@ class Transform(Codegen):
     return new_block
 
   def pre_apply(self, old_fn):
-    pass
+    pass  
 
   def post_apply(self, new_fn):
-    pass
+    pass 
 
   def apply(self, fn):
     if config.print_transform_timings:
