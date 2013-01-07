@@ -91,8 +91,9 @@ class ForLoop(Stmt):
   """
 
   _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
+
   def __str__(self):
-    
+
     s = "for %s from %s to %s by %s:" % (self.var, self.start, self.stop,
                                          self.step)
     if self.merge and len(self.merge) > 0:
@@ -114,7 +115,6 @@ class Expr(Node):
 
 class Const(Expr):
   _members = ['value']
-
 
   def children(self):
     return (self.value,)
@@ -279,7 +279,6 @@ class Slice(Expr):
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 
-
 class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a prims.Prim object
@@ -306,7 +305,7 @@ class PrimCall(Expr):
   def children(self):
     return self.args
 
-############################################################################
+#############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
 #  at the syntactic level, so eventually we'll need some more extensible

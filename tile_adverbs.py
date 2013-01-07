@@ -12,6 +12,7 @@ from core_types import Int32
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
 
+#### Medium-Sized Whale
 
 class FindAdverbs(SyntaxVisitor):
   def __init__(self):
@@ -78,6 +79,16 @@ class AdverbArgs():
     self.combine = combine
     self.init = init
     self.emit = emit
+
+def get_tiled_version(adverb):
+  if adverb is adverbs.Map:
+    return adverbs.TiledMap
+  elif adverb is adverbs.Reduce:
+    return adverbs.TiledReduce
+  elif adverb is adverbs.Scan:
+    return adverbs.TiledScan
+  else:
+    assert False, "Unexpected Adverb: %s" % adverb
 
 class TileAdverbs(Transform):
   def __init__(self):
@@ -151,18 +162,18 @@ class TileAdverbs(Transform):
 
     return len(exps)
 
-  def gen_unpack_tree(self, adverb_tree, depths, v_names, block, type_env):
-    def order_args(depth):
-      cur_depth_args = []
-      other_args = []
-      for arg in v_names:
-        arg_exps = self.get_expansions(arg)
-        if depth in arg_exps:
-          cur_depth_args.append(arg)
-        else:
-          other_args.append(arg)
-      return (cur_depth_args, other_args)
+  def order_args(self, depth, v_names):
+    cur_depth_args = []
+    other_args = []
+    for arg in v_names:
+      arg_exps = self.get_expansions(arg)
+      if depth in arg_exps:
+        cur_depth_args.append(arg)
+      else:
+        other_args.append(arg)
+    return (cur_depth_args, other_args)
 
+  def gen_unpack_tree(self, adverb_tree, depths, v_names, block, type_env):
     def gen_unpack_fn(depth_idx, arg_order):
       if depth_idx >= len(depths):
         # For each stmt in body, add its lhs free vars to the type env
@@ -193,7 +204,7 @@ class TileAdverbs(Transform):
         depth = depths[depth_idx]
 
         # Order the arguments for the current depth, i.e. for the nested fn
-        cur_arg_names, fixed_arg_names = order_args(depth)
+        cur_arg_names, fixed_arg_names = self.order_args(depth, v_names)
         nested_arg_names = fixed_arg_names + cur_arg_names
 
         # Make a type env for this function based on the number of expansions
@@ -245,6 +256,75 @@ class TileAdverbs(Transform):
         # Add the adverb to the body of the current fn and return the fn
         arg_types = [new_type_env[arg] for arg in arg_order]
         fn = syntax.TypedFn(name = names.fresh("intermediate_depth"),
+                            arg_names = arg_order,
+                            body = [syntax.Return(new_adverb)],
+                            input_types = arg_types,
+                            return_type = return_t,
+                            type_env = new_type_env)
+        return fn
+
+    return gen_unpack_fn(0, v_names)
+
+  def gen_reg_tile_unpack_tree(self, depths, v_names, inner_fn, type_env):
+    def gen_unpack_fn(depth_idx, arg_order):
+      if depth_idx >= len(depths):
+        return inner_fn
+      else:
+        # Get the current depth
+        depth = depths[depth_idx]
+
+        # Order the arguments for the current depth, i.e. for the nested fn
+        cur_arg_names, fixed_arg_names = self.order_args(depth, v_names)
+        nested_arg_names = fixed_arg_names + cur_arg_names
+
+        # Make a type env for this function based on the number of expansions
+        # left for each arg
+        new_type_env = {}
+        adv_args = self.adverb_args[depth_idx]
+        tiled_class = get_tiled_version(self.adverbs_visited[depth_idx])
+        new_adverb = tiled_class(fn = adv_args.fn,
+                                 args = adv_args.args,
+                                 axis = adv_args.axis)
+        # Increase the rank of each arg by the number of nested expansions
+        # (i.e. the expansions of that arg that occur deeper in the nesting)
+        for arg in nested_arg_names:
+          exps = self.get_expansions(arg)
+          rank_increase = 0
+          for i, e in enumerate(exps):
+            if e >= depth:
+              rank_increase = len(exps) - i
+              break
+          new_type_env[arg] = \
+              array_type.increase_rank(type_env[arg], rank_increase)
+
+        cur_arg_types = [new_type_env[arg] for arg in cur_arg_names]
+        fixed_arg_types = [new_type_env[arg] for arg in fixed_arg_names]
+
+        # Generate the nested function with the proper arg order and wrap it
+        # in a closure
+        nested_fn = gen_unpack_fn(depth_idx+1, nested_arg_names)
+        nested_args = [syntax.Var(name, type = t)
+                       for name, t in zip(cur_arg_names, cur_arg_types)]
+        nested_fixed_args = \
+            [syntax.Var(name, type = t)
+             for name, t in zip(fixed_arg_names, fixed_arg_types)]
+        closure_t = closure_type.make_closure_type(nested_fn,
+                                                   fixed_arg_types)
+        nested_closure = syntax.Closure(nested_fn, nested_fixed_args,
+                                        type=closure_t)
+
+        # Make an adverb that wraps the nested fn
+        new_adverb.fn = nested_closure
+        new_adverb.args = nested_args
+        return_t = nested_fn.return_type
+        if isinstance(new_adverb, adverbs.TiledReduce):
+          new_adverb.combine = adv_args.combine
+          new_adverb.init = adv_args.init
+        new_adverb.type = return_t
+
+        # Add the adverb to the body of the current fn and return the fn
+        arg_types = [new_type_env[arg] for arg in arg_order]
+        fn = syntax.TypedFn(name = names.fresh("reg_tile"),
                             arg_names = arg_order,
                             body = [syntax.Return(new_adverb)],
                             input_types = arg_types,
@@ -311,7 +391,6 @@ class TileAdverbs(Transform):
       name = self.get_closure_arg(adverb_arg).name
       new_expansions = copy.deepcopy(self.get_expansions(name))
       self.expansions[fn_arg] = new_expansions
-    print expr.args
     for fn_arg, adverb_arg in zip(fn.arg_names[len(closure_args):], expr.args):
       new_expansions = copy.deepcopy(self.get_expansions(adverb_arg.name))
       new_expansions.append(depth)
@@ -344,12 +423,12 @@ class TileAdverbs(Transform):
                               return_type = return_t,
                               type_env = self.pop_type_env())
       new_fn.has_tiles = True
-    #elif not self.register_tiles_done:
-    #  pass
     else:
-      self.register_tiles_done = True
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
+      if config.opt_reg_tile:
+        new_fn = self.gen_reg_tile_unpack_tree(depths, fn.arg_names, new_fn,
+                                               fn.type_env)
 
     axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
             for arg in expr.args]
@@ -398,6 +477,9 @@ class TileAdverbs(Transform):
                                   fn.arg_names,
                                   fn.body,
                                   fn.type_env)
+    if config.opt_reg_tile:
+      new_fn = self.gen_reg_tile_unpack_tree(depths, fn.arg_names, new_fn,
+                                             fn.type_env)
 
     axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
             for arg in expr.args]

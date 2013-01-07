@@ -5,8 +5,7 @@
 # show untyped IR after it's translated from Python?
 print_untyped_function = False
 
-# show the higher level typed function after
-# specialization?
+# show the higher level typed function after specialization?
 print_specialized_function = False
 
 # show lower level typed function before
@@ -14,7 +13,7 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False 
+print_functions_before_transforms = False
 
 # show the function produced by each transformation?
 print_functions_after_transforms = False
@@ -76,3 +75,6 @@ call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
 opt_tile = True
+
+# Add a level of tiling for registers
+opt_reg_tile = True
