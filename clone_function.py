@@ -13,12 +13,16 @@ class CloneFunction(Transform):
   def __init__(self, rename = False, recursive = False):
     Transform.__init__(self)
     self.rename = rename 
-    self.recursive = recursive 
+    self.recursive = recursive
+    
+     
+  def transform_Var(self, expr):
+    return Var(expr.name, type = expr.type)
   
   def transform_expr(self, expr):
     c = expr.__class__
     if c is Var:
-      return Var(expr.name, type = expr.type)
+      return self.transform_Var(expr)  
     elif c is Const:
       return Const(expr.value, type = expr.type)
     elif c is Tuple:

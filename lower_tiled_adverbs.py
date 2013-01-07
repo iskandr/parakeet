@@ -6,22 +6,30 @@ from transform import Transform
 import tuple_type
 
 class LowerTiledAdverbs(Transform):
-  def __init__(self, nesting_idx=-1):
+  default_reg_tile_size = 4
+
+  def __init__(self, nesting_idx = -1, fixed_idx = -1):
     Transform.__init__(self)
     self.nesting_idx = nesting_idx
+    self.fixed_idx = fixed_idx
     self.tiling = False
     self.tile_sizes_param = None
+    self.fixed_tile_sizes = None
     self.dl_tile_estimates = []
     self.ml_tile_estimates = []
 
     # For now, we'll assume that no closure variables have the same name.
     self.closure_vars = {}
 
-  def pre_apply(self, fn):
+  # TODO: Change this to be able to accept fixed tile sizes properly
+  def pre_apply(self, fn, fixed_tile_sizes = None):
     if not self.tile_sizes_param:
       tile_type = \
           tuple_type.make_tuple_type([Int64 for _ in range(fn.num_tiles)])
       self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
+    if self.fixed_tile_sizes == None:
+      self.fixed_tile_sizes = \
+          [LowerTiledAdverbs.default_reg_tile_size] * fn.num_tiles
     return fn
 
   def get_closure_arg(self, closure_elt):
@@ -46,14 +54,13 @@ class LowerTiledAdverbs(Transform):
     return stmt
 
   def transform_TypedFn(self, expr):
-    nested_lower = LowerTiledAdverbs(nesting_idx=self.nesting_idx)
+    nested_lower = LowerTiledAdverbs(nesting_idx = self.nesting_idx,
+                                     fixed_idx = self.fixed_idx)
     nested_lower.tile_sizes_param = self.tile_sizes_param
+    nested_lower.fixed_tile_sizes = self.fixed_tile_sizes
     return nested_lower.apply(expr)
 
   def transform_TiledMap(self, expr):
-    self.tiling = True
-    self.fn.has_tiles = True
-    self.nesting_idx += 1
     args = expr.args
     axes = expr.axes
 
@@ -62,7 +69,14 @@ class LowerTiledAdverbs(Transform):
     niters = self.shape(args[0], syntax_helpers.unwrap_constant(axes[0]))
 
     # Create the tile size variable and find the number of tiles
-    tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
+    if expr.fixed_tile_size:
+      self.fixed_idx += 1
+      tile_size = self.fixed_tile_sizes[self.fixed_idx]
+    else:
+      self.tiling = True
+      self.fn.has_tiles = True
+      self.nesting_idx += 1
+      tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
     fn = self.transform_expr(expr.fn)
 
     inner_fn = self.get_fn(fn)
@@ -100,8 +114,8 @@ class LowerTiledAdverbs(Transform):
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg, axis in zip(args, axes)]
 
-    output_region = self.index_along_axis(array_result, self.nesting_idx,
-                                          tile_bounds)
+    out_idx = self.nesting_idx if self.tiling else self.fixed_idx
+    output_region = self.index_along_axis(array_result, out_idx, tile_bounds)
 
     if nested_has_tiles:
       nested_args.append(self.tile_sizes_param)
@@ -113,9 +127,6 @@ class LowerTiledAdverbs(Transform):
     return array_result
 
   def transform_TiledReduce(self, expr):
-    self.tiling = True
-    self.fn.has_tiles = True
-    self.nesting_idx += 1
     args = expr.args
     axes = expr.axes
 
@@ -123,7 +134,14 @@ class LowerTiledAdverbs(Transform):
     # but we don't yet have anything like assertions or error handling.
     niters = self.shape(args[0], syntax_helpers.unwrap_constant(axes[0]))
 
-    tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
+    if expr.fixed_tile_size:
+      self.fixed_idx += 1
+      tile_size = self.fixed_tile_sizes[self.fixed_idx]
+    else:
+      self.tiling = True
+      self.fn.has_tiles = True
+      self.nesting_idx += 1
+      tile_size = self.index(self.tile_sizes_param, self.nesting_idx)
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
     callable_fn = self.transform_expr(expr.fn)
