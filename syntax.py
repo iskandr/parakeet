@@ -95,9 +95,13 @@ class ForLoop(Stmt):
   
   def __str__(self):
     
-    s = "for %s from %s to %s by %s:" % (self.var, self.start, self.stop, self.step)
+    s = "for %s in range(%s, %s, %s):" % \
+      (self.var, 
+       self.start.short_str(), 
+       self.stop.short_str(), 
+       self.step.short_str())
     if self.merge and len(self.merge) > 0:
-      s += "\n  (header)%s" % phi_nodes_to_str(self.merge)
+      s += "\n  (header)%s\n  (body)" % phi_nodes_to_str(self.merge)
     s += block_to_str(self.body)
     return s
 
@@ -113,13 +117,19 @@ class Expr(Node):
           if isinstance(child, Expr):
             yield child
   
+  def short_str(self):
+    return str(self)
+  
 class Const(Expr):
   _members = ['value']
   
 
   def children(self):
     return (self.value,)
-
+  
+  def short_str(self):
+    return str(self.value)
+  
   def __repr__(self):
     if self.type and not isinstance(self.type, core_types.NoneT):
       return "%s : %s" % (self.value, self.type)
@@ -140,6 +150,9 @@ class Const(Expr):
 class Var(Expr):
   _members = ['name']
 
+  def short_str(self):
+    return self.name 
+  
   def __repr__(self):
     if hasattr(self, 'type'):
       return "%s : %s" % (self.name, self.type)
@@ -288,15 +301,24 @@ class PrimCall(Expr):
 
   _members = ['prim', 'args']
 
+  def _arg_str(self, i):
+    arg = self.args[i]
+    if arg.__class__ in (Const, Var):
+      return str(arg)
+    else:
+      return "(%s)" % arg
+    
   def __repr__(self):
     if self.prim.symbol:
       if len(self.args) == 1:
-        return "%s %s" % (self.prim.symbol)
+        return "%s %s" % (self._arg_to_str(0), self.prim.symbol)
       else:
         assert len(self.args) == 2
-        return "%s %s %s" % (self.args[0], self.prim.symbol, self.args[1])
+        return "%s %s %s" % (self._arg_str(0), self.prim.symbol, self._arg_str(1))
     else:
-      return "prim<%s>(%s)" % (self.prim.name, ", ".join(map(str, self.args)))
+      arg_strings = [self._arg_str(i) for i in xrange(len(self.args))]
+      combined = ", ".join(arg_strings)
+      return "prim<%s>(%s)" % (self.prim.name, combined)
 
   def __str__(self):
     return repr(self)

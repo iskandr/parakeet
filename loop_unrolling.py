@@ -31,16 +31,16 @@ class CloneStmt(CloneFunction):
   def rename(self, old_name):
     old_type = self.type_env[old_name]
     new_name = names.refresh(old_name)
-    self.type_env[new_name] = old_type
     new_var = Var(new_name, old_type)
     self.rename_dict[old_name] = new_var
+    self.type_env[new_name] = old_type
     return new_name  
   
   def rename_var(self, old_var):
     new_name = names.refresh(old_var.name)
-    self.type_env[new_name] = old_var.type 
     new_var = Var(new_name, old_var.type)
-    self.rename_dict[old_var.name] = new_var 
+    self.rename_dict[old_var.name] = new_var
+    self.type_env[new_name] = old_var.type 
     return new_var  
 
   
@@ -57,6 +57,7 @@ class CloneStmt(CloneFunction):
     new_merge = {}
     for (old_name, (l,r)) in merge.iteritems():
       new_name = self.rename(old_name)
+
       new_left = self.transform_expr(l)
       new_merge[new_name] = (new_left, r)
     return new_merge 
@@ -81,6 +82,7 @@ class CloneStmt(CloneFunction):
     
   def transform_ForLoop(self, stmt):
     new_var = self.rename_var(stmt.var)
+
     merge = self.transform_merge_before_loop(stmt.merge)
     new_start = self.transform_expr(stmt.start)
     new_stop = self.transform_expr(stmt.stop)
@@ -98,37 +100,67 @@ class LoopUnrolling(Transform):
     self.unroll_factor = unroll_factor 
 
 
-  def clone_loop(self, stmt):
-    return CloneStmt(self.type_env).transform_ForLoop(stmt)
-    
 
   def transform_ForLoop(self, stmt):
+    assert self.unroll_factor > 0
+    if self.unroll_factor == 1:
+      return stmt  
+    
     assert stmt.step.__class__ is Const and stmt.step.value > 0, \
         "Downward loops not yet supported"
+    
     if not simple_loop_body(stmt.body):
       return stmt
-    if len(stmt.merge) > 0:
-      print "Skipping simple loop since unrolling of phi-nodes not yet implemented"
-      return stmt 
+    
+   
     counter_type = stmt.var.type
     unroll_value = syntax_helpers.const_int(self.unroll_factor, counter_type)
     
     iter_range = self.sub(stmt.stop,  stmt.start)
-    trunc = self.div(iter_range, unroll_value)
-    loop = self.clone_loop(stmt)
+    trunc = self.mul(self.div(iter_range, unroll_value), unroll_value)
+    cloner = CloneStmt(self.type_env)
+    loop = cloner.transform_ForLoop(stmt)
+    first_rename_dict = cloner.rename_dict.copy()
     loop_var = loop.var 
     loop_body = [] 
     loop_body.extend(loop.body) 
-    loop.stop = self.add(stmt.start, trunc, "stop")
-    loop.step = self.mul(loop.step, unroll_value)
+    loop_start = loop.start 
+    loop_stop = self.add(stmt.start, trunc, "stop")
+    loop_step = self.mul(loop.step, unroll_value)
     
     for i in xrange(1, self.unroll_factor):
-      fresh_loop = self.clone_loop(loop)
+      prev_rename_dict = cloner.rename_dict.copy() 
+      loop = cloner.transform_ForLoop(stmt)
+      curr_rename_dict = cloner.rename_dict 
+      for (old_loop_start_name, (_, loop_end_expr)) in stmt.merge.iteritems():
+        new_var = curr_rename_dict[old_loop_start_name]
+        if loop_end_expr.__class__ is Var:
+          new_expr = prev_rename_dict[loop_end_expr.name]
+        else:
+          new_expr = loop_end_expr 
+        assign = Assign(new_var, new_expr)
+        loop_body.append(assign)
       iter_num = self.add(loop_var, syntax_helpers.const_int(i, loop.var.type))
-      loop_body.append(Assign(fresh_loop.var, iter_num))
-      loop_body.extend(fresh_loop.body)
-    loop.body = loop_body 
+      loop_body.append(Assign(loop.var, iter_num))
+      loop_body.extend(loop.body)
+    final_merge  = {}
+    for (loop_start_name, (left, loop_end_expr)) in stmt.merge.iteritems():
+      new_loop_end_expr = cloner.transform_expr(loop_end_expr)
+      loop_start_name = first_rename_dict[loop_start_name].name 
+      final_merge[loop_start_name] = (left, new_loop_end_expr)
+    loop = ForLoop(var = loop_var, 
+                   start = loop_start, 
+                   stop = loop_stop, 
+                   step = loop_step, 
+                   body = loop_body, 
+                   merge = final_merge)
     self.blocks.append(loop)
+    cleanup_merge = {}
+
+    for (k,(_,r)) in stmt.merge.iteritems():
+      prev_loop_value = first_rename_dict[k]
+      cleanup_merge[k] = (prev_loop_value, r)
+    stmt.merge = cleanup_merge 
     stmt.start = loop.stop 
     return stmt 
     
