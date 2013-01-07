@@ -99,7 +99,6 @@ class TileAdverbs(Transform):
     self.expansions = {}
     self.exp_stack = []
     self.type_env_stack = []
-    self.reg_tile_input_types = []
     self.register_tiles_done = False
 
     # For now, we'll assume that no closure variables have the same name.
@@ -135,12 +134,6 @@ class TileAdverbs(Transform):
     self.type_env = self.type_env_stack.pop()
     return old_type_env
 
-  def push_reg_tile_inputs(self, inputs):
-    self.reg_tile_input_types.append(inputs)
-
-  def pop_reg_tile_inputs(self):
-    return self.reg_tile_input_types.pop()
-
   def get_expansions(self, arg):
     if arg in self.expansions:
       return self.expansions[arg]
@@ -171,7 +164,7 @@ class TileAdverbs(Transform):
     return len(exps)
 
   def gen_unpack_tree(self, adverb_tree, depths, v_names, inner, type_env,
-                      reg_tiling=False):
+                      reg_tiling = False, reg_tile_type_env = {}):
     def order_args(depth):
       cur_depth_args = []
       other_args = []
@@ -204,10 +197,11 @@ class TileAdverbs(Transform):
                 return_t = s.value.type
 
           # The innermost function always uses all the variables
+          input_types = [type_env[arg] for arg in arg_order]
           fn = syntax.TypedFn(name = names.fresh("inner_block"),
                               arg_names = v_names,
                               body = inner,
-                              input_types = [type_env[arg] for arg in arg_order],
+                              input_types = input_types,
                               return_type = return_t,
                               type_env = inner_type_env)
           return fn
@@ -236,9 +230,8 @@ class TileAdverbs(Transform):
         # (i.e. the expansions of that arg that occur deeper in the nesting)
         new_type_env = {}
         if reg_tiling:
-          for arg, t in zip(nested_arg_names,
-                            self.reg_tile_input_types[depth_idx]):
-            new_type_env[arg] = t
+          for arg in nested_arg_names:
+            new_type_env[arg] = reg_tile_type_env[arg]
         else:
           for arg in nested_arg_names:
             exps = self.get_expansions(arg)
@@ -390,7 +383,6 @@ class TileAdverbs(Transform):
         if exp >= depth:
           rank_inc = i
           break
-      self.push_reg_tile_inputs(input_types)
       return_t = array_type.increase_rank(expr.type, rank_inc)
       new_fn = syntax.TypedFn(name = names.fresh("expanded_map_fn"),
                               arg_names = arg_names,
@@ -402,11 +394,11 @@ class TileAdverbs(Transform):
     else:
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
-      self.push_reg_tile_inputs(new_fn.input_types)
       if config.opt_reg_tile:
         adverb_tree = [get_tiled_version(adv) for adv in self.adverbs_visited]
         new_fn = self.gen_unpack_tree(adverb_tree, depths, fn.arg_names, new_fn,
-                                      fn.type_env, reg_tiling = True)
+                                      fn.type_env, reg_tiling = True,
+                                      reg_tile_type_env = new_fn.type_env)
 
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
@@ -419,7 +411,6 @@ class TileAdverbs(Transform):
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
     self.pop_exp()
-    self.pop_reg_tile_inputs()
     return adverbs.TiledMap(fn = new_fn, args = expr.args, axes = axes,
                             type = return_t)
 
@@ -456,11 +447,11 @@ class TileAdverbs(Transform):
     depths = self.get_depths_list(fn.arg_names)
     new_fn = self.gen_unpack_tree(self.adverbs_visited, depths,
                                   fn.arg_names, fn.body, fn.type_env)
-    self.push_reg_tile_inputs(new_fn.input_types)
     if config.opt_reg_tile:
       adverb_tree = [get_tiled_version(adv) for adv in self.adverbs_visited]
       new_fn = self.gen_unpack_tree(adverb_tree, depths, fn.arg_names, new_fn,
-                                    fn.type_env, reg_tiling = True)
+                                    fn.type_env, reg_tiling = True,
+                                    reg_tile_type_env = new_fn.type_env)
 
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
@@ -479,7 +470,6 @@ class TileAdverbs(Transform):
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
     self.pop_exp()
-    self.pop_reg_tile_inputs()
     return adverbs.TiledReduce(fn = new_fn,
                                combine = new_combine,
                                init = init,

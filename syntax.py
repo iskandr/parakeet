@@ -36,8 +36,6 @@ class ExprStmt(Stmt):
   def __str__(self):
     assert self.value is not None
     return "ExprStmt(%s)" % self.value
-  
-  
 
 class Return(Stmt):
   _members = ['value']
@@ -114,7 +112,7 @@ class Expr(Node):
         for child in v:
           if isinstance(child, Expr):
             yield child
-  
+
 class Const(Expr):
   _members = ['value']
 
@@ -225,8 +223,9 @@ class Closure(Expr):
 
   def __str__(self):
     fn_str = str(self.fn) #self.fn.name if hasattr(self.fn, 'name') else str(self.fn)
-    args_str = ",".join(str(arg) for arg in self.args)
+    args_str = ",".join(arg.name + ":" + str(arg.type) for arg in self.args)
     return "Closure(%s, args={%s})" % (fn_str, args_str)
+
   def node_init(self):
     self.args = tuple(self.args)
 

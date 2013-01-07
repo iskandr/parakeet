@@ -2,8 +2,9 @@ import ctypes
 # python's function type
 from types import FunctionType
 
-from core_types import Type, IncompatibleTypes, StructT, Int64
 import type_conv
+
+from core_types import Type, IncompatibleTypes, StructT, Int64
 
 ###########################################
 #

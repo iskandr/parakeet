@@ -1,22 +1,21 @@
+import array_type
+import closure_type
+import core_types
 import names
 import prims
-import array_type
-import core_types
-import closure_type 
 import shape_codegen
 import shape_inference
-
-import syntax 
+import syntax
 import syntax_helpers
 
 from array_type import ArrayT, SliceT
 from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT
 from closure_type import ClosureT, make_closure_type
 from nested_blocks import NestedBlocks
-from syntax import AllocArray, ForLoop   
+from syntax import AllocArray, ForLoop
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
-from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn 
+from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
                            one_i64, zero, zero_i64, \
                            one, const_int, const_bool
@@ -366,7 +365,7 @@ class Codegen(object):
       return x.type.__class__ is TupleT
     except:
       return False
-    
+
   def concat_tuples(self, x, y, name = "concat_tuple"):
     if self.is_tuple(x):
       x_elts = self.tuple_elts(x)
@@ -397,7 +396,7 @@ class Codegen(object):
 
   def tuple_elts(self, tup, explicit_struct = False):
     nelts = len(tup.type.elt_types)
-    return tuple([self.tuple_proj(tup, i, explicit_struct = explicit_struct) 
+    return tuple([self.tuple_proj(tup, i, explicit_struct = explicit_struct)
                   for i in xrange(nelts)])
 
   def closure_elt(self, clos, idx):
@@ -465,7 +464,7 @@ class Codegen(object):
     if explicit_struct:
       nelts = self.prod(dims, name = "nelts")
       ptr_t = core_types.ptr_type(elt_t)
-    
+
       ptr_var = self.assign_temp(Alloc(elt_t, nelts, type = ptr_t), "data_ptr")
       stride_elts = [syntax_helpers.const(1)]
 
@@ -506,7 +505,7 @@ class Codegen(object):
       arg_types = syntax_helpers.get_types(args)
       fn = type_inference.specialize(fn.type, arg_types)
 
-    import pipeline 
+    import pipeline
     lowered_fn = pipeline.loopify(fn)
     combined_args = closure_args + args
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
@@ -538,11 +537,11 @@ class Codegen(object):
       import sys
       print sys.exc_info()[0]
       print "Error %s ==> %s" % (sys.exc_info()[:2])
-      
+
       raise
-    
+
     if self.is_tuple(extra_dims):
-      outer_shape_tuple = extra_dims 
+      outer_shape_tuple = extra_dims
     elif isinstance(extra_dims, (list, tuple)):
       outer_shape_tuple = self.tuple(extra_dims)
     else:
@@ -583,8 +582,8 @@ class Codegen(object):
     merge = {counter.name:(counter_before, counter_after)}
     return counter, counter_after, merge
 
-  def loop(self, start, niters, loop_body, 
-            return_stmt = False, 
+  def loop(self, start, niters, loop_body,
+            return_stmt = False,
             while_loop = False):
     if while_loop:
       i, i_after, merge = self.loop_counter("i", start)
@@ -601,7 +600,7 @@ class Codegen(object):
       loop_body(var)
       body = self.blocks.pop()
       loop_stmt = ForLoop(var, start, niters, one(var_t), body, {})
-      
+
     if return_stmt:
       return loop_stmt
     else:
@@ -613,7 +612,7 @@ class Codegen(object):
     combined_args = closure_args + args
 
     if isinstance(fn, Fn):
-      # if we're given an untyped function, first specialize it 
+      # if we're given an untyped function, first specialize it
       import type_inference
       fn = type_inference.specialize(fn, get_types(combined_args))
     abstract_shape = shape_inference.call_shape_expr(fn)
