@@ -49,10 +49,6 @@ class Verify(SyntaxVisitor):
         "Variable %s used before assignment" % expr.name
     assert expr.name in self.fn.type_env, \
         "Variable %s has no entry in the type dictionary" % expr.name
-    #print "fn.name:", self.fn.name
-    #print "expr:", expr
-    #print "expr.type:", expr.type
-    #print "type_env[expr]:", self.fn.type_env[expr.name]
     assert expr.type == self.fn.type_env[expr.name], \
         "Variable %s in fn %s should have type %s but annotated with %s" % \
         (expr.name, self.fn, self.fn.type_env[expr.name], expr.type)
