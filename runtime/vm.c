@@ -123,7 +123,7 @@ void vm2(int start, int end, void *args, int *tile_sizes) {
   }
 }
 
-void vm3(int start, int end, void *args, int *tile_sizes) {
+void vm3(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
   double *A = my_args->a;
   double *B = my_args->b;
@@ -131,23 +131,231 @@ void vm3(int start, int end, void *args, int *tile_sizes) {
   int m = my_args->m;
   int n = my_args->n;
   int k = my_args->k;
-  int i, j, l;
-  int aOff, bOff, oOff;
+  int64_t i, j, l;
+  int64_t aOff, bOff, oOff;
 
-  int l1bLen = tile_sizes[0];
-  int l1b;
-  int is, js;
-  for (l1b = 0; l1b < n; l1b += l1bLen) {
-    for (i = start; i < end; ++i) {
-      aOff = i * k;
-      oOff = i * n;
+  int64_t l1aLen = tile_sizes[0];
+  int64_t l1bLen = tile_sizes[1];
+  int64_t l1cLen = tile_sizes[2];
+  int64_t l1a;
+  int64_t l1b;
+  int64_t l1c;
+  int64_t is, js, ls;
+  for (l1a = start; l1a < end; l1a += l1aLen) {
+    is = l1a + l1aLen;
+    if (is > end) is = end;
+    for (l1b = 0; l1b < n; l1b += l1bLen) {
       js = l1b + l1bLen;
       if (js > n) js = n;
-      for (j = l1b; j < js; ++j) {
-        bOff = j * k;
-        O[oOff + j] = 0.0;
-        for (l = 0; l < k; ++l) {
-          O[oOff + j] += A[aOff + l] * B[bOff + l];
+
+      // This is the zeroing out of the tiled reduce's initial value.
+      for (i = l1a; i < is; ++i) {
+        for (j = l1b; j < js; ++j) {
+          O[i*n+j] = 0.0;
+        }
+      }
+      for (l1c = 0; l1c < k; l1c += l1cLen) {
+        ls = l1c + l1cLen;
+        if (ls > k) ls = k;
+        for (i = l1a; i < is; ++i) {
+          aOff = i * k;
+          oOff = i * n;
+          for (j = l1b; j < js; ++j) {
+            bOff = j * k;
+            for (l = l1c; l < ls; ++l) {
+              O[oOff + j] += A[aOff + l] * B[bOff + l];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void vm3_unrolled(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
+  vm_args_t *my_args = (vm_args_t*)args;
+  double *A = my_args->a;
+  double *B = my_args->b;
+  double *O = my_args->out;
+  int m = my_args->m;
+  int n = my_args->n;
+  int k = my_args->k;
+  int64_t i, j, l;
+  int64_t aOff, bOff, oOff;
+
+  int64_t l1aLen = tile_sizes[0];
+  int64_t l1bLen = tile_sizes[1];
+  int64_t l1cLen = tile_sizes[2];
+  int64_t l1a;
+  int64_t l1b;
+  int64_t l1c;
+  int64_t is, js, ls;
+  for (l1a = start; l1a < end; l1a += l1aLen) {
+    is = l1a + l1aLen;
+    if (is > end) is = end;
+    for (l1b = 0; l1b < n; l1b += l1bLen) {
+      js = l1b + l1bLen;
+      if (js > n) js = n;
+
+      // This is the zeroing out of the tiled reduce's initial value.
+      for (i = l1a; i < is; ++i) {
+        for (j = l1b; j < js; ++j) {
+          O[i*n+j] = 0.0;
+        }
+      }
+      for (l1c = 0; l1c < k; l1c += l1cLen) {
+        ls = l1c + l1cLen;
+        if (ls > k) ls = k;
+        for (i = l1a; i < is; ++i) {
+          aOff = i * k;
+          oOff = i * n;
+          for (j = l1b; j < js; ++j) {
+            bOff = j * k;
+            double out = 0.0;
+            for (l = l1c; l < ls-4; l += 5) {
+              out += A[aOff + l] * B[bOff + l];
+              out += A[aOff + l + 1] * B[bOff + l + 1];
+              out += A[aOff + l + 2] * B[bOff + l + 2];
+              out += A[aOff + l + 3] * B[bOff + l + 3];
+              out += A[aOff + l + 4] * B[bOff + l + 4];
+              //out += A[aOff + l + 5] * B[bOff + l + 5];
+              //out += A[aOff + l + 6] * B[bOff + l + 6];
+              //out += A[aOff + l + 7] * B[bOff + l + 7];
+            }
+            for (; l < ls; ++l) {
+              out += A[aOff + l] * B[bOff + l];
+            }
+            O[oOff + j] += out;
+          }
+        }
+      }
+    }
+  }
+}
+
+void vm3_double_unrolled(int64_t start, int64_t end, void *args,
+                         int64_t *tile_sizes) {
+  vm_args_t *my_args = (vm_args_t*)args;
+  double *A = my_args->a;
+  double *B = my_args->b;
+  double *O = my_args->out;
+  int m = my_args->m;
+  int n = my_args->n;
+  int k = my_args->k;
+  int64_t i, j, l;
+  int64_t aOff, bOff, oOff;
+
+  int64_t l1aLen = tile_sizes[0];
+  int64_t l1bLen = tile_sizes[1];
+  int64_t l1cLen = tile_sizes[2];
+  int64_t l1a;
+  int64_t l1b;
+  int64_t l1c;
+  int64_t is, js, ls;
+  for (l1a = start; l1a < end; l1a += l1aLen) {
+    is = l1a + l1aLen;
+    if (is > end) is = end;
+    for (l1b = 0; l1b < n; l1b += l1bLen) {
+      js = l1b + l1bLen;
+      if (js > n) js = n;
+
+      // This is the zeroing out of the tiled reduce's initial value.
+      for (i = l1a; i < is; ++i) {
+        for (j = l1b; j < js; ++j) {
+          O[i*n+j] = 0.0;
+        }
+      }
+      int64_t l1cLen2 = 2*l1cLen;
+      for (l1c = 0; l1c < k; l1c += l1cLen2) {
+        ls = l1c + l1cLen;
+        if (ls > k) ls = k;
+        for (i = l1a; i < is; ++i) {
+          aOff = i * k;
+          oOff = i * n;
+          for (j = l1b; j < js; ++j) {
+            bOff = j * k;
+            double out = 0.0;
+            for (l = l1c; l < ls; l += 5) {
+              out += A[aOff + l] * B[bOff + l];
+              out += A[aOff + l + 1] * B[bOff + l + 1];
+              out += A[aOff + l + 2] * B[bOff + l + 2];
+              out += A[aOff + l + 3] * B[bOff + l + 3];
+              out += A[aOff + l + 4] * B[bOff + l + 4];
+            }
+            if (l > ls) {
+              for (l = l-5; l < k; ++l) {
+                out += A[aOff + l] * B[bOff + l];
+              }
+            }
+            O[oOff + j] += out;
+          }
+        }
+        ls = l1c + l1cLen2;
+        if (ls > k) ls = k;
+        for (i = l1a; i < is; ++i) {
+          aOff = i * k;
+          oOff = i * n;
+          for (j = l1b; j < js; ++j) {
+            bOff = j * k;
+            double out = 0.0;
+            for (l = l1c+l1cLen; l < ls; l += 5) {
+              out += A[aOff + l] * B[bOff + l];
+              out += A[aOff + l + 1] * B[bOff + l + 1];
+              out += A[aOff + l + 2] * B[bOff + l + 2];
+              out += A[aOff + l + 3] * B[bOff + l + 3];
+              out += A[aOff + l + 4] * B[bOff + l + 4];
+            }
+            if (l > ls) {
+              for (l = l-5; l < k; ++l) {
+                out += A[aOff + l] * B[bOff + l];
+              }
+            }
+            O[oOff + j] += out;
+          }
+        }
+      }
+    }
+  }
+}
+void vm3_unrolled2(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
+  vm_args_t *my_args = (vm_args_t*)args;
+  double *A = my_args->a;
+  double *B = my_args->b;
+  double *O = my_args->out;
+  int m = my_args->m;
+  int n = my_args->n;
+  int k = my_args->k;
+  int64_t i, j, l;
+  int64_t aOff, bOff, oOff;
+
+  int64_t l1aLen = tile_sizes[0];
+  int64_t l1bLen = tile_sizes[1];
+  int64_t l1a;
+  int64_t l1b;
+  int64_t is, js;
+  for (l1a = start; l1a < end; l1a += l1aLen) {
+    for (l1b = 0; l1b < n; l1b += l1bLen) {
+      is = l1a + l1aLen;
+      if (is > end) is = end;
+      for (i = l1a; i < is; ++i) {
+        aOff = i * k;
+        oOff = i * n;
+        js = l1b + l1bLen;
+        if (js > n) js = n;
+        for (j = l1b; j < js; ++j) {
+          bOff = j * k;
+          double out = 0.0;
+          for (l = 0; l < k-4; l += 5) {
+            out += A[aOff + l] * B[bOff + l];
+            out += A[aOff + l + 1] * B[bOff + l + 1];
+            out += A[aOff + l + 2] * B[bOff + l + 2];
+            out += A[aOff + l + 3] * B[bOff + l + 3];
+            out += A[aOff + l + 4] * B[bOff + l + 4];
+          }
+          for (; l < k; ++l) {
+            out += A[aOff + l] * B[bOff + l];
+          }
+          O[oOff + j] = out;
         }
       }
     }
@@ -351,7 +559,7 @@ void vm_a1_b5_k0(int start, int end, void *args, int *tile_sizes) {
   }
 }
 
-void vm_a1_b6_k0(int start, int end, void *args, int *tile_sizes) {
+void vm_a1_b6_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
   double *A = my_args->a;
   double *B = my_args->b;
@@ -359,40 +567,40 @@ void vm_a1_b6_k0(int start, int end, void *args, int *tile_sizes) {
   int m = my_args->m;
   int n = my_args->n;
   int kLen = my_args->k;
-  int aOff, bOff, oOff;
+  int64_t aOff, bOff, oOff;
 
-  int l1bLen = tile_sizes[0];
-  int l1cLen = tile_sizes[1];
+  int64_t l1bLen = tile_sizes[1];
+  int64_t l1cLen = tile_sizes[2];
 
   // A L1 tile is implicit as the start/end of the chunk.
-  int j;
+  int64_t j;
   for (j = 0; j < n; j += l1bLen) {
-    int j2End = min(j + l1bLen, n);
+    int64_t j2End = min(j + l1bLen, n);
     double *Btile = B + j*kLen;
-    int it;
+    int64_t it;
     for (it = start; it < end; ++it) {
       double *Otile = O + it*n;
-      int jt;
+      int64_t jt;
       for (jt = j; jt < j2End; ++jt) {
         Otile[jt] = 0.0;
       }
     }
-    int k;
+    int64_t k;
     for (k = 0; k < kLen; k += l1cLen) {
-      int k3End = min(k + l1cLen, kLen);
-      int i2;
+      int64_t k3End = min(k + l1cLen, kLen);
+      int64_t i2;
       // A's reg tile size set to 1.
       for (i2 = start; i2 < end; ++i2) {
         double *Arow = A + i2*kLen;
         double *Orow = O + i2*n;
-        int j2;
+        int64_t j2;
         // B's reg tile size set to 6.
         for (j2 = j; j2 < j2End - 5; j2 += 6) {
           double *Brow = B + j2*kLen;
           double *Ocol = Orow + j2;
           double c0, c1, c2, c3, c4, c5;
           c0 = c1 = c2 = c3 = c4 = c5 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double b0 = Brow[k3];
@@ -421,7 +629,7 @@ void vm_a1_b6_k0(int start, int end, void *args, int *tile_sizes) {
           double *Ocol = Orow + j2;
           double c0;
           c0 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double b0 = Brow[k3];
@@ -434,7 +642,7 @@ void vm_a1_b6_k0(int start, int end, void *args, int *tile_sizes) {
   }
 }
 
-void vm_a2_b3_k0(int start, int end, void *args, int *tile_sizes) {
+void vm_a2_b3_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
   double *A = my_args->a;
   double *B = my_args->b;
@@ -442,40 +650,40 @@ void vm_a2_b3_k0(int start, int end, void *args, int *tile_sizes) {
   int m = my_args->m;
   int n = my_args->n;
   int kLen = my_args->k;
-  int aOff, bOff, oOff;
+  int64_t aOff, bOff, oOff;
 
-  int l1bLen = tile_sizes[0];
-  int l1cLen = tile_sizes[1];
+  int64_t l1bLen = tile_sizes[0];
+  int64_t l1cLen = tile_sizes[1];
 
   // A L1 tile is implicit as the start/end of the chunk.
-  int j;
+  int64_t j;
   for (j = 0; j < n; j += l1bLen) {
-    int j2End = min(j + l1bLen, n);
+    int64_t j2End = min(j + l1bLen, n);
     double *Btile = B + j*kLen;
-    int it;
+    int64_t it;
     for (it = start; it < end; ++it) {
       double *Otile = O + it*n;
-      int jt;
+      int64_t jt;
       for (jt = j; jt < j2End; ++jt) {
         Otile[jt] = 0.0;
       }
     }
-    int k;
+    int64_t k;
     for (k = 0; k < kLen; k += l1cLen) {
-      int k3End = min(k + l1cLen, kLen);
-      int i2;
+      int64_t k3End = min(k + l1cLen, kLen);
+      int64_t i2;
       // A's reg tile size set to 2.
       for (i2 = start; i2 < end - 1; i2 += 2) {
         double *Arow = A + i2*kLen;
         double *Orow = O + i2*n;
-        int j2;
+        int64_t j2;
         // B's reg tile size set to 3.
         for (j2 = j; j2 < j2End - 2; j2 += 3) {
           double *Brow = B + j2*kLen;
           double *Ocol = Orow + j2;
           double c0, c1, c2, c3, c4, c5;
           c0 = c1 = c2 = c3 = c4 = c5 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double a1 = Arow[kLen + k3];
@@ -502,7 +710,7 @@ void vm_a2_b3_k0(int start, int end, void *args, int *tile_sizes) {
           double *Ocol = Orow + j2;
           double c0, c1;
           c0 = c1 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double a1 = Arow[kLen + k3];
@@ -517,14 +725,14 @@ void vm_a2_b3_k0(int start, int end, void *args, int *tile_sizes) {
       for (; i2 < end; ++i2) {
         double *Arow = A + i2*kLen;
         double *Orow = O + i2*n;
-        int j2;
+        int64_t j2;
         // B's reg tile size set to 3.
         for (j2 = j; j2 < j2End - 2; j2 += 3) {
           double *Brow = B + j2*kLen;
           double *Ocol = Orow + j2;
           double c0, c1, c2;
           c0 = c1 = c2 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double b0 = Brow[k3];
@@ -544,7 +752,7 @@ void vm_a2_b3_k0(int start, int end, void *args, int *tile_sizes) {
           double *Ocol = Orow + j2;
           double c0;
           c0 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double b0 = Brow[k3];
@@ -867,6 +1075,40 @@ void vm_untiled(int64_t start, int64_t end, void *args, int *tile_sizes) {
       for (l = 0; l < k; ++l) {
         O[oOff + j] += A[aOff + l] * B[bOff + l];
       }
+    }
+  }
+}
+
+void vm_just_unrolled(int64_t start, int64_t end, void *args, int *tile_sizes) {
+  vm_args_t *my_args = (vm_args_t*)args;
+  double *A = my_args->a;
+  double *B = my_args->b;
+  double *O = my_args->out;
+  int m = my_args->m;
+  int n = my_args->n;
+  int k = my_args->k;
+  int64_t i, j, l;
+  int64_t aOff, bOff, oOff;
+  int64_t ls;
+
+  for (i = start; i < end; ++i) {
+    aOff = i * k;
+    oOff = i * n;
+    for (j = 0; j < n; ++j) {
+      bOff = j * k;
+      double out = 0.0;
+      for (l = 0; l < k-5; l += 6) {
+        out += A[aOff + l] * B[bOff + l];
+        out += A[aOff + l + 1] * B[bOff + l + 1];
+        out += A[aOff + l + 2] * B[bOff + l + 2];
+        out += A[aOff + l + 3] * B[bOff + l + 3];
+        out += A[aOff + l + 4] * B[bOff + l + 4];
+        out += A[aOff + l + 5] * B[bOff + l + 5];
+      }
+      for (; l < k; ++l) {
+        out += A[aOff + l] * B[bOff + l];
+      }
+      O[oOff + j] = out;
     }
   }
 }

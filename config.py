@@ -5,8 +5,7 @@
 # show untyped IR after it's translated from Python?
 print_untyped_function = False
 
-# show the higher level typed function after
-# specialization?
+# show the higher level typed function after specialization?
 print_specialized_function = False
 
 # show lower level typed function before
@@ -20,7 +19,7 @@ print_functions_before_transforms = False # ['LoopUnrolling']
 print_functions_after_transforms = False # ['LoopUnrolling']
 
 # show functions before tiling transformation?
-print_functions_before_tiling = False 
+print_functions_before_tiling = False
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
@@ -53,7 +52,7 @@ opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 opt_loop_fusion = False
-opt_loop_unrolling = True 
+opt_loop_unrolling = False
 
 ######################################
 #           LLVM OPTIONS             #
@@ -76,4 +75,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
+
+# Add a level of tiling for registers
+opt_reg_tile = True

@@ -109,10 +109,28 @@ class Runtime():
     single_tile_sizes_t = c_int64 * num_tiles
     for i in range(self.dop):
       self.tile_sizes[i] = single_tile_sizes_t()
-      for j in range(num_tiles):
-        self.tile_sizes[i][j] = 1000
+      for j in range(num_tiles-1):
+        self.tile_sizes[i][j] = 50
+      self.tile_sizes[i][num_tiles-1] = num_iters
     self.work_functions = (c_void_p * self.dop)()
     for i in range(self.dop):
+      self.work_functions[i] = cast(fn, c_void_p)
+
+    self.args = args
+    self.num_iters = num_iters
+    self.task_size = num_iters / self.dop
+    self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
+                                           self.dop, 1)
+    self.launch_job()
+    self.wait_for_job()
+    self.free_job()
+
+  def run_job_with_fixed_tiles(self, fn, args, num_iters, tiles):
+    tile_sizes_t = POINTER(c_int64) * self.dop
+    self.tile_sizes = tile_sizes_t()
+    self.work_functions = (c_void_p * self.dop)()
+    for i in range(self.dop):
+      self.tile_sizes[i] = tiles
       self.work_functions[i] = cast(fn, c_void_p)
 
     self.args = args

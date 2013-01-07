@@ -87,7 +87,7 @@ class Scan(Accumulative):
     return s
 
 class Tiled(object):
-  _members = ['axes']
+  _members = ['axes', 'fixed_tile_size']
 
   def __repr__(self):
     s = "%s(axes = %s, args = (%s), type=%s, fn = %s" % \

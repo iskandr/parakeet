@@ -3,10 +3,10 @@ import time
 
 import adverbs
 import array_type
-from closure_type import make_closure_type
+from   closure_type import make_closure_type
 import core_types
 import llvm_backend
-from parakeet import allpairs
+from   parakeet import allpairs
 import pipeline
 import prims
 import run_function
@@ -15,8 +15,10 @@ import syntax_helpers
 import testing_helpers
 
 x = 1000
-x2_array = np.arange(x*x, dtype = np.float).reshape(x,x)
-y2_array = np.arange(x*x, 2*x*x, dtype = np.float).reshape(x,x)
+y = 1000
+k = 1000
+x2_array = np.arange(x*k, dtype = np.float).reshape(x,k)
+y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
 x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
 
@@ -122,7 +124,8 @@ def test_par_mm():
   start = time.time()
   adverb_matmult(x2_array, y2_array)
   no_comp_time = time.time() - start
-  assert(testing_helpers.eq(rslt, nprslt))
+  assert(testing_helpers.eq(rslt, nprslt)), \
+      "Expected %s but got %s" % (nprslt, rslt)
   print "Parakeet time with compilation:", par_time
   print "Parakeet time without compilation:", no_comp_time
   print "NumPy time:", np_time

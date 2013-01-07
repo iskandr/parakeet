@@ -37,9 +37,15 @@ def eq(x,y):
   if isinstance(x, np.ndarray) and not isinstance(y, np.ndarray):
     return False
   if isinstance(y, np.ndarray):
-    return isinstance(x, np.ndarray) and x.shape == y.shape and \
-        (np.all(np.ravel(x) == np.ravel(y)) or \
-         abs(np.mean(np.ravel(x) - np.ravel(y))) <= 0.000001)
+    if isinstance(x, np.ndarray) and x.shape == y.shape:
+      err = abs(np.mean(np.ravel(x) - np.ravel(y)))
+      m = abs(np.mean(np.ravel(x)))
+      if not np.all(np.ravel(x) == np.ravel(y)) and err/m > 0.000001:
+        print "err:", err
+        print "err/m:", err/m
+        return False
+      else:
+        return True
   else:
     return x == y
 

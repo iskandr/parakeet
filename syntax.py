@@ -1,7 +1,7 @@
 import args
-from args import ActualArgs
+from   args import ActualArgs
 import core_types
-from node import Node
+from   node import Node
 
 class Stmt(Node):
   pass
@@ -36,8 +36,6 @@ class ExprStmt(Stmt):
   def __str__(self):
     assert self.value is not None
     return "ExprStmt(%s)" % self.value
-  
-  
 
 class Return(Stmt):
   _members = ['value']
@@ -86,20 +84,21 @@ class While(Stmt):
 
 class ForLoop(Stmt):
   """
-  Having only one loop construct started to become cumbersome, 
-  especially now that we're playing with loop optimizations. 
-  
-  So, here we have the stately and ancient for loop. 
+  Having only one loop construct started to become cumbersome, especially now
+  that we're playing with loop optimizations.
+
+  So, here we have the stately and ancient for loop.  All hail its glory.
   """
+
   _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
-  
-  def __str__(self):
-    
+
+  def __str__(self):    
     s = "for %s in range(%s, %s, %s):" % \
       (self.var, 
        self.start.short_str(), 
        self.stop.short_str(), 
        self.step.short_str())
+
     if self.merge and len(self.merge) > 0:
       s += "\n  (header)%s\n  (body)" % phi_nodes_to_str(self.merge)
     s += block_to_str(self.body)
@@ -119,10 +118,9 @@ class Expr(Node):
   
   def short_str(self):
     return str(self)
-  
+
 class Const(Expr):
   _members = ['value']
-  
 
   def children(self):
     return (self.value,)
@@ -214,7 +212,7 @@ class Tuple(Expr):
 
   def children(self):
     return self.elts
-  
+
   def __hash__(self):
     return hash(self.elts)
 
@@ -226,7 +224,7 @@ class Array(Expr):
 
   def children(self):
     return self.elts
-  
+
   def __hash__(self):
     return hash(self.elts)
 
@@ -237,8 +235,9 @@ class Closure(Expr):
 
   def __str__(self):
     fn_str = str(self.fn) #self.fn.name if hasattr(self.fn, 'name') else str(self.fn)
-    args_str = ",".join(str(arg) for arg in self.args)
-    return "Closure(%s, args={%s})" % (fn_str, args_str) 
+    args_str = ",".join(arg.name + ":" + str(arg.type) for arg in self.args)
+    return "Closure(%s, args={%s})" % (fn_str, args_str)
+
   def node_init(self):
     self.args = tuple(self.args)
 
@@ -247,13 +246,13 @@ class Closure(Expr):
       yield self.fn
     for arg in self.args:
       yield arg
-  
+
   def __hash__(self):
     return hash((self.fn, tuple(self.args)))
-  
+
 class Call(Expr):
   _members = ['fn', 'args']
-  
+
   def __str__(self):
     #if isinstance(self.fn, (Fn, TypedFn)):
     #  fn_name = self.fn.name
@@ -272,7 +271,7 @@ class Call(Expr):
     yield self.fn
     for arg in self.args:
       yield arg
-  
+
   def __hash__(self):
     return hash((self.fn, tuple(self.args)))
 
@@ -289,10 +288,9 @@ class Slice(Expr):
     yield self.start
     yield self.stop
     yield self.step
-    
+
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
-
 
 class PrimCall(Expr):
   """
@@ -329,7 +327,7 @@ class PrimCall(Expr):
   def children(self):
     return self.args
 
-############################################################################
+#############################################################################
 #
 #  Array Operators: It's not scalable to keep adding first-order operators
 #  at the syntactic level, so eventually we'll need some more extensible
@@ -352,13 +350,11 @@ class Range(Expr):
   _members = ['start', 'stop', 'step']
 
 class AllocArray(Expr):
-  """
-  Allocate an unfilled array of the given shape and type
-  """
+  """Allocate an unfilled array of the given shape and type"""
   _members = ['shape']
-  
+
   def children(self):
-    yield self.shape 
+    yield self.shape
 
 class ArrayView(Expr):
   """Create a new view on already allocated underlying data"""
@@ -431,7 +427,7 @@ class TupleProj(Expr):
 
   def children(self):
     return (self.tuple,)
-  
+
   def __hash__(self):
     return hash((self.tuple, self.index))
 
@@ -443,14 +439,14 @@ class ClosureElt(Expr):
 
   def children(self):
     return (self.closure,)
-  
+
   def __hash__(self):
     return hash((self.closure, self.index))
 
 class Cast(Expr):
   # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
   _members = ['value']
-  
+
   def __hash__(self):
     return hash(self.value)
 
@@ -468,7 +464,7 @@ class Struct(Expr):
 
   def children(self):
     return self.args
-  
+
   def __hash__(self):
     return hash(tuple(self.args))
 
@@ -482,7 +478,7 @@ class Alloc(Expr):
 
   def children(self):
     return (self.count,)
-  
+
   def __hash__(self):
     return hash((self.elt_type, self.count))
 
@@ -498,22 +494,21 @@ class TypedFn(Expr):
               'input_types',
               'return_type',
               'type_env',
-              # these last two get filled by 
-              # transformation/optimizations later 
-              'copied_by', 
+              # these last two get filled by
+              # transformation/optimizations later
+              'copied_by',
               'version',
-              'has_tiles', 
+              'has_tiles',
               'num_tiles']
-  
+
   registry = {}
   max_version = {}
   def next_version(self, name):
     n = self.max_version[name] + 1
-    self.max_version[name] = n 
-    return n 
-  
-  def node_init(self):
+    self.max_version[name] = n
+    return n
 
+  def node_init(self):
     assert isinstance(self.body, list), \
         "Invalid body for typed function: %s" % (self.body,)
     assert isinstance(self.arg_names, (list, tuple)), \
@@ -534,14 +529,15 @@ class TypedFn(Expr):
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
 
     if self.version is None:
-      self.version = 0 
+      self.version = 0
       self.max_version[self.name] = 0
-      
-    registry_key = (self.name, self.version) 
+
+    registry_key = (self.name, self.version)
     assert registry_key not in self.registry, \
-        "Typed function %s version %s already registered" % (self.name, self.version)
+        "Typed function %s version %s already registered" % \
+        (self.name, self.version)
     self.registry[registry_key] = self
-    
+
     if self.has_tiles is None:
       self.has_tiles = False
     if self.num_tiles is None:

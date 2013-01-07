@@ -1,8 +1,8 @@
 import core_types
-from core_types import NoneT, NoneType  
 
 from collect_vars import collect_binding_names
-from syntax import Expr, Tuple, Var, Index 
+from core_types import NoneT, NoneType
+from syntax import Expr, Tuple, Var, Index
 from syntax_visitor import SyntaxVisitor
 
 class Verify(SyntaxVisitor):
@@ -64,40 +64,40 @@ class Verify(SyntaxVisitor):
           (expr.fn, arg, arg.type)
 
   def visit_expr(self, expr):
-    assert expr is not None 
+    assert expr is not None
     SyntaxVisitor.visit_expr(self, expr)
-    
+
   def visit_ExprStmt(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type.__class__ is NoneT, \
       "Expected effectful expression %s to have type %s but instead got %s" % \
       (stmt.value, NoneType, stmt.value.type)
-    
+
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type == self.fn.return_type, \
-        "Incorrect return type in %s: returned value %s, expected %s but got %s" % \
+        "Incorrect return type in %s: ret value %s, expected %s but got %s" % \
         (self.fn.name, stmt.value, self.fn.return_type, stmt.value.type)
 
   def visit_lhs(self, lhs):
-    c = lhs.__class__ 
+    c = lhs.__class__
     assert c in (Var, Tuple, Index), \
        "Invalid LHS of assignment"
-    if c is Tuple: 
+    if c is Tuple:
       for elt in lhs.elts:
         self.visit_lhs(elt)
-        
+
   def visit_Assign(self, stmt):
     assert stmt.lhs.type is not None, \
         "Missing LHS type for assignment %s" % stmt
     assert stmt.rhs.type is not None, \
         "Missing RHS type for assignment %s" % stmt
-    self.visit_lhs(stmt.lhs) 
+    self.visit_lhs(stmt.lhs)
     lhs_names = collect_binding_names(stmt.lhs)
     for lhs_name in lhs_names:
       self.bind_var(lhs_name)
     self.visit_expr(stmt.rhs)
-    
+
     assert stmt.lhs.type == stmt.rhs.type, \
         "Mismatch between LHS type %s and RHS %s in '%s'" % \
         (stmt.lhs.type, stmt.rhs.type, stmt)
@@ -106,22 +106,22 @@ class Verify(SyntaxVisitor):
     assert stmt.var.__class__ is Var
     self.bind_var(stmt.var.name)
     self.visit_expr(stmt.var)
-    
+
     assert stmt.start.type == stmt.var.type
     self.visit_expr(stmt.start)
     self.visit_merge_loop_start(stmt.merge)
-    
+
     assert stmt.stop.type == stmt.var.type
     self.visit_expr(stmt.stop)
     self.visit_block(stmt.body)
     assert stmt.step.type == stmt.var.type
     self.visit_expr(stmt.step)
     self.visit_merge_loop_repeat(stmt.merge)
-    
+
   def visit_stmt(self, stmt):
-    assert stmt is not None 
+    assert stmt is not None
     SyntaxVisitor.visit_stmt(self, stmt)
-    
+
   def visit_TypedFn(self, fn):
     return verify(fn)
 
