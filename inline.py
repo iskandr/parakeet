@@ -60,7 +60,7 @@ def replace_return_with_var(body, type_env, return_type):
   replace_returns(body, result_var)
   return result_var
 
-def do_inline(src_fundef, args, dest_type_env, dest_block):
+def do_inline(src_fundef, args, dest_type_env, dest_block, result_var = None):
   arg_names = src_fundef.arg_names
   n_expected = len(arg_names)
   n_given = len(args)
@@ -92,8 +92,11 @@ def do_inline(src_fundef, args, dest_type_env, dest_block):
       rename_var(old_name)
 
   new_body = subst_stmt_list(src_fundef.body, rename_dict)
-  result_var = replace_return_with_var(new_body, dest_type_env,
-                                       src_fundef.return_type)
+  if result_var is None: 
+    result_var = replace_return_with_var(new_body, dest_type_env,
+                                         src_fundef.return_type)
+  else:
+    replace_returns(new_body, result_var)
   dest_block.extend(new_body)
   return result_var
 

@@ -35,7 +35,7 @@ copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm', memoize = False)
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')  
-loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
+loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, unroll, licm],
                  depends_on = high_level_optimizations,  
                  cleanup = [Simplify, DCE],
                  copy = True)

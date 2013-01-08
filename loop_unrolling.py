@@ -109,15 +109,15 @@ class LoopUnrolling(Transform):
     assert stmt.step.__class__ is Const and stmt.step.value > 0, \
         "Downward loops not yet supported"
     
-    if not simple_loop_body(stmt.body):
-      return stmt
-    
+    if not simple_loop_body(stmt.body) or len(stmt.body) > 20:
+      return Transform.transform_ForLoop(self, stmt)
    
     counter_type = stmt.var.type
     unroll_value = syntax_helpers.const_int(self.unroll_factor, counter_type)
     
     iter_range = self.sub(stmt.stop,  stmt.start)
-    trunc = self.mul(self.div(iter_range, unroll_value), unroll_value)
+    big_step = self.mul(unroll_value, stmt.step)
+    trunc = self.mul(self.div(iter_range, big_step), big_step)
     cloner = CloneStmt(self.type_env)
     loop = cloner.transform_ForLoop(stmt)
     first_rename_dict = cloner.rename_dict.copy()
@@ -126,7 +126,7 @@ class LoopUnrolling(Transform):
     loop_body.extend(loop.body) 
     loop_start = loop.start 
     loop_stop = self.add(stmt.start, trunc, "stop")
-    loop_step = self.mul(loop.step, unroll_value)
+    loop_step = big_step
     
     for i in xrange(1, self.unroll_factor):
       prev_rename_dict = cloner.rename_dict.copy() 
@@ -140,7 +140,8 @@ class LoopUnrolling(Transform):
           new_expr = loop_end_expr 
         assign = Assign(new_var, new_expr)
         loop_body.append(assign)
-      iter_num = self.add(loop_var, syntax_helpers.const_int(i, loop.var.type))
+      incr = self.mul(stmt.step, syntax_helpers.const_int(i, loop.var.type))
+      iter_num = self.add(loop_var, incr)
       loop_body.append(Assign(loop.var, iter_num))
       loop_body.extend(loop.body)
     final_merge  = {}

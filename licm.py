@@ -67,7 +67,16 @@ class Find_LICM_Candidates(SyntaxVisitor):
       
   def visit_merge(self, merge, both_branches = True):
     pass 
-          
+
+  def visit_ForLoop(self, stmt):
+    self.volatile_vars.push(stmt.merge.keys())
+    self.volatile_vars.add(stmt.var.name)
+    SyntaxVisitor.visit_ForLoop(self, stmt)
+    if self.does_block_return(stmt.body):
+      self.block_contains_return()
+    volatile_in_scope = self.volatile_vars.pop()
+    self.mark_safe_assignments(stmt.body, volatile_in_scope)
+              
   def visit_While(self, stmt):
     self.volatile_vars.push(stmt.merge.keys())
     SyntaxVisitor.visit_While(self, stmt)
@@ -139,6 +148,11 @@ class LoopInvariantCodeMotion(Transform):
       self.binding_depth[name] = curr_depth 
   
 
+  def transform_ForLoop(self, stmt):
+    self.mark_binding_depths(stmt.merge.iterkeys(), 1)
+    self.mark_binding_depths([stmt.var.name], 1)
+    return Transform.transform_ForLoop(self, stmt)
+  
     
   def transform_While(self, stmt):
     self.mark_binding_depths(stmt.merge.iterkeys(), 1)

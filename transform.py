@@ -329,7 +329,10 @@ class Transform(Codegen):
       start_time = time.time()
 
     transform_name = self.__class__.__name__
-
+    
+    if config.print_transform_names:
+      print "-- Running %s on %s" % (transform_name, fn.name)
+      
     if config.print_functions_before_transforms == True or \
         (isinstance(config.print_functions_before_transforms, list) and
          transform_name in config.print_functions_before_transforms):

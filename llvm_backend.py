@@ -373,7 +373,7 @@ def compile_fn(fundef):
   
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
-  print "COMPILING", fundef.name 
+
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
 

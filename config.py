@@ -10,13 +10,13 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = False # ['LoopUnrolling'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False # ['LoopUnrolling']
+print_functions_after_transforms = False # ['LoopUnrolling'] # ['LowerTiledAdverbs'] # ['LoopUnrolling']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -35,6 +35,9 @@ print_escape_analysis = False
 
 # how long did each transform take?
 print_transform_timings = False
+
+# print each transform's name when it runs 
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
@@ -72,7 +75,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
 opt_tile = False
