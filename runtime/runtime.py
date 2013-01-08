@@ -1,4 +1,7 @@
-import copy, math, random, time
+import copy
+import math
+import random
+import time
 
 from ctypes import *
 
@@ -40,7 +43,7 @@ class Runtime():
     # thread_pool.h
     self.libParRuntime.create_thread_pool.restype = thread_pool_p
     self.libParRuntime.launch_job.argtypes = \
-      [thread_pool_p, c_void_p, c_void_p, job_p, POINTER(POINTER(c_int))]
+        [thread_pool_p, c_void_p, c_void_p, job_p, POINTER(POINTER(c_int))]
     self.libParRuntime.launch_job.restype = None
     self.libParRuntime.job_finished.argtypes = [thread_pool_p]
     self.libParRuntime.job_finished.restype = c_int
@@ -67,6 +70,8 @@ class Runtime():
     self.CROSSOVER_PROB = 0.5
     self.MUTATION_PROB = 0.1
     self.L1SIZE = 2**14
+    self.L2SIZE = 2**17
+    self.L3SIZE = 2**21
     self.NUM_FP_REGS = 16
 
     self.cur_iter = 0
@@ -142,6 +147,20 @@ class Runtime():
     self.wait_for_job()
     self.free_job()
 
+  def run_compiled_job(self, fn, args, num_iters, dl_estimates, ml_estimates):
+    if len(ml_estimates) == 0:
+      self.run_job_with_fixed_tiles(fn, args, num_iters, dl_estimates)
+    else:
+      self.work_functions = (c_void_p * self.dop)()
+      for i in range(self.dop):
+        self.work_functions[i] = cast(fn, c_void_p)
+      self.args = args
+      self.num_iters = num_iters
+
+      self.gradient_find_best_tiles(ml_estimates)
+
+      self.free_job()
+
   def run_job(self, tiled_ast, args, num_iters,
               tiled_loop_iters, tiled_loop_parents):
     self.reg_block_sizes = \
@@ -172,11 +191,11 @@ class Runtime():
     block_sizes.extend([1, 6, 1])
     return block_sizes
 
-  def gradient_find_best_tiles(self, tiled_loop_iters, tiled_loop_parents):
-    num_tiled = len(tiled_loop_iters)
-    tile_sizes_t = POINTER(c_int) * self.dop
+  def gradient_find_best_tiles(self, estimates):
+    num_tiled = len(estimates)
+    tile_sizes_t = POINTER(c_int64) * self.dop
     self.tile_sizes = tile_sizes_t()
-    single_tile_sizes_t = c_int * num_tiled
+    single_tile_sizes_t = c_int64 * num_tiled
     step = 4
 
     def get_candidates(best_tile_sizes, step):
@@ -200,20 +219,20 @@ class Runtime():
     def set_task(candidates, best_tile_sizes):
       if len(candidates) < self.dop:
         for i in range(len(candidates)):
-          self.tile_sizes[i] = cast(candidates[i], POINTER(c_int))
+          self.tile_sizes[i] = cast(candidates[i], POINTER(c_int64))
         for i in range(len(candidates), self.dop):
-          self.tile_sizes[i] = cast(best_tile_sizes, POINTER(c_int))
+          self.tile_sizes[i] = cast(best_tile_sizes, POINTER(c_int64))
         return []
       else:
         for i in range(self.dop):
-          self.tile_sizes[i] = cast(candidates.pop(), POINTER(c_int))
+          self.tile_sizes[i] = cast(candidates.pop(), POINTER(c_int64))
         return candidates
 
     # Start off a job using the WS estimator's initial tile settings
     best_tile_sizes = single_tile_sizes_t()
     for i in range(num_tiled):
-      best_tile_sizes[i] = 44 # Hand calculated best for mm
-    self.task_size = 44
+      best_tile_sizes[i] = estimates[i]
+    self.task_size = estimates[0]
     candidates = get_candidates(best_tile_sizes, step)
     candidates = set_task(candidates, best_tile_sizes)
 
@@ -262,6 +281,8 @@ class Runtime():
       time.sleep(self.sleep_time)
       pct_done = self.get_percentage_done()
     if not self.job_finished():
+      ts = [self.tile_sizes[0][i] for i in range(num_tiled)]
+      print "final tile sizes:", ts
       self.wait_for_job()
 
   def genetic_find_best_tiles(self, tiled_loop_iters, tiled_loop_parents):
