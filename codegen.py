@@ -286,6 +286,28 @@ class Codegen(object):
       return syntax_helpers.const_bool(False)
     return self.prim(prims.not_equal, [x,y], name)
 
+  def min(self, x, y, name = None):
+    assert x.type == y.type, \
+        "Type mismatch between %s and %s" % (x, y)
+    if name is None:
+      name = "min_temp"
+    result = self.fresh_var(x.type, name)
+    cond = self.lte(x, y)
+    merge = {result.name:(x,y)}
+    self.blocks += syntax.If(cond, [], [], merge)
+    return result 
+
+  def max(self, x, y, name = None):
+    assert x.type == y.type, \
+        "Type mismatch between %s and %s" % (x, y)
+    if name is None:
+      name = "min_temp"
+    result = self.fresh_var(x.type, name)
+    cond = self.gte(x, y)
+    merge = {result.name:(x,y)}
+    self.blocks += syntax.If(cond, [], [], merge)
+    return result 
+
   def attr(self, obj, field, name = None):
     if name is None:
       name = field

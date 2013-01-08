@@ -1,9 +1,11 @@
 import array_type
-from core_types import Int64
 import syntax
 import syntax_helpers
-from transform import Transform
 import tuple_type
+
+from core_types import Int64
+from syntax_helpers import zero_i64, one_i64
+from transform import Transform
 
 class LowerTiledAdverbs(Transform):
   default_reg_tile_size = 4
@@ -97,6 +99,25 @@ class LowerTiledAdverbs(Transform):
     array_result = self._create_output_array(inner_fn, output_args, [],
                                              "array_result")
 
+    
+    i = self.fresh_var(niters.type, "i")
+    start = zero_i64 
+    stop = niters 
+    
+    self.blocks.push()
+    slice_stop = self.add(i, tile_size, "slice_stop")
+    slice_stop_min = self.min(slice_stop, niters, "slice_stop_min")
+    # Take care of stragglers via checking bound every iteration.
+    
+    tile_bounds = syntax.Slice(i, slice_stop_min, type=slice_t)
+
+    
+    
+    
+    
+    
+    
+    
     # Loop over the remaining tiles.
     i, i_after, merge = self.loop_counter("i")
     cond = self.lt(i, niters)
@@ -106,10 +127,10 @@ class LowerTiledAdverbs(Transform):
     next_bound = self.add(i, tile_size, "next_bound")
     tile_cond = self.lte(next_bound, niters)
     tile_merge = {i_after.name:(next_bound, niters)}
+    
+    
     self.blocks += syntax.If(tile_cond, [], [], tile_merge)
-
-    tile_bounds = syntax.Slice(i, i_after, syntax_helpers.one(Int64),
-                               type=slice_t)
+    tile_bounds = syntax.Slice(i, i_after, one_i64, type=slice_t)
 
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg, axis in zip(args, axes)]

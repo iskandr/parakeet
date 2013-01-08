@@ -80,7 +80,10 @@ class Fusion(Transform):
             prev_adverb = self.adverb_bindings[arg_name]
             if prev_adverb.__class__ is Map and \
                rhs.axis == prev_adverb.axis and \
-               inline.can_inline(prev_adverb.fn) and inline.can_inline(rhs.fn):
+               prev_adverb.fn.__class__ is TypedFn and \
+               rhs.fn.__class__ is TypedFn and \
+               inline.can_inline(prev_adverb.fn) and \
+               inline.can_inline(rhs.fn):
               const_args = [None if arg.__class__ is Var else arg
                             for arg in args]
               rhs.fn = fuse(prev_adverb.fn, rhs.fn, const_args)

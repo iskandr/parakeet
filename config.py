@@ -72,10 +72,10 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
-opt_reg_tile = True
+opt_reg_tile = False

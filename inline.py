@@ -112,10 +112,13 @@ class Inliner(Transform):
 
   def transform_Call(self, expr):
     target = self.transform_expr(expr.fn)
+    closure_args = self.closure_elts(target)
+    target = self.get_fn(target)
     if target.__class__ is TypedFn and can_inline(target):
       self.count += 1
       curr_block = self.blocks.current()
-      result_var = do_inline(target, expr.args, self.type_env, curr_block)
+      result_var = do_inline(target, closure_args + expr.args, 
+                             self.type_env, curr_block)
       return result_var
     else:
       return expr

@@ -1,10 +1,12 @@
 import numpy as np
 import parakeet
 
+parakeet.config.call_from_python_in_parallel = False 
+
 py_reduce = reduce
 py_sum = sum
 
-from parakeet import  sum
+from parakeet import  sum, reduce, each 
 from prims import add
 from testing_helpers import eq, run_local_tests
 
@@ -20,7 +22,8 @@ def argmin((curmin, curminidx), (val, idx)):
   else:
     return (curmin, curminidx)
 
-inf = float("inf")
+
+inf = np.inf 
 def py_minidx(C, idxs, x):
   def run_sqr_dist(c):
     return sqr_dist(c, x)
@@ -32,16 +35,10 @@ def py_calc_centroid(X, a, i):
   return np.mean(X[a == i], axis=0)
 
 def calc_centroid(X, a, i):
-  cur_members = X[a == i]
-  def zero(x):
-    return 0.0
-  zeros = each(zero, X[0])
-  s = reduce(add, cur_members, init=zeros)
-  def d(s):
-    return s / cur_members.shape[0]
-  return each(d, s)
+  subset = X[a==i]
+  return reduce(add, subset) / subset.shape[0]
+  
 
-from parakeet import each, reduce
 
 def parakeet_zip(xs, ys):
   def make_pair(x, y):
@@ -65,24 +62,21 @@ def par_dists(C, x):
     return sqr_dist(c, x)
   return each(run_sqr_dist, C)
 
-def par_kmeans(X, assign, k):
-  idxs = np.arange(k)
+def par_kmeans(X, assign, k, max_iters = 100):
+  centroid_indices = np.arange(k)
   def run_calc_centroid(i):
     return calc_centroid(X, assign, i)
-
-  C = parakeet.each(run_calc_centroid, idxs)
-  # C = np.array(map(run_calc_centroid, idxs))
-  converged = False
-  j = 0
-  while not converged and j < 100:
+  C = parakeet.each(run_calc_centroid, 
+                    centroid_indices)
+  for iter_num in xrange(max_iters):
     lastAssign = assign
-    def run_minidx(x):
-      return par_minidx(C, idxs, x)
+    def run_minidx(i):
+      return par_minidx(C, centroid_indices, i)
     assign = parakeet.each(run_minidx, X)
-    converged = np.all(assign == lastAssign)
-    #C = parakeet.each(run_calc_centroid, idxs)
-    C = np.array(map(run_calc_centroid, idxs))
-    j = j + 1
+    if np.all(assign == lastAssign):
+      break
+    C = parakeet.each(run_calc_centroid,
+                      centroid_indices)
   return C, assign
 
 def kmeans(X, assign, k):

@@ -303,36 +303,47 @@ class Compiler(object):
     cond = self.compile_expr(stmt.cond, builder)
     cond = llvm_convert.to_bit(cond, builder)
 
-    # compile the two possible branches as distinct basic blocks
-    # and then wire together the control flow with branches
-    true_bb, true_builder = self.new_block("if_true")
-    after_true, true_always_returns = \
+    if len(stmt.true) == 0 and len(stmt.false) == 0:
+      # if nothing happens in the loop bodies, just 
+      # emit select instructions 
+      for (name, (true_expr, false_expr)) in stmt.merge.iteritems():
+        ref = self.vars[name]
+        self.initialized.add(name)
+        true_val = self.compile_expr(true_expr, builder)
+        false_val = self.compile_expr(false_expr, builder)
+        select_val = builder.select(cond, true_val, false_val)
+        builder.store(select_val, ref)
+      return builder, False 
+    else:
+      # compile the two possible branches as distinct basic blocks
+      # and then wire together the control flow with branches
+      true_bb, true_builder = self.new_block("if_true")
+      after_true, true_always_returns = \
         self.compile_block(stmt.true, true_builder)
 
-    false_bb, false_builder = self.new_block("if_false")
-    after_false, false_always_returns = \
-        self.compile_block(stmt.false, false_builder)
+      false_bb, false_builder = self.new_block("if_false")
+      after_false, false_always_returns = \
+          self.compile_block(stmt.false, false_builder)
 
-    builder.cbranch(cond, true_bb, false_bb)
+      builder.cbranch(cond, true_bb, false_bb)
 
-    # compile phi nodes as assignments and then branch
-    # to the continuation block
-    self.compile_merge_left(stmt.merge, after_true)
-    self.compile_merge_right(stmt.merge, after_false)
+      # compile phi nodes as assignments and then branch
+      # to the continuation block
+      self.compile_merge_left(stmt.merge, after_true)
+      self.compile_merge_right(stmt.merge, after_false)
 
-    # if both branches return then there is no point
-    # making a new block for more code
-    # did both branches end in a return?
-    both_always_return = true_always_returns and false_always_returns
-    if both_always_return:
-      return None, True
-    else:
+      # if both branches return then there is no point
+      # making a new block for more code
+      # did both branches end in a return?
+      both_always_return = true_always_returns and false_always_returns
+      if both_always_return:
+        return None, True
       after_bb, after_builder = self.new_block("if_after")
       if not true_always_returns:
         after_true.branch(after_bb)
       if not false_always_returns:
         after_false.branch(after_bb)
-    return after_builder, False
+      return after_builder, False
 
   def compile_stmt(self, stmt, builder):
     """
@@ -359,9 +370,10 @@ class Compiler(object):
 
 compiled_functions = {}
 def compile_fn(fundef):
-
+  
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
+  print "COMPILING", fundef.name 
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
 
