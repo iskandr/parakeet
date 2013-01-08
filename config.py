@@ -13,10 +13,10 @@ print_specialized_function = False
 print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False # ['LoopUnrolling'] 
+print_functions_before_transforms = False # 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False # ['LoopUnrolling'] # ['LowerTiledAdverbs'] # ['LoopUnrolling']
+print_functions_after_transforms = False # ['LoopUnrolling'] 
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -78,7 +78,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
-opt_reg_tile = False
+opt_reg_tile = True

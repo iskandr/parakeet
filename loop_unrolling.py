@@ -106,11 +106,14 @@ class LoopUnrolling(Transform):
     if self.unroll_factor == 1:
       return stmt  
     
-    assert stmt.step.__class__ is Const and stmt.step.value > 0, \
-        "Downward loops not yet supported"
+    if stmt.step.__class__ is Const:
+      assert stmt.step.value > 0, "Downward loops not yet supported"
     
-    if not simple_loop_body(stmt.body) or len(stmt.body) > 20:
+    if not simple_loop_body(stmt.body):
       return Transform.transform_ForLoop(self, stmt)
+    elif len(stmt.body) > 30:
+      return stmt 
+      
    
     counter_type = stmt.var.type
     unroll_value = syntax_helpers.const_int(self.unroll_factor, counter_type)

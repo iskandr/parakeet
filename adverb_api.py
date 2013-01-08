@@ -145,7 +145,6 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        type_env = type_env)
     lowered = lowering(parallel_wrapper)
     _par_wrapper_cache[key] = (lowered, num_tiles)
-
     return lowered, num_tiles
 
 def prepare_adverb_args(python_fn, args, kwargs):

@@ -114,6 +114,7 @@ class Verify(SyntaxVisitor):
     assert stmt.stop.type == stmt.var.type
     self.visit_expr(stmt.stop)
     self.visit_block(stmt.body)
+    
     assert stmt.step.type == stmt.var.type
     self.visit_expr(stmt.step)
     self.visit_merge_loop_repeat(stmt.merge)

@@ -76,7 +76,7 @@ class LowerTiledAdverbs(Transform):
     # Create the tile size variable and find the number of tiles
     if expr.fixed_tile_size:
       self.fixed_idx += 1
-      tile_size = self.fixed_tile_sizes[self.fixed_idx]
+      tile_size = syntax_helpers.const(self.fixed_tile_sizes[self.fixed_idx])
     else:
       self.tiling = True
       self.fn.has_tiles = True
@@ -127,6 +127,7 @@ class LowerTiledAdverbs(Transform):
               self.type_env, 
               body, 
               result_var = output_region)
+    assert isinstance(step, syntax.Expr)
     self.blocks += syntax.ForLoop(i, start, stop, step, body, {})
     return array_result
 
@@ -140,7 +141,7 @@ class LowerTiledAdverbs(Transform):
 
     if expr.fixed_tile_size:
       self.fixed_idx += 1
-      tile_size = self.fixed_tile_sizes[self.fixed_idx]
+      tile_size = syntax_helpers.const(self.fixed_tile_sizes[self.fixed_idx])
     else:
       self.tiling = True
       self.fn.has_tiles = True
@@ -226,13 +227,13 @@ class LowerTiledAdverbs(Transform):
                 closure_args + [result, new_acc], 
                 self.type_env, loop_body, 
                 result_var = self.index(result, outidx, temp = False))
-      
+    assert isinstance(step, syntax.Expr), "%s not an expr" % step 
     self.blocks += syntax.ForLoop(i, start, stop, step, loop_body, merge)
 
     return result
 
   def post_apply(self, fn):
-    print fn 
+
     if self.tiling:
       fn.arg_names.append(self.tile_sizes_param.name)
       fn.input_types += (self.tile_sizes_param.type,)
