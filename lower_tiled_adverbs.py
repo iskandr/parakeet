@@ -15,8 +15,6 @@ class LowerTiledAdverbs(Transform):
     self.tiling = False
     self.tile_sizes_param = None
     self.fixed_tile_sizes = None
-    self.dl_tile_estimates = []
-    self.ml_tile_estimates = []
 
     # For now, we'll assume that no closure variables have the same name.
     self.closure_vars = {}

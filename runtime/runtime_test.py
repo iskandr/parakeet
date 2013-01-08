@@ -36,8 +36,8 @@ for i in range(8):
 num_tiles = 3
 tile_sizes_t = c_int64 * num_tiles
 tile_sizes = tile_sizes_t()
-tile_sizes[0] = 40
-tile_sizes[1] = 50
+tile_sizes[0] = 62
+tile_sizes[1] = 1000
 tile_sizes[2] = 200
 
 r = runtime.Runtime()
@@ -45,7 +45,7 @@ print "Launching parallel job"
 start = time.time()
 #r.run_job(libVM, cast(args, c_void_p), m, [n, k], [None, None])
 #r.run_untiled_job(libVM.vm3, cast(args, c_void_p), m)
-r.run_job_with_fixed_tiles(libVM.vm_untiled, cast(args, c_void_p), m,
+r.run_job_with_fixed_tiles(libVM.vm_a4_b4_k0, cast(args, c_void_p), m,
                            tile_sizes)
 stop = time.time()
 r.cleanup()

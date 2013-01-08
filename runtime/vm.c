@@ -765,7 +765,7 @@ void vm_a2_b3_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   }
 }
 
-void vm_a2_b4_k0(int start, int end, void *args, int *tile_sizes) {
+void vm_a2_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
   double *A = my_args->a;
   double *B = my_args->b;
@@ -773,40 +773,40 @@ void vm_a2_b4_k0(int start, int end, void *args, int *tile_sizes) {
   int m = my_args->m;
   int n = my_args->n;
   int kLen = my_args->k;
-  int aOff, bOff, oOff;
+  int64_t aOff, bOff, oOff;
 
-  int l1bLen = tile_sizes[0];
-  int l1cLen = tile_sizes[1];
+  int64_t l1bLen = tile_sizes[0];
+  int64_t l1cLen = tile_sizes[1];
 
   // A L1 tile is implicit as the start/end of the chunk.
-  int j;
+  int64_t j;
   for (j = 0; j < n; j += l1bLen) {
-    int j2End = min(j + l1bLen, n);
+    int64_t j2End = min(j + l1bLen, n);
     double *Btile = B + j*kLen;
-    int it;
+    int64_t it;
     for (it = start; it < end; ++it) {
       double *Otile = O + it*n;
-      int jt;
+      int64_t jt;
       for (jt = j; jt < j2End; ++jt) {
         Otile[jt] = 0.0;
       }
     }
-    int k;
+    int64_t k;
     for (k = 0; k < kLen; k += l1cLen) {
-      int k3End = min(k + l1cLen, kLen);
-      int i2;
+      int64_t k3End = min(k + l1cLen, kLen);
+      int64_t i2;
       // A's reg tile size set to 2.
       for (i2 = start; i2 < end - 1; i2 += 2) {
         double *Arow = A + i2*kLen;
         double *Orow = O + i2*n;
-        int j2;
+        int64_t j2;
         // B's reg tile size set to 3.
         for (j2 = j; j2 < j2End - 3; j2 += 4) {
           double *Brow = B + j2*kLen;
           double *Ocol = Orow + j2;
           double c0, c1, c2, c3, c4, c5, c6, c7;
           c0 = c1 = c2 = c3 = c4 = c5 = c6 = c7 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double a1 = Arow[kLen + k3];
@@ -838,7 +838,7 @@ void vm_a2_b4_k0(int start, int end, void *args, int *tile_sizes) {
           double *Ocol = Orow + j2;
           double c0, c1;
           c0 = c1 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double a1 = Arow[kLen + k3];
@@ -853,14 +853,14 @@ void vm_a2_b4_k0(int start, int end, void *args, int *tile_sizes) {
       for (; i2 < end; ++i2) {
         double *Arow = A + i2*kLen;
         double *Orow = O + i2*n;
-        int j2;
+        int64_t j2;
         // B's reg tile size set to 4.
         for (j2 = j; j2 < j2End - 3; j2 += 4) {
           double *Brow = B + j2*kLen;
           double *Ocol = Orow + j2;
           double c0, c1, c2, c3;
           c0 = c1 = c2 = c3 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double b0 = Brow[k3];
@@ -883,7 +883,7 @@ void vm_a2_b4_k0(int start, int end, void *args, int *tile_sizes) {
           double *Ocol = Orow + j2;
           double c0;
           c0 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double b0 = Brow[k3];
@@ -896,7 +896,7 @@ void vm_a2_b4_k0(int start, int end, void *args, int *tile_sizes) {
   }
 }
 
-void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
+void vm_a4_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
   double *A = my_args->a;
   double *B = my_args->b;
@@ -904,33 +904,190 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
   int m = my_args->m;
   int n = my_args->n;
   int kLen = my_args->k;
-  int aOff, bOff, oOff;
+  int64_t aOff, bOff, oOff;
 
-  int l1bLen = tile_sizes[0];
-  int l1cLen = tile_sizes[1];
+  int64_t l1bLen = tile_sizes[0];
+  int64_t l1cLen = tile_sizes[1];
 
   // A L1 tile is implicit as the start/end of the chunk.
-  int j;
+  int64_t j;
   for (j = 0; j < n; j += l1bLen) {
-    int j2End = min(j + l1bLen, n);
+    int64_t j2End = min(j + l1bLen, n);
     double *Btile = B + j*kLen;
-    int it;
+    int64_t it;
     for (it = start; it < end; ++it) {
       double *Otile = O + it*n;
-      int jt;
+      int64_t jt;
       for (jt = j; jt < j2End; ++jt) {
         Otile[jt] = 0.0;
       }
     }
-    int k;
+    int64_t k;
     for (k = 0; k < kLen; k += l1cLen) {
-      int k3End = min(k + l1cLen, kLen);
-      int i2;
+      int64_t k3End = min(k + l1cLen, kLen);
+      int64_t i2;
+      // A's reg tile size set to 4.
+      for (i2 = start; i2 < end - 3; i2 += 4) {
+        double *Arow = A + i2*kLen;
+        double *Orow = O + i2*n;
+        int64_t j2;
+        // B's reg tile size set to 4.
+        for (j2 = j; j2 < j2End - 3; j2 += 4) {
+          double *Brow = B + j2*kLen;
+          double *Ocol = Orow + j2;
+          double c0, c1, c2, c3, c4, c5, c6, c7;
+          double c8, c9, c10, c11, c12, c13, c14, c15;
+          c0 = c1 = c2 = c3 = c4 = c5 = c6 = c7 = 0.0;
+          c8 = c9 = c10 = c11 = c12 = c13 = c14 = c15 = 0.0;
+          int64_t k3;
+          for (k3 = k; k3 < k3End; ++k3) {
+            double a0 = Arow[k3];
+            double a1 = Arow[kLen + k3];
+            double a2 = Arow[2*kLen + k3];
+            double a3 = Arow[3*kLen + k3];
+            double b0 = Brow[k3];
+            double b1 = Brow[kLen + k3];
+            double b2 = Brow[2*kLen + k3];
+            double b3 = Brow[3*kLen + k3];
+            c0  += (a0 * b0);
+            c1  += (a0 * b1);
+            c2  += (a0 * b2);
+            c3  += (a0 * b3);
+            c4  += (a1 * b0);
+            c5  += (a1 * b1);
+            c6  += (a1 * b2);
+            c7  += (a1 * b3);
+            c8  += (a2 * b0);
+            c9  += (a2 * b1);
+            c10 += (a2 * b2);
+            c11 += (a2 * b3);
+            c12 += (a3 * b0);
+            c13 += (a3 * b1);
+            c14 += (a3 * b2);
+            c15 += (a3 * b3);
+          }
+          Ocol[0*n + 0] += c0;
+          Ocol[0*n + 1] += c1;
+          Ocol[0*n + 2] += c2;
+          Ocol[0*n + 3] += c3;
+          Ocol[1*n + 0] += c4;
+          Ocol[1*n + 1] += c5;
+          Ocol[1*n + 2] += c6;
+          Ocol[1*n + 3] += c7;
+          Ocol[2*n + 0] += c8;
+          Ocol[2*n + 1] += c9;
+          Ocol[2*n + 2] += c10;
+          Ocol[2*n + 3] += c11;
+          Ocol[3*n + 0] += c12;
+          Ocol[3*n + 1] += c13;
+          Ocol[3*n + 2] += c14;
+          Ocol[3*n + 3] += c15;
+        }
+        // Cleanup stragglers of j2 register tile
+        for (; j2 < j2End; ++j2) {
+          double *Brow = B + j2*kLen;
+          double *Ocol = Orow + j2;
+          double c0, c1, c2, c3;
+          c0 = c1 = c2 = c3 = 0.0;
+          int64_t k3;
+          for (k3 = k; k3 < k3End; ++k3) {
+            double a0 = Arow[k3];
+            double a1 = Arow[kLen + k3];
+            double a2 = Arow[2*kLen + k3];
+            double a3 = Arow[3*kLen + k3];
+            double b0 = Brow[k3];
+            c0 += a0 * b0;
+            c1 += a1 * b0;
+            c2 += a2 * b0;
+            c3 += a3 * b0;
+          }
+          Ocol[0*n + 0] += c0;
+          Ocol[1*n + 0] += c1;
+          Ocol[2*n + 0] += c1;
+          Ocol[3*n + 0] += c1;
+        }
+      }
+      for (; i2 < end; ++i2) {
+        double *Arow = A + i2*kLen;
+        double *Orow = O + i2*n;
+        int64_t j2;
+        // B's reg tile size set to 4.
+        for (j2 = j; j2 < j2End - 3; j2 += 4) {
+          double *Brow = B + j2*kLen;
+          double *Ocol = Orow + j2;
+          double c0, c1, c2, c3;
+          c0 = c1 = c2 = c3 = 0.0;
+          int64_t k3;
+          for (k3 = k; k3 < k3End; ++k3) {
+            double a0 = Arow[k3];
+            double b0 = Brow[k3];
+            double b1 = Brow[kLen + k3];
+            double b2 = Brow[2*kLen + k3];
+            double b3 = Brow[3*kLen + k3];
+            c0 += (a0 * b0);
+            c1 += (a0 * b1);
+            c2 += (a0 * b2);
+            c3 += (a0 * b3);
+          }
+          Ocol[0*n + 0] += c0;
+          Ocol[0*n + 1] += c1;
+          Ocol[0*n + 2] += c2;
+          Ocol[0*n + 3] += c3;
+        }
+        // Cleanup stragglers of j2 register tile
+        for (; j2 < j2End; ++j2) {
+          double *Brow = B + j2*kLen;
+          double *Ocol = Orow + j2;
+          double c0;
+          c0 = 0.0;
+          int64_t k3;
+          for (k3 = k; k3 < k3End; ++k3) {
+            double a0 = Arow[k3];
+            double b0 = Brow[k3];
+            c0 += a0 * b0;
+          }
+          Ocol[0*n + 0] += c0;
+        }
+      }
+    }
+  }
+}
+
+void vm_a2_b6_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
+  vm_args_t *my_args = (vm_args_t*)args;
+  double *A = my_args->a;
+  double *B = my_args->b;
+  double *O = my_args->out;
+  int m = my_args->m;
+  int n = my_args->n;
+  int kLen = my_args->k;
+  int64_t aOff, bOff, oOff;
+
+  int64_t l1bLen = tile_sizes[0];
+  int64_t l1cLen = tile_sizes[1];
+
+  // A L1 tile is implicit as the start/end of the chunk.
+  int64_t j;
+  for (j = 0; j < n; j += l1bLen) {
+    int64_t j2End = min(j + l1bLen, n);
+    double *Btile = B + j*kLen;
+    int64_t it;
+    for (it = start; it < end; ++it) {
+      double *Otile = O + it*n;
+      int64_t jt;
+      for (jt = j; jt < j2End; ++jt) {
+        Otile[jt] = 0.0;
+      }
+    }
+    int64_t k;
+    for (k = 0; k < kLen; k += l1cLen) {
+      int64_t k3End = min(k + l1cLen, kLen);
+      int64_t i2;
       // A's reg tile size set to 2.
       for (i2 = start; i2 < end; i2 += 2) {
         double *Arow = A + i2*kLen;
         double *Orow = O + i2*n;
-        int j2;
+        int64_t j2;
         // B's reg tile size set to 6.
         for (j2 = j; j2 < j2End; j2 += 6) {
           double *Brow = B + j2*kLen;
@@ -939,7 +1096,7 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
           double c6, c7, c8, c9, c10, c11;
           c0 = c1 = c2 = c3 = c4 = c5 = 0.0;
           c6 = c7 = c8 = c9 = c10 = c11 = 0.0;
-          int k3;
+          int64_t k3;
           for (k3 = k; k3 < k3End; ++k3) {
             double a0 = Arow[k3];
             double a1 = Arow[kLen + k3];
@@ -982,7 +1139,7 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
             double *Ocol = Orow + j2;
             double c0, c1;
             c0 = c1 = 0.0;
-            int k3;
+            int64_t k3;
             for (k3 = k; k3 < k3End; ++k3) {
               double a0 = Arow[k3];
               double a1 = Arow[kLen + k3];
@@ -1000,14 +1157,14 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
         for (i2 = i2 - 2; i2 < end; ++i2) {
           double *Arow = A + i2*kLen;
           double *Orow = O + i2*n;
-          int j2;
+          int64_t j2;
           // B's reg tile size set to 6.
           for (j2 = j; j2 < j2End; j2 += 6) {
             double *Brow = B + j2*kLen;
             double *Ocol = Orow + j2;
             double c0, c1, c2, c3, c4, c5;
             c0 = c1 = c2 = c3 = c4 = c5 = 0.0;
-            int k3;
+            int64_t k3;
             for (k3 = k; k3 < k3End; ++k3) {
               double a0 = Arow[k3];
               double b0 = Brow[k3];
@@ -1037,7 +1194,7 @@ void vm_a2_b6_k0(int start, int end, void *args, int *tile_sizes) {
               double *Ocol = Orow + j2;
               double c0, c1;
               c0 = c1 = 0.0;
-              int k3;
+              int64_t k3;
               for (k3 = k; k3 < k3End; ++k3) {
                 double a0 = Arow[k3];
                 double a1 = Arow[kLen + k3];

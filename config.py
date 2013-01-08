@@ -10,10 +10,10 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False # ['LoopUnrolling'] 
+print_functions_before_transforms = False # ['LoopUnrolling']
 
 # show the function produced by each transformation?
 print_functions_after_transforms = False # ['LoopUnrolling']
