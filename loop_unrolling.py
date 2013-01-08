@@ -11,7 +11,6 @@ from syntax import Assign, ForLoop, While, If, Return
 from syntax import Const, Var, Tuple     
 from transform import Transform  
 
-
 def simple_loop_body(stmts):
   for stmt in stmts:
     if stmt.__class__ in (Return, While, ForLoop):
@@ -66,7 +65,6 @@ class CloneStmt(CloneFunction):
     for (new_name, (new_left, old_right)) in merge.items():
       merge[new_name] = (new_left, self.transform_expr(old_right))
     return merge 
-
   
   def transform_Assign(self, expr):
     for name in collect_binding_names(expr.lhs):
@@ -75,7 +73,6 @@ class CloneStmt(CloneFunction):
     new_rhs = self.transform_expr(expr.rhs)
 
     return Assign(new_lhs, new_rhs)
-    
   
   def transform_Var(self, expr):
     return self.rename_dict.get(expr.name, expr)
@@ -90,16 +87,11 @@ class CloneStmt(CloneFunction):
     new_body = self.transform_block(stmt.body)
     merge = self.transform_merge_after_loop(merge)
     return ForLoop(new_var, new_start, new_stop, new_step, new_body, merge)  
-    
-  
-  
 
 class LoopUnrolling(Transform):  
   def __init__(self, unroll_factor = 4):
     Transform.__init__(self)
     self.unroll_factor = unroll_factor 
-
-
 
   def transform_ForLoop(self, stmt):
     assert self.unroll_factor > 0
@@ -113,7 +105,6 @@ class LoopUnrolling(Transform):
       return Transform.transform_ForLoop(self, stmt)
     elif len(stmt.body) > 30:
       return stmt 
-      
    
     counter_type = stmt.var.type
     unroll_value = syntax_helpers.const_int(self.unroll_factor, counter_type)
@@ -167,4 +158,4 @@ class LoopUnrolling(Transform):
     stmt.merge = cleanup_merge 
     stmt.start = loop.stop 
     return stmt 
-    
+ 

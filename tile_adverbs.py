@@ -1,4 +1,5 @@
 import copy
+import math
 
 import adverbs
 import array_type
@@ -11,6 +12,11 @@ from collect_vars import collect_var_names as free_vars
 from core_types import Int32
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
+
+l1_line_size = 64
+l1_size = 16384 / l1_line_size
+l2_size = 131072 / l1_line_size
+el_size = 8
 
 #### Medium-Sized Whale
 
@@ -99,7 +105,8 @@ class TileAdverbs(Transform):
     self.expansions = {}
     self.exp_stack = []
     self.type_env_stack = []
-    self.register_tiles_done = False
+    self.dl_tile_estimates = []
+    self.ml_tile_estimates = []
 
     # For now, we'll assume that no closure variables have the same name.
     self.closure_vars = {}
@@ -164,7 +171,7 @@ class TileAdverbs(Transform):
     return len(exps)
 
   def gen_unpack_tree(self, adverb_tree, depths, v_names, inner, type_env,
-                      reg_tiling = False, reg_tile_type_env = {}):
+                      reg_tiling = False):
     def order_args(depth):
       cur_depth_args = []
       other_args = []
@@ -231,7 +238,7 @@ class TileAdverbs(Transform):
         new_type_env = {}
         if reg_tiling:
           for arg in nested_arg_names:
-            new_type_env[arg] = reg_tile_type_env[arg]
+            new_type_env[arg] = inner.type_env[arg]
         else:
           for arg in nested_arg_names:
             exps = self.get_expansions(arg)
@@ -257,7 +264,7 @@ class TileAdverbs(Transform):
         closure_t = closure_type.make_closure_type(nested_fn,
                                                    fixed_arg_types)
         nested_closure = syntax.Closure(nested_fn, nested_fixed_args,
-                                        type=closure_t)
+                                        type = closure_t)
 
         # Make an adverb that wraps the nested fn
         new_adverb.fn = nested_closure
@@ -308,6 +315,59 @@ class TileAdverbs(Transform):
                                        old_combine.type_env)
     self.pop_exp()
     return new_combine
+
+  def estimate_tile_sizes(self, args, depths):
+    last_map = self.adverbs_visited[-1] is adverbs.Map
+    def estimate_dl(cache_size):
+      def estimate_dl_for_tile(tile_size):
+        num_maps = len(self.adverbs_visited) if last_map \
+                   else len(self.adverbs_visited) - 1
+        dl_estimate = tile_size ** num_maps
+        for arg in args:
+          dl_estimate += tile_size ** len(self.get_expansions(arg))
+        return math.ceil(dl_estimate / (l1_line_size / el_size))
+      t = 0
+      dl = -1
+      while dl < cache_size:
+        t += 1
+        dl = estimate_dl_for_tile(t)
+      t = t - 1 if t > 1 else t
+      return t
+    dl = estimate_dl(l1_size)
+    self.dl_tile_estimates = [dl] * self.num_tiles
+
+    max_depth = depths[-1]
+    def estimate_ml(tile_size):
+      ml = 0.0
+      for arg in args:
+        exps = self.get_expansions(arg)
+        if len(exps) > 0:
+          spatial = exps[-1]
+          temporal = max_depth
+          for e in reversed(exps):
+            if e < temporal:
+              break
+            temporal -= 1
+          ml = min(spatial, temporal)
+          for idx, e in enumerate(exps):
+            if e > ml:
+              break
+          num_ml = len(exps) - idx
+          if num_ml > 0:
+            ml += math.ceil((tile_size ** num_ml) / l1_line_size)
+          else:
+            ml += 1.0
+      if last_map:
+        ml += tile_size / l1_line_size
+      return ml
+    t = 0
+    ml = -1
+    while ml < l1_size:
+      t += 1
+      ml = estimate_ml(t)
+    t = t - 1 if t > 1 else t
+    dl2 = estimate_dl(l2_size)
+    self.ml_tile_estimates = [dl2] + ([t] * (self.num_tiles - 1))
 
   def transform_Assign(self, stmt):
     if isinstance(stmt.rhs, syntax.Closure):
@@ -392,13 +452,15 @@ class TileAdverbs(Transform):
                               type_env = self.pop_type_env())
       new_fn.has_tiles = True
     else:
+      # Estimate the tile sizes
+      self.estimate_tile_sizes(fn.arg_names, depths)
+
       new_fn = self.gen_unpack_tree(self.adverbs_visited, depths, fn.arg_names,
                                     fn.body, fn.type_env)
       if config.opt_reg_tile:
         adverb_tree = [get_tiled_version(adv) for adv in self.adverbs_visited]
         new_fn = self.gen_unpack_tree(adverb_tree, depths, fn.arg_names, new_fn,
-                                      fn.type_env, reg_tiling = True,
-                                      reg_tile_type_env = new_fn.type_env)
+                                      fn.type_env, reg_tiling = True)
 
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
@@ -445,13 +507,16 @@ class TileAdverbs(Transform):
       self.expansions[fn_arg] = new_expansions
 
     depths = self.get_depths_list(fn.arg_names)
+
+    # Estimate the tile sizes
+    self.estimate_tile_sizes(fn.arg_names, depths)
+
     new_fn = self.gen_unpack_tree(self.adverbs_visited, depths,
                                   fn.arg_names, fn.body, fn.type_env)
     if config.opt_reg_tile:
       adverb_tree = [get_tiled_version(adv) for adv in self.adverbs_visited]
       new_fn = self.gen_unpack_tree(adverb_tree, depths, fn.arg_names, new_fn,
-                                    fn.type_env, reg_tiling = True,
-                                    reg_tile_type_env = new_fn.type_env)
+                                    fn.type_env, reg_tiling = True)
 
     for arg, t in zip(expr.args, new_fn.input_types[len(closure_args):]):
       arg.type = t
