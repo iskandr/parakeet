@@ -92,7 +92,7 @@ class ShapeSemantics(adverb_semantics.AdverbSemantics):
     for (i, curr_idx) in enumerate(indices):
       old_dim = arr.dims[i]
       if curr_idx is None or \
-         (isinstance(curr_idx, Scalar) and curr_idx.value is None):
+         (isinstance(curr_idx, Const) and curr_idx.value is None):
         result_dims.append(old_dim)
       elif isinstance(curr_idx, Scalar):
         pass
