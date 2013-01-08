@@ -6,6 +6,7 @@ from fusion import Fusion
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_fusion import LoopFusion
+from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
@@ -14,7 +15,6 @@ from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
-from loop_unrolling import LoopUnrolling
 
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion')
 inline_opt = Phase(Inliner, config_param = 'opt_inline')
@@ -32,7 +32,8 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs],
                cleanup = [Simplify, DCE])
 
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
-licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm', memoize = False)
+licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
+             memoize = False)
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')  
 loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
@@ -47,8 +48,6 @@ def print_lowered(fn):
     print
     print repr(fn)
     print
-
-
 
 lowering = Phase([LowerIndexing, unroll, licm,  LowerStructs, licm,  copy_elim],
                  depends_on = loopify,
