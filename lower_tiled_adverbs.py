@@ -4,7 +4,7 @@ import syntax_helpers
 import tuple_type
 
 from core_types import Int64
-from inline import do_inline 
+from inline import do_inline
 from syntax_helpers import zero_i64, one_i64
 from transform import Transform
 
@@ -18,11 +18,6 @@ class LowerTiledAdverbs(Transform):
     self.tiling = False
     self.tile_sizes_param = None
     self.fixed_tile_sizes = None
-
-    self.dl_tile_estimates = []
-    self.ml_tile_estimates = []
-    
-    self.output_locations = []
 
     # For now, we'll assume that no closure variables have the same name.
     self.closure_vars = {}
@@ -82,7 +77,7 @@ class LowerTiledAdverbs(Transform):
       self.tiling = True
       self.fn.has_tiles = True
       self.nesting_idx += 1
-      tile_size = self.index(self.tile_sizes_param, self.nesting_idx, 
+      tile_size = self.index(self.tile_sizes_param, self.nesting_idx,
                              temp = True, name = "tilesize")
     fn = self.transform_expr(expr.fn)
 
@@ -97,25 +92,25 @@ class LowerTiledAdverbs(Transform):
     closure_args = [self.get_closure_arg(e)
                     for e in self.closure_elts(fn)]
     output_args = closure_args + args
-    
+
     if nested_has_tiles:
       n_tile_sizes = len(self.tile_sizes_param.type.elt_types)
       ones = self.tuple([syntax_helpers.one_i64] * n_tile_sizes)
-      output_args.append(ones)      
-    array_result = self._create_output_array(inner_fn, output_args, [], 
+      output_args.append(ones)
+    array_result = self._create_output_array(inner_fn, output_args, [],
                                              "array_result")
-    
+
     i = self.fresh_var(niters.type, "i")
-    start = zero_i64 
+    start = zero_i64
     step = tile_size
-    stop = niters 
-    
+    stop = niters
+
     self.blocks.push()
     slice_stop = self.add(i, tile_size, "slice_stop")
     slice_stop_min = self.min(slice_stop, niters, "slice_stop_min")
     # Take care of stragglers via checking bound every iteration.
-    
-    tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type=slice_t)
+
+    tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type = slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg, axis in zip(args, axes)]
     out_idx = self.nesting_idx if self.tiling else self.fixed_idx
@@ -123,10 +118,10 @@ class LowerTiledAdverbs(Transform):
     if nested_has_tiles:
       nested_args.append(self.tile_sizes_param)
     body = self.blocks.pop()
-    do_inline(inner_fn, 
-              closure_args + nested_args, 
-              self.type_env, 
-              body, 
+    do_inline(inner_fn,
+              closure_args + nested_args,
+              self.type_env,
+              body,
               result_var = output_region)
     assert isinstance(step, syntax.Expr)
     self.blocks += syntax.ForLoop(i, start, stop, step, body, {})
@@ -147,7 +142,7 @@ class LowerTiledAdverbs(Transform):
       self.tiling = True
       self.fn.has_tiles = True
       self.nesting_idx += 1
-      tile_size = self.index(self.tile_sizes_param, self.nesting_idx, 
+      tile_size = self.index(self.tile_sizes_param, self.nesting_idx,
                              temp = True, name = "tilesize")
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
@@ -164,7 +159,7 @@ class LowerTiledAdverbs(Transform):
     init = result
     rslt_t = result.type
     not_array = array_type.get_rank(rslt_t) == 0
-    
+
     if not_array:
       result_before = self.fresh_var(rslt_t, "result_before")
       init = result_before
@@ -175,27 +170,26 @@ class LowerTiledAdverbs(Transform):
         return syntax.Assign(cur, expr.init)
       else:
         j = self.fresh_i64("j")
-        start = zero_i64 
+        start = zero_i64
         stop = self.shape(cur, 0)
-        
+
         self.blocks.push()
         n = self.index_along_axis(cur, 0, j)
         self.blocks += init_unpack(i-1, n)
         body = self.blocks.pop()
-        
+
         return syntax.ForLoop(j, start, stop, one_i64, body, {})
     num_exps = array_type.get_rank(init.type) - \
                array_type.get_rank(expr.init.type)
     self.blocks += init_unpack(num_exps, init)
 
     # Loop over the remaining tiles.
-
     i = self.fresh_var(niters.type, "i")
-    start = zero_i64 
-    stop = niters 
-    step = tile_size 
+    start = zero_i64
+    stop = niters
+    step = tile_size
     merge = {}
-    
+
     if not_array:
       result_after = self.fresh_var(rslt_t, "result_after")
       merge[result.name] = (result_before, result_after)
@@ -208,33 +202,32 @@ class LowerTiledAdverbs(Transform):
     tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg, axis in zip(args, axes)]
-    
-    
+
+
     new_acc = self.fresh_var(inner_fn.return_type, "new_acc")
     map_call = syntax.Call(callable_fn, nested_args,
-                              type=inner_fn.return_type)
-    
+                           type = inner_fn.return_type)
+
     self.assign(new_acc, map_call)
-    
+
     loop_body = self.blocks.pop()
-    if not_array: 
-      do_inline(inner_combine, 
-                closure_args + [result, new_acc], 
-                self.type_env, loop_body, 
+    if not_array:
+      do_inline(inner_combine,
+                closure_args + [result, new_acc],
+                self.type_env, loop_body,
                 result_var = result_after)
     else:
       outidx = self.tuple([syntax_helpers.slice_none] * result.type.rank)
-      do_inline(inner_combine, 
-                closure_args + [result, new_acc], 
-                self.type_env, loop_body, 
+      do_inline(inner_combine,
+                closure_args + [result, new_acc],
+                self.type_env, loop_body,
                 result_var = self.index(result, outidx, temp = False))
-    assert isinstance(step, syntax.Expr), "%s not an expr" % step 
+    assert isinstance(step, syntax.Expr), "%s not an expr" % step
     self.blocks += syntax.ForLoop(i, start, stop, step, loop_body, merge)
 
     return result
 
   def post_apply(self, fn):
-
     if self.tiling:
       fn.arg_names.append(self.tile_sizes_param.name)
       fn.input_types += (self.tile_sizes_param.type,)

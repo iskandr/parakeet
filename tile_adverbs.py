@@ -548,6 +548,8 @@ class TileAdverbs(Transform):
   def post_apply(self, fn):
     fn.has_tiles = self.num_tiles > 0
     fn.num_tiles = self.num_tiles
+    fn.dl_tile_estimates = self.dl_tile_estimates
+    fn.ml_tile_estimates = self.ml_tile_estimates
     if config.print_tiled_adverbs:
       print
       print "DONE WITH TILING"
