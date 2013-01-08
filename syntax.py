@@ -279,7 +279,10 @@ class Slice(Expr):
   _members = ['start', 'stop', 'step']
 
   def __str__(self):
-    return "slice(%s,%s,%s)"  % (self.start, self.stop, self.step)
+    return "slice(%s, %s, %s)"  % \
+        (self.start.short_str(), 
+         self.stop.short_str(), 
+         self.step.short_str())
 
   def __repr__(self):
     return str(self)
