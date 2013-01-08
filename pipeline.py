@@ -35,11 +35,11 @@ copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')  
+unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
-                 depends_on = high_level_optimizations,  
-                 cleanup = [Simplify, DCE],
-                 copy = True)
+                depends_on = high_level_optimizations,
+                cleanup = [Simplify, DCE],
+                copy = True)
 
 def print_lowered(fn):
   if config.print_lowered_function:
@@ -60,7 +60,7 @@ def lower_tiled(fn, ignore_config = True):
   Tiling is awkward to stick into the transformation graph since it's
   non-idempotent and generates lots of previously unseen functions
   """
-  
+
   tiled = tiling.apply(fn, ignore_config = ignore_config)
   loopy = loopify.apply(tiled, run_dependencies = False)
   lowered = lowering.apply(loopy, run_dependencies = False)
