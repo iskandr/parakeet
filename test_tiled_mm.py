@@ -14,9 +14,9 @@ import syntax
 import syntax_helpers
 import testing_helpers
 
-x = 1000
-y = 1000
-k = 1000
+x = 500
+y = 500
+k = 500
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k)
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)
@@ -118,7 +118,7 @@ def test_par_mm():
   start = time.time()
   rslt = adverb_matmult(x2_array, y2_array)
   par_time = time.time() - start
-  
+
   start = time.time()
   nprslt = np.dot(x2_array, y2_array.T)
   np_time = time.time() - start

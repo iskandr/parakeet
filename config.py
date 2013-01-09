@@ -36,8 +36,8 @@ print_escape_analysis = False
 # how long did each transform take?
 print_transform_timings = False
 
-# print each transform's name when it runs 
-print_transform_names = False 
+# print each transform's name when it runs
+print_transform_names = False
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
@@ -55,7 +55,7 @@ opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 opt_loop_fusion = False
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 ######################################
 #           LLVM OPTIONS             #
@@ -81,5 +81,7 @@ call_from_python_in_parallel = True
 opt_tile = True
 
 # Add a level of tiling for registers
-opt_reg_tile = True
+opt_reg_tile = False
 
+# Perform auto-tuning search for best tile parameters
+opt_autotune_tile_sizes = False

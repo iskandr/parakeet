@@ -1,3 +1,4 @@
+import ctypes
 import numpy as np
 
 import adverbs
@@ -8,7 +9,6 @@ import array_type
 import config
 import core_types
 import closure_type
-import ctypes
 import llvm_backend
 import names
 import run_function
@@ -79,17 +79,17 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
     # arguments.
-    start_var = syntax.Var(names.fresh("start"), type=Int64)
-    stop_var = syntax.Var(names.fresh("stop"), type=Int64)
-    args_var = syntax.Var(names.fresh("args"), type=args_t)
+    start_var = syntax.Var(names.fresh("start"), type = Int64)
+    stop_var = syntax.Var(names.fresh("stop"), type = Int64)
+    args_var = syntax.Var(names.fresh("args"), type = args_t)
     tile_type = tuple_type.make_tuple_type([Int64 for _ in range(num_tiles)])
-    tile_sizes_var = syntax.Var(names.fresh("tile_sizes"), type=tile_type)
+    tile_sizes_var = syntax.Var(names.fresh("tile_sizes"), type = tile_type)
     inputs = [start_var, stop_var, args_var, tile_sizes_var]
 
     # Manually unpack the args into types Vars and slice into them.
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
-    arg_slice = \
-        syntax.Slice(start_var, stop_var, syntax_helpers.one_i64, type=slice_t)
+    arg_slice = syntax.Slice(start_var, stop_var, syntax_helpers.one_i64,
+                             type = slice_t)
     def slice_arg(arg, t):
       indices = [arg_slice]
       for _ in xrange(1, arg.type.rank):
@@ -101,10 +101,10 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     unpacked_args = []
     i = 0
     for t in nonlocal_types:
-      unpacked_args.append(syntax.Attribute(args_var, ("arg%d" % i), type=t))
+      unpacked_args.append(syntax.Attribute(args_var, ("arg%d" % i), type = t))
       i += 1
     for t in arg_types:
-      attr = syntax.Attribute(args_var, ("arg%d" % i), type=t)
+      attr = syntax.Attribute(args_var, ("arg%d" % i), type = t)
       if isinstance(t, array_type.ArrayT) and i not in closure_pos:
         # TODO: Handle axis.
         unpacked_args.append(slice_arg(attr, t))
@@ -118,13 +118,13 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
 
     # Make a typed closure that calls the payload function with the arg slices.
     closure_t = closure_type.make_closure_type(fn, [])
-    nested_closure = syntax.Closure(fn, [], type=closure_t)
+    nested_closure = syntax.Closure(fn, [], type = closure_t)
     return_t = fn.return_type
-    call = syntax.Call(nested_closure, unpacked_args, type=return_t)
-    
-    
+    call = syntax.Call(nested_closure, unpacked_args, type = return_t)
+
+
     output_name = names.fresh("output")
-    output_attr = syntax.Attribute(args_var, "output", type=return_t)
+    output_attr = syntax.Attribute(args_var, "output", type = return_t)
     output_var = syntax.Var(output_name, type = output_attr.type)
     output_slice = slice_arg(output_var, return_t)
     body = [syntax.Assign(output_var, output_attr),
@@ -144,8 +144,11 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        return_type = core_types.NoneType,
                        type_env = type_env)
     lowered = lowering(parallel_wrapper)
-    _par_wrapper_cache[key] = (lowered, num_tiles)
-    return lowered, num_tiles
+    lowered.num_tiles = num_tiles
+    lowered.dl_tile_estimates = fn.dl_tile_estimates
+    lowered.ml_tile_estimates = fn.ml_tile_estimates
+    _par_wrapper_cache[key] = lowered
+    return lowered
 
 def prepare_adverb_args(python_fn, args, kwargs):
   """
@@ -219,7 +222,7 @@ def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
   setattr(c_args, "output", gv_output)
   return output
 
-def exec_in_parallel(fn, args_repr, c_args, num_iters, num_tiles):
+def exec_in_parallel(fn, args_repr, c_args, num_iters):
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(fn)
 
   c_args_list = [c_args]
@@ -236,8 +239,15 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters, num_tiles):
     import time
     start = time.time()
 
-  # For now, don't autotune the tile params.
-  rt.run_job_with_dummy_tiles(wf_ptr, c_args_array, num_iters, num_tiles)
+  if config.opt_autotune_tile_sizes:
+    rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
+                        fn.dl_tile_estimates, fn.ml_tile_estimates)
+  else:
+    tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
+    tile_sizes = tile_sizes_t()
+    for i in range(len(fn.dl_tile_estimates)):
+      tile_sizes[i] = fn.ml_tile_estimates[i]
+    rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:
     t = time.time() - start
@@ -267,10 +277,10 @@ def par_each(fn, *args, **kwds):
   single_iter_rslt = run_function.run(fn, *[arg[0] for arg in args.positional])
   output = allocate_output((num_iters,), single_iter_rslt, c_args, return_t)
 
-  wf, num_tiles = gen_par_work_function(adverbs.Map, untyped,
-                                        nonlocals, nonlocal_types,
-                                        args_repr, arg_types, [])
-  exec_in_parallel(wf, args_repr, c_args, num_iters, num_tiles)
+  wf = gen_par_work_function(adverbs.Map, untyped,
+                             nonlocals, nonlocal_types,
+                             args_repr, arg_types, [])
+  exec_in_parallel(wf, args_repr, c_args, num_iters)
 
   return output
 
@@ -307,10 +317,10 @@ def par_allpairs(fn, x, y, **kwds):
   single_iter_rslt = run_function.run(fn, x[0], y[0])
   output = allocate_output((len(x), len(y)), single_iter_rslt, c_args, return_t)
 
-  wf, num_tiles = gen_par_work_function(adverbs.AllPairs, untyped,
-                                        nonlocals, nonlocal_types,
-                                        args_repr, arg_types, closure_pos)
-  exec_in_parallel(wf, args_repr, c_args, num_iters, num_tiles)
+  wf = gen_par_work_function(adverbs.AllPairs, untyped,
+                             nonlocals, nonlocal_types,
+                             args_repr, arg_types, closure_pos)
+  exec_in_parallel(wf, args_repr, c_args, num_iters)
 
   return output
 
@@ -322,9 +332,9 @@ def one_is_none(f, g):
   return int(f is None) + int(g is None) == 1
 
 def create_adverb_hook(adverb_class,
-                       map_fn_name=None,
-                       combine_fn_name=None,
-                       arg_names=None):
+                       map_fn_name = None,
+                       combine_fn_name = None,
+                       arg_names = None):
   assert one_is_none(map_fn_name, combine_fn_name), \
       "Invalid fn names: %s and %s" % (map_fn_name, combine_fn_name)
   if arg_names is None:

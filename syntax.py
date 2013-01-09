@@ -92,11 +92,11 @@ class ForLoop(Stmt):
 
   _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
 
-  def __str__(self):    
+  def __str__(self):
     s = "for %s in range(%s, %s, %s):" % \
-      (self.var, 
-       self.start.short_str(), 
-       self.stop.short_str(), 
+      (self.var,
+       self.start.short_str(),
+       self.stop.short_str(),
        self.step.short_str())
 
     if self.merge and len(self.merge) > 0:
@@ -115,7 +115,7 @@ class Expr(Node):
         for child in v:
           if isinstance(child, Expr):
             yield child
-  
+
   def short_str(self):
     return str(self)
 
@@ -124,10 +124,10 @@ class Const(Expr):
 
   def children(self):
     return (self.value,)
-  
+
   def short_str(self):
     return str(self.value)
-  
+
   def __repr__(self):
     if self.type and not isinstance(self.type, core_types.NoneT):
       return "%s : %s" % (self.value, self.type)
@@ -149,8 +149,8 @@ class Var(Expr):
   _members = ['name']
 
   def short_str(self):
-    return self.name 
-  
+    return self.name
+
   def __repr__(self):
     if hasattr(self, 'type'):
       return "%s : %s" % (self.name, self.type)
@@ -280,8 +280,8 @@ class Slice(Expr):
 
   def __str__(self):
     return "slice(%s, %s, %s)"  % \
-        (self.start.short_str(), 
-         self.stop.short_str(), 
+        (self.start.short_str(),
+         self.stop.short_str(),
          self.step.short_str())
 
   def __repr__(self):
@@ -308,7 +308,7 @@ class PrimCall(Expr):
       return str(arg)
     else:
       return "(%s)" % arg
-    
+
   def __repr__(self):
     if self.prim.symbol:
       if len(self.args) == 1:
@@ -502,7 +502,9 @@ class TypedFn(Expr):
               'copied_by',
               'version',
               'has_tiles',
-              'num_tiles']
+              'num_tiles',
+              'dl_tile_estimates',
+              'ml_tile_estimates']
 
   registry = {}
   max_version = {}
@@ -545,6 +547,10 @@ class TypedFn(Expr):
       self.has_tiles = False
     if self.num_tiles is None:
       self.num_tiles = 0
+    if self.dl_tile_estimates is None:
+      self.dl_tile_estimates = []
+    if self.ml_tile_estimates is None:
+      self.ml_tile_estimates = []
 
   def __repr__(self):
     arg_strings = []

@@ -26,13 +26,12 @@ class LowerTiledAdverbs(Transform):
     self.tiling = False
     self.tile_sizes_param = tile_sizes_param
     self.fixed_tile_sizes = fixed_tile_sizes
-    self.output_var = None 
+    self.output_var = None
     self.dl_tile_estimates = []
     self.ml_tile_estimates = []
     
-    self.output_var = None 
+    self.output_var = None
     self.preallocate_output = preallocate_output
-
 
     # For now, we'll assume that no closure variables have the same name.
     self.closure_vars = {}
@@ -128,7 +127,7 @@ class LowerTiledAdverbs(Transform):
       self.tiling = True
       self.fn.has_tiles = True
       self.nesting_idx += 1
-      tile_size = self.index(self.tile_sizes_param, self.nesting_idx, 
+      tile_size = self.index(self.tile_sizes_param, self.nesting_idx,
                              temp = True, name = "tilesize")
     
     untiled_inner_fn = self.get_fn(expr.fn)
@@ -160,16 +159,16 @@ class LowerTiledAdverbs(Transform):
            self.output_var.type.__class__ is ArrayT, \
            "Invalid output var %s : %s" % (self.output_var, self.output_var.type)    
     i = self.fresh_var(niters.type, "i")
-    start = zero_i64 
+    start = zero_i64
     step = tile_size
-    stop = niters 
-    
+    stop = niters
+
     self.blocks.push()
     slice_stop = self.add(i, tile_size, "slice_stop")
     slice_stop_min = self.min(slice_stop, niters, "slice_stop_min")
     # Take care of stragglers via checking bound every iteration.
-    
-    tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type=slice_t)
+
+    tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type = slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg, axis in zip(args, axes)]
     out_idx = self.nesting_idx if self.tiling else self.fixed_idx
@@ -179,10 +178,10 @@ class LowerTiledAdverbs(Transform):
     if nested_has_tiles:
       nested_args.append(self.tile_sizes_param)
     body = self.blocks.pop()
-    do_inline(tiled_inner_fn, 
+    do_inline(tiled_inner_fn,
               closure_args + nested_args, 
               self.type_env, 
-              body, 
+              body,
               output_region)
     assert isinstance(step, syntax.Expr)
     loop = syntax.ForLoop(i, start, stop, step, body, {})
@@ -213,7 +212,7 @@ class LowerTiledAdverbs(Transform):
       self.tiling = True
       self.fn.has_tiles = True
       self.nesting_idx += 1
-      tile_size = self.index(self.tile_sizes_param, self.nesting_idx, 
+      tile_size = self.index(self.tile_sizes_param, self.nesting_idx,
                              temp = True, name = "tilesize")
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
@@ -251,14 +250,14 @@ class LowerTiledAdverbs(Transform):
         return syntax.Assign(cur, expr.init)
       else:
         j = self.fresh_i64("j")
-        start = zero_i64 
+        start = zero_i64
         stop = self.shape(cur, 0)
-        
+
         self.blocks.push()
         n = self.index_along_axis(cur, 0, j)
         self.blocks += init_unpack(i-1, n)
         body = self.blocks.pop()
-        
+
         return syntax.ForLoop(j, start, stop, one_i64, body, {})
     num_exps = array_type.get_rank(init.type) - \
                array_type.get_rank(expr.init.type)
@@ -266,9 +265,9 @@ class LowerTiledAdverbs(Transform):
 
     # Loop over the remaining tiles.
     i = self.fresh_var(niters.type, "i")
-    start = zero_i64 
-    stop = niters 
-    step = tile_size 
+    start = zero_i64
+    stop = niters
+    step = tile_size
     merge = {}
     
     if not acc_is_array:
@@ -288,7 +287,7 @@ class LowerTiledAdverbs(Transform):
     map_call = syntax.Call(tiled_map_fn, nested_args, type=acc_type)
     
     self.assign(new_acc, map_call)
-    
+
     loop_body = self.blocks.pop()
     if acc_is_array: 
       outidx = self.tuple([syntax_helpers.slice_none] * result.type.rank)
@@ -307,4 +306,3 @@ class LowerTiledAdverbs(Transform):
     loop = syntax.ForLoop(i, start, stop, step, loop_body, merge)
     self.blocks.append(loop)
     return result
-
