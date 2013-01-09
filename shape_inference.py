@@ -443,7 +443,7 @@ class ShapeInference(SyntaxVisitor):
     for n,v in zip(fn.arg_names, input_values):
       self.value_env[n] = v
     self.visit_block(fn.body)
-    return self.value_env["$return"]
+    return self.value_env.get("$return", Const(None))
 
 _shape_cache = {}
 def call_shape_expr(typed_fn):

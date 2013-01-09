@@ -17,7 +17,6 @@ class LowerStructs(Transform):
   def transform_TypedFn(self, expr):
     import pipeline 
     return pipeline.lowering.apply(expr) 
-    
   
   def transform_ForLoop(self, stmt):
     start_var = self.assign_temp(stmt.start, stmt.var.name)
@@ -33,7 +32,7 @@ class LowerStructs(Transform):
     merge[loop_cond.name] = (start_cond, after_cond)
     merge[loop_var.name] = (start_var, after_var)
     new_body = self.blocks.pop()
-    return While(loop_cond, new_body, merge) 
+    return While(loop_cond, new_body, merge)   
   
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)

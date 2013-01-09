@@ -382,8 +382,17 @@ class Simplify(Transform):
           self.available_expressions[rhs] = lhs
     elif lhs_class is Tuple: 
       self.bind(lhs, rhs)
+    
+    # assigning x[i] = x[i] 
+    # does nothing 
     elif lhs_class is Index:
-      lhs = self.transform_lhs_Index(lhs)
+      if rhs_class is Index and \
+         lhs.value == rhs.value and \
+         lhs.index == rhs.index:
+        print "KILLING", stmt 
+        return None 
+      else:   
+        lhs = self.transform_lhs_Index(lhs)
     else:
       assert lhs_class is Attribute
       assert False, "Considering making attributes immutable" 
