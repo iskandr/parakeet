@@ -35,7 +35,7 @@ loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
 post_tiling = Phase([fusion_opt], copy = True)
-tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, copy_elim],
+tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs,  copy_elim],
                config_param = 'opt_tile',
                depends_on = high_level_optimizations,
                rename = True,
@@ -51,7 +51,7 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-lowering = Phase([LowerIndexing, unroll, LowerStructs, licm],
+lowering = Phase([LowerIndexing, licm, unroll, LowerStructs, licm],
                  depends_on = loopify,
                  copy = True,
                  run_after = print_lowered,

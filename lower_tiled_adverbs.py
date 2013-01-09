@@ -182,7 +182,7 @@ class LowerTiledAdverbs(Transform):
               closure_args + nested_args, 
               self.type_env, 
               body,
-              output_region)
+              result_var = None)
     assert isinstance(step, syntax.Expr)
     loop = syntax.ForLoop(i, start, stop, step, body, {})
     
@@ -295,7 +295,8 @@ class LowerTiledAdverbs(Transform):
       do_inline(tiled_combine, 
                 combine_closure_args + [result, new_acc, result_slice], 
                 self.type_env, 
-                loop_body)
+                loop_body, 
+                result_var = None)
     else:
       do_inline(tiled_combine,  
                 combine_closure_args + [result, new_acc], 
