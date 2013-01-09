@@ -84,4 +84,4 @@ opt_tile = True
 opt_reg_tile = False
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = False
+opt_autotune_tile_sizes = True

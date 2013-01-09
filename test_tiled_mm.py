@@ -14,9 +14,9 @@ import syntax
 import syntax_helpers
 import testing_helpers
 
-x = 3000
-y = 3000
-k = 3000
+x = 2000
+y = 2000
+k = 2000
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k)
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k)
 x_array_t = array_type.make_array_type(core_types.Int64, 1)

@@ -72,7 +72,7 @@ class Runtime():
     self.L1SIZE = 2**14
     self.L2SIZE = 2**17
     self.L3SIZE = 2**21
-    self.NUM_FP_REGS = 16
+    self.NUM_FP_REGS = 24
 
     self.cur_iter = 0
     self.time_per_calibration = 0.15
@@ -157,6 +157,7 @@ class Runtime():
       self.args = args
       self.num_iters = num_iters
 
+      avg_estimates = [(a+b)/2 for a,b in zip(dl_estimates, ml_estimates)]
       self.gradient_find_best_tiles(ml_estimates)
 
       self.free_job()
@@ -238,12 +239,12 @@ class Runtime():
 
     # Calibrate time to sleep between throughput measurements
     self.sleep_time = self.SLEEP_TIME
-    self.task_size = self.INITIAL_TASK_SIZE
+    self.task_size = 1 #self.INITIAL_TASK_SIZE
     self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
                                            self.dop, 1)
     self.launch_job()
     time.sleep(self.SLEEP_TIME)
-    while self.get_iters_done() < 2:
+    while self.get_iters_done() < 1:
       self.sleep_time += self.SLEEP_TIME
       time.sleep(self.SLEEP_TIME)
     time.sleep(self.sleep_time)
@@ -260,7 +261,7 @@ class Runtime():
           best_tile_sizes = self.tile_sizes[i]
       if len(candidates) == 0:
         if not changed:
-          if step > 1:
+          if False:
             print "Switching to step 1"
             step = 1
             candidates = get_candidates(best_tile_sizes, step)

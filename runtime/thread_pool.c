@@ -11,7 +11,7 @@
 
 static inline unsigned long long get_cpu_time();
 static inline int min(a, b) {
-  return a < b ? a : b;
+  return (a) < (b) ? (a) : (b);
 }
 
 typedef struct {

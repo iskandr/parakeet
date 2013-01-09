@@ -216,7 +216,7 @@ def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
 
 def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
   output_shape = adverb_shape + single_iter_rslt.shape
-  output = np.zeros(output_shape, dtype=array_type.elt_type(return_t).dtype)
+  output = np.zeros(output_shape, dtype = array_type.elt_type(return_t).dtype)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
   setattr(c_args, "output", gv_output)
@@ -232,7 +232,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
                    ctypes.sizeof(args_repr.ctypes_repr))
     c_args_list.append(c_args_new)
 
-  c_args_array = list_to_ctypes_array(c_args_list, pointers=True)
+  c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
   wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
   if config.print_parallel_exec_time:
@@ -245,8 +245,11 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
+    ts = [70, 50, 1000]
     for i in range(len(fn.dl_tile_estimates)):
-      tile_sizes[i] = fn.ml_tile_estimates[i]
+      #tile_sizes[i] = fn.ml_tile_estimates[i]
+      tile_sizes[i] = ts[i]
+    print fn.ml_tile_estimates
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:
