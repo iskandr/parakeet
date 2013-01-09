@@ -28,10 +28,21 @@ def replace_returns(stmts, output_var):
   """
   Change any returns at the outer scope into assignments to the output var
   """
-
-  for (i,stmt) in enumerate(stmts):
-    if stmt.__class__ is Return:
-      stmts[i] = syntax.Assign(output_var, stmt.value)
+  new_stmts = []
+  for stmt in stmts:
+    c = stmt.__class__  
+    if c is Return:
+      if output_var:
+        new_stmts.append(syntax.Assign(output_var, stmt.value))
+      continue 
+    elif c is If:
+      stmt.true = replace_returns(stmt.true, output_var)
+      stmt.false = replace_returns(stmt.false, output_var)
+    elif c in (ForLoop, While):
+      stmt.body = replace_returns(stmt.body, output_var)
+    
+    new_stmts.append(stmt)
+  return new_stmts 
 
 def can_inline_block(stmts, outer = False):
   for stmt in stmts:
@@ -57,8 +68,8 @@ def replace_return_with_var(body, type_env, return_type):
   result_name = names.fresh("result")
   type_env[result_name] = return_type
   result_var = Var(result_name, type = return_type)
-  replace_returns(body, result_var)
-  return result_var
+  new_body = replace_returns(body, result_var)
+  return result_var, new_body 
 
 def do_inline(src_fundef, args, dest_type_env, dest_block, result_var = None):
   arg_names = src_fundef.arg_names
@@ -78,6 +89,7 @@ def do_inline(src_fundef, args, dest_type_env, dest_block, result_var = None):
     new_var = Var(new_name, type = t)
     rename_dict[old_name] = new_var
     dest_type_env[new_name] = t
+    
     return new_var
 
   for (old_formal, actual) in zip(arg_names, args):
@@ -90,13 +102,13 @@ def do_inline(src_fundef, args, dest_type_env, dest_block, result_var = None):
   for old_name in src_fundef.type_env.iterkeys():
     if old_name not in arg_names:
       rename_var(old_name)
-
+  
   new_body = subst_stmt_list(src_fundef.body, rename_dict)
   if result_var is None: 
-    result_var = replace_return_with_var(new_body, dest_type_env,
-                                         src_fundef.return_type)
+    result_var, new_body = \
+      replace_return_with_var(new_body, dest_type_env, src_fundef.return_type)
   else:
-    replace_returns(new_body, result_var)
+    new_body = replace_returns(new_body, result_var)
   dest_block.extend(new_body)
   return result_var
 

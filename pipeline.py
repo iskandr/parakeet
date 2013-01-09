@@ -21,16 +21,6 @@ inline_opt = Phase(Inliner, config_param = 'opt_inline')
 high_level_optimizations = Phase([Simplify, inline_opt, fusion_opt],
                                  cleanup = [Simplify, DCE])
 
-mapify = Phase(MapifyAllPairs, copy = False)
-pre_tiling = Phase([mapify, fusion_opt], copy = True)
-post_tiling = Phase([fusion_opt], copy = True)
-tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs],
-               config_param = 'opt_tile',
-               depends_on = high_level_optimizations,
-               rename = True,
-               memoize = False,
-               cleanup = [Simplify, DCE])
-
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
@@ -41,6 +31,18 @@ loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
                  cleanup = [Simplify, DCE],
                  copy = True)
 
+
+mapify = Phase(MapifyAllPairs, copy = False)
+pre_tiling = Phase([mapify, fusion_opt], copy = True)
+post_tiling = Phase([fusion_opt], copy = True)
+tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, copy_elim],
+               config_param = 'opt_tile',
+               depends_on = high_level_optimizations,
+               rename = True,
+               memoize = False,
+               cleanup = [Simplify, DCE])
+
+
 def print_lowered(fn):
   if config.print_lowered_function:
     print
@@ -49,7 +51,7 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-lowering = Phase([LowerIndexing, unroll, licm,  LowerStructs, licm,  copy_elim],
+lowering = Phase([LowerIndexing, unroll, LowerStructs, licm],
                  depends_on = loopify,
                  copy = True,
                  run_after = print_lowered,

@@ -22,9 +22,9 @@ def fuse(prev_fn, next_fn, const_args=[None]):
   """
 
   type_env = prev_fn.type_env.copy()
-  body = [stmt for stmt in prev_fn.body]
-  prev_return_var = inline.replace_return_with_var(body, type_env,
-                                                   prev_fn.return_type)
+
+  prev_return_var, body = \
+    inline.replace_return_with_var(prev_fn.body, type_env, prev_fn.return_type)
   # for now we're restricting both functions to have a single return at the
   # outermost scope
   next_args = [prev_return_var if arg is None else arg for arg in const_args]

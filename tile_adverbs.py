@@ -206,7 +206,7 @@ class TileAdverbs(Transform):
           # The innermost function always uses all the variables
           input_types = [type_env[arg] for arg in arg_order]
           fn = syntax.TypedFn(name = names.fresh("inner_block"),
-                              arg_names = v_names,
+                              arg_names = tuple([name for name in v_names]),
                               body = inner,
                               input_types = input_types,
                               return_type = return_t,
@@ -424,7 +424,7 @@ class TileAdverbs(Transform):
       new_expansions.append(depth)
       self.expansions[fn_arg] = new_expansions
 
-    new_fn = syntax.TypedFn
+
     depths = self.get_depths_list(fn.arg_names)
     find_adverbs = FindAdverbs()
     find_adverbs.visit_fn(fn)
@@ -445,7 +445,7 @@ class TileAdverbs(Transform):
           break
       return_t = array_type.increase_rank(expr.type, rank_inc)
       new_fn = syntax.TypedFn(name = names.fresh("expanded_map_fn"),
-                              arg_names = arg_names,
+                              arg_names = tuple(arg_names),
                               body = self.transform_block(fn.body),
                               input_types = input_types,
                               return_type = return_t,
