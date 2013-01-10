@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import testing_helpers
 
-from parakeet import reduce, add, each, jit 
+from parakeet import reduce, add, each, jit
 from PIL import Image
 
 sausage = Image.open("sausage.jpg")
@@ -47,7 +47,6 @@ def np_blur():
       return np.array(map(do_rbg, didxs))
     return np.array(map(do_col, jidxs))
   return np.array(map(do_row, iidxs))
-
 
 def par_blur():
   def do_row(i):

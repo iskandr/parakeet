@@ -10,7 +10,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = False # ['LowerAdverbs', 'LowerIndexing']
@@ -28,7 +28,7 @@ print_tiled_adverbs = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+print_optimized_llvm = True
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -55,7 +55,7 @@ opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 
-opt_loop_fusion = True
+opt_loop_fusion = False
 opt_loop_unrolling = False
 
 ######################################

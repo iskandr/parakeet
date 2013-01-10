@@ -1,15 +1,19 @@
 import numpy as np
-import parakeet
 import testing_helpers
 
-def add1(xi):
-  return xi+1
+from parakeet import each
 
-int_vec = np.arange(80)
+def add1(xi):
+  return xi + 1
+
+def add11d(x):
+  return each(add1, x)
+
+int_vec = np.arange(80).reshape(10,8)
 
 def test_add1():
-  result = parakeet.each(add1, int_vec)
-  expected  = int_vec + 1
+  result = each(add11d, int_vec)
+  expected = int_vec + 1
   assert testing_helpers.eq(result, expected), \
       "Expected %s, got %s" % (expected, result)
 

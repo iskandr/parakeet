@@ -27,8 +27,6 @@ class LowerTiledAdverbs(Transform):
     self.tile_sizes_param = tile_sizes_param
     self.fixed_tile_sizes = fixed_tile_sizes
     self.output_var = None
-
-    self.output_var = None
     self.preallocate_output = preallocate_output
 
     # For now, we'll assume that no closure variables have the same name.
