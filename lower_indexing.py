@@ -2,9 +2,48 @@ import array_type
 import core_types
 import syntax
 import syntax_helpers
+
+from array_type import SliceT, make_array_type, ArrayT
+from core_types import NoneT, ScalarT, Int64, PtrT, IntT
+from syntax import Index, Tuple, Var, ArrayView, Assign, Slice, Struct
 from transform import Transform
 
 class LowerIndexing(Transform):
+  
+  def pre_apply(self, fn):
+    self.bindings = {}
+  
+  def tuple_proj(self, tup, idx, explicit_struct = False):
+    if tup.__class__ is Var and tup.name in self.bindings:
+      stored = self.bindings[tup.name]
+      if stored.__class__ is Tuple:
+        return stored.elts[idx]
+      else:
+        return stored.args[idx]
+    else:
+      return Transform.tuple_proj(self, tup, idx, 
+                                  explicit_struct = explicit_struct)
+  
+  def attr(self, obj, field):
+    if obj.__class__ is Var and obj.name in self.bindings:
+      stored = self.bindings[obj.name]
+      stored_class = stored.__class__ 
+      if stored_class is Struct:
+        pos = stored.type.field_pos(field)
+        return stored.args[pos]
+      elif stored_class  is Slice or stored_class is ArrayView:
+        return getattr(stored, field)
+        
+    return Transform.attr(self, obj, field) 
+  
+  def transform_AllocArray(self, expr):
+    alloc = self.alloc_array(elt_t = expr.type.elt_type, 
+                            dims = self.transform_expr(expr.shape), 
+                            name = "array", 
+                            explicit_struct = True)
+    # recursively transform to turn shape and strides tuples into structs 
+    return self.transform_expr(alloc)
+  
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data")
     shape = self.attr(arr, "shape")
@@ -19,38 +58,38 @@ class LowerIndexing(Transform):
       stride_i = self.tuple_proj(strides, i)
       shape_i = self.tuple_proj(shape, i)
       idx_t = idx.type
-      if isinstance(idx_t, core_types.ScalarT):
+      if isinstance(idx_t, ScalarT):
         offset_i = self.mul(idx, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
-      elif isinstance(idx_t, core_types.NoneT):
+      elif isinstance(idx_t, NoneT):
         new_strides.append(stride_i)
         new_shape.append(shape_i)
-      elif isinstance(idx_t, array_type.SliceT):
+      elif isinstance(idx_t, SliceT):
         start = self.attr(idx, "start")
-        if isinstance(start.type, core_types.NoneT):
+        if isinstance(start.type, NoneT):
           start = syntax_helpers.zero_i64
         stop = self.attr(idx, "stop")
-        if isinstance(stop.type, core_types.NoneT):
+        if isinstance(stop.type, NoneT):
           stop = shape_i
         step = self.attr(idx, "step")
-        if isinstance(step.type, core_types.NoneT):
+        if isinstance(step.type, NoneT):
           step = syntax_helpers.one_i64
 
         offset_i = self.mul(start, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
         dim_i = self.sub(stop, start, "dim_%d" % i)
         # don't forget to cast shape elements to int64
-        new_shape.append(self.cast(dim_i, core_types.Int64))
+        new_shape.append(self.cast(dim_i, Int64))
         new_strides.append(self.mul(stride_i, step))
       else:
         raise RuntimeError("Unsupported index type: %s" % idx_t)
 
     elt_t = arr.type.elt_type
     new_rank = len(new_strides)
-    new_array_t = array_type.make_array_type(elt_t, new_rank)
+    new_array_t = make_array_type(elt_t, new_rank)
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
-    return syntax.ArrayView(data_ptr, new_shape, new_strides, 
+    return ArrayView(data_ptr, new_shape, new_strides, 
                             elt_offset, total_elts, 
                             type = new_array_t)
 
@@ -60,11 +99,11 @@ class LowerIndexing(Transform):
     idx = self.assign_temp(idx, "idx")
 
     arr_t = arr.type
-    if isinstance(arr_t, core_types.PtrT):
-      assert isinstance(idx.type, core_types.IntT)
+    if isinstance(arr_t, PtrT):
+      assert isinstance(idx.type, IntT)
       return expr
 
-    assert isinstance(arr_t,  array_type.ArrayT), \
+    assert isinstance(arr_t,  ArrayT), \
         "Unexpected array %s : %s" % (arr, arr.type)
 
     if self.is_tuple(idx):
@@ -94,21 +133,26 @@ class LowerIndexing(Transform):
 
   def transform_Assign(self, stmt):
     lhs = stmt.lhs
+    lhs_class = lhs.__class__ 
     rhs = self.transform_expr(stmt.rhs)
-    if isinstance(lhs, syntax.Tuple):
+    if lhs_class is Tuple:
       for (i, _) in enumerate(lhs.type.elt_types):
         lhs_i = self.tuple_proj(lhs, i)
         rhs_i = self.tuple_proj(rhs, i)
         # TODO: make this recursive, otherwise nested
         # complex assignments won't get implemented
-        assert lhs_i not in (syntax.ArrayView, syntax.Tuple)
+        assert lhs_i not in (ArrayView, Tuple)
         self.assign(lhs_i, rhs_i)
       return None
 
-    elif isinstance(lhs, syntax.Index):
+    elif lhs_class is Index:
       lhs = self.transform_Index(lhs)
-      if isinstance(lhs, syntax.ArrayView):
+      if isinstance(lhs, ArrayView):
         copy_loop = self.array_copy(src = rhs, dest = lhs, return_stmt = True)
         copy_loop = self.transform_stmt(copy_loop)
         return copy_loop
-    return syntax.Assign(lhs, rhs)
+    elif lhs_class is Var and stmt.rhs.__class__ in (Slice, Struct, ArrayView, Tuple):
+      self.bindings[lhs.name] = rhs
+    
+    return Assign(lhs, rhs)
+    

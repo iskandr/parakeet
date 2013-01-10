@@ -109,13 +109,7 @@ class LowerStructs(Transform):
         (expr.type, array_struct.type)
     return array_struct
 
-  def transform_AllocArray(self, expr):
-    alloc = self.alloc_array(elt_t = expr.type.elt_type, 
-                            dims = expr.shape, 
-                            name = "array", 
-                            explicit_struct = True)
-    # recursively transform to turn shape and strides tuples into structs 
-    return self.transform_expr(alloc)
+
     
   def transform_Array(self, expr):
     """

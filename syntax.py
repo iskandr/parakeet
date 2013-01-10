@@ -317,11 +317,11 @@ class PrimCall(Expr):
 
   def _arg_str(self, i):
     arg = self.args[i]
-    if arg.__class__ in (Const, Var):
-      return str(arg)
-    else:
+    if arg.__class__ is PrimCall: 
       return "(%s)" % arg
-
+    else:
+      return str(arg)
+    
   def __repr__(self):
     if self.prim.symbol:
       if len(self.args) == 1:

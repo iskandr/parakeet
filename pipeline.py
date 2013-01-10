@@ -16,10 +16,9 @@ from pipeline_phase import Phase
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion', memoize = False)
-inline_opt = Phase(Inliner, config_param = 'opt_inline')
-high_level_optimizations = Phase([Simplify, inline_opt, fusion_opt],
-                                 cleanup = [Simplify, DCE])
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [], memoize = False)
+inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
+high_level_optimizations = Phase([Simplify, inline_opt, Simplify, DCE, fusion_opt, DCE])
 
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
@@ -51,7 +50,7 @@ def print_lowered(fn):
     print repr(fn)
     print
 
-lowering = Phase([LowerIndexing, licm, unroll, LowerStructs, licm],
+lowering = Phase([unroll, LowerIndexing, licm, LowerStructs, licm],
                  depends_on = loopify,
                  copy = True,
                  run_after = print_lowered,

@@ -73,9 +73,9 @@ class Simplify(Transform):
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
-    elif c in (Map, AllPairs):
+    elif c is Map or c is AllPairs:
       return expr.args 
-    elif c in (Scan, Reduce):  
+    elif c is Scan or c is Reduce:  
       args = tuple(expr.args)
       init = (expr.init,) if expr.init else ()
       return init + args 
@@ -107,7 +107,8 @@ class Simplify(Transform):
     c = expr.__class__ 
     if c is Const:
       return True 
-    elif c in (Tuple, TupleProj, Closure, ClosureElt, Attribute):
+    elif c is Tuple or c is TupleProj or \
+         c is Closure or c is ClosureElt or c is Attribute:
       return True 
     # WARNING: making attributes always immutable 
     # elif c is Attribute and expr.value.type.__class__ is TupleT:
@@ -376,9 +377,10 @@ class Simplify(Transform):
         return self.transform_stmt(ExprStmt(rhs))    
       else: 
         self.bind_var(lhs.name, rhs)
-        if rhs_class not in (Var, Const) and \
-            self.immutable(rhs) and \
-            rhs not in self.available_expressions:
+        if rhs_class is not Var and \
+           rhs_class is not Const and \
+           self.immutable(rhs) and \
+           rhs not in self.available_expressions:
           self.available_expressions[rhs] = lhs
     elif lhs_class is Tuple: 
       self.bind(lhs, rhs)

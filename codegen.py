@@ -16,6 +16,7 @@ from syntax import AllocArray, ForLoop, Comment
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
 from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn
+from syntax import ArrayView
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
                            one_i64, zero, zero_i64, \
                            one, const_int, const_bool
@@ -318,6 +319,8 @@ class Codegen(object):
     if obj.__class__ is Struct:
       pos = obj_t.field_pos(name)
       result =  obj.args[pos]
+    elif obj.__class__ is ArrayView:
+      return getattr(obj, field)
     else:
       assert isinstance(obj_t, StructT), \
         "Can't get attribute '%s' from type %s" % (field, obj_t)

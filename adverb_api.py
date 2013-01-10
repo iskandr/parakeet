@@ -21,7 +21,7 @@ import type_inference
 from args import ActualArgs, FormalArgs
 from common import list_to_ctypes_array
 from core_types import Int64
-from pipeline import lowering, lower_tiled
+from pipeline import lowering, lower_tiled, high_level_optimizations
 from runtime import runtime
 
 try:
@@ -142,7 +142,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        input_types = syntax_helpers.get_types(inputs),
                        body = body,
                        return_type = core_types.NoneType,
-                       type_env = type_env)
+                       type_env = type_env)     
     lowered = lowering(parallel_wrapper)
     lowered.num_tiles = num_tiles
     lowered.dl_tile_estimates = fn.dl_tile_estimates

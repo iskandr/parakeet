@@ -13,10 +13,11 @@ import syntax_helpers
 
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
-
 from llvm_helpers import const, int32
 from llvm_types import llvm_value_type, llvm_ref_type
 from syntax import Var, Struct, Index, TypedFn, Attribute 
+from syntax import Alloc
+
 
 
 _escape_analysis_cache = {}
@@ -123,7 +124,8 @@ class Compiler(object):
       builder.store(llvm_elt, elt_ptr)
 
     return struct_ptr
-
+  
+  
   def compile_Alloc(self, expr, builder):
     elt_t = expr.elt_type
     llvm_elt_t = llvm_types.llvm_value_type(elt_t)
