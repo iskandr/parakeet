@@ -32,7 +32,7 @@ print_tiled_adverbs = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+print_optimized_llvm = True
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -88,7 +88,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = False

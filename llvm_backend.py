@@ -140,7 +140,9 @@ class Compiler(object):
     llvm_idx = llvm_convert.convert(llvm_index, index_t, Int32, builder)
 
     pointer = builder.gep(llvm_arr, [llvm_idx], "elt_pointer")
-    elt = builder.load(pointer, "elt")
+    elt = builder.load(pointer, "elt", align = 16, invariant = True)
+
+  
     return elt
 
   def compile_Attribute(self, expr, builder):

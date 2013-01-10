@@ -52,6 +52,7 @@ class LLVM_Context:
     'loop-idiom',
     'loop-deletion',
     'loop-unroll',
+    'bb-vectorize',
     'gvn',
     'sccp',
     'dse',
