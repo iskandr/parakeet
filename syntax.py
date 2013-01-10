@@ -37,6 +37,19 @@ class ExprStmt(Stmt):
     assert self.value is not None
     return "ExprStmt(%s)" % self.value
 
+class Comment(Stmt):
+  _members = ['text']
+  
+  def __str__(self):
+    s = "#"
+    for (i, c) in enumerate(self.text):
+      if i % 78 == 0:
+        s += "\n# "
+      s += c
+    s += "\n#"
+    return s
+    
+
 class Return(Stmt):
   _members = ['value']
 
@@ -236,7 +249,7 @@ class Closure(Expr):
   def __str__(self):
     fn_str = str(self.fn) #self.fn.name if hasattr(self.fn, 'name') else str(self.fn)
     args_str = ",".join(arg.name + ":" + str(arg.type) for arg in self.args)
-    return "Closure(%s, args={%s})" % (fn_str, args_str)
+    return "Closure(fixed_args = {%s}, %s)" % (args_str, fn_str)
 
   def node_init(self):
     self.args = tuple(self.args)

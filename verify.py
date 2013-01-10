@@ -1,8 +1,10 @@
+import array_type
 import core_types
 
 from collect_vars import collect_binding_names
 from core_types import NoneT, NoneType
-from syntax import Expr, Tuple, Var, Index
+from syntax import Expr, Tuple, Var, Index, Closure 
+from syntax_helpers import get_types
 from syntax_visitor import SyntaxVisitor
 
 class Verify(SyntaxVisitor):
@@ -61,7 +63,7 @@ class Verify(SyntaxVisitor):
           "Expected type annotation for %s" % (arg, )
       assert isinstance(arg.type, core_types.ScalarT), \
           "Can't call primitive %s with argument %s of non-scalar type %s" % \
-          (expr.fn, arg, arg.type)
+          (expr.prim, arg, arg.type)
 
   def visit_expr(self, expr):
     assert expr is not None
@@ -72,7 +74,48 @@ class Verify(SyntaxVisitor):
     assert stmt.value.type and stmt.value.type.__class__ is NoneT, \
       "Expected effectful expression %s to have type %s but instead got %s" % \
       (stmt.value, NoneType, stmt.value.type)
-
+  
+  def check_fn_args(self, fn, args, arg_types = None):
+    if arg_types is None: 
+      arg_types = get_types(args)
+    n_given = len(arg_types)
+    n_expected = len(fn.input_types)
+    assert n_given == n_expected, \
+        "Arity mismatch when calling %s, expected %d but got %d" % \
+        (fn.name, n_expected, n_given)
+    for (i, arg_name) in enumerate(fn.arg_names):
+      given_t = arg_types[i]
+      expected_t = fn.type_env[arg_name]
+      signature_t = fn.input_types[i] 
+      assert expected_t == signature_t, \
+          "Function %s has inconsistent types %s and %s for arg %s" % \
+          (fn.name, expected_t, signature_t, arg_name)
+      assert given_t == expected_t, \
+          "Given argument '%s' : %s doesn't matched expected '%s' : %s in %s" % \
+          (args[i], given_t, arg_name, expected_t, fn.name)  
+  
+  
+  def visit_Call(self, expr):
+    if expr.fn.__class__ is Closure: 
+      closure_elts = tuple(expr.fn.args) 
+      fn = expr.fn.fn 
+    else:
+      fn = expr.fn
+      closure_elts = ()
+    self.check_fn_args(fn, closure_elts + tuple(expr.args))
+  
+  def visit_Map(self, expr):
+    if expr.fn.__class__ is Closure: 
+      closure_elts = tuple(expr.fn.args) 
+      fn = expr.fn.fn 
+    else:
+      fn = expr.fn
+      closure_elts = ()
+    elt_types = [array_type.lower_rank(arg.type, 1) for arg in expr.args]
+    arg_types = tuple(get_types(closure_elts)) + tuple(elt_types)
+    args = tuple(closure_elts) + tuple(expr.args)                      
+    self.check_fn_args(fn, args, arg_types)
+  
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type == self.fn.return_type, \

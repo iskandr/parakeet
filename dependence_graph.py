@@ -3,7 +3,7 @@ import escape_analysis
 from array_type import ArrayT
 from collect_vars import collect_var_names, collect_binding_names
 from core_types import PtrT   
-from syntax import Const, Var, Expr  
+from syntax import Const, Var, Expr, Comment   
 from syntax import Assign, Return, If, While, ForLoop 
  
 
@@ -141,6 +141,8 @@ class DependenceGraph(object):
     scope = id(stmts)
     
     for stmt in stmts:
+      if stmt.__class__ is Comment:
+        continue  
       node = self.visit_stmt(stmt, scope = scope)
       for consumed_name in node.consumes:
         block_consumes.add(consumed_name)

@@ -34,8 +34,8 @@ loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
 
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
-post_tiling = Phase([fusion_opt], copy = True)
-tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs,  copy_elim],
+post_tiling = Phase([fusion_opt, copy_elim], copy = True)
+tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                config_param = 'opt_tile',
                depends_on = high_level_optimizations,
                rename = True,

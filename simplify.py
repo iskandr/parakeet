@@ -389,7 +389,6 @@ class Simplify(Transform):
       if rhs_class is Index and \
          lhs.value == rhs.value and \
          lhs.index == rhs.index:
-        print "KILLING", stmt 
         return None 
       else:   
         lhs = self.transform_lhs_Index(lhs)

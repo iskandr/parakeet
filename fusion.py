@@ -1,43 +1,92 @@
+import inline
 import names
-from syntax import Var, Const,  Return, TypedFn
 import syntax_helpers 
 
-from adverbs import Adverb, Scan, Reduce, Map, AllPairs
 
+from dead_code_elim import DCE
+from adverbs import Adverb, Scan, Reduce, Map, AllPairs
+from simplify import Simplify
+from syntax import Var, Const,  Return, TypedFn
 from transform import Transform 
 from use_analysis import use_count
-import inline
-from dead_code_elim import DCE
-from simplify import Simplify
 
 
-def fuse(prev_fn, next_fn, const_args=[None]):
+
+
+def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
   
   if syntax_helpers.is_identity_fn(next_fn):
-    return prev_fn 
+    assert len(next_fixed_args) == 0 
+    return prev_fn, prev_fixed_args
+     
   """
   Expects the prev_fn's returned value to be one or more of the arguments to
   next_fn. Any element in 'const_args' which is None gets replaced by the
   returned Var
   """
-
-  type_env = prev_fn.type_env.copy()
-
-  prev_return_var, body = \
-    inline.replace_return_with_var(prev_fn.body, type_env, prev_fn.return_type)
+  fused_formals = []
+  fused_input_types = []
+  fused_type_env = prev_fn.type_env.copy()
+  fused_name = names.fresh('fused')
+  
+  prev_closure_formals = prev_fn.arg_names[:len(prev_fixed_args)]
+  
+  for prev_closure_arg_name in prev_closure_formals:
+    t = prev_fn.type_env[prev_closure_arg_name]
+    fused_formals.append(prev_closure_arg_name)
+    fused_input_types.append(t)
+  
+  next_closure_formals = next_fn.arg_names[:len(next_fixed_args)]
+  for next_closure_arg_name in next_closure_formals:
+    t = next_fn.type_env[next_closure_arg_name]
+    new_name = names.refresh(next_closure_arg_name)
+    fused_type_env[new_name] = t 
+    fused_formals.append(new_name)
+    fused_input_types.append(t)
+  
+  prev_direct_formals = prev_fn.arg_names[len(prev_fixed_args):]
+  for arg_name in prev_direct_formals:
+    t = prev_fn.type_env[arg_name]
+    fused_formals.append(arg_name)
+    fused_input_types.append(t)
+  
+  prev_return_var, fused_body = \
+    inline.replace_return_with_var(prev_fn.body, 
+                                   fused_type_env, 
+                                   prev_fn.return_type)
   # for now we're restricting both functions to have a single return at the
   # outermost scope
-  next_args = [prev_return_var if arg is None else arg for arg in const_args]
-  next_return_var = inline.do_inline(next_fn, next_args, type_env, body)
-  body.append(Return(next_return_var))
+  inline_args = list(next_closure_formals)
+  for arg in fusion_args:
+    if arg is None:
+      inline_args.append(prev_return_var)
+    elif isinstance(arg, int):
+      # positional arg which is not being fused out 
+      inner_name = next_fn.arg_names[arg]
+
+      inner_type = next_fn.type_env[inner_name]
+      new_name = names.refresh(inner_name)
+      fused_formals.append(new_name)
+      fused_type_env[new_name] = inner_type 
+      fused_input_types.append(inner_type)
+      var = Var(new_name, inner_type)
+      inline_args.append(var)     
+    else:
+      assert arg.__class__ is Const, \
+         "Only scalars can be spliced as literals into a fused fn: %s" % arg
+      inline_args.append(arg)
+  next_return_var = inline.do_inline(next_fn, inline_args, 
+                                     fused_type_env, fused_body)
+  fused_body.append(Return(next_return_var))
 
   # we're not renaming variables that originate from the predecessor function
-  return TypedFn(name = names.fresh('fused'),
-                        arg_names = prev_fn.arg_names,
-                        body = body,
-                        input_types = prev_fn.input_types,
-                        return_type = next_fn.return_type,
-                        type_env = type_env)
+  new_fn = TypedFn(name = fused_name, 
+                   arg_names = fused_formals, 
+                   body = fused_body,
+                   input_types = tuple(fused_input_types), 
+                   return_type = next_fn.return_type,
+                   type_env = fused_type_env)
+  return new_fn, prev_fixed_args + next_fixed_args
 
 class Fusion(Transform):
   def __init__(self, recursive=True):
@@ -52,9 +101,9 @@ class Fusion(Transform):
   
   def transform_TypedFn(self, fn):
     if self.fn.copied_by is not None:
+      print self.fn.copied_by
       return self.fn.copied_by.apply(fn)
     else:
-      
       # at the very least do high level optimizations
       import pipeline 
       return pipeline.high_level_optimizations(fn) 
@@ -65,29 +114,48 @@ class Fusion(Transform):
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
 
-    if stmt.lhs.__class__ is Var and \
-        isinstance(rhs, Adverb) and \
-        rhs.__class__ is not AllPairs:
+    if isinstance(rhs, Adverb) and \
+       rhs.__class__ is not AllPairs:
       args = rhs.args
       if all(arg.__class__ in (Var, Const) for arg in args):
         arg_names = [arg.name for arg in args if arg.__class__ is Var]
-        n_unique_vars = len(set(arg_names))
-        n_occurrences = len(arg_names)
-        if n_unique_vars == 1:
-          arg_name = arg_names[0]
-          if self.use_counts[arg_name] == n_occurrences and \
-             arg_name in self.adverb_bindings:
+        unique_vars = set(arg_names)
+        adverb_vars = [name for name in unique_vars 
+                       if name in self.adverb_bindings] 
+        n_adverb_vars = len(adverb_vars)
+       
+        
+        if n_adverb_vars == 1:
+          arg_name = adverb_vars[0]
+          n_occurrences = sum((name == arg_name for name in arg_names))
+          if self.use_counts[arg_name] == n_occurrences:
             prev_adverb = self.adverb_bindings[arg_name]
             if prev_adverb.__class__ is Map and \
                rhs.axis == prev_adverb.axis and \
-               prev_adverb.fn.__class__ is TypedFn and \
-               rhs.fn.__class__ is TypedFn and \
-               inline.can_inline(prev_adverb.fn) and \
-               inline.can_inline(rhs.fn):
-              const_args = [None if arg.__class__ is Var else arg
-                            for arg in args]
-              rhs.fn = fuse(prev_adverb.fn, rhs.fn, const_args)
-              rhs.args = prev_adverb.args
+               inline.can_inline(self.get_fn(prev_adverb.fn)) and \
+               inline.can_inline(self.get_fn(rhs.fn)):
+              surviving_array_args = []
+              fusion_args = []
+              for (pos, arg) in enumerate(args):
+                c = arg.__class__ 
+                if c is Var and arg.name == arg_name:
+                  fusion_args.append(None)
+                elif c is Const: 
+                  fusion_args.append(arg)  
+                else:
+                  surviving_array_args.append(arg) 
+                  fusion_args.append(pos)
+              new_fn, clos_args = \
+                fuse(self.get_fn(prev_adverb.fn),
+                     self.closure_elts(prev_adverb.fn), 
+                     self.get_fn(rhs.fn),
+                     self.closure_elts(rhs.fn),  
+                     fusion_args)
+              assert new_fn.return_type == self.return_type(rhs.fn) 
+              del self.adverb_bindings[arg_name]
+              rhs.fn = self.closure(new_fn, clos_args)
+              rhs.args = prev_adverb.args + surviving_array_args 
 
+    if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb):
       self.adverb_bindings[stmt.lhs.name] = rhs
     return stmt

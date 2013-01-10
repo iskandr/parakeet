@@ -2,7 +2,8 @@ import config
 import verify
 
 import syntax
-from syntax import If, Assign, While, Return, ExprStmt, ForLoop 
+from syntax import If, Assign, While, Return, ExprStmt
+from syntax import ForLoop, Comment  
 from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
@@ -289,7 +290,10 @@ class Transform(Codegen):
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge_after_loop(stmt.merge)
     return stmt 
-    
+  
+  def transform_Comment(self, stmt):
+    return stmt 
+  
   def transform_stmt(self, stmt):
     stmt_class = stmt.__class__
     if stmt_class is Assign:
@@ -304,6 +308,8 @@ class Transform(Codegen):
       return self.transform_Return(stmt)
     elif stmt_class is ExprStmt:
       return self.transform_ExprStmt(stmt)
+    elif stmt_class is Comment:
+      return self.transform_Comment(stmt)
     else:
       assert False, "Unexpected statement %s" % stmt_class
 

@@ -1,5 +1,6 @@
 from adverbs import Map, Scan, Reduce
 from syntax import Assign, Return, If, While, ExprStmt, ForLoop
+from syntax import Comment 
 from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
 from syntax import Call, TypedFn, Struct, Alloc
 from syntax import ArrayView, Slice, TupleProj, Cast, AllocArray
@@ -226,7 +227,10 @@ class SyntaxVisitor(object):
     self.visit_block(stmt.body)
     self.visit_expr(stmt.step)
     self.visit_merge_loop_repeat(stmt.merge)
-    
+  
+  def visit_Comment(self, stmt):
+    pass 
+  
   def visit_stmt(self, stmt):
     c = stmt.__class__
     if c is Assign:
@@ -241,6 +245,8 @@ class SyntaxVisitor(object):
       self.visit_If(stmt)
     elif c is ExprStmt:
       self.visit_ExprStmt(stmt)
+    elif c is Comment:
+      self.visit_Comment(stmt) 
     else:
       assert False, "Statement not implemented: %s" % stmt
 

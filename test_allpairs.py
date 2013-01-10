@@ -1,6 +1,7 @@
 import numpy as np
+import time 
 
-from parakeet import sum, allpairs, multiply
+from parakeet import sum, allpairs, multiply, run
 from testing_helpers import expect, expect_allpairs, run_local_tests
 
 bool_vec = np.array([True, False, True])
@@ -62,7 +63,30 @@ def test_loop_matmult():
       res = np.dot(X, Y)
       Z = np.zeros(res.shape, dtype = res.dtype)
       expect(loop_matmult, [X,Y,Z], res)
+      
 
+def test_loop_matmult_timing():
+  
+  X = np.random.randn(100,100).astype('float32')
+  Y = np.random.randn(100,100).astype('float32')
+  start = time.time()
+  res = np.dot(X, Y)
+  np_interval = time.time() - start
+  
+  res = np.zeros_like(Y)
+  start = time.time()
+  run(loop_matmult, X, Y, res)
+  parakeet_interval = time.time() - start
+  
+  start = time.time()
+  run(loop_matmult, X, Y, res)
+  parakeet_interval_no_comp = time.time() - start
+  print "Loop matrix multiplication timings" 
+  print "Numpy time:", np_interval
+  print "Parakeet time:", parakeet_interval
+  print "Parakeet time (w/out compilation):", parakeet_interval_no_comp
+  assert float(parakeet_interval_no_comp) / np_interval < 100  
+  
 def dot(x,y):
   return sum(x*y)
 

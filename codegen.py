@@ -12,7 +12,7 @@ from array_type import ArrayT, SliceT
 from core_types import ScalarT, Int32, Int64, NoneT, Type, StructT
 from closure_type import ClosureT, make_closure_type
 from nested_blocks import NestedBlocks
-from syntax import AllocArray, ForLoop
+from syntax import AllocArray, ForLoop, Comment 
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
 from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn
@@ -31,6 +31,9 @@ class Codegen(object):
     # and looking up their elements directly
     self.tuple_elt_cache = {}
 
+  def comment(self, text):
+    self.blocks.append(Comment(text))
+    
   def fresh_var(self, t, prefix = "temp"):
     assert t is not None, "Type required for new variable %s" % prefix
     ssa_id = names.fresh(prefix)
@@ -447,6 +450,8 @@ class Codegen(object):
     fn = self.get_fn(maybe_fn)
     old_closure_elts = self.closure_elts(maybe_fn)
     closure_elts = old_closure_elts + extra_args
+    if len(closure_elts) == 0:
+      return fn 
     closure_elt_types = [elt.type for elt in closure_elts]
     closure_t = make_closure_type(fn, closure_elt_types)
     result = Closure(fn, closure_elts, type = closure_t)
