@@ -1,7 +1,7 @@
 import names
 from subst import subst_stmt_list
 import syntax
-from syntax import If, Assign, While, Return, ForLoop 
+from syntax import If, Assign, While, Return, ForLoop, Comment 
 from syntax import Var, TypedFn, Const, ExprStmt
 import syntax_visitor
 from transform import Transform
@@ -35,7 +35,7 @@ def replace_returns(stmts, output_var):
       if output_var:
         new_stmts.append(syntax.Assign(output_var, stmt.value))
       continue 
-    elif c is If:
+    if c is If:
       stmt.true = replace_returns(stmt.true, output_var)
       stmt.false = replace_returns(stmt.false, output_var)
     elif c in (ForLoop, While):
@@ -54,7 +54,8 @@ def can_inline_block(stmts, outer = False):
     elif stmt_class in (While, ForLoop):
       if not can_inline_block(stmt.body):
         return False
-   
+    elif stmt_class is Comment: 
+      continue 
     else:
       assert stmt_class is Return, "Unexpected statement: %s" % stmt
       if not outer:
@@ -85,7 +86,6 @@ def do_inline(src_fundef, args, dest_type_env, dest_block, result_var = None):
   def rename_var(old_name):
     t = src_fundef.type_env[old_name]
     new_name = names.refresh(old_name)
-
     new_var = Var(new_name, type = t)
     rename_dict[old_name] = new_var
     dest_type_env[new_name] = t

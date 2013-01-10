@@ -261,10 +261,7 @@ class TileAdverbs(Transform):
         nested_fixed_args = \
             [syntax.Var(name, type = t)
              for name, t in zip(fixed_arg_names, fixed_arg_types)]
-        closure_t = closure_type.make_closure_type(nested_fn,
-                                                   fixed_arg_types)
-        nested_closure = syntax.Closure(nested_fn, nested_fixed_args,
-                                        type = closure_t)
+        nested_closure = self.closure(nested_fn, nested_fixed_args)
 
         # Make an adverb that wraps the nested fn
         new_adverb.fn = nested_closure

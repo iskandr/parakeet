@@ -13,10 +13,10 @@ print_specialized_function = False
 print_lowered_function = True
 
 # show the input function to each transformation?
-print_functions_before_transforms = False # ['LowerTiledAdverbs'] #
+print_functions_before_transforms = False #['Fusion']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = False #['Fusion']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -54,6 +54,7 @@ opt_licm = True
 opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
+
 opt_loop_fusion = False
 opt_loop_unrolling = False
 

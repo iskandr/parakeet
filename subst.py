@@ -30,9 +30,9 @@ class RewriteVars(Transform):
       assert isinstance(expr, Expr)
       assert new_value.type is not None, \
           "Type of replacement value %s can't be None" % new_value
-      assert new_value.type == expr.type, \
-          "Can't replace %s with %s since it changes type %s into %s" % \
-          (expr, new_value, expr.type, new_value.type)
+      #assert new_value.type == expr.type, \
+      #    "Can't replace %s with %s since it changes type %s into %s" % \
+      #    (expr, new_value, expr.type, new_value.type)
       return new_value
     
     

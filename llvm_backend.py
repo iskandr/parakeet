@@ -5,6 +5,7 @@ import config
 import escape_analysis
 import llvm_context
 import llvm_convert
+import llvm_helpers 
 import llvm_prims
 import llvm_types
 import prims
@@ -13,9 +14,10 @@ import syntax_helpers
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
 
-from llvm_helpers import const, int32 #, zero, one
+from llvm_helpers import const, int32
 from llvm_types import llvm_value_type, llvm_ref_type
 from syntax import Var, Struct, Index, TypedFn, Attribute 
+
 
 _escape_analysis_cache = {}
 class Compiler(object):
@@ -344,7 +346,10 @@ class Compiler(object):
       if not false_always_returns:
         after_false.branch(after_bb)
       return after_builder, False
-
+    
+  def compile_Comment(self, stmt, builder):  
+    return builder, False 
+  
   def compile_stmt(self, stmt, builder):
     """
     Translate an SSA statement into LLVM. Every translation function returns a

@@ -1,11 +1,12 @@
 import numpy as np
-
 import parakeet
+import syntax
+import testing_helpers
+
+from parakeet import config 
 from parakeet import each
 from pipeline import lowering 
-import syntax
 from syntax_visitor import SyntaxVisitor
-import testing_helpers
 from testing_helpers import expect
 
 def A(x):
@@ -159,7 +160,8 @@ def test_copy_elimination():
   typed_fn = parakeet.typed_repr(nested_add1, [x])
   lowered = lowering.apply(typed_fn)
   n_loops = count_loops(lowered)
-  assert n_loops <= 2, \
+  n_expected = 3 if config.opt_loop_unrolling else 2 
+  assert n_loops <= n_expected, \
       "Too many loops generated! Expected at most 2, got %d" % n_loops
 
 if __name__ == '__main__':

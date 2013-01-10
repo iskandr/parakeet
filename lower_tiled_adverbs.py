@@ -70,6 +70,7 @@ class LowerTiledAdverbs(Transform):
     value = self.transform_expr(stmt.value)
     if self.output_var:
       if not isinstance(stmt.value, adverbs.Tiled):
+        self.comment("Copy instead of Return in %s" % self.fn.name)
         rank = self.output_var.type.rank
         slice_all = self.tuple([slice_none] * rank)
         self.setidx(self.output_var, slice_all, value)
@@ -182,6 +183,7 @@ class LowerTiledAdverbs(Transform):
               body,
               result_var = None)
     assert isinstance(step, syntax.Expr)
+    self.comment("TiledMap in %s" % self.fn.name)
     loop = syntax.ForLoop(i, start, stop, step, body, {})
 
     self.blocks.append(loop)
@@ -256,6 +258,8 @@ class LowerTiledAdverbs(Transform):
         return syntax.ForLoop(j, start, stop, one_i64, body, {})
     num_exps = array_type.get_rank(init.type) - \
                array_type.get_rank(expr.init.type)
+
+    self.comment("TiledReduce in %s: init_unpack" % self.fn.name)
     self.blocks += init_unpack(num_exps, init)
 
     # Loop over the remaining tiles.
@@ -279,14 +283,21 @@ class LowerTiledAdverbs(Transform):
                    for arg, axis in zip(args, axes)]
 
     new_acc = self.fresh_var(tiled_map_fn.return_type, "new_acc")
-    map_call = syntax.Call(tiled_map_fn, nested_args, type = acc_type)
+    self.comment("TiledReduce in %s: map_fn " % self.fn.name)
+    do_inline(tiled_map_fn,
+              map_closure_args + nested_args,
+              self.type_env,
+              self.blocks.top(),
+              result_var = new_acc)
+    # map_call = syntax.Call(tiled_map_fn, nested_args, type=acc_type)
 
-    self.assign(new_acc, map_call)
+    # self.assign(new_acc, map_call)
 
     loop_body = self.blocks.pop()
     if acc_is_array:
       outidx = self.tuple([syntax_helpers.slice_none] * result.type.rank)
       result_slice = self.index(result, outidx, temp = False)
+      self.comment("")
       do_inline(tiled_combine,
                 combine_closure_args + [result, new_acc, result_slice],
                 self.type_env,
@@ -300,5 +311,6 @@ class LowerTiledAdverbs(Transform):
 
     assert isinstance(step, syntax.Expr), "%s not an expr" % step
     loop = syntax.ForLoop(i, start, stop, step, loop_body, merge)
+    self.comment("TiledReduce in %s: combine" % self.fn.name)
     self.blocks.append(loop)
     return result
