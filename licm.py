@@ -130,9 +130,7 @@ class LoopInvariantCodeMotion(Transform):
     self.analysis = Find_LICM_Candidates()
     self.safe_to_move = self.analysis.visit_fn(fn)
     self.binding_depth = {}
-    # initially we have no blocks so need to offset by 1
-    # so that input names end up at depth 0
-    self.mark_binding_depths(fn.arg_names, 1)
+    self.mark_binding_depths(fn.arg_names, 0)
 
   def mark_binding_depths(self, names, depth_offset = 0):
     curr_depth = len(self.blocks._blocks) - 1 + depth_offset
@@ -157,11 +155,13 @@ class LoopInvariantCodeMotion(Transform):
       name = stmt.lhs.name
       if name in self.safe_to_move:
         deps = self.analysis.depends_on[name]
+
         if all(d in self.binding_depth for d in deps):
           if len(deps) > 0:
             target_level = max(self.binding_depth[d] for d in deps)
           else:
             target_level = 0
+ 
           if target_level >= 0 and target_level < self.blocks.depth():
             self.blocks._blocks[target_level].append(stmt)
             self.binding_depth[name] = target_level

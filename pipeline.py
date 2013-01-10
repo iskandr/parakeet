@@ -70,19 +70,10 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                run_if = contains_adverbs,
                cleanup = [Simplify, DCE])
 
-def print_lowered(fn):
-  if config.print_lowered_function:
-    print
-    print "=== Lowered function ==="
-    print
-    print repr(fn)
-    print
-
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 lowering = Phase([unroll, LowerIndexing, loop_fusion, licm, LowerStructs, licm],
                  depends_on = loopify,
                  copy = True,
-                 post_apply = print_lowered,
                  cleanup = [Simplify, DCE])
 
 def lower_tiled(fn, ignore_config = True):
