@@ -1,4 +1,6 @@
-IFLAGS = -O3
+CC = gcc
+IFLAGS = -O3 -ffast-math -ftree-vectorize -msse2
+#IFLAGS = -O3 -ffast-math -msse2 -mllvm -vectorize-loops
 LFLAGS = -pthread -lm -lprofiler
 FLAGS = $(IFLAGS) $(LFLAGS)
 OBJS = thread_pool.o job.o
@@ -6,19 +8,17 @@ OBJS = thread_pool.o job.o
 all: runtime
 
 job:
-	gcc -fPIC -c job.c $(FLAGS) -o job.o
+	$(CC) -fPIC -c job.c $(FLAGS) -o job.o
 
 threadpool: job
-	gcc -fPIC -c thread_pool.c $(FLAGS) -o thread_pool.o
+	$(CC) -fPIC -c thread_pool.c $(FLAGS) -o thread_pool.o
 
 runtime: threadpool job
-	gcc -shared -Wl -Bsymbolic -o libparakeetruntime.so $(OBJS)
+	$(CC) -shared -Wl -Bsymbolic -o libparakeetruntime.so $(OBJS)
 
 tests: runtime threadpool
-	#gcc -o job_test $(FLAGS) -lcunit job_test.c $(OBJS)
-	gcc -fPIC -c vm.c $(FLAGS) -o vm.o
-	gcc -shared -o vm.so vm.o
-	#gcc -o vm_test $(FLAGS) -lcunit vm_test.c $(OBJS)
+	$(CC) -fPIC -c vm.c $(FLAGS) -o vm.o
+	$(CC) -shared -o vm.so vm.o
 
 clean:
 	rm -f *_test *.o *.so *.pyc *~

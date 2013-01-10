@@ -26,7 +26,7 @@ class Runtime():
     job_p = POINTER(job_t)
     thread_pool_p = POINTER(thread_pool_t)
 
-    lib_name = "libparakeetruntime.so"
+    lib_name = "./libparakeetruntime.so"
     try:
       dll = cdll.LoadLibrary(lib_name)
     except:
@@ -149,7 +149,11 @@ class Runtime():
 
   def run_compiled_job(self, fn, args, num_iters, dl_estimates, ml_estimates):
     if len(ml_estimates) == 0:
-      self.run_job_with_fixed_tiles(fn, args, num_iters, dl_estimates)
+      tile_sizes_t = c_int64 * len(ml_estimates)
+      tile_sizes = tile_sizes_t()
+      for i in range(len(ml_estimates)):
+        tile_sizes[i] = ml_estimates[i]
+      self.run_job_with_fixed_tiles(fn, args, num_iters, tile_sizes)
     else:
       self.work_functions = (c_void_p * self.dop)()
       for i in range(self.dop):

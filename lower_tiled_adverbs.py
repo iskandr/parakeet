@@ -1,25 +1,25 @@
-import adverbs 
+import adverbs
 import array_type
-import clone_function 
+import clone_function
 import syntax
 import syntax_helpers
 import tuple_type
 
 from array_type import ArrayT
-from core_types import Int64, ScalarT, NoneType 
-from inline import do_inline 
+from core_types import Int64, ScalarT, NoneType
+from inline import do_inline
 from syntax_helpers import zero_i64, one_i64, slice_none
 from transform import Transform
 
 class LowerTiledAdverbs(Transform):
   default_reg_tile_size = 4
 
-  def __init__(self, 
-                nesting_idx = -1, 
-                fixed_idx = -1, 
-                tile_sizes_param = None, 
-                fixed_tile_sizes = None, 
-                preallocate_output = False):
+  def __init__(self,
+               nesting_idx = -1,
+               fixed_idx = -1,
+               tile_sizes_param = None,
+               fixed_tile_sizes = None,
+               preallocate_output = False):
     Transform.__init__(self)
     self.nesting_idx = nesting_idx
     self.fixed_idx = fixed_idx
@@ -27,9 +27,7 @@ class LowerTiledAdverbs(Transform):
     self.tile_sizes_param = tile_sizes_param
     self.fixed_tile_sizes = fixed_tile_sizes
     self.output_var = None
-    self.dl_tile_estimates = []
-    self.ml_tile_estimates = []
-    
+
     self.output_var = None
     self.preallocate_output = preallocate_output
 
@@ -44,24 +42,24 @@ class LowerTiledAdverbs(Transform):
       self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
     if self.fixed_tile_sizes is None:
       self.fixed_tile_sizes = [self.default_reg_tile_size] * fn.num_tiles
-    
-    if self.preallocate_output: 
+
+    if self.preallocate_output:
       self.output_var = self.fresh_var(fn.return_type, "prealloc_output")
     return clone_function.CloneFunction().apply(fn)
 
   def post_apply(self, fn):
-    # the arg names list seems to be shared among 
-    # multiple functions created by tiling, 
-    # so make a clean copy here  
+    # the arg names list seems to be shared among
+    # multiple functions created by tiling,
+    # so make a clean copy here
     # fn = clone_function.CloneFunction().apply(fn)
     fn.arg_names = tuple(fn.arg_names)
-    
+
     if self.output_var:
       fn.arg_names += (self.output_var.name,)
       fn.input_types += (self.output_var.type,)
-      
-      fn.return_type = NoneType 
-    
+
+      fn.return_type = NoneType
+
     if self.tiling:
       fn.arg_names += (self.tile_sizes_param.name,)
       fn.input_types += (self.tile_sizes_param.type,)
@@ -71,15 +69,15 @@ class LowerTiledAdverbs(Transform):
   def transform_Return(self, stmt):
     value = self.transform_expr(stmt.value)
     if self.output_var:
-      if not isinstance(stmt.value, adverbs.Tiled):  
-        rank = self.output_var.type.rank 
+      if not isinstance(stmt.value, adverbs.Tiled):
+        rank = self.output_var.type.rank
         slice_all = self.tuple([slice_none] * rank)
         self.setidx(self.output_var, slice_all, value)
-      return None 
+      return None
     else:
-      stmt.value = value 
-      return stmt 
-    
+      stmt.value = value
+      return stmt
+
   def get_closure_arg(self, closure_elt):
     if isinstance(closure_elt, syntax.ClosureElt):
       if isinstance(closure_elt.closure, syntax.Closure):
@@ -103,20 +101,19 @@ class LowerTiledAdverbs(Transform):
 
   def transform_TypedFn(self, expr, preallocate_output = False):
     nested_lower = LowerTiledAdverbs(nesting_idx = self.nesting_idx,
-                                     fixed_idx = self.fixed_idx, 
-                                     tile_sizes_param = self.tile_sizes_param, 
-                                     fixed_tile_sizes = self.fixed_tile_sizes, 
-                                     preallocate_output = preallocate_output, )
+                                     fixed_idx = self.fixed_idx,
+                                     tile_sizes_param = self.tile_sizes_param,
+                                     fixed_tile_sizes = self.fixed_tile_sizes,
+                                     preallocate_output = preallocate_output)
     return nested_lower.apply(expr)
 
   def transform_TiledMap(self, expr):
-
     args = expr.args
     axes = expr.axes
 
     # TODO: Should make sure that all the shapes conform here,
     # but we don't yet have anything like assertions or error handling
-    niters = self.shape(expr.args[0], 
+    niters = self.shape(expr.args[0],
                         syntax_helpers.unwrap_constant(axes[0]))
 
     # Create the tile size variable and find the number of tiles
@@ -129,14 +126,14 @@ class LowerTiledAdverbs(Transform):
       self.nesting_idx += 1
       tile_size = self.index(self.tile_sizes_param, self.nesting_idx,
                              temp = True, name = "tilesize")
-    
+
     untiled_inner_fn = self.get_fn(expr.fn)
     if isinstance(untiled_inner_fn.return_type, ScalarT):
-      tiled_inner_fn = self.transform_TypedFn(untiled_inner_fn) 
+      tiled_inner_fn = self.transform_TypedFn(untiled_inner_fn)
     else:
-      tiled_inner_fn = self.transform_TypedFn(untiled_inner_fn, 
+      tiled_inner_fn = self.transform_TypedFn(untiled_inner_fn,
                                               preallocate_output = True)
-    
+
     nested_has_tiles = tiled_inner_fn.has_tiles
 
     # Increase the nesting_idx by the number of tiles in the nested fn
@@ -146,18 +143,19 @@ class LowerTiledAdverbs(Transform):
 
     closure_args = [self.get_closure_arg(e)
                     for e in self.closure_elts(expr.fn)]
-    
+
     if self.output_var and \
        not isinstance(untiled_inner_fn.return_type, ScalarT):
       array_result = self.output_var
     else:
       shape_args = closure_args + expr.args
-      array_result = self._create_output_array(untiled_inner_fn, shape_args, 
+      array_result = self._create_output_array(untiled_inner_fn, shape_args,
                                                [], "array_result")
-      
+
     assert self.output_var is None or \
            self.output_var.type.__class__ is ArrayT, \
-           "Invalid output var %s : %s" % (self.output_var, self.output_var.type)    
+           "Invalid output var %s : %s" % \
+           (self.output_var, self.output_var.type)
     i = self.fresh_var(niters.type, "i")
     start = zero_i64
     step = tile_size
@@ -174,30 +172,28 @@ class LowerTiledAdverbs(Transform):
     out_idx = self.nesting_idx if self.tiling else self.fixed_idx
     output_region = self.index_along_axis(array_result, out_idx, tile_bounds)
     nested_args.append(output_region)
-    
+
     if nested_has_tiles:
       nested_args.append(self.tile_sizes_param)
     body = self.blocks.pop()
     do_inline(tiled_inner_fn,
-              closure_args + nested_args, 
-              self.type_env, 
+              closure_args + nested_args,
+              self.type_env,
               body,
               result_var = None)
     assert isinstance(step, syntax.Expr)
     loop = syntax.ForLoop(i, start, stop, step, body, {})
-    
+
     self.blocks.append(loop)
     return array_result
 
-  
   def transform_expr(self, expr):
     if isinstance(expr, adverbs.Tiled):
       return Transform.transform_expr(self, expr)
     else:
-      return expr 
-  
-  def transform_TiledReduce(self, expr):
+      return expr
 
+  def transform_TiledReduce(self, expr):
     args = expr.args
     axes = expr.axes
 
@@ -216,26 +212,25 @@ class LowerTiledAdverbs(Transform):
                              temp = True, name = "tilesize")
 
     slice_t = array_type.make_slice_type(Int64, Int64, Int64)
-    
+
     untiled_map_fn = self.get_fn(expr.fn)
-    
+
     acc_type = untiled_map_fn.return_type
     acc_is_array = not isinstance(acc_type, ScalarT)
-     
+
     tiled_map_fn = self.transform_TypedFn(untiled_map_fn)
     map_closure_args = [self.get_closure_arg(e)
                         for e in self.closure_elts(expr.fn)]
-                        
+
     untiled_combine = self.get_fn(expr.combine)
     combine_closure_args = []
-    
-    
-    tiled_combine = self.transform_TypedFn(untiled_combine, acc_is_array) 
+
+    tiled_combine = self.transform_TypedFn(untiled_combine, acc_is_array)
     if self.output_var and acc_is_array:
-      result = self.output_var 
+      result = self.output_var
     else:
       shape_args = map_closure_args + args
-      result = self._create_output_array(untiled_map_fn, shape_args, 
+      result = self._create_output_array(untiled_map_fn, shape_args,
                                          [], "loop_result")
     init = result
     rslt_t = result.type
@@ -269,7 +264,7 @@ class LowerTiledAdverbs(Transform):
     stop = niters
     step = tile_size
     merge = {}
-    
+
     if not acc_is_array:
       result_after = self.fresh_var(rslt_t, "result_after")
       merge[result.name] = (result_before, result_after)
@@ -282,28 +277,28 @@ class LowerTiledAdverbs(Transform):
     tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, slice_t)
     nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                    for arg, axis in zip(args, axes)]
-    
+
     new_acc = self.fresh_var(tiled_map_fn.return_type, "new_acc")
-    map_call = syntax.Call(tiled_map_fn, nested_args, type=acc_type)
-    
+    map_call = syntax.Call(tiled_map_fn, nested_args, type = acc_type)
+
     self.assign(new_acc, map_call)
 
     loop_body = self.blocks.pop()
-    if acc_is_array: 
+    if acc_is_array:
       outidx = self.tuple([syntax_helpers.slice_none] * result.type.rank)
       result_slice = self.index(result, outidx, temp = False)
-      do_inline(tiled_combine, 
-                combine_closure_args + [result, new_acc, result_slice], 
-                self.type_env, 
-                loop_body, 
+      do_inline(tiled_combine,
+                combine_closure_args + [result, new_acc, result_slice],
+                self.type_env,
+                loop_body,
                 result_var = None)
     else:
-      do_inline(tiled_combine,  
-                combine_closure_args + [result, new_acc], 
-                self.type_env, loop_body, 
+      do_inline(tiled_combine,
+                combine_closure_args + [result, new_acc],
+                self.type_env, loop_body,
                 result_var = result_after)
-      
-    assert isinstance(step, syntax.Expr), "%s not an expr" % step 
+
+    assert isinstance(step, syntax.Expr), "%s not an expr" % step
     loop = syntax.ForLoop(i, start, stop, step, loop_body, merge)
     self.blocks.append(loop)
     return result

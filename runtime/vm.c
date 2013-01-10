@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define aligned __attribute__((aligned(16)))
+
 typedef struct {
   double *a;
   double *b;
@@ -12,7 +14,8 @@ typedef struct {
 } vm_args_t;
 
 double *make_array(int m, int n) {
-  double *array = (double*)malloc(m * n * sizeof(double));
+  double *array;
+  posix_memalign((void**)(&array), 16, m * n * sizeof(double));
   int i;
   for (i = 0; i < m * n; ++i) {
     array[i] = ((double)m) / n;
@@ -898,9 +901,9 @@ void vm_a2_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
 
 void vm_a4_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   vm_args_t *my_args = (vm_args_t*)args;
-  double *A = my_args->a;
-  double *B = my_args->b;
-  double *O = my_args->out;
+  double *A aligned = my_args->a;
+  double *B aligned = my_args->b;
+  double *O aligned = my_args->out;
   int m = my_args->m;
   int n = my_args->n;
   int kLen = my_args->k;
@@ -913,10 +916,10 @@ void vm_a4_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
   int64_t j;
   for (j = 0; j < n; j += l1bLen) {
     int64_t j2End = min(j + l1bLen, n);
-    double *Btile = B + j*kLen;
+    double *Btile aligned = B + j*kLen;
     int64_t it;
     for (it = start; it < end; ++it) {
-      double *Otile = O + it*n;
+      double *Otile aligned = O + it*n;
       int64_t jt;
       for (jt = j; jt < j2End; ++jt) {
         Otile[jt] = 0.0;
@@ -928,13 +931,13 @@ void vm_a4_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
       int64_t i2;
       // A's reg tile size set to 4.
       for (i2 = start; i2 < end - 3; i2 += 4) {
-        double *Arow = A + i2*kLen;
-        double *Orow = O + i2*n;
+        double *Arow aligned = A + i2*kLen;
+        double *Orow aligned = O + i2*n;
         int64_t j2;
         // B's reg tile size set to 4.
         for (j2 = j; j2 < j2End - 3; j2 += 4) {
-          double *Brow = B + j2*kLen;
-          double *Ocol = Orow + j2;
+          double *Brow aligned = B + j2*kLen;
+          double *Ocol aligned = Orow + j2;
           double c0, c1, c2, c3, c4, c5, c6, c7;
           double c8, c9, c10, c11, c12, c13, c14, c15;
           c0 = c1 = c2 = c3 = c4 = c5 = c6 = c7 = 0.0;
@@ -985,8 +988,8 @@ void vm_a4_b4_k0(int64_t start, int64_t end, void *args, int64_t *tile_sizes) {
         }
         // Cleanup stragglers of j2 register tile
         for (; j2 < j2End; ++j2) {
-          double *Brow = B + j2*kLen;
-          double *Ocol = Orow + j2;
+          double *Brow aligned = B + j2*kLen;
+          double *Ocol aligned = Orow + j2;
           double c0, c1, c2, c3;
           c0 = c1 = c2 = c3 = 0.0;
           int64_t k3;

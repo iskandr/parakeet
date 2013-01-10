@@ -31,7 +31,6 @@ loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
                 cleanup = [Simplify, DCE],
                 copy = True)
 
-
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
 post_tiling = Phase([fusion_opt], copy = True)
@@ -41,7 +40,6 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs,  copy_elim],
                rename = True,
                memoize = False,
                cleanup = [Simplify, DCE])
-
 
 def print_lowered(fn):
   if config.print_lowered_function:
@@ -66,4 +64,7 @@ def lower_tiled(fn, ignore_config = True):
   tiled = tiling.apply(fn, ignore_config = ignore_config)
   loopy = loopify.apply(tiled, run_dependencies = False)
   lowered = lowering.apply(loopy, run_dependencies = False)
+
+  print tiled.ml_tile_estimates
+  print lowered.ml_tile_estimates
   return lowered

@@ -10,7 +10,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show the input function to each transformation?
 print_functions_before_transforms = False # ['LowerTiledAdverbs'] #
@@ -78,10 +78,10 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = False
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = True
+opt_autotune_tile_sizes = False

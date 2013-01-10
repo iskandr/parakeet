@@ -4,9 +4,7 @@ import llvm.ee as ee
 import llvm.passes as passes
 
 class LLVM_Context:
-  """
-  Combine a module, exec engine, and pass manager into a single object
-  """
+  """Combine a module, exec engine, and pass manager into a single object"""
 
   _verify_passes = [
     'preverify',
@@ -18,7 +16,7 @@ class LLVM_Context:
     'mem2reg',
     'targetlibinfo',
     'no-aa',
-    'basicaa', 
+    'basicaa',
     'memdep',
     'tbaa',
     'instcombine',
@@ -47,7 +45,7 @@ class LLVM_Context:
     'instcombine',
     'scalar-evolution',
     'loop-simplify',
-    'lcssa', 
+    'lcssa',
     'indvars',
     'loop-idiom',
     'loop-deletion',
@@ -74,9 +72,11 @@ class LLVM_Context:
     else:
       self.engine_builder.opt(0)
     self.exec_engine = self.engine_builder.create()
-    self.pass_manager = passes.FunctionPassManager.new(self.module)
+    tm = ee.TargetMachine.new(opt = 3)
+    self.pass_manager = passes.build_pass_managers(tm, opt = 3,
+                                                   loop_vectorize = True,
+                                                   mod = self.module).fpm
 
-    self.pass_manager.add(self.exec_engine.target_data)
     for p in self._verify_passes:
       self.pass_manager.add(p)
     if optimize:

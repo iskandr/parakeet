@@ -122,7 +122,6 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     return_t = fn.return_type
     call = syntax.Call(nested_closure, unpacked_args, type = return_t)
 
-
     output_name = names.fresh("output")
     output_attr = syntax.Attribute(args_var, "output", type = return_t)
     output_var = syntax.Var(output_name, type = output_attr.type)
@@ -135,7 +134,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
       type_env[arg.name] = arg.type
 
     # Construct the typed wrapper.
-    wrapper_name = adverb_class.node_type() + fn.name +"_par"
+    wrapper_name = adverb_class.node_type() + fn.name + "_par"
     parallel_wrapper = \
         syntax.TypedFn(name = names.fresh(wrapper_name),
                        arg_names = [var.name for var in inputs],
@@ -247,9 +246,8 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     tile_sizes = tile_sizes_t()
     ts = [70, 50, 1000]
     for i in range(len(fn.dl_tile_estimates)):
-      #tile_sizes[i] = fn.ml_tile_estimates[i]
-      tile_sizes[i] = ts[i]
-    print fn.ml_tile_estimates
+      tile_sizes[i] = fn.ml_tile_estimates[i]
+      #tile_sizes[i] = ts[i]
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:

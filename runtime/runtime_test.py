@@ -14,7 +14,7 @@ class vm_args_t(Structure):
               ("n", c_int),
               ("k", c_int)]
 
-libVM = cdll.LoadLibrary("vm.so")
+libVM = cdll.LoadLibrary("./vm.so")
 libVM.make_array.restype = POINTER(c_double)
 
 #m = 24000
@@ -36,16 +36,16 @@ for i in range(8):
 num_tiles = 3
 tile_sizes_t = c_int64 * num_tiles
 tile_sizes = tile_sizes_t()
-tile_sizes[0] = 62
-tile_sizes[1] = 1000
-tile_sizes[2] = 200
+tile_sizes[0] = 60
+tile_sizes[1] = 200
+tile_sizes[2] = 2000
 
 r = runtime.Runtime()
 print "Launching parallel job"
 start = time.time()
 #r.run_job(libVM, cast(args, c_void_p), m, [n, k], [None, None])
 #r.run_untiled_job(libVM.vm3, cast(args, c_void_p), m)
-r.run_job_with_fixed_tiles(libVM.vm_a4_b4_k0, cast(args, c_void_p), m,
+r.run_job_with_fixed_tiles(libVM.vm3, cast(args, c_void_p), m,
                            tile_sizes)
 stop = time.time()
 r.cleanup()
