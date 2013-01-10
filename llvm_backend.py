@@ -1,4 +1,4 @@
-from llvm.core import Builder
+from llvm.core import Builder, ATTR_NO_CAPTURE
 from llvm.core import Type as lltype
 
 import config
@@ -33,6 +33,11 @@ class Compiler(object):
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
 
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
+    for arg in self.llvm_fn.args:
+      if not llvm_types.is_scalar(arg.type):
+        arg.add_attribute(ATTR_NO_CAPTURE)
+    self.llvm_fn.does_not_throw = True
+
     self.entry_block, self.entry_builder = self.new_block("entry")
     self._init_vars(self.parakeet_fundef, self.entry_builder)
 
@@ -135,7 +140,8 @@ class Compiler(object):
     llvm_idx = llvm_convert.convert(llvm_index, index_t, Int32, builder)
 
     pointer = builder.gep(llvm_arr, [llvm_idx], "elt_pointer")
-    elt = builder.load(pointer, "elt")
+    elt = builder.load(pointer, "elt", align = 16, invariant = True)
+
     return elt
 
   def compile_Attribute(self, expr, builder):
@@ -360,7 +366,6 @@ class Compiler(object):
     return getattr(self, method_name)(stmt, builder)
 
   def compile_block(self, stmts, builder):
-
     for stmt in stmts:
       builder, always_returns = self.compile_stmt(stmt, builder)
       if always_returns:

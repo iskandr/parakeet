@@ -12,11 +12,15 @@ print_specialized_function = False
 # it gets translated to LLVM?
 print_lowered_function = False
 
+# print function after all adverbs have been
+# turned to loops
+print_loopy_function = False
+
 # show the input function to each transformation?
 print_functions_before_transforms = False # ['LowerAdverbs', 'LowerIndexing']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False # ['LowerAdverbs']
+print_functions_after_transforms = False
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -48,15 +52,20 @@ print_parallel_exec_time = False
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
+opt_verify = True
 opt_inline = True
 opt_fusion = True
 opt_licm = True
-opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 
+# may increase compile time
 opt_loop_fusion = False
+
+# Warning: loop fusion never fully implemented
 opt_loop_unrolling = False
+
+stride_specialization = True
 
 ######################################
 #           LLVM OPTIONS             #
@@ -79,7 +88,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = False

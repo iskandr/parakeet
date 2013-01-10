@@ -37,24 +37,27 @@ def contains_adverbs(fn):
   try:
     ContainsAdverbs().visit_fn(fn)
   except ContainsAdverbs.Yes:
-    print "found adverbs in %s" % fn.name
     return True
   return False
+
+def print_loopy(fn):
+  if config.print_loopy_function:
+    print
+    print "=== Loopy function ==="
+    print
+    print repr(fn)
+    print
 
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-loopify = Phase([Simplify, LowerAdverbs, inline_opt, licm, copy_elim, licm],
+loopify = Phase([Simplify, LowerAdverbs, inline_opt, copy_elim, licm],
                 depends_on = high_level_optimizations,
                 cleanup = [Simplify, DCE],
-                copy = True, 
-                run_if = contains_adverbs)
-
-
-
-  
-  
+                copy = True,
+                run_if = contains_adverbs,
+                post_apply = print_loopy)
 
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
@@ -74,7 +77,7 @@ def print_lowered(fn):
     print
     print repr(fn)
     print
-    
+
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 lowering = Phase([unroll, LowerIndexing, loop_fusion, licm, LowerStructs, licm],
                  depends_on = loopify,
