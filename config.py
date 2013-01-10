@@ -22,7 +22,7 @@ print_functions_after_transforms = False # ['LowerAdverbs']
 print_functions_before_tiling = False
 
 # show functions after tiling transformation?
-print_tiled_adverbs = True
+print_tiled_adverbs = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -55,7 +55,7 @@ opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 
-opt_loop_fusion = False
+opt_loop_fusion = True
 opt_loop_unrolling = False
 
 ######################################

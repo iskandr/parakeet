@@ -381,14 +381,14 @@ def compile_fn(fundef):
   if config.print_unoptimized_llvm:
     print "=== LLVM before optimizations =="
     print
-    print compiler.llvm_fn
+    print compiler.llvm_context.module
     print
   compiler.llvm_context.run_passes(compiler.llvm_fn)
 
   if config.print_optimized_llvm:
     print "=== LLVM after optimizations =="
     print
-    print compiler.llvm_fn
+    print compiler.llvm_context.module
     print
 
   result = (compiler.llvm_fn, fundef, compiler.llvm_context.exec_engine)

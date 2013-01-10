@@ -18,7 +18,7 @@ runtime: threadpool job
 
 tests: runtime threadpool
 	$(CC) -fPIC -c vm.c $(FLAGS) -o vm.o
-	$(CC) -shared -o vm.so vm.o
+	$(CC) -shared -o vm.so vm.o mm_opt_parakeet.o
 
 clean:
 	rm -f *_test *.o *.so *.pyc *~
