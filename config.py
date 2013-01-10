@@ -55,7 +55,7 @@ opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True 
 
-opt_loop_fusion = False
+opt_loop_fusion = True
 opt_loop_unrolling = False
 
 ######################################
