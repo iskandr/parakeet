@@ -48,14 +48,17 @@ print_parallel_exec_time = False
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
+opt_verify = True
 opt_inline = True
 opt_fusion = True
 opt_licm = True
-opt_verify = True
 opt_copy_elimination = True
 opt_stack_allocation = True 
 
-opt_loop_fusion = True
+# may increase compile time
+opt_loop_fusion = False
+
+# Warning: loop fusion never fully implemented
 opt_loop_unrolling = False
 
 ######################################

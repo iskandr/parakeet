@@ -37,7 +37,6 @@ def contains_adverbs(fn):
   try:
     ContainsAdverbs().visit_fn(fn)
   except ContainsAdverbs.Yes:
-    print "found adverbs in %s" % fn.name
     return True
   return False
 
