@@ -80,7 +80,6 @@ class CopyElimination(Transform):
             if array_stmt.rhs.__class__ in array_constructors and \
                all(self.usedef.created_on[lhs_depends_on] < prev_path
                    for lhs_depends_on in collect_var_names(stmt.lhs)):
-              print "[CopyElim] alloc %s => %s" % (array_stmt, stmt.lhs)
               array_stmt.rhs = stmt.lhs
               return None
     """
