@@ -14,7 +14,7 @@ from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call, TypedFn, Fn 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
-from syntax_helpers import get_types 
+from syntax_helpers import get_types, slice_none_t
 from transform import Transform
 from tuple_type import TupleT
 from use_analysis import use_count
@@ -73,9 +73,9 @@ class Simplify(Transform):
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
-    elif c in (Map, AllPairs):
+    elif c is Map or c is AllPairs:
       return expr.args 
-    elif c in (Scan, Reduce):  
+    elif c is Scan or c is Reduce:  
       args = tuple(expr.args)
       init = (expr.init,) if expr.init else ()
       return init + args 
@@ -107,7 +107,8 @@ class Simplify(Transform):
     c = expr.__class__ 
     if c is Const:
       return True 
-    elif c in (Tuple, TupleProj, Closure, ClosureElt, Attribute):
+    elif c is Tuple or c is TupleProj or \
+         c is Closure or c is ClosureElt or c is Attribute:
       return True 
     # WARNING: making attributes always immutable 
     # elif c is Attribute and expr.value.type.__class__ is TupleT:
@@ -376,9 +377,10 @@ class Simplify(Transform):
         return self.transform_stmt(ExprStmt(rhs))    
       else: 
         self.bind_var(lhs.name, rhs)
-        if rhs_class not in (Var, Const) and \
-            self.immutable(rhs) and \
-            rhs not in self.available_expressions:
+        if rhs_class is not Var and \
+           rhs_class is not Const and \
+           self.immutable(rhs) and \
+           rhs not in self.available_expressions:
           self.available_expressions[rhs] = lhs
     elif lhs_class is Tuple: 
       self.bind(lhs, rhs)
@@ -389,9 +391,18 @@ class Simplify(Transform):
       if rhs_class is Index and \
          lhs.value == rhs.value and \
          lhs.index == rhs.index:
+        # kill effect-free writes like x[i] = x[i]
+        return None 
+      elif rhs_class is Var and \
+           lhs.value.__class__ is Var and \
+           lhs.value.name == rhs.name and \
+           lhs.index.type.__class__ is TupleT and \
+           all(elt_t == slice_none_t for elt_t in lhs.index.type.elt_types):
+        # also kill x[:] = x
         return None 
       else:   
         lhs = self.transform_lhs_Index(lhs)
+        
     else:
       assert lhs_class is Attribute
       assert False, "Considering making attributes immutable" 
@@ -495,6 +506,17 @@ class Simplify(Transform):
   
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
+    """
+    if new_value.__class__ is Var and \
+       new_value.name in self.use_counts and \
+       self.use_counts[new_value.name] == 1 and \
+       new_value.name in self.bindings:
+      stored = self.bindings[stmt.value.name]
+      if self.immutable(stored) and stored.__class__ is not AllPairs:
+        print "Replacing %s => %s" % (stmt, stored) 
+        stmt.value = stored
+        return stmt 
+    """
     if new_value != stmt.value:
       stmt.value = new_value
     return stmt

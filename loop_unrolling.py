@@ -1,15 +1,24 @@
+import clone_function
 import names 
 import syntax 
 import syntax_helpers 
 
-import clone_function
+from array_type import ArrayT
 from clone_function import CloneFunction
-from collect_vars import collect_bindings, collect_binding_names 
+from collect_vars import collect_bindings, collect_binding_names
+from core_types import ScalarT 
 from nested_blocks import NestedBlocks
 from subst import subst_stmt_list
 from syntax import Assign, ForLoop, While, If, Return  
 from syntax import Const, Var, Tuple     
+from tuple_type import TupleT
 from transform import Transform  
+
+def simple_assignment_type(t):
+  if t.__class__ is TupleT:
+    return all(simple_assignment_type(elt_t) for elt_t in t.elt_types)
+  else:
+    return t.__class__ is not ArrayT
 
 def simple_loop_body(stmts):
   for stmt in stmts:
@@ -18,6 +27,9 @@ def simple_loop_body(stmts):
     elif stmt.__class__ is If:
       if not simple_loop_body(stmt.true) or not simple_loop_body(stmt.false):
         return False 
+    elif stmt.__class__ is Assign and \
+         not simple_assignment_type(stmt.lhs.type):
+      return False 
   return True 
 
 class CloneStmt(CloneFunction):  

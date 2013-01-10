@@ -15,21 +15,46 @@ from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
+import syntax_visitor
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion')
-inline_opt = Phase(Inliner, config_param = 'opt_inline')
-high_level_optimizations = Phase([Simplify, inline_opt, fusion_opt],
-                                 cleanup = [Simplify, DCE])
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [], memoize = False)
+inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
+high_level_optimizations = Phase([Simplify, inline_opt, Simplify, DCE, fusion_opt, DCE])
+
+class ContainsAdverbs(syntax_visitor.SyntaxVisitor):
+  class Yes(Exception):
+    pass
+  def visit_Map(self, _):
+    raise self.Yes()
+  def visit_Reduce(self, _):
+    raise self.Yes()
+  def visit_Scan(self, _):
+    raise self.Yes()
+  def visit_AllPairs(self, _):
+    raise self.Yes()
+
+def contains_adverbs(fn):
+  try:
+    ContainsAdverbs().visit_fn(fn)
+  except ContainsAdverbs.Yes:
+    print "found adverbs in %s" % fn.name
+    return True
+  return False
 
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
-loopify = Phase([LowerAdverbs, inline_opt, licm, copy_elim, loop_fusion, licm],
+loopify = Phase([Simplify, LowerAdverbs, inline_opt, licm, copy_elim, licm],
                 depends_on = high_level_optimizations,
                 cleanup = [Simplify, DCE],
-                copy = True)
+                copy = True, 
+                run_if = contains_adverbs)
+
+
+
+  
+  
 
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
@@ -39,6 +64,7 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                depends_on = high_level_optimizations,
                rename = True,
                memoize = False,
+               run_if = contains_adverbs,
                cleanup = [Simplify, DCE])
 
 def print_lowered(fn):
@@ -48,11 +74,12 @@ def print_lowered(fn):
     print
     print repr(fn)
     print
-
-lowering = Phase([LowerIndexing, licm, unroll, LowerStructs, licm],
+    
+unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
+lowering = Phase([unroll, LowerIndexing, loop_fusion, licm, LowerStructs, licm],
                  depends_on = loopify,
                  copy = True,
-                 run_after = print_lowered,
+                 post_apply = print_lowered,
                  cleanup = [Simplify, DCE])
 
 def lower_tiled(fn, ignore_config = True):

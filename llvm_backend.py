@@ -5,7 +5,6 @@ import config
 import escape_analysis
 import llvm_context
 import llvm_convert
-import llvm_helpers 
 import llvm_prims
 import llvm_types
 import prims
@@ -13,11 +12,9 @@ import syntax_helpers
 
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
-
 from llvm_helpers import const, int32
 from llvm_types import llvm_value_type, llvm_ref_type
-from syntax import Var, Struct, Index, TypedFn, Attribute 
-
+from syntax import Var, Struct, Index, TypedFn, Attribute
 
 _escape_analysis_cache = {}
 class Compiler(object):
@@ -26,7 +23,7 @@ class Compiler(object):
     if config.opt_stack_allocation:
       self.may_escape = escape_analysis.may_escape(fundef)
     else:
-      self.may_escape = None 
+      self.may_escape = None
     self.llvm_context = llvm_cxt
     self.vars = {}
     self.initialized = set([])
@@ -306,8 +303,8 @@ class Compiler(object):
     cond = llvm_convert.to_bit(cond, builder)
 
     if len(stmt.true) == 0 and len(stmt.false) == 0:
-      # if nothing happens in the loop bodies, just 
-      # emit select instructions 
+      # if nothing happens in the loop bodies, just
+      # emit select instructions
       for (name, (true_expr, false_expr)) in stmt.merge.iteritems():
         ref = self.vars[name]
         self.initialized.add(name)
@@ -315,7 +312,7 @@ class Compiler(object):
         false_val = self.compile_expr(false_expr, builder)
         select_val = builder.select(cond, true_val, false_val)
         builder.store(select_val, ref)
-      return builder, False 
+      return builder, False
     else:
       # compile the two possible branches as distinct basic blocks
       # and then wire together the control flow with branches
@@ -346,17 +343,17 @@ class Compiler(object):
       if not false_always_returns:
         after_false.branch(after_bb)
       return after_builder, False
-    
-  def compile_Comment(self, stmt, builder):  
-    return builder, False 
-  
+
+  def compile_Comment(self, stmt, builder):
+    return builder, False
+
   def compile_stmt(self, stmt, builder):
     """
     Translate an SSA statement into LLVM. Every translation function returns a
     builder pointing to the end of the current basic block and a boolean
     indicating whether every branch of control flow in that statement ends in a
-    return. The latter is needed to avoid creating empty basic blocks, which were
-    causing some mysterious crashes inside LLVM.
+    return. The latter is needed to avoid creating empty basic blocks, which
+    were causing some mysterious crashes inside LLVM.
     """
 
     method_name = "compile_" + stmt.node_type()
@@ -375,7 +372,6 @@ class Compiler(object):
 
 compiled_functions = {}
 def compile_fn(fundef):
-  
   if fundef.name in compiled_functions:
     return compiled_functions[fundef.name]
 
@@ -394,7 +390,6 @@ def compile_fn(fundef):
     print
     print compiler.llvm_fn
     print
-
 
   result = (compiler.llvm_fn, fundef, compiler.llvm_context.exec_engine)
   compiled_functions[fundef.name] = result

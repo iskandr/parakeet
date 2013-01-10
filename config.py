@@ -13,10 +13,10 @@ print_specialized_function = False
 print_lowered_function = True
 
 # show the input function to each transformation?
-print_functions_before_transforms = False #['Fusion']
+print_functions_before_transforms = False # ['LowerAdverbs', 'LowerIndexing']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False #['Fusion']
+print_functions_after_transforms = False # ['LowerAdverbs']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False

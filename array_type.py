@@ -33,7 +33,7 @@ class SliceT(StructT):
 
   def __eq__(self, other):
     return self is other or \
-      (isinstance(other, SliceT) and
+      (other.__class__ is SliceT and
        self.start_type == other.start_type and
        self.stop_type == other.stop_type and
        self.step_type == other.step_type)

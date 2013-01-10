@@ -54,8 +54,6 @@ class LLVM_Context:
     'sccp',
     'dse',
     'adce',
-    # 'bb-vectorize',
-    'adce',
     'correlated-propagation',
     'jump-threading',
     'simplifycfg',
