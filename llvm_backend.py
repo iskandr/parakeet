@@ -135,11 +135,7 @@ class Compiler(object):
   def compile_Index(self, expr, builder):
     llvm_arr = self.compile_expr(expr.value, builder)
     llvm_index = self.compile_expr(expr.index, builder)
-
-    index_t = expr.index.type
-    llvm_idx = llvm_convert.convert(llvm_index, index_t, Int32, builder)
-
-    pointer = builder.gep(llvm_arr, [llvm_idx], "elt_pointer")
+    pointer = builder.gep(llvm_arr, [llvm_index], "elt_pointer")
     elt = builder.load(pointer, "elt", align = 16, invariant = True)
 
     return elt
@@ -168,31 +164,29 @@ class Compiler(object):
 
     return builder.call(target_fn, llvm_args, 'call_result')
 
-  def compile_PrimCall(self, expr, builder):
-    prim = expr.prim
-    args = expr.args
+  def cmp(self, prim, t, llvm_x, llvm_y, builder, result_name = None):
+    if result_name is None:
+      result_name = prim.name + "_result"
 
-    # type specialization should have made types of arguments uniform,
-    # so we only need to check the type of the first arg
-    t = args[0].type
+    if isinstance(t, FloatT):
+      cmp_op = llvm_prims.float_comparisons[prim]
+      return builder.fcmp(cmp_op, llvm_x, llvm_y, result_name)
+    elif isinstance(t, SignedT):
+      cmp_op = llvm_prims.signed_int_comparisons[prim]
+      return builder.icmp(cmp_op, llvm_x, llvm_y, result_name)
+    else:
+      assert isinstance(t, UnsignedT), "Unexpected type: %s" % t
+      cmp_op = llvm_prims.unsigned_int_comparisons[prim]
+      return builder.icmp(cmp_op, llvm_x, llvm_y, result_name)
 
-    llvm_args = [self.compile_expr(arg, builder) for arg in args]
-
-    result_name = prim.name + "_result"
+  def prim(self, prim, t, llvm_args, builder, result_name = None):
+    if result_name is None:
+      result_name = prim.name + "_result"
 
     if isinstance(prim, prims.Cmp):
-      x, y = llvm_args
-      if isinstance(t, FloatT):
-        cmp_op = llvm_prims.float_comparisons[prim]
-        bit = builder.fcmp(cmp_op, x, y, result_name)
-      elif isinstance(t, SignedT):
-        cmp_op = llvm_prims.signed_int_comparisons[prim]
-        bit = builder.icmp(cmp_op, x, y, result_name)
-      else:
-        assert isinstance(t, UnsignedT), "Unexpected type: %s" % t
-        cmp_op = llvm_prims.unsigned_int_comparisons[prim]
-        bit = builder.icmp(cmp_op, x, y, result_name)
+      bit = self.cmp(prim, t, llvm_args[0], llvm_args[1], builder)
       return llvm_convert.to_bool(bit,builder)
+
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
       if isinstance(t, FloatT):
         instr = llvm_prims.float_binops[prim]
@@ -205,6 +199,7 @@ class Compiler(object):
         instr = llvm_prims.bool_binops[prim]
       op = getattr(builder, instr)
       return op(name = result_name, *llvm_args)
+
     elif isinstance(prim, prims.Logical):
       if prim == prims.logical_and:
         return builder.and_(name = result_name, *llvm_args)
@@ -214,7 +209,15 @@ class Compiler(object):
         assert prim == prims.logical_or
         return builder.or_(name = result_name, *llvm_args)
     else:
-      assert False, "UNSUPPORTED PRIMITIVE: %s" % expr
+      assert False, "UNSUPPORTED PRIMITIVE: %s" % prim
+
+  def compile_PrimCall(self, expr, builder):
+    args = expr.args
+    # type specialization should have made types of arguments uniform,
+    # so we only need to check the type of the first arg
+    t = args[0].type
+    llvm_args = [self.compile_expr(arg, builder) for arg in args]
+    return self.prim(expr.prim, t, llvm_args, builder)
 
   def compile_expr(self, expr, builder):
     method_name = "compile_" + expr.node_type()
@@ -278,6 +281,55 @@ class Compiler(object):
       self.initialized.add(name)
       value = self.compile_expr(right, builder)
       builder.store(value, ref)
+
+  def compile_ForLoop(self, stmt, builder):
+    # first compile the starting, boundary, and
+    # increment values for the loop counter
+    start = self.compile_expr(stmt.start, builder)
+    stop = self.compile_expr(stmt.stop, builder)
+    step = self.compile_expr(stmt.step, builder)
+
+    # get the memory slot associated with the loop counter
+    loop_var = self.vars[stmt.var.name]
+
+    builder.store(start, loop_var)
+    self.initialized.add(stmt.var.name)
+
+    # ...and we'll need its Parakeet type later on
+    # for calls to 'cmp' and 'prim'
+    loop_var_t = stmt.var.type
+
+    # any phi-bound variables should be initialized to their
+    # starting values
+    self.compile_merge_left(stmt.merge, builder)
+
+    loop_bb, body_start_builder = self.new_block("loop_body")
+    after_bb, after_builder = self.new_block("after_loop")
+
+    # WARNING: Assuming loop is always increasing,
+    # only enter the loop if we're less than the stopping value
+    enter_cond = self.cmp(prims.less, loop_var_t,  start, stop,
+                          builder, "enter_cond")
+    builder.cbranch(enter_cond, loop_bb, after_bb)
+
+    # TODO: what should we do if the body always ends in a return statement?
+    body_end_builder, body_always_returns = \
+      self.compile_block(stmt.body, body_start_builder)
+
+    counter_at_end = body_end_builder.load(loop_var)
+    # increment the loop counter
+    incr = self.prim(prims.add, loop_var_t,
+                     [counter_at_end, step],
+                     body_end_builder,  "incr_loop_var")
+    body_end_builder.store(incr, loop_var)
+    self.compile_merge_right(stmt.merge, body_end_builder)
+
+    exit_cond = self.cmp(prims.less, loop_var_t, incr, stop,
+                         body_end_builder, "exit_cond")
+    body_end_builder.cbranch(exit_cond, loop_bb, after_bb)
+    # WARNING: what if the loop doesn't run? Should
+    # we still be returning 'body_always_returns'?
+    return after_builder, body_always_returns
 
   def compile_While(self, stmt, builder):
     # current flow ----> loop --------> exit--> after
@@ -361,7 +413,6 @@ class Compiler(object):
     return. The latter is needed to avoid creating empty basic blocks, which
     were causing some mysterious crashes inside LLVM.
     """
-
     method_name = "compile_" + stmt.node_type()
     return getattr(self, method_name)(stmt, builder)
 
@@ -382,7 +433,6 @@ def compile_fn(fundef):
 
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
-
   if config.print_unoptimized_llvm:
     print "=== LLVM before optimizations =="
     print

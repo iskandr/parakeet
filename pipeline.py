@@ -94,7 +94,4 @@ def lower_tiled(fn, ignore_config = True):
   tiled = tiling.apply(fn, ignore_config = ignore_config)
   loopy = loopify.apply(tiled, run_dependencies = False)
   lowered = lowering.apply(loopy, run_dependencies = False)
-
-  print tiled.ml_tile_estimates
-  print lowered.ml_tile_estimates
   return lowered

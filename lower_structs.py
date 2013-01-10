@@ -1,3 +1,4 @@
+import config
 import closure_type
 import core_types
 import syntax
@@ -17,20 +18,24 @@ class LowerStructs(Transform):
     return pipeline.lowering.apply(expr)
 
   def transform_ForLoop(self, stmt):
-    start_var = self.assign_temp(stmt.start, stmt.var.name)
-    start_cond = self.lt(start_var, stmt.stop, "cond")
+    if config.lower_for_loops:
+      start_var = self.assign_temp(stmt.start, stmt.var.name)
+      start_cond = self.lt(start_var, stmt.stop, "cond")
 
-    loop_var = stmt.var
-    self.blocks.push(self.transform_block(stmt.body))
+      loop_var = stmt.var
+      self.blocks.push(self.transform_block(stmt.body))
 
-    after_var = self.add(loop_var, stmt.step, "i_after")
-    after_cond = self.lt(after_var, stmt.stop, "after_cond")
-    loop_cond = self.fresh_var(start_cond.type, "cond")
-    merge = stmt.merge
-    merge[loop_cond.name] = (start_cond, after_cond)
-    merge[loop_var.name] = (start_var, after_var)
-    new_body = self.blocks.pop()
-    return While(loop_cond, new_body, merge)
+      after_var = self.add(loop_var, stmt.step, "i_after")
+      after_cond = self.lt(after_var, stmt.stop, "after_cond")
+      loop_cond = self.fresh_var(start_cond.type, "cond")
+      merge = stmt.merge
+      merge[loop_cond.name] = (start_cond, after_cond)
+      merge[loop_var.name] = (start_var, after_var)
+      new_body = self.blocks.pop()
+      return While(loop_cond, new_body, merge)
+    else:
+      stmt.body = self.transform_block(stmt.body)
+      return stmt
 
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
@@ -72,9 +77,7 @@ class LowerStructs(Transform):
     return syntax.Attribute(new_closure, field_name, type = field_type)
 
   def array_view(self, data, shape, strides, offset, nelts):
-    """
-    Helper function used by multiple array-related transformations
-    """
+    """Helper function used by multiple array-related transformations"""
 
     data = self.assign_temp(self.transform_expr(data), "data_ptr")
     data_t = data.type
@@ -107,12 +110,9 @@ class LowerStructs(Transform):
         (expr.type, array_struct.type)
     return array_struct
 
-
-
   def transform_Array(self, expr):
-    """
-    Array literal
-    """
+    """Array literal"""
+
     array_t = expr.type
     assert isinstance(array_t, ArrayT)
     elt_t = array_t.elt_type
