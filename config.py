@@ -52,6 +52,7 @@ print_parallel_exec_time = False
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
+lower_for_loops = True 
 opt_verify = True
 opt_inline = True
 opt_fusion = True
@@ -63,9 +64,10 @@ opt_stack_allocation = True
 opt_loop_fusion = False
 
 # Warning: loop fusion never fully implemented
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
-stride_specialization = True 
+stride_specialization = True
+
 
 ######################################
 #           LLVM OPTIONS             #
