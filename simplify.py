@@ -14,7 +14,7 @@ from syntax import Const, Var, Tuple,  TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView,  Attribute, Struct
 from syntax import PrimCall, Call, TypedFn, Fn 
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
-from syntax_helpers import get_types 
+from syntax_helpers import get_types, slice_none_t
 from transform import Transform
 from tuple_type import TupleT
 from use_analysis import use_count
@@ -391,9 +391,18 @@ class Simplify(Transform):
       if rhs_class is Index and \
          lhs.value == rhs.value and \
          lhs.index == rhs.index:
+        # kill effect-free writes like x[i] = x[i]
+        return None 
+      elif rhs_class is Var and \
+           lhs.value.__class__ is Var and \
+           lhs.value.name == rhs.name and \
+           lhs.index.type.__class__ is TupleT and \
+           all(elt_t == slice_none_t for elt_t in lhs.index.type.elt_types):
+        # also kill x[:] = x
         return None 
       else:   
         lhs = self.transform_lhs_Index(lhs)
+        
     else:
       assert lhs_class is Attribute
       assert False, "Considering making attributes immutable" 

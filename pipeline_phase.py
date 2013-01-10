@@ -18,10 +18,10 @@ class Phase(object):
                 depends_on = [],  
                 copy = False, 
                 cleanup = [], 
-                config_param = None, 
-                skip_if = None, 
+                config_param = None,
+                run_if = None, 
                 rename = False,  
-                run_after = None, 
+                post_apply = None, 
                 memoize = True, 
                 name = None):
     self.cache = {}
@@ -44,11 +44,9 @@ class Phase(object):
     self.cleanup = cleanup
     
     self.config_param = config_param 
-    
-    self.skip_if = skip_if 
-    
+    self.run_if = run_if 
     self.rename = rename 
-    self.run_after = run_after 
+    self.post_apply = post_apply 
     self.memoize = memoize 
     self.name = name   
   
@@ -90,12 +88,12 @@ class Phase(object):
       fn = CloneFunction(self.rename).apply(fn)
       fn.copied_by = self 
 
-    if (self.skip_if is None) or (not self.skip_if(fn)):
+    if (self.run_if is None) or self.run_if(fn):
       fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup)
       fn.version += 1
       
-    if self.run_after:
-      new_fn = self.run_after(fn)
+    if self.post_apply:
+      new_fn = self.post_apply(fn)
       if new_fn.__class__ is TypedFn:
         fn = new_fn 
 

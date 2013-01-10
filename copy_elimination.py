@@ -66,7 +66,6 @@ class CopyElimination(Transform):
          lhs_name not in self.may_escape and \
          self.no_array_aliases(lhs_name):
         # why assign to an array if it never gets used?
-        
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
         curr_path = self.usedef.stmt_paths[id(stmt)]
