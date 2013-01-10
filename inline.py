@@ -10,10 +10,10 @@ class FoundCall(Exception):
   pass
 
 class ContainsCalls(syntax_visitor.SyntaxVisitor):
-  def visit_expr(self, expr):
-    if expr.__class__ is syntax.Call:
-      raise FoundCall
-
+  
+  def visit_Call(self, expr):
+    raise FoundCall 
+  
   def visit_fn(self, fn):
     try:
       self.visit_block(fn.body)
@@ -64,7 +64,7 @@ def can_inline_block(stmts, outer = False):
 
 def can_inline(fundef):
   return can_inline_block(fundef.body, outer = True)
-
+  
 def replace_return_with_var(body, type_env, return_type):
   result_name = names.fresh("result")
   type_env[result_name] = return_type
@@ -124,6 +124,7 @@ class Inliner(Transform):
       # at the very least, apply high level optimizations
       import pipeline
       return pipeline.high_level_optimizations.apply(expr)
+
 
   def transform_Call(self, expr):
     target = self.transform_expr(expr.fn)

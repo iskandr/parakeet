@@ -76,7 +76,7 @@ class LowerTiledAdverbs(Transform):
         rank = self.output_var.type.rank 
         slice_all = self.tuple([slice_none] * rank)
         self.setidx(self.output_var, slice_all, value)
-      return None 
+      return None
     else:
       stmt.value = value 
       return stmt 

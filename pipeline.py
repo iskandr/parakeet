@@ -16,7 +16,7 @@ from pipeline_phase import Phase
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion')
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion', memoize = False)
 inline_opt = Phase(Inliner, config_param = 'opt_inline')
 high_level_optimizations = Phase([Simplify, inline_opt, fusion_opt],
                                  cleanup = [Simplify, DCE])

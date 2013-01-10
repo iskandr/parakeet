@@ -495,6 +495,17 @@ class Simplify(Transform):
   
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
+    """
+    if new_value.__class__ is Var and \
+       new_value.name in self.use_counts and \
+       self.use_counts[new_value.name] == 1 and \
+       new_value.name in self.bindings:
+      stored = self.bindings[stmt.value.name]
+      if self.immutable(stored) and stored.__class__ is not AllPairs:
+        print "Replacing %s => %s" % (stmt, stored) 
+        stmt.value = stored
+        return stmt 
+    """
     if new_value != stmt.value:
       stmt.value = new_value
     return stmt

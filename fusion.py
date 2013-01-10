@@ -86,6 +86,7 @@ def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
                    input_types = tuple(fused_input_types), 
                    return_type = next_fn.return_type,
                    type_env = fused_type_env)
+
   return new_fn, prev_fixed_args + next_fixed_args
 
 class Fusion(Transform):
@@ -101,7 +102,6 @@ class Fusion(Transform):
   
   def transform_TypedFn(self, fn):
     if self.fn.copied_by is not None:
-      print self.fn.copied_by
       return self.fn.copied_by.apply(fn)
     else:
       # at the very least do high level optimizations
@@ -151,8 +151,10 @@ class Fusion(Transform):
                      self.get_fn(rhs.fn),
                      self.closure_elts(rhs.fn),  
                      fusion_args)
-              assert new_fn.return_type == self.return_type(rhs.fn) 
+              assert new_fn.return_type == self.return_type(rhs.fn)
               del self.adverb_bindings[arg_name]
+              if self.fn.copied_by:
+                new_fn = self.fn.copied_by.apply(new_fn)
               rhs.fn = self.closure(new_fn, clos_args)
               rhs.args = prev_adverb.args + surviving_array_args 
 
