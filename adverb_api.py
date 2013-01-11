@@ -141,7 +141,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        input_types = syntax_helpers.get_types(inputs),
                        body = body,
                        return_type = core_types.NoneType,
-                       type_env = type_env)     
+                       type_env = type_env)
     lowered = lowering(parallel_wrapper)
     lowered.num_tiles = num_tiles
     lowered.dl_tile_estimates = fn.dl_tile_estimates
@@ -244,7 +244,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
-    ts = [70, 50, 1000]
+    ts = [100, 100, 100]
     for i in range(len(fn.dl_tile_estimates)):
       tile_sizes[i] = fn.ml_tile_estimates[i]
       #tile_sizes[i] = ts[i]

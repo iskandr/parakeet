@@ -62,7 +62,7 @@ class Runtime():
     self.DEFAULT_CHUNK_LEN = 128
     self.D_PAR = 4
     self.INITIAL_TASK_SIZE = 16
-    self.ADAPTIVE_THRESHOLD = 0.3
+    self.ADAPTIVE_THRESHOLD = 0.7
     self.SLEEP_TIME = 0.05
     self.SEARCH_CUTOFF_RATIO = 0.5
     self.TILE_SEARCH_STEP = 6
