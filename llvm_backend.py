@@ -136,7 +136,7 @@ class Compiler(object):
     llvm_arr = self.compile_expr(expr.value, builder)
     llvm_index = self.compile_expr(expr.index, builder)
     pointer = builder.gep(llvm_arr, [llvm_index], "elt_pointer")
-    elt = builder.load(pointer, "elt", align = 16, invariant = True)
+    elt = builder.load(pointer, "elt") #, align = 16, invariant = True)
 
     return elt
 
@@ -428,9 +428,17 @@ class Compiler(object):
 
 compiled_functions = {}
 def compile_fn(fundef):
-  if fundef.name in compiled_functions:
-    return compiled_functions[fundef.name]
+  key = fundef.name, fundef.copied_by
+  if key in compiled_functions:
+    return compiled_functions[key]
 
+  if config.print_lowered_function:
+    print
+    print "=== Lowered function ==="
+    print
+    print repr(fundef)
+    print
+    
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
   if config.print_unoptimized_llvm:
@@ -447,5 +455,5 @@ def compile_fn(fundef):
     print
 
   result = (compiler.llvm_fn, fundef, compiler.llvm_context.exec_engine)
-  compiled_functions[fundef.name] = result
+  compiled_functions[key] = result
   return result

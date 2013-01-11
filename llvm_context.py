@@ -74,8 +74,8 @@ class LLVM_Context:
       self.engine_builder.opt(0)
     self.exec_engine = self.engine_builder.create()
     tm = ee.TargetMachine.new(opt = 3)
-    self.pass_manager = passes.build_pass_managers(tm, opt = 3,
-                                                   loop_vectorize = True,
+    self.pass_manager = passes.build_pass_managers(tm, opt = 3, 
+                                                   loop_vectorize = True, 
                                                    mod = self.module).fpm
 
     for p in self._verify_passes:

@@ -66,7 +66,7 @@ opt_loop_fusion = False
 # Warning: loop fusion never fully implemented
 opt_loop_unrolling = False
 
-stride_specialization = True
+stride_specialization = False
 
 ######################################
 #           LLVM OPTIONS             #
@@ -86,7 +86,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
 opt_tile = True
