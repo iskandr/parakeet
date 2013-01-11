@@ -21,7 +21,7 @@ import type_inference
 from args import ActualArgs, FormalArgs
 from common import list_to_ctypes_array
 from core_types import Int64
-from pipeline import lowering, lower_tiled, high_level_optimizations
+from pipeline import lowering, lower_tiled, high_level_optimizations, tiling 
 from runtime import runtime
 
 try:
@@ -62,10 +62,11 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
     untyped_wrapper = syntax.Fn(fn_name, fn_args_obj, body)
     all_types = arg_types.prepend_positional(nonlocal_types)
     typed = type_inference.specialize(untyped_wrapper, all_types)
+    typed = high_level_optimizations(typed)
     if config.opt_tile:
-      return lower_tiled(typed)
+      return tiling(typed)
     else:
-      return lowering.apply(typed)
+      return typed
 
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
@@ -244,10 +245,10 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
-    ts = [70, 50, 1000]
+    ts = [60, 60, 60]
     for i in range(len(fn.dl_tile_estimates)):
-      tile_sizes[i] = fn.ml_tile_estimates[i]
-      #tile_sizes[i] = ts[i]
+      #tile_sizes[i] = fn.ml_tile_estimates[i]
+      tile_sizes[i] = ts[i]
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:

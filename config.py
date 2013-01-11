@@ -49,6 +49,9 @@ print_specialized_function_names = False
 # show execution time on parallel backend?
 print_parallel_exec_time = False
 
+# print generated assembly of LLVM module
+print_x86 = True
+
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
@@ -64,9 +67,9 @@ opt_stack_allocation = True
 opt_loop_fusion = False
 
 # Warning: loop fusion never fully implemented
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
-stride_specialization = False
+stride_specialization = True
 
 ######################################
 #           LLVM OPTIONS             #
@@ -86,7 +89,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
 opt_tile = True
