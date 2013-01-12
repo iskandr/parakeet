@@ -83,9 +83,9 @@ def test_kmeans():
 
 def test_kmeans_perf():
   n = 5000
-  d = 50
+  d = 120
   X = np.random.randn(n*d).reshape(n,d)
-  k = 20
+  k = 60
   niters = 10
   assignments = np.random.randint(0, k, size=n)
   
