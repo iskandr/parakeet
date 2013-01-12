@@ -256,7 +256,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
 
   if config.print_parallel_exec_time:
     t = time.time() - start
-    print "Time to execute:", t
+    print "Parallel execution time:", t
 
 def par_each(fn, *args, **kwds):
   # Don't handle outermost axis = None yet

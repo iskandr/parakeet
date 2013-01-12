@@ -47,13 +47,9 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = True
+print_parallel_exec_time = False
 
-<<<<<<< HEAD
 # print generated assembly of compiled functions
-=======
-# print generated assembly of LLVM module
->>>>>>> 63a44e5f43130ccd12ee33d724bf8c68b68f6818
 print_x86 = False
 
 ######################################
@@ -93,7 +89,7 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = False
+call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
 opt_tile = False

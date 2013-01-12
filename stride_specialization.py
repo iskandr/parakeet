@@ -113,11 +113,11 @@ def from_python(python_value):
     return abstract_array(strides)
   elif isinstance(python_value, tuple):
     return abstract_tuple(from_python_list(python_value))
-  #else:
-  #  parakeet_type = type_conv.typeof(python_value)
-  #  if isinstance(parakeet_type, StructT):
-  #    parakeet_value = type_conv.from_python(python_value)
-  #    assert False, "%s => %s" % (python_value, parakeet_value)
+  else:
+    parakeet_type = type_conv.typeof(python_value)
+    if isinstance(parakeet_type, StructT):
+      parakeet_value = type_conv.from_python(python_value)
+      assert False, "%s => %s" % (python_value, parakeet_value)
   return unknown 
   
 def from_python_list(python_values):
