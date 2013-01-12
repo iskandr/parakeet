@@ -244,10 +244,10 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
-    ts = [100, 100, 100]
+    ts = [41, 61, 64]
     for i in range(len(fn.dl_tile_estimates)):
-      tile_sizes[i] = fn.ml_tile_estimates[i]
-      #tile_sizes[i] = ts[i]
+      #tile_sizes[i] = fn.ml_tile_estimates[i]
+      tile_sizes[i] = ts[i]
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:

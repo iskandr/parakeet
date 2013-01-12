@@ -36,14 +36,14 @@ libVM.make_array.restype = POINTER(c_double)
 #m = 24000
 #n = 7200
 #k = 1200
-m = 3000
-n = 3000
-k = 3000
+m = 5000
+n = 5000
+k = 5000
 a = libVM.make_array(m, k)
 b = libVM.make_array(n, k)
 o = libVM.make_array(m, n)
 
-ll = True
+ll = False
 
 if ll:
   args_t = POINTER(par_args_t) * 8
@@ -69,34 +69,53 @@ else:
 num_tiles = 3
 tile_sizes_t = c_int64 * num_tiles
 tile_sizes = tile_sizes_t()
-tile_sizes[0] = 60
-tile_sizes[1] = 60
-tile_sizes[2] = 60
+dl_sizes = tile_sizes_t()
+dl_sizes[0] = 26
+dl_sizes[1] = 26
+dl_sizes[2] = 26
+ml_sizes = tile_sizes_t()
+ml_sizes[0] = 73
+ml_sizes[1] = 127
+ml_sizes[2] = 127
+
+# fixed:
+tile_sizes[0] = 48
+tile_sizes[1] = 73
+tile_sizes[2] = 73
+
+fn_name = "vm_tiled_unrolled"
 
 r = runtime.Runtime()
-print "Launching parallel job"
+print "Launching " + fn_name
 start = time.time()
-#r.run_job(libVM, cast(args, c_void_p), m, [n, k], [None, None])
-#r.run_untiled_job(libVM.vm3, cast(args, c_void_p), m)
-r.run_job_with_fixed_tiles(libVM.AllPairsAllPairsdotOpt,
-                           cast(args, c_void_p), m, tile_sizes)
+
+fixed = False
+if fixed:
+  print "Tile sizes:", list(tile_sizes)
+  r.run_job_with_fixed_tiles(getattr(libVM, fn_name),
+                             cast(args, c_void_p), m, tile_sizes)
+else:
+  r.run_compiled_job(getattr(libVM, fn_name),
+                     cast(args, c_void_p), m, dl_sizes, ml_sizes)
 stop = time.time()
 r.cleanup()
 print "Time to run job:", stop - start, "secs"
 
-npa = np.reshape(np.fromiter(a, dtype=np.float, count=m*k), (m, k))
-npb = np.reshape(np.fromiter(b, dtype=np.float, count=n*k), (n, k))
-npo = np.reshape(np.fromiter(o, dtype=np.float, count=m*n), (m, n))
-print "Output:", npo
+check = False
+if check:
+  npa = np.reshape(np.fromiter(a, dtype=np.float, count=m*k), (m, k))
+  npb = np.reshape(np.fromiter(b, dtype=np.float, count=n*k), (n, k))
+  npo = np.reshape(np.fromiter(o, dtype=np.float, count=m*n), (m, n))
+  print "Output:", npo
 
-npbt = npb.T
-start = time.time()
-npr = np.dot(npa, npbt)
-stop = time.time()
-print "Time for numpy:", stop - start, "secs"
-print npr
+  npbt = npb.T
+  start = time.time()
+  npr = np.dot(npa, npbt)
+  stop = time.time()
+  print "Time for numpy:", stop - start, "secs"
+  print npr
 
-if (npr == npo).all():
-  print "Passed"
-else:
-  print "Failed"
+  if (npr == npo).all():
+    print "Passed"
+  else:
+    print "Failed"

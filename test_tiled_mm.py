@@ -118,20 +118,17 @@ def adverb_matmult(X, Y):
 def test_par_mm():
   start = time.time()
   rslt = adverb_matmult(x2_array, y2_array)
-  par_time = time.time() - start
+  comp_time = time.time() - start
 
   start = time.time()
   nprslt = np.dot(x2_array, y2_array.T)
   np_time = time.time() - start
 
-  start = time.time()
   adverb_matmult(x2_array, y2_array)
-  no_comp_time = time.time() - start
 
   assert(testing_helpers.eq(rslt, nprslt)), \
       "Expected %s but got %s" % (nprslt, rslt)
-  print "Parakeet time with compilation:", par_time
-  print "Parakeet time without compilation:", no_comp_time
+  print "Parakeet time with compilation:", comp_time
   print "NumPy time:", np_time
 
 if __name__ == '__main__':
