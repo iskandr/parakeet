@@ -173,6 +173,7 @@ sinh = Float(np.sinh)
 tan = Float(np.tan)
 tanh = Float(np.tanh)
 
+
 logical_and = Logical(np.logical_and, "And")
 logical_not = Logical(np.logical_not, "Not")
 logical_or = Logical(np.logical_or, "Or")
@@ -188,6 +189,7 @@ subtract = Arith(np.subtract, 'Sub', '-')
 multiply = Arith(np.multiply, 'Mult', '*')
 divide = Arith(np.divide, 'Div', '/')
 mod = Arith(np.mod, 'Mod', '%')
+power = Arith(np.power, 'Pow', '**')
 #negative = Arith(np.negative, 'USub', '-', None, 1, 1)
 
 equal = Cmp(np.equal, 'Eq', '==')

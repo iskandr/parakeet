@@ -1,6 +1,7 @@
 import prims
 import subst
 import syntax
+import syntax_helpers
 import transform
 
 from adverbs import AllPairs, Map, Reduce, Scan
@@ -279,19 +280,29 @@ class Simplify(Transform):
       return syntax.Const(value = prim.fn(*collect_constants(args)),
                           type = expr.type)
     elif prim == prims.add:
-      if is_zero(args[0]):
-        return args[1]
-      elif is_zero(args[1]):
-        return args[0]
+      x,y = args
+      if is_zero(x):
+        return y
+      elif is_zero(y):
+        return x
     elif prim == prims.multiply:
-      if is_one(args[0]):
-        return args[1]
-      elif is_one(args[1]):
-        return args[0]
-      elif is_zero(args[0])  or is_zero(args[1]):
+      x,y = args
+      if is_one(x):
+        return y
+      elif is_one(y):
+        return x
+      elif is_zero(x)  or is_zero(y):
         return syntax.Const(value = 0, type = expr.type)
     elif prim == prims.divide and is_one(args[1]):
       return args[0]
+    elif prim == prims.power:
+      x,y = args
+      if is_one(y):
+        return self.cast(x, expr.type)
+      elif is_zero(y):
+        return syntax_helpers.one(expr.type)
+      elif y.__class__ is Const and y.value == 2:
+        return self.cast(self.mul(x, x, "sqr"), expr.type) 
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
 
   def temp_in_block(self, expr, block, name = None):

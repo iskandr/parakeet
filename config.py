@@ -49,8 +49,8 @@ print_specialized_function_names = False
 # show execution time on parallel backend?
 print_parallel_exec_time = False
 
-# print generated assembly of LLVM module
-print_x86 = True
+# print generated assembly of compiled functions
+print_x86 = False
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -63,11 +63,11 @@ opt_licm = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 
-# may increase compile time
+# Warning: loop fusion never fully implemented
 opt_loop_fusion = False
 
-# Warning: loop fusion never fully implemented
-opt_loop_unrolling = True
+# may increase compile time
+opt_loop_unrolling = False
 
 stride_specialization = True
 
@@ -92,7 +92,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = False
