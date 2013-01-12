@@ -18,10 +18,13 @@ import tuple_type
 import type_conv
 import type_inference
 
+from adverb_wrapper import untyped_identity_function as ident
 from args import ActualArgs, FormalArgs
 from common import list_to_ctypes_array
 from core_types import Int64
-from pipeline import lowering, lower_tiled, high_level_optimizations, tiling 
+from macro import staged_macro
+from pipeline import lowering, high_level_optimizations, tiling
+from run_function import run
 from runtime import runtime
 
 try:
@@ -98,7 +101,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
       tuple_t = tuple_type.make_tuple_type(syntax_helpers.get_types(indices))
       index_tuple = syntax.Tuple(indices, tuple_t)
       result_t = t.index_type(tuple_t)
-      return syntax.Index(arg, index_tuple, type=result_t)
+      return syntax.Index(arg, index_tuple, type = result_t)
     unpacked_args = []
     i = 0
     for t in nonlocal_types:
@@ -142,7 +145,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        input_types = syntax_helpers.get_types(inputs),
                        body = body,
                        return_type = core_types.NoneType,
-                       type_env = type_env)     
+                       type_env = type_env)
     lowered = lowering(parallel_wrapper)
     lowered.num_tiles = num_tiles
     lowered.dl_tile_estimates = fn.dl_tile_estimates
@@ -326,10 +329,6 @@ def par_allpairs(fn, x, y, **kwds):
 
   return output
 
-from adverb_wrapper import untyped_identity_function as ident
-from macro import staged_macro
-from run_function import run
-
 def one_is_none(f, g):
   return int(f is None) + int(g is None) == 1
 
@@ -358,11 +357,11 @@ def create_adverb_hook(adverb_class,
     ...then we hackishly force the adverb to go along the default axis of 0.
     """
     return adverb_wrapper.untyped_wrapper(adverb_class,
-                                          map_fn_name=map_fn_name,
-                                          combine_fn_name=combine_fn_name,
-                                          data_names=data_names,
-                                          varargs_name=varargs_name,
-                                          axis=axis)
+                                          map_fn_name = map_fn_name,
+                                          combine_fn_name = combine_fn_name,
+                                          data_names = data_names,
+                                          varargs_name = varargs_name,
+                                          axis = axis)
 
   def python_hook(fn, *args, **kwds):
     axis = kwds.get('axis', 0)
@@ -385,23 +384,24 @@ call_from_python = None
 if config.call_from_python_in_parallel and rt:
   call_from_python = par_each
 
-@staged_macro("axis", call_from_python=call_from_python)
+@staged_macro("axis", call_from_python = call_from_python)
 def each(f, *xs, **kwargs):
-  return adverbs.Map(f, args=xs, axis=get_axis(kwargs))
+  return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 
 if config.call_from_python_in_parallel:
   call_from_python = par_allpairs
 
-@staged_macro("axis", call_from_python=call_from_python)
+@staged_macro("axis", call_from_python = call_from_python)
 def allpairs(f, x, y, **kwargs):
-  return adverbs.AllPairs(fn=f, args=[x,y], axis=get_axis(kwargs))
+  return adverbs.AllPairs(fn = f, args = [x,y], axis = get_axis(kwargs))
 
 @staged_macro("axis")
 def reduce(f, x, **kwargs):
   axis = get_axis(kwargs)
   init = kwargs.get('init')
 
-  return adverbs.Reduce(fn=ident, combine=f, args=[x], init=init, axis=axis)
+  return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
+                        axis = axis)
 
 @staged_macro("axis")
 def scan(f, x, **kwargs):
@@ -409,5 +409,5 @@ def scan(f, x, **kwargs):
   init = kwargs.get('init')
   if init is None:
     init = syntax_helpers.none
-  return adverbs.Scan(fn=ident, combine=f, emit=ident, args=[x],
-                      init=init, axis=axis)
+  return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x],
+                      init = init, axis = axis)

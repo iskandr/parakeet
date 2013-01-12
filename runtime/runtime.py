@@ -1,6 +1,8 @@
 import copy
 import math
+import numpy as np
 import random
+import sys
 import time
 
 from ctypes import *
@@ -62,13 +64,25 @@ class Runtime():
     self.DEFAULT_CHUNK_LEN = 128
     self.D_PAR = 4
     self.INITIAL_TASK_SIZE = 16
-    self.ADAPTIVE_THRESHOLD = 0.3
-    self.SLEEP_TIME = 0.05
+
+    # How much of the computation should involve search?
+    self.ADAPTIVE_THRESHOLD = 0.6
+
+    # Params for setting intervals between throughput measurements
+    self.SLEEP_STEP = 0.05
+    self.PERCENTAGE_TO_SLEEP = 0.01
+    self.SLEEP_MIN = 0.4
+
+    # Greedy algorithm
     self.SEARCH_CUTOFF_RATIO = 0.5
     self.TILE_SEARCH_STEP = 6
+
+    # Genetic algorithm
     self.GENETIC_NUM_FOR_CONVERGENCE = 4
     self.CROSSOVER_PROB = 0.5
     self.MUTATION_PROB = 0.1
+
+    # Numbers for sausage
     self.L1SIZE = 2**14
     self.L2SIZE = 2**17
     self.L3SIZE = 2**21
@@ -161,8 +175,7 @@ class Runtime():
       self.args = args
       self.num_iters = num_iters
 
-      avg_estimates = [(a+b)/2 for a,b in zip(dl_estimates, ml_estimates)]
-      self.gradient_find_best_tiles(ml_estimates)
+      self.gaussian_find_best_tiles(dl_estimates, ml_estimates)
 
       self.free_job()
 
@@ -195,6 +208,111 @@ class Runtime():
     block_sizes = [1 for _ in range(num_loops - 3)]
     block_sizes.extend([1, 6, 1])
     return block_sizes
+
+  def gaussian_find_best_tiles(self, mins, maxes):
+    num_tiled = len(mins)
+    self.tile_sizes = (POINTER(c_int64) * self.dop)()
+    tile_size_t = c_int64 * num_tiled
+    for i in xrange(self.dop):
+      self.tile_sizes[i] = tile_size_t()
+    self.task_size = 1
+
+    best = [(a+b)/2 for a,b in zip(mins, maxes)]
+    sdevs = [b/3.0 for b in best]
+    best_tp = -1.0
+
+    def print_tile_sizes(tile_sizes):
+      s = "("
+      for t in range(num_tiled - 1):
+        s += str(tile_sizes[t]) + ", "
+      s += str(tile_sizes[num_tiled - 1]) + ")"
+      return s
+
+    def get_candidates(num_different = 2):
+      half_dop = self.dop / 2
+      for i in xrange(0, half_dop, half_dop / num_different):
+        for t in xrange(num_tiled):
+          #maxdiff = abs(maxes[t] - best[t])
+          #mindiff = abs(mins[t] - best[t])
+          #sdev = min(maxdiff, mindiff) / 2.0
+          #sdev = 0.01 if sdev < 0.01 else sdev
+          #new = int(round(np.random.normal(best[t], sdev)))
+          #new = max(mins[t], new)
+          #new = min(maxes[t], new)
+          new = int(round(np.random.normal(best[t], sdevs[t])))
+          new = max(mins[t], new)
+          new = min(maxes[t], new)
+          for j in xrange(half_dop / num_different):
+            self.tile_sizes[i + j][t] = new
+            self.tile_sizes[i + half_dop + j][t] = new
+
+    def check_tps(best_tp, num_different = 2):
+      half_dop = self.dop / 2
+      changed = False
+      tps = self.get_throughputs()
+      for i in xrange(0, half_dop, half_dop / num_different):
+        avg = 0.0
+        for j in xrange(half_dop / num_different):
+          avg += tps[i + j]
+          avg += tps[i + half_dop + j]
+        avg /= (self.dop / num_different)
+        if avg > best_tp:
+          changed = True
+          best_tp = avg
+          for t in xrange(num_tiled):
+            best[t] = self.tile_sizes[i][t]
+      return changed, best_tp
+
+    start = time.time()
+
+    get_candidates()
+    for i in range(self.dop):
+      print ("tile sizes[%d]:" % i), print_tile_sizes(self.tile_sizes[i])
+
+    # Calibrate time to sleep between throughput measurements
+    self.sleep_time = self.SLEEP_MIN
+    self.task_size = self.INITIAL_TASK_SIZE
+    self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
+                                           self.dop, 1)
+    self.launch_job()
+    time.sleep(self.sleep_time)
+    while self.get_percentage_done() < self.PERCENTAGE_TO_SLEEP:
+      self.sleep_time += self.SLEEP_STEP
+      time.sleep(self.SLEEP_STEP)
+    if self.sleep_time < self.SLEEP_MIN:
+      self.sleep_time = self.SLEEP_MIN
+    print "sleep_time:", self.sleep_time
+
+    # If there's still enough work to do, enter adaptive search
+    num_unchanged = 0
+    pct_done = self.get_percentage_done()
+    while not self.job_finished() and \
+          pct_done < self.ADAPTIVE_THRESHOLD and \
+          num_unchanged < 3:
+      changed, best_tp = check_tps(best_tp)
+      if not changed:
+        num_unchanged += 1
+      else:
+        print "best_tp:", best_tp
+        num_unchanged = 0
+      get_candidates()
+      for i in range(self.dop):
+        print ("tile sizes[%d]:" % i), print_tile_sizes(self.tile_sizes[i])
+      self.pause_job()
+      self.launch_job()
+      time.sleep(self.sleep_time)
+      pct_done = self.get_percentage_done()
+    if not self.job_finished():
+      for i in xrange(self.dop):
+        for t in xrange(num_tiled):
+          self.tile_sizes[i][t] = best[t]
+      print "time spent searching:", time.time() - start
+      print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
+      self.pause_job()
+      self.relaunch_job()
+      self.wait_for_job()
+    else:
+      print "time spent searching:", time.time() - start
 
   def gradient_find_best_tiles(self, estimates):
     num_tiled = len(estimates)

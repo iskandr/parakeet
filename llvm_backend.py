@@ -1,7 +1,5 @@
 import os
 
-import llvm 
-
 from llvm.core import Builder, ATTR_NO_CAPTURE
 from llvm.core import Type as lltype
 
@@ -34,8 +32,8 @@ class Compiler(object):
     # Initializes the variables dictionary and returns a builder object
     llvm_input_types = map(llvm_ref_type, fundef.input_types)
     llvm_output_type = llvm_ref_type(fundef.return_type)
-    llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types) 
-    
+    llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
+
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
     # self.llvm_fn.calling_convention = llvm.core.CC_FASTCALL
     
@@ -43,7 +41,6 @@ class Compiler(object):
       if not llvm_types.is_scalar(arg.type):
         arg.add_attribute(ATTR_NO_CAPTURE)
 
-     
     self.llvm_fn.does_not_throw = True
 
     self.entry_block, self.entry_builder = self.new_block("entry")
@@ -446,7 +443,7 @@ def compile_fn(fundef):
     print
     print repr(fundef)
     print
-    
+
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
   if config.print_unoptimized_llvm:
@@ -462,7 +459,6 @@ def compile_fn(fundef):
     print compiler.llvm_context.module
     print
 
-
   if config.print_x86:
     print "=== Generated assembly =="
     print
@@ -475,12 +471,12 @@ def compile_fn(fundef):
     for l in assembly_str.split('\n'):
       if l.strip().startswith('.globl'):
         if start_printing:
-          break 
-        elif fundef.name in l: 
+          break
+        elif fundef.name in l:
           start_printing = True
-      if start_printing: 
+      if start_printing:
         print l
-  
+
   result = (compiler.llvm_fn, fundef, compiler.llvm_context.exec_engine)
   compiled_functions[key] = result
   return result

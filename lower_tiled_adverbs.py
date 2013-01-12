@@ -1,6 +1,7 @@
 import adverbs
 import array_type
 import clone_function
+import config
 import syntax
 import syntax_helpers
 import tuple_type
@@ -155,36 +156,42 @@ class LowerTiledAdverbs(Transform):
            self.output_var.type.__class__ is ArrayT, \
            "Invalid output var %s : %s" % \
            (self.output_var, self.output_var.type)
-    i = self.fresh_var(niters.type, "i")
-    start = zero_i64
-    step = tile_size
-    stop = niters
 
-    self.blocks.push()
-    slice_stop = self.add(i, tile_size, "slice_stop")
-    slice_stop_min = self.min(slice_stop, niters, "slice_stop_min")
-    # Take care of stragglers via checking bound every iteration.
+    def make_loop(start, stop, step, do_min = True):
+      i = self.fresh_var(niters.type, "i")
 
-    tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type = slice_t)
-    nested_args = [self.index_along_axis(arg, axis, tile_bounds)
-                   for arg, axis in zip(args, axes)]
-    out_idx = self.nesting_idx if self.tiling else self.fixed_idx
-    output_region = self.index_along_axis(array_result, out_idx, tile_bounds)
-    nested_args.append(output_region)
+      self.blocks.push()
+      slice_stop = self.add(i, tile_size, "slice_stop")
+      slice_stop_min = self.min(slice_stop, niters, "slice_min") if do_min \
+                       else slice_stop
 
-    if nested_has_tiles:
-      nested_args.append(self.tile_sizes_param)
-    body = self.blocks.pop()
-    do_inline(tiled_inner_fn,
-              closure_args + nested_args,
-              self.type_env,
-              body,
-              result_var = None)
-    assert isinstance(step, syntax.Expr)
+      tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type = slice_t)
+      nested_args = [self.index_along_axis(arg, axis, tile_bounds)
+                     for arg, axis in zip(args, axes)]
+      out_idx = self.nesting_idx if self.tiling else self.fixed_idx
+      output_region = self.index_along_axis(array_result, out_idx, tile_bounds)
+      nested_args.append(output_region)
+
+      if nested_has_tiles:
+        nested_args.append(self.tile_sizes_param)
+      body = self.blocks.pop()
+      do_inline(tiled_inner_fn,
+                closure_args + nested_args,
+                self.type_env,
+                body,
+                result_var = None)
+      return syntax.ForLoop(i, start, stop, step, body, {})
+
+    assert isinstance(tile_size, syntax.Expr)
     self.comment("TiledMap in %s" % self.fn.name)
-    loop = syntax.ForLoop(i, start, stop, step, body, {})
 
-    self.blocks.append(loop)
+    if expr.fixed_tile_size and config.opt_reg_tiles_not_tile_size_dependent:
+      num_tiles = self.div(niters, tile_size, "num_tiles")
+      tile_stop = self.mul(num_tiles, tile_size, "tile_stop")
+      self.blocks.append(make_loop(zero_i64, tile_stop, tile_size, False))
+      self.blocks.append(make_loop(tile_stop, niters, one_i64, False))
+    else:
+      self.blocks.append(make_loop(zero_i64, niters, tile_size))
     return array_result
 
   def transform_expr(self, expr):
@@ -261,54 +268,58 @@ class LowerTiledAdverbs(Transform):
     self.blocks += init_unpack(num_exps, init)
 
     # Loop over the remaining tiles.
-    i = self.fresh_var(niters.type, "i")
-    start = zero_i64
-    stop = niters
-    step = tile_size
     merge = {}
 
     if not acc_is_array:
       result_after = self.fresh_var(rslt_t, "result_after")
       merge[result.name] = (result_before, result_after)
 
-    self.blocks.push()
-    # Take care of stragglers via checking bound every iteration.
-    slice_stop = self.add(i, tile_size, "next_bound")
-    slice_stop_min = self.min(slice_stop, niters, "next_bound_min")
+    def make_loop(start, stop, step, do_min = True):
+      i = self.fresh_var(niters.type, "i")
+      self.blocks.push()
+      slice_stop = self.add(i, step, "next_bound")
+      slice_stop_min = self.min(slice_stop, stop) if do_min \
+                       else slice_stop
 
-    tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, slice_t)
-    nested_args = [self.index_along_axis(arg, axis, tile_bounds)
-                   for arg, axis in zip(args, axes)]
+      tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type = slice_t)
+      nested_args = [self.index_along_axis(arg, axis, tile_bounds)
+                     for arg, axis in zip(args, axes)]
 
-    new_acc = self.fresh_var(tiled_map_fn.return_type, "new_acc")
-    self.comment("TiledReduce in %s: map_fn " % self.fn.name)
-    do_inline(tiled_map_fn,
-              map_closure_args + nested_args,
-              self.type_env,
-              self.blocks.top(),
-              result_var = new_acc)
-    # map_call = syntax.Call(tiled_map_fn, nested_args, type=acc_type)
-
-    # self.assign(new_acc, map_call)
-
-    loop_body = self.blocks.pop()
-    if acc_is_array:
-      outidx = self.tuple([syntax_helpers.slice_none] * result.type.rank)
-      result_slice = self.index(result, outidx, temp = False)
-      self.comment("")
-      do_inline(tiled_combine,
-                combine_closure_args + [result, new_acc, result_slice],
+      new_acc = self.fresh_var(tiled_map_fn.return_type, "new_acc")
+      self.comment("TiledReduce in %s: map_fn " % self.fn.name)
+      do_inline(tiled_map_fn,
+                map_closure_args + nested_args,
                 self.type_env,
-                loop_body,
-                result_var = None)
-    else:
-      do_inline(tiled_combine,
-                combine_closure_args + [result, new_acc],
-                self.type_env, loop_body,
-                result_var = result_after)
+                self.blocks.top(),
+                result_var = new_acc)
 
-    assert isinstance(step, syntax.Expr), "%s not an expr" % step
-    loop = syntax.ForLoop(i, start, stop, step, loop_body, merge)
+      loop_body = self.blocks.pop()
+      if acc_is_array:
+        outidx = self.tuple([syntax_helpers.slice_none] * result.type.rank)
+        result_slice = self.index(result, outidx, temp = False)
+        self.comment("")
+        do_inline(tiled_combine,
+                  combine_closure_args + [result, new_acc, result_slice],
+                  self.type_env,
+                  loop_body,
+                  result_var = None)
+      else:
+        do_inline(tiled_combine,
+                  combine_closure_args + [result, new_acc],
+                  self.type_env, loop_body,
+                  result_var = result_after)
+      return syntax.ForLoop(i, start, stop, step, loop_body, merge)
+
+    assert isinstance(tile_size, syntax.Expr), "%s not an expr" % tile_size
+
     self.comment("TiledReduce in %s: combine" % self.fn.name)
-    self.blocks.append(loop)
+
+    if expr.fixed_tile_size and config.opt_reg_tiles_not_tile_size_dependent:
+      num_tiles = self.div(niters, tile_size, "num_tiles")
+      tile_stop = self.mul(num_tiles, tile_size, "tile_stop")
+      self.blocks.append(make_loop(zero_i64, tile_stop, tile_size, False))
+      self.blocks.append(make_loop(tile_stop, niters, one_i64, False))
+    else:
+      self.blocks.append(make_loop(zero_i64, niters, tile_size))
+
     return result

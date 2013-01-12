@@ -47,9 +47,13 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = False
+print_parallel_exec_time = True
 
+<<<<<<< HEAD
 # print generated assembly of compiled functions
+=======
+# print generated assembly of LLVM module
+>>>>>>> 63a44e5f43130ccd12ee33d724bf8c68b68f6818
 print_x86 = False
 
 ######################################
@@ -69,7 +73,7 @@ opt_loop_fusion = False
 # may increase compile time
 opt_loop_unrolling = False
 
-stride_specialization = True
+stride_specialization = False
 
 ######################################
 #           LLVM OPTIONS             #
@@ -89,13 +93,14 @@ llvm_verify = True
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
 opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = False
+opt_reg_tiles_not_tile_size_dependent = False
 
 # Perform auto-tuning search for best tile parameters
 opt_autotune_tile_sizes = False

@@ -13,6 +13,7 @@ static inline safe_div(n, d) {
   return n / d + (n % d ? 1 : 0);
 }
 
+// This function assigns the tasks in round-robin fashion to threads.
 job_t *make_job(int64_t start, int64_t stop, int64_t step, int num_threads,
                 int64_t task_len) {
   int64_t num_iters = stop - start;

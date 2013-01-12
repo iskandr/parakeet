@@ -1,4 +1,5 @@
 import config
+import syntax_visitor
 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
@@ -15,7 +16,6 @@ from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
-import syntax_visitor
 
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [], memoize = False)
 inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
