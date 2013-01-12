@@ -1,3 +1,5 @@
+import os
+
 from llvm.core import Builder, ATTR_NO_CAPTURE
 from llvm.core import Type as lltype
 
@@ -33,9 +35,13 @@ class Compiler(object):
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
 
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
+    #self.llvm_fn.calling_convention = llvm.core.CC_FASTCALL
+
     for arg in self.llvm_fn.args:
       if not llvm_types.is_scalar(arg.type):
         arg.add_attribute(ATTR_NO_CAPTURE)
+        #arg.add_attribute(llvm.core.ATTR_IN_REG)
+
     self.llvm_fn.does_not_throw = True
 
     self.entry_block, self.entry_builder = self.new_block("entry")
@@ -136,7 +142,7 @@ class Compiler(object):
     llvm_arr = self.compile_expr(expr.value, builder)
     llvm_index = self.compile_expr(expr.index, builder)
     pointer = builder.gep(llvm_arr, [llvm_index], "elt_pointer")
-    elt = builder.load(pointer, "elt") #, align = 16, invariant = True)
+    elt = builder.load(pointer, "elt", align = 16) #, invariant = True)
 
     return elt
 
@@ -438,7 +444,7 @@ def compile_fn(fundef):
     print
     print repr(fundef)
     print
-    
+
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
   if config.print_unoptimized_llvm:
@@ -453,6 +459,24 @@ def compile_fn(fundef):
     print
     print compiler.llvm_context.module
     print
+
+  if config.print_x86:
+    print "=== Generated assembly =="
+    print
+    start_printing = False
+    w,r = os.popen2("llc")
+    w.write(str(compiler.llvm_context.module))
+    w.close()
+    assembly_str = r.read()
+    r.close()
+    for l in assembly_str.split('\n'):
+      if l.strip().startswith('.globl'):
+        if start_printing:
+          break
+        elif fundef.name in l:
+          start_printing = True
+      if start_printing:
+        print l
 
   result = (compiler.llvm_fn, fundef, compiler.llvm_context.exec_engine)
   compiled_functions[key] = result

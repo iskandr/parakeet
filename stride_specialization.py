@@ -1,6 +1,9 @@
 import numpy as np
 
+import type_conv
+
 from array_type import ArrayT
+from core_types import StructT
 from dead_code_elim import DCE
 from node import Node
 from pipeline_phase import Phase
@@ -48,6 +51,28 @@ class Array(AbstractValue):
   def __eq__(self, other):
     return other.__class__ is Array and \
       self.strides == other.strides
+
+class Struct(AbstractValue):
+  def __init__(self, fields):
+    self.fields = fields 
+    
+  def __str__(self):
+    return "Struct(%s)" % self.fields
+  
+  def __eq__(self, other):
+    if other.__class__ != Struct:
+      return False
+    my_fields = set(self.fields.keys())
+    other_fields = set(other.fields.keys())
+    if my_fields != other_fields:
+      return False 
+    for f in my_fields:
+      if self.fields[f] != other.fields[f]:
+        return False
+    return True
+  
+  def __hash__(self):
+    return hash(tuple(self.fields.items()))
       
 class Const(AbstractValue):
   def __init__(self, value):
@@ -87,9 +112,13 @@ def from_python(python_value):
       strides.append(specialization_const(s/elt_size)) 
     return abstract_array(strides)
   elif isinstance(python_value, tuple):
-    return abstract_tuple(from_python_list(python_value))   
-  else:
-    return unknown 
+    return abstract_tuple(from_python_list(python_value))
+  #else:
+  #  parakeet_type = type_conv.typeof(python_value)
+  #  if isinstance(parakeet_type, StructT):
+  #    parakeet_value = type_conv.from_python(python_value)
+  #    assert False, "%s => %s" % (python_value, parakeet_value)
+  return unknown 
   
 def from_python_list(python_values):
   return [from_python(v) for v in python_values] 
