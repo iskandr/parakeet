@@ -66,7 +66,7 @@ class Runtime():
     self.INITIAL_TASK_SIZE = 16
 
     # How much of the computation should involve search?
-    self.ADAPTIVE_THRESHOLD = 0.6
+    self.ADAPTIVE_THRESHOLD = 0.8
 
     # Params for setting intervals between throughput measurements
     self.SLEEP_STEP = 0.05
@@ -240,8 +240,9 @@ class Runtime():
           #new = max(mins[t], new)
           #new = min(maxes[t], new)
           new = int(round(np.random.normal(best[t], sdevs[t])))
-          new = max(mins[t], new)
-          new = min(maxes[t], new)
+          #new = max(mins[t], new)
+          #new = min(maxes[t], new)
+          new = max(1, new)
           for j in xrange(half_dop / num_different):
             self.tile_sizes[i + j][t] = new
             self.tile_sizes[i + half_dop + j][t] = new
@@ -266,8 +267,6 @@ class Runtime():
     start = time.time()
 
     get_candidates()
-    for i in range(self.dop):
-      print ("tile sizes[%d]:" % i), print_tile_sizes(self.tile_sizes[i])
 
     # Calibrate time to sleep between throughput measurements
     self.sleep_time = self.SLEEP_MIN
@@ -281,25 +280,23 @@ class Runtime():
       time.sleep(self.SLEEP_STEP)
     if self.sleep_time < self.SLEEP_MIN:
       self.sleep_time = self.SLEEP_MIN
-    print "sleep_time:", self.sleep_time
 
     # If there's still enough work to do, enter adaptive search
     num_unchanged = 0
     pct_done = self.get_percentage_done()
     while not self.job_finished() and \
           pct_done < self.ADAPTIVE_THRESHOLD and \
-          num_unchanged < 3:
+          num_unchanged < 4:
       changed, best_tp = check_tps(best_tp)
       if not changed:
         num_unchanged += 1
       else:
         print "best_tp:", best_tp
+        print "best tiles:", print_tile_sizes(best)
         num_unchanged = 0
       get_candidates()
-      for i in range(self.dop):
-        print ("tile sizes[%d]:" % i), print_tile_sizes(self.tile_sizes[i])
       self.pause_job()
-      self.launch_job()
+      self.relaunch_job()
       time.sleep(self.sleep_time)
       pct_done = self.get_percentage_done()
     if not self.job_finished():

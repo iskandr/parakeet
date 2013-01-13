@@ -50,7 +50,7 @@ print_specialized_function_names = False
 print_parallel_exec_time = False
 
 # print generated assembly of compiled functions
-print_x86 = False
+print_x86 = True
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -92,10 +92,10 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
-opt_reg_tile = False
+opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = False
 
 # Perform auto-tuning search for best tile parameters
