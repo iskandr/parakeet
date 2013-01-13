@@ -1,6 +1,121 @@
+import scipy.spatial
 import numpy as np
 import parakeet
+import time 
 
+from parakeet import allpairs, reduce, each
+from testing_helpers import eq, run_local_tests
+
+def python_update_assignments(X, centroids):
+  dists = scipy.spatial.distance.cdist(X, centroids, 'sqeuclidean')
+  return np.argmin(dists, 1)
+
+def python_update_centroids(X, assignments, k):
+  d = X.shape[1]
+  new_centroids = np.zeros((k,d))
+  for i in xrange(k):
+    new_centroids[i,:] = np.mean(X[assignments == i])
+  return new_centroids
+
+def python_kmeans(X, k, maxiters = 100, initial_assignments = None):
+  n = X.shape[0]
+  if initial_assignments is None:
+    assignments = np.random.randint(0, k, size=n)
+  else:
+    assignments = initial_assignments
+  centroids = python_update_centroids(X, assignments, k)
+  for _ in xrange(maxiters):
+    old_assignments = assignments 
+    assignments = python_update_assignments(X, centroids)
+    if any(old_assignments != assignments):
+      break       
+    centroids = python_update_centroids(X, assignments, k)
+  return centroids  
+
+def sqr_dist(x,y):
+  return sum( (x-y) ** 2)
+
+
+
+def parakeet_update_assignments(X, centroids):
+  dists = allpairs(sqr_dist, X, centroids)
+  return np.argmin(dists, 1)
+
+def mean(X):
+  return sum(X) / len(X) 
+
+def parakeet_update_centroids(X, assignments, k):
+  def f(i):
+    return mean(X[assignments == i])
+  return each(f, range(k))
+  
+def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
+  n = X.shape[0]
+  if initial_assignments is None:
+    assignments = np.random.randint(0, k, size=n)
+  else:
+    assignments = initial_assignments
+  
+  centroids = python_update_centroids(X, assignments, k)
+  for _ in xrange(maxiters):
+    old_assignments = assignments 
+    assignments = parakeet_update_assignments(X, centroids)
+    if any(old_assignments != assignments):
+      break       
+    centroids = parakeet_update_centroids(X, assignments, k)
+  return centroids  
+  
+def test_kmeans():
+  n = 50
+  d = 4
+  X = np.random.randn(n*d).reshape(n,d)
+  k = 2
+  niters = 10
+  assignments = np.random.randint(0, k, size=n)
+  parakeet_C = parakeet_kmeans(X, k, niters, assignments)
+  python_C = python_kmeans(X, k, niters, assignments)
+  assert eq(parakeet_C.shape, python_C.shape), \
+      "Got back wrong shape, expect %s but got %s" % \
+      (python_C.shape, parakeet_C.shape)
+  assert eq(parakeet_C, python_C), \
+      "Expected %s but got %s" % (python_C, parakeet_C)
+
+
+def test_kmeans_perf():
+  n = 5000
+  d = 120
+  X = np.random.randn(n*d).reshape(n,d)
+  k = 60
+  niters = 10
+  assignments = np.random.randint(0, k, size=n)
+  
+  start = time.time()
+  _ = python_kmeans(X, k, niters, assignments)
+  python_time = time.time() - start
+  
+  # run parakeet once to warm up the compiler
+  start = time.time()
+  _ = parakeet_kmeans(X, k, niters, assignments)
+  parakeet_with_comp = time.time() - start
+  
+  start = time.time()
+  _ = parakeet_kmeans(X, k, niters, assignments)
+  parakeet_time = time.time() - start 
+  
+  speedup = python_time / parakeet_time
+  print "Parakeet time:", parakeet_with_comp 
+  print "Parakeet w/out compilation:", parakeet_time
+  print "Python time", python_time  
+  
+  assert speedup > 1, \
+      "Parakeet too slow! Python time = %s, Parakeet = %s, %.1fX slowdown " % \
+      (python_time, parakeet_time, 1/speedup)
+if __name__ == '__main__':
+  run_local_tests()
+ 
+
+    
+"""
 parakeet.config.call_from_python_in_parallel = False 
 
 py_reduce = reduce
@@ -21,7 +136,6 @@ def argmin((curmin, curminidx), (val, idx)):
     return (val, idx)
   else:
     return (curmin, curminidx)
-
 
 inf = np.inf 
 def py_minidx(C, idxs, x):
@@ -97,17 +211,4 @@ def kmeans(X, assign, k):
     C = np.array(map(run_calc_centroid, idxs))
     j = j + 1
   return C, assign
-
-def test_kmeans():
-  s = 10
-  n = 50
-  X = np.random.randn(n*s).reshape(n,s)
-  init_assign = np.random.randint(3, size=n)
-  k = 3
-  C, assign = kmeans(X, init_assign, k)
-  par_C, par_assign = par_kmeans(X, init_assign, k)
-  assert eq(assign, par_assign), "Expected %s but got %s" % (assign, par_assign)
-  assert eq(C, par_C), "Expected %s but got %s" % (C, par_C)
-
-if __name__ == '__main__':
-  run_local_tests()
+"""
