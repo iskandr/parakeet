@@ -279,8 +279,12 @@ class AST_Translator(ast.NodeVisitor):
       assert len(keywords_dict) == 0
       assert len(positional) == 3
       return syntax.Range(*positional)
+    elif value == len:
+      assert len(keywords_dict) == 0
+      assert len(positional) == 1
+      return syntax.Len(positional[0])
     else:
-      assert value == slice, "Value %s not slice %s" % (value, slice)
+      assert value == slice, "Builtin not implemented: %s" % value 
       assert len(keywords_dict) == 0
       return syntax.Slice(*positional)
 

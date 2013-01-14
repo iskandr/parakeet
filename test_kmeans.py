@@ -47,7 +47,7 @@ def mean(X):
 def parakeet_update_centroids(X, assignments, k):
   def f(i):
     return mean(X[assignments == i])
-  return each(f, range(k))
+  return each(f, np.arange(k))
   
 def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
   n = X.shape[0]
@@ -56,7 +56,7 @@ def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
   else:
     assignments = initial_assignments
   
-  centroids = python_update_centroids(X, assignments, k)
+  centroids = parakeet_update_centroids(X, assignments, k)
   for _ in xrange(maxiters):
     old_assignments = assignments 
     assignments = parakeet_update_assignments(X, centroids)

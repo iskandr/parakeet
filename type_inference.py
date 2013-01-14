@@ -7,7 +7,7 @@ from array_type import ArrayT
 import closure_type
 from common import dispatch
 import config
-from core_types import Type, IntT,  ScalarT
+from core_types import Type, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 import names
@@ -17,7 +17,7 @@ import syntax as typed_ast
 import syntax_helpers
 from syntax_helpers import get_type, get_types, unwrap_constant
 import tuple_type
-from tuple_type import TupleT
+from tuple_type import TupleT, make_tuple_type
 import type_conv
 
 class InferenceFailed(Exception):
@@ -213,7 +213,6 @@ def annotate_expr(expr, tenv, var_map):
     return prim_to_closure(expr)
 
   def expr_Fn():
-
     t = closure_type.make_closure_type(expr, ())
     return typed_ast.Closure(expr, [], type = t)
 
@@ -301,6 +300,17 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Const():
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
 
+  def expr_Len():
+    v = annotate_child(expr.value)
+    t = v.type
+    if t.__class__ is ArrayT:
+      shape_t = make_tuple_type([Int64] * t.rank)
+      shape = typed_ast.Attribute(v, 'shape', type = shape_t)
+      return typed_ast.TupleProj(shape, 0, type = Int64)
+    else:
+      assert t.__class__ is TupleT, \
+         "Unexpected argument type for 'len': %s" % t
+      return typed_ast.Const(len(t.elt_types), type = Int64)
   def expr_Map():
     closure = annotate_child(expr.fn)
     new_args = annotate_args(expr.args, flat = True)
