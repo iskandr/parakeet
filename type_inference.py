@@ -392,7 +392,6 @@ def annotate_expr(expr, tenv, var_map):
   return result
 
 def annotate_stmt(stmt, tenv, var_map ):
-  print ">>", stmt 
   def infer_phi(result_var, val):
     """
     Don't actually rewrite the phi node, just add any necessary types to the
