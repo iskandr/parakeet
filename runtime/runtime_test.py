@@ -36,9 +36,9 @@ libVM.make_array.restype = POINTER(c_double)
 #m = 24000
 #n = 7200
 #k = 1200
-m = 5000
-n = 5000
-k = 5000
+m = 3000
+n = 3000
+k = 3000
 a = libVM.make_array(m, k)
 b = libVM.make_array(n, k)
 o = libVM.make_array(m, n)
@@ -79,11 +79,11 @@ ml_sizes[1] = 127
 ml_sizes[2] = 127
 
 # fixed:
-tile_sizes[0] = 48
-tile_sizes[1] = 73
-tile_sizes[2] = 73
+tile_sizes[0] = 60
+tile_sizes[1] = 60
+tile_sizes[2] = 60
 
-fn_name = "vm_tiled_unrolled"
+fn_name = "vm_a4_b4_clang"
 
 r = runtime.Runtime()
 print "Launching " + fn_name
@@ -101,7 +101,7 @@ stop = time.time()
 r.cleanup()
 print "Time to run job:", stop - start, "secs"
 
-check = False
+check = True
 if check:
   npa = np.reshape(np.fromiter(a, dtype=np.float, count=m*k), (m, k))
   npb = np.reshape(np.fromiter(b, dtype=np.float, count=n*k), (n, k))

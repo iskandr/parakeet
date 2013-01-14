@@ -250,8 +250,8 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     tile_sizes = tile_sizes_t()
     ts = [60, 60, 60]
     for i in range(len(fn.dl_tile_estimates)):
-      #tile_sizes[i] = fn.ml_tile_estimates[i]
-      tile_sizes[i] = ts[i]
+      tile_sizes[i] = fn.ml_tile_estimates[i]
+      #tile_sizes[i] = ts[i]
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:
@@ -279,7 +279,8 @@ def par_each(fn, *args, **kwds):
                                         arg_types, return_t)
 
   # TODO: Use shape inference to determine output shape.
-  single_iter_rslt = run_function.run(fn, *[arg[0] for arg in args.positional])
+  single_iter_rslt = \
+      run_function.run(fn, *[arg[0] for arg in args.positional])
   output = allocate_output((num_iters,), single_iter_rslt, c_args, return_t)
 
   wf = gen_par_work_function(adverbs.Map, untyped,
@@ -388,7 +389,7 @@ if config.call_from_python_in_parallel and rt:
 def each(f, *xs, **kwargs):
   return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
 
-if config.call_from_python_in_parallel:
+if config.call_from_python_in_parallel and rt:
   call_from_python = par_allpairs
 
 @staged_macro("axis", call_from_python = call_from_python)

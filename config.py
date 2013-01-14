@@ -19,7 +19,7 @@ print_loopy_function = False
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['ShapeElimination']
+print_functions_after_transforms = ['LoopUnrolling'] #['ShapeElimination']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -37,7 +37,7 @@ print_optimized_llvm = False
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = True
+print_transform_timings = False
 
 # print each transform's name when it runs
 print_transform_names = False

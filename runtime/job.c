@@ -29,10 +29,12 @@ job_t *make_job(int64_t start, int64_t stop, int64_t step, int num_threads,
   for (i = 0; i < num_threads; ++i) {
     int64_t num_tasks = num_total_chunks / num_threads;
     num_tasks += i < num_total_chunks % num_threads;
-    job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
     job->task_lists[i].num_tasks = num_tasks;
     job->task_lists[i].cur_task = 0;
     job->task_lists[i].barrier = &job->barrier;
+    if (num_tasks > 0) {
+      job->task_lists[i].tasks = (task_t*)malloc(sizeof(task_t) * num_tasks);
+    }
     for (j = 0; j < num_tasks; ++j) {
       job->task_lists[i].tasks[j].next_start = cur_iter;
       job->task_lists[i].tasks[j].step = step;
@@ -140,9 +142,11 @@ int num_threads(job_t *job) {
 }
 
 void free_job(job_t *job) {
-  int64_t i;
+  int i;
   for (i = 0; i < job->num_lists; ++i) {
-    free(job->task_lists[i].tasks);
+    if (job->task_lists[i].num_tasks > 0) {
+      free(job->task_lists[i].tasks);
+    }
   }
   free(job->task_lists);
   pthread_barrier_destroy(&job->barrier);

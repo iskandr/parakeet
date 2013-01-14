@@ -9,7 +9,7 @@ def add1(xi):
 def add11d(x):
   return each(add1, x)
 
-int_vec = np.arange(80, dtype=np.float).reshape(10,8)
+int_vec = np.arange(128, dtype=np.float).reshape(16,8)
 
 def test_add1():
   result = each(add11d, int_vec)

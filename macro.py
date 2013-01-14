@@ -4,7 +4,7 @@ import syntax
 from args import FormalArgs
 
 class macro(object):
-  def __init__(self, f, static_names=set([]), call_from_python=None):
+  def __init__(self, f, static_names = set([]), call_from_python = None):
     self.f = f
     self.static_names = static_names
     self.wrappers = {}
@@ -94,4 +94,5 @@ class staged_macro(object):
         "Unknown keywords: %s" % kwargs.keys()
 
   def __call__(self, fn):
-    return macro(fn, self.static_names, call_from_python=self.call_from_python)
+    return macro(fn, self.static_names,
+                 call_from_python = self.call_from_python)

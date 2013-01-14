@@ -45,6 +45,7 @@ class OffsetAnalysis(SyntaxVisitor):
       elif y.__class__ is Var and x.__class__ is Const:
         return (y.name, x.value)
     elif expr.prim is prims.subtract:
+      x, y = expr.args
       if x.__class__ is Var and y.__class__ is Const:
         return (x.name, -y.value)
     return None

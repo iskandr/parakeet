@@ -26,7 +26,7 @@ typedef struct {
   work_function_t    work_function;
   void              *args;
   int64_t           *tile_sizes;
-  int                iters_done;
+  int64_t            iters_done;
   unsigned long long timestamp;
 } worker_data_t;
 
@@ -36,7 +36,7 @@ typedef struct {
   int                 num_active;
   pthread_cond_t      master_cond;
   worker_data_t      *worker_data;
-  int                *iters_done;
+  int64_t            *iters_done;
   unsigned long long *timestamps;
   job_t              *job;
 } thread_pool_t;
@@ -47,7 +47,7 @@ void launch_job(thread_pool_t *thread_pool,
                 int64_t **tile_sizes, int reset_tps);
 void pause_job(thread_pool_t *thread_pool);
 int job_finished(thread_pool_t *thread_pool);
-int get_iters_done(thread_pool_t *thread_pool);
+int64_t get_iters_done(thread_pool_t *thread_pool);
 double *get_throughputs(thread_pool_t *thread_pool);
 void wait_for_job(thread_pool_t *thread_pool);
 job_t *get_job(thread_pool_t *thread_pool);

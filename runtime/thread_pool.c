@@ -85,7 +85,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
   pthread_cond_init(&thread_pool->master_cond, NULL);
   thread_pool->worker_data =
     (worker_data_t*)malloc(sizeof(worker_data_t)*max_threads);
-  thread_pool->iters_done = (int*)malloc(sizeof(int) * max_threads);
+  thread_pool->iters_done = (int64_t*)malloc(sizeof(int64_t) * max_threads);
   thread_pool->timestamps =
     (unsigned long long*)malloc(sizeof(unsigned long long) * max_threads);
   thread_pool->job = NULL;
@@ -195,10 +195,9 @@ int job_finished(thread_pool_t *thread_pool) {
   return all_done;
 }
 
-int get_iters_done(thread_pool_t *thread_pool) {
-  int total = 0;
-  unsigned long long timestamp;
-  int i, iters;
+int64_t get_iters_done(thread_pool_t *thread_pool) {
+  int64_t total = 0;
+  int i;
   for (i = 0; i < thread_pool->num_active; ++i) {
     total += thread_pool->worker_data[i].iters_done;
   }
@@ -209,7 +208,8 @@ int get_iters_done(thread_pool_t *thread_pool) {
 double *get_throughputs(thread_pool_t *thread_pool) {
   double *tps = (double*)malloc(thread_pool->num_active * sizeof(double));
   unsigned long long timestamp;
-  int i, iters;
+  int i;
+  int64_t iters;
   for (i = 0; i < thread_pool->num_active; ++i) {
     iters = thread_pool->worker_data[i].iters_done;
     timestamp = thread_pool->worker_data[i].timestamp;

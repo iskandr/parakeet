@@ -1,9 +1,8 @@
-import scipy.spatial
 import numpy as np
-import parakeet
-import time 
+import scipy.spatial
+import time
 
-from parakeet import allpairs, reduce, each
+from parakeet import allpairs, each
 from testing_helpers import eq, run_local_tests
 
 def python_update_assignments(X, centroids):
@@ -25,53 +24,51 @@ def python_kmeans(X, k, maxiters = 100, initial_assignments = None):
     assignments = initial_assignments
   centroids = python_update_centroids(X, assignments, k)
   for _ in xrange(maxiters):
-    old_assignments = assignments 
+    old_assignments = assignments
     assignments = python_update_assignments(X, centroids)
     if any(old_assignments != assignments):
-      break       
+      break
     centroids = python_update_centroids(X, assignments, k)
-  return centroids  
+  return centroids
 
 def sqr_dist(x,y):
-  return sum( (x-y) ** 2)
-
-
+  return sum((x-y) ** 2)
 
 def parakeet_update_assignments(X, centroids):
   dists = allpairs(sqr_dist, X, centroids)
   return np.argmin(dists, 1)
 
 def mean(X):
-  return sum(X) / len(X) 
+  return sum(X) / len(X)
 
 def parakeet_update_centroids(X, assignments, k):
   def f(i):
     return mean(X[assignments == i])
   return each(f, np.arange(k))
-  
+
 def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
   n = X.shape[0]
   if initial_assignments is None:
-    assignments = np.random.randint(0, k, size=n)
+    assignments = np.random.randint(0, k, size = n)
   else:
     assignments = initial_assignments
-  
+
   centroids = parakeet_update_centroids(X, assignments, k)
   for _ in xrange(maxiters):
-    old_assignments = assignments 
+    old_assignments = assignments
     assignments = parakeet_update_assignments(X, centroids)
     if any(old_assignments != assignments):
-      break       
+      break
     centroids = parakeet_update_centroids(X, assignments, k)
-  return centroids  
-  
+  return centroids
+
 def test_kmeans():
   n = 50
   d = 4
   X = np.random.randn(n*d).reshape(n,d)
   k = 2
   niters = 10
-  assignments = np.random.randint(0, k, size=n)
+  assignments = np.random.randint(0, k, size = n)
   parakeet_C = parakeet_kmeans(X, k, niters, assignments)
   python_C = python_kmeans(X, k, niters, assignments)
   assert eq(parakeet_C.shape, python_C.shape), \
@@ -80,48 +77,46 @@ def test_kmeans():
   assert eq(parakeet_C, python_C), \
       "Expected %s but got %s" % (python_C, parakeet_C)
 
-
 def test_kmeans_perf():
   n = 5000
   d = 120
   X = np.random.randn(n*d).reshape(n,d)
   k = 60
   niters = 10
-  assignments = np.random.randint(0, k, size=n)
-  
+  assignments = np.random.randint(0, k, size = n)
+
   start = time.time()
   _ = python_kmeans(X, k, niters, assignments)
   python_time = time.time() - start
-  
+
   # run parakeet once to warm up the compiler
   start = time.time()
   _ = parakeet_kmeans(X, k, niters, assignments)
   parakeet_with_comp = time.time() - start
-  
+
   start = time.time()
   _ = parakeet_kmeans(X, k, niters, assignments)
-  parakeet_time = time.time() - start 
-  
+  parakeet_time = time.time() - start
+
   speedup = python_time / parakeet_time
-  print "Parakeet time:", parakeet_with_comp 
+  print "Parakeet time:", parakeet_with_comp
   print "Parakeet w/out compilation:", parakeet_time
-  print "Python time", python_time  
-  
+  print "Python time", python_time
+
   assert speedup > 1, \
       "Parakeet too slow! Python time = %s, Parakeet = %s, %.1fX slowdown " % \
       (python_time, parakeet_time, 1/speedup)
+
 if __name__ == '__main__':
   run_local_tests()
- 
 
-    
 """
-parakeet.config.call_from_python_in_parallel = False 
+parakeet.config.call_from_python_in_parallel = False
 
 py_reduce = reduce
 py_sum = sum
 
-from parakeet import  sum, reduce, each 
+from parakeet import  sum, reduce, each
 from prims import add
 from testing_helpers import eq, run_local_tests
 
@@ -137,7 +132,7 @@ def argmin((curmin, curminidx), (val, idx)):
   else:
     return (curmin, curminidx)
 
-inf = np.inf 
+inf = np.inf
 def py_minidx(C, idxs, x):
   def run_sqr_dist(c):
     return sqr_dist(c, x)
@@ -151,8 +146,6 @@ def py_calc_centroid(X, a, i):
 def calc_centroid(X, a, i):
   subset = X[a==i]
   return reduce(add, subset) / subset.shape[0]
-  
-
 
 def parakeet_zip(xs, ys):
   def make_pair(x, y):
@@ -180,7 +173,7 @@ def par_kmeans(X, assign, k, max_iters = 100):
   centroid_indices = np.arange(k)
   def run_calc_centroid(i):
     return calc_centroid(X, assign, i)
-  C = parakeet.each(run_calc_centroid, 
+  C = parakeet.each(run_calc_centroid,
                     centroid_indices)
   for iter_num in xrange(max_iters):
     lastAssign = assign

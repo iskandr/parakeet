@@ -30,7 +30,7 @@ def reduce_2d(Ys):
   def zero(x):
     return 0.0
   zeros = each(zero, Ys[0])
-  return reduce(add, Ys, init=zeros)
+  return reduce(add, Ys, init = zeros)
 
 def test_2d_reduce():
   par_rslt = reduce_2d(a)
@@ -58,13 +58,6 @@ def avg_along_axis_0(Xs):
   def d(s):
     return s / Ys.shape[0]
   return each(d, s)
-
-#def test_avg_along_axis_0():
-#  assign = np.array([0,0,1,0,1,0,1,0,1,1])
-#  par_rslt = avg_along_axis_0(a)
-#  py_rslt = np.mean(a[assign == 1], axis=0)
-#  assert testing_helpers.eq(par_rslt, py_rslt), \
-#      "Expected %s but got %s" % (py_rslt, par_rslt)
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

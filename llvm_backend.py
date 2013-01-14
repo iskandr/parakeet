@@ -36,8 +36,7 @@ class Compiler(object):
     llvm_fn_t = lltype.function(llvm_output_type, llvm_input_types)
 
     self.llvm_fn = self.llvm_context.module.add_function(llvm_fn_t, fundef.name)
-    # self.llvm_fn.calling_convention = llvm.core.CC_FASTCALL
-    
+
     for arg in self.llvm_fn.args:
       if not llvm_types.is_scalar(arg.type):
         arg.add_attribute(ATTR_NO_CAPTURE)

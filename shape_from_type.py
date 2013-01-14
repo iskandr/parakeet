@@ -44,9 +44,6 @@ class Converter(object):
       field_names = [fn for (fn,_) in t._fields_]
       field_types = [ft for (_,ft) in t._fields_]
       field_vals = self.from_types(field_types)
-      print Struct
-      print field_names
-      print field_vals
       return Struct(field_names, field_vals)
     else:
       assert False, "Unsupported type: %s" % t
