@@ -168,7 +168,6 @@ def invoke_result_type(fn, arg_types):
   return result_type
 
 def annotate_expr(expr, tenv, var_map):
-  print expr
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
 
@@ -214,7 +213,6 @@ def annotate_expr(expr, tenv, var_map):
     return prim_to_closure(expr)
 
   def expr_Fn():
-
     t = closure_type.make_closure_type(expr, ())
     return typed_ast.Closure(expr, [], type = t)
 
@@ -394,6 +392,7 @@ def annotate_expr(expr, tenv, var_map):
   return result
 
 def annotate_stmt(stmt, tenv, var_map ):
+  print ">>", stmt 
   def infer_phi(result_var, val):
     """
     Don't actually rewrite the phi node, just add any necessary types to the
