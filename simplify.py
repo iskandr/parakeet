@@ -106,9 +106,11 @@ class Simplify(Transform):
     if c is Const:
       return True
     elif c is Tuple or c is TupleProj or \
-         c is Closure or c is ClosureElt or c is Attribute:
+         c is Closure or c is ClosureElt:
       return True
     # WARNING: making attributes always immutable
+    elif c in (Attribute, Struct, Slice, ArrayView):
+      return True    
     # elif c is Attribute and expr.value.type.__class__ is TupleT:
     #  return True
     elif expr.type in self.mutable_types:
@@ -133,7 +135,7 @@ class Simplify(Transform):
 
   def transform_expr(self, expr):
     stored = self.available_expressions.get(expr)
-    if stored:
+    if stored is not None:
       return stored
     else:
       return Transform.transform_expr(self, expr)

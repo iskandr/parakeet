@@ -1,198 +1,52 @@
-import adverb_semantics
-import array_type
+
 import core_types
-import tuple_type
-
-import syntax
-from syntax_visitor import SyntaxVisitor
-from syntax import TypedFn, Fn
-
 import shape
-from shape import Var, Const, Shape, Tuple, Closure
-from shape import Slice, Scalar, UnknownScalar, Unknown
-from shape import unknown_scalar, unknown_value, const
-from shape import combine_list, increase_rank
-from shape import is_zero, is_one, make_shape
 import shape_from_type
+import syntax
 
-class ShapeSemantics(adverb_semantics.AdverbSemantics):
-  def size_along_axis(self, value, axis):
-    assert isinstance(value, Shape)
-    return value.dims[axis]
-
-  #def slice_along_axis(self, arr, axis, idx):
-  #  assert False, (arr, axis, idx)
-
-  def is_tuple(self, x):
-    return isinstance(x, Tuple)
-
-  def is_none(self, x):
-    return isinstance(x, Const) and x.value is None
-
-  def rank(self, value):
-    if isinstance(value, Shape):
-      return value.rank
-    else:
-      return 0
-
-  def int(self, x):
-    return const(x)
-
-  def bool(self, x):
-    return const(x)
-
-  def add(self, x, y):
-    if is_zero(x):
-      return y
-    elif is_zero(y):
-      return x
-    elif isinstance(x, Const) and isinstance(y, Const):
-      return const(x.value + y.value)
-    else:
-      return shape.Add(x,y)
-
-  def sub(self, x, y):
-    if is_zero(y):
-      return x
-    elif isinstance(x, Const) and isinstance(y, Const):
-      return const(x.value - y.value)
-    else:
-      return shape.Sub(x, y)
-
-  def div(self, x, y):
-    assert not is_zero(y)
-    if is_one(y):
-      return x
-    elif isinstance(x, Const) and isinstance(y, Const):
-      return const(int(x.value / y.value))
-    else:
-      return shape.Div(x, y)
-
-  def shape(self, x):
-    if isinstance(x, Shape):
-      return Tuple(x.dims)
-    else:
-      return Tuple(())
-
-  def elt_type(self, x):
-    return "DON'T CARE ABOUT ELT TYPES"
-
-  def alloc_array(self, _, dims):
-    return make_shape(dims)
-
-  def index(self, arr, idx):
-    if isinstance(arr, Scalar):
-      return arr
-    assert arr.__class__ is Shape
-    if isinstance(idx, Scalar):
-      indices = [idx]
-    elif idx.__class__ is Tuple:
-      indices = idx.elts
-    result_dims = []
-    for (i, curr_idx) in enumerate(indices):
-      old_dim = arr.dims[i]
-      if curr_idx is None or \
-         (isinstance(curr_idx, Const) and curr_idx.value is None):
-        result_dims.append(old_dim)
-      elif isinstance(curr_idx, Scalar):
-        pass
-      else:
-        assert curr_idx.__class__ is Slice, \
-          "Unsupported index %s" % curr_idx
-        if isinstance(curr_idx.start, Const):
-          if curr_idx.start.value is None:
-            lower = const(0)
-          elif curr_idx.start.value < 0:
-            lower = self.sub(old_dim, curr_idx.start)
-          else:
-            lower = curr_idx.start
-        else:
-          lower = unknown_scalar
-
-        if isinstance(curr_idx.stop, Const):
-          if curr_idx.stop.value is None:
-            upper = old_dim
-          elif curr_idx.stop.value < 0:
-            upper = self.sub(old_dim, curr_idx.stop)
-          else:
-            upper = curr_idx.stop
-        else:
-          upper = unknown_scalar
-
-        n = self.sub(upper, lower)
-        step = curr_idx.step
-        if step and \
-            isinstance(step, Const) and \
-            step.value is not None and \
-            step.value != 1:
-          n = self.div(n, step)
-        result_dims.append(n)
-    n_original = len(arr.dims)
-    n_idx= len(indices)
-    if n_original > n_idx:
-      result_dims.extend(arr.dims[n_idx:])
-
-    return make_shape(result_dims)
-
-  def tuple(self, elts):
-    return Tuple(tuple(elts))
-
-  def concat_tuples(self, t1, t2):
-    return Tuple(t1.elts + t2.elts)
-
-  def setidx(self, arr, idx, v):
-    pass
-
-  def loop(self, start_idx, stop_idx, body):
-    body(start_idx)
-
-  class Accumulator(object):
-    def __init__(self, v):
-      self.v = v
-
-    def update(self, new_v):
-      self.v = new_v
-
-    def get(self):
-      return self.v
-
-  def accumulate_loop(self, start_idx, stop_idx, body, init):
-    acc = self.Accumulator(init)
-    body(acc, start_idx)
-    return acc.get()
-
-  def check_equal_sizes(self, sizes):
-    pass
-
-  def slice_value(self, start, stop, step):
-    Slice(start, stop, step)
-
-  def invoke(self, fn, args):
-    if fn.__class__ is Closure:
-      args = tuple(fn.args) + tuple(args)
-      fn = fn.fn
-    return symbolic_call(fn, args)
-
-  none = None
-  null_slice = slice(None, None, None)
-
-  def identity_function(self, x):
-    return x
+from array_type import SliceT, ArrayT
+from offset_analysis import OffsetAnalysis
+from shape import Var, Const, Shape, Tuple, Closure
+from shape import Slice, Scalar, Unknown, Struct 
+from shape import any_scalar, unknown_value, const, any_value 
+from shape import combine_list, increase_rank, make_shape
+from shape import is_one, is_zero, is_none, ConstSlice 
+from shape_semantics import ShapeSemantics
+from tuple_type import TupleT
+from syntax_visitor import SyntaxVisitor
 
 shape_semantics = ShapeSemantics()
 
 class ShapeInference(SyntaxVisitor):
-  def __init__(self):
-    self._clear()
+  
+  def visit_fn(self, fn):
+    assert isinstance(fn, syntax.TypedFn)
 
-  def _clear(self):
     self.value_env = {}
     self.equivalence_classes = {}
+    
+    self.known_offsets = OffsetAnalysis().visit_fn(fn)
+    
+    arg_types = [fn.type_env[name] for name in fn.arg_names]
+    input_values = shape_from_type.Converter().from_types(arg_types)
+    for n,v in zip(fn.arg_names, input_values):
+      self.value_env[n] = v
+    self.visit_block(fn.body)
 
+    
   def unify_scalar_var(self, x, y):
+    """
+    Unification is different than combining in that it imposes 
+    constraints on the program. 
+    If, for example, we're unifying some scalar that's 
+    reached the top of the lattice 
+    (and thus know nothing about it statically), 
+    with a scalar known to be some constant-- then the result is 
+    we expect both variables to be equal to that constant.
+    """
     assert isinstance(x, Var), "Expected scalar variable, but got: " + str(x)
     assert isinstance(y, Scalar), "Expected scalar, but got: " + str(y)
-    if isinstance(y, UnknownScalar):
+    if y == any_scalar:
       return x
     equivs = self.equivalence_classes.get(x, set([]))
     equivs.add(y)
@@ -213,7 +67,7 @@ class ShapeInference(SyntaxVisitor):
 
   def unify_scalar_list(self, values):
     assert len(values) > 0
-    acc = unknown_scalar
+    acc = any_scalar
     for v in values:
       acc = self.unify_scalars(acc, v)
     return acc
@@ -253,13 +107,16 @@ class ShapeInference(SyntaxVisitor):
     return unknown_value
 
   def visit_Struct(self, expr):
-    if isinstance(expr.type, array_type.ArrayT):
+    if isinstance(expr.type, ArrayT):
       shape_tuple = self.visit_expr(expr.args[1])
       return make_shape(shape_tuple.elts)
-    elif isinstance(expr.type, tuple_type.TupleT):
+    elif isinstance(expr.type, TupleT):
       return Tuple(self.visit_expr_list(expr.args))
+    elif isinstance(expr.type, SliceT):
+      start, stop, step = self.visit_expr_list(expr.args)
+      return Slice(start, stop, step)
     else:
-      assert False, "Unexpected struct: %s" % (expr,)
+      return unknown_value
 
   def visit_Fn(self, fn):
     return Closure(fn, [])
@@ -268,13 +125,29 @@ class ShapeInference(SyntaxVisitor):
     return Closure(fn, [])
 
   def visit_Slice(self, expr):
+    step = self.visit_expr(expr.step)   
+    if expr.start.__class__ is syntax.Var and \
+       expr.stop.__class__ is syntax.Var and \
+       step.__class__ is Const:
+      #assert False, (expr.start, expr.stop, step)
+      #step.__class__ is Const:
+      start_name = expr.start.name
+      stop_name = expr.stop.name
+      offsets = self.known_offsets.get(stop_name, [])
+      
+      for (other_var, offset) in offsets:
+        if other_var == start_name:
+          nelts = offset / (step.value if step.value is not None else 1)
+          # assert False, (start_name, stop_name, offsets)
+          return ConstSlice(nelts)
+    
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)
-    step = self.visit_expr(expr.step)
-    return Slice(start, stop, step)
+    return shape_semantics.slice_value(start, stop, step)
+    
 
   def visit_Const(self, expr):
-    return const(expr.value)
+    return Const(expr.value)
 
   def visit_ClosureElt(self, expr):
     clos = self.visit_expr(expr.closure)
@@ -290,18 +163,21 @@ class ShapeInference(SyntaxVisitor):
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
     name = expr.name
-    if isinstance(v, Shape) and name =='shape':
+    if v.__class__ is  Shape and name =='shape':
       return Tuple(v.dims)
-    elif isinstance(v, Tuple) and name.startswith('elt'):
+    elif v.__class__ is Tuple and name.startswith('elt'):
       idx = int(name[3:])
       return v[idx]
-
-    try:
-      t = expr.value.type.field_type(name)
-      if isinstance(t, core_types.ScalarT):
-        return unknown_scalar
-    except:
-      return unknown_value
+    elif v.__class__ is Slice:
+      return getattr(v, name)
+    elif v.__class__ is Struct:
+      return v.values[v.fields.index(name)] 
+      
+    t = expr.value.type.field_type(name)
+    if isinstance(t, core_types.ScalarT):
+      return any_scalar
+    else:
+      return any_value
 
   def visit_PrimCall(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
@@ -432,32 +308,34 @@ class ShapeInference(SyntaxVisitor):
     self.value_env["$return"] = combined
   
   def visit_ForLoop(self, stmt):
-    self.value_env[stmt.var.name] = unknown_scalar
+    self.value_env[stmt.var.name] = any_scalar
     SyntaxVisitor.visit_ForLoop(self, stmt)
-    
-  def visit_fn(self, fn):
-    assert isinstance(fn, syntax.TypedFn)
-    self._clear()
-    arg_types = [fn.type_env[name] for name in fn.arg_names]
-    input_values = shape_from_type.Converter().from_types(arg_types)
-    for n,v in zip(fn.arg_names, input_values):
-      self.value_env[n] = v
-    self.visit_block(fn.body)
-    return self.value_env.get("$return", Const(None))
 
+_shape_env_cache = {}
+def shape_env(typed_fn):
+  key = (typed_fn.name, typed_fn.copied_by)
+  if key in _shape_env_cache:
+    return _shape_env_cache[key]
+  else:
+    shape_inference = ShapeInference()
+    shape_inference.visit_fn(typed_fn)
+    env = shape_inference.value_env
+    _shape_env_cache[key] = env
+    return env
+    
+    
 _shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):
     typed_fn = syntax.TypedFn.registry[typed_fn]
 
-  if typed_fn.name in _shape_cache:
-    return _shape_cache[typed_fn.name]
+  key = (typed_fn.name, typed_fn.copied_by)
+  if key in _shape_cache:
+    return _shape_cache[key]
   else:
-    shape_inference = ShapeInference()
-    abstract_shape = shape_inference.visit_fn(typed_fn)
-    assert abstract_shape is not None, \
-        "Shape inference returned None for %s" % typed_fn.name
-    _shape_cache[typed_fn.name] = abstract_shape
+    env = shape_env(typed_fn)
+    abstract_shape = env.get("$return", Const(None))
+    _shape_cache[key] = abstract_shape
     return abstract_shape
 
 def bind(lhs, rhs, env):

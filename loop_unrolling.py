@@ -1,16 +1,13 @@
-import clone_function
 import names 
-import syntax 
+
 import syntax_helpers 
 
 from array_type import ArrayT
 from clone_function import CloneFunction
-from collect_vars import collect_bindings, collect_binding_names
-from core_types import ScalarT 
-from nested_blocks import NestedBlocks
-from subst import subst_stmt_list
+from collect_vars import  collect_binding_names
+from offset_analysis import OffsetAnalysis
 from syntax import Assign, ForLoop, While, If, Return  
-from syntax import Const, Var, Tuple     
+from syntax import Const, Var     
 from tuple_type import TupleT
 from transform import Transform  
 
@@ -105,6 +102,12 @@ class LoopUnrolling(Transform):
     Transform.__init__(self)
     self.unroll_factor = unroll_factor 
 
+  def pre_apply(self, fn):
+    self.offsets = OffsetAnalysis().visit_fn(fn)
+    print "[LoopUnrolling] discovered offsets:"
+    for (k,s) in self.offsets.iteritems():
+      print "  %s => %s" % (k,s)
+      
   def transform_ForLoop(self, stmt):
     assert self.unroll_factor > 0
     if self.unroll_factor == 1:
@@ -113,11 +116,10 @@ class LoopUnrolling(Transform):
     if stmt.step.__class__ is Const:
       assert stmt.step.value > 0, "Downward loops not yet supported"
     
-    if not simple_loop_body(stmt.body):
-      return Transform.transform_ForLoop(self, stmt)
-    elif len(stmt.body) > 30:
+    stmt = Transform.transform_ForLoop(self, stmt)
+    if not simple_loop_body(stmt.body) or len(stmt.body) > 50:
       return stmt 
-   
+    
     counter_type = stmt.var.type
     unroll_value = syntax_helpers.const_int(self.unroll_factor, counter_type)
     

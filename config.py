@@ -12,15 +12,14 @@ print_specialized_function = False
 # it gets translated to LLVM?
 print_lowered_function = False
 
-# print function after all adverbs have been
-# turned to loops
-print_loopy_function = True
+# print function after all adverbs have been turned to loops
+print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False # ['LowerAdverbs', 'LowerIndexing']
+print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = ['ShapeElimination']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -38,7 +37,7 @@ print_optimized_llvm = False
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = False
+print_transform_timings = True
 
 # print each transform's name when it runs
 print_transform_names = False
@@ -67,7 +66,7 @@ opt_stack_allocation = True
 opt_loop_fusion = False
 
 # may increase compile time
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
 stride_specialization = False
 
@@ -92,11 +91,11 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
-opt_reg_tile = False
-opt_reg_tiles_not_tile_size_dependent = False
+opt_reg_tile = True
+opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
 opt_autotune_tile_sizes = False
