@@ -10,11 +10,10 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
-# print function after all adverbs have been
-# turned to loops
-print_loopy_function = True
+# print function after all adverbs have been turned to loops
+print_loopy_function = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = False # ['LowerAdverbs', 'LowerIndexing']
@@ -50,7 +49,7 @@ print_specialized_function_names = False
 print_parallel_exec_time = False
 
 # print generated assembly of compiled functions
-print_x86 = True
+print_x86 = False
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #

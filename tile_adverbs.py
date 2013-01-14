@@ -421,7 +421,6 @@ class TileAdverbs(Transform):
       new_expansions.append(depth)
       self.expansions[fn_arg] = new_expansions
 
-
     depths = self.get_depths_list(fn.arg_names)
     find_adverbs = FindAdverbs()
     find_adverbs.visit_fn(fn)

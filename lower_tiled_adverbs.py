@@ -14,6 +14,7 @@ from transform import Transform
 
 class LowerTiledAdverbs(Transform):
   default_reg_tile_size = 4
+  default_last_reg_tile_size = 1
 
   def __init__(self,
                nesting_idx = -1,
@@ -40,7 +41,10 @@ class LowerTiledAdverbs(Transform):
           tuple_type.make_tuple_type([Int64] * fn.num_tiles)
       self.tile_sizes_param = self.fresh_var(tile_type, "tile_params")
     if self.fixed_tile_sizes is None:
-      self.fixed_tile_sizes = [self.default_reg_tile_size] * fn.num_tiles
+      # TODO: Replace this with an estimate of size based on the number of
+      #       floating point registers.
+      self.fixed_tile_sizes = [self.default_reg_tile_size] * fn.num_tiles - 1
+      self.fixed_tile_sizes.append(self.default_last_reg_tile_size)
 
     if self.preallocate_output:
       self.output_var = self.fresh_var(fn.return_type, "prealloc_output")
