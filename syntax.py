@@ -351,6 +351,9 @@ class PrimCall(Expr):
 #
 #############################################################################
 
+class Len(Expr):
+  _members = ['value']
+
 class ConstArray(Expr):
   _members = ['shape', 'value']
 
