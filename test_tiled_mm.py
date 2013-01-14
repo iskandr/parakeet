@@ -1,113 +1,14 @@
 import numpy as np
 import time
 
-import adverbs
-import array_type
-from   closure_type import make_closure_type
-import core_types
-import llvm_backend
 from   parakeet import allpairs
-import pipeline
-import prims
-import run_function
-import syntax
-import syntax_helpers
 import testing_helpers
 
-x = 3000
-y = 3000
-k = 3000
+x = 1000
+y = 1000
+k = 1000
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / float(x*k)
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / float(y*k)
-
-x_array_t = array_type.make_array_type(core_types.Int64, 1)
-x_2_array_t = array_type.make_array_type(core_types.Int64, 2)
-
-mul_x_y = syntax.TypedFn(
-  name = "mul_x_y",
-  arg_names = ["mx", "my"],
-  input_types = [core_types.Int64, core_types.Int64],
-  body = [syntax.Return(syntax.PrimCall(prims.multiply,
-                                        [syntax.Var("mx", type=core_types.Int64),
-                                         syntax.Var("my", type=core_types.Int64)
-                                        ], type=core_types.Int64))],
-  return_type = core_types.Int64,
-  type_env = {"mx":core_types.Int64, "my":core_types.Int64})
-
-add_x_y = syntax.TypedFn(
-  name = "add_x_y",
-  arg_names = ["ax", "ay"],
-  input_types = [core_types.Int64, core_types.Int64],
-  body = [syntax.Return(syntax.PrimCall(prims.add,
-                                        [syntax.Var("ax", type=core_types.Int64),
-                                         syntax.Var("ay", type=core_types.Int64)
-                                        ], type=core_types.Int64))],
-  return_type = core_types.Int64,
-  type_env = {"ax":core_types.Int64, "ay":core_types.Int64})
-
-red_fn = syntax.TypedFn(
-  name = "red_fn",
-  arg_names = ["X_Red", "Y_Red"],
-  input_types = [x_array_t, x_array_t],
-  body = [syntax.Return(adverbs.Reduce(add_x_y, syntax_helpers.zero_i64,
-                                       mul_x_y,
-                                       [syntax.Var("X_Red", type=x_array_t),
-                                        syntax.Var("Y_Red", type=x_array_t)],
-                                       0, type=core_types.Int64))],
-  return_type = core_types.Int64,
-  type_env = {"X_Red":x_array_t, "Y_Red":x_array_t})
-
-red_fixed_args = [syntax.Var("X_MM2", type=x_array_t)]
-red_closure_t = make_closure_type(red_fn, [x_array_t])
-red_fn_closure = syntax.Closure(red_fn, red_fixed_args, type=red_closure_t)
-
-mm2_fn = syntax.TypedFn(
-  name = "mm2_fn",
-  arg_names = ["Y_MM2", "X_MM2"],
-  input_types = [x_2_array_t, x_array_t],
-  body = [syntax.Return(adverbs.Map(red_fn_closure,
-                                    [syntax.Var("Y_MM2", type=x_2_array_t)],
-                                    0, type=x_array_t))],
-  return_type = x_array_t,
-  type_env = {"X_MM2":x_array_t, "Y_MM2":x_2_array_t})
-
-mm2_fixed_args = [syntax.Var("Y", type=x_2_array_t)]
-mm2_closure_t = make_closure_type(mm2_fn, [x_2_array_t])
-mm2_fn_closure = syntax.Closure(mm2_fn, mm2_fixed_args, type=mm2_closure_t)
-
-mm_fn = syntax.TypedFn(
-  name = "mm_fn",
-  arg_names = ["X", "Y"],
-  input_types = [x_2_array_t, x_2_array_t],
-  body = [syntax.Return(adverbs.Map(mm2_fn_closure,
-                                    [syntax.Var("X", type=x_2_array_t)],
-                                    0, type=x_2_array_t))],
-  return_type = x_2_array_t,
-  type_env = {"X":x_2_array_t, "Y":x_2_array_t})
-
-map_mul_fn = syntax.TypedFn(
-  name = "map_mul_fn",
-  arg_names = ["X", "Y"],
-  input_types = [x_2_array_t, x_2_array_t],
-  body = [syntax.Return(adverbs.Map(red_fn,
-                                    [syntax.Var("X", type=x_2_array_t),
-                                     syntax.Var("Y", type=x_2_array_t)],
-                                    0, type=x_array_t))],
-  return_type = x_array_t,
-  type_env = {"X":x_2_array_t, "Y":x_2_array_t})
-
-def test_tiled_mm():
-  new_fn = pipeline.lower_tiled(mm_fn)
-
-  assert isinstance(new_fn, syntax.TypedFn)
-  llvm_fn, parakeet_fn, exec_engine = llvm_backend.compile_fn(new_fn)
-  wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
-  a2_array = np.arange(12).reshape(4,3)
-  b2_array = np.arange(9,21).reshape(4,3)
-  rslt = wrapper(a2_array, b2_array, (2,2,2))
-  nprslt = np.dot(a2_array, b2_array.T)
-  assert(testing_helpers.eq(rslt, nprslt)), \
-      "Expected %s but got %s" % (nprslt, rslt)
 
 def dot(x, y):
   return sum(x*y)

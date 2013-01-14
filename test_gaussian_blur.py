@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import testing_helpers
 
-from parakeet import reduce, add, each, jit
+from parakeet import each
 from PIL import Image
 
 sausage = Image.open("sausage.jpg")
@@ -34,19 +34,14 @@ def gaussian_7x7(i, j, d):
     it = it + 1
   return out / 49.0
 
-plot = False
-if not plot:
-  iidxs = np.arange(565,615)
-  jidxs = np.arange(737,800)
-
 def np_blur():
   def do_row(i):
     def do_col(j):
       def do_rbg(d):
         return gaussian_7x7(i, j, d)
       return np.array(map(do_rbg, didxs))
-    return np.array(map(do_col, jidxs))
-  return np.array(map(do_row, iidxs))
+    return np.array(map(do_col, jidxs[:10]))
+  return np.array(map(do_row, iidxs[:10]))
 
 def par_blur():
   def do_row(i):
@@ -70,15 +65,15 @@ def do_par_row(i):
 def par_blur2():
   return each(do_par_row, iidxs)
 
+plot = False
 def test_blur():
-  if not plot:
-    np_blurred = np_blur().astype(np.uint8)
+  np_blurred = np_blur().astype(np.uint8)
   par_blurred = par_blur().astype(np.uint8)
   if plot:
     par_imgplot = plt.imshow(par_blurred)
     plt.show(par_imgplot)
   else:
-    assert testing_helpers.eq(np_blurred, par_blurred), \
+    assert testing_helpers.eq(np_blurred, par_blurred[:10,:10]), \
         "Expected %s but got %s" % (np_blurred, par_blurred)
 
 if __name__ == '__main__':

@@ -1,7 +1,12 @@
 import interp
 import numpy as np
 import sys
+
 from nose.tools import nottest
+
+import ast_conversion
+import type_conv
+import type_inference
 
 from run_function import specialize_and_compile
 
@@ -19,7 +24,6 @@ def run_local_functions(prefix, locals_dict = None):
         test()
         print "\n --- %s passed\n" % k
         good.add(k)
-
       except:
         raise
 
@@ -86,9 +90,6 @@ def expect_allpairs(parakeet_fn, python_fn, inputs):
     for y in inputs:
       expect(parakeet_fn, [x,y], python_fn(x,y))
 
-import ast_conversion
-import type_conv
-import type_inference
 def return_type(fn, input_types):
   untyped_fundef = ast_conversion.translate_function_value(fn)
   closure_args = untyped_fundef.python_nonlocals()

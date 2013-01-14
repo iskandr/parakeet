@@ -10,13 +10,13 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False # ['LowerAdverbs', 'LowerIndexing']
+print_functions_before_transforms = False #['LowerAdverbs']
 
 # show the function produced by each transformation?
 print_functions_after_transforms = False
@@ -95,7 +95,7 @@ opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = True
-opt_reg_tiles_not_tile_size_dependent = False
+opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
 opt_autotune_tile_sizes = False

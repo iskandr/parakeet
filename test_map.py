@@ -22,16 +22,10 @@ def add1_scalar(x):
   return x+1
 
 def test_add1_external_map():
-  tile = config.opt_tile
-  par = config.call_from_python_in_parallel
-  config.opt_tile = False
-  config.call_from_python_in_parallel = False
   parakeet_result = each(add1_scalar, ints_1d)
   python_result = ints_1d + 1
   assert eq(parakeet_result, python_result), \
          "Python %s != Parakeet %s" % (python_result, parakeet_result)
-  config.opt_tile = tile
-  config.call_from_python_in_parallel = par
 
 def add1_map(x_vec):
   return each(add1_scalar, x_vec)

@@ -43,7 +43,7 @@ class LowerTiledAdverbs(Transform):
     if self.fixed_tile_sizes is None:
       # TODO: Replace this with an estimate of size based on the number of
       #       floating point registers.
-      self.fixed_tile_sizes = [self.default_reg_tile_size] * fn.num_tiles - 1
+      self.fixed_tile_sizes = [self.default_reg_tile_size] * (fn.num_tiles - 1)
       self.fixed_tile_sizes.append(self.default_last_reg_tile_size)
 
     if self.preallocate_output:
@@ -165,14 +165,14 @@ class LowerTiledAdverbs(Transform):
       i = self.fresh_var(niters.type, "i")
 
       self.blocks.push()
-      slice_stop = self.add(i, tile_size, "slice_stop")
+      slice_stop = self.add(i, step, "slice_stop")
       slice_stop_min = self.min(slice_stop, niters, "slice_min") if do_min \
                        else slice_stop
 
       tile_bounds = syntax.Slice(i, slice_stop_min, one_i64, type = slice_t)
       nested_args = [self.index_along_axis(arg, axis, tile_bounds)
                      for arg, axis in zip(args, axes)]
-      out_idx = self.nesting_idx if self.tiling else self.fixed_idx
+      out_idx = self.fixed_idx if expr.fixed_tile_size else self.nesting_idx
       output_region = self.index_along_axis(array_result, out_idx, tile_bounds)
       nested_args.append(output_region)
 
@@ -189,11 +189,15 @@ class LowerTiledAdverbs(Transform):
     assert isinstance(tile_size, syntax.Expr)
     self.comment("TiledMap in %s" % self.fn.name)
 
-    if expr.fixed_tile_size and config.opt_reg_tiles_not_tile_size_dependent:
-      num_tiles = self.div(niters, tile_size, "num_tiles")
-      tile_stop = self.mul(num_tiles, tile_size, "tile_stop")
-      self.blocks.append(make_loop(zero_i64, tile_stop, tile_size, False))
-      self.blocks.append(make_loop(tile_stop, niters, one_i64, False))
+    if expr.fixed_tile_size and \
+       config.opt_reg_tiles_not_tile_size_dependent and \
+       syntax_helpers.unwrap_constant(tile_size) > 1:
+      diff = self.sub(tile_size, one_i64, "diff")
+      tile_stop = self.sub(niters, diff, "tile_stop")
+      loop1 = make_loop(zero_i64, tile_stop, tile_size, False)
+      self.blocks.append(loop1)
+      loop2_start = self.assign_temp(loop1.var, "loop2_start")
+      self.blocks.append(make_loop(loop2_start, niters, one_i64, False))
     else:
       self.blocks.append(make_loop(zero_i64, niters, tile_size))
     return array_result
@@ -268,8 +272,10 @@ class LowerTiledAdverbs(Transform):
     num_exps = array_type.get_rank(init.type) - \
                array_type.get_rank(expr.init.type)
 
-    self.comment("TiledReduce in %s: init_unpack" % self.fn.name)
-    self.blocks += init_unpack(num_exps, init)
+    # TODO: Get rid of this when safe to do so.
+    if expr.fixed_tile_size or True:
+      self.comment("TiledReduce in %s: init_unpack" % self.fn.name)
+      self.blocks += init_unpack(num_exps, init)
 
     # Loop over the remaining tiles.
     merge = {}
@@ -318,11 +324,15 @@ class LowerTiledAdverbs(Transform):
 
     self.comment("TiledReduce in %s: combine" % self.fn.name)
 
-    if expr.fixed_tile_size and config.opt_reg_tiles_not_tile_size_dependent:
-      num_tiles = self.div(niters, tile_size, "num_tiles")
-      tile_stop = self.mul(num_tiles, tile_size, "tile_stop")
-      self.blocks.append(make_loop(zero_i64, tile_stop, tile_size, False))
-      self.blocks.append(make_loop(tile_stop, niters, one_i64, False))
+    if expr.fixed_tile_size and \
+       config.opt_reg_tiles_not_tile_size_dependent and \
+       syntax_helpers.unwrap_constant(tile_size) > 1:
+      diff = self.sub(tile_size, one_i64, "diff")
+      tile_stop = self.sub(niters, diff, "tile_stop")
+      loop1 = make_loop(zero_i64, tile_stop, tile_size, False)
+      self.blocks.append(loop1)
+      loop2_start = self.assign_temp(loop1.var, "loop2_start")
+      self.blocks.append(make_loop(loop2_start, niters, one_i64, False))
     else:
       self.blocks.append(make_loop(zero_i64, niters, tile_size))
 
