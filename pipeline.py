@@ -15,6 +15,7 @@ from lower_tiled_adverbs import LowerTiledAdverbs
 from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
 from range_propagation import RangePropagation
+from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
@@ -84,7 +85,9 @@ lowering = Phase([RangePropagation,
                   LowerStructs, 
                   licm,
                   unroll, 
-                  licm, Simplify],
+                  licm, 
+                  Simplify,
+                  ScalarReplacement ],
                  depends_on = loopify,
                  copy = True,
                  cleanup = [Simplify, DCE])

@@ -25,4 +25,6 @@ class ScopedSet(object):
   def __contains__(self, value):
     return value in self.top()
   
+  def __str__(self):
+    return "ScopedSet(%s)" % ", ".join(str(s) for s in self.sets)
   

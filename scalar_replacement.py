@@ -1,0 +1,149 @@
+from collect_vars import collect_binding_names, collect_var_names
+# from core_types import PtrT
+from escape_analysis import may_alias 
+from scoped_set import ScopedSet
+from syntax import Assign, Return, ForLoop, While, Index, Var, Const
+from transform import Transform 
+
+
+
+
+class ScalarReplacement(Transform):
+  """
+  When a loop reads and writes to a non-varying memory location, 
+  we can keep the value of that location in a register and write 
+  it to the heap after the loop completes. 
+  
+  Transform code like this:
+      for i in low .. high: 
+        z = x[const]
+        q = z ** 2
+        x[const] = q + i 
+  into 
+      z_in = x[const]
+      for i in low .. high:
+        (header)
+          z_loop = phi(z_in, z_out)
+        (body) 
+          q = z_loop ** 2
+          z_out = q + i 
+      x[const] = z_loop   
+  """
+  def pre_apply(self, fn):
+    self.may_alias = may_alias(fn)
+  
+  def collect_loop_vars(self, loop_vars, loop_body):
+    """
+    Gather the variables whose values change between loop iterations
+    """
+    for stmt in loop_body:
+      assert stmt.__class__ not in (ForLoop, While, Return)
+      if stmt.__class__ is Assign:
+        lhs_names = collect_binding_names(stmt.lhs)
+        rhs_names = collect_var_names(stmt.rhs)
+        if any(name in loop_vars for name in rhs_names):
+          loop_vars.update(lhs_names)
+  
+  def collect_memory_accesses(self, loop_body):
+      # Assume code is normalized so a read will 
+      # directly on rhs of an assignment and 
+      # a write will be directly on the LHS
+      
+      # map from variables to index sets
+      reads = {}
+      writes = {}
+      for stmt in loop_body:
+        if stmt.__class__ is Assign:
+          if stmt.lhs.__class__ is Index:
+            assert stmt.lhs.value.__class__ is Var
+            writes.setdefault(stmt.lhs.value.name, set([])).add(stmt.lhs.index)
+          if stmt.rhs.__class__ is Index:
+            assert stmt.rhs.value.__class__ is Var
+            reads.setdefault(stmt.rhs.value.name, set([])).add(stmt.rhs.index)
+      return reads, writes  
+  
+  def is_loop_var(self, loop_vars, expr):
+    assert expr.__class__ in (Var, Const)
+    return expr.__class__ is Var and expr.name in loop_vars
+      
+  def any_loop_vars(self, loop_vars, expr_set):
+    return any(self.is_loop_var(loop_vars, expr) for expr in expr_set)
+  
+  
+  def preload_reads(self, reads):
+    scalar_vars = {}
+    for (array_name, index_set) in reads.iteritems():
+      t = self.type_env[array_name]
+      for index_expr in index_set:
+        scalar = self.index(Var(array_name, type = t), index_expr, 
+                            temp = True, name = "scalar_repl_input")
+       
+        scalar_vars[(array_name, index_expr)] = scalar
+    return scalar_vars
+
+  def replace_indexing(self, loop_body, loop_scalars):
+    """
+    Given a map from (array_name, index_expr) pairs to 
+    scalar variables, replace reads/writes with scalars
+    """
+    final_scalars = loop_scalars.copy()
+    for stmt in loop_body:
+      if stmt.rhs.__class__ is Index:
+        key = stmt.rhs.value.name, stmt.rhs.index
+        if key in final_scalars:
+          stmt.rhs = final_scalars[key]  
+      if stmt.lhs.__class__ is Index:
+        key = stmt.lhs.value.name, stmt.lhs.index
+        new_var = self.fresh_var(stmt.lhs.type, "scalar_repl_out")
+        stmt.lhs = new_var
+        final_scalars[key] = new_var  
+    return final_scalars
+  
+  
+  def transform_ForLoop(self, stmt):
+    
+    if self.is_simple_block(stmt.body):
+      loop_vars = set([stmt.var.name])
+      loop_vars.update(stmt.merge.keys())
+      # gather all the variables whose values change between loop iters
+      self.collect_loop_vars(loop_vars, stmt.body)
+      # full set of array reads & writes 
+      reads, writes = self.collect_memory_accesses(stmt.body)
+      
+      # which arrays are written to at loop-dependent locations? 
+      unsafe = set([])
+      for (name, write_indices) in writes:
+        if self.any_loop_vars(loop_vars, write_indices):
+          unsafe.add(name)
+      safe_writes = dict([(k,v) for (k,v) in writes.items() 
+                          if k not in unsafe])
+      
+      safe_reads = dict([(k,v) for (k,v) in reads.items() 
+                         if k not in unsafe and not self.any_loop_vars(loop_vars, v)])
+
+      
+      safe_locations = {}
+      all_keys = set(safe_writes.keys()).union(set(safe_reads.keys()))
+      for name in all_keys:
+        index_set = safe_reads.get(name, set([])).union(safe_writes.get(name, set([])))
+        safe_locations[name] = index_set 
+      # move all safe/loop-invariant reads into registers at the top of the loop
+      # I'm also including the writes (by passing safe_locations instead of safe_reads)
+      # so that they become loop-carried accumulator values, otherwise where else would
+      # they get their initial values?
+      input_scalars = self.preload_reads(safe_locations)
+      
+      # need to rename the scalars so they have an SSA variable for the beginning of the loop
+      loop_scalars = {}
+      for ( (name,index_expr), input_var) in input_scalars.iteritems():
+        loop_var = self.fresh_var(input_var.type, "scalar_repl_acc")
+        loop_scalars[(name, index_expr)] = loop_var
+      
+      # propagate register names for all writes 
+      final_scalars = self.replace_indexing(stmt.body, loop_scalars)
+      for (key, final_var) in final_scalars.iteritems():
+        loop_var = loop_scalars[key]
+        input_var = input_scalars[key]
+        stmt.merge[loop_var.name] = (input_var, final_var)
+
+    return stmt 

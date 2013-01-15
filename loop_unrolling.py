@@ -7,23 +7,6 @@ from syntax import Const,  Index, Tuple
 from syntax_helpers import const_int
 from transform import Transform
 
-def simple_assignment(lhs):
-  if lhs.__class__ is Tuple:
-    return all(simple_assignment(elt) for elt in lhs.elts)
-  else:
-    return lhs.__class__ is not Index or lhs.type.__class__ is not ArrayT
-
-def simple_loop_body(stmts):
-  for stmt in stmts:
-    if stmt.__class__ in (Return, While, ForLoop):
-      return False
-    elif stmt.__class__ is If:
-      if not simple_loop_body(stmt.true) or not simple_loop_body(stmt.false):
-        return False
-    elif stmt.__class__ is Assign and not simple_assignment(stmt.lhs):
-      return False
-  return True
-
 def safediv(m,n):
   return (m+n-1)/n
 
@@ -74,7 +57,7 @@ class LoopUnrolling(Transform):
       
     stmt = Transform.transform_ForLoop(self, stmt)
 
-    if not simple_loop_body(stmt.body) or len(stmt.body) > 50:
+    if not self.is_simple_block(stmt.body) or len(stmt.body) > 50:
       return stmt 
     
     start, stop, step = stmt.start, stmt.stop, stmt.step

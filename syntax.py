@@ -203,7 +203,15 @@ class Attribute(Expr):
 
 class Index(Expr):
   _members = ['value', 'index']
-
+  
+  def __eq__(self, other):
+    return other.__class__ is Index and \
+           other.value == self.value and \
+           other.index == self.index
+  
+  def __hash__(self):
+    return hash((self.value, self.index))
+  
   def children(self):
     yield self.value
     yield self.index
