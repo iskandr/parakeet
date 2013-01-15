@@ -125,22 +125,25 @@ class ShapeInference(SyntaxVisitor):
     return Closure(fn, [])
 
   def visit_Slice(self, expr):
-    step = self.visit_expr(expr.step)   
+    step = self.visit_expr(expr.step)
     if expr.start.__class__ is syntax.Var and \
        expr.stop.__class__ is syntax.Var and \
        step.__class__ is Const:
       #assert False, (expr.start, expr.stop, step)
       #step.__class__ is Const:
       start_name = expr.start.name
+    
       stop_name = expr.stop.name
       offsets = self.known_offsets.get(stop_name, [])
-      
+      step = step.value if step.value else 1 
       for (other_var, offset) in offsets:
+
         if other_var == start_name:
-          nelts = offset / (step.value if step.value is not None else 1)
+          nelts = (offset + step - 1) /  step
           # assert False, (start_name, stop_name, offsets)
+          
           return ConstSlice(nelts)
-    
+      
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)
     return shape_semantics.slice_value(start, stop, step)
@@ -315,6 +318,7 @@ _shape_env_cache = {}
 def shape_env(typed_fn):
   key = (typed_fn.name, typed_fn.copied_by)
   if key in _shape_env_cache:
+
     return _shape_env_cache[key]
   else:
     shape_inference = ShapeInference()

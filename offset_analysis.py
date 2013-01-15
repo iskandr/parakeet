@@ -18,14 +18,24 @@ class OffsetAnalysis(SyntaxVisitor):
     if x == y:
       assert k == 0, \
          "Impossible %s = %s + %d" % (x,y,k)
-      return 
     
-    x_offsets = self.known_offsets.setdefault(x, set([]))
+    if x in self.known_offsets:
+      x_offsets = self.known_offsets[x]
+    else:
+      x_offsets = set([])
+      
     x_offsets.add( (y,k) )
-    
-    y_offsets = self.known_offsets.setdefault(y, set([]))
+
+    if y in self.known_offsets:
+      y_offsets = self.known_offsets[y]
+    else:
+      y_offsets = set([])
+      
     for (z, k2) in y_offsets:
       x_offsets.add( (z, k2 + k) )
+      
+    self.known_offsets[x] = x_offsets
+    self.known_offsets[y] = y_offsets
     
   def visit_merge(self, merge):
     for (k, (l,r)) in merge.iteritems():
@@ -52,13 +62,20 @@ class OffsetAnalysis(SyntaxVisitor):
   
   
   def visit_Assign(self, stmt):
-    if stmt.lhs.__class__ is Var and stmt.rhs.__class__ is PrimCall:
-      rhs = self.visit_PrimCall(stmt.rhs)
-      if rhs is not None:
-        x = stmt.lhs.name
-        (y, offset) = rhs
-        self.update(x, y, offset)
-        self.update(y, x, -offset)
+    if stmt.lhs.__class__ is Var:
+      if stmt.rhs.__class__ is PrimCall:
+        rhs = self.visit_PrimCall(stmt.rhs)
+        if rhs is not None:
+          x = stmt.lhs.name
+          (y, offset) = rhs
+          self.update(x, y, offset)
+          self.update(x, y, offset)
+          self.update(y, x, -offset)
+      elif stmt.rhs.__class__ is Var:
+        x = stmt.lhs.name 
+        y = stmt.rhs.name
+        self.update(x, y, 0)
+        self.update(y, x, 0)
   
   def visit_fn(self, fn):
     SyntaxVisitor.visit_fn(self, fn)

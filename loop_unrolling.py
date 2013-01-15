@@ -76,7 +76,7 @@ class LoopUnrolling(Transform):
       
     stmt = Transform.transform_ForLoop(self, stmt)
 
-    if not simple_loop_body(stmt.body) or len(stmt.body) > 30:
+    if not simple_loop_body(stmt.body) or len(stmt.body) > 50:
       return stmt 
     
     start, stop, step = stmt.start, stmt.stop, stmt.step

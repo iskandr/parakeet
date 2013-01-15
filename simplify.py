@@ -505,18 +505,20 @@ class Simplify(Transform):
     # if a loop is only going to run for one iteration, might as well get rid of it
     if stmt.start.__class__ is Const and \
        stmt.stop.__class__ is Const and \
-       stmt.step.__class__ is Const and \
-       stmt.start.value + stmt.step.value >= stmt.stop.value:
-
-      for (var_name, (input_value, _)) in stmt.merge.iteritems():
-        var = Var(var_name, input.type)
-        self.blocks.append(Assign(var, input_value))
-      self.assign(stmt.var, stmt.start)
-      self.blocks.top().extend(stmt.body)
-      return None
-    else:  
-      return stmt
-
+       stmt.step.__class__ is Const:
+      if stmt.start.value >= stmt.stop.value:
+        for (var_name, (input_value, _)) in stmt.merge.iteritems():
+          var = Var(var_name, input_value.type)
+          self.blocks.append(Assign(var, input_value))
+        return None
+      elif stmt.start.value + stmt.step.value >= stmt.stop.value:
+        for (var_name, (input_value, _)) in stmt.merge.iteritems():
+          var = Var(var_name, input_value.type)
+          self.blocks.append(Assign(var, input_value))
+        self.assign(stmt.var, stmt.start)
+        self.blocks.top().extend(stmt.body)
+        return None
+    return stmt 
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
     """

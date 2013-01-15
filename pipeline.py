@@ -14,6 +14,7 @@ from lower_structs import LowerStructs
 from lower_tiled_adverbs import LowerTiledAdverbs
 from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
+from range_propagation import RangePropagation
 from shape_elim import ShapeElimination
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
@@ -72,7 +73,9 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                cleanup = [Simplify, DCE])
 
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
-lowering = Phase([ShapeElimination, 
+lowering = Phase([RangePropagation,  
+                  ShapeElimination,
+                  RangePropagation,  
                   LowerIndexing,
                   licm, 
                   loop_fusion, 
