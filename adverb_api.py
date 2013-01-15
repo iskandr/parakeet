@@ -253,8 +253,10 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     if not fn.autotuned_tile_sizes is None:
       ts = fn.autotuned_tile_sizes
     else:
-      ts = [(a+b)/2 for a,b in zip(fn.dl_tile_estimates,
-                                   fn.ml_tile_estimates)]
+      #ts = [(a+b)/2 for a,b in zip(fn.dl_tile_estimates,
+      #                             fn.ml_tile_estimates)]
+      #ts = fn.dl_tile_estimates
+      pass
     for i in range(len(fn.dl_tile_estimates)):
       tile_sizes[i] = ts[i]
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)

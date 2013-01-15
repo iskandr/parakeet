@@ -5,7 +5,6 @@ from syntax import Var
 from syntax_helpers import true, false 
 from transform import Transform 
 
-
 class RangePropagation(Transform):
   def pre_apply(self, fn):
     # map variables to pairs which include low/exclude high  

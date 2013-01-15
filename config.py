@@ -10,16 +10,16 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False 
+print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['LoopUnrolling']
+print_functions_after_transforms = False #['LoopUnrolling']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -95,11 +95,11 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = True
+opt_autotune_tile_sizes = False

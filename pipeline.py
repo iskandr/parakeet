@@ -19,9 +19,11 @@ from shape_elim import ShapeElimination
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [], memoize = False)
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [],
+                   memoize = False)
 inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
-high_level_optimizations = Phase([Simplify, inline_opt, Simplify, DCE, fusion_opt, DCE])
+high_level_optimizations = Phase([Simplify, inline_opt, Simplify, DCE,
+                                  fusion_opt, DCE])
 
 class ContainsAdverbs(syntax_visitor.SyntaxVisitor):
   class Yes(Exception):
@@ -73,14 +75,14 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                cleanup = [Simplify, DCE])
 
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
-lowering = Phase([RangePropagation,  
+lowering = Phase([RangePropagation,
                   ShapeElimination,
-                  RangePropagation,  
+                  RangePropagation,
                   LowerIndexing,
-                  licm, 
-                  loop_fusion, 
-                  LowerStructs, 
-                  licm, 
+                  licm,
+                  loop_fusion,
+                  LowerStructs,
+                  licm,
                   unroll],
                  depends_on = loopify,
                  copy = True,

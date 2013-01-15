@@ -24,7 +24,6 @@ def simple_loop_body(stmts):
       return False
   return True
 
-
 def safediv(m,n):
   return (m+n-1)/n
 
@@ -39,9 +38,8 @@ class LoopUnrolling(Transform):
       self.max_static_unrolling = unroll_factor
 
   def copy_loop_body(self, stmt, outer_loop_var, iter_num, phi_values = None):
-    """
-    Assume the current codegen block is the unrolled loop
-    """
+    """Assume the current codegen block is the unrolled loop"""
+
     cloner = CloneStmt(self.type_env)
     # make a fresh copy of the loop
     loop = cloner.transform_ForLoop(stmt)
@@ -86,7 +84,6 @@ class LoopUnrolling(Transform):
     
     # number of iterations of loop iterations is not generally known  
     
-    
     if start.__class__ is Const and \
        stop.__class__ is Const and \
        step.__class__ is Const:
@@ -102,7 +99,7 @@ class LoopUnrolling(Transform):
     name_mappings = None
     for iter_num in xrange(self.unroll_factor):   
       phi_values, curr_names = \
-        self.copy_loop_body(stmt, loop_var, iter_num, phi_values) 
+          self.copy_loop_body(stmt, loop_var, iter_num, phi_values) 
 
       if name_mappings is None:
         name_mappings = curr_names            
@@ -110,7 +107,8 @@ class LoopUnrolling(Transform):
     unrolled_body = self.blocks.pop()
     unroll_value = syntax_helpers.const_int(unroll_factor, stmt.var.type)
     unrolled_step = self.mul(unroll_value, stmt.step)
-    trunc = self.mul(self.div(self.sub(stop,  start), unrolled_step), unrolled_step)
+    trunc = self.mul(self.div(self.sub(stop, start), unrolled_step),
+                     unrolled_step)
     unrolled_stop = self.add(stmt.start, trunc)
        
     final_merge = {}
@@ -143,8 +141,8 @@ class LoopUnrolling(Transform):
     self.blocks.append(unrolled_loop)
     
     if unrolled_loop.stop.__class__ is not Const or \
-         stop.__class__ is not Const or \
-         unrolled_loop.stop.value != stop.value:
+       stop.__class__ is not Const or \
+       unrolled_loop.stop.value != stop.value:
       cleanup_merge = {}
       for (old_name, (_, output_value)) in stmt.merge.iteritems():
         input_var = name_mappings[old_name]
@@ -152,3 +150,4 @@ class LoopUnrolling(Transform):
       stmt.merge = cleanup_merge 
       stmt.start = unrolled_loop.stop 
       return stmt
+
