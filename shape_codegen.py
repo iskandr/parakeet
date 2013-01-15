@@ -62,7 +62,7 @@ class ShapeCodegen(Traversal):
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
     return self.codegen.tuple([self.visit(d) for d in v.dims])
-
+  
   def visit_Dim(self, v):
     return self.codegen.tuple_proj(self.visit(v.array), v.dim)
 

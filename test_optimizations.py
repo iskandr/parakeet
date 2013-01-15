@@ -116,6 +116,7 @@ def test_always_false():
   assert isinstance(stmt, syntax.Return)
   assert isinstance(stmt.value, syntax.Const)
 
+
 def volatile_licm_mistake():
   i = 0
   x = [0]

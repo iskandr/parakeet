@@ -305,6 +305,11 @@ class Slice(Expr):
     yield self.stop
     yield self.step
 
+  def __eq__(self, other):
+    return other.__class__ is Slice and \
+           other.start == self.start and \
+           other.stop == self.stop and \
+           other.step == self.step
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 

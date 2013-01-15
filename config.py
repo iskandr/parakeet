@@ -16,10 +16,10 @@ print_lowered_function = False
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False #['LowerAdverbs']
+print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = ['LoopUnrolling'] #['ShapeElimination']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -66,7 +66,7 @@ opt_stack_allocation = True
 opt_loop_fusion = False
 
 # may increase compile time
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
 stride_specialization = False
 
