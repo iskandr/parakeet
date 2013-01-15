@@ -1,15 +1,14 @@
-import config
 import numpy as np
 
 from parakeet import each
 from testing_helpers import run_local_tests, expect, expect_each, eq, \
                             expect_allpairs
 
-ints_1d = np.arange(16, dtype='int')
-floats_1d = np.arange(16, dtype='float')
+ints_1d = np.arange(300, dtype='int')
+floats_1d = np.arange(300, dtype='float')
 
-ints_2d = np.reshape(ints_1d, (4,4))
-floats_2d = np.reshape(ints_2d, (4,4))
+ints_2d = np.reshape(ints_1d, (25,12))
+floats_2d = np.reshape(ints_2d, (25,12))
 
 bools_1d = ints_1d % 2 == 0
 bools_2d = ints_2d % 2 == 0

@@ -4,12 +4,12 @@ import testing_helpers
 py_reduce = reduce
 from parakeet import reduce, add, each
 
-int_vec = 100 + np.arange(100, dtype=int)
+int_vec = 300 + np.arange(300, dtype=int)
 float_vec = int_vec.astype(float)
 bool_vec = float_vec < np.mean(float_vec)
 
-a = np.arange(100, dtype=float).reshape(10,10)
-b = np.arange(100,200).reshape(10,10)
+a = np.arange(500, dtype=float).reshape(50,10)
+b = np.arange(100,600).reshape(50,10)
 
 def my_sum(xs):
   return reduce(add, xs, init=0)

@@ -102,4 +102,4 @@ opt_reg_tile = False
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = True
+opt_autotune_tile_sizes = False
