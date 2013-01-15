@@ -1,9 +1,8 @@
 import syntax_helpers
-from syntax_helpers import get_types 
 
 from array_type import ArrayT
 from closure_type import ClosureT
-from core_types import ScalarT, Type 
+from core_types import ScalarT
 from shape import Closure, Scalar, Var
 from traversal import Traversal
 from tuple_type import TupleT
@@ -22,10 +21,9 @@ class ArgConverter(Traversal):
   def bind(self, scalar_value):
     v = self.fresh_var()
     self.env[v] = scalar_value
-  
-  
+
   def convert(self, x):
-    t = x.type 
+    t = x.type
     if isinstance(t, ScalarT):
       self.bind(x)
     elif isinstance(t, ArrayT):
@@ -62,7 +60,7 @@ class ShapeCodegen(Traversal):
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
     return self.codegen.tuple([self.visit(d) for d in v.dims])
-  
+
   def visit_Dim(self, v):
     return self.codegen.tuple_proj(self.visit(v.array), v.dim)
 
@@ -103,6 +101,7 @@ def make_shape_expr(codegen, symbolic_shape, input_exprs):
   that went into the function) generate a code expression for the shape of the
   result
   """
+
   if isinstance(symbolic_shape, Scalar):
     return codegen.tuple([])
   shape_codegen = ShapeCodegen(codegen, input_exprs)
