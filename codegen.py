@@ -81,23 +81,6 @@ class Codegen(object):
            (c is Closure and len(expr.args) == 0)
 
 
-  def is_simple_assignment(self, lhs):
-    if lhs.__class__ is Tuple:
-      return all(self.is_simple_assignment(elt) for elt in lhs.elts)
-    else:
-      return lhs.__class__ is not Index or lhs.type.__class__ is not ArrayT
-
-  def is_simple_block(self, stmts):
-    for stmt in stmts:
-      if stmt.__class__ in (Return, While, ForLoop):
-        return False
-      elif stmt.__class__ is If:
-        if not self.is_simple_block(stmt.true) or \
-           not self.is_simple_block(stmt.false):
-          return False
-      elif stmt.__class__ is Assign and not self.is_simple_assignment(stmt.lhs):
-        return False
-    return True
 
   def assign_temp(self, expr, name = None):
     if self.is_simple(expr):

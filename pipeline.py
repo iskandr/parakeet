@@ -15,10 +15,13 @@ from lower_tiled_adverbs import LowerTiledAdverbs
 from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
 from range_propagation import RangePropagation
+from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
+
+
 
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [],
                    memoize = False)
@@ -56,8 +59,17 @@ def print_loopy(fn):
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
+
+symbolic_range_propagation = Phase(RangePropagation, 
+                           config_param = 'opt_range_propagation', 
+                           memoize = False)
+shape_elim = Phase(ShapeElimination, 
+                       config_param = 'opt_shape_elim')
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-loopify = Phase([Simplify, LowerAdverbs, inline_opt, copy_elim, licm],
+loopify = Phase([Simplify, LowerAdverbs, inline_opt, 
+                 copy_elim, 
+                 licm, 
+],
                 depends_on = high_level_optimizations,
                 cleanup = [Simplify, DCE],
                 copy = True,
@@ -75,22 +87,32 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                run_if = contains_adverbs,
                cleanup = [Simplify, DCE])
 
+
+scalar_repl = Phase(ScalarReplacement, config_param = 'opt_scalar_replacement')
+load_elim = Phase(RedundantLoadElimination, config_param = 'opt_redundant_load_elimination')
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
-lowering = Phase([RangePropagation,
-                  ShapeElimination,
-                  RangePropagation,
+
+pre_lowering = Phase([symbolic_range_propagation, 
+                      shape_elim, 
+                      symbolic_range_propagation], 
+                     cleanup = [Simplify, DCE])
+post_lowering = Phase([licm,
+                       unroll, 
+                       licm, 
+                       Simplify,
+                       load_elim,
+                       scalar_repl, 
+                       ], cleanup = [Simplify, DCE])
+lowering = Phase([
+                  pre_lowering, 
                   LowerIndexing,
                   licm,
                   loop_fusion,
-                  LowerStructs, 
-                  licm,
-                  unroll, 
-                  licm, 
-                  Simplify,
-                  ScalarReplacement ],
+                  LowerStructs,
+                  post_lowering,],
                  depends_on = loopify,
                  copy = True,
-                 cleanup = [Simplify, DCE])
+                 cleanup = [])
 
 def lower_tiled(fn, ignore_config = True):
   """

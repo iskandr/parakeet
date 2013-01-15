@@ -1,18 +1,18 @@
 import syntax_helpers 
 
-from array_type import ArrayT
 from clone_stmt import CloneStmt
-from syntax import Assign, ForLoop, While, If, Return, Var  
-from syntax import Const,  Index, Tuple     
+from loop_transform import LoopTransform
+from syntax import ForLoop, Var  
+from syntax import Const  
 from syntax_helpers import const_int
-from transform import Transform
+
 
 def safediv(m,n):
   return (m+n-1)/n
 
-class LoopUnrolling(Transform):
+class LoopUnrolling(LoopTransform):
   def __init__(self, unroll_factor = 4, max_static_unrolling = 6):
-    Transform.__init__(self)
+    LoopTransform.__init__(self)
     self.unroll_factor = unroll_factor
     if max_static_unrolling is not None:
     # should we unroll static loops more than ones with unknown iters? 
@@ -20,6 +20,10 @@ class LoopUnrolling(Transform):
     else:
       self.max_static_unrolling = unroll_factor
 
+  def pre_apply(self, fn):
+    # skip the alias analysis that's default for LoopTransform
+    return fn 
+  
   def copy_loop_body(self, stmt, outer_loop_var, iter_num, phi_values = None):
     """Assume the current codegen block is the unrolled loop"""
 
@@ -55,7 +59,7 @@ class LoopUnrolling(Transform):
     if stmt.step.__class__ is Const:
       assert stmt.step.value > 0, "Downward loops not yet supported"
       
-    stmt = Transform.transform_ForLoop(self, stmt)
+    stmt = LoopTransform.transform_ForLoop(self, stmt)
 
     if not self.is_simple_block(stmt.body) or len(stmt.body) > 50:
       return stmt 

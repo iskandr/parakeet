@@ -5,9 +5,9 @@ import testing_helpers
 
 from parakeet import allpairs
 
-x = 2000
-y = 2000
-k = 2000
+x = 8000
+y = 8000
+k = 500
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / float(x*k)
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / float(y*k)
 

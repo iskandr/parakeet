@@ -1,14 +1,8 @@
-from collect_vars import collect_binding_names, collect_var_names
-# from core_types import PtrT
-from escape_analysis import may_alias 
-from scoped_set import ScopedSet
-from syntax import Assign, Return, ForLoop, While, Index, Var, Const
-from transform import Transform 
+from syntax import Assign, Index, Var
+from loop_transform import LoopTransform 
 
 
-
-
-class ScalarReplacement(Transform):
+class ScalarReplacement(LoopTransform):
   """
   When a loop reads and writes to a non-varying memory location, 
   we can keep the value of that location in a register and write 
@@ -29,45 +23,7 @@ class ScalarReplacement(Transform):
           z_out = q + i 
       x[const] = z_loop   
   """
-  def pre_apply(self, fn):
-    self.may_alias = may_alias(fn)
   
-  def collect_loop_vars(self, loop_vars, loop_body):
-    """
-    Gather the variables whose values change between loop iterations
-    """
-    for stmt in loop_body:
-      assert stmt.__class__ not in (ForLoop, While, Return)
-      if stmt.__class__ is Assign:
-        lhs_names = collect_binding_names(stmt.lhs)
-        rhs_names = collect_var_names(stmt.rhs)
-        if any(name in loop_vars for name in rhs_names):
-          loop_vars.update(lhs_names)
-  
-  def collect_memory_accesses(self, loop_body):
-      # Assume code is normalized so a read will 
-      # directly on rhs of an assignment and 
-      # a write will be directly on the LHS
-      
-      # map from variables to index sets
-      reads = {}
-      writes = {}
-      for stmt in loop_body:
-        if stmt.__class__ is Assign:
-          if stmt.lhs.__class__ is Index:
-            assert stmt.lhs.value.__class__ is Var
-            writes.setdefault(stmt.lhs.value.name, set([])).add(stmt.lhs.index)
-          if stmt.rhs.__class__ is Index:
-            assert stmt.rhs.value.__class__ is Var
-            reads.setdefault(stmt.rhs.value.name, set([])).add(stmt.rhs.index)
-      return reads, writes  
-  
-  def is_loop_var(self, loop_vars, expr):
-    assert expr.__class__ in (Var, Const)
-    return expr.__class__ is Var and expr.name in loop_vars
-      
-  def any_loop_vars(self, loop_vars, expr_set):
-    return any(self.is_loop_var(loop_vars, expr) for expr in expr_set)
   
   
   def preload_reads(self, reads):
@@ -88,15 +44,17 @@ class ScalarReplacement(Transform):
     """
     final_scalars = loop_scalars.copy()
     for stmt in loop_body:
-      if stmt.rhs.__class__ is Index:
-        key = stmt.rhs.value.name, stmt.rhs.index
-        if key in final_scalars:
-          stmt.rhs = final_scalars[key]  
-      if stmt.lhs.__class__ is Index:
-        key = stmt.lhs.value.name, stmt.lhs.index
-        new_var = self.fresh_var(stmt.lhs.type, "scalar_repl_out")
-        stmt.lhs = new_var
-        final_scalars[key] = new_var  
+      if stmt.__class__ is Assign:
+        if stmt.rhs.__class__ is Index:
+          key = stmt.rhs.value.name, stmt.rhs.index
+          if key in final_scalars:
+            stmt.rhs = final_scalars[key]  
+        if stmt.lhs.__class__ is Index:
+          key = stmt.lhs.value.name, stmt.lhs.index
+          if key in final_scalars:
+            new_var = self.fresh_var(stmt.lhs.type, "scalar_repl_out")
+            stmt.lhs = new_var
+            final_scalars[key] = new_var  
     return final_scalars
   
   
@@ -112,7 +70,7 @@ class ScalarReplacement(Transform):
       
       # which arrays are written to at loop-dependent locations? 
       unsafe = set([])
-      for (name, write_indices) in writes:
+      for (name, write_indices) in writes.iteritems():
         if self.any_loop_vars(loop_vars, write_indices):
           unsafe.add(name)
       safe_writes = dict([(k,v) for (k,v) in writes.items() 
@@ -139,11 +97,22 @@ class ScalarReplacement(Transform):
         loop_var = self.fresh_var(input_var.type, "scalar_repl_acc")
         loop_scalars[(name, index_expr)] = loop_var
       
+      
       # propagate register names for all writes 
       final_scalars = self.replace_indexing(stmt.body, loop_scalars)
+      
       for (key, final_var) in final_scalars.iteritems():
         loop_var = loop_scalars[key]
         input_var = input_scalars[key]
         stmt.merge[loop_var.name] = (input_var, final_var)
-
-    return stmt 
+      
+      self.blocks.append(stmt)
+      # write out the results back to memeory 
+      for ( (array_name, index_expr), loop_var) in loop_scalars.iteritems():
+        array_type = self.type_env[array_name]
+        lhs = self.index(Var(array_name, type = array_type), index_expr, temp = False)
+        self.assign(lhs, loop_var) 
+      return None
+    else:     
+      stmt.body = self.transform_block(stmt.body)
+      return stmt 

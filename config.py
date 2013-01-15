@@ -61,18 +61,20 @@ opt_fusion = True
 opt_licm = True
 opt_copy_elimination = True
 opt_stack_allocation = True
+opt_range_propagation = True 
+opt_shape_elim = True
+opt_scalar_replacement = True 
+opt_redundant_load_elimination = True
+
+# may dramatically increase compile time
+opt_loop_unrolling = True
+
+# recompile functions for distinct patterns of unit strides 
+# in array arguments  
+stride_specialization = True
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False
-
-# may increase compile time
-opt_loop_unrolling = True
-
-stride_specialization = False
-
-# Experimenting with always doing this
-# lower_for_loops = False
-
 
 ######################################
 #           LLVM OPTIONS             #
@@ -102,4 +104,4 @@ opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = False
+opt_autotune_tile_sizes = True
