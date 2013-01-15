@@ -70,10 +70,12 @@ class ShapeSemantics(AdverbSemantics):
     if isinstance(arr, Scalar):
       return arr
     assert arr.__class__ is Shape
-    if isinstance(idx, Scalar):
+    if isinstance(idx, (Scalar, Slice)):
       indices = [idx]
     elif idx.__class__ is Tuple:
       indices = idx.elts
+    else:
+      assert False, "Unexpected index: %s" % (idx,)
     result_dims = []
     for (i, curr_idx) in enumerate(indices):
       old_dim = arr.dims[i]

@@ -223,12 +223,16 @@ class Codegen(object):
       return self.pick_second(x,y)
     elif syntax_helpers.is_zero(y):
       return self.pick_first(x,y)
+    elif x.__class__ is Const and y.__class__ is Const:
+      return self.pick_const(x, y, x.value + y.value)
     else:
       return self.prim(prims.add, [x,y], name)
 
   def sub(self, x, y, name = None):
     if syntax_helpers.is_zero(y):
       return self.pick_first(x,y)
+    elif x.__class__ is Const and y.__class__ is Const:
+      return self.pick_const(x, y, x.value - y.value)
     else:
       return self.prim(prims.subtract, [x,y], name)
 
@@ -245,12 +249,16 @@ class Codegen(object):
   def div(self, x, y, name = None):
     if syntax_helpers.is_one(y):
       return self.pick_first(x,y)
+    elif x.__class__ is Const and y.__class__ is Const:
+      return self.pick_const(x, y, x.value / y.value)
     else:
       return self.prim(prims.divide, [x,y], name)
 
   def mod(self, x, y, name = None):
     if syntax_helpers.is_one(y):
       return self.pick_const(x, y, 0)
+    elif x.__class__ is Const and y.__class__ is Const:
+      return self.pick_const(x, y, x.value % y.value)
     else:
       return self.prim(prims.mod, [x,y], name)
 
@@ -273,7 +281,6 @@ class Codegen(object):
       return self.prim(prims.greater, [x,y], name)
 
   def gte(self, x, y, name = None):
-
     if isinstance(x, (Var, Const)) and x == y:
       return syntax_helpers.const_bool(True)
     else:
@@ -293,6 +300,9 @@ class Codegen(object):
   def min(self, x, y, name = None):
     assert x.type == y.type, \
         "Type mismatch between %s and %s" % (x, y)
+    if x.__class__ is Const and y.__class__ is Const:
+      return x if x.value < y.value else y 
+    
     if name is None:
       name = "min_temp"
     result = self.fresh_var(x.type, name)
@@ -304,6 +314,8 @@ class Codegen(object):
   def max(self, x, y, name = None):
     assert x.type == y.type, \
         "Type mismatch between %s and %s" % (x, y)
+    if x.__class__ is Const and y.__class__ is Const:
+      return x if x.value > y.value else y 
     if name is None:
       name = "min_temp"
     result = self.fresh_var(x.type, name)
