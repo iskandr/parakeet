@@ -22,7 +22,7 @@ class Verify(SyntaxVisitor):
 
   def phi_value_ok(self, lhs_name, v):
     assert isinstance(v, Expr), \
-       "Invalid expression in phi node: %s" % v
+       "Invalid expression in phi node: %s" % (v,)
     self.visit_expr(v)
     assert v.type is not None, \
        "Error in phi node: value %s has no type annotation" % v

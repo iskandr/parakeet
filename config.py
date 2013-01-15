@@ -16,10 +16,10 @@ print_lowered_function = False
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False
+print_functions_before_transforms = ['LowerStructs']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['LoopUnrolling'] #['ShapeElimination']
+print_functions_after_transforms = False #['LowerStructs']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -91,10 +91,10 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
-opt_reg_tile = True
+opt_reg_tile = False
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
