@@ -1,6 +1,7 @@
 import ctypes
-import dtypes
 import numpy as np
+
+import dtypes
 import type_conv
 
 from node import Node
@@ -31,9 +32,7 @@ class Type(Node):
     assert False, "Equality not implemented for type %s" % (self,)
 
 class AnyT(Type):
-  """
-  top of the type lattice, absorbs all types
-  """
+  """top of the type lattice, absorbs all types"""
 
   def combine(self, other):
     return self
@@ -45,9 +44,7 @@ class AnyT(Type):
 Any = AnyT()
 
 class UnknownT(Type):
-  """
-  Bottom of the type lattice, absorbed by all other types
-  """
+  """Bottom of the type lattice, absorbed by all other types"""
 
   _members = []
   def  combine(self, other):
@@ -60,9 +57,7 @@ class UnknownT(Type):
 Unknown = UnknownT()
 
 class FnT(Type):
-  """
-  Type of a typed function
-  """
+  """Type of a typed function"""
 
   def __init__(self, input_types, return_type):
     self.input_types = tuple(input_types )
@@ -108,8 +103,6 @@ def combine_type_list(types):
   for t in types:
     common_type = common_type.combine(t)
   return common_type
-
-import abc
 
 class ConcreteT(Type):
   """
@@ -173,9 +166,7 @@ class FieldNotFound(Exception):
     self.field_name = field_name
 
 class StructT(Type):
-  """
-  All concrete types excluding scalars and pointers
-  """
+  """All concrete types excluding scalars and pointers"""
 
   # expect each child class to fill this list
   _fields_ = []
@@ -223,8 +214,7 @@ class StructT(Type):
 ###################################################
 
 ###################################################
-# helper functions to implement properties of
-# python scalar objects
+# helper functions to implement properties of Python scalar objects
 ###################################################
 def always_zero(x):
   return type(x)(0)

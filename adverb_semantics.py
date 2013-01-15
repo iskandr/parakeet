@@ -1,5 +1,3 @@
-import syntax
-
 class AdverbSemantics(object):
   """
   Describe the behavior of adverbs in terms of lower-level value and iteration
@@ -75,11 +73,11 @@ class AdverbSemantics(object):
 
   def create_output_array(self, fn, inputs, extra_dims):
     if hasattr(self, "_create_output_array"):
-      try: 
+      try:
         return self._create_output_array(fn, inputs, extra_dims)
       except:
-        print "Failed to allocate output array using shape inference" 
-        pass 
+        print "Failed to allocate output array using shape inference"
+        pass
     inner_result = self.invoke(fn, inputs)
     inner_shape = self.shape(inner_result)
     elt_t = self.elt_type(inner_result)
@@ -92,12 +90,10 @@ class AdverbSemantics(object):
     elif r == 1:
       output_idx = self.slice_value(idx, self.none, self.int(1))
       output_indices = self.tuple([output_idx])
-    else: 
+    else:
       output_idx = self.slice_value(self.none, self.none, self.none)
       output_indices = self.tuple([output_idx])
     return self.index(output, output_indices)
-  
-
 
   def eval_map(self, f, values, axis, output = None):
     niters, delayed_elts = self.map_prelude(f, values, axis)
@@ -114,11 +110,11 @@ class AdverbSemantics(object):
 
   def eval_reduce(self, map_fn, combine, init, values, axis):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
-    zero = self.int(0)  
+    zero = self.int(0)
     one = self.int(1)
     first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
     if init is None or self.is_none(init):
-      init = first_acc_value  
+      init = first_acc_value
     else:
       init = self.invoke(combine, [init, first_acc_value])
     def loop_body(acc, idx):
@@ -126,7 +122,7 @@ class AdverbSemantics(object):
       new_acc_value = self.invoke(combine, [acc.get(), elt])
       acc.update(new_acc_value)
     return self.accumulate_loop(one, niters, loop_body, init)
-   
+
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):

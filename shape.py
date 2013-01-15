@@ -1,9 +1,8 @@
-
-
 class ValueMismatch(Exception):
   """
   Raise this exception whenever two incompatible abstract values get combined
   """
+
   def __init__(self, v1, v2):
     self.v1 = v1
     self.v2 = v2
@@ -17,14 +16,13 @@ class ValueMismatch(Exception):
 class AbstractValue(object):
   def combine(self, other):
     if self == other:
-      return self 
+      return self
     else:
       return unknown_value
 
 class Unknown(object):
-  """
-  Bottom of the abstract shape lattice
-  """
+  """Bottom of the abstract shape lattice"""
+
   def __eq__(self, other):
     return other.__class__ is Unknown
 
@@ -40,9 +38,8 @@ class Unknown(object):
 unknown_value = Unknown()
 
 class AnyValue(object):
-  """
-  Top of the abstract shape lattice
-  """
+  """Top of the abstract shape lattice"""
+
   def __eq__(self, other):
     return other.__class__ is AnyValue
 
@@ -59,6 +56,7 @@ any_value = AnyValue
 
 class Scalar(AbstractValue):
   """Base class for all scalar operations"""
+
   def combine(self, other):
     if self == other:
       return self
@@ -117,8 +115,8 @@ class Binop(Scalar):
 
   def __eq__(self, other):
     return self.__class__ == other.__class__ and \
-      self.x == other.x and \
-      self.y == other.y
+           self.x == other.x and \
+           self.y == other.y
 
   def __repr__(self):
     return str(self)
@@ -178,8 +176,8 @@ class Shape(AbstractValue):
 
   def __eq__(self, other):
     return other.__class__ is  Shape and \
-      len(self.dims) == len(other.dims) and \
-      all(d1 == d2 for (d1,d2) in zip(self.dims, other.dims) )
+           len(self.dims) == len(other.dims) and \
+           all(d1 == d2 for (d1,d2) in zip(self.dims, other.dims) )
 
   def __str__(self):
     return "Shape(%s)" % (", ".join(str(d) for d in self.dims))
@@ -259,19 +257,20 @@ def is_scalar(v):
 class ConstSlice(AbstractValue):
   def __init__(self, nelts):
     self.nelts = nelts
-  
+
   def __str__(self):
     return "ConstSlice(nelts = %d)" % self.nelts
+
   def __eq__(self, other):
     return other.__class__ is ConstSlice and \
-      other.nelts == self.nelts 
-  
+           other.nelts == self.nelts
+
   def combine(self, other):
     if other.__class__ is ConstSlice and other.nelts == self.nelts:
-      return self 
+      return self
     else:
-      return any_slice 
-      
+      return any_slice
+
 class Slice(AbstractValue):
   def __init__(self, start, stop, step):
     self.start = start
@@ -280,13 +279,13 @@ class Slice(AbstractValue):
 
   def __eq__(self, other):
     return other.__class__ is Slice and \
-      self.start == other.start and \
-      self.stop == other.stop and \
-      self.step == other.step
+           self.start == other.start and \
+           self.stop == other.stop and \
+           self.step == other.step
 
   def __str__(self):
     return "Slice(%s, %s, %s)" % (self.start, self.stop, self.step)
-  
+
   def combine(self, other):
     if isinstance(other, Slice):
       start = self.start.combine(other.start)
@@ -296,7 +295,7 @@ class Slice(AbstractValue):
     else:
       raise ValueMismatch(self, other)
 
-any_slice = Slice(any_scalar, any_scalar, any_scalar) 
+any_slice = Slice(any_scalar, any_scalar, any_scalar)
 
 class Tuple(AbstractValue):
   def __init__(self, elts):
@@ -304,8 +303,8 @@ class Tuple(AbstractValue):
 
   def __eq__(self, other):
     return other.__class__ is Tuple and \
-      len(self.elts) == len(other.elts) and \
-      all(e1 == e2 for (e1, e2) in zip(self.elts, other.elts))
+           len(self.elts) == len(other.elts) and \
+           all(e1 == e2 for (e1, e2) in zip(self.elts, other.elts))
 
   def __len__(self):
     return len(self.elts)
@@ -332,13 +331,13 @@ class Closure(AbstractValue):
 
   def __str__(self):
     return "Closure(fn = %s, %s)" % \
-      (self.fn, ", ".join(str(a) for a in self.args))
+           (self.fn, ", ".join(str(a) for a in self.args))
 
   def __eq__(self, other):
     return other.__class__ is Closure and \
-      self.fn == other.fn and \
-      len(self.arg_shapes) == len(other.arg_shapes) and \
-      all(v1 == v2 for (v1,v2) in zip(self.args, other.args))
+           self.fn == other.fn and \
+           len(self.arg_shapes) == len(other.arg_shapes) and \
+           all(v1 == v2 for (v1,v2) in zip(self.args, other.args))
 
   def combine(self, other):
     if other.__class__ is  Closure:
@@ -353,28 +352,28 @@ class Struct(AbstractValue):
   def __init__(self, field_names, field_values):
     self.fields = field_names
     self.values = field_values
-  
+
   def __str__(self):
-    field_strings = ["%s = %s" % (k,v) 
-                     for (k,v) in zip(self.fields, self.values)] 
+    field_strings = ["%s = %s" % (k,v)
+                     for (k,v) in zip(self.fields, self.values)]
     return "Struct(%s)" % ", ".join(field_strings)
-  
+
   def __eq__(self, other):
       return other.__class__ is Struct and \
-        len(self.fields) == len(other.fields) and \
-        all(n1 == n2 for (n1,n2) in zip(self.fields, other.fields)) and \
-        all(v1 == v2 for (v1, v2) in zip(self.values, other.values))
+             len(self.fields) == len(other.fields) and \
+             all(n1 == n2 for (n1,n2) in zip(self.fields, other.fields)) and \
+             all(v1 == v2 for (v1, v2) in zip(self.values, other.values))
 
   def combine(self, other):
     if other.__class__ is  Struct and \
        len(self.fields) == len(other.fields) and \
        all(n1 == n2 for (n1,n2) in zip(self.fields, other.fields)):
       combined_args = combine_pairs(self.values, other.values)
-      if any(old_val != new_val 
+      if any(old_val != new_val
              for (old_val, new_val) in zip(self.values, combined_args)):
         return Struct(self.fields, combined_args)
       else:
-        return self 
+        return self
     raise ValueMismatch(self, other)
 
 def combine_list(xs, preserve_const = True):

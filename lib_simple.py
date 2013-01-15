@@ -1,6 +1,4 @@
-"""
-Simple library functions which don't depend on adverbs
-"""
+"""Simple library functions which don't depend on adverbs"""
 
 __all__ = ["identity", "len", "shape"]
 

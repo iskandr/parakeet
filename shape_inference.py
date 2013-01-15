@@ -1,4 +1,3 @@
-
 import core_types
 import shape
 import shape_from_type
@@ -7,10 +6,10 @@ import syntax
 from array_type import SliceT, ArrayT
 from offset_analysis import OffsetAnalysis
 from shape import Var, Const, Shape, Tuple, Closure
-from shape import Slice, Scalar, Unknown, Struct 
-from shape import any_scalar, unknown_value, const, any_value 
+from shape import Slice, Scalar, Unknown, Struct
+from shape import any_scalar, unknown_value, const, any_value
 from shape import combine_list, increase_rank, make_shape
-from shape import is_one, is_zero, is_none, ConstSlice 
+from shape import ConstSlice
 from shape_semantics import ShapeSemantics
 from tuple_type import TupleT
 from syntax_visitor import SyntaxVisitor
@@ -18,32 +17,29 @@ from syntax_visitor import SyntaxVisitor
 shape_semantics = ShapeSemantics()
 
 class ShapeInference(SyntaxVisitor):
-  
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)
 
     self.value_env = {}
     self.equivalence_classes = {}
-    
+
     self.known_offsets = OffsetAnalysis().visit_fn(fn)
-    
+
     arg_types = [fn.type_env[name] for name in fn.arg_names]
     input_values = shape_from_type.Converter().from_types(arg_types)
     for n,v in zip(fn.arg_names, input_values):
       self.value_env[n] = v
     self.visit_block(fn.body)
 
-    
   def unify_scalar_var(self, x, y):
     """
-    Unification is different than combining in that it imposes 
-    constraints on the program. 
-    If, for example, we're unifying some scalar that's 
-    reached the top of the lattice 
-    (and thus know nothing about it statically), 
-    with a scalar known to be some constant-- then the result is 
-    we expect both variables to be equal to that constant.
+    Unification is different than combining in that it imposes constraints on
+    the program. If, for example, we're unifying some scalar that's reached the
+    top of the lattice (and thus know nothing about it statically), with a
+    scalar known to be some constant-- then the result is we expect both
+    variables to be equal to that constant.
     """
+
     assert isinstance(x, Var), "Expected scalar variable, but got: " + str(x)
     assert isinstance(y, Scalar), "Expected scalar, but got: " + str(y)
     if y == any_scalar:
@@ -132,22 +128,20 @@ class ShapeInference(SyntaxVisitor):
       #assert False, (expr.start, expr.stop, step)
       #step.__class__ is Const:
       start_name = expr.start.name
-    
+
       stop_name = expr.stop.name
       offsets = self.known_offsets.get(stop_name, [])
-      step = step.value if step.value else 1 
+      step = step.value if step.value else 1
       for (other_var, offset) in offsets:
 
         if other_var == start_name:
           nelts = (offset + step - 1) /  step
           # assert False, (start_name, stop_name, offsets)
-          
           return ConstSlice(nelts)
-      
+
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)
     return shape_semantics.slice_value(start, stop, step)
-    
 
   def visit_Const(self, expr):
     return Const(expr.value)
@@ -174,8 +168,8 @@ class ShapeInference(SyntaxVisitor):
     elif v.__class__ is Slice:
       return getattr(v, name)
     elif v.__class__ is Struct:
-      return v.values[v.fields.index(name)] 
-      
+      return v.values[v.fields.index(name)]
+
     t = expr.value.type.field_type(name)
     if isinstance(t, core_types.ScalarT):
       return any_scalar
@@ -202,7 +196,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_AllocArray(self, expr):
     shape_tuple = self.visit_expr(expr.shape)
     return make_shape(shape_tuple.elts)
-     
+
   def visit_Array(self, expr):
     elts = self.visit_expr_list(expr.elts)
     elt = combine_list(elts)
@@ -309,7 +303,7 @@ class ShapeInference(SyntaxVisitor):
     old_value = self.value_env.get("$return", unknown_value)
     combined = old_value.combine(new_value)
     self.value_env["$return"] = combined
-  
+
   def visit_ForLoop(self, stmt):
     self.value_env[stmt.var.name] = any_scalar
     SyntaxVisitor.visit_ForLoop(self, stmt)
@@ -318,7 +312,6 @@ _shape_env_cache = {}
 def shape_env(typed_fn):
   key = (typed_fn.name, typed_fn.copied_by)
   if key in _shape_env_cache:
-
     return _shape_env_cache[key]
   else:
     shape_inference = ShapeInference()
@@ -326,8 +319,7 @@ def shape_env(typed_fn):
     env = shape_inference.value_env
     _shape_env_cache[key] = env
     return env
-    
-    
+
 _shape_cache = {}
 def call_shape_expr(typed_fn):
   if isinstance(typed_fn, str):

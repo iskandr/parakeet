@@ -1,24 +1,25 @@
+import adverbs
 import adverb_helpers
 import adverb_wrapper
-import adverbs
-from args import ActualArgs
 import array_type
-from array_type import ArrayT
 import closure_type
-from common import dispatch
 import config
-from core_types import Type, IntT, Int64,  ScalarT
-from core_types import NoneType, NoneT, Unknown, UnknownT
-from core_types import combine_type_list, StructT
 import names
 import prims
 import syntax as untyped_ast
 import syntax as typed_ast
 import syntax_helpers
-from syntax_helpers import get_type, get_types, unwrap_constant
 import tuple_type
-from tuple_type import TupleT, make_tuple_type
 import type_conv
+
+from args import ActualArgs
+from array_type import ArrayT
+from common import dispatch
+from core_types import Type, IntT, Int64,  ScalarT
+from core_types import NoneType, NoneT, Unknown, UnknownT
+from core_types import combine_type_list, StructT
+from syntax_helpers import get_type, get_types, unwrap_constant
+from tuple_type import TupleT, make_tuple_type
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -311,6 +312,7 @@ def annotate_expr(expr, tenv, var_map):
       assert t.__class__ is TupleT, \
          "Unexpected argument type for 'len': %s" % t
       return typed_ast.Const(len(t.elt_types), type = Int64)
+
   def expr_Map():
     closure = annotate_child(expr.fn)
     new_args = annotate_args(expr.args, flat = True)
@@ -450,7 +452,6 @@ def annotate_stmt(stmt, tenv, var_map ):
         new_elts = [annotate_lhs(elt, elt_type) for elt in lhs.elts]
       tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
       return typed_ast.Tuple(new_elts, type = tuple_t)
-
     elif lhs_class is untyped_ast.Index:
       new_arr = annotate_expr(lhs.value, tenv, var_map)
       new_idx = annotate_expr(lhs.index, tenv, var_map)
@@ -501,7 +502,7 @@ def annotate_stmt(stmt, tenv, var_map ):
     body = annotate_block(stmt.body, tenv, var_map)
     merge = annotate_phi_nodes(stmt.merge)
     return typed_ast.While(cond, body, merge)
-  
+
   def stmt_ForLoop():
     infer_left_flow(stmt.merge)
     start = annotate_expr(stmt.start, tenv, var_map)
@@ -513,7 +514,7 @@ def annotate_stmt(stmt, tenv, var_map ):
     merge = annotate_phi_nodes(stmt.merge)
 
     return typed_ast.ForLoop(var, start, stop, step, body, merge)
-  
+
   return dispatch(stmt, prefix="stmt")
 
 def annotate_block(stmts, tenv, var_map):
@@ -613,9 +614,9 @@ def _specialize(fn, arg_types):
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
   coerced_fundef = rewrite_typed(typed_fundef)
-  import simplify 
+  import simplify
   normalized = simplify.Simplify().apply(coerced_fundef)
-  return normalized 
+  return normalized
 
 def _get_fundef(fn):
   if isinstance(fn, (untyped_ast.Fn, typed_ast.TypedFn)):

@@ -192,8 +192,8 @@ class LowerTiledAdverbs(Transform):
     if expr.fixed_tile_size and \
        config.opt_reg_tiles_not_tile_size_dependent and \
        syntax_helpers.unwrap_constant(tile_size) > 1:
-      diff = self.sub(tile_size, one_i64, "diff")
-      tile_stop = self.sub(niters, diff, "tile_stop")
+      num_tiles = self.div(niters, tile_size, "num_tiles")
+      tile_stop = self.mul(num_tiles, tile_size, "tile_stop")
       loop1 = make_loop(zero_i64, tile_stop, tile_size, False)
       self.blocks.append(loop1)
       loop2_start = self.assign_temp(loop1.var, "loop2_start")
@@ -327,8 +327,8 @@ class LowerTiledAdverbs(Transform):
     if expr.fixed_tile_size and \
        config.opt_reg_tiles_not_tile_size_dependent and \
        syntax_helpers.unwrap_constant(tile_size) > 1:
-      diff = self.sub(tile_size, one_i64, "diff")
-      tile_stop = self.sub(niters, diff, "tile_stop")
+      num_tiles = self.div(niters, tile_size, "num_tiles")
+      tile_stop = self.mul(num_tiles, tile_size, "tile_stop")
       loop1 = make_loop(zero_i64, tile_stop, tile_size, False)
       self.blocks.append(loop1)
       loop2_start = self.assign_temp(loop1.var, "loop2_start")

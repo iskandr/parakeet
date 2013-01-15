@@ -4,15 +4,12 @@ from syntax import Var, PrimCall, Const
 from syntax_visitor import SyntaxVisitor
 
 class OffsetAnalysis(SyntaxVisitor):
-  """
-  Determine static offset relationships between variables
-  """
+  """Determine static offset relationships between variables"""
   
   def __init__(self):
     # map from variable 'x' to list of variable offset pairs
     # [ ('y', 4), ('z', -1), ...] 
     self.known_offsets = {}
-    
     
   def update(self, x, y, k):
     if x == y:
@@ -60,7 +57,6 @@ class OffsetAnalysis(SyntaxVisitor):
         return (x.name, -y.value)
     return None
   
-  
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ is Var:
       if stmt.rhs.__class__ is PrimCall:
@@ -80,3 +76,4 @@ class OffsetAnalysis(SyntaxVisitor):
   def visit_fn(self, fn):
     SyntaxVisitor.visit_fn(self, fn)
     return self.known_offsets
+

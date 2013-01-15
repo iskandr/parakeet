@@ -39,7 +39,7 @@ class ExprStmt(Stmt):
 
 class Comment(Stmt):
   _members = ['text']
-  
+
   def __str__(self):
     s = "#"
     for (i, c) in enumerate(self.text):
@@ -48,7 +48,7 @@ class Comment(Stmt):
       s += c
     s += "\n#"
     return s
-    
+
 
 class Return(Stmt):
   _members = ['value']
@@ -322,11 +322,11 @@ class PrimCall(Expr):
 
   def _arg_str(self, i):
     arg = self.args[i]
-    if arg.__class__ is PrimCall: 
+    if arg.__class__ is PrimCall:
       return "(%s)" % arg
     else:
       return str(arg)
-    
+
   def __repr__(self):
     if self.prim.symbol:
       if len(self.args) == 1:
@@ -525,7 +525,8 @@ class TypedFn(Expr):
               'has_tiles',
               'num_tiles',
               'dl_tile_estimates',
-              'ml_tile_estimates']
+              'ml_tile_estimates',
+              'autotuned_tile_sizes']
 
   registry = {}
   max_version = {}

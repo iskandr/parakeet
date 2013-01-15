@@ -1,6 +1,7 @@
-from adverbs import AllPairs, Map
 import array_type
 import names
+
+from adverbs import AllPairs, Map
 from syntax import Assign, Return, TypedFn, Var
 from transform import Transform
 
@@ -10,6 +11,7 @@ class MapifyAllPairs(Transform):
     Assume that all adverbs occur only at the outer level of bindings, so skip
     recursive evaluation of expressions
     """
+
     if stmt.__class__ is Assign and stmt.rhs.__class__ is AllPairs:
       stmt.rhs = self.transform_AllPairs(stmt.rhs)
     elif stmt.__class__ is Return and stmt.value.__class__ is AllPairs:

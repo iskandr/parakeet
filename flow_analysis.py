@@ -13,6 +13,7 @@ class FlowAnalysis(SyntaxVisitor):
       4) which values may/must return from the function
       5)
     """
+
     self.var_points_to = {}
 
     # need to track nested references along fields
@@ -43,8 +44,6 @@ class FlowAnalysis(SyntaxVisitor):
     #for value_set in group_by_types.itervalues():
     #  for v in value_set:
     #    self.value
-
-
 
   def visit_Return(self, stmt):
     if stmt.rhs.__class__ is Var:

@@ -110,7 +110,7 @@ class Simplify(Transform):
       return True
     # WARNING: making attributes always immutable
     elif c in (Attribute, Struct, Slice, ArrayView):
-      return True    
+      return True
     # elif c is Attribute and expr.value.type.__class__ is TupleT:
     #  return True
     elif expr.type in self.mutable_types:
@@ -124,8 +124,8 @@ class Simplify(Transform):
 
   def temp(self, expr, use_count = 1):
     """
-    Wrapper around Codegen.assign_temp
-    which also updates bindings and use_counts
+    Wrapper around Codegen.assign_temp which also updates bindings and
+    use_counts
     """
 
     new_var = self.assign_temp(expr)
@@ -176,7 +176,6 @@ class Simplify(Transform):
         v = stored_v
       elif c is AllocArray and expr.name == 'shape':
         return self.transform_expr(stored_v.shape)
-
 
     if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
@@ -304,7 +303,7 @@ class Simplify(Transform):
       elif is_zero(y):
         return syntax_helpers.one(expr.type)
       elif y.__class__ is Const and y.value == 2:
-        return self.cast(self.mul(x, x, "sqr"), expr.type) 
+        return self.cast(self.mul(x, x, "sqr"), expr.type)
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
 
   def temp_in_block(self, expr, block, name = None):
@@ -453,9 +452,8 @@ class Simplify(Transform):
     return stmt
 
   def transform_loop_condition(self, expr, outer_block, loop_body, merge):
-    """
-    Normalize loop conditions so they are just simple variables
-    """
+    """Normalize loop conditions so they are just simple variables"""
+
     if self.is_simple(expr):
       return self.transform_expr(expr)
     else:
@@ -502,7 +500,8 @@ class Simplify(Transform):
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)
 
-    # if a loop is only going to run for one iteration, might as well get rid of it
+    # if a loop is only going to run for one iteration, might as well get rid of
+    # it
     if stmt.start.__class__ is Const and \
        stmt.stop.__class__ is Const and \
        stmt.step.__class__ is Const:
@@ -518,7 +517,8 @@ class Simplify(Transform):
         self.assign(stmt.var, stmt.start)
         self.blocks.top().extend(stmt.body)
         return None
-    return stmt 
+    return stmt
+
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
     """

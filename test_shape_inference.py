@@ -3,7 +3,7 @@ import parakeet
 import shape_inference
 import testing_helpers
 
-from shape_inference import call_shape_expr, unknown_scalar, const
+from shape_inference import call_shape_expr, const
 from shape_inference import Shape, Var
 
 def expect_shape(python_fn, args_list, expected):
@@ -28,8 +28,8 @@ def merge_scalars(b):
   else:
     return 2
 
-def test_unknown_scalar():
-  expect_shape(merge_scalars, [True], shape_inference.unknown_scalar)
+def test_any_scalar():
+  expect_shape(merge_scalars, [True], shape_inference.any_scalar)
 
 def array_literal():
   return [1,2,3]

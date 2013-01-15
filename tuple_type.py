@@ -1,4 +1,5 @@
 import ctypes
+
 import type_conv
 
 from core_types import IncompatibleTypes, StructT
@@ -16,9 +17,7 @@ class TupleT(StructT):
     if self.elt_types is None:
       self.elt_types = ()
     self.elt_types = tuple(self.elt_types)
-    self._fields_ = [
-      ("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)
-    ]
+    self._fields_ = [("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)]
 
   def from_python(self, python_tuple, _keep_forever = []):
     # _keep_forever.append(python_tuple)
@@ -67,7 +66,7 @@ class TupleT(StructT):
 
   def index_type(self, idx):
     assert isinstance(idx, Expr), \
-        "Tuple index not an expression: %s" % idx 
+        "Tuple index not an expression: %s" % idx
     assert isinstance(idx, Const), "Unsupported expression: %s" % idx
     idx = int(idx.value)
     assert 0 <= idx < len(self.elt_types), \
@@ -78,7 +77,7 @@ class TupleT(StructT):
   def combine(self, other):
     if isinstance(other, TupleT) and \
        len(other.elt_types) == len(self.elt_types):
-      combined_elt_types = [t1.combine(t2) for \
+      combined_elt_types = [t1.combine(t2) for
                             (t1, t2) in zip(self.elt_types, other.elt_types)]
       if combined_elt_types != self.elt_types:
         return TupleT(combined_elt_types)
@@ -90,6 +89,7 @@ class TupleT(StructT):
 _tuple_types = {}
 def repeat_tuple(t, n):
   """Given the base type t, construct the n-tuple t*t*...*t"""
+
   elt_types = tuple([t] * n)
   if elt_types in _tuple_types:
     return _tuple_types[elt_types]
@@ -103,6 +103,7 @@ def make_tuple_type(elt_types):
   Use this memoized construct to avoid constructing too many distinct tuple type
   objects and speeding up equality checks
   """
+
   key = tuple(elt_types)
   if key in _tuple_types:
     return _tuple_types[key]

@@ -4,7 +4,7 @@ from closure_type import ClosureT
 from collect_vars import collect_var_names, collect_binding_names
 from escape_analysis import may_alias
 from scoped_set import ScopedSet
-from syntax import Var, Assign, Return, While, If
+from syntax import Var, Assign, Return, While, If, Index
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
 from tuple_type import TupleT
@@ -121,6 +121,11 @@ class Find_LICM_Candidates(SyntaxVisitor):
         pass
       else:
         self.volatile_vars.update(lhs_names)
+    # mark any array writes as volatile 
+    if stmt.lhs.__class__ is Index:
+      assert stmt.lhs.value.__class__ is Var
+      self.volatile_vars.add(stmt.lhs.value.name)
+      
 
 class LoopInvariantCodeMotion(Transform):
   def __init__(self):
