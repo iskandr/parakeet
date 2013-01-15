@@ -34,8 +34,6 @@ class RewriteVars(Transform):
       #    "Can't replace %s with %s since it changes type %s into %s" % \
       #    (expr, new_value, expr.type, new_value.type)
       return new_value
-    
-    
 
 def subst_expr(expr, rename_dict):
   fresh_expr = CloneFunction().transform_expr(expr)
