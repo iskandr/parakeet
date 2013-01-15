@@ -94,7 +94,7 @@ call_from_python_in_parallel = True
 opt_tile = True
 
 # Add a level of tiling for registers
-opt_reg_tile = False
+opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
