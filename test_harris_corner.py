@@ -1,4 +1,7 @@
 import numpy as np
+import time 
+
+import parakeet 
 
 from testing_helpers import expect_each, run_local_tests
 
@@ -43,9 +46,30 @@ def harris(I):
   det = A * B - C * C
   k = 0.05
   return det - k * tr * tr
-
+"""
 def test_harris():
   expect_each(harris, harris, matrices)
+"""
+def test_harris_timing():
+  x = np.random.randn(500*500).reshape(500,500)
+  
+  np_start = time.time()
+  harris(x)
+  np_time = time.time() - np_start
+
+  par_start = time.time()
+  parakeet.run(harris,x)
+  par_time = time.time() - par_start 
+
+  par_start_no_comp = time.time()
+  parakeet.run(harris,x)
+  par_time_no_comp = time.time() - par_start_no_comp
+
+  print "Parakeet time: %.3f" % par_time
+  print "Parakeet w/out compilation: %.3f" % par_time_no_comp
+  print "Python time: %.3f" % np_time
+  assert par_time_no_comp / np_time < 5, \
+    "Parakeet too slow (%.1fX slowdown)" % (par_time_no_comp / np_time)
 
 if __name__ == '__main__':
   run_local_tests()

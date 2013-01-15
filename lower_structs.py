@@ -17,6 +17,7 @@ class LowerStructs(Transform):
     import pipeline
     return pipeline.lowering.apply(expr)
 
+  """
   def transform_ForLoop(self, stmt):
     if config.lower_for_loops:
       start_var = self.assign_temp(stmt.start, stmt.var.name)
@@ -36,7 +37,7 @@ class LowerStructs(Transform):
     else:
       stmt.body = self.transform_block(stmt.body)
       return stmt
-
+  """
   def transform_Tuple(self, expr):
     struct_args = self.transform_expr_list(expr.elts)
     return syntax.Struct(struct_args, type = expr.type)

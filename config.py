@@ -16,7 +16,7 @@ print_lowered_function = False
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['LowerStructs']
+print_functions_before_transforms = False #['LowerStructs']
 
 # show the function produced by each transformation?
 print_functions_after_transforms = False #['LowerStructs']
@@ -37,7 +37,7 @@ print_optimized_llvm = False
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = False
+print_transform_timings = True
 
 # print each transform's name when it runs
 print_transform_names = False
@@ -54,7 +54,7 @@ print_x86 = False
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
-lower_for_loops = True
+
 opt_verify = True
 opt_inline = True
 opt_fusion = True
@@ -66,9 +66,13 @@ opt_stack_allocation = True
 opt_loop_fusion = False
 
 # may increase compile time
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 stride_specialization = False
+
+# Experimenting with always doing this
+# lower_for_loops = False
+
 
 ######################################
 #           LLVM OPTIONS             #
@@ -91,11 +95,11 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = False
-opt_reg_tiles_not_tile_size_dependent = True
+opt_reg_tiles_not_tile_size_dependent = False
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = False
+opt_autotune_tile_sizes = True

@@ -68,14 +68,15 @@ class LLVM_Context:
     self.module = core.Module.new(module_name)
     self.engine_builder = ee.EngineBuilder.new(self.module)
     self.engine_builder.force_jit()
+    opt_level = 3 if optimize else 0
     if optimize:
-      self.engine_builder.opt(3)
+      self.engine_builder.opt(opt_level)
     else:
-      self.engine_builder.opt(0)
+      self.engine_builder.opt(opt_level)
     self.exec_engine = self.engine_builder.create()
-    tm = ee.TargetMachine.new(opt = 3)
-    self.pass_manager = passes.build_pass_managers(tm, opt = 3, 
-                                                   loop_vectorize = True, 
+    tm = ee.TargetMachine.new(opt = opt_level)
+    self.pass_manager = passes.build_pass_managers(tm, opt = opt_level,
+                                                   loop_vectorize = (opt_level > 0), 
                                                    mod = self.module).fpm
 
     for p in self._verify_passes:

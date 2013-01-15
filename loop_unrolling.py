@@ -2,7 +2,7 @@ import syntax_helpers
 
 from array_type import ArrayT
 from clone_stmt import CloneStmt
-from syntax import Assign, ForLoop, While, If, Return  
+from syntax import Assign, ForLoop, While, If, Return, Var  
 from syntax import Const,  Index, Tuple     
 from syntax_helpers import const_int
 from transform import Transform
@@ -23,7 +23,6 @@ def simple_loop_body(stmts):
     elif stmt.__class__ is Assign and not simple_assignment(stmt.lhs):
       return False
   return True
-
 
 
 def safediv(m,n):
@@ -74,9 +73,10 @@ class LoopUnrolling(Transform):
 
     if stmt.step.__class__ is Const:
       assert stmt.step.value > 0, "Downward loops not yet supported"
+      
     stmt = Transform.transform_ForLoop(self, stmt)
-    
-    if not simple_loop_body(stmt.body) or len(stmt.body) > 50:
+
+    if not simple_loop_body(stmt.body) or len(stmt.body) > 30:
       return stmt 
     
     start, stop, step = stmt.start, stmt.stop, stmt.step
@@ -108,11 +108,11 @@ class LoopUnrolling(Transform):
         name_mappings = curr_names            
     
     unrolled_body = self.blocks.pop()
-
     unroll_value = syntax_helpers.const_int(unroll_factor, stmt.var.type)
     unrolled_step = self.mul(unroll_value, stmt.step)
     trunc = self.mul(self.div(self.sub(stop,  start), unrolled_step), unrolled_step)
     unrolled_stop = self.add(stmt.start, trunc)
+       
     final_merge = {}
     for (old_name, (input_value, _)) in stmt.merge.iteritems():
       first_name_in_loop = name_mappings[old_name].name
@@ -125,12 +125,26 @@ class LoopUnrolling(Transform):
                             step = unrolled_step,
                             body = unrolled_body,
                             merge = final_merge)
+    
+    if unrolled_loop.start.__class__ is Const and \
+       unrolled_loop.stop.__class__ is Const and \
+       unrolled_loop.step.__class__ is Const:
+      start_value = unrolled_loop.start.value
+      stop_value = unrolled_stop.value
+      step_value = unrolled_loop.step.value  
+      if start_value + step_value == stop_value:
+        self.assign(unrolled_loop.var, unrolled_loop.start)
+        for (name, (input_value, _)) in final_merge.iteritems():
+          var = Var(name, type = input_value)
+          self.assign(var, input_value)
+        self.blocks.top().extend(unrolled_body)
+        return None 
+    
     self.blocks.append(unrolled_loop)
     
-    if unrolled_stop.__class__ is not Const or \
+    if unrolled_loop.stop.__class__ is not Const or \
          stop.__class__ is not Const or \
-         unrolled_stop.value != stop.value:
-      
+         unrolled_loop.stop.value != stop.value:
       cleanup_merge = {}
       for (old_name, (_, output_value)) in stmt.merge.iteritems():
         input_var = name_mappings[old_name]

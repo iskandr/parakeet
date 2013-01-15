@@ -73,12 +73,12 @@ tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
 
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 lowering = Phase([ShapeElimination, 
-                  unroll, 
-                  LowerIndexing, 
-                  loop_fusion, 
+                  LowerIndexing,
                   licm, 
+                  loop_fusion, 
                   LowerStructs, 
-                  licm],
+                  licm, 
+                  unroll],
                  depends_on = loopify,
                  copy = True,
                  cleanup = [Simplify, DCE])
