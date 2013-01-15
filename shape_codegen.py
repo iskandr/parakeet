@@ -66,7 +66,7 @@ class ShapeCodegen(Traversal):
   def visit_Dim(self, v):
     return self.codegen.tuple_proj(self.visit(v.array), v.dim)
 
-  def visit_UnknownScalar(self, v):
+  def visit_AnyScalar(self, v):
     assert False, "Can't generate shape expression for unknown scalar"
 
   def visit_Tuple(self, v):

@@ -1,20 +1,17 @@
-import names 
 import syntax_helpers 
 
 from array_type import ArrayT
-from clone_function import CloneFunction
-from collect_vars import  collect_binding_names
-from offset_analysis import OffsetAnalysis
-from syntax import Assign, ForLoop, While, If, Return  
-from syntax import Const, Var     
-from tuple_type import TupleT
+from clone_stmt import CloneStmt
+from syntax import Assign, ForLoop, While, If, Return, Var  
+from syntax import Const,  Index, Tuple     
+from syntax_helpers import const_int
 from transform import Transform
 
-def simple_assignment_type(t):
-  if t.__class__ is TupleT:
-    return all(simple_assignment_type(elt_t) for elt_t in t.elt_types)
+def simple_assignment(lhs):
+  if lhs.__class__ is Tuple:
+    return all(simple_assignment(elt) for elt in lhs.elts)
   else:
-    return t.__class__ is not ArrayT
+    return lhs.__class__ is not Index or lhs.type.__class__ is not ArrayT
 
 def simple_loop_body(stmts):
   for stmt in stmts:
@@ -23,95 +20,52 @@ def simple_loop_body(stmts):
     elif stmt.__class__ is If:
       if not simple_loop_body(stmt.true) or not simple_loop_body(stmt.false):
         return False
-    elif stmt.__class__ is Assign and \
-         not simple_assignment_type(stmt.lhs.type):
+    elif stmt.__class__ is Assign and not simple_assignment(stmt.lhs):
       return False
   return True
 
-def count_nested_stmts(stmt):
-  if stmt.__class__ is If:
-    return count_stmts(stmt.true) + count_stmts(stmt.false)
-  elif stmt.__class__ is ForLoop or stmt.__class__ is While:
-    return count_stmts(stmt.body)
-  else:
-    return 0
-  
-def count_stmts(stmts):
-  return len(stmts) + sum(count_nested_stmts(stmt) for stmt in stmts)
-  
 
-class CloneStmt(CloneFunction):
-  def __init__(self, outer_type_env):
-    Transform.__init__(self)
-    self.recursive = False
-    self.type_env = outer_type_env
-    self.rename_dict = {}
-
-  def rename(self, old_name):
-    old_type = self.type_env[old_name]
-    new_name = names.refresh(old_name)
-    new_var = Var(new_name, old_type)
-    self.rename_dict[old_name] = new_var
-    self.type_env[new_name] = old_type
-    return new_name
-
-  def rename_var(self, old_var):
-    new_name = names.refresh(old_var.name)
-    new_var = Var(new_name, old_var.type)
-    self.rename_dict[old_var.name] = new_var
-    self.type_env[new_name] = old_var.type
-    return new_var
-
-  def transform_merge(self, merge):
-    new_merge = {}
-    for (old_name, (l,r)) in merge.iteritems():
-      new_name = self.rename(old_name)
-      new_left = self.transform_expr(l)
-      new_right = self.transform_expr(r)
-      new_merge[new_name] = (new_left, new_right)
-    return new_merge
-
-  def transform_merge_before_loop(self, merge):
-    new_merge = {}
-    for (old_name, (l,r)) in merge.iteritems():
-      new_name = self.rename(old_name)
-
-      new_left = self.transform_expr(l)
-      new_merge[new_name] = (new_left, r)
-    return new_merge
-
-  def transform_merge_after_loop(self, merge):
-    for (new_name, (new_left, old_right)) in merge.items():
-      merge[new_name] = (new_left, self.transform_expr(old_right))
-    return merge
-
-  def transform_Assign(self, expr):
-    for name in collect_binding_names(expr.lhs):
-      self.rename(name)
-    new_lhs = self.transform_expr(expr.lhs)
-    new_rhs = self.transform_expr(expr.rhs)
-
-    return Assign(new_lhs, new_rhs)
-
-  def transform_Var(self, expr):
-    return self.rename_dict.get(expr.name, expr)
-
-  def transform_ForLoop(self, stmt):
-    new_var = self.rename_var(stmt.var)
-
-    merge = self.transform_merge_before_loop(stmt.merge)
-    new_start = self.transform_expr(stmt.start)
-    new_stop = self.transform_expr(stmt.stop)
-    new_step = self.transform_expr(stmt.step)
-    new_body = self.transform_block(stmt.body)
-    merge = self.transform_merge_after_loop(merge)
-    return ForLoop(new_var, new_start, new_stop, new_step, new_body, merge)
+def safediv(m,n):
+  return (m+n-1)/n
 
 class LoopUnrolling(Transform):
-  def __init__(self, unroll_factor = 4):
+  def __init__(self, unroll_factor = 4, max_static_unrolling = 6):
     Transform.__init__(self)
     self.unroll_factor = unroll_factor
+    if max_static_unrolling is not None:
+    # should we unroll static loops more than ones with unknown iters? 
+      self.max_static_unrolling = max_static_unrolling
+    else:
+      self.max_static_unrolling = unroll_factor
 
+  def copy_loop_body(self, stmt, outer_loop_var, iter_num, phi_values = None):
+    """
+    Assume the current codegen block is the unrolled loop
+    """
+    cloner = CloneStmt(self.type_env)
+    # make a fresh copy of the loop
+    loop = cloner.transform_ForLoop(stmt)
+    i = const_int(iter_num, loop.var.type)
+    loop_var_value = self.add(outer_loop_var, self.mul(stmt.step, i)) 
+    self.assign(loop.var, loop_var_value)
+    
+    # if this isn't the first iteration of unrolling
+    # then propagate old versions of phi-bound values
+    # into this block
+    if phi_values is not None:
+      for (old_name, input_value) in phi_values.iteritems():
+        new_var = cloner.rename_dict[old_name]
+        self.assign(new_var, input_value)
+        
+    self.blocks.top().extend(loop.body)
+    
+    output_values = {}
+    for old_name in stmt.merge.iterkeys():
+        new_var = cloner.rename_dict[old_name]
+        output_values[old_name] = loop.merge[new_var.name][1]
+        
+    return output_values, cloner.rename_dict
+    
   def transform_ForLoop(self, stmt):
     assert self.unroll_factor > 0
     if self.unroll_factor == 1:
@@ -119,97 +73,82 @@ class LoopUnrolling(Transform):
 
     if stmt.step.__class__ is Const:
       assert stmt.step.value > 0, "Downward loops not yet supported"
+      
     stmt = Transform.transform_ForLoop(self, stmt)
-    
-    if not simple_loop_body(stmt.body) or count_stmts(stmt.body) > 50:
+
+    if not simple_loop_body(stmt.body) or len(stmt.body) > 50:
       return stmt 
     
-    const_loop_bounds = \
-      stmt.start.__class__ is Const and stmt.stop.__class__ is Const
+    start, stop, step = stmt.start, stmt.stop, stmt.step
 
-    
-    cloner = CloneStmt(self.type_env)
-    loop = cloner.transform_ForLoop(stmt)
-    loop_var = loop.var
-    loop_body = []
-    loop_body.extend(loop.body)
-    
-    
     # if loop has static bounds, fully unroll unless it's too big
-    if False and const_loop_bounds:
-      iters = range(stmt.start.value, stmt.stop.value, stmt.step.value)
-      if len(iters) <= 16:
-        prelude = []
-        for (var_name, (before_value, _)) in loop.merge:
-          var = Var(var_name, type = before_value.type)
-          prelude.append(Assign(var, before_value))
-        
-        prelude.append(Assign(loop.var, Const(iters[0], type = loop.var.type)))
-        loop_body = prelude + loop_body
-        
-        for curr_iter in iters[1:]:
-          loop_body.append(Assign(loop.var, Const(curr_iter, type = loop.var.type) ))
-          prev_rename_dict = cloner.rename_dict.copy()
-          loop = cloner.transform_ForLoop(stmt)
-          curr_rename_dict = cloner.rename_dict
-          for (var_name, (_, after_value)) in stmt.merge.iteritems():
-            new_var = curr_rename_dict[var_name]
-            if after_value.__class__ is Var:
-              new_expr = prev_rename_dict[after_value.name]
-            else:
-              new_expr = after_value
-            assign = Assign(new_var, new_expr)
-            loop_body.append(assign)
-          loop_body.extend(loop.body)
-        self.blocks.top().extend(loop_body)
-        return 
-     
-    counter_type = stmt.var.type
-    unroll_value = syntax_helpers.const_int(self.unroll_factor, counter_type)
-
-    iter_range = self.sub(stmt.stop,  stmt.start)
-    big_step = self.mul(unroll_value, stmt.step)
-    trunc = self.mul(self.div(iter_range, big_step), big_step)
+    unroll_factor = self.unroll_factor
     
-    first_rename_dict = cloner.rename_dict.copy()
+    # number of iterations of loop iterations is not generally known  
     
-    loop_start = loop.start
-    loop_stop = self.add(stmt.start, trunc, "stop")
-    loop_step = big_step
+    
+    if start.__class__ is Const and \
+       stop.__class__ is Const and \
+       step.__class__ is Const:
+      niters = safediv(stop.value - start.value, step.value)
+      if niters <= self.max_static_unrolling:
+        unroll_factor = niters 
+    
+    # push the unrolled body onto the stack
+    self.blocks.push()
+    
+    phi_values = None    
+    loop_var = self.fresh_var(stmt.var.type,  "i")
+    name_mappings = None
+    for iter_num in xrange(self.unroll_factor):   
+      phi_values, curr_names = \
+        self.copy_loop_body(stmt, loop_var, iter_num, phi_values) 
 
-    for i in xrange(1, self.unroll_factor):
-      prev_rename_dict = cloner.rename_dict.copy()
-      loop = cloner.transform_ForLoop(stmt)
-      curr_rename_dict = cloner.rename_dict
-      for (old_loop_start_name, (_, loop_end_expr)) in stmt.merge.iteritems():
-        new_var = curr_rename_dict[old_loop_start_name]
-        if loop_end_expr.__class__ is Var:
-          new_expr = prev_rename_dict[loop_end_expr.name]
-        else:
-          new_expr = loop_end_expr
-        assign = Assign(new_var, new_expr)
-        loop_body.append(assign)
-      incr = self.mul(stmt.step, syntax_helpers.const_int(i, loop.var.type))
-      iter_num = self.add(loop_var, incr)
-      loop_body.append(Assign(loop.var, iter_num))
-      loop_body.extend(loop.body)
-    final_merge  = {}
-    for (loop_start_name, (left, loop_end_expr)) in stmt.merge.iteritems():
-      new_loop_end_expr = cloner.transform_expr(loop_end_expr)
-      loop_start_name = first_rename_dict[loop_start_name].name
-      final_merge[loop_start_name] = (left, new_loop_end_expr)
-    loop = ForLoop(var = loop_var,
-                   start = loop_start,
-                   stop = loop_stop,
-                   step = loop_step,
-                   body = loop_body,
-                   merge = final_merge)
-    self.blocks.append(loop)
-    cleanup_merge = {}
-
-    for (k,(_,r)) in stmt.merge.iteritems():
-      prev_loop_value = first_rename_dict[k]
-      cleanup_merge[k] = (prev_loop_value, r)
-    stmt.merge = cleanup_merge
-    stmt.start = loop.stop
-    return stmt
+      if name_mappings is None:
+        name_mappings = curr_names            
+    
+    unrolled_body = self.blocks.pop()
+    unroll_value = syntax_helpers.const_int(unroll_factor, stmt.var.type)
+    unrolled_step = self.mul(unroll_value, stmt.step)
+    trunc = self.mul(self.div(self.sub(stop,  start), unrolled_step), unrolled_step)
+    unrolled_stop = self.add(stmt.start, trunc)
+       
+    final_merge = {}
+    for (old_name, (input_value, _)) in stmt.merge.iteritems():
+      first_name_in_loop = name_mappings[old_name].name
+      output_value = phi_values[old_name]
+      final_merge[first_name_in_loop] = (input_value, output_value)
+    
+    unrolled_loop = ForLoop(var = loop_var,
+                            start = stmt.start,
+                            stop = unrolled_stop,
+                            step = unrolled_step,
+                            body = unrolled_body,
+                            merge = final_merge)
+    
+    if unrolled_loop.start.__class__ is Const and \
+       unrolled_loop.stop.__class__ is Const and \
+       unrolled_loop.step.__class__ is Const:
+      start_value = unrolled_loop.start.value
+      stop_value = unrolled_stop.value
+      step_value = unrolled_loop.step.value  
+      if start_value + step_value == stop_value:
+        self.assign(unrolled_loop.var, unrolled_loop.start)
+        for (name, (input_value, _)) in final_merge.iteritems():
+          var = Var(name, type = input_value)
+          self.assign(var, input_value)
+        self.blocks.top().extend(unrolled_body)
+        return None 
+    
+    self.blocks.append(unrolled_loop)
+    
+    if unrolled_loop.stop.__class__ is not Const or \
+         stop.__class__ is not Const or \
+         unrolled_loop.stop.value != stop.value:
+      cleanup_merge = {}
+      for (old_name, (_, output_value)) in stmt.merge.iteritems():
+        input_var = name_mappings[old_name]
+        cleanup_merge[old_name] = (input_var, output_value)
+      stmt.merge = cleanup_merge 
+      stmt.start = unrolled_loop.stop 
+      return stmt
