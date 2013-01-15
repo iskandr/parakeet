@@ -1,6 +1,6 @@
 import numpy as np
 
-from testing_helpers import expect, run_local_tests, expect_each
+from testing_helpers import expect, expect_each, run_local_tests
 
 shape_1d = 40
 ints_1d = np.arange(shape_1d)

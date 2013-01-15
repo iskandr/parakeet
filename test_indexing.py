@@ -1,7 +1,6 @@
 import numpy as np
 
-from parakeet import each
-from testing_helpers import eq, expect, run_local_tests
+from testing_helpers import expect, run_local_tests
 
 shape_1d = 40
 ints_1d = np.arange(shape_1d)

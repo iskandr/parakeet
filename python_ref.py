@@ -1,5 +1,4 @@
 import abc
-import numpy
 
 class Ref(object):
   __meta__ = abc.ABCMeta
@@ -46,5 +45,5 @@ class ClosureCellRef(Ref):
       try:
         return self.cell == other.cell
       except:
-        return self.cell is other.cell 
+        return self.cell is other.cell
     return False

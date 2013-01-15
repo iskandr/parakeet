@@ -25,11 +25,13 @@ def to_bool(llvm_value, builder):
   bools are stored as bytes, if you need to use a boolean value for control flow
   convert it to a bit instead
   """
+
   bit = to_bit(llvm_value, builder)
   return builder.zext(bit, int8_t, "bool_val")
 
 def from_float(llvm_value, new_ptype, builder):
   """Convert from an LLVM float value to some other LLVM scalar type"""
+
   dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
 
@@ -47,6 +49,7 @@ def from_float(llvm_value, new_ptype, builder):
 
 def from_signed(llvm_value, new_ptype, builder):
   """Convert from an LLVM float value to some other LLVM scalar type"""
+
   dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
 
@@ -68,6 +71,7 @@ def from_signed(llvm_value, new_ptype, builder):
 
 def from_unsigned(llvm_value, new_ptype, builder):
   """Convert from an LLVM float value to some other LLVM scalar type"""
+
   dest_llvm_type = llvm_value_type(new_ptype)
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
 
@@ -91,6 +95,7 @@ def convert(llvm_value, old_ptype, new_ptype, builder):
   Given an LLVM value and two parakeet types, generate the instruction to
   perform the conversion
   """
+
   if old_ptype == new_ptype:
     return llvm_value
 

@@ -107,9 +107,10 @@ def unwrap_constant(x):
 
 def wrap_if_constant(x):
   """
-  If given value isn't already an expression
-  turn it into one with the const helper
+  If given value isn't already an expression turn it into one with the const
+  helper
   """
+
   if is_python_constant(x):
     return const(x)
   else:
@@ -172,7 +173,6 @@ def all_scalars(exprs):
 
 def is_identity_fn(fn):
   return len(fn.arg_names) == 1 and len(fn.body) == 1 and \
-      fn.body[0].__class__ is syntax.Return and \
-      fn.body[0].value.__class__ is syntax.Var and \
-      fn.body[0].value.name == fn.arg_names[0] 
-
+         fn.body[0].__class__ is syntax.Return and \
+         fn.body[0].value.__class__ is syntax.Var and \
+         fn.body[0].value.name == fn.arg_names[0]

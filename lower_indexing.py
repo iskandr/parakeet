@@ -1,6 +1,3 @@
-import array_type
-import core_types
-import syntax
 import syntax_helpers
 
 from array_type import SliceT, make_array_type, ArrayT
@@ -9,10 +6,9 @@ from syntax import Index, Tuple, Var, ArrayView, Assign, Slice, Struct
 from transform import Transform
 
 class LowerIndexing(Transform):
-  
   def pre_apply(self, fn):
     self.bindings = {}
-  
+
   def tuple_proj(self, tup, idx, explicit_struct = False):
     if tup.__class__ is Var and tup.name in self.bindings:
       stored = self.bindings[tup.name]
@@ -21,36 +17,36 @@ class LowerIndexing(Transform):
       else:
         return stored.args[idx]
     else:
-      return Transform.tuple_proj(self, tup, idx, 
+      return Transform.tuple_proj(self, tup, idx,
                                   explicit_struct = explicit_struct)
-  
+
   def attr(self, obj, field):
     if obj.__class__ is Var and obj.name in self.bindings:
       stored = self.bindings[obj.name]
-      stored_class = stored.__class__ 
+      stored_class = stored.__class__
       if stored_class is Struct:
         pos = stored.type.field_pos(field)
         return stored.args[pos]
       elif stored_class  is Slice or stored_class is ArrayView:
         return getattr(stored, field)
-        
-    return Transform.attr(self, obj, field) 
-  
+
+    return Transform.attr(self, obj, field)
+
   def transform_AllocArray(self, expr):
-    alloc = self.alloc_array(elt_t = expr.type.elt_type, 
-                            dims = self.transform_expr(expr.shape), 
-                            name = "array", 
+    alloc = self.alloc_array(elt_t = expr.type.elt_type,
+                            dims = self.transform_expr(expr.shape),
+                            name = "array",
                             explicit_struct = True)
-    # recursively transform to turn shape and strides tuples into structs 
+    # recursively transform to turn shape and strides tuples into structs
     return self.transform_expr(alloc)
-  
+
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data")
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
     elt_offset = self.attr(arr, "offset")
     total_elts = self.attr(arr, "total_elts")
-    
+
     new_strides = []
     new_shape = []
 
@@ -89,8 +85,8 @@ class LowerIndexing(Transform):
     new_array_t = make_array_type(elt_t, new_rank)
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
-    return ArrayView(data_ptr, new_shape, new_strides, 
-                            elt_offset, total_elts, 
+    return ArrayView(data_ptr, new_shape, new_strides,
+                            elt_offset, total_elts,
                             type = new_array_t)
 
   def transform_Index(self, expr):
@@ -133,7 +129,7 @@ class LowerIndexing(Transform):
 
   def transform_Assign(self, stmt):
     lhs = stmt.lhs
-    lhs_class = lhs.__class__ 
+    lhs_class = lhs.__class__
     rhs = self.transform_expr(stmt.rhs)
     if lhs_class is Tuple:
       for (i, _) in enumerate(lhs.type.elt_types):
@@ -151,8 +147,8 @@ class LowerIndexing(Transform):
         copy_loop = self.array_copy(src = rhs, dest = lhs, return_stmt = True)
         copy_loop = self.transform_stmt(copy_loop)
         return copy_loop
-    elif lhs_class is Var and stmt.rhs.__class__ in (Slice, Struct, ArrayView, Tuple):
+    elif lhs_class is Var and \
+         stmt.rhs.__class__ in (Slice, Struct, ArrayView, Tuple):
       self.bindings[lhs.name] = rhs
-    
+
     return Assign(lhs, rhs)
-    

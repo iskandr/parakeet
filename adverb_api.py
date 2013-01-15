@@ -300,7 +300,7 @@ def par_each(fn, *args, **kwds):
 def par_allpairs(fn, x, y, **kwds):
   # TODO:
   # Why isn't this axis param used????
-  axis = kwds.get('axis', 0)
+  #axis = kwds.get('axis', 0)
 
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, [x, y], kwds)

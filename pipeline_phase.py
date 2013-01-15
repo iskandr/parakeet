@@ -100,4 +100,5 @@ class Phase(object):
       self.cache[original_key] = fn
       new_key = fn.name, fn.copied_by
       self.cache[new_key] = fn
+
     return fn

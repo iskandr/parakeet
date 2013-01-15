@@ -1,9 +1,9 @@
-from adverbs import Map, Scan, Reduce
-from syntax import Assign, Return, If, While, ExprStmt, ForLoop
-from syntax import Comment 
-from syntax import Var, Const, Tuple, Index, Attribute, PrimCall
-from syntax import Call, TypedFn, Struct, Alloc
-from syntax import ArrayView, Slice, TupleProj, Cast, AllocArray
+from adverbs import Map, Reduce, Scan
+from syntax import Assign, ExprStmt, ForLoop, If, Return, While
+from syntax import Comment
+from syntax import Attribute, Const, Index, PrimCall, Tuple, Var
+from syntax import Alloc, Call, Struct, TypedFn
+from syntax import AllocArray, ArrayView, Cast, Slice, TupleProj
 
 class SyntaxVisitor(object):
   """
@@ -51,7 +51,7 @@ class SyntaxVisitor(object):
 
   def visit_AllocArray(self, expr):
     self.visit_expr(expr.shape)
-    
+
   def visit_Slice(self, expr):
     self.visit_expr(expr.start)
     self.visit_expr(expr.stop)
@@ -130,7 +130,6 @@ class SyntaxVisitor(object):
       return self.visit_ArrayView(expr)
     elif c is Alloc:
       return self.visit_Alloc(expr)
-    
     elif c is Cast:
       return self.visit_Cast(expr)
     elif c is Call:
@@ -227,10 +226,10 @@ class SyntaxVisitor(object):
     self.visit_block(stmt.body)
     self.visit_expr(stmt.step)
     self.visit_merge_loop_repeat(stmt.merge)
-  
+
   def visit_Comment(self, stmt):
-    pass 
-  
+    pass
+
   def visit_stmt(self, stmt):
     c = stmt.__class__
     if c is Assign:
@@ -246,10 +245,9 @@ class SyntaxVisitor(object):
     elif c is ExprStmt:
       self.visit_ExprStmt(stmt)
     elif c is Comment:
-      self.visit_Comment(stmt) 
+      self.visit_Comment(stmt)
     else:
       assert False, "Statement not implemented: %s" % stmt
 
   def visit_fn(self, fn):
     self.visit_block(fn.body)
-    

@@ -500,7 +500,8 @@ class Simplify(Transform):
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)
 
-    # if a loop is only going to run for one iteration, might as well get rid of it
+    # if a loop is only going to run for one iteration, might as well get rid of
+    # it
     if stmt.start.__class__ is Const and \
        stmt.stop.__class__ is Const and \
        stmt.step.__class__ is Const:

@@ -1,4 +1,3 @@
-import config
 import closure_type
 import core_types
 import syntax
@@ -6,7 +5,6 @@ import tuple_type
 
 from array_type import ArrayT, make_array_type
 from core_types import ScalarT
-from syntax import While
 from syntax_helpers import const_int, const_tuple
 from transform import Transform
 

@@ -1,11 +1,12 @@
 import numpy as np
+
 import parakeet
 import syntax
 import testing_helpers
 
-from parakeet import config 
+from parakeet import config
 from parakeet import each
-from pipeline import lowering 
+from pipeline import lowering
 from syntax_visitor import SyntaxVisitor
 from testing_helpers import expect
 
@@ -116,7 +117,6 @@ def test_always_false():
   assert isinstance(stmt, syntax.Return)
   assert isinstance(stmt.value, syntax.Const)
 
-
 def volatile_licm_mistake():
   i = 0
   x = [0]
@@ -140,7 +140,6 @@ def g(x):
 def nested_add1(X):
   return each(g, X)
 
-
 class CountLoops(SyntaxVisitor):
   def __init__(self):
     SyntaxVisitor.__init__(self)
@@ -161,7 +160,7 @@ def test_copy_elimination():
   typed_fn = parakeet.typed_repr(nested_add1, [x])
   lowered = lowering.apply(typed_fn)
   n_loops = count_loops(lowered)
-  n_expected = 3 if config.opt_loop_unrolling else 2 
+  n_expected = 3 if config.opt_loop_unrolling else 2
   assert n_loops <= n_expected, \
       "Too many loops generated! Expected at most 2, got %d" % n_loops
 
