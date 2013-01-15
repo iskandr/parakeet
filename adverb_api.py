@@ -242,16 +242,21 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     import time
     start = time.time()
 
-  if config.opt_autotune_tile_sizes:
-    rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
-                        fn.dl_tile_estimates, fn.ml_tile_estimates)
+  if config.opt_autotune_tile_sizes and not fn.autotuned_tile_sizes:
+      rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
+                          fn.dl_tile_estimates, fn.ml_tile_estimates)
+      fn.autotuned_tile_sizes = rt.tile_sizes[0]
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
     ts = [60, 60, 60]
+    if not fn.autotuned_tile_sizes is None:
+      ts = fn.autotuned_tile_sizes
+    else:
+      ts = [(a+b)/2 for a,b in zip(fn.dl_tile_estimates,
+                                   fn.ml_tile_estimates)]
     for i in range(len(fn.dl_tile_estimates)):
-      tile_sizes[i] = fn.ml_tile_estimates[i]
-      #tile_sizes[i] = ts[i]
+      tile_sizes[i] = ts[i]
     rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
 
   if config.print_parallel_exec_time:

@@ -1,12 +1,13 @@
 import numpy as np
 import time
 
-from   parakeet import allpairs
 import testing_helpers
 
-x = 1000
-y = 1000
-k = 1000
+from parakeet import allpairs
+
+x = 3000
+y = 3000
+k = 3000
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / float(x*k)
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / float(y*k)
 
@@ -22,18 +23,20 @@ def test_par_mm():
   comp_time = time.time() - start
 
   start = time.time()
-  nprslt = np.dot(x2_array, y2_array.T)
-  np_time = time.time() - start
-
-  start = time.time()
   adverb_matmult(x2_array, y2_array)
   par_time = time.time() - start
-  assert(testing_helpers.eq(rslt, nprslt)), \
-      "Expected %s but got %s" % (nprslt, rslt)
+
+  check = False
+  if check:
+    start = time.time()
+    nprslt = np.dot(x2_array, y2_array.T)
+    np_time = time.time() - start
+    assert(testing_helpers.eq(rslt, nprslt)), \
+        "Expected %s but got %s" % (nprslt, rslt)
+    print "NumPy time:", np_time
 
   print "Parakeet time with compilation:", comp_time
   print "Parakeet without compilation:", par_time
-  print "NumPy time:", np_time
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

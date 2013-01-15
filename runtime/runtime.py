@@ -63,10 +63,11 @@ class Runtime():
     self.MAX_THREADS = 8
     self.DEFAULT_CHUNK_LEN = 128
     self.D_PAR = 4
-    self.INITIAL_TASK_SIZE = 16
+    self.INITIAL_TASK_SIZE = 8
 
     # How much of the computation should involve search?
-    self.ADAPTIVE_THRESHOLD = 0.8
+    self.ADAPTIVE_THRESHOLD = 0.5
+    self.NUM_UNCHANGED_STOP = 3
 
     # Params for setting intervals between throughput measurements
     self.SLEEP_STEP = 0.05
@@ -218,8 +219,9 @@ class Runtime():
     self.task_size = 1
 
     best = [(a+b)/2 for a,b in zip(mins, maxes)]
-    sdevs = [b/3.0 for b in best]
+    sdevs = [b/2.0 for b in best]
     best_tp = -1.0
+    num_different = 4
 
     def print_tile_sizes(tile_sizes):
       s = "("
@@ -228,7 +230,7 @@ class Runtime():
       s += str(tile_sizes[num_tiled - 1]) + ")"
       return s
 
-    def get_candidates(num_different = 2):
+    def get_candidates():
       half_dop = self.dop / 2
       for i in xrange(0, half_dop, half_dop / num_different):
         for t in xrange(num_tiled):
@@ -247,7 +249,7 @@ class Runtime():
             self.tile_sizes[i + j][t] = new
             self.tile_sizes[i + half_dop + j][t] = new
 
-    def check_tps(best_tp, num_different = 2):
+    def check_tps(best_tp):
       half_dop = self.dop / 2
       changed = False
       tps = self.get_throughputs()
@@ -257,6 +259,8 @@ class Runtime():
           avg += tps[i + j]
           avg += tps[i + half_dop + j]
         avg /= (self.dop / num_different)
+        #print "candidate:", print_tile_sizes(self.tile_sizes[i])
+        #print ("avg[%d]:" % i), tps[i]
         if avg > best_tp:
           changed = True
           best_tp = avg
@@ -275,18 +279,18 @@ class Runtime():
                                            self.dop, 1)
     self.launch_job()
     time.sleep(self.sleep_time)
-    while self.get_percentage_done() < self.PERCENTAGE_TO_SLEEP:
+    while self.get_iters_done() < self.dop * self.INITIAL_TASK_SIZE:
       self.sleep_time += self.SLEEP_STEP
       time.sleep(self.SLEEP_STEP)
-    if self.sleep_time < self.SLEEP_MIN:
-      self.sleep_time = self.SLEEP_MIN
+    #self.pause_job()
+    #self.launch_job()
 
     # If there's still enough work to do, enter adaptive search
     num_unchanged = 0
     pct_done = self.get_percentage_done()
     while not self.job_finished() and \
           pct_done < self.ADAPTIVE_THRESHOLD and \
-          num_unchanged < 4:
+          num_unchanged < self.NUM_UNCHANGED_STOP:
       changed, best_tp = check_tps(best_tp)
       if not changed:
         num_unchanged += 1
@@ -310,6 +314,9 @@ class Runtime():
       self.wait_for_job()
     else:
       print "time spent searching:", time.time() - start
+      print "final tile sizes:", print_tile_sizes(best)
+
+  #def pro_find_best_tiles(self, ):
 
   def genetic_find_best_tiles(self, tiled_loop_iters, tiled_loop_parents):
     num_tiled = len(tiled_loop_iters)
