@@ -15,7 +15,7 @@ from nested_blocks import NestedBlocks
 from syntax import AllocArray, ForLoop, Comment 
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
-from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn
+from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn, If, Return
 from syntax import ArrayView
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
                            one_i64, zero, zero_i64, \
@@ -79,6 +79,8 @@ class Codegen(object):
            (c is Tuple and len(expr.elts) == 0) or \
            (c is Struct and len(expr.args) == 0) or \
            (c is Closure and len(expr.args) == 0)
+
+
 
   def assign_temp(self, expr, name = None):
     if self.is_simple(expr):

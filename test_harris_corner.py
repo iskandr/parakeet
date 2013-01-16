@@ -59,7 +59,7 @@ def test_harris_timing():
 
   par_start = time.time()
   parakeet.run(harris,x)
-  par_time = time.time() - par_start 
+  par_time = time.time() - par_start
 
   par_start_no_comp = time.time()
   parakeet.run(harris,x)

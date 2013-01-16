@@ -117,7 +117,13 @@ def from_python(python_value):
     parakeet_type = type_conv.typeof(python_value)
     if isinstance(parakeet_type, StructT):
       parakeet_value = type_conv.from_python(python_value)
-      assert False, "%s => %s" % (python_value, parakeet_value)
+      fields = {}
+      for (field_name, _) in parakeet_type._fields_:
+        python_field = getattr(parakeet_value, field_name)
+        abstract_field = from_python(python_field)
+        fields[field_name] = abstract_field
+      return Struct(fields)        
+      # assert False, "%s => %s" % (python_value, parakeet_value)
   return unknown 
   
 def from_python_list(python_values):

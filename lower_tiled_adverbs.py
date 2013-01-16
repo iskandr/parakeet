@@ -273,7 +273,7 @@ class LowerTiledAdverbs(Transform):
                array_type.get_rank(expr.init.type)
 
     # TODO: Get rid of this when safe to do so.
-    if expr.fixed_tile_size or True:
+    if not expr.fixed_tile_size or True:
       self.comment("TiledReduce in %s: init_unpack" % self.fn.name)
       self.blocks += init_unpack(num_exps, init)
 
