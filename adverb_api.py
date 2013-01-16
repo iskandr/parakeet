@@ -1,5 +1,6 @@
 import ctypes
 import numpy as np
+import time
 
 import adverbs
 import adverb_helpers
@@ -32,6 +33,9 @@ try:
 except:
   print "Warning: Failed to load parallel runtime"
   rt = None
+
+fixed_tile_sizes = [50, 50, 140]
+par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
@@ -239,27 +243,26 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
   if config.print_parallel_exec_time:
-    import time
     start = time.time()
 
   if config.opt_autotune_tile_sizes and not fn.autotuned_tile_sizes:
-      rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
-                          fn.dl_tile_estimates, fn.ml_tile_estimates)
-      fn.autotuned_tile_sizes = rt.tile_sizes[0]
+    rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
+                        fn.dl_tile_estimates, fn.ml_tile_estimates)
+    fn.autotuned_tile_sizes = rt.tile_sizes[0]
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
-    ts = [60, 60, 60]
     if not fn.autotuned_tile_sizes is None:
       ts = fn.autotuned_tile_sizes
     else:
-      #ts = [(a+b)/2 for a,b in zip(fn.dl_tile_estimates,
-      #                             fn.ml_tile_estimates)]
-      #ts = fn.dl_tile_estimates
-      pass
-    for i in range(len(fn.dl_tile_estimates)):
-      tile_sizes[i] = ts[i]
-    rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters, tile_sizes)
+      for i in range(len(fixed_tile_sizes)):
+        tile_sizes[i] = fixed_tile_sizes[i]
+
+    s = time.time()
+    rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
+                                tile_sizes)
+    global par_runtime
+    par_runtime = time.time() - s
 
   if config.print_parallel_exec_time:
     t = time.time() - start

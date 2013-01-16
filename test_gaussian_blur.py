@@ -5,7 +5,7 @@ import testing_helpers
 from parakeet import each
 from PIL import Image
 
-sausage = Image.open("sausage.jpg")
+sausage = Image.open("crater-lake-panorama.jpg")
 np_sausage = np.array(sausage)
 
 iidxs = np.arange(3, len(np_sausage)-3)
@@ -65,7 +65,7 @@ def do_par_row(i):
 def par_blur2():
   return each(do_par_row, iidxs)
 
-plot = False
+plot = True
 def test_blur():
   np_blurred = np_blur().astype(np.uint8)
   par_blurred = par_blur().astype(np.uint8)

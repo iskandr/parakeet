@@ -79,9 +79,9 @@ ml_sizes[1] = 127
 ml_sizes[2] = 127
 
 # fixed:
-tile_sizes[0] = 60
-tile_sizes[1] = 60
-tile_sizes[2] = 60
+tile_sizes[0] = 20
+tile_sizes[1] = 26
+tile_sizes[2] = 3000
 
 fn_name = "vm_a4_b4_clang"
 
@@ -89,7 +89,7 @@ r = runtime.Runtime()
 print "Launching " + fn_name
 start = time.time()
 
-fixed = False
+fixed = True
 if fixed:
   print "Tile sizes:", list(tile_sizes)
   r.run_job_with_fixed_tiles(getattr(libVM, fn_name),
