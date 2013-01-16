@@ -46,7 +46,7 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = False
+print_parallel_exec_time = True
 
 # print generated assembly of compiled functions
 print_x86 = False
@@ -71,7 +71,7 @@ opt_loop_unrolling = True
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = True
+stride_specialization = False
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False
@@ -104,4 +104,4 @@ opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = False
+opt_autotune_tile_sizes = True

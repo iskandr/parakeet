@@ -7,6 +7,13 @@ from PIL import Image
 
 sausage = Image.open("crater-lake-panorama.jpg")
 np_sausage = np.array(sausage)
+height = len(np_sausage)
+width = len(np_sausage[0])
+
+#new = np_sausage.copy()
+#for i in range(100):
+#  new = np.append(new, np_sausage).reshape((i+2)*height, width, 3)
+#np_sausage = new
 
 iidxs = np.arange(3, len(np_sausage)-3)
 jidxs = np.arange(3, len(np_sausage[0])-3)
@@ -65,7 +72,7 @@ def do_par_row(i):
 def par_blur2():
   return each(do_par_row, iidxs)
 
-plot = True
+plot = False
 def test_blur():
   np_blurred = np_blur().astype(np.uint8)
   par_blurred = par_blur().astype(np.uint8)

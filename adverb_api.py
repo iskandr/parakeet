@@ -34,7 +34,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-fixed_tile_sizes = [50, 50, 140]
+fixed_tile_sizes = [20, 26, 3000]
 par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
@@ -245,24 +245,25 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   if config.print_parallel_exec_time:
     start = time.time()
 
-  if config.opt_autotune_tile_sizes and not fn.autotuned_tile_sizes:
-    rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
-                        fn.dl_tile_estimates, fn.ml_tile_estimates)
-    fn.autotuned_tile_sizes = rt.tile_sizes[0]
-  else:
-    tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
-    tile_sizes = tile_sizes_t()
-    if not fn.autotuned_tile_sizes is None:
-      ts = fn.autotuned_tile_sizes
+  if config.opt_tile:
+    if config.opt_autotune_tile_sizes:
+      rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
+                          fn.dl_tile_estimates, fn.ml_tile_estimates)
+      fn.autotuned_tile_sizes = rt.tile_sizes[0]
     else:
+      tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
+      tile_sizes = tile_sizes_t()
       for i in range(len(fixed_tile_sizes)):
         tile_sizes[i] = fixed_tile_sizes[i]
+        #tile_sizes[i] = (fn.dl_tile_estimates[i] + fn.ml_tile_estimates[i])/2
 
-    s = time.time()
-    rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
+      s = time.time()
+      rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                 tile_sizes)
-    global par_runtime
-    par_runtime = time.time() - s
+      global par_runtime
+      par_runtime = time.time() - s
+  else:
+    rt.run_compiled_job(wf_ptr, c_args_array, num_iters, [], [])
 
   if config.print_parallel_exec_time:
     t = time.time() - start
@@ -301,9 +302,7 @@ def par_each(fn, *args, **kwds):
   return output
 
 def par_allpairs(fn, x, y, **kwds):
-  # TODO:
-  # Why isn't this axis param used????
-  #axis = kwds.get('axis', 0)
+  axis = kwds.get('axis', 0)
 
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, [x, y], kwds)

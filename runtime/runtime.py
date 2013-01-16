@@ -66,8 +66,8 @@ class Runtime():
     self.INITIAL_TASK_SIZE = 8
 
     # How much of the computation should involve search?
-    self.ADAPTIVE_THRESHOLD = 1.0
-    self.NUM_UNCHANGED_STOP = 50
+    self.ADAPTIVE_THRESHOLD = 0.3
+    self.NUM_UNCHANGED_STOP = 3
 
     # Params for setting intervals between throughput measurements
     self.SLEEP_STEP = 0.05
@@ -155,7 +155,7 @@ class Runtime():
 
     self.args = args
     self.num_iters = num_iters
-    self.task_size = num_iters / self.dop
+    self.task_size = self.INITIAL_TASK_SIZE
     self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
                                            self.dop, 1)
     self.launch_job()
@@ -164,10 +164,9 @@ class Runtime():
 
   def run_compiled_job(self, fn, args, num_iters, dl_estimates, ml_estimates):
     if len(ml_estimates) == 0:
-      tile_sizes_t = c_int64 * len(ml_estimates)
+      tile_sizes_t = c_int64 * 1
       tile_sizes = tile_sizes_t()
-      for i in range(len(ml_estimates)):
-        tile_sizes[i] = ml_estimates[i]
+      tile_sizes[0] = 1
       self.run_job_with_fixed_tiles(fn, args, num_iters, tile_sizes)
     else:
       self.work_functions = (c_void_p * self.dop)()
@@ -236,7 +235,7 @@ class Runtime():
       for i in xrange(0, half_dop, half_dop / num_different):
         for t in xrange(num_tiled):
           new = -1
-          while new < mins[t] or new > maxes[t]:
+          while new < mins[t]:# or new > maxes[t]:
             new = int(round(np.random.normal(best[t], sdevs[t])))
 
           for j in xrange(half_dop / num_different):
@@ -277,8 +276,8 @@ class Runtime():
     while self.get_iters_done() < self.dop * self.INITIAL_TASK_SIZE:
       self.sleep_time += self.SLEEP_STEP
       time.sleep(self.SLEEP_STEP)
-    #self.pause_job()
-    #self.launch_job()
+    self.pause_job()
+    self.launch_job()
 
     # If there's still enough work to do, enter adaptive search
     num_unchanged = 0
