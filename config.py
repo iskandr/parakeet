@@ -10,7 +10,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = False 
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -37,7 +37,7 @@ print_optimized_llvm = False
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = False
+print_transform_timings = False 
 
 # print each transform's name when it runs
 print_transform_names = False
@@ -46,7 +46,7 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = True
+print_parallel_exec_time = False 
 
 # print generated assembly of compiled functions
 print_x86 = False

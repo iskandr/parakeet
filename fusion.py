@@ -115,9 +115,7 @@ class Fusion(Transform):
         adverb_vars = [name for name in unique_vars
                        if name in self.adverb_bindings]
         n_adverb_vars = len(adverb_vars)
-
-        if n_adverb_vars == 1:
-          arg_name = adverb_vars[0]
+        for arg_name in adverb_vars:
           n_occurrences = sum((name == arg_name for name in arg_names))
           if self.use_counts[arg_name] == n_occurrences:
             prev_adverb = self.adverb_bindings[arg_name]
@@ -127,7 +125,7 @@ class Fusion(Transform):
                inline.can_inline(self.get_fn(rhs.fn)):
               surviving_array_args = []
               fusion_args = []
-              for (pos, arg) in enumerate(args):
+              for (pos, arg) in enumerate(rhs.args):
                 c = arg.__class__
                 if c is Var and arg.name == arg_name:
                   fusion_args.append(None)
