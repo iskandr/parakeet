@@ -22,21 +22,21 @@ def test_par_mm():
   rslt = adverb_matmult(x2_array, y2_array)
   comp_time = time.time() - start
 
-  start = time.time()
-  adverb_matmult(x2_array, y2_array)
-  par_time = time.time() - start
-
-  check = False
+  check = True
   if check:
+    start = time.time()
+    adverb_matmult(x2_array, y2_array)
+    par_time = time.time() - start
+
     start = time.time()
     nprslt = np.dot(x2_array, y2_array.T)
     np_time = time.time() - start
     assert(testing_helpers.eq(rslt, nprslt)), \
         "Expected %s but got %s" % (nprslt, rslt)
     print "NumPy time:", np_time
+    print "Parakeet without compilation:", par_time
 
   print "Parakeet time with compilation:", comp_time
-  print "Parakeet without compilation:", par_time
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

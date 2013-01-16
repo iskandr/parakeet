@@ -27,7 +27,7 @@ typedef struct {
   void              *args;
   int64_t           *tile_sizes;
   int64_t            iters_done;
-  unsigned long long timestamp;
+  unsigned long long time_working;
 } worker_data_t;
 
 typedef struct {

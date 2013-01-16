@@ -10,7 +10,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -66,7 +66,7 @@ opt_stack_allocation = True
 opt_loop_fusion = False
 
 # may increase compile time
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
 stride_specialization = False
 
@@ -98,8 +98,8 @@ call_from_python_in_parallel = True
 opt_tile = True
 
 # Add a level of tiling for registers
-opt_reg_tile = False
+opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = False
+opt_autotune_tile_sizes = True

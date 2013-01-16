@@ -66,8 +66,8 @@ class Runtime():
     self.INITIAL_TASK_SIZE = 8
 
     # How much of the computation should involve search?
-    self.ADAPTIVE_THRESHOLD = 0.5
-    self.NUM_UNCHANGED_STOP = 3
+    self.ADAPTIVE_THRESHOLD = 1.0
+    self.NUM_UNCHANGED_STOP = 50
 
     # Params for setting intervals between throughput measurements
     self.SLEEP_STEP = 0.05
@@ -219,6 +219,7 @@ class Runtime():
     self.task_size = 1
 
     best = [(a+b)/2 for a,b in zip(mins, maxes)]
+    #best = [m for m in mins]
     sdevs = [b/2.0 for b in best]
     best_tp = -1.0
     num_different = 4
@@ -234,17 +235,10 @@ class Runtime():
       half_dop = self.dop / 2
       for i in xrange(0, half_dop, half_dop / num_different):
         for t in xrange(num_tiled):
-          #maxdiff = abs(maxes[t] - best[t])
-          #mindiff = abs(mins[t] - best[t])
-          #sdev = min(maxdiff, mindiff) / 2.0
-          #sdev = 0.01 if sdev < 0.01 else sdev
-          #new = int(round(np.random.normal(best[t], sdev)))
-          #new = max(mins[t], new)
-          #new = min(maxes[t], new)
-          new = int(round(np.random.normal(best[t], sdevs[t])))
-          new = max(mins[t], new)
-          new = min(maxes[t], new)
-          #new = max(1, new)
+          new = -1
+          while new < mins[t] or new > maxes[t]:
+            new = int(round(np.random.normal(best[t], sdevs[t])))
+
           for j in xrange(half_dop / num_different):
             self.tile_sizes[i + j][t] = new
             self.tile_sizes[i + half_dop + j][t] = new
@@ -259,13 +253,14 @@ class Runtime():
           avg += tps[i + j]
           avg += tps[i + half_dop + j]
         avg /= (self.dop / num_different)
-        #print "candidate:", print_tile_sizes(self.tile_sizes[i])
-        #print ("avg[%d]:" % i), tps[i]
+        print "candidate:", print_tile_sizes(self.tile_sizes[i])
+        print ("avg[%d]:" % i), tps[i]
         if avg > best_tp:
           changed = True
           best_tp = avg
           for t in xrange(num_tiled):
             best[t] = self.tile_sizes[i][t]
+      print
       return changed, best_tp
 
     start = time.time()
@@ -295,12 +290,12 @@ class Runtime():
       if not changed:
         num_unchanged += 1
       else:
-        print "best_tp:", best_tp
-        print "best tiles:", print_tile_sizes(best)
+        print "new best_tp:", best_tp
+        print "new best tiles:", print_tile_sizes(best)
         num_unchanged = 0
       get_candidates()
       self.pause_job()
-      self.relaunch_job()
+      self.launch_job()
       time.sleep(self.sleep_time)
       pct_done = self.get_percentage_done()
     if not self.job_finished():
@@ -310,13 +305,164 @@ class Runtime():
       print "time spent searching:", time.time() - start
       print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
       self.pause_job()
-      self.relaunch_job()
+      self.launch_job()
       self.wait_for_job()
     else:
       print "time spent searching:", time.time() - start
       print "final tile sizes:", print_tile_sizes(best)
 
-  #def pro_find_best_tiles(self, ):
+  def pro_find_best_tiles(self, mins, maxes):
+    num_tiled = len(mins)
+    self.tile_sizes = (POINTER(c_int64) * self.dop)()
+    tile_size_t = c_int64 * num_tiled
+    for i in xrange(self.dop):
+      self.tile_sizes[i] = tile_size_t()
+
+    # Generate initial simplex
+    bs = [int(0.1 * (mx - mn)) for mn, mx in zip(mins, maxes)]
+    center = [(mx + mn) / 2 for mn, mx in zip(mins, maxes)]
+    simplex = []
+    for i in range(len(bs)):
+      pos = copy.copy(center)
+      pos[i] = pos[i] + bs[i]
+      neg = copy.copy(center)
+      neg[i] = neg[i] - bs[i]
+      simplex.append(pos)
+      simplex.append(neg)
+
+    num_different = 4
+    half_dop = self.dop / 2
+    num_per_step = (len(simplex) + num_different - 1) / num_different
+    simplex_fs = [0.0 for _ in simplex]
+
+    def print_tile_sizes(tile_sizes):
+      s = "("
+      for t in range(num_tiled - 1):
+        s += str(tile_sizes[t]) + ", "
+      s += str(tile_sizes[num_tiled - 1]) + ")"
+      return s
+
+    # Sets up to dop / 2 threads to have different tile sizes, in half-round-
+    # robin fashion
+    def set_tiles_to_simplex(idx, simplex):
+      n = min(len(simplex), idx + num_different) - idx
+      ps_per = self.dop / n
+      for i in xrange(n):
+        for j in xrange(ps_per / 2):
+          for t in xrange(num_tiled):
+            self.tile_sizes[i + j][t] = simplex[i][t]
+            self.tile_sizes[i + j + half_dop][t] = simplex[i][t]
+
+    def eval_tps(idx, fs):
+      n = min(len(fs), idx + num_different) - idx
+      ps_per = self.dop / n
+      tps = self.get_throughputs()
+      for i in xrange(n):
+        avg = 0.0
+        for j in xrange(ps_per / 2):
+          avg += tps[i + j]
+          avg += tps[i + j + half_dop]
+        avg /= ps_per
+        fs[idx + i] = avg
+
+    def assess_simplex(simplex):
+      n = (len(simplex) + num_different - 1) / num_different
+      fs = [0.0 for _ in simplex]
+      for i in xrange(n):
+        set_tiles_to_simplex(i * num_different, simplex)
+        self.pause_job()
+        self.launch_job()
+        time.sleep(self.sleep_time)
+        eval_tps(i * num_different, fs)
+      return fs
+
+    def get_reflections():
+      return [[2*a - b for a,b in zip(simplex[0], simplex[i])]
+              for i in xrange(1, len(simplex))]
+
+    def get_shrinks():
+      return [[int(0.5 * (a+b)) for a,b in zip(simplex[0], simplex[i])]
+              for i in xrange(1, len(simplex))]
+
+    def get_sorted_simplex(simplex, fs):
+      idxs = sorted(range(len(fs)), key = fs.__getitem__, reverse = True)
+      return [simplex[idx] for idx in idxs], [fs[idx] for idx in idxs]
+
+    def should_stop():
+      return False #self.get_percentage_done() < self.ADAPTIVE_THRESHOLD
+
+    start = time.time()
+
+    set_tiles_to_simplex(0, simplex)
+
+    # Calibrate time to sleep between throughput measurements
+    self.sleep_time = self.SLEEP_MIN
+    self.task_size = 8 # self.INITIAL_TASK_SIZE
+    self.job = self.libParRuntime.make_job(0, self.num_iters, self.task_size,
+                                           self.dop, 1)
+    self.launch_job()
+    time.sleep(self.sleep_time)
+    while self.get_iters_done() < self.dop * self.task_size * 2:
+      self.sleep_time += self.SLEEP_STEP
+      time.sleep(self.SLEEP_STEP)
+
+    eval_tps(0, simplex_fs)
+    for i in xrange(1, num_per_step):
+      set_tiles_to_simplex(i * num_different, simplex)
+      self.pause_job()
+      self.launch_job()
+      time.sleep(self.sleep_time)
+      eval_tps(i * num_different, simplex_fs)
+    simplex, simplex_fs = get_sorted_simplex(simplex, simplex_fs)
+
+    # Hack to remove unreliably inflated initial performance sample.
+    #simplex = simplex[1:] + [simplex[0]]
+    #simplex_fs = simplex_fs[1:] + [0.0]
+
+    while not self.job_finished() and not should_stop():
+      for i in xrange(2 * num_tiled):
+        print simplex[i], ":", simplex_fs[i]
+
+      reflections = get_reflections()
+      fs = assess_simplex(reflections)
+      reflections, fs = get_sorted_simplex(reflections, fs)
+
+      if max(fs) > simplex_fs[0]:
+        expansion = [3*a - 2*b for (a,b) in zip(simplex[0], reflections[0])]
+        for i in xrange(self.dop):
+          for t in xrange(num_tiled):
+            self.tile_sizes[i][t] = expansion[t]
+        self.pause_job()
+        self.launch_job()
+        time.sleep(self.sleep_time)
+        tps = self.get_throughputs()
+        tp = 0.0
+        for i in xrange(self.dop):
+          tp += tps[i]
+        tp /= self.dop
+        if tp > fs[0]:
+          print "Expanding"
+
+        else:
+          print "reflecting"
+          simplex, simplex_fs = get_sorted_simplex([simplex[0]] + reflections,
+                                                   [simplex_fs[0]] + fs)
+      else:
+        # Shrink the simplex
+        print "Shrinking"
+        shrinks = get_shrinks()
+        fs = assess_simplex(shrinks)
+        simplex = [simplex[0]] + shrinks
+        simplex_fs = [simplex_fs[0]] + fs
+
+      if not self.job_finished():
+        for i in xrange(self.dop):
+          for t in xrange(num_tiled):
+            self.tile_sizes[i][t] = simplex[0][t]
+        self.pause_job()
+        self.relaunch_job()
+
+    self.wait_for_job()
 
   def genetic_find_best_tiles(self, tiled_loop_iters, tiled_loop_parents):
     num_tiled = len(tiled_loop_iters)
