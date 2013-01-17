@@ -66,12 +66,12 @@ opt_shape_elim = True
 opt_scalar_replacement = True
 opt_redundant_load_elimination = True
 
-# may dramatically increase compile time
-opt_loop_unrolling = True
-
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = False
+stride_specialization = True
+
+# may dramatically increase compile time
+opt_loop_unrolling = True
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False

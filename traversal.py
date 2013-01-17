@@ -11,7 +11,7 @@ class Traversal(object):
   
   def visit_generic(self, x):
     assert False, \
-      "Unsupported %s : %s" % (x, x.__class__)
+      "Unsupported %s : %s" % (x, x.__class__.__name__)
   
   def visit(self, x):
     method_name = 'visit_' + x.__class__.__name__

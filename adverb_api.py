@@ -13,6 +13,8 @@ import closure_type
 import llvm_backend
 import names
 import run_function
+import shape_eval
+import stride_specialization
 import syntax
 import syntax_helpers
 import tuple_type
@@ -34,7 +36,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-fixed_tile_sizes = [160, 290, 280]
+fixed_tile_sizes = [60, 60, 120]
 par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
@@ -152,6 +154,7 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                        return_type = core_types.NoneType,
                        type_env = type_env)
     lowered = lowering(parallel_wrapper)
+
     lowered.num_tiles = num_tiles
     lowered.dl_tile_estimates = fn.dl_tile_estimates
     lowered.ml_tile_estimates = fn.ml_tile_estimates
@@ -181,13 +184,13 @@ def prepare_adverb_args(python_fn, args, kwargs):
 def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
   # Create args struct type
   fields = []
-  i = 0
+  arg_counter = 0
   for arg_type in nonlocal_types:
-    fields.append((("arg%d" % i), arg_type))
-    i += 1
+    fields.append((("arg%d" % arg_counter), arg_type))
+    arg_counter += 1
   for arg_type in arg_types:
-    fields.append((("arg%d" % i), arg_type))
-    i += 1
+    fields.append((("arg%d" % arg_counter), arg_type))
+    arg_counter += 1
   fields.append(("output", return_t))
 
   class ParArgsType(core_types.StructT):
@@ -200,26 +203,25 @@ def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
 
   args_repr = ParArgsType()
   c_args = args_repr.ctypes_repr()
-  i = 0
+  arg_counter = 0
   for arg in nonlocals:
     obj = type_conv.from_python(arg)
-    field_name = "arg%d" % i
+    field_name = "arg%d" % arg_counter
     t = type_conv.typeof(arg)
     if isinstance(t, core_types.StructT):
       setattr(c_args, field_name, ctypes.pointer(obj))
     else:
       setattr(c_args, field_name, obj)
-    i += 1
+    arg_counter += 1
   for arg in args:
     obj = type_conv.from_python(arg)
-    field_name = "arg%d" % i
+    field_name = "arg%d" % arg_counter
     t = type_conv.typeof(arg)
     if isinstance(t, core_types.StructT):
       setattr(c_args, field_name, ctypes.pointer(obj))
     else:
       setattr(c_args, field_name, obj)
-    i += 1
-
+    arg_counter += 1
   return args_repr, c_args
 
 def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
@@ -231,6 +233,12 @@ def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
   return output
 
 def exec_in_parallel(fn, args_repr, c_args, num_iters):
+  if config.stride_specialization:
+    # specialization will skip over inputs given as None
+    fn = stride_specialization.specialize(fn, 
+                                          (None,None,c_args,None), 
+                                          fn.input_types)
+    
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(fn)
 
   c_args_list = [c_args]
@@ -287,8 +295,7 @@ def par_each(fn, *args, **kwds):
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
 
-  return_t = type_inference.infer_Map(closure_t, arg_types)
-
+  elt_result_t, typed_fn = type_inference.specialize_Map(closure_t, arg_types)
   r = adverb_helpers.max_rank(arg_types)
   for (arg, t) in zip(args, arg_types):
     if t.rank == r:
@@ -298,28 +305,43 @@ def par_each(fn, *args, **kwds):
 
   nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
   args_repr, c_args = get_par_args_repr(nonlocals, nonlocal_types, args,
-                                        arg_types, return_t)
+                                        arg_types, elt_result_t)
 
   # TODO: Use shape inference to determine output shape.
-  single_iter_rslt = \
-      run_function.run(fn, *[arg[0] for arg in args.positional])
-  output = allocate_output((num_iters,), single_iter_rslt, c_args, return_t)
+  outer_shape = (num_iters,)
+  try: 
+    combined_args = args.prepend_positional(nonlocals)
+    linearized_args = \
+        untyped.args.linearize_without_defaults(combined_args, iter)
+    inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+    output_shape = outer_shape + inner_shape
+    dtype = array_type.elt_type(typed_fn.return_type).dtype
+    output = np.zeros(shape = output_shape, dtype = dtype)
+  except:
+    print "Warning: Shape inference failed when launching parallel Map"
+    single_iter_rslt = \
+        run_function.run(fn, *[arg[0] for arg in args.positional])
+    output = allocate_output(outer_shape, single_iter_rslt, c_args, 
+                             elt_result_t)
 
   wf = gen_par_work_function(adverbs.Map, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, [])
   exec_in_parallel(wf, args_repr, c_args, num_iters)
-
   return output
+
 
 def par_allpairs(fn, x, y, **kwds):
   axis = kwds.get('axis', 0)
+  assert axis == 0, "Other axes not yet implemented" 
+    
 
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, [x, y], kwds)
 
   xtype, ytype = arg_types
-  return_t = type_inference.infer_AllPairs(closure_t, xtype, ytype)
+  elt_result_t, typed_fn = \
+      type_inference.specialize_AllPairs(closure_t, xtype, ytype)
 
   # Actually, for now, just split the first one.  Otherwise we'd have to carve
   # the output along axis = 1 and I don't feel like figuring that out.
@@ -328,12 +350,28 @@ def par_allpairs(fn, x, y, **kwds):
 
   nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
   args_repr, c_args = get_par_args_repr(nonlocals, nonlocal_types, args,
-                                        arg_types, return_t)
+                                        arg_types, elt_result_t)
 
-  # TODO: Use shape inference to determine output shape.
-  single_iter_rslt = run_function.run(fn, x[0], y[0])
-  output = allocate_output((len(x), len(y)), single_iter_rslt, c_args, return_t)
-
+  # TODO: Use axes other than 0
+  outer_shape = (len(x), len(y))
+  try:  
+    combined_args = args.prepend_positional(nonlocals)
+    linearized_args = \
+        untyped.args.linearize_without_defaults(combined_args, iter)
+    inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+    output_shape = outer_shape + inner_shape
+    dtype = array_type.elt_type(typed_fn.return_type).dtype
+    output = np.zeros(shape = output_shape, dtype = dtype)
+  except:
+    raise
+    print "Warning: Shape inference failed for parallel AllPairs"
+    single_iter_rslt = run_function.run(fn, x[0], y[0])
+    output = allocate_output(outer_shape, single_iter_rslt, c_args, 
+                             elt_result_t)
+  output_obj = type_conv.from_python(output)
+  gv_output = ctypes.pointer(output_obj)
+  setattr(c_args, "output", gv_output)
+  
   wf = gen_par_work_function(adverbs.AllPairs, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, dont_slice_position)
