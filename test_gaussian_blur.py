@@ -18,25 +18,14 @@ if repeat_img:
     new = np.append(new, np_sausage).reshape((i+2)*height, width, 3)
   np_sausage = new
 
-def gauss_kern(size):
-  """Returns a normalized 2D gauss kernel array for convolutions"""
-
+def gaussian_kernel(size):
   size = int(size)
   x, y = np.mgrid[-size:size+1, -size:size+1]
   g = np.exp(-(x**2/float(size)+y**2/float(size)))
   return g / g.sum()
 
-a = [0.00000067, 0.00002292, 0.00019117, 0.00038771,
-     0.00019117, 0.00002292, 0.00000067]
-b = [0.00002292, 0.00078633, 0.00655965, 0.01330373,
-     0.00655965, 0.00078633, 0.00002292]
-c = [0.00019117, 0.00655965, 0.05472157, 0.11098164,
-     0.05472157, 0.00655965, 0.00019117]
-d = [0.00038771, 0.01330373, 0.11098164, 0.22508352,
-     0.11098164, 0.01330373, 0.00038771]
-
 s = 3
-gaussian = gauss_kern(s)
+gaussian = gaussian_kernel(s)
 iidxs = np.arange(s, len(np_sausage)-s)
 jidxs = np.arange(s, len(np_sausage[0])-s)
 didxs = np.arange(3)
