@@ -307,14 +307,14 @@ class Runtime():
       for i in xrange(self.dop):
         for t in xrange(num_tiled):
           self.tile_sizes[i][t] = best[t]
-      print "time spent searching:", time.time() - start
-      print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
+      #print "time spent searching:", time.time() - start
+      #print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
       self.pause_job()
       self.launch_job()
       self.wait_for_job()
     else:
-      print "time spent searching:", time.time() - start
-      print "final tile sizes:", print_tile_sizes(best)
+      #print "time spent searching:", time.time() - start
+      #print "final tile sizes:", print_tile_sizes(best)
       pass
 
   def pro_find_best_tiles(self, mins, maxes):

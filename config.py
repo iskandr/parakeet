@@ -10,7 +10,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -46,7 +46,7 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = True
+print_parallel_exec_time = False
 
 # print generated assembly of compiled functions
 print_x86 = False
@@ -67,7 +67,7 @@ opt_scalar_replacement = True
 opt_redundant_load_elimination = True
 
 # may dramatically increase compile time
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
@@ -104,4 +104,4 @@ opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = True
+opt_autotune_tile_sizes = False
