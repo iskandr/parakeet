@@ -34,7 +34,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-fixed_tile_sizes = [20, 26, 3000]
+fixed_tile_sizes = [280,280,280]
 par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
@@ -253,7 +253,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     else:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
-      for i in range(len(fixed_tile_sizes)):
+      for i in range(len(fn.dl_tile_estimates)):
         tile_sizes[i] = fixed_tile_sizes[i]
         #tile_sizes[i] = (fn.dl_tile_estimates[i] + fn.ml_tile_estimates[i])/2
 

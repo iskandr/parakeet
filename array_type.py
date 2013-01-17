@@ -171,7 +171,13 @@ class ArrayT(StructT):
       x = np.asarray(x)
       self._store_forever.append(x)
 
-    ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
+    try:
+      data = x.data
+    except:
+      x = x.copy()
+      data = x.data
+      self._store_forever.append(x)
+    ptr, buffer_length = buffer_info(data, self.ptr_t.ctypes_repr)
 
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize

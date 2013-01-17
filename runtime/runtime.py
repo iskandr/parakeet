@@ -83,7 +83,7 @@ class Runtime():
     self.CROSSOVER_PROB = 0.5
     self.MUTATION_PROB = 0.1
 
-    # Numbers for sausage
+    # Sausage machine params
     self.L1SIZE = 2**14
     self.L2SIZE = 2**17
     self.L3SIZE = 2**21
@@ -217,8 +217,8 @@ class Runtime():
       self.tile_sizes[i] = tile_size_t()
     self.task_size = 1
 
-    best = [(a+b)/2 for a,b in zip(mins, maxes)]
-    #best = [m for m in mins]
+    #best = [(a+b)/2 for a,b in zip(mins, maxes)]
+    best = [m for m in maxes]
     sdevs = [b/2.0 for b in best]
     best_tp = -1.0
     num_different = 4
@@ -230,6 +230,7 @@ class Runtime():
       s += str(tile_sizes[num_tiled - 1]) + ")"
       return s
 
+    set_half_to_best = False
     def get_candidates():
       half_dop = self.dop / 2
       for i in xrange(0, half_dop, half_dop / num_different):
@@ -242,6 +243,11 @@ class Runtime():
             self.tile_sizes[i + j][t] = new
             self.tile_sizes[i + half_dop + j][t] = new
 
+      if set_half_to_best:
+        for i in xrange(0, half_dop / 2):
+          for t in xrange(num_tiled):
+            self.tile_sizes[i][t] = best[t]
+
     def check_tps(best_tp):
       half_dop = self.dop / 2
       changed = False
@@ -252,14 +258,14 @@ class Runtime():
           avg += tps[i + j]
           avg += tps[i + half_dop + j]
         avg /= (self.dop / num_different)
-        print "candidate:", print_tile_sizes(self.tile_sizes[i])
-        print ("avg[%d]:" % i), tps[i]
+        #print "candidate:", print_tile_sizes(self.tile_sizes[i])
+        #print ("avg[%d]:" % i), tps[i]
         if avg > best_tp:
           changed = True
           best_tp = avg
           for t in xrange(num_tiled):
             best[t] = self.tile_sizes[i][t]
-      print
+      #print
       return changed, best_tp
 
     start = time.time()
@@ -273,7 +279,7 @@ class Runtime():
                                            self.dop, 1)
     self.launch_job()
     time.sleep(self.sleep_time)
-    while self.get_iters_done() < self.dop * self.INITIAL_TASK_SIZE:
+    while self.get_iters_done() < self.dop * self.INITIAL_TASK_SIZE * 1.2:
       self.sleep_time += self.SLEEP_STEP
       time.sleep(self.SLEEP_STEP)
     self.pause_job()
@@ -289,8 +295,8 @@ class Runtime():
       if not changed:
         num_unchanged += 1
       else:
-        print "new best_tp:", best_tp
-        print "new best tiles:", print_tile_sizes(best)
+        #print "new best_tp:", best_tp
+        #print "new best tiles:", print_tile_sizes(best)
         num_unchanged = 0
       get_candidates()
       self.pause_job()
@@ -301,14 +307,15 @@ class Runtime():
       for i in xrange(self.dop):
         for t in xrange(num_tiled):
           self.tile_sizes[i][t] = best[t]
-      print "time spent searching:", time.time() - start
-      print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
+      #print "time spent searching:", time.time() - start
+      #print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
       self.pause_job()
       self.launch_job()
       self.wait_for_job()
     else:
-      print "time spent searching:", time.time() - start
-      print "final tile sizes:", print_tile_sizes(best)
+      #print "time spent searching:", time.time() - start
+      #print "final tile sizes:", print_tile_sizes(best)
+      pass
 
   def pro_find_best_tiles(self, mins, maxes):
     num_tiled = len(mins)
@@ -319,7 +326,8 @@ class Runtime():
 
     # Generate initial simplex
     bs = [int(0.1 * (mx - mn)) for mn, mx in zip(mins, maxes)]
-    center = [(mx + mn) / 2 for mn, mx in zip(mins, maxes)]
+    #center = [(mx + mn) / 2 for mn, mx in zip(mins, maxes)]
+    center = [m for m in maxes]
     simplex = []
     for i in range(len(bs)):
       pos = copy.copy(center)

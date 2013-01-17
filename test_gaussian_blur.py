@@ -5,7 +5,7 @@ import testing_helpers
 from parakeet import each
 from PIL import Image
 
-sausage = Image.open("crater-lake-panorama.jpg")
+sausage = Image.open("sausage.jpg")
 np_sausage = np.array(sausage)
 height = len(np_sausage)
 width = len(np_sausage[0])
@@ -30,54 +30,38 @@ d = [0.00038771, 0.01330373, 0.11098164, 0.22508352, 0.11098164, 0.01330373,
 
 gaussian = np.array([a,b,c,d,c,b,a])
 
-def gaussian_7x7(i, j, d):
-  out = 0.0
-  it = i-3
-  while it < i+4:
-    jt = j-3
-    while jt < j+4:
-      out = out + np_sausage[it][jt][d]
-      jt = jt + 1
-    it = it + 1
-  return out / 49.0
+def gaussian_7x7(i, j):
+  out = np.array([0.0, 0.0, 0.0])
+  for it in range(0, 7, 1):
+    iidx = i + it - 3
+    for jt in range(0, 7, 1):
+      jidx = j + jt - 3
+      out[0] = out[0] + np_sausage[iidx][jidx][0] * gaussian[it][jt]
+      out[1] = out[1] + np_sausage[iidx][jidx][1] * gaussian[it][jt]
+      out[2] = out[2] + np_sausage[iidx][jidx][2] * gaussian[it][jt]
+  return out
 
 def np_blur():
   def do_row(i):
     def do_col(j):
-      def do_rbg(d):
-        return gaussian_7x7(i, j, d)
-      return np.array(map(do_rbg, didxs))
-    return np.array(map(do_col, jidxs[:10]))
-  return np.array(map(do_row, iidxs[:10]))
+      return gaussian_7x7(i, j)
+    return np.array(map(do_col, jidxs[:100]))
+  return np.array(map(do_row, iidxs[:100]))
 
 def par_blur():
   def do_row(i):
     def do_col(j):
-      def do_rbg(d):
-        return gaussian_7x7(i, j, d)
-      return map(do_rbg, didxs)
+      return gaussian_7x7(i, j)
     return map(do_col, jidxs)
   return each(do_row, iidxs)
 
-def do_col(i, j):
-  def do_gaussian(d):
-    return gaussian_7x7(i, j, d)
-  return each(do_gaussian, didxs)
-
-def do_par_row(i):
-  def do_do_col(j):
-    return do_col(i, j)
-  return each(do_do_col, jidxs)
-
-def par_blur2():
-  return each(do_par_row, iidxs)
-
-plot = False
+plot = True
 def test_blur():
   np_blurred = np_blur().astype(np.uint8)
-  par_blurred = par_blur().astype(np.uint8)
+  #par_blurred = (255*par_blur()).astype(np.uint8)
+  #print par_blurred
   if plot:
-    par_imgplot = plt.imshow(par_blurred)
+    par_imgplot = plt.imshow(np_blurred)
     plt.show(par_imgplot)
   else:
     assert testing_helpers.eq(np_blurred, par_blurred[:10,:10]), \

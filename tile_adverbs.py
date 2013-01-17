@@ -14,8 +14,8 @@ from syntax_visitor import SyntaxVisitor
 from transform import Transform
 
 l1_line_size = 64
-l1_size = 16384 / l1_line_size
-l2_size = 131072 / l1_line_size
+l1_size = 2**14 / l1_line_size
+l2_size = 2**17 / l1_line_size
 el_size = 8
 
 #### Medium-Sized Whale

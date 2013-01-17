@@ -1,5 +1,5 @@
 CC = gcc
-IFLAGS = -O3 -ffast-math -ftree-vectorize -msse2
+IFLAGS = -O3 -ffast-math -msse2 -funroll-loops
 CLFLAGS = -O3 -ffast-math -msse2 -mllvm -vectorize-loops
 LFLAGS = -pthread -lm -lprofiler
 FLAGS = $(IFLAGS) $(LFLAGS)
