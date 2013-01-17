@@ -239,6 +239,22 @@ class StrideSpecializer(Transform):
   def transform_lhs(self, lhs):
     return lhs
   
+def has_unit_stride(abstract_value):
+  c = abstract_value.__class__
+  if c is Array:
+    return has_unit_stride(abstract_value.strides)
+  elif c is Struct:
+    return any(has_unit_stride(field_val) 
+               for field_val 
+               in abstract_value.fields.itervalues())
+  elif c is Tuple:
+    return any(has_unit_stride(elt) 
+               for elt in abstract_value.elts)
+  elif c is Const:
+    return abstract_value.value == 1
+  else:
+    return False
+  
 _cache = {}
 def specialize(fn, python_values, types = None):
   if types is None:
@@ -254,10 +270,13 @@ def specialize(fn, python_values, types = None):
   key = (fn.name, tuple(abstract_values))
   if key in _cache:
     return _cache[key]
-  else:
+  elif any(has_unit_stride(v) for v in abstract_values):
     specializer = StrideSpecializer(abstract_values)
+    
     transforms = Phase([specializer, DCE],
                         memoize = False, copy = True)
     new_fn = transforms.apply(fn)
-    _cache[key] = new_fn
-    return new_fn
+  else:
+    new_fn = fn
+  _cache[key] = new_fn
+  return new_fn
