@@ -14,7 +14,7 @@ width = len(np_sausage[0])
 repeat_img = False
 if repeat_img:
   new = np_sausage.copy()
-  for i in range(20):
+  for i in range(10):
     new = np.append(new, np_sausage).reshape((i+2)*height, width, 3)
   np_sausage = new
 
@@ -68,7 +68,7 @@ def test_blur():
     assert testing_helpers.eq(np_blurred_lower_right, par_blurred[-10:,-10:]), \
         "Expected (lower right) %s but got %s" % \
         (np_blurred_lower_right, par_blurred[-10:, -10:])
-    assert np.sum(np.sum((par_blurred - np_sausage[3:-3, 3:-3]) ** 2)) > 0
+    assert np.sum(np.sum((par_blurred - np_sausage[s:-s, s:-s]) ** 2)) > 0
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
