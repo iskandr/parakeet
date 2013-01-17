@@ -268,8 +268,7 @@ class AST_Translator(ast.NodeVisitor):
       import adverb_wrapper
       sum_wrapper = \
           adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
-      args = ActualArgs(positional = [prims.add] + list(positional),
-                        keywords = {'init': syntax.Const(0)})
+      args = ActualArgs(positional = [prims.add] + list(positional))
       return syntax.Call(sum_wrapper, args)
     elif value == map:
       assert len(keywords_dict) == 0
@@ -393,10 +392,10 @@ class AST_Translator(ast.NodeVisitor):
     for (k, name_after) in scope_after.iteritems():
       if k in self.env:
         name_before = self.env[k]
-        new_name = names.fresh(k)
+        new_name = names.fresh(k + "_loop")
         merge[new_name] = (syntax.Var(name_before), syntax.Var(name_after))
         substitutions[name_before]  = new_name
-        curr_scope[k] = new_name #name_after
+        curr_scope[k] = new_name
     
     exprs = [subst_expr(expr, substitutions) for expr in exprs]
     body = subst_stmt_list(body, substitutions)

@@ -5,6 +5,7 @@ import syntax_helpers
 import transform
 
 from adverbs import AllPairs, Map, Reduce, Scan
+from array_type import ArrayT 
 from closure_type import ClosureT
 from collect_vars import collect_var_names
 from core_types import NoneT, ScalarT
@@ -15,7 +16,7 @@ from syntax import Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView, Attribute, Struct
 from syntax import PrimCall, Call, TypedFn, Fn
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
-from syntax_helpers import get_types, slice_none_t
+from syntax_helpers import get_types, slice_none_t, const_int
 from transform import Transform
 from tuple_type import TupleT
 from use_analysis import use_count
@@ -402,6 +403,19 @@ class Simplify(Transform):
         return None
       else:
         lhs = self.transform_lhs_Index(lhs)
+        # when assigning x[j] = [1,2,3]
+        # just rewrite it as a sequence of element assignments 
+        # to avoid 
+        if lhs.type.__class__ is ArrayT and \
+           lhs.type.rank == 1 and \
+           rhs.__class__ is Array:
+          lhs_slice = self.assign_temp(lhs, "lhs_slice")
+          for (elt_idx, elt) in enumerate(rhs.elts):
+            lhs_idx = self.index(lhs_slice, const_int(elt_idx), temp = False)
+            self.assign(lhs_idx, elt)
+          return None
+        elif not self.is_simple(rhs):
+          rhs = self.assign_temp(rhs)
     else:
       assert lhs_class is Attribute
       assert False, "Considering making attributes immutable"
@@ -413,6 +427,7 @@ class Simplify(Transform):
       self.use_counts[rhs.name] = 0
       rhs = self.bindings[rhs.name]
     stmt.lhs = lhs
+    
     stmt.rhs = rhs
     return stmt
 

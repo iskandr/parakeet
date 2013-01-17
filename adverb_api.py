@@ -107,8 +107,9 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
     for t in nonlocal_types:
       unpacked_args.append(syntax.Attribute(args_var, ("arg%d" % i), type = t))
       i += 1
-    for t in arg_types:
+    for t in enumerate(arg_types):
       attr = syntax.Attribute(args_var, ("arg%d" % i), type = t)
+      
       if isinstance(t, array_type.ArrayT) and i not in closure_pos:
         # TODO: Handle axis.
         unpacked_args.append(slice_arg(attr, t))
@@ -249,7 +250,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   else:
     tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
     tile_sizes = tile_sizes_t()
-    ts = [60, 60, 60]
+    ts = (29, 31, 120) # [60, 60, 60]
     if not fn.autotuned_tile_sizes is None:
       ts = fn.autotuned_tile_sizes
     else:
@@ -307,15 +308,6 @@ def par_allpairs(fn, x, y, **kwds):
 
   xtype, ytype = arg_types
   return_t = type_inference.infer_AllPairs(closure_t, xtype, ytype)
-
-  # For now, only split up the larger of the 2 args amongst the threads,
-  # passing the other through in toto.
-#  if len(args.positional[0]) > len(args.positional[1]):
-#    num_iters = len(args.positional[0])
-#    closure_pos = [1]
-#  else:
-#    num_iters = len(args.positional[1])
-#    closure_pos = [0]
 
   # Actually, for now, just split the first one.  Otherwise we'd have to carve
   # the output along axis = 1 and I don't feel like figuring that out.
