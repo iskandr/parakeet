@@ -2,70 +2,84 @@ import matplotlib.pyplot as plt
 import numpy as np
 import testing_helpers
 
-from parakeet import each
+from parakeet import allpairs
 from PIL import Image
 
 sausage = Image.open("sausage.jpg")
-np_sausage = np.array(sausage)
+
+np_sausage = np.array(sausage).astype('float64')
 height = len(np_sausage)
 width = len(np_sausage[0])
 
-#new = np_sausage.copy()
-#for i in range(100):
-#  new = np.append(new, np_sausage).reshape((i+2)*height, width, 3)
-#np_sausage = new
+repeat_img = False
+if repeat_img:
+  new = np_sausage.copy()
+  for i in range(20):
+    new = np.append(new, np_sausage).reshape((i+2)*height, width, 3)
+  np_sausage = new
 
-iidxs = np.arange(3, len(np_sausage)-3)
-jidxs = np.arange(3, len(np_sausage[0])-3)
+def gauss_kern(size):
+  """Returns a normalized 2D gauss kernel array for convolutions"""
+
+  size = int(size)
+  x, y = np.mgrid[-size:size+1, -size:size+1]
+  g = np.exp(-(x**2/float(size)+y**2/float(size)))
+  return g / g.sum()
+
+a = [0.00000067, 0.00002292, 0.00019117, 0.00038771,
+     0.00019117, 0.00002292, 0.00000067]
+b = [0.00002292, 0.00078633, 0.00655965, 0.01330373,
+     0.00655965, 0.00078633, 0.00002292]
+c = [0.00019117, 0.00655965, 0.05472157, 0.11098164,
+     0.05472157, 0.00655965, 0.00019117]
+d = [0.00038771, 0.01330373, 0.11098164, 0.22508352,
+     0.11098164, 0.01330373, 0.00038771]
+
+s = 3
+gaussian = gauss_kern(s)
+iidxs = np.arange(s, len(np_sausage)-s)
+jidxs = np.arange(s, len(np_sausage[0])-s)
 didxs = np.arange(3)
 
-a = [0.00000067, 0.00002292, 0.00019117, 0.00038771, 0.00019117, 0.00002292,
-     0.00000067]
-b = [0.00002292, 0.00078633, 0.00655965, 0.01330373, 0.00655965, 0.00078633,
-     0.00002292]
-c = [0.00019117, 0.00655965, 0.05472157, 0.11098164, 0.05472157, 0.00655965,
-     0.00019117]
-d = [0.00038771, 0.01330373, 0.11098164, 0.22508352, 0.11098164, 0.01330373,
-     0.00038771]
-
-gaussian = np.array([a,b,c,d,c,b,a])
-
 def gaussian_7x7(i, j):
-  out = np.array([0.0, 0.0, 0.0])
-  for it in range(0, 7, 1):
-    iidx = i + it - 3
-    for jt in range(0, 7, 1):
-      jidx = j + jt - 3
-      out[0] = out[0] + np_sausage[iidx][jidx][0] * gaussian[it][jt]
-      out[1] = out[1] + np_sausage[iidx][jidx][1] * gaussian[it][jt]
-      out[2] = out[2] + np_sausage[iidx][jidx][2] * gaussian[it][jt]
-  return out
+  window = np_sausage[i-s:i+s+1, j-s:j+s+1, :]
+  red = 0.0
+  green = 0.0
+  blue = 0.0
+  for it in range(0,2*s+1,1):
+    for jt in range(0,2*s+1,1):
+      red = red + window[it,jt,0] * gaussian[it,jt]
+      green = green + window[it,jt,1] * gaussian[it,jt]
+      blue = blue + window[it,jt,2] * gaussian[it,jt]
+  return [red, green, blue]
 
-def np_blur():
+def np_blur(start, stop):
   def do_row(i):
     def do_col(j):
       return gaussian_7x7(i, j)
-    return np.array(map(do_col, jidxs[:100]))
-  return np.array(map(do_row, iidxs[:100]))
+    return np.array(map(do_col, jidxs[start:stop]))
+  return np.array(map(do_row, iidxs[start:stop]))
 
 def par_blur():
-  def do_row(i):
-    def do_col(j):
-      return gaussian_7x7(i, j)
-    return map(do_col, jidxs)
-  return each(do_row, iidxs)
+  return allpairs(gaussian_7x7, iidxs, jidxs)
 
-plot = True
+plot = False
 def test_blur():
-  np_blurred = np_blur().astype(np.uint8)
-  #par_blurred = (255*par_blur()).astype(np.uint8)
-  #print par_blurred
+  np_blurred_upper_left = np_blur(0,10).astype(np.uint8)
+  np_blurred_lower_right = np_blur(-10,None).astype(np.uint8)
+  par_blurred = par_blur().astype(np.uint8)
+  #par_blurred_2 = par_blur().astype(np.uint8)
   if plot:
-    par_imgplot = plt.imshow(np_blurred)
+    par_imgplot = plt.imshow(par_blurred)
     plt.show(par_imgplot)
   else:
-    assert testing_helpers.eq(np_blurred, par_blurred[:10,:10]), \
-        "Expected %s but got %s" % (np_blurred, par_blurred)
+    assert testing_helpers.eq(np_blurred_upper_left, par_blurred[:10,:10]), \
+        "Expected (upper left) %s but got %s" % \
+        (np_blurred_upper_left, par_blurred[:10, :10])
+    assert testing_helpers.eq(np_blurred_lower_right, par_blurred[-10:,-10:]), \
+        "Expected (lower right) %s but got %s" % \
+        (np_blurred_lower_right, par_blurred[-10:, -10:])
+    assert np.sum(np.sum((par_blurred - np_sausage[3:-3, 3:-3]) ** 2)) > 0
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

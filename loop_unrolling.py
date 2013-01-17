@@ -2,15 +2,16 @@ import syntax_helpers
 
 from clone_stmt import CloneStmt
 from loop_transform import LoopTransform
-from syntax import ForLoop, Var
-from syntax import Const
+from syntax import Const, ForLoop, Var
 from syntax_helpers import const_int
 
 def safediv(m,n):
   return (m+n-1)/n
 
 class LoopUnrolling(LoopTransform):
-  def __init__(self, unroll_factor = 4, max_static_unrolling = 6):
+  def __init__(self, unroll_factor = 4,
+                      max_static_unrolling = 8,
+                      max_block_size = 30):
     LoopTransform.__init__(self)
     self.unroll_factor = unroll_factor
     if max_static_unrolling is not None:
@@ -18,6 +19,8 @@ class LoopUnrolling(LoopTransform):
       self.max_static_unrolling = max_static_unrolling
     else:
       self.max_static_unrolling = unroll_factor
+
+    self.max_block_size = max_block_size
 
   def pre_apply(self, fn):
     # skip the alias analysis that's default for LoopTransform
@@ -60,7 +63,8 @@ class LoopUnrolling(LoopTransform):
 
     stmt = LoopTransform.transform_ForLoop(self, stmt)
 
-    if not self.is_simple_block(stmt.body) or len(stmt.body) > 50:
+    if not self.is_simple_block(stmt.body) or \
+       len(stmt.body) > self.max_block_size:
       return stmt
 
     start, stop, step = stmt.start, stmt.stop, stmt.step
@@ -80,12 +84,12 @@ class LoopUnrolling(LoopTransform):
     self.blocks.push()
 
     phi_values = None
-    loop_var = self.fresh_var(stmt.var.type,  "i")
+    loop_var = self.fresh_var(stmt.var.type,  "loop_counter")
     name_mappings = None
-    for iter_num in xrange(self.unroll_factor):
+    for iter_num in xrange(unroll_factor):
+      self.comment("Unrolling iteration %d" % iter_num)
       phi_values, curr_names = \
           self.copy_loop_body(stmt, loop_var, iter_num, phi_values)
-
       if name_mappings is None:
         name_mappings = curr_names
 
@@ -117,10 +121,20 @@ class LoopUnrolling(LoopTransform):
       step_value = unrolled_loop.step.value
       if start_value + step_value == stop_value:
         self.assign(unrolled_loop.var, unrolled_loop.start)
-        for (name, (input_value, _)) in final_merge.iteritems():
-          var = Var(name, type = input_value)
+        # assign all loop-carried variables to their initial values
+        self.comment("Initialize loop-carried values")
+        for (acc_name, (input_value, _)) in final_merge.iteritems():
+          var = Var(acc_name, type = input_value.type)
           self.assign(var, input_value)
+        # inline loop body
         self.blocks.top().extend(unrolled_body)
+        # since we're not going to have a cleanup loop,
+        # need to assign all the original phi-carried variables
+        self.comment("Finalize loop-carried values")
+        for old_acc_name in stmt.merge.iterkeys():
+          last_value = phi_values[old_acc_name]
+          var = Var(old_acc_name, last_value.type)
+          self.assign(var, last_value)
         return None
 
     self.blocks.append(unrolled_loop)
@@ -134,4 +148,4 @@ class LoopUnrolling(LoopTransform):
         cleanup_merge[old_name] = (input_var, output_value)
       stmt.merge = cleanup_merge
       stmt.start = unrolled_loop.stop
-      return stmt
+    return stmt

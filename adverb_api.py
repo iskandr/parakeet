@@ -34,7 +34,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-fixed_tile_sizes = [280,280,280]
+fixed_tile_sizes = [160, 290, 280]
 par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
@@ -77,7 +77,7 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
 
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
-                          args_t, arg_types, closure_pos):
+                          args_t, arg_types, dont_slice_position = -1):
   key = (adverb_class, f.name, tuple(arg_types))
   if key in _par_wrapper_cache:
     return _par_wrapper_cache[key]
@@ -113,7 +113,8 @@ def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
       i += 1
     for t in arg_types:
       attr = syntax.Attribute(args_var, ("arg%d" % i), type = t)
-      if isinstance(t, array_type.ArrayT) and i not in closure_pos:
+
+      if isinstance(t, array_type.ArrayT) and i != dont_slice_position:
         # TODO: Handle axis.
         unpacked_args.append(slice_arg(attr, t))
       else:
@@ -246,7 +247,18 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     start = time.time()
 
   if config.opt_tile:
-    if config.opt_autotune_tile_sizes:
+    global par_runtime
+    if not fn.autotuned_tile_sizes is None:
+      tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
+      tile_sizes = tile_sizes_t()
+      for i in range(len(fn.dl_tile_estimates)):
+        tile_sizes[i] = fn.autotuned_tile_sizes[i]
+
+      s = time.time()
+      rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
+                                  tile_sizes)
+      par_runtime = time.time() - s
+    elif config.opt_autotune_tile_sizes:
       rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
                           fn.dl_tile_estimates, fn.ml_tile_estimates)
       fn.autotuned_tile_sizes = rt.tile_sizes[0]
@@ -259,8 +271,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
 
       s = time.time()
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
-                                tile_sizes)
-      global par_runtime
+                                  tile_sizes)
       par_runtime = time.time() - s
   else:
     rt.run_compiled_job(wf_ptr, c_args_array, num_iters, [], [])
@@ -310,19 +321,10 @@ def par_allpairs(fn, x, y, **kwds):
   xtype, ytype = arg_types
   return_t = type_inference.infer_AllPairs(closure_t, xtype, ytype)
 
-  # For now, only split up the larger of the 2 args amongst the threads,
-  # passing the other through in toto.
-#  if len(args.positional[0]) > len(args.positional[1]):
-#    num_iters = len(args.positional[0])
-#    closure_pos = [1]
-#  else:
-#    num_iters = len(args.positional[1])
-#    closure_pos = [0]
-
   # Actually, for now, just split the first one.  Otherwise we'd have to carve
   # the output along axis = 1 and I don't feel like figuring that out.
   num_iters = len(args.positional[0])
-  closure_pos = [1]
+  dont_slice_position = 1 + len(nonlocals)
 
   nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
   args_repr, c_args = get_par_args_repr(nonlocals, nonlocal_types, args,
@@ -334,7 +336,7 @@ def par_allpairs(fn, x, y, **kwds):
 
   wf = gen_par_work_function(adverbs.AllPairs, untyped,
                              nonlocals, nonlocal_types,
-                             args_repr, arg_types, closure_pos)
+                             args_repr, arg_types, dont_slice_position)
   exec_in_parallel(wf, args_repr, c_args, num_iters)
 
   return output

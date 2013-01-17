@@ -257,7 +257,7 @@ class LowerTiledAdverbs(Transform):
     # Lift the initial value and fill it.
     def init_unpack(i, cur):
       if i == 0:
-        return syntax.Assign(cur, expr.init)
+        return syntax.Assign(cur, syntax_helpers.zero_f64)
       else:
         j = self.fresh_i64("j")
         start = zero_i64

@@ -51,7 +51,7 @@ def test_harris():
   expect_each(harris, harris, matrices)
 """
 def test_harris_timing():
-  x = np.random.randn(500*500).reshape(500,500)
+  x = np.random.randn(500, 500)
   
   np_start = time.time()
   harris(x)

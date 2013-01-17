@@ -16,10 +16,10 @@ print_lowered_function = False
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False
+print_functions_before_transforms = False #['LoopUnrolling']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False #['LoopUnrolling']
+print_functions_after_transforms = False #['LoopUnrolling'] #['LoopUnrolling']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -46,7 +46,7 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = False
+print_parallel_exec_time = True
 
 # print generated assembly of compiled functions
 print_x86 = False
@@ -97,7 +97,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = True
