@@ -14,7 +14,7 @@ import parakeet
 
 import test_kmeans
 
-d = 500
+d = 1000
 n_iters = 3
 
 def isolated_iter(n, d, k, n_repeats = 3):
