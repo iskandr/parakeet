@@ -1,10 +1,9 @@
 import time
 import multiprocessing
 import pylab 
-
+import numpy as np
 
 def isolated_iter(n_rows, k, n_repeats = 3):
-    import numpy as np 
     import parakeet
     import adverb_api  
     def dot(x,y):
@@ -21,14 +20,8 @@ def isolated_iter(n_rows, k, n_repeats = 3):
     X = np.random.random( (n_rows, k))
     Y = np.random.random( (3000, k))
     times = np.array([0.0,0.0,0.0,0.0])
-    
-    print 
-    print "----------"
-    print "%d x %d multiplied with %d x 3000" % (n_rows, k, k)      
 
-
-      
-    for it in xrange(n_repeats):      
+    for _ in xrange(n_repeats):      
       # generate the data transposed and then transpose it
       # again since Parakeet is currently cobbled by an 
       # inability to use any axis other than 0
@@ -65,11 +58,11 @@ def isolated_iter(n_rows, k, n_repeats = 3):
       # print "(RMSE) without tiling: %s, with tiling: %s " %(rmse, rmse_tile)
       assert rmse < 0.0001
       assert rmse_tile < 0.0001
-    return times / n_repeats 
+    return times / n_repeats
 
-import numpy as np
+
 def init_process():
-  import signal 
+  import signal
   signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def run_benchmarks(output_file = None, 
@@ -86,6 +79,9 @@ def run_benchmarks(output_file = None,
   pool = multiprocessing.Pool(1, init_process)
   for row_idx, n_rows in enumerate(possible_rows):
     for k_idx, k in enumerate(possible_k):
+      print 
+      print "%d x %d multiplied with %d x 3000" % (n_rows, k, k)
+      print "-----"      
       try:
         times = pool.apply(isolated_iter, args = (n_rows, k))
       except KeyboardInterrupt: 
@@ -97,6 +93,7 @@ def run_benchmarks(output_file = None,
       print "==> Parakeet (without tiling): %.3f" % times[1]
       print "==> Parakeet (with tiling, search): %.3f" % times[2]
       print "==> Parakeet (with tiling, use cached tile sizes): %.3f" % times[3]
+      print "-----"
       results[row_idx, k_idx, :] = times 
   if output_file:
     np.save(output_file, results)
