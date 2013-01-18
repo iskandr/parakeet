@@ -76,9 +76,10 @@ def run_benchmarks(output_file = None,
   # third column is parakeet with tiling (search for params)
   # fourth column is parakeet with tiling (use last cached params)
   results = np.zeros(shape = (len(possible_rows), len(possible_k), 4))
-  pool = multiprocessing.Pool(1, init_process)
+ 
   for row_idx, n_rows in enumerate(possible_rows):
     for k_idx, k in enumerate(possible_k):
+      pool = multiprocessing.Pool(1, init_process)
       print 
       print "%d x %d multiplied with %d x 3000" % (n_rows, k, k)
       print "-----"      
@@ -94,11 +95,11 @@ def run_benchmarks(output_file = None,
       print "==> Parakeet (with tiling, search): %.3f" % times[2]
       print "==> Parakeet (with tiling, use cached tile sizes): %.3f" % times[3]
       print "-----"
-      results[row_idx, k_idx, :] = times 
+      results[row_idx, k_idx, :] = times
+      pool.close()
+      pool.join()
   if output_file:
     np.save(output_file, results)
-  pool.close()
-  pool.join()
   return results
 """
 def mk_plots(r, loc = 'upper left', 
