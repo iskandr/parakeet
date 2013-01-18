@@ -33,9 +33,11 @@ def isolated_iter(n, d, k, n_repeats = 3):
     parakeet.config.opt_tile = True
     _ = test_kmeans.parakeet_kmeans(X, k, 1, assignments)
     
+    print "DONE WITH WARMUP"
     times = np.array([0.0]*4)
 
-    for _ in xrange(n_repeats):      
+    for iter_num in xrange(n_repeats):
+      print "iter", iter_num      
       # generate the data transposed and then transpose it
       # again since Parakeet is currently cobbled by an 
       # inability to use any axis other than 0
@@ -44,13 +46,17 @@ def isolated_iter(n, d, k, n_repeats = 3):
       np_result = test_kmeans.python_kmeans(X, k, n_iters, assignments)
 
       # scipy.signal.convolve2d(image, kernel, 'valid')
-      times[0] += time.time() - start
+      np_time =  time.time() - start
+      print "numpy time", np_time 
+      times[0] += np_time 
       # trim the image to make the convolutions comparable  
 
       parakeet.config.opt_tile = False
       start = time.time()
       parakeet_result = test_kmeans.parakeet_kmeans(X, k, n_iters, assignments)
-      times[1] += time.time() - start 
+      t2 = time.time() - start
+      print "parakeet without tiling", t2  
+      times[1] += t2
       print "...par_runtime without tiling: %f" % adverb_api.par_runtime
         
       # print "...running with tiling & search..."  
@@ -58,15 +64,19 @@ def isolated_iter(n, d, k, n_repeats = 3):
       parakeet.config.use_cached_tile_sizes = False
       start = time.time()
       parakeet_tile_result = test_kmeans.parakeet_kmeans(X, k, n_iters, assignments)
-      times[2] += time.time() - start
+      t3 = time.time() - start
+      print "parakeet w/ tiling & search", t3 
+      times[2] += t3
       print "...par_runtime with tiling & search: %f" % adverb_api.par_runtime
        
       # print "...running with tiling & cached tile sizes..."  
       parakeet.config.opt_tile = True
       parakeet.config.use_cached_tile_sizes = True
       start = time.time()
-      _ = test_kmeans.parakeet_kmeans(X, k, 1, assignments)
-      times[3] += time.time() - start
+      _ = test_kmeans.parakeet_kmeans(X, k, n_iters, assignments)
+      t4 = time.time() - start
+      print "parakeet w/ cached tiles",t4  
+      times[3] += t4 
       print "...par_runtime for cached tile sizes: %f" % adverb_api.par_runtime
         
         
@@ -78,7 +88,7 @@ def isolated_iter(n, d, k, n_repeats = 3):
     return repr(times / n_repeats)
 
 def run_benchmarks(output_file = None, 
-                     min_rows = 2500, max_rows = 50000, row_step = 2500, 
+                     min_rows = 2500, max_rows = 15000, row_step = 2500, 
                      min_k = 100, max_k = 1000, k_step = 100):
   possible_rows = range(min_rows, max_rows, row_step)
   possible_k = range(min_k, max_k, k_step)
