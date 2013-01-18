@@ -1,7 +1,11 @@
-import time
 import multiprocessing
-import pylab 
 import numpy as np
+import pylab 
+import subprocess
+import sys
+import time
+
+from numpy import array 
 
 def isolated_iter(n_rows, k, n_repeats = 3):
     import parakeet
@@ -58,12 +62,8 @@ def isolated_iter(n_rows, k, n_repeats = 3):
       # print "(RMSE) without tiling: %s, with tiling: %s " %(rmse, rmse_tile)
       assert rmse < 0.0001
       assert rmse_tile < 0.0001
-    return times / n_repeats
+    return repr(times / n_repeats)
 
-
-def init_process():
-  import signal
-  signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def run_benchmarks(output_file = None, 
                      min_rows = 500, max_rows = 10000, row_step = 500, 
@@ -79,25 +79,22 @@ def run_benchmarks(output_file = None,
  
   for row_idx, n_rows in enumerate(possible_rows):
     for k_idx, k in enumerate(possible_k):
-      pool = multiprocessing.Pool(1, init_process)
       print 
       print "%d x %d multiplied with %d x 3000" % (n_rows, k, k)
       print "-----"      
-      try:
-        times = pool.apply(isolated_iter, args = (n_rows, k))
-      except KeyboardInterrupt: 
-        print "Killing isolated process"
-        pool.close()
-        pool.join()
-        raise
+      output = \
+        subprocess.check_output(["python", 
+                                 "benchmark_matmult.py", 
+                                 str(n_rows), 
+                                 str(k)])
+      last_line = output.splitlines()[-1]
+      times = np.array(eval(last_line))
       print "==> Python: %.3f" % times[0]
       print "==> Parakeet (without tiling): %.3f" % times[1]
       print "==> Parakeet (with tiling, search): %.3f" % times[2]
       print "==> Parakeet (with tiling, use cached tile sizes): %.3f" % times[3]
       print "-----"
       results[row_idx, k_idx, :] = times
-      pool.close()
-      pool.join()
   if output_file:
     np.save(output_file, results)
   return results
@@ -112,4 +109,17 @@ def mk_plots(r, loc = 'upper left',
   pylab.ylabel('seconds')
   pylab.legend(('NumPy', 'Parakeet (no tiling)', 'Parakeet (tiling)'), loc = loc)
   pylab.show()
-""" 
+"""
+
+ 
+ 
+if __name__ == '__main__':
+  assert len(sys.argv) in (2,3), sys.argv
+  if sys.argv[1] == 'run':
+    file_name = sys.argv[2] if len(sys.argv) == 3 else None
+    run_benchmarks(file_name)
+  else:
+    assert len(sys.argv) == 3, sys.argv
+    n_rows = int(sys.argv[1])
+    k = int(sys.argv[2])
+    print isolated_iter(n_rows, k)
