@@ -1,6 +1,7 @@
 import config
 import syntax_visitor
 
+from cse import CSE
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
@@ -41,12 +42,14 @@ def contains_adverbs(fn):
   return False
 
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [DCE],
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, CSE, DCE],
                    memoize = False, 
                    run_if = contains_adverbs)
-inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
-high_level_optimizations = Phase([Simplify, inline_opt, Simplify, DCE,
-                                  fusion_opt, fusion_opt])
+inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [Simplify, CSE, DCE])
+high_level_optimizations = Phase([Simplify, 
+                                  inline_opt,
+                                  fusion_opt, 
+                                  fusion_opt])
 def print_loopy(fn):
   if config.print_loopy_function:
     print
@@ -65,11 +68,14 @@ symbolic_range_propagation = Phase(RangePropagation,
 shape_elim = Phase(ShapeElimination,
                        config_param = 'opt_shape_elim')
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-loopify = Phase([Simplify,
+loopify = Phase([CSE,  
                  fusion_opt, 
-                 LowerAdverbs, inline_opt,
+                 LowerAdverbs, 
+                 inline_opt,
+                 CSE,
                  copy_elim,
-                 licm,],
+                 licm, 
+                 CSE],
                 depends_on = high_level_optimizations,
                 cleanup = [Simplify, DCE],
                 copy = True,
@@ -78,7 +84,7 @@ loopify = Phase([Simplify,
 
 mapify = Phase(MapifyAllPairs, copy = False)
 pre_tiling = Phase([mapify, fusion_opt], copy = True)
-post_tiling = Phase([fusion_opt, copy_elim], copy = True)
+post_tiling = Phase([fusion_opt, CSE, copy_elim], copy = True)
 tiling = Phase([pre_tiling, TileAdverbs, LowerTiledAdverbs, post_tiling],
                config_param = 'opt_tile',
                depends_on = high_level_optimizations,
@@ -93,21 +99,28 @@ load_elim = Phase(RedundantLoadElimination,
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
 pre_lowering = Phase([symbolic_range_propagation,
+                      CSE, 
                       shape_elim,
+                      CSE, 
                       symbolic_range_propagation],
                      cleanup = [Simplify, DCE])
-post_lowering = Phase([licm,
+post_lowering = Phase([CSE,  
+                       licm,
                        unroll,
                        licm,
-                       Simplify,
+                       CSE,
                        load_elim,
+                       CSE, 
                        scalar_repl,
                        ], cleanup = [Simplify, DCE])
 lowering = Phase([
                   pre_lowering,
                   LowerIndexing,
+                  CSE, Simplify,
+                  CSE,   
                   licm,
                   loop_fusion,
+                  CSE, 
                   LowerStructs,
                   post_lowering,],
                  depends_on = loopify,

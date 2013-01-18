@@ -10,7 +10,7 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -37,10 +37,10 @@ print_optimized_llvm = False
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = False
+print_transform_timings = True
 
 # print each transform's name when it runs
-print_transform_names = True 
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
@@ -97,7 +97,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = True
