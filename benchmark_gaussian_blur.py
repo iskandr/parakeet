@@ -92,8 +92,8 @@ def isolated_iter(n_rows, n_cols, kernel_size, n_repeats = 3):
     return repr(times / n_repeats)
 
 def run_benchmarks(output_file = None, 
-                     min_rows = 100, max_rows = 2000, row_step = 100, 
-                     min_k = 5, max_k = 50, k_step = 5):
+                     min_rows = 400, max_rows = 2000, row_step = 200, 
+                     min_k = 5, max_k = 50, k_step = 3):
   possible_rows = range(min_rows, max_rows, row_step)
   possible_k = range(min_k, max_k, k_step)
   
