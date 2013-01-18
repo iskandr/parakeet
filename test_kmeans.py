@@ -14,7 +14,14 @@ def python_update_centroids(X, assignments, k):
   d = X.shape[1]
   new_centroids = np.zeros((k,d), dtype=X.dtype)
   for i in xrange(k):
-    new_centroids[i,:] = np.mean(X[assignments == i])
+    mask = assignments == i
+    count = np.sum(mask)
+    assigned_data = X[mask]
+    if count > 1:
+      new_centroids[i, :] = np.mean(assigned_data)
+    elif count == 1:
+      new_centroids[i,:] = assigned_data[0]
+
   return new_centroids
 
 def python_kmeans(X, k, maxiters = 100, initial_assignments = None):
@@ -24,13 +31,15 @@ def python_kmeans(X, k, maxiters = 100, initial_assignments = None):
   else:
     assignments = initial_assignments
   centroids = python_update_centroids(X, assignments, k)
-  for iter_num in xrange(maxiters):
+  for _ in xrange(maxiters):
     old_assignments = assignments
+    
     assignments = python_update_assignments(X, centroids)
+    
     if all(old_assignments == assignments):
       break
     centroids = python_update_centroids(X, assignments, k)
-    print "Python iter", iter_num
+
   return centroids
 
 def sqr_dist(x,y):
@@ -38,16 +47,25 @@ def sqr_dist(x,y):
 
 def parakeet_update_assignments(X, centroids):
   dists = allpairs(sqr_dist, X, centroids)
+
   return np.argmin(dists, 1)
 
 def mean(X):
   return sum(X) / len(X)
 
+
 def parakeet_update_centroids(X, assignments, k):
   d = X.shape[1]
+
   new_centroids = np.zeros((k,d), dtype=X.dtype)
   for i in xrange(k):
-    new_centroids[i,:] = parakeet.mean(X[assignments == i])
+    mask = (assignments == i)
+    count = np.sum(mask)
+    assigned_data = X[mask]
+    if count == 1:
+      new_centroids[i, :] = assigned_data[0]
+    elif count > 1:  
+      new_centroids[i,:] = parakeet.mean(assigned_data)
   return new_centroids
 
 def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
@@ -58,13 +76,13 @@ def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
     assignments = initial_assignments
 
   centroids = python_update_centroids(X, assignments, k)
-  for iter_num in xrange(maxiters):
+  for _ in xrange(maxiters):
     old_assignments = assignments
     assignments = parakeet_update_assignments(X, centroids)
     if all(old_assignments == assignments):
       break
     centroids = python_update_centroids(X, assignments, k)
-    print "Parakeet iter", iter_num
+
   return centroids
 
 def test_kmeans():

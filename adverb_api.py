@@ -293,9 +293,12 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
     print "Parallel execution time:", t
 
 def par_each(fn, *args, **kwds):
-  # Don't handle outermost axis = None yet
-  axis = kwds.get('axis', 0)
-
+  if 'axis' in kwds:
+    axis = kwds['axis']
+    del kwds['axis']
+  else:
+    axis = 0
+  assert axis == 0, "Map over axis %d not yet supported" % axis
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
 
@@ -338,6 +341,7 @@ def par_each(fn, *args, **kwds):
   wf = gen_par_work_function(adverbs.Map, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, [])
+
   exec_in_parallel(wf, args_repr, c_args, num_iters)
   return output
 
