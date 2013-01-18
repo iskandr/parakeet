@@ -330,7 +330,27 @@ class AST_Translator(ast.NodeVisitor):
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
     
-     
+  
+  def visit_ListComp(self, expr):
+    elt = expr.elt
+    assert elt.__class__ is ast.Name 
+    gens = expr.generators
+    assert len(gens) == 1
+    gen = gens[0]
+    target = gen.target
+    assert target.__class__ is ast.Name
+    seq = self.visit(gen.iter)
+    ifs = gen.ifs
+    assert len(ifs) == 0
+    arg_name = target.id
+    args = FormalArgs()
+    args.add_positional(arg_name)
+    fn_name = names.refresh('comprehension_map')
+    fn = syntax.Fn(args = args, 
+                   body = [syntax.Return(syntax.Var(arg_name))], 
+                   name = fn_name)
+    return Map(fn, args=(seq,), axis = 0)
+      
   def visit_Attribute(self, expr):
     # TODO:
     # Recursive lookup to see if:
