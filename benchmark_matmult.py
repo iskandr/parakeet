@@ -9,7 +9,6 @@ import pylab
 
 class IsolatedIteration(multiprocessing.Process):
   def __init__(self, n_rows, k, shared_times, n_repeats = 3):
-    multiprocessing.Process.__init__(self)
     self.n_rows = n_rows
     self.k = k 
     self.times = shared_times
@@ -17,16 +16,19 @@ class IsolatedIteration(multiprocessing.Process):
 
     
   def run(self):
+    print "INITIALIZING NEW PROCESS"
     import parakeet
     import adverb_api  
     def dot(x,y):
       return sum(x*y)
     def matmult(X,Y):
       return parakeet.allpairs(dot, X, Y)
+    print "Warming up JIT without tiling"
     # warm up parakeet with a first run 
     X = np.random.random((100,100)).T
     parakeet.config.opt_tile = False
     _ = matmult(X,X)
+    print "...and with tiling..."
     parakeet.config.opt_tile = True
     _ = matmult(X,X)
 
@@ -47,8 +49,6 @@ class IsolatedIteration(multiprocessing.Process):
       np_result = np.dot(X,Y.T)
       self.times[0] += time.time() - start 
         
-        
-
       parakeet.config.opt_tile = False
       start = time.time()
       parakeet_result = matmult(X,Y)
