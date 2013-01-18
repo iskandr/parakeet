@@ -19,7 +19,7 @@ def gaussian_kernel(size):
   g = np.exp(-(x**2/float(size)+y**2/float(size)))
   return g / g.sum()
 
-n_cols = 1000
+n_cols = 2000
 
 def isolated_iter(n_rows, n_cols, kernel_size, n_repeats = 3):
     print "Generating random image of size %d x %d"% (n_rows, n_cols)
@@ -92,8 +92,8 @@ def isolated_iter(n_rows, n_cols, kernel_size, n_repeats = 3):
     return repr(times / n_repeats)
 
 def run_benchmarks(output_file = None, 
-                     min_rows = 400, max_rows = 2000, row_step = 200, 
-                     min_k = 5, max_k = 50, k_step = 3):
+                     min_rows = 500, max_rows = 3500, row_step = 250, 
+                     min_k = 7, max_k = 42, k_step = 5):
   possible_rows = range(min_rows, max_rows, row_step)
   possible_k = range(min_k, max_k, k_step)
   
