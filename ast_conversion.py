@@ -16,7 +16,7 @@ from macro import macro
 from prims import Prim, prim_wrapper
 from scoped_env import ScopedEnv
 from subst import subst_expr, subst_stmt_list
-from syntax_helpers import none, true, false
+from syntax_helpers import none, true, false, one_i64, zero_i64
 
 
 
@@ -276,7 +276,14 @@ class AST_Translator(ast.NodeVisitor):
       return Map(fn = positional[0], args = positional[1:], axis = 0)
     elif value == range:
       assert len(keywords_dict) == 0
-      assert len(positional) == 3
+      n_args = len(positional)
+      
+      if n_args == 1:
+        positional = [zero_i64] + positional + [one_i64]
+      elif n_args == 2:
+        positional.extend([one_i64])
+      else:
+        assert n_args == 3
       return syntax.Range(*positional)
     elif value == len:
       assert len(keywords_dict) == 0

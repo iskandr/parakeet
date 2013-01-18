@@ -1,29 +1,52 @@
 import multiprocessing
 import numpy as np
 import pylab 
+import scipy.signal
+import scipy.ndimage
 import subprocess
 import sys
 import time
 
 from numpy import array 
 
-def isolated_iter(n_rows, k, n_repeats = 3):
-    import parakeet
-    import adverb_api  
-    def dot(x,y):
-      return sum(x*y)
-    def matmult(X,Y):
-      return parakeet.allpairs(dot, X, Y)
+import adverb_api
+import parakeet 
+
+def gaussian_kernel(size):
+  print "Generating gaussian kernel, size=", size 
+  size = int(size)
+  x, y = np.mgrid[-size:size+1, -size:size+1]
+  g = np.exp(-(x**2/float(size)+y**2/float(size)))
+  return g / g.sum()
+
+n_cols = 1000
+
+def isolated_iter(n_rows, n_cols, kernel_size, n_repeats = 3):
+    print "Generating random image of size %d x %d"% (n_rows, n_cols)
+    image = np.random.random((n_rows, n_cols))
+    kernel = gaussian_kernel(kernel_size)
+    kw, kh = kernel.shape
+    print "Kernel size: %d x %d" % (kw, kh)
+    row_indices = np.arange(n_rows)[kernel_size:-kernel_size]
+    col_indices = np.arange(n_cols)[kernel_size:-kernel_size]
+
+    def conv_pixel(i,j):
+      window = image[i-kernel_size:i+kernel_size+1, 
+                     j-kernel_size:j+kernel_size+1]
+      result = 0.0
+      for it in range(kw):
+        for jt in range(kh):
+          result = result + window[it,jt] * kernel[it,jt]
+      return result 
+    print "Warming up JIT (without tiling)"
     # warm up parakeet with a first run 
-    X = np.random.random((100,100)).T
     parakeet.config.opt_tile = False
-    _ = matmult(X,X)
+    _ = parakeet.allpairs(conv_pixel, row_indices, col_indices)
+    print "Warming up JIT (with tiling)"
     parakeet.config.opt_tile = True
-    _ = matmult(X,X)
+    _ = parakeet.allpairs(conv_pixel, row_indices, col_indices)
     
-    X = np.random.random( (n_rows, k))
-    Y = np.random.random( (3000, k))
-    times = np.array([0.0,0.0,0.0,0.0])
+    times = np.array([0.0]*4)
 
     for _ in xrange(n_repeats):      
       # generate the data transposed and then transpose it
@@ -31,12 +54,16 @@ def isolated_iter(n_rows, k, n_repeats = 3):
       # inability to use any axis other than 0
 
       start = time.time()
-      np_result = np.dot(X,Y.T)
-      times[0] += time.time() - start 
+      np_result = scipy.ndimage.convolve(image, kernel)
+      # scipy.signal.convolve2d(image, kernel, 'valid')
+      times[0] += time.time() - start
+      # trim the image to make the convolutions comparable  
+      np_result = np_result[kernel_size:-kernel_size, 
+                            kernel_size:-kernel_size]
       
       parakeet.config.opt_tile = False
       start = time.time()
-      parakeet_result = matmult(X,Y)
+      parakeet_result = parakeet.allpairs(conv_pixel, row_indices, col_indices) 
       times[1] += time.time() - start 
       print "...par_runtime without tiling: %f" % adverb_api.par_runtime
         
@@ -44,7 +71,7 @@ def isolated_iter(n_rows, k, n_repeats = 3):
       parakeet.config.opt_tile = True
       parakeet.config.use_cached_tile_sizes = False
       start = time.time()
-      parakeet_tile_result = matmult(X,Y)
+      parakeet_tile_result = parakeet.allpairs(conv_pixel, row_indices, col_indices) 
       times[2] += time.time() - start
       print "...par_runtime with tiling & search: %f" % adverb_api.par_runtime
        
@@ -52,7 +79,7 @@ def isolated_iter(n_rows, k, n_repeats = 3):
       parakeet.config.opt_tile = True
       parakeet.config.use_cached_tile_sizes = True
       start = time.time()
-      _ = matmult(X,Y)
+      _ = parakeet.allpairs(conv_pixel, row_indices, col_indices) 
       times[3] += time.time() - start
       print "...par_runtime for cached tile sizes: %f" % adverb_api.par_runtime
         
@@ -64,10 +91,9 @@ def isolated_iter(n_rows, k, n_repeats = 3):
       assert rmse_tile < 0.0001
     return repr(times / n_repeats)
 
-
 def run_benchmarks(output_file = None, 
-                     min_rows = 500, max_rows = 10000, row_step = 500, 
-                     min_k = 500, max_k = 4000, k_step = 500):
+                     min_rows = 100, max_rows = 2000, row_step = 100, 
+                     min_k = 5, max_k = 50, k_step = 5):
   possible_rows = range(min_rows, max_rows, row_step)
   possible_k = range(min_k, max_k, k_step)
   
@@ -80,11 +106,12 @@ def run_benchmarks(output_file = None,
   for row_idx, n_rows in enumerate(possible_rows):
     for k_idx, k in enumerate(possible_k):
       print 
-      print "%d x %d multiplied with %d x 3000" % (n_rows, k, k)
+      print "%d x %d image blurred by %d x %d kernel" % \
+          (n_rows, n_cols, (2*k+1), (2*k+1))
       print "-----"      
       output = \
         subprocess.check_output(["python", 
-                                 "benchmark_matmult.py", 
+                                 __file__, 
                                  str(n_rows), 
                                  str(k)])
       last_line = output.splitlines()[-1]
@@ -98,20 +125,6 @@ def run_benchmarks(output_file = None,
   if output_file:
     np.save(output_file, results)
   return results
-"""
-def mk_plots(r, loc = 'upper left', 
-             min_rows = 500, max_rows = 50000, row_step = 500):
-  x = np.arange(min_rows, max_rows, row_step)
-  pylab.plot(x, r[:, -1, 0], 'b--')
-  pylab.plot(x, r[:, -1, 1], 'rx-')
-  pylab.plot(x, r[:, -1, 2], 'g-')
-  pylab.xlabel('number of rows')
-  pylab.ylabel('seconds')
-  pylab.legend(('NumPy', 'Parakeet (no tiling)', 'Parakeet (tiling)'), loc = loc)
-  pylab.show()
-"""
-
- 
 
 if __name__ == '__main__':
   assert len(sys.argv) in (2,3), sys.argv
@@ -122,4 +135,7 @@ if __name__ == '__main__':
     assert len(sys.argv) == 3, sys.argv
     n_rows = int(sys.argv[1])
     k = int(sys.argv[2])
-    print isolated_iter(n_rows, k)
+    print "n_rows", n_rows 
+    print "n_cols", n_cols 
+    print "k", k
+    print isolated_iter(n_rows, n_cols, k)
