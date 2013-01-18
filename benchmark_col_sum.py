@@ -1,5 +1,6 @@
 import numpy as np 
 import time
+import pylab 
 
 import adverb_api 
 import parakeet 
@@ -76,6 +77,16 @@ def run_benchmarks(min_rows = 500, max_rows = 50000, row_step = 500,
   if output_file:
     np.save(output_file, results)
   return results
-    
-    
+
+def mk_plots(r, loc = 'upper left', 
+             min_rows = 500, max_rows = 50000, row_step = 500):
+  x = np.arange(min_rows, max_rows, row_step)
+  pylab.plot(x, r[:, -1, 0], 'b--')
+  pylab.plot(x, r[:, -1, 1], 'rx-')
+  pylab.plot(x, r[:, -1, 2], 'g-')
+  pylab.xlabel('number of rows')
+  pylab.ylabel('seconds')
+  pylab.legend(('NumPy', 'Parakeet (no tiling)', 'Parakeet (tiling)'), loc = loc)
+  pylab.show()
+
     
