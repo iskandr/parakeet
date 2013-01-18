@@ -9,6 +9,7 @@ import pylab
 
 class IsolatedIteration(multiprocessing.Process):
   def __init__(self, n_rows, k, shared_times, n_repeats = 3):
+    multiprocessing.Process.__init__(self)
     self.n_rows = n_rows
     self.k = k 
     self.times = shared_times
