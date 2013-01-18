@@ -48,7 +48,6 @@ class Simplify(Transform):
     # which types have elements that might
     # change between two accesses?
     self.mutable_types = ma.visit_fn(fn)
-
     self.use_counts = use_count(fn)
 
   def immutable_type(self, t):
@@ -135,11 +134,11 @@ class Simplify(Transform):
     return new_var
 
   def transform_expr(self, expr):
-    stored = self.available_expressions.get(expr)
-    if stored is not None:
-      return stored
-    else:
-      return Transform.transform_expr(self, expr)
+    if not self.is_simple(expr):
+      stored = self.available_expressions.get(expr)
+      if stored is not None:
+        return stored
+    return Transform.transform_expr(self, expr)
 
   def transform_Var(self, expr):
     name = expr.name
@@ -389,9 +388,8 @@ class Simplify(Transform):
         self.bind_var(lhs.name, rhs)
         if rhs_class is not Var and \
            rhs_class is not Const and \
-           self.immutable(rhs) and \
-           rhs not in self.available_expressions:
-          self.available_expressions[rhs] = lhs
+           self.immutable(rhs):
+          self.available_expressions.setdefault(rhs, lhs)
     elif lhs_class is Tuple:
       self.bind(lhs, rhs)
     # assigning x[i] = x[i]

@@ -5,9 +5,9 @@ import testing_helpers
 
 from parakeet import allpairs
 
-x = 3000
-y = 3000
-k = 3000
+x = 300
+y = 300
+k = 300
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / (x*k) 
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / (y*k)
 y2T = y2_array #y2_array.copy(order='F')
