@@ -34,41 +34,53 @@ class EvalShape(Traversal):
   def visit_Input(self, v):
     return self.inputs[v.pos]  
   
-  def eval_Const(self, v):
+  def visit_Const(self, v):
     return v.value 
+
+  def visit_AnyScalar(self, v):
+    return None 
     
-  def eval_Shape(self, v):
-    return self.visit_tuple(v.dims)
+  def visit_Shape(self, v):
+    dims = self.visit_tuple(v.dims)
+    assert all(isinstance(d, int) for d in dims)
     
-  def eval_Dim(self, v):
+  def visit_Dim(self, v):
     return self.visit(v.array)[v.dim]
     
-  def eval_Tuple(self, v):
+  def visit_Tuple(self, v):
     return self.visit_tuple(v.elts)
     
-  def eval_Sub(self, v):
+  def visit_Sub(self, v):
     return self.visit(v.x) - self.visit(v.y)
   
-  def eval_Add(self, v):
+  def visit_Add(self, v):
     return self.visit(v.x) + self.visit(v.y)
   
-  def eval_Mult(self, v):
+  def visit_Mult(self, v):
     return self.visit(v.x) * self.visit(v.y)  
   
-  def eval_Div(self, v):
+  def visit_Div(self, v):
     return self.visit(v.x) / self.visit(v.y)  
   
-  def eval_Mod(self, v):
+  def visit_Mod(self, v):
     return self.visit(v.x) % self.visit(v.y)  
   
-  def eval_Closure(self, v):
-    return v.fn, self.eval_tuple(v.args)
+  def visit_Closure(self, v):
+    return v.fn, self.visit_tuple(v.args)
 
 def eval_shape(symbolic_shape, input_values):
   evaluator = EvalShape(input_values)
-  return evaluator.visit(symbolic_shape)
-    
-def eval_shapes(symbolic_shapes, input_values):
-  return [eval_shape()]
+  result = evaluator.visit(symbolic_shape)
+  if not isinstance(result, tuple):
+    return () 
+  else:
+    return result
+   
+
+def result_shape(typed_fn, input_values):
+  import shape_inference
+  symbolic_shape = shape_inference.call_shape_expr(typed_fn)
+  return eval_shape(symbolic_shape, input_values)
+
       
   

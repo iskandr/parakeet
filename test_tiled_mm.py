@@ -8,9 +8,9 @@ from parakeet import allpairs
 x = 3000
 y = 3000
 k = 3000
-x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / float(x*k)
-y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / float(y*k)
-y2T = y2_array.T.copy(order='F')
+x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / (x*k) 
+y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / (y*k)
+y2T = y2_array.copy(order='F')
 
 def dot(x, y):
   return sum(x*y)
@@ -30,7 +30,9 @@ def test_par_mm():
     par_time = time.time() - start
 
     start = time.time()
-    nprslt = np.dot(x2_array, y2_array)
+    print x2_array.shape 
+    print y2T.shape 
+    nprslt = np.dot(x2_array, y2T.T)
     np_time = time.time() - start
     assert(testing_helpers.eq(rslt, nprslt)), \
         "Expected %s but got %s" % (nprslt, rslt)

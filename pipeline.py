@@ -42,7 +42,7 @@ def contains_adverbs(fn):
 
 
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [DCE],
-                   memoize = False, 
+                   memoize = False,
                    run_if = contains_adverbs)
 inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
 high_level_optimizations = Phase([Simplify, inline_opt, Simplify, DCE,
@@ -63,10 +63,10 @@ symbolic_range_propagation = Phase(RangePropagation,
                            config_param = 'opt_range_propagation',
                            memoize = False)
 shape_elim = Phase(ShapeElimination,
-                       config_param = 'opt_shape_elim')
+                   config_param = 'opt_shape_elim')
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 loopify = Phase([Simplify,
-                 fusion_opt, 
+                 fusion_opt,
                  LowerAdverbs, inline_opt,
                  copy_elim,
                  licm,],
@@ -103,8 +103,7 @@ post_lowering = Phase([licm,
                        load_elim,
                        scalar_repl,
                        ], cleanup = [Simplify, DCE])
-lowering = Phase([
-                  pre_lowering,
+lowering = Phase([pre_lowering,
                   LowerIndexing,
                   licm,
                   loop_fusion,

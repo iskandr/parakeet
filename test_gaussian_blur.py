@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+
 import testing_helpers
 
 from parakeet import allpairs
@@ -11,7 +13,7 @@ np_sausage = np.array(sausage).astype('float64')
 height = len(np_sausage)
 width = len(np_sausage[0])
 
-repeat_img = False
+repeat_img = True
 if repeat_img:
   new = np_sausage.copy()
   for i in range(10):
@@ -24,13 +26,13 @@ def gaussian_kernel(size):
   g = np.exp(-(x**2/float(size)+y**2/float(size)))
   return g / g.sum()
 
-s = 3
+s = 30
 gaussian = gaussian_kernel(s)
 iidxs = np.arange(s, len(np_sausage)-s)
 jidxs = np.arange(s, len(np_sausage[0])-s)
 didxs = np.arange(3)
 
-def gaussian_7x7(i, j):
+def gaussian_conv(i, j):
   window = np_sausage[i-s:i+s+1, j-s:j+s+1, :]
   red = 0.0
   green = 0.0
@@ -45,18 +47,23 @@ def gaussian_7x7(i, j):
 def np_blur(start, stop):
   def do_row(i):
     def do_col(j):
-      return gaussian_7x7(i, j)
+      return gaussian_conv(i, j)
     return np.array(map(do_col, jidxs[start:stop]))
   return np.array(map(do_row, iidxs[start:stop]))
 
 def par_blur():
-  return allpairs(gaussian_7x7, iidxs, jidxs)
+  return allpairs(gaussian_conv, iidxs, jidxs)
 
 plot = False
 def test_blur():
   np_blurred_upper_left = np_blur(0,10).astype(np.uint8)
   np_blurred_lower_right = np_blur(-10,None).astype(np.uint8)
+
+  start = time.time()
   par_blurred = par_blur().astype(np.uint8)
+  par_time = time.time() - start
+  print "Parakeet total time:", par_time
+
   #par_blurred_2 = par_blur().astype(np.uint8)
   if plot:
     par_imgplot = plt.imshow(par_blurred)

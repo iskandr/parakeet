@@ -1,13 +1,17 @@
+import adverbs
+import args
 import array_type
 import core_types
+import names
+import syntax
 import syntax_helpers
 
 def max_rank(arg_types):
   """
-  Given a list of types, find the maximum rank of the list
-  and also check that all other types have either the same rank
-  or are scalars
+  Given a list of types, find the maximum rank of the list and also check that
+  all other types have either the same rank or are scalars
   """
+
   curr_max = 0
   for t in arg_types:
     if isinstance(t, array_type.ArrayT):
@@ -17,9 +21,8 @@ def max_rank(arg_types):
   return curr_max
 
 def max_rank_arg(args):
-  """
-  Given a list of arguments, return one which has the maximum rank
-  """
+  """Given a list of arguments, return one which has the maximum rank"""
+
   r = max_rank(syntax_helpers.get_types(args))
   for arg in args:
     if arg.type.rank == r:
@@ -27,10 +30,10 @@ def max_rank_arg(args):
 
 def num_outer_axes(arg_types, axis):
   """
-  Helper for adverb type inference to figure out
-  how many axes it will loop over -- either 1 particular
-  one or all of them when axis is None.
+  Helper for adverb type inference to figure out how many axes it will loop over
+  -- either 1 particular one or all of them when axis is None.
   """
+
   axis = syntax_helpers.unwrap_constant(axis)
   if isinstance(arg_types, core_types.Type):
     max_arg_rank = arg_types.rank
@@ -38,10 +41,6 @@ def num_outer_axes(arg_types, axis):
     max_arg_rank = max_rank(arg_types)
   return 1 if (max_arg_rank > 0 and axis is not None) else max_arg_rank
 
-import adverbs
-import args
-import names
-import syntax
 _nested_map_cache = {}
 def nested_maps(inner_fn, depth, arg_names):
   if depth <= 0:
@@ -56,7 +55,7 @@ def nested_maps(inner_fn, depth, arg_names):
     local_name = names.refresh(var_name)
     args_obj.add_positional(local_name)
     arg_vars.append(syntax.Var(local_name))
-                    
+
   name = names.fresh(inner_fn.name + "_broadcast%d" % depth)
   nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
   closure = syntax.Closure(nested_fn, [])

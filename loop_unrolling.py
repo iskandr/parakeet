@@ -122,7 +122,8 @@ class LoopUnrolling(LoopTransform):
       if start_value + step_value == stop_value:
         self.assign(unrolled_loop.var, unrolled_loop.start)
         # assign all loop-carried variables to their initial values
-        self.comment("Initialize loop-carried values")
+        if len(final_merge) > 0:
+          self.comment("Initialize loop-carried values")
         for (acc_name, (input_value, _)) in final_merge.iteritems():
           var = Var(acc_name, type = input_value.type)
           self.assign(var, input_value)
@@ -130,7 +131,8 @@ class LoopUnrolling(LoopTransform):
         self.blocks.top().extend(unrolled_body)
         # since we're not going to have a cleanup loop,
         # need to assign all the original phi-carried variables
-        self.comment("Finalize loop-carried values")
+        if len(stmt.merge) > 0:
+          self.comment("Finalize loop-carried values")
         for old_acc_name in stmt.merge.iterkeys():
           last_value = phi_values[old_acc_name]
           var = Var(old_acc_name, last_value.type)

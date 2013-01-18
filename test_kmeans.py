@@ -44,7 +44,7 @@ def mean(X):
 def parakeet_update_centroids(X, assignments, k):
   def f(i):
     return mean(X[assignments == i])
-  return map(f, np.arange(k))
+  return each(f, np.arange(k))
 
 def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
   n = X.shape[0]
