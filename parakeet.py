@@ -25,6 +25,7 @@ def typed_repr(fn, args):
 """
 def sum(x):
   return reduce(add, x, init = 0)
+
 def prod(x):
   return reduce(multiply, x[1:], init=x[0])
 
