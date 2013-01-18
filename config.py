@@ -40,7 +40,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = False
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
