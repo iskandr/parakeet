@@ -17,8 +17,6 @@ class IsolatedIteration(multiprocessing.Process):
 
     
   def run(self):
-    
-    
     import parakeet
     import adverb_api  
     def dot(x,y):
@@ -85,9 +83,9 @@ class IsolatedIteration(multiprocessing.Process):
     return
 
  
-def run_benchmarks(min_rows = 500, max_rows = 10000, row_step = 500, 
-                     min_k = 500, max_k = 4000, k_step = 500,  
-                     output_file = None):
+def run_benchmarks(output_file = None, 
+                     min_rows = 500, max_rows = 10000, row_step = 500, 
+                     min_k = 500, max_k = 4000, k_step = 500):
   possible_rows = range(min_rows, max_rows, row_step)
   possible_k = range(min_k, max_k, k_step)
   
