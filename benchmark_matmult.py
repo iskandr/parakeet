@@ -32,19 +32,21 @@ class IsolatedIteration(multiprocessing.Process):
     print "...and with tiling..."
     parakeet.config.opt_tile = True
     _ = matmult(X,X)
-
+    
+    X = np.random.random( (self.n_rows, self.k))
+    Y = np.random.random( (3000, self.k))
+    self.times[:] = [0.0,0.0,0.0,0.0]
+    
     print 
     print "----------"
     print "%d x %d multiplied with %d x 3000" % (self.n_rows, self.k, self.k)      
 
+
+      
     for _ in xrange(self.n_repeats):      
       # generate the data transposed and then transpose it
       # again since Parakeet is currently cobbled by an 
       # inability to use any axis other than 0
-      X = np.random.random( (self.n_rows, self.k))
-      Y = np.random.random( (3000, self.k))
-      
-      self.times[:] = [0.0,0.0,0.0,0.0]
         
       start = time.time()
       np_result = np.dot(X,Y.T)
