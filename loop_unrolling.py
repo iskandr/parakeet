@@ -11,7 +11,7 @@ def safediv(m,n):
 class LoopUnrolling(LoopTransform):
   def __init__(self, unroll_factor = 4,
                       max_static_unrolling = 8,
-                      max_block_size = 30):
+                      max_block_size = 50):
     LoopTransform.__init__(self)
     self.unroll_factor = unroll_factor
     if max_static_unrolling is not None:
@@ -87,7 +87,7 @@ class LoopUnrolling(LoopTransform):
     loop_var = self.fresh_var(stmt.var.type,  "loop_counter")
     name_mappings = None
     for iter_num in xrange(unroll_factor):
-      self.comment("Unrolling iteration %d" % iter_num)
+      #self.comment("Unrolling iteration %d" % iter_num)
       phi_values, curr_names = \
           self.copy_loop_body(stmt, loop_var, iter_num, phi_values)
       if name_mappings is None:

@@ -19,7 +19,9 @@ from core_types import Type, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 from syntax_helpers import get_type, get_types, unwrap_constant
+from syntax_helpers import one_i64, zero_i64, none
 from tuple_type import TupleT, make_tuple_type
+from stride_specialization import specialize
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -337,14 +339,31 @@ def annotate_expr(expr, tenv, var_map):
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
                           combine_fn.type,
-                          arg_types, init_type)
-
+                          arg_types, 
+                          init_type)
+    typed_map_closure = make_typed_closure (map_fn, typed_map_fn)
+    typed_combine_closure = make_typed_closure(combine_fn, typed_combine_fn)
     axis = unwrap_constant(expr.axis)
     if axis is None and adverb_helpers.max_rank(arg_types) == 1:
       axis = 0
-    return adverbs.Reduce(fn = make_typed_closure (map_fn, typed_map_fn),
-                          combine = make_typed_closure(combine_fn,
-                                                       typed_combine_fn),
+    if init_type and init_type != result_type and \
+       array_type.rank(init_type) < array_type.rank(result_type):
+      assert len(new_args) == 1
+      assert axis == 0
+      arg = new_args[0]
+      first_elt = typed_ast.Index(arg, zero_i64, 
+                                  type = arg.type.index_type(zero_i64))
+      first_combine = specialize(combine_fn, (init_type, first_elt.type))
+      first_combine_closure = make_typed_closure(combine_fn, first_combine)
+      init = typed_ast.Call(first_combine_closure, (init, first_elt), 
+                                 type = first_combine.return_type)
+      slice_rest = typed_ast.Slice(start = one_i64, stop = none, step = one_i64, 
+                                   type = array_type.SliceT(Int64, NoneType, Int64))
+      rest = typed_ast.Index(arg, slice_rest, 
+                             type = arg.type.index_type(slice_rest))
+      new_args = (rest,)  
+    return adverbs.Reduce(fn = typed_map_closure,
+                          combine = typed_combine_closure,
                           args = new_args,
                           axis = axis,
                           type = result_type,
@@ -623,12 +642,17 @@ def _get_fundef(fn):
     return fn
   else:
     assert isinstance(fn, str), \
-        "Unexpected function " + str(fn)
+        "Unexpected function %s : %s"  % (fn, fn.type)
     return untyped_ast.Fn.registry[fn]
 
 def _get_closure_type(fn):
   if fn.__class__ is closure_type.ClosureT:
     return fn
+  elif isinstance(fn, typed_ast.Closure):
+    return fn.type
+  elif isinstance(fn, typed_ast.Var):
+    assert isinstance(fn.type, closure_type.ClosureT)
+    return fn.type
   else:
     fundef = _get_fundef(fn)
     return closure_type.make_closure_type(fundef, [])

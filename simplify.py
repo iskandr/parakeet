@@ -306,7 +306,15 @@ class Simplify(Transform):
       elif y.__class__ is Const and y.value == 2:
         return self.cast(self.mul(x, x, "sqr"), expr.type)
     return syntax.PrimCall(prim = prim, args = args, type = expr.type)
-
+  """
+  def transform_Reduce(self, expr):
+    if not self.is_simple(expr.init):
+      expr.init = self.assign_temp(expr.init, 'init')
+    expr.args = self.transform_args(expr.args)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    return expr  
+  """ 
   def temp_in_block(self, expr, block, name = None):
     """
     If we need a temporary variable not in the current top scope but in a

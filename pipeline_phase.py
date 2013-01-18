@@ -59,8 +59,10 @@ class Phase(object):
           names.append(t.__name__)
         else:
           names.append(str(t))
-
-      return "Phase(%s)" % (",".join(names))
+      if len(names) == 1:
+        return names[0]
+      else:
+        return "Phase(%s)" % (",".join(names))
 
   def __repr__(self):
     return str(self)

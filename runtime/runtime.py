@@ -2,10 +2,11 @@ import copy
 import math
 import numpy as np
 import random
-import sys
 import time
 
 from ctypes import *
+
+print_tile_search_info = False
 
 def next_power_2(n):
   n -= 1
@@ -72,7 +73,7 @@ class Runtime():
     # Params for setting intervals between throughput measurements
     self.SLEEP_STEP = 0.05
     self.PERCENTAGE_TO_SLEEP = 0.01
-    self.SLEEP_MIN = 0.4
+    self.SLEEP_MIN = 0.01
 
     # Greedy algorithm
     self.SEARCH_CUTOFF_RATIO = 0.5
@@ -258,14 +259,18 @@ class Runtime():
           avg += tps[i + j]
           avg += tps[i + half_dop + j]
         avg /= (self.dop / num_different)
-        print "candidate:", print_tile_sizes(self.tile_sizes[i])
-        print ("avg[%d]:" % i), tps[i]
+
         if avg > best_tp:
           changed = True
           best_tp = avg
           for t in xrange(num_tiled):
             best[t] = self.tile_sizes[i][t]
-      print
+
+        if print_tile_search_info:
+          print "candidate:", print_tile_sizes(self.tile_sizes[i])
+          print ("avg[%d]:" % i), tps[i]
+      if print_tile_search_info:
+        print
       return changed, best_tp
 
     start = time.time()
@@ -294,8 +299,9 @@ class Runtime():
       if not changed:
         num_unchanged += 1
       else:
-        print "new best_tp:", best_tp
-        print "new best tiles:", print_tile_sizes(best)
+        if print_tile_search_info:
+          print "new best_tp:", best_tp
+          print "new best tiles:", print_tile_sizes(best)
         num_unchanged = 0
       get_candidates()
       self.pause_job()
@@ -306,15 +312,16 @@ class Runtime():
       for i in xrange(self.dop):
         for t in xrange(num_tiled):
           self.tile_sizes[i][t] = best[t]
-      print "time spent searching:", time.time() - start
-      print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
+      if print_tile_search_info:
+        print "time spent searching:", time.time() - start
+        print "final tile sizes:", print_tile_sizes(self.tile_sizes[0])
       self.pause_job()
       self.launch_job()
       self.wait_for_job()
     else:
-      print "time spent searching:", time.time() - start
-      print "final tile sizes:", print_tile_sizes(best)
-      pass
+      if print_tile_search_info:
+        print "time spent searching:", time.time() - start
+        print "final tile sizes:", print_tile_sizes(best)
 
   def pro_find_best_tiles(self, mins, maxes):
     num_tiled = len(mins)

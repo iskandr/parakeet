@@ -16,10 +16,10 @@ print_lowered_function = False
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False #['LoopUnrolling']
+print_functions_before_transforms = False #['TileAdverbs'] #['Fusion', 'LowerAdverbs'] #['LoopUnrolling']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False #['LoopUnrolling'] #['LoopUnrolling']
+print_functions_after_transforms = False #['Fusion'] #['LoopUnrolling'] #['LoopUnrolling']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -46,7 +46,10 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = True
+print_parallel_exec_time = False
+
+# print details about the ongoing tile size search
+print_tile_search_info = True
 
 # print generated assembly of compiled functions
 print_x86 = False
@@ -66,12 +69,12 @@ opt_shape_elim = True
 opt_scalar_replacement = True
 opt_redundant_load_elimination = True
 
-# recompile functions for distinct patterns of unit strides
-# in array arguments
-stride_specialization = True
-
 # may dramatically increase compile time
 opt_loop_unrolling = True
+
+# recompile functions for distinct patterns of unit strides
+# in array arguments
+stride_specialization = False
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False
@@ -97,7 +100,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = True
@@ -105,3 +108,5 @@ opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
 opt_autotune_tile_sizes = True
+
+use_cached_tile_sizes = False

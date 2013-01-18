@@ -40,9 +40,8 @@ par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
-def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types,
-                      dont_tile = False):
-  key = (adverb_class, fn.name, tuple(arg_types))
+def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
+  key = (adverb_class, fn.name, tuple(arg_types), config.opt_tile)
   if key in _lowered_wrapper_cache:
     return _lowered_wrapper_cache[key]
   else:
@@ -72,21 +71,19 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types,
     all_types = arg_types.prepend_positional(nonlocal_types)
     typed = type_inference.specialize(untyped_wrapper, all_types)
     typed = high_level_optimizations(typed)
-    if config.opt_tile and not dont_tile:
+    if config.opt_tile:
       return tiling(typed)
     else:
       return typed
 
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
-                          args_t, arg_types, dont_slice_position = -1,
-                          dont_tile = False):
-  key = (adverb_class, f.name, tuple(arg_types))
+                          args_t, arg_types, dont_slice_position = -1):
+  key = (adverb_class, f.name, tuple(arg_types), config.opt_tile)
   if key in _par_wrapper_cache:
     return _par_wrapper_cache[key]
   else:
-    fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocal_types,
-                           dont_tile)
+    fn = gen_tiled_wrapper(adverb_class, f, arg_types, nonlocal_types)
     num_tiles = fn.num_tiles
     # Construct a typed parallel wrapper function that unpacks the args struct
     # and calls the (possibly tiled) payload function with its slices of the
@@ -254,18 +251,19 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
   global par_runtime
+  start_time = time.time()
+
   if config.opt_tile:
-    if not fn.autotuned_tile_sizes is None:
-      print "using old autotuned tile sizes"
+    if not fn.autotuned_tile_sizes is None and config.use_cached_tile_sizes:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
       for i in range(len(fn.dl_tile_estimates)):
         tile_sizes[i] = fn.autotuned_tile_sizes[i]
 
-      s = time.time()
+
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
-      par_runtime = time.time() - s
+
     elif config.opt_autotune_tile_sizes:
       s = time.time()
       rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
@@ -280,22 +278,24 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
         print ("tile_sizes[%d]:" % i), tile_sizes[i]
         #tile_sizes[i] = (fn.dl_tile_estimates[i] + fn.ml_tile_estimates[i])/2
 
-      s = time.time()
+
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
-      par_runtime = time.time() - s
   else:
-    s = time.time()
     rt.run_compiled_job(wf_ptr, c_args_array, num_iters, [], [])
-    par_runtime = time.time() - s
+
+  par_runtime = time.time() - start_time
 
   if config.print_parallel_exec_time:
     print "Parallel execution time:", par_runtime
 
 def par_each(fn, *args, **kwds):
-  # Don't handle outermost axis = None yet
-  axis = kwds.get('axis', 0)
-
+  if 'axis' in kwds:
+    axis = kwds['axis']
+    del kwds['axis']
+  else:
+    axis = 0
+  assert axis == 0, "Map over axis %d not yet supported" % axis
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, args, kwds)
 
@@ -319,23 +319,30 @@ def par_each(fn, *args, **kwds):
 
   outer_shape = (num_iters,)
   try:
+    # mysterious segfaults likely related to a mistake in shape inference but
+    # seem to get fixed by defaulting to actually running the first iter
+
     combined_args = args.prepend_positional(nonlocals)
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
     inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+
     output_shape = outer_shape + inner_shape
+
     dtype = array_type.elt_type(typed_fn.return_type).dtype
     output = np.zeros(shape = output_shape, dtype = dtype)
+
   except:
-    print "Warning: Shape inference failed when launching parallel Map"
+    # print "Warning: shape inference failed for parallel each"
     single_iter_rslt = \
-        run_function.run(fn, *[arg[0] for arg in args.positional])
+      run_function.run(fn, *[arg[0] for arg in args.positional])
     output = allocate_output(outer_shape, single_iter_rslt, c_args,
                              elt_result_t)
 
   wf = gen_par_work_function(adverbs.Map, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, [])
+
   exec_in_parallel(wf, args_repr, c_args, num_iters)
   return output
 
@@ -362,21 +369,19 @@ def par_allpairs(fn, x, y, **kwds):
 
   # TODO: Use axes other than 0
   outer_shape = (len(x), len(y))
-  # TODO: this doesn't seem to work in general
-#  try:
-#    combined_args = args.prepend_positional(nonlocals)
-#    linearized_args = \
-#        untyped.args.linearize_without_defaults(combined_args, iter)
-#    inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
-#    output_shape = outer_shape + inner_shape
-#    dtype = array_type.elt_type(typed_fn.return_type).dtype
-#    output = np.zeros(shape = output_shape, dtype = dtype)
-#  except:
-#    raise
-#  print "Warning: Shape inference failed for parallel AllPairs"
-  single_iter_rslt = run_function.run(fn, x[0], y[0])
-  output = allocate_output(outer_shape, single_iter_rslt, c_args,
-                           elt_result_t)
+  try:
+    combined_args = args.prepend_positional(nonlocals)
+    linearized_args = \
+        untyped.args.linearize_without_defaults(combined_args, iter)
+    inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+
+    output_shape = outer_shape + inner_shape
+    dtype = array_type.elt_type(typed_fn.return_type).dtype
+    output = np.zeros(shape = output_shape, dtype = dtype)
+  except:
+    single_iter_rslt = run_function.run(fn, x[0], y[0])
+    output = allocate_output(outer_shape, single_iter_rslt, c_args,
+                             elt_result_t)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
   c_args.output = gv_output

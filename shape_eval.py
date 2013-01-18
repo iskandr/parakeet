@@ -14,10 +14,11 @@ def transform_value(x):
     return np.array(x).shape 
   elif isinstance(x, tuple):
     return tuple(transform_value(elt) for elt in x)
-  else:
-    assert isinstance(x, (int, long, float, complex, types.NoneType)), \
-      "Unexpected value " + str(x)
+
+  elif isinstance(x, (int, long, float, complex, types.NoneType)):
     return x
+  else:
+    return None
 
 class EvalShape(Traversal):
 
@@ -43,6 +44,7 @@ class EvalShape(Traversal):
   def visit_Shape(self, v):
     dims = self.visit_tuple(v.dims)
     assert all(isinstance(d, int) for d in dims)
+    return dims
     
   def visit_Dim(self, v):
     return self.visit(v.array)[v.dim]
@@ -74,6 +76,7 @@ def eval_shape(symbolic_shape, input_values):
   if not isinstance(result, tuple):
     return () 
   else:
+    assert all(isinstance(elt, int) for elt in result)
     return result
    
 

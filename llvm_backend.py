@@ -437,7 +437,6 @@ def compile_fn(fundef):
   if key in compiled_functions:
     return compiled_functions[key]
   
-  print key
   if config.print_lowered_function:
     print
     print "=== Lowered function ==="

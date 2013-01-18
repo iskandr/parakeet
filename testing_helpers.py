@@ -1,7 +1,8 @@
 import interp
-import numpy as np
 import sys
+import time 
 
+import numpy as np
 from nose.tools import nottest
 
 import ast_conversion
@@ -101,3 +102,30 @@ def expect_type(fn, input_types, output_type):
   actual = return_type(fn, input_types)
   assert actual == output_type, "Expected type %s, actual %s" % \
                                 (output_type, actual)
+
+def timed_test(parakeet_fn, parakeet_args, python_fn, 
+               python_args = None, assert_faster = False):
+  if python_args is None:
+    python_args = parakeet_args
+
+  start = time.time()
+  _ = parakeet_fn(*parakeet_args)
+  parakeet_time_with_comp = time.time() - start 
+
+  start = time.time()
+  py_result = python_fn(*python_args)
+  py_time = time.time() - start 
+
+  start = time.time()
+  parakeet_result = parakeet_fn(*parakeet_args)
+  parakeet_time_no_comp = time.time() - start 
+
+  print "Parakeet time (with compilation):", parakeet_time_with_comp
+  print "Parakeet time (without compilation):", parakeet_time_no_comp
+  print "Python time:", py_time 
+
+  assert eq(parakeet_result, py_result), \
+    "Expected %s but got %s" % (py_result, parakeet_result)
+  if assert_faster:
+    assert py_time > parakeet_time_no_comp, \
+        "Parakeet too slow: %.2f slowdown" % (parakeet_time_no_comp/py_time)

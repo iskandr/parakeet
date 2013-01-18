@@ -1,59 +1,46 @@
 import scipy.spatial
 import numpy as np
-import time 
+import time
+
+import adverb_api
 
 from parakeet import allpairs
-from testing_helpers import expect, run_local_tests, eq
-
- 
+from testing_helpers import run_local_tests, eq
 
 def sqr_dist(x,y):
-  return sum( (x-y) ** 2)
+  return sum((x-y) ** 2)
 
 def cdist(X,Y):
   return allpairs(sqr_dist,X,Y)
 
 def test_sqr_dist():
-  X = np.random.randn(10, 5)
-  Y = np.random.randn(7, 5)
-  expect(cdist, [X,Y],  scipy.spatial.distance.cdist(X,Y, 'sqeuclidean'))
+  x = 5000
+  y = 1000
+  k = 5000
+  #X = np.random.randn(5000, 5000)
+  #Y = np.random.randn(1000, 5000)
+  X = np.arange(x*k, dtype = np.float).reshape(x,k) / (x*k)
+  Y = np.arange(y*k, dtype = np.float).reshape(y,k) / (y*k)
 
-def test_sqrt_dist_performance():
-  print "All pairs distances"
-  print "--------------------"
-        
-  for m in (1000,1024):
-    for n in (32, 100):
-      for d in (20, 1000,):
-        print "m = %d, n = %d, d = %d" % (m,n,d)
-        X = np.random.randn(m, d)
-        Y = np.random.randn(n, d)
-        
-        start = time.time()
-        np_result = scipy.spatial.distance.cdist(X, Y, 'sqeuclidean')
-        np_time = time.time() - start
-        
-        start = time.time()
-        parakeet_result = cdist(X,Y)
-        parakeet_time = time.time() - start 
-        
-        start = time.time()
-        parakeet_result = cdist(X,Y)
-        parakeet_no_comp = time.time() - start
-        
+  start_time = time.time()
+  par_rslt = cdist(X, Y)
+  par_time = time.time() - start_time
 
-        print "Parakeet:", parakeet_time
-        print "Parakeet (no compilation):", parakeet_no_comp
-        print "Numpy:", np_time
-        speedup =  float(np_time) / parakeet_no_comp
-        print "Speedup: %.1f" % speedup  
-        print      
-        slowdown = 1 / speedup
-        assert slowdown < 5, "Parakeet was too slow! (%dX slower)" % int(slowdown)    
-        
+  start_time = time.time()
+  _ = cdist(X, Y)
+  no_comp_time = time.time() - start_time
 
-  
-  
+  #start_time = time.time()
+  #np_rslt = scipy.spatial.distance.cdist(X,Y, 'sqeuclidean')
+  #np_time = time.time() - start_time
+
+  print "Parallel runtime:", adverb_api.par_runtime
+  print "Parakeet No Compilation Time:", no_comp_time
+  print "Parakeet Time:", par_time
+  #print "NumPy time:", np_time
+
+  #assert eq(np_rslt, par_rslt), \
+  #    "Expected %s but got back %s" % (np_rslt, par_rslt)
 
 if __name__ == '__main__':
   run_local_tests()

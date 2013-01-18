@@ -19,11 +19,15 @@ def typed_repr(fn, args):
 
 # TODO: Not sure using builtin names is a good idea.
 #def par_sum(x):
+"""
+  def sum(x):
+  return reduce(add, x[1:], init=x[0])
+"""
 def sum(x):
-  return reduce(add, x, init=0)
+  return reduce(add, x, init = 0)
 
 def prod(x):
-  return reduce(multiply, x, init=1)
+  return reduce(multiply, x[1:], init=x[0])
 
 def mean(x):
   return sum(x) / x.shape[0]
