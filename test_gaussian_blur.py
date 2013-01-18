@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+
 import testing_helpers
 
 from parakeet import allpairs
@@ -11,7 +13,7 @@ np_sausage = np.array(sausage).astype('float64')
 height = len(np_sausage)
 width = len(np_sausage[0])
 
-repeat_img = False
+repeat_img = True
 if repeat_img:
   new = np_sausage.copy()
   for i in range(10):
@@ -56,7 +58,12 @@ plot = False
 def test_blur():
   np_blurred_upper_left = np_blur(0,10).astype(np.uint8)
   np_blurred_lower_right = np_blur(-10,None).astype(np.uint8)
+
+  start = time.time()
   par_blurred = par_blur().astype(np.uint8)
+  par_time = time.time() - start
+  print "Parakeet total time:", par_time
+
   #par_blurred_2 = par_blur().astype(np.uint8)
   if plot:
     par_imgplot = plt.imshow(par_blurred)

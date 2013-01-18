@@ -80,8 +80,8 @@ ml_sizes[2] = 127
 
 # fixed:
 tile_sizes[0] = 3000
-tile_sizes[1] = 30
-tile_sizes[2] = 200
+tile_sizes[1] = 100
+tile_sizes[2] = 3000
 
 fn_name = "vm_a4_b4_k0"
 

@@ -13,7 +13,7 @@ from syntax_helpers import zero_i64, one_i64, slice_none
 from transform import Transform
 
 class LowerTiledAdverbs(Transform):
-  default_reg_tile_size = 4
+  default_reg_tile_size = 3
   default_last_reg_tile_size = 1
 
   def __init__(self,

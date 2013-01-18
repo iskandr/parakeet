@@ -3,7 +3,6 @@ import numpy as np
 import time
 
 import adverbs
-import adverb_helpers
 import adverb_registry
 import adverb_wrapper
 import array_type
@@ -36,7 +35,7 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-fixed_tile_sizes = [60, 60, 120]
+fixed_tile_sizes = [150, 150, 160]
 par_runtime = 0.0
 
 # TODO: Get rid of this extra level of wrapping.
@@ -235,10 +234,10 @@ def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
 def exec_in_parallel(fn, args_repr, c_args, num_iters):
   if config.stride_specialization:
     # specialization will skip over inputs given as None
-    fn = stride_specialization.specialize(fn, 
-                                          (None,None,c_args,None), 
+    fn = stride_specialization.specialize(fn,
+                                          (None,None,c_args,None),
                                           fn.input_types)
-    
+
   (llvm_fn, _, exec_engine) = llvm_backend.compile_fn(fn)
 
   c_args_list = [c_args]
@@ -251,14 +250,10 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
   wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
-  if config.print_parallel_exec_time:
-    start = time.time()
-
   global par_runtime
   start_time = time.time()
-  
+
   if config.opt_tile:
-  
     if not fn.autotuned_tile_sizes is None and config.use_cached_tile_sizes:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
@@ -268,29 +263,31 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
 
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
-  
+
     elif config.opt_autotune_tile_sizes:
+      s = time.time()
       rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
                           fn.dl_tile_estimates, fn.ml_tile_estimates)
+      par_runtime = time.time() - s
       fn.autotuned_tile_sizes = rt.tile_sizes[0]
     else:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
       for i in range(len(fn.dl_tile_estimates)):
         tile_sizes[i] = fixed_tile_sizes[i]
+        print ("tile_sizes[%d]:" % i), tile_sizes[i]
         #tile_sizes[i] = (fn.dl_tile_estimates[i] + fn.ml_tile_estimates[i])/2
 
-      
+
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
   else:
     rt.run_compiled_job(wf_ptr, c_args_array, num_iters, [], [])
-  
-  par_runtime = time.time() - start_time 
-  
+
+  par_runtime = time.time() - start_time
+
   if config.print_parallel_exec_time:
-    t = time.time() - start
-    print "Parallel execution time:", t
+    print "Parallel execution time:", par_runtime
 
 def par_each(fn, *args, **kwds):
   if 'axis' in kwds:
@@ -303,41 +300,45 @@ def par_each(fn, *args, **kwds):
       prepare_adverb_args(fn, args, kwds)
 
   elt_result_t, typed_fn = type_inference.specialize_Map(closure_t, arg_types)
-  r = adverb_helpers.max_rank(arg_types)
-  for (arg, t) in zip(args, arg_types):
-    if t.rank == r:
-      max_arg = arg
-      break
-  num_iters = max_arg.shape[axis]
+
+  # TODO: Why do we have to do this?  Shouldn't we just check that the length
+  #       of each arg along the axis dimension is the same, and then use that
+  #       common length?  I.e., why can't adverbs have args of different ranks
+  #       so long as they share the same length in the axis dimension?
+  #r = adverb_helpers.max_rank(arg_types)
+  #for (arg, t) in zip(args, arg_types):
+  #  if t.rank == r:
+  #    max_arg = arg
+  #    break
+  #num_iters = max_arg.shape[axis]
+  num_iters = args.positional[0].shape[axis]
 
   nonlocal_types = [type_conv.typeof(arg) for arg in nonlocals]
   args_repr, c_args = get_par_args_repr(nonlocals, nonlocal_types, args,
                                         arg_types, elt_result_t)
 
-  # TODO: Use shape inference to determine output shape.
   outer_shape = (num_iters,)
-  try: 
-    # mysterious segfaults likely related to a mistake in 
-    # shape inference but seem to get fixed by defaulting 
-    # to actually running the first iter
+  try:
+    # mysterious segfaults likely related to a mistake in shape inference but
+    # seem to get fixed by defaulting to actually running the first iter
 
     combined_args = args.prepend_positional(nonlocals)
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
     inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
-     
+
     output_shape = outer_shape + inner_shape
-    
+
     dtype = array_type.elt_type(typed_fn.return_type).dtype
     output = np.zeros(shape = output_shape, dtype = dtype)
-    
+
   except:
     # print "Warning: shape inference failed for parallel each"
     single_iter_rslt = \
       run_function.run(fn, *[arg[0] for arg in args.positional])
-    output = allocate_output(outer_shape, single_iter_rslt, c_args, 
+    output = allocate_output(outer_shape, single_iter_rslt, c_args,
                              elt_result_t)
-  
+
   wf = gen_par_work_function(adverbs.Map, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, [])
@@ -348,8 +349,7 @@ def par_each(fn, *args, **kwds):
 
 def par_allpairs(fn, x, y, **kwds):
   axis = kwds.get('axis', 0)
-  assert axis == 0, "Other axes not yet implemented" 
-    
+  assert axis == 0, "Other axes not yet implemented"
 
   untyped, closure_t, nonlocals, args, arg_types = \
       prepare_adverb_args(fn, [x, y], kwds)
@@ -369,7 +369,7 @@ def par_allpairs(fn, x, y, **kwds):
 
   # TODO: Use axes other than 0
   outer_shape = (len(x), len(y))
-  try:  
+  try:
     combined_args = args.prepend_positional(nonlocals)
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
@@ -380,12 +380,12 @@ def par_allpairs(fn, x, y, **kwds):
     output = np.zeros(shape = output_shape, dtype = dtype)
   except:
     single_iter_rslt = run_function.run(fn, x[0], y[0])
-    output = allocate_output(outer_shape, single_iter_rslt, c_args, 
+    output = allocate_output(outer_shape, single_iter_rslt, c_args,
                              elt_result_t)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
-  setattr(c_args, "output", gv_output)
-  
+  c_args.output = gv_output
+
   wf = gen_par_work_function(adverbs.AllPairs, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, dont_slice_position)

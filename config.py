@@ -48,6 +48,9 @@ print_specialized_function_names = False
 # show execution time on parallel backend?
 print_parallel_exec_time = False
 
+# print details about the ongoing tile size search
+print_tile_search_info = True
+
 # print generated assembly of compiled functions
 print_x86 = False
 
