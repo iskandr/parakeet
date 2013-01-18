@@ -254,23 +254,24 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   if config.print_parallel_exec_time:
     start = time.time()
 
+  global par_runtime
+  start_time = time.time()
+  
   if config.opt_tile:
-    global par_runtime
-    if not fn.autotuned_tile_sizes is None and config.cache_tile_sizes:
+  
+    if not fn.autotuned_tile_sizes is None and config.use_cached_tile_sizes:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
       for i in range(len(fn.dl_tile_estimates)):
         tile_sizes[i] = fn.autotuned_tile_sizes[i]
 
-      s = time.time()
+
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
-      par_runtime = time.time() - s
+  
     elif config.opt_autotune_tile_sizes:
-      s = time.time()
       rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
                           fn.dl_tile_estimates, fn.ml_tile_estimates)
-      par_runtime = time.time() - s
       fn.autotuned_tile_sizes = rt.tile_sizes[0]
     else:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
@@ -279,13 +280,14 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
         tile_sizes[i] = fixed_tile_sizes[i]
         #tile_sizes[i] = (fn.dl_tile_estimates[i] + fn.ml_tile_estimates[i])/2
 
-      s = time.time()
+      
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
-      par_runtime = time.time() - s
   else:
     rt.run_compiled_job(wf_ptr, c_args_array, num_iters, [], [])
-
+  
+  par_runtime = time.time() - start_time 
+  
   if config.print_parallel_exec_time:
     t = time.time() - start
     print "Parallel execution time:", t
@@ -315,7 +317,7 @@ def par_each(fn, *args, **kwds):
     # mysterious segfaults likely related to a mistake in 
     # shape inference but seem to get fixed by defaulting 
     # to actually running the first iter
-    assert False
+
     combined_args = args.prepend_positional(nonlocals)
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
@@ -327,6 +329,7 @@ def par_each(fn, *args, **kwds):
     output = np.zeros(shape = output_shape, dtype = dtype)
     
   except:
+    # print "Warning: shape inference failed for parallel each"
     single_iter_rslt = \
       run_function.run(fn, *[arg[0] for arg in args.positional])
     output = allocate_output(outer_shape, single_iter_rslt, c_args, 
@@ -372,7 +375,6 @@ def par_allpairs(fn, x, y, **kwds):
     dtype = array_type.elt_type(typed_fn.return_type).dtype
     output = np.zeros(shape = output_shape, dtype = dtype)
   except:
-    print "Warning: Shape inference failed for parallel AllPairs"
     single_iter_rslt = run_function.run(fn, x[0], y[0])
     output = allocate_output(outer_shape, single_iter_rslt, c_args, 
                              elt_result_t)

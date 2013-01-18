@@ -19,7 +19,9 @@ def buffer_info(buf, ptr_type = ctypes.c_void_p):
 
 ctypes.pythonapi.PyBuffer_New.argtypes = (ctypes.c_ulong,)
 ctypes.pythonapi.PyBuffer_New.restype = ctypes.py_object
-AllocateBuffer = ctypes.pythonapi.PyBuffer_New
+
+PyBuffer_New = ctypes.pythonapi.PyBuffer_New
+PyBuffer_FromReadWriteMemory = ctypes.pythonapi.PyBuffer_FromReadWriteMemory
 
 class SliceT(StructT):
   _members = ['start_type', 'stop_type', 'step_type']
@@ -166,19 +168,24 @@ class ArrayT(StructT):
   # until we have garbage collection figured out, we'll
   # leak memory from arrays we allocate in the conversion routine
   _store_forever = []
+  _seen_ptr = set([])
   def from_python(self, x):
     if not isinstance(x, np.ndarray):
+      print "Warning: Copying %s into Parakeet, will never get deleted" % \
+          (type(x))
       x = np.asarray(x)
       self._store_forever.append(x)
 
     try:
       data = x.data
     except:
+      print "Warning: Copying array into Parakeet, will never get deleted"
       x = x.copy()
       data = x.data
       self._store_forever.append(x)
     ptr, buffer_length = buffer_info(data, self.ptr_t.ctypes_repr)
-
+    
+    self._seen_ptr.add(ctypes.addressof(ptr))
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
     total_bytes = nelts * elt_size
@@ -208,10 +215,13 @@ class ArrayT(StructT):
     base_ptr = obj.data
 
     nbytes = obj.total_elts * elt_size
-    dest_buf = AllocateBuffer(nbytes)
+
+    dest_buf = PyBuffer_New(nbytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
-    # copy data
     ctypes.memmove(dest_ptr, base_ptr, nbytes)
+    # WARNING: THIS IS TERRIBLE AND WILL CRASH EVERYTHING
+    ctypes.pydll.LoadLibrary('libc.so.6').free(base_ptr)
+    
     return np.ndarray(shape, dtype = self.elt_type.dtype,
                       buffer = dest_buf,
                       strides = strides_in_bytes,
