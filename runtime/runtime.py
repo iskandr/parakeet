@@ -72,7 +72,7 @@ class Runtime():
     # Params for setting intervals between throughput measurements
     self.SLEEP_STEP = 0.05
     self.PERCENTAGE_TO_SLEEP = 0.01
-    self.SLEEP_MIN = 0.4
+    self.SLEEP_MIN = 0.01
 
     # Greedy algorithm
     self.SEARCH_CUTOFF_RATIO = 0.5

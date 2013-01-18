@@ -268,3 +268,6 @@ def get_rank(t):
     return t.rank
   else:
     return 0
+
+def rank(t):
+  return get_rank(t)

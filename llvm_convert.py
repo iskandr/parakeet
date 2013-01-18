@@ -36,7 +36,7 @@ def from_float(llvm_value, new_ptype, builder):
   dest_name = "%s.cast_%s" % (llvm_value.name, new_ptype)
 
   if isinstance(new_ptype, FloatT):
-    if llvm_types.nbytes(llvm_value.type) <= new_ptype.nbytes():
+    if llvm_types.nbytes(llvm_value.type) <= new_ptype.nbytes:
       return builder.fpext(llvm_value, dest_llvm_type, dest_name)
     else:
       return builder.fptrunc(llvm_value, dest_llvm_type, dest_name)

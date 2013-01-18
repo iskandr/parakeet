@@ -2,6 +2,7 @@ import numpy as np
 import scipy.spatial
 import time
 
+import parakeet 
 from parakeet import allpairs, each
 from testing_helpers import eq, run_local_tests
 
@@ -11,7 +12,7 @@ def python_update_assignments(X, centroids):
 
 def python_update_centroids(X, assignments, k):
   d = X.shape[1]
-  new_centroids = np.zeros((k,d))
+  new_centroids = np.zeros((k,d), dtype=X.dtype)
   for i in xrange(k):
     new_centroids[i,:] = np.mean(X[assignments == i])
   return new_centroids
@@ -23,12 +24,13 @@ def python_kmeans(X, k, maxiters = 100, initial_assignments = None):
   else:
     assignments = initial_assignments
   centroids = python_update_centroids(X, assignments, k)
-  for _ in xrange(maxiters):
+  for iter_num in xrange(maxiters):
     old_assignments = assignments
     assignments = python_update_assignments(X, centroids)
-    if any(old_assignments != assignments):
+    if all(old_assignments == assignments):
       break
     centroids = python_update_centroids(X, assignments, k)
+    print "Python iter", iter_num
   return centroids
 
 def sqr_dist(x,y):
@@ -42,9 +44,11 @@ def mean(X):
   return sum(X) / len(X)
 
 def parakeet_update_centroids(X, assignments, k):
-  def f(i):
-    return mean(X[assignments == i])
-  return each(f, np.arange(k))
+  d = X.shape[1]
+  new_centroids = np.zeros((k,d), dtype=X.dtype)
+  for i in xrange(k):
+    new_centroids[i,:] = parakeet.mean(X[assignments == i])
+  return new_centroids
 
 def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
   n = X.shape[0]
@@ -53,17 +57,18 @@ def parakeet_kmeans(X, k, maxiters = 100, initial_assignments = None):
   else:
     assignments = initial_assignments
 
-  centroids = parakeet_update_centroids(X, assignments, k)
-  for _ in xrange(maxiters):
+  centroids = python_update_centroids(X, assignments, k)
+  for iter_num in xrange(maxiters):
     old_assignments = assignments
     assignments = parakeet_update_assignments(X, centroids)
-    if any(old_assignments != assignments):
+    if all(old_assignments == assignments):
       break
-    centroids = parakeet_update_centroids(X, assignments, k)
+    centroids = python_update_centroids(X, assignments, k)
+    print "Parakeet iter", iter_num
   return centroids
 
 def test_kmeans():
-  n = 50
+  n = 57
   d = 4
   X = np.random.randn(n*d).reshape(n,d)
   k = 2
@@ -78,11 +83,11 @@ def test_kmeans():
       "Expected %s but got %s" % (python_C, parakeet_C)
 
 def test_kmeans_perf():
-  n = 5000
-  d = 120
+  n = 16000
+  d = 2000
   X = np.random.randn(n*d).reshape(n,d)
-  k = 60
-  niters = 10
+  k = 500
+  niters = 2
   assignments = np.random.randint(0, k, size = n)
 
   start = time.time()

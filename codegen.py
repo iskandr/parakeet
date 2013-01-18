@@ -526,8 +526,10 @@ class Codegen(object):
     if isinstance(fn, TypedFn):
       return fn.return_type
     else:
-      assert isinstance(fn.type, closure_type.ClosureT)
-      assert isinstance(fn.type.fn, TypedFn)
+      assert isinstance(fn.type, closure_type.ClosureT), \
+          "Unexpected fn type: %s" % fn.type
+      assert isinstance(fn.type.fn, TypedFn), \
+          "Unexpected fn: %s" % fn.type.fn
       return fn.type.fn.return_type
 
   def invoke_type(self, closure, args):

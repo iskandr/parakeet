@@ -1,19 +1,18 @@
+import time
+
 import config
+import syntax
 import verify
 
-import syntax
+from adverbs import Map, Reduce
+from args import ActualArgs
+from codegen import Codegen
 from syntax import If, Assign, While, Return, ExprStmt
 from syntax import ForLoop, Comment  
 from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
 from syntax import Call, TypedFn, AllocArray
-
-from adverbs import Map
-
-from args import ActualArgs
-from codegen import Codegen
-import time
 
 transform_timings = {}
 transform_counts = {}
@@ -147,6 +146,13 @@ class Transform(Codegen):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)
     return expr
+  
+  def transform_Reduce(self, expr):
+    expr.init = self.transform_if_expr(expr.init)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.args = self.transform_expr_list(expr.args)
+    return expr
 
   def transform_expr(self, expr):
     """Dispatch on the node type and call the appropriate transform method"""
@@ -184,6 +190,8 @@ class Transform(Codegen):
       result = self.transform_Call(expr)
     elif expr_class is Map:
       result = self.transform_Map(expr)
+    elif expr_class is Reduce:
+      result = self.transform_Reduce(expr)
     else:
       method = self.find_method(expr, "transform_")
       if method:

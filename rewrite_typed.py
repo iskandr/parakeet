@@ -1,18 +1,15 @@
-import names 
-
+import adverbs
+import names  
 import core_types
-from core_types import Int64 
-from array_type import ArrayT
-import tuple_type
-from tuple_type import TupleT 
-
 import syntax
-from syntax import Assign, Tuple, TupleProj, Var, Cast, Return, Index  
-import adverbs 
-
 import syntax_helpers
-from syntax_helpers import get_types
+import tuple_type
 
+from array_type import ArrayT
+from core_types import Int64 
+from tuple_type import TupleT 
+from syntax import Assign, Tuple, TupleProj, Var, Cast, Return, Index  
+from syntax_helpers import get_types, zero_i64, one_i64, none 
 from transform import Transform
 
 class RewriteTyped(Transform):
@@ -107,8 +104,8 @@ class RewriteTyped(Transform):
     if expr.init and \
         not self.is_none(expr.init) and \
         expr.init.type != acc_type:
+      assert len(expr.args) == 1
       expr.init = self.coerce_expr(expr.init, acc_type)
-
     return expr
 
   def transform_Scan(self, expr):

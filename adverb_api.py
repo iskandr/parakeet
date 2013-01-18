@@ -42,7 +42,7 @@ par_runtime = 0.0
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
 def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
-  key = (adverb_class, fn.name, tuple(arg_types))
+  key = (adverb_class, fn.name, tuple(arg_types), config.opt_tile)
   if key in _lowered_wrapper_cache:
     return _lowered_wrapper_cache[key]
   else:
@@ -80,7 +80,7 @@ def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
 _par_wrapper_cache = {}
 def gen_par_work_function(adverb_class, f, nonlocals, nonlocal_types,
                           args_t, arg_types, dont_slice_position = -1):
-  key = (adverb_class, f.name, tuple(arg_types))
+  key = (adverb_class, f.name, tuple(arg_types), config.opt_tile)
   if key in _par_wrapper_cache:
     return _par_wrapper_cache[key]
   else:
@@ -256,7 +256,7 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
 
   if config.opt_tile:
     global par_runtime
-    if not fn.autotuned_tile_sizes is None:
+    if not fn.autotuned_tile_sizes is None and config.cache_tile_sizes:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
       for i in range(len(fn.dl_tile_estimates)):
@@ -267,8 +267,10 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
                                   tile_sizes)
       par_runtime = time.time() - s
     elif config.opt_autotune_tile_sizes:
+      s = time.time()
       rt.run_compiled_job(wf_ptr, c_args_array, num_iters,
                           fn.dl_tile_estimates, fn.ml_tile_estimates)
+      par_runtime = time.time() - s
       fn.autotuned_tile_sizes = rt.tile_sizes[0]
     else:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
@@ -310,20 +312,26 @@ def par_each(fn, *args, **kwds):
   # TODO: Use shape inference to determine output shape.
   outer_shape = (num_iters,)
   try: 
+    # mysterious segfaults likely related to a mistake in 
+    # shape inference but seem to get fixed by defaulting 
+    # to actually running the first iter
+    assert False
     combined_args = args.prepend_positional(nonlocals)
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
     inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+     
     output_shape = outer_shape + inner_shape
+    
     dtype = array_type.elt_type(typed_fn.return_type).dtype
     output = np.zeros(shape = output_shape, dtype = dtype)
+    
   except:
-    print "Warning: Shape inference failed when launching parallel Map"
     single_iter_rslt = \
-        run_function.run(fn, *[arg[0] for arg in args.positional])
+      run_function.run(fn, *[arg[0] for arg in args.positional])
     output = allocate_output(outer_shape, single_iter_rslt, c_args, 
                              elt_result_t)
-
+  
   wf = gen_par_work_function(adverbs.Map, untyped,
                              nonlocals, nonlocal_types,
                              args_repr, arg_types, [])
@@ -359,11 +367,11 @@ def par_allpairs(fn, x, y, **kwds):
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
     inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+
     output_shape = outer_shape + inner_shape
     dtype = array_type.elt_type(typed_fn.return_type).dtype
     output = np.zeros(shape = output_shape, dtype = dtype)
   except:
-    raise
     print "Warning: Shape inference failed for parallel AllPairs"
     single_iter_rslt = run_function.run(fn, x[0], y[0])
     output = allocate_output(outer_shape, single_iter_rslt, c_args, 
