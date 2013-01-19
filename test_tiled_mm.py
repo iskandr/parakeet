@@ -4,6 +4,7 @@ import time
 import testing_helpers
 
 from parakeet import allpairs
+from runtime import runtime
 
 x = 3000
 y = 3000

@@ -46,7 +46,7 @@ print_transform_names = False
 print_specialized_function_names = False
 
 # show execution time on parallel backend?
-print_parallel_exec_time = False
+print_parallel_exec_time = True
 
 # print details about the ongoing tile size search
 print_tile_search_info = True
@@ -100,13 +100,13 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = True
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters
-opt_autotune_tile_sizes = True
+opt_autotune_tile_sizes = False
 
-use_cached_tile_sizes = False
+use_cached_tile_sizes = True

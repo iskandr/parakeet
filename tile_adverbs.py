@@ -10,12 +10,13 @@ import syntax
 
 from collect_vars import collect_var_names as free_vars
 from core_types import Int32
+from runtime import runtime
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
 
 l1_line_size = 64
-l1_size = 2**14 / l1_line_size
-l2_size = 2**17 / l1_line_size
+l1_size = runtime.L1SIZE / l1_line_size
+l2_size = runtime.L2SIZE / l1_line_size
 el_size = 8
 
 #### Medium-Sized Whale

@@ -104,7 +104,7 @@ def test_kmeans_perf():
   d = 2000
   X = np.random.randn(n*d).reshape(n,d)
   k = 500
-  niters = 20
+  niters = 2
   assignments = np.random.randint(0, k, size = n)
 #
 #  start = time.time()

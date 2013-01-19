@@ -79,11 +79,11 @@ ml_sizes[1] = 127
 ml_sizes[2] = 127
 
 # fixed:
-tile_sizes[0] = 3000
-tile_sizes[1] = 100
-tile_sizes[2] = 3000
+tile_sizes[0] = 299
+tile_sizes[1] = 94
+tile_sizes[2] = 1236
 
-fn_name = "vm_a4_b4_k0"
+fn_name = "vm_a3_b3_clang"
 
 r = runtime.Runtime()
 print "Launching " + fn_name
