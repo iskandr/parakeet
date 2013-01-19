@@ -114,7 +114,7 @@ class Fusion(Transform):
         unique_vars = set(arg_names)
         adverb_vars = [name for name in unique_vars
                        if name in self.adverb_bindings]
-        n_adverb_vars = len(adverb_vars)
+
         for arg_name in adverb_vars:
           n_occurrences = sum((name == arg_name for name in arg_names))
           if self.use_counts[arg_name] == n_occurrences:
