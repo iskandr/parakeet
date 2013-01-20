@@ -14,7 +14,6 @@ class CloneFunction(Transform):
     Transform.__init__(self)
     self.rename = rename 
     self.recursive = recursive
-    
      
   def transform_Var(self, expr):
     return Var(expr.name, type = expr.type)
@@ -68,7 +67,6 @@ class CloneFunction(Transform):
         new_value = self.transform_if_expr(old_value)
         args[member_name] = new_value
       return expr.__class__(**args)
-  
   
   def transform_Assign(self, stmt):
     new_lhs = self.transform_expr(stmt.lhs)

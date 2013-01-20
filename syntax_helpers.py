@@ -1,52 +1,55 @@
 import args
 import array_type
-import core_types
 import syntax
 import tuple_type
 
-def const_int(n, t = core_types.Int64):
-  return syntax.Const(n, type = t)
+from core_types import Int64, Int32, Float32, Float64, Bool
+from core_types import FloatT, IntT, BoolT, NoneType, ScalarT
+from syntax import Const
 
-def const_float(f, t = core_types.Float64):
-  return syntax.Const(f, type = t)
+def const_int(n, t = Int64):
+  return Const(n, type = t)
 
-def const_bool(b, t = core_types.Bool):
-  return syntax.Const(b, type = t)
+def const_float(f, t = Float64):
+  return Const(f, type = t)
+
+def const_bool(b, t = Bool):
+  return Const(b, type = t)
 
 def zero(t):
-  if isinstance(t, core_types.FloatT):
+  if isinstance(t, FloatT):
     x = 0.0
-  elif isinstance(t, core_types.BoolT):
+  elif isinstance(t, BoolT):
     x = False
   else:
-    assert isinstance(t, core_types.IntT)
+    assert isinstance(t, IntT)
     x = 0
-  return syntax.Const(x, type = t)
+  return Const(x, type = t)
 
-false = zero(core_types.Bool)
-zero_i32 = zero(core_types.Int32)
-zero_i64 = zero(core_types.Int64)
-zero_f32 = zero(core_types.Float32)
-zero_f64 = zero(core_types.Float64)
+false = zero(Bool)
+zero_i32 = zero(Int32)
+zero_i64 = zero(Int64)
+zero_f32 = zero(Float32)
+zero_f64 = zero(Float64)
 
 def one(t):
-  if isinstance(t, core_types.FloatT):
+  if isinstance(t, FloatT):
     x = 1.0
-  elif isinstance(t, core_types.BoolT):
+  elif t.__class__ is BoolT:
     x = True
   else:
-    assert isinstance(t, core_types.IntT)
+    assert isinstance(t, IntT)
     x = 1
-  return syntax.Const(x, type = t)
+  return Const(x, type = t)
 
-true = one(core_types.Bool)
-one_i32 = one(core_types.Int32)
-one_i64 = one(core_types.Int64)
-one_f32 = one(core_types.Float32)
-one_f64 = one(core_types.Float64)
+true = one(Bool)
+one_i32 = one(Int32)
+one_i64 = one(Int64)
+one_f32 = one(Float32)
+one_f64 = one(Float64)
 
-none_t = core_types.NoneType
-none = syntax.Const(None, type = none_t)
+none_t = NoneType
+none = Const(None, type = none_t)
 
 slice_none_t = array_type.make_slice_type(none_t, none_t, none_t)
 slice_none = syntax.Slice(none, none, none, type = slice_none_t)
@@ -98,7 +101,7 @@ def const(x):
 
 def unwrap_constant(x):
   if isinstance(x, syntax.Expr):
-    assert isinstance(x, syntax.Const), \
+    assert x.__class__ is Const, \
         "Expected constant, got %s" % (x,)
     return x.value
   else:
@@ -139,22 +142,22 @@ def get_types(exprs):
     return [expr.type for expr in exprs]
 
 def is_zero(expr):
-  return isinstance(expr, syntax.Const) and expr.value == 0
+  return expr.__class__ is Const and expr.value == 0
 
 def is_one(expr):
-  return isinstance(expr, syntax.Const) and expr.value == 1
+  return expr.__class__ is Const and expr.value == 1
 
 def is_false(expr):
-  return isinstance(expr, syntax.Const) and expr.value == False
+  return expr.__class__ is Const and expr.value == False
 
 def is_true(expr):
-  return isinstance(expr, syntax.Const) and expr.value == True
+  return expr.__class__ is Const and expr.value == True
 
 def is_none(expr):
-  return isinstance(expr, syntax.Const) and expr.value == None
+  return expr.__class__ is Const and expr.value == None
 
 def is_constant(expr):
-  return isinstance(expr, syntax.Const)
+  return expr.__class__ is Const
 
 def all_constants(exprs):
   return all(map(is_constant, exprs))
@@ -166,7 +169,7 @@ def collect_constants(exprs):
   return map(collect_constant, exprs)
 
 def is_scalar(expr):
-  return isinstance(expr.type, core_types.ScalarT)
+  return isinstance(expr.type, ScalarT)
 
 def all_scalars(exprs):
   return all(map(is_scalar, exprs))

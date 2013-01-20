@@ -239,18 +239,15 @@ class ScalarT(ConcreteT):
     assert isinstance(self.dtype, np.dtype), \
         "Expected dtype, got %s" % self.dtype
     self.name = self.dtype.name
+    self.nbytes = self.dtype.itemsize
 
   @property
   def ctypes_repr(self):
     return dtypes.to_ctypes(self.dtype)
 
-  @property
-  def nbytes(self):
-    return self.dtype.itemsize
-
   def __eq__(self, other):
-    return other.__class__ is self.__class__ and other.dtype == self.dtype
-
+    return other.__class__ is self.__class__ and self.nbytes == other.nbytes
+    
   def __hash__(self):
     return hash(self.dtype)
 

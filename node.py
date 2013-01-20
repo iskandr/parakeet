@@ -40,7 +40,9 @@ class Node(object):
       
   @classmethod
   def members(klass):
-    'Walk through classes in mro order, accumulating member names.'
+    """
+    Walk through classes in mro order, accumulating member names.
+    """
     class_name = klass.__name__
     if class_name  in _members_cache:
       return _members_cache[class_name]
@@ -99,6 +101,7 @@ class Node(object):
           C.node_init(self)
 
   def __hash__(self):
+    # print "Warning: __hash__ not implemented for %s" % self
     hash_values = []
     for m in self.members():
       v = getattr(self, m)
@@ -116,8 +119,11 @@ class Node(object):
     return True 
   
   def __eq__(self, other):
-    return other.__class__ ==  self.__class__ and self.eq_members(other)
+    return other.__class__ is  self.__class__ and self.eq_members(other)
 
+  def __ne__(self, other):
+    return not self == other 
+  
   @classmethod
   def node_type(cls):
     return cls.__name__

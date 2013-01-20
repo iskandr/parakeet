@@ -376,6 +376,7 @@ def par_allpairs(fn, x, y, **kwds):
     output = np.zeros(shape = output_shape, dtype = dtype)
   except:
     single_iter_rslt = run_function.run(fn, x[0], y[0])
+
     output = allocate_output(outer_shape, single_iter_rslt, c_args,
                              elt_result_t)
   output_obj = type_conv.from_python(output)

@@ -154,9 +154,14 @@ class Const(Expr):
     return hash(self.value)
 
   def __eq__(self, other):
-    return self.__class__ == other.__class__ and \
-           self.type == other.type and \
-           self.value == other.value
+    return other.__class__ is Const and \
+           self.value == other.value and \
+           self.type == other.type
+
+  def __ne__(self, other):
+    return other.__class__ is not Const or \
+           self.value != other.value or \
+           self.type != other.type
 
 class Var(Expr):
   _members = ['name']
@@ -177,10 +182,16 @@ class Var(Expr):
     return hash(self.name)
 
   def __eq__(self, other):
-    return self.__class__ == other.__class__ and \
-           self.type == other.type and \
-           self.name == other.name
+    return other.__class__  is Var and \
+           self.name == other.name and \
+           self.type == other.type
 
+
+  def __ne__(self, other):
+    return other.__class__ is not Var or \
+           self.name != other.name or \
+           self.type != other.type
+  
   def children(self):
     return ()
 
@@ -325,16 +336,41 @@ class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a prims.Prim object
   """
-
   _members = ['prim', 'args']
-
+  
   def _arg_str(self, i):
     arg = self.args[i]
     if arg.__class__ is PrimCall:
       return "(%s)" % arg
     else:
       return str(arg)
-
+  
+  def __hash__(self):
+    self.args = tuple(self.args)
+    return hash(self.prim) + hash(self.args)
+    
+  def __eq__(self, other):
+    if other.__class__ is not PrimCall:
+      return False 
+    
+    if other.prim != self.prim:
+      return False
+    
+    my_args = self.args
+    other_args = other.args
+    n = len(my_args)
+    if n != len(other_args):
+      return False
+    
+    for (i,arg) in enumerate(my_args):
+      other_arg = other_args[i]
+      if arg != other_arg:
+        return False
+    return True
+  
+  def __ne__(self, other):
+    return not self==other
+  
   def __repr__(self):
     if self.prim.symbol:
       if len(self.args) == 1:
