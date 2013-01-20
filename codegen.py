@@ -75,7 +75,8 @@ class Codegen(object):
 
   def is_simple(self, expr):
     c = expr.__class__
-    return c is Var or c is Const or \
+    return c is Var or \
+           c is Const or \
            (c is Tuple and len(expr.elts) == 0) or \
            (c is Struct and len(expr.args) == 0) or \
            (c is Closure and len(expr.args) == 0)

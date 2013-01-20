@@ -142,21 +142,19 @@ class Simplify(Transform):
 
   def transform_Var(self, expr):
     name = expr.name
-    original_expr = expr
+    prev_expr = expr
     while name in self.bindings:
+      prev_expr = expr 
       expr = self.bindings[name]
       if expr.__class__ is Var:
         name = expr.name
       else:
         break
-
     if expr.__class__ is Const:
       return expr
-    elif expr == original_expr:
-      return original_expr
     else:
-      return syntax.Var(name = name, type = original_expr.type)
-
+      return prev_expr
+  
   def transform_Cast(self, expr):
     v = self.transform_expr(expr.value)
     if v.type == expr.type:
@@ -174,16 +172,25 @@ class Simplify(Transform):
       c = stored_v.__class__
       if c is Var or c is Struct:
         v = stored_v
-      elif c is AllocArray and expr.name == 'shape':
-        return self.transform_expr(stored_v.shape)
+      elif c is AllocArray:
+        if expr.name == 'shape':
+          return self.transform_expr(stored_v.shape)
+        elif expr.name == 'strides':
+          return self.transform_expr(stored_v.strides)
+        elif expr.name == 'data':
+          return self.transform_expr(stored_v.data)
 
     if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
       return v.args[idx]
     elif v.__class__ is not Var:
       v = self.temp(v, "struct")
-    return Attribute(v, expr.name, type = expr.type)
-
+    if expr.value == v:
+      return expr
+    else:
+      return Attribute(value = v, name = expr.name, type = expr.type)
+    
+  
   def transform_Closure(self, expr):
     expr.args = tuple(self.transform_args(expr.args))
     return expr
@@ -292,8 +299,10 @@ class Simplify(Transform):
         return y
       elif is_one(y):
         return x
-      elif is_zero(x)  or is_zero(y):
-        return syntax.Const(value = 0, type = expr.type)
+      elif is_zero(x):
+        return x
+      elif is_zero(y):
+        return y
     elif prim == prims.divide and is_one(args[1]):
       return args[0]
     elif prim == prims.power:
@@ -304,16 +313,21 @@ class Simplify(Transform):
         return syntax_helpers.one(expr.type)
       elif y.__class__ is Const and y.value == 2:
         return self.cast(self.mul(x, x, "sqr"), expr.type)
-    return syntax.PrimCall(prim = prim, args = args, type = expr.type)
-  """
+    expr.args = args
+    return expr 
+  
   def transform_Reduce(self, expr):
-    if not self.is_simple(expr.init):
-      expr.init = self.assign_temp(expr.init, 'init')
+    
+    init = self.transform_expr(expr.init)
+    if not self.is_simple(init):
+      expr.init = self.assign_temp(init, 'init')
+    else:
+      expr.init = init
     expr.args = self.transform_args(expr.args)
     expr.fn = self.transform_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     return expr  
-  """ 
+  
   def temp_in_block(self, expr, block, name = None):
     """
     If we need a temporary variable not in the current top scope but in a
