@@ -346,11 +346,9 @@ class PrimCall(Expr):
       return str(arg)
   
   def __hash__(self):
-    value = hash(self.prim)
-    for arg in self.args:
-      value += hash(arg)
-    return value
-  
+    self.args = tuple(self.args)
+    return hash(self.prim) + hash(self.args)
+    
   def __eq__(self, other):
     if other.__class__ is not PrimCall:
       return False 
