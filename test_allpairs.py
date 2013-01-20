@@ -67,7 +67,9 @@ def test_loop_matmult():
 def test_loop_matmult_timing():
   X = np.random.randn(100,100).astype('float32')
   Y = np.random.randn(100,100).astype('float32')
+  
   start = time.time()
+  _ = np.dot(X,Y.T)
   np_interval = time.time() - start
 
   res = np.zeros_like(Y)

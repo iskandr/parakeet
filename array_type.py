@@ -219,8 +219,7 @@ class ArrayT(StructT):
     dest_buf = PyBuffer_New(nbytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
     ctypes.memmove(dest_ptr, base_ptr, nbytes)
-    # WARNING: THIS IS TERRIBLE AND WILL CRASH EVERYTHING
-    ctypes.pydll.LoadLibrary('libc.so.6').free(base_ptr)
+
     
     return np.ndarray(shape, dtype = self.elt_type.dtype,
                       buffer = dest_buf,
