@@ -273,7 +273,7 @@ def specialize(fn, python_values, types = None):
   elif any(has_unit_stride(v) for v in abstract_values):
     specializer = StrideSpecializer(abstract_values)
     
-    transforms = Phase([specializer, DCE],
+    transforms = Phase([specializer, Simplify, DCE],
                         memoize = False, copy = True)
     new_fn = transforms.apply(fn)
   else:

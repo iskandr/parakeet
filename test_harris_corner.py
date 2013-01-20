@@ -26,6 +26,7 @@ def diff_y(I):
 def test_diff_y():
   expect_each(diff_x, diff_x, matrices)
 
+
 def harris(I):
   dx = diff_x(I)
   dy = diff_y(I)
@@ -47,14 +48,31 @@ def harris(I):
   k = 0.05
   return det - k * tr * tr
 """
+def parallel_harris(I):
+  x_indices = np.arange(I.shape[0])[1:-1]
+  y_indices = np.arange(I.shape[1])[1:-1]
+   
+  def scalar_computation(i,j):
+    dx = I[i+1,j] - I[i,j]
+    dy = I[i,j+1] - I[i,j]
+    A = dx * dx
+    B = dy * dy
+    C = dx * dy
+    tr = A + B
+    det = A * B - C * C
+    k = 0.05
+    return det - k * tr * tr
+  return parakeet.allpairs(scalar_computation, x_indices, y_indices)
+"""
+"""
 def test_harris():
   expect_each(harris, harris, matrices)
 """
 def test_harris_timing():
-  x = np.random.randn(500, 500)
+  x = np.random.randn(1500, 1500)
   
   np_start = time.time()
-  harris(x)
+  np_rslt = harris(x)
   np_time = time.time() - np_start
 
   par_start = time.time()
@@ -70,6 +88,15 @@ def test_harris_timing():
   print "Python time: %.3f" % np_time
   assert par_time_no_comp / np_time < 5, \
     "Parakeet too slow (%.1fX slowdown)" % (par_time_no_comp / np_time)
-
+  
+  """
+  start = time.time()
+  parallel_result = parallel_harris(x)
+  parallel_time = time.time() - start
+  print "Parallel time: %.3f" % parallel_time
+  rmse = np.sqrt(np.mean( (parallel_result - np_rslt) **2))
+  assert rmse < 0.001, rmse 
+  """
+  
 if __name__ == '__main__':
   run_local_tests()

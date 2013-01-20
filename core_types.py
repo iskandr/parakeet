@@ -250,7 +250,7 @@ class ScalarT(ConcreteT):
 
   def __eq__(self, other):
     return other.__class__ is self.__class__ and other.dtype == self.dtype
-
+    
   def __hash__(self):
     return hash(self.dtype)
 

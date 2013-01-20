@@ -90,7 +90,7 @@ llvm_optimize = True
 llvm_num_passes = 4
 
 # run verifier over generated LLVM code?
-llvm_verify = True
+llvm_verify = False
 
 ######################################
 #         RUNTIME OPTIONS            #
@@ -100,7 +100,7 @@ llvm_verify = True
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = False
+opt_tile = True
 
 # Add a level of tiling for registers
 opt_reg_tile = True
