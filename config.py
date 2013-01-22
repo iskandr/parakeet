@@ -19,7 +19,7 @@ print_loopy_function = False
 print_functions_before_transforms = False
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False #['Fusion'] #['LoopUnrolling'] #['LoopUnrolling']
+print_functions_after_transforms = ['ScalarReplacement'] #['Fusion'] #['LoopUnrolling'] #['LoopUnrolling']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False

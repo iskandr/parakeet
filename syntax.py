@@ -347,7 +347,7 @@ class PrimCall(Expr):
   
   def __hash__(self):
     self.args = tuple(self.args)
-    return hash(self.prim) + hash(self.args)
+    return hash((self.prim, self.args))
     
   def __eq__(self, other):
     if other.__class__ is not PrimCall:
@@ -534,7 +534,8 @@ class Struct(Expr):
     return self.args
 
   def __hash__(self):
-    return hash(tuple(self.args))
+    self.args = tuple(self.args)
+    return hash(self.args)
 
 class Alloc(Expr):
   """Allocates a block of data, returns a pointer"""
