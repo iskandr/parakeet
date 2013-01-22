@@ -40,7 +40,6 @@ def contains_adverbs(fn):
     return True
   return False
 
-
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [DCE],
                    memoize = False,
                    run_if = contains_adverbs)
@@ -65,19 +64,17 @@ symbolic_range_propagation = Phase(RangePropagation,
 shape_elim = Phase(ShapeElimination,
                    config_param = 'opt_shape_elim')
 loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
-loopify = Phase([
-                   Simplify, 
-                   fusion_opt, Simplify, DCE, 
-                   LowerAdverbs, Simplify, DCE,  
-                   inline_opt, Simplify, DCE, 
-                   copy_elim, Simplify, DCE, 
-                   licm, Simplify, DCE
-                 ],
+loopify = Phase([Simplify, 
+                 fusion_opt, Simplify, DCE, 
+                 LowerAdverbs, Simplify, DCE,  
+                 inline_opt, Simplify, DCE, 
+                 copy_elim, Simplify, DCE, 
+                 licm, Simplify, DCE
+                ],
                 depends_on = high_level_optimizations,
                 copy = True,
                 run_if = contains_adverbs,
                 post_apply = print_loopy)
-
 
 mapify = Phase(MapifyAllPairs, copy = False)
 
