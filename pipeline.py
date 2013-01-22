@@ -98,21 +98,22 @@ load_elim = Phase(RedundantLoadElimination,
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
 pre_lowering = Phase([symbolic_range_propagation, Simplify, DCE, 
-                      shape_elim, Simplify, 
+                      shape_elim, Simplify,  DCE, 
                       symbolic_range_propagation, Simplify, DCE])
 
-post_lowering = Phase([licm, 
+post_lowering = Phase([Simplify, DCE, 
+                       licm, Simplify, DCE, 
                        unroll, Simplify, DCE,
-                       licm, Simplify, DCE,
+                       licm, Simplify, DCE, 
                        load_elim, Simplify, DCE,
                        scalar_repl, Simplify, DCE])
 
 lowering = Phase([pre_lowering,
-                  LowerIndexing,
-                  licm,
+                  LowerIndexing, Simplify,  DCE, 
+                  licm, Simplify, DCE, 
                   loop_fusion,
-                  LowerStructs,
-                  post_lowering],
+                  LowerStructs,  Simplify, DCE, 
+                  post_lowering, Simplify, DCE],
                  depends_on = loopify,
                  copy = True)
 

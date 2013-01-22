@@ -303,8 +303,12 @@ class Simplify(Transform):
         return x
       elif is_zero(y):
         return y
-    elif prim == prims.divide and is_one(args[1]):
-      return args[0]
+      
+    elif prim == prims.divide:
+      x,y = args 
+      if is_one(y):
+        return x
+      
     elif prim == prims.power:
       x,y = args
       if is_one(y):
@@ -313,6 +317,7 @@ class Simplify(Transform):
         return syntax_helpers.one(expr.type)
       elif y.__class__ is Const and y.value == 2:
         return self.cast(self.mul(x, x, "sqr"), expr.type)
+
     expr.args = args
     return expr 
   
