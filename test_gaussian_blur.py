@@ -26,7 +26,7 @@ def gaussian_kernel(size):
   g = np.exp(-(x**2/float(size)+y**2/float(size)))
   return g / g.sum()
 
-s = 30
+s = 5
 gaussian = gaussian_kernel(s)
 iidxs = np.arange(s, len(np_sausage)-s)
 jidxs = np.arange(s, len(np_sausage[0])-s)

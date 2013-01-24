@@ -6,8 +6,8 @@ import testing_helpers
 
 
 def test_col_sum():
-  m = 5000
-  n = 5000
+  m = 500
+  n = 500
   X = np.random.randn(m,n)
   print "Reduce(Map)"
   testing_helpers.timed_test(parakeet.sum, [X], np.sum, [X,0], 
@@ -17,8 +17,8 @@ def each_col_sum(X):
   return parakeet.each(parakeet.sum, X)
 
 def test_each_col_sum():
-  m = 5001
-  n = 5000
+  m = 501
+  n = 500
   X = np.random.random((m,n))
   Xt = X.T
   print "Map(Reduce)"
