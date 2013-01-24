@@ -104,7 +104,7 @@ def expect_type(fn, input_types, output_type):
                                 (output_type, actual)
 
 def timed_test(parakeet_fn, parakeet_args, python_fn, 
-               python_args = None, assert_faster = False):
+               python_args = None, min_speedup = None):
   if python_args is None:
     python_args = parakeet_args
 
@@ -126,6 +126,6 @@ def timed_test(parakeet_fn, parakeet_args, python_fn,
 
   assert eq(parakeet_result, py_result), \
     "Expected %s but got %s" % (py_result, parakeet_result)
-  if assert_faster:
-    assert py_time > parakeet_time_no_comp, \
+  if min_speedup is not None:
+    assert py_time / parakeet_time_no_comp > min_speedup, \
         "Parakeet too slow: %.2f slowdown" % (parakeet_time_no_comp/py_time)

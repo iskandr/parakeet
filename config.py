@@ -19,7 +19,7 @@ print_loopy_function = False
 print_functions_before_transforms = False 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['ScalarReplacement'] #['Fusion'] #['LoopUnrolling'] #['LoopUnrolling']
+print_functions_after_transforms = False 
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -49,7 +49,7 @@ print_specialized_function_names = False
 print_parallel_exec_time = False
 
 # print details about the ongoing tile size search
-print_tile_search_info = True
+print_tile_search_info = False
 
 # print generated assembly of compiled functions
 print_x86 = False

@@ -83,7 +83,7 @@ def test_dist_perf():
   W = (np.random.randn(n,n)*2)**2
   
   testing_helpers.timed_test(parakeet_dists, [W], np_dists, [W], 
-                             assert_faster=True)
+                             min_speedup = 0.1)
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

@@ -179,7 +179,8 @@ class ArrayT(StructT):
     try:
       data = x.data
     except:
-      print "Warning: Copying array into Parakeet, will never get deleted"
+      print "Warning: Copying array (shape = %s), will never be deleted" % \
+        x.shape
       x = x.copy()
       data = x.data
       self._store_forever.append(x)
