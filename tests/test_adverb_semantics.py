@@ -1,7 +1,8 @@
 import numpy as np
 import testing_helpers
+import parakeet 
 
-from interp import adverb_evaluator as interp
+from parakeet.interp import adverb_evaluator as interp
 
 vec = np.array([1,4,9,16])
 mat = np.array([vec, vec+100, vec+200, vec + 300])

@@ -1,10 +1,12 @@
-import mutability_analysis
 import numpy as np 
+
+import parakeet
 import testing_helpers
 
-from array_type import make_array_type 
-from core_types import Int64, Bool, ptr_type
-from pipeline import lowering 
+from parakeet import mutability_analysis
+from parakeet.array_type import make_array_type 
+from parakeet.core_types import Int64, Bool, ptr_type
+from parakeet.pipeline import lowering 
 
 def f(x,y):
     x[0] = True

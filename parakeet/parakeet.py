@@ -6,12 +6,6 @@ from lib_simple import *
 from prims import *
 from run_function import run, specialize_and_compile
 
-# TODO: Add the prims.
-# From adverb_api
-__all__ = ["allpairs", "each", "reduce", "scan"]
-__all__.extend(lib_simple.__all__)
-# From run_function
-__all__.extend(["run", "specialize_and_compile"])
 
 def typed_repr(fn, args):
   _, typed, _, _ = specialize_and_compile(fn, args)

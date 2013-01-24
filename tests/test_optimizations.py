@@ -1,13 +1,11 @@
 import numpy as np
 
 import parakeet
-import syntax
 import testing_helpers
 
-from parakeet import config
-from parakeet import each
-from pipeline import lowering
-from syntax_visitor import SyntaxVisitor
+from parakeet import config, each, syntax
+from parakeet.pipeline import lowering
+from parakeet.syntax_visitor import SyntaxVisitor
 from testing_helpers import expect
 
 def A(x):

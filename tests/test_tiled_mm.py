@@ -3,8 +3,7 @@ import time
 
 import testing_helpers
 
-from parakeet import allpairs
-from runtime import runtime
+from parakeet import allpairs, runtime 
 
 x = 200
 y = 10

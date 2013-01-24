@@ -12,6 +12,7 @@ import closure_type
 import llvm_backend
 import names
 import run_function
+import runtime
 import shape_eval
 import stride_specialization
 import syntax
@@ -27,11 +28,11 @@ from core_types import Int64
 from macro import staged_macro
 from pipeline import lowering, high_level_optimizations, tiling
 from run_function import run
-from runtime import runtime
 
 try:
   rt = runtime.Runtime()
 except:
+  raise
   print "Warning: Failed to load parallel runtime"
   rt = None
 

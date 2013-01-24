@@ -1,10 +1,7 @@
-# TODO: Maybe when we release, we want to make only a subset of these things
-#       visible?  I'm still confused as to how to make things visible to tests
-#       only.  Maybe the way to go is have a parakeet_internal package?
-#import parakeet
-#from parakeet import *
+from parakeet import *
+from prims import * 
+from adverb_api import allpairs, each, reduce, scan
 
-#__all__ = parakeet.__all__
 modules = [
   "adverb_api",
   "adverb_helpers",
@@ -39,7 +36,6 @@ modules = [
   "llvm_helpers",
   "llvm_prims",
   "llvm_types",
-#  "loop_unrolling",
   "lower_adverbs",
   "lower_indexing",
   "lower_structs",

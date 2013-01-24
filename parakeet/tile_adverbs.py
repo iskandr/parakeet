@@ -6,11 +6,11 @@ import array_type
 import closure_type
 import config
 import names
+import runtime
 import syntax
 
 from collect_vars import collect_var_names as free_vars
 from core_types import Int32
-from runtime import runtime
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
 

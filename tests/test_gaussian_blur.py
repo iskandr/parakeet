@@ -7,7 +7,11 @@ import testing_helpers
 from parakeet import allpairs
 from PIL import Image
 
-sausage = Image.open("sausage.jpg")
+try:
+  sausage = Image.open("../data/sausage.jpg")
+except:
+  print "Failed to load test image"
+  sausage = np.random.random(200,200, 3)
 
 np_sausage = np.array(sausage).astype('float64')
 height = len(np_sausage)

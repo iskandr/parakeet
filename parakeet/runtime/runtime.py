@@ -2,6 +2,7 @@ import copy
 import math
 import numpy as np
 import time
+import os 
 
 from ctypes import *
 
@@ -52,11 +53,11 @@ class Runtime():
     job_p = POINTER(job_t)
     thread_pool_p = POINTER(thread_pool_t)
 
-    lib_name = "./libparakeetruntime.so"
-    try:
-      dll = cdll.LoadLibrary(lib_name)
-    except:
-      dll = cdll.LoadLibrary("runtime/" + lib_name)
+    lib_name = "_runtime.so"
+    base_dir = os.path.dirname(__file__)
+    lib_path = base_dir + "/" + lib_name
+    dll = cdll.LoadLibrary(lib_path)
+
 
     self.libParRuntime = dll
 

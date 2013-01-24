@@ -1,15 +1,12 @@
-import interp
 import sys
 import time 
 
 import numpy as np
 from nose.tools import nottest
 
-import ast_conversion
-import type_conv
-import type_inference
-
-from run_function import specialize_and_compile
+import parakeet
+from parakeet import ast_conversion, interp, type_conv, type_inference
+from parakeet.run_function import specialize_and_compile
 
 def run_local_functions(prefix, locals_dict = None):
   if locals_dict is None:
@@ -102,7 +99,7 @@ def expect_type(fn, input_types, output_type):
   actual = return_type(fn, input_types)
   assert actual == output_type, "Expected type %s, actual %s" % \
                                 (output_type, actual)
-
+@nottest
 def timed_test(parakeet_fn, parakeet_args, python_fn, 
                python_args = None, min_speedup = None):
   if python_args is None:

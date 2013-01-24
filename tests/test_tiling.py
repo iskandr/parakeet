@@ -1,18 +1,12 @@
+import ctypes
 import numpy as np
 
-import adverbs
-import array_type
-import core_types
-import ctypes
-import llvm_backend
-import prims
-import run_function
-import syntax
-import syntax_helpers
 import testing_helpers
-import type_conv
 
-from pipeline import lower_tiled
+from parakeet import adverbs, array_type, core_types
+from parakeet import prims, llvm_backend, run_function 
+from parakeet import syntax, syntax_helpers, type_conv
+from parakeet.pipeline import lower_tiled 
 
 x_array = np.arange(10, dtype = np.int64)
 x2_array = np.arange(100, dtype = np.int64).reshape(10,10)

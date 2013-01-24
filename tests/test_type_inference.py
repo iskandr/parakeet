@@ -1,4 +1,6 @@
-from core_types import UInt8, Int8, Int32, Int64, Float32, Float64, Bool
+import parakeet 
+from parakeet.core_types import UInt8, Int8, Int32, Int64, \
+                                Float32, Float64, Bool
 from testing_helpers import expect_type, run_local_tests
 
 def add1(x):
