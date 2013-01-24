@@ -17,8 +17,8 @@ def each_col_sum(X):
   return parakeet.each(parakeet.sum, X)
 
 def test_each_col_sum():
-  m = 5000
-  n = 50000
+  m = 5001
+  n = 5000
   X = np.random.random((m,n))
   Xt = X.T
   print "Map(Reduce)"
