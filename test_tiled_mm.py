@@ -4,10 +4,12 @@ import time
 import testing_helpers
 
 from parakeet import allpairs
+from runtime import runtime
 
 x = 200
 y = 10
 k = 10
+
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / (x*k)
 
 y2_array = np.arange(k*y, 2*k*y, dtype = np.float).reshape(y,k) / (y*k)
@@ -27,7 +29,7 @@ def test_par_mm():
   start = time.time()
   adverb_matmult(x2_array, y2T)
   par_time = time.time() - start
-  print "Parakeet without compilation:", par_time    
+  print "Parakeet without compilation:", par_time
   print "Parakeet time with compilation:", comp_time
   check = True
   if check:

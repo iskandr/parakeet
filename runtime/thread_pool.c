@@ -51,8 +51,10 @@ static void *worker(void *args) {
                                       worker_data->args,
                                       worker_data->tile_sizes);
         unsigned long long end_time = get_cpu_time();
+        int64_t iters_done = end - task->next_start;
         pthread_mutex_lock(&worker_data->mutex);
-        worker_data->iters_done += (end - task->next_start);
+        worker_data->iters_done += iters_done;
+        worker_data->total_iters_done += iters_done;
         worker_data->time_working += (end_time - start_time);
         pthread_mutex_unlock(&worker_data->mutex);
         task->next_start += task->step;
@@ -127,7 +129,7 @@ thread_pool_t *create_thread_pool(int max_threads) {
 // This function should only ever be called when all of the threads are paused.
 void launch_job(thread_pool_t *thread_pool,
                 work_function_t *work_functions, void **args, job_t *job,
-                int64_t **tile_sizes, int reset_tps) {
+                int64_t **tile_sizes, int reset_tps, int reset_iters) {
   assert(job->num_lists <= thread_pool->num_workers);
 
   thread_pool->job = job;
@@ -152,8 +154,9 @@ void launch_job(thread_pool_t *thread_pool,
     if (reset_tps) {
       thread_pool->worker_data[i].iters_done = 0;
       thread_pool->worker_data[i].time_working = 0;
-          //thread_pool->timestamps[i] = get_cpu_time();
-      thread_pool->iters_done[i] = 0;
+    }
+    if (reset_iters) {
+      thread_pool->worker_data[i].total_iters_done = 0;
     }
     pthread_cond_signal(&thread_pool->worker_data[i].cond);
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
@@ -203,7 +206,11 @@ int64_t get_iters_done(thread_pool_t *thread_pool) {
   int64_t total = 0;
   int i;
   for (i = 0; i < thread_pool->num_active; ++i) {
-    total += thread_pool->worker_data[i].iters_done;
+    if (thread_pool->iters_done[i] == 0) {
+      pthread_mutex_lock(&thread_pool->worker_data[i].mutex);
+      total += thread_pool->worker_data[i].total_iters_done;
+      pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
+    }
   }
 
   return total;
@@ -220,10 +227,6 @@ double *get_throughputs(thread_pool_t *thread_pool) {
     timestamp = thread_pool->worker_data[i].time_working;
     pthread_mutex_unlock(&thread_pool->worker_data[i].mutex);
     tps[i] = ((double)iters) / ((double)timestamp);
-    //tps[i] = ((double)(iters - thread_pool->iters_done[i])) /
-    //         ((double)(timestamp - thread_pool->timestamps[i]));
-    thread_pool->iters_done[i] = iters;
-    thread_pool->timestamps[i] = timestamp;
   }
 
   return tps;

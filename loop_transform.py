@@ -1,6 +1,5 @@
-
 from collect_vars import collect_binding_names, collect_var_names
-from escape_analysis import may_alias 
+from escape_analysis import may_alias
 from syntax import Return, While, ForLoop, If, Assign, Var, Index, Const
 from transform import Transform
 
@@ -14,14 +13,13 @@ class LoopTransform(Transform):
            not self.is_simple_block(stmt.false):
           return False
     return True
-  
+
   def pre_apply(self, fn):
     self.may_alias = may_alias(fn)
-  
+
   def collect_loop_vars(self, loop_vars, loop_body):
-    """
-    Gather the variables whose values change between loop iterations
-    """
+    """Gather the variables whose values change between loop iterations"""
+
     for stmt in loop_body:
       assert stmt.__class__ not in (ForLoop, While, Return)
       if stmt.__class__ is Assign:
@@ -29,12 +27,12 @@ class LoopTransform(Transform):
         rhs_names = collect_var_names(stmt.rhs)
         if any(name in loop_vars for name in rhs_names):
           loop_vars.update(lhs_names)
-  
+
   def collect_memory_accesses(self, loop_body):
-      # Assume code is normalized so a read will 
-      # directly on rhs of an assignment and 
+      # Assume code is normalized so a read will
+      # directly on rhs of an assignment and
       # a write will be directly on the LHS
-      
+
       # map from variables to index sets
       reads = {}
       writes = {}
@@ -46,11 +44,11 @@ class LoopTransform(Transform):
           if stmt.rhs.__class__ is Index:
             assert stmt.rhs.value.__class__ is Var
             reads.setdefault(stmt.rhs.value.name, set([])).add(stmt.rhs.index)
-      return reads, writes  
-  
+      return reads, writes
+
   def is_loop_var(self, loop_vars, expr):
     assert expr.__class__ in (Var, Const)
     return expr.__class__ is Var and expr.name in loop_vars
-      
+
   def any_loop_vars(self, loop_vars, expr_set):
     return any(self.is_loop_var(loop_vars, expr) for expr in expr_set)

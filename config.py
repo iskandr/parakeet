@@ -10,13 +10,13 @@ print_specialized_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False 
+print_functions_before_transforms = False
 
 # show the function produced by each transformation?
 print_functions_after_transforms = False 
@@ -40,7 +40,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = False 
+print_transform_names = False
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
@@ -109,4 +109,4 @@ opt_reg_tiles_not_tile_size_dependent = True
 # Perform auto-tuning search for best tile parameters
 opt_autotune_tile_sizes = True
 
-use_cached_tile_sizes = False
+use_cached_tile_sizes = True
