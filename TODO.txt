@@ -1,3 +1,4 @@
+Alex:
 - Change ast_conversion so it immediately parses functions (instead of bundling up referenced functions as closure variables and parsing them later)
 - Parse module names in function uses, i.e. "np.dot", "parakeet.each"
 - Support for trancendentals (log, exp, etc..)
@@ -6,8 +7,14 @@
 - Add support for in-place math operators, i.e. +=, *=, etc... 
 - List comprehensions 
 - Indexing by boolean masks
-- Figure out why parallel launcher segfaults on column sums
 - Make a plan for starting parallel jobs from inside compiled code
 - Only run tiling on perfectly nested code
-- Maybe only use ML tile estimates?
-- Vectorization 
+- Finish vectorization 
+- Why is the pipeline ordering so fragile? 
+
+Eric:
+- Logic to detect whether to tile a subtree of code
+- Ability to tile only subtrees of a function
+- Proper handling of closure variables
+- Make parallel runtime handle small iteration counts
+- Figure out why parallel runtime crashes on column sums 
