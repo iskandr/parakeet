@@ -31,41 +31,20 @@
     <!-- MAIN CONTENT -->
     <div id="main_content_wrap" class="outer">
       <section id="main_content" class="inner">
-        <h3>Comparison with other projects</h3>
+        <p>Parakeet is a just-in-time compiler for numerical Python, which can speed up your code by compiling native versions of a function for each distinct set of input types. Parakeet also exposes data parallel operators which enable high-level optimizations and parallelization. Parakeet is not a general-purpose compiler for all of Python but rather supports only a small set of language constructs useful for numerical computing. </p>
+
+<p>If you're curious about how Parakeet relates to other runtime compilers for numerical Python, read this <a href="http://www.phi-node.com/2013/01/a-journey-through-parakeet.html">post</a>.</p>
+
+<h3>Data Parallel Operators</h3>
 
 <ul>
-<li>
-<strong><a href="http://copperhead.github.com/">Copperhead</a></strong> </li>
-<li><strong><a href="https://github.com/numba/numba">Numba</a></strong></li>
-<li><strong><a href="http://pypy.org/">PyPy</a></strong></li>
-<li>
-<strong><a href="http://www.cython.org/">Cython</a></strong> </li>
-</ul><h3>Welcome to GitHub Pages.</h3>
+<li><p><strong>map</strong> ( <em>transform</em>, <em>X1</em>, ..., <em>Xn</em>, <em>axis</em> = 0 ) traverses all the given inputs <em>X1</em> ... <em>Xn</em> along the specified array axis, and the function <em>transform</em> on every sub-array encountered. Collect and concatenate the results of each function call to <em>transform</em>. </p></li>
+<li><p><strong>reduce</strong> ( <em>combine</em>, <em>X1</em>, ..., <em>Xn</em>, <em>axis</em> = 0 )</p></li>
+<li><p><strong>scan</strong> ( <em>combine</em>, <em>X1</em>, ..., <em>Xn</em>, <em>axis</em> = 0 ) </p></li>
+<li><p><strong>allpairs</strong> ( <em>transform</em>, <em>X</em>, <em>Y</em>, <em>axis</em> = 0 )</p></li>
+</ul><h3>Authors and Contributors</h3>
 
-<p>This automatic page generator is the easiest way to create beautiful pages for all of your projects. Author your page content here using GitHub Flavored Markdown, select a template crafted by a designer, and publish. After your page is generated, you can check out the new branch:</p>
-
-<pre><code>$ cd your_repo_root/repo_name
-$ git fetch origin
-$ git checkout gh-pages
-</code></pre>
-
-<p>If you're using the GitHub for Mac, simply sync your repository and you'll see the new branch.</p>
-
-<h3>Designer Templates</h3>
-
-<p>We've crafted some handsome templates for you to use. Go ahead and continue to layouts to browse through them. You can easily go back to edit your page before publishing. After publishing your page, you can revisit the page generator and switch to another theme. Your Page content will be preserved if it remained markdown format.</p>
-
-<h3>Rather Drive Stick?</h3>
-
-<p>If you prefer to not use the automatic generator, push a branch named <code>gh-pages</code> to your repository to create a page manually. In addition to supporting regular HTML content, GitHub Pages support Jekyll, a simple, blog aware static site generator written by our own Tom Preston-Werner. Jekyll makes it easy to create site-wide headers and footers without having to copy them across every page. It also offers intelligent blog support and other advanced templating features.</p>
-
-<h3>Authors and Contributors</h3>
-
-<p>You can <a href="https://github.com/blog/821" class="user-mention">@mention</a> a GitHub username to generate a link to their profile. The resulting <code>&lt;a&gt;</code> element will link to the contributor's GitHub Profile. For example: In 2007, Chris Wanstrath (<a href="https://github.com/defunkt" class="user-mention">@defunkt</a>), PJ Hyett (<a href="https://github.com/pjhyett" class="user-mention">@pjhyett</a>), and Tom Preston-Werner (<a href="https://github.com/mojombo" class="user-mention">@mojombo</a>) founded GitHub.</p>
-
-<h3>Support or Contact</h3>
-
-<p>Having trouble with Pages? Check out the documentation at <a href="http://help.github.com/pages">http://help.github.com/pages</a> or contact <a href="mailto:support@github.com">support@github.com</a> and we’ll help you sort it out.</p>
+<p>Written by Alex Rubinsteyn (<a href="https://github.com/iskandr" class="user-mention">@iskandr</a>) and Eric Hielscher (<a href="https://github.com/hielscher" class="user-mention">@hielscher</a>). </p>
       </section>
     </div>
 
