@@ -323,14 +323,18 @@ def par_each(fn, *args, **kwds):
     linearized_args = \
         untyped.args.linearize_without_defaults(combined_args, iter)
     inner_shape = shape_eval.result_shape(typed_fn, linearized_args)
+    print inner_shape
 
     output_shape = outer_shape + inner_shape
 
-    dtype = array_type.elt_type(typed_fn.return_type).dtype
+    dtype = array_type.elt_type(elt_result_t).dtype
     output = np.zeros(shape = output_shape, dtype = dtype)
+    output_obj = type_conv.from_python(output)
+    gv_output = ctypes.pointer(output_obj)
+    setattr(c_args, "output", gv_output)
 
   except:
-    # print "Warning: shape inference failed for parallel each"
+    print "Warning: shape inference failed for parallel each"
     single_iter_rslt = \
       run_function.run(fn, *[arg[0] for arg in args.positional])
     output = allocate_output(outer_shape, single_iter_rslt, c_args,
