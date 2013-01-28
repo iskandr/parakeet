@@ -47,7 +47,7 @@ class jit:
     self.f = f
 
   def __call__(self, *args, **kwargs):
-    return run(self.f, args, kwargs)
+    return run(self.f, *args, **kwargs)
 
 def clear_specializations():
   import closure_type

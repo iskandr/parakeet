@@ -39,7 +39,7 @@ class ActualArgs(object):
     self.starargs = starargs
 
   def transform(self, fn, keyword_name_fn = None, keyword_value_fn = None):
-    new_pos = map(fn, self.positional)
+    new_pos = [fn(pos_arg) for pos_arg in self.positional]
     new_keywords = {}
     for (k,v) in self.keywords.iteritems():
       new_name = keyword_name_fn(k) if keyword_name_fn else k
