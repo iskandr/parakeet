@@ -29,7 +29,7 @@ def gini_orig(values, thresh):
 
 gini = parakeet.jit(gini_orig)
 """
-def test_gini():
+def test_count_thresh():
   import ast 
   import inspect
   p = ast.parse(inspect.getsource(count_thresh_orig))
