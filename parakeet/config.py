@@ -67,7 +67,7 @@ opt_stack_allocation = True
 opt_range_propagation = True
 opt_shape_elim = True
 opt_scalar_replacement = True
-opt_redundant_load_elimination = True
+opt_redundant_load_elimination = True 
 
 # may dramatically increase compile time
 opt_loop_unrolling = True

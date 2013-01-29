@@ -60,5 +60,6 @@ float_binops = {
 bool_binops = { 
   prims.add : 'or_',
   prims.multiply : 'and_', 
-  prims.subtract : 'xor'
+  prims.subtract : 'xor',
+  #prims.logical_not : 'not_'
 }

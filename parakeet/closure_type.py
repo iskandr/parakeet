@@ -3,6 +3,7 @@ import ctypes
 from types import FunctionType
 
 import type_conv
+import config
 
 from core_types import Type, IncompatibleTypes, StructT, Int64
 
@@ -96,7 +97,6 @@ def make_closure_type(fn, closure_arg_types = []):
     return t
 
 def print_specializations():
-  import config
   if config.print_specialized_function_names:
     print
     print "FUNCTION SPECIALIZATIONS"
