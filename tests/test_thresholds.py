@@ -12,7 +12,7 @@ parakeet.config.stride_specialization = True
 def count_thresh_orig(values, thresh):
   n_left = 0
   for elt in values:
-    n_left = n_left + (elt < thresh)
+    n_left += elt < thresh
   return n_left
 
 count_thresh = parakeet.jit(count_thresh_orig)

@@ -17,6 +17,7 @@ from macro import macro
 from prims import Prim, prim_wrapper
 from scoped_env import ScopedEnv
 from subst import subst_expr, subst_stmt_list
+from syntax import Assign, If, ForLoop, Var, PrimCall
 from syntax_helpers import none, true, false, one_i64, zero_i64
 
 
@@ -89,7 +90,7 @@ class AST_Translator(ast.NodeVisitor):
         assert isinstance(sub_arg, ast.Name)
         name = sub_arg.id
       lhs = self.fresh_var(name)
-      stmt = syntax.Assign(lhs, syntax.Index(var, syntax.Const(i)))
+      stmt = Assign(lhs, syntax.Index(var, syntax.Const(i)))
       assignments.append(stmt)
       if isinstance(sub_arg, ast.Tuple):
         more_stmts = self.tuple_arg_assignments(sub_arg.elts, lhs)
@@ -109,7 +110,7 @@ class AST_Translator(ast.NodeVisitor):
         assert isinstance(arg, ast.Tuple)
         arg_name = self.fresh_name("tuple_arg")
         formals.add_positional(arg_name)
-        var = syntax.Var(arg_name)
+        var = Var(arg_name)
         stmts = self.tuple_arg_assignments(arg.elts, var)
         assignments.extend(stmts)
 
@@ -129,7 +130,7 @@ class AST_Translator(ast.NodeVisitor):
     if name in reserved_names:
       return reserved_names[name]
     else:
-      return syntax.Var(self.env[name])
+      return Var(self.env[name])
 
   def visit_Name(self, expr):
     assert isinstance(expr, ast.Name), "Expected AST Name object: %s" % expr
@@ -144,9 +145,9 @@ class AST_Translator(ast.NodeVisitor):
 
     merge = {}
     for (name, ssa_name) in left_scope.iteritems():
-      left = syntax.Var(ssa_name)
+      left = Var(ssa_name)
       if name in right_scope:
-        right = syntax.Var(right_scope[name])
+        right = Var(right_scope[name])
       else:
         right = self.get_name(name)
 
@@ -160,7 +161,7 @@ class AST_Translator(ast.NodeVisitor):
       if name not in left_scope:
         try:
           left = self.get_name(name)
-          right = syntax.Var(ssa_name)
+          right = Var(ssa_name)
 
           if name in new_names:
             new_name = new_names[name]
@@ -355,7 +356,7 @@ class AST_Translator(ast.NodeVisitor):
     args.add_positional(arg_name)
     fn_name = names.refresh('comprehension_map')
     fn = syntax.Fn(args = args, 
-                   body = [syntax.Return(syntax.Var(arg_name))], 
+                   body = [syntax.Return(Var(arg_name))], 
                    name = fn_name)
     return Map(fn, args=(seq,), axis = 0)
       
@@ -379,10 +380,10 @@ class AST_Translator(ast.NodeVisitor):
   def visit_IfExp(self, expr):
     temp1, temp2, result = self.fresh_vars(["if_true", "if_false", "if_result"])
     cond = self.visit(expr.test)
-    true_block = [syntax.Assign(temp1, self.visit(expr.body))]
-    false_block = [syntax.Assign(temp2, self.visit(expr.orelse))]
+    true_block = [Assign(temp1, self.visit(expr.body))]
+    false_block = [Assign(temp2, self.visit(expr.orelse))]
     merge = {result.name : (temp1, temp2)}
-    if_stmt = syntax.If(cond, true_block, false_block, merge)
+    if_stmt = If(cond, true_block, false_block, merge)
     self.current_block().append(if_stmt)
     return result
 
@@ -399,7 +400,14 @@ class AST_Translator(ast.NodeVisitor):
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
     ssa_rhs = self.visit(stmt.value)
     ssa_lhs = self.visit_lhs(stmt.targets[0])
-    return syntax.Assign(ssa_lhs, ssa_rhs)
+    return Assign(ssa_lhs, ssa_rhs)
+  
+  def visit_AugAssign(self, stmt):
+    ssa_incr = self.visit(stmt.value)
+    ssa_old_value = self.visit(stmt.target)
+    ssa_new_value = self.visit_lhs(stmt.target)
+    prim = prims.find_ast_op(stmt.op) 
+    return Assign(ssa_new_value, PrimCall(prim, [ssa_old_value, ssa_incr]))
 
   def visit_Return(self, stmt):
     return syntax.Return(self.visit(stmt.value))
@@ -421,7 +429,7 @@ class AST_Translator(ast.NodeVisitor):
       if k in self.env:
         name_before = self.env[k]
         new_name = names.fresh(k + "_loop")
-        merge[new_name] = (syntax.Var(name_before), syntax.Var(name_after))
+        merge[new_name] = (Var(name_before), Var(name_after))
         substitutions[name_before]  = new_name
         curr_scope[k] = new_name
     
@@ -437,21 +445,20 @@ class AST_Translator(ast.NodeVisitor):
   def visit_For(self, stmt):
     assert not stmt.orelse 
     var = self.visit_lhs(stmt.target)
-    assert isinstance(var, syntax.Var)
+    assert isinstance(var, Var)
     seq = self.visit(stmt.iter)
     body, merge, _ = self.visit_loop_body(stmt.body)
     if isinstance(seq, syntax.Range):
-      return syntax.ForLoop(var, seq.start, seq.stop, seq.step, 
-                            body, merge)
+      return ForLoop(var, seq.start, seq.stop, seq.step, body, merge)
     else:
       n = syntax.Len(seq)
       start = zero_i64
       stop = n # syntax.PrimCall(prims.subtract, [n, one_i64])
       step = one_i64
       loop_counter_name = self.env.fresh('i')
-      loop_var = syntax.Var(loop_counter_name)
-      body = [syntax.Assign(var, syntax.Index(seq, loop_var))] + body
-      return syntax.ForLoop(loop_var, start, stop, step, body, merge)
+      loop_var = Var(loop_counter_name)
+      body = [Assign(var, syntax.Index(seq, loop_var))] + body
+      return ForLoop(loop_var, start, stop, step, body, merge)
     
   def visit_block(self, stmts):
     self.env.push()
@@ -474,7 +481,7 @@ class AST_Translator(ast.NodeVisitor):
       closure = syntax.Closure(fundef, closure_args)
     else:
       closure = fundef
-    return syntax.Assign(local_name, closure)
+    return Assign(local_name, closure)
 
 def translate_function_ast(function_def_ast, globals_dict = None,
                            closure_vars = [], closure_cells = [],
