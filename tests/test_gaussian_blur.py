@@ -6,12 +6,12 @@ import testing_helpers
 
 from parakeet import allpairs
 from PIL import Image
-
-try:
-  sausage = Image.open("../data/sausage.jpg")
-except:
-  print "Failed to load test image"
-  sausage = np.random.random(200,200, 3)
+#
+#try:
+#  sausage = Image.open("../data/sausage.jpg")
+#except:
+#  print "Failed to load test image"
+sausage = np.random.random((3000, 3000, 3))
 
 np_sausage = np.array(sausage).astype('float64')
 height = len(np_sausage)
@@ -67,6 +67,11 @@ def test_blur():
   par_blurred = par_blur().astype(np.uint8)
   par_time = time.time() - start
   print "Parakeet total time:", par_time
+
+  start = time.time()
+  _ = par_blur().astype(np.uint8)
+  no_comp_time = time.time() - start
+  print "Parakeet time without compilation:", no_comp_time
 
   #par_blurred_2 = par_blur().astype(np.uint8)
   if plot:
