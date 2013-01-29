@@ -19,7 +19,10 @@ def get(name):
 def fresh(name):
   version = versions.get(name, 0) + 1 
   versions[name] = version
-  ssa_name = "%s.%d" % (name, version)
+  if version == 1:
+    ssa_name = name 
+  else:
+    ssa_name = "%s.%d" % (name, version)
   original_names[ssa_name] = name
   return ssa_name 
 

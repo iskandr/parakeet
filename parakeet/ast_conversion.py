@@ -445,9 +445,9 @@ class AST_Translator(ast.NodeVisitor):
                             body, merge)
     else:
       n = syntax.Len(seq)
-      start = syntax_helpers.zero_i64
-      stop = syntax.PrimCall(prims.subtract, [n, syntax_helpers.one_i64])
-      step = syntax_helpers.one_i64
+      start = zero_i64
+      stop = n # syntax.PrimCall(prims.subtract, [n, one_i64])
+      step = one_i64
       loop_counter_name = self.env.fresh('i')
       loop_var = syntax.Var(loop_counter_name)
       body = [syntax.Assign(var, syntax.Index(seq, loop_var))] + body

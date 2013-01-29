@@ -156,13 +156,17 @@ class Simplify(Transform):
       return prev_expr
   
   def transform_Cast(self, expr):
+    
     v = self.transform_expr(expr.value)
     if v.type == expr.type:
       return v
     elif v.__class__ is Const and isinstance(expr.type, ScalarT):
       return Const(expr.type.dtype.type(v.value), type = expr.type)
-    else:
+    elif self.is_simple(v):
       expr.value = v
+      return expr
+    else:
+      expr.value = self.assign_temp(v)
       return expr
 
   def transform_Attribute(self, expr):
