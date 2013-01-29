@@ -2,14 +2,15 @@ import ast
 import inspect
 
 
+import config
 import names
 import syntax
+import syntax_helpers 
 import prims
 
 from adverbs import Map
 from args import FormalArgs, ActualArgs
 from common import dispatch
-import config
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from macro import macro
@@ -438,11 +439,19 @@ class AST_Translator(ast.NodeVisitor):
     var = self.visit_lhs(stmt.target)
     assert isinstance(var, syntax.Var)
     seq = self.visit(stmt.iter)
-    assert isinstance(seq, syntax.Range)
-    body, merge, _ = \
-      self.visit_loop_body(stmt.body)
-    return syntax.ForLoop(var, seq.start, seq.stop, seq.step, 
-                          body, merge)
+    body, merge, _ = self.visit_loop_body(stmt.body)
+    if isinstance(seq, syntax.Range):
+      return syntax.ForLoop(var, seq.start, seq.stop, seq.step, 
+                            body, merge)
+    else:
+      n = syntax.Len(seq)
+      start = syntax_helpers.zero_i64
+      stop = syntax.PrimCall(prims.subtract, [n, syntax_helpers.one_i64])
+      step = syntax_helpers.one_i64
+      loop_counter_name = self.env.fresh('i')
+      loop_var = syntax.Var(loop_counter_name)
+      body = [syntax.Assign(var, syntax.Index(seq, loop_var))] + body
+      return syntax.ForLoop(loop_var, start, stop, step, body, merge)
     
   def visit_block(self, stmts):
     self.env.push()
