@@ -10,10 +10,10 @@ parakeet.config.opt_loop_unrolling = False
 parakeet.config.stride_specialization = True
 
 def count_thresh_orig(values, thresh):
-  n_left = 0
+  n = 0
   for elt in values:
-    n_left += elt < thresh
-  return n_left
+    n += elt < thresh
+  return n
 
 count_thresh = parakeet.jit(count_thresh_orig)
 
@@ -33,7 +33,11 @@ def test_count_thresh():
   import ast 
   import inspect
   p = ast.parse(inspect.getsource(count_thresh_orig))
+  print "AST"
   print ast.dump(p)
+  print "Bytecode"
+  import dis
+  dis.dis(count_thresh_orig)
   import numpy as np
   v = np.array([1.2, 1.4, 5.0, 2, 3])
   parakeet_result = count_thresh(v, 2.0)

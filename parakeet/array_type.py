@@ -176,26 +176,24 @@ class ArrayT(StructT):
       x = np.asarray(x)
       self._store_forever.append(x)
 
-    try:
-      data = x.data
-    except:
-      print "Warning: Copying array (shape = %s), will never be deleted" % \
-        x.shape
-      x = x.copy()
-      data = x.data
-      self._store_forever.append(x)
-    ptr, buffer_length = buffer_info(data, self.ptr_t.ctypes_repr)
     
-    self._seen_ptr.add(ctypes.addressof(ptr))
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
     total_bytes = nelts * elt_size
-    assert total_bytes == buffer_length, \
-        "Shape %s has %d elements of size %d (total = %d) but buffer has" + \
-        " length %d bytes" % \
+    
+    try:
+      ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
+      assert total_bytes == buffer_length, \
+        "Shape %s has %d elements of size %d (total = %d) but buffer has %d bytes" % \
         (x.shape, nelts, elt_size, total_bytes, buffer_length)
+    
+    except:
+      print "Warning: Failed to get NumPy buffer for array with shape %s" % \
+        (x.shape,)
+      ptr = x.ctypes.data_as(self.ptr_t.ctypes_repr)
+    
+    self._seen_ptr.add(ctypes.addressof(ptr))
     ctypes_shape = self.shape_t.from_python(x.shape)
-
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
     return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape),

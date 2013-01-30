@@ -226,6 +226,7 @@ def get_par_args_repr(nonlocals, nonlocal_types, args, arg_types, return_t):
 
 def allocate_output(adverb_shape, single_iter_rslt, c_args, return_t):
   output_shape = adverb_shape + single_iter_rslt.shape
+  print output_shape 
   output = np.zeros(output_shape, dtype = array_type.elt_type(return_t).dtype)
   output_obj = type_conv.from_python(output)
   gv_output = ctypes.pointer(output_obj)
@@ -335,6 +336,7 @@ def par_each(fn, *args, **kwds):
 
   except:
     print "Warning: shape inference failed for parallel each"
+    raise 
     single_iter_rslt = \
       run_function.run(fn, *[arg[0] for arg in args.positional])
     output = allocate_output(outer_shape, single_iter_rslt, c_args,

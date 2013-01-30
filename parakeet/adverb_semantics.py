@@ -76,12 +76,13 @@ class AdverbSemantics(object):
       try:
         return self._create_output_array(fn, inputs, extra_dims)
       except:
-        print "Failed to allocate output array using shape inference"
         pass
+  
     inner_result = self.invoke(fn, inputs)
     inner_shape = self.shape(inner_result)
     elt_t = self.elt_type(inner_result)
-    return self.create_result(elt_t, inner_shape, extra_dims)
+    res =  self.create_result(elt_t, inner_shape, extra_dims)
+    return res 
 
   def output_slice(self, output, axis, idx):
     r = self.rank(output)

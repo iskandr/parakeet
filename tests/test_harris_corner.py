@@ -3,7 +3,7 @@ import time
 
 import parakeet 
 
-from testing_helpers import expect_each, run_local_tests
+from testing_helpers import expect_each, run_local_tests, eq
 
 size = (5,5)
 float_mat = np.random.uniform(0,1,size=size)
@@ -47,14 +47,12 @@ def harris(I):
   det = A * B - C * C
   k = 0.05
   return det - k * tr * tr
-"""
+
 def parallel_harris(I):
-  x_indices = np.arange(I.shape[0])[1:-1]
-  y_indices = np.arange(I.shape[1])[1:-1]
    
-  def scalar_computation(i,j):
-    dx = I[i+1,j] - I[i,j]
-    dy = I[i,j+1] - I[i,j]
+  dx = diff_x(I)
+  dy = diff_y(I)
+  def scalar_computation(dx,dy):
     A = dx * dx
     B = dy * dy
     C = dx * dy
@@ -62,29 +60,40 @@ def parallel_harris(I):
     det = A * B - C * C
     k = 0.05
     return det - k * tr * tr
-  return parakeet.allpairs(scalar_computation, x_indices, y_indices)
-"""
-"""
+  return parakeet.each(scalar_computation, dx, dy)
+
+
 def test_harris():
   expect_each(harris, harris, matrices)
-"""
+
 def test_harris_timing():
   x = np.random.randn(1500, 1500)
   
   np_start = time.time()
-  np_rslt = harris(x)
+  harris(x)
   np_time = time.time() - np_start
 
+  seq_start = time.time()
+  parakeet.run(harris,x)
+  seq_time = time.time() - seq_start
+
+  seq_start_no_comp = time.time()
+  parakeet.run(harris,x)
+  seq_time_no_comp = time.time() - seq_start_no_comp
+
   par_start = time.time()
-  parakeet.run(harris,x)
+  parallel_harris(x)
   par_time = time.time() - par_start
-
+  
   par_start_no_comp = time.time()
-  parakeet.run(harris,x)
-  par_time_no_comp = time.time() - par_start_no_comp
+  parallel_harris(x)
 
-  print "Parakeet time: %.3f" % par_time
-  print "Parakeet w/out compilation: %.3f" % par_time_no_comp
+  par_time_no_comp = time.time() - par_start_no_comp
+  
+  print "Parakeet time: %.3f" % seq_time
+  print "Parakeet w/out compilation: %.3f" % seq_time_no_comp
+  print "Parakeet parallel time: %.3f" % par_time
+  print "Parakeet parallel time (no comp): %.3f" % par_time_no_comp
   print "Python time: %.3f" % np_time
   assert par_time_no_comp / np_time < 5, \
     "Parakeet too slow (%.1fX slowdown)" % (par_time_no_comp / np_time)

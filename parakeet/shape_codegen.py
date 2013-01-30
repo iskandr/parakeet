@@ -6,6 +6,7 @@ from core_types import ScalarT
 from shape import Closure, Scalar, Var
 from traversal import Traversal
 from tuple_type import TupleT
+from shape import AnyScalar, any_scalar, computable_dim
 
 class ArgConverter(Traversal):
   def __init__(self, codegen):
@@ -59,21 +60,26 @@ class ShapeCodegen(Traversal):
 
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
+    assert all(computable_dim(d) for d in v.dims), \
+        "Invalid symbolic shape: %s" % (v,)
     return self.codegen.tuple([self.visit(d) for d in v.dims])
 
   def visit_Dim(self, v):
     return self.codegen.tuple_proj(self.visit(v.array), v.dim)
 
-  def visit_AnyScalar(self, v):
+  def visit_AnyScalar(self, v):    
     assert False, "Can't generate shape expression for unknown scalar"
 
   def visit_Tuple(self, v):
     return self.codegen.tuple(self.visit(e) for e in v.elts)
 
   def binop(self, op_name, v):
+    if v.x.__class__ is AnyScalar or v.y.__class__ is AnyScalar:
+      return any_scalar 
     x = self.visit(v.x)
     y = self.visit(v.y)
     op = getattr(self.codegen, op_name)
+   
     return op(x,y)
 
   def visit_Sub(self, v):

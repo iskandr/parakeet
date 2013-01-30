@@ -15,7 +15,7 @@ from tuple_type import TupleT
 from syntax_visitor import SyntaxVisitor
 
 shape_semantics = ShapeSemantics()
-
+counter = 0
 class ShapeInference(SyntaxVisitor):
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)
@@ -241,12 +241,13 @@ class ShapeInference(SyntaxVisitor):
         "Can't index (%s) with array shape %s and index shape %s" % \
         (expr, arr, idx)
 
+
+  
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
-    res = shape_semantics.eval_map(fn, arg_shapes, expr.axis)
-    return res
-
+    return shape_semantics.eval_map(fn, arg_shapes, expr.axis)
+    
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
@@ -383,6 +384,8 @@ def symbolic_call(fn, abstract_inputs):
   abstract_result_value = call_shape_expr(fn)
   conv = shape_from_type.Converter()
   shape_formals = conv.from_types(fn.input_types)
+  
   env = {}
   bind_pairs(shape_formals, closure_elts + tuple(abstract_inputs), env)
+
   return subst(abstract_result_value, env)

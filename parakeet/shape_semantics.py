@@ -1,7 +1,7 @@
 from adverb_semantics import AdverbSemantics
-from shape import  Const, Shape, Tuple, Closure, ConstSlice
+from shape import  Const, Shape, Tuple, Closure, ConstSlice, AnyScalar
 from shape import Slice, Scalar, Add, Sub, Div
-from shape import any_scalar,  const
+from shape import const, any_scalar
 from shape import is_zero, is_one, make_shape
 
 class ShapeSemantics(AdverbSemantics):
@@ -34,6 +34,8 @@ class ShapeSemantics(AdverbSemantics):
       return x
     elif isinstance(x, Const) and isinstance(y, Const):
       return const(x.value + y.value)
+    elif isinstance(x, AnyScalar) or isinstance(y, AnyScalar):
+      return any_scalar
     else:
       return Add(x,y)
 
@@ -42,6 +44,8 @@ class ShapeSemantics(AdverbSemantics):
       return x
     elif isinstance(x, Const) and isinstance(y, Const):
       return const(x.value - y.value)
+    elif isinstance(x, AnyScalar) or isinstance(y, AnyScalar):
+      return any_scalar
     else:
       return Sub(x, y)
 
@@ -51,6 +55,8 @@ class ShapeSemantics(AdverbSemantics):
       return x
     elif isinstance(x, Const) and isinstance(y, Const):
       return const(int(x.value / y.value))
+    elif isinstance(x, AnyScalar) or isinstance(y, AnyScalar):
+      return any_scalar
     else:
       return Div(x, y)
 
@@ -87,9 +93,11 @@ class ShapeSemantics(AdverbSemantics):
       elif curr_idx.__class__ is ConstSlice:
         result_dims.append(curr_idx.nelts)
       else:
-        assert curr_idx.__class__ is Slice, \
-          "Unsupported index %s" % curr_idx
-        if isinstance(curr_idx.start, Const):
+        assert curr_idx.__class__ is Slice, "Unsupported index %s" % curr_idx
+
+        if curr_idx.start is None:
+          lower = const(0)
+        elif isinstance(curr_idx.start, Const):
           if curr_idx.start.value is None:
             lower = const(0)
           elif curr_idx.start.value < 0:
@@ -98,8 +106,10 @@ class ShapeSemantics(AdverbSemantics):
             lower = curr_idx.start
         else:
           lower = any_scalar
-
-        if isinstance(curr_idx.stop, Const):
+         
+        if curr_idx.stop is None:
+          upper = old_dim 
+        elif isinstance(curr_idx.stop, Const):
           if curr_idx.stop.value is None:
             upper = old_dim
           elif curr_idx.stop.value < 0:

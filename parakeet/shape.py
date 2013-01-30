@@ -19,6 +19,9 @@ class AbstractValue(object):
       return self
     else:
       return unknown_value
+    
+  def __repr__(self):
+    return str(self)
 
 class Unknown(object):
   """Bottom of the abstract shape lattice"""
@@ -386,3 +389,8 @@ def combine_list(xs, preserve_const = True):
 
 def combine_pairs(xs, ys):
   return [xi.combine(yi) for (xi, yi) in zip(xs, ys)]
+
+def computable_dim(d):
+  c = d.__class__ 
+  return c is Var or c is Const or \
+    (isinstance(d, Binop) and computable_dim(d.x) and computable_dim(d.y))

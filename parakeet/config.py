@@ -74,7 +74,7 @@ opt_loop_unrolling = True
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = False
+stride_specialization = True
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False
@@ -100,7 +100,7 @@ llvm_verify = False
 call_from_python_in_parallel = True
 
 # Tile adverbs when they're run in parallel
-opt_tile = True
+opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = False

@@ -32,8 +32,8 @@ class EvalShape(Traversal):
       else:
         self.inputs.append(y)
   
-  def visit_Input(self, v):
-    return self.inputs[v.pos]  
+  def visit_Var(self, v):
+    return self.inputs[v.num]  
   
   def visit_Const(self, v):
     return v.value 
