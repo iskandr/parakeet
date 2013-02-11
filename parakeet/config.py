@@ -45,9 +45,6 @@ print_transform_names = False
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
 
-# show execution time on parallel backend?
-print_parallel_exec_time = False
-
 # print details about the ongoing tile size search
 print_tile_search_info = False
 
@@ -104,6 +101,7 @@ opt_tile = False
 
 # Add a level of tiling for registers
 opt_reg_tile = False
+
 opt_reg_tiles_not_tile_size_dependent = True
 
 # Perform auto-tuning search for best tile parameters

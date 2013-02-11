@@ -35,9 +35,6 @@ except:
   print "Warning: Failed to load parallel runtime"
   rt = None
 
-fixed_tile_sizes = [104,111,411]
-par_runtime = 0.0
-
 # TODO: Get rid of this extra level of wrapping.
 _lowered_wrapper_cache = {}
 def gen_tiled_wrapper(adverb_class, fn, arg_types, nonlocal_types):
@@ -251,9 +248,6 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
   c_args_array = list_to_ctypes_array(c_args_list, pointers = True)
   wf_ptr = exec_engine.get_pointer_to_function(llvm_fn)
 
-  global par_runtime
-  start_time = time.time()
-
   if config.opt_tile:
     if not fn.autotuned_tile_sizes is None and config.use_cached_tile_sizes:
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
@@ -271,20 +265,14 @@ def exec_in_parallel(fn, args_repr, c_args, num_iters):
       tile_sizes_t = ctypes.c_int64 * len(fn.dl_tile_estimates)
       tile_sizes = tile_sizes_t()
       for i in range(len(fn.dl_tile_estimates)):
-        #tile_sizes[i] = fixed_tile_sizes[i]
-        #tile_sizes[i] = (fn.dl_tile_estimates[i] + fn.ml_tile_estimates[i])/2
         tile_sizes[i] = fn.ml_tile_estimates[i]
-        print ("tile_sizes[%d]:" % i), tile_sizes[i]
+        # print ("tile_sizes[%d]:" % i), tile_sizes[i]
 
       rt.run_job_with_fixed_tiles(wf_ptr, c_args_array, num_iters,
                                   tile_sizes)
   else:
     rt.run_compiled_job(wf_ptr, c_args_array, num_iters, [], [])
 
-  par_runtime = time.time() - start_time
-
-  if config.print_parallel_exec_time:
-    print "Parallel execution time:", par_runtime
 
 def par_each(fn, *args, **kwds):
   if 'axis' in kwds:
