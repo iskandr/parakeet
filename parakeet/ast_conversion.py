@@ -341,23 +341,27 @@ class AST_Translator(ast.NodeVisitor):
     
   
   def visit_ListComp(self, expr):
-    elt = expr.elt
-    assert elt.__class__ is ast.Name 
     gens = expr.generators
     assert len(gens) == 1
     gen = gens[0]
     target = gen.target
     assert target.__class__ is ast.Name
+    # build a lambda as a Python ast representing 
+    # what we do to each element 
+    py_fn = ast.FunctionDef(name = "comprehension_map", 
+                                args = ast.arguments(
+                                  args = [target], 
+                                  vararg = None, 
+                                  kwarg = None, 
+                                  defaults = ()),
+                                body = [ast.Return(expr.elt)], 
+                                decorator_list = ())
+    
+    fn = translate_function_ast(py_fn, outer_env = self.env)
+    print str(fn)
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0
-    arg_name = target.id
-    args = FormalArgs()
-    args.add_positional(arg_name)
-    fn_name = names.refresh('comprehension_map')
-    fn = syntax.Fn(args = args, 
-                   body = [syntax.Return(Var(arg_name))], 
-                   name = fn_name)
     return Map(fn, args=(seq,), axis = 0)
       
   def visit_Attribute(self, expr):
