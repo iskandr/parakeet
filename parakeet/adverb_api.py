@@ -32,7 +32,6 @@ from run_function import run
 try:
   rt = runtime.Runtime()
 except:
-  raise
   print "Warning: Failed to load parallel runtime"
   rt = None
 
