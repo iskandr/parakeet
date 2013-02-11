@@ -18,6 +18,15 @@ def sqr_elts(x):
 def test_sqr_elts():
   expect(sqr_elts, [x], x**2)
   
+def outer_prod(x, y):
+  return [[xi * yi for xi in x] for yi in y]
+
+def test_outer_prod():
+  x = [1.0,2.0,3.0]
+  y = [10,20]
+  res = np.array(outer_prod(x,y))
+  expect(outer_prod, [x,y], res)
+  
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
   
