@@ -610,7 +610,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
     assert parent
     fn = syntax.Fn(ssa_fn_name, ssa_args, body, [], original_outer_names)
     if len(original_outer_names) > 0:
-      outer_ssa_vars = [parent.get_var(x) for x in original_outer_names]
+      outer_ssa_vars = [parent.lookup(x) for x in original_outer_names]
       return syntax.Closure(fn, outer_ssa_vars)
     else:
       return fn

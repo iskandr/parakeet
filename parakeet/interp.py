@@ -140,6 +140,7 @@ def eval_fn(fn, actuals):
       return args.transform(eval_expr)
 
   def eval_expr(expr):
+    # print ">>", expr
     if hasattr(expr, 'wrapper'):
       expr = expr.wrapper
     assert isinstance(expr, syntax.Expr), "Not an expression-- %s : %s" % \
