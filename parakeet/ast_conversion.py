@@ -59,6 +59,13 @@ class AST_Translator(ast.NodeVisitor):
     # mapping from names/paths to either a closure cell reference or a 
     # global value 
     self.python_refs = OrderedDict()
+    
+    self.original_outer_names = []
+    self.localized_outer_names = []
+    
+    self.push()
+     
+    
      
     #self.env = \
     #    ScopedEnv(outer_env=outer_env,
@@ -70,8 +77,8 @@ class AST_Translator(ast.NodeVisitor):
       scope = {}
     if block is None:
       block = []
-    self.scopes.append(scope)
-    self.blocks.append(block)
+    self.scopes.push(scope)
+    self.blocks.push(block)
 
   def pop(self):
     scope = self.scopes.pop()
@@ -80,7 +87,7 @@ class AST_Translator(ast.NodeVisitor):
   
   def fresh_name(self, original_name):
     fresh_name = names.fresh(original_name)
-    self.scopes[-1][original_name] = fresh_name
+    self.scopes[original_name] = fresh_name
     return fresh_name
     
   def fresh_names(self, original_names):
@@ -149,9 +156,9 @@ class AST_Translator(ast.NodeVisitor):
       # form 
       
       # make sure we haven't already recorded a reference to this value under a different name
-      #for (local_name, other_ref) in self.python_refs.iteritems():
-      #  if ref == other_ref:
-      #    return Var(local_name)
+      for (local_name, other_ref) in self.python_refs.iteritems():
+        if ref == other_ref:
+          return Var(local_name)
       local_name = names.fresh(name)
       self.scopes[name] = local_name
       self.original_outer_names.append(name)
@@ -223,8 +230,7 @@ class AST_Translator(ast.NodeVisitor):
 
   def visit_Name(self, expr):
     assert isinstance(expr, ast.Name), "Expected AST Name object: %s" % expr
-    old_name = expr.id
-    return self.get_name(old_name)
+    return self.lookup(expr.id)
 
   def create_phi_nodes(self, left_scope, right_scope, new_names = {}):
     """
@@ -238,7 +244,7 @@ class AST_Translator(ast.NodeVisitor):
       if name in right_scope:
         right = Var(right_scope[name])
       else:
-        right = self.get_name(name)
+        right = self.lookup(name)
 
       if name in new_names:
         new_name = new_names[name]
@@ -249,7 +255,7 @@ class AST_Translator(ast.NodeVisitor):
     for (name, ssa_name) in right_scope.iteritems():
       if name not in left_scope:
         try:
-          left = self.get_name(name)
+          left = self.lookup(name)
           right = Var(ssa_name)
 
           if name in new_names:
@@ -518,12 +524,12 @@ class AST_Translator(ast.NodeVisitor):
   def visit_loop_body(self, body, *exprs):
     merge = {}
     substitutions = {}
-    curr_scope = self.env.current_scope()
+    curr_scope = self.current_scope()
     exprs = [self.visit(expr) for expr in exprs]
     scope_after, body = self.visit_block(body)
     for (k, name_after) in scope_after.iteritems():
-      if k in self.env:
-        name_before = self.env[k]
+      if k in self.scopes:
+        name_before = self.scopes[k]
         new_name = names.fresh(k + "_loop")
         merge[new_name] = (Var(name_before), Var(name_after))
         substitutions[name_before]  = new_name
@@ -551,26 +557,26 @@ class AST_Translator(ast.NodeVisitor):
       start = zero_i64
       stop = n # syntax.PrimCall(prims.subtract, [n, one_i64])
       step = one_i64
-      loop_counter_name = self.env.fresh('i')
+      loop_counter_name = self.fresh_name('i')
       loop_var = Var(loop_counter_name)
       body = [Assign(var, syntax.Index(seq, loop_var))] + body
       return ForLoop(loop_var, start, stop, step, body, merge)
     
   def visit_block(self, stmts):
-    self.env.push()
+    self.push()
     curr_block = self.current_block()
     for stmt in stmts:
       parakeet_stmt = self.visit(stmt)
       curr_block.append(parakeet_stmt)
-    return self.env.pop()
+    return self.pop()
 
   def visit_FunctionDef(self, node):
     """
     Translate a nested function
     """
     fundef = translate_function_ast(node, parent = self)
-    local_name = self.env.fresh_var(node.name)
-    return Assign(local_name, fundef)
+    local_var = self.fresh_var(node.name)
+    return Assign(local_var, fundef)
 
 def translate_function_ast(function_def_ast, globals_dict = None,
                            closure_vars = [], closure_cells = [],
@@ -594,10 +600,12 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   # surrounding parakeet scope, which can't be captured with a python ref cell
   original_outer_names = translator.original_outer_names
   localized_outer_names = translator.localized_outer_names
+  python_refs = translator.python_refs 
   ssa_args.prepend_nonlocal_args(localized_outer_names)
   if globals_dict:
     assert parent is None
-    return syntax.Fn(ssa_fn_name, ssa_args, body, original_outer_names, [])
+    assert len(original_outer_names) == len(python_refs)
+    return syntax.Fn(ssa_fn_name, ssa_args, body, python_refs.values(), [])
   else:
     assert parent
     fn = syntax.Fn(ssa_fn_name, ssa_args, body, [], original_outer_names)
