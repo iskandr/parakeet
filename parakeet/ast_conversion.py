@@ -4,17 +4,22 @@ import inspect
 
 import config
 import names
+import nested_blocks 
+import scoped_dict
 import syntax
 import syntax_helpers 
 import prims
 
 from adverbs import Map
 from args import FormalArgs, ActualArgs
+from collections import OrderedDict
 from common import dispatch
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from macro import macro
+from names import NameNotFound
 from prims import Prim, prim_wrapper
+from python_ref import GlobalRef, ClosureCellRef
 from scoped_env import ScopedEnv
 from subst import subst_expr, subst_stmt_list
 from syntax import Assign, If, ForLoop, Var, PrimCall
@@ -39,35 +44,124 @@ def translate_default_arg_value(arg):
 
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
-               outer_env=None):
+               parent=None):
     # assignments which need to get prepended at the beginning of the
     # function
     self.globals = globals_dict
-    self.env = \
-        ScopedEnv(outer_env=outer_env,
-                  closure_cell_dict=closure_cell_dict,
-                  globals_dict=globals_dict)
+    self.blocks = nested_blocks.NestedBlocks()
 
+    self.parent = parent 
+    self.scopes = scoped_dict.ScopedDictionary()
+    
+    self.globals_dict = globals_dict 
+    self.closure_cell_dict = closure_cell_dict 
+    
+    # mapping from names/paths to either a closure cell reference or a 
+    # global value 
+    self.python_refs = OrderedDict()
+     
+    #self.env = \
+    #    ScopedEnv(outer_env=outer_env,
+    #              closure_cell_dict=closure_cell_dict,
+    #              globals_dict=globals_dict)
+
+  def push(self, scope = None, block = None):
+    if scope is None:
+      scope = {}
+    if block is None:
+      block = []
+    self.scopes.append(scope)
+    self.blocks.append(block)
+
+  def pop(self):
+    scope = self.scopes.pop()
+    block = self.blocks.pop()
+    return scope, block
+  
   def fresh_name(self, original_name):
-    return self.env.fresh(original_name)
-
+    fresh_name = names.fresh(original_name)
+    self.scopes[-1][original_name] = fresh_name
+    return fresh_name
+    
   def fresh_names(self, original_names):
-    return map(self.env.fresh, original_names)
+    return map(self.fresh_name, original_names)
 
-  def fresh_var(self, original_name):
-    return self.env.fresh_var(original_name)
+  def fresh_var(self, name):
+    return syntax.Var(self.fresh_name(name))
 
   def fresh_vars(self, original_names):
     return map(self.fresh_var, original_names)
-
+  
   def current_block(self):
-    return self.env.current_block()
+    return self.blocks.top()
 
   def current_scope(self):
-    return self.env.current_scope()
+    return self.scopes.top()
 
+  def get_global(self, key):
+    if isinstance(key, str):
+      return self.globals_dict[key]
+     
+    assert isinstance(key, tuple)  
+    value = self.globals_dict[key[0]]
+    for elt in key[1:]:
+      value = getattr(value, elt)
+    return value 
+    
+  def is_global(self, key):
+    try:
+      self.get_global(key)
+      return True
+    except:
+      return False
+    
+    
+  def lookup(self, name):
+    if name in reserved_names:
+      return reserved_names[name]
+    elif name in self.scopes:
+      return Var(self.scopes[name])
+    elif self.parent:
+      # don't actually keep the outer binding name, we just
+      # need to check that it's possible and tell the outer scope
+      # to register any necessary python refs
+      local_name = names.fresh(name)
+      self.scopes[name] = local_name
+      self.original_outer_names.append(name)
+      self.localized_outer_names.append(local_name)
+      return Var(local_name)
+    elif self.closure_cell_dict and name in self.closure_cell_dict:
+      ref = ClosureCellRef(self.closure_cell_dict[name], name)
+    elif self.is_global(name):
+      ref = GlobalRef(self.globals_dict, name)
+    else:
+      raise NameNotFound(name)
+    
+    value = ref.deref()
+    
+    try:
+      # if a value is a function then immediately parse it 
+      # and return its Parakeet representation 
+      
+      return translate_function_value(value)
+    except:
+      # on the other hand, don't inline constants but rather keep them in an indirect 
+      # form 
+      
+      # make sure we haven't already recorded a reference to this value under a different name
+      #for (local_name, other_ref) in self.python_refs.iteritems():
+      #  if ref == other_ref:
+      #    return Var(local_name)
+      local_name = names.fresh(name)
+      self.scopes[name] = local_name
+      self.original_outer_names.append(name)
+      self.localized_outer_names.append(local_name)
+      self.python_refs[local_name] = ref
+      return Var(local_name)
+  
   def visit_list(self, nodes):
     return map(self.visit, nodes)
+
 
   def tuple_arg_assignments(self, elts, var):
     """
@@ -126,11 +220,6 @@ class AST_Translator(ast.NodeVisitor):
 
     return formals, assignments
 
-  def get_name(self, name):
-    if name in reserved_names:
-      return reserved_names[name]
-    else:
-      return Var(self.env[name])
 
   def visit_Name(self, expr):
     assert isinstance(expr, ast.Name), "Expected AST Name object: %s" % expr
@@ -154,7 +243,7 @@ class AST_Translator(ast.NodeVisitor):
       if name in new_names:
         new_name = new_names[name]
       else:
-        new_name = self.env.fresh(name)
+        new_name = self.fresh_name(name)
       merge[new_name] = (left, right)
 
     for (name, ssa_name) in right_scope.iteritems():
@@ -166,7 +255,7 @@ class AST_Translator(ast.NodeVisitor):
           if name in new_names:
             new_name = new_names[name]
           else:
-            new_name = self.env.fresh(name)
+            new_name = self.fresh_name(name)
           merge[new_name] = (left, right)
         except names.NameNotFound:
           # for now skip over variables which weren't defined before
@@ -313,21 +402,24 @@ class AST_Translator(ast.NodeVisitor):
       attr_chain = None
     if attr_chain:
       root = attr_chain[0]
-      if root not in self.env:
+      if root not in self.scopes:
         if self.globals and root in self.globals:
           value = self.lookup_attribute_chain(attr_chain)
           if isinstance(value, macro):
             return value.transform(positional, keywords_dict)
           elif isinstance(value, prims.Prim):
             return syntax.PrimCall(value, args)
+          else:
+            assert hasattr(value, '__call__')
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
           return self.translate_builtin(value, positional, keywords_dict)
         
 
     # if we didn't evaluate a Prim or macro...
+    
     fn_val = self.visit(fn)
-
+    print fn, fn_val 
     if starargs:
       starargs_expr = self.visit(starargs)
     else:
@@ -357,7 +449,7 @@ class AST_Translator(ast.NodeVisitor):
                                 body = [ast.Return(expr.elt)], 
                                 decorator_list = ())
     
-    fn = translate_function_ast(py_fn, outer_env = self.env)
+    fn = translate_function_ast(py_fn, parent = self)
     print str(fn)
     seq = self.visit(gen.iter)
     ifs = gen.ifs
@@ -476,20 +568,13 @@ class AST_Translator(ast.NodeVisitor):
     """
     Translate a nested function
     """
-
-    fundef = translate_function_ast(node, outer_env = self.env)
+    fundef = translate_function_ast(node, parent = self)
     local_name = self.env.fresh_var(node.name)
-
-    if len(fundef.parakeet_nonlocals) > 0:
-      closure_args = map(self.get_name, fundef.parakeet_nonlocals)
-      closure = syntax.Closure(fundef, closure_args)
-    else:
-      closure = fundef
-    return Assign(local_name, closure)
+    return Assign(local_name, fundef)
 
 def translate_function_ast(function_def_ast, globals_dict = None,
                            closure_vars = [], closure_cells = [],
-                           outer_env = None):
+                           parent = None):
   """
   Helper to launch translation of a python function's AST, and then construct
   an untyped parakeet function from the arguments, refs, and translated body.
@@ -498,27 +583,29 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   assert len(closure_vars) == len(closure_cells)
   closure_cell_dict = dict(zip(closure_vars, closure_cells))
 
-  translator = AST_Translator(globals_dict, closure_cell_dict, outer_env)
+  translator = AST_Translator(globals_dict, closure_cell_dict, parent)
 
   ssa_args, assignments = translator.translate_args(function_def_ast.args)
   _, body = translator.visit_block(function_def_ast.body)
   body = assignments + body
   ssa_fn_name = names.fresh(function_def_ast.name)
 
-  refs = []
-  ref_names = []
-  for (ssa_name, ref) in translator.env.python_refs.iteritems():
-    refs.append(ref)
-    ref_names.append(ssa_name)
-
   # if function was nested in parakeet, it can have references to its
   # surrounding parakeet scope, which can't be captured with a python ref cell
-  original_outer_names = translator.env.original_outer_names
-  localized_outer_names = translator.env.localized_outer_names
-
-  ssa_args.prepend_nonlocal_args(localized_outer_names + ref_names)
-
-  return syntax.Fn(ssa_fn_name, ssa_args, body, refs, original_outer_names)
+  original_outer_names = translator.original_outer_names
+  localized_outer_names = translator.localized_outer_names
+  ssa_args.prepend_nonlocal_args(localized_outer_names)
+  if globals_dict:
+    assert parent is None
+    return syntax.Fn(ssa_fn_name, ssa_args, body, original_outer_names, [])
+  else:
+    assert parent
+    fn = syntax.Fn(ssa_fn_name, ssa_args, body, [], original_outer_names)
+    if len(original_outer_names) > 0:
+      outer_ssa_vars = [parent.get_var(x) for x in original_outer_names]
+      return syntax.Closure(fn, outer_ssa_vars)
+    else:
+      return fn
 
 def strip_leading_whitespace(source):
   lines = source.splitlines()
