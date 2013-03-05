@@ -672,6 +672,7 @@ def translate_function_value(fn):
 
     fundef = translate_function_source(source, globals_dict, free_vars,
                                        closure_cells)
+    print repr(fundef)
     register_python_fn(fn, fundef)
 
     if config.print_untyped_function:
