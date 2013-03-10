@@ -22,7 +22,7 @@ def fprop_layer(layer, x):
 
 def fprop(network, x):
   for layer in network:
-    x = parakeet.run(fprop_layer(layer,x))
+    x = parakeet.run(fprop_layer, layer,x)
   return x
 
 def fprop_python(network, x): 
