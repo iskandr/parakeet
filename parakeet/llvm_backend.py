@@ -1,7 +1,7 @@
 import os
 
 
-from llvm.core import Builder, ATTR_NO_CAPTURE
+from llvm.core import Builder, ATTR_NO_CAPTURE, Module 
 from llvm.core import Type as lltype
 
 import config
@@ -213,6 +213,11 @@ class Compiler(object):
       else:
         assert prim == prims.logical_or
         return builder.or_(name = result_name, *llvm_args)
+    elif isinstance(prim, prims.Float): 
+      llvm_op = llvm_prims.get_float_unary_op(prim, t)
+      print "[prim]", prim, t, llvm_op 
+      return builder.call(llvm_op, llvm_args)
+    
     else:
       assert False, "UNSUPPORTED PRIMITIVE: %s" % prim
 

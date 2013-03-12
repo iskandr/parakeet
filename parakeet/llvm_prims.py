@@ -1,7 +1,10 @@
 
 
 import prims
-import llvm.core as llc    
+import llvm.core as llc   
+
+
+  
 
 signed_int_comparisons = {
   prims.equal : llc.ICMP_EQ, 
@@ -63,3 +66,38 @@ bool_binops = {
   prims.subtract : 'xor',
   #prims.logical_not : 'not_'
 }
+
+import core_types 
+import llvm_types
+
+from llvm_context import global_context
+
+float32_fn_t = llc.Type.function(llvm_types.float32_t, [llvm_types.float32_t])
+float64_fn_t = llc.Type.function(llvm_types.float64_t, [llvm_types.float64_t])
+
+def float32_fn(name):
+  return global_context.module.add_function(float32_fn_t, name)
+
+def float64_fn(name):
+  return global_context.module.add_function(float64_fn_t, name)
+
+float_unary_ops_list = [ 
+  prims.tan, prims.tanh, prims.cos, prims.cosh, prims.sin, prims.sinh, 
+  prims.log, prims.log10, prims.sqrt,
+  prims.exp 
+]
+
+float_unary_ops = {}
+
+def get_float_unary_op(prim, t):
+  key = (prim, t)
+  if key in float_unary_ops:
+    return float_unary_ops[key]
+  assert prim in float_unary_ops_list, \
+    "Unsupported float primitive %s" % prim 
+  assert t in (core_types.Float32, core_types.Float64), \
+    "Invalid type %s, expected Float32 or Float64" % t
+  fn_t = float32_fn_t if t == core_types.Float32 else float64_fn_t    
+  llvm_value = global_context.module.add_function(fn_t, prim.name)
+  float_unary_ops[key] = llvm_value 
+  return llvm_value 
