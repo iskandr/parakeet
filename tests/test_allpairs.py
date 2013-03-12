@@ -65,8 +65,8 @@ def test_loop_matmult():
       expect(loop_matmult, [X,Y,Z], res)
 
 def test_loop_matmult_timing():
-  X = np.random.randn(100,100).astype('float32')
-  Y = np.random.randn(100,100).astype('float32')
+  X = np.random.randn(10,10).astype('float32')
+  Y = np.random.randn(10,10).astype('float32')
   
   start = time.time()
   _ = np.dot(X,Y.T)
