@@ -15,7 +15,7 @@ def dot(x,y):
   return sum(x*y)
 
 def fprop_elt(x,w):
-  return np.tanh(dot(x,w))
+  return parakeet.tanh(dot(x,w))
 
 def fprop_layer(layer, x):
   return [fprop_elt(x,w) for w in layer]

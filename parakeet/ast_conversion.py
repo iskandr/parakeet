@@ -122,10 +122,7 @@ class AST_Translator(ast.NodeVisitor):
         return key in str 
       else:
         assert isinstance(key, (list, tuple))
-        for elt in key:
-          if elt not in self.globals:
-            return False
-        return True
+        return key[0] in self.globals 
     else:
       return self.parent.is_global(key)
       
@@ -351,7 +348,7 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(expr, ast.Name):
       return [expr.id]
     else:
-      left = self.attribute_chain(expr.value)
+      left = self.build_attribute_chain(expr.value)
       left.append (expr.attr)
       return left
 
@@ -412,7 +409,8 @@ class AST_Translator(ast.NodeVisitor):
     try:
       attr_chain = self.build_attribute_chain(fn)
     except:
-      attr_chain = None
+      raise
+      # attr_chain = None
     if attr_chain:
       root = attr_chain[0]
       if root not in self.scopes:
@@ -426,7 +424,7 @@ class AST_Translator(ast.NodeVisitor):
           if isinstance(value, macro):
             return value.transform(positional, keywords_dict)
           elif isinstance(value, prims.Prim):
-            return syntax.PrimCall(value, args)
+            return syntax.PrimCall(value, positional)
           elif hasattr(value, '__call__'):
             fn_node = translate_function_value(value)
             if starargs:
@@ -442,7 +440,7 @@ class AST_Translator(ast.NodeVisitor):
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
           return self.translate_builtin(value, positional, keywords_dict)
-    assert False, (expr, attr_chain)
+    assert False, (expr, attr_chain, fn)
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
     
