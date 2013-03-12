@@ -48,6 +48,8 @@ def eq(x,y):
         return False
       else:
         return True
+  elif np.isnan(x):
+    return np.isnan(y)
   else:
     return x == y
 
