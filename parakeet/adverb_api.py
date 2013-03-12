@@ -25,7 +25,7 @@ from adverb_wrapper import untyped_identity_function as ident
 from args import ActualArgs, FormalArgs
 from common import list_to_ctypes_array
 from core_types import Int64
-from macro import staged_macro
+from decorators import staged_macro
 from pipeline import lowering, high_level_optimizations, tiling
 from run_function import run
 

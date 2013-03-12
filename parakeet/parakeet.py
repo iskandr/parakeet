@@ -5,6 +5,7 @@ from adverb_api import allpairs, each, reduce, scan
 from lib_simple import *
 from prims import *
 from run_function import run, specialize_and_compile
+from decorators import jit 
 
 
 def typed_repr(fn, args):
@@ -42,12 +43,6 @@ def diff(x, zero_fill=True):
 
   return x[1:] - x[:-1]
 
-class jit:
-  def __init__(self, f):
-    self.f = f
-
-  def __call__(self, *args, **kwargs):
-    return run(self.f, *args, **kwargs)
 
 def clear_specializations():
   import closure_type

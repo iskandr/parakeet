@@ -1,14 +1,14 @@
 import ast
 import inspect
-
+import types
 
 import config
 import names
 import nested_blocks 
+import prims
 import scoped_dict
 import syntax
 import syntax_helpers 
-import prims
 
 from adverbs import Map
 from args import FormalArgs, ActualArgs
@@ -16,7 +16,7 @@ from collections import OrderedDict
 from common import dispatch
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
-from macro import macro
+from decorators import macro, jit 
 from names import NameNotFound
 from prims import Prim, prim_wrapper
 from python_ref import GlobalRef, ClosureCellRef
@@ -62,15 +62,7 @@ class AST_Translator(ast.NodeVisitor):
     
     self.original_outer_names = []
     self.localized_outer_names = []
-    
     self.push()
-     
-    
-     
-    #self.env = \
-    #    ScopedEnv(outer_env=outer_env,
-    #              closure_cell_dict=closure_cell_dict,
-    #              globals_dict=globals_dict)
 
   def push(self, scope = None, block = None):
     if scope is None:
@@ -79,6 +71,7 @@ class AST_Translator(ast.NodeVisitor):
       block = []
     self.scopes.push(scope)
     self.blocks.push(block)
+
 
   def pop(self):
     scope = self.scopes.pop()
@@ -105,23 +98,37 @@ class AST_Translator(ast.NodeVisitor):
   def current_scope(self):
     return self.scopes.top()
 
-  def get_global(self, key):
-    if isinstance(key, str):
-      return self.globals_dict[key]
-     
-    assert isinstance(key, tuple)  
-    value = self.globals_dict[key[0]]
-    for elt in key[1:]:
-      value = getattr(value, elt)
-    return value 
+  def lookup_global(self, key):
+    if self.globals:
+      if isinstance(key, str):
+        return self.globals[key]
+      else:
+        assert isinstance(key, (list, tuple))  
+        value = self.globals_dict[key[0]]
+        for elt in key[1:]:
+          value = getattr(value, elt)
+        return value 
+    else:
+      return self.parent.lookup_global(key)
     
   def is_global(self, key):
-    try:
-      self.get_global(key)
-      return True
-    except:
-      return False
+    if isinstance(key, str) and key in self.scopes:
+      return False 
+    if isinstance(key, (list,tuple)) and key[0] in self.scopes:
+      return False 
     
+    if self.globals:
+      if isinstance(key, str):
+        return key in str 
+      else:
+        assert isinstance(key, (list, tuple))
+        for elt in key:
+          if elt not in self.globals:
+            return False
+        return True
+    else:
+      return self.parent.is_global(key)
+      
     
   def lookup(self, name):
     if name in reserved_names:
@@ -409,35 +416,39 @@ class AST_Translator(ast.NodeVisitor):
     if attr_chain:
       root = attr_chain[0]
       if root not in self.scopes:
-        if self.globals and root in self.globals:
-          value = self.lookup_attribute_chain(attr_chain)
+        
+        print "Attr root %s globally defined" % root 
+        print "Is global?", self.is_global(attr_chain)
+        if self.is_global(attr_chain):
+          value = self.lookup_global(attr_chain)
+          # value = self.lookup_attribute_chain(attr_chain)
+          print "Found value %s" % value 
           if isinstance(value, macro):
             return value.transform(positional, keywords_dict)
           elif isinstance(value, prims.Prim):
             return syntax.PrimCall(value, args)
+          elif hasattr(value, '__call__'):
+            fn_node = translate_function_value(value)
+            if starargs:
+              starargs_expr = self.visit(starargs)
+            else:
+              starargs_expr = None
+            actuals = ActualArgs(positional, keywords_dict, starargs_expr)
+            print "Creating Call node"
+            return syntax.Call(fn_node, actuals)
           else:
-            assert hasattr(value, '__call__')
+            assert False, "depends on global %s" % attr_chain 
+             
         elif len(attr_chain) == 1 and root in __builtins__:
           value = __builtins__[root]
           return self.translate_builtin(value, positional, keywords_dict)
-        
-
-    # if we didn't evaluate a Prim or macro...
-    
-    fn_val = self.visit(fn)
-    print fn, fn_val 
-    if starargs:
-      starargs_expr = self.visit(starargs)
-    else:
-      starargs_expr = None
-
-    actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-    return syntax.Call(fn_val, actuals)
-
+    assert False, (expr, attr_chain)
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
     
-  
+  def visit_Expr(self, expr):
+    assert False, "Expression statement not supported"
+    
   def visit_ListComp(self, expr):
     gens = expr.generators
     assert len(gens) == 1
@@ -446,6 +457,7 @@ class AST_Translator(ast.NodeVisitor):
     assert target.__class__ is ast.Name
     # build a lambda as a Python ast representing 
     # what we do to each element 
+    print "list_comp inner expr", expr.elt 
     py_fn = ast.FunctionDef(name = "comprehension_map", 
                                 args = ast.arguments(
                                   args = [target], 
@@ -642,10 +654,15 @@ def translate_function_source(source, globals_dict, closure_vars = [],
 
 import adverb_registry
 def translate_function_value(fn):
+  # if the function has been wrapped with a decorator, unwrap it 
+  while isinstance(fn, jit):
+    fn = fn.f 
+    
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
   elif isinstance(fn, Prim):
     return prim_wrapper(fn)
+    
 
   # TODO: Right now we can only deal with adverbs over a fixed axis and fixed
   # number of args due to lack of support for a few language constructs:
@@ -665,14 +682,15 @@ def translate_function_value(fn):
     source = inspect.getsource(fn)
 
     globals_dict = fn.func_globals
+
     free_vars = fn.func_code.co_freevars
     closure_cells = fn.func_closure
     if closure_cells is None:
       closure_cells = ()
 
-    fundef = translate_function_source(source, globals_dict, free_vars,
-                                       closure_cells)
-    print repr(fundef)
+    print "[translate_function_value] Translating: ", source 
+    fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
+    print "[translate_function_value] Produced:", repr(fundef)
     register_python_fn(fn, fundef)
 
     if config.print_untyped_function:
