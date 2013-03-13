@@ -30,10 +30,11 @@ def black_scholes(CallFlag,S,X,T,r,v):
 def test_black_scholes():
   x1 = (False, 10.0, 10.0, 2.0, 2.0, 2.0)
   x2 = (True, 10.0, 10.0, 2.0, 2.0, 2.0)
-  xs = np.array([x1, x2])
-  par_rslt = parakeet.each(black_scholes, xs)
-  py_rslt = black_scholes(xs)
-  assert eq(par_rslt, py_rslt)
+  xs = [x1, x2]
+  for x in xs:
+    par_rslt = parakeet.run(black_scholes, *x)
+    py_rslt = black_scholes(*x)
+    assert eq(par_rslt, py_rslt)
 
 if __name__ == '__main__':
   run_local_tests()

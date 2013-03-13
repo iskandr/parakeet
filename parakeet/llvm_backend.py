@@ -1,8 +1,10 @@
 import os
 
+import llvm.core as llc 
 
 from llvm.core import Builder, ATTR_NO_CAPTURE, Module 
 from llvm.core import Type as lltype
+
 
 import config
 import escape_analysis
@@ -15,7 +17,7 @@ import syntax_helpers
 
 from core_types import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from core_types import Int32, Int64, PtrT
-from llvm_helpers import const, int32
+from llvm_helpers import const, int32, zero 
 from llvm_types import llvm_value_type, llvm_ref_type
 from syntax import Var, Struct, Index, TypedFn, Attribute
 
@@ -184,6 +186,12 @@ class Compiler(object):
       cmp_op = llvm_prims.unsigned_int_comparisons[prim]
       return builder.icmp(cmp_op, llvm_x, llvm_y, result_name)
 
+  
+  def neg(self, x, builder):
+    if isinstance(x.type, llc.IntegerType):
+      return builder.neg(x)
+    else:
+      return builder.fsub(zero(x.type), x, "neg")
   def prim(self, prim, t, llvm_args, builder, result_name = None):
     if result_name is None:
       result_name = prim.name + "_result"
@@ -213,9 +221,13 @@ class Compiler(object):
       else:
         assert prim == prims.logical_or
         return builder.or_(name = result_name, *llvm_args)
+    elif prim == prims.abs:
+      x = llvm_args[0]
+      bit = self.cmp(prims.greater_equal, t,  x, zero(x.type), builder, "gt_zero")
+      neg_value = self.neg(x, builder)
+      return builder.select(bit, x, neg_value)
     elif isinstance(prim, prims.Float): 
       llvm_op = llvm_prims.get_float_unary_op(prim, t)
-      print "[prim]", prim, t, llvm_op 
       return builder.call(llvm_op, llvm_args)
     
     else:

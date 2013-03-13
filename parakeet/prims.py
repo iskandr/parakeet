@@ -158,6 +158,7 @@ class Cmp(Prim):
 
 class_list = [Cmp, Bitwise, Logical, Arith, Float]
 
+abs = Float(np.abs)
 sqrt = Float(np.sqrt)
 exp = Float(np.exp)
 log = Float(np.log)
