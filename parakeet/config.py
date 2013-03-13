@@ -6,11 +6,11 @@
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -87,7 +87,7 @@ llvm_optimize = True
 llvm_num_passes = 4
 
 # run verifier over generated LLVM code?
-llvm_verify = False
+llvm_verify = True
 
 ######################################
 #         RUNTIME OPTIONS            #
