@@ -702,9 +702,9 @@ def translate_function_value(fn):
     if closure_cells is None:
       closure_cells = ()
 
-    print "[translate_function_value] Translating: ", source 
+    #print "[translate_function_value] Translating: ", source 
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
-    print "[translate_function_value] Produced:", repr(fundef)
+    #print "[translate_function_value] Produced:", repr(fundef)
     register_python_fn(fn, fundef)
 
     if config.print_untyped_function:

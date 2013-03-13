@@ -103,12 +103,15 @@ post_lowering = Phase([licm,
                        load_elim,
                        scalar_repl,
                        ], cleanup = [Simplify, DCE])
+
 lowering = Phase([pre_lowering,
                   LowerIndexing,
                   licm,
                   loop_fusion,
                   LowerStructs,
-                  post_lowering,],
+                  post_lowering,
+                  LowerStructs,
+                  Simplify],
                  depends_on = loopify,
                  copy = True,
                  cleanup = [])

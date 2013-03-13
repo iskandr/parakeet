@@ -104,7 +104,8 @@ class ForLoop(Stmt):
   """
 
   _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
-
+  
+    
   def __str__(self):
     s = "for %s in range(%s, %s, %s):" % \
       (self.var,
@@ -120,6 +121,7 @@ class ForLoop(Stmt):
 class Expr(Node):
   _members = ['type']
 
+  
   def children(self):
     for v in self.itervalues():
       if v and isinstance(v, Expr):
@@ -491,7 +493,7 @@ class TupleProj(Expr):
   _members = ['tuple', 'index']
 
   def __str__(self):
-    return "%s[%d]" % (self.tuple, self.index)
+    return "TupleProj(%s, %d)" % (self.tuple, self.index)
 
   def children(self):
     return (self.tuple,)

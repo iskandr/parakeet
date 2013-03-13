@@ -2,7 +2,7 @@ import numpy as np
 import parakeet
 import testing_helpers
 
-xs = [-0.3, 0.1, 0.5, 1.5, 2.0]
+xs = [0.1, 0.5, 1.5, 2.0]
 
 def test_sin():
   testing_helpers.expect_each(parakeet.sin, np.sin, xs)
