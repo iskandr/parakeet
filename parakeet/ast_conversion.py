@@ -371,7 +371,8 @@ class AST_Translator(ast.NodeVisitor):
       import adverb_wrapper
       sum_wrapper = \
           adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
-      args = ActualArgs(positional = [prims.add] + list(positional))
+      args = ActualArgs(positional = [prims.add] + list(positional), 
+                        keywords = {'init': zero_i64})
       return syntax.Call(sum_wrapper, args)
     elif value == abs:
       assert len(keywords_dict) == 0

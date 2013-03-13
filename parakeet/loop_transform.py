@@ -4,12 +4,13 @@ from syntax import Return, While, ForLoop, If, Assign, Var, Index, Const
 from transform import Transform
 
 class LoopTransform(Transform):
-  def is_simple_block(self, stmts):
+  def is_simple_block(self, stmts, allow_branches = True):
     for stmt in stmts:
       if stmt.__class__ in (Return, While, ForLoop):
         return False
       elif stmt.__class__ is If:
-        if not self.is_simple_block(stmt.true) or \
+        if not allow_branches or \
+           not self.is_simple_block(stmt.true) or \
            not self.is_simple_block(stmt.false):
           return False
     return True

@@ -708,7 +708,7 @@ def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
     acc_type = elt_type
   else:
     acc_type = elt_type.combine(init_type)
-
+  
   typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
   new_acc_type = typed_combine_fn.return_type
   if new_acc_type != acc_type:

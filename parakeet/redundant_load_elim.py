@@ -4,7 +4,7 @@ from syntax import Assign, Index, Var
 class RedundantLoadElimination(LoopTransform):
   def transform_block(self, stmts):
     stmts = LoopTransform.transform_block(self, stmts) 
-    if self.is_simple_block(stmts):
+    if self.is_simple_block(stmts, allow_branches = False):
       reads, writes = self.collect_memory_accesses(stmts)
       safe_arrays = set([])
       for name in reads:

@@ -168,6 +168,9 @@ class Const(Expr):
 class Var(Expr):
   _members = ['name']
 
+  def node_init(self):
+    assert self.name is not None
+    
   def short_str(self):
     return self.name
 
@@ -519,6 +522,9 @@ class Cast(Expr):
 
   def __hash__(self):
     return hash(self.value)
+  
+  def __str__(self):
+    return "Cast(%s : %s)" % (self.value, self.type) 
 
 class Struct(Expr):
   """

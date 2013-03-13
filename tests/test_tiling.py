@@ -126,7 +126,7 @@ def test_2d_map():
   tile_array = (3,) * new_fn.num_tiles
   rslt = wrapper(x2_array, tile_array)
   assert testing_helpers.eq(rslt, x2_array)
-
+"""
 def test_2_maps():
   new_fn = lower_tiled(map2_fn)
   assert isinstance(new_fn, syntax.TypedFn)
@@ -136,7 +136,9 @@ def test_2_maps():
   rslt = wrapper(x2_array, tile_array)
   assert testing_helpers.eq(rslt, x2_array), \
       "Expected %s but got %s" % (x2_array, rslt)
+"""
 
+"""
 def test_1d_reduce():
   new_fn = lower_tiled(red_fn2)
   assert isinstance(new_fn, syntax.TypedFn)
@@ -144,6 +146,7 @@ def test_1d_reduce():
   wrapper = run_function.CompiledFn(llvm_fn, parakeet_fn, exec_engine)
   rslt = wrapper(x_array, (3,) * new_fn.num_tiles)
   assert testing_helpers.eq(rslt, sum(x_array))
+"""
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
