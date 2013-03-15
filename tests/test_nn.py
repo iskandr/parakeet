@@ -1,48 +1,128 @@
-# TODO: change this from Theano into Parakeet
 
-class LogisticRegression(object):
-  def __init__(self, input, n_in, n_out):
-      self.W = theano.shared(value=N.zeros((n_in, n_out), dtype=theano.config.floatX), name='W')
-      self.b = theano.shared(value=N.zeros((n_out,), dtype=theano.config.floatX), name='b')
-      self.p_y_given_x = T.nnet.softmax(theano.dot(input, self.W) + self.b)
-      self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-      self.params = [self.W, self.b]
 
-  def negative_log_likelihood(self, y):
-    return -T.mean(T.log(self.p_y_given_x)[T.arange(y.shape[0]), y])
-  
-  def errors(self, y):
-    return T.mean(T.neq(self.y_pred, y))
+import parakeet as par 
+import numpy as np
 
-class HiddenLayer(object):
-  def __init__(self, rng, input, n_in, n_out, activation=T.tanh, W=None, b=None):
-    self.input = input
-    if W is None:
-      W_values = rand_array(rng, 6.0, (n_in, n_out), theano.config.floatX)
-      W = theano.shared(value=W_values, name='W', borrow=True)
+
+class Network(object):
+  def __init__(self):
+    self.layers = []
     
-    if activation == T.nnet.sigmoid: W_values *= 4
-    if b is None:
-      b_values = N.zeros((n_out,), dtype=theano.config.floatX)
-      b = theano.shared(value=b_values, name='b', borrow=True)
+    self.start_epoch()
+    
+  def start_epoch(self):
+    self.sse = 0
+    self.n_updates = 0
+     
+  def mse(self):
+    return self.sse / self.n_updates 
+   
+  def __iadd__(self, layer):
+    self.layers += [layer]
+    return self
+    
+  def predict(self, x):
+    for layer in self.layers:
+      x = layer.fprop(x) 
+    return x
+  
+  def bprop(self, err):
+    for layer in reversed(self.layers[1:]):
+      err = layer.bprop(err)
+  
+  def update(self, x, y):
+    y_pred = self.predict(x)
+    err = y_pred - y
+    self.sse += err**2 
+    self.n_updates += 1
+    self.bprop(err)
 
-    self.W = W
-    self.b = b
-    self.output = activation(theano.dot(input, self.W) + self.b)
-    self.params = [self.W, self.b]
 
-def l1(w): return abs(w).sum()
-def l2(w): return (w ** 2).sum()
+@par.jit
+def sigmoid(x):
+  return 1.0 / (1.0 + par.exp(-x))
 
-class MLP(object):
-  def __init__(self, rng, input, n_in, n_hidden, n_out):
-    self.hidden = HiddenLayer(rng, input, n_in, n_hidden, T.tanh)
-    self.logreg = LogisticRegression(input=self.hidden.output, n_in=n_hidden, n_out=n_out)
-    layers = [self.hidden, self.logreg]
-    self.L1 = sum([l1(layer.W) for layer in layers])
-    self.L2 = sum([l2(layer.W) for layer in layers])
+@par.jit
+def d_sigmoid(x):
+  s = sigmoid(x)
+  return s * (1-s) 
 
-    self.negative_log_likelihood = self.logreg.negative_log_likelihood
-    self.errors = self.logreg.errors
-    self.params = self.hidden.params + self.logreg.params
+@par.jit
+def dot(x,y):
+  return sum(x*y)
 
+@par.jit
+def fprop_linear(x, W, b):
+  def dot_add(w_row, b_elt):
+    return sum(w_row, x) + b_elt 
+  return par.each(dot_add, W, b)
+ 
+@par.jit 
+def fprop_logistic(x, W, b):
+  return sigmoid(fprop_linear(x,W,b))
+
+@par.jit
+def bprop_logistic(x, W, b, err):
+  return W*0.001
+
+class LogisticLayer(object):
+  def __init__(self, n_in, n_out, learning_rate = 0.001):
+    self.W = np.random.randn(n_in, n_out)
+    self.bias = np.random.randn(n_out)
+    self.last_input = None
+    self.last_ouput = None 
+    self.learning_rate = learning_rate
+    
+  def fprop(self, x):
+    self.last_input = x
+    self.last_output = fprop_logistic(x, self.W, self.bias)
+    return self.last_ouput
+  
+  def bprop(self, err):
+    weighted_err = 0  
+    return weighted_err 
+    
+
+@par.jit 
+def tanh_fprop(x, w, b):
+  return par.tanh(sum(x*w) + b)
+
+def tanh_bprop(x, w, b, err):
+  return 0
+
+class TanhLayer(object):
+  def __init__(self, n, w = None, bias = None):
+    if w is None:
+      w = np.random.randn(n)
+    if bias is None:
+      bias = np.random.randn()
+    self.w = w
+    self.bias = bias
+    self.last_x = None
+    
+  def fprop(self, data):
+    self.last_data = data
+    self.last_output = tanh_fprop(data, self.w, self.bias)
+    return self.last_output
+     
+  def bprop(self, err):
+    self.last_delta = tanh_bprop(self.last_data, self.w, self.bias, err)
+    
+
+n_in = 1000 
+n_hidden = 50
+n_out = 1 
+
+mlp = Network()
+mlp += LogisticLayer(n_in, n_hidden)
+mlp += LogisticLayer(n_hidden, n_out)
+
+def test_mlp():
+  x = np.random.randn(1000)
+  y = mlp.predict(x)
+  assert len(y) == n_out
+  
+import testing_helpers
+
+if __name__ == '__main__':
+  testing_helpers.run_local_tests()

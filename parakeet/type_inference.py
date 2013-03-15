@@ -171,6 +171,7 @@ def invoke_result_type(fn, arg_types):
   return result_type
 
 def annotate_expr(expr, tenv, var_map):
+  print expr
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
 

@@ -195,7 +195,7 @@ class FormalArgs(object):
 
     def assign(i, v):
       result[i] = v
-      assert not bound[i], "%s appears twice in arguments" % self.arg_slots[i]
+      assert not bound[i], "%s appears twice in arguments" % self.positional[i]
       bound[i] = True
 
     if len(positional_values) > n:

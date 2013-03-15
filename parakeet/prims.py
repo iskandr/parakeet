@@ -191,7 +191,7 @@ multiply = Arith(np.multiply, 'Mult', '*')
 divide = Arith(np.divide, 'Div', '/')
 mod = Arith(np.mod, 'Mod', '%')
 power = Arith(np.power, 'Pow', '**')
-#negative = Arith(np.negative, 'USub', '-', None, 1, 1)
+negative = Arith(np.negative, 'USub', '-', None, 1, 1)
 
 equal = Cmp(np.equal, 'Eq', '==')
 not_equal = Cmp(np.not_equal, 'NotEq', '!=')
@@ -199,3 +199,5 @@ less = Cmp(np.less, 'Lt', '<')
 less_equal = Cmp(np.less_equal, 'LtE', '<=')
 greater = Cmp(np.greater, 'Gt', '>')
 greater_equal = Cmp(np.greater_equal, 'GtE', '>=')
+
+

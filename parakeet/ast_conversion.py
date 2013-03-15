@@ -459,7 +459,7 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.Array(self.visit_list(expr.elts))
     
   def visit_Expr(self, expr):
-    assert False, "Expression statement not supported"
+    assert False, "Expression statement not supported: %s" % ast.dump(expr)
     
   def visit_ListComp(self, expr):
     gens = expr.generators
@@ -609,7 +609,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   Helper to launch translation of a python function's AST, and then construct
   an untyped parakeet function from the arguments, refs, and translated body.
   """
-
+  
   assert len(closure_vars) == len(closure_cells)
   closure_cell_dict = dict(zip(closure_vars, closure_cells))
 
@@ -618,6 +618,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   ssa_args, assignments = translator.translate_args(function_def_ast.args)
   _, body = translator.visit_block(function_def_ast.body)
   body = assignments + body
+
   ssa_fn_name = names.fresh(function_def_ast.name)
 
   # if function was nested in parakeet, it can have references to its
