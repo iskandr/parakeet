@@ -451,8 +451,8 @@ class Fn(Expr):
   registry = {}
 
   def __str__(self):
-    return "Fn(%s)" % self.name
-    # return repr(self)
+    #  return "Fn(%s)" % self.name
+    return repr(self)
 
   def __repr__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))

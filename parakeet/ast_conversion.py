@@ -237,7 +237,6 @@ class AST_Translator(ast.NodeVisitor):
     Phi nodes make explicit the possible sources of each variable's values and
     are needed when either two branches merge or when one was optionally taken.
     """
-
     merge = {}
     for (name, ssa_name) in left_scope.iteritems():
       left = Var(ssa_name)
@@ -407,8 +406,10 @@ class AST_Translator(ast.NodeVisitor):
     except:
       attr_chain = None
     if attr_chain:
+      print "[visit_Call] attr chain exists", attr_chain
       root = attr_chain[0]
       if root not in self.scopes:
+        print "[visit_Call] root name %s not defined within parakeet" % root 
         if self.globals and root in self.globals:
           value = self.lookup_attribute_chain(attr_chain)
           if isinstance(value, macro):
@@ -423,9 +424,9 @@ class AST_Translator(ast.NodeVisitor):
         
 
     # if we didn't evaluate a Prim or macro...
-    
+    print "[visit_Call] root name %s must be inside parakeet" % fn.__dict__
     fn_val = self.visit(fn)
-    print fn, fn_val 
+    print "[visit_Call] got value", fn_val
     if starargs:
       starargs_expr = self.visit(starargs)
     else:
