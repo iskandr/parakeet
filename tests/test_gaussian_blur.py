@@ -11,7 +11,7 @@ from PIL import Image
 #  sausage = Image.open("../data/sausage.jpg")
 #except:
 #  print "Failed to load test image"
-sausage = np.random.random((3000, 3000, 3))
+sausage = np.random.random((100, 100, 3))
 
 np_sausage = np.array(sausage).astype('float64')
 height = len(np_sausage)

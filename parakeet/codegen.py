@@ -36,6 +36,7 @@ class Codegen(object):
     self.blocks.append(Comment(text))
     
   def fresh_var(self, t, prefix = "temp"):
+    assert prefix is not None
     assert t is not None, "Type required for new variable %s" % prefix
     ssa_id = names.fresh(prefix)
     self.type_env[ssa_id] = t

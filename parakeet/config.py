@@ -87,14 +87,14 @@ llvm_optimize = True
 llvm_num_passes = 4
 
 # run verifier over generated LLVM code?
-llvm_verify = False
+llvm_verify = True
 
 ######################################
 #         RUNTIME OPTIONS            #
 ######################################
 
 # Run the adverbs called from Python in parallel
-call_from_python_in_parallel = True
+call_from_python_in_parallel = False
 
 # Tile adverbs when they're run in parallel
 opt_tile = False

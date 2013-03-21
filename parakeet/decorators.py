@@ -1,7 +1,9 @@
 import names
+import run_function
 import syntax
 
 from args import FormalArgs
+
 
 class macro(object):
   def __init__(self, f, static_names = set([]), call_from_python = None):
@@ -96,3 +98,11 @@ class staged_macro(object):
   def __call__(self, fn):
     return macro(fn, self.static_names,
                  call_from_python = self.call_from_python)
+    
+class jit:
+  def __init__(self, f):
+    self.f = f
+
+  def __call__(self, *args, **kwargs):
+    return run_function.run(self.f, *args, **kwargs)
+

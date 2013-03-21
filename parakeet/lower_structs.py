@@ -34,6 +34,7 @@ class LowerStructs(Transform):
       return syntax.Assign(stmt.lhs, self.transform_expr(rhs))
 
   def transform_Closure(self, expr):
+    _ = self.transform_expr(expr.fn)
     closure_args = self.transform_expr_list(expr.args)
     closure_id = closure_type.id_of_closure_type(expr.type)
     closure_id_node = syntax.Const(closure_id, type = core_types.Int64)

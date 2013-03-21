@@ -171,6 +171,7 @@ def invoke_result_type(fn, arg_types):
   return result_type
 
 def annotate_expr(expr, tenv, var_map):
+  print expr
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
 
@@ -220,6 +221,7 @@ def annotate_expr(expr, tenv, var_map):
     return typed_ast.Closure(expr, [], type = t)
 
   def expr_Call():
+
     closure = annotate_child(expr.fn)
     args = annotate_args(expr.args)
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
@@ -707,7 +709,7 @@ def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
     acc_type = elt_type
   else:
     acc_type = elt_type.combine(init_type)
-
+  
   typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
   new_acc_type = typed_combine_fn.return_type
   if new_acc_type != acc_type:

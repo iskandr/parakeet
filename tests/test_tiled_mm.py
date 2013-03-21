@@ -5,9 +5,9 @@ import testing_helpers
 
 from parakeet import allpairs, runtime
 
-x = 3000
-y = 3000
-k = 3000
+x = 300
+y = 300
+k = 300
 
 x2_array = np.arange(x*k, dtype = np.float).reshape(x,k) / (x*k)
 

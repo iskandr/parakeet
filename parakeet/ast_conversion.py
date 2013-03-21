@@ -1,14 +1,14 @@
 import ast
 import inspect
-
+import types
 
 import config
 import names
 import nested_blocks 
+import prims
 import scoped_dict
 import syntax
 import syntax_helpers 
-import prims
 
 from adverbs import Map
 from args import FormalArgs, ActualArgs
@@ -16,7 +16,7 @@ from collections import OrderedDict
 from common import dispatch
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
-from macro import macro
+from decorators import macro, jit 
 from names import NameNotFound
 from prims import Prim, prim_wrapper
 from python_ref import GlobalRef, ClosureCellRef
@@ -62,15 +62,7 @@ class AST_Translator(ast.NodeVisitor):
     
     self.original_outer_names = []
     self.localized_outer_names = []
-    
     self.push()
-     
-    
-     
-    #self.env = \
-    #    ScopedEnv(outer_env=outer_env,
-    #              closure_cell_dict=closure_cell_dict,
-    #              globals_dict=globals_dict)
 
   def push(self, scope = None, block = None):
     if scope is None:
@@ -79,6 +71,7 @@ class AST_Translator(ast.NodeVisitor):
       block = []
     self.scopes.push(scope)
     self.blocks.push(block)
+
 
   def pop(self):
     scope = self.scopes.pop()
@@ -105,25 +98,37 @@ class AST_Translator(ast.NodeVisitor):
   def current_scope(self):
     return self.scopes.top()
 
-  def get_global(self, key):
-    if isinstance(key, str):
-      return self.globals_dict[key]
-     
-    assert isinstance(key, tuple)  
-    value = self.globals_dict[key[0]]
-    for elt in key[1:]:
-      value = getattr(value, elt)
-    return value 
+  def lookup_global(self, key):
+    if self.globals:
+      if isinstance(key, str):
+        return self.globals[key]
+      else:
+        assert isinstance(key, (list, tuple))  
+        value = self.globals_dict[key[0]]
+        for elt in key[1:]:
+          value = getattr(value, elt)
+        return value 
+    else:
+      return self.parent.lookup_global(key)
     
   def is_global(self, key):
-    try:
-      self.get_global(key)
-      return True
-    except:
-      return False
+
+    if isinstance(key, str) and key in self.scopes:
+      return False 
+    if isinstance(key, (list,tuple)) and key[0] in self.scopes:
+      return False 
     
-    
+    if self.globals:
+      if isinstance(key, str):
+        return key in self.globals 
+      else:
+        assert isinstance(key, (list, tuple))
+        return key[0] in self.globals 
+    else:
+      return self.parent.is_global(key)
+  
   def lookup(self, name):
+
     if name in reserved_names:
       return reserved_names[name]
     elif name in self.scopes:
@@ -137,6 +142,7 @@ class AST_Translator(ast.NodeVisitor):
       self.original_outer_names.append(name)
       self.localized_outer_names.append(local_name)
       return Var(local_name)
+
     elif self.closure_cell_dict and name in self.closure_cell_dict:
       ref = ClosureCellRef(self.closure_cell_dict[name], name)
     elif self.is_global(name):
@@ -343,7 +349,7 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(expr, ast.Name):
       return [expr.id]
     else:
-      left = self.attribute_chain(expr.value)
+      left = self.build_attribute_chain(expr.value)
       left.append (expr.attr)
       return left
 
@@ -364,8 +370,13 @@ class AST_Translator(ast.NodeVisitor):
       import adverb_wrapper
       sum_wrapper = \
           adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
-      args = ActualArgs(positional = [prims.add] + list(positional))
+      args = ActualArgs(positional = [prims.add] + list(positional), 
+                        keywords = {'init': zero_i64})
       return syntax.Call(sum_wrapper, args)
+    elif value == abs:
+      assert len(keywords_dict) == 0
+      assert len(positional) == 1
+      return syntax.PrimCall(prims.abs, positional)
     elif value == map:
       assert len(keywords_dict) == 0
       assert len(positional) > 1
@@ -391,6 +402,11 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Slice(*positional)
 
   def visit_Call(self, expr):
+    """
+    TODO: 
+    The logic here is broken and haphazard, eventually try to handle nested
+    scopes correctly, along with globals, cell refs, etc..
+    """
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
     assert kwargs is None, "Dictionary of keyword args not supported"
@@ -401,44 +417,49 @@ class AST_Translator(ast.NodeVisitor):
     for kwd in keywords_list:
       keywords_dict[kwd.arg] = self.visit(kwd.value)
 
-    try:
-      attr_chain = self.build_attribute_chain(fn)
-    except:
-      attr_chain = None
-    if attr_chain:
-      print "[visit_Call] attr chain exists", attr_chain
-      root = attr_chain[0]
-      if root not in self.scopes:
-        print "[visit_Call] root name %s not defined within parakeet" % root 
-        if self.globals and root in self.globals:
-          value = self.lookup_attribute_chain(attr_chain)
-          if isinstance(value, macro):
-            return value.transform(positional, keywords_dict)
-          elif isinstance(value, prims.Prim):
-            return syntax.PrimCall(value, args)
-          else:
-            assert hasattr(value, '__call__')
-        elif len(attr_chain) == 1 and root in __builtins__:
-          value = __builtins__[root]
-          return self.translate_builtin(value, positional, keywords_dict)
-        
-
-    # if we didn't evaluate a Prim or macro...
-    print "[visit_Call] root name %s must be inside parakeet" % fn.__dict__
-    fn_val = self.visit(fn)
-    print "[visit_Call] got value", fn_val
     if starargs:
       starargs_expr = self.visit(starargs)
     else:
       starargs_expr = None
-
+      
+    attr_chain = self.build_attribute_chain(fn)
+    root = attr_chain[0]
+    if root in self.scopes:
+      assert len(attr_chain) == 1
+      fn_node = Var(self.scopes[root])
+      actuals = ActualArgs(positional, keywords_dict, starargs_expr)
+      return syntax.Call(fn_node, actuals)
+    else:
+      if self.is_global(attr_chain):
+        value = self.lookup_global(attr_chain)
+        # value = self.lookup_attribute_chain(attr_chain)
+        if isinstance(value, macro):
+          return value.transform(positional, keywords_dict)
+        elif isinstance(value, prims.Prim):
+          return syntax.PrimCall(value, positional)
+        elif hasattr(value, '__call__'):
+          fn_node = translate_function_value(value)
+          
+          actuals = ActualArgs(positional, keywords_dict, starargs_expr)
+          return syntax.Call(fn_node, actuals)
+        else:
+          assert False, "depends on global %s" % attr_chain 
+           
+      elif len(attr_chain) == 1 and root in __builtins__:
+        value = __builtins__[root]
+        return self.translate_builtin(value, positional, keywords_dict)
+  # assume that function must be locally defined 
+    assert isinstance(expr, ast.Name)
+    fn_node = self.lookup(expr.id) 
     actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-    return syntax.Call(fn_val, actuals)
-
+    return syntax.Call(fn_node, actuals)
+    
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
     
-  
+  def visit_Expr(self, expr):
+    assert False, "Expression statement not supported: %s" % ast.dump(expr)
+    
   def visit_ListComp(self, expr):
     gens = expr.generators
     assert len(gens) == 1
@@ -447,6 +468,7 @@ class AST_Translator(ast.NodeVisitor):
     assert target.__class__ is ast.Name
     # build a lambda as a Python ast representing 
     # what we do to each element 
+
     py_fn = ast.FunctionDef(name = "comprehension_map", 
                                 args = ast.arguments(
                                   args = [target], 
@@ -586,7 +608,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   Helper to launch translation of a python function's AST, and then construct
   an untyped parakeet function from the arguments, refs, and translated body.
   """
-
+  
   assert len(closure_vars) == len(closure_cells)
   closure_cell_dict = dict(zip(closure_vars, closure_cells))
 
@@ -595,6 +617,7 @@ def translate_function_ast(function_def_ast, globals_dict = None,
   ssa_args, assignments = translator.translate_args(function_def_ast.args)
   _, body = translator.visit_block(function_def_ast.body)
   body = assignments + body
+
   ssa_fn_name = names.fresh(function_def_ast.name)
 
   # if function was nested in parakeet, it can have references to its
@@ -643,10 +666,18 @@ def translate_function_source(source, globals_dict, closure_vars = [],
 
 import adverb_registry
 def translate_function_value(fn):
+  # if the function has been wrapped with a decorator, unwrap it 
+  while isinstance(fn, jit):
+    fn = fn.f 
+  
+  if fn in prims.prim_lookup_by_value:
+    fn = prims.prim_lookup_by_value[fn]
+    
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
   elif isinstance(fn, Prim):
     return prim_wrapper(fn)
+    
 
   # TODO: Right now we can only deal with adverbs over a fixed axis and fixed
   # number of args due to lack of support for a few language constructs:
@@ -666,14 +697,15 @@ def translate_function_value(fn):
     source = inspect.getsource(fn)
 
     globals_dict = fn.func_globals
+
     free_vars = fn.func_code.co_freevars
     closure_cells = fn.func_closure
     if closure_cells is None:
       closure_cells = ()
 
-    fundef = translate_function_source(source, globals_dict, free_vars,
-                                       closure_cells)
-    print repr(fundef)
+    #print "[translate_function_value] Translating: ", source 
+    fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
+    #print "[translate_function_value] Produced:", repr(fundef)
     register_python_fn(fn, fundef)
 
     if config.print_untyped_function:

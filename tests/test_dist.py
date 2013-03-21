@@ -14,8 +14,8 @@ def apd(X,Y):
 
 
 def test_dists():
-  m = 500 
-  n = 200
+  m = 50 
+  n = 20
   d = 10
   X = np.random.randn(m,d)
   Y = np.random.randn(n,d)

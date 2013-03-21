@@ -150,7 +150,8 @@ class Simplify(Transform):
         name = expr.name
       else:
         break
-    if expr.__class__ is Const:
+    c = expr.__class__ 
+    if c is Var or c is Const:
       return expr
     else:
       return prev_expr
@@ -343,6 +344,8 @@ class Simplify(Transform):
     particular block, then use this function. (this function also modifies the
     bindings dictionary)
     """
+    if name is None:
+      name = "temp"
     var = self.fresh_var(expr.type, name)
     block.append(Assign(var, expr))
     self.bindings[var.name] = expr

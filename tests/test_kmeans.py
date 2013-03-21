@@ -100,11 +100,11 @@ def test_kmeans():
       "Expected %s but got %s" % (python_C, parakeet_C)
 
 def test_kmeans_perf():
-  n = 1060
-  d = 200
+  n = 160
+  d = 20
   X = np.random.randn(n*d).reshape(n,d)
-  k = 20
-  niters = 20
+  k = 5 
+  niters = 2
   assignments = np.random.randint(0, k, size = n)
 #
 #  start = time.time()

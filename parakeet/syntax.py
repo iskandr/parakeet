@@ -104,7 +104,8 @@ class ForLoop(Stmt):
   """
 
   _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
-
+  
+    
   def __str__(self):
     s = "for %s in range(%s, %s, %s):" % \
       (self.var,
@@ -120,6 +121,7 @@ class ForLoop(Stmt):
 class Expr(Node):
   _members = ['type']
 
+  
   def children(self):
     for v in self.itervalues():
       if v and isinstance(v, Expr):
@@ -166,6 +168,9 @@ class Const(Expr):
 class Var(Expr):
   _members = ['name']
 
+  def node_init(self):
+    assert self.name is not None
+    
   def short_str(self):
     return self.name
 
@@ -451,7 +456,6 @@ class Fn(Expr):
   registry = {}
 
   def __str__(self):
-    #  return "Fn(%s)" % self.name
     return repr(self)
 
   def __repr__(self):
@@ -491,7 +495,7 @@ class TupleProj(Expr):
   _members = ['tuple', 'index']
 
   def __str__(self):
-    return "%s[%d]" % (self.tuple, self.index)
+    return "TupleProj(%s, %d)" % (self.tuple, self.index)
 
   def children(self):
     return (self.tuple,)
@@ -517,6 +521,9 @@ class Cast(Expr):
 
   def __hash__(self):
     return hash(self.value)
+  
+  def __str__(self):
+    return "Cast(%s : %s)" % (self.value, self.type) 
 
 class Struct(Expr):
   """
