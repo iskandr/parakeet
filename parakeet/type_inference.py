@@ -81,6 +81,7 @@ def make_typed_closure(untyped_closure, typed_fn):
     return typed_ast.Closure(typed_fn, closure_args, t)
 
 def linearize_arg_types(fn, args):
+
   """
   Given a function object which might be one of:
     (1) a closure type
@@ -542,6 +543,9 @@ def annotate_block(stmts, tenv, var_map):
   return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
 def infer_types(untyped_fn, types):
+  
+  print "infer fn", untyped_fn
+  print "infer args", types
   """
   Given an untyped function and input types, propagate the types through the
   body, annotating the AST with type annotations.

@@ -25,7 +25,9 @@ class macro(object):
       local_name = names.fresh("input_%d" % i)
       args.add_positional(local_name)
       pos_vars.append(syntax.Var(local_name))
+  
 
+    
     for visible_name in dynamic_keywords:
       local_name = names.fresh(visible_name)
       args.add_positional(local_name, visible_name)
@@ -61,13 +63,15 @@ class macro(object):
 
       static_pairs = tuple(static_pairs)
       key = (n_pos, static_pairs, dynamic_keywords)
+
       if key in self.wrappers:
         untyped = self.wrappers[key]
       else:
         untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
         self.wrappers[key] = untyped
       import run_function
-      return run_function.run(untyped, *args, **kwargs)
+      dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
+      return run_function.run(untyped, *args, **dynamic_kwargs)
     else:
       return self.call_from_python(*args, **kwargs)
 
@@ -91,6 +95,7 @@ class macro(object):
 class staged_macro(object):
   def __init__(self, *static_names, **kwargs):
     self.static_names = tuple(static_names)
+    print "staged_macro", static_names
     self.call_from_python = kwargs.get('call_from_python')
     assert kwargs.keys() in [[], ['call_from_python']], \
         "Unknown keywords: %s" % kwargs.keys()
