@@ -1,7 +1,7 @@
 import syntax
 
 class Conv(syntax.Expr):
-  _members = ['fn', 'x', 'border_value', 'border_fn', 'window_shape']
+  _members = ['fn', 'x', 'border_value', 'border_fn', 'window_shape', 'ravel']
   def __repr__(self):
     return "Conv(fn = %s, x = %s, border_value=%s, border_fn = %s, window_shape=%s)" % \
       (self.fn, self.x, self.border_value, self.border_fn, self.window_shape)
@@ -25,14 +25,11 @@ class Adverb(syntax.Expr):
       return str(self.args)
 
   def __repr__(self):
-    s = "%s(axis = %s, args = (%s), type=%s, fn = %s" % \
+    s = "%s(axis = %s, args = (%s), type=%s, fn = %s)" % \
           (self.node_type(), self.axis,
            self.args_to_str(),
            self.type,
            self.fn_to_str(self.fn),)
-    if self.out:
-      s += ", out=%s" % self.out
-    s += ")"
     return s
 
   def __str__(self):
@@ -55,17 +52,13 @@ class Accumulative(Adverb):
   _members = ['combine', 'init']
 
   def __repr__(self):
-    s = ("%s(axis = %s, args = (%s), type = %s, init = %s, map_fn = %s, " + \
-         "combine = %s") % \
+    s = ("%s(axis = %s, args = (%s), type = %s, init = %s, map_fn = %s, combine = %s)") % \
         (self.node_type(), self.axis,
          self.args_to_str(),
          self.type,
          self.init,
          self.fn_to_str(self.fn),
          self.fn_to_str(self.combine))
-    if self.out:
-      s += ", out = %s" % self.out
-    s += ")"
     return s
 
   def node_init(self):
@@ -85,14 +78,11 @@ class Scan(Accumulative):
            self.args_to_str(),
            self.type
           )
-    s += "init = %s, map_fn = %s, combine = %s, emit = %s" % \
+    s += "init = %s, map_fn = %s, combine = %s, emit = %s)" % \
          (self.init,
           self.fn_to_str(self.fn),
           self.fn_to_str(self.combine),
           self.fn_to_str(self.emit))
-    if self.out:
-      s += ", out = %s" % self.out
-    s += ")"
     return s
 
 
@@ -100,14 +90,11 @@ class Tiled(object):
   _members = ['axes', 'fixed_tile_size']
 
   def __repr__(self):
-    s = "%s(axes = %s, args = (%s), type=%s, fn = %s" % \
+    s = "%s(axes = %s, args = (%s), type=%s, fn = %s)" % \
           (self.node_type(), self.axes,
            self.args_to_str(),
            self.type,
            self.fn_to_str(self.fn),)
-    if self.out:
-      s += ", out=%s" % self.out
-    s += ")"
     return s
 
 class TiledMap(Tiled, Map):
@@ -118,8 +105,7 @@ class TiledAllPairs(Tiled, AllPairs):
 
 class TiledReduce(Tiled, Reduce):
   def __repr__(self):
-    s = ("%s(axes = %s, args = {%s}, type = %s, init = %s, map_fn = %s, " + \
-         "combine = %s") % \
+    s = ("%s(axes = %s, args = {%s}, type = %s, init = %s, map_fn = %s, combine = %s)") % \
         (self.node_type(), self.axes,
          self.args_to_str(),
          self.type,
@@ -127,9 +113,6 @@ class TiledReduce(Tiled, Reduce):
          self.fn_to_str(self.fn),
          self.fn_to_str(self.combine),
         )
-    if self.out:
-      s += ", out = %s" % self.out
-    s += ")"
     return s
 
 class TiledScan(Tiled, Scan):
@@ -139,12 +122,9 @@ class TiledScan(Tiled, Scan):
            self.args_to_str(),
            self.type
           )
-    s += "init = %s, map_fn = %s, combine = %s, emit = %s" % \
+    s += "init = %s, map_fn = %s, combine = %s, emit = %s)" % \
          (self.init,
           self.fn_to_str(self.fn),
           self.fn_to_str(self.combine),
           self.fn_to_str(self.emit))
-    if self.out:
-      s += ", out = %s" % self.out
-    s += ")"
     return s

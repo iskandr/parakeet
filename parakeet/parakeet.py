@@ -1,7 +1,7 @@
 import config
 import lib_simple
 
-from adverb_api import allpairs, each, reduce, scan
+from adverb_api import allpairs, each, reduce, scan, conv
 from lib_simple import *
 from prims import *
 from run_function import run, specialize_and_compile
@@ -12,12 +12,6 @@ def typed_repr(fn, args):
   _, typed, _, _ = specialize_and_compile(fn, args)
   return typed
 
-# TODO: Not sure using builtin names is a good idea.
-#def par_sum(x):
-"""
-  def sum(x):
-  return reduce(add, x[1:], init=x[0])
-"""
 def sum(x):
   return reduce(add, x, init = 0)
 
@@ -43,6 +37,9 @@ def diff(x, zero_fill=True):
 
   return x[1:] - x[:-1]
 
+@jit
+def dot(x,y):
+  return sum(x*y)
 
 def clear_specializations():
   import closure_type

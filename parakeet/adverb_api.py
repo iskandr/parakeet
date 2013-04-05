@@ -467,15 +467,16 @@ def scan(f, x, **kwargs):
   return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x],
                       init = init, axis = axis)
 
-@staged_macro("size")
-def conv(f, x, **kwargs)
+@staged_macro("shape")
+def conv(f, x, **kwargs):
   border_fn = kwargs.get('border_fn')
   border_value = kwargs.get('border_value')
-  size = kwargs.get('size')
-  assert size is not None
-  print size
-  assert border_fn is not None or border_value is not None
+  shape = kwargs.get('shape')
+  ravel = kwargs.get('ravel', False)
+  assert shape is not None
+  print shape
   return adverbs.Conv(fn = f, 
                       border_fn = border_fn, 
                       border_value = border_value, 
-                      size = size)
+                      window_shape = shape
+                     )

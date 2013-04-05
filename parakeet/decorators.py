@@ -1,7 +1,7 @@
 import names
 import run_function
 import syntax
-
+import syntax_helpers
 from args import FormalArgs
 
 
@@ -36,10 +36,10 @@ class macro(object):
         assert isinstance(value, syntax.Const)
         keyword_vars[static_name] = value
       elif value is not None:
-        assert type(value) in (int, long, float, bool), \
+        assert syntax_helpers.is_python_constant(value), \
             "Unexpected type for static/staged value: %s : %s" % \
             (value, type(value))
-        keyword_vars[static_name] = syntax.Const(value)
+        keyword_vars[static_name] = syntax_helpers.const(value)
 
     result_expr = self.f(*pos_vars, **keyword_vars)
     body = [syntax.Return(result_expr)]

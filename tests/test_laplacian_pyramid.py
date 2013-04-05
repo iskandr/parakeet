@@ -70,12 +70,12 @@ def downsample(x):
   print xb.shape
   print result.shape
   return result
-
+"""
 def test():
   x = pylab.imread('../data/bv.tiff')
   if len(x.shape) > 2:
     x = (x[:, :, 0] + x[:, :, 1] + x[:, :, 2]) / 3 
-  
+  x = x[:100, :100] 
   x = x.astype('float') / x.max()
   print 'orig', x.min(), x.max()
   pylab.imshow(x, cmap='gray')
@@ -95,5 +95,5 @@ def test():
   pylab.imshow(x_small2, cmap='gray')
   pylab.title('smaller')
   pylab.show()
-  
+"""
   

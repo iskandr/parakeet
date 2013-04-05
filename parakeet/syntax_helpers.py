@@ -94,6 +94,8 @@ def const(x):
     return const_scalar(x)
   elif isinstance(x, tuple):
     return const_tuple(*map(const, x))
+  elif isinstance(x, syntax.Expr):
+    return x
   else:
     assert x is None, \
         "Can't convert Python value %s into a Parakeet constant" % x
