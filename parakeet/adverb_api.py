@@ -476,6 +476,7 @@ def conv(f, x, **kwargs):
   assert shape is not None
   print shape
   return adverbs.Conv(fn = f, 
+                      x = x, 
                       border_fn = border_fn, 
                       border_value = border_value, 
                       window_shape = shape
