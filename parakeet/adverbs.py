@@ -1,7 +1,16 @@
 import syntax
 
+class Conv(syntax.Expr):
+  _members = ['fn', 'x', 'border_value', 'border_fn', 'window_shape']
+  def __repr__(self):
+    return "Conv(fn = %s, x = %s, border_value=%s, border_fn = %s, window_shape=%s)" % \
+      (self.fn, self.x, self.border_value, self.border_fn, self.window_shape)
+
+  def __str__(self):
+      return repr(self)
+
 class Adverb(syntax.Expr):
-  _members = ['fn', 'args', 'axis', 'out']
+  _members = ['fn', 'args', 'axis']
 
   def fn_to_str(self, fn):
 #    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
@@ -85,6 +94,7 @@ class Scan(Accumulative):
       s += ", out = %s" % self.out
     s += ")"
     return s
+
 
 class Tiled(object):
   _members = ['axes', 'fixed_tile_size']

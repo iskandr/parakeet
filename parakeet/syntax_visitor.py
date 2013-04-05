@@ -61,15 +61,11 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.fn)
     for arg in expr.args:
       self.visit_expr(arg)
-    if expr.out:
-      self.visit_expr(expr.out)
 
   def visit_AllPairs(self, expr):
     self.visit_expr(expr.fn)
     for arg in expr.args:
       self.visit_expr(arg)
-    if expr.out:
-      self.visit_expr(expr.out)
 
   def visit_Reduce(self, expr):
     self.visit_expr(expr.fn)
@@ -77,8 +73,6 @@ class SyntaxVisitor(object):
       self.visit_expr(expr.init)
     for arg in expr.args:
       self.visit_expr(arg)
-    if expr.out:
-      self.visit_expr(expr.out)
 
   def visit_Scan(self, expr):
     self.visit_expr(expr.fn)
@@ -86,8 +80,6 @@ class SyntaxVisitor(object):
       self.visit_expr(expr.init)
     for arg in expr.args:
       self.visit_expr(arg)
-    if expr.out:
-      self.visit_expr(expr.out)
 
   def visit_TupleProj(self, expr):
     return self.visit_expr(expr.tuple)
