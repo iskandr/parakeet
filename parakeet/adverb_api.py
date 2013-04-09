@@ -469,15 +469,28 @@ def scan(f, x, **kwargs):
 
 @staged_macro("shape")
 def conv(f, x, **kwargs):
-  border_fn = kwargs.get('border_fn')
-  border_value = kwargs.get('border_value')
-  shape = kwargs.get('shape')
+  shape = kwargs['shape']
   ravel = kwargs.get('ravel', False)
-  assert shape is not None
-  print shape
-  return adverbs.Conv(fn = f, 
-                      x = x, 
-                      border_fn = border_fn, 
-                      border_value = border_value, 
-                      window_shape = shape
-                     )
+  return adverbs.Conv(fn = f,  x = x, window_shape = shape,  ravel = ravel)
+
+@staged_macro("shape")
+def conv_padding(f, x, **kwargs):
+  shape = kwargs['shape']
+  ravel = kwargs.get('ravel', False)
+  fill_value = kwargs['fill_value']
+  return adverbs.ConvPadding 
+
+@staged_macro("shape")
+def conv_border_fn(f, x, **kwargs):
+  shape = kwargs['shape']
+  ravel = kwargs.get('ravel', False)
+  border_fn = kwargs['border_fn']
+  return adverbs.ConvBorderFn
+
+@staged_macro("shape")
+def conv_border_value(f, x, **kwargs):
+  shape = kwargs['shape']
+  ravel = kwargs.get('ravel', False)
+  border_value = kwargs['border_value']
+  return adverbs.ConvBorderValue
+

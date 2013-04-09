@@ -1,13 +1,23 @@
 import syntax
 
 class Conv(syntax.Expr):
-  _members = ['fn', 'x', 'border_value', 'border_fn', 'window_shape', 'ravel']
+  _members = ['fn', 'x', 'window_shape', 'ravel']
+  
   def __repr__(self):
-    return "Conv(fn = %s, x = %s, border_value=%s, border_fn = %s, window_shape=%s)" % \
-      (self.fn, self.x, self.border_value, self.border_fn, self.window_shape)
-
+    return "Conv(fn = %s, x = %s, window_shape=%s, ravel=%s)" % \
+      (self.fn, self.x, self.window_shape, self.ravel)
+      
   def __str__(self):
       return repr(self)
+
+class ConvBorderFn(Conv):
+  _members = ['border_fn']
+  
+class ConvBorderValue(Conv):
+  _members = ['border_value']
+  
+class ConvPadding(Conv):
+  _members = ['fill_value']
 
 class Adverb(syntax.Expr):
   _members = ['fn', 'args', 'axis']
