@@ -408,12 +408,38 @@ def annotate_expr(expr, tenv, var_map):
                             args = new_args,
                             axis = axis,
                             type = result_type)
-
+  
+  def expr_Conv():
+    closure = annotate_child(expr.fn)
+    c = adverbs.Conv()
+    border_value = None
+    if expr.border_value:
+      border_value = annotate_child(expr.border_value)
+    shape = expr.window_shape
+    ravel = expr.ravel
+    
+    border_closure = None
+    if expr.border_closure:
+      border_closure = annotate_child(expr.border_fn)
+    x = annotate_child(expr.x)
+    xt = get_type(x)
+    result_type, typed_fn, typed_border_fn = specialize_Conv(closure.type, xt, )
+    # result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
+    # axis = unwrap_constant(expr.axis)
+    return adverbs.Conv(make_typed_closure(closure, , typed_fn))
+    return adverbs.AllPairs(make_typed_closure(closure, typed_fn),
+                            args = new_args,
+                            axis = axis,
+                            type = result_type)
+    
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
   assert isinstance(result.type, Type), \
       "Unexpected type annotation on %s: %s" % (expr, result.type)
   return result
+  
+  
+  
 
 def annotate_stmt(stmt, tenv, var_map ):
   def infer_phi(result_var, val):
