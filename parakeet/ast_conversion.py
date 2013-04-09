@@ -2,7 +2,10 @@ import ast
 import inspect
 import types
 
+import numpy as np
+
 import config
+import core_types 
 import names
 import nested_blocks 
 import prims
@@ -366,19 +369,30 @@ class AST_Translator(ast.NodeVisitor):
     return value
 
   def translate_builtin(self, value, positional, keywords_dict):
-    if value == sum:
+    def mk_reduction(fn, positional, init = None):
       import adverb_wrapper
-      sum_wrapper = \
-          adverb_wrapper.untyped_reduce_wrapper(None, prims.add)
-      args = ActualArgs(positional = [prims.add] + list(positional), 
-                        keywords = {'init': zero_i64})
-      return syntax.Call(sum_wrapper, args)
+      wrapper = adverb_wrapper.untyped_reduce_wrapper(None, fn)
+      if init:
+        keywords = keywords = {'init': init}
+      else:
+        keywords = {}
+      positional = [fn] + list(positional)
+      args = ActualArgs(positional = positional, keywords = keywords) 
+      return syntax.Call(wrapper, args)
+    if value == sum:
+      return mk_reduction(prims.add, positional, zero_i64)
     elif value == max:
       if len(positional) == 1:
-        return syntax.PrimCall(prims.max, positional)
+        return mk_reduction(prims.maximum, positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.maximum, positional)
+    elif value == min:
+      if len(positional) == 1:
+        return mk_reduction(prims.minimum, positional)
+      else:
+        assert len(positional) == 2
+        return syntax.PrimCall(prims.minimum, positional)
     elif value == abs:
       assert len(keywords_dict) == 0
       assert len(positional) == 1
@@ -387,7 +401,7 @@ class AST_Translator(ast.NodeVisitor):
       assert len(keywords_dict) == 0
       assert len(positional) > 1
       return Map(fn = positional[0], args = positional[1:], axis = 0)
-    elif value == range:
+    elif value == range or value == np.arange:
       assert len(keywords_dict) == 0
       n_args = len(positional)
       
@@ -402,12 +416,17 @@ class AST_Translator(ast.NodeVisitor):
       assert len(keywords_dict) == 0
       assert len(positional) == 1
       return syntax.Len(positional[0])
+    elif value == float:
+      return syntax.Cast(value = positional[0], type = core_types.Float64)
+    elif value == int:
+      return syntax.Cast(value = positional[0], type = core_types.Int64)
     else:
       assert value == slice, "Builtin not implemented: %s" % value 
       assert len(keywords_dict) == 0
       return syntax.Slice(*positional)
 
   def visit_Call(self, expr):
+    print ast.dump(expr)
     """
     TODO: 
     The logic here is broken and haphazard, eventually try to handle nested
@@ -443,7 +462,13 @@ class AST_Translator(ast.NodeVisitor):
           return value.transform(positional, keywords_dict)
         elif isinstance(value, prims.Prim):
           return syntax.PrimCall(value, positional)
+        elif isinstance(value, types.BuiltinFunctionType):
+          return self.translate_builtin(value, positional, keywords_dict)
+        
         elif hasattr(value, '__call__'):
+          # if it's already been wrapped, extract the underlying function value
+          if isinstance(value, jit):
+            value = value.f
           fn_node = translate_function_value(value)
           
           actuals = ActualArgs(positional, keywords_dict, starargs_expr)
@@ -455,10 +480,11 @@ class AST_Translator(ast.NodeVisitor):
         value = __builtins__[root]
         return self.translate_builtin(value, positional, keywords_dict)
   # assume that function must be locally defined 
-    assert isinstance(expr, ast.Name)
-    fn_node = self.lookup(expr.id) 
+    assert isinstance(expr.func, ast.Name)
+    fn_node = self.lookup(expr.func.id) 
     actuals = ActualArgs(positional, keywords_dict, starargs_expr)
     return syntax.Call(fn_node, actuals)
+    
     
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
