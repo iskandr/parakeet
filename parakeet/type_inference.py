@@ -426,11 +426,8 @@ def annotate_expr(expr, tenv, var_map):
     result_type, typed_fn, typed_border_fn = specialize_Conv(closure.type, xt, )
     # result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
     # axis = unwrap_constant(expr.axis)
-    return adverbs.Conv(make_typed_closure(closure, , typed_fn))
-    return adverbs.AllPairs(make_typed_closure(closure, typed_fn),
-                            args = new_args,
-                            axis = axis,
-                            type = result_type)
+    return adverbs.Conv(make_typed_closure(closure, typed_fn), x)
+
     
   result = dispatch(expr, prefix = "expr")
   assert result.type, "Missing type on %s" % result
