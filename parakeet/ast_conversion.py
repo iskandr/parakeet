@@ -373,6 +373,12 @@ class AST_Translator(ast.NodeVisitor):
       args = ActualArgs(positional = [prims.add] + list(positional), 
                         keywords = {'init': zero_i64})
       return syntax.Call(sum_wrapper, args)
+    elif value == max:
+      if len(positional) == 1:
+        return syntax.PrimCall(prims.max, positional)
+      else:
+        assert len(positional) == 2
+        return syntax.PrimCall(prims.maximum, positional)
     elif value == abs:
       assert len(keywords_dict) == 0
       assert len(positional) == 1

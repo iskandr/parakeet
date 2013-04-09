@@ -192,6 +192,11 @@ divide = Arith(np.divide, 'Div', '/')
 mod = Arith(np.mod, 'Mod', '%')
 power = Arith(np.power, 'Pow', '**')
 negative = Arith(np.negative, 'USub', '-', None, 1, 1)
+maximum = Arith(np.maximum, None, None, 'maximum', 2, 1)
+max = Arith(np.max, None, None, 'max', 1, 1)
+
+minimum = Arith(np.minimum, None, None, 'minimum', 2, 1)
+min = Arith(np.min, None, None, 'min', 1, 1)
 
 equal = Cmp(np.equal, 'Eq', '==')
 not_equal = Cmp(np.not_equal, 'NotEq', '!=')

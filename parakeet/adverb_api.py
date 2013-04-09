@@ -467,6 +467,7 @@ def scan(f, x, **kwargs):
   return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x],
                       init = init, axis = axis)
 
+
 @staged_macro("shape")
 def conv(f, x, **kwargs):
   shape = kwargs['shape']
@@ -493,4 +494,3 @@ def conv_border_value(f, x, **kwargs):
   ravel = kwargs.get('ravel', False)
   border_value = kwargs['border_value']
   return adverbs.ConvBorderValue
-

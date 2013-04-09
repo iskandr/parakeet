@@ -95,7 +95,7 @@ class macro(object):
 class staged_macro(object):
   def __init__(self, *static_names, **kwargs):
     self.static_names = tuple(static_names)
-    print "staged_macro", static_names
+
     self.call_from_python = kwargs.get('call_from_python')
     assert kwargs.keys() in [[], ['call_from_python']], \
         "Unknown keywords: %s" % kwargs.keys()
