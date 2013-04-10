@@ -185,6 +185,7 @@ class Compiler(object):
       return builder.neg(x)
     else:
       return builder.fsub(zero(x.type), x, "neg")
+    
   def prim(self, prim, t, llvm_args, builder, result_name = None):
     if result_name is None:
       result_name = prim.name + "_result"
@@ -223,6 +224,7 @@ class Compiler(object):
       else:
         assert prim == prims.logical_or
         return builder.or_(name = result_name, *llvm_args)
+      
     elif prim == prims.abs:
       x = llvm_args[0]
       bit = self.cmp(prims.greater_equal, t,  x, zero(x.type), builder, "gt_zero")

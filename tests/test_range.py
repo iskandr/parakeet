@@ -24,6 +24,8 @@ def range3(start, stop, step):
 def test_range3():
   assert eq(range3(10,20,2), np.arange(10,20,2))
 
+def test_big_step():
+  assert eq(range3(10, 20, 100), np.arange(10,20,100))
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
