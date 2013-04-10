@@ -10,7 +10,7 @@ print_specialized_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -67,11 +67,11 @@ opt_scalar_replacement = True
 opt_redundant_load_elimination = True 
 
 # may dramatically increase compile time
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = True
+stride_specialization = False
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False

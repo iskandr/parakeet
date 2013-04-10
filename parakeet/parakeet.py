@@ -45,31 +45,31 @@ def clear_specializations():
   import closure_type
   for clos_t in closure_type._closure_type_cache.itervalues():
     clos_t.specializations.clear()
+
+@jit
+def winmap1d(f, x, w = 3):
+  n = x.shape[0]
+  h = w / 2
+  def window_fn(i):
+    lower = max(i-h, 0)
+    upper = min(i+h, n)
+    return f(x[lower:upper])
+  return [window_fn(i) for i in np.arange(n)]
         
 @jit  
-def winmap2d(f, x, rows = 3, cols = 3):
+def winmap2d(f, x, wx = 3, wy = 3):
   n_rows, n_cols = x.shape
+  hx = wx / 2
+  hy = wy / 2
   def window_fn(i,j):
-    li = max(i-rows, 0)
-    ui = min(i+rows, n_rows)
-    lj = max(j-cols, 0)
-    uj = min(j+cols, n_cols)
+    li = max(i-hx, 0)
+    ui = min(i+hx, n_rows)
+    lj = max(j-hy, 0)
+    uj = min(j+hy, n_cols)
     return f(x[li:ui, lj:uj])
   return [[window_fn(i,j) 
            for j in np.arange(n_cols)] 
            for i in np.arange(n_rows)] 
   
-@jit  
-def winmap3d(f, x, wx = 3, wy = 3):
-  n_rows, n_cols = x.shape
-  def window_fn(i,j):
-    li = max(i-wx, 0)
-    ui = min(i+wx, n_rows)
-    lj = max(j-wy, 0)
-    uj = min(j+wy, n_cols)
-    return f(x[li:ui, lj:uj, :])
-  return [[window_fn(i,j) 
-           for j in np.arange(n_cols)] 
-           for i in np.arange(n_rows)] 
 
 

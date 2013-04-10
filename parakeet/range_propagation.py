@@ -31,7 +31,6 @@ class RangePropagation(Transform):
             if y == high and offset >= 0:
               return false 
             elif y == low and offset <= 0:
-              return true
-          
+              return true   
     return expr
       

@@ -3,6 +3,26 @@ from parakeet import jit
 import numpy as np
 import testing_helpers
  
+
+@jit
+def avg1d(x):
+  return sum(x) / float(len(x))
+
+def test_avg1d():
+  x = np.random.randn(20)
+  testing_helpers.eq(x.mean(), avg1d(x))
+
+@jit
+def winmap_avg1d(x, w = 3):
+  return parakeet.winmap1d(avg1d, x, w)
+
+def test_winmap_avg1d():
+  x = np.random.randn(20)**2
+  y = winmap_avg1d(x)
+  print x
+  print y
+  assert x.shape == y.shape
+
  
 @jit
 def avg2d(x):
@@ -13,6 +33,30 @@ def test_avg2d():
   x = np.random.randn(20,30)
   testing_helpers.eq(x.mean(), avg2d(x))
 
+@jit
+def winmap_zeros(x, wx = 3, wy = 3):
+  def zero(_):
+    return 0
+  return parakeet.winmap2d(zero, x, wx, wy)
+
+def test_winmap_zeros():
+  x = np.random.randn(100,100)
+  y = winmap_zeros(x)
+  assert y.sum() == 0
+
+@jit
+def winmap_first_elt(x, wx = 3, wy = 3):
+  def f(window):
+    return window[0,0]
+  return parakeet.winmap2d(f, x, wx, wy)
+
+
+def test_winmap_first_elt():
+  x = np.random.randn(10,5)**2
+  y = winmap_first_elt(x)
+  assert (y > 0).all()
+  
+  
 @jit
 def winavg2d( x, wx = 3, wy = 3):
   return parakeet.winmap2d(avg2d, x, wx, wy)
