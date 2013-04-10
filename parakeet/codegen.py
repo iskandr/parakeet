@@ -258,6 +258,12 @@ class Codegen(object):
     else:
       return self.prim(prims.divide, [x,y], name)
 
+  def safediv(self, x, y, name = None):
+    top = self.add(x, y)
+    top = self.sub(top, one(top.type))
+    return self.div(top, y, name = name)
+
+
   def mod(self, x, y, name = None):
     if syntax_helpers.is_one(y):
       return self.pick_const(x, y, 0)
@@ -632,22 +638,25 @@ class Codegen(object):
 
   def loop(self, start, niters, loop_body,
             return_stmt = False,
-            while_loop = False):
+            while_loop = False,
+            step = None):
+    if step is None:
+      step = one(start.type)
+      
     if while_loop:
       i, i_after, merge = self.loop_counter("i", start)
       cond = self.lt(i, niters)
       self.blocks.push()
       loop_body(i)
-      self.assign(i_after, self.add(i, syntax_helpers.one_i64))
+      self.assign(i_after, self.add(i, step))
       body = self.blocks.pop()
       loop_stmt = While(cond, body, merge)
     else:
-      var_t = start.type
-      var = self.fresh_var(var_t, "i")
+      var = self.fresh_var(start.type, "i")
       self.blocks.push()
       loop_body(var)
       body = self.blocks.pop()
-      loop_stmt = ForLoop(var, start, niters, one(var_t), body, {})
+      loop_stmt = ForLoop(var, start, niters, step, body, {})
 
     if return_stmt:
       return loop_stmt

@@ -172,7 +172,6 @@ def invoke_result_type(fn, arg_types):
   return result_type
 
 def annotate_expr(expr, tenv, var_map):
-  print expr
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
 
@@ -281,6 +280,12 @@ def annotate_expr(expr, tenv, var_map):
     array_t = array_type.increase_rank(common_t, 1)
     return typed_ast.Array(new_elts, type = array_t)
 
+  def expr_Range():
+    start = annotate_child(expr.start) if expr.start else None
+    stop = annotate_child(expr.stop) if expr.stop else None
+    step = annotate_child(expr.step) if expr.step else None
+    array_t = array_type.ArrayT(Int64, 1)
+    return typed_ast.Range(start, stop, step, type = array_t)
   def expr_Slice():
     start = annotate_child(expr.start)
     stop = annotate_child(expr.stop)
@@ -306,6 +311,10 @@ def annotate_expr(expr, tenv, var_map):
   def expr_Const():
     return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
 
+  def expr_Cast():
+    v = annotate_child(expr.value)
+    return typed_ast.Cast(v, type = expr.type)
+  
   def expr_Len():
     v = annotate_child(expr.value)
     t = v.type

@@ -3,7 +3,6 @@
 import prims
 import llvm.core as llc   
 
-
   
 
 signed_int_comparisons = {
@@ -66,6 +65,7 @@ bool_binops = {
   prims.subtract : 'xor',
   #prims.logical_not : 'not_'
 }
+
 
 import core_types 
 import llvm_types

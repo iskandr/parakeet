@@ -58,7 +58,6 @@ class Compiler(object):
     Create a mapping from variable names to stack locations, these will later be
     converted to SSA variables by the mem2reg pass.
     """
-
     n_expected = len(fundef.arg_names)
     n_compiled = len(self.llvm_fn.args)
     assert n_compiled == n_expected, \
@@ -82,7 +81,6 @@ class Compiler(object):
     Helper for getting the address of an attribute lookup, used both when
     setting and getting attributes
     """
-
     llvm_struct = self.compile_expr(struct, builder)
     struct_t = struct.type
     field_pos = struct_t.field_pos(name)
@@ -160,15 +158,10 @@ class Compiler(object):
   def compile_Call(self, expr, builder):
     assert expr.fn.__class__ is TypedFn
     typed_fundef = expr.fn
-
     (target_fn, _, _) = compile_fn(typed_fundef)
-
     arg_types = syntax_helpers.get_types(expr.args)
-
     llvm_args = [self.compile_expr(arg, builder) for arg in expr.args]
-
     assert len(arg_types) == len(llvm_args)
-
     return builder.call(target_fn, llvm_args, 'call_result')
 
   def cmp(self, prim, t, llvm_x, llvm_y, builder, result_name = None):
@@ -199,7 +192,16 @@ class Compiler(object):
     if isinstance(prim, prims.Cmp):
       bit = self.cmp(prim, t, llvm_args[0], llvm_args[1], builder)
       return llvm_convert.to_bool(bit,builder)
-
+    elif prim == prims.maximum:
+      x, y = llvm_args
+      bit = self.cmp(prims.less_equal, t, x, y, builder)
+      return builder.select(bit, x, y)
+    
+    elif prim == prims.minimum:
+      x,y = llvm_args
+      bit = self.cmp(prims.greater_equal, t, x, y, builder)
+      return builder.select(bit, x, y)
+    
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
       if isinstance(t, FloatT):
         instr = llvm_prims.float_binops[prim]

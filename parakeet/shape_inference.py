@@ -120,13 +120,21 @@ class ShapeInference(SyntaxVisitor):
   def visit_TypedFn(self, fn):
     return Closure(fn, [])
 
+  def visit_Range(self, expr):
+    start = self.visit_expr(expr.start)
+    stop = self.visit_expr(expr.stop)
+    step = self.visit_expr(expr.step)
+    slice_value = shape_semantics.slice_value(start, stop, step)
+    if slice_value.__class__ is ConstSlice:
+      return Shape( (slice_value.nelts,))
+    else:
+      return Shape( (any_scalar,) )
+    
   def visit_Slice(self, expr):
     step = self.visit_expr(expr.step)
     if expr.start.__class__ is syntax.Var and \
        expr.stop.__class__ is syntax.Var and \
        step.__class__ is Const:
-      #assert False, (expr.start, expr.stop, step)
-      #step.__class__ is Const:
       start_name = expr.start.name
 
       stop_name = expr.stop.name
