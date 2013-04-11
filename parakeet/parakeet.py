@@ -47,27 +47,17 @@ def clear_specializations():
     clos_t.specializations.clear()
 
 @jit
-def winmap1d(f, x, w = 3):
+def win1d(f, x, w = 3):
   n = x.shape[0]
   h = w / 2
-  def window_fn(i):
-    lower = max(i-h, 0)
-    upper = min(i+h, n)
-    return f(x[lower:upper])
-  return [window_fn(i) for i in np.arange(n)]
-        
+  return [f(x[max(i-h, 0):min(i+h, n)]) for i in np.arange(n)]
+  
 @jit  
-def winmap2d(f, x, wx = 3, wy = 3):
+def win2d(f, x, wx = 3, wy = 3):
   n_rows, n_cols = x.shape
   hx = wx / 2
   hy = wy / 2
-  def window_fn(i,j):
-    li = max(i-hx, 0)
-    ui = min(i+hx, n_rows)
-    lj = max(j-hy, 0)
-    uj = min(j+hy, n_cols)
-    return f(x[li:ui, lj:uj])
-  return [[window_fn(i,j) 
+  return [[f(x[max(i-hx, 0):min(i+hx, n_rows), max(j-hy, 0):min(j+hy, n_cols)]) 
            for j in np.arange(n_cols)] 
            for i in np.arange(n_rows)] 
   

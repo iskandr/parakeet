@@ -207,7 +207,7 @@ def eval_fn(fn, actuals):
 
     def expr_Tuple():
       return tuple(map(eval_expr, expr.elts))
-
+    
     def expr_TupleProj():
       return eval_expr(expr.tuple)[expr.index]
 
@@ -218,6 +218,12 @@ def eval_fn(fn, actuals):
       clos = eval_expr(expr.closure)
       return clos.fixed_args[expr.index]
 
+    def expr_Range():
+      return np.arange(eval_expr(expr.start), eval_expr(expr.stop), eval_expr(expr.step))
+    
+    def expr_Len():
+      return len(eval_expr(expr.value))
+    
     def expr_Map():
       fn = eval_expr(expr.fn)
       args = eval_args(expr.args)

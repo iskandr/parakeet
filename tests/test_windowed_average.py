@@ -14,13 +14,11 @@ def test_avg1d():
 
 @jit
 def winmap_avg1d(x, w = 3):
-  return parakeet.winmap1d(avg1d, x, w)
+  return parakeet.win1d(avg1d, x, w)
 
 def test_winmap_avg1d():
   x = np.random.randn(20)**2
   y = winmap_avg1d(x)
-  print x
-  print y
   assert x.shape == y.shape
 
  
@@ -37,7 +35,7 @@ def test_avg2d():
 def winmap_zeros(x, wx = 3, wy = 3):
   def zero(_):
     return 0
-  return parakeet.winmap2d(zero, x, wx, wy)
+  return parakeet.win2d(zero, x, wx, wy)
 
 def test_winmap_zeros():
   x = np.random.randn(100,100)
@@ -48,28 +46,35 @@ def test_winmap_zeros():
 def winmap_first_elt(x, wx = 3, wy = 3):
   def f(window):
     return window[0,0]
-  return parakeet.winmap2d(f, x, wx, wy)
+  return parakeet.win2d(f, x, wx, wy)
 
-
+"""
 def test_winmap_first_elt():
   x = np.random.randn(10,5)**2
   y = winmap_first_elt(x)
   assert (y > 0).all()
-  
-  
-@jit
-def winavg2d( x, wx = 3, wy = 3):
-  return parakeet.winmap2d(avg2d, x, wx, wy)
+"""
+
+def test_fn():
+  x = np.arange(5)
+  def ident(x):
+    return x
+  y = parakeet.win1d(ident, x, 3)
+  print y
+  assert False
 
 """
+@jit
+def winavg2d( x, wx = 3, wy = 3):
+  return parakeet.win2d(avg2d, x, wx, wy)
+
 def test_winavg2d():
   x = np.random.randn(100,100)
   y = winavg2d(x)
   assert x.shape==y.shape
   assert x.max() >= y.max()
   assert x.min() <= y.min()
-"""
-  
+"""  
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
   

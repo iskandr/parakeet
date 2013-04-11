@@ -35,6 +35,14 @@ def test_triple_nesting():
   x = np.array([1,2,3])
   expect(triple_nesting, [x], np.array(triple_nesting(x)))
 
+def repeat_elts(x):
+  return [x[i:i+2] for i in range(len(x)-1)]
+
+def test_repeat_elts():
+  x = np.array([0,1,2,3,4,5])
+  y = np.array([[0,1], [1,2], [2,3], [3,4], [4,5]])
+  expect(repeat_elts, [x], y)
+
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
   
