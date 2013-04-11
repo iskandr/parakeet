@@ -8,6 +8,7 @@ from core_types import ScalarT
 from syntax_helpers import const_int, const_tuple, zero
 from transform import Transform
 
+
 class LowerStructs(Transform):
   """The only non-scalar objects should all be created as explicit Structs"""
 
@@ -113,7 +114,9 @@ class LowerStructs(Transform):
                            offset = const_int(0), nelts = const_int(n))
 
   def transform_Range(self, expr):
-    nelts = self.safediv(self.sub(expr.stop, expr.start), expr.step, name="nelts")
+    diff = self.sub(expr.stop, expr.start, "range_diff")
+    nelts = self.div(diff, expr.step, name="nelts_raw")
+    nelts = self.max(nelts, const_int(1), "nelts")
     result = self.alloc_array(core_types.Int64, 
                               (nelts,), 
                               name = "range_result", 

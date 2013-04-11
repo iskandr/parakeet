@@ -50,7 +50,7 @@ def clear_specializations():
 def win1d(f, x, w = 3):
   n = x.shape[0]
   h = w / 2
-  return [f(x[max(i-h, 0):min(i+h, n)]) for i in np.arange(n)]
+  return [f(x[max(i-h, 0):min(i+h, n)]) for i in range(n)]
   
 @jit  
 def win2d(f, x, wx = 3, wy = 3):

@@ -56,12 +56,15 @@ def test_winmap_first_elt():
 """
 
 def test_fn():
-  x = np.arange(5)
+  x = np.array([0,1,2,3,4])
   def ident(x):
     return x
   y = parakeet.win1d(ident, x, 3)
-  print y
-  assert False
+  expected = np.array([[1,2,3],[2,3,4]])
+  print y, y.shape 
+  assert y.shape == expected.shape
+ 
+
 
 """
 @jit

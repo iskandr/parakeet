@@ -13,7 +13,7 @@ print_specialized_function = True
 print_lowered_function = True
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show the input function to each transformation?
 print_functions_before_transforms = False

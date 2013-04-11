@@ -426,7 +426,6 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Slice(*positional)
 
   def visit_Call(self, expr):
-    print ast.dump(expr)
     """
     TODO: 
     The logic here is broken and haphazard, eventually try to handle nested
