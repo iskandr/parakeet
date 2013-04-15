@@ -115,8 +115,8 @@ class LowerStructs(Transform):
 
   def transform_Range(self, expr):
     diff = self.sub(expr.stop, expr.start, "range_diff")
-    nelts = self.div(diff, expr.step, name="nelts_raw")
-    nelts = self.max(nelts, const_int(1), "nelts")
+    nelts = self.safediv(diff, expr.step, name="nelts_raw")
+    #nelts = self.max(nelts, const_int(1), "nelts")
     result = self.alloc_array(core_types.Int64, 
                               (nelts,), 
                               name = "range_result", 

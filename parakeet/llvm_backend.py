@@ -195,12 +195,12 @@ class Compiler(object):
       return llvm_convert.to_bool(bit,builder)
     elif prim == prims.maximum:
       x, y = llvm_args
-      bit = self.cmp(prims.less_equal, t, x, y, builder)
+      bit = self.cmp(prims.greater_equal, t, x, y, builder)
       return builder.select(bit, x, y)
     
     elif prim == prims.minimum:
       x,y = llvm_args
-      bit = self.cmp(prims.greater_equal, t, x, y, builder)
+      bit = self.cmp(prims.less_equal, t, x, y, builder)
       return builder.select(bit, x, y)
     
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):

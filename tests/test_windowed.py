@@ -55,10 +55,10 @@ def test_winmap_first_elt():
   assert (y > 0).all()
 """
 
-def test_fn():
+def test_ident():
   x = np.array([0,1,2,3,4])
   def ident(x):
-    return x
+    return x 
   y = parakeet.win1d(ident, x, 3)
   expected = np.array([[1,2,3],[2,3,4]])
   print y, y.shape 
@@ -66,7 +66,7 @@ def test_fn():
  
 
 
-"""
+
 @jit
 def winavg2d( x, wx = 3, wy = 3):
   return parakeet.win2d(avg2d, x, wx, wy)
@@ -77,7 +77,7 @@ def test_winavg2d():
   assert x.shape==y.shape
   assert x.max() >= y.max()
   assert x.min() <= y.min()
-"""  
+  
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
   
