@@ -68,13 +68,13 @@ def winavg2d( x, wx = 3, wy = 3):
   return parakeet.win2d(avg2d, x, wx, wy)
 
 def test_winavg2d():
-  x = np.random.randn(100,100)
+  x = np.random.rand(100,100)
+  x[50:65, 50:65] = 0
   y = winavg2d(x)
   assert x.shape==y.shape
   assert x.max() >= y.max()
   assert x.min() <= y.min()
-  print "IN", x
-  print "OUT", y
+  
   
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
