@@ -3,6 +3,8 @@ import math
 import pylab 
 import scipy
 import scipy.weave
+import parakeet
+from testing_helpers import eq, run_local_tests
 
 def upsample(small, new_rows = None, new_cols = None):
   old_rows, old_cols = small.shape
@@ -25,8 +27,17 @@ def upsample(small, new_rows = None, new_cols = None):
         result[i,j] = np.sum(window*weights)
            
 
+def conv(x, weights):
+  def f(window):
+    if window.shape == x.shape:
+      return sum(sum(window*weights))
+    else:
+      return 0.0
+  return parakeet.win2d(f, x, wx = weights.shape[0], wy = weights.shape[1])
 
-def conv(x, y, weights):
+
+
+def conv_weave(x, weights):
   return scipy.weave.inline("""
     int w = Nweights[0];
     int half_w = w / 2; 
@@ -48,8 +59,15 @@ def conv(x, y, weights):
     return_val = y;
   """, ('x', 'y', 'weights'))
       
-  
-def blur(x, radius = 2):
+
+def load_img(path  = '../data/bv.tiff'):
+  x = pylab.imread(path)
+  if len(x.shape) > 2:
+    x = (x[:, :, 0] + x[:, :, 1] + x[:, :, 2]) / 3 
+  x = x[:100, :100] 
+  x = x.astype('float') / x.max()
+  return x
+def blur(x, radius = 2, weave=False):
   n_rows, n_cols = x.shape
   window_width = radius*2 + 1
   sqr_dists = np.array([[(i-radius)**2 + (j-radius)**2 
@@ -58,10 +76,19 @@ def blur(x, radius = 2):
   weights = np.exp(-sqr_dists)
   # normalize so weights add up to 1
   weights /= np.sum(weights)
-  y = x.copy()
-  conv(x,y,weights) 
+  if weave:
+    y = zeros_like(x)
+    conv_weave(x,y,weights)
+  else:
+    y = conv(x, weights)
   return y
-  
+
+def test_blur():
+  x = load_img()
+  y = blur(x, weave= False)
+  z = blur(x, weave= True)
+  assert eq(y,z)
+ 
 def downsample(x):
   xb = blur(x)
   n_rows, n_cols = xb.shape
@@ -96,4 +123,6 @@ def test():
   pylab.title('smaller')
   pylab.show()
 """
-  
+ 
+if __name__ == '__main__':
+  run_local_tests() 
