@@ -55,17 +55,13 @@ def test_winmap_first_elt():
   assert (y > 0).all()
 """
 
-def test_ident():
+def test_window_shapes():
   x = np.array([0,1,2,3,4])
-  def ident(x):
-    return x 
-  y = parakeet.win1d(ident, x, 3)
-  expected = np.array([[1,2,3],[2,3,4]])
-  print y, y.shape 
-  assert y.shape == expected.shape
- 
-
-
+  def winshape(x):
+    return x.shape[0] 
+  y = parakeet.win1d(winshape, x, 3)
+  expected = np.array([2,3,3,3,2])
+  assert y.shape == expected.shape and np.all(y == expected)
 
 @jit
 def winavg2d( x, wx = 3, wy = 3):
