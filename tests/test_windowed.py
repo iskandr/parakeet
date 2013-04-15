@@ -73,6 +73,8 @@ def test_winavg2d():
   assert x.shape==y.shape
   assert x.max() >= y.max()
   assert x.min() <= y.min()
+  print "IN", x
+  print "OUT", y
   
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
