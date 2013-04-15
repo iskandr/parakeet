@@ -236,6 +236,7 @@ def annotate_expr(expr, tenv, var_map):
     return typed_ast.Attribute(value, expr.name, type = result_type)
 
   def expr_PrimCall():
+    print ">>", expr
     args = annotate_args(expr.args)
     arg_types = get_types(args)
 
