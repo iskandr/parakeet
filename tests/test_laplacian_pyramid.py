@@ -29,13 +29,11 @@ def upsample(small, new_rows = None, new_cols = None):
 
 def conv(x, weights):
   def f(window):
-    return window.shape
-    """
-    if window.shape == x.shape:
+    if window.shape == weights.shape:
       return sum(sum(window*weights))
     else:
       return 0.0
-    """
+    
   return parakeet.win2d(f, x, wx = weights.shape[0], wy = weights.shape[1])
 
 
@@ -89,7 +87,9 @@ def blur(x, radius = 2, weave=False):
 def test_blur():
   x = load_img()
   y = blur(x, weave= False)
+  print y
   z = blur(x, weave= True)
+  
   import pylab
   pylab.imshow(y)
   pylab.figure()
