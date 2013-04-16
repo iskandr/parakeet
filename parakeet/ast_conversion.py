@@ -39,6 +39,8 @@ reserved_names = {
 def translate_default_arg_value(arg):
   if isinstance(arg, ast.Num):
     return arg.n # syntax.Const(arg.n)
+  elif isinstance(arg, ast.Tuple):
+    return tuple(translate_default_arg_value(elt) for elt in arg.elts)
   else:
     assert isinstance(arg, ast.Name)
     name = arg.id

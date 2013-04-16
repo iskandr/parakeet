@@ -162,7 +162,7 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_TupleProj(self, expr):
     t = self.visit_expr(expr.tuple)
-    assert isinstance(t, Tuple)
+    assert isinstance(t, Tuple), "Expected tuple type but got %s : %s" % (t, type(t))
     return t.elts[expr.index]
 
   def visit_Attribute(self, expr):

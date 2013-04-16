@@ -142,7 +142,7 @@ class FormalArgs(object):
       else:
         s = local_name
       if local_name in self.defaults:
-        s += " = %s" % self.defaults[local_name]
+        s += " = %s" % (self.defaults[local_name],)
       strs.append(s)
     if self.starargs:
       strs.append("*" + str(self.starargs))

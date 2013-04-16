@@ -29,13 +29,8 @@ def upsample(small, new_rows = None, new_cols = None):
 
 def conv(x, weights):
   def f(window):
-    if window.shape == weights.shape:
-      return sum(sum(window*weights))
-    else:
-      return 0.0
-    
-  return parakeet.win2d(f, x, wx = weights.shape[0], wy = weights.shape[1])
-
+    return sum(sum(window*weights))
+  return parakeet.pmap2d_trim(f, x, weights.shape)
 
 
 def conv_weave(x, y,  weights):
@@ -47,7 +42,8 @@ def conv_weave(x, y,  weights):
 
     for (int i = 0; i < n_rows; ++i) {
       for (int j = 0; j < n_cols; ++j) {
-        if (i > half_w && i < n_rows - half_w && j > half_w && j < n_cols - half_w) {
+        if (i > half_w && (i < n_rows - half_w) && 
+            (j > half_w) && (j < n_cols - half_w)) {
           y[i,j] = 0.0; 
           for (int ii = 0; ii < w; ++ii) {
             for (int jj = 0; jj < w ; ++jj) {
