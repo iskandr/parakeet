@@ -15,7 +15,7 @@ import type_conv
 from args import ActualArgs
 from array_type import ArrayT
 from common import dispatch
-from core_types import Type, IntT, Int64,  ScalarT
+from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 from syntax_helpers import get_type, get_types, unwrap_constant
@@ -234,9 +234,7 @@ def annotate_expr(expr, tenv, var_map):
     assert isinstance(value.type, StructT)
     result_type = value.type.field_type(expr.name)
     return typed_ast.Attribute(value, expr.name, type = result_type)
-
   def expr_PrimCall():
-    print ">>", expr
     args = annotate_args(expr.args)
     arg_types = get_types(args)
 
@@ -244,6 +242,23 @@ def annotate_expr(expr, tenv, var_map):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       return typed_ast.PrimCall(expr.prim, args, type = result_type)
+    elif all(t.rank == 0 for t in arg_types):
+      # arguments should then be tuples
+      assert len(arg_types) == 2
+      xt, yt = arg_types
+      x, y = args 
+      assert isinstance(xt, TupleT)
+      assert isinstance(yt, TupleT)
+      x1 = typed_ast.TupleProj(x, 0, type=xt.elt_types[0])
+      x2 = typed_ast.TupleProj(x, 1, type=xt.elt_types[1])
+      y1 = typed_ast.TupleProj(y, 0, type=yt.elt_types[0])
+      y2 = typed_ast.TupleProj(y, 1, type=yt.elt_types[1]) 
+      if expr.prim == prims.equal:
+        first = typed_ast.PrimCall(prims.equal, (x1, y1), type=Bool)
+        second = typed_ast.PrimCall(prims.equal, (x2, y2), type=Bool)
+        return typed_ast.PrimCall(prims.logical_and, (first, second), type=Bool)
+      else:
+        assert False, "Unsupport tuple operation %s" % expr  
     else:
       assert all(not isinstance(t, NoneT) for t in arg_types)
       prim_fn = prims.prim_wrapper(expr.prim)
@@ -535,6 +550,9 @@ def annotate_stmt(stmt, tenv, var_map ):
     rhs = annotate_expr(stmt.rhs, tenv, var_map)
     lhs = annotate_lhs(stmt.lhs, rhs.type)
     return typed_ast.Assign(lhs, rhs)
+  
+  def stmt_Comment():
+    return stmt 
 
   def stmt_If():
     cond = annotate_expr(stmt.cond, tenv, var_map)

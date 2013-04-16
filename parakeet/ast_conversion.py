@@ -489,7 +489,16 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.Array(self.visit_list(expr.elts))
     
   def visit_Expr(self, expr):
-    assert False, "Expression statement not supported: %s" % ast.dump(expr)
+    # dummy assignment to allow for side effects on RHS
+   
+    lhs = self.fresh_var("dummy")
+    if isinstance(expr.value, ast.Str):
+      return syntax.Assign(lhs, zero_i64)
+      # return syntax.Comment(expr.value.s.strip().replace('\n', ''))
+    else:
+      rhs = self.visit(expr.value)
+      return syntax.Assign(lhs, rhs)
+
     
   def visit_ListComp(self, expr):
     gens = expr.generators

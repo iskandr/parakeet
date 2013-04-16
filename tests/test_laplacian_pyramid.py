@@ -29,15 +29,18 @@ def upsample(small, new_rows = None, new_cols = None):
 
 def conv(x, weights):
   def f(window):
+    return window.shape
+    """
     if window.shape == x.shape:
       return sum(sum(window*weights))
     else:
       return 0.0
+    """
   return parakeet.win2d(f, x, wx = weights.shape[0], wy = weights.shape[1])
 
 
 
-def conv_weave(x, weights):
+def conv_weave(x, y,  weights):
   return scipy.weave.inline("""
     int w = Nweights[0];
     int half_w = w / 2; 
@@ -77,7 +80,7 @@ def blur(x, radius = 2, weave=False):
   # normalize so weights add up to 1
   weights /= np.sum(weights)
   if weave:
-    y = zeros_like(x)
+    y = np.zeros_like(x)
     conv_weave(x,y,weights)
   else:
     y = conv(x, weights)
@@ -87,6 +90,11 @@ def test_blur():
   x = load_img()
   y = blur(x, weave= False)
   z = blur(x, weave= True)
+  import pylab
+  pylab.imshow(y)
+  pylab.figure()
+  pylab.imshow(z)
+  pylab.show()
   assert eq(y,z)
  
 def downsample(x):

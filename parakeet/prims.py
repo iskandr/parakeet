@@ -131,8 +131,7 @@ class Prim(object):
     """
     key = tuple(arg_types)
     if key not in self.type_table:
-      raise RuntimeError("Primitives %s doesn't support input types %s || %s" %
-                         (self.name, key, self.type_table))
+      raise RuntimeError("Primitives %s doesn't support input types %s, candidates: %s" % (self.name, key, self.type_table))
     else:
       return self.type_table[key]
 
