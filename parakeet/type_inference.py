@@ -642,7 +642,15 @@ def infer_types(untyped_fn, types):
       t = tenv[local_name]
       python_value = typed_args.defaults[local_name]
       var = typed_ast.Var(local_name, type = t)
-      typed_val = mk_default_const(python_value, t) #typed_ast.Const(python_value, t) #mk_default_const(python_value, t)
+      if isinstance(python_value, tuple):
+        parakeet_elts = []
+        for (elt_value, elt_type) in zip(python_value, t.elt_types):
+          parakeet_elt = typed_ast.Const(elt_value, elt_type)
+          parakeet_elts.append(parakeet_elt)
+        typed_val = typed_ast.Tuple(tuple(parakeet_elts), type = t)
+      else:
+        typed_val = typed_ast.Const(python_value, t) #mk_default_const(python_value, t)
+      print ">>>>>", typed_val
       stmt = typed_ast.Assign(var, typed_val)
       print stmt
       default_assignments.append(stmt)
