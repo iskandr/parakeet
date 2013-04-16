@@ -58,6 +58,15 @@ def tuple_default(x = (1,2)):
 def test_tuple_default():
   expect(tuple_default, [], 3)
   expect(tuple_default, [(1,3)], 4)
-  
+
+def default_closure(x = 1, y=(1,2)):
+  def inner(z, r = 0):
+    return y[0] + y[1] + z + r
+  return inner(x)
+
+def test_default_closure(): 
+  expect(default_closure, [], 4)
+  expect(default_closure, [10], 13)
+  expect(default_closure, [10, (20,30)], 60)
 if __name__ == '__main__':
   run_local_tests()
