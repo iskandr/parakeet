@@ -628,14 +628,6 @@ def infer_types(untyped_fn, types):
                in
                typed_args.nonlocals + tuple(typed_args.positional)
                if local_name not in unbound_keywords]
-  def mk_default_const(v, t):
-    if isinstance(v, tuple):
-      assert len(v) == len(t.elt_types)
-      return typed_ast.Tuple(tuple(mk_default_const(vi, ti) 
-                                  for (vi,ti) in zip(v, t.elt_types)), 
-                             type = t)
-    else:
-      return typed_ast.Const(v, t) 
   if len(unbound_keywords) > 0:
     default_assignments = []
     for local_name in unbound_keywords:
@@ -650,9 +642,8 @@ def infer_types(untyped_fn, types):
         typed_val = typed_ast.Tuple(tuple(parakeet_elts), type = t)
       else:
         typed_val = typed_ast.Const(python_value, t) #mk_default_const(python_value, t)
-      print ">>>>>", typed_val
+      print "infer_type default value %s = %s" %(var,  typed_val)
       stmt = typed_ast.Assign(var, typed_val)
-      print stmt
       default_assignments.append(stmt)
     body = default_assignments + body
 

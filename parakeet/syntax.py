@@ -272,11 +272,7 @@ class Closure(Expr):
 
   def __str__(self):
     fn_str = str(self.fn) #self.fn.name if hasattr(self.fn, 'name') else str(self.fn)
-    print type(self.args)
-    print self.args 
-    for arg in self.args:
-      print ">>", arg
-    args_str = ",".join(arg.name + ":" + str(arg.type) for arg in self.args)
+    args_str = ",".join(str(arg) + ":" + str(arg.type) for arg in self.args)
     return "Closure(fixed_args = {%s}, %s)" % (args_str, fn_str)
 
   def node_init(self):
