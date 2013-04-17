@@ -1,6 +1,6 @@
 from array_type import ArrayT, SliceT
 from closure_type import ClosureT
-from core_types import ScalarT, StructT
+from core_types import NoneT, ScalarT, StructT
 from tuple_type import TupleT
 from shape import Shape, Tuple, Closure, Var, Slice, Struct
 
@@ -45,6 +45,8 @@ class Converter(object):
       field_types = [ft for (_,ft) in t._fields_]
       field_vals = self.from_types(field_types)
       return Struct(field_names, field_vals)
+    elif isinstance(t, NoneT):
+      return Tuple(())
     else:
       assert False, "Unsupported type: %s" % t
     

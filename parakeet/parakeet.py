@@ -18,6 +18,13 @@ def sum(x):
 def prod(x):
   return reduce(multiply, x[1:], init=x[0])
 
+def min(x):
+  return reduce(min, x[1:], init=x[0])
+
+def max(x):
+  return reduce(max, x[1:], init=x[0])
+
+
 def mean(x):
   return sum(x) / x.shape[0]
 

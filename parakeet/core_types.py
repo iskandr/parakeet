@@ -124,6 +124,7 @@ class ConcreteT(Type):
 
 class NoneT(ConcreteT):
   _members = []
+  rank = 0
   ctypes_repr = ctypes.c_int64
 
   def from_python(self, val):
@@ -148,11 +149,13 @@ class NoneT(ConcreteT):
     return 0
 
   def __eq__(self, other):
-    return isinstance(other, NoneT)
+    return other.__class__ is NoneT
+  
   def __repr__(self):
     return str(self)
 
 NoneType = NoneT()
+
 def typeof_none(_):
   return NoneType
 type_conv.register(type(None), NoneT, typeof_none)

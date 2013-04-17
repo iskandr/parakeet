@@ -202,4 +202,6 @@ less_equal = Cmp(np.less_equal, 'LtE', '<=')
 greater = Cmp(np.greater, 'Gt', '>')
 greater_equal = Cmp(np.greater_equal, 'GtE', '>=')
 
+is_ = Cmp(lambda x,y: x is y, 'Is', 'is')
+
 

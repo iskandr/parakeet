@@ -31,6 +31,9 @@ def maybe_iter(obj):
   else:
     return iter(obj)
 
+class MissingArg:
+  pass
+missing_arg = MissingArg()
 class ActualArgs(object):
   def __init__(self, positional, keywords = {}, starargs = None):
     positional = tuple(positional)
@@ -221,12 +224,13 @@ class FormalArgs(object):
     missing_args = [arg_slots[i] for i in xrange(n) if not bound[i]]
     assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
     return result, extra
+  
 
   def linearize_without_defaults(self, actuals, tuple_elts_fn = tuple):
     linear_args, extra = \
         self.linearize_values(actuals, tuple_elts_fn = tuple_elts_fn,
-                              keyword_fn = lambda k, v: None)
-    return [x for x in (linear_args + extra) if x is not None]
+                              keyword_fn = lambda k, v: missing_arg)
+    return [x for x in (linear_args + extra) if x is not missing_arg]
 
   def transform(self, rename_fn = lambda x: x, keyword_value_fn = None):
     args = FormalArgs()

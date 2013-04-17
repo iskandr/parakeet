@@ -68,5 +68,18 @@ def test_default_closure():
   expect(default_closure, [], 4)
   expect(default_closure, [10], 13)
   expect(default_closure, [10, (20,30)], 60)
+
+def default_none(x, y = None):
+  if y is None:
+    return x * 2
+  else:
+    return x + y
+
+def test_default_none():
+  expect(default_none, [10], 20)
+  expect(default_none, [10, None], 20)
+  expect(default_none, [10, 1], 11)
+
+
 if __name__ == '__main__':
   run_local_tests()

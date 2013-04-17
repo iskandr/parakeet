@@ -333,6 +333,8 @@ class AST_Translator(ast.NodeVisitor):
     return result
 
   def visit_Compare(self, expr):
+    print expr.ops[0], type(expr.ops[0])
+    
     lhs = self.visit(expr.left)
     assert len(expr.ops) == 1
     prim = prims.find_ast_op(expr.ops[0])

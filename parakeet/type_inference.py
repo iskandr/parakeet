@@ -19,7 +19,7 @@ from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 from syntax_helpers import get_type, get_types, unwrap_constant
-from syntax_helpers import one_i64, zero_i64, none
+from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true
 from tuple_type import TupleT, make_tuple_type
 from stride_specialization import specialize
 
@@ -234,21 +234,31 @@ def annotate_expr(expr, tenv, var_map):
     assert isinstance(value.type, StructT)
     result_type = value.type.field_type(expr.name)
     return typed_ast.Attribute(value, expr.name, type = result_type)
+  
   def expr_PrimCall():
     args = annotate_args(expr.args)
     arg_types = get_types(args)
-
+    
     if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
       return typed_ast.PrimCall(expr.prim, args, type = result_type)
+    elif expr.prim == prims.is_:
+      if arg_types[0] != arg_types[1]:
+        return false
+      elif arg_types[0] == NoneType:
+        return true
+      else:
+        return typed_ast.PrimCall(prims.is_, args, type = Bool)
     elif all(t.rank == 0 for t in arg_types):
       # arguments should then be tuples
       assert len(arg_types) == 2
       xt, yt = arg_types
       x, y = args 
-      assert isinstance(xt, TupleT)
-      assert isinstance(yt, TupleT)
+      assert isinstance(xt, TupleT), \
+        "Unexpected argument types (%s,%s) for operator %s" % (xt, yt, expr.prim)
+      assert isinstance(yt, TupleT), \
+        "Unexepcted argument types (%s,%s) for operator %s" % (xt, yt, expr.prim)
       x1 = typed_ast.TupleProj(x, 0, type=xt.elt_types[0])
       x2 = typed_ast.TupleProj(x, 1, type=xt.elt_types[1])
       y1 = typed_ast.TupleProj(y, 0, type=yt.elt_types[0])
@@ -555,11 +565,21 @@ def annotate_stmt(stmt, tenv, var_map ):
     return stmt 
 
   def stmt_If():
-    cond = annotate_expr(stmt.cond, tenv, var_map)
+    cond = annotate_expr(stmt.cond, tenv, var_map) 
     assert isinstance(cond.type, ScalarT), \
         "Condition has type %s but must be convertible to bool" % cond.type
-    true = annotate_block(stmt.true, tenv, var_map)
-    false = annotate_block(stmt.false, tenv, var_map)
+    # it would be cleaner to not have anything resembling an optimization 
+    # inter-mixed with the type inference, but I'm not sure how else to 
+    # support 'if x is None:...'
+    print ">>>", cond, is_true(cond), is_false(cond) 
+    if is_false(cond):
+      true = []
+    else:
+      true = annotate_block(stmt.true, tenv, var_map)
+    if is_true(cond):
+      false = []
+    else:
+      false = annotate_block(stmt.false, tenv, var_map)
     merge = annotate_phi_nodes(stmt.merge)
     return typed_ast.If(cond, true, false, merge)
 
