@@ -18,12 +18,6 @@ def sum(x):
 def prod(x):
   return reduce(multiply, x[1:], init=x[0])
 
-def min(x):
-  return reduce(min, x[1:], init=x[0])
-
-def max(x):
-  return reduce(max, x[1:], init=x[0])
-
 
 def mean(x):
   return sum(x) / x.shape[0]
@@ -88,3 +82,11 @@ def pmap2d_trim(f, x, width = (3,3), step = (1,1)):
   return [[f(x[i-hx:i+hx+1, j-hy:j+hy+1]) 
            for j in np.arange(hx, n_cols-hx, step_x)] 
            for i in np.arange(hy, n_rows-hy, step_y)]
+
+
+def min_(x):
+  return reduce(minimum, x[1:], init=x[0])
+
+def max_(x):
+  return reduce(maximum, x[1:], init=x[0])
+

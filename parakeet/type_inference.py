@@ -221,7 +221,7 @@ def annotate_expr(expr, tenv, var_map):
     return typed_ast.Closure(expr, [], type = t)
 
   def expr_Call():
-
+    
     closure = annotate_child(expr.fn)
     args = annotate_args(expr.args)
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
