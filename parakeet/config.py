@@ -16,10 +16,10 @@ print_lowered_function = False
 print_loopy_function = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = False
+print_functions_before_transforms = ['IndexElim']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = False
+print_functions_after_transforms = ['IndexElim']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
@@ -31,7 +31,7 @@ print_tiled_adverbs = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = True
+print_optimized_llvm = False
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -61,6 +61,7 @@ opt_fusion = True
 opt_licm = True
 opt_copy_elimination = True
 opt_stack_allocation = True
+opt_index_elimination = True
 opt_range_propagation = True
 opt_shape_elim = True
 opt_scalar_replacement = True

@@ -14,12 +14,13 @@ from lower_structs import LowerStructs
 from lower_tiled_adverbs import LowerTiledAdverbs
 from mapify_allpairs import MapifyAllPairs
 from pipeline_phase import Phase
-from range_propagation import RangePropagation
+from value_range_propagation import RangePropagation
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from simplify import Simplify
 from tile_adverbs import TileAdverbs
+from index_elimination import IndexElim
 
 class ContainsAdverbs(syntax_visitor.SyntaxVisitor):
   class Yes(Exception):
@@ -92,9 +93,12 @@ load_elim = Phase(RedundantLoadElimination,
                   config_param = 'opt_redundant_load_elimination')
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
+index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
+
 pre_lowering = Phase([symbolic_range_propagation,
                       shape_elim,
-                      symbolic_range_propagation],
+                      symbolic_range_propagation,
+                      index_elim ],
                      cleanup = [Simplify, DCE])
 post_lowering = Phase([licm,
                        unroll,

@@ -44,17 +44,18 @@ class ScalarReplacement(LoopTransform):
     """
     final_scalars = loop_scalars.copy()
     for stmt in loop_body:
-      if stmt.__class__ is Assign:
-        if stmt.rhs.__class__ is Index:
-          key = stmt.rhs.value.name, stmt.rhs.index
-          if key in final_scalars:
-            stmt.rhs = final_scalars[key]  
-        if stmt.lhs.__class__ is Index:
-          key = stmt.lhs.value.name, stmt.lhs.index
-          if key in final_scalars:
-            new_var = self.fresh_var(stmt.lhs.type, "scalar_repl_out")
-            stmt.lhs = new_var
-            final_scalars[key] = new_var  
+      if stmt.__class__ is not Assign: 
+        continue 
+      if stmt.rhs.__class__ is Index:
+        key = stmt.rhs.value.name, stmt.rhs.index
+        if key in final_scalars:
+          stmt.rhs = final_scalars[key]  
+      if stmt.lhs.__class__ is Index:
+        key = stmt.lhs.value.name, stmt.lhs.index
+        if key in final_scalars:
+          new_var = self.fresh_var(stmt.lhs.type, "scalar_repl_out")
+          stmt.lhs = new_var
+          final_scalars[key] = new_var  
     return final_scalars
   
   
