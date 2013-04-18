@@ -34,6 +34,7 @@ def maybe_iter(obj):
 class MissingArg:
   pass
 missing_arg = MissingArg()
+
 class ActualArgs(object):
   def __init__(self, positional, keywords = {}, starargs = None):
     positional = tuple(positional)

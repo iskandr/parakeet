@@ -41,6 +41,8 @@ def ctypes_to_generic_value(cval, t):
   elif isinstance(t, core_types.IntT):
     llvm_t = llvm_types.llvm_value_type(t)
     return GenericValue.int(llvm_t, cval.value)
+  elif isinstance(t, core_types.NoneT):
+    return GenericValue.int(llvm_types.int64_t, 0)
   elif isinstance(t, core_types.PtrT):
     return GenericValue.pointer(ctypes.addressof(cval.contents))
   else:
@@ -72,12 +74,11 @@ class CompiledFn:
     assert actual_types == expected_types, \
         "Arg type mismatch, expected %s but got %s" % \
         (expected_types, actual_types)
-
     # calling conventions are that output must be preallocated by the caller'
     ctypes_inputs = [t.from_python(v) for (v,t) in zip(args, expected_types)]
     gv_inputs = [ctypes_to_generic_value(cv, t) for (cv,t) in
                  zip(ctypes_inputs, expected_types)]
-
+     
     gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
 

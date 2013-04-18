@@ -31,7 +31,7 @@ print_tiled_adverbs = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+print_optimized_llvm = True
 
 # show aliases and escape sets
 print_escape_analysis = False
