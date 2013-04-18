@@ -21,20 +21,19 @@ def erode(X, window_size = (3,3)):
 #  return parakeet.pmap2d(parakeet.max, X, window_size)
 
 
-def load_img(path  = '../data/bv.tiff'):
+def load_img(path  = '../data/rjp_small.jpg'):
   x = pylab.imread(path)
   if len(x.shape) > 2:
     x = (x[:, :, 0] + x[:, :, 1] + x[:, :, 2]) / 3 
-  x = x[:100, :100] 
   x = x.astype('float') / x.max()
   return x
 
 
 def test_erode():
   x = load_img()
-  y = erode(x)[:, :]
-
-  print x.shape, y.shape 
+  print x.shape
+  y = erode(x)[:, :, 0]
+  print y.shape
   import pylab
   pylab.imshow(x, cmap='gray')
   pylab.figure()

@@ -10,10 +10,10 @@ print_specialized_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = False

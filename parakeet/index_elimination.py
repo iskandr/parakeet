@@ -9,7 +9,6 @@ class RangePropagation(Transform):
   def pre_apply(self, fn):
     # map variables to pairs which include low/exclude high  
     self.known_ranges = {}
-    
     self.known_offsets = OffsetAnalysis().visit_fn(fn)
   
   def transform_ForLoop(self, stmt):
