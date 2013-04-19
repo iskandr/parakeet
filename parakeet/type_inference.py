@@ -183,7 +183,7 @@ class Annotator(Transform):
 
   def transform_args(self, args, flat = False):
     if isinstance(args, (list, tuple)):
-      self.transform_expr_list(args)
+      return self.transform_expr_list(args)
     else:
       new_args = args.transform(self.transform_expr)
       if flat:
