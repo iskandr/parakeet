@@ -6,8 +6,7 @@ import closure_type
 import config
 import names
 import prims
-import syntax as untyped_ast
-import syntax as typed_ast
+import syntax
 import syntax_helpers
 import tuple_type
 import type_conv
@@ -20,6 +19,7 @@ from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 from syntax_helpers import get_type, get_types, unwrap_constant
 from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true
+from transform import Transform
 from tuple_type import TupleT, make_tuple_type
 from stride_specialization import specialize
 
@@ -58,27 +58,27 @@ def unpack_closure(closure):
   elif closure.type.__class__ is closure_type.ClosureT:
     fn, arg_types = closure.type.fn, closure.type.arg_types
     closure_args = \
-        [typed_ast.ClosureElt(closure, i, type = arg_t)
+        [syntax.ClosureElt(closure, i, type = arg_t)
          for (i, arg_t) in enumerate(arg_types)]
   else:
     fn = closure
     closure_args = []
   if isinstance(fn, str):
-    fn = untyped_ast.Fn.registry[fn]
+    fn = syntax.Fn.registry[fn]
   return fn, closure_args
 
 def make_typed_closure(untyped_closure, typed_fn):
-  if untyped_closure.__class__ is untyped_ast.Fn:
+  if untyped_closure.__class__ is syntax.Fn:
     return typed_fn
 
-  assert isinstance(untyped_closure, untyped_ast.Expr) and \
+  assert isinstance(untyped_closure, syntax.Expr) and \
       isinstance(untyped_closure.type, closure_type.ClosureT)
   _, closure_args = unpack_closure(untyped_closure)
   if len(closure_args) == 0:
     return typed_fn
   else:
     t = closure_type.make_closure_type(typed_fn, get_types(closure_args))
-    return typed_ast.Closure(typed_fn, closure_args, t)
+    return syntax.Closure(typed_fn, closure_args, t)
 
 def linearize_arg_types(fn, args):
 
@@ -111,7 +111,7 @@ def linearize_arg_types(fn, args):
   return untyped_fundef, tuple(linear_args + extra)
 
 def tuple_elts(tup):
-  return [typed_ast.TupleProj(tup, i, t)
+  return [syntax.TupleProj(tup, i, t)
           for (i,t) in enumerate(tup.type.elt_types)]
 
 def flatten_actual_args(args):
@@ -142,7 +142,7 @@ def linearize_actual_args(fn, args):
 
 _invoke_type_cache = {}
 def invoke_result_type(fn, arg_types):
-  if isinstance(fn, typed_ast.TypedFn):
+  if isinstance(fn, syntax.TypedFn):
     assert isinstance(arg_types, (list, tuple))
     assert len(arg_types) == len(fn.input_types), \
         "Type mismatch between expected inputs %s and %s" % \
@@ -173,87 +173,86 @@ def invoke_result_type(fn, arg_types):
 
 
 
-class Annotate(Transform):
+class Annotator(Transform):
+  
+  def __init__(self, tenv, var_map):
+    self.tenv = tenv 
+    self.var_map = var_map
+    Transform.__init__(self)
+    
 
-def annotate_expr(expr, tenv, var_map):
-  def annotate_child(child_expr):
-    return annotate_expr(child_expr, tenv, var_map)
-
-  def annotate_children(child_exprs):
-    return [annotate_expr(e, tenv, var_map) for e in child_exprs]
-
-  def annotate_args(args, flat = False):
+  def transform_args(self, args, flat = False):
     if isinstance(args, (list, tuple)):
-      return map(annotate_child, args)
+      self.transform_expr_list(args)
     else:
-      new_args = args.transform(annotate_child)
+      new_args = args.transform(self.transform_expr)
       if flat:
         return flatten_actual_args(new_args)
       else:
         return new_args
 
-  def annotate_keywords(kwds_dict):
+  def transform_keywords(self, kwds_dict):
     if kwds_dict is None:
       return {}
     else:
       result = {}
       for (k,v) in kwds_dict.iteritems():
-        result[k] = annotate_child(v)
+        result[k] = self.transform_expr(v)
       return result
 
-  def keyword_types(kwds):
+  def keyword_types(self, kwds):
     keyword_types = {}
     for (k,v) in kwds.iteritems():
       keyword_types[k] = get_type(v)
     return keyword_types
 
-  def expr_Closure():
-    new_args = annotate_children(expr.args)
+  def transform_Closure(self, expr):
+    new_args = self.transform_expr_list(expr.args)
     t = closure_type.make_closure_type(expr.fn, get_types(new_args))
-    return typed_ast.Closure(expr.fn, new_args, type = t)
+    return syntax.Closure(expr.fn, new_args, type = t)
 
-  def prim_to_closure(p):
-    untyped_fn = prims.prim_wrapper(p)
+
+
+
+  def transform_Arith(self, expr):
+    untyped_fn = prims.prim_wrapper(expr)
     t = closure_type.make_closure_type(untyped_fn, ())
-    return typed_ast.Closure(untyped_fn, (), type = t)
+    return syntax.Closure(untyped_fn, (), type = t)
 
-  def expr_Arith():
-    return prim_to_closure(expr)
-
-  def expr_Fn():
+  def transform_Fn(self, expr):
     t = closure_type.make_closure_type(expr, ())
-    return typed_ast.Closure(expr, [], type = t)
+    return syntax.Closure(expr, [], type = t)
 
-  def expr_Call():
+  def transform_Call(self, expr):
     
-    closure = annotate_child(expr.fn)
-    args = annotate_args(expr.args)
+    closure = self.transform_expr(expr.fn)
+    args = self.transform_args(expr.args)
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
 
     typed_fn = specialize(untyped_fn, arg_types)
-    return typed_ast.Call(typed_fn, args, typed_fn.return_type)
+    return syntax.Call(typed_fn, args, typed_fn.return_type)
 
-  def expr_Attribute():
-    value = annotate_child(expr.value)
+  def transform_Attribute(self, expr):
+    value = self.transform_expr(expr.value)
     assert isinstance(value.type, StructT)
     result_type = value.type.field_type(expr.name)
-    return typed_ast.Attribute(value, expr.name, type = result_type)
+    return syntax.Attribute(value, expr.name, type = result_type)
   
-  def expr_PrimCall():
-    args = annotate_args(expr.args)
+  def transform_PrimCall(self, expr):
+    args = self.transform_args(expr.args)
     arg_types = get_types(args)
     
     if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
-      return typed_ast.PrimCall(expr.prim, args, type = result_type)
+      return syntax.PrimCall(expr.prim, args, type = result_type)
     elif expr.prim == prims.is_:
       if arg_types[0] != arg_types[1]:
         return false
       elif arg_types[0] == NoneType:
         return true
       else:
-        return typed_ast.PrimCall(prims.is_, args, type = Bool)
+        return syntax.PrimCall(prims.is_, args, type = Bool)
     elif all(t.rank == 0 for t in arg_types):
       # arguments should then be tuples
       assert len(arg_types) == 2
@@ -263,14 +262,14 @@ def annotate_expr(expr, tenv, var_map):
         "Unexpected argument types (%s,%s) for operator %s" % (xt, yt, expr.prim)
       assert isinstance(yt, TupleT), \
         "Unexepcted argument types (%s,%s) for operator %s" % (xt, yt, expr.prim)
-      x1 = typed_ast.TupleProj(x, 0, type=xt.elt_types[0])
-      x2 = typed_ast.TupleProj(x, 1, type=xt.elt_types[1])
-      y1 = typed_ast.TupleProj(y, 0, type=yt.elt_types[0])
-      y2 = typed_ast.TupleProj(y, 1, type=yt.elt_types[1]) 
+      x1 = syntax.TupleProj(x, 0, type=xt.elt_types[0])
+      x2 = syntax.TupleProj(x, 1, type=xt.elt_types[1])
+      y1 = syntax.TupleProj(y, 0, type=yt.elt_types[0])
+      y2 = syntax.TupleProj(y, 1, type=yt.elt_types[1]) 
       if expr.prim == prims.equal:
-        first = typed_ast.PrimCall(prims.equal, (x1, y1), type=Bool)
-        second = typed_ast.PrimCall(prims.equal, (x2, y2), type=Bool)
-        return typed_ast.PrimCall(prims.logical_and, (first, second), type=Bool)
+        first = syntax.PrimCall(prims.equal, (x1, y1), type=Bool)
+        second = syntax.PrimCall(prims.equal, (x2, y2), type=Bool)
+        return syntax.PrimCall(prims.logical_and, (first, second), type=Bool)
       else:
         assert False, "Unsupport tuple operation %s" % expr  
     else:
@@ -283,14 +282,14 @@ def annotate_expr(expr, tenv, var_map):
           adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
       result_t = typed_broadcast_fn.return_type
-      return typed_ast.Call(typed_broadcast_fn, args, type = result_t)
+      return syntax.Call(typed_broadcast_fn, args, type = result_t)
 
-  def expr_Index():
-    value = annotate_child(expr.value)
-    index = annotate_child(expr.index)
+  def transform_Index(self, expr):
+    value = self.transform_expr(expr.value)
+    index = self.transform_expr(expr.index)
     if isinstance(value.type, TupleT):
       assert isinstance(index.type, IntT)
-      assert isinstance(index, untyped_ast.Const)
+      assert isinstance(index, syntax.Const)
       i = index.value
       assert isinstance(i, int)
       elt_types = value.type.elt_types
@@ -298,68 +297,68 @@ def annotate_expr(expr, tenv, var_map):
           "Can't get element %d of length %d tuple %s : %s" % \
           (i, len(elt_types), value, value.type)
       elt_t = value.type.elt_types[i]
-      return typed_ast.TupleProj(value, i, type = elt_t)
+      return syntax.TupleProj(value, i, type = elt_t)
     else:
       result_type = value.type.index_type(index.type)
-      return typed_ast.Index(value, index, type = result_type)
+      return syntax.Index(value, index, type = result_type)
 
-  def expr_Array():
-    new_elts = annotate_args(expr.elts)
+  def transform_Array(self, expr):
+    new_elts = self.transform_args(expr.elts)
     elt_types = get_types(new_elts)
     common_t = combine_type_list(elt_types)
     array_t = array_type.increase_rank(common_t, 1)
-    return typed_ast.Array(new_elts, type = array_t)
+    return syntax.Array(new_elts, type = array_t)
 
-  def expr_Range():
-    start = annotate_child(expr.start) if expr.start else None
-    stop = annotate_child(expr.stop) if expr.stop else None
-    step = annotate_child(expr.step) if expr.step else None
+  def transform_Range(self, expr):
+    start = self.transform_expr(expr.start) if expr.start else None
+    stop = self.transform_expr(expr.stop) if expr.stop else None
+    step = self.transform_expr(expr.step) if expr.step else None
     array_t = array_type.ArrayT(Int64, 1)
-    return typed_ast.Range(start, stop, step, type = array_t)
-  def expr_Slice():
-    start = annotate_child(expr.start)
-    stop = annotate_child(expr.stop)
-    step = annotate_child(expr.step)
+    return syntax.Range(start, stop, step, type = array_t)
+  def transform_Slice(self, expr):
+    start = self.transform_expr(expr.start)
+    stop = self.transform_expr(expr.stop)
+    step = self.transform_expr(expr.step)
     slice_t = array_type.make_slice_type(start.type, stop.type, step.type)
-    return typed_ast.Slice(start, stop, step, type = slice_t)
+    return syntax.Slice(start, stop, step, type = slice_t)
 
-  def expr_Var():
+  def transform_Var(self, expr):
     old_name = expr.name
-    if old_name not in var_map._vars:
+    if old_name not in self.var_map._vars:
       raise names.NameNotFound(old_name)
-    new_name = var_map.lookup(old_name)
-    assert new_name in tenv, \
+    new_name = self.var_map.lookup(old_name)
+    assert new_name in self.tenv, \
         "Unknown var %s (previously %s)" % (new_name, old_name)
-    return typed_ast.Var(new_name, type = tenv[new_name])
+    return syntax.Var(new_name, type = self.tenv[new_name])
 
-  def expr_Tuple():
-    elts = annotate_children(expr.elts)
+  def transform_Tuple(self, expr):
+    elts = self.transform_expr_list(expr.elts)
     elt_types = get_types(elts)
     t = tuple_type.make_tuple_type(elt_types)
-    return typed_ast.Tuple(elts, type = t)
+    return syntax.Tuple(elts, type = t)
 
-  def expr_Const():
-    return typed_ast.Const(expr.value, type_conv.typeof(expr.value))
+  def transform_Const(self, expr):
+    return syntax.Const(expr.value, type_conv.typeof(expr.value))
 
-  def expr_Cast():
-    v = annotate_child(expr.value)
-    return typed_ast.Cast(v, type = expr.type)
+  def transform_Cast(self, expr):
+    v = self.transform_expr(expr.value)
+    return syntax.Cast(v, type = expr.type)
   
-  def expr_Len():
-    v = annotate_child(expr.value)
+  def transform_Len(self, expr):
+    v = self.transform_expr(expr.value)
     t = v.type
     if t.__class__ is ArrayT:
       shape_t = make_tuple_type([Int64] * t.rank)
-      shape = typed_ast.Attribute(v, 'shape', type = shape_t)
-      return typed_ast.TupleProj(shape, 0, type = Int64)
+      shape = syntax.Attribute(v, 'shape', type = shape_t)
+      return syntax.TupleProj(shape, 0, type = Int64)
     else:
       assert t.__class__ is TupleT, \
          "Unexpected argument type for 'len': %s" % t
-      return typed_ast.Const(len(t.elt_types), type = Int64)
+      return syntax.Const(len(t.elt_types), type = Int64)
 
-  def expr_Map():
-    closure = annotate_child(expr.fn)
-    new_args = annotate_args(expr.args, flat = True)
+  def transform_Map(self, expr):
+    closure = self.transform_expr(expr.fn)
+    new_args = self.transform_args(expr.args, flat = True)
     axis = unwrap_constant(expr.axis)
     arg_types = get_types(new_args)
     result_type, typed_fn = specialize_Map(closure.type, arg_types)
@@ -371,21 +370,17 @@ def annotate_expr(expr, tenv, var_map):
                        axis = axis,
                        type = result_type)
 
-  def expr_Reduce():
-    def ravel(x):
-      elt_type = x.type.elt_type 
-      
-      return typed_ast.ArrayView 
-      
-    map_fn = annotate_child(expr.fn)
-    combine_fn = annotate_child(expr.combine)
-    new_args = annotate_args(expr.args, flat = True)
+  def transform_Reduce(self, expr):
+
+    map_fn = self.transform_expr(expr.fn)
+    combine_fn = self.transform_expr(expr.combine)
+    new_args = self.transform_args(expr.args, flat = True)
     axis = unwrap_constant(expr.axis)
     if axis is None:
       new_args = []
       axis = 0
     arg_types = get_types(new_args)
-    init = annotate_child(expr.init) if expr.init else None
+    init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
@@ -401,15 +396,15 @@ def annotate_expr(expr, tenv, var_map):
       assert len(new_args) == 1
       assert axis == 0
       arg = new_args[0]
-      first_elt = typed_ast.Index(arg, zero_i64, 
+      first_elt = syntax.Index(arg, zero_i64, 
                                   type = arg.type.index_type(zero_i64))
       first_combine = specialize(combine_fn, (init_type, first_elt.type))
       first_combine_closure = make_typed_closure(combine_fn, first_combine)
-      init = typed_ast.Call(first_combine_closure, (init, first_elt), 
+      init = syntax.Call(first_combine_closure, (init, first_elt), 
                                  type = first_combine.return_type)
-      slice_rest = typed_ast.Slice(start = one_i64, stop = none, step = one_i64, 
+      slice_rest = syntax.Slice(start = one_i64, stop = none, step = one_i64, 
                                    type = array_type.SliceT(Int64, NoneType, Int64))
-      rest = typed_ast.Index(arg, slice_rest, 
+      rest = syntax.Index(arg, slice_rest, 
                              type = arg.type.index_type(slice_rest))
       new_args = (rest,)  
     return adverbs.Reduce(fn = typed_map_closure,
@@ -419,13 +414,13 @@ def annotate_expr(expr, tenv, var_map):
                           type = result_type,
                           init = init)
 
-  def expr_Scan():
-    map_fn = annotate_child(expr.fn)
-    combine_fn = annotate_child(expr.combine)
-    emit_fn = annotate_child(expr.emit)
-    new_args = annotate_args(expr.args, flat = True)
+  def transform_Scan(self, expr):
+    map_fn = self.transform_expr(expr.fn)
+    combine_fn = self.transform_expr(expr.combine)
+    emit_fn = self.transform_expr(expr.emit)
+    new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
-    init = annotate_child(expr.init) if expr.init else None
+    init = self.transform_expr(expr.init) if expr.init else None
     init_type = get_type(init) if init else None
     result_type, typed_map_fn, typed_combine_fn, typed_emit_fn = \
         specialize_Scan(map_fn.type, combine_fn.type, emit_fn.type,
@@ -443,9 +438,9 @@ def annotate_expr(expr, tenv, var_map):
                         type = result_type,
                         init = init)
 
-  def expr_AllPairs():
-    closure = annotate_child(expr.fn)
-    new_args = annotate_args (expr.args, flat = True)
+  def transform_AllPairs(self, expr):
+    closure = self.transform_expr(expr.fn)
+    new_args = self.transform_args (expr.args, flat = True)
     arg_types = get_types(new_args)
     assert len(arg_types) == 2
     xt,yt = arg_types
@@ -456,174 +451,161 @@ def annotate_expr(expr, tenv, var_map):
                             axis = axis,
                             type = result_type)
   
-  def expr_Conv():
-    closure = annotate_child(expr.fn)
+  """
+  def transform_Conv(self, expr):
+    closure = self.transform_expr(expr.fn)
     c = adverbs.Conv()
     border_value = None
     if expr.border_value:
-      border_value = annotate_child(expr.border_value)
+      border_value = self.transform_expr(expr.border_value)
     shape = expr.window_shape
     ravel = expr.ravel
     
     border_closure = None
     if expr.border_closure:
-      border_closure = annotate_child(expr.border_fn)
-    x = annotate_child(expr.x)
+      border_closure = self.transform_expr(expr.border_fn)
+    x = self.transform_expr(expr.x)
     xt = get_type(x)
     result_type, typed_fn, typed_border_fn = specialize_Conv(closure.type, xt, )
+  
     # result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
     # axis = unwrap_constant(expr.axis)
     return adverbs.Conv(make_typed_closure(closure, typed_fn), x)
-
-    
-  result = dispatch(expr, prefix = "expr")
-  assert result.type, "Missing type on %s" % result
-  assert isinstance(result.type, Type), \
-      "Unexpected type annotation on %s: %s" % (expr, result.type)
-  return result
+  """
   
-  
-  
-
-def annotate_stmt(stmt, tenv, var_map ):
-  def infer_phi(result_var, val):
+  def infer_phi(self, result_var, val):
     """
     Don't actually rewrite the phi node, just add any necessary types to the
     type environment
     """
 
-    new_val = annotate_expr(val, tenv, var_map)
+    new_val = self.transform_expr(val)
     new_type = new_val.type
-    old_type = tenv.get(result_var, Unknown)
-    new_result_var = var_map.lookup(result_var)
-    tenv[new_result_var]  = old_type.combine(new_type)
+    old_type = self.tenv.get(result_var, Unknown)
+    new_result_var = self.var_map.lookup(result_var)
+    self.tenv[new_result_var]  = old_type.combine(new_type)
 
-  def infer_phi_nodes(nodes, direction):
+  def infer_phi_nodes(self, nodes, direction):
     for (var, values) in nodes.iteritems():
-      infer_phi(var, direction(values))
+      self.infer_phi(var, direction(values))
 
-  def infer_left_flow(nodes):
-    return infer_phi_nodes(nodes, lambda (x, _): x)
+  def infer_left_flow(self, nodes):
+    return self.infer_phi_nodes(nodes, lambda (x, _): x)
 
-  def infer_right_flow(nodes):
-    return infer_phi_nodes(nodes, lambda (_, x): x)
+  def infer_right_flow(self, nodes):
+    return self.infer_phi_nodes(nodes, lambda (_, x): x)
 
-  def annotate_phi_node(result_var, (left_val, right_val)):
+  def transform_phi_node(self, result_var, (left_val, right_val)):
     """
     Rewrite the phi node by rewriting the values from either branch, renaming
     the result variable, recording its new type, and returning the new name
     paired with the annotated branch values
     """
 
-    new_left = annotate_expr(left_val, tenv, var_map)
-    new_right = annotate_expr(right_val, tenv, var_map)
-    old_type = tenv.get(result_var, Unknown)
+    new_left = self.transform_expr(left_val)
+    new_right = self.transform_expr(right_val)
+    old_type = self.tenv.get(result_var, Unknown)
     new_type = old_type.combine(new_left.type).combine(new_right.type)
-    new_var = var_map.lookup(result_var)
-    tenv[new_var] = new_type
+    new_var = self.var_map.lookup(result_var)
+    self.tenv[new_var] = new_type
     return (new_var, (new_left, new_right))
 
-  def annotate_phi_nodes(nodes):
+  def transform_phi_nodes(self, nodes):
     new_nodes = {}
     for old_k, (old_left, old_right) in nodes.iteritems():
-      new_name, (left, right) = annotate_phi_node(old_k, (old_left, old_right))
+      new_name, (left, right) = self.transform_phi_node(old_k, (old_left, old_right))
       new_nodes[new_name] = (left, right)
     return new_nodes
 
-  def annotate_lhs(lhs, rhs_type):
+  def transform_lhs_with_type(self, lhs, rhs_type):
     lhs_class = lhs.__class__
-    if lhs_class is untyped_ast.Tuple:
+    if lhs_class is syntax.Tuple:
       if rhs_type.__class__ is TupleT:
         assert len(lhs.elts) == len(rhs_type.elt_types)
-        new_elts = [annotate_lhs(elt, elt_type) for (elt, elt_type) in
-                      zip(lhs.elts, rhs_type.elt_types)]
+        new_elts = [self.transform_lhs_with_type(elt, elt_type) 
+                    for (elt, elt_type) in zip(lhs.elts, rhs_type.elt_types)]
       else:
         assert rhs_type.__class__ is ArrayT, \
             "Unexpected right hand side type %s" % rhs_type
         elt_type = array_type.lower_rank(rhs_type, 1)
-        new_elts = [annotate_lhs(elt, elt_type) for elt in lhs.elts]
+        new_elts = [self.transform_lhs_with_type(elt, elt_type) for elt in lhs.elts]
       tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
-      return typed_ast.Tuple(new_elts, type = tuple_t)
-    elif lhs_class is untyped_ast.Index:
-      new_arr = annotate_expr(lhs.value, tenv, var_map)
-      new_idx = annotate_expr(lhs.index, tenv, var_map)
+      return syntax.Tuple(new_elts, type = tuple_t)
+    elif lhs_class is syntax.Index:
+      new_arr = self.transform_expr(lhs.value)
+      new_idx = self.transform_expr(lhs.index)
       assert isinstance(new_arr.type, ArrayT), \
           "Expected array, got %s" % new_arr.type
       elt_t = new_arr.type.index_type(new_idx.type)
-      return typed_ast.Index(new_arr, new_idx, type = elt_t)
-    elif lhs_class is untyped_ast.Attribute:
+      return syntax.Index(new_arr, new_idx, type = elt_t)
+    elif lhs_class is syntax.Attribute:
       name = lhs.name
-      struct = annotate_expr(lhs.value, tenv, var_map)
+      struct = self.transform_expr(lhs.value)
       struct_t = struct.type
       assert isinstance(struct_t, StructT), \
           "Can't access fields on value %s of type %s" % \
           (struct, struct_t)
       field_t = struct_t.field_type(name)
-      return typed_ast.Attribute(struct, name, field_t)
+      return syntax.Attribute(struct, name, field_t)
     else:
-      assert lhs_class is untyped_ast.Var, "Unexpected LHS: %s" % (lhs,)
-      new_name = var_map.lookup(lhs.name)
-      old_type = tenv.get(new_name, Unknown)
+      assert lhs_class is syntax.Var, "Unexpected LHS: %s" % (lhs,)
+      new_name = self.var_map.lookup(lhs.name)
+      old_type = self.tenv.get(new_name, Unknown)
       new_type = old_type.combine(rhs_type)
-      tenv[new_name] = new_type
-      return typed_ast.Var(new_name, type = new_type)
+      self.tenv[new_name] = new_type
+      return syntax.Var(new_name, type = new_type)
 
-  def stmt_Assign():
-    rhs = annotate_expr(stmt.rhs, tenv, var_map)
-    lhs = annotate_lhs(stmt.lhs, rhs.type)
-    return typed_ast.Assign(lhs, rhs)
+  def transform_Assign(self, stmt):
+    rhs = self.transform_expr(stmt.rhs)
+    lhs = self.transform_lhs_with_type(stmt.lhs, rhs.type)
+    return syntax.Assign(lhs, rhs)
   
-  def stmt_Comment():
+  def transform_Comment(self, stmt):
     return stmt 
 
-  def stmt_If():
-    cond = annotate_expr(stmt.cond, tenv, var_map) 
+  def transform_If(self, stmt):
+    cond = self.transform_expr(stmt.cond) 
     assert isinstance(cond.type, ScalarT), \
         "Condition has type %s but must be convertible to bool" % cond.type
     # it would be cleaner to not have anything resembling an optimization 
     # inter-mixed with the type inference, but I'm not sure how else to 
     # support 'if x is None:...'
-    print ">>>", cond, is_true(cond), is_false(cond) 
     if is_false(cond):
       true = []
     else:
-      true = annotate_block(stmt.true, tenv, var_map)
+      true = self.transform_block(stmt.true)
     if is_true(cond):
       false = []
     else:
-      false = annotate_block(stmt.false, tenv, var_map)
-    merge = annotate_phi_nodes(stmt.merge)
-    return typed_ast.If(cond, true, false, merge)
+      false = self.transform_block(stmt.false)
+    merge = self.transform_phi_nodes(stmt.merge)
+    return syntax.If(cond, true, false, merge)
 
-  def stmt_Return():
-    ret_val = annotate_expr(stmt.value, tenv, var_map)
-    curr_return_type = tenv["$return"]
-    tenv["$return"] = curr_return_type.combine(ret_val.type)
-    return typed_ast.Return(ret_val)
+  def transform_Return(self, stmt):
+    ret_val = self.transform_expr(stmt.value)
+    curr_return_type = self.tenv["$return"]
+    self.tenv["$return"] = curr_return_type.combine(ret_val.type)
+    return syntax.Return(ret_val)
 
-  def stmt_While():
-    infer_left_flow(stmt.merge)
-    cond = annotate_expr(stmt.cond, tenv, var_map)
-    body = annotate_block(stmt.body, tenv, var_map)
-    merge = annotate_phi_nodes(stmt.merge)
-    return typed_ast.While(cond, body, merge)
+  def transform_While(self, stmt):
+    self.infer_left_flow(stmt.merge)
+    cond = self.transform_expr(stmt.cond)
+    body = self.transform_block(stmt.body)
+    merge = self.transform_phi_nodes(stmt.merge)
+    return syntax.While(cond, body, merge)
 
-  def stmt_ForLoop():
-    infer_left_flow(stmt.merge)
-    start = annotate_expr(stmt.start, tenv, var_map)
-    stop = annotate_expr(stmt.stop, tenv, var_map)
-    step = annotate_expr(stmt.step, tenv, var_map)
+  def transform_ForLoop(self, stmt):
+    self.infer_left_flow(stmt.merge)
+    start = self.transform_expr(stmt.start)
+    stop = self.transform_expr(stmt.stop)
+    step = self.transform_expr(stmt.step)
     lhs_t = start.type.combine(stop.type).combine(step.type)
-    var = annotate_lhs(stmt.var, lhs_t)
-    body = annotate_block(stmt.body, tenv, var_map)
-    merge = annotate_phi_nodes(stmt.merge)
+    var = self.transform_lhs(stmt.var, lhs_t)
+    body = self.transform_block(stmt.body)
+    merge = self.transform_phi_nodes(stmt.merge)
+    return syntax.ForLoop(var, start, stop, step, body, merge)
 
-    return typed_ast.ForLoop(var, start, stop, step, body, merge)
 
-  return dispatch(stmt, prefix="stmt")
-
-def annotate_block(stmts, tenv, var_map):
-  return [annotate_stmt(s, tenv, var_map) for s in stmts]
 
 def infer_types(untyped_fn, types):
   
@@ -654,8 +636,8 @@ def infer_types(untyped_fn, types):
 
   # keep track of the return
   tenv['$return'] = Unknown
-
-  body = annotate_block(untyped_fn.body, tenv, var_map)
+  annotator = Annotator(tenv, var_map)
+  body = annotator.transform_block(untyped_fn.body)
   arg_names = [local_name for local_name
                in
                typed_args.nonlocals + tuple(typed_args.positional)
@@ -665,17 +647,17 @@ def infer_types(untyped_fn, types):
     for local_name in unbound_keywords:
       t = tenv[local_name]
       python_value = typed_args.defaults[local_name]
-      var = typed_ast.Var(local_name, type = t)
+      var = syntax.Var(local_name, type = t)
       if isinstance(python_value, tuple):
         parakeet_elts = []
         for (elt_value, elt_type) in zip(python_value, t.elt_types):
-          parakeet_elt = typed_ast.Const(elt_value, elt_type)
+          parakeet_elt = syntax.Const(elt_value, elt_type)
           parakeet_elts.append(parakeet_elt)
-        typed_val = typed_ast.Tuple(tuple(parakeet_elts), type = t)
+        typed_val = syntax.Tuple(tuple(parakeet_elts), type = t)
       else:
-        typed_val = typed_ast.Const(python_value, t) #mk_default_const(python_value, t)
+        typed_val = syntax.Const(python_value, t) #mk_default_const(python_value, t)
       print "infer_type default value %s = %s" %(var,  typed_val)
-      stmt = typed_ast.Assign(var, typed_val)
+      stmt = syntax.Assign(var, typed_val)
       default_assignments.append(stmt)
     body = default_assignments + body
 
@@ -693,23 +675,23 @@ def infer_types(untyped_fn, types):
     for (i, elt_t) in enumerate(starargs_t.elt_types):
       arg_name = "%s_elt%d" % (names.original(local_starargs_name), i)
       tenv[arg_name] = elt_t
-      arg_var = typed_ast.Var(name = arg_name, type = elt_t)
+      arg_var = syntax.Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
     input_types = input_types + starargs_t.elt_types
-    tuple_lhs = typed_ast.Var(name = local_starargs_name, type = starargs_t)
-    tuple_rhs = typed_ast.Tuple(elts = extra_arg_vars, type = starargs_t)
-    stmt = typed_ast.Assign(tuple_lhs, tuple_rhs)
+    tuple_lhs = syntax.Var(name = local_starargs_name, type = starargs_t)
+    tuple_rhs = syntax.Tuple(elts = extra_arg_vars, type = starargs_t)
+    stmt = syntax.Assign(tuple_lhs, tuple_rhs)
     body = [stmt] + body
 
   return_type = tenv["$return"]
   # if nothing ever gets returned, then set the return type to None
   if isinstance(return_type,  UnknownT):
-    body.append(typed_ast.Return(syntax_helpers.none))
+    body.append(syntax.Return(syntax_helpers.none))
     tenv["$return"] = NoneType
     return_type = NoneType
 
-  return typed_ast.TypedFn(
+  return syntax.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
     arg_names = arg_names,
@@ -724,7 +706,7 @@ def _specialize(fn, arg_types):
   objects and performs memoization
   """
 
-  if isinstance(fn, typed_ast.TypedFn):
+  if isinstance(fn, syntax.TypedFn):
     return fn
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
@@ -734,19 +716,19 @@ def _specialize(fn, arg_types):
   return normalized
 
 def _get_fundef(fn):
-  if isinstance(fn, (untyped_ast.Fn, typed_ast.TypedFn)):
+  if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
     return fn
   else:
     assert isinstance(fn, str), \
         "Unexpected function %s : %s"  % (fn, fn.type)
-    return untyped_ast.Fn.registry[fn]
+    return syntax.Fn.registry[fn]
 
 def _get_closure_type(fn):
   if fn.__class__ is closure_type.ClosureT:
     return fn
-  elif isinstance(fn, typed_ast.Closure):
+  elif isinstance(fn, syntax.Closure):
     return fn.type
-  elif isinstance(fn, typed_ast.Var):
+  elif isinstance(fn, syntax.Var):
     assert isinstance(fn.type, closure_type.ClosureT)
     return fn.type
   else:
@@ -754,7 +736,7 @@ def _get_closure_type(fn):
     return closure_type.make_closure_type(fundef, [])
 
 def specialize(fn, arg_types):
-  if isinstance(fn, typed_ast.TypedFn):
+  if isinstance(fn, syntax.TypedFn):
     return fn
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
