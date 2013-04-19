@@ -141,6 +141,10 @@ class AdverbSemantics(object):
     return output
 
   def eval_allpairs(self, fn, x, y, axis):
+    if axis is None: 
+      x = self.ravel(x)
+      y = self.ravel(y)
+      axis = 0
     nx = self.size_along_axis(x, axis)
     ny = self.size_along_axis(y, axis)
     outer_shape = self.tuple( [nx, ny] )

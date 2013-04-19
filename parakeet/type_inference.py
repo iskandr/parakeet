@@ -171,6 +171,10 @@ def invoke_result_type(fn, arg_types):
   _invoke_type_cache[key] = result_type
   return result_type
 
+
+
+class Annotate(Transform):
+
 def annotate_expr(expr, tenv, var_map):
   def annotate_child(child_expr):
     return annotate_expr(child_expr, tenv, var_map)
@@ -368,9 +372,18 @@ def annotate_expr(expr, tenv, var_map):
                        type = result_type)
 
   def expr_Reduce():
+    def ravel(x):
+      elt_type = x.type.elt_type 
+      
+      return typed_ast.ArrayView 
+      
     map_fn = annotate_child(expr.fn)
     combine_fn = annotate_child(expr.combine)
     new_args = annotate_args(expr.args, flat = True)
+    axis = unwrap_constant(expr.axis)
+    if axis is None:
+      new_args = []
+      axis = 0
     arg_types = get_types(new_args)
     init = annotate_child(expr.init) if expr.init else None
     init_type = init.type if init else None
@@ -381,9 +394,8 @@ def annotate_expr(expr, tenv, var_map):
                           init_type)
     typed_map_closure = make_typed_closure (map_fn, typed_map_fn)
     typed_combine_closure = make_typed_closure(combine_fn, typed_combine_fn)
-    axis = unwrap_constant(expr.axis)
-    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
-      axis = 0
+    
+    
     if init_type and init_type != result_type and \
        array_type.rank(init_type) < array_type.rank(result_type):
       assert len(new_args) == 1

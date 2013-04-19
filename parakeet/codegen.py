@@ -370,6 +370,16 @@ class Codegen(object):
     else:
       return x.type
 
+  def ravel(self, x):
+    assert self.is_array(x)
+    nelts = self.nelts(x)
+    shape = self.tuple((nelts,), 'shape')
+    strides = self.tuple((self.int(x.type.elt_type.nbytes),), "strides")
+    data = self.attr(x, 'data', 'data_ptr')
+    offset = self.attr(x, 'offset')
+    t = array_type.make_array_type(x.type.elt_type, 1)
+    return syntax.ArrayView(data, shape, strides, offset, nelts, type = t)
+  
   def shape(self, array, dim = None):
     if isinstance(array.type, ArrayT):
       shape = self.attr(array, "shape")

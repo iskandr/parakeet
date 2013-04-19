@@ -400,7 +400,7 @@ def create_adverb_hook(adverb_class,
     data_names = arg_names
     varargs_name = None
 
-  def mk_wrapper(axis):
+  def mk_wrapper():
     """
     An awkward mismatch between treating adverbs as functions is that their axis
     parameter is really fixed as part of the syntax of Parakeet. Thus, when
@@ -415,8 +415,7 @@ def create_adverb_hook(adverb_class,
                                           map_fn_name = map_fn_name,
                                           combine_fn_name = combine_fn_name,
                                           data_names = data_names,
-                                          varargs_name = varargs_name,
-                                          axis = axis)
+                                          varargs_name = varargs_name)
 
   def python_hook(fn, *args, **kwds):
     axis = kwds.get('axis', 0)
@@ -424,7 +423,7 @@ def create_adverb_hook(adverb_class,
     return run(wrapper, *([fn] + list(args)))
   # for now we register with the default number of args since our wrappers
   # don't yet support unpacking a variable number of args
-  default_wrapper = mk_wrapper(axis = 0)
+  default_wrapper = mk_wrapper(axis = None)
 
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
@@ -452,9 +451,10 @@ def allpairs(f, x, y, **kwargs):
 
 @staged_macro("axis")
 def reduce(f, x, **kwargs):
-  axis = get_axis(kwargs)
+  axis = syntax_helpers.unwrap_constant(kwargs.get('axis'))
+  if axis is not None: 
+    axis = syntax_helpers.unwrap_constant(axis)                                        
   init = kwargs.get('init')
-
   return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
                         axis = axis)
 

@@ -142,6 +142,16 @@ class Transform(Codegen):
     expr.shape = self.transform_expr(expr.shape)
     return expr 
 
+  def transform_Ravel(self, expr):
+    expr.array = self.transform_expr(expr.array)
+    return expr 
+  
+  def transform_Reshape(self, expr):
+    expr.array = self.transform_expr(expr.array)
+    expr.shape = self.transform_expr(expr.shape)
+    return expr 
+
+
   def transform_Map(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)

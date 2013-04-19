@@ -197,3 +197,10 @@ class ShapeSemantics(AdverbSemantics):
 
   def identity_function(self, x):
     return x
+  
+  def ravel(self, x):
+    assert isinstance(x, Shape)
+    nelts = 1 
+    for d in x.dims:
+      nelts *= d
+    return Shape((nelts,)) 

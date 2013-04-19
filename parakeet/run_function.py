@@ -79,9 +79,7 @@ class CompiledFn:
     gv_inputs = [ctypes_to_generic_value(cv, t) for (cv,t) in
                  zip(ctypes_inputs, expected_types)]
     
-    print "gv_inputs", gv_inputs 
     gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
-    print "gv_return", gv_return 
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
 
 def prepare_args(fn, args, kwargs):

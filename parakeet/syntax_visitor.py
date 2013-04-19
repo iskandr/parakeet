@@ -52,6 +52,13 @@ class SyntaxVisitor(object):
   def visit_AllocArray(self, expr):
     self.visit_expr(expr.shape)
 
+  def visit_Ravel(self, expr):
+    self.visit_expr(expr.array)
+
+  def visit_Reshape(self, expr):
+    self.visit_expr(expr.array)
+    self.visit_expr(expr.shape)
+   
   def visit_Slice(self, expr):
     self.visit_expr(expr.start)
     self.visit_expr(expr.stop)

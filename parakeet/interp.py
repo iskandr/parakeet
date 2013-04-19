@@ -49,6 +49,9 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
   def shift_array(self, arr, offset):
     return arr[offset:]
 
+  def ravel(self, arr):
+    return np.ravel(arr)
+  
   def index(self, arr, idx):
     return arr[idx]
 
@@ -65,6 +68,7 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
     for i in xrange(start_idx, stop_idx):
       body(i)
 
+  
   class Accumulator:
     def __init__(self, value):
       self.value = value
