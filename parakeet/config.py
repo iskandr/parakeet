@@ -8,30 +8,30 @@ print_untyped_function = True
 # show the higher level typed function after specialization?
 print_specialized_function = True
 
-# show lower level typed function before
-# it gets translated to LLVM?
-print_lowered_function = False
-
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
 
+# show lower level typed function before
+# it gets translated to LLVM?
+print_lowered_function = True
+
+# show LLVM bytecode before optimization passes
+print_unoptimized_llvm = False
+
+# show LLVM bytecode after optimizations
+print_optimized_llvm = True
+
 # show the input function to each transformation?
-print_functions_before_transforms = ['IndexElim']
+print_functions_before_transforms = [] #['IndexElim']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['IndexElim']
+print_functions_after_transforms = [] #['IndexElim']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
 
 # show functions after tiling transformation?
 print_tiled_adverbs = False
-
-# show LLVM bytecode before optimization passes
-print_unoptimized_llvm = False
-
-# show LLVM bytecode after optimizations
-print_optimized_llvm = False
 
 # show aliases and escape sets
 print_escape_analysis = False

@@ -176,9 +176,9 @@ def invoke_result_type(fn, arg_types):
 class Annotator(Transform):
   
   def __init__(self, tenv, var_map):
-    self.tenv = tenv 
-    self.var_map = var_map
     Transform.__init__(self)
+    self.type_env = tenv 
+    self.var_map = var_map
     
 
   def transform_args(self, args, flat = False):
@@ -327,9 +327,9 @@ class Annotator(Transform):
     if old_name not in self.var_map._vars:
       raise names.NameNotFound(old_name)
     new_name = self.var_map.lookup(old_name)
-    assert new_name in self.tenv, \
+    assert new_name in self.type_env, \
         "Unknown var %s (previously %s)" % (new_name, old_name)
-    return syntax.Var(new_name, type = self.tenv[new_name])
+    return syntax.Var(new_name, type = self.type_env[new_name])
 
   def transform_Tuple(self, expr):
     elts = self.transform_expr_list(expr.elts)
@@ -371,17 +371,22 @@ class Annotator(Transform):
                        type = result_type)
 
   def transform_Reduce(self, expr):
-
+    print ">>", expr
+    print "blocks before", self.blocks
     map_fn = self.transform_expr(expr.fn)
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)
     axis = unwrap_constant(expr.axis)
     if axis is None:
-      new_args = []
+      new_args = [self.ravel(arg) for arg in new_args]
       axis = 0
     arg_types = get_types(new_args)
     init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
+    
+    print "new args", new_args
+    print "arg_types", arg_types
+    print "blocks after", self.blocks
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
                           combine_fn.type,
@@ -481,9 +486,9 @@ class Annotator(Transform):
 
     new_val = self.transform_expr(val)
     new_type = new_val.type
-    old_type = self.tenv.get(result_var, Unknown)
+    old_type = self.type_env.get(result_var, Unknown)
     new_result_var = self.var_map.lookup(result_var)
-    self.tenv[new_result_var]  = old_type.combine(new_type)
+    self.type_env[new_result_var]  = old_type.combine(new_type)
 
   def infer_phi_nodes(self, nodes, direction):
     for (var, values) in nodes.iteritems():
@@ -504,10 +509,10 @@ class Annotator(Transform):
 
     new_left = self.transform_expr(left_val)
     new_right = self.transform_expr(right_val)
-    old_type = self.tenv.get(result_var, Unknown)
+    old_type = self.type_env.get(result_var, Unknown)
     new_type = old_type.combine(new_left.type).combine(new_right.type)
     new_var = self.var_map.lookup(result_var)
-    self.tenv[new_var] = new_type
+    self.type_env[new_var] = new_type
     return (new_var, (new_left, new_right))
 
   def transform_phi_nodes(self, nodes):
@@ -550,9 +555,9 @@ class Annotator(Transform):
     else:
       assert lhs_class is syntax.Var, "Unexpected LHS: %s" % (lhs,)
       new_name = self.var_map.lookup(lhs.name)
-      old_type = self.tenv.get(new_name, Unknown)
+      old_type = self.type_env.get(new_name, Unknown)
       new_type = old_type.combine(rhs_type)
-      self.tenv[new_name] = new_type
+      self.type_env[new_name] = new_type
       return syntax.Var(new_name, type = new_type)
 
   def transform_Assign(self, stmt):
@@ -560,9 +565,6 @@ class Annotator(Transform):
     lhs = self.annotate_lhs(stmt.lhs, rhs.type)
     return syntax.Assign(lhs, rhs)
   
-  def transform_Comment(self, stmt):
-    return stmt 
-
   def transform_If(self, stmt):
     cond = self.transform_expr(stmt.cond) 
     assert isinstance(cond.type, ScalarT), \
@@ -583,8 +585,8 @@ class Annotator(Transform):
 
   def transform_Return(self, stmt):
     ret_val = self.transform_expr(stmt.value)
-    curr_return_type = self.tenv["$return"]
-    self.tenv["$return"] = curr_return_type.combine(ret_val.type)
+    curr_return_type = self.type_env["$return"]
+    self.type_env["$return"] = curr_return_type.combine(ret_val.type)
     return syntax.Return(ret_val)
 
   def transform_While(self, stmt):

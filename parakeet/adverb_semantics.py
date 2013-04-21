@@ -110,6 +110,9 @@ class AdverbSemantics(object):
     return output
 
   def eval_reduce(self, map_fn, combine, init, values, axis):
+    if axis is None:
+      values = [self.ravel(value) for value in values]
+      axis = 0
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     zero = self.int(0)
     one = self.int(1)

@@ -119,7 +119,14 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_TypedFn(self, fn):
     return Closure(fn, [])
-
+  
+  def visit_ArrayView(self, expr):
+    shape_tuple = self.visit_expr(expr.shape)
+    if shape_tuple.__class__ is Tuple:
+      return Shape(tuple(shape_tuple.elts))
+    else:
+      return Shape( (any_scalar,) * expr.shape.type.rank)
+    
   def visit_Range(self, expr):
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)

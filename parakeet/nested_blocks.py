@@ -33,3 +33,6 @@ class NestedBlocks(object):
       stmts = [stmts]
     self.extend_current(stmts)
     return self
+
+  def __str__(self):
+    return "NestedBlocks(%s)" % self._blocks

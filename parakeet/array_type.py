@@ -179,25 +179,46 @@ class ArrayT(StructT):
     
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
-    total_bytes = nelts * elt_size
+    # total_bytes = nelts * elt_size
     
-    try:
-      ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
-      assert total_bytes == buffer_length, \
-        "Shape %s has %d elements of size %d (total = %d) but buffer has %d bytes" % \
-        (x.shape, nelts, elt_size, total_bytes, buffer_length)
+    if x.base:
+      ptr = x.base.ctypes.data
+      offset = (x.ctypes.data - ptr) / elt_size
+      buffer_length = x.base.nbytes 
+    else:
+      ptr = x.ctypes.data 
+      offset = 0
+      buffer_length = x.nbytes 
+    buffer_elts = buffer_length / elt_size
+    assert buffer_elts == nelts, \
+       "Memory contains %d elts, but shape yields %d elts" % (buffer_elts, nelts)   
+    #try:
+    #  ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
+    #  assert total_bytes == buffer_length, \
+    #    "Shape %s has %d elements of size %d (total = %d) but buffer has %d bytes" % \
+    #    (x.shape, nelts, elt_size, total_bytes, buffer_length)
     
-    except:
-      print "Warning: Failed to get NumPy buffer for array with shape %s" % \
-        (x.shape,)
-      ptr = x.ctypes.data_as(self.ptr_t.ctypes_repr)
-    
-    self._seen_ptr.add(ctypes.addressof(ptr))
+    #except:
+    #  print "Warning: Failed to get NumPy buffer for array with shape %s" % \
+    #    (x.shape,)
+    #  ptr = x.ctypes.data_as(self.ptr_t.ctypes_repr)
+    # self._seen_ptr.add(ctypes.addressof(ptr))
     ctypes_shape = self.shape_t.from_python(x.shape)
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
-    return self.ctypes_repr(ptr, ctypes.pointer(ctypes_shape),
-                            ctypes.pointer(ctypes_strides), 0, nelts)
+    elt_type = core_types.from_dtype(x.dtype).ctypes_repr
+    ptr_type = ctypes.POINTER(elt_type)
+    #print "ptr", ptr, ptr_type.from_address(ptr)
+    #print "offset", offset 
+    #print "buffer", repr(x.data)
+    #print "ctypes", x.ctypes.data
+    res = self.ctypes_repr(ptr_type.from_address(ptr), 
+                            ctypes.pointer(ctypes_shape),
+                            ctypes.pointer(ctypes_strides), 
+                            offset, 
+                            nelts)
+    #print res 
+    return res
 
   def to_python(self, obj):
     """

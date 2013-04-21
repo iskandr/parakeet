@@ -154,8 +154,29 @@ def eval_fn(fn, actuals):
 
     def expr_Attribute():
       value = eval_expr(expr.value)
-      return getattr(value, expr.name)
+      if expr.name == 'offset':
+        if value.base is None:
+          return 0
+        else:
+          return value.ctypes.data - value.base.ctypes.data
+      elif expr.name == 'total_elts':
+        return value.size
+      else:
+        return getattr(value, expr.name)
 
+    def expr_ArrayView():
+      data = eval_expr(expr.data)
+      shape  = eval_expr(expr.shape)
+      strides = eval_expr(expr.strides)
+      offset = eval_expr(expr.offset)
+      dtype = expr.type.elt_type.dtype
+      return np.ndarray(shape = shape, 
+                        offset = offset, 
+                        buffer = data, 
+                        strides = strides, 
+                        dtype = np.dtype(dtype))
+      
+      
     def expr_Array():
       elt_values = map(eval_expr, expr.elts)
       return np.array(elt_values)

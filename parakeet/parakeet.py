@@ -18,7 +18,6 @@ def sum(x):
 def prod(x):
   return reduce(multiply, x[1:], init=x[0])
 
-
 def mean(x):
   return sum(x) / x.shape[0]
 
