@@ -181,10 +181,11 @@ class ArrayT(StructT):
     elt_size = x.dtype.itemsize
     # total_bytes = nelts * elt_size
     
-    if x.base:
+    if x.base is not None:
       ptr = x.base.ctypes.data
-      offset = (x.ctypes.data - ptr) / elt_size
-      buffer_length = x.base.nbytes 
+      offset_bytes = (x.ctypes.data - ptr) 
+      offset = offset_bytes / elt_size
+      buffer_length = x.base.size - offset_bytes 
     else:
       ptr = x.ctypes.data 
       offset = 0
