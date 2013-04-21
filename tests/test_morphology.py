@@ -29,11 +29,12 @@ def dilate(X, window_size = (3,3)):
   return parakeet.pmap2d(max_, X, window_size)
 
 
-def load_img(path  = '../data/rjp_small.jpg', gray=True):
+def load_img(path  = '../data/rjp_small.png', gray=True):
   x = pylab.imread(path)
   if len(x.shape) > 2 and gray:
-    x =  x[:, :, 1] 
-  x = x.astype('float') / 256.0
+    x =  x[:, :, 1]
+  if x.max() > 1: 
+    x = x.astype('float') / 256.0
   return x
 
 
@@ -48,9 +49,9 @@ def test_erode():
   g = filter(x[:,:,1])
   b = filter(x[:,:,2])
   y = np.dstack([r,g,b])
-  pylab.imshow(x, origin='lower')
+  pylab.imshow(x)
   pylab.figure()
-  pylab.imshow(y, origin='lower')
+  pylab.imshow(y)
   pylab.show()
   assert (x.min() <= y).all()
  

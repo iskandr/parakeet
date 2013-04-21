@@ -517,18 +517,18 @@ class Annotator(Transform):
       new_nodes[new_name] = (left, right)
     return new_nodes
 
-  def transform_lhs_with_type(self, lhs, rhs_type):
+  def annotate_lhs(self, lhs, rhs_type):
     lhs_class = lhs.__class__
     if lhs_class is syntax.Tuple:
       if rhs_type.__class__ is TupleT:
         assert len(lhs.elts) == len(rhs_type.elt_types)
-        new_elts = [self.transform_lhs_with_type(elt, elt_type) 
+        new_elts = [self.annotate_lhs(elt, elt_type) 
                     for (elt, elt_type) in zip(lhs.elts, rhs_type.elt_types)]
       else:
         assert rhs_type.__class__ is ArrayT, \
             "Unexpected right hand side type %s" % rhs_type
         elt_type = array_type.lower_rank(rhs_type, 1)
-        new_elts = [self.transform_lhs_with_type(elt, elt_type) for elt in lhs.elts]
+        new_elts = [self.annotate_lhs(elt, elt_type) for elt in lhs.elts]
       tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
       return syntax.Tuple(new_elts, type = tuple_t)
     elif lhs_class is syntax.Index:
@@ -557,7 +557,7 @@ class Annotator(Transform):
 
   def transform_Assign(self, stmt):
     rhs = self.transform_expr(stmt.rhs)
-    lhs = self.transform_lhs_with_type(stmt.lhs, rhs.type)
+    lhs = self.annotate_lhs(stmt.lhs, rhs.type)
     return syntax.Assign(lhs, rhs)
   
   def transform_Comment(self, stmt):
@@ -600,7 +600,7 @@ class Annotator(Transform):
     stop = self.transform_expr(stmt.stop)
     step = self.transform_expr(stmt.step)
     lhs_t = start.type.combine(stop.type).combine(step.type)
-    var = self.transform_lhs(stmt.var, lhs_t)
+    var = self.annotate_lhs(stmt.var, lhs_t)
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
     return syntax.ForLoop(var, start, stop, step, body, merge)
