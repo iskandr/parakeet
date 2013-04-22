@@ -182,10 +182,22 @@ class ArrayT(StructT):
     # total_bytes = nelts * elt_size
     
     if x.base is not None:
-      ptr = x.base.ctypes.data
-      offset_bytes = (x.ctypes.data - ptr) 
+      if isinstance(x.base, np.ndarray):
+        ptr = x.base.ctypes.data_as(self.ptr_t.ctypes_repr)
+        offset_bytes = x.base.ctypes.data - x.ctypes.data 
+        base_size = x.base.size
+
+      else:
+        assert isinstance(x.base, buffer)
+        print repr(x.base) 
+        print repr(x.data)
+        ptr, buffer_length = buffer_info(x.base, self.ptr_t.ctypes_repr)
+        offset_bytes = ctypes.addressof(ptr.contents) - x.ctypes.data
+        base_size = len(x.base)
+      
       offset = offset_bytes / elt_size
-      buffer_length = x.base.size - offset_bytes 
+      buffer_length = base_size - offset_bytes 
+        
     else:
       ptr = x.ctypes.data 
       offset = 0
@@ -207,13 +219,13 @@ class ArrayT(StructT):
     ctypes_shape = self.shape_t.from_python(x.shape)
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
-    elt_type = core_types.from_dtype(x.dtype).ctypes_repr
-    ptr_type = ctypes.POINTER(elt_type)
+    #elt_type = core_types.from_dtype(x.dtype).ctypes_repr
+    #ptr_type = ctypes.POINTER(elt_type)
     #print "ptr", ptr, ptr_type.from_address(ptr)
     #print "offset", offset 
     #print "buffer", repr(x.data)
     #print "ctypes", x.ctypes.data
-    res = self.ctypes_repr(ptr_type.from_address(ptr), 
+    res = self.ctypes_repr(ptr, 
                             ctypes.pointer(ctypes_shape),
                             ctypes.pointer(ctypes_strides), 
                             offset, 
