@@ -180,59 +180,28 @@ class ArrayT(StructT):
     nelts = reduce(lambda x,y: x*y, x.shape)
     elt_size = x.dtype.itemsize
     # total_bytes = nelts * elt_size
-    
     if x.base is not None:
       if isinstance(x.base, np.ndarray):
         ptr = x.base.ctypes.data_as(self.ptr_t.ctypes_repr)
-        offset_bytes = x.base.ctypes.data - x.ctypes.data 
-        base_size = x.base.size
-
+        offset_bytes = x.ctypes.data  - x.base.ctypes.data 
       else:
         assert isinstance(x.base, buffer)
-        print repr(x.base) 
-        print repr(x.data)
-        ptr, buffer_length = buffer_info(x.base, self.ptr_t.ctypes_repr)
-        offset_bytes = ctypes.addressof(ptr.contents) - x.ctypes.data
-        base_size = len(x.base)
-      
+        ptr, _ = buffer_info(x.base, self.ptr_t.ctypes_repr)
+        offset_bytes = x.ctypes.data - ctypes.addressof(ptr.contents) 
       offset = offset_bytes / elt_size
-      buffer_length = base_size - offset_bytes 
-        
     else:
       ptr = x.ctypes.data 
       offset = 0
-      buffer_length = x.nbytes 
-    buffer_elts = buffer_length / elt_size
-    assert buffer_elts == nelts, \
-       "Memory contains %d elts, but shape yields %d elts" % (buffer_elts, nelts)   
-    #try:
-    #  ptr, buffer_length = buffer_info(x.data, self.ptr_t.ctypes_repr)
-    #  assert total_bytes == buffer_length, \
-    #    "Shape %s has %d elements of size %d (total = %d) but buffer has %d bytes" % \
-    #    (x.shape, nelts, elt_size, total_bytes, buffer_length)
-    
-    #except:
-    #  print "Warning: Failed to get NumPy buffer for array with shape %s" % \
-    #    (x.shape,)
-    #  ptr = x.ctypes.data_as(self.ptr_t.ctypes_repr)
-    # self._seen_ptr.add(ctypes.addressof(ptr))
+   
     ctypes_shape = self.shape_t.from_python(x.shape)
     strides_in_elts = tuple([s / elt_size for s in x.strides])
     ctypes_strides = self.strides_t.from_python(strides_in_elts)
-    #elt_type = core_types.from_dtype(x.dtype).ctypes_repr
-    #ptr_type = ctypes.POINTER(elt_type)
-    #print "ptr", ptr, ptr_type.from_address(ptr)
-    #print "offset", offset 
-    #print "buffer", repr(x.data)
-    #print "ctypes", x.ctypes.data
-    res = self.ctypes_repr(ptr, 
+    return self.ctypes_repr(ptr, 
                             ctypes.pointer(ctypes_shape),
                             ctypes.pointer(ctypes_strides), 
                             offset, 
                             nelts)
-    #print res 
-    return res
-
+    
   def to_python(self, obj):
     """
     For now, to avoid to dealing with the messiness of ownership, we just always
