@@ -190,7 +190,7 @@ class ArrayT(StructT):
         offset_bytes = x.ctypes.data - ctypes.addressof(ptr.contents) 
       offset = offset_bytes / elt_size
     else:
-      ptr = x.ctypes.data 
+      ptr = x.ctypes.data_as(self.ptr_t.ctypes_repr)
       offset = 0
    
     ctypes_shape = self.shape_t.from_python(x.shape)
