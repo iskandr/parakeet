@@ -460,6 +460,7 @@ class AST_Translator(ast.NodeVisitor):
     else:
       if self.is_global(attr_chain):
         value = self.lookup_global(attr_chain)
+        print attr_chain, value 
         # value = self.lookup_attribute_chain(attr_chain)
         if isinstance(value, macro):
           return value.transform(positional, keywords_dict)

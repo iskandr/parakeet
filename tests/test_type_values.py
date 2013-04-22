@@ -2,7 +2,7 @@ import numpy as np
 import parakeet 
 
 from parakeet import jit 
-from testing_helpers import run_local_tests
+from testing_helpers import run_local_tests, expect
 
 @jit 
 def float32_cast(x):
@@ -109,6 +109,15 @@ def test_call_type_conv():
   assert float_res == -1000.0
   assert type(float_res) == np.float64
 
+@jit
+def type_as_value(n):
+  t2 = parakeet.dtypes.bool8
+  return t2(n)
+
+
+def test_type_as_value():
+  expect(type_as_value, [1], True)
+  expect(type_as_value, [0], False)
   
 if __name__ == '__main__':
   run_local_tests()
