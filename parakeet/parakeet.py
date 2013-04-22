@@ -5,12 +5,19 @@ from adverb_api import allpairs, each, reduce, scan, conv
 from lib_simple import *
 from prims import *
 from run_function import run, specialize_and_compile
-from decorators import jit 
+from decorators import jit, macro
+import syntax 
 
 
 def typed_repr(fn, args):
   _, typed, _, _ = specialize_and_compile(fn, args)
   return typed
+
+def clear_specializations():
+  import closure_type
+  for clos_t in closure_type._closure_type_cache.itervalues():
+    clos_t.specializations.clear()
+
 
 def sum(x):
   return reduce(add, x, init = 0)
@@ -41,10 +48,13 @@ def diff(x, zero_fill=True):
 def dot(x,y):
   return sum(x*y)
 
-def clear_specializations():
-  import closure_type
-  for clos_t in closure_type._closure_type_cache.itervalues():
-    clos_t.specializations.clear()
+@macro 
+def zeros_like(x):
+  return syntax.ConstArrayLike(x, 0)
+
+@macro
+def ones_like(x):
+  return syntax.ConstArrayLike(x, 1)
 
 @jit
 def pmap1d(f, x, w = 3):

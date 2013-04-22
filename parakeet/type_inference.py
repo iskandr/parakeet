@@ -333,12 +333,18 @@ class Annotator(Transform):
 
   def transform_Tuple(self, expr):
     elts = self.transform_expr_list(expr.elts)
-    elt_types = get_types(elts)
-    t = tuple_type.make_tuple_type(elt_types)
-    return syntax.Tuple(elts, type = t)
+    return self.tuple(elts)
+    #elt_types = get_types(elts)
+    #t = tuple_type.make_tuple_type(elt_types)
+    #return syntax.Tuple(elts, type = t)
 
   def transform_Const(self, expr):
     return syntax.Const(expr.value, type_conv.typeof(expr.value))
+  
+  def transform_ConstArrayLike(self, expr):
+    typed_array_value = self.transform_expr(expr.array)
+    t = typed_array_value.type
+    return syntax.ConstArrayLike(typed_array_value, expr.value, type = t)
 
   def transform_Cast(self, expr):
     v = self.transform_expr(expr.value)
