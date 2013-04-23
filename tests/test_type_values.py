@@ -10,33 +10,33 @@ def float32_cast(x):
 
 def test_int_to_float32():
   res = float32_cast(0)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == 0.0
   res = float32_cast(1)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == 1.0
   res = float32_cast(-1)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == -1.0
 
 def test_float_to_float32():
   res = float32_cast(0.0)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == 0.0
   res = float32_cast(1.0)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == 1.0
   res = float32_cast(-1.0)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == -1.0
   
 
 def test_bool_to_float32():
   res = float32_cast(False)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == 1.0
   res = float32_cast(True)
-  assert type(res) == np.uint8 
+  assert type(res) == np.float32 
   assert res == 1.0
 
 @jit 
@@ -44,33 +44,33 @@ def uint8_cast(x):
   return parakeet.dtypes.uint8(x)
 
 def test_int_to_uint8():
-  res = float32_cast(0)
+  res = uint8_cast(0)
   assert type(res) == np.uint8 
   assert res == 0.0
-  res = float32_cast(1)
+  res = uint8_cast(1)
   assert type(res) == np.uint8 
   assert res == 1
-  res = float32_cast(-1)
+  res = uint8_cast(-1)
   assert type(res) == np.uint8 
   assert res == 255
 
 def test_float_to_uint8():
-  res = float32_cast(0.0)
+  res = uint8_cast(0.0)
   assert type(res) == np.uint8 
   assert res == 0
-  res = float32_cast(1.0)
+  res = uint8_cast(1.0)
   assert type(res) == np.uint8 
   assert res == 1
-  res = float32_cast(-1.0)
+  res = uint8_cast(-1.0)
   assert type(res) == np.uint8 
   assert res == 255
   
 
 def test_bool_to_uint8():
-  res = float32_cast(False)
+  res = uint8_cast(False)
   assert type(res) == np.uint8 
   assert res == 0
-  res = float32_cast(True)
+  res = uint8_cast(True)
   assert type(res) == np.uint8 
   assert res == 1
   

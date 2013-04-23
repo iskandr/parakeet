@@ -460,7 +460,7 @@ class AST_Translator(ast.NodeVisitor):
     else:
       if self.is_global(attr_chain):
         value = self.lookup_global(attr_chain)
-        print attr_chain, value 
+        # print attr_chain, value 
         # value = self.lookup_attribute_chain(attr_chain)
         if isinstance(value, macro):
           return value.transform(positional, keywords_dict)
@@ -468,7 +468,6 @@ class AST_Translator(ast.NodeVisitor):
           return syntax.PrimCall(value, positional)
         elif isinstance(value, types.BuiltinFunctionType):
           return self.translate_builtin(value, positional, keywords_dict)
-        
         elif hasattr(value, '__call__'):
           # if it's already been wrapped, extract the underlying function value
           if isinstance(value, jit):
@@ -477,6 +476,10 @@ class AST_Translator(ast.NodeVisitor):
           
           actuals = ActualArgs(positional, keywords_dict, starargs_expr)
           return syntax.Call(fn_node, actuals)
+        elif isinstance(value, np.dtype):
+          assert len(positional) == 1
+          assert len(keywords_dict) == 0
+          return syntax.Cast(positional[0], type = core_types.from_dtype(value))
         else:
           assert False, "depends on global %s" % attr_chain 
            

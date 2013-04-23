@@ -225,6 +225,15 @@ def always_zero(x):
 def identity(x):
   return x
 
+class TypeValueT(ConcreteT):
+  """
+  Materialization of a type into a value 
+  """
+  rank = 0
+  _members = ['type']
+  
+type_conv.register([np.dtype], TypeValueT, lambda dt: from_dtype(dt)) 
+
 # base class for all concrete scalar types
 # don't actually tag any values with this
 class ScalarT(ConcreteT):
