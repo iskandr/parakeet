@@ -52,7 +52,7 @@ class ExternalValue(object):
   def __str__(self):
     return "ExternalValue(%s)" % self.value
 
-def mk_reduction(fn, positional, init = None):
+def mk_reduce_call(fn, positional, init = None):
   import adverb_wrapper
   wrapper = adverb_wrapper.untyped_reduce_wrapper(None, fn)
   if init:
@@ -63,6 +63,15 @@ def mk_reduction(fn, positional, init = None):
   args = ActualArgs(positional = positional, keywords = keywords) 
   return syntax.Call(wrapper, args)
 
+def mk_simple_fn(mk_body, input_name = "x", fn_name = "cast"):
+  unique_arg_name = names.fresh(input_name)
+  unique_fn_name = names.fresh(fn_name)
+  var = syntax.Var(unique_arg_name)
+  formals = FormalArgs()
+  formals.add_positional(unique_arg_name, input_name)
+  body = mk_body(var)
+  return syntax.Fn(unique_fn_name, formals, body)
+  
 _function_wrapper_cache = {}
 def mk_wrapper_function(p):
   """
@@ -427,16 +436,16 @@ class AST_Translator(ast.NodeVisitor):
   def translate_builtin(self, value, positional, keywords_dict):
     
     if value == sum:
-      return mk_reduction(prims.add, positional, zero_i64)
+      return mk_reduce_call(prims.add, positional, zero_i64)
     elif value == max:
       if len(positional) == 1:
-        return mk_reduction(prims.maximum, positional)
+        return mk_reduce_call(prims.maximum, positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.maximum, positional)
     elif value == min:
       if len(positional) == 1:
-        return mk_reduction(prims.minimum, positional)
+        return mk_reduce_call(prims.minimum, positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.minimum, positional)
