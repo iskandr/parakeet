@@ -36,11 +36,11 @@ from syntax_helpers import none, true, false, one_i64, zero_i64
 # - compiled functions that have been wrapped by some Prim
 # - compiled functions that have been wrapped by some library function 
 
-reserved_names = {
-  'True' : true,
-  'False' : false,
-  'None' : none,
-}
+#reserved_names = {
+#  'True' : true,
+#  'False' : false,
+#  'None' : none,
+#}
 
 class ExternalValue(object):
   """
@@ -109,22 +109,24 @@ class AST_Translator(ast.NodeVisitor):
     return self.scopes.top()
 
   def lookup_global(self, key):
-    if self.globals:
-      if isinstance(key, str):
-        return self.globals[key]
-      else:
-        assert isinstance(key, (list, tuple))  
-        value = self.globals_dict[key[0]]
-        for elt in key[1:]:
-          value = getattr(value, elt)
-        return value 
+    if isinstance(key, (list, tuple)):
+      assert len(key) == 1
+      key = key[0]
     else:
-      return self.parent.lookup_global(key)
+      assert isinstance(key, str), "Invalid global key: %s" % (key,)
+
+    if self.globals:
+      if key in self.globals:
+        return self.globals[key]
+      assert key in __builtins__
+      return __builtins__[key]
+    else:
+      assert self.parent is not None
+      self.parent.lookup_global(key)
     
   def is_global(self, key):
     if isinstance(key, (list, tuple)):
       key = key[0]
-     
     if key in self.scopes:
       return False
     elif self.closure_cell_dict and key in self.closure_cell_dict:
@@ -134,17 +136,8 @@ class AST_Translator(ast.NodeVisitor):
     assert self.parent is not None 
     return self.parent.is_global(key)
   
-  def get_global(self, key):
-    if isinstance(key, (list, tuple)):
-      key = key[0]
-    if self.globals:
-      if key in self.globals:
-        return self.globals[key]
-      assert key in __builtins__
-      return __builtins__[key]
-    else:
-      assert self.parent is not None
-      self.parent.get_global(key)
+
+
   
   def lookup_attr_chain_value(self, attr_chain):
     assert attr_chain[0] not in self.scopes, \
@@ -159,11 +152,8 @@ class AST_Translator(ast.NodeVisitor):
     else:
       assert len(attr_chain) == 1
       name = attr_chain[0]
-      if name in __builtins__:
-        return __builtins__[name]
-      else:
-        assert name in reserved_names, "Unknown name %s" %  name 
-        return reserved_names[name].value 
+      assert name in __builtins__, "Unknown name %s" %  name 
+      return __builtins__[name]
        
 
   def is_function_value(self, v):
@@ -195,13 +185,14 @@ class AST_Translator(ast.NodeVisitor):
     elif isinstance(expr, ast.Tuple):
       return tuple(self.syntax_to_value(elt) for elt in expr.elts)
     else: 
-      return self.lookup_attr_chain_value(self.build_attribute_chain(expr))
+      attr_chain = self.build_attribute_chain(expr)
+      print attr_chain 
+      return self.lookup_attr_chain_value(attr_chain)
   
   def lookup(self, name):
-    if name in reserved_names:
-      return reserved_names[name]
-    
-    elif name in self.scopes:
+    #if name in reserved_names:
+    #  return reserved_names[name]
+    if name in self.scopes:
       return Var(self.scopes[name])
     elif self.parent:
       # don't actually keep the outer binding name, we just
@@ -224,7 +215,7 @@ class AST_Translator(ast.NodeVisitor):
       self.python_refs[local_name] = ref
       return Var(local_name)
     elif self.is_global(name):
-      value = self.get_global(name)
+      value = self.lookup_global(name)
       if isinstance(value, types.ModuleType):
         return ExternalValue(value)
       elif self.is_static_value(value):
