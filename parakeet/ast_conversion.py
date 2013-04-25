@@ -181,7 +181,10 @@ class AST_Translator(ast.NodeVisitor):
     elif isinstance(v, np.dtype):
       x = names.fresh("x")
       fn_name = names.fresh("cast") 
-      return syntax.Fn(fn_name, [x], [syntax.Return(syntax.Cast(x, type=core_types.from_dtype(v)))])
+      formals = FormalArgs()
+      formals.add_positional(x, "x")
+      body = [syntax.Return(syntax.Cast(syntax.Var(x), type=core_types.from_dtype(v)))]
+      return syntax.Fn(fn_name, formals, body)
     else:
       assert self.is_function_value(v), "Can't make value %s into static syntax" % v
       return translate_function_value(v)    
@@ -602,6 +605,7 @@ class AST_Translator(ast.NodeVisitor):
     #
     value = self.visit(expr.value)
     if isinstance(value, ExternalValue):
+      value = value.value 
       value = getattr(value, expr.attr)
       if self.is_static_value(value):
         return self.value_to_syntax(value)

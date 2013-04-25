@@ -34,7 +34,7 @@ def test_float_to_float32():
 def test_bool_to_float32():
   res = float32_cast(False)
   assert type(res) == np.float32 
-  assert res == 1.0
+  assert res == 0.0
   res = float32_cast(True)
   assert type(res) == np.float32 
   assert res == 1.0
