@@ -36,16 +36,6 @@ reserved_names = {
   'None' : none,
 }
 
-def translate_default_arg_value(arg):
-  if isinstance(arg, ast.Num):
-    return arg.n # syntax.Const(arg.n)
-  elif isinstance(arg, ast.Tuple):
-    return tuple(translate_default_arg_value(elt) for elt in arg.elts)
-  else:
-    assert isinstance(arg, ast.Name)
-    name = arg.id
-    assert name in reserved_names
-    return reserved_names[name].value
 
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
@@ -132,10 +122,79 @@ class AST_Translator(ast.NodeVisitor):
     else:
       return self.parent.is_global(key)
   
-  def lookup(self, name):
+  
+  def lookup_attr_chain_value(self, attr_chain):
+    assert attr_chain[0] not in self.scopes, \
+      "Default arg to function must be static value: %s" % attr_chain[0]
+    if self.closure_cell_dict and attr_chain[0] in self.closure_cell_dict:
+      value = self.closure_cell_dict[attr_chain[0]]
+      for name in attr_chain[1:]:
+        value = getattr(value, name)
+      return value 
+    elif self.is_global(attr_chain):
+      return self.lookup_global(attr_chain)
+    else:
+      assert len(attr_chain) == 1
+      name = attr_chain[0]
+      if name in __builtins__:
+        return __builtins__[name]
+      else:
+        assert name in reserved_names, "Unknown name %s" %  name 
+        return reserved_names[name].value 
+       
+  
+  def is_static_value(self, v):
+    return syntax_helpers.is_python_constant(v) or type(v) is np.dtype
+  
+  def value_to_syntax(self, v):
+    if syntax_helpers.is_python_constant(v):
+      return syntax_helpers.const(v)
+    else:
+      assert type(v) is np.dtype
+      x = names.fresh("x")
+      fn_name = names.fresh("cast") 
+      return syntax.Fn(fn_name, [x], [syntax.Return(syntax.Cast(x, type=core_types.from_dtype(v)))])
+    
+  def syntax_to_value(self, expr):
+    if isinstance(expr, ast.Num):
+      return expr.n
+    elif isinstance(expr, ast.Tuple):
+      return tuple(self.static_value(elt) for elt in expr.elts)
+    else: 
+      return self.lookup_attr_chain_value(self.build_attribute_chain(expr))
+  """  
+  def lookup(self, attr_chain):
+    if not isinstance(attr_chain, tuple):
+      attr_chain = (attr_chain,)
+      
+    name = attr_chain[0]
+    attrs = attr_chain[1:]
+    if name in reserved_names:
+      expr = reserved_names[name]
+    elif name in self.scopes:
+      expr = Var(self.scopes[name])
+      
+    elif self.parent:
+      # if we're in a nested function, 
+      # rely on your parent function to fetch 
+      # globals, cell vars, reserved names, etc...
+      parent_result = self.parent.lookup(attr_chain)
+      if isinstance(parent_result, (Var, Attribute)):
+        assert len(attrs) == 0
+        # don't actually keep the outer binding name, we just
+        # need to check that it's possible and tell the outer scope
+        # to register any necessary python refs
+        local_name = names.fresh(name)
+        self.scopes[name] = local_name
+        self.original_outer_names.append(name)
+        self.localized_outer_names.append(local_name)
+        return Var(local_name)
+  """ 
 
+  def lookup(self, name):
     if name in reserved_names:
       return reserved_names[name]
+    
     elif name in self.scopes:
       return Var(self.scopes[name])
     elif self.parent:
@@ -147,9 +206,9 @@ class AST_Translator(ast.NodeVisitor):
       self.original_outer_names.append(name)
       self.localized_outer_names.append(local_name)
       return Var(local_name)
-
     elif self.closure_cell_dict and name in self.closure_cell_dict:
       ref = ClosureCellRef(self.closure_cell_dict[name], name)
+      value = ref.deref()
     elif self.is_global(name):
       ref = GlobalRef(self.globals_dict, name)
     else:
@@ -160,9 +219,14 @@ class AST_Translator(ast.NodeVisitor):
     try:
       # if a value is a function then immediately parse it 
       # and return its Parakeet representation 
-      
       return translate_function_value(value)
     except:
+      
+      if self.is_static_value(value):
+        return self.value_to_syntax(value)
+  
+        # return syntax.Const(value)
+       
       # on the other hand, don't inline constants but rather keep them in an indirect 
       # form 
       
@@ -229,8 +293,8 @@ class AST_Translator(ast.NodeVisitor):
     n_defaults = len(args.defaults)
     if n_defaults > 0:
       local_names = formals.positional[-n_defaults:]
-      for (k,v) in zip(local_names, args.defaults):
-        formals.defaults[k] = translate_default_arg_value(v)
+      for (k,expr) in zip(local_names, args.defaults):
+        formals.defaults[k] = self.syntax_to_value(expr)
 
     if args.vararg:
       assert isinstance(args.vararg, str)
@@ -308,8 +372,7 @@ class AST_Translator(ast.NodeVisitor):
         return syntax.Tuple(slice_elts)
       else:
         return slice_elts[0]
-    result = dispatch(expr, 'visit')
-    return result
+    
 
   def visit_UnaryOp(self, expr):
     ssa_val = self.visit(expr.operand)
@@ -360,6 +423,7 @@ class AST_Translator(ast.NodeVisitor):
       left.append (expr.attr)
       return left
 
+  """
   def lookup_attribute_chain(self, attr_chain):
     assert len(attr_chain) > 0
     value = self.globals
@@ -371,7 +435,8 @@ class AST_Translator(ast.NodeVisitor):
       else:
         value = getattr(value, name)
     return value
-
+  """
+  
   def translate_builtin(self, value, positional, keywords_dict):
     def mk_reduction(fn, positional, init = None):
       import adverb_wrapper
@@ -458,34 +523,30 @@ class AST_Translator(ast.NodeVisitor):
       actuals = ActualArgs(positional, keywords_dict, starargs_expr)
       return syntax.Call(fn_node, actuals)
     else:
-      if self.is_global(attr_chain):
-        value = self.lookup_global(attr_chain)
-        # print attr_chain, value 
-        # value = self.lookup_attribute_chain(attr_chain)
-        if isinstance(value, macro):
-          return value.transform(positional, keywords_dict)
-        elif isinstance(value, prims.Prim):
-          return syntax.PrimCall(value, positional)
-        elif isinstance(value, types.BuiltinFunctionType):
-          return self.translate_builtin(value, positional, keywords_dict)
-        elif hasattr(value, '__call__'):
-          # if it's already been wrapped, extract the underlying function value
-          if isinstance(value, jit):
-            value = value.f
-          fn_node = translate_function_value(value)
-          
-          actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-          return syntax.Call(fn_node, actuals)
-        elif isinstance(value, np.dtype):
-          assert len(positional) == 1
-          assert len(keywords_dict) == 0
-          return syntax.Cast(positional[0], type = core_types.from_dtype(value))
-        else:
-          assert False, "depends on global %s" % attr_chain 
-           
-      elif len(attr_chain) == 1 and root in __builtins__:
-        value = __builtins__[root]
+      value = self.lookup_attr_chain_value(attr_chain)
+      if isinstance(value, macro):
+        return value.transform(positional, keywords_dict)
+      elif isinstance(value, prims.Prim):
+        return syntax.PrimCall(value, positional)
+      elif isinstance(value, types.BuiltinFunctionType):
         return self.translate_builtin(value, positional, keywords_dict)
+      elif hasattr(value, '__call__'):
+        # if it's already been wrapped, extract the underlying function value
+        if isinstance(value, jit):
+          value = value.f
+        fn_node = translate_function_value(value)
+        
+        actuals = ActualArgs(positional, keywords_dict, starargs_expr)
+        return syntax.Call(fn_node, actuals)
+      elif isinstance(value, np.dtype):
+        assert len(positional) == 1
+        assert len(keywords_dict) == 0
+        return syntax.Cast(positional[0], type = core_types.from_dtype(value))
+      else:
+        assert False, "depends on global %s" % attr_chain 
+           
+
+
   # assume that function must be locally defined 
     assert isinstance(expr.func, ast.Name)
     fn_node = self.lookup(expr.func.id) 
@@ -498,7 +559,6 @@ class AST_Translator(ast.NodeVisitor):
     
   def visit_Expr(self, expr):
     # dummy assignment to allow for side effects on RHS
-   
     lhs = self.fresh_var("dummy")
     if isinstance(expr.value, ast.Str):
       return syntax.Assign(lhs, zero_i64)
@@ -541,8 +601,15 @@ class AST_Translator(ast.NodeVisitor):
     #      without adding it to nonlocals
     #  (3) not local at all-- in which case, add the whole chain of strings
     #      to nonlocals
-    value = self.visit(expr.value)
-    return syntax.Attribute(value, expr.attr)
+    try:
+      attr_chain = self.build_attribute_chain(expr)
+      if attr_chain[0] not in self.scopes or \
+         (self.closure_cell_dict and attr_chain[0] in self.closure_cell_dict):
+      
+        
+    except:
+      value = self.visit(expr.value)
+      return syntax.Attribute(value, expr.attr)
 
   def visit_Num(self, expr):
     return syntax.Const(expr.n)

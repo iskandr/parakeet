@@ -4,6 +4,7 @@ import adverb_wrapper
 import array_type
 import closure_type
 import config
+import core_types 
 import names
 import prims
 import syntax
@@ -224,9 +225,15 @@ class Annotator(Transform):
     return syntax.Closure(expr, [], type = t)
 
   def transform_Call(self, expr):
-    
     closure = self.transform_expr(expr.fn)
     args = self.transform_args(expr.args)
+    if closure.type.__class__ is core_types.TypeValueT:
+      assert isinstance(args, ActualArgs)
+      assert len(args.positional) == 1
+      assert len(args.keywords) == 0
+      assert args.starargs is None 
+      return self.cast(args.positional[0], closure.type.type)
+    
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
 
     typed_fn = specialize(untyped_fn, arg_types)

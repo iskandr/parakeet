@@ -105,9 +105,9 @@ def call_type_conv(n, t):
   return type_as_default_arg(n, t)
 
 def test_call_type_conv():
-  float_res = call_type_conv(10**3, parakeet.dtypes.float64)
-  assert float_res == -1000.0
+  float_res = call_type_conv(-1000, parakeet.dtypes.float64)
   assert type(float_res) == np.float64
+  assert float_res == -1000.0, "Expected -1000.0, got %s" % float_res
 
 @jit
 def type_as_value(n):

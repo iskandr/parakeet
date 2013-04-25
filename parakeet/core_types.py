@@ -110,9 +110,6 @@ class ConcreteT(Type):
   "Any" and "Unknown"
   """
 
-  def ctypes_repr(self):
-    pass
-
   def from_python(self, py_val):
     return self.ctypes_repr(py_val)
 
@@ -232,7 +229,29 @@ class TypeValueT(ConcreteT):
   rank = 0
   _members = ['type']
   
-type_conv.register([np.dtype], TypeValueT, lambda dt: from_dtype(dt)) 
+  def __str__(self):
+    return "TypeValue(%s)" % self.type 
+  
+  def __hash__(self):
+    return hash(self.type)
+  
+  def __eq__(self, other):
+    return self.type == other.type
+  
+  _type_to_id = {}
+  _id_to_type = {} 
+  def from_python(self, py_type):
+    if py_type in self._type_to_id:
+      n = self._type_to_id[py_type]
+    else:
+      n = len(self._type_to_id)
+      self._id_to_type[n] = py_type 
+      self._type_to_id[py_type] = n
+    return self.ctypes_repr(n)
+  
+  ctypes_repr = ctypes.c_int
+  
+type_conv.register([np.dtype], TypeValueT, lambda dt: TypeValueT(from_dtype(dt))) 
 
 # base class for all concrete scalar types
 # don't actually tag any values with this
