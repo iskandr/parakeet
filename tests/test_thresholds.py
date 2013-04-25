@@ -52,7 +52,8 @@ def test_count_thresh():
   python_result = count_thresh_orig(v,2.0)
   assert parakeet_result == python_result, \
     "Parakeet %s != Python %s" % (parakeet_result, python_result)
-  v = np.random.randn(10**6)
+    
+  v = np.random.randn(10**4)
   py_start = time.time()
   count_thresh_orig(v, 2.0)
   py_time = time.time() - py_start 

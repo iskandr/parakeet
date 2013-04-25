@@ -155,10 +155,17 @@ class AST_Translator(ast.NodeVisitor):
       assert name in __builtins__, "Unknown name %s" %  name 
       return __builtins__[name]
        
-
+  def is_hashable(self, x):
+    try:
+      hash(x)
+      return True
+    except:
+      return False 
+    
   def is_function_value(self, v):
+    
     return isinstance(v, (types.FunctionType, types.LambdaType, jit, Prim)) or \
-      v in prims.prim_lookup_by_value
+      (self.is_hashable(v) and v in prims.prim_lookup_by_value)
       
   def is_static_value(self, v):
     return syntax_helpers.is_python_constant(v) or \
