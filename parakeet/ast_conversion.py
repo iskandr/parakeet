@@ -22,7 +22,7 @@ from decorators import macro, jit
 from names import NameNotFound
 from prims import Prim, prim_wrapper
 from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
-from scoped_env import ScopedEnv
+
 from subst import subst_expr, subst_stmt_list
 from syntax import Assign, If, ForLoop, Var, PrimCall
 from syntax_helpers import none, true, false, one_i64, zero_i64
@@ -165,19 +165,27 @@ class AST_Translator(ast.NodeVisitor):
         assert name in reserved_names, "Unknown name %s" %  name 
         return reserved_names[name].value 
        
-  
+
+  def is_function_value(self, v):
+    return isinstance(v, (types.FunctionType, types.LambdaType, jit, Prim)) or \
+      v in prims.prim_lookup_by_value
+      
   def is_static_value(self, v):
-    return syntax_helpers.is_python_constant(v) or type(v) is np.dtype
+    return syntax_helpers.is_python_constant(v) or \
+           type(v) is np.dtype  or \
+           self.is_function_value(v)
   
   def value_to_syntax(self, v):
     if syntax_helpers.is_python_constant(v):
       return syntax_helpers.const(v)
-    else:
-      assert type(v) is np.dtype
+    elif isinstance(v, np.dtype):
       x = names.fresh("x")
       fn_name = names.fresh("cast") 
       return syntax.Fn(fn_name, [x], [syntax.Return(syntax.Cast(x, type=core_types.from_dtype(v)))])
-    
+    else:
+      assert self.is_function_value(v), "Can't make value %s into static syntax" % v
+      return translate_function_value(v)    
+  
   def syntax_to_value(self, expr):
     if isinstance(expr, ast.Num):
       return expr.n
@@ -185,35 +193,7 @@ class AST_Translator(ast.NodeVisitor):
       return tuple(self.static_value(elt) for elt in expr.elts)
     else: 
       return self.lookup_attr_chain_value(self.build_attribute_chain(expr))
-  """  
-  def lookup(self, attr_chain):
-    if not isinstance(attr_chain, tuple):
-      attr_chain = (attr_chain,)
-      
-    name = attr_chain[0]
-    attrs = attr_chain[1:]
-    if name in reserved_names:
-      expr = reserved_names[name]
-    elif name in self.scopes:
-      expr = Var(self.scopes[name])
-      
-    elif self.parent:
-      # if we're in a nested function, 
-      # rely on your parent function to fetch 
-      # globals, cell vars, reserved names, etc...
-      parent_result = self.parent.lookup(attr_chain)
-      if isinstance(parent_result, (Var, Attribute)):
-        assert len(attrs) == 0
-        # don't actually keep the outer binding name, we just
-        # need to check that it's possible and tell the outer scope
-        # to register any necessary python refs
-        local_name = names.fresh(name)
-        self.scopes[name] = local_name
-        self.original_outer_names.append(name)
-        self.localized_outer_names.append(local_name)
-        return Var(local_name)
-  """ 
-
+  
   def lookup(self, name):
     if name in reserved_names:
       return reserved_names[name]
@@ -231,29 +211,6 @@ class AST_Translator(ast.NodeVisitor):
       return Var(local_name)
     elif self.closure_cell_dict and name in self.closure_cell_dict:
       ref = ClosureCellRef(self.closure_cell_dict[name], name)
-
-    elif self.is_global(name):
-      ref = GlobalRef(self.globals_dict, name)
-    else:
-      raise NameNotFound(name)
-    
-    value = ref.deref()
-    
-    try:
-      # if a value is a function then immediately parse it 
-      # and return its Parakeet representation 
-      return translate_function_value(value)
-    except:
-      
-      if self.is_static_value(value):
-        return self.value_to_syntax(value)
-  
-        # return syntax.Const(value)
-       
-      # on the other hand, don't inline constants but rather keep them in an indirect 
-      # form 
-      
-      # make sure we haven't already recorded a reference to this value under a different name
       for (local_name, other_ref) in self.python_refs.iteritems():
         if ref == other_ref:
           return Var(local_name)
@@ -263,7 +220,18 @@ class AST_Translator(ast.NodeVisitor):
       self.localized_outer_names.append(local_name)
       self.python_refs[local_name] = ref
       return Var(local_name)
-  
+    elif self.is_global(name):
+      value = self.get_global(name)
+      if isinstance(value, types.ModuleType):
+        return ExternalValue(value)
+      elif self.is_static_value(value):
+        return self.value_to_syntax(value)
+      else:
+        assert False, "External values must be scalars or functions"
+    else:
+      raise NameNotFound(name)
+      
+      
   def visit_list(self, nodes):
     return map(self.visit, nodes)
 
