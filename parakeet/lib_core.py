@@ -3,6 +3,8 @@
 from prims import *
 from adverb_api import allpairs, each, reduce, scan, conv
 from decorators import macro, staged_macro
+from core_types import Int64, Float64
+import syntax_helpers
 
 def identity(x):
   return x
@@ -43,8 +45,53 @@ def dot(x,y):
 def minelt(x, axis = None):
   return reduce(min, x[1:], init=x[0], axis = axis)
 
+def min(x, y = None):
+  if y is None:
+    return minelt(x)
+  else:
+    return minimum(x,y)
+
 def maxelt(x, axis = None):
   return reduce(max, x[1:], init=x[0], axis = axis)
+
+def max(x, y = None):
+  if y is None:
+    return maxelt(x)
+  else:
+    return maximum(x,y)
+  
+@macro 
+def range1(n):
+  return syntax.Range(syntax_helpers.zero_i64, n, syntax_helpers.one_i64)
+
+@macro 
+def range2(start, stop):
+  return syntax.Range(start, stop, syntax_helpers.one_i64)
+
+@macro 
+def range3(start, stop, step):
+  return syntax.Range(start, stop, step)
+
+def range(a, b = None, c = None):
+  if c is None:
+    if b is None:
+      return range1(a)
+    else:
+      return range2(a,b)
+  else:
+    return range3(a,b,c)
+
+@macro
+def int(x):
+  return syntax.Cast(x, type=Int64)
+
+@macro
+def long(x):
+  return syntax.Cast(x, type=Int64)
+
+@macro
+def float(x):
+  return syntax.Cast(x, type=Float64)
 
 @macro 
 def zeros_like(x):

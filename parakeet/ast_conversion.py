@@ -6,6 +6,7 @@ import numpy as np
 
 import config
 import core_types 
+import lib_core 
 import names
 import nested_blocks 
 import prims
@@ -84,9 +85,13 @@ def mk_wrapper_function(p):
   elif p in prims.prim_lookup_by_value:
     f = prims.prim_wrapper(prims.prim_lookup_by_value[p]) 
   else:
-    pass 
+    assert isinstance(p, types.BuiltinFunctionType)
+    assert p.__name__ in lib_core.__dict__, "Unsupported builtin: %s" % (p,)
+    f = translate_function_value(lib_core.__dict__[p.__name__]) 
   _function_wrapper_cache[p] = f
   return f
+
+
 
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
@@ -766,6 +771,8 @@ def translate_function_value(fn):
   while isinstance(fn, jit):
     fn = fn.f 
   
+
+    
   if fn in prims.prim_lookup_by_value:
     fn = prims.prim_lookup_by_value[fn]
     
