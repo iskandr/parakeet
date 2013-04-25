@@ -191,10 +191,14 @@ class AST_Translator(ast.NodeVisitor):
       return expr.n
     elif isinstance(expr, ast.Tuple):
       return tuple(self.syntax_to_value(elt) for elt in expr.elts)
-    else: 
-      attr_chain = self.build_attribute_chain(expr)
-      print attr_chain 
-      return self.lookup_attr_chain_value(attr_chain)
+    elif isinstance(expr, ast.Name):
+      return self.lookup_global(expr.id)
+    elif isinstance(expr, ast.Attribute):
+      left = self.syntax_to_value(expr.value)
+      if isinstance(left, ExternalValue):
+        left = left.value 
+      return getattr(left, expr.attr) 
+
   
   def lookup(self, name):
     #if name in reserved_names:
@@ -505,19 +509,18 @@ class AST_Translator(ast.NodeVisitor):
     else:
       starargs_expr = None
       
-    attr_chain = self.build_attribute_chain(fn)
-    root = attr_chain[0]
-    if root in self.scopes:
-      assert len(attr_chain) == 1
-      fn_node = Var(self.scopes[root])
+    #attr_chain = self.build_attribute_chain(fn)
+    #root = attr_chain[0]
+    fn_node = self.visit(fn)
+    if isinstance(fn_node, syntax.Expr):
+      
       actuals = ActualArgs(positional, keywords_dict, starargs_expr)
       return syntax.Call(fn_node, actuals)
     else:
-      value = self.lookup_attr_chain_value(attr_chain)
+      assert isinstance(fn_node, ExternalValue)
+      value = fn_node.value
       if isinstance(value, macro):
         return value.transform(positional, keywords_dict)
-      elif isinstance(value, prims.Prim):
-        return syntax.PrimCall(value, positional)
       elif isinstance(value, types.BuiltinFunctionType):
         return self.translate_builtin(value, positional, keywords_dict)
       elif hasattr(value, '__call__'):
@@ -528,20 +531,10 @@ class AST_Translator(ast.NodeVisitor):
         
         actuals = ActualArgs(positional, keywords_dict, starargs_expr)
         return syntax.Call(fn_node, actuals)
-      elif isinstance(value, np.dtype):
-        assert len(positional) == 1
-        assert len(keywords_dict) == 0
-        return syntax.Cast(positional[0], type = core_types.from_dtype(value))
       else:
-        assert False, "depends on global %s" % attr_chain 
+        assert False, "Invalid function %s" % value 
            
 
-
-  # assume that function must be locally defined 
-    assert isinstance(expr.func, ast.Name)
-    fn_node = self.lookup(expr.func.id) 
-    actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-    return syntax.Call(fn_node, actuals)
     
     
   def visit_List(self, expr):
