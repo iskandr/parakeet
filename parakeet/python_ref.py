@@ -7,13 +7,29 @@ class Ref(object):
   def deref(self):
     pass
 
-class GlobalRef(Ref):
+class GlobalValueRef(Ref):
+  def __init__(self, value):
+    self.value = value 
+    
+  def deref(self):
+    return self.value 
+  
+  def __str__(self):
+    return "GlobalValueRef(%s)" % (self.value,)
+  
+  def __repr__(self):
+    return str(self)
+  
+    def __eq__(self, other):
+      return isinstance(other, GlobalValueRef) and self.value is other.value 
+
+class GlobalNameRef(Ref):
   def __init__(self, globals_dict, name):
     self.globals_dict = globals_dict
     self.name = name
 
   def __str__(self):
-    return "GlobalRef(%s)" % self.name
+    return "GlobalNameRef(%s)" % self.name
 
   def __repr__(self):
     return str(self)
@@ -22,7 +38,7 @@ class GlobalRef(Ref):
     return self.globals_dict[self.name]
 
   def __eq__(self, other):
-    return isinstance(other, GlobalRef) and \
+    return isinstance(other, GlobalNameRef) and \
            self.globals_dict is other.globals_dict and \
            self.name == other.name
 

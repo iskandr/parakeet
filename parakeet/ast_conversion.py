@@ -16,13 +16,12 @@ import syntax_helpers
 from adverbs import Map
 from args import FormalArgs, ActualArgs
 from collections import OrderedDict
-from common import dispatch
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from decorators import macro, jit 
 from names import NameNotFound
 from prims import Prim, prim_wrapper
-from python_ref import GlobalRef, ClosureCellRef
+from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
 from scoped_env import ScopedEnv
 from subst import subst_expr, subst_stmt_list
 from syntax import Assign, If, ForLoop, Var, PrimCall
@@ -123,21 +122,29 @@ class AST_Translator(ast.NodeVisitor):
       return self.parent.lookup_global(key)
     
   def is_global(self, key):
-
-    if isinstance(key, str) and key in self.scopes:
-      return False 
-    if isinstance(key, (list,tuple)) and key[0] in self.scopes:
-      return False 
-    
+    if isinstance(key, (list, tuple)):
+      key = key[0]
+     
+    if key in self.scopes:
+      return False
+    elif self.closure_cell_dict and key in self.closure_cell_dict:
+      return False
     if self.globals:
-      if isinstance(key, str):
-        return key in self.globals 
-      else:
-        assert isinstance(key, (list, tuple))
-        return key[0] in self.globals 
-    else:
-      return self.parent.is_global(key)
+      return key in self.globals or key in __builtins__  
+    assert self.parent is not None 
+    return self.parent.is_global(key)
   
+  def get_global(self, key):
+    if isinstance(key, (list, tuple)):
+      key = key[0]
+    if self.globals:
+      if key in self.globals:
+        return self.globals[key]
+      assert key in __builtins__
+      return __builtins__[key]
+    else:
+      assert self.parent is not None
+      self.parent.get_global(key)
   
   def lookup_attr_chain_value(self, attr_chain):
     assert attr_chain[0] not in self.scopes, \
