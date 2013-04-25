@@ -536,6 +536,7 @@ class Annotator(Transform):
     return new_nodes
 
   def annotate_lhs(self, lhs, rhs_type):
+    print "annotate_lhs", lhs, rhs_type 
     lhs_class = lhs.__class__
     if lhs_class is syntax.Tuple:
       if rhs_type.__class__ is TupleT:

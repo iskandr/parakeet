@@ -193,7 +193,7 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(expr, ast.Num):
       return expr.n
     elif isinstance(expr, ast.Tuple):
-      return tuple(self.static_value(elt) for elt in expr.elts)
+      return tuple(self.syntax_to_value(elt) for elt in expr.elts)
     else: 
       return self.lookup_attr_chain_value(self.build_attribute_chain(expr))
   
@@ -339,33 +339,33 @@ class AST_Translator(ast.NodeVisitor):
           pass
     return merge
 
-  def visit_slice(self, expr):
-    def visit_Index():
-      return self.visit(expr.value)
 
-    def visit_Ellipsis():
-      raise RuntimeError("Ellipsis operator unsupported")
+  def visit_Index(self, expr):
+    return self.visit(expr.value)
 
-    def visit_Slice():
-      """
-      x[l:u:s]
-      Optional fields
-        expr.lower
-        expr.upper
-        expr.step
-      """
+  def visit_Ellipsis(self, expr):
+    raise RuntimeError("Ellipsis operator unsupported")
 
-      start = self.visit(expr.lower) if expr.lower else none
-      stop = self.visit(expr.upper) if expr.upper else none
-      step = self.visit(expr.step) if expr.step else none
-      return syntax.Slice(start, stop, step)
+  def visit_Slice(self, expr):
+    """
+    x[l:u:s]
+    Optional fields
+      expr.lower
+      expr.upper
+      expr.step
+    """
 
-    def visit_ExtSlice():
-      slice_elts = map(self.visit_slice, expr.dims)
-      if len(slice_elts) > 1:
-        return syntax.Tuple(slice_elts)
-      else:
-        return slice_elts[0]
+    start = self.visit(expr.lower) if expr.lower else none
+    stop = self.visit(expr.upper) if expr.upper else none
+    step = self.visit(expr.step) if expr.step else none
+    return syntax.Slice(start, stop, step)
+
+  def visit_ExtSlice(self, expr):
+    slice_elts = map(self.visit, expr.dims)
+    if len(slice_elts) > 1:
+      return syntax.Tuple(slice_elts)
+    else:
+      return slice_elts[0]
     
 
   def visit_UnaryOp(self, expr):
@@ -390,8 +390,6 @@ class AST_Translator(ast.NodeVisitor):
     return result
 
   def visit_Compare(self, expr):
-    print expr.ops[0], type(expr.ops[0])
-    
     lhs = self.visit(expr.left)
     assert len(expr.ops) == 1
     prim = prims.find_ast_op(expr.ops[0])
@@ -401,7 +399,7 @@ class AST_Translator(ast.NodeVisitor):
 
   def visit_Subscript(self, expr):
     value = self.visit(expr.value)
-    index = self.visit_slice(expr.slice)
+    index = self.visit(expr.slice)
     return syntax.Index(value, index)
 
   def generic_visit(self, expr):
@@ -581,7 +579,7 @@ class AST_Translator(ast.NodeVisitor):
                                 decorator_list = ())
     
     fn = translate_function_ast(py_fn, parent = self)
-    print str(fn)
+    print ">>> LIST COMP FUNCTION", str(fn)
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0
@@ -636,7 +634,8 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Tuple( map(self.visit_lhs, lhs.elts))
     else:
       # in case of slicing or attributes
-      return self.visit(lhs)
+      res = self.visit(lhs)
+      return res
 
   def visit_Assign(self, stmt):
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
