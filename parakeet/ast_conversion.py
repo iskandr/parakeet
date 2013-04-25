@@ -52,6 +52,33 @@ class ExternalValue(object):
   def __str__(self):
     return "ExternalValue(%s)" % self.value
 
+def mk_reduction(fn, positional, init = None):
+  import adverb_wrapper
+  wrapper = adverb_wrapper.untyped_reduce_wrapper(None, fn)
+  if init:
+    keywords = keywords = {'init': init}
+  else:
+    keywords = {}
+  positional = [fn] + list(positional)
+  args = ActualArgs(positional = positional, keywords = keywords) 
+  return syntax.Call(wrapper, args)
+
+_function_wrapper_cache = {}
+def mk_wrapper_function(p):
+  """
+  Generate wrappers for builtins and primitives
+  """
+  if p in _function_wrapper_cache:
+    return _function_wrapper_cache[p]
+  if isinstance(p, prims.Prim):
+    f = prims.prim_wrapper(p)
+  elif p in prims.prim_lookup_by_value:
+    f = prims.prim_wrapper(prims.prim_lookup_by_value[p]) 
+  else:
+    pass 
+  _function_wrapper_cache[p] = f
+  return f
+
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
                parent=None):
@@ -158,6 +185,7 @@ class AST_Translator(ast.NodeVisitor):
            self.is_function_value(v)
   
   def value_to_syntax(self, v):
+    print "VALUE TO SYNTAX", v
     if syntax_helpers.is_python_constant(v):
       return syntax_helpers.const(v)
     elif isinstance(v, np.dtype):
@@ -168,6 +196,7 @@ class AST_Translator(ast.NodeVisitor):
       body = [syntax.Return(syntax.Cast(syntax.Var(x), type=core_types.from_dtype(v)))]
       return syntax.Fn(fn_name, formals, body)
     else:
+      
       assert self.is_function_value(v), "Can't make value %s into static syntax" % v
       return translate_function_value(v)    
   
@@ -396,16 +425,7 @@ class AST_Translator(ast.NodeVisitor):
                                                  expr.__class__.__name__))
   
   def translate_builtin(self, value, positional, keywords_dict):
-    def mk_reduction(fn, positional, init = None):
-      import adverb_wrapper
-      wrapper = adverb_wrapper.untyped_reduce_wrapper(None, fn)
-      if init:
-        keywords = keywords = {'init': init}
-      else:
-        keywords = {}
-      positional = [fn] + list(positional)
-      args = ActualArgs(positional = positional, keywords = keywords) 
-      return syntax.Call(wrapper, args)
+    
     if value == sum:
       return mk_reduction(prims.add, positional, zero_i64)
     elif value == max:
@@ -452,6 +472,10 @@ class AST_Translator(ast.NodeVisitor):
       assert len(keywords_dict) == 0
       return syntax.Slice(*positional)
 
+  def visit(self, node):
+    print node
+    return ast.NodeVisitor.visit(self, node)
+    
   def visit_Call(self, expr):
     """
     TODO: 
@@ -474,6 +498,7 @@ class AST_Translator(ast.NodeVisitor):
       starargs_expr = None
     
     fn_node = self.visit(fn)
+    
     if isinstance(fn_node, syntax.Expr):
       
       actuals = ActualArgs(positional, keywords_dict, starargs_expr)
@@ -485,14 +510,6 @@ class AST_Translator(ast.NodeVisitor):
         return value.transform(positional, keywords_dict)
       elif isinstance(value, types.BuiltinFunctionType):
         return self.translate_builtin(value, positional, keywords_dict)
-      elif hasattr(value, '__call__'):
-        # if it's already been wrapped, extract the underlying function value
-        if isinstance(value, jit):
-          value = value.f
-        fn_node = translate_function_value(value)
-        
-        actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-        return syntax.Call(fn_node, actuals)
       else:
         assert False, "Invalid function %s" % value 
            
@@ -555,6 +572,7 @@ class AST_Translator(ast.NodeVisitor):
     #     if it's a function, then parse it, else raise an error. 
     #
     value = self.visit(expr.value)
+    
     if isinstance(value, ExternalValue):
       value = value.value 
       value = getattr(value, expr.attr)
