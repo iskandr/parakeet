@@ -139,21 +139,6 @@ class AST_Translator(ast.NodeVisitor):
 
 
   
-  def lookup_attr_chain_value(self, attr_chain):
-    assert attr_chain[0] not in self.scopes, \
-      "Default arg to function must be static value: %s" % attr_chain[0]
-    if self.closure_cell_dict and attr_chain[0] in self.closure_cell_dict:
-      value = self.closure_cell_dict[attr_chain[0]]
-      for name in attr_chain[1:]:
-        value = getattr(value, name)
-      return value 
-    elif self.is_global(attr_chain):
-      return self.lookup_global(attr_chain)
-    else:
-      assert len(attr_chain) == 1
-      name = attr_chain[0]
-      assert name in __builtins__, "Unknown name %s" %  name 
-      return __builtins__[name]
        
   def is_hashable(self, x):
     try:
@@ -227,12 +212,14 @@ class AST_Translator(ast.NodeVisitor):
       return Var(local_name)
     elif self.is_global(name):
       value = self.lookup_global(name)
-      if isinstance(value, types.ModuleType):
-        return ExternalValue(value)
-      elif self.is_static_value(value):
+      if self.is_static_value(value): 
         return self.value_to_syntax(value)
       else:
-        assert False, "External values must be scalars or functions"
+        return ExternalValue(value)
+      
+        
+      #else:
+      #  assert False, "External values must be scalars or functions"
     else:
       raise NameNotFound(name)
       
@@ -407,29 +394,6 @@ class AST_Translator(ast.NodeVisitor):
   def generic_visit(self, expr):
     raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr),
                                                  expr.__class__.__name__))
-
-  def build_attribute_chain(self, expr):
-    assert isinstance(expr, (ast.Name, ast.Attribute))
-    if isinstance(expr, ast.Name):
-      return [expr.id]
-    else:
-      left = self.build_attribute_chain(expr.value)
-      left.append (expr.attr)
-      return left
-
-  """
-  def lookup_attribute_chain(self, attr_chain):
-    assert len(attr_chain) > 0
-    value = self.globals
-    for name in attr_chain:
-      if hasattr(value, '__getitem__') and name in value:
-        value = value[name]
-      elif hasattr(value, '__dict__') and name in value.__dict__:
-        value = value.__dict__[name]
-      else:
-        value = getattr(value, name)
-    return value
-  """
   
   def translate_builtin(self, value, positional, keywords_dict):
     def mk_reduction(fn, positional, init = None):
@@ -508,9 +472,7 @@ class AST_Translator(ast.NodeVisitor):
       starargs_expr = self.visit(starargs)
     else:
       starargs_expr = None
-      
-    #attr_chain = self.build_attribute_chain(fn)
-    #root = attr_chain[0]
+    
     fn_node = self.visit(fn)
     if isinstance(fn_node, syntax.Expr):
       

@@ -19,7 +19,7 @@ print_lowered_function = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+print_optimized_llvm = True
 
 # show the input function to each transformation?
 print_functions_before_transforms = [] #['IndexElim']

@@ -384,8 +384,6 @@ class Annotator(Transform):
                        type = result_type)
 
   def transform_Reduce(self, expr):
-    print ">>", expr
-    print "blocks before", self.blocks
     map_fn = self.transform_expr(expr.fn)
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)
@@ -396,10 +394,6 @@ class Annotator(Transform):
     arg_types = get_types(new_args)
     init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
-    
-    print "new args", new_args
-    print "arg_types", arg_types
-    print "blocks after", self.blocks
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
                           combine_fn.type,
