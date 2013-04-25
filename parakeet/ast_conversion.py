@@ -208,7 +208,7 @@ class AST_Translator(ast.NodeVisitor):
       return Var(local_name)
     elif self.closure_cell_dict and name in self.closure_cell_dict:
       ref = ClosureCellRef(self.closure_cell_dict[name], name)
-      value = ref.deref()
+
     elif self.is_global(name):
       ref = GlobalRef(self.globals_dict, name)
     else:
@@ -601,15 +601,9 @@ class AST_Translator(ast.NodeVisitor):
     #      without adding it to nonlocals
     #  (3) not local at all-- in which case, add the whole chain of strings
     #      to nonlocals
-    try:
-      attr_chain = self.build_attribute_chain(expr)
-      if attr_chain[0] not in self.scopes or \
-         (self.closure_cell_dict and attr_chain[0] in self.closure_cell_dict):
-      
-        
-    except:
-      value = self.visit(expr.value)
-      return syntax.Attribute(value, expr.attr)
+
+    value = self.visit(expr.value)
+    return syntax.Attribute(value, expr.attr)
 
   def visit_Num(self, expr):
     return syntax.Const(expr.n)
