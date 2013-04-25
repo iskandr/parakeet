@@ -29,6 +29,13 @@ from syntax import Assign, If, ForLoop, Var, PrimCall
 from syntax_helpers import none, true, false, one_i64, zero_i64
 
 
+# TODO: Include callables in category of "static" values 
+# s.t. is_static_value and value_to_syntax both deal with 
+# - ordinary functions 
+# - functions wrapped with jit
+# - primitives of the type Prim
+# - compiled functions that have been wrapped by some Prim
+# - compiled functions that have been wrapped by some library function 
 
 reserved_names = {
   'True' : true,
@@ -36,6 +43,15 @@ reserved_names = {
   'None' : none,
 }
 
+class ExternalValue(object):
+  """
+  Wrap up references global values with this class
+  """ 
+  def __init__(self, python_value):
+    self.value = python_value
+    
+  def __str__(self):
+    return "ExternalValue(%s)" % self.value
 
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
@@ -601,8 +617,21 @@ class AST_Translator(ast.NodeVisitor):
     #      without adding it to nonlocals
     #  (3) not local at all-- in which case, add the whole chain of strings
     #      to nonlocals
-
+    #
+    #  AN IDEA:
+    #     Allow external values to be brought into the syntax tree as 
+    #     a designated ExternalValue node
+    #     and then here check if the LHS is an ExternalValue and if so, 
+    #     pull out the value. If it's a constant, then make it into syntax, 
+    #     if it's a function, then parse it, else raise an error. 
+    #
     value = self.visit(expr.value)
+    if isinstance(value, ExternalValue):
+      value = getattr(value, expr.attr)
+      if self.is_static_value(value):
+        return self.value_to_syntax(value)
+      else:
+        return ExternalValue(value) 
     return syntax.Attribute(value, expr.attr)
 
   def visit_Num(self, expr):
