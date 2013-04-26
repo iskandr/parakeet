@@ -43,7 +43,7 @@ def dot(x,y):
   return sum(x*y)
 
 def minelt(x, axis = None):
-  return reduce(min, x[1:], init=x[0], axis = axis)
+  return reduce(minimum, x[1:], init=x[0], axis = axis)
 
 def min(x, y = None):
   if y is None:
@@ -52,7 +52,7 @@ def min(x, y = None):
     return minimum(x,y)
 
 def maxelt(x, axis = None):
-  return reduce(max, x[1:], init=x[0], axis = axis)
+  return reduce(maximum, x[1:], init=x[0], axis = axis)
 
 def max(x, y = None):
   if y is None:
