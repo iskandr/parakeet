@@ -1,7 +1,7 @@
 """Simple library functions which don't depend on adverbs"""
 
 from prims import *
-from adverb_api import allpairs, each, reduce, scan, conv
+from adverb_api import allpairs, each, reduce, scan
 from decorators import macro, staged_macro
 from core_types import Int64, Float64
 import syntax_helpers
@@ -19,7 +19,7 @@ def sum(x, axis = None):
   return reduce(add, x, init = 0, axis = axis)
 
 def prod(x, axis=None):
-  return reduce(multiply, x[1:], init=x[0], axis = axis)
+  return reduce(multiply, x, init=1, axis = axis)
 
 def mean(x, axis = None):
   return sum(x, axis = axis) / x.shape[0]
@@ -42,9 +42,9 @@ def diff(x):
 def dot(x,y):
   return sum(x*y)
 
-@staged_macro("axis")
+
 def minelt(x, axis = None):
-  return reduce(minimum, x[1:], init=x[0], axis = axis)
+  return reduce(minimum, x, axis = axis)
 
 def min(x, y = None):
   if y is None:
@@ -53,7 +53,7 @@ def min(x, y = None):
     return minimum(x,y)
 
 def maxelt(x, axis = None):
-  return reduce(maximum, x[1:], init=x[0], axis = axis)
+  return reduce(maximum, x, axis = axis)
 
 def max(x, y = None):
   if y is None:

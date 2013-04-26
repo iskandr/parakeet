@@ -91,7 +91,7 @@ def is_builtin_function(v):
   return isinstance(v, (types.TypeType, types.BuiltinFunctionType))
   
 def is_user_function(v):
-  return isinstance(v, (types.FunctionType, jit, macro))
+  return isinstance(v, (types.FunctionType, jit)) #, macro))
 
 def is_function_value(v):
   return is_user_function(v) or is_builtin_function(v) or is_prim(v)
@@ -462,7 +462,6 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Call(fn, ActualArgs(positional, keywords_dict))
       
   def visit(self, node):
-
     return ast.NodeVisitor.visit(self, node)
     
   def visit_Call(self, expr):
@@ -487,14 +486,14 @@ class AST_Translator(ast.NodeVisitor):
       starargs_expr = None
     
     fn_node = self.visit(fn)
-    
+
     if isinstance(fn_node, syntax.Expr):
-      
       actuals = ActualArgs(positional, keywords_dict, starargs_expr)
       return syntax.Call(fn_node, actuals)
     else:
       assert isinstance(fn_node, ExternalValue)
       value = fn_node.value
+      print "Underlying value", value 
       if isinstance(value, macro):
         return value.transform(positional, keywords_dict)
       elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)):

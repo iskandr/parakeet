@@ -14,12 +14,12 @@ import type_conv
 
 from args import ActualArgs
 from array_type import ArrayT
-from common import dispatch
+
 from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 from syntax_helpers import get_type, get_types, unwrap_constant
-from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true
+from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true, is_zero
 from transform import Transform
 from tuple_type import TupleT, make_tuple_type
 from stride_specialization import specialize
@@ -372,12 +372,12 @@ class Annotator(Transform):
   def transform_Map(self, expr):
     closure = self.transform_expr(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
-    axis = unwrap_constant(expr.axis)
+    axis = self.transform_if_expr(expr.axis)
     arg_types = get_types(new_args)
     result_type, typed_fn = specialize_Map(closure.type, arg_types)
-
-    if axis is None and adverb_helpers.max_rank(arg_types) == 1:
-      axis = 0
+    if axis is None or self.is_none(axis):
+      assert adverb_helpers.max_rank(arg_types) == 1
+      axis = syntax_helpers.zero_i64
     return adverbs.Map(fn = make_typed_closure(closure, typed_fn),
                        args = new_args,
                        axis = axis,
@@ -387,10 +387,10 @@ class Annotator(Transform):
     map_fn = self.transform_expr(expr.fn)
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)
-    axis = unwrap_constant(expr.axis)
-    if axis is None:
+    axis = self.transform_if_expr(expr.axis)
+    if axis is None or self.is_none(axis):
       new_args = [self.ravel(arg) for arg in new_args]
-      axis = 0
+      axis = syntax_helpers.zero_i64
     arg_types = get_types(new_args)
     init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
@@ -406,7 +406,7 @@ class Annotator(Transform):
     if init_type and init_type != result_type and \
        array_type.rank(init_type) < array_type.rank(result_type):
       assert len(new_args) == 1
-      assert axis == 0
+      assert is_zero(axis)
       arg = new_args[0]
       first_elt = syntax.Index(arg, zero_i64, 
                                   type = arg.type.index_type(zero_i64))
@@ -440,7 +440,10 @@ class Annotator(Transform):
     map_fn.fn = typed_map_fn
     combine_fn.fn = typed_combine_fn
     emit_fn.fn = typed_emit_fn
-    axis = unwrap_constant(expr.axis)
+    axis = self.transform_if_expr(expr.axis)
+    if axis is None or self.is_none(axis):
+      assert adverb_helpers.max_rank(arg_types) == 1
+      axis = syntax_helpers.zero_i64
     return adverbs.Scan(fn = make_typed_closure(map_fn, typed_map_fn),
                         combine = make_typed_closure(combine_fn,
                                                      typed_combine_fn),

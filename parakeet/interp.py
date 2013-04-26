@@ -143,6 +143,9 @@ def eval_fn(fn, actuals):
     else:
       return args.transform(eval_expr)
 
+  def eval_if_expr(maybe_expr):
+    return None if maybe_expr is None else eval_expr(maybe_expr)
+  
   def eval_expr(expr):
     # print ">>", expr
     if hasattr(expr, 'wrapper'):
@@ -252,13 +255,13 @@ def eval_fn(fn, actuals):
     def expr_Map():
       fn = eval_expr(expr.fn)
       args = eval_args(expr.args)
-      axis = syntax_helpers.unwrap_constant(expr.axis)
+      axis = eval_if_expr(expr.axis)
       return adverb_evaluator.eval_map(fn, args, axis)
 
     def expr_AllPairs():
       fn = eval_expr(expr.fn)
       x,y = eval_args(expr.args)
-      axis = syntax_helpers.unwrap_constant(expr.axis)
+      axis = eval_if_expr(expr.axis)
       return adverb_evaluator.eval_allpairs(fn, x, y, axis)
 
     def expr_Reduce():
@@ -266,7 +269,7 @@ def eval_fn(fn, actuals):
       combine_fn = eval_expr(expr.combine)
       args = eval_args(expr.args)
       init = eval_expr(expr.init) if expr.init else None
-      axis = syntax_helpers.unwrap_constant(expr.axis)
+      axis = eval_if_expr(expr.axis)
       return adverb_evaluator.eval_reduce(map_fn, combine_fn, init, args, axis)
 
     def expr_Scan():
@@ -275,7 +278,7 @@ def eval_fn(fn, actuals):
       emit = eval_expr(expr.emit)
       args = eval_args(expr.args)
       init = eval_expr(expr.init)
-      axis = syntax_helpers.unwrap_constant(expr.axis)
+      axis = eval_if_expr(expr.axis)
       return adverb_evaluator.eval_scan(map_fn, combine, emit, init, args, axis)
 
     result = dispatch(expr, 'expr')
