@@ -28,7 +28,7 @@ def reduce_2d(Ys):
   def zero(x):
     return 0.0
   zeros = parakeet.each(zero, Ys[0])
-  return reduce(parakeet.add, Ys, init = zeros)
+  return parakeet.reduce(parakeet.add, Ys, init = zeros, axis = 0)
 
 def test_2d_reduce():
   par_rslt = reduce_2d(a)

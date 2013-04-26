@@ -11,8 +11,9 @@ from shape import any_scalar, unknown_value, const, any_value
 from shape import combine_list, increase_rank, make_shape
 from shape import ConstSlice
 from shape_semantics import ShapeSemantics
-from tuple_type import TupleT
+from syntax_helpers import unwrap_constant
 from syntax_visitor import SyntaxVisitor
+from tuple_type import TupleT
 
 shape_semantics = ShapeSemantics()
 counter = 0
@@ -264,14 +265,16 @@ class ShapeInference(SyntaxVisitor):
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
-    return shape_semantics.eval_map(fn, arg_shapes, expr.axis)
+    axis = unwrap_constant(expr.axis)
+    return shape_semantics.eval_map(fn, arg_shapes, axis)
     
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     arg_shapes = self.visit_expr_list(expr.args)
     init = self.visit_expr(expr.init) if expr.init else None
-    return shape_semantics.eval_reduce(fn, combine, init, arg_shapes, expr.axis)
+    axis = unwrap_constant(expr.axis)
+    return shape_semantics.eval_reduce(fn, combine, init, arg_shapes, axis)
 
   def visit_Scan(self, expr):
     fn = self.visit_expr(expr.fn)
@@ -279,11 +282,11 @@ class ShapeInference(SyntaxVisitor):
     emit = self.visit_expr(expr.emit)
     arg_shapes = self.visit_expr_list(expr.args)
     init = self.visit_expr(expr.init) if expr.init else None
-    return shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes,
-                                       expr.axis)
+    axis = unwrap_constant(expr.axis)
+    return shape_semantics.eval_reduce(fn, combine, emit, init, arg_shapes, axis)
 
   def visit_AllPairs(self, expr):
-    axis = self.visit_expr(expr.axis)
+    axis = self.unwrap_constant(expr.axis)
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     return shape_semantics.eval_allpairs(fn, arg_shapes, axis)
