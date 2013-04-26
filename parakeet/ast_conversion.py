@@ -199,7 +199,7 @@ class AST_Translator(ast.NodeVisitor):
            self.is_function_value(v)
   
   def value_to_syntax(self, v):
-    print "VALUE TO SYNTAX", v
+
     if syntax_helpers.is_python_constant(v):
       return syntax_helpers.const(v)
     elif isinstance(v, np.dtype):
@@ -487,7 +487,7 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Slice(*positional)
 
   def visit(self, node):
-    print node
+
     return ast.NodeVisitor.visit(self, node)
     
   def visit_Call(self, expr):
@@ -563,7 +563,7 @@ class AST_Translator(ast.NodeVisitor):
                                 decorator_list = ())
     
     fn = translate_function_ast(py_fn, parent = self)
-    print ">>> LIST COMP FUNCTION", str(fn)
+
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0

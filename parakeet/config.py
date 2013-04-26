@@ -6,10 +6,10 @@
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
@@ -49,7 +49,7 @@ print_specialized_function_names = False
 print_tile_search_info = False
 
 # print generated assembly of compiled functions
-print_x86 = False
+print_x86 = True
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -68,11 +68,11 @@ opt_scalar_replacement = True
 opt_redundant_load_elimination = True 
 
 # may dramatically increase compile time
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = False
+stride_specialization = True
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False

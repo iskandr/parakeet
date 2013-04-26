@@ -56,6 +56,8 @@ def generic_value_to_python(gv, t):
   elif isinstance(t, core_types.FloatT):
     llvm_t = llvm_types.ctypes_scalar_to_lltype(t.ctypes_repr)
     return t.dtype.type(gv.as_real(llvm_t))
+  elif isinstance(t, core_types.NoneT):
+    return None
   else:
     addr = gv.as_pointer()
     struct = t.ctypes_repr.from_address(addr)
@@ -78,7 +80,7 @@ class CompiledFn:
     ctypes_inputs = [t.from_python(v) for (v,t) in zip(args, expected_types)]
     gv_inputs = [ctypes_to_generic_value(cv, t) for (cv,t) in
                  zip(ctypes_inputs, expected_types)]
-    
+
     gv_return = self.exec_engine.run_function(self.llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, self.parakeet_fn.return_type)
 
@@ -128,7 +130,8 @@ def run(fn, *args, **kwargs):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-
+  print "COMPILING"
   untyped, _, compiled, all_args = specialize_and_compile(fn, args, kwargs)
+  print "GOT FNS"
   linear_args = untyped.args.linearize_without_defaults(all_args)
   return compiled(*linear_args)
