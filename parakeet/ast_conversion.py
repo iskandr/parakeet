@@ -454,14 +454,11 @@ class AST_Translator(ast.NodeVisitor):
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.minimum, positional)
-    elif value == abs:
-      assert len(keywords_dict) == 0
-      assert len(positional) == 1
-      return syntax.PrimCall(prims.abs, positional)
     elif value == map:
       assert len(keywords_dict) == 0
       assert len(positional) > 1
-      return Map(fn = positional[0], args = positional[1:], axis = 0)
+      axis = keywords_dict.get("axis", None)
+      return Map(fn = positional[0], args = positional[1:], axis = axis)
     elif value == range or value == np.arange:
       assert len(keywords_dict) == 0
       n_args = len(positional)
@@ -477,15 +474,10 @@ class AST_Translator(ast.NodeVisitor):
       assert len(keywords_dict) == 0
       assert len(positional) == 1
       return syntax.Len(positional[0])
-    elif value == float:
-      return syntax.Cast(value = positional[0], type = core_types.Float64)
-    elif value == int:
-      return syntax.Cast(value = positional[0], type = core_types.Int64)
     else:
-      assert value == slice, "Builtin not implemented: %s" % value 
-      assert len(keywords_dict) == 0
-      return syntax.Slice(*positional)
-
+      fn = self.value_to_syntax(value)
+      return syntax.Call(fn, ActualArgs(positional, keywords_dict))
+      
   def visit(self, node):
 
     return ast.NodeVisitor.visit(self, node)
@@ -523,7 +515,7 @@ class AST_Translator(ast.NodeVisitor):
       if isinstance(value, macro):
         return value.transform(positional, keywords_dict)
       elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)):
-        return self.translate_builtin(value, positional, keywords_dict)
+        return self.translate_builtin_call(value, positional, keywords_dict)
       else:
         assert False, "Invalid function %s" % value 
            
