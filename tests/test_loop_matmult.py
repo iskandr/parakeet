@@ -5,10 +5,12 @@ from testing_helpers import run_local_tests, expect, eq
 
 @jit 
 def mm(X,Y,Z):
-  for i in range(X.shape[0]):
-      for j in range(Y.shape[0]):
+  m,d = X.shape
+  n = Y.shape[1]  
+  for i in range(m):
+      for j in range(n):
           total = 0.0
-          for k in range(X.shape[1]):
+          for k in range(d):
               total += X[i,k] * Y[k,j]
           Z[i,j] = total 
 

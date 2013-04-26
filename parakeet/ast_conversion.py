@@ -430,7 +430,6 @@ class AST_Translator(ast.NodeVisitor):
                                                  expr.__class__.__name__))
   
   def translate_builtin_call(self, value, positional, keywords_dict):
-
     if value is sum:
       return mk_reduce_call(prims.prim_wrapper(prims.add), positional, zero_i64)
     elif value is max:
@@ -450,25 +449,30 @@ class AST_Translator(ast.NodeVisitor):
       assert len(positional) > 1
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
-    #elif value is range or value is np.arange or value is xrange:
-    #  assert len(keywords_dict) == 0
-    #  n_args = len(positional)
+    elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)) and \
+         value.__name__ in lib_core.__dict__:
+      parakeet_equiv = lib_core.__dict__[value.__name__]
+      if isinstance(parakeet_equiv, macro):
+        return parakeet_equiv.transform(positional, keywords_dict)
+    
+    fn = value_to_syntax(value)
+    return syntax.Call(fn, ActualArgs(positional, keywords_dict))
+    """
+    elif value is range or value is np.arange or value is xrange:
+      assert len(keywords_dict) == 0
+      n_args = len(positional)
       
-    #  if n_args == 1:
-    #    positional = [zero_i64] + positional + [one_i64]
-    #  elif n_args == 2:
-    #    positional.extend([one_i64])
-    #  else:
-    #    assert n_args == 3
-    #  return syntax.Range(*positional)
-    else:
-      fn = value_to_syntax(value)
-      return syntax.Call(fn, ActualArgs(positional, keywords_dict))
+      if n_args == 1:
+        positional = [zero_i64] + positional + [one_i64]
+      elif n_args == 2:
+        positional.extend([one_i64])
+      else:
+        assert n_args == 3
+      return syntax.Range(*positional)
+    """
       
   def visit(self, node):
-    print ast.dump(node)
     res = ast.NodeVisitor.visit(self, node)
-    print "==> ", res 
     return res 
     
   def visit_Call(self, expr):
@@ -510,11 +514,11 @@ class AST_Translator(ast.NodeVisitor):
       return value
     
     def translate_value_call(value):
-      if is_user_function(value):
+      if isinstance(value, macro):
+        return value.transform(positional, keywords_dict)
+      elif is_user_function(value):
         return syntax.Call(translate_function_value(value), 
                            ActualArgs(positional, keywords_dict, starargs_expr))
-      elif isinstance(value, macro):
-        return value.transform(positional, keywords_dict)
       else:
         return self.translate_builtin_call(value, positional, keywords_dict)
           
@@ -680,14 +684,18 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(seq, syntax.Range):
       return ForLoop(var, seq.start, seq.stop, seq.step, body, merge)
     else:
-      n = syntax.Len(seq)
+      
+      seq_name = self.fresh_name("seq")
+      seq_var = Var(seq_name)
+      self.current_block().append(Assign(seq_var, seq))
+      
+      n = syntax.Len(seq_var)
       start = zero_i64
-      stop = n # syntax.PrimCall(prims.subtract, [n, one_i64])
       step = one_i64
-      loop_counter_name = self.fresh_name('i')
+      loop_counter_name = self.fresh_name('loop_counter')
       loop_var = Var(loop_counter_name)
-      body = [Assign(var, syntax.Index(seq, loop_var))] + body
-      return ForLoop(loop_var, start, stop, step, body, merge)
+      body = [Assign(var, syntax.Index(seq_var, loop_var))] + body
+      return ForLoop(loop_var, start, n, step, body, merge)
     
   def visit_block(self, stmts):
     self.push()
@@ -821,9 +829,9 @@ def translate_function_value(fn, _currently_processing = set([])):
     if closure_cells is None:
       closure_cells = ()
 
-    # print "[translate_function_value] Translating: ", source 
+    
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
-    #print "[translate_function_value] Produced:", repr(fundef)
+   
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
   register_python_fn(original_fn, fundef)

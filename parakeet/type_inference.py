@@ -544,7 +544,7 @@ class Annotator(Transform):
                     for (elt, elt_type) in zip(lhs.elts, rhs_type.elt_types)]
       else:
         assert rhs_type.__class__ is ArrayT, \
-            "Unexpected right hand side type %s" % rhs_type
+            "Unexpected right hand side type %s for %s" % (rhs_type, lhs)
         elt_type = array_type.lower_rank(rhs_type, 1)
         new_elts = [self.annotate_lhs(elt, elt_type) for elt in lhs.elts]
       tuple_t = tuple_type.make_tuple_type(get_types(new_elts))
