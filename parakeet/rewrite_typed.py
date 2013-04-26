@@ -162,7 +162,7 @@ class RewriteTyped(Transform):
       index_elt_t = index.type.elt_type
       index_fn = self.get_index_fn(expr.value.type, index_elt_t)
       index_closure = self.closure(index_fn, [expr.value])
-      return adverbs.Map(fn = index_closure, args = [expr.index], type = expr.value.type, axis = 0)
+      return adverbs.Map(fn = index_closure, args = [expr.index], type = expr.value.type, axis = zero_i64)
     else:
       return expr 
   
