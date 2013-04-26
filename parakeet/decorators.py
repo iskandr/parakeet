@@ -52,10 +52,8 @@ class macro(object):
 
   def as_fn(self):
     n_args = self.f.func_code.co_argcount
-    n_argnames = len(self.f.func_code.co_varnames)
-    n_kwd = 0 if not self.f.func_defaults else len(self.f.func_defaults)
-    assert n_kwd == 0
-    assert n_args == n_argnames
+    n_default = 0 if not self.f.func_defaults else len(self.f.func_defaults)
+    assert n_default == 0
     return self._create_wrapper(n_args,[],{})
     
   def __call__(self, *args, **kwargs):

@@ -77,24 +77,31 @@ def mk_wrapper_function(p):
   return f
   
        
-def is_hashable(self, x):
+def is_hashable(x):
   try:
     hash(x)
     return True
   except:
     return False 
+
+def is_prim(v):
+  return isinstance(v, (Prim)) or (is_hashable(v) and v in prims.prim_lookup_by_value) 
+
+def is_builtin_function(v):
+  return isinstance(v, (types.TypeType, types.BuiltinFunctionType))
   
-def is_function_value(self, v):
-  
-  return isinstance(v, (types.FunctionType, types.LambdaType, jit, types.TypeType, Prim)) or \
-    (self.is_hashable(v) and v in prims.prim_lookup_by_value)
+def is_user_function(v):
+  return isinstance(v, (types.FunctionType, jit, macro))
+
+def is_function_value(v):
+  return is_user_function(v) or is_builtin_function(v) or is_prim(v)
     
-def is_static_value(self, v):
+def is_static_value(v):
   return syntax_helpers.is_python_constant(v) or \
          type(v) is np.dtype  or \
-         self.is_function_value(v)
+         is_function_value(v)
 
-def value_to_syntax(self, v):
+def value_to_syntax(v):
   if syntax_helpers.is_python_constant(v):
     return syntax_helpers.const(v)
   elif isinstance(v, np.dtype):
@@ -106,10 +113,8 @@ def value_to_syntax(self, v):
     return syntax.Fn(fn_name, formals, body)
   else:
     
-    assert self.is_function_value(v), "Can't make value %s into static syntax" % v
+    assert is_function_value(v), "Can't make value %s : %s into static syntax" % (v, type(v))
     return translate_function_value(v)    
-
-
 
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
@@ -737,7 +742,14 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 closure_cells)
 
 import adverb_registry
-def translate_function_value(fn):
+def translate_function_value(fn, _currently_processing = set([])):
+  
+  assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
+  assert fn not in _currently_processing, \
+    "Recursion detected through function value %s" % (fn,)
+  _currently_processing.add(fn)
+  original_fn = fn
+  
   if type(fn) in (types.BuiltinFunctionType, types.TypeType):
     assert hasattr(lib_core, fn.__name__), "Invalid primitive: %s" % (fn,) 
     fn = getattr(lib_core, fn.__name__)
@@ -785,5 +797,7 @@ def translate_function_value(fn):
     #print "[translate_function_value] Produced:", repr(fundef)
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
+  register_python_fn(original_fn, fundef)
   register_python_fn(fn, fundef)
+  _currently_processing.remove(original_fn)
   return fundef
