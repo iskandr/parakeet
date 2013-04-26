@@ -45,11 +45,9 @@ class macro(object):
 
     result_expr = self.f(*pos_vars, **keyword_vars)
     body = [syntax.Return(result_expr)]
-
     wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
                                          len(dynamic_keywords))
     wrapper_name = names.fresh(wrapper_name)
-
     return syntax.Fn(name = wrapper_name, args = args, body = body)
 
   def __call__(self, *args, **kwargs):
@@ -69,7 +67,6 @@ class macro(object):
       else:
         untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
         self.wrappers[key] = untyped
-      import run_function
       dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
       return run_function.run(untyped, *args, **dynamic_kwargs)
     else:

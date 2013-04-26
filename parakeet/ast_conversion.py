@@ -190,7 +190,7 @@ class AST_Translator(ast.NodeVisitor):
     
   def is_function_value(self, v):
     
-    return isinstance(v, (types.FunctionType, types.LambdaType, jit, Prim)) or \
+    return isinstance(v, (types.FunctionType, types.LambdaType, jit, types.TypeType, Prim)) or \
       (self.is_hashable(v) and v in prims.prim_lookup_by_value)
       
   def is_static_value(self, v):
@@ -438,7 +438,7 @@ class AST_Translator(ast.NodeVisitor):
     raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr),
                                                  expr.__class__.__name__))
   
-  def translate_builtin(self, value, positional, keywords_dict):
+  def translate_builtin_call(self, value, positional, keywords_dict):
     
     if value == sum:
       return mk_reduce_call(prims.prim_wrapper(prims.add), positional, zero_i64)
@@ -760,28 +760,33 @@ def translate_function_source(source, globals_dict, closure_vars = [],
 
 import adverb_registry
 def translate_function_value(fn):
+  if type(fn) in (types.BuiltinFunctionType, types.TypeType):
+    assert hasattr(lib_core, fn.__name__), "Invalid primitive: %s" % (fn,) 
+    fn = getattr(lib_core, fn.__name__)
+  
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
     fn = fn.f 
   
-
+  if already_registered_python_fn(fn):
+    return lookup_python_fn(fn)
     
   if fn in prims.prim_lookup_by_value:
     fn = prims.prim_lookup_by_value[fn]
+  
+  if isinstance(fn, Prim):
+    fundef = prim_wrapper(fn)
+  
     
-  if already_registered_python_fn(fn):
-    return lookup_python_fn(fn)
-  elif isinstance(fn, Prim):
-    return prim_wrapper(fn)
-    
-
   # TODO: Right now we can only deal with adverbs over a fixed axis and fixed
   # number of args due to lack of support for a few language constructs:
   # - variable number of args packed as a tuple i.e. *args
   # - keyword arguments packed as a...? ...struct of some kind? i.e. **kwds
   # - unpacking tuples and unpacking structs
   elif adverb_registry.is_registered(fn):
-    return adverb_registry.get_wrapper(fn)
+    fundef = adverb_registry.get_wrapper(fn)
+  elif isinstance(fn, macro):
+    fundef = fn.as_fn()
   else:
     assert hasattr(fn, 'func_globals'), \
         "Expected function to have globals: %s" % fn
@@ -800,9 +805,7 @@ def translate_function_value(fn):
     # print "[translate_function_value] Translating: ", source 
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
     #print "[translate_function_value] Produced:", repr(fundef)
-    register_python_fn(fn, fundef)
-
     if config.print_untyped_function:
-      print "[ast_conversion] Translated %s into untyped function:\n%s" % \
-            (fn, repr(fundef))
-    return fundef
+      print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
+  register_python_fn(fn, fundef)
+  return fundef
