@@ -460,7 +460,9 @@ class Annotator(Transform):
     assert len(arg_types) == 2
     xt,yt = arg_types
     result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
-    axis = unwrap_constant(expr.axis)
+    axis = self.transform_if_expr(expr.axis)
+    if axis is None or self.is_none(axis):
+      axis = zero_i64
     return adverbs.AllPairs(make_typed_closure(closure, typed_fn),
                             args = new_args,
                             axis = axis,
@@ -621,9 +623,7 @@ class Annotator(Transform):
 
 
 def infer_types(untyped_fn, types):
-  
-  print "infer fn", untyped_fn
-  print "infer args", types
+
   """
   Given an untyped function and input types, propagate the types through the
   body, annotating the AST with type annotations.
