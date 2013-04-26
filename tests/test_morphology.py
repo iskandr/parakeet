@@ -7,41 +7,11 @@ import time
 import parakeet
 from testing_helpers import eq, run_local_tests
 
-def min_(x):
-  min_val = 1.0
-  for i in range(x.shape[0]):
-    for j in range(x.shape[1]):
-      if x[i,j] < min_val:
-        min_val = x[i,j]
-  return min_val
- 
-
 def erode(X, window_size = (3,3)):
-  return parakeet.pmap2d(min_, X, window_size)
-
-def erode_loops(X, window_size = (3,3)):
-  m,n = X.shape
-  wx, wy = window_size 
-  result = parakeet.zeros_like(X)
-  for i in range(m):
-    for j in range(n):
-      min_val = 1.0
-      window = X[max(0, i -ii):min(m, i + ii), max(0, j - jj):min(n, j + jj)]
-      for elt in parakeet.ravel(window):
-        if elt < min_val:
-          min_val = elt
-    result[i,j] = min_val
-
-def max_(x):
-  max_val = 0.0
-  for i in range(x.shape[0]):
-    for j in range(x.shape[1]):
-      if x[i,j] > max_val:
-        max_val = x[i,j]
-  return max_val
+  return parakeet.pmap2d(parakeet.min, X, window_size)
 
 def dilate(X, window_size = (3,3)):
-  return parakeet.pmap2d(max_, X, window_size)
+  return parakeet.pmap2d(parakeet.max, X, window_size)
 
 
 def load_img(path  = '../data/rjp_small.png', gray=True):
@@ -72,11 +42,11 @@ def test_erode():
   size = (10,10)
   r,g,b = x[:,:,0],x[:,:,1],x[:,:,2]
   
-  print "EROSION TIMINGS"
+
   def filter(img):
     print "---"
     par_start_t = time.time()
-    res_par = erode_loops(img, size)
+    res_par = erode(img, size)
     par_end_t = time.time()
     print "Parakeet time: %0.3f" % (par_end_t - par_start_t)
     sci_start_t = time.time()
@@ -105,13 +75,13 @@ def morph_close(x, dilate_shape, erode_shape = None):
     erode_shape = dilate_shape
   return erode(dilate(x, dilate_shape), erode_shape)
 
-"""
+
 def test_residual():
   x = load_img(gray=False)
   s1 = (5,20)
   s2 = (17,3)
   def filter(img):
-    return erode(dilate(img, s1) * erode(img, s2), s2)
+    return erode(dilate(img, (3,3)), (1,1))#  + erode(img, s2), s2) **3
     
   r = filter(x[:,:,0])
   g = filter(x[:,:,1])
@@ -121,6 +91,6 @@ def test_residual():
   pylab.figure()
   pylab.imshow(y)
   pylab.show()
-"""
+
 if __name__ == '__main__':
   run_local_tests() 

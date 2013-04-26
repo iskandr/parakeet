@@ -6,7 +6,7 @@ from testing_helpers import run_local_tests, expect
 
 @jit 
 def float32_cast(x):
-  return parakeet.dtypes.float32(x)
+  return parakeet.float32(x)
 
 def test_int_to_float32():
   res = float32_cast(0)
@@ -41,7 +41,7 @@ def test_bool_to_float32():
 
 @jit 
 def uint8_cast(x):
-  return parakeet.dtypes.uint8(x)
+  return parakeet.uint8(x)
 
 def test_int_to_uint8():
   res = uint8_cast(0)
@@ -88,7 +88,7 @@ def test_type_as_arg():
   assert type(float_res) == np.float64
   
 @jit
-def type_as_default_arg(n, t=parakeet.dtypes.float64):
+def type_as_default_arg(n, t=parakeet.float64):
   return t(n)
   
 def test_type_as_default_arg():
@@ -105,13 +105,13 @@ def call_type_conv(n, t):
   return type_as_default_arg(n, t)
 
 def test_call_type_conv():
-  float_res = call_type_conv(-1000, parakeet.dtypes.float64)
+  float_res = call_type_conv(-1000, parakeet.float64)
   assert type(float_res) == np.float64
   assert float_res == -1000.0, "Expected -1000.0, got %s" % float_res
 
 @jit
 def type_as_value(n):
-  t2 = parakeet.dtypes.bool8
+  t2 = np.bool8
   return t2(n)
 
 

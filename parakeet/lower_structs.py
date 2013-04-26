@@ -127,3 +127,6 @@ class LowerStructs(Transform):
       self.setidx(ptr, i, v)
     self.loop(zero(core_types.Int64), nelts, loop_body, return_stmt = False, while_loop = False)
     return result 
+  
+  def transform_ConstArray(self, expr):
+    assert False

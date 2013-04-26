@@ -3,8 +3,65 @@ import __builtin__
 from prims import *
 from adverb_api import allpairs, each, reduce, scan
 from decorators import macro, staged_macro
-from core_types import Int64, Float64
+from core_types import Int8, Int16, Int32, Int64
+from core_types import Float32, Float64
+from core_types import UInt8, UInt16, UInt32, UInt64
+from core_types import Bool
+
 import syntax_helpers
+from syntax_helpers import zero_i64, one_i64, one_i32
+
+@macro 
+def int8(x):
+  return syntax.Cast(x, type = Int8) 
+
+@macro 
+def int16(x):
+  return syntax.Cast(x, type = Int16) 
+
+@macro 
+def int32(x):
+  return syntax.Cast(x, type = Int32) 
+
+@macro 
+def int64(x):
+  return syntax.Cast(x, type = Int64) 
+
+int = int64 
+long = int64 
+
+@macro 
+def uint8(x):
+  return syntax.Cast(x, type = UInt8) 
+
+@macro 
+def uint16(x):
+  return syntax.Cast(x, type = UInt16) 
+
+@macro 
+def uint32(x):
+  return syntax.Cast(x, type = UInt32) 
+
+@macro 
+def uint64(x):
+  return syntax.Cast(x, type = UInt64)
+
+uint = uint64 
+
+@macro 
+def float32(x):
+  return syntax.Cast(x, type = Float32)
+
+@macro 
+def float64(x):
+  return syntax.Cast(x, type = Float64)
+
+float = float64
+
+def bool8(x):
+  return syntax.Cast(x, type = Bool)
+
+bool = bool8 
 
 def identity(x):
   return x
@@ -72,26 +129,22 @@ def range(n, *xs):
     return syntax.Range(n, xs[0], syntax_helpers.one_i64)  
   else:
     return syntax.Range(n, xs[0], xs[1])
-
-@macro
-def int(x):
-  return syntax.Cast(x, type=Int64)
-
-@macro
-def long(x):
-  return syntax.Cast(x, type=Int64)
-
-@macro
-def float(x):
-  return syntax.Cast(x, type=Float64)
+arange = range 
 
 @macro 
-def zeros_like(x):
-  return syntax.ConstArrayLike(x, 0)
+def zeros(shape, dtype = float64):
+  return syntax.ConstArray(shape, value = dtype(zero_i64))
+
+def zeros_like(x, dtype = float64):
+  return zeros(x.shape, dtype)
+
+@macro
+def ones(shape, dtype = float64):
+  return syntax.ConstArray(shape = shape, value = dtype(one_i32))
 
 @macro
 def ones_like(x):
-  return syntax.ConstArrayLike(x, 1)
+  return ones(x.shape)
 
 
 

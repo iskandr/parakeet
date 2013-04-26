@@ -454,22 +454,9 @@ class AST_Translator(ast.NodeVisitor):
       parakeet_equiv = lib_core.__dict__[value.__name__]
       if isinstance(parakeet_equiv, macro):
         return parakeet_equiv.transform(positional, keywords_dict)
-    
     fn = value_to_syntax(value)
     return syntax.Call(fn, ActualArgs(positional, keywords_dict))
-    """
-    elif value is range or value is np.arange or value is xrange:
-      assert len(keywords_dict) == 0
-      n_args = len(positional)
-      
-      if n_args == 1:
-        positional = [zero_i64] + positional + [one_i64]
-      elif n_args == 2:
-        positional.extend([one_i64])
-      else:
-        assert n_args == 3
-      return syntax.Range(*positional)
-    """
+    
       
   def visit(self, node):
     res = ast.NodeVisitor.visit(self, node)
