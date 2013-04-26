@@ -19,7 +19,7 @@ print_lowered_function = False
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = True
+print_optimized_llvm = False
 
 # show the input function to each transformation?
 print_functions_before_transforms = [] #['IndexElim']
@@ -49,7 +49,7 @@ print_specialized_function_names = False
 print_tile_search_info = False
 
 # print generated assembly of compiled functions
-print_x86 = True
+print_x86 = False
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -68,11 +68,11 @@ opt_scalar_replacement = True
 opt_redundant_load_elimination = True 
 
 # may dramatically increase compile time
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = True
+stride_specialization = False
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False

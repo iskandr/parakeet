@@ -77,6 +77,16 @@ def test_to_float():
   assert type(res) is np.float64, "Expected type float, got: %s" % (type(res),)
   assert res == 1.0
 
+  res = to_float(True)
+  assert res == 1.0
+
+@jit
+def to_long(x):
+  return long(x)
+
+def test_to_long():
+  res = to_long(-1.0)
+  assert res == -1.0
 
 if __name__ == '__main__':
   run_local_tests()
