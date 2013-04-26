@@ -5,7 +5,10 @@ import syntax
 import syntax_helpers
 
 from args import FormalArgs, ActualArgs
-from lib_simple import identity
+
+
+def identity(x):
+  return x
 
 untyped_identity_function = ast_conversion.translate_function_value(identity)
 

@@ -760,8 +760,9 @@ def translate_function_source(source, globals_dict, closure_vars = [],
     syntax = syntax.body[0]
   elif isinstance(syntax, ast.Expression):
     syntax = syntax.body
+  
   assert isinstance(syntax, ast.FunctionDef), \
-      "Unexpected Python syntax node: %s" % syntax
+      "Unexpected Python syntax node: %s" % ast.dump(syntax)
   return translate_function_ast(syntax, globals_dict, closure_vars,
                                 closure_cells)
 
@@ -796,9 +797,7 @@ def translate_function_value(fn):
         "Expected function to have closure cells: %s" % fn
     assert hasattr(fn, 'func_code'), \
         "Expected function to have code object: %s" % fn
-
     source = inspect.getsource(fn)
-
     globals_dict = fn.func_globals
 
     free_vars = fn.func_code.co_freevars
@@ -806,7 +805,7 @@ def translate_function_value(fn):
     if closure_cells is None:
       closure_cells = ()
 
-    #print "[translate_function_value] Translating: ", source 
+    # print "[translate_function_value] Translating: ", source 
     fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
     #print "[translate_function_value] Produced:", repr(fundef)
     register_python_fn(fn, fundef)
