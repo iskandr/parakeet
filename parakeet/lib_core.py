@@ -1,5 +1,5 @@
 """Simple library functions which don't depend on adverbs"""
-
+import __builtin__
 from prims import *
 from adverb_api import allpairs, each, reduce, scan
 from decorators import macro, staged_macro
@@ -61,26 +61,17 @@ def max(x, y = None):
   else:
     return maximum(x,y)
   
-@macro 
-def range1(n):
-  return syntax.Range(syntax_helpers.zero_i64, n, syntax_helpers.one_i64)
 
-@macro 
-def range2(start, stop):
-  return syntax.Range(start, stop, syntax_helpers.one_i64)
-
-@macro 
-def range3(start, stop, step):
-  return syntax.Range(start, stop, step)
-
-def range(a, b = None, c = None):
-  if c is None:
-    if b is None:
-      return range1(a)
-    else:
-      return range2(a,b)
+@macro
+def range(n, *xs):
+  count = __builtin__.len(xs)
+  assert 0 <= count <= 2, "Too many args for range: %s" % ((n,) + tuple(xs))
+  if count == 0:
+    return syntax.Range(syntax_helpers.zero_i64, n, syntax_helpers.one_i64)
+  elif count == 1:
+    return syntax.Range(n, xs[0], syntax_helpers.one_i64)  
   else:
-    return range3(a,b,c)
+    return syntax.Range(n, xs[0], xs[1])
 
 @macro
 def int(x):
@@ -101,3 +92,6 @@ def zeros_like(x):
 @macro
 def ones_like(x):
   return syntax.ConstArrayLike(x, 1)
+
+
+

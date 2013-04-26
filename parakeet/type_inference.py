@@ -535,7 +535,7 @@ class Annotator(Transform):
     return new_nodes
 
   def annotate_lhs(self, lhs, rhs_type):
-    print "annotate_lhs", lhs, rhs_type 
+
     lhs_class = lhs.__class__
     if lhs_class is syntax.Tuple:
       if rhs_type.__class__ is TupleT:
@@ -669,7 +669,7 @@ def infer_types(untyped_fn, types):
         typed_val = syntax.Tuple(tuple(parakeet_elts), type = t)
       else:
         typed_val = syntax.Const(python_value, t) #mk_default_const(python_value, t)
-      print "infer_type default value %s = %s" %(var,  typed_val)
+
       stmt = syntax.Assign(var, typed_val)
       default_assignments.append(stmt)
     body = default_assignments + body

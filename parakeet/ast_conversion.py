@@ -1,3 +1,4 @@
+import __builtin__
 import ast
 import inspect
 import types
@@ -196,11 +197,14 @@ class AST_Translator(ast.NodeVisitor):
     if self.globals:
       if key in self.globals:
         return self.globals[key]
-      assert key in __builtins__
-      return __builtins__[key]
+      elif key in __builtin__.__dict__:
+
+        return __builtin__.__dict__[key]
+      else:
+        assert False, "Couldn't find global name %s" % key
     else:
       assert self.parent is not None
-      self.parent.lookup_global(key)
+      return self.parent.lookup_global(key)
     
   def is_global(self, key):
     if isinstance(key, (list, tuple)):
@@ -446,17 +450,17 @@ class AST_Translator(ast.NodeVisitor):
       assert len(positional) > 1
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
-    elif value is range or value is np.arange or value is xrange:
-      assert len(keywords_dict) == 0
-      n_args = len(positional)
+    #elif value is range or value is np.arange or value is xrange:
+    #  assert len(keywords_dict) == 0
+    #  n_args = len(positional)
       
-      if n_args == 1:
-        positional = [zero_i64] + positional + [one_i64]
-      elif n_args == 2:
-        positional.extend([one_i64])
-      else:
-        assert n_args == 3
-      return syntax.Range(*positional)
+    #  if n_args == 1:
+    #    positional = [zero_i64] + positional + [one_i64]
+    #  elif n_args == 2:
+    #    positional.extend([one_i64])
+    #  else:
+    #    assert n_args == 3
+    #  return syntax.Range(*positional)
     else:
       fn = value_to_syntax(value)
       return syntax.Call(fn, ActualArgs(positional, keywords_dict))
