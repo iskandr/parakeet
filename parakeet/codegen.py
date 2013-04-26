@@ -372,6 +372,8 @@ class Codegen(object):
 
   def ravel(self, x):
     assert self.is_array(x)
+    if x.type.rank == 1:
+      return x
     nelts = self.nelts(x)
     shape = self.tuple((nelts,), 'shape')
     strides = self.tuple((self.int(x.type.elt_type.nbytes),), "strides")

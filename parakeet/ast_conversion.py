@@ -485,21 +485,42 @@ class AST_Translator(ast.NodeVisitor):
     else:
       starargs_expr = None
     
-    fn_node = self.visit(fn)
-
-    if isinstance(fn_node, syntax.Expr):
-      actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-      return syntax.Call(fn_node, actuals)
-    else:
-      assert isinstance(fn_node, ExternalValue)
-      value = fn_node.value
-      print "Underlying value", value 
+    def is_attr_chain(expr):
+      return isinstance(expr, ast.Name) or \
+             (isinstance(expr, ast.Attribute) and is_attr_chain(expr.value))
+    def extract_attr_chain(expr):
+      if isinstance(expr, ast.Name):
+        return [expr.id]
+      else:
+        base = extract_attr_chain(expr.value)
+        base.append(expr.attr)
+        return base
+    
+    def lookup_attr_chain(names):
+      value = self.lookup_global(names[0])
+      for name in names[1:]:
+        value = getattr(value, name)
+      return value
+    
+    def translate_value_call(value):
       if isinstance(value, macro):
         return value.transform(positional, keywords_dict)
       elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)):
         return self.translate_builtin_call(value, positional, keywords_dict)
       else:
         assert False, "Invalid function %s" % value 
+          
+    if is_attr_chain(fn):
+      names = extract_attr_chain(fn)
+      if self.is_global(names):
+        return translate_value_call(lookup_attr_chain(names))
+    fn_node = self.visit(fn)    
+    if isinstance(fn_node, syntax.Expr):
+      actuals = ActualArgs(positional, keywords_dict, starargs_expr)
+      return syntax.Call(fn_node, actuals)
+    else:
+      assert isinstance(fn_node, ExternalValue)
+      return translate_value_call(fn_node.value)
            
 
     
@@ -746,6 +767,8 @@ def translate_function_value(fn, _currently_processing = set([])):
   assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
   assert fn not in _currently_processing, \
     "Recursion detected through function value %s" % (fn,)
+  if already_registered_python_fn(fn):
+    return lookup_python_fn(fn)
   _currently_processing.add(fn)
   original_fn = fn
   
@@ -757,8 +780,7 @@ def translate_function_value(fn, _currently_processing = set([])):
   while isinstance(fn, jit):
     fn = fn.f 
   
-  if already_registered_python_fn(fn):
-    return lookup_python_fn(fn)
+
     
   if fn in prims.prim_lookup_by_value:
     fn = prims.prim_lookup_by_value[fn]
