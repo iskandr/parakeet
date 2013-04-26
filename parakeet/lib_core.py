@@ -42,6 +42,7 @@ def diff(x):
 def dot(x,y):
   return sum(x*y)
 
+@staged_macro("axis")
 def minelt(x, axis = None):
   return reduce(minimum, x[1:], init=x[0], axis = axis)
 
