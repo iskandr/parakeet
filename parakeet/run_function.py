@@ -130,8 +130,6 @@ def run(fn, *args, **kwargs):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-  print "COMPILING"
   untyped, _, compiled, all_args = specialize_and_compile(fn, args, kwargs)
-  print "GOT FNS"
   linear_args = untyped.args.linearize_without_defaults(all_args)
   return compiled(*linear_args)

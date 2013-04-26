@@ -426,37 +426,37 @@ class AST_Translator(ast.NodeVisitor):
                                                  expr.__class__.__name__))
   
   def translate_builtin_call(self, value, positional, keywords_dict):
-    
-    if value == sum:
+
+    if value is sum:
       return mk_reduce_call(prims.prim_wrapper(prims.add), positional, zero_i64)
-    elif value == max:
+    elif value is max:
       if len(positional) == 1:
         return mk_reduce_call(prims.prim_wrapper(prims.maximum), positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.maximum, positional)
-    elif value == min:
+    elif value is min:
       if len(positional) == 1:
         return mk_reduce_call(prims.prim_wrapper(prims.minimum), positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.minimum, positional)
-    elif value == map:
+    elif value is map:
       assert len(keywords_dict) == 0
       assert len(positional) > 1
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
-    #elif value == range or value == np.arange:
-    #  assert len(keywords_dict) == 0
-    #  n_args = len(positional)
+    elif value is range or value is np.arange or value is xrange:
+      assert len(keywords_dict) == 0
+      n_args = len(positional)
       
-    #  if n_args == 1:
-    #    positional = [zero_i64] + positional + [one_i64]
-    #  elif n_args == 2:
-    #    positional.extend([one_i64])
-    #  else:
-    #    assert n_args == 3
-    #  return syntax.Range(*positional)
+      if n_args == 1:
+        positional = [zero_i64] + positional + [one_i64]
+      elif n_args == 2:
+        positional.extend([one_i64])
+      else:
+        assert n_args == 3
+      return syntax.Range(*positional)
     else:
       fn = value_to_syntax(value)
       return syntax.Call(fn, ActualArgs(positional, keywords_dict))
@@ -563,7 +563,7 @@ class AST_Translator(ast.NodeVisitor):
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0
-    return Map(fn, args=(seq,), axis = 0)
+    return Map(fn, args=(seq,), axis = zero_i64)
       
   def visit_Attribute(self, expr):
     # TODO:
@@ -764,12 +764,15 @@ def translate_function_source(source, globals_dict, closure_vars = [],
 
 import adverb_registry
 def translate_function_value(fn, _currently_processing = set([])):
+  # if the function has been wrapped with a decorator, unwrap it 
+  while isinstance(fn, jit):
+    fn = fn.f 
   
+  if already_registered_python_fn(fn):
+    return lookup_python_fn(fn)
   assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
   assert fn not in _currently_processing, \
     "Recursion detected through function value %s" % (fn,)
-  if already_registered_python_fn(fn):
-    return lookup_python_fn(fn)
   _currently_processing.add(fn)
   original_fn = fn
   
@@ -777,10 +780,7 @@ def translate_function_value(fn, _currently_processing = set([])):
     assert hasattr(lib_core, fn.__name__), "Invalid primitive: %s" % (fn,) 
     fn = getattr(lib_core, fn.__name__)
   
-  # if the function has been wrapped with a decorator, unwrap it 
-  while isinstance(fn, jit):
-    fn = fn.f 
-  
+
 
     
   if fn in prims.prim_lookup_by_value:
