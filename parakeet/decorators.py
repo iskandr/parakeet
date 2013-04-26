@@ -50,6 +50,14 @@ class macro(object):
     wrapper_name = names.fresh(wrapper_name)
     return syntax.Fn(name = wrapper_name, args = args, body = body)
 
+  def as_fn(self):
+    n_args = self.f.func_code.co_argcount
+    n_argnames = len(self.f.func_code.co_varnames)
+    n_kwd = 0 if not self.f.func_defaults else len(self.f.func_defaults)
+    assert n_kwd == 0
+    assert n_args == n_argnames
+    return self._create_wrapper(n_args,[],{})
+    
   def __call__(self, *args, **kwargs):
     if self.call_from_python is None:
       n_pos = len(args)

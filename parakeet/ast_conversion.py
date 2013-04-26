@@ -28,21 +28,6 @@ from subst import subst_expr, subst_stmt_list
 from syntax import Assign, If, ForLoop, Var, PrimCall
 from syntax_helpers import none, true, false, one_i64, zero_i64
 
-
-# TODO: Include callables in category of "static" values 
-# s.t. is_static_value and value_to_syntax both deal with 
-# - ordinary functions 
-# - functions wrapped with jit
-# - primitives of the type Prim
-# - compiled functions that have been wrapped by some Prim
-# - compiled functions that have been wrapped by some library function 
-
-#reserved_names = {
-#  'True' : true,
-#  'False' : false,
-#  'None' : none,
-#}
-
 class ExternalValue(object):
   """
   Wrap up references global values with this class
@@ -90,6 +75,39 @@ def mk_wrapper_function(p):
     f = translate_function_value(lib_core.__dict__[p.__name__]) 
   _function_wrapper_cache[p] = f
   return f
+  
+       
+def is_hashable(self, x):
+  try:
+    hash(x)
+    return True
+  except:
+    return False 
+  
+def is_function_value(self, v):
+  
+  return isinstance(v, (types.FunctionType, types.LambdaType, jit, types.TypeType, Prim)) or \
+    (self.is_hashable(v) and v in prims.prim_lookup_by_value)
+    
+def is_static_value(self, v):
+  return syntax_helpers.is_python_constant(v) or \
+         type(v) is np.dtype  or \
+         self.is_function_value(v)
+
+def value_to_syntax(self, v):
+  if syntax_helpers.is_python_constant(v):
+    return syntax_helpers.const(v)
+  elif isinstance(v, np.dtype):
+    x = names.fresh("x")
+    fn_name = names.fresh("cast") 
+    formals = FormalArgs()
+    formals.add_positional(x, "x")
+    body = [syntax.Return(syntax.Cast(syntax.Var(x), type=core_types.from_dtype(v)))]
+    return syntax.Fn(fn_name, formals, body)
+  else:
+    
+    assert self.is_function_value(v), "Can't make value %s into static syntax" % v
+    return translate_function_value(v)    
 
 
 
@@ -149,6 +167,20 @@ class AST_Translator(ast.NodeVisitor):
   def current_scope(self):
     return self.scopes.top()
 
+
+  def syntax_to_value(self, expr):
+    if isinstance(expr, ast.Num):
+      return expr.n
+    elif isinstance(expr, ast.Tuple):
+      return tuple(self.syntax_to_value(elt) for elt in expr.elts)
+    elif isinstance(expr, ast.Name):
+      return self.lookup_global(expr.id)
+    elif isinstance(expr, ast.Attribute):
+      left = self.syntax_to_value(expr.value)
+      if isinstance(left, ExternalValue):
+        left = left.value 
+      return getattr(left, expr.attr) 
+
   def lookup_global(self, key):
     if isinstance(key, (list, tuple)):
       assert len(key) == 1
@@ -177,56 +209,6 @@ class AST_Translator(ast.NodeVisitor):
     assert self.parent is not None 
     return self.parent.is_global(key)
   
-
-
-  
-       
-  def is_hashable(self, x):
-    try:
-      hash(x)
-      return True
-    except:
-      return False 
-    
-  def is_function_value(self, v):
-    
-    return isinstance(v, (types.FunctionType, types.LambdaType, jit, types.TypeType, Prim)) or \
-      (self.is_hashable(v) and v in prims.prim_lookup_by_value)
-      
-  def is_static_value(self, v):
-    return syntax_helpers.is_python_constant(v) or \
-           type(v) is np.dtype  or \
-           self.is_function_value(v)
-  
-  def value_to_syntax(self, v):
-
-    if syntax_helpers.is_python_constant(v):
-      return syntax_helpers.const(v)
-    elif isinstance(v, np.dtype):
-      x = names.fresh("x")
-      fn_name = names.fresh("cast") 
-      formals = FormalArgs()
-      formals.add_positional(x, "x")
-      body = [syntax.Return(syntax.Cast(syntax.Var(x), type=core_types.from_dtype(v)))]
-      return syntax.Fn(fn_name, formals, body)
-    else:
-      
-      assert self.is_function_value(v), "Can't make value %s into static syntax" % v
-      return translate_function_value(v)    
-  
-  def syntax_to_value(self, expr):
-    if isinstance(expr, ast.Num):
-      return expr.n
-    elif isinstance(expr, ast.Tuple):
-      return tuple(self.syntax_to_value(elt) for elt in expr.elts)
-    elif isinstance(expr, ast.Name):
-      return self.lookup_global(expr.id)
-    elif isinstance(expr, ast.Attribute):
-      left = self.syntax_to_value(expr.value)
-      if isinstance(left, ExternalValue):
-        left = left.value 
-      return getattr(left, expr.attr) 
-
   
   def lookup(self, name):
     #if name in reserved_names:
@@ -255,8 +237,8 @@ class AST_Translator(ast.NodeVisitor):
       return Var(local_name)
     elif self.is_global(name):
       value = self.lookup_global(name)
-      if self.is_static_value(value): 
-        return self.value_to_syntax(value)
+      if is_static_value(value): 
+        return value_to_syntax(value)
       else:
         return ExternalValue(value)
       
@@ -459,23 +441,19 @@ class AST_Translator(ast.NodeVisitor):
       assert len(positional) > 1
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
-    elif value == range or value == np.arange:
-      assert len(keywords_dict) == 0
-      n_args = len(positional)
+    #elif value == range or value == np.arange:
+    #  assert len(keywords_dict) == 0
+    #  n_args = len(positional)
       
-      if n_args == 1:
-        positional = [zero_i64] + positional + [one_i64]
-      elif n_args == 2:
-        positional.extend([one_i64])
-      else:
-        assert n_args == 3
-      return syntax.Range(*positional)
-    elif value == len:
-      assert len(keywords_dict) == 0
-      assert len(positional) == 1
-      return syntax.Len(positional[0])
+    #  if n_args == 1:
+    #    positional = [zero_i64] + positional + [one_i64]
+    #  elif n_args == 2:
+    #    positional.extend([one_i64])
+    #  else:
+    #    assert n_args == 3
+    #  return syntax.Range(*positional)
     else:
-      fn = self.value_to_syntax(value)
+      fn = value_to_syntax(value)
       return syntax.Call(fn, ActualArgs(positional, keywords_dict))
       
   def visit(self, node):
@@ -582,8 +560,8 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(value, ExternalValue):
       value = value.value 
       value = getattr(value, expr.attr)
-      if self.is_static_value(value):
-        return self.value_to_syntax(value)
+      if is_static_value(value):
+        return value_to_syntax(value)
       else:
         return ExternalValue(value) 
     return syntax.Attribute(value, expr.attr)
