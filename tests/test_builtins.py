@@ -60,6 +60,23 @@ def range3(start, stop, step):
 def test_range3():
   expect(range3, [20,45,3], np.arange(20,45,3))
 
+@jit 
+def to_int(x):
+  return int(x)
+
+def test_to_int():
+  expect(to_int, [1.2], 1)
+
+
+@jit 
+def to_float(x):
+  return float(x)
+
+def test_to_float():
+  res = to_float(1)
+  assert type(res) is np.float64, "Expected type float, got: %s" % (type(res),)
+  assert res == 1.0
+
 
 if __name__ == '__main__':
   run_local_tests()

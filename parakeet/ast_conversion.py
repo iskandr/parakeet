@@ -522,7 +522,7 @@ class AST_Translator(ast.NodeVisitor):
       value = fn_node.value
       if isinstance(value, macro):
         return value.transform(positional, keywords_dict)
-      elif isinstance(value, types.BuiltinFunctionType):
+      elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)):
         return self.translate_builtin(value, positional, keywords_dict)
       else:
         assert False, "Invalid function %s" % value 
