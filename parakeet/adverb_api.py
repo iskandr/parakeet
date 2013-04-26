@@ -428,9 +428,6 @@ def create_adverb_hook(adverb_class,
   adverb_registry.register(python_hook, default_wrapper)
   return python_hook
 
-def get_axis(kwargs):
-  axis = kwargs.get('axis', 0)
-  return syntax_helpers.unwrap_constant(axis)
 
 # TODO: Called from the outside maybe macros should generate wrapper functions
 
@@ -440,30 +437,28 @@ if config.call_from_python_in_parallel and rt:
 
 @staged_macro("axis", call_from_python = call_from_python)
 def each(f, *xs, **kwargs):
-  return adverbs.Map(f, args = xs, axis = get_axis(kwargs))
+  return adverbs.Map(f, args = xs, 
+                     axis = kwargs.get("axis", syntax_helpers.zero_i64))
 
 if config.call_from_python_in_parallel and rt:
   call_from_python = par_allpairs
 
 @staged_macro("axis", call_from_python = call_from_python)
 def allpairs(f, x, y, **kwargs):
-  return adverbs.AllPairs(fn = f, args = [x,y], axis = get_axis(kwargs))
+  return adverbs.AllPairs(fn = f, args = [x,y], 
+                          axis = kwargs.get("axis", syntax_helpers.zero_i64))
 
 @staged_macro("axis")
 def reduce(f, x, **kwargs):
-  axis = kwargs.get('axis')                                        
-  init = kwargs.get('init')
-  return adverbs.Reduce(fn = ident, combine = f, args = [x], init = init,
-                        axis = axis)
+  return adverbs.Reduce(fn = ident, combine = f, args = [x], 
+                        init = kwargs.get('init', syntax_helpers.none), 
+                        axis = kwargs.get("axis", syntax_helpers.none))
 
 @staged_macro("axis")
 def scan(f, x, **kwargs):
-  axis = get_axis(kwargs)
-  init = kwargs.get('init')
-  if init is None:
-    init = syntax_helpers.none
   return adverbs.Scan(fn = ident, combine = f, emit = ident, args = [x],
-                      init = init, axis = axis)
+                      init = kwargs.get('init', syntax_helpers.none), 
+                      axis = kwargs.get("axis", syntax_helpers.zero_i64))
 
 """
 @staged_macro("shape")
