@@ -466,7 +466,10 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Call(fn, ActualArgs(positional, keywords_dict))
       
   def visit(self, node):
-    return ast.NodeVisitor.visit(self, node)
+    print ast.dump(node)
+    res = ast.NodeVisitor.visit(self, node)
+    print "==> ", res 
+    return res 
     
   def visit_Call(self, expr):
     """
