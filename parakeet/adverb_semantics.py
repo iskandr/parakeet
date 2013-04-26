@@ -40,6 +40,8 @@ class AdverbSemantics(object):
     return [e(idx) for e in delayed_elts]
 
   def sizes_along_axis(self, xs, axis):
+    print xs, axis, 1 > axis 
+    assert False
     axis_sizes = [self.size_along_axis(x, axis)
                   for x in xs
                   if self.rank(x) > axis]

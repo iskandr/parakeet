@@ -503,12 +503,13 @@ class AST_Translator(ast.NodeVisitor):
       return value
     
     def translate_value_call(value):
-      if isinstance(value, macro):
+      if is_user_function(value):
+        return syntax.Call(translate_function_value(value), 
+                           ActualArgs(positional, keywords_dict, starargs_expr))
+      elif isinstance(value, macro):
         return value.transform(positional, keywords_dict)
-      elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)):
-        return self.translate_builtin_call(value, positional, keywords_dict)
       else:
-        assert False, "Invalid function %s" % value 
+        return self.translate_builtin_call(value, positional, keywords_dict)
           
     if is_attr_chain(fn):
       names = extract_attr_chain(fn)
