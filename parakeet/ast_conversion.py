@@ -441,16 +441,16 @@ class AST_Translator(ast.NodeVisitor):
   def translate_builtin(self, value, positional, keywords_dict):
     
     if value == sum:
-      return mk_reduce_call(prims.add, positional, zero_i64)
+      return mk_reduce_call(prims.prim_wrapper(prims.add), positional, zero_i64)
     elif value == max:
       if len(positional) == 1:
-        return mk_reduce_call(prims.maximum, positional)
+        return mk_reduce_call(prims.prim_wrapper(prims.maximum), positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.maximum, positional)
     elif value == min:
       if len(positional) == 1:
-        return mk_reduce_call(prims.minimum, positional)
+        return mk_reduce_call(prims.prim_wrapper(prims.minimum), positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.minimum, positional)

@@ -114,3 +114,16 @@ class LowerStructs(Transform):
                            offset = const_int(0), nelts = const_int(n))
 
 
+  def transform_Range(self, expr):
+    diff = self.sub(expr.stop, expr.start, "range_diff")
+    nelts = self.safediv(diff, expr.step, name="nelts_raw")
+    result = self.alloc_array(core_types.Int64, 
+                              (nelts,), 
+                              name = "range_result", 
+                              explicit_struct = True)
+    ptr = self.attr(result, "data", "data_ptr")
+    def loop_body(i):
+      v = self.add(expr.start, self.mul(i, expr.step)) 
+      self.setidx(ptr, i, v)
+    self.loop(zero(core_types.Int64), nelts, loop_body, return_stmt = False, while_loop = False)
+    return result 
