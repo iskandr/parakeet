@@ -441,18 +441,21 @@ class ArrayView(Expr):
     yield self.offset
     yield self.total_elts
 
-def Ravel(Expr):
+class Ravel(Expr):
   _members = ['array']
   
   def children(self):
     return (self.array,)
 
-def Reshape(Expr):
+class Reshape(Expr):
   _members = ['array', 'shape']
   
   def children(self):
     yield self.array 
     yield self.shape
+
+class Fill(Expr):
+  _members = ['shape', 'fn']
 
 class Fn(Expr):
   """

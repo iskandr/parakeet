@@ -131,18 +131,21 @@ def range(n, *xs):
     return syntax.Range(n, xs[0], xs[1])
 arange = range 
 
-@macro 
+@macro
+def fill(shape, fn):
+  return syntax.Fill(shape = shape, fn = fn)
+
 def zeros(shape, dtype = float64):
-  return syntax.ConstArray(shape, value = dtype(zero_i64))
+  zero = dtype(0)
+  return fill(shape, lambda _: zero)
 
 def zeros_like(x, dtype = float64):
   return zeros(x.shape, dtype)
 
-@macro
 def ones(shape, dtype = float64):
-  return syntax.ConstArray(shape = shape, value = dtype(one_i32))
+  one = dtype(1)
+  return fill(shape, lambda _: one)
 
-@macro
 def ones_like(x):
   return ones(x.shape)
 

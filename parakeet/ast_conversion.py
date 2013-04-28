@@ -696,12 +696,17 @@ class AST_Translator(ast.NodeVisitor):
     """
     Translate a nested function
     """
-    fundef = translate_function_ast(node, parent = self)
+    fundef = translate_function_ast(node.name, node.args, node.body, parent = self)
     local_var = self.fresh_var(node.name)
     return Assign(local_var, fundef)
 
-def translate_function_ast(function_def_ast, globals_dict = None,
-                           closure_vars = [], closure_cells = [],
+  def visit_Lambda(self, node):
+    return translate_function_ast("lambda", node.args, [ast.Return(node.body)], parent = self)
+    
+def translate_function_ast(name, args, body, 
+                           globals_dict = None,
+                           closure_vars = [], 
+                           closure_cells = [],
                            parent = None):
   """
   Helper to launch translation of a python function's AST, and then construct
@@ -713,11 +718,12 @@ def translate_function_ast(function_def_ast, globals_dict = None,
 
   translator = AST_Translator(globals_dict, closure_cell_dict, parent)
 
-  ssa_args, assignments = translator.translate_args(function_def_ast.args)
-  _, body = translator.visit_block(function_def_ast.body)
+  print ">>", ast.dump(args)
+  ssa_args, assignments = translator.translate_args(args)
+  _, body = translator.visit_block(body)
   body = assignments + body
 
-  ssa_fn_name = names.fresh(function_def_ast.name)
+  ssa_fn_name = names.fresh(name)
 
   # if function was nested in parakeet, it can have references to its
   # surrounding parakeet scope, which can't be captured with a python ref cell
@@ -761,7 +767,11 @@ def translate_function_source(source, globals_dict, closure_vars = [],
   
   assert isinstance(syntax, ast.FunctionDef), \
       "Unexpected Python syntax node: %s" % ast.dump(syntax)
-  return translate_function_ast(syntax, globals_dict, closure_vars,
+  return translate_function_ast(syntax.name, 
+                                syntax.args, 
+                                syntax.body, 
+                                globals_dict, 
+                                closure_vars,
                                 closure_cells)
 
 import adverb_registry
