@@ -56,6 +56,7 @@ class UnknownT(Type):
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
 
+
 class FnT(Type):
   """Type of a typed function"""
 
@@ -96,6 +97,7 @@ def make_fn_type(input_types, return_type):
     t = FnT(input_types, return_type)
     _fn_type_cache[key] = t
     return t
+
 
 def combine_type_list(types):
   common_type = Unknown

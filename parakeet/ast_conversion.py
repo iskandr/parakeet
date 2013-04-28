@@ -313,6 +313,7 @@ class AST_Translator(ast.NodeVisitor):
       for (k,expr) in zip(local_names, args.defaults):
         formals.defaults[k] = self.syntax_to_value(expr)
 
+
     if args.vararg:
       assert isinstance(args.vararg, str)
       formals.starargs = self.fresh_name(args.vararg)

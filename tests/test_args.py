@@ -80,6 +80,19 @@ def test_default_none():
   expect(default_none, [10, None], 20)
   expect(default_none, [10, 1], 11)
 
+def add1(x):
+  return x + 1
+
+def add2(x): 
+  return x + 2 
+
+
+def fn_as_default(f = add1):
+  return f(1)
+
+def test_fn_as_default():
+  expect(fn_as_default, [], 2)
+  expect(fn_as_default, [add2], 3)
 
 if __name__ == '__main__':
   run_local_tests()
