@@ -622,8 +622,7 @@ class TypedFn(Expr):
         "Invalid type environment: %s" % (self.type_env,)
 
     self.type = core_types.make_fn_type(self.input_types, self.return_type)
-    #import closure_type 
-    #self.type = closure_type.make_closure_type(self, ())
+
     if self.version is None:
       self.version = 0
       self.max_version[self.name] = 0

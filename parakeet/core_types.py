@@ -155,9 +155,7 @@ class NoneT(ConcreteT):
 
 NoneType = NoneT()
 
-def typeof_none(_):
-  return NoneType
-type_conv.register(type(None), NoneT, typeof_none)
+
 
 def is_struct(c_repr):
   return type(c_repr) == type(ctypes.Structure)
@@ -253,7 +251,6 @@ class TypeValueT(ConcreteT):
   
   ctypes_repr = ctypes.c_int
   
-type_conv.register([np.dtype], TypeValueT, lambda dt: TypeValueT(from_dtype(dt))) 
 
 # base class for all concrete scalar types
 # don't actually tag any values with this
@@ -316,6 +313,8 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
     type_conv.register(python_type, parakeet_type)
 
   return parakeet_type
+
+
 
 class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""

@@ -112,7 +112,4 @@ def make_tuple_type(elt_types):
     _tuple_types[key] = t
     return t
 
-def typeof(python_tuple):
-  return make_tuple_type(map(type_conv.typeof, python_tuple))
 
-type_conv.register(tuple, TupleT, typeof)

@@ -241,13 +241,6 @@ def make_array_type(elt_t, rank):
     _array_types[key] = t
     return t
 
-def typeof_array(x):
-  x = np.asarray(x)
-  elt_t = core_types.from_dtype(x.dtype)
-  rank = len(x.shape)
-  return make_array_type(elt_t, rank)
-
-type_conv.register((np.ndarray, list), ArrayT, typeof_array)
 
 def elt_type(t):
   if isinstance(t, ArrayT):

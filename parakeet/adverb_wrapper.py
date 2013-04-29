@@ -6,7 +6,6 @@ import syntax_helpers
 
 from args import FormalArgs, ActualArgs
 
-
 def identity(x):
   return x
 
@@ -30,6 +29,7 @@ def untyped_wrapper(adverb_class,
   Return a function which calls the desired adverb with the data args and
   unpacked varargs tuple.
   """
+  
 
   axis = syntax_helpers.wrap_if_constant(axis)
   key = (adverb_class.__name__,
@@ -117,7 +117,7 @@ def get_fundef(fn):
   Get the function definition in case I want to pass in the name of an untyped
   function or an untranslated python fn.
   """
-
+  import ast_conversion 
   if isinstance(fn, str):
     assert fn  in syntax.Fn.registry, "Function not found: %s" % fn
     return syntax.Fn.registry[fn]

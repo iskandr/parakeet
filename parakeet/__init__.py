@@ -72,6 +72,7 @@ modules = [
   "traversal",
   "tuple_type",
   "type_conv",
+  "type_conv_decls",
   "type_inference",
   "use_analysis",
   "verify"

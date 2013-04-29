@@ -3,8 +3,9 @@ import ctypes
 from types import FunctionType
 
 import type_conv
-import config
 
+ 
+import prims
 from core_types import Type, IncompatibleTypes, StructT, Int64
 
 ###########################################
@@ -96,6 +97,8 @@ def make_closure_type(fn, closure_arg_types = []):
     _closure_type_cache[key] = t
     return t
 
+import config
+
 def print_specializations():
   if config.print_specialized_function_names:
     print
@@ -112,24 +115,10 @@ def print_specializations():
     print
     print "Total: %d function specializations" % count
 
+
 import atexit
 atexit.register(print_specializations)
-def typeof_fn(f):
-  import ast_conversion
-  untyped_fn = ast_conversion.translate_function_value(f)
-  closure_args = untyped_fn.python_nonlocals()
-  closure_arg_types = map(type_conv.typeof, closure_args)
-  return make_closure_type(untyped_fn, closure_arg_types)
 
-type_conv.register(FunctionType, ClosureT, typeof_fn)
-
-import prims
-
-def typeof_prim(p):
-  untyped_fn = prims.prim_wrapper(p)
-  return make_closure_type(untyped_fn, [])
-
-type_conv.register(prims.class_list, ClosureT, typeof_prim)
 
 """
 Map each (untyped fn id, fixed arg) types to a distinct integer so that the

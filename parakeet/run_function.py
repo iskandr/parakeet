@@ -1,7 +1,6 @@
 import ctypes
 from llvm.ee import GenericValue
 
-import ast_conversion
 import config
 import core_types
 import llvm_backend
@@ -90,9 +89,11 @@ def prepare_args(fn, args, kwargs):
   values and their types
   """
 
+  
   if isinstance(fn, syntax.Fn):
     untyped = fn
   else:
+    import ast_conversion
     # translate from the Python AST to Parakeet's untyped format
     untyped = ast_conversion.translate_function_value(fn)
 

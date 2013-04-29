@@ -51,5 +51,18 @@ def test_zeros_like():
   expect(parakeet.zeros_like, [bool_vec, np.dtype('float')], np.zeros_like(bool_vec, dtype = np.dtype('float')))
   expect(parakeet.zeros_like, [bool_mat, np.dtype('float')], np.zeros_like(bool_mat, dtype = np.dtype('float')))
 
+
+def test_empty():
+  s = (20, 20, 3)
+  x = parakeet.empty(s)
+  assert x.shape == s
+  
+def test_empty_int():
+  s = (2,2,2,2)
+  x = parakeet.empty(s, dtype=np.uint8)
+  assert x.shape == s
+  assert x.dtype == np.uint8
+  
+
 if __name__ == '__main__':
   run_local_tests()

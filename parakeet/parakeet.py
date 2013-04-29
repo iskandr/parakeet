@@ -1,11 +1,15 @@
 import numpy as np
 
+
 import config
+import type_conv_decls
+from decorators import jit, macro
 from lib_core import *
 from lib_patchmap import * 
 from run_function import run, specialize_and_compile
-from decorators import jit, macro
 import syntax 
+
+
 
 
 def typed_repr(fn, args):
