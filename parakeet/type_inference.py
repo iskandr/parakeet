@@ -61,7 +61,6 @@ def unpack_closure(closure):
         [syntax.ClosureElt(closure, i, type = arg_t)
          for (i, arg_t) in enumerate(arg_types)]
   else:
-    print ">>>", closure, type(closure), closure.type
     fn = closure
     closure_args = []
     # fn = syntax.Fn.registry[fn]
@@ -127,7 +126,6 @@ def flatten_actual_args(args):
 
 def linearize_actual_args(fn, args):
     untyped_fn, closure_args = unpack_closure(fn)
-    print untyped_fn, type(untyped_fn), closure_args 
     if isinstance(args, (list, tuple)):
       args = ActualArgs(args)
     args = args.prepend_positional(closure_args)
@@ -340,7 +338,6 @@ class Annotator(Transform):
     assert new_name in self.type_env, \
         "Unknown var %s (previously %s)" % (new_name, old_name)
     t = self.type_env[new_name]
-    print old_name, new_name, t, type(t)
     return syntax.Var(new_name, type = t)
 
   def transform_Tuple(self, expr):
@@ -628,7 +625,6 @@ class Annotator(Transform):
 
 
 def infer_types(untyped_fn, types):
-  print "UNTYPED", untyped_fn
   """
   Given an untyped function and input types, propagate the types through the
   body, annotating the AST with type annotations.
@@ -646,13 +642,13 @@ def infer_types(untyped_fn, types):
   unbound_keywords = []
   def keyword_fn(local_name, value):
     unbound_keywords.append(local_name)
-    print "!!!", local_name, value, type_conv.typeof(value)
+    # print "!!!", local_name, value, type_conv.typeof(value)
     return type_conv.typeof(value)
 
   tenv = typed_args.bind(types,
                          keyword_fn = keyword_fn,
                          starargs_fn = tuple_type.make_tuple_type)
-  print tenv 
+
   # keep track of the return
   tenv['$return'] = Unknown
   annotator = Annotator(tenv, var_map)

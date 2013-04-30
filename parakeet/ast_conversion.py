@@ -40,15 +40,9 @@ class ExternalValue(object):
     return "ExternalValue(%s)" % self.value
 
 def mk_reduce_call(fn, positional, init = None):
-  import adverb_wrapper
-  wrapper = adverb_wrapper.untyped_reduce_wrapper(None, fn)
-  if init:
-    keywords = keywords = {'init': init}
-  else:
-    keywords = {}
-  positional = [fn] + list(positional)
-  args = ActualArgs(positional = positional, keywords = keywords) 
-  return syntax.Call(wrapper, args)
+  init = syntax_helpers.none if init is None else init
+  axis = syntax_helpers.zero_i64
+  return syntax.Reduce(combine = fn, args = positional, axis = axis, init = init)
 
 def mk_simple_fn(mk_body, input_name = "x", fn_name = "cast"):
   unique_arg_name = names.fresh(input_name)
@@ -719,7 +713,6 @@ def translate_function_ast(name, args, body,
 
   translator = AST_Translator(globals_dict, closure_cell_dict, parent)
 
-  print ">>", ast.dump(args)
   ssa_args, assignments = translator.translate_args(args)
   _, body = translator.visit_block(body)
   body = assignments + body

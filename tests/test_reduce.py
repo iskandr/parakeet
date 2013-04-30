@@ -25,16 +25,14 @@ def sqr_dist(y, x):
   return sum((x-y)*(x-y))
 
 def reduce_2d(Ys):
-  def zero(x):
-    return 0.0
-  zeros = parakeet.each(zero, Ys[0])
-  return parakeet.reduce(parakeet.add, Ys, init = zeros, axis = 0)
+  init = parakeet.zeros_like(Ys[0])
+  return parakeet.reduce(parakeet.add, Ys, init = init, axis = 0)
 
 def test_2d_reduce():
   par_rslt = reduce_2d(a)
   np_rslt = np.sum(a, 0)
   assert testing_helpers.eq(par_rslt, np_rslt), \
-      "Expected %s but got %s" % (np_rslt, par_rslt)
+    "Expected %s but got %s" % (np_rslt, par_rslt)
 
 def test_sqr_dist():
   z = a[0]

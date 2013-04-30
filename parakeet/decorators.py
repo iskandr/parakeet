@@ -112,5 +112,6 @@ class jit:
     self.f = f
 
   def __call__(self, *args, **kwargs):
+    import run_function
     return run_function.run(self.f, *args, **kwargs)
 
