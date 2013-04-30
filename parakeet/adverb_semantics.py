@@ -165,3 +165,8 @@ class AdverbSemantics(object):
       self.loop(zero, ny, inner_loop_body)
     self.loop(zero, nx, outer_loop_body)
     return output
+  
+  def eval_index_map(self):
+    pass
+  def eval_index_reduce(self):
+    pass 
