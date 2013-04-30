@@ -1,7 +1,7 @@
-from adverbs import Adverb
 from array_type import ArrayT 
 from core_types import PtrT
 from syntax import Var, Alloc, ArrayView, Array, Struct, AllocArray  
+from syntax import Adverb
 from syntax_visitor import SyntaxVisitor
 
 class FindLocalArrays(SyntaxVisitor):

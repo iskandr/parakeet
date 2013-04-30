@@ -1,7 +1,7 @@
 import array_type
 import names
 
-from adverbs import AllPairs, Map
+from syntax import AllPairs, Map
 from syntax import Assign, Return, TypedFn, Var
 from transform import Transform
 

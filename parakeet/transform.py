@@ -4,7 +4,6 @@ import config
 import syntax
 import verify
 
-from adverbs import Map, Reduce
 from args import ActualArgs
 from codegen import Codegen
 from syntax import If, Assign, While, Return, ExprStmt
@@ -13,6 +12,7 @@ from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
 from syntax import Call, TypedFn, AllocArray
+from syntax import Map, Reduce, Scan 
 
 transform_timings = {}
 transform_counts = {}

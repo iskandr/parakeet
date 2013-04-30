@@ -15,7 +15,6 @@ import scoped_dict
 import syntax
 import syntax_helpers 
 
-from adverbs import Map
 from args import FormalArgs, ActualArgs
 from collections import OrderedDict
 from function_registry import already_registered_python_fn
@@ -26,7 +25,7 @@ from prims import Prim, prim_wrapper
 from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
 
 from subst import subst_expr, subst_stmt_list
-from syntax import Assign, If, ForLoop, Var, PrimCall
+from syntax import Assign, If, ForLoop, Var, PrimCall, Map
 from syntax_helpers import none, true, false, one_i64, zero_i64
 
 class ExternalValue(object):

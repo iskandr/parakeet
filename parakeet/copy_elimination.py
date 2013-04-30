@@ -1,11 +1,11 @@
 import escape_analysis
 
-from adverbs import Map, Reduce, Scan, AllPairs
 from array_type import ArrayT
 from collect_vars import collect_var_names
 from core_types import ScalarT
 from find_local_arrays import FindLocalArrays
 from syntax import AllocArray, ArrayView, Index, Struct, Var
+from syntax import Map, Reduce, Scan, AllPairs
 from transform import Transform
 from usedef import UseDefAnalysis
 

@@ -166,7 +166,17 @@ class AdverbSemantics(object):
     self.loop(zero, nx, outer_loop_body)
     return output
   
-  def eval_index_map(self):
-    pass
+  def eval_index_map(self, fn, shape, output = None): 
+    if output is None:
+      output = self.create_output_array(fn, (shape,), shape)
+    return output
+    """ 
+    def loop_body(idx):
+      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
+      elt_result = self.invoke(f, [elt(idx) for elt in delayed_elts])
+      self.setidx(output, output_indices, elt_result)
+    self.loop(zero, niters, loop_body)
+    return output
+    """
   def eval_index_reduce(self):
     pass 

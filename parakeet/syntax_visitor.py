@@ -1,9 +1,9 @@
-from adverbs import Map, Reduce, Scan
 from syntax import Assign, ExprStmt, ForLoop, If, Return, While
 from syntax import Comment
 from syntax import Attribute, Const, Index, PrimCall, Tuple, Var
 from syntax import Alloc, Call, Struct, TypedFn
 from syntax import AllocArray, ArrayView, Cast, Slice, TupleProj
+from syntax import Map, Reduce, Scan, AllPairs, Fill
 
 class SyntaxVisitor(object):
   """

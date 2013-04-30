@@ -1,8 +1,7 @@
 import syntax_helpers
 
-from adverbs import Map 
 from adverb_semantics import AdverbSemantics
-from syntax import Index 
+from syntax import Index, Map 
 from transform import Transform
 
 class LowerAdverbs(AdverbSemantics, Transform):

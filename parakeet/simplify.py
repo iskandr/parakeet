@@ -4,7 +4,6 @@ import syntax
 import syntax_helpers
 import transform
 
-from adverbs import AllPairs, Map, Reduce, Scan
 from array_type import ArrayT 
 from closure_type import ClosureT
 from collect_vars import collect_var_names
@@ -15,6 +14,7 @@ from syntax import AllocArray, Assign, ExprStmt
 from syntax import Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView, Attribute, Struct
 from syntax import PrimCall, Call, TypedFn, Fn
+from syntax import AllPairs, Map, Reduce, Scan
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from syntax_helpers import get_types, slice_none_t, const_int
 from transform import Transform
