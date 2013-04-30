@@ -21,6 +21,8 @@ def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.none)
   return syntax.Map(fn = f, args = args, axis = axis)
 
+each = map
+
 @macro 
 def allpairs(f, x, y, axis = None):
   axis = syntax_helpers.zero_i64 if axis is None else axis
