@@ -542,16 +542,15 @@ class AST_Translator(ast.NodeVisitor):
     # build a lambda as a Python ast representing 
     # what we do to each element 
 
-    py_fn = ast.FunctionDef(name = "comprehension_map", 
-                                args = ast.arguments(
-                                  args = [target], 
-                                  vararg = None, 
-                                  kwarg = None, 
-                                  defaults = ()),
+    args = ast.arguments(args = [target], 
+                         vararg = None,  
+                         kwarg = None,  
+                         defaults = ())
+
+    fn = translate_function_ast(name = "comprehension_map", 
+                                args = args, 
                                 body = [ast.Return(expr.elt)], 
-                                decorator_list = ())
-    
-    fn = translate_function_ast(py_fn, parent = self)
+                                parent = self)
 
     seq = self.visit(gen.iter)
     ifs = gen.ifs
@@ -770,23 +769,23 @@ def translate_function_source(source, globals_dict, closure_vars = [],
 
 
 def translate_function_value(fn, _currently_processing = set([])):
+  if type(fn) in (types.BuiltinFunctionType, types.TypeType):
+    assert hasattr(lib_core, fn.__name__), "Invalid primitive: %s" % (fn,) 
+    fn = getattr(lib_core, fn.__name__)
+
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
     fn = fn.f 
   
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
+  
   assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
   assert fn not in _currently_processing, \
     "Recursion detected through function value %s" % (fn,)
   _currently_processing.add(fn)
   original_fn = fn
   
-  if type(fn) in (types.BuiltinFunctionType, types.TypeType):
-    assert hasattr(lib_core, fn.__name__), "Invalid primitive: %s" % (fn,) 
-    fn = getattr(lib_core, fn.__name__)
-  
-
 
     
   if fn in prims.prim_lookup_by_value:
