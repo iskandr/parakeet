@@ -261,7 +261,11 @@ class ShapeInference(SyntaxVisitor):
         (expr, arr, idx)
 
 
-  
+  def visit_Fill(self, expr):
+    shape_tuple = self.visit_expr(expr.shape)
+    fn = self.visit_expr(expr.fn)
+    return shape_semantics.eval_fill(fn, shape_tuple)
+    
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)

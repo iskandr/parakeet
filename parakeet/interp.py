@@ -252,6 +252,19 @@ def eval_fn(fn, actuals):
     def expr_Len():
       return len(eval_expr(expr.value))
     
+    def expr_Fill():
+      fn = eval_expr(expr.fn)
+      shape = eval_expr(expr.shape)
+      ranges = [xrange(n) for n in shape]
+      def wrap_idx(idx):
+        if len(idx) == 1:
+          idx = idx[0]
+        return eval_fn(fn, idx)
+      import itertools 
+      elts = [wrap_idx(idx) for idx in itertools.product(ranges)]
+      return np.array(elts, shape = shape)
+      
+    
     def expr_Map():
       fn = eval_expr(expr.fn)
       args = eval_args(expr.args)

@@ -181,6 +181,9 @@ class Annotator(Transform):
     self.type_env = tenv 
     self.var_map = var_map
     
+  
+  def transform_generic_expr(self, expr):
+    assert False, "Unsupported expression: %s" % (expr,)
 
   def transform_args(self, args, flat = False):
     if isinstance(args, (list, tuple)):
@@ -370,7 +373,25 @@ class Annotator(Transform):
       assert t.__class__ is TupleT, \
          "Unexpected argument type for 'len': %s" % t
       return syntax.Const(len(t.elt_types), type = Int64)
+ 
+  def transform_Fill(self, expr):
+    shape = self.transform_expr(expr.shape)
+    closure = self.transform_expr(expr.fn)
+    shape_t = shape.type
+    if isinstance(shape_t, IntT):
+      shape = self.cast(shape, Int64)
+      n_indices = 1
+    else:
+      assert isinstance(shape_t, TupleT)
+      assert all(isinstance(t, ScalarT) for t in shape_t.elt_types)
+      n_indices = len(shape_t.elt_types)
+      if not all(t == Int64 for t in shape_t.elt_types):
+        elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
+        shape = self.tuple(elts)
+    result_type, typed_fn = specialize_Fill(closure.type, n_indices)
 
+    return syntax.Fill(shape = shape, fn = typed_fn, type = result_type)
+  
   def transform_Map(self, expr):
     closure = self.transform_expr(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
@@ -580,6 +601,8 @@ class Annotator(Transform):
     lhs = self.annotate_lhs(stmt.lhs, rhs.type)
     return syntax.Assign(lhs, rhs)
   
+  
+  
   def transform_If(self, stmt):
     cond = self.transform_expr(stmt.cond) 
     assert isinstance(cond.type, ScalarT), \
@@ -624,7 +647,7 @@ class Annotator(Transform):
 
 
 
-def infer_types(untyped_fn, types):
+def infer_types(untyped_fn, types, tab = [0]):
   """
   Given an untyped function and input types, propagate the types through the
   body, annotating the AST with type annotations.
@@ -633,7 +656,11 @@ def infer_types(untyped_fn, types):
   inferred types throughout the program and inserts adverbs for scalar operators
   applied to arrays
   """
-
+  tab[0] += 1
+  space = '  ' * (tab[0]-1)
+  print space, " --- INFER",  types
+  print space, " ---", repr(untyped_fn)
+  
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(rename_fn = var_map.rename)
   if untyped_fn.args.starargs:
@@ -705,7 +732,7 @@ def infer_types(untyped_fn, types):
     body.append(syntax.Return(syntax_helpers.none))
     tenv["$return"] = NoneType
     return_type = NoneType
-
+  tab[0] -= 1
   return syntax.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
@@ -781,6 +808,13 @@ def infer_return_type(untyped, arg_types):
 
   typed = specialize(untyped, arg_types)
   return typed.return_type
+
+def specialize_Fill(fn, n_indices):
+  idx_type = make_tuple_type(Int64, n_indices) if n_indices > 1 else Int64
+  typed_fn = specialize(fn, (idx_type,))
+  result_type = array_type.increase_rank(typed_fn.return_type, n_indices)
+  return result_type, typed_fn
+    
 
 def specialize_Map(map_fn, array_types):
   elt_types = array_type.lower_ranks(array_types, 1)

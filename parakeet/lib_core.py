@@ -18,7 +18,7 @@ def identity(x):
 
 @macro
 def map(f, *args, **kwds):
-  axis = kwds.get('axis', syntax_helpers.none)
+  axis = kwds.get('axis', syntax_helpers.zero_i64)
   return syntax.Map(fn = f, args = args, axis = axis)
 
 each = map
