@@ -94,5 +94,14 @@ def test_fn_as_default():
   expect(fn_as_default, [], 2)
   expect(fn_as_default, [add2], 3)
 
+def lambda_closure(x):
+  y = 1.0
+  def g(f, x):
+    return f(x)
+  return g(lambda z: z + y, x)
+
+def test_lambda_closure():
+  expect(lambda_closure, [1], 2.0) 
+
 if __name__ == '__main__':
   run_local_tests()
