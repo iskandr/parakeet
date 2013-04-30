@@ -1,7 +1,7 @@
-import adverbs
 import adverb_helpers
 import adverb_wrapper
 import array_type
+import ast_conversion
 import closure_type
 import config
 import core_types 
@@ -14,7 +14,6 @@ import type_conv
 
 from args import ActualArgs
 from array_type import ArrayT
-
 from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
@@ -172,6 +171,9 @@ def invoke_result_type(fn, arg_types):
   _invoke_type_cache[key] = result_type
   return result_type
 
+def identity(x):
+  return x
+untyped_identity_function = ast_conversion.translate_function_value(identity)
 
 
 class Annotator(Transform):
@@ -322,6 +324,7 @@ class Annotator(Transform):
     step = self.transform_expr(expr.step) if expr.step else None
     array_t = array_type.ArrayT(Int64, 1)
     return syntax.Range(start, stop, step, type = array_t)
+
   def transform_Slice(self, expr):
     start = self.transform_expr(expr.start)
     stop = self.transform_expr(expr.stop)
@@ -380,13 +383,13 @@ class Annotator(Transform):
     if axis is None or self.is_none(axis):
       assert adverb_helpers.max_rank(arg_types) == 1
       axis = syntax_helpers.zero_i64
-    return adverbs.Map(fn = make_typed_closure(closure, typed_fn),
+    return syntax.Map(fn = make_typed_closure(closure, typed_fn),
                        args = new_args,
                        axis = axis,
                        type = result_type)
 
   def transform_Reduce(self, expr):
-    map_fn = self.transform_expr(expr.fn)
+    map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function) 
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)
     axis = self.transform_if_expr(expr.axis)
@@ -421,7 +424,7 @@ class Annotator(Transform):
       rest = syntax.Index(arg, slice_rest, 
                              type = arg.type.index_type(slice_rest))
       new_args = (rest,)  
-    return adverbs.Reduce(fn = typed_map_closure,
+    return syntax.Reduce(fn = typed_map_closure,
                           combine = typed_combine_closure,
                           args = new_args,
                           axis = axis,
@@ -429,7 +432,7 @@ class Annotator(Transform):
                           init = init)
 
   def transform_Scan(self, expr):
-    map_fn = self.transform_expr(expr.fn)
+    map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function)
     combine_fn = self.transform_expr(expr.combine)
     emit_fn = self.transform_expr(expr.emit)
     new_args = self.transform_args(expr.args, flat = True)
@@ -446,7 +449,7 @@ class Annotator(Transform):
     if axis is None or self.is_none(axis):
       assert adverb_helpers.max_rank(arg_types) == 1
       axis = syntax_helpers.zero_i64
-    return adverbs.Scan(fn = make_typed_closure(map_fn, typed_map_fn),
+    return syntax.Scan(fn = make_typed_closure(map_fn, typed_map_fn),
                         combine = make_typed_closure(combine_fn,
                                                      typed_combine_fn),
                         emit = make_typed_closure(emit_fn, typed_emit_fn),
@@ -465,7 +468,7 @@ class Annotator(Transform):
     axis = self.transform_if_expr(expr.axis)
     if axis is None or self.is_none(axis):
       axis = zero_i64
-    return adverbs.AllPairs(make_typed_closure(closure, typed_fn),
+    return syntax.AllPairs(make_typed_closure(closure, typed_fn),
                             args = new_args,
                             axis = axis,
                             type = result_type)
@@ -473,7 +476,7 @@ class Annotator(Transform):
   """
   def transform_Conv(self, expr):
     closure = self.transform_expr(expr.fn)
-    c = adverbs.Conv()
+    c = syntax.Conv()
     border_value = None
     if expr.border_value:
       border_value = self.transform_expr(expr.border_value)
@@ -489,7 +492,7 @@ class Annotator(Transform):
   
     # result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
     # axis = unwrap_constant(expr.axis)
-    return adverbs.Conv(make_typed_closure(closure, typed_fn), x)
+    return syntax.Conv(make_typed_closure(closure, typed_fn), x)
   """
   
   def infer_phi(self, result_var, val):

@@ -1,5 +1,10 @@
 """Simple library functions which don't depend on adverbs"""
 import __builtin__
+
+
+import syntax
+import syntax_helpers
+
 from prims import *
 from adverb_api import allpairs, each, reduce, scan
 from decorators import macro, staged_macro
@@ -7,9 +12,13 @@ from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
 from core_types import Bool
-
-import syntax_helpers
 from syntax_helpers import zero_i64, one_i64, one_i32
+
+@macro
+def map(f, *args, **kwds):
+  axis = kwds.get('axis', syntax_helpers.none)
+  return syntax.Map(fn = f, )
+  
 
 @macro 
 def int8(x):

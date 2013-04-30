@@ -1,4 +1,4 @@
-import adverbs
+
 import args
 import array_type
 import core_types
@@ -59,7 +59,7 @@ def nested_maps(inner_fn, depth, arg_names):
   name = names.fresh(inner_fn.name + "_broadcast%d" % depth)
   nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
   closure = syntax.Closure(nested_fn, [])
-  map_expr = adverbs.Map(closure, 
+  map_expr = syntax.Map(closure, 
                          axis = syntax_helpers.zero_i64, 
                          args = arg_vars)
   fn = syntax.Fn(

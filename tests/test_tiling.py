@@ -3,7 +3,7 @@ import numpy as np
 
 import testing_helpers
 
-from parakeet import adverbs, array_type, core_types
+from parakeet import  array_type, core_types
 from parakeet import prims, llvm_backend, run_function 
 from parakeet import syntax, syntax_helpers, type_conv
 from parakeet.pipeline import lower_tiled 
@@ -33,7 +33,7 @@ map_fn = syntax.TypedFn(
   name = "map_fn",
   arg_names = ["X"],
   input_types = [x_array_t],
-  body = [syntax.Return(adverbs.Map(id_fn, [syntax.Var("X", type=x_array_t)],
+  body = [syntax.Return(syntax.Map(id_fn, [syntax.Var("X", type=x_array_t)],
                                     0, type=x_array_t))],
   return_type = x_array_t,
   type_env = {"X":x_array_t})
@@ -50,7 +50,7 @@ nested_map_fn = syntax.TypedFn(
   name = "nested_map_fn",
   arg_names = ["X"],
   input_types = [x_array_t],
-  body = [syntax.Return(adverbs.Map(nested_id_fn,
+  body = [syntax.Return(syntax.Map(nested_id_fn,
                                     [syntax.Var("X", type=x_array_t)],
                                     0, type=x_array_t))],
   return_type = x_array_t,
@@ -60,7 +60,7 @@ map2_fn = syntax.TypedFn(
   name = "map2_fn",
   arg_names = ["X"],
   input_types = [x_2_array_t],
-  body = [syntax.Return(adverbs.Map(nested_map_fn,
+  body = [syntax.Return(syntax.Map(nested_map_fn,
                                     [syntax.Var("X", type=x_2_array_t)],
                                     0, type=x_2_array_t))],
   return_type = x_2_array_t,
@@ -78,7 +78,7 @@ map2d_1map_fn = syntax.TypedFn(
   name = "map2d_1map_fn",
   arg_names = ["X"],
   input_types = [x_2_array_t],
-  body = [syntax.Return(adverbs.Map(id_fn_2d,
+  body = [syntax.Return(syntax.Map(id_fn_2d,
                                     [syntax.Var("X", type=x_2_array_t)],
                                     0, type=x_2_array_t))],
   return_type = x_2_array_t,
@@ -99,7 +99,7 @@ red_fn2 = syntax.TypedFn(
   name = "red_fn2",
   arg_names = ["X"],
   input_types = [x_array_t],
-  body = [syntax.Return(adverbs.Reduce(add_x_y2, syntax_helpers.zero_i64,
+  body = [syntax.Return(syntax.Reduce(add_x_y2, syntax_helpers.zero_i64,
                                        id_fn_2,
                                        [syntax.Var("X", type=x_array_t)],
                                        0, type=core_types.Int64))],

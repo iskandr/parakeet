@@ -1,4 +1,4 @@
-import adverbs
+
 import array_type
 import clone_function
 import config
@@ -72,7 +72,7 @@ class LowerTiledAdverbs(Transform):
   def transform_Return(self, stmt):
     value = self.transform_expr(stmt.value)
     if self.output_var:
-      if not isinstance(stmt.value, adverbs.Tiled):
+      if not isinstance(stmt.value, syntax.Tiled):
         self.comment("Copy instead of Return in %s" % self.fn.name)
         rank = self.output_var.type.rank
         slice_all = self.tuple([slice_none] * rank)
@@ -203,7 +203,7 @@ class LowerTiledAdverbs(Transform):
     return array_result
 
   def transform_expr(self, expr):
-    if isinstance(expr, adverbs.Tiled):
+    if isinstance(expr, syntax.Tiled):
       return Transform.transform_expr(self, expr)
     else:
       return expr

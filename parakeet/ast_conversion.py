@@ -775,7 +775,7 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 closure_vars,
                                 closure_cells)
 
-import adverb_registry
+
 def translate_function_value(fn, _currently_processing = set([])):
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
@@ -808,8 +808,7 @@ def translate_function_value(fn, _currently_processing = set([])):
   # - variable number of args packed as a tuple i.e. *args
   # - keyword arguments packed as a...? ...struct of some kind? i.e. **kwds
   # - unpacking tuples and unpacking structs
-  elif adverb_registry.is_registered(fn):
-    fundef = adverb_registry.get_wrapper(fn)
+
   elif isinstance(fn, macro):
     fundef = fn.as_fn()
   else:

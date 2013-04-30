@@ -1,7 +1,7 @@
 import copy
 import math
 
-import adverbs
+
 import array_type
 import closure_type
 import config
@@ -89,12 +89,12 @@ class AdverbArgs():
     self.emit = emit
 
 def get_tiled_version(adverb):
-  if adverb is adverbs.Map:
-    return adverbs.TiledMap
-  elif adverb is adverbs.Reduce:
-    return adverbs.TiledReduce
-  elif adverb is adverbs.Scan:
-    return adverbs.TiledScan
+  if adverb is syntax.Map:
+    return syntax.TiledMap
+  elif adverb is syntax.Reduce:
+    return syntax.TiledReduce
+  elif adverb is syntax.Scan:
+    return syntax.TiledScan
   else:
     assert False, "Unexpected Adverb: %s" % adverb
 
@@ -268,7 +268,7 @@ class TileAdverbs(Transform):
         new_adverb.fn = nested_closure
         new_adverb.args = nested_args
         return_t = nested_fn.return_type
-        if isinstance(new_adverb, adverbs.Reduce):
+        if isinstance(new_adverb, syntax.Reduce):
           if reg_tiling:
             ds = copy.copy(depths)
             ds.remove(depth)
@@ -306,7 +306,7 @@ class TileAdverbs(Transform):
     self.push_exp(None, None)
     for arg in old_combine.arg_names:
       self.expansions[arg] = depths
-    combine_maps = [adverbs.Map for _ in depths]
+    combine_maps = [syntax.Map for _ in depths]
     new_combine = self.gen_unpack_tree(combine_maps, depths,
                                        old_combine.arg_names,
                                        old_combine.body,
@@ -315,7 +315,7 @@ class TileAdverbs(Transform):
     return new_combine
 
   def estimate_tile_sizes(self, args, depths):
-    last_map = self.adverbs_visited[-1] is adverbs.Map
+    last_map = self.adverbs_visited[-1] is syntax.Map
     def estimate_dl(cache_size):
       def estimate_dl_for_tile(tile_size):
         num_maps = len(self.adverbs_visited) if last_map \
@@ -371,7 +371,7 @@ class TileAdverbs(Transform):
     if isinstance(stmt.rhs, syntax.Closure):
       self.closure_vars[stmt.lhs.name] = stmt.rhs
 
-    if isinstance(stmt.rhs, adverbs.Adverb):
+    if isinstance(stmt.rhs, syntax.Adverb):
       new_rhs = self.transform_expr(stmt.rhs)
       stmt.lhs.type = new_rhs.type
       self.type_env[stmt.lhs.name] = stmt.lhs.type
@@ -379,7 +379,7 @@ class TileAdverbs(Transform):
     elif len(self.adverbs_visited) > 0:
       fv_names = free_vars(stmt.rhs)
       depths = self.get_depths_list(fv_names)
-      map_tree = [adverbs.Map for _ in depths]
+      map_tree = [syntax.Map for _ in depths]
       inner_body = [stmt, syntax.Return(stmt.lhs)]
       nested_args, unpack_fn = \
           self.gen_unpack_tree(map_tree, depths, fv_names, inner_body,
@@ -393,7 +393,7 @@ class TileAdverbs(Transform):
       return stmt
 
   def transform_Return(self, stmt):
-    if isinstance(stmt.value, adverbs.Adverb):
+    if isinstance(stmt.value, syntax.Adverb):
       return syntax.Return(self.transform_expr(stmt.value))
     stmt.value.type = self.type_env[stmt.value.name]
     return stmt
@@ -411,7 +411,7 @@ class TileAdverbs(Transform):
 
     axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
             for arg in expr.args]
-    self.push_exp(adverbs.Map, AdverbArgs(expr.fn, expr.args, expr.axis, axes))
+    self.push_exp(syntax.Map, AdverbArgs(expr.fn, expr.args, expr.axis, axes))
     for fn_arg, adverb_arg in zip(fn.arg_names[:len(closure_args)],
                                   closure_args):
       name = self.get_closure_arg(adverb_arg).name
@@ -424,9 +424,9 @@ class TileAdverbs(Transform):
 
     depths = self.get_depths_list(fn.arg_names)
     find_adverbs = FindAdverbs()
-    find_adverbs.visit_fn(fn)
+    find_syntax.visit_fn(fn)
 
-    if find_adverbs.has_adverbs:
+    if find_syntax.has_adverbs:
       arg_names = list(fn.arg_names)
       input_types = []
       self.push_type_env(fn.type_env)
@@ -470,7 +470,7 @@ class TileAdverbs(Transform):
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
     self.pop_exp()
-    return adverbs.TiledMap(fn = new_fn, args = expr.args, axes = axes,
+    return syntax.TiledMap(fn = new_fn, args = expr.args, axes = axes,
                             type = return_t)
 
   # For now, reductions end the tiling chain.
@@ -487,7 +487,7 @@ class TileAdverbs(Transform):
 
     axes = [self.get_num_expansions_at_depth(arg.name, depth) + expr.axis
             for arg in expr.args]
-    self.push_exp(adverbs.Reduce, AdverbArgs(combine = expr.combine,
+    self.push_exp(syntax.Reduce, AdverbArgs(combine = expr.combine,
                                              init = expr.init,
                                              fn = expr.fn,
                                              args = expr.args,
@@ -532,7 +532,7 @@ class TileAdverbs(Transform):
       closure.type = closure_type.make_closure_type(new_fn, closure_arg_types)
       new_fn = closure
     self.pop_exp()
-    return adverbs.TiledReduce(fn = new_fn,
+    return syntax.TiledReduce(fn = new_fn,
                                combine = new_combine,
                                init = init,
                                args = expr.args,

@@ -1,15 +1,10 @@
-import adverbs
-import ast_conversion
 import names
 import syntax
 import syntax_helpers
 
 from args import FormalArgs, ActualArgs
 
-def identity(x):
-  return x
 
-untyped_identity_function = ast_conversion.translate_function_value(identity)
 
 _adverb_wrapper_cache = {}
 def untyped_wrapper(adverb_class,
@@ -79,8 +74,7 @@ def untyped_wrapper(adverb_class,
     def add_fn_arg(field, value):
       if value:
         adverb_params[field] = value
-      elif field in adverb_param_names:
-        adverb_params[field] = untyped_identity_function
+
     add_fn_arg('fn', map_fn)
     add_fn_arg('combine', combine_fn)
     add_fn_arg('emit', emit_fn)
@@ -141,7 +135,7 @@ def equiv_arg_names(fn):
 
 def untyped_map_wrapper(fn, axis = 0):
   data_names, varargs_name = equiv_arg_names(fn)
-  return untyped_wrapper(adverbs.Map,
+  return untyped_wrapper(syntax.Map,
                          map_fn_name = 'f',
                          data_names = data_names,
                          varargs_name = varargs_name,
@@ -151,7 +145,7 @@ def untyped_allpairs_wrapper(fn, axis = 0):
   data_names, varargs_name = equiv_arg_names(fn)
   assert len(data_names) == 2
   assert varargs_name is None
-  return untyped_wrapper(adverbs.AllPairs,
+  return untyped_wrapper(syntax.AllPairs,
                          map_fn_name = 'f',
                          data_names = data_names,
                          axis = axis)
@@ -173,7 +167,7 @@ def untyped_reduce_wrapper(map_fn, combine_fn, axis = 0):
       combine_arity
   assert combine_varargs is None, "Binary operator can't have varargs"
 
-  return untyped_wrapper(adverbs.Reduce,
+  return untyped_wrapper(syntax.Reduce,
                          map_fn_name = map_fn_name,
                          combine_fn_name = 'combine',
                          data_names = data_names,
@@ -209,7 +203,7 @@ def untyped_scan_wrapper(map_fn, combine_fn, emit_fn, axis = 0):
       "Expected emit to be a unary function, got %d args" % len(emit_data_names)
   assert emit_varargs_name is None, \
       "Didn't expect emit to have variable number of arguments"
-  return untyped_wrapper(adverbs.Reduce,
+  return untyped_wrapper(syntax.Reduce,
                          map_fn_name = map_fn_name,
                          combine_fn_name = 'combine',
                          emit_fn_name = emit_fn_name,

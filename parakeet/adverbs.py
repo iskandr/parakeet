@@ -19,6 +19,9 @@ class ConvBorderValue(Conv):
 class ConvPadding(Conv):
   _members = ['fill_value']
 
+class Fill(syntax.Expr):
+  _members = ['shape', 'fn']
+
 class Adverb(syntax.Expr):
   _members = ['fn', 'args', 'axis']
 
@@ -47,6 +50,8 @@ class Adverb(syntax.Expr):
 
 class Map(Adverb):
   pass
+
+
 
 class AllPairs(Adverb):
   def node_init(self):
