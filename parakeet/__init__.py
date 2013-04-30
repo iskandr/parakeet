@@ -1,6 +1,6 @@
 from parakeet import *
 from prims import * 
-from adverb_api import allpairs, each, reduce, scan
+
 
 modules = [
   "adverb_api",

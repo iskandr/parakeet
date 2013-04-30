@@ -1,24 +1,59 @@
 """Simple library functions which don't depend on adverbs"""
 import __builtin__
 
-
 import syntax
 import syntax_helpers
 
 from prims import *
-from adverb_api import allpairs, each, reduce, scan
-from decorators import macro, staged_macro
+from decorators import macro, jit 
 from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
 from core_types import Bool
 from syntax_helpers import zero_i64, one_i64, one_i32
 
+@jit 
+def identity(x):
+  return x
+
 @macro
 def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.none)
-  return syntax.Map(fn = f, )
-  
+  return syntax.Map(fn = f, args = args, axis = axis)
+
+@macro 
+def allpairs(f, x, y, axis = None):
+  axis = syntax_helpers.zero_i64 if axis is None else axis
+  return syntax.AllPairs(fn = f, args = (x,y), axis = axis)
+
+@macro
+def reduce(f, *args, **kwds):
+  axis = kwds.get('axis', syntax_helpers.none)
+  init = kwds.get('init', syntax_helpers.none)
+  import ast_conversion
+  ident = ast_conversion.translate_function_value(identity)
+  return syntax.Reduce(fn = ident, 
+                       combine = f, 
+                       args = args,
+                       init = init,
+                       axis = axis)
+
+@macro
+def scan(f, *args, **kwds):
+  axis = kwds.get('axis', syntax_helpers.none)
+  init = kwds.get('init', syntax_helpers.none)
+  import ast_conversion
+  ident = ast_conversion.translate_function_value(identity)
+  return syntax.Scan(fn = ident,  
+                     combine = f,
+                     emit = ident, 
+                     args = args,
+                     init = init,
+                     axis = axis)
+
+@macro
+def fill(shape, fn):
+  return syntax.Fill(shape = shape, fn = fn)
 
 @macro 
 def int8(x):
@@ -72,30 +107,35 @@ def bool8(x):
 
 bool = bool8 
 
-def identity(x):
-  return x
-
+@jit 
 def len(arr):
   return arr.shape[0]
 
+@jit 
 def shape(arr):
   return arr.shape
 
+@jit 
 def sum(x, axis = None):
   return reduce(add, x, init = 0, axis = axis)
 
+@jit 
 def prod(x, axis=None):
   return reduce(multiply, x, init=1, axis = axis)
 
+@jit 
 def mean(x, axis = None):
   return sum(x, axis = axis) / x.shape[0]
 
+@jit 
 def cumsum(x, axis = None):
   return scan(add, x, axis = axis)
 
+@jit 
 def cumprod(x, axis = None):
   return scan(multiply, x, axis = axis)
 
+@jit 
 def diff(x):
   """
   TODO:
@@ -105,29 +145,32 @@ def diff(x):
   """
   return x[1:] - x[:-1]
 
+@jit 
 def dot(x,y):
   return sum(x*y)
 
-
+@jit 
 def minelt(x, axis = None):
   return reduce(minimum, x, axis = axis)
 
+@jit 
 def min(x, y = None):
   if y is None:
     return minelt(x)
   else:
     return minimum(x,y)
 
+@jit 
 def maxelt(x, axis = None):
   return reduce(maximum, x, axis = axis)
 
+@jit
 def max(x, y = None):
   if y is None:
     return maxelt(x)
   else:
     return maximum(x,y)
   
-
 @macro
 def range(n, *xs):
   count = __builtin__.len(xs)
@@ -141,22 +184,23 @@ def range(n, *xs):
 arange = range 
 
 @macro
-def fill(shape, fn):
-  return syntax.Fill(shape = shape, fn = fn)
+def empty(shape):
+  return syntax.Alloc(elt_type = np.float64, shape = shape)
 
+@jit 
 def zeros(shape, dtype = float64):
   zero = dtype(0)
   return fill(shape, lambda _: zero)
 
+@jit
 def zeros_like(x, dtype = float64):
   return zeros(x.shape, dtype)
 
+@jit
 def ones(shape, dtype = float64):
   one = dtype(1)
   return fill(shape, lambda _: one)
 
+@jit
 def ones_like(x):
   return ones(x.shape)
-
-
-

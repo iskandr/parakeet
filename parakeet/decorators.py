@@ -1,9 +1,8 @@
 import names
-import run_function
+
 import syntax
 import syntax_helpers
 from args import FormalArgs
-
 
 class macro(object):
   def __init__(self, f, static_names = set([]), call_from_python = None):
@@ -57,6 +56,7 @@ class macro(object):
     return self._create_wrapper(n_args,[],{})
     
   def __call__(self, *args, **kwargs):
+    import run_function
     if self.call_from_python is None:
       n_pos = len(args)
       keywords = kwargs.keys()
