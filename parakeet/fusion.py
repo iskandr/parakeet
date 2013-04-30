@@ -2,8 +2,7 @@ import inline
 import names
 import syntax_helpers
 
-from adverbs import Adverb, Map, AllPairs
-from syntax import Var, Const,  Return, TypedFn
+from syntax import Var, Const,  Return, TypedFn, Adverb, Map, AllPairs
 from transform import Transform
 from use_analysis import use_count
 
@@ -97,6 +96,7 @@ class Fusion(Transform):
     if self.fn.copied_by is not None:
       return self.fn.copied_by.apply(fn)
     else:
+      print "RUNNING HIGH LEVEL ON FN", fn
       # at the very least do high level optimizations
       import pipeline
       return pipeline.high_level_optimizations(fn)
@@ -105,9 +105,8 @@ class Fusion(Transform):
     if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
+    if isinstance(rhs, Adverb) and rhs.__class__ is not AllPairs:
 
-    if isinstance(rhs, Adverb) and \
-       rhs.__class__ is not AllPairs:
       args = rhs.args
       if all(arg.__class__ in (Var, Const) for arg in args):
         arg_names = [arg.name for arg in args if arg.__class__ is Var]
@@ -123,6 +122,7 @@ class Fusion(Transform):
                rhs.axis == prev_adverb.axis and \
                inline.can_inline(self.get_fn(prev_adverb.fn)) and \
                inline.can_inline(self.get_fn(rhs.fn)):
+ 
               surviving_array_args = []
               fusion_args = []
               for (pos, arg) in enumerate(rhs.args):

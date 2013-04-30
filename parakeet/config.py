@@ -25,7 +25,7 @@ print_optimized_llvm = False
 print_functions_before_transforms = [] #['IndexElim']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #['IndexElim']
+print_functions_after_transforms = ['Fusion'] #['IndexElim']
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False

@@ -136,7 +136,7 @@ class Expr(Node):
 
 class Const(Expr):
   _members = ['value']
-
+  
   def children(self):
     return (self.value,)
 
@@ -159,7 +159,7 @@ class Const(Expr):
     return other.__class__ is Const and \
            self.value == other.value and \
            self.type == other.type
-
+    
   def __ne__(self, other):
     return other.__class__ is not Const or \
            self.value != other.value or \
