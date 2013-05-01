@@ -79,7 +79,8 @@ def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
                    return_type = next_fn.return_type,
                    type_env = fused_type_env)
 
-  return new_fn, prev_fixed_args + next_fixed_args
+  combined_args = prev_fixed_args + next_fixed_args
+  return new_fn, combined_args 
 
 class Fusion(Transform):
   def __init__(self, recursive=True):

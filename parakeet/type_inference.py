@@ -284,7 +284,8 @@ class Annotator(Transform):
       else:
         assert False, "Unsupport tuple operation %s" % expr  
     else:
-      assert all(not isinstance(t, NoneT) for t in arg_types)
+      assert all(not isinstance(t, NoneT) for t in arg_types), \
+        "Invalid argument types for prim %s: %s" % (expr.prim, arg_types,)
       prim_fn = prims.prim_wrapper(expr.prim)
 
       max_rank = adverb_helpers.max_rank(arg_types)
@@ -409,6 +410,7 @@ class Annotator(Transform):
                        type = result_type)
 
   def transform_Reduce(self, expr):
+    print expr 
     map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function) 
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)

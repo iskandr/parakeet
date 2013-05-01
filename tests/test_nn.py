@@ -54,7 +54,7 @@ def dot(x,y):
 @par.jit
 def fprop_linear(x, W, b):
   def dot_add(w_row, b_elt):
-    return sum(w_row, x) + b_elt 
+    return sum(w_row * x) + b_elt 
   return par.each(dot_add, W, b)
  
 @par.jit 

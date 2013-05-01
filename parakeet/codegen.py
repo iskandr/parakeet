@@ -471,7 +471,7 @@ class Codegen(object):
 
   def closure_elts(self, clos):
     if clos.__class__ is TypedFn:
-      return []
+      return ()
     return tuple(self.closure_elt(clos, i)
                  for i in xrange(len(clos.type.arg_types)))
 

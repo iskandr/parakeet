@@ -131,7 +131,8 @@ class Inliner(Transform):
     if target.__class__ is TypedFn and can_inline(target):
       self.count += 1
       curr_block = self.blocks.current()
-      result_var = do_inline(target, closure_args + expr.args,
+      combined_args = tuple(closure_args) + tuple(expr.args)
+      result_var = do_inline(target, combined_args,
                              self.type_env, curr_block)
       return result_var
     else:

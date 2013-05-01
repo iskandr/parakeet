@@ -193,6 +193,7 @@ class Compiler(object):
     if isinstance(prim, prims.Cmp):
       bit = self.cmp(prim, t, llvm_args[0], llvm_args[1], builder)
       return llvm_convert.to_bool(bit,builder)
+    
     elif prim == prims.maximum:
       x, y = llvm_args
       bit = self.cmp(prims.greater_equal, t, x, y, builder)
@@ -202,6 +203,9 @@ class Compiler(object):
       x,y = llvm_args
       bit = self.cmp(prims.less_equal, t, x, y, builder)
       return builder.select(bit, x, y)
+    
+    elif prim == prims.negative:
+      return self.neg(llvm_args[0], builder)
     
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
       if isinstance(t, FloatT):
