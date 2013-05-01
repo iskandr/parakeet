@@ -486,7 +486,7 @@ class Codegen(object):
   def closure(self, maybe_fn, extra_args, name = None):
     fn = self.get_fn(maybe_fn)
     old_closure_elts = self.closure_elts(maybe_fn)
-    closure_elts = old_closure_elts + extra_args
+    closure_elts = old_closure_elts + tuple(extra_args)
     if len(closure_elts) == 0:
       return fn 
     closure_elt_types = [elt.type for elt in closure_elts]

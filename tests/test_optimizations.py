@@ -173,8 +173,9 @@ def licm_nested_loops():
   total = 0
   a = [1,2,3,4,5]
   for _ in range(3):
-    for j in range(len(a)):
-      a[j] *= 10
+    for i in range(2):
+      for j in range(len(a)):
+        a[j] *= 10
     total += a[1]
   return total   
 

@@ -13,7 +13,7 @@ print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -50,16 +50,15 @@ opt_verify = True
 opt_inline = True
 opt_fusion = True
 
+opt_licm = True
 opt_copy_elimination = True
 opt_stack_allocation = True
 opt_index_elimination = True
 opt_range_propagation = True
 opt_shape_elim = True
 opt_scalar_replacement = True
-opt_redundant_load_elimination = True 
+opt_redundant_load_elimination = True  
 
-# LICM is sometime buggy with allocations inside loops 
-opt_licm = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False

@@ -164,7 +164,8 @@ class LoopInvariantCodeMotion(Transform):
     return Transform.transform_If(self, stmt)
 
   def transform_Assign(self, stmt):
-    if stmt.lhs.__class__ is Var:
+    # TODO: Allow possibility of indexing into variables that are read-only
+    if stmt.lhs.__class__ is Var and stmt.rhs.__class__ is not Index:
       name = stmt.lhs.name
       if name in self.safe_to_move:
         deps = self.analysis.depends_on[name]
