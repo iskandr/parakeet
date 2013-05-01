@@ -120,7 +120,9 @@ class ClosureVal:
     return eval_fn(self.fn, args)
 
 def eval_fn(fn, actuals):
-  if isinstance(fn, syntax.TypedFn):
+  if isinstance(fn, np.dtype):
+    return fn.type(*actuals)
+  elif isinstance(fn, syntax.TypedFn):
     assert len(fn.arg_names) == len(actuals), \
       "Wrong number of args, expected %s but given %s" % \
       (fn.arg_names, actuals)

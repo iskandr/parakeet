@@ -164,6 +164,9 @@ class FieldNotFound(Exception):
   def __init__(self, struct_t, field_name):
     self.struct_t = struct_t
     self.field_name = field_name
+    
+  def __str__(self):
+    return "FieldNotFound(%s, %s)" % (self.struct_t, self.field_name)
 
 class StructT(Type):
   """All concrete types excluding scalars and pointers"""
@@ -236,7 +239,7 @@ class TypeValueT(ConcreteT):
     return hash(self.type)
   
   def __eq__(self, other):
-    return self.type == other.type
+    return other.__class__ is TypeValueT and self.type == other.type
   
   _type_to_id = {}
   _id_to_type = {} 
@@ -259,11 +262,13 @@ class ScalarT(ConcreteT):
   _members = ['dtype']
 
   # no need for _fields_ since scalars aren't represented as a struct
+  """
   _properties_ = [
     ('real', identity),
     ('imag', always_zero),
     ('conjugate', identity)
   ]
+  """
 
   def node_init(self):
     assert isinstance(self.dtype, np.dtype), \

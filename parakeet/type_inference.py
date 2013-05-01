@@ -538,6 +538,7 @@ class Annotator(Transform):
   def infer_right_flow(self, nodes):
     return self.infer_phi_nodes(nodes, lambda (_, x): x)
 
+  
   def transform_phi_node(self, result_var, (left_val, right_val)):
     """
     Rewrite the phi node by rewriting the values from either branch, renaming
@@ -608,19 +609,29 @@ class Annotator(Transform):
   
   def transform_If(self, stmt):
     cond = self.transform_expr(stmt.cond) 
+
     assert isinstance(cond.type, ScalarT), \
         "Condition has type %s but must be convertible to bool" % cond.type
     # it would be cleaner to not have anything resembling an optimization 
     # inter-mixed with the type inference, but I'm not sure how else to 
     # support 'if x is None:...'
-    if is_false(cond):
-      true = []
-    else:
-      true = self.transform_block(stmt.true)
     if is_true(cond):
-      false = []
-    else:
-      false = self.transform_block(stmt.false)
+      self.blocks.top().extend(self.transform_block(stmt.true))
+      for (name, (left,_)) in stmt.merge.iteritems():
+        typed_left = self.transform_expr(left)
+        typed_var = self.annotate_lhs(syntax.Var(name), typed_left.type) 
+        self.assign(typed_var, typed_left)
+      return
+    
+    if is_false(cond):
+      self.blocks.top().extend(self.transform_block(stmt.false))
+      for (name, (_,right)) in stmt.merge.iteritems():
+        typed_right = self.transform_expr(right)
+        typed_var = self.annotate_lhs(syntax.Var(name), typed_right.type)
+        self.assign(typed_var, typed_right)
+      return
+    true = self.transform_block(stmt.true)
+    false = self.transform_block(stmt.false) 
     merge = self.transform_phi_nodes(stmt.merge)
     return syntax.If(cond, true, false, merge)
 

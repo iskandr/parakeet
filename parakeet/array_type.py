@@ -5,6 +5,7 @@ import type_conv
 
 from core_types import StructT, IncompatibleTypes, Int64, ptr_type
 from tuple_type import TupleT, repeat_tuple
+from core_types import TypeValueT
 
 def buffer_info(buf, ptr_type = ctypes.c_void_p):
   """Given a python buffer, return its address and length"""
@@ -100,9 +101,10 @@ class ArrayT(StructT):
       ('shape', tuple_t),
       ('strides', tuple_t),
       ('offset', Int64),
-      ('total_elts', Int64)
+      ('total_elts', Int64),
+      ('dtype', TypeValueT(self.elt_type))
     ]
-
+  
   def dtype(self):
     return self.elt_type.dtype
 

@@ -185,9 +185,9 @@ def range(n, *xs):
     return syntax.Range(n, xs[0], xs[1])
 arange = range 
 
-@macro
-def empty(shape):
-  return syntax.Alloc(elt_type = np.float64, shape = shape)
+#@macro
+#def empty(shape, dtype = np.float64):
+#  return syntax.Alloc(elt_type = dtype, shape = shape)
 
 @jit 
 def zeros(shape, dtype = float64):
@@ -195,7 +195,9 @@ def zeros(shape, dtype = float64):
   return fill(shape, lambda _: zero)
 
 @jit
-def zeros_like(x, dtype = float64):
+def zeros_like(x, dtype = None):
+  if dtype is None:
+    dtype = x.dtype
   return zeros(x.shape, dtype)
 
 @jit
@@ -204,5 +206,7 @@ def ones(shape, dtype = float64):
   return fill(shape, lambda _: one)
 
 @jit
-def ones_like(x):
+def ones_like(x, dtype = None):
+  if dtype is None:
+    dtype = x.dtype
   return ones(x.shape)
