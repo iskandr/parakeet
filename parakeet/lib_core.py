@@ -5,7 +5,7 @@ import syntax
 import syntax_helpers
 
 from prims import *
-from decorators import macro, jit 
+from decorators import macro, staged_macro, jit 
 from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
@@ -16,19 +16,19 @@ from syntax_helpers import zero_i64, one_i64, one_i32
 def identity(x):
   return x
 
-@macro
+@staged_macro("axis")
 def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.zero_i64)
   return syntax.Map(fn = f, args = args, axis = axis)
 
 each = map
 
-@macro 
+@staged_macro("axis") 
 def allpairs(f, x, y, axis = None):
   axis = syntax_helpers.zero_i64 if axis is None else axis
   return syntax.AllPairs(fn = f, args = (x,y), axis = axis)
 
-@macro
+@staged_macro("axis")
 def reduce(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.none)
   init = kwds.get('init', syntax_helpers.none)
@@ -40,7 +40,7 @@ def reduce(f, *args, **kwds):
                        init = init,
                        axis = axis)
 
-@macro
+@staged_macro("axis")
 def scan(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.zero_i64)
   init = kwds.get('init', syntax_helpers.none)
