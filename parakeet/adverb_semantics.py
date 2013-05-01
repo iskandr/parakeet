@@ -117,6 +117,7 @@ class AdverbSemantics(object):
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     zero = self.int(0)
     one = self.int(1)
+    
     first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
     if init is None or self.is_none(init):
       init = first_acc_value

@@ -10,6 +10,10 @@ bool_mat = int_mat % 2
 def dot(x,y):
   return sum(x*y)
 
+def test_dot():
+  vecs = [m[0] for m in matrices]
+  expect_allpairs(dot, np.dot, vecs)
+
 def adverb_matmult(X,Y):
   return parakeet.allpairs(dot, X, Y)
 

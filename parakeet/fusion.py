@@ -96,7 +96,7 @@ class Fusion(Transform):
     if self.fn.copied_by is not None:
       return self.fn.copied_by.apply(fn)
     else:
-      print "RUNNING HIGH LEVEL ON FN", fn
+
       # at the very least do high level optimizations
       import pipeline
       return pipeline.high_level_optimizations(fn)

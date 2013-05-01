@@ -139,6 +139,10 @@ class Transform(Codegen):
     return expr
     
 
+  def transform_Array(self, expr):
+    expr.elts = self.transform_expr_tuple(expr.elts) 
+    return expr
+    
   def transform_ArrayView(self, expr):
     expr.data = self.transform_expr(expr.data)
     expr.shape = self.transform_expr(expr.shape)

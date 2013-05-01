@@ -21,14 +21,13 @@ def mm(X,Y,Z):
               total += X[i,k] * Y[k,j]
           Z[i,j] = total 
   return Z
+
 def test_loop_matmult():
   for X in matrices:
     for Y in matrices:
       res = np.dot(X, Y)
       Z = np.zeros(res.shape, dtype = res.dtype)
       expect(mm, [X,Y,Z], res)
-
-
 
 if __name__ == '__main__':
     run_local_tests()

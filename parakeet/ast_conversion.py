@@ -38,10 +38,15 @@ class ExternalValue(object):
   def __str__(self):
     return "ExternalValue(%s)" % self.value
 
+
 def mk_reduce_call(fn, positional, init = None):
   init = syntax_helpers.none if init is None else init
   axis = syntax_helpers.zero_i64
-  return syntax.Reduce(combine = fn, args = positional, axis = axis, init = init)
+  return syntax.Reduce(fn = translate_function_value(lib_core.identity), 
+                       combine = fn, 
+                       args = positional, 
+                       axis = axis, 
+                       init = init)
 
 def mk_simple_fn(mk_body, input_name = "x", fn_name = "cast"):
   unique_arg_name = names.fresh(input_name)

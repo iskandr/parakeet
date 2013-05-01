@@ -661,7 +661,7 @@ class Annotator(Transform):
 
 
 
-def infer_types(untyped_fn, types, tab = [0]):
+def infer_types(untyped_fn, types):
   """
   Given an untyped function and input types, propagate the types through the
   body, annotating the AST with type annotations.
@@ -670,10 +670,7 @@ def infer_types(untyped_fn, types, tab = [0]):
   inferred types throughout the program and inserts adverbs for scalar operators
   applied to arrays
   """
-  tab[0] += 1
-  space = '  ' * (tab[0]-1)
-  print space, " --- INFER",  types
-  print space, " ---", repr(untyped_fn)
+
   
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(rename_fn = var_map.rename)
@@ -746,7 +743,7 @@ def infer_types(untyped_fn, types, tab = [0]):
     body.append(syntax.Return(syntax_helpers.none))
     tenv["$return"] = NoneType
     return_type = NoneType
-  tab[0] -= 1
+
   return syntax.TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,

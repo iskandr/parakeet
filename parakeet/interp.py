@@ -281,6 +281,7 @@ def eval_fn(fn, actuals):
       return adverb_evaluator.eval_allpairs(fn, x, y, axis)
 
     def expr_Reduce():
+      
       map_fn = eval_expr(expr.fn)
       combine_fn = eval_expr(expr.combine)
       args = eval_args(expr.args)
