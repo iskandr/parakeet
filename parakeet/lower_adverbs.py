@@ -9,10 +9,17 @@ class LowerAdverbs(AdverbSemantics, Transform):
     import pipeline 
     return pipeline.loopify(expr)
     
-  def transform_Fill(self, expr, output = None):
+  def transform_IndexMap(self, expr, output = None):
     fn = self.transform_expr(expr.fn)
     shape = self.transform_expr(expr.shape)
     return self.eval_index_map(fn, shape, output)
+  
+  def transform_IndexReduce(self, expr):
+    fn = self.transform_expr(expr.fn)
+    combine = self.transform_expr(expr.combine)
+    shape = self.transform_expr(expr.shape)
+    init = self.transform_if_expr(expr.init)
+    return self.eval_index_reduce(fn, combine, shape, init)
     
   def transform_Map(self, expr, output = None):
     fn = self.transform_expr(expr.fn)

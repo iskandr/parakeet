@@ -3,7 +3,7 @@ from syntax import Comment
 from syntax import Attribute, Const, Index, PrimCall, Tuple, Var
 from syntax import Alloc, Call, Struct, TypedFn
 from syntax import AllocArray, ArrayView, Cast, Slice, TupleProj
-from syntax import Map, Reduce, Scan, AllPairs, Fill
+from syntax import Map, Reduce, Scan, AllPairs
 
 class SyntaxVisitor(object):
   """

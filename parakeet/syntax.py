@@ -659,39 +659,37 @@ class TypedFn(Expr):
 
   def children(self):
     return ()
-  
-  
-  
-class Conv(Expr):
-  _members = ['fn', 'x', 'window_shape', 'ravel']
-  
-  def __repr__(self):
-    return "Conv(fn = %s, x = %s, window_shape=%s, ravel=%s)" % \
-      (self.fn, self.x, self.window_shape, self.ravel)
-      
-  def __str__(self):
-      return repr(self)
-
-class ConvBorderFn(Conv):
-  _members = ['border_fn']
-  
-class ConvBorderValue(Conv):
-  _members = ['border_value']
-  
-class ConvPadding(Conv):
-  _members = ['fill_value']
-
-class Fill(Expr):
-  _members = ['shape', 'fn']
 
 class Adverb(Expr):
-  _members = ['fn', 'args', 'axis']
+  _members = ['fn']
+  
+class IndexAdverb(Adverb):
+  _members = ['shape']
+
+
+class IndexMap(IndexAdverb):
+  """
+  Map from each distinct index in the shape to a value 
+  """
+  pass 
+  
+class IndexReduce(IndexAdverb):
+  """
+  Expect the 'fn' field to take indices and produces 
+  element values, whereas 'combine' takes pairs of element 
+  values and combines them. 
+  """
+  _members = ['combine', 'init']
+  
+
+class DataAdverb(Expr):
+  _members = ['args', 'axis']
 
   def fn_to_str(self, fn):
-#    if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
-#      return fn.name
-#    else:
-    return str(fn)
+    if isinstance(fn, (Fn, TypedFn)):
+      return fn.name
+    else:
+      return str(fn)
 
   def args_to_str(self):
     if isinstance(self.args, (list, tuple)):
@@ -710,15 +708,11 @@ class Adverb(Expr):
   def __str__(self):
     return repr(self)
 
-class Map(Adverb):
+class Map(DataAdverb):
   pass
 
-
-
-class AllPairs(Adverb):
-  def node_init(self):
-    if self.axis is None:
-      self.axis = 0
+class AllPairs(DataAdverb):
+  pass 
 
 class Accumulative(Adverb):
   """
@@ -728,15 +722,6 @@ class Accumulative(Adverb):
   """
   _members = ['combine', 'init']
 
-  def __repr__(self):
-    s = ("%s(axis = %s, args = (%s), type = %s, init = %s, map_fn = %s, combine = %s)") % \
-        (self.node_type(), self.axis,
-         self.args_to_str(),
-         self.type,
-         self.init,
-         self.fn_to_str(self.fn),
-         self.fn_to_str(self.combine))
-    return s
 
   def node_init(self):
     # assert self.init is not None
@@ -744,7 +729,14 @@ class Accumulative(Adverb):
     pass
 
 class Reduce(Accumulative):
-  pass
+  def __repr__(self):
+    return "Reduce(axis = %s, args = (%s), type = %s, init = %s, map_fn = %s, combine = %s)" % \
+        (self.axis,
+         self.args_to_str(),
+         self.type,
+         self.init,
+         self.fn_to_str(self.fn),
+         self.fn_to_str(self.combine))
 
 class Scan(Accumulative):
   _members = ['emit']
@@ -806,3 +798,22 @@ class TiledScan(Tiled, Scan):
           self.fn_to_str(self.emit))
     return s
 
+  
+class Conv(Adverb):
+  _members = ['x', 'window_shape']
+  
+  def __repr__(self):
+    return "Conv(fn = %s, x = %s, window_shape=%s)" % \
+      (self.fn, self.x, self.window_shape)
+      
+  def __str__(self):
+      return repr(self)
+
+class ConvBorderFn(Conv):
+  _members = ['border_fn']
+  
+class ConvBorderValue(Conv):
+  _members = ['border_value']
+  
+class ConvPadding(Conv):
+  _members = ['fill_value']

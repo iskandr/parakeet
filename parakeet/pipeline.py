@@ -24,7 +24,10 @@ class ContainsAdverbs(syntax_visitor.SyntaxVisitor):
   class Yes(Exception):
     pass
   
-  def visit_Fill(self, _):
+  def visit_IndexMap(self, _):
+    raise self.Yes()
+  
+  def visit_IndexReduce(self, _):
     raise self.Yes()
   
   def visit_Map(self, _):

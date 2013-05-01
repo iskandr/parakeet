@@ -261,10 +261,13 @@ class ShapeInference(SyntaxVisitor):
         (expr, arr, idx)
 
 
-  def visit_Fill(self, expr):
+  def visit_IndexMap(self, expr):
     shape_tuple = self.visit_expr(expr.shape)
     fn = self.visit_expr(expr.fn)
     return shape_semantics.eval_index_map(fn, shape_tuple)
+    
+  def visit_IndexReduce(self, expr):
+    assert False, "IndexReduce not implemented"
     
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)

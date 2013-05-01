@@ -376,7 +376,7 @@ class Annotator(Transform):
          "Unexpected argument type for 'len': %s" % t
       return syntax.Const(len(t.elt_types), type = Int64)
  
-  def transform_Fill(self, expr):
+  def transform_IndexMap(self, expr):
     shape = self.transform_expr(expr.shape)
     closure = self.transform_expr(expr.fn)
     shape_t = shape.type
@@ -390,10 +390,32 @@ class Annotator(Transform):
       if not all(t == Int64 for t in shape_t.elt_types):
         elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
         shape = self.tuple(elts)
-    result_type, typed_fn = specialize_Fill(closure.type, n_indices)
-    return syntax.Fill(shape = shape, 
-                       fn = make_typed_closure(closure, typed_fn), 
-                       type = result_type)
+    result_type, typed_fn = specialize_IndexMap(closure.type, n_indices)
+    return syntax.IndexMap(shape = shape, 
+                           fn = make_typed_closure(closure, typed_fn), 
+                           type = result_type)
+  
+  def transform_IndexReduce(self, expr):
+    shape = self.transform_expr(expr.shape)
+    map_fn_closure = self.transform_expr(expr.fn)
+    combine_closure = self.transform_expr(expr.combine)
+    shape_t = shape.type
+    if isinstance(shape_t, IntT):
+      shape = self.cast(shape, Int64)
+      n_indices = 1
+    else:
+      assert isinstance(shape_t, TupleT)
+      assert all(isinstance(t, ScalarT) for t in shape_t.elt_types)
+      n_indices = len(shape_t.elt_types)
+      if not all(t == Int64 for t in shape_t.elt_types):
+        elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
+        shape = self.tuple(elts)
+    result_type, typed_fn, typed_combine = \
+      specialize_IndexMap(map_fn_closure.type, combine_closure, n_indices)
+    return syntax.IndexReduce(shape = shape, 
+                           fn = make_typed_closure(map_fn_closure, typed_fn),
+                           combine = make_typed_closure(combine_closure, typed_combine), 
+                           type = result_type)
   
   def transform_Map(self, expr):
     closure = self.transform_expr(expr.fn)
@@ -811,12 +833,19 @@ def infer_return_type(untyped, arg_types):
   typed = specialize(untyped, arg_types)
   return typed.return_type
 
-def specialize_Fill(fn, n_indices):
+def specialize_IndexMap(fn, n_indices):
   idx_type = make_tuple_type( (Int64,) * n_indices) if n_indices > 1 else Int64
   typed_fn = specialize(fn, (idx_type,))
   result_type = array_type.increase_rank(typed_fn.return_type, n_indices)
   return result_type, typed_fn
-    
+
+def specialize_IndexReduce(fn, combine, n_indices):
+  idx_type = make_tuple_type( (Int64,) * n_indices) if n_indices > 1 else Int64
+  typed_fn = specialize(fn, (idx_type,))
+  elt_type = typed_fn.return_type
+  typed_combine = specialize(combine, (elt_type, elt_type))
+  assert typed_combine.return_type == elt_type 
+  return elt_type, typed_fn, typed_combine
 
 def specialize_Map(map_fn, array_types):
   elt_types = array_type.lower_ranks(array_types, 1)

@@ -164,10 +164,17 @@ class Transform(Codegen):
     expr.shape = self.transform_expr(expr.shape)
     return expr 
 
-  def transform_Fill(self, expr):
+  def transform_IndexMap(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.shape = self.transform_expr(expr.shape)
     return expr 
+  
+  def transform_IndexReduce(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.shape = self.transform_expr(expr.shape)
+    expr.init = self.transform_if_expr(expr.init)
+    return expr
   
   def transform_Map(self, expr):
     expr.axis = self.transform_if_expr(expr.axis)

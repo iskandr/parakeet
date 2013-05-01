@@ -53,8 +53,12 @@ def scan(f, *args, **kwds):
                      axis = axis)
 
 @macro
-def fill(shape, fn):
-  return syntax.Fill(shape = shape, fn = fn)
+def imap(fn, shape):
+  return syntax.IndexMap(shape = shape, fn = fn)
+
+@macro
+def ireduce(fn, shape, init = None):
+  return syntax.IndexReduce(fn = fn, shape = shape, init = init)
 
 @macro 
 def int8(x):
@@ -193,7 +197,7 @@ arange = range
 @jit 
 def zeros(shape, dtype = float64):
   zero = dtype(0)
-  return fill(shape, lambda _: zero)
+  return imap(lambda _: zero, shape)
 
 @jit
 def zeros_like(x, dtype = None):
@@ -204,7 +208,7 @@ def zeros_like(x, dtype = None):
 @jit
 def ones(shape, dtype = float64):
   one = dtype(1)
-  return fill(shape, lambda _: one)
+  return imap(lambda _: one, shape)
 
 @jit
 def ones_like(x, dtype = None):
