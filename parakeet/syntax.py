@@ -682,7 +682,7 @@ class IndexReduce(IndexAdverb):
   _members = ['combine', 'init']
   
 
-class DataAdverb(Expr):
+class DataAdverb(Adverb):
   _members = ['args', 'axis']
 
   def fn_to_str(self, fn):
@@ -714,7 +714,7 @@ class Map(DataAdverb):
 class AllPairs(DataAdverb):
   pass 
 
-class Accumulative(Adverb):
+class Accumulative(DataAdverb):
   """
   Adverbs such as Reduce and Scan which carry an accumulated value and require a
   'combine' function to merge the accumulators resulting from parallel

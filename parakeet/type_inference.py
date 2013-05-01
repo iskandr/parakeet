@@ -11,7 +11,7 @@ import syntax_helpers
 import tuple_type
 import type_conv
 
-from args import ActualArgs
+from args import ActualArgs, FormalArgs
 from array_type import ArrayT
 from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
@@ -432,6 +432,34 @@ class Annotator(Transform):
                        type = result_type)
 
 
+  def flatten_Reduce(self, map_fn, combine, x, init):
+    """Turn an axis-less reduction into a IndexReduce"""
+    shape = self.shape(x)
+    
+    # build a function from indices which picks out the data elements
+    # need for the original map_fn
+ 
+    
+    outer_closure_args = self.closure_elts(map_fn)
+    args_obj = FormalArgs()
+    inner_closure_vars = []
+    for i in xrange(len(outer_closure_args)):
+      visible_name = "c%d" % i
+      name = names.fresh(visible_name)
+      args_obj.add_positional(name, visible_name)
+      inner_closure_vars.append(syntax.Var(name))
+    inner_closure_vars = tuple(inner_closure_vars)
+    data_arg_var = syntax.Var(names.fresh("x"))
+    idx_arg_var = syntax.Var(names.fresh("idx"))
+    idx_expr = syntax.Index(data_arg_var, idx_arg_var)
+    inner_fn = self.get_fn(map_fn)
+    fn_call_expr = syntax.Call(inner_fn, inner_closure_vars + (idx_expr,))
+    untyped_idx_fn = syntax.Fn(name = names.fresh("idx_map"),
+                               args = args_obj, 
+                               body =  [syntax.Return(fn_call_expr)]
+                              )
+    assert False
+    
   def transform_Reduce(self, expr):
     new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
@@ -442,14 +470,12 @@ class Annotator(Transform):
     
     init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
-    assert axis is not None and not self.is_none(axis)
-    #if axis is None or self.is_none(axis):
-    #  max_arg = adverb_helpers.max_rank_arg(new_args)
-    #  shape = self.shape(max_arg)
-    #  rank = self.rank(max_arg)
-    #  arg_types = 
-      
-    #else: 
+    
+    if axis is None or self.is_none(axis):
+      assert len(new_args) == 1, \
+        "Can't handle multiple reduction inputs and flattening from axis=None"
+      x = new_args[0]
+      return self.flatten_Reduce(map_fn, combine_fn, x, init)                        
     
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
