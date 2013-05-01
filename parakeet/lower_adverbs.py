@@ -32,7 +32,9 @@ class LowerAdverbs(AdverbSemantics, Transform):
     fn = self.transform_expr(expr.fn)
     args = self.transform_expr_list(expr.args)
     combine = self.transform_expr(expr.combine)
+    print expr.emit 
     emit = self.transform_expr(expr.emit)
+
     init = self.transform_if_expr(expr.init)
     axis = syntax_helpers.unwrap_constant(expr.axis)
     return self.eval_scan(fn, combine, emit, init, args, axis)

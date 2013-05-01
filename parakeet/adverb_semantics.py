@@ -130,6 +130,9 @@ class AdverbSemantics(object):
     return self.accumulate_loop(one, niters, loop_body, init)
 
   def eval_scan(self, map_fn, combine, emit, init, values, axis):
+    print "map", map_fn
+    print "combine", combine 
+    print "emit",  emit 
     niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     def delayed_map_result(idx):
       return self.invoke(map_fn, self.force_list(delayed_elts, idx))

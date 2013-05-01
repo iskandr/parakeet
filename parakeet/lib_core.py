@@ -42,7 +42,7 @@ def reduce(f, *args, **kwds):
 
 @macro
 def scan(f, *args, **kwds):
-  axis = kwds.get('axis', syntax_helpers.none)
+  axis = kwds.get('axis', syntax_helpers.zero_i64)
   init = kwds.get('init', syntax_helpers.none)
   import ast_conversion
   ident = ast_conversion.translate_function_value(identity)

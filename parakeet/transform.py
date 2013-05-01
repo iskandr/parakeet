@@ -189,7 +189,7 @@ class Transform(Codegen):
     expr.fn = self.transform_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     expr.args = self.transform_expr_list(expr.args)
-    expr.emit = self.transform_expr(expr.combine)
+    expr.emit = self.transform_expr(expr.emit)
     return expr
   
   def transform_AllPairs(self, expr):
