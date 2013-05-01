@@ -472,8 +472,8 @@ class Codegen(object):
   def closure_elts(self, clos):
     if clos.__class__ is TypedFn:
       return []
-    return [self.closure_elt(clos, i)
-            for i in xrange(len(clos.type.arg_types))]
+    return tuple(self.closure_elt(clos, i)
+                 for i in xrange(len(clos.type.arg_types)))
 
   def get_fn(self, maybe_clos):
     if maybe_clos.__class__ is Closure:
@@ -573,7 +573,7 @@ class Codegen(object):
 
     import pipeline
     lowered_fn = pipeline.loopify(fn)
-    combined_args = closure_args + args
+    combined_args = tuple(closure_args) + tuple(args)
     call = syntax.Call(lowered_fn, combined_args, type = lowered_fn.return_type)
 
     return self.assign_temp(call, "call_result")
@@ -678,7 +678,7 @@ class Codegen(object):
   def call_shape(self, maybe_clos, args):
     fn = self.get_fn(maybe_clos)
     closure_args = self.closure_elts(maybe_clos)
-    combined_args = closure_args + args
+    combined_args = tuple(closure_args) + tuple(args)
 
     if isinstance(fn, Fn):
       # if we're given an untyped function, first specialize it
