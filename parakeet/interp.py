@@ -257,12 +257,13 @@ def eval_fn(fn, actuals):
       shape = eval_expr(expr.shape)
       ranges = [xrange(n) for n in shape]
       def wrap_idx(idx):
+        print idx 
         if len(idx) == 1:
           idx = idx[0]
-        return eval_fn(fn, idx)
+        return eval_fn(fn, (idx,))
       import itertools 
-      elts = [wrap_idx(idx) for idx in itertools.product(ranges)]
-      return np.array(elts, shape = shape)
+      elts = [wrap_idx(idx) for idx in itertools.product(*ranges)]
+      return np.array(elts).reshape((shape))
       
     
     def expr_Map():
