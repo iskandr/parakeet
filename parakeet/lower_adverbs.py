@@ -10,7 +10,6 @@ class LowerAdverbs(AdverbSemantics, Transform):
     return pipeline.loopify(expr)
     
   def transform_Fill(self, expr, output = None):
-    assert False
     fn = self.transform_expr(expr.fn)
     shape = self.transform_expr(expr.shape)
     return self.eval_index_map(fn, shape, output)

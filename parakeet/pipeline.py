@@ -25,12 +25,19 @@ from index_elimination import IndexElim
 class ContainsAdverbs(syntax_visitor.SyntaxVisitor):
   class Yes(Exception):
     pass
+  
+  def visit_Fill(self, _):
+    raise self.Yes()
+  
   def visit_Map(self, _):
     raise self.Yes()
+  
   def visit_Reduce(self, _):
     raise self.Yes()
+  
   def visit_Scan(self, _):
     raise self.Yes()
+  
   def visit_AllPairs(self, _):
     raise self.Yes()
 
