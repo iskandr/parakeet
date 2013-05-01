@@ -33,38 +33,18 @@ def conv(x, weights):
   return parakeet.pmap2d_trim(f, x, weights.shape)
 
 
-def conv_weave(x, y,  weights):
-  return scipy.weave.inline("""
-    int w = Nweights[0];
-    int half_w = w / 2; 
-    int n_rows = Nx[0];
-    int n_cols = Nx[1];
-
-    for (int i = 0; i < n_rows; ++i) {
-      for (int j = 0; j < n_cols; ++j) {
-        if (i > half_w && (i < n_rows - half_w) && 
-            (j > half_w) && (j < n_cols - half_w)) {
-          y[i,j] = 0.0; 
-          for (int ii = 0; ii < w; ++ii) {
-            for (int jj = 0; jj < w ; ++jj) {
-              y[i,j] += x[i + ii - half_w, j + jj - half_w] * weights[ii, jj];
-            }
-          }
-        } 
-      }
-    }
-    return_val = y;
-  """, ('x', 'y', 'weights'))
-      
-
-def load_img(path  = '../data/bv.tiff'):
-  x = pylab.imread(path)
+def load_img(path  = 'data/rjp_small.png'):
+  try:
+    x = pylab.imread(path)
+  except:
+    x = pylab.imread('../' + path)
   if len(x.shape) > 2:
     x = (x[:, :, 0] + x[:, :, 1] + x[:, :, 2]) / 3 
   x = x[:100, :100] 
   x = x.astype('float') / x.max()
   return x
-def blur(x, radius = 2, weave=False):
+
+def blur(x, radius = 2):
   n_rows, n_cols = x.shape
   window_width = radius*2 + 1
   sqr_dists = np.array([[(i-radius)**2 + (j-radius)**2 
@@ -73,25 +53,26 @@ def blur(x, radius = 2, weave=False):
   weights = np.exp(-sqr_dists)
   # normalize so weights add up to 1
   weights /= np.sum(weights)
-  if weave:
-    y = np.zeros_like(x)
-    conv_weave(x,y,weights)
-  else:
-    y = conv(x, weights)
+  y = conv(x, weights)
   return y
+
+plot = True
 
 def test_blur():
   x = load_img()
-  y = blur(x, weave= False)
-  print y
-  z = blur(x, weave= True)
-  
-  import pylab
-  pylab.imshow(y)
-  pylab.figure()
-  pylab.imshow(z)
-  pylab.show()
-  assert eq(y,z)
+  radius = 2
+  y = blur(x, radius=radius)
+  if plot:
+    import pylab
+    pylab.imshow(x)
+    pylab.figure()
+    pylab.imshow(y)
+    pylab.show()
+  print x[24,42]
+  print y[24-radius,42-radius]
+  print y[70,70]
+  assert abs(x[24,42] - y[24-radius,42-radius]) < abs(x[24,42] - y[70,70])
+
  
 def downsample(x):
   xb = blur(x)
@@ -101,32 +82,6 @@ def downsample(x):
   print xb.shape
   print result.shape
   return result
-"""
-def test():
-  x = pylab.imread('../data/bv.tiff')
-  if len(x.shape) > 2:
-    x = (x[:, :, 0] + x[:, :, 1] + x[:, :, 2]) / 3 
-  x = x[:100, :100] 
-  x = x.astype('float') / x.max()
-  print 'orig', x.min(), x.max()
-  pylab.imshow(x, cmap='gray')
-  pylab.title('original')
-  x_blur = blur(x)
-  print 'blur', x_blur.min(), x_blur.max()
-  pylab.figure()
-  pylab.imshow(x_blur, cmap='gray')
-  pylab.title('blur')
-  x_small = downsample(x)
-  print 'small', x_small.min(), x_small.max()
-  pylab.figure()
-  pylab.imshow(x_small, cmap='gray')
-  pylab.title('small')
-  x_small2 = downsample(x_small)
-  pylab.figure()
-  pylab.imshow(x_small2, cmap='gray')
-  pylab.title('smaller')
-  pylab.show()
-"""
  
 if __name__ == '__main__':
   run_local_tests() 

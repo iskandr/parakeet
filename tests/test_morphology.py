@@ -7,6 +7,8 @@ import time
 import parakeet
 from testing_helpers import eq, run_local_tests
 
+plot = False 
+
 def erode(X, window_size = (3,3)):
   return parakeet.pmap2d(parakeet.min, X, window_size)
 
@@ -14,8 +16,11 @@ def dilate(X, window_size = (3,3)):
   return parakeet.pmap2d(parakeet.max, X, window_size)
 
 
-def load_img(path  = '../data/rjp_small.png', gray=True):
-  x = pylab.imread(path)
+def load_img(path  = 'data/rjp_small.png', gray=True):
+  try:
+    x = pylab.imread(path)
+  except:
+    x = pylab.imread('../' + path)
   if len(x.shape) > 2 and gray:
     x =  x[:, :, 1]
   if x.max() > 1: 
@@ -54,9 +59,6 @@ def test_erode():
     sci_end_t = time.time()
     print "SciPy time: %0.3f" % (sci_end_t - sci_start_t)
     assert res_par.shape == res_sci.shape
-    #print np.abs(res_par-res_sci).max()
-    #pylab.imshow((res_par - res_sci)**2)
-    #pylab.show()
     assert True #(res_par == res_sci).all(), "# different elements: %d / %d" % ((res_par != res_sci).sum(), res_par.size)
     return res_par
   filter(r)
@@ -87,10 +89,11 @@ def test_residual():
   g = filter(x[:,:,1])
   b = filter(x[:,:,2])
   y = np.dstack([r,g,b])
-  pylab.imshow(x)
-  pylab.figure()
-  pylab.imshow(y)
-  pylab.show()
+  if plot:
+    pylab.imshow(x)
+    pylab.figure()
+    pylab.imshow(y)
+    pylab.show()
 
 if __name__ == '__main__':
   run_local_tests() 
