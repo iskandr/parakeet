@@ -56,7 +56,7 @@ def blur(x, radius = 2):
   y = conv(x, weights)
   return y
 
-plot = True
+plot = False
 
 def test_blur():
   x = load_img()
