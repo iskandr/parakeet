@@ -11,7 +11,7 @@ from syntax import ForLoop, Comment
 from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
-from syntax import Call, TypedFn, AllocArray
+from syntax import Call, TypedFn, Fn, AllocArray
 from syntax import Map, Reduce, Scan 
 
 transform_timings = {}
@@ -121,7 +121,9 @@ class Transform(Codegen):
 
   def transform_TypedFn(self, expr):
     """By default, don't do recursive transformation of referenced functions"""
-
+    return expr
+  
+  def transform_Fn(self, expr):
     return expr
 
   def transform_Slice(self, expr):
@@ -129,6 +131,13 @@ class Transform(Codegen):
     expr.stop = self.transform_expr(expr.stop) if expr.stop else None
     expr.step = self.transform_expr(expr.step) if expr.step else None
     return expr
+  
+  def transform_Range(self, expr):
+    expr.start = self.transform_expr(expr.start) if expr.start else None
+    expr.stop = self.transform_expr(expr.stop) if expr.stop else None
+    expr.step = self.transform_expr(expr.step) if expr.step else None
+    return expr
+    
 
   def transform_ArrayView(self, expr):
     expr.data = self.transform_expr(expr.data)
@@ -151,17 +160,47 @@ class Transform(Codegen):
     expr.shape = self.transform_expr(expr.shape)
     return expr 
 
-
+  def transform_Fill(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.shape = self.transform_expr(expr.shape)
+    return expr 
+  
   def transform_Map(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
     expr.fn = self.transform_expr(expr.fn)
     expr.args = self.transform_expr_list(expr.args)
     return expr
   
   def transform_Reduce(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
     expr.init = self.transform_if_expr(expr.init)
     expr.fn = self.transform_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     expr.args = self.transform_expr_list(expr.args)
+    return expr
+  
+  def transform_Scan(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
+    expr.init = self.transform_if_expr(expr.init)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.args = self.transform_expr_list(expr.args)
+    expr.emit = self.transform_expr(expr.combine)
+    return expr
+  
+  def transform_AllPairs(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.args = self.transform_expr_tuple(expr.args)
+    return expr
+  
+  def transform_Closure(self, expr):
+    expr.args = self.transform_expr_tuple(expr.args)
+    expr.fn = self.transform_expr(expr.fn)
+    return expr
+  
+  def transform_ClosureElt(self, expr):
+    expr.closure = self.transform_expr(expr.closure)
     return expr
 
   def transform_expr(self, expr):
@@ -196,6 +235,8 @@ class Transform(Codegen):
       result = self.transform_ArrayView(expr)
     elif expr_class is TypedFn:
       result = self.transform_TypedFn(expr)
+    elif expr_class is Fn:
+      result = self.transform_Fn(expr)
     elif expr_class is Call:
       result = self.transform_Call(expr)
     elif expr_class is Map:
@@ -204,9 +245,12 @@ class Transform(Codegen):
       result = self.transform_Reduce(expr)
     else:
       method = self.find_method(expr, "transform_")
+      print expr, method 
+
       if method:
         result = method(expr)
       else:
+        assert False
         result = self.transform_generic_expr(expr)
     if result is None:
       print "%s got turned into None" % expr

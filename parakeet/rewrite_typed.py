@@ -108,6 +108,8 @@ class RewriteTyped(Transform):
       expr.init = self.coerce_expr(expr.init, acc_type)
     return expr
 
+
+    
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)
     if expr.init and \

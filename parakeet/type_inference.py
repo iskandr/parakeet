@@ -54,7 +54,9 @@ def unpack_closure(closure):
 
   if closure.__class__ is closure_type.ClosureT:
     fn, closure_args = closure.fn, closure.arg_types
-
+  elif closure.__class__ is syntax.Closure:
+    fn = closure.fn 
+    closure_args = closure.args 
   elif closure.type.__class__ is closure_type.ClosureT:
     fn, arg_types = closure.type.fn, closure.type.arg_types
     closure_args = \
@@ -389,8 +391,12 @@ class Annotator(Transform):
         elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
         shape = self.tuple(elts)
     result_type, typed_fn = specialize_Fill(closure.type, n_indices)
-
-    return syntax.Fill(shape = shape, fn = typed_fn, type = result_type)
+    print "!A", expr.fn 
+    print "!B", closure
+    print "!C", typed_fn 
+    return syntax.Fill(shape = shape, 
+                       fn = make_typed_closure(closure, typed_fn), 
+                       type = result_type)
   
   def transform_Map(self, expr):
     closure = self.transform_expr(expr.fn)
