@@ -245,15 +245,12 @@ class Transform(Codegen):
       result = self.transform_Reduce(expr)
     else:
       method = self.find_method(expr, "transform_")
-      print expr, method 
-
       if method:
         result = method(expr)
       else:
         assert False
         result = self.transform_generic_expr(expr)
     if result is None:
-      print "%s got turned into None" % expr
       return expr 
     else:
       return result 
