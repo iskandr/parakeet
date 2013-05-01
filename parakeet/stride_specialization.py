@@ -160,6 +160,9 @@ class FindConstantStrides(SyntaxVisitor):
   def __init__(self, fn, abstract_values):
     self.env = bind_list(fn.arg_names, abstract_values)
   
+  def visit_generic_expr(self, expr):
+    return unknown
+  
   def visit_Var(self, expr):
     return self.env.get(expr.name, unknown)
   
@@ -213,11 +216,8 @@ class FindConstantStrides(SyntaxVisitor):
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ is Var:
       value = self.visit_expr(stmt.rhs)
-      if value is not None:
-        self.env[stmt.lhs.name] = value
-      else:
-        print "%s returned None in ConstantStride analysis" % stmt.rhs
-  
+      assert value is not None, "%s returned None in ConstantStride analysis" % stmt.rhs 
+        
   
 class StrideSpecializer(Transform):
   def __init__(self, abstract_inputs):

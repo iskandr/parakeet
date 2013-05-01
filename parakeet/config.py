@@ -27,12 +27,6 @@ print_functions_before_transforms = [] #['IndexElim']
 # show the function produced by each transformation?
 print_functions_after_transforms = [] 
 
-# show functions before tiling transformation?
-print_functions_before_tiling = False
-
-# show functions after tiling transformation?
-print_tiled_adverbs = False
-
 # show aliases and escape sets
 print_escape_analysis = False
 
@@ -45,9 +39,6 @@ print_transform_names = False
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
 
-# print details about the ongoing tile size search
-print_tile_search_info = False
-
 # print generated assembly of compiled functions
 print_x86 = False
 
@@ -58,7 +49,7 @@ print_x86 = False
 opt_verify = True
 opt_inline = True
 opt_fusion = True
-opt_licm = True
+
 opt_copy_elimination = True
 opt_stack_allocation = True
 opt_index_elimination = True
@@ -66,6 +57,9 @@ opt_range_propagation = True
 opt_shape_elim = True
 opt_scalar_replacement = True
 opt_redundant_load_elimination = True 
+
+# LICM is sometime buggy with allocations inside loops 
+opt_licm = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False

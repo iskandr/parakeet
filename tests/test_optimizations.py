@@ -8,6 +8,12 @@ from parakeet.pipeline import lowering
 from parakeet.syntax_visitor import SyntaxVisitor
 from testing_helpers import expect
 
+config.opt_fusion = True 
+config.opt_copy_elimination = True 
+config.opt_inline = True 
+config.opt_licm = True 
+
+
 def A(x):
   return x + 1
 
@@ -162,5 +168,18 @@ def test_copy_elimination():
   assert n_loops <= n_expected, \
       "Too many loops generated! Expected at most 2, got %d" % n_loops
 
+def licm_nested_loops():
+  
+  total = 0
+  a = [1,2,3,4,5]
+  for _ in range(3):
+    for j in range(len(a)):
+      a[j] *= 10
+    total += a[1]
+  return total   
+
+def test_licm_nested_loops():
+  testing_helpers.expect(licm_nested_loops, [], licm_nested_loops())
+  
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

@@ -106,8 +106,10 @@ class Find_LICM_Candidates(SyntaxVisitor):
            (c is syntax.Struct and not isinstance(expr.type, safe_types))
 
   def visit_Assign(self, stmt):
+     
     lhs_names = collect_binding_names(stmt.lhs)
     rhs_names = collect_var_names(stmt.rhs)
+   
     for x in lhs_names:
       dependencies = self.depends_on.get(x, set([]))
       dependencies.update(rhs_names)
@@ -125,6 +127,12 @@ class Find_LICM_Candidates(SyntaxVisitor):
     if stmt.lhs.__class__ is Index:
       assert stmt.lhs.value.__class__ is Var
       self.volatile_vars.add(stmt.lhs.value.name)
+      #print 
+      #print "STMT", stmt
+      #print "lhs names", lhs_names 
+      #print "rhs names", rhs_names 
+      #print "volatile vars", self.volatile_vars
+      #print 
       
 
 class LoopInvariantCodeMotion(Transform):
