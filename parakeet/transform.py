@@ -64,7 +64,7 @@ class Transform(Codegen):
 
   def find_method(self, expr, prefix = "transform_"):
     method_name = prefix + expr.node_type()
-    print ">>>", method_name
+
     if hasattr(self, method_name):
       return getattr(self, method_name)
     else:
@@ -252,7 +252,7 @@ class Transform(Codegen):
       if method:
         result = method(expr)
       else:
-        assert False
+        assert False, "Unsupported expr %s" % (expr,)
         result = self.transform_generic_expr(expr)
     if result is None:
       return expr 

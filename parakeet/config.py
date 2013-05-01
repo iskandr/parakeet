@@ -3,17 +3,17 @@
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -25,7 +25,7 @@ print_optimized_llvm = False
 print_functions_before_transforms = [] #['IndexElim']
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['Fusion'] #['IndexElim']
+print_functions_after_transforms = [] 
 
 # show functions before tiling transformation?
 print_functions_before_tiling = False
