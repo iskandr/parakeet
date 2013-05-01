@@ -167,9 +167,28 @@ class AdverbSemantics(object):
     return output
   
   def eval_index_map(self, fn, shape, output = None): 
+    
     if output is None:
       output = self.create_output_array(fn, (shape,), shape)
-    return output
+      
+    dims = self.tuple_elts(shape)
+    n_loops = len(dims)
+    def build_loops(index_vars = ()):
+      n_indices = len(index_vars)
+      if n_indices == n_loops:
+        if n_indices > 1:
+          idx_tuple = self.tuple(index_vars)
+        else:
+          idx_tuple = index_vars[0]
+        elt_result =  self.invoke(fn, (idx_tuple,))
+        self.setidx(output, index_vars, elt_result)
+      else:
+        def loop_body(idx):
+          build_loops(index_vars + (idx,))
+        self.loop(self.int(0), dims[n_indices], loop_body)
+    build_loops()
+    return output 
+    
     """ 
     def loop_body(idx):
       output_indices = self.build_slice_indices(self.rank(output), 0, idx)

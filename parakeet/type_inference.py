@@ -391,9 +391,6 @@ class Annotator(Transform):
         elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
         shape = self.tuple(elts)
     result_type, typed_fn = specialize_Fill(closure.type, n_indices)
-    print "!A", expr.fn 
-    print "!B", closure
-    print "!C", typed_fn 
     return syntax.Fill(shape = shape, 
                        fn = make_typed_closure(closure, typed_fn), 
                        type = result_type)
@@ -816,7 +813,7 @@ def infer_return_type(untyped, arg_types):
   return typed.return_type
 
 def specialize_Fill(fn, n_indices):
-  idx_type = make_tuple_type(Int64, n_indices) if n_indices > 1 else Int64
+  idx_type = make_tuple_type( (Int64,) * n_indices) if n_indices > 1 else Int64
   typed_fn = specialize(fn, (idx_type,))
   result_type = array_type.increase_rank(typed_fn.return_type, n_indices)
   return result_type, typed_fn
