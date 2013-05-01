@@ -181,3 +181,22 @@ def is_identity_fn(fn):
          fn.body[0].__class__ is syntax.Return and \
          fn.body[0].value.__class__ is syntax.Var and \
          fn.body[0].value.name == fn.arg_names[0]
+         
+def gen_arg_names(n, base_names):
+  results = []
+
+  m = len(base_names)
+  for i in xrange(n):
+    curr = base_names[i % m]
+    cycle = i / m
+    if cycle > 0:
+      curr = "%s_%d" % (curr, cycle+1)
+    results.append(curr)
+  return results
+
+def gen_data_arg_names(n):
+  return gen_arg_names(n, ['x', 'y', 'z', 'a', 'b', 'c', 'd'])
+
+def gen_fn_arg_names(n):
+  return gen_arg_names(n, ['f', 'g', 'h', 'p', 'q', 'r', 's'])
+

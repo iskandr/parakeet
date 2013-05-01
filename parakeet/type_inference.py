@@ -1,5 +1,4 @@
 import adverb_helpers
-import adverb_wrapper
 import array_type
 import ast_conversion
 import closure_type
@@ -289,7 +288,7 @@ class Annotator(Transform):
       prim_fn = prims.prim_wrapper(expr.prim)
 
       max_rank = adverb_helpers.max_rank(arg_types)
-      arg_names = adverb_wrapper.gen_data_arg_names(len(arg_types))
+      arg_names = syntax_helpers.gen_data_arg_names(len(arg_types))
       untyped_broadcast_fn = \
           adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
