@@ -19,6 +19,7 @@ def pmap2d(f, x, width = (3,3), step = (1,1)):
   n_rows, n_cols = x.shape
   hx = width_x / 2
   hy = width_y / 2
+  
   return [[f(x[max(i-hx, 0):min(i+hx+1, n_rows), max(j-hy, 0):min(j+hy+1, n_cols)]) 
            for j in np.arange(0, n_cols, step_x)] 
            for i in np.arange(0, n_rows, step_y)]

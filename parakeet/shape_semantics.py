@@ -7,8 +7,6 @@ from shape import is_zero, is_one, make_shape
 class ShapeSemantics(AdverbSemantics):
   def size_along_axis(self, value, axis):
     assert isinstance(value, Shape)
-    print "!!!!", value, value.dims, axis, type(axis)
-
     return value.dims[axis]
 
   def is_tuple(self, x):

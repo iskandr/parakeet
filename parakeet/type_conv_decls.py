@@ -50,4 +50,4 @@ def typeof_fn(f):
 type_conv.register(types.FunctionType, ClosureT, typeof_fn)
 type_conv.register(jit, ClosureT, typeof_fn)
 type_conv.register(macro, ClosureT, typeof_fn)
-
+type_conv.register(types.BuiltinFunctionType, ClosureT, typeof_fn)

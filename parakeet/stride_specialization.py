@@ -8,7 +8,7 @@ from dead_code_elim import DCE
 from node import Node
 from pipeline_phase import Phase
 from simplify import Simplify
-from syntax import Var
+from syntax import Var, Fn, TypedFn 
 from syntax_helpers import const_int
 from syntax_visitor import SyntaxVisitor
 from transform import Transform
@@ -159,9 +159,26 @@ def bind_list(arg_names, abstract_values):
 class FindConstantStrides(SyntaxVisitor):
   def __init__(self, fn, abstract_values):
     self.env = bind_list(fn.arg_names, abstract_values)
-  
+    self.return_value = None 
+    
   def visit_generic_expr(self, expr):
     return unknown
+  
+  def visit_fn(self, fn):
+    SyntaxVisitor.visit_fn(self, fn)
+    if self.return_value is None:
+      return unknown 
+    else:
+      return self.return_value
+  
+  def visit_Call(self, expr):
+    if expr.fn.__class__ in (Fn, TypedFn): 
+      args = self.visit_expr_list(expr.args)
+      return  FindConstantStrides(expr.fn, args).visit_fn(expr.fn)
+    else:
+      return unknown 
+      
+     
   
   def visit_Var(self, expr):
     return self.env.get(expr.name, unknown)
@@ -207,6 +224,7 @@ class FindConstantStrides(SyntaxVisitor):
       return Array(stride_val)
     else:
       return unknown   
+    
   def visit_Alloc(self, expr):
     return unknown 
   
@@ -216,8 +234,16 @@ class FindConstantStrides(SyntaxVisitor):
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ is Var:
       value = self.visit_expr(stmt.rhs)
-      assert value is not None, "%s returned None in ConstantStride analysis" % stmt.rhs 
-        
+      assert value is not None, \
+        "%s : %s returned None in ConstantStride analysis" % (stmt.rhs, stmt.rhs.node_type()) 
+      self.env[stmt.lhs.name] = value 
+      
+  def visit_Return(self, stmt):
+    value = self.visit_expr(stmt.value)
+    if self.return_value is None:
+      self.return_value = value 
+    elif self.return_value != value:
+      self.return_value = unknown 
   
 class StrideSpecializer(Transform):
   def __init__(self, abstract_inputs):

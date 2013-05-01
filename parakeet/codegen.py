@@ -374,9 +374,10 @@ class Codegen(object):
     assert self.is_array(x)
     if x.type.rank == 1:
       return x
+    assert False, "Ravel not supported until we can copy discontiguous arrays"
     nelts = self.nelts(x)
     shape = self.tuple((nelts,), 'shape')
-    strides = self.tuple((self.int(x.type.elt_type.nbytes),), "strides")
+    strides = self.tuple((self.int(1),), "strides")
     data = self.attr(x, 'data', 'data_ptr')
     offset = self.attr(x, 'offset')
     t = array_type.make_array_type(x.type.elt_type, 1)

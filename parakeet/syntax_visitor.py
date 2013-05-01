@@ -16,7 +16,17 @@ class SyntaxVisitor(object):
 
   def visit_Const(self, expr):
     pass
-
+  
+  def visit_Fn(self, expr):
+    pass 
+  
+  def visit_ClosureElt(self, expr):
+    self.visit_expr(expr.closure)
+  
+  def visit_Closure(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr_list(expr.args)
+    
   def visit_Tuple(self, expr):
     for elt in expr.elts:
       self.visit_expr(elt)
@@ -144,11 +154,9 @@ class SyntaxVisitor(object):
     else:
       method_name = 'visit_' + expr.node_type()
       method = getattr(self, method_name, None)
-      if method:
-        return method(expr)
-      else:
-        self.visit_generic_expr(expr)
-
+      assert method is not None, "Missing method %s" % method_name 
+      return method(expr)
+      
   def visit_expr_list(self, exprs):
     return [self.visit_expr(expr) for expr in exprs]
 

@@ -5,15 +5,17 @@ import scipy.ndimage
 import time 
 
 import parakeet
+
+from parakeet import jit, pmap2d  
 from testing_helpers import eq, run_local_tests
 
-plot = False 
+plot = True 
 
 def erode(X, window_size = (3,3)):
-  return parakeet.pmap2d(parakeet.min, X, window_size)
-
+  return pmap2d(min, X, window_size)
+ 
 def dilate(X, window_size = (3,3)):
-  return parakeet.pmap2d(parakeet.max, X, window_size)
+  return pmap2d(max, X, window_size)
 
 
 def load_img(path  = 'data/rjp_small.png', gray=True):
@@ -55,11 +57,19 @@ def test_erode():
     par_end_t = time.time()
     print "Parakeet time: %0.3f" % (par_end_t - par_start_t)
     sci_start_t = time.time()
-    res_sci = scipy.ndimage.grey_erosion(r, size, mode = 'nearest')
+    res_sci = scipy.ndimage.grey_erosion(img, size, mode = 'nearest')
     sci_end_t = time.time()
     print "SciPy time: %0.3f" % (sci_end_t - sci_start_t)
+    
+    
+    if plot:
+      pylab.imshow(res_par)
+      pylab.figure()
+      pylab.imshow(res_sci)
+      pylab.show()
     assert res_par.shape == res_sci.shape
-    assert True #(res_par == res_sci).all(), "# different elements: %d / %d" % ((res_par != res_sci).sum(), res_par.size)
+    assert (res_par == res_sci).all(), \
+      "# different elements: %d / %d" % ((res_par != res_sci).sum(), res_par.size)
     return res_par
   filter(r)
   filter(g)
@@ -89,7 +99,7 @@ def test_residual():
   g = filter(x[:,:,1])
   b = filter(x[:,:,2])
   y = np.dstack([r,g,b])
-  if plot:
+  if False and plot:
     pylab.imshow(x)
     pylab.figure()
     pylab.imshow(y)

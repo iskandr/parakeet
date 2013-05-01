@@ -410,11 +410,10 @@ class Annotator(Transform):
                        type = result_type)
 
   def transform_Reduce(self, expr):
-    print "DEBUG._reduce expr", expr 
+
     map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function) 
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)
-    print "DEBUG._reduce args", new_args
     axis = self.transform_if_expr(expr.axis)
     if axis is None or self.is_none(axis):
       new_args = [self.ravel(arg) for arg in new_args]
@@ -496,27 +495,7 @@ class Annotator(Transform):
                             axis = axis,
                             type = result_type)
   
-  """
-  def transform_Conv(self, expr):
-    closure = self.transform_expr(expr.fn)
-    c = syntax.Conv()
-    border_value = None
-    if expr.border_value:
-      border_value = self.transform_expr(expr.border_value)
-    shape = expr.window_shape
-    ravel = expr.ravel
-    
-    border_closure = None
-    if expr.border_closure:
-      border_closure = self.transform_expr(expr.border_fn)
-    x = self.transform_expr(expr.x)
-    xt = get_type(x)
-    result_type, typed_fn, typed_border_fn = specialize_Conv(closure.type, xt, )
-  
-    # result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
-    # axis = unwrap_constant(expr.axis)
-    return syntax.Conv(make_typed_closure(closure, typed_fn), x)
-  """
+
   
   def infer_phi(self, result_var, val):
     """

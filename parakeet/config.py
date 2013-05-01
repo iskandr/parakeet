@@ -3,17 +3,17 @@
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -37,7 +37,7 @@ print_transform_timings = False
 print_transform_names = False
 
 # before starting function specialization, print the fn name and input types 
-print_before_specialization = True
+print_before_specialization = False
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
