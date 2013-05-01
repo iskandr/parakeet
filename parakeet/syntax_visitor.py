@@ -154,8 +154,11 @@ class SyntaxVisitor(object):
     else:
       method_name = 'visit_' + expr.node_type()
       method = getattr(self, method_name, None)
-      assert method is not None, "Missing method %s" % method_name 
-      return method(expr)
+      if method is None:
+        print "Missing visitor method %s" % method_name
+        return self.visit_generic_expr(expr)
+      else:
+        return method(expr)
       
   def visit_expr_list(self, exprs):
     return [self.visit_expr(expr) for expr in exprs]

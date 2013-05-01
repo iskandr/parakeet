@@ -24,8 +24,7 @@ def map(f, *args, **kwds):
 each = map
 
 @staged_macro("axis") 
-def allpairs(f, x, y, axis = None):
-  axis = syntax_helpers.zero_i64 if axis is None else axis
+def allpairs(f, x, y, axis = 0):
   return syntax.AllPairs(fn = f, args = (x,y), axis = axis)
 
 @staged_macro("axis")

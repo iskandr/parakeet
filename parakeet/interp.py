@@ -146,7 +146,7 @@ def eval_fn(fn, actuals):
       return args.transform(eval_expr)
 
   def eval_if_expr(maybe_expr):
-    return None if maybe_expr is None else eval_expr(maybe_expr)
+    return eval_expr(maybe_expr) if isinstance(maybe_expr, syntax.Expr) else maybe_expr
   
   def eval_expr(expr):
     # print ">>", expr

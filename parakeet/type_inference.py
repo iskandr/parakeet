@@ -409,18 +409,26 @@ class Annotator(Transform):
                        axis = axis,
                        type = result_type)
 
+
   def transform_Reduce(self, expr):
+    new_args = self.transform_args(expr.args, flat = True)
+    arg_types = get_types(new_args)
+    axis = self.transform_if_expr(expr.axis)
 
     map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function) 
     combine_fn = self.transform_expr(expr.combine)
-    new_args = self.transform_args(expr.args, flat = True)
-    axis = self.transform_if_expr(expr.axis)
-    if axis is None or self.is_none(axis):
-      new_args = [self.ravel(arg) for arg in new_args]
-      axis = syntax_helpers.zero_i64
-    arg_types = get_types(new_args)
+    
     init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
+    assert axis is not None and not self.is_none(axis)
+    #if axis is None or self.is_none(axis):
+    #  max_arg = adverb_helpers.max_rank_arg(new_args)
+    #  shape = self.shape(max_arg)
+    #  rank = self.rank(max_arg)
+    #  arg_types = 
+      
+    #else: 
+    
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
                           combine_fn.type,
