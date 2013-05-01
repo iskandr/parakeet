@@ -250,9 +250,7 @@ class Annotator(Transform):
     return syntax.Attribute(value, expr.name, type = result_type)
   
   def transform_PrimCall(self, expr):
-    print expr 
     args = self.transform_args(expr.args)
-    print args 
     arg_types = get_types(args)
     
     if all(isinstance(t, ScalarT) for t in arg_types):
@@ -412,10 +410,11 @@ class Annotator(Transform):
                        type = result_type)
 
   def transform_Reduce(self, expr):
-    print expr 
+    print "DEBUG._reduce expr", expr 
     map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function) 
     combine_fn = self.transform_expr(expr.combine)
     new_args = self.transform_args(expr.args, flat = True)
+    print "DEBUG._reduce args", new_args
     axis = self.transform_if_expr(expr.axis)
     if axis is None or self.is_none(axis):
       new_args = [self.ravel(arg) for arg in new_args]
@@ -683,7 +682,7 @@ def infer_types(untyped_fn, types):
   unbound_keywords = []
   def keyword_fn(local_name, value):
     unbound_keywords.append(local_name)
-    # print "!!!", local_name, value, type_conv.typeof(value)
+    
     return type_conv.typeof(value)
 
   tenv = typed_args.bind(types,
@@ -792,6 +791,8 @@ def _get_closure_type(fn):
     return closure_type.make_closure_type(fundef, [])
 
 def specialize(fn, arg_types):
+  if config.print_before_specialization:
+    print "=== Specializing", fn, "for types", arg_types 
   if isinstance(fn, syntax.TypedFn):
     return fn
   if isinstance(arg_types, (list, tuple)):

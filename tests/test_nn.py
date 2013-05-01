@@ -18,12 +18,12 @@ class Network(object):
     return self.sse / self.n_updates 
    
   def __iadd__(self, layer):
-    self.layers += [layer]
+    self.layers.append(layer)
     return self
     
   def predict(self, x):
     for layer in self.layers:
-      x = layer.fprop(x) 
+      x = layer.fprop(x)
     return x
   
   def bprop(self, err):
@@ -67,16 +67,20 @@ def bprop_logistic(x, W, b, err):
 
 class LogisticLayer(object):
   def __init__(self, n_in, n_out, learning_rate = 0.001):
-    self.W = np.random.randn(n_in, n_out)
+    self.W = np.random.randn( n_out, n_in)
     self.bias = np.random.randn(n_out)
     self.last_input = None
-    self.last_ouput = None 
+    self.last_output = None 
     self.learning_rate = learning_rate
     
+  def __str__(self):
+    return "LogisticLayer(in = %d, out = %d)" % (self.W.shape[0], self.W.shape[1])
+  
   def fprop(self, x):
     self.last_input = x
     self.last_output = fprop_logistic(x, self.W, self.bias)
-    return self.last_ouput
+
+    return self.last_output
   
   def bprop(self, err):
     weighted_err = 0  
@@ -121,6 +125,8 @@ def test_mlp():
   x = np.random.randn(1000)
   y = mlp.predict(x)
   assert len(y) == n_out
+  assert np.all(y >= 0)
+  assert np.all(y <= 1)
   
 import testing_helpers
 
