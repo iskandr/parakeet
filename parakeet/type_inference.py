@@ -250,7 +250,9 @@ class Annotator(Transform):
     return syntax.Attribute(value, expr.name, type = result_type)
   
   def transform_PrimCall(self, expr):
+    print expr 
     args = self.transform_args(expr.args)
+    print args 
     arg_types = get_types(args)
     
     if all(isinstance(t, ScalarT) for t in arg_types):
