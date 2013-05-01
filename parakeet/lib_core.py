@@ -104,10 +104,12 @@ def float64(x):
 
 float = float64
 
+@macro 
 def bool8(x):
   return syntax.Cast(x, type = Bool)
 
 bool = bool8 
+bool_ = bool8 
 
 @jit 
 def len(arr):
