@@ -354,7 +354,7 @@ class Codegen(object):
       return result
 
   def is_none(self, x):
-    return isinstance(x, syntax.Expr) and x.type.__class__ is NoneT
+    return x is None or (isinstance(x, syntax.Expr) and x.type.__class__ is NoneT)
 
   def is_array(self, x):
     return x.type.__class__ is  ArrayT

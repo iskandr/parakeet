@@ -302,6 +302,9 @@ def eval_fn(fn, actuals):
       args = eval_args(expr.args)
       init = eval_expr(expr.init) if expr.init else None
       axis = eval_if_expr(expr.axis)
+      if axis is None:
+        args = [np.ravel(x) for x in args]
+        axis = 0
       return adverb_evaluator.eval_reduce(map_fn, combine_fn, init, args, axis)
 
     def expr_Scan():

@@ -473,6 +473,7 @@ class Annotator(Transform):
     
     result_type, typed_fn, typed_combine = \
       specialize_IndexReduce(idx_closure, combine, n_indices)
+    init = self.cast(init, typed_fn.return_type)
     return syntax.IndexReduce(shape = shape, 
                               fn = make_typed_closure(idx_closure, typed_fn),
                               combine = make_typed_closure(combine, typed_combine),
@@ -492,11 +493,14 @@ class Annotator(Transform):
     init = self.transform_expr(expr.init) if expr.init else None
     init_type = init.type if init else None
     
-    if axis is None or self.is_none(axis):
-      assert len(new_args) == 1, \
-        "Can't handle multiple reduction inputs and flattening from axis=None"
-      x = new_args[0]
-      return self.flatten_Reduce(map_fn, combine_fn, x, init)                        
+    if self.is_none(axis):
+      if adverb_helpers.max_rank(arg_types) > 1:
+        assert len(new_args) == 1, \
+          "Can't handle multiple reduction inputs and flattening from axis=None"
+        x = new_args[0]
+        return self.flatten_Reduce(map_fn, combine_fn, x, init)
+      else:
+        axis = self.int(0)                        
     
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,

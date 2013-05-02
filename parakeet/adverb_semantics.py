@@ -201,15 +201,34 @@ class AdverbSemantics(object):
     dims = self.tuple_elts(shape)
     n_loops = len(dims)
     zero = self.int(0)
-    assert False 
+    first_idx = self.tuple([zero for _ in range(n_loops)]) if n_loops > 1 else zero 
+    first_acc_value = self.invoke(fn, (first_idx,))
     if init is None or self.is_none(init):
       init = first_acc_value
     else:
       init = self.invoke(combine, [init, first_acc_value])
-    def loop_body(acc, idx):
-      elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
-      new_acc_value = self.invoke(combine, [acc.get(), elt])
-      acc.update(new_acc_value)
-    return self.accumulate_loop(one, niters, loop_body, init)
+    
+    def build_loops(index_vars = (), acc = None):
+      n_indices = len(index_vars)
+      if n_indices == n_loops:
+        if n_indices > 1:
+          idx_tuple = self.tuple(index_vars)
+        else:
+          idx_tuple = index_vars[0]
+        elt_result =  self.invoke(fn, (idx_tuple,))
+        new_acc_value = self.invoke(combine, (acc.get(), elt_result))
+        acc.update(new_acc_value)
+      elif n_indices == 0:
+        # only the 
+        def loop_body(acc, idx):
+          build_loops(index_vars + (idx,), acc = acc)
+        return self.accumulate_loop(self.int(1), dims[0], loop_body, init)
+      else:
+        # intermediate loops start from zero 
+        def loop_body(idx):
+          build_loops(index_vars + (idx,), acc = acc)
+        self.loop(self.int(0), dims[n_indices], loop_body)
+        return acc.get() 
+    return build_loops()
     
     

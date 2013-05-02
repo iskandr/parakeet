@@ -2,7 +2,7 @@ import inline
 import names
 import syntax_helpers
 
-from syntax import Var, Const,  Return, TypedFn, Adverb, Map, AllPairs
+from syntax import Var, Const,  Return, TypedFn, DataAdverb, Map, AllPairs
 from transform import Transform
 from use_analysis import use_count
 
@@ -106,7 +106,7 @@ class Fusion(Transform):
     if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
-    if isinstance(rhs, Adverb) and rhs.__class__ is not AllPairs:
+    if isinstance(rhs, DataAdverb) and rhs.__class__ is not AllPairs:
 
       args = rhs.args
       if all(arg.__class__ in (Var, Const) for arg in args):
@@ -148,6 +148,6 @@ class Fusion(Transform):
               rhs.fn = self.closure(new_fn, clos_args)
               rhs.args = prev_adverb.args + surviving_array_args
 
-    if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb):
+    if stmt.lhs.__class__ is Var and isinstance(rhs, DataAdverb):
       self.adverb_bindings[stmt.lhs.name] = rhs
     return stmt
