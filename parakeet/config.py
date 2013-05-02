@@ -37,7 +37,7 @@ print_transform_timings = False
 print_transform_names = False
 
 # before starting function specialization, print the fn name and input types 
-print_before_specialization = False
+print_before_specialization = True
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

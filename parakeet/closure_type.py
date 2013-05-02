@@ -45,7 +45,15 @@ class ClosureT(StructT):
     return hash( (self.fn,) + self.arg_types)
 
   def __eq__(self, other):
-    return self.fn == other.fn and self.arg_types == other.arg_types
+    if self.fn.__class__ != other.fn.__class__:
+      return False
+    if isinstance(self.fn, str):
+      same_fn = (self.fn == other.fn)
+    else:
+      # checking equality of functions isn't really defined, 
+      # so just check that it's the same location 
+      same_fn = self.fn is other.fn
+    return same_fn and self.arg_types == other.arg_types
 
   def __str__(self):
     fn_name = self.fn if isinstance(self.fn, str) else self.fn.name

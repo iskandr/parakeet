@@ -59,9 +59,9 @@ def nested_maps(inner_fn, depth, arg_names):
   name = names.fresh(inner_fn.name + "_broadcast%d" % depth)
   nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
 
-  map_expr = syntax.Map(nested_fn, 
-                         axis = syntax_helpers.zero_i64, 
-                         args = arg_vars)
+  map_expr = syntax.Map(fn = nested_fn, 
+                        axis = syntax_helpers.zero_i64, 
+                        args = arg_vars)
   fn = syntax.Fn(
     name = name,
     args = args_obj,

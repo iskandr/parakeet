@@ -416,6 +416,7 @@ class Annotator(Transform):
                            type = result_type)
   
   def transform_Map(self, expr):
+    print ">>", expr 
     closure = self.transform_expr(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
     axis = self.transform_if_expr(expr.axis)
