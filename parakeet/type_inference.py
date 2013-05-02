@@ -216,17 +216,15 @@ class Annotator(Transform):
     t = closure_type.make_closure_type(expr.fn, get_types(new_args))
     return syntax.Closure(expr.fn, new_args, type = t)
 
-
-
-
   def transform_Arith(self, expr):
     untyped_fn = prims.prim_wrapper(expr)
     t = closure_type.make_closure_type(untyped_fn, ())
     return syntax.Closure(untyped_fn, (), type = t)
 
   def transform_Fn(self, expr):
-    t = closure_type.make_closure_type(expr, ())
-    return syntax.Closure(expr, [], type = t)
+    return expr 
+    #t = closure_type.make_closure_type(expr, ())
+    #return syntax.Closure(expr, [], type = t)
 
   def transform_Call(self, expr):
     closure = self.transform_expr(expr.fn)
@@ -435,7 +433,7 @@ class Annotator(Transform):
   def flatten_Reduce(self, map_fn, combine, x, init):
     """Turn an axis-less reduction into a IndexReduce"""
     shape = self.shape(x)
-    
+    n_indices = self.rank(x)
     # build a function from indices which picks out the data elements
     # need for the original map_fn
  
@@ -448,17 +446,40 @@ class Annotator(Transform):
       name = names.fresh(visible_name)
       args_obj.add_positional(name, visible_name)
       inner_closure_vars.append(syntax.Var(name))
-    inner_closure_vars = tuple(inner_closure_vars)
-    data_arg_var = syntax.Var(names.fresh("x"))
-    idx_arg_var = syntax.Var(names.fresh("idx"))
+    
+    data_arg_name = names.fresh("x")
+    data_arg_var = syntax.Var(data_arg_name)
+    idx_arg_name = names.fresh("i")
+    idx_arg_var = syntax.Var(idx_arg_name)
+    
+    args_obj.add_positional(data_arg_name, "x")
+    args_obj.add_positional(idx_arg_name, "i")
+    
     idx_expr = syntax.Index(data_arg_var, idx_arg_var)
     inner_fn = self.get_fn(map_fn)
-    fn_call_expr = syntax.Call(inner_fn, inner_closure_vars + (idx_expr,))
-    untyped_idx_fn = syntax.Fn(name = names.fresh("idx_map"),
-                               args = args_obj, 
-                               body =  [syntax.Return(fn_call_expr)]
-                              )
-    assert False
+    fn_call_expr = syntax.Call(inner_fn, tuple(inner_closure_vars)  + (idx_expr,))
+    idx_fn = syntax.Fn(name = names.fresh("idx_map"),
+                       args = args_obj, 
+                       body =  [syntax.Return(fn_call_expr)]
+                       )
+    
+    #t = closure_type.make_closure_type(typed_fn, get_types(closure_args))
+    #return syntax.Closure(typed_fn, closure_args, t)
+    outer_closure_args = tuple(outer_closure_args) + (x,)
+  
+    idx_closure_t = closure_type.make_closure_type(idx_fn, get_types(outer_closure_args))
+    
+    idx_closure = syntax.Closure(idx_fn, args = outer_closure_args, type = idx_closure_t)
+    
+    result_type, typed_fn, typed_combine = \
+      specialize_IndexReduce(idx_closure, combine, n_indices)
+    return syntax.IndexReduce(shape = shape, 
+                              fn = make_typed_closure(idx_closure, typed_fn),
+                              combine = make_typed_closure(combine, typed_combine),
+                              init = init,   
+                              type = result_type)
+    
+    
     
   def transform_Reduce(self, expr):
     new_args = self.transform_args(expr.args, flat = True)
@@ -720,10 +741,13 @@ def infer_types(untyped_fn, types):
     
     return type_conv.typeof(value)
 
-  tenv = typed_args.bind(types,
+  try: 
+    tenv = typed_args.bind(types,
                          keyword_fn = keyword_fn,
                          starargs_fn = tuple_type.make_tuple_type)
-
+  except: 
+    print "Error while calling %s with types %s" % (untyped_fn, types)
+    raise
   # keep track of the return
   tenv['$return'] = Unknown
   annotator = Annotator(tenv, var_map)

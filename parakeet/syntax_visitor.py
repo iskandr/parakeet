@@ -74,6 +74,16 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.stop)
     self.visit_expr(expr.step)
 
+  def visit_IndexMap(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.shape)
+
+  def visit_IndexReduce(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.combine)
+    self.visit_expr(expr.shape)
+    self.visit_expr(expr.init)
+
   def visit_Map(self, expr):
     self.visit_expr(expr.fn)
     for arg in expr.args:

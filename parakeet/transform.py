@@ -264,6 +264,8 @@ class Transform(Codegen):
     if result is None:
       return expr 
     else:
+      assert isinstance(result, syntax.Expr), \
+        "Invalid result type in transformation: %s" % (type(result),)
       return result 
   
   def transform_lhs_Var(self, expr):

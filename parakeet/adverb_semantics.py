@@ -197,5 +197,19 @@ class AdverbSemantics(object):
     self.loop(zero, niters, loop_body)
     return output
     """
-  def eval_index_reduce(self):
-    pass 
+  def eval_index_reduce(self, fn, combine, shape, init = None):
+    dims = self.tuple_elts(shape)
+    n_loops = len(dims)
+    zero = self.int(0)
+    assert False 
+    if init is None or self.is_none(init):
+      init = first_acc_value
+    else:
+      init = self.invoke(combine, [init, first_acc_value])
+    def loop_body(acc, idx):
+      elt = self.invoke(map_fn, [elt(idx) for elt in delayed_elts])
+      new_acc_value = self.invoke(combine, [acc.get(), elt])
+      acc.update(new_acc_value)
+    return self.accumulate_loop(one, niters, loop_body, init)
+    
+    

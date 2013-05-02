@@ -487,7 +487,7 @@ class Fn(Expr):
         "Expected body of fn to be list of statements, got " + str(self.body)
 
     import closure_type
-    self.type = closure_type.make_closure_type(self.name, ())
+    self.type = closure_type.make_closure_type(self, ())
     self.registry[self.name] = self
 
   def python_nonlocals(self):
