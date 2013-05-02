@@ -559,7 +559,7 @@ class AST_Translator(ast.NodeVisitor):
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0
-    return Map(fn, args=(seq,), axis = zero_i64)
+    return Map(fn = fn, args=(seq,), axis = zero_i64)
       
   def visit_Attribute(self, expr):
     # TODO:

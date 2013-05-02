@@ -119,6 +119,11 @@ class SyntaxVisitor(object):
   def visit_Cast(self, expr):
     return self.visit_expr(expr.value)
 
+  def visit_Range(self, expr):
+    self.visit_expr(expr.start)
+    self.visit_expr(expr.stop)
+    self.visit_expr(expr.step)
+    
   def visit_generic_expr(self, expr):
     for v in expr.children():
       self.visit_expr(v)
