@@ -264,14 +264,7 @@ class Simplify(Transform):
     return self.temp(self.transform_expr(x), name = name)
   
   def transform_args(self, args):
-    new_args = []
-    for arg in args:
-      new_arg = self.transform_expr(arg)
-      if self.is_simple(new_arg):
-        new_args.append(new_arg)
-      else:
-        new_args.append(self.temp(new_arg))
-    return new_args
+    return [self.transform_arg(x) for x in args]
 
   def transform_Array(self, expr):
     expr.elts = tuple(self.transform_args(expr.elts))
@@ -547,18 +540,17 @@ class Simplify(Transform):
     return stmt
 
   def transform_ForLoop(self, stmt):
-    stmt.start = self.transform_arg(stmt.start)
-    stmt.stop = self.transform_arg(stmt.stop)
-    if self.is_none(stmt.step):
-      stmt.step = syntax_helpers.one(stmt.start.type)
-    else:
-      stmt.step = self.transform_arg(stmt.step)
-    return stmt 
-    stmt.step = self.transform_expr(stmt.step)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge,
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)
+    stmt.start = self.transform_arg(stmt.start, 'start')
+    stmt.stop = self.transform_arg(stmt.stop, 'stop')
+    if self.is_none(stmt.step):
+      stmt.step = syntax_helpers.one(stmt.start.type)
+    else:
+      stmt.step = self.transform_arg(stmt.step, 'step')
+
 
     # if a loop is only going to run for one iteration, might as well get rid of
     # it

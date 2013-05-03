@@ -13,7 +13,7 @@ def test_erode_identity_shape():
 
 def test_erode():
   shape = (3,3)
-  expected = np.array([[1, 1, 1,], [1,1,2]])
+  expected = np.array([[1, 1, 2], [1,1,2]])
   testing_helpers.expect(erode, [x, shape], expected)
 
 

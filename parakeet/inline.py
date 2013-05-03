@@ -128,7 +128,10 @@ class Inliner(Transform):
     target = self.transform_expr(expr.fn)
     closure_args = self.closure_elts(target)
     target = self.get_fn(target)
-    if target.__class__ is TypedFn and can_inline(target):
+    if target.__class__ is TypedFn:
+      if not can_inline(target):
+        print "[Warning] Can't inline %s" % target
+        return expr  
       self.count += 1
       curr_block = self.blocks.current()
       combined_args = tuple(closure_args) + tuple(expr.args)

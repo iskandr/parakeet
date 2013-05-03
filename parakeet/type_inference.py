@@ -627,8 +627,6 @@ class Annotator(Transform):
     for old_k, (old_left, old_right) in nodes.iteritems():
       new_name, (left, right) = self.transform_phi_node(old_k, (old_left, old_right))
       new_nodes[new_name] = (left, right)
-      assert left.type == right.type 
-      
     return new_nodes
 
   def annotate_lhs(self, lhs, rhs_type):

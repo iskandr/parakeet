@@ -652,7 +652,7 @@ class TypedFn(Expr):
             block_to_str(self.body))
 
   def __str__(self):
-    return "Fn(%s : %s => %s)" % (self.name, self.input_types, self.return_type)
+    return "TypedFn(%s : %s => %s)" % (self.name, self.input_types, self.return_type)
 
   def __hash__(self):
     return hash(self.name)
