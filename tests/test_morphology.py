@@ -55,6 +55,12 @@ def test_erode():
 
   def filter(img):
     print "---"
+    par_start_compile_t = time.time()
+    res_par = erode(img[:1, :1], size)
+    par_end_compile_t = time.time()
+    print "Parakeet compile time: %0.3f" % (par_end_compile_t - par_start_compile_t)
+    
+    print "---"
     par_start_t = time.time()
     res_par = erode(img, size)
     par_end_t = time.time()
