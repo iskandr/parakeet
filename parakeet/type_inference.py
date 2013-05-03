@@ -397,6 +397,7 @@ class Annotator(Transform):
     shape = self.transform_expr(expr.shape)
     map_fn_closure = self.transform_expr(expr.fn)
     combine_closure = self.transform_expr(expr.combine)
+    init = self.transform_if_expr(expr.init)
     shape_t = shape.type
     if isinstance(shape_t, IntT):
       shape = self.cast(shape, Int64)
@@ -409,10 +410,13 @@ class Annotator(Transform):
         elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
         shape = self.tuple(elts)
     result_type, typed_fn, typed_combine = \
-      specialize_IndexMap(map_fn_closure.type, combine_closure, n_indices)
+      specialize_IndexReduce(map_fn_closure.type, combine_closure, n_indices)
+    if not self.is_none(init):
+      init = self.cast(init, result_type)
     return syntax.IndexReduce(shape = shape, 
                               fn = make_typed_closure(map_fn_closure, typed_fn),
-                              combine = make_typed_closure(combine_closure, typed_combine), 
+                              combine = make_typed_closure(combine_closure, typed_combine),
+                              init = init,  
                               type = result_type)
   
   def transform_Map(self, expr):
@@ -474,7 +478,8 @@ class Annotator(Transform):
     
     result_type, typed_fn, typed_combine = \
       specialize_IndexReduce(idx_closure, combine, n_indices)
-    init = self.cast(init, typed_fn.return_type)
+    if not self.is_none(init):
+      init = self.cast(init, typed_fn.return_type)
     return syntax.IndexReduce(shape = shape, 
                               fn = make_typed_closure(idx_closure, typed_fn),
                               combine = make_typed_closure(combine, typed_combine),
@@ -622,6 +627,8 @@ class Annotator(Transform):
     for old_k, (old_left, old_right) in nodes.iteritems():
       new_name, (left, right) = self.transform_phi_node(old_k, (old_left, old_right))
       new_nodes[new_name] = (left, right)
+      assert left.type == right.type 
+      
     return new_nodes
 
   def annotate_lhs(self, lhs, rhs_type):

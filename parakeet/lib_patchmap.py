@@ -20,12 +20,19 @@ def pmap2(f, x, width = (3,3)):
   hx = width_x / 2
   hy = width_y / 2
   def local_apply((i,j)):
-    lx = max(i-hx, 0)
-    ux = min(i+hx+1, n_rows)
-    ly = max(j-hy, 0)
-    uy = min(j+hy+1, n_cols)
-    window = x[lx:ux, ly:uy]
-    return f(window)
+    if i <= hx or i >= n_rows - hx or j < hy or j >= n_cols - hy:
+      lx = max(i-hx, 0)
+      ux = min(i+hx+1, n_rows)
+      ly = max(j-hy, 0)
+      uy = min(j+hy+1, n_cols)
+      result = f(x[lx:ux, ly:uy])
+    else:
+      lx = i-hx
+      ux = i+hx+1
+      ly = j-hy
+      uy = j+hy+1
+      result = f(x[lx:ux, ly:uy])
+    return result
   return imap(local_apply, x.shape)
     
 @jit  

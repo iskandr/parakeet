@@ -40,6 +40,8 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
   
   def mul(self, x, y):
     return x * y
+  
+
 
   def shape(self, x):
     return np.shape(x)

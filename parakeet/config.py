@@ -25,7 +25,7 @@ print_optimized_llvm = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['IndexElim']
+print_functions_before_transforms = [] #['DCE'] 
 
 # show the function produced by each transformation?
 print_functions_after_transforms = [] 
@@ -65,11 +65,11 @@ opt_redundant_load_elimination = True
 
 
 # may dramatically increase compile time
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = False
+stride_specialization = True
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False

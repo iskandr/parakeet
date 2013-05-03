@@ -223,11 +223,10 @@ class AdverbSemantics(object):
         acc.update(new_acc_value)
       
       elif n_indices == 0:
-        if first_pass and n_loops == 1:
-          return acc
+        start = self.int(0) if first_pass else self.int(1)
         def loop_body(acc, idx):
           build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
-        return self.accumulate_loop(self.int(0), dims[0], loop_body, acc)
+        return self.accumulate_loop(start, dims[0], loop_body, acc)
       else:
         # intermediate loops start from zero 
         def loop_body(idx):
@@ -241,8 +240,11 @@ class AdverbSemantics(object):
             stop = self.int(1)
         self.loop(start, stop, loop_body)
         return acc.get() 
-    acc0 = build_loops(index_vars = (), first_pass = True)
-    res = build_loops(index_vars = (), acc = acc0, first_pass = False)
+    if n_loops == 1:
+      return build_loops(first_pass = True)
+    else:
+      acc0 = build_loops(index_vars = (), first_pass = True)
+      res = build_loops(index_vars = (), acc = acc0, first_pass = False)
     return res
   
     

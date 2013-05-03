@@ -34,11 +34,15 @@ class DCE(Transform):
   def transform_merge(self, phi_nodes):
     new_merge = {}
     for (var_name, (l,r)) in phi_nodes.iteritems():
+
+      
       if self.is_live(var_name):
+
         new_merge[var_name] = (l,r)
       else:
         self.decref(l)
         self.decref(r)
+
     return new_merge
 
   def transform_Assign(self, stmt):
@@ -104,18 +108,18 @@ class DCE(Transform):
 
     stmt.false = self.transform_block(stmt.false)
 
-    new_merge = self.transform_merge(stmt.merge)
+    stmt.merge = self.transform_merge(stmt.merge)
 
-    if len(new_merge) == 0 and len(stmt.true) == 0 and \
+    if len(stmt.merge) == 0 and len(stmt.true) == 0 and \
         len(stmt.false) == 0:
       return None
     elif syntax_helpers.is_true(cond):
-      for name, (_, v) in new_merge.iteritems():
+      for name, (_, v) in stmt.merge.iteritems():
         self.assign(Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.true))
       return None
     elif syntax_helpers.is_false(cond):
-      for name, (v, _) in new_merge.items():
+      for name, (v, _) in stmt.merge.items():
         self.assign(Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.false))
       return None
