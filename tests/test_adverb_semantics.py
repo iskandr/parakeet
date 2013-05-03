@@ -142,5 +142,18 @@ def test_allpairs():
       "Expected %s for AllPairs but got %s" % \
       (inner_products, np_inner_products)
 
+def test_index_map():
+  indices = interp.eval_index_map(interp.identity_function, (10,))
+  assert testing_helpers.eq(indices, np.arange(10)), \
+    "Expected %s from IndexMap but got %s" % (np.arange(10), indices)
+    
+def test_index_reduce():
+  n = 10 
+  total = interp.eval_index_reduce(interp.identity_function, np.add, (n,), 0)
+  expected = sum(np.arange(10,))
+  assert total == expected, "Expected %d but got %d" % (expected, total)
+  total_no_tuple = interp.eval_index_reduce(interp.identity_function, np.add, n, 0)
+  assert total_no_tuple == expected, "Expected %d but got %d" % (expected, total_no_tuple )
+
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

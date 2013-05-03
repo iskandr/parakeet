@@ -382,7 +382,7 @@ class Annotator(Transform):
       shape = self.cast(shape, Int64)
       n_indices = 1
     else:
-      assert isinstance(shape_t, TupleT)
+      assert isinstance(shape_t, TupleT), "Expected shape to be tuple, instead got %s" % (shape_t,)
       assert all(isinstance(t, ScalarT) for t in shape_t.elt_types)
       n_indices = len(shape_t.elt_types)
       if not all(t == Int64 for t in shape_t.elt_types):
@@ -411,12 +411,12 @@ class Annotator(Transform):
     result_type, typed_fn, typed_combine = \
       specialize_IndexMap(map_fn_closure.type, combine_closure, n_indices)
     return syntax.IndexReduce(shape = shape, 
-                           fn = make_typed_closure(map_fn_closure, typed_fn),
-                           combine = make_typed_closure(combine_closure, typed_combine), 
-                           type = result_type)
+                              fn = make_typed_closure(map_fn_closure, typed_fn),
+                              combine = make_typed_closure(combine_closure, typed_combine), 
+                              type = result_type)
   
   def transform_Map(self, expr):
-    print ">>", expr 
+
     closure = self.transform_expr(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
     axis = self.transform_if_expr(expr.axis)
@@ -529,11 +529,11 @@ class Annotator(Transform):
                              type = arg.type.index_type(slice_rest))
       new_args = (rest,)  
     return syntax.Reduce(fn = typed_map_closure,
-                          combine = typed_combine_closure,
-                          args = new_args,
-                          axis = axis,
-                          type = result_type,
-                          init = init)
+                         combine = typed_combine_closure,
+                         args = new_args,
+                         axis = axis,
+                         type = result_type,
+                         init = init)
 
   def transform_Scan(self, expr):
     map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function)
@@ -554,13 +554,13 @@ class Annotator(Transform):
       assert adverb_helpers.max_rank(arg_types) == 1
       axis = syntax_helpers.zero_i64
     return syntax.Scan(fn = make_typed_closure(map_fn, typed_map_fn),
-                        combine = make_typed_closure(combine_fn,
-                                                     typed_combine_fn),
-                        emit = make_typed_closure(emit_fn, typed_emit_fn),
-                        args = new_args,
-                        axis = axis,
-                        type = result_type,
-                        init = init)
+                       combine = make_typed_closure(combine_fn,
+                                                    typed_combine_fn),
+                       emit = make_typed_closure(emit_fn, typed_emit_fn),
+                       args = new_args,
+                       axis = axis,
+                       type = result_type,
+                       init = init)
 
   def transform_AllPairs(self, expr):
     closure = self.transform_expr(expr.fn)
@@ -572,10 +572,10 @@ class Annotator(Transform):
     axis = self.transform_if_expr(expr.axis)
     if axis is None or self.is_none(axis):
       axis = zero_i64
-    return syntax.AllPairs(make_typed_closure(closure, typed_fn),
-                            args = new_args,
-                            axis = axis,
-                            type = result_type)
+    return syntax.AllPairs(fn = make_typed_closure(closure, typed_fn),
+                           args = new_args,
+                           axis = axis,
+                           type = result_type)
   
 
   

@@ -6,16 +6,16 @@ import time
 
 import parakeet
 
-from parakeet import jit, pmap2d  
+from parakeet import jit, pmap2 
 from testing_helpers import eq, run_local_tests
 
-plot = True 
+
 
 def erode(X, window_size = (3,3)):
-  return pmap2d(min, X, window_size)
+  return pmap2(min, X, window_size)
  
 def dilate(X, window_size = (3,3)):
-  return pmap2d(max, X, window_size)
+  return pmap2(max, X, window_size)
 
 
 def load_img(path  = 'data/rjp_small.png', gray=True):
@@ -43,6 +43,9 @@ def test_dilate():
   assert (g.min() <= gd).all()
   bd = filter(b)
   assert (b.min() <= bd).all()
+
+
+plot = False 
 
 def test_erode():
   x = load_img(gray=False)
@@ -88,6 +91,8 @@ def morph_close(x, dilate_shape, erode_shape = None):
   return erode(dilate(x, dilate_shape), erode_shape)
 
 
+plot_rgb = False 
+
 def test_residual():
   x = load_img(gray=False)
   s1 = (5,20)
@@ -99,7 +104,7 @@ def test_residual():
   g = filter(x[:,:,1])
   b = filter(x[:,:,2])
   y = np.dstack([r,g,b])
-  if False and plot:
+  if plot_rgb:
     pylab.imshow(x)
     pylab.figure()
     pylab.imshow(y)

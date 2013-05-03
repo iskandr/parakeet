@@ -80,7 +80,9 @@ class AdverbSemantics(object):
         pass
   
     inner_result = self.invoke(fn, inputs)
+    
     inner_shape = self.shape(inner_result)
+
     elt_t = self.elt_type(inner_result)
     res =  self.create_result(elt_t, inner_shape, extra_dims)
     return res 
@@ -167,11 +169,13 @@ class AdverbSemantics(object):
     return output
   
   def eval_index_map(self, fn, shape, output = None): 
-    
-    if output is None:
-      output = self.create_output_array(fn, (shape,), shape)
-      
     dims = self.tuple_elts(shape)
+    if len(dims) == 1:
+      shape = dims[0]
+      
+    if output is None:
+      output = self.create_output_array(fn, [shape], shape)
+
     n_loops = len(dims)
     def build_loops(index_vars = ()):
       n_indices = len(index_vars)
@@ -198,6 +202,7 @@ class AdverbSemantics(object):
     return output
     """
   def eval_index_reduce(self, fn, combine, shape, init = None):
+
     dims = self.tuple_elts(shape)
     n_loops = len(dims)
     zero = self.int(0)
@@ -208,27 +213,38 @@ class AdverbSemantics(object):
     else:
       init = self.invoke(combine, [init, first_acc_value])
     
-    def build_loops(index_vars = (), acc = None):
+    def build_loops(index_vars = (), acc = init, first_pass = False):
+
       n_indices = len(index_vars)
       if n_indices == n_loops:
-        if n_indices > 1:
-          idx_tuple = self.tuple(index_vars)
-        else:
-          idx_tuple = index_vars[0]
+        idx_tuple = self.tuple(index_vars) if n_indices > 1 else index_vars[0] 
         elt_result =  self.invoke(fn, (idx_tuple,))
         new_acc_value = self.invoke(combine, (acc.get(), elt_result))
         acc.update(new_acc_value)
+      
       elif n_indices == 0:
-        # only the 
+        if first_pass and n_loops == 1:
+          return acc
         def loop_body(acc, idx):
-          build_loops(index_vars + (idx,), acc = acc)
-        return self.accumulate_loop(self.int(1), dims[0], loop_body, init)
+          build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
+        return self.accumulate_loop(self.int(0), dims[0], loop_body, acc)
       else:
         # intermediate loops start from zero 
         def loop_body(idx):
-          build_loops(index_vars + (idx,), acc = acc)
-        self.loop(self.int(0), dims[n_indices], loop_body)
+          build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
+        start = self.int(0)
+        stop = dims[n_indices]
+        if first_pass:
+          if n_loops == n_indices + 1:
+            start = self.int(1)
+          else:
+            stop = self.int(1)
+        self.loop(start, stop, loop_body)
         return acc.get() 
-    return build_loops()
+    acc0 = build_loops(index_vars = (), first_pass = True)
+    res = build_loops(index_vars = (), acc = acc0, first_pass = False)
+    return res
+  
+    
     
     

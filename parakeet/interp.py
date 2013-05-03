@@ -37,6 +37,9 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
 
   def sub(self, x, y):
     return x - y
+  
+  def mul(self, x, y):
+    return x * y
 
   def shape(self, x):
     return np.shape(x)
@@ -58,7 +61,13 @@ class InterpSemantics(adverb_semantics.AdverbSemantics):
 
   def tuple(self, elts):
     return tuple(elts)
-
+  
+  def tuple_elts(self, t):
+    if isinstance(t, tuple):
+      return t
+    else:
+      return (t,) 
+  
   def concat_tuples(self, t1, t2):
     return tuple(t1) + tuple(t2)
 
