@@ -3,23 +3,23 @@
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = False
+print_untyped_function = True
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+print_optimized_llvm = True
 
 # before starting function specialization, print the fn name and input types 
 print_before_specialization = False
@@ -65,11 +65,11 @@ opt_redundant_load_elimination = True
 
 
 # may dramatically increase compile time
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = True
+stride_specialization = False
 
 # Warning: loop fusion never fully implemented
 opt_loop_fusion = False

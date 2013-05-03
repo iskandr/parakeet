@@ -21,6 +21,7 @@ from transform import Transform
 from tuple_type import TupleT
 from use_analysis import use_count
 
+
 # classes of expressions known to have no side effects
 # and to be unaffected by changes in mutable state as long
 # as all their arguments are SSA variables or constants
@@ -122,16 +123,18 @@ class Simplify(Transform):
       result = all(self.immutable(child) for child in child_nodes)
     return result
 
-  def temp(self, expr, use_count = 1):
+  def temp(self, expr, name = None, use_count = 1):
     """
     Wrapper around Codegen.assign_temp which also updates bindings and
     use_counts
     """
-
-    new_var = self.assign_temp(expr)
-    self.bindings[new_var.name] = expr
-    self.use_counts[new_var.name] = use_count
-    return new_var
+    if self.is_simple(expr):
+      return expr 
+    else:
+      new_var = self.assign_temp(expr, name = name)
+      self.bindings[new_var.name] = expr
+      self.use_counts[new_var.name] = use_count
+      return new_var
 
   def transform_expr(self, expr):
     if not self.is_simple(expr):
@@ -256,6 +259,10 @@ class Simplify(Transform):
       expr.args = args
       return expr
 
+  def transform_arg(self, x, name = None):
+
+    return self.temp(self.transform_expr(x), name = name)
+  
   def transform_args(self, args):
     new_args = []
     for arg in args:
@@ -526,6 +533,7 @@ class Simplify(Transform):
       merge[cond_var.name] = (left_cond, right_cond)
       return cond_var
 
+    
   def transform_While(self, stmt):
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge,
@@ -539,8 +547,13 @@ class Simplify(Transform):
     return stmt
 
   def transform_ForLoop(self, stmt):
-    stmt.start = self.transform_expr(stmt.start)
-    stmt.stop = self.transform_expr(stmt.stop)
+    stmt.start = self.transform_arg(stmt.start)
+    stmt.stop = self.transform_arg(stmt.stop)
+    if self.is_none(stmt.step):
+      stmt.step = syntax_helpers.one(stmt.start.type)
+    else:
+      stmt.step = self.transform_arg(stmt.step)
+    return stmt 
     stmt.step = self.transform_expr(stmt.step)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge,

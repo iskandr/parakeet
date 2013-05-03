@@ -25,14 +25,14 @@ def pmap2(f, x, width = (3,3)):
       ux = min(i+hx+1, n_rows)
       ly = max(j-hy, 0)
       uy = min(j+hy+1, n_cols)
-      result = f(x[lx:ux, ly:uy])
+      return f(x[lx:ux, ly:uy])
     else:
       lx = i-hx
       ux = i+hx+1
       ly = j-hy
       uy = j+hy+1
-      result = f(x[lx:ux, ly:uy])
-    return result
+      return f(x[lx:ux, ly:uy])
+    
   return imap(local_apply, x.shape)
     
 @jit  
