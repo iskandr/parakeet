@@ -26,7 +26,6 @@ def run_local_functions(prefix, locals_dict = None):
         raise
 
   print "\n%d tests passed: %s\n" % (len(good), ", ".join(good))
-  # print "%d failed: %s" % (len(bad),", ".join(bad))
 
 @nottest
 def run_local_tests(locals_dict = None):
