@@ -10,12 +10,32 @@ from parakeet import jit, pmap2
 from testing_helpers import eq, run_local_tests
 
 
+def winmin(x):
+  m,n = x.shape
+  v = x[0,0]
+  for i in range(m):
+    for j in range(n):
+      v2 = x[i,j]
+      if v2 < v:
+        v = v2
+  return v
+
+
+def winmax(x):
+  m,n = x.shape
+  v = x[0,0]
+  for i in range(m):
+    for j in range(n):
+      v2 = x[i,j]
+      if v2 > v:
+        v = v2
+  return v
 
 def erode(X, window_size = (3,3)):
-  return pmap2(min, X, window_size)
+  return pmap2(winmin, X, window_size)
  
 def dilate(X, window_size = (3,3)):
-  return pmap2(max, X, window_size)
+  return pmap2(winmax, X, window_size)
 
 
 def load_img(path  = 'data/rjp_small.png', gray=True):
@@ -24,29 +44,68 @@ def load_img(path  = 'data/rjp_small.png', gray=True):
   except:
     x = pylab.imread('../' + path)
   if len(x.shape) > 2 and gray:
-    x =  x[:, :, 1]
+    x =  x[:, :, 2]
+  if len(x.shape) > 2 and x.shape[2] == 4:
+    x = x[:,:,:3]
   if x.max() > 1: 
-    x = x.astype('float') / 256.0
+    x = x.astype('float') / 257.0
   return x
 
 
+X = np.array([[0, 0,   0,   0,   0],
+              [0, 0.1,  0.2, 0.3, 0],
+              [0, 0.3,  0.4, 0.3, 0],
+              [0, 0.2,  0.1, 0.5, 0],
+              [0, 0,    0,   0,   0]])
+
+# what we would expect after a 3x3 erosion 
+X_erode = np.array([[0, 0, 0,   0, 0],
+                    [0, 0, 0,   0, 0],
+                    [0, 0, 0.1, 0, 0],
+                    [0, 0, 0,   0, 0],
+                    [0, 0, 0,   0, 0]])
+
+X_dilate = np.array([[0.1, 0.2, 0.3, 0.3, 0.3],
+                     [0.3, 0.4, 0.4, 0.4, 0.3],
+                     [0.3, 0.4, 0.5, 0.5, 0.5],
+                     [0.3, 0.4, 0.5, 0.5, 0.5],
+                     [0.2, 0.2, 0.5, 0.5, 0.5]])
+
+def test_erode():
+  res = erode(X, (3,3))
+  assert res.shape == X_erode.shape, "Expected shape %s but got %s" % (X_erode.shape, res.shape)
+  assert (res == X_erode).all(), "Expected %s but got %s" % (X_erode, res)
 
 def test_dilate():
+  res = dilate(X, (3,3))
+  assert res.shape == X_dilate.shape, "Expected shape %s but got %s" % (X_dilate.shape, res.shape)
+  assert (res == X_dilate).all(), "Expected %s but got %s" % (X_dilate, res)
+
+  
+  """
   x = load_img(gray=False)
   def filter(img):
     return dilate(img, (10,10))
   r,g,b = x[:,:,0],x[:,:,1],x[:,:,2]
   rd = filter(r)
+  
   assert rd.shape == r.shape 
-  assert (r.min() <= rd).all()
   gd = filter(g)
-  assert (g.min() <= gd).all()
   bd = filter(b)
-  assert (b.min() <= bd).all()
+  if plot:
+    pylab.imshow(x)
+    pylab.figure()
+    y = np.dstack([rd, gd, bd])
+    pylab.imshow(y)
+    pylab.figure()
+    pylab.imshow((y-x)**3)
+    pylab.show()
+  assert (r <= rd).all(), np.sum(r > rd)
+  assert (g <= gd).all(), np.sum(g > gd)
+  assert (b <= bd).all(), np.sum(b > bd)
+  """
 
-
-plot = False 
-
+"""
 def test_erode():
   x = load_img(gray=False)
   size = (10,10)
@@ -54,9 +113,9 @@ def test_erode():
   
 
   def filter(img):
-    print "---"
     par_start_compile_t = time.time()
-    res_par = erode(img[:1, :1], size)
+    print "---"
+    res_par = erode(img, size)
     par_end_compile_t = time.time()
     print "Parakeet compile time: %0.3f" % (par_end_compile_t - par_start_compile_t)
     
@@ -75,6 +134,8 @@ def test_erode():
       pylab.imshow(res_par)
       pylab.figure()
       pylab.imshow(res_sci)
+      pylab.figure()
+      pylab.imshow(res_sci - res_par)
       pylab.show()
     assert res_par.shape == res_sci.shape
     assert (res_par == res_sci).all(), \
@@ -84,7 +145,7 @@ def test_erode():
   filter(g)
   filter(b)
   
-
+"""
 def morph_open(x, erode_shape, dilate_shape = None):
   if dilate_shape is None: 
     dilate_shape = erode_shape

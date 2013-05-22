@@ -11,8 +11,9 @@ class DCE(Transform):
 
   def pre_apply(self, fn):
     self.use_counts = use_count(fn)
-
+    
   def is_live(self, name):
+    
     count = self.use_counts.get(name)
     return count and count > 0
 
@@ -104,11 +105,15 @@ class DCE(Transform):
 
   def transform_If(self, stmt):
     cond = stmt.cond
+
+    # Process the phi-merge first 
+    # so that variables dead after the If 
+    # statement can become dead inside it 
+    stmt.merge = self.transform_merge(stmt.merge)
+
     stmt.true = self.transform_block(stmt.true)
 
     stmt.false = self.transform_block(stmt.false)
-
-    stmt.merge = self.transform_merge(stmt.merge)
 
     if len(stmt.merge) == 0 and len(stmt.true) == 0 and \
         len(stmt.false) == 0:

@@ -387,7 +387,9 @@ class Transform(Codegen):
 
   def transform_block(self, stmts):
     self.blocks.push()
-    for old_stmt in (reversed(stmts) if self.reverse else stmts):
+    if self.reverse: 
+      stmts = reversed(stmts)
+    for old_stmt in  stmts:
       new_stmt = self.transform_stmt(old_stmt)
       if new_stmt is not None:
         self.blocks.append_to_current(new_stmt)
