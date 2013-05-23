@@ -113,8 +113,8 @@ def value_to_syntax(v):
   else:
     
     assert is_function_value(v), "Can't make value %s : %s into static syntax" % (v, type(v))
-    return translate_function_value(v)    
-
+    return translate_function_value(v)  
+    
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, globals_dict=None, closure_cell_dict=None,
                parent=None):
@@ -772,9 +772,28 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 closure_cells)
 
 
+
+_function_mappings = {
+  np.empty_like : lib_core.zeros_like, 
+  np.empty : lib_core.zeros, 
+  np.zeros_like : lib_core.zeros_like, 
+  np.zeros : lib_core.zeros, 
+  np.ones : lib_core.ones, 
+  np.add : prims.add, 
+  np.subtract : prims.subtract, 
+  np.multiply : prims.multiply, 
+  np.divide : prims.divide, 
+  np.logical_and : prims.logical_and, 
+  np.logical_not : prims.logical_not, 
+  np.logical_or : prims.logical_or,                
+}
+
 def translate_function_value(fn, _currently_processing = set([])):
+  if fn in _function_mappings:
+    fn = _function_mappings[fn]
+    
   if type(fn) in (types.BuiltinFunctionType, types.TypeType):
-    assert hasattr(lib_core, fn.__name__), "Invalid primitive: %s" % (fn,) 
+    assert hasattr(lib_core, fn.__name__), "Unsupported primitive: %s" % (fn,) 
     fn = getattr(lib_core, fn.__name__)
 
   # if the function has been wrapped with a decorator, unwrap it 

@@ -189,21 +189,22 @@ def range(n, *xs):
   else:
     return syntax.Range(n, xs[0], xs[1])
 arange = range 
-
-#@macro
-#def empty(shape, dtype = np.float64):
-#  return syntax.Alloc(elt_type = dtype, shape = shape)
+xrange = range 
 
 @jit 
 def zeros(shape, dtype = float64):
   zero = dtype(0)
   return imap(lambda _: zero, shape)
 
+empty = zeros 
+
 @jit
 def zeros_like(x, dtype = None):
   if dtype is None:
     dtype = x.dtype
   return zeros(x.shape, dtype)
+
+empty_like = zeros_like 
 
 @jit
 def ones(shape, dtype = float64):
