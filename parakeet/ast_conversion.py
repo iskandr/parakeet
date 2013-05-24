@@ -770,12 +770,40 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 globals_dict, 
                                 closure_vars,
                                 closure_cells)
+_property_mappings = {
+  'dtype' : lib_core.elt_type,                
+  'imag' : None,      
+  'itemsize' : None,
+  'real' : None, 
+  'shape' : lib_core.shape, 
+  'size' : None,  
+  'strides' : None, 
+  'T' : None,     
+}
 
-
+_method_mappings = {
+  'fill' : None, 
+  'any' : None, 
+  'all' : None, 
+  'argmax' : None, 
+  'argsort' : None, 
+  'copy' : None, 
+  'cumprod' : None, 
+  'cumsum' : None, 
+  'diagonal' : None, 
+  'min' : None, 
+  'max' : None, 
+  'ravel' : None, 
+  'round' : None, 
+  'flatten' : None, 
+}
 
 _function_mappings = {
-  np.empty_like : lib_core.zeros_like, 
-  np.empty : lib_core.zeros, 
+  range : lib_core.arange, 
+  xrange : lib_core.arange, 
+  range : lib_core.arange, 
+  np.empty_like : lib_core.empty_like, 
+  np.empty : lib_core.empty, 
   np.zeros_like : lib_core.zeros_like, 
   np.zeros : lib_core.zeros, 
   np.ones : lib_core.ones, 
@@ -787,7 +815,6 @@ _function_mappings = {
   np.logical_not : prims.logical_not, 
   np.logical_or : prims.logical_or,                
 }
-
 def translate_function_value(fn, _currently_processing = set([])):
   if fn in _function_mappings:
     fn = _function_mappings[fn]

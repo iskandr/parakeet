@@ -424,7 +424,8 @@ class Range(Expr):
 
 class AllocArray(Expr):
   """Allocate an unfilled array of the given shape and type"""
-  _members = ['shape']
+  _members = ['shape', 'elt_type']
+  
 
   def children(self):
     yield self.shape

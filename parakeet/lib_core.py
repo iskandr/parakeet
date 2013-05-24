@@ -6,11 +6,15 @@ import syntax_helpers
 
 from prims import *
 from decorators import macro, staged_macro, jit 
+
+import array_type
+
 from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
-from core_types import Bool
-from syntax_helpers import zero_i64, one_i64, one_i32
+from core_types import Bool, TypeValueT
+
+from syntax_helpers import zero_i64, one_i64, one_i32, const_int 
 
 @jit 
 def identity(x):
@@ -20,8 +24,6 @@ def identity(x):
 def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.zero_i64)
   return syntax.Map(fn = f, args = args, axis = axis)
-
-each = map
 
 @staged_macro("axis") 
 def allpairs(f, x, y, axis = 0):
@@ -179,7 +181,7 @@ def max(x, y = None):
     return maximum(x,y)
   
 @macro
-def range(n, *xs):
+def arange(n, *xs):
   count = __builtin__.len(xs)
   assert 0 <= count <= 2, "Too many args for range: %s" % ((n,) + tuple(xs))
   if count == 0:
@@ -188,23 +190,30 @@ def range(n, *xs):
     return syntax.Range(n, xs[0], syntax_helpers.one_i64)  
   else:
     return syntax.Range(n, xs[0], xs[1])
-arange = range 
-xrange = range 
+ 
+ 
+@macro
+def empty(shape, dtype):
+  return syntax.AllocArray(shape = shape, elt_type = dtype) 
 
+@jit 
+def empty_like(x, dtype = None):
+  if dtype is None:
+    return empty(x.shape, x.dtype)
+  else:
+    return empty(x.shape, dtype)
+  
 @jit 
 def zeros(shape, dtype = float64):
   zero = dtype(0)
   return imap(lambda _: zero, shape)
 
-empty = zeros 
 
 @jit
 def zeros_like(x, dtype = None):
   if dtype is None:
     dtype = x.dtype
   return zeros(x.shape, dtype)
-
-empty_like = zeros_like 
 
 @jit
 def ones(shape, dtype = float64):
@@ -216,3 +225,11 @@ def ones_like(x, dtype = None):
   if dtype is None:
     dtype = x.dtype
   return ones(x.shape)
+
+@macro 
+def elt_type(x):
+  return syntax.DelayUntilTyped(lambda xt: TypeValueT(array_type.elt_type(xt.type)))
+
+@macro
+def itemsize(x):
+  return syntax.DelayUntilTyped(lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
