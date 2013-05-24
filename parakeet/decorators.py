@@ -107,6 +107,8 @@ class staged_macro(object):
     return macro(fn, self.static_names,
                  call_from_python = self.call_from_python)
     
+
+        
 class jit:
   def __init__(self, f):
     self.f = f

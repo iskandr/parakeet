@@ -5,7 +5,7 @@ import syntax
 import syntax_helpers
 
 from prims import *
-from decorators import macro, staged_macro, jit 
+from decorators import macro, staged_macro, jit
 
 import array_type
 
@@ -228,8 +228,10 @@ def ones_like(x, dtype = None):
 
 @macro 
 def elt_type(x):
-  return syntax.DelayUntilTyped(lambda xt: TypeValueT(array_type.elt_type(xt.type)))
+  return syntax.DelayUntilTyped(values = (x,), 
+                                fn = lambda xt: TypeValueT(array_type.elt_type(xt.type)))
 
 @macro
 def itemsize(x):
-  return syntax.DelayUntilTyped(lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
+  return syntax.DelayUntilTyped(valuess = (x,), 
+                                fn = lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
