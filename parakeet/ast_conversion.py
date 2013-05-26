@@ -591,9 +591,10 @@ class AST_Translator(ast.NodeVisitor):
     elif attr in property_mappings:
       fn = property_mappings[attr]
       if isinstance(fn, macro):
-        return fn.transform(value)
+        return fn.transform( [value] )
       else:
-        return syntax.Call(fn, ActualArgs(positional = (value,)))  
+        return syntax.Call(translate_function_value(fn),
+                            ActualArgs(positional = (value,)))  
     elif attr in method_mappings:
       fn_python = method_mappings[attr]
       fn_syntax = translate_function_value(fn_python)

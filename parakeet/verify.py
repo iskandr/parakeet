@@ -67,6 +67,8 @@ class Verify(SyntaxVisitor):
 
   def visit_expr(self, expr):
     assert expr is not None
+    assert expr.type is not None, \
+      "Missing type annotation on %s" % expr 
     SyntaxVisitor.visit_expr(self, expr)
 
   def visit_ExprStmt(self, stmt):
@@ -118,7 +120,8 @@ class Verify(SyntaxVisitor):
   
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
-    assert stmt.value.type and stmt.value.type == self.fn.return_type, \
+    #print "RET TYPE", stmt.value.type, stmt.value.type == True, stmt.value.type == False
+    assert stmt.value.type is not None and stmt.value.type == self.fn.return_type, \
         "Incorrect return type in %s: ret value %s, expected %s but got %s" % \
         (self.fn.name, stmt.value, self.fn.return_type, stmt.value.type)
 

@@ -213,8 +213,10 @@ class Annotator(Transform):
   
   def transform_DelayUntilTyped(self, expr):
     new_values = self.transform_expr_tuple(expr.values)
-    return expr.fn(*new_values)
-  
+    new_syntax = expr.fn(*new_values)
+    assert new_syntax.type is not None
+    return new_syntax
+    
   def transform_Closure(self, expr):
     new_args = self.transform_expr_list(expr.args)
     t = closure_type.make_closure_type(expr.fn, get_types(new_args))

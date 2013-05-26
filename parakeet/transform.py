@@ -148,7 +148,7 @@ class Transform(Codegen):
     expr.shape = self.transform_expr(expr.shape)
     expr.strides = self.transform_expr(expr.strides)
     expr.offset = self.transform_expr(expr.offset)
-    expr.total_elts = self.transform_expr(expr.total_elts)
+    expr.size = self.transform_expr(expr.size)
     return expr
   
   def transform_AllocArray(self, expr):

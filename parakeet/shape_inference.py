@@ -179,7 +179,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
     name = expr.name
-    if v.__class__ is  Shape and name =='shape':
+    if v.__class__ is Shape and name in ('shape', 'strides'):
       return Tuple(v.dims)
     elif v.__class__ is Tuple and name.startswith('elt'):
       idx = int(name[3:])

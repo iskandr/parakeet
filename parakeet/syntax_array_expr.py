@@ -37,14 +37,14 @@ class AllocArray(Expr):
 class ArrayView(Expr):
   """Create a new view on already allocated underlying data"""
 
-  _members = ['data', 'shape', 'strides', 'offset', 'total_elts']
+  _members = ['data', 'shape', 'strides', 'offset', 'size']
 
   def children(self):
     yield self.data
     yield self.shape
     yield self.strides
     yield self.offset
-    yield self.total_elts
+    yield self.size
 
 class Ravel(Expr):
   _members = ['array']

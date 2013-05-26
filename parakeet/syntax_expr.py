@@ -124,15 +124,18 @@ class Index(Expr):
 class Tuple(Expr):
   _members = ['elts']
 
+  def node_init(self):
+    self.elts = tuple(self.elts)
+    if self.type is None and all(e.type is not None for e in self.elts):
+      import tuple_type 
+      self.type = tuple_type.make_tuple_type(tuple(e.type for e in self.elts))
+      
   def __str__(self):
     if len(self.elts) > 0:
       return ", ".join([str(e) for e in self.elts])
     else:
       return "()"
-
-  def node_init(self):
-    self.elts = tuple(self.elts)
-
+    
   def children(self):
     return self.elts
 
@@ -288,6 +291,11 @@ class PrimCall(Expr):
 class TupleProj(Expr):
   _members = ['tuple', 'index']
 
+  def node_init(self):
+    if self.type is None:
+      if self.tuple.type is not None and self.index.__class__ is Const:
+        self.type = self.tuple.type.elt_types[self.index.value]
+            
   def __str__(self):
     return "TupleProj(%s, %d)" % (self.tuple, self.index)
 

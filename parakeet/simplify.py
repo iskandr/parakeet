@@ -92,8 +92,7 @@ class Simplify(Transform):
       if c is Array:
         return expr.elts
       elif c is ArrayView:
-        return (expr.data, expr.shape, expr.strides, expr.offset,
-                expr.total_elts)
+        return (expr.data, expr.shape, expr.strides, expr.offset, expr.size)
       elif c is Struct:
         return expr.args
       elif c is AllocArray:

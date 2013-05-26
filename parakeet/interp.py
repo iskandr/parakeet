@@ -176,8 +176,6 @@ def eval_fn(fn, actuals):
           return 0
         else:
           return value.ctypes.data - value.base.ctypes.data
-      elif expr.name == 'total_elts':
-        return value.size
       else:
         return getattr(value, expr.name)
 

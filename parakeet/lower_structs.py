@@ -84,7 +84,7 @@ class LowerStructs(Transform):
 
   def transform_ArrayView(self, expr):
     array_struct = self.array_view(expr.data, expr.shape, expr.strides,
-                                   expr.offset, expr.total_elts)
+                                   expr.offset, expr.size)
     assert expr.type == array_struct.type, \
         "Mismatch between original type %s and transformed type %s" % \
         (expr.type, array_struct.type)

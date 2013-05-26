@@ -57,7 +57,7 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.shape)
     self.visit_expr(expr.strides)
     self.visit_expr(expr.offset)
-    self.visit_expr(expr.total_elts)
+    self.visit_expr(expr.size)
 
   def visit_AllocArray(self, expr):
     self.visit_expr(expr.shape)

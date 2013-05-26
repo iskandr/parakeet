@@ -78,7 +78,7 @@ class macro(object):
     else:
       return self.call_from_python(*args, **kwargs)
 
-  def transform(self, args, kwargs):
+  def transform(self, args, kwargs = {}):
     for arg in args:
       assert isinstance(arg, syntax.Expr), \
           "Macros can only take syntax nodes as arguments, got %s" % (arg,)

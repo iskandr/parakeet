@@ -8,14 +8,16 @@ from prims import *
 from decorators import macro, staged_macro, jit
 
 import array_type
-
+from array_type import ArrayT
 from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
 from core_types import Bool, TypeValueT
 from syntax import Map, AllPairs, Reduce, Scan, IndexMap, IndexReduce
-from syntax import DelayUntilTyped, Cast, Range, Attribute, AllocArray  
+from syntax import DelayUntilTyped, Cast, Range, Attribute, AllocArray
+from syntax import Tuple, TupleProj, ArrayView
 from syntax_helpers import zero_i64, one_i64, one_i32, const_int 
+from tuple_type import empty_tuple_t 
 
 @jit 
 def identity(x):
@@ -121,9 +123,15 @@ def real(x):
 def alen(arr):
   return arr.shape[0]
 
-@jit 
-def shape(arr):
-  return arr.shape
+@macro 
+def shape(x):
+  def fn(xt):
+    if isinstance(xt.type, ArrayT):
+      return Attribute(xt, 'shape', type = xt.type.shape_t)
+    else:
+      return Tuple((), type = empty_tuple_t)
+    
+  return DelayUntilTyped(values = (x,), fn = fn)
 
 @jit 
 def sum(x, axis = None):
@@ -246,7 +254,30 @@ def ones_like(x, dtype = None):
 
 @macro
 def transpose(x):
-  return syntax.Transpose(x)
+  def fn(xt):
+    if isinstance(xt.type, ArrayT) and xt.type.rank > 1:
+      shape = Attribute(xt, 'shape', type = xt.type.shape_t)
+      strides = Attribute(xt, 'strides', type = xt.type.strides_t)
+      data = Attribute(xt, 'data', type = xt.type.ptr_t)
+      size = Attribute(xt, 'size', type = Int64)
+      offset = Attribute(xt, 'offset', type = Int64)
+      ndims = xt.type.rank 
+      shape_elts = [TupleProj(shape, i, type = Int64) 
+                               for i in xrange(ndims)]
+      stride_elts = [TupleProj(strides, i, type = Int64) 
+                                 for i in xrange(ndims)]
+      new_shape = Tuple(tuple(reversed(shape_elts)))
+      new_strides = Tuple(tuple(reversed(stride_elts)))
+      return ArrayView(data, 
+                       new_shape, 
+                       new_strides, 
+                       offset, 
+                       size, 
+                       type = xt.type)
+    else:
+      return xt 
+  return DelayUntilTyped(values = (x,), fn = fn)   
+  #
 
 @macro 
 def ravel(x):
@@ -278,7 +309,7 @@ def rank(x):
 def size(x):
   def fn(xt):
     if isinstance(xt.type, array_type.ArrayT):
-      return Attribute(xt, 'total_elts')
+      return Attribute(xt, 'size', type = Int64)
     else:
       return const_int(1)
   return DelayUntilTyped(values = (x,), fn = fn)

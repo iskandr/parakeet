@@ -112,4 +112,4 @@ def make_tuple_type(elt_types):
     _tuple_types[key] = t
     return t
 
-
+empty_tuple_t = make_tuple_type(())

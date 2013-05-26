@@ -13,7 +13,7 @@ print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False

@@ -45,7 +45,7 @@ class LowerIndexing(Transform):
     shape = self.attr(arr, "shape")
     strides = self.attr(arr, "strides")
     elt_offset = self.attr(arr, "offset")
-    total_elts = self.attr(arr, "total_elts")
+    size = self.attr(arr, "size")
 
     new_strides = []
     new_shape = []
@@ -86,7 +86,7 @@ class LowerIndexing(Transform):
     new_strides = self.tuple(new_strides, "strides")
     new_shape = self.tuple(new_shape, "shape")
     return ArrayView(data_ptr, new_shape, new_strides,
-                            elt_offset, total_elts,
+                            elt_offset, size,
                             type = new_array_t)
 
   def transform_Index(self, expr):

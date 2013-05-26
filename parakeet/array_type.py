@@ -101,7 +101,7 @@ class ArrayT(StructT):
       ('shape', tuple_t),
       ('strides', tuple_t),
       ('offset', Int64),
-      ('total_elts', Int64),
+      ('size', Int64),
       # ('dtype', TypeValueT(self.elt_type))
     ]
   
@@ -218,7 +218,7 @@ class ArrayT(StructT):
 
     base_ptr = obj.data
 
-    nbytes = obj.total_elts * elt_size
+    nbytes = obj.size * elt_size
 
     dest_buf = PyBuffer_New(nbytes)
     dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
