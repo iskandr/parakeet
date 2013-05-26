@@ -918,7 +918,8 @@ def specialize_IndexReduce(fn, combine, n_indices):
   typed_fn = specialize(fn, (idx_type,))
   elt_type = typed_fn.return_type
   typed_combine = specialize(combine, (elt_type, elt_type))
-  assert typed_combine.return_type == elt_type 
+  assert typed_combine.return_type == elt_type, \
+    "Expected combiner %s to return %s but got %s" % (typed_combine, typed_combine.return_type, elt_type)
   return elt_type, typed_fn, typed_combine
 
 def specialize_Map(map_fn, array_types):
