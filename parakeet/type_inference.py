@@ -18,7 +18,7 @@ from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
 from stride_specialization import specialize
-from syntax import Fn, TypedFn, Closure, Var 
+from syntax import Fn, TypedFn, Closure, ClosureElt, Var 
 from syntax_helpers import get_type, get_types, unwrap_constant
 from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true, is_zero
 from transform import Transform
@@ -505,6 +505,9 @@ class Annotator(Transform):
     combine_fn = self.transform_expr(expr.combine)
     
     init = self.transform_expr(expr.init) if expr.init else None
+    
+    if all(isinstance(t, ScalarT) for t in arg_types):
+      return self.invoke(map_fn, new_args)
     init_type = init.type if init else None
     
     if self.is_none(axis):
@@ -935,8 +938,8 @@ def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
   if init_type is None or isinstance(init_type, NoneT):
     acc_type = elt_type
   else:
-    acc_type = elt_type.combine(init_type)
-  
+    acc_type = init_type # elt_type.combine(init_type)
+
   typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
   new_acc_type = typed_combine_fn.return_type
   if new_acc_type != acc_type:

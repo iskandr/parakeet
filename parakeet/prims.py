@@ -145,7 +145,8 @@ class Arith(Prim):
 
 class Logical(Prim):
   """Expects boolean inputs, returns a boolean"""
-  pass
+  def expected_input_types(self, arg_types):
+    return [core_types.Bool] * len(arg_types)
 
 class Bitwise(Prim):
   """Takes any two identical scalar types, returns the same"""
