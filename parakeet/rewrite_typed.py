@@ -13,12 +13,20 @@ from syntax_helpers import get_types, zero_i64, one_i64, none
 from transform import Transform
 
 class RewriteTyped(Transform):
-  def __init__(self):
+  def __init__(self, return_type = None):
     Transform.__init__(self, verify = False)
-  
-  def pre_apply(self, fn):
-    self.fn_return_type = self.fn.type_env["$return"]
+    self.forced_return_type = return_type 
     
+    
+  def pre_apply(self, fn):
+    if self.forced_return_type is None:
+      self.fn_return_type = self.fn.type_env["$return"]
+    else:
+      self.fn_return_type = self.forced_return_type
+  
+  def post_apply(self, fn):
+    fn.return_type = self.fn_return_type  
+  
   def coerce_expr(self, expr, t):
     assert t is not None
     expr = self.transform_expr(expr)
@@ -210,5 +218,5 @@ class RewriteTyped(Transform):
     stmt.merge = self.transform_merge(stmt.merge)
     return stmt
 
-def rewrite_typed(typed_fundef):
-  return RewriteTyped().apply(typed_fundef)
+def rewrite_typed(typed_fundef, return_type = None):
+  return RewriteTyped(return_type).apply(typed_fundef)

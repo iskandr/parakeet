@@ -418,7 +418,7 @@ class Annotator(Transform):
         elts = tuple(self.cast(elt, Int64) for elt in self.tuple_elts(shape))
         shape = self.tuple(elts)
     result_type, typed_fn, typed_combine = \
-      specialize_IndexReduce(map_fn_closure.type, combine_closure, n_indices)
+      specialize_IndexReduce(map_fn_closure.type, combine_closure, n_indices, init)
     if not self.is_none(init):
       init = self.cast(init, result_type)
     return syntax.IndexReduce(shape = shape, 
@@ -485,9 +485,9 @@ class Annotator(Transform):
     idx_closure = Closure(idx_fn, args = outer_closure_args, type = idx_closure_t)
     
     result_type, typed_fn, typed_combine = \
-      specialize_IndexReduce(idx_closure, combine, n_indices)
+      specialize_IndexReduce(idx_closure, combine, n_indices, init)
     if not self.is_none(init):
-      init = self.cast(init, typed_fn.return_type)
+      init = self.cast(init, typed_combine.return_type)
     return syntax.IndexReduce(shape = shape, 
                               fn = make_typed_closure(idx_closure, typed_fn),
                               combine = make_typed_closure(combine, typed_combine),
@@ -834,7 +834,7 @@ def infer_types(untyped_fn, types):
     return_type = return_type,
     type_env = tenv)
 
-def _specialize(fn, arg_types):
+def _specialize(fn, arg_types, return_type = None):
   """
   Do the actual work of type specialization, whereas the wrapper 'specialize'
   pulls out untyped functions from closures, wraps argument lists in ActualArgs
@@ -845,7 +845,7 @@ def _specialize(fn, arg_types):
     return fn
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
-  coerced_fundef = rewrite_typed(typed_fundef)
+  coerced_fundef = rewrite_typed(typed_fundef, return_type)
   import simplify
   normalized = simplify.Simplify().apply(coerced_fundef)
   return normalized
@@ -873,25 +873,39 @@ def _get_closure_type(fn):
     fundef = _get_fundef(fn)
     return closure_type.make_closure_type(fundef, [])
 
-def specialize(fn, arg_types):
+def specialize(fn, arg_types, return_type = None):
   if config.print_before_specialization:
-    print "=== Specializing", fn, "for types", arg_types 
+    if return_type:
+      print "==== Specializing", fn, "for input types", arg_types, "and return type", return_type
+    else:  
+      print "=== Specializing", fn, "for types", arg_types 
   if isinstance(fn, syntax.TypedFn):
+    assert len(fn.input_types) == len(arg_types)
+    assert all(t1 == t2 for t1,t2 in zip(fn.input_types, arg_types))
+    if return_type is not None:
+      assert fn.return_type == return_type 
     return fn
+  
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
   closure_t = _get_closure_type(fn)
-  if arg_types in closure_t.specializations:
-    return closure_t.specializations[arg_types]
+  key = arg_types, return_type
+  if key in closure_t.specializations:
+    return closure_t.specializations[key]
 
   full_arg_types = arg_types.prepend_positional(closure_t.arg_types)
   fundef = _get_fundef(closure_t.fn)
-  typed =  _specialize(fundef, full_arg_types)
-  closure_t.specializations[arg_types] = typed
+  typed =  _specialize(fundef, full_arg_types, return_type)
+  closure_t.specializations[key] = typed
 
   if config.print_specialized_function:
-    print "=== Specialized %s for input types %s ===" % \
+    if return_type:
+      print "=== Specialized %s for input types %s and return type %s ==="  % \
+          (fundef.name, full_arg_types, return_type)
+    else:
+      print "=== Specialized %s for input types %s ==="  % \
           (fundef.name, full_arg_types)
+    
     print
     print repr(typed)
     print
@@ -913,15 +927,16 @@ def specialize_IndexMap(fn, n_indices):
   result_type = array_type.increase_rank(typed_fn.return_type, n_indices)
   return result_type, typed_fn
 
-def specialize_IndexReduce(fn, combine, n_indices):
+def specialize_IndexReduce(fn, combine, n_indices, init = None):
   idx_type = make_tuple_type( (Int64,) * n_indices) if n_indices > 1 else Int64
-  typed_fn = specialize(fn, (idx_type,))
+  if init:
+    typed_fn = specialize(fn, (idx_type,), return_type = init.type)
+  else:
+    typed_fn = specialize(fn, (idx_type,))
   elt_type = typed_fn.return_type
   typed_combine = specialize(combine, (elt_type, elt_type))
-  assert typed_combine.return_type == elt_type, \
-    "Expected combiner %s to return %s but got %s" % (typed_combine, typed_combine.return_type, elt_type)
-  return elt_type, typed_fn, typed_combine
-
+  return elt_type, typed_fn, typed_combine 
+      
 def specialize_Map(map_fn, array_types):
   elt_types = array_type.lower_ranks(array_types, 1)
   typed_map_fn = specialize(map_fn, elt_types)

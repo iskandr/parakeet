@@ -36,7 +36,6 @@ def allpairs(f, x, y, axis = 0):
 def reduce(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.none)
   init = kwds.get('init', syntax_helpers.none)
-  print "Running reduce macro", init, axis 
   import ast_conversion
   ident = ast_conversion.translate_function_value(identity)
   return Reduce(fn = ident, 

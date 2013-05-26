@@ -104,8 +104,12 @@ class Verify(SyntaxVisitor):
     else:
       fn = expr.fn
       closure_elts = ()
-    self.check_fn_args(fn, closure_elts + tuple(expr.args))
-  
+    try:
+      self.check_fn_args(fn, closure_elts + tuple(expr.args))
+    except:
+      print "[verify] Errors in function call %s" %expr 
+      raise 
+    
   def visit_Map(self, expr):
     if expr.fn.__class__ is Closure: 
       closure_elts = tuple(expr.fn.args) 
@@ -186,4 +190,8 @@ def verify(fn):
     assert input_t == t, \
         "Mismatch between %s's input type %s and the arg %s's type %s" % \
         (fn.name, input_t, arg_name, t)
-  Verify(fn).visit_block(fn.body)
+  try:    
+    Verify(fn).visit_block(fn.body)
+  except:
+    print "[verify] Errors in body of function", repr(fn)
+    raise 
