@@ -7,7 +7,7 @@ import numpy as np
 
 import config
 import core_types 
-import lib_core 
+import lib 
 import names
 import nested_blocks 
 import prims
@@ -28,6 +28,8 @@ from subst import subst_expr, subst_stmt_list
 from syntax import Assign, If, ForLoop, Var, PrimCall, Map
 from syntax_helpers import none, true, false, one_i64, zero_i64
 
+from mappings import function_mappings, method_mappings, property_mappings 
+
 class ExternalValue(object):
   """
   Wrap up references global values with this class
@@ -42,7 +44,7 @@ class ExternalValue(object):
 def mk_reduce_call(fn, positional, init = None):
   init = syntax_helpers.none if init is None else init
   axis = syntax_helpers.zero_i64
-  return syntax.Reduce(fn = translate_function_value(lib_core.identity), 
+  return syntax.Reduce(fn = translate_function_value(lib.identity), 
                        combine = fn, 
                        args = positional, 
                        axis = axis, 
@@ -70,8 +72,8 @@ def mk_wrapper_function(p):
     f = prims.prim_wrapper(prims.prim_lookup_by_value[p]) 
   else:
     assert isinstance(p, types.BuiltinFunctionType)
-    assert p.__name__ in lib_core.__dict__, "Unsupported builtin: %s" % (p,)
-    f = translate_function_value(lib_core.__dict__[p.__name__]) 
+    assert p.__name__ in lib.__dict__, "Unsupported builtin: %s" % (p,)
+    f = translate_function_value(lib.__dict__[p.__name__]) 
   _function_wrapper_cache[p] = f
   return f
   
@@ -449,8 +451,8 @@ class AST_Translator(ast.NodeVisitor):
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
     elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)) and \
-         value.__name__ in lib_core.__dict__:
-      parakeet_equiv = lib_core.__dict__[value.__name__]
+         value.__name__ in lib.__dict__:
+      parakeet_equiv = lib.__dict__[value.__name__]
       if isinstance(parakeet_equiv, macro):
         return parakeet_equiv.transform(positional, keywords_dict)
     fn = value_to_syntax(value)
@@ -770,62 +772,21 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 globals_dict, 
                                 closure_vars,
                                 closure_cells)
-_property_mappings = {
-  'dtype' : lib_core.elt_type,                
-  'imag' : lib_core.imag,      
-  'itemsize' : lib_core.itemsize,
-  'real' :  lib_core.real, 
-  'shape' : lib_core.shape, 
-  'size' : lib_core.size,   
-  'strides' : lib_core.strides, 
-  'T' : lib_core.transpose,     
-}
 
-_method_mappings = {
-  'fill' : lib_core.fill, 
-  'any' : lib_core.any, 
-  'all' : lib_core.all, 
-  'argmax' : lib_core.argmax, 
-  'argsort' : lib_core.argsort, 
-  'copy' : lib_core.copy, 
-  'cumprod' : lib_core.cumprod, 
-  'cumsum' : lib_core.cumsum, 
-  # 'diagonal' : lib_core.diagonal, 
-  'min' : lib_core.min, 
-  'max' : lib_core.max, 
-  'ravel' : lib_core.ravel, 
-  'flatten' : lib_core.ravel, 
-}
-
-_function_mappings = {
-  range : lib_core.arange, 
-  xrange : lib_core.arange, 
-  range : lib_core.arange, 
-  np.empty_like : lib_core.empty_like, 
-  np.empty : lib_core.empty, 
-  np.zeros_like : lib_core.zeros_like, 
-  np.zeros : lib_core.zeros, 
-  np.ones : lib_core.ones, 
-  np.add : prims.add, 
-  np.subtract : prims.subtract, 
-  np.multiply : prims.multiply, 
-  np.divide : prims.divide, 
-  np.logical_and : prims.logical_and, 
-  np.logical_not : prims.logical_not, 
-  np.logical_or : prims.logical_or,                
-}
 def translate_function_value(fn, _currently_processing = set([])):
   if fn in _function_mappings:
     fn = _function_mappings[fn]
-    
-  if type(fn) in (types.BuiltinFunctionType, types.TypeType):
-    assert hasattr(lib_core, fn.__name__), "Unsupported primitive: %s" % (fn,) 
-    fn = getattr(lib_core, fn.__name__)
-
+  
+  if fn in prims.prim_lookup_by_value:
+    fn = prims.prim_lookup_by_value[fn]
+  
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
     fn = fn.f 
-  
+    
+  assert type(fn) not in (types.BuiltinFunctionType, types.TypeType), \
+    "Unsupported primitive: %s" % (fn,) 
+
   if already_registered_python_fn(fn):
     return lookup_python_fn(fn)
   
@@ -834,11 +795,6 @@ def translate_function_value(fn, _currently_processing = set([])):
     "Recursion detected through function value %s" % (fn,)
   _currently_processing.add(fn)
   original_fn = fn
-  
-
-    
-  if fn in prims.prim_lookup_by_value:
-    fn = prims.prim_lookup_by_value[fn]
   
   if isinstance(fn, Prim):
     fundef = prim_wrapper(fn)

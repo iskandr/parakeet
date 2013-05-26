@@ -1,11 +1,9 @@
 from parakeet import *
 from prims import * 
-
+from lib import * 
 
 modules = [
-  "adverb_api",
   "adverb_helpers",
-  "adverb_registry",
   "adverb_semantics",
   "adverb_wrapper",
   "adverbs",
@@ -41,7 +39,6 @@ modules = [
   "lower_structs",
   "lower_tiled_adverbs",
   "lowering",
-  "macro",
   "mapify_allpairs",
   "memory",
   "mutability_analysis",
@@ -54,7 +51,6 @@ modules = [
   "rewrite_typed",
   "run_function",
   "scoped_dict",
-  "scoped_env",
   "scoped_set",
   "shape_codegen",
   "shape_eval",
