@@ -58,7 +58,7 @@ def copy(x):
   else:
     return x
 
-def expect(fn, args, expected):
+def expect(fn, args, expected, valid_types = None):
   """
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
@@ -77,8 +77,15 @@ def expect(fn, args, expected):
       "Expected %s but typed fn returned %s" % (expected, typed_result)
 
   llvm_result = compiled(*linear_args)
+  if valid_types is not None:
+    if not isinstance(valid_types, (tuple, list)):
+      valid_types = [valid_types]
+    assert type(llvm_result) in valid_types, \
+      "Expected result to have type in %s but got %s" % (valid_types, type(llvm_result))
+      
   assert eq(llvm_result, expected), \
       "Expected %s but compiled fn returned %s" % (expected, llvm_result)
+  
 
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

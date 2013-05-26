@@ -1,10 +1,12 @@
 from testing_helpers import expect, run_local_tests
+from parakeet import jit 
+import numpy as np 
 
-def always1():
+def always_1():
   return 1
 
-def test_always1():
-  expect(always1, [], 1)
+def test_always_1():
+  expect(always_1, [], 1)
 
 def always_neg10():
   return -10
@@ -12,6 +14,18 @@ def always_neg10():
 def test_always_neg10():
   expect(always_neg10, [], -10)
 
+def always_true():
+  return True
+
+def test_always_true():
+  expect(always_true, [], True, valid_types = (np.bool, np.bool8, np.bool_, bool))
+
+def always_false():
+  return False 
+
+def test_always_false():
+  expect(always_false, [], False, valid_types = (np.bool, np.bool8, np.bool_, bool))
+  
 def add1(x):
   return x + 1
 

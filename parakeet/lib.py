@@ -36,13 +36,14 @@ def allpairs(f, x, y, axis = 0):
 def reduce(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.none)
   init = kwds.get('init', syntax_helpers.none)
+  print "Running reduce macro", init, axis 
   import ast_conversion
   ident = ast_conversion.translate_function_value(identity)
   return Reduce(fn = ident, 
-                       combine = f, 
-                       args = args,
-                       init = init,
-                       axis = axis)
+                combine = f, 
+                args = args,
+                init = init,
+                axis = axis)
 
 @staged_macro("axis")
 def scan(f, *args, **kwds):
@@ -109,7 +110,7 @@ def float64(x):
   return Cast(x, type = Float64)
 
 @macro 
-def bool8(x):
+def bool(x):
   return Cast(x, type = Bool)
 
 @jit
@@ -163,11 +164,11 @@ def and_(x, y):
 
 @jit 
 def any(x, axis=None):
-  return reduce(x, or_, axis = axis)
+  return reduce(or_, x, axis = axis, init = False)
 
 @jit
 def all(x, axis = None):
-  return reduce(x, and_, axis = axis)
+  return reduce(and_, x, axis = axis, init = True)
 
 
 @jit 

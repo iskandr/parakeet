@@ -32,9 +32,17 @@ method_mappings = {
 }
 
 function_mappings = {
-  int : lib.Int64, 
-  bool : lib.bool8, 
+  int : lib.int64, 
+  np.int8 : lib.int8, 
+  np.int16 : lib.int16, 
+  np.int32 : lib.int32, 
+  np.int64 : lib.int64, 
+  
   float : lib.float64, 
+  np.float32 : lib.float32, 
+  np.float64 : lib.float64, 
+  
+  bool : lib.bool, 
   
   np.rank : lib.rank, 
   len : lib.alen, 

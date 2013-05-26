@@ -13,14 +13,16 @@ import type_conv
 
 from args import ActualArgs, FormalArgs
 from array_type import ArrayT
+from closure_type import ClosureT 
 from core_types import Type, Bool, IntT, Int64,  ScalarT
 from core_types import NoneType, NoneT, Unknown, UnknownT
 from core_types import combine_type_list, StructT
+from stride_specialization import specialize
+from syntax import Fn, TypedFn, Closure, Var 
 from syntax_helpers import get_type, get_types, unwrap_constant
 from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true, is_zero
 from transform import Transform
 from tuple_type import TupleT, make_tuple_type
-from stride_specialization import specialize
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -53,13 +55,13 @@ def unpack_closure(closure):
 
   if closure.__class__ is closure_type.ClosureT:
     fn, closure_args = closure.fn, closure.arg_types
-  elif closure.__class__ is syntax.Closure:
+  elif closure.__class__ is Closure:
     fn = closure.fn 
     closure_args = closure.args 
   elif closure.type.__class__ is closure_type.ClosureT:
     fn, arg_types = closure.type.fn, closure.type.arg_types
     closure_args = \
-        [syntax.ClosureElt(closure, i, type = arg_t)
+        [ClosureElt(closure, i, type = arg_t)
          for (i, arg_t) in enumerate(arg_types)]
   else:
     fn = closure
@@ -78,7 +80,7 @@ def make_typed_closure(untyped_closure, typed_fn):
     return typed_fn
   else:
     t = closure_type.make_closure_type(typed_fn, get_types(closure_args))
-    return syntax.Closure(typed_fn, closure_args, t)
+    return Closure(typed_fn, closure_args, t)
 
 def linearize_arg_types(fn, args):
 
@@ -220,17 +222,17 @@ class Annotator(Transform):
   def transform_Closure(self, expr):
     new_args = self.transform_expr_list(expr.args)
     t = closure_type.make_closure_type(expr.fn, get_types(new_args))
-    return syntax.Closure(expr.fn, new_args, type = t)
+    return Closure(expr.fn, new_args, type = t)
 
   def transform_Arith(self, expr):
     untyped_fn = prims.prim_wrapper(expr)
     t = closure_type.make_closure_type(untyped_fn, ())
-    return syntax.Closure(untyped_fn, (), type = t)
+    return Closure(untyped_fn, (), type = t)
 
   def transform_Fn(self, expr):
     return expr 
     #t = closure_type.make_closure_type(expr, ())
-    #return syntax.Closure(expr, [], type = t)
+    #return Closure(expr, [], type = t)
 
   def transform_Call(self, expr):
     closure = self.transform_expr(expr.fn)
@@ -347,7 +349,7 @@ class Annotator(Transform):
     assert new_name in self.type_env, \
         "Unknown var %s (previously %s)" % (new_name, old_name)
     t = self.type_env[new_name]
-    return syntax.Var(new_name, type = t)
+    return Var(new_name, type = t)
 
   def transform_Tuple(self, expr):
     elts = self.transform_expr_list(expr.elts)
@@ -456,12 +458,12 @@ class Annotator(Transform):
       visible_name = "c%d" % i
       name = names.fresh(visible_name)
       args_obj.add_positional(name, visible_name)
-      inner_closure_vars.append(syntax.Var(name))
+      inner_closure_vars.append(Var(name))
     
     data_arg_name = names.fresh("x")
-    data_arg_var = syntax.Var(data_arg_name)
+    data_arg_var = Var(data_arg_name)
     idx_arg_name = names.fresh("i")
-    idx_arg_var = syntax.Var(idx_arg_name)
+    idx_arg_var = Var(idx_arg_name)
     
     args_obj.add_positional(data_arg_name, "x")
     args_obj.add_positional(idx_arg_name, "i")
@@ -475,12 +477,12 @@ class Annotator(Transform):
                        )
     
     #t = closure_type.make_closure_type(typed_fn, get_types(closure_args))
-    #return syntax.Closure(typed_fn, closure_args, t)
+    #return Closure(typed_fn, closure_args, t)
     outer_closure_args = tuple(outer_closure_args) + (x,)
   
     idx_closure_t = closure_type.make_closure_type(idx_fn, get_types(outer_closure_args))
     
-    idx_closure = syntax.Closure(idx_fn, args = outer_closure_args, type = idx_closure_t)
+    idx_closure = Closure(idx_fn, args = outer_closure_args, type = idx_closure_t)
     
     result_type, typed_fn, typed_combine = \
       specialize_IndexReduce(idx_closure, combine, n_indices)
@@ -667,12 +669,12 @@ class Annotator(Transform):
       field_t = struct_t.field_type(name)
       return syntax.Attribute(struct, name, field_t)
     else:
-      assert lhs_class is syntax.Var, "Unexpected LHS: %s" % (lhs,)
+      assert lhs_class is Var, "Unexpected LHS: %s" % (lhs,)
       new_name = self.var_map.lookup(lhs.name)
       old_type = self.type_env.get(new_name, Unknown)
       new_type = old_type.combine(rhs_type)
       self.type_env[new_name] = new_type
-      return syntax.Var(new_name, type = new_type)
+      return Var(new_name, type = new_type)
 
   def transform_Assign(self, stmt):
     rhs = self.transform_expr(stmt.rhs)
@@ -693,7 +695,7 @@ class Annotator(Transform):
       self.blocks.top().extend(self.transform_block(stmt.true))
       for (name, (left,_)) in stmt.merge.iteritems():
         typed_left = self.transform_expr(left)
-        typed_var = self.annotate_lhs(syntax.Var(name), typed_left.type) 
+        typed_var = self.annotate_lhs(Var(name), typed_left.type) 
         self.assign(typed_var, typed_left)
       return
     
@@ -701,7 +703,7 @@ class Annotator(Transform):
       self.blocks.top().extend(self.transform_block(stmt.false))
       for (name, (_,right)) in stmt.merge.iteritems():
         typed_right = self.transform_expr(right)
-        typed_var = self.annotate_lhs(syntax.Var(name), typed_right.type)
+        typed_var = self.annotate_lhs(Var(name), typed_right.type)
         self.assign(typed_var, typed_right)
       return
     true = self.transform_block(stmt.true)
@@ -777,7 +779,7 @@ def infer_types(untyped_fn, types):
     for local_name in unbound_keywords:
       t = tenv[local_name]
       python_value = typed_args.defaults[local_name]
-      var = syntax.Var(local_name, type = t)
+      var = Var(local_name, type = t)
       if isinstance(python_value, tuple):
         parakeet_elts = []
         for (elt_value, elt_type) in zip(python_value, t.elt_types):
@@ -805,11 +807,11 @@ def infer_types(untyped_fn, types):
     for (i, elt_t) in enumerate(starargs_t.elt_types):
       arg_name = "%s_elt%d" % (names.original(local_starargs_name), i)
       tenv[arg_name] = elt_t
-      arg_var = syntax.Var(name = arg_name, type = elt_t)
+      arg_var = Var(name = arg_name, type = elt_t)
       arg_names.append(arg_name)
       extra_arg_vars.append(arg_var)
     input_types = input_types + starargs_t.elt_types
-    tuple_lhs = syntax.Var(name = local_starargs_name, type = starargs_t)
+    tuple_lhs = Var(name = local_starargs_name, type = starargs_t)
     tuple_rhs = syntax.Tuple(elts = extra_arg_vars, type = starargs_t)
     stmt = syntax.Assign(tuple_lhs, tuple_rhs)
     body = [stmt] + body
@@ -854,11 +856,14 @@ def _get_fundef(fn):
     return syntax.Fn.registry[fn]
 
 def _get_closure_type(fn):
+  assert isinstance(fn, (Fn, TypedFn, ClosureT, Closure, Var)), \
+    "Expected function, got %s" % fn
+    
   if fn.__class__ is closure_type.ClosureT:
     return fn
-  elif isinstance(fn, syntax.Closure):
+  elif isinstance(fn, Closure):
     return fn.type
-  elif isinstance(fn, syntax.Var):
+  elif isinstance(fn, Var):
     assert isinstance(fn.type, closure_type.ClosureT)
     return fn.type
   else:
@@ -937,7 +942,8 @@ def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
   if new_acc_type != acc_type:
     typed_combine_fn = specialize(combine_fn, [new_acc_type, elt_type])
     new_acc_type = typed_combine_fn.return_type
-  assert new_acc_type == acc_type
+  assert new_acc_type == acc_type, \
+    "Expected accumulator types %s but encountered %s" % (acc_type, new_acc_type)
   return new_acc_type, typed_map_fn, typed_combine_fn
 
 def infer_Reduce(map_fn, combine_fn, array_types, init_type = None):
