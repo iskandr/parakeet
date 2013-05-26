@@ -10,7 +10,7 @@ property_mappings = {
   'real' :  lib.identity, # ain't no complex numbers yet 
   'shape' : lib.shape, 
   'size' : lib.size,   
-  'strides' : lib.strides, 
+  # 'strides' : lib.strides, 
   'ndim' : lib.rank, 
   'T' : lib.transpose,     
 }
@@ -20,7 +20,7 @@ method_mappings = {
   'any' : lib.any, 
   'all' : lib.all, 
   'argmax' : lib.argmax, 
-  'argsort' : lib.argsort, 
+  # 'argsort' : lib.argsort, 
   'copy' : lib.copy, 
   'cumprod' : lib.cumprod, 
   'cumsum' : lib.cumsum, 
@@ -37,7 +37,8 @@ function_mappings = {
   float : lib.float64, 
   
   np.rank : lib.rank, 
-  np.alen : lib.len, 
+  len : lib.alen, 
+  np.alen : lib.alen, 
   np.real : lib.real, 
   # np.imag : lib.imag
   np.size : lib.size, 

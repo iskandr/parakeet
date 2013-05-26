@@ -210,7 +210,11 @@ class Annotator(Transform):
     for (k,v) in kwds.iteritems():
       keyword_types[k] = get_type(v)
     return keyword_types
-
+  
+  def transform_DelayUntilTyped(self, expr):
+    new_values = self.transform_expr_tuple(expr.values)
+    return expr.fn(*new_values)
+  
   def transform_Closure(self, expr):
     new_args = self.transform_expr_list(expr.args)
     t = closure_type.make_closure_type(expr.fn, get_types(new_args))

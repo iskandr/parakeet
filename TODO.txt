@@ -1,9 +1,30 @@
+Now:
+- Indexing by boolean masks
+- Make DelayUntilTyped work in type_specialization 
+- Make attributes in ast_conversion use mappings, throw error on unknown attribute 
+- Enable LLVM's loop vectorization in the backend 
+
+Long term:
+- Garbage collection 
+- Split up outermost scope into execution plan, 
+  i.e. [local_vars1 = run_llvm(fn1, inputs), 
+        local_vars2 = parfor(fn2, inputs, local_vars1)
+        ...
+        return result_vars
+       ]
+- Factor out LLVM backend into tinyjit
+- Add C backend 
+- Extend C backend to turn ParFor expressions into CUDA kernels 
+
+On pause:
 - Adverb semantics for conv
 - Code generation for conv
-- Support for unary negation
-- Garbage collection 
-- Indexing by boolean masks
-- Make a plan for starting parallel jobs from inside compiled code
-- Only run tiling on perfectly nested code
-- Finish vectorization 
 - Why is the pipeline ordering so fragile? 
+
+Maybe never?
+- Factor out shape inference into Shapely
+- Adverb-level vectorization 
+- starting parallel jobs from inside compiled code
+
+Old:
+- Only run tiling on perfectly nested code

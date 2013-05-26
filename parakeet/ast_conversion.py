@@ -580,15 +580,27 @@ class AST_Translator(ast.NodeVisitor):
     #     if it's a function, then parse it, else raise an error. 
     #
     value = self.visit(expr.value)
-    
+    attr = expr.attr
     if isinstance(value, ExternalValue):
       value = value.value 
-      value = getattr(value, expr.attr)
+      value = getattr(value, attr)
       if is_static_value(value):
         return value_to_syntax(value)
       else:
         return ExternalValue(value) 
-    return syntax.Attribute(value, expr.attr)
+    elif attr in property_mappings:
+      fn = property_mappings[attr]
+      if isinstance(fn, macro):
+        return fn.transform(value)
+      else:
+        return syntax.Call(fn, ActualArgs(positional = (value,)))  
+    elif attr in method_mappings:
+      fn_python = method_mappings[attr]
+      fn_syntax = translate_function_value(fn_python)
+      return syntax.Closure(fn_syntax, args=(value,))
+    else:
+      assert False, "Attribute %s not supported" % attr 
+    # return syntax.Attribute(value, expr.attr)
 
   def visit_Num(self, expr):
     return syntax.Const(expr.n)
@@ -774,8 +786,8 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 closure_cells)
 
 def translate_function_value(fn, _currently_processing = set([])):
-  if fn in _function_mappings:
-    fn = _function_mappings[fn]
+  if fn in function_mappings:
+    fn = function_mappings[fn]
   
   if fn in prims.prim_lookup_by_value:
     fn = prims.prim_lookup_by_value[fn]

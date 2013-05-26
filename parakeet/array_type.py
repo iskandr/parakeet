@@ -102,7 +102,7 @@ class ArrayT(StructT):
       ('strides', tuple_t),
       ('offset', Int64),
       ('total_elts', Int64),
-      ('dtype', TypeValueT(self.elt_type))
+      # ('dtype', TypeValueT(self.elt_type))
     ]
   
   def dtype(self):

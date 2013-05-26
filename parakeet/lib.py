@@ -13,7 +13,8 @@ from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
 from core_types import Bool, TypeValueT
-
+from syntax import Map, AllPairs, Reduce, Scan, IndexMap, IndexReduce
+from syntax import DelayUntilTyped, Cast, Range, Attribute, AllocArray  
 from syntax_helpers import zero_i64, one_i64, one_i32, const_int 
 
 @jit 
@@ -23,11 +24,11 @@ def identity(x):
 @staged_macro("axis")
 def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.zero_i64)
-  return syntax.Map(fn = f, args = args, axis = axis)
+  return Map(fn = f, args = args, axis = axis)
 
 @staged_macro("axis") 
 def allpairs(f, x, y, axis = 0):
-  return syntax.AllPairs(fn = f, args = (x,y), axis = axis)
+  return AllPairs(fn = f, args = (x,y), axis = axis)
 
 @staged_macro("axis")
 def reduce(f, *args, **kwds):
@@ -35,7 +36,7 @@ def reduce(f, *args, **kwds):
   init = kwds.get('init', syntax_helpers.none)
   import ast_conversion
   ident = ast_conversion.translate_function_value(identity)
-  return syntax.Reduce(fn = ident, 
+  return Reduce(fn = ident, 
                        combine = f, 
                        args = args,
                        init = init,
@@ -47,7 +48,7 @@ def scan(f, *args, **kwds):
   init = kwds.get('init', syntax_helpers.none)
   import ast_conversion
   ident = ast_conversion.translate_function_value(identity)
-  return syntax.Scan(fn = ident,  
+  return Scan(fn = ident,  
                      combine = f,
                      emit = ident, 
                      args = args,
@@ -56,62 +57,68 @@ def scan(f, *args, **kwds):
 
 @macro
 def imap(fn, shape):
-  return syntax.IndexMap(shape = shape, fn = fn)
+  return IndexMap(shape = shape, fn = fn)
 
 @macro
 def ireduce(fn, shape, init = None):
-  return syntax.IndexReduce(fn = fn, shape = shape, init = init)
+  return IndexReduce(fn = fn, shape = shape, init = init)
 
 @macro 
 def int8(x):
-  return syntax.Cast(x, type = Int8) 
+  return Cast(x, type = Int8) 
 
 @macro 
 def int16(x):
-  return syntax.Cast(x, type = Int16) 
+  return Cast(x, type = Int16) 
 
 @macro 
 def int32(x):
-  return syntax.Cast(x, type = Int32) 
+  return Cast(x, type = Int32) 
 
 @macro 
 def int64(x):
-  return syntax.Cast(x, type = Int64) 
+  return Cast(x, type = Int64) 
 
 
 @macro 
 def uint8(x):
-  return syntax.Cast(x, type = UInt8) 
+  return Cast(x, type = UInt8) 
 
 @macro 
 def uint16(x):
-  return syntax.Cast(x, type = UInt16) 
+  return Cast(x, type = UInt16) 
 
 @macro 
 def uint32(x):
-  return syntax.Cast(x, type = UInt32) 
+  return Cast(x, type = UInt32) 
 
 @macro 
 def uint64(x):
-  return syntax.Cast(x, type = UInt64)
+  return Cast(x, type = UInt64)
 
 uint = uint64 
 
 @macro 
 def float32(x):
-  return syntax.Cast(x, type = Float32)
+  return Cast(x, type = Float32)
 
 @macro 
 def float64(x):
-  return syntax.Cast(x, type = Float64)
+  return Cast(x, type = Float64)
 
 @macro 
 def bool8(x):
-  return syntax.Cast(x, type = Bool)
+  return Cast(x, type = Bool)
 
+@jit
+def real(x):
+  """
+  For now we don't have complex types, so real is just the identity function
+  """
+  return x 
 
 @jit 
-def len(arr):
+def alen(arr):
   return arr.shape[0]
 
 @jit 
@@ -196,16 +203,16 @@ def arange(n, *xs):
   count = __builtin__.len(xs)
   assert 0 <= count <= 2, "Too many args for range: %s" % ((n,) + tuple(xs))
   if count == 0:
-    return syntax.Range(syntax_helpers.zero_i64, n, syntax_helpers.one_i64)
+    return Range(syntax_helpers.zero_i64, n, syntax_helpers.one_i64)
   elif count == 1:
-    return syntax.Range(n, xs[0], syntax_helpers.one_i64)  
+    return Range(n, xs[0], syntax_helpers.one_i64)  
   else:
-    return syntax.Range(n, xs[0], xs[1])
+    return Range(n, xs[0], xs[1])
  
  
 @macro
 def empty(shape, dtype):
-  return syntax.AllocArray(shape = shape, elt_type = dtype) 
+  return AllocArray(shape = shape, elt_type = dtype) 
 
 @jit 
 def empty_like(x, dtype = None):
@@ -237,23 +244,83 @@ def ones_like(x, dtype = None):
     dtype = x.dtype
   return ones(x.shape)
 
+@macro
+def transpose(x):
+  return syntax.Transpose(x)
+
+@macro 
+def ravel(x):
+  return syntax.Ravel(x)
+
+@macro 
+def reshape(x):
+  return syntax.Reshape(x)
+
 @macro 
 def elt_type(x):
-  return syntax.DelayUntilTyped(
+  return DelayUntilTyped(
     values = (x,), 
     fn = lambda xt: TypeValueT(array_type.elt_type(xt.type)))
 
 @macro
 def itemsize(x):
-  return syntax.DelayUntilTyped(
+  return DelayUntilTyped(
     values = (x,), 
     fn = lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
 
 @macro 
 def rank(x):
-  return syntax.DelayUntilTyped(
+  return DelayUntilTyped(
     values = (x,), 
     fn = lambda xt: const_int(xt.type.rank))
+
+@macro 
+def size(x):
+  def fn(xt):
+    if isinstance(xt.type, array_type.ArrayT):
+      return Attribute(xt, 'total_elts')
+    else:
+      return const_int(1)
+  return DelayUntilTyped(values = (x,), fn = fn)
+
+@jit 
+def fill(x, v):
+  for i in range(len(x)):
+    x[i] = v 
+    
+@jit
+def argmax(x):
+  """
+  Currently assumes axis=None
+  TODO: Support axis arguments
+  """
+  def helper(curr_idx, acc):
+    max_val = acc[1]
+    v = x[curr_idx]
+    if v > max_val:
+      return (curr_idx, v)
+    else:
+      return acc
+  return ireduce(helper, x.shape, init = (0,x[0]))
+
+@jit
+def argmin(x):
+  """
+  Currently assumes axis=None
+  TODO: Support axis arguments
+  """
+  def helper(curr_idx, acc):
+    min_val = acc[1]
+    v = x[curr_idx]
+    if v < min_val:
+      return (curr_idx, v)
+    else:
+      return acc
+  return ireduce(helper, x.shape, init = (0,x[0]))
+
+@jit
+def copy(x):
+  return [xi for xi in x]
 
 
 @jit
