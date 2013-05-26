@@ -63,6 +63,7 @@ bool_binops = {
   prims.add : 'or_',
   prims.multiply : 'and_', 
   prims.subtract : 'xor',
+  prims.divide : 'and_'
   #prims.logical_not : 'not_'
 }
 

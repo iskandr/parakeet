@@ -50,7 +50,8 @@ def prim_wrapper(p):
 
 class Prim(object):
   def __init__(self, fn, python_op_name = None, symbol = None,
-               name = None, nin = None, nout = None):
+               name = None, nin = None, nout = None, 
+               extra_signatures = []):
     self.fn = fn
     prim_lookup_by_value[fn] = self
     self.symbol = symbol
@@ -80,8 +81,26 @@ class Prim(object):
       self.nout = 1
 
     self._create_type_table()
+    for sig in extra_signatures:
+      self._add_signature(sig)
+      
     self.wrapper = prim_wrapper(self)
 
+  def _add_signature(self, signature):
+    # numpy type signatures look like 'ff->f' where each character
+    # represents a single type
+
+    arg_codes, result_code = signature.split('->')
+    try:
+      parakeet_types = [core_types.from_char_code(c) for c in arg_codes]
+      input_types = tuple(parakeet_types)
+      result_type = core_types.from_char_code(result_code)
+      self.type_table[input_types] = result_type
+    except:
+      # print "Signature %s failed  for %s" % (signature , self.fn)
+      pass
+  
+  
   def _create_type_table(self):
     # for now only support ufuncs which describe their own type behavior
     if hasattr(self.fn, 'types'):
@@ -89,17 +108,7 @@ class Prim(object):
 
       self.type_table = {}
       for signature in self.fn.types:
-        # numpy type signatures look like 'ff->f' where each character
-        # represents a single type
-
-        arg_codes, result_code = signature.split('->')
-        try:
-          input_types = tuple([core_types.from_char_code(c) for c in arg_codes])
-
-          result_type = core_types.from_char_code(result_code)
-          self.type_table[input_types] = result_type
-        except:
-          pass
+        self._add_signature(signature)
 
   def __eq__(self, other):
     return self.fn == other.fn
@@ -188,7 +197,7 @@ bitwise_xor = Bitwise(np.bitwise_xor, 'BitXor', '^')
 add = Arith(np.add, 'Add', '+')
 subtract = Arith(np.subtract, 'Sub', '-')
 multiply = Arith(np.multiply, 'Mult', '*')
-divide = Arith(np.divide, 'Div', '/')
+divide = Arith(np.divide, 'Div', '/', extra_signatures = ['??->?'])
 mod = Arith(np.mod, 'Mod', '%')
 power = Arith(np.power, 'Pow', '**')
 negative = Arith(np.negative, 'USub', '-', None, 1, 1)

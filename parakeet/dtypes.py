@@ -3,7 +3,7 @@ import numpy as np
 
 # partial mapping, since ctypes doesn't support
 # complex numbers
-bool8 = np.dtype('bool')
+bool8 = np.dtype('bool8')
 int8 = np.dtype('int8')
 uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
