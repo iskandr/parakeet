@@ -139,6 +139,23 @@ def cumprod(x, axis = None):
   return scan(multiply, x, axis = axis)
 
 @jit 
+def or_(x, y):
+  return x or y
+
+@jit 
+def and_(x, y):
+  return x and y
+
+@jit 
+def any(x, axis=None):
+  return reduce(x, or_, axis = axis)
+
+@jit
+def all(x, axis = None):
+  return reduce(x, and_, axis = axis)
+
+
+@jit 
 def diff(x):
   """
   TODO:
@@ -222,14 +239,21 @@ def ones_like(x, dtype = None):
 
 @macro 
 def elt_type(x):
-  return syntax.DelayUntilTyped(values = (x,), 
-                                fn = lambda xt: TypeValueT(array_type.elt_type(xt.type)))
+  return syntax.DelayUntilTyped(
+    values = (x,), 
+    fn = lambda xt: TypeValueT(array_type.elt_type(xt.type)))
 
 @macro
 def itemsize(x):
-  return syntax.DelayUntilTyped(valuess = (x,), 
-                                fn = lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
+  return syntax.DelayUntilTyped(
+    values = (x,), 
+    fn = lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
 
+@macro 
+def rank(x):
+  return syntax.DelayUntilTyped(
+    values = (x,), 
+    fn = lambda xt: const_int(xt.type.rank))
 
 
 @jit

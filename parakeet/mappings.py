@@ -1,15 +1,17 @@
 import numpy as np 
 import lib 
-import prims 
+import prims
+import math  
 
 property_mappings = {
   'dtype' : lib.elt_type,                
-  'imag' : lib.imag,      
+  # 'imag' : lib.imag,      
   'itemsize' : lib.itemsize,
-  'real' :  lib.real, 
+  'real' :  lib.identity, # ain't no complex numbers yet 
   'shape' : lib.shape, 
   'size' : lib.size,   
   'strides' : lib.strides, 
+  'ndim' : lib.rank, 
   'T' : lib.transpose,     
 }
 
@@ -33,6 +35,12 @@ function_mappings = {
   int : lib.Int64, 
   bool : lib.bool8, 
   float : lib.float64, 
+  
+  np.rank : lib.rank, 
+  np.alen : lib.len, 
+  np.real : lib.real, 
+  # np.imag : lib.imag
+  np.size : lib.size, 
   
   min : lib._prim_min,
   max : lib._prim_max, 
@@ -64,5 +72,20 @@ function_mappings = {
   
   np.logical_and : prims.logical_and, 
   np.logical_not : prims.logical_not, 
-  np.logical_or : prims.logical_or,                
+  np.logical_or : prims.logical_or,  
+  
+  np.cos : prims.cos, 
+  math.cos : prims.cos, 
+  np.sin : prims.sin, 
+  math.sin : prims.sin, 
+  np.tan : prims.tan, 
+  math.tan : prims.tan, 
+  
+  math.cosh : prims.cosh, 
+  np.cosh : prims.cosh, 
+  np.sinh : prims.sinh,           
+  math.sinh : prims.sinh, 
+  np.tanh : prims.tanh, 
+  math.tanh : prims.tanh, 
+  
 }
