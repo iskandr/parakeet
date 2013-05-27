@@ -64,10 +64,9 @@ def test_increase_rank_3d():
 def incr(xi):
   return xi + 1
 
-from parakeet import each
 
 def simple_map(x):
-  return each(incr, x)
+  return parakeet.map(incr, x)
 
 def test_simple_map_1d():
   expect_shape(simple_map, [vec], Shape([Var(0)]))
@@ -76,7 +75,7 @@ def test_simple_map_2d():
   expect_shape(simple_map, [mat], Shape([Var(0), Var(1)]))
 
 def map_increase_rank(x):
-  return each(increase_rank, x)
+  return parakeet.map(increase_rank, x)
 
 def test_map_increase_rank_1d():
   expect_shape(map_increase_rank, [vec], Shape([Var(0), 2]))

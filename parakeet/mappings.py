@@ -32,6 +32,10 @@ method_mappings = {
 }
 
 function_mappings = {
+                     
+  map : lib.map, 
+  reduce : lib.reduce, 
+  
   int : lib.int64, 
   np.int8 : lib.int8, 
   np.int16 : lib.int16, 
@@ -43,6 +47,9 @@ function_mappings = {
   np.float64 : lib.float64, 
   
   bool : lib.bool, 
+  np.bool : lib.bool, 
+  np.bool8 : lib.bool, 
+  np.bool_ : lib.bool, 
   
   np.rank : lib.rank, 
   len : lib.alen, 
@@ -62,6 +69,13 @@ function_mappings = {
   np.all : lib.all, 
   any : lib.any, 
   np.any : lib.any, 
+  
+  sum : lib.sum, 
+  np.sum : lib.sum, 
+  np.prod : lib.prod, 
+  
+  abs : prims.abs, 
+  np.abs : prims.abs, 
   
   range : lib.arange, 
   xrange : lib.arange, 

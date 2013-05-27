@@ -28,6 +28,8 @@ def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.zero_i64)
   return Map(fn = f, args = args, axis = axis)
 
+each = map
+
 @staged_macro("axis") 
 def allpairs(f, x, y, axis = 0):
   return AllPairs(fn = f, args = (x,y), axis = axis)
