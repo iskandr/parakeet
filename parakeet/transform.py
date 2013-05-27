@@ -12,7 +12,7 @@ from syntax import Var, Tuple, Index, Attribute, Const
 from syntax import PrimCall, Struct, Alloc, Cast
 from syntax import TupleProj, Slice, ArrayView
 from syntax import Call, TypedFn, Fn, AllocArray
-from syntax import Map, Reduce, Scan 
+from syntax import Map, Reduce, Scan, Len 
 
 transform_timings = {}
 transform_counts = {}
@@ -162,7 +162,10 @@ class Transform(Codegen):
   def transform_Reshape(self, expr):
     expr.array = self.transform_expr(expr.array)
     expr.shape = self.transform_expr(expr.shape)
-    return expr 
+    return expr
+  
+  def transform_Len(self, expr):
+    expr.value = self.transform_expr(expr.value) 
 
   def transform_IndexMap(self, expr):
     expr.fn = self.transform_expr(expr.fn)
@@ -254,6 +257,8 @@ class Transform(Codegen):
       result = self.transform_Map(expr)
     elif expr_class is Reduce:
       result = self.transform_Reduce(expr)
+    elif expr_class is Len:
+      result = self.transform_Len(expr)
     else:
       method = self.find_method(expr, "transform_")
       if method:

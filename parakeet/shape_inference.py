@@ -135,7 +135,6 @@ class ShapeInference(SyntaxVisitor):
   def visit_Reshape(self, expr):
     return self.shape_from_tuple(expr.shape)
   
-  
   def visit_Ravel(self, expr):
     shape = self.visit_expr(expr.array)
     if isinstance(shape, Shape):
@@ -145,6 +144,7 @@ class ShapeInference(SyntaxVisitor):
       return Shape((nelts,))
     else:
       return any_value 
+  
   def visit_Range(self, expr):
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)

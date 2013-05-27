@@ -43,7 +43,11 @@ def test_copy():
   def call_copy(x):
     return x.copy()
   run(call_copy, 'copy')
-
+  x = np.array([1,2,3])
+  y = parakeet.jit(call_copy)(x)
+  x[0] = 10
+  assert y[0] == 1
+  
 def test_ravel():
   def call_ravel(x):
     return x.ravel()

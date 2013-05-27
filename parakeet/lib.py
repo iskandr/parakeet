@@ -17,7 +17,7 @@ from syntax import Map, AllPairs, Reduce, Scan, IndexMap, IndexReduce
 from syntax import DelayUntilTyped, Cast, Range, Attribute, AllocArray
 from syntax import Tuple, TupleProj, ArrayView
 from syntax_helpers import zero_i64, one_i64, one_i32, const_int 
-from tuple_type import empty_tuple_t 
+from tuple_type import empty_tuple_t, TupleT 
 
 @jit 
 def identity(x):
@@ -119,19 +119,25 @@ def real(x):
   """
   return x 
 
-@jit 
-def alen(arr):
-  return arr.shape[0]
+@macro 
+def alen(x):
+  def typed_alen(xt):
+    if isinstance(xt.type, ArrayT):
+      return Index(Attribute(xt, 'shape', type = xt.shape.shape_t), const_int(0), type = Int64)
+    else:
+      assert isinstance(xt.type, TupleT), "Can't get 'len' of object of type %s" % xt.type 
+      return const_int(len(xt.type.elt_types))
+  return DelayUntilTyped(values=(x,), fn = typed_alen)
 
 @macro 
 def shape(x):
-  def fn(xt):
+  def typed_shape(xt):
     if isinstance(xt.type, ArrayT):
       return Attribute(xt, 'shape', type = xt.type.shape_t)
     else:
       return Tuple((), type = empty_tuple_t)
     
-  return DelayUntilTyped(values = (x,), fn = fn)
+  return DelayUntilTyped(values = (x,), fn = typed_shape)
 
 @jit 
 def sum(x, axis = None):
@@ -254,7 +260,7 @@ def ones_like(x, dtype = None):
 
 @macro
 def transpose(x):
-  def fn(xt):
+  def typed_transpose(xt):
     if isinstance(xt.type, ArrayT) and xt.type.rank > 1:
       shape = Attribute(xt, 'shape', type = xt.type.shape_t)
       strides = Attribute(xt, 'strides', type = xt.type.strides_t)
@@ -276,7 +282,7 @@ def transpose(x):
                        type = xt.type)
     else:
       return xt 
-  return DelayUntilTyped(values = (x,), fn = fn)   
+  return DelayUntilTyped(values = (x,), fn = typed_transpose)   
 
 @macro 
 def ravel(x):
@@ -294,24 +300,26 @@ def elt_type(x):
 
 @macro
 def itemsize(x):
+  def typed_itemsize(xt):
+    return const_int(array_type.elt_type(xt.type).nbytes)
   return DelayUntilTyped(
     values = (x,), 
-    fn = lambda xt: const_int(array_type.elt_type(xt.type).nbytes))
+    fn = typed_itemsize)
 
 @macro 
 def rank(x):
-  return DelayUntilTyped(
-    values = (x,), 
-    fn = lambda xt: const_int(xt.type.rank))
+  def typed_rank(xt):
+    return const_int(xt.type.rank) 
+  return DelayUntilTyped(values = (x,), fn = typed_rank)
 
 @macro 
 def size(x):
-  def fn(xt):
+  def typed_size(xt):
     if isinstance(xt.type, array_type.ArrayT):
       return Attribute(xt, 'size', type = Int64)
     else:
       return const_int(1)
-  return DelayUntilTyped(values = (x,), fn = fn)
+  return DelayUntilTyped(values = (x,), fn = typed_size)
 
 @jit 
 def fill(x, v):

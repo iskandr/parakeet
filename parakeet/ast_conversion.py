@@ -463,6 +463,15 @@ class AST_Translator(ast.NodeVisitor):
     res = ast.NodeVisitor.visit(self, node)
     return res 
     
+  def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
+    if isinstance(value, macro):
+      return value.transform(positional, keywords_dict)
+    elif is_user_function(value):
+      return syntax.Call(translate_function_value(value), 
+                           ActualArgs(positional, keywords_dict, starargs_expr))
+    else:
+      return self.translate_builtin_call(value, positional, keywords_dict)
+    
   def visit_Call(self, expr):
     """
     TODO: 
@@ -501,30 +510,22 @@ class AST_Translator(ast.NodeVisitor):
         value = getattr(value, name)
       return value
     
-    def translate_value_call(value):
-      if isinstance(value, macro):
-        return value.transform(positional, keywords_dict)
-      elif is_user_function(value):
-        return syntax.Call(translate_function_value(value), 
-                           ActualArgs(positional, keywords_dict, starargs_expr))
-      else:
-        return self.translate_builtin_call(value, positional, keywords_dict)
+  
           
     if is_attr_chain(fn):
       names = extract_attr_chain(fn)
       if self.is_global(names):
-        return translate_value_call(lookup_attr_chain(names))
+        return self.translate_value_call(lookup_attr_chain(names), 
+                                         positional, keywords_dict, starargs_expr)
     fn_node = self.visit(fn)    
     if isinstance(fn_node, syntax.Expr):
       actuals = ActualArgs(positional, keywords_dict, starargs_expr)
       return syntax.Call(fn_node, actuals)
     else:
       assert isinstance(fn_node, ExternalValue)
-      return translate_value_call(fn_node.value)
-           
+      return self.translate_value_call(fn_node.value, 
+                                       positional, keywords_dict, starargs_expr)
 
-    
-    
   def visit_List(self, expr):
     return syntax.Array(self.visit_list(expr.elts))
     
@@ -684,12 +685,11 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(seq, syntax.Range):
       return ForLoop(var, seq.start, seq.stop, seq.step, body, merge)
     else:
-      
       seq_name = self.fresh_name("seq")
       seq_var = Var(seq_name)
       self.current_block().append(Assign(seq_var, seq))
-      
-      n = syntax.Len(seq_var)
+      len_fn = translate_function_value(len)
+      n = syntax.Call(len_fn, ActualArgs([seq_var]))
       start = zero_i64
       step = one_i64
       loop_counter_name = self.fresh_name('loop_counter')
