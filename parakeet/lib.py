@@ -277,30 +277,11 @@ def transpose(x):
     else:
       return xt 
   return DelayUntilTyped(values = (x,), fn = fn)   
-  #
 
 @macro 
 def ravel(x):
-  def fn(xt):
-    if isinstance(xt.type, ArrayT) and xt.type.rank > 1:
-      assert False, "Ravel not implemented"
-      """
-      strides = Attribute(xt, 'strides', type = xt.type.strides_t)
-      data = Attribute(xt, 'data', type = xt.type.ptr_t)
-      size = Attribute(xt, 'size', type = Int64)
-      offset = Attribute(xt, 'offset', type = Int64)
-      ndims = xt.type.rank 
-      shape_elts = [TupleProj(shape, i, type = Int64) 
-                               for i in xrange(ndims)]
-      stride_elts = [TupleProj(strides, i, type = Int64) 
-                                 for i in xrange(ndims)]
-      new_shape = Tuple( (size,) )
-      strides = 
-      """
-    else:
-      return xt 
-    
-  return syntax.DelayUntilTyped(values=(x,), fn=fn)
+  return syntax.Ravel(x)
+  
 @macro 
 def reshape(x):
   return syntax.Reshape(x)

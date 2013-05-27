@@ -118,16 +118,33 @@ class ShapeInference(SyntaxVisitor):
   def visit_Fn(self, fn):
     return Closure(fn, [])
 
+
   def visit_TypedFn(self, fn):
     return Closure(fn, [])
-  
-  def visit_ArrayView(self, expr):
-    shape_tuple = self.visit_expr(expr.shape)
+
+  def shape_from_tuple(self, expr):  
+    shape_tuple = self.visit_expr(expr)
     if shape_tuple.__class__ is Tuple:
       return Shape(tuple(shape_tuple.elts))
     else:
-      return Shape( (any_scalar,) * expr.shape.type.rank)
-    
+      return Shape( (any_scalar,) * expr.type.rank)
+
+  def visit_ArrayView(self, expr):
+    return self.shape_from_tuple(expr.shape)
+  
+  def visit_Reshape(self, expr):
+    return self.shape_from_tuple(expr.shape)
+  
+  
+  def visit_Ravel(self, expr):
+    shape = self.visit_expr(expr.array)
+    if isinstance(shape, Shape):
+      nelts = const(1)
+      for dim in shape.dims:
+        nelts = shape_semantics.mul(nelts, dim)
+      return Shape((nelts,))
+    else:
+      return any_value 
   def visit_Range(self, expr):
     start = self.visit_expr(expr.start)
     stop = self.visit_expr(expr.stop)

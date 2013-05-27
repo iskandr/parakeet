@@ -1,6 +1,6 @@
 from adverb_semantics import AdverbSemantics
 from shape import  Const, Shape, Tuple, Closure, ConstSlice, AnyScalar
-from shape import Slice, Scalar, Add, Sub, Div
+from shape import Slice, Scalar, Add, Sub, Div, Mult
 from shape import const, any_scalar
 from shape import is_zero, is_one, make_shape
 
@@ -49,6 +49,16 @@ class ShapeSemantics(AdverbSemantics):
     else:
       return Sub(x, y)
 
+  def mul(self, x, y):
+    if is_zero(x) or is_zero(y):
+      return const(0)
+    elif is_one(x):
+      return y
+    elif is_one(y):
+      return x
+    else:
+      return Mult(x,y)
+    
   def div(self, x, y):
     assert not is_zero(y)
     if is_one(y):

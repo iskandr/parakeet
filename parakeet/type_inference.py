@@ -366,6 +366,23 @@ class Annotator(Transform):
     t = typed_array_value.type
     return syntax.ConstArrayLike(typed_array_value, expr.value, type = t)
 
+  def transform_Reshape(self, expr):
+    array = self.transform_expr(expr.array)
+    shape = self.transform_expr(expr.shape)
+    rank = len(shape.type.elt_types)
+    assert isinstance(array.type, array_type.ArrayT)
+    t = array_type.make_array_type(array.elt_type, rank)
+    return syntax.Reshape(array, shape, type = t)
+  
+  def transform_Ravel(self, expr):
+    array = self.transform_expr(expr.array)
+    if not isinstance(array.type, array_type.ArrayT):
+      print "Warning: Can't ravel/flatten an object of type %s" % array.type 
+      return array 
+    t = array_type.make_array_type(array.type.elt_type, 1)
+    return syntax.Ravel(array, type = t)
+  
+  
   def transform_Cast(self, expr):
     v = self.transform_expr(expr.value)
     return syntax.Cast(v, type = expr.type)
