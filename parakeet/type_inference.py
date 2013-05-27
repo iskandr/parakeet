@@ -929,10 +929,10 @@ def specialize_IndexMap(fn, n_indices):
 
 def specialize_IndexReduce(fn, combine, n_indices, init = None):
   idx_type = make_tuple_type( (Int64,) * n_indices) if n_indices > 1 else Int64
-  if init:
-    typed_fn = specialize(fn, (idx_type,), return_type = init.type)
-  else:
+  if init is None or isinstance(init.type, NoneT):
     typed_fn = specialize(fn, (idx_type,))
+  else:
+    typed_fn = specialize(fn, (idx_type,), return_type = init.type)
   elt_type = typed_fn.return_type
   typed_combine = specialize(combine, (elt_type, elt_type))
   return elt_type, typed_fn, typed_combine 

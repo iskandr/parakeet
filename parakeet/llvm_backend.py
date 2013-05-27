@@ -175,7 +175,7 @@ class Compiler(object):
       cmp_op = llvm_prims.signed_int_comparisons[prim]
       return builder.icmp(cmp_op, llvm_x, llvm_y, result_name)
     else:
-      assert isinstance(t, UnsignedT), "Unexpected type: %s" % t
+      assert isinstance(t, (BoolT, UnsignedT)), "Unexpected type for comparison %s: %s" % (prim, t)
       cmp_op = llvm_prims.unsigned_int_comparisons[prim]
       return builder.icmp(cmp_op, llvm_x, llvm_y, result_name)
 

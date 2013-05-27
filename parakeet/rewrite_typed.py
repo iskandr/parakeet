@@ -19,10 +19,12 @@ class RewriteTyped(Transform):
     
     
   def pre_apply(self, fn):
+    
     if self.forced_return_type is None:
       self.fn_return_type = self.fn.type_env["$return"]
     else:
       self.fn_return_type = self.forced_return_type
+      
   
   def post_apply(self, fn):
     fn.return_type = self.fn_return_type  

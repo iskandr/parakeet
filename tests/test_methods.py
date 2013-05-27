@@ -15,7 +15,7 @@ def run(fn, method_name):
     method = getattr(v, method_name)
     expected = method()
     result = fn(v)
-    assert expected == result, "Expected %s but got %s" % (expected, result)
+    assert np.allclose(expected, result), "Expected %s but got %s" % (expected, result)
 
 def test_min():
   def call_min(x):
