@@ -17,6 +17,7 @@ class macro(object):
 
   _macro_wrapper_cache = {}
   def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
+    print "CREATING WRAPPER FOR", self.f
     args = FormalArgs()
     pos_vars = []
     keyword_vars = {}
@@ -56,6 +57,7 @@ class macro(object):
     return self._create_wrapper(n_args,[],{})
     
   def __call__(self, *args, **kwargs):
+    print "CALLING ", self.f
     import run_function
     if self.call_from_python is None:
       n_pos = len(args)
@@ -79,6 +81,7 @@ class macro(object):
       return self.call_from_python(*args, **kwargs)
 
   def transform(self, args, kwargs = {}):
+    print "TRANSFORMING", self.f 
     for arg in args:
       assert isinstance(arg, syntax.Expr), \
           "Macros can only take syntax nodes as arguments, got %s" % (arg,)

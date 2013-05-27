@@ -186,7 +186,10 @@ class Annotator(Transform):
     
   
   def transform_expr(self, expr):
-    result = Transform.transform_expr(self, expr)
+    if not isinstance(expr, syntax.Expr):
+      expr = ast_conversion.value_to_syntax(expr)
+    
+    result = Transform.transform_expr(self, expr)  
     assert result.type is not None,  \
       "Unsupported expression encountered during type inference: %s" % (expr,)
     return result 
@@ -218,8 +221,8 @@ class Annotator(Transform):
     return keyword_types
   
   def transform_DelayUntilTyped(self, expr):
-    new_value = self.transform_expr(expr.value)
-    new_syntax = expr.fn(new_value)
+    new_values = self.transform_expr_tuple(expr.values)
+    new_syntax = expr.fn(*new_values)
     assert new_syntax.type is not None
     return new_syntax
   
@@ -337,7 +340,19 @@ class Annotator(Transform):
     return syntax.Array(new_elts, type = array_t)
 
   def transform_AllocArray(self, expr):
-    pass 
+    elt_type = expr.elt_type
+    assert isinstance(elt_type, core_types.ScalarT), \
+      "Invalid array element type  %s" % (elt_type)
+      
+    shape = self.transform_expr(expr.shape)
+    if isinstance(shape, core_types.ScalarT):
+      shape = self.cast(shape, Int64)
+      shape = self.tuple((shape,), "array_shape")
+    assert isinstance(shape, TupleT), \
+      "Invalid shape %s" % (shape,)
+    rank = len(shape.elt_types)
+    t = array_type.make_array_type(elt_type, rank)
+    return syntax.AllocArray(shape, elt_type, type = t)
   
   def transform_Range(self, expr):
     start = self.transform_expr(expr.start) if expr.start else None

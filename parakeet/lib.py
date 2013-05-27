@@ -226,8 +226,33 @@ def arange(n, *xs):
  
  
 @macro
-def empty(shape, dtype):
-  return AllocArray(shape = shape, elt_type = dtype) 
+def empty(shape, dtype = float64):
+  print dtype
+  def typed_empty(shape, dtype):
+    # HACK! 
+    # In addition to TypeValue, allow casting functions 
+    # to be treated as dtypes 
+    if isinstance(dtype, syntax.Fn):
+      assert len(dtype.body) == 1
+      stmt = dtype.body[0]
+      assert stmt.__class__ is syntax.Return 
+      expr = stmt.value 
+      assert expr.__class__ is syntax.Cast
+      elt_t = expr.type 
+    elif isinstance(dtype, syntax.TypedFn):
+      elt_t = dtype.return_type
+    else:
+      assert isinstance(dtype.type, core_types.TypeValueT), \
+         "Invalid dtype %s " % (dtype,)
+      elt_t = dtype.type.type 
+    assert isinstance(elt_t, core_types.ScalarT), \
+       "Array element type %s must be scalar" % (elt_t,)  
+    if isinstance(shape, core_types.ScalarT):
+      shape = Tuple((shape,))
+    rank = len(shape.type.elt_types)
+    arr_t = array_type.make_array_type(elt_t, rank)
+    return AllocArray(shape = shape, elt_type = elt_t, type = arr_t)
+  return DelayUntilTyped(values=(shape,dtype), fn = typed_empty) 
 
 @jit 
 def empty_like(x, dtype = None):

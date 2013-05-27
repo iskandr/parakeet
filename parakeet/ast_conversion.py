@@ -92,10 +92,10 @@ def is_builtin_function(v):
   return isinstance(v, (types.TypeType, types.BuiltinFunctionType))
   
 def is_user_function(v):
-  return isinstance(v, (types.FunctionType, jit)) #, macro))
+  return isinstance(v, (types.FunctionType, jit, macro))
 
 def is_function_value(v):
-  return is_user_function(v) or is_builtin_function(v) or is_prim(v)
+  return is_user_function(v) or is_builtin_function(v) or is_prim(v) 
     
 def is_static_value(v):
   return syntax_helpers.is_python_constant(v) or \
@@ -113,7 +113,6 @@ def value_to_syntax(v):
     body = [syntax.Return(syntax.Cast(syntax.Var(x), type=core_types.from_dtype(v)))]
     return syntax.Fn(fn_name, formals, body)
   else:
-    
     assert is_function_value(v), "Can't make value %s : %s into static syntax" % (v, type(v))
     return translate_function_value(v)  
     
