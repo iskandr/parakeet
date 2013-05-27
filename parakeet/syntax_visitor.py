@@ -124,6 +124,9 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.stop)
     self.visit_expr(expr.step)
     
+  def visit_TypeValue(self, expr):
+    pass 
+    
   def visit_generic_expr(self, expr):
     for v in expr.children():
       self.visit_expr(v)

@@ -217,6 +217,9 @@ class Transform(Codegen):
     expr.closure = self.transform_expr(expr.closure)
     return expr
 
+  def transform_TypeValue(self, expr):
+    pass 
+  
   def transform_expr(self, expr):
     """Dispatch on the node type and call the appropriate transform method"""
 
@@ -340,6 +343,7 @@ class Transform(Codegen):
     stmt.value = self.transform_expr(stmt.value)
     return stmt
 
+  
   def transform_Return(self, stmt):
     stmt.value = self.transform_expr(stmt.value)
     return stmt

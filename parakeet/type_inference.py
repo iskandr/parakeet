@@ -185,9 +185,13 @@ class Annotator(Transform):
     self.var_map = var_map
     
   
-  def transform_generic_expr(self, expr):
-    assert False, "Unsupported expression: %s" % (expr,)
-
+  def transform_expr(self, expr):
+    result = Transform.transform_expr(self, expr)
+    assert result.type is not None,  \
+      "Unsupported expression encountered during type inference: %s" % (expr,)
+    return result 
+  
+  
   def transform_args(self, args, flat = False):
     if isinstance(args, (list, tuple)):
       return self.transform_expr_list(args)
@@ -214,10 +218,15 @@ class Annotator(Transform):
     return keyword_types
   
   def transform_DelayUntilTyped(self, expr):
-    new_values = self.transform_expr_tuple(expr.values)
-    new_syntax = expr.fn(*new_values)
+    new_value = self.transform_expr(expr.value)
+    new_syntax = expr.fn(new_value)
     assert new_syntax.type is not None
     return new_syntax
+  
+  def transform_TypeValue(self, expr):
+    t = expr.type_value 
+    assert isinstance(t, core_types.Type), "Invalid type value %s" % (t,)
+    return syntax.TypeValue(t, type=core_types.TypeValueT(t))
     
   def transform_Closure(self, expr):
     new_args = self.transform_expr_list(expr.args)
@@ -327,6 +336,9 @@ class Annotator(Transform):
     array_t = array_type.increase_rank(common_t, 1)
     return syntax.Array(new_elts, type = array_t)
 
+  def transform_AllocArray(self, expr):
+    pass 
+  
   def transform_Range(self, expr):
     start = self.transform_expr(expr.start) if expr.start else None
     stop = self.transform_expr(expr.stop) if expr.stop else None

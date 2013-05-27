@@ -13,17 +13,30 @@ class DelayUntilTyped(Expr):
   Once the list of values has been annotated with locally inferred types, 
   pass them to the given function to construct a final expression 
   """
-  _members = ['values', 'fn']
+  _members = ['value', 'fn']
  
-  def node_init(self):
-    if isinstance(self.values, list):
-      self.values = tuple(self.values)
-    elif not isinstance(self.values, tuple):
-      self.values = (self.values,)
+  #def node_init(self):
+  #  if isinstance(self.values, list):
+  #    self.values = tuple(self.values)
+  #  elif not isinstance(self.values, tuple):
+  #    self.values = (self.values,)
     
   def children(self):
-    return self.values  
+    yield self.value
 
+class TypeValue(Expr):
+  """
+  Value materialization of a type 
+  """
+  
+  _members = ['type_value']
+  
+  def node_init(self):
+    if self.type is None:
+      self.type = core_types.TypeValueT(self.type_value)
+    assert isinstance(self.type, core_types.TypeValueT)
+    assert self.type.type 
+    
 class Fn(Expr):
   """
   Function definition.

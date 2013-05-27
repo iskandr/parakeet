@@ -324,7 +324,8 @@ def eval_fn(fn, actuals):
       init = eval_expr(expr.init)
       axis = eval_if_expr(expr.axis)
       return adverb_evaluator.eval_scan(map_fn, combine, emit, init, args, axis)
-
+  
+        
     result = dispatch(expr, 'expr')
     # we don't support python function's inside parakeet,
     # they have to be translated into Parakeet functions

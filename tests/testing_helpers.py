@@ -66,9 +66,12 @@ def expect(fn, args, expected, valid_types = None):
 
   untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
 
-  untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
-  assert eq(untyped_result, expected), \
-      "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
+  # Abandoned interpreting untyped code due to addition of DelayUntilTyped
+  # syntax nodes 
+  #untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
+  #assert eq(untyped_result, expected), \
+  #    "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
+  
   linear_args = untyped.args.linearize_without_defaults(all_args)
 
 
