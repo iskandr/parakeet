@@ -129,4 +129,7 @@ class LowerStructs(Transform):
     return result 
   
   def transform_ConstArray(self, expr):
-    assert False
+    assert False, "ConstArray not implemented"
+    
+  def transform_Ravel(self, expr):
+    return self.ravel(self.transform_expr(expr.array))

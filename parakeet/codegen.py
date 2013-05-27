@@ -15,7 +15,7 @@ from nested_blocks import NestedBlocks
 from syntax import AllocArray, ForLoop, Comment 
 from syntax import Var, Assign, Closure, Attribute, PrimCall
 from syntax import Index, Const, TypedFn, Struct, ClosureElt, Cast
-from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn, If, Return
+from syntax import TupleProj, Tuple, Alloc, Slice, While, Fn
 from syntax import ArrayView
 from syntax_helpers import get_types, wrap_constants, wrap_if_constant, \
                            one_i64, zero, zero_i64, \
@@ -87,7 +87,6 @@ class Codegen(object):
   def assign_temp(self, expr, name = None):
     if self.is_simple(expr):
       return expr
-
     if name is None:
       name = self.temp_name(expr)
     var = self.fresh_var(expr.type, name)
@@ -374,7 +373,7 @@ class Codegen(object):
     assert self.is_array(x)
     if x.type.rank == 1:
       return x
-    assert False, "Ravel not supported until we can copy discontiguous arrays"
+    print "[Warning] Ravel will fail for discontiguous arrays"
     nelts = self.nelts(x)
     shape = self.tuple((nelts,), 'shape')
     strides = self.tuple((self.int(1),), "strides")

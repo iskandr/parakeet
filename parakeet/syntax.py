@@ -90,12 +90,7 @@ class TypedFn(Expr):
               # these last two get filled by
               # transformation/optimizations later
               'copied_by',
-              'version',
-              'has_tiles',
-              'num_tiles',
-              'dl_tile_estimates',
-              'ml_tile_estimates',
-              'autotuned_tile_sizes']
+              'version',]
 
   registry = {}
   max_version = {}
@@ -133,15 +128,6 @@ class TypedFn(Expr):
         "Typed function %s version %s already registered" % \
         (self.name, self.version)
     self.registry[registry_key] = self
-
-    if self.has_tiles is None:
-      self.has_tiles = False
-    if self.num_tiles is None:
-      self.num_tiles = 0
-    if self.dl_tile_estimates is None:
-      self.dl_tile_estimates = []
-    if self.ml_tile_estimates is None:
-      self.ml_tile_estimates = []
 
   def __repr__(self):
     arg_strings = []

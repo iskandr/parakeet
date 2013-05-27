@@ -448,8 +448,10 @@ class Annotator(Transform):
 
     closure = self.transform_expr(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
-    axis = self.transform_if_expr(expr.axis)
     arg_types = get_types(new_args)
+    if all(isinstance(t, ScalarT) for t in arg_types):
+      return self.invoke(closure, new_args)
+    axis = self.transform_if_expr(expr.axis)
     result_type, typed_fn = specialize_Map(closure.type, arg_types)
     if axis is None or self.is_none(axis):
       assert adverb_helpers.max_rank(arg_types) == 1
