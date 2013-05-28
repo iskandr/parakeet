@@ -37,6 +37,7 @@ function_mappings = {
   reduce : lib.reduce, 
   
   int : lib.int64, 
+  long : lib.int64, 
   np.int8 : lib.int8, 
   np.int16 : lib.int16, 
   np.int32 : lib.int32, 

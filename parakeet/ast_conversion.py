@@ -463,6 +463,9 @@ class AST_Translator(ast.NodeVisitor):
     return res 
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
+    if value in function_mappings:
+      value = function_mappings[value]
+      
     if isinstance(value, macro):
       return value.transform(positional, keywords_dict)
     elif is_user_function(value):
@@ -477,6 +480,7 @@ class AST_Translator(ast.NodeVisitor):
     The logic here is broken and haphazard, eventually try to handle nested
     scopes correctly, along with globals, cell refs, etc..
     """
+    
     fn, args, keywords_list, starargs, kwargs = \
         expr.func, expr.args, expr.keywords, expr.starargs, expr.kwargs
     assert kwargs is None, "Dictionary of keyword args not supported"
@@ -508,11 +512,10 @@ class AST_Translator(ast.NodeVisitor):
       for name in names[1:]:
         value = getattr(value, name)
       return value
-    
-  
           
     if is_attr_chain(fn):
       names = extract_attr_chain(fn)
+      
       if self.is_global(names):
         return self.translate_value_call(lookup_attr_chain(names), 
                                          positional, keywords_dict, starargs_expr)

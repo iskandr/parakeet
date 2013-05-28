@@ -552,8 +552,10 @@ class Annotator(Transform):
     
     init = self.transform_expr(expr.init) if expr.init else None
     
+    # if there aren't any arrays, just treat this as a function call
     if all(isinstance(t, ScalarT) for t in arg_types):
       return self.invoke(map_fn, new_args)
+    
     init_type = init.type if init else None
     
     if self.is_none(axis):
@@ -1000,15 +1002,15 @@ def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
   if init_type is None or isinstance(init_type, NoneT):
     acc_type = elt_type
   else:
-    acc_type = init_type # elt_type.combine(init_type)
+    acc_type = init_type
 
   typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
   new_acc_type = typed_combine_fn.return_type
   if new_acc_type != acc_type:
     typed_combine_fn = specialize(combine_fn, [new_acc_type, elt_type])
     new_acc_type = typed_combine_fn.return_type
-  assert new_acc_type == acc_type, \
-    "Expected accumulator types %s but encountered %s" % (acc_type, new_acc_type)
+  #assert new_acc_type == acc_type, \
+  #  "Expected accumulator types %s but encountered %s" % (acc_type, new_acc_type)
   return new_acc_type, typed_map_fn, typed_combine_fn
 
 def infer_Reduce(map_fn, combine_fn, array_types, init_type = None):
