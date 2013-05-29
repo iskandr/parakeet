@@ -59,9 +59,11 @@ def test_window_shapes():
   x = np.array([0,1,2,3,4])
   def winshape(x):
     return x.shape[0] 
-  y = parakeet.pmap2(winshape, x, 3)
+  y = parakeet.pmap1(winshape, x, 3)
+  
   expected = np.array([2,3,3,3,2])
-  assert y.shape == expected.shape and np.all(y == expected)
+  assert y.shape == expected.shape, "Expected shape %s but got %s" % (expected.shape, y.shape)
+  assert np.all(y == expected), "Expected array %s but got %s" % (expected, y)
 
 @jit
 def winavg2d( x, wx = 3, wy = 3):

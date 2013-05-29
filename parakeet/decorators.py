@@ -26,7 +26,6 @@ class macro(object):
       args.add_positional(local_name)
       pos_vars.append(syntax.Var(local_name))
   
-
     
     for visible_name in dynamic_keywords:
       local_name = names.fresh(visible_name)
@@ -81,7 +80,6 @@ class macro(object):
       return self.call_from_python(*args, **kwargs)
 
   def transform(self, args, kwargs = {}):
-    print "TRANSFORMING", self.f 
     for arg in args:
       assert isinstance(arg, syntax.Expr), \
           "Macros can only take syntax nodes as arguments, got %s" % (arg,)

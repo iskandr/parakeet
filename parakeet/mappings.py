@@ -59,10 +59,10 @@ function_mappings = {
   # np.imag : lib.imag
   np.size : lib.size, 
   
-  min : lib._prim_min,
-  max : lib._prim_max, 
-  np.min : lib.min, 
-  np.max : lib.max, 
+  min : lib.min,
+  max : lib.max, 
+  np.min : lib.min_reduce, 
+  np.max : lib.max_reduce, 
   np.minimum : lib.minimum, 
   np.maximum : lib.maximum, 
   

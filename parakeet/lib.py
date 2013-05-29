@@ -194,24 +194,24 @@ def dot(x,y):
   return sum(x*y)
 
 @jit 
-def min(x, axis = None):
+def min_reduce(x, axis = None):
   return reduce(minimum, x, axis = axis)
 
 @jit 
-def _prim_min(x, y = None):
+def min(x, y = None):
   if y is None:
-    return min(x)
+    return min_reduce(x)
   else:
     return minimum(x,y)
 
 @jit 
-def max(x, axis = None):
+def max_reduce(x, axis = None):
   return reduce(maximum, x, axis = axis)
 
 @jit
-def _prim_max(x, y = None):
+def max(x, y = None):
   if y is None:
-    return max(x)
+    return max_reduce(x)
   else:
     return maximum(x,y)
   
@@ -389,9 +389,12 @@ def copy(x):
 @jit
 def pmap1(f, x, w = 3):
   n = x.shape[0]
-  h = w / 2
-  return [f(x[max(i-h, 0):min(i+h+1, n)]) for i in range(n)]
-
+  def local_apply(i):
+    lower = max(i-w/2, 0)
+    upper = min(i+w/2+1, n)
+    elts = x[lower:upper]
+    return f(elts)
+  return imap(local_apply, n)
 
 @jit  
 def pmap2(f, x, width = (3,3)):

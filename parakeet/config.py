@@ -9,11 +9,11 @@ print_untyped_function = True
 print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -38,7 +38,6 @@ print_transform_timings = False
 
 # print each transform's name when it runs
 print_transform_names = False
-
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
