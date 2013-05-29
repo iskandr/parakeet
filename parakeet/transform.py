@@ -220,6 +220,9 @@ class Transform(Codegen):
   def transform_TypeValue(self, expr):
     pass 
   
+  def transform_DelayUntilTyped(self, expr):
+    expr.values = self.transform_expr_tuple(expr.values)
+  
   def transform_expr(self, expr):
     """Dispatch on the node type and call the appropriate transform method"""
 

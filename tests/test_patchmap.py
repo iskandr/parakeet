@@ -16,7 +16,5 @@ def test_erode():
   expected = np.array([[1, 1, 2], [1,1,2]])
   testing_helpers.expect(erode, [x, shape], expected)
 
-
-
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

@@ -509,8 +509,15 @@ class AST_Translator(ast.NodeVisitor):
     
     def lookup_attr_chain(names):
       value = self.lookup_global(names[0])
+    
       for name in names[1:]:
-        value = getattr(value, name)
+        if hasattr(value, name):
+          value = getattr(value, name)
+        else:
+          try:
+            value = value[name]
+          except:
+            assert False, "Couldn't find global name %s" % ('.'.join(names))
       return value
           
     if is_attr_chain(fn):

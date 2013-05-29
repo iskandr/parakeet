@@ -194,24 +194,24 @@ def dot(x,y):
   return sum(x*y)
 
 @jit 
-def min_reduce(x, axis = None):
+def min(x, axis = None):
   return reduce(minimum, x, axis = axis)
 
 @jit 
-def min(x, y = None):
+def prim_min(x, y = None):
   if y is None:
-    return min_reduce(x)
+    return min(x)
   else:
     return minimum(x,y)
 
 @jit 
-def max_reduce(x, axis = None):
+def max(x, axis = None):
   return reduce(maximum, x, axis = axis)
 
 @jit
-def max(x, y = None):
+def prim_max(x, y = None):
   if y is None:
-    return max_reduce(x)
+    return max(x)
   else:
     return maximum(x,y)
   
@@ -390,8 +390,8 @@ def copy(x):
 def pmap1(f, x, w = 3):
   n = x.shape[0]
   def local_apply(i):
-    lower = max(i-w/2, 0)
-    upper = min(i+w/2+1, n)
+    lower = __builtins__.max(i-w/2, 0)
+    upper = __builtins__.min(i+w/2+1, n)
     elts = x[lower:upper]
     return f(elts)
   return imap(local_apply, n)
@@ -408,10 +408,10 @@ def pmap2(f, x, width = (3,3)):
   hy = width_y / 2
   def local_apply((i,j)):
     if i <= hx or i >= n_rows - hx or j < hy or j >= n_cols - hy:
-      lx = max(i-hx, 0)
-      ux = min(i+hx+1, n_rows)
-      ly = max(j-hy, 0)
-      uy = min(j+hy+1, n_cols)
+      lx = __builtins__.max(i-hx, 0)
+      ux = __builtins__.min(i+hx+1, n_rows)
+      ly = __builtins__.max(j-hy, 0)
+      uy = __builtins__.min(j+hy+1, n_cols)
       result = f(x[lx:ux, ly:uy])
     else:
       lx = i-hx
