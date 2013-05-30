@@ -206,13 +206,13 @@ class AdverbSemantics(object):
     dims = self.tuple_elts(shape)
     n_loops = len(dims)
     zero = self.int(0)
-    first_idx = self.tuple([zero for _ in range(n_loops)]) if n_loops > 1 else zero 
-    first_acc_value = self.invoke(fn, (first_idx,))
     if init is None or self.is_none(init):
-      init = first_acc_value
+      first_idx = self.tuple([zero for _ in range(n_loops)]) if n_loops > 1 else zero 
+      init = self.invoke(fn, (first_idx,))
+      two_passes = True 
     else:
-      init = self.invoke(combine, [init, first_acc_value])
-    
+      two_passes = False 
+      
     def build_loops(index_vars = (), acc = init, first_pass = False):
 
       n_indices = len(index_vars)
@@ -223,8 +223,12 @@ class AdverbSemantics(object):
         acc.update(new_acc_value)
       
       elif n_indices == 0:
-        start = self.int(0) if first_pass else self.int(1)
-        stop= self.int(1) if first_pass else dims[0]
+        if two_passes:
+          start = self.int(0) if first_pass else self.int(1)
+          stop = self.int(1) if first_pass else dims[0]
+        else:
+          start = self.int(0)
+          stop = dims[0]
         def loop_body(acc, idx):
           build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
         return self.accumulate_loop(start, stop, loop_body, acc)
@@ -241,13 +245,12 @@ class AdverbSemantics(object):
             stop = self.int(1)
         self.loop(start, stop, loop_body)
         return acc.get() 
-    if n_loops == 1:
-      return build_loops(first_pass = True)
-    else:
+    if two_passes:
       acc0 = build_loops(index_vars = (), first_pass = True)
-      res = build_loops(index_vars = (), acc = acc0, first_pass = False)
-    return res
-  
+      return build_loops(index_vars = (), acc = acc0, first_pass = False)
+    else:
+      return build_loops(index_vars = (), acc = init)
+   
     
     
     
