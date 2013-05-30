@@ -224,9 +224,10 @@ class AdverbSemantics(object):
       
       elif n_indices == 0:
         start = self.int(0) if first_pass else self.int(1)
+        stop= self.int(1) if first_pass else dims[0]
         def loop_body(acc, idx):
           build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
-        return self.accumulate_loop(start, dims[0], loop_body, acc)
+        return self.accumulate_loop(start, stop, loop_body, acc)
       else:
         # intermediate loops start from zero 
         def loop_body(idx):

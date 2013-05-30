@@ -4,11 +4,13 @@ import __builtin__
 import syntax
 import syntax_helpers
 
-from prims import *
+import numpy as np 
+import prims 
 from decorators import macro, staged_macro, jit
 
 import array_type
 from array_type import ArrayT
+import core_types 
 from core_types import Int8, Int16, Int32, Int64
 from core_types import Float32, Float64
 from core_types import UInt8, UInt16, UInt32, UInt64
@@ -144,11 +146,11 @@ def shape(x):
 
 @jit 
 def sum(x, axis = None):
-  return reduce(add, x, init = 0, axis = axis)
+  return reduce(prims.add, x, init = 0, axis = axis)
 
 @jit 
 def prod(x, axis=None):
-  return reduce(multiply, x, init=1, axis = axis)
+  return reduce(prims.multiply, x, init=1, axis = axis)
 
 @jit 
 def mean(x, axis = None):
@@ -156,11 +158,11 @@ def mean(x, axis = None):
 
 @jit 
 def cumsum(x, axis = None):
-  return scan(add, x, axis = axis)
+  return scan(prims.add, x, axis = axis)
 
 @jit 
 def cumprod(x, axis = None):
-  return scan(multiply, x, axis = axis)
+  return scan(prims.multiply, x, axis = axis)
 
 @jit 
 def or_(x, y):
@@ -195,25 +197,25 @@ def dot(x,y):
 
 @jit 
 def min(x, axis = None):
-  return reduce(minimum, x, axis = axis)
+  return reduce(prims.minimum, x, axis = axis)
 
 @jit 
-def prim_min(x, y = None):
+def _builtin_min(x, y = None):
   if y is None:
     return min(x)
   else:
-    return minimum(x,y)
+    return prims.minimum(x,y)
 
 @jit 
 def max(x, axis = None):
-  return reduce(maximum, x, axis = axis)
+  return reduce(prims.maximum, x, axis = axis)
 
 @jit
-def prim_max(x, y = None):
+def _builtin_max(x, y = None):
   if y is None:
     return max(x)
   else:
-    return maximum(x,y)
+    return prims.maximum(x,y)
   
 @macro
 def arange(n, *xs):
@@ -407,19 +409,11 @@ def pmap2(f, x, width = (3,3)):
   hx = width_x / 2
   hy = width_y / 2
   def local_apply((i,j)):
-    if i <= hx or i >= n_rows - hx or j < hy or j >= n_cols - hy:
-      lx = __builtins__.max(i-hx, 0)
-      ux = __builtins__.min(i+hx+1, n_rows)
-      ly = __builtins__.max(j-hy, 0)
-      uy = __builtins__.min(j+hy+1, n_cols)
-      result = f(x[lx:ux, ly:uy])
-    else:
-      lx = i-hx
-      ux = i+hx+1
-      ly = j-hy
-      uy = j+hy+1
-      result = f(x[lx:ux, ly:uy])
-    return result
+    lx = __builtins__.max(i-hx, 0)
+    ux = __builtins__.min(i+hx+1, n_rows)
+    ly = __builtins__.max(j-hy, 0)
+    uy = __builtins__.min(j+hy+1, n_cols)
+    return f(x[lx:ux, ly:uy])
     
   return imap(local_apply, x.shape)
     

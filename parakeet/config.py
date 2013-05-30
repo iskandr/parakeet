@@ -25,10 +25,10 @@ print_optimized_llvm = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] # ['DCE'] 
+print_functions_before_transforms = ['LowerAdverbs'] # ['DCE'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #['DCE'] 
+print_functions_after_transforms = ['LowerAdverbs'] #['DCE'] 
 
 # show aliases and escape sets
 print_escape_analysis = False
