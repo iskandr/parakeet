@@ -13,7 +13,7 @@ print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -68,10 +68,7 @@ opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = False
-
-# Warning: loop fusion never fully implemented
-opt_loop_fusion = False
+stride_specialization = True
 
 ######################################
 #           LLVM OPTIONS             #

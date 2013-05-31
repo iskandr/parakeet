@@ -5,7 +5,6 @@ import time
 from parakeet import jit 
 import scipy.ndimage
 
-@jit 
 def dilate_naive(x, window_size):
   m,n = x.shape
   k,l = window_size 
@@ -31,12 +30,14 @@ def dilate_decompose_loops(x, window_size):
   z = np.empty_like(x)
   for i in xrange(m):
     for j in xrange(n):
-      currmax = x[i,j]
-      for ii in xrange(max(0, i-hk), min(m, i+hk+1)):
+      left_idx = max(0, i-hk)
+      right_idx = min(m, i+hk+1) 
+      currmax = x[left_idx, j]
+      for ii in xrange(left_idx+1, right_idx):
         elt = x[ii, j]
         if elt > currmax:
           currmax = elt 
-      y[i,j] = currmax 
+      y[i, j] = currmax 
   for i in xrange(m):
     for j in xrange(n):
       left_idx = max(0, j-hl)
@@ -57,15 +58,15 @@ def dilate_1d_naive(x_strip, y_strip, window_size):
   """
   nelts = len(x_strip)
   half = window_size / 2 
-  for i in xrange(nelts):
-    left_idx = max(i-half,0)
-    right_idx = min(i+half+1, nelts)
+  for idx in xrange(nelts):
+    left_idx = max(idx-half,0)
+    right_idx = min(idx+half+1, nelts)
     currmax = x_strip[left_idx]
     for j in xrange(left_idx+1, right_idx):
       elt = x_strip[j]
       if elt > currmax:
         currmax = elt
-    y_strip[i] = currmax 
+    y_strip[idx] = currmax 
 
 @jit 
 def dilate_decompose(x, window_size): 
@@ -73,10 +74,11 @@ def dilate_decompose(x, window_size):
   k,l = window_size
   y = np.empty_like(x)
   z = np.empty_like(x)
-  for row_idx in xrange(m):
-    dilate_1d_naive(x[row_idx,:], y[row_idx,:], k)
-  for col_idx in xrange(n):
-    dilate_1d_naive(y[:, col_idx], z[:, col_idx], l)
+
+  for i in xrange(m):
+    dilate_1d_naive(x[i,:], y[i,:], k)
+  for j in xrange(n):
+    dilate_1d_naive(y[:, j], z[:, j], l)
   return z
 
 def dilate_1d_interior(x_strip, y_strip, window_size):
@@ -150,30 +152,40 @@ class timer(object):
     else:
       print "%s : elapsed time %0.4f" % (self.name, t) 
     
-window_size = (9,9)
+window_size = (11,11)
 width, height = 1024,768
-image = np.random.randint(0, 50,  (width, height))
+image = np.random.randint(0, 150,  (width, height))
 
 
 with timer('scipy'):
   scipy_result = scipy.ndimage.grey_dilation(image, window_size, mode='nearest')
 
+"""
 with timer('cpython-naive'):
   naive_result = dilate_naive(image, window_size)
 assert np.allclose(naive_result, scipy_result)
+"""
 
-def run(fn, name):
+dilate_naive = jit(dilate_naive)
+
+def run(fn, name, imshow=False):
   print 
   with timer(name + '-compile'):
     fn(image[:1, :1], window_size)
   with timer(name):
     result = fn(image, window_size)
+  
+  if imshow:
+    import pylab
+    pylab.imshow(result)
+    pylab.figure()
+    pylab.imshow(scipy_result)
+    pylab.show()
   assert np.allclose(result, scipy_result)
   
 run(dilate_naive, 'parakeet-naive')
 run(dilate_decompose_loops, 'decompose-loops')
-run(dilate_decompose, 'decompose-slices')
+run(dilate_decompose, 'decompose-slices', imshow=False)
 run(dilate_decompose_interior, 'decompose-interior')
-
 
 

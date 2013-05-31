@@ -1,5 +1,5 @@
 import numpy as np
-
+from parakeet import jit 
 from testing_helpers import expect, expect_each, run_local_tests
 
 shape_1d = 40
@@ -112,7 +112,16 @@ def lower_right_corner(X):
   return X[m/2:m, n/2:n]
 
 def test_lower_right_corner():
-  expect_each(lower_right_corner, lower_right_corner, matrices)
+  expect_each(jit(lower_right_corner), lower_right_corner, matrices)
+
+def multiple_slices(x):
+  y = x[2:4,:]
+  return y[:,2]
+
+def test_multiple_slices():
+  x = np.random.randn(10,10)
+  expect_each(jit(multiple_slices), multiple_slices, matrices)
+  
 
 if __name__ == '__main__':
   run_local_tests()

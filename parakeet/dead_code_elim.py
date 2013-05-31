@@ -132,6 +132,12 @@ class DCE(Transform):
 
   def transform_Return(self, stmt):
     return stmt
+  
+  def transform_ExprStmt(self, stmt):
+    if self.is_simple(stmt.value):
+      return None 
+    else:
+      return stmt 
 
   def transform_ForLoop(self, stmt):
     stmt.body = self.transform_block(stmt.body)

@@ -741,7 +741,7 @@ class Annotator(Transform):
     cond = self.transform_expr(stmt.cond) 
 
     assert isinstance(cond.type, ScalarT), \
-        "Condition has type %s but must be convertible to bool" % cond.type
+        "Condition %s has type %s but must be convertible to bool" % (cond, cond.type)
     # it would be cleaner to not have anything resembling an optimization 
     # inter-mixed with the type inference, but I'm not sure how else to 
     # support 'if x is None:...'

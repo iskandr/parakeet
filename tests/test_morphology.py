@@ -20,7 +20,6 @@ def winmin(x):
         v = v2
   return v
 
-
 def winmax(x):
   m,n = x.shape
   v = x[0,0]
@@ -81,7 +80,43 @@ def test_dilate():
   assert res.shape == X_dilate.shape, "Expected shape %s but got %s" % (X_dilate.shape, res.shape)
   assert (res == X_dilate).all(), "Expected %s but got %s" % (X_dilate, res)
 
-  
+
+
+def dilate_1d_naive(x_strip, y_strip, window_size):
+  """
+  Given a 1-dimensional input and 1-dimensional output, 
+  fill output with 1d dilation of input 
+  """
+  nelts = len(x_strip)
+  half = window_size / 2 
+  for i in xrange(nelts):
+    left_idx = max(i-half,0)
+    right_idx = min(i+half+1, nelts)
+    currmax = x_strip[left_idx]
+    for j in xrange(left_idx+1, right_idx):
+      elt = x_strip[j]
+      if elt > currmax:
+        currmax = elt
+    y_strip[i] = currmax 
+
+@jit 
+def dilate_decompose(x, window_size): 
+  m,n = x.shape
+  k,l = window_size
+  y = np.empty_like(x)
+  z = np.empty_like(x)
+  for row_idx in xrange(m):
+    dilate_1d_naive(x[row_idx,:], y[row_idx,:], k)
+  for col_idx in xrange(n):
+    dilate_1d_naive(y[:, col_idx], z[:, col_idx], l)
+  return z
+
+def test_dilate_decompose():
+  res = dilate_decompose(X, (3,3))
+  assert res.shape == X_dilate.shape, "Expected shape %s but got %s" % (X_dilate.shape, res.shape)
+  assert (res == X_dilate).all(), "Original \n%s Expected dilation \n%s but got \n%s unequal elts \n%s" % \
+    (X, X_dilate, res, X_dilate != res)
+
   """
   x = load_img(gray=False)
   def filter(img):

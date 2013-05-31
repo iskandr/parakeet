@@ -1,11 +1,12 @@
 import numpy as np
 
 import parakeet
+from parakeet import jit 
 import testing_helpers
 
 def init(W, E = None):
   C = W.copy()
-  if E:
+  if not (E is None):
     C[~E] = np.inf
   for i in xrange(C.shape[0]):
     C[i,i] = 0
@@ -51,13 +52,8 @@ def parakeet_dists(W, E = None):
   m,n = C.shape
   assert m == n
   vertices = np.arange(n)
-  def min_elt(ci, ai):
-    if ci < ai:
-      return ci
-    else:
-      return ai
   def min_row(c_row, a_row):
-    return map(min_elt, c_row, a_row)
+    return map(min, c_row, a_row)
   
   for k in vertices:
     from_k = C[:, k]
@@ -77,13 +73,14 @@ def test_dists():
   C3 = parakeet_dists(W)
   assert np.all(np.ravel(C1 == C3)), \
       "Parakeet wrong: Expected %s but got %s" % (C1, C3)
-
+"""
 def test_dist_perf():
-  n = 200
+  n = 21
   W = (np.random.randn(n,n)*2)**2
   
-  testing_helpers.timed_test(parakeet_dists, [W], np_dists, [W], 
+  testing_helpers.timed_test(jit(loop_dists), [W], np_dists, [W], 
                              min_speedup = 0.1)
+"""
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

@@ -231,7 +231,7 @@ def arange(n, *xs):
  
 @macro
 def empty(shape, dtype = float64):
-  print dtype
+
   def typed_empty(shape, dtype):
     # HACK! 
     # In addition to TypeValue, allow casting functions 

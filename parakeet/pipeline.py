@@ -1,4 +1,5 @@
 import config
+import syntax 
 import syntax_visitor
 
 from copy_elimination import CopyElimination
@@ -6,7 +7,6 @@ from dead_code_elim import DCE
 from fusion import Fusion
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
-from loop_fusion import LoopFusion
 from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
@@ -24,24 +24,11 @@ class ContainsAdverbs(syntax_visitor.SyntaxVisitor):
   class Yes(Exception):
     pass
   
-  def visit_IndexMap(self, _):
-    raise self.Yes()
-  
-  def visit_IndexReduce(self, _):
-    raise self.Yes()
-  
-  def visit_Map(self, _):
-    raise self.Yes()
-  
-  def visit_Reduce(self, _):
-    raise self.Yes()
-  
-  def visit_Scan(self, _):
-    raise self.Yes()
-  
-  def visit_AllPairs(self, _):
-    raise self.Yes()
-
+  def visit_expr(self, expr):
+    if isinstance(expr, syntax.Adverb):
+      raise self.Yes()
+    syntax_visitor.SyntaxVisitor.visit_expr(self, expr)
+    
 def contains_adverbs(fn):
   try:
     ContainsAdverbs().visit_fn(fn)
@@ -73,7 +60,8 @@ symbolic_range_propagation = Phase(RangePropagation,
                            memoize = False)
 shape_elim = Phase(ShapeElimination,
                    config_param = 'opt_shape_elim')
-loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
+# loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
+
 loopify = Phase([Simplify,
                  fusion_opt,
                  LowerAdverbs, inline_opt,
@@ -111,7 +99,6 @@ post_lowering = Phase([licm,
 lowering = Phase([pre_lowering,
                   LowerIndexing,
                   licm,
-                  loop_fusion,
                   LowerStructs,
                   post_lowering,
                   LowerStructs,

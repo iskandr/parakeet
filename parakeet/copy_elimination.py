@@ -5,12 +5,9 @@ from collect_vars import collect_var_names
 from core_types import ScalarT
 from find_local_arrays import FindLocalArrays
 from syntax import AllocArray, ArrayView, Index, Struct, Var
-from syntax import Map, Reduce, Scan, AllPairs
+from syntax import Adverb
 from transform import Transform
 from usedef import UseDefAnalysis
-
-array_constructors = [ArrayView, Struct, AllocArray,
-                      Map, Reduce, Scan, AllPairs]
 
 class CopyElimination(Transform):
   def apply(self, fn):
@@ -46,6 +43,9 @@ class CopyElimination(Transform):
     # if we ever have mutable compound objects in arrays
     return len(array_aliases) <= 1
 
+  def is_array_alloc(self, expr):
+    return expr.__class__ in [ArrayView, Struct, AllocArray] or isinstance(expr, Adverb)
+    
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form
     # dest[complex_indexing] = src
@@ -73,27 +73,9 @@ class CopyElimination(Transform):
              rhs_name in self.local_arrays:
             array_stmt = self.local_arrays[rhs_name]
             prev_path = self.usedef.stmt_paths[id(array_stmt)]
-            if array_stmt.rhs.__class__ in array_constructors and \
+            if self.is_array_alloc(array_stmt.rhs) and \
                all(self.usedef.created_on[lhs_depends_on] < prev_path
                    for lhs_depends_on in collect_var_names(stmt.lhs)):
               array_stmt.rhs = stmt.lhs
               return None
-    """
-    elif stmt.lhs.__class__ is Var and stmt.rhs.__class__ is Alloc:
-      lhs_name = stmt.lhs.name
-      curr_path = self.usedef.stmt_number[id(stmt)]
-      print stmt
-      for prev_name in self.pointers_by_size.get(stmt.rhs.count, []):
-        if self.type_env[prev_name] == self.type_env[lhs_name] and \
-           prev_name in self.local_alloc and \
-           lhs_name in self.local_alloc and \
-           self.usedef.last_use[prev_name] <  curr_stmt_number:
-          stmt.rhs = Var(prev_name, type = self.type_env[prev_name])
-          self.usedef.last_use[prev_name] = curr_stmt_number
-          return stmt
-      if lhs_name not in self.may_escape and \
-         len(self.may_alias.get(lhs_name, [])) <= 1:
-        alloc_set = self.pointers_by_size.setdefault(stmt.rhs.count, set([]))
-        alloc_set.add(lhs_name)
-    """
     return stmt

@@ -4,17 +4,17 @@ import syntax
 import syntax_helpers
 import transform
 
-from array_type import ArrayT 
+from array_type import ArrayT, SliceT 
 from closure_type import ClosureT
 from collect_vars import collect_var_names
 from core_types import NoneT, ScalarT
 from mutability_analysis import TypeBasedMutabilityAnalysis
 from scoped_dict import ScopedDictionary
-from syntax import AllocArray, Assign, ExprStmt
+from syntax import AllocArray, Assign, ExprStmt, Adverb
 from syntax import Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast
 from syntax import Slice, Index, Array, ArrayView, Attribute, Struct
 from syntax import PrimCall, Call, TypedFn, Fn
-from syntax import AllPairs, Map, Reduce, Scan
+from syntax import AllPairs, Map, Reduce, Scan, IndexMap, IndexReduce
 from syntax_helpers import collect_constants, is_one, is_zero, all_constants
 from syntax_helpers import get_types, slice_none_t, const_int
 from transform import Transform
@@ -75,9 +75,9 @@ class Simplify(Transform):
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
-    elif c is Map or c is AllPairs:
+    elif c is Map or c is AllPairs or c is IndexMap:
       return expr.args
-    elif c is Scan or c is Reduce:
+    elif c is Scan or c is Reduce or c is IndexReduce:
       args = tuple(expr.args)
       init = (expr.init,) if expr.init else ()
       return init + args
@@ -102,26 +102,12 @@ class Simplify(Transform):
     return None
 
   def immutable(self, expr):
-    c = expr.__class__
-    if c is Const:
-      return True
-    elif c is Tuple or c is TupleProj or \
-         c is Closure or c is ClosureElt:
-      return True
-    # WARNING: making attributes always immutable
-    elif c in (Attribute, Struct, Slice, ArrayView):
-      return True
-    # elif c is Attribute and expr.value.type.__class__ is TupleT:
-    #  return True
-    elif expr.type in self.mutable_types:
-      return False
-    child_nodes = self.children(expr, allow_mutable = False)
-    if child_nodes is None:
-      result =  False
-    else:
-      result = all(self.immutable(child) for child in child_nodes)
-    return result
-
+    return (isinstance(expr, (Const, Tuple, Adverb, Cast, Var, PrimCall)) and 
+            (all(self.immutable(c) for c in expr.children())) or \
+           (isinstance(expr, (Attribute, TupleProj)) and \
+            isinstance(expr.type, (ScalarT, TupleT, SliceT))))
+    
+                      
   def temp(self, expr, name = None, use_count = 1):
     """
     Wrapper around Codegen.assign_temp which also updates bindings and
