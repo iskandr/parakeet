@@ -4,6 +4,7 @@ import time
 
 from parakeet import jit 
 import scipy.ndimage
+from numba import autojit 
 
 def dilate_naive(x, window_size):
   m,n = x.shape
@@ -21,7 +22,9 @@ def dilate_naive(x, window_size):
       y[i,j] = currmax
   return y  
 
-@jit 
+dilate_naive_parakeet = jit(dilate_naive)
+dilate_naive_numba = autojit(dilate_naive)
+
 def dilate_decompose_loops(x, window_size):
   m,n = x.shape
   k,l = window_size 
@@ -50,13 +53,16 @@ def dilate_decompose_loops(x, window_size):
       z[i,j] = currmax
   return z 
 
+dilate_decompose_loops_parakeet = jit(dilate_decompose_loops)
+dilate_decompose_loops_numba = autojit(dilate_decompose_loops)
 
-def dilate_1d_naive(x_strip, y_strip, window_size):
+def dilate_1d_naive(x_strip,  window_size):
   """
   Given a 1-dimensional input and 1-dimensional output, 
   fill output with 1d dilation of input 
   """
   nelts = len(x_strip)
+  y_strip = np.empty_like(x_strip)
   half = window_size / 2 
   for idx in xrange(nelts):
     left_idx = max(idx-half,0)
@@ -67,22 +73,22 @@ def dilate_1d_naive(x_strip, y_strip, window_size):
       if elt > currmax:
         currmax = elt
     y_strip[idx] = currmax 
+  return y_strip
 
-@jit 
 def dilate_decompose(x, window_size): 
   m,n = x.shape
   k,l = window_size
-  y = np.empty_like(x)
-  z = np.empty_like(x)
+  y = [dilate_1d_naive(x[row_idx, :], k) for row_idx in xrange(m)]
+  z = [dilate_1d_naive(y[:, col_idx], l) for col_idx in xrange(n)]
+  return np.array(z).T
 
-  for i in xrange(m):
-    dilate_1d_naive(x[i,:], y[i,:], k)
-  for j in xrange(n):
-    dilate_1d_naive(y[:, j], z[:, j], l)
-  return z
+dilate_decompose_parakeet = jit(dilate_decompose)
+dilate_decompose_numba = autojit(dilate_decompose)
 
-def dilate_1d_interior(x_strip, y_strip, window_size):
+def dilate_1d_interior(x_strip, window_size):
+  
   nelts = len(x_strip)
+  y_strip = np.empty_like(x_strip)
   half = window_size / 2 
   
   interior_start = half+1
@@ -120,18 +126,17 @@ def dilate_1d_interior(x_strip, y_strip, window_size):
       if elt > currmax:
         currmax = elt
     y_strip[i] = currmax 
-  
-@jit 
+  return y_strip 
+
 def dilate_decompose_interior(x, window_size): 
   m,n = x.shape
   k,l = window_size
-  y = np.empty_like(x)
-  z = np.empty_like(x)
-  for row_idx in xrange(m):
-    dilate_1d_interior(x[row_idx,:], y[row_idx,:], k)
-  for col_idx in xrange(n):
-    dilate_1d_interior(y[:, col_idx], z[:, col_idx], l)
-  return z 
+  y = [dilate_1d_interior(x[row_idx, :],k) for row_idx in xrange(m)]
+  z = [dilate_1d_interior(y[:, col_idx],l) for col_idx in xrange(n)]
+  return np.array(z).T 
+
+dilate_decompose_interior_parakeet = jit(dilate_decompose_interior)
+dilate_decompose_interior_numba = autojit(dilate_decompose_interior)
 
 
 class timer(object):
@@ -152,7 +157,7 @@ class timer(object):
     else:
       print "%s : elapsed time %0.4f" % (self.name, t) 
     
-window_size = (11,11)
+window_size = (7,7)
 width, height = 1024,768
 image = np.random.randint(0, 150,  (width, height))
 
@@ -160,13 +165,6 @@ image = np.random.randint(0, 150,  (width, height))
 with timer('scipy'):
   scipy_result = scipy.ndimage.grey_dilation(image, window_size, mode='nearest')
 
-"""
-with timer('cpython-naive'):
-  naive_result = dilate_naive(image, window_size)
-assert np.allclose(naive_result, scipy_result)
-"""
-
-dilate_naive = jit(dilate_naive)
 
 def run(fn, name, imshow=False):
   print 
@@ -183,9 +181,18 @@ def run(fn, name, imshow=False):
     pylab.show()
   assert np.allclose(result, scipy_result)
   
-run(dilate_naive, 'parakeet-naive')
-run(dilate_decompose_loops, 'decompose-loops')
-run(dilate_decompose, 'decompose-slices', imshow=False)
-run(dilate_decompose_interior, 'decompose-interior')
+run(dilate_naive_parakeet, 'parakeet-naive')
+run(dilate_naive_numba, 'numba-naive')
+run(dilate_decompose_loops_parakeet, 'parakeet-decompose-loops')
+run(dilate_decompose_loops_numba, 'numba-decompose-loops')
+
+run(dilate_decompose_parakeet, 'parakeet-decompose-slices' )
+run(dilate_decompose_numba, 'numba-decompose-slices-numba')
+run(dilate_decompose_interior_parakeet, 'parakeet-decompose-interior')
+run(dilate_decompose_interior_numba, 'numba-decompose-interior')
 
 
+
+with timer('cpython-naive'):
+  naive_result = dilate_naive(image, window_size)
+assert np.allclose(naive_result, scipy_result)
