@@ -201,3 +201,6 @@ run(dilate_decompose_interior_numba, 'numba-decompose-interior')
 with timer('cpython-naive'):
   naive_result = dilate_naive(image, window_size)
 assert np.allclose(naive_result, scipy_result)
+with timer('cpython-decompose=loops'):
+  res = dilate_decompose_loops(image, window_size)
+assert np.allclose(res, scipy_result)
