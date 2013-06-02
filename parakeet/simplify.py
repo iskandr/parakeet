@@ -165,14 +165,16 @@ class Simplify(Transform):
       c = stored_v.__class__
       if c is Var or c is Struct:
         v = stored_v
-      elif c is AllocArray:
+      elif c is ArrayView:
         if expr.name == 'shape':
           return self.transform_expr(stored_v.shape)
         elif expr.name == 'strides':
           return self.transform_expr(stored_v.strides)
         elif expr.name == 'data':
           return self.transform_expr(stored_v.data)
-
+      elif c is AllocArray:
+        if expr.name == 'shape':
+          return self.transform_expr(stored_v.shape)
     if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
       return v.args[idx]

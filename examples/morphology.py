@@ -168,18 +168,23 @@ with timer('scipy'):
 
 def run(fn, name, imshow=False):
   print 
-  with timer(name + '-compile'):
-    fn(image[:1, :1], window_size)
-  with timer(name):
-    result = fn(image, window_size)
+  try:
+    with timer(name + '-compile'):
+      fn(image[:1, :1], window_size)
+    with timer(name):
+      result = fn(image, window_size)
+    if imshow:
+      import pylab
+      pylab.imshow(result)
+      pylab.figure()
+      pylab.imshow(scipy_result)
+      pylab.show()
+    assert np.allclose(result, scipy_result)
   
-  if imshow:
-    import pylab
-    pylab.imshow(result)
-    pylab.figure()
-    pylab.imshow(scipy_result)
-    pylab.show()
-  assert np.allclose(result, scipy_result)
+  except:
+    print "%s failed" % name
+    import sys 
+    print sys.exc_info()[1]
   
 run(dilate_naive_parakeet, 'parakeet-naive')
 run(dilate_naive_numba, 'numba-naive')
