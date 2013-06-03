@@ -50,7 +50,9 @@ class LLVM_Context:
     'indvars',
     'loop-idiom',
     'loop-deletion',
+    'loop-vectorize',
     'loop-unroll',
+    
     'memdep',
     'gvn',
     'memdep',
@@ -75,9 +77,11 @@ class LLVM_Context:
       self.engine_builder.opt(opt_level)
     self.exec_engine = self.engine_builder.create()
     tm = ee.TargetMachine.new(opt = opt_level)
-    self.pass_manager = passes.build_pass_managers(tm, opt = opt_level,
-                                                   loop_vectorize = (opt_level > 0), 
-                                                   mod = self.module).fpm
+    _, fpm = passes.build_pass_managers(tm, 
+                                     opt = opt_level,
+                                     loop_vectorize = (opt_level > 0), 
+                                     mod = self.module)
+    self.pass_manager = fpm 
 
     for p in self._verify_passes:
       self.pass_manager.add(p)

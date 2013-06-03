@@ -157,10 +157,11 @@ class timer(object):
     else:
       print "%s : elapsed time %0.4f" % (self.name, t) 
     
-window_size = (7,7)
+window_size = (13,13)
 width, height = 1024,768
 image = np.random.randint(0, 150,  (width, height))
-
+#import pylab
+#image  = pylab.imread('../data/rjp_small.png')[:,:,1]
 
 with timer('scipy'):
   scipy_result = scipy.ndimage.grey_dilation(image, window_size, mode='nearest')
@@ -175,18 +176,21 @@ def run(fn, name, imshow=False):
       result = fn(image, window_size)
     if imshow:
       import pylab
+      pylab.imshow(image)
+      pylab.figure()
       pylab.imshow(result)
       pylab.figure()
       pylab.imshow(scipy_result)
       pylab.show()
     assert np.allclose(result, scipy_result)
-  
+  except KeyboardInterrupt:
+    raise   
   except:
     print "%s failed" % name
     import sys 
     print sys.exc_info()[1]
   
-run(dilate_naive_parakeet, 'parakeet-naive')
+run(dilate_naive_parakeet, 'parakeet-naive', imshow=True)
 run(dilate_naive_numba, 'numba-naive')
 run(dilate_decompose_loops_parakeet, 'parakeet-decompose-loops')
 run(dilate_decompose_loops_numba, 'numba-decompose-loops')
