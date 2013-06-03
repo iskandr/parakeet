@@ -50,7 +50,7 @@ def eq(x,y):
   elif np.isscalar(x) and np.isnan(x):
     return np.isscalar(x) and np.isnan(y)
   else:
-    return x == y
+    return np.allclose(x,y)
 
 def copy(x):
   if isinstance(x, np.ndarray):
