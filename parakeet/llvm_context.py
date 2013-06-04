@@ -50,7 +50,7 @@ class LLVM_Context:
     'indvars',
     'loop-idiom',
     'loop-deletion',
-    'loop-vectorize',
+    # 'loop-vectorize',
     'loop-unroll',
     
     'memdep',
