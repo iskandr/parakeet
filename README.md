@@ -11,9 +11,7 @@ To accelerate wrap it with Parakeet's *@jit* decorator:
 
    import numpy as np 
    
-   alpha = 1.0
-   beta = 0.3
-   def slow(x):
+   def slow(x, alpha = 0.5, beta = 0.3):
      y = np.empty_like(x)
      for i in xrange(len(x)):
        y[i] = np.tanh(x[i] * alpha + beta)
@@ -21,14 +19,14 @@ To accelerate wrap it with Parakeet's *@jit* decorator:
      
   from parakeet import jit 
   @jit
-  def fast(x,y):
+  def fast(x, alpha = 0.5, beta = 0.3):
     y = np.empty_like(x)
     for i in xrange(len(x)):
       y[i] = np.tanh(x[i] * alpha + beta)
     return x 
     
   @jit
-  def fast_comprehension(x):
+  def fast_comprehension(x, alpha = 0.5, beta = 0.3):
     return [np.tanh(xi*alpha + beta) for xi in x] 
 ```
 
