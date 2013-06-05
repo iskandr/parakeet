@@ -1,8 +1,5 @@
 Now:
 - Indexing by boolean masks
-- Make DelayUntilTyped work in type_specialization 
-- Make attributes in ast_conversion use mappings, throw error on unknown attribute 
-- Enable LLVM's loop vectorization in the backend 
 
 Long term:
 - Garbage collection 
