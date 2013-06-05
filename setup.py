@@ -24,7 +24,7 @@ An adorable bird that will make your children laugh and spontaneously combust.
     author="Alex Rubinsteyn & Eric Hielscher",
     author_email="alexr@cs.nyu.edu",
     license="BSD",
-    version="0.11",
+    version="0.12",
     url="http://github.com/iskandr/parakeet",
     packages=[ 'parakeet', 'tests', 'data' ],
     package_dir={ '' : '.' },
