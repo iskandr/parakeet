@@ -5,7 +5,7 @@ Do you have intolerably slow numerical algorithms written in Python?
 Parakeet may be able to significantly speed up your bottleneck through 
 *type specialization* and *native code generation*. 
 
-To accelerate wrap it with Parakeet's *@jit* decorator:
+To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 
 ```python 
 
