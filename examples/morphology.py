@@ -21,9 +21,63 @@ else:
   empty_like = np.empty_like 
 import time 
 
-if not running_pypy:
-  from numba import autojit 
-  from parakeet import jit 
+
+
+  
+k = 7
+width, height = 1024,768
+if running_pypy:
+  from random import randint
+  image = np.array([[randint(0,256) for _ in xrange(width)] for _ in xrange(height)])
+else:
+  image = np.random.randint(0, 256,  (width, height)) / 256.0
+
+
+class timer(object):
+  def __init__(self, name = None):
+    self.name = name 
+    self.start_t = time.time()
+    
+  def __enter__(self):
+    self.start_t = time.time()
+  
+  def elapsed(self):
+    return time.time() - self.start_t
+  
+  def __exit__(self,*exit_args):
+    t = self.elapsed()
+    if self.name is None:
+      print "Elasped time %0.4f" % t 
+    else:
+      print "%s : %0.4f" % (self.name, t) 
+
+def run(fn, name, imshow=False):
+  print 
+  print "---", name 
+  for (prefix, wrapper) in [('parakeet-', jit), ('numba-', autojit)]:
+    print 
+    try:
+      wrapped_fn = wrapper(fn)
+      with timer(prefix + name + '-compile'):
+        wrapped_fn(image[:1, :1], k)
+      with timer(name):
+        result = wrapped_fn(image, k)
+      if imshow:
+        import pylab
+        pylab.imshow(image)
+        pylab.figure()
+        pylab.imshow(result)
+        pylab.figure()
+        pylab.imshow(scipy_result)
+        pylab.show()
+      if not running_pypy:
+        assert allclose(result, scipy_result)
+    except KeyboardInterrupt:
+      raise   
+    except:
+      print "%s failed" % (prefix+name)
+      import sys 
+      print sys.exc_info()[1]
 
 def dilate_naive(x, k):
   m,n = x.shape
@@ -39,37 +93,29 @@ def dilate_naive(x, k):
       y[i,j] = currmax
   return y  
 
-if not running_pypy:
-  dilate_naive_parakeet = jit(dilate_naive)
-  
-  #numba requires its own min/max 
-  @autojit
-  def numba_min(x,y):
-    return x if x < y else y
-  
-  @autojit
-  def numba_max(x,y):
-    return x if x > y else y
-  
-  @autojit
-  def dilate_naive_numba(x,k):
-    m,n = x.shape
-    y = empty_like(x)
-    for i in xrange(m):
-      for j in xrange(n):
-        currmax = x[i,j]
-        for ii in xrange(numba_max(0, i-k/2), numba_min(m, i+k/2+1)):
-          for jj in xrange(numba_max(0, j-k/2), numba_min(n, j+k/2+1)):
-            elt = x[ii,jj]
-            if elt > currmax:
-              currmax = elt
-        y[i,j] = currmax
-    return y  
+# Numba doesn't yet support min/max so try using inline if expressions
+def dilate_naive_inline(x,k):
+  m,n = x.shape
+  y = empty_like(x)
+  for i in xrange(m):
+    start_i = i - k/2
+    stop_i = i + k/2 + 1
+    for j in xrange(n):
+      currmax = x[i,j]
+      start_j = j - k/2
+      stop_j = j + k/2 + 1
+      for ii in xrange(start_i if start_i >= 0 else 0, stop_i if stop_i <= m else m):
+        for jj in xrange(start_j if start_j >= 0 else 0, stop_j if stop_j <=n else n):
+          elt = x[ii,jj]
+          if elt > currmax:
+            currmax = elt
+      y[i,j] = currmax
+  return y  
 
+ 
 def dilate_decompose_loops(x, k):
   m,n = x.shape
   y = empty_like(x)
-  z = empty_like(x)
   for i in xrange(m):
     for j in xrange(n):
       left_idx = max(0, i-k/2)
@@ -80,6 +126,7 @@ def dilate_decompose_loops(x, k):
         if elt > currmax:
           currmax = elt 
       y[i, j] = currmax 
+  z = empty_like(x)
   for i in xrange(m):
     for j in xrange(n):
       left_idx = max(0, j-k/2)
@@ -88,40 +135,40 @@ def dilate_decompose_loops(x, k):
       for jj in xrange(left_idx+1, right_idx):
         elt = y[i,jj]
         if elt > currmax:
+          currmax = elt
+      z[i,j] = currmax
+  return z 
+
+def dilate_decompose_loops_inline(x, k):
+  m,n = x.shape
+  y = empty_like(x)
+  for i in xrange(m):
+    start_i = i-k/2
+    stop_i = i+k/2+1 
+    for j in xrange(n):
+      left_idx = start_i if start_i >= 0 else 0
+      right_idx = stop_i if stop_i <= m else m 
+      currmax = x[left_idx, j]
+      for ii in xrange(left_idx+1, right_idx):
+        elt = x[ii, j]
+        if elt > currmax:
+          currmax = elt 
+      y[i, j] = currmax 
+  z = empty_like(x)
+  for i in xrange(m):
+    for j in xrange(n):
+      start_j = j-k/2
+      stop_j = j+k/2+1
+      left_idx = start_j if start_j >= 0 else 0
+      right_idx = stop_j if stop_j <= n else n
+      currmax = y[i,left_idx]  
+      for jj in xrange(left_idx+1, right_idx):
+        elt = y[i,jj]
+        if elt > currmax:
             currmax = elt
       z[i,j] = currmax
   return z 
 
-if not running_pypy:
-  dilate_decompose_loops_parakeet = jit(dilate_decompose_loops)
-  dilate_decompose_loops_numba = autojit(dilate_decompose_loops)
- 
-  @autojit
-  def dilate_decompose_loops_numba(x, k):
-    m,n = x.shape
-    y = empty_like(x)
-    z = empty_like(x)
-    for i in xrange(m):
-      for j in xrange(n):
-        left_idx = numba_max(0, i-k/2)
-        right_idx = numba_min(m, i+k/2+1) 
-        currmax = x[left_idx, j]
-        for ii in xrange(left_idx+1, right_idx):
-          elt = x[ii, j]
-          if elt > currmax:
-            currmax = elt 
-        y[i, j] = currmax 
-    for i in xrange(m):
-      for j in xrange(n):
-        left_idx = numba_max(0, j-k/2)
-        right_idx = numba_min(n, j+k/2+1)
-        currmax = y[i,left_idx]  
-        for jj in xrange(left_idx+1, right_idx):
-          elt = y[i,jj]
-          if elt > currmax:
-            currmax = elt
-        z[i,j] = currmax
-    return z 
 
 def dilate_1d_naive(x_strip,  k):
   """
@@ -148,9 +195,6 @@ def dilate_decompose(x, k):
   z = [dilate_1d_naive(y[:, col_idx], k) for col_idx in xrange(n)]
   return np.array(z).T
 
-if not running_pypy:
-  dilate_decompose_parakeet = jit(dilate_decompose)
-  dilate_decompose_numba = autojit(dilate_decompose)
 
 def dilate_1d_interior(x_strip, k):
   
@@ -201,64 +245,7 @@ def dilate_decompose_interior(x, k):
   z = [dilate_1d_interior(y[:, col_idx],k) for col_idx in xrange(n)]
   return np.array(z).T 
 
-if not running_pypy:
-  dilate_decompose_interior_parakeet = jit(dilate_decompose_interior)
-  dilate_decompose_interior_numba = autojit(dilate_decompose_interior)
 
-
-class timer(object):
-  def __init__(self, name = None):
-    self.name = name 
-    self.start_t = time.time()
-    
-  def __enter__(self):
-    self.start_t = time.time()
-  
-  def elapsed(self):
-    return time.time() - self.start_t
-  
-  def __exit__(self,*exit_args):
-    t = self.elapsed()
-    if self.name is None:
-      print "Elasped time %0.4f" % t 
-    else:
-      print "%s : elapsed time %0.4f" % (self.name, t) 
-
-  
-k = 7
-width, height = 1024,768
-if running_pypy:
-  from random import randint
-  image = np.array([[randint(0,256) for _ in xrange(width)] for _ in xrange(height)])
-else:
-  image = np.random.randint(0, 256,  (width, height)) / 256.0
-#print image.dtype 
-#import pylab
-#image  = pylab.imread('../data/rjp_small.png')[:,:,1]
-
-def run(fn, name, imshow=False):
-  print 
-  try:
-    with timer(name + '-compile'):
-      fn(image[:1, :1], k)
-    with timer(name):
-      result = fn(image, k)
-    if imshow:
-      import pylab
-      pylab.imshow(image)
-      pylab.figure()
-      pylab.imshow(result)
-      pylab.figure()
-      pylab.imshow(scipy_result)
-      pylab.show()
-    if not running_pypy:
-      assert allclose(result, scipy_result)
-  except KeyboardInterrupt:
-    raise   
-  except:
-    print "%s failed" % name
-    import sys 
-    print sys.exc_info()[1]
  
 if __name__ == '__main__':
 
@@ -266,19 +253,21 @@ if __name__ == '__main__':
     import scipy.ndimage
     with timer('scipy'):
       scipy_result = scipy.ndimage.grey_dilation(image, k, mode='nearest')
-    #import skimage.morphology
-    #with timer('skimage'):
-    #  selem = skimage.morphology.selem.rectangle(k,k)
-    #  skimage_result = skimage.morphology.dilation(image, selem)
-    run(dilate_naive_parakeet, 'parakeet-naive', imshow=False)
-    run(dilate_naive_numba, 'numba-naive')
-    run(dilate_decompose_loops_parakeet, 'parakeet-decompose-loops')
-    run(dilate_decompose_loops_numba, 'numba-decompose-loops')
+    from numba import autojit 
+    from parakeet import jit 
+    
+    run(dilate_naive, 'naive', imshow=False)
+    run(dilate_naive_inline, 'naive-inline')
+    run(dilate_decompose_loops, 'decompose-loops')    
+    run(dilate_decompose_loops_inline, 'decompose-loops-inline')
+    run(dilate_decompose, 'decompose-slices' )
+    run(dilate_decompose_interior, 'decompose-interior')
 
-    run(dilate_decompose_parakeet, 'parakeet-decompose-slices' )
-    run(dilate_decompose_numba, 'numba-decompose-slices-numba')
-    run(dilate_decompose_interior_parakeet, 'parakeet-decompose-interior')
-    run(dilate_decompose_interior_numba, 'numba-decompose-interior')
-
-  run(dilate_naive, 'cpython-naive')
-  run(dilate_decompose_loops, 'cpython-decompose=loops')
+  with timer('cpython-naive'):
+    dilate_naive(image, k,)
+  with timer('cpython-naive-inline'):
+    dilate_naive_inline(image, k)
+  with timer('cpython-decompose-loops'):
+    dilate_decompose_loops(image, k)
+  with timer('cpython-decompose-loops-inline'):
+    dilate_decompose_loops_inline(image, k)
