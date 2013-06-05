@@ -34,9 +34,10 @@ else:
 
 
 class timer(object):
-  def __init__(self, name = None):
+  def __init__(self, name = None, newline = True):
     self.name = name 
     self.start_t = time.time()
+    self.newline = newline
     
   def __enter__(self):
     self.start_t = time.time()
@@ -46,6 +47,8 @@ class timer(object):
   
   def __exit__(self,*exit_args):
     t = self.elapsed()
+    if self.newline:
+      print 
     if self.name is None:
       print "Elasped time %0.4f" % t 
     else:
@@ -55,12 +58,11 @@ def run(fn, name, imshow=False):
   print 
   print "---", name 
   for (prefix, wrapper) in [('parakeet-', jit), ('numba-', autojit)]:
-    print 
     try:
       wrapped_fn = wrapper(fn)
-      with timer(prefix + name + '-compile'):
+      with timer(prefix + name + '-compile', True):
         wrapped_fn(image[:1, :1], k)
-      with timer(name):
+      with timer(prefix + name, False):
         result = wrapped_fn(image, k)
       if imshow:
         import pylab
@@ -191,10 +193,8 @@ def dilate_1d_naive(x_strip,  k):
 
 def dilate_decompose(x, k): 
   m,n = x.shape
-  y = [dilate_1d_naive(x[row_idx, :], k) for row_idx in xrange(m)]
-  z = [dilate_1d_naive(y[:, col_idx], k) for col_idx in xrange(n)]
-  return np.array(z).T
-
+  y = np.array([dilate_1d_naive(x[row_idx, :], k) for row_idx in xrange(m)])
+  return np.array([dilate_1d_naive(y[:, col_idx], k) for col_idx in xrange(n)]).T
 
 def dilate_1d_interior(x_strip, k):
   
@@ -241,11 +241,8 @@ def dilate_1d_interior(x_strip, k):
 
 def dilate_decompose_interior(x, k): 
   m,n = x.shape
-  y = [dilate_1d_interior(x[row_idx, :],k) for row_idx in xrange(m)]
-  z = [dilate_1d_interior(y[:, col_idx],k) for col_idx in xrange(n)]
-  return np.array(z).T 
-
-
+  y = np.array([dilate_1d_interior(x[row_idx, :],k) for row_idx in xrange(m)])
+  return np.array([dilate_1d_interior(y[:, col_idx],k) for col_idx in xrange(n)]).T
  
 if __name__ == '__main__':
 
