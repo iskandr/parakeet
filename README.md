@@ -40,7 +40,6 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * List literals (interpreted as array construction)
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
-  
 
 Parakeet is written for Python 2.7 (sorry internet) and depends on:
 
@@ -50,3 +49,5 @@ Parakeet is written for Python 2.7 (sorry internet) and depends on:
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
 
 
+If you have any questions about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) 
+from last year or contact the [main developer](http://www.rubinsteyn.com).
