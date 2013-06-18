@@ -25,6 +25,10 @@ from tuple_type import empty_tuple_t, TupleT
 def identity(x):
   return x
 
+@macro 
+def parfor(shape, fn):
+  return syntax.ParFor(shape, fn)
+
 @staged_macro("axis")
 def map(f, *args, **kwds):
   axis = kwds.get('axis', syntax_helpers.zero_i64)
