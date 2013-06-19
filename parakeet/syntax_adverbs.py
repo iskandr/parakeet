@@ -6,7 +6,6 @@ class Adverb(Expr):
 class IndexAdverb(Adverb):
   _members = ['shape']
 
-
 class IndexMap(IndexAdverb):
   """
   Map from each distinct index in the shape to a value 
@@ -60,6 +59,7 @@ class Accumulative(DataAdverb):
   'combine' function to merge the accumulators resulting from parallel
   sub-computations.
   """
+class ParFor():
   _members = ['combine', 'init']
 
 
@@ -157,3 +157,5 @@ class ConvBorderValue(Conv):
   
 class ConvPadding(Conv):
   _members = ['fill_value']
+  
+  

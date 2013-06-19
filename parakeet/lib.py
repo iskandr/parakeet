@@ -27,7 +27,7 @@ def identity(x):
 
 @macro 
 def parfor(shape, fn):
-  return syntax.ParFor(shape, fn)
+  return syntax.IndexMap(fn = fn, shape = shape)
 
 @staged_macro("axis")
 def map(f, *args, **kwds):

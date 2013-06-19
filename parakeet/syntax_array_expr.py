@@ -62,8 +62,8 @@ class Reshape(Expr):
 class Shape(Expr):
   _members = ['array']
   
-  def children(self):
-    yield self.array 
+class Strides(Expr):
+  _members = ['array']
     
 class Transpose(Expr):
   _members = ['array']
