@@ -71,6 +71,12 @@ class Codegen(object):
         return "slice"
       else:
         return "elt"
+    elif c is TupleProj:
+      if expr.tuple.__class__ is Var:
+        original = names.original(expr.tuple.name)
+        return "%s%d_elt%d" % (original, names.versions[original], expr.index)
+      else:
+        return "tuple_elt%d" % expr.index
     else:
       return "temp"
 
@@ -118,8 +124,9 @@ class Codegen(object):
 
   def index(self, arr, idx, temp = True, name = None):
     """Index into array or tuple differently depending on the type"""
-
+    
     temp = temp or name is not None
+    
     arr_t = arr.type
 
     if isinstance(arr_t, ScalarT):

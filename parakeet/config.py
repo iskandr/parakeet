@@ -59,8 +59,8 @@ opt_stack_allocation = True
 opt_index_elimination = True
 opt_range_propagation = True
 opt_shape_elim = True
-opt_scalar_replacement = True
-opt_redundant_load_elimination = True  
+opt_scalar_replacement = False
+opt_redundant_load_elimination = False  
 
 
 # may dramatically increase compile time
@@ -68,7 +68,7 @@ opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = True
+stride_specialization = False
 
 ######################################
 #           LLVM OPTIONS             #
