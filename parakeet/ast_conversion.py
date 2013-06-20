@@ -573,7 +573,7 @@ class AST_Translator(ast.NodeVisitor):
     else:
       assert target.__class__ is ast.Tuple and all(e.__class__ is ast.Name for e in target.elts),\
        "Expected comprehension target to be variable or tuple of variables, got %s" % ast.dump(target)
-      arg_vars = target.elts
+      arg_vars = [ast.Tuple(elts = target.elts)]
     # build a lambda as a Python ast representing 
     # what we do to each element 
 

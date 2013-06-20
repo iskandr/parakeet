@@ -16,10 +16,10 @@ def local_maxima(data, wsize, mode=wrap):
   def is_max(position):
     myval = data[position]
     def is_bigger_neighbor(offset):
-      neighbor_idx = tuple(mode(p,o-w/2,w) for p,o,w in zip(position, offset, wsize))
+      neighbor_idx = tuple(mode(p, o-w/2, w) for (p, o, w) in zip(position, offset, wsize))
       return data[neighbor_idx] >= myval
-    return not parakeet.any(parakeet.imap(wsize, is_bigger_neighbor))
-  return parakeet.imap(data.shape, is_max)
+    return not parakeet.any(parakeet.imap(is_bigger_neighbor, wsize))
+  return parakeet.imap(is_max, data.shape)
 
 
 if __name__  == '__main__':
@@ -27,3 +27,9 @@ if __name__  == '__main__':
   x = np.random.randn(*shape)
   wsize = (3,5,3,1)
   y = local_maxima(x, wsize)
+  print x
+  print y
+  assert x.shape == y.shape  
+  print x.shape, x.dtype
+  print y.shape, y.dtype 
+  print "maxima", sum(y.ravel()) , "/", x.size

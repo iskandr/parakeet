@@ -37,6 +37,7 @@ function_mappings = {
   reduce : lib.reduce, 
  
   np.array : lib.identity, 
+  tuple : lib._builtin_tuple, 
  
   int : lib.int64, 
   long : lib.int64, 

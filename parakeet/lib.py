@@ -74,13 +74,13 @@ def ireduce(fn, shape, init = None):
   return IndexReduce(fn = fn, shape = shape, init = init)
 
 @jit 
-def _mk_tuple(*args):
+def _tuple_from_args(*args):
   return args
 
 @macro
 def zip(*args):
   import ast_conversion 
-  elt_tupler = ast_conversion.translate_function_value(_mk_tuple)
+  elt_tupler = ast_conversion.translate_function_value(_tuple_from_args)
   return Map(fn = elt_tupler, args = args)
 
 @macro 
@@ -136,6 +136,20 @@ def real(x):
   For now we don't have complex types, so real is just the identity function
   """
   return x 
+
+@macro 
+def _builtin_tuple(x):
+  def typed_tuple(xt):
+    if isinstance(xt.type, TupleT):
+      return xt 
+    else:
+      assert isinstance(xt.type, ArrayT), "Can't create type from %s" % (xt.type,)
+      assert isinstance(xt, syntax.Array), "Can only create tuple from array of const length"
+      elt_types = [e.type for e in xt.elts]
+      import tuple_type
+      tuple_t = tuple_type.make_tuple_type(elt_types)
+      return syntax.Tuple(xt.elts, type = tuple_t)
+  return DelayUntilTyped(x, typed_tuple)
 
 @macro 
 def alen(x):
