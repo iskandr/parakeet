@@ -30,6 +30,18 @@ from syntax_helpers import none, true, false, one_i64, zero_i64
 
 from mappings import function_mappings, method_mappings, property_mappings 
 
+class UnsupportedSyntax(Exception):
+  def __init__(self, node, filename = None):
+    self.filename = None 
+    self.node = node
+    
+  def __str__(self):
+    if self.filename is not None and self.node.lineno is not None:
+      return "Parakeet encountered unsupported syntax %s in %s on line %d" % \
+        (self.node.__class__.__name__, self.filename, self.node.lineno)
+    else:
+      return "Parakeet doesn't support %s" % self.node.__class__.__name__
+  
 class ExternalValue(object):
   """
   Wrap up references global values with this class
@@ -426,8 +438,7 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.Index(value, index)
 
   def generic_visit(self, expr):
-    raise RuntimeError("Unsupported: %s : %s" % (ast.dump(expr),
-                                                 expr.__class__.__name__))
+    raise UnsupportedSyntax(expr)
   
   def translate_builtin_call(self, value, positional, keywords_dict):
     if value is sum:
@@ -549,16 +560,24 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Assign(lhs, rhs)
 
     
+  def visit_GeneratorExp(self, expr):
+    return self.visit_ListComp(expr)
+    
   def visit_ListComp(self, expr):
     gens = expr.generators
     assert len(gens) == 1
     gen = gens[0]
     target = gen.target
-    assert target.__class__ is ast.Name
+    if target.__class__ is ast.Name:
+      arg_vars = [target]
+    else:
+      assert target.__class__ is ast.Tuple and all(e.__class__ is ast.Name for e in target.elts),\
+       "Expected comprehension target to be variable or tuple of variables, got %s" % ast.dump(target)
+      arg_vars = target.elts
     # build a lambda as a Python ast representing 
     # what we do to each element 
 
-    args = ast.arguments(args = [target], 
+    args = ast.arguments(args = arg_vars, 
                          vararg = None,  
                          kwarg = None,  
                          defaults = ())
@@ -570,7 +589,7 @@ class AST_Translator(ast.NodeVisitor):
 
     seq = self.visit(gen.iter)
     ifs = gen.ifs
-    assert len(ifs) == 0
+    assert len(ifs) == 0, "Parakeet: Conditions in array comprehensions not yet supported"
     return Map(fn = fn, args=(seq,), axis = zero_i64)
       
   def visit_Attribute(self, expr):
