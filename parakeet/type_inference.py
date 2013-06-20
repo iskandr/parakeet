@@ -475,12 +475,24 @@ class Annotator(Transform):
                               type = result_type)
   
   def transform_Map(self, expr):
-
     closure = self.transform_expr(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
+    assert len(arg_types) > 0, "Map requires array arguments"
+    # if all arguments are scalars just handle map as a regular function call
     if all(isinstance(t, ScalarT) for t in arg_types):
       return self.invoke(closure, new_args)
+    # if any arguments are tuples then all of them should be tuples of same len
+    elif any(isinstance(t, TupleT) for t in arg_types):
+      assert all(isinstance(t, TupleT) for t in arg_types), \
+        "Map doesn't support input types %s" % (arg_types,)
+      nelts = len(arg_types[0].elt_types)
+      assert all(len(t.elt_types) == nelts for t in arg_types[1:]), \
+       "Tuple arguments to Map must be of same length"
+      zipped_elts = []
+      for i in xrange(nelts):
+        zipped_elts.append([self.tuple_proj(arg,i) for arg in new_args])
+      return self.tuple([self.invoke(closure, elts) for elts in zipped_elts])
     axis = self.transform_if_expr(expr.axis)
     result_type, typed_fn = specialize_Map(closure.type, arg_types)
     if axis is None or self.is_none(axis):

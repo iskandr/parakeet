@@ -27,7 +27,7 @@ def identity(x):
 
 @macro 
 def parfor(shape, fn):
-  return syntax.IndexMap(fn = fn, shape = shape)
+  return syntax.ParFor(fn = fn, shape = shape)
 
 @staged_macro("axis")
 def map(f, *args, **kwds):
@@ -72,6 +72,16 @@ def imap(fn, shape):
 @macro
 def ireduce(fn, shape, init = None):
   return IndexReduce(fn = fn, shape = shape, init = init)
+
+@jit 
+def _mk_tuple(*args):
+  return args
+
+@macro
+def zip(*args):
+  import ast_conversion 
+  elt_tupler = ast_conversion.translate_function_value(_mk_tuple)
+  return Map(fn = elt_tupler, args = args)
 
 @macro 
 def int8(x):

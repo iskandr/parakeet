@@ -11,6 +11,13 @@ class IndexMap(IndexAdverb):
   Map from each distinct index in the shape to a value 
   """
   pass 
+
+class ParFor(IndexAdverb):
+  """
+  Not really an adverb, since it doesn't return an array but only evaluates 
+  its function argument for side effects
+  """
+  pass   
   
 class IndexReduce(IndexAdverb):
   """
@@ -59,7 +66,6 @@ class Accumulative(DataAdverb):
   'combine' function to merge the accumulators resulting from parallel
   sub-computations.
   """
-class ParFor():
   _members = ['combine', 'init']
 
 
