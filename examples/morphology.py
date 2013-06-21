@@ -2,6 +2,8 @@
 import platform 
 impl = platform.python_implementation()
 
+from timer import timer 
+
 print "Running under", impl
 running_pypy = impl == 'PyPy'
 
@@ -33,26 +35,6 @@ else:
   image = np.random.randint(0, 256,  (width, height)) / 256.0
 
 
-class timer(object):
-  def __init__(self, name = None, newline = True):
-    self.name = name 
-    self.start_t = time.time()
-    self.newline = newline
-    
-  def __enter__(self):
-    self.start_t = time.time()
-  
-  def elapsed(self):
-    return time.time() - self.start_t
-  
-  def __exit__(self,*exit_args):
-    t = self.elapsed()
-    if self.newline:
-      print 
-    if self.name is None:
-      print "Elasped time %0.4f" % t 
-    else:
-      print "%s : %0.4f" % (self.name, t) 
 
 def run(fn, name, imshow=False):
   print 

@@ -205,51 +205,27 @@ class AdverbSemantics(object):
 
     dims = self.tuple_elts(shape)
     n_loops = len(dims)
-    zero = self.int(0)
-    if init is None or self.is_none(init):
-      first_idx = self.tuple([zero for _ in range(n_loops)]) if n_loops > 1 else zero 
-      init = self.invoke(fn, (first_idx,))
-      two_passes = True 
-    else:
-      two_passes = False 
-      
-    def build_loops(index_vars = (), acc = init, first_pass = False):
-
+    assert init is not None and not self.is_none(init), "IndexReduce requires initial value"
+    def build_loops(index_vars, acc):
+    
       n_indices = len(index_vars)
+      if n_indices > 0:
+        acc_value = acc.get()
+      else:
+        acc_value = acc 
       if n_indices == n_loops:
+        
         idx_tuple = self.tuple(index_vars) if n_indices > 1 else index_vars[0] 
         elt_result =  self.invoke(fn, (idx_tuple,))
-        new_acc_value = self.invoke(combine, (acc.get(), elt_result))
-        acc.update(new_acc_value)
+        acc.update(self.invoke(combine, (acc_value, elt_result)))
+        return acc.get()
       
-      elif n_indices == 0:
-        if two_passes:
-          start = self.int(0) if first_pass else self.int(1)
-          stop = self.int(1) if first_pass else dims[0]
-        else:
-          start = self.int(0)
-          stop = dims[0]
-        def loop_body(acc, idx):
-          build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
-        return self.accumulate_loop(start, stop, loop_body, acc)
-      else:
-        # intermediate loops start from zero 
-        def loop_body(idx):
-          build_loops(index_vars + (idx,), acc = acc, first_pass = first_pass)
-        start = self.int(0)
-        stop = dims[n_indices]
-        if first_pass:
-          if n_loops == n_indices + 1:
-            start = self.int(1)
-          else:
-            stop = self.int(1)
-        self.loop(start, stop, loop_body)
-        return acc.get() 
-    if two_passes:
-      acc0 = build_loops(index_vars = (), first_pass = True)
-      return build_loops(index_vars = (), acc = acc0, first_pass = False)
-    else:
-      return build_loops(index_vars = (), acc = init)
+      def loop_body(acc, idx):
+        new_value = build_loops(index_vars + (idx,), acc = acc)
+        acc.update(new_value)
+        return new_value
+      return self.accumulate_loop(self.int(0), dims[n_indices], loop_body, acc_value)
+    return build_loops(index_vars = (), acc = init)
    
     
     

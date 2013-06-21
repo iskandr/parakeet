@@ -3,17 +3,17 @@
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -59,8 +59,8 @@ opt_stack_allocation = True
 opt_index_elimination = True
 opt_range_propagation = True
 opt_shape_elim = True
-opt_scalar_replacement = False
-opt_redundant_load_elimination = False  
+opt_scalar_replacement = True
+opt_redundant_load_elimination = True  
 
 
 # may dramatically increase compile time
@@ -68,7 +68,7 @@ opt_loop_unrolling = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
-stride_specialization = False
+stride_specialization = True
 
 ######################################
 #           LLVM OPTIONS             #

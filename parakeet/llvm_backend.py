@@ -180,12 +180,32 @@ class Compiler(object):
       return builder.icmp(cmp_op, llvm_x, llvm_y, result_name)
 
   
+  def lt(self, t, llvm_x, llvm_y, builder, result_name = None ):
+    return self.cmp(prims.less, t, llvm_x, llvm_y, builder, result_name)
+  
+  def lte(self, t, llvm_x, llvm_y, builder, result_name = None ):
+    return self.cmp(prims.less_equal, t, llvm_x, llvm_y, builder, result_name)
+  
+  def neq(self, t, llvm_x, llvm_y, builder, result_name = None):
+    return self.cmp(prims.not_equal, t, llvm_x, llvm_y, builder, result_name)
+  
+  def sub(self, t, x, y, builder, result_name = "sub"):
+    if isinstance(t, FloatT):
+      return builder.fsub(x,y,result_name)
+    else:
+      return builder.sub(x,y,result_name)
+    
+  def add(self, t, x, y, builder, result_name = "add"):
+    if isinstance(t, FloatT):
+      return builder.fadd(x,y,result_name)
+    else:
+      return builder.add(x,y,result_name)
+    
   def neg(self, x, builder):
     if isinstance(x.type, llc.IntegerType):
-      return builder.neg(x)
+      return builder.neg(x, "neg")
     else:
-      return builder.fsub(zero(x.type), x, "neg")
-    
+      return builder.fsub(zero(x.type), x, "neg") 
   def prim(self, prim, t, llvm_args, builder, result_name = None):
     if result_name is None:
       result_name = prim.name + "_result"
@@ -207,6 +227,29 @@ class Compiler(object):
     elif prim == prims.negative:
       return self.neg(llvm_args[0], builder)
     
+    # python's remainder is weird in that it preserve's the sign of 
+    # the second argument, whereas LLVM's srem/frem operators preserve
+    # the sign of the first 
+    elif prim == prims.mod:
+      x,y = llvm_args 
+      if isinstance(t, (UnsignedT, BoolT)):
+        return builder.urem(llvm_args[0], llvm_args[1], "modulo")
+      elif isinstance(t, SignedT): 
+        rem = builder.srem(x,y, "modulo")
+      else:
+        assert isinstance(t, FloatT)
+        rem = builder.frem(llvm_args[0], llvm_args[1], "modulo")
+
+      y_is_negative = self.lt(t, y, zero(y.type), builder, "first_arg_negative")
+      rem_is_negative = self.lt(t, rem, zero(rem.type), builder, "rem_is_negative")
+      y_nonzero = self.neq(t, y, zero(y.type), builder, "first_arg_nonzero")
+      rem_nonzero = self.neq(t,x,zero(x.type),builder,"rem_nonzero")
+      neither_zero = builder.and_(y_nonzero, rem_nonzero, "neither_zero")
+      diff_signs = builder.xor(y_is_negative, rem_is_negative, "different_signs")
+      should_flip = builder.and_(neither_zero, diff_signs, "should_flip") 
+      flipped_rem = self.add(t, y, rem, builder, "flipped_rem") 
+      return builder.select(should_flip, flipped_rem, rem)
+        
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
       if isinstance(t, FloatT):
         instr = llvm_prims.float_binops[prim]

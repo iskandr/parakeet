@@ -37,8 +37,7 @@ signed_binops = {
   prims.add : 'add',  
   prims.subtract : 'sub', 
   prims.multiply : 'mul', 
-  prims.divide : 'sdiv', 
-  prims.mod : 'srem'
+  prims.divide : 'sdiv',
 }
 
 unsigned_binops = { 
@@ -54,7 +53,6 @@ float_binops = {
   prims.subtract : 'fsub', 
   prims.multiply : 'fmul', 
   prims.divide : 'fdiv', 
-  prims.mod : 'frem', 
 }
 
 # Note: there is no division instruction between booleans
@@ -63,7 +61,8 @@ bool_binops = {
   prims.add : 'or_',
   prims.multiply : 'and_', 
   prims.subtract : 'xor',
-  prims.divide : 'and_', 
+  prims.divide : 'and_',
+  
   prims.mod : 'urem'
   #prims.logical_not : 'not_'
 }

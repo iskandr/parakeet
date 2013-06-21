@@ -4,10 +4,10 @@ import parakeet
 from parakeet import jit 
 
 values = [1, 1.0, True, 
-          # np.array([1,2,3], dtype='int8'),
-          np.array([1,2,3], dtype='int16'),
+          np.array([1,2,3], dtype='int8'),
+          #np.array([1,2,3], dtype='int16'),
           #np.array([1,2,3], dtype='int32'), 
-          #np.array([1,2,3], dtype='int64'),
+          np.array([1,2,3], dtype='int64'),
           np.array([1,2,3], dtype='float32'), 
           # np.array([1,2,3], dtype='float64')
         ]

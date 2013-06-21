@@ -63,6 +63,11 @@ class Codegen(object):
         return names.original(expr.value.name) + "_" + expr.name
       else:
         return expr.name
+    elif c is Attribute:
+      if expr.value.__class__ is Var:
+        return "%s_%s" % (expr.value.name, expr.name)
+      else:
+        return expr.name
     elif c is Index:
       idx_t = expr.index.type
       if isinstance(idx_t, SliceT) or \
@@ -710,8 +715,11 @@ class Codegen(object):
       self.assign(new_var, new_value)
       self.curr_var = new_var
 
+  def mk_acc(self, init):
+    return self.Accumulator(init.type, self.fresh_var, self.assign)
+    
   def accumulate_loop(self, start, stop, loop_body, init, return_stmt = False):
-    acc = self.Accumulator(init.type, self.fresh_var, self.assign)
+    acc = self.mk_acc(init)
     def loop_body_with_acc(i):
       loop_body(acc, i)
     loop_stmt = self.loop(start, stop, loop_body_with_acc, return_stmt = True)
