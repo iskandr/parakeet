@@ -31,21 +31,29 @@ def python_local_maxima(data, wsize, mode=wrap):
       result[pos] &= (data[neighbor_idx] <= myval)
   return result 
 
+###
+# Numba fails no matter what I do with the code, giving up for now
+#
+#import numba
+#numba_local_maxima = numba.autojit(python_local_maxima)
+
 if __name__  == '__main__':
   from timer import timer 
   shape = (30,10,10,12)
   x = np.random.randn(*shape)
   wsize = (3,3,3,3)
-  with timer("Parakeet first run"):
-    z = local_maxima(x, wsize)
-  with timer("Parakeet second run"):
-    z = local_maxima(x, wsize)
+  with timer("Parakeet (first run)"):
+    parakeet_result  = local_maxima(x, wsize)
+  with timer("Parakeet (second run)"):
+    parakeet_result  = local_maxima(x, wsize)
+  #with timer("Numba (first run)"):
+  #  numba_result  = numba_local_maxima(x, wsize, wrap)
+  #with timer("Numba (second run)"):
+  #  numba_result  = numba_local_maxima(x, wsize, wrap)
   with timer("Python"):
-    y = python_local_maxima(x, wsize)
+    python_result = python_local_maxima(x, wsize) 
   
-  assert x.shape == y.shape == z.shape  
-  print "actual maxima", sum(y.ravel()), "/", x.size
-  print "parakeet maxima", sum(z.ravel()) , "/", x.size
-  assert np.allclose(y,z)
+  assert np.allclose(python_result,parakeet_result)
+  assert np.allclose(python_result,numba_result)
   
   
