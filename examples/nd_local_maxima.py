@@ -12,15 +12,6 @@ def reflect(pos, offset, bound):
     return min(2*(bound-1)-idx,max(idx,-idx))
   
 
-def python_local_maxima(data, wsize, mode=wrap):
-  result = np.ones(shape=data.shape,dtype='bool')
-  for pos in np.ndindex(data.shape):
-    myval = data[pos]  
-    for offset in np.ndindex(wsize):
-      neighbor_idx = tuple(mode(p, o-w/2, w) for (p, o, w) in zip(pos, offset, wsize))
-      result[pos] &= (data[neighbor_idx] <= myval)
-  return result 
-
 @parakeet.jit 
 def local_maxima(data, wsize, mode=wrap):
   def is_max(pos):
@@ -30,6 +21,16 @@ def local_maxima(data, wsize, mode=wrap):
     return parakeet.all(parakeet.imap(is_smaller_neighbor, wsize))
   return parakeet.imap(is_max, data.shape)
   
+
+def python_local_maxima(data, wsize, mode=wrap):
+  result = np.ones(shape=data.shape,dtype='bool')
+  for pos in np.ndindex(data.shape):
+    myval = data[pos]  
+    for offset in np.ndindex(wsize):
+      neighbor_idx = tuple(mode(p, o-w/2, w) for (p, o, w) in zip(pos, offset, wsize))
+      result[pos] &= (data[neighbor_idx] <= myval)
+  return result 
+
 if __name__  == '__main__':
   from timer import timer 
   shape = (30,10,10,12)

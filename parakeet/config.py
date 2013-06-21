@@ -28,7 +28,7 @@ print_before_specialization = False
 print_functions_before_transforms = [] #['LowerAdverbs'] # ['DCE'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['Fusion'] #['LowerAdverbs'] #['DCE'] 
+print_functions_after_transforms = [] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
 
 # show aliases and escape sets
 print_escape_analysis = False
