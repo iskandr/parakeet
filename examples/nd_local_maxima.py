@@ -35,12 +35,13 @@ if __name__  == '__main__':
   shape = (30,10,10,12)
   x = np.random.randn(*shape)
   wsize = (3,3,3,3)
-  with timer("Python"):
-    y = python_local_maxima(x, wsize)
   with timer("Parakeet first run"):
     z = local_maxima(x, wsize)
   with timer("Parakeet second run"):
     z = local_maxima(x, wsize)
+  with timer("Python"):
+    y = python_local_maxima(x, wsize)
+  
   assert x.shape == y.shape == z.shape  
   print "actual maxima", sum(y.ravel()), "/", x.size
   print "parakeet maxima", sum(z.ravel()) , "/", x.size

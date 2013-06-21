@@ -2,7 +2,8 @@ import inline
 import names
 import syntax_helpers
 
-from syntax import Var, Const,  Return, TypedFn, DataAdverb, Map, AllPairs
+from syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
+from syntax import IndexMap, IndexReduce, Map, Reduce, AllPairs
 from transform import Transform
 from use_analysis import use_count
 
@@ -106,7 +107,9 @@ class Fusion(Transform):
     if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
-    if isinstance(rhs, DataAdverb) and rhs.__class__ is not AllPairs:
+    if isinstance(rhs, DataAdverb) and \
+       rhs.__class__ is not AllPairs and \
+       inline.can_inline(self.get_fn(rhs.fn)):
 
       args = rhs.args
       if all(arg.__class__ in (Var, Const) for arg in args):
@@ -119,35 +122,62 @@ class Fusion(Transform):
           n_occurrences = sum((name == arg_name for name in arg_names))
           if self.use_counts[arg_name] == n_occurrences:
             prev_adverb = self.adverb_bindings[arg_name]
-            if prev_adverb.__class__ is Map and \
-               rhs.axis == prev_adverb.axis and \
-               inline.can_inline(self.get_fn(prev_adverb.fn)) and \
-               inline.can_inline(self.get_fn(rhs.fn)):
- 
-              surviving_array_args = []
-              fusion_args = []
-              for (pos, arg) in enumerate(rhs.args):
-                c = arg.__class__
-                if c is Var and arg.name == arg_name:
-                  fusion_args.append(None)
-                elif c is Const:
-                  fusion_args.append(arg)
-                else:
-                  surviving_array_args.append(arg)
-                  fusion_args.append(pos)
-              new_fn, clos_args = \
+            if inline.can_inline(self.get_fn(prev_adverb.fn)):
+             
+              # 
+              # Map(Map) -> Map
+              # Reduce(Map) -> Reduce 
+              # Scan(Map) -> Scan 
+              # 
+              if prev_adverb.__class__ is Map and rhs.axis == prev_adverb.axis:
+                surviving_array_args = []
+                fusion_args = []
+                for (pos, arg) in enumerate(rhs.args):
+                  c = arg.__class__
+                  if c is Var and arg.name == arg_name:
+                    fusion_args.append(None)
+                  elif c is Const:
+                    fusion_args.append(arg)
+                  else:
+                    surviving_array_args.append(arg)
+                    fusion_args.append(pos)
+                new_fn, clos_args = \
                   fuse(self.get_fn(prev_adverb.fn),
-                       self.closure_elts(prev_adverb.fn),
-                       self.get_fn(rhs.fn),
-                       self.closure_elts(rhs.fn),
-                       fusion_args)
-              assert new_fn.return_type == self.return_type(rhs.fn)
-              del self.adverb_bindings[arg_name]
-              if self.fn.copied_by:
-                new_fn = self.fn.copied_by.apply(new_fn)
-              rhs.fn = self.closure(new_fn, clos_args)
-              rhs.args = prev_adverb.args + surviving_array_args
-
-    if stmt.lhs.__class__ is Var and isinstance(rhs, DataAdverb):
+                        self.closure_elts(prev_adverb.fn),
+                        self.get_fn(rhs.fn),
+                        self.closure_elts(rhs.fn),
+                        fusion_args)
+                assert new_fn.return_type == self.return_type(rhs.fn)
+                del self.adverb_bindings[arg_name]
+                if self.fn.copied_by:
+                  new_fn = self.fn.copied_by.apply(new_fn)
+                rhs.fn = self.closure(new_fn, clos_args)
+                rhs.args = prev_adverb.args + surviving_array_args
+                
+              # 
+              # Reduce(IndexMap) -> IndexReduce
+              #   
+              elif prev_adverb.__class__ is IndexMap and \
+                   rhs.__class__ is Reduce and \
+                   len(rhs.args) == 1 and \
+                   (self.is_none(rhs.axis) or rhs.args[0].type.rank == 1):
+                
+                new_fn, clos_args = \
+                  fuse(self.get_fn(prev_adverb.fn),
+                        self.closure_elts(prev_adverb.fn),
+                        self.get_fn(rhs.fn),
+                        self.closure_elts(rhs.fn),
+                        rhs.args)
+                assert new_fn.return_type == self.return_type(rhs.fn)
+                del self.adverb_bindings[arg_name]
+                if self.fn.copied_by:
+                  new_fn = self.fn.copied_by.apply(new_fn)
+                stmt.rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
+                                  shape = prev_adverb.shape, 
+                                  combine = rhs.combine, 
+                                  type = rhs.type,
+                                  init = rhs.init )
+                
+    if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb):
       self.adverb_bindings[stmt.lhs.name] = rhs
     return stmt

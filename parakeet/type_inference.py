@@ -577,8 +577,17 @@ class Annotator(Transform):
       if adverb_helpers.max_rank(arg_types) > 1:
         assert len(new_args) == 1, \
           "Can't handle multiple reduction inputs and flattening from axis=None"
-        x = new_args[0]
-        return self.flatten_Reduce(map_fn, combine_fn, x, init)
+        #x = new_args[0]
+        #return self.flatten_Reduce(map_fn, combine_fn, x, init)
+        #new_args = [self.ravel(new_args[0])]
+        #arg_types = get_types(new_args)
+        
+        # Expect that the arguments will get raveled before 
+        # the adverb gets evaluated 
+        axis = self.none
+        arg_types = [array_type.lower_rank(t, t.rank - 1) 
+                     for t in arg_types
+                     if t.rank > 1]
       else:
         axis = self.int(0)                        
     
@@ -594,7 +603,7 @@ class Annotator(Transform):
     if init_type and init_type != result_type and \
        array_type.rank(init_type) < array_type.rank(result_type):
       assert len(new_args) == 1
-      assert is_zero(axis)
+      #assert is_zero(axis), "Unexpected axis %s : %s" % (axis, axis.type)
       arg = new_args[0]
       first_elt = syntax.Index(arg, zero_i64, 
                                   type = arg.type.index_type(zero_i64))
@@ -607,6 +616,7 @@ class Annotator(Transform):
       rest = syntax.Index(arg, slice_rest, 
                              type = arg.type.index_type(slice_rest))
       new_args = (rest,)  
+    
     return syntax.Reduce(fn = typed_map_closure,
                          combine = typed_combine_closure,
                          args = new_args,

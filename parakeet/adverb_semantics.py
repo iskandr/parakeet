@@ -113,11 +113,15 @@ class AdverbSemantics(object):
     return output
 
   def eval_reduce(self, map_fn, combine, init, values, axis):
-    assert axis is not None 
-    niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     zero = self.int(0)
     one = self.int(1)
     
+    if axis is  None or self.is_none(axis):
+      assert len(values) == 1
+      values = [self.ravel(values[0])]
+      axis = 0
+    
+    niters, delayed_elts = self.map_prelude(map_fn, values, axis)
     first_acc_value = self.invoke(map_fn, [elt(zero) for elt in delayed_elts])
     if init is None or self.is_none(init):
       init = first_acc_value
