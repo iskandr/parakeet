@@ -205,7 +205,16 @@ class AdverbSemantics(object):
 
     dims = self.tuple_elts(shape)
     n_loops = len(dims)
-    assert init is not None and not self.is_none(init), "IndexReduce requires initial value"
+    
+    zero = self.int(0)
+    
+    if init is not None or not self.is_none(init):
+      if n_loops > 1:
+        zeros = self.tuple([zero for _ in xrange(n_loops)])
+        init = self.invoke(fn, [zeros])
+      else:
+        init = self.invoke(fn, [zero])
+        
     def build_loops(index_vars, acc):
     
       n_indices = len(index_vars)

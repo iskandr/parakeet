@@ -19,10 +19,9 @@ def test_each_col_sum():
   n = 1000
   X = np.random.random((m,n))
   Xt = X.T
-  print "Map(Reduce)"
   # summing rows of Xt is same as summing cols of original
   testing_helpers.timed_test(each_col_sum, [Xt], np.sum, [Xt,1],
-                             min_speedup = 0.1)
+                             min_speedup = 0.05)
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
