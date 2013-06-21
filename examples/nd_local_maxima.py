@@ -36,9 +36,9 @@ if __name__  == '__main__':
   wsize = (3,5,3,1)
   y = python_local_maxima(x, wsize)
   z = local_maxima(x, wsize)
-  print x
-  print y
-  print z 
+  #print x
+  #print y
+  #print z 
   assert x.shape == y.shape == z.shape  
   print "actual maxima", sum(y.ravel()), "/", x.size
   print "parakeet maxima", sum(z.ravel()) , "/", x.size

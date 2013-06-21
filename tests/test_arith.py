@@ -39,6 +39,12 @@ def div(x,y):
 
 def test_div():
   run(div, np.divide)
-  
+ 
+def mod(x,y):
+  return x % y 
+
+def test_mod():
+  run(mod, np.mod)
+ 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()
