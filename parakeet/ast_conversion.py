@@ -31,14 +31,20 @@ from syntax_helpers import none, true, false, one_i64, zero_i64
 from mappings import function_mappings, method_mappings, property_mappings 
 
 class UnsupportedSyntax(Exception):
-  def __init__(self, node, filename = None):
-    self.filename = None 
+  def __init__(self, node, function_name = None, filename = None):
+    self.function_name = function_name 
+    self.filename = filename 
     self.node = node
     
   def __str__(self):
-    if self.filename is not None and self.node.lineno is not None:
-      return "Parakeet encountered unsupported syntax %s in %s on line %d" % \
-        (self.node.__class__.__name__, self.filename, self.node.lineno)
+    if self.function_name is not None and \
+       self.filename is not None and \
+       self.node.lineno is not None:
+      return "Parakeet doesn't support %s from function '%s' in file %s on line %d" % \
+        (self.node.__class__.__name__, self.function_name, self.filename, self.node.lineno)
+    elif self.function_name is not None:
+      return "Parakeet doesn't support %s in '%s'" % \
+        (self.node.__class__.__name__, self.function_name)
     else:
       return "Parakeet doesn't support %s" % self.node.__class__.__name__
   
@@ -129,8 +135,12 @@ def value_to_syntax(v):
     return translate_function_value(v)  
     
 class AST_Translator(ast.NodeVisitor):
-  def __init__(self, globals_dict=None, closure_cell_dict=None,
-               parent=None):
+  def __init__(self, 
+               globals_dict=None, 
+               closure_cell_dict=None,
+               parent=None, 
+               function_name = None, 
+               filename = None):
     # assignments which need to get prepended at the beginning of the
     # function
     self.globals = globals_dict
@@ -148,6 +158,8 @@ class AST_Translator(ast.NodeVisitor):
     
     self.original_outer_names = []
     self.localized_outer_names = []
+    self.filename = filename 
+    self.function_name = function_name 
     self.push()
 
   def push(self, scope = None, block = None):
@@ -438,7 +450,9 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.Index(value, index)
 
   def generic_visit(self, expr):
-    raise UnsupportedSyntax(expr)
+    raise UnsupportedSyntax(expr, 
+                            function_name = self.function_name, 
+                            filename = self.filename)
   
   def translate_builtin_call(self, value, positional, keywords_dict):
     if value is sum:
@@ -744,11 +758,14 @@ class AST_Translator(ast.NodeVisitor):
   def visit_Lambda(self, node):
     return translate_function_ast("lambda", node.args, [ast.Return(node.body)], parent = self)
     
-def translate_function_ast(name, args, body, 
+def translate_function_ast(name, 
+                           args, 
+                           body, 
                            globals_dict = None,
                            closure_vars = [], 
                            closure_cells = [],
-                           parent = None):
+                           parent = None, 
+                           filename = None):
   """
   Helper to launch translation of a python function's AST, and then construct
   an untyped parakeet function from the arguments, refs, and translated body.
@@ -756,8 +773,12 @@ def translate_function_ast(name, args, body,
   
   assert len(closure_vars) == len(closure_cells)
   closure_cell_dict = dict(zip(closure_vars, closure_cells))
-
-  translator = AST_Translator(globals_dict, closure_cell_dict, parent)
+  
+  if filename is None and parent is not None:
+    filename = parent.filename 
+    
+  translator = AST_Translator(globals_dict, closure_cell_dict, 
+                              parent, function_name = name, filename = filename)
 
   ssa_args, assignments = translator.translate_args(args)
   _, body = translator.visit_block(body)
@@ -794,8 +815,11 @@ def strip_leading_whitespace(source):
   else:
     return source
 
-def translate_function_source(source, globals_dict, closure_vars = [],
-                              closure_cells = []):
+def translate_function_source(source, 
+                              globals_dict, 
+                              closure_vars = [],
+                              closure_cells = [],
+                              filename = None):
   assert len(closure_vars) == len(closure_cells)
   syntax = ast.parse(strip_leading_whitespace(source))
 
@@ -812,9 +836,11 @@ def translate_function_source(source, globals_dict, closure_vars = [],
                                 syntax.body, 
                                 globals_dict, 
                                 closure_vars,
-                                closure_cells)
+                                closure_cells, 
+                                filename = filename)
 
 def translate_function_value(fn, _currently_processing = set([])):
+  print ">>", fn 
   if fn in function_mappings:
     fn = function_mappings[fn]
   
@@ -857,6 +883,7 @@ def translate_function_value(fn, _currently_processing = set([])):
     assert hasattr(fn, 'func_code'), \
         "Expected function to have code object: %s" % fn
     source = inspect.getsource(fn)
+    filename = inspect.getsourcefile(fn)
     globals_dict = fn.func_globals
 
     free_vars = fn.func_code.co_freevars
@@ -865,7 +892,11 @@ def translate_function_value(fn, _currently_processing = set([])):
       closure_cells = ()
 
     
-    fundef = translate_function_source(source, globals_dict, free_vars, closure_cells)
+    fundef = translate_function_source(source,
+                                      globals_dict,
+                                      free_vars,
+                                      closure_cells, 
+                                      filename = filename)
    
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))

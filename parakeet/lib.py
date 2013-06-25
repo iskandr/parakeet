@@ -381,6 +381,7 @@ def fill(x, v):
   for i in range(len(x)):
     x[i] = v 
     
+    
 @jit
 def argmax(x):
   """

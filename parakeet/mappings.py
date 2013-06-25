@@ -29,6 +29,7 @@ method_mappings = {
   'max' : lib.max, 
   'ravel' : lib.ravel, 
   'flatten' : lib.ravel, 
+  'sum' : lib.sum, 
 }
 
 function_mappings = {
@@ -69,6 +70,9 @@ function_mappings = {
   np.minimum : prims.minimum, 
   np.maximum : prims.maximum, 
   
+  np.argmin : lib.argmin, 
+  np.argmax : lib.argmax, 
+  
   all : lib.all, 
   np.all : lib.all, 
   any : lib.any, 
@@ -77,6 +81,7 @@ function_mappings = {
   sum : lib.sum, 
   np.sum : lib.sum, 
   np.prod : lib.prod, 
+  np.mean : lib.mean, 
   
   abs : prims.abs, 
   np.abs : prims.abs, 
