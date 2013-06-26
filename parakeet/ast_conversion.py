@@ -840,7 +840,6 @@ def translate_function_source(source,
                                 filename = filename)
 
 def translate_function_value(fn, _currently_processing = set([])):
-  print ">>", fn 
   if fn in function_mappings:
     fn = function_mappings[fn]
   
@@ -850,7 +849,8 @@ def translate_function_value(fn, _currently_processing = set([])):
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
     fn = fn.f 
-    
+  
+  # print ">>", fn   
   assert type(fn) not in (types.BuiltinFunctionType, types.TypeType), \
     "Unsupported primitive: %s" % (fn,) 
 
@@ -876,30 +876,24 @@ def translate_function_value(fn, _currently_processing = set([])):
   elif isinstance(fn, macro):
     fundef = fn.as_fn()
   else:
-    assert hasattr(fn, 'func_globals'), \
-        "Expected function to have globals: %s" % fn
-    assert hasattr(fn, 'func_closure'), \
-        "Expected function to have closure cells: %s" % fn
-    assert hasattr(fn, 'func_code'), \
-        "Expected function to have code object: %s" % fn
+    assert hasattr(fn, 'func_globals'), "Expected function to have globals: %s" % fn
+    assert hasattr(fn, 'func_closure'), "Expected function to have closure cells: %s" % fn
+    assert hasattr(fn, 'func_code'), "Expected function to have code object: %s" % fn
     source = inspect.getsource(fn)
     filename = inspect.getsourcefile(fn)
     globals_dict = fn.func_globals
 
     free_vars = fn.func_code.co_freevars
     closure_cells = fn.func_closure
-    if closure_cells is None:
-      closure_cells = ()
-
-    
+    if closure_cells is None: closure_cells = ()
     fundef = translate_function_source(source,
-                                      globals_dict,
-                                      free_vars,
-                                      closure_cells, 
-                                      filename = filename)
-   
+                                        globals_dict,
+                                        free_vars,
+                                        closure_cells, 
+                                        filename = filename)
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
+                
   register_python_fn(original_fn, fundef)
   register_python_fn(fn, fundef)
   _currently_processing.remove(original_fn)

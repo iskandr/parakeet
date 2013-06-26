@@ -11,7 +11,7 @@ import syntax_helpers
 import tuple_type
 import type_conv
 
-from args import ActualArgs, FormalArgs
+from args import ActualArgs, FormalArgs, MissingArgsError
 from array_type import ArrayT
 from closure_type import ClosureT 
 from core_types import Type, Bool, IntT, Int64,  ScalarT
@@ -837,8 +837,12 @@ def infer_types(untyped_fn, types):
 
   try: 
     tenv = typed_args.bind(types,
-                         keyword_fn = keyword_fn,
-                         starargs_fn = tuple_type.make_tuple_type)
+                           keyword_fn = keyword_fn,
+                           starargs_fn = tuple_type.make_tuple_type)
+  except  MissingArgsError as e:
+    e.fn_name = untyped_fn.name 
+    raise e 
+    
   except: 
     print "Error while calling %s with types %s" % (untyped_fn, types)
     raise

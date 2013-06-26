@@ -69,9 +69,10 @@ def scan(f, *args, **kwds):
 def imap(fn, shape):
   return IndexMap(shape = shape, fn = fn)
 
+
 @macro
-def ireduce(fn, shape, init = None):
-  return IndexReduce(fn = fn, shape = shape, init = init)
+def ireduce(combine, shape, map_fn = identity, init = None):
+  return IndexReduce(fn = map_fn, combine=combine, shape = shape, init = init)
 
 @jit 
 def _tuple_from_args(*args):
@@ -386,31 +387,57 @@ def fill(x, v):
 def argmax(x):
   """
   Currently assumes axis=None
-  TODO: Support axis arguments
+  TODO: 
+    - Support axis arguments
+    - use IndexReduce instead of explicit loop
+  
+      def argmax_map(curr_idx):
+        return curr_idx, x[curr_idx]
+  
+      def argmax_combine((i1,v1), (i2,v2)):
+        if v1 > v2:
+          return (i1,v1)
+        else:
+          return (i2,v2)
+    
+      return ireduce(combine=argmin_combine, shape=x.shape, map_fn=argmin_map, init = (0,x[0]))
   """
-  def helper(curr_idx, acc):
-    max_val = acc[1]
-    v = x[curr_idx]
-    if v > max_val:
-      return (curr_idx, v)
-    else:
-      return acc
-  return ireduce(helper, x.shape, init = (0,x[0]))
+  bestval = x[0]
+  bestidx = 0
+  for i in xrange(1, len(x)):
+    currval = x[i]
+    if currval > bestval:
+      bestval = currval
+      bestidx = i
+  return bestidx 
 
 @jit
 def argmin(x):
   """
   Currently assumes axis=None
-  TODO: Support axis arguments
+  TODO: 
+    - Support axis arguments
+    - use IndexReduce instead of explicit loop
+  
+      def argmin_map(curr_idx):
+        return curr_idx, x[curr_idx]
+  
+      def argmin_combine((i1,v1), (i2,v2)):
+        if v1 < v2:
+          return (i1,v1)
+        else:
+          return (i2,v2)
+    
+      return ireduce(combine=argmin_combine, shape=x.shape, map_fn=argmin_map, init = (0,x[0]))
   """
-  def helper(curr_idx, acc):
-    min_val = acc[1]
-    v = x[curr_idx]
-    if v < min_val:
-      return (curr_idx, v)
-    else:
-      return acc
-  return ireduce(helper, x.shape, init = (0,x[0]))
+  bestval = x[0]
+  bestidx = 0
+  for i in xrange(1, len(x)):
+    currval = x[i]
+    if currval < bestval:
+      bestval = currval
+      bestidx = i
+  return bestidx 
 
 @jit
 def copy(x):

@@ -31,10 +31,36 @@ def maybe_iter(obj):
   else:
     return iter(obj)
 
-class MissingArg:
-  pass
+class MissingArg(object):
+  pass 
+# placeholder object 
 missing_arg = MissingArg()
 
+class MissingArgsError(Exception):
+  def __init__(self, missing_arg_names, fn_name = None, file_name = None, line_no = None):
+    import names
+    self.missing_arg_names = [names.original(name) for name in missing_arg_names]
+    
+    self.fn_name = fn_name 
+    self.file_name = file_name 
+    self.line_no = line_no 
+    
+  def __str__(self):
+    if len(self.missing_arg_names) > 1:
+      err_str = "Missing args %s" % ", ".join(["'%s'" % name for name in self.missing_arg_names])
+    else:
+      err_str = "Missing arg '%s'" % self.missing_arg_names[0]
+    
+    if self.fn_name is not None:
+      err_str += " in call to function '%s'" % self.fn_name
+      
+    if self.file_name is not None:
+      err_str += " in file %s" % self.file_name 
+    
+    if self.line_no is not None:
+      err_str += " on line %d" % self.line_no
+    return err_str
+  
 class ActualArgs(object):
   def __init__(self, positional, keywords = {}, starargs = None):
     positional = tuple(positional)
@@ -223,7 +249,8 @@ class FormalArgs(object):
         assign(i, keyword_fn(local_name, v) if keyword_fn else v)
     arg_slots = self.nonlocals + tuple(self.positional)
     missing_args = [arg_slots[i] for i in xrange(n) if not bound[i]]
-    assert len(missing_args) == 0, "Missing args: %s" % (missing_args,)
+    if len(missing_args) > 0:
+      raise MissingArgsError(missing_args)
     return result, extra
   
 

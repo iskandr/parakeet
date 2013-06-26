@@ -120,12 +120,11 @@ class Codegen(object):
     return self.zero(t = Int64, name = name)
 
   def cast(self, expr, t):
-    assert isinstance(t, ScalarT), \
-        "Can't cast %s to non-scalar type %s" % (expr, t)
     if expr.type == t:
       return expr
-    else:
-      return self.assign_temp(Cast(expr, type = t), "cast_%s" % t)
+    assert isinstance(t, ScalarT), \
+        "Can't cast %s : %s to non-scalar type %s" % (expr, expr.type, t)
+    return self.assign_temp(Cast(expr, type = t), "cast_%s" % t)
 
   def index(self, arr, idx, temp = True, name = None):
     """Index into array or tuple differently depending on the type"""
