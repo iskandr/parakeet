@@ -1,6 +1,6 @@
 import parakeet
 import numpy as np 
-from timer import timer 
+from timer import compare_perf
 
 
 
@@ -27,19 +27,11 @@ def conv(x, weights, mode=clamp):
                     result[i,j] += x[idx] * weights[ii,jj] 
     return result
 
-fastconv = parakeet.jit(conv)
 
 xsize = (300,300)
 x = np.random.randn(*xsize)
 wsize = (5,5)
 w = np.random.randn(*wsize)
 
-
-with timer('parakeet-conv-first'):
-    fastconv(x,w)
-
-with timer('parakeet-conv-second'):
-    fastconv(x,w)
-
-with timer('python-conv'):
-    conv(x, w)
+# Nmba can't run this benchmark yet 
+compare_perf(conv, [x,w], numba=False)

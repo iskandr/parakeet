@@ -1,5 +1,5 @@
 import numpy as np 
-from timer import compare_with_numba 
+from timer import compare_perf
 
 # Simple convolution of 3x3 patches from a given array x
 # by a 3x3 array of filter weights
@@ -13,5 +13,5 @@ def conv_3x3_trim(x, weights):
 x = np.random.randn(500,500)
 w = np.random.randn(3,3)
 
-compare_with_numba(conv_3x3_trim, [x,w])
+compare_perf(conv_3x3_trim, [x,w])
 

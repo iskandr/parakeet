@@ -1,4 +1,3 @@
-from timer import compare_with_numba 
 import numpy as np
 
 def dists(X,Y):
@@ -12,6 +11,7 @@ d = 100
 X = np.random.randn(1000,d)
 Y = np.random.randn(200,d)
 
-compare_with_numba(dists, [X,Y])
+import timer 
+timer.compare_perf(dists, [X,Y])
 
 

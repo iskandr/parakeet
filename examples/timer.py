@@ -21,27 +21,31 @@ class timer(object):
     else:
       print "%s : %0.4f" % (self.name, t) 
 
-import parakeet 
-import numba
+from parakeet import jit
+from numba import autojit
 import numpy as np 
-def compare_with_numba(fn, args, cpython = True):
-  parakeet_fn = parakeet.jit(fn)
 
+def compare_perf(fn, args, numba= True, cpython = True):
+  
+  parakeet_fn = jit(fn)
+  
   with timer('Parakeet #1'):
     parakeet_result = parakeet_fn(*args)
 
   with timer('Parakeet #2'):
     parakeet_result = parakeet_fn(*args)
 
-  numba_fn = numba.autojit(fn)
+  if numba:
+    numba_fn = autojit(fn)
 
-  with timer('Numba #1'):
-    numba_result = numba_fn(*args)
+    with timer('Numba #1'):
+      numba_result = numba_fn(*args)
 
-  with timer('Numba #2'):
-    numba_result = numba_fn(*args)
+    with timer('Numba #2'):
+      numba_result = numba_fn(*args)
   
-  assert np.allclose(parakeet_result, numba_result)  
+    assert np.allclose(parakeet_result, numba_result)  
+  
   if cpython:
     with timer('Python'):
       python_result = fn(*args)
