@@ -102,6 +102,13 @@ class ShapeSemantics(AdverbSemantics):
         pass
       elif curr_idx.__class__ is ConstSlice:
         result_dims.append(curr_idx.nelts)
+      elif curr_idx.__class__ is Shape:
+        if len(curr_idx.dims) == 0:
+          # same as unknown scalar 
+          pass 
+        else:
+          assert len(curr_idx.dims) == 1, "Indexing by a multi-dimensional array not yet supported"
+          result_dims.append(curr_idx.dims[0])
       else:
         assert curr_idx.__class__ is Slice, "Unsupported index %s" % curr_idx
 
