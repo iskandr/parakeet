@@ -171,10 +171,19 @@ class RewriteTyped(Transform):
     if index.type.__class__ is ArrayT:
       assert index.type.rank == 1, \
         "Don't yet support indexing by %s" % index.type 
+      
       index_elt_t = index.type.elt_type
+      if index_elt_t == core_types.Bool:
+        index_array = syntax.Where(expr.index)
+        index_elt_t = core_types.Int64
+      else:
+        index_array = expr.index 
       index_fn = self.get_index_fn(expr.value.type, index_elt_t)
       index_closure = self.closure(index_fn, [expr.value])
-      return syntax.Map(fn = index_closure, args = [expr.index], type = expr.value.type, axis = zero_i64)
+      return syntax.Map(fn = index_closure, 
+                        args = index_array, 
+                        type = expr.value.type, 
+                        axis = zero_i64)
     else:
       return expr 
   

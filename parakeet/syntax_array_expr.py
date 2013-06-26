@@ -70,3 +70,12 @@ class Transpose(Expr):
   
   def children(self):
     yield self.array 
+    
+class Where(Expr):
+  """
+  Given a boolean array, returns its true indices 
+  """
+  _members = ['array']
+  
+  def children(self):
+    yield self.array 
