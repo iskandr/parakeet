@@ -166,18 +166,28 @@ class RewriteTyped(Transform):
     return fn 
     
   def transform_Index(self, expr):
-    # Fancy indexing! 
+    # TODO: Make fancy indexing work 
+    # with multiple indices, boolean index elements, 
+    # and multi-dimensional indexing
+    
     index = expr.index
+    #if index.type.__class__ is TupleT:
+    #  indices = index.elts 
+    #else:
+    #  indices = [index]
+    
     if index.type.__class__ is ArrayT:
       assert index.type.rank == 1, \
         "Don't yet support indexing by %s" % index.type 
       
       index_elt_t = index.type.elt_type
-      if index_elt_t == core_types.Bool:
-        index_array = syntax.Where(expr.index)
-        index_elt_t = core_types.Int64
-      else:
-        index_array = expr.index 
+      assert False
+      #if index_elt_t == core_types.Bool:
+      #  index_array = syntax.Where(expr.index)
+      #  index_elt_t = core_types.Int64
+      #else:
+      #  index_array = expr.index 
+      index_array = expr.index 
       index_fn = self.get_index_fn(expr.value.type, index_elt_t)
       index_closure = self.closure(index_fn, [expr.value])
       return syntax.Map(fn = index_closure, 

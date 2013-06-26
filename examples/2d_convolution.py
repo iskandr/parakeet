@@ -9,6 +9,12 @@ def clamp(i, offset, maxval):
     j = max(0, i + offset)
     return min(j, maxval)
 
+
+def reflect(pos, offset, bound):
+    idx = pos+offset
+    return min(2*(bound-1)-idx,max(idx,-idx))
+ 
+
 def conv(x, weights, mode=clamp):
     sx = x.shape
     sw = weights.shape
@@ -23,20 +29,17 @@ def conv(x, weights, mode=clamp):
 
 fastconv = parakeet.jit(conv)
 
-
 xsize = (300,300)
 x = np.random.randn(*xsize)
 wsize = (5,5)
 w = np.random.randn(*wsize)
 
 
-with timer('parakeet-first'):
+with timer('parakeet-conv-first'):
     fastconv(x,w)
 
-with timer('parakeet-second'):
+with timer('parakeet-conv-second'):
     fastconv(x,w)
 
-
-
-with timer('python'):
+with timer('python-conv'):
     conv(x, w)
