@@ -612,9 +612,7 @@ class Codegen(object):
     except:
       print "Shape inference failed when calling %s with %s" % (fn, args)
       import sys
-      print sys.exc_info()[0]
       print "Error %s ==> %s" % (sys.exc_info()[:2])
-
       raise
 
     if self.is_tuple(extra_dims):

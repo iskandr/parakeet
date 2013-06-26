@@ -61,7 +61,7 @@ class ShapeCodegen(Traversal):
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
     assert all(computable_dim(d) for d in v.dims), \
-        "Invalid symbolic shape: %s" % (v,)
+        "Symbolic shape '%s' has non-constant dimensions" % (v,)
     return self.codegen.tuple([self.visit(d) for d in v.dims])
 
   def visit_Dim(self, v):
