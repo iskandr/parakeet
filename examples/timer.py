@@ -12,14 +12,16 @@ class timer(object):
   def elapsed(self):
     return time.time() - self.start_t
   
-  def __exit__(self,*exit_args):
+  def __exit__(self, exc_type, exc_value, traceback):
     t = self.elapsed()
     if self.newline:
       print 
-    if self.name is None:
-      print "Elasped time %0.4f" % t 
+    s = "Elapsed time: " if self.name is None else "%s : " % self.name 
+    if exc_type is None:
+      s += "%0.4f" % t
     else:
-      print "%s : %0.4f" % (self.name, t) 
+      s += "FAILED (%s)" % str(exc_type)
+    print s  
 
 from parakeet import jit
 from numba import autojit
