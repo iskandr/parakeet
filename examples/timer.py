@@ -20,8 +20,10 @@ class timer(object):
     if exc_type is None:
       s += "%0.4f" % t
     else:
-      s += "FAILED (%s)" % str(exc_type)
-    print s  
+      s += "FAILED (%s)" % (str(exc_type) if exc_type.__name__ is None else exc_type.__name__)
+    print s 
+    # don't raise exceptions
+    return exc_type is not KeyboardInterrupt
 
 from parakeet import jit
 from numba import autojit

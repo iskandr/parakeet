@@ -12,12 +12,10 @@ def sqr_dists_loops(X,Y):
   return D
 
 ndims = 10
-nsamples = 10**5
-nclusters = 100
+nsamples = 10**4
+nclusters = 50
 X = np.random.randn(nsamples, ndims)
 Y = np.random.randn(nclusters, ndims)
-
-
 
 
 
@@ -74,6 +72,14 @@ import numba
 #
 # Numba's @autojit just like Parakeet's @jit
 #
+numba_dists = numba.autojit(sqr_dists)
+
+with timer('Numba (comprehensions) #1'):
+  numba_dists(X,Y)
+
+with timer('Numba (comprehensions) #2'):
+  numba_dists(X,Y)
+
 numba_dists_loops = numba.autojit(sqr_dists_loops)
 
 with timer('Numba (loops) #1'):
