@@ -33,5 +33,4 @@ x = np.random.randn(*xsize)
 wsize = (5,5)
 w = np.random.randn(*wsize)
 
-# Nmba can't run this benchmark yet 
-compare_perf(conv, [x,w], numba=False)
+compare_perf(conv, [x,w])

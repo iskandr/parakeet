@@ -4,6 +4,7 @@ import numpy as np
 
 def dist(x,y):
   return ((x-y)**2).sum()
+
 def kmeans_comprehensions(X, k, niters = 10):
   C = X[:k, :]
   for _ in xrange(niters):
@@ -48,4 +49,7 @@ X = np.random.randn(n,d)
 k = 5
 
 from timer import compare_perf
+
+compare_perf(kmeans_comprehensions, [X, k, 10])
+
 compare_perf(kmeans_loops, [X, k, 10])
