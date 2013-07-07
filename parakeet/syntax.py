@@ -1,12 +1,12 @@
-import args
-from   args import ActualArgs
-import core_types
-from  node import Node
-from syntax_stmts import * 
-from syntax_expr import *
-from syntax_array_expr import * 
-from syntax_adverbs import * 
 
+from arrayjit.syntax import * 
+from ndtypes import Type, TypeValueT
+from treelike  import Node
+
+import args
+
+from args import ActualArgs 
+from syntax_adverbs import * 
 
 class DelayUntilTyped(Expr):
   """
@@ -33,11 +33,11 @@ class TypeValue(Expr):
   
   def node_init(self):
     if self.type is None:
-      self.type = core_types.TypeValueT(self.type_value)
-    assert isinstance(self.type, core_types.TypeValueT)
+      self.type = TypeValueT(self.type_value)
+    assert isinstance(self.type, TypeValueT)
     assert self.type.type 
     
-class Fn(Expr):
+class UntypedFn(Expr):
   """
   Function definition.
   A top-level function can have references to python values from its enclosing
@@ -125,7 +125,7 @@ class TypedFn(Expr):
 
     assert isinstance(self.input_types, tuple), \
         "Invalid input types: %s" % (self.input_types,)
-    assert isinstance(self.return_type, core_types.Type), \
+    assert isinstance(self.return_type, Type), \
         "Invalid return type: %s" % (self.return_type,)
     assert isinstance(self.type_env, dict), \
         "Invalid type environment: %s" % (self.type_env,)
