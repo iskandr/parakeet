@@ -3,8 +3,8 @@ import array_type
 import syntax
 import tuple_type
 
-from core_types import Int64, Int32, Float32, Float64, Bool
-from core_types import FloatT, IntT, BoolT, NoneType, ScalarT
+from ndtypes import Int64, Int32, Float32, Float64, Bool
+from ndtypes import FloatT, IntT, BoolT, NoneType, ScalarT
 from syntax import Const
 
 def const_int(n, t = Int64):

@@ -1,40 +1,15 @@
-import numpy as np
 import types 
 
-import core_types 
+from ndtypes import ArrayT, type_conv, typeof_array
+
 import prims  
-import type_conv
 
-from array_type import make_array_type, ArrayT
 from closure_type import make_closure_type, ClosureT
-
 from frontend import jit, macro 
-from tuple_type import make_tuple_type, TupleT 
 
-from core_types import NoneT, NoneType, TypeValueT, from_dtype
-
-type_conv.register(type(None), NoneT, lambda _: NoneType)
-type_conv.register([np.dtype], TypeValueT, lambda dt: TypeValueT(from_dtype(dt))) 
-
-def typeof_type(t):
-  assert hasattr(t, 'dtype'), "Can only convert numpy types"
-  dt = t(0).dtype 
-  pt = from_dtype(dt)
-  return TypeValueT(pt) 
-type_conv.register(types.TypeType, TypeValueT, typeof_type)
-
-def typeof_tuple(python_tuple):
-  return make_tuple_type(map(type_conv.typeof, python_tuple))
-
-type_conv.register(types.TupleType, TupleT, typeof_tuple)
-
-def typeof_array(x):
-  x = np.asarray(x)
-  elt_t = core_types.from_dtype(x.dtype)
-  rank = len(x.shape)
-  return make_array_type(elt_t, rank)
-
-type_conv.register((np.ndarray, list, xrange), ArrayT, typeof_array)
+# ndtypes already register NumPy arrays type converters, 
+# but parakeet also treats ranges and lists as arrays 
+type_conv.register((list, xrange), ArrayT, typeof_array)
 
 def typeof_prim(p):
   untyped_fn = prims.prim_wrapper(p)
