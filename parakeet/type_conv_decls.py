@@ -7,9 +7,11 @@ import type_conv
 
 from array_type import make_array_type, ArrayT
 from closure_type import make_closure_type, ClosureT
-from core_types import NoneT, NoneType, TypeValueT, from_dtype
-from decorators import jit, macro 
+
+from frontend import jit, macro 
 from tuple_type import make_tuple_type, TupleT 
+
+from core_types import NoneT, NoneType, TypeValueT, from_dtype
 
 type_conv.register(type(None), NoneT, lambda _: NoneType)
 type_conv.register([np.dtype], TypeValueT, lambda dt: TypeValueT(from_dtype(dt))) 

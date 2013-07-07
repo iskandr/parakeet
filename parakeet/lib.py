@@ -6,7 +6,7 @@ import syntax_helpers
 
 import numpy as np 
 import prims 
-from decorators import macro, staged_macro, jit
+from frontend import macro, staged_macro, jit
 
 import array_type
 from array_type import ArrayT

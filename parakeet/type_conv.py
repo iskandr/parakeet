@@ -24,8 +24,8 @@ def equiv_type(python_type):
   return _type_mapping[python_type]
 
 def typeof(python_value):
-  import decorators 
-  if isinstance(python_value, decorators.jit):
+  import frontend 
+  if isinstance(python_value, frontend.jit):
     python_value = python_value.f 
   python_type = type(python_value)
   assert python_type in _typeof_functions, \

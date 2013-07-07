@@ -1,3 +1,45 @@
+
+default_backend = 'llvm'
+
+######################################
+#        PARAKEET OPTIMIZATIONS      #
+######################################
+
+opt_verify = True
+opt_inline = True
+opt_fusion = True
+
+opt_licm = True
+opt_copy_elimination = True
+opt_stack_allocation = True
+opt_index_elimination = True
+opt_range_propagation = True
+opt_shape_elim = True
+opt_scalar_replacement = True
+opt_redundant_load_elimination = True  
+
+# may dramatically increase compile time
+opt_loop_unrolling = False
+
+# recompile functions for distinct patterns of unit strides
+# in array arguments
+stride_specialization = True
+
+######################################
+#           LLVM OPTIONS             #
+######################################
+
+# run LLVM optimization passes
+llvm_optimize = True
+
+# number of times to run optimizations
+llvm_num_passes = 4
+
+# run verifier over generated LLVM code?
+llvm_verify = True
+
+
+
 #####################################
 #            DEBUG OUTPUT           #
 #####################################
@@ -45,42 +87,5 @@ print_specialized_function_names = False
 # print generated assembly of compiled functions
 print_x86 = False
 
-######################################
-#        PARAKEET OPTIMIZATIONS      #
-######################################
-
-opt_verify = True
-opt_inline = True
-opt_fusion = True
-
-opt_licm = True
-opt_copy_elimination = True
-opt_stack_allocation = True
-opt_index_elimination = True
-opt_range_propagation = True
-opt_shape_elim = True
-opt_scalar_replacement = True
-opt_redundant_load_elimination = True  
-
-
-# may dramatically increase compile time
-opt_loop_unrolling = False
-
-# recompile functions for distinct patterns of unit strides
-# in array arguments
-stride_specialization = True
-
-######################################
-#           LLVM OPTIONS             #
-######################################
-
-# run LLVM optimization passes
-llvm_optimize = True
-
-# number of times to run optimizations
-llvm_num_passes = 4
-
-# run verifier over generated LLVM code?
-llvm_verify = True
 
 
