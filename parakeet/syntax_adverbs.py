@@ -1,4 +1,4 @@
-from syntax_expr import Expr
+from arrayjit import Expr
  
 class Adverb(Expr):
   _members = ['fn']

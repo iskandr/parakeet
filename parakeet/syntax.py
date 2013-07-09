@@ -1,11 +1,7 @@
 
-from arrayjit.syntax import * 
-from ndtypes import Type, TypeValueT
-from treelike  import Node
-
-import args
-
-from args import ActualArgs 
+from arrayjit import syntax, Expr, block_to_str, closure_type
+  
+from args import FormalArgs
 from syntax_adverbs import * 
 
 class DelayUntilTyped(Expr):
@@ -24,19 +20,9 @@ class DelayUntilTyped(Expr):
   def children(self):
     return self.values
 
-class TypeValue(Expr):
-  """
-  Value materialization of a type 
-  """
-  
-  _members = ['type_value']
-  
-  def node_init(self):
-    if self.type is None:
-      self.type = TypeValueT(self.type_value)
-    assert isinstance(self.type, TypeValueT)
-    assert self.type.type 
     
+
+
 class UntypedFn(Expr):
   """
   Function definition.
@@ -63,12 +49,11 @@ class UntypedFn(Expr):
   def node_init(self):
     assert isinstance(self.name, str), \
         "Expected string for fn name, got %s" % self.name
-    assert isinstance(self.args, args.FormalArgs), \
+    assert isinstance(self.args, FormalArgs), \
         "Expected arguments to fn to be FormalArgs object, got %s" % self.args
     assert isinstance(self.body, list), \
         "Expected body of fn to be list of statements, got " + str(self.body)
 
-    import closure_type
     self.type = closure_type.make_closure_type(self, ())
     self.registry[self.name] = self
 
@@ -77,87 +62,6 @@ class UntypedFn(Expr):
       return [ref.deref() for ref in self.python_refs]
     else:
       return []
-
-  def children(self):
-    return ()
-
-################################################################################
-#
-#  Constructs below here are only used in the typed representation
-#
-################################################################################
-
-
-class TypedFn(Expr):
-  """
-  The body of a TypedFn should contain Expr nodes which have been extended with
-  a 'type' attribute
-  """
-
-  _members = ['name',
-              'arg_names',
-              'body',
-              'input_types',
-              'return_type',
-              'type_env',
-              # these last two get filled by
-              # transformation/optimizations later
-              'copied_by',
-              'version',]
-
-  registry = {}
-  max_version = {}
-  def next_version(self, name):
-    n = self.max_version[name] + 1
-    self.max_version[name] = n
-    return n
-
-  def node_init(self):
-    assert isinstance(self.body, list), \
-        "Invalid body for typed function: %s" % (self.body,)
-    assert isinstance(self.arg_names, (list, tuple)), \
-        "Invalid typed function arguments: %s" % (self.arg_names,)
-    assert isinstance(self.name, str), \
-        "Invalid typed function name: %s" % (self.name,)
-
-    if isinstance(self.input_types, list):
-      self.input_types = tuple(self.input_types)
-
-    assert isinstance(self.input_types, tuple), \
-        "Invalid input types: %s" % (self.input_types,)
-    assert isinstance(self.return_type, Type), \
-        "Invalid return type: %s" % (self.return_type,)
-    assert isinstance(self.type_env, dict), \
-        "Invalid type environment: %s" % (self.type_env,)
-
-    self.type = core_types.make_fn_type(self.input_types, self.return_type)
-
-    if self.version is None:
-      self.version = 0
-      self.max_version[self.name] = 0
-
-    registry_key = (self.name, self.version)
-    assert registry_key not in self.registry, \
-        "Typed function %s version %s already registered" % \
-        (self.name, self.version)
-    self.registry[registry_key] = self
-
-  def __repr__(self):
-    arg_strings = []
-
-    for name in self.arg_names:
-      arg_strings.append("%s : %s" % (name, self.type_env.get(name)))
-
-    return "function %s(%s) => %s:%s" % \
-           (self.name, ", ".join(arg_strings),
-            self.return_type,
-            block_to_str(self.body))
-
-  def __str__(self):
-    return "TypedFn(%s : %s => %s)" % (self.name, self.input_types, self.return_type)
-
-  def __hash__(self):
-    return hash(self.name)
 
   def children(self):
     return ()
