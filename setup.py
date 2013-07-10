@@ -21,10 +21,10 @@ An adorable bird that will make your children laugh and spontaneously combust.
                  'Intended Audience :: Developers',
                  'Programming Language :: Python :: 2.7',
                  ],
-    author="Alex Rubinsteyn & Eric Hielscher",
+    author="Alex Rubinsteyn",
     author_email="alexr@cs.nyu.edu",
     license="BSD",
-    version="0.13",
+    version="0.14",
     url="http://github.com/iskandr/parakeet",
     packages=[ 'parakeet', 'tests', 'data' , 'examples'],
     package_dir={ '' : '.' },
@@ -32,4 +32,8 @@ An adorable bird that will make your children laugh and spontaneously combust.
       'llvmpy', 
       'numpy', 
       'scipy',
+      'loopjit', 
+      'shapely',
+      'ndtypes',
+      'treelike'
     ])

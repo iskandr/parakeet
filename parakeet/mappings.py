@@ -119,5 +119,12 @@ function_mappings = {
   math.sinh : prims.sinh, 
   np.tanh : prims.tanh, 
   math.tanh : prims.tanh, 
+ 
+  math.atanh : prims.atanh, 
+  math.asinh : prims.asinh, 
+  math.acosh : prims.acosh, 
   
+  math.sqrt : prims.sqrt, 
+  np.sqrt : prims.sqrt, 
+ 
 }
