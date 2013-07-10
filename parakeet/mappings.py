@@ -120,9 +120,12 @@ function_mappings = {
   np.tanh : prims.tanh, 
   math.tanh : prims.tanh, 
  
-  math.atanh : prims.atanh, 
+  math.atanh : prims.arctanh,
+  np.arctanh : prims.arctanh,  
   math.asinh : prims.asinh, 
+  np.asinh : prims.arcsinh, 
   math.acosh : prims.acosh, 
+  np.acosh : prims.arccosh, 
   
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
