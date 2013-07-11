@@ -34,6 +34,5 @@ An adorable bird that will make your children laugh and spontaneously combust.
       'scipy',
       'loopjit', 
       'shapely',
-      'ndtypes',
       'treelike'
     ])
