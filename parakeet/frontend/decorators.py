@@ -2,7 +2,9 @@
 from loopjit import names 
 from .. args import FormalArgs  
 from .. syntax import Expr, Var, Const, Return, UntypedFn 
-from .. syntax.helpers import const, is_python_constant 
+from .. syntax import const, is_python_constant 
+
+from run_function import run  
 
 class jit:
   def __init__(self, f):

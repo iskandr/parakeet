@@ -26,7 +26,8 @@ An adorable bird that will make your children laugh and spontaneously combust.
     license="BSD",
     version="0.14",
     url="http://github.com/iskandr/parakeet",
-    packages=[ 'parakeet', 'tests', 'data' , 'examples'],
+    packages=[ 'parakeet', ],
+    
     package_dir={ '' : '.' },
     requires=[
       'llvmpy', 

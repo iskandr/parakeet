@@ -123,9 +123,9 @@ function_mappings = {
   math.atanh : prims.arctanh,
   np.arctanh : prims.arctanh,  
   math.asinh : prims.asinh, 
-  np.asinh : prims.arcsinh, 
+  np.arcsinh : prims.arcsinh, 
   math.acosh : prims.acosh, 
-  np.acosh : prims.arccosh, 
+  np.arccosh : prims.arccosh,
   
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
