@@ -43,11 +43,13 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
 
 Parakeet is written for Python 2.7 (sorry internet) and depends on:
 
+* [shapely](https://github.com/iskandr/shapely)
 * [llvmpy](https://github.com/llvmpy/llvmpy)
 * [NumPy](http://www.numpy.org/)
 * [SciPy](http://www.scipy.org/) 
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
 
+You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running "pip install parakeet". 
 
 If you have any questions about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) 
 from last year or contact the [main developer](http://www.rubinsteyn.com).
