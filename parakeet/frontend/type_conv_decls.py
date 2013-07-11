@@ -1,10 +1,9 @@
 import types 
 
-from ndtypes import ArrayT, type_conv, typeof_array
+from loopjit.ndtypes import ArrayT,  make_closure_type, ClosureT
+from loopjit.ndtypes import type_conv, typeof_array, 
+from loopjit import prims 
 
-import prims  
-
-from closure_type import make_closure_type, ClosureT
 from frontend import jit, macro 
 
 # ndtypes already register NumPy arrays type converters, 

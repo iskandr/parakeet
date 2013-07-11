@@ -1,8 +1,7 @@
 import numpy as np 
 
-from treelike.testing_helpers import run_local_tests, expect 
+from testing_helpers import run_local_tests, expect 
 
-from parakeet import jit 
 
 int_array = np.array([10,20,30])
 bool_array = np.array([True, True, True])
