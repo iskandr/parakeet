@@ -2,15 +2,16 @@ import itertools
 import numpy as np
 import types
 
-import adverb_semantics
-import ast_conversion
-import syntax
+from treelike import dispatch 
+from loopjit.ndtypes import ScalarT, StructT 
 
+from adverb.semantics import AdverbSemantics 
+from frontend import ast_conversion 
+from syntax import Expr, UntypedFn, TypedFn
+from syntax import  Var, Tuple, Return, If, While, ForLoop
 from args import ActualArgs
-from common import dispatch
-from core_types import ScalarT, StructT
 
-class InterpSemantics(adverb_semantics.AdverbSemantics):
+class InterpSemantics(AdverbSemantics):
   def size_along_axis(self, value, axis):
     assert len(value.shape) > axis, \
         "Can't get %d'th element of %s with shape %s" % \
@@ -134,7 +135,7 @@ class ClosureVal:
 def eval_fn(fn, actuals):
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
-  elif isinstance(fn, syntax.TypedFn):
+  elif isinstance(fn, TypedFn):
     assert len(fn.arg_names) == len(actuals), \
       "Wrong number of args, expected %s but given %s" % \
       (fn.arg_names, actuals)
@@ -142,7 +143,7 @@ def eval_fn(fn, actuals):
 
     for (k,v) in zip(fn.arg_names, actuals):
       env[k] = v
-  elif isinstance(fn, syntax.Fn):
+  elif isinstance(fn, UntypedFn):
     # untyped functions have a more complicated args object
     # which deals with named args, variable arity, etc..
     env = fn.args.bind(actuals)
@@ -158,13 +159,13 @@ def eval_fn(fn, actuals):
       return args.transform(eval_expr)
 
   def eval_if_expr(maybe_expr):
-    return eval_expr(maybe_expr) if isinstance(maybe_expr, syntax.Expr) else maybe_expr
+    return eval_expr(maybe_expr) if isinstance(maybe_expr, Expr) else maybe_expr
   
   def eval_expr(expr):
     # print ">>", expr
     if hasattr(expr, 'wrapper'):
       expr = expr.wrapper
-    assert isinstance(expr, syntax.Expr), "Not an expression-- %s : %s" % \
+    assert isinstance(expr, Expr), "Not an expression-- %s : %s" % \
          (expr, type(expr))
     def expr_Const():
       return expr.value
@@ -217,11 +218,11 @@ def eval_fn(fn, actuals):
       return eval_fn(fn, arg_values)
 
     def expr_Closure():
-      if isinstance(expr.fn, (syntax.Fn, syntax.TypedFn)):
+      if isinstance(expr.fn, (UntypedFn, TypedFn)):
         fundef = expr.fn
       else:
         assert isinstance(expr.fn, str)
-        fundef = syntax.Fn.registry[expr.fn]
+        fundef = UntypedFn.registry[expr.fn]
       closure_arg_vals = map(eval_expr, expr.args)
       return ClosureVal(fundef, closure_arg_vals)
 
@@ -252,7 +253,7 @@ def eval_fn(fn, actuals):
       return eval_expr(expr.tuple)[expr.index]
 
     def expr_ClosureElt():
-      assert isinstance(expr.closure, syntax.Expr), \
+      assert isinstance(expr.closure, Expr), \
           "Invalid closure expression-- %s : %s" % \
           (expr.closure, type(expr.closure))
       clos = eval_expr(expr.closure)
@@ -344,26 +345,26 @@ def eval_fn(fn, actuals):
       env[result] = eval_expr(right)
 
   def assign(lhs, rhs, env):
-    if isinstance(lhs, syntax.Var):
+    if isinstance(lhs, Var):
       env[lhs.name] = rhs
-    elif isinstance(lhs, syntax.Tuple):
+    elif isinstance(lhs, Tuple):
       assert isinstance(rhs, tuple)
       for (elt, v) in zip(lhs.elts, rhs):
         assign(elt, v, env)
-    elif isinstance(lhs, syntax.Index):
+    elif isinstance(lhs, Index):
       arr = eval_expr(lhs.value)
       idx = eval_expr(lhs.index)
       arr[idx] = rhs
 
   def eval_stmt(stmt):
-    if isinstance(stmt, syntax.Return):
+    if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)
-    elif isinstance(stmt, syntax.Assign):
+    elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
       assign(stmt.lhs, value, env)
 
-    elif isinstance(stmt, syntax.If):
+    elif isinstance(stmt, If):
       cond_val = eval_expr(stmt.cond)
       if cond_val:
         eval_block(stmt.true)
@@ -372,12 +373,12 @@ def eval_fn(fn, actuals):
         eval_block(stmt.false)
         eval_merge_right(stmt.merge)
 
-    elif isinstance(stmt, syntax.While):
+    elif isinstance(stmt, While):
       eval_merge_left(stmt.merge)
       while eval_expr(stmt.cond):
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
-    elif isinstance(stmt, syntax.ForLoop):
+    elif isinstance(stmt, ForLoop):
       start = eval_expr(stmt.start)
       stop = eval_expr(stmt.stop)
       step = eval_expr(stmt.step)

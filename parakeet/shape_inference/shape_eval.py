@@ -1,4 +1,5 @@
-from traversal import Traversal 
+from treelike import Traversal
+ 
 import types 
 import numpy as np 
 

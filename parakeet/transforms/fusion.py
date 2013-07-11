@@ -1,14 +1,12 @@
-import inline
-import names
-import syntax_helpers
-
-from syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
-from syntax import IndexMap, IndexReduce, Map, Reduce, AllPairs
-from transform import Transform
-from use_analysis import use_count
+from loopjit import names, inline, Transform 
+from loopjit.analysis.use_analysis import use_count 
+ 
+from .. import syntax 
+from .. syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
+from .. syntax import IndexMap, IndexReduce, Map, Reduce, AllPairs
 
 def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
-  if syntax_helpers.is_identity_fn(next_fn):
+  if syntax.helpers.is_identity_fn(next_fn):
     assert len(next_fixed_args) == 0
     return prev_fn, prev_fixed_args
 

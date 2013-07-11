@@ -1,4 +1,6 @@
-from shapely.syntax import * 
+from loopjit.syntax import *
+from loopjit.syntax.helpers import block_to_str 
+from loopjit.ndtypes import make_closure_type 
 
 from args import FormalArgs
  
@@ -51,7 +53,7 @@ class UntypedFn(Expr):
     assert isinstance(self.body, list), \
         "Expected body of fn to be list of statements, got " + str(self.body)
 
-    self.type = closure_type.make_closure_type(self, ())
+    self.type = make_closure_type(self, ())
     self.registry[self.name] = self
 
   def python_nonlocals(self):
