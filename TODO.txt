@@ -1,5 +1,6 @@
 Now:
 - Indexing by boolean masks
+- Factor out shape inference into Shapely
 
 Long term:
 - Garbage collection 
@@ -19,7 +20,6 @@ On pause:
 - Why is the pipeline ordering so fragile? 
 
 Maybe never?
-- Factor out shape inference into Shapely
 - Adverb-level vectorization 
 - starting parallel jobs from inside compiled code
 
