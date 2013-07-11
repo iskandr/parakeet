@@ -45,8 +45,7 @@ Parakeet is written for Python 2.7 (sorry internet) and depends on:
 
 * [shapely](https://github.com/iskandr/shapely)
 * [llvmpy](https://github.com/llvmpy/llvmpy)
-* [NumPy](http://www.numpy.org/)
-* [SciPy](http://www.scipy.org/) 
+* [NumPy and SciPy](http://www.scipy.org/install.html)
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
 
 You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running "pip install parakeet". 
