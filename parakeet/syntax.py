@@ -1,8 +1,7 @@
+from shapely.syntax import * 
 
-from arrayjit import syntax, Expr, block_to_str, closure_type
-  
 from args import FormalArgs
-from syntax_adverbs import * 
+ 
 
 class DelayUntilTyped(Expr):
   """
@@ -19,8 +18,6 @@ class DelayUntilTyped(Expr):
     
   def children(self):
     return self.values
-
-    
 
 
 class UntypedFn(Expr):
