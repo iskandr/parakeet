@@ -10,7 +10,7 @@ from treelike import NestedBlocks, ScopedDict
 from loopjit import names, prims 
 from loopjit.names import NameNotFound 
 from loopjit.prims import Prim 
-from loopjit.transform import subst_expr, subst_stmt_list
+from loopjit.transforms import subst_expr, subst_stmt_list
 
 from .. import config, syntax, lib
 from .. args import FormalArgs, ActualArgs
