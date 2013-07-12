@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 
 import sys
 
@@ -26,9 +26,11 @@ An adorable bird that will make your children laugh and spontaneously combust.
     license="BSD",
     version="0.14",
     url="http://github.com/iskandr/parakeet",
-    packages=[ 'parakeet', ],
+    packages=[ 'parakeet', 'parakeet.examples', 'parakeet.test' ],
     
-    package_dir={ '' : '.' },
+    package_dir={  'parakeet.examples' : './examples', 
+                   'parakeet.test' : './test' 
+                },
     requires=[
       'llvmpy', 
       'numpy', 
