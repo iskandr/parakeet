@@ -5,7 +5,8 @@ from loopjit.ndtypes import type_conv, typeof_array,
 from loopjit import prims 
 
 from frontend import jit, macro 
-
+from prim_wrapper import prim_wrapper 
+ 
 # ndtypes already register NumPy arrays type converters, 
 # but parakeet also treats ranges and lists as arrays 
 type_conv.register((list, xrange), ArrayT, typeof_array)
@@ -27,3 +28,6 @@ type_conv.register(types.FunctionType, ClosureT, typeof_fn)
 type_conv.register(jit, ClosureT, typeof_fn)
 type_conv.register(macro, ClosureT, typeof_fn)
 type_conv.register(types.BuiltinFunctionType, ClosureT, typeof_fn)
+
+import numpy as np
+type_conv.register(np.ufunc, ClosureT, typeof_fn)

@@ -1,5 +1,5 @@
 import config 
-import type_conv_decls
+
 from frontend import jit, macro
 from lib import *
 from run_function import run, specialize_and_compile

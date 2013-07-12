@@ -2,33 +2,27 @@ import __builtin__
 import ast
 import inspect
 import types
+from collections import OrderedDict
 
 import numpy as np
 
-import config
-import core_types 
-import lib 
-import names
-import nested_blocks 
-import prims
-import scoped_dict
-import syntax
-import syntax_helpers 
+from treelike import NestedBlocks, ScopedDict 
+from loopjit import names, prims 
+from loopjit.names import NameNotFound 
+from loopjit.prims import Prim 
+from loopjit.transform import subst_expr, subst_stmt_list
 
-from args import FormalArgs, ActualArgs
-from collections import OrderedDict
+from .. import config, syntax, lib
+from .. args import FormalArgs, ActualArgs
+from .. syntax import Assign, If, ForLoop, Var, PrimCall, Map
+from .. syntax import none, true, false, one_i64, zero_i64 
+from decorators import macro, jit 
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
-from decorators import macro, jit 
-from names import NameNotFound
-from prims import Prim, prim_wrapper
+from mappings import function_mappings, method_mappings, property_mappings 
+from prim_wrapper import prim_wrapper 
 from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
 
-from subst import subst_expr, subst_stmt_list
-from syntax import Assign, If, ForLoop, Var, PrimCall, Map
-from syntax_helpers import none, true, false, one_i64, zero_i64
-
-from mappings import function_mappings, method_mappings, property_mappings 
 
 class UnsupportedSyntax(Exception):
   def __init__(self, node, function_name = None, filename = None):

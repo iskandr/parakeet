@@ -1,16 +1,16 @@
 
 from .. frontend import macro, staged_macro, jit 
 from .. syntax import none, zero_i64, none_i64 
-from .. syntax import Map, Reduce,  
+from .. syntax import Map, Reduce, Scan, IndexMap, IndexReduce, ParFor, AllPairs 
+from .. syntax import none, translate_function_value
 
 @jit 
 def identity(x):
   return x
 
-
 @macro 
 def parfor(shape, fn):
-  return syntax.ParFor(fn = fn, shape = shape)
+  return ParFor(fn = fn, shape = shape)
 
 @staged_macro("axis")
 def map(f, *args, **kwds):
@@ -25,10 +25,10 @@ def allpairs(f, x, y, axis = 0):
 
 @staged_macro("axis")
 def reduce(f, *args, **kwds):
-  axis = kwds.get('axis', syntax_helpers.none)
-  init = kwds.get('init', syntax_helpers.none)
-  import ast_conversion
-  ident = ast_conversion.translate_function_value(identity)
+  axis = kwds.get('axis', none)
+  init = kwds.get('init', none)
+  
+  ident = translate_function_value(identity)
   return Reduce(fn = ident, 
                 combine = f, 
                 args = args,
@@ -37,10 +37,10 @@ def reduce(f, *args, **kwds):
 
 @staged_macro("axis")
 def scan(f, *args, **kwds):
-  axis = kwds.get('axis', syntax_helpers.zero_i64)
-  init = kwds.get('init', syntax_helpers.none)
-  import ast_conversion
-  ident = ast_conversion.translate_function_value(identity)
+  axis = kwds.get('axis', zero_i64)
+  init = kwds.get('init', none)
+  
+  ident = translate_function_value(identity)
   return Scan(fn = ident,  
                      combine = f,
                      emit = ident, 
