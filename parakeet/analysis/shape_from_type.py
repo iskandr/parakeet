@@ -7,7 +7,7 @@ from shape import Shape, Tuple, Closure, Var, Slice, Struct
 
 
 
-def from_types(types):
+def shapes_from_types(types):
   return Converter().from_types(types)
 
 class Converter(object):

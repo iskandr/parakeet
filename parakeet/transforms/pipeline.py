@@ -1,5 +1,7 @@
-from loopjit import Phase 
+from loopjit import Phase, Simplify, CopyElimination, Inliner 
+from loopjit import LoopInvariantCodeMotion, RangePropagation, DCE    
 
+from .. import config 
 from .. analysis import contains_adverbs  
 from fusion import Fusion
 from lower_adverbs import LowerAdverbs

@@ -45,7 +45,7 @@ def specialize(fn, args, kwargs = {}):
   # other functions it calls
   typed_fn = type_inference.specialize(untyped, arg_types)
   
-  from pipeline import high_level_optimizations
+  from .. transforms.pipeline import high_level_optimizations
   # apply high level optimizations 
   optimized_fn = high_level_optimizations.apply(typed_fn)
   

@@ -1,8 +1,8 @@
 from adverb_semantics import AdverbSemantics
-from shape import  Const, Shape, Tuple, Closure, ConstSlice, AnyScalar
-from shape import Slice, Scalar, Add, Sub, Div, Mult
-from shape import const, any_scalar
-from shape import is_zero, is_one, make_shape
+from .. shape import  Const, Shape, Tuple, Closure, ConstSlice, AnyScalar
+from .. shape import Slice, Scalar, Add, Sub, Div, Mult
+from .. shape import const, any_scalar
+from .. shape import is_zero, is_one, make_shape
 
 class ShapeSemantics(AdverbSemantics):
   def size_along_axis(self, value, axis):
