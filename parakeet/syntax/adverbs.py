@@ -1,16 +1,60 @@
-from loopjit.syntax import Expr 
-
+from expr import Expr
+ 
+class AdverbNotImplemented(Exception):
+  def __init__(self, obj):
+    self.obj = obj 
+    
+  def __str__(self):
+    return "Adverb %s not implemented" % (self.obj.__class__.__name__)
+ 
 class Adverb(Expr):
   _members = ['fn']
   
+  def eval(self, context):
+    raise AdverbNotImplemented(self)
+  
 class IndexAdverb(Adverb):
   _members = ['shape']
-
+  
+  
+  
 class IndexMap(IndexAdverb):
   """
   Map from each distinct index in the shape to a value 
   """
-  pass 
+  
+  def eval(self, context):
+    """
+    Experiment in attaching sequential adverb semantics to the syntax itself
+    """
+    fn = context.eval(self.fn)
+    shape = context.eval(self.shape)
+    dims = self.tuple_elts(shape)
+    if len(dims) == 1:
+      shape = dims[0]
+      
+    if self.output is None:
+      output = self.create_output_array(self.fn, [shape], shape)
+    else:
+      output = context.eval(self.output)
+
+    n_loops = len(dims)
+    def build_loops(index_vars = ()):
+      n_indices = len(index_vars)
+      if n_indices == n_loops:
+        if n_indices > 1:
+          idx_tuple = self.tuple(index_vars)
+        else:
+          idx_tuple = index_vars[0]
+        elt_result =  self.invoke(fn, (idx_tuple,))
+        self.setidx(output, index_vars, elt_result)
+      else:
+        def loop_body(idx):
+          build_loops(index_vars + (idx,))
+        self.loop(self.int(0), dims[n_indices], loop_body)
+    build_loops()
+    return output 
+ 
 
 class ParFor(IndexAdverb):
   """
@@ -163,4 +207,5 @@ class ConvBorderValue(Conv):
   
 class ConvPadding(Conv):
   _members = ['fill_value']
+  
   

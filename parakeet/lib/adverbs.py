@@ -1,8 +1,8 @@
 
-from .. frontend import macro, staged_macro, jit 
-from .. syntax import none, zero_i64, none_i64 
+from .. frontend import macro, staged_macro, jit,  translate_function_value 
+from .. syntax import none, zero_i64 
 from .. syntax import Map, Reduce, Scan, IndexMap, IndexReduce, ParFor, AllPairs 
-from .. syntax import none, translate_function_value
+from .. syntax import none
 
 @jit 
 def identity(x):
@@ -16,7 +16,6 @@ def parfor(shape, fn):
 def map(f, *args, **kwds):
   axis = kwds.get('axis', zero_i64)
   return Map(fn = f, args = args, axis = axis)
-
 each = map
 
 @staged_macro("axis") 
@@ -47,7 +46,6 @@ def scan(f, *args, **kwds):
                      args = args,
                      init = init,
                      axis = axis)
-
 @macro
 def imap(fn, shape):
   return IndexMap(shape = shape, fn = fn)

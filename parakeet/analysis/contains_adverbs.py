@@ -1,7 +1,6 @@
 
+from syntax_visitor import SyntaxVisitor
 from .. syntax import Adverb 
-from loopjit import SyntaxVisitor  
-
 
 class ContainsAdverbs(SyntaxVisitor):
   class Yes(Exception):

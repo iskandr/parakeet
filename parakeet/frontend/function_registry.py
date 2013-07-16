@@ -1,5 +1,3 @@
-from syntax import Fn
-
 # python value of a user-defined function mapped to its
 # untyped representation
 known_python_functions = {}

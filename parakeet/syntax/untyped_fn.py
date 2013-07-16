@@ -1,26 +1,8 @@
-from loopjit.syntax import *
-from loopjit.ndtypes import make_closure_type 
 
-from args import FormalArgs
-from syntax_adverbs import * 
- 
-   
-
-class DelayUntilTyped(Expr):
-  """
-  Once the list of values has been annotated with locally inferred types, 
-  pass them to the given function to construct a final expression 
-  """
-  _members = ['values', 'fn']
- 
-  def node_init(self):
-    if isinstance(self.values, list):
-      self.values = tuple(self.values)
-    elif not isinstance(self.values, tuple):
-      self.values = (self.values,)
-    
-  def children(self):
-    return self.values
+from ..ndtypes import make_closure_type
+from expr import Expr
+from fn_args import FormalArgs 
+from stmt import block_to_str
 
 
 class UntypedFn(Expr):

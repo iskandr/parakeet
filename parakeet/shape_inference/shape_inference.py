@@ -154,9 +154,7 @@ class ShapeInference(SyntaxVisitor):
       return Shape( (slice_value.nelts,))
     else:
       return Shape( (any_scalar,) )
-  
-  def visit_ConstArrayLike(self, expr):
-    return self.visit_expr(expr.array)
+
   
   def visit_Slice(self, expr):
     step = self.visit_expr(expr.step)

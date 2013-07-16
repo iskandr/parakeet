@@ -16,3 +16,6 @@ def clear_specializations():
 from prims import * 
 from lib import * 
 
+
+from frontend.run_function import run 
+from frontend.build_function import build_fn 

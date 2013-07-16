@@ -1,13 +1,14 @@
-import escape_analysis
+from .. ndtypes import ScalarT, ArrayT
 
-from array_type import ArrayT
-from collect_vars import collect_var_names
-from core_types import ScalarT
-from find_local_arrays import FindLocalArrays
-from syntax import AllocArray, ArrayView, Index, Struct, Var
-from syntax import Adverb
+from .. analysis.collect_vars import collect_var_names
+from .. analysis import escape_analysis
+from .. analysis.find_local_arrays import FindLocalArrays
+from .. analysis.usedef import UseDefAnalysis
+from .. syntax import AllocArray, ArrayView, Index, Struct, Var
+
+# from .. syntax import Adverb
 from transform import Transform
-from usedef import UseDefAnalysis
+
 
 class CopyElimination(Transform):
   def apply(self, fn):
@@ -44,7 +45,7 @@ class CopyElimination(Transform):
     return len(array_aliases) <= 1
 
   def is_array_alloc(self, expr):
-    return expr.__class__ in [ArrayView, Struct, AllocArray] or isinstance(expr, Adverb)
+    return expr.__class__ in [ArrayView, Struct, AllocArray] #  or isinstance(expr, Adverb)
     
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form

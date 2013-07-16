@@ -1,9 +1,9 @@
 
-from loopjit.ndtypes import Int8, Int16, Int32, Int64
-from loopjit.ndtypes import UInt8, UInt16, UInt32, UInt64
-from loopjit.ndtypes import Float32, Float64, Bool 
+from .. ndtypes import (Int8, Int16, Int32, Int64, 
+                        UInt8, UInt16, UInt32, UInt64,
+                        Float32, Float64, Bool) 
 
-from .. frontend import macro 
+from .. frontend import macro, jit 
 from .. syntax import Cast 
 
 @macro 
@@ -52,3 +52,10 @@ def float64(x):
 @macro 
 def bool(x):
   return Cast(x, type = Bool)
+
+@jit
+def real(x):
+  """
+  For now we don't have complex types, so real is just the identity function
+  """
+  return x 

@@ -1,7 +1,8 @@
-import numpy as np 
-import lib 
-import prims
 import math  
+import numpy as np
+
+from .. import lib, prims   
+
 
 property_mappings = {
   'dtype' : lib.elt_type,                
@@ -17,19 +18,19 @@ property_mappings = {
 
 method_mappings = {
   'fill' : lib.fill, 
-  'any' : lib.any, 
-  'all' : lib.all, 
+  'any' : lib.any_, 
+  'all' : lib.all_, 
   'argmax' : lib.argmax, 
   # 'argsort' : lib.argsort, 
   'copy' : lib.copy, 
   'cumprod' : lib.cumprod, 
   'cumsum' : lib.cumsum, 
   # 'diagonal' : lib.diagonal, 
-  'min' : lib.min, 
-  'max' : lib.max, 
+  'min' : lib.reduce_min, 
+  'max' : lib.reduce_max, 
   'ravel' : lib.ravel, 
   'flatten' : lib.ravel, 
-  'sum' : lib.sum, 
+  'sum' : lib.sum_, 
 }
 
 function_mappings = {
@@ -38,7 +39,7 @@ function_mappings = {
   reduce : lib.reduce, 
  
   np.array : lib.identity, 
-  tuple : lib._builtin_tuple, 
+  tuple : lib.tuple_, 
  
   int : lib.int64, 
   long : lib.int64, 
@@ -57,29 +58,29 @@ function_mappings = {
   np.bool_ : lib.bool, 
   
   np.rank : lib.rank, 
-  len : lib.alen, 
-  np.alen : lib.alen, 
+  len : lib.len_, 
+  np.alen : lib.len_, 
   np.real : lib.real, 
   # np.imag : lib.imag
   np.size : lib.size, 
   
-  min : lib._builtin_min,
-  max : lib._builtin_max, 
-  np.min : lib.min, 
-  np.max : lib.max, 
+  min : lib.builtin_min,
+  max : lib.builtin_max, 
+  np.min : lib.reduce_min, 
+  np.max : lib.reduce_max, 
   np.minimum : prims.minimum, 
   np.maximum : prims.maximum, 
   
   np.argmin : lib.argmin, 
   np.argmax : lib.argmax, 
   
-  all : lib.all, 
-  np.all : lib.all, 
-  any : lib.any, 
-  np.any : lib.any, 
+  all : lib.all_, 
+  np.all : lib.all_, 
+  any : lib.any_, 
+  np.any : lib.any_, 
   
-  sum : lib.sum, 
-  np.sum : lib.sum, 
+  sum : lib.sum_, 
+  np.sum : lib.sum_, 
   np.prod : lib.prod, 
   np.mean : lib.mean, 
   
@@ -122,9 +123,9 @@ function_mappings = {
  
   math.atanh : prims.arctanh,
   np.arctanh : prims.arctanh,  
-  math.asinh : prims.asinh, 
+  math.asinh : prims.arcsinh, 
   np.arcsinh : prims.arcsinh, 
-  math.acosh : prims.acosh, 
+  math.acosh : prims.arccosh, 
   np.arccosh : prims.arccosh,
   
   math.sqrt : prims.sqrt, 

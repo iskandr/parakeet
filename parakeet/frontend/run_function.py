@@ -1,10 +1,6 @@
-from args import FormalArgs, ActualArgs
+from ..syntax.fn_args import FormalArgs, ActualArgs
 
-import config 
-import names
-import syntax
-import syntax_helpers
-import type_conv 
+from .. import config, names, syntax, type_conv 
 import type_inference 
 
 def prepare_args(fn, args, kwargs):

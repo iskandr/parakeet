@@ -8,8 +8,8 @@ from loopjit.ndtypes import ScalarT, StructT
 from adverb.semantics import AdverbSemantics 
 from frontend import ast_conversion 
 from syntax import Expr, UntypedFn, TypedFn
-from syntax import  Var, Tuple, Return, If, While, ForLoop
-from args import ActualArgs
+from syntax import  Var, Tuple, Return, If, While, ForLoop, ActualArgs
+from fn_args import 
 
 class InterpSemantics(AdverbSemantics):
   def size_along_axis(self, value, axis):
@@ -42,8 +42,6 @@ class InterpSemantics(AdverbSemantics):
   def mul(self, x, y):
     return x * y
   
-
-
   def shape(self, x):
     return np.shape(x)
 

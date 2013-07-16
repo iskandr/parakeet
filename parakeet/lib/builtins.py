@@ -1,22 +1,42 @@
-from .. frontend import translate_function_value, jit, macro
- 
-from .. ndtypes import make_tuple_type, TupleT, ArrayT 
-from .. syntax import Map, Tuple, DelayUntilTyped, Array 
- 
+from .. import prims 
+from .. frontend import translate_function_value, jit, macro 
+from .. ndtypes import make_tuple_type, TupleT, ArrayT, Int64 
+from .. syntax import (Map, Tuple, DelayUntilTyped, Array, Attribute, 
+                       TupleProj,  const_int)
+from adverbs import reduce, map 
 
+@jit 
+def or_(x, y):
+  return x or y
+
+@jit 
+def and_(x, y):
+  return x and y
+
+@jit 
+def any_(x, axis=None):
+  return reduce(or_, x, axis = axis, init = False)
+
+@jit
+def all_(x, axis = None):
+  return reduce(and_, x, axis = axis, init = True)
+
+@jit 
+def sum_(x, axis = None):
+  return reduce(prims.add, x, init = 0, axis = axis)
 
 @jit 
 def _tuple_from_args(*args):
   return args
 
 @macro
-def zip(*args):
+def zip_(*args):
 
   elt_tupler = translate_function_value(_tuple_from_args)
   return Map(fn = elt_tupler, args = args)
 
 @macro 
-def _builtin_tuple(x):
+def tuple_(x):
   def typed_tuple(xt):
     if isinstance(xt.type, TupleT):
       return xt 
@@ -27,3 +47,40 @@ def _builtin_tuple(x):
       tuple_t = make_tuple_type(elt_types)
       return Tuple(xt.elts, type = tuple_t)
   return DelayUntilTyped(x, typed_tuple)
+
+
+@macro 
+def len_(x):
+  def typed_alen(xt):
+    if isinstance(xt.type, ArrayT):
+      shape = Attribute(xt, 'shape', type = xt.type.shape_t)
+      return TupleProj(shape, 0, type = Int64)
+    else:
+      assert isinstance(xt.type, TupleT), "Can't get 'len' of object of type %s" % xt.type 
+      return const_int(len(xt.type.elt_types))
+  return DelayUntilTyped(x, typed_alen)
+
+@jit
+def reduce_min(x, axis = None):
+  return reduce(prims.minimum, x, axis = axis)
+
+@jit 
+def builtin_min(x, y = None):
+  if y is None:
+    return reduce_min(x)
+  else:
+    return prims.minimum(x,y)
+
+@jit 
+def reduce_max(x, axis = None):
+  return reduce(prims.maximum, x, axis = axis)
+
+@jit
+def builtin_max(x, y = None):
+  if y is None:
+    return reduce_max(x)
+  else:
+    return prims.maximum(x,y)
+  
+
+

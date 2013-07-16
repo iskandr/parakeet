@@ -1,13 +1,11 @@
-import shape 
-import syntax  
-
-
-from shape_inference import shape_env
-from transform import Transform
+from .. import syntax 
+from ..shape_inference import shape_env, shape
+from ..transforms import Transform
 
 class ShapeElimination(Transform): 
   def pre_apply(self, fn):
     self.shape_env = shape_env(fn)
+
 
   def transform_Var(self, expr):
     if expr.name in self.shape_env:

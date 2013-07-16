@@ -1,18 +1,52 @@
+import numpy as np
 import types 
 
-from loopjit.ndtypes import ArrayT,  make_closure_type, ClosureT
-from loopjit.ndtypes import type_conv, typeof_array, 
-from loopjit import prims 
+from ..ndtypes import (type_conv, scalar_types, 
+                       make_array_type, ArrayT, 
+                       make_tuple_type, TupleT, 
+                       make_closure_type, ClosureT, 
+                       NoneT, NoneType, TypeValueT)
 
-from frontend import jit, macro 
-from prim_wrapper import prim_wrapper 
+type_conv.register(type(None), NoneT, lambda _: NoneType)
+
+def typeof_dtype(dt):
+  return TypeValueT(scalar_types.from_dtype(dt))
+type_conv.register([np.dtype], TypeValueT, typeof_dtype) 
+
+def typeof_type(t):
+  assert hasattr(t, 'dtype'), "Can only convert numpy types"
+  dt = t(0).dtype 
+  pt = scalar_types.from_dtype(dt)
+  return TypeValueT(pt) 
+type_conv.register(types.TypeType, TypeValueT, typeof_type)
+
+def typeof_tuple(python_tuple):
+  return make_tuple_type(map(type_conv.typeof, python_tuple))
+
+type_conv.register(types.TupleType, TupleT, typeof_tuple)
+
+def typeof_array(x):
+  x = np.asarray(x)
+  elt_t = scalar_types.from_dtype(x.dtype)
+  rank = len(x.shape)
+  return make_array_type(elt_t, rank)
+
+type_conv.register(np.ndarray, ArrayT, typeof_array)
+
+from .. import prims 
+type_conv.register((list, xrange), ArrayT, typeof_array)
+
+
+
+from decorators  import jit, macro 
+from ..syntax import prim_wrapper 
  
 # ndtypes already register NumPy arrays type converters, 
 # but parakeet also treats ranges and lists as arrays 
 type_conv.register((list, xrange), ArrayT, typeof_array)
 
 def typeof_prim(p):
-  untyped_fn = prims.prim_wrapper(p)
+  untyped_fn = prim_wrapper(p)
   return make_closure_type(untyped_fn, [])
 
 type_conv.register(prims.class_list, ClosureT, typeof_prim)
@@ -28,6 +62,4 @@ type_conv.register(types.FunctionType, ClosureT, typeof_fn)
 type_conv.register(jit, ClosureT, typeof_fn)
 type_conv.register(macro, ClosureT, typeof_fn)
 type_conv.register(types.BuiltinFunctionType, ClosureT, typeof_fn)
-
-import numpy as np
 type_conv.register(np.ufunc, ClosureT, typeof_fn)

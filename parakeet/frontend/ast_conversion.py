@@ -5,22 +5,24 @@ import types
 from collections import OrderedDict
 
 import numpy as np
-
-from treelike import NestedBlocks, ScopedDict 
-from loopjit import names, prims 
-from loopjit.names import NameNotFound 
-from loopjit.prims import Prim 
-from loopjit.transforms import subst_expr, subst_stmt_list
-
-from .. import config, syntax, lib
-from .. args import FormalArgs, ActualArgs
-from .. syntax import Assign, If, ForLoop, Var, PrimCall, Map
-from .. syntax import none, true, false, one_i64, zero_i64 
+from treelike import NestedBlocks, ScopedDict
+ 
+from .. import config, lib, names, prims, syntax  
+from ..names import NameNotFound
+from ..ndtypes import from_dtype 
+from ..prims import Prim 
+from ..syntax import (Assign, If, ForLoop, Var, PrimCall, Map,
+                       FormalArgs, ActualArgs, 
+                       UntypedFn,  
+                       none, true, false, one_i64, zero_i64, 
+                       is_python_constant, const) 
+from syntax.prim_wrapper import prim_wrapper
+from ..transforms import subst_expr, subst_stmt_list
 from decorators import macro, jit 
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from mappings import function_mappings, method_mappings, property_mappings 
-from prim_wrapper import prim_wrapper 
+ 
 from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
 
 
@@ -54,8 +56,8 @@ class ExternalValue(object):
 
 
 def mk_reduce_call(fn, positional, init = None):
-  init = syntax_helpers.none if init is None else init
-  axis = syntax_helpers.zero_i64
+  init = none if init is None else init
+  axis = zero_i64
   return syntax.Reduce(fn = translate_function_value(lib.identity), 
                        combine = fn, 
                        args = positional, 
@@ -69,7 +71,7 @@ def mk_simple_fn(mk_body, input_name = "x", fn_name = "cast"):
   formals = FormalArgs()
   formals.add_positional(unique_arg_name, input_name)
   body = mk_body(var)
-  return syntax.Fn(unique_fn_name, formals, body)
+  return UntypedFn(unique_fn_name, formals, body)
   
 _function_wrapper_cache = {}
 def mk_wrapper_function(p):
@@ -79,9 +81,9 @@ def mk_wrapper_function(p):
   if p in _function_wrapper_cache:
     return _function_wrapper_cache[p]
   if isinstance(p, prims.Prim):
-    f = prims.prim_wrapper(p)
+    f = prim_wrapper(p)
   elif p in prims.prim_lookup_by_value:
-    f = prims.prim_wrapper(prims.prim_lookup_by_value[p]) 
+    f = prim_wrapper(prims.prim_lookup_by_value[p]) 
   else:
     assert isinstance(p, types.BuiltinFunctionType)
     assert p.__name__ in lib.__dict__, "Unsupported builtin: %s" % (p,)
@@ -110,20 +112,20 @@ def is_function_value(v):
   return is_user_function(v) or is_builtin_function(v) or is_prim(v) 
     
 def is_static_value(v):
-  return syntax_helpers.is_python_constant(v) or \
+  return is_python_constant(v) or \
          type(v) is np.dtype  or \
          is_function_value(v)
 
 def value_to_syntax(v):
-  if syntax_helpers.is_python_constant(v):
-    return syntax_helpers.const(v)
+  if is_python_constant(v):
+    return const(v)
   elif isinstance(v, np.dtype):
     x = names.fresh("x")
     fn_name = names.fresh("cast") 
     formals = FormalArgs()
     formals.add_positional(x, "x")
-    body = [syntax.Return(syntax.Cast(syntax.Var(x), type=core_types.from_dtype(v)))]
-    return syntax.Fn(fn_name, formals, body)
+    body = [syntax.Return(syntax.Cast(syntax.Var(x), type=from_dtype(v)))]
+    return syntax.UntypedFn(fn_name, formals, body)
   else:
     assert is_function_value(v), "Can't make value %s : %s into static syntax" % (v, type(v))
     return translate_function_value(v)  
@@ -138,10 +140,10 @@ class AST_Translator(ast.NodeVisitor):
     # assignments which need to get prepended at the beginning of the
     # function
     self.globals = globals_dict
-    self.blocks = nested_blocks.NestedBlocks()
+    self.blocks = NestedBlocks()
 
     self.parent = parent 
-    self.scopes = scoped_dict.ScopedDictionary()
+    self.scopes = ScopedDict()
     
     self.globals_dict = globals_dict 
     self.closure_cell_dict = closure_cell_dict 
@@ -450,16 +452,16 @@ class AST_Translator(ast.NodeVisitor):
   
   def translate_builtin_call(self, value, positional, keywords_dict):
     if value is sum:
-      return mk_reduce_call(prims.prim_wrapper(prims.add), positional, zero_i64)
+      return mk_reduce_call(prim_wrapper(prims.add), positional, zero_i64)
     elif value is max:
       if len(positional) == 1:
-        return mk_reduce_call(prims.prim_wrapper(prims.maximum), positional)
+        return mk_reduce_call(prim_wrapper(prims.maximum), positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.maximum, positional)
     elif value is min:
       if len(positional) == 1:
-        return mk_reduce_call(prims.prim_wrapper(prims.minimum), positional)
+        return mk_reduce_call(prim_wrapper(prims.minimum), positional)
       else:
         assert len(positional) == 2
         return syntax.PrimCall(prims.minimum, positional)
@@ -789,10 +791,10 @@ def translate_function_ast(name,
   if globals_dict:
     assert parent is None
     assert len(original_outer_names) == len(python_refs)
-    return syntax.Fn(ssa_fn_name, ssa_args, body, python_refs.values(), [])
+    return UntypedFn(ssa_fn_name, ssa_args, body, python_refs.values(), [])
   else:
     assert parent
-    fn = syntax.Fn(ssa_fn_name, ssa_args, body, [], original_outer_names)
+    fn = UntypedFn(ssa_fn_name, ssa_args, body, [], original_outer_names)
     if len(original_outer_names) > 0:
       outer_ssa_vars = [parent.lookup(x) for x in original_outer_names]
       return syntax.Closure(fn, outer_ssa_vars)

@@ -1,13 +1,14 @@
 import __builtin__
 
-from loopjit.ndtypes import TypeValueT, ScalarT  
 
 from .. frontend.decorators import jit, macro
+from .. ndtypes import TypeValueT, ScalarT, make_array_type
 from .. syntax import one_i64, zero_i64
 from .. syntax import Range, Return, Cast, UntypedFn, TypedFn, AllocArray
-from .. syntax import Tuple, DelayUntilTyped   
+from .. syntax import Tuple, DelayUntilTyped
 
-from core import float64
+from adverbs import imap 
+from numpy_types import float64   
 
 @macro
 def arange(n, *xs):
@@ -46,7 +47,7 @@ def empty(shape, dtype = float64):
     if isinstance(shape, ScalarT):
       shape = Tuple((shape,))
     rank = len(shape.type.elt_types)
-    arr_t = array_type.make_array_type(elt_t, rank)
+    arr_t = make_array_type(elt_t, rank)
     return AllocArray(shape = shape, elt_type = elt_t, type = arr_t)
   return DelayUntilTyped(values=(shape,dtype), fn = typed_empty) 
 

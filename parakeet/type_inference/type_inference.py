@@ -1,28 +1,21 @@
-import adverb_helpers
-import array_type
-import ast_conversion
-import closure_type
-import config
-import core_types 
-import names
-import prims
-import syntax
-import syntax_helpers
-import tuple_type
-import type_conv
+from .. import config, names, ndtypes, prims, syntax
+from ..frontend import ast_conversion
+from ..ndtypes import array_type, closure_type, tuple_type, type_conv
+from ..ndtypes import (Type, Bool, IntT, Int64,  ScalarT, 
+                       NoneType, NoneT, Unknown, UnknownT, 
+                       combine_type_list, StructT, TypeValueT)
+from ..ndtypes.array_type import ArrayT, make_array_type, make_slice_type
+from ..ndtypes.closure_type import ClosureT, make_closure_type
+from ..ndtypes.tuple_type import  TupleT, make_tuple_type
+from ..syntax import adverb_helpers, prim_wrapper
+from ..syntax import UntypedFn, TypedFn, Closure, ClosureElt, Var
+from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
+                              one_i64, zero_i64, none, true, false, 
+                              is_false, is_true, is_zero, 
+                              gen_data_arg_names)
+from ..syntax.fn_args import ActualArgs, FormalArgs
+from ..transforms import Transform, stride_specialization, Simplify 
 
-from args import ActualArgs, FormalArgs, MissingArgsError
-from array_type import ArrayT
-from closure_type import ClosureT 
-from core_types import Type, Bool, IntT, Int64,  ScalarT
-from core_types import NoneType, NoneT, Unknown, UnknownT
-from core_types import combine_type_list, StructT
-from stride_specialization import specialize
-from syntax import Fn, TypedFn, Closure, ClosureElt, Var 
-from syntax_helpers import get_type, get_types, unwrap_constant
-from syntax_helpers import one_i64, zero_i64, none, true, false, is_false, is_true, is_zero
-from transform import Transform
-from tuple_type import TupleT, make_tuple_type
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
@@ -66,11 +59,11 @@ def unpack_closure(closure):
   else:
     fn = closure
     closure_args = []
-    # fn = syntax.Fn.registry[fn]
+    # fn = UntypedFn.registry[fn]
   return fn, closure_args
 
 def make_typed_closure(untyped_closure, typed_fn):
-  if untyped_closure.__class__ is syntax.Fn:
+  if untyped_closure.__class__ is UntypedFn:
     return typed_fn
 
   assert isinstance(untyped_closure, syntax.Expr) and \
@@ -133,7 +126,7 @@ def linearize_actual_args(fn, args):
       args = ActualArgs(args)
     args = args.prepend_positional(closure_args)
 
-    arg_types = args.transform(syntax_helpers.get_type)
+    arg_types = args.transform(get_type)
 
     # Drop arguments that are assigned defaults,
     # since we're assuming those are set in the body
@@ -143,7 +136,7 @@ def linearize_actual_args(fn, args):
 
 _invoke_type_cache = {}
 def invoke_result_type(fn, arg_types):
-  if isinstance(fn, syntax.TypedFn):
+  if isinstance(fn, TypedFn):
     assert isinstance(arg_types, (list, tuple))
     assert len(arg_types) == len(fn.input_types), \
         "Type mismatch between expected inputs %s and %s" % \
@@ -153,7 +146,6 @@ def invoke_result_type(fn, arg_types):
 
   if isinstance(arg_types, (list, tuple)):
     arg_types = ActualArgs(arg_types)
-
   key = (fn, arg_types)
   if key in _invoke_type_cache:
     return _invoke_type_cache[key]
@@ -175,7 +167,6 @@ def invoke_result_type(fn, arg_types):
 def identity(x):
   return x
 untyped_identity_function = ast_conversion.translate_function_value(identity)
-
 
 class Annotator(Transform):
   
@@ -228,8 +219,8 @@ class Annotator(Transform):
   
   def transform_TypeValue(self, expr):
     t = expr.type_value 
-    assert isinstance(t, core_types.Type), "Invalid type value %s" % (t,)
-    return syntax.TypeValue(t, type=core_types.TypeValueT(t))
+    assert isinstance(t, Type), "Invalid type value %s" % (t,)
+    return syntax.TypeValue(t, type=TypeValueT(t))
     
   def transform_Closure(self, expr):
     new_args = self.transform_expr_list(expr.args)
@@ -237,7 +228,7 @@ class Annotator(Transform):
     return Closure(expr.fn, new_args, type = t)
 
   def transform_Arith(self, expr):
-    untyped_fn = prims.prim_wrapper(expr)
+    untyped_fn = prim_wrapper(expr)
     t = closure_type.make_closure_type(untyped_fn, ())
     return Closure(untyped_fn, (), type = t)
 
@@ -249,7 +240,7 @@ class Annotator(Transform):
   def transform_Call(self, expr):
     closure = self.transform_expr(expr.fn)
     args = self.transform_args(expr.args)
-    if closure.type.__class__ is core_types.TypeValueT:
+    if closure.type.__class__ is TypeValueT:
       assert isinstance(args, ActualArgs)
       assert len(args.positional) == 1
       assert len(args.keywords) == 0
@@ -304,10 +295,10 @@ class Annotator(Transform):
     else:
       assert all(not isinstance(t, NoneT) for t in arg_types), \
         "Invalid argument types for prim %s: %s" % (expr.prim, arg_types,)
-      prim_fn = prims.prim_wrapper(expr.prim)
+      prim_fn = prim_wrapper(expr.prim)
 
       max_rank = adverb_helpers.max_rank(arg_types)
-      arg_names = syntax_helpers.gen_data_arg_names(len(arg_types))
+      arg_names = gen_data_arg_names(len(arg_types))
       untyped_broadcast_fn = \
           adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
@@ -341,11 +332,11 @@ class Annotator(Transform):
 
   def transform_AllocArray(self, expr):
     elt_type = expr.elt_type
-    assert isinstance(elt_type, core_types.ScalarT), \
+    assert isinstance(elt_type, ScalarT), \
       "Invalid array element type  %s" % (elt_type)
       
     shape = self.transform_expr(expr.shape)
-    if isinstance(shape, core_types.ScalarT):
+    if isinstance(shape, ScalarT):
       shape = self.cast(shape, Int64)
       shape = self.tuple((shape,), "array_shape")
     assert isinstance(shape, TupleT), \
@@ -388,10 +379,7 @@ class Annotator(Transform):
   def transform_Const(self, expr):
     return syntax.Const(expr.value, type_conv.typeof(expr.value))
   
-  def transform_ConstArrayLike(self, expr):
-    typed_array_value = self.transform_expr(expr.array)
-    t = typed_array_value.type
-    return syntax.ConstArrayLike(typed_array_value, expr.value, type = t)
+
 
   def transform_Reshape(self, expr):
     array = self.transform_expr(expr.array)
@@ -532,7 +520,7 @@ class Annotator(Transform):
     idx_expr = syntax.Index(data_arg_var, idx_arg_var)
     inner_fn = self.get_fn(map_fn)
     fn_call_expr = syntax.Call(inner_fn, tuple(inner_closure_vars)  + (idx_expr,))
-    idx_fn = syntax.Fn(name = names.fresh("idx_map"),
+    idx_fn = UntypedFn(name = names.fresh("idx_map"),
                        args = args_obj, 
                        body =  [syntax.Return(fn_call_expr)]
                        )
@@ -903,7 +891,7 @@ def infer_types(untyped_fn, types):
     tenv["$return"] = NoneType
     return_type = NoneType
 
-  return syntax.TypedFn(
+  return TypedFn(
     name = names.refresh(untyped_fn.name),
     body = body,
     arg_names = arg_names,
@@ -918,25 +906,24 @@ def _specialize(fn, arg_types, return_type = None):
   objects and performs memoization
   """
 
-  if isinstance(fn, syntax.TypedFn):
+  if isinstance(fn, TypedFn):
     return fn
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
   coerced_fundef = rewrite_typed(typed_fundef, return_type)
-  import simplify
-  normalized = simplify.Simplify().apply(coerced_fundef)
+  normalized = Simplify().apply(coerced_fundef)
   return normalized
 
 def _get_fundef(fn):
-  if isinstance(fn, (syntax.Fn, syntax.TypedFn)):
+  if isinstance(fn, (UntypedFn, TypedFn)):
     return fn
   else:
     assert isinstance(fn, str), \
         "Unexpected function %s : %s"  % (fn, fn.type)
-    return syntax.Fn.registry[fn]
+    return UntypedFn.registry[fn]
 
 def _get_closure_type(fn):
-  assert isinstance(fn, (Fn, TypedFn, ClosureT, Closure, Var)), \
+  assert isinstance(fn, (UntypedFn, TypedFn, ClosureT, Closure, Var)), \
     "Expected function, got %s" % fn
     
   if fn.__class__ is closure_type.ClosureT:
@@ -956,7 +943,7 @@ def specialize(fn, arg_types, return_type = None):
       print "==== Specializing", fn, "for input types", arg_types, "and return type", return_type
     else:  
       print "=== Specializing", fn, "for types", arg_types 
-  if isinstance(fn, syntax.TypedFn):
+  if isinstance(fn, TypedFn):
     assert len(fn.input_types) == len(arg_types)
     assert all(t1 == t2 for t1,t2 in zip(fn.input_types, arg_types))
     if return_type is not None:

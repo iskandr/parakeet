@@ -1,2 +1,0 @@
-from loopjit.ndtypes import * 
-

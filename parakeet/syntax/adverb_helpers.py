@@ -1,10 +1,13 @@
 
-import args
-import array_type
-import core_types
-import names
-import syntax
-import syntax_helpers
+from fn_args import FormalArgs, ActualArgs
+   
+from .. import names 
+from .. ndtypes import ArrayT, Type
+from adverbs import Map
+from expr import Var
+from helpers import  unwrap_constant, zero_i64, get_types
+from stmt import Return 
+from untyped_fn import UntypedFn
 
 def max_rank(arg_types):
   """
@@ -14,7 +17,7 @@ def max_rank(arg_types):
 
   curr_max = 0
   for t in arg_types:
-    if isinstance(t, array_type.ArrayT):
+    if isinstance(t, ArrayT):
       assert curr_max == 0 or curr_max == t.rank,  \
        "Adverb can't accept inputs of rank %d and %d" % (curr_max, t.rank)
       curr_max = t.rank
@@ -23,7 +26,7 @@ def max_rank(arg_types):
 def max_rank_arg(args):
   """Given a list of arguments, return one which has the maximum rank"""
 
-  r = max_rank(syntax_helpers.get_types(args))
+  r = max_rank(get_types(args))
   for arg in args:
     if arg.type.rank == r:
       return arg
@@ -34,8 +37,8 @@ def num_outer_axes(arg_types, axis):
   -- either 1 particular one or all of them when axis is None.
   """
 
-  axis = syntax_helpers.unwrap_constant(axis)
-  if isinstance(arg_types, core_types.Type):
+  axis = unwrap_constant(axis)
+  if isinstance(arg_types, Type):
     max_arg_rank = arg_types.rank
   else:
     max_arg_rank = max_rank(arg_types)
@@ -49,23 +52,23 @@ def nested_maps(inner_fn, depth, arg_names):
   key = inner_fn.name, depth, tuple(arg_names)
   if key in _nested_map_cache:
     return _nested_map_cache[key]
-  args_obj = args.FormalArgs()
+  args_obj = FormalArgs()
   arg_vars = []
   for var_name in arg_names:
     local_name = names.refresh(var_name)
     args_obj.add_positional(local_name)
-    arg_vars.append(syntax.Var(local_name))
+    arg_vars.append(Var(local_name))
 
   name = names.fresh(inner_fn.name + "_broadcast%d" % depth)
   nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
 
-  map_expr = syntax.Map(fn = nested_fn, 
-                        axis = syntax_helpers.zero_i64, 
+  map_expr = Map(fn = nested_fn, 
+                        axis = zero_i64, 
                         args = arg_vars)
-  fn = syntax.Fn(
+  fn = UntypedFn(
     name = name,
     args = args_obj,
-    body = [syntax.Return(map_expr)]
+    body = [Return(map_expr)]
   )
 
   _nested_map_cache[key] = fn

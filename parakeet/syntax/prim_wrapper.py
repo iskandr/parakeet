@@ -1,7 +1,5 @@
-import names
-import syntax
-
-from args import FormalArgs
+from .. import names 
+from .. syntax import  FormalArgs, Var, UntypedFn, Return, PrimCall  
 
 
 _untyped_prim_wrappers = {}
@@ -17,9 +15,9 @@ def prim_wrapper(p):
     arg_vars = []
     for name in names.fresh_list(p.nin):
       args_obj.add_positional(name)
-      arg_vars.append(syntax.Var(name))
-    body = [syntax.Return(syntax.PrimCall(p, arg_vars))]
-    fundef = syntax.Fn(fn_name, args_obj, body, [])
+      arg_vars.append(Var(name))
+    body = [Return(PrimCall(p, arg_vars))]
+    fundef = UntypedFn(fn_name, args_obj, body, [])
     _untyped_prim_wrappers[p] = fundef
 
     return fundef
