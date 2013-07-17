@@ -14,24 +14,25 @@ class AdverbEvalNotImplemented(Exception):
 class Adverb(Expr, AdverbEvalHelpers):
   _members = ['fn']
     
-  def eval(self, context):
-    raise AdverbEvalNotImplemented(self, context)
+  def transform(self, transformer):
+    raise AdverbEvalNotImplemented(self,transformer)
   
 class IndexAdverb(Adverb):
   _members = ['shape']
+  
+  
   
 class IndexMap(IndexAdverb):
   """
   Map from each distinct index in the shape to a value 
   """
   
+  
   def eval(self, context):
     """
     Experiment in attaching sequential adverb semantics to the syntax itself
     """
-    fn = context.eval(self.fn)
-    shape = context.eval(self.shape)
-    dims = self.tuple_elts(shape)
+    dims = self.tuple_elts(self.shape)
     if len(dims) == 1:
       shape = dims[0]
       
@@ -48,8 +49,8 @@ class IndexMap(IndexAdverb):
           idx_tuple = self.tuple(index_vars)
         else:
           idx_tuple = index_vars[0]
-        elt_result =  self.invoke(fn, (idx_tuple,))
-        self.setidx(output, index_vars, elt_result)
+        elt_result =  self.invoke(self.fn, (idx_tuple,))
+        context.setidx(output, index_vars, elt_result)
       else:
         def loop_body(idx):
           build_loops(index_vars + (idx,))
@@ -153,10 +154,10 @@ class Map(DataAdverb):
       output_indices = self.build_slice_indices(self.rank(output), 0, idx)
       elt_result = self.call(f, [elt(idx) for elt in delayed_elts])
       self.setidx(output, output_indices, elt_result)
-    self.loop(zero, niters, loop_body)
+    self.parfor(niters, loop_body)
     return output
 
-class AllPairs(DataAdverb):
+class OuterMap(DataAdverb):
   pass 
 
 class Accumulative(DataAdverb):
@@ -199,6 +200,19 @@ class Scan(Accumulative):
           self.fn_to_str(self.emit))
     return s
 
+
+class Filtered(object):
+  _members = ['pred']
+
+
+class FilterMap(Map, Filtered):
+  pass 
+
+class FilterReduce(Scan, Filtered):
+  pass 
+
+class FilterScan(Scan, Filtered):
+  pass 
 
 class Tiled(object):
   _members = ['axes', 'fixed_tile_size']

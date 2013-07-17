@@ -7,6 +7,8 @@ class AdverbEvalHelpers(object):
   methods of BaseSemantics and make them work for some other domain (such as
   types, shapes, or compiled expressions)
   """
+  
+  
   def delayed_elt(self, x, axis):
     return lambda idx: self.slice_along_axis(x, axis, idx)
 

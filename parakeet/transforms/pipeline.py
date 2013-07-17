@@ -4,6 +4,7 @@ from ..analysis import contains_adverbs
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
+from index_elimination import IndexElim
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
@@ -11,13 +12,14 @@ from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from mapify_allpairs import MapifyAllPairs
+from maps_to_parfor import MapsToParFor
 from pipeline_phase import Phase
-from value_range_propagation import RangePropagation
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from simplify import Simplify
-from index_elimination import IndexElim
+from value_range_propagation import RangePropagation
+
 
 
 ####################################
@@ -44,7 +46,8 @@ high_level_optimizations = Phase([Simplify,
                                   fusion_opt, 
                                   fusion_opt, 
                                   copy_elim, 
-                                  Simplify, DCE], 
+                                  Simplify, DCE, 
+                                  MapsToParFor], 
                                  copy = True)
 
 
