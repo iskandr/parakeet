@@ -3,13 +3,13 @@ import numpy as np
 import types
 
 from treelike import dispatch 
-from loopjit.ndtypes import ScalarT, StructT 
 
+from frontend import ast_conversion
+from ndtypes import ScalarT, StructT  
+from syntax import (Expr, UntypedFn, TypedFn, 
+                    Var, Tuple, Return, If, While, ForLoop, ActualArgs, 
+                    Assign, Index)
 
-from frontend import ast_conversion 
-from syntax import Expr, UntypedFn, TypedFn
-from syntax import  Var, Tuple, Return, If, While, ForLoop, ActualArgs
-from fn_args import 
 
 class InterpSemantics(object):
   def size_along_axis(self, value, axis):
@@ -316,6 +316,7 @@ def eval_fn(fn, actuals):
       return adverb_evaluator.eval_reduce(map_fn, combine_fn, init, args, axis)
 
     def expr_Scan():
+      
       map_fn = eval_expr(expr.fn)
       combine = eval_expr(expr.combine)
       emit = eval_expr(expr.emit)

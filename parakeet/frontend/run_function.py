@@ -77,7 +77,7 @@ def run_typed_fn(fn, args, backend = None):
     assert False, "Unknown backend %s" % backend 
 
   
-def run(fn, *args, **kwargs):
+def run_python_fn(fn, *args, **kwargs):
   """
   Given a python function, run it in Parakeet on the supplied args
   """

@@ -5,7 +5,7 @@ from .. import prims, syntax
 from .. analysis.collect_vars import collect_var_names
 from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
-from .. ndtypes import ArrayT, SliceT, ClosureT, NoneT, ScalarT, TupleT, ImmutableT
+from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT
 
 from .. syntax import (AllocArray, Assign, ExprStmt, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
@@ -73,7 +73,7 @@ class Simplify(Transform):
       return (expr.value,)
     elif c is Map or c is OuterMap or c is IndexMap:
       return expr.args
-    elif c is Scan or c is Reduce or c is IndexReduce:
+    elif c is Scan or c is Reduce or c is IndexReduce or c is FilterReduce:
       args = tuple(expr.args)
       init = (expr.init,) if expr.init else ()
       return init + args
@@ -232,10 +232,10 @@ class Simplify(Transform):
       if fn.type.fn.__class__ is TypedFn:
         fn = fn.type.fn
       else:
-        assert False, "Encountered untyped function in call to closure"
-        #assert isinstance(fn.type.fn, Fn)
-        #import type_inference
-        #fn = type_inference.specialize(fn, get_types(combined_args))
+        
+        assert isinstance(fn.type.fn, UntypedFn)
+        from .. type_inference import specialize 
+        fn = specialize(fn, get_types(combined_args))
       assert fn.return_type == expr.type
       return Call(fn, combined_args, type = fn.return_type)
     else:
@@ -310,17 +310,17 @@ class Simplify(Transform):
     expr.args = args
     return expr 
   
-  #def transform_Reduce(self, expr):
-  #  
-  #  init = self.transform_expr(expr.init)
-  #  if not self.is_simple(init):
-  #    expr.init = self.assign_name(init, 'init')
-  #  else:
-  #    expr.init = init
-  #  expr.args = self.transform_args(expr.args)
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.combine = self.transform_expr(expr.combine)
-  #  return expr  
+  def transform_Reduce(self, expr):
+    
+    init = self.transform_expr(expr.init)
+    if not self.is_simple(init):
+      expr.init = self.assign_name(init, 'init')
+    else:
+      expr.init = init
+    expr.args = self.transform_args(expr.args)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    return expr  
   
   def temp_in_block(self, expr, block, name = None):
     """
@@ -531,7 +531,7 @@ class Simplify(Transform):
     stmt.start = self.transform_arg(stmt.start, 'start')
     stmt.stop = self.transform_arg(stmt.stop, 'stop')
     if self.is_none(stmt.step):
-      stmt.step = syntax_helpers.one(stmt.start.type)
+      stmt.step = one(stmt.start.type)
     else:
       stmt.step = self.transform_arg(stmt.step, 'step')
 
