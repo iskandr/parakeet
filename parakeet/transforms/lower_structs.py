@@ -4,10 +4,10 @@
 
  
 
-from .. import  syntax, closure_type 
+from .. import  syntax
 
-from .. ndtypes import ScalarT, ArrayT, make_array_type, TupleT
-from .. ndtypes import Int32, Int64,  ptr_type, PtrT  
+from .. ndtypes import (ScalarT, ArrayT, make_array_type, TupleT, 
+                        Int32, Int64,  ptr_type, PtrT, closure_type)  
 from .. syntax import Struct, Assign, Const, Index, Attribute, Var, Tuple, Alloc  
 from .. syntax.helpers import const_int, const_tuple, zero
 from transform import Transform

@@ -1,22 +1,24 @@
 from expr import Expr
- 
-class AdverbNotImplemented(Exception):
-  def __init__(self, obj):
+from adverb_eval import AdverbEvalHelpers  
+
+
+class AdverbEvalNotImplemented(Exception):
+  def __init__(self, obj, context):
     self.obj = obj 
+    self.context = context 
     
   def __str__(self):
-    return "Adverb %s not implemented" % (self.obj.__class__.__name__)
+    return "Semantics for adverb %s not implemented (called from %s)" % \
+        (self.obj.__class__.__name__, self.context.__class__.__name__)
  
-class Adverb(Expr):
+class Adverb(Expr, AdverbEvalHelpers):
   _members = ['fn']
-  
+    
   def eval(self, context):
-    raise AdverbNotImplemented(self)
+    raise AdverbEvalNotImplemented(self, context)
   
 class IndexAdverb(Adverb):
   _members = ['shape']
-  
-  
   
 class IndexMap(IndexAdverb):
   """
@@ -71,7 +73,46 @@ class IndexReduce(IndexAdverb):
   """
   _members = ['combine', 'init']
   
-
+  def eval(self, context):
+    shape = context.transform_expr(self.shape)
+    init = context.transform_if_expr(self.init)
+    fn = context.transform_expr(self.fn)
+    combine = context.transform_expr(self.combine)
+    
+    dims = self.tuple_elts(shape)
+    n_loops = len(dims)
+    
+    zero = self.int(0)
+    
+    if init is not None or not self.is_none(init):
+      if n_loops > 1:
+        zeros = self.tuple([zero for _ in xrange(n_loops)])
+        init = self.call(fn, [zeros])
+      else:
+        init = self.call(fn, [zero])
+        
+    def build_loops(index_vars, acc):
+    
+      n_indices = len(index_vars)
+      if n_indices > 0:
+        acc_value = acc.get()
+      else:
+        acc_value = acc 
+      if n_indices == n_loops:
+        
+        idx_tuple = self.tuple(index_vars) if n_indices > 1 else index_vars[0] 
+        elt_result =  self.call(fn, (idx_tuple,))
+        acc.update(self.call(combine, (acc_value, elt_result)))
+        return acc.get()
+      
+      def loop_body(acc, idx):
+        new_value = build_loops(index_vars + (idx,), acc = acc)
+        acc.update(new_value)
+        return new_value
+      return self.accumulate_loop(self.int(0), dims[n_indices], loop_body, acc_value)
+    return build_loops(index_vars = (), acc = init)
+   
+  
 class DataAdverb(Adverb):
   _members = ['args', 'axis']
 
@@ -99,7 +140,21 @@ class DataAdverb(Adverb):
     return repr(self)
 
 class Map(DataAdverb):
-  pass
+  def eval(self, context, output = None):
+    f = context.transform_expr(self.fn)
+    values = context.transform_expr_list(self.args)
+    axis = context.transform_if_expr(self.axis)
+    niters, delayed_elts = self.map_prelude(f, values, axis)
+    zero = self.int(0)
+    first_elts = self.force_list(delayed_elts, zero)
+    if output is None:
+      output = self.create_output_array(f, first_elts, niters)
+    def loop_body(idx):
+      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
+      elt_result = self.call(f, [elt(idx) for elt in delayed_elts])
+      self.setidx(output, output_indices, elt_result)
+    self.loop(zero, niters, loop_body)
+    return output
 
 class AllPairs(DataAdverb):
   pass 

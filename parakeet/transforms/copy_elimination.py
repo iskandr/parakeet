@@ -6,7 +6,7 @@ from .. analysis.find_local_arrays import FindLocalArrays
 from .. analysis.usedef import UseDefAnalysis
 from .. syntax import AllocArray, ArrayView, Index, Struct, Var
 
-# from .. syntax import Adverb
+from .. syntax import Adverb
 from transform import Transform
 
 
@@ -24,7 +24,7 @@ class CopyElimination(Transform):
     self.local_alloc = find_local_arrays.local_allocs
     self.local_arrays = find_local_arrays.local_arrays
 
-    escape_info = escape_analysis.run(fn)
+    escape_info = escape_analysis(fn)
     self.may_escape = escape_info.may_escape
     self.may_alias = escape_info.may_alias
 
@@ -45,7 +45,7 @@ class CopyElimination(Transform):
     return len(array_aliases) <= 1
 
   def is_array_alloc(self, expr):
-    return expr.__class__ in [ArrayView, Struct, AllocArray] #  or isinstance(expr, Adverb)
+    return expr.__class__ in [ArrayView, Struct, AllocArray] or isinstance(expr, Adverb)
     
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form

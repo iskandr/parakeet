@@ -143,7 +143,7 @@ class EscapeAnalysis(SyntaxVisitor):
       self.update_escaped(name, combined_set)
 
 _cache = {}
-def run(fundef):
+def escape_analysis(fundef):
   key = (fundef.name, fundef.copied_by, fundef.version)
   if key in _cache:
     return _cache[key]
@@ -154,7 +154,7 @@ def run(fundef):
     return analysis
 
 def may_alias(fundef):
-  return run(fundef).may_alias 
+  return escape_analysis(fundef).may_alias 
 
 def may_escape(fundef):
-  return run(fundef).may_escape
+  return escape_analysis(fundef).may_escape

@@ -1,7 +1,8 @@
 from .. import syntax
 from .. syntax import Const, ForLoop, Var
 from .. syntax.helpers import const_int
-from clone_stmt import CloneStmt
+from ..transforms import CloneStmt 
+
 from loop_transform import LoopTransform
 
 

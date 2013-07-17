@@ -1,7 +1,7 @@
 
-from .. analysis.collect_vars import collect_binding_names, collect_var_names
-from .. analysis.escape_analysis import may_alias
-from .. syntax import Return, While, ForLoop, If, Assign, Var, Index, Const
+from ..analysis.collect_vars import collect_binding_names, collect_var_names
+from ..analysis.escape_analysis import may_alias
+from ..syntax import Return, While, ForLoop, If, Assign, Var, Index, Const
 from transform import Transform
 
 class LoopTransform(Transform):

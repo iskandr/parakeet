@@ -1,16 +1,12 @@
 
-import names  
-import core_types
-import syntax
-import syntax_helpers
-import tuple_type
+from .. import names, syntax 
+from ..ndtypes import (IncompatibleTypes, ScalarT, 
+                       Bool, Type,  ArrayT, Int64, TupleT, 
+                       make_tuple_type)
+from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index)
+from ..syntax.helpers import get_types, zero_i64, one_i64, none, const 
+from ..transforms import Transform 
 
-from array_type import ArrayT
-from core_types import Int64 
-from tuple_type import TupleT 
-from syntax import Assign, Tuple, TupleProj, Var, Cast, Return, Index  
-from syntax_helpers import get_types, zero_i64, one_i64, none 
-from transform import Transform
 
 class RewriteTyped(Transform):
   def __init__(self, return_type = None):
@@ -37,7 +33,7 @@ class RewriteTyped(Transform):
     elif expr.__class__ is Tuple:
       if t.__class__ is not TupleT or \
           len(expr.type.elt_types) != t.elt_types:
-        raise core_types.IncompatibleTypes(expr.type, t)
+        raise IncompatibleTypes(expr.type, t)
       else:
         new_elts = []
         for elt, elt_t in zip(expr.elts, t.elt_types):
@@ -45,8 +41,8 @@ class RewriteTyped(Transform):
         return Tuple(new_elts, type = t)
     else:
       assert \
-          isinstance(expr.type, core_types.ScalarT) and \
-          isinstance(t, core_types.ScalarT), \
+          isinstance(expr.type, ScalarT) and \
+          isinstance(t, ScalarT), \
           "Can't cast type %s into %s" % (expr.type, t)
       return syntax.Cast(expr, type=t)
 
@@ -70,7 +66,7 @@ class RewriteTyped(Transform):
       elts = map(self.transform_lhs, lhs.elts)
       elt_types = get_types(elts)
       if elt_types != lhs.type.elt_types:
-        return syntax.Tuple(elts, type = tuple_type.make_tuple_type(elt_types))
+        return syntax.Tuple(elts, type = make_tuple_type(elt_types))
       else:
         return lhs
     else:
@@ -100,7 +96,7 @@ class RewriteTyped(Transform):
       first_elt = self.assign_temp(expr.elts[0], "first_elt")
       elt_dims = [self.shape(first_elt, i) for i in xrange(array_t.rank - 1)]
       n = len(expr.elts)
-      outer_dim = syntax_helpers.const(n)
+      outer_dim = const(n)
       all_dims = (outer_dim,) + tuple(elt_dims)
       array = self.alloc_array(elt_t, all_dims, "array_literal")
       for i, elt in enumerate(expr.elts):
@@ -216,14 +212,14 @@ class RewriteTyped(Transform):
     else:         
       
       new_rhs = self.coerce_expr(rhs, lhs_t)
-      assert new_rhs.type and isinstance(new_rhs.type, core_types.Type), \
+      assert new_rhs.type and isinstance(new_rhs.type, Type), \
           "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
       stmt.lhs = new_lhs
       stmt.rhs = new_rhs
       return stmt
 
   def transform_If(self, stmt):
-    stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
+    stmt.cond = self.coerce_expr(stmt.cond, Bool)
     stmt.true = self.transform_block(stmt.true)
     stmt.false = self.transform_block(stmt.false)
     stmt.merge = self.transform_merge(stmt.merge)
@@ -234,7 +230,7 @@ class RewriteTyped(Transform):
     return stmt
 
   def transform_While(self, stmt):
-    stmt.cond = self.coerce_expr(stmt.cond, core_types.Bool)
+    stmt.cond = self.coerce_expr(stmt.cond, Bool)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)
     return stmt

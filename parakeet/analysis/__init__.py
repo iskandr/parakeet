@@ -1,6 +1,14 @@
-from contains_adverbs import ContainsAdverbs, contains_adverbs
+from contains_adverbs import contains_adverbs
+from contains_calls import contains_calls
+from escape_analysis import may_alias, may_escape, escape_analysis 
+import find_constant_strides
+from find_constant_strides import FindConstantStrides
+from find_local_arrays import FindLocalArrays
+from index_elim_analysis import IndexElimAnalysis
+from mutability_analysis import find_mutable_types, TypeBasedMutabilityAnalysis
+from offset_analysis import OffsetAnalysis 
+from syntax_visitor import SyntaxVisitor 
+from use_analysis import find_live_vars, use_count
+from usedef import StmtPath, UseDefAnalysis
+from verify import verify 
 
-from shape_from_type import shapes_from_types
- 
-from shape_inference import shape_env, call_shape_expr, bind, bind_pairs
-from shape_inference import subst, subst_list, symbolic_call

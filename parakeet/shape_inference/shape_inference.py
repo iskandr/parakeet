@@ -1,9 +1,15 @@
-import core_types
+
+from .. import syntax 
+from ..analysis import OffsetAnalysis, SyntaxVisitor
+from ..ndtypes import SliceT, ArrayT
+
+
 import shape
 import shape_from_type
 import syntax
 
-from array_type import SliceT, ArrayT
+
+from array_type import 
 from offset_analysis import OffsetAnalysis
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, Unknown, Struct

@@ -6,13 +6,14 @@ from .. ndtypes  import make_slice_type, make_array_type, make_closure_type
 from .. ndtypes import  ArrayT, SliceT, TupleT, make_tuple_type 
 from .. ndtypes import ScalarT, Int32, Int64, NoneT, Type, StructT
 from .. ndtypes import ptr_type,  ClosureT 
-from .. syntax import Alloc, AllocArray, ArrayView, Assign, Attribute
-from .. syntax import Call, Cast, Closure, ClosureElt, Comment,  Const
-from .. syntax import Expr, ForLoop, If, Index, Return 
-from .. syntax import PrimCall, Slice, Struct, Tuple,  TupleProj, TypedFn,  Var, While  
-from .. syntax import get_types, wrap_constants, zero, zero_i64, is_zero, \
-                      one_i64, one,  is_one, wrap_if_constant, slice_none, \
-                      const_bool, const_int, const
+from .. syntax import (Alloc, AllocArray, ArrayView, Assign, Attribute,
+                       Call, Cast, Closure, ClosureElt, Comment,  Const,
+                       Expr, ForLoop, If, Index, Return,
+                       PrimCall, Slice, Struct, Tuple,  TupleProj, TypedFn,  Var, While, 
+                       UntypedFn)  
+from .. syntax import (get_types, wrap_constants, zero, zero_i64, is_zero, 
+                      one_i64, one,  is_one, wrap_if_constant, slice_none, 
+                      const_bool, const_int, const)
 
 
 class Builder(object):
@@ -582,13 +583,13 @@ class Builder(object):
   def check_equal_sizes(self, sizes):
     pass
   
-  #def invoke_type(self, closure, args):
-  #  import type_inference
-  #  closure_t = closure.type
-  #  arg_types = syntax.helpers.get_types(args)
-  #  assert all(isinstance(t, core_types.Type) for t in arg_types), \
-  #      "Invalid types: %s" % (arg_types, )
-  #  return type_inference.invoke_result_type(closure_t, arg_types)
+  def invoke_type(self, closure, args):
+    from .. type_inference import invoke_result_type 
+    closure_t = closure.type
+    arg_types = syntax.helpers.get_types(args)
+    assert all(isinstance(t, Type) for t in arg_types), \
+        "Invalid types: %s" % (arg_types, )
+    return invoke_result_type(closure_t, arg_types)
 
   def invoke(self, fn, args):
     #import type_inference
@@ -614,33 +615,33 @@ class Builder(object):
   # TODO: get rid of that leading underscore to enable this function once
   # shape inference works for all the weird and wacky constructs in our
   # syntax zoo
-  #def _create_output_array(self, fn, args, extra_dims, name = "output"):
-  #  """
-  #  Given a function and its argument, use shape inference to figure out the
-  #  result shape of the array and preallocate it.  If the result should be a
-  #  scalar, just return a scalar variable.
-  #  """
-  #  try:
-  #    inner_shape_tuple = self.call_shape(fn, args)
-  #  except:
-  #    print "Shape inference failed when calling %s with %s" % (fn, args)
-  #    import sys
-  #    print "Error %s ==> %s" % (sys.exc_info()[:2])
-  #    raise
+  def _create_output_array(self, fn, args, extra_dims, name = "output"):
+    """
+    Given a function and its argument, use shape inference to figure out the
+    result shape of the array and preallocate it.  If the result should be a
+    scalar, just return a scalar variable.
+    """
+    try:
+      inner_shape_tuple = self.call_shape(fn, args)
+    except:
+      print "Shape inference failed when calling %s with %s" % (fn, args)
+      import sys
+      print "Error %s ==> %s" % (sys.exc_info()[:2])
+      raise
 
-  #  if self.is_tuple(extra_dims):
-  #    outer_shape_tuple = extra_dims
-  #  elif isinstance(extra_dims, (list, tuple)):
-  #    outer_shape_tuple = self.tuple(extra_dims)
-  #  else:
-  #    outer_shape_tuple = self.tuple((extra_dims,) if extra_dims else ())
+    if self.is_tuple(extra_dims):
+      outer_shape_tuple = extra_dims
+    elif isinstance(extra_dims, (list, tuple)):
+      outer_shape_tuple = self.tuple(extra_dims)
+    else:
+      outer_shape_tuple = self.tuple((extra_dims,) if extra_dims else ())
 
-  #  shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
-  #  elt_t = self.elt_type(self.return_type(fn))
-  #  if len(shape.type.elt_types) > 0:
-  #    return self.alloc_array(elt_t, shape, name)
-  #  else:
-  #    return self.fresh_var(elt_t, name)
+    shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
+    elt_t = self.elt_type(self.return_type(fn))
+    if len(shape.type.elt_types) > 0:
+      return self.alloc_array(elt_t, shape, name)
+    else:
+      return self.fresh_var(elt_t, name)
 
   def rank(self, value):
     if self.is_array(value):
@@ -652,6 +653,53 @@ class Builder(object):
     slice_t = make_slice_type(start.type, stop.type, step.type)
     return Slice(start, stop, step, type = slice_t)
 
+  def build_slice_indices(self, rank, axis, idx):
+    """
+    Build index tuple to pull out the 'idx' element along the given axis
+    """
+    if rank == 1:
+      assert axis == 0
+      return idx
+
+    indices = []
+    for i in xrange(rank):
+      if i == axis:
+        indices.append(idx)
+      else:
+        s = self.slice_value(self.none, self.none, self.int(1))
+        indices.append(s)
+    return self.tuple(indices)
+
+
+  def slice_along_axis(self, arr, axis, idx):
+    """
+    Pull out a slice if the array has the given axis, 
+    otherwise just return the array 
+    """
+    r = self.rank(arr)
+    if r > axis:
+      index_tuple = self.build_slice_indices(r, axis, idx)
+      return self.index(arr, index_tuple)
+    else:
+      return arr
+
+  def output_slice(self, output, axis, idx):
+    """
+    Create an expression which acts as an LHS output location 
+    for a slice throught the variable 'output' along the given axis
+    """
+    r = self.rank(output)
+    if r > 1:
+      output_indices = self.build_slice_indices(r, axis, idx)
+    elif r == 1:
+      output_idx = self.slice_value(idx, self.none, self.int(1))
+      output_indices = self.tuple([output_idx])
+    else:
+      output_idx = self.slice_value(self.none, self.none, self.none)
+      output_indices = self.tuple([output_idx])
+    return self.index(output, output_indices)
+  
+  
   def loop_var(self, name = "i", start_val = syntax.zero_i64):
     """
     Generate three SSA variables to use as the before/during/after values
@@ -720,17 +768,20 @@ class Builder(object):
     else:
       self.blocks += loop_stmt
 
-  #def call_shape(self, maybe_clos, args):
-    #fn = self.get_fn(maybe_clos)
-    #closure_args = self.closure_elts(maybe_clos)
-    #combined_args = tuple(closure_args) + tuple(args)
+  def call_shape(self, maybe_clos, args):
+    from ..shape_inference import call_shape_expr, shape_codegen
+    fn = self.get_fn(maybe_clos)
+    closure_args = self.closure_elts(maybe_clos)
+    combined_args = tuple(closure_args) + tuple(args)
+     
+    if isinstance(fn, UntypedFn):
+      # if we're given an untyped function, first specialize it
+      from ..type_inference import specialize
 
-    #if isinstance(fn, Fn):
-    #  # if we're given an untyped function, first specialize it
-    #  import type_inference
-    #  fn = type_inference.specialize(fn, get_types(combined_args))
-    #abstract_shape = shape_inference.call_shape_expr(fn)
-    #return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
+       
+      fn = specialize(fn, get_types(combined_args))
+    abstract_shape = call_shape_expr(fn)
+    return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
 
   class Accumulator:
     def __init__(self, acc_type, fresh_var, assign):
@@ -796,5 +847,6 @@ class Builder(object):
         return self.loop(start, stop, loop_body, return_stmt)
 
     return create_loops()
+  
   def return_(self, value):
     self.blocks += [Return(value)]  

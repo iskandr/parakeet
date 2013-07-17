@@ -5,13 +5,13 @@ import types
 from treelike import dispatch 
 from loopjit.ndtypes import ScalarT, StructT 
 
-from adverb.semantics import AdverbSemantics 
+
 from frontend import ast_conversion 
 from syntax import Expr, UntypedFn, TypedFn
 from syntax import  Var, Tuple, Return, If, While, ForLoop, ActualArgs
 from fn_args import 
 
-class InterpSemantics(AdverbSemantics):
+class InterpSemantics(object):
   def size_along_axis(self, value, axis):
     assert len(value.shape) > axis, \
         "Can't get %d'th element of %s with shape %s" % \
