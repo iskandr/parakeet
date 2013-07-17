@@ -5,14 +5,15 @@ from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
 from index_elimination import IndexElim
+from indexify_adverbs import IndexifyAdverbs
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
-from mapify_allpairs import MapifyAllPairs
-from maps_to_parfor import MapsToParFor
+#from mapify_allpairs import MapifyAllPairs
+#from maps_to_parfor import MapsToParFor
 from pipeline_phase import Phase
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
@@ -42,12 +43,12 @@ high_level_optimizations = Phase([Simplify,
                                   Simplify, DCE,
                                   licm, 
                                   Simplify, DCE, 
-                                  MapifyAllPairs,
+                                  # MapifyAllPairs,
                                   fusion_opt, 
                                   fusion_opt, 
                                   copy_elim, 
                                   Simplify, DCE, 
-                                  MapsToParFor], 
+                                  IndexifyAdverbs], 
                                  copy = True)
 
 

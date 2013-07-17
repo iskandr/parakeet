@@ -1,7 +1,8 @@
 import time
 
 from .. import config
-from .. analysis import verify  
+from .. analysis import verify
+from .. builder import Builder  
 from .. syntax import Expr, If, Assign, While, Return, ExprStmt
 from .. syntax import ForLoop, Comment  
 from .. syntax import Var, Tuple, Index, Attribute, Const
@@ -9,7 +10,7 @@ from .. syntax import PrimCall, Struct, Alloc, Cast
 from .. syntax import TupleProj, Slice, ArrayView
 from .. syntax import Call, TypedFn,  AllocArray, Len
 
-from builder import Builder
+
 
 # from . syntax import Map, Reduce 
 

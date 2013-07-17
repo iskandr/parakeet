@@ -30,5 +30,3 @@ from tuple_type import TupleT, make_tuple_type, empty_tuple_t, repeat_tuple
 
 import dtypes
 import type_conv   
-
-

@@ -1,9 +1,10 @@
 
 from .. import syntax
+from .. builder import Builder
 from .. ndtypes import SliceT, make_array_type, ArrayT 
 from .. ndtypes import NoneT, ScalarT, Int64, PtrT, IntT
 from .. syntax import Index, Tuple, Var, ArrayView, Assign, Slice, Struct
-from builder import Builder 
+ 
 from transform import Transform
 
 class LowerIndexing(Transform):

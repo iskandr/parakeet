@@ -14,7 +14,12 @@ class IndexifyAdverbs(Transform):
     Take a function whose last k values are slices through input data 
     and transform it into a function which explicitly extracts its arguments
     """  
-    key = (fn.name, fn.copied_by, k)
+    
+    # do I need fn.version *and* fn.copied_by? 
+    key = (fn.name, fn.copied_by, fn.version, k)
+    if key in self._indexed_fn_cache:
+      return self._indexed_fn_cache[key]
+    value_args = fn
   
   def transform_AllPairs(self, expr):
     axis = unwrap_constant(expr.axis)

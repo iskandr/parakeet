@@ -2,7 +2,7 @@ from ..  import names, syntax
 from ..analysis.use_analysis import use_count 
 from ..transforms import inline, Transform 
 from .. syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
-from .. syntax import IndexMap, IndexReduce, Map, Reduce, AllPairs
+from .. syntax import IndexMap, IndexReduce, Map, Reduce, OuterMap 
 
 def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
   if syntax.helpers.is_identity_fn(next_fn):
@@ -105,7 +105,7 @@ class Fusion(Transform):
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
     if isinstance(rhs, DataAdverb) and \
-       rhs.__class__ is not AllPairs and \
+       rhs.__class__ is not OuterMap and \
        inline.can_inline(self.get_fn(rhs.fn)):
 
       args = rhs.args
