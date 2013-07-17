@@ -6,13 +6,14 @@ from .. analysis.collect_vars import collect_var_names
 from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
 from .. ndtypes import ArrayT, SliceT, ClosureT, NoneT, ScalarT, TupleT, ImmutableT
-from .. syntax import AllocArray, Assign, ExprStmt #, Adverb
-from .. syntax import Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast
-from .. syntax import Slice, Index, Array, ArrayView, Attribute, Struct
-from .. syntax import PrimCall, Call, TypedFn #, Fn
-# from syntax import AllPairs, Map, Reduce, Scan, IndexMap, IndexReduce
+
+from .. syntax import (AllocArray, Assign, ExprStmt, 
+                       Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
+                       Slice, Index, Array, ArrayView, Attribute, Struct,
+                       PrimCall, Call, TypedFn, UntypedFn, 
+                       OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
 from .. syntax.helpers import collect_constants, is_one, is_zero, all_constants
-from .. syntax.helpers import get_types, slice_none_t, const_int
+from .. syntax.helpers import get_types, slice_none_t, const_int, one 
 import subst
 import transform 
 from transform import Transform
@@ -70,12 +71,12 @@ class Simplify(Transform):
       return (expr.start, expr.stop, expr.step)
     elif c is Cast:
       return (expr.value,)
-    #elif c is Map or c is AllPairs or c is IndexMap:
-    #  return expr.args
-    #elif c is Scan or c is Reduce or c is IndexReduce:
-    #  args = tuple(expr.args)
-    #  init = (expr.init,) if expr.init else ()
-    #  return init + args
+    elif c is Map or c is OuterMap or c is IndexMap:
+      return expr.args
+    elif c is Scan or c is Reduce or c is IndexReduce:
+      args = tuple(expr.args)
+      init = (expr.init,) if expr.init else ()
+      return init + args
     elif c is Call:
       # assume all Calls might modify their arguments
       if allow_mutable or all(self.immutable(arg) for arg in expr.args):
@@ -302,7 +303,7 @@ class Simplify(Transform):
       if is_one(y):
         return self.cast(x, expr.type)
       elif is_zero(y):
-        return syntax_helpers.one(expr.type)
+        return one(expr.type)
       elif y.__class__ is Const and y.value == 2:
         return self.cast(self.mul(x, x, "sqr"), expr.type)
 

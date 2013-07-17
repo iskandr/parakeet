@@ -4,7 +4,7 @@ from .. syntax import (none, zero_i64,
                        Map, Reduce, Scan, 
                        IndexMap, IndexReduce, 
                        ParFor, OuterMap,
-                       FilterMap, FilterReduce) 
+                       Filter, FilterReduce) 
  
 @jit 
 def identity(x):
@@ -28,6 +28,16 @@ each = map
 @staged_macro("axis")
 def allpairs(f, x, y, axis = 0):
   return OuterMap(fn = f, args = (x,y), axis = axis)
+
+@staged_macro("axis")
+def outer_map(f, *args, **kwds):
+  if 'axis' in kwds:
+    axis = kwds['axis']
+    del kwds['axis']
+  else:
+    axis = zero_i64
+  assert len(kwds) == 0, "outer_map got unexpected keywords %s" % (kwds.keys())
+  return OuterMap(fn = f, args = args, axis = axis)
 
 @staged_macro("axis")
 def reduce(f, *args, **kwds):
@@ -68,18 +78,18 @@ def imap(fn, shape):
 
 
 @macro
-def ireduce(combine, shape, map_fn = identity, init = None):
-  return IndexReduce(fn = map_fn, combine=combine, shape = shape, init = init)
+def ireduce(fn, combine, shape, init = None):
+  return IndexReduce(fn = fn, combine=combine, shape = shape, init = init)
 
 @staged_macro("axis")
-def filter_map(f, pred, *args, **kwds):
+def filter(pred, *args, **kwds):
   if 'axis' in kwds:
     axis = kwds['axis']
     del kwds['axis']
   else:
     axis = zero_i64
-  assert len(kwds) == 0, "filter_map got unexpected keywords %s" % (kwds.keys())
-  return FilterMap(fn = f, pred = pred, args = args, axis = axis)
+  assert len(kwds) == 0, "filter got unexpected keywords %s" % (kwds.keys())
+  return Filter(fn = pred, args = args, axis = axis)
 
 
 @staged_macro("axis")
@@ -97,7 +107,7 @@ def filter_reduce(f, pred, *args, **kwds):
   assert len(kwds) == 0, "reduce got unexpected keywords %s" % (kwds.keys())
   
   ident = translate_function_value(identity)
-  return Reduce(fn = ident, 
+  return FilterReduce(fn = ident, 
                 pred = pred, 
                 combine = f, 
                 args = args,

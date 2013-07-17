@@ -169,10 +169,6 @@ class Accumulative(DataAdverb):
   _members = ['combine', 'init']
 
 
-  def node_init(self):
-    # assert self.init is not None
-    # assert self.combine is not None
-    pass
 
 class Reduce(Accumulative):
   def __repr__(self):
@@ -201,18 +197,20 @@ class Scan(Accumulative):
     return s
 
 
-class Filtered(object):
-  _members = ['pred']
-
-
-class FilterMap(Map, Filtered):
+class Filter(Adverb):
+  """
+  Filters its arguments using the boolean predicate field 'fn'
+  """
   pass 
 
-class FilterReduce(Scan, Filtered):
-  pass 
+class FilterReduce(Reduce, Filter):
+  """
+  Like a normal reduce but skips some elements if they don't pass
+  the predicate 'pred'
+  """
+  _members = ['pred'] 
 
-class FilterScan(Scan, Filtered):
-  pass 
+
 
 class Tiled(object):
   _members = ['axes', 'fixed_tile_size']
@@ -228,7 +226,7 @@ class Tiled(object):
 class TiledMap(Tiled, Map):
   pass
 
-class TiledAllPairs(Tiled, AllPairs):
+class TiledOuterMap(Tiled, OuterMap):
   pass
 
 class TiledReduce(Tiled, Reduce):

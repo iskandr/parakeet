@@ -1,8 +1,8 @@
 
-from .. import config, names, syntax, type_inference
+from .. import config, type_inference
 from .. ndtypes import type_conv
 from ..syntax import UntypedFn
-from ..syntax.fn_args import FormalArgs, ActualArgs
+from ..syntax.fn_args import ActualArgs
 from .. transforms import pipeline
  
 def prepare_args(fn, args, kwargs):
@@ -23,6 +23,7 @@ def prepare_args(fn, args, kwargs):
   # get types of all inputs
   arg_types = arg_values.transform(type_conv.typeof)
   return untyped, arg_values, arg_types
+
 
 def specialize(fn, args, kwargs = {}):
   """
@@ -46,10 +47,7 @@ def specialize(fn, args, kwargs = {}):
   from .. transforms.pipeline import high_level_optimizations
   # apply high level optimizations 
   optimized_fn = high_level_optimizations.apply(typed_fn)
-  
   return untyped, optimized_fn, linear_args 
- 
-
   
 def run_typed_fn(fn, args, backend = None):
   
@@ -84,16 +82,11 @@ def run(fn, *args, **kwargs):
   Given a python function, run it in Parakeet on the supplied args
   """
   
-  if '_mode' in kwargs:
-    backend_name = kwargs['_mode']
-    del kwargs['_mode']
+  if '_backend' in kwargs:
+    backend_name = kwargs['_backend']
+    del kwargs['_backend']
   else:
     backend_name = config.default_backend
-  
   _, typed_fn, linear_args = specialize(fn, args, kwargs)
- 
-  import backend
-  assert hasattr(backend, backend_name), "Unrecognized backend %s" % backend_name
-  b = getattr(backend, backend_name) 
-  return b.run(typed_fn, linear_args)
+  run_typed_fn(typed_fn, linear_args, backend_name)
   
