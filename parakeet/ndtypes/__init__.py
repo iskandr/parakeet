@@ -32,5 +32,3 @@ import dtypes
 import type_conv   
 
 
-# should be hidden from user  
-import type_conv_decls as _decls 

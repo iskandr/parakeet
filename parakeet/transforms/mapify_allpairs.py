@@ -1,8 +1,6 @@
-import array_type
-import names
-
-from syntax import AllPairs, Map
-from syntax import Assign, Return, TypedFn, Var
+from .. import names 
+from ..ndtypes import ArrayT, lower_rank
+from ..syntax import AllPairs, Map, Assign, Return, TypedFn, Var
 from transform import Transform
 
 class MapifyAllPairs(Transform):
@@ -67,7 +65,7 @@ class MapifyAllPairs(Transform):
 
     inner_closure_rhs = self.closure(fn, inner_closure_args + [x_elt_var])
 
-    inner_result_t = array_type.lower_rank(expr.type, 1)
+    inner_result_t = lower_rank(expr.type, 1)
     inner_fn = TypedFn(
       name = names.fresh('allpairs_into_maps_wrapper'),
       arg_names = tuple(inner_arg_names),

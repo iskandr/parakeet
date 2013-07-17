@@ -1,5 +1,4 @@
 from .. import config, names, ndtypes, prims, syntax
-from ..frontend import ast_conversion
 from ..ndtypes import array_type, closure_type, tuple_type, type_conv
 from ..ndtypes import (Type, Bool, IntT, Int64,  ScalarT, 
                        NoneType, NoneT, Unknown, UnknownT, 
@@ -8,7 +7,7 @@ from ..ndtypes.array_type import ArrayT, make_array_type, make_slice_type
 from ..ndtypes.closure_type import ClosureT, make_closure_type
 from ..ndtypes.tuple_type import  TupleT, make_tuple_type
 from ..syntax import adverb_helpers, prim_wrapper
-from ..syntax import UntypedFn, TypedFn, Closure, ClosureElt, Var
+from ..syntax import UntypedFn, TypedFn, Closure, ClosureElt, Var, Return
 from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
                               one_i64, zero_i64, none, true, false, 
                               is_false, is_true, is_zero, 
@@ -86,9 +85,16 @@ def invoke_result_type(fn, arg_types):
   _invoke_type_cache[key] = result_type
   return result_type
 
-def identity(x):
-  return x
-untyped_identity_function = ast_conversion.translate_function_value(identity)
+
+def mk_untyped_identity():
+  var_name = names.fresh('x')
+  var_expr = Var(var_name)
+  fn_name = names.fresh('identity')
+  args_obj = FormalArgs()
+  args_obj.add_positional(var_name)
+  return UntypedFn(name = fn_name, args = args_obj, body = [Return(Var(var_name))])
+
+untyped_identity_function = mk_untyped_identity()
 
 class Annotator(Transform):
   
@@ -99,6 +105,7 @@ class Annotator(Transform):
     
   
   def transform_expr(self, expr):
+    from ..frontend import ast_conversion
     if not isinstance(expr, syntax.Expr):
       expr = ast_conversion.value_to_syntax(expr)
     

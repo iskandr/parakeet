@@ -1,7 +1,4 @@
-from array_type import ArrayT, SliceT
-from closure_type import ClosureT
-from core_types import NoneT, ScalarT, StructT, TypeValueT
-from tuple_type import TupleT
+from ..ndtypes import ArrayT, SliceT, ClosureT, NoneT, ScalarT, StructT, TypeValueT, TupleT
 from shape import Shape, Tuple, Closure, Var, Slice, Struct
 
 

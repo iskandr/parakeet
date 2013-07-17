@@ -1,25 +1,18 @@
 
 from .. import syntax 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
-from ..ndtypes import SliceT, ArrayT
-
+from ..ndtypes import SliceT, ArrayT, TupleT
+from ..syntax import unwrap_constant 
 
 import shape
 import shape_from_type
-import syntax
 
-
-from array_type import 
-from offset_analysis import OffsetAnalysis
 from shape import Var, Const, Shape, Tuple, Closure
 from shape import Slice, Scalar, Unknown, Struct
 from shape import any_scalar, unknown_value, const, any_value
 from shape import combine_list, increase_rank, make_shape
 from shape import ConstSlice
 from shape_semantics import ShapeSemantics
-from syntax_helpers import unwrap_constant
-from syntax_visitor import SyntaxVisitor
-from tuple_type import TupleT
 
 shape_semantics = ShapeSemantics()
 counter = 0

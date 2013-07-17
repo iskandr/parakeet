@@ -7,7 +7,7 @@ from collections import OrderedDict
 import numpy as np
 from treelike import NestedBlocks, ScopedDict
  
-from .. import config, lib, names, prims, syntax  
+from .. import config, names, prims, syntax  
 from ..names import NameNotFound
 from ..ndtypes import from_dtype 
 from ..prims import Prim 
@@ -15,14 +15,12 @@ from ..syntax import (Assign, If, ForLoop, Var, PrimCall, Map,
                        FormalArgs, ActualArgs, 
                        UntypedFn,  
                        none, true, false, one_i64, zero_i64, 
-                       is_python_constant, const) 
-from syntax.prim_wrapper import prim_wrapper
+                       is_python_constant, const, prim_wrapper) 
 from ..transforms import subst_expr, subst_stmt_list
-from decorators import macro, jit 
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn
 from mappings import function_mappings, method_mappings, property_mappings 
- 
+from decorators import jit, macro  
 from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
 
 
@@ -58,6 +56,7 @@ class ExternalValue(object):
 def mk_reduce_call(fn, positional, init = None):
   init = none if init is None else init
   axis = zero_i64
+  from .. import lib 
   return syntax.Reduce(fn = translate_function_value(lib.identity), 
                        combine = fn, 
                        args = positional, 
@@ -72,24 +71,6 @@ def mk_simple_fn(mk_body, input_name = "x", fn_name = "cast"):
   formals.add_positional(unique_arg_name, input_name)
   body = mk_body(var)
   return UntypedFn(unique_fn_name, formals, body)
-  
-_function_wrapper_cache = {}
-def mk_wrapper_function(p):
-  """
-  Generate wrappers for builtins and primitives
-  """
-  if p in _function_wrapper_cache:
-    return _function_wrapper_cache[p]
-  if isinstance(p, prims.Prim):
-    f = prim_wrapper(p)
-  elif p in prims.prim_lookup_by_value:
-    f = prim_wrapper(prims.prim_lookup_by_value[p]) 
-  else:
-    assert isinstance(p, types.BuiltinFunctionType)
-    assert p.__name__ in lib.__dict__, "Unsupported builtin: %s" % (p,)
-    f = translate_function_value(lib.__dict__[p.__name__]) 
-  _function_wrapper_cache[p] = f
-  return f
   
        
 def is_hashable(x):
@@ -451,6 +432,7 @@ class AST_Translator(ast.NodeVisitor):
                             filename = self.filename)
   
   def translate_builtin_call(self, value, positional, keywords_dict):
+    from mappings import function_mappings 
     if value is sum:
       return mk_reduce_call(prim_wrapper(prims.add), positional, zero_i64)
     elif value is max:
@@ -470,9 +452,8 @@ class AST_Translator(ast.NodeVisitor):
       assert len(positional) > 1
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
-    elif isinstance(value, (types.BuiltinFunctionType, types.TypeType)) and \
-         value.__name__ in lib.__dict__:
-      parakeet_equiv = lib.__dict__[value.__name__]
+    elif value in function_mappings:
+      parakeet_equiv = function_mappings[value]
       if isinstance(parakeet_equiv, macro):
         return parakeet_equiv.transform(positional, keywords_dict)
     fn = value_to_syntax(value)
@@ -484,6 +465,7 @@ class AST_Translator(ast.NodeVisitor):
     return res 
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
+    from mappings import function_mappings 
     if value in function_mappings:
       value = function_mappings[value]
       
@@ -893,4 +875,115 @@ def translate_function_value(fn, _currently_processing = set([])):
   register_python_fn(original_fn, fundef)
   register_python_fn(fn, fundef)
   _currently_processing.remove(original_fn)
-  return fundef
+  return fundef 
+""" 
+class jit:
+  def __init__(self, f):
+    self.f = f
+
+  def __call__(self, *args, **kwargs):
+    return run(self.f, *args, **kwargs)
+
+
+class macro(object):
+  def __init__(self, f, static_names = set([]), call_from_python = None):
+    self.f = f
+    self.static_names = static_names
+    self.wrappers = {}
+    self.call_from_python = call_from_python
+    if hasattr(self.f, "__name__"):
+      self.name = f.__name__
+    else:
+      self.name = "f"
+
+  _macro_wrapper_cache = {}
+  def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
+    args = FormalArgs()
+    pos_vars = []
+    keyword_vars = {}
+    for i in xrange(n_pos):
+      local_name = names.fresh("input_%d" % i)
+      args.add_positional(local_name)
+      pos_vars.append(Var(local_name))
+  
+    
+    for visible_name in dynamic_keywords:
+      local_name = names.fresh(visible_name)
+      args.add_positional(local_name, visible_name)
+      keyword_vars[visible_name] = Var(local_name)
+
+    for (static_name, value) in static_pairs:
+      if isinstance(value, Expr):
+        assert isinstance(value, Const)
+        keyword_vars[static_name] = value
+      elif value is not None:
+        assert is_python_constant(value), \
+            "Unexpected type for static/staged value: %s : %s" % \
+            (value, type(value))
+        keyword_vars[static_name] = const(value)
+
+    result_expr = self.f(*pos_vars, **keyword_vars)
+    body = [Return(result_expr)]
+    wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
+                                         len(dynamic_keywords))
+    wrapper_name = names.fresh(wrapper_name)
+    return UntypedFn(name = wrapper_name, args = args, body = body)
+
+  def as_fn(self):
+    n_args = self.f.func_code.co_argcount
+    n_default = 0 if not self.f.func_defaults else len(self.f.func_defaults)
+    assert n_default == 0
+    return self._create_wrapper(n_args,[],{})
+    
+  def __call__(self, *args, **kwargs):
+    if self.call_from_python is not None:
+      return self.call_from_python(*args, **kwargs)
+    n_pos = len(args)
+    keywords = kwargs.keys()
+
+    static_pairs = ((k,kwargs.get(k)) for k in self.static_names)
+    dynamic_keywords = tuple(k for k in keywords
+                               if k not in self.static_names)
+
+    static_pairs = tuple(static_pairs)
+    key = (n_pos, static_pairs, dynamic_keywords)
+
+    if key in self.wrappers:
+      untyped = self.wrappers[key]
+    else:
+      untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
+      self.wrappers[key] = untyped
+    dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
+    return run(untyped, *args, **dynamic_kwargs)
+    
+
+  def transform(self, args, kwargs = {}):
+    for arg in args:
+      assert isinstance(arg, Expr), \
+          "Macros can only take syntax nodes as arguments, got %s" % (arg,)
+    for (name,arg) in kwargs.iteritems():
+      assert isinstance(arg, Expr), \
+          "Macros can only take syntax nodes as arguments, got %s = %s" % \
+          (name, arg)
+    result = self.f(*args, **kwargs)
+    assert isinstance(result, Expr), \
+        "Expected macro %s to return syntax expression, got %s" % \
+        (self.f, result)
+    return result
+
+  def __str__(self):
+    return "macro(%s)" % self.name
+  
+class staged_macro(object):
+  def __init__(self, *static_names, **kwargs):
+    self.static_names = tuple(static_names)
+
+    self.call_from_python = kwargs.get('call_from_python')
+    assert kwargs.keys() in [[], ['call_from_python']], \
+        "Unknown keywords: %s" % kwargs.keys()
+
+  def __call__(self, fn):
+    return macro(fn, 
+                 self.static_names,
+                 call_from_python = self.call_from_python)
+"""

@@ -1,7 +1,6 @@
-from loopjit import names, inline, Transform 
-from loopjit.analysis.use_analysis import use_count 
- 
-from .. import syntax 
+from ..  import names, syntax
+from ..analysis.use_analysis import use_count 
+from ..transforms import inline, Transform 
 from .. syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
 from .. syntax import IndexMap, IndexReduce, Map, Reduce, AllPairs
 

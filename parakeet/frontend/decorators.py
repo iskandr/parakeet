@@ -1,8 +1,8 @@
 
-from loopjit import names 
-from .. args import FormalArgs  
-from .. syntax import Expr, Var, Const, Return, UntypedFn 
-from .. syntax import const, is_python_constant 
+from .. import names 
+  
+from .. syntax import (Expr, Var, Const, Return, UntypedFn, FormalArgs, 
+                       const, is_python_constant)
 
 from run_function import run  
 
