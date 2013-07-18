@@ -2,7 +2,7 @@ from .. import names
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple
 from ..syntax import ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap 
-from ..syntax.helpers import unwrap_constant, get_types 
+from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
 from transform import Transform 
 
@@ -15,7 +15,9 @@ class IndexifyAdverbs(Transform):
   input indices
   """
   _indexed_fn_cache = {}
-  def indexify_fn(self, fn, axis, array_args, cartesian_product = False):
+  def indexify_fn(self, fn, axis, array_args, 
+                   cartesian_product = False,
+                   output = None):
     """
     Take a function whose last k values are slices through input data 
     and transform it into a function which explicitly extracts its arguments
@@ -50,9 +52,13 @@ class IndexifyAdverbs(Transform):
     for i, array_slice_arg in enumerate(array_slice_args):
       slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
       builder.assign(array_slice_arg, slice_value)
-      
-    builder.return_(builder.call(fn, old_input_vars))
     
+    elt_result = builder.call(fn, old_input_vars)
+    if output is None: 
+      builder.return_(elt_result)
+    else:
+      self.setidx(output, index_input_var, elt_result)
+      builder.return_(none)
     new_closure = self.closure(new_fn, new_closure_args)
     self._indexed_fn_cache[key] = new_closure
     return new_closure
@@ -135,19 +141,18 @@ class IndexifyAdverbs(Transform):
   def transform_OuterMap(self, expr):
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
+    fn = expr.fn 
     dimsizes = [self.shape(arg, axis) for arg in args]
     # recursively descend down the function bodies to pull together nested ParFors 
     if axis is None: 
-      x = self.ravel(x)
-      y = self.ravel(y)
+      args = [self.ravel(arg) for arg in args]
       axis = 0
-    nx = self.size_along_axis(x, axis)
-    ny = self.size_along_axis(y, axis)
-    outer_shape = self.tuple( [nx, ny] )
+    counts = [self.size_along_axis(arg, axis) for arg in args]
+    outer_shape = self.tuple(counts)
     zero = self.int(0)
-    first_x = self.slice_along_axis(x, axis, zero)
-    first_y = self.slice_along_axis(y, axis, zero)
-    output =  self.create_output_array(fn, [first_x, first_y], outer_shape)
+    first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
+    output =  self.create_output_array(fn, first_values, outer_shape)
+    
     def outer_loop_body(i):
       xi = self.slice_along_axis(x, axis, i)
       def inner_loop_body(j):
