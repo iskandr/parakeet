@@ -20,13 +20,6 @@ class Adverb(Expr, AdverbEvalHelpers):
 class IndexAdverb(Adverb):
   _members = ['shape']
   
-class ParFor(IndexAdverb):
-  """
-  Not really an adverb, since it doesn't return an array but only evaluates 
-  its function argument for side effects
-  """
-  pass   
-  
 class IndexMap(IndexAdverb):
   """
   Map from each distinct index in the shape to a value 

@@ -102,7 +102,6 @@ class ForLoop(Stmt):
   """
 
   _members = ['var', 'start', 'stop', 'step', 'body', 'merge']
-  
     
   def __str__(self):
     s = "for %s in range(%s, %s, %s):" % \
@@ -115,4 +114,11 @@ class ForLoop(Stmt):
       s += "\n  (header)%s\n  (body)" % phi_nodes_to_str(self.merge)
     s += block_to_str(self.body)
     return s
+  
+  
+class ParFor(Stmt):
+  _members = ['fn', 'bounds']
+
+  def __str__(self):
+    return "ParFor(fn = %s, bounds = %s)" % (self.fn, self.bounds)
   

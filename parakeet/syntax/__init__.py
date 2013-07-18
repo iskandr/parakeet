@@ -19,11 +19,12 @@ from low_level import Alloc, Struct
 
 from prim_wrapper import prim_wrapper 
 
-from stmt import Stmt, Assign, Comment, ExprStmt, ForLoop, If, Return, While
+from stmt import Stmt, Assign, Comment, ExprStmt, ForLoop, If, Return, While, ParFor
 from stmt import block_to_str 
 
 from typed_fn import TypedFn 
 from type_value import TypeValue
 
 from untyped_fn import UntypedFn 
+
 

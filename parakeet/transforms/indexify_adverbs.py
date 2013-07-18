@@ -116,7 +116,9 @@ class IndexifyAdverbs(Transform):
     res =  self.create_result(elt_t, inner_shape, extra_dims)
     return res 
   
-  
+  def parfor(self, bounds, fn):
+    self.blocks += [ParFor(fn = fn, bounds = bounds)]
+    
   def transform_Map(self, expr, output = None):
     # recursively descend down the function bodies to pull together nested ParFors
     args = self.transform_expr_list(expr.args)
@@ -152,17 +154,9 @@ class IndexifyAdverbs(Transform):
     zero = self.int(0)
     first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
     output =  self.create_output_array(fn, first_values, outer_shape)
-    
-    def outer_loop_body(i):
-      xi = self.slice_along_axis(x, axis, i)
-      def inner_loop_body(j):
-        yj = self.slice_along_axis(y, axis, j)
-        out_idx = self.tuple([i,j])
-        self.setidx(output, out_idx, self.call(fn, [xi, yj]))
-      self.loop(zero, ny, inner_loop_body)
-    self.loop(zero, nx, outer_loop_body)
-    return output
-    return ParFor()
+    loop_body = self.indexify_fn(fn, axis, args, cartesian_product = True, output = output)
+    self.parfor(dimsizes, loop_body)
+    return output 
   
   def transform_IndexMap(self, expr):
     # recursively descend down the function bodies to pull together nested ParFors
@@ -254,4 +248,37 @@ class IndexifyAdverbs(Transform):
         self.transform_OuterMap(stmt.rhs, output = stmt.lhs)
        
     return Transform.transform_Assign(self, stmt)
+  
+  """
+  def transform_Map(self, expr, output = None):
+    fn = self.transform_expr(expr.fn)
+    args = self.transform_expr_list(expr.args)
+    axis = unwrap_constant(expr.axis)
+    return self.eval_map(fn, args, axis, output = output)
+
+  def transform_Reduce(self, expr):
+    fn = self.transform_expr(expr.fn)
+    args = self.transform_expr_list(expr.args)
+    combine = self.transform_expr(expr.combine)
+    init = self.transform_if_expr(expr.init)
+    axis = unwrap_constant(expr.axis)
+    return self.eval_reduce(fn, combine, init, args, axis)
+
+  def transform_Scan(self, expr):
+    fn = self.transform_expr(expr.fn)
+    args = self.transform_expr_list(expr.args)
+    combine = self.transform_expr(expr.combine)
+    emit = self.transform_expr(expr.emit)
+    init = self.transform_if_expr(expr.init)
+    axis = unwrap_constant(expr.axis)
+    return self.eval_scan(fn, combine, emit, init, args, axis)
+
+  def transform_AllPairs(self, expr):
+    fn = self.transform_expr(expr.fn)
+    args = self.transform_expr_list(expr.args)
+    assert len(args) == 2
+    x,y = self.transform_expr_list(args)
+    axis = unwrap_constant(expr.axis)
+    return self.eval_allpairs(fn, x, y, axis)
+  """
   
