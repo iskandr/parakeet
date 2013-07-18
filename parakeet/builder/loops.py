@@ -139,3 +139,31 @@ class BuilderLoops(BuilderCore):
         return self.loop(start, stop, loop_body, return_stmt)
 
     return create_loops()
+  
+  
+  def nested_loops(self, 
+                     upper_bounds, 
+                     loop_body, 
+                     lower_bounds = None, 
+                     step_sizes = None):
+    n_loops = len(upper_bounds)
+    assert lower_bounds is None or len(lower_bounds) == n_loops
+    assert step_sizes is None or len(step_sizes) == n_loops 
+    
+    def build_loops(index_vars = ()):
+      n_indices = len(index_vars)
+      if n_indices == n_loops:
+        if n_indices > 1:
+          idx_tuple = self.tuple(index_vars)
+        else:
+          idx_tuple = index_vars[0]
+        result = loop_body(idx_tuple)
+        assert result is None, "Expected loop body to return None, not %s" % (result,)
+      else:
+        def loop_body(idx):
+          build_loops(index_vars + (idx,))
+        lower = self.int(0) if lower_bounds is None else lower_bounds[n_indices]
+        upper = upper_bounds[n_indices]  
+        step = self.int(1) if step_sizes is None else step_sizes[n_indices]
+        self.loop(lower, upper, loop_body, step=step)
+    build_loops()

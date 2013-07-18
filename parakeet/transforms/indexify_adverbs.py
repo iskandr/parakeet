@@ -1,7 +1,9 @@
+from .. import names 
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple
-from ..syntax import ParFor, IndexReduce, IndexScan, IndexFilter 
+from ..syntax import ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap 
 from ..syntax.helpers import unwrap_constant, get_types 
+from ..syntax.adverb_helpers import max_rank_arg
 from transform import Transform 
 
 
@@ -13,49 +15,238 @@ class IndexifyAdverbs(Transform):
   input indices
   """
   _indexed_fn_cache = {}
-  def indexify_fn(self, fn, array_args, n_indices):
+  def indexify_fn(self, fn, axis, array_args, cartesian_product = False):
     """
     Take a function whose last k values are slices through input data 
     and transform it into a function which explicitly extracts its arguments
     """  
     array_arg_types = tuple(get_types(array_args))
+    
     # do I need fn.version *and* fn.copied_by? 
-    key = (fn.name, fn.copied_by, fn.version, array_arg_types, n_indices)
+    key = (fn.name, fn.copied_by, fn.version, array_arg_types, cartesian_product, axis)
     if key in self._indexed_fn_cache:
       return self._indexed_fn_cache[key]
-    input_vars = self.input_vars(fn)
-    k = len(array_arg_types)
-    closure_args = input_vars[:-k]
-    slice_args = input_vars[-k:]
-
+    old_input_vars = self.input_vars(fn)
+    n_arrays = len(array_arg_types)
+    old_closure_args = old_input_vars[:-n_arrays]
+    array_slice_args = old_input_vars[-n_arrays:]
+    
     array_arg_vars = tuple(self.fresh_var(t, prefix="array_arg%d" % i)
                            for i,t in enumerate(array_arg_types))
-    new_closure_args = tuple(closure_args) + array_arg_vars
-    index_arg = Int64 if n_indices == 1 else repeat_tuple(Int64, n_indices) 
-    new_fn = build_fn()
+    new_closure_args = tuple(old_closure_args) + array_arg_vars
     
+    n_indices = n_arrays if cartesian_product else 1
+    index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
+    
+    
+    new_input_types = new_closure_args + tuple([index_input_type])
+    new_fn, builder, input_vars = build_fn(new_input_types, fn.return_type)
+    index_input_var = input_vars[-1]
+    
+    index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
+    if cartesian_product and n_indices > 1:
+      index_elts = index_elts * n_arrays 
+
+    for i, array_slice_arg in enumerate(array_slice_args):
+      slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
+      builder.assign(array_slice_arg, slice_value)
+      
+    builder.return_(builder.call(fn, old_input_vars))
+    
+    new_closure = self.closure(new_fn, new_closure_args)
+    self._indexed_fn_cache[key] = new_closure
+    return new_closure
   
-  def transform_Map(self, expr):
+  def delayed_elt(self, x, axis):
+    return lambda idx: self.slice_along_axis(x, axis, idx)
+
+  def delay_list(self, xs, axis):
+    return [self.delayed_elt(x, axis) for x in xs]
+
+  def force_list(self, delayed_elts, idx):
+    return [e(idx) for e in delayed_elts]
+
+  def sizes_along_axis(self, xs, axis):
+    axis_sizes = [self.size_along_axis(x, axis)
+                  for x in xs
+                  if self.rank(x) > axis]
+
+    assert len(axis_sizes) > 0
+    # all arrays should agree in their dimensions along the
+    # axis we're iterating over
+    self.check_equal_sizes(axis_sizes)
+    return axis_sizes
+
+  def map_prelude(self, map_fn, xs, axis):
+    axis_sizes = self.sizes_along_axis(xs, axis)
+    return axis_sizes[0], self.delay_list(xs, axis)
+
+  def acc_prelude(self, init, combine, delayed_map_result):
+    zero = self.int(0)
+    if init is None or self.is_none(init):
+      return delayed_map_result(zero)
+    else:
+      # combine the provided initializer with
+      # transformed first value of the data
+      # in case we need to coerce up
+      return self.call(combine, [init, delayed_map_result(zero)])
+
+  def create_result(self, elt_type, inner_shape, outer_shape):
+    if not self.is_tuple(outer_shape):
+      outer_shape = self.tuple([outer_shape])
+    result_shape = self.concat_tuples(outer_shape, inner_shape)
+    result = self.alloc_array(elt_type, result_shape)
+    return result
+
+  def create_output_array(self, fn, inputs, extra_dims):
+    if hasattr(self, "_create_output_array"):
+      try:
+        return self._create_output_array(fn, inputs, extra_dims)
+      except:
+        pass
+    inner_result = self.call(fn, inputs)   
+    inner_shape = self.shape(inner_result)
+    elt_t = self.elt_type(inner_result)
+    res =  self.create_result(elt_t, inner_shape, extra_dims)
+    return res 
+  
+  
+  def transform_Map(self, expr, output = None):
+    # recursively descend down the function bodies to pull together nested ParFors
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
-    # recursively descend down the function bodies to pull together nested ParFors 
+    old_fn = expr.fn
+    index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False)
+    biggest_arg = max_rank_arg(args)
+    
+    niters, delayed_elts = self.map_prelude(old_fn, args, axis)
+    zero = self.int(0)
+    first_elts = self.force_list(delayed_elts, zero)
+    if output is None:
+      output = self.create_output_array(old_fn, first_elts, niters)
+    def loop_body(idx):
+      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
+      elt_result = self.call(old_fn, [elt(idx) for elt in delayed_elts])
+      self.setidx(output, output_indices, elt_result)
+    self.parfor(niters, loop_body)
+    return output 
     return ParFor()
+  
   def transform_OuterMap(self, expr):
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
     dimsizes = [self.shape(arg, axis) for arg in args]
     # recursively descend down the function bodies to pull together nested ParFors 
+    if axis is None: 
+      x = self.ravel(x)
+      y = self.ravel(y)
+      axis = 0
+    nx = self.size_along_axis(x, axis)
+    ny = self.size_along_axis(y, axis)
+    outer_shape = self.tuple( [nx, ny] )
+    zero = self.int(0)
+    first_x = self.slice_along_axis(x, axis, zero)
+    first_y = self.slice_along_axis(y, axis, zero)
+    output =  self.create_output_array(fn, [first_x, first_y], outer_shape)
+    def outer_loop_body(i):
+      xi = self.slice_along_axis(x, axis, i)
+      def inner_loop_body(j):
+        yj = self.slice_along_axis(y, axis, j)
+        out_idx = self.tuple([i,j])
+        self.setidx(output, out_idx, self.call(fn, [xi, yj]))
+      self.loop(zero, ny, inner_loop_body)
+    self.loop(zero, nx, outer_loop_body)
+    return output
     return ParFor()
   
   def transform_IndexMap(self, expr):
-    # recursively descend down the function bodies to pull together nested ParFors 
+    # recursively descend down the function bodies to pull together nested ParFors
+    dims = self.tuple_elts(shape)
+    if len(dims) == 1:
+      shape = dims[0]
+      
+    if output is None:
+      output = self.create_output_array(fn, [shape], shape)
+
+    n_loops = len(dims)
+    def build_loops(index_vars = ()):
+      n_indices = len(index_vars)
+      if n_indices == n_loops:
+        if n_indices > 1:
+          idx_tuple = self.tuple(index_vars)
+        else:
+          idx_tuple = index_vars[0]
+        elt_result =  self.call(fn, (idx_tuple,))
+        self.setidx(output, index_vars, elt_result)
+      else:
+        def loop_body(idx):
+          build_loops(index_vars + (idx,))
+        self.loop(self.int(0), dims[n_indices], loop_body)
+    build_loops()
+    return output 
+
     return ParFor()
   
   def transform_Reduce(self, expr):
+    zero = self.int(0)
+    one = self.int(1)
+    
+    if axis is  None or self.is_none(axis):
+      assert len(values) == 1
+      values = [self.ravel(values[0])]
+      axis = 0
+    
+    niters, delayed_elts = self.map_prelude(map_fn, values, axis)
+    first_acc_value = self.call(map_fn, [elt(zero) for elt in delayed_elts])
+    if init is None or self.is_none(init):
+      init = first_acc_value
+    else:
+      init = self.call(combine, [init, first_acc_value])
+    def loop_body(acc, idx):
+      elt = self.call(map_fn, [elt(idx) for elt in delayed_elts])
+      new_acc_value = self.call(combine, [acc.get(), elt])
+      acc.update(new_acc_value)
+    return self.accumulate_loop(one, niters, loop_body, init)
     return IndexReduce()
   
   def transform_Scan(self, expr):
-    return IndexScan()
+    zero = self.int(0)
+    one = self.int(1)
+    
+    if axis is  None or self.is_none(axis):
+      assert len(values) == 1
+      values = [self.ravel(values[0])]
+      axis = 0
+    
+    niters, delayed_elts = self.map_prelude(map_fn, values, axis)
+    first_acc_value = self.call(map_fn, [elt(zero) for elt in delayed_elts])
+    if init is None or self.is_none(init):
+      init = first_acc_value
+    else:
+      init = self.call(combine, [init, first_acc_value])
+    def loop_body(acc, idx):
+      elt = self.call(map_fn, [elt(idx) for elt in delayed_elts])
+      new_acc_value = self.call(combine, [acc.get(), elt])
+      acc.update(new_acc_value)
+    return self.accumulate_loop(one, niters, loop_body, init)
+    # return IndexScan()
   
   def transform_Filter(self, expr):
-    return IndexFilter(self, expr)
+    assert False, "Filter not implemented"
+    # return IndexFilter(self, expr)
+    
+  def transform_Assign(self, stmt):
+    """
+    If you encounter an adverb being written to an output location, 
+    then why not just use that as the output directly? 
+    """
+    if stmt.lhs.__class__ is Index:
+      rhs_class = stmt.rhs.__class__ 
+      if rhs_class is Map:
+        self.transform_Map(stmt.rhs, output = stmt.lhs)
+        return None 
+      elif rhs_class is OuterMap:
+        self.transform_OuterMap(stmt.rhs, output = stmt.lhs)
+       
+    return Transform.transform_Assign(self, stmt)
+  

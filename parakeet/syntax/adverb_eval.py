@@ -9,59 +9,6 @@ class AdverbEvalHelpers(object):
   """
   
   
-  def delayed_elt(self, x, axis):
-    return lambda idx: self.slice_along_axis(x, axis, idx)
-
-  def delay_list(self, xs, axis):
-    return [self.delayed_elt(x, axis) for x in xs]
-
-  def force_list(self, delayed_elts, idx):
-    return [e(idx) for e in delayed_elts]
-
-  def sizes_along_axis(self, xs, axis):
-    
-    axis_sizes = [self.size_along_axis(x, axis)
-                  for x in xs
-                  if self.rank(x) > axis]
-
-    assert len(axis_sizes) > 0
-    # all arrays should agree in their dimensions along the
-    # axis we're iterating over
-    self.check_equal_sizes(axis_sizes)
-    return axis_sizes
-
-  def map_prelude(self, map_fn, xs, axis):
-    axis_sizes = self.sizes_along_axis(xs, axis)
-    return axis_sizes[0], self.delay_list(xs, axis)
-
-  def acc_prelude(self, init, combine, delayed_map_result):
-    zero = self.int(0)
-    if init is None or self.is_none(init):
-      return delayed_map_result(zero)
-    else:
-      # combine the provided initializer with
-      # transformed first value of the data
-      # in case we need to coerce up
-      return self.call(combine, [init, delayed_map_result(zero)])
-
-  def create_result(self, elt_type, inner_shape, outer_shape):
-    if not self.is_tuple(outer_shape):
-      outer_shape = self.tuple([outer_shape])
-    result_shape = self.concat_tuples(outer_shape, inner_shape)
-    result = self.alloc_array(elt_type, result_shape)
-    return result
-
-  def create_output_array(self, fn, inputs, extra_dims):
-    if hasattr(self, "_create_output_array"):
-      try:
-        return self._create_output_array(fn, inputs, extra_dims)
-      except:
-        pass
-    inner_result = self.call(fn, inputs)   
-    inner_shape = self.shape(inner_result)
-    elt_t = self.elt_type(inner_result)
-    res =  self.create_result(elt_t, inner_shape, extra_dims)
-    return res 
 
 
   def eval_reduce(self, map_fn, combine, init, values, axis):

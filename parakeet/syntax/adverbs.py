@@ -31,37 +31,7 @@ class IndexMap(IndexAdverb):
   """
   Map from each distinct index in the shape to a value 
   """
-  
-  
-  def eval(self, context):
-    """
-    Experiment in attaching sequential adverb semantics to the syntax itself
-    """
-    dims = self.tuple_elts(self.shape)
-    if len(dims) == 1:
-      shape = dims[0]
-      
-    if self.output is None:
-      output = self.create_output_array(self.fn, [shape], shape)
-    else:
-      output = context.eval(self.output)
-
-    n_loops = len(dims)
-    def build_loops(index_vars = ()):
-      n_indices = len(index_vars)
-      if n_indices == n_loops:
-        if n_indices > 1:
-          idx_tuple = self.tuple(index_vars)
-        else:
-          idx_tuple = index_vars[0]
-        elt_result =  self.invoke(self.fn, (idx_tuple,))
-        context.setidx(output, index_vars, elt_result)
-      else:
-        def loop_body(idx):
-          build_loops(index_vars + (idx,))
-        self.loop(self.int(0), dims[n_indices], loop_body)
-    build_loops()
-    return output 
+  pass 
  
 
 class IndexAccumulative(IndexAdverb):
@@ -74,46 +44,9 @@ class IndexReduce(IndexAccumulative):
   values and combines them. 
   """
 
-  
-  def eval(self, context):
-    shape = context.transform_expr(self.shape)
-    init = context.transform_if_expr(self.init)
-    fn = context.transform_expr(self.fn)
-    combine = context.transform_expr(self.combine)
+  pass 
+
     
-    dims = self.tuple_elts(shape)
-    n_loops = len(dims)
-    
-    zero = self.int(0)
-    
-    if init is not None or not self.is_none(init):
-      if n_loops > 1:
-        zeros = self.tuple([zero for _ in xrange(n_loops)])
-        init = self.call(fn, [zeros])
-      else:
-        init = self.call(fn, [zero])
-        
-    def build_loops(index_vars, acc):
-    
-      n_indices = len(index_vars)
-      if n_indices > 0:
-        acc_value = acc.get()
-      else:
-        acc_value = acc 
-      if n_indices == n_loops:
-        
-        idx_tuple = self.tuple(index_vars) if n_indices > 1 else index_vars[0] 
-        elt_result =  self.call(fn, (idx_tuple,))
-        acc.update(self.call(combine, (acc_value, elt_result)))
-        return acc.get()
-      
-      def loop_body(acc, idx):
-        new_value = build_loops(index_vars + (idx,), acc = acc)
-        acc.update(new_value)
-        return new_value
-      return self.accumulate_loop(self.int(0), dims[n_indices], loop_body, acc_value)
-    return build_loops(index_vars = (), acc = init)
-  
 class IndexScan(IndexAccumulative):
   _members = ['emit']
   
@@ -144,21 +77,7 @@ class DataAdverb(Adverb):
     return repr(self)
 
 class Map(DataAdverb):
-  def eval(self, context, output = None):
-    f = context.transform_expr(self.fn)
-    values = context.transform_expr_list(self.args)
-    axis = context.transform_if_expr(self.axis)
-    niters, delayed_elts = self.map_prelude(f, values, axis)
-    zero = self.int(0)
-    first_elts = self.force_list(delayed_elts, zero)
-    if output is None:
-      output = self.create_output_array(f, first_elts, niters)
-    def loop_body(idx):
-      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
-      elt_result = self.call(f, [elt(idx) for elt in delayed_elts])
-      self.setidx(output, output_indices, elt_result)
-    self.parfor(niters, loop_body)
-    return output
+  pass 
 
 class OuterMap(DataAdverb):
   pass 
