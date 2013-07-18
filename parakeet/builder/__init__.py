@@ -1,11 +1,13 @@
 
 
-from builder_arith import BuilderArith 
-from builder_array import BuilderArray 
-from builder_loops import BuilderLoops 
-from builder_call import BuilderCall
+from arith import BuilderArith 
+from array import BuilderArray 
+from loops import BuilderLoops 
+from call import BuilderCall
 
 class Builder(BuilderArith, BuilderArray, BuilderCall, BuilderLoops):
   pass 
 
-__all__ = ['Builder']
+from build_fn import build_fn
+ 
+__all__ = ['Builder', 'build_fn']

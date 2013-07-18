@@ -4,7 +4,7 @@ from ..syntax.helpers import (zero, one,
                               is_zero, is_one, const_bool, 
                               wrap_constants, get_types, wrap_if_constant)
 
-from builder_core import BuilderCore 
+from core import BuilderCore 
 
 class BuilderArith(BuilderCore):
   def prim(self, prim_fn, args, name=None):

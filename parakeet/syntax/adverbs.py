@@ -20,7 +20,12 @@ class Adverb(Expr, AdverbEvalHelpers):
 class IndexAdverb(Adverb):
   _members = ['shape']
   
-  
+class ParFor(IndexAdverb):
+  """
+  Not really an adverb, since it doesn't return an array but only evaluates 
+  its function argument for side effects
+  """
+  pass   
   
 class IndexMap(IndexAdverb):
   """
@@ -59,20 +64,16 @@ class IndexMap(IndexAdverb):
     return output 
  
 
-class ParFor(IndexAdverb):
-  """
-  Not really an adverb, since it doesn't return an array but only evaluates 
-  its function argument for side effects
-  """
-  pass   
+class IndexAccumulative(IndexAdverb):
+  _members = ['combine', 'init']
   
-class IndexReduce(IndexAdverb):
+class IndexReduce(IndexAccumulative):
   """
   Expect the 'fn' field to take indices and produces 
   element values, whereas 'combine' takes pairs of element 
   values and combines them. 
   """
-  _members = ['combine', 'init']
+
   
   def eval(self, context):
     shape = context.transform_expr(self.shape)
@@ -112,7 +113,9 @@ class IndexReduce(IndexAdverb):
         return new_value
       return self.accumulate_loop(self.int(0), dims[n_indices], loop_body, acc_value)
     return build_loops(index_vars = (), acc = init)
-   
+  
+class IndexScan(IndexAccumulative):
+  _members = ['emit']
   
 class DataAdverb(Adverb):
   _members = ['args', 'axis']
@@ -203,6 +206,9 @@ class Filter(Adverb):
   """
   pass 
 
+class IndexFilter(IndexAdverb, Filter):
+  pass 
+
 class FilterReduce(Reduce, Filter):
   """
   Like a normal reduce but skips some elements if they don't pass
@@ -210,7 +216,8 @@ class FilterReduce(Reduce, Filter):
   """
   _members = ['pred'] 
 
-
+class IndexFilterReduce(FilterReduce):
+  pass 
 
 class Tiled(object):
   _members = ['axes', 'fixed_tile_size']

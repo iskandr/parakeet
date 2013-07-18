@@ -2,7 +2,7 @@
 from .. import syntax 
 from ..syntax import Expr, While, ForLoop 
 from ..syntax.helpers import zero, one, zero_i32, zero_i64, wrap_if_constant
-from builder_core import BuilderCore 
+from core import BuilderCore 
 
 class BuilderLoops(BuilderCore):
   

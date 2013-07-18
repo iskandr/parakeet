@@ -3,7 +3,7 @@ from treelike.testing_helpers import run_local_tests, expect_eq
 import parakeet
 
 def mk_identity(t):
-  f, (x,), b = parakeet.build_fn([t], t)
+  f, b, (x,) = parakeet.build_fn([t], t)
   b.return_(x)
   return f
 

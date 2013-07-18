@@ -2,7 +2,7 @@ from ..ndtypes import ClosureT, Type, make_closure_type
 from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt  
 from ..syntax.helpers import get_types 
 
-from builder_core import BuilderCore
+from core import BuilderCore
 
 class BuilderCall(BuilderCore):
   

@@ -3,7 +3,7 @@ from treelike.testing_helpers import run_local_tests, expect_eq
 import parakeet
 
 def mk_scalar_add(t):
-  f, (x,y), b = parakeet.build_fn([t,t], t)
+  f, b, (x,y) = parakeet.build_fn([t,t], t)
   b.return_(b.add(x,y))
   return f
 
@@ -26,7 +26,7 @@ def vec_add(x,y):
   assert x.dtype == y.dtype 
   assert len(x.shape) == len(y.shape) == 1 
   z = np.zeros_like(x)
-  array_t = parakeet.typeof_array(x)
+  array_t = parakeet.typeof(x)
   fn = mk_vec_add(array_t)
   parakeet.run_typed_fn(fn, (x,y,z))
   return z 

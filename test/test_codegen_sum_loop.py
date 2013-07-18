@@ -5,7 +5,7 @@ import parakeet
 
 def mk_sum(elt_t):
   array_t = parakeet.ndtypes.make_array_type(elt_t, 1)
-  f, (x,), b = parakeet.build_fn([array_t], elt_t)
+  f, b, (x,) = parakeet.build_fn([array_t], elt_t)
   n = b.len(x)
   total_before, total_after, merge = b.loop_var('total', b.zero(elt_t))
   def loop_body(idx):
