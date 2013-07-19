@@ -103,24 +103,24 @@ class IndexifyAdverbs(Transform):
       return self.call(combine, [init, delayed_map_result(zero)])
   """
   
-  def create_result(self, elt_type, inner_shape, outer_shape):
-    if not self.is_tuple(outer_shape):
-      outer_shape = self.tuple([outer_shape])
-    result_shape = self.concat_tuples(outer_shape, inner_shape)
-    result = self.alloc_array(elt_type, result_shape)
-    return result
+  #def create_result(self, elt_type, inner_shape, outer_shape):
+  #  if not self.is_tuple(outer_shape):
+  #    outer_shape = self.tuple([outer_shape])
+  #  result_shape = self.concat_tuples(outer_shape, inner_shape)
+  #  result = self.alloc_array(elt_type, result_shape)
+  #  return result
 
-  def create_output_array(self, fn, inputs, extra_dims):
-    if hasattr(self, "_create_output_array"):
-      try:
-        return self._create_output_array(fn, inputs, extra_dims)
-      except:
-        pass
-    inner_result = self.call(fn, inputs)   
-    inner_shape = self.shape(inner_result)
-    elt_t = self.elt_type(inner_result)
-    res =  self.create_result(elt_t, inner_shape, extra_dims)
-    return res 
+  #def create_output_array(self, fn, inputs, extra_dims):
+  #  if hasattr(self, "_create_output_array"):
+  #    try:
+  #      return self._create_output_array(fn, inputs, extra_dims)
+  #    except:
+  #      pass
+  #  inner_result = self.call(fn, inputs)   
+  #  inner_shape = self.shape(inner_result)
+  #  elt_t = self.elt_type(inner_result)
+  #  res =  self.create_result(elt_t, inner_shape, extra_dims)
+  #  return res 
   
   def parfor(self, bounds, fn):
     self.blocks += [ParFor(fn = fn, bounds = bounds)]
