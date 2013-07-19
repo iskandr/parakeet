@@ -2,9 +2,9 @@ from ..ndtypes import ClosureT, Type, make_closure_type
 from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt  
 from ..syntax.helpers import get_types 
 
-from core import BuilderCore
+from core_builder import CoreBuilder
 
-class BuilderCall(BuilderCore):
+class CallBuilder(CoreBuilder):
   
   """
   Builder for all things related to calling functions

@@ -1,11 +1,11 @@
 
 
-from arith import BuilderArith 
-from array import BuilderArray 
-from loops import BuilderLoops 
-from call import BuilderCall
+from arith_builder import ArithBuilder 
+from array_builder import ArrayBuilder
+from loop_builder import LoopBuilder 
+from call_builder import CallBuilder
 
-class Builder(BuilderArith, BuilderArray, BuilderCall, BuilderLoops):
+class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
   pass 
 
 from build_fn import build_fn

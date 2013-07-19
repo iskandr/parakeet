@@ -2,9 +2,9 @@
 from .. import syntax 
 from ..syntax import Expr, While, ForLoop 
 from ..syntax.helpers import zero, one, zero_i32, zero_i64, wrap_if_constant
-from core import BuilderCore 
+from core_builder import CoreBuilder 
 
-class BuilderLoops(BuilderCore):
+class LoopBuilder(CoreBuilder):
   
   """
   Builder for loops and things that use loops

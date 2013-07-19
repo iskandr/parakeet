@@ -10,7 +10,7 @@ from ..syntax.helpers import (wrap_if_constant,
                               one_i64, zero_i64, 
                               zero)
 
-class BuilderCore(object):
+class CoreBuilder(object):
   none = syntax.none
   null_slice = syntax.slice_none
   

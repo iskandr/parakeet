@@ -4,9 +4,9 @@ from ..syntax.helpers import (zero, one,
                               is_zero, is_one, const_bool, 
                               wrap_constants, get_types, wrap_if_constant)
 
-from core import BuilderCore 
+from core_builder import CoreBuilder 
 
-class BuilderArith(BuilderCore):
+class ArithBuilder(CoreBuilder):
   def prim(self, prim_fn, args, name=None):
     args = wrap_constants(args)
     arg_types = get_types(args)

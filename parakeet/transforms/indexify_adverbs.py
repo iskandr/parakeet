@@ -6,8 +6,6 @@ from ..syntax.helpers import unwrap_constant, get_types, none
 from ..syntax.adverb_helpers import max_rank_arg
 from transform import Transform 
 
-
-
 class IndexifyAdverbs(Transform):
   """
   Take all the adverbs whose parameterizing functions assume they 
@@ -25,7 +23,10 @@ class IndexifyAdverbs(Transform):
     array_arg_types = tuple(get_types(array_args))
     
     # do I need fn.version *and* fn.copied_by? 
-    key = (fn.name, fn.copied_by, fn.version, array_arg_types, cartesian_product, axis)
+    key = (fn.name, fn.copied_by, fn.version, 
+           array_arg_types, 
+           cartesian_product, 
+           axis, output is None)
     if key in self._indexed_fn_cache:
       return self._indexed_fn_cache[key]
     old_input_vars = self.input_vars(fn)
@@ -35,7 +36,12 @@ class IndexifyAdverbs(Transform):
     
     array_arg_vars = tuple(self.fresh_var(t, prefix="array_arg%d" % i)
                            for i,t in enumerate(array_arg_types))
-    new_closure_args = tuple(old_closure_args) + array_arg_vars
+    #max_array_arg = max_rank_arg(array_arg_vars)
+    # max_array_rank = self.rank(max_array_arg)
+    if output is None:
+      new_closure_args = tuple(old_closure_args) + array_arg_vars
+    else:
+      new_closure_args = tuple(old_closure_args) + (output,) + array_arg_vars
     
     n_indices = n_arrays if cartesian_product else 1
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
@@ -50,7 +56,13 @@ class IndexifyAdverbs(Transform):
       index_elts = index_elts * n_arrays 
 
     for i, array_slice_arg in enumerate(array_slice_args):
-      slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
+      curr_array = array_arg_vars[i]
+      # if not cartesian_product: 
+      #  if self.rank(curr_array) == max_array_rank:
+      #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
+      #  else:
+      #    slice_value = curr_array
+      slice_value = self.slice_along_axis(curr_array, axis, index_elts[i]) 
       builder.assign(array_slice_arg, slice_value)
     
     elt_result = builder.call(fn, old_input_vars)
@@ -124,21 +136,17 @@ class IndexifyAdverbs(Transform):
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
     old_fn = expr.fn
-    index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False)
     biggest_arg = max_rank_arg(args)
-    
-    niters, delayed_elts = self.map_prelude(old_fn, args, axis)
-    zero = self.int(0)
-    first_elts = self.force_list(delayed_elts, zero)
+    niters = self.shape(biggest_arg, axis)
     if output is None:
-      output = self.create_output_array(old_fn, first_elts, niters)
-    def loop_body(idx):
-      output_indices = self.build_slice_indices(self.rank(output), 0, idx)
-      elt_result = self.call(old_fn, [elt(idx) for elt in delayed_elts])
-      self.setidx(output, output_indices, elt_result)
-    self.parfor(niters, loop_body)
+      outer_dims = [niters]
+      # use shape inference to create output
+      output = self._create_output_array(old_fn, args, outer_dims)
+        
+    index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False, 
+                                output = output)
+    self.parfor(niters, index_fn)
     return output 
-    return ParFor()
   
   def transform_OuterMap(self, expr):
     args = self.transform_expr_list(expr.args)

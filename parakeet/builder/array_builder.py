@@ -3,9 +3,9 @@ from ..ndtypes import (make_slice_type, make_array_type, ptr_type,
                        ArrayT, TupleT, ScalarT, Type)
 from ..syntax import (Alloc, AllocArray, Const, Index, Slice, Struct, TupleProj)
 from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none)
-from core import BuilderCore 
+from core_builder import CoreBuilder 
 
-class BuilderArray(BuilderCore):
+class ArrayBuilder(CoreBuilder):
   """
   Builder for constructing arrays and getting their properties
   """
