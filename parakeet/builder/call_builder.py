@@ -1,6 +1,8 @@
+
 from ..ndtypes import ClosureT, Type, make_closure_type
 from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt  
-from ..syntax.helpers import get_types 
+from ..syntax.helpers import get_types, zero_i64
+from ..syntax.adverb_helpers import max_rank
 
 from core_builder import CoreBuilder
 
@@ -46,20 +48,6 @@ class CallBuilder(CoreBuilder):
     else:
       return result
   
-  def call_shape(self, maybe_clos, args):
-    from ..shape_inference import call_shape_expr, shape_codegen
-    fn = self.get_fn(maybe_clos)
-    closure_args = self.closure_elts(maybe_clos)
-    combined_args = tuple(closure_args) + tuple(args)
-     
-    if isinstance(fn, UntypedFn):
-      # if we're given an untyped function, first specialize it
-      from ..type_inference import specialize
-
-       
-      fn = specialize(fn, get_types(combined_args))
-    abstract_shape = call_shape_expr(fn)
-    return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
 
   def return_type(self, fn):
     if isinstance(fn, TypedFn):
@@ -106,3 +94,19 @@ class CallBuilder(CoreBuilder):
 
   def call(self, fn, args):
     return self.invoke(fn, args) 
+
+  def call_shape(self, maybe_clos, args):
+    from ..shape_inference import call_shape_expr, shape_codegen
+    fn = self.get_fn(maybe_clos)
+    closure_args = self.closure_elts(maybe_clos)
+    combined_args = tuple(closure_args) + tuple(args)
+     
+    if isinstance(fn, UntypedFn):
+      # if we're given an untyped function, first specialize it
+      from ..type_inference import specialize
+
+       
+      fn = specialize(fn, get_types(combined_args))
+    abstract_shape = call_shape_expr(fn)
+    return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
+

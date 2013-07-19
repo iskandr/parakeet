@@ -75,14 +75,6 @@ class IndexifyAdverbs(Transform):
     self._indexed_fn_cache[key] = new_closure
     return new_closure
   
-  def delayed_elt(self, x, axis):
-    return lambda idx: self.slice_along_axis(x, axis, idx)
-
-  def delay_list(self, xs, axis):
-    return [self.delayed_elt(x, axis) for x in xs]
-
-  def force_list(self, delayed_elts, idx):
-    return [e(idx) for e in delayed_elts]
 
   def sizes_along_axis(self, xs, axis):
     axis_sizes = [self.size_along_axis(x, axis)
@@ -95,9 +87,10 @@ class IndexifyAdverbs(Transform):
     self.check_equal_sizes(axis_sizes)
     return axis_sizes
 
-  def map_prelude(self, map_fn, xs, axis):
+  """
+  def prelude(self, map_fn, xs, axis):
     axis_sizes = self.sizes_along_axis(xs, axis)
-    return axis_sizes[0], self.delay_list(xs, axis)
+    return axis_sizes[0]
 
   def acc_prelude(self, init, combine, delayed_map_result):
     zero = self.int(0)
@@ -108,7 +101,8 @@ class IndexifyAdverbs(Transform):
       # transformed first value of the data
       # in case we need to coerce up
       return self.call(combine, [init, delayed_map_result(zero)])
-
+  """
+  
   def create_result(self, elt_type, inner_shape, outer_shape):
     if not self.is_tuple(outer_shape):
       outer_shape = self.tuple([outer_shape])
@@ -141,7 +135,7 @@ class IndexifyAdverbs(Transform):
     if output is None:
       outer_dims = [niters]
       # use shape inference to create output
-      output = self._create_output_array(old_fn, args, outer_dims)
+      output = self.create_output_array(old_fn, args, outer_dims)
         
     index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False, 
                                 output = output)

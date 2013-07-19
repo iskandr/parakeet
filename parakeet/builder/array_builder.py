@@ -146,37 +146,6 @@ class ArrayBuilder(CoreBuilder):
       output_indices = self.tuple([output_idx])
     return self.index(output, output_indices)
   
-    
-  # TODO: get rid of that leading underscore to enable this function once
-  # shape inference works for all the weird and wacky constructs in our
-  # syntax zoo
-  def _create_output_array(self, fn, args, extra_dims, name = "output"):
-    """
-    Given a function and its argument, use shape inference to figure out the
-    result shape of the array and preallocate it.  If the result should be a
-    scalar, just return a scalar variable.
-    """
-    try:
-      inner_shape_tuple = self.call_shape(fn, args)
-    except:
-      print "Shape inference failed when calling %s with %s" % (fn, args)
-      import sys
-      print "Error %s ==> %s" % (sys.exc_info()[:2])
-      raise
-
-    if self.is_tuple(extra_dims):
-      outer_shape_tuple = extra_dims
-    elif isinstance(extra_dims, (list, tuple)):
-      outer_shape_tuple = self.tuple(extra_dims)
-    else:
-      outer_shape_tuple = self.tuple((extra_dims,) if extra_dims else ())
-
-    shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
-    elt_t = self.elt_type(self.return_type(fn))
-    if len(shape.type.elt_types) > 0:
-      return self.alloc_array(elt_t, shape, name)
-    else:
-      return self.fresh_var(elt_t, name)
 
   def size_along_axis(self, value, axis):
     return self.shape(value, axis)

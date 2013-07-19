@@ -1,7 +1,7 @@
 
 from .. import syntax 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
-from ..ndtypes import SliceT, ArrayT, TupleT
+from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT
 from ..syntax import unwrap_constant 
 
 import shape
@@ -204,7 +204,7 @@ class ShapeInference(SyntaxVisitor):
       return v.values[v.fields.index(name)]
 
     t = expr.value.type.field_type(name)
-    if isinstance(t, core_types.ScalarT):
+    if isinstance(t, ScalarT):
       return any_scalar
     else:
       return any_value
