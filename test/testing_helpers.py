@@ -2,13 +2,11 @@ import sys
 import time 
 import numpy as np
 
-
 from nose.tools import nottest
-
-from treelike.testing_helpers import  run_local_tests, eq, expect_eq  
+from treelike.testing_helpers import  run_local_tests, eq, expect_eq
+  
 import parakeet
-from parakeet import ast_conversion, interp, type_conv, type_inference
-from parakeet.run_function import specialize_and_compile
+from parakeet import ast_conversion, interp, type_conv, type_inference, specialize_and_compile
 
 def copy(x):
   if isinstance(x, np.ndarray):

@@ -1,12 +1,8 @@
-import syntax_helpers
+from treelike import Traversal 
 
-from array_type import ArrayT
-from closure_type import ClosureT
-from core_types import ScalarT
-from shape import Closure, Scalar, Var
-from traversal import Traversal
-from tuple_type import TupleT
-from shape import AnyScalar, any_scalar, computable_dim
+from ..syntax import const  
+from ..ndtypes import ArrayT, ClosureT, ScalarT, TupleT 
+from shape import Closure, Scalar, Var, AnyScalar, any_scalar, computable_dim
 
 class ArgConverter(Traversal):
   def __init__(self, codegen):
@@ -56,7 +52,7 @@ class ShapeCodegen(Traversal):
     return self.env[v]
 
   def visit_Const(self, v):
-    return syntax_helpers.const(v.value)
+    return const(v.value)
 
   def visit_Shape(self, v):
     assert len(v.dims) > 0, "Encountered empty shape"
