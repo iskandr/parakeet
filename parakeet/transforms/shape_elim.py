@@ -2,6 +2,7 @@ from .. import syntax
 from ..shape_inference import shape_env, shape
 from ..transforms import Transform
 
+
 class ShapeElimination(Transform): 
   def pre_apply(self, fn):
     self.shape_env = shape_env(fn)

@@ -9,7 +9,6 @@ from .. syntax import AllocArray, ArrayView, Index, Struct, Var
 from .. syntax import Adverb
 from transform import Transform
 
-
 class CopyElimination(Transform):
   def apply(self, fn):
     if all(isinstance(t, ScalarT) for t in fn.type_env.itervalues()):

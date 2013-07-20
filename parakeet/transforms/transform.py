@@ -8,11 +8,7 @@ from .. syntax import ForLoop, Comment
 from .. syntax import Var, Tuple, Index, Attribute, Const
 from .. syntax import PrimCall, Struct, Alloc, Cast
 from .. syntax import TupleProj, Slice, ArrayView
-from .. syntax import Call, TypedFn,  AllocArray, Len
-
-
-
-# from . syntax import Map, Reduce 
+from .. syntax import Call, TypedFn,  AllocArray, Len, Map, Reduce 
 
 transform_timings = {}
 transform_counts = {}
@@ -165,46 +161,46 @@ class Transform(Builder):
   def transform_Len(self, expr):
     expr.value = self.transform_expr(expr.value) 
 
-  #def transform_IndexMap(self, expr):
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.shape = self.transform_expr(expr.shape)
-  #  return expr 
+  def transform_IndexMap(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.shape = self.transform_expr(expr.shape)
+    return expr 
   
-  #def transform_IndexReduce(self, expr):
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.combine = self.transform_expr(expr.combine)
-  #  expr.shape = self.transform_expr(expr.shape)
-  #  expr.init = self.transform_if_expr(expr.init)
-  #  return expr
+  def transform_IndexReduce(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.shape = self.transform_expr(expr.shape)
+    expr.init = self.transform_if_expr(expr.init)
+    return expr
   
-  #def transform_Map(self, expr):
-  #  expr.axis = self.transform_if_expr(expr.axis)
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.args = self.transform_expr_list(expr.args)
-  #  return expr
+  def transform_Map(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.args = self.transform_expr_list(expr.args)
+    return expr
   
-  #def transform_Reduce(self, expr):
-  #  expr.axis = self.transform_if_expr(expr.axis)
-  #  expr.init = self.transform_if_expr(expr.init)
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.combine = self.transform_expr(expr.combine)
-  #  expr.args = self.transform_expr_list(expr.args)
-  #  return expr
+  def transform_Reduce(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
+    expr.init = self.transform_if_expr(expr.init)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.args = self.transform_expr_list(expr.args)
+    return expr
   
-  #def transform_Scan(self, expr):
-  #  expr.axis = self.transform_if_expr(expr.axis)
-  #  expr.init = self.transform_if_expr(expr.init)
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.combine = self.transform_expr(expr.combine)
-  #  expr.args = self.transform_expr_list(expr.args)
-  #  expr.emit = self.transform_expr(expr.emit)
-  #  return expr
+  def transform_Scan(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
+    expr.init = self.transform_if_expr(expr.init)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.args = self.transform_expr_list(expr.args)
+    expr.emit = self.transform_expr(expr.emit)
+    return expr
   
-  #def transform_AllPairs(self, expr):
-  #  expr.axis = self.transform_if_expr(expr.axis)
-  #  expr.fn = self.transform_expr(expr.fn)
-  #  expr.args = self.transform_expr_tuple(expr.args)
-  #  return expr
+  def transform_OuterMap(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.args = self.transform_expr_tuple(expr.args)
+    return expr
   
   def transform_Closure(self, expr):
     expr.args = self.transform_expr_tuple(expr.args)
@@ -218,8 +214,8 @@ class Transform(Builder):
   def transform_TypeValue(self, expr):
     pass 
   
-  #def transform_DelayUntilTyped(self, expr):
-  #  expr.values = self.transform_expr_tuple(expr.values)
+  def transform_DelayUntilTyped(self, expr):
+    expr.values = self.transform_expr_tuple(expr.values)
   
   def transform_expr(self, expr):
     """Dispatch on the node type and call the appropriate transform method"""
@@ -253,14 +249,14 @@ class Transform(Builder):
       result = self.transform_ArrayView(expr)
     elif expr_class is TypedFn:
       result = self.transform_TypedFn(expr)
-    #elif expr_class is Fn:
-    #  result = self.transform_Fn(expr)
+    #elif expr_class is UntypedFn:
+    #  result = self.transform_UntypedFn(expr)
     elif expr_class is Call:
       result = self.transform_Call(expr)
-    #elif expr_class is Map:
-    #  result = self.transform_Map(expr)
-    #elif expr_class is Reduce:
-    #  result = self.transform_Reduce(expr)
+    elif expr_class is Map:
+      result = self.transform_Map(expr)
+    elif expr_class is Reduce:
+      result = self.transform_Reduce(expr)
     elif expr_class is Len:
       result = self.transform_Len(expr)
     else:

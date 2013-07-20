@@ -25,6 +25,7 @@ class IndexMap(IndexAdverb):
   Map from each distinct index in the shape to a value 
   """
   pass 
+
  
 
 class IndexAccumulative(IndexAdverb):
