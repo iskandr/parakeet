@@ -5,7 +5,6 @@ def clear_specializations():
   for clos_t in _closure_type_cache.itervalues():
     clos_t.specializations.clear()
 
-  
 
 def print_specializations():
   if config.print_specialized_function_names:

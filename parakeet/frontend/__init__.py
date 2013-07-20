@@ -6,9 +6,11 @@ from closure_specializations import print_specializations
 import type_conv_decls as _decls 
 from decorators import jit, macro, staged_macro
 from ast_conversion import translate_function_value, translate_function_ast
-from run_function import run_typed_fn, run_python_fn, specialize  
-import mappings 
+
+from run_function import run_typed_fn, run_python_fn, specialize
 
 def typed_repr(python_fn, args):
   _, typed_fn, _ = specialize(python_fn, args)
   return typed_fn 
+
+import mappings 

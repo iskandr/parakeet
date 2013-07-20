@@ -1,11 +1,13 @@
 
-from .. frontend import macro, staged_macro, jit,  translate_function_value 
+
 from .. syntax import (none, zero_i64, 
                        Map, Reduce, Scan, 
                        IndexMap, IndexReduce, 
                        ParFor, OuterMap,
                        Filter, FilterReduce) 
- 
+
+from .. frontend import macro, staged_macro, jit,  translate_function_value 
+
 @jit 
 def identity(x):
   return x

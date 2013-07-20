@@ -4,14 +4,14 @@ from .. import names
 from .. syntax import (Expr, Var, Const, Return, UntypedFn, FormalArgs, 
                        const, is_python_constant)
 
-from run_function import run  
+from run_function import run_python_fn
 
 class jit:
   def __init__(self, f):
     self.f = f
 
   def __call__(self, *args, **kwargs):
-    return run(self.f, *args, **kwargs)
+    return run_python_fn(self.f, *args, **kwargs)
 
 
 class macro(object):
@@ -83,7 +83,7 @@ class macro(object):
       untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
       self.wrappers[key] = untyped
     dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
-    return run(untyped, *args, **dynamic_kwargs)
+    return run_python_fn(untyped, *args, **dynamic_kwargs)
     
 
   def transform(self, args, kwargs = {}):
