@@ -1,6 +1,7 @@
 import numpy as np
 import types 
 
+
 from ..ndtypes import (type_conv, scalar_types, 
                        make_array_type, ArrayT, 
                        make_tuple_type, TupleT, 

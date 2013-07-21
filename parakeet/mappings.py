@@ -1,8 +1,6 @@
 import math  
 import numpy as np
-
-from .. import lib, prims   
-
+import lib, prims   
 
 property_mappings = {
   'dtype' : lib.elt_type,                

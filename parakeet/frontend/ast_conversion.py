@@ -18,8 +18,7 @@ from ..syntax import (Assign, If, ForLoop, Var, PrimCall, Map,
                        is_python_constant, const, prim_wrapper) 
 from ..transforms import subst_expr, subst_stmt_list
 from function_registry import already_registered_python_fn
-from function_registry import register_python_fn, lookup_python_fn
-from mappings import function_mappings, method_mappings, property_mappings 
+from function_registry import register_python_fn, lookup_python_fn 
 from decorators import jit, macro  
 from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
 
@@ -432,7 +431,7 @@ class AST_Translator(ast.NodeVisitor):
                             filename = self.filename)
   
   def translate_builtin_call(self, value, positional, keywords_dict):
-    from mappings import function_mappings 
+    from ..mappings import function_mappings     
     if value is sum:
       return mk_reduce_call(prim_wrapper(prims.add), positional, zero_i64)
     elif value is max:
@@ -465,7 +464,7 @@ class AST_Translator(ast.NodeVisitor):
     return res 
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
-    from mappings import function_mappings 
+    from ..mappings import function_mappings 
     if value in function_mappings:
       value = function_mappings[value]
       
@@ -600,6 +599,8 @@ class AST_Translator(ast.NodeVisitor):
     #     pull out the value. If it's a constant, then make it into syntax, 
     #     if it's a function, then parse it, else raise an error. 
     #
+    
+    from ..mappings import property_mappings, method_mappings
     value = self.visit(expr.value)
     attr = expr.attr
     if isinstance(value, ExternalValue):
@@ -818,6 +819,7 @@ def translate_function_source(source,
                                 filename = filename)
 
 def translate_function_value(fn, _currently_processing = set([])):
+  from ..mappings import function_mappings
   if fn in function_mappings:
     fn = function_mappings[fn]
   
@@ -876,114 +878,3 @@ def translate_function_value(fn, _currently_processing = set([])):
   register_python_fn(fn, fundef)
   _currently_processing.remove(original_fn)
   return fundef 
-""" 
-class jit:
-  def __init__(self, f):
-    self.f = f
-
-  def __call__(self, *args, **kwargs):
-    return run(self.f, *args, **kwargs)
-
-
-class macro(object):
-  def __init__(self, f, static_names = set([]), call_from_python = None):
-    self.f = f
-    self.static_names = static_names
-    self.wrappers = {}
-    self.call_from_python = call_from_python
-    if hasattr(self.f, "__name__"):
-      self.name = f.__name__
-    else:
-      self.name = "f"
-
-  _macro_wrapper_cache = {}
-  def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
-    args = FormalArgs()
-    pos_vars = []
-    keyword_vars = {}
-    for i in xrange(n_pos):
-      local_name = names.fresh("input_%d" % i)
-      args.add_positional(local_name)
-      pos_vars.append(Var(local_name))
-  
-    
-    for visible_name in dynamic_keywords:
-      local_name = names.fresh(visible_name)
-      args.add_positional(local_name, visible_name)
-      keyword_vars[visible_name] = Var(local_name)
-
-    for (static_name, value) in static_pairs:
-      if isinstance(value, Expr):
-        assert isinstance(value, Const)
-        keyword_vars[static_name] = value
-      elif value is not None:
-        assert is_python_constant(value), \
-            "Unexpected type for static/staged value: %s : %s" % \
-            (value, type(value))
-        keyword_vars[static_name] = const(value)
-
-    result_expr = self.f(*pos_vars, **keyword_vars)
-    body = [Return(result_expr)]
-    wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
-                                         len(dynamic_keywords))
-    wrapper_name = names.fresh(wrapper_name)
-    return UntypedFn(name = wrapper_name, args = args, body = body)
-
-  def as_fn(self):
-    n_args = self.f.func_code.co_argcount
-    n_default = 0 if not self.f.func_defaults else len(self.f.func_defaults)
-    assert n_default == 0
-    return self._create_wrapper(n_args,[],{})
-    
-  def __call__(self, *args, **kwargs):
-    if self.call_from_python is not None:
-      return self.call_from_python(*args, **kwargs)
-    n_pos = len(args)
-    keywords = kwargs.keys()
-
-    static_pairs = ((k,kwargs.get(k)) for k in self.static_names)
-    dynamic_keywords = tuple(k for k in keywords
-                               if k not in self.static_names)
-
-    static_pairs = tuple(static_pairs)
-    key = (n_pos, static_pairs, dynamic_keywords)
-
-    if key in self.wrappers:
-      untyped = self.wrappers[key]
-    else:
-      untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
-      self.wrappers[key] = untyped
-    dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
-    return run(untyped, *args, **dynamic_kwargs)
-    
-
-  def transform(self, args, kwargs = {}):
-    for arg in args:
-      assert isinstance(arg, Expr), \
-          "Macros can only take syntax nodes as arguments, got %s" % (arg,)
-    for (name,arg) in kwargs.iteritems():
-      assert isinstance(arg, Expr), \
-          "Macros can only take syntax nodes as arguments, got %s = %s" % \
-          (name, arg)
-    result = self.f(*args, **kwargs)
-    assert isinstance(result, Expr), \
-        "Expected macro %s to return syntax expression, got %s" % \
-        (self.f, result)
-    return result
-
-  def __str__(self):
-    return "macro(%s)" % self.name
-  
-class staged_macro(object):
-  def __init__(self, *static_names, **kwargs):
-    self.static_names = tuple(static_names)
-
-    self.call_from_python = kwargs.get('call_from_python')
-    assert kwargs.keys() in [[], ['call_from_python']], \
-        "Unknown keywords: %s" % kwargs.keys()
-
-  def __call__(self, fn):
-    return macro(fn, 
-                 self.static_names,
-                 call_from_python = self.call_from_python)
-"""

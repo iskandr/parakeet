@@ -1,5 +1,5 @@
 import numpy as np 
-from .. decorators import jit 
+from .. frontend import jit 
 from adverbs import imap 
 
 @jit
