@@ -1,6 +1,6 @@
 from .. import names 
 from ..builder import build_fn 
-from ..ndtypes import Int64, repeat_tuple
+from ..ndtypes import Int64, repeat_tuple, NoneType 
 from ..syntax import ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap 
 from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
@@ -38,17 +38,18 @@ class IndexifyAdverbs(Transform):
                            for i,t in enumerate(array_arg_types))
     #max_array_arg = max_rank_arg(array_arg_vars)
     # max_array_rank = self.rank(max_array_arg)
-    if output is None:
-      new_closure_args = tuple(old_closure_args) + array_arg_vars
-    else:
-      new_closure_args = tuple(old_closure_args) + (output,) + array_arg_vars
-    
     n_indices = n_arrays if cartesian_product else 1
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     
-    
-    new_input_types = new_closure_args + tuple([index_input_type])
-    new_fn, builder, input_vars = build_fn(new_input_types, fn.return_type)
+    if output is None:
+      new_closure_args = tuple(old_closure_args) + array_arg_vars
+      new_input_types = new_closure_args + tuple([index_input_type])
+      new_return_type = fn.return_type 
+    else:
+      new_closure_args = tuple(old_closure_args) + (output,) + array_arg_vars
+      new_input_types = new_closure_args + tuple([index_input_type])
+      new_return_type = NoneType 
+    new_fn, builder, input_vars = build_fn(new_input_types, new_return_type)
     index_input_var = input_vars[-1]
     
     index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
@@ -62,14 +63,14 @@ class IndexifyAdverbs(Transform):
       #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
       #  else:
       #    slice_value = curr_array
-      slice_value = self.slice_along_axis(curr_array, axis, index_elts[i]) 
+      slice_value = builder.slice_along_axis(curr_array, axis, index_elts[i]) 
       builder.assign(array_slice_arg, slice_value)
     
     elt_result = builder.call(fn, old_input_vars)
     if output is None: 
       builder.return_(elt_result)
     else:
-      self.setidx(output, index_input_var, elt_result)
+      builder.setidx(output, index_input_var, elt_result)
       builder.return_(none)
     new_closure = self.closure(new_fn, new_closure_args)
     self._indexed_fn_cache[key] = new_closure

@@ -2,7 +2,7 @@ from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment,
                       Attribute, Const, Index, PrimCall, Tuple, Var, 
                       Alloc, Call, Struct, TypedFn, 
                       AllocArray, ArrayView, Cast, Slice, TupleProj, 
-                      Map, Reduce, Scan, OuterMap)
+                      Map, Reduce, Scan, OuterMap, ParFor)
 
 class SyntaxVisitor(object):
   """
@@ -106,7 +106,7 @@ class SyntaxVisitor(object):
       self.visit_expr(expr.init)
     for arg in expr.args:
       self.visit_expr(arg)
-
+      
   def visit_TupleProj(self, expr):
     return self.visit_expr(expr.tuple)
 
@@ -168,6 +168,7 @@ class SyntaxVisitor(object):
       return self.visit_Scan(expr)
     elif c is TypedFn:
       return self.visit_TypedFn(expr)
+
     else:
       method_name = 'visit_' + expr.node_type()
       method = getattr(self, method_name, None)
@@ -257,6 +258,10 @@ class SyntaxVisitor(object):
   def visit_Comment(self, stmt):
     pass
 
+  def visit_ParFor(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.bounds)
+    
   def visit_stmt(self, stmt):
     c = stmt.__class__
     if c is Assign:
@@ -273,6 +278,8 @@ class SyntaxVisitor(object):
       self.visit_ExprStmt(stmt)
     elif c is Comment:
       self.visit_Comment(stmt)
+    elif c is ParFor:
+      self.visit_ParFor(stmt)
     else:
       assert False, "Statement not implemented: %s" % stmt
 
