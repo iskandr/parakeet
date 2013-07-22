@@ -42,14 +42,14 @@ class IndexifyAdverbs(Transform):
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     
     if output is None:
-      new_closure_args = tuple(old_closure_args) + array_arg_vars
-      new_input_types = new_closure_args + tuple([index_input_type])
+      new_closure_args = tuple(old_closure_args) + array_args
+      inner_input_types = get_types(new_closure_args) + tuple([index_input_type])
       new_return_type = fn.return_type 
     else:
-      new_closure_args = tuple(old_closure_args) + (output,) + array_arg_vars
-      new_input_types = new_closure_args + tuple([index_input_type])
+      new_closure_args = tuple(old_closure_args) + (output,) + array_args
+      inner_input_types = get_types(new_closure_args) + tuple([index_input_type])
       new_return_type = NoneType 
-    new_fn, builder, input_vars = build_fn(new_input_types, new_return_type)
+    new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type)
     index_input_var = input_vars[-1]
     
     index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
