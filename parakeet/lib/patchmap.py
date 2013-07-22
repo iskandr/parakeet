@@ -22,6 +22,7 @@ def pmap2(f, x, width = (3,3)):
   n_rows, n_cols = x.shape
   hx = width_x / 2
   hy = width_y / 2
+  
   def local_apply((i,j)):
     lx = __builtins__.max(i-hx, 0)
     ux = __builtins__.min(i+hx+1, n_rows)

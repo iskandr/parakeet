@@ -6,7 +6,9 @@ from nose.tools import nottest
 from treelike.testing_helpers import  run_local_tests, eq, expect_eq
   
 import parakeet
-from parakeet import ast_conversion, interp, type_conv, type_inference, specialize_and_compile
+
+from parakeet import (interp, type_conv, type_inference, 
+                      specialize, translate_function_value, run_typed_fn)
 
 def copy(x):
   if isinstance(x, np.ndarray):
@@ -20,22 +22,16 @@ def expect(fn, args, expected, valid_types = None):
   the correct result
   """
 
-  untyped, typed, compiled, all_args = specialize_and_compile(fn, args)
+  _, typed, linear_args  = specialize(fn, args)
 
-  # Abandoned interpreting untyped code due to addition of DelayUntilTyped
-  # syntax nodes 
-  #untyped_result = interp.eval_fn(untyped, all_args.transform(copy))
-  #assert eq(untyped_result, expected), \
-  #    "Expected %s but untyped fn returned  %s" % (expected, untyped_result)
-  
-  linear_args = untyped.args.linearize_without_defaults(all_args)
 
 
   typed_result = interp.eval_fn(typed, map(copy, linear_args))
   assert eq(typed_result, expected), \
       "Expected %s but typed fn returned %s" % (expected, typed_result)
 
-  llvm_result = compiled(*linear_args)
+  
+  llvm_result = run_typed_fn(typed, args, backend="llvm")
   if valid_types is not None:
     if not isinstance(valid_types, (tuple, list)):
       valid_types = [valid_types]
@@ -56,7 +52,7 @@ def expect_allpairs(parakeet_fn, python_fn, inputs):
       expect(parakeet_fn, [x,y], python_fn(x,y))
 
 def return_type(fn, input_types):
-  untyped_fundef = ast_conversion.translate_function_value(fn)
+  untyped_fundef = translate_function_value(fn)
   closure_args = untyped_fundef.python_nonlocals()
   closure_arg_types = map(type_conv.typeof, closure_args)
   return type_inference.infer_return_type(untyped_fundef,

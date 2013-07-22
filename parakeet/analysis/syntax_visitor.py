@@ -1,9 +1,8 @@
-from .. syntax import Assign, ExprStmt, ForLoop, If, Return, While
-from .. syntax import Comment
-from .. syntax import Attribute, Const, Index, PrimCall, Tuple, Var
-from .. syntax import Alloc, Call, Struct, TypedFn
-from .. syntax import AllocArray, ArrayView, Cast, Slice, TupleProj
-# from syntax import Map, Reduce, Scan, AllPairs
+from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, 
+                      Attribute, Const, Index, PrimCall, Tuple, Var, 
+                      Alloc, Call, Struct, TypedFn, 
+                      AllocArray, ArrayView, Cast, Slice, TupleProj, 
+                      Map, Reduce, Scan, OuterMap)
 
 class SyntaxVisitor(object):
   """
@@ -74,39 +73,39 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.stop)
     self.visit_expr(expr.step)
 
-  #def visit_IndexMap(self, expr):
-  #  self.visit_expr(expr.fn)
-  #  self.visit_expr(expr.shape)
+  def visit_IndexMap(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.shape)
 
-  #def visit_IndexReduce(self, expr):
-  #  self.visit_expr(expr.fn)
-  # self.visit_expr(expr.combine)
-  #  self.visit_expr(expr.shape)
-  #  self.visit_expr(expr.init)
+  def visit_IndexReduce(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.combine)
+    self.visit_expr(expr.shape)
+    self.visit_expr(expr.init)
 
-  #def visit_Map(self, expr):
-  #  self.visit_expr(expr.fn)
-  #  for arg in expr.args:
-  #    self.visit_expr(arg)
+  def visit_Map(self, expr):
+    self.visit_expr(expr.fn)
+    for arg in expr.args:
+      self.visit_expr(arg)
 
-  #def visit_AllPairs(self, expr):
-  #  self.visit_expr(expr.fn)
-  #  for arg in expr.args:
-  #    self.visit_expr(arg)
+  def visit_OuterMap(self, expr):
+    self.visit_expr(expr.fn)
+    for arg in expr.args:
+      self.visit_expr(arg)
 
-  #def visit_Reduce(self, expr):
-  #  self.visit_expr(expr.fn)
-  #  if expr.init:
-  #    self.visit_expr(expr.init)
-  #  for arg in expr.args:
-  #    self.visit_expr(arg)
+  def visit_Reduce(self, expr):
+    self.visit_expr(expr.fn)
+    if expr.init:
+      self.visit_expr(expr.init)
+    for arg in expr.args:
+      self.visit_expr(arg)
 
-  #def visit_Scan(self, expr):
-  #  self.visit_expr(expr.fn)
-  #  if expr.init:
-  #    self.visit_expr(expr.init)
-  #  for arg in expr.args:
-  #    self.visit_expr(arg)
+  def visit_Scan(self, expr):
+    self.visit_expr(expr.fn)
+    if expr.init:
+      self.visit_expr(expr.init)
+    for arg in expr.args:
+      self.visit_expr(arg)
 
   def visit_TupleProj(self, expr):
     return self.visit_expr(expr.tuple)
@@ -161,12 +160,12 @@ class SyntaxVisitor(object):
       return self.visit_Cast(expr)
     elif c is Call:
       return self.visit_Call(expr)
-    #elif c is Map:
-    #  return self.visit_Map(expr)
-    #elif c is Reduce:
-    #  return self.visit_Reduce(expr)
-    #elif c is Scan:
-    #  return self.visit_Scan(expr)
+    elif c is Map:
+      return self.visit_Map(expr)
+    elif c is Reduce:
+      return self.visit_Reduce(expr)
+    elif c is Scan:
+      return self.visit_Scan(expr)
     elif c is TypedFn:
       return self.visit_TypedFn(expr)
     else:

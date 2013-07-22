@@ -19,6 +19,12 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
     result shape of the array and preallocate it.  If the result should be a
     scalar, just return a scalar variable.
     """
+    assert self.is_fn(fn), \
+      "Expected function, got %s" % (fn,)
+    assert isinstance(array_args, (list,tuple)), \
+      "Expected list of array args, got %s" % (array_args,)
+    assert isinstance(axis, (int, long)), \
+      "Expected axis to be an integer, got %s" % (axis,)
     
     # take the 0'th slice just to have a value in hand 
     inner_args = [self.slice_along_axis(array, axis, zero_i64)
@@ -42,7 +48,8 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
         extra_dims.append(dim)
     else:
       biggest_arg = max_rank_arg(array_args)
-      assert self.rank(biggest_arg) > axis
+      assert self.rank(biggest_arg) > axis, \
+        "Can't slice along axis %d of %s (rank = %d)" % (axis, biggest_arg, self.rank(biggest_arg)) 
       extra_dims.append(self.shape(biggest_arg, axis))
       
     outer_shape_tuple = self.tuple(extra_dims)

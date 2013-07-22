@@ -93,7 +93,7 @@ class RewriteTyped(Transform):
       return syntax.Array(new_elts, type = array_t)
     else:
       # need to allocate an output array and copy the elements in
-      first_elt = self.assign_temp(expr.elts[0], "first_elt")
+      first_elt = self.assign_name(expr.elts[0], "first_elt")
       elt_dims = [self.shape(first_elt, i) for i in xrange(array_t.rank - 1)]
       n = len(expr.elts)
       outer_dim = const(n)
@@ -199,7 +199,7 @@ class RewriteTyped(Transform):
     rhs = self.transform_expr(stmt.rhs)
     assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
     if new_lhs.__class__ is Tuple: 
-      rhs = self.assign_temp(rhs)
+      rhs = self.assign_name(rhs)
       for (i, lhs_elt) in enumerate(new_lhs.elts):
         if lhs_elt.__class__ is Var:
           name = names.original(lhs_elt.name) 

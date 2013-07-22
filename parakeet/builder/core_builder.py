@@ -2,9 +2,10 @@ from treelike import NestedBlocks
 
 from .. import syntax, names 
 from ..ndtypes import (make_array_type, make_tuple_type, 
-                       Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT) 
+                       Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT, 
+                       ArrayT, FnT, ClosureT) 
 from ..syntax import (ArrayView, Assign, Attribute, Cast, Const, Closure,  Comment, Expr, 
-                      Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var)
+                      Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var, TypedFn)
 from ..syntax.helpers import (wrap_if_constant, 
                               const_bool, const_int, const_float, get_types,  
                               one_i64, zero_i64, 
@@ -52,8 +53,6 @@ class CoreBuilder(object):
 
   def insert_stmt(self, stmt):
     self.blocks.append_to_current(stmt)
-
-
 
   def temp_name(self, expr):
     c = expr.__class__
@@ -199,7 +198,13 @@ class CoreBuilder(object):
       return x.type.__class__ is TupleT
     except:
       return False
-
+    
+  def is_array(self, x):
+    return x.type.__class__ is  ArrayT
+  
+  def is_fn(self, x):
+    return x.__class__ in (TypedFn, Closure) or isinstance(x.type, (FnT, ClosureT)) 
+  
   def concat_tuples(self, x, y, name = "concat_tuple"):
     if self.is_tuple(x):
       x_elts = self.tuple_elts(x)
@@ -232,8 +237,6 @@ class CoreBuilder(object):
     nelts = len(tup.type.elt_types)
     return tuple([self.tuple_proj(tup, i, explicit_struct = explicit_struct)
                   for i in xrange(nelts)])
-
-
 
   def prod(self, elts, name = None):
     if self.is_tuple(elts):

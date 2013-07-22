@@ -3,12 +3,9 @@ import time
 from .. import config
 from .. analysis import verify
 from .. builder import Builder  
-from .. syntax import Expr, If, Assign, While, Return, ExprStmt
-from .. syntax import ForLoop, Comment  
-from .. syntax import Var, Tuple, Index, Attribute, Const
-from .. syntax import PrimCall, Struct, Alloc, Cast
-from .. syntax import TupleProj, Slice, ArrayView
-from .. syntax import Call, TypedFn,  AllocArray, Len, Map, Reduce 
+from .. syntax import (Expr, If, Assign, While, Return, ExprStmt, ForLoop, Comment, 
+                      Var, Tuple, Index, Attribute, Const, PrimCall, Struct, Alloc, Cast, 
+                      TupleProj, Slice, ArrayView, Call, TypedFn,  AllocArray, Len, Map, Reduce) 
 
 transform_timings = {}
 transform_counts = {}
@@ -472,7 +469,7 @@ class Transform(Builder):
 
     if self.verify:
       try:
-        verify.verify(new_fn)
+        verify(new_fn)
       except:
         print "ERROR after running %s on %s" % (transform_name , new_fn)
         raise

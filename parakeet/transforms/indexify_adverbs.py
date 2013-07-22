@@ -130,15 +130,17 @@ class IndexifyAdverbs(Transform):
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
     old_fn = expr.fn
-    biggest_arg = max_rank_arg(args)
-    niters = self.shape(biggest_arg, axis)
+
+
     if output is None:
-      outer_dims = [niters]
+      # outer_dims = [niters]
       # use shape inference to create output
-      output = self.create_output_array(old_fn, args, outer_dims)
+      output = self.create_output_array(old_fn, args, axis)
         
     index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False, 
                                 output = output)
+    biggest_arg = max_rank_arg(args)
+    niters = self.shape(biggest_arg, axis)
     self.parfor(niters, index_fn)
     return output 
   

@@ -161,7 +161,7 @@ class Annotator(Transform):
     t = closure_type.make_closure_type(untyped_fn, ())
     return Closure(untyped_fn, (), type = t)
 
-  def transform_Fn(self, expr):
+  def transform_UntypedFn(self, expr):
     return expr 
     #t = closure_type.make_closure_type(expr, ())
     #return Closure(expr, [], type = t)

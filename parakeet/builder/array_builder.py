@@ -11,8 +11,7 @@ class ArrayBuilder(CoreBuilder):
   """
   
   
-  def is_array(self, x):
-    return x.type.__class__ is  ArrayT
+
 
   def elt_type(self, x):
     if isinstance(x, Type):
@@ -177,7 +176,7 @@ class ArrayBuilder(CoreBuilder):
         idx = idx.value
       proj = self.tuple_proj(arr, idx)
       if temp:
-        return self.assign_temp(proj, "tuple_elt%d" % idx if name is None else name)
+        return self.assign_name(proj, "tuple_elt%d" % idx if name is None else name)
       else:
         return proj
 
@@ -203,7 +202,7 @@ class ArrayBuilder(CoreBuilder):
     t = arr_t.index_type(idx.type)
     idx_expr = Index(arr, idx, type=t)
     if temp:
-      return self.assign_temp(idx_expr, "array_elt" if name is None else name)
+      return self.assign_name(idx_expr, "array_elt" if name is None else name)
     else:
       return idx_expr  
 

@@ -19,8 +19,8 @@ class UntypedFn(Expr):
   _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
   registry = {}
 
-  def __str__(self):
-    return "Fn(%s)" % self.name
+  #def __str__(self):
+  #  return "Fn(%s)" % self.name
 
   def __repr__(self):
     return "def %s(%s):%s" % (self.name, self.args, block_to_str(self.body))
