@@ -55,7 +55,7 @@ class ArrayBuilder(CoreBuilder):
       strides = self.tuple(stride_elts, "strides", explicit_struct = True)
       array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
     else:
-      array = AllocArray(shape, type = array_t)
+      array = AllocArray(shape, elt_type = elt_t, type = array_t)
     return self.assign_name(array, name)
   def len(self, array):
     return self.shape(array, 0)

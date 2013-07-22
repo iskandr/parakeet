@@ -5,10 +5,13 @@ import types
 from treelike import dispatch 
 
 from frontend import ast_conversion
-from ndtypes import ScalarT, StructT  
-from syntax import (Expr, UntypedFn, TypedFn, 
-                    Var, Tuple, Return, If, While, ForLoop, ActualArgs, 
-                    Assign, Index)
+from ndtypes import ScalarT, StructT, Type   
+from syntax import (Expr, Var, Tuple, 
+                    UntypedFn, TypedFn, 
+                    Return, If, While, ForLoop, ParFor,  
+                    ActualArgs, 
+                    Assign, Index, AllocArray,)
+
 
 
 class InterpSemantics(object):
@@ -131,6 +134,13 @@ class ClosureVal:
     return eval_fn(self.fn, args)
 
 def eval_fn(fn, actuals):
+  try:
+    _eval_fn(fn, actuals)
+  except:
+    # print "[Interp] Error in function %s" % (fn,)
+    raise
+   
+def _eval_fn(fn, actuals):
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -178,6 +188,14 @@ def eval_fn(fn, actuals):
       else:
         return getattr(value, expr.name)
 
+    def expr_AllocArray():
+      shape = eval_expr(expr.shape)
+      assert isinstance(shape, tuple), "Expected tuple, got %s" % (shape,)
+      assert isinstance(expr.elt_type, ScalarT), \
+          "Expected scalar element type for AllocArray, got %s" % (expr.elt_type,)
+      dtype = expr.elt_type.dtype
+      return np.ndarray(shape = shape, dtype = dtype)
+    
     def expr_ArrayView():
       data = eval_expr(expr.data)
       shape  = eval_expr(expr.shape)
@@ -263,16 +281,17 @@ def eval_fn(fn, actuals):
     def expr_Len():
       return len(eval_expr(expr.value))
     
-    def expr_IndexMap():
-      fn = eval_expr(expr.fn)
-      shape = eval_expr(expr.shape)
-      ranges = [xrange(n) for n in shape]
-      def wrap_idx(idx):
-        if len(idx) == 1:
-          idx = idx[0]
-        return eval_fn(fn, (idx,))
-      elts = [wrap_idx(idx) for idx in itertools.product(*ranges)]
-      return np.array(elts).reshape((shape))
+    #def expr_IndexMap():
+    #  fn = eval_expr(expr.fn)
+    #  shape = eval_expr(expr.shape)
+    #  ranges = [xrange(n) for n in shape]
+    #  def wrap_idx(idx):
+    #    if len(idx) == 1:
+    #      idx = idx[0]
+    #    return eval_fn(fn, (idx,))
+    #  elts = [wrap_idx(idx) for idx in itertools.product(*ranges)]
+    #  return np.array(elts).reshape((shape))
+    
     
     def expr_IndexReduce():
       fn = eval_expr(expr.fn)
@@ -291,17 +310,18 @@ def eval_fn(fn, actuals):
           elt = eval_fn(combine, (acc, elt))
       return elt 
     
-    def expr_Map():
-      fn = eval_expr(expr.fn)
-      args = eval_args(expr.args)
-      axis = eval_if_expr(expr.axis)
-      return adverb_evaluator.eval_map(fn, args, axis)
+    #def expr_Map():
+    #  fn = eval_expr(expr.fn)
+    #  args = eval_args(expr.args)
+    #  axis = eval_if_expr(expr.axis)
+    #  return adverb_evaluator.eval_map(fn, args, axis)
 
-    def expr_AllPairs():
-      fn = eval_expr(expr.fn)
-      x,y = eval_args(expr.args)
-      axis = eval_if_expr(expr.axis)
-      return adverb_evaluator.eval_allpairs(fn, x, y, axis)
+    #def expr_OuterMap():
+    #  fn = eval_expr(expr.fn)
+    #  x,y = eval_args(expr.args)
+    #  axis = eval_if_expr(expr.axis)
+    #  assert False, "Need implementation for "
+    # return adverb_evaluator.eval_allpairs(fn, x, y, axis)
 
     def expr_Reduce():
       
@@ -355,7 +375,15 @@ def eval_fn(fn, actuals):
       idx = eval_expr(lhs.index)
       arr[idx] = rhs
 
+  
   def eval_stmt(stmt):
+    try:
+      _eval_stmt(stmt)
+    except:
+      print "[Interp] Error while running statement '%s' in function '%s'" % (stmt,fn.name,)
+      raise 
+    
+  def _eval_stmt(stmt):
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)
@@ -377,6 +405,7 @@ def eval_fn(fn, actuals):
       while eval_expr(stmt.cond):
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
+        
     elif isinstance(stmt, ForLoop):
       start = eval_expr(stmt.start)
       stop = eval_expr(stmt.stop)
@@ -386,8 +415,22 @@ def eval_fn(fn, actuals):
         env[stmt.var.name] = i
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
+    elif isinstance(stmt, ParFor):
+      bounds = eval_expr(stmt.bounds)
+      if isinstance(bounds, (list,tuple)) and len(bounds) == 1:
+        bounds = bounds[0]
+        
+      if isinstance(bounds, (int, long)):
+        for idx in xrange(bounds):
+          eval_fn(fn, (idx,))
+      else:
+        for idx in np.ndindex(bounds):
+          eval_fn(fn, (idx,))
+          
+      
+      
     else:
-      raise RuntimeError("Not implemented: %s" % stmt)
+      raise RuntimeError("Statement not implemented: %s" % stmt)
 
   def eval_block(stmts):
     for stmt in stmts:

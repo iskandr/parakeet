@@ -32,41 +32,44 @@ class IndexifyAdverbs(Transform):
     old_input_vars = self.input_vars(fn)
     n_arrays = len(array_arg_types)
     old_closure_args = old_input_vars[:-n_arrays]
-    array_slice_args = old_input_vars[-n_arrays:]
     
-    array_arg_vars = tuple(self.fresh_var(t, prefix="array_arg%d" % i)
-                           for i,t in enumerate(array_arg_types))
+    
+  
     #max_array_arg = max_rank_arg(array_arg_vars)
     # max_array_rank = self.rank(max_array_arg)
     n_indices = n_arrays if cartesian_product else 1
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     
     if output is None:
-      new_closure_args = tuple(old_closure_args) + array_args
-      inner_input_types = get_types(new_closure_args) + tuple([index_input_type])
+      new_closure_args = tuple(old_closure_args) + tuple(array_args)
+      inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
       new_return_type = fn.return_type 
     else:
-      new_closure_args = tuple(old_closure_args) + (output,) + array_args
-      inner_input_types = get_types(new_closure_args) + tuple([index_input_type])
+      new_closure_args = tuple(old_closure_args) + (output,) + tuple(array_args)
+      inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
       new_return_type = NoneType 
+      
     new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type)
+    n_old_closure_args = len(old_closure_args)
+    array_arg_vars = input_vars[(n_old_closure_args + 0 if output is None else 1):-1]
+    
     index_input_var = input_vars[-1]
     
     index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
     if cartesian_product and n_indices > 1:
       index_elts = index_elts * n_arrays 
 
-    for i, array_slice_arg in enumerate(array_slice_args):
-      curr_array = array_arg_vars[i]
+    slice_values = []
+    for i, curr_array in enumerate(array_arg_vars):
       # if not cartesian_product: 
       #  if self.rank(curr_array) == max_array_rank:
       #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
       #  else:
       #    slice_value = curr_array
-      slice_value = builder.slice_along_axis(curr_array, axis, index_elts[i]) 
-      builder.assign(array_slice_arg, slice_value)
+      slice_values.append(builder.slice_along_axis(curr_array, axis, index_elts[i])) 
+      
     
-    elt_result = builder.call(fn, old_input_vars)
+    elt_result = builder.call(fn, tuple(old_closure_args) + tuple(slice_values))
     if output is None: 
       builder.return_(elt_result)
     else:
