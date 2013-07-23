@@ -105,6 +105,7 @@ class Inliner(Transform):
     else:
       return expr
 
+
   def apply(self, fn):
     if contains_calls(fn):
       return Transform.apply(self, fn)

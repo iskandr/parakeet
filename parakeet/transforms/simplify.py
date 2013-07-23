@@ -392,7 +392,7 @@ class Simplify(Transform):
     lhs_class = lhs.__class__
     rhs_class = rhs.__class__
     if lhs_class is Var:
-      if rhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
+      if lhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
         return self.transform_stmt(ExprStmt(rhs))
       else:
         self.bind_var(lhs.name, rhs)

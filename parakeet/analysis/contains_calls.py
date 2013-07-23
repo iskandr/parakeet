@@ -5,7 +5,7 @@ class FoundCall(Exception):
 
 class ContainsCalls(SyntaxVisitor):
   def visit_Call(self, expr):
-    raise FoundCall
+    raise FoundCall()
 
   def visit_fn(self, fn):
     try:

@@ -27,7 +27,7 @@ def expect(fn, args, expected, valid_types = None):
   """
 
   interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
-  expect_eq(interp_result, expected)
+  expect_eq(interp_result, expected, "interp")
 
   llvm_result = run_python_fn(fn, _copy_list(args), backend="llvm")
   if valid_types is not None:
@@ -35,7 +35,7 @@ def expect(fn, args, expected, valid_types = None):
       valid_types = [valid_types]
     assert type(llvm_result) in valid_types, \
       "Expected result to have type in %s but got %s" % (valid_types, type(llvm_result))
-  expect_eq(llvm_result, expected)
+  expect_eq(llvm_result, expected, "llvm")
   
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

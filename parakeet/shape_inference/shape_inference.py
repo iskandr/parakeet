@@ -12,6 +12,15 @@ from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown,
                    increase_rank, make_shape, is_zero, is_one, 
                    ) 
 
+class ShapeInferenceFailure(Exception):
+  def __init__(self, value, fn):
+    self.value = value 
+    self.fn = fn 
+  
+  def __str__(self):
+    return "Couldn't infer shape of %s in function %s" % (self.value, self.fn.name)
+
+  
 counter = 0
 class ShapeInference(SyntaxVisitor):
   def size_along_axis(self, value, axis):
@@ -233,7 +242,7 @@ class ShapeInference(SyntaxVisitor):
   
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)
-
+    self.fn = fn 
     self.value_env = {}
     self.equivalence_classes = {}
 
@@ -484,6 +493,11 @@ class ShapeInference(SyntaxVisitor):
         return shape.make_shape(dims)
       else:
         return self.index(arr, idx)
+    
+    if isinstance(arr, Scalar):
+      assert False, "Expected %s to be array, shape inference found scalar" % (arr,)
+    elif arr == shape.any_value:
+      raise ShapeInferenceFailure(expr, self.fn)
     assert False, \
         "Can't index (%s) with array shape %s and index shape %s" % \
         (expr, arr, idx)

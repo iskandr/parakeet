@@ -16,6 +16,7 @@ from imap_elim import IndexMapElimination
 
 #from mapify_allpairs import MapifyAllPairs
 #from maps_to_parfor import MapsToParFor
+from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
@@ -81,16 +82,23 @@ shape_elim = Phase(ShapeElimination,
 # loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 
 
-loopify = Phase([LowerAdverbs, 
+index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
+
+
+lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
+loopify = Phase([lower_adverbs,
+                 ParForToNestedLoops, 
                  inline_opt,
                  copy_elim,
-                 licm,],
+                 licm,
+                 symbolic_range_propagation,
+                 shape_elim,
+                 symbolic_range_propagation,
+                 index_elim ],
                 depends_on = high_level_optimizations,
                 cleanup = [Simplify, DCE],
                 copy = True,
-                run_if = contains_adverbs,
                 post_apply = print_loopy)
-
 
 
 ####################
@@ -104,12 +112,7 @@ load_elim = Phase(RedundantLoadElimination,
                   config_param = 'opt_redundant_load_elimination')
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
-index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
-pre_lowering = Phase([symbolic_range_propagation,
-                      shape_elim,
-                      symbolic_range_propagation,
-                      index_elim ],
-                     cleanup = [Simplify, DCE])
+
 
 post_lowering = Phase([licm,
                        unroll,
@@ -119,12 +122,12 @@ post_lowering = Phase([licm,
                        scalar_repl,
                        ], cleanup = [Simplify, DCE])
 
-lowering = Phase([pre_lowering,
+lowering = Phase([
                   LowerIndexing,
                   licm,
                   LowerStructs,
                   post_lowering,
-                  LowerStructs,
+                  # LowerStructs,
                   Simplify],
                  depends_on = loopify,
                  copy = True,

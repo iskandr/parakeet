@@ -90,7 +90,7 @@ class CallBuilder(CoreBuilder):
       fn = self.get_fn(fn)
     if lower: 
       from  ..transforms import pipeline
-      fn = pipeline.pre_lowering(fn)
+      fn = pipeline.loopify(fn)
       
     combined_args = tuple(closure_args) + tuple(args)
     call = Call(fn, combined_args, type = fn.return_type)

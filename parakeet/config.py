@@ -51,14 +51,14 @@ llvm_verify = True
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
@@ -70,10 +70,14 @@ print_optimized_llvm = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['LowerAdverbs'] # ['DCE'] 
+print_functions_before_transforms = ['IndexifyAdverbs', 'ParForToNestedLoops', 
+                                     'LoopInvariantCodeMotion', 'LowerStructs', 
+                                     'LowerIndexing', 'ShapeElimination'] #['LowerAdverbs'] # ['DCE'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
+print_functions_after_transforms = ['IndexifyAdverbs', 'ParForToNestedLoops', 
+                                    'LoopInvariantCodeMotion', 'LowerStructs', 
+                                    'LowerIndexing', 'ShapeElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
 
 # show aliases and escape sets
 print_escape_analysis = False

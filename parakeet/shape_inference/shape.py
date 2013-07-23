@@ -51,7 +51,7 @@ class AnyValue(object):
 
   def __str__(self):
     return "<any>"
-
+  
   def __repr__(self):
     return str(self)
 
@@ -78,6 +78,9 @@ class AnyScalar(Scalar):
 
   def __str__(self):
     return "Scalar"
+  
+  def __repr__(self):
+    return str(self)
 
 any_scalar = AnyScalar()
 

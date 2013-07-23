@@ -7,9 +7,7 @@ class LowerAdverbs(Transform):
     from pipeline import loopify  
     return loopify(expr)
   
-  def transform_ParFor(self, stmt):
-    fn = self.transform_expr(stmt.fn)
-    self.nested_loops(stmt.bounds, fn)
+
   
   def transform_IndexMap(self, expr, output = None):  
     # recursively descend down the function bodies to pull together nested ParFors
