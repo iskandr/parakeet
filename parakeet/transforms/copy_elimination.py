@@ -61,6 +61,7 @@ class CopyElimination(Transform):
       if lhs_name not in self.usedef.first_use and \
          lhs_name not in self.may_escape and \
          self.no_array_aliases(lhs_name):
+
         # why assign to an array if it never gets used?
         return None
       elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
@@ -69,13 +70,16 @@ class CopyElimination(Transform):
         if lhs_name not in self.usedef.first_use or \
            self.usedef.first_use[lhs_name] > curr_path:
           if self.usedef.last_use[rhs_name] == curr_path and \
+             lhs_name not in self.may_escape and \
              rhs_name not in self.may_escape and \
              rhs_name in self.local_arrays:
+            
             array_stmt = self.local_arrays[rhs_name]
             prev_path = self.usedef.stmt_paths[id(array_stmt)]
             if self.is_array_alloc(array_stmt.rhs) and \
                all(self.usedef.created_on[lhs_depends_on] < prev_path
                    for lhs_depends_on in collect_var_names(stmt.lhs)):
+              
               array_stmt.rhs = stmt.lhs
               return None
     return stmt

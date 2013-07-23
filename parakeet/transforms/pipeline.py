@@ -34,7 +34,7 @@ from value_range_propagation import RangePropagation
 ####################################
 
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [DCE],
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, DCE],
                    memoize = False,
                    run_if = contains_adverbs)
 inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
@@ -42,22 +42,21 @@ copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 
-high_level_optimizations = Phase([Simplify, 
-                                  inline_opt, 
-                                  Simplify, DCE,
-                                  licm, 
-                                  Simplify, DCE, 
-                                  # MapifyAllPairs,
-                                  fusion_opt, 
-                                  fusion_opt, 
-                                  copy_elim, 
-                                  Simplify, DCE, 
-                                  IndexifyAdverbs, 
-                                  ShapePropagation, 
-                                  IndexMapElimination], 
+high_level_optimizations = Phase([
+                                    Simplify, 
+                                    inline_opt, 
+                                    Simplify, DCE,
+                                    licm, 
+                                    Simplify, DCE, 
+                                    fusion_opt, 
+                                    fusion_opt, 
+                                    copy_elim, 
+                                    Simplify, DCE, 
+                                    IndexifyAdverbs, 
+                                    ShapePropagation, 
+                                    IndexMapElimination
+                                 ], 
                                  copy = True)
-
-
 
 ####################
 #                  #
@@ -86,15 +85,17 @@ index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
 
 
 lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
-loopify = Phase([lower_adverbs,
-                 ParForToNestedLoops, 
-                 inline_opt,
-                 copy_elim,
-                 licm,
-                 symbolic_range_propagation,
-                 shape_elim,
-                 symbolic_range_propagation,
-                 index_elim ],
+loopify = Phase([
+                   lower_adverbs,
+                   ParForToNestedLoops, 
+                   inline_opt,
+                   copy_elim,
+                   licm,
+                   symbolic_range_propagation,
+                   shape_elim,
+                   symbolic_range_propagation,
+                   index_elim
+                ],
                 depends_on = high_level_optimizations,
                 cleanup = [Simplify, DCE],
                 copy = True,
@@ -114,21 +115,24 @@ unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
 
 
-post_lowering = Phase([licm,
-                       unroll,
-                       licm,
-                       Simplify,
-                       load_elim,
-                       scalar_repl,
-                       ], cleanup = [Simplify, DCE])
+post_lowering = Phase([
+                         licm,
+                         unroll,
+                         licm,
+                         Simplify,
+                         load_elim,
+                         scalar_repl,
+                      ], 
+                      cleanup = [Simplify, DCE])
 
 lowering = Phase([
-                  LowerIndexing,
-                  licm,
-                  LowerStructs,
-                  post_lowering,
-                  # LowerStructs,
-                  Simplify],
+                    LowerIndexing,
+                    licm,
+                    LowerStructs,
+                    post_lowering,
+                    # LowerStructs,
+                    Simplify
+                 ],
                  depends_on = loopify,
                  copy = True,
                  cleanup = [])
