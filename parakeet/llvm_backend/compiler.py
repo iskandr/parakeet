@@ -5,9 +5,9 @@ from llvm.core import Builder, ATTR_NO_CAPTURE #, Module
 from llvm.core import Type as lltype
 
 from .. import config, prims, syntax 
+from .. analysis import may_escape
 from .. ndtypes import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
 from .. ndtypes import Int32, Int64, PtrT
-from .. analysis import escape_analysis
 from .. syntax import Var, Struct, Index, TypedFn, Attribute 
 
 import llvm_context
@@ -24,7 +24,7 @@ class Compiler(object):
   def __init__(self, fundef, llvm_cxt = llvm_context.global_context):
     self.parakeet_fundef = fundef
     if config.opt_stack_allocation:
-      self.may_escape = escape_analysis.may_escape(fundef)
+      self.may_escape = may_escape(fundef)
     else:
       self.may_escape = None
     self.llvm_context = llvm_cxt

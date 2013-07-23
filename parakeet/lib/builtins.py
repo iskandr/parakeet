@@ -6,23 +6,23 @@ from .. syntax import (Map, Tuple, DelayUntilTyped, Array, Attribute,
 from adverbs import reduce, map 
 
 @jit 
-def or_(x, y):
+def builtin_or(x, y):
   return x or y
 
 @jit 
-def and_(x, y):
+def builtin_and(x, y):
   return x and y
 
 @jit 
-def any_(x, axis=None):
-  return reduce(or_, x, axis = axis, init = False)
+def builtin_any(x, axis=None):
+  return reduce(builtin_or, x, axis = axis, init = False)
 
 @jit
-def all_(x, axis = None):
-  return reduce(and_, x, axis = axis, init = True)
+def builtin_all(x, axis = None):
+  return reduce(builtin_and, x, axis = axis, init = True)
 
 @jit 
-def sum_(x, axis = None):
+def builtin_sum(x, axis = None):
   return reduce(prims.add, x, init = 0, axis = axis)
 
 @jit 
@@ -30,13 +30,13 @@ def _tuple_from_args(*args):
   return args
 
 @macro
-def zip_(*args):
+def builtin_zip(*args):
 
   elt_tupler = translate_function_value(_tuple_from_args)
   return Map(fn = elt_tupler, args = args)
 
 @macro 
-def tuple_(x):
+def builtin_tuple(x):
   def typed_tuple(xt):
     if isinstance(xt.type, TupleT):
       return xt 
@@ -50,7 +50,7 @@ def tuple_(x):
 
 
 @macro 
-def len_(x):
+def builtin_len(x):
   def typed_alen(xt):
     if isinstance(xt.type, ArrayT):
       shape = Attribute(xt, 'shape', type = xt.type.shape_t)

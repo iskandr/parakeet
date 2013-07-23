@@ -10,6 +10,7 @@ from .. syntax import Tuple, DelayUntilTyped
 from adverbs import imap 
 from numpy_types import float64   
 
+
 @macro
 def arange(n, *xs):
   count = __builtin__.len(xs)

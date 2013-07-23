@@ -16,8 +16,8 @@ property_mappings = {
 
 method_mappings = {
   'fill' : lib.fill, 
-  'any' : lib.any_, 
-  'all' : lib.all_, 
+  'any' : lib.builtin_any, 
+  'all' : lib.builtin_all, 
   'argmax' : lib.argmax, 
   # 'argsort' : lib.argsort, 
   'copy' : lib.copy, 
@@ -28,16 +28,17 @@ method_mappings = {
   'max' : lib.reduce_max, 
   'ravel' : lib.ravel, 
   'flatten' : lib.ravel, 
-  'sum' : lib.sum_, 
+  'sum' : lib.builtin_sum, 
 }
 
 function_mappings = {
-                     
+           
+  zip : lib.builtin_zip,        
   map : lib.map, 
   reduce : lib.reduce, 
  
   np.array : lib.identity, 
-  tuple : lib.tuple_, 
+  tuple : lib.builtin_tuple, 
  
   int : lib.int64, 
   long : lib.int64, 
@@ -56,8 +57,8 @@ function_mappings = {
   np.bool_ : lib.bool, 
   
   np.rank : lib.rank, 
-  len : lib.len_, 
-  np.alen : lib.len_, 
+  len : lib.builtin_len, 
+  np.alen : lib.builtin_len, 
   np.real : lib.real, 
   # np.imag : lib.imag
   np.size : lib.size, 
@@ -72,13 +73,13 @@ function_mappings = {
   np.argmin : lib.argmin, 
   np.argmax : lib.argmax, 
   
-  all : lib.all_, 
-  np.all : lib.all_, 
-  any : lib.any_, 
-  np.any : lib.any_, 
+  all : lib.builtin_all, 
+  np.all : lib.builtin_all, 
+  any : lib.builtin_any, 
+  np.any : lib.builtin_any, 
   
-  sum : lib.sum_, 
-  np.sum : lib.sum_, 
+  sum : lib.builtin_sum, 
+  np.sum : lib.builtin_sum, 
   np.prod : lib.prod, 
   np.mean : lib.mean, 
   
@@ -98,8 +99,12 @@ function_mappings = {
   
   np.add : prims.add, 
   np.subtract : prims.subtract, 
-  np.multiply : prims.multiply, 
+  np.multiply : prims.multiply,
+   
   np.divide : prims.divide, 
+  np.mod : prims.mod, 
+  np.modf : prims.modf, 
+  np.remainder : prims.remainder,  
   
   np.logical_and : prims.logical_and, 
   np.logical_not : prims.logical_not, 
@@ -128,5 +133,23 @@ function_mappings = {
   
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
- 
+  
+  np.square : lib.square, 
+  np.sign : lib.sign, 
+  np.reciprocal : lib.reciprocal, 
+  np.conjugate : lib.conjugate,
+  
+  np.trunc : prims.trunc, 
+  np.rint : prims.rint, 
+  np.floor : prims.floor, 
+  np.ceil : prims.ceil,
+  
+  np.exp : prims.exp, 
+  np.exp2 : prims.exp2, 
+  np.expm1 : prims.expm1, 
+  
+  np.log : prims.log, 
+  np.log10 : prims.log10, 
+  np.log2 : prims.log2, 
+  np.log1p : prims.log1p, 
 }

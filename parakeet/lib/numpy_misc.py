@@ -174,3 +174,25 @@ def diff(x):
 def dot(x,y):
   return sum(x*y)
 
+@jit 
+def square(x):
+  return x * x 
+
+@jit
+def conjugate(x):
+  """
+  For now we don't have complex numbers so this is just the identity function
+  """
+  return x 
+
+def _scalar_sign(x):
+  return x if x >= 0 else -x 
+
+@jit
+def sign(x):
+  return map(_scalar_sign(x))
+
+@jit 
+def reciprocal(x):
+  return 1 / x
+

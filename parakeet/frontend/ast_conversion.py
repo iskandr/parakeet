@@ -831,7 +831,7 @@ def translate_function_value(fn, _currently_processing = set([])):
     fn = fn.f 
   
   # print ">>", fn   
-  assert type(fn) not in (types.BuiltinFunctionType, types.TypeType), \
+  assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
     "Unsupported primitive: %s" % (fn,) 
 
   if already_registered_python_fn(fn):

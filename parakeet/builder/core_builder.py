@@ -82,6 +82,8 @@ class CoreBuilder(object):
         return "%s%d_elt%d" % (original, names.versions[original], expr.index)
       else:
         return "tuple_elt%d" % expr.index
+    elif c is Var:
+      return names.refresh(expr.name) 
     else:
       return "temp"
 
@@ -100,7 +102,8 @@ class CoreBuilder(object):
     #  return expr
     if name is None:
       name = self.temp_name(expr)
-    var = self.fresh_var(expr.type, name)
+    
+    var = self.fresh_var(expr.type, names.refresh(name))
     self.assign(var, expr)
     return var
 

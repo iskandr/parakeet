@@ -133,14 +133,10 @@ class ClosureVal:
       args = self.fixed_args + tuple(args)
     return eval_fn(self.fn, args)
 
-def eval_fn(fn, actuals):
-  try:
-    _eval_fn(fn, actuals)
-  except:
-    # print "[Interp] Error in function %s" % (fn,)
-    raise
+
    
-def _eval_fn(fn, actuals):
+def eval_fn(fn, actuals):
+  print "CALLING %s WITH ARGS %s" % (fn, actuals)
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -170,11 +166,12 @@ def _eval_fn(fn, actuals):
     return eval_expr(maybe_expr) if isinstance(maybe_expr, Expr) else maybe_expr
   
   def eval_expr(expr):
-    # print ">>", expr
+
     if hasattr(expr, 'wrapper'):
       expr = expr.wrapper
     assert isinstance(expr, Expr), "Not an expression-- %s : %s" % \
          (expr, type(expr))
+         
     def expr_Const():
       return expr.value
 
@@ -194,7 +191,7 @@ def _eval_fn(fn, actuals):
       assert isinstance(expr.elt_type, ScalarT), \
           "Expected scalar element type for AllocArray, got %s" % (expr.elt_type,)
       dtype = expr.elt_type.dtype
-      return np.ndarray(shape = shape, dtype = dtype)
+      return  np.ndarray(shape = shape, dtype = dtype) 
     
     def expr_ArrayView():
       data = eval_expr(expr.data)
@@ -347,6 +344,7 @@ def _eval_fn(fn, actuals):
   
         
     result = dispatch(expr, 'expr')
+    
     # we don't support python function's inside parakeet,
     # they have to be translated into Parakeet functions
     if isinstance(result, types.FunctionType):
@@ -377,6 +375,7 @@ def _eval_fn(fn, actuals):
 
   
   def eval_stmt(stmt):
+    print "STMT", stmt 
     try:
       _eval_stmt(stmt)
     except:
@@ -415,7 +414,9 @@ def _eval_fn(fn, actuals):
         env[stmt.var.name] = i
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
+        
     elif isinstance(stmt, ParFor):
+      fn = eval_expr(stmt.fn)
       bounds = eval_expr(stmt.bounds)
       if isinstance(bounds, (list,tuple)) and len(bounds) == 1:
         bounds = bounds[0]

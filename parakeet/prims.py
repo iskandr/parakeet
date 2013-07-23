@@ -144,16 +144,28 @@ class Cmp(Prim):
   """Takes two arguments of any type, returns a boolean"""
   pass
 
-class_list = [Cmp, Bitwise, Logical, Arith, Float]
+class Round(Prim):
+  """
+  Rounding operations
+  """
+  pass
+
+class_list = [Cmp, Bitwise, Logical, Arith, Float, Round]
 
 abs = Float(np.abs)
 sqrt = Float(np.sqrt)
+
 exp = Float(np.exp)
-log = Float(np.log)
+exp2 = Float(np.exp2)
+expm1 = Float(np.expm1)
+
+
 sqrt = Float(np.sqrt)
 
+log = Float(np.log)
 log10 = Float(np.log10)
 log2 = Float(np.log2)
+log1p = Float(np.log1p)
 
 cos = Float(np.cos)
 cosh = Float(np.cosh)
@@ -187,11 +199,12 @@ bitwise_xor = Bitwise(np.bitwise_xor, 'BitXor', '^')
 add = Arith(np.add, 'Add', '+')
 subtract = Arith(np.subtract, 'Sub', '-')
 multiply = Arith(np.multiply, 'Mult', '*')
+
+
 divide = Arith(np.divide, 'Div', '/', extra_signatures = ['??->?'])
-
-
 mod = Arith(np.mod, 'Mod', '%', extra_signatures = ['??->?'])
-
+modf = Arith(np.modf)
+remainder = Arith(np.remainder)
 
 power = Arith(np.power, 'Pow', '**')
 negative = Arith(np.negative, 'USub', '-', None, 1, 1)
@@ -207,5 +220,12 @@ greater = Cmp(np.greater, 'Gt', '>')
 greater_equal = Cmp(np.greater_equal, 'GtE', '>=')
 
 is_ = Cmp(lambda x,y: x is y, 'Is', 'is')
+
+trunc = Round(np.trunc)
+rint = Round(np.rint)
+floor = Round(np.floor)
+ceil = Round(np.ceil)
+
+
 
 
