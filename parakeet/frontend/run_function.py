@@ -1,7 +1,7 @@
 
 from .. import config, type_inference
 from .. ndtypes import type_conv
-from ..syntax import UntypedFn
+from ..syntax import UntypedFn, TypedFn
 from ..syntax.fn_args import ActualArgs
 from .. transforms import pipeline
  
@@ -10,22 +10,18 @@ def prepare_args(fn, args, kwargs):
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
   values and their types
   """
-  if isinstance(fn, UntypedFn):
-    untyped = fn
-  else:
-    import ast_conversion
-    # translate from the Python AST to Parakeet's untyped format
-    untyped = ast_conversion.translate_function_value(fn)
+  assert isinstance(fn, UntypedFn)
+   
 
-  nonlocals = list(untyped.python_nonlocals())
+  nonlocals = list(fn.python_nonlocals())
   arg_values = ActualArgs(nonlocals + list(args), kwargs)
 
   # get types of all inputs
   arg_types = arg_values.transform(type_conv.typeof)
-  return untyped, arg_values, arg_types
+  return arg_values, arg_types
 
 
-def specialize(fn, args, kwargs = {}):
+def specialize(untyped, args, kwargs = {}):
   """
   Translate, specialize and begin to optimize the given function for the types
   of the supplies arguments.
@@ -34,7 +30,7 @@ def specialize(fn, args, kwargs = {}):
   arguments in a linear order. 
   """
 
-  untyped, arg_values, arg_types = prepare_args(fn, args, kwargs)
+  arg_values, arg_types = prepare_args(untyped, args, kwargs)
   
   # convert the awkward mix of positional, named, and starargs 
   # into a positional sequence of arguments
@@ -47,10 +43,10 @@ def specialize(fn, args, kwargs = {}):
   from .. transforms.pipeline import high_level_optimizations
   # apply high level optimizations 
   optimized_fn = high_level_optimizations.apply(typed_fn)
-  return untyped, optimized_fn, linear_args 
+  return optimized_fn, linear_args 
   
 def run_typed_fn(fn, args, backend = None):
-  
+  assert isinstance(fn, TypedFn)
   actual_types = tuple(type_conv.typeof(arg) for arg in  args)
   expected_types = fn.input_types
   assert actual_types == expected_types, \
@@ -75,20 +71,28 @@ def run_typed_fn(fn, args, backend = None):
 
     gv_return = exec_engine.run_function(llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, fn.return_type)
+  
+  elif backend == "interp":
+    from .. import interp 
+    return interp.eval_fn(fn, args)
   else:
     assert False, "Unknown backend %s" % backend 
 
+def run_untyped_fn(fn, args, kwargs = None, backend = None):
+  assert isinstance(fn, UntypedFn)
+  if kwargs is None:
+    kwargs = {}
+  typed_fn, linear_args = specialize(fn, args, kwargs)
+  return run_typed_fn(typed_fn, linear_args, backend)
   
-def run_python_fn(fn, *args, **kwargs):
+def run_python_fn(fn, args, kwargs = None, backend = None):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-  
-  if '_backend' in kwargs:
-    backend_name = kwargs['_backend']
-    del kwargs['_backend']
-  else:
-    backend_name = config.default_backend
-  _, typed_fn, linear_args = specialize(fn, args, kwargs)
-  run_typed_fn(typed_fn, linear_args, backend_name)
+  if kwargs is None:
+    kwargs = {}
+  import ast_conversion
+  # translate from the Python AST to Parakeet's untyped format
+  untyped = ast_conversion.translate_function_value(fn)
+  return run_untyped_fn(untyped, args, kwargs, backend)
   

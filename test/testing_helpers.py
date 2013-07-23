@@ -7,14 +7,18 @@ from treelike.testing_helpers import  run_local_tests, eq, expect_eq
   
 import parakeet
 
-from parakeet import (interp, type_conv, type_inference, 
-                      specialize, translate_function_value, run_typed_fn)
+from parakeet import (type_conv, type_inference, 
+                      specialize, translate_function_value,
+                      run_typed_fn, run_python_fn)
 
-def copy(x):
+def _copy(x):
   if isinstance(x, np.ndarray):
     return x.copy()
   else:
     return x
+
+def _copy_list(xs):
+  return [_copy(x) for x in xs]
 
 def expect(fn, args, expected, valid_types = None):
   """
@@ -22,26 +26,17 @@ def expect(fn, args, expected, valid_types = None):
   the correct result
   """
 
-  _, typed, linear_args  = specialize(fn, args)
+  interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
+  expect_eq(interp_result, expected)
 
-
-
-  typed_result = interp.eval_fn(typed, map(copy, linear_args))
-  assert eq(typed_result, expected), \
-      "Expected %s but typed fn returned %s" % (expected, typed_result)
-
-  
-  llvm_result = run_typed_fn(typed, args, backend="llvm")
+  llvm_result = run_python_fn(fn, _copy_list(args), backend="llvm")
   if valid_types is not None:
     if not isinstance(valid_types, (tuple, list)):
       valid_types = [valid_types]
     assert type(llvm_result) in valid_types, \
       "Expected result to have type in %s but got %s" % (valid_types, type(llvm_result))
-      
-  assert eq(llvm_result, expected), \
-      "Expected %s but compiled fn returned %s" % (expected, llvm_result)
+  expect_eq(llvm_result, expected)
   
-
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:
     expect(parakeet_fn, [x], python_fn(x))
