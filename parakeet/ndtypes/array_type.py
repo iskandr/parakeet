@@ -5,9 +5,9 @@ import type_conv
 
 import core_types
 
-from core_types import StructT, IncompatibleTypes
+from core_types import StructT, IncompatibleTypes, NoneT 
 from ptr_type import ptr_type
-from scalar_types import Int64, ScalarT, IntT
+from scalar_types import Int64, ScalarT, IntT 
 from tuple_type import TupleT, repeat_tuple
 from slice_type import SliceT, make_slice_type  
 def buffer_info(buf, ptr_type = ctypes.c_void_p):
@@ -32,9 +32,9 @@ class ArrayT(StructT):
 
   def node_init(self):
     
-    assert isinstance(self.elt_type, ScalarT), \
-      "Can't create array with element type %s, currently only scalar elements supported" % \
-      (self.elt_type,)
+    #assert isinstance(self.elt_type, ScalarT), \
+    #  "Can't create array with element type %s, currently only scalar elements supported" % \
+    #  (self.elt_type,)
         
     tuple_t = repeat_tuple(Int64, self.rank)
 
@@ -71,7 +71,7 @@ class ArrayT(StructT):
       elt_t = self.elt_type
       combined_elt_t = elt_t.combine(other)
       return make_array_type(combined_elt_t, self.rank)
-    elif isinstance(other, ArrayT):
+    elif other.__class__ is ArrayT:
       assert self.rank == other.rank
       combined_elt_t = self.elt_type.combine(other.elt_type)
       return make_array_type(combined_elt_t, self.rank)
@@ -86,7 +86,7 @@ class ArrayT(StructT):
     if not isinstance(idx, core_types.Type):
       idx = idx.type
 
-    if isinstance(idx, TupleT):
+    if idx.__class__ is TupleT:
       indices = idx.elt_types
     else:
       indices = [idx]
@@ -104,8 +104,7 @@ class ArrayT(StructT):
       if isinstance(t, IntT):
         result_rank -= 1
       else:
-        assert isinstance(t, (core_types.NoneT, SliceT, ArrayT, TupleT)), \
-            "Unexpected index type: %s " % t
+        assert isinstance(t,  (TupleT, NoneT, SliceT, ArrayT, )),  "Unexpected index type: %s " % t
     if result_rank > 0:
       return make_array_type(self.elt_type, result_rank)
     else:
@@ -190,7 +189,7 @@ def make_array_type(elt_t, rank):
 
 
 def elt_type(t):
-  if isinstance(t, ArrayT):
+  if t.__class__ is ArrayT:
     return t.elt_type
   else:
     return t
@@ -199,14 +198,14 @@ def elt_types(ts):
   return map(elt_type, ts)
 
 def lower_rank(t, r):
-  if isinstance(t, ArrayT):
+  if t.__class__ is ArrayT:
     assert t.rank >= r
     return make_array_type(t.elt_type, t.rank - r)
   else:
     return t
 
 def increase_rank(t, r):
-  if isinstance(t, ArrayT):
+  if t.__class__ is ArrayT:
     return make_array_type(t.elt_type, t.rank + r)
   else:
     return make_array_type(t, r)
@@ -215,7 +214,7 @@ def lower_ranks(arg_types, r):
   return [lower_rank(t, r) for t in arg_types]
 
 def get_rank(t):
-  if isinstance(t, ArrayT):
+  if t.__class__ is ArrayT:
     return t.rank
   else:
     return 0

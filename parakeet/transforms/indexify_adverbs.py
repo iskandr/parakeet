@@ -64,7 +64,7 @@ class IndexifyAdverbs(Transform):
     
     slice_values = []
     for i, curr_array in enumerate(array_arg_vars):
-      print i, index_elts, curr_array 
+
       # if not cartesian_product: 
       #  if self.rank(curr_array) == max_array_rank:
       #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
@@ -75,11 +75,9 @@ class IndexifyAdverbs(Transform):
     
     elt_result = builder.call(fn, tuple(old_closure_args) + tuple(slice_values))
     if output is None: 
-      print "RETURNING", elt_result 
       builder.return_(elt_result)
     else:
       local_output_var = input_vars[n_old_closure_args]
-      print "output", output, output.type, "local", local_output_var, local_output_var.type 
       builder.setidx(local_output_var, index_input_var, elt_result)
       builder.return_(none)
     new_closure = self.closure(new_fn, new_closure_args)

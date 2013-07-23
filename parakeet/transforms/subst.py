@@ -22,7 +22,7 @@ class RewriteVars(Transform):
 
   def transform_Var(self, expr):
     new_value = self.rename_dict.get(expr.name, expr.name)
-    if isinstance(new_value, str):
+    if new_value.__class__ is str:
       if new_value != expr.name:
         expr.name = new_value
       return expr

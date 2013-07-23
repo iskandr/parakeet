@@ -390,7 +390,6 @@ class Transform(Builder):
     elif stmt_class is ExprStmt:
       return self.transform_ExprStmt(stmt)
     elif stmt_class is ParFor:
-      print "Calling transform_ParFor from %s" % (self.__class__.__name__,)
       return self.transform_ParFor(stmt)
     elif stmt_class is Comment:
       return self.transform_Comment(stmt)

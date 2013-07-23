@@ -136,7 +136,7 @@ class ClosureVal:
 
    
 def eval_fn(fn, actuals):
-  # print "CALLING %s WITH ARGS %s" % (fn, actuals)
+
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -374,14 +374,9 @@ def eval_fn(fn, actuals):
       arr[idx] = rhs
 
   
-  def eval_stmt(stmt):
-    try:
-      _eval_stmt(stmt)
-    except:
-      print "[Interp] Error while running statement '%s' in function '%s'" % (stmt,fn.name,)
-      raise 
+
     
-  def _eval_stmt(stmt):
+  def eval_stmt(stmt):
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)

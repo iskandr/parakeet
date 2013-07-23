@@ -161,10 +161,7 @@ class LoopBuilder(CoreBuilder):
                      loop_body, 
                      lower_bounds = None, 
                      step_sizes = None):
-    
-    print "nested loops with loop_body = %s" % loop_body
     upper_bounds = self._to_list(upper_bounds)
-    
     n_loops = len(upper_bounds)
     assert lower_bounds is None or len(lower_bounds) == n_loops
     assert step_sizes is None or len(step_sizes) == n_loops 

@@ -12,12 +12,15 @@ from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
+from imap_elim import IndexMapElimination
+
 #from mapify_allpairs import MapifyAllPairs
 #from maps_to_parfor import MapsToParFor
-from pipeline_phase import Phase
+from phase import Phase
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
+from shape_propagation import ShapePropagation
 from simplify import Simplify
 from value_range_propagation import RangePropagation
 
@@ -48,7 +51,9 @@ high_level_optimizations = Phase([Simplify,
                                   fusion_opt, 
                                   copy_elim, 
                                   Simplify, DCE, 
-                                  IndexifyAdverbs], 
+                                  IndexifyAdverbs, 
+                                  ShapePropagation, 
+                                  IndexMapElimination], 
                                  copy = True)
 
 

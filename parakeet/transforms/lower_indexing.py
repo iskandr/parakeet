@@ -59,18 +59,18 @@ class LowerIndexing(Transform):
       if isinstance(idx_t, ScalarT):
         offset_i = self.mul(idx, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
-      elif isinstance(idx_t, NoneT):
+      elif idx_t.__class__ is NoneT:
         new_strides.append(stride_i)
         new_shape.append(shape_i)
-      elif isinstance(idx_t, SliceT):
+      elif idx_t.__class__ is SliceT:
         start = self.attr(idx, "start")
-        if isinstance(start.type, NoneT):
+        if start.type.__class__ is NoneT:
           start = syntax.helpers.zero_i64
         stop = self.attr(idx, "stop")
-        if isinstance(stop.type, NoneT):
+        if stop.type.__class__ is NoneT:
           stop = shape_i
         step = self.attr(idx, "step")
-        if isinstance(step.type, NoneT):
+        if step.type.__class__ is NoneT:
           step = syntax.helpers.one_i64
 
         offset_i = self.mul(start, stride_i, "offset_%d" % i)
@@ -97,12 +97,11 @@ class LowerIndexing(Transform):
     idx = self.assign_name(idx, "idx")
 
     arr_t = arr.type
-    if isinstance(arr_t, PtrT):
+    if arr_t.__class__ is PtrT:
       assert isinstance(idx.type, IntT)
       return expr
 
-    assert isinstance(arr_t,  ArrayT), \
-        "Unexpected array %s : %s" % (arr, arr.type)
+    assert arr_t.__class__ is  ArrayT, "Unexpected array %s : %s" % (arr, arr.type)
 
     if self.is_tuple(idx):
       indices = self.tuple_elts(idx)
@@ -145,7 +144,7 @@ class LowerIndexing(Transform):
 
     elif lhs_class is Index:
       lhs = self.transform_Index(lhs)
-      if isinstance(lhs, ArrayView):
+      if lhs.__class__ is ArrayView:
         copy_loop = self.array_copy(src = rhs, dest = lhs, return_stmt = True)
         copy_loop = self.transform_stmt(copy_loop)
         return copy_loop

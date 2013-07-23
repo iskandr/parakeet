@@ -1,8 +1,9 @@
-from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, 
-                      Attribute, Const, Index, PrimCall, Tuple, Var, 
-                      Alloc, Call, Struct, TypedFn, 
-                      AllocArray, ArrayView, Cast, Slice, TupleProj, 
-                      Map, Reduce, Scan, OuterMap, ParFor)
+from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
+                       TypedFn, UntypedFn,  Closure, 
+                       Attribute, Const, Index, PrimCall, Tuple, Var, 
+                       Alloc, Call, Struct, Shape, Strides, 
+                       AllocArray, ArrayView, Cast, Slice, TupleProj, 
+                       Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
 
 class SyntaxVisitor(object):
   """
@@ -130,53 +131,60 @@ class SyntaxVisitor(object):
     for v in expr.children():
       self.visit_expr(v)
 
-  def visit_expr(self, expr):
+  _expr_method_names = {
+    Var : 'visit_Var', 
+    Const : 'visit_Const', 
+    PrimCall : 'visit_PrimCall', 
+    Attribute : 'visit_Attribute', 
+    Index : 'visit_Index', 
+    Tuple : 'visit_Tuple', 
+    TupleProj : 'visit_TupleProj', 
+    Slice : 'visit_Slice', 
+    Struct : 'visit_Struct', 
+    AllocArray : 'visit_AllocArray', 
+    ArrayView : 'visit_ArrayView', 
+    Shape : 'visit_Shape', 
+    Strides : 'visit_Strides', 
+    Alloc : 'visit_Alloc', 
+    Cast : 'visit_Cast', 
+    Call : 'visit_Call', 
+    Map : 'visit_Map', 
+    IndexMap : 'visit_IndexMap', 
+    OuterMap : 'visit_OuterMap', 
+    Reduce : 'visit_Reduce', 
+    IndexReduce : 'visit_IndexReduce', 
+    Scan : 'visit_Scan', 
+    IndexScan : 'visit_IndexScan',
+    Closure : 'visit_Closure', 
+    UntypedFn : 'visit_UntypedFn',  
+    TypedFn : 'visit_TypedFn', 
+  }
+  
+  def visit_expr(self, expr):    
     c = expr.__class__
-    if c is Var:
+    if c is Var:  
       return self.visit_Var(expr)
-    elif c is Const:
+    elif c is Const: 
       return self.visit_Const(expr)
     elif c is PrimCall:
       return self.visit_PrimCall(expr)
-    elif c is Attribute:
-      return self.visit_Attribute(expr)
-    elif c is Index:
-      return self.visit_Index(expr)
     elif c is Tuple:
       return self.visit_Tuple(expr)
     elif c is TupleProj:
-      return self.visit_TupleProj(expr)
-    elif c is Slice:
-      return self.visit_Slice(expr)
-    elif c is Struct:
-      return self.visit_Struct(expr)
-    elif c is AllocArray:
-      return self.visit_AllocArray(expr)
-    elif c is ArrayView:
-      return self.visit_ArrayView(expr)
-    elif c is Alloc:
-      return self.visit_Alloc(expr)
-    elif c is Cast:
-      return self.visit_Cast(expr)
-    elif c is Call:
-      return self.visit_Call(expr)
-    elif c is Map:
-      return self.visit_Map(expr)
-    elif c is Reduce:
-      return self.visit_Reduce(expr)
-    elif c is Scan:
-      return self.visit_Scan(expr)
-    elif c is TypedFn:
-      return self.visit_TypedFn(expr)
-
+      return self.visit_TupleProj(expr) 
+    elif c is Index: 
+      return self.visit_Index(expr)
     else:
-      method_name = 'visit_' + expr.node_type()
-      method = getattr(self, method_name, None)
-      if method is None:
-        print "Missing visitor method %s" % method_name
-        return self.visit_generic_expr(expr)
-      else:
-        return method(expr)
+      return getattr(self, self._expr_method_names[c])(expr)
+    
+    #else:
+    #  method_name = 'visit_' + expr.node_type()
+    #  return getattr(self, method_name, None)(expr)
+    #  if method is None:
+    #    print "Missing visitor method %s" % method_name
+    #    return self.visit_generic_expr(expr)
+    #  else:
+    #    return method(expr)
       
   def visit_expr_list(self, exprs):
     return [self.visit_expr(expr) for expr in exprs]
@@ -261,27 +269,26 @@ class SyntaxVisitor(object):
   def visit_ParFor(self, expr):
     self.visit_expr(expr.fn)
     self.visit_expr(expr.bounds)
-    
+  
+  
+  _stmt_method_names = {
+    Assign : 'visit_Assign', 
+    Return : 'visit_Return', 
+    While : 'visit_While', 
+    ForLoop : 'visit_ForLoop', 
+    If : 'visit_If', 
+    ExprStmt : 'visit_ExprStmt', 
+    ParFor : 'visit_ParFor', 
+    Comment : 'visit_Comment',                    
+  }
+  
   def visit_stmt(self, stmt):
     c = stmt.__class__
-    if c is Assign:
+    if c is Assign: 
       self.visit_Assign(stmt)
-    elif c is Return:
-      self.visit_Return(stmt)
-    elif c is ForLoop:
-      self.visit_ForLoop(stmt)
-    elif c is While:
-      self.visit_While(stmt)
-    elif c is If:
-      self.visit_If(stmt)
-    elif c is ExprStmt:
-      self.visit_ExprStmt(stmt)
-    elif c is Comment:
-      self.visit_Comment(stmt)
-    elif c is ParFor:
-      self.visit_ParFor(stmt)
     else:
-      assert False, "Statement not implemented: %s" % stmt
+      getattr(self, self._stmt_method_names[c])(stmt)
+    
 
   def visit_fn(self, fn):
     self.visit_block(fn.body)

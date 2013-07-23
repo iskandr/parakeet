@@ -61,7 +61,6 @@ def run_typed_fn(fn, args, backend = None):
     from ..llvm_backend.llvm_context import global_context
     exec_engine = global_context.exec_engine
     lowered_fn = pipeline.lowering.apply(fn)
-    print "LOWERED FN", lowered_fn 
     llvm_fn = compile_fn(lowered_fn).llvm_fn
 
     # calling conventions are that output must be preallocated by the caller'
@@ -75,6 +74,14 @@ def run_typed_fn(fn, args, backend = None):
   elif backend == "interp":
     from .. import interp 
     return interp.eval_fn(fn, args)
+  
+  elif backend == "shiver":
+    
+    from ..llvm_backend.llvm_context import global_context
+    exec_engine = global_context.exec_engine
+    # import shiver 
+    # shiver.parfor(fn, niters, fixed_args, ee = exec_engine)
+    assert False, "Shiver not yet implemented"
   else:
     assert False, "Unknown backend %s" % backend 
 

@@ -5,7 +5,6 @@ default_backend = 'llvm'
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
 
-opt_verify = True
 opt_inline = True
 opt_fusion = True
 
@@ -24,6 +23,10 @@ opt_loop_unrolling = False
 # recompile functions for distinct patterns of unit strides
 # in array arguments
 stride_specialization = True
+
+# run verifier after each transformation 
+opt_verify = True
+
 
 ######################################
 #           LLVM OPTIONS             #

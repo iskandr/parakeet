@@ -2,7 +2,7 @@ from .. analysis.find_constant_strides import FindConstantStrides, Const, Array,
 from .. analysis.find_constant_strides import from_python_list, from_internal_repr
 from .. syntax.helpers import const_int
 from dead_code_elim import DCE
-from pipeline_phase import Phase
+from phase import Phase
 from simplify import Simplify
 from transform import Transform
 
