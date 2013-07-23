@@ -75,21 +75,25 @@ class CallBuilder(CoreBuilder):
         "Invalid types: %s" % (arg_types, )
     return invoke_result_type(closure_t, arg_types)
 
-  def invoke(self, fn, args):
+  def invoke(self, fn, args, lower = True):
     #import type_inference
     if fn.__class__ is TypedFn:
       closure_args = []
     else:
       assert isinstance(fn.type, ClosureT), \
           "Unexpected function %s with type: %s" % (fn, fn.type)
+      #if isinstance(fn.type.fn, UntypedFn):
+      #  arg_types = get_types(args)
+      #  from .. import type_inference
+      #  fn = type_inference.specialize(fn.type, arg_types)
       closure_args = self.closure_elts(fn)
-      # arg_types = get_types(args)
-      # fn = type_inference.specialize(fn.type, arg_types)
-
-    from  ..transforms import pipeline
-    opt_fn = pipeline.pre_lowering(fn)
+      fn = self.get_fn(fn)
+    if lower: 
+      from  ..transforms import pipeline
+      fn = pipeline.pre_lowering(fn)
+      
     combined_args = tuple(closure_args) + tuple(args)
-    call = Call(opt_fn, combined_args, type = opt_fn.return_type)
+    call = Call(fn, combined_args, type = fn.return_type)
     return self.assign_name(call, "call_result")
 
   def call(self, fn, args):

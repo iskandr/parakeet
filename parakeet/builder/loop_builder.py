@@ -1,5 +1,6 @@
 
 from .. import syntax 
+from ..ndtypes import ScalarT, TupleT 
 from ..syntax import Expr, While, ForLoop 
 from ..syntax.helpers import zero, one, zero_i32, zero_i64, wrap_if_constant
 from core_builder import CoreBuilder 
@@ -140,15 +141,41 @@ class LoopBuilder(CoreBuilder):
 
     return create_loops()
   
+  def _to_list(self, bounds):
+    if isinstance(bounds, Expr):
+      if isinstance(bounds.type, ScalarT):
+        return [bounds]
+      else:
+        assert isinstance(bounds, TupleT), \
+          "Expected tuple but got %s : %s" % (bounds, bounds.type) 
+        return self.tuple_elts(bounds)
+    elif isinstance(bounds, (int,long)):
+      return [bounds]
+    else:
+      assert isinstance(bounds, (tuple,list))
+      return bounds 
+  
   
   def nested_loops(self, 
                      upper_bounds, 
                      loop_body, 
                      lower_bounds = None, 
                      step_sizes = None):
+    upper_bounds = self._to_list(upper_bounds)
+    
     n_loops = len(upper_bounds)
     assert lower_bounds is None or len(lower_bounds) == n_loops
     assert step_sizes is None or len(step_sizes) == n_loops 
+    
+    if lower_bounds is None:
+      lower_bounds = [self.int(0) for _ in upper_bounds]
+    else:
+      lower_bounds = self._to_list(lower_bounds)
+    
+    if step_sizes is None:
+      step_sizes = [self.int(1) for _ in upper_bounds]
+    else:
+      step_sizes = self._to_list(step_sizes)
     
     def build_loops(index_vars = ()):
       n_indices = len(index_vars)
@@ -157,13 +184,17 @@ class LoopBuilder(CoreBuilder):
           idx_tuple = self.tuple(index_vars)
         else:
           idx_tuple = index_vars[0]
-        result = loop_body(idx_tuple)
+        if isinstance(loop_body, Expr):
+          result = self.call(loop_body, [idx_tuple])
+        else:
+          assert hasattr(loop_body, '__call__'), "Expected callable value, got %s" % (loop_body,)
+          result = loop_body(idx_tuple)
         assert result is None, "Expected loop body to return None, not %s" % (result,)
       else:
-        def loop_body(idx):
+        def inner_loop_body(idx):
           build_loops(index_vars + (idx,))
-        lower = self.int(0) if lower_bounds is None else lower_bounds[n_indices]
+        lower = lower_bounds[n_indices]
         upper = upper_bounds[n_indices]  
-        step = self.int(1) if step_sizes is None else step_sizes[n_indices]
-        self.loop(lower, upper, loop_body, step=step)
+        step = step_sizes[n_indices]
+        self.loop(lower, upper, inner_loop_body, step=step)
     build_loops()

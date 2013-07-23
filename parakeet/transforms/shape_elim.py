@@ -7,7 +7,6 @@ class ShapeElimination(Transform):
   def pre_apply(self, fn):
     self.shape_env = shape_env(fn)
 
-
   def transform_Var(self, expr):
     if expr.name in self.shape_env:
       v = self.shape_env[expr.name]
