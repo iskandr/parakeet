@@ -1,8 +1,7 @@
 
 from .. import names
-from .. analysis.contains_calls import contains_calls
-from .. syntax import If, Assign, While, Return, ForLoop, Comment
-from .. syntax import Var, TypedFn, Const, ExprStmt
+from .. analysis import contains_calls, can_inline  
+from .. syntax import (If, Assign, While, Return, ForLoop, Var, TypedFn, Const, ExprStmt)
 
  
 from subst import subst_stmt_list
@@ -28,26 +27,6 @@ def replace_returns(stmts, output_var):
     new_stmts.append(stmt)
   return new_stmts
 
-def can_inline_block(stmts, outer = False):
-  for stmt in stmts:
-    stmt_class = stmt.__class__
-    if stmt_class is Assign or stmt_class is ExprStmt:
-      pass
-    elif stmt_class is If:
-      return can_inline_block(stmt.true) and can_inline_block(stmt.false)
-    elif stmt_class in (While, ForLoop):
-      if not can_inline_block(stmt.body):
-        return False
-    elif stmt_class is Comment:
-      continue
-    else:
-      assert stmt_class is Return, "Unexpected statement: %s" % stmt
-      if not outer:
-        return False
-  return True
-
-def can_inline(fundef):
-  return can_inline_block(fundef.body, outer = True)
 
 def replace_return_with_var(body, type_env, return_type):
   result_name = names.fresh("result")

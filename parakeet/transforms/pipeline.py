@@ -76,9 +76,8 @@ shape_elim = Phase(ShapeElimination,
 # loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 
 
-loopify = Phase([Simplify,
-                 fusion_opt,
-                 LowerAdverbs, inline_opt,
+loopify = Phase([LowerAdverbs, 
+                 inline_opt,
                  copy_elim,
                  licm,],
                 depends_on = high_level_optimizations,
@@ -106,6 +105,7 @@ pre_lowering = Phase([symbolic_range_propagation,
                       symbolic_range_propagation,
                       index_elim ],
                      cleanup = [Simplify, DCE])
+
 post_lowering = Phase([licm,
                        unroll,
                        licm,

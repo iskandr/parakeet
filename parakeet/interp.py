@@ -136,7 +136,7 @@ class ClosureVal:
 
    
 def eval_fn(fn, actuals):
-  print "CALLING %s WITH ARGS %s" % (fn, actuals)
+  # print "CALLING %s WITH ARGS %s" % (fn, actuals)
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -375,7 +375,6 @@ def eval_fn(fn, actuals):
 
   
   def eval_stmt(stmt):
-    print "STMT", stmt 
     try:
       _eval_stmt(stmt)
     except:

@@ -3,7 +3,7 @@ import time
 from .. import config
 from .. analysis import verify
 from .. builder import Builder  
-from .. syntax import (Expr, If, Assign, While, Return, ExprStmt, ForLoop, Comment, 
+from .. syntax import (Expr, If, Assign, While, Return, ExprStmt, ForLoop, Comment, ParFor, 
                       Var, Tuple, Index, Attribute, Const, PrimCall, Struct, Alloc, Cast, 
                       TupleProj, Slice, ArrayView, Call, TypedFn,  AllocArray, Len, Map, Reduce) 
 
@@ -370,6 +370,11 @@ class Transform(Builder):
   def transform_Comment(self, stmt):
     return stmt 
   
+  def transform_ParFor(self, stmt):
+    stmt.fn = self.transform_expr(stmt.fn)
+    stmt.bounds= self.transform_expr(stmt.bounds)
+    return stmt 
+  
   def transform_stmt(self, stmt):
     stmt_class = stmt.__class__
     if stmt_class is Assign:
@@ -384,6 +389,9 @@ class Transform(Builder):
       return self.transform_Return(stmt)
     elif stmt_class is ExprStmt:
       return self.transform_ExprStmt(stmt)
+    elif stmt_class is ParFor:
+      print "Calling transform_ParFor from %s" % (self.__class__.__name__,)
+      return self.transform_ParFor(stmt)
     elif stmt_class is Comment:
       return self.transform_Comment(stmt)
     else:

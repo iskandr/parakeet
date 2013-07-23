@@ -2,10 +2,14 @@ from ..syntax import Index, Map, unwrap_constant, zero_i64
 from transform import Transform
 
 class LowerAdverbs(Transform):
-  
+    
   def transform_TypedFn(self, expr):
     from pipeline import loopify  
     return loopify(expr)
+  
+  def transform_ParFor(self, stmt):
+    fn = self.transform_expr(stmt.fn)
+    self.nested_loops(stmt.bounds, fn)
   
   def transform_IndexMap(self, expr, output = None):  
     # recursively descend down the function bodies to pull together nested ParFors
@@ -59,11 +63,6 @@ class LowerAdverbs(Transform):
         return new_value
       return self.accumulate_loop(self.int(0), dims[n_indices], loop_body, acc_value)
     return build_loops(index_vars = (), acc = init)
-    
-
-  def transform_ParFor(self, expr):
-    fn = self.transform_expr(expr.fn)
-    self.nested_loops(expr.shape, fn)    
 
   def transform_IndexScan(self, expr):
     assert False, "IndexScan not implemented" 

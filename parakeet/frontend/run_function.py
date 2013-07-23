@@ -59,11 +59,13 @@ def run_typed_fn(fn, args, backend = None):
 
   if backend is None:
     backend = config.default_backend
+    
   if backend == 'llvm':
     from ..llvm_backend import ctypes_to_generic_value, generic_value_to_python, compile_fn 
     from ..llvm_backend.llvm_context import global_context
     exec_engine = global_context.exec_engine
     lowered_fn = pipeline.lowering.apply(fn)
+    print "LOWERED FN", lowered_fn 
     llvm_fn = compile_fn(lowered_fn).llvm_fn
 
     # calling conventions are that output must be preallocated by the caller'

@@ -1,6 +1,6 @@
 from .. import names 
 from ..builder import build_fn 
-from ..ndtypes import Int64, repeat_tuple, NoneType 
+from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT 
 from ..syntax import ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap 
 from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
@@ -55,12 +55,16 @@ class IndexifyAdverbs(Transform):
     
     index_input_var = input_vars[-1]
     
-    index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
-    if cartesian_product and n_indices > 1:
-      index_elts = index_elts * n_arrays 
-
+    if cartesian_product:
+      index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
+    else:
+      assert isinstance(index_input_var.type, ScalarT), \
+        "Unexpected index type %s" % (index_input_var.type)
+      index_elts = [index_input_var] * n_arrays 
+    
     slice_values = []
     for i, curr_array in enumerate(array_arg_vars):
+      print i, index_elts, curr_array 
       # if not cartesian_product: 
       #  if self.rank(curr_array) == max_array_rank:
       #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
@@ -71,9 +75,10 @@ class IndexifyAdverbs(Transform):
     
     elt_result = builder.call(fn, tuple(old_closure_args) + tuple(slice_values))
     if output is None: 
+      print "RETURNING", elt_result 
       builder.return_(elt_result)
     else:
-      local_output_var = input_vars[n_old_closure_args+1]
+      local_output_var = input_vars[n_old_closure_args]
       print "output", output, output.type, "local", local_output_var, local_output_var.type 
       builder.setidx(local_output_var, index_input_var, elt_result)
       builder.return_(none)
