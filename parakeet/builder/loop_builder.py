@@ -161,6 +161,8 @@ class LoopBuilder(CoreBuilder):
                      loop_body, 
                      lower_bounds = None, 
                      step_sizes = None):
+    
+    print "nested loops with loop_body = %s" % loop_body
     upper_bounds = self._to_list(upper_bounds)
     
     n_loops = len(upper_bounds)
@@ -189,7 +191,7 @@ class LoopBuilder(CoreBuilder):
         else:
           assert hasattr(loop_body, '__call__'), "Expected callable value, got %s" % (loop_body,)
           result = loop_body(idx_tuple)
-        assert result is None, "Expected loop body to return None, not %s" % (result,)
+        assert self.is_none(result), "Expected loop body to return None, not %s" % (result,)
       else:
         def inner_loop_body(idx):
           build_loops(index_vars + (idx,))
