@@ -3,7 +3,7 @@
 from .. import syntax
 from .. analysis.collect_vars import collect_var_names_list
 from .. analysis.use_analysis import use_count
-from .. syntax import Assign, Const, Index, PrimCall, Tuple, TupleProj, Var
+from .. syntax import Assign, Const, Index, PrimCall, Tuple, TupleProj, Var, Closure, ClosureElt 
 from transform import Transform
 
 
@@ -15,7 +15,6 @@ class DCE(Transform):
     self.use_counts = use_count(fn)
     
   def is_live(self, name):
-    
     count = self.use_counts.get(name)
     return count and count > 0
 
@@ -61,24 +60,34 @@ class DCE(Transform):
       return True
 
     rhs_counts = {}
+    
     if cond.__class__ is not Var:
       return False
     rhs_counts[cond.name] = 1
+ 
     def process_rhs(expr):
-      if expr.__class__ is Var:
+      klass = expr.__class__
+      if klass is Var:
         rhs_counts[expr.name] = rhs_counts.get(expr.name, 0) + 1
-      elif expr.__class__ is Const:
+      elif klass is Const:
         pass
-      elif expr.__class__ is PrimCall:
+      elif klass is PrimCall:
         for arg in expr.args:
           process_rhs(arg)
-      elif expr.__class__ is Tuple:
+      elif klass is Tuple:
         for elt in expr.elts:
           process_rhs(elt)
-      elif expr.__class__ is TupleProj:
+      elif klass is TupleProj:
         process_rhs(expr.tuple)
-      elif expr.__class__ is Index:
+      elif klass is Index:
         process_rhs(expr.value)
+        process_rhs(expr.index)
+      elif klass is Closure: 
+        process_rhs(expr.fn)
+        for arg in expr.args:
+          process_rhs(arg)
+      elif klass is ClosureElt:
+        process_rhs(expr.closure)
         process_rhs(expr.index)
       else:
         return False

@@ -68,6 +68,7 @@ class CloneFunction(Transform):
       return expr.__class__(**args)
   
   def transform_Assign(self, stmt):
+
     new_lhs = self.transform_expr(stmt.lhs)
     new_rhs = self.transform_expr(stmt.rhs)
     return Assign(new_lhs, new_rhs)

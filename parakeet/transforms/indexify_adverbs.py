@@ -23,10 +23,14 @@ class IndexifyAdverbs(Transform):
     array_arg_types = tuple(get_types(array_args))
     
     # do I need fn.version *and* fn.copied_by? 
-    key = (fn.name, fn.copied_by, fn.version, 
-           array_arg_types, 
-           cartesian_product, 
-           axis, output is None)
+    key = (
+             fn.name, 
+             fn.copied_by,
+             axis, 
+             output is None,  
+             array_arg_types, 
+             cartesian_product, 
+           )
     if key in self._indexed_fn_cache:
       return self._indexed_fn_cache[key]
     old_input_vars = self.input_vars(fn)
@@ -48,7 +52,8 @@ class IndexifyAdverbs(Transform):
       new_return_type = NoneType 
       
     input_names = [self.temp_name(clos_arg) for clos_arg in new_closure_args] + [names.fresh("idx")]
-    new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type, 
+    new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type,
+                                           name = "idx_" + fn.name,  
                                            input_names = input_names)
     n_old_closure_args = len(old_closure_args)
     array_arg_vars = input_vars[(n_old_closure_args + 0 if output is None else 1):-1]
@@ -80,8 +85,10 @@ class IndexifyAdverbs(Transform):
       local_output_var = input_vars[n_old_closure_args]
       builder.setidx(local_output_var, index_input_var, elt_result)
       builder.return_(none)
+    # print "INDEXIFY GENERATED", new_fn 
     new_closure = self.closure(new_fn, new_closure_args)
     self._indexed_fn_cache[key] = new_closure
+    
     return new_closure
   
 

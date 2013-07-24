@@ -72,6 +72,13 @@ class macro(object):
   def __call__(self, *args, **kwargs):
     if self.call_from_python is not None:
       return self.call_from_python(*args, **kwargs)
+    
+    if '_backend' in kwargs:
+      backend_name = kwargs['_backend']
+      del kwargs['_backend']
+    else:
+      backend_name = None
+
     n_pos = len(args)
     keywords = kwargs.keys()
 
@@ -89,11 +96,6 @@ class macro(object):
       self.wrappers[key] = untyped
     dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
     
-    if '_backend' in kwargs:
-      backend_name = dynamic_kwargs['_backend']
-      del dynamic_kwargs['_backend']
-    else:
-      backend_name = None
     
     return run_untyped_fn(untyped, args, dynamic_kwargs, backend = backend_name)
     

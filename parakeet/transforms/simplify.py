@@ -97,11 +97,15 @@ class Simplify(Transform):
         return (expr.value,)
     return None
 
-  def immutable(self, expr):
-    return (isinstance(expr, (Const, Tuple, Cast, Var, PrimCall)) and 
+  def immutable(self, expr, _immutable_classes = (Const,  Var,
+                                                   Closure, ClosureElt, 
+                                                   Tuple, TupleProj, 
+                                                   Cast, PrimCall, 
+                                                   TypedFn, UntypedFn)):
+    klass = expr.__class__ 
+    return (klass in _immutable_classes and 
             (all(self.immutable(c) for c in expr.children())) or \
-           (isinstance(expr, (Attribute, TupleProj)) and \
-            isinstance(expr.type, ImmutableT)))
+           (klass is Attribute and isinstance(expr.type, ImmutableT)))
     
                       
   def temp(self, expr, name = None, use_count = 1):
@@ -213,6 +217,7 @@ class Simplify(Transform):
     assert isinstance(idx, int), \
         "ClosureElt index must be an integer, got: " + str(idx)
     new_closure = self.transform_expr(expr.closure)
+
     if new_closure.__class__ is Var and new_closure.name in self.bindings:
       closure_expr = self.bindings[new_closure.name]
       if closure_expr.__class__ is Closure:
@@ -391,14 +396,15 @@ class Simplify(Transform):
 
     lhs_class = lhs.__class__
     rhs_class = rhs.__class__
+
     if lhs_class is Var:
       if lhs.type.__class__ is NoneT and self.use_counts.get(lhs.name,0) == 0:
         return self.transform_stmt(ExprStmt(rhs))
-      else:
+      elif self.immutable(rhs):
+        
         self.bind_var(lhs.name, rhs)
         if rhs_class is not Var and \
-           rhs_class is not Const and \
-           self.immutable(rhs):
+           rhs_class is not Const:
           self.available_expressions.setdefault(rhs, lhs)
     elif lhs_class is Tuple:
       self.bind(lhs, rhs)

@@ -141,7 +141,8 @@ class LowerIndexing(Transform):
         assert lhs_i not in (ArrayView, Tuple)
         self.assign(lhs_i, rhs_i)
       return None
-
+    
+    
     elif lhs_class is Index:
       lhs = self.transform_Index(lhs)
       if lhs.__class__ is ArrayView:

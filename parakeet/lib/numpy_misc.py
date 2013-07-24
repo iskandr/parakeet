@@ -196,3 +196,11 @@ def sign(x):
 def reciprocal(x):
   return 1 / x
 
+
+@jit 
+def rad2deg(rad):
+  return rad * 180 / 3.141592653589793
+
+@jit
+def deg2rad(deg):
+  return deg * 3.141592653589793 / 180 

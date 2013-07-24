@@ -1,5 +1,5 @@
 from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
-                       TypedFn, UntypedFn,  Closure, 
+                       TypedFn, UntypedFn,  Closure, ClosureElt,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
                        Alloc, Call, Struct, Shape, Strides, 
                        AllocArray, ArrayView, Cast, Slice, TupleProj, 
@@ -42,6 +42,9 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.value)
     self.visit_expr(expr.index)
 
+  def visit_UntypedFn(self, expr):
+    pass 
+  
   def visit_TypedFn(self, expr):
     pass
 
@@ -126,6 +129,7 @@ class SyntaxVisitor(object):
     
   def visit_TypeValue(self, expr):
     pass 
+  
     
   def visit_generic_expr(self, expr):
     for v in expr.children():
@@ -156,6 +160,7 @@ class SyntaxVisitor(object):
     Scan : 'visit_Scan', 
     IndexScan : 'visit_IndexScan',
     Closure : 'visit_Closure', 
+    ClosureElt : 'visit_ClosureElt', 
     UntypedFn : 'visit_UntypedFn',  
     TypedFn : 'visit_TypedFn', 
   }

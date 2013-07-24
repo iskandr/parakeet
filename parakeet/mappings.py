@@ -102,34 +102,15 @@ function_mappings = {
   np.multiply : prims.multiply,
    
   np.divide : prims.divide, 
-  np.mod : prims.mod, 
-  np.modf : prims.modf, 
+  np.modf : prims.mod,  
+  np.mod : prims.remainder,
   np.remainder : prims.remainder,  
   
   np.logical_and : prims.logical_and, 
   np.logical_not : prims.logical_not, 
   np.logical_or : prims.logical_or,  
   
-  np.cos : prims.cos, 
-  math.cos : prims.cos, 
-  np.sin : prims.sin, 
-  math.sin : prims.sin, 
-  np.tan : prims.tan, 
-  math.tan : prims.tan, 
-  
-  math.cosh : prims.cosh, 
-  np.cosh : prims.cosh, 
-  np.sinh : prims.sinh,           
-  math.sinh : prims.sinh, 
-  np.tanh : prims.tanh, 
-  math.tanh : prims.tanh, 
- 
-  math.atanh : prims.arctanh,
-  np.arctanh : prims.arctanh,  
-  math.asinh : prims.arcsinh, 
-  np.arcsinh : prims.arcsinh, 
-  math.acosh : prims.arccosh, 
-  np.arccosh : prims.arccosh,
+
   
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
@@ -151,5 +132,29 @@ function_mappings = {
   np.log : prims.log, 
   np.log10 : prims.log10, 
   np.log2 : prims.log2, 
-  np.log1p : prims.log1p, 
+  np.log1p : prims.log1p,
+  
+    np.cos : prims.cos, 
+  math.cos : prims.cos, 
+  np.sin : prims.sin, 
+  math.sin : prims.sin, 
+  np.tan : prims.tan, 
+  math.tan : prims.tan, 
+  
+  math.cosh : prims.cosh, 
+  np.cosh : prims.cosh, 
+  np.sinh : prims.sinh,           
+  math.sinh : prims.sinh, 
+  np.tanh : prims.tanh, 
+  math.tanh : prims.tanh, 
+ 
+  math.atanh : prims.arctanh,
+  np.arctanh : prims.arctanh,  
+  math.asinh : prims.arcsinh, 
+  np.arcsinh : prims.arcsinh, 
+  math.acosh : prims.arccosh, 
+  np.arccosh : prims.arccosh,
+  
+  np.rad2deg : lib.rad2deg, 
+  np.deg2rad : lib.deg2rad,  
 }

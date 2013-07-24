@@ -16,7 +16,7 @@ def build_fn(input_types,
   assert len(input_names) == n_inputs 
   if name is None:
     name = 'f'
-  name = names.fresh(name)
+  name = names.refresh(name)
  
   f = TypedFn(name = name, 
               arg_names = input_names, 

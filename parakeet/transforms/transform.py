@@ -4,8 +4,9 @@ from .. import config
 from .. analysis import verify
 from .. builder import Builder  
 from .. syntax import (Expr, If, Assign, While, Return, ExprStmt, ForLoop, Comment, ParFor, 
-                      Var, Tuple, Index, Attribute, Const, PrimCall, Struct, Alloc, Cast, 
-                      TupleProj, Slice, ArrayView, Call, TypedFn,  AllocArray, Len, Map, Reduce) 
+                       Var, Tuple, Index, Attribute, Const, PrimCall, Struct, Alloc, Cast,  
+                       TupleProj, Slice, ArrayView, Call, TypedFn,  AllocArray, Len, UntypedFn,  
+                       Map, Reduce) 
 
 transform_timings = {}
 transform_counts = {}
@@ -43,8 +44,8 @@ class Transform(Builder):
       return tuple([self.transform_if_expr(x) for x in maybe_expr])
     elif isinstance(maybe_expr, list):
       return [self.transform_if_expr(x) for x in maybe_expr]
-    elif hasattr(maybe_expr, 'transform'):
-      return maybe_expr.transform(self.transform_expr)
+    #elif hasattr(maybe_expr, 'transform'):
+    #  return maybe_expr.transform(self.transform_expr)
     else:
       return maybe_expr
 
@@ -113,6 +114,10 @@ class Transform(Builder):
     return expr
 
   def transform_TypedFn(self, expr):
+    """By default, don't do recursive transformation of referenced functions"""
+    return expr
+  
+  def transform_UntypedFn(self, expr):
     """By default, don't do recursive transformation of referenced functions"""
     return expr
 
@@ -246,8 +251,8 @@ class Transform(Builder):
       result = self.transform_ArrayView(expr)
     elif expr_class is TypedFn:
       result = self.transform_TypedFn(expr)
-    #elif expr_class is UntypedFn:
-    #  result = self.transform_UntypedFn(expr)
+    elif expr_class is UntypedFn:
+      result = self.transform_UntypedFn(expr)
     elif expr_class is Call:
       result = self.transform_Call(expr)
     elif expr_class is Map:
