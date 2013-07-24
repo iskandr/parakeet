@@ -28,7 +28,7 @@ class LowerAdverbs(Transform):
     return output
   
   def transform_IndexReduce(self, expr):
-    init = self.transform_if_expr(self.init)
+    init = self.transform_if_expr(expr.init)
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
     shape = expr.shape 
@@ -53,7 +53,7 @@ class LowerAdverbs(Transform):
         idx_tuple = self.tuple(index_vars) if n_indices > 1 else index_vars[0] 
         elt_result =  self.call(fn, (idx_tuple,))
         acc.update(self.call(combine, (acc_value, elt_result)))
-      return acc.get()
+      return acc.get() if hasattr(acc, 'get') else acc 
         
       def loop_body(acc, idx):
         new_value = build_loops(index_vars + (idx,), acc = acc)

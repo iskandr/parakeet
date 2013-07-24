@@ -1,10 +1,11 @@
 
-from ..ndtypes import ClosureT, Type, make_closure_type
-from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt  
-from ..syntax.helpers import get_types, zero_i64
+from ..ndtypes import ClosureT, Type, make_closure_type, NoneType 
+from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt, Return   
+from ..syntax.helpers import get_types, zero_i64, none 
 from ..syntax.adverb_helpers import max_rank
 
 from core_builder import CoreBuilder
+from parakeet.syntax.stmt import ExprStmt
 
 class CallBuilder(CoreBuilder):
   
@@ -75,7 +76,18 @@ class CallBuilder(CoreBuilder):
         "Invalid types: %s" % (arg_types, )
     return invoke_result_type(closure_t, arg_types)
 
-  def invoke(self, fn, args, lower = True):
+  def is_identity_fn(self, fn):
+    if len(fn.arg_names) == 1:
+      input_name = fn.arg_names[0]
+      if len(fn.body) == 1:
+        stmt = fn.body[0]
+        if stmt.__class__ is Return:
+          expr = stmt.value 
+          if expr.__class__ is Var:
+            return expr.name == input_name
+    return False 
+    
+  def invoke(self, fn, args, loopify = False, lower = False):
     #import type_inference
     if fn.__class__ is TypedFn:
       closure_args = []
@@ -88,13 +100,25 @@ class CallBuilder(CoreBuilder):
       #  fn = type_inference.specialize(fn.type, arg_types)
       closure_args = self.closure_elts(fn)
       fn = self.get_fn(fn)
-    if lower: 
+    if loopify or lower : 
       from  ..transforms import pipeline
-      fn = pipeline.loopify(fn)
-      
+      if loopify: 
+        fn = pipeline.loopify(fn)
+      if lower: 
+        fn = pipeline.lowering(fn)
+        
     combined_args = tuple(closure_args) + tuple(args)
+    # don't generate Call nodes for identity function 
+    if self.is_identity_fn(fn):
+      assert len(combined_args) == 1
+      return combined_args[0]
+    
     call = Call(fn, combined_args, type = fn.return_type)
-    return self.assign_name(call, "call_result")
+    if fn.return_type == NoneType:
+      self.insert_stmt(ExprStmt(call))
+      return none
+    else:
+      return self.assign_name(call, "call_result")
 
   def call(self, fn, args):
     return self.invoke(fn, args) 

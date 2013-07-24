@@ -75,7 +75,10 @@ class IndexifyAdverbs(Transform):
       #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
       #  else:
       #    slice_value = curr_array
-      slice_values.append(builder.slice_along_axis(curr_array, axis, index_elts[i])) 
+      
+      curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
+      # print i, "axis", axis, "array", curr_array, ":", curr_array.type,  "slice", curr_slice
+      slice_values.append(curr_slice) 
       
     
     elt_result = builder.call(fn, tuple(old_closure_args) + tuple(slice_values))
@@ -147,7 +150,6 @@ class IndexifyAdverbs(Transform):
     axis = unwrap_constant(expr.axis)
     old_fn = expr.fn
 
-
     if output is None:
       # outer_dims = [niters]
       # use shape inference to create output
@@ -178,80 +180,90 @@ class IndexifyAdverbs(Transform):
     self.parfor(dimsizes, loop_body)
     return output 
   
-  def transform_IndexMap(self, expr):
-    # recursively descend down the function bodies to pull together nested ParFors
+  def transform_IndexMap(self, expr, output = None):
+    shape = expr.shape 
+    fn = expr.fn 
+    
     dims = self.tuple_elts(shape)
+    
     if len(dims) == 1:
       shape = dims[0]
       
-    if output is None:
-      output = self.create_output_array(fn, [shape], shape)
-
-    n_loops = len(dims)
-    def build_loops(index_vars = ()):
-      n_indices = len(index_vars)
-      if n_indices == n_loops:
-        if n_indices > 1:
-          idx_tuple = self.tuple(index_vars)
-        else:
-          idx_tuple = index_vars[0]
-        elt_result =  self.call(fn, (idx_tuple,))
-        self.setidx(output, index_vars, elt_result)
-      else:
-        def loop_body(idx):
-          build_loops(index_vars + (idx,))
-        self.loop(self.int(0), dims[n_indices], loop_body)
-    build_loops()
-    return output 
-
-    return ParFor()
+    #if output is None:
+    #  output = self.create_output_array(fn, [shape], shape)
+    #if n_indices > 1:
+    #      idx_tuple = self.tuple(index_vars)
+    #    else:
+    #      idx_tuple = index_vars[0]
+    #    elt_result =  self.call(fn, (idx_tuple,))
+    #    self.setidx(output, index_vars, elt_result)
+    #  else:
+    #    def loop_body(idx):
+    #      build_loops(index_vars + (idx,))
+    #    self.loop(self.int(0), dims[n_indices], loop_body)
+    
+    #return output
+    assert False, "IndexMap needs impl" 
+    return self.parfor(shape, fn)
+    
   
   def transform_Reduce(self, expr):
-    axis = expr.axis 
     fn = expr.fn 
     combine = expr.combine 
     init = expr.init 
-    values = expr.args
+    args = expr.args
 
+    axis = expr.axis
     if axis is  None or self.is_none(axis):
-      assert len(values) == 1
-      values = [self.ravel(values[0])]
+      assert len(args) == 1
+      args = [self.ravel(args[0])]
       axis = 0
-    
-    niters, delayed_elts = self.map_prelude(map_fn, values, axis)
-    first_acc_value = self.call(map_fn, [elt(zero) for elt in delayed_elts])
-    if init is None or self.is_none(init):
-      init = first_acc_value
     else:
-      init = self.call(combine, [init, first_acc_value])
-    def loop_body(acc, idx):
-      elt = self.call(map_fn, [elt(idx) for elt in delayed_elts])
-      new_acc_value = self.call(combine, [acc.get(), elt])
-      acc.update(new_acc_value)
-    return self.accumulate_loop(one, niters, loop_body, init)
-    return IndexReduce()
+      axis = unwrap_constant(axis)
+
+    if self.is_none(init):
+      assert len(args) == 1, "If 'init' not specified then can't have more than 1 arg"
+      init = self.index_along_axis(args[0], axis, self.int(0))
+      assert init.type == fn.return_type 
+      
+
+    index_fn = self.indexify_fn(fn, 
+                                axis, 
+                                args, 
+                                cartesian_product=False)
+    
+    max_arg = max_rank_arg(args)
+    shape = self.shape(max_arg) 
+    return IndexReduce(fn = index_fn, 
+                       init = init, 
+                       combine = combine, 
+                       shape = shape, 
+                       type = expr.type)
   
-  def transform_Scan(self, expr):
-    zero = self.int(0)
-    one = self.int(1)
-    
+  def transform_Scan(self, expr, output = None):
+    combine = expr.combine 
+    init = expr.init 
+    args = expr.args
+
+    axis = expr.axis
     if axis is  None or self.is_none(axis):
-      assert len(values) == 1
-      values = [self.ravel(values[0])]
+      assert len(args) == 1
+      args = [self.ravel(args[0])]
       axis = 0
-    
-    niters, delayed_elts = self.map_prelude(map_fn, values, axis)
-    first_acc_value = self.call(map_fn, [elt(zero) for elt in delayed_elts])
-    if init is None or self.is_none(init):
-      init = first_acc_value
     else:
-      init = self.call(combine, [init, first_acc_value])
-    def loop_body(acc, idx):
-      elt = self.call(map_fn, [elt(idx) for elt in delayed_elts])
-      new_acc_value = self.call(combine, [acc.get(), elt])
-      acc.update(new_acc_value)
-    return self.accumulate_loop(one, niters, loop_body, init)
-    # return IndexScan()
+      axis = unwrap_constant(axis)
+    index_fn = self.indexify_fn(expr.fn, 
+                                axis, 
+                                args, 
+                                cartesian_product=False)
+    assert init is not None
+    max_arg = max_rank_arg(args)
+    shape = self.shape(max_arg) 
+    return IndexScan(fn = index_fn, 
+                     init = init, 
+                     combine = combine, 
+                     shape = shape, 
+                     type = expr.type)
   
   def transform_Filter(self, expr):
     assert False, "Filter not implemented"

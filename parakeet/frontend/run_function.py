@@ -73,6 +73,7 @@ def run_typed_fn(fn, args, backend = None):
   
   elif backend == "interp":
     from .. import interp 
+    fn = pipeline.loopify(fn)
     return interp.eval_fn(fn, args)
   
   elif backend == "shiver":
