@@ -207,9 +207,12 @@ class IndexifyAdverbs(Transform):
     return ParFor()
   
   def transform_Reduce(self, expr):
-    zero = self.int(0)
-    one = self.int(1)
-    
+    axis = expr.axis 
+    fn = expr.fn 
+    combine = expr.combine 
+    init = expr.init 
+    values = expr.args
+
     if axis is  None or self.is_none(axis):
       assert len(values) == 1
       values = [self.ravel(values[0])]
