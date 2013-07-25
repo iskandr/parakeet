@@ -39,9 +39,6 @@ class IndexifyAdverbs(Transform):
     closure_arg_types = tuple(get_types(closure_args))
     n_closure_args = len(closure_args)
     
-    print "INDEXIFY", fn 
-    print "array args", n_arrays, array_arg_types
-    print "closure_args", n_closure_args, closure_args 
     # do I need fn.version *and* fn.copied_by? 
     key = (
              fn.name, 
@@ -87,8 +84,7 @@ class IndexifyAdverbs(Transform):
       input_names.append(names.refresh(old_input_name)) 
     
     input_names.append(names.fresh("idx"))
-    
-    print inner_input_types, input_names 
+   
     new_fn_name = names.fresh("idx_" + names.original(fn.name))
     
     new_fn, builder, input_vars = build_fn(inner_input_types, 
@@ -123,7 +119,7 @@ class IndexifyAdverbs(Transform):
       #    slice_value = curr_array
       
       curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
-      # print i, "axis", axis, "array", curr_array, ":", curr_array.type,  "slice", curr_slice
+      
       slice_values.append(curr_slice) 
     
     elt_result = builder.call(fn, tuple(closure_arg_vars) + tuple(slice_values))
@@ -136,7 +132,6 @@ class IndexifyAdverbs(Transform):
     inliner = Inliner()
     new_fn = inliner.apply(new_fn)
     self._indexed_fn_cache[key] = new_fn 
-    print "RESULT", new_fn 
     return mk_closure()
           
     

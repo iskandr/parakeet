@@ -4,11 +4,11 @@ import time
 import testing_helpers
 import parakeet 
 
-parakeet.config.print_x86 = True
-parakeet.config.print_untyped_function = True 
-parakeet.config.print_lowered_function = True
-parakeet.config.print_optimized_llvm = True
-parakeet.config.print_specialized_function = True
+#parakeet.config.print_x86 = True
+#parakeet.config.print_untyped_function = True 
+#parakeet.config.print_lowered_function = True
+#parakeet.config.print_optimized_llvm = True
+#parakeet.config.print_specialized_function = True
 parakeet.config.opt_loop_unrolling = False 
 parakeet.config.stride_specialization = True
 

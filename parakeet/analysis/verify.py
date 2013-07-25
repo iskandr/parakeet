@@ -103,7 +103,7 @@ class Verify(SyntaxVisitor):
   
   
   def verify_call(self, fn, args):
-    print "Checking %s (%s)" % (fn, tuple(args))
+    # print "Checking %s (%s)" % (fn, tuple(args))
  
     if fn.__class__ is Closure: 
       closure_elts = tuple(fn.args) 
