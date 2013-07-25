@@ -2,7 +2,7 @@
 
 import numpy as np
 import ndtypes 
-from ndtypes import Bool, combine_type_list 
+from ndtypes import Bool, combine_type_list, FloatT, IntT 
 
 prim_lookup_by_value = {}
 
@@ -63,6 +63,8 @@ class Prim(object):
     self._create_type_table()
     for sig in extra_signatures:
       self._add_signature(sig)
+    # table mapping mismatching types i.e. (Int32, Float64) to (Float64, Float64)
+    self._upcast_types = {}
 
 
   def _add_signature(self, signature):
@@ -101,6 +103,20 @@ class Prim(object):
   def __repr__(self):
     return "prim(%s)" % self.name
 
+  def _signature_distance(self, types1, types2):
+    dist = 0
+    for (t1, t2) in zip(types1, types2):
+      if t1 != t2:
+        dist += 1 
+        size_difference = np.abs(t1.nbytes - t2.nbytes)
+        if size_difference > 0:
+          dist += np.log2(size_difference + 1)
+        if isinstance(t1, FloatT) and not isinstance(t2, FloatT):
+          dist += 1
+        elif isinstance(t2, FloatT) and not isinstance(t1, FloatT):
+          dist += 1
+    return dist 
+  
   def expected_input_types(self, arg_types):
     """Given some argument types, return the desired upcast types"""
     # by default we just figure out the common type and expect every arg to be
@@ -109,8 +125,25 @@ class Prim(object):
     assert n_inputs == self.nin, \
         "Incorrect number of argument types for %s, expected %s but given %d" \
         % (self.name, self.nin, n_inputs)
-    common_type = combine_type_list(arg_types)
-    return [common_type] * n_inputs
+    
+    arg_types = tuple(arg_types)
+    if arg_types in self.type_table:
+      return arg_types
+    elif arg_types in self._upcast_types:
+      return self._upcast_types[arg_types]
+    else:
+      # search over all possible signatures to figure out 
+      best_upcast_types = None
+      best_distance = np.inf 
+      for candidate_types in self.type_table:
+        dist = self._signature_distance(arg_types, candidate_types)
+        if dist < best_distance:
+          best_distance = dist
+          best_upcast_types = candidate_types
+      self._upcast_types[arg_types] = best_upcast_types
+      return best_upcast_types  
+    #common_type = combine_type_list(arg_types)
+    #return [common_type] * n_inputs
 
   def result_type(self, arg_types):
     """
