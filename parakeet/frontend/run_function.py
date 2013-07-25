@@ -1,23 +1,26 @@
 
 from .. import config, type_inference
-from .. ndtypes import type_conv
+from .. ndtypes import type_conv, Type 
 from ..syntax import UntypedFn, TypedFn
 from ..syntax.fn_args import ActualArgs
 from .. transforms import pipeline
  
+def _typeof(arg):
+  if hasattr(arg, 'type') and isinstance(arg.type, Type):
+    return arg.type 
+  return type_conv.typeof(arg)
+
 def prepare_args(fn, args, kwargs):
   """
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
   values and their types
   """
   assert isinstance(fn, UntypedFn)
-   
-
   nonlocals = list(fn.python_nonlocals())
   arg_values = ActualArgs(nonlocals + list(args), kwargs)
 
   # get types of all inputs
-  arg_types = arg_values.transform(type_conv.typeof)
+  arg_types = arg_values.transform(_typeof)
   return arg_values, arg_types
 
 

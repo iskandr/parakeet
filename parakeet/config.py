@@ -63,16 +63,16 @@ print_lowered_function = True
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+print_optimized_llvm = True
 
 # before starting function specialization, print the fn name and input types 
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['IndexifyAdverbs', 'Inliner'] #['CopyElimination'] #['LowerAdverbs'] # ['DCE'] 
+print_functions_before_transforms = ['IndexifyAdverbs', 'LowerAdverbs']#, 'Inliner'] #['CopyElimination'] #['LowerAdverbs'] # ['DCE'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = []# ['IndexifyAdverbs', 'Inliner'] #['CopyElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
+print_functions_after_transforms = ['IndexifyAdverbs', 'LowerAdverbs']# 'Inliner'] #['CopyElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
 
 # show aliases and escape sets
 print_escape_analysis = False

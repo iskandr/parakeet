@@ -4,6 +4,7 @@ from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, Pa
                        Alloc, Call, Struct, Shape, Strides, 
                        AllocArray, ArrayView, Cast, Slice, TupleProj, 
                        Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
+from parakeet.syntax.type_value import TypeValue
 
 class SyntaxVisitor(object):
   """
@@ -163,6 +164,7 @@ class SyntaxVisitor(object):
     ClosureElt : 'visit_ClosureElt', 
     UntypedFn : 'visit_UntypedFn',  
     TypedFn : 'visit_TypedFn', 
+    TypeValue : 'visit_TypeValue', 
   }
   
   def visit_expr(self, expr):    

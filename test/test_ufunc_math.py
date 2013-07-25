@@ -11,12 +11,15 @@ arrays = [int_array, bool_array, float_array]
 
 def unary(fn): 
   for x in arrays:
-    expect(fn, [x], fn(x))
+    expected = fn(x)
+    if expected.dtype == 'float16':
+      expected = fn(x.astype('int'))
+    expect(fn, [x], expected, fn.__name__ + "-" + str(x.dtype) + str(len(x.shape)))
 
 def binary(fn):
   for x in arrays:
     for y in arrays:
-      expect(fn, [x,y], fn(x,y))
+      expect(fn, [x,y], fn(x,y), x.dtype)
       
 def test_add():
   binary(np.add)
@@ -83,7 +86,6 @@ def test_log2():
 
 def test_log10():
   unary(np.log10)
-
 
 def test_expm1():
   unary(np.expm1)

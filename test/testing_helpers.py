@@ -20,7 +20,7 @@ def _copy(x):
 def _copy_list(xs):
   return [_copy(x) for x in xs]
 
-def expect(fn, args, expected, valid_types = None):
+def expect(fn, args, expected, msg = None, valid_types = None):
   """
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
@@ -29,7 +29,11 @@ def expect(fn, args, expected, valid_types = None):
     expected = expected.astype('float32')
 
   interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
-  expect_eq(interp_result, expected, "interp")
+  label = "interp"
+
+  if msg is not None:
+    label += "-" + str(msg)
+  expect_eq(interp_result, expected, label)
 
   llvm_result = run_python_fn(fn, _copy_list(args), backend="llvm")
   if valid_types is not None:
@@ -37,7 +41,10 @@ def expect(fn, args, expected, valid_types = None):
       valid_types = [valid_types]
     assert type(llvm_result) in valid_types, \
       "Expected result to have type in %s but got %s" % (valid_types, type(llvm_result))
-  expect_eq(llvm_result, expected, "llvm")
+  label = "llvm"
+  if msg is not None:
+      label += "-" + str(msg)
+  expect_eq(llvm_result, expected, label)
   
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

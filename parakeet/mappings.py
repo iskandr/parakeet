@@ -3,7 +3,7 @@ import numpy as np
 import lib, prims   
 
 property_mappings = {
-  'dtype' : lib.elt_type,                
+  'dtype' : lib.get_elt_type,                
   # 'imag' : lib.imag,      
   'itemsize' : lib.itemsize,
   'real' :  lib.identity, # ain't no complex numbers yet 
@@ -134,7 +134,7 @@ function_mappings = {
   np.log2 : prims.log2, 
   np.log1p : prims.log1p,
   
-    np.cos : prims.cos, 
+  np.cos : prims.cos, 
   math.cos : prims.cos, 
   np.sin : prims.sin, 
   math.sin : prims.sin, 

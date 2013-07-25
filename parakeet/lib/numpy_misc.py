@@ -1,5 +1,5 @@
 
-from .. import prims
+from .. import prims, ndtypes 
 from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t
 from .. frontend import macro, jit 
 from .. syntax import (Attribute, TupleProj, ArrayView, DelayUntilTyped, 
@@ -43,9 +43,9 @@ def reshape(x):
   return Reshape(x)
 
 @macro 
-def elt_type(x):
+def get_elt_type(x):
   def typed_elt_type(xt):
-    return TypeValue(elt_type(xt.type))
+    return TypeValue(ndtypes.elt_type(xt.type))
   return DelayUntilTyped(x, typed_elt_type)
 
 @macro
