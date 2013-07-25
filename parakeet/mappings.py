@@ -124,6 +124,7 @@ function_mappings = {
   np.rint : prims.rint, 
   np.floor : prims.floor, 
   np.ceil : prims.ceil,
+  np.round : prims.round, 
   
   np.exp : prims.exp, 
   np.exp2 : prims.exp2, 

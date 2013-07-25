@@ -262,6 +262,7 @@ trunc = Round(np.trunc)
 rint = Round(np.rint)
 floor = Round(np.floor)
 ceil = Round(np.ceil)
+round = Round(np.round) 
 
 
 
