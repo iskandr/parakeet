@@ -1,7 +1,8 @@
 from .. import names 
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT 
-from ..syntax import ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap 
+from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
+                      Var, Return)
 from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
 from transform import Transform 
@@ -12,6 +13,13 @@ class IndexifyAdverbs(Transform):
   get fed slices of input data and turn them into version which take explicit
   input indices
   """
+  
+  def fresh_input_name(self, expr):
+    if expr is Var:
+      return names.refresh(expr.name)
+    else:
+      return names.fresh("input")
+    
   _indexed_fn_cache = {}
   def indexify_fn(self, fn, axis, array_args, 
                    cartesian_product = False,
@@ -50,10 +58,11 @@ class IndexifyAdverbs(Transform):
       new_closure_args = tuple(old_closure_args) + (output,) + tuple(array_args)
       inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
       new_return_type = NoneType 
-      
-    input_names = [self.temp_name(clos_arg) for clos_arg in new_closure_args] + [names.fresh("idx")]
+    
+    
+    input_names = [self.fresh_input_name(clos_arg) for clos_arg in new_closure_args] + [names.fresh("idx")]
     new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type,
-                                           name = "idx_" + fn.name,  
+                                           name = names.fresh("idx_" + names.original(fn.name)),  
                                            input_names = input_names)
     n_old_closure_args = len(old_closure_args)
     array_arg_vars = input_vars[(n_old_closure_args + 0 if output is None else 1):-1]
@@ -153,7 +162,7 @@ class IndexifyAdverbs(Transform):
     if output is None:
       # outer_dims = [niters]
       # use shape inference to create output
-      output = self.create_output_array(old_fn, args, axis)
+      output = self.create_map_output_array(old_fn, args, axis)
         
     index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False, 
                                 output = output)
@@ -175,7 +184,7 @@ class IndexifyAdverbs(Transform):
     outer_shape = self.tuple(counts)
     zero = self.int(0)
     first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
-    output =  self.create_output_array(fn, first_values, outer_shape)
+    output =  self.create_map_output_array(fn, first_values, outer_shape)
     loop_body = self.indexify_fn(fn, axis, args, cartesian_product = True, output = output)
     self.parfor(dimsizes, loop_body)
     return output 
@@ -188,23 +197,30 @@ class IndexifyAdverbs(Transform):
     
     if len(dims) == 1:
       shape = dims[0]
-      
-    #if output is None:
-    #  output = self.create_output_array(fn, [shape], shape)
-    #if n_indices > 1:
-    #      idx_tuple = self.tuple(index_vars)
-    #    else:
-    #      idx_tuple = index_vars[0]
-    #    elt_result =  self.call(fn, (idx_tuple,))
-    #    self.setidx(output, index_vars, elt_result)
-    #  else:
-    #    def loop_body(idx):
-    #      build_loops(index_vars + (idx,))
-    #    self.loop(self.int(0), dims[n_indices], loop_body)
     
-    #return output
-    assert False, "IndexMap needs impl" 
-    return self.parfor(shape, fn)
+    if output is None:
+      output = self.create_output_array(fn, [shape], shape)
+    
+    
+    old_closure_args = self.closure_elts(fn)
+    old_closure_arg_types = get_types(old_closure_args)
+    fn = self.get_fn(fn)
+    
+    closure_arg_names = [self.fresh_input_name(clos_arg) for clos_arg in old_closure_args] 
+    new_closure_vars = [Var(name, type=clos_arg.type) for 
+                        name, t in zip(closure_arg_names, old_closure_arg_types)]
+    idx_name = names.refresh(fn.arg_names[-1])
+    idx_var = Var(name = idx_name, type = fn.input_types[-1])
+    output_name = names.refresh("output")  
+    output_var = Var(name = output_name, type = output.type)
+    new_input_types = old_closure_arg_types + [output.type] + [idx_var.type]
+    new_input_names = closure_arg_names + [output_name] + [idx_name]            
+    new_fn, builder, input_vars = build_fn(new_input_types, NoneType,
+                                           name =  names.fresh("idx_" + names.original(fn.name)),  
+                                           input_names = new_input_names)
+    builder.setidx(output, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
+    builder.return_(none)
+    return self.parfor(shape, self.closure(new_fn, tuple(old_closure_args) + (output,) ))
     
   
   def transform_Reduce(self, expr):

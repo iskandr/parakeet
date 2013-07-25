@@ -11,7 +11,7 @@ from call_builder import CallBuilder
 class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
   
 
-  def create_output_array(self, fn, array_args, axis, 
+  def create_map_output_array(self, fn, array_args, axis, 
                             cartesian_product = False, 
                             name = "output"):
     """
@@ -29,15 +29,8 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
     # take the 0'th slice just to have a value in hand 
     inner_args = [self.slice_along_axis(array, axis, zero_i64)
                   for array in array_args]
-    try:
-      inner_shape_tuple = self.call_shape(fn, inner_args)
-    except:
-      print "Shape inference failed when calling %s with %s" % (fn, array_args)
-      import sys
-      print "Error %s ==> %s" % (sys.exc_info()[:2])
-      raise
-
     
+        
     extra_dims = []
     if cartesian_product:
       for array in array_args:
@@ -50,10 +43,25 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       biggest_arg = max_rank_arg(array_args)
       assert self.rank(biggest_arg) > axis, \
         "Can't slice along axis %d of %s (rank = %d)" % (axis, biggest_arg, self.rank(biggest_arg)) 
-      extra_dims.append(self.shape(biggest_arg, axis))
-      
+      extra_dims.append(self.shape(biggest_arg, axis))  
     outer_shape_tuple = self.tuple(extra_dims)
-    shape = self.concat_tuples(outer_shape_tuple, inner_shape_tuple)
+    return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
+  
+  def create_output_array(self, fn, inner_args, 
+                          outer_shape = (), 
+                          name = "output"):
+    if isinstance(outer_shape, (list, tuple)):
+      outer_shape = self.tuple(outer_shape_tuple)
+      
+    try:
+      inner_shape_tuple = self.call_shape(fn, inner_args)
+    except:
+      print "Shape inference failed when calling %s with %s" % (fn, array_args)
+      import sys
+      print "Error %s ==> %s" % (sys.exc_info()[:2])
+      raise
+
+    shape = self.concat_tuples(outer_shape, inner_shape_tuple)
     elt_t = self.elt_type(self.return_type(fn))
     if len(shape.type.elt_types) > 0:
       return self.alloc_array(elt_t, shape, name)

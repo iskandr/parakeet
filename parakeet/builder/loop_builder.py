@@ -146,7 +146,7 @@ class LoopBuilder(CoreBuilder):
       if isinstance(bounds.type, ScalarT):
         return [bounds]
       else:
-        assert isinstance(bounds, TupleT), \
+        assert isinstance(bounds.type, TupleT), \
           "Expected tuple but got %s : %s" % (bounds, bounds.type) 
         return self.tuple_elts(bounds)
     elif isinstance(bounds, (int,long)):
