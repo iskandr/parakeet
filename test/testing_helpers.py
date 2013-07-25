@@ -25,6 +25,8 @@ def expect(fn, args, expected, valid_types = None):
   Helper function used for testing, assert that Parakeet evaluates given code to
   the correct result
   """
+  if hasattr(expected, 'dtype') and expected.dtype == 'float16':
+    expected = expected.astype('float32')
 
   interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
   expect_eq(interp_result, expected, "interp")
