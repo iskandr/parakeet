@@ -1,5 +1,7 @@
+from ..ndtypes import TupleT, Int64 
 from ..syntax import Index, Map, unwrap_constant, zero_i64 
 from transform import Transform
+from parakeet.syntax.stmt import ForLoop
 
 class LowerAdverbs(Transform):
     
@@ -32,35 +34,53 @@ class LowerAdverbs(Transform):
     fn = self.transform_expr(expr.fn)
     combine = self.transform_expr(expr.combine)
     shape = expr.shape 
-    dims = self.tuple_elts(shape)
-    n_loops = len(dims)
+    # n_loops = len(dims)
     
-    if init is not None or not self.is_none(init):
-      if n_loops > 1:
-        zeros = self.tuple([zero_i64 for _ in xrange(n_loops)])
-        init = self.call(fn, [zeros])
+    assert init is not None, "Can't have empty 'init' field for IndexReduce"
+   
+    if isinstance(shape.type, TupleT): 
+      bounds = self.tuple_elts(shape)
+    else:
+      bounds = [shape]
+    acc_t = init.type
+
+    loop_counters = ["i", "j", "k", "l", "ii", "jj", "kk", "ll"]
+    def build_body(indices, bounds, old_acc):
+      if len(bounds) == 0:
+        if len(indices) > 1:
+          indices = self.tuple(indices)
+        else:
+          indices = indices[0]
+        print "indices", indices 
+        print "bounds", bounds 
+        print "old_acc", old_acc
+        elt = self.call(fn, (indices,))
+        print "elt", elt 
+        new_acc = self.call(combine, (old_acc, elt))
+        print "new_acc", new_acc 
+        return new_acc 
       else:
-        init = self.call(fn, [zero_i64])
-          
-    def build_loops(index_vars, acc):    
-      n_indices = len(index_vars)
-      if n_indices > 0:
-        acc_value = acc.get()
-      else:
-        acc_value = acc 
+        acc_before = self.fresh_var(acc_t, "acc_before")
+        loop_counter_name = loop_counters[len(indices) % len(loop_counters)] 
+        loop_counter = self.fresh_var(Int64, loop_counter_name)
         
-      if n_indices == n_loops:
-        idx_tuple = self.tuple(index_vars) if n_indices > 1 else index_vars[0] 
-        elt_result =  self.call(fn, (idx_tuple,))
-        acc.update(self.call(combine, (acc_value, elt_result)))
-      return acc.get() if hasattr(acc, 'get') else acc 
-        
-      def loop_body(acc, idx):
-        new_value = build_loops(index_vars + (idx,), acc = acc)
-        acc.update(new_value)
-        return new_value
-      return self.accumulate_loop(self.int(0), dims[n_indices], loop_body, acc_value)
-    return build_loops(index_vars = (), acc = init)
+        future_indices = indices + (loop_counter,)
+        future_bounds = bounds[1:]
+        self.blocks.push()
+        acc_after = build_body(future_indices, future_bounds, acc_before)
+        body = self.blocks.pop()
+        merge = {acc_before.name : (old_acc, acc_after)}
+        for_loop = ForLoop(var = loop_counter, 
+                          start = self.int(0), 
+                          stop = bounds[0], 
+                          step = self.int(1), 
+                          body = body, 
+                          merge = merge)
+        self.blocks.append_to_current(for_loop)
+        return acc_after
+         
+    return build_body(indices = (), bounds = bounds, old_acc = init)
+
 
   def transform_IndexScan(self, expr):
     assert False, "IndexScan not implemented" 

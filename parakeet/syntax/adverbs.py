@@ -26,7 +26,6 @@ class IndexMap(IndexAdverb):
   """
   pass 
 
- 
 
 class IndexAccumulative(IndexAdverb):
   _members = ['combine', 'init']

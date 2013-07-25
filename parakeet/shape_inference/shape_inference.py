@@ -11,6 +11,7 @@ from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown,
                    any_scalar, unknown_value, const, any_value, combine_list, 
                    increase_rank, make_shape, is_zero, is_one, 
                    ) 
+from parakeet.syntax.adverbs import IndexReduce
 
 class ShapeInferenceFailure(Exception):
   def __init__(self, value, fn):
@@ -220,12 +221,14 @@ class ShapeInference(SyntaxVisitor):
     else:
       return Slice(start, stop, step)
 
-  def invoke(self, fn, args):
+  def call(self, fn, args):
     if fn.__class__ is Closure:
       args = tuple(fn.args) + tuple(args)
       fn = fn.fn
     return symbolic_call(fn, args)
 
+  def invoke(self, fn, args):
+    return self.call(fn, args)
   none = None
   null_slice = slice(None, None, None)
 
@@ -509,7 +512,20 @@ class ShapeInference(SyntaxVisitor):
     assert False, "IndexMap not implemented"
     
   def visit_IndexReduce(self, expr):
-    assert False, "IndexReduce not implemented"
+    fn = self.visit_expr(expr.fn)
+    combine = self.visit_expr(expr.combine)
+    bounds = self.visit_expr(expr.shape)
+    if bounds.__class__ is Tuple: 
+      bounds_elts = bounds.elts 
+    else:
+      assert isinstance(bounds, shape.Scalar)
+      bounds_elts = [bounds] 
+    acc_shape = self.visit_expr(expr.init)
+    elt_result = symbolic_call(fn, [bounds])
+    return symbolic_call(combine, [acc_shape, elt_result])
+     
+    # inner_shape = 
+    # assert False, "IndexReduce not implemented"
     
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)

@@ -89,10 +89,11 @@ class Inliner(Transform):
       return pipeline.high_level_optimizations.apply(expr)
 
   def transform_Call(self, expr):
-    target = self.transform_expr(expr.fn)
-    closure_args = self.closure_elts(target)
-    target = self.get_fn(target)
+    print "INLINE", expr 
+    fn = self.transform_expr(expr.fn)
+    target = self.get_fn(fn)
     if target.__class__ is TypedFn:
+      closure_args = self.closure_elts(fn)
       if not can_inline(target):
         print "[Warning] Can't inline %s" % target
         return expr  
@@ -101,6 +102,8 @@ class Inliner(Transform):
       combined_args = tuple(closure_args) + tuple(expr.args)
       result_var = do_inline(target, combined_args,
                              self.type_env, curr_block)
+      print "INLINE RESULT", result_var
+
       return result_var
     else:
       return expr

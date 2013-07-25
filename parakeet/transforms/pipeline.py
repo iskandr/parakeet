@@ -1,5 +1,5 @@
 from .. import config 
-from ..analysis import contains_adverbs
+from ..analysis import contains_adverbs, contains_calls 
 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
@@ -37,7 +37,10 @@ from value_range_propagation import RangePropagation
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, DCE],
                    memoize = False,
                    run_if = contains_adverbs)
-inline_opt = Phase(Inliner, config_param = 'opt_inline', cleanup = [])
+inline_opt = Phase(Inliner, 
+                   config_param = 'opt_inline', 
+                   cleanup = [], 
+                   run_if = contains_calls)
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
@@ -53,6 +56,7 @@ high_level_optimizations = Phase([
                                     copy_elim, 
                                     Simplify, DCE, 
                                     IndexifyAdverbs, 
+                                    inline_opt,
                                     ShapePropagation, 
                                     IndexMapElimination
                                  ], 
@@ -86,9 +90,9 @@ index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
 
 lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
 loopify = Phase([
+                   inline_opt,
                    lower_adverbs,
                    ParForToNestedLoops, 
-                   inline_opt,
                    copy_elim,
                    licm,
                    symbolic_range_propagation,

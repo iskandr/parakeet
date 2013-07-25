@@ -49,13 +49,16 @@ class IndexifyAdverbs(Transform):
              cartesian_product, 
            )
     
-    if key in self._indexed_fn_cache:
+    def mk_closure():
       new_fn = self._indexed_fn_cache[key] 
       if output is None:
-        return self.closure(new_fn, closure_args)
+        return self.closure(new_fn, closure_args + array_args)
       else:
-        return self.closure(new_fn, closure_args + (output,))
+        return self.closure(new_fn, (output, ) + closure_args + array_args)
     
+    if key in self._indexed_fn_cache:
+      return mk_closure()
+      
     #max_array_arg = max_rank_arg(array_arg_vars)
     # max_array_rank = self.rank(max_array_arg)
     n_indices = n_arrays if cartesian_product else 1
@@ -127,10 +130,8 @@ class IndexifyAdverbs(Transform):
       builder.setidx(output_var, index_input_var, elt_result)
       builder.return_(none)
     self._indexed_fn_cache[key] = new_fn 
-    if output is None:
-      return self.closure(new_fn, closure_args + array_args)
-    else:
-      return self.closure(new_fn, (output,) + closure_args + array_args)
+    print "RESULT", new_fn 
+    return mk_closure()
           
     
   
@@ -195,7 +196,8 @@ class IndexifyAdverbs(Transform):
       # use shape inference to create output
       output = self.create_map_output_array(old_fn, args, axis)
         
-    index_fn = self.indexify_fn(expr.fn, axis, args, cartesian_product=False, 
+    index_fn = self.indexify_fn(expr.fn, axis, args, 
+                                cartesian_product=False, 
                                 output = output)
     biggest_arg = max_rank_arg(args)
     niters = self.shape(biggest_arg, axis)
@@ -216,7 +218,9 @@ class IndexifyAdverbs(Transform):
     zero = self.int(0)
     first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
     output =  self.create_map_output_array(fn, first_values, outer_shape)
-    loop_body = self.indexify_fn(fn, axis, args, cartesian_product = True, output = output)
+    loop_body = self.indexify_fn(fn, axis, args, 
+                                 cartesian_product = True, 
+                                 output = output)
     self.parfor(dimsizes, loop_body)
     return output 
   
@@ -238,20 +242,23 @@ class IndexifyAdverbs(Transform):
     fn = self.get_fn(fn)
     
     closure_arg_names = [self.fresh_input_name(clos_arg) for clos_arg in old_closure_args] 
-    new_closure_vars = [Var(name, type=clos_arg.type) for 
-                        name, t in zip(closure_arg_names, old_closure_arg_types)]
+    new_closure_vars = [Var(name, type=t) 
+                        for name, t in 
+                        zip(closure_arg_names, old_closure_arg_types)]
+    
     idx_name = names.refresh(fn.arg_names[-1])
-    idx_var = Var(name = idx_name, type = fn.input_types[-1])
     output_name = names.refresh("output")  
-    output_var = Var(name = output_name, type = output.type)
-    new_input_types = old_closure_arg_types + [output.type] + [idx_var.type]
-    new_input_names = closure_arg_names + [output_name] + [idx_name]            
+    
+    new_input_names = [output_name] + closure_arg_names + [idx_name]            
+    new_input_types =  [output.type]  + old_closure_arg_types + [fn.input_types[-1]]
     new_fn, builder, input_vars = build_fn(new_input_types, NoneType,
                                            name =  names.fresh("idx_" + names.original(fn.name)),  
                                            input_names = new_input_names)
-    builder.setidx(output, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
+    output_var = input_vars[0]
+    idx_var = input_vars[-1]
+    builder.setidx(output_var, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
     builder.return_(none)
-    return self.parfor(shape, self.closure(new_fn, tuple(old_closure_args) + (output,) ))
+    return self.parfor(shape, self.closure(new_fn, (output,) + tuple(old_closure_args)  ))
     
   
   def transform_Reduce(self, expr):
@@ -273,7 +280,6 @@ class IndexifyAdverbs(Transform):
       init = self.index_along_axis(args[0], axis, self.int(0))
       assert init.type == fn.return_type 
       
-
     index_fn = self.indexify_fn(fn, 
                                 axis, 
                                 args, 
@@ -281,6 +287,7 @@ class IndexifyAdverbs(Transform):
     
     max_arg = max_rank_arg(args)
     shape = self.shape(max_arg) 
+
     return IndexReduce(fn = index_fn, 
                        init = init, 
                        combine = combine, 
