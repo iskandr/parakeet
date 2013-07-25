@@ -225,12 +225,27 @@ class CoreBuilder(object):
   def is_fn(self, x):
     return x.__class__ in (TypedFn, Closure) or isinstance(x.type, (FnT, ClosureT)) 
   
+  def num_tuple_elts(self, x):
+    assert self.is_tuple(x)
+    return len(x.type.elt_types)
+  
   def concat_tuples(self, x, y, name = "concat_tuple"):
-    if self.is_tuple(x):
+    
+    x_is_tuple = self.is_tuple(x)
+    y_is_tuple = self.is_tuple(y)
+    
+    if x_is_tuple and y_is_tuple:
+      print "TUPLECONCAT", self.num_tuple_elts(x), self.num_tuple_elts(y)
+      if self.num_tuple_elts(x) == 0:
+        return y 
+      elif self.num_tuple_elts(y) == 0:
+        return x 
+      
+    if x_is_tuple:
       x_elts = self.tuple_elts(x)
     else:
       x_elts = (x,)
-    if self.is_tuple(y):
+    if y_is_tuple:
       y_elts = self.tuple_elts(y)
     else:
       y_elts = (y,)

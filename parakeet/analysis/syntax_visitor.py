@@ -277,7 +277,6 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.fn)
     self.visit_expr(expr.bounds)
   
-  
   _stmt_method_names = {
     Assign : 'visit_Assign', 
     Return : 'visit_Return', 
