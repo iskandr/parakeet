@@ -24,6 +24,7 @@ from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
 from value_range_propagation import RangePropagation
+from parakeet.transforms import indexify_adverbs
 
 
 
@@ -41,24 +42,27 @@ inline_opt = Phase(Inliner,
                    config_param = 'opt_inline', 
                    cleanup = [], 
                    run_if = contains_calls)
+
 copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
+
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 
+indexify_adverbs = Phase([IndexifyAdverbs, 
+                          inline_opt, 
+                          Simplify, 
+                          DCE], 
+                         run_if = contains_adverbs) 
 high_level_optimizations = Phase([
                                     Simplify, 
-                                    inline_opt, 
-                                    Simplify, DCE,
-                                    licm, 
-                                    Simplify, DCE, 
+                                    inline_opt, Simplify, DCE,
+                                    licm, Simplify, DCE, 
                                     fusion_opt, 
                                     fusion_opt, 
-                                    copy_elim, 
-                                    Simplify, DCE, 
-                                    IndexifyAdverbs, 
-                                    inline_opt,
+                                    copy_elim, Simplify, DCE, 
+                                    indexify_adverbs, 
                                     ShapePropagation, 
-                                    IndexMapElimination
+                                    IndexMapElimination, 
                                  ], 
                                  copy = True)
 

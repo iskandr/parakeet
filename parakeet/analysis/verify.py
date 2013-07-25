@@ -95,7 +95,7 @@ class Verify(SyntaxVisitor):
           (fn.name, expected_t, signature_t, arg_name)
       assert given_t == expected_t, \
           "Given argument %s%s doesn't matched expected '%s' : %s in %s" % \
-          ("'%s' :" %  args[i] if args is not None else "", 
+          ("'%s' : " %  args[i] if args is not None else "", 
            given_t, 
            arg_name, 
            expected_t, 
