@@ -48,12 +48,7 @@ copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 
-indexify_adverbs = Phase([IndexifyAdverbs, 
-                          inline_opt, Simplify, DCE, 
-                          ShapePropagation, 
-                          IndexMapElimination,
-                          ], 
-                         run_if = contains_adverbs) 
+
 high_level_optimizations = Phase([
                                     Simplify, 
                                     inline_opt, Simplify, DCE,
@@ -61,9 +56,17 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     fusion_opt, 
                                     copy_elim, Simplify, DCE, 
-                                    indexify_adverbs, 
                                  ], 
                                  copy = True)
+
+indexify = Phase([IndexifyAdverbs, 
+                  inline_opt, Simplify, DCE, 
+                  ShapePropagation, 
+                  IndexMapElimination,
+                 ], 
+                 run_if = contains_adverbs, 
+                 copy = True, 
+                 depends_on=high_level_optimizations) 
 
 ####################
 #                  #
@@ -103,7 +106,7 @@ loopify = Phase([
                    symbolic_range_propagation,
                    index_elim
                 ],
-                depends_on = high_level_optimizations,
+                depends_on = indexify,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 post_apply = print_loopy)

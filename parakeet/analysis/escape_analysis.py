@@ -119,7 +119,10 @@ class EscapeAnalysis(SyntaxVisitor):
         combined.extend(self.collect_lhs_names(elt))
     else:
       return []
-
+  
+  def visit_Closure(self, expr):
+    self.mark_escape_list(collect_nonscalar_names_from_list(expr.args))
+  
   def visit_Assign(self, stmt):
     lhs_names = set(self.collect_lhs_names(stmt.lhs))
     rhs_names = set(collect_nonscalar_names(stmt.rhs))
@@ -128,7 +131,7 @@ class EscapeAnalysis(SyntaxVisitor):
 
   def visit_Return(self, expr):
     self.mark_escape_list(collect_nonscalar_names(expr.value))
-
+  
   def visit_merge(self, merge):
     for (name, (l,r)) in merge.iteritems():
       if l.__class__ is Var: 
