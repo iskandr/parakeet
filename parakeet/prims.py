@@ -108,11 +108,15 @@ class Prim(object):
     for (t1, t2) in zip(types1, types2):
       if t1 != t2:
         dist += 1 
-        size_difference = np.abs(t1.nbytes - t2.nbytes)
-        if size_difference > 0:
+        size_difference = t2.nbytes - t1.nbytes
+        if size_difference < 0:
+          dist += 10000
+        elif size_difference > 0:
           dist += np.log2(size_difference + 1)
+        # can't go from float to int 
         if isinstance(t1, FloatT) and not isinstance(t2, FloatT):
-          dist += 1
+          dist += 1000
+        # but going to from int to float is only minor penalty...
         elif isinstance(t2, FloatT) and not isinstance(t1, FloatT):
           dist += 1
     return dist 

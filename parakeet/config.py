@@ -50,29 +50,29 @@ llvm_verify = True
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # show LLVM bytecode before optimization passes
 print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = True
+print_optimized_llvm = False
 
 # before starting function specialization, print the fn name and input types 
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['IndexifyAdverbs', 'LowerAdverbs']#, 'Inliner'] #['CopyElimination'] #['LowerAdverbs'] # ['DCE'] 
+print_functions_before_transforms = [] #['IndexifyAdverbs', 'LowerAdverbs']#, 'Inliner'] #['CopyElimination'] #['LowerAdverbs'] # ['DCE'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = ['IndexifyAdverbs', 'LowerAdverbs']# 'Inliner'] #['CopyElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
+print_functions_after_transforms = [] #['IndexifyAdverbs', 'LowerAdverbs']# 'Inliner'] #['CopyElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
 
 # show aliases and escape sets
 print_escape_analysis = False
