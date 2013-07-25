@@ -16,7 +16,9 @@ class IndexifyAdverbs(Transform):
   
   def fresh_input_name(self, expr):
     if expr is Var:
-      return names.refresh(expr.name)
+      new_name = names.refresh(expr.name)
+      print ">>", expr.name, "->", new_name
+      new_name 
     else:
       return names.fresh("input")
     
@@ -55,12 +57,15 @@ class IndexifyAdverbs(Transform):
       inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
       new_return_type = fn.return_type 
     else:
+      
       new_closure_args = tuple(old_closure_args) + (output,) + tuple(array_args)
       inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
       new_return_type = NoneType 
     
     
-    input_names = [self.fresh_input_name(clos_arg) for clos_arg in new_closure_args] + [names.fresh("idx")]
+    input_names = [self.fresh_input_name(clos_arg) 
+                   for clos_arg in 
+                   new_closure_args] + [names.fresh("idx")]
     new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type,
                                            name = names.fresh("idx_" + names.original(fn.name)),  
                                            input_names = input_names)

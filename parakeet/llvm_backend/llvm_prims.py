@@ -81,12 +81,31 @@ def float32_fn(name):
 def float64_fn(name):
   return global_context.module.add_function(float64_fn_t, name)
 
-float_unary_ops_list = [ 
-  prims.tan, prims.tanh, prims.cos, prims.cosh, prims.sin, prims.sinh, 
-  prims.log, prims.log10, prims.sqrt,
-  prims.exp 
-]
-
+# names used in math library 
+_float_op_names = {
+  prims.tan : 'tan', 
+  prims.tanh : 'tanh',
+  prims.arctan : 'atan', 
+  prims.arctanh : 'atanh', 
+   
+  prims.cos : 'cos', 
+  prims.cosh : 'cosh', 
+  prims.arccos : 'acos', 
+  prims.arccosh : 'acosh', 
+  
+  prims.sin : 'sin', 
+  prims.sinh : 'sinh',
+  prims.arcsin : 'asin',
+  prims.arcsinh : 'asinh', 
+  
+  prims.log : 'log',
+  prims.log10 : 'log10', 
+  prims.sqrt : 'sqrt', 
+  prims.exp : 'exp',  
+  prims.abs : 'fabs', 
+  
+} 
+ 
 float_unary_ops = {}
 
 #import llvmmath 
@@ -115,35 +134,30 @@ def get_float_unary_op(prim, t):
   key = (prim, t)
   if key in float_unary_ops:
     return float_unary_ops[key]
-  assert prim in float_unary_ops_list, \
+  
+  assert prim in _float_op_names, \
     "Unsupported float primitive %s" % prim 
   assert t in (Float32, Float64), \
     "Invalid type %s, expected Float32 or Float64" % t
-  #if t == Float32:
-  #  sym = mathlib.symbols[prim.name][('float', ('float',))]
-  #else:
-  #  assert t == Float64 
-  #  sym = mathlib.symbols[prim.name][('double', ('double',))]
-  #print sym 
- 
+  
+  prim_name = _float_op_names[prim]
+  
    
   if t == Float32:
     fn_t = float32_fn_t
-    if prim.name == "abs":
-      fn_name = "llvm.fabs.f32"
-    elif prim.name in _llvm_intrinsics:
-      fn_name = "llvm.%s.f32" % prim.name
+    if prim_name in _llvm_intrinsics:
+      fn_name = "llvm.%s.f32" % prim_name
     else:
-      fn_name = prim.name + "f" 
+      fn_name = prim_name + "f" 
   else:
     assert t == Float64
     fn_t = float64_fn_t
-    if prim.name == "abs":
-      fn_name = "llvm.fabs.f64"
-    elif prim.name in _llvm_intrinsics:
-      fn_name = "llvm.%s.f64" % prim.name 
+    if prim_name in _llvm_intrinsics:
+      fn_name = "llvm.%s.f64" % prim_name 
     else:
-      fn_name = prim.name 
+      fn_name = prim_name 
   llvm_value = global_context.module.get_or_insert_function(fn_t, fn_name)
+  llvm_value.add_attribute(llc.ATTR_NO_UNWIND)
+  llvm_value.add_attribute(llc.ATTR_READ_NONE)
   float_unary_ops[key] = llvm_value
   return llvm_value 

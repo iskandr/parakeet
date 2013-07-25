@@ -1,3 +1,4 @@
+import numpy as np 
 
 from .. import prims, ndtypes 
 from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t
@@ -204,3 +205,7 @@ def rad2deg(rad):
 @jit
 def deg2rad(deg):
   return deg * 3.141592653589793 / 180 
+
+@jit 
+def hypot(x,y):
+  return np.sqrt(x**2 + y**2)

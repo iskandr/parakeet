@@ -3,14 +3,19 @@ import numpy as np
 from testing_helpers import run_local_tests, expect  
 
 
-int_array = np.array([10,20,30])
-bool_array = np.array([True, True, True])
-float_array = np.array([1.0, 2.0, 3.0])
+int_array = np.array([0,1])
+bool_array = np.array([False,True])
+float_array = np.array([0.1, 0.2])
 arrays = [int_array, bool_array, float_array]
 
 def unary(fn): 
   for x in arrays:
     expect(fn, [x], fn(x))
+
+def binary(fn):
+  for x in arrays:
+      for y in arrays:
+          expect(fn, [x,y], fn(x,y))
 
 def test_sin():
   unary(np.sin)
@@ -33,8 +38,6 @@ def test_arctan():
 def test_arctan2():
   unary(np.arctan2)
   
-def test_hypot():
-  unary(np.hypot)
   
 def test_sinh():
   unary(np.sinh)
@@ -60,6 +63,8 @@ def test_deg2rad():
 def test_rad2deg():
   unary(np.rad2deg)
   
-  
+#def test_hypot():
+#  binary(np.hypot)
+
 if __name__ == '__main__':
   run_local_tests() 

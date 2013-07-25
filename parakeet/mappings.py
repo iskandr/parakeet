@@ -157,4 +157,5 @@ function_mappings = {
   
   np.rad2deg : lib.rad2deg, 
   np.deg2rad : lib.deg2rad,  
+  # np.hypot : lib.hypot, 
 }
