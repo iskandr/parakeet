@@ -6,6 +6,7 @@ from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, O
 from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
 from transform import Transform 
+from scipy.weave.build_tools import old_init_posix
 
 class IndexifyAdverbs(Transform):
   """
@@ -16,9 +17,7 @@ class IndexifyAdverbs(Transform):
   
   def fresh_input_name(self, expr):
     if expr is Var:
-      new_name = names.refresh(expr.name)
-      print ">>", expr.name, "->", new_name
-      new_name 
+      return names.refresh(expr.name)
     else:
       return names.fresh("input")
     
@@ -30,49 +29,76 @@ class IndexifyAdverbs(Transform):
     Take a function whose last k values are slices through input data 
     and transform it into a function which explicitly extracts its arguments
     """  
+    array_args = tuple(array_args)
     array_arg_types = tuple(get_types(array_args))
+    n_arrays = len(array_arg_types)
+    closure_args = self.closure_elts(fn)
+    closure_arg_types = tuple(get_types(closure_args))
+    n_closure_args = len(closure_args)
     
+    print "INDEXIFY", fn 
+    print "array args", n_arrays, array_arg_types
+    print "closure_args", n_closure_args, closure_args 
     # do I need fn.version *and* fn.copied_by? 
     key = (
              fn.name, 
              fn.copied_by,
              axis, 
+             closure_arg_types, 
              output is None,  
-             array_arg_types, 
              cartesian_product, 
            )
+    
     if key in self._indexed_fn_cache:
-      return self._indexed_fn_cache[key]
-    old_input_vars = self.input_vars(fn)
-    n_arrays = len(array_arg_types)
-    old_closure_args = old_input_vars[:-n_arrays]
-  
+      new_fn = self._indexed_fn_cache[key] 
+      if output is None:
+        return self.closure(new_fn, closure_args)
+      else:
+        return self.closure(new_fn, closure_args + (output,))
+    
     #max_array_arg = max_rank_arg(array_arg_vars)
     # max_array_rank = self.rank(max_array_arg)
     n_indices = n_arrays if cartesian_product else 1
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     
     if output is None:
-      new_closure_args = tuple(old_closure_args) + tuple(array_args)
-      inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
+      inner_input_types = closure_arg_types + array_arg_types + (index_input_type,)
       new_return_type = fn.return_type 
     else:
-      
-      new_closure_args = tuple(old_closure_args) + (output,) + tuple(array_args)
-      inner_input_types = tuple(get_types(new_closure_args)) + tuple([index_input_type])
+      inner_input_types = (output.type,) + closure_arg_types +  array_arg_types + (index_input_type,)
       new_return_type = NoneType 
     
     
-    input_names = [self.fresh_input_name(clos_arg) 
-                   for clos_arg in 
-                   new_closure_args] + [names.fresh("idx")]
-    new_fn, builder, input_vars = build_fn(inner_input_types, new_return_type,
-                                           name = names.fresh("idx_" + names.original(fn.name)),  
-                                           input_names = input_names)
-    n_old_closure_args = len(old_closure_args)
-    array_arg_vars = input_vars[(n_old_closure_args + 0 if output is None else 1):-1]
+    input_names = []
+    if output is not None:
+      if output is Var:
+        local_output_name = names.refresh(output.name)
+      else:
+        local_output_name = names.fresh("local_output")
+      input_names.append(local_output_name) 
     
+    for old_input_name in fn.arg_names:
+      input_names.append(names.refresh(old_input_name)) 
+    
+    input_names.append(names.fresh("idx"))
+    
+    print inner_input_types, input_names 
+    new_fn_name = names.fresh("idx_" + names.original(fn.name))
+    
+    new_fn, builder, input_vars = build_fn(inner_input_types, 
+                                           new_return_type,
+                                           name = new_fn_name,  
+                                           input_names = input_names)
+
     index_input_var = input_vars[-1]
+    if output is None:
+      output_var = None
+      closure_arg_vars = input_vars[:n_closure_args]
+      array_arg_vars = input_vars[n_closure_args:-1]
+    else:
+      output_var = input_vars[0]
+      closure_arg_vars = input_vars[1:n_closure_args+1]
+      array_arg_vars = input_vars[n_closure_args+1:-1]
     
     if cartesian_product:
       index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
@@ -93,20 +119,20 @@ class IndexifyAdverbs(Transform):
       curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
       # print i, "axis", axis, "array", curr_array, ":", curr_array.type,  "slice", curr_slice
       slice_values.append(curr_slice) 
-      
     
-    elt_result = builder.call(fn, tuple(old_closure_args) + tuple(slice_values))
+    elt_result = builder.call(fn, tuple(closure_arg_vars) + tuple(slice_values))
     if output is None: 
       builder.return_(elt_result)
     else:
-      local_output_var = input_vars[n_old_closure_args]
-      builder.setidx(local_output_var, index_input_var, elt_result)
+      builder.setidx(output_var, index_input_var, elt_result)
       builder.return_(none)
-    # print "INDEXIFY GENERATED", new_fn 
-    new_closure = self.closure(new_fn, new_closure_args)
-    self._indexed_fn_cache[key] = new_closure
+    self._indexed_fn_cache[key] = new_fn 
+    if output is None:
+      return self.closure(new_fn, closure_args + array_args)
+    else:
+      return self.closure(new_fn, (output,) + closure_args + array_args)
+          
     
-    return new_closure
   
 
   def sizes_along_axis(self, xs, axis):

@@ -51,12 +51,12 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
                           outer_shape = (), 
                           name = "output"):
     if isinstance(outer_shape, (list, tuple)):
-      outer_shape = self.tuple(outer_shape_tuple)
+      outer_shape = self.tuple(outer_shape)
       
     try:
       inner_shape_tuple = self.call_shape(fn, inner_args)
     except:
-      print "Shape inference failed when calling %s with %s" % (fn, array_args)
+      print "Shape inference failed when calling %s with %s" % (fn, inner_args)
       import sys
       print "Error %s ==> %s" % (sys.exc_info()[:2])
       raise
