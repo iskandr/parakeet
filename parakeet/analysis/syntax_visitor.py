@@ -2,9 +2,8 @@ from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, Pa
                        TypedFn, UntypedFn,  Closure, ClosureElt,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
                        Alloc, Call, Struct, Shape, Strides, 
-                       AllocArray, ArrayView, Cast, Slice, TupleProj, 
+                       AllocArray, ArrayView, Cast, Slice, TupleProj, TypeValue,  
                        Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
-from parakeet.syntax.type_value import TypeValue
 
 class SyntaxVisitor(object):
   """
@@ -27,6 +26,7 @@ class SyntaxVisitor(object):
   def visit_Closure(self, expr):
     self.visit_expr(expr.fn)
     self.visit_expr_list(expr.args)
+    
     
   def visit_Tuple(self, expr):
     for elt in expr.elts:

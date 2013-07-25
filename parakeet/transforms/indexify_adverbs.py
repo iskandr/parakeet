@@ -5,8 +5,11 @@ from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, O
                       Var, Return)
 from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
-from transform import Transform 
+from inline import Inliner 
+from transform import Transform
 from scipy.weave.build_tools import old_init_posix
+
+ 
 
 class IndexifyAdverbs(Transform):
   """
@@ -129,6 +132,9 @@ class IndexifyAdverbs(Transform):
     else:
       builder.setidx(output_var, index_input_var, elt_result)
       builder.return_(none)
+    
+    inliner = Inliner()
+    new_fn = inliner.apply(new_fn)
     self._indexed_fn_cache[key] = new_fn 
     print "RESULT", new_fn 
     return mk_closure()

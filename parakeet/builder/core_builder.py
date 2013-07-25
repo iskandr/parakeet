@@ -5,7 +5,8 @@ from ..ndtypes import (make_array_type, make_tuple_type,
                        Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT, 
                        ArrayT, FnT, ClosureT) 
 from ..syntax import (ArrayView, Assign, Attribute, Cast, Const, Closure,  Comment, Expr, 
-                      Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var, TypedFn)
+                      Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var, TypedFn, 
+                      AllocArray, ArrayExpr, Adverb)
 from ..syntax.helpers import (wrap_if_constant, 
                               const_bool, const_int, const_float, get_types,  
                               one_i64, zero_i64, 
@@ -94,6 +95,22 @@ class CoreBuilder(object):
            (c is Tuple and len(expr.elts) == 0) or \
            (c is Struct and len(expr.args) == 0) or \
            (c is Closure and len(expr.args) == 0)
+
+
+  def is_pure(self, expr):
+    c = expr.__class__
+    return c is Var or \
+           c is Const or \
+           c is Tuple or \
+           c is Struct or \
+           c is Closure or \
+           c is AllocArray or \
+           c is ArrayView or \
+           c is PrimCall or \
+           isinstance(expr, ArrayExpr) or \
+           isinstance(expr, Adverb)
+           
+    
 
 
 

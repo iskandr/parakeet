@@ -1,7 +1,7 @@
-from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT
+from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT 
 from .. ndtypes import lower_rank 
 
-from .. syntax import Expr, Tuple, Var, Index, Closure 
+from .. syntax import Expr, Tuple, Var, Index, Closure, TypedFn 
 from .. syntax.helpers import get_types
 from collect_vars import collect_binding_names
 from syntax_visitor import SyntaxVisitor
@@ -77,8 +77,9 @@ class Verify(SyntaxVisitor):
       "Expected effectful expression %s to have type %s but instead got %s" % \
       (stmt.value, NoneType, stmt.value.type)
   
-  def check_fn_args(self, fn, args, arg_types = None):
+  def check_fn_args(self, fn, args = None, arg_types = None):
     if arg_types is None: 
+      assert args is not None 
       arg_types = get_types(args)
     n_given = len(arg_types)
     n_expected = len(fn.input_types)
@@ -93,22 +94,42 @@ class Verify(SyntaxVisitor):
           "Function %s has inconsistent types %s and %s for arg %s" % \
           (fn.name, expected_t, signature_t, arg_name)
       assert given_t == expected_t, \
-          "Given argument '%s' : %s doesn't matched expected '%s' : %s in %s" % \
-          (args[i], given_t, arg_name, expected_t, fn.name)  
+          "Given argument %s%s doesn't matched expected '%s' : %s in %s" % \
+          ("'%s' :" %  args[i] if args is not None else "", 
+           given_t, 
+           arg_name, 
+           expected_t, 
+           fn.name)  
   
   
+  def verify_call(self, fn, args):
+    print "Checking %s (%s)" % (fn, tuple(args))
+ 
+    if fn.__class__ is Closure: 
+      closure_elts = tuple(fn.args) 
+      fn = fn.fn 
+      args = tuple(closure_elts) + tuple(args)
+      
+    if fn.__class__ is TypedFn:
+      try:
+        self.check_fn_args(fn, args)
+      except:
+        print "[verify] Errors in function call %s(%s)" % (fn.name, args) 
+        raise 
+  
+    else: 
+      assert isinstance(fn.type, ClosureT), "Unexpected function %s : %s" % (fn, fn.type)
+      closure_arg_types = fn.type.arg_types 
+      arg_types = tuple(closure_arg_types) + tuple(get_types(args))
+      try:
+        self.check_fn_args(fn, arg_types = arg_types)
+      except:
+        print "[verify] Errors in function call %s(%s)" % (fn.name, args) 
+        raise 
+  
+      
   def visit_Call(self, expr):
-    if expr.fn.__class__ is Closure: 
-      closure_elts = tuple(expr.fn.args) 
-      fn = expr.fn.fn 
-    else:
-      fn = expr.fn
-      closure_elts = ()
-    try:
-      self.check_fn_args(fn, closure_elts + tuple(expr.args))
-    except:
-      print "[verify] Errors in function call %s" %expr 
-      raise 
+    self.verify_call(expr.fn, expr.args)
     
   def visit_Map(self, expr):
     if expr.fn.__class__ is Closure: 
@@ -169,7 +190,12 @@ class Verify(SyntaxVisitor):
     assert stmt.step.type == stmt.var.type
     self.visit_expr(stmt.step)
     self.visit_merge_loop_repeat(stmt.merge)
-
+    
+  def visit_ParFor(self, stmt):
+    fn = stmt.fn 
+    args = (stmt.bounds,)
+    self.verify_call(fn, args)
+    
   def visit_stmt(self, stmt):
     assert stmt is not None
     SyntaxVisitor.visit_stmt(self, stmt)

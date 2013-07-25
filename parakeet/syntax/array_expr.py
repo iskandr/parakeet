@@ -1,7 +1,13 @@
 from expr import Expr 
 
+class ArrayExpr(Expr):
+  """
+  Common base class for first-order array operations 
+  that don't change the underlying data 
+  """
+  pass
 
-class Array(Expr):
+class Array(ArrayExpr):
   _members = ['elts']
 
   def node_init(self):
@@ -14,7 +20,7 @@ class Array(Expr):
     return hash(self.elts)
 
 
-class Index(Expr):
+class Index(ArrayExpr):
   _members = ['value', 'index']
   
   def __eq__(self, other):
@@ -33,7 +39,7 @@ class Index(Expr):
     return "%s[%s]" % (self.value, self.index)
 
 
-class Slice(Expr):
+class Slice(ArrayExpr):
   _members = ['start', 'stop', 'step']
 
   def __str__(self):
@@ -59,13 +65,13 @@ class Slice(Expr):
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 
-class Len(Expr):
+class Len(ArrayExpr):
   _members = ['value']
 
-class ConstArray(Expr):
+class ConstArray(ArrayExpr):
   _members = ['shape', 'value']
 
-class ConstArrayLike(Expr):
+class ConstArrayLike(ArrayExpr):
   """
   Create an array with the same shape as the first arg, but with all values set
   to the second arg
@@ -73,10 +79,10 @@ class ConstArrayLike(Expr):
 
   _members = ['array', 'value']
 
-class Range(Expr):
+class Range(ArrayExpr):
   _members = ['start', 'stop', 'step']
 
-class AllocArray(Expr):
+class AllocArray(ArrayExpr):
   """Allocate an unfilled array of the given shape and type"""
   _members = ['shape', 'elt_type']
   
@@ -84,7 +90,7 @@ class AllocArray(Expr):
     yield self.shape
 
 
-class ArrayView(Expr):
+class ArrayView(ArrayExpr):
   """Create a new view on already allocated underlying data"""
 
   _members = ['data', 'shape', 'strides', 'offset', 'size']
@@ -96,32 +102,32 @@ class ArrayView(Expr):
     yield self.offset
     yield self.size
 
-class Ravel(Expr):
+class Ravel(ArrayExpr):
   _members = ['array']
   
   def children(self):
     return (self.array,)
 
-class Reshape(Expr):
+class Reshape(ArrayExpr):
   _members = ['array', 'shape']
   
   def children(self):
     yield self.array 
     yield self.shape
 
-class Shape(Expr):
+class Shape(ArrayExpr):
   _members = ['array']
   
-class Strides(Expr):
+class Strides(ArrayExpr):
   _members = ['array']
     
-class Transpose(Expr):
+class Transpose(ArrayExpr):
   _members = ['array']
   
   def children(self):
     yield self.array 
     
-class Where(Expr):
+class Where(ArrayExpr):
   """
   Given a boolean array, returns its true indices 
   """

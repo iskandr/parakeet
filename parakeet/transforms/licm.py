@@ -6,7 +6,7 @@ from .. analysis.escape_analysis import may_alias
 from .. analysis.syntax_visitor import SyntaxVisitor
 
 from .. ndtypes import ImmutableT 
-from .. syntax import Var, Assign, Return, While, If, Index, Alloc 
+from .. syntax import Var, Assign, Return, While, If, Index, Alloc, AllocArray  
 from .. syntax import Array, ArrayView, Slice, Struct 
 
 from transform import Transform
@@ -102,6 +102,7 @@ class Find_LICM_Candidates(SyntaxVisitor):
     c = expr.__class__
     
     return c is Alloc or \
+           c is AllocArray or \
            c is Array or \
            c is ArrayView or \
            c is Slice or  \

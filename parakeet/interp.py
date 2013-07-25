@@ -8,11 +8,9 @@ from frontend import ast_conversion
 from ndtypes import ScalarT, StructT, Type   
 from syntax import (Expr, Var, Tuple, 
                     UntypedFn, TypedFn, 
-                    Return, If, While, ForLoop, ParFor,  
+                    Return, If, While, ForLoop, ParFor, ExprStmt,   
                     ActualArgs, 
                     Assign, Index, AllocArray,)
-
-
 
 class InterpSemantics(object):
   def size_along_axis(self, value, axis):
@@ -342,8 +340,9 @@ def eval_fn(fn, actuals):
       axis = eval_if_expr(expr.axis)
       return adverb_evaluator.eval_scan(map_fn, combine, emit, init, args, axis)
   
-        
-    result = dispatch(expr, 'expr')
+    fn_name = "expr_" + expr.__class__.__name__
+    dispatch_fn = locals()[fn_name]
+    result = dispatch_fn()
     
     # we don't support python function's inside parakeet,
     # they have to be translated into Parakeet functions
@@ -409,6 +408,9 @@ def eval_fn(fn, actuals):
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
         
+    elif isinstance(stmt, ExprStmt):
+      eval_expr(stmt.value)
+      
     elif isinstance(stmt, ParFor):
       fn = eval_expr(stmt.fn)
       bounds = eval_expr(stmt.bounds)

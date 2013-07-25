@@ -2,7 +2,6 @@ from .. syntax import Assign, Index, Var
 
 from loop_transform import LoopTransform
 
-
 class RedundantLoadElimination(LoopTransform):
   def transform_block(self, stmts):
     stmts = LoopTransform.transform_block(self, stmts) 

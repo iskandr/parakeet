@@ -88,8 +88,12 @@ class Inliner(Transform):
       import pipeline
       return pipeline.high_level_optimizations.apply(expr)
 
+  def transform_ExprStmt(self, stmt):
+
+    return Transform.transform_ExprStmt(self, stmt)
+  
   def transform_Call(self, expr):
-    print "INLINE", expr 
+
     fn = self.transform_expr(expr.fn)
     target = self.get_fn(fn)
     if target.__class__ is TypedFn:
@@ -101,14 +105,13 @@ class Inliner(Transform):
       curr_block = self.blocks.current()
       combined_args = tuple(closure_args) + tuple(expr.args)
       result_var = do_inline(target, combined_args,
-                             self.type_env, curr_block)
-      print "INLINE RESULT", result_var
-
+                             self.type_env, curr_block)    
       return result_var
     else:
       return expr
 
 
+  
   def apply(self, fn):
     if contains_calls(fn):
       return Transform.apply(self, fn)

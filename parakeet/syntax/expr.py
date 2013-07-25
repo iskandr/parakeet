@@ -4,7 +4,6 @@ from .. ndtypes import NoneT, make_tuple_type
 
 class Expr(Node):
   _members = ['type']
-
   
   def children(self):
     for v in self.itervalues():

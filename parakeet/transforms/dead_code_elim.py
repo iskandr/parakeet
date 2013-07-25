@@ -145,7 +145,7 @@ class DCE(Transform):
     return stmt
   
   def transform_ExprStmt(self, stmt):
-    if self.is_simple(stmt.value):
+    if self.is_pure(stmt.value):
       return None 
     else:
       return stmt 

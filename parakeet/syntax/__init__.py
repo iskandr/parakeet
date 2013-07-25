@@ -2,7 +2,7 @@ from adverbs import *
 
 from adverb_helpers import * 
 
-from array_expr import Array, Index, Slice, Len, Range, AllocArray, ArrayView
+from array_expr import ArrayExpr, Array, Index, Slice, Len, Range, AllocArray, ArrayView
 from array_expr import  Ravel, Reshape, Shape, Strides, Transpose, Where  
 
 from delay_until_typed import DelayUntilTyped

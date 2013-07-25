@@ -69,10 +69,10 @@ print_optimized_llvm = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['IndexifyAdverbs', 'LowerAdverbs']#, 'Inliner'] #['CopyElimination'] #['LowerAdverbs'] # ['DCE'] 
+print_functions_before_transforms = []# ['RedundantLoadElimination']#['LowerAdverbs'] #, 'Inliner'] #['CopyElimination'] #['LowerAdverbs'] # ['DCE'] 
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #['IndexifyAdverbs', 'LowerAdverbs']# 'Inliner'] #['CopyElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
+print_functions_after_transforms = [] #['RedundantLoadElimination']#['LowerAdverbs'] #, 'LowerAdverbs']# 'Inliner'] #['CopyElimination'] # ['Fusion'] #['LowerAdverbs'] #['DCE'] 
 
 # show aliases and escape sets
 print_escape_analysis = False

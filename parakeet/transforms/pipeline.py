@@ -90,9 +90,9 @@ index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
 
 lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
 loopify = Phase([
-                   inline_opt,
                    lower_adverbs,
                    ParForToNestedLoops, 
+                   inline_opt, 
                    copy_elim,
                    licm,
                    symbolic_range_propagation,
@@ -113,8 +113,12 @@ loopify = Phase([
 ####################
 
 scalar_repl = Phase(ScalarReplacement, config_param = 'opt_scalar_replacement')
+
+# Currently incorrect in the presence of function calls
+# TODO: Make this mark an slices that are call arguments as read & written to
 load_elim = Phase(RedundantLoadElimination,
-                  config_param = 'opt_redundant_load_elimination')
+                  config_param = 'opt_redundant_load_elimination', 
+                  run_if = lambda fn: not contains_calls(fn))
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
 
@@ -133,9 +137,8 @@ lowering = Phase([
                     LowerIndexing,
                     licm,
                     LowerStructs,
-                    post_lowering,
-                    # LowerStructs,
-                    Simplify
+                    post_lowering
+                    
                  ],
                  depends_on = loopify,
                  copy = True,

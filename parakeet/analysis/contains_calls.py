@@ -4,6 +4,10 @@ class FoundCall(Exception):
   pass
 
 class ContainsCalls(SyntaxVisitor):
+  
+  def visit_stmt(self, stmt):
+    SyntaxVisitor.visit_stmt(self, stmt)
+    
   def visit_Call(self, expr):
     raise FoundCall()
 
@@ -15,4 +19,8 @@ class ContainsCalls(SyntaxVisitor):
     return False
 
 def contains_calls(fn):
-  return ContainsCalls().visit_fn(fn)
+  result = ContainsCalls().visit_fn(fn)
+  # print "Contains calls?", fn.name, result
+  #if result: 
+  #  print "==> ", fn  
+  return result 
