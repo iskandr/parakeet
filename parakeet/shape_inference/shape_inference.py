@@ -28,6 +28,7 @@ class ShapeInference(SyntaxVisitor):
     assert isinstance(value, Shape)
     return value.dims[axis]
 
+  
   def is_tuple(self, x):
     return isinstance(x, Tuple)
 
@@ -169,7 +170,17 @@ class ShapeInference(SyntaxVisitor):
       result_dims.extend(arr.dims[n_idx:])
 
     return make_shape(result_dims)
-
+  
+  def slice_along_axis(self, arr, axis):
+    if arr.__class__ is Shape:
+      dims = arr.dims[:axis] + arr.dims[(axis+1):]
+      if len(dims) > 0:
+        return Shape(dims)
+      else:
+        return any_scalar
+    else:
+      return arr 
+  
   def tuple(self, elts):
     return Tuple(tuple(elts))
 
@@ -515,11 +526,6 @@ class ShapeInference(SyntaxVisitor):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     bounds = self.visit_expr(expr.shape)
-    if bounds.__class__ is Tuple: 
-      bounds_elts = bounds.elts 
-    else:
-      assert isinstance(bounds, shape.Scalar)
-      bounds_elts = [bounds] 
     acc_shape = self.visit_expr(expr.init)
     elt_result = symbolic_call(fn, [bounds])
     return symbolic_call(combine, [acc_shape, elt_result])
@@ -539,9 +545,17 @@ class ShapeInference(SyntaxVisitor):
     arg_shapes = self.visit_expr_list(expr.args)
     init = self.visit_expr(expr.init) if expr.init else None
     axis = unwrap_constant(expr.axis)
-    assert False, "Reduce needs an implementation"
-    
-
+    if axis is None:
+      assert len(arg_shapes) == 1
+      arg_shapes = [self.ravel(arg_shapes[0])]
+      axis = 0
+    if init is None:
+      assert len(arg_shapes) == 1
+      init = self.slice_along_axis(arg_shapes[0], axis)
+    elt_shapes = [self.slice_along_axis(arg, axis) for arg in arg_shapes]
+    elt_result = symbolic_call(fn, elt_shapes)
+    return symbolic_call(combine, [init, elt_result])
+      
   def visit_Scan(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)

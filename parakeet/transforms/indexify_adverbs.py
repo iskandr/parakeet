@@ -285,9 +285,8 @@ class IndexifyAdverbs(Transform):
                                 axis, 
                                 args, 
                                 cartesian_product=False)
-    
     max_arg = max_rank_arg(args)
-    shape = self.shape(max_arg) 
+    shape = self.shape(max_arg, axis) 
 
     return IndexReduce(fn = index_fn, 
                        init = init, 

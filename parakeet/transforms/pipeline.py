@@ -1,6 +1,6 @@
 from .. import config 
 from ..analysis import contains_adverbs, contains_calls 
-
+from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
@@ -24,16 +24,12 @@ from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
 from value_range_propagation import RangePropagation
-from parakeet.transforms import indexify_adverbs
-
-
 
 ####################################
 #                                  #
 #    HIGH LEVEL OPTIMIZATIONS      # 
 #                                  #
 ####################################
-
 
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, DCE],
                    memoize = False,
@@ -52,6 +48,7 @@ licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
 high_level_optimizations = Phase([
                                     Simplify, 
                                     inline_opt, Simplify, DCE,
+                                    ConstArgSpecialization, Simplify, DCE, 
                                     licm, Simplify, DCE, 
                                     fusion_opt, 
                                     fusion_opt, 

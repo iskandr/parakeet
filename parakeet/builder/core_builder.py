@@ -235,7 +235,6 @@ class CoreBuilder(object):
     y_is_tuple = self.is_tuple(y)
     
     if x_is_tuple and y_is_tuple:
-      print "TUPLECONCAT", self.num_tuple_elts(x), self.num_tuple_elts(y)
       if self.num_tuple_elts(x) == 0:
         return y 
       elif self.num_tuple_elts(y) == 0:
