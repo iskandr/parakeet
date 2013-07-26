@@ -97,15 +97,17 @@ class Simplify(Transform):
         return (expr.value,)
     return None
 
-  def immutable(self, expr, _immutable_classes = (Const,  Var,
-                                                   Closure, ClosureElt, 
-                                                   Tuple, TupleProj, 
-                                                   Cast, PrimCall, 
-                                                   TypedFn, UntypedFn)):
+  _immutable_classes = set([Const,  Var, Closure, ClosureElt, 
+                            Tuple, TupleProj, Cast, PrimCall, 
+                            TypedFn, UntypedFn])
+  
+  def immutable(self, expr):
     klass = expr.__class__ 
-    return (klass in _immutable_classes and 
-            (all(self.immutable(c) for c in expr.children())) or \
-           (klass is Attribute and isinstance(expr.type, ImmutableT)))
+    
+    result = (klass in self._immutable_classes and 
+                (all(self.immutable(c) for c in expr.children()))) or \
+             (klass is Attribute and isinstance(expr.type, ImmutableT))
+    return result 
     
                       
   def temp(self, expr, name = None, use_count = 1):

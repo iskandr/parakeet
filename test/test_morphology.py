@@ -196,7 +196,8 @@ def morph_close(x, dilate_shape, erode_shape = None):
 plot_rgb = False 
 
 def test_residual():
-  x = load_img(gray=False)
+  #x = load_img(gray=False)
+  x = np.random.randn(50,50,3)
   s1 = (5,20)
   s2 = (17,3)
   def filter(img):

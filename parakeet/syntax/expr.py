@@ -21,7 +21,7 @@ class Const(Expr):
   _members = ['value']
   
   def children(self):
-    return (self.value,)
+    return ()
 
   def short_str(self):
     return str(self.value)

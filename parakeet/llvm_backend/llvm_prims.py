@@ -91,7 +91,8 @@ _float_op_names = {
   prims.tan : 'tan', 
   prims.tanh : 'tanh',
   prims.arctan : 'atan', 
-  prims.arctanh : 'atanh', 
+  prims.arctanh : 'atanh',
+  prims.arctan2 : 'atan2',  
    
   prims.cos : 'cos', 
   prims.cosh : 'cosh', 
@@ -175,6 +176,5 @@ def get_float_op(prim, t, _float_decls = {}):
   llvm_value.add_attribute(llc.ATTR_NO_UNWIND)
   llvm_value.add_attribute(llc.ATTR_READONLY)
   _float_decls[key] = llvm_value
-  print prim, t, llvm_value
   return llvm_value 
 

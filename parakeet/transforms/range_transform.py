@@ -9,10 +9,14 @@ class RangeTransform(Transform):
   """
   
   def pre_apply(self, old_fn):
+    
     analysis = ValueRangeAnalyis()
     analysis.visit_fn(old_fn)
-    self.ranges = analysis.ranges 
-  
+    self.ranges = analysis.ranges
+    
+    print "RANGE ANALYSIS RESULT", self.ranges  
+    print "...for fn", old_fn 
+    
   def get(self, x):
     if x.__class__ is Var and x.name in self.ranges:
       return self.ranges[x.name]

@@ -68,4 +68,11 @@ def logaddexp2(x, y):
   pos = diff > 0
   neg = diff <= 0
   return pos * (x + log2_1p(2 ** -diff)) + neg * (y + log2_1p(2 ** diff))
+
+@jit 
+def true_divide(x, y):
+  """
+  Not exactly true divide, since I guess it's sometimes supposed to stay an int
+  """
+  return (x + 0.0) / (y + 0.0)
   

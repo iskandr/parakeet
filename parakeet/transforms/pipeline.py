@@ -35,12 +35,16 @@ from range_propagation import RangePropagation
 fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, DCE],
                    memoize = False,
                    run_if = contains_adverbs)
+
 inline_opt = Phase(Inliner, 
                    config_param = 'opt_inline', 
                    cleanup = [], 
-                   run_if = contains_calls)
+                   run_if = contains_calls, 
+                   memoize = False )
 
-copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
+copy_elim = Phase(CopyElimination, 
+                  config_param = 'opt_copy_elimination', 
+                  memoize = False)
 
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
@@ -50,15 +54,15 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
                                     memoize = False)
 high_level_optimizations = Phase([
                                     Simplify, 
-                                    inline_opt, Simplify, DCE,
+                                    inline_opt, 
                                     # ConstArgSpecialization, Simplify, DCE,
-                                    symbolic_range_propagation, 
-                                    licm, Simplify, DCE,
+                                    symbolic_range_propagation,   
+                                    licm,
                                     fusion_opt, 
                                     fusion_opt, 
-                                    copy_elim, Simplify, DCE, 
+                                    copy_elim
                                  ], 
-                                 copy = True)
+                                 copy = True, cleanup = [Simplify, DCE])
 
 indexify = Phase([IndexifyAdverbs, 
                   inline_opt, Simplify, DCE, 

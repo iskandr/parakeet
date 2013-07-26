@@ -78,7 +78,7 @@ class Phase(object):
        getattr(config, self.config_param) == False:
       return fn
 
-    original_key = fn.name, fn.copied_by
+    original_key = fn.name, fn.copied_by, fn.version 
     if original_key in self.cache:
       return self.cache[original_key]
 
@@ -102,5 +102,4 @@ class Phase(object):
       self.cache[original_key] = fn
       new_key = fn.name, fn.copied_by
       self.cache[new_key] = fn
-
     return fn

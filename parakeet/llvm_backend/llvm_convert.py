@@ -105,5 +105,6 @@ def convert(llvm_value, old_ptype, new_ptype, builder):
   elif isinstance(old_ptype, SignedT):
     return from_signed(llvm_value, new_ptype, builder)
   else:
-    assert isinstance(old_ptype, (BoolT, UnsignedT))
+    assert isinstance(old_ptype, (BoolT, UnsignedT)), \
+      "Unexpected type %s can't be converted to %s" % (old_ptype, new_ptype)
     return from_unsigned(llvm_value, new_ptype, builder)

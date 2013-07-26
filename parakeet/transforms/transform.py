@@ -175,6 +175,13 @@ class Transform(Builder):
     expr.init = self.transform_if_expr(expr.init)
     return expr
   
+  def transform_IndexScan(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.shape = self.transform_expr(expr.shape)
+    expr.init = self.transform_if_expr(expr.init)
+    return expr
+  
   def transform_Map(self, expr):
     expr.axis = self.transform_if_expr(expr.axis)
     expr.fn = self.transform_expr(expr.fn)

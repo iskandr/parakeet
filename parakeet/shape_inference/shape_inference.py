@@ -249,12 +249,12 @@ class ShapeInference(SyntaxVisitor):
   def identity_function(self, x):
     return x
   
-  def ravel(self, x):
-    assert isinstance(x, Shape)
-    nelts = 1 
-    for d in x.dims:
-      nelts *= d
-    return Shape((nelts,)) 
+  #def ravel(self, x):
+  #  assert isinstance(x, Shape)
+  #  nelts = 1 
+  #  for d in x.dims:
+  #    nelts *= d
+  #  return Shape((nelts,)) 
   
   
   def visit_fn(self, fn):
@@ -374,8 +374,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_Reshape(self, expr):
     return self.shape_from_tuple(expr.shape)
   
-  def visit_Ravel(self, expr):
-    shape = self.visit_expr(expr.array)
+  def ravel(self, shape):        
     if isinstance(shape, Shape):
       nelts = const(1)
       for dim in shape.dims:
@@ -383,6 +382,11 @@ class ShapeInference(SyntaxVisitor):
       return Shape((nelts,))
     else:
       return any_value 
+  
+
+  def visit_Ravel(self, expr):
+    shape = self.visit_expr(expr.array)
+    return self.ravel(shape)
   
   def visit_Range(self, expr):
     start = self.visit_expr(expr.start)

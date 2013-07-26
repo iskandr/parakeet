@@ -36,7 +36,7 @@ def test_arctan():
   unary(np.arctan)
   
 def test_arctan2():
-  unary(np.arctan2)
+  binary(np.arctan2)
   
   
 def test_sinh():

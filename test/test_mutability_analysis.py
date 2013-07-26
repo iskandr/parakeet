@@ -3,10 +3,9 @@ import numpy as np
 import parakeet
 import testing_helpers
 
-from parakeet import mutability_analysis
-from parakeet.array_type import make_array_type 
-from parakeet.core_types import Int64, Bool, ptr_type
-from parakeet.pipeline import lowering 
+from parakeet.analysis import mutability_analysis
+from parakeet import make_array_type, Int64, Bool, ptr_type, specialize
+from parakeet.transforms.pipeline import lowering 
 
 def f(x,y):
     x[0] = True
@@ -15,7 +14,7 @@ def f(x,y):
 def test_mutable_array():
   bool_vec = np.array([True, False])
   int_vec = np.array([1,2])
-  _, typed, _, _ =  testing_helpers.specialize_and_compile(f, [bool_vec, int_vec])
+  typed, _, =  specialize(f, [bool_vec, int_vec])
    
   mutable_types = mutability_analysis.find_mutable_types(typed)
   int_array_t = make_array_type(Int64, 1)

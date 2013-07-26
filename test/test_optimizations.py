@@ -4,8 +4,8 @@ import parakeet
 import testing_helpers
 
 from parakeet import config, each, syntax
-from parakeet.pipeline import lowering
-from parakeet.syntax_visitor import SyntaxVisitor
+from parakeet.transforms.pipeline import lowering
+from parakeet.analysis.syntax_visitor import SyntaxVisitor
 from testing_helpers import expect
 
 config.opt_fusion = True 

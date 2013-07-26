@@ -1,7 +1,7 @@
 from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
                        TypedFn, UntypedFn,  Closure, ClosureElt,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
-                       Alloc, Array, Call, Struct, Shape, Strides, 
+                       Alloc, Array, Call, Struct, Shape, Strides, Range, 
                        AllocArray, ArrayView, Cast, Slice, TupleProj, TypeValue,  
                        Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
 
@@ -92,6 +92,12 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.shape)
     self.visit_expr(expr.init)
 
+  def visit_IndexScan(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.combine)
+    self.visit_expr(expr.shape)
+    self.visit_expr(expr.init)
+
   def visit_Map(self, expr):
     self.visit_expr(expr.fn)
     for arg in expr.args:
@@ -152,17 +158,18 @@ class SyntaxVisitor(object):
     Struct : 'visit_Struct', 
     AllocArray : 'visit_AllocArray', 
     ArrayView : 'visit_ArrayView', 
-    Array : 'visit_Array', 
+    Array : 'visit_Array',
+    Range : 'visit_Range',  
     Shape : 'visit_Shape', 
     Strides : 'visit_Strides', 
     Alloc : 'visit_Alloc', 
     Cast : 'visit_Cast', 
     Call : 'visit_Call', 
-    Map : 'visit_Map', 
+    Map : 'visit_Map',
+    OuterMap : 'visit_OuterMap',
     IndexMap : 'visit_IndexMap', 
-    OuterMap : 'visit_OuterMap', 
-    Reduce : 'visit_Reduce', 
-    IndexReduce : 'visit_IndexReduce', 
+    Reduce : 'visit_Reduce',
+    IndexReduce : 'visit_IndexReduce',
     Scan : 'visit_Scan', 
     IndexScan : 'visit_IndexScan',
     Closure : 'visit_Closure', 

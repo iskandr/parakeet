@@ -8,6 +8,7 @@ class RangePropagation(RangeTransform):
   
   def visit_Var(self, expr):
     if expr.name in self.ranges:
+      print "FOUND", expr.name, self.ranges[expr.name]
       (l,u) = self.ranges[expr.name]
       if l == u:
         return Const(l, type = expr.type)

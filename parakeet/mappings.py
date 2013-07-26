@@ -102,6 +102,10 @@ function_mappings = {
   np.multiply : prims.multiply,
    
   np.divide : prims.divide, 
+  # TODO: Fix all the different divide functions 
+  np.true_divide : lib.numpy_math.true_divide, 
+  np.floor_divide : prims.divide, 
+   
   np.modf : prims.mod,  
   np.fmod : prims.mod, 
   np.mod : prims.remainder,

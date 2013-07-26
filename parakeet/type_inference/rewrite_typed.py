@@ -141,7 +141,7 @@ class RewriteTyped(Transform):
   def get_index_fn(self, array_t, idx_t,  _index_function_cache = {}):
     key = (array_t, idx_t) 
     if key in _index_function_cache:
-      return self.index_function_cache[key]
+      return _index_function_cache[key]
     array_name = names.fresh("array")
     array_var = Var(array_name, type = array_t)
     idx_name = names.fresh("idx")
