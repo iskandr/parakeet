@@ -1,11 +1,13 @@
 from .. import names
-from ..ndtypes import (TupleT, ScalarT, IntT, Int64, ArrayT, 
-                       combine_type_list, increase_rank, 
+from ..ndtypes import (TupleT, ScalarT, IntT, Int64, ArrayT, Unknown, StructT,  
+                       combine_type_list, increase_rank, lower_rank,  
                        make_array_type, make_tuple_type, make_slice_type, 
                        type_conv)
+
 from ..syntax import (Array, AllocArray, Attribute, Cast, Const, Expr, Index, 
-                      Range, Ravel, Reshape, Slice, TupleProj, Var)
-from ..syntax.helpers import get_types 
+                      Range, Ravel, Reshape, Slice, Tuple, TupleProj, Var, 
+                      ForLoop, While, Assign, Return, If)
+from ..syntax.helpers import get_types, is_true, is_false 
 from ..transforms import Transform
 
 class LocalTypeInference(Transform):
@@ -141,3 +143,146 @@ class LocalTypeInference(Transform):
       assert t.__class__ is TupleT, \
          "Unexpected argument type for 'len': %s" % t
       return Const(len(t.elt_types), type = Int64)
+    
+  def infer_phi(self, result_var, val):
+    """
+    Don't actually rewrite the phi node, just add any necessary types to the
+    type environment
+    """
+
+    new_val = self.transform_expr(val)
+    new_type = new_val.type
+    old_type = self.type_env.get(result_var, Unknown)
+    new_result_var = self.var_map.lookup(result_var)
+    self.type_env[new_result_var]  = old_type.combine(new_type)
+
+  def infer_phi_nodes(self, nodes, direction):
+    for (var, values) in nodes.iteritems():
+      self.infer_phi(var, direction(values))
+
+  def infer_left_flow(self, nodes):
+    return self.infer_phi_nodes(nodes, lambda (x, _): x)
+
+  def infer_right_flow(self, nodes):
+    return self.infer_phi_nodes(nodes, lambda (_, x): x)
+
+  
+  def transform_phi_node(self, result_var, (left_val, right_val)):
+    """
+    Rewrite the phi node by rewriting the values from either branch, renaming
+    the result variable, recording its new type, and returning the new name
+    paired with the annotated branch values
+    """
+
+    new_left = self.transform_expr(left_val)
+    new_right = self.transform_expr(right_val)
+    old_type = self.type_env.get(result_var, Unknown)
+    new_type = old_type.combine(new_left.type).combine(new_right.type)
+    new_var = self.var_map.lookup(result_var)
+    self.type_env[new_var] = new_type
+    return (new_var, (new_left, new_right))
+
+  def transform_phi_nodes(self, nodes):
+    new_nodes = {}
+    for old_k, (old_left, old_right) in nodes.iteritems():
+      new_name, (left, right) = self.transform_phi_node(old_k, (old_left, old_right))
+      new_nodes[new_name] = (left, right)
+    return new_nodes
+
+  def annotate_lhs(self, lhs, rhs_type):
+
+    lhs_class = lhs.__class__
+    if lhs_class is Tuple:
+      if rhs_type.__class__ is TupleT:
+        assert len(lhs.elts) == len(rhs_type.elt_types)
+        new_elts = [self.annotate_lhs(elt, elt_type) 
+                    for (elt, elt_type) in zip(lhs.elts, rhs_type.elt_types)]
+      else:
+        assert rhs_type.__class__ is ArrayT, \
+            "Unexpected right hand side type %s for %s" % (rhs_type, lhs)
+        elt_type = lower_rank(rhs_type, 1)
+        new_elts = [self.annotate_lhs(elt, elt_type) for elt in lhs.elts]
+      tuple_t = make_tuple_type(get_types(new_elts))
+      return Tuple(new_elts, type = tuple_t)
+    elif lhs_class is Index:
+      new_arr = self.transform_expr(lhs.value)
+      new_idx = self.transform_expr(lhs.index)
+      assert new_arr.type.__class__ is ArrayT, \
+          "Expected array, got %s" % new_arr.type
+      elt_t = new_arr.type.index_type(new_idx.type)
+      return Index(new_arr, new_idx, type = elt_t)
+    elif lhs_class is Attribute:
+      name = lhs.name
+      struct = self.transform_expr(lhs.value)
+      struct_t = struct.type
+      assert isinstance(struct_t, StructT), \
+          "Can't access fields on value %s of type %s" % \
+          (struct, struct_t)
+      field_t = struct_t.field_type(name)
+      return Attribute(struct, name, field_t)
+    else:
+      assert lhs_class is Var, "Unexpected LHS: %s" % (lhs,)
+      new_name = self.var_map.lookup(lhs.name)
+      old_type = self.type_env.get(new_name, Unknown)
+      new_type = old_type.combine(rhs_type)
+      self.type_env[new_name] = new_type
+      return Var(new_name, type = new_type)
+
+  def transform_Assign(self, stmt):
+    rhs = self.transform_expr(stmt.rhs)
+    lhs = self.annotate_lhs(stmt.lhs, rhs.type)
+    return Assign(lhs, rhs)
+  
+  
+  
+  def transform_If(self, stmt):
+    cond = self.transform_expr(stmt.cond) 
+
+    assert isinstance(cond.type, ScalarT), \
+        "Condition %s has type %s but must be convertible to bool" % (cond, cond.type)
+    # it would be cleaner to not have anything resembling an optimization 
+    # inter-mixed with the type inference, but I'm not sure how else to 
+    # support 'if x is None:...'
+    if is_true(cond):
+      self.blocks.top().extend(self.transform_block(stmt.true))
+      for (name, (left,_)) in stmt.merge.iteritems():
+        typed_left = self.transform_expr(left)
+        typed_var = self.annotate_lhs(Var(name), typed_left.type) 
+        self.assign(typed_var, typed_left)
+      return
+    
+    if is_false(cond):
+      self.blocks.top().extend(self.transform_block(stmt.false))
+      for (name, (_,right)) in stmt.merge.iteritems():
+        typed_right = self.transform_expr(right)
+        typed_var = self.annotate_lhs(Var(name), typed_right.type)
+        self.assign(typed_var, typed_right)
+      return
+    true = self.transform_block(stmt.true)
+    false = self.transform_block(stmt.false) 
+    merge = self.transform_phi_nodes(stmt.merge)
+    return If(cond, true, false, merge)
+
+  def transform_Return(self, stmt):
+    ret_val = self.transform_expr(stmt.value)
+    curr_return_type = self.type_env["$return"]
+    self.type_env["$return"] = curr_return_type.combine(ret_val.type)
+    return Return(ret_val)
+
+  def transform_While(self, stmt):
+    self.infer_left_flow(stmt.merge)
+    cond = self.transform_expr(stmt.cond)
+    body = self.transform_block(stmt.body)
+    merge = self.transform_phi_nodes(stmt.merge)
+    return While(cond, body, merge)
+
+  def transform_ForLoop(self, stmt):
+    self.infer_left_flow(stmt.merge)
+    start = self.transform_expr(stmt.start)
+    stop = self.transform_expr(stmt.stop)
+    step = self.transform_expr(stmt.step)
+    lhs_t = start.type.combine(stop.type).combine(step.type)
+    var = self.annotate_lhs(stmt.var, lhs_t)
+    body = self.transform_block(stmt.body)
+    merge = self.transform_phi_nodes(stmt.merge)
+    return ForLoop(var, start, stop, step, body, merge)

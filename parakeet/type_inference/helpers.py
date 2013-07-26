@@ -1,7 +1,7 @@
 
 from .. import names 
 from ..ndtypes import ClosureT, make_closure_type
-from ..syntax import Expr, UntypedFn, Closure, Var, Return, ClosureElt 
+from ..syntax import Expr, UntypedFn, Closure, Var, Return, ClosureElt, TypedFn  
 from ..syntax.fn_args import FormalArgs
 from ..syntax.helpers import get_types 
 
@@ -52,3 +52,25 @@ def mk_untyped_identity():
                    body = [Return(var_expr)])
 
 untyped_identity_function = mk_untyped_identity()
+
+def _get_fundef(fn):
+  c = fn.__class__ 
+  if c is UntypedFn or c is TypedFn:
+    return fn
+  assert c is str, "Unexpected function %s : %s"  % (fn, fn.type)
+  return UntypedFn.registry[fn]
+
+def _get_closure_type(fn):
+  assert isinstance(fn, (UntypedFn, TypedFn, ClosureT, Closure, Var)), \
+    "Expected function, got %s" % fn
+  c = fn.__class__ 
+  if c is ClosureT:
+    return fn
+  elif c is Closure:
+    return fn.type
+  elif c is Var:
+    assert fn.type.__class__ is ClosureT
+    return fn.type
+  else:
+    fundef = _get_fundef(fn)
+    return make_closure_type(fundef, [])
