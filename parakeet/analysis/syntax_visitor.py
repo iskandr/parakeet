@@ -1,7 +1,7 @@
 from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
                        TypedFn, UntypedFn,  Closure, ClosureElt,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
-                       Alloc, Call, Struct, Shape, Strides, 
+                       Alloc, Array, Call, Struct, Shape, Strides, 
                        AllocArray, ArrayView, Cast, Slice, TupleProj, TypeValue,  
                        Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
 
@@ -56,6 +56,10 @@ class SyntaxVisitor(object):
     for arg in expr.args:
       self.visit_expr(arg)
 
+  def visit_Array(self, expr):
+    for elt in expr.elts:
+      self.visit_expr(elt)
+      
   def visit_ArrayView(self, expr):
     self.visit_expr(expr.data)
     self.visit_expr(expr.shape)
@@ -148,6 +152,7 @@ class SyntaxVisitor(object):
     Struct : 'visit_Struct', 
     AllocArray : 'visit_AllocArray', 
     ArrayView : 'visit_ArrayView', 
+    Array : 'visit_Array', 
     Shape : 'visit_Shape', 
     Strides : 'visit_Strides', 
     Alloc : 'visit_Alloc', 

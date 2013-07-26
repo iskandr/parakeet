@@ -10,5 +10,5 @@ from ast_conversion import translate_function_value, translate_function_ast
 from run_function import run_typed_fn, run_python_fn, specialize
 
 def typed_repr(python_fn, args):
-  _, typed_fn, _ = specialize(python_fn, args)
+  typed_fn, _ = specialize(python_fn, args)
   return typed_fn 

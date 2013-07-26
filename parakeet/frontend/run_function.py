@@ -4,6 +4,8 @@ from .. ndtypes import type_conv, Type
 from ..syntax import UntypedFn, TypedFn, ActualArgs
 from .. transforms import pipeline
  
+
+ 
 def _typeof(arg):
   if hasattr(arg, 'type') and isinstance(arg.type, Type):
     return arg.type 
@@ -14,14 +16,18 @@ def prepare_args(fn, args, kwargs):
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
   values and their types
   """
-  assert isinstance(fn, UntypedFn)
+  assert not isinstance(fn, TypedFn), "[prepare_args] Only works for untyped functions"
+  if not isinstance(fn, UntypedFn):
+    import ast_conversion
+    fn = ast_conversion.translate_function_value(fn)   
+    
   nonlocals = list(fn.python_nonlocals())
   arg_values = ActualArgs(nonlocals + list(args), kwargs)
 
   # get types of all inputs
   arg_types = arg_values.transform(_typeof)
   return arg_values, arg_types
-
+  
 
 def specialize(untyped, args, kwargs = {}):
   """
@@ -32,6 +38,10 @@ def specialize(untyped, args, kwargs = {}):
   arguments in a linear order. 
   """
 
+  if not isinstance(untyped, UntypedFn):
+    import ast_conversion
+    untyped = ast_conversion.translate_function_value(untyped)
+       
   arg_values, arg_types = prepare_args(untyped, args, kwargs)
   
   # convert the awkward mix of positional, named, and starargs 
@@ -46,7 +56,24 @@ def specialize(untyped, args, kwargs = {}):
   # apply high level optimizations 
   optimized_fn = high_level_optimizations.apply(typed_fn)
   return optimized_fn, linear_args 
-  
+
+def prepare_llvm(fn, args):
+  from ..llvm_backend import ctypes_to_generic_value, compile_fn 
+
+
+  lowered_fn = pipeline.lowering.apply(fn)
+  llvm_fn = compile_fn(lowered_fn).llvm_fn
+
+    # calling conventions are that output must be preallocated by the caller'
+  ctypes_inputs = [t.from_python(v) 
+                   for (v,t) 
+                   in zip(args, fn.input_types)]
+  gv_inputs = [ctypes_to_generic_value(cv, t) 
+               for (cv,t) 
+               in zip(ctypes_inputs, fn.input_types)]
+  return llvm_fn, gv_inputs 
+
+
 def run_typed_fn(fn, args, backend = None):
   assert isinstance(fn, TypedFn)
   actual_types = tuple(type_conv.typeof(arg) for arg in  args)
@@ -59,17 +86,12 @@ def run_typed_fn(fn, args, backend = None):
     backend = config.default_backend
     
   if backend == 'llvm':
-    from ..llvm_backend import ctypes_to_generic_value, generic_value_to_python, compile_fn 
     from ..llvm_backend.llvm_context import global_context
+    from ..llvm_backend import generic_value_to_python 
+    
+    llvm_fn, gv_inputs = prepare_llvm(fn, args) 
+    
     exec_engine = global_context.exec_engine
-    lowered_fn = pipeline.lowering.apply(fn)
-    llvm_fn = compile_fn(lowered_fn).llvm_fn
-
-    # calling conventions are that output must be preallocated by the caller'
-    ctypes_inputs = [t.from_python(v) for (v,t) in zip(args, expected_types)]
-    gv_inputs = [ctypes_to_generic_value(cv, t) for (cv,t) in
-               zip(ctypes_inputs, expected_types)]
-
     gv_return = exec_engine.run_function(llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, fn.return_type)
   
@@ -82,9 +104,12 @@ def run_typed_fn(fn, args, backend = None):
     
     from ..llvm_backend.llvm_context import global_context
     exec_engine = global_context.exec_engine
+    # TODO: 
+    # scan outer scope of function to see if it's all simple statements 
+    # don't run in Shiver if there are loops 
     # import shiver 
-    # shiver.parfor(fn, niters, fixed_args, ee = exec_engine)
-    assert False, "Shiver not yet implemented"
+    
+    assert False, "Shiver backend not yet implemented"
   else:
     assert False, "Unknown backend %s" % backend 
 
