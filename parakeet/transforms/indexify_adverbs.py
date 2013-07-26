@@ -209,7 +209,7 @@ class IndexifyAdverbs(Transform):
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
     fn = expr.fn 
-    dimsizes = [self.shape(arg, axis) for arg in args]
+    # dimsizes = [self.shape(arg, axis) for arg in args]
     # recursively descend down the function bodies to pull together nested ParFors 
     if axis is None: 
       args = [self.ravel(arg) for arg in args]
@@ -218,11 +218,12 @@ class IndexifyAdverbs(Transform):
     outer_shape = self.tuple(counts)
     zero = self.int(0)
     first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
-    output =  self.create_map_output_array(fn, first_values, outer_shape)
+    # self.create_output_array(fn, inner_args, outer_shape, name)
+    output =  self.create_output_array(fn, first_values, outer_shape)
     loop_body = self.indexify_fn(fn, axis, args, 
                                  cartesian_product = True, 
                                  output = output)
-    self.parfor(dimsizes, loop_body)
+    self.parfor(outer_shape, loop_body)
     return output 
   
   def transform_IndexMap(self, expr, output = None):

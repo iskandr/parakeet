@@ -368,20 +368,20 @@ class TypeInference(LocalTypeInference):
                        type = result_type,
                        init = init)
 
-  #def transform_AllPairs(self, expr):
-  #  closure = self.transform_expr(expr.fn)
-  #  new_args = self.transform_args (expr.args, flat = True)
-  #  arg_types = get_types(new_args)
-  #  assert len(arg_types) == 2
-  #  xt,yt = arg_types
-  #  result_type, typed_fn = specialize_AllPairs(closure.type, xt, yt)
-  #  axis = self.transform_if_expr(expr.axis)
-  #  if axis is None or self.is_none(axis):
-  #    axis = zero_i64
-  #  return syntax.AllPairs(fn = make_typed_closure(closure, typed_fn),
-  #                         args = new_args,
-  #                         axis = axis,
-  #                         type = result_type)
+  def transform_OuterMap(self, expr):
+    closure = self.transform_expr(expr.fn)
+    new_args = self.transform_args (expr.args, flat = True)
+    arg_types = get_types(new_args)
+    n_args = len(arg_types)
+    assert n_args > 0
+    result_type, typed_fn = specialize_OuterMap(closure.type, arg_types)
+    axis = self.transform_if_expr(expr.axis)
+    if axis is None or self.is_none(axis):
+      axis = zero_i64
+    return syntax.OuterMap(fn = make_typed_closure(closure, typed_fn),
+                           args = new_args,
+                           axis = axis,
+                           type = result_type)
   
 
   
@@ -612,7 +612,7 @@ def infer_Scan(map_fn, combine_fn, emit_fn, array_types, init_type = None):
   return t
 
 def specialize_OuterMap(fn, array_types):
-  elt_types = [lower_rank(t) for t in array_types]
+  elt_types = [lower_rank(t, 1) for t in array_types]
   typed_map_fn = specialize(fn, elt_types)
   elt_result_t = typed_map_fn.return_type
   result_t = array_type.increase_rank(elt_result_t, 2)
