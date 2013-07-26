@@ -313,13 +313,19 @@ class IndexifyAdverbs(Transform):
                                 axis, 
                                 args, 
                                 cartesian_product=False)
-    assert init is not None
+    if self.is_none(init):
+      init = self.call(index_fn, [self.int(0)])  
+    #assert init is not None, "Didn't expect init of Scan to be None"
+    #assert init.type == self.return_type(index_fn), \
+    # "Mismatch between type of init %s and return type of fn %s" % (init.type, 
+    #                                                                 self.return_type(index_fn))
     max_arg = max_rank_arg(args)
     shape = self.shape(max_arg) 
+    niters = self.tuple_proj(shape, axis)
     return IndexScan(fn = index_fn, 
                      init = init, 
                      combine = combine, 
-                     shape = shape, 
+                     shape = niters, 
                      type = expr.type)
   
   def transform_Filter(self, expr):
@@ -340,37 +346,5 @@ class IndexifyAdverbs(Transform):
         self.transform_OuterMap(stmt.rhs, output = stmt.lhs)
        
     return Transform.transform_Assign(self, stmt)
-  
-  """
-  def transform_Map(self, expr, output = None):
-    fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args)
-    axis = unwrap_constant(expr.axis)
-    return self.eval_map(fn, args, axis, output = output)
 
-  def transform_Reduce(self, expr):
-    fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args)
-    combine = self.transform_expr(expr.combine)
-    init = self.transform_if_expr(expr.init)
-    axis = unwrap_constant(expr.axis)
-    return self.eval_reduce(fn, combine, init, args, axis)
-
-  def transform_Scan(self, expr):
-    fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args)
-    combine = self.transform_expr(expr.combine)
-    emit = self.transform_expr(expr.emit)
-    init = self.transform_if_expr(expr.init)
-    axis = unwrap_constant(expr.axis)
-    return self.eval_scan(fn, combine, emit, init, args, axis)
-
-  def transform_AllPairs(self, expr):
-    fn = self.transform_expr(expr.fn)
-    args = self.transform_expr_list(expr.args)
-    assert len(args) == 2
-    x,y = self.transform_expr_list(args)
-    axis = unwrap_constant(expr.axis)
-    return self.eval_allpairs(fn, x, y, axis)
-  """
   

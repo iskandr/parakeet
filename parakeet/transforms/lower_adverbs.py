@@ -34,7 +34,37 @@ class LowerAdverbs(Transform):
   def get_loop_counter(self, depth):
     loop_counter_name = self._loop_counters[depth % len(self._loop_counters)] 
     return  self.fresh_var(Int64, loop_counter_name)
+  
+   
+  def build_nested_reduction(self, indices, bounds, old_acc, body_fn):
+      if len(bounds) == 0:
+        if len(indices) > 1:
+          indices = self.tuple(indices)
+        else:
+          indices = indices[0]
+        new_acc = body_fn(indices, old_acc)
+        return new_acc 
+      else:
+        acc_t = old_acc.type 
+        acc_before = self.fresh_var(acc_t, "acc_before")
+        loop_counter = self.get_loop_counter(len(indices)) 
         
+        future_indices = indices + (loop_counter,)
+        future_bounds = bounds[1:]
+        self.blocks.push()
+        acc_after = self.build_nested_reduction(future_indices, future_bounds, acc_before, body_fn)
+        body = self.blocks.pop()
+        merge = {acc_before.name : (old_acc, acc_after)}
+        for_loop = ForLoop(var = loop_counter, 
+                          start = self.int(0), 
+                          stop = bounds[0], 
+                          step = self.int(1), 
+                          body = body, 
+                          merge = merge)
+        self.blocks.append_to_current(for_loop)
+        return acc_after
+
+  
   def transform_IndexReduce(self, expr):
     init = self.transform_if_expr(expr.init)
     fn = self.transform_expr(expr.fn)
@@ -48,42 +78,43 @@ class LowerAdverbs(Transform):
       bounds = self.tuple_elts(shape)
     else:
       bounds = [shape]
-    acc_t = init.type
+    def body(indices, old_acc):
+      elt = self.call(fn, (indices,))
+      return self.call(combine, (old_acc, elt))
+       
+    return self.build_nested_reduction(
+              indices = (), 
+              bounds = bounds, 
+              old_acc = init, 
+              body_fn = body)
 
+
+  def transform_IndexScan(self, expr, output = None):
+    init = self.transform_if_expr(expr.init)
+    fn = self.transform_expr(expr.fn)
+    combine = self.transform_expr(expr.combine)
     
-    def build_body(indices, bounds, old_acc):
-      if len(bounds) == 0:
-        if len(indices) > 1:
-          indices = self.tuple(indices)
-        else:
-          indices = indices[0]
-        elt = self.call(fn, (indices,))
-        new_acc = self.call(combine, (old_acc, elt))
-        return new_acc 
-      else:
-        acc_before = self.fresh_var(acc_t, "acc_before")
-        loop_counter = self.get_loop_counter(len(indices)) 
-        
-        future_indices = indices + (loop_counter,)
-        future_bounds = bounds[1:]
-        self.blocks.push()
-        acc_after = build_body(future_indices, future_bounds, acc_before)
-        body = self.blocks.pop()
-        merge = {acc_before.name : (old_acc, acc_after)}
-        for_loop = ForLoop(var = loop_counter, 
-                          start = self.int(0), 
-                          stop = bounds[0], 
-                          step = self.int(1), 
-                          body = body, 
-                          merge = merge)
-        self.blocks.append_to_current(for_loop)
-        return acc_after
-         
-    return build_body(indices = (), bounds = bounds, old_acc = init)
-
-
-  def transform_IndexScan(self, expr):
-    assert False, "IndexScan not implemented" 
+    shape = expr.shape 
+    if output is None:
+      output = self.create_output_array(fn, [shape], shape)
+      
+    
+    assert init is not None, "Can't have empty 'init' field for IndexScan"
+    assert init.type == self.return_type(fn), \
+      "Mismatching types init=%s, fn returns %s" % (init.type, self.return_type(fn))
+    if isinstance(shape.type, TupleT): 
+      bounds = self.tuple_elts(shape)
+    else:
+      bounds = [shape]
+      
+    def body(indices, old_acc):
+      elt = self.call(fn, (indices,))
+      new_acc = self.call(combine, (old_acc, elt))
+      self.setidx(output, indices, new_acc)
+      return new_acc
+       
+    self.build_nested_reduction(indices = (), bounds = bounds, old_acc = init, body_fn = body)
+    return output 
   
   def transform_IndexFilter(self, expr):
     assert False, "IndexFilter not implemented"

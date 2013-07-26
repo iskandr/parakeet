@@ -324,7 +324,7 @@ class TypeInference(LocalTypeInference):
       #assert is_zero(axis), "Unexpected axis %s : %s" % (axis, axis.type)
       arg = new_args[0]
       first_elt = syntax.Index(arg, zero_i64, 
-                                  type = arg.type.index_type(zero_i64))
+                               type = arg.type.index_type(zero_i64))
       first_combine = specialize(combine_fn, (init_type, first_elt.type))
       first_combine_closure = make_typed_closure(combine_fn, first_combine)
       init = syntax.Call(first_combine_closure, (init, first_elt), 
@@ -348,8 +348,11 @@ class TypeInference(LocalTypeInference):
     emit_fn = self.transform_expr(expr.emit)
     new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
+    
     init = self.transform_expr(expr.init) if expr.init else None
+    
     init_type = get_type(init) if init else None
+    
     result_type, typed_map_fn, typed_combine_fn, typed_emit_fn = \
         specialize_Scan(map_fn.type, combine_fn.type, emit_fn.type,
                         arg_types, init_type)
@@ -360,6 +363,7 @@ class TypeInference(LocalTypeInference):
     if axis is None or self.is_none(axis):
       assert adverb_helpers.max_rank(arg_types) == 1
       axis = zero_i64
+      
     return syntax.Scan(fn = make_typed_closure(map_fn, typed_map_fn),
                        combine = make_typed_closure(combine_fn,
                                                     typed_combine_fn),

@@ -23,8 +23,6 @@ else:
   empty_like = np.empty_like 
 import time 
 
-
-
   
 k = 7
 width, height = 1024,768
@@ -33,8 +31,6 @@ if running_pypy:
   image = np.array([[randint(0,256) for _ in xrange(width)] for _ in xrange(height)])
 else:
   image = np.random.randint(0, 256,  (width, height)) / 256.0
-
-
 
 def run(fn, name, imshow=False):
   print 
@@ -52,10 +48,12 @@ def run(fn, name, imshow=False):
         pylab.figure()
         pylab.imshow(result)
         pylab.figure()
-        pylab.imshow(scipy_result)
-        pylab.show()
-      if not running_pypy:
+        if scipy_result is not None:
+          pylab.imshow(scipy_result)
+          pylab.show()
+      if not running_pypy and scipy_result is not None:
         assert allclose(result, scipy_result)
+
     except KeyboardInterrupt:
       raise   
     except:
@@ -227,14 +225,15 @@ def dilate_decompose_interior(x, k):
   return np.array([dilate_1d_interior(y[:, col_idx],k) for col_idx in xrange(n)]).T
  
 if __name__ == '__main__':
-
   if not running_pypy: 
+    scipy_result = None 
     import scipy.ndimage
     with timer('scipy'):
       scipy_result = scipy.ndimage.grey_dilation(image, k, mode='nearest')
     from numba import autojit 
     from parakeet import jit 
-    
+    jit(dilate_naive)(image, k)
+
     run(dilate_naive, 'naive', imshow=False)
     run(dilate_naive_inline, 'naive-inline')
     run(dilate_decompose_loops, 'decompose-loops')    
