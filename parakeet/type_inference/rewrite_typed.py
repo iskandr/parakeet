@@ -187,7 +187,7 @@ class RewriteTyped(Transform):
       index_fn = self.get_index_fn(expr.value.type, index_elt_t)
       index_closure = self.closure(index_fn, [expr.value])
       return Map(fn = index_closure, 
-                 args = index_array, 
+                 args = [index_array], 
                  type = expr.value.type, 
                  axis = zero_i64)
     else:

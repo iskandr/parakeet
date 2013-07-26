@@ -1,8 +1,8 @@
 from .. import names 
-from .. syntax import TypedFn, Var, Const, Attribute, Index, PrimCall
-from .. syntax import If, Assign, While, ExprStmt, Return, ForLoop 
-from .. syntax import  Slice, Struct
-from .. syntax import Tuple, TupleProj, Cast, Alloc     
+from .. syntax import (TypedFn, Var, Const, Attribute, Index, PrimCall, 
+                       If, Assign, While, ExprStmt, Return, ForLoop,  
+                       Slice, Struct, Tuple, TupleProj, Cast, Alloc,
+                       Map, Reduce, Scan, IndexMap, IndexReduce, IndexScan)      
 from transform import Transform 
 
 class CloneFunction(Transform):
@@ -42,29 +42,41 @@ class CloneFunction(Transform):
         return cloner.apply(expr)
       else:
         return expr 
+      
     elif c is Slice: 
       start = self.transform_if_expr(expr.start)
       stop = self.transform_if_expr(expr.stop)
       step = self.transform_if_expr(expr.step)
       return Slice(start, stop, step, type = expr.type)
+    
     elif c is Struct: 
       new_args = self.transform_expr_list(expr.args)
       return Struct(args = new_args, type = expr.type)
+    
     elif c is TupleProj: 
       new_tuple = self.transform_expr(expr.tuple)
       return TupleProj(new_tuple, expr.index, type = expr.type)
+    
     elif c is Cast:
-      return Cast(self.transform_expr(expr.value), expr.type) 
+      return Cast(self.transform_expr(expr.value), expr.type)
+     
     elif c is Alloc:
       return Alloc(count = self.transform_expr(expr.count), 
                    elt_type = expr.elt_type, 
                    type = expr.type)
+    elif c is Map:
+      return Map(fn = expr.fn, 
+                 args = self.transform_expr_list(expr.args), 
+                 axis = self.transform_if_expr(expr.axis), 
+                 type = expr.type)
+       
     else:
       args = {}
       for member_name in expr.members():
         old_value = getattr(expr, member_name)
         new_value = self.transform_if_expr(old_value)
         args[member_name] = new_value
+      
       return expr.__class__(**args)
   
   def transform_Assign(self, stmt):
