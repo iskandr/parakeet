@@ -1,3 +1,5 @@
+from parakeet import jit 
+
 import timer  
 
 def covariance(x,y):
@@ -10,10 +12,12 @@ def fit_simple_regression(x,y):
 
 import numpy as np 
 
-N = 10**6
+N = 10**7
 x = np.random.randn(N)
 slope = 903.29
 offset = 102.1
 y = slope * x + offset
+
+jit(fit_simple_regression)(x,y)
 
 timer.compare_perf(fit_simple_regression, (x,y))

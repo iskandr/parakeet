@@ -4,6 +4,7 @@ from ..syntax import TupleProj, get_type, ActualArgs
 
 
 from helpers import unpack_closure
+from parakeet.syntax.formal_args import FormalArgs
 
 def linearize_arg_types(fn, args):
 
@@ -24,6 +25,14 @@ def linearize_arg_types(fn, args):
   untyped_fundef, closure_args = unpack_closure(fn)
   if isinstance(args, (list, tuple)):
     args = ActualArgs(args)
+    
+  if not isinstance(untyped_fundef.args, FormalArgs):
+    assert False, "Expected function to have FormalArgs"
+    #formals = FormalArgs()
+    #for arg in untyped_fundef.args:
+    #  formals.add_positional(arg)
+  else:
+    formals = untyped_fundef.args
 
   if len(closure_args) > 0:
     args = args.prepend_positional(closure_args)
@@ -32,7 +41,7 @@ def linearize_arg_types(fn, args):
     return type_conv.typeof(v)
 
   linear_args, extra = \
-      untyped_fundef.args.linearize_values(args, keyword_fn = keyword_fn)
+      formals.linearize_values(args, keyword_fn = keyword_fn)
   return untyped_fundef, tuple(linear_args + extra)
 
 def tuple_elts(tup):
@@ -61,5 +70,9 @@ def linearize_actual_args(fn, args):
     # Drop arguments that are assigned defaults,
     # since we're assuming those are set in the body
     # of the function
-    combined_args = untyped_fn.args.linearize_without_defaults(args, tuple_elts)
+    if isinstance(untyped_fn.args, FormalArgs):
+      combined_args = untyped_fn.args.linearize_without_defaults(args, tuple_elts)  
+    else:
+      combined_args = list(args)
+    
     return untyped_fn, combined_args, arg_types

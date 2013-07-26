@@ -292,6 +292,8 @@ def eval_fn(fn, actuals):
       fn = eval_expr(expr.fn)
       combine = eval_expr(expr.combine)
       shape = eval_expr(expr.shape)
+      if not isinstance(shape, (list, tuple) ):
+        shape = [shape]
       ranges = [xrange(n) for n in shape]
         
       acc = eval_if_expr(expr.init)

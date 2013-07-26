@@ -11,7 +11,9 @@ property_mappings = {
   'size' : lib.size,   
   # 'strides' : lib.strides, 
   'ndim' : lib.rank, 
-  'T' : lib.transpose,     
+  'T' : lib.transpose, 
+  
+       
 }
 
 method_mappings = {
@@ -28,7 +30,8 @@ method_mappings = {
   'max' : lib.reduce_max, 
   'ravel' : lib.ravel, 
   'flatten' : lib.ravel, 
-  'sum' : lib.builtin_sum, 
+  'sum' : lib.builtin_sum,
+  'mean' : lib.mean, 
 }
 
 function_mappings = {
