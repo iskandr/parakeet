@@ -393,6 +393,10 @@ class AST_Translator(ast.NodeVisitor):
 
   def visit_UnaryOp(self, expr):
     ssa_val = self.visit(expr.operand)
+    # UAdd doesn't do anything!
+    
+    if expr.op.__class__.__name__ == 'UAdd':
+      return ssa_val 
     prim = prims.find_ast_op(expr.op)
     return syntax.PrimCall(prim, [ssa_val])
 

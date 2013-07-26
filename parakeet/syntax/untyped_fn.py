@@ -1,7 +1,7 @@
 
 from ..ndtypes import make_closure_type
 from expr import Expr
-from fn_args import FormalArgs 
+from formal_args import FormalArgs 
 from stmt import block_to_str
 
 

@@ -7,11 +7,12 @@ from ..ndtypes.array_type import lower_rank
 from ..ndtypes.closure_type import ClosureT
 from ..ndtypes.tuple_type import  TupleT, make_tuple_type
 from ..syntax import adverb_helpers, prim_wrapper
-from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const)
+from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, 
+                      ActualArgs, FormalArgs, MissingArgsError)
 from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
                               one_i64, zero_i64, none, true, false, 
                               gen_data_arg_names)
-from ..syntax.fn_args import ActualArgs, FormalArgs, MissingArgsError
+
 from ..transforms import Simplify 
 
 from helpers import untyped_identity_function, make_typed_closure, _get_closure_type, _get_fundef

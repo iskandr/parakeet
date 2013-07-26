@@ -6,7 +6,7 @@ from llvm.core import Type as lltype
 
 from .. import config, prims, syntax 
 from .. analysis import may_escape
-from .. ndtypes import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT
+from .. ndtypes import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT, Float64
 from .. ndtypes import Int32, Int64, PtrT
 from .. syntax import Var, Struct, Index, TypedFn, Attribute 
 
@@ -204,6 +204,7 @@ class Compiler(object):
       return builder.neg(x, "neg")
     else:
       return builder.fsub(zero(x.type), x, "neg") 
+    
   def prim(self, prim, t, llvm_args, builder, result_name = None):
     if result_name is None:
       result_name = prim.name + "_result"
@@ -247,6 +248,19 @@ class Compiler(object):
       should_flip = builder.and_(neither_zero, diff_signs, "should_flip") 
       flipped_rem = self.add(t, y, rem, builder, "flipped_rem") 
       return builder.select(should_flip, flipped_rem, rem)
+
+    elif prim == prims.power:
+      x,y = llvm_args
+       
+      if isinstance(t, FloatT):
+        new_t = t 
+      else:
+        new_t = Float64
+      x = llvm_convert.convert(x, t, new_t, builder)
+      y = llvm_convert.convert(y, t, new_t, builder)
+      llvm_op = llvm_prims.get_float_op(prim, new_t)
+      result = builder.call(llvm_op, [x,y])
+      return llvm_convert.convert(result, new_t, t, builder)
         
     elif isinstance(prim, prims.Arith) or isinstance(prim, prims.Bitwise):
       if isinstance(t, FloatT):
@@ -276,7 +290,7 @@ class Compiler(object):
       neg_value = self.neg(x, builder)
       return builder.select(bit, x, neg_value)
     elif isinstance(prim, prims.Float): 
-      llvm_op = llvm_prims.get_float_unary_op(prim, t)
+      llvm_op = llvm_prims.get_float_op(prim, t)
       return builder.call(llvm_op, llvm_args)
     
     else:

@@ -3,7 +3,7 @@ from .. import syntax
 from .. builder import Builder
 from .. ndtypes import SliceT, make_array_type, ArrayT 
 from .. ndtypes import NoneT, ScalarT, Int64, PtrT, IntT
-from .. syntax import Index, Tuple, Var, ArrayView, Assign, Slice, Struct
+from .. syntax import Const, Index, Tuple, Var, ArrayView, Assign, Slice, Struct
  
 from transform import Transform
 
@@ -119,9 +119,21 @@ class LowerIndexing(Transform):
     if syntax.helpers.all_scalars(indices):
       data_ptr = self.attr(arr, "data")
       strides = self.attr(arr, "strides")
+      shape = self.attr(arr, "shape")
       offset_elts = self.attr(arr, "offset")
       for (i, idx_i) in enumerate(indices):
         stride_i = self.tuple_proj(strides, i)
+        # Currently, negative indexing doesn't really work
+        # this is a short-term band-aid to fix constant/known 
+        # negative indices. 
+        # TODO:
+        #  - mark user indexing with 'check_negative' 
+        #  - remove these checks using range analysis
+        #  - when lowering any expressions with remaining checks
+        #    actually test whether the components > 0  
+        if idx_i.__class__ is Const and idx_i.value < 0:
+          elts_in_dim = self.tuple_proj(shape, i)
+          idx_i = self.add(elts_in_dim, idx_i)
         elts_i = self.mul(stride_i, idx_i, "offset_elts_%d" % i)
         offset_elts = self.add(offset_elts, elts_i, "total_offset")
       return self.index(data_ptr, offset_elts, temp = False)

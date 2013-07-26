@@ -1,8 +1,7 @@
 
 from .. import config, type_inference
 from .. ndtypes import type_conv, Type 
-from ..syntax import UntypedFn, TypedFn
-from ..syntax.fn_args import ActualArgs
+from ..syntax import UntypedFn, TypedFn, ActualArgs
 from .. transforms import pipeline
  
 def _typeof(arg):

@@ -75,6 +75,11 @@ int64_fn_t = llc.Type.function(llvm_types.int64_t, [llvm_types.int64_t])
 float32_fn_t = llc.Type.function(llvm_types.float32_t, [llvm_types.float32_t])
 float64_fn_t = llc.Type.function(llvm_types.float64_t, [llvm_types.float64_t])
 
+binary_float32_fn_t = llc.Type.function(llvm_types.float32_t, 
+                                        [llvm_types.float32_t, llvm_types.float32_t])
+binary_float64_fn_t = llc.Type.function(llvm_types.float64_t, 
+                                        [llvm_types.float64_t, llvm_types.float64_t])
+
 def float32_fn(name):
   return global_context.module.add_function(float32_fn_t, name)
 
@@ -105,6 +110,7 @@ _float_op_names = {
    
    
   prims.exp : 'exp',  
+  prims.exp2 : 'exp2', 
   prims.power : 'pow', 
   prims.expm1 : 'expm1',
   
@@ -117,7 +123,6 @@ _float_op_names = {
   
 } 
  
-float_unary_ops = {}
 
 #import llvmmath 
 #mathlib = llvmmath.get_default_math_lib()
@@ -141,10 +146,10 @@ _llvm_intrinsics = set(['sqrt',
                         'rint', 
                         'nearbyint',                         
                       ])
-def get_float_unary_op(prim, t):
+def get_float_op(prim, t, _float_decls = {}):
   key = (prim, t)
-  if key in float_unary_ops:
-    return float_unary_ops[key]
+  if key in _float_decls:
+    return _float_decls[key]
   
   assert prim in _float_op_names, \
     "Unsupported float primitive %s" % prim 
@@ -153,22 +158,23 @@ def get_float_unary_op(prim, t):
   
   prim_name = _float_op_names[prim]
   
-   
   if t == Float32:
-    fn_t = float32_fn_t
+    fn_t = float32_fn_t if prim.nin == 1 else binary_float32_fn_t
     if prim_name in _llvm_intrinsics:
       fn_name = "llvm.%s.f32" % prim_name
     else:
       fn_name = prim_name + "f" 
   else:
     assert t == Float64
-    fn_t = float64_fn_t
+    fn_t = float64_fn_t if prim.nin == 1 else binary_float64_fn_t
     if prim_name in _llvm_intrinsics:
       fn_name = "llvm.%s.f64" % prim_name 
     else:
       fn_name = prim_name 
   llvm_value = global_context.module.get_or_insert_function(fn_t, fn_name)
   llvm_value.add_attribute(llc.ATTR_NO_UNWIND)
-  llvm_value.add_attribute(llc.ATTR_READ_NONE)
-  float_unary_ops[key] = llvm_value
+  llvm_value.add_attribute(llc.ATTR_READONLY)
+  _float_decls[key] = llvm_value
+  print prim, t, llvm_value
   return llvm_value 
+

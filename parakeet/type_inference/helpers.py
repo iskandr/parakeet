@@ -1,8 +1,7 @@
 
 from .. import names 
 from ..ndtypes import ClosureT, make_closure_type
-from ..syntax import Expr, UntypedFn, Closure, Var, Return, ClosureElt, TypedFn  
-from ..syntax.fn_args import FormalArgs
+from ..syntax import Expr, UntypedFn, Closure, Var, Return, ClosureElt, TypedFn, FormalArgs  
 from ..syntax.helpers import get_types 
 
 def unpack_closure(closure):

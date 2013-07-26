@@ -106,7 +106,7 @@ class ShapeInference(SyntaxVisitor):
     if isinstance(arr, Scalar):
       return arr
     assert arr.__class__ is Shape
-    if isinstance(idx, (Scalar, Slice)):
+    if isinstance(idx, (Scalar, Slice, ConstSlice)):
       indices = [idx]
     elif idx.__class__ is Tuple:
       indices = idx.elts
@@ -228,9 +228,11 @@ class ShapeInference(SyntaxVisitor):
       if step_val is None:
         step_val = 1
       nelts = (stop.value - start_val) / step_val
-      return ConstSlice(nelts)
-    else:
-      return Slice(start, stop, step)
+      # TODO: 
+      # Properly handle negative slicing 
+      if nelts >= 0:
+        return ConstSlice(nelts)
+    return Slice(start, stop, step)
 
   def call(self, fn, args):
     if fn.__class__ is Closure:

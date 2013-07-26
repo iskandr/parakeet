@@ -1,7 +1,7 @@
 
 from ..ndtypes import type_conv
-from ..syntax import TupleProj, get_type
-from ..syntax.fn_args import ActualArgs
+from ..syntax import TupleProj, get_type, ActualArgs
+
 
 from helpers import unpack_closure
 
