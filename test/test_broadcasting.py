@@ -1,6 +1,6 @@
 import numpy as np
 from parakeet import jit  
-from testing_helpers import expect_eq  
+from testing_helpers import expect_eq, run_local_tests
 
 @jit 
 def add(x,y):
@@ -25,5 +25,6 @@ def test_2d_2d():
   
 
 
-  
+if __name__ == '__main__':
+  run_local_tests()
   

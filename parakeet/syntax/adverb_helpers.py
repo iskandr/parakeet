@@ -19,9 +19,12 @@ def max_rank(arg_types):
   curr_max = 0
   for t in arg_types:
     if isinstance(t, ArrayT):
-      assert curr_max == 0 or curr_max == t.rank,  \
-       "Adverb can't accept inputs of rank %d and %d" % (curr_max, t.rank)
-      curr_max = t.rank
+      r =  t.rank
+      if r > curr_max:
+        curr_max = r  
+      #assert curr_max == 0 or curr_max == t.rank,  \
+      # "Adverb can't accept inputs of rank %d and %d" % (curr_max, t.rank)
+      
   return curr_max
 
 def max_rank_arg(args):
