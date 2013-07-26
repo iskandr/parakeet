@@ -1,8 +1,10 @@
 Now:
-- Indexing by boolean masks
-- Factor out shape inference into Shapely
+- Support all numerical/math ufuncs
+- Combine nested maps into single ParFor 
 
 Long term:
+- Indexing by boolean masks
+- Support 'output' parameter of ufuncs 
 - Garbage collection 
 - Split up outermost scope into execution plan, 
   i.e. [local_vars1 = run_llvm(fn1, inputs), 
@@ -10,7 +12,6 @@ Long term:
         ...
         return result_vars
        ]
-- Factor out LLVM backend into tinyjit
 - Add C backend 
 - Extend C backend to turn ParFor expressions into CUDA kernels 
 

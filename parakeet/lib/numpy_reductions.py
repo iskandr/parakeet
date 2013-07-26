@@ -2,7 +2,33 @@ from .. import prims
 from ..frontend import jit
 from adverbs import scan 
 
-    
+@jit 
+def prod(x, axis=None):
+  return reduce(prims.multiply, x, init=1, axis = axis)
+
+@jit 
+def mean(x, axis = None):
+  return sum(x, axis = axis) / x.shape[0]
+
+@jit 
+def cumsum(x, axis = None):
+  return scan(prims.add, x, axis = axis)
+
+@jit 
+def cumprod(x, axis = None):
+  return scan(prims.multiply, x, axis = axis)
+
+@jit 
+def dot(x,y):
+  """
+  Currently just a vector product, not a matrix multiplication
+  TODO: 
+    - Add matrix multiply as a primitive which corresponds to BLAS  
+    - Delay the expression until type inference so you can switch between dot
+      and a call to BLAS 
+  """
+  return sum(x*y)
+
 @jit
 def argmax(x):
   """
@@ -58,27 +84,5 @@ def argmin(x):
       bestval = currval
       bestidx = i
   return bestidx 
-
-
-
-@jit 
-def prod(x, axis=None):
-  return reduce(prims.multiply, x, init=1, axis = axis)
-
-@jit 
-def mean(x, axis = None):
-  return sum(x, axis = axis) / x.shape[0]
-
-@jit 
-def cumsum(x, axis = None):
-  return scan(prims.add, x, axis = axis)
-
-@jit 
-def cumprod(x, axis = None):
-  return scan(prims.multiply, x, axis = axis)
-
-@jit 
-def dot(x,y):
-  return sum(x*y)
 
 

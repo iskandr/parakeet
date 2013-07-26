@@ -1,14 +1,22 @@
 from .. import names
-from ..ndtypes import (TupleT, ScalarT, IntT, Int64, ArrayT, Unknown, StructT,  
+from ..ndtypes import (TupleT, ScalarT, IntT, Int64, ArrayT, Unknown, StructT, Type, TypeValueT,  
                        combine_type_list, increase_rank, lower_rank,  
-                       make_array_type, make_tuple_type, make_slice_type, 
+                       make_array_type, make_tuple_type, make_slice_type, make_closure_type, 
                        type_conv)
 
-from ..syntax import (Array, AllocArray, Attribute, Cast, Const, Expr, Index, 
-                      Range, Ravel, Reshape, Slice, Tuple, TupleProj, Var, 
-                      ForLoop, While, Assign, Return, If)
+from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, Index, 
+                      Range, Ravel, Reshape, Slice, Tuple, TupleProj, TypeValue,  Var,  
+                      ForLoop, While, Assign, Return, If, 
+                      prim_wrapper)
+
 from ..syntax.helpers import get_types, is_true, is_false 
 from ..transforms import Transform
+
+
+class InferenceFailed(Exception):
+  def __init__(self, msg):
+    self.msg = msg
+
 
 class LocalTypeInference(Transform):
   """
@@ -143,7 +151,38 @@ class LocalTypeInference(Transform):
       assert t.__class__ is TupleT, \
          "Unexpected argument type for 'len': %s" % t
       return Const(len(t.elt_types), type = Int64)
+
+
+  def transform_DelayUntilTyped(self, expr):
+    new_values = self.transform_expr_tuple(expr.values)
+    new_syntax = expr.fn(*new_values)
+    assert new_syntax.type is not None
+    return new_syntax
+  
+  def transform_TypeValue(self, expr):
+    t = expr.type_value 
+    assert isinstance(t, Type), "Invalid type value %s" % (t,)
+    return TypeValue(t, type=TypeValueT(t))
     
+  def transform_Closure(self, expr):
+    new_args = self.transform_expr_list(expr.args)
+    t = make_closure_type(expr.fn, get_types(new_args))
+    return Closure(expr.fn, new_args, type = t)
+
+  def transform_Arith(self, expr):
+    untyped_fn = prim_wrapper(expr)
+    t = make_closure_type(untyped_fn, ())
+    return Closure(untyped_fn, (), type = t)
+
+  def transform_UntypedFn(self, expr):
+    return expr 
+
+  def transform_Attribute(self, expr):
+    value = self.transform_expr(expr.value)
+    assert isinstance(value.type, StructT)
+    result_type = value.type.field_type(expr.name)
+    return Attribute(value, expr.name, type = result_type)
+
   def infer_phi(self, result_var, val):
     """
     Don't actually rewrite the phi node, just add any necessary types to the
@@ -286,3 +325,10 @@ class LocalTypeInference(Transform):
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
     return ForLoop(var, start, stop, step, body, merge)
+  
+  #def keyword_types(self, kwds):
+  #  keyword_types = {}
+  #  for (k,v) in kwds.iteritems():
+  #    keyword_types[k] = get_type(v)
+  #  return keyword_types
+  

@@ -1,10 +1,10 @@
 from .. import config, names,  prims, syntax
 from ..ndtypes import array_type, closure_type, tuple_type, type_conv
-from ..ndtypes import (Type, Bool, IntT, Int64,  ScalarT, 
+from ..ndtypes import (Bool, IntT, Int64,  ScalarT, 
                        NoneType, NoneT, Unknown, UnknownT, 
-                       StructT, TypeValueT)
+                       TypeValueT)
 from ..ndtypes.array_type import lower_rank
-from ..ndtypes.closure_type import ClosureT, make_closure_type
+from ..ndtypes.closure_type import ClosureT
 from ..ndtypes.tuple_type import  TupleT, make_tuple_type
 from ..syntax import adverb_helpers, prim_wrapper
 from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const)
@@ -16,15 +16,8 @@ from ..transforms import Simplify
 
 from helpers import untyped_identity_function, make_typed_closure, _get_closure_type, _get_fundef
 from linearize_args import linearize_actual_args, flatten_actual_args
-from local_inference import LocalTypeInference
+from local_inference import LocalTypeInference, InferenceFailed 
 from var_map import VarMap 
-
-
-class InferenceFailed(Exception):
-  def __init__(self, msg):
-    self.msg = msg
-
-
 
 
 _invoke_type_cache = {}
@@ -57,9 +50,6 @@ def invoke_result_type(fn, arg_types):
   _invoke_type_cache[key] = result_type
   return result_type
 
-
-
-
 class TypeInference(LocalTypeInference):
   
   
@@ -82,37 +72,6 @@ class TypeInference(LocalTypeInference):
         result[k] = self.transform_expr(v)
       return result
 
-  #def keyword_types(self, kwds):
-  #  keyword_types = {}
-  #  for (k,v) in kwds.iteritems():
-  #    keyword_types[k] = get_type(v)
-  #  return keyword_types
-  
-  def transform_DelayUntilTyped(self, expr):
-    new_values = self.transform_expr_tuple(expr.values)
-    new_syntax = expr.fn(*new_values)
-    assert new_syntax.type is not None
-    return new_syntax
-  
-  def transform_TypeValue(self, expr):
-    t = expr.type_value 
-    assert isinstance(t, Type), "Invalid type value %s" % (t,)
-    return syntax.TypeValue(t, type=TypeValueT(t))
-    
-  def transform_Closure(self, expr):
-    new_args = self.transform_expr_list(expr.args)
-    t = closure_type.make_closure_type(expr.fn, get_types(new_args))
-    return Closure(expr.fn, new_args, type = t)
-
-  def transform_Arith(self, expr):
-    untyped_fn = prim_wrapper(expr)
-    t = closure_type.make_closure_type(untyped_fn, ())
-    return Closure(untyped_fn, (), type = t)
-
-  def transform_UntypedFn(self, expr):
-    return expr 
-    #t = closure_type.make_closure_type(expr, ())
-    #return Closure(expr, [], type = t)
 
   def transform_Call(self, expr):
     closure = self.transform_expr(expr.fn)
@@ -129,11 +88,7 @@ class TypeInference(LocalTypeInference):
     typed_fn = specialize(untyped_fn, arg_types)
     return syntax.Call(typed_fn, args, typed_fn.return_type)
 
-  def transform_Attribute(self, expr):
-    value = self.transform_expr(expr.value)
-    assert isinstance(value.type, StructT)
-    result_type = value.type.field_type(expr.name)
-    return syntax.Attribute(value, expr.name, type = result_type)
+
   
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
