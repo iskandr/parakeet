@@ -7,7 +7,7 @@ from llvm.core import Type as lltype
 from .. import config, prims, syntax 
 from .. analysis import may_escape
 from .. ndtypes import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT, Float64
-from .. ndtypes import Int32, Int64, PtrT
+from .. ndtypes import Int32, Int64, PtrT, Bool 
 from .. syntax import Var, Struct, Index, TypedFn, Attribute 
 
 import llvm_context
@@ -224,6 +224,10 @@ class Compiler(object):
       return builder.select(bit, x, y)
     
     elif prim == prims.negative:
+      if t == Bool: 
+        bit = llvm_convert.to_bit(llvm_args[0], builder)
+        negated = builder.not_(bit)
+        return llvm_convert.to_bool(negated, builder)
       return self.neg(llvm_args[0], builder)
     
     # python's remainder is weird in that it preserve's the sign of 

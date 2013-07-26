@@ -14,8 +14,8 @@ class RangeTransform(Transform):
     analysis.visit_fn(old_fn)
     self.ranges = analysis.ranges
     
-    print "RANGE ANALYSIS RESULT", self.ranges  
-    print "...for fn", old_fn 
+    #print "RANGE ANALYSIS RESULT", self.ranges  
+    #print "...for fn", old_fn 
     
   def get(self, x):
     if x.__class__ is Var and x.name in self.ranges:

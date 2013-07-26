@@ -212,7 +212,7 @@ class PrimCall(Expr):
   def __repr__(self):
     if self.prim.symbol:
       if len(self.args) == 1:
-        return "%s %s" % (self._arg_str(0), self.prim.symbol)
+        return "%s%s" % (self.prim.symbol, self._arg_str(0))
       else:
         assert len(self.args) == 2
         return "%s %s %s" % (self._arg_str(0), self.prim.symbol, self._arg_str(1))
