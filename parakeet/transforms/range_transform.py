@@ -1,61 +1,45 @@
-from ..analysis import ValueRangeAnalyis
+from ..analysis.value_range_analysis import (ValueRangeAnalyis, Interval, 
+                                             TupleOfIntervals, SliceOfIntervals)
 from ..syntax import Var, Const 
 from ..syntax.helpers import true, false 
 from transform import Transform
 
-class RangeTransform(Transform):
+class RangeTransform(Transform, ValueRangeAnalyis):
   """
   Base class for transforms which use value ranges gathered from analysis
   """
   
   def pre_apply(self, old_fn):
-    
-    analysis = ValueRangeAnalyis()
-    analysis.visit_fn(old_fn)
-    self.ranges = analysis.ranges
-    
+    ValueRangeAnalyis.__init__(self)
+    self.visit_fn(old_fn)
     #print "RANGE ANALYSIS RESULT", self.ranges  
     #print "...for fn", old_fn 
-    
-  def get(self, x):
-    if x.__class__ is Var and x.name in self.ranges:
-      return self.ranges[x.name]
-    elif x.__class__ is Const:
-      return (x.value, x.value)
-    else:
-      return None   
-  
+
   def cmp_eq(self, x, y):
-    if x is None or y is None:
-      return None
-    lx, ux = x
-    ly, uy = y 
-    if lx == ly and ux == uy:
+    if not isinstance(x, Interval) or not isinstance(y, Interval):
+      return None 
+    if x.lower == y.lower and x.upper == y.upper:
       return true 
-    if ux < ly or uy < lx:
+    if x.upper < y.lower or y.upper < x.lower:
       return false
     return None   
   
   def cmp_lt(self, x, y):
-    if x is None or y is None:
-      return None
-    lx, ux = x
-    ly, uy = y
-    if ux < ly:
+    if not isinstance(x, Interval) or not isinstance(y, Interval):
+      return None 
+    if x.upper < y.lower:
       return true 
-    elif lx > uy:
+    elif x.lower > y.upper:
       return false
     else:
       return None 
   
   def cmp_lte(self, x, y):
-    if x is None or y is None:
-      return None
-    lx, ux = x
-    ly, uy = y
-    if ux < ly:
+    if not isinstance(x, Interval) or not isinstance(y, Interval):
+      return None 
+    if x.upper < y.lower:
       return true 
-    elif lx > uy:
+    elif x.lower > y.upper:
       return false
     else:
       return None 

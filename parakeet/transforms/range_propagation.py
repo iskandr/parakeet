@@ -2,16 +2,17 @@
 
 from .. import prims 
 from ..syntax import Const 
+from ..analysis.value_range_analysis import Interval  
 from range_transform import RangeTransform 
 
 class RangePropagation(RangeTransform):
   
   def visit_Var(self, expr):
     if expr.name in self.ranges:
-      print "FOUND", expr.name, self.ranges[expr.name]
-      (l,u) = self.ranges[expr.name]
-      if l == u:
-        return Const(l, type = expr.type)
+      # print "FOUND", expr.name, self.ranges[expr.name]
+      range_val = self.ranges[expr.name]
+      if isinstance(range_val, Interval) and range_val.lower == range_val.upper:
+        return Const(range_val.lower, type = expr.type)
     return expr 
   
   def visit_PrimCall(self, expr):

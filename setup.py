@@ -4,6 +4,7 @@ from setuptools import setup, Extension, find_packages
 
 import sys
 
+import parakeet 
 
 setup(
     name="parakeet",
@@ -25,16 +26,16 @@ An adorable bird that will make your children laugh and spontaneously combust.
     author_email="alexr@cs.nyu.edu",
     license="BSD",
     version=parakeet.__version__,
-    url="http://github.com/iskandr/parakeet",
-    packages=[ 'parakeet', 
-               'parakeet.adverbs',
-               'parakeet.analysis', 
-               'parakeet.frontend', 
-               'parakeet.lib', 
-               'parakeet.transforms', 
-               'parakeet.type_inference', 
-               'parakeet.examples', 
-               'parakeet.test' ],
+    url=parakeet.__website__, 
+    packages=find_packages() + ['parakeet.test', 'parakeet.examples'], 
+    #[ 'parakeet', 
+    #           'parakeet.analysis', 
+    #           'parakeet.frontend', 
+    #           'parakeet.lib', 
+    #           'parakeet.transforms', 
+    #           'parakeet.type_inference', 
+    #           'parakeet.examples', 
+    #           'parakeet.test' ],
     
     package_dir={  'parakeet.examples' : './examples', 
                    'parakeet.test' : './test' 

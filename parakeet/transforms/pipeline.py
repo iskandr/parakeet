@@ -1,6 +1,6 @@
 from .. import config 
 from ..analysis import contains_adverbs, contains_calls 
-from const_arg_specialization import ConstArgSpecialization 
+# from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 from fusion import Fusion
@@ -13,7 +13,7 @@ from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from imap_elim import IndexMapElimination
-
+from negative_index_elim import NegativeIndexElim
 #from mapify_allpairs import MapifyAllPairs
 #from maps_to_parfor import MapsToParFor
 from offset_propagation import OffsetPropagation
@@ -51,7 +51,7 @@ licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
 
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',
-                                    memoize = False)
+                                    memoize = True)
 high_level_optimizations = Phase([
                                     Simplify, 
                                     inline_opt, 
@@ -107,6 +107,7 @@ loopify = Phase([
                    licm,
                    shape_elim,
                    symbolic_range_propagation,
+                   NegativeIndexElim, 
                    index_elim
                 ],
                 depends_on = indexify,
@@ -132,7 +133,7 @@ unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
 
 
 
-post_lowering = Phase([
+post_lowering = Phase([ 
                          licm,
                          unroll,
                          licm,
@@ -144,6 +145,7 @@ post_lowering = Phase([
 
 lowering = Phase([
                     LowerIndexing,
+                    
                     licm,
                     LowerStructs,
                     post_lowering
