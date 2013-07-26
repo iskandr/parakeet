@@ -6,7 +6,7 @@ from .. syntax import (Expr, Var, Const, Return, UntypedFn, FormalArgs,
 
 from run_function import run_python_fn, run_untyped_fn 
 
-class jit:
+class jit(object):
   def __init__(self, f):
     self.f = f
 
