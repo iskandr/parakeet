@@ -6,3 +6,5 @@ from numpy_math import *
 from numpy_reductions import * 
 from numpy_types import * 
 from patchmap import * 
+
+sum = builtin_sum

@@ -1,5 +1,6 @@
 import numpy as np
 import parakeet
+from parakeet import jit 
 
 from numpy import exp, log, sqrt
 from testing_helpers import eq, run_local_tests
@@ -27,12 +28,14 @@ def black_scholes(CallFlag,S,X,T,r,v):
   else:
     return z*CND(-1.0*d2) - S*CND(-1.0*d1)
 
+black_scholes_parakeet = jit(black_scholes)
+
 def test_black_scholes():
   x1 = (False, 10.0, 10.0, 2.0, 2.0, 2.0)
   x2 = (True, 10.0, 10.0, 2.0, 2.0, 2.0)
   xs = [x1, x2]
   for x in xs:
-    par_rslt = parakeet.run(black_scholes, *x)
+    par_rslt = black_scholes_parakeet(*x)
     py_rslt = black_scholes(*x)
     assert eq(par_rslt, py_rslt)
 

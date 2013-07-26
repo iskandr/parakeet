@@ -10,7 +10,7 @@ def mk_scalar_add(t):
 def mk_vec_add(array_t):
   elt_t = parakeet.elt_type(array_t)
   add_fn = mk_scalar_add(elt_t)
-  fn, inputs, builder = parakeet.build_fn([array_t, array_t, array_t])
+  fn, builder, inputs = parakeet.build_fn([array_t, array_t, array_t])
   x,y,z = inputs
   n = builder.len(x)
   def loop_body(idx):

@@ -1,7 +1,7 @@
 from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
                        TypedFn, UntypedFn,  Closure, ClosureElt,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
-                       Alloc, Array, Call, Struct, Shape, Strides, Range, 
+                       Alloc, Array, Call, Struct, Shape, Strides, Range, Ravel, 
                        AllocArray, ArrayView, Cast, Slice, TupleProj, TypeValue,  
                        Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
 
@@ -159,7 +159,8 @@ class SyntaxVisitor(object):
     AllocArray : 'visit_AllocArray', 
     ArrayView : 'visit_ArrayView', 
     Array : 'visit_Array',
-    Range : 'visit_Range',  
+    Range : 'visit_Range',
+    Ravel : 'visit_Ravel',   
     Shape : 'visit_Shape', 
     Strides : 'visit_Strides', 
     Alloc : 'visit_Alloc', 
