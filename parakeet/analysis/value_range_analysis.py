@@ -299,7 +299,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
     for (k, (left,right)) in phi_nodes.iteritems():
       left_val = self.get(left)
       right_val = self.get(right)
-      self.set(k, self.combine(left_val, right_val))
+      self.set(k, combine(left_val, right_val))
 
   def always_positive(self, x, inclusive = True):
     if not isinstance(x, Interval):

@@ -28,10 +28,10 @@ class NegativeIndexElim(RangeTransform):
     if has_negative(range_value):
       if isinstance(range_value, TupleOfIntervals):
         index_ranges = range_value.elts 
-        index_elts = self.tuple_elts(arr.index)
+        index_elts = self.tuple_elts(expr.index)
       else:
         index_ranges = [range_value]
-        index_elts = [arr.index]
+        index_elts = [expr.index]
       assert len(index_ranges) == len(index_elts)
       shape = self.shape(expr.value)
       shape_elts = self.tuple_elts(shape)

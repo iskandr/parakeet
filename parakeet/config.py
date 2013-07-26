@@ -1,5 +1,5 @@
 
-default_backend = 'llvm'
+default_backend = 'llvm' #shiver 
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -69,10 +69,10 @@ print_optimized_llvm = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['Simplify']  
+print_functions_before_transforms = [] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = [] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False

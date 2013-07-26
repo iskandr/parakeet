@@ -2,7 +2,6 @@ import itertools
 import numpy as np
 import types
 
-from treelike import dispatch 
 
 from frontend import ast_conversion
 from ndtypes import ScalarT, StructT, Type   
@@ -11,6 +10,7 @@ from syntax import (Expr, Var, Tuple,
                     Return, If, While, ForLoop, ParFor, ExprStmt,   
                     ActualArgs, 
                     Assign, Index, AllocArray,)
+from parakeet.frontend import ast_conversion
 
 class InterpSemantics(object):
   def size_along_axis(self, value, axis):
@@ -388,26 +388,51 @@ def eval_fn(fn, actuals):
         eval_fn(fn, (idx,))
         
   def eval_parfor_shiver(stmt):
-    eval_parfor_seq(stmt)
-    return 
-    """
-    fn = eval_expr(stmt.fn)
-    assert isinstance(fn, ClosureVal), "Invalid function %s" % (fn,)
-    
+    clos = eval_expr(stmt.fn)
+    assert hasattr(clos, "__call__"), "Unexpected fn %s" % (clos,) 
     bounds = eval_expr(stmt.bounds)
     assert isinstance(bounds, (int,long,tuple)), "Invalid bounds %s" % (bounds,)
     
+    if isinstance(clos, ClosureVal):
+      fn = clos.fn
+      fixed_args = clos.fixed_args 
+    else:
+      fn = clos 
+      fixed_args = ()
+    
+    
+    if isinstance(bounds, (tuple,list)) and len(bounds) == 1:
+      bounds = bounds[0]
+    
+    
+    full_args = tuple(fixed_args) + (bounds,)
+    
+    if isinstance(fn, TypedFn):
+      typed = fn
+      linear_args = fixed_args  
+    else:
+      from frontend import specialize 
+      typed, linear_args = specialize(fn, full_args)
     
     import transforms,  llvm_backend
-    lowered_fn = transforms.pipeline.lowering(fn.fn)
-    llvm_fn = llvm_backend.compile_fn(lowered_fn)
+    from llvm_backend import ctypes_to_generic_value
+    lowered_fn = transforms.pipeline.lowering(fn)
+    llvm_fn = llvm_backend.compile_fn(lowered_fn).llvm_fn 
     
-    # need to convert everything to generic values! 
-    fixed_args = ()
+    expected_types = typed.input_types[:-1]
+    
+    ctypes_inputs = [t.from_python(v) 
+                     for (v,t) 
+                     in zip(linear_args, expected_types)]
+    
+    gv_inputs = [ctypes_to_generic_value(cv, t) 
+                 for (cv,t) 
+                 in zip(ctypes_inputs, expected_types)]
+    
     import shiver 
-    shiver.parfor(llvm_fn, bounds, fixed_args, llvm_backend.global_context.exec_engine)  
-    """
-    
+    shiver.parfor(llvm_fn, bounds, 
+                  fixed_args = gv_inputs, 
+                  ee = llvm_backend.global_context.exec_engine)  
   def eval_stmt(stmt):
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)

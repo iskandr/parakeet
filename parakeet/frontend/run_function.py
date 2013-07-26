@@ -1,7 +1,8 @@
-
+ 
+from .. analysis import contains_loops 
 from .. import config, type_inference
 from .. ndtypes import type_conv, Type 
-from ..syntax import UntypedFn, TypedFn, ActualArgs
+from ..syntax import UntypedFn, TypedFn, ActualArgs, ForLoop, While
 from .. transforms import pipeline
  
 
@@ -84,6 +85,17 @@ def run_typed_fn(fn, args, backend = None):
   if backend is None:
     backend = config.default_backend
     
+  if backend == 'shiver':
+    if contains_loops(fn):
+      # for now only run parallel outer statements 
+      backend = 'llvm'
+    else:
+      fn = pipeline.indexify(fn)
+      from .. import interp 
+      return interp.eval_fn(fn, args)
+      #from ..llvm_backend.llvm_context import global_context
+      #exec_engine = global_context.exec_engine
+    
   if backend == 'llvm':
     from ..llvm_backend.llvm_context import global_context
     from ..llvm_backend import generic_value_to_python 
@@ -110,16 +122,7 @@ def run_typed_fn(fn, args, backend = None):
     fn = pipeline.loopify(fn)
     return interp.eval_fn(fn, args)
   
-  elif backend == "shiver":
-    
-    from ..llvm_backend.llvm_context import global_context
-    exec_engine = global_context.exec_engine
-    # TODO: 
-    # scan outer scope of function to see if it's all simple statements 
-    # don't run in Shiver if there are loops 
-    # import shiver 
-    
-    assert False, "Shiver backend not yet implemented"
+  
   else:
     assert False, "Unknown backend %s" % backend 
 

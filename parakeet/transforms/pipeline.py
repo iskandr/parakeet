@@ -1,5 +1,5 @@
 from .. import config 
-from ..analysis import contains_adverbs, contains_calls 
+from ..analysis import contains_adverbs, contains_calls, contains_loops
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
@@ -14,8 +14,6 @@ from lower_indexing import LowerIndexing
 from lower_structs import LowerStructs
 from imap_elim import IndexMapElimination
 from negative_index_elim import NegativeIndexElim
-#from mapify_allpairs import MapifyAllPairs
-#from maps_to_parfor import MapsToParFor
 from offset_propagation import OffsetPropagation
 from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
@@ -46,7 +44,9 @@ copy_elim = Phase(CopyElimination,
                   config_param = 'opt_copy_elimination', 
                   memoize = False)
 
-licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
+licm = Phase(LoopInvariantCodeMotion, 
+             config_param = 'opt_licm',
+             run_if = contains_loops, 
              memoize = False)
 
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
@@ -122,14 +122,17 @@ loopify = Phase([
 #                  #
 ####################
 
-scalar_repl = Phase(ScalarReplacement, config_param = 'opt_scalar_replacement')
+scalar_repl = Phase(ScalarReplacement, 
+                    config_param = 'opt_scalar_replacement', 
+                    run_if = contains_loops)
 
 # Currently incorrect in the presence of function calls
 # TODO: Make this mark an slices that are call arguments as read & written to
 load_elim = Phase(RedundantLoadElimination,
                   config_param = 'opt_redundant_load_elimination', 
                   run_if = lambda fn: not contains_calls(fn))
-unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling')
+unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
+               run_if = contains_loops)
 
 
 
@@ -145,7 +148,6 @@ post_lowering = Phase([
 
 lowering = Phase([
                     LowerIndexing,
-                    
                     licm,
                     LowerStructs,
                     post_lowering
