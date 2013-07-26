@@ -1,6 +1,6 @@
 import parakeet 
 import testing_helpers
-
+from parakeet import jit 
 import numpy as np 
 
 def init_layer(input_size, n_elts):
@@ -15,14 +15,16 @@ def dot(x,y):
   return sum(x*y)
 
 def fprop_elt(x,w):
-  return parakeet.tanh(dot(x,w))
+  return np.tanh(dot(x,w))
 
 def fprop_layer(layer, x):
   return [fprop_elt(x,w) for w in layer]
 
+fprop_layer_parakeet = jit(fprop_layer)
+
 def fprop(network, x):
   for layer in network:
-    x = parakeet.run(fprop_layer, layer, x)
+    x = fprop_layer_parakeet(layer, x)
   return x
 
 def fprop_python(network, x): 

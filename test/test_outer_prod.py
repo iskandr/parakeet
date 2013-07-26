@@ -1,7 +1,7 @@
 import numpy as np
 import time
 
-from parakeet import allpairs, multiply, sum
+from parakeet import allpairs, multiply 
 from testing_helpers import expect, expect_allpairs, run_local_tests
 
 bool_vec = np.array([True, False, True])

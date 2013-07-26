@@ -157,7 +157,7 @@ class RewriteTyped(Transform):
         return_type = elt_t,
         type_env = {array_name:array_t, idx_name:idx_t}, 
         body = [Return (Index(array_var, idx_var, type = elt_t))]) 
-    self.index_function_cache[key] = fn 
+    _index_function_cache[key] = fn 
     return fn 
     
   def transform_Index(self, expr):
