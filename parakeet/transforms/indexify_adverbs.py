@@ -34,6 +34,7 @@ class IndexifyAdverbs(Transform):
     """  
     array_args = tuple(array_args)
     array_arg_types = tuple(get_types(array_args))
+    print "array_arg_types", array_arg_types
     n_arrays = len(array_arg_types)
     closure_args = self.closure_elts(fn)
     closure_arg_types = tuple(get_types(closure_args))
@@ -45,6 +46,7 @@ class IndexifyAdverbs(Transform):
              fn.copied_by,
              axis, 
              closure_arg_types, 
+             array_arg_types, 
              output is None,  
              cartesian_product, 
            )
@@ -196,7 +198,7 @@ class IndexifyAdverbs(Transform):
       # outer_dims = [niters]
       # use shape inference to create output
       output = self.create_map_output_array(old_fn, args, axis)
-        
+    print "Creating index fn with axis = %s, args = %s" % (axis, args)
     index_fn = self.indexify_fn(expr.fn, axis, args, 
                                 cartesian_product=False, 
                                 output = output)

@@ -4,8 +4,8 @@ import parakeet
 from parakeet import jit 
 
 values = [1, 
-          1.0, 
-          True, 
+          #1.0, 
+          #True, 
           #np.array([1,2,3], dtype='int8'),
           #np.array([1,2,3], dtype='int16'),
           #np.array([1,2,3], dtype='int32'), 

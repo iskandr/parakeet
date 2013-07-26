@@ -67,7 +67,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
           elif p == prims.subtract:
             self.set(name, self.sub(self.get(x), self.get(y)))
           elif p == prims.multiply:
-            set.set(name, self.mul(self.get(x), self.get(y)))
+            self.set(name, self.mul(self.get(x), self.get(y)))
   
   def visit_merge(self, phi_nodes):    
     for (k, (left,right)) in phi_nodes.iteritems():

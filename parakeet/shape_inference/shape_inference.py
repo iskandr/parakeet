@@ -555,11 +555,6 @@ class ShapeInference(SyntaxVisitor):
     else:
       return elt_result 
     
-        
-      
-    
-    
-    
     
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)

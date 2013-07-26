@@ -151,7 +151,7 @@ class RewriteTyped(Transform):
     elt_t = array_t.index_type(idx_t)
 
     fn = syntax.TypedFn(
-        name = names.fresh("idx_helper"), 
+        name = names.fresh("fancy_indexing_helper"), 
         arg_names = (array_name, idx_name),
         input_types = (array_t, idx_t),
         return_type = elt_t,
