@@ -60,6 +60,7 @@ def rank(x):
   def typed_rank(xt):
     return const_int(xt.type.rank) 
   return DelayUntilTyped(x, typed_rank)
+
 @macro 
 def size(x):
   def typed_size(xt):
@@ -73,64 +74,7 @@ def size(x):
 def fill(x, v):
   for i in range(len(x)):
     x[i] = v 
-    
-    
-@jit
-def argmax(x):
-  """
-  Currently assumes axis=None
-  TODO: 
-    - Support axis arguments
-    - use IndexReduce instead of explicit loop
-  
-      def argmax_map(curr_idx):
-        return curr_idx, x[curr_idx]
-  
-      def argmax_combine((i1,v1), (i2,v2)):
-        if v1 > v2:
-          return (i1,v1)
-        else:
-          return (i2,v2)
-    
-      return ireduce(combine=argmin_combine, shape=x.shape, map_fn=argmin_map, init = (0,x[0]))
-  """
-  bestval = x[0]
-  bestidx = 0
-  for i in xrange(1, len(x)):
-    currval = x[i]
-    if currval > bestval:
-      bestval = currval
-      bestidx = i
-  return bestidx 
-
-@jit
-def argmin(x):
-  """
-  Currently assumes axis=None
-  TODO: 
-    - Support axis arguments
-    - use IndexReduce instead of explicit loop
-  
-      def argmin_map(curr_idx):
-        return curr_idx, x[curr_idx]
-  
-      def argmin_combine((i1,v1), (i2,v2)):
-        if v1 < v2:
-          return (i1,v1)
-        else:
-          return (i2,v2)
-    
-      return ireduce(combine=argmin_combine, shape=x.shape, map_fn=argmin_map, init = (0,x[0]))
-  """
-  bestval = x[0]
-  bestidx = 0
-  for i in xrange(1, len(x)):
-    currval = x[i]
-    if currval < bestval:
-      bestval = currval
-      bestidx = i
-  return bestidx 
-
+ 
 
 @macro 
 def shape(x):
@@ -143,22 +87,6 @@ def shape(x):
   return DelayUntilTyped(x, typed_shape)
 
 
-@jit 
-def prod(x, axis=None):
-  return reduce(prims.multiply, x, init=1, axis = axis)
-
-@jit 
-def mean(x, axis = None):
-  return sum(x, axis = axis) / x.shape[0]
-
-@jit 
-def cumsum(x, axis = None):
-  return scan(prims.add, x, axis = axis)
-
-@jit 
-def cumprod(x, axis = None):
-  return scan(prims.multiply, x, axis = axis)
-
 
 
 @jit 
@@ -170,42 +98,3 @@ def diff(x):
     - allow n'th differences by recursion
   """
   return x[1:] - x[:-1]
-
-@jit 
-def dot(x,y):
-  return sum(x*y)
-
-@jit 
-def square(x):
-  return x * x 
-
-@jit
-def conjugate(x):
-  """
-  For now we don't have complex numbers so this is just the identity function
-  """
-  return x 
-
-def _scalar_sign(x):
-  return x if x >= 0 else -x 
-
-@jit
-def sign(x):
-  return map(_scalar_sign(x))
-
-@jit 
-def reciprocal(x):
-  return 1 / x
-
-
-@jit 
-def rad2deg(rad):
-  return rad * 180 / 3.141592653589793
-
-@jit
-def deg2rad(deg):
-  return deg * 3.141592653589793 / 180 
-
-@jit 
-def hypot(x,y):
-  return np.sqrt(x**2 + y**2)

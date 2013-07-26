@@ -109,16 +109,15 @@ function_mappings = {
   np.logical_and : prims.logical_and, 
   np.logical_not : prims.logical_not, 
   np.logical_or : prims.logical_or,  
-  
-
-  
+    
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
   
-  np.square : lib.square, 
+  np.square : lib.square,
+  np.power : prims.power,  
   np.sign : lib.sign, 
-  np.reciprocal : lib.reciprocal, 
-  np.conjugate : lib.conjugate,
+  np.reciprocal : lib.numpy_math.reciprocal, 
+  np.conjugate : lib.numpy_math.conjugate,
   
   np.trunc : prims.trunc, 
   np.rint : prims.rint, 

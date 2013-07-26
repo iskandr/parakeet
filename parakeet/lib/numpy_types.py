@@ -52,10 +52,3 @@ def float64(x):
 @macro 
 def bool(x):
   return Cast(x, type = Bool)
-
-@jit
-def real(x):
-  """
-  For now we don't have complex types, so real is just the identity function
-  """
-  return x 

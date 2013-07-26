@@ -244,6 +244,9 @@ modf = Arith(np.modf)
 remainder = Arith(np.remainder)
 
 power = Arith(np.power, 'Pow', '**')
+# power_int = Arith(np.power, extra_signatures = [''])
+
+
 negative = Arith(np.negative, 'USub', '-', None, 1, 1)
 maximum = Arith(np.maximum, None, None, 'maximum', 2, 1)
 minimum = Arith(np.minimum, None, None, 'minimum', 2, 1)
