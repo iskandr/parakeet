@@ -11,5 +11,6 @@ from offset_analysis import OffsetAnalysis
 from syntax_visitor import SyntaxVisitor 
 from use_analysis import find_live_vars, use_count
 from usedef import StmtPath, UseDefAnalysis
+from value_range_analysis import ValueRangeAnalyis
 from verify import verify 
 

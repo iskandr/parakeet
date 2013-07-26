@@ -204,7 +204,7 @@ class ArrayBuilder(CoreBuilder):
     if temp:
       return self.assign_name(idx_expr, "array_elt" if name is None else name)
     else:
-      return idx_expr  
+      return idx_expr
 
   def index_along_axis(self, arr, axis, idx, name=None):
     if arr.type.__class__ is not ArrayT:

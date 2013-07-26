@@ -16,6 +16,7 @@ from imap_elim import IndexMapElimination
 
 #from mapify_allpairs import MapifyAllPairs
 #from maps_to_parfor import MapsToParFor
+from offset_propagation import OffsetPropagation
 from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
 from redundant_load_elim import RedundantLoadElimination
@@ -23,7 +24,7 @@ from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
-from value_range_propagation import RangePropagation
+from range_propagation import RangePropagation
 
 ####################################
 #                                  #
@@ -44,12 +45,15 @@ copy_elim = Phase(CopyElimination, config_param = 'opt_copy_elimination')
 licm = Phase(LoopInvariantCodeMotion, config_param = 'opt_licm',
              memoize = False)
 
-
+symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
+                                    config_param = 'opt_range_propagation',
+                                    memoize = False)
 high_level_optimizations = Phase([
                                     Simplify, 
                                     inline_opt, Simplify, DCE,
-                                    ConstArgSpecialization, Simplify, DCE, 
-                                    licm, Simplify, DCE, 
+                                    # ConstArgSpecialization, Simplify, DCE,
+                                    symbolic_range_propagation, 
+                                    licm, Simplify, DCE,
                                     fusion_opt, 
                                     fusion_opt, 
                                     copy_elim, Simplify, DCE, 
@@ -80,9 +84,8 @@ def print_loopy(fn):
     print
 
 
-symbolic_range_propagation = Phase(RangePropagation,
-                           config_param = 'opt_range_propagation',
-                           memoize = False)
+
+
 shape_elim = Phase(ShapeElimination,
                    config_param = 'opt_shape_elim')
 # loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
@@ -98,7 +101,6 @@ loopify = Phase([
                    inline_opt, 
                    copy_elim,
                    licm,
-                   symbolic_range_propagation,
                    shape_elim,
                    symbolic_range_propagation,
                    index_elim

@@ -3,10 +3,9 @@ from .. import names, syntax
 from ..ndtypes import (IncompatibleTypes, ScalarT, 
                        Bool, Type,  ArrayT, Int64, TupleT, 
                        make_tuple_type)
-from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index)
+from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index, Map)
 from ..syntax.helpers import get_types, zero_i64, one_i64, none, const 
 from ..transforms import Transform 
-
 
 class RewriteTyped(Transform):
   def __init__(self, return_type = None):
@@ -138,10 +137,10 @@ class RewriteTyped(Transform):
     """
     return expr
   
-  index_function_cache = {}
-  def get_index_fn(self, array_t, idx_t):
+
+  def get_index_fn(self, array_t, idx_t,  _index_function_cache = {}):
     key = (array_t, idx_t) 
-    if key in self.index_function_cache:
+    if key in _index_function_cache:
       return self.index_function_cache[key]
     array_name = names.fresh("array")
     array_var = Var(array_name, type = array_t)
@@ -152,7 +151,7 @@ class RewriteTyped(Transform):
     elt_t = array_t.index_type(idx_t)
 
     fn = syntax.TypedFn(
-        name = names.fresh("idx"), 
+        name = names.fresh("idx_helper"), 
         arg_names = (array_name, idx_name),
         input_types = (array_t, idx_t),
         return_type = elt_t,
@@ -177,19 +176,20 @@ class RewriteTyped(Transform):
         "Don't yet support indexing by %s" % index.type 
       
       index_elt_t = index.type.elt_type
-      assert False
-      #if index_elt_t == core_types.Bool:
-      #  index_array = syntax.Where(expr.index)
-      #  index_elt_t = core_types.Int64
-      #else:
-      #  index_array = expr.index 
+      
+      if index_elt_t == Bool:
+        assert False, "Indexing by boolean vector not yet implemented"
+        #index_array = Where(expr.index)
+        #index_elt_t = Int64
+      else:
+        index_array = expr.index 
       index_array = expr.index 
       index_fn = self.get_index_fn(expr.value.type, index_elt_t)
       index_closure = self.closure(index_fn, [expr.value])
-      return syntax.Map(fn = index_closure, 
-                        args = index_array, 
-                        type = expr.value.type, 
-                        axis = zero_i64)
+      return Map(fn = index_closure, 
+                 args = index_array, 
+                 type = expr.value.type, 
+                 axis = zero_i64)
     else:
       return expr 
   

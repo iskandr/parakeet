@@ -21,7 +21,12 @@ class Array(ArrayExpr):
 
 
 class Index(ArrayExpr):
-  _members = ['value', 'index']
+  """
+  TODO: 
+    - make all user-defined indexing check_negative=True by default 
+    - implement backend logic for lowering check_negative 
+  """
+  _members = ['value', 'index', 'check_negative']
   
   def __eq__(self, other):
     return other.__class__ is Index and \

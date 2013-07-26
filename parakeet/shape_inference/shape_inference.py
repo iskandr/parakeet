@@ -12,6 +12,7 @@ from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown,
                    increase_rank, make_shape, is_zero, is_one, 
                    ) 
 from parakeet.syntax.adverbs import IndexReduce
+from parakeet.syntax.adverb_helpers import max_rank_arg
 
 class ShapeInferenceFailure(Exception):
   def __init__(self, value, fn):
@@ -539,7 +540,26 @@ class ShapeInference(SyntaxVisitor):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     axis = unwrap_constant(expr.axis)
-    assert False, "Map needs an implementation"
+    assert axis is not None, "Unexpected axis=None in Map %s" % expr 
+    elt_shapes = [self.slice_along_axis(arg, axis) for arg in arg_shapes]
+    elt_result = symbolic_call(fn, elt_shapes)
+    
+    outer_dim = None 
+    max_rank = 0
+    for arg_shape in arg_shapes:
+      if isinstance(arg_shape, Shape) and len(arg_shape.dims) > max_rank:
+        max_rank = len(arg_shape.dims)
+        outer_dim = arg_shape.dims[axis]
+    if outer_dim is not None:
+      return shape.increase_rank(elt_result, axis, outer_dim)
+    else:
+      return elt_result 
+    
+        
+      
+    
+    
+    
     
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)

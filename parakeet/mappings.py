@@ -103,6 +103,7 @@ function_mappings = {
    
   np.divide : prims.divide, 
   np.modf : prims.mod,  
+  np.fmod : prims.mod, 
   np.mod : prims.remainder,
   np.remainder : prims.remainder,  
   
@@ -124,6 +125,7 @@ function_mappings = {
   np.floor : prims.floor, 
   np.ceil : prims.ceil,
   np.round : prims.round, 
+  np.rint : prims.round, 
   
   np.exp : prims.exp, 
   np.exp2 : prims.exp2, 

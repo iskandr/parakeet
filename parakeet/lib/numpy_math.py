@@ -19,8 +19,13 @@ def real(x):
   return x  
 
 def _scalar_sign(x):
-  return x if x >= 0 else -x 
-
+  if x > 0:
+    return 1
+  elif x < 0:
+    return -1 
+  else:
+    return 0
+  
 @jit
 def sign(x):
   return map(_scalar_sign,x)
