@@ -70,8 +70,8 @@ function_mappings = {
   np.minimum : prims.minimum, 
   np.maximum : prims.maximum, 
   
-  np.argmin : lib.argmin, 
-  np.argmax : lib.argmax, 
+  np.argmin : lib.numpy_reductions.argmin, 
+  np.argmax : lib.numpy_reductions.argmax, 
   
   all : lib.builtin_all, 
   np.all : lib.builtin_all, 
@@ -113,9 +113,9 @@ function_mappings = {
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
   
-  np.square : lib.square,
+  np.square : lib.numpy_math.square,
   np.power : prims.power,  
-  np.sign : lib.sign, 
+  np.sign : lib.numpy_math.sign, 
   np.reciprocal : lib.numpy_math.reciprocal, 
   np.conjugate : lib.numpy_math.conjugate,
   
@@ -155,7 +155,7 @@ function_mappings = {
   math.acosh : prims.arccosh, 
   np.arccosh : prims.arccosh,
   
-  np.rad2deg : lib.rad2deg, 
-  np.deg2rad : lib.deg2rad,  
+  np.rad2deg : lib.numpy_math.rad2deg, 
+  np.deg2rad : lib.numpy_math.deg2rad,  
   # np.hypot : lib.hypot, 
 }

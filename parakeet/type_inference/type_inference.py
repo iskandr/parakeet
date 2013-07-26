@@ -3,7 +3,7 @@ from ..ndtypes import array_type, closure_type, tuple_type, type_conv
 from ..ndtypes import (Type, Bool, IntT, Int64,  ScalarT, 
                        NoneType, NoneT, Unknown, UnknownT, 
                        combine_type_list, StructT, TypeValueT)
-from ..ndtypes.array_type import ArrayT, make_array_type, make_slice_type
+from ..ndtypes.array_type import ArrayT, make_array_type, make_slice_type, lower_rank
 from ..ndtypes.closure_type import ClosureT, make_closure_type
 from ..ndtypes.tuple_type import  TupleT, make_tuple_type
 from ..syntax import adverb_helpers, prim_wrapper
@@ -16,43 +16,15 @@ from ..syntax.helpers import (get_type, get_types, unwrap_constant,
 from ..syntax.fn_args import ActualArgs, FormalArgs, MissingArgsError
 from ..transforms import Transform, stride_specialization, Simplify 
 
-from linearize_args import linearize_actual_args, unpack_closure, flatten_actual_args
+from helpers import untyped_identity_function, make_typed_closure
+from linearize_args import linearize_actual_args, flatten_actual_args
+from var_map import VarMap 
+
 
 class InferenceFailed(Exception):
   def __init__(self, msg):
     self.msg = msg
 
-class VarMap:
-  def __init__(self):
-    self._vars = {}
-
-  def rename(self, old_name):
-    new_name = names.refresh(old_name)
-    self._vars[old_name] = new_name
-    return new_name
-
-  def lookup(self, old_name):
-    if old_name in self._vars:
-      return self._vars[old_name]
-    else:
-      return self.rename(old_name)
-
-  def __str__(self):
-    return "VarMap(%s)" % self._vars
-
-
-def make_typed_closure(untyped_closure, typed_fn):
-  if untyped_closure.__class__ is UntypedFn:
-    return typed_fn
-
-  assert isinstance(untyped_closure, syntax.Expr) and \
-         untyped_closure.type.__class__ is closure_type.ClosureT
-  _, closure_args = unpack_closure(untyped_closure)
-  if len(closure_args) == 0:
-    return typed_fn
-  else:
-    t = closure_type.make_closure_type(typed_fn, get_types(closure_args))
-    return Closure(typed_fn, closure_args, t)
 
 
 
@@ -87,35 +59,9 @@ def invoke_result_type(fn, arg_types):
   return result_type
 
 
-def mk_untyped_identity():
-  var_name = names.fresh('x')
-  var_expr = Var(var_name)
-  fn_name = names.fresh('identity')
-  args_obj = FormalArgs()
-  args_obj.add_positional(var_name)
-  return UntypedFn(name = fn_name, 
-                   args = args_obj, 
-                   body = [Return(var_expr)])
 
-untyped_identity_function = mk_untyped_identity()
-
-class Annotator(Transform):
-  
-  def __init__(self, tenv, var_map):
-    Transform.__init__(self)
-    self.type_env = tenv 
-    self.var_map = var_map
-    
-  
-  def transform_expr(self, expr):
-    from ..frontend import ast_conversion
-    if not isinstance(expr, syntax.Expr):
-      expr = ast_conversion.value_to_syntax(expr)
-    
-    result = Transform.transform_expr(self, expr)  
-    assert result.type is not None,  \
-      "Unsupported expression encountered during type inference: %s" % (expr,)
-    return result 
+from local_inference import LocalTypeInference
+class TypeInference(LocalTypeInference):
   
   
   def transform_args(self, args, flat = False):
@@ -137,12 +83,12 @@ class Annotator(Transform):
         result[k] = self.transform_expr(v)
       return result
 
-  def keyword_types(self, kwds):
-    keyword_types = {}
-    for (k,v) in kwds.iteritems():
-      keyword_types[k] = get_type(v)
-    return keyword_types
-  syntax
+  #def keyword_types(self, kwds):
+  #  keyword_types = {}
+  #  for (k,v) in kwds.iteritems():
+  #    keyword_types[k] = get_type(v)
+  #  return keyword_types
+  
   def transform_DelayUntilTyped(self, expr):
     new_values = self.transform_expr_tuple(expr.values)
     new_syntax = expr.fn(*new_values)
@@ -242,114 +188,6 @@ class Annotator(Transform):
       result_t = typed_broadcast_fn.return_type
       return syntax.Call(typed_broadcast_fn, args, type = result_t)
 
-  def transform_Index(self, expr):
-    value = self.transform_expr(expr.value)
-    index = self.transform_expr(expr.index)
-    if isinstance(value.type, TupleT):
-      assert isinstance(index.type, IntT)
-      assert index.__class__  is Const
-      i = index.value
-      assert isinstance(i, int)
-      elt_types = value.type.elt_types
-      assert i < len(elt_types), \
-          "Can't get element %d of length %d tuple %s : %s" % \
-          (i, len(elt_types), value, value.type)
-      elt_t = value.type.elt_types[i]
-      return TupleProj(value, i, type = elt_t)
-    else:
-      result_type = value.type.index_type(index.type)
-      return syntax.Index(value, index, type = result_type)
-
-  def transform_Array(self, expr):
-    new_elts = self.transform_args(expr.elts)
-    elt_types = get_types(new_elts)
-    common_t = combine_type_list(elt_types)
-    array_t = array_type.increase_rank(common_t, 1)
-    return syntax.Array(new_elts, type = array_t)
-
-  def transform_AllocArray(self, expr):
-    elt_type = expr.elt_type
-    assert isinstance(elt_type, ScalarT), \
-      "Invalid array element type  %s" % (elt_type)
-      
-    shape = self.transform_expr(expr.shape)
-    if isinstance(shape, ScalarT):
-      shape = self.cast(shape, Int64)
-      shape = self.tuple((shape,), "array_shape")
-    assert isinstance(shape, TupleT), \
-      "Invalid shape %s" % (shape,)
-    rank = len(shape.elt_types)
-    t = array_type.make_array_type(elt_type, rank)
-    return syntax.AllocArray(shape, elt_type, type = t)
-  
-  def transform_Range(self, expr):
-    start = self.transform_expr(expr.start) if expr.start else None
-    stop = self.transform_expr(expr.stop) if expr.stop else None
-    step = self.transform_expr(expr.step) if expr.step else None
-    array_t = array_type.ArrayT(Int64, 1)
-    return syntax.Range(start, stop, step, type = array_t)
-
-  def transform_Slice(self, expr):
-    start = self.transform_expr(expr.start)
-    stop = self.transform_expr(expr.stop)
-    step = self.transform_expr(expr.step)
-    slice_t = array_type.make_slice_type(start.type, stop.type, step.type)
-    return syntax.Slice(start, stop, step, type = slice_t)
-
-  def transform_Var(self, expr):
-    old_name = expr.name
-    if old_name not in self.var_map._vars:
-      raise names.NameNotFound(old_name)
-    new_name = self.var_map.lookup(old_name)
-    assert new_name in self.type_env, \
-        "Unknown var %s (previously %s)" % (new_name, old_name)
-    t = self.type_env[new_name]
-    return Var(new_name, type = t)
-
-  def transform_Tuple(self, expr):
-    elts = self.transform_expr_list(expr.elts)
-    return self.tuple(elts)
-    #elt_types = get_types(elts)
-    #t = tuple_type.make_tuple_type(elt_types)
-    #return syntax.Tuple(elts, type = t)
-
-  def transform_Const(self, expr):
-    return Const(expr.value, type_conv.typeof(expr.value))
-  
-
-
-  def transform_Reshape(self, expr):
-    array = self.transform_expr(expr.array)
-    shape = self.transform_expr(expr.shape)
-    rank = len(shape.type.elt_types)
-    assert isinstance(array.type, array_type.ArrayT)
-    t = array_type.make_array_type(array.elt_type, rank)
-    return syntax.Reshape(array, shape, type = t)
-  
-  def transform_Ravel(self, expr):
-    array = self.transform_expr(expr.array)
-    if not isinstance(array.type, array_type.ArrayT):
-      print "Warning: Can't ravel/flatten an object of type %s" % array.type 
-      return array 
-    t = array_type.make_array_type(array.type.elt_type, 1)
-    return Ravel(array, type = t)
-  
-  
-  def transform_Cast(self, expr):
-    v = self.transform_expr(expr.value)
-    return Cast(v, type = expr.type)
-  
-  def transform_Len(self, expr):
-    v = self.transform_expr(expr.value)
-    t = v.type
-    if t.__class__ is ArrayT:
-      shape_t = make_tuple_type([Int64] * t.rank)
-      shape = Attribute(v, 'shape', type = shape_t)
-      return TupleProj(shape, 0, type = Int64)
-    else:
-      assert t.__class__ is TupleT, \
-         "Unexpected argument type for 'len': %s" % t
-      return Const(len(t.elt_types), type = Int64)
  
   def transform_IndexMap(self, expr):
     shape = self.transform_expr(expr.shape)
@@ -773,7 +611,7 @@ def infer_types(untyped_fn, types):
     raise
   # keep track of the return
   tenv['$return'] = Unknown
-  annotator = Annotator(tenv, var_map)
+  annotator = TypeInference(tenv, var_map)
   body = annotator.transform_block(untyped_fn.body)
   arg_names = [local_name for local_name
                in
@@ -981,14 +819,13 @@ def infer_Scan(map_fn, combine_fn, emit_fn, array_types, init_type = None):
                                array_types, init_type)
   return t
 
-def specialize_AllPairs(fn, xtype, ytype):
-  x_elt_t = array_type.lower_rank(xtype, 1)
-  y_elt_t = array_type.lower_rank(ytype, 1)
-  typed_map_fn = specialize(fn, [x_elt_t, y_elt_t])
+def specialize_OuterMap(fn, array_types):
+  elt_types = [lower_rank(t) for t in array_types]
+  typed_map_fn = specialize(fn, elt_types)
   elt_result_t = typed_map_fn.return_type
   result_t = array_type.increase_rank(elt_result_t, 2)
   return result_t, typed_map_fn
 
-def infer_AllPairs(fn, xtype, ytype):
-  t, _ = specialize_AllPairs(fn, xtype, ytype)
+def infer_OuterMap(fn, array_types):
+  t, _ = specialize_OuterMap(fn, array_types)
   return t

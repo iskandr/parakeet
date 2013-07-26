@@ -1,31 +1,9 @@
 
-from ..ndtypes import ClosureT, type_conv
-from ..syntax import Closure, ClosureElt, TupleProj, get_type
-from ..syntax.fn_args import ActualArgs, FormalArgs
+from ..ndtypes import type_conv
+from ..syntax import TupleProj, get_type
+from ..syntax.fn_args import ActualArgs
 
-def unpack_closure(closure):
-  """
-  Given an object which could be either a function, a function's name, a
-  closure, or a closure type:
-  Return the underlying untyped function and the closure arguments
-  """
-
-  if closure.__class__ is ClosureT:
-    fn, closure_args = closure.fn, closure.arg_types
-  elif closure.__class__ is Closure:
-    fn = closure.fn 
-    closure_args = closure.args 
-  elif closure.type.__class__ is ClosureT:
-    fn, arg_types = closure.type.fn, closure.type.arg_types
-    closure_args = \
-        [ClosureElt(closure, i, type = arg_t)
-         for (i, arg_t) in enumerate(arg_types)]
-  else:
-    fn = closure
-    closure_args = []
-    # fn = UntypedFn.registry[fn]
-  return fn, closure_args
-
+from helpers import unpack_closure
 
 def linearize_arg_types(fn, args):
 

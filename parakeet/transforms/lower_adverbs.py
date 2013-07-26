@@ -29,6 +29,12 @@ class LowerAdverbs(Transform):
     self.nested_loops(dims, loop_body)    
     return output
   
+  _loop_counters = ["i", "j", "k", "l", "ii", "jj", "kk", "ll"]
+  
+  def get_loop_counter(self, depth):
+    loop_counter_name = self._loop_counters[depth % len(self._loop_counters)] 
+    return  self.fresh_var(Int64, loop_counter_name)
+        
   def transform_IndexReduce(self, expr):
     init = self.transform_if_expr(expr.init)
     fn = self.transform_expr(expr.fn)
@@ -44,25 +50,19 @@ class LowerAdverbs(Transform):
       bounds = [shape]
     acc_t = init.type
 
-    loop_counters = ["i", "j", "k", "l", "ii", "jj", "kk", "ll"]
+    
     def build_body(indices, bounds, old_acc):
       if len(bounds) == 0:
         if len(indices) > 1:
           indices = self.tuple(indices)
         else:
           indices = indices[0]
-        print "indices", indices 
-        print "bounds", bounds 
-        print "old_acc", old_acc
         elt = self.call(fn, (indices,))
-        print "elt", elt 
         new_acc = self.call(combine, (old_acc, elt))
-        print "new_acc", new_acc 
         return new_acc 
       else:
         acc_before = self.fresh_var(acc_t, "acc_before")
-        loop_counter_name = loop_counters[len(indices) % len(loop_counters)] 
-        loop_counter = self.fresh_var(Int64, loop_counter_name)
+        loop_counter = self.get_loop_counter(len(indices)) 
         
         future_indices = indices + (loop_counter,)
         future_bounds = bounds[1:]
