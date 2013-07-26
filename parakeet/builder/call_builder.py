@@ -1,6 +1,6 @@
 
 from ..ndtypes import ClosureT, Type, make_closure_type, NoneType 
-from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt, Return   
+from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt, Return, FormalArgs   
 from ..syntax.helpers import get_types, zero_i64, none 
 from ..syntax.adverb_helpers import max_rank
 
@@ -77,14 +77,31 @@ class CallBuilder(CoreBuilder):
     return invoke_result_type(closure_t, arg_types)
 
   def is_identity_fn(self, fn):
-    if len(fn.arg_names) == 1:
+    if fn.__class__ is TypedFn and len(fn.arg_names) == 1:
       input_name = fn.arg_names[0]
-      if len(fn.body) == 1:
-        stmt = fn.body[0]
-        if stmt.__class__ is Return:
-          expr = stmt.value 
-          if expr.__class__ is Var:
-            return expr.name == input_name
+    elif fn.__class__ is UntypedFn:
+      args = fn.args 
+      if isinstance(args, (list, tuple)):
+        input_name = args[0]
+      else:
+        assert isinstance(args, FormalArgs), "Unexpected args %s" % (args,)
+        if args.n_args == 1 and len(args.positional) == 1:
+          input_name = args.positional[0]  
+        else:
+          return False 
+    else:
+      return False 
+    
+    if isinstance(input_name, Var):
+      input_name = input_name.name
+    else:
+      assert isinstance(input_name, str), "Unexpected input %s" % (input_name,)    
+    if len(fn.body) == 1:
+      stmt = fn.body[0]
+      if stmt.__class__ is Return:
+        expr = stmt.value 
+        if expr.__class__ is Var:
+          return expr.name == input_name
     return False 
     
   def invoke(self, fn, args, loopify = False, lower = False):
@@ -108,6 +125,11 @@ class CallBuilder(CoreBuilder):
         fn = pipeline.lowering(fn)
         
     combined_args = tuple(closure_args) + tuple(args)
+    if isinstance(fn, UntypedFn):
+      combined_arg_types = get_types(combined_args)
+      from .. import type_inference
+      fn = type_inference.specialize(fn, combined_arg_types)
+    
     # don't generate Call nodes for identity function 
     if self.is_identity_fn(fn):
       assert len(combined_args) == 1

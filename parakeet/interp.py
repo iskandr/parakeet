@@ -374,6 +374,39 @@ def eval_fn(fn, actuals):
 
   
 
+  def eval_parfor_seq(stmt):
+    fn = eval_expr(stmt.fn)
+    bounds = eval_expr(stmt.bounds)
+    if isinstance(bounds, (list,tuple)) and len(bounds) == 1:
+      bounds = bounds[0]
+        
+    if isinstance(bounds, (int, long)):
+      for idx in xrange(bounds):
+        eval_fn(fn, (idx,))
+    else:
+      for idx in np.ndindex(bounds):
+        eval_fn(fn, (idx,))
+        
+  def eval_parfor_shiver(stmt):
+    eval_parfor_seq(stmt)
+    return 
+    """
+    fn = eval_expr(stmt.fn)
+    assert isinstance(fn, ClosureVal), "Invalid function %s" % (fn,)
+    
+    bounds = eval_expr(stmt.bounds)
+    assert isinstance(bounds, (int,long,tuple)), "Invalid bounds %s" % (bounds,)
+    
+    
+    import transforms,  llvm_backend
+    lowered_fn = transforms.pipeline.lowering(fn.fn)
+    llvm_fn = llvm_backend.compile_fn(lowered_fn)
+    
+    # need to convert everything to generic values! 
+    fixed_args = ()
+    import shiver 
+    shiver.parfor(llvm_fn, bounds, fixed_args, llvm_backend.global_context.exec_engine)  
+    """
     
   def eval_stmt(stmt):
     if isinstance(stmt, Return):
@@ -412,18 +445,7 @@ def eval_fn(fn, actuals):
       eval_expr(stmt.value)
       
     elif isinstance(stmt, ParFor):
-      fn = eval_expr(stmt.fn)
-      bounds = eval_expr(stmt.bounds)
-      if isinstance(bounds, (list,tuple)) and len(bounds) == 1:
-        bounds = bounds[0]
-        
-      if isinstance(bounds, (int, long)):
-        for idx in xrange(bounds):
-          eval_fn(fn, (idx,))
-      else:
-        for idx in np.ndindex(bounds):
-          eval_fn(fn, (idx,))
-          
+      eval_parfor_shiver(stmt)    
       
       
     else:
