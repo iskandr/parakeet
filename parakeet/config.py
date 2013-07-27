@@ -15,7 +15,7 @@ opt_shape_elim = True
 opt_redundant_load_elimination = True  
 
 # may dramatically increase compile time
-opt_loop_unrolling = True
+opt_loop_unrolling = False
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 

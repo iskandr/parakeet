@@ -335,8 +335,11 @@ class AST_Translator(ast.NodeVisitor):
       if name in right_scope:
         right = Var(right_scope[name])
       else:
-        right = self.lookup(name)
-
+        try:
+          right = self.lookup(name)
+        except NameNotFound:
+          continue 
+          
       if name in new_names:
         new_name = new_names[name]
       else:

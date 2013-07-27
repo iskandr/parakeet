@@ -13,7 +13,7 @@ def fit_simple_regression(x,y):
 import numpy as np 
 
 N = 10**7
-x = np.random.randn(N)
+x = np.random.randn(N).astype('float64')
 slope = 903.29
 offset = 102.1
 y = slope * x + offset

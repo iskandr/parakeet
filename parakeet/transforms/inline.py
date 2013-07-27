@@ -99,7 +99,7 @@ class Inliner(Transform):
     if target.__class__ is TypedFn:
       closure_args = self.closure_elts(fn)
       if not can_inline(target):
-        print "[Warning] Can't inline %s" % target
+        # print "[Warning] Can't inline %s" % target
         return expr  
       self.count += 1
       curr_block = self.blocks.current()
