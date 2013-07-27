@@ -36,7 +36,7 @@ class LowerAdverbs(Transform):
     return  self.fresh_var(Int64, loop_counter_name)
   
    
-  def build_nested_reduction(self, indices, bounds, old_acc, body_fn):
+  def build_nested_reduction(self, indices, starts, bounds, old_acc, body_fn):
       if len(bounds) == 0:
         if len(indices) > 1:
           indices = self.tuple(indices)
@@ -50,13 +50,18 @@ class LowerAdverbs(Transform):
         loop_counter = self.get_loop_counter(len(indices)) 
         
         future_indices = indices + (loop_counter,)
+        future_starts = starts[1:]
         future_bounds = bounds[1:]
         self.blocks.push()
-        acc_after = self.build_nested_reduction(future_indices, future_bounds, acc_before, body_fn)
+        acc_after = self.build_nested_reduction(future_indices, 
+                                                future_starts, 
+                                                future_bounds, 
+                                                acc_before, 
+                                                body_fn)
         body = self.blocks.pop()
         merge = {acc_before.name : (old_acc, acc_after)}
         for_loop = ForLoop(var = loop_counter, 
-                          start = self.int(0), 
+                          start = starts[0],
                           stop = bounds[0], 
                           step = self.int(1), 
                           body = body, 
@@ -78,12 +83,23 @@ class LowerAdverbs(Transform):
       bounds = self.tuple_elts(shape)
     else:
       bounds = [shape]
+      
+    if expr.start_index is not None:
+      if isinstance(expr.start_index.type, TupleT):
+        starts = self.tuple_elts(expr.start_index)
+      else:
+        starts = [expr.start_index]
+    else:
+      starts = [self.int(0)] * len(bounds)
+      
+    
     def body(indices, old_acc):
       elt = self.call(fn, (indices,))
       return self.call(combine, (old_acc, elt))
        
     return self.build_nested_reduction(
               indices = (), 
+              starts = starts, 
               bounds = bounds, 
               old_acc = init, 
               body_fn = body)
@@ -112,8 +128,11 @@ class LowerAdverbs(Transform):
       new_acc = self.call(combine, (old_acc, elt))
       self.setidx(output, indices, new_acc)
       return new_acc
-       
-    self.build_nested_reduction(indices = (), bounds = bounds, old_acc = init, body_fn = body)
+    starts = [self.int(0)] * len(bounds)
+    self.build_nested_reduction(indices = (),
+                                starts = starts, 
+                                bounds = bounds, 
+                                old_acc = init, body_fn = body)
     return output 
   
   def transform_IndexFilter(self, expr):

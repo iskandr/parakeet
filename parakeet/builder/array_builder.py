@@ -57,6 +57,7 @@ class ArrayBuilder(CoreBuilder):
     else:
       array = AllocArray(shape, elt_type = elt_t, type = array_t)
     return self.assign_name(array, name)
+  
   def len(self, array):
     return self.shape(array, 0)
   

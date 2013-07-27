@@ -410,8 +410,7 @@ class Simplify(Transform):
           self.available_expressions.setdefault(rhs, lhs)
     elif lhs_class is Tuple:
       self.bind(lhs, rhs)
-    # assigning x[i] = x[i]
-    # does nothing
+
     elif lhs_class is Index:
       if rhs_class is Index and \
          lhs.value == rhs.value and \
@@ -450,8 +449,9 @@ class Simplify(Transform):
        self.use_counts.get(rhs.name, 1) == 1:
       self.use_counts[rhs.name] = 0
       rhs = self.bindings[rhs.name]
+    old_lhs = stmt.lhs 
+    old_rhs = stmt.rhs 
     stmt.lhs = lhs
-    
     stmt.rhs = rhs
     return stmt
 

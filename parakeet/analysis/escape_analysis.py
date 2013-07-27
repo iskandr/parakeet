@@ -31,6 +31,7 @@ class EscapeAnalysis(SyntaxVisitor):
   """
   
   def visit_fn(self, fn):
+    
     self.scalars = set([])
     self.may_alias = {}
     all_scalars = True 
@@ -106,6 +107,31 @@ class EscapeAnalysis(SyntaxVisitor):
         self.may_escape.add(lhs_name)
   
   def visit_Call(self, expr):
+    self.visit_expr(expr.fn)
+    self.mark_escape_list(collect_nonscalar_names_from_list(expr.args))
+
+  def visit_Map(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_if_expr(expr.axis)
+    self.mark_escape_list(collect_nonscalar_names_from_list(expr.args))
+
+  def visit_Reduce(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.combine)
+    self.visit_if_expr(expr.axis)
+    self.visit_if_expr(expr.init)
+    self.mark_escape_list(collect_nonscalar_names_from_list(expr.args))
+
+  def visit_Scan(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_expr(expr.combine)
+    self.visit_if_expr(expr.axis)
+    self.visit_if_expr(expr.init)
+    self.mark_escape_list(collect_nonscalar_names_from_list(expr.args))
+  
+  def visit_OuterMap(self, expr):
+    self.visit_expr(expr.fn)
+    self.visit_if_expr(expr.axis)
     self.mark_escape_list(collect_nonscalar_names_from_list(expr.args))
 
   def collect_lhs_names(self, expr):
@@ -129,9 +155,9 @@ class EscapeAnalysis(SyntaxVisitor):
     for lhs_name in lhs_names:
       self.update_aliases(lhs_name, rhs_names)
 
-  def visit_Return(self, expr):
-    self.mark_escape_list(collect_nonscalar_names(expr.value))
-  
+  def visit_Return(self, stmt):
+    self.mark_escape_list(collect_nonscalar_names(stmt.value))
+ 
   def visit_merge(self, merge):
     for (name, (l,r)) in merge.iteritems():
       if l.__class__ is Var: 

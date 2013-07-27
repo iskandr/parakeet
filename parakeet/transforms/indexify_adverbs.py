@@ -23,7 +23,10 @@ class IndexifyAdverbs(Transform):
       return names.refresh(expr.name)
     else:
       return names.fresh("input")
-    
+  
+  def fresh_fn_name(self, prefix, fn):
+    return names.fresh(prefix + names.original(self.get_fn(fn).name))
+  
   _indexed_fn_cache = {}
   def indexify_fn(self, fn, axis, array_args, 
                    cartesian_product = False,
@@ -86,8 +89,7 @@ class IndexifyAdverbs(Transform):
       input_names.append(names.refresh(old_input_name)) 
     
     input_names.append(names.fresh("idx"))
-   
-    new_fn_name = names.fresh("idx_" + names.original(fn.name))
+    new_fn_name = self.fresh_fn_name("idx_", fn)
     
     new_fn, builder, input_vars = build_fn(inner_input_types, 
                                            new_return_type,
@@ -133,7 +135,7 @@ class IndexifyAdverbs(Transform):
     
     inliner = Inliner()
     new_fn = inliner.apply(new_fn)
-    self._indexed_fn_cache[key] = new_fn 
+    self._indexed_fn_cache[key] = new_fn
     return mk_closure()
           
     
@@ -263,7 +265,8 @@ class IndexifyAdverbs(Transform):
     builder.setidx(output_var, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
     builder.return_(none)
     return self.parfor(shape, self.closure(new_fn, (output,) + tuple(old_closure_args)  ))
-    
+  
+  
   
   def transform_Reduce(self, expr):
     fn = expr.fn 
@@ -289,14 +292,68 @@ class IndexifyAdverbs(Transform):
                                 args, 
                                 cartesian_product=False)
     max_arg = max_rank_arg(args)
-    shape = self.shape(max_arg, axis) 
-
+    nelts = self.shape(max_arg, axis)
+    
+    
     return IndexReduce(fn = index_fn, 
                        init = init, 
                        combine = combine, 
-                       shape = shape, 
+                       shape = nelts, 
                        type = expr.type)
-  
+    """
+    result_t = self.return_type(index_fn)
+    n_chunks = 8 
+    n_chunks_expr = self.int(n_chunks) 
+    chunk_size = self.div(nelts, n_chunks_expr)
+    outer_closure_args = self.closure_elts(index_fn)
+    raw_index_fn = self.get_fn(index_fn)
+    closure_arg_types = get_types(outer_closure_args)
+    partial_results = self.alloc_array(result_t, n_chunks_expr)
+    wrapper_input_types = tuple(closure_arg_types) + (nelts.type, partial_results.type, Int64)
+    chunk_idx_name = names.fresh("chunk_idx")
+    partial_results_name = names.fresh("partial_results")
+    nelts_name = names.fresh("nelts")
+    wrapper_name = self.fresh_fn_name("wrapper_", index_fn)
+    
+    wrapper_input_names = tuple(names.refresh(name) for name in raw_index_fn.arg_names[:-1]) + \
+                          (nelts_name, partial_results_name, chunk_idx_name) 
+    reduce_wrapper, builder, wrapper_inputs = build_fn(wrapper_input_types, 
+                                                       NoneType,
+                                                       name = wrapper_name,  
+                                                       input_names =  wrapper_input_names)
+    local_nelts, local_partial_results, chunk_idx = wrapper_inputs[-3:]
+    local_chunk_size = self.div(local_nelts, n_chunks_expr)
+    local_start = builder.mul(chunk_idx, local_chunk_size)
+    local_stop = builder.mul(builder.add(chunk_idx, builder.int(1)), local_chunk_size)
+    local_stop = builder.max(local_stop, local_nelts)
+    local_nelts = builder.sub(local_stop, local_start)
+    inner_closure_args= wrapper_inputs[:-3]
+    #print inner_closure_args, wrapper_inputs[-3:]
+    #assert False
+    inner_index_fn = builder.closure(raw_index_fn, inner_closure_args)
+    local_reduce = IndexReduce(fn = inner_index_fn, 
+                        init = init, 
+                        combine = combine, 
+                        shape = local_nelts, 
+                        start_index = local_start, 
+                        type = expr.type)
+    local_result = builder.assign_name(local_reduce, "local_result")
+    builder.setidx(local_partial_results, chunk_idx, local_result)
+    builder.return_(none)
+    reduce_wrapper = self.closure(reduce_wrapper, tuple(outer_closure_args) + (nelts, partial_results, ) )
+    self.parfor(n_chunks_expr, reduce_wrapper)
+    assert n_chunks > 1 
+    result = self.call(combine, 
+                       [self.index(partial_results, self.int(0)), 
+                        self.index(partial_results, self.int(1))])
+    
+    def outer_combine_loop_body(acc, idx):
+      acc.update(self.call(combine, [acc.get(), self.index(partial_results, idx)]))
+    #print reduce_wrapper
+    #assert False
+    return self.accumulate_loop(self.int(2), n_chunks_expr, outer_combine_loop_body, result)
+    """
+    
   def transform_Scan(self, expr, output = None):
     combine = expr.combine 
     init = expr.init 

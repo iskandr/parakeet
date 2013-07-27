@@ -113,9 +113,9 @@ _float_op_names = {
   prims.exp : 'exp',  
   prims.exp2 : 'exp2', 
   prims.power : 'pow', 
-  prims.expm1 : 'expm1',
-  
+  prims.expm1 : 'expm1', 
   prims.sqrt : 'sqrt', 
+  
   prims.abs : 'fabs', 
   
   prims.ceil : 'ceil', 

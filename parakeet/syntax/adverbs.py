@@ -18,7 +18,7 @@ class Adverb(Expr, AdverbEvalHelpers):
     raise AdverbEvalNotImplemented(self,transformer)
   
 class IndexAdverb(Adverb):
-  _members = ['shape']
+  _members = ['shape', 'start_index']
   
 class IndexMap(IndexAdverb):
   """

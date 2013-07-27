@@ -24,6 +24,7 @@ def fresh(name):
   else:
     ssa_name = "%s.%d" % (name, version)
   original_names[ssa_name] = name
+  # assert ssa_name != 'array_elt.3' 
   return ssa_name 
 
 lcase_chars = [chr(i + 97) for i in xrange(26)]

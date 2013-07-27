@@ -51,6 +51,7 @@ class DCE(Transform):
     if self.is_live_lhs(stmt.lhs):
       return stmt
     self.decref(stmt.rhs)
+    # print "DEAD", stmt
     return None
 
   def is_dead_loop(self, cond, body, merge):

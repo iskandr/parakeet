@@ -12,109 +12,6 @@ from syntax import (Expr, Var, Tuple,
                     Assign, Index, AllocArray,)
 from parakeet.frontend import ast_conversion
 
-class InterpSemantics(object):
-  def size_along_axis(self, value, axis):
-    assert len(value.shape) > axis, \
-        "Can't get %d'th element of %s with shape %s" % \
-        (axis, value, value.shape)
-    return value.shape[axis]
-
-  def is_tuple(self, x):
-    return isinstance(x, tuple)
-
-  def is_none(self, x):
-    return x is None
-
-  def rank(self, value):
-    return np.rank(value)
-
-  def int(self, x):
-    return int(x)
-
-  def bool(self, x):
-    return bool(x)
-
-  def add(self, x, y):
-    return x + y
-
-  def sub(self, x, y):
-    return x - y
-  
-  def mul(self, x, y):
-    return x * y
-  
-  def shape(self, x):
-    return np.shape(x)
-
-  def elt_type(self, x):
-    return x.dtype if hasattr(x, 'dtype') else type(x)
-
-  def alloc_array(self, elt_type, dims):
-    return np.zeros(dims, dtype = elt_type)
-
-  def shift_array(self, arr, offset):
-    return arr[offset:]
-
-  def ravel(self, arr):
-    return np.ravel(arr)
-  
-  def index(self, arr, idx):
-    return arr[idx]
-
-  def tuple(self, elts):
-    return tuple(elts)
-  
-  def tuple_elts(self, t):
-    if isinstance(t, tuple):
-      return t
-    else:
-      return (t,) 
-  
-  def concat_tuples(self, t1, t2):
-    return tuple(t1) + tuple(t2)
-
-  def setidx(self, arr, idx, v):
-    arr[idx] = v
-
-  def loop(self, start_idx, stop_idx, body):
-    for i in xrange(start_idx, stop_idx):
-      body(i)
-
-  
-  class Accumulator:
-    def __init__(self, value):
-      self.value = value
-
-    def get(self):
-      return self.value
-
-    def update(self, new_value):
-      self.value = new_value
-
-  def accumulate_loop(self, start_idx, stop_idx, body, init):
-    acc = self.Accumulator(init)
-    for i in xrange(start_idx, stop_idx):
-      body(acc, i)
-    return acc.get()
-
-  def check_equal_sizes(self, sizes):
-    assert len(sizes) > 0
-    first = sizes[0]
-    assert all(sz == first for sz in sizes[1:])
-
-  def slice_value(self, start, stop, step):
-    return slice(start, stop, step)
-
-  def invoke(self, fn, args):
-    return eval_fn(fn, args)
-
-  none = None
-  null_slice = slice(None, None, None)
-  def identity_function(self, x):
-    return x
-
-adverb_evaluator = InterpSemantics()
-
 class ReturnValue(Exception):
   def __init__(self, value):
     self.value = value
@@ -276,18 +173,6 @@ def eval_fn(fn, actuals):
     def expr_Len():
       return len(eval_expr(expr.value))
     
-    #def expr_IndexMap():
-    #  fn = eval_expr(expr.fn)
-    #  shape = eval_expr(expr.shape)
-    #  ranges = [xrange(n) for n in shape]
-    #  def wrap_idx(idx):
-    #    if len(idx) == 1:
-    #      idx = idx[0]
-    #    return eval_fn(fn, (idx,))
-    #  elts = [wrap_idx(idx) for idx in itertools.product(*ranges)]
-    #  return np.array(elts).reshape((shape))
-    
-    
     def expr_IndexReduce():
       fn = eval_expr(expr.fn)
       combine = eval_expr(expr.combine)
@@ -295,7 +180,7 @@ def eval_fn(fn, actuals):
       if not isinstance(shape, (list, tuple) ):
         shape = [shape]
       ranges = [xrange(n) for n in shape]
-        
+      
       acc = eval_if_expr(expr.init)
       for idx in itertools.product(*ranges):
         if len(idx) == 1:
@@ -307,41 +192,6 @@ def eval_fn(fn, actuals):
           elt = eval_fn(combine, (acc, elt))
       return elt 
     
-    #def expr_Map():
-    #  fn = eval_expr(expr.fn)
-    #  args = eval_args(expr.args)
-    #  axis = eval_if_expr(expr.axis)
-    #  return adverb_evaluator.eval_map(fn, args, axis)
-
-    #def expr_OuterMap():
-    #  fn = eval_expr(expr.fn)
-    #  x,y = eval_args(expr.args)
-    #  axis = eval_if_expr(expr.axis)
-    #  assert False, "Need implementation for "
-    # return adverb_evaluator.eval_allpairs(fn, x, y, axis)
-
-    def expr_Reduce():
-      
-      map_fn = eval_expr(expr.fn)
-      combine_fn = eval_expr(expr.combine)
-      args = eval_args(expr.args)
-      init = eval_expr(expr.init) if expr.init else None
-      axis = eval_if_expr(expr.axis)
-      if axis is None:
-        args = [np.ravel(x) for x in args]
-        axis = 0
-      return adverb_evaluator.eval_reduce(map_fn, combine_fn, init, args, axis)
-
-    def expr_Scan():
-      
-      map_fn = eval_expr(expr.fn)
-      combine = eval_expr(expr.combine)
-      emit = eval_expr(expr.emit)
-      args = eval_args(expr.args)
-      init = eval_expr(expr.init)
-      axis = eval_if_expr(expr.axis)
-      return adverb_evaluator.eval_scan(map_fn, combine, emit, init, args, axis)
-  
     fn_name = "expr_" + expr.__class__.__name__
     dispatch_fn = locals()[fn_name]
     result = dispatch_fn()

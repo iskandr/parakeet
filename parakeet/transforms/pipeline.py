@@ -42,12 +42,12 @@ inline_opt = Phase(Inliner,
 
 copy_elim = Phase(CopyElimination, 
                   config_param = 'opt_copy_elimination', 
-                  memoize = False)
+                  memoize = True)
 
 licm = Phase(LoopInvariantCodeMotion, 
              config_param = 'opt_licm',
              run_if = contains_loops, 
-             memoize = False)
+             memoize = True)
 
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',

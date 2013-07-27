@@ -1,4 +1,4 @@
-from .. syntax import (Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
+from .. syntax import (Expr, Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
                        TypedFn, UntypedFn,  Closure, ClosureElt,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
                        Alloc, Array, Call, Struct, Shape, Strides, Range, Ravel, 
@@ -11,6 +11,10 @@ class SyntaxVisitor(object):
   values
   """
 
+  def visit_if_expr(self, expr):
+    if isinstance(expr, Expr):
+      self.visit_expr(expr)
+      
   def visit_Var(self, expr):
     pass
 
@@ -100,25 +104,29 @@ class SyntaxVisitor(object):
 
   def visit_Map(self, expr):
     self.visit_expr(expr.fn)
+    self.visit_if_expr(expr.axis)
     for arg in expr.args:
       self.visit_expr(arg)
 
   def visit_OuterMap(self, expr):
     self.visit_expr(expr.fn)
+    self.visit_if_expr(expr.axis)
     for arg in expr.args:
       self.visit_expr(arg)
 
   def visit_Reduce(self, expr):
     self.visit_expr(expr.fn)
-    if expr.init:
-      self.visit_expr(expr.init)
+    self.visit_expr(expr.combine)
+    self.visit_if_expr(expr.axis)
+    self.visit_if_expr(expr.init)
     for arg in expr.args:
       self.visit_expr(arg)
 
   def visit_Scan(self, expr):
     self.visit_expr(expr.fn)
-    if expr.init:
-      self.visit_expr(expr.init)
+    self.visit_expr(expr.combine)
+    self.visit_if_expr(expr.axis)
+    self.visit_if_expr(expr.init)
     for arg in expr.args:
       self.visit_expr(arg)
       

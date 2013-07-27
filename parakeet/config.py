@@ -7,29 +7,27 @@ default_backend = 'llvm' #shiver
 
 opt_inline = True
 opt_fusion = True
-
 opt_licm = True
-opt_copy_elimination = True
 opt_stack_allocation = True
 opt_index_elimination = True
 opt_range_propagation = True
 opt_shape_elim = True
-
 opt_redundant_load_elimination = True  
 
 # may dramatically increase compile time
-opt_loop_unrolling = False
+opt_loop_unrolling = True
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
 opt_scalar_replacement = False
+opt_copy_elimination = False
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments
 stride_specialization = True
 
 # run verifier after each transformation 
-opt_verify = True
+opt_verify = False
 
 
 ######################################
@@ -73,10 +71,10 @@ print_optimized_llvm = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms = [] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = []# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False

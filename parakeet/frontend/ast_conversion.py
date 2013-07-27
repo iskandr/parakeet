@@ -581,7 +581,6 @@ class AST_Translator(ast.NodeVisitor):
                                 args = args, 
                                 body = [ast.Return(expr.elt)], 
                                 parent = self)
-
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0, "Parakeet: Conditions in array comprehensions not yet supported"

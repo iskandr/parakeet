@@ -51,6 +51,7 @@ def num_outer_axes(arg_types, axis):
 _nested_map_cache = {}
 def nested_maps(inner_fn, depth, arg_names):
   if depth <= 0:
+    assert isinstance(inner_fn, UntypedFn)
     return inner_fn
 
   key = inner_fn.name, depth, tuple(arg_names)
@@ -67,8 +68,8 @@ def nested_maps(inner_fn, depth, arg_names):
   nested_fn = nested_maps(inner_fn, depth - 1, arg_names)
 
   map_expr = Map(fn = nested_fn, 
-                        axis = zero_i64, 
-                        args = arg_vars)
+                 axis = zero_i64, 
+                 args = arg_vars)
   fn = UntypedFn(
     name = name,
     args = args_obj,
