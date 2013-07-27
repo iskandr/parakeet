@@ -56,6 +56,7 @@ function_mappings = {
   any : lib.builtin_any, 
   sum : lib.builtin_sum, 
   abs : prims.abs,  
+  pow : prims.power, 
   
   # TYPES 
   np.int8 : lib.numpy_types.int8, 
@@ -151,6 +152,7 @@ function_mappings = {
   
   # LOGS AND EXPONENTIATION 
   np.square : lib.numpy_math.square,
+  math.pow : prims.power, 
   np.power : prims.power,
   np.exp : prims.exp, 
   np.exp2 : prims.exp2, 

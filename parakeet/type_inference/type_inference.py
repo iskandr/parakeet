@@ -146,7 +146,7 @@ class TypeInference(LocalTypeInference):
   def transform_IndexMap(self, expr):
     shape = self.transform_expr(expr.shape)
     if not isinstance(shape.type, TupleT):
-      assert isinstance(shape.type, ScalarT), "Invalid shape for IndexMap: %s" % (shape,)
+      assert isinstance(shape.type, ScalarT), "Invalid shape for IndexMap: %s : %s" % (shape, shape.type)
       shape = self.tuple((shape,))
     closure = self.transform_expr(expr.fn)
     shape_t = shape.type

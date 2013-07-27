@@ -269,7 +269,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
   def add_range(self, x, y):
     if not isinstance(x, Interval) or not isinstance(y, Interval):
       return any_value 
-    return (x.lower + y.lower, x.upper + y.upper)
+    return Interval (x.lower + y.lower, x.upper + y.upper)
   
   def sub_range(self, x, y):
     if not isinstance(x, Interval) or not isinstance(y, Interval):

@@ -54,7 +54,7 @@ class LLVM_Context:
     'loop-deletion',
     # 'loop-vectorize',
     'loop-unroll',
-    
+    # 'bb-vectorize',
     'memdep',
     'gvn',
     'memdep',
@@ -65,6 +65,7 @@ class LLVM_Context:
     'jump-threading',
     'simplifycfg',
     'instcombine',
+    'licm',
   ]
 
   def __init__(self, module_name, optimize = config.llvm_optimize,
