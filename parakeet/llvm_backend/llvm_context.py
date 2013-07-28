@@ -52,9 +52,9 @@ class LLVM_Context:
     'indvars',
     'loop-idiom',
     'loop-deletion',
-    # 'loop-vectorize',
-    'loop-unroll',
-    # 'bb-vectorize',
+    #'loop-vectorize',
+     'loop-unroll',
+    #'bb-vectorize',
     'memdep',
     'gvn',
     'memdep',
@@ -79,13 +79,16 @@ class LLVM_Context:
     else:
       self.engine_builder.opt(opt_level)
     self.exec_engine = self.engine_builder.create()
-    tm = ee.TargetMachine.new(opt = opt_level)
+    tm = ee.TargetMachine.new(opt = opt_level, cm=ee.CM_JITDEFAULT)
+    self.tm = tm 
     _, fpm = passes.build_pass_managers(tm, 
                                      opt = opt_level,
                                      loop_vectorize = (opt_level > 0), 
-                                     mod = self.module)
+                                     mod = self.module, 
+                                     vectorize = (opt_level > 0), 
+                                     )
     self.pass_manager = fpm 
-
+    # self.fpm = fpm 
     for p in self._verify_passes:
       self.pass_manager.add(p)
     if optimize:
@@ -95,5 +98,12 @@ class LLVM_Context:
   def run_passes(self, llvm_fn, n_iters = config.llvm_num_passes):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)
-
+    #passmanagers = passes.build_pass_managers(
+    #        tm= self.tm , opt=3, inline_threshold=1000,
+    #        loop_vectorize=True, vectorize=True, fpm=False)
+    #for optname in self._opt_passes:
+    #  passmanagers.pm.add(optname)
+    #passmanagers.pm.add('loop-vectorize')
+    #passmanagers.pm.run(self.module)
+      
 global_context = LLVM_Context("module")
