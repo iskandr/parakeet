@@ -46,6 +46,40 @@ class CoreBuilder(object):
     self.type_env[ssa_id] = t
     return Var(ssa_id, type = t)
 
+
+  def if_(self, cond, true_thunk, false_thunk, result_vars = ()):
+    """
+    Args:
+      cond - the condition expression 
+      true_thunk : given some variables, construct the true branch
+      false_thunk : given other variables, construct the false branch
+      result_vars : the merged version of the values from the two branches
+    """
+    merge = {}
+    assert all(expr.__class__ is Var for expr in result_vars)
+    left_vars = []
+    right_vars = []
+    for result_var in result_vars:
+      name = result_var.name 
+      t = result_var.type
+      left_var = self.fresh_var(t, prefix = "if_true_" + names.original(name) )
+      left_vars.append(left_var)
+      right_var = self.fresh_var(t, prefix = "if_false_" + names.original(name) )
+      right_vars.append(right_var)
+      merge[result_var.name] = (left_var, right_var)
+    
+    self.blocks.push()
+    true_thunk(*left_vars)
+    true_block = self.blocks.pop()
+    
+    self.blocks.push()
+    false_think(*right_vars)
+    false_block = self.blocks.pop()
+     
+    stmt = If(cond, true_block, false_block, merge = merge)
+    self.insert_stmt(stmt)
+    return stmt 
+
   def fresh_i32(self, prefix = "temp"):
     return self.fresh_var(Int32, prefix)
 
@@ -180,19 +214,7 @@ class CoreBuilder(object):
     return x is None or (isinstance(x, Expr) and x.type.__class__ is NoneT)
 
 
-  def ravel(self, x):
-    assert self.is_array(x)
-    if x.type.rank == 1:
-      return x
-    print "[Warning] Ravel will fail for discontiguous arrays"
-    nelts = self.nelts(x)
-    shape = self.tuple((nelts,), 'shape')
-    strides = self.tuple((self.int(1),), "strides")
-    data = self.attr(x, 'data', 'data_ptr')
-    offset = self.attr(x, 'offset')
-    t = make_array_type(x.type.elt_type, 1)
-    return ArrayView(data, shape, strides, offset, nelts, type = t)
-  
+
 
 
   def tuple(self, elts, name = "tuple", explicit_struct = False):

@@ -59,5 +59,5 @@ def from_python(python_value):
 def to_python(internal_value, parakeet_type):
   if parakeet_type.__class__ in _to_python_fns:
     return _to_python_fns[parakeet_type.__class__](internal_value)
-  return parakeet_type.from_python(internal_value)
+  return parakeet_type.to_python(internal_value)
   

@@ -153,6 +153,20 @@ class ArrayBuilder(CoreBuilder):
   def check_equal_sizes(self, sizes):
     pass
   
+  def ravel(self, x):
+    assert self.is_array(x)
+    if x.type.rank == 1:
+      return x
+    
+    nelts = self.nelts(x)
+    shape = self.tuple((nelts,), 'shape')
+    strides = self.tuple((self.int(1),), "strides")
+    data = self.attr(x, 'data', 'data_ptr')
+    offset = self.attr(x, 'offset')
+    t = make_array_type(x.type.elt_type, 1)
+    return ArrayView(data, shape, strides, offset, nelts, type = t)
+  
+  
   def index(self, arr, idx, temp = True, name = None):
     """Index into array or tuple differently depending on the type"""
     

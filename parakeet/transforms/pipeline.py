@@ -47,10 +47,12 @@ copy_elim = Phase(CopyElimination,
 licm = Phase(LoopInvariantCodeMotion, 
              config_param = 'opt_licm',
              run_if = contains_loops, 
-             memoize = True)
+             memoize = True, 
+             name = "LICM")
 
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',
+                                    name = "SymRangeProp", 
                                     memoize = True)
 high_level_optimizations = Phase([
                                     Simplify, 
@@ -62,7 +64,9 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim
                                  ], 
-                                 copy = True, cleanup = [Simplify, DCE])
+                                 name = "HighLevelOpts", 
+                                 copy = True, 
+                                 cleanup = [Simplify, DCE])
 
 indexify = Phase([IndexifyAdverbs, 
                   inline_opt, Simplify, DCE, 
@@ -71,6 +75,7 @@ indexify = Phase([IndexifyAdverbs,
                  ], 
                  run_if = contains_adverbs, 
                  copy = True, 
+                 name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
 ####################
@@ -113,6 +118,7 @@ loopify = Phase([
                 depends_on = indexify,
                 cleanup = [Simplify, DCE],
                 copy = True,
+                name = "Loopify",
                 post_apply = print_loopy)
 
 
@@ -131,28 +137,25 @@ scalar_repl = Phase(ScalarReplacement,
 load_elim = Phase(RedundantLoadElimination,
                   config_param = 'opt_redundant_load_elimination', 
                   run_if = lambda fn: not contains_calls(fn))
+
+
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
                run_if = contains_loops)
 
-
-
-post_lowering = Phase([ 
-                         licm,
-                         unroll,
-                         licm,
-                         Simplify,
-                         load_elim,
-                         scalar_repl,
-                      ], 
-                      cleanup = [Simplify, DCE])
 
 lowering = Phase([
                     LowerIndexing,
                     licm,
                     LowerStructs,
-                    post_lowering
+                    licm, 
+                    unroll, 
+                    licm,
+                    load_elim, 
+                    scalar_repl, 
+                    Simplify,
                     
                  ],
                  depends_on = loopify,
                  copy = True,
-                 cleanup = [])
+                 name = "Lowering", 
+                 cleanup = [Simplify, DCE])

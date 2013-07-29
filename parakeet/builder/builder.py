@@ -67,3 +67,25 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       return self.alloc_array(elt_t, shape, name)
     else:
       return self.fresh_var(elt_t, name) 
+  
+  def any_eq(self, tuple, target_elt):
+    elts = self.tuple_elts(tuple)
+    is_eq = false
+    for elt in elts:
+      is_eq = self.or_
+    
+  
+  def ravel(self, x):
+    assert self.is_array(x)
+    if x.type.rank == 1:
+      return x
+    
+    nelts = self.nelts(x)
+    old_strides = self.strides(x)
+    shape = self.tuple((nelts,), 'shape')
+    strides = self.tuple((self.int(1),), "strides")
+    data = self.attr(x, 'data', 'data_ptr')
+    offset = self.attr(x, 'offset')
+    t = make_array_type(x.type.elt_type, 1)
+    return ArrayView(data, shape, strides, offset, nelts, type = t)
+  

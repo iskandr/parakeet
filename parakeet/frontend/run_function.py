@@ -30,7 +30,7 @@ def prepare_args(fn, args, kwargs):
   return arg_values, arg_types
   
 
-def specialize(untyped, args, kwargs = {}):
+def specialize(untyped, args, kwargs = {}, optimize = True):
   """
   Translate, specialize and begin to optimize the given function for the types
   of the supplies arguments.
@@ -52,11 +52,11 @@ def specialize(untyped, args, kwargs = {}):
   # propagate types through function representation and all
   # other functions it calls
   typed_fn = type_inference.specialize(untyped, arg_types)
-  
-  from .. transforms.pipeline import high_level_optimizations
-  # apply high level optimizations 
-  optimized_fn = high_level_optimizations.apply(typed_fn)
-  return optimized_fn, linear_args 
+  if optimize: 
+    from .. transforms.pipeline import high_level_optimizations
+    # apply high level optimizations 
+    typed_fn = high_level_optimizations.apply(typed_fn)
+  return typed_fn, linear_args 
 
 """
 def prepare_llvm(fn, args):

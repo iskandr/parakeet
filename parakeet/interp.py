@@ -4,7 +4,7 @@ import types
 
 
 from frontend import ast_conversion
-from ndtypes import ScalarT, StructT, Type   
+from ndtypes import ScalarT, StructT, Type, type_conv     
 from syntax import (Expr, Var, Tuple, 
                     UntypedFn, TypedFn, 
                     Return, If, While, ForLoop, ParFor, ExprStmt,   
@@ -28,7 +28,12 @@ class ClosureVal:
       args = self.fixed_args + tuple(args)
     return eval_fn(self.fn, args)
 
-
+def eval(fn, actuals):
+  result = eval_fn(fn, actuals)
+  import ctypes 
+  if isinstance(result, ctypes.Structure):
+    return type_conv.to_python(result, fn.return_type)
+  return result 
    
 def eval_fn(fn, actuals):
 
@@ -152,7 +157,7 @@ def eval_fn(fn, actuals):
       assert isinstance(expr.type, StructT), \
           "Expected %s : %s to be a struct" % (expr, expr.type)
       elts = map(eval_expr, expr.args)
-      return expr.type.ctypes_repr(elts)
+      return expr.type.ctypes_repr(*elts)
 
     def expr_Tuple():
       return tuple(map(eval_expr, expr.elts))
@@ -337,7 +342,7 @@ def eval_fn(fn, actuals):
     eval_block(fn.body)
 
   except ReturnValue as r:
-    return r.value
+    return r.value 
   except:
     raise
 

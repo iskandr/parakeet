@@ -41,16 +41,17 @@ class ArithBuilder(CoreBuilder):
       return self.pick_first(x,y)
     elif x.__class__ is Const and y.__class__ is Const:
       return self.pick_const(x, y, x.value + y.value)
-    else:
-      return self.prim(prims.add, [x,y], name)
+    if name is None: name = "add_result"
+    return self.prim(prims.add, [x,y], name)
 
   def sub(self, x, y, name = None):
     if is_zero(y):
       return self.pick_first(x,y)
     elif x.__class__ is Const and y.__class__ is Const:
       return self.pick_const(x, y, x.value - y.value)
-    else:
-      return self.prim(prims.subtract, [x,y], name)
+    
+    if name is None: name = "sub_result"
+    return self.prim(prims.subtract, [x,y], name)
 
   def mul(self, x, y, name = None):
     if is_one(x):
@@ -59,8 +60,9 @@ class ArithBuilder(CoreBuilder):
       return self.pick_first(x,y)
     elif is_zero(x) or is_zero(y):
       return self.pick_const(x, y, 0)
-    else:
-      return self.prim(prims.multiply, [x,y], name)
+    
+    if name is None: name = "mul_result"
+    return self.prim(prims.multiply, [x,y], name)
 
   def div(self, x, y, name = None):
     if is_one(y):
@@ -81,42 +83,44 @@ class ArithBuilder(CoreBuilder):
       return self.pick_const(x, y, 0)
     elif x.__class__ is Const and y.__class__ is Const:
       return self.pick_const(x, y, x.value % y.value)
-    else:
-      return self.prim(prims.mod, [x,y], name)
+    if name is None: name = "mod_result"
+    return self.prim(prims.mod, [x,y], name)
 
   def lt(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(False)
-    else:
-      return self.prim(prims.less, [x,y], name)
+    if name is None: name = "lt_result"
+    return self.prim(prims.less, [x,y], name)
 
   def lte(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(True)
-    else:
-      return self.prim(prims.less_equal, [x,y], name)
+    
+    if name is None: name = "lte_result"
+    return self.prim(prims.less_equal, [x,y], name)
 
   def gt(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(False)
-    else:
-      return self.prim(prims.greater, [x,y], name)
+    if name is None: name = "gt_result"
+    return self.prim(prims.greater, [x,y], name)
 
   def gte(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(True)
-    else:
-      return self.prim(prims.greater_equal, [x,y], name)
+    if name is None: name = "gte_result"
+    return self.prim(prims.greater_equal, [x,y], name)
 
   def eq(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(True)
-    else:
-      return self.prim(prims.equal, [x,y], name)
+    if name is None: name = "eq_result"
+    return self.prim(prims.equal, [x,y], name)
 
   def neq(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(False)
+    if name is None: name = "neq_result"
     return self.prim(prims.not_equal, [x,y], name)
 
   def min(self, x, y, name = None):
@@ -145,3 +149,20 @@ class ArithBuilder(CoreBuilder):
     merge = {result.name:(x,y)}
     self.blocks += If(cond, [], [], merge)
     return result   
+  
+  def or_(self, x, y, name = None):
+    if x.__class__ is Const and x.value:
+      return x
+    elif y.__class__ is Const and y.value:
+      return y
+    if name is None:
+      name = "or_result"
+    return self.prim(prims.or_, [x,y], name)
+  
+    
+  def and_(self, x, y, name = None):
+    if x.__class__ is Const and x.value and y.__class__ is Const and y.value:
+      return x 
+    if name is None:
+      name = "and_result"
+    return self.prim(prims.and_, [x,y], name)

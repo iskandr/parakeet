@@ -43,7 +43,7 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
 
 Parakeet is written for Python 2.7 (sorry internet) and depends on:
 
-* [loopjit](https://github.com/iskandr/loopjit)
+* [treelike](https://github.com/iskandr/treelike)
 * [llvmpy](https://github.com/llvmpy/llvmpy)
 * [NumPy and SciPy](http://www.scipy.org/install.html)
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
