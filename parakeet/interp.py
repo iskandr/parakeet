@@ -116,6 +116,7 @@ def eval_fn(fn, actuals):
       return array[index]
 
     def expr_PrimCall():
+
       return expr.prim.fn (*eval_args(expr.args))
     
     def expr_Slice():
@@ -294,8 +295,10 @@ def eval_fn(fn, actuals):
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)
+    
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
+      print "ASSIGN", stmt, "=", value 
       assign(stmt.lhs, value, env)
 
     elif isinstance(stmt, If):
@@ -317,11 +320,13 @@ def eval_fn(fn, actuals):
       start = eval_expr(stmt.start)
       stop = eval_expr(stmt.stop)
       step = eval_expr(stmt.step)
+      print "ForLoop(start %s = %s, stop %s = %s, step %s = %s)" % (stmt.start, start, stmt.stop, stop, stmt.step, step) 
       eval_merge_left(stmt.merge)
       for i in xrange(start, stop, step):
         env[stmt.var.name] = i
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
+      
         
     elif isinstance(stmt, ExprStmt):
       eval_expr(stmt.value)

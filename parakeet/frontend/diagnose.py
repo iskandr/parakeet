@@ -1,5 +1,5 @@
 from run_function import specialize 
-from ..transforms import Phase, Transform
+from ..transforms import Phase, Transform, CloneFunction
 from ..transforms.pipeline import lowering
 
 def transform_name(t):
@@ -42,7 +42,6 @@ def linearize_phases(typed_fn, phases):
   return combined 
          
 def get_transform_list(typed_fn):
-  from ..transforms.pipeline import lowering 
   return linearize_phase(typed_fn, lowering)  
 
 def find_broken_transform(fn, inputs, expected, print_transforms = True):
@@ -58,13 +57,14 @@ def find_broken_transform(fn, inputs, expected, print_transforms = True):
   for (name, t) in transforms:
     print "  -> ", name 
   old_fn = fn 
+  cloner = CloneFunction()
   for (name, t) in transforms:
     print "[Diagnose] Running %s..." % (name, )
     # in case t is just a class, instantiate it 
     if not isinstance(t, Transform):
       t = t()
     assert isinstance(t, Transform)
-    new_fn = t.apply(old_fn)
+    new_fn = t.apply(cloner.apply(old_fn))
     result = interp.eval(new_fn, args)
     if result != expected:
       print "[Diagnose] Expected %s but got %s " % (expected, result)
