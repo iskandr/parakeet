@@ -285,7 +285,7 @@ class CoreBuilder(object):
     elif tup.__class__ is Var and (tup.name, idx) in self.tuple_elt_cache:
       return self.tuple_elt_cache[(tup.name, idx)]
     elif explicit_struct:
-      return Attribute(tuple, "elt%d" % idx, type = tup.type.elt_types[idx])
+      return Attribute(tup, "elt%d" % idx, type = tup.type.elt_types[idx])
     else:
       return TupleProj(tup, idx, type = tup.type.elt_types[idx])
 

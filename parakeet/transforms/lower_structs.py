@@ -24,6 +24,13 @@ class LowerStructs(Transform):
     struct_args = self.transform_expr_list(expr.elts)
     return Struct(struct_args, type = expr.type)
 
+  def transform_TupleProj(self, expr):
+    new_tuple = self.transform_expr(expr.tuple)
+    assert isinstance(expr.index, int)
+    tuple_t = expr.tuple.type
+    field_name, field_type  = tuple_t._fields_[expr.index]
+    return Attribute(new_tuple, field_name, type = field_type)
+
   def transform_Slice(self, expr):
     struct_args = self.transform_expr_list([expr.start, expr.stop, expr.step])
     return Struct(struct_args, type = expr.type)
@@ -44,13 +51,6 @@ class LowerStructs(Transform):
     closure_id = closure_type.id_of_closure_type(expr.type)
     closure_id_node = Const(closure_id, type = Int64)
     return Struct([closure_id_node] + closure_args, type = expr.type)
-
-  def transform_TupleProj(self, expr):
-    new_tuple = self.transform_expr(expr.tuple)
-    assert isinstance(expr.index, int)
-    tuple_t = expr.tuple.type
-    field_name, field_type  = tuple_t._fields_[expr.index]
-    return Attribute(new_tuple, field_name, type = field_type)
 
   def transform_ClosureElt(self, expr):
     new_closure = self.transform_expr(expr.closure)
@@ -136,4 +136,4 @@ class LowerStructs(Transform):
     assert False, "ConstArray not implemented"
     
   def transform_Ravel(self, expr):
-    return self.ravel(self.transform_expr(expr.array))
+    return self.ravel(self.transform_expr(expr.array), explicit_struct = True)

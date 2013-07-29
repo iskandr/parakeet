@@ -61,8 +61,8 @@ class ArrayBuilder(CoreBuilder):
   def len(self, array):
     return self.shape(array, 0)
   
-  def nelts(self, array):
-    shape_elts = self.tuple_elts(self.shape(array))
+  def nelts(self, array, explicit_struct = False):
+    shape_elts = self.tuple_elts(self.shape(array), explicit_struct = explicit_struct)
     return self.prod(shape_elts, name = "nelts") 
 
   def rank(self, value):
@@ -71,27 +71,25 @@ class ArrayBuilder(CoreBuilder):
     else:
       return 0
 
-  def shape(self, array, dim = None):
+  def shape(self, array, dim = None, explicit_struct = False):
     if isinstance(array.type, ArrayT):
       shape = self.attr(array, "shape")
       if dim is None:
         return shape
       else:
         assert isinstance(dim, (int, long))
-        dim_t = shape.type.elt_types[dim]
-        dim_value = TupleProj(shape, dim, type = dim_t)
+        dim_value = self.tuple_proj(shape, dim, explicit_struct = explicit_struct)
         return self.assign_name(dim_value, "dim%d" % dim)
     else:
       return self.tuple([])
 
-  def strides(self, array, dim = None):
+  def strides(self, array, dim = None, explicit_struct = False):
     assert array.type.__class__ is ArrayT
     strides = self.attr(array, "strides")
     if dim is None:
       return strides
     else:
-      elt_t = strides.type.elt_types[dim]
-      elt_value = TupleProj(strides, dim, type = elt_t)
+      elt_value = self.tuple_proj(strides, dim, explicit_struct = explicit_struct)
       return self.assign_name(elt_value, "stride%d" % dim)
 
   def slice_value(self, start, stop, step):
@@ -152,20 +150,6 @@ class ArrayBuilder(CoreBuilder):
 
   def check_equal_sizes(self, sizes):
     pass
-  
-  def ravel(self, x):
-    assert self.is_array(x)
-    if x.type.rank == 1:
-      return x
-    
-    nelts = self.nelts(x)
-    shape = self.tuple((nelts,), 'shape')
-    strides = self.tuple((self.int(1),), "strides")
-    data = self.attr(x, 'data', 'data_ptr')
-    offset = self.attr(x, 'offset')
-    t = make_array_type(x.type.elt_type, 1)
-    return ArrayView(data, shape, strides, offset, nelts, type = t)
-  
   
   def index(self, arr, idx, temp = True, name = None):
     """Index into array or tuple differently depending on the type"""

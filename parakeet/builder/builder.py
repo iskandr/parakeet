@@ -1,6 +1,6 @@
 
 from ..ndtypes import make_array_type 
-from ..syntax import ArrayView
+from ..syntax import ArrayView, Struct, Expr 
 from ..syntax.helpers import zero_i64, get_types, one 
 from ..syntax.adverb_helpers import max_rank, max_rank_arg
 
@@ -77,20 +77,22 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       is_eq = self.or_(is_eq, self.eq(elt, target_elt))
     return is_eq 
     
-  def ravel(self, x):
+  def ravel(self, x, explicit_struct = False):
     # TODO: Check the strides to see if any element is equal to 1
     # otherwise do an array_copy
     assert self.is_array(x)
     if x.type.rank == 1:
       return x
     
-    nelts = self.nelts(x)
-    # old_strides = self.strides(x)
-    shape = self.tuple((nelts,), 'shape')
-    strides = self.tuple((self.int(1),), "strides")
-    
+    nelts = self.nelts(x, explicit_struct = explicit_struct)
+    assert isinstance(nelts, Expr)
+    shape = self.tuple((nelts,), 'shape', explicit_struct = explicit_struct)
+    strides = self.tuple((self.int(1),), "strides", explicit_struct = explicit_struct)
     data = self.attr(x, 'data', 'data_ptr')
     offset = self.attr(x, 'offset')
     t = make_array_type(x.type.elt_type, 1)
-    return ArrayView(data, shape, strides, offset, nelts, type = t)
+    if explicit_struct: 
+      return Struct(args = (data, shape, strides, offset, nelts), type = t)
+    else:
+      return ArrayView(data, shape, strides, offset, nelts, type = t)
   

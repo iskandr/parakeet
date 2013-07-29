@@ -193,7 +193,7 @@ class SyntaxVisitor(object):
     TypeValue : 'visit_TypeValue', 
   }
   
-  def visit_expr(self, expr):    
+  def visit_expr(self, expr):   
     c = expr.__class__
     if c is Var:  
       return self.visit_Var(expr)

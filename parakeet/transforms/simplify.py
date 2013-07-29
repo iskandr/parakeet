@@ -9,7 +9,7 @@ from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT
 
 from .. syntax import (AllocArray, Assign, ExprStmt, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
-                       Slice, Index, Array, ArrayView, Attribute, Struct,
+                       Slice, Index, Array, ArrayView, Attribute, Struct, Select, 
                        PrimCall, Call, TypedFn, UntypedFn, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
 from .. syntax.helpers import collect_constants, is_one, is_zero, is_false, is_true, all_constants
@@ -501,6 +501,15 @@ class Simplify(Transform):
                                       left_block = stmt.true,
                                       right_block = stmt.false)
     stmt.cond = self.transform_expr(stmt.cond)
+    if len(stmt.true) == 0 and len(stmt.false) == 0 and len(stmt.merge) == 1:
+      (lhs_name, (true_expr, false_expr)) = stmt.merge.items()[0]
+      lhs_type = self.lookup_type(lhs_name)
+      lhs_var = Var(name = lhs_name, type = lhs_type)
+      assert true_expr.type == false_expr.type, \
+        "Unexpcted type mismatch: %s != %s" % (true_expr.type, false_expr.type)
+      rhs = Select(stmt.cond, true_expr, false_expr, type = true_expr.type)
+      self.bind_var(lhs_name, rhs)
+      return self.assign(lhs_var, rhs)
     return stmt
 
   def transform_loop_condition(self, expr, outer_block, loop_body, merge):
