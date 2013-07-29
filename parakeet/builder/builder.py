@@ -85,7 +85,7 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       return x
     
     nelts = self.nelts(x)
-    old_strides = self.strides(x)
+    # old_strides = self.strides(x)
     shape = self.tuple((nelts,), 'shape')
     strides = self.tuple((self.int(1),), "strides")
     

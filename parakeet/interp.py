@@ -152,6 +152,12 @@ def eval_fn(fn, actuals):
       assert isinstance(t, ScalarT)
       # use numpy's conversion function
       return t.dtype.type(x)
+    
+    def expr_Select():
+      cond = eval_expr(expr.cond)
+      trueval = eval_expr(expr.true_value)
+      falseval = eval_expr(expr.false_value)
+      return trueval if cond else falseval 
 
     def expr_Struct():
       assert expr.type, "Expected type on %s!" % expr
@@ -298,7 +304,6 @@ def eval_fn(fn, actuals):
     
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
-      print "ASSIGN", stmt, "=", value 
       assign(stmt.lhs, value, env)
 
     elif isinstance(stmt, If):
@@ -320,7 +325,6 @@ def eval_fn(fn, actuals):
       start = eval_expr(stmt.start)
       stop = eval_expr(stmt.stop)
       step = eval_expr(stmt.step)
-      print "ForLoop(start %s = %s, stop %s = %s, step %s = %s)" % (stmt.start, start, stmt.stop, stop, stmt.step, step) 
       eval_merge_left(stmt.merge)
       for i in xrange(start, stop, step):
         env[stmt.var.name] = i

@@ -249,14 +249,6 @@ class ShapeInference(SyntaxVisitor):
   def identity_function(self, x):
     return x
   
-  #def ravel(self, x):
-  #  assert isinstance(x, Shape)
-  #  nelts = 1 
-  #  for d in x.dims:
-  #    nelts *= d
-  #  return Shape((nelts,)) 
-  
-  
   def visit_fn(self, fn):
     assert isinstance(fn, syntax.TypedFn)
     self.fn = fn 
@@ -457,6 +449,12 @@ class ShapeInference(SyntaxVisitor):
     arg_shapes = self.visit_expr_list(expr.args)
     return shape.combine_list(arg_shapes, preserve_const = False)
 
+  def visit_Select(self, expr):
+    cond = self.visit_expr(expr.cond)
+    falseval = self.visit_expr(expr.true_value)
+    trueval = self.visit_expr(expr.false_value)
+    return cond.combine(falseval).combine(trueval)
+    
   def visit_Var(self, expr):
     name = expr.name
     if name in self.value_env:
@@ -536,10 +534,7 @@ class ShapeInference(SyntaxVisitor):
     acc_shape = self.visit_expr(expr.init)
     elt_result = symbolic_call(fn, [bounds])
     return symbolic_call(combine, [acc_shape, elt_result])
-     
-    # inner_shape = 
-    # assert False, "IndexReduce not implemented"
-    
+
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
@@ -589,6 +584,8 @@ class ShapeInference(SyntaxVisitor):
   def visit_OuterMap(self, expr):
     fn = self.visit_expr(expr.fn)
     assert False, "OuterMap needs an implementation"
+
+  
 
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):

@@ -270,3 +270,19 @@ class Cast(Expr):
   
   def __str__(self):
     return "Cast(%s : %s)" % (self.value, self.type) 
+
+class Select(Expr):
+  _members = ['cond', 'true_value', 'false_value']
+  
+  def __hash__(self):
+    return hash((self.cond, self.true_value, self.false_value))
+  
+  def __str__(self):
+    return "Select(%s, %s, %s)" % (self.cond, self.true_value, self.false_value)
+  
+  def children(self):
+    yield self.cond 
+    yield self.true_value 
+    yield self.false_value 
+  
+  

@@ -78,7 +78,6 @@ function_mappings = {
   np.minimum : prims.minimum, 
   np.maximum : prims.maximum, 
   
-  
   # COMPARISONS
   np.greater : prims.greater, 
   np.greater_equal : prims.greater_equal, 
@@ -121,9 +120,9 @@ function_mappings = {
   np.multiply : prims.multiply,
    
   np.divide : prims.divide, 
-  # TODO: Fix all the different divide functions 
-  np.true_divide : lib.numpy_math.true_divide, 
   np.floor_divide : prims.divide, 
+  np.true_divide : lib.numpy_math.true_divide, 
+  
    
   np.modf : prims.mod,  
   np.fmod : prims.mod, 
@@ -193,5 +192,7 @@ function_mappings = {
   np.arccosh : prims.arccosh,
   np.rad2deg : lib.numpy_math.rad2deg, 
   np.deg2rad : lib.numpy_math.deg2rad,  
-  # np.hypot : lib.hypot, 
+  # np.hypot : lib.hypot,
+  
+  np.where : lib.where,
 }

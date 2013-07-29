@@ -1,6 +1,7 @@
 from ..frontend import jit 
 
 import numpy as np 
+import math 
 
 
 @jit
@@ -52,27 +53,27 @@ def square(x):
 
 @jit 
 def logaddexp(x, y):
-  diff = x - y 
-  pos = diff > 0 
-  neg = diff <= 0
-  return pos * (x + np.log1p(np.exp(-diff))) + neg * (y + np.log1p(np.exp(diff)))  
- 
+  diff = x -y 
+  return np.where(diff > 0, np.log1p(np.exp(-diff)), np.log1p(np.exp(diff)))
 
 @jit   
 def log2_1p(x):
   return 1.0 / np.log(2) * np.log1p(x)
 
+
 @jit 
 def logaddexp2(x, y):
   diff = x - y 
-  pos = diff > 0
-  neg = diff <= 0
-  return pos * (x + log2_1p(2 ** -diff)) + neg * (y + log2_1p(2 ** diff))
+  return np.where(diff > 0,  x + log2_1p(math.pow(2, -diff)) , y + log2_1p(math.pow(2, diff)))
 
+ 
 @jit 
 def true_divide(x, y):
   """
   Not exactly true divide, since I guess it's sometimes supposed to stay an int
   """
   return (x + 0.0) / (y + 0.0)
-  
+
+@jit 
+def floor_divide(x, y):
+  return math.floor(x / y)  

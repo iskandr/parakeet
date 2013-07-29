@@ -35,8 +35,13 @@ class macro(object):
     args = FormalArgs()
     pos_vars = []
     keyword_vars = {}
+    
     for i in xrange(n_pos):
-      local_name = names.fresh("input_%d" % i)
+      if i <  self.f.func_code.co_argcount: 
+        raw_name = self.f.func_code.co_varnames[i] 
+      else:
+        raw_name = "input_%d" % i
+      local_name = names.fresh(raw_name)
       args.add_positional(local_name)
       pos_vars.append(Var(local_name))
   

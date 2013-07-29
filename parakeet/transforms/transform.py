@@ -109,6 +109,12 @@ class Transform(Builder):
     expr.value = self.transform_expr(expr.value)
     return expr
 
+  def transform_Select(self, expr):
+    expr.cond = self.transform_expr(expr.cond)
+    expr.true_value = self.transform_expr(expr.true_value)
+    expr.false_value = self.transform_expr(expr.false_value)
+    return expr 
+
   def transform_TupleProj(self, expr):
     expr.tuple = self.transform_expr(expr.tuple)
     return expr
@@ -215,6 +221,7 @@ class Transform(Builder):
     expr.args = self.transform_expr_tuple(expr.args)
     expr.fn = self.transform_expr(expr.fn)
     return expr
+  
   
   def transform_ClosureElt(self, expr):
     expr.closure = self.transform_expr(expr.closure)

@@ -1,5 +1,5 @@
 from .. syntax import (Expr, Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
-                       TypedFn, UntypedFn,  Closure, ClosureElt,  
+                       TypedFn, UntypedFn,  Closure, ClosureElt, Select,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
                        Alloc, Array, Call, Struct, Shape, Strides, Range, Ravel, 
                        AllocArray, ArrayView, Cast, Slice, TupleProj, TypeValue,  
@@ -145,11 +145,15 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.start)
     self.visit_expr(expr.stop)
     self.visit_expr(expr.step)
+  
+  def visit_Select(self, expr):
+    self.visit_expr(expr.cond)
+    self.visit_expr(expr.true_value)
+    self.visit_expr(expr.false_value)
     
   def visit_TypeValue(self, expr):
     pass 
   
-    
   def visit_generic_expr(self, expr):
     for v in expr.children():
       self.visit_expr(v)
@@ -174,6 +178,7 @@ class SyntaxVisitor(object):
     Alloc : 'visit_Alloc', 
     Cast : 'visit_Cast', 
     Call : 'visit_Call', 
+    Select : 'visit_Select', 
     Map : 'visit_Map',
     OuterMap : 'visit_OuterMap',
     IndexMap : 'visit_IndexMap', 
@@ -204,15 +209,6 @@ class SyntaxVisitor(object):
       return self.visit_Index(expr)
     else:
       return getattr(self, self._expr_method_names[c])(expr)
-    
-    #else:
-    #  method_name = 'visit_' + expr.node_type()
-    #  return getattr(self, method_name, None)(expr)
-    #  if method is None:
-    #    print "Missing visitor method %s" % method_name
-    #    return self.visit_generic_expr(expr)
-    #  else:
-    #    return method(expr)
       
   def visit_expr_list(self, exprs):
     return [self.visit_expr(expr) for expr in exprs]

@@ -9,7 +9,6 @@ class RangePropagation(RangeTransform):
   
   def visit_Var(self, expr):
     if expr.name in self.ranges:
-      # print "FOUND", expr.name, self.ranges[expr.name]
       range_val = self.ranges[expr.name]
       if isinstance(range_val, Interval) and range_val.lower == range_val.upper:
         return Const(range_val.lower, type = expr.type)
@@ -36,5 +35,5 @@ class RangePropagation(RangeTransform):
       return expr 
     else:
       return result 
-    
+
   

@@ -12,7 +12,7 @@ from .. syntax import (AllocArray, Assign, ExprStmt,
                        Slice, Index, Array, ArrayView, Attribute, Struct,
                        PrimCall, Call, TypedFn, UntypedFn, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
-from .. syntax.helpers import collect_constants, is_one, is_zero, all_constants
+from .. syntax.helpers import collect_constants, is_one, is_zero, is_false, is_true, all_constants
 from .. syntax.helpers import get_types, slice_none_t, const_int, one 
 import subst
 import transform 
@@ -251,7 +251,6 @@ class Simplify(Transform):
       return expr
 
   def transform_arg(self, x, name = None):
-
     return self.temp(self.transform_expr(x), name = name)
   
   def transform_args(self, args):
@@ -277,6 +276,22 @@ class Simplify(Transform):
     new_args = self.transform_args(expr.args)
     return syntax.Struct(new_args, type = expr.type)
 
+  def transform_Select(self, expr):
+    cond = self.transform_expr(expr.cond)
+    trueval = self.transform_expr(expr.true_value)
+    falseval = self.transform_expr(expr.false_value)
+    if is_true(cond):
+      return trueval 
+    elif is_false(cond):
+      return falseval
+    elif trueval == falseval:
+      return trueval 
+    else:
+      expr.cond = cond 
+      expr.false_value = falseval 
+      expr.true_value = trueval 
+      return expr    
+    
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
     prim = expr.prim
@@ -449,8 +464,6 @@ class Simplify(Transform):
        self.use_counts.get(rhs.name, 1) == 1:
       self.use_counts[rhs.name] = 0
       rhs = self.bindings[rhs.name]
-    old_lhs = stmt.lhs 
-    old_rhs = stmt.rhs 
     stmt.lhs = lhs
     stmt.rhs = rhs
     return stmt

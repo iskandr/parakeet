@@ -140,8 +140,14 @@ class Compiler(object):
     llvm_index = self.compile_expr(expr.index, builder)
     pointer = builder.gep(llvm_arr, [llvm_index], "elt_pointer")
     elt = builder.load(pointer, "elt", align = 16) #, invariant = True)
-
     return elt
+  
+  def compile_Select(self, expr, builder):
+    cond = self.compile_expr(expr.cond, builder)
+    cond = llvm_convert.to_bit(cond, builder)
+    trueval = self.compile_expr(expr.true_value, builder)
+    falseval = self.compile_expr(expr.false_value, builder)
+    return builder.select(cond, trueval, falseval, "select_result")
 
   def compile_Attribute(self, expr, builder):
     field_ptr, _ = \

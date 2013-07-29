@@ -301,6 +301,10 @@ class ValueRangeAnalyis(SyntaxVisitor):
       right_val = self.get(right)
       self.set(k, combine(left_val, right_val))
 
+  def visit_Select(self, expr):
+    return combine(self.get(expr.true_value), 
+                   self.get(expr.false_value))
+  
   def always_positive(self, x, inclusive = True):
     if not isinstance(x, Interval):
       return False 
@@ -338,7 +342,8 @@ class ValueRangeAnalyis(SyntaxVisitor):
       
   def visit_While(self, stmt):
     self.run_loop(stmt.body, stmt.merge)
-    
+  
+  
   def visit_ForLoop(self, stmt):    
     start = self.get(stmt.start)
     stop = self.get(stmt.stop)

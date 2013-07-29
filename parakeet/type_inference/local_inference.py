@@ -1,11 +1,13 @@
 from .. import names
-from ..ndtypes import (TupleT, ScalarT, IntT, Int64, ArrayT, Unknown, StructT, Type, TypeValueT,  
+from ..ndtypes import (StructT, Type, Unknown,
+                       ArrayT, TypeValueT, TupleT,
+                       ScalarT, IntT, Int64,  Bool,    
                        combine_type_list, increase_rank, lower_rank,  
                        make_array_type, make_tuple_type, make_slice_type, make_closure_type, 
                        type_conv)
 
 from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, Index, 
-                      Range, Ravel, Reshape, Slice, Tuple, TupleProj, TypeValue,  Var,  
+                      Range, Ravel, Reshape, Select, Slice, Tuple, TupleProj, TypeValue,  Var,  
                       ForLoop, While, Assign, Return, If, 
                       prim_wrapper)
 
@@ -182,7 +184,17 @@ class LocalTypeInference(Transform):
     assert isinstance(value.type, StructT)
     result_type = value.type.field_type(expr.name)
     return Attribute(value, expr.name, type = result_type)
-
+  
+  def transform_Select(self, expr):
+    trueval = self.transform_expr(expr.true_value)
+    falseval = self.transform_expr(expr.false_value)
+    t = trueval.type.combine(falseval.type)
+    trueval = self.cast(trueval, t)
+    falseval = self.cast(falseval, t) 
+    cond = self.transform_expr(expr.cond)
+    cond = self.cast(cond, Bool)
+    return Select(cond = cond, true_value = trueval, false_value = falseval, type = t)
+  
   def infer_phi(self, result_var, val):
     """
     Don't actually rewrite the phi node, just add any necessary types to the

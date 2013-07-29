@@ -64,7 +64,6 @@ def zeros(shape, dtype = float64):
   zero = dtype(0)
   return imap(lambda _: zero, shape)
 
-
 @jit
 def zeros_like(x, dtype = None):
   if dtype is None:

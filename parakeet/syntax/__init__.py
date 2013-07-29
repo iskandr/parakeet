@@ -9,8 +9,8 @@ from array_expr import  Ravel, Reshape, Shape, Strides, Transpose, Where
 
 from delay_until_typed import DelayUntilTyped
 
-from expr import Expr, Var, Const, Attribute,  Tuple, TupleProj, Closure, ClosureElt
-from expr import Call, PrimCall, Cast
+from expr import Attribute, Call, Cast, Const, Closure, ClosureElt, Expr 
+from expr import PrimCall, Select, Tuple, TupleProj, Var 
 
 from formal_args import FormalArgs, MissingArgsError
 
