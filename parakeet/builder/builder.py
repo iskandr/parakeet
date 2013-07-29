@@ -1,5 +1,7 @@
 
-from ..syntax.helpers import zero_i64, get_types 
+from ..ndtypes import make_array_type 
+from ..syntax import ArrayView
+from ..syntax.helpers import zero_i64, get_types, one 
 from ..syntax.adverb_helpers import max_rank, max_rank_arg
 
 from arith_builder import ArithBuilder 
@@ -70,12 +72,14 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
   
   def any_eq(self, tuple, target_elt):
     elts = self.tuple_elts(tuple)
-    is_eq = false
-    for elt in elts:
-      is_eq = self.or_
+    is_eq = self.eq(elts[0], target_elt)
+    for elt in elts[1:]:
+      is_eq = self.or_(is_eq, self.eq(elt, target_elt))
+    return is_eq 
     
-  
   def ravel(self, x):
+    # TODO: Check the strides to see if any element is equal to 1
+    # otherwise do an array_copy
     assert self.is_array(x)
     if x.type.rank == 1:
       return x
@@ -84,6 +88,7 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
     old_strides = self.strides(x)
     shape = self.tuple((nelts,), 'shape')
     strides = self.tuple((self.int(1),), "strides")
+    
     data = self.attr(x, 'data', 'data_ptr')
     offset = self.attr(x, 'offset')
     t = make_array_type(x.type.elt_type, 1)
