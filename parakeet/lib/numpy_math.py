@@ -51,10 +51,27 @@ def hypot(x,y):
 def square(x):
   return x * x 
 
+def _logaddexp_scalar(x, y):
+  """
+  Copied from BioPython (http://biopython.org/)
+  """
+  if x < y:
+    bigger = x 
+    smaller = y 
+  else:
+    bigger = x 
+    smaller = y 
+    
+  diff = smaller - bigger    
+  if diff < -100: 
+    return bigger 
+
+  return bigger + np.log1p(np.exp(diff))
+  
+
 @jit 
 def logaddexp(x, y):
-  diff = x -y 
-  return np.where(diff > 0, np.log1p(np.exp(-diff)), np.log1p(np.exp(diff)))
+  return map(_logaddexp_scalar, x, y)
 
 @jit   
 def log2_1p(x):

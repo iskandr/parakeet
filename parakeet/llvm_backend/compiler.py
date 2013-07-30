@@ -17,6 +17,7 @@ import llvm_prims
 
 from llvm_helpers import const, int32, zero 
 from llvm_types import llvm_value_type, llvm_ref_type
+from parakeet.llvm_backend.llvm_convert import to_bit, from_bit
 
 
 _escape_analysis_cache = {}
@@ -297,12 +298,18 @@ class Compiler(object):
 
     elif isinstance(prim, prims.Logical):
       if prim == prims.logical_and:
-        return builder.and_(name = result_name, *llvm_args)
+        result = builder.and_(name = result_name, 
+                            lhs = to_bit(llvm_args[0], builder), 
+                            rhs = to_bit(llvm_args[1], builder))
+        return from_bit(result, t, builder)
       elif prim == prims.logical_not:
-        return builder.not_(name = result_name, *llvm_args)
+        result = builder.not_(to_bit(llvm_args[0], builder), name = result_name)
+        return from_bit(result, t, builder)
       else:
         assert prim == prims.logical_or
-        return builder.or_(name = result_name, *llvm_args)
+        result = builder.or_(lhs = to_bit(llvm_args[0], builder), 
+                           rhs = to_bit(llvm_args[1], builder), name = result_name)
+        return from_bit(result, t, builder)
       
     elif prim == prims.abs:
       x = llvm_args[0]
