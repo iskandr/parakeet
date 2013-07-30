@@ -143,12 +143,19 @@ class Compiler(object):
     return elt
   
   def compile_Select(self, expr, builder):
+    print "SELECT", expr 
     cond = self.compile_expr(expr.cond, builder)
+    print cond 
     cond = llvm_convert.to_bit(cond, builder)
+    print cond 
     trueval = self.compile_expr(expr.true_value, builder)
+    print trueval 
     falseval = self.compile_expr(expr.false_value, builder)
-    return builder.select(cond, trueval, falseval, "select_result")
-
+    print falseval 
+    result =  builder.select(cond, trueval, falseval, "select_result")
+    print result 
+    return result 
+  
   def compile_Attribute(self, expr, builder):
     field_ptr, _ = \
         self.attribute_lookup(expr.value, expr.name, builder)

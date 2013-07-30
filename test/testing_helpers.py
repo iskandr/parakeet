@@ -29,7 +29,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
     expected = expected.astype('float32')
 
   interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
-  label = "interp"
+  label = "interp: inputs = %s" % ", ".join(str(arg) for arg in args)
 
   if msg is not None:
     label += "-" + str(msg)
@@ -41,7 +41,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
       valid_types = [valid_types]
     assert type(llvm_result) in valid_types, \
       "Expected result to have type in %s but got %s" % (valid_types, type(llvm_result))
-  label = "llvm"
+  label = "llvm: inputs = %s" % ", ".join(str(arg) for arg in args)
   if msg is not None:
       label += "-" + str(msg)
   expect_eq(llvm_result, expected, label)
