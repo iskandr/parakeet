@@ -196,15 +196,24 @@ class Compiler(object):
   
   def sub(self, t, x, y, builder, result_name = "sub"):
     if isinstance(t, FloatT):
-      return builder.fsub(x,y,result_name)
+      return builder.fsub(x, y, result_name)
     else:
-      return builder.sub(x,y,result_name)
+      return builder.sub(x, y, result_name)
     
+  
   def add(self, t, x, y, builder, result_name = "add"):
     if isinstance(t, FloatT):
-      return builder.fadd(x,y,result_name)
+      return builder.fadd(x, y, result_name)
     else:
-      return builder.add(x,y,result_name)
+      return builder.add(x, y, result_name)
+  
+  
+  def mul(self, t, x, y, builder, result_name = "mul"):
+    if isinstance(t, FloatT):
+      return builder.fmul(x, y, result_name)
+    else:
+      return builder.mul(x, y, result_name)
+  
     
   def neg(self, x, builder):
     if isinstance(x.type, llc.IntegerType):
@@ -250,14 +259,14 @@ class Compiler(object):
         assert isinstance(t, FloatT)
         rem = builder.frem(llvm_args[0], llvm_args[1], "modulo")
 
-      y_is_negative = self.lt(t, y, zero(y.type), builder, "first_arg_negative")
+      y_is_negative = self.lt(t, y, zero(y.type), builder, "second_arg_negative")
       rem_is_negative = self.lt(t, rem, zero(rem.type), builder, "rem_is_negative")
-      y_nonzero = self.neq(t, y, zero(y.type), builder, "first_arg_nonzero")
-      rem_nonzero = self.neq(t,x,zero(x.type),builder,"rem_nonzero")
+      y_nonzero = self.neq(t, y, zero(y.type), builder, "second_arg_nonzero")
+      rem_nonzero = self.neq(t, rem, zero(x.type), builder, "rem_nonzero")
       neither_zero = builder.and_(y_nonzero, rem_nonzero, "neither_zero")
       diff_signs = builder.xor(y_is_negative, rem_is_negative, "different_signs")
       should_flip = builder.and_(neither_zero, diff_signs, "should_flip") 
-      flipped_rem = self.add(t, y, rem, builder, "flipped_rem") 
+      flipped_rem = self.add(t, y, rem, builder, "flipped_rem")
       return builder.select(should_flip, flipped_rem, rem)
 
     elif prim == prims.power:
