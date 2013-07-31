@@ -86,44 +86,7 @@ def float32_fn(name):
 def float64_fn(name):
   return global_context.module.add_function(float64_fn_t, name)
 
-# names used in math library 
-_float_op_names = {
-  prims.tan : 'tan', 
-  prims.tanh : 'tanh',
-  prims.arctan : 'atan', 
-  prims.arctanh : 'atanh',
-  prims.arctan2 : 'atan2',  
-   
-  prims.cos : 'cos', 
-  prims.cosh : 'cosh', 
-  prims.arccos : 'acos', 
-  prims.arccosh : 'acosh', 
-  
-  prims.sin : 'sin', 
-  prims.sinh : 'sinh',
-  prims.arcsin : 'asin',
-  prims.arcsinh : 'asinh', 
-  
-  prims.log : 'log',
-  prims.log2 : 'log2', 
-  prims.log10 : 'log10',
-  prims.log1p : 'log1p', 
-   
-   
-  prims.exp : 'exp',  
-  prims.exp2 : 'exp2', 
-  prims.power : 'pow', 
-  prims.expm1 : 'expm1', 
-  prims.sqrt : 'sqrt', 
-  
-  prims.abs : 'fabs', 
-  
-  prims.ceil : 'ceil', 
-  prims.floor : 'floor', 
-  prims.round : 'round', 
-  
-} 
- 
+
 
 #import llvmmath 
 #mathlib = llvmmath.get_default_math_lib()
@@ -147,17 +110,20 @@ _llvm_intrinsics = set(['sqrt',
                         'rint', 
                         'nearbyint',                         
                       ])
+
+from ..c_backend.c_prims import _float_fn_names
+
 def get_float_op(prim, t, _float_decls = {}):
   key = (prim, t)
   if key in _float_decls:
     return _float_decls[key]
   
-  assert prim in _float_op_names, \
+  assert prim in _float_fn_names, \
     "Unsupported float primitive %s" % prim 
   assert t in (Float32, Float64), \
     "Invalid type %s, expected Float32 or Float64" % t
   
-  prim_name = _float_op_names[prim]
+  prim_name = _float_fn_names[prim]
   
   if t == Float32:
     fn_t = float32_fn_t if prim.nin == 1 else binary_float32_fn_t
