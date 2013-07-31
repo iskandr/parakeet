@@ -63,11 +63,15 @@ function_mappings = {
   np.int16 : lib.numpy_types.int16, 
   np.int32 : lib.numpy_types.int32, 
   np.int64 : lib.numpy_types.int64, 
-  np.float32 : lib.numpy_types.float32, 
-  np.float64 : lib.numpy_types.float64, 
+  np.uint8 : lib.numpy_types.uint8,
+  np.uint16 : lib.numpy_types.uint16, 
+  np.uint32 : lib.numpy_types.uint32, 
+  np.uint64 : lib.numpy_types.uint64,  
   np.bool : lib.numpy_types.bool, 
   np.bool8 : lib.numpy_types.bool, 
   np.bool_ : lib.numpy_types.bool, 
+  np.float32 : lib.numpy_types.float32, 
+  np.float64 : lib.numpy_types.float64, 
   
   np.rank : lib.rank, 
   np.alen : lib.builtin_len, 
@@ -195,4 +199,5 @@ function_mappings = {
   # np.hypot : lib.hypot,
   
   np.where : lib.where,
+  
 }

@@ -7,6 +7,8 @@ from ..ndtypes import (Int8, Int16, Int32, Int64, Float32, Float64,
                        TupleT, ScalarT, ArrayT, 
                        elt_type) 
 
+from type_converters import to_ctype, to_dtype
+
 class Compiler(SyntaxVisitor):
   
   def __init__(self):
@@ -47,40 +49,17 @@ class Compiler(SyntaxVisitor):
     self.name_mappings[ssa_name] = name 
     return name 
   
-  def dtype(self, t):
-    if t == Int8: return "NPY_INT8"
-    elif t == Int16: return "NPY_INT16"
-    elif t == Int32: return "NPY_INT32"
-    elif t == Int64: return "NPY_INT64"
-    elif t == Float32: return "NPY_FLOAT32"
-    elif t == Float64: return "NPY_FLOAT64"
-    else:
-      assert False, "Unsupported element type %s" % t
-  
-  def ctype(self, t):
-    if t == Int8: return "int8_t"
-    elif t == Int16: return "int16_t"
-    elif t == Int32: return "int32_t"
-    elif t == Int64: return "int64_t"
-    elif t == Float32: return "float32_t"
-    elif t == Float64: return "float64_t"
-    elif not isinstance(t, ScalarT):
-      return "PyObject*"
-    else:
-      assert False, "Unsupported type %s" % t 
-    
-  
   def tuple_to_stack_array(self, expr):
     assert expr.type.__class__ is TupleT 
     t0 = expr.type.elt_types
     assert all(t == t0 for t in expr.type.elt_types[1:])
     array_name = self.fresh_name("array_from_tuple")
     n = len(expr.type.elt_types)
-    self.stmt("%s %s[%d]" % (self.ctype(t0), array_name, n))
+    self.stmt("%s %s[%d]" % (to_ctype(t0), array_name, n))
     
   def visit_AllocArray(self, expr):
     shape = self.tuple_to_stack_array(expr.shape)
-    t = self.dtype(elt_type(expr.type))
+    t = to_dtype(elt_type(expr.type))
     return "PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
   
   def visit_Const(self, expr):
@@ -95,4 +74,4 @@ class Compiler(SyntaxVisitor):
     rhs = self.visit_expr(stmt.rhs)
     self.stmt("%s = %s" % (lhs_name, rhs))
     
-  #def visit_PrimCall(self, expr):
+  def visit_PrimCall(self, expr):
