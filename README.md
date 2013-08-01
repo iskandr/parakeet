@@ -11,7 +11,6 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 
    import numpy as np 
    
-   
    def loopy_function(x, alpha = 0.5, beta = 0.3):
      y = np.empty_like(x)
      for i in xrange(len(x)):
@@ -34,7 +33,10 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 
 Install
 ====
-You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running "pip install parakeet". 
+You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running:
+
+    pip install parakeet
+
 
 Dependencies
 ====
