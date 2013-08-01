@@ -8,14 +8,8 @@ import parakeet
 
 setup(
     name="parakeet",
-    description="Runtime compiler for flight and amusement.",
-    long_description='''
-Parakeet
-=========
-
-An adorable bird that will make your children laugh and spontaneously combust.
-
-''',
+    description="Runtime compiler for numerical Python.",
+    long_description=open('README.md').read(),
     classifiers=['Development Status :: 3 - Alpha',
                  'Topic :: Software Development :: Libraries',
                  'License :: OSI Approved :: BSD License',

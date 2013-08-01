@@ -1,6 +1,8 @@
 Now:
-- Support all numerical/math ufuncs
 - Combine nested maps into single ParFor 
+- Finish C backend
+- Implement flattening which explicitly splits function into unwrap/flattened/wrap
+- Extend C backend to turn ParFor/IndexReduce/IndexScan expressions into CUDA kernels 
 
 Long term:
 - Indexing by boolean masks
@@ -12,17 +14,13 @@ Long term:
         ...
         return result_vars
        ]
-- Add C backend 
-- Extend C backend to turn ParFor expressions into CUDA kernels 
 
 On pause:
 - Adverb semantics for conv
 - Code generation for conv
-- Why is the pipeline ordering so fragile? 
 
 Maybe never?
 - Adverb-level vectorization 
-- starting parallel jobs from inside compiled code
 
 Old:
 - Only run tiling on perfectly nested code

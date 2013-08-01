@@ -1,5 +1,5 @@
 Parakeet: Runtime accelerator for numerical Python
------
+====
 
 If you have intolerably slow numerical algorithms written in Python, 
 Parakeet may be able to significantly speed up your bottleneck through 
@@ -30,6 +30,9 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
     return [np.tanh(xi*alpha + beta) for xi in x] 
 ```
 
+Supported Subset of Python
+====
+
 Parakeet cannot accelerate arbitrary Python code, it only supports a limited subset of the language:
 
   * Scalar operations (i.e. addition, multiplication, etc...)
@@ -41,6 +44,9 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
 
+Dependencies
+====
+
 Parakeet is written for Python 2.7 (sorry internet) and depends on:
 
 * [treelike](https://github.com/iskandr/treelike)
@@ -48,7 +54,11 @@ Parakeet is written for Python 2.7 (sorry internet) and depends on:
 * [NumPy and SciPy](http://www.scipy.org/install.html)
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
 
+Install
+====
 You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running "pip install parakeet". 
 
+More Information
+====
 If you have any questions about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) 
 from last year or contact the [main developer](http://www.rubinsteyn.com).
