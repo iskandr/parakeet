@@ -1,9 +1,9 @@
-Parakeet: Runtime accelerator for numerical Python
+Parakeet
 ====
 
-If you have intolerably slow numerical algorithms written in Python, 
-Parakeet may be able to significantly speed up your bottleneck through 
-*type specialization* and *native code generation*. 
+Parakeet is a runtime accelerator for an array-oriented subset of Python. If you're doing a lot of number crunching in Python, 
+Parakeet may be able to significantly speed up your code. 
+
 
 To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 
@@ -49,7 +49,8 @@ Optional (if using the LLVM backend):
 * [llvmpy](http://www.llvmpy.org/#quickstart)
 
 
-Supported Python Features
+
+Supported language features
 ====
 
 Parakeet cannot accelerate arbitrary Python code, it only supports a limited subset of the language:
@@ -62,7 +63,7 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * List literals (interpreted as array construction)
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
-More Information
+
+How does it work? 
 ====
-If you have any questions about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) 
-from last year or contact the [main developer](http://www.rubinsteyn.com).
+Your untyped function gets used as a template from which multiple *type specializations* are generated (for each distinct set of input types). These typed functions are then churned through many optimizations before finally getting translated into native code. For more information about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [main developer](http://www.rubinsteyn.com).
