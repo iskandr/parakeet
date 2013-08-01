@@ -24,10 +24,10 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
   assert loopy_function(x) == fast_version(x)
   
   @jit
-  def comprehension(x, alpha = 0.5, beta = 0.3):
+  def fast_comprehension(x, alpha = 0.5, beta = 0.3):
     return np.array([np.tanh(xi*alpha + beta) for xi in x])
   
-  assert loopy_function(x) == comprehension(x) 
+  assert loopy_function(x) == fast_comprehension(x) 
 ```
 
 
