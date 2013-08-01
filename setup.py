@@ -22,15 +22,6 @@ setup(
     version=parakeet.__version__,
     url=parakeet.__website__, 
     packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
-    #[ 'parakeet', 
-    #           'parakeet.analysis', 
-    #           'parakeet.frontend', 
-    #           'parakeet.lib', 
-    #           'parakeet.transforms', 
-    #           'parakeet.type_inference', 
-    #           'parakeet.examples', 
-    #           'parakeet.test' ],
-    
     package_dir={ 
                   'parakeet.benchmarks' : './benchmarks', 
                   'parakeet.examples' : './examples', 
