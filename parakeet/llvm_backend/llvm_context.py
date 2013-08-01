@@ -3,7 +3,7 @@ import llvm.core as core
 import llvm.ee as ee
 import llvm.passes as passes
 
-from .. import config
+import llvm_config 
 
 class LLVM_Context:
   """Combine a module, exec engine, and pass manager into a single object"""
@@ -68,8 +68,9 @@ class LLVM_Context:
     'licm',
   ]
 
-  def __init__(self, module_name, optimize = config.llvm_optimize,
-               verify = config.llvm_verify):
+  def __init__(self, module_name, 
+               optimize = llvm_config.llvm_optimize,
+               verify = llvm_config.llvm_verify):
     self.module = core.Module.new(module_name)
     self.engine_builder = ee.EngineBuilder.new(self.module)
     self.engine_builder.force_jit()
@@ -95,7 +96,7 @@ class LLVM_Context:
       for p in (self._opt_passes + self._verify_passes):
         self.pass_manager.add(p)
 
-  def run_passes(self, llvm_fn, n_iters = config.llvm_num_passes):
+  def run_passes(self, llvm_fn, n_iters = llvm_config.llvm_num_passes):
     for _ in xrange(n_iters):
       self.pass_manager.run(llvm_fn)
     #passmanagers = passes.build_pass_managers(

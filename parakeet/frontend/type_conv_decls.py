@@ -59,6 +59,7 @@ def typeof_fn(f):
   closure_arg_types = map(type_conv.typeof, closure_args)
   return make_closure_type(untyped_fn, closure_arg_types)
 
+
 type_conv.register(types.FunctionType, ClosureT, typeof_fn)
 type_conv.register(jit, ClosureT, typeof_fn)
 type_conv.register(macro, ClosureT, typeof_fn)

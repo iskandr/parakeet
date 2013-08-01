@@ -96,6 +96,7 @@ def run_typed_fn(fn, args, backend = None):
       #from ..llvm_backend.llvm_context import global_context
       #exec_engine = global_context.exec_engine
     
+  
   if backend == 'llvm':
     from ..llvm_backend.llvm_context import global_context
     from ..llvm_backend import generic_value_to_python 
@@ -117,11 +118,20 @@ def run_typed_fn(fn, args, backend = None):
     gv_return = exec_engine.run_function(llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, fn.return_type)
   
+  elif backend == 'c':
+    loopy_fn = pipeline.loopify.apply(fn)
+    
+    print 
+    print loopy_fn
+    
+    from .. import c_backend 
+    print 
+    print c_backend.function_source(loopy_fn)
+    assert False 
   elif backend == "interp":
     from .. import interp 
     fn = pipeline.loopify(fn)
     return interp.eval_fn(fn, args)
-  
   
   else:
     assert False, "Unknown backend %s" % backend 

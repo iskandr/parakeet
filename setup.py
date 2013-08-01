@@ -27,7 +27,7 @@ An adorable bird that will make your children laugh and spontaneously combust.
     license="BSD",
     version=parakeet.__version__,
     url=parakeet.__website__, 
-    packages=find_packages() + ['parakeet.test', 'parakeet.examples'], 
+    packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
     #[ 'parakeet', 
     #           'parakeet.analysis', 
     #           'parakeet.frontend', 
@@ -37,12 +37,16 @@ An adorable bird that will make your children laugh and spontaneously combust.
     #           'parakeet.examples', 
     #           'parakeet.test' ],
     
-    package_dir={  'parakeet.examples' : './examples', 
-                   'parakeet.test' : './test' 
+    package_dir={ 
+                  'parakeet.benchmarks' : './benchmarks', 
+                  'parakeet.examples' : './examples', 
+                  'parakeet.test' : './test' 
                 },
     requires=[
-      'llvmpy', 
+
       'numpy', 
       'scipy',
       'treelike'
+      # LLVM is optional as long as you use the C backend 
+      # 'llvmpy'   
     ])

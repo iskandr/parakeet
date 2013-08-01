@@ -1,7 +1,10 @@
 
 from ..ndtypes import (UInt8, UInt16, UInt32, UInt64, 
                        Int8, Int16, Int32, Int64, Float32, Float64, NoneType,  
-                       TupleT, ScalarT, ArrayT)
+                       TupleT, ScalarT, NoneT, ArrayT, SliceT, Type)
+
+
+
 
 def to_dtype(t):
   if t == Int8: return "NPY_INT8"
@@ -13,7 +16,7 @@ def to_dtype(t):
   else:
     assert False, "Unsupported element type %s" % t
   
-def to_ctype(self, t):
+def to_ctype(t):
   if t == Int8: return "int8_t"
   elif t == UInt8: return "uint8_t"
   elif t == UInt16: return "uint16_t"
@@ -25,7 +28,20 @@ def to_ctype(self, t):
   elif t == Float32: return "float32_t"
   elif t == Float64: return "float64_t"
   elif t == NoneType: return "void"
-  elif not isinstance(t, ScalarT):
+  elif isinstance(t, ArrayT):
+    return "PyArrayObject*"
+  elif isinstance(t, TupleT):
+    return "PyTupleObject*"
+  elif isinstance(t, SliceT):
+    return "PySliceObject*"
+  elif isinstance(t, NoneT):
     return "PyObject*"
   else:
-    assert False, "Unsupported type %s" % t 
+    assert False, "Unsupported type %s" % t
+    
+  
+class BoxedNumberT(Type):
+  """
+  When creating wrappers which accept pyobjects, let's pretend all numbers come boxed
+  """
+  pass 

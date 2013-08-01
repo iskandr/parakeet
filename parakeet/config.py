@@ -1,5 +1,5 @@
 
-default_backend = 'llvm' #shiver 
+default_backend = 'c' #llvm 
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -29,21 +29,6 @@ stride_specialization = True
 # run verifier after each transformation 
 opt_verify = False
 
-
-######################################
-#           LLVM OPTIONS             #
-######################################
-
-# run LLVM optimization passes
-llvm_optimize = True
-
-# number of times to run optimizations
-llvm_num_passes = 4
-
-# run verifier over generated LLVM code?
-llvm_verify = True
-
-
 #####################################
 #            DEBUG OUTPUT           #
 #####################################
@@ -60,12 +45,6 @@ print_loopy_function = False
 # show lower level typed function before
 # it gets translated to LLVM?
 print_lowered_function = False
-
-# show LLVM bytecode before optimization passes
-print_unoptimized_llvm = False
-
-# show LLVM bytecode after optimizations
-print_optimized_llvm = False
 
 # before starting function specialization, print the fn name and input types 
 print_before_specialization = False
@@ -88,8 +67,6 @@ print_transform_names = False
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
 
-# print generated assembly of compiled functions
-print_x86 = False
 
 
 
