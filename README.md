@@ -30,7 +30,26 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
     return [np.tanh(xi*alpha + beta) for xi in x] 
 ```
 
-Supported Subset of Python
+
+Install
+====
+You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running "pip install parakeet". 
+
+Dependencies
+====
+
+Parakeet is written for Python 2.7 (sorry internet) and depends on:
+
+* [treelike](https://github.com/iskandr/treelike)
+* [nose](https://nose.readthedocs.org/en/latest/) for unit tests
+* [NumPy and SciPy](http://www.scipy.org/install.html)
+
+Optional (if using the LLVM backend):
+
+* [llvmpy](http://www.llvmpy.org/#quickstart)
+
+
+Supported Python Features
 ====
 
 Parakeet cannot accelerate arbitrary Python code, it only supports a limited subset of the language:
@@ -43,21 +62,6 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * List literals (interpreted as array construction)
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
-
-Dependencies
-====
-
-Parakeet is written for Python 2.7 (sorry internet) and depends on:
-
-* [treelike](https://github.com/iskandr/treelike)
-* [llvmpy](https://github.com/llvmpy/llvmpy)
-* [NumPy and SciPy](http://www.scipy.org/install.html)
-* [nose](https://nose.readthedocs.org/en/latest/) for unit tests
-
-Install
-====
-You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running "pip install parakeet". 
-
 More Information
 ====
 If you have any questions about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) 
