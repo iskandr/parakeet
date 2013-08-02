@@ -39,6 +39,9 @@ class CoreBuilder(object):
   def return_(self, value):
     self.blocks += [Return(value)]  
     
+  def return_tuple(self, values):
+    self.return_(self.tuple(values, name = None))
+    
   def fresh_var(self, t, prefix = "temp"):
     assert prefix is not None
     assert t is not None, "Type required for new variable %s" % prefix

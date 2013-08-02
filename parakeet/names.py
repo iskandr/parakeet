@@ -50,3 +50,7 @@ def refresh(unique_name):
   except NameNotFound:
     # it wasn't really an SSA name but keep going anyway 
     return fresh(unique_name)
+  
+def add_prefix(prefix, name):
+  base = original(name)
+  return fresh(prefix + base)
