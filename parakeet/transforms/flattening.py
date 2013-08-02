@@ -169,17 +169,29 @@ class Flatten(Transform):
       idx = expr.type.field_index(field_name)
       vs = self.flat_values(v, path)
   
+  
+  
+  def transform_Tuple(self, expr):
+    pass
+  
+  def transform_TupleProj(self, expr):
+    pass  
+  
   def transform_Assign(self, stmt):
+    pass 
+    """
     c = stmt.rhs.__class__
-    if c is Tuple: 
+    if c is Tuple:
+       
     elif c is TupleProj: 
     elif c is Closure:
+      lhs_vars = 
+      # enumerate function and fixed args
+      # and assign then to lhs fixed args 
+      
     elif c is ClosureElt:
-    elif 
-      
-      
-      
-      
+    elif
+    """ 
       
     
   #def flatten_vars(self, vars):
