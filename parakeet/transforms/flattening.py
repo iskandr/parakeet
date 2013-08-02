@@ -1,6 +1,8 @@
 from .. import names 
 from ..builder import build_fn
 from ..ndtypes import ScalarT, NoneT, ArrayT, SliceT, TupleT, Int64, PtrT, ptr_type
+from ..syntax import Var, Struct, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const
+
 from transform import Transform
 
 
@@ -66,28 +68,11 @@ def build_unwrapper(fn):
 # map from a return type to a function which takes all the elements of a struct and constructs it
 _wrappers = {}
 
-class AccessPath(object):
-  def __eq__(self, other):
-    return False 
-  
-  def __neq__(self, other):
-    return not self == other 
 
-class Attr(AccessPath):
-  def __init__(self, base, attr):
-    self.base = base
-    self.attr = attr
-    
-  def __eq__(self, other):
-    return other.__class__ is Attr and self.base == other.base and self.attr == other.attr  
-    
-class Idx(AccessPath):
-  def __init__(self, base, idx):
-    self.base = base 
-    self.idx = idx
-    
-  def __eq__(self, other):
-    return other.__class__ is Idx and self.base == other.base and self.idx == other.idx 
+  
+def path_name(path):
+  return "_".join(path)
+
 
 class Flatten(Transform):
   """
@@ -100,21 +85,116 @@ class Flatten(Transform):
   
   def pre_apply(self, fn):
     self.paths = {}
+    return fn 
+
+  def flat_values(self, v, path):
+    if path in self.paths:
+      return self.paths[path]
     
-  def flatten_input(self, var, path = None):
-    if path is None: path = var.name
-    t = var.type
+    t = v.type 
     if isinstance(t, (NoneT, ScalarT)):
-      self.paths[path] = var
-      return var 
+      result = (v,)
+      
     elif isinstance(t, ArrayT):
-      data = self.attr(var, 'data', name = "array_data")
-      self.flatten_input(var, path)
-      self.paths[Attr(path, 'data')] = data
+      data_path = path + ("data",)
+      data_values = \
+        self.flat_values(self.attr(v, 'data', name = path_name(data_path)), data_path)
       
-      offset = self.attr(var, 'offset', name = "array_offset")
-      self.paths[Attr(path, 'offset')] = offset 
+      offset_path = path + ("offset",)
+      offset_values = \
+        self.flat_values(self.attr(v, 'offset', name = path_name(offset_path)), offset_path)
       
+      shape_values = \
+        self.flat_values(self.shape(v), path + ("shape",))
+      
+      stride_values = \
+        self.flat_values(self.strides(v), path + ("strides",))
+      
+      result = data_values + offset_values + shape_values + stride_values  
+    
+    elif isinstance(t, SliceT):
+      start_path = path + ("start",)
+      start_values = self.flat_values(self.attr(v, name = path_name(start_path)), start_path)
+      
+      stop_path = path + ("stop",)
+      stop_values = self.flat_values(self.attr(v, name = path_name(stop_path)), stop_path)
+      
+      step_path = path + ("step",)
+      step_values = self.flat_values(self.attr(v, name = path_name(step_path)), step_path)
+      
+      result = start_values + stop_values + step_values 
+    
+    elif isinstance(t, TupleT):
+      result = []
+      for i, elt in enumerate(self.tuple_elts(v)):
+        field = "elt%d" % i 
+        elt_path = path + (field,)
+        if elt.__class__ is not Var:
+          elt = self.assign_name(elt, path_name(elt_path))
+        result.extend(self.flat_values(elt, elt_path))
+      result = tuple(result)
+    self.paths[path] = result
+    return result 
+    
+  def flatten_var(self, v):
+    assert v.__class__ is Var
+    path = (v.name,)  
+    return self.flat_values(v, path)
+  
+  def get_path(self, expr):
+    c = expr.__class__  
+    if c is Const:
+      return ()
+    elif c is Var:
+      return (expr.name,)
+    elif c is Attribute:
+      return self.get_path(expr.value) + (expr.name,)
+    elif c is TupleProj:
+      return self.get_path(expr.tuple) + ("elt%d" % expr.index)
+    elif c is ClosureElt:
+      return self.get_path(expr.closure) + ("closure_elt%d" % expr.index)
+    else:
+      assert False, "Can't get path of expression %s" % expr 
+    
+    
+  def flatten_expr(self, expr):
+    c = expr.__class__
+    if c is Var:
+      return self.flatten_var(expr)
+    elif c is Const: 
+      return expr
+    path = self.get_path(expr)  
+    if c is Attribute:
+      field_name = expr.name 
+      idx = expr.type.field_index(field_name)
+      vs = self.flat_values(v, path)
+  
+  def transform_Assign(self, stmt):
+    c = stmt.rhs.__class__
+    if c is Tuple: 
+    elif c is TupleProj: 
+    elif c is Closure:
+    elif c is ClosureElt:
+    elif 
+      
+      
+      
+      
+      
+    
+  #def flatten_vars(self, vars):
+  #  result = []
+  #  for var in vars:
+  #    result.extend(self.flatten_value(var, path=(var.name,)))
+  #  return tuple(result)
+  
+  def flatten_inputs(self):
+    input_vars = self.input_vars(self.fn)
+    
+    for var in input_vars:
+      name = var.name 
+      self.flatten_input(var, (name,))
+    
       
 
 

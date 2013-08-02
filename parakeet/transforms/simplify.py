@@ -11,6 +11,7 @@ from .. syntax import (AllocArray, Assign, ExprStmt,
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
                        Slice, Index, Array, ArrayView, Attribute, Struct, Select, 
                        PrimCall, Call, TypedFn, UntypedFn, 
+                       Adverb, Accumulative, HasEmit, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
 from .. syntax.helpers import collect_constants, is_one, is_zero, is_false, is_true, all_constants
 from .. syntax.helpers import get_types, slice_none_t, const_int, one 
@@ -128,6 +129,23 @@ class Simplify(Transform):
       stored = self.available_expressions.get(expr)
       if stored is not None:
         return stored
+    
+    # instead of passing a closure into adverbs, 
+    # just move the closed-over variables onto the adverb itself 
+    """
+    if isinstance(expr, Adverb):
+      if expr.fn.type.__class__ is ClosureT:
+        expr.fixed_args = tuple(self.closure_elts(expr.fn)) + tuple(expr.fixed_args)
+        expr.fn = self.get_fn(expr.fn)
+    if isinstance(expr, Accumulative):
+      if expr.combine.type.__class__ is ClosureT:
+        expr.combine_fixed_args = tuple(self.closure_elts(expr.combine)) + tuple(expr.combine_fixed_args)
+        expr.combine = self.get_fn(expr.combine)
+    if isinstance(expr, HasEmit):
+      if expr.emit.type.__class__ is ClosureT:
+        expr.emit_fixed_args = tuple(self.closure_elts(expr.emit)) + tuple(expr.emit_fixed_args)
+        expr.emit = self.get_fn(expr.emit)
+    """ 
     return Transform.transform_expr(self, expr)
 
   def transform_Var(self, expr):
@@ -186,7 +204,6 @@ class Simplify(Transform):
       return expr
     else:
       return Attribute(value = v, name = expr.name, type = expr.type)
-    
   
   def transform_Closure(self, expr):
     expr.args = tuple(self.transform_args(expr.args))
