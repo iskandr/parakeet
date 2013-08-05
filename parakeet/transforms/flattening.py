@@ -209,10 +209,12 @@ class Flatten(Transform):
       # TODO: Make this work for arrays of structures/tuples
       assert len(rhs_values) == 1, \
         "Wrong number of flattened values on RHS of setidx: %s ==> %s" % (stmt, rhs_values) 
-      assert stmt.type.__class__ is PtrT, \
-        "Flattening expects all indexing to go directly through pointers, not %s" % expr.type  
-      return expr 
+      assert lhs.value.type.__class__ is PtrT, \
+        "Flattening expects all indexing to go directly through pointers, not %s" % lhs.value.type  
+      self.rhs = rhs_values[0]
+      return stmt 
     if stmt.lhs.__class__ is Var:
+      pass 
     
     
       
