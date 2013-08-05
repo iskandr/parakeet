@@ -1,7 +1,8 @@
 from .. import names 
 from ..builder import build_fn
 from ..ndtypes import ScalarT, NoneT, ArrayT, SliceT, TupleT, Int64, PtrT, ptr_type
-from ..syntax import Var, Struct, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const
+from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
+                      Struct, Index) 
 
 from transform import Transform
 
@@ -182,16 +183,16 @@ class Flatten(Transform):
       path = (expr.name,)
       if path in self.paths:
         return self.paths[path]
-      self.paths[path] = expr 
+      self.paths[path] = expr
+    elif isinstance(expr, Index):
       
-    elif isinstnace(expr, Index):
-      # assignment to pointer location
-      # should we change that instead to a statement
-      # like SetIdx? 
-      pass
     elif isinstance(expr, Attribute):
-      # should I change this to a statement like SetAttr?
-      pass  
+      assert expr.value.__class__ is Var, \
+        "Flattening expects all attribute access to go through Var, not %s" % expr 
+      path = (expr.value.name, expr.name)
+      fields = self.transform_expr(expr.value)
+      field_idx = expr.value.type.field_index(expr.name)
+      return (fields[field_idx],)
     elif isinstance(expr, Tuple):
       result = []
       for elt in expr.elts:
@@ -199,6 +200,22 @@ class Flatten(Transform):
       return tuple(result)
     
   def transform_Assign(self, stmt):
+    lhs = stmt.lhs 
+    rhs_values = self.transform_expr(stmt.rhs) 
+    c = stmt.lhs.__class__
+    assert c is not Tuple, \
+      "Unexpected tuple LHS encountered while flattening: %s" % stmt
+    if c is Index:
+      # TODO: Make this work for arrays of structures/tuples
+      assert len(rhs_values) == 1, \
+        "Wrong number of flattened values on RHS of setidx: %s ==> %s" % (stmt, rhs_values) 
+      assert stmt.type.__class__ is PtrT, \
+        "Flattening expects all indexing to go directly through pointers, not %s" % expr.type  
+      return expr 
+    if stmt.lhs.__class__ is Var:
+    
+    
+      
     lhs_vars = self.lhs_vars(stmt.lhs)
     rhs_vars = self.transform_expr(stmt.rhs)
     nvars = len(lhs_vars)
