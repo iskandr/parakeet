@@ -122,3 +122,25 @@ class ParFor(Stmt):
   def __str__(self):
     return "ParFor(fn = %s, bounds = %s)" % (self.fn, self.bounds)
   
+#  
+# Consider using these in the future
+# instead of having a structured LHS for Assign
+#
+
+class SetIndex(Stmt):
+  _members = ['array', 'index', 'value']
+  
+  def __str__(self):
+    return "%s[%s] = %s" % (self.array, self.index, self.value)
+  
+
+class SetAttr(Stmt):
+  _members = ['struct', 'attr', 'value']
+
+  def node_init(self):
+    assert isinstance(self.struct, Expr)
+    assert isinstance(self.attr, str)
+    assert isinstance(self.value, Expr)
+    
+  def __str__(self):
+    return "%s.%s = %s" % (self.struct, self.attr, self.value)

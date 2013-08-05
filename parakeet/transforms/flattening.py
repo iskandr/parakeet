@@ -177,8 +177,37 @@ class Flatten(Transform):
   def transform_TupleProj(self, expr):
     pass  
   
+  def lhs_vars(self, expr):
+    if isinstance(expr, Var):
+      path = (expr.name,)
+      if path in self.paths:
+        return self.paths[path]
+      self.paths[path] = expr 
+      
+    elif isinstnace(expr, Index):
+      # assignment to pointer location
+      # should we change that instead to a statement
+      # like SetIdx? 
+      pass
+    elif isinstance(expr, Attribute):
+      # should I change this to a statement like SetAttr?
+      pass  
+    elif isinstance(expr, Tuple):
+      result = []
+      for elt in expr.elts:
+        result.append(self.lhs_vars(elt))
+      return tuple(result)
+    
   def transform_Assign(self, stmt):
-    pass 
+    lhs_vars = self.lhs_vars(stmt.lhs)
+    rhs_vars = self.transform_expr(stmt.rhs)
+    nvars = len(lhs_vars)
+    assert nvars == len(rhs_vars)
+    for i in xrange(nvars):
+      lhs = lhs_vars[i]
+      rhs = rhs_vars[i]
+      self.assign(lhs, rhs)
+    return None 
     """
     c = stmt.rhs.__class__
     if c is Tuple:
