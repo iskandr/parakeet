@@ -5,6 +5,7 @@ from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Con
                       Struct, Index) 
 
 from transform import Transform
+from parakeet.syntax.expr import TupleProj
 
 
 def flatten_type(t):
@@ -42,6 +43,55 @@ def flatten_types(ts):
   return tuple(result) 
 
 
+class FlatRepr(object):
+  pass 
+
+class FlatTuple(FlattenedRepr):
+  def __init__(self, elts):
+    self.elts = elts
+    
+  def __getattr_(self, index):
+    assert isinstance(index, (int, long))
+    assert index < len(self.elts)
+    return self.elts[index]
+
+  def __iter__(self):
+    for i, elt in enumerate(self.elts):
+      if isinstance(elt, FlattenedRepr):
+        for sub_path, sub_elt in elt:
+          yield concat_path(i, sub_path), sub_elt
+      else:
+        yield i, elt  
+        
+def FlatStruct(FlattenedRepr):
+  def __init__(self, fields):
+    self.fields = fields
+  
+  def __iter__(self):
+    for (k,v) in self.fields:
+      if isinstance(v, FlattenedRepr):
+        for sub_path, sub_elt in v:
+          yield concat_path(k, sub_path), sub_elt 
+      else:
+        yield k,v 
+      
+  def __getattr__(self, k):
+    for k2,v in self.fields:
+      if k == k2:
+        return v
+    assert False, "Key not found %s" % k
+
+def concat_path(p1, p2):
+  if not isinstance(p1, tuple):
+    p1 = (p1,)
+    
+  if not isinstance(p2, tuple):
+    p2 = (p2,)
+  return p1 + p2 
+
+def path_name(path):
+  return "_".join(path)
+
 
 # map from a type signature to a helper which pulls apart all the inputs and returns
 # their scalar/ptr elements     
@@ -71,8 +121,6 @@ _wrappers = {}
 
 
   
-def path_name(path):
-  return "_".join(path)
 
 
 class Flatten(Transform):
@@ -172,11 +220,63 @@ class Flatten(Transform):
   
   
   
-  def transform_Tuple(self, expr):
-    pass
   
+  def flatten_expr_tuple(self, exprs):
+    result = []
+    for expr in exprs:
+      result.extend(self.transform_expr(expr))
+    return tuple(result)
+  
+  def transform_expr(self, expr):
+    result = Transform.transform_expr(self, expr)
+    if isinstance(result, tuple):
+      return result
+    elif isinstance(result, list):
+      return tuple(result)
+    else:
+      return (result,) 
+  
+
+  def build_path(self, expr):
+    c = expr.__class__ 
+    if c is Var:
+      return (expr.name,)
+    elif c is Attribute:
+      base_path = self.build_path(expr.value)
+      return base_path + (expr.name,)
+    elif c is TupleProj:
+      base_path = self.build_path(expr.tuple)
+      return base_path + (expr.index,)
+    else:
+      assert False, "Can't build path for expression %s" % expr 
+
+  def transform_Tuple(self, expr):
+    return self.flatten_expr_tuple(expr.elts)
+    
   def transform_TupleProj(self, expr):
-    pass  
+    elts = self.transform_expr(expr.tuple)
+    assert len(elts) >= expr.index, "Insufficient elements %s for tuple %s" (elts, expr)
+    return elts[expr.index]
+  
+  def transform_Var(self, expr):
+    
+    #if expr.name in self.flattened_vars:
+    #  return self.flattened_vars[expr.name]
+    path = (expr.name,)
+    if path in self.paths:
+      return self.paths[path]
+    return expr 
+  
+      
+  def transform_Attribute(self, expr):
+    fields = self.transform_expr(expr.value)
+    field_index = expr.type.field_index(expr.name)
+    # WHAT IF THE ATTRIBUTE IS ITSELF A STRUCTURED OBJECT?
+    #  ie.e. {a : tuple(int, int), b : array } ??? 
+    # then the fields return are going to need slicing or sub-indexing 
+    return fields[field_index]
+    
+    
   
   def lhs_vars(self, expr):
     if isinstance(expr, Var):
@@ -198,11 +298,155 @@ class Flatten(Transform):
       for elt in expr.elts:
         result.append(self.lhs_vars(elt))
       return tuple(result)
+  
+  def bind(self, lhs, rhs, path = ()):
+    t = lhs.type 
+    if isinstance(t, (NoneT, ScalarT)):
+      result = (v,)
+      
+    elif isinstance(t, ArrayT):
+      data_path = path + ("data",)
+      data_values = \
+        self.flat_values(self.attr(v, 'data', name = path_name(data_path)), data_path)
+      
+      offset_path = path + ("offset",)
+      offset_values = \
+        self.flat_values(self.attr(v, 'offset', name = path_name(offset_path)), offset_path)
+      
+      shape_values = \
+        self.flat_values(self.shape(v), path + ("shape",))
+      
+      stride_values = \
+        self.flat_values(self.strides(v), path + ("strides",))
+      
+      result = data_values + offset_values + shape_values + stride_values  
+    
+    elif isinstance(t, SliceT):
+      start_path = path + ("start",)
+      start_values = self.flat_values(self.attr(v, name = path_name(start_path)), start_path)
+      
+      stop_path = path + ("stop",)
+      stop_values = self.flat_values(self.attr(v, name = path_name(stop_path)), stop_path)
+      
+      step_path = path + ("step",)
+      step_values = self.flat_values(self.attr(v, name = path_name(step_path)), step_path)
+      
+      result = start_values + stop_values + step_values 
+    
+    elif isinstance(t, TupleT):
+      result = []
+      for i, elt in enumerate(self.tuple_elts(v)):
+        field = "elt%d" % i 
+        elt_path = path + (field,)
+        if elt.__class__ is not Var:
+          elt = self.assign_name(elt, path_name(elt_path))
+        result.extend(self.flat_values(elt, elt_path))
+      result = tuple(result)
+    self.paths[path] = result
+    return result 
+    
+    if isinstance(t, ScalarT):
+      return  
+    if isinstance(t, ArrayT):
+      
+    if isinstance(t, TupleT):
+       result = []
+      for i, elt in enumerate(self.tuple_elts(v)):
+        field = "elt%d" % i 
+        elt_path = path + (field,)
+        if elt.__class__ is not Var:
+          elt = self.assign_name(elt, path_name(elt_path))
+        result.extend(self.flat_values(elt, elt_path))
+      result = tuple(result)
+    self.paths[path] = result
+    
+    assert path not self.paths, "Already have binding for access path %s : %s" % (path, t)
+    
+  def bind(self, lhs, rhs):
+    c = lhs.__class__
+    if c is Var:
+      name = lhs.name 
+      for rhs_path, rhs_var in rhs:
+        lhs_path = (name,) + path
+        lhs_name = path_name(lhs_path)
+        lhs_var = self.fresh_var(lhs_name)
+        self.assign(lhs_var, rhs_var) 
+  
+  def transform_lhs(self, expr, path = ()):
+    t = expr.type 
+    if isinstance(t, (NoneT, ScalarT)):
+      result = (expr,)
+      
+    elif isinstance(t, ArrayT):
+      data_path = path + ("data",)
+      data_values = \
+        self.flat_values(self.attr(v, 'data', name = path_name(data_path)), data_path)
+      
+      offset_path = path + ("offset",)
+      offset_values = \
+        self.flat_values(self.attr(v, 'offset', name = path_name(offset_path)), offset_path)
+      
+      shape_values = \
+        self.flat_values(self.shape(v), path + ("shape",))
+      
+      stride_values = \
+        self.flat_values(self.strides(v), path + ("strides",))
+      
+      result = data_values + offset_values + shape_values + stride_values  
+    
+    elif isinstance(t, SliceT):
+      start_path = path + ("start",)
+      start_values = self.flat_values(self.attr(v, name = path_name(start_path)), start_path)
+      
+      stop_path = path + ("stop",)
+      stop_values = self.flat_values(self.attr(v, name = path_name(stop_path)), stop_path)
+      
+      step_path = path + ("step",)
+      step_values = self.flat_values(self.attr(v, name = path_name(step_path)), step_path)
+      
+      result = start_values + stop_values + step_values 
+    
+    elif isinstance(t, TupleT):
+      result = []
+      for i, elt in enumerate(self.tuple_elts(v)):
+        field = "elt%d" % i 
+        elt_path = path + (field,)
+        if elt.__class__ is not Var:
+          elt = self.assign_name(elt, path_name(elt_path))
+        result.extend(self.flat_values(elt, elt_path))
+      result = tuple(result)
+    self.paths[path] = result
+    return result 
+    
+    if isinstance(t, ScalarT):
+      return  
+    if isinstance(t, ArrayT):
+      
+    if isinstance(t, TupleT):
+       result = []
+      for i, elt in enumerate(self.tuple_elts(v)):
+        field = "elt%d" % i 
+        elt_path = path + (field,)
+        if elt.__class__ is not Var:
+          elt = self.assign_name(elt, path_name(elt_path))
+        result.extend(self.flat_values(elt, elt_path))
+      result = tuple(result)
+    self.paths[path] = result
+    
+    assert path not self.paths, "Already have binding for access path %s : %s" % (path, t)
     
   def transform_Assign(self, stmt):
-    lhs = stmt.lhs 
-    rhs_values = self.transform_expr(stmt.rhs) 
-    c = stmt.lhs.__class__
+    lhs = tuple(self.transform_lhs(stmt.lhs))
+    rhs = tuple(self.transform_expr(stmt.rhs))
+    assert len(lhs) == len(rhs), "Mismatching in LHS terms %s and RHS terms %s" % (lhs, rhs)
+    for lhs_elt, rhs_elt in zip(lhs,rhs):
+      self.assign(lhs_elt, rhs_elt)
+    return None 
+   
+    """  
+    #lhs = stmt.lhs 
+    #rhs_values = tuple(self.transform_expr(stmt.rhs)) 
+    c = lhs.__class__
     assert c is not Tuple, \
       "Unexpected tuple LHS encountered while flattening: %s" % stmt
     if c is Index:
@@ -213,10 +457,11 @@ class Flatten(Transform):
         "Flattening expects all indexing to go directly through pointers, not %s" % lhs.value.type  
       self.rhs = rhs_values[0]
       return stmt 
-    if stmt.lhs.__class__ is Var:
-      pass 
-    
-    
+    if lhs.__class__ is Var:
+      base_path = (lhs.name,)
+      self.bind(base_path, lhs.type, rhs_values)
+      paths = self.expand(lhs.type, path = base_path)
+      assert len(paths)
       
     lhs_vars = self.lhs_vars(stmt.lhs)
     rhs_vars = self.transform_expr(stmt.rhs)
@@ -227,7 +472,7 @@ class Flatten(Transform):
       rhs = rhs_vars[i]
       self.assign(lhs, rhs)
     return None 
-    """
+    
     c = stmt.rhs.__class__
     if c is Tuple:
        
