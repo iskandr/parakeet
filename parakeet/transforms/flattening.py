@@ -373,11 +373,29 @@ class Flatten(Transform):
         self.assign(lhs_var, rhs_var) 
   
   def transform_lhs(self, expr, path = ()):
-    t = expr.type 
+    c = expr.__class__ 
+    if c is Tuple:
+      return FlatTuple([self.transform_lhs(elt) for elt in expr.elts])
+    
+    elif c is Index:
+      assert isinstance(expr.array.type, PtrT)
+      assert isinstance(expr.index, (Const, Var))
+      return (expr,)
+   
+    elif c is Attribute:
+      
+      assert isinstance(expr.value, Var)
+      fields = self.transform_Var(expr.value)
+      assert isinstance(fields, FlatStruct)
+      return fields[expr.name]
+    
+    assert c is Var
     if isinstance(t, (NoneT, ScalarT)):
       result = (expr,)
-      
+        
     elif isinstance(t, ArrayT):
+      
+      
       data_path = path + ("data",)
       data_values = \
         self.flat_values(self.attr(v, 'data', name = path_name(data_path)), data_path)
