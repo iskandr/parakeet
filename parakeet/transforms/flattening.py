@@ -284,8 +284,6 @@ class Flatten(Transform):
       if path in self.paths:
         return self.paths[path]
       self.paths[path] = expr
-    elif isinstance(expr, Index):
-      
     elif isinstance(expr, Attribute):
       assert expr.value.__class__ is Var, \
         "Flattening expects all attribute access to go through Var, not %s" % expr 
@@ -372,47 +370,26 @@ class Flatten(Transform):
         lhs_var = self.fresh_var(lhs_name)
         self.assign(lhs_var, rhs_var) 
   
-  def transform_lhs(self, expr, path = ()):
-    c = expr.__class__ 
-    if c is Tuple:
-      return FlatTuple([self.transform_lhs(elt) for elt in expr.elts])
+  def transform_lhs_type(self, t, path):
     
-    elif c is Index:
-      assert isinstance(expr.array.type, PtrT)
-      assert isinstance(expr.index, (Const, Var))
-      return (expr,)
-   
-    elif c is Attribute:
-      
-      assert isinstance(expr.value, Var)
-      fields = self.transform_Var(expr.value)
-      assert isinstance(fields, FlatStruct)
-      return fields[expr.name]
+  def transform_lhs_var(self, expr):
+    name = expr.name 
+    t = expr.type 
     
-    assert c is Var
     if isinstance(t, (NoneT, ScalarT)):
-      result = (expr,)
-        
+      return (expr,)    
     elif isinstance(t, ArrayT):
-      
-      
-      data_path = path + ("data",)
-      data_values = \
-        self.flat_values(self.attr(v, 'data', name = path_name(data_path)), data_path)
-      
-      offset_path = path + ("offset",)
-      offset_values = \
-        self.flat_values(self.attr(v, 'offset', name = path_name(offset_path)), offset_path)
-      
-      shape_values = \
-        self.flat_values(self.shape(v), path + ("shape",))
-      
-      stride_values = \
-        self.flat_values(self.strides(v), path + ("strides",))
-      
-      result = data_values + offset_values + shape_values + stride_values  
-    
+      data = self.fresh_var(name + "_data")
+      offset = self.fresh_var(name + "_offset")
+      shape = self.transform_lhs_type(t.shape_t, path = (name,'shape'))
+      strides = self.transform_lhs_type(t.strides_t, path = (name, 'strides'))
+             
+      result = FlatStruct(('data', data), ('offset',offset), 
+                          ('shape', shape), ('strides',strides))
+      self.env[name] = result 
+      return result 
     elif isinstance(t, SliceT):
+      start_var = 
       start_path = path + ("start",)
       start_values = self.flat_values(self.attr(v, name = path_name(start_path)), start_path)
       
@@ -435,6 +412,29 @@ class Flatten(Transform):
       result = tuple(result)
     self.paths[path] = result
     return result 
+    
+  def transform_lhs(self, expr, path = ()):
+    c = expr.__class__ 
+    if c is Tuple:
+      return FlatTuple([self.transform_lhs(elt, path = path + (i,)) 
+                        for i, elt in enumerate(expr.elts)])
+    
+    elif c is Index:
+      assert isinstance(expr.array.type, PtrT)
+      assert isinstance(expr.index, (Const, Var))
+      return (expr,)
+   
+    elif c is Attribute:
+      
+      assert isinstance(expr.value, Var)
+      fields = self.transform_Var(expr.value)
+      assert isinstance(fields, FlatStruct)
+      return fields[expr.name]
+    
+    assert c is Var
+    assert len(path) == 0
+    return self.transform_lhs_var(expr.name, t)
+
     
     if isinstance(t, ScalarT):
       return  
