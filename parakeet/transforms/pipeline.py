@@ -3,6 +3,7 @@ from ..analysis import contains_adverbs, contains_calls, contains_loops
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
+from flattening import Flatten
 from fusion import Fusion
 from index_elimination import IndexElim
 from indexify_adverbs import IndexifyAdverbs
@@ -62,7 +63,8 @@ high_level_optimizations = Phase([
                                     licm,
                                     fusion_opt, 
                                     fusion_opt, 
-                                    copy_elim
+                                    copy_elim, 
+                                    Flatten, 
                                  ], 
                                  name = "HighLevelOpts", 
                                  copy = True, 
