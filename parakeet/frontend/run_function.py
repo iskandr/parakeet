@@ -119,7 +119,8 @@ def run_typed_fn(fn, args, backend = None):
     return generic_value_to_python(gv_return, fn.return_type)
   
   elif backend == 'c':
-    loopy_fn = pipeline.loopify.apply(fn)
+    flat_fn = pipeline.flatten.apply(fn)
+    loopy_fn = pipeline.loopify.apply(flat_fn)
     
     print 
     print loopy_fn

@@ -63,8 +63,7 @@ high_level_optimizations = Phase([
                                     licm,
                                     fusion_opt, 
                                     fusion_opt, 
-                                    copy_elim, 
-                                    Flatten, 
+                                    copy_elim,  
                                  ], 
                                  name = "HighLevelOpts", 
                                  copy = True, 
@@ -79,6 +78,8 @@ indexify = Phase([IndexifyAdverbs,
                  copy = True, 
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
+
+flatten = Phase([Flatten], name="Flatten", copy=True, depends_on=indexify)
 
 ####################
 #                  #
