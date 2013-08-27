@@ -1,11 +1,87 @@
 from .. import names 
 from ..builder import build_fn
-from ..ndtypes import ScalarT, NoneT, ArrayT, SliceT, TupleT, Int64, PtrT, ptr_type, ClosureT
+from ..ndtypes import ScalarT, NoneT, ArrayT, SliceT, TupleT, Int64, PtrT, ptr_type, ClosureT, FnT
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn) 
 
 from transform import Transform
 from parakeet.syntax.expr import TupleProj
+
+
+
+
+
+
+
+
+
+def flatten_seqs(*seqs):
+  result = []
+  for seq in seqs:
+    for elt in seq:
+      result.append(elt)
+  return tuple(result)
+
+
+def flatten_type(t):
+  if isinstance(t, (ScalarT, PtrT)):
+    return (t,)
+  elif isinstance(t, TupleT):
+    return flatten_seqs(flatten_type(elt_t) for elt_t in t.elt_types)
+  elif isinstance(t, (NoneT, FnT)):
+    return ()
+  elif isinstance(t, ClosureT):
+    return flatten_seqs(flatten_type(elt_t) for elt_t in t.arg_types)
+  elif isinstance(t, ArrayT):
+    return flatten_seqs(
+      [t.ptr_t, Int64], # base pointer and elt offset
+      flatten_type(t.shape_t),
+      flatten_type(t.strides_t)           
+    )
+  elif isinstance(t, SliceT):
+    return (t.start_type, t.stop_type, t.step_type)
+  else:
+    assert False, "Unsupported type %s" % (t,)
+    
+def field_pos(t, field, _cache = {}):
+  key = (t, field)
+  if key in _cache:
+    return _cache[key]
+  assert isinstance(t, StrucT)
+  offset = 0
+  for (field_name, field_t) in t._fields_:
+    n = len(flatten_type(field_t))
+    if field_name == field:
+      result = (offset, offset+n)
+      _cache[key] = offset
+      return result
+  assert False, "Field %s not found on type %s" % (field, t)
+
+def build_unwrap_inputs(input_types, arg_names):
+  pass 
+
+def build_wrap_result(f):
+  pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def flatten_type(t):
