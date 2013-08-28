@@ -336,6 +336,35 @@ class BuildFlatFn(object):
     pass 
      
    
+    
+  #######################
+  #
+  # Adverbs
+  #
+  #######################
+  def flatten_Map(self, expr):
+    pass 
+  
+  def flatten_Reduce(self, expr):
+    pass 
+  
+  def flatten_Scan(self, expr):
+    pass
+  
+  def flatten_IndexMap(self, expr):
+    pass
+  
+  def flatten_IndexReduce(self, expr):
+    pass 
+  
+  def flatten_IndexScan(self, expr):
+    pass 
+  
+  def flatten_OuterMap(self, expr):
+    pass 
+  
+  
+  
   def flatten_scalar_expr(self, expr):
     """
     Give me back a single expression instead of a list 
