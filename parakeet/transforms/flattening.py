@@ -50,9 +50,10 @@ def field_pos_range(t, field, _cache = {}):
     return _cache[key]
   assert isinstance(t, StrucT)
   offset = 0
-  for (field_name, field_t) in t._fields_:
+  
+  for i, (field_name, field_t) in enumerate(t._fields_):
     n = len(flatten_type(field_t))
-    if field_name == field:
+    if field_name == field or (isinstance(field, (int, long)) and i == field):
       result = (offset, offset+n)
       _cache[key] = offset
       return result
@@ -137,6 +138,30 @@ class BuildFlatFn(object):
     self.flat_fn.body = self.flatten_block(self.old_fn.body)
     return self.flat_fn
   
+  
+  #######################
+  #
+  #     Helpers
+  #
+  #######################
+  
+  def extract_fn(self, fn):
+    t = fn.type 
+    if isinstance(t, FnT):
+      return fn 
+    else:
+      assert isinstance(t, ClosureT)
+      return t.fn 
+    
+  def make_closure(self, fn, args):
+    if len(args) == 0:
+      return fn 
+    else:
+      arg_types = tuple(arg.type for arg in args)
+      t = make_closure_type(fn, arg_types)
+      return Closure(fn, args, type = t)
+    
+  
   def flatten_block(self, stmts):
     self.blocks.push()
     for stmt in stmts:
@@ -149,6 +174,14 @@ class BuildFlatFn(object):
         assert isinstance(new_stmt, Stmt), "Expected statement, got %s" % (new_stmt,)
         self.blocks.append(new_stmt)
     return self.blocks.pop()
+  
+  
+  
+  #######################
+  #
+  #     Statements
+  #
+  #######################
   
   def flatten_Assign(self, stmt):
     c = stmt.lhs.__class__
@@ -185,22 +218,6 @@ class BuildFlatFn(object):
   def flatten_ExprStmt(self, stmt):
     return ExprStmt(value = self.flatten_expr(stmt.value))
    
-  def extract_fn(self, fn):
-    t = fn.type 
-    if isinstance(t, FnT):
-      return fn 
-    else:
-      assert isinstance(t, ClosureT)
-      return t.fn 
-    
-  def make_closure(self, fn, args):
-    if len(args) == 0:
-      return fn 
-    else:
-      arg_types = tuple(arg.type for arg in args)
-      t = make_closure_type(fn, arg_types)
-      return Closure(fn, args, type = t)
-    
   def flatten_ParFor(self, stmt):
     old_fn = elf.extract_fn(stmt.fn)
     assert isinstance(old_fn, TypedFn)
@@ -217,14 +234,26 @@ class BuildFlatFn(object):
     method_name = "flatten_%s" % stmt.__class__.__name__
     return getattr(self, method_name)(stmt)
   
+  #######################
+  #
+  #     Expressions 
+  #
+  #######################
   
   def flatten_expr(self, expr):
     method_name = "flatten_%s" % expr.__class__.__name__
     return getattr(self, method_name)(stmt)
   
+  def flatten_expr_list(self, exprs):
+    return map_concat(self.flatten_expr, exprs)
+  
+  def flatten_Const(self, expr):
+    return [expr]
+  
+  def flatten_Cast(self, expr):
+    return [expr]
   
   def flatten_Var(self, expr):
-    
     if isinstance(expr.type, (ScalarT, PtrT)):
       return (expr,)
     elif isinstance(expr.type, NoneT):
@@ -234,6 +263,79 @@ class BuildFlatFn(object):
       assert name in self.var_expansions 
       return self.var_expansions[name]
     
+  def flatten_Tuple(self, expr):
+    return self.flatten_expr_list(expr.elts)
+  
+  def flatten_field(self, struct, field):
+    elts = self.flatten_expr(struct)
+    start, stop = field_pos_range(struct.type, field)
+    return elts[start:stop]
+   
+  def flatten_TupleProj(self, expr):
+    return self.flatten_field(expr.tuple, expr.index)
+  
+  def flatten_Closure(self, expr):
+    pass 
+  
+  def flatten_ClosureElt(self, expr):
+    return self.flatten_field(expr.closure, expr.index)
+  
+  def flatten_Attribute(self, expr):
+    return self.flatten_field(expr.value, expr.name)
+  
+  def flatten_Alloc(self, expr):
+    pass 
+  
+  def flatten_Array(self, expr):
+    assert False, "Array node should be an explicit allocation by now"
+    # or, if we flatten structured elts, maybe we should handle it here?
+  def flatten_Index(self, expr):
+    
+    #expr.value
+    #expr.index 
+    #expr.check_negative 
+    pass 
+  
+  def flatten_Slice(self, expr):
+    return self.flatten_expr_list([expr.start, expr.stop, expr.step])
+  
+  def flatten_Len(self, expr):
+    pass 
+  
+  def flatten_ConstArray(self, expr):
+    pass 
+  
+  def flatten_ConstArrayLike(self, expr):
+    pass 
+  
+  def flatten_Range(self, expr):
+    pass 
+  
+  def flatten_AllocArray(self, expr):
+    pass 
+  
+  def flatten_ArrayView(self, expr):
+    pass 
+  
+  def flatten_Ravel(self, expr):
+    pass 
+  
+  def flatten_Reshape(self, expr):
+    pass 
+  
+  def flatten_Shape(self, expr):
+    pass 
+  
+  def flatten_Strides(self, expr):
+    pass 
+  
+  def flatten_Transpose(self, expr):
+    pass 
+  
+  def flatten_Where(self, expr):
+    pass 
+     
+   
   def flatten_scalar_expr(self, expr):
     """
     Give me back a single expression instead of a list 
