@@ -6,6 +6,11 @@ from ..syntax import TypedFn
 from ..builder import Builder 
 
 
+def fresh_builder(fn):
+  blocks = NestedBlocks()
+  blocks.push(f.body)
+  return Builder(type_env = f.type_env, blocks = blocks)
+  
 def build_fn(input_types, 
              return_type = NoneType, 
              name = None, 
@@ -25,9 +30,6 @@ def build_fn(input_types,
               input_types = input_types, 
               return_type = return_type) 
               
-  
-  blocks = NestedBlocks()
-  blocks.push(f.body)
-  builder = Builder(type_env = f.type_env, blocks = blocks)
+  builder = fresh_builder(f)
   input_vars = builder.input_vars(f) 
   return f, builder, input_vars  

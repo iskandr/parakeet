@@ -1,39 +1,37 @@
 from .. import names 
 from ..builder import build_fn
-from ..ndtypes import ScalarT, NoneT, ArrayT, SliceT, TupleT, Int64, PtrT, ptr_type, ClosureT, FnT
+from ..ndtypes import (ScalarT, NoneT, ArrayT, SliceT, TupleT, make_tuple_type, 
+                       Int64, PtrT, ptr_type, ClosureT, FnT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn) 
+from ..syntax.helpers import none 
 
 from transform import Transform
-from parakeet.syntax.expr import TupleProj
 
-
-
-
-
-
-
-
-
-def flatten_seqs(*seqs):
+def concat(seqs):
   result = []
   for seq in seqs:
     for elt in seq:
       result.append(elt)
   return tuple(result)
 
+def concat_args(*seqs):
+  return concat(seqs)
+
+def map_concat(f, seq):
+  return concat(f(elt) for elt in seq)
 
 def flatten_type(t):
   if isinstance(t, (ScalarT, PtrT)):
     return (t,)
   elif isinstance(t, TupleT):
-    return flatten_seqs(flatten_type(elt_t) for elt_t in t.elt_types)
+    return concat(flatten_type(elt_t) for elt_t in t.elt_types)
   elif isinstance(t, (NoneT, FnT)):
     return ()
   elif isinstance(t, ClosureT):
-    return flatten_seqs(flatten_type(elt_t) for elt_t in t.arg_types)
+    return concat(flatten_type(elt_t) for elt_t in t.arg_types)
   elif isinstance(t, ArrayT):
-    return flatten_seqs(
+    return concat_args(
       [t.ptr_t, Int64], # base pointer and elt offset
       flatten_type(t.shape_t),
       flatten_type(t.strides_t)           
@@ -42,8 +40,11 @@ def flatten_type(t):
     return (t.start_type, t.stop_type, t.step_type)
   else:
     assert False, "Unsupported type %s" % (t,)
-    
-def field_pos(t, field, _cache = {}):
+
+def flatten_types(ts):
+  return flatten_seq(*[flatten_type(t) for t in ts])
+  
+def field_pos_range(t, field, _cache = {}):
   key = (t, field)
   if key in _cache:
     return _cache[key]
@@ -57,20 +58,235 @@ def field_pos(t, field, _cache = {}):
       return result
   assert False, "Field %s not found on type %s" % (field, t)
 
-def build_unwrap_inputs(input_types, arg_names):
-  pass 
+def single_type(ts):
+  """
+  Turn a sequence of types into a single type object
+  """
+  if len(ts) == 0:
+    return NoneT
+  elif len(ts) == 1:
+    return ts[0]
+  else:
+    return make_tuple_type(ts)
+  
+def single_value(values):
+  if len(values) == 0:
+    return none 
+  elif len(values) == 1:
+    return values[0]
+  else:
+    t = make_tuple_type(tuple(v.t for v in values))
+    return Tuple(values, type = t)
+  
+def mk_vars(names, types):
+  """
+  Combine a list of names and a list of types into a single list of vars
+  """
+  return [Var(name = name, type = t) for name, t in zip(names, types)]
 
-def build_wrap_result(f):
-  pass
+class FlattenBody(object):
+  """
+  Take an ordinary function and make an equivalent function 
+  where all variables have scalar or pointer types. This requires
+  expanding structures into multiple components (thus changing
+  both the input and output types of the fn)
+  """
+  
+  def __init__(self, old_fn):
+    self.old_fn = old_fn
+    # maps name of var in old_fn to a collection of variables
+    self.flat_types = {}
+      
+    self.blocks = NestedBlocks()
+    
+    # a var of struct type from the old fn 
+    # maps to multiple variables in the new
+    # function 
+    self.var_expansions = {}
+  
+  def transform_TypedFn(self, expr):
+    return build_flat_fn(expr)
 
+class BuildFlatFn(object):
+  def __init__(self, old_fn):
+    self.old_fn = old_fn 
+    base_name = names.original(old_fn.name)
+    flat_fn_name = names.fresh("flat_" + base_name)
 
-
-
-
-
-
-
-
+    self.type_env = {}
+    for (name, t) in old_fn.type_env.iteritems():
+      old_var = Var(name = name, type = type)
+      for new_var in self.flatten_lhs_var(old_var):
+        self.type_env[new_var.name] = new_var.type
+    old_input_vars = mk_vars(old_fn.arg_names, old_fn.input_types)
+    new_input_vars = self.flatten_lhs_var(old_input_vars)
+    new_input_names = tuple(var.name for var in new_input_vars)
+    new_input_types = tuple(var.type for var in new_input_var)
+    new_return_type =  single_type(flatten_type(old_fn.return_type))
+    
+    self.flat_fn = \
+      TypedFn(name = flat_fn_name, 
+        arg_names = new_input_names, 
+        body = [], 
+        type_env = self.type_env,
+        input_types = new_input_types, 
+        return_type = new_return_type) 
+    self.blocks = NestedBlocks()
+    
+  def run(self):
+    self.flat_fn.body = self.flatten_block(self.old_fn.body)
+    return self.flat_fn
+  
+  def flatten_block(self, stmts):
+    self.blocks.push()
+    for stmt in stmts:
+      result = self.flatten_stmt(stmt)
+      if result is None:
+        continue
+      if not isinstance(result, (list,tuple)):
+        result = [result]
+      for new_stmt in result:
+        assert isinstance(new_stmt, Stmt), "Expected statement, got %s" % (new_stmt,)
+        self.blocks.append(new_stmt)
+    return self.blocks.pop()
+  
+  def flatten_Assign(self, stmt):
+    c = stmt.lhs.__class__
+    
+    if c is Var:
+      result = []
+      vars = self.flatten_lhs_var(stmt.lhs)
+      values = self.flatten_expr(stmt.rhs)
+      assert len(vars) == len(values)
+      self.var_expansions(stmt.lhs.name, values)
+      
+      for var, value in zip(vars, values):
+        result.append(Assign(var, value))
+      return result 
+    elif c is Index:
+      assert False, "LHS indexing not implemented"  
+  
+  def flatten_ForLoop(self, stmt):
+    var = self.flatten_scalar_lhs_var(stmt.var)
+    start = self.flatten_scalar_expr(stmt.start)
+    stop = self.flatten_scalar_expr(stmt.stop)
+    step = self.flatten_scalar_expr(stmt.step)
+    body = self.flatten_block(stmt.body)
+    merge = self.flatten_merge(stmt.merge)
+    return ForLoop(var, start, stop, step, body, merge)
+  
+  def flatten_While(self, stmt):
+    cond = self.flatten_expr(stmt.cond)
+    body = self.flatten_block(stmt.body)
+    merge = self.flatten_merge(stmt.merge)
+    return While(cond, body, merge)
+     
+   
+  def flatten_ExprStmt(self, stmt):
+    return ExprStmt(value = self.flatten_expr(stmt.value))
+   
+  def extract_fn(self, fn):
+    t = fn.type 
+    if isinstance(t, FnT):
+      return fn 
+    else:
+      assert isinstance(t, ClosureT)
+      return t.fn 
+    
+  def make_closure(self, fn, args):
+    if len(args) == 0:
+      return fn 
+    else:
+      arg_types = tuple(arg.type for arg in args)
+      t = make_closure_type(fn, arg_types)
+      return Closure(fn, args, type = t)
+    
+  def flatten_ParFor(self, stmt):
+    old_fn = elf.extract_fn(stmt.fn)
+    assert isinstance(old_fn, TypedFn)
+    new_fn = self.transform_TypedFn(old_fn)
+    
+    closure_elts  = self.flatten_expr(stmt.fn) 
+    closure = self.make_closure(fn, closure_elts)
+    bounds = single_value(self.flatten_expr(stmt.bounds))
+  
+  def flatten_Comment(self, stmt):
+    return stmt 
+  
+  def flatten_stmt(self, stmt):
+    method_name = "flatten_%s" % stmt.__class__.__name__
+    return getattr(self, method_name)(stmt)
+  
+  
+  def flatten_expr(self, expr):
+    method_name = "flatten_%s" % expr.__class__.__name__
+    return getattr(self, method_name)(stmt)
+  
+  
+  def flatten_Var(self, expr):
+    
+    if isinstance(expr.type, (ScalarT, PtrT)):
+      return (expr,)
+    elif isinstance(expr.type, NoneT):
+      return ()
+    else:
+      name = expr.name
+      assert name in self.var_expansions 
+      return self.var_expansions[name]
+    
+  def flatten_scalar_expr(self, expr):
+    """
+    Give me back a single expression instead of a list 
+    """
+    flat_exprs = self.flatten_expr(expr)
+    assert len(flat_exprs) == 1
+    return flat_exprs[0]
+    
+  def flatten_lhs_var(self, old_var):
+    name = old_var.name 
+    t = old_var.type 
+    if isinstance(t, (ScalarT, PtrT)):
+      return [old_var]
+    elif isinstance(t, (FnT, NoneT)):
+      return []
+    elif isinstance(t, SliceT):
+      start = Var(name = "%s_start" % name, type = t.start_type)
+      stop = Var(name = "%s_stop" % name, type = t.stop_type)
+      step = Var(name = "%s_step" % name, type = t.step_type)
+      field_vars = [start, stop, step]
+    elif isinstance(t, ClosureT):
+      field_vars = [Var(name = "%s_closure_elt%d" % (name,i) , type = t) 
+                    for i,t in enumerate(t.arg_types)]
+    elif isinstance(t, TupleT):
+      field_vars = [Var(name = "%s_elt%d" % (name, i), type = t) 
+                    for i,t in enumerate(t.elt_types)]
+    elif isinstance(t, ArrayT):
+      data = Var(name = "%s_data" % name, type = t.ptr_t)
+      offset = Var(name = "%s_offset" % name, type = Int64)
+      shape = Var(name = "%s_shape" % name, type = t.shape_t)
+      strides = Var(name = "%s_strides" % name, type = t.strides_t)
+      field_vars = [data, offset, shape, strides]
+    else:
+      assert Fasle, "Unsupport type %s" % (t,)
+    return self.flatten_lhs_vars(field_vars)
+  
+  def flatten_lhs_vars(self, old_vars):
+    return map_concat(self.flatten_lhs_var, old_vars)
+  
+  def flatten_scalar_lhs_var(self, old_var):
+    vars = self.flatten_lhs_var(old_var)
+    assert len(vars) == 1
+    return vars[0]
+  
+def build_flat_fn(old_fn, _cache = {}):
+  key = (old_fn.name, old_fn.copied_by)
+  if key in _cache:
+    return _cache[key]
+  
+  flat_fn = BuildFlatFn(old_fn).run()
+  _cache[key] = flat_fn
+  return flat_fn
+  
 
 
 
@@ -279,65 +495,7 @@ class Flatten(Transform):
     self.paths[path] = result
     return result 
     
-  def flatten_var(self, v):
-    assert v.__class__ is Var
-    path = (v.name,)  
-    return self.flat_values(v, path)
-  
-  def get_path(self, expr):
-    c = expr.__class__  
-    if c is Const:
-      return ()
-    elif c is Var:
-      return (expr.name,)
-    elif c is Attribute:
-      return self.get_path(expr.value) + (expr.name,)
-    elif c is TupleProj:
-      return self.get_path(expr.tuple) + ("elt%d" % expr.index)
-    elif c is ClosureElt:
-      return self.get_path(expr.closure) + ("closure_elt%d" % expr.index)
-    else:
-      assert False, "Can't get path of expression %s" % expr 
-    
 
-  
-  def flatten(self, *exprs):
-    result = []
-    for expr in exprs:
-      c = expr.__class__ 
-      if c is Tuple:
-        result.extend(expr.elts)
-      else:
-        result.append(expr)
-    if len(result) == 1:
-      return result[0]
-    else:
-      return self.tuple(result)
-  
-  #def flatten_expr_tuple(self, exprs):
-  #  result = []
-  #  for expr in exprs:
-  #    result.extend(self.transform_expr(expr))
-  #  return tuple(result)
-  
-  def build_path(self, expr):
-    c = expr.__class__ 
-    if c is Var:
-      return (expr.name,)
-    elif c is Attribute:
-      base_path = self.build_path(expr.value)
-      return base_path + (expr.name,)
-    elif c is TupleProj:
-      base_path = self.build_path(expr.tuple)
-      return base_path + (expr.index,)
-    else:
-      assert False, "Can't build path for expression %s" % expr 
-
-  #def transform_Tuple(self, expr):
-  #  return self.flatten_expr_tuple(expr.elts)
-   
-  def transform_expr(self, expr):
-    return self.flatten(Transform.transform_expr(self, expr))
    
   def transform_TupleProj(self, expr):
     elts = self.transform_expr(expr.tuple)
