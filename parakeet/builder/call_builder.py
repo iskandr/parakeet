@@ -104,7 +104,7 @@ class CallBuilder(CoreBuilder):
           return expr.name == input_name
     return False 
     
-  def invoke(self, fn, args, loopify = False, lower = False):
+  def invoke(self, fn, args, loopify = False, lower = False, name = None):
     #import type_inference
     if fn.__class__ is TypedFn:
       closure_args = []
@@ -140,10 +140,12 @@ class CallBuilder(CoreBuilder):
       self.insert_stmt(ExprStmt(call))
       return none
     else:
-      return self.assign_name(call, "call_result")
+      if name is None:
+        name = "call_result"
+      return self.assign_name(call, name)
 
-  def call(self, fn, args):
-    return self.invoke(fn, args) 
+  def call(self, fn, args, name = None):
+    return self.invoke(fn, args, name = name) 
 
   def call_shape(self, maybe_clos, args):
     from ..shape_inference import call_shape_expr, shape_codegen

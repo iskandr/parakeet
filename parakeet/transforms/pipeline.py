@@ -79,7 +79,7 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([Flatten], name="Flatten", copy=True, depends_on=indexify)
+flatten = Phase([Flatten, inline_opt], name="Flatten", copy=False, depends_on=indexify)
 
 ####################
 #                  #
@@ -118,7 +118,7 @@ loopify = Phase([
                    NegativeIndexElim, 
                    index_elim
                 ],
-                depends_on = indexify,
+                depends_on = flatten,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 name = "Loopify",

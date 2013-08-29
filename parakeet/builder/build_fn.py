@@ -8,8 +8,8 @@ from ..builder import Builder
 
 def fresh_builder(fn):
   blocks = NestedBlocks()
-  blocks.push(f.body)
-  return Builder(type_env = f.type_env, blocks = blocks)
+  blocks.push(fn.body)
+  return Builder(type_env = fn.type_env, blocks = blocks)
   
 def build_fn(input_types, 
              return_type = NoneType, 
