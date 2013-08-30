@@ -1,11 +1,11 @@
 from .. import names 
 from treelike import NestedBlocks
-from ..builder import build_fn
-from ..ndtypes import (ScalarT, NoneT, ArrayT, SliceT, TupleT, make_tuple_type, 
+from ..builder import build_fn, Builder
+from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tuple_type, 
                        Int64, PtrT, ptr_type, ClosureT, FnT, StructT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
-                      Struct, Index, TypedFn, Return, Stmt, Assign) 
-from ..syntax.helpers import none 
+                      Struct, Index, TypedFn, Return, Stmt, Assign, Alloc) 
+from ..syntax.helpers import none, const_int 
 
 from transform import Transform
 
@@ -20,7 +20,6 @@ def concat_args(*seqs):
   return concat(seqs)
 
 def concat_map(f, seq):
-  print "concat_map", f, seq
   return concat(f(elt) for elt in seq)
 
 def flatten_type(t):
@@ -35,9 +34,10 @@ def flatten_type(t):
   elif isinstance(t, ArrayT):
     return concat_args(
       flatten_type(t.ptr_t), 
-      [Int64], # base pointer and elt offset
       flatten_type(t.shape_t),
-      flatten_type(t.strides_t)           
+      flatten_type(t.strides_t),          
+      (Int64, Int64), # offset and size
+      
     )
   elif isinstance(t, SliceT):
     return (t.start_type, t.stop_type, t.step_type)
@@ -53,21 +53,26 @@ def field_pos_range(t, field, _cache = {}):
     return _cache[key]
   assert isinstance(t, StructT)
   offset = 0
-  
   for i, (field_name, field_t) in enumerate(t._fields_):
     n = len(flatten_type(field_t))
     if field_name == field or (isinstance(field, (int, long)) and i == field):
       result = (offset, offset+n)
-      _cache[key] = offset
+      
+      _cache[key] = result
       return result
+    offset += n 
   assert False, "Field %s not found on type %s" % (field, t)
+
+def get_field_elts(t, values, field):
+  start, stop = field_pos_range(t, field)
+  return values[start:stop]
 
 def single_type(ts):
   """
   Turn a sequence of types into a single type object
   """
   if len(ts) == 0:
-    return NoneT
+    return NoneType
   elif len(ts) == 1:
     return ts[0]
   else:
@@ -89,7 +94,7 @@ def mk_vars(names, types):
   return [Var(name = name, type = t) for name, t in zip(names, types)]
 
 
-class BuildFlatFn(object):
+class BuildFlatFn(Builder):
   def __init__(self, old_fn):
     self.old_fn = old_fn 
     base_name = names.original(old_fn.name)
@@ -182,7 +187,7 @@ class BuildFlatFn(object):
       result = []
       vars = self.flatten_lhs_var(stmt.lhs)
       values = self.flatten_expr(stmt.rhs)
-      assert len(vars) == len(values)
+      assert len(vars) == len(values), "Mismatch between LHS %s and RHS %s" % (vars, values)
       self.var_expansions[stmt.lhs.name] = values
       
       for var, value in zip(vars, values):
@@ -211,7 +216,7 @@ class BuildFlatFn(object):
     return ExprStmt(value = self.flatten_expr(stmt.value))
    
   def flatten_ParFor(self, stmt):
-    old_fn = elf.extract_fn(stmt.fn)
+    old_fn = self.extract_fn(stmt.fn)
     assert isinstance(old_fn, TypedFn)
     new_fn = self.transform_TypedFn(old_fn)
     
@@ -302,8 +307,28 @@ class BuildFlatFn(object):
     # or, if we flatten structured elts, maybe we should handle it here?
   def flatten_Index(self, expr):
     
-    #expr.value
-    #expr.index 
+    t = expr.value.type 
+    if isinstance(t, PtrT):
+      return [expr]   
+    assert isinstance(t, ArrayT), "Expected Index to take array, got %s" % (expr.type,)
+    array_fields = self.flatten_expr(expr.value)
+    data_fields = get_field_elts(t, array_fields, 'data')
+    print "data_fields", data_fields
+    
+    
+    shape = get_field_elts(t, array_fields, 'shape')
+    print "shape", shape 
+    
+    strides = get_field_elts(t, array_fields, 'strides')
+    print "strides", strides 
+    
+    
+    offset = get_field_elts(t, array_fields, 'offset')[0]
+    print "offset", offset
+    
+    assert isinstance(expr.index.type, ScalarT)
+    return [self.index(data_fields[0], self.mul(expr.index, strides[0]))]
+     
     #expr.check_negative 
     assert False 
   
@@ -327,8 +352,20 @@ class BuildFlatFn(object):
   def flatten_Range(self, expr):
     assert False, "Not implemented" 
   
+  def strides_from_shape_elts(self, shape_elts):
+    strides = [const_int(1)]
+    for dim in reversed(shape_elts[1:]):
+      strides = [self.mul(strides[0], dim)] + strides
+    return strides
+  
   def flatten_AllocArray(self, expr):
-    assert False, "Not implemented" 
+    nelts = const_int(1)
+    shape_elts = self.flatten_expr(expr.shape)
+    for dim in shape_elts:
+      nelts = self.mul(nelts, dim)
+    ptr = Alloc(elt_type = expr.elt_type, count = nelts, type = ptr_type(expr.elt_type))
+    stride_elts = self.strides_from_shape_elts(shape_elts)
+    return (ptr,) + tuple(shape_elts) + tuple(stride_elts) + (self.int(0), nelts)
   
   def flatten_ArrayView(self, expr):
     assert False, "Not implemented" 
@@ -400,13 +437,14 @@ class BuildFlatFn(object):
                     for i,t in enumerate(t.elt_types)]
     elif isinstance(t, ArrayT):
       data = Var(name = "%s_data" % name, type = t.ptr_t)
-      offset = Var(name = "%s_offset" % name, type = Int64)
       shape = Var(name = "%s_shape" % name, type = t.shape_t)
       strides = Var(name = "%s_strides" % name, type = t.strides_t)
-      field_vars = [data, offset, shape, strides]
+      offset = Var(name = "%s_offset" % name, type = Int64)
+      nelts = Var(name = "%s_nelts" % name, type = Int64)
+      field_vars = [data, shape, strides, offset, nelts]
+    
     else:
       assert False, "Unsupport type %s" % (t,)
-    print field_vars, self.flatten_lhs_vars(field_vars)
     return self.flatten_lhs_vars(field_vars)
   
   def flatten_lhs_vars(self, old_vars):
@@ -419,10 +457,8 @@ class BuildFlatFn(object):
   
 def build_flat_fn(old_fn, _cache = {}):
   key = (old_fn.name, old_fn.copied_by)
-  print "BUILD FLAT FN", key 
   if key in _cache:
     return _cache[key]
-  print "MISS"
   flat_fn = BuildFlatFn(old_fn).run()
   _cache[key] = flat_fn
   _cache[(flat_fn.name, flat_fn.copied_by)] = flat_fn
@@ -441,10 +477,11 @@ class Flatten(Transform):
     elif isinstance(t, ArrayT):
       # for structured arrays, should this be a tuple? 
       data = self.attr(var, 'data', name = var.name + "_data")
-      offset = self.attr(var, 'offset', name = var.name + "_offset")
       shape = self.attr(var, 'shape', name = var.name + "_shape")
       strides = self.attr(var, 'strides', name = var.name + "_strides")
-      return self.unbox_vars([data, offset, shape, strides])
+      offset = self.attr(var, 'offset', name = var.name + "_offset")
+      size = self.attr(var, 'size', name = var.name + "_size")
+      return self.unbox_vars([data, shape, strides, offset, size])
     elif isinstance(t, SliceT):
       start = self.attr(var, 'start')
       stop = self.attr(var, 'stop')
