@@ -2,7 +2,7 @@ from .. import names
 from treelike import NestedBlocks
 from ..builder import build_fn, Builder
 from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tuple_type, 
-                       Int64, PtrT, ptr_type, ClosureT, FnT, StructT)
+                       Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc) 
 from ..syntax.helpers import none, const_int 
@@ -84,7 +84,7 @@ def single_value(values):
   elif len(values) == 1:
     return values[0]
   else:
-    t = make_tuple_type(tuple(v.t for v in values))
+    t = make_tuple_type(tuple(v.type for v in values))
     return Tuple(values, type = t)
   
 def mk_vars(names, types):
@@ -180,22 +180,32 @@ class BuildFlatFn(Builder):
   #
   #######################
   
+  
   def flatten_Assign(self, stmt):
     c = stmt.lhs.__class__
-    
+    values = self.flatten_expr(stmt.rhs)
     if c is Var:
       result = []
       vars = self.flatten_lhs_var(stmt.lhs)
-      values = self.flatten_expr(stmt.rhs)
       assert len(vars) == len(values), "Mismatch between LHS %s and RHS %s" % (vars, values)
-      self.var_expansions[stmt.lhs.name] = values
-      
+      self.var_expansions[stmt.lhs.name] = values 
       for var, value in zip(vars, values):
         result.append(Assign(var, value))
       return result 
     elif c is Index:
-      assert False, "LHS indexing not implemented"  
-  
+      
+      idx = self.flatten_scalar_expr(stmt.lhs.index)
+      values = self.flatten_expr(stmt.lhs.value)
+      array_t = stmt.lhs.value.type 
+      data = get_field_elts(array_t, values, 'data')[0]
+      shape = get_field_elts(array_t, values, 'shape')
+      strides = get_field_elts(array_t, values, 'strides')
+      offset = get_field_elts(array_t, values, 'offset')[0]
+      offset = self.add(offset, self.mul(idx, strides[0]))
+      stmt.lhs = Index(data, offset)
+      stmt.rhs = values[0]
+      return [stmt]
+     
   def flatten_ForLoop(self, stmt):
     var = self.flatten_scalar_lhs_var(stmt.var)
     start = self.flatten_scalar_expr(stmt.start)
@@ -221,7 +231,8 @@ class BuildFlatFn(Builder):
     new_fn = self.transform_TypedFn(old_fn)
     
     closure_elts  = self.flatten_expr(stmt.fn) 
-    closure = self.make_closure(fn, closure_elts)
+    print type(closure_elts)
+    closure = self.make_closure(stmt.fn, closure_elts)
     bounds = single_value(self.flatten_expr(stmt.bounds))
   
   def flatten_Return(self, stmt):
@@ -291,7 +302,7 @@ class BuildFlatFn(Builder):
     return self.flatten_field(expr.tuple, expr.index)
   
   def flatten_Closure(self, expr):
-    assert False, "Not implemented" 
+    return self.flatten_expr_list(expr.args)
   
   def flatten_ClosureElt(self, expr):
     return self.flatten_field(expr.closure, expr.index)
@@ -313,24 +324,13 @@ class BuildFlatFn(Builder):
     assert isinstance(t, ArrayT), "Expected Index to take array, got %s" % (expr.type,)
     array_fields = self.flatten_expr(expr.value)
     data_fields = get_field_elts(t, array_fields, 'data')
-    print "data_fields", data_fields
-    
-    
     shape = get_field_elts(t, array_fields, 'shape')
-    print "shape", shape 
-    
     strides = get_field_elts(t, array_fields, 'strides')
-    print "strides", strides 
-    
-    
     offset = get_field_elts(t, array_fields, 'offset')[0]
-    print "offset", offset
-    
     assert isinstance(expr.index.type, ScalarT)
-    return [self.index(data_fields[0], self.mul(expr.index, strides[0]))]
+    return [self.index(data_fields[0], 
+                       self.add(offset, self.mul(expr.index, strides[0])))]
      
-    #expr.check_negative 
-    assert False 
   
   def flatten_PrimCall(self, expr):
     args = self.flatten_scalar_expr_list(expr.args)
@@ -487,12 +487,12 @@ class Flatten(Transform):
       stop = self.attr(var, 'stop')
       step = self.attr(var, 'step')
       return self.unbox_vars([start, stop, step])
-    elif isinstance(var, ClosureT):
+    elif isinstance(t, ClosureT):
       closure_elts = [self.closure_elt(var, i, name = var.name + "_closure_elt%d" % i)
                       for i in xrange(len(t.arg_types))]
       return self.unbox_vars(closure_elts)
-    elif isinstance(var, TupleT):
-      tuple_elts = [self.tuple_proj(var, i, name = var.name + "_elt%d" % i)
+    elif isinstance(t, TupleT):
+      tuple_elts = [self.assign_name(self.tuple_proj(var, i), name = var.name + "_elt%d" % i)
                       for i in xrange(len(t.elt_types))]
       return self.unbox_vars(tuple_elts)
     else:
@@ -520,13 +520,13 @@ class Flatten(Transform):
       start, stop, step = elts
       return self.slice_value(start, stop, step)
     elif isinstance(t, ArrayT):
-      assert False, "Not implemented"
+      assert False, "Not implemented: ArrayT"
     elif isinstance(t, TupleT):
-      assert False, "Not implemented" 
+      assert False, "Not implemented: TupleT" 
     elif isinstance(t, ClosureT):
-      assert False, "Not implemented" 
+      assert False, "Not implemented: ClosureT" 
     elif isinstance(t, FnT):
-      assert False, "Not implemented" 
+      assert False, "Not implemented: FnT" 
   
   def transform_block(self, stmts):
     return stmts
