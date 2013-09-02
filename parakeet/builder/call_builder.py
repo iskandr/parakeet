@@ -117,13 +117,13 @@ class CallBuilder(CoreBuilder):
       #  fn = type_inference.specialize(fn.type, arg_types)
       closure_args = self.closure_elts(fn)
       fn = self.get_fn(fn)
+      assert fn.__class__ is TypedFn, "Expected typed fn got %s" % (fn.__class__.__name__)
     if loopify or lower : 
       from  ..transforms import pipeline
       if loopify: 
         fn = pipeline.loopify(fn)
       if lower: 
         fn = pipeline.lowering(fn)
-        
     combined_args = tuple(closure_args) + tuple(args)
     if isinstance(fn, UntypedFn):
       combined_arg_types = get_types(combined_args)
@@ -135,6 +135,7 @@ class CallBuilder(CoreBuilder):
       assert len(combined_args) == 1
       return combined_args[0]
     
+  
     call = Call(fn, combined_args, type = fn.return_type)
     if fn.return_type == NoneType:
       self.insert_stmt(ExprStmt(call))

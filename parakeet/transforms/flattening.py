@@ -4,7 +4,8 @@ from ..builder import build_fn, Builder
 from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tuple_type, 
                        Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
-                      Struct, Index, TypedFn, Return, Stmt, Assign, Alloc) 
+                      Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
+                      ParFor, PrimCall) 
 from ..syntax.helpers import none, const_int 
 
 from transform import Transform
@@ -51,7 +52,7 @@ def field_pos_range(t, field, _cache = {}):
   key = (t, field)
   if key in _cache:
     return _cache[key]
-  assert isinstance(t, StructT)
+  assert isinstance(t, StructT), "Expected struct got %s.%s" % (t, field)
   offset = 0
   for i, (field_name, field_t) in enumerate(t._fields_):
     n = len(flatten_type(field_t))
@@ -129,6 +130,7 @@ class BuildFlatFn(Builder):
         type_env = self.type_env,
         input_types = new_input_types, 
         return_type = new_return_type) 
+      
     self.blocks = NestedBlocks()
     
   def run(self):
@@ -141,23 +143,6 @@ class BuildFlatFn(Builder):
   #     Helpers
   #
   #######################
-  
-  def extract_fn(self, fn):
-    t = fn.type 
-    if isinstance(t, FnT):
-      return fn 
-    else:
-      assert isinstance(t, ClosureT)
-      return t.fn 
-    
-  def make_closure(self, fn, args):
-    if len(args) == 0:
-      return fn 
-    else:
-      arg_types = tuple(arg.type for arg in args)
-      t = make_closure_type(fn, arg_types)
-      return Closure(fn, args, type = t)
-    
   
   def flatten_block(self, stmts):
     self.blocks.push()
@@ -197,6 +182,8 @@ class BuildFlatFn(Builder):
       idx = self.flatten_scalar_expr(stmt.lhs.index)
       values = self.flatten_expr(stmt.lhs.value)
       array_t = stmt.lhs.value.type 
+      if isinstance(array_t, PtrT):
+        return stmt  
       data = get_field_elts(array_t, values, 'data')[0]
       shape = get_field_elts(array_t, values, 'shape')
       strides = get_field_elts(array_t, values, 'strides')
@@ -226,15 +213,15 @@ class BuildFlatFn(Builder):
     return ExprStmt(value = self.flatten_expr(stmt.value))
    
   def flatten_ParFor(self, stmt):
-    old_fn = self.extract_fn(stmt.fn)
+    old_fn = self.get_fn(stmt.fn)
     assert isinstance(old_fn, TypedFn)
-    new_fn = self.transform_TypedFn(old_fn)
+    new_fn = self.flatten_TypedFn(old_fn)
     
-    closure_elts  = self.flatten_expr(stmt.fn) 
-    print type(closure_elts)
-    closure = self.make_closure(stmt.fn, closure_elts)
+    closure_elts  = self.flatten_expr_list(self.closure_elts(stmt.fn)) 
+    closure = self.closure(new_fn, closure_elts)
     bounds = single_value(self.flatten_expr(stmt.bounds))
-  
+    return ParFor(fn = closure, bounds = bounds)
+    
   def flatten_Return(self, stmt):
     return Return(single_value(self.flatten_expr(stmt.value)))
   
@@ -271,14 +258,16 @@ class BuildFlatFn(Builder):
     return [self.flatten_scalar_expr(e) for e in  exprs]
   
   def flatten_Const(self, expr):
+    if isinstance(expr.type, NoneT):
+      return []
     return [expr]
   
   def flatten_Cast(self, expr):
     return [expr]
   
-  def transform_TypedFn(self, expr):
-    return build_flat_fn(expr)
-
+  def flatten_TypedFn(self, expr):
+    result = build_flat_fn(expr)
+    return result
     
   def flatten_Var(self, expr):
     if isinstance(expr.type, (ScalarT, PtrT)):
@@ -302,7 +291,9 @@ class BuildFlatFn(Builder):
     return self.flatten_field(expr.tuple, expr.index)
   
   def flatten_Closure(self, expr):
-    return self.flatten_expr_list(expr.args)
+    fn = self.flatten_TypedFn(expr.fn)
+    args = self.flatten_expr_list(expr.args)
+    return [self.closure(fn, args)]
   
   def flatten_ClosureElt(self, expr):
     return self.flatten_field(expr.closure, expr.index)
@@ -334,8 +325,7 @@ class BuildFlatFn(Builder):
   
   def flatten_PrimCall(self, expr):
     args = self.flatten_scalar_expr_list(expr.args)
-    expr.args = args
-    return [expr] 
+    return [PrimCall(prim = expr.prim, args = args, type = expr.type)]
   
   def flatten_Slice(self, expr):
     return self.flatten_expr_list([expr.start, expr.stop, expr.step])
@@ -504,13 +494,15 @@ class Flatten(Transform):
   def to_seq(self, expr):
     if isinstance(expr.type, TupleT):
       return self.tuple_elts(expr)
+    elif isinstance(expr.type, (FnT, NoneT)):
+      return []
     else:
       return [expr]
       
   
   def box(self, t, elts):
     if isinstance(t, NoneT):
-      assert len(elts) == 0
+      assert len(elts) == 0, "Expected 0 values for None, got %s" % (elts,)
       return none 
     elif isinstance(t, ScalarT):
       assert len(elts) == 1
@@ -520,7 +512,12 @@ class Flatten(Transform):
       start, stop, step = elts
       return self.slice_value(start, stop, step)
     elif isinstance(t, ArrayT):
-      assert False, "Not implemented: ArrayT"
+      data = get_field_elts(t, elts, 'data')[0]
+      shape = self.tuple(get_field_elts(t, elts, 'shape'))
+      strides = self.tuple(get_field_elts(t, elts, 'strides'))
+      offset = get_field_elts(t, elts, 'offset')[0]
+      nelts = get_field_elts(t, elts, 'size')[0]
+      return self.array_view(data, shape, strides, offset, nelts)
     elif isinstance(t, TupleT):
       assert False, "Not implemented: TupleT" 
     elif isinstance(t, ClosureT):

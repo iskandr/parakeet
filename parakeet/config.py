@@ -50,19 +50,19 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #'Flatten'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms = ['Flatten'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #'Flatten']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = [ 'Flatten']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = True
+print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = True 
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

@@ -1,7 +1,7 @@
 
 from ..ndtypes import (make_slice_type, make_array_type, ptr_type, 
-                       ArrayT, TupleT, ScalarT, Type)
-from ..syntax import (Alloc, AllocArray, Const, Index, Slice, Struct, TupleProj)
+                       ArrayT, TupleT, ScalarT, Type, PtrT)
+from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, TupleProj)
 from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none)
 from core_builder import CoreBuilder 
 
@@ -231,5 +231,21 @@ class ArrayBuilder(CoreBuilder):
     self.assign(self.index(arr, idx, temp=False), v)
 
 
+  def array_view(self, data, shape, strides, offset, nelts):
+    if isinstance(shape.type, ScalarT):
+      shape = self.tuple([shape])
+    if isinstance(strides.type, ScalarT):
+      strides = self.tuple(strides)
+    assert isinstance(shape.type, TupleT)
+    assert isinstance(strides.type, TupleT)
+    
+    ndims = len(strides.type.elt_types)
+    assert ndims == len(shape.type.elt_types)
+    assert isinstance(data.type, PtrT)
+    elt_t = data.type.elt_type
+    array_t = ArrayT(elt_t, ndims)
+    return ArrayView(data = data, shape = shape, strides = strides, 
+                     offset = offset, size = nelts, 
+                     type = array_t)
 
   

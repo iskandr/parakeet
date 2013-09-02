@@ -85,6 +85,13 @@ def eval_fn(fn, actuals):
       else:
         return getattr(value, expr.name)
 
+    def expr_Alloc():
+      count = eval_expr(expr.count)
+      arr = np.empty(shape = (count,), dtype = expr.elt_type.dtype)
+      print "Allocated", arr.shape
+      print "Data", arr.data
+      return arr.data
+      
     def expr_AllocArray():
       shape = eval_expr(expr.shape)
       assert isinstance(shape, tuple), "Expected tuple, got %s" % (shape,)
