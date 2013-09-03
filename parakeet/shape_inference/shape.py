@@ -330,7 +330,7 @@ class Tuple(AbstractValue):
         return Tuple(combine_pairs(self.elts, other.elts))
     raise ValueMismatch(self, other)
 
-def Ptr(AbstractValue):
+class Ptr(AbstractValue):
   def __init__(self, elt_shape):
     self.elt_shape = elt_shape
     

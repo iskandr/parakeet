@@ -47,6 +47,7 @@ class Converter(object):
     elif isinstance(t, (TypeValueT, NoneT)):
       return Tuple(())
     elif isinstance(t, PtrT):
+      print t,  Ptr(self.from_type(t.elt_type))
       return Ptr(self.from_type(t.elt_type))
     else:
       assert False, "Unsupported type: %s" % t

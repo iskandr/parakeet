@@ -12,7 +12,9 @@ class NegativeIndexElim(RangeTransform):
   def transform_Index(self, expr):
     arr = expr.value 
     arr_t = arr.type 
-    assert arr_t.__class__ is ArrayT, "Expected array, got %s : %s" % (arr, arr.type)
+    if arr_t.__class__ is not ArrayT:
+      return expr 
+    
     range_value = self.get(expr.index)
     
     def has_negative(range_value, inclusive = False):

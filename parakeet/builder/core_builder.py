@@ -6,7 +6,7 @@ from ..ndtypes import (make_array_type, make_tuple_type,
                        ArrayT, FnT, ClosureT) 
 from ..syntax import (ArrayView, Assign, Attribute, Cast, Const, Closure,  Comment, Expr, 
                       Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var, TypedFn, 
-                      AllocArray, ArrayExpr, Adverb)
+                      AllocArray, ArrayExpr, Adverb, Select)
 from ..syntax.helpers import (wrap_if_constant, 
                               const_bool, const_int, const_float, get_types,  
                               one_i64, zero_i64, 
@@ -307,3 +307,7 @@ class CoreBuilder(object):
       for e in elts[1:]:
         result = self.mul(result, e, name = name)
       return result
+    
+  def select(self, cond, true_value, false_value):
+    assert true_value.type == false_value.type
+    return Select(cond, true_value, false_value, type = true_value.type)

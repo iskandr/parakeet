@@ -79,7 +79,7 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([Flatten, inline_opt], name="Flatten", copy=True, depends_on=indexify)
+flatten = Phase([NegativeIndexElim, Flatten, inline_opt], name="Flatten", copy=True, depends_on=indexify)
 
 ####################
 #                  #
@@ -103,7 +103,7 @@ shape_elim = Phase(ShapeElimination,
 # loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 
 
-index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
+index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_elimination')
 
 
 lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
@@ -115,7 +115,7 @@ loopify = Phase([
                    licm,
                    shape_elim,
                    symbolic_range_propagation,
-                   NegativeIndexElim, 
+                    
                    index_elim
                 ],
                 depends_on = flatten,

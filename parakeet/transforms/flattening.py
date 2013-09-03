@@ -208,7 +208,10 @@ class BuildFlatFn(Builder):
     merge = self.flatten_merge(stmt.merge)
     return While(cond, body, merge)
      
-   
+  
+  def flatten_If(self, stmt):
+    assert False, "If not implemented"
+    
   def flatten_ExprStmt(self, stmt):
     return ExprStmt(value = self.flatten_expr(stmt.value))
    
@@ -301,6 +304,13 @@ class BuildFlatFn(Builder):
   def flatten_Attribute(self, expr):
     return self.flatten_field(expr.value, expr.name)
   
+  def flatten_Select(self, expr):
+    cond = self.flatten_scalar_expr(expr.cond)
+    true_values = self.flatten_expr(expr.true_value)
+    false_values = self.flatten_expr(expr.false_value)
+    assert len(true_values) == len(false_values)
+    return [self.select(cond,t,f) for t,f in zip(true_values, false_values)]
+    
   def flatten_Alloc(self, expr):
     assert False, "Not implemented" 
   
@@ -530,8 +540,6 @@ class Flatten(Transform):
    
   
   def pre_apply(self, old_fn, _cache = {}):
-   
-     
     if old_fn.name in _cache:
       return _cache[old_fn.name]
     
