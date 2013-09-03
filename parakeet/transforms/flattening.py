@@ -5,7 +5,7 @@ from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tu
                        Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
-                      ParFor, PrimCall) 
+                      ParFor, PrimCall, If) 
 from ..syntax.helpers import none, const_int 
 
 from transform import Transform
@@ -192,7 +192,26 @@ class BuildFlatFn(Builder):
       stmt.lhs = Index(data, offset)
       stmt.rhs = values[0]
       return [stmt]
-     
+  
+  def flatten_merge(self, phi_nodes):
+    result = {}
+    for (k, (left, right)) in phi_nodes.iteritems():
+      t = left.type
+      assert right.type == t 
+      if isinstance(expr.type, (ScalarT, PtrT)):
+        result[k] = (self.flatten_scalar_expr(left), self.flatten_scalar_expr(right))
+      elif isinstance(expr.type, (FnT, NoneT)):
+        continue 
+      else:
+        vars = self.var_expansions[k]
+        flat_left = self.flatten_expr(left)
+        flat_right = self.flatten_expr(right)
+        assert len(vars) == len(flat_left)
+        assert len(vars) == len(flat_right)
+        for i, var in enumerate(vars):
+          result[var.name] = (flat_left[i], flat_right[i])
+    return result 
+   
   def flatten_ForLoop(self, stmt):
     var = self.flatten_scalar_lhs_var(stmt.var)
     start = self.flatten_scalar_expr(stmt.start)
@@ -210,8 +229,13 @@ class BuildFlatFn(Builder):
      
   
   def flatten_If(self, stmt):
-    assert False, "If not implemented"
-    
+    cond = self.flatten_scalar_expr(stmt.cond)
+    true = self.flatten_block(stmt.true)
+    false = self.flatten_block(stmt.false)
+    merge = self.flatten_merge(stmt.merge)
+    assert merge is not None
+    return If(cond, true, false, merge = merge)
+  
   def flatten_ExprStmt(self, stmt):
     return ExprStmt(value = self.flatten_expr(stmt.value))
    
@@ -275,7 +299,7 @@ class BuildFlatFn(Builder):
   def flatten_Var(self, expr):
     if isinstance(expr.type, (ScalarT, PtrT)):
       return (expr,)
-    elif isinstance(expr.type, NoneT):
+    elif isinstance(expr.type, (FnT, NoneT)):
       return ()
     else:
       name = expr.name
