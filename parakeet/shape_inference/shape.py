@@ -330,6 +330,22 @@ class Tuple(AbstractValue):
         return Tuple(combine_pairs(self.elts, other.elts))
     raise ValueMismatch(self, other)
 
+def Ptr(AbstractValue):
+  def __init__(self, elt_shape):
+    self.elt_shape = elt_shape
+    
+  def __str__(self):
+    return "Ptr(%s)" % self.elt_shape
+  
+  def __eq__(self, other):
+    return other.__class__ is Ptr and self.elt_shape == other.elt_shape
+  
+  def combine(self, other):
+    if self == other:
+      return self
+    raise ValueMismatch(self, other)
+
+
 class Closure(AbstractValue):
   def __init__(self, fn, args):
     self.fn = fn

@@ -1,5 +1,6 @@
-from ..ndtypes import ArrayT, SliceT, ClosureT, NoneT, ScalarT, StructT, TypeValueT, TupleT
-from shape import Shape, Tuple, Closure, Var, Slice, Struct
+from ..ndtypes import (ArrayT, SliceT, ClosureT, NoneT, ScalarT, StructT, 
+                       TypeValueT, TupleT, PtrT)
+from shape import Shape, Tuple, Closure, Var, Slice, Struct, Ptr
 
 
 
@@ -45,6 +46,8 @@ class Converter(object):
       return Struct(field_names, field_vals)
     elif isinstance(t, (TypeValueT, NoneT)):
       return Tuple(())
+    elif isinstance(t, PtrT):
+      return Ptr(self.from_type(t.elt_type))
     else:
       assert False, "Unsupported type: %s" % t
     

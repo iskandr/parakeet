@@ -9,7 +9,7 @@ import shape_from_type
 from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown, 
                    ConstSlice, Struct, AnyScalar, Add, Mult, Div, Sub, 
                    any_scalar, unknown_value, const, any_value, combine_list, 
-                   increase_rank, make_shape, is_zero, is_one, 
+                   increase_rank, make_shape, is_zero, is_one, Ptr, 
                    ) 
 from parakeet.syntax.adverbs import IndexReduce
 from parakeet.syntax.adverb_helpers import max_rank_arg
@@ -324,15 +324,13 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_expr(self, expr):
     abstract_shape = SyntaxVisitor.visit_expr(self, expr)
+    print expr, expr.type, abstract_shape
     assert abstract_shape is not None, \
         "Unsupported expression in shape inference: %s" % expr.node_type()
     return abstract_shape
 
   def visit_Alloc(self, expr):
-    # alloc doesn't return an array but rather
-    # a pointer whose shape properties
-    # we don't yet care about here
-    return unknown_value
+    return Ptr(shape_from_type.from_type(expr.elt_type))
 
   def visit_Struct(self, expr):
     if isinstance(expr.type, ArrayT):
