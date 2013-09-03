@@ -553,7 +553,11 @@ class Flatten(Transform):
       nelts = get_field_elts(t, elts, 'size')[0]
       return self.array_view(data, shape, strides, offset, nelts)
     elif isinstance(t, TupleT):
-      assert False, "Not implemented: TupleT" 
+      boxed_elts = []
+      for i, elt_t in enumerate(t.elt_types):
+        elt = self.box(elt_t, get_field_elts(t, elts, i))
+        boxed_elts.append(elt)
+      return self.tuple(boxed_elts)
     elif isinstance(t, ClosureT):
       assert False, "Not implemented: ClosureT" 
     elif isinstance(t, FnT):
