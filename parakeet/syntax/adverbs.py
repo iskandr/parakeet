@@ -8,45 +8,24 @@ class Adverb(Expr):
   def functions(self):
     yield self.fn 
     
-  #def children(self):
-  #  yield self.fn 
-  #  yield self.fixed_args 
-    
   def node_init(self):
     if self.fixed_args is None:
       self.fixed_args = ()
       
-  #def __init__(self, fn, fixed_args = ()):
-  #  self.fn = fn 
-  #  self.fixed_args = fixed_args
-
 class Accumulative(Adverb):
   """
   Adverbs such as Reduce and Scan which carry an accumulated value and require a
   'combine' function to merge the accumulators resulting from parallel
   sub-computations.
   """
-  _members = ['combine', 'combine_fixed_args', 'init']
+  _members = ['combine', 'init']
   
-  def node_init(self):
-    if self.combine_fixed_args is None:
-      self.combine_fixed_args = ()
-  #def children(self):
-  #  yield self.fn 
-  #  yield self.fixed_args
-  #  yield self.combine 
-  #  yield self.init 
-    
 class HasEmit(Expr):
   """
   Common base class for Scan, IndexScan, and whatever other sorts of scans can be dreamed up
   """
-  _members = ['emit', 'emit_fixed_args']
+  _members = ['emit']
   
-  def node_init(self):
-    if self.emit_fixed_args is None:
-      self.emit_fixed_args = ()
-
   
 
 class IndexAdverb(Adverb):
@@ -146,11 +125,7 @@ class IndexFilter(IndexAdverb, Filter):
   pass 
 
 class HasPred(Filter):
-  _members = ['pred', 'pred_fixed_args']
-
-  def node_init(self):
-    if self.pred_fixed_args is None:
-      self.pred_fixed_args = ()
+  _members = ['pred']
 
 class FilterReduce(Reduce, Filter):
   """
@@ -218,11 +193,7 @@ class Conv(Adverb):
       return repr(self)
 
 class ConvBorderFn(Conv):
-  _members = ['border_fn', 'border_fn_fixed_args']
-  
-  def node_init(self):
-    if self.border_fn_fixed_args is None:
-      self.border_fn_fixed_args = ()
+  _members = ['border_fn']
   
 class ConvBorderValue(Conv):
   _members = ['border_value']

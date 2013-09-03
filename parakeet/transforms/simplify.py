@@ -129,23 +129,6 @@ class Simplify(Transform):
       stored = self.available_expressions.get(expr)
       if stored is not None:
         return stored
-    
-    # instead of passing a closure into adverbs, 
-    # just move the closed-over variables onto the adverb itself 
-    """
-    if isinstance(expr, Adverb):
-      if expr.fn.type.__class__ is ClosureT:
-        expr.fixed_args = tuple(self.closure_elts(expr.fn)) + tuple(expr.fixed_args)
-        expr.fn = self.get_fn(expr.fn)
-    if isinstance(expr, Accumulative):
-      if expr.combine.type.__class__ is ClosureT:
-        expr.combine_fixed_args = tuple(self.closure_elts(expr.combine)) + tuple(expr.combine_fixed_args)
-        expr.combine = self.get_fn(expr.combine)
-    if isinstance(expr, HasEmit):
-      if expr.emit.type.__class__ is ClosureT:
-        expr.emit_fixed_args = tuple(self.closure_elts(expr.emit)) + tuple(expr.emit_fixed_args)
-        expr.emit = self.get_fn(expr.emit)
-    """ 
     return Transform.transform_expr(self, expr)
 
   def transform_Var(self, expr):

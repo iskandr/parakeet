@@ -324,7 +324,6 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_expr(self, expr):
     abstract_shape = SyntaxVisitor.visit_expr(self, expr)
-    print expr, expr.type, abstract_shape
     assert abstract_shape is not None, \
         "Unsupported expression in shape inference: %s" % expr.node_type()
     return abstract_shape

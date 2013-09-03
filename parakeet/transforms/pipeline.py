@@ -1,5 +1,5 @@
 from .. import config 
-from ..analysis import contains_adverbs, contains_calls, contains_loops
+from ..analysis import contains_adverbs, contains_calls, contains_loops, contains_structs
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
@@ -31,7 +31,9 @@ from range_propagation import RangePropagation
 #                                  #
 ####################################
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, DCE],
+normalize = Phase([Simplify], memoize = True, cleanup = [])
+
+fusion_opt = Phase(Fusion, config_param = 'opt_fusion',
                    memoize = False,
                    run_if = contains_adverbs)
 
@@ -54,24 +56,25 @@ licm = Phase(LoopInvariantCodeMotion,
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',
                                     name = "SymRangeProp", 
-                                    memoize = True)
+                                    memoize = True, cleanup = [])
+ 
 high_level_optimizations = Phase([
-                                    Simplify, 
                                     inline_opt, 
-                                    # ConstArgSpecialization, Simplify, DCE,
                                     symbolic_range_propagation,   
                                     licm,
                                     fusion_opt, 
-                                    fusion_opt, 
                                     copy_elim,  
                                  ], 
+                                 depends_on = normalize,
                                  name = "HighLevelOpts", 
                                  copy = True, 
+                                 memoize = True, 
                                  cleanup = [Simplify, DCE])
 
 indexify = Phase([IndexifyAdverbs, 
                   inline_opt, Simplify, DCE, 
                   ShapePropagation, 
+                  NegativeIndexElim,
                   IndexMapElimination,
                  ], 
                  run_if = contains_adverbs, 
@@ -79,7 +82,11 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([NegativeIndexElim, Flatten, inline_opt], name="Flatten", copy=True, depends_on=indexify)
+flatten = Phase([ Flatten, inline_opt], name="Flatten", 
+                copy=True, 
+                depends_on=indexify,
+                run_if = contains_structs,  
+                memoize = True)
 
 ####################
 #                  #
@@ -115,7 +122,6 @@ loopify = Phase([
                    licm,
                    shape_elim,
                    symbolic_range_propagation,
-                    
                    index_elim
                 ],
                 depends_on = flatten,

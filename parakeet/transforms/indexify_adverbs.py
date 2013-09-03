@@ -9,8 +9,6 @@ from inline import Inliner
 from transform import Transform
 from scipy.weave.build_tools import old_init_posix
 
- 
-
 class IndexifyAdverbs(Transform):
   """
   Take all the adverbs whose parameterizing functions assume they 
@@ -152,40 +150,6 @@ class IndexifyAdverbs(Transform):
     self.check_equal_sizes(axis_sizes)
     return axis_sizes
 
-  """
-  def prelude(self, map_fn, xs, axis):
-    axis_sizes = self.sizes_along_axis(xs, axis)
-    return axis_sizes[0]
-
-  def acc_prelude(self, init, combine, delayed_map_result):
-    zero = self.int(0)
-    if init is None or self.is_none(init):
-      return delayed_map_result(zero)
-    else:
-      # combine the provided initializer with
-      # transformed first value of the data
-      # in case we need to coerce up
-      return self.call(combine, [init, delayed_map_result(zero)])
-  """
-  
-  #def create_result(self, elt_type, inner_shape, outer_shape):
-  #  if not self.is_tuple(outer_shape):
-  #    outer_shape = self.tuple([outer_shape])
-  #  result_shape = self.concat_tuples(outer_shape, inner_shape)
-  #  result = self.alloc_array(elt_type, result_shape)
-  #  return result
-
-  #def create_output_array(self, fn, inputs, extra_dims):
-  #  if hasattr(self, "_create_output_array"):
-  #    try:
-  #      return self._create_output_array(fn, inputs, extra_dims)
-  #    except:
-  #      pass
-  #  inner_result = self.call(fn, inputs)   
-  #  inner_shape = self.shape(inner_result)
-  #  elt_t = self.elt_type(inner_result)
-  #  res =  self.create_result(elt_t, inner_shape, extra_dims)
-  #  return res 
   
   def parfor(self, bounds, fn):
     self.blocks += [ParFor(fn = fn, bounds = bounds)]
@@ -300,60 +264,7 @@ class IndexifyAdverbs(Transform):
                        combine = combine, 
                        shape = nelts, 
                        type = expr.type)
-    """
-    result_t = self.return_type(index_fn)
-    n_chunks = 8 
-    n_chunks_expr = self.int(n_chunks) 
-    chunk_size = self.div(nelts, n_chunks_expr)
-    outer_closure_args = self.closure_elts(index_fn)
-    raw_index_fn = self.get_fn(index_fn)
-    closure_arg_types = get_types(outer_closure_args)
-    partial_results = self.alloc_array(result_t, n_chunks_expr)
-    wrapper_input_types = tuple(closure_arg_types) + (nelts.type, partial_results.type, Int64)
-    chunk_idx_name = names.fresh("chunk_idx")
-    partial_results_name = names.fresh("partial_results")
-    nelts_name = names.fresh("nelts")
-    wrapper_name = self.fresh_fn_name("wrapper_", index_fn)
-    
-    wrapper_input_names = tuple(names.refresh(name) for name in raw_index_fn.arg_names[:-1]) + \
-                          (nelts_name, partial_results_name, chunk_idx_name) 
-    reduce_wrapper, builder, wrapper_inputs = build_fn(wrapper_input_types, 
-                                                       NoneType,
-                                                       name = wrapper_name,  
-                                                       input_names =  wrapper_input_names)
-    local_nelts, local_partial_results, chunk_idx = wrapper_inputs[-3:]
-    local_chunk_size = self.div(local_nelts, n_chunks_expr)
-    local_start = builder.mul(chunk_idx, local_chunk_size)
-    local_stop = builder.mul(builder.add(chunk_idx, builder.int(1)), local_chunk_size)
-    local_stop = builder.max(local_stop, local_nelts)
-    local_nelts = builder.sub(local_stop, local_start)
-    inner_closure_args= wrapper_inputs[:-3]
-    #print inner_closure_args, wrapper_inputs[-3:]
-    #assert False
-    inner_index_fn = builder.closure(raw_index_fn, inner_closure_args)
-    local_reduce = IndexReduce(fn = inner_index_fn, 
-                        init = init, 
-                        combine = combine, 
-                        shape = local_nelts, 
-                        start_index = local_start, 
-                        type = expr.type)
-    local_result = builder.assign_name(local_reduce, "local_result")
-    builder.setidx(local_partial_results, chunk_idx, local_result)
-    builder.return_(none)
-    reduce_wrapper = self.closure(reduce_wrapper, tuple(outer_closure_args) + (nelts, partial_results, ) )
-    self.parfor(n_chunks_expr, reduce_wrapper)
-    assert n_chunks > 1 
-    result = self.call(combine, 
-                       [self.index(partial_results, self.int(0)), 
-                        self.index(partial_results, self.int(1))])
-    
-    def outer_combine_loop_body(acc, idx):
-      acc.update(self.call(combine, [acc.get(), self.index(partial_results, idx)]))
-    #print reduce_wrapper
-    #assert False
-    return self.accumulate_loop(self.int(2), n_chunks_expr, outer_combine_loop_body, result)
-    """
-    
+   
   def transform_Scan(self, expr, output = None):
     combine = expr.combine 
     init = expr.init 
@@ -387,7 +298,6 @@ class IndexifyAdverbs(Transform):
   
   def transform_Filter(self, expr):
     assert False, "Filter not implemented"
-    # return IndexFilter(self, expr)
     
   def transform_Assign(self, stmt):
     """

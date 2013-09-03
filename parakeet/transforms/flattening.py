@@ -5,7 +5,8 @@ from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tu
                        Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
-                      ParFor, PrimCall, If, While, ForLoop) 
+                      ParFor, PrimCall, If, While, ForLoop, Call, Expr, 
+                      IndexMap) 
 from ..syntax.helpers import none, const_int 
 
 from transform import Transform
@@ -66,6 +67,8 @@ def field_pos_range(t, field, _cache = {}):
 
 def get_field_elts(t, values, field):
   start, stop = field_pos_range(t, field)
+  assert stop <= len(values), \
+    "Insufficient number of flattened fields %s for %s.%s" % (values, t, field)
   return values[start:stop]
 
 def single_type(ts):
@@ -97,6 +100,7 @@ def mk_vars(names, types):
 
 class BuildFlatFn(Builder):
   def __init__(self, old_fn):
+    Builder.__init__(self)
     self.old_fn = old_fn 
     base_name = names.original(old_fn.name)
     flat_fn_name = names.fresh("flat_" + base_name)
@@ -131,7 +135,6 @@ class BuildFlatFn(Builder):
         input_types = new_input_types, 
         return_type = new_return_type) 
       
-    self.blocks = NestedBlocks()
     
   def run(self):
     self.flat_fn.body = self.flatten_block(self.old_fn.body)
@@ -168,29 +171,34 @@ class BuildFlatFn(Builder):
   
   def flatten_Assign(self, stmt):
     c = stmt.lhs.__class__
-    values = self.flatten_expr(stmt.rhs)
+    rhs = self.flatten_expr(stmt.rhs)
     if c is Var:
-      result = []
       vars = self.flatten_lhs_var(stmt.lhs)
-      assert len(vars) == len(values), "Mismatch between LHS %s and RHS %s" % (vars, values)
-      self.var_expansions[stmt.lhs.name] = values 
-      for var, value in zip(vars, values):
-        result.append(Assign(var, value))
+      self.var_expansions[stmt.lhs.name] = vars 
+      if isinstance(rhs, Expr):
+        # the IR doesn't allow for multiple assignment 
+        # so we fake it with tuple literals
+        return [Assign(self.tuple(vars), rhs)]
+      assert len(vars) == len(rhs), "Mismatch between LHS %s and RHS %s" % (vars, rhs)
+      result = []
+      for var, value in zip(vars, rhs):
+        result.append(Assign(var, rhs))
       return result 
     elif c is Index:
-      
-      idx = self.flatten_scalar_expr(stmt.lhs.index)
-      values = self.flatten_expr(stmt.lhs.value)
       array_t = stmt.lhs.value.type 
       if isinstance(array_t, PtrT):
         return stmt  
+      indices = self.flatten_expr(stmt.lhs.index)
+      values = self.flatten_expr(stmt.lhs.value)
       data = get_field_elts(array_t, values, 'data')[0]
       shape = get_field_elts(array_t, values, 'shape')
       strides = get_field_elts(array_t, values, 'strides')
       offset = get_field_elts(array_t, values, 'offset')[0]
-      offset = self.add(offset, self.mul(idx, strides[0]))
+      assert len(indices) == len(strides)
+      for idx, stride in zip(indices, strides):
+        offet = self.add(offset, self.mul(idx, stride))
       stmt.lhs = Index(data, offset)
-      stmt.rhs = values[0]
+      stmt.rhs = rhs[0]
       return [stmt]
   
   def flatten_merge(self, phi_nodes):
@@ -241,10 +249,8 @@ class BuildFlatFn(Builder):
    
   def flatten_ParFor(self, stmt):
     old_fn = self.get_fn(stmt.fn)
-    assert isinstance(old_fn, TypedFn)
-    new_fn = self.flatten_TypedFn(old_fn)
-    
-    closure_elts  = self.flatten_expr_list(self.closure_elts(stmt.fn)) 
+    new_fn = build_flat_fn(old_fn)
+    closure_elts  = self.flatten_expr(stmt.fn)
     closure = self.closure(new_fn, closure_elts)
     bounds = single_value(self.flatten_expr(stmt.bounds))
     return ParFor(fn = closure, bounds = bounds)
@@ -289,12 +295,24 @@ class BuildFlatFn(Builder):
       return []
     return [expr]
   
+  def flatten_fn(self, closure):
+    fn = self.get_fn(closure)
+    import pipeline
+    fn = pipeline.indexify.apply(fn)
+    flat_fn = build_flat_fn(fn)
+    flat_closure_args = self.flatten_expr(closure)
+    return flat_fn, flat_closure_args
+  
+  def flatten_Call(self, expr):
+    flat_fn, flat_closure_args = self.flatten_fn(expr.fn)
+    flat_args = self.flatten_expr_list(expr.args)
+    return Call(flat_fn, tuple(flat_closure_args) + tuple(flat_args), type = flat_fn.return_type)
+  
   def flatten_Cast(self, expr):
     return [expr]
   
   def flatten_TypedFn(self, expr):
-    result = build_flat_fn(expr)
-    return result
+    return []
     
   def flatten_Var(self, expr):
     if isinstance(expr.type, (ScalarT, PtrT)):
@@ -318,10 +336,8 @@ class BuildFlatFn(Builder):
     return self.flatten_field(expr.tuple, expr.index)
   
   def flatten_Closure(self, expr):
-    fn = self.flatten_TypedFn(expr.fn)
-    args = self.flatten_expr_list(expr.args)
-    return [self.closure(fn, args)]
-  
+    return self.flatten_expr_list(expr.args)
+    
   def flatten_ClosureElt(self, expr):
     return self.flatten_field(expr.closure, expr.index)
   
@@ -429,8 +445,13 @@ class BuildFlatFn(Builder):
     assert False, "Not implemented"
   
   def flatten_IndexMap(self, expr):
-    assert False, "Not implemented"
-  
+    fn, closure_args = self.flatten_fn(expr.fn)
+    shape_elts = self.flatten_expr(expr.shape)
+    # import pdb; pdb.set_trace()
+    return IndexMap(fn = self.closure(fn, closure_args), shape = self.tuple(shape_elts), type = None)
+    
+    
+    
   def flatten_IndexReduce(self, expr):
     assert False, "Not implemented" 
   
@@ -480,7 +501,7 @@ class BuildFlatFn(Builder):
     return vars[0]
   
 def build_flat_fn(old_fn, _cache = {}):
-  key = (old_fn.name, old_fn.copied_by)
+  key = old_fn.name
   if key in _cache:
     return _cache[key]
   flat_fn = BuildFlatFn(old_fn).run()
@@ -488,8 +509,6 @@ def build_flat_fn(old_fn, _cache = {}):
   _cache[(flat_fn.name, flat_fn.copied_by)] = flat_fn
   return flat_fn
   
-
-
 class Flatten(Transform):
   
   def unbox_var(self, var):
