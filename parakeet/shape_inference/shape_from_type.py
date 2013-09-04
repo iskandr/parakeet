@@ -1,5 +1,5 @@
 from ..ndtypes import (ArrayT, SliceT, ClosureT, NoneT, ScalarT, StructT, 
-                       TypeValueT, TupleT, PtrT)
+                       TypeValueT, TupleT, PtrT, FnT)
 from shape import Shape, Tuple, Closure, Var, Slice, Struct, Ptr, any_scalar
 
 
@@ -28,26 +28,36 @@ class Converter(object):
     elif t.__class__ is ArrayT:
       dim_vars = [self.fresh_var() for _ in range(t.rank)]
       return Shape(dim_vars)
+    
     elif t.__class__ is TupleT:
       elt_values = self.from_types(t.elt_types)
       return Tuple(elt_values)
+    
     elif t.__class__ is SliceT:
       start = self.from_type(t.start_type)
       stop = self.from_type(t.stop_type)
       step = self.from_type(t.step_type)
       return Slice(start, stop, step)
+    
     elif t.__class__ is ClosureT:
       arg_vals = self.from_types(t.arg_types)
       return Closure(t.fn, arg_vals)
+   
+    elif t.__class__ is FnT:
+      return Closure(t.fn, ())
+    
     elif isinstance(t, StructT):
       field_names = [fn for (fn,_) in t._fields_]
       field_types = [ft for (_,ft) in t._fields_]
       field_vals = self.from_types(field_types)
       return Struct(field_names, field_vals)
+    
     elif isinstance(t, (TypeValueT, NoneT)):
       return Tuple(())
-    elif isinstance(t, PtrT):
-      return Ptr(any_scalar)
+    
+    elif isinstance(t, PtrT): 
+      return Ptr(any_scalar) 
+    
     else:
       assert False, "Unsupported type: %s" % t
     

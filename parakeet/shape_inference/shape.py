@@ -55,7 +55,7 @@ class AnyValue(object):
   def __repr__(self):
     return str(self)
 
-any_value = AnyValue
+any_value = AnyValue()
 
 class Scalar(AbstractValue):
   """Base class for all scalar operations"""

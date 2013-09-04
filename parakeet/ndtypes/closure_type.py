@@ -24,7 +24,7 @@ class ClosureT(StructT, ImmutableT):
     elif not isinstance(self.arg_types, tuple):
       self.arg_types = tuple(self.arg_types)
 
-    self._fields_ = [('fn_id', Int64)]
+    self._fields_ = [] #('fn_id', Int64)]
     for (i, t) in enumerate(self.arg_types):
       self._fields_.append( ('arg%d' % i, t) )
 
@@ -40,6 +40,9 @@ class ClosureT(StructT, ImmutableT):
     return hash( (self.fn,) + self.arg_types)
 
   def __eq__(self, other):
+    
+    if other.__class__ is not ClosureT:
+      return False
     if self.fn.__class__ != other.fn.__class__:
       return False
     if isinstance(self.fn, str):

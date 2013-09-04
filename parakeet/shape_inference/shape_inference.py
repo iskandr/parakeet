@@ -1,7 +1,7 @@
 
 from .. import syntax 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
-from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT
+from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT, FnT
 from ..syntax import unwrap_constant 
 
 import shape
@@ -426,17 +426,40 @@ class ShapeInference(SyntaxVisitor):
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
     name = expr.name
-    if v.__class__ is Shape and name in ('shape', 'strides'):
-      return Tuple(v.dims)
-    elif v.__class__ is Tuple and name.startswith('elt'):
-      idx = int(name[3:])
+    
+    if v.__class__ is Shape:
+      if name in ('shape', 'strides'):
+        return Tuple(v.dims)
+      elif name in ('offset', 'size', 'nelts'):
+        return any_scalar
+      elif name == 'data':
+        return Ptr(any_scalar)
+      
+    elif v.__class__ is Tuple:
+      if name.startswith('elt'):
+        idx = int(name[3:])
+      else:
+        idx = int(name)
       return v[idx]
+    
     elif v.__class__ is Slice:
       return getattr(v, name)
+    
+    elif v.__class__ is Closure:
+      if name.startswith('elt'):
+        idx = int(name[3:])
+      elif name.startswith('closure_elt'):
+        idx = int(name[len('closure_elt'):])
+      else:
+        idx = int(name)
+      return v.args[idx]
+        
+      
     elif v.__class__ is Struct:
       return v.values[v.fields.index(name)]
 
     t = expr.value.type.field_type(name)
+    
     if isinstance(t, ScalarT):
       return any_scalar
     else:
@@ -494,6 +517,8 @@ class ShapeInference(SyntaxVisitor):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
+    print "visit_Index", expr, arr, idx
+    
     if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
     elif arr.__class__ is Shape:
@@ -509,7 +534,11 @@ class ShapeInference(SyntaxVisitor):
         return shape.make_shape(dims)
       else:
         return self.index(arr, idx)
-    
+    elif arr.__class__ is Ptr:
+      assert isinstance(arr.elt_shape, Scalar)
+      assert isinstance(idx, Scalar)
+      
+      return any_scalar
     if isinstance(arr, Scalar):
       assert False, "Expected %s to be array, shape inference found scalar" % (arr,)
     elif arr == shape.any_value:

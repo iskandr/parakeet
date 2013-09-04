@@ -59,7 +59,6 @@ def field_pos_range(t, field, _cache = {}):
     n = len(flatten_type(field_t))
     if field_name == field or (isinstance(field, (int, long)) and i == field):
       result = (offset, offset+n)
-      
       _cache[key] = result
       return result
     offset += n 
@@ -367,9 +366,12 @@ class BuildFlatFn(Builder):
     shape = get_field_elts(t, array_fields, 'shape')
     strides = get_field_elts(t, array_fields, 'strides')
     offset = get_field_elts(t, array_fields, 'offset')[0]
-    assert isinstance(expr.index.type, ScalarT)
-    return [self.index(data_fields[0], 
-                       self.add(offset, self.mul(expr.index, strides[0])))]
+    indices = self.flatten_expr(expr.index)
+    print indices 
+    assert len(indices) == len(strides)
+    for i, idx in enumerate(indices):
+      offset = self.add(offset, self.mul(idx, strides[i]))
+    return [self.index(data_fields[0], offset)]
      
   
   def flatten_PrimCall(self, expr):

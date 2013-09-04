@@ -13,14 +13,16 @@ class CallBuilder(CoreBuilder):
   Builder for all things related to calling functions
   """
   
-  def closure_elt(self, clos, idx):
+  def closure_elt(self, clos, idx, name = None):
     assert isinstance(idx, (int, long))
 
     if isinstance(clos, Closure):
-      return clos.args[idx]
+      result = clos.args[idx]
     else:
-      return ClosureElt(clos, idx, type = clos.type.arg_types[idx])
-
+      result = ClosureElt(clos, idx, type = clos.type.arg_types[idx])
+    if name is None:
+      return result
+    return self.assign_name(result, name)
   def closure_elts(self, clos):
     if clos.__class__ is TypedFn:
       return ()
