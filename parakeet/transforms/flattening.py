@@ -196,7 +196,7 @@ class BuildFlatFn(Builder):
       offset = get_field_elts(array_t, values, 'offset')[0]
       assert len(indices) == len(strides)
       for idx, stride in zip(indices, strides):
-        offet = self.add(offset, self.mul(idx, stride))
+        offset = self.add(offset, self.mul(idx, stride))
       stmt.lhs = Index(data, offset)
       stmt.rhs = rhs[0]
       return [stmt]
@@ -248,9 +248,7 @@ class BuildFlatFn(Builder):
     return ExprStmt(value = self.flatten_expr(stmt.value))
    
   def flatten_ParFor(self, stmt):
-    old_fn = self.get_fn(stmt.fn)
-    new_fn = build_flat_fn(old_fn)
-    closure_elts  = self.flatten_expr(stmt.fn)
+    new_fn, closure_elts = self.flatten_fn(stmt.fn)
     closure = self.closure(new_fn, closure_elts)
     bounds = single_value(self.flatten_expr(stmt.bounds))
     return ParFor(fn = closure, bounds = bounds)
@@ -306,7 +304,8 @@ class BuildFlatFn(Builder):
   def flatten_Call(self, expr):
     flat_fn, flat_closure_args = self.flatten_fn(expr.fn)
     flat_args = self.flatten_expr_list(expr.args)
-    return Call(flat_fn, tuple(flat_closure_args) + tuple(flat_args), type = flat_fn.return_type)
+    args = tuple(flat_closure_args) + tuple(flat_args)
+    return Call(flat_fn, args, type = flat_fn.return_type)
   
   def flatten_Cast(self, expr):
     return [expr]

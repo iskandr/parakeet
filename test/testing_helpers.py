@@ -3,13 +3,17 @@ import time
 import numpy as np
 
 from nose.tools import nottest
-from treelike.testing_helpers import  run_local_tests, eq, expect_eq
+
+from treelike.testing_helpers import  eq, expect_eq, run_local_tests
+  
   
 import parakeet
 
 from parakeet import (type_conv, type_inference, 
                       specialize, translate_function_value,
                       run_typed_fn, run_python_fn)
+
+
 
 def _copy(x):
   if isinstance(x, np.ndarray):

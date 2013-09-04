@@ -40,11 +40,11 @@ print_untyped_function = False
 print_specialized_function = False 
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = False
+print_lowered_function = True
 
 # before starting function specialization, print the fn name and input types 
 print_before_specialization = False
@@ -62,11 +62,10 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = True 
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
-
 
 
 

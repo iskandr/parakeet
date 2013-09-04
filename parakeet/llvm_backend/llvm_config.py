@@ -21,7 +21,7 @@ print_x86 = False
 
 
 # show LLVM bytecode before optimization passes
-print_unoptimized_llvm = False
+print_unoptimized_llvm = True
 
 # show LLVM bytecode after optimizations
 print_optimized_llvm = False

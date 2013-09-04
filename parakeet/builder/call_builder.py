@@ -67,7 +67,12 @@ class CallBuilder(CoreBuilder):
     return [Var(arg_name, t) 
             for arg_name, t in 
             zip(fn.arg_names, fn.input_types)]
-    
+  
+  def input_types(self, closure):
+    fn = self.get_fn(closure)
+    closure_args = self.closure_elts(closure)
+    return fn.input_types[len(closure_args):]
+  
   def invoke_type(self, closure, args):
     from .. type_inference import invoke_result_type 
     closure_t = closure.type

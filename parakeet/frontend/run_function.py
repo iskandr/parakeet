@@ -75,6 +75,7 @@ def prepare_llvm(fn, args):
 """
 
 def run_typed_fn(fn, args, backend = None):
+  
   assert isinstance(fn, TypedFn)
   actual_types = tuple(type_conv.typeof(arg) for arg in  args)
   expected_types = fn.input_types
@@ -82,9 +83,9 @@ def run_typed_fn(fn, args, backend = None):
     "Arg type mismatch, expected %s but got %s" % \
     (expected_types, actual_types)
 
+  
   if backend is None:
     backend = config.default_backend
-    
   if backend == 'shiver':
     if contains_loops(fn):
       # for now only run parallel outer statements 

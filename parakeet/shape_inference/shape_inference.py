@@ -329,7 +329,7 @@ class ShapeInference(SyntaxVisitor):
     return abstract_shape
 
   def visit_Alloc(self, expr):
-    return Ptr(shape_from_type.from_type(expr.elt_type))
+    return Ptr(any_scalar)
 
   def visit_Struct(self, expr):
     if isinstance(expr.type, ArrayT):
@@ -665,6 +665,8 @@ def subst(x, env):
     return Tuple(tuple((subst_list(x.elts, env))))
   elif isinstance(x, Closure):
     return Closure(x.fn, subst_list(x.args, env))
+  elif isinstance(x, Ptr):
+    return Ptr(subst(x.elt_shape, env))
   else:
     raise RuntimeError("Unexpected abstract expression: %s" % x)
 

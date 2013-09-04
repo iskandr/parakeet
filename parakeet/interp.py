@@ -82,15 +82,19 @@ def eval_fn(fn, actuals):
           return 0
         else:
           return value.ctypes.data - value.base.ctypes.data
+      elif isinstance(value, tuple):
+        if expr.name.startswith('elt'):
+          field = int(expr.name[3:])
+        else:
+          field = int(expr.name)
+        return value[field]  
       else:
         return getattr(value, expr.name)
 
     def expr_Alloc():
       count = eval_expr(expr.count)
       arr = np.empty(shape = (count,), dtype = expr.elt_type.dtype)
-      print "Allocated", arr.shape
-      print "Data", arr.data
-      return arr.data
+      return arr
       
     def expr_AllocArray():
       shape = eval_expr(expr.shape)
@@ -106,10 +110,13 @@ def eval_fn(fn, actuals):
       strides = eval_expr(expr.strides)
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
+      if isinstance(data, np.ndarray):
+        data = data.data 
+      bytes_per_elt = dtype.itemsize
       return np.ndarray(shape = shape, 
                         offset = offset, 
                         buffer = data, 
-                        strides = strides, 
+                        strides = tuple(si * bytes_per_elt for si in  strides), 
                         dtype = np.dtype(dtype))
       
       
@@ -192,6 +199,15 @@ def eval_fn(fn, actuals):
     def expr_Len():
       return len(eval_expr(expr.value))
     
+    def expr_IndexMap():
+      fn = eval_expr(expr.fn)
+      shape = eval_expr(expr.shape)
+      dtype = expr.type.elt_type.dtype
+      result = np.empty(shape, dtype = dtype)
+      for idx in np.ndindex(shape):
+        result[idx] = eval_fn(fn, (idx,))
+      return result
+      
     def expr_IndexReduce():
       fn = eval_expr(expr.fn)
       combine = eval_expr(expr.combine)
@@ -245,9 +261,7 @@ def eval_fn(fn, actuals):
 
   
 
-  def eval_parfor_seq(stmt):
-    fn = eval_expr(stmt.fn)
-    bounds = eval_expr(stmt.bounds)
+  def eval_parfor_seq(fn, bounds):
     if isinstance(bounds, (list,tuple)) and len(bounds) == 1:
       bounds = bounds[0]
         
@@ -257,11 +271,10 @@ def eval_fn(fn, actuals):
     else:
       for idx in np.ndindex(bounds):
         eval_fn(fn, (idx,))
-        
-  def eval_parfor_shiver(stmt):
-    clos = eval_expr(stmt.fn)
+  
+    
+  def eval_parfor_shiver(clos, bounds):
     assert hasattr(clos, "__call__"), "Unexpected fn %s" % (clos,) 
-    bounds = eval_expr(stmt.bounds)
     assert isinstance(bounds, (int,long,tuple)), "Invalid bounds %s" % (bounds,)
     
     if isinstance(clos, ClosureVal):
@@ -343,7 +356,10 @@ def eval_fn(fn, actuals):
       eval_expr(stmt.value)
       
     elif isinstance(stmt, ParFor):
-      eval_parfor_shiver(stmt)    
+      fn = eval_expr(stmt.fn)
+      bounds = eval_expr(stmt.bounds)
+    
+      eval_parfor_seq(fn, bounds)    
       
       
     else:

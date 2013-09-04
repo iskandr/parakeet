@@ -1,3 +1,4 @@
+from treelike.testing_helpers import eq
 from run_function import specialize 
 from ..transforms import Phase, Transform, CloneFunction
 from ..transforms.pipeline import lowering
@@ -49,7 +50,8 @@ def find_broken_transform(fn, inputs, expected, print_transforms = True):
   # print "[Diagnose] Specializing function..."
   fn, args = specialize(fn, inputs, optimize=False)  
   # print "[Diagnose] Trying function %s before transformations.." % fn.name 
-  if interp.eval(fn, args) != expected:
+  interp_result = interp.eval(fn, args) 
+  if not eq(interp_result, expected):
     print "[Diagnose] This function was busted before we optimized anything!" 
     return None 
   transforms = get_transform_list(fn)
@@ -66,7 +68,7 @@ def find_broken_transform(fn, inputs, expected, print_transforms = True):
     assert isinstance(t, Transform)
     new_fn = t.apply(cloner.apply(old_fn))
     result = interp.eval(new_fn, args)
-    if result != expected:
+    if not eq(result, expected):
       print "[Diagnose] Expected %s but got %s " % (expected, result)
       print "[Diagnose] After running ", t
       print "[Diagnose] Old function ", old_fn 

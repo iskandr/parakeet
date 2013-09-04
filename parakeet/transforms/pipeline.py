@@ -63,6 +63,7 @@ high_level_optimizations = Phase([
                                     symbolic_range_propagation,   
                                     licm,
                                     fusion_opt, 
+                                    fusion_opt, 
                                     copy_elim,  
                                  ], 
                                  depends_on = normalize,
