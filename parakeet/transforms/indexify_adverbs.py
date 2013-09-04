@@ -228,8 +228,8 @@ class IndexifyAdverbs(Transform):
     idx_var = input_vars[-1]
     builder.setidx(output_var, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
     builder.return_(none)
-    return self.parfor(shape, self.closure(new_fn, (output,) + tuple(old_closure_args)  ))
-  
+    self.parfor(shape, self.closure(new_fn, (output,) + tuple(old_closure_args)  ))
+    return output
   
   
   def transform_Reduce(self, expr):

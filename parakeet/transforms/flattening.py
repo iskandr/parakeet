@@ -182,7 +182,7 @@ class BuildFlatFn(Builder):
       assert len(vars) == len(rhs), "Mismatch between LHS %s and RHS %s" % (vars, rhs)
       result = []
       for var, value in zip(vars, rhs):
-        result.append(Assign(var, rhs))
+        result.append(Assign(var, value))
       return result 
     elif c is Index:
       array_t = stmt.lhs.value.type 
@@ -436,32 +436,31 @@ class BuildFlatFn(Builder):
   #
   #######################
   def flatten_Map(self, expr):
-    assert False, "Not implemented" 
+    assert False, "Unexpected Map encountered during flattening, should be IndexScan"
   
   def flatten_Reduce(self, expr):
-    assert False, "Not implemented" 
+    assert False, "Unexpected Reduce encountered during flattening, should be IndexScan"
   
   def flatten_Scan(self, expr):
-    assert False, "Not implemented"
+    assert False, "Unexpected Scan encountered during flattening, should be IndexScan"
   
   def flatten_IndexMap(self, expr):
-    fn, closure_args = self.flatten_fn(expr.fn)
-    shape_elts = self.flatten_expr(expr.shape)
+    #fn, closure_args = self.flatten_fn(expr.fn)
+    #shape_elts = self.flatten_expr(expr.shape)
     # import pdb; pdb.set_trace()
-    return IndexMap(fn = self.closure(fn, closure_args), shape = self.tuple(shape_elts), type = None)
+    #return IndexMap(fn = self.closure(fn, closure_args), shape = self.tuple(shape_elts), type = None)
+    assert False, "Unexpected IndexMap, should have been turned into ParFor before flattening"
     
-    
-    
+  
+  def flatten_OuterMap(self, expr):
+    assert False, "Unexpected OuterMap, should have been turned into ParFor before flattening"
+  
   def flatten_IndexReduce(self, expr):
     assert False, "Not implemented" 
   
   def flatten_IndexScan(self, expr):
     assert False, "Not implemented" 
-  
-  def flatten_OuterMap(self, expr):
-    assert False, "Not implemented" 
-  
-  
+    
   def flatten_lhs_var(self, old_var):
     name = old_var.name 
     t = old_var.type 

@@ -208,6 +208,7 @@ class SyntaxVisitor(object):
     elif c is Index: 
       return self.visit_Index(expr)
     else:
+      assert c in self._expr_method_names, "Unknown expression type %s (from %s)" % (c, expr)
       return getattr(self, self._expr_method_names[c])(expr)
       
   def visit_expr_list(self, exprs):
