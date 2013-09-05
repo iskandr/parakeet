@@ -155,11 +155,20 @@ class Compiler(object):
 
   def tuple_to_stack_array(self, expr):
     assert expr.type.__class__ is TupleT 
-    t0 = expr.type.elt_types
+    t0 = expr.type.elt_types[0]
     assert all(t == t0 for t in expr.type.elt_types[1:])
     array_name = self.fresh_name("array_from_tuple")
     n = len(expr.type.elt_types)
-    self.stmt("%s %s[%d]" % (to_ctype(t0), array_name, n))
+    self.append("%s %s[%d];" % (to_ctype(t0), array_name, n))
+    tup = self.visit_expr(expr)
+    for i, elt in enumerate(self.tuple_elts(tup, expr.type.elt_types)):
+      self.append("%s[%d] = %s;" % array_name, i, elt )
+    return array_name
+    
+  def array_to_tuple(self, arr, n, elt_t):
+    elts = [box_scalar("%s[%d]" % (arr,i), elt_t) for i in xrange(n)]
+    elt_str = ", ".join(elts)
+    return "PyTuple_Pack(%d, %s)" % (n, elt_str)
     
   def visit_Alloc(self, expr):
     elt_size = expr.elt_type.dtype.itemsize
@@ -204,6 +213,12 @@ class Compiler(object):
     else:
       return proj_str 
   
+  def tuple_elts(self, tup, ts):
+    result = []
+    for i,t in enumerate(ts):
+      result.append(self.tuple_elt(tup, i, t))
+    return result
+  
   def visit_TupleProj(self, expr):
     tup = self.visit_expr(expr.tuple)
     return self.tuple_elt(tup, expr.index, expr.type)
@@ -227,12 +242,13 @@ class Compiler(object):
     buffer_name = self.fresh_name("array_buffer")
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % (buffer_name,  data, count, bytes_per_elt))
-    dtype = to_dtype(expr.type.elt_type)
+    dtype = "PyArray_DescrFromType(%s)" % to_dtype(expr.type.elt_type)
     
     vec_name = self.fresh_name("linear_array")
     #   _members = ['data', 'shape', 'strides', 'offset', 'size']
-    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s)" % (vec_name, buffer_name, dtype, count, offset))
-    return "PyArray_Reshape(%s, %s)" % (vec_name, shape)
+    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % (vec_name, buffer_name, dtype, count, offset))
+    # TODO: Assign PyArray_STRIDES[i] = PyTuple_GETITEM(strides, i)
+    return "PyArray_Reshape(( PyArrayObject*) %s, %s)" % (vec_name, shape)
       
   def visit_Attribute(self, expr):
     attr = expr.name
@@ -240,9 +256,17 @@ class Compiler(object):
     if attr == "data":
       return "(%s) PyArray_DATA (%s)" % (to_ctype(expr.type), v)
     elif attr == "shape":
-      return "PyArray_SHAPE(%s)" % v
+      elt_types = expr.type.elt_types
+      n = len(elt_types)
+      elt_t = elt_types[0]
+      assert all(t == elt_t for t in elt_types)
+      return self.array_to_tuple("PyArray_SHAPE(%s)" % v, n, elt_t) 
     elif attr == "strides":
-      return "PyArray_STRIDES(%s)" % v
+      elt_types = expr.type.elt_types
+      n = len(elt_types)
+      elt_t = elt_types[0]
+      assert all(t == elt_t for t in elt_types)
+      return self.array_to_tuple("PyArray_STRIDES(%s)" % v, n, elt_t)
     elif attr == 'offset':
       return "0"
     else:
