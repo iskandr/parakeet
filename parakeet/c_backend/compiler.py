@@ -9,16 +9,73 @@ from ..ndtypes import (TupleT, ScalarT, ArrayT,
 from boxing import box_scalar, unbox_scalar
 from c_types import to_ctype, to_dtype
 
-common_headers = """
-#include <math.h>
-#include <stdint.h>
-#include <Python.h>
-"""
-
 
 _function_names = {}
 _function_defs = {}
+
+header_names = ["math.h", "stdint.h", "Python.h", 'numpy/arrayobject.h']
+
+common_headers = "\n".join("#include <%s>" % header for header in header_names) + "\n"
+
+import distutils 
+python_include_dirs = [distutils.sysconfig.get_python_inc()]
+
+import numpy as np 
+numpy_include_dirs = np.distutils.misc_util.get_numpy_include_dirs()
+
+include_dirs = python_include_dirs + numpy_include_dirs 
+
+compiler_flags = ['-I%s' % path for path in include_dirs]
+
+def get_default_compiler(compilers = ['clang', 'g++']):
+  for compiler in compilers:
+    path = distutils.spawn.find_executable(compiler)
+    if path:
+      return path 
+  assert False, "No compiler found"
   
+import subprocess
+def compile(src, src_filename = None):
+  if src_filename is None:
+    import tempfile
+    src_file = tempfile.NamedTemporaryFile(suffix = ".cpp", prefix = "parakeet_source", delete=False)
+    src_filename = src_file.name 
+  else:
+    src_file = open(src_filename, 'w')
+  src_file.write(src)
+  src_file.close()
+  compiler = get_default_compiler()
+  target_name = src_filename.replace('.cpp', '.so')
+  subprocess.check_call([compiler] + compiler_flags + ['-c', src_filename, '-shared', '-o', target_name])
+
+
+def function_source(fn):
+  key = fn.name, fn.copied_by 
+  if key in _function_defs:
+    return _function_defs[key]
+  
+  new_compiler = Compiler()
+  name, src = new_compiler.visit_fn(fn)
+  src = common_headers + src 
+  print src 
+  compile(src)
+  _function_names[key] = name
+  _function_defs[key] = src
+  return src
+
+def function_name(fn):
+  key = fn.name, fn.copied_by 
+  if key in _function_names:
+    return _function_names[key]
+  
+  new_compiler = Compiler()
+  name, src = new_compiler.visit_fn(fn)
+  src = common_headers + src 
+  _function_names[key] = name
+  _function_defs[key] = src
+  return name
+
+
 class Compiler(object):
    
   def __init__(self):
@@ -181,7 +238,7 @@ class Compiler(object):
     attr = expr.name
     v = self.visit_expr(expr.value) 
     if attr == "data":
-      return "PyArray_DATA (%s)" % v
+      return "(%s) PyArray_DATA (%s)" % (to_ctype(expr.type), v)
     elif attr == "shape":
       return "PyArray_SHAPE(%s)" % v
     elif attr == "strides":
@@ -285,32 +342,6 @@ class Compiler(object):
     fndef = "%(c_return_type)s %(c_fn_name)s (%(input_str)s) {%(c_body)s}" % locals()
     return c_fn_name, fndef 
 
-def function_source(fn):
-  key = fn.name, fn.copied_by 
-  if key in _function_defs:
-    return _function_defs[key]
-  
-  new_compiler = Compiler()
-  name, src = new_compiler.visit_fn(fn)
-  src = common_headers + src 
-  _function_names[key] = name
-  _function_defs[key] = src
-  return src
-
-def function_name(fn):
-  key = fn.name, fn.copied_by 
-  if key in _function_names:
-    return _function_names[key]
-  
-  new_compiler = Compiler()
-  name, src = new_compiler.visit_fn(fn)
-  src = common_headers + src 
-  _function_names[key] = name
-  _function_defs[key] = src
-  return name
-
- 
-    
   
     
     
