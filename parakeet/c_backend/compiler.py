@@ -4,7 +4,7 @@ from .. import names, prims
 from ..analysis import SyntaxVisitor
 from ..syntax import Var, Const, TypedFn 
 from ..ndtypes import (TupleT, ScalarT, ArrayT, 
-                       elt_type) 
+                       elt_type, FloatT, IntT, BoolT) 
 
 from boxing import box_scalar, unbox_scalar
 from c_types import to_ctype, to_dtype
@@ -35,8 +35,23 @@ class Compiler(object):
     assert result is not None, "Compilation method for expression %s return None" % expr_class_name
     return result 
   
+      
   def visit_expr_list(self, exprs):
     return [self.visit_expr(e) for e in exprs]
+  
+  
+  def as_pyobj(self, expr):
+    """
+    Compile the expression and if necessary box it up as a PyObject
+    """
+    result = self.visit_expr(expr)
+    if isinstance(expr.type, ScalarT):
+      return box_scalar(result, expr.type)
+    else:
+      return result
+  
+  def as_pyobj_list(self, exprs):
+    return [self.as_pyobj(expr) for expr in exprs]
   
   def visit_stmt(self, stmt):
     stmt_class_name = stmt.__class__.__name__
@@ -89,6 +104,12 @@ class Compiler(object):
     n = len(expr.type.elt_types)
     self.stmt("%s %s[%d]" % (to_ctype(t0), array_name, n))
     
+  def visit_Alloc(self, expr):
+    elt_size = expr.elt_type.dtype.itemsize
+    elt_t = to_ctype(expr.elt_type)
+    nelts = self.visit_expr(expr.count)
+    return "(%s*) malloc(%d * %s)" % (elt_t, elt_size, nelts)
+  
   def visit_AllocArray(self, expr):
     shape = self.tuple_to_stack_array(expr.shape)
     t = to_dtype(elt_type(expr.type))
@@ -108,28 +129,54 @@ class Compiler(object):
     else:
       return "((%s) (%s))" % (ct, x)
   
+  def mk_tuple(self, elts):
+    elt_str = ", ".join(self.as_pyobj_list(elts)) 
+    n = len(elts)
+    return "PyTuple_Pack(%d, %s)" % (n, elt_str)
+    
   def visit_Tuple(self, expr):
-    elts = self.visit_expr_list(expr.elts)
-    elt_str = ", ".join(elts) 
-    n = len(expr.elts)
-    return "(PyTupleObject*) (%d, %s)" % (n, elt_str)
+    return self.mk_tuple(expr.elts)
   
-
-  
-  def visit_TupleProj(self, expr):
-    t = expr.type 
-    tup = self.visit_expr(expr.tuple)
-    is_scalar = isinstance(t, ScalarT)
-    cast_type = "PyObject*" if is_scalar else to_ctype(t) 
-    proj_str = "(%s) PyTuple_GET_ITEM(%s, %d)" % (cast_type, tup, expr.index)
-    if is_scalar:
+  def visit_Closure(self, expr):
+    return self.mk_tuple(expr.args)
+ 
+  def tuple_elt(self, tup, idx, t):
+    proj_str = "PyTuple_GET_ITEM(%s, %d)" % (tup, idx)
+    if isinstance(t, ScalarT):
       return unbox_scalar(proj_str, t)
     else:
       return proj_str 
   
-  def visit_Index(self, expr):
-    return "<INDEXING>: SHOULD BE REPLACED WITH FLATTENED CODE"
+  def visit_TupleProj(self, expr):
+    tup = self.visit_expr(expr.tuple)
+    return self.tuple_elt(tup, expr.index, expr.type)
   
+  def visit_ClosureElt(self, expr):
+    clos = self.visit_expr(expr.closure)
+    return self.tuple_elt(clos, expr.index, expr.type)
+  
+  def visit_Index(self, expr):
+    arr = self.visit_expr(expr.value)
+    idx = self.visit_expr(expr.index)
+    return "%s[%s]" % (arr, idx)
+  
+  
+  def visit_ArrayView(self, expr):
+    data = self.visit_expr(expr.data)
+    shape = self.visit_expr(expr.shape)
+    strides = self.visit_expr(expr.strides)
+    count = self.visit_expr(expr.size)
+    offset = self.visit_expr(expr.offset)
+    buffer_name = self.fresh_name("array_buffer")
+    bytes_per_elt = expr.type.elt_type.dtype.itemsize
+    self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % (buffer_name,  data, count, bytes_per_elt))
+    dtype = to_dtype(expr.type.elt_type)
+    
+    vec_name = self.fresh_name("linear_array")
+    #   _members = ['data', 'shape', 'strides', 'offset', 'size']
+    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s)" % (vec_name, buffer_name, dtype, count, offset))
+    return "PyArray_Reshape(%s, %s)" % (vec_name, shape)
+      
   def visit_Attribute(self, expr):
     attr = expr.name
     v = self.visit_expr(expr.value) 
@@ -139,6 +186,8 @@ class Compiler(object):
       return "PyArray_SHAPE(%s)" % v
     elif attr == "strides":
       return "PyArray_STRIDES(%s)" % v
+    elif attr == 'offset':
+      return "0"
     else:
       assert False, "Unsupported attribute %s" % attr 
       
@@ -164,16 +213,36 @@ class Compiler(object):
       return "%s | %s" % (args[0], args[1])
      
   def visit_Assign(self, stmt):
-    assert stmt.lhs.__class__ is Var
-    lhs_name = self.name(stmt.lhs.name)
+    #assert stmt.lhs.__class__ is Var
+    #lhs_name = self.name(stmt.lhs.name)
+    #rhs = self.visit_expr(stmt.rhs)
+    #return "%s = %s;" % (lhs_name, rhs)
+    lhs = self.visit_expr(stmt.lhs)
     rhs = self.visit_expr(stmt.rhs)
-    return "%s = %s;" % (lhs_name, rhs)
-  
+    if stmt.lhs.__class__ is Var:
+      return "%s %s = %s;" % (to_ctype(stmt.lhs.type), lhs, rhs)
+    else:
+      return "%s = %s;" % (lhs, rhs)
+    
   def visit_merge_left(self, merge):
-    pass 
+    if len(merge) == 0:
+      return ""
+    
+    stmts = ["\n"]
+    for (name, (left, _)) in merge.iteritems():
+      stmts.append("%s %s = %s;"  % (to_ctype(left.type), 
+                                     self.name(name), 
+                                     self.visit_expr(left)))
+    return "\n".join(stmts)
+      
   
   def visit_merge_right(self, merge):
-    pass 
+    if len(merge) == 0:
+      return ""
+    stmts = ["\n"]
+    for (name, (_, right)) in merge.iteritems():
+      stmts.append("%s = %s;"  % (self.name(name), self.visit_expr(right)))
+    return "\n".join(stmts)
     
   def visit_ForLoop(self, stmt):
     start = self.visit_expr(stmt.start)
@@ -182,8 +251,11 @@ class Compiler(object):
     var = self.visit_expr(stmt.var)
     t = to_ctype(stmt.var.type)
     
-    body = self.indent("\n" + self.visit_block(stmt.body))
-    s = "for (%(t)s %(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
+    body =  self.visit_block(stmt.body) +  self.visit_merge_right(stmt.merge)
+    body = self.indent("\n" + body)
+    
+    s = self.visit_merge_left(stmt.merge)
+    s += "\nfor (%(t)s %(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
     return s % locals()
   
   def visit_Return(self, stmt):
@@ -220,6 +292,7 @@ def function_source(fn):
   
   new_compiler = Compiler()
   name, src = new_compiler.visit_fn(fn)
+  src = common_headers + src 
   _function_names[key] = name
   _function_defs[key] = src
   return src
@@ -231,6 +304,7 @@ def function_name(fn):
   
   new_compiler = Compiler()
   name, src = new_compiler.visit_fn(fn)
+  src = common_headers + src 
   _function_names[key] = name
   _function_defs[key] = src
   return name

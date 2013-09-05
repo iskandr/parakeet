@@ -10,7 +10,7 @@ def fill_with_const(a, k):
   return parakeet.imap(return_const, a.shape)
   
 def test_fill_with_const():
-  shape=(10,20,30,3)
+  shape=(5,2,3,3)
   a = np.empty(shape=shape, dtype='float32')
   k = 3.137
   expected = np.ones(shape = shape, dtype='float32') * k
