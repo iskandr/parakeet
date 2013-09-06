@@ -127,9 +127,10 @@ def run_typed_fn(fn, args, backend = None):
     print loopy_fn
     
     from .. import c_backend 
-    print 
-    print c_backend.function_source(loopy_fn)
-    assert False 
+    compiled_fn = c_backend.compile(loopy_fn)
+    print compiled_fn.src 
+    return compiled_fn.fn_ptr(*args)
+     
   elif backend == "interp":
     from .. import interp 
     fn = pipeline.loopify(fn)

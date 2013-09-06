@@ -1,1 +1,1 @@
-from compiler import function_source  
+from compiler import function_source, compile, function_name  

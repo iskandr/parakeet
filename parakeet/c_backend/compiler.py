@@ -1,3 +1,6 @@
+import collections 
+import ctypes
+
 from treelike import NestedBlocks
 
 from .. import names, prims 
@@ -8,88 +11,31 @@ from ..ndtypes import (TupleT, ScalarT, ArrayT,
 
 from boxing import box_scalar, unbox_scalar
 from c_types import to_ctype, to_dtype
+from compile_util import compile_dll 
 
+CompiledFn = collections.namedtuple("CompiledFn",("fn_ptr", "src", "name"))
 
-_function_names = {}
-_function_defs = {}
+def compile(fn, _compile_cache = {}):
+  key = fn.name, fn.copied_by 
+  if key in _compile_cache:
+    return _compile_cache[key]
+  name, src = Translator().visit_fn(fn)
+  dll = compile_dll(src)
+  fn_ptr = getattr(dll, name)
+  fn_ptr.argtypes = (ctypes.py_object,) * len(fn.input_types)
+  fn_ptr.restype = ctypes.py_object
+  compiled_fn = CompiledFn(fn_ptr  = fn_ptr, src = src, name = name)
+  _compile_cache[key]  = compiled_fn
+  return compiled_fn
 
-header_names = ["math.h", "stdint.h", "Python.h", 'numpy/arrayobject.h']
-
-common_headers = "\n".join("#include <%s>" % header for header in header_names) + "\n"
-
-import distutils 
-python_include_dirs = [distutils.sysconfig.get_python_inc()]
-
-python_lib_dirs = []
-python_libs = ['python2.7']
-linker_flags = ["-l%s" % lib for lib in python_libs] + ["-L%s" % path for path in python_lib_dirs]
-
-import numpy as np 
-numpy_include_dirs = np.distutils.misc_util.get_numpy_include_dirs()
-
-include_dirs = python_include_dirs + numpy_include_dirs 
-
-compiler_flags = ['-I%s' % path for path in include_dirs]
-
-def get_default_compiler(compilers = ['clang', 'gcc']):
-  for compiler in compilers:
-    path = distutils.spawn.find_executable(compiler)
-    if path:
-      return path 
-  assert False, "No compiler found"
-  
-import subprocess
-def compile(src, src_filename = None):
-  if src_filename is None:
-    import tempfile
-    src_file = tempfile.NamedTemporaryFile(suffix = ".c", prefix = "parakeet_", delete=False)
-    src_filename = src_file.name 
-  else:
-    src_file = open(src_filename, 'w')
-  src_file.write(src)
-  src_file.close()
-  compiler = get_default_compiler()
-  object_name = src_filename.replace('.c', '.o')
-  subprocess.check_call([compiler] + compiler_flags + ['-fPIC'] + \
-                         ['-c', src_filename, '-o', object_name])
-  
-  shared_name = src_filename.replace('.c', '.so')
-  subprocess.check_call([compiler, '-shared'] + linker_flags + \
-                         ['-o', shared_name, object_name])
-  
-  import ctypes 
-  cdll = ctypes.cdll.LoadLibrary(shared_name)
-  print cdll 
-  return cdll.imap_wrapper_2_0() 
 
 def function_source(fn):
-  key = fn.name, fn.copied_by 
-  if key in _function_defs:
-    return _function_defs[key]
-  
-  new_compiler = Compiler()
-  name, src = new_compiler.visit_fn(fn)
-  src = common_headers + src 
-  print src 
-  compile(src)
-  _function_names[key] = name
-  _function_defs[key] = src
-  return src
+  return compile(fn).src 
 
 def function_name(fn):
-  key = fn.name, fn.copied_by 
-  if key in _function_names:
-    return _function_names[key]
-  
-  new_compiler = Compiler()
-  name, src = new_compiler.visit_fn(fn)
-  src = common_headers + src 
-  _function_names[key] = name
-  _function_defs[key] = src
-  return name
+  return compile(fn).name 
 
-
-class Compiler(object):
+class Translator(object):
    
   def __init__(self):
     self.blocks = []
@@ -307,6 +253,8 @@ class Compiler(object):
       return "%s | %s" % (args[0], args[1])
      
   def visit_Assign(self, stmt):
+    self.append('printf("Running %s\\n");' % stmt)
+    
     #assert stmt.lhs.__class__ is Var
     #lhs_name = self.name(stmt.lhs.name)
     #rhs = self.visit_expr(stmt.rhs)
