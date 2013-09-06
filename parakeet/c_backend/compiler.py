@@ -20,6 +20,10 @@ common_headers = "\n".join("#include <%s>" % header for header in header_names) 
 import distutils 
 python_include_dirs = [distutils.sysconfig.get_python_inc()]
 
+python_lib_dirs = []
+python_libs = ['python2.7']
+linker_flags = ["-l%s" % lib for lib in python_libs] + ["-L%s" % path for path in python_lib_dirs]
+
 import numpy as np 
 numpy_include_dirs = np.distutils.misc_util.get_numpy_include_dirs()
 
@@ -27,7 +31,7 @@ include_dirs = python_include_dirs + numpy_include_dirs
 
 compiler_flags = ['-I%s' % path for path in include_dirs]
 
-def get_default_compiler(compilers = ['clang', 'g++']):
+def get_default_compiler(compilers = ['clang', 'gcc']):
   for compiler in compilers:
     path = distutils.spawn.find_executable(compiler)
     if path:
@@ -38,16 +42,25 @@ import subprocess
 def compile(src, src_filename = None):
   if src_filename is None:
     import tempfile
-    src_file = tempfile.NamedTemporaryFile(suffix = ".cpp", prefix = "parakeet_source", delete=False)
+    src_file = tempfile.NamedTemporaryFile(suffix = ".c", prefix = "parakeet_", delete=False)
     src_filename = src_file.name 
   else:
     src_file = open(src_filename, 'w')
   src_file.write(src)
   src_file.close()
   compiler = get_default_compiler()
-  target_name = src_filename.replace('.cpp', '.so')
-  subprocess.check_call([compiler] + compiler_flags + ['-c', src_filename, '-shared', '-o', target_name])
-
+  object_name = src_filename.replace('.c', '.o')
+  subprocess.check_call([compiler] + compiler_flags + ['-fPIC'] + \
+                         ['-c', src_filename, '-o', object_name])
+  
+  shared_name = src_filename.replace('.c', '.so')
+  subprocess.check_call([compiler, '-shared'] + linker_flags + \
+                         ['-o', shared_name, object_name])
+  
+  import ctypes 
+  cdll = ctypes.cdll.LoadLibrary(shared_name)
+  print cdll 
+  return cdll.imap_wrapper_2_0() 
 
 def function_source(fn):
   key = fn.name, fn.copied_by 
