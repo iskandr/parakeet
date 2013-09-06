@@ -46,5 +46,5 @@ def compile_dll(src, src_filename = None):
   subprocess.check_call([compiler, '-shared'] + linker_flags + \
                          ['-o', shared_name, object_name])
   
-  cdll = ctypes.cdll.LoadLibrary(shared_name)
+  cdll = ctypes.pydll.LoadLibrary(shared_name)
   return cdll 

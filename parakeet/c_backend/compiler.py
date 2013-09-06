@@ -6,12 +6,13 @@ from treelike import NestedBlocks
 from .. import names, prims 
 from ..analysis import SyntaxVisitor
 from ..syntax import Var, Const, TypedFn 
-from ..ndtypes import (TupleT, ScalarT, ArrayT, 
+from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT, 
                        elt_type, FloatT, IntT, BoolT) 
 
 from boxing import box_scalar, unbox_scalar
 from c_types import to_ctype, to_dtype
 from compile_util import compile_dll 
+from config import debug 
 
 CompiledFn = collections.namedtuple("CompiledFn",("fn_ptr", "src", "name"))
 
@@ -20,10 +21,13 @@ def compile(fn, _compile_cache = {}):
   if key in _compile_cache:
     return _compile_cache[key]
   name, src = Translator().visit_fn(fn)
+  
+  print src 
   dll = compile_dll(src)
   fn_ptr = getattr(dll, name)
   fn_ptr.argtypes = (ctypes.py_object,) * len(fn.input_types)
   fn_ptr.restype = ctypes.py_object
+  
   compiled_fn = CompiledFn(fn_ptr  = fn_ptr, src = src, name = name)
   _compile_cache[key]  = compiled_fn
   return compiled_fn
@@ -90,6 +94,9 @@ class Translator(object):
   def append(self, stmt):
     self.blocks[-1].append(stmt)
   
+  def printf(self, str):
+    self.append('printf("%s\\n");' % str)
+    
   def fresh_name(self, prefix):
     prefix = names.original(prefix)
     prefix = prefix.replace(".", "_")
@@ -99,12 +106,12 @@ class Translator(object):
     else:
       return "%s_%d" % (prefix, version)
   
-  def name(self, ssa_name):
+  def name(self, ssa_name, overwrite = False):
     """
     Convert from ssa names, which might have large version numbers and contain 
     syntactically invalid characters to valid local C names
     """
-    if ssa_name in self.name_mappings:
+    if ssa_name in self.name_mappings and not overwrite:
       return self.name_mappings[ssa_name]
     prefix = names.original(ssa_name)
     prefix = prefix.replace(".", "_")
@@ -112,14 +119,24 @@ class Translator(object):
     self.name_mappings[ssa_name] = name 
     return name 
 
+  def check_tuple(self, tup):
+    self.printf("Checking tuple type for %s" % tup)
+    self.append('printf("Tuple OK? %%d\\n", PyTuple_Check(%s));' % tup)
+ 
+  def check_array(self, arr):
+    self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
+    self.append('printf("Array OK? %%d\\n", PyArray_Check(%s));' % (arr,))
+ 
   def tuple_to_stack_array(self, expr):
-    assert expr.type.__class__ is TupleT 
+    if debug:
+      assert expr.type.__class__ is TupleT 
+      assert all(t == t0 for t in expr.type.elt_types[1:])
     t0 = expr.type.elt_types[0]
-    assert all(t == t0 for t in expr.type.elt_types[1:])
+    tup = self.visit_expr(expr)
+    if debug: self.check_tuple(tup)
     array_name = self.fresh_name("array_from_tuple")
     n = len(expr.type.elt_types)
     self.append("%s %s[%d];" % (to_ctype(t0), array_name, n))
-    tup = self.visit_expr(expr)
     for i, elt in enumerate(self.tuple_elts(tup, expr.type.elt_types)):
       self.append("%s[%d] = %s;" % array_name, i, elt )
     return array_name
@@ -166,7 +183,8 @@ class Translator(object):
     return self.mk_tuple(expr.args)
  
   def tuple_elt(self, tup, idx, t):
-    proj_str = "PyTuple_GET_ITEM(%s, %d)" % (tup, idx)
+    if debug: self.check_tuple(tup)
+    proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
     if isinstance(t, ScalarT):
       return unbox_scalar(proj_str, t)
     else:
@@ -206,31 +224,42 @@ class Translator(object):
     vec_name = self.fresh_name("linear_array")
     #   _members = ['data', 'shape', 'strides', 'offset', 'size']
     self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % (vec_name, buffer_name, dtype, count, offset))
-    # TODO: Assign PyArray_STRIDES[i] = PyTuple_GETITEM(strides, i)
+    # TODO: Assign PyArray_STRIDES[i] = PyTuple_GetItem(strides, i)
     return "PyArray_Reshape(( PyArrayObject*) %s, %s)" % (vec_name, shape)
-      
-  def visit_Attribute(self, expr):
-    attr = expr.name
-    v = self.visit_expr(expr.value) 
+    
+  def attribute(self, v, attr, t):
     if attr == "data":
-      return "(%s) PyArray_DATA (%s)" % (to_ctype(expr.type), v)
+      if debug: self.check_array(v)
+      return "(%s) PyArray_DATA (%s)" % (to_ctype(t), v)
     elif attr == "shape":
+      if debug: self.check_array(v)
       elt_types = expr.type.elt_types
       n = len(elt_types)
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
       return self.array_to_tuple("PyArray_SHAPE(%s)" % v, n, elt_t) 
     elif attr == "strides":
-      elt_types = expr.type.elt_types
+      if debug: self.check_array(v)
+      elt_types = t.elt_types
       n = len(elt_types)
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
-      return self.array_to_tuple("PyArray_STRIDES(%s)" % v, n, elt_t)
+      strides_name = self.fresh_name("strides")
+      self.printf("Getting strides of %s" % v)
+      self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_name, v))
+      strides_tuple = self.array_to_tuple(strides_name, n, elt_t)
+      self.printf("Turning array to tuple")
+      return strides_tuple
     elif attr == 'offset':
       return "0"
     else:
       assert False, "Unsupported attribute %s" % attr 
-      
+    
+  def visit_Attribute(self, expr):
+    attr = expr.name
+    v = self.visit_expr(expr.value) 
+    return self.attribute(v, attr, expr.type)
+    
   def visit_PrimCall(self, expr):
     args = self.visit_expr_list(expr.args)
     p = expr.prim 
@@ -303,8 +332,8 @@ class Translator(object):
   def visit_Return(self, stmt):
     return "return %s;" % self.visit_expr(stmt.value)
   
-  def visit_block(self, stmts):
-    self.push()
+  def visit_block(self, stmts, push = True):
+    if push: self.push()
     for stmt in stmts:
       s = self.visit_stmt(stmt)
       self.append(s)
@@ -316,15 +345,43 @@ class Translator(object):
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
-     
+  
+  def check_type(self, v, t):
+    if isinstance(t, (ClosureT, TupleT)):
+      self.printf("Checking tuple for %s" % v)
+      self.append('printf("Is %s a tuple? %%d\\n", PyTuple_Check(%s));' % (v,v))
+    elif isinstance(t, IntT):
+      self.printf("Checking int for %s" % v)
+      self.append('printf("Is %s an int? %%d\\n", PyInt_Check(%s));' % (v,v))
+        
   def visit_fn(self, fn):
-    c_input_names = [self.name(argname) for argname in fn.arg_names]
-    c_input_types = [to_ctype(t) for t in fn.input_types]
-    input_str = ", ".join(ct + " " + n for (ct, n) in zip(c_input_types, c_input_names))
-    c_return_type = to_ctype(fn.return_type)
     c_fn_name = self.fresh_name(fn.name)
-    c_body = self.indent("\n" + self.visit_block(fn.body))
-    fndef = "%(c_return_type)s %(c_fn_name)s (%(input_str)s) {%(c_body)s}" % locals()
+    c_args = ", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
+    
+    self.push()
+    self.printf("Eval init")
+    self.append("PyEval_InitThreads();")
+    self.printf("Create GILstate")
+    #self.append("PyGILState_STATE gstate;")
+    self.printf("GILstate ensure")
+    #self.append("gstate = PyGILState_Ensure();")
+    
+    for i, argname in enumerate(fn.arg_names):
+      c_name = self.name(argname)
+      if debug:
+        self.check_type(c_name, fn.type_env[argname])
+      #if debug:
+      #  self.printf("Printing arg #%d %s" % (i,c_name))
+      #  self.append('printf("Type: %%s\\n", PyString_AsString(PyObject_Str(PyObject_Type(%s))));' % c_name)
+      #  self.append('printf("Value: %%s\\n", PyString_AsString(PyObject_Str(%s)));' % c_name)
+      
+      t = fn.type_env[argname]
+      if isinstance(t, ScalarT):
+        new_name = self.name(argname, overwrite = True)
+        self.append("%s %s = %s;" % (to_ctype(t), c_name, unbox(c_name)))
+    c_body = self.visit_block(fn.body, push=False)
+    c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
+    fndef = "PyObject* %(c_fn_name)s (%(c_args)s) {%(c_body)s}" % locals()
     return c_fn_name, fndef 
 
   

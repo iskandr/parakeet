@@ -122,13 +122,11 @@ def run_typed_fn(fn, args, backend = None):
   elif backend == 'c':
     flat_fn = pipeline.flatten.apply(fn)
     loopy_fn = pipeline.loopify.apply(flat_fn)
-    
-    print 
-    print loopy_fn
-    
     from .. import c_backend 
     compiled_fn = c_backend.compile(loopy_fn)
-    print compiled_fn.src 
+    
+    args = c_backend.prepare_args(args)
+    print "inputs", args
     return compiled_fn.fn_ptr(*args)
      
   elif backend == "interp":
