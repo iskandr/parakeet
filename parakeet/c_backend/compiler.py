@@ -23,6 +23,8 @@ def compile(fn, _compile_cache = {}):
   name, src = Translator().visit_fn(fn)
   
   print src 
+  
+  
   dll = compile_dll(src)
   fn_ptr = getattr(dll, name)
   fn_ptr.argtypes = (ctypes.py_object,) * len(fn.input_types)
@@ -101,6 +103,7 @@ class Translator(object):
     prefix = names.original(prefix)
     prefix = prefix.replace(".", "_")
     version = self.name_versions.get(prefix, 1)
+    self.name_versions[prefix] = version + 1
     if version == 1:
       return prefix 
     else:
@@ -280,7 +283,27 @@ class Translator(object):
       return "%s | %s" % (args[0], args[1])
     elif p == prims.bitwise_or:
       return "%s | %s" % (args[0], args[1])
-     
+    elif p == prims.equal:
+      return "%s == %s" % (args[0], args[1])
+    elif p == prims.not_equal:
+      return "%s != %s" % (args[0], args[1])
+    elif p == prims.greater:
+      return "%s > %s" % (args[0], args[1])
+    elif p == prims.greater_equal:
+      return "%s >= %s" % (args[0], args[1])
+    elif p == prims.less:
+      return "%s < %s" % (args[0], args[1])
+    elif p == prims.less_equal:
+      return "%s <= %s" % (args[0], args[1])
+    
+    else:
+      assert False, "Prim not yet implemented: %s" % p
+  
+  def visit_Select(self, expr):
+    cond = self.visit_expr(expr.cond)
+    true = self.visit_expr(expr.true_value)
+    false = self.visit_expr(expr.false_value)
+    return "%s ? %s : %s" % (true, cond, false) 
   def visit_Assign(self, stmt):
     self.append('printf("Running %s\\n");' % stmt)
     
@@ -330,7 +353,7 @@ class Translator(object):
     return s % locals()
   
   def visit_Return(self, stmt):
-    return "return %s;" % self.visit_expr(stmt.value)
+    return "return %s;" % self.as_pyobj(stmt.value)
   
   def visit_block(self, stmts, push = True):
     if push: self.push()
@@ -360,10 +383,11 @@ class Translator(object):
     
     self.push()
     self.printf("Eval init")
-    self.append("PyEval_InitThreads();")
-    self.printf("Create GILstate")
+    self.append("Py_Initialize();")
+    #self.append("PyEval_InitThreads();")
+    #self.printf("Create GILstate")
     #self.append("PyGILState_STATE gstate;")
-    self.printf("GILstate ensure")
+    #self.printf("GILstate ensure")
     #self.append("gstate = PyGILState_Ensure();")
     
     for i, argname in enumerate(fn.arg_names):
@@ -378,7 +402,7 @@ class Translator(object):
       t = fn.type_env[argname]
       if isinstance(t, ScalarT):
         new_name = self.name(argname, overwrite = True)
-        self.append("%s %s = %s;" % (to_ctype(t), c_name, unbox(c_name)))
+        self.append("%s %s = %s;" % (to_ctype(t), new_name, unbox_scalar(c_name, t)))
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
     fndef = "PyObject* %(c_fn_name)s (%(c_args)s) {%(c_body)s}" % locals()

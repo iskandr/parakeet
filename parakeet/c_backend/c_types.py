@@ -2,7 +2,7 @@
 from ..ndtypes import (UInt8, UInt16, UInt32, UInt64, 
                        Int8, Int16, Int32, Int64, Float32, Float64, NoneType,  
                        TupleT, ScalarT, NoneT, ArrayT, SliceT, Type, 
-                       ClosureT, PtrT)
+                       ClosureT, PtrT, Bool)
 
 
 
@@ -18,6 +18,7 @@ def to_dtype(t):
     assert False, "Unsupported element type %s" % t
   
 def to_ctype(t):
+  
   if t == Int8: return "int8_t"
   elif t == UInt8: return "uint8_t"
   elif t == UInt16: return "uint16_t"
@@ -28,8 +29,8 @@ def to_ctype(t):
   elif t == Int64: return "int64_t"
   elif t == Float32: return "float"
   elif t == Float64: return "double"
-  elif t == NoneType: return "void"
-  
+  elif t == NoneType: return "int"
+  elif t == Bool: return "int"
   #elif isinstance(t, ArrayT):
   #  return "PyArrayObject*"
   #elif isinstance(t, (ClosureT, TupleT)):

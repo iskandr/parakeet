@@ -39,7 +39,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
     label += "-" + str(msg)
   expect_eq(interp_result, expected, label)
 
-  llvm_result = run_python_fn(fn, _copy_list(args), backend="llvm")
+  llvm_result = run_python_fn(fn, _copy_list(args), backend="c")
   if valid_types is not None:
     if not isinstance(valid_types, (tuple, list)):
       valid_types = [valid_types]

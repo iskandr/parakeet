@@ -44,16 +44,16 @@ print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
-print_lowered_function = True
+print_lowered_function = False
 
 # before starting function specialization, print the fn name and input types 
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['Flatten', 'ShapeElimination'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms = []#['Flatten', 'ShapeElimination'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [ 'Flatten',  'ShapeElimination']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = [] #[ 'Flatten',  'ShapeElimination']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -62,7 +62,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = True 
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
