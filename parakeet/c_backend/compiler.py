@@ -11,10 +11,10 @@ from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT,
 
 from boxing import box_scalar, unbox_scalar
 from c_types import to_ctype, to_dtype
-from compile_util import compile_dll 
+from compile_util import compile_module 
 from config import debug 
 
-CompiledFn = collections.namedtuple("CompiledFn",("fn_ptr", "src", "name"))
+CompiledFn = collections.namedtuple("CompiledFn",("c_fn", "src", "name"))
 
 def compile(fn, _compile_cache = {}):
   key = fn.name, fn.copied_by 
@@ -25,12 +25,12 @@ def compile(fn, _compile_cache = {}):
   print src 
   
   
-  dll = compile_dll(src)
-  fn_ptr = getattr(dll, name)
-  fn_ptr.argtypes = (ctypes.py_object,) * len(fn.input_types)
-  fn_ptr.restype = ctypes.py_object
+  c_fn = compile_module(src, name)
+  #fn_ptr = getattr(dll, name)
+  #fn_ptr.argtypes = (ctypes.py_object,) * len(fn.input_types)
+  #fn_ptr.restype = ctypes.py_object
   
-  compiled_fn = CompiledFn(fn_ptr  = fn_ptr, src = src, name = name)
+  compiled_fn = CompiledFn(c_fn  = c_fn, src = src, name = name)
   _compile_cache[key]  = compiled_fn
   return compiled_fn
 
@@ -236,11 +236,11 @@ class Translator(object):
       return "(%s) PyArray_DATA (%s)" % (to_ctype(t), v)
     elif attr == "shape":
       if debug: self.check_array(v)
-      elt_types = expr.type.elt_types
+      elt_types = t.elt_types
       n = len(elt_types)
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
-      return self.array_to_tuple("PyArray_SHAPE(%s)" % v, n, elt_t) 
+      return self.array_to_tuple("PyArray_SHAPE( (PyArrayObject*) %s)" % v, n, elt_t) 
     elif attr == "strides":
       if debug: self.check_array(v)
       elt_types = t.elt_types

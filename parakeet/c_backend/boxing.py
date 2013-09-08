@@ -14,7 +14,7 @@ def box_scalar(x, t):
 def unbox_scalar(x,t):
   if isinstance(t, IntT):
     return "PyInt_AS_LONG(%s)" % x
-  elif isinstnace(t, FloatT):
+  elif isinstance(t, FloatT):
     return "PyFloat_AS_DOUBLE(%s)" % x
   elif isinstance(t, BoolT):
     return "%s == Py_True" % x
