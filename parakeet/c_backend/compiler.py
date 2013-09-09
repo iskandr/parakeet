@@ -240,7 +240,7 @@ class Translator(object):
       n = len(elt_types)
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
-      return self.array_to_tuple("PyArray_SHAPE( (PyArrayObject*) %s)" % v, n, elt_t) 
+      return self.array_to_tuple("PyArray_DIMS( (PyArrayObject*) %s)" % v, n, elt_t) 
     elif attr == "strides":
       if debug: self.check_array(v)
       elt_types = t.elt_types
