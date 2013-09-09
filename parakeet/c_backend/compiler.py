@@ -12,25 +12,25 @@ from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT,
 from boxing import box_scalar, unbox_scalar
 from c_types import to_ctype, to_dtype
 from compile_util import compile_module 
-from config import debug 
+from config import debug, print_function_source, print_module_source 
+from reserved_names import is_reserved
 
-CompiledFn = collections.namedtuple("CompiledFn",("c_fn", "src", "name"))
+CompiledFn = collections.namedtuple("CompiledFn",("c_fn", "module", "filename", "src", "name"))
 
 def compile(fn, _compile_cache = {}):
   key = fn.name, fn.copied_by 
   if key in _compile_cache:
     return _compile_cache[key]
   name, src = Translator().visit_fn(fn)
-  
-  print src 
-  
-  
-  c_fn = compile_module(src, name)
-  #fn_ptr = getattr(dll, name)
-  #fn_ptr.argtypes = (ctypes.py_object,) * len(fn.input_types)
-  #fn_ptr.restype = ctypes.py_object
-  
-  compiled_fn = CompiledFn(c_fn  = c_fn, src = src, name = name)
+  if print_function_source:
+    print "Generated C source for %s:" %(name, src)
+  module = compile_module(src, name, print_source = print_module_source)
+  c_fn = getattr(module,name)
+  compiled_fn = CompiledFn(c_fn = c_fn, 
+                           module = module, 
+                           filename= module.__file__,
+                           src = src, 
+                           name = name)
   _compile_cache[key]  = compiled_fn
   return compiled_fn
 
@@ -96,15 +96,26 @@ class Translator(object):
   def append(self, stmt):
     self.blocks[-1].append(stmt)
   
-  def printf(self, str):
-    self.append('printf("%s\\n");' % str)
+  def printf(self, s):
+    self.append('printf("%s\\n");' % s)
+  
+  def c_str(self, obj):
+    return "PyString_AsString(PyObject_Str(%s))" % obj
+  
+  def print_pyobj(self, obj, text = ""):
+    text = '"%s"' % text
+    self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_str(obj)))
+  
+  def print_pyobj_type(self, obj, text=""):
+    text = '"%s"' % text
+    self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_str("PyObject_Type(%s)" % obj)))
     
   def fresh_name(self, prefix):
     prefix = names.original(prefix)
     prefix = prefix.replace(".", "_")
     version = self.name_versions.get(prefix, 1)
     self.name_versions[prefix] = version + 1
-    if version == 1:
+    if version == 1 and not is_reserved(prefix):
       return prefix 
     else:
       return "%s_%d" % (prefix, version)
@@ -123,18 +134,22 @@ class Translator(object):
     return name 
 
   def check_tuple(self, tup):
-    self.printf("Checking tuple type for %s" % tup)
-    self.append('printf("Tuple OK? %%d\\n", PyTuple_Check(%s));' % tup)
+    if debug:
+      self.printf("Checking tuple type for %s" % tup)
+      self.append('printf("Tuple OK? %%d\\n", PyTuple_Check(%s));' % tup)
  
   def check_array(self, arr):
-    self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
-    self.append('printf("Array OK? %%d\\n", PyArray_Check(%s));' % (arr,))
+    if debug:
+      self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
+      self.append('printf("Array OK? %%d\\n", PyArray_Check(%s));' % (arr,))
  
   def tuple_to_stack_array(self, expr):
+    t0 = expr.type.elt_types[0]
+    
     if debug:
       assert expr.type.__class__ is TupleT 
       assert all(t == t0 for t in expr.type.elt_types[1:])
-    t0 = expr.type.elt_types[0]
+      
     tup = self.visit_expr(expr)
     if debug: self.check_tuple(tup)
     array_name = self.fresh_name("array_from_tuple")
@@ -161,6 +176,8 @@ class Translator(object):
     return "PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
   
   def visit_Const(self, expr):
+    if isinstance(expr.type, BoolT):
+      return "Py_True == Py_%s" % expr.value
     return "%s" % expr.value 
   
   def visit_Var(self, expr):
@@ -240,7 +257,11 @@ class Translator(object):
       n = len(elt_types)
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
-      return self.array_to_tuple("PyArray_DIMS( (PyArrayObject*) %s)" % v, n, elt_t) 
+      shape_name = self.fresh_name("strides")
+      shape_array = "PyArray_DIMS( (PyArrayObject*) %s)" % v
+      self.append("npy_intp* %s = %s;" % (shape_name, shape_array))
+      return self.array_to_tuple(shape_name, n, elt_t)
+      
     elif attr == "strides":
       if debug: self.check_array(v)
       elt_types = t.elt_types
@@ -248,10 +269,10 @@ class Translator(object):
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
       strides_name = self.fresh_name("strides")
-      self.printf("Getting strides of %s" % v)
+      if debug: self.printf("Getting strides of %s" % v)
       self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_name, v))
       strides_tuple = self.array_to_tuple(strides_name, n, elt_t)
-      self.printf("Turning array to tuple")
+      if debug: self.printf("Turning array to tuple")
       return strides_tuple
     elif attr == 'offset':
       return "0"
@@ -303,9 +324,10 @@ class Translator(object):
     cond = self.visit_expr(expr.cond)
     true = self.visit_expr(expr.true_value)
     false = self.visit_expr(expr.false_value)
-    return "%s ? %s : %s" % (true, cond, false) 
+    return "%s ? %s : %s" % (cond, true, false) 
+  
   def visit_Assign(self, stmt):
-    self.append('printf("Running %s\\n");' % stmt)
+    # if debug: self.append('printf("Running %s\\n");' % stmt)
     
     #assert stmt.lhs.__class__ is Var
     #lhs_name = self.name(stmt.lhs.name)
@@ -353,7 +375,10 @@ class Translator(object):
     return s % locals()
   
   def visit_Return(self, stmt):
-    return "return %s;" % self.as_pyobj(stmt.value)
+    v = self.as_pyobj(stmt.value)
+    self.print_pyobj_type(v, "Return type: ")
+    self.print_pyobj(v, "Return value: ")
+    return "return %s;" % v
   
   def visit_block(self, stmts, push = True):
     if push: self.push()
@@ -370,6 +395,7 @@ class Translator(object):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
   
   def check_type(self, v, t):
+    if not debug: return
     if isinstance(t, (ClosureT, TupleT)):
       self.printf("Checking tuple for %s" % v)
       self.append('printf("Is %s a tuple? %%d\\n", PyTuple_Check(%s));' % (v,v))
@@ -385,30 +411,22 @@ class Translator(object):
     c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
     
     self.push()
-    #self.printf("Eval init")
-    #self.append("Py_Initialize();")
-    #self.append("PyEval_InitThreads();")
-    #self.printf("Create GILstate")
-    #self.append("PyGILState_STATE gstate;")
-    #self.printf("GILstate ensure")
-    #self.append("gstate = PyGILState_Ensure();")
-    
     for i, argname in enumerate(fn.arg_names):
-      
       c_name = self.name(argname)
-      self.append("PyObject* %s = PyTuple_GET_ITEM(%s, %d);" % (c_name, args, i))
+      self.append("PyObject* %s = PyTuple_GetItem(%s, %d);" % (c_name, args, i))
       if debug:
         self.check_type(c_name, fn.type_env[argname])
       
       if debug:
         self.printf("Printing arg #%d %s" % (i,c_name))
-        self.append('printf("Type: %%s\\n", PyString_AsString(PyObject_Str(PyObject_Type(%s))));' % c_name)
-        self.append('printf("Value: %%s\\n", PyString_AsString(PyObject_Str(%s)));' % c_name)
+        self.print_pyobj_type(c_name, text = "Type: ")
+        self.print_pyobj(c_name, text = "Value: ")
       
       t = fn.type_env[argname]
       if isinstance(t, ScalarT):
         new_name = self.name(argname, overwrite = True)
         self.append("%s %s = %s;" % (to_ctype(t), new_name, unbox_scalar(c_name, t)))
+        
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
     fndef = "PyObject* %(c_fn_name)s (%(c_args)s) {%(c_body)s}" % locals()

@@ -50,9 +50,10 @@ include_dirs = python_include_dirs + numpy_include_dirs
 compiler_flags = ['-I%s' % path for path in include_dirs] +  ['-fPIC']
 
 
-def compile_module(src, fn_name, src_filename = None, 
-                      print_source = True, 
-                      print_commands = True):
+def compile_module(src, fn_name, 
+                     src_filename = None, 
+                     print_source = True, 
+                     print_commands = True):
   src = common_headers + src
   if src_filename is None:
     src_file = tempfile.NamedTemporaryFile(suffix = source_extension, 
@@ -106,5 +107,4 @@ def compile_module(src, fn_name, src_filename = None,
     print subprocess.check_output(change_cmd)
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
-  m = imp.load_dynamic(fn_name, shared_name)
-  return getattr(m, fn_name)
+  return imp.load_dynamic(fn_name, shared_name)

@@ -78,8 +78,8 @@ def simple_merge(x):
   return y
 
 def test_simple_merge():
-  expect(simple_merge, [0], 1)
   expect(simple_merge, [2], 2)
+  expect(simple_merge, [0], 1)
 
 def one_sided_merge(x,b):
   if b:
