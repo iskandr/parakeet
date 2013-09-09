@@ -127,7 +127,7 @@ def run_typed_fn(fn, args, backend = None):
     
     args = c_backend.prepare_args(args)
     print "inputs", args
-    return compiled_fn.fn_ptr(*args)
+    return compiled_fn.c_fn(*args)
      
   elif backend == "interp":
     from .. import interp 

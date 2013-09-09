@@ -379,11 +379,14 @@ class Translator(object):
         
   def visit_fn(self, fn):
     c_fn_name = self.fresh_name(fn.name)
-    c_args = ", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
+    dummy = self.fresh_name("dummy")
+    args = self.fresh_name("args")
+    
+    c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
     
     self.push()
-    self.printf("Eval init")
-    self.append("Py_Initialize();")
+    #self.printf("Eval init")
+    #self.append("Py_Initialize();")
     #self.append("PyEval_InitThreads();")
     #self.printf("Create GILstate")
     #self.append("PyGILState_STATE gstate;")
@@ -391,13 +394,16 @@ class Translator(object):
     #self.append("gstate = PyGILState_Ensure();")
     
     for i, argname in enumerate(fn.arg_names):
+      
       c_name = self.name(argname)
+      self.append("PyObject* %s = PyTuple_GET_ITEM(%s, %d);" % (c_name, args, i))
       if debug:
         self.check_type(c_name, fn.type_env[argname])
-      #if debug:
-      #  self.printf("Printing arg #%d %s" % (i,c_name))
-      #  self.append('printf("Type: %%s\\n", PyString_AsString(PyObject_Str(PyObject_Type(%s))));' % c_name)
-      #  self.append('printf("Value: %%s\\n", PyString_AsString(PyObject_Str(%s)));' % c_name)
+      
+      if debug:
+        self.printf("Printing arg #%d %s" % (i,c_name))
+        self.append('printf("Type: %%s\\n", PyString_AsString(PyObject_Str(PyObject_Type(%s))));' % c_name)
+        self.append('printf("Value: %%s\\n", PyString_AsString(PyObject_Str(%s)));' % c_name)
       
       t = fn.type_env[argname]
       if isinstance(t, ScalarT):
