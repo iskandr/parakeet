@@ -8,9 +8,10 @@ import tempfile
 
 header_names = ["Python.h", 
                 'numpy/arrayobject.h',
+                'numpy/arrayscalars.h',
                 "stdint.h", 
                 "math.h", 
-                ]
+                ]#include <numpy/arrayscalars.h>
 common_headers = "\n".join("#include <%s>" % header for header in header_names) + "\n"
 
 config_vars = distutils.sysconfig.get_config_vars()

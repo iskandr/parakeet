@@ -124,7 +124,7 @@ def run_typed_fn(fn, args, backend = None):
     loopy_fn = pipeline.loopify.apply(flat_fn)
     from .. import c_backend 
     compiled_fn = c_backend.compile(loopy_fn)
-    args = c_backend.prepare_args(args)
+    args = c_backend.prepare_args(args, fn.input_types)
     print "Inputs to compiled code...", args
     return compiled_fn.c_fn(*args)
      
