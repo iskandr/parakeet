@@ -350,7 +350,6 @@ class Translator(object):
                                      self.name(name), 
                                      self.visit_expr(left)))
     return "\n".join(stmts)
-      
   
   def visit_merge_right(self, merge):
     if len(merge) == 0:
@@ -359,7 +358,17 @@ class Translator(object):
     for (name, (_, right)) in merge.iteritems():
       stmts.append("%s = %s;"  % (self.name(name), self.visit_expr(right)))
     return "\n".join(stmts)
+  
+  
+  
+  def visit_If(self, stmt):
+    #  'true', 'false', 'merge']
+    cond = self.visit_expr(stmt.cond)
+    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge)
+    false = self.visit_block(stmt.false) + self.visit_merge_right(stmt.merge)
+    return "if(%s) {%s} else {%s}" % (cond, true, false) 
     
+  
   def visit_ForLoop(self, stmt):
     start = self.visit_expr(stmt.start)
     stop = self.visit_expr(stmt.stop)
