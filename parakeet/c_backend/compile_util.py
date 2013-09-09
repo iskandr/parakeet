@@ -61,6 +61,7 @@ def compile_module(src, fn_name, src_filename = None):
   {
     //Py_Initialize();
     Py_InitModule("%(fn_name)s", %(fn_name)sMethods);
+    import_array();
   }
   """ % locals())
   
