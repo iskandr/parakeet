@@ -136,7 +136,7 @@ class Translator(object):
     else:
       return "%s_%d" % (prefix, version)
   
-  def fresh_var(self, t, prefix = None):
+  def fresh_var(self, t, prefix = None, init = None):
     if prefix is None:
       prefix = "temp"
     name = self.fresh_name(prefix)
@@ -144,8 +144,10 @@ class Translator(object):
       t_str = t
     else:
       t_str = to_ctype(t)
-      
-    self.append("%s %s;" % (t_str, name))
+    if init is None:
+      self.append("%s %s;" % (t_str, name))
+    else:
+      self.append("%s %s = %s;" % (t_str, name, init))
     return name
   
   def assign(self, name, rhs):
@@ -310,7 +312,7 @@ class Translator(object):
     attr = expr.name
     v = self.visit_expr(expr.value) 
     return self.attribute(v, attr, expr.type)
-    
+  
   def visit_PrimCall(self, expr):
     t = expr.type
     args = self.visit_expr_list(expr.args)
@@ -345,14 +347,21 @@ class Translator(object):
     elif p == prims.less_equal:
       return "%s <= %s" % (args[0], args[1])
     elif p == prims.remainder:
-      assert isinstance(t, IntT)
       x,y = args
-      xdivy = self.fresh_var(t, "xdivy")
-      xmody = self.fresh_var(t, "xmody")
-      self.assign(xdivy, "(%s)(%s - (unsigned long)%s * %s)" % (to_ctype(t), x, xdivy, y))
-      self.append("if (%s && ((%s ^ %s) < 0) /* i.e. and signs differ */) { %s += %s;}" % \
-                    (xmody, y, xmody, xmody, y))
-      return xmody
+      assert isinstance(t, IntT), "Modulo not yet implemented for floats"
+      
+      rem = self.fresh_var(t, "rem", "%s %% %s" % (x,y))
+
+      y_is_negative = self.fresh_var(t, "y_is_negative", "%s < 0" % y)
+      rem_is_negative = self.fresh_var(t, "rem_is_negative", "%s < 0" % rem)
+      y_nonzero = self.fresh_var(t, "y_nonzero", "%s != 0" % y)
+      rem_nonzero = self.fresh_var(t, "rem_nonzero", "%s != 0" % rem)
+      neither_zero = self.fresh_var(t, "neither_zero", "%s && %s" % (y_nonzero, rem_nonzero))
+      diff_signs = self.fresh_var(t, "diff_signs", "%s ^ %s" % (y_is_negative, rem_is_negative))
+      should_flip = self.fresh_var(t, "should_flip", "%s && %s" % (neither_zero, diff_signs))
+      flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
+      return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
+      
     else:
       assert False, "Prim not yet implemented: %s" % p
   
@@ -455,7 +464,7 @@ class Translator(object):
   def check_int(self, x):
     self.append('printf("Checking int type for %s @ %%p\\n", %s);' % (x,x))
     self.append("""
-      if (!PyInt_Check(%s)) { 
+      if (!PyArray_IsIntegerScalar(%s)) { 
         PyErr_Format(PyExc_AssertionError, 
                      "Expected %s to be int, got %%s", 
                      %s); 
