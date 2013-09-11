@@ -114,13 +114,17 @@ class Translator(object):
   def c_str(self, obj):
     return "PyString_AsString(PyObject_Str(%s))" % obj
   
+  def c_type_str(self, obj):
+    return self.c_str("PyObject_Type(%s)" % obj)
+   
   def print_pyobj(self, obj, text = ""):
     text = '"%s"' % text
     self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_str(obj)))
   
   def print_pyobj_type(self, obj, text=""):
     text = '"%s"' % text
-    self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_str("PyObject_Type(%s)" % obj)))
+    self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_type_str(obj)))
+    
     
   def fresh_name(self, prefix):
     prefix = names.original(prefix)
@@ -131,6 +135,21 @@ class Translator(object):
       return prefix 
     else:
       return "%s_%d" % (prefix, version)
+  
+  def fresh_var(self, t, prefix = None):
+    if prefix is None:
+      prefix = "temp"
+    name = self.fresh_name(prefix)
+    if isinstance(t, str):
+      t_str = t
+    else:
+      t_str = to_ctype(t)
+      
+    self.append("%s %s;" % (t_str, name))
+    return name
+  
+  def assign(self, name, rhs):
+    self.append("%s = %s;" % (name, rhs))
   
   def name(self, ssa_name, overwrite = False):
     """
@@ -293,6 +312,7 @@ class Translator(object):
     return self.attribute(v, attr, expr.type)
     
   def visit_PrimCall(self, expr):
+    t = expr.type
     args = self.visit_expr_list(expr.args)
     p = expr.prim 
     if p == prims.add:
@@ -324,7 +344,15 @@ class Translator(object):
       return "%s < %s" % (args[0], args[1])
     elif p == prims.less_equal:
       return "%s <= %s" % (args[0], args[1])
-    
+    elif p == prims.remainder:
+      assert isinstance(t, IntT)
+      x,y = args
+      xdivy = self.fresh_var(t, "xdivy")
+      xmody = self.fresh_var(t, "xmody")
+      self.assign(xdivy, "(%s)(%s - (unsigned long)%s * %s)" % (to_ctype(t), x, xdivy, y))
+      self.append("if (%s && ((%s ^ %s) < 0) /* i.e. and signs differ */) { %s += %s;}" % \
+                    (xmody, y, xmody, xmody, y))
+      return xmody
     else:
       assert False, "Prim not yet implemented: %s" % p
   
@@ -407,26 +435,32 @@ class Translator(object):
     self.printf("Checking tuple type for %s" % tup)
     self.append("""
       if (!PyTuple_Check(%s)) { 
-        PyErr_SetString(PyExc_AssertionError, "Expected %s to be tuple"); 
+        PyErr_Format(PyExc_AssertionError, 
+                    "Expected %s to be tuple, got %%s", 
+                    %s); 
         return NULL;
-      }""" % (tup, tup))
+      }""" % (tup, tup, self.c_type_str(tup)))
  
   def check_array(self, arr):
     self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
     self.append("""
       if (!PyArray_Check(%s)) { 
-        PyErr_SetString(PyExc_AssertionError, "Expected %s to be array"); 
+        PyErr_Format(PyExc_AssertionError, 
+                    "Expected %s to be array, got %%s", 
+                    %s); 
         return NULL;
-      }""" % (arr, arr))
+      }""" % (arr, arr, self.c_type_str(arr)))
   
   
   def check_int(self, x):
     self.append('printf("Checking int type for %s @ %%p\\n", %s);' % (x,x))
     self.append("""
       if (!PyInt_Check(%s)) { 
-        PyErr_SetString(PyExc_AssertionError, "Expected %s to be int"); 
+        PyErr_Format(PyExc_AssertionError, 
+                     "Expected %s to be int, got %%s", 
+                     %s); 
         return NULL;
-      }""" % (x, x))
+      }""" % (x, x, self.c_type_str(x)))
   
   def check_type(self, v, t):
     if not debug: return
