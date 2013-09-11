@@ -9,7 +9,7 @@ from ..syntax import Var, Const, TypedFn
 from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT, 
                        elt_type, FloatT, IntT, BoolT) 
 
-from boxing import box_scalar, unbox_scalar
+
 from c_types import to_ctype, to_dtype
 from compile_util import compile_module 
 from config import debug, print_function_source, print_module_source 
@@ -61,16 +61,28 @@ class Translator(object):
   def visit_expr_list(self, exprs):
     return [self.visit_expr(e) for e in exprs]
   
-  
+
+  def unbox_scalar(self, x, t):
+    assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
+    temp = self.fresh_name("scalar_temp")
+    self.append("%s %s;" % (to_ctype(t), temp))
+    self.append("PyArray_ScalarAsCtype(%s, &%s);" % (x, temp))
+    return temp 
+      
+  def box_scalar(self, x, t):
+    scalar = self.fresh_name("scalar");
+    self.append("%s %s = %s;" % (to_ctype(t), scalar, x))
+    return "PyArray_Scalar(&%s, PyArray_DescrFromType(%s), NULL)" % (scalar, to_dtype(t) )
+    
   def as_pyobj(self, expr):
     """
     Compile the expression and if necessary box it up as a PyObject
     """
-    result = self.visit_expr(expr)
+    x = self.visit_expr(expr)
     if isinstance(expr.type, ScalarT):
-      return box_scalar(result, expr.type)
+      return self.box_scalar(x, expr.type)
     else:
-      return result
+      return x
   
   def as_pyobj_list(self, exprs):
     return [self.as_pyobj(expr) for expr in exprs]
@@ -160,7 +172,7 @@ class Translator(object):
     return array_name
     
   def array_to_tuple(self, arr, n, elt_t):
-    elts = [box_scalar("%s[%d]" % (arr,i), elt_t) for i in xrange(n)]
+    elts = [self.box_scalar("%s[%d]" % (arr,i), elt_t) for i in xrange(n)]
     elt_str = ", ".join(elts)
     return "PyTuple_Pack(%d, %s)" % (n, elt_str)
     
@@ -206,7 +218,7 @@ class Translator(object):
     if debug: self.check_tuple(tup)
     proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
     if isinstance(t, ScalarT):
-      return unbox_scalar(proj_str, t)
+      return self.unbox_scalar(proj_str, t)
     else:
       return proj_str 
   
@@ -432,7 +444,7 @@ class Translator(object):
       t = fn.type_env[argname]
       if isinstance(t, ScalarT):
         new_name = self.name(argname, overwrite = True)
-        self.append("%s %s = %s;" % (to_ctype(t), new_name, unbox_scalar(c_name, t)))
+        self.append("%s %s = %s;" % (to_ctype(t), new_name, self.unbox_scalar(c_name, t)))
         
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
