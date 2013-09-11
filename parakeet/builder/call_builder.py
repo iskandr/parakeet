@@ -112,16 +112,17 @@ class CallBuilder(CoreBuilder):
     return False 
     
   def invoke(self, fn, args, loopify = False, lower = False, name = None):
-    #import type_inference
+    
+    if fn.__class__ is UntypedFn:
+      arg_types = get_types(args)
+      from .. import type_inference
+      fn = type_inference.specialize(fn.type, arg_types)
+      
     if fn.__class__ is TypedFn:
       closure_args = []
     else:
       assert isinstance(fn.type, ClosureT), \
           "Unexpected function %s with type: %s" % (fn, fn.type)
-      #if isinstance(fn.type.fn, UntypedFn):
-      #  arg_types = get_types(args)
-      #  from .. import type_inference
-      #  fn = type_inference.specialize(fn.type, arg_types)
       closure_args = self.closure_elts(fn)
       fn = self.get_fn(fn)
       assert fn.__class__ is TypedFn, "Expected typed fn got %s" % (fn.__class__.__name__)
@@ -132,10 +133,7 @@ class CallBuilder(CoreBuilder):
       if lower: 
         fn = pipeline.lowering(fn)
     combined_args = tuple(closure_args) + tuple(args)
-    if isinstance(fn, UntypedFn):
-      combined_arg_types = get_types(combined_args)
-      from .. import type_inference
-      fn = type_inference.specialize(fn, combined_arg_types)
+    
     
     # don't generate Call nodes for identity function 
     if self.is_identity_fn(fn):

@@ -145,15 +145,9 @@ class Translator(object):
     self.name_mappings[ssa_name] = name 
     return name 
 
-  def check_tuple(self, tup):
-    if debug:
-      self.printf("Checking tuple type for %s" % tup)
-      self.append('printf("Tuple OK? %%d\\n", PyTuple_Check(%s));' % tup)
+  
+
  
-  def check_array(self, arr):
-    if debug:
-      self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
-      self.append('printf("Array OK? %%d\\n", PyArray_Check(%s));' % (arr,))
  
   def tuple_to_stack_array(self, expr):
     t0 = expr.type.elt_types[0]
@@ -281,13 +275,15 @@ class Translator(object):
       elt_t = elt_types[0]
       assert all(t == elt_t for t in elt_types)
       strides_name = self.fresh_name("strides")
-      if debug: self.printf("Getting strides of %s" % v)
+      # if debug: self.printf("Getting strides of %s" % v)
       self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_name, v))
       strides_tuple = self.array_to_tuple(strides_name, n, elt_t)
-      if debug: self.printf("Turning array to tuple")
+      # if debug: self.printf("Turning array to tuple")
       return strides_tuple
     elif attr == 'offset':
       return "0"
+    elif attr in ('size', 'nelts'):
+      return "PyArray_Size(%s)" % v
     else:
       assert False, "Unsupported attribute %s" % attr 
     
@@ -339,12 +335,6 @@ class Translator(object):
     return "%s ? %s : %s" % (cond, true, false) 
   
   def visit_Assign(self, stmt):
-    # if debug: self.append('printf("Running %s\\n");' % stmt)
-    
-    #assert stmt.lhs.__class__ is Var
-    #lhs_name = self.name(stmt.lhs.name)
-    #rhs = self.visit_expr(stmt.rhs)
-    #return "%s = %s;" % (lhs_name, rhs)
     lhs = self.visit_expr(stmt.lhs)
     rhs = self.visit_expr(stmt.rhs)
     if stmt.lhs.__class__ is Var:
@@ -413,14 +403,39 @@ class Translator(object):
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
   
+  def check_tuple(self, tup):
+    self.printf("Checking tuple type for %s" % tup)
+    self.append("""
+      if (!PyTuple_Check(%s)) { 
+        PyErr_SetString(PyExc_AssertionError, "Expected %s to be tuple"); 
+        return NULL;
+      }""" % (tup, tup))
+ 
+  def check_array(self, arr):
+    self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
+    self.append("""
+      if (!PyArray_Check(%s)) { 
+        PyErr_SetString(PyExc_AssertionError, "Expected %s to be array"); 
+        return NULL;
+      }""" % (arr, arr))
+  
+  
+  def check_int(self, x):
+    self.append('printf("Checking int type for %s @ %%p\\n", %s);' % (x,x))
+    self.append("""
+      if (!PyInt_Check(%s)) { 
+        PyErr_SetString(PyExc_AssertionError, "Expected %s to be int"); 
+        return NULL;
+      }""" % (x, x))
+  
   def check_type(self, v, t):
     if not debug: return
     if isinstance(t, (ClosureT, TupleT)):
-      self.printf("Checking tuple for %s" % v)
-      self.append('printf("Is %s a tuple? %%d\\n", PyTuple_Check(%s));' % (v,v))
+      self.check_tuple(v)
     elif isinstance(t, IntT):
-      self.printf("Checking int for %s" % v)
-      self.append('printf("Is %s an int? %%d\\n", PyInt_Check(%s));' % (v,v))
+      self.check_int(v)
+    elif isinstance(t, ArrayT):
+      self.check_array(v)
         
   def visit_fn(self, fn):
     c_fn_name = self.fresh_name(fn.name)
@@ -435,7 +450,7 @@ class Translator(object):
       self.append("PyObject* %s = PyTuple_GetItem(%s, %d);" % (c_name, args, i))
       if debug:
         self.check_type(c_name, fn.type_env[argname])
-      
+         
       if debug:
         self.printf("Printing arg #%d %s" % (i,c_name))
         self.print_pyobj_type(c_name, text = "Type: ")
