@@ -4,10 +4,10 @@ import ctypes
 from treelike import NestedBlocks
 
 from .. import names, prims 
-from ..analysis import SyntaxVisitor
+from ..analysis import use_count
 from ..syntax import Var, Const, TypedFn 
 from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT, 
-                       elt_type, FloatT, IntT, BoolT, Int64, SignedT) 
+                       elt_type, FloatT, IntT, BoolT, Int64, SignedT, NoneT) 
 
 
 from c_types import to_ctype, to_dtype
@@ -67,6 +67,8 @@ class Translator(object):
     
   def unbox_scalar(self, x, t):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
+    self.print_pyobj_type(x, "[unbox scalar] type %s " % t)
+    self.print_pyobj(x, "[unbox scalar] value %s " % t)
     result = self.fresh_var(t, "scalar_value")
     if isinstance(t, IntT):
       check = "PyInt_Check"
@@ -82,14 +84,22 @@ class Translator(object):
       check = "PyBool_Check"
       get = "PyObject_IsTrue"
       
+    self.printf("[unbox_scalar] Python object? %d", "%s(%s)" % (check, x))
     self.append("""
       if (%(check)s(%(x)s)) { %(result)s = %(get)s(%(x)s); }
       else { PyArray_ScalarAsCtype(%(x)s, &%(result)s); }
     """ % locals())
+    self.printf("[unbox_scalar] Result: %ld", result)
     return result 
       
   def box_scalar(self, x, t):
-    if x[0].isalpha():
+    
+    if isinstance(t, BoolT):
+      return "PyBool_FromLong(%s)" % x
+    elif isinstance(t, NoneT):
+      self.append("Py_INCREF(Py_None);")
+      return "Py_None"
+    if x.replace("_", "").isalpha():
       scalar = x
     else:
       scalar = self.fresh_name("scalar");
@@ -128,11 +138,27 @@ class Translator(object):
     return block_str.replace("\n", "\n  ")
   
   def append(self, stmt):
-    assert len(stmt.strip()) == 0 or ";" in stmt, "What kinda riffraff is this? %s" % stmt
+    stripped = stmt.strip()
+    
+    assert len(stripped) == 0 or \
+      ";" in stripped or \
+      stripped.startswith("//") or \
+      stripped.startswith("/*"), "Invalid statement: %s" % stmt
     self.blocks[-1].append(stmt)
   
-  def printf(self, s):
-    self.append('printf("%s\\n");' % s)
+  def newline(self):
+    self.append("\n")
+    
+  def comment(self, text):
+    self.append("// %s" % text)
+  
+  def printf(self, fmt, *args):
+    
+    result = 'printf("%s\\n"' % fmt
+    if len(args) > 0:
+      result = result + ", " + ", ".join(str(arg) for arg in args)
+    self.append( result + ");" )
+    
   
   def c_str(self, obj):
     return "PyString_AsString(PyObject_Str(%s))" % obj
@@ -229,6 +255,8 @@ class Translator(object):
   def visit_Const(self, expr):
     if isinstance(expr.type, BoolT):
       return "Py_True == Py_%s" % expr.value
+    elif isinstance(expr.type, NoneT):
+      return "0"
     return "%s" % expr.value 
   
   def visit_Var(self, expr):
@@ -260,7 +288,7 @@ class Translator(object):
       elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
       result = self.unbox_scalar(elt_obj, t)
       if debug and t == Int64:
-        self.append(""" printf("tupleproj %s[%d] = %%lld\\n", %s);""" % (tup, idx, result))
+        self.append(""" printf("tupleproj %s[%d] = %%ld\\n", %s);""" % (tup, idx, result))
       return result
     else:
       return proj_str 
@@ -319,7 +347,7 @@ class Translator(object):
       "Can only get strides of array, not %s : %s" % (array_expr, arr_t)
     elt_t = arr_t.elt_type
     arr = self.visit_expr(array_expr)
-    if debug: self.check_array(arr)
+    # if debug: self.check_array(arr)
     
     
     bytes_per_elt = elt_t.dtype.itemsize
@@ -334,17 +362,20 @@ class Translator(object):
     strides_elts = self.fresh_name("strides_elts")
     self.append("npy_intp %s[%d];" % (strides_elts, n))
     for i in xrange(n):
+      if debug:
+        self.printf("converting strides %s[%d] = %%ld to %%ld" % (strides_bytes, i), 
+                    "%s[%d]" % (strides_bytes, i), "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))   
       self.append("%s[%d] = %s[%d] / %d;" % (strides_elts, i, strides_bytes, i, bytes_per_elt))
-    strides_tuple = self.array_to_tuple(strides_elts, n, elt_t)
+    strides_tuple = self.array_to_tuple(strides_elts, n, stride_t)
     return strides_tuple
     
         
   def attribute(self, v, attr, t):
     if attr == "data":
-      if debug: self.check_array(v)
+      # if debug: self.check_array(v)
       return "(%s) PyArray_DATA (%s)" % (to_ctype(t), v)
     elif attr == "shape":
-      if debug: self.check_array(v)
+      # if debug: self.check_array(v)
       elt_types = t.elt_types
       n = len(elt_types)
       elt_t = elt_types[0]
@@ -475,8 +506,9 @@ class Translator(object):
   
   def visit_Return(self, stmt):
     v = self.as_pyobj(stmt.value)
-    self.print_pyobj_type(v, "Return type: ")
-    self.print_pyobj(v, "Return value: ")
+    if debug: 
+      self.print_pyobj_type(v, "Return type: ")
+      self.print_pyobj(v, "Return value: ")
     return "return %s;" % v
   
   def visit_block(self, stmts, push = True):
@@ -494,7 +526,8 @@ class Translator(object):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
   
   def check_tuple(self, tup):
-    self.printf("Checking tuple type for %s" % tup)
+    self.newline()
+    self.comment("Checking tuple type for %s" % tup)
     self.append("""
       if (!PyTuple_Check(%s)) { 
         PyErr_Format(PyExc_AssertionError, 
@@ -504,7 +537,8 @@ class Translator(object):
       }""" % (tup, tup, self.c_type_str(tup)))
  
   def check_array(self, arr):
-    self.append('printf("Checking array type for %s @ %%p\\n", %s);' % (arr, arr,))
+    self.newline()
+    self.comment("Checking array type for %s" % arr)
     self.append("""
       if (!PyArray_Check(%s)) { 
         PyErr_Format(PyExc_AssertionError, 
@@ -515,7 +549,8 @@ class Translator(object):
   
   
   def check_int(self, x):
-    self.append('printf("Checking int type for %s @ %%p\\n", %s);' % (x,x))
+    self.newline()
+    self.comment("Checking int type for %s" % x)
     self.append("""
       if (!PyArray_IsIntegerScalar(%s)) { 
         PyErr_Format(PyExc_AssertionError, 
@@ -534,7 +569,9 @@ class Translator(object):
       self.check_array(v)
         
   def visit_fn(self, fn):
+    uses = use_count(fn)
     c_fn_name = self.fresh_name(fn.name)
+    
     dummy = self.fresh_name("dummy")
     args = self.fresh_name("args")
     
@@ -542,17 +579,23 @@ class Translator(object):
     
     self.push()
     for i, argname in enumerate(fn.arg_names):
+      assert argname in uses, "Couldn't find arg %s in use-counts" % argname
+      if uses[argname] <= 1:
+        self.comment("Skipping unused argument %s" % argname)
+        continue
+      
+      self.comment("Unpacking argument %s"  % argname)
       c_name = self.name(argname)
       self.append("PyObject* %s = PyTuple_GetItem(%s, %d);" % (c_name, args, i))
+      
+      
+      t = fn.type_env[argname]
       if debug:
-        self.check_type(c_name, fn.type_env[argname])
-         
-      if debug:
+        self.check_type(c_name, t)
         self.printf("Printing arg #%d %s" % (i,c_name))
         self.print_pyobj_type(c_name, text = "Type: ")
         self.print_pyobj(c_name, text = "Value: ")
       
-      t = fn.type_env[argname]
       if isinstance(t, ScalarT):
         new_name = self.name(argname, overwrite = True)
         self.append("%s %s = %s;" % (to_ctype(t), new_name, self.unbox_scalar(c_name, t)))

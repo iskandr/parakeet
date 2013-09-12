@@ -63,7 +63,7 @@ def parakeet_dists(W, E = None):
   return C
 
 def test_dists():
-  n = 100
+  n = 10
   W = (np.random.randn(n,n)*2)**2
   C1 = outer_dists(W)
   C2 = np_dists(W)

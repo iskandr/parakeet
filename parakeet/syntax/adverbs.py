@@ -3,14 +3,12 @@ from expr import Expr
 
 
 class Adverb(Expr):
-  _members = ['fn', 'fixed_args']
+  _members = ['fn']
   
   def functions(self):
     yield self.fn 
     
-  def node_init(self):
-    if self.fixed_args is None:
-      self.fixed_args = ()
+
       
 class Accumulative(Adverb):
   """
@@ -86,7 +84,7 @@ class Map(DataAdverb):
 class OuterMap(DataAdverb):
   pass 
 
-class DataAccumulative(Accumulative):
+class DataAccumulative(DataAdverb, Accumulative):
   pass 
 
 

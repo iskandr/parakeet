@@ -16,6 +16,8 @@ def prepare_arg(arg, t):
   elif isinstance(t, (NoneT, SliceT)):
     return  arg
   elif isinstance(t, ArrayT):
+    if isinstance(arg, np.ndarray):
+      return arg
     return np.asarray(arg)
   elif isinstance(t, TupleT):
     arg = tuple(arg)
