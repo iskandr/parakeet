@@ -1,4 +1,4 @@
-import collections 
+ 
 import ctypes
 
 from treelike import NestedBlocks
@@ -17,22 +17,20 @@ from compile_util import compile_module
 from config import debug, print_function_source, print_module_source 
 from reserved_names import is_reserved
 
-CompiledFn = collections.namedtuple("CompiledFn",("c_fn", "module", "filename", "src", "name"))
+
 
 def compile(fn, _compile_cache = {}):
   key = fn.name, fn.copied_by 
   if key in _compile_cache:
     return _compile_cache[key]
-  name, src = Translator().visit_fn(fn)
+  translator = Translator()
+  name, src = translator.visit_fn(fn)
   if print_function_source:
     print "Generated C source for %s:" %(name, src)
-  module = compile_module(src, name, print_source = print_module_source)
-  c_fn = getattr(module,name)
-  compiled_fn = CompiledFn(c_fn = c_fn, 
-                           module = module, 
-                           filename= module.__file__,
-                           src = src, 
-                           name = name)
+  compiled_fn = compile_module(src, name, 
+                               extra_objects = set(translator.extra_objects),
+                               print_source = print_module_source)
+  
   _compile_cache[key]  = compiled_fn
   return compiled_fn
 
@@ -49,6 +47,9 @@ class Translator(object):
     self.blocks = []
     self.name_versions = {}
     self.name_mappings = {}
+    
+    # depends on these .o files
+    self.extra_objects = [] 
 
   
   def visit_expr(self, expr):
@@ -419,7 +420,7 @@ class Translator(object):
       return "-%s" % args[0]
     elif p == prims.abs:
       x  = args[0]
-      return "%(x)s ? %(x)s >= 0 : -%(x)s" % {'x': x}
+      return " %s >= 0 ? %s  : -%s" % (x,x,x)
     elif p == prims.bitwise_and:
       return "%s & %s" % (args[0], args[1])
     elif p == prims.bitwise_or:
@@ -458,12 +459,22 @@ class Translator(object):
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
     elif p == prims.exp:
       return "exp(%s)" % args[0]
+    elif p == prims.exp2:
+      return "exp2(%s)" % args[0]
     elif p == prims.power:
       return "pow(%s, %s)" % (args[0], args[1])
     elif p == prims.log1p:
       return "log1p(%s)" % args[0]
     else:
       assert False, "Prim not yet implemented: %s" % p
+  
+  def visit_Call(self, expr):
+    fn = expr.fn
+    assert isinstance(fn, TypedFn), "Expected TypedFn, got %s : %s" % (fn, fn.type)
+    compiled_fn = compile(fn)
+    args = self.visit_expr_list(expr.args)
+    self.extra_objects.append(compiled_fn.object_filename)
+    return "%s(%s)" % (compiled_fn.name, ", ".join(args))
   
   def visit_Select(self, expr):
     cond = self.visit_expr(expr.cond)
@@ -601,12 +612,9 @@ class Translator(object):
       if uses[argname] <= 1:
         self.comment("Skipping unused argument %s" % argname)
         continue
-      
       self.comment("Unpacking argument %s"  % argname)
       c_name = self.name(argname)
       self.append("PyObject* %s = PyTuple_GetItem(%s, %d);" % (c_name, args, i))
-      
-      
       t = fn.type_env[argname]
       if debug:
         self.check_type(c_name, t)

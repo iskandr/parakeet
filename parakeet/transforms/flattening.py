@@ -173,17 +173,22 @@ class BuildFlatFn(Builder):
     c = stmt.lhs.__class__
     rhs = self.flatten_expr(stmt.rhs)
     if c is Var:
-      vars = self.flatten_lhs_var(stmt.lhs)
-      self.var_expansions[stmt.lhs.name] = vars 
+      lhs_vars = self.flatten_lhs_var(stmt.lhs)
+      self.var_expansions[stmt.lhs.name] = lhs_vars 
       if isinstance(rhs, Expr):
-        # the IR doesn't allow for multiple assignment 
-        # so we fake it with tuple literals
-        return [Assign(self.tuple(vars), rhs)]
-      assert len(vars) == len(rhs), "Mismatch between LHS %s and RHS %s" % (vars, rhs)
+        if len(lhs_vars) == 1:
+          return [Assign(lhs_vars[0], rhs)]
+        else:
+          # the IR doesn't allow for multiple assignment 
+          # so we fake it with tuple literals
+          return [Assign(self.tuple(lhs_vars), rhs)]
+      assert isinstance(rhs, (list,tuple))
+      assert len(lhs_vars) == len(rhs), "Mismatch between LHS %s and RHS %s" % (vars, rhs)
       result = []
-      for var, value in zip(vars, rhs):
+      for var, value in zip(lhs_vars, rhs):
         result.append(Assign(var, value))
       return result 
+
     elif c is Index:
       array_t = stmt.lhs.value.type 
       if isinstance(array_t, PtrT):
@@ -200,7 +205,9 @@ class BuildFlatFn(Builder):
       stmt.lhs = Index(data, offset)
       stmt.rhs = rhs[0]
       return [stmt]
-  
+    else:
+      assert False, "LHS not supported in flattening: %s" % stmt 
+      
   def flatten_merge(self, phi_nodes):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():

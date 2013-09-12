@@ -483,7 +483,7 @@ class ShapeInference(SyntaxVisitor):
       for other_name in self.equivalence_classes[name]:
         if other_name in self.value_env:
           return self.value_env[other_name]
-    raise RuntimeError("Unknown variable: %s" %  expr)
+    raise RuntimeError("Unknown variable: %s in function %s" %  (expr, self.fn.name))
 
   def visit_Tuple(self, expr):
     return Tuple(self.visit_expr_list(expr.elts))
