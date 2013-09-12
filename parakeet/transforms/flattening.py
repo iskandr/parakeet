@@ -2,7 +2,8 @@ from .. import names
 from treelike import NestedBlocks
 from ..builder import build_fn, Builder
 from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tuple_type, 
-                       Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT)
+                       Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT, 
+                       TypeValueT)
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
                       ParFor, PrimCall, If, While, ForLoop, Call, Expr, 
@@ -29,7 +30,7 @@ def flatten_type(t):
     return (t,)
   elif isinstance(t, TupleT):
     return concat(flatten_type(elt_t) for elt_t in t.elt_types)
-  elif isinstance(t, (NoneT, FnT)):
+  elif isinstance(t, (NoneT, FnT, TypeValueT)):
     return ()
   elif isinstance(t, ClosureT):
     return concat(flatten_type(elt_t) for elt_t in t.arg_types)
@@ -355,6 +356,7 @@ class BuildFlatFn(Builder):
   def flatten_Array(self, expr):
     assert False, "Array node should be an explicit allocation by now"
     # or, if we flatten structured elts, maybe we should handle it here?
+    
   def flatten_Index(self, expr):
     
     t = expr.value.type 
@@ -467,7 +469,7 @@ class BuildFlatFn(Builder):
     t = old_var.type 
     if isinstance(t, (ScalarT, PtrT)):
       return [old_var]
-    elif isinstance(t, (FnT, NoneT)):
+    elif isinstance(t, (NoneT, FnT, TypeValueT)):
       return []
     elif isinstance(t, SliceT):
       start = Var(name = "%s_start" % name, type = t.start_type)

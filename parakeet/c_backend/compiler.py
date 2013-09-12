@@ -7,7 +7,7 @@ from .. import names, prims
 from ..analysis import SyntaxVisitor
 from ..syntax import Var, Const, TypedFn 
 from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT, 
-                       elt_type, FloatT, IntT, BoolT, Int64) 
+                       elt_type, FloatT, IntT, BoolT, Int64, SignedT) 
 
 
 from c_types import to_ctype, to_dtype
@@ -64,10 +64,26 @@ class Translator(object):
 
   def unbox_scalar(self, x, t):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
-    temp = self.fresh_name("scalar_temp")
-    self.append("%s %s;" % (to_ctype(t), temp))
-    self.append("PyArray_ScalarAsCtype(%s, &%s);" % (x, temp))
-    return temp 
+    result = self.fresh_var(t, "scalar_value")
+    if isinstance(t, IntT):
+      check = "PyInt_Check"
+      if isinstance(t, SignedT):
+        get = "PyInt_AsLong"
+      else:
+        get = "PyInt_AsUnsignedLongMask"
+    elif isinstance(t, FloatT):
+      check = "PyFloat_Check"
+      get = "PyFloat_AsDouble"
+    else:
+      assert isinstance(t, BoolT), "Unexpected type %s" % t 
+      check = "PyBool_Check"
+      get = "PyObject_IsTrue"
+      
+    self.append("""
+      if (%(check)s(%(x)s)) { %(result)s = %(get)s(%(x)s); }
+      else { PyArray_ScalarAsCtype(%(x)s, &%(result)s); }
+    """ % locals())
+    return result 
       
   def box_scalar(self, x, t):
     if x[0].isalpha():
@@ -237,7 +253,8 @@ class Translator(object):
     if debug: self.check_tuple(tup)
     proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
     if isinstance(t, ScalarT):
-      result = self.unbox_scalar(proj_str, t)
+      elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
+      result = self.unbox_scalar(elt_obj, t)
       if debug and t == Int64:
         self.append(""" printf("tupleproj %s[%d] = %%lld\\n", %s);""" % (tup, idx, result))
       return result
