@@ -37,7 +37,7 @@ _ctype_mappings = {
   Float32:  "float",
   Float64:  "double",
   NoneType:  "int",
-  Bool:  "int",
+  Bool:  "int8_t",
 }
 
 def to_ctype(t):
