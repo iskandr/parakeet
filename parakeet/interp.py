@@ -130,7 +130,7 @@ def eval_fn(fn, actuals):
       return array[index]
 
     def expr_PrimCall():
-
+      print expr.args, map(type, eval_args(expr.args))
       return expr.prim.fn (*eval_args(expr.args))
     
     def expr_Slice():
@@ -257,6 +257,7 @@ def eval_fn(fn, actuals):
     elif isinstance(lhs, Index):
       arr = eval_expr(lhs.value)
       idx = eval_expr(lhs.index)
+
       arr[idx] = rhs
 
   

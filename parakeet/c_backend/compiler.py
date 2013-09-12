@@ -349,9 +349,7 @@ class Translator(object):
     elif p == prims.remainder:
       x,y = args
       assert isinstance(t, IntT), "Modulo not yet implemented for floats"
-      
       rem = self.fresh_var(t, "rem", "%s %% %s" % (x,y))
-
       y_is_negative = self.fresh_var(t, "y_is_negative", "%s < 0" % y)
       rem_is_negative = self.fresh_var(t, "rem_is_negative", "%s < 0" % rem)
       y_nonzero = self.fresh_var(t, "y_nonzero", "%s != 0" % y)
@@ -361,7 +359,6 @@ class Translator(object):
       should_flip = self.fresh_var(t, "should_flip", "%s && %s" % (neither_zero, diff_signs))
       flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
-      
     else:
       assert False, "Prim not yet implemented: %s" % p
   
