@@ -62,6 +62,9 @@ class Translator(object):
     return [self.visit_expr(e) for e in exprs]
   
 
+  def breakpoint(self):
+    self.append("raise(SIGINT);")
+    
   def unbox_scalar(self, x, t):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
     result = self.fresh_var(t, "scalar_value")
@@ -148,7 +151,7 @@ class Translator(object):
     
   def fresh_name(self, prefix):
     prefix = names.original(prefix)
-    prefix = prefix.replace(".", "_")
+    prefix = prefix.replace(".", "")
     version = self.name_versions.get(prefix, 1)
     self.name_versions[prefix] = version + 1
     if version == 1 and not is_reserved(prefix):
@@ -181,7 +184,8 @@ class Translator(object):
     if ssa_name in self.name_mappings and not overwrite:
       return self.name_mappings[ssa_name]
     prefix = names.original(ssa_name)
-    prefix = prefix.replace(".", "_")
+    prefix = prefix.replace(".", "")
+
     name = self.fresh_name(prefix)
     self.name_mappings[ssa_name] = name 
     return name 
@@ -279,6 +283,7 @@ class Translator(object):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
+    #self.breakpoint()
     return "%s[%s]" % (arr, idx)
   
   
@@ -288,6 +293,8 @@ class Translator(object):
     strides = self.visit_expr(expr.strides)
     count = self.visit_expr(expr.size)
     offset = self.visit_expr(expr.offset)
+    bytes_per_elt = expr.type.elt_type.dtype.itemsize
+    offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
     buffer_name = self.fresh_name("array_buffer")
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % (buffer_name,  data, count, bytes_per_elt))
@@ -295,16 +302,43 @@ class Translator(object):
     
     vec_name = self.fresh_name("linear_array")
     #   _members = ['data', 'shape', 'strides', 'offset', 'size']
-    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % (vec_name, buffer_name, dtype, count, offset))
+    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
+                (vec_name, buffer_name, dtype, count, offset_bytes))
     reshaped  = self.fresh_name("reshaped")
     self.append("PyObject* %s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % (reshaped, vec_name, shape))
     strides_array = self.fresh_name("strides_array")
     self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_array, reshaped))
     for i, stride_t in enumerate(expr.strides.type.elt_types):
       stride_value = self.tuple_elt(strides, i, stride_t)
-      self.append("%s[%d] = %s * %d;" % (strides_array, i, stride_value, expr.type.elt_type.dtype.itemsize) )
+      self.append("%s[%d] = %s * %d;" % (strides_array, i, stride_value, bytes_per_elt) )
     return reshaped
-                
+  
+  def strides(self, array_expr):
+    arr_t = array_expr.type
+    assert isinstance(arr_t, ArrayT), \
+      "Can only get strides of array, not %s : %s" % (array_expr, arr_t)
+    elt_t = arr_t.elt_type
+    arr = self.visit_expr(array_expr)
+    if debug: self.check_array(arr)
+    
+    
+    bytes_per_elt = elt_t.dtype.itemsize
+
+    strides_tuple_t = arr_t.strides_t
+    stride_t = strides_tuple_t.elt_types[0]
+    
+    assert all(t == stride_t for t in strides_tuple_t)
+    n = len(strides_tuple_t.elt_types)
+    strides_bytes = self.fresh_name("strides_bytes")
+    self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_bytes, arr))
+    strides_elts = self.fresh_name("strides_elts")
+    self.append("npy_intp %s[%d];" % (strides_elts, n))
+    for i in xrange(n):
+      self.append("%s[%d] = %s[%d] / %d;" % (strides_elts, i, strides_bytes, i, bytes_per_elt))
+    strides_tuple = self.array_to_tuple(strides_elts, n, elt_t)
+    return strides_tuple
+    
+        
   def attribute(self, v, attr, t):
     if attr == "data":
       if debug: self.check_array(v)
@@ -321,17 +355,8 @@ class Translator(object):
       return self.array_to_tuple(shape_name, n, elt_t)
       
     elif attr == "strides":
-      if debug: self.check_array(v)
-      elt_types = t.elt_types
-      n = len(elt_types)
-      elt_t = elt_types[0]
-      assert all(t == elt_t for t in elt_types)
-      strides_name = self.fresh_name("strides")
-      # if debug: self.printf("Getting strides of %s" % v)
-      self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_name, v))
-      strides_tuple = self.array_to_tuple(strides_name, n, elt_t)
-      # if debug: self.printf("Turning array to tuple")
-      return strides_tuple
+      assert False, "Can't directly use NumPy strides without dividing by itemsize"
+      
     elif attr == 'offset':
       return "0"
     elif attr in ('size', 'nelts'):
@@ -341,6 +366,8 @@ class Translator(object):
     
   def visit_Attribute(self, expr):
     attr = expr.name
+    if attr == 'strides':
+      return self.strides(expr.value)
     v = self.visit_expr(expr.value) 
     return self.attribute(v, attr, expr.type)
   
@@ -425,8 +452,6 @@ class Translator(object):
     for (name, (_, right)) in merge.iteritems():
       stmts.append("%s = %s;"  % (self.name(name), self.visit_expr(right)))
     return "\n".join(stmts)
-  
-  
   
   def visit_If(self, stmt):
     cond = self.visit_expr(stmt.cond)

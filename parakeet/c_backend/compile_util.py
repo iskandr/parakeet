@@ -6,11 +6,14 @@ import platform
 import subprocess  
 import tempfile
 
+from config import debug
+
 header_names = ["Python.h", 
                 'numpy/arrayobject.h',
                 'numpy/arrayscalars.h',
                 "stdint.h", 
                 "math.h", 
+                "signal.h"
                 ]#include <numpy/arrayscalars.h>
 common_headers = "\n".join("#include <%s>" % header for header in header_names) + "\n"
 
@@ -19,7 +22,7 @@ defs = "\n".join(defs + ["\n"])
 config_vars = distutils.sysconfig.get_config_vars()
 
 default_compiler = None
-for compiler in ['clang', 'g++']:
+for compiler in [ 'clang', 'g++' ]:
   path = distutils.spawn.find_executable(compiler)
   if path:
     default_compiler = path
@@ -39,18 +42,28 @@ else:
 
 python_include_dirs = [distutils.sysconfig.get_python_inc()]
 
+numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
+include_dirs = python_include_dirs + numpy_include_dirs 
+compiler_flags = ['-I%s' % path for path in include_dirs] +  ['-fPIC', '-Wall']
+
+if debug:
+  compiler_flags.extend(['-ggdb3', '-O0'])
+else:
+  compiler_flags.extend(['-O3'])
+
+
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
 python_version = distutils.sysconfig.get_python_version()
 python_lib = "python%s" % python_version
 python_lib_full = 'lib%s%s' % (python_lib, python_lib_extension)
 
+
 linker_flags = ['-shared'] + \
                ["-L%s" % python_lib_dir] + \
-               ["-l%s" % python_lib]
+               ["-l%s" % python_lib] + ['-ggdb3']
+               
 
-numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
-include_dirs = python_include_dirs + numpy_include_dirs 
-compiler_flags = ['-I%s' % path for path in include_dirs] +  ['-fPIC']
+
 
 
 def compile_module(src, fn_name, 
