@@ -310,6 +310,9 @@ class BuildFlatFn(Builder):
   def flatten_Cast(self, expr):
     return [expr]
   
+  def flatten_UntypedFn(self, expr):
+    return []
+  
   def flatten_TypedFn(self, expr):
     return []
     

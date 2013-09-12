@@ -6,8 +6,10 @@ from treelike import NestedBlocks
 from .. import names, prims 
 from ..analysis import use_count
 from ..syntax import Var, Const, TypedFn 
-from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT, 
-                       elt_type, FloatT, IntT, BoolT, Int64, SignedT, NoneT) 
+from ..ndtypes import (TupleT,  ArrayT, ClosureT, NoneT, 
+                       elt_type, ScalarT, 
+                       FloatT, Float32, Float64, 
+                       IntT, BoolT, Int64, SignedT,) 
 
 
 from c_types import to_ctype, to_dtype
@@ -67,8 +69,7 @@ class Translator(object):
     
   def unbox_scalar(self, x, t):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
-    self.print_pyobj_type(x, "[unbox scalar] type %s " % t)
-    self.print_pyobj(x, "[unbox scalar] value %s " % t)
+    
     result = self.fresh_var(t, "scalar_value")
     if isinstance(t, IntT):
       check = "PyInt_Check"
@@ -83,13 +84,12 @@ class Translator(object):
       assert isinstance(t, BoolT), "Unexpected type %s" % t 
       check = "PyBool_Check"
       get = "PyObject_IsTrue"
-      
-    self.printf("[unbox_scalar] Python object? %d", "%s(%s)" % (check, x))
+    
     self.append("""
       if (%(check)s(%(x)s)) { %(result)s = %(get)s(%(x)s); }
       else { PyArray_ScalarAsCtype(%(x)s, &%(result)s); }
     """ % locals())
-    self.printf("[unbox_scalar] Result: %ld", result)
+    
     return result 
       
   def box_scalar(self, x, t):
@@ -409,7 +409,7 @@ class Translator(object):
     if p == prims.add:
       return "%s + %s" % (args[0], args[1])
     if p == prims.subtract:
-      return "%s + %s" % (args[0], args[1])
+      return "%s - %s" % (args[0], args[1])
     elif p == prims.multiply:
       return "%s * %s" % (args[0], args[1])
     elif p == prims.divide:
@@ -437,7 +437,12 @@ class Translator(object):
       return "%s <= %s" % (args[0], args[1])
     elif p == prims.remainder:
       x,y = args
-      assert isinstance(t, IntT), "Modulo not yet implemented for floats"
+      if t == Float32:
+        return "fmodf(%s, %s)" % (x,y)
+      elif t == Float64:
+        return "fmod(%s, %s)" % (x,y)
+      
+      assert isinstance(t, (BoolT, IntT)), "Modulo not implemented for %s" % t
       rem = self.fresh_var(t, "rem", "%s %% %s" % (x,y))
       y_is_negative = self.fresh_var(t, "y_is_negative", "%s < 0" % y)
       rem_is_negative = self.fresh_var(t, "rem_is_negative", "%s < 0" % rem)

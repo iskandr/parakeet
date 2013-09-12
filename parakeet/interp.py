@@ -75,6 +75,15 @@ def eval_fn(fn, actuals):
     def expr_Const():
       return expr.value
 
+    def _strides(numpy_array):
+      strides_bytes = numpy_array.strides
+      itemsize = numpy_array.dtype.itemsize
+      return tuple(stride / itemsize for stride in strides_bytes)
+      
+    def expr_Strides():
+      value = eval_expr(expr.array)
+      return _strides(value)
+    
     def expr_Attribute():
       value = eval_expr(expr.value)
       if expr.name == 'offset':
@@ -82,12 +91,19 @@ def eval_fn(fn, actuals):
           return 0
         else:
           return value.ctypes.data - value.base.ctypes.data
+      elif expr.name == 'data':
+        return np.ravel(value)
+      
+      elif expr.name == 'strides':
+        return _strides(value)
+      
       elif isinstance(value, tuple):
         if expr.name.startswith('elt'):
           field = int(expr.name[3:])
         else:
           field = int(expr.name)
-        return value[field]  
+        return value[field]
+        
       else:
         return getattr(value, expr.name)
 
@@ -127,6 +143,7 @@ def eval_fn(fn, actuals):
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)
+      print "expr_Index", expr, array, index 
       return array[index]
 
     def expr_PrimCall():

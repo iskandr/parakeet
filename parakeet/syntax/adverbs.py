@@ -10,7 +10,7 @@ class Adverb(Expr):
     
 
       
-class Accumulative(Adverb):
+class Accumulative(Expr):
   """
   Adverbs such as Reduce and Scan which carry an accumulated value and require a
   'combine' function to merge the accumulators resulting from parallel
@@ -37,7 +37,7 @@ class IndexMap(IndexAdverb):
   pass 
 
 
-class IndexAccumulative(Accumulative):
+class IndexAccumulative(IndexAdverb, Accumulative):
   pass 
   
 class IndexReduce(IndexAccumulative):
