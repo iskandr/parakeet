@@ -406,6 +406,7 @@ class Translator(object):
     t = expr.type
     args = self.visit_expr_list(expr.args)
     p = expr.prim 
+    
     if p == prims.add:
       return "%s + %s" % (args[0], args[1])
     if p == prims.subtract:
@@ -414,6 +415,8 @@ class Translator(object):
       return "%s * %s" % (args[0], args[1])
     elif p == prims.divide:
       return "%s / %s" % (args[0], args[1])
+    elif p == prims.negative:
+      return "-%s" % args[0]
     elif p == prims.abs:
       x  = args[0]
       return "%(x)s ? %(x)s >= 0 : -%(x)s" % {'x': x}
@@ -453,6 +456,12 @@ class Translator(object):
       should_flip = self.fresh_var(t, "should_flip", "%s && %s" % (neither_zero, diff_signs))
       flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
+    elif p == prims.exp:
+      return "exp(%s)" % args[0]
+    elif p == prims.power:
+      return "pow(%s, %s)" % (args[0], args[1])
+    elif p == prims.log1p:
+      return "log1p(%s)" % args[0]
     else:
       assert False, "Prim not yet implemented: %s" % p
   
@@ -574,15 +583,19 @@ class Translator(object):
       self.check_array(v)
         
   def visit_fn(self, fn):
-    uses = use_count(fn)
+    
     c_fn_name = self.fresh_name(fn.name)
+    uses = use_count(fn)
+    self.push()
+    
     
     dummy = self.fresh_name("dummy")
     args = self.fresh_name("args")
     
-    c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
-    
-    self.push()
+    if debug: 
+      self.newline()
+      self.printf("\\nStarting %s : %s..." % (c_fn_name, fn.type))
+      
     for i, argname in enumerate(fn.arg_names):
       assert argname in uses, "Couldn't find arg %s in use-counts" % argname
       if uses[argname] <= 1:
@@ -607,6 +620,8 @@ class Translator(object):
         
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
+    c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
+    
     fndef = "PyObject* %(c_fn_name)s (%(c_args)s) {%(c_body)s}" % locals()
     return c_fn_name, fndef 
 
