@@ -7,7 +7,7 @@ from .. import names, prims
 from ..analysis import SyntaxVisitor
 from ..syntax import Var, Const, TypedFn 
 from ..ndtypes import (TupleT, ScalarT, ArrayT, ClosureT, 
-                       elt_type, FloatT, IntT, BoolT) 
+                       elt_type, FloatT, IntT, BoolT, Int64, SignedT) 
 
 
 from c_types import to_ctype, to_dtype
@@ -64,14 +64,33 @@ class Translator(object):
 
   def unbox_scalar(self, x, t):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
-    temp = self.fresh_name("scalar_temp")
-    self.append("%s %s;" % (to_ctype(t), temp))
-    self.append("PyArray_ScalarAsCtype(%s, &%s);" % (x, temp))
-    return temp 
+    result = self.fresh_var(t, "scalar_value")
+    if isinstance(t, IntT):
+      check = "PyInt_Check"
+      if isinstance(t, SignedT):
+        get = "PyInt_AsLong"
+      else:
+        get = "PyInt_AsUnsignedLongMask"
+    elif isinstance(t, FloatT):
+      check = "PyFloat_Check"
+      get = "PyFloat_AsDouble"
+    else:
+      assert isinstance(t, BoolT), "Unexpected type %s" % t 
+      check = "PyBool_Check"
+      get = "PyObject_IsTrue"
+      
+    self.append("""
+      if (%(check)s(%(x)s)) { %(result)s = %(get)s(%(x)s); }
+      else { PyArray_ScalarAsCtype(%(x)s, &%(result)s); }
+    """ % locals())
+    return result 
       
   def box_scalar(self, x, t):
-    scalar = self.fresh_name("scalar");
-    self.append("%s %s = %s;" % (to_ctype(t), scalar, x))
+    if x[0].isalpha():
+      scalar = x
+    else:
+      scalar = self.fresh_name("scalar");
+      self.append("%s %s = %s;" % (to_ctype(t), scalar, x))
     return "PyArray_Scalar(&%s, PyArray_DescrFromType(%s), NULL)" % (scalar, to_dtype(t) )
     
   def as_pyobj(self, expr):
@@ -106,6 +125,7 @@ class Translator(object):
     return block_str.replace("\n", "\n  ")
   
   def append(self, stmt):
+    assert len(stmt.strip()) == 0 or ";" in stmt, "What kinda riffraff is this? %s" % stmt
     self.blocks[-1].append(stmt)
   
   def printf(self, s):
@@ -233,7 +253,11 @@ class Translator(object):
     if debug: self.check_tuple(tup)
     proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
     if isinstance(t, ScalarT):
-      return self.unbox_scalar(proj_str, t)
+      elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
+      result = self.unbox_scalar(elt_obj, t)
+      if debug and t == Int64:
+        self.append(""" printf("tupleproj %s[%d] = %%lld\\n", %s);""" % (tup, idx, result))
+      return result
     else:
       return proj_str 
   
@@ -245,7 +269,8 @@ class Translator(object):
   
   def visit_TupleProj(self, expr):
     tup = self.visit_expr(expr.tuple)
-    return self.tuple_elt(tup, expr.index, expr.type)
+    result = self.tuple_elt(tup, expr.index, expr.type)
+    return result
   
   def visit_ClosureElt(self, expr):
     clos = self.visit_expr(expr.closure)
@@ -271,9 +296,15 @@ class Translator(object):
     vec_name = self.fresh_name("linear_array")
     #   _members = ['data', 'shape', 'strides', 'offset', 'size']
     self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % (vec_name, buffer_name, dtype, count, offset))
-    # TODO: Assign PyArray_STRIDES[i] = PyTuple_GetItem(strides, i)
-    return "PyArray_Reshape(( PyArrayObject*) %s, %s)" % (vec_name, shape)
-    
+    reshaped  = self.fresh_name("reshaped")
+    self.append("PyObject* %s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % (reshaped, vec_name, shape))
+    strides_array = self.fresh_name("strides_array")
+    self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_array, reshaped))
+    for i, stride_t in enumerate(expr.strides.type.elt_types):
+      stride_value = self.tuple_elt(strides, i, stride_t)
+      self.append("%s[%d] = %s * %d;" % (strides_array, i, stride_value, expr.type.elt_type.dtype.itemsize) )
+    return reshaped
+                
   def attribute(self, v, attr, t):
     if attr == "data":
       if debug: self.check_array(v)

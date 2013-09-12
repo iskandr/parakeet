@@ -14,6 +14,8 @@ header_names = ["Python.h",
                 ]#include <numpy/arrayscalars.h>
 common_headers = "\n".join("#include <%s>" % header for header in header_names) + "\n"
 
+defs = []#["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+defs = "\n".join(defs + ["\n"])
 config_vars = distutils.sysconfig.get_config_vars()
 
 default_compiler = None
@@ -55,7 +57,7 @@ def compile_module(src, fn_name,
                      src_filename = None, 
                      print_source = True, 
                      print_commands = True):
-  src = common_headers + src
+  src = defs + common_headers + src
   if src_filename is None:
     src_file = tempfile.NamedTemporaryFile(suffix = source_extension, 
                                            prefix = "parakeet_%s_" % fn_name, 

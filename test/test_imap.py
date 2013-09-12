@@ -10,7 +10,7 @@ def fill_with_const(a, k):
   return parakeet.imap(return_const, a.shape)
   
 def test_fill_with_const():
-  shape=(5,2,3,3)
+  shape=(5,2,1,3)
   a = np.empty(shape=shape, dtype='float32')
   k = 3.137
   expected = np.ones(shape = shape, dtype='float32') * k
@@ -18,7 +18,7 @@ def test_fill_with_const():
 
 
 def test_identity():
-  x = np.random.randn(10,20,3,2)
+  x = np.ones((1,2,3,2))
   def get_idx(idx):
     return x[idx]
   y = parakeet.imap(get_idx, x.shape)
