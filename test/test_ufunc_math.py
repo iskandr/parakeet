@@ -11,7 +11,10 @@ arrays = [int_array, bool_array, float_array]
 
 def unary(fn): 
   for x in arrays:
-    expected = fn(x)
+    try:
+      expected = fn(x)
+    except:
+      expected = fn(x.astype('int'))
     if expected.dtype == 'float16':
       expected = fn(x.astype('int'))
     expect(fn, [x], expected, fn.__name__ + "-" + str(x.dtype) + str(len(x.shape)))

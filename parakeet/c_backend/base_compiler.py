@@ -18,7 +18,7 @@ class BaseCompiler(object):
     assert hasattr(self, method_name), "Unsupported expression %s" % expr_class_name  
     result = getattr(self, method_name)(expr)
     assert result is not None, \
-      "Compilation method for expression %s return None" % expr_class_name
+      "Compilation method for expression %s returned None, expected code string" % expr_class_name
     return result 
       
   def visit_expr_list(self, exprs):

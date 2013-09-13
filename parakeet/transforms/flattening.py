@@ -379,7 +379,7 @@ class BuildFlatFn(Builder):
     strides = get_field_elts(t, array_fields, 'strides')
     offset = get_field_elts(t, array_fields, 'offset')[0]
     indices = self.flatten_expr(expr.index)
-    print indices 
+
     assert len(indices) == len(strides)
     for i, idx in enumerate(indices):
       offset = self.add(offset, self.mul(idx, strides[i]))

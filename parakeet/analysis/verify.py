@@ -103,8 +103,6 @@ class Verify(SyntaxVisitor):
   
   
   def verify_call(self, fn, args):
-    # print "Checking %s (%s)" % (fn, tuple(args))
- 
     if fn.__class__ is Closure: 
       closure_elts = tuple(fn.args) 
       fn = fn.fn 
@@ -145,7 +143,6 @@ class Verify(SyntaxVisitor):
   
   def visit_Return(self, stmt):
     self.visit_expr(stmt.value)
-    #print "RET TYPE", stmt.value.type, stmt.value.type == True, stmt.value.type == False
     assert stmt.value.type is not None and stmt.value.type == self.fn.return_type, \
         "Incorrect return type in %s: ret value %s, expected %s but got %s" % \
         (self.fn.name, stmt.value, self.fn.return_type, stmt.value.type)

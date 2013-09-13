@@ -125,7 +125,6 @@ def run_typed_fn(fn, args, backend = None):
     from .. import c_backend 
     compiled_fn = c_backend.compile_entry(loopy_fn)
     args = c_backend.prepare_args(args, fn.input_types)
-    print "Inputs to compiled code...", args
     return compiled_fn.c_fn(*args)
      
   elif backend == "interp":

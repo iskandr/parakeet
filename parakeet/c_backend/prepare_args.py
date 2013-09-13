@@ -10,7 +10,7 @@ def prepare_closure_args(untyped_fn):
       
 
 def prepare_arg(arg, t):
-  print "Converting %s to %s" % (arg, t)
+
   if isinstance(t, ScalarT):
     return t.dtype.type(arg)
   elif isinstance(t, (NoneT, SliceT)):

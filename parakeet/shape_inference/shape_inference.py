@@ -517,8 +517,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
-    print "visit_Index", expr, arr, idx
-    
+
     if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
     elif arr.__class__ is Shape:

@@ -9,44 +9,57 @@ from ..syntax import Var, Const, TypedFn
 from ..ndtypes import (TupleT,  ArrayT, ClosureT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
-                       IntT, BoolT, Int64, SignedT,) 
+                       IntT, BoolT, Int64, SignedT,
+                       PtrT, NoneType) 
 
 
 from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
-from compile_util import compile_module 
+from compile_util import compile_module, compile_object
 from config import debug, print_function_source, print_module_source 
 
 
 
 def compile_flat(fn, _compile_cache = {}):
+
   key = fn.name, fn.copied_by 
   if key in _compile_cache:
     return _compile_cache[key]
   compiler = FlatFnCompiler()
-  name, src = compiler.visit_fn(fn)
+  name, sig, src = compiler.visit_fn(fn)
   if print_function_source: print "Generated C source for %s:" %(name, src)
-  compiled_fn = compile_object(src, name, 
-                               extra_objects = set(compiler.extra_objects),
-                               print_source = print_module_source)
-  assert False, "Compile_flat not done yet"
+  obj = compile_object(src, 
+                       fn_name = name, 
+                       fn_signature = sig, 
+                       extra_objects = compiler.extra_objects,
+                       forward_declarations =  compiler.forward_declarations, 
+                       print_source = print_module_source)
+  return obj
+  
 
 def flat_function_source(fn):
   return compile_flat(fn).src 
 
 def flat_function_name(fn):
-  return compile_flat(fn).name 
+  return compile_flat(fn).fn_name 
+
+def flat_function_signature(fn):
+  return compile_flat(fn).fn_signature
+
 
 def compile_entry(fn, _compile_cache = {}):
   key = fn.name, fn.copied_by 
   if key in _compile_cache:
     return _compile_cache[key]
   compiler = PyModuleCompiler()
-  name, src = compiler.visit_fn(fn)
+  name, sig, src = compiler.visit_fn(fn)
   if print_function_source: print "Generated C source for %s:" %(name, src)
-  compiled_fn = compile_module(src, name, 
+  compiled_fn = compile_module(src, 
+                               fn_name = name,
+                               fn_signature = sig, 
                                extra_objects = set(compiler.extra_objects),
+                               forward_declarations =  compiler.forward_declarations, 
                                print_source = print_module_source)
   _compile_cache[key]  = compiled_fn
   return compiled_fn
@@ -56,14 +69,19 @@ def entry_function_source(fn):
   return compile_entry(fn).src 
 
 def entry_function_name(fn):
-  return compile_entry(fn).name 
+  return compile_entry(fn).fn_name 
+
+def entry_function_signature(fn):
+  return compile_entry(fn).fn_signature 
 
 class FlatFnCompiler(BaseCompiler):
   
   def __init__(self):
     BaseCompiler.__init__(self)
+    
+    self.forward_declarations = set([])
     # depends on these .o files
-    self.extra_objects = [] 
+    self.extra_objects = set([]) 
     
     
   def visit_Alloc(self, expr):
@@ -94,7 +112,6 @@ class FlatFnCompiler(BaseCompiler):
     t = expr.type
     args = self.visit_expr_list(expr.args)
     p = expr.prim 
-    
     if p == prims.add:
       return "%s + %s" % (args[0], args[1])
     if p == prims.subtract:
@@ -128,11 +145,8 @@ class FlatFnCompiler(BaseCompiler):
       return "%s <= %s" % (args[0], args[1])
     elif p == prims.remainder:
       x,y = args
-      if t == Float32:
-        return "fmodf(%s, %s)" % (x,y)
-      elif t == Float64:
-        return "fmod(%s, %s)" % (x,y)
-      
+      if t == Float32: return "fmodf(%s, %s)" % (x,y)
+      elif t == Float64: return "fmod(%s, %s)" % (x,y)
       assert isinstance(t, (BoolT, IntT)), "Modulo not implemented for %s" % t
       rem = self.fresh_var(t, "rem", "%s %% %s" % (x,y))
       y_is_negative = self.fresh_var(t, "y_is_negative", "%s < 0" % y)
@@ -145,13 +159,23 @@ class FlatFnCompiler(BaseCompiler):
       flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
     elif p == prims.exp:
+      if t == Float32: return "expf(%s)" % args[0]
       return "exp(%s)" % args[0]
     elif p == prims.exp2:
+      if t == Float32: return "exp2f(%s)" % args[0]
       return "exp2(%s)" % args[0]
+    elif p == prims.expm1:
+      if t == Float32: return "expm1f(%s)" % args[0]
+      return "expm1(%s)" % args[0]
     elif p == prims.power:
+      if t == Float32: return "powf(%s, %s)" % (args[0], args[1])
       return "pow(%s, %s)" % (args[0], args[1])
     elif p == prims.log1p:
+      if t == Float32: return "log1pf(%s)" % args[0]
       return "log1p(%s)" % args[0]
+    elif p == prims.log10:
+      if t == Float32:  return "log10f(%s)" % args[0]
+      return "log10(%s)" % args[0]    
     else:
       assert False, "Prim not yet implemented: %s" % p
   
@@ -163,10 +187,11 @@ class FlatFnCompiler(BaseCompiler):
   def visit_Call(self, expr):
     fn = expr.fn
     assert isinstance(fn, TypedFn), "Expected TypedFn, got %s : %s" % (fn, fn.type)
-    compiled_fn = compile(fn)
+    compiled_fn = compile_flat(fn)
     args = self.visit_expr_list(expr.args)
-    self.extra_objects.append(compiled_fn.object_filename)
-    return "%s(%s)" % (compiled_fn.name, ", ".join(args))
+    self.extra_objects.add(compiled_fn.object_filename)
+    self.forward_declarations.add(compiled_fn.fn_signature)
+    return "%s(%s)" % (compiled_fn.fn_name, ", ".join(args))
   
   def visit_Select(self, expr):
     cond = self.visit_expr(expr.cond)
@@ -187,6 +212,7 @@ class FlatFnCompiler(BaseCompiler):
       return ""
     
     stmts = ["\n"]
+    
     for (name, (left, _)) in merge.iteritems():
       stmts.append("%s %s = %s;"  % (to_ctype(left.type), 
                                      self.name(name), 
@@ -221,10 +247,14 @@ class FlatFnCompiler(BaseCompiler):
     s += "\nfor (%(t)s %(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
     return s % locals()
 
-
   def visit_Return(self, stmt):
-    assert False, "Return in flat_fn not implemented"
-    
+    assert not self.return_by_ref, "Returning multiple values not yet implemented: %s" % stmt 
+    if self.return_void:
+      return "return;"
+    else:
+      v = self.visit_expr(stmt.value)
+      return "return %s;" % v
+      
   def visit_block(self, stmts, push = True):
     if push: self.push()
     for stmt in stmts:
@@ -234,15 +264,51 @@ class FlatFnCompiler(BaseCompiler):
     return self.pop()
       
   def visit_TypedFn(self, expr):
-    return function_name(expr)
+    
+    return flat_function_name(expr)
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
   
-         
-  def visit_fn(self, fn):
-    assert False, "Flat visit_fn not yet implemented"
   
+  def return_types(self, fn):
+    if isinstance(fn.return_type, TupleT):
+      return fn.return_type.elt_types
+    else:
+      assert isinstance(fn.return_type, (PtrT, ScalarT))
+      return [fn.return_type]
+    
+  
+  def visit_fn(self, fn):
+    c_fn_name = self.fresh_name(fn.name)
+    arg_types = [to_ctype(t) for t in fn.input_types]
+    arg_names = [self.name(old_arg) for old_arg in fn.arg_names]
+    return_types = self.return_types(fn)
+    n_return = len(return_types)
+    
+    if n_return == 1:
+      return_type = to_ctype(return_types[0])
+      self.return_void = (return_type == NoneType)
+      self.return_by_ref = False
+    elif n_return == 0:
+      return_type = "void"
+      self.return_void = True
+      self.return_by_ref = False
+    else:
+      return_type = "void"
+      self.return_void = True
+      self.return_by_ref = True
+      self.return_var_types = [to_ctype(t) for t in return_types]
+      self.return_var_names = [self.fresh_name("return_value%d" % i) for i in xrange(n_return)]
+      arg_types = arg_types + ["%s*" % t for t in self.return_var_types] 
+      arg_names = arg_names + self.return_var_names
+      
+    args_str = ", ".join("%s %s" % (t, name) for (t,name) in zip(arg_types,arg_names))
+    body_str = self.visit_block(fn.body)
+    sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
+    src = "%s { %s }" % (sig, body_str) 
+    return c_fn_name, sig, src
+    
 
 class PyModuleCompiler(FlatFnCompiler):
    
@@ -529,7 +595,7 @@ class PyModuleCompiler(FlatFnCompiler):
     return self.pop()
       
   def visit_TypedFn(self, expr):
-    return function_name(expr)
+    return flat_function_name(expr)
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
@@ -571,9 +637,9 @@ class PyModuleCompiler(FlatFnCompiler):
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
     c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
-    
-    fndef = "PyObject* %(c_fn_name)s (%(c_args)s) {%(c_body)s}" % locals()
-    return c_fn_name, fndef 
+    c_sig = "PyObject* %(c_fn_name)s (%(c_args)s)" % locals() 
+    fndef = "%s {%s}" % (c_sig, c_body)
+    return c_fn_name, c_sig, fndef 
 
   
     

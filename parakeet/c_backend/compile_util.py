@@ -16,12 +16,15 @@ CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                        "object_filename",
                                        "src", 
                                        "src_filename",
-                                       "name"))
+                                       "fn_name",
+                                       "fn_signature"))
 
 CompiledObject = collections.namedtuple("CompiledObject", 
                                         ("src",
                                          "src_filename",
-                                         "object_filename"))
+                                         "object_filename", 
+                                         "fn_name",
+                                         "fn_signature"))
 
 common_headers = ["stdint.h",  "math.h",  "signal.h"]
 
@@ -73,16 +76,18 @@ python_lib_full = 'lib%s%s' % (python_lib, python_lib_extension)
 
 linker_flags = ['-shared'] + \
                ["-L%s" % python_lib_dir] + \
-               ["-l%s" % python_lib] + ['-ggdb3']
+               ["-l%s" % python_lib] + ['-ggdb3', '-lm']  
                
 
 
 
-def create_source_file(src, fn_name = None, src_filename = None, 
-                       forward_declarations = [],
-                       extra_headers = [], 
-                       print_source = debug):
-  
+def create_source_file(src, 
+                         fn_name = None, 
+                         src_filename = None, 
+                         forward_declarations = [],
+                         extra_headers = [], 
+                         print_source = debug):
+
   if fn_name is None:
     prefix = "parakeet_"
   else:
@@ -102,6 +107,10 @@ def create_source_file(src, fn_name = None, src_filename = None,
     src_file.write("#include <%s>\n" % header)
   
   for decl in set(forward_declarations):
+    decl = decl.strip()
+    if not decl.endswith(";"):
+      decl += ";"
+    decl += "\n"
     src_file.write(decl)
   
   src_file.write(src)
@@ -111,24 +120,35 @@ def create_source_file(src, fn_name = None, src_filename = None,
 
 def compile_object(src, 
                    fn_name = None,  
+                   fn_signature = None,
                    src_filename = None, 
                    forward_declarations = [],
                    extra_headers = [], 
                    extra_objects = [], 
                    print_source = debug, 
                    print_commands = debug ):
-  src_file = create_source_file(src, fn_name, src_filename, 
-                                forward_declarations, extra_headers,
+  
+  src_file = create_source_file(src, 
+                                fn_name = fn_name, 
+                                src_filename = src_filename, 
+                                forward_declarations = forward_declarations, 
+                                extra_headers = extra_headers,
                                 print_source = print_source)
   src_filename = src_file.name
   object_name = src_filename.replace(source_extension, object_extension)
   compiler_cmd = [compiler] + compiler_flags + ['-c', src_filename, '-o', object_name]
   if print_commands: print " ".join(compiler_cmd)
-  print subprocess.check_output(compiler_cmd)
-  return CompiledObject(src = src, src_filename = src_filename, object_filename = object_name)
+  subprocess.check_call(compiler_cmd)
+  return CompiledObject(src = src, 
+                        src_filename = src_filename, 
+                        object_filename = object_name, 
+                        fn_name = fn_name, 
+                        fn_signature = fn_signature)
   
   
-def compile_module(src, fn_name, 
+def compile_module(src, 
+                     fn_name,
+                     fn_signature = None,  
                      src_filename = None,
                      forward_declarations = [],
                      extra_headers = [],  
@@ -137,6 +157,7 @@ def compile_module(src, fn_name,
                      print_source = debug, 
                      print_commands = debug):
   
+
   src += """
     static PyMethodDef %(fn_name)sMethods[] = {
       {"%(fn_name)s",  %(fn_name)s, METH_VARARGS,
@@ -154,8 +175,11 @@ def compile_module(src, fn_name,
     }
     """ % locals()  
   
-  compiled_object = compile_object(src, fn_name, src_filename, 
-                                   forward_declarations,
+
+  compiled_object = compile_object(src, 
+                                   fn_name,
+                                   src_filename  = src_filename, 
+                                   forward_declarations = forward_declarations,
                                    extra_headers = python_headers + extra_headers,  
                                    extra_objects = extra_objects,
                                    print_source = print_source, 
@@ -171,7 +195,7 @@ def compile_module(src, fn_name,
   
   env = os.environ.copy()
   env["LD_LIBRARY_PATH"] = python_lib_dir
-  print subprocess.check_call(linker_cmd, env = env)
+  subprocess.check_call(linker_cmd, env = env)
   
   if mac_os:
     # Annoyingly have to patch up the shared library to point to the correct Python
@@ -179,7 +203,7 @@ def compile_module(src, fn_name,
                   python_lib_dir + "/%s" % python_lib_full, 
                   shared_name]
     if print_commands: print " ".join(change_cmd)
-    print subprocess.check_output(change_cmd)
+    subprocess.check_call(change_cmd)
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)
@@ -190,6 +214,7 @@ def compile_module(src, fn_name,
                              object_filename = object_name, 
                              src = src, 
                              src_filename = src_filename,
-                             name = fn_name)
+                             fn_name = fn_name, 
+                             fn_signature = fn_signature)
   return compiled_fn
 
