@@ -1,5 +1,5 @@
 import numpy as np
-from ..ndtypes import (type_conv, ScalarT, ArrayT, FnT, ClosureT, SliceT, NoneT, TupleT)
+from ..ndtypes import (type_conv, ScalarT, ArrayT, FnT, ClosureT, SliceT, NoneT, TupleT, TypeValueT)
 from ..syntax import TypedFn, UntypedFn
 
 
@@ -14,7 +14,9 @@ def prepare_arg(arg, t):
   if isinstance(t, ScalarT):
     return t.dtype.type(arg)
   elif isinstance(t, (NoneT, SliceT)):
-    return  arg
+    return arg
+  elif isinstance(t, TypeValueT):
+    return ()
   elif isinstance(t, ArrayT):
     if isinstance(arg, np.ndarray):
       return arg

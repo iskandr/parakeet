@@ -525,7 +525,7 @@ class Flatten(Transform):
   
   def unbox_var(self, var):
     t = var.type 
-    if isinstance(t, (FnT, NoneT)):
+    if isinstance(t, (FnT, NoneT, TypeValueT)):
       return []
     elif isinstance(t, (PtrT, ScalarT)):
       return [var]

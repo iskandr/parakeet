@@ -111,6 +111,12 @@ class FlatFnCompiler(BaseCompiler):
   def visit_PrimCall(self, expr):
     t = expr.type
     args = self.visit_expr_list(expr.args)
+    
+    # parenthesize any compound expressions 
+    for i, arg_expr in enumerate(expr.args):
+      if not isinstance(arg_expr, (Var, Const)):
+        args[i] = "(" + args[i] + ")"
+        
     p = expr.prim 
     if p == prims.add:
       return "%s + %s" % (args[0], args[1])
@@ -125,12 +131,22 @@ class FlatFnCompiler(BaseCompiler):
     elif p == prims.abs:
       x  = args[0]
       return " %s >= 0 ? %s  : -%s" % (x,x,x)
+    
     elif p == prims.bitwise_and:
       return "%s & %s" % (args[0], args[1])
     elif p == prims.bitwise_or:
       return "%s | %s" % (args[0], args[1])
-    elif p == prims.bitwise_or:
-      return "%s | %s" % (args[0], args[1])
+    elif p == prims.bitwise_not:
+      return "~%s" % args[0]
+    
+    elif p == prims.logical_and:
+      return "%s && %s" % (args[0], args[1])
+    elif p == prims.logical_or:
+      return "%s || %s" % (args[0], args[1])
+    elif p == prims.logical_not:
+      return "!%s" % args[0]
+    
+    
     elif p == prims.equal:
       return "%s == %s" % (args[0], args[1])
     elif p == prims.not_equal:
@@ -158,24 +174,33 @@ class FlatFnCompiler(BaseCompiler):
       should_flip = self.fresh_var(t, "should_flip", "%s && %s" % (neither_zero, diff_signs))
       flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
-    elif p == prims.exp:
-      if t == Float32: return "expf(%s)" % args[0]
-      return "exp(%s)" % args[0]
-    elif p == prims.exp2:
-      if t == Float32: return "exp2f(%s)" % args[0]
-      return "exp2(%s)" % args[0]
-    elif p == prims.expm1:
-      if t == Float32: return "expm1f(%s)" % args[0]
-      return "expm1(%s)" % args[0]
+    
+    elif p == prims.maximum:
+      x,y = args
+      return "(%s > %s) ? %s : %s" % (x,y,x,y)
+    elif p == prims.minimum:
+      x,y = args
+      return "(%s < %s) ? %s : %s" % (x,y,x,y)
+    
     elif p == prims.power:
-      if t == Float32: return "powf(%s, %s)" % (args[0], args[1])
-      return "pow(%s, %s)" % (args[0], args[1])
-    elif p == prims.log1p:
-      if t == Float32: return "log1pf(%s)" % args[0]
-      return "log1p(%s)" % args[0]
-    elif p == prims.log10:
-      if t == Float32:  return "log10f(%s)" % args[0]
-      return "log10(%s)" % args[0]    
+      if t == Float32: 
+        return "powf(%s, %s)" % (args[0], args[1])
+      else:
+        return "pow(%s, %s)" % (args[0], args[1])
+    
+    elif isinstance(t, FloatT):
+      # many float prims implemented using the same name in math.h
+      name = p.name
+      if name.startswith("arc"):
+        # arccos -> acos
+        name = "a" + name[3:]
+      if t == Float32: name = name + "f" 
+      if len(args) == 1:
+        return "%s(%s)" % (name, args[0])
+      else:
+        assert len(args) == 2, "Unexpected prim %s with %d args (%s)" % (p, len(args), args)
+        return "%s(%s, %s)" % (name, args[0], args[1])
+  
     else:
       assert False, "Prim not yet implemented: %s" % p
   
@@ -393,6 +418,7 @@ class PyModuleCompiler(FlatFnCompiler):
     return array_name
     
   def array_to_tuple(self, arr, n, elt_t):
+    if n == 0: return "PyTuple_Pack(0);"
     elts = [self.box_scalar("%s[%d]" % (arr,i), elt_t) for i in xrange(n)]
     elt_str = ", ".join(elts)
     return "PyTuple_Pack(%d, %s)" % (n, elt_str)
@@ -404,8 +430,9 @@ class PyModuleCompiler(FlatFnCompiler):
     return result
   
   def mk_tuple(self, elts):
-    elt_str = ", ".join(self.as_pyobj_list(elts)) 
     n = len(elts)
+    if n == 0: return "PyTuple_Pack(0);"
+    elt_str = ", ".join(self.as_pyobj_list(elts)) 
     return "PyTuple_Pack(%d, %s)" % (n, elt_str)
   
   
