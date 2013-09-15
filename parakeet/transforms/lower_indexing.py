@@ -4,7 +4,8 @@ from .. builder import Builder
 from .. ndtypes import SliceT, make_array_type, ArrayT 
 from .. ndtypes import NoneT, ScalarT, Int64, PtrT, IntT
 from .. syntax import Const, Index, Tuple, Var, ArrayView, Assign, Slice, Struct
- 
+from ..syntax.helpers import zero_i64, one_i64
+
 from transform import Transform
 
 class LowerIndexing(Transform):
@@ -63,16 +64,21 @@ class LowerIndexing(Transform):
         new_strides.append(stride_i)
         new_shape.append(shape_i)
       elif idx_t.__class__ is SliceT:
-        start = self.attr(idx, "start")
-        if start.type.__class__ is NoneT:
-          start = syntax.helpers.zero_i64
-        stop = self.attr(idx, "stop")
-        if stop.type.__class__ is NoneT:
+        if isinstance(idx_t.start_type, NoneT):
+          start =  zero_i64
+        else:
+          start = self.attr(idx, "start")
+        
+        if isinstance(idx_t.step_type, NoneT):
+          step = one_i64
+        else:
+          step = self.attr(idx, "step")
+        
+        if isinstance(idx_t.stop_type, NoneT):
           stop = shape_i
-        step = self.attr(idx, "step")
-        if step.type.__class__ is NoneT:
-          step = syntax.helpers.one_i64
-
+        else:
+          stop = self.attr(idx, "stop")
+        
         offset_i = self.mul(start, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
         dim_i = self.sub(stop, start, "dim_%d" % i)

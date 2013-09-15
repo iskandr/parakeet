@@ -43,12 +43,12 @@ def flatten_type(t):
       
     )
   elif isinstance(t, SliceT):
-    return (t.start_type, t.stop_type, t.step_type)
+    return flatten_types( (t.start_type, t.stop_type, t.step_type) )
   else:
     assert False, "Unsupported type %s" % (t,)
 
 def flatten_types(ts):
-  return flatten_seq(*[flatten_type(t) for t in ts])
+  return concat([flatten_type(t) for t in ts])
   
 def field_pos_range(t, field, _cache = {}):
   key = (t, field)
@@ -57,6 +57,7 @@ def field_pos_range(t, field, _cache = {}):
   assert isinstance(t, StructT), "Expected struct got %s.%s" % (t, field)
   offset = 0
   for i, (field_name, field_t) in enumerate(t._fields_):
+    print i, field_name, field_t, flatten_type(field_t)
     n = len(flatten_type(field_t))
     if field_name == field or (isinstance(field, (int, long)) and i == field):
       result = (offset, offset+n)
@@ -183,7 +184,8 @@ class BuildFlatFn(Builder):
           # so we fake it with tuple literals
           return [Assign(self.tuple(lhs_vars), rhs)]
       assert isinstance(rhs, (list,tuple))
-      assert len(lhs_vars) == len(rhs), "Mismatch between LHS %s and RHS %s" % (vars, rhs)
+      assert len(lhs_vars) == len(rhs), \
+        "Mismatch between LHS %s and RHS %s : %s => %s" % (lhs_vars, stmt.rhs, stmt.rhs.type, rhs)
       result = []
       for var, value in zip(lhs_vars, rhs):
         result.append(Assign(var, value))
@@ -339,11 +341,15 @@ class BuildFlatFn(Builder):
   def flatten_field(self, struct, field):
     elts = self.flatten_expr(struct)
     start, stop = field_pos_range(struct.type, field)
+    print "struct", struct, "field", field, "elts", elts, "start", start, "stop", stop 
+    
     return elts[start:stop]
    
   def flatten_TupleProj(self, expr):
-    return self.flatten_field(expr.tuple, expr.index)
-  
+    result = self.flatten_field(expr.tuple, expr.index)
+    print "TupleProj", expr.tuple, expr.tuple.type, "[", expr.index, "] :",  expr.type, result
+    return result
+    
   def flatten_Closure(self, expr):
     return self.flatten_expr_list(expr.args)
     
@@ -366,6 +372,7 @@ class BuildFlatFn(Builder):
   def flatten_Array(self, expr):
     assert False, "Array node should be an explicit allocation by now"
     # or, if we flatten structured elts, maybe we should handle it here?
+  
     
   def flatten_Index(self, expr):
     t = expr.value.type 
@@ -377,10 +384,13 @@ class BuildFlatFn(Builder):
     shape = get_field_elts(t, array_fields, 'shape')
     strides = get_field_elts(t, array_fields, 'strides')
     offset = get_field_elts(t, array_fields, 'offset')[0]
+    
     indices = self.flatten_expr(expr.index)
+    
     n_indices = len(indices)
     n_strides = len(strides)
-    assert n_indices <= n_strides, "Not supported: more indices than dimensions"
+    assert n_indices <= n_strides, \
+      "Not supported: more indices than dimensions: %d > %d" % (n_indices, n_strides)
     if n_indices < n_strides:
       extra_indices = [slice_none] * (n_strides - n_indices)
       indices.extend(extra_indices)
@@ -515,9 +525,9 @@ class BuildFlatFn(Builder):
     return concat_map(self.flatten_lhs_var, old_vars)
   
   def flatten_scalar_lhs_var(self, old_var):
-    vars = self.flatten_lhs_var(old_var)
-    assert len(vars) == 1
-    return vars[0]
+    lhs_vars = self.flatten_lhs_var(old_var)
+    assert len(lhs_vars) == 1
+    return lhs_vars[0]
   
 def build_flat_fn(old_fn, _cache = {}):
   key = old_fn.name

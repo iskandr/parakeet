@@ -83,7 +83,7 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([ Flatten, inline_opt], name="Flatten", 
+flatten = Phase([ LowerIndexing, Flatten, inline_opt], name="Flatten", 
                 copy=True, 
                 depends_on=indexify,
                 run_if = contains_structs,  
