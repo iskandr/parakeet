@@ -76,7 +76,7 @@ python_lib_full = 'lib%s%s' % (python_lib, python_lib_extension)
 
 linker_flags = ['-shared'] + \
                ["-L%s" % python_lib_dir] + \
-               ["-l%s" % python_lib] + ['-ggdb3', '-lm']  
+               ["-l%s" % python_lib] + ['-lm']  
                
 
 

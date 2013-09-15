@@ -5,7 +5,7 @@ from treelike import NestedBlocks
 
 from .. import names, prims 
 from ..analysis import use_count
-from ..syntax import Var, Const, TypedFn 
+from ..syntax import Const, Tuple, TypedFn, Var
 from ..ndtypes import (TupleT,  ArrayT, ClosureT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
@@ -17,7 +17,7 @@ from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
 from compile_util import compile_module, compile_object
-from config import debug, print_function_source, print_module_source 
+from config import debug, check_pyobj_types, print_function_source, print_module_source 
 
 
 
@@ -337,10 +337,10 @@ class FlatFnCompiler(BaseCompiler):
 
 class PyModuleCompiler(FlatFnCompiler):
    
-  def unbox_scalar(self, x, t):
+  def unbox_scalar(self, x, t, target = "scalar_value"):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
     
-    result = self.fresh_var(t, "scalar_value")
+    result = self.fresh_var(t, target)
     if isinstance(t, IntT):
       check = "PyInt_Check"
       if isinstance(t, SignedT):
@@ -401,20 +401,26 @@ class PyModuleCompiler(FlatFnCompiler):
     text = '"%s"' % text
     self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_type_str(obj)))
     
-  def tuple_to_stack_array(self, expr):
+  def tuple_to_stack_array(self, expr, name = "array_from_tuple", elt_type = None):
     t0 = expr.type.elt_types[0]
     
-    if debug:
-      assert expr.type.__class__ is TupleT 
-      assert all(t == t0 for t in expr.type.elt_types[1:])
-      
-    tup = self.visit_expr(expr)
-    if debug: self.check_tuple(tup)
-    array_name = self.fresh_name("array_from_tuple")
+    assert expr.type.__class__ is TupleT 
+    assert all(t == t0 for t in expr.type.elt_types[1:])
+    
+    if expr.__class__ is Tuple:
+      elts = [self.visit_expr(elt_expr) for elt_expr in expr.elts]
+    else:
+      tup = self.visit_expr(expr)
+      self.check_tuple(tup)
+      elts = self.tuple_elts(tup, expr.type.elt_types)
+    
+    array_name = self.fresh_name(name)
     n = len(expr.type.elt_types)
-    self.append("%s %s[%d];" % (to_ctype(t0), array_name, n))
-    for i, elt in enumerate(self.tuple_elts(tup, expr.type.elt_types)):
-      self.append("%s[%d] = %s;" % array_name, i, elt )
+    if elt_type is None:
+      elt_type = to_ctype(t0)
+    self.append("%s %s[%d];" % (elt_type, array_name, n))
+    for i, elt in enumerate(elts):
+      self.append("%s[%d] = %s;" % (array_name, i, elt))
     return array_name
     
   def array_to_tuple(self, arr, n, elt_t):
@@ -437,6 +443,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def check_tuple(self, tup):
+    if not check_pyobj_types: return 
     self.newline()
     self.comment("Checking tuple type for %s" % tup)
     self.append("""
@@ -448,6 +455,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (tup, tup, self.c_type_str(tup)))
  
   def check_array(self, arr):
+    if not check_pyobj_types: return 
     self.newline()
     self.comment("Checking array type for %s" % arr)
     self.append("""
@@ -460,6 +468,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def check_int(self, x):
+    if not check_pyobj_types: return 
     self.newline()
     self.comment("Checking int type for %s" % x)
     self.append("""
@@ -471,7 +480,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (x, x, self.c_type_str(x)))
   
   def check_type(self, v, t):
-    if not debug: return
+    if not check_pyobj_types: return 
     if isinstance(t, (ClosureT, TupleT)):
       self.check_tuple(v)
     elif isinstance(t, IntT):
@@ -480,13 +489,13 @@ class PyModuleCompiler(FlatFnCompiler):
       self.check_array(v)
       
   def tuple_elt(self, tup, idx, t):
-    if debug: self.check_tuple(tup)
+    self.check_tuple(tup)
     proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
     if isinstance(t, ScalarT):
       elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
       result = self.unbox_scalar(elt_obj, t)
       if debug and t == Int64:
-        self.append(""" printf("tupleproj %s[%d] = %%ld\\n", %s);""" % (tup, idx, result))
+        self.append(""" printf("tupleproj %s[%d] = %%" PRId64 "\\n", %s);""" % (tup, idx, result))
       return result
     else:
       return proj_str 
@@ -521,10 +530,10 @@ class PyModuleCompiler(FlatFnCompiler):
         
   def attribute(self, v, attr, t):
     if attr == "data":
-      # if debug: self.check_array(v)
+      self.check_array(v)
       return "(%s) PyArray_DATA (%s)" % (to_ctype(t), v)
     elif attr == "shape":
-      # if debug: self.check_array(v)
+      self.check_array(v)
       elt_types = t.elt_types
       n = len(elt_types)
       elt_t = elt_types[0]
@@ -570,30 +579,46 @@ class PyModuleCompiler(FlatFnCompiler):
   
   def visit_ArrayView(self, expr):
     data = self.visit_expr(expr.data)
-    shape = self.visit_expr(expr.shape)
-    strides = self.visit_expr(expr.strides)
-    count = self.visit_expr(expr.size)
+    ndims = expr.type.rank
     offset = self.visit_expr(expr.offset)
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
-    offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
-    buffer_name = self.fresh_name("array_buffer")
-    bytes_per_elt = expr.type.elt_type.dtype.itemsize
-    self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % \
-                (buffer_name,  data, count, bytes_per_elt))
-    dtype = "PyArray_DescrFromType(%s)" % to_dtype(expr.type.elt_type)
-    
-    vec_name = self.fresh_name("linear_array")
-    #   _members = ['data', 'shape', 'strides', 'offset', 'size']
-    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
-                (vec_name, buffer_name, dtype, count, offset_bytes))
+    dtype = to_dtype(expr.type.elt_type)
     reshaped  = self.fresh_name("reshaped")
-    self.append("PyObject* %s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
+    print "DATA", data 
+    print "NDIMS", ndims 
+    print "dtype", dtype 
+    # TODO: how to attach refcounts to ptr in flattened form?
+    
+    locally_allocated = False
+   
+    if locally_allocated:
+      count = self.visit_expr(expr.size)
+      offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
+    
+      buffer_name = self.fresh_name("array_buffer")
+      self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % \
+                  (buffer_name,  data, count, bytes_per_elt))
+      dtype_descr = "PyArray_DescrFromType(%s)" % dtype
+    
+      vec_name = self.fresh_name("linear_array")
+      #   _members = ['data', 'shape', 'strides', 'offset', 'size']
+      self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
+                  (vec_name, buffer_name, dtype_descr, count, offset_bytes))
+   
+      shape = self.visit_expr(expr.shape)
+      self.append("PyObject* %s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
                 (reshaped, vec_name, shape))
-    strides_array = self.fresh_name("strides_array")
-    self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_array, reshaped))
+      
+    else:
+      dims_array = self.tuple_to_stack_array(expr.shape, name = "shape", elt_type = "npy_intp")
+      self.append("PyObject* %s = PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s]);" % \
+                   (reshaped, ndims, dims_array, dtype, data, offset))
+      
+    strides_elts = self.tuple_to_stack_array(expr.strides, name = "strides", elt_type = "npy_intp")
+    strides_bytes = self.fresh_name("strides_bytes")
+    self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_bytes, reshaped))
     for i, stride_t in enumerate(expr.strides.type.elt_types):
-      stride_value = self.tuple_elt(strides, i, stride_t)
-      self.append("%s[%d] = %s * %d;" % (strides_array, i, stride_value, bytes_per_elt) )
+      self.append("%s[%d] = %s[%d] * %d;" % (strides_bytes, i, strides_elts, i, bytes_per_elt) )
     return reshaped
   
     
@@ -651,15 +676,15 @@ class PyModuleCompiler(FlatFnCompiler):
       c_name = self.name(argname)
       self.append("PyObject* %s = PyTuple_GetItem(%s, %d);" % (c_name, args, i))
       t = fn.type_env[argname]
+      self.check_type(c_name, t)
       if debug:
-        self.check_type(c_name, t)
         self.printf("Printing arg #%d %s" % (i,c_name))
         self.print_pyobj_type(c_name, text = "Type: ")
         self.print_pyobj(c_name, text = "Value: ")
       
       if isinstance(t, ScalarT):
         new_name = self.name(argname, overwrite = True)
-        self.append("%s %s = %s;" % (to_ctype(t), new_name, self.unbox_scalar(c_name, t)))
+        self.unbox_scalar(c_name, t, target = new_name)
         
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")

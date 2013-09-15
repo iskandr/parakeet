@@ -217,10 +217,7 @@ class CoreBuilder(object):
     return x is None or (isinstance(x, Expr) and x.type.__class__ is NoneT)
 
 
-
-
-
-  def tuple(self, elts, name = "tuple", explicit_struct = False):
+  def tuple(self, elts, name = None, explicit_struct = False):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
     tuple_t = make_tuple_type(get_types(elts))

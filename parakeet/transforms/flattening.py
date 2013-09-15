@@ -8,7 +8,7 @@ from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Con
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
                       ParFor, PrimCall, If, While, ForLoop, Call, Expr, 
                       IndexMap) 
-from ..syntax.helpers import none, const_int 
+from ..syntax.helpers import none, const_int, slice_none 
 
 from transform import Transform
 
@@ -368,7 +368,6 @@ class BuildFlatFn(Builder):
     # or, if we flatten structured elts, maybe we should handle it here?
     
   def flatten_Index(self, expr):
-    
     t = expr.value.type 
     if isinstance(t, PtrT):
       return [expr]   
@@ -379,8 +378,16 @@ class BuildFlatFn(Builder):
     strides = get_field_elts(t, array_fields, 'strides')
     offset = get_field_elts(t, array_fields, 'offset')[0]
     indices = self.flatten_expr(expr.index)
+    n_indices = len(indices)
+    n_strides = len(strides)
+    assert n_indices <= n_strides, "Not supported: more indices than dimensions"
+    if n_indices < n_strides:
+      extra_indices = [slice_none] * (n_strides - n_indices)
+      indices.extend(extra_indices)
 
-    assert len(indices) == len(strides)
+    # fast-path for the common case when we're indexing
+    # by all scalars to retrieve a scalar result
+    #if syntax.helpers.all_scalars(indices):
     for i, idx in enumerate(indices):
       offset = self.add(offset, self.mul(idx, strides[i]))
     return [self.index(data_fields[0], offset)]

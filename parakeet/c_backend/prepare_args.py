@@ -39,5 +39,5 @@ def prepare_arg(arg, t):
   
 def prepare_args(args, arg_types):
   result = tuple(prepare_arg(arg, t) for arg, t in zip(args, arg_types))
-  
   return result
+

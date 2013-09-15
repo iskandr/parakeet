@@ -125,8 +125,11 @@ def run_typed_fn(fn, args, backend = None):
     from .. import c_backend 
     compiled_fn = c_backend.compile_entry(loopy_fn)
     args = c_backend.prepare_args(args, fn.input_types)
-    return compiled_fn.c_fn(*args)
-     
+    result = compiled_fn.c_fn(*args)
+    print type(result)
+    if hasattr(result, 'dtype'): 
+      print result.dtype, result.shape, result.strides , result.data 
+    return result 
   elif backend == "interp":
     from .. import interp 
     fn = pipeline.loopify(fn)
