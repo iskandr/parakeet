@@ -1,16 +1,97 @@
 
 from .. import syntax
 from .. builder import Builder
-from .. ndtypes import SliceT, make_array_type, ArrayT 
-from .. ndtypes import NoneT, ScalarT, Int64, PtrT, IntT
+ 
+from .. ndtypes import (NoneT, ScalarT, Int64, PtrT, IntT, 
+                        SliceT, make_array_type, ArrayT, TupleT)
 from .. syntax import Const, Index, Tuple, Var, ArrayView, Assign, Slice, Struct
-from ..syntax.helpers import zero_i64, one_i64
+from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none 
 
 from transform import Transform
 
-class LowerIndexing(Transform):
-  def pre_apply(self, fn):
-    self.bindings = {}
+class SliceAssignToParFor(Transform):
+  
+  def assign_index(self, lhs, rhs):
+    
+    
+    if isinstance(lhs.index.type, TupleT):
+      indices = self.tuple_elts(lhs.index)
+    else:
+      indices = [lhs.index]
+    
+    n_dims = lhs.array.rank 
+    n_indices = len(indices)
+    assert n_dims >= n_indices, \
+      "Not yet supported: more indices (%d) than dimensions (%d) in %s" % (n_indices, n_dims, lhs) 
+    if n_indices < n_dims:
+      indices = indices + [slice_none] * (n_dims - n_indices)
+      
+    if all_scalars(indices):
+      self.assign_index(lhs, rhs)
+    else:
+      assert False 
+      
+      
+  def transform_Assign(self, stmt):
+    lhs_class = stmt.lhs.__class__
+    if lhs_class is Tuple:
+      for (i, _) in enumerate(stmt.lhs.type.elt_types):
+        lhs_i = self.tuple_proj(stmt.lhs, i)
+        rhs_i = self.tuple_proj(stmt.rhs, i)
+        # TODO: make this recursive, otherwise nested
+        # complex assignments won't get implemented
+        assert lhs_i.__class__ not in (ArrayView, Tuple)
+        if lhs_i.__class__ is Index:
+          self.assign_index(lhs_i)
+        else:
+          assert lhs_i.__class__ is Var, "Unexpcted LHS %s : %s" % (lhs_i, lhs_i.type)
+          self.assign(lhs_i, rhs_i)
+      return None
+    elif lhs_class is Index:
+      self.assign_index(stmt.lhs, stmt.rhs)
+      return None
+    else:
+      return stmt
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   def tuple_proj(self, tup, idx, explicit_struct = False):
     if tup.__class__ is Var and tup.name in self.bindings:
@@ -34,14 +115,6 @@ class LowerIndexing(Transform):
         return getattr(stored, field)
 
     return Builder.attr(self, obj, field)
-
-  def transform_AllocArray(self, expr):
-    alloc = self.alloc_array(elt_t = expr.type.elt_type,
-                            dims = self.transform_expr(expr.shape),
-                            name = "array",
-                            explicit_struct = True)
-    # recursively transform to turn shape and strides tuples into structs
-    return self.transform_expr(alloc)
 
   def array_slice(self, arr, indices):
     data_ptr = self.attr(arr, "data")
@@ -97,7 +170,7 @@ class LowerIndexing(Transform):
                             elt_offset, size,
                             type = new_array_t)
 
-  def transform_Index(self, expr):
+  def __transform_Index(self, expr):
     arr = self.transform_expr(expr.value)
     idx = self.transform_expr(expr.index)
     idx = self.assign_name(idx, "idx")
@@ -135,7 +208,7 @@ class LowerIndexing(Transform):
     else:
       return self.array_slice(arr, indices)
 
-  def transform_Assign(self, stmt):
+  def __transform_Assign(self, stmt):
     lhs = stmt.lhs
     lhs_class = lhs.__class__
     rhs = self.transform_expr(stmt.rhs)
@@ -145,7 +218,7 @@ class LowerIndexing(Transform):
         rhs_i = self.tuple_proj(rhs, i)
         # TODO: make this recursive, otherwise nested
         # complex assignments won't get implemented
-        assert lhs_i.__class__ not in (ArrayView, Tuple)
+        assert lhs_i not in (ArrayView, Tuple)
         self.assign(lhs_i, rhs_i)
       return None
     

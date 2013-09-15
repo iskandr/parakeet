@@ -24,6 +24,7 @@ from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
 from range_propagation import RangePropagation
+from lhs_slice_to_parfor import SliceAssignToParFor
 
 ####################################
 #                                  #
@@ -62,9 +63,10 @@ high_level_optimizations = Phase([
                                     inline_opt, 
                                     symbolic_range_propagation,   
                                     licm,
-                                    fusion_opt, 
-                                    fusion_opt, 
                                     copy_elim,  
+                                    SliceAssignToParFor,                  
+                                    fusion_opt, 
+                                    fusion_opt, 
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -83,7 +85,7 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([ LowerIndexing, Flatten, inline_opt], name="Flatten", 
+flatten = Phase([ Flatten, inline_opt], name="Flatten", 
                 copy=True, 
                 depends_on=indexify,
                 run_if = contains_structs,  

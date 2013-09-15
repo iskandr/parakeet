@@ -438,7 +438,13 @@ class BuildFlatFn(Builder):
     return (ptr,) + tuple(shape_elts) + tuple(stride_elts) + (self.int(0), nelts)
   
   def flatten_ArrayView(self, expr):
-    assert False, "Not implemented" 
+    data = self.flatten_expr(expr.data)
+    shape = self.flatten_expr(expr.shape)
+    strides = self.flatten_expr(expr.strides)
+    offset = self.flatten_expr(expr.offset)
+    size = self.flatten_expr(expr.size)
+    return data + shape + strides + offset + size
+    
   
   def flatten_Ravel(self, expr):
     assert False, "Not implemented" 
