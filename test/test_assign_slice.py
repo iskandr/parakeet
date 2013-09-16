@@ -16,7 +16,7 @@ def test_set_1d_simple_slice():
     x[idx] = y
     setidx(x2, idx, y)
     assert testing_helpers.eq(x, x2), "Expected %s but got %s" % (x, x2)
-"""
+    
 def test_set_1d_simple_slice_to_const():
     x = np.array([1,2,3,4,5,6]) 
     x2 = x.copy()
@@ -34,7 +34,7 @@ def test_set_1d_step_slice_to_const():
     x[idx] = y
     setidx(x2, idx, y)
     assert testing_helpers.eq(x, x2)
-"""
+
 def test_set_1d_negative_slice():
     x = np.array([1,2,3,4,5,6]) 
     x2 = x.copy()
