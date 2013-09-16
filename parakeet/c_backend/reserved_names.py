@@ -34,66 +34,27 @@ keywords = set([
 
 macro_names = set(["assert"])
 util_names = set(["printf", "malloc", "free", ])
-math_names = set([
-  "acos",
-  "acosf", 
-  "acosl",
-  
-  "asin",
-  "asinf",
-  "asinl",
-  
-  "atan",
-  "atanf",
-  "atanl",
-  
-  "atan2",
-  "atan2f",
-  "atan2l",
-  
-  "atanh", 
-  "atanhf",
-  "atanhl",
-  
-  "atof",
-  "ceil"
-  
-  "cos",
-  "cosf",
-  "cosl",
-  
-  "cosh",
-  "coshf",
-  "coshl",
-  
-  "exp",
-  "expf",
-  "expl",
-  
-  "fabs",
-  "floor",
-  "frexp",
-  "ldexp",
-  "log",
-  "log10", 
+
+import math 
+
+base_math_names = [name for name in dir(math) if not name.startswith("__")]
+
+float32_math_names = [name+'f' for name in base_math_names]
+long_math_names = [name+"l" for name in base_math_names]
+extra_math_names = [
+  "atof", "cbrt", "cbrtf", "cbrtl",
   "div", 
-  
-  "sin", 
-  "sinf",
-  "sinl",
-  
-  "sinh",
-  "sinhf",
-  "sinhl",
-  
-  "tan", 
-  "tanf",
-  "tanl",
-  
-  "tanh",
-  "tanhf",
-  "tanh2"             
-])
+  "exp2", "exp2f", "exp2l", 
+  "j0", "j1", "jn",
+  "log2", "log2f", "log2l", 
+  "logb", "logbf", "logbl", 
+  "lrintf", "lrintl", 
+  "lround", "lroundf", "lroundl", 
+  "signgam", 
+  "tgamma", "tgammaf", "tgammal"  
+  "y0", "y1", "yn",              
+]
+math_names = set(base_math_names+float32_math_names+long_math_names+extra_math_names)
 all_reserved_names = keywords.union(macro_names).union(util_names).union(math_names)
  
 def is_reserved(name):

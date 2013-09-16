@@ -71,8 +71,7 @@ class BaseCompiler(object):
     prefix = names.original(prefix)
     
     prefix = prefix.replace(".", "")
-    if "_" not in prefix:
-      prefix = prefix + "_"
+  
     version = self.name_versions.get(prefix, 1)
     self.name_versions[prefix] = version + 1
     if version == 1 and not is_reserved(prefix):

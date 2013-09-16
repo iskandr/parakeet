@@ -565,11 +565,19 @@ class PyModuleCompiler(FlatFnCompiler):
     strides_tuple = self.array_to_tuple(strides_elts, n, stride_t)
     return strides_tuple
     
-        
+  def decref(self, obj):
+    self.append("Py_DECREF(%s);" % obj)
+    
   def attribute(self, v, attr, t):
     if attr == "data":
       self.check_array(v)
-      return "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
+      c_expr = "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
+      data_var = self.fresh_var(to_ctype(t), "data", c_expr)
+      pyint = self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data_var)
+      self.append("PySet_Add(%s, %s);" % (self.external_pointer_set, pyint))
+      self.decref(pyint)
+      return data_var
+    
     elif attr == "shape":
       self.check_array(v)
       elt_types = t.elt_types
@@ -626,38 +634,49 @@ class PyModuleCompiler(FlatFnCompiler):
     offset = self.visit_expr(expr.offset)
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     dtype = to_dtype(expr.type.elt_type)
-    reshaped  = self.fresh_name("reshaped")
+    reshaped  = self.fresh_var("PyObject*", "reshaped")
     # TODO: how to attach refcounts to ptr in flattened form?
+    data_pyint =  self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data)
+    is_external_ptr = \
+      self.fresh_var("int", "is_external_ptr", 
+                     "PySet_Contains(%s, %s)" % (self.external_pointer_set, data_pyint)) 
+    self.decref(data_pyint)
     
-    locally_allocated = True
-   
-    if locally_allocated:
-      count = self.visit_expr(expr.size)
-      offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
+    self.printf("Is %p external? %d", data, is_external_ptr )
+    self.push()
+    count = self.visit_expr(expr.size)
+    offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
     
-      buffer_name = self.fresh_name("array_buffer")
-      self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % \
+    buffer_name = self.fresh_name("array_buffer")
+    self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % \
                   (buffer_name,  data, count, bytes_per_elt))
-      dtype_descr = "PyArray_DescrFromType(%s)" % dtype
+    dtype_descr = "PyArray_DescrFromType(%s)" % dtype
     
-      vec_name = self.fresh_name("linear_array")
-      #   _members = ['data', 'shape', 'strides', 'offset', 'size']
-      self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
+    vec_name = self.fresh_name("linear_array")
+    #   _members = ['data', 'shape', 'strides', 'offset', 'size']
+    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
                   (vec_name, buffer_name, dtype_descr, count, offset_bytes))
    
-      shape = self.visit_expr(expr.shape)
-      self.append("PyObject* %s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
+    shape = self.visit_expr(expr.shape)
+    self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
                 (reshaped, vec_name, shape))
       
-    else:
-      dims_array = self.tuple_to_stack_array(expr.shape, name = "shape", elt_type = "npy_intp")
-      self.append("PyObject* %s = PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s]);" % \
+    if_new_ptr = self.pop()
+    
+    self.push()
+    dims_array = self.tuple_to_stack_array(expr.shape, name = "shape", elt_type = "npy_intp")
+    self.append("%s = PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s]);" % \
                    (reshaped, ndims, dims_array, dtype, data, offset))
-      
+    if_old_ptr = self.pop()
+    
+    self.append("if(%s) { %s } else { %s } " % \
+                (is_external_ptr, 
+                 self.indent("\n" + if_old_ptr + "\n"), 
+                 self.indent("\n" + if_new_ptr + "\n")))
     strides_elts = self.tuple_to_stack_array(expr.strides, name = "strides", elt_type = "npy_intp")
     strides_bytes = self.fresh_name("strides_bytes")
     self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, reshaped))
-    for i, stride_t in enumerate(expr.strides.type.elt_types):
+    for i, _ in enumerate(expr.strides.type.elt_types):
       self.append("%s[%d] = %s[%d] * %d;" % (strides_bytes, i, strides_elts, i, bytes_per_elt) )
     return reshaped
   
@@ -706,6 +725,8 @@ class PyModuleCompiler(FlatFnCompiler):
     if debug: 
       self.newline()
       self.printf("\\nStarting %s : %s..." % (c_fn_name, fn.type))
+    
+    
       
     for i, argname in enumerate(fn.arg_names):
       assert argname in uses, "Couldn't find arg %s in use-counts" % argname
@@ -725,6 +746,9 @@ class PyModuleCompiler(FlatFnCompiler):
       if isinstance(t, ScalarT):
         new_name = self.name(argname, overwrite = True)
         self.unbox_scalar(c_name, t, target = new_name)
+
+    self.external_pointer_set = \
+      self.fresh_var("PyObject*", "external_pointer_set", "PySet_New(NULL)")
         
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
