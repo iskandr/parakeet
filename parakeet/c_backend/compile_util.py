@@ -33,12 +33,12 @@ python_headers = ["Python.h",  'numpy/arrayobject.h', 'numpy/arrayscalars.h',]
   
   
 
-defs = []#["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 defs = "\n".join(defs + ["\n"])
 config_vars = distutils.sysconfig.get_config_vars()
 
 default_compiler = None
-for compiler in [ 'clang', 'g++' ]:
+for compiler in [  'gcc', 'clang']:
   path = distutils.spawn.find_executable(compiler)
   if path:
     default_compiler = path
@@ -46,7 +46,7 @@ for compiler in [ 'clang', 'g++' ]:
 
 assert compiler is not None, "No compiler found!"
 
-source_extension = ".cpp"
+source_extension = ".c"
 object_extension = ".o"
 shared_extension = npdist.system_info.get_shared_lib_extension(True)
 
@@ -63,7 +63,7 @@ include_dirs = python_include_dirs + numpy_include_dirs
 compiler_flags = ['-I%s' % path for path in include_dirs] +  ['-fPIC', '-Wall']
 
 if debug:
-  compiler_flags.extend(['-ggdb3', '-O0'])
+  compiler_flags.extend(['-g', '-O0'])
 else:
   compiler_flags.extend(['-O3'])
 

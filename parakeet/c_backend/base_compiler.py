@@ -69,14 +69,18 @@ class BaseCompiler(object):
   
   def fresh_name(self, prefix):
     prefix = names.original(prefix)
+    
     prefix = prefix.replace(".", "")
+    if "_" not in prefix:
+      prefix = prefix + "_"
     version = self.name_versions.get(prefix, 1)
     self.name_versions[prefix] = version + 1
     if version == 1 and not is_reserved(prefix):
       return prefix 
-    else:
+    elif prefix[-1] != "_":
       return "%s_%d" % (prefix, version)
-  
+    else:
+      return prefix + str(version)
   def fresh_var(self, t, prefix = None, init = None):
     if prefix is None:
       prefix = "temp"

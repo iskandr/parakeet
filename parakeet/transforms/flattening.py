@@ -619,8 +619,7 @@ class Flatten(Transform):
   
   def transform_block(self, stmts):
     return stmts
-   
-  
+    
   def pre_apply(self, old_fn, _cache = {}):
     if old_fn.name in _cache:
       return _cache[old_fn.name]

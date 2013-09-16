@@ -5,7 +5,7 @@ from treelike import NestedBlocks
 
 from .. import names, prims 
 from ..analysis import use_count
-from ..syntax import Const, Tuple, TypedFn, Var
+from ..syntax import Const, Tuple, TypedFn, Var, TupleProj, ArrayView, PrimCall
 from ..ndtypes import (TupleT,  ArrayT, ClosureT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
@@ -224,24 +224,42 @@ class FlatFnCompiler(BaseCompiler):
     false = self.visit_expr(expr.false_value)
     return "%s ? %s : %s" % (cond, true, false) 
   
+  def is_pure(self, expr):
+    return expr.__class__ in (Var, Const, PrimCall, Attribute, TupleProj, Tuple, ArrayView)
+  
   def visit_Assign(self, stmt):
     lhs = self.visit_expr(stmt.lhs)
     rhs = self.visit_expr(stmt.rhs)
+    
     if stmt.lhs.__class__ is Var:
       return "%s %s = %s;" % (to_ctype(stmt.lhs.type), lhs, rhs)
     else:
       return "%s = %s;" % (lhs, rhs)
+  
+  def declare_merge_vars(self, merge):
+    """ 
+    Declare but don't initialize
+    """
+    for (name, (left, _)) in merge.iteritems():
+      c_name = self.name(name)
+      t = to_ctype(left.type)
+      self.append("%s %s;" % (t, c_name))
+   
+ 
+  def visit_merge_left(self, merge, declare = False):
     
-  def visit_merge_left(self, merge):
     if len(merge) == 0:
       return ""
     
     stmts = ["\n"]
     
     for (name, (left, _)) in merge.iteritems():
-      stmts.append("%s %s = %s;"  % (to_ctype(left.type), 
-                                     self.name(name), 
-                                     self.visit_expr(left)))
+      c_left = self.visit_expr(left)
+      c_name = self.name(name)
+      if declare:
+        stmts.append("%s %s = %s;"  % (to_ctype(left.type), c_name, c_left))
+      else:
+        stmts.append("%s = %s;" % (c_name, c_left))
     return "\n".join(stmts)
   
   def visit_merge_right(self, merge):
@@ -253,12 +271,15 @@ class FlatFnCompiler(BaseCompiler):
     return "\n".join(stmts)
   
   def visit_If(self, stmt):
+    
+    self.declare_merge_vars(stmt.merge)
     cond = self.visit_expr(stmt.cond)
-    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge)
+    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, declare = False)
     false = self.visit_block(stmt.false) + self.visit_merge_right(stmt.merge)
-    return "if(%s) {%s} else {%s}" % (cond, true, false) 
+    return "if(%s) {%s} else {%s}" % (cond, self.indent(true), self.indent(false)) 
   
   def visit_ForLoop(self, stmt):
+    s = self.visit_merge_left(stmt.merge, declare=True)
     start = self.visit_expr(stmt.start)
     stop = self.visit_expr(stmt.stop)
     step = self.visit_expr(stmt.step)
@@ -268,8 +289,8 @@ class FlatFnCompiler(BaseCompiler):
     body =  self.visit_block(stmt.body) +  self.visit_merge_right(stmt.merge)
     body = self.indent("\n" + body)
     
-    s = self.visit_merge_left(stmt.merge)
-    s += "\nfor (%(t)s %(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
+    s += "\n %(t)s %(var)s;"
+    s += "\nfor (%(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
     return s % locals()
 
   def visit_Return(self, stmt):
@@ -528,7 +549,7 @@ class PyModuleCompiler(FlatFnCompiler):
     assert all(t == stride_t for t in strides_tuple_t)
     n = len(strides_tuple_t.elt_types)
     strides_bytes = self.fresh_name("strides_bytes")
-    self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_bytes, arr))
+    self.append("npy_intp* %s = PyArray_STRIDES( (PyArrayObject*) %s);" % (strides_bytes, arr))
     strides_elts = self.fresh_name("strides_elts")
     self.append("npy_intp %s[%d];" % (strides_elts, n))
     for i in xrange(n):
@@ -543,7 +564,7 @@ class PyModuleCompiler(FlatFnCompiler):
   def attribute(self, v, attr, t):
     if attr == "data":
       self.check_array(v)
-      return "(%s) PyArray_DATA (%s)" % (to_ctype(t), v)
+      return "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
     elif attr == "shape":
       self.check_array(v)
       elt_types = t.elt_types
@@ -601,9 +622,6 @@ class PyModuleCompiler(FlatFnCompiler):
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     dtype = to_dtype(expr.type.elt_type)
     reshaped  = self.fresh_name("reshaped")
-    print "DATA", data 
-    print "NDIMS", ndims 
-    print "dtype", dtype 
     # TODO: how to attach refcounts to ptr in flattened form?
     
     locally_allocated = False
@@ -633,7 +651,7 @@ class PyModuleCompiler(FlatFnCompiler):
       
     strides_elts = self.tuple_to_stack_array(expr.strides, name = "strides", elt_type = "npy_intp")
     strides_bytes = self.fresh_name("strides_bytes")
-    self.append("npy_intp* %s = PyArray_STRIDES(%s);" % (strides_bytes, reshaped))
+    self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, reshaped))
     for i, stride_t in enumerate(expr.strides.type.elt_types):
       self.append("%s[%d] = %s[%d] * %d;" % (strides_bytes, i, strides_elts, i, bytes_per_elt) )
     return reshaped
