@@ -1,16 +1,30 @@
 from .. import config
+
 from .. syntax import TypedFn
 from clone_function import CloneFunction
+from transform import Transform 
 
-
-def apply_transforms(fn, transforms, cleanup = []):
+name_stack = []
+def apply_transforms(fn, transforms, cleanup = [], phase_name = None):
+  if phase_name: name_stack.append("{" + phase_name + "}")
   for T in transforms:
     t = T() if type(T) == type else T
+    if isinstance(t, Transform): 
+      name_stack.append(str(t))
+      if config.print_transform_names:
+        print "-- Running %s on %s" % ("->".join(name_stack), fn.name)
+    elif isinstance(t, Phase) and t.run_if is not None and not t.run_if(fn):
+      continue 
     fn = t.apply(fn)
     assert fn is not None, "%s transformed fn into None" % T
-    fn = apply_transforms(fn, cleanup, [])
+  
+    if isinstance(t, Transform): name_stack.pop()
+    fn = apply_transforms(fn, cleanup, [], phase_name = "cleanup")
+  
+  if phase_name: name_stack.pop()
   return fn
 
+name_stack = []
 class Phase(object):
   def __init__(self,
                transforms,
@@ -90,7 +104,7 @@ class Phase(object):
       fn.copied_by = self
 
     if (self.run_if is None) or self.run_if(fn):
-      fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup)
+      fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
       fn.version += 1
 
     if self.post_apply:

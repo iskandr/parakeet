@@ -15,7 +15,7 @@ def test_set_1d_simple_slice():
     print x[idx]
     x[idx] = y
     setidx(x2, idx, y)
-    assert testing_helpers.eq(x, x2)
+    assert testing_helpers.eq(x, x2), "Expected %s but got %s" % (x, x2)
 """
 def test_set_1d_simple_slice_to_const():
     x = np.array([1,2,3,4,5,6]) 
@@ -42,7 +42,7 @@ def test_set_1d_negative_slice():
     y = [10, 20]
     x[idx] = y
     setidx(x2, idx, y)
-    assert testing_helpers.eq(x, x2)
+    assert testing_helpers.eq(x, x2), "Expected %s but got %s" % (x, x2)
 
 if __name__ == '__main__':
     testing_helpers.run_local_tests()

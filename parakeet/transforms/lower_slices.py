@@ -22,7 +22,11 @@ class LowerSlices(Transform):
     n_parfor_indices = len(slice_positions)
     n_indices = n_fixed_indices + n_parfor_indices
     parfor_idx_t = repeat_tuple(Int64, n_parfor_indices) if n_parfor_indices > 1 else Int64 
-    input_types = [lhs_array_type, rhs_value_type] + [Int64] * n_fixed_indices + [parfor_idx_t]
+    fixed_index_types = [Int64] * n_fixed_indices
+    slice_start_types = [Int64] * n_parfor_indices
+    slice_step_types = [Int64] * n_parfor_indices
+    input_types = [lhs_array_type, rhs_value_type] + fixed_index_types + \
+      slice_start_types + slice_step_types + [parfor_idx_t]
     name = "setidx_array%d_%s_par%d" % \
       (lhs_array_type.rank, lhs_array_type.elt_type, n_parfor_indices)
     #build_fn
@@ -33,12 +37,22 @@ class LowerSlices(Transform):
     #  - input_names=None
     # Outputs:
     #  f, builder, input_vars 
-    idx_names = ["idx%d" % (i+1) for i in xrange(n_fixed_indices + n_parfor_indices)]
-    input_names = ["output_array", "input_array"] + idx_names
+    idx_names = ["idx%d" % (i+1) for i in xrange(n_fixed_indices)]
+    start_names = ["start%d" % (i+1) for i in xrange(n_parfor_indices)]
+    step_names = ["step%d" % (i+1) for i in xrange(n_parfor_indices)]
+    
+    
+    input_names = ["output_array", "input_array"] + idx_names + start_names + step_names + ["sliceidx"]
+    
     fn, builder, input_vars = build_fn(input_types, NoneType, name, input_names)
     lhs = input_vars[0]
     rhs = input_vars[1]
     fixed_indices = input_vars[2:(2+n_fixed_indices)]
+    starts = input_vars[(2+n_fixed_indices):(2+n_fixed_indices+n_parfor_indices)]
+    steps = input_vars[(2+n_fixed_indices+n_parfor_indices):(2+n_fixed_indices+2*n_parfor_indices)]
+    assert (2+n_fixed_indices+2*n_parfor_indices+1) == len(input_vars), \
+      "Wrong number of vars: %s, expected %d but got %d" % \
+      (input_vars, 2+n_fixed_indices+2*n_parfor_indices+1, len(input_vars))
     parfor_idx = input_vars[-1]
     if n_parfor_indices > 1:
       parfor_indices = builder.tuple_elts(parfor_idx)
@@ -58,9 +72,12 @@ class LowerSlices(Transform):
       else:
         assert slice_counter < len(slice_positions)  and slice_positions[slice_counter] == i, \
           "Bad positions for indices, missing %d" % i  
-        indices.append(parfor_indices[slice_counter])
+        start = starts[slice_counter]
+        step = steps[slice_counter]
+        parfor_idx = parfor_indices[slice_counter]
+        indices.append(builder.add(start, builder.mul(step, parfor_idx)))
         slice_counter += 1
-    self.index
+    
     value = builder.index(rhs, parfor_indices)
     builder.setidx(lhs, builder.tuple(indices), value)
     builder.return_(none)
@@ -135,7 +152,11 @@ class LowerSlices(Transform):
                          for (start, stop, step) in slices])
     
     setidx_fn = self.make_setidx_fn(lhs.value.type, rhs.type, scalar_index_positions, slice_positions)
-    closure = self.closure(setidx_fn, [lhs, rhs] + scalar_indices, "setidx_closure")  
+    starts = [start for (start, _, _) in slices]
+    steps = [step for (_, _, step) in slices]
+    closure = self.closure(setidx_fn, 
+                           [lhs.value, rhs] + scalar_indices + starts + steps, 
+                           "setidx_closure")  
     self.parfor(closure, bounds)
       
   def transform_Assign(self, stmt):

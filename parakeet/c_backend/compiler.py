@@ -379,7 +379,7 @@ class PyModuleCompiler(FlatFnCompiler):
     Compile the expression and if necessary box it up as a PyObject
     """
     x = self.visit_expr(expr)
-    if isinstance(expr.type, ScalarT):
+    if isinstance(expr.type, (NoneT, ScalarT)):
       return self.box_scalar(x, expr.type)
     else:
       return x
@@ -454,6 +454,18 @@ class PyModuleCompiler(FlatFnCompiler):
         return NULL;
       }""" % (tup, tup, self.c_type_str(tup)))
  
+  def check_slice(self, obj):
+    if not check_pyobj_types: return 
+    self.newline()
+    self.comment("Checking slice type for %s" % obj)
+    self.append("""
+      if (!PySlice_Check(%s)) { 
+        PyErr_Format(PyExc_AssertionError, 
+                    "Expected %s to be slice, got %%s", 
+                    %s); 
+        return NULL;
+      }""" % (obj, obj, self.c_type_str(obj)))
+  
   def check_array(self, arr):
     if not check_pyobj_types: return 
     self.newline()
@@ -550,6 +562,11 @@ class PyModuleCompiler(FlatFnCompiler):
       return "0"
     elif attr in ('size', 'nelts'):
       return "PyArray_Size(%s)" % v
+    
+    elif attr in ('start', 'stop', 'step'):
+      self.check_slice(v)
+      obj = "((PySliceObject*)%s)->%s" % (v, attr)
+      return self.unbox_scalar(obj, t, attr)
     else:
       assert False, "Unsupported attribute %s" % attr 
    

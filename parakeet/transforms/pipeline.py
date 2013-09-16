@@ -59,6 +59,7 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
                                     name = "SymRangeProp", 
                                     memoize = True, cleanup = [])
  
+lower_slices = Phase([LowerSlices], name = "lower_slices", memoize = True, copy=True)
 high_level_optimizations = Phase([
                                     inline_opt, 
                                     symbolic_range_propagation,   
@@ -66,7 +67,7 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     fusion_opt, 
                                     copy_elim,
-                                    LowerSlices 
+                                    lower_slices 
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
