@@ -40,7 +40,7 @@ class BaseCompiler(object):
   
   def pop(self):
     stmts = self.blocks.pop()
-    return "\n".join("  " + stmt for stmt in stmts)
+    return "  " + self.indent("\n".join("  " + stmt for stmt in stmts))
   
   def indent(self, block_str):
     return block_str.replace("\n", "\n  ")

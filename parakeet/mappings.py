@@ -151,7 +151,7 @@ function_mappings = {
   np.floor : prims.floor, 
   np.ceil : prims.ceil,
   np.round : prims.round, 
-  np.rint : prims.round, 
+  np.rint : prims.rint, 
   
   # LOGS AND EXPONENTIATION 
   np.square : lib.numpy_math.square,

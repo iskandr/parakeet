@@ -39,16 +39,16 @@ def expect(fn, args, expected, msg = None, valid_types = None):
     label += "-" + str(msg)
   expect_eq(interp_result, expected, label)
 
-  llvm_result = run_python_fn(fn, _copy_list(args), backend="c")
+  native_result = run_python_fn(fn, _copy_list(args), backend="c")
   if valid_types is not None:
     if not isinstance(valid_types, (tuple, list)):
       valid_types = [valid_types]
-    assert type(llvm_result) in valid_types, \
-      "Expected result to have type in %s but got %s" % (valid_types, type(llvm_result))
-  label = "llvm: inputs = %s" % ", ".join(str(arg) for arg in args)
+    assert type(native_result) in valid_types, \
+      "Expected result to have type in %s but got %s" % (valid_types, type(native_result))
+  label = "native: inputs = %s" % ", ".join(str(arg) for arg in args)
   if msg is not None:
       label += "-" + str(msg)
-  expect_eq(llvm_result, expected, label)
+  expect_eq(native_result, expected, label)
   
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

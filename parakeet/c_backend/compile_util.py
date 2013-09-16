@@ -61,7 +61,8 @@ python_include_dirs = [distutils.sysconfig.get_python_inc()]
 
 numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
 include_dirs = python_include_dirs + numpy_include_dirs 
-compiler_flags = ['-I%s' % path for path in include_dirs] +  ['-fPIC', '-Wall', '-Wno-unused-variable']
+compiler_flags = ['-I%s' % path for path in include_dirs] + \
+                 ['-fPIC', '-Wall', '-Wno-unused-variable']
 
 opt_flags = ['-O3']
 if fast_math:

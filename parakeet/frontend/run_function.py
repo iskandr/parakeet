@@ -128,9 +128,6 @@ def run_typed_fn(fn, args, backend = None):
     args = c_backend.prepare_args(args, fn.input_types)
     assert len(args) == len(flat_fn.input_types)
     result = compiled_fn.c_fn(*args)
-    print type(result)
-    if hasattr(result, 'dtype'): 
-      print result.dtype, result.shape, result.strides , result.data 
     return result 
   elif backend == "interp":
     from .. import interp 

@@ -50,6 +50,11 @@ extra_math_names = [
   "logb", "logbf", "logbl", 
   "lrintf", "lrintl", 
   "lround", "lroundf", "lroundl", 
+  "remainder", "remainderf", "remainderl", 
+  "remquo", "remquof", "remquol", 
+  "rint", "rintf", "rintl", 
+  "round", "roundf", "roundl",
+  "scalb", "scalbln", "scalblnf", "scalblnl", "scalbn", "scalbnf", "scalbnl",  
   "signgam", 
   "tgamma", "tgammaf", "tgammal"  
   "y0", "y1", "yn",              

@@ -5,7 +5,7 @@ from treelike import NestedBlocks
 
 from .. import names, prims 
 from ..analysis import use_count
-from ..syntax import Const, Tuple, TypedFn, Var, TupleProj, ArrayView, PrimCall
+from ..syntax import Const, Tuple, TypedFn, Var, TupleProj, ArrayView, PrimCall, Attribute 
 from ..ndtypes import (TupleT,  ArrayT, ClosureT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
@@ -17,7 +17,8 @@ from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
 from compile_util import compile_module, compile_object
-from config import debug, check_pyobj_types, print_function_source, print_module_source 
+from config import debug, check_pyobj_types, print_function_source, print_module_source, print_input_ir 
+ 
 
 
 
@@ -245,33 +246,36 @@ class FlatFnCompiler(BaseCompiler):
       t = to_ctype(left.type)
       self.append("%s %s;" % (t, c_name))
    
- 
   def visit_merge_left(self, merge, declare = False):
     
     if len(merge) == 0:
       return ""
     
-    stmts = ["\n"]
+    self.push()
+    self.comment("Merge Phi Nodes (left side) " + str(merge))
+    
     
     for (name, (left, _)) in merge.iteritems():
       c_left = self.visit_expr(left)
       c_name = self.name(name)
       if declare:
-        stmts.append("%s %s = %s;"  % (to_ctype(left.type), c_name, c_left))
+        self.append("%s %s = %s;"  % (to_ctype(left.type), c_name, c_left))
       else:
-        stmts.append("%s = %s;" % (c_name, c_left))
-    return "\n".join(stmts)
+        self.append("%s = %s;" % (c_name, c_left))
+    return self.pop()
   
   def visit_merge_right(self, merge):
+    
     if len(merge) == 0:
       return ""
-    stmts = ["\n"]
+    self.push()
+    self.comment("Merge Phi Nodes (right side) " + str(merge))
+    
     for (name, (_, right)) in merge.iteritems():
-      stmts.append("%s = %s;"  % (self.name(name), self.visit_expr(right)))
-    return "\n".join(stmts)
+      self.append("%s = %s;"  % (self.name(name), self.visit_expr(right)))
+    return self.pop()
   
   def visit_If(self, stmt):
-    
     self.declare_merge_vars(stmt.merge)
     cond = self.visit_expr(stmt.cond)
     true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, declare = False)
@@ -280,6 +284,7 @@ class FlatFnCompiler(BaseCompiler):
   
   def visit_While(self, stmt):
     decls = self.visit_merge_left(stmt.merge, declare = True)
+    cond = self.visit_expr(stmt.cond)
     body = self.visit_block(stmt.body) + self.visit_merge_right(stmt.merge)
     return decls + "while (%s) {%s}" % (cond, body)
   
@@ -291,7 +296,8 @@ class FlatFnCompiler(BaseCompiler):
     var = self.visit_expr(stmt.var)
     t = to_ctype(stmt.var.type)
     
-    body =  self.visit_block(stmt.body) +  self.visit_merge_right(stmt.merge)
+    body =  self.visit_block(stmt.body)
+    body += self.visit_merge_right(stmt.merge)
     body = self.indent("\n" + body)
     
     s += "\n %(t)s %(var)s;"
@@ -642,7 +648,7 @@ class PyModuleCompiler(FlatFnCompiler):
                      "PySet_Contains(%s, %s)" % (self.external_pointer_set, data_pyint)) 
     self.decref(data_pyint)
     
-    self.printf("Is %p external? %d", data, is_external_ptr )
+    # self.printf("Is %p external? %d", data, is_external_ptr )
     self.push()
     count = self.visit_expr(expr.size)
     offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
@@ -713,7 +719,9 @@ class PyModuleCompiler(FlatFnCompiler):
   
          
   def visit_fn(self, fn):
-    
+    if print_input_ir:
+      print "=== Compiling to C (entry function) ==="
+      print fn
     c_fn_name = self.fresh_name(fn.name)
     uses = use_count(fn)
     self.push()
@@ -725,8 +733,6 @@ class PyModuleCompiler(FlatFnCompiler):
     if debug: 
       self.newline()
       self.printf("\\nStarting %s : %s..." % (c_fn_name, fn.type))
-    
-    
       
     for i, argname in enumerate(fn.arg_names):
       assert argname in uses, "Couldn't find arg %s in use-counts" % argname
