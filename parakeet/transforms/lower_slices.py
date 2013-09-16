@@ -64,7 +64,6 @@ class LowerSlices(Transform):
     # This would be easier if I had OCaml cons lists!
     slice_counter = 0
     fixed_counter = 0
-    print fixed_positions, slice_positions
     for i in xrange(n_indices):
       if fixed_counter < len(fixed_positions)  and i == fixed_positions[fixed_counter]:
         indices.append(fixed_indices[fixed_counter])
@@ -107,18 +106,14 @@ class LowerSlices(Transform):
       # if there aren't any slice expressions, don't bother with the rest of this function
       return indices, range(len(indices)), [], []
     
-    print "!", expr, expr.type
     shape = self.shape(expr.value)
-    print "!!", shape, shape.type
     shape_elts = self.tuple_elts(shape)
-    print "!!!", shape_elts
     slices = []
     slice_positions = []
     scalar_indices = []
     scalar_index_positions = []
     
     for i, shape_elt in enumerate(shape_elts):
-      print ">>",  i, shape_elt
       idx = indices[i]
       t = idx.type
       if isinstance(t, ScalarT):
@@ -144,7 +139,6 @@ class LowerSlices(Transform):
       self.dissect_index_expr(expr)
     assert len(scalar_indices) == len(scalar_index_positions)
     assert len(slices) == len(slice_positions)
-    print "transform_Index", expr, scalar_indices, slices 
     if len(slices) == 0:
       return expr
     
