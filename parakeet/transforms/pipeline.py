@@ -67,7 +67,7 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     fusion_opt, 
                                     copy_elim,
-                                    lower_slices 
+                                    NegativeIndexElim,
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -78,7 +78,6 @@ high_level_optimizations = Phase([
 indexify = Phase([IndexifyAdverbs, 
                   inline_opt, Simplify, DCE, 
                   ShapePropagation, 
-                  NegativeIndexElim,
                   IndexMapElimination,
                  ], 
                  run_if = contains_adverbs, 
@@ -87,8 +86,8 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([ Flatten ], name="Flatten", 
-                copy=False, 
+flatten = Phase([lower_slices, Flatten, inline_opt ], name="Flatten", 
+                copy=True, 
                 depends_on=indexify,
                 run_if = contains_structs,  
                 memoize = True)

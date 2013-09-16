@@ -57,7 +57,6 @@ def field_pos_range(t, field, _cache = {}):
   assert isinstance(t, StructT), "Expected struct got %s.%s" % (t, field)
   offset = 0
   for i, (field_name, field_t) in enumerate(t._fields_):
-    print i, field_name, field_t, flatten_type(field_t)
     n = len(flatten_type(field_t))
     if field_name == field or (isinstance(field, (int, long)) and i == field):
       result = (offset, offset+n)
@@ -341,13 +340,10 @@ class BuildFlatFn(Builder):
   def flatten_field(self, struct, field):
     elts = self.flatten_expr(struct)
     start, stop = field_pos_range(struct.type, field)
-    print "struct", struct, "field", field, "elts", elts, "start", start, "stop", stop 
-    
     return elts[start:stop]
    
   def flatten_TupleProj(self, expr):
     result = self.flatten_field(expr.tuple, expr.index)
-    print "TupleProj", expr.tuple, expr.tuple.type, "[", expr.index, "] :",  expr.type, result
     return result
     
   def flatten_Closure(self, expr):
@@ -625,6 +621,7 @@ class Flatten(Transform):
       return _cache[old_fn.name]
     
     flat_fn = build_flat_fn(old_fn)
+    flat_fn.copied_by = old_fn.copied_by
     input_vars = mk_vars(old_fn.arg_names, old_fn.input_types)
     self.blocks.push()
     unboxed_inputs = self.unbox_vars(input_vars)
