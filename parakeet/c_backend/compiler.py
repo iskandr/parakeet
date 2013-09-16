@@ -629,7 +629,7 @@ class PyModuleCompiler(FlatFnCompiler):
     reshaped  = self.fresh_name("reshaped")
     # TODO: how to attach refcounts to ptr in flattened form?
     
-    locally_allocated = False
+    locally_allocated = True
    
     if locally_allocated:
       count = self.visit_expr(expr.size)

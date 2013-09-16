@@ -120,11 +120,13 @@ def run_typed_fn(fn, args, backend = None):
     return generic_value_to_python(gv_return, fn.return_type)
   
   elif backend == 'c':
-    flat_fn = pipeline.flatten.apply(fn)
-    loopy_fn = pipeline.loopify.apply(flat_fn)
+    loopy_fn = pipeline.loopify.apply(fn)
+    
+    flat_fn = pipeline.flatten.apply(loopy_fn)
     from .. import c_backend 
-    compiled_fn = c_backend.compile_entry(loopy_fn)
+    compiled_fn = c_backend.compile_entry(flat_fn)
     args = c_backend.prepare_args(args, fn.input_types)
+    assert len(args) == len(flat_fn.input_types)
     result = compiled_fn.c_fn(*args)
     print type(result)
     if hasattr(result, 'dtype'): 

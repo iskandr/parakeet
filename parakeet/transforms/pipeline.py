@@ -129,7 +129,7 @@ loopify = Phase([
                    symbolic_range_propagation,
                    index_elim
                 ],
-                depends_on = flatten,
+                depends_on = indexify,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 name = "Loopify",
