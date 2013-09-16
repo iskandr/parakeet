@@ -205,8 +205,12 @@ class Simplify(Transform):
     if new_tuple.__class__ is Var and new_tuple.name in self.bindings:
       tuple_expr = self.bindings[new_tuple.name]
       if tuple_expr.__class__ is Tuple:
+        assert idx < len(tuple_expr.elts), \
+          "Too few elements in tuple %s : %s, elts = %s" % (expr, tuple_expr.type, tuple_expr.elts)
         return tuple_expr.elts[idx]
       elif tuple_expr.__class__ is Struct:
+        assert idx < len(tuple_expr.args), \
+          "Too few args in closure %s : %s, elts = %s" % (expr, tuple_expr.type, tuple_expr.elts) 
         return tuple_expr.args[idx]
 
     if not self.is_simple(new_tuple):

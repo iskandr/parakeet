@@ -278,6 +278,11 @@ class FlatFnCompiler(BaseCompiler):
     false = self.visit_block(stmt.false) + self.visit_merge_right(stmt.merge)
     return self.indent("if(%s) {\n%s\n} else {\n%s\n}" % (cond, self.indent(true), self.indent(false))) 
   
+  def visit_While(self, stmt):
+    decls = self.visit_merge_left(stmt.merge, declare = True)
+    body = self.visit_block(stmt.body) + self.visit_merge_right(stmt.merge)
+    return decls + "while (%s) {%s}" % (cond, body)
+  
   def visit_ForLoop(self, stmt):
     s = self.visit_merge_left(stmt.merge, declare=True)
     start = self.visit_expr(stmt.start)
@@ -307,7 +312,7 @@ class FlatFnCompiler(BaseCompiler):
       s = self.visit_stmt(stmt)
       self.append(s)
     self.append("\n")
-    return self.pop()
+    return self.indent("\n" + self.pop())
       
   def visit_TypedFn(self, expr):
     

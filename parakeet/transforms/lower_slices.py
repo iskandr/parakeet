@@ -132,9 +132,56 @@ class LowerSlices(Transform):
         slice_positions.append(i)   
       return scalar_indices, scalar_index_positions, slices, slice_positions
     
+  def transform_Index(self, expr):
+    if isinstance(expr.index.type, ScalarT):
+      return expr 
     
-  def assign_index(self, lhs, rhs):
+    scalar_indices, scalar_index_positions, slices, slice_positions = \
+      self.dissect_index_expr(expr)
+    assert len(scalar_indices) == len(scalar_index_positions)
+    assert len(slices) == len(slice_positions)
+    if len(slices) == 0:
+      return expr
+    
+    array = self.transform_expr(expr.value)
+    data = self.attr(array, 'data')
+    shape = self.shape(array)
+    shape_elts = self.tuple_elts(shape)
+    strides = self.strides(array)
+    stride_elts = self.tuple_elts(strides)
+    offset = self.attr(array, 'offset')
 
+    
+    new_shape = []
+    new_strides = []
+    n_indices = len(scalar_indices) + len(slices)
+    fixed_count = 0
+    slice_count = 0
+    for i in xrange(n_indices):
+      if fixed_count < len(scalar_index_positions) and scalar_index_positions[fixed_count] == i:
+        idx = scalar_indices[fixed_count]
+        fixed_count += 1
+        offset = self.add(offset, self.mul(idx, stride_elts[i]), name = "offset")
+      else:
+        assert slice_positions[slice_count] == i
+        (start, stop, step) = slices[slice_count]
+        slice_count += 1
+     
+        shape_elt = self.safediv(self.sub(stop, start, name = "span"), step, name = "new_shape")
+        new_shape.append(shape_elt)
+        stride_elt = self.mul(stride_elts[i], step, name = "new_stride")
+        new_strides.append(stride_elt)
+    size = self.prod(new_shape)
+    new_rank = len(slices)
+    assert len(new_shape) == new_rank
+    assert len(new_strides) == new_rank
+    new_array = self.array_view(data, self.tuple(new_shape), self.tuple(new_strides), offset, size)
+    assert new_array.type.rank == new_rank
+    return new_array
+    
+    
+      
+  def assign_index(self, lhs, rhs):
     if isinstance(lhs.index.type, ScalarT):
       self.assign(lhs,rhs)
       return 

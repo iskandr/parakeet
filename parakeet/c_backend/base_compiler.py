@@ -81,6 +81,7 @@ class BaseCompiler(object):
       return "%s_%d" % (prefix, version)
     else:
       return prefix + str(version)
+    
   def fresh_var(self, t, prefix = None, init = None):
     if prefix is None:
       prefix = "temp"
