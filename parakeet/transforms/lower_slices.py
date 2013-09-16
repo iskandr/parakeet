@@ -132,14 +132,17 @@ class LowerSlices(Transform):
     return scalar_indices, scalar_index_positions, slices, slice_positions
     
   def transform_Index(self, expr):
+    print "transform_Index", expr
     if isinstance(expr.index.type, ScalarT):
-      return expr 
+      print "FOUND ME A SCALAR"
+      return expr
     
     scalar_indices, scalar_index_positions, slices, slice_positions = \
       self.dissect_index_expr(expr)
     assert len(scalar_indices) == len(scalar_index_positions)
     assert len(slices) == len(slice_positions)
     if len(slices) == 0:
+      print "NO SLICES"
       return expr
     
     array = self.transform_expr(expr.value)
@@ -208,11 +211,12 @@ class LowerSlices(Transform):
       
   def transform_Assign(self, stmt):
     lhs_class = stmt.lhs.__class__
+    rhs = self.transform_expr(stmt.rhs)
      
     if lhs_class is Tuple:
       for (i, _) in enumerate(stmt.lhs.type.elt_types):
         lhs_i = self.tuple_proj(stmt.lhs, i)
-        rhs_i = self.tuple_proj(stmt.rhs, i)
+        rhs_i = self.tuple_proj(rhs, i)
         # TODO: make this recursive, otherwise nested
         # complex assignments won't get implemented
         assert lhs_i.__class__ not in (ArrayView, Tuple)
@@ -224,9 +228,10 @@ class LowerSlices(Transform):
       return None
     elif lhs_class is Index:
       
-      self.assign_index(stmt.lhs, stmt.rhs)
+      self.assign_index(stmt.lhs, rhs)
       return None
     else:
+      stmt.rhs = rhs
       return stmt
     
 

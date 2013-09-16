@@ -68,6 +68,7 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim,
                                     NegativeIndexElim,
+                                    lower_slices
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -86,7 +87,7 @@ indexify = Phase([IndexifyAdverbs,
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
 
-flatten = Phase([lower_slices, Flatten, inline_opt ], name="Flatten", 
+flatten = Phase([Flatten, inline_opt ], name="Flatten", 
                 copy=True, 
                 depends_on=indexify,
                 run_if = contains_structs,  
