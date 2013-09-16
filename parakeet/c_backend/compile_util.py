@@ -7,7 +7,7 @@ import platform
 import subprocess  
 import tempfile
 
-from config import debug
+from config import debug, pure_c, fast_math
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
@@ -38,7 +38,7 @@ defs = "\n".join(defs + ["\n"])
 config_vars = distutils.sysconfig.get_config_vars()
 
 default_compiler = None
-for compiler in [  'gcc', 'clang']:
+for compiler in [  ('gcc' if pure_c else 'g++'), 'clang']:
   path = distutils.spawn.find_executable(compiler)
   if path:
     default_compiler = path
@@ -46,7 +46,8 @@ for compiler in [  'gcc', 'clang']:
 
 assert compiler is not None, "No compiler found!"
 
-source_extension = ".c"
+
+source_extension = ".c" if pure_c else ".cpp"
 object_extension = ".o"
 shared_extension = npdist.system_info.get_shared_lib_extension(True)
 
@@ -62,10 +63,15 @@ numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
 include_dirs = python_include_dirs + numpy_include_dirs 
 compiler_flags = ['-I%s' % path for path in include_dirs] +  ['-fPIC', '-Wall']
 
+opt_flags = ['-O3']
+if fast_math:
+  opt_flags.append('-ffast-math')
+  
 if debug:
   compiler_flags.extend(['-g', '-O0'])
 else:
-  compiler_flags.extend(['-O3'])
+  compiler_flags.extend(opt_flags)
+  
 
 
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"

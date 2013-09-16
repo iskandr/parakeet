@@ -276,7 +276,7 @@ class FlatFnCompiler(BaseCompiler):
     cond = self.visit_expr(stmt.cond)
     true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, declare = False)
     false = self.visit_block(stmt.false) + self.visit_merge_right(stmt.merge)
-    return "if(%s) {%s} else {%s}" % (cond, self.indent(true), self.indent(false)) 
+    return self.indent("if(%s) {\n%s\n} else {\n%s\n}" % (cond, self.indent(true), self.indent(false))) 
   
   def visit_ForLoop(self, stmt):
     s = self.visit_merge_left(stmt.merge, declare=True)

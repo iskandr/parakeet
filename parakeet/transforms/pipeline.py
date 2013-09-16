@@ -82,6 +82,7 @@ indexify = Phase([IndexifyAdverbs,
                   IndexMapElimination,
                  ], 
                  run_if = contains_adverbs, 
+            
                  copy = True, 
                  name = "Indexify", 
                  depends_on=high_level_optimizations) 
