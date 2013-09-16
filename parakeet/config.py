@@ -50,10 +50,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['Flatten', 'LowerSlices'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms = ['Flatten'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [ 'Flatten', 'LowerSlices']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = [ 'Flatten']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False

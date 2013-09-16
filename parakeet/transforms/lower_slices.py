@@ -132,9 +132,7 @@ class LowerSlices(Transform):
     return scalar_indices, scalar_index_positions, slices, slice_positions
     
   def transform_Index(self, expr):
-    print "transform_Index", expr
     if isinstance(expr.index.type, ScalarT):
-      print "FOUND ME A SCALAR"
       return expr
     
     scalar_indices, scalar_index_positions, slices, slice_positions = \
@@ -142,7 +140,6 @@ class LowerSlices(Transform):
     assert len(scalar_indices) == len(scalar_index_positions)
     assert len(slices) == len(slice_positions)
     if len(slices) == 0:
-      print "NO SLICES"
       return expr
     
     array = self.transform_expr(expr.value)
