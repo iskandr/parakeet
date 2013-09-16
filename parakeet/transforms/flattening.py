@@ -390,7 +390,7 @@ class BuildFlatFn(Builder):
     n_indices = len(indices)
     n_strides = len(strides)
     assert n_indices <= n_strides, \
-      "Not supported: more indices than dimensions: %d > %d" % (n_indices, n_strides)
+      "Not supported: more indices than dimensions: %d > %d in %s" % (n_indices, n_strides, expr)
     if n_indices < n_strides:
       extra_indices = [slice_none] * (n_strides - n_indices)
       indices.extend(extra_indices)

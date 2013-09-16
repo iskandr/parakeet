@@ -1,31 +1,85 @@
 
-from .. import syntax
-from .. builder import Builder
- 
-from .. ndtypes import (NoneT, ScalarT, Int64, PtrT, IntT, 
-                        SliceT, make_array_type, ArrayT, TupleT, NoneType,
-                        repeat_tuple, make_tuple_type)
-from .. syntax import Const, Index, Tuple, Var, ArrayView, Assign, Slice, Struct
-from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none 
+from .. builder import build_fn 
+from .. ndtypes import (NoneT, ScalarT, Int64, SliceT, TupleT, NoneType,repeat_tuple)
+from .. syntax import  Index, Tuple, Var, ArrayView
+from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none, none 
 
 
 from transform import Transform
 
 
-
-class LowerSlices(Transform):
-  
+class LowerSlices(Transform):  
+  def make_setidx_fn(self, lhs_array_type, 
+                             rhs_value_type, 
+                             fixed_positions, 
+                             slice_positions, _cache = {}):
+    fixed_positions = tuple(fixed_positions)
+    slice_positions = tuple(slice_positions)
+    key = lhs_array_type, rhs_value_type, fixed_positions, slice_positions
+    if key in _cache: return _cache[key]
+    
+    n_fixed_indices = len(fixed_positions)
+    n_parfor_indices = len(slice_positions)
+    n_indices = n_fixed_indices + n_parfor_indices
+    parfor_idx_t = repeat_tuple(Int64, n_parfor_indices) if n_parfor_indices > 1 else Int64 
+    input_types = [lhs_array_type, rhs_value_type] + [Int64] * n_fixed_indices + [parfor_idx_t]
+    name = "setidx_array%d_%s_par%d" % \
+      (lhs_array_type.rank, lhs_array_type.elt_type, n_parfor_indices)
+    #build_fn
+    # Inputs:  
+    #  - input_types
+    #  - return_type=NoneType
+    #  - name=None
+    #  - input_names=None
+    # Outputs:
+    #  f, builder, input_vars 
+    idx_names = ["idx%d" % (i+1) for i in xrange(n_fixed_indices + n_parfor_indices)]
+    input_names = ["output_array", "input_array"] + idx_names
+    fn, builder, input_vars = build_fn(input_types, NoneType, name, input_names)
+    lhs = input_vars[0]
+    rhs = input_vars[1]
+    fixed_indices = input_vars[2:(2+n_fixed_indices)]
+    parfor_idx = input_vars[-1]
+    if n_parfor_indices > 1:
+      parfor_indices = builder.tuple_elts(parfor_idx)
+    else:
+      parfor_indices = [parfor_idx]
+    
+    indices = []   
+    # interleave the fixed and slice indices in their appropriate order
+    # This would be easier if I had OCaml cons lists!
+    slice_counter = 0
+    fixed_counter = 0
+    print fixed_positions, slice_positions
+    for i in xrange(n_indices):
+      if fixed_counter < len(fixed_positions)  and i == fixed_positions[fixed_counter]:
+        indices.append(fixed_indices[fixed_counter])
+        fixed_counter += 1 
+      else:
+        assert slice_counter < len(slice_positions)  and slice_positions[slice_counter] == i, \
+          "Bad positions for indices, missing %d" % i  
+        indices.append(parfor_indices[slice_counter])
+        slice_counter += 1
+    self.index
+    value = builder.index(rhs, parfor_indices)
+    builder.setidx(lhs, builder.tuple(indices), value)
+    builder.return_(none)
+    _cache[key] = fn
+    return fn
+    
+    
   def dissect_index_expr(self, expr):
     """
     Split up an indexing expression into 
     fixed scalar indices and the start/stop/step of all slices
     """
+
     if isinstance(expr.index.type, TupleT):
       indices = self.tuple_elts(expr.index)
     else:
       indices = [expr.index]
     
-    n_dims = expr.array.rank 
+    n_dims = expr.value.type.rank 
     n_indices = len(indices)
     assert n_dims >= n_indices, \
       "Not yet supported: more indices (%d) than dimensions (%d) in %s" % (n_indices, n_dims, expr) 
@@ -36,7 +90,7 @@ class LowerSlices(Transform):
       # if there aren't any slice expressions, don't bother with the rest of this function
       return indices, range(len(indices)), [], []
     
-    shape = self.shape(expr.array)
+    shape = self.shape(expr.value)
     shape_elts = self.tuple_elts(shape)
     slices = []
     slice_positions = []
@@ -63,6 +117,7 @@ class LowerSlices(Transform):
     
     
   def assign_index(self, lhs, rhs):
+
     if isinstance(lhs.index.type, ScalarT):
       self.assign(lhs,rhs)
       return 
@@ -72,19 +127,18 @@ class LowerSlices(Transform):
     assert len(scalar_indices) == len(scalar_index_positions)
     assert len(slices) == len(slice_positions)
     if len(slices) == 0:
-      self.setidx(lhs.array, self.tuple(scalar_indices), rhs)
+      self.setidx(lhs.value, self.tuple(scalar_indices), rhs)
       return 
     # if we've gotten this far then there is a slice somewhere in the indexing 
     # expression, so we're going to turn the assignment into a setidx parfor 
     bounds = self.tuple([self.div(self.sub(stop, start), step)
                          for (start, stop, step) in slices])
     
-    setidx_fn = None 
-    self.parfor(setidx_fn, bounds)
-
+    setidx_fn = self.make_setidx_fn(lhs.value.type, rhs.type, scalar_index_positions, slice_positions)
+    closure = self.closure(setidx_fn, [lhs, rhs] + scalar_indices, "setidx_closure")  
+    self.parfor(closure, bounds)
       
   def transform_Assign(self, stmt):
-    
     lhs_class = stmt.lhs.__class__
      
     if lhs_class is Tuple:
@@ -101,7 +155,7 @@ class LowerSlices(Transform):
           self.assign(lhs_i, rhs_i)
       return None
     elif lhs_class is Index:
-      assert False
+      
       self.assign_index(stmt.lhs, stmt.rhs)
       return None
     else:
