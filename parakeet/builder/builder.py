@@ -1,6 +1,6 @@
 
-from ..ndtypes import make_array_type 
-from ..syntax import ArrayView, Struct, Expr 
+from ..ndtypes import make_array_type, TupleT, IntT, FnT, ClosureT
+from ..syntax import ArrayView, Struct, Expr, ParFor 
 from ..syntax.helpers import zero_i64, get_types, one 
 from ..syntax.adverb_helpers import max_rank, max_rank_arg
 
@@ -25,8 +25,7 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       "Expected function, got %s" % (fn,)
     assert isinstance(array_args, (list,tuple)), \
       "Expected list of array args, got %s" % (array_args,)
-    assert isinstance(axis, (int, long)), \
-      "Expected axis to be an integer, got %s" % (axis,)
+    assert isinstance(axis, (int, long)), "Expected axis to be an integer, got %s" % (axis,)
     
     # take the 0'th slice just to have a value in hand 
     inner_args = [self.slice_along_axis(array, axis, zero_i64)
@@ -70,13 +69,21 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
     else:
       return self.fresh_var(elt_t, name) 
   
-  def any_eq(self, tuple, target_elt):
-    elts = self.tuple_elts(tuple)
+  def any_eq(self, tup, target_elt):
+    elts = self.tuple_elts(tup)
     is_eq = self.eq(elts[0], target_elt)
     for elt in elts[1:]:
       is_eq = self.or_(is_eq, self.eq(elt, target_elt))
     return is_eq 
+  
     
+  def parfor(self, fn, bounds):
+    assert isinstance(bounds, Expr)
+    assert isinstance(bounds.type, (TupleT, IntT))
+    assert isinstance(fn, Expr)
+    assert isinstance(fn.type, (FnT, ClosureT))
+    self.blocks += [ParFor(fn = fn, bounds = bounds)]
+  
   def ravel(self, x, explicit_struct = False):
     # TODO: Check the strides to see if any element is equal to 1
     # otherwise do an array_copy

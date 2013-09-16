@@ -4,8 +4,9 @@ from .. import syntax, names
 from ..ndtypes import (make_array_type, make_tuple_type, 
                        Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT, 
                        ArrayT, FnT, ClosureT) 
-from ..syntax import (ArrayView, Assign, Attribute, Cast, Const, Closure,  Comment, Expr, 
-                      Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var, TypedFn, 
+from ..syntax import (Assign, Return, If,    
+                      ArrayView, Attribute, Cast, Const, Closure,  Comment, Expr, 
+                      Index, PrimCall,   Struct, Slice, Tuple, TupleProj, TypedFn, Var, 
                       AllocArray, ArrayExpr, Adverb, Select)
 from ..syntax.helpers import (wrap_if_constant, 
                               const_bool, const_int, const_float, get_types,  
@@ -76,7 +77,7 @@ class CoreBuilder(object):
     true_block = self.blocks.pop()
     
     self.blocks.push()
-    false_think(*right_vars)
+    false_thunk(*right_vars)
     false_block = self.blocks.pop()
      
     stmt = If(cond, true_block, false_block, merge = merge)
@@ -198,11 +199,12 @@ class CoreBuilder(object):
     if name is None:
       name = field
     obj_t = obj.type
-    if obj.__class__ is Struct:
+    c = obj.__class__ 
+    if c is Struct:
       pos = obj_t.field_pos(name)
       result =  obj.args[pos]
-    elif obj.__class__ is ArrayView:
-      return getattr(obj, field)
+    elif c in (ArrayView, Slice):
+      result = getattr(obj, field)
     else:
       assert isinstance(obj_t, StructT), \
         "Can't get attribute '%s' from type %s" % (field, obj_t)

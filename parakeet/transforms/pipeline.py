@@ -24,7 +24,7 @@ from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
 from range_propagation import RangePropagation
-from lhs_slice_to_parfor import SliceAssignToParFor
+from lower_slices import LowerSlices
 
 ####################################
 #                                  #
@@ -63,10 +63,9 @@ high_level_optimizations = Phase([
                                     inline_opt, 
                                     symbolic_range_propagation,   
                                     licm,
-                                    copy_elim,  
-                                    SliceAssignToParFor,                  
                                     fusion_opt, 
                                     fusion_opt, 
+                                    copy_elim, 
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -78,6 +77,7 @@ indexify = Phase([IndexifyAdverbs,
                   inline_opt, Simplify, DCE, 
                   ShapePropagation, 
                   NegativeIndexElim,
+                  LowerSlices, Simplify, DCE, 
                   IndexMapElimination,
                  ], 
                  run_if = contains_adverbs, 
@@ -165,7 +165,6 @@ lowering = Phase([
                     load_elim, 
                     scalar_repl, 
                     Simplify,
-                    
                  ],
                  depends_on = loopify,
                  copy = True,

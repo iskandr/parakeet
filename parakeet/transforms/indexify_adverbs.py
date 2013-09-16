@@ -150,9 +150,7 @@ class IndexifyAdverbs(Transform):
     self.check_equal_sizes(axis_sizes)
     return axis_sizes
 
-  
-  def parfor(self, bounds, fn):
-    self.blocks += [ParFor(fn = fn, bounds = bounds)]
+
     
   def transform_Map(self, expr, output = None):
     # recursively descend down the function bodies to pull together nested ParFors
@@ -170,7 +168,7 @@ class IndexifyAdverbs(Transform):
                                 output = output)
     biggest_arg = max_rank_arg(args)
     niters = self.shape(biggest_arg, axis)
-    self.parfor(niters, index_fn)
+    self.parfor(index_fn, niters)
     return output 
   
   def transform_OuterMap(self, expr):
@@ -191,7 +189,7 @@ class IndexifyAdverbs(Transform):
     loop_body = self.indexify_fn(fn, axis, args, 
                                  cartesian_product = True, 
                                  output = output)
-    self.parfor(outer_shape, loop_body)
+    self.parfor(loop_body, outer_shape)
     return output 
   
   def transform_IndexMap(self, expr, output = None):
@@ -228,7 +226,8 @@ class IndexifyAdverbs(Transform):
     idx_var = input_vars[-1]
     builder.setidx(output_var, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
     builder.return_(none)
-    self.parfor(shape, self.closure(new_fn, (output,) + tuple(old_closure_args)  ))
+    new_closure = self.closure(new_fn, (output,) + tuple(old_closure_args)  )
+    self.parfor(new_closure, shape)
     return output
   
   
