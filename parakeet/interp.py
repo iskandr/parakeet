@@ -90,7 +90,9 @@ def eval_fn(fn, actuals):
         if value.base is None:
           return 0
         else:
-          return  (value.ctypes.data - value.base.ctypes.data) / value.dtype.itemsize
+          offset_bytes = value.base.ctypes.data - value.ctypes.data
+          return offset_bytes / value.dtype.itemsize 
+        
       elif expr.name == 'data':
         return np.ravel(value)
       
@@ -130,6 +132,7 @@ def eval_fn(fn, actuals):
       bytes_per_elt = dtype.itemsize
       if isinstance(data, np.ndarray):
         data = data.data 
+      print ">>>", "shape", shape, "strides", strides, "offset", offset
       return np.ndarray(shape = shape, 
                         offset = offset * dtype.itemsize, 
                         buffer = data, 
