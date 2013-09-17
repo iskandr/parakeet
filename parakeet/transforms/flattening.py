@@ -184,7 +184,8 @@ class BuildFlatFn(Builder):
           return [Assign(self.tuple(lhs_vars), rhs)]
       assert isinstance(rhs, (list,tuple))
       assert len(lhs_vars) == len(rhs), \
-        "Mismatch between LHS %s and RHS %s : %s => %s" % (lhs_vars, stmt.rhs, stmt.rhs.type, rhs)
+        "Mismatch between LHS %s and RHS %s : %s => %s in stmt %s" % \
+        (lhs_vars, stmt.rhs, stmt.rhs.type, rhs, stmt)
       result = []
       for var, value in zip(lhs_vars, rhs):
         result.append(Assign(var, value))
@@ -385,11 +386,9 @@ class BuildFlatFn(Builder):
     
     n_indices = len(indices)
     n_strides = len(strides)
-    assert n_indices <= n_strides, \
-      "Not supported: more indices than dimensions: %d > %d in %s" % (n_indices, n_strides, expr)
-    if n_indices < n_strides:
-      extra_indices = [slice_none] * (n_strides - n_indices)
-      indices.extend(extra_indices)
+    assert n_indices == n_strides, \
+      "Not supported:  indices vs. dimensions: %d != %d in %s" % (n_indices, n_strides, expr)
+
 
     # fast-path for the common case when we're indexing
     # by all scalars to retrieve a scalar result

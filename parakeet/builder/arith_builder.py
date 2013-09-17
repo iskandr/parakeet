@@ -1,3 +1,4 @@
+import numpy as np 
 from .. import prims 
 from ..syntax import Const, PrimCall, Var, If  
 from ..syntax.helpers import (zero, one, 
@@ -76,8 +77,8 @@ class ArithBuilder(CoreBuilder):
     top = self.add(x, y)
     top = self.sub(top, one(top.type))
     return self.div(top, y, name = name)
-
-
+  
+  
   def mod(self, x, y, name = None):
     if is_one(y):
       return self.pick_const(x, y, 0)
@@ -86,6 +87,18 @@ class ArithBuilder(CoreBuilder):
     if name is None: name = "mod_result"
     return self.prim(prims.mod, [x,y], name)
 
+  def fmod(self, x, y, name = None):
+    if is_one(y):
+      return self.pick_const(x, y, 0)
+    elif x.__class__ is Const and y.__class__ is Const:
+      return self.pick_const(x, y, np.fmod(x,y))
+    else:
+      return self.prim(prims.fmod, [x,y], name)
+      
+  def div_round_up(self, x, y, name = None):
+    # (a+(-a%b))//b
+    return self.div(self.add(x, self.fmod(self.neg(x), y)), y, name = name)
+  
   def lt(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(False)

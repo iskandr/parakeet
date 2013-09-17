@@ -121,14 +121,15 @@ def eval_fn(fn, actuals):
       return  np.ndarray(shape = shape, dtype = dtype) 
     
     def expr_ArrayView():
+      print ">>", expr
       data = eval_expr(expr.data)
       shape  = eval_expr(expr.shape)
       strides = eval_expr(expr.strides)
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
+      bytes_per_elt = dtype.itemsize
       if isinstance(data, np.ndarray):
         data = data.data 
-      bytes_per_elt = dtype.itemsize
       return np.ndarray(shape = shape, 
                         offset = offset * dtype.itemsize, 
                         buffer = data, 
@@ -334,6 +335,7 @@ def eval_fn(fn, actuals):
                   fixed_args = gv_inputs, 
                   ee = llvm_backend.global_context.exec_engine)  
   def eval_stmt(stmt):
+    print "!!", stmt 
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)

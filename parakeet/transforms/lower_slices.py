@@ -205,7 +205,9 @@ class LowerSlices(Transform):
                            [lhs.value, rhs] + scalar_indices + starts + steps, 
                            "setidx_closure")  
     self.parfor(closure, bounds)
-      
+  
+  def transform_TypedFn(self, expr):
+    return self.fn.copied_by.apply(expr)
   def transform_Assign(self, stmt):
     lhs_class = stmt.lhs.__class__
     rhs = self.transform_expr(stmt.rhs)

@@ -1,6 +1,7 @@
 from contains_adverbs import contains_adverbs
 from contains_calls import contains_calls
 from contains_loops import contains_loops
+from contains_slices import contains_slices
 from contains_structs import contains_structs 
 from escape_analysis import may_alias, may_escape, escape_analysis 
 import find_constant_strides

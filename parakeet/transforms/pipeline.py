@@ -1,5 +1,6 @@
 from .. import config 
-from ..analysis import contains_adverbs, contains_calls, contains_loops, contains_structs
+from ..analysis import (contains_adverbs, contains_calls, contains_loops, 
+                        contains_structs, contains_slices)
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
@@ -59,7 +60,9 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
                                     name = "SymRangeProp", 
                                     memoize = True, cleanup = [])
  
-lower_slices = Phase([LowerSlices], name = "lower_slices", memoize = True, copy=True)
+lower_slices = Phase([LowerSlices], name = "lower_slices", 
+                     memoize = True, 
+                     copy=False, run_if = contains_slices)
 high_level_optimizations = Phase([
                                     inline_opt, 
                                     symbolic_range_propagation,   
@@ -121,9 +124,11 @@ index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_eli
 lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
 loopify = Phase([
                    lower_adverbs,
+
                    ParForToNestedLoops, 
                    inline_opt, 
                    copy_elim,
+                   lower_slices, 
                    licm,
                    shape_elim,
                    symbolic_range_propagation,
