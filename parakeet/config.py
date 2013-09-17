@@ -34,10 +34,10 @@ opt_verify = False
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True 
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -50,10 +50,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = ['Flatten', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms =  []#['Flatten', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [ 'Flatten', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = [] #[ 'Flatten', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False

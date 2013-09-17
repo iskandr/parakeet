@@ -29,7 +29,7 @@ def compile_flat(fn, _compile_cache = {}):
     return _compile_cache[key]
   compiler = FlatFnCompiler()
   name, sig, src = compiler.visit_fn(fn)
-  if print_function_source: print "Generated C source for %s:" %(name, src)
+  if print_function_source: print "Generated C source for %s: %s" %(name, src)
   obj = compile_object(src, 
                        fn_name = name, 
                        fn_signature = sig, 
@@ -55,7 +55,7 @@ def compile_entry(fn, _compile_cache = {}):
     return _compile_cache[key]
   compiler = PyModuleCompiler()
   name, sig, src = compiler.visit_fn(fn)
-  if print_function_source: print "Generated C source for %s:" %(name, src)
+  if print_function_source: print "Generated C source for %s: %s" %(name, src)
   compiled_fn = compile_module(src, 
                                fn_name = name,
                                fn_signature = sig, 

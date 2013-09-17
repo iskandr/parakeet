@@ -65,6 +65,7 @@ compiler_flags = ['-I%s' % path for path in include_dirs] + \
                  ['-fPIC', '-Wall', '-Wno-unused-variable']
 
 opt_flags = ['-O3']
+
 if fast_math:
   opt_flags.append('-ffast-math')
   

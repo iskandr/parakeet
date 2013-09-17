@@ -120,12 +120,15 @@ def run_typed_fn(fn, args, backend = None):
     return generic_value_to_python(gv_return, fn.return_type)
   
   elif backend == 'c':
-    loopy_fn = pipeline.loopify.apply(fn)
-    
-    flat_fn = pipeline.flatten.apply(loopy_fn)
     from .. import c_backend 
-    compiled_fn = c_backend.compile_entry(flat_fn)
     args = c_backend.prepare_args(args, fn.input_types)
+    
+    loopy_fn = pipeline.loopify.apply(fn)
+    flat_fn = pipeline.flatten.apply(loopy_fn)
+    from ..transforms import  stride_specialization
+    #flat_fn = stride_specialization.specialize(flat_fn, args)
+    
+    compiled_fn = c_backend.compile_entry(flat_fn)
     assert len(args) == len(flat_fn.input_types)
     result = compiled_fn.c_fn(*args)
     return result 
