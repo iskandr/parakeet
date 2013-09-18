@@ -175,7 +175,8 @@ class FlatFnCompiler(BaseCompiler):
       should_flip = self.fresh_var(t, "should_flip", "%s && %s" % (neither_zero, diff_signs))
       flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
-    
+    elif p == prims.fmod:
+      return "%s %% %s" % (args[0], args[1])
     elif p == prims.maximum:
       x,y = args
       return "(%s > %s) ? %s : %s" % (x,y,x,y)

@@ -115,6 +115,9 @@ class ArrayBuilder(CoreBuilder):
         indices.append(s)
     return self.tuple(indices)
 
+  def elts_in_slice(self, start, stop, step):
+    start_minus_start = self.sub(stop, start, name = "stop_minus_start")
+    return self.div_round_up(start_minus_start, step)
 
   def slice_along_axis(self, arr, axis, idx):
     """

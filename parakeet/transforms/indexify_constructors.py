@@ -10,7 +10,7 @@ class IndexifyArrayConstructors(Transform):
   """
 
   def transform_Range(self, expr):
-    nelts = self.elts_in_range(expr.start, expr.stop, expr.step)
+    nelts = self.elts_in_slice(expr.start, expr.stop, expr.step)
     caster = mk_cast_fn(Int64, expr.type.elt_type)
     return self.imap(caster, nelts)
     

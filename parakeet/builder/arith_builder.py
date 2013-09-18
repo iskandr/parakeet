@@ -73,10 +73,7 @@ class ArithBuilder(CoreBuilder):
     else:
       return self.prim(prims.divide, [x,y], name)
 
-  def safediv(self, x, y, name = None):
-    top = self.add(x, y)
-    top = self.sub(top, one(top.type))
-    return self.div(top, y, name = name)
+
   
   
   def mod(self, x, y, name = None):
@@ -96,8 +93,22 @@ class ArithBuilder(CoreBuilder):
       return self.prim(prims.fmod, [x,y], name)
       
   def div_round_up(self, x, y, name = None):
-    # (a+(-a%b))//b
-    return self.div(self.add(x, self.fmod(self.neg(x), y)), y, name = name)
+    div_toward_zero = self.div(x,y,"div_toward_zero")
+    m = self.fmod(x, y)
+    has_remainder = self.neq(m, zero(m.type), "has_remainder") 
+    x_is_positive = self.is_positive(x)
+    y_is_positive = self.is_positive(y)
+    was_rounded_down = self.and_(has_remainder, self.and_(x_is_positive, y_is_positive))
+    div_plus_one = self.add(div_toward_zero, one(div_toward_zero.type), "div_plus_one")
+    return self.select(was_rounded_down, div_plus_one, div_toward_zero)
+  
+  def safediv(self, x, y, name = None):
+    """
+    Like div_round_up but only safe for positive integers
+    """
+    top = self.add(x, y)
+    top = self.sub(top, one(top.type))
+    return self.div(top, y, name = name)
   
   def lt(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
@@ -112,12 +123,16 @@ class ArithBuilder(CoreBuilder):
     if name is None: name = "lte_result"
     return self.prim(prims.less_equal, [x,y], name)
 
+  
   def gt(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(False)
     if name is None: name = "gt_result"
     return self.prim(prims.greater, [x,y], name)
 
+  def is_positive(self, x):
+    return self.gt(x, zero(x.type), "is_positive")
+  
   def gte(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(True)
@@ -170,7 +185,7 @@ class ArithBuilder(CoreBuilder):
       return y
     if name is None:
       name = "or_result"
-    return self.prim(prims.or_, [x,y], name)
+    return self.prim(prims.logical_or, [x,y], name)
   
     
   def and_(self, x, y, name = None):
@@ -178,4 +193,4 @@ class ArithBuilder(CoreBuilder):
       return x 
     if name is None:
       name = "and_result"
-    return self.prim(prims.and_, [x,y], name)
+    return self.prim(prims.logical_and, [x,y], name)

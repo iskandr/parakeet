@@ -70,6 +70,20 @@ def expect_type(fn, input_types, output_type):
   actual = return_type(fn, input_types)
   assert actual == output_type, "Expected type %s, actual %s" % \
                                 (output_type, actual)
+
+def assert_eq_arrays(numpy_result, parakeet_result, test_name = None):
+  if test_name is None:
+    msg = ""
+  else:
+    msg = "[%s] " % test_name
+  assert type(numpy_result) == type(parakeet_result), \
+    "%sExpected type %s but got %s" % (msg, type(numpy_result), type(parakeet_result))
+  if hasattr(numpy_result, 'shape'):
+    assert hasattr(parakeet_result, 'shape')
+    assert numpy_result.shape == parakeet_result.shape, \
+      "%sExpected shape %s but got %s" % (msg, numpy_result.shape, parakeet_result.shape)
+  assert eq(numpy_result, parakeet_result), \
+    "%sExpected value %s but got %s" % (msg, numpy_result, parakeet_result)
 @nottest
 def timed_test(parakeet_fn, parakeet_args, python_fn, 
                python_args = None, min_speedup = None):

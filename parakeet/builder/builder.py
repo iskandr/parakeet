@@ -1,6 +1,6 @@
 
-from ..ndtypes import make_array_type, TupleT, IntT, FnT, ClosureT
-from ..syntax import ArrayView, Struct, Expr, ParFor 
+from ..ndtypes import make_array_type, TupleT, IntT, FnT, ClosureT, increase_rank
+from ..syntax import ArrayView, Struct, Expr, ParFor, IndexMap 
 from ..syntax.helpers import zero_i64, get_types, one 
 from ..syntax.adverb_helpers import max_rank, max_rank_arg
 
@@ -84,6 +84,22 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
     assert isinstance(fn.type, (FnT, ClosureT))
     self.blocks += [ParFor(fn = fn, bounds = bounds)]
   
+  def imap(self, fn, bounds):
+    assert isinstance(bounds, Expr)
+    if isinstance(bounds.type, TupleT):
+      tup = bounds 
+      ndims = len(bounds.type.elt_types) 
+    else:
+      assert isinstance(bounds.type, IntT)
+      tup = self.tuple([bounds])
+      ndims = 1 
+    assert isinstance(fn, Expr)
+    assert isinstance(fn.type, (FnT, ClosureT))
+    elt_type = fn.return_type 
+    result_type = increase_rank(elt_type, ndims)
+    return IndexMap(fn = fn, shape = tup, type = result_type)
+    
+    
   def ravel(self, x, explicit_struct = False):
     # TODO: Check the strides to see if any element is equal to 1
     # otherwise do an array_copy
