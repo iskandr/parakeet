@@ -95,7 +95,7 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       ndims = 1 
     assert isinstance(fn, Expr)
     assert isinstance(fn.type, (FnT, ClosureT))
-    elt_type = fn.return_type 
+    elt_type = self.return_type(fn) 
     result_type = increase_rank(elt_type, ndims)
     return IndexMap(fn = fn, shape = tup, type = result_type)
     
