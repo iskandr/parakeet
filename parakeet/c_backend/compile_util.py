@@ -29,7 +29,10 @@ CompiledObject = collections.namedtuple("CompiledObject",
 
 common_headers = ["stdint.h",  "math.h",  "signal.h"]
 
-python_headers = ["Python.h",  'numpy/arrayobject.h', 'numpy/arrayscalars.h',]
+python_headers = ["Python.h", 
+                  "bufferobject.h",
+                  'numpy/arrayobject.h',
+                  'numpy/arrayscalars.h',]
 
   
   

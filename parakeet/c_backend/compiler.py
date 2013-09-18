@@ -89,7 +89,10 @@ class FlatFnCompiler(BaseCompiler):
     elt_size = expr.elt_type.dtype.itemsize
     elt_t = to_ctype(expr.elt_type)
     nelts = self.visit_expr(expr.count)
-    return "(%s*) malloc(%d * %s)" % (elt_t, elt_size, nelts)
+    nbytes = "%d * %s" % (elt_size, nelts)
+    ptr  =  "(%s*) malloc(%s)" % (elt_t, nbytes)
+    return  "PyBuffer_FromReadWriteMemory(%s, %s)" % (ptr, nbytes) 
+    #return "(%s*) malloc(%d * %s)" % (elt_t, elt_size, nelts)                  
   
   def visit_Const(self, expr):
     if isinstance(expr.type, BoolT):
@@ -211,7 +214,9 @@ class FlatFnCompiler(BaseCompiler):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
-    return "%s[%s]" % (arr, idx)
+    elt_t = expr.value.type.elt_type
+    ptr_t = "%s*" % to_ctype(elt_t)
+    return "( (%s) ((PyBufferObject*)%s)->b_ptr)[%s]" % (ptr_t, arr, idx)
   
   def visit_Call(self, expr):
     fn = expr.fn
