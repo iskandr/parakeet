@@ -31,7 +31,11 @@ def is_prim(numpy_fn):
 class Prim(object):
   def __init__(self, fn, python_op_name = None, symbol = None,
                name = None, nin = None, nout = None, 
-               extra_signatures = []):
+               extra_signatures = [], 
+               doc = None):
+    if doc is not None:
+      self.__doc__ = doc 
+      
     self.fn = fn
     prim_lookup_by_value[fn] = self
     self.symbol = symbol
@@ -189,15 +193,12 @@ class Round(Prim):
 
 class_list = [Cmp, Bitwise, Logical, Arith, Float, Round]
 
-abs = Float(np.abs)
+abs = Float(np.abs, doc = "Absolute value")
 sqrt = Float(np.sqrt)
 
 exp = Float(np.exp)
 exp2 = Float(np.exp2)
 expm1 = Float(np.expm1)
-
-
-sqrt = Float(np.sqrt)
 
 log = Float(np.log)
 log10 = Float(np.log10)
@@ -239,9 +240,10 @@ multiply = Arith(np.multiply, 'Mult', '*')
 
 
 divide = Arith(np.divide, 'Div', '/', extra_signatures = ['??->?'])
-mod = Arith(np.mod, 'Mod', '%', extra_signatures = ['??->?'])
-modf = Arith(np.modf)
-remainder = Arith(np.remainder)
+
+remainder = Arith(np.remainder, 'Mod', '%', extra_signatures = ['??->?'])
+mod = remainder 
+fmod = Arith(np.fmod, doc = "Return the element-wise remainder of division. C-style modulo.")
 
 power = Arith(np.power, 'Pow', '**')
 # power_int = Arith(np.power, extra_signatures = [''])

@@ -126,12 +126,11 @@ function_mappings = {
   np.divide : prims.divide, 
   np.floor_divide : prims.divide, 
   np.true_divide : lib.numpy_math.true_divide, 
-  
    
-  np.modf : prims.mod,  
-  np.fmod : prims.mod, 
   np.mod : prims.remainder,
-  np.remainder : prims.remainder,  
+  np.remainder : prims.remainder,
+  np.fmod : prims.fmod,
+  # np.modf : prims.modf,
   
   np.logical_and : prims.logical_and, 
   np.logical_not : prims.logical_not, 

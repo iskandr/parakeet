@@ -1,7 +1,8 @@
 import collections 
 import distutils 
 import imp 
-import numpy.distutils as npdist
+import numpy.distutils as npdist 
+import numpy.distutils.system_info as np_sysinfo 
 import os
 import platform
 import subprocess  
@@ -49,7 +50,7 @@ assert compiler is not None, "No compiler found!"
 
 source_extension = ".c" if pure_c else ".cpp"
 object_extension = ".o"
-shared_extension = npdist.system_info.get_shared_lib_extension(True)
+shared_extension = np_sysinfo.get_shared_lib_extension(True)
 
 mac_os = platform.system() == 'Darwin'
 if mac_os:

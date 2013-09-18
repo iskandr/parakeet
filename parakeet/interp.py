@@ -337,8 +337,8 @@ def eval_fn(fn, actuals):
     shiver.parfor(llvm_fn, bounds, 
                   fixed_args = gv_inputs, 
                   ee = llvm_backend.global_context.exec_engine)  
+    
   def eval_stmt(stmt):
-    print "!!", stmt 
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)

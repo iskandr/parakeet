@@ -8,7 +8,7 @@ __website__     = 'https://github.com/iskandr/parakeet'
 import config
 from ndtypes import * 
 from analysis import SyntaxVisitor, verify
-from builder import Builder, build_fn 
+from builder import Builder, build_fn, mk_identity_fn, mk_cast_fn 
 from transforms import clone_function, Transform
 from prims import *   
 from lib import * 

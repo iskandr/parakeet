@@ -2,18 +2,14 @@ from treelike.testing_helpers import run_local_tests, expect_eq
 
 import parakeet
 
-def mk_identity(t):
-  f, b, (x,) = parakeet.build_fn([t], t)
-  b.return_(x)
-  return f
 
 def identity_i64(x):
-  fn = mk_identity(parakeet.Int64)
+  fn = parakeet.mk_identity_fn(parakeet.Int64)
   print repr(fn) 
   return parakeet.run_typed_fn(fn, (x,))
   
 def identity_f64(x):
-  fn = mk_identity(parakeet.Float64)
+  fn = parakeet.mk_identity_fn(parakeet.Float64)
   return parakeet.run_typed_fn(fn, (x,))
 
 def test_identity():

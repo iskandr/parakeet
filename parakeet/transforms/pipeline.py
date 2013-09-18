@@ -8,6 +8,7 @@ from flattening import Flatten
 from fusion import Fusion
 from index_elimination import IndexElim
 from indexify_adverbs import IndexifyAdverbs
+from indexify_constructors import IndexifyArrayConstructors
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
@@ -71,7 +72,8 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim,
                                     NegativeIndexElim,
-                                    lower_slices
+                                    lower_slices, 
+                                    IndexifyArrayConstructors
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 

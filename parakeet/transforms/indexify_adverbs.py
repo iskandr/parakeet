@@ -7,7 +7,7 @@ from ..syntax.helpers import unwrap_constant, get_types, none
 from ..syntax.adverb_helpers import max_rank_arg
 from inline import Inliner 
 from transform import Transform
-from scipy.weave.build_tools import old_init_posix
+
 
 class IndexifyAdverbs(Transform):
   """
