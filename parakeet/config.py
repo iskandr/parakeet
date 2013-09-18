@@ -1,5 +1,5 @@
+default_backend = 'c' #llvm
 
-default_backend = 'c' #llvm 
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -29,9 +29,13 @@ stride_specialization = True
 # run verifier after each transformation 
 opt_verify = False
 
+
+
 #####################################
 #            DEBUG OUTPUT           #
 #####################################
+
+
 
 # show untyped IR after it's translated from Python?
 print_untyped_function = False
@@ -67,5 +71,8 @@ print_transform_names = False
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
 
-
+#####################################
+#         DESPERATE MEASURES        #
+#####################################
+testing_find_broken_transform = True 
 

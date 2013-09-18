@@ -162,8 +162,8 @@ class FlatFnCompiler(BaseCompiler):
       return "%s <= %s" % (args[0], args[1])
     elif p == prims.remainder:
       x,y = args
-      if t == Float32: return "fmodf(%s, %s)" % (x,y)
-      elif t == Float64: return "fmod(%s, %s)" % (x,y)
+      if t == Float32: return "remainderf(%s, %s)" % (x,y)
+      elif t == Float64: return "remainder(%s, %s)" % (x,y)
       assert isinstance(t, (BoolT, IntT)), "Modulo not implemented for %s" % t
       rem = self.fresh_var(t, "rem", "%s %% %s" % (x,y))
       y_is_negative = self.fresh_var(t, "y_is_negative", "%s < 0" % y)
@@ -176,6 +176,8 @@ class FlatFnCompiler(BaseCompiler):
       flipped_rem = self.fresh_var(t, "flipped_rem", "%s + %s" % (y, rem))
       return "%s ? %s : %s" % (should_flip, flipped_rem, rem)
     elif p == prims.fmod:
+      if t == Float32: return "fmodf(%s, %s)" % (args[0], args[1])
+      elif t == Float64: return "fmod(%s, %s)" % (args[0], args[1])
       return "%s %% %s" % (args[0], args[1])
     elif p == prims.maximum:
       x,y = args

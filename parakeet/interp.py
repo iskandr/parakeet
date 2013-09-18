@@ -27,6 +27,8 @@ class ClosureVal:
     else:
       args = self.fixed_args + tuple(args)
     return eval_fn(self.fn, args)
+  
+
 
 def eval(fn, actuals):
   result = eval_fn(fn, actuals)
@@ -123,7 +125,7 @@ def eval_fn(fn, actuals):
       return  np.ndarray(shape = shape, dtype = dtype) 
     
     def expr_ArrayView():
-      print ">>", expr
+
       data = eval_expr(expr.data)
       shape  = eval_expr(expr.shape)
       strides = eval_expr(expr.strides)
@@ -132,7 +134,7 @@ def eval_fn(fn, actuals):
       bytes_per_elt = dtype.itemsize
       if isinstance(data, np.ndarray):
         data = data.data 
-      print ">>>", "shape", shape, "strides", strides, "offset", offset
+
       return np.ndarray(shape = shape, 
                         offset = offset * dtype.itemsize, 
                         buffer = data, 

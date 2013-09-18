@@ -6,14 +6,13 @@ from nose.tools import nottest
 
 from treelike.testing_helpers import  eq, expect_eq, run_local_tests
   
-  
-import parakeet
 
 from parakeet import (type_conv, type_inference, 
                       specialize, translate_function_value,
+                      find_broken_transform,
                       run_typed_fn, run_python_fn)
 
-
+from parakeet.config import testing_find_broken_transform
 
 def _copy(x):
   if isinstance(x, np.ndarray):
@@ -48,7 +47,12 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   label = "native: inputs = %s" % ", ".join(str(arg) for arg in args)
   if msg is not None:
       label += "-" + str(msg)
-  expect_eq(native_result, expected, label)
+  try:
+    expect_eq(native_result, expected, label)
+  except:
+    if testing_find_broken_transform:
+      find_broken_transform(fn, args, expected)
+    raise 
   
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

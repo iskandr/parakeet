@@ -136,7 +136,7 @@ loopify = Phase([
                    symbolic_range_propagation,
                    index_elim
                 ],
-                depends_on = indexify,
+                depends_on = flatten,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 name = "Loopify",
