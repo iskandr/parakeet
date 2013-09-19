@@ -88,12 +88,11 @@ class FlatFnCompiler(BaseCompiler):
   def visit_Alloc(self, expr):
     elt_size = expr.elt_type.dtype.itemsize
     elt_t = to_ctype(expr.elt_type)
-    nelts = self.visit_expr(expr.count)
+    nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
     nbytes = "%d * %s" % (elt_size, nelts)
-    ptr  =  "(%s*) malloc(%s)" % (elt_t, nbytes)
-    return  "PyBuffer_FromReadWriteMemory(%s, %s)" % (ptr, nbytes) 
-    #return "(%s*) malloc(%d * %s)" % (elt_t, elt_size, nelts)                  
-  
+    ptr  =  "malloc(%s)" % (nbytes,)
+    return "PyArray_SimpleNewFromData(1, &%s, %s, %s )" % (nelts, to_dtype(elt_t), ptr) 
+    
   def visit_Const(self, expr):
     if isinstance(expr.type, BoolT):
       return "1" if expr.value else "0"
@@ -216,7 +215,7 @@ class FlatFnCompiler(BaseCompiler):
     idx = self.visit_expr(expr.index)
     elt_t = expr.value.type.elt_type
     ptr_t = "%s*" % to_ctype(elt_t)
-    return "( (%s) ((PyBufferObject*)%s)->b_ptr)[%s]" % (ptr_t, arr, idx)
+    return "( (%s) (PyArray_DATA(%s)))[%s]" % (ptr_t, arr, idx)
   
   def visit_Call(self, expr):
     fn = expr.fn
@@ -587,9 +586,9 @@ class PyModuleCompiler(FlatFnCompiler):
       self.check_array(v)
       c_expr = "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
       data_var = self.fresh_var(to_ctype(t), "data", c_expr)
-      pyint = self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data_var)
-      self.append("PySet_Add(%s, %s);" % (self.external_pointer_set, pyint))
-      self.decref(pyint)
+      # pyint = self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data_var)
+      # self.append("PySet_Add(%s, %s);" % (self.external_pointer_set, pyint))
+      # self.decref(pyint)
       return data_var
     
     elif attr == "shape":
@@ -649,15 +648,6 @@ class PyModuleCompiler(FlatFnCompiler):
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     dtype = to_dtype(expr.type.elt_type)
     reshaped  = self.fresh_var("PyObject*", "reshaped")
-    # TODO: how to attach refcounts to ptr in flattened form?
-    data_pyint =  self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data)
-    is_external_ptr = \
-      self.fresh_var("int", "is_external_ptr", 
-                     "PySet_Contains(%s, %s)" % (self.external_pointer_set, data_pyint)) 
-    self.decref(data_pyint)
-    
-    # self.printf("Is %p external? %d", data, is_external_ptr )
-    self.push()
     count = self.visit_expr(expr.size)
     offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
     
@@ -668,8 +658,8 @@ class PyModuleCompiler(FlatFnCompiler):
     
     vec_name = self.fresh_name("linear_array")
     #   _members = ['data', 'shape', 'strides', 'offset', 'size']
-    self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
-                  (vec_name, buffer_name, dtype_descr, count, offset_bytes))
+    #self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
+                  #(vec_name, buffer_name, dtype_descr, count, offset_bytes))
    
     shape = self.visit_expr(expr.shape)
     self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
