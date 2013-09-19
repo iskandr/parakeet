@@ -584,12 +584,13 @@ class PyModuleCompiler(FlatFnCompiler):
   def attribute(self, v, attr, t):
     if attr == "data":
       self.check_array(v)
-      c_expr = "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
-      data_var = self.fresh_var(to_ctype(t), "data", c_expr)
+      return "PyArray_Ravel((PyArrayObject*) %s, 0)" % (v,)  
+      #c_expr = "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
+      #data_var = self.fresh_var(to_ctype(t), "data", c_expr)
       # pyint = self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data_var)
       # self.append("PySet_Add(%s, %s);" % (self.external_pointer_set, pyint))
       # self.decref(pyint)
-      return data_var
+      #return data_var
     
     elif attr == "shape":
       self.check_array(v)
@@ -642,41 +643,21 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def visit_ArrayView(self, expr):
-    data = self.visit_expr(expr.data)
+    vec_name = self.visit_expr(expr.data)
     ndims = expr.type.rank
     offset = self.visit_expr(expr.offset)
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     dtype = to_dtype(expr.type.elt_type)
-    reshaped  = self.fresh_var("PyObject*", "reshaped")
+    
     count = self.visit_expr(expr.size)
     offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
     
-    buffer_name = self.fresh_name("array_buffer")
-    self.append("PyObject* %s = PyBuffer_FromReadWriteMemory(%s, %s * %d);" % \
-                  (buffer_name,  data, count, bytes_per_elt))
-    dtype_descr = "PyArray_DescrFromType(%s)" % dtype
-    
-    vec_name = self.fresh_name("linear_array")
-    #   _members = ['data', 'shape', 'strides', 'offset', 'size']
-    #self.append("PyObject* %s = PyArray_FromBuffer(%s, %s, %s, %s);" % \
-                  #(vec_name, buffer_name, dtype_descr, count, offset_bytes))
    
     shape = self.visit_expr(expr.shape)
+    reshaped  = self.fresh_var("PyObject*", "reshaped")
     self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
                 (reshaped, vec_name, shape))
-      
-    if_new_ptr = self.pop()
     
-    self.push()
-    dims_array = self.tuple_to_stack_array(expr.shape, name = "shape", elt_type = "npy_intp")
-    self.append("%s = PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s]);" % \
-                   (reshaped, ndims, dims_array, dtype, data, offset))
-    if_old_ptr = self.pop()
-    
-    self.append("if(%s) { %s } else { %s } " % \
-                (is_external_ptr, 
-                 self.indent("\n" + if_old_ptr + "\n"), 
-                 self.indent("\n" + if_new_ptr + "\n")))
     strides_elts = self.tuple_to_stack_array(expr.strides, name = "strides", elt_type = "npy_intp")
     strides_bytes = self.fresh_name("strides_bytes")
     self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, reshaped))
