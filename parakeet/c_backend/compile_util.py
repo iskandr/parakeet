@@ -8,7 +8,7 @@ import platform
 import subprocess  
 import tempfile
 
-from config import debug, pure_c, fast_math
+from config import debug, pure_c, fast_math, print_commands, print_module_source
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
@@ -72,7 +72,12 @@ opt_flags = ['-O3']
 
 if fast_math:
   opt_flags.append('-ffast-math')
-  
+
+use_openmp = compiler in ('gcc', 'g++')
+
+if use_openmp:
+  opt_flags.append('-fopenmp')
+
 if debug:
   compiler_flags.extend(['-g', '-O0'])
 else:
@@ -91,7 +96,9 @@ linker_flags = ['-shared'] + \
                ["-l%s" % python_lib] + ['-lm']  
 if mac_os:
   linker_flags.append("-headerpad_max_install_names")
-               
+
+if use_openmp:
+  linker_flags.append('-lgomp')             
 
 
 
@@ -100,7 +107,7 @@ def create_source_file(src,
                          src_filename = None, 
                          forward_declarations = [],
                          extra_headers = [], 
-                         print_source = debug):
+                         print_source = print_module_source):
 
   if fn_name is None:
     prefix = "parakeet_"
@@ -139,8 +146,8 @@ def compile_object(src,
                    forward_declarations = [],
                    extra_headers = [], 
                    extra_objects = [], 
-                   print_source = debug, 
-                   print_commands = debug ):
+                   print_source = print_module_source, 
+                   print_commands = print_commands ):
   
   src_file = create_source_file(src, 
                                 fn_name = fn_name, 
@@ -168,8 +175,8 @@ def compile_module(src,
                      extra_headers = [],  
                      extra_objects = [],
                      
-                     print_source = debug, 
-                     print_commands = debug):
+                     print_source = print_module_source, 
+                     print_commands = print_commands):
   
 
   src += """

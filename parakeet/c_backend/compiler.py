@@ -17,7 +17,9 @@ from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
 from compile_util import compile_module, compile_object
-from config import debug, check_pyobj_types, print_function_source, print_module_source, print_input_ir 
+from config import (debug, check_pyobj_types, 
+                    print_function_source, print_module_source, print_input_ir, 
+                    print_commands) 
  
 
 
@@ -35,7 +37,8 @@ def compile_flat(fn, _compile_cache = {}):
                        fn_signature = sig, 
                        extra_objects = compiler.extra_objects,
                        forward_declarations =  compiler.forward_declarations, 
-                       print_source = print_module_source)
+                       print_source = print_module_source, 
+                       print_commands = print_commands)
   return obj
   
 
@@ -84,15 +87,17 @@ class FlatFnCompiler(BaseCompiler):
     # depends on these .o files
     self.extra_objects = set([]) 
     
-    
   def visit_Alloc(self, expr):
     elt_size = expr.elt_type.dtype.itemsize
-    elt_t = to_ctype(expr.elt_type)
+    elt_t =  expr.elt_type
+    elt_t_str = to_ctype(elt_t)
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
     nbytes = "%d * %s" % (elt_size, nelts)
     ptr  =  "malloc(%s)" % (nbytes,)
     return "PyArray_SimpleNewFromData(1, &%s, %s, %s )" % (nelts, to_dtype(elt_t), ptr) 
-    
+  
+  
+  
   def visit_Const(self, expr):
     if isinstance(expr.type, BoolT):
       return "1" if expr.value else "0"
@@ -110,6 +115,7 @@ class FlatFnCompiler(BaseCompiler):
       return "(%s) %s" % (ct, x)
     else:
       return "((%s) (%s))" % (ct, x)
+  
   
   def visit_PrimCall(self, expr):
     t = expr.type
@@ -326,6 +332,17 @@ class FlatFnCompiler(BaseCompiler):
       self.append(s)
     self.append("\n")
     return self.indent("\n" + self.pop())
+  
+  def visit_ParFor(self, stmt):
+    
+    print stmt.bounds 
+    
+    return """
+      
+      int i;
+      #pragma omp parallel for 
+      for(i = 0; i < 10; ++i) {}
+    """
       
   def visit_TypedFn(self, expr):
     
