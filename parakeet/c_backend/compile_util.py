@@ -8,7 +8,7 @@ import platform
 import subprocess  
 import tempfile
 
-from config import debug, pure_c, fast_math, print_commands, print_module_source
+from config import debug, pure_c, fast_math, print_commands, print_module_source, use_openmp
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
@@ -73,10 +73,8 @@ opt_flags = ['-O3']
 if fast_math:
   opt_flags.append('-ffast-math')
 
-use_openmp = compiler in ('gcc', 'g++')
 
-if use_openmp:
-  opt_flags.append('-fopenmp')
+
 
 if debug:
   compiler_flags.extend(['-g', '-O0'])
@@ -97,8 +95,9 @@ linker_flags = ['-shared'] + \
 if mac_os:
   linker_flags.append("-headerpad_max_install_names")
 
-if use_openmp:
-  linker_flags.append('-lgomp')             
+if not debug and use_openmp and compiler in ('gcc', 'g++'):
+  compiler_flags.append('-fopenmp')
+  linker_flags.append('-fopenmp')             
 
 
 

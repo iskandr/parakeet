@@ -17,12 +17,14 @@ from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
 from compile_util import compile_module, compile_object
-from config import (debug, check_pyobj_types, 
-                    print_function_source, print_module_source, print_input_ir, 
+from config import (debug, 
+                    check_pyobj_types, 
+                    print_function_source, 
+                    print_module_source, 
+                    print_input_ir, 
                     print_commands) 
+from parakeet.c_backend.config import use_openmp
  
-
-
 
 def compile_flat(fn, _compile_cache = {}):
 
@@ -334,15 +336,17 @@ class FlatFnCompiler(BaseCompiler):
     return self.indent("\n" + self.pop())
   
   def visit_ParFor(self, stmt):
-    
-    print stmt.bounds 
-    
+    bounds = self.visit_expr(stmt.bounds)
+    print stmt.bounds, bounds 
+    i = self.fresh_var("int64_t", "i")
+    omp = "#pragma omp parallel for" if use_openmp else ""
+    body = "" 
     return """
-      
-      int i;
-      #pragma omp parallel for 
-      for(i = 0; i < 10; ++i) {}
-    """
+      %(omp)s
+      for(%(i)s = 0; %(i)s < 10; ++%(i)s) {
+        %(body)s
+      }
+    """ % locals()
       
   def visit_TypedFn(self, expr):
     
