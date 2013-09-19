@@ -4,8 +4,10 @@ from ..analysis import (contains_adverbs, contains_calls, contains_loops,
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
+from explicit_array_alloc import ExplicitArrayAlloc
 from flattening import Flatten
 from fusion import Fusion
+from imap_elim import IndexMapElimination
 from index_elimination import IndexElim
 from indexify_adverbs import IndexifyAdverbs
 from indexify_constructors import IndexifyArrayConstructors
@@ -14,19 +16,18 @@ from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
 from lower_indexing import LowerIndexing
+from lower_slices import LowerSlices
 from lower_structs import LowerStructs
-from imap_elim import IndexMapElimination
 from negative_index_elim import NegativeIndexElim
 from offset_propagation import OffsetPropagation
 from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
+from range_propagation import RangePropagation
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
-from range_propagation import RangePropagation
-from lower_slices import LowerSlices
 
 ####################################
 #                                  #
@@ -126,7 +127,7 @@ index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_eli
 lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
 loopify = Phase([
                    lower_adverbs,
-
+                   ExplicitArrayAlloc, 
                    ParForToNestedLoops, 
                    inline_opt, 
                    copy_elim,

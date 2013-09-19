@@ -1,7 +1,7 @@
 
 from ..ndtypes import (make_slice_type, make_array_type, ptr_type, 
                        ArrayT, TupleT, ScalarT, Type, PtrT)
-from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, TupleProj)
+from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, Var, TupleProj)
 from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none)
 from core_builder import CoreBuilder 
 
@@ -235,16 +235,25 @@ class ArrayBuilder(CoreBuilder):
 
 
   def array_view(self, data, shape, strides, offset, nelts):
+    assert isinstance(data.type, PtrT), \
+        "Data field of array must be a pointer, got %s" % data.type
+    if data.__class__ is not Var:
+      data = self.assign_name(data, "data_ptr")
+      
     if isinstance(shape.type, ScalarT):
       shape = self.tuple([shape])
+    assert isinstance(shape.type, TupleT), \
+      "Shape of array must be a tuple, got: %s" % shape.type
+      
     if isinstance(strides.type, ScalarT):
       strides = self.tuple(strides)
-    assert isinstance(shape.type, TupleT)
-    assert isinstance(strides.type, TupleT)
-    
+      
+    assert isinstance(strides.type, TupleT), \
+      "Strides of array must be a tuple, got: %s" % strides.type
+
     ndims = len(strides.type.elt_types)
     assert ndims == len(shape.type.elt_types)
-    assert isinstance(data.type, PtrT)
+
     elt_t = data.type.elt_type
     array_t = ArrayT(elt_t, ndims)
     return ArrayView(data = data, shape = shape, strides = strides, 
@@ -252,3 +261,4 @@ class ArrayBuilder(CoreBuilder):
                      type = array_t)
 
   
+    
