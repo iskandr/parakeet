@@ -726,6 +726,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % locals())
     self.print_pyobj(vec, "vec after slice")
     self.printf("Reshaping")
+    uprank_shape = self.fresh_var("PyArray_Dims", "newshape")
     reshaped  = self.fresh_var("PyObject*", "reshaped")
     self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % (reshaped, vec, shape))
     self.return_if_null(reshaped)
