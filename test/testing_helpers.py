@@ -14,6 +14,7 @@ from parakeet import (type_conv, type_inference,
 
 from parakeet.config import testing_find_broken_transform
 
+
 def _copy(x):
   if isinstance(x, np.ndarray):
     return x.copy()

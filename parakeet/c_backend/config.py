@@ -16,8 +16,8 @@ check_pyobj_types = debug or True
 #########################
 print_input_ir = True
 print_commands = True 
-print_function_source = True
-print_module_source = False
+print_function_source = False
+print_module_source = True
 
 # Generate a .c file or a .cpp? 
 pure_c = True

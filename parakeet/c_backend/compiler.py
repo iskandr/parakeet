@@ -702,24 +702,42 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def visit_ArrayView(self, expr):
+    ndims = expr.type.rank 
     vec = self.visit_expr(expr.data)
     offset = self.visit_expr(expr.offset)
-    bytes_per_elt = expr.type.elt_type.dtype.itemsize
-    strides_elts = self.tuple_to_var_list(expr.strides)
     
-    strides_bytes = self.fresh_name("strides_bytes")
+    if expr.strides.__class__ is Tuple:
+      strides_elts = self.visit_expr_list(expr.strides.elts)  
+    else:
+      strides_var = self.visit_expr(expr.strides)
+      strides_array = self.tuple_to_stack_array(strides_var, "strides_array", "npy_intp")
+      strides_elts = ["%s[%d]" % (strides_array, i) for i in xrange(ndims)]
+    
+    if expr.shape.__class__ is Tuple:
+      shape_elts = self.visit_expr_list(expr.shape.elts) 
+    else:
+      shape_var = self.visit_expr(expr.strides)
+      shape_array = self.tuple_to_stack_array(shape_var, "shape_array", "npy_intp")
+      shape_elts = ["%s[%d]" % (shape_array, i) for i in xrange(ndims)]
+    
+    # slice out the 1D data array if there's an offset 
     self.append("""
       if (%(offset)s > 0) { 
         printf("Getting slice, offset = %%d\\n", %(offset)s); 
         %(vec)s = PySequence_GetSlice(%(vec)s, %(offset)s, PySequence_Size(%(vec)s));
         printf("Got slice!\\n"); 
       }""" % locals())
-    self.print_pyobj(vec, "vec after slice")
+    
     count = self.fresh_var("int64_t", "count", "PySequence_Size(%s)" % vec)
     self.printf("1D Len %ld\\n", count)
-    ndims = expr.type.rank 
+    self.print_pyobj(vec, "vec after slice")
+    
+      
+    
+    # increase the rank of the 1D nd-array to whatever the rank of the result 
+    # should be so that the strides and shape arrays are of the appropriate size 
     if ndims > 1:
-      self.printf("Increasing rank")
+  
       uprank_elts =  (count,) + ("1",) * (ndims-1) 
       uprank_elts_as_pyobj = ["PyInt_FromLong(%s)"  % elt for elt in uprank_elts]
       uprank_elts_str = ", ".join(uprank_elts_as_pyobj)
@@ -727,18 +745,64 @@ class PyModuleCompiler(FlatFnCompiler):
       self.append("%s = PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
       self.return_if_null(vec)
       self.print_pyobj(vec, "After uprank")
-    self.printf("Getting strides")
-    self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, vec))
-    self.printf("Got strides!")
-    for i, _ in enumerate(expr.strides.type.elt_types):
-      self.append("%s[%d] = %s[%d] * %d;" % (strides_bytes, i, strides_elts, i, bytes_per_elt) )
-    reshaped  = self.fresh_var("PyObject*", "reshaped")
-    shape = self.fresh_var("PyObject*", "shape", self.visit_expr(expr.shape))
-    self.append("%s = PyArray_Reshape( (PyArrayObject*) %s, %s);" % (reshaped, vec, shape))
-    self.return_if_null(reshaped)
-    self.printf("Reshaped: %p", reshaped)
+      
     
-    return reshaped
+    numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
+    
+    self.printf("Getting strides")
+    self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))
+    self.printf("Got strides!")
+    
+    numpy_shape = self.fresh_var("npy_intp*", "numpy_shape")
+    self.printf("Getting shape")
+    self.append("%s = PyArray_DIMS(  (PyArrayObject*) %s);" % (numpy_shape, vec))
+    self.printf("Got strides!")
+    bytes_per_elt = expr.type.elt_type.dtype.itemsize
+    
+    for i, _ in enumerate(expr.strides.type.elt_types):
+      self.append("%s[%d] = %s * %d;" % (numpy_strides, i, strides_elts[i], bytes_per_elt) )
+      self.append("%s[%d] = %s;" % (numpy_shape, i, shape_elts[i]))
+    
+    self.print_pyobj(vec, "final array")
+    
+    
+    self.append("""
+      // clear both fortran and c layout flags 
+      ((PyArrayObject*) %(vec)s)->flags &= ~NPY_F_CONTIGUOUS;
+      ((PyArrayObject*) %(vec)s)->flags &= ~NPY_C_CONTIGUOUS;
+    """ % locals())
+    
+    f_layout_strides = ["1"]
+    for shape_elt in shape_elts[1:]:
+      f_layout_strides.append(f_layout_strides[-1] + " * " + shape_elt)
+    
+    c_layout_strides = ["1"]
+    for shape_elt in list(reversed(shape_elts))[:-1]:
+      c_layout_strides = [c_layout_strides[-1] + " * " + shape_elt] + c_layout_strides
+    
+    is_c_layout = "&& ".join("(%s) == (%s)" % (actual, ideal) 
+                             for actual, ideal 
+                             in zip(strides_elts, c_layout_strides))
+    is_f_layout = " && ".join("(%s) == (%s)" % (actual, ideal) 
+                             for actual, ideal 
+                             in zip(strides_elts, f_layout_strides))
+    
+       
+    # make sure the contiguity flags are set correctly 
+    self.append("""
+      
+      printf("c layout? %%d\\n", %(is_c_layout)s);
+      printf("f layout? %%d\\n", %(is_f_layout)s);  
+      // it's possible that *neither* of the above flags should be on
+      // which is why we enable them separately here 
+      if (%(is_f_layout)s) { ((PyArrayObject*)%(vec)s)->flags |= NPY_F_CONTIGUOUS; }
+      else if (%(is_c_layout)s) {
+        printf("Setting flags %%ld\\n", ((PyArrayObject*)%(vec)s)->flags);   
+        ((PyArrayObject*)%(vec)s)->flags |= NPY_C_CONTIGUOUS;
+        printf("Done w/ flags %%ld\\n", ((PyArrayObject*)%(vec)s)->flags);  
+      }
+    """ % locals())
+    return vec
   
     
   def visit_Attribute(self, expr):
