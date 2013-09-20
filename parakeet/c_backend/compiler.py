@@ -5,12 +5,14 @@ from treelike import NestedBlocks
 
 from .. import names, prims 
 from ..analysis import use_count
-from ..syntax import Const, Tuple, TypedFn, Var, TupleProj, ArrayView, PrimCall, Attribute 
-from ..ndtypes import (TupleT,  ArrayT, ClosureT, NoneT, 
+from ..syntax import (Const, Tuple, TypedFn, Var, TupleProj, ArrayView, 
+                      PrimCall, Attribute, Expr, Closure)  
+from ..ndtypes import (TupleT,  ArrayT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
                        IntT, BoolT, Int64, SignedT,
-                       PtrT, NoneType) 
+                       PtrT, NoneType, 
+                       FnT, ClosureT) 
 
 
 from c_types import to_ctype, to_dtype
@@ -90,13 +92,9 @@ class FlatFnCompiler(BaseCompiler):
     self.extra_objects = set([]) 
     
   def visit_Alloc(self, expr):
-    elt_size = expr.elt_type.dtype.itemsize
     elt_t =  expr.elt_type
-    elt_t_str = to_ctype(elt_t)
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
-    nbytes = "%d * %s" % (elt_size, nelts)
-    ptr  =  "malloc(%s)" % (nbytes,)
-    return "PyArray_SimpleNewFromData(1, &%s, %s, %s )" % (nelts, to_dtype(elt_t), ptr) 
+    return "PyArray_SimpleNew(1, &%s, %s)" % (nelts, to_dtype(elt_t))
   
   
   
@@ -226,13 +224,10 @@ class FlatFnCompiler(BaseCompiler):
     return "( (%s) (PyArray_DATA(%s)))[%s]" % (ptr_t, arr, idx)
   
   def visit_Call(self, expr):
-    fn = expr.fn
-    assert isinstance(fn, TypedFn), "Expected TypedFn, got %s : %s" % (fn, fn.type)
-    compiled_fn = compile_flat(fn)
+    fn_name = self.get_fn(expr.fn)
+    closure_args = self.get_closure_args(expr.fn)
     args = self.visit_expr_list(expr.args)
-    self.extra_objects.add(compiled_fn.object_filename)
-    self.forward_declarations.add(compiled_fn.fn_signature)
-    return "%s(%s)" % (compiled_fn.fn_name, ", ".join(args))
+    return "%s(%s)" % (fn_name, ", ".join(tuple(closure_args) + tuple(args)))
   
   def visit_Select(self, expr):
     cond = self.visit_expr(expr.cond)
@@ -320,7 +315,7 @@ class FlatFnCompiler(BaseCompiler):
     return s % locals()
 
   def visit_Return(self, stmt):
-    assert not self.return_by_ref, "Returning multiple values not yet implemented: %s" % stmt 
+    assert not self.return_by_ref, "Returning multiple values not yet implemented: %s" % stmt
     if self.return_void:
       return "return;"
     else:
@@ -335,18 +330,63 @@ class FlatFnCompiler(BaseCompiler):
     self.append("\n")
     return self.indent("\n" + self.pop())
   
-  def visit_ParFor(self, stmt):
-    bounds = self.visit_expr(stmt.bounds)
-    print stmt.bounds, bounds 
-    i = self.fresh_var("int64_t", "i")
-    omp = "#pragma omp parallel for" if use_openmp else ""
-    body = "" 
+  def tuple_to_var_list(self, expr):
+    assert isinstance(expr, Expr)
+    if isinstance(expr, Tuple):
+      elts = expr.elts 
+    else:
+      assert isinstance(expr.type, ScalarT), "Unexpected expr %s : %s" % (expr, expr.type)
+      elts = [expr]
+    return self.visit_expr_list(elts)
+      
+  
+  def get_fn(self, expr):
+    if expr.__class__ is  TypedFn:
+      result = expr 
+    elif expr.__class__ is Closure:
+      result = expr.fn 
+    else:
+      assert isinstance(expr.type, (FnT, ClosureT)), \
+        "Expected function or closure, got %s : %s" % (expr, expr.type)
+      result = expr.type.fn
+    compiled_fn = compile_flat(result)
+    self.extra_objects.add(compiled_fn.object_filename)
+    self.forward_declarations.add(compiled_fn.fn_signature)
+    return compiled_fn.fn_name 
+
+  def get_closure_args(self, fn):
+    if isinstance(fn.type, FnT):
+      return []
+    else:
+      assert isinstance(fn, Closure), "Expected closure, got %s : %s" % (fn, fn.type)
+      return self.visit_expr_list(fn.args)
+      
+  def build_loops(self, loop_vars, bounds, body):
+    if len(loop_vars) == 0:
+      return body
+    var = loop_vars[0]
+    bound = bounds[0]
+    nested = self.build_loops(loop_vars[1:], bounds[1:], body)
     return """
-      %(omp)s
-      for(%(i)s = 0; %(i)s < 10; ++%(i)s) {
-        %(body)s
-      }
-    """ % locals()
+    for (%s = 0; %s < %s; ++%s) {
+      %s
+    }""" % (var, var, bound, var, nested )
+    
+  def visit_ParFor(self, stmt):
+    bounds = self.tuple_to_var_list(stmt.bounds)
+    loop_var_names = ["i", "j", "k", "l", "ii", "jj", "kk", "ll"]
+    n_vars = len(bounds)
+    assert n_vars <= len(loop_var_names)
+    loop_vars = [self.fresh_var("int64_t", loop_var_names[i]) for i in xrange(n_vars)]
+    
+    omp = "#pragma omp parallel for" if use_openmp else ""
+    fn_name = self.get_fn(stmt.fn)
+    closure_args = self.get_closure_args(stmt.fn)
+    combined_args = tuple(closure_args) + tuple(loop_vars)
+    arg_str = ", ".join(combined_args)
+    body = "%s(%s);" % (fn_name, arg_str)    
+    return omp + self.build_loops(loop_vars, bounds, body) 
+    
       
   def visit_TypedFn(self, expr):
     
@@ -359,12 +399,15 @@ class FlatFnCompiler(BaseCompiler):
   def return_types(self, fn):
     if isinstance(fn.return_type, TupleT):
       return fn.return_type.elt_types
+    elif isinstance(fn.return_type, NoneT):
+      return []
     else:
       assert isinstance(fn.return_type, (PtrT, ScalarT))
       return [fn.return_type]
     
   
   def visit_fn(self, fn):
+    
     c_fn_name = self.fresh_name(fn.name)
     arg_types = [to_ctype(t) for t in fn.input_types]
     arg_names = [self.name(old_arg) for old_arg in fn.arg_names]
@@ -389,7 +432,9 @@ class FlatFnCompiler(BaseCompiler):
       arg_names = arg_names + self.return_var_names
       
     args_str = ", ".join("%s %s" % (t, name) for (t,name) in zip(arg_types,arg_names))
+    
     body_str = self.visit_block(fn.body)
+
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
     src = "%s { %s }" % (sig, body_str) 
     return c_fn_name, sig, src
@@ -662,7 +707,6 @@ class PyModuleCompiler(FlatFnCompiler):
     return self.tuple_elt(clos, expr.index, expr.type)
   
   
-  
   def visit_ArrayView(self, expr):
     vec_name = self.visit_expr(expr.data)
     ndims = expr.type.rank
@@ -676,6 +720,8 @@ class PyModuleCompiler(FlatFnCompiler):
    
     shape = self.visit_expr(expr.shape)
     reshaped  = self.fresh_var("PyObject*", "reshaped")
+
+    self.append("Py_INCREF(%s);" % vec_name)
     self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
                 (reshaped, vec_name, shape))
     
@@ -701,6 +747,7 @@ class PyModuleCompiler(FlatFnCompiler):
     if debug: 
       self.print_pyobj_type(v, "Return type: ")
       self.print_pyobj(v, "Return value: ")
+
     return "return %s;" % v
   
   def visit_block(self, stmts, push = True):

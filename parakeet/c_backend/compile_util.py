@@ -143,7 +143,7 @@ def compile_object(src,
                    fn_signature = None,
                    src_filename = None, 
                    forward_declarations = [],
-                   extra_headers = [], 
+                   extra_headers = python_headers, 
                    extra_objects = [], 
                    print_source = print_module_source, 
                    print_commands = print_commands ):

@@ -74,6 +74,11 @@ class BaseCompiler(object):
   
     version = self.name_versions.get(prefix, 1)
     self.name_versions[prefix] = version + 1
+    
+    # not valid chars!
+    if not any(c.isalpha() for c in prefix):
+      prefix = "temp" + prefix 
+      
     if version == 1 and not is_reserved(prefix):
       return prefix 
     elif prefix[-1] != "_":
