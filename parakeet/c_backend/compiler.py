@@ -705,19 +705,9 @@ class PyModuleCompiler(FlatFnCompiler):
     vec = self.visit_expr(expr.data)
     offset = self.visit_expr(expr.offset)
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
-    self.printf("[ArrayView] Offset: %ld", offset )
-    shape = self.fresh_var("PyObject*", "shape", self.visit_expr(expr.shape))
-    self.printf("Shape %s = %%p" % shape, shape)
-    self.print_pyobj(shape, "Shape")
-        
-    strides_elts = self.tuple_to_stack_array(expr.strides, name = "strides", elt_type = "npy_intp")
-
-    self.printf("[ArrayView] NDims: %d" % len(expr.strides))
-    strides_bytes = self.fresh_name("strides_bytes")
-    self.print_pyobj(vec, "vec before slice")
-    count = self.fresh_var("int64_t", "len", "PySequence_Size(%(vec)s)" % locals())
+    strides_elts = self.tuple_to_var_list(expr.strides)
     
-    self.printf("Len %d\\n", count)
+    strides_bytes = self.fresh_name("strides_bytes")
     self.append("""
       if (%(offset)s > 0) { 
         printf("Getting slice, offset = %%d\\n", %(offset)s); 
@@ -725,17 +715,29 @@ class PyModuleCompiler(FlatFnCompiler):
         printf("Got slice!\\n"); 
       }""" % locals())
     self.print_pyobj(vec, "vec after slice")
-    self.printf("Reshaping")
-    uprank_shape = self.fresh_var("PyArray_Dims", "newshape")
-    reshaped  = self.fresh_var("PyObject*", "reshaped")
-    self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % (reshaped, vec, shape))
-    self.return_if_null(reshaped)
-    self.printf("Reshaped: %p", reshaped)
+    count = self.fresh_var("int64_t", "count", "PySequence_Size(%s)" % vec)
+    self.printf("1D Len %ld\\n", count)
+    ndims = expr.type.rank 
+    if ndims > 1:
+      self.printf("Increasing rank")
+      uprank_elts =  (count,) + ("1",) * (ndims-1) 
+      uprank_elts_as_pyobj = ["PyInt_FromLong(%s)"  % elt for elt in uprank_elts]
+      uprank_elts_str = ", ".join(uprank_elts_as_pyobj)
+      uprank_shape = "PyTuple_Pack(%d, %s)" % (ndims, uprank_elts_str)
+      self.append("%s = PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
+      self.return_if_null(vec)
+      self.print_pyobj(vec, "After uprank")
     self.printf("Getting strides")
-    self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, reshaped))
+    self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, vec))
     self.printf("Got strides!")
     for i, _ in enumerate(expr.strides.type.elt_types):
       self.append("%s[%d] = %s[%d] * %d;" % (strides_bytes, i, strides_elts, i, bytes_per_elt) )
+    reshaped  = self.fresh_var("PyObject*", "reshaped")
+    shape = self.fresh_var("PyObject*", "shape", self.visit_expr(expr.shape))
+    self.append("%s = PyArray_Reshape( (PyArrayObject*) %s, %s);" % (reshaped, vec, shape))
+    self.return_if_null(reshaped)
+    self.printf("Reshaped: %p", reshaped)
+    
     return reshaped
   
     
