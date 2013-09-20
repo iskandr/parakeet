@@ -115,4 +115,7 @@ class BaseCompiler(object):
 
     name = self.fresh_name(prefix)
     self.name_mappings[ssa_name] = name 
-    return name 
+    return name
+   
+  def return_if_null(self, obj):
+    self.append("if (!%s) { return NULL; }" % obj)

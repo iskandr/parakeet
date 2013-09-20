@@ -651,13 +651,7 @@ class PyModuleCompiler(FlatFnCompiler):
     if attr == "data":
       self.check_array(v)
       return "PyArray_Ravel((PyArrayObject*) %s, 0)" % (v,)  
-      #c_expr = "(%s) PyArray_DATA (  (PyArrayObject*) %s)" % (to_ctype(t), v)
-      #data_var = self.fresh_var(to_ctype(t), "data", c_expr)
-      # pyint = self.fresh_var("PyObject*", "data_pyint", "PyInt_FromLong((int64_t) %s)" % data_var)
-      # self.append("PySet_Add(%s, %s);" % (self.external_pointer_set, pyint))
-      # self.decref(pyint)
-      #return data_var
-    
+
     elif attr == "shape":
       self.check_array(v)
       elt_types = t.elt_types
@@ -708,26 +702,37 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def visit_ArrayView(self, expr):
-    vec_name = self.visit_expr(expr.data)
-    ndims = expr.type.rank
+    vec = self.visit_expr(expr.data)
     offset = self.visit_expr(expr.offset)
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
-    dtype = to_dtype(expr.type.elt_type)
-    
-    count = self.visit_expr(expr.size)
-    offset_bytes = self.fresh_var("npy_intp", "offset_bytes", "%s * %d" % (offset, bytes_per_elt))
-    
-   
-    shape = self.visit_expr(expr.shape)
-    reshaped  = self.fresh_var("PyObject*", "reshaped")
-
-    self.append("Py_INCREF(%s);" % vec_name)
-    self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % \
-                (reshaped, vec_name, shape))
-    
+    self.printf("[ArrayView] Offset: %ld", offset )
+    shape = self.fresh_var("PyObject*", "shape", self.visit_expr(expr.shape))
+    self.printf("Shape %s = %%p" % shape, shape)
+    self.print_pyobj(shape, "Shape")
+        
     strides_elts = self.tuple_to_stack_array(expr.strides, name = "strides", elt_type = "npy_intp")
+
+    self.printf("[ArrayView] NDims: %d" % len(expr.strides))
     strides_bytes = self.fresh_name("strides_bytes")
+    self.print_pyobj(vec, "vec before slice")
+    count = self.fresh_var("int64_t", "len", "PySequence_Size(%(vec)s)" % locals())
+    
+    self.printf("Len %d\\n", count)
+    self.append("""
+      if (%(offset)s > 0) { 
+        printf("Getting slice, offset = %%d\\n", %(offset)s); 
+        %(vec)s = PySequence_GetSlice(%(vec)s, %(offset)s, PySequence_Size(%(vec)s));
+        printf("Got slice!\\n"); 
+      }""" % locals())
+    self.print_pyobj(vec, "vec after slice")
+    self.printf("Reshaping")
+    reshaped  = self.fresh_var("PyObject*", "reshaped")
+    self.append("%s = PyArray_Reshape(( PyArrayObject*) %s, %s);" % (reshaped, vec, shape))
+    self.return_if_null(reshaped)
+    self.printf("Reshaped: %p", reshaped)
+    self.printf("Getting strides")
     self.append("npy_intp* %s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (strides_bytes, reshaped))
+    self.printf("Got strides!")
     for i, _ in enumerate(expr.strides.type.elt_types):
       self.append("%s[%d] = %s[%d] * %d;" % (strides_bytes, i, strides_elts, i, bytes_per_elt) )
     return reshaped
@@ -800,8 +805,6 @@ class PyModuleCompiler(FlatFnCompiler):
         new_name = self.name(argname, overwrite = True)
         self.unbox_scalar(c_name, t, target = new_name)
 
-    self.external_pointer_set = \
-      self.fresh_var("PyObject*", "external_pointer_set", "PySet_New(NULL)")
         
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
