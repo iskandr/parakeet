@@ -1,3 +1,6 @@
+Current segfault: 
+  test_morpholog.test_residual 
+
 test.test_arrays.test_create_const ... FAIL
 test.test_arrays.test_set_idx_1d ... FAIL
 test.test_arrays.test_set_idx_2d ... FAIL
@@ -29,16 +32,6 @@ test.test_scan.test_scan_add_2d ... FAIL
 test.test_setidx.test_set_idx_1d ... FAIL
 test.test_setidx.test_set_idx_2d ... FAIL
 test.test_setidx.test_set_idx_3d ... FAIL
-test.test_slices.test_implicit_slice_first_axis_matrices ... FAIL
-test.test_slices.test_slice_first_axis_matrices ... FAIL
-test.test_slices.test_slice_second_axis_matrices ... FAIL
-test.test_slices.test_assign_first_axis ... FAIL
-test.test_slices.test_assign_second_axis ... FAIL
-test.test_slices.test_assign_slices ... ERROR
-test.test_slices.test_assign_four_rows ... ERROR
-test.test_slices.test_loop_slices ... ERROR
-test.test_slices.test_lower_right_corner ... FAIL
-test.test_slices.test_multiple_slices ... ERROR
 test.test_ufunc_math.test_floor_divide ... FAIL
 test.test_ufunc_math.test_negative ... FAIL
 test.test_ufunc_math.test_power ... FAIL

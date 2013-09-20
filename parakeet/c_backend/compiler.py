@@ -723,14 +723,11 @@ class PyModuleCompiler(FlatFnCompiler):
     # slice out the 1D data array if there's an offset 
     self.append("""
       if (%(offset)s > 0) { 
-        printf("Getting slice, offset = %%d\\n", %(offset)s); 
         %(vec)s = PySequence_GetSlice(%(vec)s, %(offset)s, PySequence_Size(%(vec)s));
-        printf("Got slice!\\n"); 
       }""" % locals())
     
     count = self.fresh_var("int64_t", "count", "PySequence_Size(%s)" % vec)
-    self.printf("1D Len %ld\\n", count)
-    self.print_pyobj(vec, "vec after slice")
+
     
       
     
@@ -749,14 +746,14 @@ class PyModuleCompiler(FlatFnCompiler):
     
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
     
-    self.printf("Getting strides")
+
     self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))
-    self.printf("Got strides!")
+
     
     numpy_shape = self.fresh_var("npy_intp*", "numpy_shape")
-    self.printf("Getting shape")
+
     self.append("%s = PyArray_DIMS(  (PyArrayObject*) %s);" % (numpy_shape, vec))
-    self.printf("Got strides!")
+
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     
     for i, _ in enumerate(expr.strides.type.elt_types):
@@ -790,16 +787,12 @@ class PyModuleCompiler(FlatFnCompiler):
        
     # make sure the contiguity flags are set correctly 
     self.append("""
-      
-      printf("c layout? %%d\\n", %(is_c_layout)s);
-      printf("f layout? %%d\\n", %(is_f_layout)s);  
       // it's possible that *neither* of the above flags should be on
       // which is why we enable them separately here 
       if (%(is_f_layout)s) { ((PyArrayObject*)%(vec)s)->flags |= NPY_F_CONTIGUOUS; }
-      else if (%(is_c_layout)s) {
-        printf("Setting flags %%ld\\n", ((PyArrayObject*)%(vec)s)->flags);   
+      else if (%(is_c_layout)s) {         
         ((PyArrayObject*)%(vec)s)->flags |= NPY_C_CONTIGUOUS;
-        printf("Done w/ flags %%ld\\n", ((PyArrayObject*)%(vec)s)->flags);  
+
       }
     """ % locals())
     return vec
