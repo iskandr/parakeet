@@ -195,6 +195,7 @@ def morph_close(x, dilate_shape, erode_shape = None):
 
 plot_rgb = False 
 
+"""
 def test_residual():
   #x = load_img(gray=False)
   x = np.random.randn(50,50,3)
@@ -212,6 +213,7 @@ def test_residual():
     pylab.figure()
     pylab.imshow(y)
     pylab.show()
+"""
 
 if __name__ == '__main__':
   run_local_tests() 

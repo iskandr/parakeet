@@ -790,10 +790,7 @@ class PyModuleCompiler(FlatFnCompiler):
       // it's possible that *neither* of the above flags should be on
       // which is why we enable them separately here 
       if (%(is_f_layout)s) { ((PyArrayObject*)%(vec)s)->flags |= NPY_F_CONTIGUOUS; }
-      else if (%(is_c_layout)s) {         
-        ((PyArrayObject*)%(vec)s)->flags |= NPY_C_CONTIGUOUS;
-
-      }
+      if (%(is_c_layout)s) { ((PyArrayObject*)%(vec)s)->flags |= NPY_C_CONTIGUOUS; }
     """ % locals())
     return vec
   
