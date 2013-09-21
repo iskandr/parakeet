@@ -37,7 +37,7 @@ python_headers = ["Python.h",
   
   
 
-defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+defs = [] #["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 defs = "\n".join(defs + ["\n"])
 config_vars = distutils.sysconfig.get_config_vars()
 

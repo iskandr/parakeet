@@ -1,7 +1,7 @@
 import numpy as np
 import testing_helpers
-
-from testing_helpers import expect
+import parakeet 
+from parakeet.testing_helpers import expect
 
 n = 8
 vec_int = np.arange(n)

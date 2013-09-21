@@ -1,7 +1,14 @@
-
 import numpy as np
+import parakeet 
+from parakeet.testing_helpers import expect, run_local_tests
 
-from testing_helpers import expect, run_local_tests
+def create_const(x):
+  return [x,x,x,x]
+
+def test_create_const():
+  expect(create_const, [1],  np.array([1,1,1,1]))
+  expect(create_const, [1.0], np.array([1.0, 1.0, 1.0, 1.0]))
+  expect(create_const, [True], np.array([True, True, True, True]))
 
 shape_1d = 40
 ints_1d = np.arange(shape_1d)
@@ -10,15 +17,36 @@ bools_1d = ints_1d % 2
 
 vecs = [ints_1d, floats_1d, bools_1d]
 
+def index_1d(x, i):
+  return x[i]
+
+def test_index_1d():
+  for vec in vecs:
+    expect(index_1d, [vec, 20], vec[20])
+
 shape_2d = (4,10)
 matrices = [np.reshape(vec, shape_2d) for vec in vecs]
+
+def index_2d(x, i, j):
+  return x[i, j]
+
+def test_index_2d():
+  for mat in matrices:
+    expect(index_2d, [mat, 2, 5], mat[2,5])
+
+def index_3d(x, i, j, k):
+  return x[i, j, k]
 
 shape_3d = (4,5,2)
 tensors = [np.reshape(mat, shape_3d) for mat in matrices]
 
+def test_index_3d():
+  for x in tensors:
+    expect(index_3d, [x, 2, 2, 1], x[2,2,1])
+
 def set_idx_1d(arr,i,val):
   arr[i] = val
-  return arr 
+  return arr
 
 def test_set_idx_1d():
   idx = 10

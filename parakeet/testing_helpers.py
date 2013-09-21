@@ -4,15 +4,14 @@ import numpy as np
 
 from nose.tools import nottest
 
-from treelike.testing_helpers import  eq, expect_eq, run_local_tests
+from treelike.testing_helpers import eq, expect_eq, run_local_tests
   
+from . import (type_conv, type_inference, 
+              specialize, translate_function_value,
+              find_broken_transform,
+              run_typed_fn, run_python_fn)
 
-from parakeet import (type_conv, type_inference, 
-                      specialize, translate_function_value,
-                      find_broken_transform,
-                      run_typed_fn, run_python_fn)
-
-from parakeet.config import testing_find_broken_transform
+from config import testing_find_broken_transform
 
 
 def _copy(x):
@@ -89,6 +88,7 @@ def assert_eq_arrays(numpy_result, parakeet_result, test_name = None):
       "%sExpected shape %s but got %s" % (msg, numpy_result.shape, parakeet_result.shape)
   assert eq(numpy_result, parakeet_result), \
     "%sExpected value %s but got %s" % (msg, numpy_result, parakeet_result)
+    
 @nottest
 def timed_test(parakeet_fn, parakeet_args, python_fn, 
                python_args = None, min_speedup = None):

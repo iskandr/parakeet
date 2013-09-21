@@ -1,7 +1,6 @@
 import numpy as np 
 import parakeet 
-
-import testing_helpers 
+from parakeet import testing_helpers 
 
 values = [np.array(0), np.array(0.0), np.array(True), 
           np.array([0]), 

@@ -310,6 +310,7 @@ class BuildFlatFn(Builder):
     flat_closure_args = self.flatten_expr(closure)
     return flat_fn, flat_closure_args
   
+  
   def flatten_Call(self, expr):
     flat_fn, flat_closure_args = self.flatten_fn(expr.fn)
     flat_args = self.flatten_expr_list(expr.args)
@@ -487,8 +488,10 @@ class BuildFlatFn(Builder):
     assert False, "Unexpected OuterMap, should have been turned into ParFor before flattening"
   
   def flatten_IndexReduce(self, expr):
-    assert False, "Not implemented" 
-  
+    fn, fn_args = self.flatten_fn(expr.fn)
+    combine, combine_args = self.flatten_fn(expr.combine)
+    assert False, expr 
+      
   def flatten_IndexScan(self, expr):
     assert False, "Not implemented" 
     

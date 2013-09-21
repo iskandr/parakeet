@@ -1,5 +1,5 @@
 import parakeet 
-import testing_helpers
+from  parakeet import testing_helpers
 import numpy as np 
 
 

@@ -1,7 +1,7 @@
 import numpy as np 
 import testing_helpers 
 import parakeet 
-from parakeet import jit 
+from parakeet import jit, testing_helpers
 
 values = [1, 
           #1.0, 

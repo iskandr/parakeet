@@ -1,7 +1,7 @@
 import numpy as np
 import parakeet 
 
-from testing_helpers import expect, run_local_tests 
+from parakeet.testing_helpers import expect, run_local_tests 
 
 
 int_vec = np.array([1,2,3])

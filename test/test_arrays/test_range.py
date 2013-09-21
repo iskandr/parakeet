@@ -1,6 +1,6 @@
 import numpy as np
 import parakeet
-import testing_helpers
+from parakeet import testing_helpers
 from testing_helpers import assert_eq_arrays 
 
 @parakeet.jit

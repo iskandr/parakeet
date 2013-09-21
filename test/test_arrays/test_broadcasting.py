@@ -1,6 +1,6 @@
 import numpy as np
 from parakeet import jit  
-from testing_helpers import expect_eq, run_local_tests
+from parakeet.testing_helpers import expect_eq, run_local_tests
 
 @jit 
 def add(x,y):

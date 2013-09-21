@@ -1,6 +1,5 @@
-from treelike.testing_helpers import run_local_tests, expect_eq
-
 import parakeet
+from parakeet.testing_helpers import run_local_tests, expect_eq
 
 def mk_adder(t):
   f, b, (x,y) = parakeet.build_fn([t,t], t)

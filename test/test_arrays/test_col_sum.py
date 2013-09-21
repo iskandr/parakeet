@@ -1,6 +1,6 @@
 import numpy as np
 import parakeet
-import testing_helpers
+from parakeet import testing_helpers
 
 #
 #def test_col_sum():
