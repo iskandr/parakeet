@@ -122,14 +122,12 @@ def run_typed_fn(fn, args, backend = None):
   elif backend == 'c':
     from .. import c_backend 
     args = c_backend.prepare_args(args, fn.input_types)
-    
-    loopy_fn = pipeline.loopify.apply(fn)
-    flat_fn = pipeline.flatten.apply(loopy_fn)
+    fn = pipeline.loopify.apply(fn)
     from ..transforms import  stride_specialization
     #flat_fn = stride_specialization.specialize(flat_fn, args)
     
-    compiled_fn = c_backend.compile_entry(flat_fn)
-    assert len(args) == len(flat_fn.input_types)
+    compiled_fn = c_backend.compile_entry(fn)
+    assert len(args) == len(fn.input_types)
     result = compiled_fn.c_fn(*args)
     return result 
   elif backend == "interp":

@@ -501,7 +501,7 @@ class BuildFlatFn(Builder):
      
       
   def flatten_IndexScan(self, expr):
-    assert False, "Not implemented" 
+    assert False, "IndexScan Not implemented" 
     
   def flatten_lhs_var(self, old_var):
     name = old_var.name 
