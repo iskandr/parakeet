@@ -488,14 +488,22 @@ class BuildFlatFn(Builder):
     assert False, "Unexpected OuterMap, should have been turned into ParFor before flattening"
   
   def flatten_IndexReduce(self, expr):
-    assert isinstance(expr.type, ScalarT), "Non-scalar reductions not yet implemented"
+    # assert isinstance(expr.type, ScalarT), "Non-scalar reductions not yet implemented"
     fn, fn_args = self.flatten_fn(expr.fn)
     fn = self.closure(fn, fn_args)
     combine, combine_args = self.flatten_fn(expr.combine)
     combine = self.closure(combine, combine_args)
     shape = self.tuple(self.flatten_expr(expr.shape))
-    init = self.flatten_expr(expr.init)[0]
-    t = flatten_type(expr.type)[0]
+    
+    init = self.flatten_expr(expr.init)
+    t = flatten_type(expr.type)
+    if len(t) == 1:
+      init = init[0]
+      t = t[0]
+    else:
+      init = self.tuple(init)
+      t = make_tuple_type(t)
+    
     result =  IndexReduce(fn = fn, combine = combine, shape = shape, type = t, init = init)
     return [result]
      
