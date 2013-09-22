@@ -1,17 +1,15 @@
 import numpy as np 
-import testing_helpers 
-import parakeet 
 from parakeet import jit, testing_helpers
 
 values = [1, 
-          #1.0, 
-          #True, 
-          #np.array([1,2,3], dtype='int8'),
-          #np.array([1,2,3], dtype='int16'),
-          #np.array([1,2,3], dtype='int32'), 
+          1.0, 
+          True, 
+          np.array([1,2,3], dtype='int8'),
+          np.array([1,2,3], dtype='int16'),
+          np.array([1,2,3], dtype='int32'), 
           np.array([1,2,3], dtype='int64'),
           np.array([1,2,3], dtype='float32'), 
-          # np.array([1,2,3], dtype='float64')
+          np.array([1,2,3], dtype='float64')
         ]
 
 def run(parakeet_fn, python_fn):

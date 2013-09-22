@@ -1,7 +1,5 @@
 import numpy as np
-import testing_helpers
-import parakeet 
-from parakeet.testing_helpers import expect
+from parakeet.testing_helpers import expect, run_local_tests
 
 n = 8
 vec_int = np.arange(n)
@@ -28,4 +26,4 @@ def test_2d_by_idx():
     expect(idx, [m, indices], idx(m, indices))
 
 if __name__ == '__main__':
-    testing_helpers.run_local_tests()
+    run_local_tests()

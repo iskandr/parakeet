@@ -1,6 +1,5 @@
-
-
-import parakeet as par 
+import parakeet as par
+from parakeet import testing_helpers, jit 
 import numpy as np
 
 
@@ -38,30 +37,30 @@ class Network(object):
     self.bprop(err)
 
 
-@par.jit
+@jit
 def sigmoid(x):
   return 1.0 / (1.0 + par.exp(-x))
 
-@par.jit
+@jit
 def d_sigmoid(x):
   s = sigmoid(x)
   return s * (1-s) 
 
-@par.jit
+@jit
 def dot(x,y):
   return sum(x*y)
 
-@par.jit
+@jit
 def fprop_linear(x, W, b):
   def dot_add(w_row, b_elt):
     return sum(w_row * x) + b_elt 
   return par.each(dot_add, W, b)
  
-@par.jit 
+@jit 
 def fprop_logistic(x, W, b):
   return sigmoid(fprop_linear(x,W,b))
 
-@par.jit
+@jit
 def bprop_logistic(x, W, b, err):
   return W*0.001
 
@@ -87,7 +86,7 @@ class LogisticLayer(object):
     return weighted_err 
     
 
-@par.jit 
+@jit 
 def tanh_fprop(x, w, b):
   return par.tanh(sum(x*w) + b)
 
@@ -128,7 +127,7 @@ def test_mlp():
   assert np.all(y >= 0)
   assert np.all(y <= 1)
   
-import testing_helpers
+
 
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

@@ -2,7 +2,7 @@ import numpy as np
 import parakeet 
 
 from parakeet import jit 
-from testing_helpers import run_local_tests, expect
+from parakeet.testing_helpers import run_local_tests, expect
 
 @jit 
 def float32_cast(x):

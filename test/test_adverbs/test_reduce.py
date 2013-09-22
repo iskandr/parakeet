@@ -1,6 +1,6 @@
 import numpy as np
-import testing_helpers
-import parakeet 
+import parakeet
+from parakeet import testing_helpers 
 
 int_vec = 300 + np.arange(300, dtype=int)
 float_vec = int_vec.astype(float)

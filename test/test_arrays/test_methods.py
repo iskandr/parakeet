@@ -1,7 +1,5 @@
 import numpy as np
-
-import parakeet 
-import testing_helpers 
+from parakeet import testing_helpers, jit 
 
 values = [np.array(0), np.array(1.0), np.array([True]), 
           np.array([1,2,3]), np.array([1.0, 2.0, 3.0]), np.array([True, False]),
@@ -10,7 +8,7 @@ values = [np.array(0), np.array(1.0), np.array([True]),
          ]
 
 def run(fn, method_name):
-  fn = parakeet.jit(fn)
+  fn = jit(fn)
   for v in values:
     method = getattr(v, method_name)
     expected = method()
@@ -44,7 +42,7 @@ def test_copy():
     return x.copy()
   run(call_copy, 'copy')
   x = np.array([1,2,3])
-  y = parakeet.jit(call_copy)(x)
+  y = jit(call_copy)(x)
   x[0] = 10
   assert y[0] == 1
   

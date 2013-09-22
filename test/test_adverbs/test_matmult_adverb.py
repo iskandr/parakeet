@@ -1,6 +1,6 @@
 import numpy as np 
 import parakeet 
-from testing_helpers import expect, run_local_tests, eq, expect_allpairs 
+from parakeet.testing_helpers import expect, run_local_tests, eq, expect_allpairs 
 
 int_mat = np.reshape(np.arange(9), (3,3))
 float_mat = np.sqrt(int_mat)

@@ -1,5 +1,5 @@
 
-from testing_helpers import run_local_tests, expect, expect_eq
+from parakeet.testing_helpers import run_local_tests, expect, expect_eq
 
 def rad2deg(rad):
   return (rad * 180) / 3.14159265359

@@ -1,6 +1,6 @@
 import numpy as np 
 
-from testing_helpers import run_local_tests, expect 
+from parakeet.testing_helpers import run_local_tests, expect 
 
 
 int_array = np.array([10,20,30])

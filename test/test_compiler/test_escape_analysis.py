@@ -1,9 +1,10 @@
-import parakeet 
+
 
 from parakeet import Int64, make_tuple_type 
 from parakeet.analysis.escape_analysis import EscapeAnalysis
-from parakeet.syntax import Tuple, Var, TypedFn, Assign, Return, TupleProj, zero_i64, one_i64   
-from testing_helpers import run_local_tests
+from parakeet.syntax import Tuple, Var, TypedFn, Assign, Return, TupleProj, zero_i64, one_i64
+from parakeet.testing_helpers import run_local_tests   
+
  
 
 tuple_t = make_tuple_type((Int64, Int64))

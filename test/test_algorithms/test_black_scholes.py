@@ -1,9 +1,8 @@
-import numpy as np
-import parakeet
 from parakeet import jit 
+from parakeet.testing_helpers import eq, run_local_tests
 
 from numpy import exp, log, sqrt
-from testing_helpers import eq, run_local_tests
+
 
 def CND(x):
   a1 = 0.31938153

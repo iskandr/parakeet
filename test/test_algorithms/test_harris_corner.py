@@ -2,8 +2,7 @@ import numpy as np
 import time 
 
 import parakeet 
-
-from testing_helpers import expect_each, run_local_tests, eq
+from parakeet.testing_helpers import expect_each, run_local_tests, eq
 
 size = (5,5)
 float_mat = np.random.uniform(0,1,size=size)

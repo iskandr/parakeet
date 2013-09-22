@@ -1,7 +1,5 @@
 import numpy as np
-import testing_helpers
-
-from parakeet import each
+from parakeet import each, testing_helpers
 
 def add1(xi):
   return xi + 1

@@ -4,7 +4,7 @@ import time
 
 import parakeet
 from parakeet import allpairs, each
-from testing_helpers import eq, run_local_tests
+from parakeet.testing_helpers import eq, run_local_tests
 
 def python_update_assignments(X, centroids):
   dists = scipy.spatial.distance.cdist(X, centroids, 'sqeuclidean')

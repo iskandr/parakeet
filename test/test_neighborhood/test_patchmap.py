@@ -1,7 +1,7 @@
 import numpy as np
 
 import parakeet 
-import testing_helpers
+from parakeet import testing_helpers
 
 def erode(x, shape):
   return parakeet.pmap2(min, x, shape)

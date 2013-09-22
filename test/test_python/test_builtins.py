@@ -1,5 +1,5 @@
-from testing_helpers import expect, eq, run_local_tests
 from parakeet import jit
+from parakeet.testing_helpers import expect, run_local_tests
 import numpy as np
 
 @jit
@@ -66,7 +66,6 @@ def to_int(x):
 
 def test_to_int():
   expect(to_int, [1.2], 1)
-
 
 @jit 
 def to_float(x):

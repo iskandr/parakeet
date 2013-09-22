@@ -3,7 +3,7 @@ import scipy.spatial
 import time 
 
 import parakeet 
-import testing_helpers
+from parakeet import testing_helpers
 
 def sqr_dist(x,y):
   return sum( (x-y) ** 2)

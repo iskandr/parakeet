@@ -1,12 +1,10 @@
 import numpy as np
 
 import parakeet
-import testing_helpers
-
 from parakeet import config, each, syntax
 from parakeet.transforms.pipeline import lowering
 from parakeet.analysis.syntax_visitor import SyntaxVisitor
-from testing_helpers import expect
+from parakeet.testing_helpers import expect, run_local_tests
 
 config.opt_fusion = True 
 config.opt_copy_elimination = True 
@@ -57,7 +55,7 @@ def test_inline():
   assert len(typed_fn.body) in [1,2], \
       "Expected body to be 1 or 2 statements, got %s" % typed_fn
   assert simple_fn(typed_fn)
-  testing_helpers.expect(C, [1], 2)
+  expect(C, [1], 2)
 
 def lots_of_arith(x):
   y = 4 * 1
@@ -67,7 +65,7 @@ def lots_of_arith(x):
   return b
 
 def test_simple_constant_folding():
-  testing_helpers.expect(lots_of_arith, [1], 1)
+  expect(lots_of_arith, [1], 1)
   typed_fn = parakeet.typed_repr(lots_of_arith, [1])
   assert len(typed_fn.body) == 1, \
       "Insufficiently simplified body: %s" % typed_fn
@@ -80,7 +78,7 @@ def const_across_control_flow(b):
   return x
 
 def test_constants_across_control_flow():
-  testing_helpers.expect(const_across_control_flow, [True], 1)
+  expect(const_across_control_flow, [True], 1)
   typed_fn = parakeet.typed_repr(const_across_control_flow, [True])
   assert len(typed_fn.body) == 1, "Fn body too long: " + str(typed_fn.body)
   stmt = typed_fn.body[0]
@@ -97,7 +95,7 @@ def always_true_branch():
     return res
 
 def test_always_true():
-  testing_helpers.expect(always_true_branch, [], 0)
+  expect(always_true_branch, [], 0)
   typed_fn = parakeet.typed_repr(always_true_branch, [])
   assert len(typed_fn.body) == 1, "Fn body too long: " + str(typed_fn.body)
   stmt = typed_fn.body[0]
@@ -114,7 +112,7 @@ def always_false_branch():
     return res
 
 def test_always_false():
-  testing_helpers.expect(always_false_branch, [], 1)
+  expect(always_false_branch, [], 1)
   typed_fn = parakeet.typed_repr(always_false_branch, [])
   assert len(typed_fn.body) == 1, "Fn body too long: " + str(typed_fn.body)
   stmt = typed_fn.body[0]
@@ -180,7 +178,7 @@ def licm_nested_loops():
   return total   
 
 def test_licm_nested_loops():
-  testing_helpers.expect(licm_nested_loops, [], licm_nested_loops())
+  expect(licm_nested_loops, [], licm_nested_loops())
   
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  run_local_tests()

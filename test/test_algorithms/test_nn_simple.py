@@ -1,6 +1,4 @@
-import parakeet 
-import testing_helpers
-from parakeet import jit 
+from parakeet import jit, testing_helpers 
 import numpy as np 
 
 def init_layer(input_size, n_elts):

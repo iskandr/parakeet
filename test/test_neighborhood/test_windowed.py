@@ -1,7 +1,6 @@
 import parakeet 
-from parakeet import jit 
+from parakeet import jit, testing_helpers 
 import numpy as np
-import testing_helpers
  
 
 @jit

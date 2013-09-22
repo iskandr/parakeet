@@ -1,7 +1,7 @@
 import numpy as np
 
 from parakeet import scan, add
-from testing_helpers import run_local_tests, expect, expect_each
+from parakeet.testing_helpers import run_local_tests, expect, expect_each
 
 int_1d = np.arange(5)
 float_1d = np.arange(5, dtype='float')

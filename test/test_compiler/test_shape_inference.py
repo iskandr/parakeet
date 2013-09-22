@@ -1,10 +1,9 @@
 import numpy as np
 import parakeet
-import testing_helpers
-
 from parakeet import shape_inference
 from parakeet.shape_inference import call_shape_expr
 from parakeet.shape_inference.shape import const, Shape, Var 
+from parakeet import testing_helpers
 
 def expect_shape(python_fn, args_list, expected):
   print "[expect_shape]"

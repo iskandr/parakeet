@@ -1,6 +1,7 @@
 import numpy as np 
-import parakeet 
-import testing_helpers
+import parakeet
+from parakeet.testing_helpers import run_local_tests 
+
 
 @parakeet.jit
 def rint(x):
@@ -16,4 +17,4 @@ def test_rint():
     assert np.allclose(np.rint(y), rint(y))
 
 if __name__ == "__main__":
-    testing_helpers.run_local_tests()
+    run_local_tests()

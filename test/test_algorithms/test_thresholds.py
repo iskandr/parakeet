@@ -1,8 +1,9 @@
 import numpy as np 
 import time 
 
-import testing_helpers
-import parakeet 
+
+import parakeet
+from parakeet import testing_helpers 
 
 #parakeet.config.print_x86 = True
 #parakeet.config.print_untyped_function = True 

@@ -1,8 +1,7 @@
 import numpy as np
 
 from parakeet import each
-from testing_helpers import run_local_tests, expect, expect_each, eq, \
-                            expect_allpairs
+from parakeet.testing_helpers import (run_local_tests, expect, expect_each, eq, expect_allpairs)
 
 ints_1d = np.arange(300, dtype='int')
 floats_1d = np.arange(300, dtype='float')

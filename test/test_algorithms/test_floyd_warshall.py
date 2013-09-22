@@ -1,8 +1,7 @@
 import numpy as np
 
 import parakeet
-from parakeet import jit 
-import testing_helpers
+from parakeet import jit, testing_helpers 
 
 def init(W, E = None):
   C = W.copy()

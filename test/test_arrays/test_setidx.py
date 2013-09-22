@@ -1,5 +1,4 @@
 import numpy as np
-import parakeet
 from parakeet.testing_helpers import expect, run_local_tests
 
 shape_1d = 40

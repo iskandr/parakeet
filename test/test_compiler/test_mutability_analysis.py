@@ -1,11 +1,11 @@
 import numpy as np 
 
-import parakeet
-import testing_helpers
+
 
 from parakeet.analysis import mutability_analysis
 from parakeet import make_array_type, Int64, Bool, ptr_type, specialize
 from parakeet.transforms.pipeline import lowering 
+from parakeet.testing_helpers import run_local_tests
 
 def f(x,y):
     x[0] = True
@@ -56,4 +56,4 @@ def test_mutable_slice():
   assert len(mutable_types) == 1, mutable_types
 """
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  run_local_tests()

@@ -1,7 +1,8 @@
 import numpy as np
-import time 
+
+ 
 from parakeet import jit 
-from testing_helpers import run_local_tests, expect, eq
+from parakeet.testing_helpers import run_local_tests, expect
 
 int_mat = np.reshape(np.arange(9), (3,3))
 float_mat = np.sqrt(int_mat)

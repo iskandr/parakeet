@@ -1,6 +1,4 @@
-from testing_helpers import expect, run_local_tests
-import parakeet 
-import numpy as np 
+from parakeet.testing_helpers import expect, run_local_tests
 
 def varargs_return(*x):
   return x

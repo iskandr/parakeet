@@ -1,7 +1,6 @@
 import numpy as np 
-import testing_helpers 
+from parakeet.testing_helpers import expect, run_local_tests
 
-from testing_helpers import expect
 
 x = np.array([1,2,3,4,5])
 
@@ -45,5 +44,5 @@ def test_repeat_elts():
 
 
 if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+  run_local_tests()
   

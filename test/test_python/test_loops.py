@@ -1,4 +1,4 @@
-from testing_helpers import expect, run_local_tests
+from parakeet.testing_helpers import expect, run_local_tests
 
 def for_range_loop(start, stop, step):
   x = 0

@@ -2,7 +2,7 @@ import matplotlib.pylab as pylab
 import numpy as np
 import parakeet
 
-from testing_helpers import eq, run_local_tests
+from parakeet.testing_helpers import eq, run_local_tests
 
 size = 21
 init = np.array(([0] * (size/2)) + [1] + ([0] * (size - size/2 - 1)))

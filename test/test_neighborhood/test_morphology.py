@@ -7,7 +7,7 @@ import time
 import parakeet
 
 from parakeet import jit, pmap2 
-from testing_helpers import eq, run_local_tests
+from parakeet.testing_helpers import eq, run_local_tests
 
 
 def winmin(x):

@@ -1,7 +1,8 @@
 import numpy as np
 import parakeet
 from parakeet import jit 
-from testing_helpers import expect, run_local_tests, eq
+from parakeet.testing_helpers import expect, run_local_tests, eq
+
 
 @jit 
 def fill_with_const(a, k):
