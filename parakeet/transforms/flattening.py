@@ -7,7 +7,7 @@ from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tu
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
                       ParFor, PrimCall, If, While, ForLoop, Call, Expr, 
-                      IndexMap) 
+                      IndexMap, IndexReduce) 
 from ..syntax.helpers import none, const_int, slice_none 
 
 from transform import Transform
@@ -488,9 +488,17 @@ class BuildFlatFn(Builder):
     assert False, "Unexpected OuterMap, should have been turned into ParFor before flattening"
   
   def flatten_IndexReduce(self, expr):
+    assert isinstance(expr.type, ScalarT), "Non-scalar reductions not yet implemented"
     fn, fn_args = self.flatten_fn(expr.fn)
+    fn = self.closure(fn, fn_args)
     combine, combine_args = self.flatten_fn(expr.combine)
-    assert False, expr 
+    combine = self.closure(combine, combine_args)
+    shape = self.tuple(self.flatten_expr(expr.shape))
+    init = self.flatten_expr(expr.init)[0]
+    t = flatten_type(expr.type)[0]
+    result =  IndexReduce(fn = fn, combine = combine, shape = shape, type = t, init = init)
+    return [result]
+     
       
   def flatten_IndexScan(self, expr):
     assert False, "Not implemented" 

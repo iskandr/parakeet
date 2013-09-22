@@ -76,9 +76,11 @@ class Var(Expr):
 
 
   def __ne__(self, other):
-    return other.__class__ is not Var or \
-           self.name != other.name or \
-           self.type != other.type
+    if other.__class__ is not Var:
+      return True 
+    if self.name != other.name:
+      return True
+    return self.type != other.type 
   
   def children(self):
     return ()

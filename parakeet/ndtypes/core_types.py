@@ -26,6 +26,10 @@ class Type(Node):
 
   def __eq__(self, _):
     assert False, "Equality not implemented for type %s" % (self,)
+  
+  def __ne__(self, other):
+    return not (self == other)
+  
 
 class AnyT(Type):
   """top of the type lattice, absorbs all types"""

@@ -31,9 +31,15 @@ class ScalarT(ImmutableT):
     return dtypes.to_ctypes(self.dtype)
 
   def __eq__(self, other):
-    return self is other or \
-           (self.__class__  is other.__class__ and self.nbytes == other.nbytes)
-    
+    if self is other:
+      return True 
+    if self.__class__ is not other.__class__:
+      return False 
+    return self.nbytes == other.nbytes
+  
+  def __ne__(self, other):
+    return not (self == other) 
+  
   def __hash__(self):
     return hash(self.dtype)
 
