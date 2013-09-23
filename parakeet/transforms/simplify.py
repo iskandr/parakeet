@@ -299,6 +299,7 @@ class Simplify(Transform):
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
     prim = expr.prim
+    print "PRIMCALL", expr, expr.args, args 
     if all_constants(args):
       return syntax.Const(value = prim.fn(*collect_constants(args)),
                           type = expr.type)
@@ -308,7 +309,9 @@ class Simplify(Transform):
         return y
       elif is_zero(y):
         return x
+    
     elif prim == prims.multiply:
+      
       x,y = args
       if is_one(x):
         return y
@@ -478,6 +481,16 @@ class Simplify(Transform):
     self.available_expressions.pop()
     return new_stmts
 
+  def enter_loop(self, phi_nodes):
+    result = {}
+    for (k, (left,right)) in phi_nodes.iteritems():
+      new_left = self.transform_expr(left)
+      if new_left == right:
+        self.set_binding(k, new_left)
+      else:
+        result[k] = (new_left, right)
+    return result 
+  
   def transform_merge(self, phi_nodes, left_block, right_block):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():
@@ -493,6 +506,7 @@ class Simplify(Transform):
         # if both control flows yield the same value then
         # we don't actually need the phi-bound variable, we can just
         # replace the left value everywhere
+        self.assign(Var(name= k, type = new_left.type), new_left)
         self.set_binding(k, new_left)
       else:
         result[k] = new_left, new_right
@@ -550,8 +564,9 @@ class Simplify(Transform):
 
     
   def transform_While(self, stmt):
+    merge = self.enter_loop(stmt.merge)
     stmt.body = self.transform_block(stmt.body)
-    stmt.merge = self.transform_merge(stmt.merge,
+    stmt.merge = self.transform_merge(merge,
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)
     stmt.cond = \
@@ -562,8 +577,9 @@ class Simplify(Transform):
     return stmt
 
   def transform_ForLoop(self, stmt):
+    merge = self.enter_loop(stmt.merge)
     stmt.body = self.transform_block(stmt.body)
-    stmt.merge = self.transform_merge(stmt.merge,
+    stmt.merge = self.transform_merge(merge,
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)
     stmt.start = self.transform_arg(stmt.start, 'start')

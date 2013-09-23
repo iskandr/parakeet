@@ -208,7 +208,8 @@ class BuildFlatFn(Builder):
       assert len(indices) == len(strides)
       for idx, stride in zip(indices, strides):
         offset = self.add(offset, self.mul(idx, stride))
-      stmt.lhs = Index(data, offset)
+
+      stmt.lhs = self.index(data, offset, temp=False)
       stmt.rhs = rhs[0]
       return [stmt]
     else:
