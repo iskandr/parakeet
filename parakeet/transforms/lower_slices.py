@@ -204,12 +204,14 @@ class LowerSlices(Transform):
     bounds = self.tuple([self.div(self.sub(stop, start), step)
                          for (start, stop, step) in slices])
     
-    setidx_fn = self.make_setidx_fn(lhs.value.type, rhs.type, scalar_index_positions, slice_positions)
+    setidx_fn = self.make_setidx_fn(lhs.value.type, 
+                                    rhs.type, 
+                                    scalar_index_positions, 
+                                    slice_positions)
     starts = [start for (start, _, _) in slices]
     steps = [step for (_, _, step) in slices]
     closure = self.closure(setidx_fn, 
-                           [lhs.value, rhs] + scalar_indices + starts + steps, 
-                           "setidx_closure")  
+                           [lhs.value, rhs] + scalar_indices + starts + steps)  
     self.parfor(closure, bounds)
   
   def transform_TypedFn(self, expr):

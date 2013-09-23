@@ -295,11 +295,11 @@ class Simplify(Transform):
       expr.false_value = falseval 
       expr.true_value = trueval 
       return expr    
-    
+  
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
     prim = expr.prim
-    print "PRIMCALL", expr, expr.args, args 
+
     if all_constants(args):
       return syntax.Const(value = prim.fn(*collect_constants(args)),
                           type = expr.type)
@@ -309,7 +309,14 @@ class Simplify(Transform):
         return y
       elif is_zero(y):
         return x
-    
+      
+    elif prim == prims.subtract:
+      x,y = args 
+      if is_zero(x):
+        return y 
+      elif is_zero(y):
+        return x     
+          
     elif prim == prims.multiply:
       
       x,y = args

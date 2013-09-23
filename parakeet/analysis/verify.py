@@ -1,4 +1,4 @@
-from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT 
+from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT, TupleT, FnT, Type
 from .. ndtypes import lower_rank 
 
 from .. syntax import Expr, Tuple, Var, Index, Closure, TypedFn 
@@ -102,28 +102,32 @@ class Verify(SyntaxVisitor):
            fn.name)  
   
   
-  def verify_call(self, fn, args):
+  def get_fn_and_closure(self, fn):
     if fn.__class__ is Closure: 
-      closure_elts = tuple(fn.args) 
-      fn = fn.fn 
-      args = tuple(closure_elts) + tuple(args)
-      
-    if fn.__class__ is TypedFn:
-      try:
-        self.check_fn_args(fn, args)
-      except:
-        print "[verify] Errors in function call %s(%s)" % (fn.name, args) 
-        raise 
-  
-    else: 
+      return fn.fn, tuple(get_types(fn.args)) 
+    elif fn.__class__ is TypedFn:
+      return fn, ()
+    elif fn.type.__class__ is FnT:
+      return  fn, ()
+    else:
       assert isinstance(fn.type, ClosureT), "Unexpected function %s : %s" % (fn, fn.type)
-      closure_arg_types = fn.type.arg_types 
-      arg_types = tuple(closure_arg_types) + tuple(get_types(args))
-      try:
-        self.check_fn_args(fn, arg_types = arg_types)
-      except:
-        print "[verify] Errors in function call %s(%s)" % (fn.name, args) 
-        raise 
+  
+  
+  def verify_call(self, fn, args):
+    fn, closure_arg_types = self.get_fn_and_closure(fn)
+    arg_types = []
+    for arg in args:
+      if isinstance(arg, Type):
+        arg_types.append(arg)
+      else:
+        assert isinstance(arg, Expr)
+        arg_types.append(arg.type)
+    arg_types = tuple(closure_arg_types) + tuple(arg_types)
+    try:
+      self.check_fn_args(fn, arg_types = arg_types)
+    except:
+      print "[verify] Errors in function call %s(%s)" % (fn.name, args) 
+      raise 
   
       
   def visit_Call(self, expr):
@@ -189,8 +193,12 @@ class Verify(SyntaxVisitor):
     self.visit_merge_loop_repeat(stmt.merge)
     
   def visit_ParFor(self, stmt):
-    fn = stmt.fn 
-    args = (stmt.bounds,)
+    fn = stmt.fn
+    bounds_t = stmt.bounds.type
+    if isinstance(bounds_t, TupleT) and len(bounds_t.elt_types) == 1:
+      args = (bounds_t.elt_types[0],)
+    else:
+      args = (stmt.bounds,)
     self.verify_call(fn, args)
     
   def visit_stmt(self, stmt):

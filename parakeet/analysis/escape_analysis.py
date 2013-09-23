@@ -31,7 +31,7 @@ class EscapeAnalysis(SyntaxVisitor):
   """
   
   def visit_fn(self, fn):
-    
+    print "ESCAPE", fn 
     self.scalars = set([])
     self.may_alias = {}
     all_scalars = True 
