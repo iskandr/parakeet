@@ -27,7 +27,7 @@ opt_copy_elimination = False
 stride_specialization = True
 
 # run verifier after each transformation 
-opt_verify = False
+opt_verify = True
 
 
 
@@ -54,10 +54,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms =  [] #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms =  ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = [] #[ 'Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -66,7 +66,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = False 
+print_transform_names = True 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

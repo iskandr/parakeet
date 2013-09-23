@@ -7,7 +7,7 @@ from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tu
 from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
                       Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
                       ParFor, PrimCall, If, While, ForLoop, Call, Expr, 
-                      IndexMap, IndexReduce) 
+                      IndexMap, IndexReduce, ExprStmt) 
 from ..syntax.helpers import none, const_int, slice_none 
 
 from transform import Transform
@@ -169,10 +169,14 @@ class BuildFlatFn(Builder):
   #######################
   
   
+  #def bind_name(self):
+  #def bind_var(self, lhs, rhs):
+  
   def flatten_Assign(self, stmt):
     c = stmt.lhs.__class__
     rhs = self.flatten_expr(stmt.rhs)
     if c is Var:
+      
       lhs_vars = self.flatten_lhs_var(stmt.lhs)
       self.var_expansions[stmt.lhs.name] = lhs_vars 
       if isinstance(rhs, Expr):
@@ -209,7 +213,11 @@ class BuildFlatFn(Builder):
       return [stmt]
     else:
       assert False, "LHS not supported in flattening: %s" % stmt 
-      
+  
+  def enter_loop(self, phi_nodes):
+    for (k, (left, _)) in phi_nodes.iteritems():
+      self.var_expansions[k] = self.flatten_lhs_name(k, left.type)
+  
   def flatten_merge(self, phi_nodes):
     result = {}
     for (k, (left, right)) in phi_nodes.iteritems():
@@ -220,16 +228,17 @@ class BuildFlatFn(Builder):
       elif isinstance(t, (FnT, NoneT)):
         continue 
       else:
-        vars = self.var_expansions[k]
+        fields = self.var_expansions[k]
         flat_left = self.flatten_expr(left)
         flat_right = self.flatten_expr(right)
-        assert len(vars) == len(flat_left)
-        assert len(vars) == len(flat_right)
-        for i, var in enumerate(vars):
+        assert len(fields) == len(flat_left)
+        assert len(fields) == len(flat_right)
+        for i, var in enumerate(fields):
           result[var.name] = (flat_left[i], flat_right[i])
     return result 
    
   def flatten_ForLoop(self, stmt):
+    self.enter_loop(stmt.merge)
     var = self.flatten_scalar_lhs_var(stmt.var)
     start = self.flatten_scalar_expr(stmt.start)
     stop = self.flatten_scalar_expr(stmt.stop)
@@ -239,6 +248,7 @@ class BuildFlatFn(Builder):
     return ForLoop(var, start, stop, step, body, merge)
   
   def flatten_While(self, stmt):
+    self.enter_loop(stmt.merge)
     cond = self.flatten_scalar_expr(stmt.cond)
     body = self.flatten_block(stmt.body)
     merge = self.flatten_merge(stmt.merge)
@@ -510,12 +520,10 @@ class BuildFlatFn(Builder):
       
   def flatten_IndexScan(self, expr):
     assert False, "IndexScan Not implemented" 
-    
-  def flatten_lhs_var(self, old_var):
-    name = old_var.name 
-    t = old_var.type 
+  
+  def flatten_lhs_name(self, name, t):
     if isinstance(t, (ScalarT, PtrT)):
-      return [old_var]
+      return [Var(name = name, type = t)]
     elif isinstance(t, (NoneT, FnT, TypeValueT)):
       return []
     elif isinstance(t, SliceT):
@@ -536,10 +544,16 @@ class BuildFlatFn(Builder):
       offset = Var(name = "%s_offset" % name, type = Int64)
       nelts = Var(name = "%s_nelts" % name, type = Int64)
       field_vars = [data, shape, strides, offset, nelts]
-    
     else:
       assert False, "Unsupport type %s" % (t,)
     return self.flatten_lhs_vars(field_vars)
+  
+  def flatten_lhs_var(self, old_var):
+    t = old_var.type 
+    if isinstance(t, (PtrT, ScalarT)):
+      return [old_var]
+    name = old_var.name 
+    return self.flatten_lhs_name(name, t)
   
   def flatten_lhs_vars(self, old_vars):
     return concat_map(self.flatten_lhs_var, old_vars)
@@ -590,8 +604,8 @@ class Flatten(Transform):
     else:
       assert False, "Unsupported type %s" % (t,)
   
-  def unbox_vars(self, vars):
-    return concat_map(self.unbox_var, vars)
+  def unbox_vars(self, exprs):
+    return concat_map(self.unbox_var, exprs)
   
   def to_seq(self, expr):
     if isinstance(expr.type, TupleT):
@@ -600,7 +614,6 @@ class Flatten(Transform):
       return []
     else:
       return [expr]
-      
   
   def box(self, t, elts):
     if isinstance(t, NoneT):

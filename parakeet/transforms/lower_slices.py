@@ -2,7 +2,7 @@
 from .. builder import build_fn 
 from .. ndtypes import (NoneT, ScalarT, Int64, SliceT, TupleT, NoneType,repeat_tuple)
 from .. syntax import  Index, Tuple, Var, ArrayView
-from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none, none 
+from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none, none
 
 
 from transform import Transform
@@ -132,8 +132,14 @@ class LowerSlices(Transform):
     return scalar_indices, scalar_index_positions, slices, slice_positions
     
   def transform_Index(self, expr):
-    if isinstance(expr.index.type, ScalarT):
+    
+    ndims = expr.value.type.rank
+    if ndims == 1 and isinstance(expr.index.type, ScalarT):
       return expr
+    elif isinstance(expr.index.type, TupleT) and \
+        len(expr.index.type.elt_types) == ndims and \
+        all(isinstance(t, ScalarT) for t in expr.index.type.elt_types):
+      return expr 
     
     scalar_indices, scalar_index_positions, slices, slice_positions = \
       self.dissect_index_expr(expr)
@@ -208,6 +214,7 @@ class LowerSlices(Transform):
   
   def transform_TypedFn(self, expr):
     return self.fn.copied_by.apply(expr)
+  
   def transform_Assign(self, stmt):
     lhs_class = stmt.lhs.__class__
     rhs = self.transform_expr(stmt.rhs)

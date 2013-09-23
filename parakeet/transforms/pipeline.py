@@ -124,7 +124,7 @@ shape_elim = Phase(ShapeElimination,
 index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_elimination')
 
 
-lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
+lower_adverbs = Phase([LowerAdverbs, lower_slices], run_if = contains_adverbs)
 loopify = Phase([
                    lower_adverbs,
                    ExplicitArrayAlloc, 
@@ -137,7 +137,7 @@ loopify = Phase([
                    symbolic_range_propagation,
                    index_elim
                 ],
-                depends_on = flatten,
+                depends_on = indexify,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 name = "Loopify",
