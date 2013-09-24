@@ -94,8 +94,7 @@ class Phase(object):
     if self.config_param is not None and not ignore_config and \
        getattr(config, self.config_param) == False:
       return fn
-    
-    print "Phase apply", self, ":",  fn.name, fn.created_by, fn.transform_history
+   
     if self.memoize and (fn.created_by == self or self in fn.transform_history):
       return fn 
     

@@ -152,7 +152,9 @@ def eval_fn(fn, actuals):
       return array[index]
 
     def expr_PrimCall():
-      return expr.prim.fn (*eval_args(expr.args))
+      arg_values = eval_args(expr.args)
+
+      return expr.prim.fn (*arg_values)
     
     def expr_Slice():
       return slice(eval_expr(expr.start), eval_expr(expr.stop),

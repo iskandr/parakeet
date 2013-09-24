@@ -27,10 +27,10 @@ CompiledObject = collections.namedtuple("CompiledObject",
                                          "fn_name",
                                          "fn_signature"))
 
+  
 common_headers = ["stdint.h",  "math.h",  "signal.h"]
 
 python_headers = ["Python.h", 
-                  "bufferobject.h",
                   'numpy/arrayobject.h',
                   'numpy/arrayscalars.h',]
 
@@ -100,6 +100,10 @@ if not debug and use_openmp and compiler in ('gcc', 'g++'):
   linker_flags.append('-fopenmp')             
 
 
+# write to in-memory tmpfs if possible
+tempdir = None 
+if os.path.isdir("/dev/shm"):
+  tempdir = "/dev/shm"
 
 def create_source_file(src, 
                          fn_name = None, 
@@ -115,7 +119,8 @@ def create_source_file(src,
   if src_filename is None:
     src_file = tempfile.NamedTemporaryFile(suffix = source_extension, 
                                            prefix =  prefix, 
-                                           delete=False)
+                                           delete=False, 
+                                           dir = tempdir)
     src_filename = src_file.name 
   else:
     src_file = open(src_filename, 'w')

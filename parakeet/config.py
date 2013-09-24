@@ -41,7 +41,7 @@ opt_verify = True
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -66,7 +66,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = True 
+print_transform_names = False 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

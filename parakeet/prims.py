@@ -2,7 +2,7 @@
 
 import numpy as np
 import ndtypes 
-from ndtypes import Bool, combine_type_list, FloatT, IntT 
+from ndtypes import Bool, combine_type_list, FloatT, IntT, BoolT 
 
 prim_lookup_by_value = {}
 
@@ -123,6 +123,13 @@ class Prim(object):
         # but going to from int to float is only minor penalty...
         elif isinstance(t2, FloatT) and not isinstance(t1, FloatT):
           dist += 1
+        
+        # can't go from int to bool 
+        if isinstance(t1, BoolT) and not isinstance(t2, BoolT):
+          dist += 1
+        elif isinstance(t2, BoolT) and not isinstance(t1, BoolT):
+          dist += 1000 
+        
     return dist 
   
   def expected_input_types(self, arg_types):
@@ -135,6 +142,7 @@ class Prim(object):
         % (self.name, self.nin, n_inputs)
     
     arg_types = tuple(arg_types)
+    print "arg types", arg_types
     if arg_types in self.type_table:
       return arg_types
     elif arg_types in self._upcast_types:

@@ -58,21 +58,7 @@ def specialize(untyped, args, kwargs = {}, optimize = True):
     typed_fn = high_level_optimizations.apply(typed_fn)
   return typed_fn, linear_args 
 
-"""
-def prepare_llvm(fn, args):
-  from ..llvm_backend import ctypes_to_generic_value, compile_fn 
-  lowered_fn = pipeline.lowering.apply(fn)
-  llvm_fn = compile_fn(lowered_fn).llvm_fn
 
-    # calling conventions are that output must be preallocated by the caller'
-  ctypes_inputs = [t.from_python(v) 
-                   for (v,t) 
-                   in zip(args, fn.input_types)]
-  gv_inputs = [ctypes_to_generic_value(cv, t) 
-               for (cv,t) 
-               in zip(ctypes_inputs, fn.input_types)]
-  return llvm_fn, gv_inputs 
-"""
 
 def run_typed_fn(fn, args, backend = None):
   
@@ -94,9 +80,6 @@ def run_typed_fn(fn, args, backend = None):
       fn = pipeline.indexify(fn)
       from .. import interp 
       return interp.eval_fn(fn, args)
-      #from ..llvm_backend.llvm_context import global_context
-      #exec_engine = global_context.exec_engine
-    
   
   if backend == 'llvm':
     from ..llvm_backend.llvm_context import global_context
@@ -111,10 +94,6 @@ def run_typed_fn(fn, args, backend = None):
     gv_inputs = [ctypes_to_generic_value(cv, t) 
                  for (cv,t) 
                  in zip(ctypes_inputs, expected_types)]
-    #gv_inputs = [python_to_generic_value(x, t)
-    #             for (x,t) in zip(args, expected_types)]
-    # llvm_fn, gv_inputs = prepare_llvm(fn, args) 
-    
     exec_engine = global_context.exec_engine
     gv_return = exec_engine.run_function(llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, fn.return_type)
