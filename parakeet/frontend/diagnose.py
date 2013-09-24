@@ -62,14 +62,14 @@ def find_broken_transform(fn, inputs, expected,
   for (name, t) in transforms:
     print "  -> ", name 
   old_fn = fn 
-  cloner = CloneFunction()
+
   for (name, t) in transforms:
     print "[Diagnose] Running %s..." % (name, )
     # in case t is just a class, instantiate it 
     if not isinstance(t, Transform):
       t = t()
     assert isinstance(t, Transform)
-    
+    cloner = CloneFunction(parent_transform = t)
     new_fn = t.apply(cloner.apply(old_fn))
     if print_functions:
       print new_fn 

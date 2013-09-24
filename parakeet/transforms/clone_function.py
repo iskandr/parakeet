@@ -9,10 +9,11 @@ class CloneFunction(Transform):
   """
   Copy all the objects in the AST of a function
   """
-  def __init__(self, rename = False, recursive = False):
+  def __init__(self, parent_transform = None, rename = False, recursive = False):
     Transform.__init__(self)
     self.rename = rename 
     self.recursive = recursive
+    self.parent_transform = parent_transform 
      
   def transform_Var(self, expr):
     return Var(expr.name, type = expr.type)
@@ -125,7 +126,9 @@ class CloneFunction(Transform):
        
     new_fundef_args['type_env'] = old_fn.type_env.copy()
     new_fundef_args['transform_history'] = old_fn.transform_history.copy()
-     
+    new_fundef_args['transform_history'].add(self.parent_transform)
+    new_fundef_args['created_by'] = self.parent_transform
+    
     # don't need to set a new body block since we're assuming 
     # that transform_block will at least allocate a new list 
     new_fundef = TypedFn(**new_fundef_args)

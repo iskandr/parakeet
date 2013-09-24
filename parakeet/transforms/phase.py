@@ -95,6 +95,7 @@ class Phase(object):
        getattr(config, self.config_param) == False:
       return fn
     
+    print "Phase apply", self, ":",  fn.name, fn.created_by, fn.transform_history
     if self.memoize and (fn.created_by == self or self in fn.transform_history):
       return fn 
     
@@ -104,15 +105,14 @@ class Phase(object):
 
     if self.depends_on and run_dependencies:
       fn = apply_transforms(fn, self.depends_on)
-      
+    
+    
     if self.run_if is not None and not self.run_if(fn):
       return fn 
     
     if self.copy:
-      fn = CloneFunction(self.rename).apply(fn)
-      fn.created_by = self
-
-    fn.transform_history.add(self)
+      fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
+      
     fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
 
     

@@ -40,7 +40,7 @@ class TypedFn(Expr):
   
   @property 
   def cache_key(self):
-    return self.name, self.created_by, self.version
+    return self.name, self.created_by, self.version, tuple(self.input_types), self.return_type
   
   @property
   def version(self):
