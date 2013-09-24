@@ -7,16 +7,17 @@ __website__     = 'https://github.com/iskandr/parakeet'
 
 import config
 from ndtypes import * 
-print "A" 
+
 from analysis import SyntaxVisitor, verify
-print "B" 
+
 from builder import Builder, build_fn, mk_identity_fn, mk_cast_fn
-print "C" 
+
 from transforms import clone_function, Transform
-print "D"
+
 from prims import *
-print "E"    
+  
 from lib import * 
+
 from frontend import jit, macro, run_python_fn, run_typed_fn
 from frontend import typed_repr, specialize, find_broken_transform
 

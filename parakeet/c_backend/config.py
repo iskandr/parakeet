@@ -7,8 +7,8 @@ use_openmp = False
 ##########################
 # Insert Debugging Code  #
 ##########################
-debug = True
-check_pyobj_types = True 
+debug = False
+check_pyobj_types = False 
 
 #########################
 #  Verbose Printing     #
@@ -21,3 +21,4 @@ print_module_source = True
 
 # Generate a .c file or a .cpp? 
 pure_c = True
+delete_temp_files = True 

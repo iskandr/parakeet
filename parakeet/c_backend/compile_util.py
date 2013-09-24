@@ -12,63 +12,24 @@ import time
 from config import (debug, pure_c, fast_math, 
                     print_commands, print_module_source, 
                     print_command_elapsed_time,
-                    use_openmp)
+                    use_openmp, 
+                    delete_temp_files)
 
-"""
-class CompiledPyFn(object):
-  def __init__(self, fn_name, fn_signature, src,
-                src_filename= None,  
-                c_fn = None, module = None, 
-                shared_filename = None, 
-                object_filename = None):
-    self.fn_name = fn_name 
-    self.fn_signature = fn_signature
-    self.src = src
-     
-    self._src_filename = src_filename 
-    self._c_fn = c_fn
-    self._module = module  
-    self._shared_filename = shared_filename
-    self._object_filename = object_filename 
-    
-  @property
-  def src_filename(self):
-    if self._src_filename:
-      return self._src_filename
-    else:
-      # write source
-      # store in self._src_filename
-  
-  @property
-  def c_fn(self):
-    pass
-  
-  @property
-  def shared_filename(self):
-    pass
-     
-  @property
-  def object_filename(self):
-    pass
-  
-  @property 
-  def module(self):
-    pass 
-    
-"""
+
+
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
+                                       "src_filename", 
                                        "module", 
                                        "shared_filename", 
                                        "object_filename",
                                        "src", 
-                                       "src_filename",
                                        "fn_name",
                                        "fn_signature"))
 
 CompiledObject = collections.namedtuple("CompiledObject", 
                                         ("src",
-                                         "src_filename",
+                                         "src_filename",  
                                          "object_filename", 
                                          "fn_name",
                                          "fn_signature"))
@@ -80,8 +41,8 @@ numpy_headers = ['numpy/arrayobject.h', 'numpy/arrayscalars.h']
 
 python_headers = core_python_headers + numpy_headers 
 
-defs = [] #["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
-defs = "\n".join(defs + ["\n"])
+cpp_defs = [] #["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+
 config_vars = distutils.sysconfig.get_config_vars()
 
 default_compiler = None
@@ -151,6 +112,7 @@ def create_source_file(src,
                          fn_name = None, 
                          src_filename = None, 
                          forward_declarations = [],
+                         extra_function_sources = [], 
                          extra_headers = [], 
                          print_source = print_module_source):
 
@@ -161,14 +123,15 @@ def create_source_file(src,
   if src_filename is None:
     src_file = tempfile.NamedTemporaryFile(suffix = source_extension, 
                                            prefix =  prefix, 
-                                           delete=False, 
+                                           delete = False, 
                                            dir = tempdir)
     src_filename = src_file.name 
   else:
     src_file = open(src_filename, 'w')
   
-  for d in defs:
+  for d in cpp_defs:
     src_file.write(d)
+    src_file.write("\n")
   
   for header in extra_headers + c_headers:
     src_file.write("#include <%s>\n" % header)
@@ -180,6 +143,10 @@ def create_source_file(src,
     decl += "\n"
     src_file.write(decl)
   
+  for other_fn_src in extra_function_sources:
+    src_file.write(other_fn_src)
+    src_file.write("\n")
+      
   src_file.write(src)
   src_file.close()
   if print_source: print subprocess.check_output(['cat', src_filename])
@@ -190,6 +157,7 @@ def compile_object(src,
                    fn_signature = None,
                    src_filename = None, 
                    forward_declarations = [],
+                   extra_function_sources = [], 
                    extra_headers = python_headers, 
                    extra_objects = [], 
                    print_source = print_module_source, 
@@ -198,7 +166,8 @@ def compile_object(src,
   src_file = create_source_file(src, 
                                 fn_name = fn_name, 
                                 src_filename = src_filename, 
-                                forward_declarations = forward_declarations, 
+                                forward_declarations = forward_declarations,
+                                extra_function_sources = extra_function_sources,  
                                 extra_headers = extra_headers,
                                 print_source = print_source)
   src_filename = src_file.name
@@ -208,7 +177,7 @@ def compile_object(src,
   if print_command_elapsed_time: t = time.time()
   
   subprocess.check_call(compiler_cmd)
-  
+
   if print_command_elapsed_time: print "Source compilation, elapsed time:", time.time() - t 
   
   return CompiledObject(src = src, 
@@ -223,9 +192,9 @@ def compile_module(src,
                      fn_signature = None,  
                      src_filename = None,
                      forward_declarations = [],
+                     extra_function_sources = [], 
                      extra_headers = [],  
                      extra_objects = [],
-                     
                      print_source = print_module_source, 
                      print_commands = print_commands):
   
@@ -252,6 +221,7 @@ def compile_module(src,
                                    fn_name,
                                    src_filename  = src_filename, 
                                    forward_declarations = forward_declarations,
+                                   extra_function_sources = extra_function_sources, 
                                    extra_headers = python_headers + extra_headers,  
                                    extra_objects = extra_objects,
                                    print_source = print_source, 
@@ -269,7 +239,9 @@ def compile_module(src,
   env["LD_LIBRARY_PATH"] = python_lib_dir
   if print_command_elapsed_time: t = time.time()
   subprocess.check_call(linker_cmd, env = env)
-  if print_command_elapsed_time: print "Linking, elapsed time:", time.time() - t 
+  
+  if print_command_elapsed_time: print "Linking, elapsed time:", time.time() - t
+   
   if mac_os:
     # Annoyingly have to patch up the shared library to point to the correct Python
     change_cmd = ['install_name_tool', '-change', '%s' % python_lib_full, 
@@ -277,10 +249,25 @@ def compile_module(src,
                   shared_name]
     if print_commands: print " ".join(change_cmd)
     subprocess.check_call(change_cmd)
+  # delete the .o file since we don't need it anymore 
+  # os.remove(object_name)
+  
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)
+  
+  #on a UNIX-style filesystem it should be OK to delete a file while it's open
+  #since the inode will just float untethered from any name
+  #If we ever support windows we should find some other way to delete the .dll 
+  
+  
   c_fn = getattr(module,fn_name)
+  
+  if delete_temp_files:
+    os.remove(src_filename)
+    os.remove(object_name)
+    os.remove(shared_name)
+    
   compiled_fn = CompiledPyFn(c_fn = c_fn, 
                              module = module, 
                              shared_filename =  shared_name,
@@ -290,4 +277,48 @@ def compile_module(src,
                              fn_name = fn_name, 
                              fn_signature = fn_signature)
   return compiled_fn
+
+"""
+
+class CompiledFn(object):
+  def __init__(self, fn_name, fn_signature, src,
+                src_filename= None,  
+                c_fn = None, module = None, 
+                shared_filename = None, 
+                object_filename = None):
+    self.fn_name = fn_name 
+    self.fn_signature = fn_signature
+    self.src = src
+     
+    self._src_filename = src_filename 
+    self._c_fn = c_fn
+    self._module = module  
+    self._shared_filename = shared_filename
+    self._object_filename = object_filename 
+    
+  @property
+  def src_filename(self):
+    if self._src_filename: return self._src_filename
+    # write source
+    # store in self._src_filename
+  
+  @property
+  def c_fn(self):
+    if self._c_fn: return self._c_fn
+    
+    
+    
+  
+  @property
+  def shared_filename(self):
+    pass
+     
+  @property
+  def object_filename(self):
+    pass
+  
+  @property 
+  def module(self):
+    pass 
+"""  
 

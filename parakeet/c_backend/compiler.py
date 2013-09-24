@@ -18,16 +18,17 @@ from ..ndtypes import (TupleT,  ArrayT, NoneT,
 from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
-from compile_util import compile_module, compile_object
+from compile_util import compile_module
 from config import (debug, 
                     check_pyobj_types, 
                     print_function_source, 
                     print_module_source, 
                     print_input_ir, 
-                    print_commands) 
+                    ) 
 from parakeet.c_backend.config import use_openmp
  
 
+"""
 def compile_flat(fn, _compile_cache = {}):
 
   key = fn.cache_key
@@ -41,11 +42,13 @@ def compile_flat(fn, _compile_cache = {}):
                        fn_signature = sig, 
                        extra_objects = compiler.extra_objects,
                        forward_declarations =  compiler.forward_declarations, 
+                       extra_definitions = compiler.extra_definitons,
                        print_source = print_module_source, 
                        print_commands = print_commands)
   return obj
-  
+"""
 
+"""
 def flat_function_source(fn):
   return compile_flat(fn).src 
 
@@ -54,6 +57,16 @@ def flat_function_name(fn):
 
 def flat_function_signature(fn):
   return compile_flat(fn).fn_signature
+"""
+
+def compile_flat_source(fn, _compile_cache = {}):
+  key = fn.cache_key
+  if key in _compile_cache:
+    return _compile_cache[key]
+  compiler = FlatFnCompiler()
+  name, sig, src = compiler.visit_fn(fn)
+  _compile_cache[key] = (name,sig,src)
+  return (name,sig,src)
 
 
 def compile_entry(fn, _compile_cache = {}):
@@ -67,6 +80,7 @@ def compile_entry(fn, _compile_cache = {}):
                                fn_name = name,
                                fn_signature = sig, 
                                extra_objects = set(compiler.extra_objects),
+                               extra_function_sources = compiler.extra_function_sources, 
                                forward_declarations =  compiler.forward_declarations, 
                                print_source = print_module_source)
   _compile_cache[key]  = compiled_fn
@@ -90,6 +104,11 @@ class FlatFnCompiler(BaseCompiler):
     self.forward_declarations = set([])
     # depends on these .o files
     self.extra_objects = set([]) 
+    
+    # to avoid adding the same function's source twice 
+    # we also track the signatures in a set 
+    self.extra_function_signatures = set([])
+    self.extra_function_sources = []
     
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
@@ -345,17 +364,21 @@ class FlatFnCompiler(BaseCompiler):
   
   def get_fn(self, expr):
     if expr.__class__ is  TypedFn:
-      result = expr 
+      fn = expr 
     elif expr.__class__ is Closure:
-      result = expr.fn 
+      fn = expr.fn 
     else:
       assert isinstance(expr.type, (FnT, ClosureT)), \
         "Expected function or closure, got %s : %s" % (expr, expr.type)
-      result = expr.type.fn
-    compiled_fn = compile_flat(result)
-    self.extra_objects.add(compiled_fn.object_filename)
-    self.forward_declarations.add(compiled_fn.fn_signature)
-    return compiled_fn.fn_name 
+      fn = expr.type.fn
+    #compiled_fn = compile_flat(result)
+    #self.extra_objects.add(compiled_fn.object_filename)
+    #self.forward_declarations.add(compiled_fn.fn_signature)
+    c_name, sig, src = compile_flat_source(fn)
+    if sig not in self.extra_function_signatures:
+      self.extra_function_signatures.add(sig)
+      self.extra_function_sources.append(src)
+    return c_name
 
   def get_closure_args(self, fn):
     if isinstance(fn.type, FnT):
@@ -392,8 +415,7 @@ class FlatFnCompiler(BaseCompiler):
     
       
   def visit_TypedFn(self, expr):
-    
-    return flat_function_name(expr)
+    return self.get_fn(expr)
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
@@ -762,7 +784,7 @@ class PyModuleCompiler(FlatFnCompiler):
       uprank_elts_as_pyobj = ["PyInt_FromLong(%s)"  % elt for elt in uprank_elts]
       uprank_elts_str = ", ".join(uprank_elts_as_pyobj)
       uprank_shape = "PyTuple_Pack(%d, %s)" % (ndims, uprank_elts_str)
-      self.append("%s = PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
+      self.append("%s = (PyArrayObject*) PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
       self.return_if_null(vec)
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
     self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))
@@ -832,7 +854,7 @@ class PyModuleCompiler(FlatFnCompiler):
     return self.pop()
       
   def visit_TypedFn(self, expr):
-    return flat_function_name(expr)
+    return self.get_fn(expr)
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
