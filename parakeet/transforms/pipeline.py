@@ -64,6 +64,7 @@ licm = Phase(LoopInvariantCodeMotion,
              memoize = False, 
              name = "LICM")
 
+
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',
                                     name = "SymRangeProp",
@@ -71,9 +72,6 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
                                     memoize = False, 
                                     cleanup = [])
  
-lower_slices = Phase([LowerSlices], name = "lower_slices", 
-                     memoize = True, 
-                     copy=False, run_if = contains_slices)
 
 high_level_optimizations = Phase([
                                     inline_opt, 
@@ -83,7 +81,7 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim,
                                     NegativeIndexElim,
-                                    lower_slices, 
+                                    LowerSlices, 
                                     IndexifyArrayConstructors, 
                                     symbolic_range_propagation,
                                  ], 
@@ -103,7 +101,7 @@ indexify = Phase([
                  run_if = contains_adverbs, 
                  depends_on=high_level_optimizations, 
                  copy = True,
-                 memoize = True,) 
+                 memoize = True) 
 
 flatten = Phase([Flatten, inline_opt, Simplify, DCE ], name="Flatten", 
                 depends_on=indexify,
@@ -136,14 +134,14 @@ shape_elim = Phase(ShapeElimination,
 index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_elimination')
 
 
-lower_adverbs = Phase([LowerAdverbs, lower_slices], run_if = contains_adverbs)
+lower_adverbs = Phase([LowerAdverbs, LowerSlices], run_if = contains_adverbs)
 loopify = Phase([
                    lower_adverbs,
                    ExplicitArrayAlloc, 
                    ParForToNestedLoops, 
                    inline_opt, 
                    copy_elim,
-                   lower_slices, 
+                   LowerSlices, 
                    licm,
                    shape_elim,
                    symbolic_range_propagation,

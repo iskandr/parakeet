@@ -14,6 +14,48 @@ from config import (debug, pure_c, fast_math,
                     print_command_elapsed_time,
                     use_openmp)
 
+"""
+class CompiledPyFn(object):
+  def __init__(self, fn_name, fn_signature, src,
+                src_filename= None,  
+                c_fn = None, module = None, 
+                shared_filename = None, 
+                object_filename = None):
+    self.fn_name = fn_name 
+    self.fn_signature = fn_signature
+    self.src = src
+     
+    self._src_filename = src_filename 
+    self._c_fn = c_fn
+    self._module = module  
+    self._shared_filename = shared_filename
+    self._object_filename = object_filename 
+    
+  @property
+  def src_filename(self):
+    if self._src_filename:
+      return self._src_filename
+    else:
+      # write source
+      # store in self._src_filename
+  
+  @property
+  def c_fn(self):
+    pass
+  
+  @property
+  def shared_filename(self):
+    pass
+     
+  @property
+  def object_filename(self):
+    pass
+  
+  @property 
+  def module(self):
+    pass 
+    
+"""
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
                                        "module", 

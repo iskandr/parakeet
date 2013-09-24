@@ -32,19 +32,15 @@ class TypedFn(Expr):
 
   registry = {}
   
-  # max_version = {}
-  #def next_version(self, name):
-  #  n = self.max_version[name] + 1
-  #  self.max_version[name] = n
-  #  return n
+
   
   @property 
   def cache_key(self):
-    return self.name, self.created_by, self.version, tuple(self.input_types), self.return_type
+    return self.name, self.created_by, self.version
   
   @property
   def version(self):
-    return len(self.transform_history)
+    return frozenset(self.transform_history)
   
   def node_init(self):
     assert isinstance(self.body, list), \

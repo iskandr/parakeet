@@ -278,7 +278,8 @@ class SyntaxVisitor(object):
     self.visit_expr(stmt.cond)
     self.visit_block(stmt.body)
     self.visit_merge_loop_repeat(stmt.merge)
-
+    
+    
   def visit_ForLoop(self, stmt):
     self.visit_lhs(stmt.var)
     self.visit_expr(stmt.start)

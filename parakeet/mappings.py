@@ -156,13 +156,26 @@ function_mappings = {
   np.square : lib.numpy_math.square,
   math.pow : prims.power, 
   np.power : prims.power,
-  np.exp : prims.exp, 
-  np.exp2 : prims.exp2, 
-  np.expm1 : prims.expm1, 
+  
+  np.exp : prims.exp,
+  math.exp : prims.exp, 
+   
+  np.exp2 : prims.exp2,
+   
+  np.expm1 : prims.expm1,
+  math.expm1 : prims.expm1, 
+   
   np.log : prims.log, 
-  np.log10 : prims.log10, 
-  np.log2 : prims.log2, 
+  math.log : prims.log, 
+  
+  np.log10 : prims.log10,
+  math.log10 : prims.log10, 
+   
+  np.log2 : prims.log2,
+   
   np.log1p : prims.log1p,
+  math.log1p : prims.log1p, 
+  
   np.logaddexp : lib.numpy_math.logaddexp, 
   np.logaddexp2 : lib.numpy_math.logaddexp2, 
   

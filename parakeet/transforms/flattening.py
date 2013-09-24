@@ -377,8 +377,10 @@ class BuildFlatFn(Builder):
     return [self.select(cond,t,f) for t,f in zip(true_values, false_values)]
     
   def flatten_Alloc(self, expr):
-    assert False, "Not implemented" 
-  
+    count_exprs = self.flatten_expr(expr.count)
+    assert len(count_exprs) == 1
+    return Alloc(count = count_exprs[0], elt_type = expr.elt_type, type = expr.type)
+    
   def flatten_Array(self, expr):
     assert False, "Array node should be an explicit allocation by now"
     # or, if we flatten structured elts, maybe we should handle it here?

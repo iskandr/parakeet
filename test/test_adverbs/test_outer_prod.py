@@ -4,22 +4,18 @@ import time
 from parakeet import allpairs, multiply 
 from parakeet.testing_helpers import expect, expect_allpairs, run_local_tests
 
-bool_vec = np.array([True, False, True])
-int_vec = np.array([1,2,3])
-float_vec = np.array([10.0, 20.0, 30.0])
+bool_vec = np.array([True, False, ])
+int_vec = np.array([1,2,])
+float_vec = np.array([10.0, 20.0, ])
 
 vectors = [bool_vec, int_vec, float_vec]
 
 def loop_outer_prod(x,y,z):
   nx = x.shape[0]
   ny = y.shape[0]
-  i = 0
-  while i < nx:
-    j = 0
-    while j < ny:
+  for i in xrange(0, nx):
+    for j in xrange(0, ny): 
       z[i,j] = x[i] * y[j]
-      j = j + 1
-    i = i + 1
   return z
 
 def test_loop_outer_prod():

@@ -94,7 +94,8 @@ class FlatFnCompiler(BaseCompiler):
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
-    return "PyArray_SimpleNew(1, &%s, %s)" % (nelts, to_dtype(elt_t))
+
+    return "(PyArrayObject*) PyArray_SimpleNew(1, &%s, %s)" % (nelts, to_dtype(elt_t))
   
   
   
@@ -305,10 +306,11 @@ class FlatFnCompiler(BaseCompiler):
     step = self.visit_expr(stmt.step)
     var = self.visit_expr(stmt.var)
     t = to_ctype(stmt.var.type)
-    
+ 
     body =  self.visit_block(stmt.body)
     body += self.visit_merge_right(stmt.merge)
-    body = self.indent("\n" + body)
+    body = self.indent("\n" + body) 
+    
     
     s += "\n %(t)s %(var)s;"
     s += "\nfor (%(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
@@ -316,6 +318,7 @@ class FlatFnCompiler(BaseCompiler):
 
   def visit_Return(self, stmt):
     assert not self.return_by_ref, "Returning multiple values not yet implemented: %s" % stmt
+
     if self.return_void:
       return "return;"
     else:
@@ -433,7 +436,7 @@ class FlatFnCompiler(BaseCompiler):
       
     args_str = ", ".join("%s %s" % (t, name) for (t,name) in zip(arg_types,arg_names))
     
-    body_str = self.visit_block(fn.body)
+    body_str = self.visit_block(fn.body) 
 
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
     src = "%s { %s }" % (sig, body_str) 
@@ -486,6 +489,8 @@ class PyModuleCompiler(FlatFnCompiler):
     x = self.visit_expr(expr)
     if isinstance(expr.type, (NoneT, ScalarT)):
       return self.box_scalar(x, expr.type)
+    elif isinstance(expr.type, ArrayT):
+      return "(PyObject*) " + x 
     else:
       return x
   
@@ -496,7 +501,7 @@ class PyModuleCompiler(FlatFnCompiler):
     return "PyString_AsString(PyObject_Str(%s))" % obj
   
   def c_type_str(self, obj):
-    return self.c_str("PyObject_Type(%s)" % obj)
+    return self.c_str("PyObject_Type((PyObject*) %s)" % obj)
    
   def print_pyobj(self, obj, text = ""):
     text = '"%s"' % text
@@ -664,7 +669,9 @@ class PyModuleCompiler(FlatFnCompiler):
   def attribute(self, v, attr, t):
     if attr == "data":
       self.check_array(v)
-      return "PyArray_Ravel((PyArrayObject*) %s, 0)" % (v,)  
+      result = "(PyArrayObject*) PyArray_Ravel((PyArrayObject*) %s, 0)" % (v,)
+      
+      return result   
 
     elif attr == "shape":
       self.check_array(v)
@@ -697,7 +704,7 @@ class PyModuleCompiler(FlatFnCompiler):
   def visit_AllocArray(self, expr):
     shape = self.tuple_to_stack_array(expr.shape)
     t = to_dtype(elt_type(expr.type))
-    return "PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
+    return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
     
   def visit_Tuple(self, expr):
     return self.mk_tuple(expr.elts)
@@ -735,12 +742,14 @@ class PyModuleCompiler(FlatFnCompiler):
       shape_elts = ["%s[%d]" % (shape_array, i) for i in xrange(ndims)]
     
     # slice out the 1D data array if there's an offset 
+    size =  "PySequence_Size( (PyObject*) %(vec)s)" % locals()
     self.append("""
       if (%(offset)s > 0) { 
-        %(vec)s = PySequence_GetSlice(%(vec)s, %(offset)s, PySequence_Size(%(vec)s));
+        %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
       }""" % locals())
-    
-    count = self.fresh_var("int64_t", "count", "PySequence_Size(%s)" % vec)
+    self.check_array(vec)
+
+    count = self.fresh_var("int64_t", "count", "PySequence_Size( (PyObject*) %s)" % vec)
 
     
       

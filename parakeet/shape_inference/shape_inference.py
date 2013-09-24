@@ -315,6 +315,9 @@ class ShapeInference(SyntaxVisitor):
   def visit_merge_loop_start(self, merge):
     for (k, (l, _)) in merge.iteritems():
       self.value_env[k] = self.visit_expr(l)
+  
+  def visit_merge_loop_repeat(self, merge):
+    self.visit_merge(merge)
 
   def visit_merge(self, merge):
     for (k, (l,r)) in merge.iteritems():
@@ -620,8 +623,6 @@ class ShapeInference(SyntaxVisitor):
     fn = self.visit_expr(expr.fn)
     assert False, "OuterMap needs an implementation"
 
-  
-
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
       assert isinstance(rhs, Tuple)
@@ -643,10 +644,21 @@ class ShapeInference(SyntaxVisitor):
   def visit_ForLoop(self, stmt):
     self.value_env[stmt.var.name] = any_scalar
     SyntaxVisitor.visit_ForLoop(self, stmt)
-
+    # visit body a second time in case first-pass fixed values relative 
+    # to initial value of iteration vars 
+    self.visit_block(stmt.body)
+  
+  def visit_While(self, stmt):
+    SyntaxVisitor.visit_While(self, stmt)
+    # visit body a second time in case first-pass fixed values relative 
+    # to initial value of iteration vars 
+    self.visit_block(stmt.body)
+    
+    
 _shape_env_cache = {}
 def shape_env(typed_fn):
   key = typed_fn.cache_key
+  
   if key in _shape_env_cache:
     return _shape_env_cache[key]
 

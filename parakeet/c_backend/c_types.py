@@ -52,7 +52,8 @@ def to_ctype(t):
   if t in _ctype_mappings:
     return _ctype_mappings[t]
   elif isinstance(t, PtrT):
-    return "PyObject*"#"%s*" % to_ctype(t.elt_type)
+   
+    return "PyArrayObject*"#"%s*" % to_ctype(t.elt_type)
   elif isinstance(t, (ArrayT, ClosureT, TupleT, SliceT, NoneT)):
     return "PyObject*"
   else:

@@ -16,8 +16,9 @@ def apply_transforms(fn, transforms, cleanup = [], phase_name = None):
     elif isinstance(t, Phase) and t.run_if is not None and not t.run_if(fn):
       continue 
     fn = t.apply(fn)
+    
     assert fn is not None, "%s transformed fn into None" % T
-  
+
     if isinstance(t, Transform): name_stack.pop()
     fn = apply_transforms(fn, cleanup, [], phase_name = "cleanup")
   
@@ -111,9 +112,9 @@ class Phase(object):
     
     if self.copy:
       fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
-      
+    #else:
+    #  fn.transform_history.add(self)
     fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
-
     
     if self.post_apply:
       new_fn = self.post_apply(fn)

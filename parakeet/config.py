@@ -10,7 +10,7 @@ opt_fusion = True
 opt_licm = True
 opt_stack_allocation = True
 opt_index_elimination = True
-opt_range_propagation = True
+opt_range_propagation = True 
 opt_shape_elim = True
 opt_redundant_load_elimination = True  
 
@@ -41,10 +41,10 @@ opt_verify = False
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
@@ -54,10 +54,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms =  []#['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms = [] #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
-print_functions_after_transforms = []#['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
+print_functions_after_transforms = [] #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False

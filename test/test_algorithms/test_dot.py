@@ -1,9 +1,9 @@
 import numpy as np
 from parakeet.testing_helpers import  expect_allpairs, run_local_tests
 
-bool_vec = np.array([True, False, True, False, True])
-int_vec = np.array([1,2,3,4,5])
-float_vec = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+bool_vec = np.array([True, False, True, ])
+int_vec = np.array([1,2,3,])
+float_vec = np.array([10.0, 20.0, 30.0 ])
 
 vectors = [bool_vec, int_vec, float_vec]
 
