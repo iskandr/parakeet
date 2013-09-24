@@ -41,10 +41,8 @@ class IndexifyAdverbs(Transform):
     closure_arg_types = tuple(get_types(closure_args))
     n_closure_args = len(closure_args)
     fn = self.get_fn(fn)
-    # do I need fn.version *and* fn.copied_by? 
-    key = (
-             fn.name, 
-             fn.copied_by,
+
+    key = (  fn.cache_key, 
              axis, 
              closure_arg_types, 
              array_arg_types, 

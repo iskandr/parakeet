@@ -636,29 +636,25 @@ class ShapeInference(SyntaxVisitor):
 
 _shape_env_cache = {}
 def shape_env(typed_fn):
-  key = (typed_fn.name, typed_fn.copied_by)
+  key = typed_fn.cache_key
   if key in _shape_env_cache:
     return _shape_env_cache[key]
-  else:
-    shape_inference = ShapeInference()
-    shape_inference.visit_fn(typed_fn)
-    env = shape_inference.value_env
-    _shape_env_cache[key] = env
-    return env
+  
+  shape_inference = ShapeInference()
+  shape_inference.visit_fn(typed_fn)
+  env = shape_inference.value_env
+  _shape_env_cache[key] = env
+  return env
 
 _shape_cache = {}
 def call_shape_expr(typed_fn):
-  if isinstance(typed_fn, str):
-    typed_fn = syntax.TypedFn.registry[typed_fn]
-
-  key = (typed_fn.name, typed_fn.copied_by)
+  key = typed_fn.cache_key
   if key in _shape_cache:
     return _shape_cache[key]
-  else:
-    env = shape_env(typed_fn)
-    abstract_shape = env.get("$return", Const(None))
-    _shape_cache[key] = abstract_shape
-    return abstract_shape
+  env = shape_env(typed_fn)
+  abstract_shape = env.get("$return", Const(None))
+  _shape_cache[key] = abstract_shape
+  return abstract_shape
 
 def bind(lhs, rhs, env):
   if isinstance(lhs, Var):

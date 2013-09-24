@@ -81,8 +81,8 @@ class Inliner(Transform):
     self.count = 0
 
   def transform_TypedFn(self, expr):
-    if self.fn.copied_by is not None:
-      return self.fn.copied_by.apply(expr)
+    if self.fn.created_by is not None:
+      return self.fn.created_by.apply(expr)
     else:
       # at the very least, apply high level optimizations
       import pipeline

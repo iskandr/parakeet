@@ -544,7 +544,7 @@ CompiledFn = namedtuple('CompiledFn', ('llvm_fn', 'llvm_exec_engine', 'parakeet_
 
 compiled_functions = {}
 def compile_fn(fundef):
-  key = fundef.name, fundef.copied_by
+  key = fundef.cache_key 
   if key in compiled_functions:
     return compiled_functions[key]
   

@@ -215,7 +215,11 @@ class LowerSlices(Transform):
     self.parfor(closure, bounds)
   
   def transform_TypedFn(self, expr):
-    return self.fn.copied_by.apply(expr)
+    if self.fn.created_by is not None:
+      return self.fn.created_by.apply(expr)
+    else:
+      import pipeline 
+      return pipeline.high_level_optimizations.apply(expr)
   
   def transform_Assign(self, stmt):
     lhs_class = stmt.lhs.__class__

@@ -37,6 +37,15 @@ class Transform(Builder):
   def __str__(self):
     return self.__class__.__name__ 
   
+  def __repr__(self):
+    return str(self)
+  
+  def __hash__(self):
+    return hash(str(self))
+  
+  def __eq__(self, other):
+    return str(self) == str(other)
+  
   def lookup_type(self, name):
     assert self.type_env is not None
     return self.type_env[name]

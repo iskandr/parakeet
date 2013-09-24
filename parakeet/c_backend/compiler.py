@@ -30,7 +30,7 @@ from parakeet.c_backend.config import use_openmp
 
 def compile_flat(fn, _compile_cache = {}):
 
-  key = fn.name, fn.copied_by 
+  key = fn.cache_key
   if key in _compile_cache:
     return _compile_cache[key]
   compiler = FlatFnCompiler()
@@ -57,7 +57,7 @@ def flat_function_signature(fn):
 
 
 def compile_entry(fn, _compile_cache = {}):
-  key = fn.name, fn.copied_by 
+  key = fn.cache_key
   if key in _compile_cache:
     return _compile_cache[key]
   compiler = PyModuleCompiler()
@@ -773,9 +773,6 @@ class PyModuleCompiler(FlatFnCompiler):
     for i, _ in enumerate(expr.strides.type.elt_types):
       self.append("%s[%d] = %s * %d;" % (numpy_strides, i, strides_elts[i], bytes_per_elt) )
       self.append("%s[%d] = %s;" % (numpy_shape, i, shape_elts[i]))
-    
-    self.print_pyobj(vec, "final array")
-    
     
     self.append("""
       // clear both fortran and c layout flags 

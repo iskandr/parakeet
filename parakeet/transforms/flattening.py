@@ -133,7 +133,8 @@ class BuildFlatFn(Builder):
         body = [], 
         type_env = self.type_env,
         input_types = new_input_types, 
-        return_type = new_return_type) 
+        return_type = new_return_type, 
+        created_by = self) 
       
     
   def run(self):
@@ -565,12 +566,12 @@ class BuildFlatFn(Builder):
     return lhs_vars[0]
   
 def build_flat_fn(old_fn, _cache = {}):
-  key = old_fn.name
+  key = old_fn.cache_key
   if key in _cache:
     return _cache[key]
   flat_fn = BuildFlatFn(old_fn).run()
   _cache[key] = flat_fn
-  _cache[(flat_fn.name, flat_fn.copied_by)] = flat_fn
+  _cache[flat_fn.cache_key] = flat_fn
   return flat_fn
   
 class Flatten(Transform):
@@ -649,11 +650,15 @@ class Flatten(Transform):
     return stmts
     
   def pre_apply(self, old_fn, _cache = {}):
-    if old_fn.name in _cache:
-      return _cache[old_fn.name]
+    key = old_fn.cache_key
+    if key  in _cache:
+      return _cache[key]
     
     flat_fn = build_flat_fn(old_fn)
-    flat_fn.copied_by = old_fn.copied_by
+    
+    flat_fn.created_by = old_fn.created_by
+    flat_fn.transform_history = old_fn.transform_history.copy()
+    
     input_vars = mk_vars(old_fn.arg_names, old_fn.input_types)
     self.blocks.push()
     unboxed_inputs = self.unbox_vars(input_vars)
@@ -663,7 +668,7 @@ class Flatten(Transform):
     boxed_result = self.box(old_fn.return_type, unboxed_elts)
     self.return_(boxed_result)
     old_fn.body = self.blocks.pop()
-    _cache[old_fn.name] = old_fn
-    _cache[flat_fn.name] = flat_fn 
+    _cache[key] = old_fn
+    _cache[flat_fn.cache_key] = flat_fn 
     return old_fn
   

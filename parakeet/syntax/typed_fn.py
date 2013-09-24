@@ -26,16 +26,26 @@ class TypedFn(Expr):
               'type_env',
               # these last two get filled by
               # transformation/optimizations later
-              'copied_by',
-              'version',]
+              'created_by',
+              'transform_history'
+             ]
 
   registry = {}
-  max_version = {}
-  def next_version(self, name):
-    n = self.max_version[name] + 1
-    self.max_version[name] = n
-    return n
-
+  
+  # max_version = {}
+  #def next_version(self, name):
+  #  n = self.max_version[name] + 1
+  #  self.max_version[name] = n
+  #  return n
+  
+  @property 
+  def cache_key(self):
+    return self.name, self.created_by, self.version
+  
+  @property
+  def version(self):
+    return len(self.transform_history)
+  
   def node_init(self):
     assert isinstance(self.body, list), \
         "Invalid body for typed function: %s" % (self.body,)
@@ -55,15 +65,14 @@ class TypedFn(Expr):
         "Invalid type environment: %s" % (self.type_env,)
 
     self.type = make_fn_type(self.input_types, self.return_type)
+    
+    if self.transform_history is None:
+      self.transform_history = set([])
 
-    if self.version is None:
-      self.version = 0
-      self.max_version[self.name] = 0
-
-    registry_key = (self.name, self.version)
+    registry_key = self.cache_key 
     assert registry_key not in self.registry, \
-        "Typed function %s version %s already registered" % \
-        (self.name, self.version)
+        "Typed function %s (key = %s) already registered" % \
+        (self.name, registry_key)
     self.registry[registry_key] = self
 
   def __repr__(self):

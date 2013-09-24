@@ -92,8 +92,8 @@ class Fusion(Transform):
     self.use_counts = use_count(fn)
 
   def transform_TypedFn(self, fn):
-    if self.fn.copied_by is not None:
-      return self.fn.copied_by.apply(fn)
+    if self.fn.created_by is not None:
+      return self.fn.created_by.apply(fn)
     else:
 
       # at the very least do high level optimizations
@@ -146,8 +146,8 @@ class Fusion(Transform):
                         fusion_args)
                 assert new_fn.return_type == self.return_type(rhs.fn)
                 del self.adverb_bindings[arg_name]
-                if self.fn.copied_by:
-                  new_fn = self.fn.copied_by.apply(new_fn)
+                if self.fn.created_by is not None:
+                  new_fn = self.fn.created_by.apply(new_fn)
                 rhs.fn = self.closure(new_fn, clos_args)
                 rhs.args = prev_adverb.args + surviving_array_args
                 
@@ -167,8 +167,8 @@ class Fusion(Transform):
                         rhs.args)
                 assert new_fn.return_type == self.return_type(rhs.fn)
                 del self.adverb_bindings[arg_name]
-                if self.fn.copied_by:
-                  new_fn = self.fn.copied_by.apply(new_fn)
+                if self.fn.created_by is not None:
+                  new_fn = self.fn.created_by.apply(new_fn)
                 stmt.rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
                                   shape = prev_adverb.shape, 
                                   combine = rhs.combine, 

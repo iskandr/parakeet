@@ -82,8 +82,11 @@ class Phase(object):
     return str(self)
 
   def __eq__(self, other):
-    return self is other
+    return str(self) == str(other)
 
+  def __hash__(self):
+    return hash(str(self))
+  
   def __call__(self, fn, run_dependencies = True, ignore_config = False):
     return self.apply(fn, run_dependencies, ignore_config)
 
@@ -91,22 +94,28 @@ class Phase(object):
     if self.config_param is not None and not ignore_config and \
        getattr(config, self.config_param) == False:
       return fn
-
-    original_key = fn.name, fn.copied_by, fn.version 
+    
+    if self.memoize and (fn.created_by == self or self in fn.transform_history):
+      return fn 
+    
+    original_key = fn.cache_key
     if original_key in self.cache:
       return self.cache[original_key]
 
     if self.depends_on and run_dependencies:
       fn = apply_transforms(fn, self.depends_on)
-
+      
+    if self.run_if is not None and not self.run_if(fn):
+      return fn 
+    
     if self.copy:
       fn = CloneFunction(self.rename).apply(fn)
-      fn.copied_by = self
+      fn.created_by = self
 
-    if (self.run_if is None) or self.run_if(fn):
-      fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
-      fn.version += 1
+    fn.transform_history.add(self)
+    fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
 
+    
     if self.post_apply:
       new_fn = self.post_apply(fn)
       if new_fn.__class__ is TypedFn:
@@ -114,6 +123,5 @@ class Phase(object):
 
     if self.memoize:
       self.cache[original_key] = fn
-      new_key = fn.name, fn.copied_by
-      self.cache[new_key] = fn
+      self.cache[fn.cache_key] = fn
     return fn

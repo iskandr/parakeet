@@ -122,8 +122,10 @@ class CloneFunction(Transform):
       new_fundef_args['name'] = names.refresh(old_fn.name)
     else:
       new_fundef_args['name'] = old_fn.name
-      new_fundef_args['version'] = old_fn.next_version(old_fn.name) 
+       
     new_fundef_args['type_env'] = old_fn.type_env.copy()
+    new_fundef_args['transform_history'] = old_fn.transform_history.copy()
+     
     # don't need to set a new body block since we're assuming 
     # that transform_block will at least allocate a new list 
     new_fundef = TypedFn(**new_fundef_args)
