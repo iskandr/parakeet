@@ -158,13 +158,12 @@ class CallBuilder(CoreBuilder):
     fn = self.get_fn(maybe_clos)
     closure_args = self.closure_elts(maybe_clos)
     combined_args = tuple(closure_args) + tuple(args)
-     
     if isinstance(fn, UntypedFn):
       # if we're given an untyped function, first specialize it
-      from ..type_inference import specialize
-
-       
+      from ..type_inference import specialize       
       fn = specialize(fn, get_types(combined_args))
+      from ..transforms import pipeline 
+      fn = pipeline.high_level_optimizations(fn)
     abstract_shape = call_shape_expr(fn)
     return shape_codegen.make_shape_expr(self, abstract_shape, combined_args)
 

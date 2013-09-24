@@ -1,5 +1,5 @@
 
-from .. import syntax 
+from .. import syntax, prims 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
 from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT, FnT
 from ..syntax import unwrap_constant 
@@ -465,8 +465,19 @@ class ShapeInference(SyntaxVisitor):
       return any_value
 
   def visit_PrimCall(self, expr):
-    arg_shapes = self.visit_expr_list(expr.args)
-    return shape.combine_list(arg_shapes, preserve_const = False)
+    
+    p = expr.prim
+    args = self.visit_expr_list(expr.args)
+    if p == prims.add: 
+      return self.add(args[0], args[1])
+    elif p == prims.subtract:
+      return self.sub(args[0], args[1])
+    elif p == prims.multiply:
+      return self.mul(args[0], args[1])
+    elif p == prims.divide:
+      return self.div(args[0], args[1])
+    else:
+      return shape.combine_list(args, preserve_const = False)
 
   def visit_Select(self, expr):
     cond = self.visit_expr(expr.cond)
@@ -638,7 +649,7 @@ def shape_env(typed_fn):
   key = typed_fn.cache_key
   if key in _shape_env_cache:
     return _shape_env_cache[key]
-  
+
   shape_inference = ShapeInference()
   shape_inference.visit_fn(typed_fn)
   env = shape_inference.value_env
@@ -703,6 +714,7 @@ def symbolic_call(fn, abstract_inputs):
     fn = fn.fn
   else:
     closure_elts = ()
+
   abstract_result_value = call_shape_expr(fn)
   conv = shape_from_type.Converter()
   shape_formals = conv.from_types(fn.input_types)
