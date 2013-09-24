@@ -584,6 +584,18 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (arr, arr, self.c_type_str(arr)))
   
   
+  def check_bool(self, x):
+    if not check_pyobj_types: return 
+    self.newline()
+    self.comment("Checking bool type for %s" % x)
+    self.append("""
+      if (!PyArray_IsScalar(%s, Bool)) { 
+        PyErr_Format(PyExc_AssertionError, 
+                     "Expected %s to be bool, got %%s", 
+                     %s); 
+        return NULL;
+      }""" % (x, x, self.c_type_str(x)))
+  
   def check_int(self, x):
     if not check_pyobj_types: return 
     self.newline()
@@ -600,6 +612,8 @@ class PyModuleCompiler(FlatFnCompiler):
     if not check_pyobj_types: return 
     if isinstance(t, (ClosureT, TupleT)):
       self.check_tuple(v)
+    elif isinstance(t, BoolT):
+      self.check_bool(v)
     elif isinstance(t, IntT):
       self.check_int(v)
     elif isinstance(t, ArrayT):
