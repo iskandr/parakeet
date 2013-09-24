@@ -35,17 +35,24 @@ from simplify import Simplify
 #                                  #
 ####################################
 
-normalize = Phase([Simplify], memoize = True, cleanup = [])
+normalize = Phase([Simplify], 
+                  memoize = True, 
+                  copy = False, 
+                  cleanup = [], 
+                  name = "Normalize")
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion',
+fusion_opt = Phase(Fusion, 
+                   config_param = 'opt_fusion',
                    memoize = False,
+                   copy = False, 
                    run_if = contains_adverbs)
 
 inline_opt = Phase(Inliner, 
                    config_param = 'opt_inline', 
                    cleanup = [], 
                    run_if = contains_calls, 
-                   memoize = False )
+                   memoize = False, 
+                   copy = False)
 
 copy_elim = Phase(CopyElimination, 
                   config_param = 'opt_copy_elimination', 
@@ -54,17 +61,20 @@ copy_elim = Phase(CopyElimination,
 licm = Phase(LoopInvariantCodeMotion, 
              config_param = 'opt_licm',
              run_if = contains_loops, 
-             memoize = True, 
+             memoize = False, 
              name = "LICM")
 
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',
-                                    name = "SymRangeProp", 
-                                    memoize = True, cleanup = [])
+                                    name = "SymRangeProp",
+                                    copy = False,  
+                                    memoize = False, 
+                                    cleanup = [])
  
 lower_slices = Phase([LowerSlices], name = "lower_slices", 
                      memoize = True, 
                      copy=False, run_if = contains_slices)
+
 high_level_optimizations = Phase([
                                     inline_opt, 
                                     symbolic_range_propagation,   
@@ -74,7 +84,8 @@ high_level_optimizations = Phase([
                                     copy_elim,
                                     NegativeIndexElim,
                                     lower_slices, 
-                                    IndexifyArrayConstructors
+                                    IndexifyArrayConstructors, 
+                                    symbolic_range_propagation,
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -82,21 +93,22 @@ high_level_optimizations = Phase([
                                  memoize = True, 
                                  cleanup = [Simplify, DCE])
 
-indexify = Phase([IndexifyAdverbs, 
-                  inline_opt, Simplify, DCE, 
-                  ShapePropagation, 
-                  IndexMapElimination,
-                 ], 
+indexify = Phase([
+                    IndexifyAdverbs, 
+                    inline_opt, Simplify, DCE, 
+                    ShapePropagation, 
+                    IndexMapElimination,
+                 ],
+                 name = "Indexify",  
                  run_if = contains_adverbs, 
-            
-                 copy = True, 
-                 name = "Indexify", 
-                 depends_on=high_level_optimizations) 
+                 depends_on=high_level_optimizations, 
+                 copy = True,
+                 memoize = True,) 
 
 flatten = Phase([Flatten, inline_opt, Simplify, DCE ], name="Flatten", 
-                copy=True, 
                 depends_on=indexify,
                 run_if = contains_structs,  
+                copy=True, 
                 memoize = True)
 
 ####################
@@ -177,6 +189,7 @@ lowering = Phase([
                     Simplify,
                  ],
                  depends_on = loopify,
+                 memoize = True, 
                  copy = True,
                  name = "Lowering", 
                  cleanup = [Simplify, DCE])

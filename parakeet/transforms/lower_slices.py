@@ -41,7 +41,6 @@ class LowerSlices(Transform):
     start_names = ["start%d" % (i+1) for i in xrange(n_parfor_indices)]
     step_names = ["step%d" % (i+1) for i in xrange(n_parfor_indices)]
     
-    
     input_names = ["output_array", "input_array"] + idx_names + start_names + step_names + ["sliceidx"]
     
     fn, builder, input_vars = build_fn(input_types, NoneType, name, input_names)

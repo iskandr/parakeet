@@ -142,7 +142,6 @@ class Prim(object):
         % (self.name, self.nin, n_inputs)
     
     arg_types = tuple(arg_types)
-    print "arg types", arg_types
     if arg_types in self.type_table:
       return arg_types
     elif arg_types in self._upcast_types:

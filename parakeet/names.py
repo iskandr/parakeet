@@ -38,8 +38,11 @@ def fresh_list(count):
 
 def original(unique_name):
   original_name = original_names.get(unique_name)
+
   if original_name is None:
-    return unique_name 
+    versions[unique_name] = 1
+    original_names[unique_name] = unique_name
+    return unique_name  
   else:
     return original_name 
   

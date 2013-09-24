@@ -311,8 +311,8 @@ class BuildFlatFn(Builder):
   
   def flatten_Const(self, expr):
     if isinstance(expr.type, NoneT):
-      return []
-    return [expr]
+      return ()
+    return (expr,)
   
   def flatten_fn(self, closure):
     fn = self.get_fn(closure)
