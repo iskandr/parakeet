@@ -124,7 +124,7 @@ function_mappings = {
   np.multiply : prims.multiply,
    
   np.divide : prims.divide, 
-  np.floor_divide : prims.divide, 
+  np.floor_divide : lib.numpy_math.floor_divide, 
   np.true_divide : lib.numpy_math.true_divide, 
    
   np.mod : prims.remainder,
@@ -146,12 +146,18 @@ function_mappings = {
   # ROUNDING
   
   np.trunc : prims.trunc, 
-  np.rint : prims.rint, 
-  np.floor : prims.floor, 
-  np.ceil : prims.ceil,
-  np.round : prims.round, 
-  np.rint : prims.rint, 
+  math.trunc : prims.trunc,
+   
+  np.rint : prims.rint,
   
+  np.floor : prims.floor, 
+  math.floor : prims.floor,
+   
+  np.ceil : prims.ceil,
+  math.ceil : prims.ceil, 
+  
+  np.round : prims.round,
+ 
   # LOGS AND EXPONENTIATION 
   np.square : lib.numpy_math.square,
   math.pow : prims.power, 

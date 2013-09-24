@@ -10,7 +10,8 @@ from ..syntax import (Const, Tuple, TypedFn, Var, TupleProj, ArrayView,
 from ..ndtypes import (TupleT,  ArrayT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
-                       IntT, BoolT, Int64, SignedT,
+                       BoolT, Bool, 
+                       IntT,  Int64, SignedT,
                        PtrT, NoneType, 
                        FnT, ClosureT) 
 
@@ -156,7 +157,10 @@ class FlatFnCompiler(BaseCompiler):
     elif p == prims.divide:
       return "%s / %s" % (args[0], args[1])
     elif p == prims.negative:
-      return "-%s" % args[0]
+      if t == Bool:
+        return "1 - %s" % args[0]
+      else:
+        return "-%s" % args[0]
     elif p == prims.abs:
       x  = args[0]
       return " %s >= 0 ? %s  : -%s" % (x,x,x)
