@@ -755,19 +755,10 @@ class PyModuleCompiler(FlatFnCompiler):
       uprank_shape = "PyTuple_Pack(%d, %s)" % (ndims, uprank_elts_str)
       self.append("%s = PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
       self.return_if_null(vec)
-      self.print_pyobj(vec, "After uprank")
-      
-    
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
-    
-
     self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))
-
-    
     numpy_shape = self.fresh_var("npy_intp*", "numpy_shape")
-
     self.append("%s = PyArray_DIMS(  (PyArrayObject*) %s);" % (numpy_shape, vec))
-
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     
     for i, _ in enumerate(expr.strides.type.elt_types):

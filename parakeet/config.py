@@ -27,7 +27,7 @@ opt_copy_elimination = False
 stride_specialization = True
 
 # run verifier after each transformation 
-opt_verify = True
+opt_verify = False
 
 
 
@@ -41,7 +41,7 @@ opt_verify = True
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False

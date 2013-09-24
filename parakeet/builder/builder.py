@@ -53,7 +53,6 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
                           name = "output"):
     if isinstance(outer_shape, (list, tuple)):
       outer_shape = self.tuple(outer_shape)
-      
     try:
       inner_shape_tuple = self.call_shape(fn, inner_args)
     except:

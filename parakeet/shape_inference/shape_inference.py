@@ -434,7 +434,6 @@ class ShapeInference(SyntaxVisitor):
         return any_scalar
       elif name == 'data':
         return Ptr(any_scalar)
-      
     elif v.__class__ is Tuple:
       if name.startswith('elt'):
         idx = int(name[3:])

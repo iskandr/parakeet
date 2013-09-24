@@ -7,8 +7,12 @@ import os
 import platform
 import subprocess  
 import tempfile
+import time 
 
-from config import debug, pure_c, fast_math, print_commands, print_module_source, use_openmp
+from config import (debug, pure_c, fast_math, 
+                    print_commands, print_module_source, 
+                    print_command_elapsed_time,
+                    use_openmp)
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
@@ -28,14 +32,11 @@ CompiledObject = collections.namedtuple("CompiledObject",
                                          "fn_signature"))
 
   
-common_headers = ["stdint.h",  "math.h",  "signal.h"]
+c_headers = ["stdint.h",  "math.h",  "signal.h"]
+core_python_headers = ["Python.h"]
+numpy_headers = ['numpy/arrayobject.h', 'numpy/arrayscalars.h']
 
-python_headers = ["Python.h", 
-                  'numpy/arrayobject.h',
-                  'numpy/arrayscalars.h',]
-
-  
-  
+python_headers = core_python_headers + numpy_headers 
 
 defs = [] #["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 defs = "\n".join(defs + ["\n"])
@@ -73,14 +74,13 @@ opt_flags = ['-O3']
 if fast_math:
   opt_flags.append('-ffast-math')
 
-
-
-
 if debug:
   compiler_flags.extend(['-g', '-O0'])
 else:
   compiler_flags.extend(opt_flags)
-  
+
+if not pure_c: 
+  compiler_flags.extend(['-fpermissive'])  
 
 
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
@@ -128,7 +128,7 @@ def create_source_file(src,
   for d in defs:
     src_file.write(d)
   
-  for header in extra_headers + common_headers:
+  for header in extra_headers + c_headers:
     src_file.write("#include <%s>\n" % header)
   
   for decl in set(forward_declarations):
@@ -163,7 +163,12 @@ def compile_object(src,
   object_name = src_filename.replace(source_extension, object_extension)
   compiler_cmd = [compiler] + compiler_flags + ['-c', src_filename, '-o', object_name]
   if print_commands: print " ".join(compiler_cmd)
+  if print_command_elapsed_time: t = time.time()
+  
   subprocess.check_call(compiler_cmd)
+  
+  if print_command_elapsed_time: print "Source compilation, elapsed time:", time.time() - t 
+  
   return CompiledObject(src = src, 
                         src_filename = src_filename, 
                         object_filename = object_name, 
@@ -220,8 +225,9 @@ def compile_module(src,
   
   env = os.environ.copy()
   env["LD_LIBRARY_PATH"] = python_lib_dir
+  if print_command_elapsed_time: t = time.time()
   subprocess.check_call(linker_cmd, env = env)
-  
+  if print_command_elapsed_time: print "Linking, elapsed time:", time.time() - t 
   if mac_os:
     # Annoyingly have to patch up the shared library to point to the correct Python
     change_cmd = ['install_name_tool', '-change', '%s' % python_lib_full, 
