@@ -28,12 +28,7 @@ class TypedFn(Expr):
               # transformation/optimizations later
               'created_by',
               'transform_history', 
-              'allow_duplicate_cache_key'
              ]
-
-  registry = {}
-  
-
   
   @property 
   def cache_key(self):
@@ -66,12 +61,7 @@ class TypedFn(Expr):
     if self.transform_history is None:
       self.transform_history = set([])
 
-    registry_key = self.cache_key 
-    if self.allow_duplicate_cache_key in (None, False): 
-      assert registry_key not in self.registry, \
-        "Typed function %s (key = %s) already registered" % \
-        (self.name, registry_key)
-    self.registry[registry_key] = self
+
 
   def __repr__(self):
     arg_strings = []

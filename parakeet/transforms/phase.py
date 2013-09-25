@@ -131,7 +131,10 @@ class Phase(object):
     
     if self.copy:
       fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
-      
+      assert fn.cache_key not in self.cache, \
+        "Typed function %s (key = %s) already registered" % \
+        (fn.name, fn.cache_key)
+    
     fn.transform_history.add(self)
     fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
     

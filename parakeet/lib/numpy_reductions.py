@@ -1,5 +1,6 @@
-from .. import prims 
+
 from ..frontend import jit
+from .. import prims 
 from adverbs import scan 
 
 @jit 
