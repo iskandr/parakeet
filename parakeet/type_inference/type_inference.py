@@ -86,7 +86,7 @@ class TypeInference(LocalTypeInference):
     
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
     typed_fn = specialize(untyped_fn, arg_types)
-    return syntax.Call(typed_fn, args, typed_fn.return_type)
+    return syntax.Call(typed_fn, tuple(args), typed_fn.return_type)
 
 
   

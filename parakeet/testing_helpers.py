@@ -9,7 +9,8 @@ from treelike.testing_helpers import eq, expect_eq, run_local_tests
 from . import (type_conv, type_inference, 
               specialize, translate_function_value,
               find_broken_transform,
-              run_typed_fn, run_python_fn)
+              run_untyped_fn, 
+              run_typed_fn, run_python_fn, frontend)
 
 from config import testing_find_broken_transform
 
@@ -31,8 +32,10 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   if hasattr(expected, 'dtype') and expected.dtype == 'float16':
     expected = expected.astype('float32')
 
+  untyped_fn = frontend.ast_conversion.translate_function_value(fn)
+  
   try: 
-    interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
+    interp_result = run_untyped_fn(untyped_fn, _copy_list(args), backend = "interp")
   except: 
     if testing_find_broken_transform: find_broken_transform(fn, args, expected)
     raise
@@ -41,6 +44,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   if msg is not None:
     label += "-" + str(msg)
+    
   try: 
     expect_eq(interp_result, expected, label)
   except: 
@@ -48,6 +52,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
     raise 
 
   native_result = run_python_fn(fn, _copy_list(args), backend="c")
+  
   if valid_types is not None:
     if not isinstance(valid_types, (tuple, list)):
       valid_types = [valid_types]

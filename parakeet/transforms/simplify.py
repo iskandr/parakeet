@@ -239,11 +239,10 @@ class Simplify(Transform):
     args = self.transform_args(expr.args)
     if fn.type.__class__ is ClosureT:
       closure_elts = self.closure_elts(fn)
-      combined_args = closure_elts + args
+      combined_args = tuple(closure_elts) + tuple(args)
       if fn.type.fn.__class__ is TypedFn:
         fn = fn.type.fn
       else:
-        
         assert isinstance(fn.type.fn, UntypedFn)
         from .. type_inference import specialize 
         fn = specialize(fn, get_types(combined_args))
