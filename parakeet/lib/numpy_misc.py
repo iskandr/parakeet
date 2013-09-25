@@ -2,8 +2,10 @@
 from .. import prims 
 from ..frontend import jit, macro
 from ..ndtypes import ScalarT, ArrayT 
-from ..syntax import Select, DelayUntilTyped, PrimCall, Call 
-
+from ..syntax import Select, DelayUntilTyped, PrimCall, Call
+ 
+from numpy_reductions import vdot
+ 
 @macro
 def _select(cond, trueval, falseval):
   return Select(cond, trueval, falseval)
@@ -13,12 +15,7 @@ def where(cond, trueval, falseval):
   #return Select(cond, trueval, falseval )
   return map(_select, cond, trueval, falseval)
 
-@jit 
-def vdot(x,y):
-  """
-  Inner product between two 1Dvectors
-  """
-  return sum(x*y)
+
 
 @macro
 def dot(X,Y):
@@ -33,4 +30,5 @@ def dot(X,Y):
       assert isinstance(Xt.type, ArrayT), \
         "Expected %s to be array but got %s" % (Yt, Yt.type)
       assert False, "Dot product not yet implemented"
+  return DelayUntilTyped((X,Y), typed_dot)
     

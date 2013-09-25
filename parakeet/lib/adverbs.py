@@ -110,8 +110,8 @@ def filter_reduce(f, pred, *args, **kwds):
   
   ident = translate_function_value(identity)
   return FilterReduce(fn = ident, 
-                pred = pred, 
-                combine = f, 
-                args = args,
-                init = init,
-                axis = axis)
+                      pred = pred, 
+                      combine = f, 
+                      args = args,
+                      init = init,
+                      axis = axis)

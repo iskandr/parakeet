@@ -106,6 +106,8 @@ function_mappings = {
   
   
   np.abs : prims.abs, 
+
+  
   
   # ARRAY CONSTRUCTORS 
   np.array : lib.identity, 
@@ -217,5 +219,7 @@ function_mappings = {
   # np.hypot : lib.hypot,
   
   np.where : lib.where,
+  np.vdot : lib.vdot, 
+  np.dot : lib.dot, 
   
 }

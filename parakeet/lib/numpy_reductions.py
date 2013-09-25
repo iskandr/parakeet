@@ -20,13 +20,9 @@ def cumprod(x, axis = None):
   return scan(prims.multiply, x, axis = axis)
 
 @jit 
-def dot(x,y):
+def vdot(x,y):
   """
-  Currently just a vector product, not a matrix multiplication
-  TODO: 
-    - Add matrix multiply as a primitive which corresponds to BLAS  
-    - Delay the expression until type inference so you can switch between dot
-      and a call to BLAS 
+  Inner product between two 1Dvectors
   """
   return sum(x*y)
 

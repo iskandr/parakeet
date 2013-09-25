@@ -28,7 +28,8 @@ class ClosureVal:
       args = self.fixed_args + tuple(args)
     return eval_fn(self.fn, args)
   
-
+def rankof(x):
+  return x.ndim if hasattr(x, 'ndim') else 0 
 
 def eval(fn, actuals):
   result = eval_fn(fn, actuals)
@@ -229,6 +230,83 @@ def eval_fn(fn, actuals):
     
     def expr_Len():
       return len(eval_expr(expr.value))
+    
+    def expr_Map():
+      fn = eval_expr(expr.fn)
+      args = [eval_expr(arg) for arg in expr.args]
+      if isinstance(expr.axis, (int, long)):
+        axis = expr.axis 
+      else:
+        axis = eval_expr(expr.axis)
+        
+      if axis is None:
+        args = [np.ravel(arg) for arg in args]
+        axis = 0
+        
+      largest_rank = 0
+      largest_arg = None
+      
+      for arg in args:
+        rank = rankof(arg) 
+        if rank > largest_rank:
+          largest_rank = rank 
+          largest_arg = arg
+      if largest_rank == 0:
+        return eval_fn(fn, args) 
+      niters = largest_arg.shape[axis]
+      results = []
+      for i in xrange(niters):
+        elt_args = []
+        for arg in args:
+          indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+          elt_args.append(arg[tuple(indices)])
+        results.append(eval_fn(fn, elt_args))
+      return np.array(results)
+    
+    def expr_Reduce():
+      fn = eval_expr(expr.fn)
+      combine = eval_expr(expr.combine)
+      init = eval_expr(expr.init) if expr.init else None 
+      args = [eval_expr(arg) for arg in expr.args]
+      if isinstance(expr.axis, (int, long)):
+        axis = expr.axis
+      else:
+        axis = eval_expr(expr.axis)
+        
+      if axis is None:
+        args = [np.ravel(arg) for arg in args]
+        axis = 0 
+      
+      largest_rank = 0
+      largest_arg = None
+      for arg in args:
+        rank = rankof(arg) 
+        if rank > largest_rank:
+          largest_rank = rank 
+          largest_arg = arg
+          
+      if largest_rank == 0:
+        acc = eval_fn(fn, args)
+        if init is None: return acc 
+        else: return eval_fn(combine, [init, acc])
+      
+      niters = largest_arg.shape[axis]
+
+      if init is not None: acc = init 
+      else: acc = None 
+        
+      for i in xrange(niters):
+        elt_args = []
+        for arg in args:
+          indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+          elt_args.append(arg[tuple(indices)])
+        elt_result = eval_fn(fn, elt_args)
+        if acc is not None:
+          acc = eval_fn(combine, [acc, elt_result])
+        else:
+          acc = elt_result
+      return acc
+    
     
     def expr_IndexMap():
       fn = eval_expr(expr.fn)
