@@ -7,13 +7,13 @@ default_backend = 'c' #llvm
 
 
 opt_inline = True
-opt_fusion = False
-opt_licm = False
-opt_stack_allocation = False
-opt_index_elimination = False
-opt_range_propagation = False 
-opt_shape_elim = False
-opt_redundant_load_elimination = False  
+opt_fusion = True
+opt_licm = True
+opt_stack_allocation = True
+opt_index_elimination = True
+opt_range_propagation = True 
+opt_shape_elim = True
+opt_redundant_load_elimination = True  
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -67,7 +67,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = False 
+print_transform_names = True 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

@@ -53,9 +53,9 @@ def specialize(untyped, args, kwargs = {}, optimize = True):
   # other functions it calls
   typed_fn = type_inference.specialize(untyped, arg_types)
   if optimize: 
-    from .. transforms.pipeline import high_level_optimizations
+    from .. transforms.pipeline import normalize 
     # apply high level optimizations 
-    typed_fn = high_level_optimizations.apply(typed_fn)
+    typed_fn = normalize.apply(typed_fn)
   return typed_fn, linear_args 
 
 
@@ -115,6 +115,7 @@ def run_untyped_fn(fn, args, kwargs = None, backend = None):
   if kwargs is None:
     kwargs = {}
   typed_fn, linear_args = specialize(fn, args, kwargs)
+  
   return run_typed_fn(typed_fn, linear_args, backend)
   
 def run_python_fn(fn, args, kwargs = None, backend = None):

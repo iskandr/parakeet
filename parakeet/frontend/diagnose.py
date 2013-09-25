@@ -69,7 +69,7 @@ def find_broken_transform(fn, inputs, expected,
     if not isinstance(t, Transform):
       t = t()
     assert isinstance(t, Transform)
-    cloner = CloneFunction(parent_transform = t)
+    cloner = CloneFunction(parent_transform = t, allow_duplicate_cache_key = True)
     new_fn = t.apply(cloner.apply(old_fn))
     if print_functions:
       print new_fn 

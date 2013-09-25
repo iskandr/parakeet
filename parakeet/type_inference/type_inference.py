@@ -502,8 +502,7 @@ def _specialize(fn, arg_types, return_type = None):
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
   return rewrite_typed(typed_fundef, return_type)
-  #normalized = Simplify().apply(coerced_fundef)
-  #return normalized
+
 
 
 

@@ -270,8 +270,27 @@ class Simplify(Transform):
     if expr.value.__class__ is Array and expr.index.__class__ is Const:
       assert isinstance(expr.index.value, (int, long)) and \
              len(expr.value.elts) > expr.index.value
-
       return expr.value.elts[expr.index.value]
+    
+    # take expressions like "a[i][j]" and turn them into "a[i,j]" 
+    if expr.value.__class__ is Index: 
+      base_array = expr.value.value
+      if isinstance(base_array.type, ArrayT):
+        base_index = expr.value.index 
+        if isinstance(base_index.type, TupleT):
+          indices = self.tuple_elts(base_index)
+        else:
+          assert isinstance(base_index.type, ScalarT), \
+            "Unexpected index type %s : %s in %s" % (base_index, base_index.type, expr)
+          indices = [base_index]
+        if isinstance(expr.index.type, TupleT):
+          indices.extend(self.tuple_elts(expr.index))
+        else:
+          assert isinstance(expr.index.type, ScalarT), \
+            "Unexpected index type %s : %s in %s" % (expr.index, expr.index.type, expr)
+          indices.append(expr.index)
+        expr = self.index(base_array, self.tuple(indices))
+        return self.transform_expr(expr)
     if expr.value.__class__ is not Var:
       expr.value = self.temp(expr.value, "array")
     return expr
