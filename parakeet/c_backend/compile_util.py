@@ -72,7 +72,7 @@ include_dirs = python_include_dirs + numpy_include_dirs
 compiler_flags = ['-I%s' % path for path in include_dirs] + \
                  ['-fPIC', '-Wall', '-Wno-unused-variable']
 
-opt_flags = ['-O3']
+opt_flags = ['-O3', '-msse2']
 
 if fast_math:
   opt_flags.append('-ffast-math')

@@ -876,11 +876,15 @@ def translate_function_value(fn, _currently_processing = set([])):
     free_vars = fn.func_code.co_freevars
     closure_cells = fn.func_closure
     if closure_cells is None: closure_cells = ()
-    fundef = translate_function_source(source,
+    try: 
+      fundef = translate_function_source(source,
                                         globals_dict,
                                         free_vars,
                                         closure_cells, 
                                         filename = filename)
+    except:
+      _currently_processing.remove(fn)
+      raise 
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
                 

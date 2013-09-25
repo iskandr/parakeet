@@ -1,7 +1,7 @@
 ##########################
 #  Performance Options   #
 ##########################
-fast_math = False
+fast_math = True
 use_openmp = False 
 
 ##########################

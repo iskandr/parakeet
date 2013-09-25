@@ -1,13 +1,16 @@
 from prepare_args import prepare_args
-from ..transforms import pipeline
+from ..transforms.pipeline  import loopify, flatten 
+from ..transforms.stride_specialization import specialize
+from ..config import stride_specialization
 from compiler import compile_entry 
 
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
-  fn = pipeline.loopify.apply(fn)
-  fn = pipeline.flatten(fn)
-  #from ..transforms import  stride_specialization
-  #flat_fn = stride_specialization.specialize(flat_fn, args)
+  fn = loopify.apply(fn)
+  fn = flatten(fn)
+  if stride_specialization:
+    fn = specialize(fn, python_values = args)
+    print fn 
   compiled_fn = compile_entry(fn)
   assert len(args) == len(fn.input_types)
   result = compiled_fn.c_fn(*args)

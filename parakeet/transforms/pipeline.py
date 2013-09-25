@@ -135,6 +135,9 @@ index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_eli
 
 
 lower_adverbs = Phase([LowerAdverbs, LowerSlices], run_if = contains_adverbs)
+
+unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
+               run_if = contains_loops)
 loopify = Phase([
                    lower_adverbs,
                    ExplicitArrayAlloc, 
@@ -144,6 +147,7 @@ loopify = Phase([
                    LowerSlices, 
                    licm,
                    shape_elim,
+                   unroll, 
                    symbolic_range_propagation,
                    index_elim
                 ],
@@ -171,8 +175,6 @@ load_elim = Phase(RedundantLoadElimination,
                   run_if = lambda fn: not contains_calls(fn))
 
 
-unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
-               run_if = contains_loops)
 
 
 lowering = Phase([

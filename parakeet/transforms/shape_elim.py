@@ -11,7 +11,6 @@ class ShapeElimination(Transform):
     if expr.name in self.shape_env:
       v = self.shape_env[expr.name]
       if v.__class__ is shape.Const:
-        print "SHAPE ELIM", expr, v 
         return  syntax.Const(value = v.value, type = expr.type)
     return expr
   

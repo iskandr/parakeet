@@ -152,8 +152,12 @@ class FindConstantStrides(SyntaxVisitor):
     self.env = bind_list(fn.arg_names, abstract_values)
     self.return_value = None 
     
-  def visit_generic_expr(self, expr):
-    return unknown
+  def visit_expr(self, expr):
+    result = SyntaxVisitor.visit_expr(self, expr)
+    if result is None: 
+      return unknown
+    else: 
+      return result 
   
   def visit_fn(self, fn):
     SyntaxVisitor.visit_fn(self, fn)
@@ -168,9 +172,7 @@ class FindConstantStrides(SyntaxVisitor):
       return  FindConstantStrides(expr.fn, args).visit_fn(expr.fn)
     else:
       return unknown 
-      
-     
-  
+
   def visit_Var(self, expr):
     return self.env.get(expr.name, unknown)
   
@@ -197,6 +199,13 @@ class FindConstantStrides(SyntaxVisitor):
     else:
       return unknown
 
+  def visit_TupleProj(self, expr):
+    value = self.visit_expr(expr.tuple)
+    if isinstance(value, Tuple):
+      return value.elts[expr.index]
+    else:
+      return unknown 
+    
   def visit_PrimCall(self, expr):
     abstract_values = self.visit_expr_list(expr.args)
     if all(v.__class__ is Const for v in abstract_values):
