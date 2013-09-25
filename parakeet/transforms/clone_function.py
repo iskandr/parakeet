@@ -126,7 +126,6 @@ class CloneFunction(Transform):
        
     new_fundef_args['type_env'] = old_fn.type_env.copy()
     new_fundef_args['transform_history'] = old_fn.transform_history.copy()
-    new_fundef_args['transform_history'].add(self.parent_transform)
     new_fundef_args['created_by'] = self.parent_transform
     
     # don't need to set a new body block since we're assuming 

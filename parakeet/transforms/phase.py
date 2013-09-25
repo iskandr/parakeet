@@ -6,13 +6,13 @@ from transform import Transform
 
 name_stack = []
 def apply_transforms(fn, transforms, cleanup = [], phase_name = None):
-  if phase_name: name_stack.append("{" + phase_name + "}")
+  if phase_name: name_stack.append("{" + phase_name + " :: " + fn.name +  "}")
   for T in transforms:
     t = T() if type(T) == type else T
     if isinstance(t, Transform): 
       name_stack.append(str(t))
       if config.print_transform_names:
-        print "-- Running %s on %s" % ("->".join(name_stack), fn.name)
+        print "-- %s" % ("->".join(name_stack),)
     elif isinstance(t, Phase) and t.run_if is not None and not t.run_if(fn):
       continue 
     fn = t.apply(fn)
@@ -112,8 +112,7 @@ class Phase(object):
     
     if self.copy:
       fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
-    #else:
-    #  fn.transform_history.add(self)
+    fn.transform_history.add(self)
     fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
     
     if self.post_apply:

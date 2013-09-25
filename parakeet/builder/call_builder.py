@@ -113,7 +113,7 @@ class CallBuilder(CoreBuilder):
     
   def invoke(self, fn, args, loopify = False, lower = False, name = None):
     
-    print "invoke", fn, args 
+
     if isinstance(fn, UntypedFn) or isinstance(fn.type, FnT):
       closure_args = [] 
     else: 

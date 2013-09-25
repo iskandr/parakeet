@@ -31,12 +31,21 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   if hasattr(expected, 'dtype') and expected.dtype == 'float16':
     expected = expected.astype('float32')
 
-  interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
+  try: 
+    interp_result = run_python_fn(fn, _copy_list(args), backend = "interp")
+  except: 
+    if testing_find_broken_transform: find_broken_transform(fn, args, expected)
+    raise
+   
   label = "interp: inputs = %s" % ", ".join(str(arg) for arg in args)
 
   if msg is not None:
     label += "-" + str(msg)
-  expect_eq(interp_result, expected, label)
+  try: 
+    expect_eq(interp_result, expected, label)
+  except: 
+    if testing_find_broken_transform: find_broken_transform(fn, args, expected)
+    raise 
 
   native_result = run_python_fn(fn, _copy_list(args), backend="c")
   if valid_types is not None:
@@ -86,8 +95,8 @@ def assert_eq_arrays(numpy_result, parakeet_result, test_name = None):
     assert hasattr(parakeet_result, 'shape')
     assert numpy_result.shape == parakeet_result.shape, \
       "%sExpected shape %s but got %s" % (msg, numpy_result.shape, parakeet_result.shape)
-  assert eq(numpy_result, parakeet_result), \
-    "%sExpected value %s but got %s" % (msg, numpy_result, parakeet_result)
+    assert eq(numpy_result, parakeet_result), \
+      "%sExpected value %s but got %s" % (msg, numpy_result, parakeet_result)
     
 @nottest
 def timed_test(parakeet_fn, parakeet_args, python_fn, 

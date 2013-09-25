@@ -127,14 +127,22 @@ def eval_fn(fn, actuals):
     def expr_ArrayView():
 
       data = eval_expr(expr.data)
+      
       shape  = eval_expr(expr.shape)
       strides = eval_expr(expr.strides)
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
+      """
+      print "data", data, len(data) 
+      print "strides", strides 
+      print "shape", shape 
+      print "offset", offset
+      print "dtype", dtype
+      """ 
       if isinstance(data, np.ndarray):
         data = data.data 
-
+ 
       return np.ndarray(shape = shape, 
                         offset = offset * dtype.itemsize, 
                         buffer = data, 

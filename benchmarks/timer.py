@@ -27,7 +27,8 @@ class timer(object):
     return exc_type is not KeyboardInterrupt
 
 from parakeet import jit
-from numba import autojit
+from numba import autojit, config 
+config.print_function = False 
 import numpy as np 
 
 def compare_perf(fn, args, numba= True, cpython = True):

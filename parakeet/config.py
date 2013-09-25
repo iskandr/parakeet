@@ -5,14 +5,15 @@ default_backend = 'c' #llvm
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
 
+
 opt_inline = True
-opt_fusion = True
-opt_licm = True
-opt_stack_allocation = True
-opt_index_elimination = True
-opt_range_propagation = True 
-opt_shape_elim = True
-opt_redundant_load_elimination = True  
+opt_fusion = False
+opt_licm = False
+opt_stack_allocation = False
+opt_index_elimination = False
+opt_range_propagation = False 
+opt_shape_elim = False
+opt_redundant_load_elimination = False  
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -27,7 +28,7 @@ opt_copy_elimination = False
 stride_specialization = True
 
 # run verifier after each transformation 
-opt_verify = False
+opt_verify = True
 
 
 
@@ -38,13 +39,13 @@ opt_verify = False
 
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
@@ -75,5 +76,5 @@ print_specialized_function_names = False
 #         DESPERATE MEASURES        #
 #####################################
 
-testing_find_broken_transform = False 
+testing_find_broken_transform = True 
 

@@ -24,7 +24,9 @@ def kmeans_loops(X, k, niters = 10):
       min_idx = 0 
       for cidx in xrange(1,k):
         centroid = C[cidx,:]
-        curr_dist = np.sum(x-centroid)**2
+        curr_dist = 0.0
+        for xidx in xrange(ndims):
+          curr_dist += (x[xidx] - centroid[xidx])**2
         if curr_dist < min_dist:
           min_dist = curr_dist
           min_idx = cidx
@@ -44,12 +46,12 @@ def kmeans_loops(X, k, niters = 10):
       C[cidx, :] /= cluster_count 
   return C      
 
-n, d = 10**3, 100
+n, d = 10**4, 50
 X = np.random.randn(n,d)
-k = 5
+k = 25
 
 from timer import compare_perf
 
-compare_perf(kmeans_comprehensions, [X, k, 10])
+compare_perf(kmeans_comprehensions, [X, k, 5],cpython=False)
 
-compare_perf(kmeans_loops, [X, k, 10])
+compare_perf(kmeans_loops, [X, k, 5], cpython=True)

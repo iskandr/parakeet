@@ -35,5 +35,6 @@ if __name__ == '__main__':
   x = np.arange(N) / float(N)
   jit(rosen_der_np)(x) 
   from timer import compare_perf
+  # numba still crashes on negative indexing
   compare_perf(rosen_der_np, [x.copy()], numba=False)
   compare_perf(rosen_der_loops, [x.copy()], numba=False)
