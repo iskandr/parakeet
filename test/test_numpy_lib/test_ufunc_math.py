@@ -3,9 +3,9 @@ import numpy as np
 from parakeet.testing_helpers import run_local_tests, expect 
 
 
-int_array = np.array([10,20,30])
-bool_array = np.array([True, True, True])
-float_array = np.array([1.0, 2.0, 3.0])
+int_array = np.array([2,3])
+bool_array = np.array([True, True])
+float_array = np.array([1.0, 2.0])
 arrays = [int_array, bool_array, float_array]
 
 

@@ -31,28 +31,18 @@ def parakeet_local_maxima(data, wsize, mode=wrap):
   return parakeet.imap(is_max, data.shape)
   
 
-###
-# Numba fails no matter what I do with the code, giving up for now
-#
-import numba
-numba_local_maxima = numba.autojit(python_local_maxima)
+shape = (4,5,3,3)
+x = np.random.randn(*shape)
+wsize = (3,3,3,3)
 
-if __name__  == '__main__':
-  from timer import timer 
-  shape = (30,10,10,12)
-  x = np.random.randn(*shape)
-  wsize = (3,3,3,3)
-  with timer("Parakeet (first run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize)
-  with timer("Parakeet (second run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize)
-  with timer("Numba (first run)"):
-    numba_result  = numba_local_maxima(x, wsize, wrap)
-  with timer("Numba (second run)"):
-    numba_result  = numba_local_maxima(x, wsize, wrap)
-  with timer("Python"):
-    python_result = python_local_maxima(x, wsize) 
-  
+def test_local_maxima():
+  parakeet_result  = parakeet_local_maxima(x, wsize)
+  python_result = python_local_maxima(x, wsize) 
   assert np.allclose(python_result,parakeet_result)
   
+
+from parakeet.testing_helpers import run_local_tests
+
+if __name__ == '__main__':
+    run_local_tests()
   

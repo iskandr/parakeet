@@ -1,6 +1,4 @@
-test.test_numpy_lib.test_ufunc_math.test_negative
-test.test_numpy_lib.test_ufunc_math.test_floor_divide
-test.test_numpy_lib.test_ufunc_math.test_add
+
 test.test_arrays.test_slices.test_assign_first_axis
 test.test_arrays.test_methods.test_flatten
 test.test_arrays.test_methods.test_ravel

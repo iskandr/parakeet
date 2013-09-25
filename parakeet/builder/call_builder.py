@@ -1,5 +1,5 @@
 
-from ..ndtypes import ClosureT, Type, make_closure_type, NoneType 
+from ..ndtypes import FnT, ClosureT, Type, make_closure_type, NoneType 
 from ..syntax import UntypedFn, TypedFn, Var, Call, Closure, ClosureElt, Return, FormalArgs   
 from ..syntax.helpers import get_types, zero_i64, none 
 from ..syntax.adverb_helpers import max_rank
@@ -113,35 +113,37 @@ class CallBuilder(CoreBuilder):
     
   def invoke(self, fn, args, loopify = False, lower = False, name = None):
     
-    if fn.__class__ is UntypedFn:
-      arg_types = get_types(args)
-      from .. import type_inference
-      fn = type_inference.specialize(fn.type, arg_types)
-      
-    if fn.__class__ is TypedFn:
-      closure_args = []
-    else:
-      assert isinstance(fn.type, ClosureT), \
-          "Unexpected function %s with type: %s" % (fn, fn.type)
+    print "invoke", fn, args 
+    if isinstance(fn, UntypedFn) or isinstance(fn.type, FnT):
+      closure_args = [] 
+    else: 
+      assert isinstance(fn.type, ClosureT), "Unexpected function %s with type: %s" % (fn, fn.type)
       closure_args = self.closure_elts(fn)
       fn = self.get_fn(fn)
-      assert fn.__class__ is TypedFn, "Expected typed fn got %s" % (fn.__class__.__name__)
-    if loopify or lower : 
+      
+    
+    args =  tuple(closure_args) + tuple(args)
+    
+    if isinstance(fn, UntypedFn):
+      arg_types = get_types(args)
+      from .. import type_inference
+      fn = type_inference.specialize(fn, arg_types)
+      
+    if loopify or lower: 
       from  ..transforms import pipeline
       if loopify: 
         fn = pipeline.loopify(fn)
       if lower: 
         fn = pipeline.lowering(fn)
-    combined_args = tuple(closure_args) + tuple(args)
-    
     
     # don't generate Call nodes for identity function 
     if self.is_identity_fn(fn):
-      assert len(combined_args) == 1
-      return combined_args[0]
+      assert len(args) == 1
+      return args[0]
     
   
-    call = Call(fn, combined_args, type = fn.return_type)
+    call = Call(fn, args, type = fn.return_type)
+
     if fn.return_type == NoneType:
       self.insert_stmt(ExprStmt(call))
       return none
