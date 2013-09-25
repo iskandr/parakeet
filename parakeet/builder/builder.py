@@ -1,6 +1,6 @@
 
 from ..ndtypes import make_array_type, TupleT, IntT, FnT, ClosureT, increase_rank
-from ..syntax import ArrayView, Struct, Expr, ParFor, IndexMap 
+from ..syntax import ArrayView, Struct, Expr, ParFor, IndexMap, UntypedFn, TypedFn 
 from ..syntax.helpers import zero_i64, get_types, one 
 from ..syntax.adverb_helpers import max_rank, max_rank_arg
 
@@ -8,6 +8,7 @@ from arith_builder import ArithBuilder
 from array_builder import ArrayBuilder
 from loop_builder import LoopBuilder 
 from call_builder import CallBuilder
+from numba import type_inference
 
 
 class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
@@ -62,7 +63,17 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
       raise
 
     shape = self.concat_tuples(outer_shape, inner_shape_tuple)
-    elt_t = self.elt_type(self.return_type(fn))
+    closure_args = self.closure_elts(fn)
+    fn = self.get_fn(fn)
+    if isinstance(fn, UntypedFn):
+      from .. type_inference import infer_return_type 
+      arg_types = get_types(tuple(closure_args) + tuple(inner_args))
+      return_type = infer_return_type(fn , arg_types)
+      
+    else:
+      assert isinstance(fn, TypedFn), "Unexpected function %s" % fn
+      return_type = self.return_type(fn)
+    elt_t = self.elt_type(return_type)
     if len(shape.type.elt_types) > 0:
       return self.alloc_array(elt_t, shape, name)
     else:

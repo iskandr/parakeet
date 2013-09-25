@@ -179,6 +179,10 @@ class Transform(Builder):
     expr.shape = self.transform_expr(expr.shape)
     return expr
   
+  def transform_Transpose(self, expr):
+    Transpose()
+    return expr 
+  
   def transform_Len(self, expr):
     expr.value = self.transform_expr(expr.value) 
 

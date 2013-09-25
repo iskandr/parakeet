@@ -2,8 +2,9 @@
 from .. import prims 
 from ..frontend import jit, macro
 from ..ndtypes import ScalarT, ArrayT 
-from ..syntax import Select, DelayUntilTyped, PrimCall, Call, Transpose, OuterMap
- 
+from ..syntax import Select, DelayUntilTyped, PrimCall, Call,  OuterMap
+
+from numpy_array import transpose
 from numpy_reductions import vdot
  
 @macro
@@ -14,8 +15,6 @@ def _select(cond, trueval, falseval):
 def where(cond, trueval, falseval):
   #return Select(cond, trueval, falseval )
   return map(_select, cond, trueval, falseval)
-
-
 
 @macro
 def dot(X,Y):
@@ -36,20 +35,18 @@ def dot(X,Y):
       result_type = X.type.elt_type.combine(Y.type.elt_type)
       if X.type.rank == 1 and Y.type.rank == 1:
         return Call(fn = _vdot, args = [X, Y], type = result_type)
-      
-      Yt = Transpose(Y, type = Y.type)
-      
+
       if X.type.rank == 1:
-        assert Yt.type.rank == 2, "Don't know how to multiply %s and %s" % (X.type, Yt.type)
+        assert Y.type.rank == 2, "Don't know how to multiply %s and %s" % (X.type, Y.type)
 
         assert False, "Dot product between vector and matrix not yet implemented"
         
-      elif Yt.type.rank == 1:
-        assert X.type.rank == 1, "Don't know how to multiply %s and %s" % (X.type, Yt.type)
+      elif Y.type.rank == 1:
+        assert X.type.rank == 1, "Don't know how to multiply %s and %s" % (X.type, Y.type)
         assert False, "Dot product between matrix and vector not yet implemented"
         
-      assert X.type.rank == 2 and Yt.type.rank == 2, \
-        "Don't know how to multiply %s and %s" % (X.type, Yt.type)
-      return OuterMap(fn = _vdot, args = (X, Yt), axis = 0, type = result_type)
-  return DelayUntilTyped((X,Y), typed_dot)
+      assert X.type.rank == 2 and Y.type.rank == 2, \
+        "Don't know how to multiply %s and %s" % (X.type, Y.type)
+      return OuterMap(fn = _vdot, args = (X, Y), axis = 0, type = result_type)
+  return DelayUntilTyped(  [X,  transpose.transform([Y])], typed_dot)
     
