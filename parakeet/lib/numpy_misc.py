@@ -1,7 +1,7 @@
 
 from .. import prims 
 from ..frontend import jit, macro
-from ..ndtypes import ScalarT, ArrayT 
+from ..ndtypes import ScalarT, ArrayT, make_array_type
 from ..syntax import Select, DelayUntilTyped, PrimCall, Call,  OuterMap
 
 from numpy_array import transpose
@@ -30,11 +30,17 @@ def dot(X,Y):
         "Expected %s to be array but got %s" % (Y, Y.type)
       
       from ..frontend import ast_conversion 
-      _vdot = ast_conversion.translate_function_value(vdot)
-      
+      vdot_untyped = ast_conversion.translate_function_value(vdot)
+      from ..type_inference import specialize 
+      vdot_typed = specialize(vdot_untyped, 
+                              [make_array_type(X.type.elt_type, 1), 
+                               make_array_type(Y.type.elt_type, 1)])
       result_type = X.type.elt_type.combine(Y.type.elt_type)
+      assert vdot_typed.return_type == result_type, \
+        "Expected return type %s but got %s from vdot" % (result_type, vdot_typed.return_type)
+      
       if X.type.rank == 1 and Y.type.rank == 1:
-        return Call(fn = _vdot, args = [X, Y], type = result_type)
+        return Call(fn = vdot_untyped, args = [X, Y], type = result_type)
 
       if X.type.rank == 1:
         assert Y.type.rank == 2, "Don't know how to multiply %s and %s" % (X.type, Y.type)
@@ -47,6 +53,8 @@ def dot(X,Y):
         
       assert X.type.rank == 2 and Y.type.rank == 2, \
         "Don't know how to multiply %s and %s" % (X.type, Y.type)
-      return OuterMap(fn = _vdot, args = (X, Y), axis = 0, type = result_type)
+        
+      return OuterMap(fn = vdot_typed, args = (X, Y), axis = 0, 
+                      type = make_array_type(result_type, 2))
   return DelayUntilTyped(  [X,  transpose.transform([Y])], typed_dot)
     

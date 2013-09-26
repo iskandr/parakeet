@@ -4,7 +4,7 @@ import numpy as np
 from parakeet import jit, allpairs 
 from parakeet.testing_helpers import run_local_tests, expect
 
-int_mat = np.reshape(np.arange(4), (2,2))
+int_mat = np.reshape(np.arange(6), (2,3))
 float_mat = np.sqrt(int_mat)
 bool_mat = int_mat % 2
 
@@ -26,9 +26,9 @@ def mm_loops(X,Y,Z):
 def test_matmult_loops():
   for X in matrices:
     for Y in matrices:
-      res = np.dot(X, Y)
+      res = np.dot(X, Y.T)
       Z = np.zeros(res.shape, dtype = res.dtype)
-      expect(mm_loops, [X,Y,Z], res)
+      expect(mm_loops, [X,Y.T,Z], res)
       
 @jit 
 def dot(x,y):
@@ -41,8 +41,8 @@ def matmult_allpairs(X,Y):
 def test_matmult_adverb():
   for X in matrices:
     for Y in matrices:
-      res = np.dot(X, Y)
-      expect(matmult_allpairs, [X,Y], res)
+      res = np.dot(X, Y.T)
+      expect(matmult_allpairs, [X,Y.T], res)
 
 @jit 
 def matmult_comprehensions(X,Y):
@@ -51,14 +51,14 @@ def matmult_comprehensions(X,Y):
 def test_matmult_comprehensions():
   for X in matrices:
     for Y in matrices:
-      res = np.dot(X, Y)
-      expect(matmult_comprehensions, [X,Y], res)
+      res = np.dot(X, Y.T)
+      expect(matmult_comprehensions, [X,Y.T], res)
 
 def test_matmult_numpy():
   for X in matrices:
     for Y in matrices:
-      res = np.dot(X, Y)
-      expect(np.dot, [X,Y], res)
+      res = np.dot(X, Y.T)
+      expect(np.dot, [X,Y.T], res)
 
   
 

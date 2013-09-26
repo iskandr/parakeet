@@ -382,11 +382,12 @@ class TypeInference(LocalTypeInference):
     axis = self.transform_if_expr(expr.axis)
     if axis is None or self.is_none(axis):
       axis = zero_i64
-    return syntax.OuterMap(fn = make_typed_closure(closure, typed_fn),
+    result = syntax.OuterMap(fn = make_typed_closure(closure, typed_fn),
                            args = new_args,
                            axis = axis,
                            type = result_type)
-  
+    print result 
+    return result 
 
   
   

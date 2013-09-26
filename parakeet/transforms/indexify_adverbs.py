@@ -2,7 +2,7 @@ from .. import names
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT 
 from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
-                      Var, Return)
+                      Var, Return, UntypedFn)
 from ..syntax.helpers import unwrap_constant, get_types, none 
 from ..syntax.adverb_helpers import max_rank_arg
 from inline import Inliner 
@@ -41,7 +41,8 @@ class IndexifyAdverbs(Transform):
     closure_arg_types = tuple(get_types(closure_args))
     n_closure_args = len(closure_args)
     fn = self.get_fn(fn)
-
+    
+        
     key = (  fn.cache_key, 
              axis, 
              closure_arg_types, 
@@ -60,8 +61,7 @@ class IndexifyAdverbs(Transform):
     if key in self._indexed_fn_cache:
       return mk_closure()
       
-    #max_array_arg = max_rank_arg(array_arg_vars)
-    # max_array_rank = self.rank(max_array_arg)
+    
     n_indices = n_arrays if cartesian_product else 1
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     
@@ -173,7 +173,6 @@ class IndexifyAdverbs(Transform):
     args = self.transform_expr_list(expr.args)
     axis = unwrap_constant(expr.axis)
     fn = expr.fn 
-    # dimsizes = [self.shape(arg, axis) for arg in args]
     # recursively descend down the function bodies to pull together nested ParFors 
     if axis is None: 
       args = [self.ravel(arg) for arg in args]
