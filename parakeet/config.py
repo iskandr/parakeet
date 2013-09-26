@@ -23,7 +23,6 @@ stride_specialization = False
 # may dramatically increase compile time
 opt_loop_unrolling = False
     
-
 # run verifier after each transformation 
 opt_verify = True
 
@@ -43,9 +42,9 @@ def set_opt_level(n):
     g['opt_index_elimination'] = True
     g['opt_range_propagation'] = True 
     g['opt_shape_elim'] = True
-    g['opt_redundant_load_elimination'] = True
   if n > 1:
     g['opt_licm'] = True  
+    g['opt_redundant_load_elimination'] = True
     g['stride_specialization'] = True    
   if n > 2: 
     g['opt_loop_unrolling'] = True

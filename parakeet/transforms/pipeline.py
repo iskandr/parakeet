@@ -15,6 +15,7 @@ from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
+from lower_array_operators import LowerArrayOperators
 from lower_indexing import LowerIndexing
 from lower_slices import LowerSlices
 from lower_structs import LowerStructs
@@ -82,7 +83,8 @@ high_level_optimizations = Phase([
                                     copy_elim,
                                     NegativeIndexElim,
                                     LowerSlices, 
-                                    IndexifyArrayConstructors, 
+                                    # IndexifyArrayConstructors,
+                                    LowerArrayOperators,  
                                     symbolic_range_propagation,
                                  ], 
                                  depends_on = normalize,

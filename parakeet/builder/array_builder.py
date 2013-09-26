@@ -24,14 +24,19 @@ class ArrayBuilder(CoreBuilder):
     else:
       return x.type
   
-  def alloc_array(self, elt_t, dims, name = "array", explicit_struct = False):
+  def alloc_array(self, elt_t, dims, name = "array", 
+                   explicit_struct = False, 
+                   array_view = False, 
+                   order = "C"):
     """
     Given an element type and sequence of expressions denoting each dimension
     size, generate code to allocate an array and its shape/strides metadata. For
     now I'm assuming that all arrays are in row-major, eventually we should make
     the layout an option.
     """
-
+    
+    assert order == "C", "Only row-major layout supported so far, not %s" % order 
+    
     if self.is_tuple(dims):
       shape = dims
       dims = self.tuple_elts(shape)
@@ -41,7 +46,7 @@ class ArrayBuilder(CoreBuilder):
       shape = self.tuple(dims, "shape", explicit_struct = explicit_struct)
     rank = len(dims)
     array_t = make_array_type(elt_t, rank)
-    if explicit_struct:
+    if explicit_struct or array_view:
       nelts = self.prod(dims, name = "nelts")
       ptr_t = ptr_type(elt_t)
 
@@ -53,9 +58,17 @@ class ArrayBuilder(CoreBuilder):
         next_stride = self.mul(stride_elts[0], d, "dim")
         stride_elts = [next_stride] + stride_elts
       strides = self.tuple(stride_elts, "strides", explicit_struct = True)
-      array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
+      if explicit_struct:
+        array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
+      else:
+        array = ArrayView(data = ptr_var, 
+                          shape = shape, 
+                          strides = strides,
+                          offset = zero_i64,
+                          size = nelts )
     else:
       array = AllocArray(shape, elt_type = elt_t, type = array_t)
+    if name is None: return array 
     return self.assign_name(array, name)
   
   def len(self, array):

@@ -5,7 +5,6 @@ test.test_algorithms.test_harris_corner.test_diff_x ... ERROR
 test.test_algorithms.test_harris_corner.test_diff_y ... ERROR
 test.test_algorithms.test_harris_corner.test_harris ... FAIL
 test.test_algorithms.test_harris_corner.test_harris_timing ... FAIL
-Failure: ImportError (No module named testing_helpers) ... ERROR
 test.test_algorithms.test_matmult_comprehensions.test_matmult_comprehensions ... FAIL
 test.test_arrays.test_assign_slice.test_set_1d_simple_slice_to_const ... FAIL
 test.test_arrays.test_assign_slice.test_set_1d_step_slice_to_const ... FAIL

@@ -182,30 +182,34 @@ class IndexifyAdverbs(Transform):
   def get_axes(self, args, axis):
     if isinstance(axis, Expr):
       axis = unwrap_constant(axis)
+      
     if axis is None: 
       args = [self.ravel(arg) for arg in args]
       axis = 0
+      
     if isinstance(axis, list):
       axes = tuple(axis)
     elif isinstance(axis, tuple):
       axes = axis
     else:
       assert isinstance(axis, (int,long)), "Invalid axis %s" % axis 
-      axes = (axis,) * len(args) 
+      axes = (axis,) * len(args)
+       
     assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
     return axes 
   
   def niters(self, args, axes):
+    axes = self.get_axes(axes)
     assert len(args) == len(axes)
-    rank = 0 
-    arg = None
-    axis = None 
+    best_rank = 0 
+    best_arg = None
+    best_axis = None 
     for curr_arg, curr_axis in zip(args,axes):
       r = self.rank(curr_arg) 
-      if r > rank:
-        arg = curr_arg 
-        axis = curr_axis 
-    return self.shape(arg, axis)
+      if r > best_rank:
+        best_arg = curr_arg 
+        best_axis = curr_axis 
+    return self.shape(best_arg, best_axis)
   
   def transform_Map(self, expr, output = None):
     # recursively descend down the function bodies to pull together nested ParFors
