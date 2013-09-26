@@ -134,13 +134,7 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-      """
-      print "data", data, len(data) 
-      print "strides", strides 
-      print "shape", shape 
-      print "offset", offset
-      print "dtype", dtype
-      """ 
+
       if isinstance(data, np.ndarray):
         data = data.data 
  
@@ -158,7 +152,7 @@ def eval_fn(fn, actuals):
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)
-      print "Index", array, index 
+ 
       return array[index]
 
     def expr_PrimCall():

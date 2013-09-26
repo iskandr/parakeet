@@ -10,7 +10,6 @@ def run(fn, args):
   fn = flatten(fn)
   if stride_specialization:
     fn = specialize(fn, python_values = args)
-    print fn 
   compiled_fn = compile_entry(fn)
   assert len(args) == len(fn.input_types)
   result = compiled_fn.c_fn(*args)

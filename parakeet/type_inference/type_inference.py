@@ -386,7 +386,7 @@ class TypeInference(LocalTypeInference):
                            args = new_args,
                            axis = axis,
                            type = result_type)
-    print result 
+
     return result 
 
   

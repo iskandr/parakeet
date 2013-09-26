@@ -98,9 +98,12 @@ class Simplify(Transform):
         return (expr.value,)
     return None
 
-  _immutable_classes = set([Const,  Var, Closure, ClosureElt, 
-                            Tuple, TupleProj, Cast, PrimCall, 
-                            TypedFn, UntypedFn])
+  _immutable_classes = set([Const,  Var, 
+                            Closure, ClosureElt, 
+                            Tuple, TupleProj, 
+                            Cast, PrimCall, 
+                            TypedFn, UntypedFn, 
+                            ArrayView])
   
   def immutable(self, expr):
     klass = expr.__class__ 
@@ -125,12 +128,15 @@ class Simplify(Transform):
       return new_var
 
   def transform_expr(self, expr):
-    if not self.is_simple(expr):
-      stored = self.available_expressions.get(expr)
-      if stored is not None:
-        return stored
+    if self.is_simple(expr):
+      return Transform.transform_expr(self, expr)
+    
+    stored = self.available_expressions.get(expr)
+    if stored is not None: 
+      return stored
     return Transform.transform_expr(self, expr)
 
+    
   def transform_Var(self, expr):
     name = expr.name
     prev_expr = expr
@@ -189,11 +195,11 @@ class Simplify(Transform):
       return Attribute(value = v, name = expr.name, type = expr.type)
   
   def transform_Closure(self, expr):
-    expr.args = tuple(self.transform_args(expr.args))
+    expr.args = tuple(self.transform_simple_exprs(expr.args))
     return expr
 
   def transform_Tuple(self, expr):
-    expr.elts = tuple( self.transform_args(expr.elts))
+    expr.elts = tuple( self.transform_simple_exprs(expr.elts))
     return expr
 
   def transform_TupleProj(self, expr):
@@ -236,7 +242,7 @@ class Simplify(Transform):
 
   def transform_Call(self, expr):
     fn = self.transform_expr(expr.fn)
-    args = self.transform_args(expr.args)
+    args = self.transform_simple_exprs(expr.args)
     if fn.type.__class__ is ClosureT:
       closure_elts = self.closure_elts(fn)
       combined_args = tuple(closure_elts) + tuple(args)
@@ -253,14 +259,21 @@ class Simplify(Transform):
       expr.args = args
       return expr
 
-  def transform_arg(self, x, name = None):
-    return self.temp(self.transform_expr(x), name = name)
   
-  def transform_args(self, args):
-    return [self.transform_arg(x) for x in args]
+  def transform_simple_expr(self, expr, name = None):
+    if name is None: 
+      name = "temp"
+    result = self.transform_expr(expr)
+    if not self.is_simple(result):
+      return self.assign_name(result, name)
+    else:
+      return result
+  
+  def transform_simple_exprs(self, args):
+    return [self.transform_simple_expr(x) for x in args]
 
   def transform_Array(self, expr):
-    expr.elts = tuple(self.transform_args(expr.elts))
+    expr.elts = tuple(self.transform_simple_exprs(expr.elts))
     return expr
 
   def transform_Index(self, expr):
@@ -295,7 +308,7 @@ class Simplify(Transform):
     return expr
 
   def transform_Struct(self, expr):
-    new_args = self.transform_args(expr.args)
+    new_args = self.transform_simple_exprs(expr.args)
     return syntax.Struct(new_args, type = expr.type)
 
   def transform_Select(self, expr):
@@ -315,7 +328,7 @@ class Simplify(Transform):
       return expr    
   
   def transform_PrimCall(self, expr):
-    args = self.transform_args(expr.args)
+    args = self.transform_simple_exprs(expr.args)
     prim = expr.prim
 
     if all_constants(args):
@@ -364,6 +377,18 @@ class Simplify(Transform):
     expr.args = args
     return expr 
   
+  def transform_Map(self, expr):
+    expr.args = self.transform_simple_exprs(expr.args)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.axis = self.transform_if_expr(expr.axis)
+    return expr  
+  
+  def transform_OuterMap(self, expr):
+    expr.args = self.transform_simple_exprs(expr.args)
+    expr.fn = self.transform_expr(expr.fn)
+    expr.axis = self.transform_if_expr(expr.axis)
+    return expr 
+  
   def transform_Reduce(self, expr):
     
     init = self.transform_expr(expr.init)
@@ -371,7 +396,7 @@ class Simplify(Transform):
       expr.init = self.assign_name(init, 'init')
     else:
       expr.init = init
-    expr.args = self.transform_args(expr.args)
+    expr.args = self.transform_simple_exprs(expr.args)
     expr.fn = self.transform_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     return expr  
@@ -452,8 +477,7 @@ class Simplify(Transform):
       elif self.immutable(rhs):
         
         self.bind_var(lhs.name, rhs)
-        if rhs_class is not Var and \
-           rhs_class is not Const:
+        if rhs_class is not Var and rhs_class is not Const:
           self.available_expressions.setdefault(rhs, lhs)
     elif lhs_class is Tuple:
       self.bind(lhs, rhs)
@@ -543,17 +567,14 @@ class Simplify(Transform):
     stmt.merge = self.transform_merge(stmt.merge,
                                       left_block = stmt.true,
                                       right_block = stmt.false)
-    stmt.cond = self.transform_expr(stmt.cond)
+    stmt.cond = self.transform_simple_expr(stmt.cond, "cond")
     if len(stmt.true) == 0 and len(stmt.false) == 0 and len(stmt.merge) <= 2:
-      cond = stmt.cond
-      if not self.is_simple(cond):
-        cond = self.assign_name(cond)
       for (lhs_name, (true_expr, false_expr)) in stmt.merge.items():
         lhs_type = self.lookup_type(lhs_name)
         lhs_var = Var(name = lhs_name, type = lhs_type)
         assert true_expr.type == false_expr.type, \
           "Unexpcted type mismatch: %s != %s" % (true_expr.type, false_expr.type)
-        rhs = Select(cond, true_expr, false_expr, type = true_expr.type)
+        rhs = Select(stmt.cond, true_expr, false_expr, type = true_expr.type)
         self.bind_var(lhs_name, rhs)
         self.assign(lhs_var, rhs)
       return None 
@@ -607,13 +628,12 @@ class Simplify(Transform):
     stmt.merge = self.transform_merge(merge,
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)
-    stmt.start = self.transform_arg(stmt.start, 'start')
-    stmt.stop = self.transform_arg(stmt.stop, 'stop')
+    stmt.start = self.transform_simple_expr(stmt.start, 'start')
+    stmt.stop = self.transform_simple_expr(stmt.stop, 'stop')
     if self.is_none(stmt.step):
       stmt.step = one(stmt.start.type)
     else:
-      stmt.step = self.transform_arg(stmt.step, 'step')
-
+      stmt.step = self.transform_simple_expr(stmt.step, 'step')
 
     # if a loop is only going to run for one iteration, might as well get rid of
     # it
@@ -636,17 +656,6 @@ class Simplify(Transform):
 
   def transform_Return(self, stmt):
     new_value = self.transform_expr(stmt.value)
-    """
-    if new_value.__class__ is Var and \
-       new_value.name in self.use_counts and \
-       self.use_counts[new_value.name] == 1 and \
-       new_value.name in self.bindings:
-      stored = self.bindings[stmt.value.name]
-      if self.immutable(stored) and stored.__class__ is not AllPairs:
-        print "Replacing %s => %s" % (stmt, stored)
-        stmt.value = stored
-        return stmt
-    """
     if new_value != stmt.value:
       stmt.value = new_value
     return stmt

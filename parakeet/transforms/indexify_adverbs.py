@@ -2,8 +2,8 @@ from .. import names
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT 
 from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
-                      Var, Return, UntypedFn)
-from ..syntax.helpers import unwrap_constant, get_types, none 
+                      Var, Return, UntypedFn, Expr)
+from ..syntax.helpers import unwrap_constant, get_types, none, zero_i64 
 from ..syntax.adverb_helpers import max_rank_arg
 from inline import Inliner 
 from transform import Transform
@@ -34,6 +34,7 @@ class IndexifyAdverbs(Transform):
     and transform it into a function which explicitly extracts its arguments
     """  
     array_args = tuple(array_args)
+    
     array_arg_types = tuple(get_types(array_args))
 
     n_arrays = len(array_arg_types)
@@ -42,9 +43,10 @@ class IndexifyAdverbs(Transform):
     n_closure_args = len(closure_args)
     fn = self.get_fn(fn)
     
-        
+    axes = self.get_axes(array_args, axis)
+    
     key = (  fn.cache_key, 
-             axis, 
+             axes, 
              closure_arg_types, 
              array_arg_types, 
              output is None,  
@@ -110,12 +112,7 @@ class IndexifyAdverbs(Transform):
       index_elts = [index_input_var] * n_arrays 
     
     slice_values = []
-    if isinstance(axis, (tuple, list)):
-      axes = axis 
-    else:
-      assert isinstance(axis, (int,long)), "Unexpected axis %s" % axis 
-      axes = (axis,) * len(array_arg_vars)
-    assert len(axes) == len(array_arg_vars)
+
     for i, curr_array in enumerate(array_arg_vars):
       axis = axes[i]
       curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
@@ -149,39 +146,91 @@ class IndexifyAdverbs(Transform):
     return axis_sizes
 
 
+
+  def create_map_output_array(self, fn, array_args, axes, 
+                            cartesian_product = False, 
+                            name = "output"):
+    """
+    Given a function and its argument, use shape inference to figure out the
+    result shape of the array and preallocate it.  If the result should be a
+    scalar, just return a scalar variable.
+    """
+    assert self.is_fn(fn), \
+      "Expected function, got %s" % (fn,)
+    assert isinstance(array_args, (list,tuple)), \
+      "Expected list of array args, got %s" % (array_args,)
+    axes = self.get_axes(array_args, axes)
     
+    
+    # take the 0'th slice just to have a value in hand 
+    inner_args = [self.slice_along_axis(array, axis, zero_i64)
+                  for array, axis in zip(array_args, axes)]
+
+    extra_dims = []
+    if cartesian_product:
+      for array, axis in zip(array_args, axes):
+        if self.rank(array) > axis:
+          dim = self.shape(array, axis)
+        else:
+          dim = 1 
+        extra_dims.append(dim)
+    else:
+      extra_dims.append(self.niters(array_args, axes))
+    outer_shape_tuple = self.tuple(extra_dims)
+    return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
+
+  def get_axes(self, args, axis):
+    if isinstance(axis, Expr):
+      axis = unwrap_constant(axis)
+    if axis is None: 
+      args = [self.ravel(arg) for arg in args]
+      axis = 0
+    if isinstance(axis, list):
+      axes = tuple(axis)
+    elif isinstance(axis, tuple):
+      axes = axis
+    else:
+      assert isinstance(axis, (int,long)), "Invalid axis %s" % axis 
+      axes = (axis,) * len(args) 
+    assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
+    return axes 
+  
+  def niters(self, args, axes):
+    assert len(args) == len(axes)
+    rank = 0 
+    arg = None
+    axis = None 
+    for curr_arg, curr_axis in zip(args,axes):
+      r = self.rank(curr_arg) 
+      if r > rank:
+        arg = curr_arg 
+        axis = curr_axis 
+    return self.shape(arg, axis)
+  
   def transform_Map(self, expr, output = None):
     # recursively descend down the function bodies to pull together nested ParFors
     args = self.transform_expr_list(expr.args)
-    axis = unwrap_constant(expr.axis)
+    axes = self.get_axes(args, expr.axis)
     old_fn = expr.fn
 
     if output is None:
-      # outer_dims = [niters]
-      # use shape inference to create output
-      output = self.create_map_output_array(old_fn, args, axis)
+      output = self.create_map_output_array(old_fn, args, axes)
     
-    index_fn = self.indexify_fn(expr.fn, axis, args, 
+    niters = self.niters(args, axes)
+    index_fn = self.indexify_fn(expr.fn, axes, args, 
                                 cartesian_product=False, 
                                 output = output)
-    biggest_arg = max_rank_arg(args)
-    niters = self.shape(biggest_arg, axis)
+    
+    
     self.parfor(index_fn, niters)
     return output 
   
   def transform_OuterMap(self, expr):
     args = self.transform_expr_list(expr.args)
-    axis = unwrap_constant(expr.axis)
+    axes = self.get_axes(args, expr.axis)
+    
     fn = expr.fn 
     # recursively descend down the function bodies to pull together nested ParFors 
-    if axis is None: 
-      args = [self.ravel(arg) for arg in args]
-      axis = 0
-    if isinstance(axis, (list,tuple)):
-      axes = axis
-    else:
-      axes = (axis,) * len(args) 
-    assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
     counts = [self.size_along_axis(arg, axis) for (arg,axis) in zip(args,axes)]
     outer_shape = self.tuple(counts)
     zero = self.int(0)
@@ -284,13 +333,8 @@ class IndexifyAdverbs(Transform):
                                 cartesian_product=False)
     if self.is_none(init):
       init = self.call(index_fn, [self.int(0)])  
-    #assert init is not None, "Didn't expect init of Scan to be None"
-    #assert init.type == self.return_type(index_fn), \
-    # "Mismatch between type of init %s and return type of fn %s" % (init.type, 
-    #                                                                 self.return_type(index_fn))
-    max_arg = max_rank_arg(args)
-    shape = self.shape(max_arg) 
-    niters = self.tuple_proj(shape, axis)
+    
+    niters = self.niters(args, axis)
     return IndexScan(fn = index_fn, 
                      init = init, 
                      combine = combine, 

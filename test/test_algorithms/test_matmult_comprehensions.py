@@ -1,6 +1,6 @@
 import numpy as np
 
-from parakeet import jit, allpairs 
+from parakeet import jit 
 from parakeet.testing_helpers import run_local_tests, expect
 
 int_mat = np.reshape(np.arange(6), (2,3))
@@ -13,16 +13,7 @@ matrices = [int_mat, float_mat, bool_mat]
 def dot(x,y):
   return sum(x*y)
 
-@jit 
-def matmult_allpairs(X,Y):
-  return allpairs(dot, X, Y, axis = (0,1))
 
-def test_matmult_allpairs():
-  for X in matrices:
-    for Y in matrices:
-      res = np.dot(X, Y.T)
-      expect(matmult_allpairs, [X,Y.T], res)
-      
 @jit 
 def matmult_comprehensions(X,Y):
   return np.array([[dot(x,y) for y in Y.T] for x in X])
