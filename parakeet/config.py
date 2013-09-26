@@ -45,7 +45,7 @@ print_untyped_function = True
 print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
