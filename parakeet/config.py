@@ -35,6 +35,7 @@ opt_copy_elimination = False
 def set_opt_level(n):
   assert 0 <= n <= 3, "Invalid optimization level %d" % n
   g = globals()
+
   if n > 0:
     g['opt_inline'] = True
     g['opt_fusion'] = True
@@ -47,7 +48,8 @@ def set_opt_level(n):
     g['opt_licm'] = True  
     g['stride_specialization'] = True    
   if n > 2: 
-    g['opt_loop_unrolling'] = True  
+    g['opt_loop_unrolling'] = True
+
     
 
 set_opt_level(default_opt_level)
