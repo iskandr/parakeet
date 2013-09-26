@@ -102,6 +102,9 @@ def const(x):
 
 def unwrap_constant(x):
   if isinstance(x, Expr):
+    if x.__class__ is Tuple:
+      return tuple(unwrap_constant(elt) for elt in x.elts)
+    
     assert x.__class__ is Const, \
         "Expected constant, got %s" % (x,)
     return x.value

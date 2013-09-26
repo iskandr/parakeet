@@ -33,7 +33,12 @@ def allpairs(f, x, y, axis = 0):
 
 @staged_macro("axis")
 def outer_map(f, *args, **kwds):
-  if 'axis' in kwds:
+  if 'axes' in kwds:
+    assert 'axis' not in kwds, "Can't have both 'axis' and 'axes' as keywords"
+    axis = kwds['axes']
+    del kwds['axes'] 
+    
+  elif 'axis' in kwds:
     axis = kwds['axis']
     del kwds['axis']
   else:

@@ -110,14 +110,14 @@ class IndexifyAdverbs(Transform):
       index_elts = [index_input_var] * n_arrays 
     
     slice_values = []
+    if isinstance(axis, (tuple, list)):
+      axes = axis 
+    else:
+      assert isinstance(axis, (int,long)), "Unexpected axis %s" % axis 
+      axes = (axis,) * len(array_arg_vars)
+    assert len(axes) == len(array_arg_vars)
     for i, curr_array in enumerate(array_arg_vars):
-
-      # if not cartesian_product: 
-      #  if self.rank(curr_array) == max_array_rank:
-      #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
-      #  else:
-      #    slice_value = curr_array
-      
+      axis = axes[i]
       curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
       
       slice_values.append(curr_slice) 
@@ -185,10 +185,10 @@ class IndexifyAdverbs(Transform):
     counts = [self.size_along_axis(arg, axis) for (arg,axis) in zip(args,axes)]
     outer_shape = self.tuple(counts)
     zero = self.int(0)
-    first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
+    first_values = [self.slice_along_axis(arg, axis, zero) for (arg,axis) in zip(args, axes)]
     # self.create_output_array(fn, inner_args, outer_shape, name)
     output =  self.create_output_array(fn, first_values, outer_shape)
-    loop_body = self.indexify_fn(fn, axis, args, 
+    loop_body = self.indexify_fn(fn, axes, args, 
                                  cartesian_product = True, 
                                  output = output)
     self.parfor(loop_body, outer_shape)
