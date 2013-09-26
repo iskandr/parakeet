@@ -177,7 +177,12 @@ class IndexifyAdverbs(Transform):
     if axis is None: 
       args = [self.ravel(arg) for arg in args]
       axis = 0
-    counts = [self.size_along_axis(arg, axis) for arg in args]
+    if isinstance(axis, (list,tuple)):
+      axes = axis
+    else:
+      axes = (axis,) * len(args) 
+    assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
+    counts = [self.size_along_axis(arg, axis) for (arg,axis) in zip(args,axes)]
     outer_shape = self.tuple(counts)
     zero = self.int(0)
     first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]

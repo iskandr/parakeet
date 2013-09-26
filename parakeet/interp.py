@@ -158,6 +158,7 @@ def eval_fn(fn, actuals):
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)
+      print "Index", array, index 
       return array[index]
 
     def expr_PrimCall():

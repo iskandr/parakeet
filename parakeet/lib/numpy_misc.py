@@ -4,7 +4,7 @@ from ..frontend import jit, macro
 from ..ndtypes import ScalarT, ArrayT, make_array_type
 from ..syntax import Select, DelayUntilTyped, PrimCall, Call,  OuterMap
 
-from numpy_array import transpose
+
 from numpy_reductions import vdot
  
 @macro
@@ -53,8 +53,9 @@ def dot(X,Y):
         
       assert X.type.rank == 2 and Y.type.rank == 2, \
         "Don't know how to multiply %s and %s" % (X.type, Y.type)
-        
-      return OuterMap(fn = vdot_typed, args = (X, Y), axis = 0, 
+      
+      return OuterMap(fn = vdot_typed, args = (X, Y), axis = (0,1), 
                       type = make_array_type(result_type, 2))
-  return DelayUntilTyped(  [X,  transpose.transform([Y])], typed_dot)
+      
+  return DelayUntilTyped(  [X, Y], typed_dot)
     
