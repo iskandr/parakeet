@@ -66,7 +66,7 @@ def lots_of_arith(x):
 
 def test_simple_constant_folding():
   expect(lots_of_arith, [1], 1)
-  typed_fn = parakeet.typed_repr(lots_of_arith, [1])
+  typed_fn = parakeet.typed_repr(lots_of_arith, [1], optimize = True)
   assert len(typed_fn.body) == 1, \
       "Insufficiently simplified body: %s" % typed_fn
 

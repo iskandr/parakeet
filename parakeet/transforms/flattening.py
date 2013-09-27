@@ -107,8 +107,10 @@ class BuildFlatFn(Builder):
 
     self.type_env = {}
     for (name, t) in old_fn.type_env.iteritems():
+
       old_var = Var(name = name, type = t)
       for new_var in self.flatten_lhs_var(old_var):
+  
         self.type_env[new_var.name] = new_var.type
     old_input_vars = mk_vars(old_fn.arg_names, old_fn.input_types)
         
@@ -219,7 +221,7 @@ class BuildFlatFn(Builder):
     else:
       assert False, "LHS not supported in flattening: %s" % stmt 
   
-  def enter_loop(self, phi_nodes):
+  def enter_branch(self, phi_nodes):
     for (k, (left, _)) in phi_nodes.iteritems():
       self.var_expansions[k] = self.flatten_lhs_name(k, left.type)
   
@@ -233,6 +235,7 @@ class BuildFlatFn(Builder):
       elif isinstance(t, (FnT, NoneT)):
         continue 
       else:
+      
         fields = self.var_expansions[k]
         flat_left = self.flatten_expr(left)
         flat_right = self.flatten_expr(right)
@@ -243,7 +246,7 @@ class BuildFlatFn(Builder):
     return result 
    
   def flatten_ForLoop(self, stmt):
-    self.enter_loop(stmt.merge)
+    self.enter_branch(stmt.merge)
     var = self.flatten_scalar_lhs_var(stmt.var)
     start = self.flatten_scalar_expr(stmt.start)
     stop = self.flatten_scalar_expr(stmt.stop)
@@ -253,7 +256,7 @@ class BuildFlatFn(Builder):
     return ForLoop(var, start, stop, step, body, merge)
   
   def flatten_While(self, stmt):
-    self.enter_loop(stmt.merge)
+    self.enter_branch(stmt.merge)
     cond = self.flatten_scalar_expr(stmt.cond)
     body = self.flatten_block(stmt.body)
     merge = self.flatten_merge(stmt.merge)
@@ -261,6 +264,7 @@ class BuildFlatFn(Builder):
      
   
   def flatten_If(self, stmt):
+    self.enter_branch(stmt.merge)
     cond = self.flatten_scalar_expr(stmt.cond)
     true = self.flatten_block(stmt.true)
     false = self.flatten_block(stmt.false)
