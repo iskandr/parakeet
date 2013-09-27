@@ -65,7 +65,8 @@ class ArrayBuilder(CoreBuilder):
                           shape = shape, 
                           strides = strides,
                           offset = zero_i64,
-                          size = nelts)
+                          size = nelts, 
+                          type = array_t)
     else:
       array = AllocArray(shape, elt_type = elt_t, type = array_t)
     if name is None: 

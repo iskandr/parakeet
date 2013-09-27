@@ -16,9 +16,9 @@ class LowerArrayOperators(Transform):
     """Array literal"""
 
     array_t = expr.type
-    assert isinstance(array_t, ArrayT)
+    assert isinstance(array_t, ArrayT), "Expected array but got %s" % array_t
     elt_t = array_t.elt_type
-    assert isinstance(elt_t, ScalarT)
+    assert isinstance(elt_t, ScalarT), "Expected array to have scalar elemements but got %s" % elt_t
 
     elts = self.transform_expr_list(expr.elts)
     n = len(elts)
@@ -31,7 +31,9 @@ class LowerArrayOperators(Transform):
       lhs = Index(ptr_var, const_int(i), type = elt_t)
       self.assign(lhs, elt)
 
-    return self.array_view(ptr_var, const_tuple(n), const_tuple(1),
+    return self.array_view(ptr_var, 
+                           const_tuple(n), 
+                           const_tuple(1),
                            offset = const_int(0), 
                            nelts = const_int(n))
       
@@ -39,12 +41,13 @@ class LowerArrayOperators(Transform):
     return self.shape(expr, 0)
 
   def transform_AllocArray(self, expr):
+    dims = self.transform_expr(expr.shape),
     return self.alloc_array(elt_t = expr.type.elt_type,
-                             dims = self.transform_expr(expr.shape),
-                             name = "array",
-                             order = "C", 
-                             array_view = True, 
-                             explicit_struct = False)
+                            dims = dims, 
+                            name = "array",
+                            order = "C", 
+                            array_view = True, 
+                            explicit_struct = False)
     
   def transform_Reshape(self, expr):
     assert False, "Reshape not implemented"
