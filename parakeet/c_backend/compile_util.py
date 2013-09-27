@@ -176,7 +176,7 @@ def compile_object(src,
   if print_commands: print " ".join(compiler_cmd)
   if print_command_elapsed_time: t = time.time()
   
-  subprocess.check_call(compiler_cmd)
+  subprocess.check_output(compiler_cmd)
 
   if print_command_elapsed_time: print "Source compilation, elapsed time:", time.time() - t 
   
@@ -238,7 +238,7 @@ def compile_module(src,
   env = os.environ.copy()
   env["LD_LIBRARY_PATH"] = python_lib_dir
   if print_command_elapsed_time: t = time.time()
-  subprocess.check_call(linker_cmd, env = env)
+  subprocess.check_output(linker_cmd, env = env)
   
   if print_command_elapsed_time: print "Linking, elapsed time:", time.time() - t
    
@@ -248,7 +248,7 @@ def compile_module(src,
                   python_lib_dir + "/%s" % python_lib_full, 
                   shared_name]
     if print_commands: print " ".join(change_cmd)
-    subprocess.check_call(change_cmd)
+    subprocess.check_output(change_cmd)
   # delete the .o file since we don't need it anymore 
   # os.remove(object_name)
   

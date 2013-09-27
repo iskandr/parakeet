@@ -187,7 +187,7 @@ class LowerSlices(Transform):
     
       
   def assign_index(self, lhs, rhs):
-    if isinstance(lhs.index.type, ScalarT):
+    if isinstance(lhs.index.type, ScalarT) and isinstance(rhs.type, ScalarT):
       self.assign(lhs,rhs)
       return 
     

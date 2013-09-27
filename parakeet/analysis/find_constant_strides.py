@@ -67,7 +67,8 @@ class Struct(AbstractValue):
       
 class Const(AbstractValue):
   def __init__(self, value):
-    assert isinstance(value, int)
+    assert isinstance(value, (int, long, bool, np.bool_, np.ScalarType)), \
+                      "Expected scalar but got %s : %s" % (value, type(value)) 
     self.value = value
   
   def __str__(self):
@@ -182,7 +183,7 @@ class FindConstantStrides(SyntaxVisitor):
     elif expr.value == 1:
       return one 
     elif isinstance(expr.value, int):
-      return Const(expr.value)
+      return Const(int(expr.value))
     else:
       return unknown
   
