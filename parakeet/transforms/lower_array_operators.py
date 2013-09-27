@@ -1,5 +1,5 @@
 from ..builder import build_fn
-from ..syntax import  Alloc,  Index, ArrayView, Const, Transpose 
+from ..syntax import  Alloc,  Index, ArrayView, Const, Transpose, Ravel 
 from ..syntax.helpers import zero_i64, one_i64, const_int, const_tuple, true, false   
 from ..ndtypes import (ScalarT, PtrT, TupleT, ArrayT, ptr_type, Int64)
 
@@ -14,11 +14,10 @@ class LowerArrayOperators(Transform):
 
   def transform_Array(self, expr):
     """Array literal"""
-
     array_t = expr.type
     assert isinstance(array_t, ArrayT), "Expected array but got %s" % array_t
     elt_t = array_t.elt_type
-    assert isinstance(elt_t, ScalarT), "Expected array to have scalar elemements but got %s" % elt_t
+    assert isinstance(elt_t, ScalarT), "Expected array to have scalar elements but got %s" % elt_t
 
     elts = self.transform_expr_list(expr.elts)
     n = len(elts)
@@ -127,11 +126,42 @@ class LowerArrayOperators(Transform):
     
   
   def transform_Ravel(self, expr):
-    strides = self.strides(expr.array)
-    any_unit = false 
-    for stride in strides:
-      any_unit = self.or_(any_unit, self.eq(stride, one_i64))
-    assert False, "Ravel not implemented"
+    
+    array = expr.array 
+    while array.__class__ is Ravel:
+      array = expr.array 
+    array = self.transform_expr(array)
+    strides = self.tuple_elts(self.attr(array, 'strides'))
+    shape = self.tuple_elts(self.attr(array, 'shape'))
+    any_unit = false
+    nelts = one_i64 
+    for i in xrange(len(shape)):
+      shape_elt = shape[i]
+      nelts = self.mul(nelts, shape_elt)
+      stride_elt = strides[i]
+      any_unit = self.or_(any_unit, self.eq(stride_elt, one_i64))      
+    array_result = self.fresh_var(expr.type, prefix = "raveled")
+    data = self.attr(array, 'data')
+    offset = self.attr(array, 'offset')
+    def contiguous(x):
+      view =  self.array_view(data, 
+                              shape = self.tuple([nelts]), 
+                              strides = self.tuple([one_i64]), 
+                              offset = offset, 
+                              nelts = nelts)
+      self.assign(x, view)
+    def not_contiguous(x):
+      new_array = self.alloc_array(x.type.elt_type, 
+                                   dims = self.attr(array, 'shape'),
+                                   name = "fresh_array", 
+                                   explicit_struct = False, 
+                                   array_view = True, 
+                                   order = "C")
+      self.array_copy(array, new_array)
+      self.assign(x, new_array)
+    self.if_(any_unit, contiguous, not_contiguous, [array_result])
+    return array_result 
+
     
   def transform_Transpose(self, expr):
     if expr.array.__class__ is Transpose:

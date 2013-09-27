@@ -292,6 +292,8 @@ class CoreBuilder(object):
       return TupleProj(tup, idx, type = tup.type.elt_types[idx])
 
   def tuple_elts(self, tup, explicit_struct = False):
+    if not isinstance(tup.type, TupleT):
+      return [tup]
     nelts = len(tup.type.elt_types)
     return tuple([self.tuple_proj(tup, i, explicit_struct = explicit_struct)
                   for i in xrange(nelts)])
