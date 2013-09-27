@@ -4,8 +4,6 @@ default_backend = 'c' #llvm
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
-
-default_opt_level = 2 
   
 opt_inline = False
 opt_fusion = False
@@ -22,14 +20,16 @@ stride_specialization = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
-    
-# run verifier after each transformation 
-opt_verify = True
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
 opt_scalar_replacement = False
 opt_copy_elimination = False
+    
+# run verifier after each transformation 
+opt_verify = True
+
+default_opt_level = 2 
 
 def set_opt_level(n):
   assert 0 <= n <= 3, "Invalid optimization level %d" % n
@@ -49,10 +49,7 @@ def set_opt_level(n):
   if n > 2: 
     g['opt_loop_unrolling'] = True
 
-    
-
 set_opt_level(default_opt_level)
-
 
 #####################################
 #            DEBUG OUTPUT           #
@@ -61,10 +58,10 @@ set_opt_level(default_opt_level)
 
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = False
+print_untyped_function = True
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -77,7 +74,7 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = []  #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
+print_functions_before_transforms = ['LowerArrayOperators']  #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] #['Simplify']  
 
 # show the function produced by each transformation?
 print_functions_after_transforms =  [] #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']# ['Fusion'] #IndexifyAdverbs'] #['Fusion'] #['NegativeIndexElim'] # ['Simplify'] #['IndexifyAdverbs']  
@@ -89,7 +86,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = False 
+print_transform_names = True 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

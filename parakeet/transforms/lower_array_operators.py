@@ -26,22 +26,21 @@ class LowerArrayOperators(Transform):
     ptr_t = ptr_type(elt_t)
     alloc = Alloc(elt_t, const_int(n), type = ptr_t)
     ptr_var = self.assign_name(alloc, "data")
-
+    array = self.array_view(ptr_var, 
+                            shape = const_tuple(n), 
+                            strides = const_tuple(1), 
+                            offset = zero_i64,
+                            nelts = const_int(n))
     for (i, elt) in enumerate(elts):
-      lhs = Index(ptr_var, const_int(i), type = elt_t)
-      self.assign(lhs, elt)
-
-    return self.array_view(ptr_var, 
-                           const_tuple(n), 
-                           const_tuple(1),
-                           offset = const_int(0), 
-                           nelts = const_int(n))
+      self.setidx(array, const_int(i), elt)
+    return array 
+  
       
   def transform_Len(self, expr):
     return self.shape(expr, 0)
 
   def transform_AllocArray(self, expr):
-    dims = self.transform_expr(expr.shape),
+    dims = self.transform_expr(expr.shape)
     return self.alloc_array(elt_t = expr.type.elt_type,
                             dims = dims, 
                             name = "array",

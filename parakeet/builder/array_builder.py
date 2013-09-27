@@ -36,7 +36,7 @@ class ArrayBuilder(CoreBuilder):
     """
     
     assert order == "C", "Only row-major layout supported so far, not %s" % order 
-    
+
     if self.is_tuple(dims):
       shape = dims
       dims = self.tuple_elts(shape)
@@ -54,10 +54,11 @@ class ArrayBuilder(CoreBuilder):
       stride_elts = [const(1)]
 
       # assume row-major for now!
+
       for d in reversed(dims[1:]):
         next_stride = self.mul(stride_elts[0], d, "dim")
         stride_elts = [next_stride] + stride_elts
-      strides = self.tuple(stride_elts, "strides", explicit_struct = True)
+      strides = self.tuple(stride_elts, "strides", explicit_struct = explicit_struct)
       if explicit_struct:
         array = Struct([ptr_var, shape, strides, zero_i64, nelts], type = array_t)
       else:
