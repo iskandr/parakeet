@@ -93,7 +93,7 @@ def eval_fn(fn, actuals):
         if value.base is None:
           return 0
         else:
-          offset_bytes = value.base.ctypes.data - value.ctypes.data
+          offset_bytes =  value.ctypes.data - value.base.ctypes.data
           return offset_bytes / value.dtype.itemsize 
         
       elif expr.name == 'data':
@@ -134,12 +134,18 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-
+      if True:
+        print "data", data 
+        print "shape",  shape 
+        print "strides", strides
+        print "offset", offset 
+        print "itemsize", bytes_per_elt
+        
       if isinstance(data, np.ndarray):
         data = data.data 
  
       return np.ndarray(shape = shape, 
-                        offset = offset * dtype.itemsize, 
+                        offset = offset * bytes_per_elt, 
                         buffer = data, 
                         strides = tuple(si * bytes_per_elt for si in  strides), 
                         dtype = np.dtype(dtype))
@@ -152,7 +158,7 @@ def eval_fn(fn, actuals):
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)
- 
+      
       return array[index]
 
     def expr_PrimCall():

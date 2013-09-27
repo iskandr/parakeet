@@ -93,5 +93,5 @@ print_specialized_function_names = False
 #         DESPERATE MEASURES        #
 #####################################
 
-testing_find_broken_transform = False 
+testing_find_broken_transform = True 
 
