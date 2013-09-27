@@ -35,5 +35,8 @@ def test_index_3d():
   for x in tensors:
     expect(index_3d, [x, 2, 2, 1], x[2,2,1])
 
+
+
+
 if __name__ == '__main__':
   run_local_tests()

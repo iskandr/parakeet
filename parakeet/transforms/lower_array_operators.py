@@ -6,7 +6,7 @@ from ..ndtypes import (ScalarT, PtrT, TupleT, ArrayT, ptr_type, Int64)
 from transform import Transform
 
 
-def LowerArrayOperators(Transform):
+class LowerArrayOperators(Transform):
   """
   Lower first-order array operators such as Ravel, transpose
   into views or copies

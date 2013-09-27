@@ -199,7 +199,7 @@ class IndexifyAdverbs(Transform):
     return axes 
   
   def niters(self, args, axes):
-    axes = self.get_axes(axes)
+    axes = self.get_axes(args, axes)
     assert len(args) == len(axes)
     best_rank = 0 
     best_arg = None

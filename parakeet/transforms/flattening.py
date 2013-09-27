@@ -206,7 +206,10 @@ class BuildFlatFn(Builder):
       shape = get_field_elts(array_t, values, 'shape')
       strides = get_field_elts(array_t, values, 'strides')
       offset = get_field_elts(array_t, values, 'offset')[0]
-      assert len(indices) == len(strides)
+      n_dims = len(strides)
+      n_indices = len(indices)
+      assert n_dims == n_indices, \
+        "Expected %d indices but only got %d in %s" % (n_dims, n_indices, stmt)
       for idx, stride in zip(indices, strides):
         offset = self.add(offset, self.mul(idx, stride))
 

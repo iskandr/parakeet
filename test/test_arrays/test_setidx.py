@@ -53,5 +53,6 @@ def test_set_idx_3d():
     x2[i, j, k] = val
     expect(set_idx_3d, [x1, i, j, k, val], x2)
 
+
 if __name__ == '__main__':
   run_local_tests()

@@ -4,13 +4,13 @@ from ..analysis import (contains_adverbs, contains_calls, contains_loops,
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
-from explicit_array_alloc import ExplicitArrayAlloc
+
 from flattening import Flatten
 from fusion import Fusion
 from imap_elim import IndexMapElimination
 from index_elimination import IndexElim
 from indexify_adverbs import IndexifyAdverbs
-from indexify_constructors import IndexifyArrayConstructors
+
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
@@ -142,7 +142,6 @@ unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling',
                run_if = contains_loops)
 loopify = Phase([
                    lower_adverbs,
-                   ExplicitArrayAlloc, 
                    ParForToNestedLoops, 
                    inline_opt, 
                    copy_elim,

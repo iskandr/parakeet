@@ -65,10 +65,11 @@ class ArrayBuilder(CoreBuilder):
                           shape = shape, 
                           strides = strides,
                           offset = zero_i64,
-                          size = nelts )
+                          size = nelts)
     else:
       array = AllocArray(shape, elt_type = elt_t, type = array_t)
-    if name is None: return array 
+    if name is None: 
+      return array 
     return self.assign_name(array, name)
   
   def len(self, array):
