@@ -3,7 +3,7 @@ from parakeet import jit
 # Simple convolution of 3x3 patches from a given array x
 # by a 3x3 array of filter weights
  
- @jit
+@jit
 def conv_3x3_trim(x, weights):
   return np.array([[(x[i-1:i+2, j-1:j+2]*weights).sum() 
                     for j in xrange(1, x.shape[1] -2)]

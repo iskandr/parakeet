@@ -21,5 +21,5 @@ def rosenbrock_derivative(x):
 N = 12
 x = np.arange(N) / float(N)
 print "Input: ", x
-pront "Deriv(Rosenbrock):", rosenbrock_derivative(12)
+print "Deriv(Rosenbrock):", rosenbrock_derivative(x)
 
