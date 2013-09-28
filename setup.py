@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from setuptools import setup, Extension, find_packages
-
+import os 
 import sys
 
 import parakeet 
@@ -9,7 +9,7 @@ import parakeet
 setup(
     name="parakeet",
     description="Runtime compiler for numerical Python.",
-    long_description=open('README.md').read(),
+    long_description=open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
     classifiers=['Development Status :: 3 - Alpha',
                  'Topic :: Software Development :: Libraries',
                  'License :: OSI Approved :: BSD License',
