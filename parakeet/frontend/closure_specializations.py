@@ -1,4 +1,5 @@
-from .. import config 
+ 
+from ..config import print_specialized_function_names
 from ..ndtypes.closure_type import _closure_type_cache
 
 def clear_specializations():   
@@ -7,7 +8,8 @@ def clear_specializations():
 
 
 def print_specializations():
-  if config.print_specialized_function_names:
+
+  if print_specialized_function_names:
     print
     print "FUNCTION SPECIALIZATIONS"
     count = 0

@@ -63,11 +63,15 @@ function_mappings = {
   np.int16 : lib.numpy_types.int16, 
   np.int32 : lib.numpy_types.int32, 
   np.int64 : lib.numpy_types.int64, 
-  np.float32 : lib.numpy_types.float32, 
-  np.float64 : lib.numpy_types.float64, 
+  np.uint8 : lib.numpy_types.uint8,
+  np.uint16 : lib.numpy_types.uint16, 
+  np.uint32 : lib.numpy_types.uint32, 
+  np.uint64 : lib.numpy_types.uint64,  
   np.bool : lib.numpy_types.bool, 
   np.bool8 : lib.numpy_types.bool, 
   np.bool_ : lib.numpy_types.bool, 
+  np.float32 : lib.numpy_types.float32, 
+  np.float64 : lib.numpy_types.float64, 
   
   np.rank : lib.rank, 
   np.alen : lib.builtin_len, 
@@ -102,6 +106,8 @@ function_mappings = {
   
   
   np.abs : prims.abs, 
+
+  
   
   # ARRAY CONSTRUCTORS 
   np.array : lib.identity, 
@@ -120,14 +126,13 @@ function_mappings = {
   np.multiply : prims.multiply,
    
   np.divide : prims.divide, 
-  np.floor_divide : prims.divide, 
+  np.floor_divide : lib.numpy_math.floor_divide, 
   np.true_divide : lib.numpy_math.true_divide, 
-  
    
-  np.modf : prims.mod,  
-  np.fmod : prims.mod, 
   np.mod : prims.remainder,
-  np.remainder : prims.remainder,  
+  np.remainder : prims.remainder,
+  np.fmod : prims.fmod,
+  # np.modf : prims.modf,
   
   np.logical_and : prims.logical_and, 
   np.logical_not : prims.logical_not, 
@@ -143,23 +148,42 @@ function_mappings = {
   # ROUNDING
   
   np.trunc : prims.trunc, 
-  np.rint : prims.rint, 
-  np.floor : prims.floor, 
-  np.ceil : prims.ceil,
-  np.round : prims.round, 
-  np.rint : prims.round, 
+  math.trunc : prims.trunc,
+   
+  np.rint : prims.rint,
   
+  np.floor : prims.floor, 
+  math.floor : prims.floor,
+   
+  np.ceil : prims.ceil,
+  math.ceil : prims.ceil, 
+  
+  np.round : prims.round,
+ 
   # LOGS AND EXPONENTIATION 
   np.square : lib.numpy_math.square,
   math.pow : prims.power, 
   np.power : prims.power,
-  np.exp : prims.exp, 
-  np.exp2 : prims.exp2, 
-  np.expm1 : prims.expm1, 
+  
+  np.exp : prims.exp,
+  math.exp : prims.exp, 
+   
+  np.exp2 : prims.exp2,
+   
+  np.expm1 : prims.expm1,
+  math.expm1 : prims.expm1, 
+   
   np.log : prims.log, 
-  np.log10 : prims.log10, 
-  np.log2 : prims.log2, 
+  math.log : prims.log, 
+  
+  np.log10 : prims.log10,
+  math.log10 : prims.log10, 
+   
+  np.log2 : prims.log2,
+   
   np.log1p : prims.log1p,
+  math.log1p : prims.log1p, 
+  
   np.logaddexp : lib.numpy_math.logaddexp, 
   np.logaddexp2 : lib.numpy_math.logaddexp2, 
   
@@ -195,4 +219,7 @@ function_mappings = {
   # np.hypot : lib.hypot,
   
   np.where : lib.where,
+  np.vdot : lib.vdot, 
+  np.dot : lib.dot, 
+  
 }

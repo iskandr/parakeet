@@ -8,14 +8,8 @@ import parakeet
 
 setup(
     name="parakeet",
-    description="Runtime compiler for flight and amusement.",
-    long_description='''
-Parakeet
-=========
-
-An adorable bird that will make your children laugh and spontaneously combust.
-
-''',
+    description="Runtime compiler for numerical Python.",
+    long_description=open('README.md').read(),
     classifiers=['Development Status :: 3 - Alpha',
                  'Topic :: Software Development :: Libraries',
                  'License :: OSI Approved :: BSD License',
@@ -27,22 +21,17 @@ An adorable bird that will make your children laugh and spontaneously combust.
     license="BSD",
     version=parakeet.__version__,
     url=parakeet.__website__, 
-    packages=find_packages() + ['parakeet.test', 'parakeet.examples'], 
-    #[ 'parakeet', 
-    #           'parakeet.analysis', 
-    #           'parakeet.frontend', 
-    #           'parakeet.lib', 
-    #           'parakeet.transforms', 
-    #           'parakeet.type_inference', 
-    #           'parakeet.examples', 
-    #           'parakeet.test' ],
-    
-    package_dir={  'parakeet.examples' : './examples', 
-                   'parakeet.test' : './test' 
+    packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
+    package_dir={ 
+                  'parakeet.benchmarks' : './benchmarks', 
+                  'parakeet.examples' : './examples', 
+                  'parakeet.test' : './test' 
                 },
     requires=[
-      'llvmpy', 
+
       'numpy', 
       'scipy',
       'treelike'
+      # LLVM is optional as long as you use the C backend 
+      # 'llvmpy'   
     ])

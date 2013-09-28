@@ -1,7 +1,7 @@
 
-from .. import syntax 
+from .. import syntax, prims 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
-from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT
+from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT, FnT
 from ..syntax import unwrap_constant 
 
 import shape
@@ -9,7 +9,7 @@ import shape_from_type
 from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown, 
                    ConstSlice, Struct, AnyScalar, Add, Mult, Div, Sub, 
                    any_scalar, unknown_value, const, any_value, combine_list, 
-                   increase_rank, make_shape, is_zero, is_one, 
+                   increase_rank, make_shape, is_zero, is_one, Ptr, 
                    ) 
 from parakeet.syntax.adverbs import IndexReduce
 from parakeet.syntax.adverb_helpers import max_rank_arg
@@ -315,6 +315,9 @@ class ShapeInference(SyntaxVisitor):
   def visit_merge_loop_start(self, merge):
     for (k, (l, _)) in merge.iteritems():
       self.value_env[k] = self.visit_expr(l)
+  
+  def visit_merge_loop_repeat(self, merge):
+    self.visit_merge(merge)
 
   def visit_merge(self, merge):
     for (k, (l,r)) in merge.iteritems():
@@ -329,10 +332,7 @@ class ShapeInference(SyntaxVisitor):
     return abstract_shape
 
   def visit_Alloc(self, expr):
-    # alloc doesn't return an array but rather
-    # a pointer whose shape properties
-    # we don't yet care about here
-    return unknown_value
+    return Ptr(any_scalar)
 
   def visit_Struct(self, expr):
     if isinstance(expr.type, ArrayT):
@@ -429,25 +429,58 @@ class ShapeInference(SyntaxVisitor):
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
     name = expr.name
-    if v.__class__ is Shape and name in ('shape', 'strides'):
-      return Tuple(v.dims)
-    elif v.__class__ is Tuple and name.startswith('elt'):
-      idx = int(name[3:])
+    
+    if v.__class__ is Shape:
+      if name in ('shape', 'strides'):
+        return Tuple(v.dims)
+      elif name in ('offset', 'size', 'nelts'):
+        return any_scalar
+      elif name == 'data':
+        return Ptr(any_scalar)
+    elif v.__class__ is Tuple:
+      if name.startswith('elt'):
+        idx = int(name[3:])
+      else:
+        idx = int(name)
       return v[idx]
+    
     elif v.__class__ is Slice:
       return getattr(v, name)
+    
+    elif v.__class__ is Closure:
+      if name.startswith('elt'):
+        idx = int(name[3:])
+      elif name.startswith('closure_elt'):
+        idx = int(name[len('closure_elt'):])
+      else:
+        idx = int(name)
+      return v.args[idx]
+        
+      
     elif v.__class__ is Struct:
       return v.values[v.fields.index(name)]
 
     t = expr.value.type.field_type(name)
+    
     if isinstance(t, ScalarT):
       return any_scalar
     else:
       return any_value
 
   def visit_PrimCall(self, expr):
-    arg_shapes = self.visit_expr_list(expr.args)
-    return shape.combine_list(arg_shapes, preserve_const = False)
+    
+    p = expr.prim
+    args = self.visit_expr_list(expr.args)
+    if p == prims.add: 
+      return self.add(args[0], args[1])
+    elif p == prims.subtract:
+      return self.sub(args[0], args[1])
+    elif p == prims.multiply:
+      return self.mul(args[0], args[1])
+    elif p == prims.divide:
+      return self.div(args[0], args[1])
+    else:
+      return shape.combine_list(args, preserve_const = False)
 
   def visit_Select(self, expr):
     cond = self.visit_expr(expr.cond)
@@ -463,7 +496,7 @@ class ShapeInference(SyntaxVisitor):
       for other_name in self.equivalence_classes[name]:
         if other_name in self.value_env:
           return self.value_env[other_name]
-    raise RuntimeError("Unknown variable: %s" %  expr)
+    raise RuntimeError("Unknown variable: %s in function %s" %  (expr, self.fn.name))
 
   def visit_Tuple(self, expr):
     return Tuple(self.visit_expr_list(expr.elts))
@@ -497,6 +530,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
+
     if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
     elif arr.__class__ is Shape:
@@ -512,7 +546,11 @@ class ShapeInference(SyntaxVisitor):
         return shape.make_shape(dims)
       else:
         return self.index(arr, idx)
-    
+    elif arr.__class__ is Ptr:
+      assert isinstance(arr.elt_shape, Scalar)
+      assert isinstance(idx, Scalar)
+      
+      return any_scalar
     if isinstance(arr, Scalar):
       assert False, "Expected %s to be array, shape inference found scalar" % (arr,)
     elif arr == shape.any_value:
@@ -585,8 +623,6 @@ class ShapeInference(SyntaxVisitor):
     fn = self.visit_expr(expr.fn)
     assert False, "OuterMap needs an implementation"
 
-  
-
   def bind(self, lhs, rhs):
     if isinstance(lhs, syntax.Tuple):
       assert isinstance(rhs, Tuple)
@@ -608,32 +644,39 @@ class ShapeInference(SyntaxVisitor):
   def visit_ForLoop(self, stmt):
     self.value_env[stmt.var.name] = any_scalar
     SyntaxVisitor.visit_ForLoop(self, stmt)
-
+    # visit body a second time in case first-pass fixed values relative 
+    # to initial value of iteration vars 
+    self.visit_block(stmt.body)
+  
+  def visit_While(self, stmt):
+    SyntaxVisitor.visit_While(self, stmt)
+    # visit body a second time in case first-pass fixed values relative 
+    # to initial value of iteration vars 
+    self.visit_block(stmt.body)
+    
+    
 _shape_env_cache = {}
 def shape_env(typed_fn):
-  key = (typed_fn.name, typed_fn.copied_by)
+  key = typed_fn.cache_key
+  
   if key in _shape_env_cache:
     return _shape_env_cache[key]
-  else:
-    shape_inference = ShapeInference()
-    shape_inference.visit_fn(typed_fn)
-    env = shape_inference.value_env
-    _shape_env_cache[key] = env
-    return env
+
+  shape_inference = ShapeInference()
+  shape_inference.visit_fn(typed_fn)
+  env = shape_inference.value_env
+  _shape_env_cache[key] = env
+  return env
 
 _shape_cache = {}
 def call_shape_expr(typed_fn):
-  if isinstance(typed_fn, str):
-    typed_fn = syntax.TypedFn.registry[typed_fn]
-
-  key = (typed_fn.name, typed_fn.copied_by)
+  key = typed_fn.cache_key
   if key in _shape_cache:
     return _shape_cache[key]
-  else:
-    env = shape_env(typed_fn)
-    abstract_shape = env.get("$return", Const(None))
-    _shape_cache[key] = abstract_shape
-    return abstract_shape
+  env = shape_env(typed_fn)
+  abstract_shape = env.get("$return", Const(None))
+  _shape_cache[key] = abstract_shape
+  return abstract_shape
 
 def bind(lhs, rhs, env):
   if isinstance(lhs, Var):
@@ -668,6 +711,8 @@ def subst(x, env):
     return Tuple(tuple((subst_list(x.elts, env))))
   elif isinstance(x, Closure):
     return Closure(x.fn, subst_list(x.args, env))
+  elif isinstance(x, Ptr):
+    return Ptr(subst(x.elt_shape, env))
   else:
     raise RuntimeError("Unexpected abstract expression: %s" % x)
 
@@ -681,6 +726,7 @@ def symbolic_call(fn, abstract_inputs):
     fn = fn.fn
   else:
     closure_elts = ()
+
   abstract_result_value = call_shape_expr(fn)
   conv = shape_from_type.Converter()
   shape_formals = conv.from_types(fn.input_types)

@@ -40,6 +40,8 @@ class UnsupportedSyntax(Exception):
         (self.node.__class__.__name__, self.function_name)
     else:
       return "Parakeet doesn't support %s" % self.node.__class__.__name__
+    
+
   
 class ExternalValue(object):
   """
@@ -765,6 +767,8 @@ def translate_function_ast(name,
   translator = AST_Translator(globals_dict, closure_cell_dict, 
                               parent, function_name = name, filename = filename)
 
+  assert not args.kwarg, "Parakeet doesn't support **kwargs, found in %s%s(%s)" % \
+    (filename +":" if filename else "", name, args) 
   ssa_args, assignments = translator.translate_args(args)
   _, body = translator.visit_block(body)
   body = assignments + body
@@ -872,11 +876,15 @@ def translate_function_value(fn, _currently_processing = set([])):
     free_vars = fn.func_code.co_freevars
     closure_cells = fn.func_closure
     if closure_cells is None: closure_cells = ()
-    fundef = translate_function_source(source,
+    try: 
+      fundef = translate_function_source(source,
                                         globals_dict,
                                         free_vars,
                                         closure_cells, 
                                         filename = filename)
+    except:
+      _currently_processing.remove(fn)
+      raise 
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
                 

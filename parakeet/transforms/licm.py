@@ -128,7 +128,8 @@ class Find_LICM_Candidates(SyntaxVisitor):
         self.volatile_vars.update(lhs_names)
     # mark any array writes as volatile 
     if stmt.lhs.__class__ is Index:
-      assert stmt.lhs.value.__class__ is Var
+      assert stmt.lhs.value.__class__ is Var, \
+        "Expected LHS array to be variable but instead got %s" % stmt  
       self.volatile_vars.add(stmt.lhs.value.name)
       #print 
       #print "STMT", stmt

@@ -2,7 +2,8 @@
 
 import numpy as np
 import ndtypes 
-from ndtypes import Bool, combine_type_list, FloatT, IntT 
+
+from ndtypes import Bool, combine_type_list, FloatT, IntT, BoolT, Float32, Float64 
 
 prim_lookup_by_value = {}
 
@@ -31,7 +32,11 @@ def is_prim(numpy_fn):
 class Prim(object):
   def __init__(self, fn, python_op_name = None, symbol = None,
                name = None, nin = None, nout = None, 
-               extra_signatures = []):
+               extra_signatures = [], 
+               doc = None):
+    if doc is not None:
+      self.__doc__ = doc 
+      
     self.fn = fn
     prim_lookup_by_value[fn] = self
     self.symbol = symbol
@@ -119,6 +124,13 @@ class Prim(object):
         # but going to from int to float is only minor penalty...
         elif isinstance(t2, FloatT) and not isinstance(t1, FloatT):
           dist += 1
+        
+        # can't go from int to bool 
+        if isinstance(t1, BoolT) and not isinstance(t2, BoolT):
+          dist += 1
+        elif isinstance(t2, BoolT) and not isinstance(t1, BoolT):
+          dist += 1000 
+        
     return dist 
   
   def expected_input_types(self, arg_types):
@@ -162,8 +174,18 @@ class Prim(object):
 
 class Float(Prim):
   """Always returns a float"""
-  pass
-
+  def expected_input_types(self, arg_types):
+    max_nbytes = max(t.nbytes for t in arg_types)
+    if max_nbytes <= 4:
+      upcast_types = [Float32.combine(t) for t in arg_types]
+    else:
+      upcast_types = [Float64.combine(t) for t in arg_types]
+    return Prim.expected_input_types(self, upcast_types)
+  
+  def result_type(self, arg_types):
+    t = Prim.result_type(self, arg_types)
+    return t.combine(Float32)
+  
 class Arith(Prim):
   """Basic arithmetic operators"""
   pass
@@ -189,15 +211,12 @@ class Round(Prim):
 
 class_list = [Cmp, Bitwise, Logical, Arith, Float, Round]
 
-abs = Float(np.abs)
+abs = Float(np.abs, doc = "Absolute value")
 sqrt = Float(np.sqrt)
 
 exp = Float(np.exp)
 exp2 = Float(np.exp2)
 expm1 = Float(np.expm1)
-
-
-sqrt = Float(np.sqrt)
 
 log = Float(np.log)
 log10 = Float(np.log10)
@@ -239,11 +258,14 @@ multiply = Arith(np.multiply, 'Mult', '*')
 
 
 divide = Arith(np.divide, 'Div', '/', extra_signatures = ['??->?'])
-mod = Arith(np.mod, 'Mod', '%', extra_signatures = ['??->?'])
-modf = Arith(np.modf)
-remainder = Arith(np.remainder)
 
-power = Arith(np.power, 'Pow', '**')
+remainder = Arith(np.remainder, 'Mod', '%', extra_signatures = ['??->?'])
+mod = remainder 
+fmod = Arith(np.fmod, doc = "Return the element-wise remainder of division. C-style modulo.")
+
+
+# used to be Arith but easier if result is always floating point 
+power = Float(np.power, 'Pow', '**')
 # power_int = Arith(np.power, extra_signatures = [''])
 
 

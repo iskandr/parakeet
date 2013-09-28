@@ -4,9 +4,10 @@ from .. import syntax, names
 from ..ndtypes import (make_array_type, make_tuple_type, 
                        Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT, 
                        ArrayT, FnT, ClosureT) 
-from ..syntax import (ArrayView, Assign, Attribute, Cast, Const, Closure,  Comment, Expr, 
-                      Index, PrimCall,   Return, Struct,  Tuple, TupleProj, Var, TypedFn, 
-                      AllocArray, ArrayExpr, Adverb)
+from ..syntax import (Assign, Return, If,    
+                      ArrayView, Attribute, Cast, Const, Closure,  Comment, Expr, 
+                      Index, PrimCall,   Struct, Slice, Tuple, TupleProj, TypedFn, Var, 
+                      AllocArray, ArrayExpr, Adverb, Select)
 from ..syntax.helpers import (wrap_if_constant, 
                               const_bool, const_int, const_float, get_types,  
                               one_i64, zero_i64, 
@@ -39,9 +40,13 @@ class CoreBuilder(object):
   def return_(self, value):
     self.blocks += [Return(value)]  
     
+  def return_tuple(self, values):
+    self.return_(self.tuple(values, name = None))
+    
   def fresh_var(self, t, prefix = "temp"):
     assert prefix is not None
     assert t is not None, "Type required for new variable %s" % prefix
+    prefix = names.original(prefix)
     ssa_id = names.fresh(prefix)
     self.type_env[ssa_id] = t
     return Var(ssa_id, type = t)
@@ -73,7 +78,7 @@ class CoreBuilder(object):
     true_block = self.blocks.pop()
     
     self.blocks.push()
-    false_think(*right_vars)
+    false_thunk(*right_vars)
     false_block = self.blocks.pop()
      
     stmt = If(cond, true_block, false_block, merge = merge)
@@ -195,11 +200,12 @@ class CoreBuilder(object):
     if name is None:
       name = field
     obj_t = obj.type
-    if obj.__class__ is Struct:
+    c = obj.__class__ 
+    if c is Struct:
       pos = obj_t.field_pos(name)
       result =  obj.args[pos]
-    elif obj.__class__ is ArrayView:
-      return getattr(obj, field)
+    elif c in (ArrayView, Slice):
+      result = getattr(obj, field)
     else:
       assert isinstance(obj_t, StructT), \
         "Can't get attribute '%s' from type %s" % (field, obj_t)
@@ -214,10 +220,7 @@ class CoreBuilder(object):
     return x is None or (isinstance(x, Expr) and x.type.__class__ is NoneT)
 
 
-
-
-
-  def tuple(self, elts, name = "tuple", explicit_struct = False):
+  def tuple(self, elts, name = None, explicit_struct = False):
     if not isinstance(elts, (list, tuple)):
       elts = [elts]
     tuple_t = make_tuple_type(get_types(elts))
@@ -290,6 +293,8 @@ class CoreBuilder(object):
       return TupleProj(tup, idx, type = tup.type.elt_types[idx])
 
   def tuple_elts(self, tup, explicit_struct = False):
+    if not isinstance(tup.type, TupleT):
+      return [tup]
     nelts = len(tup.type.elt_types)
     return tuple([self.tuple_proj(tup, i, explicit_struct = explicit_struct)
                   for i in xrange(nelts)])
@@ -304,3 +309,7 @@ class CoreBuilder(object):
       for e in elts[1:]:
         result = self.mul(result, e, name = name)
       return result
+    
+  def select(self, cond, true_value, false_value):
+    assert true_value.type == false_value.type
+    return Select(cond, true_value, false_value, type = true_value.type)

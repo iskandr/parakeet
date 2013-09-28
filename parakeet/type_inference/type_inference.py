@@ -86,14 +86,15 @@ class TypeInference(LocalTypeInference):
     
     untyped_fn, args, arg_types = linearize_actual_args(closure, args)
     typed_fn = specialize(untyped_fn, arg_types)
-    return syntax.Call(typed_fn, args, typed_fn.return_type)
+    return syntax.Call(typed_fn, tuple(args), typed_fn.return_type)
 
 
   
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
+
     arg_types = get_types(args)
-    
+
     if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
@@ -107,7 +108,8 @@ class TypeInference(LocalTypeInference):
         return syntax.PrimCall(prims.is_, args, type = Bool)
     elif all(t.rank == 0 for t in arg_types):
       # arguments should then be tuples
-      assert len(arg_types) == 2
+      assert len(arg_types) == 2, \
+        "Expected two arguments but got [%s] in %s" % (", ".join(str(t) for t in arg_types), expr)
       xt, yt = arg_types
       x, y = args 
       assert xt.__class__ is TupleT, \
@@ -382,11 +384,12 @@ class TypeInference(LocalTypeInference):
     axis = self.transform_if_expr(expr.axis)
     if axis is None or self.is_none(axis):
       axis = zero_i64
-    return syntax.OuterMap(fn = make_typed_closure(closure, typed_fn),
+    result = syntax.OuterMap(fn = make_typed_closure(closure, typed_fn),
                            args = new_args,
                            axis = axis,
                            type = result_type)
-  
+
+    return result 
 
   
   
@@ -502,8 +505,7 @@ def _specialize(fn, arg_types, return_type = None):
   typed_fundef = infer_types(fn, arg_types)
   from rewrite_typed import rewrite_typed
   return rewrite_typed(typed_fundef, return_type)
-  #normalized = Simplify().apply(coerced_fundef)
-  #return normalized
+
 
 
 

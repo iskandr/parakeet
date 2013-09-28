@@ -179,13 +179,19 @@ class LoopBuilder(CoreBuilder):
     def build_loops(index_vars = ()):
       n_indices = len(index_vars)
       if n_indices == n_loops:
-        if n_indices > 1:
-          idx_tuple = self.tuple(index_vars)
-        else:
-          idx_tuple = index_vars[0]
+        
+        
         if isinstance(loop_body, Expr):
-          result = self.call(loop_body, [idx_tuple])
+          input_types = self.input_types(loop_body)
+          if len(input_types) == len(index_vars):
+            result = self.call(loop_body, index_vars)
+          else:
+            result = self.call(loop_body, [self.tuple(index_vars)])
         else:
+          if n_indices > 1:
+            idx_tuple = self.tuple(index_vars)
+          else:
+            idx_tuple = index_vars[0]
           assert hasattr(loop_body, '__call__'), "Expected callable value, got %s" % (loop_body,)
           result = loop_body(idx_tuple)
         assert self.is_none(result), "Expected loop body to return None, not %s" % (result,)

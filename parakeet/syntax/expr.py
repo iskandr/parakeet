@@ -76,9 +76,11 @@ class Var(Expr):
 
 
   def __ne__(self, other):
-    return other.__class__ is not Var or \
-           self.name != other.name or \
-           self.type != other.type
+    if other.__class__ is not Var:
+      return True 
+    if self.name != other.name:
+      return True
+    return self.type != other.type 
   
   def children(self):
     return ()
@@ -108,7 +110,16 @@ class Tuple(Expr):
     self.elts = tuple(self.elts)
     if self.type is None and all(e.type is not None for e in self.elts):
       self.type = make_tuple_type(tuple(e.type for e in self.elts))
-      
+  
+  def __iter__(self):
+    return iter(self.elts)
+  
+  def __len__(self):
+    return len(self.elts)
+  
+  def __getitem__(self, idx):
+    return self.elts[idx]
+  
   def __str__(self):
     if len(self.elts) > 0:
       return ", ".join([str(e) for e in self.elts])

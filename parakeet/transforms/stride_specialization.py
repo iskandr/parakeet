@@ -15,6 +15,8 @@ class StrideSpecializer(Transform):
     analysis = FindConstantStrides(fn, self.abstract_inputs)
     analysis.visit_fn(fn)
     self.env = analysis.env
+    #for k,v in sorted(self.env.items()):
+    #  print k, v
   
   def transform_Var(self, expr):
     if expr.name in self.env:
@@ -59,10 +61,12 @@ def specialize(fn, python_values, types = None):
     return _cache[key]
   elif any(has_unit_stride(v) for v in abstract_values):
     specializer = StrideSpecializer(abstract_values)
-    
+
     transforms = Phase([specializer, Simplify, DCE],
-                        memoize = False, copy = True)
+                        memoize = False, copy = True, 
+                        name = "StrideSpecialization for %s" % abstract_values)
     new_fn = transforms.apply(fn)
+
   else:
     new_fn = fn
   _cache[key] = new_fn

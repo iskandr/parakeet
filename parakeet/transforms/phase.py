@@ -1,16 +1,39 @@
 from .. import config
+
 from .. syntax import TypedFn
 from clone_function import CloneFunction
+from transform import Transform 
 
-
-def apply_transforms(fn, transforms, cleanup = []):
+name_stack = []
+def apply_transforms(fn, transforms, cleanup = [], phase_name = None):
+  if len(transforms) == 0:
+    return fn 
+  if phase_name: name_stack.append("{" + phase_name + " :: " + fn.name +  "}")
   for T in transforms:
     t = T() if type(T) == type else T
+
+    if isinstance(t, Transform):
+      name_stack.append(str(t))
+      if config.print_transform_names:
+        print "-- %s" % ("->".join(name_stack),)
+      
+    elif isinstance(t, Phase) and t.should_skip(fn) and not t.depends_on:
+      continue 
+
     fn = t.apply(fn)
+
     assert fn is not None, "%s transformed fn into None" % T
-    fn = apply_transforms(fn, cleanup, [])
+
+    if isinstance(t, Transform): name_stack.pop()
+
+    if len(cleanup) > 0:
+      fn = apply_transforms(fn, cleanup, [], phase_name = "cleanup")
+    
+  
+  if phase_name: name_stack.pop()
   return fn
 
+name_stack = []
 class Phase(object):
   def __init__(self,
                transforms,
@@ -68,31 +91,53 @@ class Phase(object):
     return str(self)
 
   def __eq__(self, other):
-    return self is other
+    return str(self) == str(other)
 
-  def __call__(self, fn, run_dependencies = True, ignore_config = False):
-    return self.apply(fn, run_dependencies, ignore_config)
+  def __hash__(self):
+    return hash(str(self))
+  
+  def __call__(self, fn, run_dependencies = True):
+    return self.apply(fn, run_dependencies)
 
-  def apply(self, fn, run_dependencies = True, ignore_config = False):
-    if self.config_param is not None and not ignore_config and \
-       getattr(config, self.config_param) == False:
-      return fn
-
-    original_key = fn.name, fn.copied_by, fn.version 
+  def should_skip(self, fn):
+    if self.config_param is not None and getattr(config, self.config_param) == False:
+      return True
+   
+    if self.memoize and (fn.created_by == self or self in fn.transform_history):
+      return True
+    
+    if self.run_if:
+      return not self.run_if(fn)
+    
+    return False 
+    
+  def is_cached(self, fn):
+    return fn.cache_key in self.cache 
+  
+  def needs_cleanup(self, fn):
+    return not (self.should_skip(fn) or self.is_cached(fn)) 
+    
+  def apply(self, fn, run_dependencies = True):
+    
+    original_key = fn.cache_key
     if original_key in self.cache:
       return self.cache[original_key]
 
     if self.depends_on and run_dependencies:
       fn = apply_transforms(fn, self.depends_on)
-
+      
+    if self.should_skip(fn):
+      return fn 
+    
     if self.copy:
-      fn = CloneFunction(self.rename).apply(fn)
-      fn.copied_by = self
-
-    if (self.run_if is None) or self.run_if(fn):
-      fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup)
-      fn.version += 1
-
+      fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
+      assert fn.cache_key not in self.cache, \
+        "Typed function %s (key = %s) already registered" % \
+        (fn.name, fn.cache_key)
+    
+    fn.transform_history.add(self)
+    fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
+    
     if self.post_apply:
       new_fn = self.post_apply(fn)
       if new_fn.__class__ is TypedFn:
@@ -100,6 +145,5 @@ class Phase(object):
 
     if self.memoize:
       self.cache[original_key] = fn
-      new_key = fn.name, fn.copied_by
-      self.cache[new_key] = fn
+      self.cache[fn.cache_key] = fn
     return fn

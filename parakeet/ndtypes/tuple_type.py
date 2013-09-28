@@ -63,6 +63,10 @@ class TupleT(StructT, ImmutableT):
 
   def __iter__(self):
     return iter(self.elt_types)
+  
+  def __getitem__(self, idx):
+    assert isinstance(idx, (int,long)), "Invalid index for TupleT: %s" % idx 
+    return self.elt_types[idx]
 
   def index_type(self, idx):
     #assert isinstance(idx, Expr), \

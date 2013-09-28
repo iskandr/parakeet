@@ -2,14 +2,12 @@ from .. import names
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT 
 from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
-                      Var, Return)
-from ..syntax.helpers import unwrap_constant, get_types, none 
+                      Var, Return, UntypedFn, Expr)
+from ..syntax.helpers import unwrap_constant, get_types, none, zero_i64 
 from ..syntax.adverb_helpers import max_rank_arg
 from inline import Inliner 
 from transform import Transform
-from scipy.weave.build_tools import old_init_posix
 
- 
 
 class IndexifyAdverbs(Transform):
   """
@@ -36,6 +34,7 @@ class IndexifyAdverbs(Transform):
     and transform it into a function which explicitly extracts its arguments
     """  
     array_args = tuple(array_args)
+    
     array_arg_types = tuple(get_types(array_args))
 
     n_arrays = len(array_arg_types)
@@ -43,11 +42,11 @@ class IndexifyAdverbs(Transform):
     closure_arg_types = tuple(get_types(closure_args))
     n_closure_args = len(closure_args)
     fn = self.get_fn(fn)
-    # do I need fn.version *and* fn.copied_by? 
-    key = (
-             fn.name, 
-             fn.copied_by,
-             axis, 
+    
+    axes = self.get_axes(array_args, axis)
+    
+    key = (  fn.cache_key, 
+             axes, 
              closure_arg_types, 
              array_arg_types, 
              output is None,  
@@ -64,8 +63,7 @@ class IndexifyAdverbs(Transform):
     if key in self._indexed_fn_cache:
       return mk_closure()
       
-    #max_array_arg = max_rank_arg(array_arg_vars)
-    # max_array_rank = self.rank(max_array_arg)
+    
     n_indices = n_arrays if cartesian_product else 1
     index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     
@@ -114,14 +112,9 @@ class IndexifyAdverbs(Transform):
       index_elts = [index_input_var] * n_arrays 
     
     slice_values = []
-    for i, curr_array in enumerate(array_arg_vars):
 
-      # if not cartesian_product: 
-      #  if self.rank(curr_array) == max_array_rank:
-      #    slice_value = self.slice_along_axis(array_arg_vars[i], axis, index_elts[i])
-      #  else:
-      #    slice_value = curr_array
-      
+    for i, curr_array in enumerate(array_arg_vars):
+      axis = axes[i]
       curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
       
       slice_values.append(curr_slice) 
@@ -133,8 +126,8 @@ class IndexifyAdverbs(Transform):
       builder.setidx(output_var, index_input_var, elt_result)
       builder.return_(none)
     
-    inliner = Inliner()
-    new_fn = inliner.apply(new_fn)
+    #inliner = Inliner()
+    #new_fn = inliner.apply(new_fn)
     self._indexed_fn_cache[key] = new_fn
     return mk_closure()
           
@@ -152,82 +145,106 @@ class IndexifyAdverbs(Transform):
     self.check_equal_sizes(axis_sizes)
     return axis_sizes
 
-  """
-  def prelude(self, map_fn, xs, axis):
-    axis_sizes = self.sizes_along_axis(xs, axis)
-    return axis_sizes[0]
 
-  def acc_prelude(self, init, combine, delayed_map_result):
-    zero = self.int(0)
-    if init is None or self.is_none(init):
-      return delayed_map_result(zero)
-    else:
-      # combine the provided initializer with
-      # transformed first value of the data
-      # in case we need to coerce up
-      return self.call(combine, [init, delayed_map_result(zero)])
-  """
-  
-  #def create_result(self, elt_type, inner_shape, outer_shape):
-  #  if not self.is_tuple(outer_shape):
-  #    outer_shape = self.tuple([outer_shape])
-  #  result_shape = self.concat_tuples(outer_shape, inner_shape)
-  #  result = self.alloc_array(elt_type, result_shape)
-  #  return result
 
-  #def create_output_array(self, fn, inputs, extra_dims):
-  #  if hasattr(self, "_create_output_array"):
-  #    try:
-  #      return self._create_output_array(fn, inputs, extra_dims)
-  #    except:
-  #      pass
-  #  inner_result = self.call(fn, inputs)   
-  #  inner_shape = self.shape(inner_result)
-  #  elt_t = self.elt_type(inner_result)
-  #  res =  self.create_result(elt_t, inner_shape, extra_dims)
-  #  return res 
-  
-  def parfor(self, bounds, fn):
-    self.blocks += [ParFor(fn = fn, bounds = bounds)]
+  def create_map_output_array(self, fn, array_args, axes, 
+                            cartesian_product = False, 
+                            name = "output"):
+    """
+    Given a function and its argument, use shape inference to figure out the
+    result shape of the array and preallocate it.  If the result should be a
+    scalar, just return a scalar variable.
+    """
+    assert self.is_fn(fn), \
+      "Expected function, got %s" % (fn,)
+    assert isinstance(array_args, (list,tuple)), \
+      "Expected list of array args, got %s" % (array_args,)
+    axes = self.get_axes(array_args, axes)
     
+    
+    # take the 0'th slice just to have a value in hand 
+    inner_args = [self.slice_along_axis(array, axis, zero_i64)
+                  for array, axis in zip(array_args, axes)]
+
+    extra_dims = []
+    if cartesian_product:
+      for array, axis in zip(array_args, axes):
+        if self.rank(array) > axis:
+          dim = self.shape(array, axis)
+        else:
+          dim = 1 
+        extra_dims.append(dim)
+    else:
+      extra_dims.append(self.niters(array_args, axes))
+    outer_shape_tuple = self.tuple(extra_dims)
+    return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
+
+  def get_axes(self, args, axis):
+    if isinstance(axis, Expr):
+      axis = unwrap_constant(axis)
+      
+    if axis is None: 
+      args = [self.ravel(arg) for arg in args]
+      axis = 0
+      
+    if isinstance(axis, list):
+      axes = tuple(axis)
+    elif isinstance(axis, tuple):
+      axes = axis
+    else:
+      assert isinstance(axis, (int,long)), "Invalid axis %s" % axis 
+      axes = (axis,) * len(args)
+       
+    assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
+    return axes 
+  
+  def niters(self, args, axes):
+    axes = self.get_axes(args, axes)
+    assert len(args) == len(axes)
+    best_rank = 0 
+    best_arg = None
+    best_axis = None 
+    for curr_arg, curr_axis in zip(args,axes):
+      r = self.rank(curr_arg) 
+      if r > best_rank:
+        best_arg = curr_arg 
+        best_axis = curr_axis 
+    return self.shape(best_arg, best_axis)
+  
   def transform_Map(self, expr, output = None):
     # recursively descend down the function bodies to pull together nested ParFors
     args = self.transform_expr_list(expr.args)
-    axis = unwrap_constant(expr.axis)
+    axes = self.get_axes(args, expr.axis)
     old_fn = expr.fn
 
     if output is None:
-      # outer_dims = [niters]
-      # use shape inference to create output
-      output = self.create_map_output_array(old_fn, args, axis)
+      output = self.create_map_output_array(old_fn, args, axes)
     
-    index_fn = self.indexify_fn(expr.fn, axis, args, 
+    niters = self.niters(args, axes)
+    index_fn = self.indexify_fn(expr.fn, axes, args, 
                                 cartesian_product=False, 
                                 output = output)
-    biggest_arg = max_rank_arg(args)
-    niters = self.shape(biggest_arg, axis)
-    self.parfor(niters, index_fn)
+    
+    
+    self.parfor(index_fn, niters)
     return output 
   
   def transform_OuterMap(self, expr):
     args = self.transform_expr_list(expr.args)
-    axis = unwrap_constant(expr.axis)
+    axes = self.get_axes(args, expr.axis)
+    
     fn = expr.fn 
-    # dimsizes = [self.shape(arg, axis) for arg in args]
     # recursively descend down the function bodies to pull together nested ParFors 
-    if axis is None: 
-      args = [self.ravel(arg) for arg in args]
-      axis = 0
-    counts = [self.size_along_axis(arg, axis) for arg in args]
+    counts = [self.size_along_axis(arg, axis) for (arg,axis) in zip(args,axes)]
     outer_shape = self.tuple(counts)
     zero = self.int(0)
-    first_values = [self.slice_along_axis(arg, axis, zero) for arg in args]
+    first_values = [self.slice_along_axis(arg, axis, zero) for (arg,axis) in zip(args, axes)]
     # self.create_output_array(fn, inner_args, outer_shape, name)
     output =  self.create_output_array(fn, first_values, outer_shape)
-    loop_body = self.indexify_fn(fn, axis, args, 
+    loop_body = self.indexify_fn(fn, axes, args, 
                                  cartesian_product = True, 
                                  output = output)
-    self.parfor(outer_shape, loop_body)
+    self.parfor(loop_body, outer_shape)
     return output 
   
   def transform_IndexMap(self, expr, output = None):
@@ -264,8 +281,9 @@ class IndexifyAdverbs(Transform):
     idx_var = input_vars[-1]
     builder.setidx(output_var, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
     builder.return_(none)
-    return self.parfor(shape, self.closure(new_fn, (output,) + tuple(old_closure_args)  ))
-  
+    new_closure = self.closure(new_fn, (output,) + tuple(old_closure_args)  )
+    self.parfor(new_closure, shape)
+    return output
   
   
   def transform_Reduce(self, expr):
@@ -300,60 +318,7 @@ class IndexifyAdverbs(Transform):
                        combine = combine, 
                        shape = nelts, 
                        type = expr.type)
-    """
-    result_t = self.return_type(index_fn)
-    n_chunks = 8 
-    n_chunks_expr = self.int(n_chunks) 
-    chunk_size = self.div(nelts, n_chunks_expr)
-    outer_closure_args = self.closure_elts(index_fn)
-    raw_index_fn = self.get_fn(index_fn)
-    closure_arg_types = get_types(outer_closure_args)
-    partial_results = self.alloc_array(result_t, n_chunks_expr)
-    wrapper_input_types = tuple(closure_arg_types) + (nelts.type, partial_results.type, Int64)
-    chunk_idx_name = names.fresh("chunk_idx")
-    partial_results_name = names.fresh("partial_results")
-    nelts_name = names.fresh("nelts")
-    wrapper_name = self.fresh_fn_name("wrapper_", index_fn)
-    
-    wrapper_input_names = tuple(names.refresh(name) for name in raw_index_fn.arg_names[:-1]) + \
-                          (nelts_name, partial_results_name, chunk_idx_name) 
-    reduce_wrapper, builder, wrapper_inputs = build_fn(wrapper_input_types, 
-                                                       NoneType,
-                                                       name = wrapper_name,  
-                                                       input_names =  wrapper_input_names)
-    local_nelts, local_partial_results, chunk_idx = wrapper_inputs[-3:]
-    local_chunk_size = self.div(local_nelts, n_chunks_expr)
-    local_start = builder.mul(chunk_idx, local_chunk_size)
-    local_stop = builder.mul(builder.add(chunk_idx, builder.int(1)), local_chunk_size)
-    local_stop = builder.max(local_stop, local_nelts)
-    local_nelts = builder.sub(local_stop, local_start)
-    inner_closure_args= wrapper_inputs[:-3]
-    #print inner_closure_args, wrapper_inputs[-3:]
-    #assert False
-    inner_index_fn = builder.closure(raw_index_fn, inner_closure_args)
-    local_reduce = IndexReduce(fn = inner_index_fn, 
-                        init = init, 
-                        combine = combine, 
-                        shape = local_nelts, 
-                        start_index = local_start, 
-                        type = expr.type)
-    local_result = builder.assign_name(local_reduce, "local_result")
-    builder.setidx(local_partial_results, chunk_idx, local_result)
-    builder.return_(none)
-    reduce_wrapper = self.closure(reduce_wrapper, tuple(outer_closure_args) + (nelts, partial_results, ) )
-    self.parfor(n_chunks_expr, reduce_wrapper)
-    assert n_chunks > 1 
-    result = self.call(combine, 
-                       [self.index(partial_results, self.int(0)), 
-                        self.index(partial_results, self.int(1))])
-    
-    def outer_combine_loop_body(acc, idx):
-      acc.update(self.call(combine, [acc.get(), self.index(partial_results, idx)]))
-    #print reduce_wrapper
-    #assert False
-    return self.accumulate_loop(self.int(2), n_chunks_expr, outer_combine_loop_body, result)
-    """
-    
+   
   def transform_Scan(self, expr, output = None):
     combine = expr.combine 
     init = expr.init 
@@ -372,13 +337,8 @@ class IndexifyAdverbs(Transform):
                                 cartesian_product=False)
     if self.is_none(init):
       init = self.call(index_fn, [self.int(0)])  
-    #assert init is not None, "Didn't expect init of Scan to be None"
-    #assert init.type == self.return_type(index_fn), \
-    # "Mismatch between type of init %s and return type of fn %s" % (init.type, 
-    #                                                                 self.return_type(index_fn))
-    max_arg = max_rank_arg(args)
-    shape = self.shape(max_arg) 
-    niters = self.tuple_proj(shape, axis)
+    
+    niters = self.niters(args, axis)
     return IndexScan(fn = index_fn, 
                      init = init, 
                      combine = combine, 
@@ -387,7 +347,6 @@ class IndexifyAdverbs(Transform):
   
   def transform_Filter(self, expr):
     assert False, "Filter not implemented"
-    # return IndexFilter(self, expr)
     
   def transform_Assign(self, stmt):
     """

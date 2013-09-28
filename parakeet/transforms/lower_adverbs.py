@@ -61,13 +61,13 @@ class LowerAdverbs(Transform):
         body = self.blocks.pop()
         merge = {acc_before.name : (old_acc, acc_after)}
         for_loop = ForLoop(var = loop_counter, 
-                          start = starts[0],
-                          stop = bounds[0], 
-                          step = self.int(1), 
-                          body = body, 
-                          merge = merge)
+                           start = starts[0],
+                           stop = bounds[0], 
+                           step = self.int(1), 
+                           body = body, 
+                           merge = merge)
         self.blocks.append_to_current(for_loop)
-        return acc_after
+        return acc_before # should this be acc_after?
 
   
   def transform_IndexReduce(self, expr):

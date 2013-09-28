@@ -75,13 +75,13 @@ def logaddexp(x, y):
 
 @jit   
 def log2_1p(x):
-  return 1.0 / np.log(2) * np.log1p(x)
+  return (1.0 / np.log(2)) * np.log1p(x)
 
 
 @jit 
 def logaddexp2(x, y):
   diff = x - y 
-  return np.where(diff > 0,  x + log2_1p(math.pow(2, -diff)) , y + log2_1p(math.pow(2, diff)))
+  return np.where(diff > 0,  x + log2_1p(2 ** -diff) , y + log2_1p(2 ** diff))
 
  
 @jit 

@@ -1,24 +1,34 @@
 from expr import Expr
-from adverb_eval import AdverbEvalHelpers  
-
-
-class AdverbEvalNotImplemented(Exception):
-  def __init__(self, obj, context):
-    self.obj = obj 
-    self.context = context 
-    
-  def __str__(self):
-    return "Semantics for adverb %s not implemented (called from %s)" % \
-        (self.obj.__class__.__name__, self.context.__class__.__name__)
- 
-class Adverb(Expr, AdverbEvalHelpers):
-  _members = ['fn']
-    
-  def transform(self, transformer):
-    raise AdverbEvalNotImplemented(self,transformer)
   
+
+
+class Adverb(Expr):
+  _members = ['fn']
+  
+  def functions(self):
+    yield self.fn 
+    
+
+      
+class Accumulative(Expr):
+  """
+  Adverbs such as Reduce and Scan which carry an accumulated value and require a
+  'combine' function to merge the accumulators resulting from parallel
+  sub-computations.
+  """
+  _members = ['combine', 'init']
+  
+class HasEmit(Expr):
+  """
+  Common base class for Scan, IndexScan, and whatever other sorts of scans can be dreamed up
+  """
+  _members = ['emit']
+  
+  
+
 class IndexAdverb(Adverb):
   _members = ['shape', 'start_index']
+  
   
 class IndexMap(IndexAdverb):
   """
@@ -27,8 +37,8 @@ class IndexMap(IndexAdverb):
   pass 
 
 
-class IndexAccumulative(IndexAdverb):
-  _members = ['combine', 'init']
+class IndexAccumulative(IndexAdverb, Accumulative):
+  pass 
   
 class IndexReduce(IndexAccumulative):
   """
@@ -36,12 +46,11 @@ class IndexReduce(IndexAccumulative):
   element values, whereas 'combine' takes pairs of element 
   values and combines them. 
   """
-
   pass 
 
     
-class IndexScan(IndexAccumulative):
-  _members = ['emit']
+class IndexScan(IndexAccumulative, HasEmit):
+  pass 
   
 class DataAdverb(Adverb):
   _members = ['args', 'axis']
@@ -75,17 +84,11 @@ class Map(DataAdverb):
 class OuterMap(DataAdverb):
   pass 
 
-class Accumulative(DataAdverb):
-  """
-  Adverbs such as Reduce and Scan which carry an accumulated value and require a
-  'combine' function to merge the accumulators resulting from parallel
-  sub-computations.
-  """
-  _members = ['combine', 'init']
+class DataAccumulative(DataAdverb, Accumulative):
+  pass 
 
 
-
-class Reduce(Accumulative):
+class Reduce(DataAccumulative):
   def __repr__(self):
     return "Reduce(axis = %s, args = (%s), type = %s, init = %s, map_fn = %s, combine = %s)" % \
         (self.axis,
@@ -95,9 +98,7 @@ class Reduce(Accumulative):
          self.fn_to_str(self.fn),
          self.fn_to_str(self.combine))
 
-class Scan(Accumulative):
-  _members = ['emit']
-
+class Scan(DataAccumulative, HasEmit):
   def __repr__(self):
     s = "%s(axis = %s, args = {%s}, type = %s, " \
         % (self.node_type(), self.axis,
@@ -121,13 +122,17 @@ class Filter(Adverb):
 class IndexFilter(IndexAdverb, Filter):
   pass 
 
+class HasPred(Filter):
+  _members = ['pred']
+
 class FilterReduce(Reduce, Filter):
   """
   Like a normal reduce but skips some elements if they don't pass
   the predicate 'pred'
   """
-  _members = ['pred'] 
-
+  pass  
+  
+  
 class IndexFilterReduce(FilterReduce):
   pass 
 

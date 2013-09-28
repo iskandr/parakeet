@@ -209,15 +209,25 @@ class RewriteTyped(Transform):
         elt_stmt = self.transform_Assign(Assign(lhs_elt, idx))
         self.blocks.append_to_current(elt_stmt)
       return None  
-    else:         
+    elif new_lhs.__class__ is Index and \
+         isinstance(new_lhs.value.type, ArrayT) and \
+         isinstance(rhs.type, ScalarT):
+      new_rhs = self.coerce_expr(rhs, new_lhs.value.type.elt_type)
+      assert new_rhs.type and isinstance(new_rhs.type, Type), \
+          "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
       
+      stmt.lhs = new_lhs
+      stmt.rhs = new_rhs
+      return stmt 
+
+    else:     
       new_rhs = self.coerce_expr(rhs, lhs_t)
       assert new_rhs.type and isinstance(new_rhs.type, Type), \
           "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
       stmt.lhs = new_lhs
       stmt.rhs = new_rhs
       return stmt
-
+    
   def transform_If(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, Bool)
     stmt.true = self.transform_block(stmt.true)

@@ -1,6 +1,5 @@
 
 import llvm.core as llc 
-
 from llvm.core import Builder, ATTR_NO_CAPTURE #, Module 
 from llvm.core import Type as lltype
 
@@ -10,11 +9,11 @@ from .. ndtypes import BoolT, FloatT, SignedT, UnsignedT, ScalarT, NoneT, Float6
 from .. ndtypes import Int32, Int64, PtrT, Bool 
 from .. syntax import Var, Struct, Index, TypedFn, Attribute 
 
+import llvm_config 
 import llvm_context
 import llvm_convert
 import llvm_types
 import llvm_prims
-
 from llvm_helpers import const, int32, zero 
 from llvm_types import llvm_value_type, llvm_ref_type
 from parakeet.llvm_backend.llvm_convert import to_bit, from_bit
@@ -545,7 +544,7 @@ CompiledFn = namedtuple('CompiledFn', ('llvm_fn', 'llvm_exec_engine', 'parakeet_
 
 compiled_functions = {}
 def compile_fn(fundef):
-  key = fundef.name, fundef.copied_by
+  key = fundef.cache_key 
   if key in compiled_functions:
     return compiled_functions[key]
   
@@ -558,20 +557,20 @@ def compile_fn(fundef):
 
   compiler = Compiler(fundef)
   compiler.compile_body(fundef.body)
-  if config.print_unoptimized_llvm:
+  if llvm_config.print_unoptimized_llvm:
     print "=== LLVM before optimizations =="
     print
     print compiler.llvm_context.module
     print
   compiler.llvm_context.run_passes(compiler.llvm_fn)
 
-  if config.print_optimized_llvm:
+  if llvm_config.print_optimized_llvm:
     print "=== LLVM after optimizations =="
     print
     print compiler.llvm_context.module
     print
 
-  if config.print_x86:
+  if llvm_config.print_x86:
     print "=== Generated assembly =="
     print
     start_printing = False

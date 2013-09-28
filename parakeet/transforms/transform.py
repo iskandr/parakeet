@@ -27,12 +27,25 @@ class Transform(Builder):
   def __init__(self, verify=config.opt_verify,
                      reverse=False,
                      require_types=True):
+
     Builder.__init__(self)
     self.fn = None
     self.verify = verify
     self.reverse = reverse
     self.require_types = require_types
 
+  def __str__(self):
+    return self.__class__.__name__ 
+  
+  def __repr__(self):
+    return str(self)
+  
+  def __hash__(self):
+    return hash(str(self))
+  
+  def __eq__(self, other):
+    return str(self) == str(other)
+  
   def lookup_type(self, name):
     assert self.type_env is not None
     return self.type_env[name]
@@ -165,6 +178,10 @@ class Transform(Builder):
     expr.array = self.transform_expr(expr.array)
     expr.shape = self.transform_expr(expr.shape)
     return expr
+  
+  def transform_Transpose(self, expr):
+    Transpose()
+    return expr 
   
   def transform_Len(self, expr):
     expr.value = self.transform_expr(expr.value) 
@@ -439,8 +456,6 @@ class Transform(Builder):
 
     transform_name = self.__class__.__name__
     
-    if config.print_transform_names:
-      print "-- Running %s on %s" % (transform_name, fn.name)
       
     if config.print_functions_before_transforms == True or \
         (isinstance(config.print_functions_before_transforms, list) and

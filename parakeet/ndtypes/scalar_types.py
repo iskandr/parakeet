@@ -11,15 +11,6 @@ class ScalarT(ImmutableT):
   rank = 0
   _members = ['dtype']
 
-  # no need for _fields_ since scalars aren't represented as a struct
-  """
-  _properties_ = [
-    ('real', identity),
-    ('imag', always_zero),
-    ('conjugate', identity)
-  ]
-  """
-
   def node_init(self):
     assert isinstance(self.dtype, np.dtype), \
         "Expected dtype, got %s" % self.dtype
@@ -31,9 +22,15 @@ class ScalarT(ImmutableT):
     return dtypes.to_ctypes(self.dtype)
 
   def __eq__(self, other):
-    return self is other or \
-           (self.__class__  is other.__class__ and self.nbytes == other.nbytes)
-    
+    if self is other:
+      return True 
+    if self.__class__ is not other.__class__:
+      return False 
+    return self.nbytes == other.nbytes
+  
+  def __ne__(self, other):
+    return not (self == other) 
+  
   def __hash__(self):
     return hash(self.dtype)
 
@@ -47,6 +44,7 @@ class ScalarT(ImmutableT):
     return self
 
   def combine(self, other):
+     
     if isinstance(other, ScalarT):
       combined_dtype = np.promote_types(self.dtype, other.dtype)
       if combined_dtype == self.dtype:

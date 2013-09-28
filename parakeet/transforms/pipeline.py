@@ -1,28 +1,34 @@
 from .. import config 
-from ..analysis import contains_adverbs, contains_calls, contains_loops
+from ..analysis import (contains_adverbs, contains_calls, contains_loops, 
+                        contains_structs, contains_slices)
 # from const_arg_specialization import ConstArgSpecialization 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
+
+from flattening import Flatten
 from fusion import Fusion
+from imap_elim import IndexMapElimination
 from index_elimination import IndexElim
 from indexify_adverbs import IndexifyAdverbs
+
 from inline import Inliner
 from licm import LoopInvariantCodeMotion
 from loop_unrolling import LoopUnrolling
 from lower_adverbs import LowerAdverbs
+from lower_array_operators import LowerArrayOperators
 from lower_indexing import LowerIndexing
+from lower_slices import LowerSlices
 from lower_structs import LowerStructs
-from imap_elim import IndexMapElimination
 from negative_index_elim import NegativeIndexElim
 from offset_propagation import OffsetPropagation
 from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
+from range_propagation import RangePropagation
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
-from range_propagation import RangePropagation
 
 ####################################
 #                                  #
@@ -30,15 +36,24 @@ from range_propagation import RangePropagation
 #                                  #
 ####################################
 
-fusion_opt = Phase(Fusion, config_param = 'opt_fusion', cleanup = [Simplify, DCE],
+normalize = Phase([Simplify], 
+                  memoize = True, 
+                  copy = False, 
+                  cleanup = [], 
+                  name = "Normalize")
+
+fusion_opt = Phase(Fusion, 
+                   config_param = 'opt_fusion',
                    memoize = False,
+                   copy = False, 
                    run_if = contains_adverbs)
 
 inline_opt = Phase(Inliner, 
                    config_param = 'opt_inline', 
                    cleanup = [], 
                    run_if = contains_calls, 
-                   memoize = False )
+                   memoize = False, 
+                   copy = False)
 
 copy_elim = Phase(CopyElimination, 
                   config_param = 'opt_copy_elimination', 
@@ -47,36 +62,54 @@ copy_elim = Phase(CopyElimination,
 licm = Phase(LoopInvariantCodeMotion, 
              config_param = 'opt_licm',
              run_if = contains_loops, 
-             memoize = True, 
+             memoize = False, 
              name = "LICM")
+
 
 symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation], 
                                     config_param = 'opt_range_propagation',
-                                    name = "SymRangeProp", 
-                                    memoize = True)
+                                    name = "SymRangeProp",
+                                    copy = False,  
+                                    memoize = False, 
+                                    cleanup = [])
+ 
+
 high_level_optimizations = Phase([
-                                    Simplify, 
                                     inline_opt, 
-                                    # ConstArgSpecialization, Simplify, DCE,
                                     symbolic_range_propagation,   
                                     licm,
                                     fusion_opt, 
                                     fusion_opt, 
-                                    copy_elim
+                                    copy_elim,
+                                    NegativeIndexElim,
+                                    LowerSlices, 
+                                    # IndexifyArrayConstructors,
+                                    LowerArrayOperators,  
+                                    symbolic_range_propagation,
                                  ], 
+                                 depends_on = normalize,
                                  name = "HighLevelOpts", 
                                  copy = True, 
+                                 memoize = True, 
                                  cleanup = [Simplify, DCE])
 
-indexify = Phase([IndexifyAdverbs, 
-                  inline_opt, Simplify, DCE, 
-                  ShapePropagation, 
-                  IndexMapElimination,
-                 ], 
+indexify = Phase([
+                    IndexifyAdverbs, 
+                    inline_opt, Simplify, DCE, 
+                    ShapePropagation, 
+                    IndexMapElimination,
+                 ],
+                 name = "Indexify",  
                  run_if = contains_adverbs, 
-                 copy = True, 
-                 name = "Indexify", 
-                 depends_on=high_level_optimizations) 
+                 depends_on=high_level_optimizations, 
+                 copy = True,
+                 memoize = True) 
+
+flatten = Phase([Flatten, inline_opt, Simplify, DCE ], name="Flatten", 
+                depends_on=indexify,
+                run_if = contains_structs,  
+                copy=True, 
+                memoize = True)
 
 ####################
 #                  #
@@ -100,19 +133,23 @@ shape_elim = Phase(ShapeElimination,
 # loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 
 
-index_elim = Phase(IndexElim, config_param = 'opt_index_elimination')
+index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_elimination')
 
 
-lower_adverbs = Phase([LowerAdverbs], run_if = contains_adverbs)
+lower_adverbs = Phase([LowerAdverbs, LowerSlices], run_if = contains_adverbs)
+
+unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
+               run_if = contains_loops)
 loopify = Phase([
                    lower_adverbs,
                    ParForToNestedLoops, 
                    inline_opt, 
                    copy_elim,
+                   LowerSlices, 
                    licm,
                    shape_elim,
+                   unroll, 
                    symbolic_range_propagation,
-                   NegativeIndexElim, 
                    index_elim
                 ],
                 depends_on = indexify,
@@ -139,8 +176,6 @@ load_elim = Phase(RedundantLoadElimination,
                   run_if = lambda fn: not contains_calls(fn))
 
 
-unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
-               run_if = contains_loops)
 
 
 lowering = Phase([
@@ -153,9 +188,9 @@ lowering = Phase([
                     load_elim, 
                     scalar_repl, 
                     Simplify,
-                    
                  ],
                  depends_on = loopify,
+                 memoize = True, 
                  copy = True,
                  name = "Lowering", 
                  cleanup = [Simplify, DCE])

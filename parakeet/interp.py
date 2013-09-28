@@ -10,7 +10,7 @@ from syntax import (Expr, Var, Tuple,
                     Return, If, While, ForLoop, ParFor, ExprStmt,   
                     ActualArgs, 
                     Assign, Index, AllocArray,)
-from parakeet.frontend import ast_conversion
+
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -27,6 +27,9 @@ class ClosureVal:
     else:
       args = self.fixed_args + tuple(args)
     return eval_fn(self.fn, args)
+  
+def rankof(x):
+  return x.ndim if hasattr(x, 'ndim') else 0 
 
 def eval(fn, actuals):
   result = eval_fn(fn, actuals)
@@ -36,7 +39,7 @@ def eval(fn, actuals):
   return result 
    
 def eval_fn(fn, actuals):
-
+  
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -55,7 +58,7 @@ def eval_fn(fn, actuals):
     return fn(actuals)
   else:
     return fn(*actuals)
-
+  
   def eval_args(args):
     if isinstance(args, (list, tuple)):
       return map(eval_expr, args)
@@ -75,16 +78,45 @@ def eval_fn(fn, actuals):
     def expr_Const():
       return expr.value
 
+    def _strides(numpy_array):
+      strides_bytes = numpy_array.strides
+      itemsize = numpy_array.dtype.itemsize
+      return tuple(stride / itemsize for stride in strides_bytes)
+      
+    def expr_Strides():
+      value = eval_expr(expr.array)
+      return _strides(value)
+    
     def expr_Attribute():
       value = eval_expr(expr.value)
       if expr.name == 'offset':
         if value.base is None:
           return 0
         else:
-          return value.ctypes.data - value.base.ctypes.data
+          offset_bytes =  value.ctypes.data - value.base.ctypes.data
+          return offset_bytes / value.dtype.itemsize 
+        
+      elif expr.name == 'data':
+        return np.ravel(value)
+      
+      elif expr.name == 'strides':
+        return _strides(value)
+      
+      elif isinstance(value, tuple):
+        if expr.name.startswith('elt'):
+          field = int(expr.name[3:])
+        else:
+          field = int(expr.name)
+        return value[field]
+        
       else:
         return getattr(value, expr.name)
 
+    def expr_Alloc():
+      count = eval_expr(expr.count)
+      arr = np.empty(shape = (count,), dtype = expr.elt_type.dtype)
+      return arr
+      
     def expr_AllocArray():
       shape = eval_expr(expr.shape)
       assert isinstance(shape, tuple), "Expected tuple, got %s" % (shape,)
@@ -94,15 +126,28 @@ def eval_fn(fn, actuals):
       return  np.ndarray(shape = shape, dtype = dtype) 
     
     def expr_ArrayView():
+
       data = eval_expr(expr.data)
+      
       shape  = eval_expr(expr.shape)
       strides = eval_expr(expr.strides)
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
+      bytes_per_elt = dtype.itemsize
+      if False:
+        print "data", data 
+        print "shape",  shape 
+        print "strides", strides
+        print "offset", offset 
+        print "itemsize", bytes_per_elt
+        
+      if isinstance(data, np.ndarray):
+        data = data.data 
+ 
       return np.ndarray(shape = shape, 
-                        offset = offset, 
+                        offset = offset * bytes_per_elt, 
                         buffer = data, 
-                        strides = strides, 
+                        strides = tuple(si * bytes_per_elt for si in  strides), 
                         dtype = np.dtype(dtype))
       
       
@@ -113,11 +158,13 @@ def eval_fn(fn, actuals):
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)
+      
       return array[index]
 
     def expr_PrimCall():
-
-      return expr.prim.fn (*eval_args(expr.args))
+      arg_values = eval_args(expr.args)
+      result = expr.prim.fn (*arg_values)
+      return result 
     
     def expr_Slice():
       return slice(eval_expr(expr.start), eval_expr(expr.stop),
@@ -185,6 +232,92 @@ def eval_fn(fn, actuals):
     def expr_Len():
       return len(eval_expr(expr.value))
     
+    def expr_Map():
+      fn = eval_expr(expr.fn)
+      args = [eval_expr(arg) for arg in expr.args]
+      if isinstance(expr.axis, (int, long)):
+        axis = expr.axis 
+      else:
+        axis = eval_expr(expr.axis)
+        
+      if axis is None:
+        args = [np.ravel(arg) for arg in args]
+        axis = 0
+        
+      largest_rank = 0
+      largest_arg = None
+      
+      for arg in args:
+        rank = rankof(arg) 
+        if rank > largest_rank:
+          largest_rank = rank 
+          largest_arg = arg
+      if largest_rank == 0:
+        return eval_fn(fn, args) 
+      niters = largest_arg.shape[axis]
+      results = []
+      for i in xrange(niters):
+        elt_args = []
+        for arg in args:
+          indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+          elt_args.append(arg[tuple(indices)])
+        results.append(eval_fn(fn, elt_args))
+      return np.array(results)
+    
+    def expr_Reduce():
+      fn = eval_expr(expr.fn)
+      combine = eval_expr(expr.combine)
+      init = eval_expr(expr.init) if expr.init else None 
+      args = [eval_expr(arg) for arg in expr.args]
+      if isinstance(expr.axis, (int, long)):
+        axis = expr.axis
+      else:
+        axis = eval_expr(expr.axis)
+        
+      if axis is None:
+        args = [np.ravel(arg) for arg in args]
+        axis = 0 
+      
+      largest_rank = 0
+      largest_arg = None
+      for arg in args:
+        rank = rankof(arg) 
+        if rank > largest_rank:
+          largest_rank = rank 
+          largest_arg = arg
+          
+      if largest_rank == 0:
+        acc = eval_fn(fn, args)
+        if init is None: return acc 
+        else: return eval_fn(combine, [init, acc])
+      
+      niters = largest_arg.shape[axis]
+
+      if init is not None: acc = init 
+      else: acc = None 
+        
+      for i in xrange(niters):
+        elt_args = []
+        for arg in args:
+          indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+          elt_args.append(arg[tuple(indices)])
+        elt_result = eval_fn(fn, elt_args)
+        if acc is not None:
+          acc = eval_fn(combine, [acc, elt_result])
+        else:
+          acc = elt_result
+      return acc
+    
+    
+    def expr_IndexMap():
+      fn = eval_expr(expr.fn)
+      shape = eval_expr(expr.shape)
+      dtype = expr.type.elt_type.dtype
+      result = np.empty(shape, dtype = dtype)
+      for idx in np.ndindex(shape):
+        result[idx] = eval_fn(fn, (idx,))
+      return result
+      
     def expr_IndexReduce():
       fn = eval_expr(expr.fn)
       combine = eval_expr(expr.combine)
@@ -234,13 +367,12 @@ def eval_fn(fn, actuals):
     elif isinstance(lhs, Index):
       arr = eval_expr(lhs.value)
       idx = eval_expr(lhs.index)
+
       arr[idx] = rhs
 
   
 
-  def eval_parfor_seq(stmt):
-    fn = eval_expr(stmt.fn)
-    bounds = eval_expr(stmt.bounds)
+  def eval_parfor_seq(fn, bounds):
     if isinstance(bounds, (list,tuple)) and len(bounds) == 1:
       bounds = bounds[0]
         
@@ -250,11 +382,10 @@ def eval_fn(fn, actuals):
     else:
       for idx in np.ndindex(bounds):
         eval_fn(fn, (idx,))
-        
-  def eval_parfor_shiver(stmt):
-    clos = eval_expr(stmt.fn)
+  
+    
+  def eval_parfor_shiver(clos, bounds):
     assert hasattr(clos, "__call__"), "Unexpected fn %s" % (clos,) 
-    bounds = eval_expr(stmt.bounds)
     assert isinstance(bounds, (int,long,tuple)), "Invalid bounds %s" % (bounds,)
     
     if isinstance(clos, ClosureVal):
@@ -278,7 +409,8 @@ def eval_fn(fn, actuals):
       from frontend import specialize 
       typed, linear_args = specialize(fn, full_args)
     
-    import transforms,  llvm_backend
+    import transforms
+    import llvm_backend
     from llvm_backend import ctypes_to_generic_value
     lowered_fn = transforms.pipeline.lowering(fn)
     llvm_fn = llvm_backend.compile_fn(lowered_fn).llvm_fn 
@@ -297,7 +429,9 @@ def eval_fn(fn, actuals):
     shiver.parfor(llvm_fn, bounds, 
                   fixed_args = gv_inputs, 
                   ee = llvm_backend.global_context.exec_engine)  
+    
   def eval_stmt(stmt):
+
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)
@@ -336,7 +470,10 @@ def eval_fn(fn, actuals):
       eval_expr(stmt.value)
       
     elif isinstance(stmt, ParFor):
-      eval_parfor_shiver(stmt)    
+      fn = eval_expr(stmt.fn)
+      bounds = eval_expr(stmt.bounds)
+    
+      eval_parfor_seq(fn, bounds)    
       
       
     else:

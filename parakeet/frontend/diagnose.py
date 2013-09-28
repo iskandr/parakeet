@@ -1,6 +1,7 @@
+from treelike.testing_helpers import eq
 from run_function import specialize 
 from ..transforms import Phase, Transform, CloneFunction
-from ..transforms.pipeline import lowering
+from ..transforms.pipeline import lowering, loopify
 
 def transform_name(t):
   assert not isinstance(t, Phase)
@@ -41,32 +42,46 @@ def linearize_phases(typed_fn, phases):
     combined.extend(linearize_phase(typed_fn, phase))
   return combined 
          
-def get_transform_list(typed_fn):
-  return linearize_phase(typed_fn, lowering)  
+def get_transform_list(typed_fn, last_phase = loopify):
+  return linearize_phase(typed_fn, last_phase)  
 
-def find_broken_transform(fn, inputs, expected, print_transforms = True):
+def find_broken_transform(fn, inputs, expected, 
+                             print_transforms = True, 
+                             print_functions = True, 
+                             last_phase = loopify):
   from .. import interp 
   # print "[Diagnose] Specializing function..."
   fn, args = specialize(fn, inputs, optimize=False)  
-  # print "[Diagnose] Trying function %s before transformations.." % fn.name 
-  if interp.eval(fn, args) != expected:
+  # print "[Diagnose] Trying function %s before transformations.." % fn.name
+  try:  
+    interp_result = interp.eval(fn, args)
+  except:
+    print "[Diagnose] Runtime error in ", fn 
+    interp_result = None
+  
+   
+  if not eq(interp_result, expected):
     print "[Diagnose] This function was busted before we optimized anything!" 
     return None 
-  transforms = get_transform_list(fn)
+  transforms = get_transform_list(fn, last_phase = last_phase)
   print "[Diagnose] Full list of transforms:"
   for (name, t) in transforms:
     print "  -> ", name 
   old_fn = fn 
-  cloner = CloneFunction()
+
   for (name, t) in transforms:
     print "[Diagnose] Running %s..." % (name, )
     # in case t is just a class, instantiate it 
     if not isinstance(t, Transform):
       t = t()
     assert isinstance(t, Transform)
+    cloner = CloneFunction(parent_transform = t)
     new_fn = t.apply(cloner.apply(old_fn))
+    if print_functions:
+      print new_fn 
+      
     result = interp.eval(new_fn, args)
-    if result != expected:
+    if not eq(result, expected):
       print "[Diagnose] Expected %s but got %s " % (expected, result)
       print "[Diagnose] After running ", t
       print "[Diagnose] Old function ", old_fn 

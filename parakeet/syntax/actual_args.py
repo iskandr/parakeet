@@ -71,6 +71,9 @@ class ActualArgs(object):
       arg_strings.append("*" + str(self.starargs))
     return ", ".join(arg_strings)
 
+  def __repr__(self):
+    return str(self)
+
   def __hash__(self):
     kwd_tuple = tuple(self.keywords.items())
     full_tuple = self.positional + kwd_tuple + (self.starargs,)
