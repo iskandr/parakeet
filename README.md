@@ -82,4 +82,4 @@ Your untyped function gets used as a template from which multiple *type speciali
 (for each distinct set of input types). These typed functions are then churned through many optimizations 
 before finally getting translated into native code. 
 For more information about the project you can watch the [Parakeet presentation](https://vimeo.com/73895275) from 
-this year's  PyData Boston, look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [Alex Rubinsteyn](http://www.rubinsteyn.com).
+this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [Alex Rubinsteyn](http://www.rubinsteyn.com).
