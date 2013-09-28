@@ -9,25 +9,33 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 
 ```python 
 
-   import numpy as np 
-   
-   def loopy_function(x, alpha = 0.5, beta = 0.3):
-     y = np.empty_like(x)
-     for i in xrange(len(x)):
-       y[i] = np.tanh(x[i] * alpha + beta)
-     return y
-     
-  from parakeet import jit 
-  fast_version = jit(loop_function)
+import numpy as np 
+from parakeet import jit 
 
-  x = np.array([1,2,3])
-  assert loopy_function(x) == fast_version(x)
+x = np.array([1,2,3])
+y = np.tanh(x) * alpha + beta
+   
+@jit
+def fast(x, alpha = 0.5, beta = 0.3):
+  return np.tanh(x) * alpha + beta 
+   
+@jit 
+def loopy(x, alpha = 0.5, beta = 0.3):
+  y = np.empty_like(x)
+  for i in xrange(len(x)):
+    y[i] = np.tanh(x[i] * alpha + beta)
+  return y
+     
   
-  @jit
-  def fast_comprehension(x, alpha = 0.5, beta = 0.3):
-    return np.array([np.tanh(xi*alpha + beta) for xi in x])
+@jit
+def comprehension(x, alpha = 0.5, beta = 0.3):
+  return np.array([np.tanh(xi*alpha + beta) for xi in x])
   
-  assert loopy_function(x) == fast_comprehension(x) 
+
+assert fast(x) == y
+assert loopy(x) == y
+assert comprehension(x) == y
+
 ```
 
 
