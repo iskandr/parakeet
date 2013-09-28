@@ -52,8 +52,14 @@ def find_broken_transform(fn, inputs, expected,
   from .. import interp 
   # print "[Diagnose] Specializing function..."
   fn, args = specialize(fn, inputs, optimize=False)  
-  # print "[Diagnose] Trying function %s before transformations.." % fn.name 
-  interp_result = interp.eval(fn, args) 
+  # print "[Diagnose] Trying function %s before transformations.." % fn.name
+  try:  
+    interp_result = interp.eval(fn, args)
+  except:
+    print "[Diagnose] Runtime error in ", fn 
+    interp_result = None
+  
+   
   if not eq(interp_result, expected):
     print "[Diagnose] This function was busted before we optimized anything!" 
     return None 
