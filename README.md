@@ -39,6 +39,7 @@ assert comprehension(x) == y
 ```
 
 
+
 Install
 ====
 You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running:
@@ -77,4 +78,8 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
 
 How does it work? 
 ====
-Your untyped function gets used as a template from which multiple *type specializations* are generated (for each distinct set of input types). These typed functions are then churned through many optimizations before finally getting translated into native code. For more information about the project either check out our [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [main developer](http://www.rubinsteyn.com).
+Your untyped function gets used as a template from which multiple *type specializations* are generated 
+(for each distinct set of input types). These typed functions are then churned through many optimizations 
+before finally getting translated into native code. 
+For more information about the project you can watch the [Parakeet presentation](https://vimeo.com/73895275) from 
+this year's  PyData Boston, look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [Alex Rubinsteyn](http://www.rubinsteyn.com).
