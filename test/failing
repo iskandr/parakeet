@@ -1,35 +1,12 @@
-test.test_adverbs.test_scan.test_scan_add_1d ... ERROR
-test.test_adverbs.test_scan.test_scan_add_2d ... ERROR
-test.test_algorithms.test_floyd_warshall.test_dists ... FAIL
-test.test_algorithms.test_harris_corner.test_diff_x ... ERROR
-test.test_algorithms.test_harris_corner.test_diff_y ... ERROR
-test.test_algorithms.test_harris_corner.test_harris ... FAIL
-test.test_algorithms.test_harris_corner.test_harris_timing ... FAIL
-test.test_algorithms.test_matmult_comprehensions.test_matmult_comprehensions ... FAIL
-test.test_arrays.test_assign_slice.test_set_1d_simple_slice_to_const ... FAIL
-test.test_arrays.test_assign_slice.test_set_1d_step_slice_to_const ... FAIL
-test.test_arrays.test_methods.test_ravel ... FAIL
-test.test_arrays.test_methods.test_flatten ... FAIL
-test.test_arrays.test_slices.test_multiple_slices ... ERROR
-test.test_compiler.test_codegen_sum_loop.test_sum ... (c compiler error)
-test.test_compiler.test_optimizations.test_simple_constant_folding ... FAIL
-test.test_compiler.test_optimizations.test_constants_across_control_flow ... FAIL
-test.test_compiler.test_optimizations.test_always_true ... FAIL
-test.test_compiler.test_optimizations.test_always_false ... FAIL
-test.test_compiler.test_optimizations.test_volatile_licm_mistake ... ERROR
-test.test_neighborhood.test_patchmap.test_erode_identity_shape ... ERROR
-test.test_neighborhood.test_patchmap.test_erode ... FAIL
-test.test_numpy_lib.test_ufunc_math.test_remainder ... FAIL
-test.test_numpy_lib.test_ufunc_math.test_logaddexp2 ... FAIL
-test.test_numpy_lib.test_ufunc_math.test_remainder ... FAIL
-test.test_numpy_lib.test_ufunc_math.test_mod ... FAIL
-
-
-
-
-
-
-
-
-
+test.adverbs.test_scan.test_scan_add_2d ... FAIL
+test.algorithms.test_floyd_warshall.test_dists ... FAIL
+test.algorithms.test_harris_corner.test_harris ... FAIL
+test.algorithms.test_harris_corner.test_harris_timing ... FAIL
+test.algorithms.test_matmult_comprehensions.test_matmult_comprehensions ... FAIL
+test.arrays.test_assign_slice.test_set_1d_simple_slice_to_const ... FAIL
+test.arrays.test_assign_slice.test_set_1d_step_slice_to_const ... FAIL
+test.arrays.test_broadcasting.test_2d_1d ... FAIL
+test.compiler.test_optimizations.test_constants_across_control_flow ... FAIL
+test.compiler.test_optimizations.test_copy_elimination ... FAIL
+test.numpy_lib.test_ufunc_math.test_logaddexp ... FAIL
 

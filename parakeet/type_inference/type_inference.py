@@ -92,8 +92,9 @@ class TypeInference(LocalTypeInference):
   
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
+    print args 
     arg_types = get_types(args)
-    
+    print arg_types 
     if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
@@ -107,7 +108,8 @@ class TypeInference(LocalTypeInference):
         return syntax.PrimCall(prims.is_, args, type = Bool)
     elif all(t.rank == 0 for t in arg_types):
       # arguments should then be tuples
-      assert len(arg_types) == 2
+      assert len(arg_types) == 2, \
+        "Expected two arguments but got [%s] in %s" % (", ".join(str(t) for t in arg_types), expr)
       xt, yt = arg_types
       x, y = args 
       assert xt.__class__ is TupleT, \
