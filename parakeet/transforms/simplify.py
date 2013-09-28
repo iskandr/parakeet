@@ -34,7 +34,7 @@ class Simplify(Transform):
     transform.Transform.__init__(self)
     # associate var names with any immutable values
     # they are bound to
-    self.bindings = {}
+    self.bindings = ScopedDict()
 
     # which expressions have already been computed
     # and stored in some variable?
@@ -140,6 +140,7 @@ class Simplify(Transform):
   def transform_Var(self, expr):
     name = expr.name
     prev_expr = expr
+
     while name in self.bindings:
       prev_expr = expr 
       expr = self.bindings[name]
@@ -148,9 +149,12 @@ class Simplify(Transform):
       else:
         break
     c = expr.__class__ 
+    
     if c is Var or c is Const:
+
       return expr
     else:
+
       return prev_expr
   
   def transform_Cast(self, expr):
@@ -526,8 +530,10 @@ class Simplify(Transform):
 
   def transform_block(self, stmts):
     self.available_expressions.push()
+    self.bindings.push()
     new_stmts = Transform.transform_block(self, stmts)
     self.available_expressions.pop()
+    self.bindings.pop()
     return new_stmts
 
   def enter_loop(self, phi_nodes):
