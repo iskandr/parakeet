@@ -181,21 +181,33 @@ class FlatFnCompiler(BaseCompiler):
     
     
     elif p == prims.equal:
+      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
+        return "1"
       return "%s == %s" % (args[0], args[1])
     elif p == prims.not_equal:
+      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
+        return "0"
       return "%s != %s" % (args[0], args[1])
     elif p == prims.greater:
+      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
+        return "0"
       return "%s > %s" % (args[0], args[1])
     elif p == prims.greater_equal:
+      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
+        return "1"
       return "%s >= %s" % (args[0], args[1])
     elif p == prims.less:
+      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
+        return "0"
       return "%s < %s" % (args[0], args[1])
     elif p == prims.less_equal:
+      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
+        return "1"
       return "%s <= %s" % (args[0], args[1])
     elif p == prims.remainder:
       x,y = args
-      if t == Float32: return "remainderf(%s, %s)" % (x,y)
-      elif t == Float64: return "remainder(%s, %s)" % (x,y)
+      if t == Float32: return "fmod(%s, %s)" % (x,y)
+      elif t == Float64: return "fmod(%s, %s)" % (x,y)
       assert isinstance(t, (BoolT, IntT)), "Modulo not implemented for %s" % t
       rem = self.fresh_var(t, "rem", "%s %% %s" % (x,y))
       y_is_negative = self.fresh_var(t, "y_is_negative", "%s < 0" % y)
@@ -813,6 +825,7 @@ class PyModuleCompiler(FlatFnCompiler):
     c_layout_strides = ["1"]
     for shape_elt in list(reversed(shape_elts))[:-1]:
       c_layout_strides = [c_layout_strides[-1] + " * " + shape_elt] + c_layout_strides
+    
     
     is_c_layout = "&& ".join("(%s) == (%s)" % (actual, ideal) 
                              for actual, ideal 

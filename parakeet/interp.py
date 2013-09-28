@@ -10,7 +10,7 @@ from syntax import (Expr, Var, Tuple,
                     Return, If, While, ForLoop, ParFor, ExprStmt,   
                     ActualArgs, 
                     Assign, Index, AllocArray,)
-from parakeet.frontend import ast_conversion
+
 
 class ReturnValue(Exception):
   def __init__(self, value):
@@ -39,7 +39,7 @@ def eval(fn, actuals):
   return result 
    
 def eval_fn(fn, actuals):
-
+  
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -58,7 +58,7 @@ def eval_fn(fn, actuals):
     return fn(actuals)
   else:
     return fn(*actuals)
-
+  
   def eval_args(args):
     if isinstance(args, (list, tuple)):
       return map(eval_expr, args)
@@ -163,8 +163,8 @@ def eval_fn(fn, actuals):
 
     def expr_PrimCall():
       arg_values = eval_args(expr.args)
-
-      return expr.prim.fn (*arg_values)
+      result = expr.prim.fn (*arg_values)
+      return result 
     
     def expr_Slice():
       return slice(eval_expr(expr.start), eval_expr(expr.stop),
@@ -409,7 +409,8 @@ def eval_fn(fn, actuals):
       from frontend import specialize 
       typed, linear_args = specialize(fn, full_args)
     
-    import transforms,  llvm_backend
+    import transforms
+    import llvm_backend
     from llvm_backend import ctypes_to_generic_value
     lowered_fn = transforms.pipeline.lowering(fn)
     llvm_fn = llvm_backend.compile_fn(lowered_fn).llvm_fn 
@@ -430,6 +431,7 @@ def eval_fn(fn, actuals):
                   ee = llvm_backend.global_context.exec_engine)  
     
   def eval_stmt(stmt):
+
     if isinstance(stmt, Return):
       v = eval_expr(stmt.value)
       raise ReturnValue(v)

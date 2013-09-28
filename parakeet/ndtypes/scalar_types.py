@@ -11,15 +11,6 @@ class ScalarT(ImmutableT):
   rank = 0
   _members = ['dtype']
 
-  # no need for _fields_ since scalars aren't represented as a struct
-  """
-  _properties_ = [
-    ('real', identity),
-    ('imag', always_zero),
-    ('conjugate', identity)
-  ]
-  """
-
   def node_init(self):
     assert isinstance(self.dtype, np.dtype), \
         "Expected dtype, got %s" % self.dtype

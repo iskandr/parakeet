@@ -1,16 +1,12 @@
- 
-from .. analysis import contains_loops 
-from .. import config, type_inference
-from .. ndtypes import type_conv, Type 
-from ..syntax import UntypedFn, TypedFn, ActualArgs, ForLoop, While
-from .. transforms import pipeline
- 
+
+from .. import config, type_inference 
+from ..analysis import contains_loops 
+from ..ndtypes import type_conv, Type 
+from ..syntax import UntypedFn, TypedFn, ActualArgs
+from ..transforms import pipeline
 
  
-def _typeof(arg):
-  if hasattr(arg, 'type') and isinstance(arg.type, Type):
-    return arg.type 
-  return type_conv.typeof(arg)
+
 
 def prepare_args(fn, args, kwargs):
   """
@@ -26,6 +22,11 @@ def prepare_args(fn, args, kwargs):
   arg_values = ActualArgs(nonlocals + list(args), kwargs)
 
   # get types of all inputs
+  def _typeof(arg):
+    if hasattr(arg, 'type') and isinstance(arg.type, Type):
+      return arg.type 
+    else:
+      return type_conv.typeof(arg)
   arg_types = arg_values.transform(_typeof)
   return arg_values, arg_types
   
@@ -57,8 +58,6 @@ def specialize(untyped, args, kwargs = {}, optimize = True):
     # apply high level optimizations 
     typed_fn = normalize.apply(typed_fn)
   return typed_fn, linear_args 
-
-
 
 def run_typed_fn(fn, args, backend = None):
   
@@ -100,8 +99,16 @@ def run_typed_fn(fn, args, backend = None):
   
   elif backend == 'c':
     from .. import c_backend
-    return c_backend.run(fn, args) 
-     
+    return c_backend.run(fn, args)
+   
+  elif backend == 'openmp':
+    from .. import openmp_backend 
+    return openmp_backend.run(fn, args)
+  
+  elif backend == 'cuda':
+    from .. import cuda_backend 
+    return cuda_backend.run(fn, args)
+  
   elif backend == "interp":
     from .. import interp 
     fn = pipeline.loopify(fn)
@@ -117,13 +124,21 @@ def run_untyped_fn(fn, args, kwargs = None, backend = None):
   typed_fn, linear_args = specialize(fn, args, kwargs)
   
   return run_typed_fn(typed_fn, linear_args, backend)
-  
+
+def run_python_ast(fn_name, fn_args, fn_body, globals_dict, 
+                     arg_values, kwarg_values = None, backend = None):
+  """
+  Instead of giving Parakeet a function to parse, you can construct a Python 
+  AST yourself and then have that converted into a Typed Parakeet function
+  """
+  import ast_conversion
+  untyped = ast_conversion.translate_function_ast(fn_name, fn_args, fn_body, globals_dict)
+  return run_untyped_fn(untyped, arg_values, kwarg_values, backend)
+    
 def run_python_fn(fn, args, kwargs = None, backend = None):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-  if kwargs is None:
-    kwargs = {}
   import ast_conversion
   # translate from the Python AST to Parakeet's untyped format
   untyped = ast_conversion.translate_function_value(fn)

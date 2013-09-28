@@ -2,7 +2,8 @@
 
 import numpy as np
 import ndtypes 
-from ndtypes import Bool, combine_type_list, FloatT, IntT, BoolT 
+
+from ndtypes import Bool, combine_type_list, FloatT, IntT, BoolT, Float32, Float64 
 
 prim_lookup_by_value = {}
 
@@ -173,8 +174,18 @@ class Prim(object):
 
 class Float(Prim):
   """Always returns a float"""
-  pass
-
+  def expected_input_types(self, arg_types):
+    max_nbytes = max(t.nbytes for t in arg_types)
+    if max_nbytes <= 4:
+      upcast_types = [Float32.combine(t) for t in arg_types]
+    else:
+      upcast_types = [Float64.combine(t) for t in arg_types]
+    return Prim.expected_input_types(self, upcast_types)
+  
+  def result_type(self, arg_types):
+    t = Prim.result_type(self, arg_types)
+    return t.combine(Float32)
+  
 class Arith(Prim):
   """Basic arithmetic operators"""
   pass
@@ -252,7 +263,9 @@ remainder = Arith(np.remainder, 'Mod', '%', extra_signatures = ['??->?'])
 mod = remainder 
 fmod = Arith(np.fmod, doc = "Return the element-wise remainder of division. C-style modulo.")
 
-power = Arith(np.power, 'Pow', '**')
+
+# used to be Arith but easier if result is always floating point 
+power = Float(np.power, 'Pow', '**')
 # power_int = Arith(np.power, extra_signatures = [''])
 
 
