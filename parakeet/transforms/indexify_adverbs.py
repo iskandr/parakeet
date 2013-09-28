@@ -126,8 +126,8 @@ class IndexifyAdverbs(Transform):
       builder.setidx(output_var, index_input_var, elt_result)
       builder.return_(none)
     
-    inliner = Inliner()
-    new_fn = inliner.apply(new_fn)
+    #inliner = Inliner()
+    #new_fn = inliner.apply(new_fn)
     self._indexed_fn_cache[key] = new_fn
     return mk_closure()
           
