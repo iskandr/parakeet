@@ -158,7 +158,13 @@ class LowerArrayOperators(Transform):
                                    array_view = True, 
                                    order = "C")
       self.array_copy(array, new_array)
-      self.assign(x, new_array)
+      data = self.attr(new_array, 'data')
+      flat_view = self.array_view(data, 
+                              shape = self.tuple([nelts]), 
+                              strides = self.tuple([one_i64]), 
+                              offset = offset, 
+                              nelts = nelts)
+      self.assign(x, flat_view)
     self.if_(any_unit, contiguous, not_contiguous, [array_result])
     return array_result 
 

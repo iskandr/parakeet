@@ -46,6 +46,7 @@ class CoreBuilder(object):
   def fresh_var(self, t, prefix = "temp"):
     assert prefix is not None
     assert t is not None, "Type required for new variable %s" % prefix
+    prefix = names.original(prefix)
     ssa_id = names.fresh(prefix)
     self.type_env[ssa_id] = t
     return Var(ssa_id, type = t)

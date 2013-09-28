@@ -14,9 +14,7 @@ opt_shape_elim = False
 opt_redundant_load_elimination = False
 opt_licm = False
 
-# recompile functions for distinct patterns of unit strides
-# in array arguments
-stride_specialization = False
+
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -28,6 +26,10 @@ opt_copy_elimination = False
     
 # run verifier after each transformation 
 opt_verify = True
+
+# recompile functions for distinct patterns of unit strides
+# in array arguments :: seems to cause a rare bug with control flow!
+stride_specialization = False
 
 default_opt_level = 2 
 
@@ -45,7 +47,7 @@ def set_opt_level(n):
   if n > 1:
     g['opt_licm'] = True  
     g['opt_redundant_load_elimination'] = True
-    g['stride_specialization'] = True    
+
   if n > 2: 
     g['opt_loop_unrolling'] = True
 
@@ -72,10 +74,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] # ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']   
+print_functions_before_transforms = ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']   
 
 # show the function produced by each transformation?
-print_functions_after_transforms =  [] # ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']  
+print_functions_after_transforms =  ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -84,7 +86,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = False 
+print_transform_names = True 
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
