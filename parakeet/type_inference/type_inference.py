@@ -92,9 +92,9 @@ class TypeInference(LocalTypeInference):
   
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
-    print args 
+
     arg_types = get_types(args)
-    print arg_types 
+
     if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)

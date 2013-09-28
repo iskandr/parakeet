@@ -4,12 +4,12 @@ import time
 import parakeet 
 from parakeet.testing_helpers import expect_each, run_local_tests, eq
 
+
 size = (5,5)
 float_mat = np.random.uniform(0,1,size=size)
-bool_mat = float_mat > 0.5
 int_mat = np.random.random_integers(0,255,size=size)
 
-matrices = [float_mat, bool_mat, int_mat]
+matrices = [float_mat, int_mat]
 
 def diff_x(I):
   m = I.shape[0]
@@ -47,64 +47,11 @@ def harris(I):
   k = 0.05
   return det - k * tr * tr
 
-def parallel_harris(I):
-   
-  dx = diff_x(I)
-  dy = diff_y(I)
-  def scalar_computation(dx,dy):
-    A = dx * dx
-    B = dy * dy
-    C = dx * dy
-    tr = A + B
-    det = A * B - C * C
-    k = 0.05
-    return det - k * tr * tr
-  return parakeet.each(scalar_computation, dx, dy)
-
 
 def test_harris():
   expect_each(harris, harris, matrices)
 
-def test_harris_timing():
-  x = np.random.randn(50, 50)
-  
-  np_start = time.time()
-  harris(x)
-  np_time = time.time() - np_start
 
-  seq_start = time.time()
-  parakeet.run_python_fn(harris, [x])
-  seq_time = time.time() - seq_start
-
-  seq_start_no_comp = time.time()
-  parakeet.run_python_fn(harris, [x])
-  seq_time_no_comp = time.time() - seq_start_no_comp
-
-  par_start = time.time()
-  parallel_harris(x)
-  par_time = time.time() - par_start
-  
-  par_start_no_comp = time.time()
-  parallel_harris(x)
-
-  par_time_no_comp = time.time() - par_start_no_comp
-  
-  print "Parakeet time: %.3f" % seq_time
-  print "Parakeet w/out compilation: %.3f" % seq_time_no_comp
-  print "Parakeet parallel time: %.3f" % par_time
-  print "Parakeet parallel time (no comp): %.3f" % par_time_no_comp
-  print "Python time: %.3f" % np_time
-  #assert par_time_no_comp / np_time < 5, \
-  #  "Parakeet too slow (%.1fX slowdown)" % (par_time_no_comp / np_time)
-  
-  """
-  start = time.time()
-  parallel_result = parallel_harris(x)
-  parallel_time = time.time() - start
-  print "Parallel time: %.3f" % parallel_time
-  rmse = np.sqrt(np.mean( (parallel_result - np_rslt) **2))
-  assert rmse < 0.001, rmse 
-  """
   
 if __name__ == '__main__':
   run_local_tests()
