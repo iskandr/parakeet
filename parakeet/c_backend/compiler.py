@@ -322,7 +322,7 @@ class FlatFnCompiler(BaseCompiler):
     
     for (name, (_, right)) in merge.iteritems():
       c_right = self.visit_expr(right)
-      self.print_pyobj(self.as_pyobj(right), "Merge right %s " % name)
+     
       self.append("%s = %s;"  % (self.name(name), c_right))
     return self.pop()
   
@@ -773,12 +773,12 @@ class PyModuleCompiler(FlatFnCompiler):
     
     # slice out the 1D data array if there's an offset 
     size =  "PySequence_Size( (PyObject*) %(vec)s)" % locals()
-    self.print_pyobj(vec, "Before ")
+
     self.append("""
       if (%(offset)s > 0) {
         %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
       }""" % locals())
-    self.print_pyobj(vec, "After ")
+    
     self.check_array(vec)
 
     count = self.fresh_var("int64_t", "count", "PySequence_Size( (PyObject*) %s)" % vec)
