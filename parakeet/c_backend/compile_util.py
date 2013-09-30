@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import time 
 
+from tempfile import NamedTemporaryFile
+
 from config import (debug, pure_c, fast_math, 
                     print_commands, print_module_source, 
                     print_command_elapsed_time,
@@ -122,10 +124,11 @@ def create_source_file(src,
   else:
     prefix = "parakeet_%s_" % fn_name
   if src_filename is None:
-    src_file = tempfile.NamedTemporaryFile(suffix = source_extension, 
-                                           prefix =  prefix, 
-                                           delete = False, 
-                                           dir = tempdir)
+    src_file = NamedTemporaryFile(suffix = source_extension, 
+                                  prefix =  prefix, 
+                                  delete = False, 
+                                  mode = 'w',
+                                  dir = tempdir)
     src_filename = src_file.name 
   else:
     src_file = open(src_filename, 'w')
@@ -153,6 +156,24 @@ def create_source_file(src,
   if print_source: print subprocess.check_output(['cat', src_filename])
   return src_file 
 
+def run_cmd(cmd, env = None, label = ""):
+  if print_commands: print " ".join(cmd)
+  if print_command_elapsed_time: t = time.time()
+  with open(os.devnull, "w") as fnull:
+    with NamedTemporaryFile(prefix="parakeet_compile_err", mode = 'r+') as err_file:
+      try:  
+        subprocess.check_call(cmd, stdout = fnull, stderr = err_file, env = env)
+      except:
+        print "Parakeet encountered error(s) during compilation: "
+        print err_file.read()
+        raise 
+    
+  if print_command_elapsed_time: 
+    if label:
+      print "%s, elapsed time: %0.4f" % (label, time.time() - t)
+    else:
+      print "Elapsed time:", time.time() - t 
+
 def compile_object(src, 
                    fn_name = None,  
                    fn_signature = None,
@@ -174,13 +195,7 @@ def compile_object(src,
   src_filename = src_file.name
   object_name = src_filename.replace(source_extension, object_extension)
   compiler_cmd = [compiler] + compiler_flags + ['-c', src_filename, '-o', object_name]
-  if print_commands: print " ".join(compiler_cmd)
-  if print_command_elapsed_time: t = time.time()
-  
-  subprocess.check_output(compiler_cmd)
-
-  if print_command_elapsed_time: print "Source compilation, elapsed time:", time.time() - t 
-  
+  run_cmd(compiler_cmd, label = "Compile source")
   return CompiledObject(src = src, 
                         src_filename = src_filename, 
                         object_filename = object_name, 
@@ -233,15 +248,11 @@ def compile_module(src,
   
   shared_name = src_filename.replace(source_extension, shared_extension)
   linker_cmd = [compiler] + linker_flags + [object_name] + list(extra_objects) + ['-o', shared_name]
-  
-  if print_commands: print "LD_LIBRARY_PATH=%s" % python_lib_dir, " ".join(linker_cmd)
-  
+
   env = os.environ.copy()
   env["LD_LIBRARY_PATH"] = python_lib_dir
-  if print_command_elapsed_time: t = time.time()
-  subprocess.check_output(linker_cmd, env = env)
+  run_cmd(linker_cmd, env = env, label = "Linking")
   
-  if print_command_elapsed_time: print "Linking, elapsed time:", time.time() - t
    
   if mac_os:
     # Annoyingly have to patch up the shared library to point to the correct Python

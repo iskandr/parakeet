@@ -1,7 +1,7 @@
 from .. syntax import (Expr, Assign, ExprStmt, ForLoop, If, Return, While, Comment, ParFor, 
                        TypedFn, UntypedFn,  Closure, ClosureElt, Select,  
                        Attribute, Const, Index, PrimCall, Tuple, Var, 
-                       Alloc, Array, Call, Struct, Shape, Strides, Range, Ravel, 
+                       Alloc, Array, Call, Struct, Shape, Strides, Range, Ravel, Transpose,
                        AllocArray, ArrayView, Cast, Slice, TupleProj, TypeValue,  
                        Map, Reduce, Scan, OuterMap, IndexMap, IndexReduce, IndexScan )
 
@@ -86,6 +86,9 @@ class SyntaxVisitor(object):
     self.visit_expr(expr.stop)
     self.visit_expr(expr.step)
 
+  def visit_Transpose(self, expr):
+    self.visit_expr(expr.array)
+    
   def visit_IndexMap(self, expr):
     self.visit_expr(expr.fn)
     self.visit_expr(expr.shape)
@@ -173,6 +176,7 @@ class SyntaxVisitor(object):
     Array : 'visit_Array',
     Range : 'visit_Range',
     Ravel : 'visit_Ravel',   
+    Transpose : 'visit_Transpose', 
     Shape : 'visit_Shape', 
     Strides : 'visit_Strides', 
     Alloc : 'visit_Alloc', 

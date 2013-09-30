@@ -110,8 +110,7 @@ class FlatFnCompiler(BaseCompiler):
       return "0"
     elif x == "0":
       return "1"
-    else:
-      return "!%s" % x
+    return "!%s" % x
   
   def and_(self, x, y):
     if x == "0" or y == "0":
@@ -122,8 +121,7 @@ class FlatFnCompiler(BaseCompiler):
       return y 
     elif y == "1":
       return x
-    else:
-      return "%s && %s" % (x,y) 
+    return "%s && %s" % (x,y) 
   
   def or_(self, x, y):
     if x == "1" or y == "1":
@@ -132,8 +130,7 @@ class FlatFnCompiler(BaseCompiler):
       return y
     elif y == "0":
       return x 
-    else:
-      return "%s || %s" % (x,y) 
+    return "%s || %s" % (x,y) 
   
   def visit_PrimCall(self, expr):
     t = expr.type
@@ -176,7 +173,7 @@ class FlatFnCompiler(BaseCompiler):
       return self.or_(args[0], args[1])
     
     elif p == prims.logical_not:
-      self.not_(args[0])
+      return self.not_(args[0])
       
     elif p == prims.equal:
       if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:

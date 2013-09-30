@@ -5,7 +5,7 @@ from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t
 from .. frontend import macro, jit 
 from .. syntax import (Attribute, TupleProj, ArrayView, DelayUntilTyped, 
                        Tuple, Ravel, Reshape, TypeValue, 
-                       const_int)
+                       const_int, Transpose)
 
 from adverbs import map, reduce, scan 
 

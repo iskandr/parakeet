@@ -180,7 +180,7 @@ class Transform(Builder):
     return expr
   
   def transform_Transpose(self, expr):
-    Transpose()
+    expr.array = self.transform_expr(expr.array)
     return expr 
   
   def transform_Len(self, expr):

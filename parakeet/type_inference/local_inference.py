@@ -7,7 +7,9 @@ from ..ndtypes import (StructT, Type, Unknown,
                        type_conv)
 
 from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, Index, 
-                      Range, Ravel, Reshape, Select, Slice, Tuple, TupleProj, TypeValue,  Var,  
+                      Range, Ravel, Reshape, 
+                      Select, Slice, 
+                      Transpose, Tuple, TupleProj, TypeValue,  Var,  
                       ForLoop, While, Assign, Return, If, 
                       prim_wrapper)
 
@@ -131,12 +133,20 @@ class LocalTypeInference(Transform):
   
   def transform_Ravel(self, expr):
     array = self.transform_expr(expr.array)
-    if array.type.__class__ is not  ArrayT:
-      print "Warning: Can't ravel/flatten an object of type %s" % array.type 
+    if isinstance(array, ScalarT):
       return array 
+    assert array.type.__class__ is ArrayT, \
+      "Can't ravel/flatten %s of type %s" % (array, array.type) 
     t = make_array_type(array.type.elt_type, 1)
     return Ravel(array, type = t)
   
+  def transform_Transpose(self, expr):
+    array = self.transform_expr(expr.array)
+    if isinstance(array.type, ScalarT):
+      return array
+    assert array.type.__class__ is ArrayT, \
+      "Can't transpose %s of type %s" % (array, array.type) 
+    return Transpose(array = array, type = array.type)
   
   def transform_Cast(self, expr):
     v = self.transform_expr(expr.value)
