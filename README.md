@@ -87,6 +87,6 @@ this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slid
 
 Backends
 ===
-Parakeet currently supports compilation to C or LLVM. To switch between these options change `parakeet.config.default\_backend` to either "c" or "llvm". 
+Parakeet currently supports compilation to C or LLVM. To switch between these options change `parakeet.config.default_backend` to either "c" or "llvm". 
 
 
