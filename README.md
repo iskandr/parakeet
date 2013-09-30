@@ -1,7 +1,8 @@
 Parakeet
 ====
 
-Parakeet is a runtime accelerator for an array-oriented subset of Python. If you're doing a lot of number crunching in Python, 
+Parakeet is a runtime accelerator for an array-oriented subset of Python. 
+If you're doing a lot of number crunching in Python, 
 Parakeet may be able to significantly speed up your code. 
 
 
@@ -79,7 +80,13 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
 How does it work? 
 ====
 Your untyped function gets used as a template from which multiple *type specializations* are generated 
-(for each distinct set of input types). These typed functions are then churned through many optimizations 
-before finally getting translated into native code. 
+(for each distinct set of input types). 
+These typed functions are then churned through many optimizations before finally getting translated into native code. 
 For more information about the project you can watch the [Parakeet presentation](https://vimeo.com/73895275) from 
 this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [Alex Rubinsteyn](http://www.rubinsteyn.com).
+
+Backends
+===
+Parakeet currently supports compilation to C or LLVM. To switch between these options change `parakeet.config.default\_backend` to either "c" or "llvm". 
+
+
