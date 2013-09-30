@@ -27,9 +27,8 @@ setup(
                   'parakeet.examples' : './examples', 
                   'parakeet.test' : './test' 
                 },
-    requires=[
-
-      'numpy', 
+    install_requires=[
+      'numpy>=1.7', 
       'scipy',
       'treelike'
       # LLVM is optional as long as you use the C backend 

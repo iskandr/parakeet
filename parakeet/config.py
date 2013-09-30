@@ -5,32 +5,6 @@ default_backend = 'c' #llvm
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
   
-opt_inline = False
-opt_fusion = False
-opt_stack_allocation = False
-opt_index_elimination = False
-opt_range_propagation = False
-opt_shape_elim = False
-opt_redundant_load_elimination = False
-opt_licm = False
-
-
-
-# may dramatically increase compile time
-opt_loop_unrolling = False
-
-# suspiciously complex optimizations may introduce bugs 
-# TODO: comb through carefully 
-opt_scalar_replacement = False
-opt_copy_elimination = False
-    
-# run verifier after each transformation 
-opt_verify = True
-
-# recompile functions for distinct patterns of unit strides
-# in array arguments :: seems to cause a rare bug with control flow!
-stride_specialization = True
-
 default_opt_level = 2 
 
 def set_opt_level(n):
@@ -50,6 +24,29 @@ def set_opt_level(n):
 
   if n > 2: 
     g['opt_loop_unrolling'] = True
+
+opt_inline = False
+opt_fusion = False
+opt_stack_allocation = False
+opt_index_elimination = False
+opt_range_propagation = False
+opt_shape_elim = False
+opt_redundant_load_elimination = False
+opt_licm = False
+
+# may dramatically increase compile time
+opt_loop_unrolling = False
+
+# suspiciously complex optimizations may introduce bugs 
+# TODO: comb through carefully 
+opt_scalar_replacement = False
+opt_copy_elimination = False
+    
+# run verifier after each transformation 
+opt_verify = True
+
+# recompile functions for distinct patterns of unit strides
+stride_specialization = True
 
 set_opt_level(default_opt_level)
 
@@ -95,5 +92,5 @@ print_specialized_function_names = False
 #         DESPERATE MEASURES        #
 #####################################
 
-testing_find_broken_transform = False 
+testing_find_broken_transform = True 
 

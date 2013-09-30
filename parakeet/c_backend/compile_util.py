@@ -96,9 +96,12 @@ python_lib_full = 'lib%s%s' % (python_lib, python_lib_extension)
 
 linker_flags = ['-shared'] + \
                ["-L%s" % python_lib_dir] + \
-               ["-l%s" % python_lib] + ['-lm']  
+               ['-lm']  
 if mac_os:
   linker_flags.append("-headerpad_max_install_names")
+  linker_flags.append("-undefined dynamic_lookup")
+else:
+  linker_flags.append("-l%s" % python_lib)
 
 if not debug and use_openmp and compiler in ('gcc', 'g++'):
   compiler_flags.append('-fopenmp')

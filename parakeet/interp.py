@@ -308,6 +308,8 @@ def eval_fn(fn, actuals):
           acc = elt_result
       return acc
     
+    def expr_Scan():
+      assert False, "Scan not implemented"
     
     def expr_IndexMap():
       fn = eval_expr(expr.fn)

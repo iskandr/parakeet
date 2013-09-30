@@ -11,4 +11,3 @@ script: nosetests test/*
 branches:
   only:
     - master
-    - dev

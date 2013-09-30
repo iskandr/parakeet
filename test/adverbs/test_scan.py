@@ -9,7 +9,7 @@ int_2d = np.array([int_1d, int_1d, int_1d])
 float_2d = np.array([float_1d, float_1d, float_1d])
 
 def running_sum(x):
-  return scan(add, x)
+  return scan(add, x, init = 0)
 
 def test_scan_add_1d():
   expect_each(running_sum, np.cumsum, [int_1d, float_1d])

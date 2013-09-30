@@ -8,8 +8,8 @@ bool_array = np.array([False,True])
 float_array = np.array([0.1, 0.2])
 arrays = [int_array, bool_array, float_array]
 
-def unary(fn): 
-  for x in arrays:
+def unary(fn, data = None): 
+  for x in (arrays if data is None else data):
     expect(fn, [x], fn(x))
 
 def binary(fn):
@@ -52,10 +52,10 @@ def test_arcsinh():
   unary(np.arcsinh)
   
 def test_arccosh():
-  unary(np.arccosh)
+  unary(np.arccosh, data = np.array([2.0, 3.0]))
   
 def test_arctanh():
-  unary(np.arctanh)
+  unary(np.arctanh, data = np.array([0.2, 0.3]))
   
 def test_deg2rad():
   unary(np.deg2rad)

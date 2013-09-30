@@ -83,7 +83,6 @@ high_level_optimizations = Phase([
                                     copy_elim,
                                     NegativeIndexElim,
                                     LowerSlices, 
-                                    # IndexifyArrayConstructors,
                                     LowerArrayOperators,  
                                     symbolic_range_propagation,
                                  ], 

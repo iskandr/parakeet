@@ -117,10 +117,13 @@ class RewriteTyped(Transform):
     
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)
-    if expr.init and \
-        not self.is_none(expr.init) and \
-        expr.init.type != acc_type:
-      expr.init = self.coerce_expr(expr.init, acc_type)
+    if expr.init and not self.is_none(expr.init) and expr.init.type != acc_type:
+      if isinstance(acc_type, ScalarT):
+        expr.init = self.coerce_expr(expr.init, acc_type)
+      else:
+        assert False, \
+          "Scan with scalar init of type %s and accumulator of type %s not yet supported" % \
+                    (expr.init.type, acc_type)
     return expr
 
   def transform_Slice(self, expr):

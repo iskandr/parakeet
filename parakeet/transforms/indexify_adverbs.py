@@ -26,9 +26,11 @@ class IndexifyAdverbs(Transform):
     return names.fresh(prefix + names.original(self.get_fn(fn).name))
   
   _indexed_fn_cache = {}
-  def indexify_fn(self, fn, axis, array_args, 
+  def indexify_fn(self, fn, axis,
+                   array_args, 
                    cartesian_product = False,
-                   output = None):
+                   output = None, 
+                   index_offsets = None):
     """
     Take a function whose last k values are slices through input data 
     and transform it into a function which explicitly extracts its arguments
@@ -51,6 +53,7 @@ class IndexifyAdverbs(Transform):
              array_arg_types, 
              output is None,  
              cartesian_product, 
+             index_offsets, 
            )
     
     def mk_closure():
@@ -115,7 +118,11 @@ class IndexifyAdverbs(Transform):
 
     for i, curr_array in enumerate(array_arg_vars):
       axis = axes[i]
-      curr_slice = builder.slice_along_axis(curr_array, axis, index_elts[i])
+      idx_expr = index_elts[i]
+      if index_offsets is not None:
+        assert len(index_offsets) == len(array_arg_vars)
+        idx_expr = builder.add(idx_expr, builder.int(index_offsets[i]) )
+      curr_slice = builder.slice_along_axis(curr_array, axis, idx_expr)
       
       slice_values.append(curr_slice) 
     
@@ -300,17 +307,24 @@ class IndexifyAdverbs(Transform):
     else:
       axis = unwrap_constant(axis)
 
+    max_arg = max_rank_arg(args)
+    nelts = self.shape(max_arg, axis)
     if self.is_none(init):
       assert len(args) == 1, "If 'init' not specified then can't have more than 1 arg"
       init = self.index_along_axis(args[0], axis, self.int(0))
-      assert init.type == fn.return_type 
+      index_offsets = (1,)
+      assert init.type == fn.return_type
+      nelts = self.sub(nelts, self.int(1), "nelts") 
+    else:
+      index_offsets = None
       
     index_fn = self.indexify_fn(fn, 
                                 axis, 
                                 args, 
-                                cartesian_product=False)
-    max_arg = max_rank_arg(args)
-    nelts = self.shape(max_arg, axis)
+                                cartesian_product=False, 
+                                index_offsets = index_offsets)
+
+
     
     
     return IndexReduce(fn = index_fn, 
@@ -331,18 +345,29 @@ class IndexifyAdverbs(Transform):
       axis = 0
     else:
       axis = unwrap_constant(axis)
+    
+    niters = self.niters(args, axis)
+    
+    if self.is_none(init):
+      assert len(args) == 1
+      init = self.index_along_axis(args[0], axis, self.int(0))# self.call(index_fn, [self.int(0)])  
+      index_offsets = (1,)
+      niters = self.sub(niters, self.int(1), "niters")
+    else:
+      index_offsets = None
+      
+      
     index_fn = self.indexify_fn(expr.fn, 
                                 axis, 
                                 args, 
-                                cartesian_product=False)
-    if self.is_none(init):
-      init = self.call(index_fn, [self.int(0)])  
+                                cartesian_product=False, 
+                                index_offsets = index_offsets)
     
-    niters = self.niters(args, axis)
+
     return IndexScan(fn = index_fn, 
                      init = init, 
                      combine = combine, 
-                     shape = niters, 
+                     shape = niters,
                      type = expr.type)
   
   def transform_Filter(self, expr):
