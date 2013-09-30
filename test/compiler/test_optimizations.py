@@ -6,10 +6,7 @@ from parakeet.transforms.pipeline import lowering
 from parakeet.analysis.syntax_visitor import SyntaxVisitor
 from parakeet.testing_helpers import expect, run_local_tests
 
-config.opt_fusion = True 
-config.opt_copy_elimination = True 
-config.opt_inline = True 
-config.opt_licm = True 
+config.set_opt_level(2)
 
 
 def A(x):

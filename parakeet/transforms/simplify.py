@@ -528,12 +528,14 @@ class Simplify(Transform):
     stmt.rhs = rhs
     return stmt
 
-  def transform_block(self, stmts):
+  def transform_block(self, stmts, keep_bindings = False):
     self.available_expressions.push()
     self.bindings.push()
     new_stmts = Transform.transform_block(self, stmts)
+    
     self.available_expressions.pop()
-    self.bindings.pop()
+    if not keep_bindings:
+      self.bindings.pop()
     return new_stmts
 
   def enter_loop(self, phi_nodes):
@@ -568,11 +570,13 @@ class Simplify(Transform):
     return result
 
   def transform_If(self, stmt):
-    stmt.true = self.transform_block(stmt.true)
-    stmt.false = self.transform_block(stmt.false)
+    stmt.true = self.transform_block(stmt.true, keep_bindings = True)
+    stmt.false = self.transform_block(stmt.false, keep_bindings=True)
     stmt.merge = self.transform_merge(stmt.merge,
                                       left_block = stmt.true,
                                       right_block = stmt.false)
+    self.bindings.pop()
+    self.bindings.pop()
     stmt.cond = self.transform_simple_expr(stmt.cond, "cond")
     if len(stmt.true) == 0 and len(stmt.false) == 0 and len(stmt.merge) <= 2:
       for (lhs_name, (true_expr, false_expr)) in stmt.merge.items():

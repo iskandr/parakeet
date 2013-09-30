@@ -170,8 +170,14 @@ class Verify(SyntaxVisitor):
     for lhs_name in lhs_names:
       self.bind_var(lhs_name)
     self.visit_expr(stmt.rhs)
-
-    assert stmt.lhs.type == stmt.rhs.type, \
+    rhs_t = stmt.rhs.type 
+    if stmt.lhs.__class__ is Index:
+      array_t = stmt.lhs.value.type 
+      assert stmt.lhs.type == rhs_t or rhs_t == array_t.elt_type, \
+        "Mismatch between LHS type %s and RHS %s in '%s'" % \
+        (stmt.lhs.type, stmt.rhs.type, stmt)
+    else:
+      assert stmt.lhs.type == stmt.rhs.type, \
         "Mismatch between LHS type %s and RHS %s in '%s'" % \
         (stmt.lhs.type, stmt.rhs.type, stmt)
 

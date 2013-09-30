@@ -133,7 +133,7 @@ class LocalTypeInference(Transform):
   
   def transform_Ravel(self, expr):
     array = self.transform_expr(expr.array)
-    if isinstance(array, ScalarT):
+    if isinstance(array.type, ScalarT):
       return array 
     assert array.type.__class__ is ArrayT, \
       "Can't ravel/flatten %s of type %s" % (array, array.type) 
@@ -253,11 +253,15 @@ class LocalTypeInference(Transform):
   def annotate_lhs(self, lhs, rhs_type):
 
     lhs_class = lhs.__class__
+    #
+    # Am I a tuple of Assignments? 
+    #
     if lhs_class is Tuple:
       if rhs_type.__class__ is TupleT:
         assert len(lhs.elts) == len(rhs_type.elt_types)
         new_elts = [self.annotate_lhs(elt, elt_type) 
-                    for (elt, elt_type) in zip(lhs.elts, rhs_type.elt_types)]
+                    for (elt, elt_type) 
+                    in zip(lhs.elts, rhs_type.elt_types)]
       else:
         assert rhs_type.__class__ is ArrayT, \
             "Unexpected right hand side type %s for %s" % (rhs_type, lhs)
@@ -265,6 +269,10 @@ class LocalTypeInference(Transform):
         new_elts = [self.annotate_lhs(elt, elt_type) for elt in lhs.elts]
       tuple_t = make_tuple_type(get_types(new_elts))
       return Tuple(new_elts, type = tuple_t)
+    
+    #
+    # Index Assignment
+    #
     elif lhs_class is Index:
       new_arr = self.transform_expr(lhs.value)
       new_idx = self.transform_expr(lhs.index)
@@ -272,6 +280,10 @@ class LocalTypeInference(Transform):
           "Expected array, got %s" % new_arr.type
       elt_t = new_arr.type.index_type(new_idx.type)
       return Index(new_arr, new_idx, type = elt_t)
+    
+    # 
+    # Attribute Assignment for Mutable Objects
+    # 
     elif lhs_class is Attribute:
       name = lhs.name
       struct = self.transform_expr(lhs.value)
@@ -281,6 +293,10 @@ class LocalTypeInference(Transform):
           (struct, struct_t)
       field_t = struct_t.field_type(name)
       return Attribute(struct, name, field_t)
+    
+    # 
+    # Regular Binding of Names to Values
+    # 
     else:
       assert lhs_class is Var, "Unexpected LHS: %s" % (lhs,)
       new_name = self.var_map.lookup(lhs.name)
@@ -293,8 +309,6 @@ class LocalTypeInference(Transform):
     rhs = self.transform_expr(stmt.rhs)
     lhs = self.annotate_lhs(stmt.lhs, rhs.type)
     return Assign(lhs, rhs)
-  
-  
   
   def transform_If(self, stmt):
     cond = self.transform_expr(stmt.cond) 
