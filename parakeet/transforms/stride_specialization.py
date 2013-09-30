@@ -1,6 +1,6 @@
 from .. analysis.find_constant_strides import FindConstantStrides, Const, Array, Struct, Tuple
 from .. analysis.find_constant_strides import from_python_list, from_internal_repr
-from .. syntax.helpers import const_int
+from .. syntax.helpers import const_int, const 
 from dead_code_elim import DCE
 from phase import Phase
 from simplify import Simplify
@@ -15,14 +15,14 @@ class StrideSpecializer(Transform):
     analysis = FindConstantStrides(fn, self.abstract_inputs)
     analysis.visit_fn(fn)
     self.env = analysis.env
-    #for k,v in sorted(self.env.items()):
-    #  print k, v
+
   
   def transform_Var(self, expr):
     if expr.name in self.env:
       value = self.env[expr.name]
       if value.__class__ is Const:
-        return const_int(value.value)
+        result = const(value.value)
+        return result 
     return expr
   
   def transform_lhs(self, lhs):

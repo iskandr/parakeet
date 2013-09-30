@@ -41,7 +41,7 @@ numpy_headers = ['numpy/arrayobject.h', 'numpy/arrayscalars.h']
 
 python_headers = core_python_headers + numpy_headers 
 
-cpp_defs = [] #["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+cpp_defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 
 config_vars = distutils.sysconfig.get_config_vars()
 

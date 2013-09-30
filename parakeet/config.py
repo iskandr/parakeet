@@ -29,7 +29,7 @@ opt_verify = True
 
 # recompile functions for distinct patterns of unit strides
 # in array arguments :: seems to cause a rare bug with control flow!
-stride_specialization = False
+stride_specialization = True
 
 default_opt_level = 2 
 

@@ -1,3 +1,5 @@
+import numpy as np 
+
 from .. ndtypes import Int64, Int32, Float32, Float64, Bool
 from .. ndtypes import FloatT, IntT, BoolT, NoneType, ScalarT
 from .. ndtypes import make_slice_type, make_tuple_type
@@ -54,16 +56,24 @@ slice_none_t = make_slice_type(none_t, none_t, none_t)
 slice_none = Slice(none, none, none, type = slice_none_t)
 
 def is_python_int(x):
-  return isinstance(x, (int, long))
+  return isinstance(x, (int, 
+                        long, 
+                        np.int8, 
+                        np.int16, 
+                        np.int32, 
+                        np.int64, 
+                        np.uint8, 
+                        np.uint32,
+                        np.uint64))
 
 def is_python_float(x):
-  return isinstance(x, float)
+  return isinstance(x, (float, np.float32, np.float64 ))
 
 def is_python_bool(x):
-  return isinstance(x, bool)
+  return isinstance(x, (bool, np.bool, np.bool8, np.bool_))
 
 def is_python_scalar(x):
-  return isinstance(x,  (bool, int, long, float))
+  return isinstance(x,  (bool, int, long, float)) or isinstance(x, np.ScalarType)
 
 def is_python_constant(x):
   if isinstance(x, tuple):
@@ -72,12 +82,12 @@ def is_python_constant(x):
     return x is None or is_python_scalar(x)
 
 def const_scalar(x):
-  if is_python_int(x):
-    return const_int(x)
-  elif isinstance(x, bool):
+  if is_python_bool(x):
     return const_bool(x)
+  elif is_python_int(x):
+    return const_int(x)
   else:
-    assert isinstance(x, float)
+    assert is_python_float(x)
     return const_float(x)
 
 def make_tuple(elts):
@@ -89,6 +99,7 @@ def const_tuple(*python_values):
   return make_tuple(map(const, python_values))
 
 def const(x):
+  
   if is_python_scalar(x):
     return const_scalar(x)
   elif isinstance(x, tuple):

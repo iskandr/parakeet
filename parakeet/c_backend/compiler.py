@@ -26,39 +26,6 @@ from config import (debug,
                     print_module_source, 
                     print_input_ir, 
                     ) 
-from parakeet.c_backend.config import use_openmp
- 
-
-"""
-def compile_flat(fn, _compile_cache = {}):
-
-  key = fn.cache_key
-  if key in _compile_cache:
-    return _compile_cache[key]
-  compiler = FlatFnCompiler()
-  name, sig, src = compiler.visit_fn(fn)
-  if print_function_source: print "Generated C source for %s: %s" %(name, src)
-  obj = compile_object(src, 
-                       fn_name = name, 
-                       fn_signature = sig, 
-                       extra_objects = compiler.extra_objects,
-                       forward_declarations =  compiler.forward_declarations, 
-                       extra_definitions = compiler.extra_definitons,
-                       print_source = print_module_source, 
-                       print_commands = print_commands)
-  return obj
-"""
-
-"""
-def flat_function_source(fn):
-  return compile_flat(fn).src 
-
-def flat_function_name(fn):
-  return compile_flat(fn).fn_name 
-
-def flat_function_signature(fn):
-  return compile_flat(fn).fn_signature
-"""
 
 def compile_flat_source(fn, _compile_cache = {}):
   key = fn.cache_key
@@ -283,31 +250,34 @@ class FlatFnCompiler(BaseCompiler):
     else:
       return "%s = %s;" % (lhs, rhs)
   
+  def declare(self, parakeet_name, parakeet_type, init_value = None):
+    c_name = self.name(parakeet_name)
+    t = to_ctype(parakeet_type)
+    if init_value is None:
+      self.append("%s %s;" % (t, c_name))
+    else: 
+      self.append("%s %s = %s;" % (t, c_name, init_value))
+  
   def declare_merge_vars(self, merge):
     """ 
     Declare but don't initialize
     """
     for (name, (left, _)) in merge.iteritems():
-      c_name = self.name(name)
-      t = to_ctype(left.type)
-      self.append("%s %s;" % (t, c_name))
-   
-  def visit_merge_left(self, merge, declare = False):
+      self.declare(name, left.type)
+      
+  def visit_merge_left(self, merge, only_declare = False):
     
     if len(merge) == 0:
       return ""
     
     self.push()
     self.comment("Merge Phi Nodes (left side) " + str(merge))
-    
-    
     for (name, (left, _)) in merge.iteritems():
-      c_left = self.visit_expr(left)
-      c_name = self.name(name)
-      if declare:
-        self.append("%s %s = %s;"  % (to_ctype(left.type), c_name, c_left))
+      if only_declare:
+        self.declare(name, left.type)
       else:
-        self.append("%s = %s;" % (c_name, c_left))
+        c_left = self.visit_expr(left)
+        self.declare(name, left.type, c_left)
     return self.pop()
   
   def visit_merge_right(self, merge):
@@ -324,18 +294,18 @@ class FlatFnCompiler(BaseCompiler):
   def visit_If(self, stmt):
     self.declare_merge_vars(stmt.merge)
     cond = self.visit_expr(stmt.cond)
-    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, declare = False)
+    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, only_declare = False)
     false = self.visit_block(stmt.false) + self.visit_merge_right(stmt.merge)
     return self.indent("if(%s) {\n%s\n} else {\n%s\n}" % (cond, self.indent(true), self.indent(false))) 
   
   def visit_While(self, stmt):
-    decls = self.visit_merge_left(stmt.merge, declare = True)
+    decls = self.visit_merge_left(stmt.merge, only_declare = True)
     cond = self.visit_expr(stmt.cond)
     body = self.visit_block(stmt.body) + self.visit_merge_right(stmt.merge)
     return decls + "while (%s) {%s}" % (cond, body)
   
   def visit_ForLoop(self, stmt):
-    s = self.visit_merge_left(stmt.merge, declare=True)
+    s = self.visit_merge_left(stmt.merge, only_declare=True)
     start = self.visit_expr(stmt.start)
     stop = self.visit_expr(stmt.stop)
     step = self.visit_expr(stmt.step)
@@ -607,10 +577,10 @@ class PyModuleCompiler(FlatFnCompiler):
     self.append("""
       if (!PyArray_Check(%s)) { 
         PyErr_Format(PyExc_AssertionError, 
-                    "Expected %s to be array, got %%s", 
-                    %s); 
+                    "Expected %s to be array, got %%s : %%s", 
+                    %s, %s); 
         return NULL;
-      }""" % (arr, arr, self.c_type_str(arr)))
+      }""" % (arr, arr, self.c_str(arr), self.c_type_str(arr)))
   
   
   def check_bool(self, x):
