@@ -131,12 +131,12 @@ class DCE(Transform):
         len(stmt.false) == 0:
       return None
     elif syntax.helpers.is_true(cond):
-      for name, (_, v) in stmt.merge.iteritems():
+      for name, (v, _) in stmt.merge.iteritems():
         self.assign(Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.true))
       return None
     elif syntax.helpers.is_false(cond):
-      for name, (v, _) in stmt.merge.items():
+      for name, (_, v) in stmt.merge.items():
         self.assign(Var(name, type = v.type), v)
       self.blocks.extend_current(reversed(stmt.false))
       return None

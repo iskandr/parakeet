@@ -4,8 +4,23 @@ from actual_args import ActualArgs
 class MissingArg(object):
   pass 
 
+class UnexpectedKeyword(Exception):
+  def __init__(self, keyword_name, fn_name = None):
+    self.keyword_name = keyword_name
+    self.fn_name = fn_name
+  
+  def __str__(self):
+    if self.fn_name:
+      return "Encountered unexpected keyword '%s' in fn %s" % (self.keyword_name, self.fn_name)
+    return "Encountered unexpected keyword %s" % self.keyword_name
+  
+  def __repr__(self):
+    return str(self)
+
 # placeholder object 
 missing_arg = MissingArg()
+
+
 
 class MissingArgsError(Exception):
   def __init__(self, missing_arg_names, fn_name = None, file_name = None, line_no = None):
@@ -155,8 +170,8 @@ class FormalArgs(object):
       assign(i, p)
 
     for (k,v) in keyword_values.iteritems():
-      assert k in self.local_names, \
-          "Unknown keyword: %s" % k
+      if k not in self.local_names:
+        raise UnexpectedKeyword(k)
       local_name = self.local_names[k]
       assign(self.positions[local_name], v)
 

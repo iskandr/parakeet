@@ -105,6 +105,36 @@ class FlatFnCompiler(BaseCompiler):
       return "((%s) (%s))" % (ct, x)
   
   
+  def not_(self, x):
+    if x == "1":
+      return "0"
+    elif x == "0":
+      return "1"
+    else:
+      return "!%s" % x
+  
+  def and_(self, x, y):
+    if x == "0" or y == "0":
+      return "0"
+    elif x == "1" and y == "1":
+      return "1"
+    elif x == "1":
+      return y 
+    elif y == "1":
+      return x
+    else:
+      return "%s && %s" % (x,y) 
+  
+  def or_(self, x, y):
+    if x == "1" or y == "1":
+      return "1"
+    elif x == "0":
+      return y
+    elif y == "0":
+      return x 
+    else:
+      return "%s || %s" % (x,y) 
+  
   def visit_PrimCall(self, expr):
     t = expr.type
     args = self.visit_expr_list(expr.args)
@@ -140,13 +170,14 @@ class FlatFnCompiler(BaseCompiler):
       return "~%s" % args[0]
     
     elif p == prims.logical_and:
-      return "%s && %s" % (args[0], args[1])
+      return self.and_(args[0], args[1])
+      
     elif p == prims.logical_or:
-      return "%s || %s" % (args[0], args[1])
+      return self.or_(args[0], args[1])
+    
     elif p == prims.logical_not:
-      return "!%s" % args[0]
-    
-    
+      self.not_(args[0])
+      
     elif p == prims.equal:
       if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
         return "1"
@@ -265,7 +296,7 @@ class FlatFnCompiler(BaseCompiler):
     for (name, (left, _)) in merge.iteritems():
       self.declare(name, left.type)
       
-  def visit_merge_left(self, merge, only_declare = False):
+  def visit_merge_left(self, merge, fresh_vars = True):
     
     if len(merge) == 0:
       return ""
@@ -273,11 +304,13 @@ class FlatFnCompiler(BaseCompiler):
     self.push()
     self.comment("Merge Phi Nodes (left side) " + str(merge))
     for (name, (left, _)) in merge.iteritems():
-      if only_declare:
-        self.declare(name, left.type)
-      else:
-        c_left = self.visit_expr(left)
+      c_left = self.visit_expr(left)
+      if fresh_vars:
         self.declare(name, left.type, c_left)
+      else:
+        c_name = self.name(name)
+        self.append("%s = %s;" % (c_name, c_left))
+        
     return self.pop()
   
   def visit_merge_right(self, merge):
@@ -288,30 +321,31 @@ class FlatFnCompiler(BaseCompiler):
     self.comment("Merge Phi Nodes (right side) " + str(merge))
     
     for (name, (_, right)) in merge.iteritems():
-      self.append("%s = %s;"  % (self.name(name), self.visit_expr(right)))
+      c_right = self.visit_expr(right)
+      self.print_pyobj(self.as_pyobj(right), "Merge right %s " % name)
+      self.append("%s = %s;"  % (self.name(name), c_right))
     return self.pop()
   
   def visit_If(self, stmt):
     self.declare_merge_vars(stmt.merge)
     cond = self.visit_expr(stmt.cond)
-    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, only_declare = False)
+    true = self.visit_block(stmt.true) + self.visit_merge_left(stmt.merge, fresh_vars = False)
     false = self.visit_block(stmt.false) + self.visit_merge_right(stmt.merge)
     return self.indent("if(%s) {\n%s\n} else {\n%s\n}" % (cond, self.indent(true), self.indent(false))) 
   
   def visit_While(self, stmt):
-    decls = self.visit_merge_left(stmt.merge, only_declare = True)
+    decls = self.visit_merge_left(stmt.merge, fresh_vars = True)
     cond = self.visit_expr(stmt.cond)
     body = self.visit_block(stmt.body) + self.visit_merge_right(stmt.merge)
     return decls + "while (%s) {%s}" % (cond, body)
   
   def visit_ForLoop(self, stmt):
-    s = self.visit_merge_left(stmt.merge, only_declare=True)
+    s = self.visit_merge_left(stmt.merge, fresh_vars = True)
     start = self.visit_expr(stmt.start)
     stop = self.visit_expr(stmt.stop)
     step = self.visit_expr(stmt.step)
     var = self.visit_expr(stmt.var)
     t = to_ctype(stmt.var.type)
- 
     body =  self.visit_block(stmt.body)
     body += self.visit_merge_right(stmt.merge)
     body = self.indent("\n" + body) 
@@ -663,7 +697,9 @@ class PyModuleCompiler(FlatFnCompiler):
   def attribute(self, v, attr, t):
     if attr == "data":
       self.check_array(v)
+
       result = "(PyArrayObject*) PyArray_Ravel((PyArrayObject*) %s, 0)" % (v,)
+
       
       return result   
 
@@ -737,10 +773,12 @@ class PyModuleCompiler(FlatFnCompiler):
     
     # slice out the 1D data array if there's an offset 
     size =  "PySequence_Size( (PyObject*) %(vec)s)" % locals()
+    self.print_pyobj(vec, "Before ")
     self.append("""
-      if (%(offset)s > 0) { 
+      if (%(offset)s > 0) {
         %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
       }""" % locals())
+    self.print_pyobj(vec, "After ")
     self.check_array(vec)
 
     count = self.fresh_var("int64_t", "count", "PySequence_Size( (PyObject*) %s)" % vec)

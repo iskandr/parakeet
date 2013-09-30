@@ -113,6 +113,7 @@ class Ravel(ArrayExpr):
   def children(self):
     return (self.array,)
 
+
 class Reshape(ArrayExpr):
   _members = ['array', 'shape']
   

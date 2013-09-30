@@ -11,29 +11,7 @@ from adverbs import map, reduce, scan
 
 @macro
 def transpose(x):
-  def typed_transpose(xt):
-    if isinstance(xt.type, ArrayT) and xt.type.rank > 1:
-      shape = Attribute(xt, 'shape', type = xt.type.shape_t)
-      strides = Attribute(xt, 'strides', type = xt.type.strides_t)
-      data = Attribute(xt, 'data', type = xt.type.ptr_t)
-      size = Attribute(xt, 'size', type = Int64)
-      offset = Attribute(xt, 'offset', type = Int64)
-      ndims = xt.type.rank 
-      shape_elts = [TupleProj(shape, i, type = Int64) 
-                               for i in xrange(ndims)]
-      stride_elts = [TupleProj(strides, i, type = Int64) 
-                                 for i in xrange(ndims)]
-      new_shape = Tuple(tuple(reversed(shape_elts)))
-      new_strides = Tuple(tuple(reversed(stride_elts)))
-      return ArrayView(data, 
-                       new_shape, 
-                       new_strides, 
-                       offset, 
-                       size, 
-                       type = xt.type)
-    else:
-      return xt 
-  return DelayUntilTyped(x, typed_transpose)   
+  return Transpose(x)
 
 @macro 
 def ravel(x):

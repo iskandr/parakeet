@@ -172,13 +172,26 @@ class LowerArrayOperators(Transform):
   def transform_Transpose(self, expr):
     if expr.array.__class__ is Transpose:
       return self.transform_expr(expr.array.array)
+    
     array = self.transform_expr(expr.array)
+    if isinstance(array.type, ScalarT):
+      return array 
+    assert isinstance(array.type, ArrayT), "Can't transpose %s : %s" % (array, array.type)
+    ndims = array.type.rank 
+    if ndims <= 1:
+      return array 
+    assert ndims == 2, "Tranposing arrays of rank %d not yet supported" % (ndims,)
+    
     data = self.attr(array, 'data')
     shape = self.shape(array)
     strides = self.strides(array)
     offset = self.attr(array, 'offset')
-    # TODO: What happens to the offset when you transpose an array? 
-    assert False, "Transpose not implemented"
+    stride_elts = self.tuple_elts(strides)
+    shape_elts = self.tuple_elts(shape)
+    new_shape = self.tuple(tuple(reversed(shape_elts)))
+    new_strides = self.tuple(tuple(reversed(stride_elts)))
+    size = self.attr(array, 'size')
+    return self.array_view(data, new_shape, new_strides, offset, size)
     
   def transform_Where(self, expr):
     assert False, "Where not implemented"
