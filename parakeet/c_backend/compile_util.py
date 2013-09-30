@@ -103,9 +103,10 @@ if not debug and use_openmp and compiler in ('gcc', 'g++'):
   linker_flags.append('-fopenmp')             
 
 
-# write to in-memory tmpfs if possible
+
 tempdir = None 
-if os.path.isdir("/dev/shm"):
+# write to in-memory tmpfs if possible
+if os.path.isdir("/dev/shm") and os.access('/dev/shm', os.W_OK):
   tempdir = "/dev/shm"
 
 def create_source_file(src, 
