@@ -7,32 +7,39 @@ default_backend = 'c' #llvm
   
 default_opt_level = 2 
 
+
 def set_opt_level(n):
   assert 0 <= n <= 3, "Invalid optimization level %d" % n
   g = globals()
 
-  if n > 0:
-    g['opt_inline'] = True
-    g['opt_fusion'] = True
-    g['opt_stack_allocation'] = True
-    g['opt_index_elimination'] = True
-    g['opt_range_propagation'] = True 
-    g['opt_shape_elim'] = True
-  if n > 1:
-    g['opt_licm'] = True  
-    g['opt_redundant_load_elimination'] = True
-
-  if n > 2: 
-    g['opt_loop_unrolling'] = True
-
+  for name in ('opt_inline', 
+               'opt_fusion', 
+               'opt_index_elimination',
+               'opt_range_propagation'):
+    g[name] = n > 0
+    
+  for name in ('opt_licm', 
+               'opt_redundant_load_elimination', 
+               'opt_stack_allocation', 
+               'opt_shape_elim', 
+               'stride_specialization'):
+    g[name] = n > 1 
+    
+  for name in ('opt_loop_unrolling',):
+    g[name] = n > 2 
+    
 opt_inline = False
 opt_fusion = False
-opt_stack_allocation = False
 opt_index_elimination = False
 opt_range_propagation = False
-opt_shape_elim = False
-opt_redundant_load_elimination = False
+
 opt_licm = False
+opt_redundant_load_elimination = False
+opt_stack_allocation = False
+opt_shape_elim = False
+
+# recompile functions for distinct patterns of unit strides
+stride_specialization = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -45,8 +52,6 @@ opt_copy_elimination = False
 # run verifier after each transformation 
 opt_verify = True
 
-# recompile functions for distinct patterns of unit strides
-stride_specialization = True
 
 set_opt_level(default_opt_level)
 
