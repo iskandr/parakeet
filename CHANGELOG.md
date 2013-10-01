@@ -1,3 +1,11 @@
+
+### 0.16.2 / October 1st, 2013 ###
+
+- Moved version info into submodule so setup.py can run without full dependencies (thanks rjpower). 
+- Fixed support for references to global arrays.
+- Make C backend respect runtime changes to config flags. 
+- Got rid of unncessary linking against libpython. 
+
 ### 0.16.1 / September 30th, 2013 ###
 
 - Fixed bugs in C backend and a several optimizatons.

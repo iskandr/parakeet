@@ -400,7 +400,6 @@ class AST_Translator(ast.NodeVisitor):
       return syntax.Tuple(slice_elts)
     else:
       return slice_elts[0]
-    
 
   def visit_UnaryOp(self, expr):
     ssa_val = self.visit(expr.operand)
