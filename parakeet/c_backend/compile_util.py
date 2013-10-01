@@ -295,8 +295,9 @@ def compile_module(src,
   if config.delete_temp_files:
     os.remove(src_filename)
     os.remove(object_name)
-    
-    os.remove(shared_name)
+    # window's can't just untether inodes like a UNIX
+    # ...have to eventually think of a plan to clean these things up
+    if not windows: os.remove(shared_name)
     
   compiled_fn = CompiledPyFn(c_fn = c_fn, 
                              module = module, 
