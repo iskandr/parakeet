@@ -252,11 +252,15 @@ class AST_Translator(ast.NodeVisitor):
       value = self.lookup_global(name)
       if is_static_value(value):
         return value_to_syntax(value)
-      else: 
+      elif isinstance(value, np.ndarray): 
         ref = GlobalValueRef(value)
         return self.local_ref_name(ref, name)
-        #assert False, "Can only use globals which can be turned into static syntax, not %s" % value
-        #return ExternalValue(value)
+      else:
+        # assume that this is a module or object which will have some 
+        # statically convertible value pulled out of it 
+        return ExternalValue(value)
+      #else:
+      #  assert False, "Can't use global value %s" % value
     else:
       raise NameNotFound(name)
       
