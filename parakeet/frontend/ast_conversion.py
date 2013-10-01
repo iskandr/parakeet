@@ -220,6 +220,17 @@ class AST_Translator(ast.NodeVisitor):
     return self.parent.is_global(key)
   
   
+  def local_ref_name(self, ref, python_name):
+    for (local_name, other_ref) in self.python_refs.iteritems():
+      if ref == other_ref:
+        return Var(local_name)
+    local_name = names.fresh(python_name)
+    self.scopes[python_name] = local_name
+    self.original_outer_names.append(python_name)
+    self.localized_outer_names.append(local_name)
+    self.python_refs[local_name] = ref
+    return Var(local_name)
+  
   def lookup(self, name):
     #if name in reserved_names:
     #  return reserved_names[name]
@@ -236,25 +247,16 @@ class AST_Translator(ast.NodeVisitor):
       return Var(local_name)
     elif self.closure_cell_dict and name in self.closure_cell_dict:
       ref = ClosureCellRef(self.closure_cell_dict[name], name)
-      for (local_name, other_ref) in self.python_refs.iteritems():
-        if ref == other_ref:
-          return Var(local_name)
-      local_name = names.fresh(name)
-      self.scopes[name] = local_name
-      self.original_outer_names.append(name)
-      self.localized_outer_names.append(local_name)
-      self.python_refs[local_name] = ref
-      return Var(local_name)
+      return self.local_ref_name(ref, name)
     elif self.is_global(name):
       value = self.lookup_global(name)
-      if is_static_value(value): 
+      if is_static_value(value):
         return value_to_syntax(value)
-      else:
-        return ExternalValue(value)
-      
-        
-      #else:
-      #  assert False, "External values must be scalars or functions"
+      else: 
+        ref = GlobalValueRef(value)
+        return self.local_ref_name(ref, name)
+        #assert False, "Can only use globals which can be turned into static syntax, not %s" % value
+        #return ExternalValue(value)
     else:
       raise NameNotFound(name)
       
