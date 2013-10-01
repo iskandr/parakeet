@@ -4,7 +4,7 @@ from setuptools import setup, Extension, find_packages
 import os 
 import sys
 
-import parakeet 
+import parakeet.version
 
 setup(
     name="parakeet",
@@ -19,8 +19,8 @@ setup(
     author="Alex Rubinsteyn",
     author_email="alexr@cs.nyu.edu",
     license="BSD",
-    version=parakeet.__version__,
-    url=parakeet.__website__, 
+    version=parakeet.version.__version__,
+    url=parakeet.version.__website__, 
     packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
     package_dir={ 
                   'parakeet.benchmarks' : './benchmarks', 
