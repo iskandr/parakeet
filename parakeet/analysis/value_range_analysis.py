@@ -211,7 +211,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
       if expr.start.type == NoneType:
         start = const_zero 
       else: 
-          start = self.get(expr.start)
+        start = self.get(expr.start)
       if expr.stop.type == NoneType:
         stop = positive_interval
       else:
@@ -261,11 +261,13 @@ class ValueRangeAnalyis(SyntaxVisitor):
   
   def set(self, name, val):
     if val is not None and val is not unknown_value:
-      old_value = self.ranges.get(name, unknown_value)
+      old_value = self.ranges.get(name)
+      if old_value is not None:
+        if old_value != val:
+          val = unknown_value
+          self.old_values[name] = old_value
       self.ranges[name] = val
-      if old_value != val:
-        self.old_values[name] = old_value 
-
+      
   def add_range(self, x, y):
     if not isinstance(x, Interval) or not isinstance(y, Interval):
       return any_value 

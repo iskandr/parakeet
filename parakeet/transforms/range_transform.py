@@ -1,6 +1,4 @@
-from ..analysis.value_range_analysis import (ValueRangeAnalyis, Interval, 
-                                             TupleOfIntervals, SliceOfIntervals)
-from ..syntax import Var, Const 
+from ..analysis.value_range_analysis import (ValueRangeAnalyis, Interval)
 from ..syntax.helpers import true, false 
 from transform import Transform
 
@@ -12,9 +10,7 @@ class RangeTransform(Transform, ValueRangeAnalyis):
   def pre_apply(self, old_fn):
     ValueRangeAnalyis.__init__(self)
     self.visit_fn(old_fn)
-    #print "RANGE ANALYSIS RESULT", self.ranges  
-    #print "...for fn", old_fn 
-
+    
   def cmp_eq(self, x, y):
     if not isinstance(x, Interval) or not isinstance(y, Interval):
       return None 
