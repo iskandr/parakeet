@@ -1,13 +1,12 @@
-import numpy as np 
 
-from .. import prims, ndtypes 
+
+from .. import ndtypes 
 from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t
 from .. frontend import macro, jit 
-from .. syntax import (Attribute, TupleProj, ArrayView, DelayUntilTyped, 
+from .. syntax import (Attribute, DelayUntilTyped, 
                        Tuple, Ravel, Reshape, TypeValue, 
                        const_int, Transpose)
 
-from adverbs import map, reduce, scan 
 
 @macro
 def transpose(x):

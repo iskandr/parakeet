@@ -60,10 +60,10 @@ set_opt_level(default_opt_level)
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = False
+print_untyped_function = True
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False

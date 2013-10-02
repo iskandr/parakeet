@@ -4,8 +4,9 @@ from adverb_helpers import *
 
 from actual_args import ActualArgs 
 
-from array_expr import ArrayExpr, Array, Index, Slice, Len, Range, AllocArray, ArrayView
-from array_expr import  Ravel, Reshape, Shape, Strides, Transpose, Where  
+from array_expr import (ArrayExpr, Array, Index, Slice, Len, Range, AllocArray, ArrayView, 
+                        Ravel, Reshape, Shape, Strides, Transpose, Where, ConstArray, ConstArrayLike)
+  
 
 from delay_until_typed import DelayUntilTyped
 

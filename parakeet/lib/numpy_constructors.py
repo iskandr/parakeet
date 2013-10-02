@@ -3,9 +3,8 @@ import __builtin__
 
 from .. frontend.decorators import jit, macro
 from .. ndtypes import TypeValueT, ScalarT, make_array_type
-from .. syntax import one_i64, zero_i64
-from .. syntax import Range, Return, Cast, UntypedFn, TypedFn, AllocArray
-from .. syntax import Tuple, DelayUntilTyped
+from .. syntax import (one_i64, zero_i64, Range, Return, Cast, UntypedFn, TypedFn, AllocArray, 
+                       Tuple, DelayUntilTyped, ConstArray, ConstArrayLike)
 
 from adverbs import imap 
 from numpy_types import float64   
@@ -59,10 +58,11 @@ def empty_like(x, dtype = None):
   else:
     return empty(x.shape, dtype)
   
-@jit 
+@jit  
 def zeros(shape, dtype = float64):
   zero = dtype(0)
   return imap(lambda _: zero, shape)
+  #return ConstArrayLike(shape = shape, value = zero)
 
 @jit
 def zeros_like(x, dtype = None):
