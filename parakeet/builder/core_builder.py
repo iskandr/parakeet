@@ -196,8 +196,8 @@ class CoreBuilder(object):
   
 
 
-  def attr(self, obj, field, name = None):
-    if name is None:
+  def attr(self, obj, field, name = None, temp = True):
+    if temp and name is None:
       name = field
     obj_t = obj.type
     c = obj.__class__ 

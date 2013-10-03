@@ -134,7 +134,7 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-      if False:
+      if True:
         print "data", data 
         print "shape",  shape 
         print "strides", strides

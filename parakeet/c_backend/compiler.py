@@ -1,9 +1,5 @@
  
-import ctypes
-
-from treelike import NestedBlocks
-
-from .. import names, prims 
+from .. import prims 
 from ..analysis import use_count
 from ..syntax import (Const, Tuple, TypedFn, Var, TupleProj, ArrayView, 
                       PrimCall, Attribute, Expr, Closure)  
@@ -20,12 +16,7 @@ from c_types import to_ctype, to_dtype
 from base_compiler import BaseCompiler
 
 from compile_util import compile_module
-from config import (debug, 
-                    check_pyobj_types, 
-                    print_function_source, 
-                    print_module_source, 
-                    print_input_ir, 
-                    ) 
+import config 
 
 def compile_flat_source(fn, _compile_cache = {}):
   key = fn.cache_key
@@ -43,14 +34,15 @@ def compile_entry(fn, _compile_cache = {}):
     return _compile_cache[key]
   compiler = PyModuleCompiler()
   name, sig, src = compiler.visit_fn(fn)
-  if print_function_source: print "Generated C source for %s: %s" %(name, src)
+  if config.print_function_source: 
+    print "Generated C source for %s: %s" %(name, src)
   compiled_fn = compile_module(src, 
                                fn_name = name,
                                fn_signature = sig, 
                                extra_objects = set(compiler.extra_objects),
                                extra_function_sources = compiler.extra_function_sources, 
                                forward_declarations =  compiler.forward_declarations, 
-                               print_source = print_module_source)
+                               print_source = config.print_module_source)
   _compile_cache[key]  = compiled_fn
   return compiled_fn
 
@@ -578,7 +570,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def check_tuple(self, tup):
-    if not check_pyobj_types: return 
+    if not config.check_pyobj_types: return 
     self.newline()
     self.comment("Checking tuple type for %s" % tup)
     self.append("""
@@ -590,7 +582,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (tup, tup, self.c_type_str(tup)))
  
   def check_slice(self, obj):
-    if not check_pyobj_types: return 
+    if not config.check_pyobj_types: return 
     self.newline()
     self.comment("Checking slice type for %s" % obj)
     self.append("""
@@ -602,7 +594,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (obj, obj, self.c_type_str(obj)))
   
   def check_array(self, arr):
-    if not check_pyobj_types: return 
+    if not config.check_pyobj_types: return 
     self.newline()
     self.comment("Checking array type for %s" % arr)
     self.append("""
@@ -615,7 +607,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def check_bool(self, x):
-    if not check_pyobj_types: return 
+    if not config.check_pyobj_types: return 
     self.newline()
     self.comment("Checking bool type for %s" % x)
     self.append("""
@@ -627,7 +619,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (x, x, self.c_type_str(x)))
   
   def check_int(self, x):
-    if not check_pyobj_types: return 
+    if not config.check_pyobj_types: return 
     self.newline()
     self.comment("Checking int type for %s" % x)
     self.append("""
@@ -639,7 +631,7 @@ class PyModuleCompiler(FlatFnCompiler):
       }""" % (x, x, self.c_type_str(x)))
   
   def check_type(self, v, t):
-    if not check_pyobj_types: return 
+    if not config.check_pyobj_types: return 
     if isinstance(t, (ClosureT, TupleT)):
       self.check_tuple(v)
     elif isinstance(t, BoolT):
@@ -655,7 +647,7 @@ class PyModuleCompiler(FlatFnCompiler):
     if isinstance(t, ScalarT):
       elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
       result = self.unbox_scalar(elt_obj, t)
-      if debug and t == Int64:
+      if config.debug and t == Int64:
         self.append(""" printf("tupleproj %s[%d] = %%" PRId64 "\\n", %s);""" % (tup, idx, result))
       return result
     else:
@@ -681,7 +673,7 @@ class PyModuleCompiler(FlatFnCompiler):
     strides_elts = self.fresh_name("strides_elts")
     self.append("npy_intp %s[%d];" % (strides_elts, n))
     for i in xrange(n):
-      if debug:
+      if config.debug:
         self.printf("converting strides %s[%d] = %%ld to %%ld" % (strides_bytes, i), 
                     "%s[%d]" % (strides_bytes, i), "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))   
       self.append("%s[%d] = %s[%d] / %d;" % (strides_elts, i, strides_bytes, i, bytes_per_elt))
@@ -847,7 +839,7 @@ class PyModuleCompiler(FlatFnCompiler):
     
   def visit_Return(self, stmt):
     v = self.as_pyobj(stmt.value)
-    if debug: 
+    if config.debug: 
       self.print_pyobj_type(v, "Return type: ")
       self.print_pyobj(v, "Return value: ")
 
@@ -869,7 +861,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
          
   def visit_fn(self, fn):
-    if print_input_ir:
+    if config.print_input_ir:
       print "=== Compiling to C (entry function) ==="
       print fn
     c_fn_name = self.fresh_name(fn.name)
@@ -880,7 +872,7 @@ class PyModuleCompiler(FlatFnCompiler):
     dummy = self.fresh_name("dummy")
     args = self.fresh_name("args")
     
-    if debug: 
+    if config.debug: 
       self.newline()
       self.printf("\\nStarting %s : %s..." % (c_fn_name, fn.type))
       
@@ -894,7 +886,7 @@ class PyModuleCompiler(FlatFnCompiler):
       self.append("PyObject* %s = PyTuple_GetItem(%s, %d);" % (c_name, args, i))
       t = fn.type_env[argname]
       self.check_type(c_name, t)
-      if debug:
+      if config.debug:
         self.printf("Printing arg #%d %s" % (i,c_name))
         self.print_pyobj_type(c_name, text = "Type: ")
         self.print_pyobj(c_name, text = "Value: ")

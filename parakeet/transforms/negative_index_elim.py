@@ -2,6 +2,7 @@
 from ..analysis.value_range_analysis import TupleOfIntervals, SliceOfIntervals
 from ..ndtypes import ArrayT, TupleT, SliceT 
 from ..syntax import Tuple, Slice, Var, Index  
+from ..syntax.helpers import zero_i64, one_i64 
 
 from range_transform import RangeTransform, Interval
 
@@ -32,7 +33,6 @@ class NegativeIndexElim(RangeTransform):
     
 
     range_value = self.get(expr.index)
-    print "transform_Index", expr, expr.index, expr.index.__class__, range_value  
 
     if self.has_negative(range_value):
       if isinstance(range_value, TupleOfIntervals):
@@ -49,13 +49,21 @@ class NegativeIndexElim(RangeTransform):
           if self.always_negative(index_range, inclusive=False):
             index_elts[i] = self.add(shape_elts[i], index_elt)
         elif isinstance(index_range, SliceOfIntervals) and self.has_negative(index_range):
-          start = self.attr(index_elt, 'start')
-          stop = self.attr(index_elt, 'stop')
-          step = self.attr(index_elt, 'step')
-          if self.always_negative(index_range.start, inclusive=False):
+          start = self.attr(index_elt, 'start', temp = False)
+          stop = self.attr(index_elt, 'stop', temp = False)
+          step = self.attr(index_elt, 'step', temp = False)
+          if self.is_none(start): 
+            start = zero_i64 
+          elif self.always_negative(index_range.start, inclusive=False):
             start = self.add(shape_elts[i], start)
-          if self.always_negative(index_range.stop, inclusive=False):
+          
+          if self.is_none(stop):
+            stop = shape_elts[i]
+          elif self.always_negative(index_range.stop, inclusive=False):
             stop = self.add(shape_elts[i], stop)
+          
+          assert not self.always_negative(index_range.step, inclusive=False), \
+            "Negative step in slice not currently supported"
           index_elts[i] = Slice(start=start, stop=stop, step = step, type = index_elt.type)
       if len(index_elts) > 1:
         index = self.tuple(index_elts)

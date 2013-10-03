@@ -167,9 +167,7 @@ class LowerSlices(Transform):
       else:
         assert slice_positions[slice_count] == i
         (start, stop, step) = slices[slice_count]
-        
         slice_count += 1
-       
         dim_offset = self.mul(start, stride_elts[i], name = "dim_offset")
         offset = self.add(offset, dim_offset, "offset")
         shape_elt = self.safediv(self.sub(stop, start, name = "span"), step, name = "new_shape")
