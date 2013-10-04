@@ -1,6 +1,6 @@
-from expr import Expr 
+from seq_expr import SeqExpr 
 
-class ArrayExpr(Expr):
+class ArrayExpr(SeqExpr):
   """
   Common base class for first-order array operations 
   that don't change the underlying data 
@@ -18,31 +18,6 @@ class Array(ArrayExpr):
 
   def __hash__(self):
     return hash(self.elts)
-
-
-class Index(ArrayExpr):
-  """
-  TODO: 
-    - make all user-defined indexing check_negative=True by default 
-    - implement backend logic for lowering check_negative 
-  """
-  _members = ['value', 'index', 'check_negative']
-  
-  def __eq__(self, other):
-    return other.__class__ is Index and \
-           other.value == self.value and \
-           other.index == self.index
-  
-  def __hash__(self):
-    return hash((self.value, self.index))
-  
-  def children(self):
-    yield self.value
-    yield self.index
-
-  def __str__(self):
-    return "%s[%s]" % (self.value, self.index)
-
 
 class Slice(ArrayExpr):
   _members = ['start', 'stop', 'step']
@@ -70,8 +45,7 @@ class Slice(ArrayExpr):
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 
-class Len(ArrayExpr):
-  _members = ['value']
+
 
 class ConstArray(ArrayExpr):
   _members = ['shape', 'value']
@@ -141,5 +115,3 @@ class Where(ArrayExpr):
   
   def children(self):
     yield self.array 
-    
-    

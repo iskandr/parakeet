@@ -300,11 +300,11 @@ class Simplify(Transform):
             "Unexpected index type %s : %s in %s" % (base_index, base_index.type, expr)
           indices = [base_index]
         if isinstance(expr.index.type, TupleT):
-          indices.extend(self.tuple_elts(expr.index))
+          indices = tuple(indices) + tuple(self.tuple_elts(expr.index))
         else:
           assert isinstance(expr.index.type, ScalarT), \
             "Unexpected index type %s : %s in %s" % (expr.index, expr.index.type, expr)
-          indices.append(expr.index)
+          indices = tuple(indices) + (expr.index,)
         expr = self.index(base_array, self.tuple(indices))
         return self.transform_expr(expr)
     if expr.value.__class__ is not Var:

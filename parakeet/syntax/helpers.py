@@ -5,7 +5,8 @@ from .. ndtypes import FloatT, IntT, BoolT, NoneType, ScalarT
 from .. ndtypes import make_slice_type, make_tuple_type
 
 from array_expr import Slice
-from expr  import Const, Var, Expr, Tuple 
+from expr  import Const, Var, Expr
+from tuple_expr import Tuple 
 from stmt import Return  
 
 def const_int(n, t = Int64):

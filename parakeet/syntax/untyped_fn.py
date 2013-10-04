@@ -16,7 +16,7 @@ class UntypedFn(Expr):
   'parakeet_nonlocals'
   """
 
-  _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals']
+  _members = ['name', 'args', 'body', 'python_refs', 'parakeet_nonlocals', 'doc_string']
   registry = {}
 
   #def __str__(self):

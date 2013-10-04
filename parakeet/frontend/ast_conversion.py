@@ -11,16 +11,23 @@ from .. import config, names, prims, syntax
 from ..names import NameNotFound
 from ..ndtypes import from_dtype 
 from ..prims import Prim 
-from ..syntax import (Assign, If, ForLoop, Var, PrimCall, Map,
-                       FormalArgs, ActualArgs, 
-                       UntypedFn,  
-                       none, true, false, one_i64, zero_i64, 
-                       is_python_constant, const, prim_wrapper) 
+from ..syntax import (Assign, If, ForLoop, Return,  
+                      Var, PrimCall, Cast,  
+                      Map, Reduce, 
+                      Enumerate, Zip, Len,   
+                      Slice,  Tuple, Array,
+                      Const, Call, Index, 
+                      FormalArgs, ActualArgs, 
+                      UntypedFn, Closure, 
+                      Range, 
+                      prim_wrapper) 
+from ..syntax.helpers import (none, true, false, one_i64, zero_i64, 
+                              is_python_constant, const) 
 from ..transforms import subst_expr, subst_stmt_list
 from function_registry import already_registered_python_fn
 from function_registry import register_python_fn, lookup_python_fn 
 from decorators import jit, macro  
-from python_ref import GlobalValueRef, GlobalNameRef, ClosureCellRef
+from python_ref import GlobalValueRef,  ClosureCellRef
 
 
 class UnsupportedSyntax(Exception):
@@ -58,16 +65,16 @@ def mk_reduce_call(fn, positional, init = None):
   init = none if init is None else init
   axis = zero_i64
   from .. import lib 
-  return syntax.Reduce(fn = translate_function_value(lib.identity), 
-                       combine = fn, 
-                       args = positional, 
-                       axis = axis, 
-                       init = init)
+  return Reduce(fn = translate_function_value(lib.identity), 
+                combine = fn, 
+                args = positional, 
+                axis = axis, 
+                init = init)
 
 def mk_simple_fn(mk_body, input_name = "x", fn_name = "cast"):
   unique_arg_name = names.fresh(input_name)
   unique_fn_name = names.fresh(fn_name)
-  var = syntax.Var(unique_arg_name)
+  var = Var(unique_arg_name)
   formals = FormalArgs()
   formals.add_positional(unique_arg_name, input_name)
   body = mk_body(var)
@@ -106,8 +113,8 @@ def value_to_syntax(v):
     fn_name = names.fresh("cast") 
     formals = FormalArgs()
     formals.add_positional(x, "x")
-    body = [syntax.Return(syntax.Cast(syntax.Var(x), type=from_dtype(v)))]
-    return syntax.UntypedFn(fn_name, formals, body)
+    body = [Return(Cast(Var(x), type=from_dtype(v)))]
+    return UntypedFn(fn_name, formals, body)
   else:
     assert is_function_value(v), "Can't make value %s : %s into static syntax" % (v, type(v))
     return translate_function_value(v)  
@@ -163,7 +170,7 @@ class AST_Translator(ast.NodeVisitor):
     return map(self.fresh_name, original_names)
 
   def fresh_var(self, name):
-    return syntax.Var(self.fresh_name(name))
+    return Var(self.fresh_name(name))
 
   def fresh_vars(self, original_names):
     return map(self.fresh_var, original_names)
@@ -290,7 +297,7 @@ class AST_Translator(ast.NodeVisitor):
         assert isinstance(sub_arg, ast.Name)
         name = sub_arg.id
       lhs = self.fresh_var(name)
-      stmt = Assign(lhs, syntax.Index(var, syntax.Const(i)))
+      stmt = Assign(lhs, Index(var, Const(i)))
       assignments.append(stmt)
       if isinstance(sub_arg, ast.Tuple):
         more_stmts = self.tuple_arg_assignments(sub_arg.elts, lhs)
@@ -392,12 +399,12 @@ class AST_Translator(ast.NodeVisitor):
     start = self.visit(expr.lower) if expr.lower else none
     stop = self.visit(expr.upper) if expr.upper else none
     step = self.visit(expr.step) if expr.step else none
-    return syntax.Slice(start, stop, step)
+    return Slice(start, stop, step)
 
   def visit_ExtSlice(self, expr):
     slice_elts = map(self.visit, expr.dims)
     if len(slice_elts) > 1:
-      return syntax.Tuple(slice_elts)
+      return Tuple(slice_elts)
     else:
       return slice_elts[0]
 
@@ -408,13 +415,13 @@ class AST_Translator(ast.NodeVisitor):
     if expr.op.__class__.__name__ == 'UAdd':
       return ssa_val 
     prim = prims.find_ast_op(expr.op)
-    return syntax.PrimCall(prim, [ssa_val])
+    return PrimCall(prim, [ssa_val])
 
   def visit_BinOp(self, expr):
     ssa_left = self.visit(expr.left)
     ssa_right = self.visit(expr.right)
     prim = prims.find_ast_op(expr.op)
-    return syntax.PrimCall(prim, [ssa_left, ssa_right])
+    return PrimCall(prim, [ssa_left, ssa_right])
 
   def visit_BoolOp(self, expr):
     values = map(self.visit, expr.values)
@@ -423,7 +430,7 @@ class AST_Translator(ast.NodeVisitor):
     # Boolean operators
     result = values[0]
     for v in values[1:]:
-      result = syntax.PrimCall(prim, [result, v])
+      result = PrimCall(prim, [result, v])
     return result
 
   def visit_Compare(self, expr):
@@ -432,45 +439,63 @@ class AST_Translator(ast.NodeVisitor):
     prim = prims.find_ast_op(expr.ops[0])
     assert len(expr.comparators) == 1
     rhs = self.visit(expr.comparators[0])
-    return syntax.PrimCall(prim, [lhs, rhs])
+    return PrimCall(prim, [lhs, rhs])
 
   def visit_Subscript(self, expr):
     value = self.visit(expr.value)
     index = self.visit(expr.slice)
-    return syntax.Index(value, index)
+    return Index(value, index)
 
   def generic_visit(self, expr):
     raise UnsupportedSyntax(expr, 
                             function_name = self.function_name, 
                             filename = self.filename)
   
+  
   def translate_builtin_call(self, value, positional, keywords_dict):
     from ..mappings import function_mappings     
+    
     if value is sum:
       return mk_reduce_call(prim_wrapper(prims.add), positional, zero_i64)
+    
     elif value is max:
       if len(positional) == 1:
         return mk_reduce_call(prim_wrapper(prims.maximum), positional)
       else:
         assert len(positional) == 2
-        return syntax.PrimCall(prims.maximum, positional)
+        return PrimCall(prims.maximum, positional)
+    
     elif value is min:
       if len(positional) == 1:
         return mk_reduce_call(prim_wrapper(prims.minimum), positional)
       else:
         assert len(positional) == 2
-        return syntax.PrimCall(prims.minimum, positional)
+        return PrimCall(prims.minimum, positional)
+    
     elif value is map:
       assert len(keywords_dict) == 0
       assert len(positional) > 1
       axis = keywords_dict.get("axis", None)
       return Map(fn = positional[0], args = positional[1:], axis = axis)
+    
+    elif value is enumerate:
+      assert len(positional) == 1, "Wrong number of args for 'enumerate': %s" % positional 
+      assert len(keywords_dict) == 0, \
+        "Didn't expect keyword arguments for 'enumerate': %s" % keywords_dict
+      return Enumerate(positional[0])
+    
+    elif value is Zip:
+      assert len(positional) == 1, "Wrong number of args for 'zip': %s" % positional 
+      assert len(keywords_dict) == 0, \
+        "Didn't expect keyword arguments for 'zip': %s" % keywords_dict
+      return Zip(positional[0])
+    
     elif value in function_mappings:
       parakeet_equiv = function_mappings[value]
       if isinstance(parakeet_equiv, macro):
         return parakeet_equiv.transform(positional, keywords_dict)
     fn = value_to_syntax(value)
-    return syntax.Call(fn, ActualArgs(positional, keywords_dict))
+    return Call(fn, ActualArgs(positional, keywords_dict))
     
       
   def visit(self, node):
@@ -485,7 +510,7 @@ class AST_Translator(ast.NodeVisitor):
     if isinstance(value, macro):
       return value.transform(positional, keywords_dict)
     elif is_user_function(value):
-      return syntax.Call(translate_function_value(value), 
+      return Call(translate_function_value(value), 
                            ActualArgs(positional, keywords_dict, starargs_expr))
     else:
       return self.translate_builtin_call(value, positional, keywords_dict)
@@ -545,20 +570,20 @@ class AST_Translator(ast.NodeVisitor):
     fn_node = self.visit(fn)    
     if isinstance(fn_node, syntax.Expr):
       actuals = ActualArgs(positional, keywords_dict, starargs_expr)
-      return syntax.Call(fn_node, actuals)
+      return Call(fn_node, actuals)
     else:
       assert isinstance(fn_node, ExternalValue)
       return self.translate_value_call(fn_node.value, 
                                        positional, keywords_dict, starargs_expr)
 
   def visit_List(self, expr):
-    return syntax.Array(self.visit_list(expr.elts))
+    return Array(self.visit_list(expr.elts))
     
   def visit_Expr(self, expr):
     # dummy assignment to allow for side effects on RHS
     lhs = self.fresh_var("dummy")
     if isinstance(expr.value, ast.Str):
-      return syntax.Assign(lhs, zero_i64)
+      return Assign(lhs, zero_i64)
       # return syntax.Comment(expr.value.s.strip().replace('\n', ''))
     else:
       rhs = self.visit(expr.value)
@@ -628,18 +653,18 @@ class AST_Translator(ast.NodeVisitor):
       if isinstance(fn, macro):
         return fn.transform( [value] )
       else:
-        return syntax.Call(translate_function_value(fn),
-                            ActualArgs(positional = (value,)))  
+        return Call(translate_function_value(fn),
+                    ActualArgs(positional = (value,)))  
     elif attr in method_mappings:
       fn_python = method_mappings[attr]
       fn_syntax = translate_function_value(fn_python)
-      return syntax.Closure(fn_syntax, args=(value,))
+      return Closure(fn_syntax, args=(value,))
     else:
       assert False, "Attribute %s not supported" % attr 
-    # return syntax.Attribute(value, expr.attr)
+
 
   def visit_Num(self, expr):
-    return syntax.Const(expr.n)
+    return Const(expr.n)
 
   def visit_Tuple(self, expr):
     return syntax.Tuple(self.visit_list(expr.elts))
@@ -710,25 +735,85 @@ class AST_Translator(ast.NodeVisitor):
     body, merge, (cond,) = self.visit_loop_body(stmt.body, stmt.test)
     return syntax.While(cond, body, merge)
 
+  def assign(self, lhs, rhs):
+    self.current_block().append(Assign(lhs,rhs))
+ 
+  def assign_to_var(self, rhs, name = None):
+    if isinstance(rhs, (Var, Const)):
+      return rhs 
+    if name is None:
+      name = "temp"
+    var = self.fresh_var(name)
+    self.assign(var, rhs)
+    return var 
+    
+  def len(self, x):
+    if isinstance(x, Enumerate):
+      return self.len(x.value)
+    elif isinstance(x, Zip):
+      elt_lens = [self.len(v) for v in x.values]
+      result = elt_lens[0]
+      for n in elt_lens[1:]:
+        result = PrimCall(prims.minimum, [result, n])
+      return result 
+    elif isinstance(x, (Array, Tuple)):
+      return Const(len(x.elts))
+    else:
+      seq_var = self.assign_to_var(x, "len_input")
+      result_var = self.fresh_var("len_result")
+      self.assign(result_var,  Len(seq_var))
+      return result_var  
+  
+  def add(self, x, y):
+    return self.assign_to_var(PrimCall(prims.add, [x,y]), "add")
+  
+  def sub(self, x, y):
+    return self.assign_to_var(PrimCall(prims.subtract, [x,y]), "sub")
+  
+  def mul(self, x, y):
+    return self.assign_to_var(PrimCall(prims.multiply, [x,y]), "mul")
+  
+  def div(self, x, y):
+    return self.assign_to_var(PrimCall(prims.divide, [x,y]), "div")
+  
+  def flatten_lhs(self, x):
+    if isinstance(x, Tuple):
+      result = []
+      for elt in x.elts:
+        result.extend(self.flatten_lhs(elt))
+      return result 
+    else:
+      return [x]
+  
+  def flatten_lengths(self, x):
+    if isinstance(x, Zip):
+      result = []
+      for value in x.values:
+        result.extend(self.flatten_lengths(value))
+      return result 
+    else:
+      
+      
+  
   def visit_For(self, stmt):
     assert not stmt.orelse 
     var = self.visit_lhs(stmt.target)
-    assert isinstance(var, Var)
     seq = self.visit(stmt.iter)
     body, merge, _ = self.visit_loop_body(stmt.body)
-    if isinstance(seq, syntax.Range):
+
+    if isinstance(seq, Range):
+      assert isinstance(var, Var), "Expect loop variable to be simple but got '%s'" % var
       return ForLoop(var, seq.start, seq.stop, seq.step, body, merge)
     else:
-      seq_name = self.fresh_name("seq")
-      seq_var = Var(seq_name)
-      self.current_block().append(Assign(seq_var, seq))
-      len_fn = translate_function_value(len)
-      n = syntax.Call(len_fn, ActualArgs([seq_var]))
+      lens = self.flatten_lens(seq)
+      
       start = zero_i64
       step = one_i64
       loop_counter_name = self.fresh_name('loop_counter')
       loop_var = Var(loop_counter_name)
-      body = [Assign(var, syntax.Index(seq_var, loop_var))] + body
+      seq_var = self.assign_to_var(seq, "seq")
+      n = self.len(seq_var)
+      body = [Assign(var, Index(seq_var, loop_var))] + body
       return ForLoop(loop_var, start, n, step, body, merge)
     
   def visit_block(self, stmts):
@@ -775,6 +860,15 @@ def translate_function_ast(name,
   assert not args.kwarg, "Parakeet doesn't support **kwargs, found in %s%s(%s)" % \
     (filename +":" if filename else "", name, args) 
   ssa_args, assignments = translator.translate_args(args)
+  
+  doc_string = None
+  if len(body) > 0 and isinstance(body[0], ast.Expr):
+    print ast.dump(body[0])
+    if isinstance(body[0].value, ast.Str):
+      doc_string = body[0].value.s
+      body = body[1:]
+     
+    
   _, body = translator.visit_block(body)
   body = assignments + body
 
@@ -792,7 +886,7 @@ def translate_function_ast(name,
     return UntypedFn(ssa_fn_name, ssa_args, body, python_refs.values(), [])
   else:
     assert parent
-    fn = UntypedFn(ssa_fn_name, ssa_args, body, [], original_outer_names)
+    fn = UntypedFn(ssa_fn_name, ssa_args, body, [], original_outer_names, doc_string = doc_string)
     if len(original_outer_names) > 0:
       outer_ssa_vars = [parent.lookup(x) for x in original_outer_names]
       return syntax.Closure(fn, outer_ssa_vars)
@@ -815,19 +909,19 @@ def translate_function_source(source,
                               closure_cells = [],
                               filename = None):
   assert len(closure_vars) == len(closure_cells)
-  syntax = ast.parse(strip_leading_whitespace(source))
+  syntax_tree = ast.parse(strip_leading_whitespace(source))
 
-  if isinstance(syntax, (ast.Module, ast.Interactive)):
-    assert len(syntax.body) == 1
-    syntax = syntax.body[0]
-  elif isinstance(syntax, ast.Expression):
-    syntax = syntax.body
+  if isinstance(syntax_tree, (ast.Module, ast.Interactive)):
+    assert len(syntax_tree.body) == 1
+    syntax_tree = syntax_tree.body[0]
+  elif isinstance(syntax_tree, ast.Expression):
+    syntax_tree = syntax_tree.body
   
-  assert isinstance(syntax, ast.FunctionDef), \
-      "Unexpected Python syntax node: %s" % ast.dump(syntax)
-  return translate_function_ast(syntax.name, 
-                                syntax.args, 
-                                syntax.body, 
+  assert isinstance(syntax_tree, ast.FunctionDef), \
+      "Unexpected Python syntax node: %s" % ast.dump(syntax_tree)
+  return translate_function_ast(syntax_tree.name, 
+                                syntax_tree.args, 
+                                syntax_tree.body, 
                                 globals_dict, 
                                 closure_vars,
                                 closure_cells, 
@@ -844,8 +938,7 @@ def translate_function_value(fn, _currently_processing = set([])):
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
     fn = fn.f 
-  
-  # print ">>", fn   
+
   assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
     "Unsupported primitive: %s" % (fn,) 
 
