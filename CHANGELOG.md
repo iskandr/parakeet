@@ -1,3 +1,6 @@
+### 0.16.3 / October 5th, 2013 ### 
+
+- Added support for binding multiple variables in a for loop (i.e. "for (x,(y,z)) in enumerate(zip(ys,zs)):")
 
 ### 0.16.2 / October 1st, 2013 ###
 
