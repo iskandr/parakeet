@@ -7,25 +7,25 @@ from collections import OrderedDict
 import numpy as np
 from treelike import NestedBlocks, ScopedDict
  
-from .. import config, names, prims, syntax  
+from .. import config, names, prims, syntax
+
 from ..names import NameNotFound
 from ..ndtypes import from_dtype 
 from ..prims import Prim 
 from ..syntax import (Assign, If, ForLoop, Return,  
-                      Var, PrimCall, Cast,  
+                      Var, PrimCall, Cast,  Select, 
                       Map, Reduce, 
-                      Enumerate, Zip, Len,   
+                      Enumerate, Zip, Len, Range,    
                       Slice,  Tuple, Array,
                       Const, Call, Index, 
                       FormalArgs, ActualArgs, 
                       UntypedFn, Closure, 
-                      Range, 
+                      
                       prim_wrapper) 
 from ..syntax.helpers import (none, true, false, one_i64, zero_i64, 
                               is_python_constant, const) 
 from ..transforms import subst_expr, subst_stmt_list
-from function_registry import already_registered_python_fn
-from function_registry import register_python_fn, lookup_python_fn 
+
 from decorators import jit, macro  
 from python_ref import GlobalValueRef,  ClosureCellRef
 
@@ -47,7 +47,8 @@ class UnsupportedSyntax(Exception):
         (self.node.__class__.__name__, self.function_name)
     else:
       return "Parakeet doesn't support %s" % self.node.__class__.__name__
-    
+
+
 
   
 class ExternalValue(object):
@@ -105,19 +106,24 @@ def is_static_value(v):
          type(v) is np.dtype  or \
          is_function_value(v)
 
+
+def mk_untyped_cast_fn(output_dtype, _cache = {}):
+  if output_dtype in _cache:
+    return _cache[output_dtype]
+  x = names.fresh("x")
+  fn_name = names.fresh("cast") 
+  formals = FormalArgs()
+  formals.add_positional(x, "x")
+  body = [Return(Cast(Var(x), type=from_dtype(output_dtype)))]
+  fn = UntypedFn(fn_name, formals, body)
+  _cache[output_dtype] = fn
+  return fn 
+
 def value_to_syntax(v):
   if is_python_constant(v):
     return const(v)
-  elif isinstance(v, np.dtype):
-    x = names.fresh("x")
-    fn_name = names.fresh("cast") 
-    formals = FormalArgs()
-    formals.add_positional(x, "x")
-    body = [Return(Cast(Var(x), type=from_dtype(v)))]
-    return UntypedFn(fn_name, formals, body)
   else:
-    assert is_function_value(v), "Can't make value %s : %s into static syntax" % (v, type(v))
-    return translate_function_value(v)  
+    return translate_function_value(v)
     
 class AST_Translator(ast.NodeVisitor):
   def __init__(self, 
@@ -452,9 +458,13 @@ class AST_Translator(ast.NodeVisitor):
                             filename = self.filename)
   
   
-  def translate_builtin_call(self, value, positional, keywords_dict):
-    from ..mappings import function_mappings     
+
+      
+  def visit(self, node):
+    res = ast.NodeVisitor.visit(self, node)
+    return res 
     
+  def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
     if value is sum:
       return mk_reduce_call(prim_wrapper(prims.add), positional, zero_i64)
     
@@ -484,36 +494,28 @@ class AST_Translator(ast.NodeVisitor):
         "Didn't expect keyword arguments for 'enumerate': %s" % keywords_dict
       return Enumerate(positional[0])
     
-    elif value is Zip:
+    elif value is len:
+      assert len(positional) == 1, "Wrong number of args for 'len': %s" % positional 
+      assert len(keywords_dict) == 0, \
+        "Didn't expect keyword arguments for 'len': %s" % keywords_dict
+      return self.len(positional[0])
+    
+    elif value is zip:
       assert len(positional) == 1, "Wrong number of args for 'zip': %s" % positional 
       assert len(keywords_dict) == 0, \
         "Didn't expect keyword arguments for 'zip': %s" % keywords_dict
       return Zip(positional[0])
     
-    elif value in function_mappings:
-      parakeet_equiv = function_mappings[value]
-      if isinstance(parakeet_equiv, macro):
-        return parakeet_equiv.transform(positional, keywords_dict)
-    fn = value_to_syntax(value)
-    return Call(fn, ActualArgs(positional, keywords_dict))
     
-      
-  def visit(self, node):
-    res = ast.NodeVisitor.visit(self, node)
-    return res 
-    
-  def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
-    from ..mappings import function_mappings 
+    from ..mappings import function_mappings
     if value in function_mappings:
       value = function_mappings[value]
-      
+    
     if isinstance(value, macro):
       return value.transform(positional, keywords_dict)
-    elif is_user_function(value):
-      return Call(translate_function_value(value), 
-                           ActualArgs(positional, keywords_dict, starargs_expr))
-    else:
-      return self.translate_builtin_call(value, positional, keywords_dict)
+      
+    fn = translate_function_value(value)
+    return Call(fn, ActualArgs(positional, keywords_dict, starargs_expr))
     
   def visit_Call(self, expr):
     """
@@ -589,7 +591,6 @@ class AST_Translator(ast.NodeVisitor):
       rhs = self.visit(expr.value)
       return syntax.Assign(lhs, rhs)
 
-    
   def visit_GeneratorExp(self, expr):
     return self.visit_ListComp(expr)
     
@@ -670,15 +671,11 @@ class AST_Translator(ast.NodeVisitor):
     return syntax.Tuple(self.visit_list(expr.elts))
 
   def visit_IfExp(self, expr):
-    temp1, temp2, result = self.fresh_vars(["if_true", "if_false", "if_result"])
     cond = self.visit(expr.test)
-    true_block = [Assign(temp1, self.visit(expr.body))]
-    false_block = [Assign(temp2, self.visit(expr.orelse))]
-    merge = {result.name : (temp1, temp2)}
-    if_stmt = If(cond, true_block, false_block, merge)
-    self.current_block().append(if_stmt)
-    return result
-
+    if_true = self.visit(expr.body)
+    if_false = self.visit(expr.orelse)
+    return Select(cond, if_true, if_false)
+    
   def visit_lhs(self, lhs):
     if isinstance(lhs, ast.Name):
       return self.fresh_var(lhs.id)
@@ -746,24 +743,8 @@ class AST_Translator(ast.NodeVisitor):
     var = self.fresh_var(name)
     self.assign(var, rhs)
     return var 
-    
-  def len(self, x):
-    if isinstance(x, Enumerate):
-      return self.len(x.value)
-    elif isinstance(x, Zip):
-      elt_lens = [self.len(v) for v in x.values]
-      result = elt_lens[0]
-      for n in elt_lens[1:]:
-        result = PrimCall(prims.minimum, [result, n])
-      return result 
-    elif isinstance(x, (Array, Tuple)):
-      return Const(len(x.elts))
-    else:
-      seq_var = self.assign_to_var(x, "len_input")
-      result_var = self.fresh_var("len_result")
-      self.assign(result_var,  Len(seq_var))
-      return result_var  
   
+    
   def add(self, x, y):
     return self.assign_to_var(PrimCall(prims.add, [x,y]), "add")
   
@@ -776,6 +757,28 @@ class AST_Translator(ast.NodeVisitor):
   def div(self, x, y):
     return self.assign_to_var(PrimCall(prims.divide, [x,y]), "div")
   
+  
+  def len(self, x):
+    if isinstance(x, Enumerate):
+      return self.len(x.value)
+    elif isinstance(x, Zip):
+      elt_lens = [self.len(v) for v in x.values]
+      result = elt_lens[0]
+      for n in elt_lens[1:]:
+        result = PrimCall(prims.minimum, [result, n])
+      return result 
+    elif isinstance(x, (Array, Tuple)):
+      return Const(len(x.elts))
+    
+    elif isinstance(x, Range):
+      # if it's a range from 0..len(x), then just return len(x)
+      if isinstance(x.stop, Len):
+        if isinstance(x.start, Const) and x.start.value == 0:
+          if isinstance(x.step, Const) and x.stop.value in (1,-1, None):
+            return x.stop
+    seq_var = self.assign_to_var(x, "len_input")
+    return self.assign_to_var(Len(seq_var), "len_result")
+  """
   def flatten_lhs(self, x):
     if isinstance(x, Tuple):
       result = []
@@ -784,6 +787,7 @@ class AST_Translator(ast.NodeVisitor):
       return result 
     else:
       return [x]
+  """
   
   def flatten_lengths(self, x):
     if isinstance(x, Zip):
@@ -792,9 +796,30 @@ class AST_Translator(ast.NodeVisitor):
         result.extend(self.flatten_lengths(value))
       return result 
     else:
-      
-      
+      return [self.len(x)]
   
+  def for_loop_bindings(self, idx, lhs, rhs):
+    
+    if isinstance(rhs, Enumerate):
+      array = rhs.value 
+      elt = Index(array, idx)
+      if isinstance(lhs, Tuple):
+        var_names = ", ".join(str(elt) for elt in lhs.elts)
+        if len(lhs.elts) < 2:
+          raise SyntaxError("Too many values to unpack: enumerate expects 2 but given %s" % var_names)
+        elif len(lhs.elts) > 2:
+          raise SyntaxError("Need more than 2 values to unpack for LHS of %s" % var_names)
+        x, y = lhs.elts 
+        #return [Assign(x, loop_idx)] + self.for_loop_bindings(
+      elif isinstance(lhs, Var):
+        return [Assign(lhs, Tuple(idx, elt))]
+    elif isinstance(rhs, Range):
+      pass 
+    elif isinstance(lhs, Var):
+      return [Assign(lhs, Index(rhs, idx))]
+    else:
+      raise SyntaxError("Unexpected loop variable %s" % lhs)
+      
   def visit_For(self, stmt):
     assert not stmt.orelse 
     var = self.visit_lhs(stmt.target)
@@ -805,16 +830,10 @@ class AST_Translator(ast.NodeVisitor):
       assert isinstance(var, Var), "Expect loop variable to be simple but got '%s'" % var
       return ForLoop(var, seq.start, seq.stop, seq.step, body, merge)
     else:
-      lens = self.flatten_lens(seq)
-      
-      start = zero_i64
-      step = one_i64
-      loop_counter_name = self.fresh_name('loop_counter')
-      loop_var = Var(loop_counter_name)
-      seq_var = self.assign_to_var(seq, "seq")
-      n = self.len(seq_var)
-      body = [Assign(var, Index(seq_var, loop_var))] + body
-      return ForLoop(loop_var, start, n, step, body, merge)
+      idx = self.fresh_var("idx")
+      n = self.len(seq)
+      bindings = self.for_loop_bindings(idx, var, seq)
+      return ForLoop(idx, zero_i64, n, one_i64, bindings + body, merge)
     
   def visit_block(self, stmts):
     self.push()
@@ -927,23 +946,57 @@ def translate_function_source(source,
                                 closure_cells, 
                                 filename = filename)
 
-def translate_function_value(fn, _currently_processing = set([])):
-  from ..mappings import function_mappings
+# python value of a user-defined function mapped to its
+# untyped representation
+_known_python_functions = {}
+
+# keep track of which functions are being translated at this moment 
+# to check for recursive calls 
+_currently_processing = set([])
+
+def translate_function_value(fn):
+  
+  # if it's already a Parakeet function, just return it 
+  if isinstance(fn, UntypedFn):
+    return fn 
+  
+  # short-circuit logic for turning dtypes and Python types into 
+  # functions for casting from any value to those types 
+  if isinstance(fn, np.dtype): 
+    return mk_untyped_cast_fn(fn)
+  elif fn is int or fn is long: 
+    return mk_untyped_cast_fn(np.int64)
+  elif fn is bool: 
+    return mk_untyped_cast_fn(np.bool_)
+  elif fn is float: 
+    return mk_untyped_cast_fn(np.float64)
+    
+  # any builtin or numpy library function should have an entry here
+  from ..mappings import function_mappings 
   if fn in function_mappings:
     fn = function_mappings[fn]
-  
+ 
+  # ...unless we forgot to add it to mappings but some equivalent primitive 
+  # got registered 
   if fn in prims.prim_lookup_by_value:
     fn = prims.prim_lookup_by_value[fn]
   
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
-    fn = fn.f 
+    fn = fn.f
+  
+  # if we see a macro, make it materialize itself as a function
+  # ...this is hackish, since it fixes all the keyword args to 
+  # their default values.  
+  if isinstance(fn, macro):
+    fn = fn.as_fn()
 
   assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
     "Unsupported primitive: %s" % (fn,) 
 
-  if already_registered_python_fn(fn):
-    return lookup_python_fn(fn)
+
+  if fn in _known_python_functions:
+    return _known_python_functions[fn]
   
   assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
   assert fn not in _currently_processing, \
@@ -953,6 +1006,7 @@ def translate_function_value(fn, _currently_processing = set([])):
   
   if isinstance(fn, Prim):
     fundef = prim_wrapper(fn)
+ 
   
     
   # TODO: Right now we can only deal with adverbs over a fixed axis and fixed
@@ -967,13 +1021,17 @@ def translate_function_value(fn, _currently_processing = set([])):
     assert hasattr(fn, 'func_globals'), "Expected function to have globals: %s" % fn
     assert hasattr(fn, 'func_closure'), "Expected function to have closure cells: %s" % fn
     assert hasattr(fn, 'func_code'), "Expected function to have code object: %s" % fn
-    source = inspect.getsource(fn)
-    filename = inspect.getsourcefile(fn)
+    try: 
+      source = inspect.getsource(fn)
+      filename = inspect.getsourcefile(fn)
+    except:
+      assert False, "Parakeet couldn't access source of function %s" % fn 
     globals_dict = fn.func_globals
 
     free_vars = fn.func_code.co_freevars
     closure_cells = fn.func_closure
-    if closure_cells is None: closure_cells = ()
+    if closure_cells is None: 
+      closure_cells = ()
     try: 
       fundef = translate_function_source(source,
                                         globals_dict,
@@ -986,7 +1044,7 @@ def translate_function_value(fn, _currently_processing = set([])):
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
                 
-  register_python_fn(original_fn, fundef)
-  register_python_fn(fn, fundef)
+  _known_python_functions[original_fn] = fundef 
+  _known_python_functions[fn] = fundef 
   _currently_processing.remove(original_fn)
   return fundef 

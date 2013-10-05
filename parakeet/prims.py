@@ -3,7 +3,7 @@
 import numpy as np
 import ndtypes 
 
-from ndtypes import Bool, combine_type_list, FloatT, IntT, BoolT, Float32, Float64 
+from ndtypes import Bool, FloatT, BoolT, Float32, Float64 
 
 prim_lookup_by_value = {}
 

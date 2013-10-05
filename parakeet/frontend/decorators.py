@@ -32,9 +32,16 @@ class macro(object):
 
   _macro_wrapper_cache = {}
   def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
+    
+    static_pairs = tuple(static_pairs)
+    key = (n_pos, static_pairs, dynamic_keywords)
+    if key in self.wrappers:
+      return self.wrappers[key]
+    
     args = FormalArgs()
     pos_vars = []
     keyword_vars = {}
+    
     
     for i in xrange(n_pos):
       if i <  self.f.func_code.co_argcount: 
@@ -66,8 +73,10 @@ class macro(object):
     wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
                                          len(dynamic_keywords))
     wrapper_name = names.fresh(wrapper_name)
-    return UntypedFn(name = wrapper_name, args = args, body = body)
-
+    untyped = UntypedFn(name = wrapper_name, args = args, body = body)
+    self.wrappers[key] = untyped
+    return untyped 
+  
   def as_fn(self):
     n_args = self.f.func_code.co_argcount
     n_default = 0 if not self.f.func_defaults else len(self.f.func_defaults)
@@ -91,14 +100,8 @@ class macro(object):
     dynamic_keywords = tuple(k for k in keywords
                                if k not in self.static_names)
 
-    static_pairs = tuple(static_pairs)
-    key = (n_pos, static_pairs, dynamic_keywords)
 
-    if key in self.wrappers:
-      untyped = self.wrappers[key]
-    else:
-      untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
-      self.wrappers[key] = untyped
+    untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
     dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
     
     

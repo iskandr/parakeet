@@ -10,7 +10,8 @@ from . import (type_conv, type_inference,
               specialize, translate_function_value,
               find_broken_transform,
               run_untyped_fn, 
-              run_typed_fn, run_python_fn, frontend)
+              run_typed_fn, 
+              run_python_fn)
 
 from config import testing_find_broken_transform
 
@@ -32,7 +33,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   if hasattr(expected, 'dtype') and expected.dtype == 'float16':
     expected = expected.astype('float32')
 
-  untyped_fn = frontend.ast_conversion.translate_function_value(fn)
+  untyped_fn = translate_function_value(fn)
   
   try: 
     interp_result = run_untyped_fn(untyped_fn, _copy_list(args), backend = "interp")
