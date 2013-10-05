@@ -501,11 +501,10 @@ class AST_Translator(ast.NodeVisitor):
       return self.len(positional[0])
     
     elif value is zip:
-      assert len(positional) == 1, "Wrong number of args for 'zip': %s" % positional 
+      assert len(positional) > 1, "Wrong number of args for 'zip': %s" % positional 
       assert len(keywords_dict) == 0, \
         "Didn't expect keyword arguments for 'zip': %s" % keywords_dict
-      return Zip(positional[0])
-    
+      return Zip(values = positional)
     
     from ..mappings import function_mappings
     if value in function_mappings:
@@ -745,17 +744,33 @@ class AST_Translator(ast.NodeVisitor):
     return var 
   
     
-  def add(self, x, y):
-    return self.assign_to_var(PrimCall(prims.add, [x,y]), "add")
+  def add(self, x, y, temp = True):
+    expr = PrimCall(prims.add, [x,y])
+    if temp:
+      return self.assign_to_var(expr, "add")
+    else:
+      return expr 
   
-  def sub(self, x, y):
-    return self.assign_to_var(PrimCall(prims.subtract, [x,y]), "sub")
+  def sub(self, x, y, temp = True):
+    expr = PrimCall(prims.subtract, [x,y])
+    if temp:
+      return self.assign_to_var(expr, "sub")
+    else:
+      return expr 
   
-  def mul(self, x, y):
-    return self.assign_to_var(PrimCall(prims.multiply, [x,y]), "mul")
+  def mul(self, x, y, temp = True):
+    expr = PrimCall(prims.multiply, [x,y])
+    if temp:
+      return self.assign_to_var(expr, "mul")
+    else:
+      return expr 
   
-  def div(self, x, y):
-    return self.assign_to_var(PrimCall(prims.divide, [x,y]), "div")
+  def div(self, x, y, temp = True):
+    expr = PrimCall(prims.divide, [x,y])
+    if temp:
+      return self.assign_to_var(expr, "div")
+    else:
+      return expr 
   
   
   def len(self, x):
@@ -778,47 +793,71 @@ class AST_Translator(ast.NodeVisitor):
             return x.stop
     seq_var = self.assign_to_var(x, "len_input")
     return self.assign_to_var(Len(seq_var), "len_result")
-  """
-  def flatten_lhs(self, x):
-    if isinstance(x, Tuple):
-      result = []
-      for elt in x.elts:
-        result.extend(self.flatten_lhs(elt))
-      return result 
-    else:
-      return [x]
-  """
-  
-  def flatten_lengths(self, x):
-    if isinstance(x, Zip):
-      result = []
-      for value in x.values:
-        result.extend(self.flatten_lengths(value))
-      return result 
-    else:
-      return [self.len(x)]
+
+
+  def is_none(self, v):
+    return v is None or isinstance(v, Const) and v.value is None 
   
   def for_loop_bindings(self, idx, lhs, rhs):
-    
     if isinstance(rhs, Enumerate):
       array = rhs.value 
       elt = Index(array, idx)
       if isinstance(lhs, Tuple):
         var_names = ", ".join(str(elt) for elt in lhs.elts)
         if len(lhs.elts) < 2:
-          raise SyntaxError("Too many values to unpack: enumerate expects 2 but given %s" % var_names)
+          raise SyntaxError("Too many values to unpack: 'enumerate' expects 2 but given %s" % var_names)
         elif len(lhs.elts) > 2:
           raise SyntaxError("Need more than 2 values to unpack for LHS of %s" % var_names)
-        x, y = lhs.elts 
-        #return [Assign(x, loop_idx)] + self.for_loop_bindings(
+        idx_var, seq_var = lhs.elts
+        other_bindings = self.for_loop_bindings(idx, seq_var, array)
+        return [Assign(idx_var, idx)] +  other_bindings 
       elif isinstance(lhs, Var):
-        return [Assign(lhs, Tuple(idx, elt))]
+        seq_var = self.fresh_var("seq_elt")
+        other_bindings = self.for_loop_bindings(idx, seq_var, array)
+        return [Assign(lhs, Tuple(idx, seq_var))] + other_bindings
+      else:
+        raise SyntaxError("Unexpected binding in for loop: %s = %s" % (lhs,rhs)) 
+      
+    elif isinstance(rhs, Zip):
+      values_str = ", ".join(str(v) for v in rhs.values)
+      if len(rhs.values) < 2:
+        raise SyntaxError("'zip' must take at least two arguments, given: %s" % values_str)
+      if isinstance(lhs, Tuple):
+        if len(lhs.elts) < len(rhs.values):
+          raise SyntaxError("Too many values to unpack in %s = %s" % (lhs, rhs))
+        elif len(lhs.elts) > len(rhs.values):
+          raise SyntaxError("Too few values on LHS of bindings in %s = %s" % (lhs,rhs))
+        result = []
+        for lhs_var, rhs_value in zip(lhs.elts, rhs.values):
+          result.extend(self.for_loop_bindings(idx, lhs_var, rhs_value))
+        return result 
+      elif isinstance(lhs, Var):
+        lhs_vars = [self.fresh_var("elt%d" % i) for i in xrange(len(rhs.values))]
+        result = []
+        for lhs_var, rhs_value in zip(lhs_vars, rhs.values):
+          result.extend(self.for_loop_bindings(idx, lhs_var, rhs_value))
+        result.append(Assign(lhs, Tuple(elts=lhs_vars)))
+        return result  
+      else:
+        raise SyntaxError("Unexpected binding in for loop: %s = %s" % (lhs,rhs)) 
+      
     elif isinstance(rhs, Range):
-      pass 
-    elif isinstance(lhs, Var):
-      return [Assign(lhs, Index(rhs, idx))]
+      if isinstance(lhs, Tuple):
+        raise SyntaxError("Too few values in unpack in for loop binding %s = %s" % (lhs,rhs))
+      elif isinstance(lhs, Var):
+        start = rhs.start
+        if self.is_none(start): 
+          start = zero_i64
+        step = rhs.step
+        if self.is_none(step): 
+          step = one_i64 
+        return [Assign(lhs, self.add(start, self.mul(idx, step, temp = False), temp= False))]
+      else:
+        raise SyntaxError("Unexpected binding in for loop: %s = %s" % (lhs,rhs)) 
+      
     else:
-      raise SyntaxError("Unexpected loop variable %s" % lhs)
+      return [Assign(lhs, Index(rhs,idx))]
+      
       
   def visit_For(self, stmt):
     assert not stmt.orelse 
@@ -985,11 +1024,7 @@ def translate_function_value(fn):
   while isinstance(fn, jit):
     fn = fn.f
   
-  # if we see a macro, make it materialize itself as a function
-  # ...this is hackish, since it fixes all the keyword args to 
-  # their default values.  
-  if isinstance(fn, macro):
-    fn = fn.as_fn()
+
 
   assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
     "Unsupported primitive: %s" % (fn,) 

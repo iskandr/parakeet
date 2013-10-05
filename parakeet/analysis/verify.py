@@ -66,7 +66,7 @@ class Verify(SyntaxVisitor):
           (expr.prim, arg, arg.type)
 
   def visit_expr(self, expr):
-    assert expr is not None
+    assert expr is not None, "Expression missing, must be a compiler bug"
     assert expr.type is not None, \
       "Missing type annotation on %s" % expr 
     SyntaxVisitor.visit_expr(self, expr)
@@ -79,7 +79,7 @@ class Verify(SyntaxVisitor):
   
   def check_fn_args(self, fn, args = None, arg_types = None):
     if arg_types is None: 
-      assert args is not None 
+      assert args is not None, "Function args missing" 
       arg_types = get_types(args)
     n_given = len(arg_types)
     n_expected = len(fn.input_types)
@@ -120,7 +120,8 @@ class Verify(SyntaxVisitor):
       if isinstance(arg, Type):
         arg_types.append(arg)
       else:
-        assert isinstance(arg, Expr)
+        assert isinstance(arg, Expr), \
+          "Expected call argument to be expression but got %s" % arg 
         arg_types.append(arg.type)
     arg_types = tuple(closure_arg_types) + tuple(arg_types)
     try:
@@ -154,8 +155,7 @@ class Verify(SyntaxVisitor):
     
   def visit_lhs(self, lhs):
     c = lhs.__class__
-    assert c in (Var, Tuple, Index), \
-       "Invalid LHS of assignment"
+    assert c in (Var, Tuple, Index), "Invalid LHS of assignment: %s" % lhs 
     if c is Tuple:
       for elt in lhs.elts:
         self.visit_lhs(elt)
@@ -182,19 +182,25 @@ class Verify(SyntaxVisitor):
         (stmt.lhs.type, stmt.rhs.type, stmt)
 
   def visit_ForLoop(self, stmt):
-    assert stmt.var.__class__ is Var
+    assert stmt.var.__class__ is Var, "Expected loop variable, got: %s" % stmt.var 
     self.bind_var(stmt.var.name)
     self.visit_expr(stmt.var)
 
-    assert stmt.start.type == stmt.var.type
+    assert stmt.start.type == stmt.var.type, \
+      "Loop variable type %s : %s doesn't match start value %s : %s" % \
+      (stmt.var, stmt.var.type, stmt.start, stmt.start.type)
     self.visit_expr(stmt.start)
     self.visit_merge_loop_start(stmt.merge)
 
-    assert stmt.stop.type == stmt.var.type
+    assert stmt.stop.type == stmt.var.type, \
+      "Loop variable type %s : %s doesn't match stop value %s : %s" % \
+      (stmt.var, stmt.var.type, stmt.stop, stmt.stop.type)
     self.visit_expr(stmt.stop)
     self.visit_block(stmt.body)
     
-    assert stmt.step.type == stmt.var.type
+    assert stmt.step.type == stmt.var.type, \
+     "Loop variable type %s : %s doesn't match stop value %s : %s" % \
+      (stmt.var, stmt.var.type, stmt.stop, stmt.stop.type)
     self.visit_expr(stmt.step)
     self.visit_merge_loop_repeat(stmt.merge)
     
@@ -208,7 +214,7 @@ class Verify(SyntaxVisitor):
     self.verify_call(fn, args)
     
   def visit_stmt(self, stmt):
-    assert stmt is not None
+    assert stmt is not None, "Statement missing, must be a compiler bug"
     SyntaxVisitor.visit_stmt(self, stmt)
 
   def visit_TypedFn(self, fn):

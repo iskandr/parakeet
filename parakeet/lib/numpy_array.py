@@ -20,6 +20,7 @@ def ravel(x):
 def reshape(x):
   return Reshape(x)
 
+
 @macro 
 def get_elt_type(x):
   def typed_elt_type(xt):
@@ -62,7 +63,6 @@ def shape(x):
       return Tuple((), type = empty_tuple_t)
     
   return DelayUntilTyped(x, typed_shape)
-
 
 
 

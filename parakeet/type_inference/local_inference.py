@@ -358,6 +358,7 @@ class LocalTypeInference(Transform):
     step = self.transform_expr(stmt.step)
     lhs_t = start.type.combine(stop.type).combine(step.type)
     var = self.annotate_lhs(stmt.var, lhs_t)
+
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
     return ForLoop(var, start, stop, step, body, merge)

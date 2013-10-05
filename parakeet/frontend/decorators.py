@@ -81,7 +81,7 @@ class macro(object):
     n_args = self.f.func_code.co_argcount
     n_default = 0 if not self.f.func_defaults else len(self.f.func_defaults)
     assert n_default == 0
-    return self._create_wrapper(n_args,[],{})
+    return self._create_wrapper(n_args,[],())
     
   def __call__(self, *args, **kwargs):
     if self.call_from_python is not None:

@@ -242,6 +242,15 @@ class RewriteTyped(Transform):
     stmt.value = self.coerce_expr(stmt.value, self.fn_return_type)
     return stmt
 
+  def transform_ForLoop(self, stmt):
+    var_t = stmt.var.type
+    stmt.start = self.coerce_expr(stmt.start, var_t)
+    stmt.stop = self.coerce_expr(stmt.stop, var_t)
+    stmt.step = self.coerce_expr(stmt.step, var_t)
+    stmt.body = self.transform_block(stmt.body)
+    stmt.merge = self.transform_merge(stmt.merge)
+    return stmt 
+  
   def transform_While(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, Bool)
     stmt.body = self.transform_block(stmt.body)

@@ -31,7 +31,7 @@ def _tuple_from_args(*args):
 
 @macro
 def builtin_zip(*args):
-
+  assert len(args) > 1, "Zip requires at least two arguments, given: %s" % str(args)
   elt_tupler = translate_function_value(_tuple_from_args)
   return Map(fn = elt_tupler, args = args)
 
