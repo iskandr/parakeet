@@ -10,20 +10,22 @@ from treelike import NestedBlocks, ScopedDict
 from .. import config, names, prims, syntax
 
 from ..names import NameNotFound
-from ..ndtypes import from_dtype 
+from ..ndtypes import Type
 from ..prims import Prim 
-from ..syntax import (Assign, If, ForLoop, Return,  
+from ..syntax import (Expr, 
+                      Assign, If, ForLoop, Return,  
                       Var, PrimCall, Cast,  Select, 
                       Map, Reduce, 
                       Enumerate, Zip, Len, Range,    
                       Slice,  Tuple, Array,
                       Const, Call, Index, 
                       FormalArgs, ActualArgs, 
-                      UntypedFn, Closure, 
-                      
-                      prim_wrapper) 
+                      UntypedFn, Closure)
+ 
 from ..syntax.helpers import (none, true, false, one_i64, zero_i64, 
-                              is_python_constant, const) 
+                              is_python_constant, const)
+from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_expr_fn, build_untyped_cast_fn
+ 
 from ..transforms import subst_expr, subst_stmt_list
 
 from decorators import jit, macro  
@@ -105,19 +107,6 @@ def is_static_value(v):
   return is_python_constant(v) or \
          type(v) is np.dtype  or \
          is_function_value(v)
-
-
-def mk_untyped_cast_fn(output_dtype, _cache = {}):
-  if output_dtype in _cache:
-    return _cache[output_dtype]
-  x = names.fresh("x")
-  fn_name = names.fresh("cast") 
-  formals = FormalArgs()
-  formals.add_positional(x, "x")
-  body = [Return(Cast(Var(x), type=from_dtype(output_dtype)))]
-  fn = UntypedFn(fn_name, formals, body)
-  _cache[output_dtype] = fn
-  return fn 
 
 def value_to_syntax(v):
   if is_python_constant(v):
@@ -466,18 +455,18 @@ class AST_Translator(ast.NodeVisitor):
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
     if value is sum:
-      return mk_reduce_call(prim_wrapper(prims.add), positional, zero_i64)
+      return mk_reduce_call(build_untyped_prim_fn(prims.add), positional, zero_i64)
     
     elif value is max:
       if len(positional) == 1:
-        return mk_reduce_call(prim_wrapper(prims.maximum), positional)
+        return mk_reduce_call(build_untyped_prim_fn(prims.maximum), positional)
       else:
         assert len(positional) == 2
         return PrimCall(prims.maximum, positional)
     
     elif value is min:
       if len(positional) == 1:
-        return mk_reduce_call(prim_wrapper(prims.minimum), positional)
+        return mk_reduce_call(build_untyped_prim_fn(prims.minimum), positional)
       else:
         assert len(positional) == 2
         return PrimCall(prims.minimum, positional)
@@ -1000,15 +989,9 @@ def translate_function_value(fn):
   
   # short-circuit logic for turning dtypes and Python types into 
   # functions for casting from any value to those types 
-  if isinstance(fn, np.dtype): 
-    return mk_untyped_cast_fn(fn)
-  elif fn is int or fn is long: 
-    return mk_untyped_cast_fn(np.int64)
-  elif fn is bool: 
-    return mk_untyped_cast_fn(np.bool_)
-  elif fn is float: 
-    return mk_untyped_cast_fn(np.float64)
-    
+  if isinstance(fn, (np.dtype, int, long, float, bool)): 
+    return build_untyped_cast_fn(fn)
+      
   # any builtin or numpy library function should have an entry here
   from ..mappings import function_mappings 
   if fn in function_mappings:
@@ -1039,19 +1022,18 @@ def translate_function_value(fn):
   original_fn = fn
   
   if isinstance(fn, Prim):
-    fundef = prim_wrapper(fn)
- 
-  
-    
-  # TODO: Right now we can only deal with adverbs over a fixed axis and fixed
-  # number of args due to lack of support for a few language constructs:
-  # - variable number of args packed as a tuple i.e. *args
-  # - keyword arguments packed as a...? ...struct of some kind? i.e. **kwds
-  # - unpacking tuples and unpacking structs
-
+    fundef = build_untyped_prim_fn(fn)
+  elif isinstance(fn, (Type, np.dtype, int, bool, long, float)):
+    fundef = build_untyped_cast_fn(fn)
+  elif isinstance(fn, Expr):
+    fundef = build_untyped_expr_fn(fn)  
   elif isinstance(fn, macro):
     fundef = fn.as_fn()
   else:
+    # if it's not a macro or some sort of internal expression
+    # then we're really dealing with a Python function
+    # so get to work pulling apart its AST and translating
+    # it into Parakeet IR
     assert hasattr(fn, 'func_globals'), "Expected function to have globals: %s" % fn
     assert hasattr(fn, 'func_closure'), "Expected function to have closure cells: %s" % fn
     assert hasattr(fn, 'func_code'), "Expected function to have code object: %s" % fn

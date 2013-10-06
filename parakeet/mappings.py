@@ -1,6 +1,7 @@
 import math  
 import numpy as np
 import lib, prims   
+from syntax import Zip, Len, build_untyped_cast_fn 
 
 property_mappings = {
   'dtype' : lib.get_elt_type,                
@@ -39,7 +40,7 @@ method_mappings = {
 
 function_mappings = {
   # PYTHON BUILTINS          
-  zip : lib.builtin_zip,        
+  zip : Zip, 
   map : lib.map, 
   reduce : lib.reduce, 
   tuple : lib.builtin_tuple, 
@@ -49,7 +50,7 @@ function_mappings = {
   int : lib.numpy_types.int64, 
   long : lib.numpy_types.int64, 
   bool : lib.numpy_types.bool, 
-  len : lib.builtin_len, 
+  len : Len,  
   min : lib.builtin_min,
   max : lib.builtin_max,
   all : lib.builtin_all, 
@@ -59,7 +60,7 @@ function_mappings = {
   pow : prims.power, 
   
   # TYPES 
-  np.int8 : lib.numpy_types.int8, 
+  np.int8 : build_untyped_cast_fn(np.int8), 
   np.int16 : lib.numpy_types.int16, 
   np.int32 : lib.numpy_types.int32, 
   np.int64 : lib.numpy_types.int64, 

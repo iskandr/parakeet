@@ -40,15 +40,16 @@ type_conv.register((list, xrange), ArrayT, typeof_array)
 
 
 from decorators  import jit, macro 
-from ..syntax import prim_wrapper 
+
  
 # ndtypes already register NumPy arrays type converters, 
 # but parakeet also treats ranges and lists as arrays 
 type_conv.register((list, xrange), ArrayT, typeof_array)
 
 def typeof_prim(p):
-  untyped_fn = prim_wrapper(p)
-  return make_closure_type(untyped_fn, [])
+  from ..syntax.wrappers import  build_untyped_prim_fn
+  untyped_fn = build_untyped_prim_fn(p)
+  return make_closure_type(untyped_fn, ())
 
 type_conv.register(prims.class_list, ClosureT, typeof_prim)
 

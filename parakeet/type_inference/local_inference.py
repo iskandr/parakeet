@@ -10,11 +10,11 @@ from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, 
                       Range, Ravel, Reshape, 
                       Select, Slice, 
                       Transpose, Tuple, TupleProj, TypeValue,  Var,  
-                      ForLoop, While, Assign, Return, If,
-                      Map,  
-                      prim_wrapper)
+                      ForLoop, While, Assign, Return, If)
 
 from ..syntax.helpers import get_types, is_true, is_false, zero_i64
+from ..syntax.wrappers import build_untyped_prim_fn
+
 from ..transforms import Transform
 
 
@@ -171,8 +171,6 @@ class LocalTypeInference(Transform):
       assert t.__class__ is TupleT, "Unexpected argument for 'len' - %s : %s" % (expr.value, t)
       return Const(len(t.elt_types), type = Int64)
 
-
-      
   def transform_DelayUntilTyped(self, expr):
     new_values = self.transform_expr_tuple(expr.values)
     new_syntax = expr.fn(*new_values)
@@ -190,9 +188,9 @@ class LocalTypeInference(Transform):
     return Closure(expr.fn, new_args, type = t)
 
   def transform_Arith(self, expr):
-    untyped_fn = prim_wrapper(expr)
-    t = make_closure_type(untyped_fn, ())
-    return Closure(untyped_fn, (), type = t)
+    return build_untyped_prim_fn(expr)
+    #t = make_closure_type(untyped_fn, ())
+    #return Closure(untyped_fn, (), type = t)
 
   def transform_UntypedFn(self, expr):
     return expr 

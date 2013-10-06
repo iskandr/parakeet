@@ -1,5 +1,6 @@
 from .. import config, names,  prims, syntax
-from ..ndtypes import (array_type, closure_type, tuple_type, type_conv, 
+from ..ndtypes import (Type, 
+                       array_type, closure_type, tuple_type, type_conv, 
                        Bool, IntT, Int64,  ScalarT, ArrayT,  
                        NoneType, NoneT, Unknown, UnknownT, 
                        TypeValueT, 
@@ -7,12 +8,14 @@ from ..ndtypes import (array_type, closure_type, tuple_type, type_conv,
                        lower_rank, make_array_type, 
                        ClosureT)
 
-from ..syntax import adverb_helpers, prim_wrapper
+from ..syntax import adverb_helpers
+
 from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, Map,  
                       ActualArgs, FormalArgs, MissingArgsError)
 from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
                               one_i64, zero_i64, none, true, false, 
                               gen_data_arg_names)
+from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_cast_fn
 
 from ..transforms import Simplify 
 
@@ -74,9 +77,22 @@ class TypeInference(LocalTypeInference):
         result[k] = self.transform_expr(v)
       return result
 
-
+  
+  def transform_fn(self, f):
+    """
+    If you're calling a Type, turn it into a wrapper function around the Cast expression. 
+    If you're calling a Prim, turn it into a wrapper function around the PrimCall expression.
+    """
+    if isinstance(f, Type):
+      expr = build_untyped_cast_fn(f)
+    elif isinstance(f, prims.Prim):
+      expr = build_untyped_prim_fn(f)
+    else:
+      expr = f 
+    return self.transform_expr(expr)
+  
   def transform_Call(self, expr):
-    closure = self.transform_expr(expr.fn)
+    closure = self.transform_fn(expr.fn)
     args = self.transform_args(expr.args)
     if closure.type.__class__ is TypeValueT:
       assert args.__class__ is  ActualArgs
@@ -135,7 +151,7 @@ class TypeInference(LocalTypeInference):
     else:
       assert all(t.__class__ is not NoneT for t in arg_types), \
         "Invalid argument types for prim %s: %s" % (expr.prim, arg_types,)
-      prim_fn = prim_wrapper(expr.prim)
+      prim_fn = build_untyped_prim_fn(expr.prim)
 
       max_rank = adverb_helpers.max_rank(arg_types)
       arg_names = gen_data_arg_names(len(arg_types))
@@ -185,7 +201,7 @@ class TypeInference(LocalTypeInference):
     if not isinstance(shape.type, TupleT):
       assert isinstance(shape.type, ScalarT), "Invalid shape for IndexMap: %s : %s" % (shape, shape.type)
       shape = self.tuple((shape,))
-    closure = self.transform_expr(expr.fn)
+    closure = self.transform_fn(expr.fn)
     shape_t = shape.type
     if isinstance(shape_t, IntT):
       shape = self.cast(shape, Int64)
@@ -204,8 +220,8 @@ class TypeInference(LocalTypeInference):
   
   def transform_IndexReduce(self, expr):
     shape = self.transform_expr(expr.shape)
-    map_fn_closure = self.transform_expr(expr.fn)
-    combine_closure = self.transform_expr(expr.combine)
+    map_fn_closure = self.transform_fn(expr.fn if expr.fn else untyped_identity_function)
+    combine_closure = self.transform_fn(expr.combine)
     init = self.transform_if_expr(expr.init)
     shape_t = shape.type
     if isinstance(shape_t, IntT):
@@ -229,7 +245,7 @@ class TypeInference(LocalTypeInference):
                               type = result_type)
   
   def transform_Map(self, expr):
-    closure = self.transform_expr(expr.fn)
+    closure = self.transform_fn(expr.fn)
     new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     assert len(arg_types) > 0, "Map requires array arguments"
@@ -316,8 +332,8 @@ class TypeInference(LocalTypeInference):
     arg_types = get_types(new_args)
     axis = self.transform_if_expr(expr.axis)
 
-    map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function) 
-    combine_fn = self.transform_expr(expr.combine)
+    map_fn = self.transform_fn(expr.fn if expr.fn else untyped_identity_function) 
+    combine_fn = self.transform_fn(expr.combine)
     
     init = self.transform_expr(expr.init) if expr.init else None
     
@@ -379,9 +395,9 @@ class TypeInference(LocalTypeInference):
                          init = init)
 
   def transform_Scan(self, expr):
-    map_fn = self.transform_expr(expr.fn if expr.fn else untyped_identity_function)
-    combine_fn = self.transform_expr(expr.combine)
-    emit_fn = self.transform_expr(expr.emit)
+    map_fn = self.transform_fn(expr.fn if expr.fn else untyped_identity_function)
+    combine_fn = self.transform_fn(expr.combine)
+    emit_fn = self.transform_fn(expr.emit)
     new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     
@@ -410,7 +426,7 @@ class TypeInference(LocalTypeInference):
                        init = init)
 
   def transform_OuterMap(self, expr):
-    closure = self.transform_expr(expr.fn)
+    closure = self.transform_fn(expr.fn)
     new_args = self.transform_args (expr.args, flat = True)
     arg_types = get_types(new_args)
     n_args = len(arg_types)

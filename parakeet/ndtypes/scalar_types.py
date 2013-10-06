@@ -160,12 +160,13 @@ def is_scalar_subtype(t1, t2):
          ((t1 == t2) or (t1.nbytes < t2.nbytes) or \
           (isinstance(t1, IntT) and isinstance(t2, FloatT)))
 
-def register_numeric_type(klass, dtype):
-  parakeet_type = klass(dtype)
-  _dtype_to_parakeet_type[dtype] = parakeet_type
-  return parakeet_type
-
 def from_dtype(dtype):
+  if not isinstance(dtype, np.dtype):
+    assert hasattr(dtype, 'dtype'), "Expected a dtype but %s" % dtype 
+    value = dtype(0)
+    dtype = value.dtype 
+  assert dtype in _dtype_to_parakeet_type, \
+    "Don't know how to make Parakeet scalar type from dtype %s" % dtype
   return _dtype_to_parakeet_type[dtype]
 
 def from_char_code(c):

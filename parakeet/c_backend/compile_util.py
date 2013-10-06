@@ -100,8 +100,6 @@ def get_compiler_flags(compiler):
 
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
 python_version = distutils.sysconfig.get_python_version()
-#python_lib = "python%s" % python_version
-#python_lib_full = 'lib%s%s' % (python_lib, python_lib_extension)
 
 def get_linker_flags(compiler):
   linker_flags = ['-shared'] + ['-lm']
@@ -135,7 +133,7 @@ def create_source_file(src,
   if src_filename is None:
     src_file = NamedTemporaryFile(suffix = get_source_extension(),  
                                   prefix =  prefix, 
-                                  delete = False, 
+                                  delete = False,
                                   mode = 'w')
     src_filename = src_file.name 
   else:

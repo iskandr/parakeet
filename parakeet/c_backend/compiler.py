@@ -796,7 +796,7 @@ class PyModuleCompiler(FlatFnCompiler):
         """ % locals())
     elif cond != "0":
       self.append("""
-        if (%(cond)) {
+        if (%(cond)s) {
           %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
         }""" % locals())
     self.check_array(vec)

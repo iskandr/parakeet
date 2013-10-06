@@ -4,12 +4,16 @@ import numpy as np
 # partial mapping, since ctypes doesn't support
 # complex numbers
 bool8 = np.dtype('bool8')
+
 int8 = np.dtype('int8')
 uint8 = np.dtype('uint8')
+
 int16 = np.dtype('int16')
 uint16 = np.dtype('uint16')
+
 int32 = np.dtype('int32')
 uint32 = np.dtype('uint32')
+
 int64 = np.dtype('int64')
 uint64 = np.dtype('uint64')
   

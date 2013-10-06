@@ -23,8 +23,6 @@ from helpers import *
 
 from low_level import Alloc, Struct 
 
-from prim_wrapper import prim_wrapper 
-
 from seq_expr import Index, Enumerate, Len, Zip 
 
 from tuple_expr import Tuple, TupleProj
@@ -37,4 +35,5 @@ from type_value import TypeValue
 
 from untyped_fn import UntypedFn 
 
+from wrappers import build_untyped_prim_fn, build_untyped_expr_fn, build_untyped_cast_fn
 

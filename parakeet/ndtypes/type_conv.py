@@ -7,10 +7,10 @@ _from_python_fns = {}
 # class of ndtype -> (internal value -> python value)
 _to_python_fns = {}
 def register(python_types, 
-             parakeet_type, 
-             typeof = None, 
-             to_python = None, 
-             from_python = None):
+              parakeet_type, 
+              typeof = None, 
+              to_python = None, 
+              from_python = None):
   """
   Map each python type to either a parakeet type or a function that returns a
   parakeet type
