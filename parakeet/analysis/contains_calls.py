@@ -20,7 +20,4 @@ class ContainsCalls(SyntaxVisitor):
 
 def contains_calls(fn):
   result = ContainsCalls().visit_fn(fn)
-  # print "Contains calls?", fn.name, result
-  #if result: 
-  #  print "==> ", fn  
   return result 

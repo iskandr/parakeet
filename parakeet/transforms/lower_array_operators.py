@@ -117,6 +117,7 @@ class LowerArrayOperators(Transform):
     step = expr.step 
     caster = self.mk_range_fn(start, step, expr.type.elt_type)
     nelts = self.elts_in_slice(start, stop, step)
+    
     return self.imap(caster, nelts)
 
   # TODO: Add support for np.ndindex through this operator 

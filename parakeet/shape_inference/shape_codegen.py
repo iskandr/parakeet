@@ -67,7 +67,9 @@ class ShapeCodegen(Traversal):
     assert False, "Can't generate shape expression for unknown scalar"
 
   def visit_Tuple(self, v):
-    return self.codegen.tuple(self.visit(e) for e in v.elts)
+    # a tuple is effectively a scalar
+    return self.codegen.tuple([])
+    # return self.codegen.tuple([self.visit(e) for e in v.elts])
 
   def binop(self, op_name, v):
     if v.x.__class__ is AnyScalar or v.y.__class__ is AnyScalar:

@@ -35,39 +35,29 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   untyped_fn = translate_function_value(fn)
   
-  try: 
-    interp_result = run_untyped_fn(untyped_fn, _copy_list(args), backend = "interp")
-  except: 
-    if testing_find_broken_transform: find_broken_transform(fn, args, expected)
-    raise
+  for backend in ('interp', 'c'):
+    try: 
+      result = run_untyped_fn(untyped_fn, _copy_list(args), backend = backend)
+    except: 
+      if testing_find_broken_transform: find_broken_transform(fn, args, expected)
+      raise
    
-  label = "interp: inputs = %s" % ", ".join(str(arg) for arg in args)
+    label = "backend=%s, inputs = %s" % (backend, ", ".join(str(arg) for arg in args))
 
-  if msg is not None:
-    label += "-" + str(msg)
+    if msg is not None:
+      label += ": " + str(msg)
     
-  try: 
-    expect_eq(interp_result, expected, label)
-  except: 
-    if testing_find_broken_transform: find_broken_transform(fn, args, expected)
-    raise 
-
-  native_result = run_python_fn(fn, _copy_list(args), backend="c")
-  
-  if valid_types is not None:
-    if not isinstance(valid_types, (tuple, list)):
-      valid_types = [valid_types]
-    assert type(native_result) in valid_types, \
-      "Expected result to have type in %s but got %s" % (valid_types, type(native_result))
-  label = "native: inputs = %s" % ", ".join(str(arg) for arg in args)
-  if msg is not None:
-      label += "-" + str(msg)
-  try:
-    expect_eq(native_result, expected, label)
-  except:
-    if testing_find_broken_transform:
-      find_broken_transform(fn, args, expected)
-    raise 
+    try: 
+      expect_eq(result, expected, label)
+    except: 
+      if testing_find_broken_transform: find_broken_transform(fn, args, expected)
+      raise 
+    
+    if valid_types is not None:
+      if not isinstance(valid_types, (tuple, list)):
+        valid_types = [valid_types]
+      assert type(result) in valid_types, \
+        "Expected result to have type in %s but got %s" % (valid_types, type(result))
   
 def expect_each(parakeet_fn, python_fn, inputs):
   for x in inputs:

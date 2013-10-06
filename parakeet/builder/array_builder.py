@@ -1,7 +1,7 @@
 
 from ..ndtypes import (make_slice_type, make_array_type, ptr_type, 
-                       ArrayT, TupleT, ScalarT, Type, PtrT)
-from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, Var, TupleProj)
+                       ArrayT, TupleT, ScalarT, Type, PtrT, Int64)
+from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, Var)
 from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none)
 from core_builder import CoreBuilder 
 
@@ -133,7 +133,7 @@ class ArrayBuilder(CoreBuilder):
 
   def elts_in_slice(self, start, stop, step):
     start_minus_start = self.sub(stop, start, name = "stop_minus_start")
-    return self.safediv(start_minus_start, step)
+    return self.cast(self.safediv(start_minus_start, step), Int64)
 
   def slice_along_axis(self, arr, axis, idx):
     """

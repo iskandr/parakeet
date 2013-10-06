@@ -18,6 +18,7 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
                           name = "output"):
     if isinstance(outer_shape, (list, tuple)):
       outer_shape = self.tuple(outer_shape)
+      
     try:
       inner_shape_tuple = self.call_shape(fn, inner_args)
     except:
@@ -59,16 +60,19 @@ class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
     self.blocks += [ParFor(fn = fn, bounds = bounds)]
   
   def imap(self, fn, bounds):
-    assert isinstance(bounds, Expr)
+
+    assert isinstance(bounds, Expr), "Expected imap bounds to be expression, got %s" % bounds
     if isinstance(bounds.type, TupleT):
       tup = bounds 
       ndims = len(bounds.type.elt_types) 
     else:
-      assert isinstance(bounds.type, IntT)
+      assert isinstance(bounds.type, IntT), \
+        "Expected imap bounds to be tuple or int, got %s : %s" % (bounds, bounds.type)
       tup = self.tuple([bounds])
       ndims = 1 
-    assert isinstance(fn, Expr)
-    assert isinstance(fn.type, (FnT, ClosureT))
+    assert isinstance(fn, Expr), "Expected imap function to be expression, got %s" % (fn,)
+    assert isinstance(fn.type, (FnT, ClosureT)), \
+      "Expected imap function to have a function type but got %s : %s" % (fn, fn.type)
     elt_type = self.return_type(fn) 
     result_type = increase_rank(elt_type, ndims)
     return IndexMap(fn = fn, shape = tup, type = result_type)

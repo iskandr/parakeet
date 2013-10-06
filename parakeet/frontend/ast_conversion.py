@@ -921,7 +921,6 @@ def translate_function_ast(name,
   
   doc_string = None
   if len(body) > 0 and isinstance(body[0], ast.Expr):
-    print ast.dump(body[0])
     if isinstance(body[0].value, ast.Str):
       doc_string = body[0].value.s
       body = body[1:]

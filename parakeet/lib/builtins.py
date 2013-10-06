@@ -2,7 +2,7 @@ from .. import prims
 from .. frontend import translate_function_value, jit, macro 
 from .. ndtypes import make_tuple_type, TupleT, ArrayT, Int64 
 from .. syntax import (Map, Tuple, DelayUntilTyped, Array, Attribute, 
-                       TupleProj,  const_int)
+                       TupleProj,  const_int, Zip, Len)
 from adverbs import reduce, map 
 
 @jit 
@@ -25,15 +25,23 @@ def builtin_all(x, axis = None):
 def builtin_sum(x, axis = None):
   return reduce(prims.add, x, init = 0, axis = axis)
 
+
+@macro 
+def builtin_zip(*args):
+  assert len(args) > 1, "Zip requires at least two arguments, given: %s" % str(args)
+  return Zip(values = args)
+
+"""
 @jit 
 def _tuple_from_args(*args):
   return args
 
 @macro
 def builtin_zip(*args):
-  assert len(args) > 1, "Zip requires at least two arguments, given: %s" % str(args)
+  
   elt_tupler = translate_function_value(_tuple_from_args)
   return Map(fn = elt_tupler, args = args)
+"""
 
 @macro 
 def builtin_tuple(x):
@@ -49,6 +57,11 @@ def builtin_tuple(x):
   return DelayUntilTyped(x, typed_tuple)
 
 
+@macro
+def builtin_len(x):
+  return Len(x) 
+
+"""
 @macro 
 def builtin_len(x):
   def typed_alen(xt):
@@ -59,6 +72,7 @@ def builtin_len(x):
       assert isinstance(xt.type, TupleT), "Can't get 'len' of object of type %s" % xt.type 
       return const_int(len(xt.type.elt_types))
   return DelayUntilTyped(x, typed_alen)
+"""
 
 @jit
 def reduce_min(x, axis = None):

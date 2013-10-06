@@ -124,6 +124,38 @@ class FlatFnCompiler(BaseCompiler):
       return x 
     return "%s || %s" % (x,y) 
   
+  def gt(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "0"
+    return "%s > %s" % (x, y)
+  
+  def gte(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "1"
+    return "%s >= %s" % (x,y) 
+  
+  def lt(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "0"
+    return "%s < %s" % (x,y)
+  
+  def lte(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "1"
+    return "%s <= %s" % (x, y) 
+  
+  def neq(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "0"
+    return "%s != %s" % (x, y) 
+  
+  def eq(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "1"
+    return "%s == %s" % (x, y)
+  
+  
+  
   def visit_PrimCall(self, expr):
     t = expr.type
     args = self.visit_expr_list(expr.args)
@@ -168,29 +200,23 @@ class FlatFnCompiler(BaseCompiler):
       return self.not_(args[0])
       
     elif p == prims.equal:
-      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
-        return "1"
-      return "%s == %s" % (args[0], args[1])
+      return self.eq(args[0], args[1], t)
+    
     elif p == prims.not_equal:
-      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
-        return "0"
-      return "%s != %s" % (args[0], args[1])
+      return self.neq(args[0], args[1], t)
+    
     elif p == prims.greater:
-      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
-        return "0"
-      return "%s > %s" % (args[0], args[1])
+      return self.gt(args[0], args[1], t)
+      
     elif p == prims.greater_equal:
-      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
-        return "1"
-      return "%s >= %s" % (args[0], args[1])
+      return self.gte(args[0], args[1], t)
+    
     elif p == prims.less:
-      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
-        return "0"
-      return "%s < %s" % (args[0], args[1])
+      return self.lt(args[0], args[1], t)
+    
     elif p == prims.less_equal:
-      if isinstance(t, (BoolT, IntT)) and args[0] == args[1]:
-        return "1"
-      return "%s <= %s" % (args[0], args[1])
+      return self.lte(args[0], args[1], t)
+    
     elif p == prims.remainder:
       x,y = args
       if t == Float32: return "fmod(%s, %s)" % (x,y)
@@ -763,11 +789,16 @@ class PyModuleCompiler(FlatFnCompiler):
     # slice out the 1D data array if there's an offset 
     size =  "PySequence_Size( (PyObject*) %(vec)s)" % locals()
 
-    self.append("""
-      if (%(offset)s > 0) {
+    cond = self.gt(offset, "0", Int64)
+    if cond == "1":
+      self.append("""
         %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
-      }""" % locals())
-    
+        """ % locals())
+    elif cond != "0":
+      self.append("""
+        if (%(cond)) {
+          %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
+        }""" % locals())
     self.check_array(vec)
 
     count = self.fresh_var("int64_t", "count", "PySequence_Size( (PyObject*) %s)" % vec)
@@ -810,10 +841,11 @@ class PyModuleCompiler(FlatFnCompiler):
       c_layout_strides = [c_layout_strides[-1] + " * " + shape_elt] + c_layout_strides
     
     
-    is_c_layout = "&& ".join("(%s) == (%s)" % (actual, ideal) 
+    
+    is_c_layout = "&& ".join(self.eq(actual, ideal, Int64) 
                              for actual, ideal 
                              in zip(strides_elts, c_layout_strides))
-    is_f_layout = " && ".join("(%s) == (%s)" % (actual, ideal) 
+    is_f_layout = " && ".join(self.eq(actual, ideal, Int64) 
                              for actual, ideal 
                              in zip(strides_elts, f_layout_strides))
     

@@ -219,14 +219,17 @@ class IndexifyAdverbs(Transform):
     return self.shape(best_arg, best_axis)
   
   def transform_Map(self, expr, output = None):
-    # recursively descend down the function bodies to pull together nested ParFors
+    # TODO: 
+    # - recursively descend down the function bodies to pull together nested ParFors
+    
+
     args = self.transform_expr_list(expr.args)
     axes = self.get_axes(args, expr.axis)
     old_fn = expr.fn
 
     if output is None:
       output = self.create_map_output_array(old_fn, args, axes)
-    
+
     niters = self.niters(args, axes)
     index_fn = self.indexify_fn(expr.fn, axes, args, 
                                 cartesian_product=False, 

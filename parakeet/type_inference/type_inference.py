@@ -1,13 +1,14 @@
 from .. import config, names,  prims, syntax
-from ..ndtypes import array_type, closure_type, tuple_type, type_conv
-from ..ndtypes import (Bool, IntT, Int64,  ScalarT, 
+from ..ndtypes import (array_type, closure_type, tuple_type, type_conv, 
+                       Bool, IntT, Int64,  ScalarT, ArrayT,  
                        NoneType, NoneT, Unknown, UnknownT, 
-                       TypeValueT)
-from ..ndtypes.array_type import lower_rank
-from ..ndtypes.closure_type import ClosureT
-from ..ndtypes.tuple_type import  TupleT, make_tuple_type
+                       TypeValueT, 
+                       TupleT, make_tuple_type, 
+                       lower_rank, make_array_type, 
+                       ClosureT)
+
 from ..syntax import adverb_helpers, prim_wrapper
-from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, 
+from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, Map,  
                       ActualArgs, FormalArgs, MissingArgsError)
 from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
                               one_i64, zero_i64, none, true, false, 
@@ -144,6 +145,40 @@ class TypeInference(LocalTypeInference):
       result_t = typed_broadcast_fn.return_type
       return syntax.Call(typed_broadcast_fn, args, type = result_t)
 
+  def transform_Zip(self, expr):
+    assert isinstance(expr.values, (list,tuple)), "Expected multiple values but got %s" % expr.values
+    typed_values = self.transform_expr_tuple(expr.values)
+    # if you're just zipping tuples together, 
+    # then the result can also be a tuple
+    if all(isinstance(v.type, TupleT) for v in typed_values):
+      # keep the shortest tuple
+      n = min(len(v.type.elt_types) for v in typed_values)
+      print n, typed_values 
+      zip_inputs = []
+      for v in typed_values:
+        zip_inputs.append(self.tuple_elts(v)[:n])
+      return self.tuple([self.tuple(group) for group in zip(*zip_inputs)])
+    
+    # if any are tuples, that puts a max length on any sequence
+    elif any(isinstance(v.type, TupleT) for v in typed_values):
+      # keep the shortest tuple
+      n = min(len(v.type.elt_types) for v in typed_values if isinstance(v.type, TupleT))
+      assert False, "Zipping of mixed tuples and arrays not yet supported"  
+    else:
+      assert all(isinstance(v.type, ArrayT) for v in typed_values), \
+        "Expected all inputs to zip to be arrays but got %s" % \
+        ", ".join(str(v.type) for v in typed_values)
+      
+      elt_t = make_tuple_type([v.type.elt_type for v in typed_values])  
+      result_t = make_array_type(elt_t, 1)
+      def tupler(*args):
+        return args 
+      from ..frontend import ast_conversion
+      untyped = ast_conversion.translate_function_value(tupler)
+      typed = specialize(untyped, [v.type.elt_type for v in typed_values])
+      result = Map(fn = typed, args = typed_values, axis = zero_i64, type = result_t)
+      assert False, "Materializing the result of zipping arrays not yet supported"
+      #return result
  
   def transform_IndexMap(self, expr):
     shape = self.transform_expr(expr.shape)

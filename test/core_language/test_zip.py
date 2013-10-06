@@ -9,6 +9,12 @@ def test_zip_tuples():
   b = (np.array([1.0]), np.array([2.0]), np.array([3.0]))
   expect(use_zip, [a,b], zip(a,b))
 
+def test_zip_arrays():
+  a = np.array([1,2,3])
+  b = np.array([True,False,False])
+  expect(use_zip, [a,b], zip(a,b))
+
+
 if __name__ == '__main__':
   run_local_tests() 
 

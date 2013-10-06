@@ -10,10 +10,11 @@ from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, 
                       Range, Ravel, Reshape, 
                       Select, Slice, 
                       Transpose, Tuple, TupleProj, TypeValue,  Var,  
-                      ForLoop, While, Assign, Return, If, 
+                      ForLoop, While, Assign, Return, If,
+                      Map,  
                       prim_wrapper)
 
-from ..syntax.helpers import get_types, is_true, is_false 
+from ..syntax.helpers import get_types, is_true, is_false, zero_i64
 from ..transforms import Transform
 
 
@@ -90,7 +91,14 @@ class LocalTypeInference(Transform):
     start = self.transform_expr(expr.start) if expr.start else None
     stop = self.transform_expr(expr.stop) if expr.stop else None
     step = self.transform_expr(expr.step) if expr.step else None
-    array_t = ArrayT(Int64, 1)
+    
+    # by default we're generating ranges of Int64
+    # but also allow for floating values 
+    elt_t = Int64 
+    if not self.is_none(start): elt_t = elt_t.combine(start.type)
+    if not self.is_none(stop): elt_t = elt_t.combine(stop.type)
+    if not self.is_none(step): elt_t = elt_t.combine(step.type)
+    array_t = ArrayT(elt_t, 1)
     return Range(start, stop, step, type = array_t)
 
   def transform_Slice(self, expr):
@@ -160,11 +168,11 @@ class LocalTypeInference(Transform):
       shape = Attribute(v, 'shape', type = shape_t)
       return TupleProj(shape, 0, type = Int64)
     else:
-      assert t.__class__ is TupleT, \
-         "Unexpected argument type for 'len': %s" % t
+      assert t.__class__ is TupleT, "Unexpected argument for 'len' - %s : %s" % (expr.value, t)
       return Const(len(t.elt_types), type = Int64)
 
 
+      
   def transform_DelayUntilTyped(self, expr):
     new_values = self.transform_expr_tuple(expr.values)
     new_syntax = expr.fn(*new_values)

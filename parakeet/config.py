@@ -85,7 +85,7 @@ print_functions_after_transforms =  [] #['Flatten', 'LowerSlices', 'LowerAdverbs
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = False
+print_transform_timings = True
 
 # print each transform's name when it runs
 print_transform_names = False

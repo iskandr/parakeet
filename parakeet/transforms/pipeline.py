@@ -154,6 +154,7 @@ loopify = Phase([
                 depends_on = indexify,
                 cleanup = [Simplify, DCE],
                 copy = True,
+                memoize = True, 
                 name = "Loopify",
                 post_apply = print_loopy)
 
