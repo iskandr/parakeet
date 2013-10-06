@@ -1008,9 +1008,7 @@ def translate_function_value(fn):
   
 
 
-  assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
-    "Unsupported primitive: %s" % (fn,) 
-
+  
 
   if fn in _known_python_functions:
     return _known_python_functions[fn]
@@ -1025,22 +1023,33 @@ def translate_function_value(fn):
     fundef = build_untyped_prim_fn(fn)
   elif isinstance(fn, (Type, np.dtype, int, bool, long, float)):
     fundef = build_untyped_cast_fn(fn)
-  elif isinstance(fn, Expr):
+  elif isinstance(fn, type) and Expr in fn.mro():
     fundef = build_untyped_expr_fn(fn)  
   elif isinstance(fn, macro):
     fundef = fn.as_fn()
   else:
+     
+      
     # if it's not a macro or some sort of internal expression
     # then we're really dealing with a Python function
     # so get to work pulling apart its AST and translating
     # it into Parakeet IR
-    assert hasattr(fn, 'func_globals'), "Expected function to have globals: %s" % fn
-    assert hasattr(fn, 'func_closure'), "Expected function to have closure cells: %s" % fn
-    assert hasattr(fn, 'func_code'), "Expected function to have code object: %s" % fn
-    try: 
+    try:
+      assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
+        "Unsupported primitive: %s" % (fn,) 
+    except:
+      _currently_processing.remove(fn)
+      raise
+     
+    try:
+      assert hasattr(fn, 'func_globals'), "Expected function to have globals: %s" % fn
+      assert hasattr(fn, 'func_closure'), "Expected function to have closure cells: %s" % fn
+      assert hasattr(fn, 'func_code'), "Expected function to have code object: %s" % fn
+
       source = inspect.getsource(fn)
       filename = inspect.getsourcefile(fn)
     except:
+      _currently_processing.remove(fn)
       assert False, "Parakeet couldn't access source of function %s" % fn 
     globals_dict = fn.func_globals
 

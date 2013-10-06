@@ -40,8 +40,7 @@ def build_untyped_prim_fn(p):
 
 def build_untyped_expr_fn(expr, n_args = 1):
   """Given an expression, return a function which applies that expression to arguments"""
-  assert isinstance(expr, Expr), "Expected Expr but got %s" % expr 
-  return simple_untyped_fn(expr.__class__.__name__ + "_fn", expr, n_args)
+  return simple_untyped_fn(expr.__name__ + "_fn", expr, n_args)
     
 _untyped_cast_wrappers = {}
 def build_untyped_cast_fn(t):

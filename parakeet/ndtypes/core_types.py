@@ -46,6 +46,9 @@ Any = AnyT()
 class UnknownT(Type):
   """Bottom of the type lattice, absorbed by all other types"""
 
+  def __hash__(self):
+    return hash("unknown")
+  
   _members = []
   def  combine(self, other):
     return other
@@ -55,9 +58,6 @@ class UnknownT(Type):
 
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
-
-
-
 
 def combine_type_list(types):
   common_type = Unknown

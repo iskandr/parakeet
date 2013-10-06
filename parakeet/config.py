@@ -60,7 +60,7 @@ set_opt_level(default_opt_level)
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = False
+print_untyped_function = True
 
 # show the higher level typed function after specialization?
 print_specialized_function = False
@@ -85,7 +85,7 @@ print_functions_after_transforms =  [] #['Flatten', 'LowerSlices', 'LowerAdverbs
 print_escape_analysis = False
 
 # how long did each transform take?
-print_transform_timings = True
+print_transform_timings = False
 
 # print each transform's name when it runs
 print_transform_names = False

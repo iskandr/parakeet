@@ -32,9 +32,9 @@ class ArrayT(StructT):
 
   def node_init(self):
     
-    #assert isinstance(self.elt_type, ScalarT), \
-    #  "Can't create array with element type %s, currently only scalar elements supported" % \
-    #  (self.elt_type,)
+    assert isinstance(self.elt_type, ScalarT), \
+      "Can't create array with element type %s, currently only scalar elements supported" % \
+      (self.elt_type,)
         
     tuple_t = repeat_tuple(Int64, self.rank)
 

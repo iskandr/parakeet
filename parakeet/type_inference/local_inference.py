@@ -1,7 +1,7 @@
 from .. import names
 from ..ndtypes import (StructT, Type, Unknown,
                        ArrayT, TypeValueT, TupleT,
-                       ScalarT, IntT, Int64,  Bool,    
+                       ScalarT, IntT, Int64,  Bool, Float64,    
                        combine_type_list, increase_rank, lower_rank,  
                        make_array_type, make_tuple_type, make_slice_type, make_closure_type, 
                        type_conv)
@@ -64,9 +64,18 @@ class LocalTypeInference(Transform):
       return Index(value, index, type = result_type)
 
   def transform_Array(self, expr):
+    
     new_elts = self.transform_args(expr.elts)
-    elt_types = get_types(new_elts)
-    common_t = combine_type_list(elt_types)
+    if expr.type is None:
+      elt_types = get_types(new_elts)
+      if len(elt_types) > 0:
+        common_t = combine_type_list(elt_types)
+        if common_t is Unknown:
+          raise TypeError("Couldn't find commom type for elements of array %s" % expr)
+      # numpy defaults to Float arrays 
+      common_t = Float64 
+    else:
+      common_t = expr.type 
     array_t = increase_rank(common_t, 1)
     return Array(new_elts, type = array_t)
 

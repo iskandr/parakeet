@@ -2,8 +2,8 @@ import numpy as np
 from parakeet.testing_helpers import expect, run_local_tests
 from parakeet import config  
 
-config.print_specialized_function = True
-config.print_loopy_function = True  
+config.print_specialized_function = False
+config.print_loopy_function = False
 
 
 vec = np.arange(16)
@@ -38,7 +38,6 @@ def negative_start_2d(x):
 
 def test_negative_start_2d():
     expect(negative_start_2d, [mat], mat[-2:, -3:])
-
 
 def negative_step_1d(x):
     return x[::-2]

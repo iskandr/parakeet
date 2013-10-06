@@ -11,7 +11,7 @@ from ..ndtypes import (Type,
 from ..syntax import adverb_helpers
 
 from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, Map,  
-                      ActualArgs, FormalArgs, MissingArgsError)
+                      ActualArgs, FormalArgs, MissingArgsError, TooManyArgsError)
 from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
                               one_i64, zero_i64, none, true, false, 
                               gen_data_arg_names)
@@ -23,6 +23,7 @@ from helpers import untyped_identity_function, make_typed_closure, _get_closure_
 from linearize_args import linearize_actual_args, flatten_actual_args
 from local_inference import LocalTypeInference, InferenceFailed 
 from var_map import VarMap 
+
 
 
 _invoke_type_cache = {}
@@ -472,10 +473,9 @@ def infer_types(untyped_fn, types):
     tenv = typed_args.bind(types,
                            keyword_fn = keyword_fn,
                            starargs_fn = tuple_type.make_tuple_type)
-  except MissingArgsError as e:
+  except (MissingArgsError, TooManyArgsError) as e:
     e.fn_name = untyped_fn.name 
     raise e 
-    
   except: 
     print "Error while calling %s with types %s" % (untyped_fn, types)
     raise

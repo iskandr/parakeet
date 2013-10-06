@@ -1,8 +1,7 @@
 from .. import names 
 from actual_args import ActualArgs
 
-class MissingArg(object):
-  pass 
+
 
 class UnexpectedKeyword(Exception):
   def __init__(self, keyword_name, fn_name = None):
@@ -17,9 +16,22 @@ class UnexpectedKeyword(Exception):
   def __repr__(self):
     return str(self)
 
+class TooManyArgsError(Exception):
+  def __init__(self, extra_args, fn_name = None):
+    self.extra_args = extra_args
+    self.fn_name = fn_name 
+  
+  def __str__(self):
+    if self.fn_name:
+      return "Too many args (%s) in call to %s" % (self.extra_args, self.fn_name)
+    else:
+      return "Too many args: %s" % (self.extra_args,)
+    
+  
+class MissingArg(object):
+  pass 
 # placeholder object 
 missing_arg = MissingArg()
-
 
 
 class MissingArgsError(Exception):
@@ -135,8 +147,9 @@ class FormalArgs(object):
 
     if self.starargs:
       env[self.starargs] = starargs_fn(extra)
-    else:
-      assert len(extra) == 0, "Too many args: %s" % (extra,)
+    if len(extra) > 0:
+      raise TooManyArgsError(extra)
+      
     return env
 
   def linearize_values(self, actuals, keyword_fn = None, tuple_elts_fn = iter):

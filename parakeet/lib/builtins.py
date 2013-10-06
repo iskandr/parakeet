@@ -27,23 +27,6 @@ def builtin_sum(x, axis = None):
 
 
 @macro 
-def builtin_zip(*args):
-  assert len(args) > 1, "Zip requires at least two arguments, given: %s" % str(args)
-  return Zip(values = args)
-
-"""
-@jit 
-def _tuple_from_args(*args):
-  return args
-
-@macro
-def builtin_zip(*args):
-  
-  elt_tupler = translate_function_value(_tuple_from_args)
-  return Map(fn = elt_tupler, args = args)
-"""
-
-@macro 
 def builtin_tuple(x):
   def typed_tuple(xt):
     if isinstance(xt.type, TupleT):
@@ -56,23 +39,6 @@ def builtin_tuple(x):
       return Tuple(xt.elts, type = tuple_t)
   return DelayUntilTyped(x, typed_tuple)
 
-
-@macro
-def builtin_len(x):
-  return Len(x) 
-
-"""
-@macro 
-def builtin_len(x):
-  def typed_alen(xt):
-    if isinstance(xt.type, ArrayT):
-      shape = Attribute(xt, 'shape', type = xt.type.shape_t)
-      return TupleProj(shape, 0, type = Int64)
-    else:
-      assert isinstance(xt.type, TupleT), "Can't get 'len' of object of type %s" % xt.type 
-      return const_int(len(xt.type.elt_types))
-  return DelayUntilTyped(x, typed_alen)
-"""
 
 @jit
 def reduce_min(x, axis = None):
