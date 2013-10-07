@@ -1,7 +1,7 @@
 
 from .. import names 
   
-from .. syntax import (Expr, Var, Const, Return, UntypedFn, FormalArgs, 
+from .. syntax import (Expr, Var, Const, Return, UntypedFn, FormalArgs, DelayUntilTyped,  
                        const, is_python_constant)
 
 from run_function import run_python_fn, run_untyped_fn 
@@ -124,6 +124,11 @@ class macro(object):
 
   def __str__(self):
     return "macro(%s)" % self.name
+
+class typed_macro(macro):
+  def transform(self, args, kwargs = {}):
+    return DelayUntilTyped(values = args, keywords = kwargs, fn = self.f)
+    
 
 class staged_macro(object):
   def __init__(self, *static_names, **kwargs):

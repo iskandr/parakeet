@@ -4,15 +4,16 @@ from ..ndtypes import (StructT, Type, Unknown,
                        ScalarT, IntT, Int64,  Bool, Float64,    
                        combine_type_list, increase_rank, lower_rank,  
                        make_array_type, make_tuple_type, make_slice_type, make_closure_type, 
-                       type_conv)
+                       repeat_tuple, 
+                       type_conv, )
 
 from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, Index, 
-                      Range, Ravel, Reshape, 
+                      Range, Ravel, Reshape, Shape,
                       Select, Slice, 
                       Transpose, Tuple, TupleProj, TypeValue,  Var,  
                       ForLoop, While, Assign, Return, If)
 
-from ..syntax.helpers import get_types, is_true, is_false, zero_i64
+from ..syntax.helpers import get_types, is_true, is_false, zero_i64, const_int, make_tuple
 from ..syntax.wrappers import build_untyped_prim_fn
 
 from ..transforms import Transform
@@ -139,6 +140,16 @@ class LocalTypeInference(Transform):
     return Const(expr.value, type_conv.typeof(expr.value))
   
 
+  def transform_Shape(self, expr):
+    array = self.transform_expr(expr.array)
+    if isinstance(array.type, ArrayT):
+      t = repeat_tuple(Int64, array.type.rank)
+      return Shape(array = array, type = t)
+    elif isinstance(array.type, TupleT):
+      return const_int(len(array.type.elt_types))
+    else:
+      return make_tuple(())
+      
 
   def transform_Reshape(self, expr):
     array = self.transform_expr(expr.array)
@@ -182,8 +193,15 @@ class LocalTypeInference(Transform):
 
   def transform_DelayUntilTyped(self, expr):
     new_values = self.transform_expr_tuple(expr.values)
-    new_syntax = expr.fn(*new_values)
-    assert new_syntax.type is not None
+    if expr.keywords:
+      typed_keywords = {}
+      for k, v in expr.keywords.iteritems():
+        typed_keywords[k] = self.transform_expr(v)
+      new_syntax = expr.fn(*new_values, **typed_keywords)
+    else:
+      new_syntax = expr.fn(*new_values)
+    assert new_syntax.type is not None, \
+      "Error in %s, new expression %s lacks type" % (expr, new_syntax)
     return new_syntax
   
   def transform_TypeValue(self, expr):

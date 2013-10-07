@@ -1,7 +1,7 @@
 import math  
 import numpy as np
 import lib, prims   
-from syntax import Zip, Len, Array, build_untyped_cast_fn 
+from syntax import Zip, Len, build_untyped_cast_fn 
 
 property_mappings = {
   'dtype' : lib.get_elt_type,                
@@ -111,7 +111,7 @@ function_mappings = {
   
   
   # ARRAY CONSTRUCTORS 
-  np.array : Array, 
+  np.array : lib.array, 
   np.arange  : lib.arange, 
   
   np.empty_like : lib.empty_like, 
@@ -220,7 +220,9 @@ function_mappings = {
   # np.hypot : lib.hypot,
   
   np.where : lib.where,
+  
   np.vdot : lib.vdot, 
-  np.dot : lib.dot, 
+  np.dot : lib.dot,
+  np.linalg.norm : lib.norm,  
   
 }

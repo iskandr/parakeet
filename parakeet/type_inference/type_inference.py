@@ -12,6 +12,7 @@ from ..syntax import adverb_helpers
 
 from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, Map,  
                       ActualArgs, FormalArgs, MissingArgsError, TooManyArgsError)
+
 from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
                               one_i64, zero_i64, none, true, false, 
                               gen_data_arg_names)
@@ -457,11 +458,12 @@ def infer_types(untyped_fn, types):
   applied to arrays
   """
 
+
   
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(rename_fn = var_map.rename)
   if untyped_fn.args.starargs:
-    assert typed_args.starargs
+    assert typed_args.starargs, "Missing star-args in call to %s(%s)" % (untyped_fn.name, typed_args,)
 
   unbound_keywords = []
   def keyword_fn(local_name, value):

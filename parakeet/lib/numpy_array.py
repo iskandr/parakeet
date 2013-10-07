@@ -1,11 +1,10 @@
 
 
 from .. import ndtypes 
-from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t
-from .. frontend import macro, jit 
-from .. syntax import (Attribute, DelayUntilTyped, 
-                       Tuple, Ravel, Reshape, TypeValue, 
-                       const_int, Transpose)
+from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t, TupleT 
+from .. frontend import macro, jit, typed_macro 
+from .. syntax import (Attribute, Tuple, Ravel, Shape, Reshape, TypeValue, Transpose, Const)
+from .. syntax.helpers import const_int, zero_i64 
 
 
 @macro
@@ -21,32 +20,30 @@ def reshape(x):
   return Reshape(x)
 
 
-@macro 
+@typed_macro 
 def get_elt_type(x):
-  def typed_elt_type(xt):
-    return TypeValue(ndtypes.elt_type(xt.type))
-  return DelayUntilTyped(x, typed_elt_type)
+  return TypeValue(ndtypes.elt_type(x.type))
+  
+@typed_macro
+def itemsize(xt):
+  return const_int(elt_type(xt.type).nbytes)
+  
+@typed_macro 
+def rank(xt):
+  return const_int(xt.type.rank) 
 
-@macro
-def itemsize(x):
-  def typed_itemsize(xt):
-    return const_int(elt_type(xt.type).nbytes)
-  return DelayUntilTyped(x, typed_itemsize)
-
-@macro 
-def rank(x):
-  def typed_rank(xt):
-    return const_int(xt.type.rank) 
-  return DelayUntilTyped(x, typed_rank)
-
-@macro 
-def size(x):
-  def typed_size(xt):
-    if isinstance(xt.type, ArrayT):
-      return Attribute(xt, 'size', type = Int64)
-    else:
-      return const_int(1)
-  return DelayUntilTyped(x, typed_size)
+@typed_macro 
+def size(xt, axis = None):
+  if axis is None: 
+    axis = zero_i64
+  assert isinstance(axis, Const), "Axis argument to 'size' must be a constant, given %s" % axis
+  assert axis.value == 0, "Calling 'size' along axes other than 0 not yet supported, given %s" % axis
+  if isinstance(xt.type, ArrayT):
+    return Attribute(xt, 'size', type = Int64)
+  elif isinstance(xt.type, TupleT):
+    return const_int(len(xt.type.elt_types))
+  else:
+    return const_int(1)
 
 @jit 
 def fill(x, v):
@@ -54,16 +51,9 @@ def fill(x, v):
     x[i] = v 
  
 
-@macro 
+@macro  
 def shape(x):
-  def typed_shape(xt):
-    if isinstance(xt.type, ArrayT):
-      return Attribute(xt, 'shape', type = xt.type.shape_t)
-    else:
-      return Tuple((), type = empty_tuple_t)
-    
-  return DelayUntilTyped(x, typed_shape)
-
+  return Shape(x)
 
 
 @jit 

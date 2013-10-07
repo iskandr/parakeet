@@ -183,6 +183,9 @@ class Transform(Builder):
     expr.array = self.transform_expr(expr.array)
     return expr 
   
+  def transform_Shape(self, expr):
+    expr.array = self.transform_expr(expr.array)
+  
   def transform_Len(self, expr):
     expr.value = self.transform_expr(expr.value) 
 

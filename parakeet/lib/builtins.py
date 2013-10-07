@@ -1,7 +1,7 @@
 from .. import prims 
-from .. frontend import translate_function_value, jit, macro 
+from .. frontend import translate_function_value, jit, macro, typed_macro 
 from .. ndtypes import make_tuple_type, TupleT, ArrayT, Int64 
-from .. syntax import (Map, Tuple, DelayUntilTyped, Array, Attribute, 
+from .. syntax import (Map, Tuple,  Array, Attribute, 
                        TupleProj,  const_int, Zip, Len)
 from adverbs import reduce, map 
 
@@ -26,19 +26,17 @@ def builtin_sum(x, axis = None):
   return reduce(prims.add, x, init = 0, axis = axis)
 
 
-@macro 
-def builtin_tuple(x):
-  def typed_tuple(xt):
-    if isinstance(xt.type, TupleT):
-      return xt 
-    else:
-      assert isinstance(xt.type, ArrayT), "Can't create type from %s" % (xt.type,)
-      assert isinstance(xt, Array), "Can only create tuple from array of const length"
-      elt_types = [e.type for e in xt.elts]
-      tuple_t = make_tuple_type(elt_types)
-      return Tuple(xt.elts, type = tuple_t)
-  return DelayUntilTyped(x, typed_tuple)
-
+@typed_macro 
+def builtin_tuple(xt):
+  if isinstance(xt.type, TupleT):
+    return xt 
+  else:
+    assert isinstance(xt.type, ArrayT), "Can't create type from %s" % (xt.type,)
+    assert isinstance(xt, Array), "Can only create tuple from array of const length"
+    elt_types = [e.type for e in xt.elts]
+    tuple_t = make_tuple_type(elt_types)
+    return Tuple(xt.elts, type = tuple_t)
+  
 
 @jit
 def reduce_min(x, axis = None):

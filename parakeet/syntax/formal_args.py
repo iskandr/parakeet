@@ -57,7 +57,6 @@ class MissingArgsError(Exception):
     if self.line_no is not None:
       err_str += " on line %d" % self.line_no
     return err_str
- 
 
 class FormalArgs(object):
   def __init__(self):
@@ -147,7 +146,7 @@ class FormalArgs(object):
 
     if self.starargs:
       env[self.starargs] = starargs_fn(extra)
-    if len(extra) > 0:
+    elif len(extra) > 0:
       raise TooManyArgsError(extra)
       
     return env
