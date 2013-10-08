@@ -10,6 +10,7 @@ class jit(object):
   def __init__(self, f):
     self.f = f
 
+
   def __call__(self, *args, **kwargs):
     if '_backend' in kwargs:
       backend_name = kwargs['_backend']
@@ -22,6 +23,8 @@ class jit(object):
 class macro(object):
   def __init__(self, f, static_names = set([]), call_from_python = None):
     self.f = f
+    self.n_args = self.f.func_code.co_argcount
+    self.defaults = self.f.func_defaults 
     self.static_names = static_names
     self.wrappers = {}
     self.call_from_python = call_from_python
@@ -33,7 +36,8 @@ class macro(object):
   
   _macro_wrapper_cache = {}
   def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
-    
+  
+  
     static_pairs = tuple(static_pairs)
     key = (n_pos, static_pairs, dynamic_keywords)
     if key in self.wrappers:
@@ -53,7 +57,6 @@ class macro(object):
       args.add_positional(local_name)
       pos_vars.append(Var(local_name))
   
-    
     for visible_name in dynamic_keywords:
       local_name = names.fresh(visible_name)
       args.add_positional(local_name, visible_name)
@@ -76,13 +79,13 @@ class macro(object):
     wrapper_name = names.fresh(wrapper_name)
     untyped = UntypedFn(name = wrapper_name, args = args, body = body)
     self.wrappers[key] = untyped
+    print key, untyped 
     return untyped 
   
   def as_fn(self):
-    n_args = self.f.func_code.co_argcount
-    n_default = 0 if not self.f.func_defaults else len(self.f.func_defaults)
+    n_default = 0 if not self.defaults else len(self.defaults)
     assert n_default == 0
-    return self._create_wrapper(n_args,[],())
+    return self._create_wrapper(self.n_args, [], ())
     
   def __call__(self, *args, **kwargs):
     if self.call_from_python is not None:
