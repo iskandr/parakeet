@@ -637,7 +637,10 @@ class PyModuleCompiler(FlatFnCompiler):
     unboxed_elts = self.tuple_elts(x, elt_types)
     boxed_elts = [self.box(elt, elt_t) for elt, elt_t in zip(unboxed_elts, elt_types)]
     n = len(boxed_elts)
-    return "PyTuple_Pack(%d, %s)" % (n, ", ".join(boxed_elts))
+    if n == 0:
+      return "PyTuple_Pack(0)"
+    else:
+      return "PyTuple_Pack(%d, %s)" % (n, ", ".join(boxed_elts))
   
   def box(self, x, t):
     if isinstance(t, (NoneT, ScalarT)):
@@ -724,10 +727,12 @@ class PyModuleCompiler(FlatFnCompiler):
   def array_to_tuple(self, arr, n, elt_t, boxed = False):
     raw_elts = ["%s[%d]" % (arr,i) for i in xrange(n)]
     if boxed:
-      if n == 0: return "PyTuple_Pack(0);"
-      boxed_elts = [self.box_scalar(raw_elt, elt_t) for raw_elt in raw_elts]
-      elt_str = ", ".join(boxed_elts)
-      return "PyTuple_Pack(%d, %s)" % (n, elt_str)
+      if n == 0: 
+        return "PyTuple_Pack(0);"
+      else:
+        boxed_elts = [self.box_scalar(raw_elt, elt_t) for raw_elt in raw_elts]
+        elt_str = ", ".join(boxed_elts)
+        return "PyTuple_Pack(%d, %s)" % (n, elt_str)
     else:
       field_types = (self.to_ctype(elt_t),) * n 
       tuple_struct_t = self.struct_type_from_fields(field_types)
@@ -744,9 +749,11 @@ class PyModuleCompiler(FlatFnCompiler):
   def mk_tuple(self, elts, boxed = False):
     n = len(elts)
     if boxed:
-      if n == 0: return "PyTuple_Pack(0);"
-      elt_str = ", ".join(self.as_pyobj_list(elts)) 
-      return "PyTuple_Pack(%d, %s)" % (n, elt_str)
+      if n == 0: 
+        return "PyTuple_Pack(0);"
+      else:
+        elt_str = ", ".join(self.as_pyobj_list(elts)) 
+        return "PyTuple_Pack(%d, %s)" % (n, elt_str)
     else:
       field_types = tuple(elt.type for elt in elts)
       tuple_struct_t = self.struct_type_from_fields(field_types)
@@ -978,7 +985,10 @@ class PyModuleCompiler(FlatFnCompiler):
       uprank_elts =  (count,) + ("1",) * (ndims-1) 
       uprank_elts_as_pyobj = ["PyInt_FromLong(%s)"  % elt for elt in uprank_elts]
       uprank_elts_str = ", ".join(uprank_elts_as_pyobj)
-      uprank_shape = "PyTuple_Pack(%d, %s)" % (ndims, uprank_elts_str)
+      if ndims == 0: 
+        uprank_shape = "PyTuple_Pack(0)"
+      else:
+        uprank_shape = "PyTuple_Pack(%d, %s)" % (ndims, uprank_elts_str)
       self.append("%s = (PyArrayObject*) PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
       self.return_if_null(vec)
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
@@ -1104,10 +1114,3 @@ class PyModuleCompiler(FlatFnCompiler):
     c_sig = "PyObject* %(c_fn_name)s (%(c_args)s)" % locals() 
     fndef = "%s {%s}" % (c_sig, c_body)
     return c_fn_name, c_sig, fndef 
-
-  
-    
-    
-    
-    
-    
