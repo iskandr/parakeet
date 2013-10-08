@@ -6,14 +6,14 @@ from nose.tools import nottest
 
 from treelike.testing_helpers import eq, expect_eq, run_local_tests
   
-from . import (type_conv, type_inference, 
+from . import (type_conv, type_inference, config, 
               specialize, translate_function_value,
               find_broken_transform,
               run_untyped_fn, 
               run_typed_fn, 
               run_python_fn)
 
-from config import testing_find_broken_transform
+
 
 
 def _copy(x):
@@ -39,7 +39,8 @@ def expect(fn, args, expected, msg = None, valid_types = None):
     try: 
       result = run_untyped_fn(untyped_fn, _copy_list(args), backend = backend)
     except: 
-      if testing_find_broken_transform: find_broken_transform(fn, args, expected)
+      if config.testing_find_broken_transform: 
+        find_broken_transform(fn, args, expected)
       raise
    
     label = "backend=%s, inputs = %s" % (backend, ", ".join(str(arg) for arg in args))
@@ -50,7 +51,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
     try: 
       expect_eq(result, expected, label)
     except: 
-      if testing_find_broken_transform: find_broken_transform(fn, args, expected)
+      if config.testing_find_broken_transform: find_broken_transform(fn, args, expected)
       raise 
     
     if valid_types is not None:

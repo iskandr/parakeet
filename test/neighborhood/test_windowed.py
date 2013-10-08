@@ -47,12 +47,6 @@ def winmap_first_elt(x, wx = 3, wy = 3):
     return window[0,0]
   return parakeet.pmap2(f, x, wx, wy)
 
-"""
-def test_winmap_first_elt():
-  x = np.random.randn(10,5)**2
-  y = winmap_first_elt(x)
-  assert (y > 0).all()
-"""
 
 def test_window_shapes():
   x = np.array([0,1,2,3,4])
@@ -75,7 +69,6 @@ def test_winavg2d():
   assert x.shape==y.shape
   assert x.max() >= y.max()
   assert x.min() <= y.min()
-  
   
 if __name__ == '__main__':
   testing_helpers.run_local_tests()

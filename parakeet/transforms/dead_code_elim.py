@@ -33,6 +33,7 @@ class DCE(Transform):
     for var_name in collect_var_names_list(expr):
       self.use_counts[var_name] -= 1
 
+
   def transform_merge(self, phi_nodes):
     new_merge = {}
     for (var_name, (l,r)) in phi_nodes.iteritems():
@@ -41,7 +42,6 @@ class DCE(Transform):
       else:
         self.decref(l)
         self.decref(r)
-
     return new_merge
 
   
@@ -61,10 +61,11 @@ class DCE(Transform):
     
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
-      if stmt.lhs.__class__ is Tuple:
+      if stmt.lhs.__class__ is Tuple: 
         self.save_lhs_tuple(stmt.lhs)
       return stmt
     self.decref(stmt.rhs)
+
     return None
 
   def is_dead_loop(self, cond, body, merge):
@@ -119,9 +120,9 @@ class DCE(Transform):
     return True
 
   def transform_While(self, stmt):
-    # expressions don't get changed by this transform
-    new_body = self.transform_block(stmt.body)
     new_merge = self.transform_merge(stmt.merge)
+    new_body = self.transform_block(stmt.body)
+
     if self.is_dead_loop(stmt.cond, new_body, new_merge):
       return None
     stmt.body = new_body
@@ -165,18 +166,19 @@ class DCE(Transform):
       return stmt 
 
   def transform_ForLoop(self, stmt):
-    stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)
+    stmt.body = self.transform_block(stmt.body)
+
     if len(stmt.body) > 0 or len(stmt.merge) > 0:
       return stmt
 
   def post_apply(self, fn):
     type_env = {}
     for (name,t) in fn.type_env.iteritems():
-      
       if self.is_live(name):
         type_env[name] = t
-
+      else:
+        print "Killing", name, t, self.is_live(name) 
     fn.type_env = type_env
     Transform.post_apply(self, fn)
     return fn

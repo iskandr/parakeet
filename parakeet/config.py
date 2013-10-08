@@ -63,7 +63,7 @@ set_opt_level(default_opt_level)
 print_untyped_function = True
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False
@@ -76,10 +76,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms = [] #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']   
+print_functions_before_transforms = ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']   
 
 # show the function produced by each transformation?
-print_functions_after_transforms =  [] #['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']  
+print_functions_after_transforms =  ['Flatten', 'LowerSlices', 'LowerAdverbs', 'IndexifyAdverbs']  
 
 # show aliases and escape sets
 print_escape_analysis = False
@@ -97,5 +97,5 @@ print_specialized_function_names = False
 #         DESPERATE MEASURES        #
 #####################################
 
-testing_find_broken_transform = False 
+testing_find_broken_transform = True 
 

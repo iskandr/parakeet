@@ -235,7 +235,6 @@ class BuildFlatFn(Builder):
       elif isinstance(t, (FnT, NoneT)):
         continue 
       else:
-      
         fields = self.var_expansions[k]
         flat_left = self.flatten_expr(left)
         flat_right = self.flatten_expr(right)
