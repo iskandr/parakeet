@@ -220,7 +220,7 @@ function_mappings = {
   # np.hypot : lib.hypot,
   
   np.where : lib.where,
-  
+  np.linspace : lib.linspace, 
   np.vdot : lib.vdot, 
   np.dot : lib.dot,
   np.linalg.norm : lib.norm,  

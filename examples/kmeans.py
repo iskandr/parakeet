@@ -18,5 +18,5 @@ n, d = 10**3, 100
 X = np.random.randn(n,d)
 k = 5
 
-C = kmean(X, k, niters=20) 
+C = kmeans(X, k, niters=20) 
 print "Clusters:", C

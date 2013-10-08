@@ -13,16 +13,16 @@ def negative_stop_1d(x):
     return x[:-2]
 
 def test_negative_stop_1d_vec():
-    expect(negative_stop_1d, [vec], vec[:-2])
+    expect(negative_stop_1d, [vec], negative_stop_1d(vec))
 
 def test_negative_stop_1d_mat():
-    expect(negative_stop_2d, [mat], mat[:-2])
+    expect(negative_stop_1d, [mat], negative_stop_1d(mat))
 
 def negative_stop_2d(x):
     return x[:-2, :-3]
 
 def test_negative_stop_2d():
-    expect(negative_stop_2d, [mat], mat[:-2,:-3])
+    expect(negative_stop_2d, [mat], negative_stop_2d(mat))
 
 def negative_start_1d(x):
     return x[-2:]

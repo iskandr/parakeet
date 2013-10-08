@@ -185,9 +185,11 @@ class Transform(Builder):
   
   def transform_Shape(self, expr):
     expr.array = self.transform_expr(expr.array)
+    return expr 
   
   def transform_Len(self, expr):
     expr.value = self.transform_expr(expr.value) 
+    return expr
 
   def transform_IndexMap(self, expr):
     expr.fn = self.transform_expr(expr.fn)
@@ -252,6 +254,7 @@ class Transform(Builder):
   
   def transform_DelayUntilTyped(self, expr):
     expr.values = self.transform_expr_tuple(expr.values)
+    return expr 
   
   def transform_expr(self, expr):
     """Dispatch on the node type and call the appropriate transform method"""

@@ -73,8 +73,9 @@ class LocalTypeInference(Transform):
         common_t = combine_type_list(elt_types)
         if common_t is Unknown:
           raise TypeError("Couldn't find commom type for elements of array %s" % expr)
-      # numpy defaults to Float arrays 
-      common_t = Float64 
+      else:
+        # numpy defaults to Float arrays 
+        common_t = Float64 
     else:
       common_t = expr.type 
     array_t = increase_rank(common_t, 1)
@@ -146,9 +147,10 @@ class LocalTypeInference(Transform):
       t = repeat_tuple(Int64, array.type.rank)
       return Shape(array = array, type = t)
     elif isinstance(array.type, TupleT):
-      return const_int(len(array.type.elt_types))
+      elt = const_int(len(array.type.elt_types))
+      return self.tuple( [elt]  )
     else:
-      return make_tuple(())
+      return self.tuple( [] )
       
 
   def transform_Reshape(self, expr):

@@ -30,6 +30,7 @@ class macro(object):
     else:
       self.name = "f"
 
+  
   _macro_wrapper_cache = {}
   def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
     
@@ -126,8 +127,11 @@ class macro(object):
     return "macro(%s)" % self.name
 
 class typed_macro(macro):
-  def transform(self, args, kwargs = {}):
-    return DelayUntilTyped(values = args, keywords = kwargs, fn = self.f)
+  def __init__(self, f, *args, **kwargs):
+    macro.__init__(self, f, *args, **kwargs)
+    def delayed(*macro_args, **macro_kwargs):
+      return DelayUntilTyped(values = macro_args, keywords = macro_kwargs, fn = f)
+    self.f = delayed 
     
 
 class staged_macro(object):

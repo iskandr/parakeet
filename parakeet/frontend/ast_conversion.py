@@ -632,6 +632,7 @@ class AST_Translator(ast.NodeVisitor):
     attr = expr.attr
     if isinstance(value, ExternalValue):
       value = value.value 
+      assert hasattr(value, attr), "Couldn't find attribute '%s' in %s" % (attr, value)
       value = getattr(value, attr)
       if is_static_value(value):
         return value_to_syntax(value)

@@ -4,7 +4,7 @@ from parakeet.testing_helpers import assert_eq_arrays, run_local_tests
 
 @parakeet.jit
 def each_sum(X):
-  return parakeet.each(parakeet.sum, X)
+  return parakeet.each(np.sum, X)
 
 m = 2000
 n = 1000

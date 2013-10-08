@@ -84,6 +84,7 @@ class RewriteTyped(Transform):
       return syntax.PrimCall(expr.prim, upcast_args, type = result_type)
 
   def transform_Array(self, expr):
+
     array_t = expr.type
     elt_t = array_t.elt_type
     assert array_t.rank > 0

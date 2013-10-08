@@ -1,6 +1,7 @@
 import numpy as np
 
-from ..syntax import UntypedFn, Return, Cast, TypedFn, TypeValue, Array, Tuple
+from ..frontend import macro, jit 
+from ..syntax import UntypedFn, Return, Cast, TypedFn, TypeValue, Array, Tuple, Expr 
 from ..syntax.helpers import get_types  
 from ..ndtypes import type_conv, TypeValueT, ArrayT, IntT, make_tuple_type, TupleT, ScalarT
 
@@ -10,7 +11,13 @@ def _get_type(dtype):
   Defensively try to extract a scalar type from any wacky thing
   that might get passed in as a 'dtype' to an array constructor
   """
-  if isinstance(np.dtype (np.dtype, type)):
+  if isinstance(dtype, macro):
+    dtype = dtype.as_fn()
+  
+  while isinstance(dtype, jit):
+    dtype = dtype.f 
+    
+  if isinstance(dtype, (np.dtype, type)):
     return type_conv.equiv_type(dtype)
   elif isinstance(dtype, str):
     return type_conv.equiv_type(np.dtype(dtype))
@@ -27,6 +34,10 @@ def _get_type(dtype):
     return dtype.type
   elif isinstance(dtype, TypeValue):
     return dtype.type_value  
+  elif isinstance(dtype, Expr):
+    if isinstance(dtype.type, TypeValueT):
+      return dtype.type.type 
+    assert False, "Don't know how to turn %s : %s into Parakeet type" % (dtype, dtype.type)
   assert False, "Don't know how to turn %s into Parakeet type" % dtype  
 
 def _get_shape(value):

@@ -16,10 +16,11 @@ from parakeet.ndtypes.core_types import combine_type_list
 @macro
 def arange(n, *xs, **kwds):
   if 'dtype' in kwds:
-    elt_t = kwds['dtype']
+    elt_t = _get_type(kwds['dtype'])
     del kwds['dtype']
   else:
     elt_t = Int64
+    
   assert len(kwds) == 0, "Unexpected keyword arguments to 'arange': %s" % kwds
   array_t = make_array_type(elt_t, 1) 
   count = __builtin__.len(xs)
@@ -44,9 +45,6 @@ def arange(n, *xs, **kwds):
     step = Cast(step, type = elt_t)
   return Range(start, stop, step, type = array_t)
  
-
-  
-
 @typed_macro
 def empty(shape, dtype = float64):
   elt_t = _get_type(dtype)
@@ -63,7 +61,7 @@ def empty_like(x, dtype = None):
   else:
     return empty(x.shape, dtype)
   
-@typed_macro  
+@jit   
 def zeros(shape, dtype = float64):
   zero = dtype(0)
   return imap(lambda _: zero, shape)
@@ -90,9 +88,32 @@ def ones_like(x, dtype = None):
 def copy(x):
   return [xi for xi in x]
 
+@jit 
+def linspace(start, stop, num = 50, endpoint = True):
+  """
+  Copied from numpy.linspace but dropped the 'retstep' option 
+  which allows you to optionall return a tuple (that messes with type inference)
+  """
+  num = int(num)
+  if num <= 0:
+    return np.array([])
+  elif endpoint:
+    if num == 1:
+      return np.array([float(start)])
+    step = (stop-start)/float((num-1))
+    y = np.arange(0, num) * step + start
+    y[-1] = stop
+    return y
+  else:
+    step = (stop-start)/float(num)
+    return np.arange(0, num) * step + start 
  
 @typed_macro
-def array(value):
+def array(value, dtype = None):
+  if dtype is not None:
+    expected_elt_type = _get_type(dtype)
+    print "Got dtype argument to array: %s, ignoring for now" % expected_elt_type
+
   if isinstance(value.type, ArrayT):
     return value 
   else:
