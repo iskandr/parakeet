@@ -4,7 +4,7 @@ import numpy as np
 from .. frontend.decorators import jit, macro, typed_macro 
 from .. ndtypes import (TypeValueT, ScalarT, make_array_type, make_tuple_type, Float64, 
                         type_conv, ArrayT, TupleT, IntT, Int64) 
-from .. syntax import (Range, Cast, AllocArray, TupleProj, Array )
+from .. syntax import (Range, Cast, AllocArray, TupleProj, Array, ConstArray, ConstArrayLike)
 
 from ..syntax.helpers import get_types, one_i64, zero_i64
 
@@ -61,22 +61,35 @@ def empty_like(x, dtype = None):
   else:
     return empty(x.shape, dtype)
   
-@jit   
+@typed_macro   
 def zeros(shape, dtype = float64):
-  zero = dtype(0)
-  return imap(lambda _: zero, shape)
-  #return ConstArrayLike(shape = shape, value = zero)
-
+  shape = _get_shape(shape)
+  elt_type = _get_type(dtype)
+  zero = Cast(zero_i64, type = elt_type)
+  ndims = len(shape.type.elt_types)
+  if ndims == 0:
+    return zero 
+  else:
+    t = make_array_type(elt_type, ndims)
+    return ConstArray(shape = shape, value = zero, type = t)
+  
 @jit
 def zeros_like(x, dtype = None):
   if dtype is None:
     dtype = x.dtype
   return zeros(x.shape, dtype)
 
-@jit
+@typed_macro
 def ones(shape, dtype = float64):
-  one = dtype(1)
-  return imap(lambda _: one, shape)
+  shape = _get_shape(shape)
+  elt_type = _get_type(dtype)
+  one = Cast(one_i64, type = elt_type)
+  ndims = len(shape.type.elt_types)
+  if ndims == 0:
+    return one 
+  else:
+    t = make_array_type(elt_type, ndims)
+    return ConstArray(shape = shape, value = one, type = t)
 
 @jit
 def ones_like(x, dtype = None):

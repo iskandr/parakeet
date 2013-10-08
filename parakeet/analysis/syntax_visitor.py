@@ -83,7 +83,15 @@ class SyntaxVisitor(object):
 
   def visit_Shape(self, expr):
     self.visit_expr(expr.array)
-   
+  
+  def visit_ConstArray(self, expr):
+    self.visit_expr(expr.shape)
+    self.visit_expr(expr.value)
+    
+  def visit_ConstArrayLike(self, expr):
+    self.visit_expr(expr.array)
+    self.visit_expr(expr.value)
+  
   def visit_Slice(self, expr):
     self.visit_expr(expr.start)
     self.visit_expr(expr.stop)
@@ -214,9 +222,22 @@ class SyntaxVisitor(object):
       return self.visit_TupleProj(expr) 
     elif c is Index: 
       return self.visit_Index(expr)
-    else:
-      assert c in self._expr_method_names, "Unknown expression type %s (from %s)" % (c, expr)
-      return getattr(self, self._expr_method_names[c])(expr)
+    
+    # try looking up the method in fast-path dictionary
+    method_name = self._expr_method_names.get(c)
+    if not method_name:
+      # ...otherwise, just construct a new string following the visit_Expr pattern 
+      method_name = "visit_" + c.__name__
+    
+    # if we found a method, call it 
+    if method_name:
+      method = getattr(self, method_name)
+      
+    if method:
+      return method(expr)
+
+    for child in expr.children():
+      self.visit_expr(child)
       
   def visit_expr_list(self, exprs):
     return [self.visit_expr(expr) for expr in exprs]

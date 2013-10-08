@@ -7,7 +7,9 @@ from ..ndtypes import (StructT, Type, Unknown,
                        repeat_tuple, 
                        type_conv, )
 
-from ..syntax import (Array, AllocArray, Attribute, Cast, Closure, Const, Expr, Index, 
+from ..syntax import (Array, AllocArray, Attribute, 
+                      Cast, Closure, Const, ConstArray, ConstArrayLike, 
+                      Expr, Index, 
                       Range, Ravel, Reshape, Shape,
                       Select, Slice, 
                       Transpose, Tuple, TupleProj, TypeValue,  Var,  
@@ -64,6 +66,7 @@ class LocalTypeInference(Transform):
       result_type = value.type.index_type(index.type)
       return Index(value, index, type = result_type)
 
+  
   def transform_Array(self, expr):
     
     new_elts = self.transform_args(expr.elts)
@@ -95,7 +98,41 @@ class LocalTypeInference(Transform):
     rank = len(shape.elt_types)
     t = make_array_type(elt_type, rank)
     return AllocArray(shape, elt_type, type = t)
+
+  def transform_ConstArray(self, expr):
+    shape = self.transform_expr(expr.shape)
+    value = self.transform_expr(expr.value)
+    assert isinstance(value.type, ScalarT), \
+      "ConstArray expects scalar value, got %s: %s" % (value, value.type)
+    if isinstance(shape.type, ScalarT):
+      shape = self.tuple([shape])
+    assert isinstance(shape.type, TupleT), \
+      "Expected shape of ConstArray to be tuple, got %s : %s" % (shape, shape.type)
+    ndims = len(shape.type.elt_types)
+    if ndims == 0:
+      return value 
+    array_t = make_array_type(value.type, ndims)
+    return ConstArray(shape, value, type = array_t) 
   
+  def transform_ConstArrayLike(self, expr):
+    array = self.transform_expr(expr.array)
+    value = self.transform_expr(expr.value)
+    assert isinstance(value.type, ScalarT), \
+      "ConstArray expects scalar value, got %s: %s" % (value, value.type)
+    if isinstance(array.type, ScalarT):
+      return value 
+    elif isinstance(array.type, TupleT):
+      array = self.transform_expr(Array(elts = self.tuple_elts(array)))
+      
+    assert isinstance(array.type, ArrayT), \
+      "ConstArrayLike expected array, got %s : %s" % (array, array.type)
+    shape = self.shape(array)
+    ndims = len(shape.type.elt_types)
+    if ndims == 0:
+      return value 
+    array_t = make_array_type(value.type, ndims)
+    return ConstArrayLike(array = array, value = value, type = array_t)
+    
 
   
   def transform_Range(self, expr):

@@ -45,8 +45,6 @@ class Slice(ArrayExpr):
   def __hash__(self):
     return hash((self.start, self.stop, self.step))
 
-
-
 class ConstArray(ArrayExpr):
   _members = ['shape', 'value']
 

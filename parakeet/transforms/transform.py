@@ -169,6 +169,14 @@ class Transform(Builder):
   def transform_AllocArray(self, expr):
     expr.shape = self.transform_expr(expr.shape)
     return expr 
+  
+  def transform_ConstArray(self, expr):
+    expr.shape = self.transform_expr(expr.shape)
+    expr.value = self.transform_expr(expr.value)
+    
+  def transform_ConstArrayLike(self, expr):
+    expr.array = self.transform_expr(expr.array)
+    expr.value = self.transform_expr(expr.value)
 
   def transform_Ravel(self, expr):
     expr.array = self.transform_expr(expr.array)

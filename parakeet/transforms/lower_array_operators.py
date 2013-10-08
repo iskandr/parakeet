@@ -198,11 +198,27 @@ class LowerArrayOperators(Transform):
     assert False, "Where not implemented"
   
   
+  def mk_const_fn(self, idx_type, value, _const_fn_cache = {}):
+    if isinstance(idx_type, TupleT) and len(idx_type.elt_types) == 1:
+      idx_type = idx_type.elt_types[0]
+    key = idx_type, value
+    if value in _const_fn_cache:
+      return _const_fn_cache[key]
+    fn, builder, _ = build_fn([idx_type], value.type)
+    builder.return_(value)
+    _const_fn_cache[key] = fn 
+    return fn 
+    
+  
   def transform_ConstArray(self, expr):
-    assert False, "ConstArray not implemented"
+    const_fn = self.mk_const_fn(expr.shape.type, expr.value)
+    return self.imap(const_fn, expr.shape)
   
   def transform_ConstArrayLike(self, expr):
-    assert False, "ConstArrayLike not implemented"
+    array = self.transform_expr(expr.array)
+    shape = self.shape(array)
+    const_fn = self.mk_const_fn(expr.value)
+    return self.imap(const_fn, shape)
   
   
   
