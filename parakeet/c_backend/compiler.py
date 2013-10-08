@@ -94,8 +94,8 @@ class FlatFnCompiler(BaseCompiler):
     if key in _cache:
       return _cache[key]
     typename = self.fresh_name("tuple_type")
-    field_decls = ["  %s %s;" % (self.to_ctype(t), "elt%d" % i) for i,t in enumerate(field_types)]
-    decl = "struct %s {\n%s\n};" % (typename, "\n".join(field_decls))
+    field_decls = ["  %s %s;" % (t, "elt%d" % i) for i,t in enumerate(field_types)]
+    decl = "typedef struct %s {\n%s\n} %s;" % (typename, "\n".join(field_decls), typename)
     self.declarations.add(decl)
     _cache[key] = typename
     return typename 
@@ -640,24 +640,39 @@ class PyModuleCompiler(FlatFnCompiler):
       self.append("%s[%d] = %s;" % (array_name, i, elt))
     return array_name
     
-  def array_to_tuple(self, arr, n, elt_t):
-    if n == 0: return "PyTuple_Pack(0);"
-    elts = [self.box_scalar("%s[%d]" % (arr,i), elt_t) for i in xrange(n)]
-    elt_str = ", ".join(elts)
-    return "PyTuple_Pack(%d, %s)" % (n, elt_str)
+  def array_to_tuple(self, arr, n, elt_t, boxed = False):
+    raw_elts = ["%s[%d]" % (arr,i) for i in xrange(n)]
+    if boxed:
+      if n == 0: return "PyTuple_Pack(0);"
+      boxed_elts = [self.box_scalar(raw_elt, elt_t) for raw_elt in raw_elts]
+      elt_str = ", ".join(boxed_elts)
+      return "PyTuple_Pack(%d, %s)" % (n, elt_str)
+    else:
+      field_types = (self.to_ctype(elt_t),) * n 
+      tuple_struct_t = self.struct_type_from_fields(field_types)
+      init = "{%s}" % ", ".join(raw_elts)
+      return self.fresh_var(tuple_struct_t, "tuple_value", init)
+      
   
-  def tuple_elts(self, tup, ts):
+  def tuple_elts(self, tup, ts, boxed = False):
     result = []
     for i,t in enumerate(ts):
-      result.append(self.tuple_elt(tup, i, t))
+      result.append(self.tuple_elt(tup, i, t, boxed = boxed))
     return result
   
-  def mk_tuple(self, elts):
+  def mk_tuple(self, elts, boxed = False):
     n = len(elts)
-    if n == 0: return "PyTuple_Pack(0);"
-    elt_str = ", ".join(self.as_pyobj_list(elts)) 
-    return "PyTuple_Pack(%d, %s)" % (n, elt_str)
-  
+    if boxed:
+      if n == 0: return "PyTuple_Pack(0);"
+      elt_str = ", ".join(self.as_pyobj_list(elts)) 
+      return "PyTuple_Pack(%d, %s)" % (n, elt_str)
+    else:
+      field_types = tuple(elt.type for elt in elts)
+      tuple_struct_t = self.struct_type_from_fields(field_types)
+      elts_str = ", ".join(self.visit_expr(elt) for elt in elts)
+      init = "{" + elts_str +  "}"
+      return self.fresh_var(tuple_struct_t, "tuple_value", init)
+    
   
   def check_tuple(self, tup):
     if not config.check_pyobj_types: return 
@@ -816,7 +831,7 @@ class PyModuleCompiler(FlatFnCompiler):
     return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
     
   def visit_Tuple(self, expr):
-    return self.mk_tuple(expr.elts)
+    return self.mk_tuple(expr.elts, boxed = False)
   
   def visit_Closure(self, expr):
     return self.mk_tuple(expr.args)
