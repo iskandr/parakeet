@@ -1,6 +1,6 @@
 from .. import names 
 
-from c_types import to_ctype
+from type_mappings import to_ctype
 from reserved_names import is_reserved
 
 
@@ -119,3 +119,5 @@ class BaseCompiler(object):
    
   def return_if_null(self, obj):
     self.append("if (!%s) { return NULL; }" % obj)
+    
+  

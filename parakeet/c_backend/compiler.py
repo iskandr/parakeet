@@ -1,3 +1,4 @@
+from collections import namedtuple
  
 from .. import prims 
 from ..analysis import use_count
@@ -12,12 +13,18 @@ from ..ndtypes import (TupleT,  ArrayT, NoneT,
                        PtrT, NoneType, 
                        FnT, ClosureT) 
 
-
-from c_types import to_ctype, to_dtype
+import type_mappings
 from base_compiler import BaseCompiler
 
 from compile_util import compile_module
 import config 
+
+CompiledFlatFn = namedtuple("CompiledFlatFn", 
+                            ("name", "sig", "src",
+                             "extra_objects",
+                             "extra_functions",
+                             "extra_function_signatures", 
+                             "declarations"))
 
 def compile_flat_source(fn, _compile_cache = {}):
   key = fn.cache_key
@@ -25,8 +32,15 @@ def compile_flat_source(fn, _compile_cache = {}):
     return _compile_cache[key]
   compiler = FlatFnCompiler()
   name, sig, src = compiler.visit_fn(fn)
-  _compile_cache[key] = (name,sig,src)
-  return (name,sig,src)
+  result = CompiledFlatFn(name = name, 
+                          sig = sig, 
+                          src = src,
+                          extra_objects = compiler.extra_objects, 
+                          extra_functions = compiler.extra_functions,
+                          extra_function_signatures = compiler.extra_function_signatures,
+                          declarations = compiler.declarations)
+  _compile_cache[key] = result
+  return result
 
 
 def compile_entry(fn, _compile_cache = {}):
@@ -37,12 +51,14 @@ def compile_entry(fn, _compile_cache = {}):
   name, sig, src = compiler.visit_fn(fn)
   if config.print_function_source: 
     print "Generated C source for %s: %s" %(name, src)
+  ordered_function_sources = [compiler.extra_functions[extra_sig] for 
+                              extra_sig in compiler.extra_function_signatures]
   compiled_fn = compile_module(src, 
                                fn_name = name,
                                fn_signature = sig, 
                                extra_objects = set(compiler.extra_objects),
-                               extra_function_sources = compiler.extra_function_sources, 
-                               forward_declarations =  compiler.forward_declarations, 
+                               extra_function_sources = ordered_function_sources, 
+                               declarations =  compiler.declarations, 
                                print_source = config.print_module_source)
   _compile_cache[key]  = compiled_fn
   return compiled_fn
@@ -62,37 +78,44 @@ class FlatFnCompiler(BaseCompiler):
   def __init__(self):
     BaseCompiler.__init__(self)
     
-    # structs 
-    #self.type_decls = set([])
+    self.declarations = set([])
     
-    self.forward_declarations = set([])
     # depends on these .o files
     self.extra_objects = set([]) 
     
     # to avoid adding the same function's source twice 
-    # we also track the signatures in a set 
-    self.extra_function_signatures = set([])
-    self.extra_function_sources = []
+    # we use its signature as a key  
+    self.extra_functions = {}
+    self.extra_function_signatures = []
     
-  
+    
   def struct_type_from_fields(self, field_types, _cache = {}):
     key = tuple(field_types)
     if key in _cache:
       return _cache[key]
     typename = self.fresh_name("tuple_type")
-    field_decls = ["  %s %s;" % (to_ctype(t), "elt%d" % i) for i,t in enumerate(field_types)]
+    field_decls = ["  %s %s;" % (self.to_ctype(t), "elt%d" % i) for i,t in enumerate(field_types)]
     decl = "struct %s {\n%s\n};" % (typename, "\n".join(field_decls))
-    self.forward_declarations.add(decl)
+    self.declarations.add(decl)
     _cache[key] = typename
     return typename 
-    
-    
   
+  
+  def to_ctypes(self, ts):
+    return tuple(self.to_ctype(t) for t in ts)
+  
+  def to_ctype(self, t):
+    if isinstance(t, TupleT):
+      elt_types = self.to_ctypes(t.elt_types)
+      return self.struct_type_from_fields(elt_types) 
+    else:
+      return type_mappings.to_ctype(t)
+    
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
 
-    return "(PyArrayObject*) PyArray_SimpleNew(1, &%s, %s)" % (nelts, to_dtype(elt_t))
+    return "(PyArrayObject*) PyArray_SimpleNew(1, &%s, %s)" % (nelts, type_mappings.to_dtype(elt_t))
   
   
   
@@ -108,7 +131,7 @@ class FlatFnCompiler(BaseCompiler):
   
   def visit_Cast(self, expr):
     x = self.visit_expr(expr.value)
-    ct = to_ctype(expr.type)
+    ct = self.to_ctype(expr.type)
     if isinstance(expr, (Const, Var)):
       return "(%s) %s" % (ct, x)
     else:
@@ -287,7 +310,7 @@ class FlatFnCompiler(BaseCompiler):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
     elt_t = expr.value.type.elt_type
-    ptr_t = "%s*" % to_ctype(elt_t)
+    ptr_t = "%s*" % self.to_ctype(elt_t)
     return "( (%s) (PyArray_DATA(%s)))[%s]" % (ptr_t, arr, idx)
   
   def visit_Call(self, expr):
@@ -310,13 +333,13 @@ class FlatFnCompiler(BaseCompiler):
     rhs = self.visit_expr(stmt.rhs)
     
     if stmt.lhs.__class__ is Var:
-      return "%s %s = %s;" % (to_ctype(stmt.lhs.type), lhs, rhs)
+      return "%s %s = %s;" % (self.to_ctype(stmt.lhs.type), lhs, rhs)
     else:
       return "%s = %s;" % (lhs, rhs)
   
   def declare(self, parakeet_name, parakeet_type, init_value = None):
     c_name = self.name(parakeet_name)
-    t = to_ctype(parakeet_type)
+    t = self.to_ctype(parakeet_type)
     if init_value is None:
       self.append("%s %s;" % (t, c_name))
     else: 
@@ -378,7 +401,7 @@ class FlatFnCompiler(BaseCompiler):
     stop = self.visit_expr(stmt.stop)
     step = self.visit_expr(stmt.step)
     var = self.visit_expr(stmt.var)
-    t = to_ctype(stmt.var.type)
+    t = self.to_ctype(stmt.var.type)
     body =  self.visit_block(stmt.body)
     body += self.visit_merge_right(stmt.merge)
     body = self.indent("\n" + body) 
@@ -433,12 +456,25 @@ class FlatFnCompiler(BaseCompiler):
       fn = expr.type.fn
     #compiled_fn = compile_flat(result)
     #self.extra_objects.add(compiled_fn.object_filename)
-    #self.forward_declarations.add(compiled_fn.fn_signature)
-    c_name, sig, src = compile_flat_source(fn)
-    if sig not in self.extra_function_signatures:
-      self.extra_function_signatures.add(sig)
-      self.extra_function_sources.append(src)
-    return c_name
+    #self.declarations.add(compiled_fn.fn_signature)
+    compiled = compile_flat_source(fn)
+    if compiled.sig not in self.extra_function_signatures:
+      # add any declarations it depends on 
+      self.declarations.update(compiled.declarations)
+      
+      #add any external objects it wants to be linked against 
+      self.extra_objects.update(compiled.extra_objects)
+      
+      # first add the new function's dependencies
+      for extra_sig in compiled.extra_function_signatures:
+        if extra_sig not in self.extra_function_signatures:
+          self.extra_function_signatures.append(extra_sig)
+          extra_src = compiled.function_sources[extra_sig]
+          self.extra_functions[extra_sig] = extra_src 
+      # now add the function itself 
+      self.extra_function_signatures.append(compiled.sig)
+      self.extra_functions[compiled.sig] = compiled.src
+    return compiled.name
 
   def get_closure_args(self, fn):
     if isinstance(fn.type, FnT):
@@ -480,13 +516,13 @@ class FlatFnCompiler(BaseCompiler):
   def visit_fn(self, fn, return_by_ref = False):
     
     c_fn_name = self.fresh_name(fn.name)
-    arg_types = [to_ctype(t) for t in fn.input_types]
+    arg_types = [self.to_ctype(t) for t in fn.input_types]
     arg_names = [self.name(old_arg) for old_arg in fn.arg_names]
     return_types = self.return_types(fn)
     n_return = len(return_types)
     
     if n_return == 1:
-      return_type = to_ctype(return_types[0])
+      return_type = self.to_ctype(return_types[0])
       self.return_void = (return_type == NoneType)
       self.return_by_ref = False
     elif n_return == 0:
@@ -497,7 +533,7 @@ class FlatFnCompiler(BaseCompiler):
       return_type = "void"
       self.return_void = True
       self.return_by_ref = True
-      self.return_var_types = [to_ctype(t) for t in return_types]
+      self.return_var_types = [self.to_ctype(t) for t in return_types]
       self.return_var_names = [self.fresh_name("return_value%d" % i) for i in xrange(n_return)]
       arg_types = arg_types + ["%s*" % t for t in self.return_var_types] 
       arg_names = arg_names + self.return_var_names
@@ -550,8 +586,8 @@ class PyModuleCompiler(FlatFnCompiler):
       scalar = x
     else:
       scalar = self.fresh_name("scalar");
-      self.append("%s %s = %s;" % (to_ctype(t), scalar, x))
-    return "PyArray_Scalar(&%s, PyArray_DescrFromType(%s), NULL)" % (scalar, to_dtype(t) )
+      self.append("%s %s = %s;" % (self.to_ctype(t), scalar, x))
+    return "PyArray_Scalar(&%s, PyArray_DescrFromType(%s), NULL)" % (scalar, type_mappings.to_dtype(t) )
     
   def as_pyobj(self, expr):
     """
@@ -598,7 +634,7 @@ class PyModuleCompiler(FlatFnCompiler):
     array_name = self.fresh_name(name)
     n = len(expr.type.elt_types)
     if elt_type is None:
-      elt_type = to_ctype(t0)
+      elt_type = self.to_ctype(t0)
     self.append("%s %s[%d];" % (elt_type, array_name, n))
     for i, elt in enumerate(elts):
       self.append("%s[%d] = %s;" % (array_name, i, elt))
@@ -776,7 +812,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
   def visit_AllocArray(self, expr):
     shape = self.tuple_to_stack_array(expr.shape)
-    t = to_dtype(elt_type(expr.type))
+    t = type_mappings.to_dtype(elt_type(expr.type))
     return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
     
   def visit_Tuple(self, expr):

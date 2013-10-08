@@ -118,7 +118,7 @@ def get_linker_flags(compiler):
 def create_source_file(src, 
                          fn_name = None, 
                          src_filename = None, 
-                         forward_declarations = [],
+                         declarations = [],
                          extra_function_sources = [], 
                          extra_headers = [], 
                          print_source = None):
@@ -146,7 +146,7 @@ def create_source_file(src,
   for header in extra_headers + c_headers:
     src_file.write("#include <%s>\n" % header)
   
-  for decl in set(forward_declarations):
+  for decl in set(declarations):
     decl = decl.strip()
     if not decl.endswith(";"):
       decl += ";"
@@ -185,7 +185,7 @@ def compile_object(src,
                    fn_name = None,  
                    fn_signature = None,
                    src_filename = None, 
-                   forward_declarations = [],
+                   declarations = [],
                    extra_function_sources = [], 
                    extra_headers = python_headers, 
                    extra_objects = [], 
@@ -197,7 +197,7 @@ def compile_object(src,
   src_file = create_source_file(src, 
                                 fn_name = fn_name, 
                                 src_filename = src_filename, 
-                                forward_declarations = forward_declarations,
+                                declarations = declarations,
                                 extra_function_sources = extra_function_sources,  
                                 extra_headers = extra_headers,
                                 print_source = print_source)
@@ -218,7 +218,7 @@ def compile_module(src,
                      fn_name,
                      fn_signature = None,  
                      src_filename = None,
-                     forward_declarations = [],
+                     declarations = [],
                      extra_function_sources = [], 
                      extra_headers = [],  
                      extra_objects = [],
@@ -251,7 +251,7 @@ def compile_module(src,
   compiled_object = compile_object(src, 
                                    fn_name,
                                    src_filename  = src_filename, 
-                                   forward_declarations = forward_declarations,
+                                   declarations = declarations,
                                    extra_function_sources = extra_function_sources, 
                                    extra_headers = python_headers + extra_headers,  
                                    extra_objects = extra_objects,

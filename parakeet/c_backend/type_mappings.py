@@ -1,11 +1,7 @@
 
 from ..ndtypes import (UInt8, UInt16, UInt32, UInt64, 
                        Int8, Int16, Int32, Int64, Float32, Float64, NoneType,  
-                       TupleT, ScalarT, NoneT, ArrayT, SliceT, Type, 
-                       ClosureT, PtrT, Bool)
-
-
-
+                       Bool, ArrayT, ClosureT, TupleT, SliceT, NoneT, PtrT)
 
 _dtype_mappings = {
   Bool : "NPY_BOOL",
@@ -41,27 +37,12 @@ _ctype_mappings = {
 }
 
 def to_ctype(t):
-  #elif isinstance(t, ArrayT):
-  #  return "PyArrayObject*"
-  #elif isinstance(t, (ClosureT, TupleT)):
-  #  return "PyTupleObject*"
-  #elif isinstance(t, SliceT):
-  #  return "PySliceObject*"
-  #elif isinstance(t, NoneT):
-  #  return "PyObject*"
   if t in _ctype_mappings:
     return _ctype_mappings[t]
   elif isinstance(t, PtrT):
-   
-    return "PyArrayObject*"#"%s*" % to_ctype(t.elt_type)
+    return "PyArrayObject*" #"%s*" % to_ctype(t.elt_type)
   elif isinstance(t, (ArrayT, ClosureT, TupleT, SliceT, NoneT)):
     return "PyObject*"
   else:
     assert False, "Unsupported type %s" % t
     
-  
-class BoxedNumberT(Type):
-  """
-  When creating wrappers which accept pyobjects, let's pretend all numbers come boxed
-  """
-  pass 
