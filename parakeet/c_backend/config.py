@@ -17,7 +17,7 @@ print_input_ir = True
 print_command_elapsed_time = False
 print_commands = False
 print_function_source = False
-print_module_source = False
+print_module_source = True
 
 # Generate a .c file or a .cpp? 
 pure_c = True

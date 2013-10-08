@@ -3,6 +3,7 @@ from .. import prims
 from ..analysis import use_count
 from ..syntax import (Const, Tuple, TypedFn, Var, TupleProj, ArrayView, 
                       PrimCall, Attribute, Expr, Closure)  
+from ..syntax.helpers import get_types 
 from ..ndtypes import (TupleT,  ArrayT, NoneT, 
                        elt_type, ScalarT, 
                        FloatT, Float32, Float64, 
@@ -61,6 +62,9 @@ class FlatFnCompiler(BaseCompiler):
   def __init__(self):
     BaseCompiler.__init__(self)
     
+    # structs 
+    #self.type_decls = set([])
+    
     self.forward_declarations = set([])
     # depends on these .o files
     self.extra_objects = set([]) 
@@ -70,6 +74,20 @@ class FlatFnCompiler(BaseCompiler):
     self.extra_function_signatures = set([])
     self.extra_function_sources = []
     
+  
+  def struct_type_from_fields(self, field_types, _cache = {}):
+    key = tuple(field_types)
+    if key in _cache:
+      return _cache[key]
+    typename = self.fresh_name("tuple_type")
+    field_decls = ["  %s %s;" % (to_ctype(t), "elt%d" % i) for i,t in enumerate(field_types)]
+    decl = "struct %s {\n%s\n};" % (typename, "\n".join(field_decls))
+    self.forward_declarations.add(decl)
+    _cache[key] = typename
+    return typename 
+    
+    
+  
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
@@ -371,10 +389,17 @@ class FlatFnCompiler(BaseCompiler):
     return s % locals()
 
   def visit_Return(self, stmt):
-    assert not self.return_by_ref, "Returning multiple values not yet implemented: %s" % stmt
-
+    assert not self.return_by_ref, "Returning multiple values by ref not yet implemented: %s" % stmt
     if self.return_void:
       return "return;"
+    elif isinstance(stmt.value, Tuple):
+      # if not returning multiple values by reference, then make a struct for them
+      field_types = get_types(stmt.value.elts) 
+      struct_type = self.struct_type_from_fields(field_types)
+      result_elts = ", ".join(self.visit_expr(elt) for elt in stmt.value.elts)
+      result_value = "{" + result_elts + "}"
+      result = self.fresh_var(struct_type, "result", result_value)
+      return "return %s;" % result 
     else:
       v = self.visit_expr(stmt.value)
       return "return %s;" % v
@@ -452,7 +477,7 @@ class FlatFnCompiler(BaseCompiler):
       return [fn.return_type]
     
   
-  def visit_fn(self, fn):
+  def visit_fn(self, fn, return_by_ref = False):
     
     c_fn_name = self.fresh_name(fn.name)
     arg_types = [to_ctype(t) for t in fn.input_types]
@@ -468,7 +493,7 @@ class FlatFnCompiler(BaseCompiler):
       return_type = "void"
       self.return_void = True
       self.return_by_ref = False
-    else:
+    elif return_by_ref:
       return_type = "void"
       self.return_void = True
       self.return_by_ref = True
@@ -476,7 +501,10 @@ class FlatFnCompiler(BaseCompiler):
       self.return_var_names = [self.fresh_name("return_value%d" % i) for i in xrange(n_return)]
       arg_types = arg_types + ["%s*" % t for t in self.return_var_types] 
       arg_names = arg_names + self.return_var_names
-      
+    else:
+      return_type = self.struct_type_from_fields(return_types)
+      self.return_void = False 
+      self.return_by_ref = False 
     args_str = ", ".join("%s %s" % (t, name) for (t,name) in zip(arg_types,arg_names))
     
     body_str = self.visit_block(fn.body) 

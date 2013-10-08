@@ -165,14 +165,15 @@ def create_source_file(src,
 def run_cmd(cmd, env = None, label = ""):
   if config.print_commands: print " ".join(cmd)
   if config.print_command_elapsed_time: t = time.time()
-  with open(os.devnull, "w") as fnull:
-    with NamedTemporaryFile(prefix="parakeet_compile_err", mode = 'r+') as err_file:
-      try:  
-        subprocess.check_call(cmd, stdout = fnull, stderr = err_file, env = env)
-      except:
-        print "Parakeet encountered error(s) during compilation: "
-        print err_file.read()
-        raise 
+  subprocess.check_output(cmd, env = env)
+  #with open(os.devnull, "w") as fnull:
+  #  with NamedTemporaryFile(prefix="parakeet_compile_err", mode = 'r+') as err_file:
+  #    try:  
+  #      subprocess.check_call(cmd, stdout = fnull, stderr = err_file, env = env)
+  #    except:
+  #      print "Parakeet encountered error(s) during compilation: "
+  #      print err_file.read()
+  #      raise 
     
   if config.print_command_elapsed_time: 
     if label:
