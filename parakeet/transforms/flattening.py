@@ -538,22 +538,26 @@ class BuildFlatFn(Builder):
     elif isinstance(t, (NoneT, FnT, TypeValueT)):
       return []
     elif isinstance(t, SliceT):
-      start = Var(name = "%s_start" % name, type = t.start_type)
-      stop = Var(name = "%s_stop" % name, type = t.stop_type)
-      step = Var(name = "%s_step" % name, type = t.step_type)
+      base = name.replace(".", "_")
+      start = Var(name = "%s_start" % base, type = t.start_type)
+      stop = Var(name = "%s_stop" % base, type = t.stop_type)
+      step = Var(name = "%s_step" % base, type = t.step_type)
       field_vars = [start, stop, step]
     elif isinstance(t, ClosureT):
-      field_vars = [Var(name = "%s_closure_elt%d" % (name,i) , type = t) 
+      base = name.replace(".", "_")
+      field_vars = [Var(name = "%s_closure_elt%d" % (base,i) , type = t) 
                     for i,t in enumerate(t.arg_types)]
     elif isinstance(t, TupleT):
-      field_vars = [Var(name = "%s_elt%d" % (name, i), type = t) 
+      base = name.replace(".", "_")
+      field_vars = [Var(name = "%s_elt%d" % (base, i), type = t) 
                     for i,t in enumerate(t.elt_types)]
     elif isinstance(t, ArrayT):
-      data = Var(name = "%s_data" % name, type = t.ptr_t)
-      shape = Var(name = "%s_shape" % name, type = t.shape_t)
-      strides = Var(name = "%s_strides" % name, type = t.strides_t)
-      offset = Var(name = "%s_offset" % name, type = Int64)
-      nelts = Var(name = "%s_nelts" % name, type = Int64)
+      base = name.replace(".", "_")
+      data = Var(name = "%s_data" % base, type = t.ptr_t)
+      shape = Var(name = "%s_shape" % base, type = t.shape_t)
+      strides = Var(name = "%s_strides" % base, type = t.strides_t)
+      offset = Var(name = "%s_offset" % base, type = Int64)
+      nelts = Var(name = "%s_nelts" % base, type = Int64)
       field_vars = [data, shape, strides, offset, nelts]
     else:
       assert False, "Unsupport type %s" % (t,)
@@ -587,17 +591,19 @@ class Flatten(Transform):
   
   def unbox_var(self, var):
     t = var.type 
+
     if isinstance(t, (FnT, NoneT, TypeValueT)):
       return []
     elif isinstance(t, (PtrT, ScalarT)):
       return [var]
     elif isinstance(t, ArrayT):
       # for structured arrays, should this be a tuple? 
-      data = self.attr(var, 'data', name = var.name + "_data")
-      shape = self.attr(var, 'shape', name = var.name + "_shape")
-      strides = self.attr(var, 'strides', name = var.name + "_strides")
-      offset = self.attr(var, 'offset', name = var.name + "_offset")
-      size = self.attr(var, 'size', name = var.name + "_size")
+      base = var.name.replace(".", "_")
+      data = self.attr(var, 'data', name = base + "_data")
+      shape = self.attr(var, 'shape', name = base + "_shape")
+      strides = self.attr(var, 'strides', name = base + "_strides")
+      offset = self.attr(var, 'offset', name = base + "_offset")
+      size = self.attr(var, 'size', name = base + "_size")
       return self.unbox_vars([data, shape, strides, offset, size])
     elif isinstance(t, SliceT):
       start = self.attr(var, 'start')
@@ -605,11 +611,13 @@ class Flatten(Transform):
       step = self.attr(var, 'step')
       return self.unbox_vars([start, stop, step])
     elif isinstance(t, ClosureT):
-      closure_elts = [self.closure_elt(var, i, name = var.name + "_closure_elt%d" % i)
+      base = var.name.replace(".", "_")
+      closure_elts = [self.closure_elt(var, i, name = base + "_closure_elt%d" % i)
                       for i in xrange(len(t.arg_types))]
       return self.unbox_vars(closure_elts)
     elif isinstance(t, TupleT):
-      tuple_elts = [self.assign_name(self.tuple_proj(var, i), name = var.name + "_elt%d" % i)
+      base = var.name.replace(".", "_")
+      tuple_elts = [self.assign_name(self.tuple_proj(var, i), name = base + "_elt%d" % i)
                       for i in xrange(len(t.elt_types))]
       return self.unbox_vars(tuple_elts)
     else:

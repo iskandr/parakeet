@@ -146,7 +146,7 @@ def create_source_file(src,
   for header in extra_headers + c_headers:
     src_file.write("#include <%s>\n" % header)
   
-  for decl in set(declarations):
+  for decl in declarations:
     decl = decl.strip()
     if not decl.endswith(";"):
       decl += ";"

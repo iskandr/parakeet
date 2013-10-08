@@ -36,10 +36,7 @@ class DCE(Transform):
   def transform_merge(self, phi_nodes):
     new_merge = {}
     for (var_name, (l,r)) in phi_nodes.iteritems():
-
-      
       if self.is_live(var_name):
-
         new_merge[var_name] = (l,r)
       else:
         self.decref(l)
@@ -47,11 +44,27 @@ class DCE(Transform):
 
     return new_merge
 
+  
+  def save_lhs_tuple(self, lhs):
+    """
+    If there's a Tuple assignment on the LHS 
+    then all the variables must be kept alive
+    together if any of them survive
+    """
+    for elt in lhs.elts:
+      if elt.__class__ is Tuple:
+        self.save_lhs_tuple(elt)
+      else:
+        assert elt.__class__ is Var 
+        if not self.is_live(elt.name):
+          self.use_counts[elt.name] = 1 
+    
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
+      if stmt.lhs.__class__ is Tuple:
+        self.save_lhs_tuple(stmt.lhs)
       return stmt
     self.decref(stmt.rhs)
-    # print "DEAD", stmt
     return None
 
   def is_dead_loop(self, cond, body, merge):
@@ -160,8 +173,10 @@ class DCE(Transform):
   def post_apply(self, fn):
     type_env = {}
     for (name,t) in fn.type_env.iteritems():
+      
       if self.is_live(name):
         type_env[name] = t
+
     fn.type_env = type_env
     Transform.post_apply(self, fn)
     return fn
