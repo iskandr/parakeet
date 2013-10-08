@@ -23,10 +23,10 @@ def julia_loops(cr, ci, N, bound=1.5, lim=1000., cutoff=1e6):
     return julia
 
 def test_julia():
-   cr=0.285
-   ci=0.01
-   N=20
-   testing_helpers.expect(julia_loops, [cr, ci, N], julia_loops(cr,ci,N))
+  cr=0.285
+  ci=0.01
+  N=20
+  testing_helpers.expect(julia_loops, [cr, ci, N], julia_loops(cr,ci,N))
 
 
 if __name__ == "__main__":
