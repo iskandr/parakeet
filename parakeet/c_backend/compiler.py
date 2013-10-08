@@ -11,7 +11,7 @@ from ..ndtypes import (TupleT,  ArrayT, NoneT,
                        BoolT, Bool, 
                        IntT,  Int64, SignedT,
                        PtrT, NoneType, 
-                       FnT, ClosureT) 
+                       FnT, ClosureT, Type) 
 
 import type_mappings
 from base_compiler import BaseCompiler
@@ -53,6 +53,7 @@ def compile_entry(fn, _compile_cache = {}):
     print "Generated C source for %s: %s" %(name, src)
   ordered_function_sources = [compiler.extra_functions[extra_sig] for 
                               extra_sig in compiler.extra_function_signatures]
+
   compiled_fn = compile_module(src, 
                                fn_name = name,
                                fn_signature = sig, 
@@ -88,16 +89,24 @@ class FlatFnCompiler(BaseCompiler):
     self.extra_functions = {}
     self.extra_function_signatures = []
     
+    # don't create more than one struct type per tuple type
+    self._tuple_struct_cache = {}
     
-  def struct_type_from_fields(self, field_types, _cache = {}):
-    key = tuple(field_types)
-    if key in _cache:
-      return _cache[key]
+  def struct_type_from_fields(self, field_types):
+    
+    if any(not isinstance(t, str) for t in field_types):
+      field_types = tuple(self.to_ctype(t) if isinstance(t, Type) else t 
+                          for t in field_types)
+    else:
+      field_types = tuple(field_types)
+    
+    if field_types in self._tuple_struct_cache:
+      return self._tuple_struct_cache[field_types]
     typename = self.fresh_name("tuple_type")
     field_decls = ["  %s %s;" % (t, "elt%d" % i) for i,t in enumerate(field_types)]
     decl = "typedef struct %s {\n%s\n} %s;" % (typename, "\n".join(field_decls), typename)
     self.declarations.add(decl)
-    _cache[key] = typename
+    self._tuple_struct_cache[field_types] = typename
     return typename 
   
   
@@ -552,8 +561,10 @@ class FlatFnCompiler(BaseCompiler):
 
 class PyModuleCompiler(FlatFnCompiler):
    
-  def unbox_scalar(self, x, t, target = "scalar_value"):
+  def unbox_scalar(self, x, t, target = None):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
+    if target is None:
+      target = "scalar_value"
     
     result = self.fresh_var(t, target)
     if isinstance(t, IntT):
@@ -617,7 +628,27 @@ class PyModuleCompiler(FlatFnCompiler):
   def print_pyobj_type(self, obj, text=""):
     text = '"%s"' % text
     self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_type_str(obj)))
-    
+  
+  def unbox(self, boxed, t, target = None):
+    if isinstance(t, ScalarT):
+      return self.unbox_scalar(boxed, t, target = target)
+    elif isinstance(t, TupleT):
+      assert isinstance(t, TupleT), "Don't know how to unbox %s : %s" % (boxed, t)
+      return self.unbox_tuple(boxed, t, target = target)
+    else:
+      return boxed 
+  
+  def unbox_tuple(self, boxed_tuple, tuple_t, target = "tuple_value"):
+    assert isinstance(tuple_t, TupleT), "Expected tuple type, got %s" % tuple_t
+    elt_types = tuple_t.elt_types 
+    c_struct_t = self.struct_type_from_fields(elt_types)
+    boxed_tuple_elts = self.tuple_elts(boxed_tuple, tuple_t, boxed=True)
+    unboxed_tuple_elts = [self.unbox(boxed_elt, elt_t) 
+                          for (boxed_elt, elt_t) 
+                          in zip(boxed_tuple_elts, elt_types)]
+    elts_str = ", ".join(unboxed_tuple_elts)
+    return self.fresh_var(c_struct_t, target, "{" + elts_str + "}")
+     
   def tuple_to_stack_array(self, expr, name = "array_from_tuple", elt_type = None):
     t0 = expr.type.elt_types[0]
     
@@ -746,17 +777,20 @@ class PyModuleCompiler(FlatFnCompiler):
     elif isinstance(t, ArrayT):
       self.check_array(v)
       
-  def tuple_elt(self, tup, idx, t):
-    self.check_tuple(tup)
-    proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
-    if isinstance(t, ScalarT):
-      elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
-      result = self.unbox_scalar(elt_obj, t)
-      if config.debug and t == Int64:
-        self.append(""" printf("tupleproj %s[%d] = %%" PRId64 "\\n", %s);""" % (tup, idx, result))
-      return result
+  def tuple_elt(self, tup, idx, t, boxed = False):
+    if boxed: 
+      self.check_tuple(tup)
+      proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
+      if isinstance(t, ScalarT):
+        elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
+        result = self.unbox_scalar(elt_obj, t)
+        if config.debug and t == Int64:
+          self.append(""" printf("tupleproj %s[%d] = %%" PRId64 "\\n", %s);""" % (tup, idx, result))
+        return result
+      else:
+        return proj_str
     else:
-      return proj_str 
+      return "%s.elt%d" % (tup, idx)  
  
   
   def strides(self, array_expr):
@@ -839,6 +873,7 @@ class PyModuleCompiler(FlatFnCompiler):
   def visit_TupleProj(self, expr):
     tup = self.visit_expr(expr.tuple)
     result = self.tuple_elt(tup, expr.index, expr.type)
+
     return result
   
   def visit_ClosureElt(self, expr):
@@ -1002,10 +1037,11 @@ class PyModuleCompiler(FlatFnCompiler):
         self.print_pyobj_type(c_name, text = "Type: ")
         self.print_pyobj(c_name, text = "Value: ")
       
-      if isinstance(t, ScalarT):
-        new_name = self.name(argname, overwrite = True)
-        self.unbox_scalar(c_name, t, target = new_name)
-
+      if isinstance(t, (TupleT, ScalarT)):
+        #new_name = self.name(argname, overwrite = True)
+        var = self.unbox(c_name, t, target = argname)
+        self.name_mappings[argname] = var
+      
         
     c_body = self.visit_block(fn.body, push=False)
     c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
