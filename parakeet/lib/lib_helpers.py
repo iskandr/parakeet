@@ -19,32 +19,29 @@ def _get_type(dtype):
     dtype = dtype.f 
   
   while isinstance(dtype, Expr):
-
-    if isinstance(dtype, TypeValue):
-      dtype = dtype.type_value  
-    elif isinstance(dtype.type, TypeValueT):
-      dtype = dtype.type
-    elif isinstance(dtype.type, ClosureT):
-      dtype = dtype.type.fn
-    elif isinstance(dtype, Closure):
-      dtype = dtype.fn
-    elif isinstance(dtype, UntypedFn):
+    if isinstance(dtype, UntypedFn):
       if len(dtype.body) == 1:
         stmt = dtype.body[0]
         if stmt.__class__ is Return:
           expr = stmt.value 
           if expr.__class__ is Cast:
             dtype = expr.type 
-            continue 
+            break
       assert False, "Don't know how to convert function %s into Parakeet type" % dtype
     elif isinstance(dtype, TypedFn):
       dtype = dtype.return_type
+    if isinstance(dtype, TypeValue):
+      dtype = dtype.type_value  
+    elif isinstance(dtype.type, TypeValueT):
+      dtype = dtype.type
+    elif isinstance(dtype, Closure):
+      dtype = dtype.fn
     elif isinstance(dtype.type, (ClosureT, FnT)):
       dtype = dtype.type.fn
     else:
       assert False, "Don't know how to turn %s : %s into Parakeet type" % (dtype, dtype.type)  
-  
-  print dtype, type(dtype)
+
+
   if isinstance(dtype, Type):
     if isinstance(dtype, TypeValueT):
       return dtype.type
@@ -52,6 +49,7 @@ def _get_type(dtype):
       return dtype 
     
   elif isinstance(dtype, (np.dtype, type)):
+
     return type_conv.equiv_type(dtype)
   elif isinstance(dtype, str):
     return type_conv.equiv_type(np.dtype(dtype))

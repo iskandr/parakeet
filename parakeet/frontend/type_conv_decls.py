@@ -2,6 +2,7 @@ import numpy as np
 import types 
 
 
+from ..syntax import UntypedFn, TypedFn 
 from ..ndtypes import (type_conv, scalar_types, 
                        make_array_type, ArrayT, 
                        make_tuple_type, TupleT, 
@@ -66,3 +67,5 @@ type_conv.register(jit, ClosureT, typeof_fn)
 type_conv.register(macro, ClosureT, typeof_fn)
 type_conv.register(types.BuiltinFunctionType, ClosureT, typeof_fn)
 type_conv.register(np.ufunc, ClosureT, typeof_fn)
+type_conv.register(UntypedFn, ClosureT, typeof_fn)
+type_conv.register(TypedFn, ClosureT, typeof_fn)

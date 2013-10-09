@@ -23,8 +23,17 @@ class jit(object):
 class macro(object):
   def __init__(self, f, static_names = set([]), call_from_python = None):
     self.f = f
+    self.argcount = self.f.func_code.co_argcount 
+    self.varnames = self.f.func_code.co_varnames 
     self.n_args = self.f.func_code.co_argcount
-    self.defaults = self.f.func_defaults 
+    self.defaults = self.f.func_defaults
+    
+    n_defaults = len(self.defaults) if self.defaults else 0 
+    self.defaults_dictionary = {}
+    n_pos = self.n_args - n_defaults
+    for i, default_name in enumerate(self.varnames[n_pos:n_pos+n_defaults]):
+      self.defaults_dictionary[default_name] = self.defaults[i]
+    
     self.static_names = static_names
     self.wrappers = {}
     self.call_from_python = call_from_python
@@ -38,9 +47,8 @@ class macro(object):
   
   _macro_wrapper_cache = {}
   def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
-  
-  
     static_pairs = tuple(static_pairs)
+    
     key = (n_pos, static_pairs, dynamic_keywords)
     if key in self.wrappers:
       return self.wrappers[key]
@@ -49,20 +57,25 @@ class macro(object):
     pos_vars = []
     keyword_vars = {}
     
-    
     for i in xrange(n_pos):
-      if i <  self.f.func_code.co_argcount: 
-        raw_name = self.f.func_code.co_varnames[i] 
+      if i <  self.argcount: 
+        raw_name = self.varnames[i]
       else:
         raw_name = "input_%d" % i
       local_name = names.fresh(raw_name)
       args.add_positional(local_name)
       pos_vars.append(Var(local_name))
-  
+
+      
+    import ast_conversion
     for visible_name in dynamic_keywords:
       local_name = names.fresh(visible_name)
       args.add_positional(local_name, visible_name)
       keyword_vars[visible_name] = Var(local_name)
+      if visible_name in self.defaults_dictionary:
+        default_value = self.defaults_dictionary[visible_name]
+        parakeet_value = ast_conversion.value_to_syntax(default_value)
+        args.defaults[local_name] = parakeet_value
 
     for (static_name, value) in static_pairs:
       if isinstance(value, Expr):
@@ -74,6 +87,7 @@ class macro(object):
             (value, type(value))
         keyword_vars[static_name] = const(value)
 
+    print "Passing in ", pos_vars, keyword_vars
     result_expr = self.f(*pos_vars, **keyword_vars)
     body = [Return(result_expr)]
     wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
@@ -81,14 +95,16 @@ class macro(object):
     wrapper_name = names.fresh(wrapper_name)
     untyped = UntypedFn(name = wrapper_name, args = args, body = body)
     self.wrappers[key] = untyped
-    print key, untyped 
+    print "Generated", untyped 
     return untyped 
   
   def as_fn(self):
-    #assert False, "Materializing macro %s as a function not supported" % self.name 
-    n_default = 0 if not self.defaults else len(self.defaults)
-    assert n_default == 0
-    return self._create_wrapper(self.n_args, [], ())
+    n_default = len(self.defaults) if self.defaults else 0 
+    n_pos = self.n_args - n_default 
+    arg_varnames = self.varnames[:self.argcount]
+    keyword_names = arg_varnames[n_pos:]
+    wrapper = self._create_wrapper(n_pos, [], keyword_names)
+    return wrapper 
     
   def __call__(self, *args, **kwargs):
     if self.call_from_python is not None:

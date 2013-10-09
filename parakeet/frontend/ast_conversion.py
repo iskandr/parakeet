@@ -109,7 +109,9 @@ def is_static_value(v):
          is_function_value(v)
 
 def value_to_syntax(v):
-  if is_python_constant(v):
+  if isinstance(v, Expr):
+    return v 
+  elif is_python_constant(v):
     return const(v)
   else:
     return translate_function_value(v)
