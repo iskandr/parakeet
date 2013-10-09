@@ -85,10 +85,10 @@ class macro(object):
     return untyped 
   
   def as_fn(self):
-    assert False, "Materializing macro %s as a function not supported" % self.name 
-    #n_default = 0 if not self.defaults else len(self.defaults)
-    #assert n_default == 0
-    #return self._create_wrapper(self.n_args, [], ())
+    #assert False, "Materializing macro %s as a function not supported" % self.name 
+    n_default = 0 if not self.defaults else len(self.defaults)
+    assert n_default == 0
+    return self._create_wrapper(self.n_args, [], ())
     
   def __call__(self, *args, **kwargs):
     if self.call_from_python is not None:

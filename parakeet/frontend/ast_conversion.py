@@ -1026,8 +1026,8 @@ def translate_function_value(fn):
     fundef = build_untyped_cast_fn(fn)
   elif isinstance(fn, type) and Expr in fn.mro():
     fundef = build_untyped_expr_fn(fn)  
-  #elif isinstance(fn, macro):
-  #  fundef = fn.as_fn()
+  elif isinstance(fn, macro):
+    fundef = fn.as_fn()
     
   else:
     # if it's not a macro or some sort of internal expression

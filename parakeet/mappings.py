@@ -60,7 +60,7 @@ function_mappings = {
   pow : prims.power, 
   
   # TYPES 
-  np.int8 : build_untyped_cast_fn(np.int8), 
+  np.int8 : lib.numpy_types.int8, 
   np.int16 : lib.numpy_types.int16, 
   np.int32 : lib.numpy_types.int32, 
   np.int64 : lib.numpy_types.int64, 
