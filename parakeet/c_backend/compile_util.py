@@ -44,6 +44,8 @@ config_vars = distutils.sysconfig.get_config_vars()
 
 
 def get_compiler(_cache = {}):
+  if config.compiler_path:
+    return config.compiler_path
   if config.pure_c in _cache:
     return _cache[config.pure_c]
   for compiler in [ ('gcc' if config.pure_c else 'g++'), 'icc', 'clang']:

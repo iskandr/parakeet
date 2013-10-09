@@ -44,6 +44,9 @@ class NegativeIndexElim(RangeTransform):
       assert len(index_ranges) == len(index_elts)
       shape = self.shape(expr.value)
       shape_elts = self.tuple_elts(shape)
+      assert len(shape_elts) == len(index_elts), \
+        "Mismatch between number of indices %d and rank %d in %s"  % \
+        (len(index_elts), len(shape_elts), expr)
       for i, (index_range, index_elt) in enumerate(zip(index_ranges, index_elts)):
         if isinstance(index_range, Interval):
           if self.always_negative(index_range, inclusive=False):
@@ -52,18 +55,27 @@ class NegativeIndexElim(RangeTransform):
           start = self.attr(index_elt, 'start', temp = False)
           stop = self.attr(index_elt, 'stop', temp = False)
           step = self.attr(index_elt, 'step', temp = False)
-          if self.is_none(start): 
-            start = zero_i64 
-          elif self.always_negative(index_range.start, inclusive=False):
-            start = self.add(shape_elts[i], start)
+          shape_elt = shape_elts[i]
           
-          if self.is_none(stop):
-            stop = shape_elts[i]
-          elif self.always_negative(index_range.stop, inclusive=False):
-            stop = self.add(shape_elts[i], stop)
+          if self.always_negative(index_range.start, inclusive=False):
+            start = self.add(shape_elt, start)
           
-          assert not self.always_negative(index_range.step, inclusive=False), \
-            "Negative step in slice not currently supported"
+          if self.always_negative(index_range.stop, inclusive=False):
+            stop = self.add(shape_elt, stop)
+          
+          
+          
+          if self.always_negative(index_range.step):
+            # if it's a negative step then (stupidly) there's
+            # no valid stop value
+            if self.is_none(start):
+              start = self.sub(shape_elt, one_i64)
+          else:
+            # step is positive 
+            if self.is_none(start):
+              start = zero_i64
+            if self.is_none(stop):
+              stop = shape_elt
           index_elts[i] = Slice(start=start, stop=stop, step = step, type = index_elt.type)
       if len(index_elts) > 1:
         index = self.tuple(index_elts)
