@@ -78,13 +78,21 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
 
+
+
 How does it work? 
 ====
 Your untyped function gets used as a template from which multiple *type specializations* are generated 
 (for each distinct set of input types). 
 These typed functions are then churned through many optimizations before finally getting translated into native code. 
-For more information about the project you can watch the [Parakeet presentation](https://vimeo.com/73895275) from 
-this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year or contact the [Alex Rubinsteyn](http://www.rubinsteyn.com).
+
+More information
+===
+
+  * Read more about Parakeet on the [project website](http://www.parakeetpython.com) 
+  * Ask questions on the [discussion group](http://groups.google.com/forum/#!forum/parakeet-python)
+  * Watch the [Parakeet presentation](https://vimeo.com/73895275) from this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year 
+  * Contact the [main developer](http://www.rubinsteyn.com) directly
 
 Backends
 ===
