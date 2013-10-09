@@ -12,6 +12,7 @@ from adverbs import imap
 from numpy_types import float64
 from lib_helpers import _get_type, _get_shape    
 from parakeet.ndtypes.core_types import combine_type_list
+from parakeet.syntax.helpers import make_tuple
 
 @macro
 def arange(n, *xs, **kwds):
@@ -91,8 +92,9 @@ def ones(shape, dtype = float64):
     t = make_array_type(elt_type, ndims)
     return ConstArray(shape = shape, value = one, type = t)
 
-@jit
+@jit  
 def ones_like(x, dtype = None):
+
   if dtype is None:
     dtype = x.dtype
   return ones(x.shape, dtype)

@@ -1017,7 +1017,7 @@ def translate_function_value(fn):
   assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
   assert fn not in _currently_processing, \
     "Recursion detected through function value %s" % (fn,)
-  _currently_processing.add(fn)
+
   original_fn = fn
   
   if isinstance(fn, Prim):
@@ -1028,20 +1028,16 @@ def translate_function_value(fn):
     fundef = build_untyped_expr_fn(fn)  
   elif isinstance(fn, macro):
     fundef = fn.as_fn()
+    
   else:
-     
-      
     # if it's not a macro or some sort of internal expression
     # then we're really dealing with a Python function
     # so get to work pulling apart its AST and translating
     # it into Parakeet IR
-    try:
-      assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc), \
-        "Unsupported primitive: %s" % (fn,) 
-    except:
-      _currently_processing.remove(fn)
-      raise
-     
+    assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc, types.MethodType), \
+      "Unsupported function: %s" % (fn,) 
+    
+    _currently_processing.add(fn) 
     try:
       assert hasattr(fn, 'func_globals'), "Expected function to have globals: %s" % fn
       assert hasattr(fn, 'func_closure'), "Expected function to have closure cells: %s" % fn
@@ -1069,8 +1065,10 @@ def translate_function_value(fn):
       raise 
     if config.print_untyped_function:
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
-                
-  _known_python_functions[original_fn] = fundef 
+  
+    _currently_processing.remove(fn)              
+    _known_python_functions[original_fn] = fundef
+     
   _known_python_functions[fn] = fundef 
-  _currently_processing.remove(original_fn)
+  
   return fundef 
