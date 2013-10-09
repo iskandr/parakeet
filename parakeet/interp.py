@@ -125,6 +125,7 @@ def eval_fn(fn, actuals):
       dtype = expr.elt_type.dtype
       return  np.ndarray(shape = shape, dtype = dtype) 
     
+    
     def expr_ArrayView():
 
       data = eval_expr(expr.data)
@@ -155,6 +156,24 @@ def eval_fn(fn, actuals):
       elt_values = map(eval_expr, expr.elts)
       return np.array(elt_values)
 
+    def expr_ConstArray():
+      shape = eval_expr(expr.shape)
+      value = eval_expr(expr.value)
+      return np.ones(shape, dtype = expr.value.type.elt_type.dtype) * value 
+    
+    def expr_ConstArrayLike():
+      array = eval_expr(expr.array)
+      value = eval_expr(expr.value)
+      return np.ones_like(array, dtype = expr.value.type.elt_type.dtype) * value 
+    
+    def expr_Shape():
+      return np.shape(eval_expr(expr.array))
+    
+    def expr_Reshape():
+      array = eval_expr(expr.array)
+      shape = eval_expr(expr.shape)
+      return array.reshape(shape)
+    
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)

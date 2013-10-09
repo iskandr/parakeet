@@ -9,7 +9,7 @@ import shape_from_type
 from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown, 
                    ConstSlice, Struct, AnyScalar, Add, Mult, Div, Sub, 
                    any_scalar, unknown_value, const, any_value, combine_list, 
-                   increase_rank, make_shape, is_zero, is_one, Ptr, 
+                   increase_rank, make_shape, is_zero, is_one, Ptr,    
                    ) 
 from parakeet.syntax.adverbs import IndexReduce
 from parakeet.syntax.adverb_helpers import max_rank_arg
@@ -356,15 +356,46 @@ class ShapeInference(SyntaxVisitor):
   def shape_from_tuple(self, expr):  
     shape_tuple = self.visit_expr(expr)
     if shape_tuple.__class__ is Tuple:
-      return Shape(tuple(shape_tuple.elts))
+      return make_shape(tuple(shape_tuple.elts))
+    elif shape_tuple.__class__ is Const:
+      return make_shape((shape_tuple.value,))
     else:
-      return Shape( (any_scalar,) * expr.type.rank)
+      return make_shape( (any_scalar,) * expr.type.rank)
 
+  def tuple_from_shape(self, expr):
+    shape = self.visit_expr(expr)
+    if shape.__class__ is Shape:
+      return Tuple(tuple(shape.dims))
+    elif shape.__class__ is Const:
+      return Tuple( (shape.value,) )
+    else:
+      return Tuple( (any_scalar,) * expr.type.rank) 
+   
   def visit_ArrayView(self, expr):
     return self.shape_from_tuple(expr.shape)
   
   def visit_Reshape(self, expr):
     return self.shape_from_tuple(expr.shape)
+  
+  def visit_Shape(self, expr):
+    return self.tuple_from_shape(expr.array)
+  
+  def visit_AllocArray(self, expr):
+    return self.shape_from_tuple(expr.shape)
+    
+  def visit_Array(self, expr):
+    elts = self.visit_expr_list(expr.elts)
+    elt = combine_list(elts)
+    n = len(elts)
+    res = increase_rank(elt, 0, const(n))
+    return res
+
+  
+  def visit_ConstArray(self, expr):
+    return self.shape_from_tuple(expr.shape)
+  
+  def visit_ConstArrayLike(self, expr):
+    return self.visit_expr(expr.array)
   
   def ravel(self, shape):        
     if isinstance(shape, Shape):
@@ -500,17 +531,6 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_Tuple(self, expr):
     return Tuple(self.visit_expr_list(expr.elts))
-
-  def visit_AllocArray(self, expr):
-    shape_tuple = self.visit_expr(expr.shape)
-    return make_shape(shape_tuple.elts)
-
-  def visit_Array(self, expr):
-    elts = self.visit_expr_list(expr.elts)
-    elt = combine_list(elts)
-    n = len(elts)
-    res = increase_rank(elt, 0, const(n))
-    return res
 
   def visit_Call(self, expr):
     fn = self.visit_expr(expr.fn)

@@ -18,6 +18,7 @@ from .. syntax.helpers import get_types, slice_none_t, const_int, one
 import subst
 import transform 
 from transform import Transform
+from parakeet.syntax.adverbs import IndexAdverb, IndexAccumulative
 
 # classes of expressions known to have no side effects
 # and to be unaffected by changes in mutable state as long
@@ -392,6 +393,47 @@ class Simplify(Transform):
     expr.fn = self.transform_expr(expr.fn)
     expr.axis = self.transform_if_expr(expr.axis)
     return expr 
+  
+  def transform_shape(self, expr):
+    if isinstance(expr, Tuple):
+      expr.elts = self.transform_simple_exprs(expr.elts)
+      return expr 
+    else:
+      return self.transform_simple_expr(expr)
+  
+  def transform_ParFor(self, stmt):
+    stmt.bounds = self.transform_shape(stmt.bounds)
+    stmt.fn = self.transform_expr(stmt.fn)
+    return stmt
+  
+  def transform_IndexMap(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.shape = self.transform_shape(expr.shape)
+    return expr 
+  
+  def transform_IndexReduce(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.init = self.transform_if_expr(expr.init)
+    expr.shape = self.transform_shape(expr.shape)
+    return expr 
+  
+  def transform_IndexScan(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.emit = self.transform_expr(expr.emit)
+    expr.init = self.transform_if_expr(expr.init)
+    expr.shape = self.transform_shape(expr.shape)
+    return expr 
+  
+  def transform_ConstArray(self, expr):
+    expr.shape = self.transform_shape(expr.shape)
+    expr.value = self.transform_simple_expr(expr.value)
+    return expr
+  
+  def transform_ConstArrayLike(self, expr):
+    expr.array = self.transform_simple_expr(expr.array)
+    expr.value = self.transform_simple_expr(expr.value)
   
   def transform_Reduce(self, expr):
     

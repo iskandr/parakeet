@@ -51,8 +51,8 @@ class LowerArrayOperators(Transform):
     assert False, "Reshape not implemented"
     
   def transform_Shape(self, expr):
-    return  self.shape(self.transform_expr(expr.array))
-    
+
+    return self.shape(self.transform_expr(expr.array))
     
   def transform_Strides(self, expr):
     return self.strides(self.transform_expr(expr.array))
