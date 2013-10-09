@@ -396,7 +396,7 @@ class Simplify(Transform):
   
   def transform_shape(self, expr):
     if isinstance(expr, Tuple):
-      expr.elts = self.transform_simple_exprs(expr.elts)
+      expr.elts = tuple(self.transform_simple_exprs(expr.elts))
       return expr 
     else:
       return self.transform_simple_expr(expr)
@@ -412,16 +412,16 @@ class Simplify(Transform):
     return expr 
   
   def transform_IndexReduce(self, expr):
-    expr.fn = self.transform_expr(expr.fn)
+    expr.fn = self.transform_if_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     expr.init = self.transform_if_expr(expr.init)
     expr.shape = self.transform_shape(expr.shape)
     return expr 
   
   def transform_IndexScan(self, expr):
-    expr.fn = self.transform_expr(expr.fn)
+    expr.fn = self.transform_if_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
-    expr.emit = self.transform_expr(expr.emit)
+    expr.emit = self.transform_if_expr(expr.emit)
     expr.init = self.transform_if_expr(expr.init)
     expr.shape = self.transform_shape(expr.shape)
     return expr 

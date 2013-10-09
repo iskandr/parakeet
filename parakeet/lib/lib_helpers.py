@@ -19,13 +19,14 @@ def _get_type(dtype):
     dtype = dtype.f 
   
   while isinstance(dtype, Expr):
+
     if isinstance(dtype, TypeValue):
       dtype = dtype.type_value  
     elif isinstance(dtype.type, TypeValueT):
       dtype = dtype.type
     elif isinstance(dtype.type, ClosureT):
       dtype = dtype.type.fn
-    if isinstance(dtype, Closure):
+    elif isinstance(dtype, Closure):
       dtype = dtype.fn
     elif isinstance(dtype, UntypedFn):
       if len(dtype.body) == 1:
@@ -41,13 +42,15 @@ def _get_type(dtype):
     elif isinstance(dtype.type, (ClosureT, FnT)):
       dtype = dtype.type.fn
     else:
-      assert False, "Don't know how to turn %s into Parakeet type" % dtype  
+      assert False, "Don't know how to turn %s : %s into Parakeet type" % (dtype, dtype.type)  
   
+  print dtype, type(dtype)
   if isinstance(dtype, Type):
     if isinstance(dtype, TypeValueT):
       return dtype.type
     else:
       return dtype 
+    
   elif isinstance(dtype, (np.dtype, type)):
     return type_conv.equiv_type(dtype)
   elif isinstance(dtype, str):

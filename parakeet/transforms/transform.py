@@ -70,8 +70,8 @@ class Transform(Builder):
     return expr
 
   def find_method(self, expr, prefix = "transform_"):
-    method_name = prefix + expr.node_type()
-
+    assert expr, "Expected expression but got %s" % expr 
+    method_name = prefix + expr.__class__.__name__
     if hasattr(self, method_name):
       return getattr(self, method_name)
     else:

@@ -1,7 +1,7 @@
 
 
 from .. import ndtypes 
-from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t, TupleT 
+from .. ndtypes import ArrayT, Int64, elt_type, empty_tuple_t, TupleT, TypeValueT 
 from .. frontend import macro, jit, typed_macro 
 from .. syntax import (Attribute, Tuple, Ravel, Shape, Reshape, TypeValue, Transpose, Const)
 from .. syntax.helpers import const_int, zero_i64 
@@ -22,7 +22,8 @@ def reshape(x):
 
 @typed_macro 
 def get_elt_type(x):
-  return TypeValue(ndtypes.elt_type(x.type))
+  elt_t = ndtypes.elt_type(x.type)
+  return TypeValue(elt_t, type = TypeValueT(elt_t))
   
 @typed_macro
 def itemsize(xt):

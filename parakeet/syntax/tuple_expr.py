@@ -30,7 +30,7 @@ class Tuple(SeqExpr):
     return self.elts
 
   def __hash__(self):
-    return hash(self.elts)
+    return hash(tuple(self.elts))
 
 
 class TupleProj(SeqExpr):
