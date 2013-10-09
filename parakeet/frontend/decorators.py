@@ -23,7 +23,6 @@ class jit(object):
 class macro(object):
   def __init__(self, f, static_names = set([]), call_from_python = None):
     self.f = f
-    self.varnames = self.f.func_code.co_varnames 
     self.n_args = self.f.func_code.co_argcount
     self.defaults = self.f.func_defaults 
     self.static_names = static_names
@@ -31,28 +30,18 @@ class macro(object):
     self.call_from_python = call_from_python
     if hasattr(self.f, "__name__"):
       self.name = f.__name__
+    elif hasattr(self.f, "name"):
+      self.name = self.f.name 
     else:
-      self.name = "f"
+      self.name = "macro"
 
   
   _macro_wrapper_cache = {}
-  def _create_wrapper(self, n_pos = None, default_values = None):
-      
-    if n_pos is None: 
-      n_pos = self.n_args 
-      
-    if default_values is None:
-      varnames = self.varnames[:self.n_args]
-      n_default = 0 if not self.defaults else len(self.defaults)
-      assert len(varnames) >= n_default
-      default_keys = varnames[:-n_default]
-      if default_keys and self.defaults:
-        default_values = dict(zip(default_keys, self.defaults))
-      else:
-        default_values = {}
-    
-    defaults_seq = tuple(default_values.items())
-    key = (n_pos, defaults_seq)
+  def _create_wrapper(self, n_pos, static_pairs, dynamic_keywords):
+  
+  
+    static_pairs = tuple(static_pairs)
+    key = (n_pos, static_pairs, dynamic_keywords)
     if key in self.wrappers:
       return self.wrappers[key]
     
@@ -61,39 +50,46 @@ class macro(object):
     keyword_vars = {}
     
     
-    
-    from ast_conversion import value_to_syntax
-
     for i in xrange(n_pos):
-      if i <  self.f.func_code.co_varnames: 
+      if i <  self.f.func_code.co_argcount: 
         raw_name = self.f.func_code.co_varnames[i] 
       else:
         raw_name = "input_%d" % i
       local_name = names.fresh(raw_name)
-      if raw_name in default_values:
-        default_value = default_values[raw_name]
-        if not isinstance(default_value, Expr):
-          v = value_to_syntax(default_value)
-        else:
-          v = default_value
-        args.add_positional(local_name, raw_name)
-        args.defaults[raw_name] = v
-        keyword_vars[raw_name] = Var(local_name)  
-      else:
-        args.add_positional(local_name)
-        pos_vars.append(Var(local_name))
+      args.add_positional(local_name)
+      pos_vars.append(Var(local_name))
+  
+    for visible_name in dynamic_keywords:
+      local_name = names.fresh(visible_name)
+      args.add_positional(local_name, visible_name)
+      keyword_vars[visible_name] = Var(local_name)
+
+    for (static_name, value) in static_pairs:
+      if isinstance(value, Expr):
+        assert isinstance(value, Const)
+        keyword_vars[static_name] = value
+      elif value is not None:
+        assert is_python_constant(value), \
+            "Unexpected type for static/staged value: %s : %s" % \
+            (value, type(value))
+        keyword_vars[static_name] = const(value)
 
     result_expr = self.f(*pos_vars, **keyword_vars)
     body = [Return(result_expr)]
-    wrapper_name = "%s_wrapper" % self.name
+    wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
+                                         len(dynamic_keywords))
     wrapper_name = names.fresh(wrapper_name)
     untyped = UntypedFn(name = wrapper_name, args = args, body = body)
     self.wrappers[key] = untyped
+    print key, untyped 
     return untyped 
   
   def as_fn(self):
-    return self._create_wrapper()
-        
+    assert False, "Materializing macro %s as a function not supported" % self.name 
+    #n_default = 0 if not self.defaults else len(self.defaults)
+    #assert n_default == 0
+    #return self._create_wrapper(self.n_args, [], ())
+    
   def __call__(self, *args, **kwargs):
     if self.call_from_python is not None:
       return self.call_from_python(*args, **kwargs)
@@ -103,8 +99,20 @@ class macro(object):
       del kwargs['_backend']
     else:
       backend_name = None
-    untyped = self._create_wrapper()
-    return run_untyped_fn(untyped, args, kwargs, backend = backend_name)
+
+    n_pos = len(args)
+    keywords = kwargs.keys()
+
+    static_pairs = ((k,kwargs.get(k)) for k in self.static_names)
+    dynamic_keywords = tuple(k for k in keywords
+                               if k not in self.static_names)
+
+
+    untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
+    dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
+    
+    
+    return run_untyped_fn(untyped, args, dynamic_kwargs, backend = backend_name)
     
 
   def transform(self, args, kwargs = {}):

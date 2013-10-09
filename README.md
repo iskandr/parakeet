@@ -14,28 +14,28 @@ import numpy as np
 from parakeet import jit 
 
 x = np.array([1,2,3])
-y = np.tanh(x) * alpha + beta
+y = np.tanh(x * alpha) + beta
    
 @jit
 def fast(x, alpha = 0.5, beta = 0.3):
-  return np.tanh(x) * alpha + beta 
+  return np.tanh(x * alpha) + beta 
    
 @jit 
 def loopy(x, alpha = 0.5, beta = 0.3):
   y = np.empty_like(x)
   for i in xrange(len(x)):
-    y[i] = np.tanh(x[i] * alpha + beta)
+    y[i] = np.tanh(x[i] * alpha) + beta
   return y
      
   
 @jit
 def comprehension(x, alpha = 0.5, beta = 0.3):
-  return np.array([np.tanh(xi*alpha + beta) for xi in x])
+  return np.array([np.tanh(xi*alpha) + beta for xi in x])
   
 
-assert fast(x) == y
-assert loopy(x) == y
-assert comprehension(x) == y
+assert np.allclose(fast(x), y)
+assert np.allclose(loopy(x), y)
+assert np.allclose(comprehension(x), y)
 
 ```
 
@@ -60,6 +60,7 @@ Parakeet is written for Python 2.7 (sorry internet) and depends on:
 Optional (if using the LLVM backend):
 
 * [llvmpy](http://www.llvmpy.org/#quickstart)
+
 
 
 
