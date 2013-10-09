@@ -63,23 +63,6 @@ Optional (if using the LLVM backend):
 
 
 
-
-Supported language features
-====
-
-Parakeet cannot accelerate arbitrary Python code, it only supports a limited subset of the language:
-
-  * Scalar operations (i.e. addition, multiplication, etc...)
-  * Control flow (if-statements, loops, etc...)
-  * Tuples
-  * Slices
-  * NumPy arrays (and some NumPy library functions) 
-  * List literals (interpreted as array construction)
-  * List comprehensions (interpreted as array comprehensions)
-  * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
-
-
-
 How does it work? 
 ====
 Your untyped function gets used as a template from which multiple *type specializations* are generated 
@@ -93,6 +76,25 @@ More information
   * Ask questions on the [discussion group](http://groups.google.com/forum/#!forum/parakeet-python)
   * Watch the [Parakeet presentation](https://vimeo.com/73895275) from this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year 
   * Contact the [main developer](http://www.rubinsteyn.com) directly
+
+
+
+Supported language features
+====
+
+Parakeet cannot accelerate arbitrary Python code, it only supports a limited subset of the language:
+
+  * Scalar operations (i.e. "x + 3 * y")
+  * Control flow (if-statements, loops, etc...)
+  * Nested functions and lambdas
+  * Tuples
+  * Slices
+  * NumPy array expressions (i.e. "x[1:, :] + 2 * y[:-1, ::2]")
+  * NumPy array constructors (i.e. np.ones, np.empty, etc..)
+  * NumPy ufuncs (i.e. np.sin, np.exp, etc..)
+  * List literals (interpreted as array construction)
+  * List comprehensions (interpreted as array comprehensions)
+  * Parakeet's "adverbs" (higher order array operations like parakeet.map, parakeet.reduce)
 
 Backends
 ===
