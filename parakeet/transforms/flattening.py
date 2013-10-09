@@ -666,6 +666,7 @@ class Flatten(Transform):
     return stmts
     
   def pre_apply(self, old_fn, _cache = {}):
+
     key = old_fn.cache_key
     if key  in _cache:
       return _cache[key]

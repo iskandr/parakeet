@@ -3,8 +3,9 @@
 ##########################
 fast_math = True
 use_openmp = False 
-# overload the defaults 
+# overload the default compiler path  
 compiler_path = None
+
 ##########################
 # Insert Debugging Code  #
 ##########################

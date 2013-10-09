@@ -9,6 +9,7 @@ from transform import Transform
 
 
 class LowerSlices(Transform):  
+
   def make_setidx_fn(self, lhs_array_type, 
                              rhs_value_type, 
                              fixed_positions, 
@@ -29,6 +30,7 @@ class LowerSlices(Transform):
       slice_start_types + slice_step_types + [parfor_idx_t]
     name = "setidx_array%d_%s_par%d" % \
       (lhs_array_type.rank, lhs_array_type.elt_type, n_parfor_indices)
+      
     #build_fn
     # Inputs:  
     #  - input_types
@@ -159,11 +161,13 @@ class LowerSlices(Transform):
     n_indices = len(scalar_indices) + len(slices)
     fixed_count = 0
     slice_count = 0
+
     for i in xrange(n_indices):
       if fixed_count < len(scalar_index_positions) and scalar_index_positions[fixed_count] == i:
         idx = scalar_indices[fixed_count]
         fixed_count += 1
         offset = self.add(offset, self.mul(idx, stride_elts[i]), name = "offset")
+
       else:
         assert slice_positions[slice_count] == i
         (start, stop, step) = slices[slice_count]
@@ -174,6 +178,7 @@ class LowerSlices(Transform):
         new_shape.append(shape_elt)
         stride_elt = self.mul(stride_elts[i], step, name = "new_stride")
         new_strides.append(stride_elt)
+   
     size = self.prod(new_shape)
     new_rank = len(slices)
     assert len(new_shape) == new_rank

@@ -21,6 +21,7 @@ setup(
     license="BSD",
     version=parakeet.version.__version__,
     url=parakeet.version.__website__, 
+    download_url = 'https://github.com/iskandr/parakeet/releases', 
     packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
     package_dir={ 
                   'parakeet.benchmarks' : './benchmarks', 

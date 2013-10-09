@@ -5,7 +5,7 @@ from .. import prims, syntax
 from .. analysis.collect_vars import collect_var_names
 from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
-from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT
+from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType 
 
 from .. syntax import (AllocArray, Assign, ExprStmt, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
@@ -14,7 +14,7 @@ from .. syntax import (AllocArray, Assign, ExprStmt,
                        Adverb, Accumulative, HasEmit, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
 from .. syntax.helpers import collect_constants, is_one, is_zero, is_false, is_true, all_constants
-from .. syntax.helpers import get_types, slice_none_t, const_int, one 
+from .. syntax.helpers import get_types, slice_none_t, const_int, one, none 
 import subst
 import transform 
 from transform import Transform
@@ -104,7 +104,9 @@ class Simplify(Transform):
                             Tuple, TupleProj, 
                             Cast, PrimCall, 
                             TypedFn, UntypedFn, 
-                            ArrayView])
+                            ArrayView, 
+                            Slice, 
+                            ])
   
   def immutable(self, expr):
     klass = expr.__class__ 
@@ -130,8 +132,13 @@ class Simplify(Transform):
 
   def transform_expr(self, expr):
     if self.is_simple(expr):
-      return Transform.transform_expr(self, expr)
+      if expr.type == NoneType:
+        return none 
+      else:
+        return Transform.transform_expr(self, expr)
     
+    
+      
     stored = self.available_expressions.get(expr)
     if stored is not None: 
       return stored
@@ -174,6 +181,7 @@ class Simplify(Transform):
 
   def transform_Attribute(self, expr):
     v = self.transform_expr(expr.value)
+    
     if v.__class__ is Var and v.name in self.bindings:
       stored_v = self.bindings[v.name]
       c = stored_v.__class__
@@ -189,6 +197,14 @@ class Simplify(Transform):
       elif c is AllocArray:
         if expr.name == 'shape':
           return self.transform_expr(stored_v.shape)
+      elif c is Slice:
+        if expr.name == "start":
+          return self.transform_expr(stored_v.start)
+        elif expr.name == "stop":
+          return self.transform_expr(stored_v.stop)
+        else:
+          assert expr.name == "step", "Unexpected attribute for slice: %s" % expr.name  
+          return self.transform_expr(stored_v.step)
     if v.__class__ is Struct:
       idx = v.type.field_pos(expr.name)
       return v.args[idx]
@@ -280,6 +296,12 @@ class Simplify(Transform):
   def transform_Array(self, expr):
     expr.elts = tuple(self.transform_simple_exprs(expr.elts))
     return expr
+  
+  def transform_Slice(self, expr):
+    expr.start = self.transform_simple_expr(expr.start)
+    expr.stop = self.transform_simple_expr(expr.stop)
+    expr.step = self.transform_simple_expr(expr.step)
+    return expr 
 
   def transform_Index(self, expr):
     expr.value = self.transform_expr(expr.value)
@@ -345,7 +367,16 @@ class Simplify(Transform):
         return y
       elif is_zero(y):
         return x
-      
+      if y.__class__ is Const and y.value < 0:
+        expr.prim = prims.subtract
+        y.value *= -1
+        return expr 
+      elif x.__class__ is Const and x.value < 0:
+        expr.prim = prims.subtract
+        x.value *= -1 
+        expr.args = [y, x]
+        return expr 
+        
     elif prim == prims.subtract:
       x,y = args 
       if is_zero(x):

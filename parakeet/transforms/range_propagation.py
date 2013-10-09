@@ -18,8 +18,8 @@ class RangePropagation(RangeTransform):
     p = expr.prim 
     result = None 
     if isinstance(p, prims.Cmp):
-      x,y = expr.args
-      x, y = self.get(x), self.get(y)
+      argx, argy = expr.args
+      x, y = self.get(argx), self.get(argy)
       if x is not None and y is not None:        
         if p == prims.equal:
           result = self.cmp_eq(x,y)
@@ -31,6 +31,8 @@ class RangePropagation(RangeTransform):
           result = self.cmp_lt(y, x)
         elif p == prims.greater_equal:
           result = self.cmp_lte(y, x)
+     
+          
     if result is None:
       return expr 
     else:

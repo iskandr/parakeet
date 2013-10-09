@@ -31,7 +31,7 @@ def test_negative_start_1d_vec():
     expect(negative_start_1d, [vec], vec[-2:])
 
 def test_negative_start_1d_mat():
-    expect(negative_start_2d, [mat], mat[-2:])
+    expect(negative_start_1d, [mat], mat[-2:])
 
 def negative_start_2d(x):
     return x[-2:, -3:]
@@ -46,13 +46,13 @@ def test_negative_step_1d_vec():
     expect(negative_step_1d, [vec], vec[::-2])
 
 def test_negative_step_1d_mat():
-    expect(negative_step_2d, [mat], mat[::-2])
+    expect(negative_step_1d, [mat], mat[::-2])
 
 def negative_step_2d(x):
     return x[::-2, ::-3]
 
 def test_negative_step_2d():
-    expect(negative_step_2d, [vec], mat[::-2, ::-3])
+    expect(negative_step_2d, [mat], mat[::-2, ::-3])
 
 if __name__ == "__main__":
     run_local_tests()

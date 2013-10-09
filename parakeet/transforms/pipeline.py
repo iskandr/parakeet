@@ -82,7 +82,7 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim,
                                     NegativeIndexElim,
-                                    LowerSlices, 
+                                    LowerSlices,
                                     LowerArrayOperators,  
                                     symbolic_range_propagation,
                                  ], 

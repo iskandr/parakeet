@@ -87,7 +87,7 @@ class macro(object):
             (value, type(value))
         keyword_vars[static_name] = const(value)
 
-    print "Passing in ", pos_vars, keyword_vars
+
     result_expr = self.f(*pos_vars, **keyword_vars)
     body = [Return(result_expr)]
     wrapper_name = "%s_wrapper_%d_%d" % (self.name, n_pos,
@@ -95,7 +95,6 @@ class macro(object):
     wrapper_name = names.fresh(wrapper_name)
     untyped = UntypedFn(name = wrapper_name, args = args, body = body)
     self.wrappers[key] = untyped
-    print "Generated", untyped 
     return untyped 
   
   def as_fn(self):

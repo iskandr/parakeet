@@ -1,3 +1,9 @@
+"""
+Authors: Kurt W. Smith, Serge Guelton
+License: MIT
+Source: https://github.com/numfocus/python-benchmarks/blob/master/julia/julia_python.py
+"""
+
 import numpy as np 
 from parakeet import testing_helpers
 

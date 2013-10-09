@@ -3,7 +3,7 @@ from treelike import NestedBlocks
 from .. import syntax, names 
 from ..ndtypes import (make_array_type, make_tuple_type, 
                        Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT, 
-                       ArrayT, FnT, ClosureT) 
+                       ArrayT, FnT, ClosureT, NoneType) 
 from ..syntax import (Assign, Return, If,    
                       ArrayView, Attribute, Cast, Const, Closure,  Comment, Expr, 
                       Index, PrimCall,   Struct, Slice, Tuple, TupleProj, TypedFn, Var, 
@@ -11,7 +11,7 @@ from ..syntax import (Assign, Return, If,
 from ..syntax.helpers import (wrap_if_constant, 
                               const_bool, const_int, const_float, get_types,  
                               one_i64, zero_i64, 
-                              zero)
+                              zero, none)
 
 class CoreBuilder(object):
   none = syntax.none
@@ -210,7 +210,10 @@ class CoreBuilder(object):
       assert isinstance(obj_t, StructT), \
         "Can't get attribute '%s' from type %s" % (field, obj_t)
       field_t = obj.type.field_type(field)
-      result = Attribute(obj, field, type = field_t)
+      if field_t == NoneType:
+        result = none 
+      else:
+        result = Attribute(obj, field, type = field_t)
     if name:
       return self.assign_name(result, name)
     else:

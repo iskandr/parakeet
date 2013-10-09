@@ -1,3 +1,10 @@
+"""
+Authors: Federico Vaggi
+License: MIT
+Source: https://bitbucket.org/FedericoV/numpy-tip-complex-modeling/
+
+Source: https://github.com/numfocus/python-benchmarks/blob/master/arc_distance/arc_distance_python.py
+"""
 
 from parakeet import jit, testing_helpers
 import numpy as np
@@ -52,7 +59,7 @@ def arc_distance_tile(a, b):
 
     return distance_matrix
 
-def test_arc_distance_tile(a,b):
+def test_arc_distance_tile():
   testing_helpers.expect(arc_distance_tile, [a,b], arc_distance_tile(a,b))
 
 

@@ -40,6 +40,7 @@ def eval(fn, actuals):
    
 def eval_fn(fn, actuals):
   
+
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -118,7 +119,9 @@ def eval_fn(fn, actuals):
       return arr
       
     def expr_AllocArray():
+
       shape = eval_expr(expr.shape)
+
       assert isinstance(shape, tuple), "Expected tuple, got %s" % (shape,)
       assert isinstance(expr.elt_type, ScalarT), \
           "Expected scalar element type for AllocArray, got %s" % (expr.elt_type,)
