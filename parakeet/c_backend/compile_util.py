@@ -48,7 +48,10 @@ def get_compiler(_cache = {}):
     return config.compiler_path
   if config.pure_c in _cache:
     return _cache[config.pure_c]
-  for compiler in [ ('gcc' if config.pure_c else 'g++'), 'icc', 'clang']:
+  for compiler in ['mingw32-gcc', 
+                   ('gcc' if config.pure_c else 'g++'), 
+                   'icc', 
+                   'clang']:
     path = distutils.spawn.find_executable(compiler)
     if path:
       _cache[config.pure_c] = path
