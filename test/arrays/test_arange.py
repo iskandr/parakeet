@@ -4,9 +4,7 @@ import numpy as np
 from parakeet import jit, config 
 from parakeet.testing_helpers import expect, run_local_tests 
 
-config.print_untyped_function = True 
-config.print_specialized_function = True 
-config.print_loopy_function = True 
+
 
 @jit 
 def arange1(a):
