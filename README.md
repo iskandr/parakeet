@@ -9,7 +9,6 @@ Parakeet may be able to significantly speed up your code.
 To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 
 ```python 
-
 import numpy as np 
 from parakeet import jit 
 
@@ -27,12 +26,10 @@ def loopy(x, alpha = 0.5, beta = 0.3):
     y[i] = np.tanh(x[i] * alpha) + beta
   return y
      
-  
 @jit
 def comprehension(x, alpha = 0.5, beta = 0.3):
   return np.array([np.tanh(xi*alpha) + beta for xi in x])
   
-
 assert np.allclose(fast(x), y)
 assert np.allclose(loopy(x), y)
 assert np.allclose(comprehension(x), y)
