@@ -6,8 +6,10 @@ https://gist.github.com/rokroskar/bdcf6c6b210ff0efc738#file-gistfile1-txt-L55
  
 import numpy as np
 from numpy import int32
-from parakeet import testing_helpers 
- 
+from parakeet import testing_helpers, config 
+
+config.print_loopy_function = True
+config.testing_find_broken_transform = True  
  
 def kernel_func(d, h) : 
     if d < 1 : 
@@ -46,12 +48,12 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
         qt = qts[i] * mass[i] / rhos[i]
 
         # is the particle in the frame?
-        if ((x > xmin-2*h) & (x < xmax+2*h) & 
-            (y > ymin-2*h) & (y < ymax+2*h) & 
+        if ((x > xmin-2*h) and (x < xmax+2*h) and 
+            (y > ymin-2*h) and (y < ymax+2*h) and 
             (np.abs(z-zplane) < 2*h)) : 
         
                     
-            if (MAX_D_OVER_H*h/dx < 1 ) & (MAX_D_OVER_H*h/dy < 1) : 
+            if (MAX_D_OVER_H*h/dx < 1 ) and (MAX_D_OVER_H*h/dy < 1) : 
                 # pixel coordinates 
                 xpos = physical_to_pixel(x,xmin,dx)
                 ypos = physical_to_pixel(y,ymin,dy)
@@ -62,7 +64,7 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
  
                 dxpix, dypix, dzpix = [x-xpixel,y-ypixel,z-zpixel]
                 d = distance(dxpix,dypix,dzpix)
-                if (xpos > 0) & (xpos < nx) & (ypos > 0) & (ypos < ny) & (d/h < 2) : 
+                if (xpos > 0) and (xpos < nx) and (ypos > 0) and (ypos < ny) and (d/h < 2) : 
                     kernel_val = kernel_vals[int(d/(0.01*h))]/(h*h*h)
                     image[xpos,ypos] += qt*kernel_val
  
@@ -98,7 +100,7 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
  
 def test_image_render() : 
     N = 25
-    x = y = z = hs= qts = mass = rhos = np.random.rand(25)
+    x = y = z = hs= qts = mass = rhos = np.random.rand(N)
     nx=ny=5
     args = (x,y,z,hs,qts,mass,rhos,nx,ny)
     testing_helpers.expect(render_image, args, render_image(*args))

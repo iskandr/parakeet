@@ -1,4 +1,9 @@
+
+import cStringIO
+import os  
+import sys 
 import time
+import tempfile 
 
 class timer(object):
   def __init__(self, name = None, newline = True):
@@ -7,13 +12,35 @@ class timer(object):
     self.newline = newline
     
   def __enter__(self):
+    #self.old_stdout = sys.stdout 
+    #self.old_stderr = sys.stderr 
+    #sys.stdout = cStringIO.StringIO()
+    #sys.stderr = cStringIO.StringIO()
+
+    # redirect stdout to avoid seeing 
+    # all of Numba's noisy LLVM code 
+    
+    stdout_newfile = tempfile.NamedTemporaryFile()
+    stderr_newfile = tempfile.NamedTemporaryFile()
+    self.prev_stdout_fd = os.dup(sys.stdout.fileno())
+    self.prev_stderr_fd = os.dup(sys.stderr.fileno())
+    os.dup2(stdout_newfile.fileno(), sys.stdout.fileno())
+    os.dup2(stderr_newfile.fileno(), sys.stderr.fileno())
+    self.prev_stdout = sys.stdout
+    self.prev_stderr = sys.stderr 
+    
     self.start_t = time.time()
+
   
   def elapsed(self):
     return time.time() - self.start_t
   
   def __exit__(self, exc_type, exc_value, traceback):
     t = self.elapsed()
+    #sys.stdout = self.old_stdout
+    #sys.stderr = self.old_stderr 
+    os.dup2(self.prev_stdout_fd, self.prev_stdout.fileno())
+    os.dup2(self.prev_stderr_fd, self.prev_stderr.fileno())
     if self.newline:
       print 
     s = "Elapsed time: " if self.name is None else "%s : " % self.name 

@@ -466,12 +466,15 @@ def eval_fn(fn, actuals):
 
     elif isinstance(stmt, If):
       cond_val = eval_expr(stmt.cond)
+
       if cond_val:
         eval_block(stmt.true)
+        
         eval_merge_left(stmt.merge)
       else:
         eval_block(stmt.false)
         eval_merge_right(stmt.merge)
+        
 
     elif isinstance(stmt, While):
       eval_merge_left(stmt.merge)
@@ -483,7 +486,9 @@ def eval_fn(fn, actuals):
       start = eval_expr(stmt.start)
       stop = eval_expr(stmt.stop)
       step = eval_expr(stmt.step)
+
       eval_merge_left(stmt.merge)
+
       for i in xrange(start, stop, step):
         env[stmt.var.name] = i
         eval_block(stmt.body)
@@ -504,6 +509,7 @@ def eval_fn(fn, actuals):
       raise RuntimeError("Statement not implemented: %s" % stmt)
 
   def eval_block(stmts):
+
     for stmt in stmts:
       eval_stmt(stmt)
 

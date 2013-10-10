@@ -108,7 +108,17 @@ python_version = distutils.sysconfig.get_python_version()
 
 def get_linker_flags(compiler):
   linker_flags = ['-shared'] + ['-lm']
-  
+  if windows:
+    # crazy stupid hack for exposing Python symbols
+    # even though we're compiling a shared library, why does Windows care?
+    # why does windows even exist? 
+    inc_dir = distutils.sysconfig.get_python_inc()
+    base = os.path.split(inc_dir)[0]
+    lib_dir = base + "\libs"
+    linker_flags.append('-L' + lib_dir)
+    libname = 'python' + distutils.sysconfig.get_python_version().replace('.', '')
+    linker_flags.append('-l' + libname)
+    
   #if mac_os:
   #  linker_flags.append("-headerpad_max_install_names")
   #  linker_flags.append("-undefined dynamic_lookup")
