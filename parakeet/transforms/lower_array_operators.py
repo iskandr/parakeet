@@ -12,6 +12,7 @@ class LowerArrayOperators(Transform):
   into views or copies
   """
 
+
   def transform_Array(self, expr):
     """Array literal"""
     array_t = expr.type
@@ -78,13 +79,15 @@ class LowerArrayOperators(Transform):
     if key in _range_fn_cache:
       fn = _range_fn_cache[key]
     else:
-      input_types = [Int64]
+      input_types = []
       if not start_is_const: input_types.append(start.type)
       if not step_is_const: input_types.append(step.type)
+      input_types.append(Int64)
       fn, builder, input_vars = build_fn(input_types, output_type)
     
       assert len(input_vars) == (3 - start_is_const - step_is_const), \
         "Unexpected # of input vars %d" % len(input_vars)
+        
       counter = 0
       if start_is_const:
         inner_start = start 

@@ -462,7 +462,7 @@ def eval_fn(fn, actuals):
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
       assign(stmt.lhs, value, env)
-      
+
     elif isinstance(stmt, If):
       cond_val = eval_expr(stmt.cond)
 

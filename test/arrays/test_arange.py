@@ -1,8 +1,12 @@
 
 import numpy as np
 
-from parakeet import jit  
+from parakeet import jit, config 
 from parakeet.testing_helpers import expect, run_local_tests 
+
+config.print_untyped_function = True 
+config.print_specialized_function = True 
+config.print_loopy_function = True 
 
 @jit 
 def arange1(a):
@@ -58,12 +62,7 @@ def test_range3_float_reverse():
   c = -1.7
   expect(arange3, [a,b,c], np.arange(a,b,c))  
     
-  
-def test_empty_int():
-  s = (2,2,2,2)
-  x = np.empty(s, dtype=np.uint8)
-  assert x.shape == s
-  assert x.dtype == np.uint8
+
 
 if __name__ == '__main__':
   run_local_tests()

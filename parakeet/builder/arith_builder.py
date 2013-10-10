@@ -110,6 +110,16 @@ class ArithBuilder(CoreBuilder):
     top = self.sub(top, one(top.type))
     return self.div(top, y, name = name)
   
+  
+  def ceil(self, x, name = None):
+    return self.prim(prims.ceil, [x], name)
+  
+  def floor(self, x, name = None):
+    return self.prim(prims.floor, [x], name)
+  
+  def round(self, x, name = None):
+    return self.prim(prims.round, [x], name)
+  
   def lt(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
       return const_bool(False)
