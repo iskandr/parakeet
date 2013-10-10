@@ -6,10 +6,6 @@ https://gist.github.com/rokroskar/bdcf6c6b210ff0efc738#file-gistfile1-txt-L55
  
 import numpy as np
 from numpy import int32
-from parakeet import testing_helpers 
-
-
-
  
 def kernel_func(d, h) : 
     if d < 1 : 
@@ -30,7 +26,7 @@ def pixel_to_physical(xpix,x_start,dx) :
     return dx*xpix+x_start
  
 def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, 
-                 xmin = 0.0, xmax = 1.0, ymin = 0.0, ymax = 1.0): 
+                  xmin = 0.0, xmax = 1.0, ymin = 0.0, ymax = 1.0): 
     MAX_D_OVER_H = 2.0
  
     image = np.zeros((nx,ny))
@@ -97,14 +93,11 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny,
     
  
     return image
- 
- 
-def test_image_render() : 
-    N = 4
-    x = y = z = hs= qts = mass = rhos = np.random.rand(N)
-    nx=ny=2
-    args = (x,y,z,hs,qts,mass,rhos,nx,ny)
-    testing_helpers.expect(render_image, args, render_image(*args))
 
-if __name__ == '__main__':
-  testing_helpers.run_local_tests()
+import timer 
+
+N = 400
+x = y = z = hs= qts = mass = rhos = np.random.rand(N)
+nx=ny=20
+args = (x,y,z,hs,qts,mass,rhos,nx,ny, 0.0, 1.0, 0.0, 1.0)
+timer.compare_perf(render_image, args)

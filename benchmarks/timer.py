@@ -80,13 +80,16 @@ def compare_perf(fn, args, numba= True, cpython = True):
 
     with timer('Numba #2 -- %s' % name):
       numba_result = numba_fn(*args)
-  
-  if parakeet_result is not None and numba_result is not None:  
-    assert np.allclose(parakeet_result, numba_result)  
-  
+
   if cpython:
     with timer('Python -- %s' % name):
-      python_result = fn(*args)
-
-  if cpython_result is not None and parakeet_result is not None:
-    assert np.allclose(parakeet_result, python_result)  
+      cpython_result = fn(*args)
+  
+  if parakeet_result is not None: 
+    if cpython_result is not None:
+      assert np.allclose(parakeet_result, cpython_result)
+  
+  if numba_result is not None:
+    if cpython_result is not None:
+      assert np.allclose(numba_result, cpython_result)
+  
