@@ -114,9 +114,10 @@ def get_linker_flags(compiler):
     libname = 'python' + distutils.sysconfig.get_python_version().replace('.', '')
     linker_flags.append('-l' + libname)
     
-  #if mac_os:
-  #  linker_flags.append("-headerpad_max_install_names")
-  #  linker_flags.append("-undefined dynamic_lookup")
+  if mac_os:
+    linker_flags.append("-Wl,-undefined")
+    linker_flags.append("-Wl,dynamic_lookup")
+    
   if use_openmp(compiler):
     linker_flags.append('-fopenmp')             
   return linker_flags 
