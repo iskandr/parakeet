@@ -65,10 +65,13 @@ shared_extension = np_sysinfo.get_shared_lib_extension(True)
 
 mac_os = platform.system() == 'Darwin'
 windows = platform.system() == 'Windows'
-if mac_os:
-  python_lib_extension = '.dylib'
-else:
-  python_lib_extension = '.so'
+
+#if mac_os:
+#  python_lib_extension = '.dylib'
+#elif windows:
+#  python_lib_extension = '.pyd'
+#else:
+#  python_lib_extension = '.so'
 
 python_include_dirs = [distutils.sysconfig.get_python_inc()]
 
