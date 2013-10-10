@@ -48,8 +48,7 @@ def get_compiler(_cache = {}):
     return config.compiler_path
   if config.pure_c in _cache:
     return _cache[config.pure_c]
-  for compiler in ['mingw32-gcc', 
-                   ('gcc' if config.pure_c else 'g++'), 
+  for compiler in [('gcc' if config.pure_c else 'g++'), 
                    'icc', 
                    'clang']:
     path = distutils.spawn.find_executable(compiler)
@@ -68,13 +67,6 @@ shared_extension = np_sysinfo.get_shared_lib_extension(True)
 
 mac_os = platform.system() == 'Darwin'
 windows = platform.system() == 'Windows'
-
-#if mac_os:
-#  python_lib_extension = '.dylib'
-#elif windows:
-#  python_lib_extension = '.pyd'
-#else:
-#  python_lib_extension = '.so'
 
 python_include_dirs = [distutils.sysconfig.get_python_inc()]
 

@@ -8,8 +8,9 @@ import numpy as np
 from numpy import int32
 from parakeet import testing_helpers, config 
 
+config.print_untyped_function = True
 config.print_loopy_function = True
-config.testing_find_broken_transform = True  
+
  
 def kernel_func(d, h) : 
     if d < 1 : 
@@ -29,7 +30,8 @@ def physical_to_pixel(xpos,xmin,dx) :
 def pixel_to_physical(xpix,x_start,dx) : 
     return dx*xpix+x_start
  
-def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0, ymin = 0.0, ymax = 1.0) : 
+def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, 
+                 xmin = 0.0, xmax = 1.0, ymin = 0.0, ymax = 1.0): 
     MAX_D_OVER_H = 2.0
  
     image = np.zeros((nx,ny))
@@ -42,7 +44,7 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
     zplane = 0.0
  
     # set up the kernel values
-    kernel_samples = np.arange(0, 2.01, 0.01)
+    kernel_samples = np.arange(0, 2.01, .01)
     kernel_vals = np.array([kernel_func(x,1.0) for x in kernel_samples])
     for i, (x,y,z,h) in enumerate(zip(xs,ys,zs,hs)):
         qt = qts[i] * mass[i] / rhos[i]
@@ -65,7 +67,7 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
                 dxpix, dypix, dzpix = [x-xpixel,y-ypixel,z-zpixel]
                 d = distance(dxpix,dypix,dzpix)
                 if (xpos > 0) and (xpos < nx) and (ypos > 0) and (ypos < ny) and (d/h < 2) : 
-                    kernel_val = kernel_vals[int(d/(0.01*h))]/(h*h*h)
+                    kernel_val = kernel_vals[int(d/(.01*h))]/(h*h*h)
                     image[xpos,ypos] += qt*kernel_val
  
             else :
@@ -91,7 +93,7 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
                         dxpix, dypix, dzpix = [x-xpixel,y-ypixel,z-zpixel]
                         d = distance(dxpix,dypix,dzpix)
                         if (d/h < 2) : 
-                            kernel_val = kernel_vals[int(d/(0.01*h))]/(h*h*h)
+                            kernel_val = kernel_vals[int(d/(.01*h))]/(h*h*h)
                             image[xpix,ypix] += qt*kernel_val
     
  
@@ -99,9 +101,9 @@ def render_image(xs, ys, zs, hs, qts, mass, rhos, nx, ny, xmin = 0.0, xmax = 1.0
  
  
 def test_image_render() : 
-    N = 25
+    N = 4
     x = y = z = hs= qts = mass = rhos = np.random.rand(N)
-    nx=ny=5
+    nx=ny=2
     args = (x,y,z,hs,qts,mass,rhos,nx,ny)
     testing_helpers.expect(render_image, args, render_image(*args))
 

@@ -109,7 +109,23 @@ class Simplify(Transform):
                             ])
   
   def immutable(self, expr):
+    """
+    TODO: make all this mutability/immutability stuff sane 
+    
+    t = expr.type 
+    if t.__class__ is ArrayT:
+      return self.immutable_type(t)
+    elif t.__class__ is Call:
+      fn = self.get_fn(expr.fn)
+      return not isinstance(fn.return_type, ArrayT) and all(not isinstance(input_t, ArrayT))
+      if isinstance(expr.fn, TypedFn):
+        input_types = expr.fn.input_types 
+        return_type = expr.fn.return_type 
+      elif isinstance(expr.fn.type, ClosureT):
+        input_types = expr.fn.type.fn.input_types
+    """   
     klass = expr.__class__ 
+    
     
     result = (klass in self._immutable_classes and 
                 (all(self.immutable(c) for c in expr.children()))) or \
@@ -361,54 +377,69 @@ class Simplify(Transform):
     if all_constants(args):
       return syntax.Const(value = prim.fn(*collect_constants(args)),
                           type = expr.type)
-    elif prim == prims.add:
-      x,y = args
-      if is_zero(x):
-        return y
-      elif is_zero(y):
-        return x
-      if y.__class__ is Const and y.value < 0:
-        expr.prim = prims.subtract
-        y.value *= -1
-        return expr 
-      elif x.__class__ is Const and x.value < 0:
-        expr.prim = prims.subtract
-        x.value *= -1 
-        expr.args = [y, x]
-        return expr 
+    if len(args) == 2:
+      x,y = args 
+      
+      if prim == prims.add:
+        if is_zero(x):
+          return y
+        elif is_zero(y):
+          return x
+        if y.__class__ is Const and y.value < 0:
+          expr.prim = prims.subtract
+          y.value *= -1
+          return expr 
+        elif x.__class__ is Const and x.value < 0:
+          expr.prim = prims.subtract
+          x.value *= -1 
+          expr.args = [y, x]
+          return expr 
         
-    elif prim == prims.subtract:
-      x,y = args 
-      if is_zero(x):
-        return y 
-      elif is_zero(y):
-        return x     
-          
-    elif prim == prims.multiply:
+      elif prim == prims.subtract:
+        if is_zero(y):
+          return x
+        elif is_zero(x) and y.__class__ is Var:
+           
+          stored = self.bindings.get(y.name)
+          print "STORED", y, stored 
+          # 0 - (a * b) --> -a * b |or| a * -b 
+          if stored and stored.__class__ is PrimCall and stored.prim == prims.multiply:
+            
+            a,b = stored.args
+            print "==>", a, a.__class__,  b, b.__class__   
+            if a.__class__ is Const:
+              expr.prim = prims.multiply
+              neg_a = Const(value = -a.value, type = a.type)
+              expr.args = [neg_a, b]
+              return expr 
+            elif b.__class__ is Const:
+              expr.prim = prims.multiply
+              neg_b = Const(value = -b.value, type = b.type)
+              expr.args = [a, neg_b]
+              return expr 
+            
+      elif prim == prims.multiply:
       
-      x,y = args
-      if is_one(x):
-        return y
-      elif is_one(y):
-        return x
-      elif is_zero(x):
-        return x
-      elif is_zero(y):
-        return y
-      
-    elif prim == prims.divide:
-      x,y = args 
-      if is_one(y):
+        if is_one(x):
+          return y
+        elif is_one(y):
+          return x
+        elif is_zero(x):
+          return x
+        elif is_zero(y):
+          return y
+        
+      elif prim == prims.divide and is_one(y):
         return x
       
-    elif prim == prims.power:
-      x,y = args
-      if is_one(y):
-        return self.cast(x, expr.type)
-      elif is_zero(y):
-        return one(expr.type)
-      elif y.__class__ is Const and y.value == 2:
-        return self.cast(self.mul(x, x, "sqr"), expr.type)
+      elif prim == prims.power:
+      
+        if is_one(y):
+          return self.cast(x, expr.type)
+        elif is_zero(y):
+          return one(expr.type)
+        elif y.__class__ is Const and y.value == 2:
+          return self.cast(self.mul(x, x, "sqr"), expr.type)
 
     expr.args = args
     return expr 

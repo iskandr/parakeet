@@ -180,7 +180,7 @@ def eval_fn(fn, actuals):
     def expr_Index():
       array = eval_expr(expr.value)
       index = eval_expr(expr.index)
-      
+      print expr, array.shape, index
       return array[index]
 
     def expr_PrimCall():
@@ -463,7 +463,7 @@ def eval_fn(fn, actuals):
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
       assign(stmt.lhs, value, env)
-
+      
     elif isinstance(stmt, If):
       cond_val = eval_expr(stmt.cond)
 
@@ -486,10 +486,11 @@ def eval_fn(fn, actuals):
       start = eval_expr(stmt.start)
       stop = eval_expr(stmt.stop)
       step = eval_expr(stmt.step)
-
+       
       eval_merge_left(stmt.merge)
 
       for i in xrange(start, stop, step):
+        print "ForLoop", start, stop, step, "iter", stmt.var, i 
         env[stmt.var.name] = i
         eval_block(stmt.body)
         eval_merge_right(stmt.merge)
