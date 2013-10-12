@@ -56,7 +56,7 @@ def specialize(fn, python_values, types = None):
     for (t, internal_value) in zip(types, python_values):
       abstract_values.append(from_internal_repr(t, internal_value))
   
-  key = (fn.name, tuple(abstract_values))
+  key = (fn.cache_key, tuple(abstract_values))
   if key in _cache:
     return _cache[key]
   elif any(has_unit_stride(v) for v in abstract_values):

@@ -26,61 +26,6 @@ CompiledFlatFn = namedtuple("CompiledFlatFn",
                              "extra_function_signatures", 
                              "declarations"))
 
-
-def compile_flat_source(fn, _struct_type_cache = {}, _compile_cache = {}):
-  # make sure compiled source uses consistent names for tuple types 
-  relevant_types = set(t for t in fn.type_env.itervalues() if isinstance(t, TupleT))
-  declared_tuples = set(t for t in _struct_type_cache.iterkeys() if t in relevant_types)
-  
-  key = fn.cache_key, frozenset(declared_tuples)
-  
-  if key in _compile_cache:
-    return _compile_cache[key]
-  
-  compiler = FlatFnCompiler(struct_type_cache = _struct_type_cache)
-  name, sig, src = compiler.visit_fn(fn)
-  result = CompiledFlatFn(name = name, 
-                          sig = sig, 
-                          src = src,
-                          extra_objects = compiler.extra_objects, 
-                          extra_functions = compiler.extra_functions,
-                          extra_function_signatures = compiler.extra_function_signatures,
-                          declarations = compiler.declarations)
-  _compile_cache[key] = result
-  return result
-
-
-def compile_entry(fn, _compile_cache = {}):
-  key = fn.cache_key
-  if key in _compile_cache:
-    return _compile_cache[key]
-  compiler = PyModuleCompiler()
-  name, sig, src = compiler.visit_fn(fn)
-  if config.print_function_source: 
-    print "Generated C source for %s: %s" %(name, src)
-  ordered_function_sources = [compiler.extra_functions[extra_sig] for 
-                              extra_sig in compiler.extra_function_signatures]
-
-  compiled_fn = compile_module(src, 
-                               fn_name = name,
-                               fn_signature = sig, 
-                               extra_objects = set(compiler.extra_objects),
-                               extra_function_sources = ordered_function_sources, 
-                               declarations =  compiler.declarations, 
-                               print_source = config.print_module_source)
-  _compile_cache[key]  = compiled_fn
-  return compiled_fn
-
-
-def entry_function_source(fn):
-  return compile_entry(fn).src 
-
-def entry_function_name(fn):
-  return compile_entry(fn).fn_name 
-
-def entry_function_signature(fn):
-  return compile_entry(fn).fn_signature 
-
 class FlatFnCompiler(BaseCompiler):
   
   def __init__(self, struct_type_cache = None):
@@ -1114,3 +1059,59 @@ class PyModuleCompiler(FlatFnCompiler):
     c_sig = "PyObject* %(c_fn_name)s (%(c_args)s)" % locals() 
     fndef = "%s {%s}" % (c_sig, c_body)
     return c_fn_name, c_sig, fndef 
+  
+  
+  
+def compile_flat_source(fn, _struct_type_cache = {}, _compile_cache = {}):
+  # make sure compiled source uses consistent names for tuple types 
+  relevant_types = set(t for t in fn.type_env.itervalues() if isinstance(t, TupleT))
+  declared_tuples = set(t for t in _struct_type_cache.iterkeys() if t in relevant_types)
+  
+  key = fn.cache_key, frozenset(declared_tuples)
+  
+  if key in _compile_cache:
+    return _compile_cache[key]
+  
+  compiler = FlatFnCompiler(struct_type_cache = _struct_type_cache)
+  name, sig, src = compiler.visit_fn(fn)
+  result = CompiledFlatFn(name = name, 
+                          sig = sig, 
+                          src = src,
+                          extra_objects = compiler.extra_objects, 
+                          extra_functions = compiler.extra_functions,
+                          extra_function_signatures = compiler.extra_function_signatures,
+                          declarations = compiler.declarations)
+  _compile_cache[key] = result
+  return result
+
+
+def compile_entry(fn, compiler_class = PyModuleCompiler, _compile_cache = {}):
+  key = fn.cache_key, compiler_class 
+  if key in _compile_cache:
+    return _compile_cache[key]
+  compiler = compiler_class()
+  name, sig, src = compiler.visit_fn(fn)
+  if config.print_function_source: 
+    print "Generated C source for %s: %s" %(name, src)
+  ordered_function_sources = [compiler.extra_functions[extra_sig] for 
+                              extra_sig in compiler.extra_function_signatures]
+
+  compiled_fn = compile_module(src, 
+                               fn_name = name,
+                               fn_signature = sig, 
+                               extra_objects = set(compiler.extra_objects),
+                               extra_function_sources = ordered_function_sources, 
+                               declarations =  compiler.declarations, 
+                               print_source = config.print_module_source)
+  _compile_cache[key]  = compiled_fn
+  return compiled_fn
+
+
+def entry_function_source(fn):
+  return compile_entry(fn).src 
+
+def entry_function_name(fn):
+  return compile_entry(fn).fn_name 
+
+def entry_function_signature(fn):
+  return compile_entry(fn).fn_signature 
