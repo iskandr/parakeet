@@ -1,5 +1,5 @@
 from .. import config 
-from ..c_backend import prepare_args  
+from ..c_backend.prepare_args import prepare_args  
 from ..transforms.pipeline import flatten
 from ..transforms.stride_specialization import specialize
 

@@ -8,7 +8,7 @@ class MulticoreFlatFnCompiler(FlatFnCompiler):
     assert n_vars <= len(loop_var_names)
     loop_vars = [self.fresh_var("int64_t", loop_var_names[i]) for i in xrange(n_vars)]
     
-    omp = "#pragma omp parallel for" 
+    omp = "#pragma omp parallel for collapse(%d)" % len(bounds) 
     fn_name = self.get_fn(stmt.fn)
     closure_args = self.get_closure_args(stmt.fn)
     combined_args = tuple(closure_args) + tuple(loop_vars)
