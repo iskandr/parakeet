@@ -39,5 +39,13 @@ class MulticoreFlatFnCompiler(FlatFnCompiler):
   
 
 class MulticoreModuleCompiler(PyModuleCompiler, MulticoreFlatFnCompiler):
-  pass  
+  pass
+
+
+from ..analysis import contains_adverbs
+from .. import c_backend 
+def compile_entry(fn):
+  
+  return c_backend.compile_entry(fn, compiler_class = MulticoreModuleCompiler)
+
 
