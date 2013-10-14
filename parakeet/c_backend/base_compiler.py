@@ -30,7 +30,8 @@ class BaseCompiler(object):
   def visit_stmt(self, stmt):
     stmt_class_name = stmt.__class__.__name__
     method_name = "visit_" + stmt_class_name
-    assert hasattr(self, method_name), "Unsupported statemet %s" % stmt_class_name  
+    assert hasattr(self, method_name), \
+      "Statement %s not supported by %s" % (stmt_class_name, self.__class__.__name__)  
     result = getattr(self, method_name)(stmt)
     assert result is not None, "Compilation method for statement %s return None" % stmt_class_name
     return result 
