@@ -1,4 +1,4 @@
-default_backend = 'openmp' #llvm
+default_backend = 'c' #llvm
 
 
 ######################################
