@@ -568,6 +568,8 @@ class PyModuleCompiler(FlatFnCompiler):
                                  extra_objects = set(self.extra_objects),
                                  extra_function_sources = ordered_function_sources, 
                                  declarations =  self.declarations, 
+                                 extra_compile_flags = self.extra_compile_flags, 
+                                 extra_link_flags = self.extra_link_flags, 
                                  print_source = config.print_module_source)
     self._entry_compile_cache[key]  = compiled_fn
     return compiled_fn

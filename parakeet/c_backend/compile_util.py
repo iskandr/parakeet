@@ -74,8 +74,8 @@ numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
 include_dirs = python_include_dirs + numpy_include_dirs 
 
 
-def use_openmp(compiler):
-  return not config.debug and config.use_openmp and compiler in ('gcc', 'g++', 'icc')
+#def use_openmp(compiler):
+#  return not config.debug and config.use_openmp and compiler in ('gcc', 'g++', 'icc')
 
 def get_opt_flags():
   opt_flags = ['-O3', '-msse2']
@@ -93,9 +93,7 @@ def get_compiler_flags(compiler):
 
   if not config.pure_c: 
     compiler_flags.extend(['-fpermissive'])
-  
-  if use_openmp(compiler):
-    compiler_flags.append('-fopenmp')  
+
   return compiler_flags   
 
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
@@ -118,8 +116,8 @@ def get_linker_flags(compiler):
     linker_flags.append("-Wl,-undefined")
     linker_flags.append("-Wl,dynamic_lookup")
     
-  if use_openmp(compiler):
-    linker_flags.append('-fopenmp')             
+  #if use_openmp(compiler):
+  #  linker_flags.append('-fopenmp')             
   return linker_flags 
 
 
@@ -201,6 +199,7 @@ def compile_object(src,
                    extra_function_sources = [], 
                    extra_headers = python_headers, 
                    extra_objects = [], 
+                   extra_compile_flags = [], 
                    print_source = None, 
                    print_commands = None):
   if print_source is None: print_source = config.print_module_source
@@ -216,7 +215,7 @@ def compile_object(src,
   src_filename = src_file.name
   object_name = src_filename.replace(get_source_extension(), object_extension)
   compiler = get_compiler()
-  compiler_flags = get_compiler_flags(compiler)
+  compiler_flags = get_compiler_flags(compiler) + extra_compile_flags
   compiler_cmd = [compiler] + compiler_flags + ['-c', src_filename, '-o', object_name]
   run_cmd(compiler_cmd, label = "Compile source")
   return CompiledObject(src = src, 
@@ -234,6 +233,8 @@ def compile_module(src,
                      extra_function_sources = [], 
                      extra_headers = [],  
                      extra_objects = [],
+                     extra_compile_flags = [], 
+                     extra_link_flags = [], 
                      print_source = None, 
                      print_commands = None):
   
@@ -267,6 +268,7 @@ def compile_module(src,
                                    extra_function_sources = extra_function_sources, 
                                    extra_headers = python_headers + extra_headers,  
                                    extra_objects = extra_objects,
+                                   extra_compile_flags = extra_compile_flags, 
                                    print_source = print_source, 
                                    print_commands = print_commands)
   
@@ -275,7 +277,7 @@ def compile_module(src,
   
   shared_name = src_filename.replace(get_source_extension(), shared_extension)
   compiler = get_compiler()
-  linker_flags = get_linker_flags(compiler)
+  linker_flags = get_linker_flags(compiler) + extra_link_flags
   linker_cmd = [compiler, object_name] + linker_flags + list(extra_objects) + ['-o', shared_name]
 
   env = os.environ.copy()

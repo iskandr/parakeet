@@ -10,8 +10,17 @@ class BaseCompiler(object):
     self.blocks = []
     self.name_versions = {}
     self.name_mappings = {}
+    self.extra_compile_flags = []
+    self.extra_link_flags = []
+
+  def add_compile_flag(self, flag):
+    if flag not in self.extra_compile_flags:
+      self.extra_compile_flags.append(flag)
   
-  
+  def add_link_flag(self, flag):
+    if flag not in self.extra_link_flags:
+      self.extra_link_flags.append(flag)
+        
   def visit_expr(self, expr):
     expr_class_name = expr.__class__.__name__
     method_name = "visit_" + expr_class_name

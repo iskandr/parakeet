@@ -178,6 +178,7 @@ class BuildFlatFn(Builder):
   def flatten_Assign(self, stmt):
     c = stmt.lhs.__class__
     rhs = self.flatten_expr(stmt.rhs)
+
     if c is Var:
       
       lhs_vars = self.flatten_lhs_var(stmt.lhs)
@@ -403,8 +404,19 @@ class BuildFlatFn(Builder):
     strides = get_field_elts(t, array_fields, 'strides')
     offset = get_field_elts(t, array_fields, 'offset')[0]
     
-    indices = self.flatten_expr(expr.index)
-    
+    index = expr.index 
+    if isinstance(index.type, (NoneT, SliceT, ScalarT)):
+      indices = [index]
+    elif isinstance(index, Tuple):
+      indices = index.elts 
+    else:
+      assert isinstance(index.type, TupleT), "Expected index to scalar, slice, or tuple"
+      indices = self.tuple_elts(index)
+
+    print indices 
+      
+    #indices = self.flatten_expr(expr.index)
+    print expr.index, expr.index.type 
     n_indices = len(indices)
     n_strides = len(strides)
     assert n_indices == n_strides, \

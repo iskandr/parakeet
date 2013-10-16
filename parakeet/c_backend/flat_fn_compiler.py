@@ -536,13 +536,16 @@ class FlatFnCompiler(BaseCompiler):
   
     if key in self._flat_compile_cache:
       return self._flat_compile_cache[key]
+    
     name, sig, src = self.visit_flat_fn(parakeet_fn)
-    result = CompiledFlatFn(name = name, 
-                          sig = sig, 
-                          src = src,
-                          extra_objects = self.extra_objects, 
-                          extra_functions = self.extra_functions,
-                          extra_function_signatures = self.extra_function_signatures,
-                          declarations = self.declarations)
+    
+    result = CompiledFlatFn(
+      name = name, 
+      sig = sig, 
+      src = src,
+      extra_objects = self.extra_objects, 
+      extra_functions = self.extra_functions,
+      extra_function_signatures = self.extra_function_signatures,
+      declarations = self.declarations)
     self._flat_compile_cache[key] = result
     return result

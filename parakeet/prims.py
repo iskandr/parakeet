@@ -3,7 +3,7 @@
 import numpy as np
 import ndtypes 
 
-from ndtypes import Bool, FloatT, BoolT, Float32, Float64 
+from ndtypes import Bool, FloatT, BoolT, Float32, Float64, ScalarT 
 
 prim_lookup_by_value = {}
 
@@ -112,6 +112,8 @@ class Prim(object):
     dist = 0
     for (t1, t2) in zip(types1, types2):
       if t1 != t2:
+        assert isinstance(t1, ScalarT), "Expected scalar type but got %s" % t1
+        assert isinstance(t2, ScalarT), "Expected scalar type but got %s" % t2  
         dist += 1 
         size_difference = t2.nbytes - t1.nbytes
         if size_difference < 0:
@@ -129,7 +131,9 @@ class Prim(object):
         if isinstance(t1, BoolT) and not isinstance(t2, BoolT):
           dist += 1
         elif isinstance(t2, BoolT) and not isinstance(t1, BoolT):
-          dist += 1000 
+          dist += 1000
+        
+           
         
     return dist 
   
