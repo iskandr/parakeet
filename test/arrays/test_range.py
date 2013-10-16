@@ -12,7 +12,6 @@ def test_range1():
   n = 10
   numpy_result = np.arange(n)
   parakeet_result = range1(n)
-  print numpy_result, parakeet_result
   testing_helpers.assert_eq_arrays(numpy_result, parakeet_result, "range1")
   
 @parakeet.jit

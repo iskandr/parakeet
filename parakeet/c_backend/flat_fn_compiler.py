@@ -36,9 +36,9 @@ class FlatFnCompiler(BaseCompiler):
     
     if struct_type_cache is None:
       # don't create more than one struct type per tuple type
-      self._tuple_struct_cache = {}
+      self._struct_type_cache = {}
     else:
-      self._tuple_struct_cache = struct_type_cache
+      self._struct_type_cache = struct_type_cache
   
   def add_decl(self, decl):
     if decl not in self.declarations:
@@ -52,15 +52,15 @@ class FlatFnCompiler(BaseCompiler):
     else:
       field_types = tuple(field_types)
     
-    if field_types in self._tuple_struct_cache:
-      return self._tuple_struct_cache[field_types]
+    if field_types in self._struct_type_cache:
+      return self._struct_type_cache[field_types]
     
     typename = names.fresh("tuple_type").replace(".", "_")
 
     field_decls = ["  %s %s;" % (t, "elt%d" % i) for i,t in enumerate(field_types)]
     decl = "typedef struct %s {\n%s\n} %s;" % (typename, "\n".join(field_decls), typename)
     self.add_decl(decl)
-    self._tuple_struct_cache[field_types] = typename
+    self._struct_type_cache[field_types] = typename
     return typename 
   
   
@@ -426,7 +426,7 @@ class FlatFnCompiler(BaseCompiler):
         "Expected function or closure, got %s : %s" % (expr, expr.type)
       fn = expr.type.fn
     
-    compiler = self.__class__(_tuple_struct_cache = self._tuple_struct_cache)
+    compiler = self.__class__(struct_type_cache = self._struct_type_cache)
     compiled = compiler.compile_flat_source(fn)
     
     if compiled.sig not in self.extra_function_signatures:
@@ -441,8 +441,7 @@ class FlatFnCompiler(BaseCompiler):
       for extra_sig in compiled.extra_function_signatures:
         if extra_sig not in self.extra_function_signatures:
           self.extra_function_signatures.append(extra_sig)
-          extra_src = compiled.function_sources[extra_sig]
-          self.extra_functions[extra_sig] = extra_src 
+          self.extra_functions[extra_sig] = compiled.extra_functions[extra_sig] 
       # now add the function itself 
       self.extra_function_signatures.append(compiled.sig)
       self.extra_functions[compiled.sig] = compiled.src
