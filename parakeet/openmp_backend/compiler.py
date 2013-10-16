@@ -1,6 +1,6 @@
-from ..c_backend import PyModuleCompiler, FlatFnCompiler
+from ..c_backend import PyModuleCompiler
 
-class MulticoreFlatFnCompiler(FlatFnCompiler):
+class MulticoreCompiler(PyModuleCompiler):
   def visit_ParFor(self, stmt):
     bounds = self.tuple_to_var_list(stmt.bounds)
     loop_var_names = ["i", "j", "k", "l", "ii", "jj", "kk", "ll"]
@@ -37,15 +37,3 @@ class MulticoreFlatFnCompiler(FlatFnCompiler):
   def visit_IndexMap(self, expr):
     assert False, "IndexMap should have been lowered into ParFor by now: %s" % expr 
   
-
-class MulticoreModuleCompiler(PyModuleCompiler, MulticoreFlatFnCompiler):
-  pass
-
-
-from ..analysis import contains_adverbs
-from .. import c_backend 
-def compile_entry(fn):
-  
-  return c_backend.compile_entry(fn, compiler_class = MulticoreModuleCompiler)
-
-

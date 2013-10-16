@@ -1,3 +1,3 @@
-from compiler import (entry_function_source, compile_entry, entry_function_name, 
-                      FlatFnCompiler, PyModuleCompiler)
+from flat_fn_compiler import FlatFnCompiler
+from pymodule_compiler import PyModuleCompiler
 from run_function import run 
