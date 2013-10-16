@@ -276,7 +276,7 @@ def compile_module(src,
   shared_name = src_filename.replace(get_source_extension(), shared_extension)
   compiler = get_compiler()
   linker_flags = get_linker_flags(compiler)
-  linker_cmd = [compiler] + linker_flags + [object_name] + list(extra_objects) + ['-o', shared_name]
+  linker_cmd = [compiler, object_name] + linker_flags + list(extra_objects) + ['-o', shared_name]
 
   env = os.environ.copy()
   env["LD_LIBRARY_PATH"] = python_lib_dir

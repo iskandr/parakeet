@@ -21,7 +21,7 @@ def fast(x, alpha = 0.5, beta = 0.3):
    
 @jit 
 def loopy(x, alpha = 0.5, beta = 0.3):
-  y = np.empty_like(x)
+  y = np.empty_like(x, dtype = float)
   for i in xrange(len(x)):
     y[i] = np.tanh(x[i] * alpha) + beta
   return y

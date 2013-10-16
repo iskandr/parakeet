@@ -205,13 +205,26 @@ class Verify(SyntaxVisitor):
     self.visit_merge_loop_repeat(stmt.merge)
     
   def visit_ParFor(self, stmt):
-    fn = stmt.fn
+    """
+    Have to be annoyingly flexible with ParFor since we might encounter
+    ordinary or flattened functions as arguments and the latter don't 
+    take tuples of indices but have to take each index as a separate parameter
+    """
+    fn, closure_arg_types = self.get_fn_and_closure(stmt.fn)
     bounds_t = stmt.bounds.type
-    if isinstance(bounds_t, TupleT) and len(bounds_t.elt_types) == 1:
-      args = (bounds_t.elt_types[0],)
+    assert len(fn.input_types) > 0, \
+      "Problem with ParFor, can't call function %s which accepts 0 args" % fn.name 
+       
+    last_input_type = fn.input_types[-1]
+    if isinstance(last_input_type, TupleT):
+      assert bounds_t == last_input_type, \
+        "ParFor function expects index type %s but bounds of type %s" % (last_input_type, bounds_t)
+      arg_types = (bounds_t,)
+    elif isinstance(bounds_t, TupleT):
+      arg_types = bounds_t.elt_types
     else:
-      args = (stmt.bounds,)
-    self.verify_call(fn, args)
+      arg_types = (stmt.bounds.type,)
+    self.verify_call(fn, tuple(closure_arg_types) + tuple(arg_types))
     
   def visit_stmt(self, stmt):
     assert stmt is not None, "Statement missing, must be a compiler bug"
