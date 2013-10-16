@@ -27,12 +27,21 @@ CompiledFlatFn = namedtuple("CompiledFlatFn",
                              "declarations"))
 
 
-def compile_flat_source(fn, _struct_type_cache = {}, _compile_cache = {}):
+def compile_flat_source(fn, _struct_type_cache = None,
+                              compiler_class = None, 
+                              _compile_cache = {}):
+  if _struct_type_cache is None:
+    _struct_type_cache = {}
+  
+  if compiler_class is None: 
+    compiler_class = FlatFnCompiler
+      
   # make sure compiled source uses consistent names for tuple types 
   relevant_types = set(t for t in fn.type_env.itervalues() if isinstance(t, TupleT))
   declared_tuples = set(t for t in _struct_type_cache.iterkeys() if t in relevant_types)
   
-  key = fn.cache_key, frozenset(declared_tuples)
+  
+  key = fn.cache_key, frozenset(declared_tuples), 
   
   if key in _compile_cache:
     return _compile_cache[key]
