@@ -984,7 +984,17 @@ _known_python_functions = {}
 # to check for recursive calls 
 _currently_processing = set([])
 
-def translate_function_value(fn):
+
+import threading 
+def translate_function_value(fn, _lock = threading.RLock()):
+  """
+  Prevent two threads from clobbering the recursion logic by both entering 
+  the translation code
+  """
+  with _lock: 
+    return _translate_function_value(fn)
+
+def _translate_function_value(fn):
   
   # if it's already a Parakeet function, just return it 
   if isinstance(fn, UntypedFn):

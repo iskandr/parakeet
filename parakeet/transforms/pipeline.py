@@ -82,8 +82,8 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim,
                                     NegativeIndexElim,
-                                    LowerSlices,
-                                    LowerArrayOperators,  
+                                    LowerArrayOperators,
+                                    LowerSlices,  
                                     symbolic_range_propagation,
                                  ], 
                                  depends_on = normalize,
@@ -139,6 +139,7 @@ lower_adverbs = Phase([LowerAdverbs, LowerSlices], run_if = contains_adverbs)
 
 unroll = Phase(LoopUnrolling, config_param = 'opt_loop_unrolling', 
                run_if = contains_loops)
+
 loopify = Phase([
                    lower_adverbs,
                    ParForToNestedLoops, 

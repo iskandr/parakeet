@@ -413,10 +413,10 @@ class BuildFlatFn(Builder):
       assert isinstance(index.type, TupleT), "Expected index to scalar, slice, or tuple"
       indices = self.tuple_elts(index)
 
-    print indices 
+
       
     #indices = self.flatten_expr(expr.index)
-    print expr.index, expr.index.type 
+   
     n_indices = len(indices)
     n_strides = len(strides)
     assert n_indices == n_strides, \
