@@ -7,6 +7,8 @@ import numpy as np
 mu = 0.1
 Lx, Ly = 101, 101
 N = 1000
+import parakeet
+parakeet.default_backend = 'c'
 
 def diffuse_loops(iter_num):
     u = np.zeros((Lx, Ly), dtype=np.float64)

@@ -17,7 +17,7 @@ def run(fn, args):
   
       
   compiled_fn = MulticoreCompiler().compile_entry(fn)
-  #print compiled_fn.src  
+ 
   assert len(args) == len(fn.input_types)
   result = compiled_fn.c_fn(*args)
   return result

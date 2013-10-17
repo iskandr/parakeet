@@ -1,7 +1,7 @@
 
 from .. import syntax 
 from ..ndtypes import ScalarT, TupleT 
-from ..syntax import Expr, While, ForLoop 
+from ..syntax import Expr, While, ForLoop, Const 
 from ..syntax.helpers import zero, one, zero_i32, zero_i64, wrap_if_constant
 from core_builder import CoreBuilder 
 
@@ -31,8 +31,6 @@ class LoopBuilder(CoreBuilder):
     merge = {counter.name:(counter_before, counter_after)}
     return counter, counter_after, merge
 
-
-  
   def loop(self, 
            start, 
            niters, 
@@ -162,6 +160,7 @@ class LoopBuilder(CoreBuilder):
                      lower_bounds = None, 
                      step_sizes = None):
     upper_bounds = self._to_list(upper_bounds)
+    
     n_loops = len(upper_bounds)
     assert lower_bounds is None or len(lower_bounds) == n_loops
     assert step_sizes is None or len(step_sizes) == n_loops 
@@ -176,11 +175,10 @@ class LoopBuilder(CoreBuilder):
     else:
       step_sizes = self._to_list(step_sizes)
     
+    
     def build_loops(index_vars = ()):
       n_indices = len(index_vars)
       if n_indices == n_loops:
-        
-        
         if isinstance(loop_body, Expr):
           input_types = self.input_types(loop_body)
           if len(input_types) == len(index_vars):
@@ -201,5 +199,13 @@ class LoopBuilder(CoreBuilder):
         lower = lower_bounds[n_indices]
         upper = upper_bounds[n_indices]  
         step = step_sizes[n_indices]
+        # sanity check the bounds 
+        if lower.__class__ is Const and upper.__class__ is Const and step.__class__ is Const:
+          if step.value < 0:
+            assert lower.value > upper.value, \
+              "Attempting to build invalid loop from %s to %s by %s" % (lower, upper, step)
+          elif step.value > 0:
+            assert upper.value > lower.value, \
+              "Attempting to build invalid loop from %s to %s by %s" % (lower, upper, step) 
         self.loop(lower, upper, inner_loop_body, step=step)
     build_loops()

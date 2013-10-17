@@ -7,10 +7,7 @@ from ..syntax import Var, Const, PrimCall, Tuple, Slice, TupleProj, Attribute, S
 import numpy as np 
 from ..syntax.helpers import unwrap_constant
 from syntax_visitor import SyntaxVisitor
-
-
-
-
+from pygments.token import Other
 
 
 class AbstractValue(object):
@@ -23,8 +20,14 @@ class AbstractValue(object):
   def __repr__(self):
     return str(self)
   
+  def combine(self, other):
+    if self == other:
+      return self 
+    else:
+      return any_value 
+  
   def widen(self, other):
-    return any_value 
+    return self.combine(other) 
   
 class Unknown(AbstractValue):
   """
@@ -36,6 +39,7 @@ class Unknown(AbstractValue):
   
   def combine(self, other):
     return other 
+  
   
 unknown_value = Unknown()
 
@@ -55,11 +59,7 @@ class AnyValue(AbstractValue):
   
 any_value = AnyValue()
 
-def combine(x, y):
-  if x.__class__ is not y.__class__: 
-    return any_value   
-  else:
-    return x.combine(y)
+
 
 class Interval(AbstractValue):
   def __init__(self, lower, upper):
@@ -116,7 +116,7 @@ class TupleOfIntervals(AbstractValue):
       return any_value 
     elif len(other.elts) != len(self.elts):
       return any_value  
-    combined_elts = [combine(e1,e2) for e1,e2 in zip(self.elts, other.elts)]
+    combined_elts = [e1.combine(e2) for e1,e2 in zip(self.elts, other.elts)]
     return TupleOfIntervals(combined_elts)
 
   def widen(self, other):
@@ -146,9 +146,9 @@ class SliceOfIntervals(AbstractValue):
   def combine(self, other):
     if other.__class__ is not SliceOfIntervals:
       return any_value
-    start = combine(self.start, other.start)
-    stop = combine(self.stop, other.stop)
-    step = combine(self.step, other.step)
+    start = self.start.combine(other.start)
+    stop = self.stop.combine(other.stop)
+    step = self.step.combine(other.step)
     if start == self.start and stop == self.stop and step == self.stop:
       return self 
     return mk_slice(start,stop,step)
@@ -195,6 +195,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
       return Interval(expr.value, expr.value)
     
     elif c is Var and expr.name in self.ranges:
+      # print "GET", expr.name, self.ranges[expr.name]
       return self.ranges[expr.name]
     
     elif c is Tuple:
@@ -261,17 +262,12 @@ class ValueRangeAnalyis(SyntaxVisitor):
   
   def set(self, name, val):
     if val is not None and val is not unknown_value:
+      
       old_value = self.ranges.get(name, unknown_value)
       self.ranges[name] = val
-      if old_value != val:
+      if old_value != val and old_value is not unknown_value:
         self.old_values[name] = old_value 
-    #if val is not None and val is not unknown_value:
-    #  old_value = self.ranges.get(name)
-    #  if old_value is not None:
-    #    if old_value != val:
-    #      val = unknown_value
-    #      self.old_values[name] = old_value
-    #  self.ranges[name] = val
+
       
   def add_range(self, x, y):
     if not isinstance(x, Interval) or not isinstance(y, Interval):
@@ -300,17 +296,19 @@ class ValueRangeAnalyis(SyntaxVisitor):
   
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ is Var:
-      self.set(stmt.lhs.name, self.get(stmt.rhs))
+      name = stmt.lhs.name 
+      v = self.get(stmt.rhs)
+
+      self.set(name, v)
   
   def visit_merge(self, phi_nodes):    
     for (k, (left,right)) in phi_nodes.iteritems():
       left_val = self.get(left)
       right_val = self.get(right)
-      self.set(k, combine(left_val, right_val))
+      self.set(k, left_val.combine(right_val))
 
   def visit_Select(self, expr):
-    return combine(self.get(expr.true_value), 
-                   self.get(expr.false_value))
+    return self.get(expr.true_value).combine(self.get(expr.false_value))
   
   def always_positive(self, x, inclusive = True):
     if not isinstance(x, Interval):
@@ -333,6 +331,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
     for (k, oldv) in old_values.iteritems():
       newv = self.ranges[k]
       if oldv != newv:
+        print "widening %s to %s" % (k, newv)
         self.ranges[k] = oldv.widen(newv)
           
   def run_loop(self, body, merge):
@@ -341,11 +340,13 @@ class ValueRangeAnalyis(SyntaxVisitor):
     old_values = self.old_values.pop()
     
     while len(old_values) > 0:
+      print "Repeating loop", len(old_values), old_values 
       self.old_values.push()
       self.visit_block(body)
       self.visit_merge(merge)
       self.widen(old_values)
       old_values = self.old_values.pop()
+      print "Values", self.ranges 
       
   def visit_While(self, stmt):
     self.run_loop(stmt.body, stmt.merge)

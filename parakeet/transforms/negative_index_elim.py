@@ -46,9 +46,10 @@ class NegativeIndexElim(RangeTransform):
       given_elts = [given if given.type != NoneType else slice_none 
                     for given in self.tuple_elts(index)]
       index_elts = given_elts + [slice_none] * (n_expected - n_given)
-
+      
     index_elts = list(index_elts)
     index_ranges = [self.get(idx_elt) for idx_elt in index_elts]
+
     
     assert len(index_ranges) == len(index_elts)
     shape = self.shape(expr.value)
@@ -121,6 +122,7 @@ class NegativeIndexElim(RangeTransform):
       else:
         index = index_elts[0]
       expr.index = index  
+
     return expr 
           
     

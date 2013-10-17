@@ -21,6 +21,9 @@ class PyModuleCompiler(FlatFnCompiler):
   entry-point that unboxes all the PyObject inputs, 
   runs a flattened computations, and boxes the result as PyObjects
   """
+  def __init__(self, module_entry = True, *args, **kwargs):
+    FlatFnCompiler.__init__(self, module_entry = module_entry, *args, **kwargs)
+    
   def unbox_scalar(self, x, t, target = None):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
     if target is None:
@@ -315,12 +318,14 @@ class PyModuleCompiler(FlatFnCompiler):
   def attribute(self, v, attr, t):
     if attr == "data":
       self.check_array(v)
-
-      result = "(PyArrayObject*) PyArray_Ravel((PyArrayObject*) %s, 0)" % (v,)
-
+      struct_type = self.struct_type(t)
       
-      return result   
-
+      ptr_type = type_mappings.to_ctype(t) 
+      data_field = "(%s) (((PyArrayObject*) %s)->data)" % (ptr_type, v) 
+      # get the data field but also fill the base object 
+      return self.fresh_var(struct_type, "data", "{%s, %s}" % (data_field, v))
+      
+      
     elif attr == "shape":
       self.check_array(v)
       elt_types = t.elt_types
@@ -372,66 +377,40 @@ class PyModuleCompiler(FlatFnCompiler):
   
   
   def visit_ArrayView(self, expr):
+    data = self.visit_expr(expr.data)
     ndims = expr.type.rank 
-    vec = self.visit_expr(expr.data)
     offset = self.visit_expr(expr.offset)
+    count = self.visit_expr(expr.size)
     
     if expr.strides.__class__ is Tuple:
       strides_elts = self.visit_expr_list(expr.strides.elts)  
     else:
-      strides_var = self.visit_expr(expr.strides)
-      strides_array = self.tuple_to_stack_array(strides_var, "strides_array", "npy_intp")
+      strides_array = self.tuple_to_stack_array(expr.strides, "strides_array", "npy_intp")
       strides_elts = ["%s[%d]" % (strides_array, i) for i in xrange(ndims)]
-    
-    if expr.shape.__class__ is Tuple:
-      shape_elts = self.visit_expr_list(expr.shape.elts) 
-    else:
-      shape_var = self.visit_expr(expr.strides)
-      shape_array = self.tuple_to_stack_array(shape_var, "shape_array", "npy_intp")
-      shape_elts = ["%s[%d]" % (shape_array, i) for i in xrange(ndims)]
-    
-    # slice out the 1D data array if there's an offset 
-    size =  "PySequence_Size( (PyObject*) %(vec)s)" % locals()
 
-    cond = self.gt(offset, "0", Int64)
-    if cond == "1":
-      self.append("""
-        %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
-        """ % locals())
-    elif cond != "0":
-      self.append("""
-        if (%(cond)s) {
-          %(vec)s = (PyArrayObject*) PySequence_GetSlice( (PyObject*)  %(vec)s, %(offset)s, %(size)s);
-        }""" % locals())
-    self.check_array(vec)
-
-    count = self.fresh_var("int64_t", "count", "PySequence_Size( (PyObject*) %s)" % vec)
-
+    shape_array = self.tuple_to_stack_array(expr.shape, "shape_array", "npy_intp")
+    shape_elts = ["%s[%d]" % (shape_array, i) for i in xrange(ndims)]
     
-      
     
-    # increase the rank of the 1D nd-array to whatever the rank of the result 
-    # should be so that the strides and shape arrays are of the appropriate size 
-    if ndims > 1:
-  
-      uprank_elts =  (count,) + ("1",) * (ndims-1) 
-      uprank_elts_as_pyobj = ["PyInt_FromLong(%s)"  % elt for elt in uprank_elts]
-      uprank_elts_str = ", ".join(uprank_elts_as_pyobj)
-      if ndims == 0: 
-        uprank_shape = "PyTuple_Pack(0)"
-      else:
-        uprank_shape = "PyTuple_Pack(%d, %s)" % (ndims, uprank_elts_str)
-      self.append("%s = (PyArrayObject*) PyArray_Reshape( (PyArrayObject*) %s, %s);" % (vec, vec, uprank_shape))
-      self.return_if_null(vec)
+    # PyObject* PyArray_SimpleNewFromData(int nd, npy_intp* dims, int typenum, void* data)
+    typenum = type_mappings.to_dtype(expr.data.type.elt_type)
+    array_alloc = \
+      "PyArray_SimpleNewFromData(%d, %s, %s, %s.data)" % (ndims, shape_array, typenum, data)
+    vec = self.fresh_var("PyArrayObject*", "fresh_array", array_alloc) 
+    self.return_if_null(vec)
+    
+    # if the pointer had a PyObject reference, 
+    # set that as the new array's base 
+    self.append("if (%s.base) { %s->base = %s.base; %s->flags &= ~NPY_ARRAY_OWNDATA; }" % \
+                (data, vec, data, vec))
+        
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
     self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))
-    numpy_shape = self.fresh_var("npy_intp*", "numpy_shape")
-    self.append("%s = PyArray_DIMS(  (PyArrayObject*) %s);" % (numpy_shape, vec))
     bytes_per_elt = expr.type.elt_type.dtype.itemsize
     
     for i, _ in enumerate(expr.strides.type.elt_types):
       self.append("%s[%d] = %s * %d;" % (numpy_strides, i, strides_elts[i], bytes_per_elt) )
-      self.append("%s[%d] = %s;" % (numpy_shape, i, shape_elts[i]))
+      
     
     self.append("""
       // clear both fortran and c layout flags 
@@ -474,15 +453,15 @@ class PyModuleCompiler(FlatFnCompiler):
     v = self.visit_expr(expr.value) 
     return self.attribute(v, attr, expr.type)
   
-  
-    
   def visit_Return(self, stmt):
-    v = self.as_pyobj(stmt.value)
-    if config.debug: 
-      self.print_pyobj_type(v, "Return type: ")
-      self.print_pyobj(v, "Return value: ")
-
-    return "return %s;" % v
+    if self.module_entry:
+      v = self.as_pyobj(stmt.value)
+      if config.debug: 
+        self.print_pyobj_type(v, "Return type: ")
+        self.print_pyobj(v, "Return value: ")
+      return "return %s;" % v
+    else:
+      return FlatFnCompiler.visit_Return(self, stmt)
   
   def visit_block(self, stmts, push = True):
     if push: self.push()
@@ -497,7 +476,6 @@ class PyModuleCompiler(FlatFnCompiler):
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
-  
          
   def visit_fn(self, fn):
     if config.print_input_ir:
@@ -539,9 +517,11 @@ class PyModuleCompiler(FlatFnCompiler):
 
         self.name_mappings[argname] = var
       
-        
+
+
     c_body = self.visit_block(fn.body, push=False)
-    c_body = self.indent("\n" + c_body )#+ "\nPyGILState_Release(gstate);")
+
+    c_body = self.indent(c_body )
     c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
     c_sig = "PyObject* %(c_fn_name)s (%(c_args)s)" % locals() 
     fndef = "%s {%s}" % (c_sig, c_body)

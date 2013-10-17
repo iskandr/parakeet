@@ -1,8 +1,7 @@
 ##########################
 #  Performance Options   #
 ##########################
-fast_math = True
-use_openmp = False 
+fast_math = True 
 # overload the default compiler path  
 compiler_path = None
 

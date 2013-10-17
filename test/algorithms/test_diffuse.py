@@ -1,5 +1,7 @@
 import numpy as np 
-from parakeet import testing_helpers
+from parakeet import testing_helpers, config
+
+config.default_backend = 'c'
 
 
 mu = 0.1
@@ -21,7 +23,7 @@ def diffuse_loops(iter_num):
     return u
 
 def test_diffuse_loops():
-  testing_helpers.expect(diffuse_loops, [2], diffuse_loops(2))
+  testing_helpers.expect(diffuse_loops, [3], diffuse_loops(3))
 
 
 def diffuse_array_expressions(iter_num):
@@ -39,7 +41,7 @@ def diffuse_array_expressions(iter_num):
     return u
 
 def test_diffuse_array_expressions():
-  testing_helpers.expect(diffuse_array_expressions, [2], diffuse_array_expressions(2))
+  testing_helpers.expect(diffuse_array_expressions, [3], diffuse_array_expressions(3))
 
 if __name__ == "__main__":
   testing_helpers.run_local_tests()

@@ -2,7 +2,7 @@ from collections import namedtuple
 
 from .. import names, prims  
 from ..ndtypes import (IntT, FloatT, TupleT, FnT, Type, BoolT, NoneT, Float32, Float64, Bool, 
-                       ClosureT, ScalarT, PtrT, NoneType)    
+                       ClosureT, ScalarT, PtrT, NoneType, ArrayT)    
 from ..syntax import (Const, Var,  PrimCall, Attribute, TupleProj, Tuple, ArrayView,
                       Expr, Closure, TypedFn)
 from ..syntax.helpers import get_types   
@@ -20,7 +20,9 @@ CompiledFlatFn = namedtuple("CompiledFlatFn",
 
 class FlatFnCompiler(BaseCompiler):
   
-  def __init__(self, struct_type_cache = None):
+  def __init__(self,  
+               module_entry = False, 
+               struct_type_cache = None):
     BaseCompiler.__init__(self)
     
     
@@ -40,11 +42,33 @@ class FlatFnCompiler(BaseCompiler):
     else:
       self._struct_type_cache = struct_type_cache
   
+
+      
+    # are we actually compiling the entry-point into a Python module?
+    # if so, expect some of the methods like visit_Return to be overloaded 
+    # to return PyObjects
+    self.module_entry = module_entry
+     
   def add_decl(self, decl):
     if decl not in self.declarations:
       self.declarations.append(decl)
   
-  def struct_type_from_fields(self, field_types):
+  def struct_type(self, parakeet_type):
+    if isinstance(parakeet_type, TupleT):
+      return self.struct_type_from_fields(parakeet_type.elt_types, 
+                                          struct_name = "tuple_type")
+    elif isinstance(parakeet_type, PtrT):
+      # need both an actual data pointer 
+      # and an optional PyObject base
+      elt_t = type_mappings.to_ctype(parakeet_type.elt_type) 
+      field_types = ["%s*" % elt_t, "PyObject*"]
+      return self.struct_type_from_fields(field_types, 
+                                          struct_name = "ptr_type",
+                                          field_names = ["data", "base"])
+    else:
+      assert False, "Don't know how to make C struct type for %s" % parakeet_type
+       
+  def struct_type_from_fields(self, field_types, struct_name = "struct_type", field_names = None):
     
     if any(not isinstance(t, str) for t in field_types):
       field_types = tuple(self.to_ctype(t) if isinstance(t, Type) else t 
@@ -52,36 +76,47 @@ class FlatFnCompiler(BaseCompiler):
     else:
       field_types = tuple(field_types)
     
-    if field_types in self._struct_type_cache:
-      return self._struct_type_cache[field_types]
+    if field_names is None:
+      field_names = tuple("elt%d" % i for i in xrange(len(field_types)))
+    else:
+      assert len(field_names) == len(field_types), \
+        "Mismatching number of types %d and field names %d" % (len(field_types), len(field_names))
+      field_names = tuple(field_names)
+      
+    key = field_types, struct_name, field_names 
+    if key in self._struct_type_cache:
+      return self._struct_type_cache[key]
     
-    typename = names.fresh("tuple_type").replace(".", "_")
+    typename = names.fresh(struct_name).replace(".", "_")
 
-    field_decls = ["  %s %s;" % (t, "elt%d" % i) for i,t in enumerate(field_types)]
+   
+
+    field_decls = ["  %s %s;" % (t, field_name) 
+                   for t,field_name in zip(field_types, field_names)]
     decl = "typedef struct %s {\n%s\n} %s;" % (typename, "\n".join(field_decls), typename)
     self.add_decl(decl)
-    self._struct_type_cache[field_types] = typename
+    self._struct_type_cache[key] = typename
     return typename 
   
-  
+
   def to_ctypes(self, ts):
     return tuple(self.to_ctype(t) for t in ts)
   
   def to_ctype(self, t):
-    if isinstance(t, TupleT):
-      elt_types = self.to_ctypes(t.elt_types)
-      return self.struct_type_from_fields(elt_types) 
+    if isinstance(t, (ArrayT, TupleT, PtrT)):
+      return self.struct_type(t)
     else:
       return type_mappings.to_ctype(t)
     
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
-
-    return "(PyArrayObject*) PyArray_SimpleNew(1, &%s, %s)" % (nelts, type_mappings.to_dtype(elt_t))
-  
-  
-  
+    bytes_per_elt = elt_t.nbytes
+    nbytes = "%s * %d" % (nelts, bytes_per_elt)
+    raw_ptr = "(%s) malloc(%s)" % (type_mappings.to_ctype(expr.type), nbytes)
+    struct_type = self.struct_type(expr.type)
+    return self.fresh_var(struct_type, "new_ptr", "{%s, NULL}" % raw_ptr)
+    
   def visit_Const(self, expr):
     if isinstance(expr.type, BoolT):
       return "1" if expr.value else "0"
@@ -272,9 +307,9 @@ class FlatFnCompiler(BaseCompiler):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
-    elt_t = expr.value.type.elt_type
-    ptr_t = "%s*" % self.to_ctype(elt_t)
-    return "( (%s) (PyArray_DATA(%s)))[%s]" % (ptr_t, arr, idx)
+    #elt_t = expr.value.type.elt_type
+    # ptr_t = "%s*" % self.to_ctype(elt_t)
+    return "%s.data[%s]" % (arr, idx)
   
   def visit_Call(self, expr):
     fn_name = self.get_fn(expr.fn)
@@ -388,8 +423,7 @@ class FlatFnCompiler(BaseCompiler):
       return "return;"
     elif isinstance(stmt.value, Tuple):
       # if not returning multiple values by reference, then make a struct for them
-      field_types = get_types(stmt.value.elts) 
-      struct_type = self.struct_type_from_fields(field_types)
+      struct_type = self.struct_type(stmt.value.type)
       result_elts = ", ".join(self.visit_expr(elt) for elt in stmt.value.elts)
       result_value = "{" + result_elts + "}"
       result = self.fresh_var(struct_type, "result", result_value)
@@ -426,7 +460,8 @@ class FlatFnCompiler(BaseCompiler):
         "Expected function or closure, got %s : %s" % (expr, expr.type)
       fn = expr.type.fn
     
-    compiler = self.__class__(struct_type_cache = self._struct_type_cache)
+    compiler = self.__class__(module_entry = False, 
+                              struct_type_cache = self._struct_type_cache)
     compiled = compiler.compile_flat_source(fn)
     
     if compiled.sig not in self.extra_function_signatures:
@@ -486,7 +521,7 @@ class FlatFnCompiler(BaseCompiler):
   
   def visit_flat_fn(self, fn, return_by_ref = False):
     
-    c_fn_name = self.fresh_name(fn.name)
+    c_fn_name = names.refresh(fn.name).replace(".", "_")
     arg_types = [self.to_ctype(t) for t in fn.input_types]
     arg_names = [self.name(old_arg) for old_arg in fn.arg_names]
     return_types = self.return_types(fn)
@@ -523,17 +558,15 @@ class FlatFnCompiler(BaseCompiler):
   _flat_compile_cache = {}
   def compile_flat_source(self, parakeet_fn):
       
-    # make sure compiled source uses consistent names for tuple types 
-    relevant_types = set(t for t in parakeet_fn.type_env.itervalues() 
-                         if isinstance(t, TupleT))
-    declared_tuples = set(t for t in self._struct_type_cache.iterkeys() 
-                          if t in relevant_types)
-  
-  
+    # make sure compiled source uses consistent names for tuple and array types, 
+    # which both need declarations for their C struct representations  
+    struct_types = set(t for t in parakeet_fn.type_env.itervalues() 
+                         if isinstance(t, (ArrayT, TupleT)))
+    
     # include your own class in the cache key so that we get distinct code 
     # for derived compilers like OpenMP and CUDA 
-    key = parakeet_fn.cache_key, frozenset(declared_tuples), self.__class__
-  
+    key = parakeet_fn.cache_key, frozenset(struct_types), self.__class__
+    
     if key in self._flat_compile_cache:
       return self._flat_compile_cache[key]
     

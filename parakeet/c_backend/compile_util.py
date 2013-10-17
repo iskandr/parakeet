@@ -73,10 +73,6 @@ python_include_dirs = [distutils.sysconfig.get_python_inc()]
 numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
 include_dirs = python_include_dirs + numpy_include_dirs 
 
-
-#def use_openmp(compiler):
-#  return not config.debug and config.use_openmp and compiler in ('gcc', 'g++', 'icc')
-
 def get_opt_flags():
   opt_flags = ['-O3', '-msse2']
   if config.fast_math:

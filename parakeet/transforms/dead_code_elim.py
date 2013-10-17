@@ -177,6 +177,7 @@ class DCE(Transform):
     for (name,t) in fn.type_env.iteritems():
       if self.is_live(name):
         type_env[name] = t
+
     fn.type_env = type_env
     Transform.post_apply(self, fn)
     return fn

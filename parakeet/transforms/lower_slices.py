@@ -8,16 +8,22 @@ from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none, none
 from transform import Transform
 
 
+
 class LowerSlices(Transform):  
 
+
+  
+  _setidx_cache = {}
   def make_setidx_fn(self, lhs_array_type, 
                              rhs_value_type, 
                              fixed_positions, 
-                             slice_positions, _cache = {}):
+                             slice_positions):
     fixed_positions = tuple(fixed_positions)
     slice_positions = tuple(slice_positions)
     key = lhs_array_type, rhs_value_type, fixed_positions, slice_positions
-    if key in _cache: return _cache[key]
+    if key in self._setidx_cache: 
+      return self._setidx_cache[key]
+
     
     n_fixed_indices = len(fixed_positions)
     n_parfor_indices = len(slice_positions)
@@ -81,7 +87,7 @@ class LowerSlices(Transform):
     value = builder.index(rhs, parfor_indices)
     builder.setidx(lhs, builder.tuple(indices), value)
     builder.return_(none)
-    _cache[key] = fn
+    self._setidx_cache[key] = fn
     return fn
     
     
@@ -201,6 +207,8 @@ class LowerSlices(Transform):
     if len(slices) == 0:
       self.setidx(lhs.value, self.tuple(scalar_indices), rhs)
       return 
+    
+
     # if we've gotten this far then there is a slice somewhere in the indexing 
     # expression, so we're going to turn the assignment into a setidx parfor 
     bounds = self.tuple([self.div(self.sub(stop, start), step)
@@ -213,7 +221,9 @@ class LowerSlices(Transform):
     starts = [start for (start, _, _) in slices]
     steps = [step for (_, _, step) in slices]
     closure = self.closure(setidx_fn, 
-                           [lhs.value, rhs] + scalar_indices + starts + steps)  
+                           [lhs.value, rhs] + scalar_indices + starts + steps)
+
+
     self.parfor(closure, bounds)
   
   def transform_TypedFn(self, expr):

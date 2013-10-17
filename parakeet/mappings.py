@@ -13,8 +13,6 @@ property_mappings = {
   # 'strides' : lib.strides, 
   'ndim' : lib.rank, 
   'T' : lib.transpose, 
-  
-       
 }
 
 method_mappings = {
