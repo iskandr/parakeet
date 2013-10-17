@@ -5,7 +5,7 @@ from .. import prims, syntax
 from .. analysis.collect_vars import collect_var_names
 from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
-from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType 
+from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType, SliceT
 
 from .. syntax import (AllocArray, Assign, ExprStmt, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
@@ -319,9 +319,23 @@ class Simplify(Transform):
     expr.step = self.transform_simple_expr(expr.step)
     return expr 
 
+  
+  def transform_index_expr(self, expr):
+    if expr.__class__ is Tuple:
+      new_elts = []
+      for elt in expr.elts:
+        new_elt = self.transform_expr(elt)
+        if not self.is_simple(new_elt) and new_elt.type.__class__ is not SliceT:
+          new_elt = self.temp(new_elt, "index_tuple_elt")
+        new_elts.append(new_elt)
+      expr.elts = tuple(new_elts)
+      return expr 
+    else:
+      return self.transform_expr(expr) 
+  
   def transform_Index(self, expr):
     expr.value = self.transform_expr(expr.value)
-    expr.index = self.transform_expr(expr.index)
+    expr.index = self.transform_index_expr(expr.index)
     if expr.value.__class__ is Array and expr.index.__class__ is Const:
       assert isinstance(expr.index.value, (int, long)) and \
              len(expr.value.elts) > expr.index.value
@@ -549,7 +563,7 @@ class Simplify(Transform):
 
   def transform_lhs_Index(self, lhs):
     # lhs.value = self.transform_expr(lhs.value)
-    lhs.index = self.transform_expr(lhs.index)
+    lhs.index = self.transform_index_expr(lhs.index)
     if lhs.value.__class__ is Var:
       stored = self.bindings.get(lhs.value.name)
       if stored and stored.__class__ is Var:

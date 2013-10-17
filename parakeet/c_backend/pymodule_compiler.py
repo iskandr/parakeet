@@ -325,7 +325,6 @@ class PyModuleCompiler(FlatFnCompiler):
       # get the data field but also fill the base object 
       return self.fresh_var(struct_type, "data", "{%s, %s}" % (data_field, v))
       
-      
     elif attr == "shape":
       self.check_array(v)
       elt_types = t.elt_types

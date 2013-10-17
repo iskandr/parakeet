@@ -41,7 +41,7 @@ def diffuse_array_expressions(iter_num):
     return u
 
 def test_diffuse_array_expressions():
-  testing_helpers.expect(diffuse_array_expressions, [3], diffuse_array_expressions(3))
+  testing_helpers.expect(diffuse_array_expressions, [2], diffuse_array_expressions(2))
 
 if __name__ == "__main__":
   testing_helpers.run_local_tests()

@@ -184,7 +184,7 @@ class LowerSlices(Transform):
         new_shape.append(shape_elt)
         stride_elt = self.mul(stride_elts[i], step, name = "new_stride")
         new_strides.append(stride_elt)
-   
+ 
     size = self.prod(new_shape)
     new_rank = len(slices)
     assert len(new_shape) == new_rank

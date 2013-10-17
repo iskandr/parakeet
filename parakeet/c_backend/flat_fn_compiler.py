@@ -18,6 +18,13 @@ CompiledFlatFn = namedtuple("CompiledFlatFn",
                              "declarations"))
 
 
+
+# mapping from (field_types, struct_name, field_names) to type names 
+_struct_type_names = {}
+
+# mapping from struct name to decl 
+_struct_type_decls = {}
+
 class FlatFnCompiler(BaseCompiler):
   
   def __init__(self,  
@@ -36,13 +43,6 @@ class FlatFnCompiler(BaseCompiler):
     self.extra_functions = {}
     self.extra_function_signatures = []
     
-    if struct_type_cache is None:
-      # don't create more than one struct type per tuple type
-      self._struct_type_cache = {}
-    else:
-      self._struct_type_cache = struct_type_cache
-  
-
       
     # are we actually compiling the entry-point into a Python module?
     # if so, expect some of the methods like visit_Return to be overloaded 
@@ -55,8 +55,7 @@ class FlatFnCompiler(BaseCompiler):
   
   def struct_type(self, parakeet_type):
     if isinstance(parakeet_type, TupleT):
-      return self.struct_type_from_fields(parakeet_type.elt_types, 
-                                          struct_name = "tuple_type")
+      return self.struct_type_from_fields(parakeet_type.elt_types)
     elif isinstance(parakeet_type, PtrT):
       # need both an actual data pointer 
       # and an optional PyObject base
@@ -68,7 +67,9 @@ class FlatFnCompiler(BaseCompiler):
     else:
       assert False, "Don't know how to make C struct type for %s" % parakeet_type
        
-  def struct_type_from_fields(self, field_types, struct_name = "struct_type", field_names = None):
+  def struct_type_from_fields(self, 
+                                 field_types, 
+                                 struct_name = "tuple_type", field_names = None):
     
     if any(not isinstance(t, str) for t in field_types):
       field_types = tuple(self.to_ctype(t) if isinstance(t, Type) else t 
@@ -83,19 +84,24 @@ class FlatFnCompiler(BaseCompiler):
         "Mismatching number of types %d and field names %d" % (len(field_types), len(field_names))
       field_names = tuple(field_names)
       
-    key = field_types, struct_name, field_names 
-    if key in self._struct_type_cache:
-      return self._struct_type_cache[key]
+    key = field_types, struct_name, field_names
+
+    if key in _struct_type_names:
+      typename = _struct_type_names[key]
+      decl = _struct_type_decls[typename]
+      if decl not in self.declarations:
+        self.declarations.append(decl)
+      return typename 
     
-    typename = names.fresh(struct_name).replace(".", "_")
-
-   
-
+    typename = names.fresh(struct_name).replace(".", "")
+     
     field_decls = ["  %s %s;" % (t, field_name) 
                    for t,field_name in zip(field_types, field_names)]
     decl = "typedef struct %s {\n%s\n} %s;" % (typename, "\n".join(field_decls), typename)
+    
+    _struct_type_names[key] = typename
+    _struct_type_decls[typename] = decl
     self.add_decl(decl)
-    self._struct_type_cache[key] = typename
     return typename 
   
 
@@ -103,8 +109,10 @@ class FlatFnCompiler(BaseCompiler):
     return tuple(self.to_ctype(t) for t in ts)
   
   def to_ctype(self, t):
-    if isinstance(t, (ArrayT, TupleT, PtrT)):
+    if isinstance(t, (TupleT, PtrT)):
       return self.struct_type(t)
+    elif isinstance(t, ArrayT):
+      assert False, "Unexpected ArrayT in flattened code"
     else:
       return type_mappings.to_ctype(t)
     
@@ -460,8 +468,7 @@ class FlatFnCompiler(BaseCompiler):
         "Expected function or closure, got %s : %s" % (expr, expr.type)
       fn = expr.type.fn
     
-    compiler = self.__class__(module_entry = False, 
-                              struct_type_cache = self._struct_type_cache)
+    compiler = self.__class__(module_entry = False)
     compiled = compiler.compile_flat_source(fn)
     
     if compiled.sig not in self.extra_function_signatures:
@@ -524,6 +531,7 @@ class FlatFnCompiler(BaseCompiler):
     c_fn_name = names.refresh(fn.name).replace(".", "_")
     arg_types = [self.to_ctype(t) for t in fn.input_types]
     arg_names = [self.name(old_arg) for old_arg in fn.arg_names]
+
     return_types = self.return_types(fn)
     n_return = len(return_types)
     
