@@ -94,7 +94,7 @@ class Interval(AbstractValue):
     lower_diff = other.lower - self.lower
     upper_diff = other.upper - self.upper
     
-    print self, other, lower_diff, upper_diff   
+
     if lower_diff < 0:
       lower = -np.inf
     else:
@@ -209,7 +209,6 @@ class ValueRangeAnalyis(SyntaxVisitor):
       return Interval(expr.value, expr.value)
     
     elif c is Var and expr.name in self.ranges:
-      # print "GET", expr.name, self.ranges[expr.name]
       return self.ranges[expr.name]
     
     elif c is Tuple:
@@ -349,7 +348,6 @@ class ValueRangeAnalyis(SyntaxVisitor):
   def widen(self, old_values):
     for (k, oldv) in old_values.iteritems():
       newv = self.ranges[k]
-      print oldv, newv 
       if oldv != newv:
         self.ranges[k] = oldv.widen(newv)
           
@@ -369,12 +367,17 @@ class ValueRangeAnalyis(SyntaxVisitor):
     old_values = self.old_values.pop()
     self.widen(old_values)
     
+    # TODO: verify that it's safe not to run loop with widened values
+    #self.visit_block(body)
+    #self.visit_merge(merge)
+    
+    
   def visit_While(self, stmt):
     self.run_loop(stmt.body, stmt.merge)
   
   
   def visit_ForLoop(self, stmt):    
-    print stmt 
+
     start = self.get(stmt.start)
     stop = self.get(stmt.stop)
     step = self.get(stmt.step)

@@ -394,14 +394,19 @@ class PyModuleCompiler(FlatFnCompiler):
     # PyObject* PyArray_SimpleNewFromData(int nd, npy_intp* dims, int typenum, void* data)
     typenum = type_mappings.to_dtype(expr.data.type.elt_type)
     array_alloc = \
-      "PyArray_SimpleNewFromData(%d, %s, %s, %s.data)" % (ndims, shape_array, typenum, data)
+      "PyArray_SimpleNewFromData(%d, %s, %s, &%s.data[%s])" % \
+        (ndims, shape_array, typenum, data, offset)
     vec = self.fresh_var("PyArrayObject*", "fresh_array", array_alloc) 
     self.return_if_null(vec)
     
     # if the pointer had a PyObject reference, 
     # set that as the new array's base 
-    self.append("if (%s.base) { %s->base = %s.base; %s->flags &= ~NPY_ARRAY_OWNDATA; }" % \
-                (data, vec, data, vec))
+    self.append("""
+      if (%s.base) { 
+        %s->base = %s.base;
+        Py_INCREF(%s.base);  
+        %s->flags &= ~NPY_ARRAY_OWNDATA; 
+      }""" % (data, vec, data, data, vec))
         
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
     self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))

@@ -38,6 +38,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   for backend in ('interp', 'c', 'openmp'):
     try: 
       result = run_untyped_fn(untyped_fn, _copy_list(args), backend = backend)
+      
     except: 
       if config.testing_find_broken_transform: 
         find_broken_transform(fn, args, expected)
@@ -49,9 +50,12 @@ def expect(fn, args, expected, msg = None, valid_types = None):
       label += ": " + str(msg)
     
     try: 
+      if hasattr(result, 'flags'):
+        print result.flags
       expect_eq(result, expected, label)
     except: 
-      if config.testing_find_broken_transform: find_broken_transform(fn, args, expected)
+      if config.testing_find_broken_transform: 
+        find_broken_transform(fn, args, expected)
       raise 
     
     if valid_types is not None:

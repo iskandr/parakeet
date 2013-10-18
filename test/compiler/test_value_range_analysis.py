@@ -58,13 +58,16 @@ def test_const():
 
 def nested_loops():
   x = 0
+  y = 0
+  z = 0 
   for i in xrange(10):
     x = x + i
     for j in xrange(3,12,1):
-      x = x + j
-    
-  z = x
-  return z
+      y = y + x
+      for k in xrange(3):
+        z = z + y
+  q = z
+  return q
 
 def test_nested_loops():
   ranges = infer_ranges(nested_loops, [])    
@@ -79,7 +82,7 @@ def test_nested_loops():
         expect_range(k,v,0,None)
       except:
         expect_range(k,v,3,np.inf)
-    elif k.startswith("z"):
+    elif k.startswith("q"):
       expect_range(k,v,None,np.inf)
 if __name__ == "__main__":
   testing_helpers.run_local_tests()
