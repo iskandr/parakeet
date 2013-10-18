@@ -8,11 +8,8 @@ from compiler import MulticoreCompiler
 
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
-  print "Before indexify", fn 
   fn = indexify(fn)
-  print "Before flatten", fn 
   fn = flatten(fn)
-   
   if config.stride_specialization:
     fn = specialize(fn, python_values = args)
       

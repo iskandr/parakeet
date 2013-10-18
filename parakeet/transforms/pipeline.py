@@ -73,7 +73,7 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
                                     memoize = False, 
                                     cleanup = [])
  
-lower_slices = Phase([NegativeIndexElim,LowerSlices], copy = False, memoize = False)
+
 
 high_level_optimizations = Phase([
                                     inline_opt, 
@@ -83,7 +83,8 @@ high_level_optimizations = Phase([
                                     fusion_opt, 
                                     copy_elim,
                                     LowerArrayOperators,
-                                    lower_slices, 
+                                    NegativeIndexElim,
+                                    LowerSlices, 
                                     symbolic_range_propagation,
                                  ], 
                                  depends_on = normalize,
@@ -94,7 +95,7 @@ high_level_optimizations = Phase([
 
 indexify = Phase([
                     IndexifyAdverbs, 
-                    lower_slices, 
+                    LowerSlices, 
                     inline_opt, Simplify, DCE, 
                     ShapePropagation, 
                     IndexMapElimination,

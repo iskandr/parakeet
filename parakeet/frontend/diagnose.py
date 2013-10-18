@@ -1,3 +1,4 @@
+import sys 
 from treelike.testing_helpers import eq
 from run_function import specialize 
 from ..transforms import Phase, Transform, CloneFunction
@@ -50,17 +51,21 @@ def find_broken_transform(fn, inputs, expected,
                              print_functions = True, 
                              last_phase = loopify):
   from .. import interp 
-  # print "[Diagnose] Specializing function..."
+  
+
   fn, args = specialize(fn, inputs, optimize=False)  
-  # print "[Diagnose] Trying function %s before transformations.." % fn.name
+
   try:  
     interp_result = interp.eval(fn, args)
   except:
-    print "[Diagnose] Runtime error in ", fn 
-    interp_result = None
+    print "[Diagnose] Runtime before any optimizations while trying to run", fn
+    raise  
+    
   
    
   if not eq(interp_result, expected):
+    print "[Diagnose] Expected:", expected 
+    print "[Diagnose] Result:", interp_result
     print "[Diagnose] This function was busted before we optimized anything!" 
     return None 
   transforms = get_transform_list(fn, last_phase = last_phase)

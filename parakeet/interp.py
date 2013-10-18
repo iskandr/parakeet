@@ -4,12 +4,12 @@ import types
 
 
 from frontend import ast_conversion
-from ndtypes import ScalarT, StructT, Type, type_conv     
+from ndtypes import ScalarT, StructT,  type_conv     
 from syntax import (Expr, Var, Tuple, 
                     UntypedFn, TypedFn, 
                     Return, If, While, ForLoop, ParFor, ExprStmt,   
                     ActualArgs, 
-                    Assign, Index, AllocArray,)
+                    Assign, Index, )
 
 
 class ReturnValue(Exception):
@@ -60,6 +60,7 @@ def eval_fn(fn, actuals):
   else:
     return fn(*actuals)
   
+
   def eval_args(args):
     if isinstance(args, (list, tuple)):
       return map(eval_expr, args)
@@ -138,7 +139,7 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-      if True:
+      if False:
         print "data", data 
         print "shape",  shape 
         print "strides", strides
@@ -162,12 +163,18 @@ def eval_fn(fn, actuals):
     def expr_ConstArray():
       shape = eval_expr(expr.shape)
       value = eval_expr(expr.value)
-      return np.ones(shape, dtype = expr.value.type.elt_type.dtype) * value 
+      return np.ones(shape, dtype = expr.value.type.dtype) * value 
     
     def expr_ConstArrayLike():
       array = eval_expr(expr.array)
       value = eval_expr(expr.value)
       return np.ones_like(array, dtype = expr.value.type.elt_type.dtype) * value 
+    
+    def expr_TypeValue():
+      t = expr.type_value  
+      assert isinstance(t, ScalarT), \
+        "Parakeet only supports scalar types as values, not %s" % expr 
+      return t.dtype 
     
     def expr_Shape():
       return np.shape(eval_expr(expr.array))
@@ -280,8 +287,12 @@ def eval_fn(fn, actuals):
       for i in xrange(niters):
         elt_args = []
         for arg in args:
-          indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
-          elt_args.append(arg[tuple(indices)])
+          r = rankof(arg)
+          if r > 0:
+            indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+            elt_args.append(arg[tuple(indices)])
+          else:
+            elt_args.append(arg)
         results.append(eval_fn(fn, elt_args))
       return np.array(results)
     
