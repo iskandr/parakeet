@@ -227,6 +227,7 @@ class LowerSlices(Transform):
     self.parfor(closure, bounds)
   
   def transform_TypedFn(self, expr):
+
     if self.fn.created_by is not None:
       return self.fn.created_by.apply(expr)
     else:

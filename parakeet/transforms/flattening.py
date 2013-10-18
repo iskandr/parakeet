@@ -394,6 +394,7 @@ class BuildFlatFn(Builder):
   
     
   def flatten_Index(self, expr):
+    print expr 
     t = expr.value.type 
     if isinstance(t, PtrT):
       return [expr]   

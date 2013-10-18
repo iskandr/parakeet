@@ -121,6 +121,7 @@ class Phase(object):
     
     original_key = fn.cache_key
     if original_key in self.cache:
+
       return self.cache[original_key]
 
     if self.depends_on and run_dependencies:

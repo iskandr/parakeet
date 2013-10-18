@@ -1,20 +1,20 @@
 from .. import config 
 
 from ..c_backend.prepare_args import prepare_args  
-from ..transforms.pipeline import flatten
+from ..transforms.pipeline import flatten, indexify 
 from ..transforms.stride_specialization import specialize
 
 from compiler import MulticoreCompiler 
 
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
-  #print "Input", fn 
+  print "Before indexify", fn 
+  fn = indexify(fn)
+  print "Before flatten", fn 
   fn = flatten(fn)
-  #print "Output", fn 
+   
   if config.stride_specialization:
     fn = specialize(fn, python_values = args)
-  #print "Output2", fn 
-  
       
   compiled_fn = MulticoreCompiler().compile_entry(fn)
  
