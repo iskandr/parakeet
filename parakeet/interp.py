@@ -331,8 +331,12 @@ def eval_fn(fn, actuals):
       for i in xrange(niters):
         elt_args = []
         for arg in args:
-          indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
-          elt_args.append(arg[tuple(indices)])
+          r = rankof(arg)
+          if r > 0:
+            indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+            elt_args.append(arg[tuple(indices)])
+          else:
+            elt_args.append(arg)
         elt_result = eval_fn(fn, elt_args)
         if acc is not None:
           acc = eval_fn(combine, [acc, elt_result])
