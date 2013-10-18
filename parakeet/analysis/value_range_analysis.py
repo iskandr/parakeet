@@ -1,13 +1,13 @@
-from treelike import ScopedSet, ScopedDict 
+from treelike import  ScopedDict 
 
 from .. import prims  
 from ..ndtypes import NoneType, get_rank 
-from ..syntax import Var, Const, PrimCall, Tuple, Slice, TupleProj, Attribute, Shape, While 
+from ..syntax import Var, Const, PrimCall, Tuple, Slice, TupleProj, Attribute, Shape 
  
 import numpy as np 
 from ..syntax.helpers import unwrap_constant
 from syntax_visitor import SyntaxVisitor
-from pygments.token import Other
+
 
 
 class AbstractValue(object):
@@ -27,7 +27,11 @@ class AbstractValue(object):
       return any_value 
   
   def widen(self, other):
-    return self.combine(other) 
+    if self == other:
+      return self 
+    else:
+      assert False, "widening not implemented for (%s, %)" % (self, other) 
+    
   
 class Unknown(AbstractValue):
   """
@@ -38,7 +42,10 @@ class Unknown(AbstractValue):
     return "<unknown>"
   
   def combine(self, other):
-    return other 
+    return other
+  
+  def widen(self, other):
+    return other  
   
   
 unknown_value = Unknown()
@@ -52,6 +59,9 @@ class AnyValue(AbstractValue):
     return "<any>"
   
   def combine(self, other):
+    return any_value 
+  
+  def widen(self, other):
     return any_value 
   
   def __eq__(self, other):
@@ -75,18 +85,22 @@ class Interval(AbstractValue):
     return other.__class__ is Interval and self.lower == other.lower and self.upper == other.upper
   
   def widen(self, other):
+    
     """
     Like 'combine' but not symmetric-- the other value
     is a more recent version from within a loop, 
     so try to follow the 'trend' of its changes. 
     """
     lower_diff = other.lower - self.lower
-    upper_diff = other.lower - self.lower
+    upper_diff = other.upper - self.upper
     
+    print self, other, lower_diff, upper_diff   
     if lower_diff < 0:
       lower = -np.inf
     else:
       lower = self.lower 
+    
+    
     
     if upper_diff > 0:
       upper = np.inf 
@@ -249,6 +263,7 @@ class ValueRangeAnalyis(SyntaxVisitor):
         x = self.get(expr.args[0])
         y = self.get(expr.args[1])
         if p == prims.add:
+
           return self.add_range(x,y)
         elif p == prims.subtract:
           return self.sub_range(x,y)
@@ -262,7 +277,6 @@ class ValueRangeAnalyis(SyntaxVisitor):
   
   def set(self, name, val):
     if val is not None and val is not unknown_value:
-      
       old_value = self.ranges.get(name, unknown_value)
       self.ranges[name] = val
       if old_value != val and old_value is not unknown_value:
@@ -298,9 +312,14 @@ class ValueRangeAnalyis(SyntaxVisitor):
     if stmt.lhs.__class__ is Var:
       name = stmt.lhs.name 
       v = self.get(stmt.rhs)
-
       self.set(name, v)
   
+  def visit_merge_left(self, phi_nodes):
+    for (k, (left, _)) in phi_nodes.iteritems():
+      left_val = self.get(left)
+      self.set(k, left_val)
+      
+      
   def visit_merge(self, phi_nodes):    
     for (k, (left,right)) in phi_nodes.iteritems():
       left_val = self.get(left)
@@ -330,29 +349,32 @@ class ValueRangeAnalyis(SyntaxVisitor):
   def widen(self, old_values):
     for (k, oldv) in old_values.iteritems():
       newv = self.ranges[k]
+      print oldv, newv 
       if oldv != newv:
-        print "widening %s to %s" % (k, newv)
         self.ranges[k] = oldv.widen(newv)
           
   def run_loop(self, body, merge):
-    self.old_values.push()
-    self.visit_block(body)
-    old_values = self.old_values.pop()
     
-    while len(old_values) > 0:
-      print "Repeating loop", len(old_values), old_values 
-      self.old_values.push()
-      self.visit_block(body)
-      self.visit_merge(merge)
-      self.widen(old_values)
-      old_values = self.old_values.pop()
-      print "Values", self.ranges 
-      
+    
+    # run loop for the first time 
+    self.old_values.push()
+    self.visit_merge_left(merge)
+    self.visit_block(body)
+    self.visit_merge(merge)
+    
+    #run loop for the second time 
+    self.visit_block(body)
+    self.visit_merge(merge)
+    
+    old_values = self.old_values.pop()
+    self.widen(old_values)
+    
   def visit_While(self, stmt):
     self.run_loop(stmt.body, stmt.merge)
   
   
   def visit_ForLoop(self, stmt):    
+    print stmt 
     start = self.get(stmt.start)
     stop = self.get(stmt.stop)
     step = self.get(stmt.step)

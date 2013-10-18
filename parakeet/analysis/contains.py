@@ -10,6 +10,7 @@ def contains_structs(fn):
   return False
 
 
+
 class Yes(Exception):
   pass 
 
