@@ -257,6 +257,8 @@ def increase_rank(x, axis, dim_expr):
   else:
     raise RuntimeError("Don't know how to raise rank of value %s" % x)
 
+
+
 def is_scalar(v):
   return isinstance(v, Scalar)
 
@@ -413,3 +415,15 @@ def computable_dim(d):
   c = d.__class__ 
   return c is Var or c is Const or \
     (isinstance(d, Binop) and computable_dim(d.x) and computable_dim(d.y))
+
+
+def dims(v):
+  if isinstance(v, Shape):
+    return tuple(v.dims) 
+  elif isinstance(v, Tuple):
+    return tuple(v.elts) 
+  else:
+    return ()
+
+def combine_dims(v1, v2):
+  return dims(v1) + dims(v2)

@@ -1,7 +1,7 @@
 
 from .. import syntax, prims 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
-from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT, FnT
+from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT
 from ..syntax import unwrap_constant 
 
 import shape
@@ -9,10 +9,9 @@ import shape_from_type
 from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown, 
                    ConstSlice, Struct, AnyScalar, Add, Mult, Div, Sub, 
                    any_scalar, unknown_value, const, any_value, combine_list, 
-                   increase_rank, make_shape, is_zero, is_one, Ptr,    
+                   increase_rank, make_shape, is_zero, is_one, Ptr,
+                   dims, combine_dims     
                    ) 
-from parakeet.syntax.adverbs import IndexReduce
-from parakeet.syntax.adverb_helpers import max_rank_arg
 
 class ShapeInferenceFailure(Exception):
   def __init__(self, value, fn):
@@ -334,6 +333,9 @@ class ShapeInference(SyntaxVisitor):
   def visit_Alloc(self, expr):
     return Ptr(any_scalar)
 
+  def visit_TypeValue(self, expr):
+    return unknown_value
+  
   def visit_Struct(self, expr):
     if isinstance(expr.type, ArrayT):
       shape_tuple = self.visit_expr(expr.args[1])
@@ -580,10 +582,17 @@ class ShapeInference(SyntaxVisitor):
         (expr, arr, idx)
 
 
+  
   def visit_IndexMap(self, expr):
     shape_tuple = self.visit_expr(expr.shape)
-    fn = self.visit_expr(expr.fn)
-    assert False, "IndexMap not implemented"
+    clos = self.visit_expr(expr.fn)
+    
+    if isinstance(clos.fn.input_types[-1], TupleT):
+      elt_result = symbolic_call(clos, [shape_tuple])
+    else:
+      elt_result = symbolic_call(clos, shape_tuple.elts)
+    return combine_dims(shape_tuple, elt_result)
+    
     
   def visit_IndexReduce(self, expr):
     fn = self.visit_expr(expr.fn)
@@ -643,17 +652,12 @@ class ShapeInference(SyntaxVisitor):
     fn = self.visit_expr(expr.fn)
     assert False, "OuterMap needs an implementation"
 
-  def bind(self, lhs, rhs):
-    if isinstance(lhs, syntax.Tuple):
-      assert isinstance(rhs, Tuple)
-      for l,r in zip(lhs.elts, rhs.elts):
-        self.bind(l,r)
-    elif isinstance(lhs, syntax.Var):
-      self.value_env[lhs.name] = rhs
+
 
   def visit_Assign(self, stmt):
-    rhs = self.visit_expr(stmt.rhs)
-    self.bind(stmt.lhs, rhs)
+    if stmt.lhs.__class__ in (syntax.Var, syntax.Tuple):
+      rhs = self.visit_expr(stmt.rhs)
+      bind_syntax(stmt.lhs, rhs, self.value_env)
 
   def visit_Return(self, stmt):
     new_value = self.visit_expr(stmt.value)
@@ -698,6 +702,15 @@ def call_shape_expr(typed_fn):
   _shape_cache[key] = abstract_shape
   return abstract_shape
 
+def bind_syntax(lhs, rhs, env):
+  if isinstance(lhs, syntax.Tuple):
+    assert isinstance(rhs, Tuple), "Expected tuple on RHS of binding %s = %s" % (lhs,rhs)
+    for l,r in zip(lhs.elts, rhs.elts):
+      bind_syntax(l, r, env)
+  elif isinstance(lhs, syntax.Var):
+    env[lhs.name] = rhs
+
+    
 def bind(lhs, rhs, env):
   if isinstance(lhs, Var):
     env[lhs] = rhs
@@ -708,8 +721,13 @@ def bind(lhs, rhs, env):
     assert isinstance(rhs, Closure)
     bind_pairs(lhs.args, rhs.args, env)
   elif isinstance(lhs, Tuple):
-    assert isinstance(rhs, Tuple)
-    bind_pairs(lhs.elts, rhs.elts, env)
+    if rhs == any_value: 
+      bind_pairs(lhs.elts, [any_value for _ in lhs.elts], env)
+    elif lhs == unknown_value:
+      bind_pairs(lhs.elts, [unknown_value for _ in lhs.elts], env)
+    else:
+      assert isinstance(rhs, Tuple), "Expected tuple on RHS of binding %s = %s" % (lhs,rhs)
+      bind_pairs(lhs.elts, rhs.elts, env)
   else:
     raise RuntimeError("Unexpected shape LHS: %s" % lhs)
 

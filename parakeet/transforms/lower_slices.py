@@ -6,11 +6,21 @@ from ..syntax.helpers import zero_i64, one_i64, all_scalars, slice_none, none
 
 
 from transform import Transform
-
+from phase import Phase 
 
 
 class LowerSlices(Transform):  
-
+  
+  def pre_apply(self, old_fn):
+    print "BEFORE"
+    for k,v in sorted(old_fn.type_env.items()):
+      print "-- ", k,v
+    
+  def post_apply(self, old_fn):
+    print "AFTER"
+    for k, v in sorted(old_fn.type_env.items()):
+      print "-- ", k,v 
+                       
 
   
   _setidx_cache = {}
@@ -227,12 +237,10 @@ class LowerSlices(Transform):
     self.parfor(closure, bounds)
   
   def transform_TypedFn(self, expr):
-
-    if self.fn.created_by is not None:
-      return self.fn.created_by.apply(expr)
-    else:
-      import pipeline 
-      return pipeline.high_level_optimizations.apply(expr)
+    if self.fn.created_by is not None and isinstance (self.fn.created_by, Phase):
+        return self.fn.created_by.apply(expr)
+    import pipeline
+    return pipeline.high_level_optimizations.apply(expr)
   
   def transform_Assign(self, stmt):
     lhs_class = stmt.lhs.__class__
