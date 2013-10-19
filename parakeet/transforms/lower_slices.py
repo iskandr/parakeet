@@ -189,6 +189,7 @@ class LowerSlices(Transform):
     new_rank = len(slices)
     assert len(new_shape) == new_rank
     assert len(new_strides) == new_rank
+
     new_array = self.array_view(data, self.tuple(new_shape), self.tuple(new_strides), offset, size)
     assert new_array.type.rank == new_rank
     return new_array
