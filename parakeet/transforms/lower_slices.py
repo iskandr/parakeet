@@ -11,16 +11,6 @@ from phase import Phase
 
 class LowerSlices(Transform):  
   
-  def pre_apply(self, old_fn):
-    print "BEFORE"
-    for k,v in sorted(old_fn.type_env.items()):
-      print "-- ", k,v
-    
-  def post_apply(self, old_fn):
-    print "AFTER"
-    for k, v in sorted(old_fn.type_env.items()):
-      print "-- ", k,v 
-                       
 
   
   _setidx_cache = {}

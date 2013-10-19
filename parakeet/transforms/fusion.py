@@ -92,13 +92,8 @@ class Fusion(Transform):
     self.use_counts = use_count(fn)
 
   def transform_TypedFn(self, fn):
-    if self.fn.created_by is not None:
-      return self.fn.created_by.apply(fn)
-    else:
-
-      # at the very least do high level optimizations
-      import pipeline
-      return pipeline.high_level_optimizations(fn)
+    import pipeline
+    return pipeline.high_level_optimizations(fn)
 
   def transform_Assign(self, stmt):
     if self.recursive:

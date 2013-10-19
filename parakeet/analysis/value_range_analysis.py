@@ -77,10 +77,13 @@ class Interval(AbstractValue):
     self.upper = upper 
   
   def combine(self, other):
+    if other.__class__ is not Interval:
+      return any_value 
+    
     lower = min(self.lower, other.lower)
     upper = max(self.upper, other.upper)
     return Interval(lower,upper)
-  
+    
   def __eq__(self, other):
     return other.__class__ is Interval and self.lower == other.lower and self.upper == other.upper
   
@@ -91,6 +94,9 @@ class Interval(AbstractValue):
     is a more recent version from within a loop, 
     so try to follow the 'trend' of its changes. 
     """
+    
+    if other.__class__ is not Interval:
+      return any_value 
     lower_diff = other.lower - self.lower
     upper_diff = other.upper - self.upper
     

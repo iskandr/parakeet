@@ -710,7 +710,6 @@ def bind_syntax(lhs, rhs, env):
   elif isinstance(lhs, syntax.Var):
     env[lhs.name] = rhs
 
-    
 def bind(lhs, rhs, env):
   if isinstance(lhs, Var):
     env[lhs] = rhs
