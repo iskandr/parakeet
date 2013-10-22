@@ -110,6 +110,17 @@ class BaseCompiler(object):
       self.append("%s %s = %s;" % (t_str, name, init))
     return name
   
+  def fresh_array_var(self, t, n, prefix = None):
+    if prefix is None:
+      prefix = "temp"
+    name = self.fresh_name(prefix)
+    if isinstance(t, str):
+      t_str = t
+    else:
+      t_str = to_ctype(t)
+    self.append("%s %s[%d];" % (t_str, name, n))
+    return name
+  
   def assign(self, name, rhs):
     self.append("%s = %s;" % (name, rhs))
   

@@ -1,4 +1,4 @@
-from parakeet.testing_helpers import expect 
+from parakeet.testing_helpers import expect, run_local_tests
 
 def call_const_lambda():
   return (lambda: 1)()
@@ -17,3 +17,6 @@ def call_closure_lambda(x):
 
 def test_call_closure_lambda():
   expect(call_closure_lambda, [1], 2)
+
+if __name__ == "__main__":
+  run_local_tests()

@@ -8,8 +8,8 @@ compiler_path = None
 ##########################
 # Insert Debugging Code  #
 ##########################
-debug = False
-check_pyobj_types = False 
+debug = True
+check_pyobj_types = True 
 
 #########################
 #  Verbose Printing     #

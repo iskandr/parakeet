@@ -9,7 +9,7 @@ from compiler import MulticoreCompiler
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
   fn = indexify(fn)
-  fn = flatten(fn)
+  #fn = flatten(fn)
   if config.stride_specialization:
     fn = specialize(fn, python_values = args)
       

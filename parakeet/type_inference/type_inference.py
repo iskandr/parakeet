@@ -171,7 +171,6 @@ class TypeInference(LocalTypeInference):
     if all(isinstance(v.type, TupleT) for v in typed_values):
       # keep the shortest tuple
       n = min(len(v.type.elt_types) for v in typed_values)
-      print n, typed_values 
       zip_inputs = []
       for v in typed_values:
         zip_inputs.append(self.tuple_elts(v)[:n])

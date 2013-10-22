@@ -7,7 +7,9 @@ from ..ndtypes import (TupleT,  ArrayT, NoneT,
                        BoolT,  
                        IntT,  Int64, SignedT,
                        PtrT,  
-                       ClosureT) 
+                       ClosureT, 
+                       SliceT, ptr_type)
+ 
 
 import type_mappings
 from flat_fn_compiler import FlatFnCompiler
@@ -49,7 +51,64 @@ class PyModuleCompiler(FlatFnCompiler):
       else { PyArray_ScalarAsCtype(%(x)s, &%(result)s); }
     """ % locals())
     return result 
+  
+  def unbox_array(self, boxed_array, elt_type, ndims, target = "array_value"):
+    shape_ptr = self.fresh_var("npy_intp*", "shape_ptr", "PyArray_DIMS(%s)" % boxed_array)
+    strides_bytes = self.fresh_var("npy_intp*", "strides_bytes", 
+                                   "PyArray_STRIDES( (PyArrayObject*) %s)" % boxed_array)
+
+    #strides_elts = self.fresh_name("strides_elts")
+    #self.append("npy_intp %s[%d];" % (strides_elts, ndims))
+    bytes_per_elt = elt_type.dtype.itemsize 
+    typename = self.array_struct_type(elt_type, ndims)
+    result = self.fresh_var(typename, "unboxed_array")
+    ptr = self.get_boxed_array_ptr(boxed_array, ptr_type(elt_type))
+    self.setfield(result, 'data', ptr)
+    for i in xrange(ndims):
+      if config.debug:
+        self.printf("converting strides %s[%d] = %%ld to %%ld" % (strides_bytes, i), 
+                    "%s[%d]" % (strides_bytes, i), "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))   
+      self.setidx("%s.strides" % result, i, "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))
+      self.setidx("%s.shape" % result, i, "%s[%d]" % (shape_ptr, i))
+    self.setfield(result, "offset", "0")
+    self.setfield(result, "size", "PyArray_Size(%s)" % boxed_array)
+    return result 
+  
+  def unbox_tuple(self, boxed_tuple, tuple_t, target = "tuple_value"):
+    if isinstance(tuple_t, TupleT):
+      elt_types = tuple(tuple_t.elt_types)
+    elif isinstance(tuple_t, ClosureT):
+      elt_types = tuple(tuple_t.arg_types)
+    else:
+      assert False, "Expected tuple type, got %s" % tuple_t
+     
+    c_struct_t = self.struct_type_from_fields(elt_types)
+    unboxed_elts = []
+    for i in xrange(len(elt_types)):
+      elt = self.fresh_var("PyObject*", "boxed_elt%d" % i, 
+                           self.tuple_elt(boxed_tuple, i, elt_types[i], boxed=True))
+      unboxed_elts.append(elt)
+    elts_str = ", ".join(unboxed_elts)
+    return self.fresh_var(c_struct_t, target, "{" + elts_str + "}")
       
+  def unbox(self, boxed, t, target = None):
+    if isinstance(t, (NoneT, PtrT, ScalarT)):
+      return self.unbox_scalar(boxed, t, target = target)
+    elif isinstance(t, (ClosureT, TupleT)):
+      return self.unbox_tuple(boxed, t, target = target)
+    elif isinstance(t, SliceT):
+      return self.unbox_slice(boxed, 
+                              start_type = t.start_type, 
+                              stop_type = t.stop_type, 
+                              step_type = t.step_type, 
+                              target = target)
+    elif isinstance(t, ArrayT):
+      return self.unbox_array(boxed, 
+                              elt_type = t.elt_type, 
+                              ndims = t.rank, target = target)
+    else:
+      return boxed 
+        
   def box_scalar(self, x, t):  
     if isinstance(t, BoolT):
       return "PyBool_FromLong(%s)" % x
@@ -82,6 +141,10 @@ class PyModuleCompiler(FlatFnCompiler):
       return self.box_scalar(x, t)
     elif isinstance(t, (ClosureT, TupleT)):
       return self.box_tuple(x, t)
+    elif isinstance(t, SliceT):
+      assert False, "HOW TO SLICE?"
+    elif isinstance(t, ArrayT):
+      return self.box_array(x, t)
     else:
       # all other types already boxed 
       return x
@@ -92,10 +155,8 @@ class PyModuleCompiler(FlatFnCompiler):
     Compile the expression and if necessary box it up as a PyObject
     """
     x = self.visit_expr(expr)
-    if isinstance(expr.type, (NoneT, ScalarT, TupleT, ClosureT)):
+    if isinstance(expr.type, (NoneT, ScalarT, TupleT, ClosureT, ArrayT, SliceT)):
       return self.box(x, expr.type)
-    elif isinstance(expr.type, ArrayT):
-      return "(PyObject*) " + x 
     else:
       return x
   
@@ -115,27 +176,14 @@ class PyModuleCompiler(FlatFnCompiler):
   def print_pyobj_type(self, obj, text=""):
     text = '"%s"' % text
     self.append('printf("%%s%%s\\n", %s, %s);' % (text, self.c_type_str(obj)))
+
+    
+  def setfield(self, base, fieldname, value):
+    self.append("%s.%s = %s;" % (base, fieldname, value))
   
-  def unbox(self, boxed, t, target = None):
-    if isinstance(t, (NoneT, PtrT, ScalarT)):
-      return self.unbox_scalar(boxed, t, target = target)
-    elif isinstance(t, (ClosureT, TupleT)):
-      return self.unbox_tuple(boxed, t, target = target)
-    else:
-      return boxed 
-  
-  def unbox_tuple(self, boxed_tuple, tuple_t, target = "tuple_value"):
-    if isinstance(tuple_t, TupleT):
-      elt_types = tuple(tuple_t.elt_types)
-    elif isinstance(tuple_t, ClosureT):
-      elt_types = tuple(tuple_t.arg_types)
-    else:
-      assert False, "Expected tuple type, got %s" % tuple_t
-     
-    c_struct_t = self.struct_type_from_fields(elt_types)
-    tuple_elts = self.tuple_elts(boxed_tuple, elt_types, boxed=True)
-    elts_str = ", ".join(tuple_elts)
-    return self.fresh_var(c_struct_t, target, "{" + elts_str + "}")
+  def setidx(self, arr, idx, value):
+    self.append("%s[%s] = %s;" % (arr, idx, value))
+
      
   def tuple_to_stack_array(self, expr, name = "array_from_tuple", elt_type = None):
     t0 = expr.type.elt_types[0]
@@ -285,7 +333,7 @@ class PyModuleCompiler(FlatFnCompiler):
     else:
       return "%s.elt%d" % (tup, idx)  
  
-  
+  """
   def strides(self, array_expr):
     arr_t = array_expr.type
     assert isinstance(arr_t, ArrayT), \
@@ -311,53 +359,109 @@ class PyModuleCompiler(FlatFnCompiler):
       self.append("%s[%d] = %s[%d] / %d;" % (strides_elts, i, strides_bytes, i, bytes_per_elt))
     strides_tuple = self.array_to_tuple(strides_elts, n, stride_t)
     return strides_tuple
+  """
     
   def decref(self, obj):
     self.append("Py_DECREF(%s);" % obj)
-    
-  def attribute(self, v, attr, t):
+  
+  def get_boxed_array_ptr(self, v, parakeet_ptr_t):
+    self.check_array(v)
+    c_struct_type = self.struct_type(parakeet_ptr_t)
+    c_ptr_type = type_mappings.to_ctype(parakeet_ptr_t) 
+    data_field = "(%s) (((PyArrayObject*) %s)->data)" % (c_ptr_type, v) 
+    # get the data field but also fill the base object 
+    return self.fresh_var(c_struct_type, "data", "{%s, %s}" % (data_field, v))
+ 
+  def attribute(self, v, attr, t, boxed = False):
     if attr == "data":
-      self.check_array(v)
-      struct_type = self.struct_type(t)
-      
-      ptr_type = type_mappings.to_ctype(t) 
-      data_field = "(%s) (((PyArrayObject*) %s)->data)" % (ptr_type, v) 
-      # get the data field but also fill the base object 
-      return self.fresh_var(struct_type, "data", "{%s, %s}" % (data_field, v))
-      
+      if boxed:
+        self.check_array(v)
+        struct_type = self.struct_type(t)
+        ptr_type = type_mappings.to_ctype(t) 
+        data_field = "(%s) (((PyArrayObject*) %s)->data)" % (ptr_type, v) 
+        # get the data field but also fill the base object 
+        return self.fresh_var(struct_type, "data", "{%s, %s}" % (data_field, v))
+      else:
+        return "%s.data" % v  
     elif attr == "shape":
-      self.check_array(v)
+      shape_name = self.fresh_name("shape")
       elt_types = t.elt_types
       n = len(elt_types)
-      elt_t = elt_types[0]
-      assert all(t == elt_t for t in elt_types)
-      shape_name = self.fresh_name("strides")
-      shape_array = "PyArray_DIMS( (PyArrayObject*) %s)" % v
-      self.append("npy_intp* %s = %s;" % (shape_name, shape_array))
+      elt_t = elt_types[0]  
+      if boxed:
+        self.check_array(v)
+        
+        assert all(t == elt_t for t in elt_types)
+
+        shape_array = "PyArray_DIMS( (PyArrayObject*) %s)" % v
+        self.append("npy_intp* %s = %s;" % (shape_name, shape_array))
+      else:
+        self.append("npy_intp* %s = %s.shape;" % (shape_name, v))
       return self.array_to_tuple(shape_name, n, elt_t)
       
     elif attr == "strides":
-      assert False, "Can't directly use NumPy strides without dividing by itemsize"
-      
+      elt_types = t.elt_types
+      n = len(elt_types)  
+      elt_t = elt_types[0]
+      if boxed:
+        assert False, "Can't directly use NumPy strides without dividing by itemsize"
+      else:
+        strides_name = self.fresh_var("npy_intp*", "strides", "%s.strides" % v)
+      return self.array_to_tuple(strides_name, n, elt_t)
     elif attr == 'offset':
-      return "0"
+      if boxed:
+        return "0"
+      else:
+        return "%s.offset" % v
     elif attr in ('size', 'nelts'):
-      return "PyArray_Size(%s)" % v
-    
+      if boxed:
+        return "PyArray_Size(%s)" % v
+      else:
+        return "%s.size" % v
+       
     elif attr in ('start', 'stop', 'step'):
-      self.check_slice(v)
-      obj = "((PySliceObject*)%s)->%s" % (v, attr)
-      return self.unbox_scalar(obj, t, attr)
+      if boxed:
+        self.check_slice(v)
+        obj = "((PySliceObject*)%s)->%s" % (v, attr)
+        return self.unbox_scalar(obj, t, attr)
+      else:
+        return "%s.%s" % (v, attr)
     else:
       assert False, "Unsupported attribute %s" % attr 
    
     
   
-  def visit_AllocArray(self, expr):
-    shape = self.tuple_to_stack_array(expr.shape)
-    t = type_mappings.to_dtype(elt_type(expr.type))
-    return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
+  def visit_AllocArray(self, expr, boxed=False):
+    if boxed:
+      shape = self.tuple_to_stack_array(expr.shape)
+      t = type_mappings.to_dtype(elt_type(expr.type))
+      return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
     
+    if config.debug:
+      print "[Debug] Allocating array : %s " % expr.type  
+    
+    ndims = expr.type.rank 
+    shape = self.visit_expr(expr.shape)
+    nelts = self.fresh_var("int64_t", "nelts", " * ".join("%s.elt%d" % (shape, i) for i in xrange(ndims) ))
+    bytes_per_elt = expr.type.elt_type.dtype.itemsize
+    typename = self.to_ctype(expr.type)
+    result = self.fresh_var(typename, "new_array")
+    raw_ptr_t = self.to_ctype(expr.type.elt_type) + "*"
+    self.setfield(result, "data.raw_ptr", "(%s) malloc(%s * %s)" % (raw_ptr_t, nelts, bytes_per_elt) )
+    self.setfield(result, "data.base", "(PyObject*) NULL")
+    self.setfield(result, "offset", "0")
+    self.setfield(result, "size", nelts)
+    # assume C-order layout
+    shape_elts = ["%s.elt%d" % (shape, i) for i in xrange(ndims)]
+    strides_elts = [" * ".join(["1"] + shape_elts[(i+1):]) for i in xrange(ndims)]
+    for i in xrange(ndims):
+      self.setidx("%s.shape" % result, i, shape_elts[i])
+      # assume c major layout for now
+      self.setidx("%s.strides" % result, i, strides_elts[i])
+    if config.debug:
+      self.printf("[Debug] Done allocating array")
+    return result 
+     
   def visit_Tuple(self, expr):
     return self.mk_tuple(expr.elts, boxed = False)
   
@@ -374,46 +478,87 @@ class PyModuleCompiler(FlatFnCompiler):
     clos = self.visit_expr(expr.closure)
     return self.tuple_elt(clos, expr.index, expr.type)
   
-  
   def visit_ArrayView(self, expr):
+    typename = self.to_ctype(expr.type)
     data = self.visit_expr(expr.data)
     ndims = expr.type.rank 
     offset = self.visit_expr(expr.offset)
     count = self.visit_expr(expr.size)
-    
-    if expr.strides.__class__ is Tuple:
-      strides_elts = self.visit_expr_list(expr.strides.elts)  
-    else:
-      strides_array = self.tuple_to_stack_array(expr.strides, "strides_array", "npy_intp")
-      strides_elts = ["%s[%d]" % (strides_array, i) for i in xrange(ndims)]
+    shape = self.visit_expr(expr.shape)
+    strides = self.visit_expr(expr.strides)
+  
+    strides_elts = ["%s.elt%d" % (strides, i) for i in xrange(ndims)]
+    shape_elts = ["%s.elt%d" % (shape, i) for i in xrange(ndims)]
+    #shape_array = self.fresh_array_var("npy_intp", ndims, "shape_array")
+    #strides_array = self.fresh_array_var("npy_intp", ndims, "strides_array")
+    #for i in xrange(ndims):
+    #  self.append("%s[%d] = %s.elt%d;" % (shape_array, i, shape, i))
+    #  self.append("%s[%d] = %s.elt%d;" % (strides_array, i, strides, i))
+    #fields = "{%(data)s, %(shape)s, %(strides)s, %(offset)s, %(count)s }" % locals()
+    result = self.fresh_var(typename, "array_result")
+    self.setfield(result, "data", data)
+    self.setfield(result, "offset", offset)
+    self.setfield(result, 'size', count)
+    for i in xrange(ndims):
+      self.setidx("%s.shape" % result, i, shape_elts[i])
+      self.setidx("%s.strides" % result, i, strides_elts[i])
+    return result 
+  
 
-    shape_array = self.tuple_to_stack_array(expr.shape, "shape_array", "npy_intp")
-    shape_elts = ["%s[%d]" % (shape_array, i) for i in xrange(ndims)]
+  def box_ArrayView(self, expr):
+    data = self.visit_expr(expr.data)
+    ndims = expr.type.rank 
+    offset = self.visit_expr(expr.offset)
+    count = self.visit_expr(expr.size)
+    shape = self.visit_expr(expr.shape)
+    strides = self.visit_expr(expr.strides)
+  
+    strides_elts = ["%s.elt%d" % (strides, i) for i in xrange(ndims)]
+    shape_elts = ["%s.elt%d" % (shape, i) for i in xrange(ndims)]
+    shape_array = None 
+    strides_array = None 
+    elt_type = expr.type.elt_type 
+    return self.make_boxed_array(elt_type, ndims, data, strides_array, shape_array, offset, count)
+  
+  
+  def box_array(self, arr, t):
+    elt_t = t.elt_type
+    ndims = t.rank 
+    data_ptr = "%s.data.raw_ptr" % arr 
+    base = "%s.data.base" % arr
+    strides_array = "%s.strides" % arr 
+    shape_array = "%s.shape" % arr 
+    offset = "%s.offset" % arr 
+    size = "%s.size" % arr 
+    return self.make_boxed_array(elt_t, ndims, data_ptr, strides_array, shape_array, offset, size, base)
+  
+  def make_boxed_array(self, elt_type, ndims, data_ptr, strides_array, shape_array, offset, size, base = "NULL"):
     
     
     # PyObject* PyArray_SimpleNewFromData(int nd, npy_intp* dims, int typenum, void* data)
-    typenum = type_mappings.to_dtype(expr.data.type.elt_type)
+    typenum = type_mappings.to_dtype(elt_type)
     array_alloc = \
-      "PyArray_SimpleNewFromData(%d, %s, %s, &%s.data[%s])" % \
-        (ndims, shape_array, typenum, data, offset)
+      "PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s])" % \
+        (ndims, shape_array, typenum, data_ptr, offset)
     vec = self.fresh_var("PyArrayObject*", "fresh_array", array_alloc) 
     self.return_if_null(vec)
     
     # if the pointer had a PyObject reference, 
     # set that as the new array's base 
-    self.append("""
-      if (%s.base) { 
-        %s->base = %s.base;
-        Py_INCREF(%s.base);  
-        %s->flags &= ~NPY_ARRAY_OWNDATA; 
-      }""" % (data, vec, data, data, vec))
+    if base not in ("0", "NULL"):
+      self.append("""
+        if (%s) { 
+          %s->base = %s;
+          Py_INCREF(%s);  
+          %s->flags &= ~NPY_ARRAY_OWNDATA; 
+        }""" % (base, vec, base, base, vec))
         
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
     self.append("%s = PyArray_STRIDES(  (PyArrayObject*) %s);" % (numpy_strides, vec))
-    bytes_per_elt = expr.type.elt_type.dtype.itemsize
+    bytes_per_elt = elt_type.dtype.itemsize
     
-    for i, _ in enumerate(expr.strides.type.elt_types):
-      self.append("%s[%d] = %s * %d;" % (numpy_strides, i, strides_elts[i], bytes_per_elt) )
+    for i in xrange(ndims):
+      self.append("%s[%d] = %s[%d] * %d;" % (numpy_strides, i, strides_array, i, bytes_per_elt) )
       
     
     self.append("""
@@ -423,15 +568,17 @@ class PyModuleCompiler(FlatFnCompiler):
     """ % locals())
     
     f_layout_strides = ["1"]
-    for shape_elt in shape_elts[1:]:
+    for i in xrange(1, ndims):
+      shape_elt = "%s[%d]" % (shape_array, i)
       f_layout_strides.append(f_layout_strides[-1] + " * " + shape_elt)
     
     c_layout_strides = ["1"]
-    for shape_elt in list(reversed(shape_elts))[:-1]:
+    for i in xrange(ndims-1,0,-1):
+      shape_elt = "%s[%d]" % (shape_array, i)
       c_layout_strides = [c_layout_strides[-1] + " * " + shape_elt] + c_layout_strides
     
     
-    
+    strides_elts = ["%s[%d]" % (strides_array, i) for i in xrange(ndims)]
     is_c_layout = "&& ".join(self.eq(actual, ideal, Int64) 
                              for actual, ideal 
                              in zip(strides_elts, c_layout_strides))
@@ -514,9 +661,9 @@ class PyModuleCompiler(FlatFnCompiler):
         self.print_pyobj_type(c_name, text = "Type: ")
         self.print_pyobj(c_name, text = "Value: ")
       
-      if isinstance(t, (TupleT, NoneT, PtrT, ClosureT, ScalarT)):
+      if isinstance(t, (TupleT, NoneT, PtrT, ClosureT, ScalarT, ArrayT, SliceT)):
         #new_name = self.name(argname, overwrite = True)
-
+        self.comment("Unboxing %s : %s" % (argname, t))
         var = self.unbox(c_name, t, target = argname)
 
         self.name_mappings[argname] = var
@@ -558,13 +705,3 @@ class PyModuleCompiler(FlatFnCompiler):
     self._entry_compile_cache[key]  = compiled_fn
     return compiled_fn
 
-"""
-def entry_function_source(fn):
-  return compile_entry(fn).src 
-
-def entry_function_name(fn):
-  return compile_entry(fn).fn_name 
-
-def entry_function_signature(fn):
-  return compile_entry(fn).fn_signature 
-"""

@@ -7,7 +7,7 @@ from pymodule_compiler import PyModuleCompiler
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
   fn = loopify.apply(fn)
-  fn = flatten(fn)
+  #fn = flatten(fn)
   if stride_specialization:
     fn = specialize(fn, python_values = args)
   compiled_fn = PyModuleCompiler().compile_entry(fn)

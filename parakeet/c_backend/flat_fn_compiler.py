@@ -2,10 +2,10 @@ from collections import namedtuple
 
 from .. import names, prims  
 from ..ndtypes import (IntT, FloatT, TupleT, FnT, Type, BoolT, NoneT, Float32, Float64, Bool, 
-                       ClosureT, ScalarT, PtrT, NoneType, ArrayT)    
+                       ClosureT, ScalarT, PtrT, NoneType, ArrayT, SliceT)    
 from ..syntax import (Const, Var,  PrimCall, Attribute, TupleProj, Tuple, ArrayView,
                       Expr, Closure, TypedFn)
-from ..syntax.helpers import get_types   
+# from ..syntax.helpers import get_types   
 import type_mappings
 from base_compiler import BaseCompiler
 
@@ -53,23 +53,47 @@ class FlatFnCompiler(BaseCompiler):
     if decl not in self.declarations:
       self.declarations.append(decl)
   
+  def ptr_struct_type(self, elt_t):
+    # need both an actual data pointer 
+    # and an optional PyObject base
+    field_types = ["%s*" % self.to_ctype(elt_t), "PyObject*"]
+    return self.struct_type_from_fields(field_types, 
+                                        struct_name = "%s_ptr_type" % elt_t,
+                                        field_names = ["raw_ptr", "base"])
+  
+  def array_struct_type(self, elt_t, rank):
+    ptr_field_t = self.ptr_struct_type(elt_t)
+    field_types = [ptr_field_t, "npy_intp", "npy_intp", "int64_t", "int64_t"]
+    field_names = ["data", "shape", "strides", "offset", "size"]
+    field_repeats = {}
+    field_repeats["shape"] = rank 
+    field_repeats["strides"] = rank
+    return self.struct_type_from_fields(field_types, "array_type", field_names, field_repeats)
+  
+  def slice_struct_type(self, start_t = "int64_t", stop_t = "int64_t", step_t = "int64_t"):
+    field_types = [start_t, stop_t, step_t]
+    field_names = ["start", "stop", "step"]
+    return self.struct_type_from_fields(field_types, "slice_type", field_names)
+  
   def struct_type(self, parakeet_type):
     if isinstance(parakeet_type, TupleT):
       return self.struct_type_from_fields(parakeet_type.elt_types)
     elif isinstance(parakeet_type, PtrT):
-      # need both an actual data pointer 
-      # and an optional PyObject base
-      elt_t = type_mappings.to_ctype(parakeet_type.elt_type) 
-      field_types = ["%s*" % elt_t, "PyObject*"]
-      return self.struct_type_from_fields(field_types, 
-                                          struct_name = "ptr_type",
-                                          field_names = ["data", "base"])
+      return self.ptr_struct_type(parakeet_type.elt_type)
+    elif isinstance(parakeet_type, ArrayT):
+      elt_t = parakeet_type.elt_type 
+      rank = parakeet_type.rank 
+      return self.array_struct_type(elt_t, rank)
+    elif isinstance(parakeet_type, SliceT):
+      return self.slice_struct_type()
     else:
       assert False, "Don't know how to make C struct type for %s" % parakeet_type
        
   def struct_type_from_fields(self, 
                                  field_types, 
-                                 struct_name = "tuple_type", field_names = None):
+                                 struct_name = "tuple_type", 
+                                 field_names = None, 
+                                 field_repeats = {}):
     
     if any(not isinstance(t, str) for t in field_types):
       field_types = tuple(self.to_ctype(t) if isinstance(t, Type) else t 
@@ -83,9 +107,10 @@ class FlatFnCompiler(BaseCompiler):
       assert len(field_names) == len(field_types), \
         "Mismatching number of types %d and field names %d" % (len(field_types), len(field_names))
       field_names = tuple(field_names)
-      
-    key = field_types, struct_name, field_names
-
+    
+    repeat_set =  frozenset(sorted(field_repeats.items()))
+    key = field_types, struct_name, field_names, repeat_set
+     
     if key in _struct_type_names:
       typename = _struct_type_names[key]
       decl = _struct_type_decls[typename]
@@ -94,9 +119,14 @@ class FlatFnCompiler(BaseCompiler):
       return typename 
     
     typename = names.fresh(struct_name).replace(".", "")
-     
-    field_decls = ["  %s %s;" % (t, field_name) 
-                   for t,field_name in zip(field_types, field_names)]
+    
+    field_decls = []
+    for t, field_name in zip(field_types, field_names):
+      if field_name in field_repeats:
+        field_decl = "  %s %s[%d];" % (t, field_name, field_repeats[field_name])
+      else:
+        field_decl = "  %s %s;" % (t, field_name)
+      field_decls.append(field_decl)
     decl = "typedef struct %s {\n%s\n} %s;" % (typename, "\n".join(field_decls), typename)
     
     _struct_type_names[key] = typename
@@ -109,7 +139,7 @@ class FlatFnCompiler(BaseCompiler):
     return tuple(self.to_ctype(t) for t in ts)
   
   def to_ctype(self, t):
-    if isinstance(t, (TupleT, PtrT)):
+    if isinstance(t, (TupleT, ArrayT, PtrT, SliceT)):
       return self.struct_type(t)
     elif isinstance(t, ArrayT):
       assert False, "Unexpected ArrayT in flattened code"
@@ -314,10 +344,28 @@ class FlatFnCompiler(BaseCompiler):
   
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
-    idx = self.visit_expr(expr.index)
-    #elt_t = expr.value.type.elt_type
-    # ptr_t = "%s*" % self.to_ctype(elt_t)
-    return "%s.data[%s]" % (arr, idx)
+    if isinstance(expr.index.type, ScalarT):
+      index_exprs = [expr.index]
+    else:
+      assert isinstance(expr.index, Tuple), \
+        "Unexpected index %s : %s" % (expr.index, expr.index.type)
+      index_exprs = expr.index.elts 
+    assert all(isinstance(idx_expr.type, ScalarT) for idx_expr in index_exprs), \
+      "Expected all indices to be scalars but got %s" % (index_exprs,)
+    indices = [self.visit_expr(idx_expr) for idx_expr in index_exprs]
+    if isinstance(expr.value.type, PtrT):
+      assert len (indices) == 1, \
+        "Can't index into pointer using %d indices (%s)" % (len(indices), index_exprs)
+      raw_ptr = "%s.raw_ptr" % arr
+      offset = indices[0]
+    else:
+      assert isinstance(expr.value.type, ArrayT)
+      offset = self.fresh_var("int64_t", "offset", "%s.offset" % arr)
+      for i, idx in enumerate(indices):
+        stride = "%s.strides[%d]" % (arr, i)
+        self.append("%s += %s * %s;" % (offset, idx, stride))
+      raw_ptr = "%s.data.raw_ptr" % arr 
+    return "%s[%s]" % (raw_ptr, offset)
   
   def visit_Call(self, expr):
     fn_name = self.get_fn(expr.fn)
