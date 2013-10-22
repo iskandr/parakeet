@@ -599,8 +599,8 @@ class PyModuleCompiler(FlatFnCompiler):
     
   def visit_Attribute(self, expr):
     attr = expr.name
-    if attr == 'strides':
-      return self.strides(expr.value)
+    #if attr == 'strides':
+    #  return self.strides(expr.value)
     v = self.visit_expr(expr.value) 
     return self.attribute(v, attr, expr.type)
   
