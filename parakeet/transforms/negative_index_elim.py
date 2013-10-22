@@ -99,8 +99,9 @@ class NegativeIndexElim(RangeTransform):
           # if it's a negative step then (stupidly) there's
           # no valid stop value
           if self.is_none(stop):
-            assert False, \
-              "Not yet supported: Python's peculiar behavior with negative slice steps and None stop"
+            stop = self.int(-1)
+            #assert False, \
+            #  "Not yet supported: Python's peculiar behavior with negative slice steps and None stop"
             
           
             
