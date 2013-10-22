@@ -1,13 +1,14 @@
 import numpy as np 
 
-from .. ndtypes import Int64, Int32, Float32, Float64, Bool
-from .. ndtypes import FloatT, IntT, BoolT, NoneType, ScalarT
-from .. ndtypes import make_slice_type, make_tuple_type
+from .. ndtypes import (Int64, Int32, Float32, Float64, Bool, FloatT, IntT, BoolT, 
+                        NoneType, ScalarT, make_slice_type, make_tuple_type, ClosureT, 
+                        FnT)
 
 from array_expr import Slice
-from expr  import Const, Var, Expr
+from expr  import Const, Var, Expr, Closure  
 from tuple_expr import Tuple 
 from stmt import Return  
+from typed_fn import TypedFn 
 
 def const_int(n, t = Int64):
   return Const(n, type = t)
@@ -195,7 +196,18 @@ def is_identity_fn(fn):
          fn.body[0].__class__ is Return and \
          fn.body[0].value.__class__ is Var and \
          fn.body[0].value.name == fn.arg_names[0]
-         
+
+def get_fn(maybe_closure):
+  if isinstance(maybe_closure, TypedFn):
+    return maybe_closure 
+  elif isinstance(maybe_closure, (FnT, ClosureT, Closure)):
+    return maybe_closure.fn 
+  
+  elif isinstance(maybe_closure.type, (FnT, ClosureT)):
+    return maybe_closure.type.fn 
+  else:
+    assert False, "Can't get function from %s" % maybe_closure 
+  
 def gen_arg_names(n, base_names):
   results = []
 

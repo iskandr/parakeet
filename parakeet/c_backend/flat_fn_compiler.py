@@ -347,9 +347,13 @@ class FlatFnCompiler(BaseCompiler):
     if isinstance(expr.index.type, ScalarT):
       index_exprs = [expr.index]
     else:
-      assert isinstance(expr.index, Tuple), \
+      assert isinstance(expr.index.type, TupleT), \
         "Unexpected index %s : %s" % (expr.index, expr.index.type)
-      index_exprs = expr.index.elts 
+      if isinstance(expr.index, Tuple):
+        index_exprs = expr.index.elts 
+      else:
+        index_exprs = [TupleProj(expr.index, i, type = t) 
+                       for i, t in enumerate(expr.index.type.elt_types) ]
     assert all(isinstance(idx_expr.type, ScalarT) for idx_expr in index_exprs), \
       "Expected all indices to be scalars but got %s" % (index_exprs,)
     indices = [self.visit_expr(idx_expr) for idx_expr in index_exprs]
@@ -495,15 +499,6 @@ class FlatFnCompiler(BaseCompiler):
       self.append(s)
     self.append("\n")
     return self.indent("\n" + self.pop())
-  
-  def tuple_to_var_list(self, expr):
-    assert isinstance(expr, Expr)
-    if isinstance(expr, Tuple):
-      elts = expr.elts 
-    else:
-      assert isinstance(expr.type, ScalarT), "Unexpected expr %s : %s" % (expr, expr.type)
-      elts = [expr]
-    return self.visit_expr_list(elts)
       
   
   def get_fn(self, expr):
