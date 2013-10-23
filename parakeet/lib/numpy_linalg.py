@@ -7,6 +7,19 @@ from ..ndtypes import ScalarT, ArrayT, make_array_type
 from ..syntax import Select, DelayUntilTyped, PrimCall, Call,  OuterMap, Map
 from ..syntax.helpers import make_closure 
 
+def _get_vdot_fn(a, b):
+  from numpy_reductions import vdot  
+  from ..frontend import ast_conversion 
+  vdot_untyped = ast_conversion.translate_function_value(vdot)
+  from ..type_inference import specialize
+  vec_type_a = make_array_type(a.type.elt_type, 1) 
+  vec_type_b = make_array_type(b.type.elt_type, 1)
+  result_scalar_type = a.type.elt_type.combine(b.type.elt_type)
+  vdot_typed = specialize(vdot_untyped, [vec_type_a, vec_type_b] )
+  assert vdot_typed.return_type == result_scalar_type, \
+    "Expected return type %s but got %s from vdot" % (result_scalar_type, vdot_typed.return_type)
+  return vdot_typed 
+
 @typed_macro
 def dot(a,b):
   if isinstance(a.type, ScalarT):
@@ -17,37 +30,32 @@ def dot(a,b):
   assert isinstance(a.type, ArrayT), "Expected %s to be array but got %s" % (a, a.type)
   assert isinstance(a.type, ArrayT), "Expected %s to be array but got %s" % (b, b.type)
       
-  from numpy_reductions import vdot  
-  from ..frontend import ast_conversion 
-  vdot_untyped = ast_conversion.translate_function_value(vdot)
-  from ..type_inference import specialize
-  vec_type_a = make_array_type(a.type.elt_type, 1) 
-  vec_type_b = make_array_type(b.type.elt_type, 1)
-  vdot_typed = specialize(vdot_untyped, [vec_type_a, vec_type_b] )
-  result_scalar_type = a.type.elt_type.combine(b.type.elt_type)
-  assert vdot_typed.return_type == result_scalar_type, \
-    "Expected return type %s but got %s from vdot" % (result_scalar_type, vdot_typed.return_type)
       
   if a.type.rank == 1 and b.type.rank == 1:
-    return Call(fn = vdot_untyped, args = [a, b], type = result_scalar_type)
+    vdot = _get_vdot_fn(a,b)
+    return Call(fn = vdot, args = [a, b], type = vdot.return_type)
 
   elif a.type.rank == 1:
+    vdot = _get_vdot_fn(a,b)
+    
     assert b.type.rank == 2, "Don't know how to multiply %s and %s" % (a.type, b.type)
-    vdot_col = make_closure(vdot_typed, (a,))
-    result_vec_type = make_array_type(result_scalar_type, 1)
+    vdot_col = make_closure(vdot, (a,))
+    result_vec_type = make_array_type(vdot.return_type, 1)
     return Map(fn = vdot_col, args = (b,), axis = 1, type = result_vec_type)
         
   elif b.type.rank == 1:
     assert a.type.rank == 2, "Don't know how to multiply %s and %s" % (a.type, b.type)
-    vdot_row = make_closure(vdot_typed, (b,))
-    result_vec_type = make_array_type(result_scalar_type, 1)
+    vdot = _get_vdot_fn(b,a)
+    vdot_row = make_closure(vdot, (b,))
+    result_vec_type = make_array_type(vdot.return_type, 1)
     return Map(fn = vdot_row, args = (a,), axis = 0, type = result_vec_type)
   else:  
     assert a.type.rank == 2 and b.type.rank == 2, \
         "Don't know how to multiply %s and %s" % (a.type, b.type)
-    result_matrix_type = make_array_type(result_scalar_type, 2)
-    return OuterMap(fn = vdot_typed, args = (a, b), axis = (0,1), 
-                    type = make_array_type(result_matrix_type, 2))
+    vdot = _get_vdot_fn(a,b)
+    result_matrix_type = make_array_type(vdot.return_type, 2)
+    return OuterMap(fn = vdot, args = (a, b), axis = (0,1), 
+                    type = result_matrix_type)
       
 @typed_macro 
 def norm(x, ord=None):

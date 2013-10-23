@@ -31,8 +31,6 @@ class ArrayT(StructT):
   _members = ['elt_type', 'rank']
 
   def node_init(self):
-    
-    print self.elt_type, type(self.elt_type), isinstance(self.elt_type, ScalarT)
     assert isinstance(self.elt_type, ScalarT), \
       "Can't create array with element type %s, currently only scalar elements supported" % \
       (self.elt_type,)
