@@ -113,8 +113,6 @@ class RewriteTyped(Transform):
       assert len(expr.args) == 1
       expr.init = self.coerce_expr(expr.init, acc_type)
     return expr
-
-
     
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)

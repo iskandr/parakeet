@@ -117,6 +117,8 @@ class Closure(Expr):
 
   def node_init(self):
     self.args = tuple(self.args)
+    self.return_type = self.fn.return_type
+    self.input_types = self.fn.input_types[len(self.args):]
 
   def children(self):
     if isinstance(self.fn, Expr):

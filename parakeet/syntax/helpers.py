@@ -2,12 +2,13 @@ import numpy as np
 
 from .. ndtypes import (Int64, Int32, Float32, Float64, Bool, FloatT, IntT, BoolT, 
                         NoneType, ScalarT, make_slice_type, make_tuple_type, ClosureT, 
-                        FnT)
+                        FnT, Type, make_closure_type)
 
 from array_expr import Slice
-from expr  import Const, Var, Expr, Closure  
+from expr  import Const, Var, Expr, Closure, ClosureElt 
 from tuple_expr import Tuple 
 from stmt import Return  
+from untyped_fn import UntypedFn
 from typed_fn import TypedFn 
 
 def const_int(n, t = Int64):
@@ -202,11 +203,30 @@ def get_fn(maybe_closure):
     return maybe_closure 
   elif isinstance(maybe_closure, (FnT, ClosureT, Closure)):
     return maybe_closure.fn 
-  
   elif isinstance(maybe_closure.type, (FnT, ClosureT)):
     return maybe_closure.type.fn 
   else:
     assert False, "Can't get function from %s" % maybe_closure 
+
+def get_closure_args(maybe_closure):
+  if isinstance(maybe_closure, Type):
+    assert isinstance(maybe_closure, (FnT, ClosureT))
+    maybe_closure = maybe_closure.fn 
+  if maybe_closure.__class__ is Closure:
+    return tuple(maybe_closure.args)
+  elif maybe_closure.type.__class__ is ClosureT:
+    return tuple(ClosureElt(maybe_closure, i, type = arg_type)
+                 for i, arg_type in enumerate(maybe_closure.type.arg_types))
+  else:
+    return ()
+  
+def make_closure(fn, closure_args):
+  old_closure_args = get_closure_args(fn)
+  fn = get_fn(fn)
+  closure_args = tuple(closure_args)
+  combined_closure_args = old_closure_args + closure_args 
+  t = make_closure_type(fn, combined_closure_args)
+  return Closure(fn, combined_closure_args, type = t)
   
 def gen_arg_names(n, base_names):
   results = []
