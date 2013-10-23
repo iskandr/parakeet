@@ -313,6 +313,10 @@ class CoreBuilder(object):
         result = self.mul(result, e, name = name)
       return result
     
-  def select(self, cond, true_value, false_value):
+  def select(self, cond, true_value, false_value, name = None):
     assert true_value.type == false_value.type
-    return Select(cond, true_value, false_value, type = true_value.type)
+    expr = Select(cond, true_value, false_value, type = true_value.type)
+    if name is None:
+      return expr
+    else:
+      return self.assign_name(expr, name)

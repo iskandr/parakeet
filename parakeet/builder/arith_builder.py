@@ -96,11 +96,12 @@ class ArithBuilder(CoreBuilder):
     div_toward_zero = self.div(x,y,"div_toward_zero")
     m = self.fmod(x, y)
     has_remainder = self.neq(m, zero(m.type), "has_remainder") 
-    x_is_positive = self.is_positive(x)
-    y_is_positive = self.is_positive(y)
-    was_rounded_down = self.and_(has_remainder, self.and_(x_is_positive, y_is_positive))
+    prod = self.mul(x, y, "prod")
+    prod_is_positive = self.is_positive(prod, "prod_is_positive")
+    
+    was_rounded_down = self.and_(has_remainder, prod_is_positive)
     div_plus_one = self.add(div_toward_zero, one(div_toward_zero.type), "div_plus_one")
-    return self.select(was_rounded_down, div_plus_one, div_toward_zero)
+    return self.select(was_rounded_down, div_plus_one, div_toward_zero, name = name)
   
   def safediv(self, x, y, name = None):
     """
@@ -140,8 +141,8 @@ class ArithBuilder(CoreBuilder):
     if name is None: name = "gt_result"
     return self.prim(prims.greater, [x,y], name)
 
-  def is_positive(self, x):
-    return self.gt(x, zero(x.type), "is_positive")
+  def is_positive(self, x, name = "is_positive"):
+    return self.gt(x, zero(x.type), name)
   
   def gte(self, x, y, name = None):
     if isinstance(x, (Var, Const)) and x == y:
