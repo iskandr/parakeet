@@ -327,8 +327,6 @@ class IndexifyAdverbs(Transform):
                                 cartesian_product=False, 
                                 index_offsets = index_offsets)
 
-
-    
     
     return IndexReduce(fn = index_fn, 
                        init = init, 

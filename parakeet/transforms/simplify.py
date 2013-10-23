@@ -48,7 +48,7 @@ class Simplify(Transform):
     # change between two accesses?
     self.mutable_types = ma.visit_fn(fn)
     self.use_counts = use_count(fn)
-
+    
   def immutable_type(self, t):
     return t not in self.mutable_types
 
@@ -111,19 +111,7 @@ class Simplify(Transform):
   def immutable(self, expr):
     """
     TODO: make all this mutability/immutability stuff sane 
-    
-    t = expr.type 
-    if t.__class__ is ArrayT:
-      return self.immutable_type(t)
-    elif t.__class__ is Call:
-      fn = self.get_fn(expr.fn)
-      return not isinstance(fn.return_type, ArrayT) and all(not isinstance(input_t, ArrayT))
-      if isinstance(expr.fn, TypedFn):
-        input_types = expr.fn.input_types 
-        return_type = expr.fn.return_type 
-      elif isinstance(expr.fn.type, ClosureT):
-        input_types = expr.fn.type.fn.input_types
-    """   
+    """
     klass = expr.__class__ 
     
     
@@ -152,9 +140,6 @@ class Simplify(Transform):
         return none 
       else:
         return Transform.transform_expr(self, expr)
-    
-    
-      
     stored = self.available_expressions.get(expr)
     if stored is not None: 
       return stored
@@ -387,7 +372,6 @@ class Simplify(Transform):
   def transform_PrimCall(self, expr):
     args = self.transform_simple_exprs(expr.args)
     prim = expr.prim
-
     if all_constants(args):
       return syntax.Const(value = prim.fn(*collect_constants(args)),
                           type = expr.type)
@@ -401,12 +385,12 @@ class Simplify(Transform):
           return x
         if y.__class__ is Const and y.value < 0:
           expr.prim = prims.subtract
-          y.value *= -1
+          expr.args = (x, Const(value = -y.value, type = y.type))
+          
           return expr 
         elif x.__class__ is Const and x.value < 0:
           expr.prim = prims.subtract
-          x.value *= -1 
-          expr.args = [y, x]
+          expr.args = (y, Const(value = -x.value, type = x.type)) 
           return expr 
         
       elif prim == prims.subtract:
@@ -415,12 +399,11 @@ class Simplify(Transform):
         elif is_zero(x) and y.__class__ is Var:
            
           stored = self.bindings.get(y.name)
-          print "STORED", y, stored 
+          
           # 0 - (a * b) --> -a * b |or| a * -b 
           if stored and stored.__class__ is PrimCall and stored.prim == prims.multiply:
             
             a,b = stored.args
-            print "==>", a, a.__class__,  b, b.__class__   
             if a.__class__ is Const:
               expr.prim = prims.multiply
               neg_a = Const(value = -a.value, type = a.type)
@@ -562,7 +545,6 @@ class Simplify(Transform):
         self.bind(lhs_elt, rhs_elt)
 
   def transform_lhs_Index(self, lhs):
-    # lhs.value = self.transform_expr(lhs.value)
     lhs.index = self.transform_index_expr(lhs.index)
     if lhs.value.__class__ is Var:
       stored = self.bindings.get(lhs.value.name)
@@ -587,9 +569,9 @@ class Simplify(Transform):
       return stmt
 
   def transform_Assign(self, stmt):
+    
     lhs = stmt.lhs
     rhs = self.transform_expr(stmt.rhs)
-
     lhs_class = lhs.__class__
     rhs_class = rhs.__class__
 
@@ -649,6 +631,7 @@ class Simplify(Transform):
   def transform_block(self, stmts, keep_bindings = False):
     self.available_expressions.push()
     self.bindings.push()
+    
     new_stmts = Transform.transform_block(self, stmts)
     
     self.available_expressions.pop()

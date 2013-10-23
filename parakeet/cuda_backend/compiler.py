@@ -1,10 +1,19 @@
 from ..c_backend import PyModuleCompiler, FlatFnCompiler
 from ..ndtypes import TupleT, IntT 
-class CudaFlatFnCompiler(FlatFnCompiler):
+
+import pycuda 
+
+class CudaCompiler(PyModuleCompiler):
   
-  def __init__(self):
-    FlatFnCompiler.__init__(self)
-    self.depth = 0
+  def __init__(self, depth = 0, *args, **kwargs):
+    self.depth = depth
+    PyModuleCompiler.__init__(self, *args, **kwargs)
+  
+  def visit_NumCores(self, expr):
+    # by default we're running sequentially 
+    sm_count = None # TODO
+    active_thread_blocks = 6 
+    return "%d" % (sm_count * active_thread_blocks)
     
   def enter_kernel(self):
     """
@@ -51,7 +60,7 @@ class CudaFlatFnCompiler(FlatFnCompiler):
       pass 
       
       
-      
+     
   def visit_IndexReduce(self, expr):
     fn =  self.get_fn(expr.fn, qualifier = "device")
     combine = self.get_fn(expr.combine, qualifier = "device")
@@ -68,10 +77,8 @@ class CudaFlatFnCompiler(FlatFnCompiler):
     emit = self.get_fn(expr.emit, qualifier = "device")
     if self.in_host():
       pass 
-  
+ 
 
-class CudaModuleCompiler(PyModuleCompiler, CudaFlatFnCompiler):
-  pass  
 
 def compile_entry(fn):
   pass 

@@ -214,7 +214,7 @@ class CoreBuilder(object):
         result = none 
       else:
         result = Attribute(obj, field, type = field_t)
-    if name:
+    if name and result.__class__ not in (Var, Const):
       return self.assign_name(result, name)
     else:
       return result

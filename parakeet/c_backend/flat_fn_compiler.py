@@ -450,6 +450,10 @@ class FlatFnCompiler(BaseCompiler):
       self.append("%s = %s;"  % (self.name(name), c_right))
     return self.pop()
   
+  def visit_NumCores(self, expr):
+    # by default we're running sequentially 
+    return "1"
+  
   def visit_If(self, stmt):
     self.declare_merge_vars(stmt.merge)
     cond = self.visit_expr(stmt.cond)
@@ -501,7 +505,7 @@ class FlatFnCompiler(BaseCompiler):
     return self.indent("\n" + self.pop())
       
   
-  def get_fn(self, expr):
+  def get_fn(self, expr, compiler_kwargs = {}):
     if expr.__class__ is  TypedFn:
       fn = expr 
     elif expr.__class__ is Closure:
@@ -511,7 +515,7 @@ class FlatFnCompiler(BaseCompiler):
         "Expected function or closure, got %s : %s" % (expr, expr.type)
       fn = expr.type.fn
     
-    compiler = self.__class__(module_entry = False)
+    compiler = self.__class__(module_entry = False, **compiler_kwargs)
     compiled = compiler.compile_flat_source(fn)
     
     if compiled.sig not in self.extra_function_signatures:

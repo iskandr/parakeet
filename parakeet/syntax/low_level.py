@@ -32,3 +32,31 @@ class Alloc(Expr):
 
   def __hash__(self):
     return hash((self.elt_type, self.count))
+  
+class NumCores(Expr):
+  
+  """
+  Degree of available parallelism, 
+  varies depending on backend and how
+  ParFor is actually being mapped 
+  to executing threads/thread blocks/etc..
+  """
+  _members = []
+  
+  def __str__(self):
+    return "NUM_CORES"
+  
+  def __eq__(self, other):
+    return other.__class__ is NumCores 
+  
+  def node_init(self):
+    from ..ndtypes import Int64
+    self.type = Int64 
+  
+  def __hash__(self):
+    return 0
+  
+  def children(self):
+    return ()
+  
+  

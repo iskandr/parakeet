@@ -1,4 +1,4 @@
-from ..analysis.value_range_analysis import (ValueRangeAnalyis, Interval)
+from ..analysis.value_range_analysis import (ValueRangeAnalyis, Interval, NoneValue)
 from ..syntax.helpers import true, false 
 from transform import Transform
 

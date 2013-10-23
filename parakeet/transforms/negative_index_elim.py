@@ -2,9 +2,9 @@
 from ..analysis.value_range_analysis import TupleOfIntervals, SliceOfIntervals
 from ..ndtypes import ArrayT, TupleT, SliceT, ScalarT, NoneType 
 from ..syntax import Tuple, Slice, Var, Index  
-from ..syntax.helpers import zero_i64, one_i64, slice_none, make_slice_type 
+from ..syntax.helpers import zero_i64, one_i64, slice_none, make_slice_type, none
 
-from range_transform import RangeTransform, Interval
+from range_transform import RangeTransform, Interval, NoneValue
 
 class NegativeIndexElim(RangeTransform):
   
@@ -49,8 +49,8 @@ class NegativeIndexElim(RangeTransform):
       
     index_elts = list(index_elts)
     index_ranges = [self.get(idx_elt) for idx_elt in index_elts]
-
     
+    print expr, index_elts, "IndexRanges", index_ranges 
     assert len(index_ranges) == len(index_elts)
     shape = self.shape(expr.value)
     shape_elts = self.tuple_elts(shape)
@@ -67,17 +67,23 @@ class NegativeIndexElim(RangeTransform):
          
       elif isinstance(index_range, SliceOfIntervals) and self.has_negative(index_range):
         
-        if index_range.start.upper == index_range.start.lower:
+        if isinstance(index_range.start, NoneValue):
+          start = none
+        elif index_range.start.upper == index_range.start.lower:
           start = self.int(index_range.start.lower)
         else:
           start = self.attr(index_elt, 'start', temp = False)
         
-        if index_range.stop.upper == index_range.stop.lower:
+        if isinstance(index_range.stop, NoneValue):
+          stop = none 
+        elif index_range.stop.upper == index_range.stop.lower:
           stop = self.int(index_range.stop.lower)
         else:
           stop = self.attr(index_elt, 'stop', temp = False)
         
-        if index_range.step.lower == index_range.step.upper:
+        if isinstance(index_range.step, NoneValue):
+          step = none 
+        elif index_range.step.lower == index_range.step.upper:
           step = self.int(index_range.step.lower)
         else: 
           step = self.attr(index_elt, 'step', temp = False)
@@ -91,7 +97,6 @@ class NegativeIndexElim(RangeTransform):
           stop = self.add(shape_elt, stop, "stop")
           
         if self.always_negative(index_range.step):
-          
           if self.is_none(start):
             start = self.sub(shape_elt, one_i64, "last_pos")
           
@@ -99,10 +104,10 @@ class NegativeIndexElim(RangeTransform):
           # if it's a negative step then (stupidly) there's
           # no valid stop value
           if self.is_none(stop):
+            # from this point forward, negative stop just means include the element 0
             stop = self.int(-1)
             #assert False, \
             #  "Not yet supported: Python's peculiar behavior with negative slice steps and None stop"
-            
           
             
         else:

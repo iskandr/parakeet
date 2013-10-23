@@ -425,6 +425,7 @@ class Transform(Builder):
     return stmt 
   
   def transform_stmt(self, stmt):
+    
     stmt_class = stmt.__class__
     if stmt_class is Assign:
       return self.transform_Assign(stmt)
@@ -446,16 +447,17 @@ class Transform(Builder):
       assert False, "Unexpected statement %s" % stmt_class
 
   def transform_block(self, stmts):
+    
     self.blocks.push()
-    if self.reverse: 
-      stmts = reversed(stmts)
-    for old_stmt in  stmts:
+    
+    if self.reverse: stmts = reversed(stmts)
+    
+    for old_stmt in stmts:
       new_stmt = self.transform_stmt(old_stmt)
       if new_stmt is not None:
         self.blocks.append_to_current(new_stmt)
     new_block = self.blocks.pop()
-    if self.reverse:
-      new_block.reverse()
+    if self.reverse: new_block.reverse()
     return new_block
 
   def pre_apply(self, old_fn):
@@ -479,7 +481,7 @@ class Transform(Builder):
       print "--- before ---"
       print repr(fn)
       print
-
+    
     self.fn = fn
     self.type_env = fn.type_env
 
@@ -497,6 +499,7 @@ class Transform(Builder):
 
     # pop the outermost block, which have been written to by
     new_body = self.transform_block(fn.body)
+    
     if len(pre_block) > 0:
       new_body = pre_block  + new_body
 

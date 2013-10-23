@@ -1,16 +1,22 @@
+import multiprocessing 
+
 from ..syntax import Expr, Tuple
 from ..syntax.helpers import get_fn 
 from ..ndtypes import ScalarT, TupleT
-from ..c_backend import PyModuleCompiler
+from ..c_backend import PyModuleCompiler, FlatFnCompiler
 
 class MulticoreCompiler(PyModuleCompiler):
   
-  def __init__(self, *args, **kwargs):
+  def __init__(self, parfor_depth = 0, *args, **kwargs):
+    self.parfor_depth = parfor_depth
     PyModuleCompiler.__init__(self, *args, **kwargs)
     self.add_compile_flag("-fopenmp")
     self.add_link_flag("-fopenmp")
-    self.parfor_counter = 0
+
   
+  def visit_NumCores(self, expr):
+    # by default we're running sequentially 
+    return "%d" % multiprocessing.cpu_count()
   
   def tuple_to_var_list(self, expr):
     assert isinstance(expr, Expr)
@@ -22,7 +28,7 @@ class MulticoreCompiler(PyModuleCompiler):
     else:
       assert isinstance(expr.type, ScalarT), "Unexpected expr %s : %s" % (expr, expr.type)
       return [self.visit_expr(expr)]
-    
+  
   
   def visit_ParFor(self, stmt):
     
@@ -32,9 +38,9 @@ class MulticoreCompiler(PyModuleCompiler):
     assert n_vars <= len(loop_var_names)
     loop_vars = [self.fresh_var("int64_t", loop_var_names[i]) for i in xrange(n_vars)]
     
-    self.parfor_counter += 1  
+    self.parfor_depth += 1  
     
-    fn_name = self.get_fn(stmt.fn)
+    fn_name = self.get_fn(stmt.fn, compiler_kwargs = {'parfor_depth':self.parfor_depth})
     closure_args = self.get_closure_args(stmt.fn)
     private_vars = [loop_var for loop_var in loop_vars] 
     fn = get_fn(stmt.fn)
@@ -56,8 +62,8 @@ class MulticoreCompiler(PyModuleCompiler):
       body = "%s(%s);\n" % (fn_name, ", ".join(combined_args))
  
     loops = self.build_loops(loop_vars, bounds, body)
-    self.parfor_counter -= 1 
-    if self.parfor_counter == 0:  
+    self.parfor_depth -= 1 
+    if self.parfor_depth == 0:  
       release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
       acquire_gil = "\nPy_END_ALLOW_THREADS\n"  
       omp = "#pragma omp parallel for collapse(%d) private(%s)" % \

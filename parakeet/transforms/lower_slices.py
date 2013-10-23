@@ -180,7 +180,8 @@ class LowerSlices(Transform):
         slice_count += 1
         dim_offset = self.mul(start, stride_elts[i], name = "dim_offset")
         offset = self.add(offset, dim_offset, "offset")
-        shape_elt = self.safediv(self.sub(stop, start, name = "span"), step, name = "new_shape")
+        span = self.sub(stop, start, name = "span")
+        shape_elt = self.div_round_up(span, step, name = "new_shape")
         new_shape.append(shape_elt)
         stride_elt = self.mul(stride_elts[i], step, name = "new_stride")
         new_strides.append(stride_elt)

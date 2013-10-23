@@ -1,7 +1,7 @@
 from treelike import  ScopedDict 
 
 from .. import prims  
-from ..ndtypes import NoneType, get_rank 
+from ..ndtypes import NoneT, NoneType, get_rank 
 from ..syntax import Var, Const, PrimCall, Tuple, Slice, TupleProj, Attribute, Shape 
  
 import numpy as np 
@@ -69,7 +69,22 @@ class AnyValue(AbstractValue):
   
 any_value = AnyValue()
 
-
+class NoneValue(AbstractValue):
+  def __str__(self):
+    return "None"
+  
+  
+  def __eq__(self, other):
+    return other.__class__ is NoneValue
+  
+  def combine(self, other):
+    if self == other:
+      return self 
+    else:
+      return any_value 
+    
+  def widen(self, other):
+    return self.combine(other)
 
 class Interval(AbstractValue):
   def __init__(self, lower, upper):
@@ -123,6 +138,7 @@ class Interval(AbstractValue):
     
 const_zero = Interval(0,0)
 const_one = Interval(1,1)
+const_none = NoneValue()
 positive_interval = Interval(0, np.inf)
 negative_interval = Interval(-np.inf, 0)
   
@@ -211,7 +227,9 @@ class ValueRangeAnalyis(SyntaxVisitor):
   def get(self, expr):
     c = expr.__class__ 
     
-    if c is Const:
+    if expr.type.__class__ is NoneT:
+      return const_none 
+    elif c is Const:
       return Interval(expr.value, expr.value)
     
     elif c is Var and expr.name in self.ranges:
@@ -228,14 +246,8 @@ class ValueRangeAnalyis(SyntaxVisitor):
         return tup.elts[idx]
       
     elif c is Slice:
-      if expr.start.type == NoneType:
-        start = const_zero 
-      else: 
-        start = self.get(expr.start)
-      if expr.stop.type == NoneType:
-        stop = positive_interval
-      else:
-        stop = self.get(expr.stop)
+      start = self.get(expr.start)
+      stop = self.get(expr.stop)
       if expr.step.type ==  NoneType:
         step = const_one   
       else:

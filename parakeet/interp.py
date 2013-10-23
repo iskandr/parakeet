@@ -139,7 +139,8 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-      if False:
+      if True:
+        print expr 
         print "data", data 
         print "shape",  shape 
         print "strides", strides
@@ -397,6 +398,7 @@ def eval_fn(fn, actuals):
 
   def assign(lhs, rhs, env):
     if isinstance(lhs, Var):
+      
       env[lhs.name] = rhs
     elif isinstance(lhs, Tuple):
       assert isinstance(rhs, tuple)
@@ -476,6 +478,7 @@ def eval_fn(fn, actuals):
     
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
+      print stmt, "=", value 
       assign(stmt.lhs, value, env)
 
     elif isinstance(stmt, If):
