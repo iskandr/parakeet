@@ -50,8 +50,8 @@ def expect(fn, args, expected, msg = None, valid_types = None):
       label += ": " + str(msg)
     
     try: 
-      if hasattr(result, 'flags'):
-        print result.flags
+      #if hasattr(result, 'flags'):
+      #  print result.flags
       expect_eq(result, expected, label)
     except: 
       if config.testing_find_broken_transform: 

@@ -50,7 +50,6 @@ class NegativeIndexElim(RangeTransform):
     index_elts = list(index_elts)
     index_ranges = [self.get(idx_elt) for idx_elt in index_elts]
     
-    print expr, index_elts, "IndexRanges", index_ranges 
     assert len(index_ranges) == len(index_elts)
     shape = self.shape(expr.value)
     shape_elts = self.tuple_elts(shape)

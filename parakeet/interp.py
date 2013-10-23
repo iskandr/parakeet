@@ -139,7 +139,7 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-      if True:
+      if False:
         print expr 
         print "data", data 
         print "shape",  shape 
@@ -478,7 +478,7 @@ def eval_fn(fn, actuals):
     
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
-      print stmt, "=", value 
+      # print stmt, "=", value 
       assign(stmt.lhs, value, env)
 
     elif isinstance(stmt, If):
