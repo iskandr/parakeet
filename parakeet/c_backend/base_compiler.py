@@ -1,6 +1,6 @@
 from .. import names 
 
-from type_mappings import to_ctype
+import type_mappings 
 from reserved_names import is_reserved
 
 
@@ -96,6 +96,14 @@ class BaseCompiler(object):
     else:
       return prefix + str(version)
     
+  def to_ctype(self, t):
+    """
+    Convert Parakeet type to string representing its C type.
+    The base class implementation only handles scalars, 
+    support for Tuples, Slices, and Arrays is in the overload FlatFnCompiler.to_ctype
+    """
+    return type_mappings.to_ctype(t)
+  
   def fresh_var(self, t, prefix = None, init = None):
     if prefix is None:
       prefix = "temp"
@@ -103,7 +111,7 @@ class BaseCompiler(object):
     if isinstance(t, str):
       t_str = t
     else:
-      t_str = to_ctype(t)
+      t_str = self.to_ctype(t)
     if init is None:
       self.append("%s %s;" % (t_str, name))
     else:
@@ -117,7 +125,7 @@ class BaseCompiler(object):
     if isinstance(t, str):
       t_str = t
     else:
-      t_str = to_ctype(t)
+      t_str = self.to_ctype(t)
     self.append("%s %s[%d];" % (t_str, name, n))
     return name
   

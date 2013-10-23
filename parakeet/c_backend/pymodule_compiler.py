@@ -621,9 +621,6 @@ class PyModuleCompiler(FlatFnCompiler):
       self.append(s)
     self.append("\n")
     return self.pop()
-      
-  def visit_TypedFn(self, expr):
-    return self.get_fn(expr)
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name

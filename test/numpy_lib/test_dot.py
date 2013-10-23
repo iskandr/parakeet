@@ -25,5 +25,17 @@ def test_dot_mm():
       res = np.dot(X, Y.T)
       expect(np.dot, [X,Y.T], res)
 
+def test_dot_mv():
+  col = np.array([1,2,3])
+  for mat in matrices:
+    res = np.dot(mat, col)
+    expect(np.dot, [mat, col], res)
+
+def test_dot_vm():
+  row = np.array([1,2])
+  for mat in matrices:
+    res = np.dot(row, mat)
+    expect(np.dot, [row, mat], res) 
+
 if __name__ == '__main__':
     run_local_tests()

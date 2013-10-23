@@ -372,7 +372,7 @@ class FlatFnCompiler(BaseCompiler):
     return "%s[%s]" % (raw_ptr, offset)
   
   def visit_Call(self, expr):
-    fn_name = self.get_fn(expr.fn)
+    fn_name = self.get_fn_name(expr.fn)
     closure_args = self.get_closure_args(expr.fn)
     args = self.visit_expr_list(expr.args)
     return "%s(%s)" % (fn_name, ", ".join(tuple(closure_args) + tuple(args)))
@@ -505,7 +505,7 @@ class FlatFnCompiler(BaseCompiler):
     return self.indent("\n" + self.pop())
       
   
-  def get_fn(self, expr, compiler_kwargs = {}):
+  def get_fn_name(self, expr, compiler_kwargs = {}):
     if expr.__class__ is  TypedFn:
       fn = expr 
     elif expr.__class__ is Closure:
@@ -557,7 +557,7 @@ class FlatFnCompiler(BaseCompiler):
 
       
   def visit_TypedFn(self, expr):
-    return self.get_fn(expr)
+    return self.get_fn_name(expr)
 
   def visit_UntypedFn(self, expr):
     assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
