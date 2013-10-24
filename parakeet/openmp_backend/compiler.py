@@ -123,7 +123,19 @@ class MulticoreCompiler(PyModuleCompiler):
     """
     For now, just use a sequential implementation for reductions
     """
-    pass   
+    bounds = self.tuple_to_var_list(expr.shape)
+    n_vars = len(bounds)
+    combine_name, combine_closure_args, _ = self.get_fn_info(expr.combine)
+    loop_vars = self.loop_vars(n_vars)
+    assert expr.init is not None, "Accumulator required but not given"
+    elt = self.fresh_var(expr.type, "elt")
+    body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
+    acc = self.fresh_var(expr.type, "acc", self.visit_expr(expr.init))
+    combine_arg_str = ", ".join(tuple(combine_closure_args) + (acc, elt))
+    body += "\n%s = %s(%s);\n" % (acc, combine_name, combine_arg_str)
+    emit_name, emit_closure_args, _ = self.get_fn_info(expr.emit)
+    assert False, "Scan not implemented"  
+    # self.append(self.build_loops(loop_vars, bounds, body))
     
   def visit_Map(self, expr):
     assert False, "Map should have been lowered into ParFor by now: %s" % expr 

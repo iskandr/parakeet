@@ -8,16 +8,17 @@ compiler_path = None
 ##########################
 # Insert Debugging Code  #
 ##########################
-debug = False
-check_pyobj_types = False 
+debug = True
+check_pyobj_types = True 
 
 #########################
 #  Verbose Printing     #
 #########################
-print_input_ir = False
+print_input_ir = True
+print_function_source = True
+
 print_command_elapsed_time = False
 print_commands = False
-print_function_source = False
 print_module_source = False
 
 # Generate a .c file or a .cpp? 
