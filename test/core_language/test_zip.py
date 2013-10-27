@@ -7,7 +7,7 @@ def use_zip(x,y):
 def test_zip_tuples():
   a = (1,2,3)
   b = (np.array([1.0]), np.array([2.0]), np.array([3.0]))
-  expect(use_zip, [a,b], zip(a,b))
+  expect(use_zip, [a,b], tuple(zip(a,b)))
 
 # TODO: 
 # Figure out some plan for returning 'dtype' containing

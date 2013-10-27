@@ -53,6 +53,7 @@ class PyModuleCompiler(FlatFnCompiler):
     return result 
   
   def unbox_array(self, boxed_array, elt_type, ndims, target = "array_value"):
+    self.printf("UNBOXING ARRAY")
     shape_ptr = self.fresh_var("npy_intp*", "shape_ptr", "PyArray_DIMS(%s)" % boxed_array)
     strides_bytes = self.fresh_var("npy_intp*", "strides_bytes", 
                                    "PyArray_STRIDES( (PyArrayObject*) %s)" % boxed_array)
@@ -70,6 +71,9 @@ class PyModuleCompiler(FlatFnCompiler):
                     "%s[%d]" % (strides_bytes, i), "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))   
       self.setidx("%s.strides" % result, i, "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))
       self.setidx("%s.shape" % result, i, "%s[%d]" % (shape_ptr, i))
+      self.printf("unboxed array stride %d = %ld (%ld)", i, 
+                  "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt),
+                  "%s.strides[%d]"  % (result,i))  
     self.setfield(result, "offset", "0")
     self.setfield(result, "size", "PyArray_Size(%s)" % boxed_array)
     return result 
@@ -85,7 +89,9 @@ class PyModuleCompiler(FlatFnCompiler):
     c_struct_t = self.struct_type_from_fields(elt_types)
     unboxed_elts = []
     for i in xrange(len(elt_types)):
-      elt = self.fresh_var("PyObject*", "boxed_elt%d" % i, 
+      elt_t = elt_types[i]
+      elt_typename = self.to_ctype(elt_t)
+      elt = self.fresh_var(elt_typename, "unboxed_elt%d" % i, 
                            self.tuple_elt(boxed_tuple, i, elt_types[i], boxed=True))
       unboxed_elts.append(elt)
     elts_str = ", ".join(unboxed_elts)
@@ -107,7 +113,7 @@ class PyModuleCompiler(FlatFnCompiler):
                               elt_type = t.elt_type, 
                               ndims = t.rank, target = target)
     else:
-      return boxed 
+      assert False, "Don't know how to unbox %s : %s" % (boxed, t)
         
   def box_scalar(self, x, t):  
     if isinstance(t, BoolT):
@@ -142,7 +148,7 @@ class PyModuleCompiler(FlatFnCompiler):
     elif isinstance(t, (ClosureT, TupleT)):
       return self.box_tuple(x, t)
     elif isinstance(t, SliceT):
-      assert False, "HOW TO SLICE?"
+      assert False, "I CAN HAZ SLICE?"
     elif isinstance(t, ArrayT):
       return self.box_array(x, t)
     else:
@@ -321,15 +327,11 @@ class PyModuleCompiler(FlatFnCompiler):
     if boxed: 
       self.check_tuple(tup)
       proj_str = "PyTuple_GetItem(%s, %d)" % (tup, idx)
-      if isinstance(t, (TupleT, ScalarT)):
-        elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
-        result = self.unbox(elt_obj, t)
-        if config.debug and t == Int64:
-          self.append(""" printf("tupleproj %s[%d] = %%" PRId64 "\\n", %s);""" % (tup, idx, result))
-        return result
-      
-      else:
-        return proj_str
+      elt_obj = self.fresh_var("PyObject*", "%s_elt" % tup, proj_str)
+      result = self.unbox(elt_obj, t)
+      if config.debug and t == Int64:
+        self.append(""" printf("tupleproj %s[%d] = %%" PRId64 "\\n", %s);""" % (tup, idx, result))
+      return result
     else:
       return "%s.elt%d" % (tup, idx)  
  
@@ -558,6 +560,7 @@ class PyModuleCompiler(FlatFnCompiler):
     bytes_per_elt = elt_type.dtype.itemsize
     
     for i in xrange(ndims):
+      self.printf("boxed array stride %d = %d", i, "%s[%d]" % (strides_array,i) )
       self.append("%s[%d] = %s[%d] * %d;" % (numpy_strides, i, strides_array, i, bytes_per_elt) )
       
     

@@ -6,11 +6,11 @@ def true_divided(x):
     return True / x
 
 def test_true_divided_python_scalars():
-    testing_helpers.expect(true_divided, [True], [True])
-    testing_helpers.expect(true_divided, [1], [1])
-    testing_helpers.expect(true_divided, [1.0], [1.0])
-    testing_helpers.expect(true_divided, [2], [0])
-    testing_helpers.expect(true_divided, [2.0], [0.5])
+    testing_helpers.expect(true_divided, [True], True)
+    testing_helpers.expect(true_divided, [1], 1)
+    testing_helpers.expect(true_divided, [1.0], 1.0)
+    testing_helpers.expect(true_divided, [2], 0)
+    testing_helpers.expect(true_divided, [2.0], 0.5)
 
 
 def test_true_divided_uint8():
