@@ -53,7 +53,6 @@ class PyModuleCompiler(FlatFnCompiler):
     return result 
   
   def unbox_array(self, boxed_array, elt_type, ndims, target = "array_value"):
-    self.printf("UNBOXING ARRAY")
     shape_ptr = self.fresh_var("npy_intp*", "shape_ptr", "PyArray_DIMS(%s)" % boxed_array)
     strides_bytes = self.fresh_var("npy_intp*", "strides_bytes", 
                                    "PyArray_STRIDES( (PyArrayObject*) %s)" % boxed_array)
@@ -71,9 +70,6 @@ class PyModuleCompiler(FlatFnCompiler):
                     "%s[%d]" % (strides_bytes, i), "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))   
       self.setidx("%s.strides" % result, i, "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))
       self.setidx("%s.shape" % result, i, "%s[%d]" % (shape_ptr, i))
-      self.printf("unboxed array stride %d = %ld (%ld)", i, 
-                  "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt),
-                  "%s.strides[%d]"  % (result,i))  
     self.setfield(result, "offset", "0")
     self.setfield(result, "size", "PyArray_Size(%s)" % boxed_array)
     return result 
@@ -560,7 +556,6 @@ class PyModuleCompiler(FlatFnCompiler):
     bytes_per_elt = elt_type.dtype.itemsize
     
     for i in xrange(ndims):
-      self.printf("boxed array stride %d = %d", i, "%s[%d]" % (strides_array,i) )
       self.append("%s[%d] = %s[%d] * %d;" % (numpy_strides, i, strides_array, i, bytes_per_elt) )
       
     
