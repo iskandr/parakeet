@@ -74,20 +74,6 @@ class FlatFnCompiler(BaseCompiler):
     field_types = [start_t, stop_t, step_t]
     field_names = ["start", "stop", "step"]
     return self.struct_type_from_fields(field_types, "slice_type", field_names)
-  
-  def struct_type(self, parakeet_type):
-    if isinstance(parakeet_type, TupleT):
-      return self.struct_type_from_fields(parakeet_type.elt_types)
-    elif isinstance(parakeet_type, PtrT):
-      return self.ptr_struct_type(parakeet_type.elt_type)
-    elif isinstance(parakeet_type, ArrayT):
-      elt_t = parakeet_type.elt_type 
-      rank = parakeet_type.rank 
-      return self.array_struct_type(elt_t, rank)
-    elif isinstance(parakeet_type, SliceT):
-      return self.slice_struct_type()
-    else:
-      assert False, "Don't know how to make C struct type for %s" % parakeet_type
        
   def struct_type_from_fields(self, 
                                  field_types, 
@@ -135,16 +121,25 @@ class FlatFnCompiler(BaseCompiler):
     return typename 
   
 
+  def to_ctype(self, parakeet_type):
+    if isinstance(parakeet_type, TupleT):
+      return self.struct_type_from_fields(parakeet_type.elt_types)
+    elif isinstance(parakeet_type, PtrT):
+      return self.ptr_struct_type(parakeet_type.elt_type)
+    elif isinstance(parakeet_type, ArrayT):
+      elt_t = parakeet_type.elt_type 
+      rank = parakeet_type.rank 
+      return self.array_struct_type(elt_t, rank)
+    elif isinstance(parakeet_type, SliceT):
+      return self.slice_struct_type()
+    elif isinstance(parakeet_type, (NoneT, ScalarT)):
+      return type_mappings.to_ctype(parakeet_type)
+    else:
+      assert False, "Don't know how to make C type for %s" % parakeet_type
+    
+  
   def to_ctypes(self, ts):
     return tuple(self.to_ctype(t) for t in ts)
-  
-  def to_ctype(self, t):
-    if isinstance(t, (TupleT, ArrayT, PtrT, SliceT)):
-      return self.struct_type(t)
-    elif isinstance(t, ArrayT):
-      assert False, "Unexpected ArrayT in flattened code"
-    else:
-      return type_mappings.to_ctype(t)
     
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
@@ -152,7 +147,7 @@ class FlatFnCompiler(BaseCompiler):
     bytes_per_elt = elt_t.nbytes
     nbytes = "%s * %d" % (nelts, bytes_per_elt)
     raw_ptr = "(%s) malloc(%s)" % (type_mappings.to_ctype(expr.type), nbytes)
-    struct_type = self.struct_type(expr.type)
+    struct_type = self.to_ctype(expr.type)
     return self.fresh_var(struct_type, "new_ptr", "{%s, NULL}" % raw_ptr)
     
   def visit_Const(self, expr):
@@ -487,7 +482,7 @@ class FlatFnCompiler(BaseCompiler):
       return "return;"
     elif isinstance(stmt.value, Tuple):
       # if not returning multiple values by reference, then make a struct for them
-      struct_type = self.struct_type(stmt.value.type)
+      struct_type = self.to_ctype(stmt.value.type)
       result_elts = ", ".join(self.visit_expr(elt) for elt in stmt.value.elts)
       result_value = "{" + result_elts + "}"
       result = self.fresh_var(struct_type, "result", result_value)

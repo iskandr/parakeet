@@ -1,7 +1,8 @@
 from ..analysis import use_count
 from ..syntax import Tuple 
  
-from ..ndtypes import (TupleT,  ArrayT, NoneT, 
+from ..ndtypes import (TupleT,  ArrayT, 
+                       NoneT, NoneType,  
                        elt_type, ScalarT, 
                        FloatT, 
                        BoolT,  
@@ -30,7 +31,7 @@ class PyModuleCompiler(FlatFnCompiler):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
     if target is None:
       target = "scalar_value"
-    
+      
     result = self.fresh_var(t, target)
     if isinstance(t, IntT):
       check = "PyInt_Check"
@@ -93,17 +94,25 @@ class PyModuleCompiler(FlatFnCompiler):
     elts_str = ", ".join(unboxed_elts)
     return self.fresh_var(c_struct_t, target, "{" + elts_str + "}")
       
+  def unbox_slice(self, boxed, t, target = None):
+    if target is None: target = "slice"
+    typename = self.to_ctype(t)
+    start = self.unbox("((PySliceObject*)%s)->start" % boxed, t.start_type, "start")
+    stop = self.unbox("((PySliceObject*)%s)->stop" % boxed, t.stop_type, "stop")
+    step = self.unbox("((PySliceObject*)%s)->step" % boxed, t.step_type, "step")
+    return self.fresh_var(typename, target, "{%s,%s,%s}" % (start,stop,step) )
+    
   def unbox(self, boxed, t, target = None):
-    if isinstance(t, (NoneT, PtrT, ScalarT)):
+    if isinstance(t, NoneT):
+      return "0"
+    elif isinstance(t, PtrT):
+      assert False, "Unexpected raw pointer passed as argument from Python %s : %s" % (boxed, t)
+    if isinstance(t, ScalarT):
       return self.unbox_scalar(boxed, t, target = target)
     elif isinstance(t, (ClosureT, TupleT)):
       return self.unbox_tuple(boxed, t, target = target)
     elif isinstance(t, SliceT):
-      return self.unbox_slice(boxed, 
-                              start_type = t.start_type, 
-                              stop_type = t.stop_type, 
-                              step_type = t.step_type, 
-                              target = target)
+      return self.unbox_slice(boxed, t, target = target) 
     elif isinstance(t, ArrayT):
       return self.unbox_array(boxed, 
                               elt_type = t.elt_type, 
@@ -111,12 +120,13 @@ class PyModuleCompiler(FlatFnCompiler):
     else:
       assert False, "Don't know how to unbox %s : %s" % (boxed, t)
         
+  def box_none(self):
+    self.append("Py_INCREF(Py_None);")
+    return "Py_None"
+  
   def box_scalar(self, x, t):  
     if isinstance(t, BoolT):
       return "PyBool_FromLong(%s)" % x
-    elif isinstance(t, NoneT):
-      self.append("Py_INCREF(Py_None);")
-      return "Py_None"
     if x.replace("_", "").isalpha():
       scalar = x
     else:
@@ -138,13 +148,21 @@ class PyModuleCompiler(FlatFnCompiler):
     else:
       return "PyTuple_Pack(%d, %s)" % (n, ", ".join(boxed_elts))
   
+  def box_slice(self, x, t):
+    start = self.box("%s.start" % x, t.start_type)
+    stop = self.box("%s.stop" % x, t.stop_type)
+    step = self.box("%s.step" % x, t.step_type)
+    return "PySlice_New(%s, %s, %s)" % (start, stop, step)
+  
   def box(self, x, t):
-    if isinstance(t, (NoneT, ScalarT)):
+    if isinstance(t, ScalarT):
       return self.box_scalar(x, t)
+    elif isinstance(t, NoneT):
+      return self.box_none()
     elif isinstance(t, (ClosureT, TupleT)):
       return self.box_tuple(x, t)
     elif isinstance(t, SliceT):
-      assert False, "I CAN HAZ SLICE?"
+      return self.box_sclie(x, t)
     elif isinstance(t, ArrayT):
       return self.box_array(x, t)
     else:
@@ -364,7 +382,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
   def get_boxed_array_ptr(self, v, parakeet_ptr_t):
     self.check_array(v)
-    c_struct_type = self.struct_type(parakeet_ptr_t)
+    c_struct_type = self.to_ctype(parakeet_ptr_t)
     c_ptr_type = type_mappings.to_ctype(parakeet_ptr_t) 
     data_field = "(%s) (((PyArrayObject*) %s)->data)" % (c_ptr_type, v) 
     # get the data field but also fill the base object 
@@ -374,7 +392,7 @@ class PyModuleCompiler(FlatFnCompiler):
     if attr == "data":
       if boxed:
         self.check_array(v)
-        struct_type = self.struct_type(t)
+        struct_type = self.to_ctype(t)
         ptr_type = type_mappings.to_ctype(t) 
         data_field = "(%s) (((PyArrayObject*) %s)->data)" % (ptr_type, v) 
         # get the data field but also fill the base object 
