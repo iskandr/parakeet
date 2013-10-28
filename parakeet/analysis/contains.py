@@ -5,11 +5,10 @@ from syntax_visitor import SyntaxVisitor
 
 def memoize(analyzer):
   _cache = {}
-  def memoized(fn_arg):
-    key = fn_arg.cache_key
+  def memoized(fn_arg): 
+    key = analyzer, fn_arg.cache_key
     if key in _cache:
       return _cache[key]
-    
     result = analyzer(fn_arg)
     _cache[key] = result 
     return result 

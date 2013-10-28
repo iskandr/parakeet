@@ -5,13 +5,16 @@ from clone_function import CloneFunction
 from transform import Transform 
 
 name_stack = []
-def apply_transforms(fn, transforms, cleanup = [], phase_name = None):
+def apply_transforms(fn, transforms, 
+                       cleanup = [], 
+                       phase_name = None, 
+                       transform_history = None):
   if len(transforms) == 0:
     return fn 
   if phase_name: name_stack.append("{" + phase_name + " :: " + fn.name +  "}")
   for T in transforms:
     t = T() if type(T) == type else T
-
+    
     if isinstance(t, Transform):
       name_stack.append(str(t))
       if config.print_transform_names:
@@ -29,6 +32,8 @@ def apply_transforms(fn, transforms, cleanup = [], phase_name = None):
     if len(cleanup) > 0:
       fn = apply_transforms(fn, cleanup, [], phase_name = "cleanup")
     
+    if transform_history is not None:
+      transform_history.add(T)
   
   if phase_name: name_stack.pop()
   return fn
@@ -137,7 +142,10 @@ class Phase(object):
         (fn.name, fn.cache_key)
     
     fn.transform_history.add(self)
-    fn = apply_transforms(fn, self.transforms, cleanup = self.cleanup, phase_name = str(self))
+    fn = apply_transforms(fn, self.transforms, 
+                          cleanup = self.cleanup, 
+                          phase_name = str(self), 
+                          transform_history = fn.transform_history)
     
     if self.post_apply:
       new_fn = self.post_apply(fn)
