@@ -144,6 +144,13 @@ class FlatFnCompiler(BaseCompiler):
   def to_ctypes(self, ts):
     return tuple(self.to_ctype(t) for t in ts)
     
+  def visit_Slice(self, expr):
+    typename = self.to_ctype(expr.type)
+    start = self.visit_expr(expr.start)
+    stop = self.visit_expr(expr.stop)
+    step = self.visit_expr(expr.step)
+    return self.fresh_var(typename, "slice", "{%s, %s, %s}" % (start,stop,step))
+    
   def visit_Alloc(self, expr):
     elt_t =  expr.elt_type
     nelts = self.fresh_var("npy_intp", "nelts", self.visit_expr(expr.count))
