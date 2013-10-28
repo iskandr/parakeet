@@ -124,6 +124,8 @@ class FlatFnCompiler(BaseCompiler):
   def to_ctype(self, parakeet_type):
     if isinstance(parakeet_type, TupleT):
       return self.struct_type_from_fields(parakeet_type.elt_types)
+    elif isinstance(parakeet_type, ClosureT):
+      return self.struct_type_from_fields(parakeet_type.arg_types)
     elif isinstance(parakeet_type, PtrT):
       return self.ptr_struct_type(parakeet_type.elt_type)
     elif isinstance(parakeet_type, ArrayT):
@@ -134,6 +136,7 @@ class FlatFnCompiler(BaseCompiler):
       return self.slice_struct_type()
     elif isinstance(parakeet_type, (NoneT, ScalarT)):
       return type_mappings.to_ctype(parakeet_type)
+    
     else:
       assert False, "Don't know how to make C type for %s" % parakeet_type
     
@@ -550,13 +553,12 @@ class FlatFnCompiler(BaseCompiler):
     }""" % (var, var, bound, var, nested )
     
 
-      
+  
   def visit_TypedFn(self, expr):
     return self.get_fn_name(expr)
 
   def visit_UntypedFn(self, expr):
-    assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
-  
+    return "{}"
   
   def return_types(self, fn):
     if isinstance(fn.return_type, TupleT):

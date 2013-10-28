@@ -112,7 +112,7 @@ class PyModuleCompiler(FlatFnCompiler):
     elif isinstance(t, (ClosureT, TupleT)):
       return self.unbox_tuple(boxed, t, target = target)
     elif isinstance(t, SliceT):
-      return self.unbox_slice(boxed, t, target = target) 
+      return self.unbox_slice(boxed, t, target = target)
     elif isinstance(t, ArrayT):
       return self.unbox_array(boxed, 
                               elt_type = t.elt_type, 
@@ -637,9 +637,6 @@ class PyModuleCompiler(FlatFnCompiler):
       self.append(s)
     self.append("\n")
     return self.pop()
-
-  def visit_UntypedFn(self, expr):
-    assert False, "Unexpected UntypedFn %s in C backend, should have been specialized" % expr.name
          
   def visit_fn(self, fn):
     if config.print_input_ir:
