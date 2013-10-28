@@ -5,8 +5,13 @@ from ..transforms import Transform
 
 class ShapeElimination(Transform): 
   def pre_apply(self, fn):
+    print "BEFORE SHAPE ELIM", fn
     self.shape_env = shape_env(fn)
 
+  def post_apply(self, fn):
+    print "AFTER", fn
+    return fn 
+  
   def transform_Var(self, expr):
     if expr.name in self.shape_env:
       v = self.shape_env[expr.name]

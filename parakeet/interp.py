@@ -32,6 +32,7 @@ def rankof(x):
   return x.ndim if hasattr(x, 'ndim') else 0 
 
 def eval(fn, actuals):
+
   result = eval_fn(fn, actuals)
   import ctypes 
   if isinstance(result, ctypes.Structure):
@@ -39,8 +40,7 @@ def eval(fn, actuals):
   return result 
    
 def eval_fn(fn, actuals):
-  
-
+  print fn 
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -139,7 +139,7 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
-      if False:
+      if True:
         print expr 
         print "data", data 
         print "shape",  shape 

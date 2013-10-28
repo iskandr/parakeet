@@ -464,8 +464,10 @@ class ShapeInference(SyntaxVisitor):
     name = expr.name
     
     if v.__class__ is Shape:
-      if name in ('shape', 'strides'):
+      if name == 'shape':
         return Tuple(v.dims)
+      elif name == 'strides':
+        return Tuple((any_scalar,) * len(v.dims) )
       elif name in ('offset', 'size', 'nelts'):
         return any_scalar
       elif name == 'data':

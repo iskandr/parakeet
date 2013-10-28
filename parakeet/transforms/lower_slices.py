@@ -139,7 +139,7 @@ class LowerSlices(Transform):
     return scalar_indices, scalar_index_positions, slices, slice_positions
     
   def transform_Index(self, expr):
-    
+
     ndims = expr.value.type.rank
     if ndims == 1 and isinstance(expr.index.type, ScalarT):
       return expr
@@ -160,6 +160,7 @@ class LowerSlices(Transform):
     shape = self.shape(array)
     shape_elts = self.tuple_elts(shape)
     strides = self.strides(array)
+     
     stride_elts = self.tuple_elts(strides)
     offset = self.attr(array, 'offset')
     new_shape = []
@@ -193,6 +194,11 @@ class LowerSlices(Transform):
 
     new_array = self.array_view(data, self.tuple(new_shape), self.tuple(new_strides), offset, size)
     assert new_array.type.rank == new_rank
+    #if len(stride_elts) > 1:
+    #  print "STRIDES", stride_elts 
+    #  print "EXPR", expr 
+    #  print "NEW ARRAY", new_array
+    #  print 
     return new_array
     
     
