@@ -566,7 +566,7 @@ class FlatFnCompiler(BaseCompiler):
     elif isinstance(fn.return_type, NoneT):
       return []
     else:
-      assert isinstance(fn.return_type, (PtrT, ScalarT))
+      # assert isinstance(fn.return_type, (PtrT, ScalarT)), "Unexpected return type %s" % fn.return_type
       return [fn.return_type]
     
   

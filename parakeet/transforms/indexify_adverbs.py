@@ -374,6 +374,10 @@ class IndexifyAdverbs(Transform):
   def transform_Filter(self, expr):
     assert False, "Filter not implemented"
     
+  def transform_TypedFn(self, expr):
+    import pipeline 
+    return pipeline.indexify.apply(expr)
+  
   def transform_Assign(self, stmt):
     """
     If you encounter an adverb being written to an output location, 

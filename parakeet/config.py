@@ -1,6 +1,5 @@
 default_backend = 'openmp' #llvm
 
-
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################

@@ -5,14 +5,6 @@ import time
 import parakeet
 from parakeet import testing_helpers 
 
-#parakeet.config.print_x86 = True
-#parakeet.config.print_untyped_function = True 
-#parakeet.config.print_lowered_function = True
-#parakeet.config.print_optimized_llvm = True
-#parakeet.config.print_specialized_function = True
-parakeet.config.opt_loop_unrolling = False 
-parakeet.config.stride_specialization = True
-
 def count_thresh_orig(values, thresh):
   n = 0
   for elt in values:

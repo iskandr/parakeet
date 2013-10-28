@@ -62,7 +62,7 @@ class LowerArrayOperators(Transform):
   Given first-order array constructors, turn them into IndexMaps
   """
 
-  def mk_range_fn(self, start, step, output_type,   _range_fn_cache = {}):
+  def mk_range_fn(self, start, step, output_type, _range_fn_cache = {}):
     """
     Given expressions for start, stop, and step of an iteration range
     and a desired output type. 
@@ -75,7 +75,7 @@ class LowerArrayOperators(Transform):
     start_is_const = start.__class__ is Const
     step_is_const = step.__class__ is Const
     
-    key = output_type, start_is_const,  step_is_const
+    key = output_type, (start.type, start_is_const), (step.type, step_is_const)
     if key in _range_fn_cache:
       fn = _range_fn_cache[key]
     else:

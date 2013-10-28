@@ -6,8 +6,6 @@ from parakeet.transforms.pipeline import lowering
 from parakeet.analysis.syntax_visitor import SyntaxVisitor
 from parakeet.testing_helpers import expect, run_local_tests
 
-config.set_opt_level(2)
-
 
 def A(x):
   return x + 1

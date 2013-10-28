@@ -5,9 +5,6 @@ from ..ndtypes import type_conv, Type
 from ..syntax import UntypedFn, TypedFn, ActualArgs
 from ..transforms import pipeline
 
- 
-
-
 def prepare_args(fn, args, kwargs):
   """
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
@@ -71,16 +68,20 @@ def run_typed_fn(fn, args, backend = None):
   
   if backend is None:
     backend = config.default_backend
-  if backend == 'shiver':
-    if contains_loops(fn):
-      # for now only run parallel outer statements 
-      backend = 'llvm'
-    else:
-      fn = pipeline.indexify(fn)
-      from .. import interp 
-      return interp.eval_fn(fn, args)
+    
+  if backend == 'c':
+    from .. import c_backend
+    return c_backend.run(fn, args)
+   
+  elif backend == 'openmp':
+    from .. import openmp_backend 
+    return openmp_backend.run(fn, args)
   
-  if backend == 'llvm':
+  elif backend == 'cuda':
+    from .. import cuda_backend 
+    return cuda_backend.run(fn, args)
+  
+  elif backend == 'llvm':
     from ..llvm_backend.llvm_context import global_context
     from ..llvm_backend import generic_value_to_python 
     from ..llvm_backend import ctypes_to_generic_value, compile_fn 
@@ -96,19 +97,7 @@ def run_typed_fn(fn, args, backend = None):
     exec_engine = global_context.exec_engine
     gv_return = exec_engine.run_function(llvm_fn, gv_inputs)
     return generic_value_to_python(gv_return, fn.return_type)
-  
-  elif backend == 'c':
-    from .. import c_backend
-    return c_backend.run(fn, args)
-   
-  elif backend == 'openmp':
-    from .. import openmp_backend 
-    return openmp_backend.run(fn, args)
-  
-  elif backend == 'cuda':
-    from .. import cuda_backend 
-    return cuda_backend.run(fn, args)
-  
+
   elif backend == "interp":
     from .. import interp 
     fn = pipeline.loopify(fn)

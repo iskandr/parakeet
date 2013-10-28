@@ -519,6 +519,7 @@ class ShapeInference(SyntaxVisitor):
     cond = self.visit_expr(expr.cond)
     falseval = self.visit_expr(expr.true_value)
     trueval = self.visit_expr(expr.false_value)
+
     return cond.combine(falseval).combine(trueval)
     
   def visit_Var(self, expr):
@@ -621,7 +622,6 @@ class ShapeInference(SyntaxVisitor):
     else:
       return elt_result 
     
-    
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
@@ -651,8 +651,6 @@ class ShapeInference(SyntaxVisitor):
   def visit_OuterMap(self, expr):
     fn = self.visit_expr(expr.fn)
     assert False, "OuterMap needs an implementation"
-
-
 
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ in (syntax.Var, syntax.Tuple):

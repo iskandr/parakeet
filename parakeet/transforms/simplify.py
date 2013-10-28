@@ -13,12 +13,12 @@ from .. syntax import (AllocArray, Assign, ExprStmt,
                        PrimCall, Call, TypedFn, UntypedFn, 
                        Adverb, Accumulative, HasEmit, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
-from .. syntax.helpers import collect_constants, is_one, is_zero, is_false, is_true, all_constants
-from .. syntax.helpers import get_types, slice_none_t, const_int, one, none 
+from .. syntax.helpers import (collect_constants, is_one, is_zero, is_false, is_true, all_constants,
+                               get_types, slice_none_t, const_int, one, none, true, false) 
 import subst
 import transform 
 from transform import Transform
-from parakeet.syntax.adverbs import IndexAdverb, IndexAccumulative
+
 
 # classes of expressions known to have no side effects
 # and to be unaffected by changes in mutable state as long
@@ -375,6 +375,14 @@ class Simplify(Transform):
     if all_constants(args):
       return syntax.Const(value = prim.fn(*collect_constants(args)),
                           type = expr.type)
+    
+    if len(args) == 1:
+      x = args[0]
+      if prim == prims.logical_not:
+        if is_false(x):
+          return true 
+        elif is_true(x):
+          return false 
     if len(args) == 2:
       x,y = args 
       
@@ -437,7 +445,16 @@ class Simplify(Transform):
           return one(expr.type)
         elif y.__class__ is Const and y.value == 2:
           return self.cast(self.mul(x, x, "sqr"), expr.type)
-
+      elif prim == prims.logical_and:
+        if is_true(x):
+          return y 
+        elif is_false(x) or is_false(y):
+          return false 
+      elif prim == prims.logical_or:
+        if is_true(x) or is_true(y):
+          return true 
+        elif is_false(x) or is_false(y):
+          return false 
     expr.args = args
     return expr 
   

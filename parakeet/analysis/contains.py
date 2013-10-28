@@ -3,13 +3,25 @@ from .. syntax import Adverb, ParFor, Closure, UntypedFn, TypedFn
 
 from syntax_visitor import SyntaxVisitor
 
+def memoize(analyzer):
+  _cache = {}
+  def memoized(fn_arg):
+    key = fn_arg.cache_key
+    if key in _cache:
+      return _cache[key]
+    
+    result = analyzer(fn_arg)
+    _cache[key] = result 
+    return result 
+  return memoized  
+  
+
+@memoize 
 def contains_structs(fn):
   for t in fn.type_env.itervalues():
     if not isinstance(t, (ScalarT, PtrT, NoneT)):
       return True
   return False
-
-
 
 class Yes(Exception):
   pass 
@@ -24,7 +36,8 @@ class ContainsSlices(SyntaxVisitor):
       raise Yes()
     if not all(isinstance(t, ScalarT) for t in idx_types):
       raise Yes()
-  
+
+@memoize 
 def contains_slices(fn):
   try:
     ContainsSlices().visit_fn(fn)
@@ -50,7 +63,12 @@ def contains_loops(fn):
 class ContainsCalls(SyntaxVisitor):
   def visit_Call(self, expr):
     raise Yes()
-
+  
+  def visit_TypedFn(self, expr):
+    if contains_calls(expr):
+      raise Yes()
+  
+@memoize 
 def contains_calls(fn):
   try: 
     ContainsCalls().visit_fn(fn)
@@ -64,7 +82,11 @@ class ContainsAdverbs(SyntaxVisitor):
       raise Yes()
     SyntaxVisitor.visit_expr(self, expr)
   
-
+  def visit_TypedFn(self, expr):
+    if contains_adverbs(expr):
+      raise Yes()
+  
+@memoize 
 def contains_adverbs(fn):
   try:
     ContainsAdverbs().visit_fn(fn)
@@ -77,8 +99,14 @@ class ContainsParFor(SyntaxVisitor):
     if stmt.__class__ is ParFor:
       raise Yes()
     SyntaxVisitor.visit_stmt(self, stmt)
+  
+  
+  def visit_TypedFn(self, expr):
+    if contains_parfor(expr):
+      raise Yes()
 
-def contrains_parfor(fn):
+@memoize 
+def contains_parfor(fn):
   try:
     ContainsParFor.visit_fn(fn)
     return False 
@@ -90,7 +118,8 @@ class ContainsFunctions(SyntaxVisitor):
     if isinstance(expr, (UntypedFn, TypedFn, Closure)) or isinstance(expr.type, (FnT, ClosureT)):
       raise Yes()
     SyntaxVisitor.visit_expr(expr)
-    
+
+@memoize 
 def contains_functions(fn):
   try:
     ContainsFunctions().visit_fn(fn)
