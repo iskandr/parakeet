@@ -20,13 +20,13 @@ def matmult_loops(X,Y,Z):
   return Z
      
 
-n, d = 250, 1000
-m = 250 
+n, d = 350, 1000
+m = 450 
 X = np.random.randn(n,d)
 Y = np.random.randn(d,m)
 Z = np.zeros((m,n))
 from timer import compare_perf
 
-compare_perf(matmult_high_level, [X,Y],cpython=True)
-
 compare_perf(matmult_loops, [X, Y, Z], cpython=False)
+compare_perf(matmult_high_level, [X,Y],cpython=True, extra = {'numpy':np.dot})
+
