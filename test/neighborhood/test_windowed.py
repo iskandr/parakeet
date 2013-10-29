@@ -1,7 +1,9 @@
 import parakeet 
-from parakeet import jit, testing_helpers 
+from parakeet import jit, testing_helpers, c_backend, config 
 import numpy as np
- 
+
+c_backend.print_function_source = True
+c_backend.print_module_source = True 
 
 @jit
 def avg1d(x):

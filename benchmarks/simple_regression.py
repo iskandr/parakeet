@@ -1,5 +1,4 @@
-from parakeet import jit 
-
+from parakeet import jit, config, c_backend 
 import timer  
 
 def covariance(x,y):

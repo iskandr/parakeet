@@ -10,10 +10,14 @@ class MulticoreCompiler(PyModuleCompiler):
   
   def __init__(self, parfor_depth = 0, *args, **kwargs):
     self.parfor_depth = parfor_depth
+    self.seen_parfor = None 
     PyModuleCompiler.__init__(self, *args, **kwargs)
-    self.add_compile_flag("-fopenmp")
-    self.add_link_flag("-fopenmp")
-
+    
+  
+  @property 
+  def cache_key(self):
+    return self.__class__, self.parfor_depth > 0
+  
   _loop_var_names = ["i","j","k","l","a","b","c","ii","jj","kk","ll","aa","bb","cc"] 
   def loop_vars(self, count, init_value = "0"):
     assert count <= len(self._loop_var_names)
@@ -46,6 +50,7 @@ class MulticoreCompiler(PyModuleCompiler):
       - C expressions representing its closure arguments
       - Parakeet input types 
     """
+
     fn_name = self.get_fn_name(fn_expr)
     closure_args = self.get_closure_args(fn_expr)
     root_fn = get_fn(fn_expr)
@@ -82,21 +87,36 @@ class MulticoreCompiler(PyModuleCompiler):
     else:
       body += "\n%s;\n" % call
     return body, private_vars
+  
+  
+  def enter_parfor(self):
+    self.parfor_depth += 1
+    if not self.seen_parfor:
+      self.seen_parfor = True 
+      self.add_compile_flag("-fopenmp")
+      self.add_link_flag("-fopenmp")
     
+  def exit_parfor(self):
+    self.parfor_depth -= 1
+    
+
+  
   def visit_ParFor(self, stmt):
-    
     bounds = self.tuple_to_var_list(stmt.bounds)
     n_vars = len(bounds)
     loop_vars = self.loop_vars(n_vars)
-    self.parfor_depth += 1  
+    
+    self.enter_parfor()
     body, private_vars = self.build_loop_body(stmt.fn, loop_vars)
     loops = self.build_loops(loop_vars, bounds, body)
-    self.parfor_depth -= 1 
+    self.exit_parfor()
+    
     if self.parfor_depth == 0:  
       release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
       acquire_gil = "\nPy_END_ALLOW_THREADS\n"  
-      omp = "#pragma omp parallel for collapse(%d) private(%s)" % \
-        (len(bounds), ", ".join(private_vars))
+      omp = "#pragma omp parallel for private(%s)" % ", ".join(private_vars)
+      if len(loop_vars) > 1:
+        omp += " collapse(%d)" % len(loop_vars) 
       return release_gil + omp + loops + acquire_gil    
     else:
       return loops 
@@ -117,7 +137,6 @@ class MulticoreCompiler(PyModuleCompiler):
     body += "\n%s = %s(%s);\n" % (acc, combine_name, combine_arg_str)
     self.append(self.build_loops(loop_vars, bounds, body))
     return acc 
-    
     
   def visit_IndexScan(self, expr):
     """

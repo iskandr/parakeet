@@ -67,7 +67,7 @@ def run_typed_fn(fn, args, backend = None):
 
   
   if backend is None:
-    backend = config.default_backend
+    backend = config.backend
     
   if backend == 'c':
     from .. import c_backend

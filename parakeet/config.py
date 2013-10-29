@@ -1,4 +1,11 @@
-default_backend = 'c' #llvm
+# BACKEND SELECTION
+#  - 'c': sequential, use gcc or clang to compile
+#  - 'openmp': multi-threaded execution for array operations, requires gcc 4.4+
+#  - 'llvm': deprecated
+#  - 'interp': interpreter, will be dreadfully slow
+#  - 'cuda': experimental GPU support
+
+backend = 'openmp' 
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -88,7 +95,7 @@ print_escape_analysis = False
 print_transform_timings = False
 
 # print each transform's name when it runs
-print_transform_names = True
+print_transform_names = False
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False

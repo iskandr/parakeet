@@ -163,12 +163,15 @@ def create_source_file(src,
       
   src_file.write(src)
   src_file.close()
-  if print_source: print subprocess.check_output(['cat', src_filename])
+  if print_source: 
+    print subprocess.check_output(['cat', src_filename])
   return src_file 
 
 def run_cmd(cmd, env = None, label = ""):
-  if config.print_commands: print " ".join(cmd)
-  if config.print_command_elapsed_time: t = time.time()
+  if config.print_commands: 
+    print " ".join(cmd)
+  if config.print_command_elapsed_time: 
+    t = time.time()
   
   # first compile silently
   # if you encounter an error, then recompile with output printing 
@@ -198,8 +201,10 @@ def compile_object(src,
                    extra_compile_flags = [], 
                    print_source = None, 
                    print_commands = None):
-  if print_source is None: print_source = config.print_module_source
-  if print_commands is None: print_commands = config.print_commands
+  if print_source is None: 
+    print_source = config.print_module_source
+  if print_commands is None: 
+    print_commands = config.print_commands
   
   src_file = create_source_file(src, 
                                 fn_name = fn_name, 

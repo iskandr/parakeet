@@ -611,8 +611,17 @@ class FlatFnCompiler(BaseCompiler):
     body_str = self.visit_block(fn.body) 
 
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
-    src = "%s { %s }" % (sig, body_str) 
+    src = "inline %s { %s }" % (sig, body_str) 
     return c_fn_name, sig, src
+  
+  @property 
+  def cache_key(self):
+    """
+    If we ever need to differentiate compiled function by *how* they were compiled,
+    we can use this cache key to track the class of the compiler or other
+    relevant meta-data
+    """ 
+    return self.__class__ 
   
   _flat_compile_cache = {}
   def compile_flat_source(self, parakeet_fn):
@@ -624,7 +633,7 @@ class FlatFnCompiler(BaseCompiler):
     
     # include your own class in the cache key so that we get distinct code 
     # for derived compilers like OpenMP and CUDA 
-    key = parakeet_fn.cache_key, frozenset(struct_types), self.__class__
+    key = parakeet_fn.cache_key, frozenset(struct_types), self.cache_key
     
     if key in self._flat_compile_cache:
       return self._flat_compile_cache[key]

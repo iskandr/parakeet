@@ -1,7 +1,7 @@
 import numpy as np 
-from parakeet import testing_helpers, config
+from parakeet import testing_helpers
 
-config.default_backend = 'c'
+
 
 
 mu = 0.1
