@@ -508,8 +508,6 @@ class FnCompiler(BaseCompiler):
       return []
     else:
       assert isinstance(fn, Closure), "Expected closure, got %s : %s" % (fn, fn.type)
-      print "CLOSURE ARGS", [(arg, type(arg)) for arg in fn.args]
-      print "RESULT", self.visit_expr_list(fn.args)
       return self.visit_expr_list(fn.args)
       
   def build_loops(self, loop_vars, bounds, body):

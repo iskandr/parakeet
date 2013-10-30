@@ -490,20 +490,14 @@ def infer_types(untyped_fn, types):
                if local_name not in unbound_keywords]
   if len(unbound_keywords) > 0:
     default_assignments = []
+    from ..frontend.ast_conversion import value_to_syntax 
     for local_name in unbound_keywords:
       t = tenv[local_name]
       python_value = typed_args.defaults[local_name]
       var = Var(local_name, type = t)
-      if python_value.__class__ is tuple:
-        parakeet_elts = []
-        for (elt_value, elt_type) in zip(python_value, t.elt_types):
-          parakeet_elt = Const(elt_value, elt_type)
-          parakeet_elts.append(parakeet_elt)
-        typed_val = syntax.Tuple(tuple(parakeet_elts), type = t)
-      else:
-        typed_val = Const(python_value, t) #mk_default_const(python_value, t)
-
-      stmt = syntax.Assign(var, typed_val)
+      parakeet_value = value_to_syntax(python_value)
+      parakeet_value.type = t 
+      stmt = syntax.Assign(var, parakeet_value)
       default_assignments.append(stmt)
     body = default_assignments + body
 

@@ -178,16 +178,15 @@ class AST_Translator(ast.NodeVisitor):
   def current_scope(self):
     return self.scopes.top()
 
-
-  def syntax_to_value(self, expr):
+  def ast_to_value(self, expr):
     if isinstance(expr, ast.Num):
       return expr.n
     elif isinstance(expr, ast.Tuple):
-      return tuple(self.syntax_to_value(elt) for elt in expr.elts)
+      return tuple(self.ast_to_value(elt) for elt in expr.elts)
     elif isinstance(expr, ast.Name):
-      return self.lookup_global(expr.id)
+      return self.lookup_global(expr.id) 
     elif isinstance(expr, ast.Attribute):
-      left = self.syntax_to_value(expr.value)
+      left = self.ast_to_value(expr.value)
       if isinstance(left, ExternalValue):
         left = left.value 
       return getattr(left, expr.attr) 
@@ -322,8 +321,12 @@ class AST_Translator(ast.NodeVisitor):
     if n_defaults > 0:
       local_names = formals.positional[-n_defaults:]
       for (k,expr) in zip(local_names, args.defaults):
-        formals.defaults[k] = self.syntax_to_value(expr)
-
+        v = self.ast_to_value(expr)
+        
+        # for now we're putting literal python 
+        # values in the defaults dictionary of
+        # a function's formal arguments
+        formals.defaults[k] = v 
 
     if args.vararg:
       assert isinstance(args.vararg, str)
@@ -885,14 +888,12 @@ class AST_Translator(ast.NodeVisitor):
   def visit_Lambda(self, node):
     return translate_function_ast("lambda", node.args, [ast.Return(node.body)], parent = self)
     
-def translate_function_ast(name, 
-                           args, 
-                           body, 
-                           globals_dict = None,
-                           closure_vars = [], 
-                           closure_cells = [],
-                           parent = None, 
-                           filename = None):
+def translate_function_ast(name, args, body, 
+                              globals_dict = None,
+                              closure_vars = [], 
+                              closure_cells = [],
+                              parent = None, 
+                              filename = None):
   """
   Helper to launch translation of a python function's AST, and then construct
   an untyped parakeet function from the arguments, refs, and translated body.
@@ -1018,10 +1019,6 @@ def _translate_function_value(fn):
   # if the function has been wrapped with a decorator, unwrap it 
   while isinstance(fn, jit):
     fn = fn.f
-  
-
-
-  
 
   if fn in _known_python_functions:
     return _known_python_functions[fn]

@@ -349,33 +349,6 @@ class PyModuleCompiler(FnCompiler):
     else:
       return "%s.elt%d" % (tup, idx)  
  
-  """
-  def strides(self, array_expr):
-    arr_t = array_expr.type
-    assert isinstance(arr_t, ArrayT), \
-      "Can only get strides of array, not %s : %s" % (array_expr, arr_t)
-    elt_t = arr_t.elt_type
-    arr = self.visit_expr(array_expr)
-    
-    bytes_per_elt = elt_t.dtype.itemsize
-
-    strides_tuple_t = arr_t.strides_t
-    stride_t = strides_tuple_t.elt_types[0]
-    
-    assert all(t == stride_t for t in strides_tuple_t)
-    n = len(strides_tuple_t.elt_types)
-    strides_bytes = self.fresh_name("strides_bytes")
-    self.append("npy_intp* %s = PyArray_STRIDES( (PyArrayObject*) %s);" % (strides_bytes, arr))
-    strides_elts = self.fresh_name("strides_elts")
-    self.append("npy_intp %s[%d];" % (strides_elts, n))
-    for i in xrange(n):
-      if config.debug:
-        self.printf("converting strides %s[%d] = %%ld to %%ld" % (strides_bytes, i), 
-                    "%s[%d]" % (strides_bytes, i), "%s[%d] / %d" % (strides_bytes, i, bytes_per_elt))   
-      self.append("%s[%d] = %s[%d] / %d;" % (strides_elts, i, strides_bytes, i, bytes_per_elt))
-    strides_tuple = self.array_to_tuple(strides_elts, n, stride_t)
-    return strides_tuple
-  """
     
   def decref(self, obj):
     self.append("Py_DECREF(%s);" % obj)

@@ -72,7 +72,9 @@ class Verify(SyntaxVisitor):
     SyntaxVisitor.visit_expr(self, expr)
 
   def visit_Const(self, expr):
-    assert isinstance(expr.type, (ScalarT, NoneT)), "Invalid constant %s : %s" % (expr.value, expr.type) 
+    assert isinstance(expr.type, (ScalarT, NoneT)), \
+      "Invalid constant %s : %s" % (expr.value, expr.type)
+       
   def visit_ExprStmt(self, stmt):
     self.visit_expr(stmt.value)
     assert stmt.value.type and stmt.value.type.__class__ is NoneT, \

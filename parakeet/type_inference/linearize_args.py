@@ -4,7 +4,7 @@ from ..syntax import TupleProj, get_type, ActualArgs
 
 
 from helpers import unpack_closure
-from parakeet.syntax.formal_args import FormalArgs, UnexpectedKeyword
+from ..syntax.formal_args import FormalArgs, UnexpectedKeyword
 
 def linearize_arg_types(fn, args):
 

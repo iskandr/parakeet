@@ -170,9 +170,6 @@ class LocalTypeInference(Transform):
   def transform_Tuple(self, expr):
     elts = self.transform_expr_list(expr.elts)
     return self.tuple(elts)
-    #elt_types = get_types(elts)
-    #t = tuple_type.make_tuple_type(elt_types)
-    #return syntax.Tuple(elts, type = t)
 
   def transform_Const(self, expr):
     return Const(expr.value, type_conv.typeof(expr.value))

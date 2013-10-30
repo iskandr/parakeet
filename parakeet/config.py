@@ -13,7 +13,6 @@ backend = 'openmp'
   
 default_opt_level = 2 
 
-
 def set_opt_level(n):
   assert 0 <= n <= 3, "Invalid optimization level %d" % n
   g = globals()
@@ -27,8 +26,9 @@ def set_opt_level(n):
   for name in ('opt_licm', 
                'opt_redundant_load_elimination', 
                'opt_stack_allocation', 
-               'opt_shape_elim', 
-               'stride_specialization'):
+               'opt_shape_elim',
+               'stride_specialization', 
+               ):
     g[name] = n > 1 
     
   for name in ('opt_loop_unrolling',):
@@ -52,8 +52,8 @@ opt_loop_unrolling = False
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
+opt_copy_elimination = True
 opt_scalar_replacement = False
-opt_copy_elimination = False
     
 # run verifier after each transformation 
 opt_verify = True

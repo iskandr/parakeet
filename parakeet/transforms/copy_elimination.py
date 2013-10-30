@@ -17,11 +17,12 @@ class CopyElimination(Transform):
       return Transform.apply(self, fn)
 
   def pre_apply(self, fn):
-    find_local_arrays = FindLocalArrays()
-    find_local_arrays.visit_fn(fn)
+    local_array_analysis = FindLocalArrays()
+    local_array_analysis.visit_fn(fn)
 
-    self.local_alloc = find_local_arrays.local_allocs
-    self.local_arrays = find_local_arrays.local_arrays
+
+    self.local_alloc = local_array_analysis.local_allocs
+    self.local_arrays = local_array_analysis.local_arrays
 
     escape_info = escape_analysis(fn)
     self.may_escape = escape_info.may_escape
@@ -30,8 +31,10 @@ class CopyElimination(Transform):
     self.usedef = UseDefAnalysis()
     self.usedef.visit_fn(fn)
 
+    
     self.pointers_by_size = {}
     self.arrays_by_size = {}
+    
 
   def no_array_aliases(self, array_name):
     alias_set = self.may_alias.get(array_name, [])
@@ -55,31 +58,47 @@ class CopyElimination(Transform):
     #   3) src was locally allocated
     # ...then transform the code so instead of allocating src
 
-    if stmt.lhs.__class__ is Index and  stmt.lhs.value.__class__ is Var:
-      lhs_name = stmt.lhs.value.name
+    if stmt.lhs.__class__ is not Index or stmt.lhs.value.__class__ is not Var:
+      return stmt 
+    
+    lhs_name = stmt.lhs.value.name
 
-      if lhs_name not in self.usedef.first_use and \
-         lhs_name not in self.may_escape and \
-         self.no_array_aliases(lhs_name):
+    # why assign to an array if it never gets used?
+    if lhs_name not in self.usedef.first_use and \
+       lhs_name not in self.may_escape and \
+       self.no_array_aliases(lhs_name):
+      return None
+    
+    # only match statements like array[idx] = some_rhs_var
+    if stmt.lhs.type.__class__ is not ArrayT or stmt.rhs.__class__ is not Var:
+      return stmt 
+    
+    curr_path = self.usedef.stmt_paths[id(stmt)]
+    rhs_name = stmt.rhs.name
 
-        # why assign to an array if it never gets used?
-        return None
-      elif stmt.lhs.type.__class__ is ArrayT and stmt.rhs.__class__ is Var:
-        curr_path = self.usedef.stmt_paths[id(stmt)]
-        rhs_name = stmt.rhs.name
-        if lhs_name not in self.usedef.first_use or \
-           self.usedef.first_use[lhs_name] > curr_path:
-          if self.usedef.last_use[rhs_name] == curr_path and \
-             lhs_name not in self.may_escape and \
-             rhs_name not in self.may_escape and \
-             rhs_name in self.local_arrays:
+    
+    if lhs_name in self.usedef.first_use and self.usedef.first_use[lhs_name] <= curr_path:
+      return stmt 
+    
+    if self.usedef.last_use[rhs_name] != curr_path:
+      return stmt
+    
+    if rhs_name in self.may_escape:
+      return stmt  
+    
+    if rhs_name not in self.local_arrays:
+      return stmt 
             
-            array_stmt = self.local_arrays[rhs_name]
-            prev_path = self.usedef.stmt_paths[id(array_stmt)]
-            if self.is_array_alloc(array_stmt.rhs) and \
-               all(self.usedef.created_on[lhs_depends_on] < prev_path
-                   for lhs_depends_on in collect_var_names(stmt.lhs)):
-              
-              array_stmt.rhs = stmt.lhs
-              return None
-    return stmt
+    array_stmt = self.local_arrays[rhs_name]
+    prev_path = self.usedef.stmt_paths[id(array_stmt)]
+    if not self.is_array_alloc(array_stmt.rhs):
+      return stmt 
+    
+    for lhs_depends_on in collect_var_names(stmt.lhs):
+      created_on = self.usedef.created_on[lhs_depends_on]
+      if created_on >= prev_path:
+        return stmt 
+             
+    array_stmt.rhs = stmt.lhs
+    return None
+    

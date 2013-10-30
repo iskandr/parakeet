@@ -13,7 +13,7 @@ from .. syntax import (AllocArray, Assign, ExprStmt,
                        PrimCall, Call, TypedFn, UntypedFn, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
 from .. syntax.helpers import (collect_constants, is_one, is_zero, is_false, is_true, all_constants,
-                               get_types, slice_none_t, const_int, one, none, true, false) 
+                               get_types, slice_none_t, const_int, one, none, true, false, slice_none) 
 import subst
 import transform 
 from transform import Transform
@@ -146,6 +146,15 @@ class Simplify(Transform):
 
     
   def transform_Var(self, expr):
+    t = expr.type 
+    if t.__class__ is NoneT:
+      return none 
+    elif t.__class__ is SliceT and \
+         t.start_type == NoneType and \
+         t.stop_type == NoneType and \
+         t.step_type == NoneType:
+      return slice_none 
+    
     name = expr.name
     prev_expr = expr
 
@@ -319,7 +328,9 @@ class Simplify(Transform):
   
   def transform_Index(self, expr):
     expr.value = self.transform_expr(expr.value)
+
     expr.index = self.transform_index_expr(expr.index)
+
     if expr.value.__class__ is Array and expr.index.__class__ is Const:
       assert isinstance(expr.index.value, (int, long)) and \
              len(expr.value.elts) > expr.index.value

@@ -40,7 +40,6 @@ def eval(fn, actuals):
   return result 
    
 def eval_fn(fn, actuals):
-  print fn 
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):

@@ -10,7 +10,6 @@ class jit(object):
   def __init__(self, f):
     self.f = f
 
-
   def __call__(self, *args, **kwargs):
     if '_backend' in kwargs:
       backend_name = kwargs['_backend']

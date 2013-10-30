@@ -3,8 +3,6 @@ import parakeet
 import parakeet.c_backend
 
 
-parakeet.c_backend.config.print_input_ir = True
-parakeet.c_backend.config.print_module_source = True
 
 def wrap(pos, offset, bound):
     return ( pos + offset ) % bound

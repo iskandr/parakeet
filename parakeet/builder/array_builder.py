@@ -112,8 +112,6 @@ class ArrayBuilder(CoreBuilder):
     slice_t = make_slice_type(start.type, stop.type, step.type)
     return Slice(start, stop, step, type = slice_t)
 
-
-
   def build_slice_indices(self, rank, axis, idx):
     """
     Build index tuple to pull out the 'idx' element along the given axis

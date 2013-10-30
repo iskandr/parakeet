@@ -92,6 +92,7 @@ class ScalarReplacement(LoopTransform):
       # so that they become loop-carried accumulator values, otherwise where else would
       # they get their initial values?
       input_scalars = self.preload_reads(safe_locations)
+
       
       # need to rename the scalars so they have an SSA variable for the beginning of the loop
       loop_scalars = {}

@@ -74,5 +74,3 @@ class FindLocalArrays(SyntaxVisitor):
           self.array_to_alloc[lhs_name] = data_name 
       elif rhs_class is Array or AllocArray:
         self.local_arrays[stmt.lhs.name] = stmt
-      #elif isinstance(stmt.rhs, Adverb):
-      #  self.local_arrays[lhs_name] = stmt 

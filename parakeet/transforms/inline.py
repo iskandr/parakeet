@@ -80,6 +80,7 @@ class Inliner(Transform):
     Transform.__init__(self)
     self.count = 0
 
+
   def transform_TypedFn(self, expr):
     if self.fn.created_by is not None:
       return self.fn.created_by.apply(expr)

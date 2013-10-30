@@ -5,6 +5,9 @@ class StmtPath(object):
   def __init__(self, elts = ()):
     self.elts = tuple(elts) 
   
+  def __str__(self):
+    return "{%s}" % ", ".join(str(e) for e in self.elts)
+  
   def __len__(self):
     return len(self.elts)
 
@@ -15,6 +18,8 @@ class StmtPath(object):
     return iter(self.elts)
   
   def __lt__(self, other):
+    if other.__class__ is not StmtPath:
+      other = StmtPath([other])
     n = len(other)
     for (i,c1) in enumerate(self.elts):
       if n <= i:
@@ -34,6 +39,9 @@ class StmtPath(object):
   
   
   def __eq__(self, other):
+    if other.__class__ is not StmtPath:
+      other = StmtPath([other])
+      
     if len(self) != len(other):
       return False
     else:
@@ -42,9 +50,20 @@ class StmtPath(object):
           return False 
       return True 
   
+  def __ne__(self, other):
+    return not (self == other)
+  
   def __le__(self, other):
-    return self == other or self < other 
-    
+    return self == other or self < other
+  
+  def __lte__(self, other):
+    return (self < other) or (self == other)
+  
+  def __gt__(self, other):
+    return not (self <= other) 
+  
+  def __gte__(self, other):
+    return not (self < other)
 
 class UseDefAnalysis(SyntaxVisitor):
   """
