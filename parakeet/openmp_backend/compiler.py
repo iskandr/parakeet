@@ -40,8 +40,9 @@ class MulticoreCompiler(PyModuleCompiler):
       return [self.visit_expr(expr)]
   
   
-  def get_fn_name(self, fn_expr):
-    return PyModuleCompiler.get_fn_name(self, fn_expr, compiler_kwargs = {'parfor_depth':self.parfor_depth})
+  def get_fn_name(self, fn_expr, _cache = {}):
+    return PyModuleCompiler.get_fn_name(self, fn_expr, 
+                                        compiler_kwargs = {'parfor_depth':self.parfor_depth})
   
   def get_fn_info(self, fn_expr):
     """
@@ -66,6 +67,7 @@ class MulticoreCompiler(PyModuleCompiler):
     private variables it uses. 
     """
     fn_name, closure_args, input_types = self.get_fn_info(fn_expr)
+
     private_vars = [loop_var for loop_var in loop_vars] 
     last_input_type = input_types[-1]
     body = ""
@@ -131,6 +133,7 @@ class MulticoreCompiler(PyModuleCompiler):
     loop_vars = self.loop_vars(n_vars)
     assert expr.init is not None, "Accumulator required but not given"
     elt = self.fresh_var(expr.type, "elt")
+
     body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
     acc = self.fresh_var(expr.type, "acc", self.visit_expr(expr.init))
     combine_arg_str = ", ".join(tuple(combine_closure_args) + (acc, elt))

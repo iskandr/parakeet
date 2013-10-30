@@ -13,19 +13,19 @@ from ..ndtypes import (TupleT,  ArrayT,
  
 
 import type_mappings
-from flat_fn_compiler import FlatFnCompiler
+from fn_compiler import FnCompiler
 from compile_util import compile_module
 import config 
 
 
-class PyModuleCompiler(FlatFnCompiler):
+class PyModuleCompiler(FnCompiler):
   """
   Compile a Parakeet function into a Python module with an 
   entry-point that unboxes all the PyObject inputs, 
   runs a flattened computations, and boxes the result as PyObjects
   """
   def __init__(self, module_entry = True, *args, **kwargs):
-    FlatFnCompiler.__init__(self, module_entry = module_entry, *args, **kwargs)
+    FnCompiler.__init__(self, module_entry = module_entry, *args, **kwargs)
     
   def unbox_scalar(self, x, t, target = None):
     assert isinstance(t, ScalarT), "Expected scalar type, got %s" % t
@@ -487,7 +487,6 @@ class PyModuleCompiler(FlatFnCompiler):
   def visit_TupleProj(self, expr):
     tup = self.visit_expr(expr.tuple)
     result = self.tuple_elt(tup, expr.index, expr.type)
-
     return result
   
   def visit_ClosureElt(self, expr):
@@ -505,12 +504,7 @@ class PyModuleCompiler(FlatFnCompiler):
   
     strides_elts = ["%s.elt%d" % (strides, i) for i in xrange(ndims)]
     shape_elts = ["%s.elt%d" % (shape, i) for i in xrange(ndims)]
-    #shape_array = self.fresh_array_var("npy_intp", ndims, "shape_array")
-    #strides_array = self.fresh_array_var("npy_intp", ndims, "strides_array")
-    #for i in xrange(ndims):
-    #  self.append("%s[%d] = %s.elt%d;" % (shape_array, i, shape, i))
-    #  self.append("%s[%d] = %s.elt%d;" % (strides_array, i, strides, i))
-    #fields = "{%(data)s, %(shape)s, %(strides)s, %(offset)s, %(count)s }" % locals()
+
     result = self.fresh_var(typename, "array_result")
     self.setfield(result, "data", data)
     self.setfield(result, "offset", offset)
@@ -520,7 +514,7 @@ class PyModuleCompiler(FlatFnCompiler):
       self.setidx("%s.strides" % result, i, strides_elts[i])
     return result 
   
-
+  """
   def box_ArrayView(self, expr):
     data = self.visit_expr(expr.data)
     ndims = expr.type.rank 
@@ -535,7 +529,7 @@ class PyModuleCompiler(FlatFnCompiler):
     strides_array = None 
     elt_type = expr.type.elt_type 
     return self.make_boxed_array(elt_type, ndims, data, strides_array, shape_array, offset, count)
-  
+  """
   
   def box_array(self, arr, t):
     elt_t = t.elt_type
@@ -615,8 +609,6 @@ class PyModuleCompiler(FlatFnCompiler):
     
   def visit_Attribute(self, expr):
     attr = expr.name
-    #if attr == 'strides':
-    #  return self.strides(expr.value)
     v = self.visit_expr(expr.value) 
     return self.attribute(v, attr, expr.type)
   
@@ -628,7 +620,7 @@ class PyModuleCompiler(FlatFnCompiler):
         self.print_pyobj(v, "Return value: ")
       return "return %s;" % v
     else:
-      return FlatFnCompiler.visit_Return(self, stmt)
+      return FnCompiler.visit_Return(self, stmt)
   
   def visit_block(self, stmts, push = True):
     if push: self.push()

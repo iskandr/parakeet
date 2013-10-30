@@ -5,13 +5,12 @@ from .. import prims, syntax
 from .. analysis.collect_vars import collect_var_names
 from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
-from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType, SliceT
+from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType, SliceT, FnT
 
 from .. syntax import (AllocArray, Assign, ExprStmt, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
                        Slice, Index, Array, ArrayView, Attribute, Struct, Select, 
                        PrimCall, Call, TypedFn, UntypedFn, 
-                       Adverb, Accumulative, HasEmit, 
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
 from .. syntax.helpers import (collect_constants, is_one, is_zero, is_false, is_true, all_constants,
                                get_types, slice_none_t, const_int, one, none, true, false) 
@@ -502,6 +501,7 @@ class Simplify(Transform):
     expr.shape = self.transform_shape(expr.shape)
     return expr 
   
+     
   def transform_ConstArray(self, expr):
     expr.shape = self.transform_shape(expr.shape)
     expr.value = self.transform_simple_expr(expr.value)

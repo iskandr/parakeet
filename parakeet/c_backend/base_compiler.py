@@ -1,5 +1,5 @@
 from .. import names 
-
+from ..ndtypes import BoolT, IntT 
 import type_mappings 
 from reserved_names import is_reserved
 
@@ -149,4 +149,94 @@ class BaseCompiler(object):
   def return_if_null(self, obj):
     self.append("if (!%s) { return NULL; }" % obj)
     
+  def not_(self, x):
+    if x == "1":
+      return "0"
+    elif x == "0":
+      return "1"
+    return "!%s" % x
   
+  def and_(self, x, y):
+    if x == "0" or y == "0":
+      return "0"
+    elif x == "1" and y == "1":
+      return "1"
+    elif x == "1":
+      return y 
+    elif y == "1":
+      return x
+    return "%s && %s" % (x,y) 
+  
+  def or_(self, x, y):
+    if x == "1" or y == "1":
+      return "1"
+    elif x == "0":
+      return y
+    elif y == "0":
+      return x 
+    return "%s || %s" % (x,y) 
+  
+  def gt(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "0"
+    return "%s > %s" % (x, y)
+  
+  def gte(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "1"
+    return "%s >= %s" % (x,y) 
+  
+  def lt(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "0"
+    return "%s < %s" % (x,y)
+  
+  def lte(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "1"
+    return "%s <= %s" % (x, y) 
+  
+  def neq(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "0"
+    return "%s != %s" % (x, y) 
+  
+  def eq(self, x, y, t):
+    if isinstance(t, (BoolT, IntT)) and x == y:
+      return "1"
+    return "%s == %s" % (x, y)
+  
+  
+  def add(self, x, y):
+    if x == "0":
+      return y
+    elif y == "0":
+      return x
+    return "%s + %s" % (x,y)
+  
+  def sub(self, x, y):
+    if x == "0":
+      return "-(%s)" % y 
+    elif y == "0":
+      return x 
+    return "%s - %s" % (x,y)
+  
+  def mul(self, x, y):
+    if x == "1":
+      return y 
+    elif y == "1":
+      return x 
+    elif x == 0 or y == 0:
+      return "0"
+    return "%s * %s" % (x,y)
+  
+  def div(self, x, y):
+    if x == y:
+      return "1"
+    elif x == "0":
+      return "0"
+    elif y == "1":
+      return x
+    else:
+      return "%s / %s" % (x,y)
+    
