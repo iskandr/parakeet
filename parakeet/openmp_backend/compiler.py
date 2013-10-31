@@ -9,15 +9,15 @@ from ..c_backend import PyModuleCompiler
 
 class MulticoreCompiler(PyModuleCompiler):
   
-  def __init__(self, parfor_depth = 0, *args, **kwargs):
-    self.parfor_depth = parfor_depth
+  def __init__(self, depth = 0, *args, **kwargs):
+    self.depth = depth
     self.seen_parfor = None 
     PyModuleCompiler.__init__(self, *args, **kwargs)
     
   
   @property 
   def cache_key(self):
-    return self.__class__, self.parfor_depth > 0
+    return self.__class__, self.depth > 0
   
   _loop_var_names = ["i","j","k","l","a","b","c","ii","jj","kk","ll","aa","bb","cc"] 
   def loop_vars(self, count, init_value = "0"):
@@ -41,11 +41,12 @@ class MulticoreCompiler(PyModuleCompiler):
       return [self.visit_expr(expr)]
   
   
-  def get_fn_name(self, fn_expr, _cache = {}):
+  def get_fn_name(self, fn_expr, attributes = []):
     return PyModuleCompiler.get_fn_name(self, fn_expr, 
-                                        compiler_kwargs = {'parfor_depth':self.parfor_depth})
+                                        compiler_kwargs = {'depth':self.depth}, 
+                                        attributes = attributes)
   
-  def get_fn_info(self, fn_expr):
+  def get_fn_info(self, fn_expr, attributes = []):
     """
     Given a function expression, return:
       - the name of its C representation
@@ -53,11 +54,10 @@ class MulticoreCompiler(PyModuleCompiler):
       - Parakeet input types 
     """
 
-    fn_name = self.get_fn_name(fn_expr)
+    fn_name = self.get_fn_name(fn_expr, attributes = attributes)
     closure_args = self.get_closure_args(fn_expr)
     root_fn = get_fn(fn_expr)
     input_types = root_fn.input_types 
-  
     return fn_name, closure_args, input_types
     
   
@@ -94,14 +94,14 @@ class MulticoreCompiler(PyModuleCompiler):
   
   
   def enter_parfor(self):
-    self.parfor_depth += 1
+    self.depth += 1
     if not self.seen_parfor:
       self.seen_parfor = True 
       self.add_compile_flag("-fopenmp")
       self.add_link_flag("-fopenmp")
     
   def exit_parfor(self):
-    self.parfor_depth -= 1
+    self.depth -= 1
     
 
   
@@ -115,7 +115,7 @@ class MulticoreCompiler(PyModuleCompiler):
     loops = self.build_loops(loop_vars, bounds, body)
     self.exit_parfor()
     
-    if self.parfor_depth == 0:  
+    if self.depth == 0:  
       release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
       acquire_gil = "\nPy_END_ALLOW_THREADS\n"  
       omp = "#pragma omp parallel for private(%s)" % ", ".join(private_vars)

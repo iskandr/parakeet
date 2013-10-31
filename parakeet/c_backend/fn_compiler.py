@@ -462,7 +462,7 @@ class FnCompiler(BaseCompiler):
     return self.indent("\n" + self.pop())
       
   
-  def get_fn_name(self, expr, compiler_kwargs = {}):
+  def get_fn_name(self, expr, compiler_kwargs = {}, attributes = []):
     if expr.__class__ is  TypedFn:
       fn = expr 
     elif expr.__class__ is Closure:
@@ -473,7 +473,7 @@ class FnCompiler(BaseCompiler):
       fn = expr.type.fn
     
     compiler = self.__class__(module_entry = False, **compiler_kwargs)
-    compiled = compiler.compile_flat_source(fn)
+    compiled = compiler.compile_flat_source(fn, attributes = attributes)
     
     if compiled.sig not in self.extra_function_signatures:
       # add any declarations it depends on 
@@ -539,7 +539,9 @@ class FnCompiler(BaseCompiler):
       return [fn.return_type]
     
   
-  def visit_flat_fn(self, fn, return_by_ref = False):
+  def visit_flat_fn(self, fn, return_by_ref = False, attributes = None):
+    if attributes is None:
+      attributes = []
     
     c_fn_name = names.refresh(fn.name).replace(".", "_")
     arg_types = [self.to_ctype(t) for t in fn.input_types]
@@ -571,9 +573,12 @@ class FnCompiler(BaseCompiler):
     args_str = ", ".join("%s %s" % (t, name) for (t,name) in zip(arg_types,arg_names))
     
     body_str = self.visit_block(fn.body) 
-
+    
+    attributes.append("__attribute__((always_inline))")
+    attributes.append("inline")
+    attr_str = " ".join(attributes)
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
-    src = "__attribute__((always_inline)) inline %s { %s }" % (sig, body_str) 
+    src = "%s %s { %s }" % (attr_str, sig, body_str) 
     return c_fn_name, sig, src
   
   @property 
@@ -586,7 +591,7 @@ class FnCompiler(BaseCompiler):
     return self.__class__ 
   
   _flat_compile_cache = {}
-  def compile_flat_source(self, parakeet_fn):
+  def compile_flat_source(self, parakeet_fn, attributes = []):
       
     # make sure compiled source uses consistent names for tuple and array types, 
     # which both need declarations for their C struct representations  
@@ -595,12 +600,13 @@ class FnCompiler(BaseCompiler):
     
     # include your own class in the cache key so that we get distinct code 
     # for derived compilers like OpenMP and CUDA 
-    key = parakeet_fn.cache_key, frozenset(struct_types), self.cache_key
+    key = parakeet_fn.cache_key, frozenset(struct_types), self.cache_key, tuple(attributes)
     
     if key in self._flat_compile_cache:
       return self._flat_compile_cache[key]
     
-    name, sig, src = self.visit_flat_fn(parakeet_fn)
+    name, sig, src = self.visit_flat_fn(parakeet_fn, attributes = attributes)
+      
     
     result = CompiledFlatFn(
       name = name, 
