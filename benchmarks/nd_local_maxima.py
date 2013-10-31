@@ -21,6 +21,7 @@ def python_local_maxima(data, wsize, mode=wrap):
       result[pos] &= (data[neighbor_idx] <= myval)
   return result 
 
+
 @parakeet.jit 
 def parakeet_local_maxima(data, wsize, mode=wrap):
   def is_max(pos):
@@ -31,11 +32,8 @@ def parakeet_local_maxima(data, wsize, mode=wrap):
   return parakeet.imap(is_max, data.shape)
   
 
-###
-# Numba fails no matter what I do with the code, giving up for now
-#
 import numba
-numba_local_maxima = numba.autojit(python_local_maxima)
+numba_local_maxima = numba.autojit(python_local_maxima) 
 
 if __name__  == '__main__':
   from timer import timer 
