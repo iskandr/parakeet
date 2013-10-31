@@ -22,7 +22,7 @@ def julia_loops(cr, ci, N, bound=1.5, lim=1000., cutoff=1e6):
             julia[i,j] = kernel(x, y, cr, ci, lim, cutoff=cutoff)
     return julia
 
-from timer import compare_perf 
+from compare_perf import compare_perf 
 cr=0.285
 ci=0.01
 N=100

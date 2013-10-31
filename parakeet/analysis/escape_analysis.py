@@ -44,6 +44,7 @@ class EscapeAnalysis(SyntaxVisitor):
         all_scalars = False 
     
     self.may_escape = set([])
+    self.may_return = set([])
     
     if all_scalars:
       return  
@@ -76,10 +77,21 @@ class EscapeAnalysis(SyntaxVisitor):
     if name not in self.scalars:
       for alias in self.may_alias[name]:
         self.may_escape.add(alias)
-
+  
   def mark_escape_list(self, names):
     for name in names:
         self.mark_escape(name)
+  
+  
+  def mark_return(self, name):
+    if name not in self.scalars:
+      for alias in self.may_alias[name]:
+        self.may_return.add(alias)
+  
+  
+  def mark_return_list(self, names):
+    for name in names:
+        self.mark_return(name)
   
   def update_aliases(self, lhs_name, rhs_names):
     """
@@ -104,6 +116,13 @@ class EscapeAnalysis(SyntaxVisitor):
        any(alias in self.may_escape for alias in rhs_alias_set):
         self.may_escape.update(rhs_alias_set.difference(self.scalars))
         self.may_escape.add(lhs_name)
+        
+  def update_return(self, lhs_name, rhs_alias_set):
+    if lhs_name not in self.scalars and \
+       any(alias in self.may_return for alias in rhs_alias_set):
+        self.may_return.update(rhs_alias_set.difference(self.scalars))
+        self.may_return.add(lhs_name)
+    
   
   def visit_Call(self, expr):
     self.visit_expr(expr.fn)
@@ -155,7 +174,9 @@ class EscapeAnalysis(SyntaxVisitor):
       self.update_aliases(lhs_name, rhs_names)
 
   def visit_Return(self, stmt):
-    self.mark_escape_list(collect_nonscalar_names(stmt.value))
+    arrays = collect_nonscalar_names(stmt.value)
+    self.mark_escape_list(arrays)
+    self.mark_return_list(arrays)
  
   def visit_merge(self, merge):
     for (name, (l,r)) in merge.iteritems():
@@ -169,6 +190,7 @@ class EscapeAnalysis(SyntaxVisitor):
         right_aliases = empty
       combined_set = self.update_aliases(name, left_aliases.union(right_aliases))
       self.update_escaped(name, combined_set)
+      self.update_return(name, combined_set)
 
 _cache = {}
 def escape_analysis(fundef):

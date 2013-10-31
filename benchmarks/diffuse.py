@@ -46,7 +46,7 @@ def diffuse_array_expressions(iter_num):
     return u
 
 
-from timer import compare_perf 
+from compare_perf import compare_perf 
 
 compare_perf(diffuse_loops, [N], numba=True)
 compare_perf( diffuse_array_expressions, [N], numba =True)

@@ -573,7 +573,7 @@ class FnCompiler(BaseCompiler):
     body_str = self.visit_block(fn.body) 
 
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
-    src = "inline %s { %s }" % (sig, body_str) 
+    src = "__attribute__((always_inline)) inline %s { %s }" % (sig, body_str) 
     return c_fn_name, sig, src
   
   @property 

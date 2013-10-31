@@ -1,5 +1,5 @@
 from parakeet import jit, config, c_backend 
-import timer  
+ 
 
 
 def covariance(x,y):
@@ -18,6 +18,7 @@ slope = 903.29
 offset = 102.1
 y = slope * x + offset
 
-jit(fit_simple_regression)(x,y)
 
-timer.compare_perf(fit_simple_regression, (x,y))
+
+from compare_perf import compare_perf 
+compare_perf(fit_simple_regression, (x,y))

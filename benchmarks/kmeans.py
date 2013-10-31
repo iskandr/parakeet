@@ -50,7 +50,7 @@ n, d = 10**4, 50
 X = np.random.randn(n,d)
 k = 25
 
-from timer import compare_perf
+from compare_perf import compare_perf
 
 compare_perf(kmeans_comprehensions, [X, k, 5],cpython=False)
 

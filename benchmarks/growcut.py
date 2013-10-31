@@ -40,6 +40,6 @@ state[0, 0, 1] = 1
 
 window_radius = 10
 
-from timer import compare_perf 
+from compare_perf import compare_perf 
 
 compare_perf(growcut_python, [image, state, state_next, window_radius])

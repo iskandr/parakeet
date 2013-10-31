@@ -664,7 +664,7 @@ class PyModuleCompiler(FnCompiler):
          
   def visit_fn(self, fn):
     if config.print_input_ir:
-      print "=== Compiling to C (entry function) ==="
+      print "=== Compiling to C with %s (entry function) ===" % self.__class__.__name__ 
       print fn
     c_fn_name = self.fresh_name(fn.name)
     uses = use_count(fn)

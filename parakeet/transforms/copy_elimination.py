@@ -27,7 +27,8 @@ class CopyElimination(Transform):
     escape_info = escape_analysis(fn)
     self.may_escape = escape_info.may_escape
     self.may_alias = escape_info.may_alias
-
+    self.may_return = escape_info.may_return
+    
     self.usedef = UseDefAnalysis()
     self.usedef.visit_fn(fn)
 
@@ -83,7 +84,7 @@ class CopyElimination(Transform):
     if self.usedef.last_use[rhs_name] != curr_path:
       return stmt
     
-    if rhs_name in self.may_escape:
+    if rhs_name in self.may_return:
       return stmt  
     
     if rhs_name not in self.local_arrays:

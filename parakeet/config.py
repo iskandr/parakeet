@@ -27,6 +27,7 @@ def set_opt_level(n):
                'opt_redundant_load_elimination', 
                'opt_stack_allocation', 
                'opt_shape_elim',
+               'opt_copy_elimination',
                'stride_specialization', 
                ):
     g[name] = n > 1 
@@ -50,14 +51,22 @@ stride_specialization = False
 # may dramatically increase compile time
 opt_loop_unrolling = False
 
+# replace 
+#   a = alloc
+#   ...
+#   b[i:j] = a
+#
+#   with 
+#     a = b[i:j]  
+opt_copy_elimination = False
+
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
-opt_copy_elimination = True
+
 opt_scalar_replacement = False
     
 # run verifier after each transformation 
-opt_verify = True
-
+opt_verify = False
 
 set_opt_level(default_opt_level)
 

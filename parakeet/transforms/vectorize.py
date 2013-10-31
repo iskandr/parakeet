@@ -1,4 +1,5 @@
-from ndtypes import Int32, Int64, Float32, Float64
+from ..ndtypes import Int32, Int64, Float32, Float64
+
 from loop_transform import LoopTransform
 
 class Vectorize(LoopTransform):
@@ -19,14 +20,6 @@ class Vectorize(LoopTransform):
         candidate_names.add(k)
         before_values[k] = before
         after_values[k] = after
-      
-      
-      
-      
-      
-      
-      
-      
       
   
   def transform_ForLoop(self, stmt):

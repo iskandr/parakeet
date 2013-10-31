@@ -3,7 +3,7 @@ from expr import Expr
 
 
 class Adverb(Expr):
-  _members = ['fn']
+  _members = ['fn', 'output']
   
   def node_init(self):
     assert self.fn, "Can't construct adverb %s without a function argument" % self 

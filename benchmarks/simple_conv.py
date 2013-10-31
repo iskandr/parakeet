@@ -1,5 +1,5 @@
 import numpy as np 
-from timer import compare_perf
+from compare_perf import compare_perf
 
 # Simple convolution of 3x3 patches from a given array x
 # by a 3x3 array of filter weights
