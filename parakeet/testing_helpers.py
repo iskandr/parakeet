@@ -25,6 +25,13 @@ def _copy(x):
 def _copy_list(xs):
   return [_copy(x) for x in xs]
 
+available_backends = ['interp', 'c', 'openmp']
+try:
+  import pycuda
+  available_backends.append('cuda')
+except:
+  pass 
+
 def expect(fn, args, expected, msg = None, valid_types = None):
   """
   Helper function used for testing, assert that Parakeet evaluates given code to
@@ -35,7 +42,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   untyped_fn = translate_function_value(fn)
   
-  for backend in ('interp', 'c', 'openmp'):
+  for backend in available_backends:
     try: 
       result = run_untyped_fn(untyped_fn, _copy_list(args), backend = backend)
       

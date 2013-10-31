@@ -1,14 +1,12 @@
-from ..c_backend import PyModuleCompiler, FnCompiler
-from ..ndtypes import TupleT, IntT 
-
 import pycuda 
 
-class CudaCompiler(PyModuleCompiler):
-  
-  def __init__(self, depth = 0, *args, **kwargs):
-    self.depth = depth
-    PyModuleCompiler.__init__(self, *args, **kwargs)
-  
+from ..c_backend import FnCompiler
+from ..openmp_backend import MulticoreCompiler
+from ..ndtypes import TupleT, IntT 
+
+
+class CudaCompiler(MulticoreCompiler):
+    
   def visit_NumCores(self, expr):
     # by default we're running sequentially 
     sm_count = None # TODO
@@ -19,19 +17,20 @@ class CudaCompiler(PyModuleCompiler):
     """
     Keep a stack of adverb contexts so we know when we're global vs. block vs. thread
     """
-    pass 
+    self.parfor_depth += 1  
   
   def exit_kernel(self):
-    pass 
+    self.parfor_depth -= 1 
    
+  
   def in_host(self):
-    return self.depth == 0
+    return self.parfor_depth == 0
   
   def in_block(self):
-    return self.depth == 1
+    return self.parfor_depth == 1
   
   def in_thread(self):
-    return self.depth > 1
+    return self.parfor_depth > 1
      
   def get_fn(self, fn, qualifier = "host"):
     """
@@ -48,13 +47,14 @@ class CudaCompiler(PyModuleCompiler):
     else:
       assert isinstance(stmt.bounds, IntT)
       n_indices = 1
-    if n_indices > 3 or not self.in_host():   
+    if self.in_host():   
       fn =  self.get_fn(stmt.fn, qualifier = "device")
       # weave a kernel which will map 3D indices into whatever the kernel needs
       kernel = None 
     else:
+      assert n_indices <= 3, "ParFor over %d indices not yet supported" % n_indices 
       kernel = self.get_fn(stmt.fn, qualifier = "global")
-    
+      
     if self.in_host():
       # invoke the kernel! 
       pass 
