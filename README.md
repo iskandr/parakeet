@@ -95,6 +95,6 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
 
 Backends
 ===
-Parakeet currently supports compilation to C or LLVM. To switch between these options change `parakeet.config.default_backend` to either "c" or "llvm". 
+Parakeet currently supports compilation to sequential C, multi-core C with OpenMP (default), or LLVM (deprecated). To switch between these options change `parakeet.config.backend` to one of "c", "openmp", or "llvm". 
 
 
