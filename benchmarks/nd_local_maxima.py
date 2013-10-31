@@ -42,10 +42,14 @@ if __name__  == '__main__':
   shape = (30,10,10,12)
   x = np.random.randn(*shape)
   wsize = (3,3,3,3)
-  with timer("Parakeet (first run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize)
-  with timer("Parakeet (second run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize)
+  with timer("Parakeet C (first run)"):
+    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'c')
+  with timer("Parakeet C (second run)"):
+    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'c')
+  with timer("Parakeet OpenMP (first run)"):
+    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
+  with timer("Parakeet OpenMP (second run)"):
+    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
   with timer("Numba (first run)"):
     numba_result  = numba_local_maxima(x, wsize, wrap)
   with timer("Numba (second run)"):
