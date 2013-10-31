@@ -32,12 +32,14 @@ def parakeet_local_maxima(data, wsize, mode=wrap):
   return parakeet.imap(is_max, data.shape)
   
 
-import numba
-numba_local_maxima = numba.autojit(python_local_maxima) 
+# not sure how to get numba to auto-jit size generic code
+# get error: "FAILED with KeyError 'sized_pointer(npy_intp, 4)'"
+#import numba
+#numba_local_maxima = numba.autojit(python_local_maxima) 
 
 if __name__  == '__main__':
   from timer import timer 
-  shape = (30,10,10,12)
+  shape = (30,30,30,12)
   x = np.random.randn(*shape)
   wsize = (3,3,3,3)
   with timer("Parakeet C (first run)"):
@@ -48,10 +50,11 @@ if __name__  == '__main__':
     parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
   with timer("Parakeet OpenMP (second run)"):
     parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
-  with timer("Numba (first run)"):
-    numba_result  = numba_local_maxima(x, wsize, wrap)
-  with timer("Numba (second run)"):
-    numba_result  = numba_local_maxima(x, wsize, wrap)
+
+  #with timer("Numba (first run)"):
+  #  numba_result  = numba_local_maxima(x, wsize, wrap)
+  #with timer("Numba (second run)"):
+  #  numba_result  = numba_local_maxima(x, wsize, wrap)
   with timer("Python"):
     python_result = python_local_maxima(x, wsize) 
   
