@@ -365,9 +365,10 @@ class IndexifyAdverbs(Transform):
                                 index_offsets = index_offsets)
     
 
-    return IndexScan(fn = index_fn, 
+    return IndexScan(fn = index_fn,
                      init = init, 
-                     combine = combine, 
+                     combine = combine,
+                     emit = expr.emit, 
                      shape = niters,
                      type = expr.type)
   

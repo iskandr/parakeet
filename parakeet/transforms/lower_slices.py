@@ -236,9 +236,9 @@ class LowerSlices(Transform):
   
   def transform_TypedFn(self, expr):
     if self.fn.created_by is not None and isinstance (self.fn.created_by, Phase):
-        return self.fn.created_by.apply(expr)
+      return self.fn.created_by.apply(expr)
     import pipeline
-    return pipeline.high_level_optimizations.apply(expr)
+    return pipeline.indexify.apply(expr)
   
   def transform_Assign(self, stmt):
     lhs_class = stmt.lhs.__class__

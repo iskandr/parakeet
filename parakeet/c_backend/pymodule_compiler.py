@@ -1,5 +1,5 @@
 from ..analysis import use_count
-from ..syntax import Tuple 
+from ..syntax import Tuple,  Expr
  
 from ..ndtypes import (TupleT,  ArrayT, 
                        NoneT, NoneType,  
@@ -201,8 +201,58 @@ class PyModuleCompiler(FnCompiler):
   def setfield(self, base, fieldname, value):
     self.append("%s.%s = %s;" % (base, fieldname, value))
   
-  def setidx(self, arr, idx, value):
-    self.append("%s[%s] = %s;" % (arr, idx, value))
+  def getidx(self, arr, idx, full_array = False):
+    """
+    Given either the compiled string representation or Parakeet IR
+    for an array and index, construct a C indexing expression 
+    """
+
+    if isinstance(arr, Expr):
+      if isinstance(arr.type, ArrayT):
+        arr = self.visit_expr(arr)
+        ptr = "%s.data.raw_ptr" % arr
+      else:
+        assert isinstance(arr.type, PtrT), \
+          "Expected array or pointer but got %s : %s" % (arr, arr.type)
+        arr = None
+        ptr = self.visit_expr(arr)
+    else:    
+      assert isinstance(arr, str), "Expected string repr of array but got %s" % arr
+      if full_array:
+        ptr = "%s.data.raw_ptr" % arr 
+      else:
+        ptr = arr 
+        arr = None  
+        
+    if isinstance(idx, Expr):
+      if isinstance(idx.type, TupleT):
+        nelts = len(idx.type.elt_types)
+        tuple_value = self.visit_expr(idx)
+        idx = ["%s.elt%d" % (tuple_value,i) for i in xrange(nelts)]
+      else:
+        assert isinstance(idx.type, ScalarT), "Expected index %s to be scalar or tuple" % idx
+        offset = idx 
+        
+    if isinstance(idx, str):
+      offset = idx 
+    elif isinstance(idx, (int,long)):
+      offset = "%s" % idx
+    elif isinstance(idx, (list,tuple)):
+      assert arr, "Expected full array but only pointer %s is available" % ptr 
+      offset = "0"
+      for i,idx_elt in enumerate(idx):
+        if isinstance(idx_elt, Expr):
+          idx_elt = self.visit_expr(idx_elt)
+        offset = self.add(offset, self.mul("%s.strides[%d]" % (arr,i), idx_elt))
+      
+    return "%s[%s]" % (ptr, offset)
+  
+  def setidx(self, arr, idx, value, full_array = False, return_stmt = False):
+    stmt = "%s = %s;" % (self.getidx(arr, idx, full_array = full_array), value)
+    if return_stmt:
+      return stmt 
+    else:
+      self.append(stmt)
 
      
   def tuple_to_stack_array(self, expr, name = "array_from_tuple", elt_type = None):
@@ -420,28 +470,26 @@ class PyModuleCompiler(FnCompiler):
    
     
   
-  def visit_AllocArray(self, expr, boxed=False):
-    if boxed:
-      shape = self.tuple_to_stack_array(expr.shape)
-      t = type_mappings.to_dtype(elt_type(expr.type))
-      return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
-    
-    if config.debug:
-      print "[Debug] Allocating array : %s " % expr.type  
-    
-    ndims = expr.type.rank 
-    shape = self.visit_expr(expr.shape)
-    nelts = self.fresh_var("int64_t", "nelts", " * ".join("%s.elt%d" % (shape, i) for i in xrange(ndims) ))
-    bytes_per_elt = expr.type.elt_type.dtype.itemsize
-    typename = self.to_ctype(expr.type)
+  def alloc_array(self, array_t, shape_expr):
+    if isinstance(shape_expr.type, ScalarT):
+      dim = self.visit_expr(shape_expr)
+      nelts = dim 
+      shape_elts = [dim]
+      ndims = 1 
+    else:
+      shape = self.visit_expr(shape_expr)
+      ndims = array_t.rank
+      shape_elts = ["%s.elt%d" % (shape, i) for i in xrange(ndims)]
+      nelts = self.fresh_var("int64_t", "nelts", " * ".join(shape_elts))
+    bytes_per_elt = array_t.elt_type.dtype.itemsize
+    typename = self.to_ctype(array_t)
     result = self.fresh_var(typename, "new_array")
-    raw_ptr_t = self.to_ctype(expr.type.elt_type) + "*"
+    raw_ptr_t = self.to_ctype(array_t.elt_type) + "*"
     self.setfield(result, "data.raw_ptr", "(%s) malloc(%s * %s)" % (raw_ptr_t, nelts, bytes_per_elt) )
     self.setfield(result, "data.base", "(PyObject*) NULL")
     self.setfield(result, "offset", "0")
     self.setfield(result, "size", nelts)
     # assume C-order layout
-    shape_elts = ["%s.elt%d" % (shape, i) for i in xrange(ndims)]
     strides_elts = [" * ".join(["1"] + shape_elts[(i+1):]) for i in xrange(ndims)]
     for i in xrange(ndims):
       self.setidx("%s.shape" % result, i, shape_elts[i])
@@ -450,6 +498,17 @@ class PyModuleCompiler(FnCompiler):
     if config.debug:
       self.printf("[Debug] Done allocating array")
     return result 
+    
+  
+  def visit_AllocArray(self, expr, boxed=False):
+    if boxed:
+      shape = self.tuple_to_stack_array(expr.shape)
+      t = type_mappings.to_dtype(elt_type(expr.type))
+      return "(PyArrayObject*) PyArray_SimpleNew(%d, %s, %s)" % (expr.type.rank, shape, t)
+    
+    if config.debug:
+      print "[Debug] Allocating array : %s " % expr.type  
+    return self.alloc_array(expr.type, expr.shape)
      
   def visit_Tuple(self, expr):
     return self.mk_tuple(expr.elts, boxed = False)

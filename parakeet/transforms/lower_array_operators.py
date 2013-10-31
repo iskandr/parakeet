@@ -220,7 +220,7 @@ class LowerArrayOperators(Transform):
   def transform_ConstArrayLike(self, expr):
     array = self.transform_expr(expr.array)
     shape = self.shape(array)
-    const_fn = self.mk_const_fn(expr.value)
+    const_fn = self.mk_const_fn(shape.type, expr.value)
     return self.imap(const_fn, shape)
   
   

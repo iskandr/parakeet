@@ -2,8 +2,9 @@ import multiprocessing
 
 from ..syntax import Expr, Tuple
 from ..syntax.helpers import get_fn 
-from ..ndtypes import ScalarT, TupleT
-from ..c_backend import PyModuleCompiler, FlatFnCompiler
+from ..ndtypes import ScalarT, TupleT, ArrayT
+from ..c_backend import PyModuleCompiler
+
 
 
 class MulticoreCompiler(PyModuleCompiler):
@@ -56,7 +57,8 @@ class MulticoreCompiler(PyModuleCompiler):
     closure_args = self.get_closure_args(fn_expr)
     root_fn = get_fn(fn_expr)
     input_types = root_fn.input_types 
-    return fn_name, closure_args, input_types 
+  
+    return fn_name, closure_args, input_types
     
   
   def build_loop_body(self, fn_expr, loop_vars, target_name = None):
@@ -145,19 +147,35 @@ class MulticoreCompiler(PyModuleCompiler):
     """
     For now, just use a sequential implementation for reductions
     """
+    assert isinstance(expr.type, ArrayT), "Expected output of Scan to be an array"
+
     bounds = self.tuple_to_var_list(expr.shape)
     n_vars = len(bounds)
     combine_name, combine_closure_args, _ = self.get_fn_info(expr.combine)
     loop_vars = self.loop_vars(n_vars)
+    
+    
+    result = self.alloc_array(expr.type, expr.shape)
+    
     assert expr.init is not None, "Accumulator required but not given"
-    elt = self.fresh_var(expr.type, "elt")
+    
+    elt_t = get_fn(expr.fn).return_type 
+    elt = self.fresh_var(elt_t, "elt")
     body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
-    acc = self.fresh_var(expr.type, "acc", self.visit_expr(expr.init))
+    acc = self.fresh_var(expr.init.type, "acc", self.visit_expr(expr.init))
     combine_arg_str = ", ".join(tuple(combine_closure_args) + (acc, elt))
     body += "\n%s = %s(%s);\n" % (acc, combine_name, combine_arg_str)
     emit_name, emit_closure_args, _ = self.get_fn_info(expr.emit)
-    assert False, "Scan not implemented"  
-    # self.append(self.build_loops(loop_vars, bounds, body))
+    body += "\n"
+    emit_args = tuple(emit_closure_args) + (acc,)
+    emit_args_str = ", ".join(emit_args)
+    body += self.setidx(result, 
+                        loop_vars, 
+                        "%s(%s)" % (emit_name, emit_args_str), 
+                        full_array = True, 
+                        return_stmt = True)
+    self.append(self.build_loops(loop_vars, bounds, body))
+    return result
     
   def visit_Map(self, expr):
     assert False, "Map should have been lowered into ParFor by now: %s" % expr 

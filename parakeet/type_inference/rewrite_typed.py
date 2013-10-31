@@ -3,9 +3,11 @@ from .. import names, syntax
 from ..ndtypes import (IncompatibleTypes, ScalarT, 
                        Bool, Type,  ArrayT, Int64, TupleT, 
                        make_tuple_type)
-from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index, Map)
+from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index, Map, 
+                      ConstArrayLike, Const)
 from ..syntax.helpers import get_types, zero_i64, one_i64, none, const 
 from ..transforms import Transform 
+
 
 class RewriteTyped(Transform):
   def __init__(self, return_type = None):
@@ -119,10 +121,19 @@ class RewriteTyped(Transform):
     if expr.init and not self.is_none(expr.init) and expr.init.type != acc_type:
       if isinstance(acc_type, ScalarT):
         expr.init = self.coerce_expr(expr.init, acc_type)
+      elif isinstance(expr.init.type, ScalarT) and \
+           isinstance(expr.axis, Const) and \
+           len(expr.args) == 1:
+        arr_slice = self.slice_along_axis(expr.args[0], expr.axis, zero_i64)
+        init_type = ArrayT(elt_type = expr.init.type, rank = arr_slice.type.rank)
+        expr.init = ConstArrayLike(array = arr_slice, 
+                                   value = expr.init, 
+                                   type = init_type)
       else:
         assert False, \
           "Scan with scalar init of type %s and accumulator of type %s not yet supported" % \
                     (expr.init.type, acc_type)
+    print expr 
     return expr
 
   def transform_Slice(self, expr):

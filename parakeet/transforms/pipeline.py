@@ -71,20 +71,19 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
                                     memoize = False, 
                                     cleanup = [])
  
-
+shape_elim = Phase(ShapeElimination,
+                   config_param = 'opt_shape_elim')
 
 high_level_optimizations = Phase([
                                     inline_opt,
-                                    
                                     symbolic_range_propagation,   
                                     licm,
-                                         
                                     fusion_opt, 
                                     fusion_opt, 
-                                    
                                     LowerArrayOperators,
                                     NegativeIndexElim,
                                     symbolic_range_propagation,
+
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -99,11 +98,6 @@ copy_elim = Phase(CopyElimination,
 
 indexify = Phase([
                     IndexifyAdverbs, Simplify, DCE, 
-                    copy_elim, DCE, 
-                    LowerSlices, 
-                    inline_opt, Simplify, DCE, 
-                    ShapePropagation, 
-                    IndexMapElimination,
                  ],
                  name = "Indexify",  
                  run_if = contains_adverbs, 
@@ -111,10 +105,19 @@ indexify = Phase([
                  copy = True,
                  memoize = True) 
 
+after_indexify = Phase([copy_elim, Simplify, DCE, 
+                        LowerSlices, 
+                        inline_opt, Simplify, DCE, 
+                        ShapePropagation, 
+                        IndexMapElimination], 
+                       name = "AfterIndexify", 
+                       depends_on = indexify, 
+                       copy = True, 
+                       memoize = True)
 
 
 flatten = Phase([Flatten, inline_opt, Simplify, DCE ], name="Flatten", 
-                depends_on=indexify,
+                depends_on=after_indexify,
                 run_if = contains_structs,  
                 copy=True, 
                 memoize = True)
@@ -136,8 +139,7 @@ def print_loopy(fn):
 
 
 
-shape_elim = Phase(ShapeElimination,
-                   config_param = 'opt_shape_elim')
+
 # loop_fusion = Phase(LoopFusion, config_param = 'opt_loop_fusion')
 
 
@@ -156,7 +158,7 @@ loopify = Phase([lower_adverbs,
                  symbolic_range_propagation, 
                  index_elim, 
                 ],
-                depends_on = indexify,
+                depends_on = after_indexify,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 memoize = True, 
