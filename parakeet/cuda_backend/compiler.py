@@ -1,4 +1,4 @@
-from ..c_backend import PyModuleCompiler, FlatFnCompiler
+from ..c_backend import PyModuleCompiler, FnCompiler
 from ..ndtypes import TupleT, IntT 
 
 import pycuda 
@@ -38,7 +38,7 @@ class CudaCompiler(PyModuleCompiler):
       Valid options for qualifier = "host" | "device" | "global"
     """
     if qualifier == "host": 
-      return FlatFnCompiler.get_fn(self, fn)
+      return FnCompiler.get_fn_name(self, fn)
     else:
       assert False, "GPU functions not implemented yet"
       
