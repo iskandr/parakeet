@@ -1,4 +1,5 @@
 from expr import Expr 
+from stmt import Stmt 
 
 class Struct(Expr):
   """
@@ -32,6 +33,19 @@ class Alloc(Expr):
 
   def __hash__(self):
     return hash((self.elt_type, self.count))
+
+class Free(Expr):
+  """Free a manually allocated block of memory"""
+  _members = ['value']
+  
+  def __str__(self):
+    return "free(%s)" % self.value 
+  
+  def children(self):
+    yield self.value 
+    
+  def __hash__(self):
+    return hash(self.value)
   
 class NumCores(Expr):
   
@@ -58,5 +72,21 @@ class NumCores(Expr):
   
   def children(self):
     return ()
+
+class SourceExpr(Expr):
+  """
+  Splice this code directly into the low-level representation, 
+  should only be used from within a backend that knows what
+  the target code should look like 
+  """
+  _members = ['text']
   
+
+class SourceStmt(Stmt):
+  """
+  Splice this code directly into the low-level representation, 
+  should only be used from within a backend that knows what
+  the target code should look like 
+  """
+  _members = ['text']
   

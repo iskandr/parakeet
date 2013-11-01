@@ -143,7 +143,9 @@ class FnCompiler(BaseCompiler):
   
   def to_ctypes(self, ts):
     return tuple(self.to_ctype(t) for t in ts)
-    
+  
+  
+  
   def visit_Slice(self, expr):
     typename = self.to_ctype(expr.type)
     start = self.visit_expr(expr.start)
@@ -452,7 +454,13 @@ class FnCompiler(BaseCompiler):
     else:
       v = self.visit_expr(stmt.value)
       return "return %s;" % v
-      
+  
+  def visit_SourceExpr(self, expr):
+    return expr.text 
+  
+  def visit_SourceStmt(self, stmt):
+    return stmt.text 
+  
   def visit_block(self, stmts, push = True):
     if push: self.push()
     for stmt in stmts:

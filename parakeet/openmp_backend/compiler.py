@@ -102,9 +102,7 @@ class MulticoreCompiler(PyModuleCompiler):
     
   def exit_parfor(self):
     self.depth -= 1
-    
 
-  
   def visit_ParFor(self, stmt):
     bounds = self.tuple_to_var_list(stmt.bounds)
     n_vars = len(bounds)

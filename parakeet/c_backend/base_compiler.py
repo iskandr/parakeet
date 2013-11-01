@@ -21,6 +21,7 @@ class BaseCompiler(object):
     if flag not in self.extra_link_flags:
       self.extra_link_flags.append(flag)
         
+  
   def visit_expr(self, expr):
     expr_class_name = expr.__class__.__name__
     method_name = "visit_" + expr_class_name

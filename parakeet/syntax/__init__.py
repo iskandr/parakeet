@@ -21,14 +21,14 @@ from formal_args import FormalArgs, MissingArgsError, TooManyArgsError
 import helpers 
 from helpers import * 
 
-from low_level import Alloc, Struct 
+from low_level import Alloc, Struct, Free, SourceExpr, SourceStmt
 
 from seq_expr import Index, Enumerate, Len, Zip 
 
-from tuple_expr import Tuple, TupleProj
-
 from stmt import Stmt, Assign, Comment, ExprStmt, ForLoop, If, Return, While, ParFor
 from stmt import block_to_str 
+
+from tuple_expr import Tuple, TupleProj
 
 from typed_fn import TypedFn 
 from type_value import TypeValue

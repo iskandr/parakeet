@@ -3,6 +3,8 @@ from treelike import Node
 from .. ndtypes import NoneT
 
 class Expr(Node):
+  
+  
   _members = ['type']
   
   def children(self):
@@ -17,6 +19,18 @@ class Expr(Node):
   def short_str(self):
     return str(self)
 
+  def __eq__(self, other):
+    if self.__class__ is not other.__class__:
+      return False
+    return all(c1 == c2 for (c1,c2) in zip(self.children(), other.children))
+    
+  def __ne__(self, other):
+    return not (self == other)
+  
+  def hash(self):
+    elts = tuple(self.children())
+    return hash(elts)
+   
 class Const(Expr):
   _members = ['value']
   
