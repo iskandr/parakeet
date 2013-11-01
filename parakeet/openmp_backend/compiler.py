@@ -41,12 +41,13 @@ class MulticoreCompiler(PyModuleCompiler):
       return [self.visit_expr(expr)]
   
   
-  def get_fn_name(self, fn_expr, attributes = []):
+  def get_fn_name(self, fn_expr, attributes = [], inline = True):
     return PyModuleCompiler.get_fn_name(self, fn_expr, 
                                         compiler_kwargs = {'depth':self.depth}, 
-                                        attributes = attributes)
+                                        attributes = attributes, 
+                                        inline = inline)
   
-  def get_fn_info(self, fn_expr, attributes = []):
+  def get_fn_info(self, fn_expr, attributes = [], inline = True):
     """
     Given a function expression, return:
       - the name of its C representation
@@ -54,7 +55,7 @@ class MulticoreCompiler(PyModuleCompiler):
       - Parakeet input types 
     """
 
-    fn_name = self.get_fn_name(fn_expr, attributes = attributes)
+    fn_name = self.get_fn_name(fn_expr, attributes = attributes, inline = inline)
     closure_args = self.get_closure_args(fn_expr)
     root_fn = get_fn(fn_expr)
     input_types = root_fn.input_types 

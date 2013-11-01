@@ -20,9 +20,9 @@ class Expr(Node):
     return str(self)
 
   def __eq__(self, other):
-    if self.__class__ is not other.__class__:
-      return False
-    return all(c1 == c2 for (c1,c2) in zip(self.children(), other.children))
+    return (self.__class__ is other.__class__) and \
+      self.type == other.type and \
+      all(c1 == c2 for (c1,c2) in zip(self.children(), other.children()))
     
   def __ne__(self, other):
     return not (self == other)

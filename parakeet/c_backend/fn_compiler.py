@@ -426,6 +426,9 @@ class FnCompiler(BaseCompiler):
     body = self.visit_block(stmt.body) + self.visit_merge_right(stmt.merge)
     return decls + "while (%s) {%s}" % (cond, body)
   
+  def visit_ExprStmt(self, stmt):
+    return self.visit_expr(stmt.value) + ";"
+  
   def visit_ForLoop(self, stmt):
     s = self.visit_merge_left(stmt.merge, fresh_vars = True)
     start = self.visit_expr(stmt.start)
@@ -470,7 +473,7 @@ class FnCompiler(BaseCompiler):
     return self.indent("\n" + self.pop())
       
   
-  def get_fn_name(self, expr, compiler_kwargs = {}, attributes = []):
+  def get_fn_name(self, expr, compiler_kwargs = {}, attributes = [], inline = True):
     if expr.__class__ is  TypedFn:
       fn = expr 
     elif expr.__class__ is Closure:
@@ -481,7 +484,7 @@ class FnCompiler(BaseCompiler):
       fn = expr.type.fn
     
     compiler = self.__class__(module_entry = False, **compiler_kwargs)
-    compiled = compiler.compile_flat_source(fn, attributes = attributes)
+    compiled = compiler.compile_flat_source(fn, attributes = attributes, inline = inline)
     
     if compiled.sig not in self.extra_function_signatures:
       # add any declarations it depends on 
@@ -547,7 +550,7 @@ class FnCompiler(BaseCompiler):
       return [fn.return_type]
     
   
-  def visit_flat_fn(self, fn, return_by_ref = False, attributes = None):
+  def visit_flat_fn(self, fn, return_by_ref = False, attributes = None, inline = True):
     if attributes is None:
       attributes = []
     
@@ -582,8 +585,8 @@ class FnCompiler(BaseCompiler):
     
     body_str = self.visit_block(fn.body) 
     
-    attributes.append("__attribute__((always_inline))")
-    attributes.append("inline")
+    if inline:
+      attributes = attributes + ["__attribute__((always_inline))", "inline"]
     attr_str = " ".join(attributes)
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
     src = "%s %s { %s }" % (attr_str, sig, body_str) 
@@ -599,7 +602,7 @@ class FnCompiler(BaseCompiler):
     return self.__class__ 
   
   _flat_compile_cache = {}
-  def compile_flat_source(self, parakeet_fn, attributes = []):
+  def compile_flat_source(self, parakeet_fn, attributes = [], inline = True):
       
     # make sure compiled source uses consistent names for tuple and array types, 
     # which both need declarations for their C struct representations  
@@ -613,7 +616,7 @@ class FnCompiler(BaseCompiler):
     if key in self._flat_compile_cache:
       return self._flat_compile_cache[key]
     
-    name, sig, src = self.visit_flat_fn(parakeet_fn, attributes = attributes)
+    name, sig, src = self.visit_flat_fn(parakeet_fn, attributes = attributes, inline = inline)
       
     
     result = CompiledFlatFn(

@@ -42,7 +42,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   untyped_fn = translate_function_value(fn)
   
-  for backend in available_backends:
+  for backend in ['cuda']: #available_backends:
     try: 
       result = run_untyped_fn(untyped_fn, _copy_list(args), backend = backend)
       

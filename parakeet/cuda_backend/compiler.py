@@ -4,48 +4,11 @@ from .. import names
 from ..builder import build_fn
 # from ..c_backend import FnCompiler
 from ..ndtypes import TupleT,  Int32, FnT, ScalarT, SliceT, NoneT, ArrayT
+from ..c_backend import PyModuleCompiler
 from ..openmp_backend import MulticoreCompiler
-from ..syntax import SourceExpr, SourceStmt
 from ..syntax.helpers import get_types, get_fn, get_closure_args
+from cuda_syntax import threadIdx, blockIdx
 
-
-
-class dim3(object):
-  def __init__(self, x, y, z):
-    self.x = x 
-    self.y = y 
-    self.z = z 
-  
-  def __iter__(self):
-    yield self.x 
-    yield self.y 
-    yield self.z
-    
-  def __getitem__(self, idx):
-    if idx == 0:
-      return self.x 
-    elif idx == 1:
-      return self.y 
-    else:
-      assert idx == 2, "Unexpected index %s to %s" % (idx, self)
-      return self.z
-    
-  def __str__(self):
-    return "dim3(x = %s, y = %s, z = %s)" % (self.x, self.y, self.z) 
- 
-# pasted literally into the C source 
-blockIdx_x = SourceExpr("blockIdx.x", type=Int32)
-blockIdx_y = SourceExpr("blockIdx.y", type=Int32)
-blockIdx_z = SourceExpr("blockIdx.z", type=Int32)
-blockIdx = dim3(blockIdx_x, blockIdx_y, blockIdx_z)
-
-threadIdx_x = SourceExpr("threadIdx.x", type=Int32)
-threadIdx_y = SourceExpr("threadIdx.y", type=Int32)
-threadIdx_z = SourceExpr("threadIdx.z", type=Int32)
-threadIdx = dim3(threadIdx_x, threadIdx_y, threadIdx_z)
-
-warpSize = SourceExpr("wrapSize", type=Int32)
-__syncthreads = SourceStmt("__syncthreads;")
 
 
 class CudaCompiler(MulticoreCompiler):
@@ -54,30 +17,54 @@ class CudaCompiler(MulticoreCompiler):
     # keep track of which kernels we've already compiled 
     # and map the name of the nested function to its kernel name
     self._kernel_cache = {}
+    if 'gpu_depth' in kwargs:
+      self.gpu_depth = kwargs['gpu_depth'] 
+      del kwargs['gpu_depth']
+    else:
+      self.gpu_depth = 0
     MulticoreCompiler.__init__(self, *args, **kwargs)
     
   @property 
   def cache_key(self):
-    return self.__class__, max(self.depth, 2)
+    return self.__class__, self.depth > 0, max(self.gpu_depth, 2) 
   
+  def in_host(self):
+    return self.gpu_depth == 0
+  
+  def in_block(self):
+    return self.gpu_depth == 1
+  
+  def in_gpu(self):
+    return self.gpu_depth > 0
+  
+  def get_fn_name(self, fn_expr, attributes = [], inline = True):
+    if self.in_gpu():
+      attributes = ["__device__"] + attributes 
+      
+    kwargs = {'depth':self.depth, 'gpu_depth':self.gpu_depth}
+    return PyModuleCompiler.get_fn_name(self, fn_expr, 
+                                        compiler_kwargs = kwargs,
+                                        attributes = attributes, 
+                                        inline = inline)
     
-  def get_fn_name(self, fn_expr, attributes = ["__device__"]):
-    return MulticoreCompiler.get_fn_name(fn_expr, attributes = attributes)
+  def get_device_fn_name(self, fn_expr):
+    return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__device__"])
+  
+  def get_global_fn_name(self, fn_expr):
+    return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__global__"], inline = False)
+  
   
   def enter_kernel(self):
     """
     Keep a stack of adverb contexts so we know when we're global vs. block vs. thread
     """
-    self.depth += 1  
+    MulticoreCompiler.enter_parfor(self)
+    self.gpu_depth += 1  
   
   def exit_kernel(self):
-    self.depth -= 1 
+    MulticoreCompiler.exit_parfor(self)
+    self.gpu_depth -= 1 
   
-  def in_host(self):
-    return self.depth == 0
-  
-  def in_block(self):
-    return self.depth == 1
   
   def in_thread(self):
     return self.depth > 1
@@ -109,7 +96,8 @@ class CudaCompiler(MulticoreCompiler):
     assert len(outer_closure_args) == n_closure_args, \
       "Mismatch between closure formal args %s and given %s" % (", ".join(closure_arg_types),
                                                                 ", ".join(outer_closure_args))
-    outer_input_types = tuple(closure_arg_types) + tuple(get_types(bounds))
+    bound_types = (Int32,) * n_indices
+    outer_input_types = tuple(closure_arg_types) + bound_types
     kernel_name = names.fresh("kernel_" + fn.name)
     parakeet_kernel, builder, input_vars  = build_fn(outer_input_types, name = kernel_name)
     
@@ -128,7 +116,7 @@ class CudaCompiler(MulticoreCompiler):
     inner_args = tuple(closure_vars) + tuple(index_args)
     builder.call(fn, inner_args)
     
-    c_kernel_name = self.get_fn_name(parakeet_kernel)
+    c_kernel_name = self.get_global_fn_name(parakeet_kernel)
     
     self._kernel_cache[key] = c_kernel_name
     return c_kernel_name, outer_closure_args
@@ -140,6 +128,15 @@ class CudaCompiler(MulticoreCompiler):
     if isinstance(t, TupleT):
       return all(self.pass_by_value(elt_t) for elt_t in t.elt_types)
     return False 
+  
+  def memcpy_to_device(self, device_ptr, host_ptr, nbytes):
+    self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyHostToDevice);" % \
+                 (device_ptr, host_ptr, nbytes))
+  
+  def memcpy_to_host(self, device_ptr, host_ptr, nbytes):
+    self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyDeviceToHost);" % \
+                 (device_ptr, host_ptr, nbytes))
+  
   
   def to_gpu(self, c_expr, t):
     if self.pass_by_value(t):
@@ -155,7 +152,7 @@ class CudaCompiler(MulticoreCompiler):
       self.append("(%s) cudaMalloc( (void**) &%s, %s);" % (ptr_t, dst, nbytes))
       
       # copy the contents of the host array to the GPU
-      self.append("cudaMemcpy(%s, %s, %s);" % (dst, src, nbytes))
+      self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyHostToDevice);" % (dst, src, nbytes))
       
       # make an identical array descriptor but change its data pointer to the GPU location
       gpu_descriptor = self.fresh_var(self.to_ctype(t), "gpu_array", c_expr)
@@ -170,36 +167,54 @@ class CudaCompiler(MulticoreCompiler):
       return gpu_tuple 
     else:
       assert False, "Unsupported type in CUDA backend %s" % t 
-      
   
-  def from_gpu(self, host_values, types):
+  def list_to_gpu(self, host_values, types):
     return [self.to_gpu(v,t) for (v,t) in zip(host_values, types)]
   
-  def args_to_gpu(self, vs):
-    return [self.to_gpu(v) for v in vs]
   
+  def to_host(self, host_value, gpu_value, t):
+    if self.pass_by_value(t):
+      return
+    elif isinstance(t, ArrayT):
+      pass 
+    elif isinstance(t, TupleT):
+      pass 
+    else:
+      assert False, "Unsupported type in CUDA backend %s" % t 
+      
+  def list_to_host(self, host_values, gpu_values, types):
+    for i, t in enumerate(types):
+      host_value = host_values[i]
+      gpu_value = gpu_values[i]
+      self.to_host(host_value, gpu_value, t)
+    
   def visit_ParFor(self, stmt):
     bounds = self.tuple_to_var_list(stmt.bounds)
+
     n_indices = len(bounds)
-    if n_indices > 3 or self.in_host():
+    if n_indices > 3 or not self.in_host():
       return MulticoreCompiler.visit_ParFor(self, stmt)
 
-    
-    kernel_name, closure_args = self.build_kernel(stmt.fn, n_indices)
+    kernel_name, closure_args = self.build_kernel(stmt.fn, bounds)
     
     host_closure_args = self.visit_expr_list(closure_args)
-    gpu_closure_args = []
     closure_arg_types = get_types(closure_args)
-    for host_value, t in zip(host_closure_args, closure_arg_types):
-      gpu_value = self.to_gpu(host_value, t)
-      gpu_closure_args.append(gpu_value)
+
+    self.comment("copy closure arguments to the GPU")
+    gpu_closure_args = \
+      [self.to_gpu(c_expr, t) for (c_expr, t) in 
+       zip(host_closure_args, closure_arg_types)]
+    
+      
     dims_with_threads = tuple(bounds) + ("1",)
     dims_str = ", ".join(dims_with_threads)
+    self.comment("kernel launch")
     launch = "%s<<<%s>>(%s);" % (kernel_name, dims_str, ", ".join(gpu_closure_args))
+    
     self.append(launch)
-    # copy arguments back from the GPU to the host
-    return  
-  
+    self.comment("copy arguments back from the GPU to the host")
+    self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types)
+    return "/* done with ParFor */"
   
   def visit_NumCores(self, expr):
     # by default we're running sequentially 
