@@ -1,7 +1,8 @@
 ##########################
 #  Performance Options   #
 ##########################
-fast_math = True 
+fast_math = False 
+sse2 = False 
 # overload the default compiler path  
 compiler_path = None
 

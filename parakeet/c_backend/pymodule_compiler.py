@@ -25,6 +25,24 @@ class PyModuleCompiler(FnCompiler):
   runs a flattened computations, and boxes the result as PyObjects
   """
   def __init__(self, module_entry = True, *args, **kwargs):
+    if 'compiler_cmd' in kwargs:
+      self.compiler_cmd = kwargs['compiler_cmd']
+      del kwargs['compiler_cmd']
+    else:
+      self.compiler_cmd = None
+      
+    if 'compiler_shared_flags' in kwargs:
+      self.compiler_shared_flags = kwargs['compiler_shared_flags']
+      del kwargs['compiler_shared_flags']
+    else:
+      self.compiler_shared_flags = None
+      
+    if 'linker_shared_flags' in kwargs:
+      self.linker_shared_flags = kwargs['linker_shared_flags']
+      del kwargs['linker_shared_flags']
+    else:
+      self.linker_shared_flags = None 
+      
     FnCompiler.__init__(self, module_entry = module_entry, *args, **kwargs)
     
   def unbox_scalar(self, x, t, target = None):
@@ -709,7 +727,7 @@ class PyModuleCompiler(FnCompiler):
     c_body = self.indent(c_body )
     c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
     c_sig = "PyObject* %(c_fn_name)s (%(c_args)s)" % locals() 
-    fndef = "%s {%s}" % (c_sig, c_body)
+    fndef = "%s {\n\n %s}" % (c_sig, c_body)
     return c_fn_name, c_sig, fndef 
   
   _entry_compile_cache = {} 
@@ -735,7 +753,10 @@ class PyModuleCompiler(FnCompiler):
                                  declarations =  self.declarations, 
                                  extra_compile_flags = self.extra_compile_flags, 
                                  extra_link_flags = self.extra_link_flags, 
-                                 print_source = config.print_module_source)
+                                 print_source = config.print_module_source, 
+                                 compiler = self.compiler_cmd, 
+                                 compiler_shared_flags = self.compiler_shared_flags, 
+                                 linker_shared_flags = self.linker_shared_flags)
     self._entry_compile_cache[key]  = compiled_fn
     return compiled_fn
 

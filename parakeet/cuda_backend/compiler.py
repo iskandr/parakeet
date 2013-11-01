@@ -22,7 +22,10 @@ class CudaCompiler(MulticoreCompiler):
       del kwargs['gpu_depth']
     else:
       self.gpu_depth = 0
-    MulticoreCompiler.__init__(self, *args, **kwargs)
+    MulticoreCompiler.__init__(self, 
+                               compiler_cmd = 'nvcc', 
+                               compiler_shared_flags = ['-Xcompiler', '-fPIC'], 
+                               *args, **kwargs)
     
   @property 
   def cache_key(self):
@@ -116,7 +119,10 @@ class CudaCompiler(MulticoreCompiler):
     inner_args = tuple(closure_vars) + tuple(index_args)
     builder.call(fn, inner_args)
     
+    
+    self.enter_kernel()
     c_kernel_name = self.get_global_fn_name(parakeet_kernel)
+    self.exit_kernel()
     
     self._kernel_cache[key] = c_kernel_name
     return c_kernel_name, outer_closure_args
@@ -195,6 +201,7 @@ class CudaCompiler(MulticoreCompiler):
     if n_indices > 3 or not self.in_host():
       return MulticoreCompiler.visit_ParFor(self, stmt)
 
+    
     kernel_name, closure_args = self.build_kernel(stmt.fn, bounds)
     
     host_closure_args = self.visit_expr_list(closure_args)

@@ -589,7 +589,7 @@ class FnCompiler(BaseCompiler):
       attributes = attributes + ["__attribute__((always_inline))", "inline"]
     attr_str = " ".join(attributes)
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
-    src = "%s %s { %s }" % (attr_str, sig, body_str) 
+    src = "%s %s {\n\n%s}" % (attr_str, sig, body_str) 
     return c_fn_name, sig, src
   
   @property 
