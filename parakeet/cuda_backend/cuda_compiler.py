@@ -44,14 +44,34 @@ class CudaCompiler(MulticoreCompiler):
     return gpu_args 
   
   def launch_kernel(self, bounds, gpu_closure_args, kernel_name):
-    assert len(bounds) <= 3
-    dims = tuple(bounds) + ("1",) * (3-len(bounds))
-    dims_str = "dim3(%s)" % ", ".join(dims)
+    n_bounds = len(bounds)
+    assert len(bounds) <= 5
+    
+    grid_dims = [bounds[0]]
+    if n_bounds > 1:
+      block_dims = [bounds[1]]
+    else:
+      block_dims = ["1"]
+    
+    if n_bounds > 2:
+      grid_dims.append(bounds[2])
+    else:
+      grid_dims.append("1")
+    grid_dims.append("1")
+    
+    if n_bounds > 3: block_dims.append(bounds[3])
+    else: block_dims.append("1")
+    if n_bounds > 4: block_dims.append([4])
+    else: block_dims.append("1")
+      
+    
+    grid_dims_str = "dim3(%s)" % ", ".join(grid_dims)
+    block_dims_str = "dim3(%s)" % ", ".join(block_dims)
     self.comment("kernel launch")
     kernel_args = tuple(gpu_closure_args) + tuple(bounds)
     kernel_args_str = ", ".join(kernel_args)
 
-    self.append("%s<<<%s, 1>>>(%s);" % (kernel_name, dims_str, kernel_args_str))
+    self.append("%s<<<%s, %s>>>(%s);" % (kernel_name, grid_dims_str, block_dims_str, kernel_args_str))
   
     self.comment("After launching kernel, synchronize to make sure the computation is done")
     self.synchronize("Kernel launch")
@@ -161,9 +181,14 @@ class CudaCompiler(MulticoreCompiler):
     # number of threads per block > 1  
     bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
     
-    indices = tuple(blockIdx)[:n_indices]
-    #indices = tuple(threadIdx)[:n_indices]
+    indices = [blockIdx.x,  threadIdx.x, blockIdx.y, threadIdx.y, threadIdx.z][:n_indices]
+
     indices = [builder.cast(idx, t) for idx, t in zip(indices,index_types)]
+    
+    # TODO: Have a target number of threadBlocks based on the number of SMs
+    # that we can get from PyCUDA and then have loops inside of each theadBlock
+    # over the real indices
+    
     if index_as_tuple:
       index_args = (builder.tuple(indices),)
     else:
