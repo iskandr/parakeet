@@ -6,6 +6,7 @@ from ..builder import build_fn
 from ..ndtypes import TupleT,  Int32, FnT, ScalarT, SliceT, NoneT, ArrayT
 from ..c_backend import PyModuleCompiler
 from ..openmp_backend import MulticoreCompiler
+from ..syntax import PrintString 
 from ..syntax.helpers import get_types, get_fn, get_closure_args
 from cuda_syntax import threadIdx, blockIdx
 
@@ -23,7 +24,7 @@ class CudaCompiler(MulticoreCompiler):
     else:
       self.gpu_depth = 0
     MulticoreCompiler.__init__(self, 
-                               compiler_cmd = 'nvcc',
+                               compiler_cmd = ['nvcc', '-arch=sm_21'], 
                                extra_link_flags = ['-lcudart'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',
@@ -33,6 +34,43 @@ class CudaCompiler(MulticoreCompiler):
   @property 
   def cache_key(self):
     return self.__class__, self.depth > 0, max(self.gpu_depth, 2) 
+  
+  def visit_ParFor(self, stmt):
+    bounds = self.tuple_to_var_list(stmt.bounds)
+
+    n_indices = len(bounds)
+    if n_indices > 3 or not self.in_host():
+      return MulticoreCompiler.visit_ParFor(self, stmt)
+
+    
+    kernel_name, closure_args = self.build_kernel(stmt.fn, bounds)
+    
+    host_closure_args = self.visit_expr_list(closure_args)
+    closure_arg_types = get_types(closure_args)
+
+    self.comment("copy closure arguments to the GPU")
+    gpu_closure_args = \
+      [self.to_gpu(c_expr, t) for (c_expr, t) in 
+       zip(host_closure_args, closure_arg_types)]
+    
+      
+    dims_with_threads = tuple(bounds) + ("1",)
+    dims_str = ", ".join(dims_with_threads)
+    self.comment("kernel launch")
+    kernel_args = tuple(gpu_closure_args) + tuple(bounds)
+    kernel_args_str = ", ".join(kernel_args)
+    launch = "%s<<<%s>>>(%s);" % (kernel_name, dims_str, kernel_args_str)
+    
+    self.append(launch)
+    self.comment("copy arguments back from the GPU to the host")
+    self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types)
+    return "/* done with ParFor */"
+  
+  def visit_NumCores(self, expr):
+    # by default we're running sequentially 
+    sm_count = None # TODO
+    active_thread_blocks = 6 
+    return "%d" % (sm_count * active_thread_blocks)  
   
   def in_host(self):
     return self.gpu_depth == 0
@@ -44,7 +82,7 @@ class CudaCompiler(MulticoreCompiler):
     return self.gpu_depth > 0
   
   def get_fn_name(self, fn_expr, attributes = [], inline = True):
-    print "getting fn name for", fn_expr, self.depth, self.gpu_depth 
+
     if self.in_gpu():
       attributes = ["__device__"] + attributes 
     kwargs = {'depth':self.depth, 'gpu_depth':self.gpu_depth}
@@ -107,6 +145,8 @@ class CudaCompiler(MulticoreCompiler):
     kernel_name = names.fresh("kernel_" + fn.name)
     parakeet_kernel, builder, input_vars  = build_fn(outer_input_types, name = kernel_name)
     
+    builder.add
+    builder.append(PrintString("We're on the GPU"))
     closure_vars = input_vars[:n_closure_args]
     
     # TODO: use these to compute indices when n_indices > 3 or 
@@ -186,9 +226,16 @@ class CudaCompiler(MulticoreCompiler):
     if self.pass_by_value(t):
       return
     elif isinstance(t, ArrayT):
-      pass 
+      dst = "%s.data.raw_ptr" % host_value 
+      src = "%s.data.raw_ptr"  % gpu_value 
+      nelts = "%s.size" % gpu_value
+      nbytes = "%s * %d" % (nelts, t.elt_type.dtype.itemsize)  
+      self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyDeviceToHost);" % (dst, src, nbytes) ) 
     elif isinstance(t, TupleT):
-      pass 
+      for i, elt_t in enumerate(t.elt_types):
+        host_elt = "%s.elt%d" % (host_value, i)
+        gpu_elt = "%s.elt%d" % (gpu_value, i)
+        self.to_host(host_elt, gpu_elt, elt_t)
     else:
       assert False, "Unsupported type in CUDA backend %s" % t 
       
@@ -198,42 +245,7 @@ class CudaCompiler(MulticoreCompiler):
       gpu_value = gpu_values[i]
       self.to_host(host_value, gpu_value, t)
     
-  def visit_ParFor(self, stmt):
-    bounds = self.tuple_to_var_list(stmt.bounds)
 
-    n_indices = len(bounds)
-    if n_indices > 3 or not self.in_host():
-      return MulticoreCompiler.visit_ParFor(self, stmt)
-
-    
-    kernel_name, closure_args = self.build_kernel(stmt.fn, bounds)
-    
-    host_closure_args = self.visit_expr_list(closure_args)
-    closure_arg_types = get_types(closure_args)
-
-    self.comment("copy closure arguments to the GPU")
-    gpu_closure_args = \
-      [self.to_gpu(c_expr, t) for (c_expr, t) in 
-       zip(host_closure_args, closure_arg_types)]
-    
-      
-    dims_with_threads = tuple(bounds) + ("1",)
-    dims_str = ", ".join(dims_with_threads)
-    self.comment("kernel launch")
-    kernel_args = tuple(gpu_closure_args) + tuple(bounds)
-    kernel_args_str = ", ".join(kernel_args)
-    launch = "%s<<<%s>>>(%s);" % (kernel_name, dims_str, kernel_args_str)
-    
-    self.append(launch)
-    self.comment("copy arguments back from the GPU to the host")
-    self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types)
-    return "/* done with ParFor */"
-  
-  def visit_NumCores(self, expr):
-    # by default we're running sequentially 
-    sm_count = None # TODO
-    active_thread_blocks = 6 
-    return "%d" % (sm_count * active_thread_blocks)  
   """
   def visit_IndexReduce(self, expr):
     fn =  self.get_fn(expr.fn, qualifier = "device")

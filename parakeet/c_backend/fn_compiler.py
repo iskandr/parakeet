@@ -414,6 +414,19 @@ class FnCompiler(BaseCompiler):
     # by default we're running sequentially 
     return "1"
   
+  def visit_Comment(self, stmt):
+    return "// " + stmt.text
+    
+  def visit_PrintString(self, stmt):
+    self.printf(stmt.text)
+    return "// done with printf"
+    
+  def visit_SourceExpr(self, expr):
+    return expr.text 
+  
+  def visit_SourceStmt(self, stmt):
+    return stmt.text 
+  
   def visit_If(self, stmt):
     self.declare_merge_vars(stmt.merge)
     cond = self.visit_expr(stmt.cond)
@@ -459,11 +472,7 @@ class FnCompiler(BaseCompiler):
       v = self.visit_expr(stmt.value)
       return "return %s;" % v
   
-  def visit_SourceExpr(self, expr):
-    return expr.text 
-  
-  def visit_SourceStmt(self, stmt):
-    return stmt.text 
+
   
   def visit_block(self, stmts, push = True):
     if push: self.push()

@@ -1,8 +1,8 @@
 ##########################
 #  Performance Options   #
 ##########################
-fast_math = False 
-sse2 = False 
+fast_math = True 
+sse2 = True 
 # overload the default compiler path  
 compiler_path = None
 
@@ -19,8 +19,9 @@ print_input_ir = False
 print_module_source = True
 print_function_source = False
 
+print_commands = True
 print_command_elapsed_time = False
-print_commands = False
+
 
 # Generate a .c file or a .cpp? 
 pure_c = True

@@ -31,6 +31,12 @@ class CoreBuilder(object):
     # and looking up their elements directly
     self.tuple_elt_cache = {}
 
+  def insert_stmt(self, stmt):
+    self.blocks.append_to_current(stmt)
+
+  def append(self, stmt):
+    self.blocks.append_to_current(stmt)
+  
   def comment(self, text):
     self.blocks.append(Comment(text))
   
@@ -91,9 +97,7 @@ class CoreBuilder(object):
   def fresh_i64(self, prefix = "temp"):
     return self.fresh_var(Int64, prefix)
 
-  def insert_stmt(self, stmt):
-    self.blocks.append_to_current(stmt)
-
+  
   def temp_name(self, expr):
     c = expr.__class__
     if c is PrimCall:

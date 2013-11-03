@@ -260,8 +260,14 @@ def compile_object(src,
                                 src_extension = src_extension)
   src_filename = src_file.name
   object_name = src_filename.replace(src_extension, object_extension)
-  compiler_flags = get_compiler_flags(compiler, extra_compile_flags, compiler_flag_prefix) 
-  compiler_cmd = [compiler] + compiler_flags + ['-c', src_filename, '-o', object_name]
+  compiler_flags = get_compiler_flags(compiler, extra_compile_flags, compiler_flag_prefix)
+  if isinstance(compiler, (list,tuple)):
+    compiler_cmd = list(compiler)
+  else:
+    compiler_cmd = [compiler] 
+  compiler_cmd += compiler_flags 
+  compiler_cmd += ['-c', src_filename, '-o', object_name]
+  
   run_cmd(compiler_cmd, label = "Compile source")
   return CompiledObject(src = src, 
                         src_filename = src_filename, 
@@ -330,7 +336,15 @@ def compile_module(src,
   object_name = compiled_object.object_filename
   shared_name = src_filename.replace(src_extension, shared_extension)
   linker_flags = get_linker_flags(compiler, extra_link_flags, linker_flag_prefix) 
-  linker_cmd = [compiler, object_name] + linker_flags + list(extra_objects) + ['-o', shared_name]
+  
+  if isinstance(compiler, (list,tuple)):
+    linker_cmd = list(compiler)
+  else:
+    linker_cmd = [compiler]
+  linker_cmd += [object_name] 
+  linker_cmd += linker_flags 
+  linker_cmd += list(extra_objects) 
+  linker_cmd += ['-o', shared_name]
 
   env = os.environ.copy()
   env["LD_LIBRARY_PATH"] = python_lib_dir

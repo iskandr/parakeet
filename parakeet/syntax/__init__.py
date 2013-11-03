@@ -25,8 +25,8 @@ from low_level import Alloc, Struct, Free, SourceExpr, SourceStmt
 
 from seq_expr import Index, Enumerate, Len, Zip 
 
-from stmt import Stmt, Assign, Comment, ExprStmt, ForLoop, If, Return, While, ParFor
-from stmt import block_to_str 
+from stmt import (Stmt, Assign, Comment, ExprStmt, ForLoop, If, Return, While, ParFor, 
+                  PrintString, block_to_str) 
 
 from tuple_expr import Tuple, TupleProj
 

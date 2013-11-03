@@ -9,6 +9,7 @@ from run_function import run_python_fn, run_untyped_fn
 class jit(object):
   def __init__(self, f):
     self.f = f
+    self.fn = f 
 
   def __call__(self, *args, **kwargs):
     if '_backend' in kwargs:
