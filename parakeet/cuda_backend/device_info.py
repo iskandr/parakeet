@@ -10,6 +10,10 @@ def get_cuda_devices(compute_capability = (1,3)):
   devices = [pycuda.driver.Device(i) for i in xrange(pycuda.driver.Device.count())]
   return [d for d in devices if d.compute_capability() >= compute_capability]
 
+def device_id(cuda_device):
+  import pycuda.driver 
+  return cuda_device.get_attribute(pycuda.driver.device_attribute.PCI_DEVICE_ID)
+
 def display_attached(cuda_device):
   import pycuda.driver 
   return cuda_device.get_attribute(pycuda.driver.device_attribute.KERNEL_EXEC_TIMEOUT) == 1  

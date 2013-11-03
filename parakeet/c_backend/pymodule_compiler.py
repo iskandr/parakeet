@@ -677,7 +677,13 @@ class PyModuleCompiler(FnCompiler):
       self.append(s)
     self.append("\n")
     return self.pop()
-         
+  
+  def enter_module_body(self):
+    pass 
+  
+  def exit_module_body(self):
+    pass 
+  
   def visit_fn(self, fn):
     if config.print_input_ir:
       print "=== Compiling to C with %s (entry function) ===" % self.__class__.__name__ 
@@ -719,9 +725,9 @@ class PyModuleCompiler(FnCompiler):
         self.name_mappings[argname] = var
       
 
-
+    self.enter_module_body()
     c_body = self.visit_block(fn.body, push=False)
-
+    self.exit_module_body()
     c_body = self.indent(c_body )
     c_args = "PyObject* %s, PyObject* %s" % (dummy, args) #", ".join("PyObject* %s" % self.name(n) for n in fn.arg_names)
     c_sig = "PyObject* %(c_fn_name)s (%(c_args)s)" % locals() 

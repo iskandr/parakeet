@@ -8,6 +8,8 @@ from ..c_backend import PyModuleCompiler
 from ..openmp_backend import MulticoreCompiler
 from ..syntax import PrintString 
 from ..syntax.helpers import get_types, get_fn, get_closure_args
+
+import device_info 
 from cuda_syntax import threadIdx, blockIdx
 
 
@@ -23,6 +25,10 @@ class CudaCompiler(MulticoreCompiler):
       del kwargs['gpu_depth']
     else:
       self.gpu_depth = 0
+    
+    self.device = device_info.best_cuda_device()
+    assert self.device, "No GPU found"
+    
     MulticoreCompiler.__init__(self, 
                                compiler_cmd = ['nvcc', '-arch=sm_13'], 
                                extra_link_flags = ['-lcudart'], 
@@ -30,10 +36,13 @@ class CudaCompiler(MulticoreCompiler):
                                compiler_flag_prefix = '-Xcompiler',
                                linker_flag_prefix = '-Xlinker', 
                                *args, **kwargs)
-    
+  
   @property 
   def cache_key(self):
     return self.__class__, self.depth > 0, max(self.gpu_depth, 2) 
+  
+  def enter_module_body(self):
+    self.append('cudaSetDevice(%d);' % device_info.device_id(self.device))
   
   def build_kernel_args(self, host_args, arg_types):
     self.comment("copy closure arguments to the GPU")
