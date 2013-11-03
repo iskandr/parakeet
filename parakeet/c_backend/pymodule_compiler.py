@@ -17,6 +17,18 @@ from fn_compiler import FnCompiler
 from compile_util import compile_module
 import config 
 
+def attr_from_kwargs(obj, kwargs, attr, value = None):
+  """
+  If an attribute is in the kwargs dictionary, then assign it to the
+  given object and remove it from the dictionary, otherwise assign 
+  the default value
+  """
+  if attr in kwargs:
+    setattr(obj, attr, kwargs[attr])
+    del kwargs[attr]
+  else:
+    setattr(obj, attr, value)
+
 
 class PyModuleCompiler(FnCompiler):
   """
@@ -25,24 +37,10 @@ class PyModuleCompiler(FnCompiler):
   runs a flattened computations, and boxes the result as PyObjects
   """
   def __init__(self, module_entry = True, *args, **kwargs):
-    if 'compiler_cmd' in kwargs:
-      self.compiler_cmd = kwargs['compiler_cmd']
-      del kwargs['compiler_cmd']
-    else:
-      self.compiler_cmd = None
-      
-    if 'compiler_shared_flags' in kwargs:
-      self.compiler_shared_flags = kwargs['compiler_shared_flags']
-      del kwargs['compiler_shared_flags']
-    else:
-      self.compiler_shared_flags = None
-      
-    if 'linker_shared_flags' in kwargs:
-      self.linker_shared_flags = kwargs['linker_shared_flags']
-      del kwargs['linker_shared_flags']
-    else:
-      self.linker_shared_flags = None 
-      
+    attr_from_kwargs(self, kwargs, 'compiler_cmd')    
+    attr_from_kwargs(self, kwargs, 'compiler_flag_prefix')
+    attr_from_kwargs(self, kwargs, 'linker_flag_prefix')  
+    attr_from_kwargs(self, kwargs, 'src_extension')
     FnCompiler.__init__(self, module_entry = module_entry, *args, **kwargs)
     
   def unbox_scalar(self, x, t, target = None):
@@ -598,7 +596,7 @@ class PyModuleCompiler(FnCompiler):
     # PyObject* PyArray_SimpleNewFromData(int nd, npy_intp* dims, int typenum, void* data)
     typenum = type_mappings.to_dtype(elt_type)
     array_alloc = \
-      "PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s])" % \
+      "(PyArrayObject*) PyArray_SimpleNewFromData(%d, %s, %s, &%s[%s])" % \
         (ndims, shape_array, typenum, data_ptr, offset)
     vec = self.fresh_var("PyArrayObject*", "fresh_array", array_alloc) 
     self.return_if_null(vec)
@@ -668,7 +666,7 @@ class PyModuleCompiler(FnCompiler):
       if config.debug: 
         self.print_pyobj_type(v, "Return type: ")
         self.print_pyobj(v, "Return value: ")
-      return "return %s;" % v
+      return "return (PyObject*) %s;" % v
     else:
       return FnCompiler.visit_Return(self, stmt)
   
@@ -748,6 +746,7 @@ class PyModuleCompiler(FnCompiler):
     compiled_fn = compile_module(src, 
                                  fn_name = name,
                                  fn_signature = sig, 
+                                 src_extension = self.src_extension,
                                  extra_objects = set(self.extra_objects),
                                  extra_function_sources = ordered_function_sources, 
                                  declarations =  self.declarations, 
@@ -755,8 +754,8 @@ class PyModuleCompiler(FnCompiler):
                                  extra_link_flags = self.extra_link_flags, 
                                  print_source = config.print_module_source, 
                                  compiler = self.compiler_cmd, 
-                                 compiler_shared_flags = self.compiler_shared_flags, 
-                                 linker_shared_flags = self.linker_shared_flags)
+                                 compiler_flag_prefix = self.compiler_flag_prefix, 
+                                 linker_flag_prefix = self.linker_flag_prefix)
     self._entry_compile_cache[key]  = compiled_fn
     return compiled_fn
 

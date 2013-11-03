@@ -23,8 +23,10 @@ class CudaCompiler(MulticoreCompiler):
     else:
       self.gpu_depth = 0
     MulticoreCompiler.__init__(self, 
-                               compiler_cmd = 'nvcc', 
-                               compiler_shared_flags = ['-Xcompiler', '-fPIC'], 
+                               compiler_cmd = 'nvcc',
+                               src_extension = '.cu',  
+                               compiler_flag_prefix = '-Xcompiler',
+                               linker_flag_prefix = '-Xlinker',  
                                *args, **kwargs)
     
   @property 
@@ -216,7 +218,9 @@ class CudaCompiler(MulticoreCompiler):
     dims_with_threads = tuple(bounds) + ("1",)
     dims_str = ", ".join(dims_with_threads)
     self.comment("kernel launch")
-    launch = "%s<<<%s>>(%s);" % (kernel_name, dims_str, ", ".join(gpu_closure_args))
+    kernel_args = tuple(gpu_closure_args) + tuple(bounds)
+    kernel_args_str = ", ".join(kernel_args)
+    launch = "%s<<<%s>>>(%s);" % (kernel_name, dims_str, kernel_args_str)
     
     self.append(launch)
     self.comment("copy arguments back from the GPU to the host")

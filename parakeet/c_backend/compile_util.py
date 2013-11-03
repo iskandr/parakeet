@@ -81,33 +81,47 @@ def get_opt_flags():
     opt_flags.append('-ffast-math')
   return opt_flags 
 
-def get_compiler_flags(compiler, shared_flags = None):
-  if shared_flags is None:
-    compiler_flags = ['-fPIC']
-  else:
-    compiler_flags = [shared_flag for shared_flag in shared_flags]
-  compiler_flags.extend(['-I%s' % path for path in include_dirs])
+def get_compiler_flags(compiler, extra_flags = [], compiler_flag_prefix = None):
+  compiler_flags = ['-I%s' % path for path in include_dirs]
+  
+  def add_flag(flag):
+    if compiler_flag_prefix is not None:
+      compiler_flags.append(compiler_flag_prefix)
+    compiler_flags.append(flag)
+
+  add_flag('-fPIC')
+    
   # compiler_flags.extend(['-Wall', '-Wno-unused-variable'])
   
   if config.debug:
+    # nvcc understands debug mode flags
     compiler_flags.extend(['-g', '-O0'])
   else:
-    compiler_flags.extend(get_opt_flags())
+    for flag in get_opt_flags():
+      add_flag(flag)
 
   if not config.pure_c: 
-    compiler_flags.extend(['-fpermissive'])
+    add_flag('-fpermissive')
 
+  for flag in extra_flags:
+    add_flag(flag)
+    
   return compiler_flags   
 
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
 python_version = distutils.sysconfig.get_python_version()
 
-def get_linker_flags(compiler, shared_flags = None):
-  if shared_flags is None:
-    linker_flags = ['-shared']
-  else:
-    linker_flags = [shared_flag for shared_flag in shared_flags]
-  linker_flags.append('-lm')
+def get_linker_flags(compiler, extra_flags = [], linker_flag_prefix = None):
+  # for whatever reason nvcc is OK with the -shared linker flag
+  # but not with the -fPIC compiler flag 
+  linker_flags = ['-shared']
+  
+  def add_flag(flag):
+    if linker_flag_prefix is not None:
+      linker_flags.append(linker_flag_prefix)
+    linker_flags.append(flag)
+    
+  add_flag('-lm')
   if windows:
     # crazy stupid hack for exposing Python symbols
     # even though we're compiling a shared library, why does Windows care?
@@ -115,16 +129,16 @@ def get_linker_flags(compiler, shared_flags = None):
     inc_dir = distutils.sysconfig.get_python_inc()
     base = os.path.split(inc_dir)[0]
     lib_dir = base + "\libs"
-    linker_flags.append('-L' + lib_dir)
+    add_flag('-L' + lib_dir)
     libname = 'python' + distutils.sysconfig.get_python_version().replace('.', '')
-    linker_flags.append('-l' + libname)
+    add_flag('-l' + libname)
     
   if mac_os:
-    linker_flags.append("-Wl,-undefined")
-    linker_flags.append("-Wl,dynamic_lookup")
+    add_flag("-Wl,-undefined")
+    add_flag("-Wl,dynamic_lookup")
     
-  #if use_openmp(compiler):
-  #  linker_flags.append('-fopenmp')             
+  for flag in extra_flags:
+    add_flag(flag)
   return linker_flags 
 
 
@@ -136,7 +150,8 @@ def create_source_file(src,
                          declarations = [],
                          extra_function_sources = [], 
                          extra_headers = [], 
-                         print_source = None):
+                         print_source = None, 
+                         src_extension = None):
   
   if print_source is None: 
     print_source = config.print_module_source
@@ -145,8 +160,11 @@ def create_source_file(src,
     prefix = "parakeet_"
   else:
     prefix = "parakeet_%s_" % fn_name
+  if src_extension is None:
+    src_extension = get_source_extension()
+      
   if src_filename is None:
-    src_file = NamedTemporaryFile(suffix = get_source_extension(),  
+    src_file = NamedTemporaryFile(suffix = src_extension,  
                                   prefix =  prefix, 
                                   delete = False,
                                   mode = 'w')
@@ -171,11 +189,18 @@ def create_source_file(src,
   for other_fn_src in extra_function_sources:
     src_file.write(other_fn_src)
     src_file.write("\n")
-      
+  
   src_file.write(src)
   src_file.close()
-  if print_source: 
-    print subprocess.check_output(['cat', src_filename])
+      
+  if print_source:
+    with open(src_filename, 'r') as src_file_readonly:
+      for i, line in enumerate(src_file_readonly.read().splitlines()):
+        print i+1, " ", line  
+    #print subprocess.check_output(['cat', '-n',  src_filename])
+  
+  
+  
   return src_file 
 
 def run_cmd(cmd, env = None, label = ""):
@@ -205,6 +230,7 @@ def compile_object(src,
                    fn_name = None,  
                    fn_signature = None,
                    src_filename = None, 
+                   src_extension = None, 
                    declarations = [],
                    extra_function_sources = [], 
                    extra_headers = python_headers, 
@@ -213,12 +239,16 @@ def compile_object(src,
                    print_source = None, 
                    print_commands = None, 
                    compiler = None, 
-                   compiler_shared_flags = None, 
-                   linker_shared_flags = None):
+                   compiler_flag_prefix  = None):
+  
   if print_source is None: 
     print_source = config.print_module_source
   if print_commands is None: 
     print_commands = config.print_commands
+  if src_extension is None:
+    src_extension = get_source_extension()
+  if compiler is None:
+    compiler = get_compiler()
   
   src_file = create_source_file(src, 
                                 fn_name = fn_name, 
@@ -226,12 +256,11 @@ def compile_object(src,
                                 declarations = declarations,
                                 extra_function_sources = extra_function_sources,  
                                 extra_headers = extra_headers,
-                                print_source = print_source)
+                                print_source = print_source, 
+                                src_extension = src_extension)
   src_filename = src_file.name
-  object_name = src_filename.replace(get_source_extension(), object_extension)
-  if compiler is None:
-    compiler = get_compiler()
-  compiler_flags = get_compiler_flags(compiler, compiler_shared_flags) + extra_compile_flags
+  object_name = src_filename.replace(src_extension, object_extension)
+  compiler_flags = get_compiler_flags(compiler, extra_compile_flags, compiler_flag_prefix) 
   compiler_cmd = [compiler] + compiler_flags + ['-c', src_filename, '-o', object_name]
   run_cmd(compiler_cmd, label = "Compile source")
   return CompiledObject(src = src, 
@@ -245,6 +274,7 @@ def compile_module(src,
                      fn_name,
                      fn_signature = None,  
                      src_filename = None,
+                     src_extension = None, 
                      declarations = [],
                      extra_function_sources = [], 
                      extra_headers = [],  
@@ -254,8 +284,8 @@ def compile_module(src,
                      print_source = None, 
                      print_commands = None, 
                      compiler = None, 
-                     compiler_shared_flags = None, 
-                     linker_shared_flags = None):
+                     compiler_flag_prefix = None, 
+                     linker_flag_prefix = None):
   
   if print_source is None:
     print_source = config.print_module_source
@@ -280,9 +310,12 @@ def compile_module(src,
     """ % locals()  
   
 
+  if src_extension is None: src_extension = get_source_extension()
+  if compiler is None: compiler = get_compiler()
   compiled_object = compile_object(src, 
                                    fn_name,
-                                   src_filename  = src_filename, 
+                                   src_filename  = src_filename,
+                                   src_extension = src_extension,  
                                    declarations = declarations,
                                    extra_function_sources = extra_function_sources, 
                                    extra_headers = python_headers + extra_headers,  
@@ -291,15 +324,12 @@ def compile_module(src,
                                    print_source = print_source, 
                                    print_commands = print_commands, 
                                    compiler = compiler, 
-                                   compiler_shared_flags = compiler_shared_flags)
+                                   compiler_flag_prefix = compiler_flag_prefix)
   
   src_filename = compiled_object.src_filename
   object_name = compiled_object.object_filename
-  
-  shared_name = src_filename.replace(get_source_extension(), shared_extension)
-  if compiler is None:
-    compiler = get_compiler()
-  linker_flags = get_linker_flags(compiler, linker_shared_flags) + extra_link_flags
+  shared_name = src_filename.replace(src_extension, shared_extension)
+  linker_flags = get_linker_flags(compiler, extra_link_flags, linker_flag_prefix) 
   linker_cmd = [compiler, object_name] + linker_flags + list(extra_objects) + ['-o', shared_name]
 
   env = os.environ.copy()
