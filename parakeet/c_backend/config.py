@@ -17,6 +17,7 @@ check_pyobj_types = False
 #########################
 print_input_ir = False
 print_module_source = True
+print_line_numbers = False 
 print_function_source = False
 
 print_commands = True

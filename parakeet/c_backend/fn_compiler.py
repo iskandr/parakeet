@@ -329,6 +329,7 @@ class FnCompiler(BaseCompiler):
         stride = "%s.strides[%d]" % (arr, i)
         self.append("%s += %s * %s;" % (offset, idx, stride))
       raw_ptr = "%s.data.raw_ptr" % arr 
+
     return "%s[%s]" % (raw_ptr, offset)
   
   def visit_Call(self, expr):

@@ -196,7 +196,10 @@ def create_source_file(src,
   if print_source:
     with open(src_filename, 'r') as src_file_readonly:
       for i, line in enumerate(src_file_readonly.read().splitlines()):
-        print i+1, " ", line  
+        if config.print_line_numbers:
+          print i+1, " ", line
+        else:
+          print line   
     #print subprocess.check_output(['cat', '-n',  src_filename])
   
   
