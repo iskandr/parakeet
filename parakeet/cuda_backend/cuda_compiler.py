@@ -24,7 +24,7 @@ class CudaCompiler(MulticoreCompiler):
     else:
       self.gpu_depth = 0
     MulticoreCompiler.__init__(self, 
-                               compiler_cmd = 'nvcc', 
+                               compiler_cmd = ['nvcc', '-arch=sm_13'], 
                                extra_link_flags = ['-lcudart'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',
@@ -44,18 +44,15 @@ class CudaCompiler(MulticoreCompiler):
     return gpu_args 
   
   def launch_kernel(self, bounds, gpu_closure_args, kernel_name):
-    dims_with_threads = tuple(bounds) + ("1",)
-    dims_str = ", ".join(dims_with_threads)
+    assert len(bounds) <= 3
+    dims = tuple(bounds) + ("1",) * (3-len(bounds))
+    dims_str = "dim3(%s)" % ", ".join(dims)
     self.comment("kernel launch")
     kernel_args = tuple(gpu_closure_args) + tuple(bounds)
     kernel_args_str = ", ".join(kernel_args)
-    for i, bound in enumerate(bounds):
-      self.printf("Kernel dim %d = %%d" % i, bound)
-      
-    launch = "%s<<<%s>>>(%s);" % (kernel_name, dims_str, kernel_args_str)
-    self.append(launch)
-    self.check_gpu_error("kernel launch")
-    
+
+    self.append("%s<<<%s, 1>>>(%s);" % (kernel_name, dims_str, kernel_args_str))
+  
     self.comment("After launching kernel, synchronize to make sure the computation is done")
     self.synchronize("Kernel launch")
     
@@ -75,6 +72,7 @@ class CudaCompiler(MulticoreCompiler):
     closure_arg_types = get_types(closure_args)
     
     gpu_closure_args = self.build_kernel_args(host_closure_args, closure_arg_types)
+
     self.launch_kernel(bounds, gpu_closure_args, kernel_name)
     
     self.comment("copy arguments back from the GPU to the host")
@@ -213,12 +211,6 @@ class CudaCompiler(MulticoreCompiler):
     self.append("cudaError %s = cudaDeviceSynchronize();" % error_code_var)
     self.check_gpu_error(context, error_code_var)
     
-  def memcpy_to_host(self, dst, src, nbytes):
-    self.printf("Copy from %s to %s %%d bytes" % (src, dst), nbytes)
-    self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyDeviceToHost);" % \
-                 ( dst, src,nbytes))
-    
-  
   
   def to_gpu(self, c_expr, t):
     if self.pass_by_value(t):
@@ -238,15 +230,10 @@ class CudaCompiler(MulticoreCompiler):
       # copy the contents of the host array to the GPU
       self.append("cudaMemcpyAsync(%s, %s, %s, cudaMemcpyHostToDevice);" % (dst, src, nbytes))
       
+      # self.check_gpu_error("Memcpy of %s : %s (%s -> %s)" % (c_expr, t, src, dst))
       # make an identical array descriptor but change its data pointer to the GPU location
       gpu_descriptor = self.fresh_var(self.to_ctype(t), "gpu_array", c_expr)
-      self.printf("GPU descriptor size = %d", "%s.size" % gpu_descriptor)
-      self.printf("GPU descriptor shape[0] = %d", "%s.shape[0]" % gpu_descriptor)
-      self.printf("GPU descriptor strides[0] = %d", "%s.strides[0]" % gpu_descriptor)
-      self.printf("GPU descriptor original ptr = %p", "%s.data.raw_ptr" % gpu_descriptor)
-      self.printf("GPU descriptor offset = %d", "%s.offset" % gpu_descriptor)
       self.append("%s.data.raw_ptr = %s;" % (gpu_descriptor, dst))
-      self.printf("GPU descriptor new ptr = %p", "%s.data.raw_ptr" % gpu_descriptor)
       return gpu_descriptor
     
     elif isinstance(t, (ClosureT, TupleT)):
@@ -271,7 +258,6 @@ class CudaCompiler(MulticoreCompiler):
       src = "%s.data.raw_ptr"  % gpu_value 
       nelts = "%s.size" % gpu_value
       nbytes = "%s * %d" % (nelts, t.elt_type.dtype.itemsize)  
-      self.printf("Copy from %s (%%p) to %s (%%p) %%d bytes" % (src, dst), src, dst, nbytes)
       self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyDeviceToHost);" % (dst, src, nbytes) )
       self.append("cudaFree(%s);" % src) 
 

@@ -16,11 +16,11 @@ check_pyobj_types = False
 #  Verbose Printing     #
 #########################
 print_input_ir = False
-print_module_source = True
+print_module_source = False
 print_line_numbers = False 
 print_function_source = False
 
-print_commands = True
+print_commands = False
 print_command_elapsed_time = False
 
 

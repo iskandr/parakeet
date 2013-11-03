@@ -15,7 +15,7 @@ def compare_perf(fn, args, numba= True, cpython = True, extra = {}):
   numba_result = None 
   cpython_result = None 
 
-  for backend in ('c', 'openmp'):
+  for backend in ('c', 'openmp', 'cuda'):
     with timer('Parakeet (backend = %s) #1 -- %s' % (backend, name)):
       parakeet_result = parakeet_fn(*args, _backend = backend)
 
