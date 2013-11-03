@@ -482,7 +482,7 @@ class FnCompiler(BaseCompiler):
       assert isinstance(expr.type, (FnT, ClosureT)), \
         "Expected function or closure, got %s : %s" % (expr, expr.type)
       fn = expr.type.fn
-    
+
     compiler = self.__class__(module_entry = False, **compiler_kwargs)
     compiled = compiler.compile_flat_source(fn, attributes = attributes, inline = inline)
     

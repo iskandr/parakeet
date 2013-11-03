@@ -24,9 +24,10 @@ class CudaCompiler(MulticoreCompiler):
       self.gpu_depth = 0
     MulticoreCompiler.__init__(self, 
                                compiler_cmd = 'nvcc',
+                               extra_linker_flags = ['-lcudart'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',
-                               linker_flag_prefix = '-Xlinker',  
+                               linker_flag_prefix = '-Xlinker', 
                                *args, **kwargs)
     
   @property 
@@ -43,31 +44,31 @@ class CudaCompiler(MulticoreCompiler):
     return self.gpu_depth > 0
   
   def get_fn_name(self, fn_expr, attributes = [], inline = True):
+    print "getting fn name for", fn_expr, self.depth, self.gpu_depth 
     if self.in_gpu():
       attributes = ["__device__"] + attributes 
-      
     kwargs = {'depth':self.depth, 'gpu_depth':self.gpu_depth}
     return PyModuleCompiler.get_fn_name(self, fn_expr, 
                                         compiler_kwargs = kwargs,
                                         attributes = attributes, 
                                         inline = inline)
     
-  def get_device_fn_name(self, fn_expr):
-    return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__device__"])
+  #def get_device_fn_name(self, fn_expr):
+  #  return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__device__"])
   
-  def get_global_fn_name(self, fn_expr):
-    return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__global__"], inline = False)
+  #def get_global_fn_name(self, fn_expr):
+  #  return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__global__"], inline = False)
   
   
   def enter_kernel(self):
     """
     Keep a stack of adverb contexts so we know when we're global vs. block vs. thread
     """
-    MulticoreCompiler.enter_parfor(self)
+    self.depth += 1
     self.gpu_depth += 1  
   
   def exit_kernel(self):
-    MulticoreCompiler.exit_parfor(self)
+    self.depth -= 1
     self.gpu_depth -= 1 
   
   
@@ -123,7 +124,8 @@ class CudaCompiler(MulticoreCompiler):
     
     
     self.enter_kernel()
-    c_kernel_name = self.get_global_fn_name(parakeet_kernel)
+
+    c_kernel_name = self.get_fn_name(parakeet_kernel, attributes = ["__global__"])
     self.exit_kernel()
     
     self._kernel_cache[key] = c_kernel_name

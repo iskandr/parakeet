@@ -5,7 +5,7 @@ from ..transforms.pipeline import (flatten, high_level_optimizations, after_inde
 from ..transforms.stride_specialization import specialize
 
 
-from compiler import CudaCompiler 
+from cuda_compiler import CudaCompiler 
 
 def run(fn, args):
   args = prepare_args(args, fn.input_types)

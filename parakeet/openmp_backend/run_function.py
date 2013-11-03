@@ -4,7 +4,7 @@ from ..c_backend.prepare_args import prepare_args
 from ..transforms.pipeline import after_indexify, final_loop_optimizations, flatten  
 from ..transforms.stride_specialization import specialize
 
-from compiler import MulticoreCompiler 
+from multicore_compiler import MulticoreCompiler 
 
 def run(fn, args):
   args = prepare_args(args, fn.input_types)

@@ -6,13 +6,13 @@ from reserved_names import is_reserved
 
 class BaseCompiler(object):
   
-  def __init__(self):
+  def __init__(self, extra_link_flags = None, extra_compile_flags = None):
     self.blocks = []
     self.name_versions = {}
     self.name_mappings = {}
-    self.extra_compile_flags = []
-    self.extra_link_flags = []
-
+    self.extra_link_flags = extra_link_flags if extra_link_flags else []
+    self.extra_compile_flags = extra_compile_flags if extra_compile_flags else []
+    
   def add_compile_flag(self, flag):
     if flag not in self.extra_compile_flags:
       self.extra_compile_flags.append(flag)
