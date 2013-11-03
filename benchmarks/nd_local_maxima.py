@@ -43,13 +43,23 @@ if __name__  == '__main__':
   x = np.random.randn(*shape)
   wsize = (3,3,3,3)
   with timer("Parakeet C (first run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'c')
+    parakeet_result_c  = parakeet_local_maxima(x, wsize, _backend = 'c')
   with timer("Parakeet C (second run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'c')
+    parakeet_result_c  = parakeet_local_maxima(x, wsize, _backend = 'c')
+  
   with timer("Parakeet OpenMP (first run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
+    parakeet_result_omp  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
+  assert np.allclose(parakeet_result_c, parakeet_result_omp), \
+    "OpenMP backend differs from C: %s vs. %s" % (np.sum(parakeet_result_c), np.sum(parakeet_result_omp))
   with timer("Parakeet OpenMP (second run)"):
-    parakeet_result  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
+    parakeet_result_omp  = parakeet_local_maxima(x, wsize, _backend = 'openmp')
+
+  with timer("Parakeet CUDA (first run)"):
+    parakeet_result_cuda  = parakeet_local_maxima(x, wsize, _backend = 'cuda')
+  assert np.allclose(parakeet_result_c, parakeet_result_cuda), \
+    "CUDA backend differs from C: %s vs %s" % (np.sum(parakeet_result_c), np.sum(parakeet_result_cuda))
+  with timer("Parakeet CUDA (second run)"):
+    parakeet_result_cuda  = parakeet_local_maxima(x, wsize, _backend = 'cuda')
 
   #with timer("Numba (first run)"):
   #  numba_result  = numba_local_maxima(x, wsize, wrap)

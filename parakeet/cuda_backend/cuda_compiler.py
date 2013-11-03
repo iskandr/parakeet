@@ -82,7 +82,7 @@ class CudaCompiler(MulticoreCompiler):
     bounds = self.tuple_to_var_list(stmt.bounds)
 
     n_indices = len(bounds)
-    if n_indices > 3 or not self.in_host():
+    if n_indices > 5 or not self.in_host():
       return MulticoreCompiler.visit_ParFor(self, stmt)
 
     
