@@ -44,7 +44,7 @@ class CudaCompiler(MulticoreCompiler):
     return gpu_args 
   
   def launch_kernel(self, bounds, gpu_closure_args, kernel_name):
-    dims_with_threads = tuple(bounds) + ("256",)
+    dims_with_threads = tuple(bounds) + ("1",)
     dims_str = ", ".join(dims_with_threads)
     self.comment("kernel launch")
     kernel_args = tuple(gpu_closure_args) + tuple(bounds)
@@ -97,21 +97,15 @@ class CudaCompiler(MulticoreCompiler):
     return self.gpu_depth > 0
   
   def get_fn_name(self, fn_expr, attributes = [], inline = True):
-
-    if self.in_gpu():
-      attributes = ["__device__"] + attributes 
+    if self.in_gpu() and not attributes:
+      attributes = ["__device__"] 
     kwargs = {'depth':self.depth, 'gpu_depth':self.gpu_depth}
     return PyModuleCompiler.get_fn_name(self, fn_expr, 
                                         compiler_kwargs = kwargs,
                                         attributes = attributes, 
                                         inline = inline)
     
-  #def get_device_fn_name(self, fn_expr):
-  #  return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__device__"])
-  
-  #def get_global_fn_name(self, fn_expr):
-  #  return MulticoreCompiler.get_fn_name(self, fn_expr, attributes = ["__global__"], inline = False)
-  
+
   
   def enter_kernel(self):
     """
@@ -170,6 +164,7 @@ class CudaCompiler(MulticoreCompiler):
     bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
     
     indices = tuple(blockIdx)[:n_indices]
+    #indices = tuple(threadIdx)[:n_indices]
     indices = [builder.cast(idx, t) for idx, t in zip(indices,index_types)]
     if index_as_tuple:
       index_args = (builder.tuple(indices),)
@@ -182,7 +177,9 @@ class CudaCompiler(MulticoreCompiler):
     
     self.enter_kernel()
 
-    c_kernel_name = self.get_fn_name(parakeet_kernel, attributes = ["__global__"])
+    c_kernel_name = self.get_fn_name(parakeet_kernel, 
+                                     attributes = ["__global__"], 
+                                     inline = False)
     self.exit_kernel()
     
     self._kernel_cache[key] = c_kernel_name
@@ -198,9 +195,6 @@ class CudaCompiler(MulticoreCompiler):
       return all(self.pass_by_value(elt_t) for elt_t in t.arg_types)
     return False 
   
-  def memcpy_to_device(self, device_ptr, host_ptr, nbytes):
-    self.append("cudaMemcpyAsync(%s, %s, %s, cudaMemcpyHostToDevice);" % \
-                 (device_ptr, host_ptr, nbytes))
   
   def check_gpu_error(self, context = None, error_code_var = None):
     if error_code_var is None:
@@ -242,7 +236,7 @@ class CudaCompiler(MulticoreCompiler):
       self.check_gpu_error("cudaMalloc for %s : %s" % (c_expr, t))
       
       # copy the contents of the host array to the GPU
-      self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyHostToDevice);" % (dst, src, nbytes))
+      self.append("cudaMemcpyAsync(%s, %s, %s, cudaMemcpyHostToDevice);" % (dst, src, nbytes))
       
       # make an identical array descriptor but change its data pointer to the GPU location
       gpu_descriptor = self.fresh_var(self.to_ctype(t), "gpu_array", c_expr)
@@ -254,6 +248,7 @@ class CudaCompiler(MulticoreCompiler):
       self.append("%s.data.raw_ptr = %s;" % (gpu_descriptor, dst))
       self.printf("GPU descriptor new ptr = %p", "%s.data.raw_ptr" % gpu_descriptor)
       return gpu_descriptor
+    
     elif isinstance(t, (ClosureT, TupleT)):
       # copy contents of the host tuple into another struct
       gpu_tuple = self.fresh_var(self.to_ctype(t), "gpu_tuple", c_expr)
@@ -279,6 +274,7 @@ class CudaCompiler(MulticoreCompiler):
       self.printf("Copy from %s (%%p) to %s (%%p) %%d bytes" % (src, dst), src, dst, nbytes)
       self.append("cudaMemcpy(%s, %s, %s, cudaMemcpyDeviceToHost);" % (dst, src, nbytes) )
       self.append("cudaFree(%s);" % src) 
+
     elif isinstance(t, (ClosureT, TupleT)):
       for i, elt_t in enumerate(t.elt_types):
         host_elt = "%s.elt%d" % (host_value, i)
