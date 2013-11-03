@@ -2,7 +2,7 @@ import numpy as np
 import parakeet 
 import parakeet.c_backend
 
-
+parakeet.config.backend = 'cuda'
 
 def wrap(pos, offset, bound):
     return ( pos + offset ) % bound
