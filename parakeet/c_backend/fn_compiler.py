@@ -29,8 +29,9 @@ class FnCompiler(BaseCompiler):
   
   def __init__(self,  
                module_entry = False, 
-               struct_type_cache = None):
-    BaseCompiler.__init__(self)
+               struct_type_cache = None, 
+               **kwargs):
+    BaseCompiler.__init__(self, **kwargs)
     
     
     self.declarations = []

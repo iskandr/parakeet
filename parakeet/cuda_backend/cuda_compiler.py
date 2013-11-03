@@ -24,7 +24,7 @@ class CudaCompiler(MulticoreCompiler):
       self.gpu_depth = 0
     MulticoreCompiler.__init__(self, 
                                compiler_cmd = 'nvcc',
-                               extra_linker_flags = ['-lcudart'], 
+                               extra_link_flags = ['-lcudart'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',
                                linker_flag_prefix = '-Xlinker', 
