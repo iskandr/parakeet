@@ -39,7 +39,7 @@ def parakeet_local_maxima(data, wsize, mode=wrap):
 
 if __name__  == '__main__':
   from timer import timer 
-  shape = (30,30,30,12)
+  shape = (30,30,20,12)
   x = np.random.randn(*shape)
   wsize = (3,3,3,3)
   with timer("Parakeet C (first run)"):

@@ -678,7 +678,12 @@ class PyModuleCompiler(FnCompiler):
     self.append("\n")
     return self.pop()
   
+  
   def enter_module_body(self):
+    """
+    Some derived compiler classes might want to use this hook
+    to generate special code when entering the function body of the module entry
+    """
     pass 
   
   def exit_module_body(self):

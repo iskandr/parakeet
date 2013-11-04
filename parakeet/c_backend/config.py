@@ -20,7 +20,7 @@ print_module_source = True
 print_line_numbers = False 
 print_function_source = False
 
-print_commands = True
+print_commands = False
 print_command_elapsed_time = False
 
 

@@ -158,7 +158,8 @@ class LoopBuilder(CoreBuilder):
                      upper_bounds, 
                      loop_body, 
                      lower_bounds = None, 
-                     step_sizes = None):
+                     step_sizes = None, 
+                     index_vars_as_list = False):
     upper_bounds = self._to_list(upper_bounds)
     
     n_loops = len(upper_bounds)
@@ -186,7 +187,9 @@ class LoopBuilder(CoreBuilder):
           else:
             result = self.call(loop_body, [self.tuple(index_vars)])
         else:
-          if n_indices > 1:
+          if index_vars_as_list:
+            idx_tuple = list(index_vars)
+          elif n_indices > 1:
             idx_tuple = self.tuple(index_vars)
           else:
             idx_tuple = index_vars[0]

@@ -35,5 +35,16 @@ threadIdx_y = SourceExpr("threadIdx.y", type=Int32)
 threadIdx_z = SourceExpr("threadIdx.z", type=Int32)
 threadIdx = dim3(threadIdx_x, threadIdx_y, threadIdx_z)
 
+blockDim_x = SourceExpr("blockDim.x", type = Int32)
+blockDim_y = SourceExpr("blockDim.y", type = Int32)
+blockDim_z = SourceExpr("blockDim.z", type = Int32)
+blockDim = dim3(blockDim_x, blockDim_y, blockDim_z)
+
+gridDim_x = SourceExpr("gridDim.x", type = Int32)
+gridDim_y = SourceExpr("gridDim.y", type = Int32)
+gridDim_z = SourceExpr("gridDim.z", type = Int32)
+gridDim = dim3(gridDim_x, gridDim_y, gridDim_z)
+
 warpSize = SourceExpr("wrapSize", type=Int32)
 __syncthreads = SourceStmt("__syncthreads;")
+

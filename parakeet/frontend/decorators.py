@@ -9,7 +9,9 @@ from run_function import run_python_fn, run_untyped_fn
 class jit(object):
   def __init__(self, f):
     self.f = f
-    self.fn = f 
+    self.fn = f
+    #import ast_conversion 
+    #self.untyped = ast_conversion.translate_function_value(f)
 
   def __call__(self, *args, **kwargs):
     if '_backend' in kwargs:
@@ -23,6 +25,7 @@ class jit(object):
 class macro(object):
   def __init__(self, f, static_names = set([]), call_from_python = None):
     self.f = f
+    self.fn = f 
     self.argcount = self.f.func_code.co_argcount 
     self.varnames = self.f.func_code.co_varnames 
     self.n_args = self.f.func_code.co_argcount

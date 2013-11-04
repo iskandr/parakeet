@@ -1,3 +1,4 @@
+import numpy as np 
 import pycuda 
 
 from .. import names
@@ -6,13 +7,14 @@ from ..builder import build_fn
 from ..ndtypes import TupleT,  Int32, FnT, ScalarT, SliceT, NoneT, ArrayT, ClosureT
 from ..c_backend import PyModuleCompiler
 from ..openmp_backend import MulticoreCompiler
-from ..syntax import PrintString 
-from ..syntax.helpers import get_types, get_fn, get_closure_args
+from ..syntax import PrintString, SourceExpr
+from ..syntax.helpers import get_types, get_fn, get_closure_args, const_int, zero_i32, one_i32
 
 import device_info 
-from cuda_syntax import threadIdx, blockIdx
+from cuda_syntax import threadIdx, blockIdx, blockDim 
 
 
+THREADS_PER_DIM = 16 
 
 class CudaCompiler(MulticoreCompiler):
   
@@ -29,6 +31,7 @@ class CudaCompiler(MulticoreCompiler):
     self.device = device_info.best_cuda_device()
     assert self.device, "No GPU found"
     
+    self.use_constant_memory_for_args = True
     MulticoreCompiler.__init__(self, 
                                compiler_cmd = ['nvcc', '-arch=sm_13'], 
                                extra_link_flags = ['-lcudart'], 
@@ -44,6 +47,118 @@ class CudaCompiler(MulticoreCompiler):
   def enter_module_body(self):
     self.append('cudaSetDevice(%d);' % device_info.device_id(self.device))
   
+  
+  def build_kernel(self, clos, bounds):
+    n_indices = len(bounds)
+    fn = get_fn(clos)
+    outer_closure_exprs = get_closure_args(clos)
+    closure_arg_types = get_types(outer_closure_exprs)
+    host_closure_args = self.visit_expr_list(outer_closure_exprs)
+    gpu_closure_args = self.build_kernel_args(host_closure_args, closure_arg_types)
+
+    input_types = fn.input_types 
+    
+    #nested_fn_name, outer_closure_args, input_types = \
+    # self.get_fn_info(fn, attributes = ["__device__"])
+    #key = fn.cache_key, self.cache_key
+    #if key in self._kernel_cache:
+    #  kernel_name = self._kernel_cache[key]
+    #  return kernel_name, None #gpu_closure_args, host_closure_args, closure_arg_types
+    
+    kernel_name = names.fresh("kernel_" + fn.name)
+    
+    if isinstance(input_types[-1], TupleT):
+      index_types = input_types[-1].elt_types   
+      index_as_tuple = True
+      # if function takes a tuple of 
+      closure_arg_types = input_types[:-1]
+    else:
+      index_types = input_types[-n_indices:]
+      index_as_tuple = False
+      closure_arg_types = input_types[:-n_indices]
+      
+    n_closure_args = len(closure_arg_types)
+    assert len(outer_closure_exprs) == n_closure_args, \
+      "Mismatch between closure formal args %s and given %s" % (", ".join(closure_arg_types),
+                                                                ", ".join(outer_closure_exprs))
+    bound_types = (Int32,) * n_indices
+    
+    if self.use_constant_memory_for_args:
+      outer_input_types = bound_types 
+    else:
+      outer_input_types = tuple(closure_arg_types) + bound_types
+      
+    
+        
+    
+    parakeet_kernel, builder, input_vars  = build_fn(outer_input_types, name = kernel_name)
+    
+    if self.use_constant_memory_for_args:
+      closure_vars = []
+      for i, t in enumerate(closure_arg_types):
+        raw_name = "gpu_arg_" + fn.arg_names[i]
+        const_name = self.fresh_name(raw_name)
+        typename = self.to_ctype(t)
+        self.add_decl("__constant__ %s %s" % (typename, const_name))
+        closure_vars.append(SourceExpr(const_name, type=t))
+        gpu_arg = gpu_closure_args[i]
+        self.append("cudaMemcpyToSymbol(%s, &%s, sizeof(%s));" % (const_name, gpu_arg, typename))
+        
+      
+      closure_vars = tuple(closure_vars)
+      
+      # need to do a cudaMemcpyToSymbol for each gpu arg   
+      bounds_vars = input_vars
+  
+    else:
+      # TODO: use these to compute indices when n_indices > 3 or 
+      # number of threads per block > 1  
+      closure_vars = input_vars[:n_closure_args]
+      bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
+
+
+    """
+       upper_bounds, 
+       loop_body, 
+       lower_bounds = None, 
+       step_sizes = None
+    """
+    
+    
+    start_idx = builder.add(threadIdx.x, builder.mul(blockDim.x, blockIdx.x))
+    start_indices = [start_idx]
+    if n_indices == 1:
+      step_sizes = [const_int(THREADS_PER_DIM**2, Int32)]
+    if n_indices > 1:
+      start_idx_y = builder.add(threadIdx.y, builder.mul(blockDim.y, blockIdx.y))
+      start_indices.append(start_idx_y)
+      step_sizes = [const_int(THREADS_PER_DIM, Int32), const_int(THREADS_PER_DIM, Int32)]
+      for i in xrange(2, n_indices):
+        start_indices.append(zero_i32)
+        step_sizes.append(one_i32)
+        
+    def loop_body(index_vars):
+      if not isinstance(index_vars, (list,tuple)):
+        pass
+      indices = [builder.cast(idx, t) for idx, t in zip(index_vars,index_types)]
+      if index_as_tuple:
+        index_args = (builder.tuple(indices),)
+      else:
+        index_args = indices
+      inner_args = tuple(closure_vars) + tuple(index_args)
+      builder.call(fn, inner_args)
+      
+    builder.nested_loops(bounds_vars, loop_body, start_indices, step_sizes, index_vars_as_list = True)
+    
+    self.enter_kernel()
+    c_kernel_name = self.get_fn_name(parakeet_kernel, 
+                                     attributes = ["__global__"], 
+                                     inline = False)
+    self.exit_kernel()
+    
+    # self._kernel_cache[key] = c_kernel_name
+    return c_kernel_name, gpu_closure_args, host_closure_args, closure_arg_types
+  
   def build_kernel_args(self, host_args, arg_types):
     self.comment("copy closure arguments to the GPU")
     gpu_args = \
@@ -52,34 +167,43 @@ class CudaCompiler(MulticoreCompiler):
     self.synchronize("Copying from GPU to Host")
     return gpu_args 
   
-  def launch_kernel(self, bounds, gpu_closure_args, kernel_name):
+  def launch_kernel(self, bounds, params, kernel_name):
     n_bounds = len(bounds)
-    assert len(bounds) <= 5
     
-    grid_dims = [bounds[0]]
-    if n_bounds > 1:
-      block_dims = [bounds[1]]
+    sm_count = device_info.num_multiprocessors(self.device)
+    n_blocks = sm_count * 8
+    
+    if n_bounds == 1:
+      grid_dims = [n_blocks, 1, 1]
+      block_dims = [THREADS_PER_DIM**2, 1, 1]
     else:
-      block_dims = ["1"]
-    
-    if n_bounds > 2:
-      grid_dims.append(bounds[2])
-    else:
-      grid_dims.append("1")
-    grid_dims.append("1")
-    
-    if n_bounds > 3: block_dims.append(bounds[3])
-    else: block_dims.append("1")
-    if n_bounds > 4: block_dims.append([4])
-    else: block_dims.append("1")
-      
-    
-    grid_dims_str = "dim3(%s)" % ", ".join(grid_dims)
-    block_dims_str = "dim3(%s)" % ", ".join(block_dims)
-    self.comment("kernel launch")
-    kernel_args = tuple(gpu_closure_args) + tuple(bounds)
-    kernel_args_str = ", ".join(kernel_args)
+      blocks_per_axis = int(np.ceil(np.sqrt(n_blocks)))
+      grid_dims = [blocks_per_axis, blocks_per_axis, 1]
+      block_dims = [THREADS_PER_DIM,THREADS_PER_DIM,1]
 
+    #assert len(bounds) <= 5
+    #grid_dims = [bounds[0]]
+    #if n_bounds > 1:
+    #  block_dims = [bounds[1]]
+    #else:
+    #  block_dims = ["1"]
+    
+    #if n_bounds > 2:
+    #  grid_dims.append(bounds[2])
+    #else:
+    #  grid_dims.append("1")
+    #grid_dims.append("1")
+    
+    #if n_bounds > 3: block_dims.append(bounds[3])
+    #else: block_dims.append("1")
+    #if n_bounds > 4: block_dims.append([4])
+    #else: block_dims.append("1")
+    
+    grid_dims_str = "dim3(%s)" % ", ".join( str(d) for d in grid_dims)
+    block_dims_str = "dim3(%s)" % ", ".join( str(d) for d in block_dims)
+    self.comment("kernel launch")
+    
+    kernel_args_str = ", ".join(params)
     self.append("%s<<<%s, %s>>>(%s);" % (kernel_name, grid_dims_str, block_dims_str, kernel_args_str))
   
     self.comment("After launching kernel, synchronize to make sure the computation is done")
@@ -95,24 +219,27 @@ class CudaCompiler(MulticoreCompiler):
       return MulticoreCompiler.visit_ParFor(self, stmt)
 
     
-    kernel_name, closure_args = self.build_kernel(stmt.fn, bounds)
+    kernel_name, gpu_closure_args, host_closure_args, closure_arg_types  = \
+      self.build_kernel(stmt.fn, bounds)
     
-    host_closure_args = self.visit_expr_list(closure_args)
-    closure_arg_types = get_types(closure_args)
-    
-    gpu_closure_args = self.build_kernel_args(host_closure_args, closure_arg_types)
-
-    self.launch_kernel(bounds, gpu_closure_args, kernel_name)
+    if self.use_constant_memory_for_args:
+      params = bounds 
+    else:
+      params = tuple(gpu_closure_args) + tuple(bounds)
+      
+    self.launch_kernel(bounds, params, kernel_name)
     
     self.comment("copy arguments back from the GPU to the host")
     self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types)
     return "/* done with ParFor */"
   
+  """
   def visit_NumCores(self, expr):
     # by default we're running sequentially 
     sm_count = None # TODO
     active_thread_blocks = 6 
     return "%d" % (sm_count * active_thread_blocks)  
+  """
   
   def in_host(self):
     return self.gpu_depth == 0
@@ -150,72 +277,6 @@ class CudaCompiler(MulticoreCompiler):
     return self.depth > 1
   
   
-  def build_kernel(self, clos, bounds):
-    n_indices = len(bounds)
-    fn = get_fn(clos)
-    outer_closure_args = get_closure_args(clos)
-    input_types = fn.input_types 
-    
-    #nested_fn_name, outer_closure_args, input_types = \
-    # self.get_fn_info(fn, attributes = ["__device__"])
-    key = fn.cache_key, self.cache_key
-    if key in self._kernel_cache:
-      kernel_name = self._kernel_cache[key]
-      return kernel_name, outer_closure_args
-    
-    if isinstance(input_types[-1], TupleT):
-      index_types = input_types[-1].elt_types   
-      index_as_tuple = True
-      # if function takes a tuple of 
-      closure_arg_types = input_types[:-1]
-    else:
-      index_types = input_types[-n_indices:]
-      index_as_tuple = False
-      closure_arg_types = input_types[:-n_indices]
-      
-    n_closure_args = len(closure_arg_types)
-    assert len(outer_closure_args) == n_closure_args, \
-      "Mismatch between closure formal args %s and given %s" % (", ".join(closure_arg_types),
-                                                                ", ".join(outer_closure_args))
-    bound_types = (Int32,) * n_indices
-    outer_input_types = tuple(closure_arg_types) + bound_types
-    kernel_name = names.fresh("kernel_" + fn.name)
-    parakeet_kernel, builder, input_vars  = build_fn(outer_input_types, name = kernel_name)
-    
-    #builder.add
-    #builder.append(PrintString("We're on the GPU"))
-    closure_vars = input_vars[:n_closure_args]
-    
-    # TODO: use these to compute indices when n_indices > 3 or 
-    # number of threads per block > 1  
-    bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
-    
-    indices = [blockIdx.x,  threadIdx.x, blockIdx.y, threadIdx.y, threadIdx.z][:n_indices]
-
-    indices = [builder.cast(idx, t) for idx, t in zip(indices,index_types)]
-    
-    # TODO: Have a target number of threadBlocks based on the number of SMs
-    # that we can get from PyCUDA and then have loops inside of each theadBlock
-    # over the real indices
-    
-    if index_as_tuple:
-      index_args = (builder.tuple(indices),)
-    else:
-      index_args = indices
-    
-    inner_args = tuple(closure_vars) + tuple(index_args)
-    builder.call(fn, inner_args)
-    
-    
-    self.enter_kernel()
-
-    c_kernel_name = self.get_fn_name(parakeet_kernel, 
-                                     attributes = ["__global__"], 
-                                     inline = False)
-    self.exit_kernel()
-    
-    self._kernel_cache[key] = c_kernel_name
-    return c_kernel_name, outer_closure_args
   
   
   def pass_by_value(self, t):
