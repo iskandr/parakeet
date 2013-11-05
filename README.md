@@ -95,6 +95,10 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
 
 Backends
 ===
-Parakeet currently supports compilation to sequential C, multi-core C with OpenMP (default), or LLVM (deprecated). To switch between these options change `parakeet.config.backend` to one of "c", "openmp", or "llvm". 
+Parakeet currently supports compilation to sequential C, multi-core C with OpenMP (default), or LLVM (deprecated). To switch between these options change `parakeet.config.backend` to one of:
+  * "c": lowers all parallel operators to loops, compile sequential code with gcc
+  * "openmp": also compiles with gcc, but parallel operators run across multiple cores (default)
+  * "cuda": launch parallel operations on the GPU (experimental)
+  * "llvm": older backend, has fallen behind and some programs may not work
 
 
