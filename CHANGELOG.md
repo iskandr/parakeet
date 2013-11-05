@@ -1,3 +1,7 @@
+### 0.19 / November 4th, 2013 ###
+
+- Added experimental CUDA backend (use by passing _backend='cuda' to functions wrapped by @jit)
+
 ### 0.18 / October 30th, 2013 ###
 
 - Added OpenMP backend (runs most map-like computations across multiple threads)
