@@ -37,7 +37,9 @@ def best_cuda_device(compute_capability = (1,3)):
     elif d.total_memory() > best_device.total_memory():
       best_device = d
   return best_device    
-    
+
+def has_gpu():
+  return best_cuda_device() is not None
 
     
   

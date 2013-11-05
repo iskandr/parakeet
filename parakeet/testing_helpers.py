@@ -25,12 +25,6 @@ def _copy(x):
 def _copy_list(xs):
   return [_copy(x) for x in xs]
 
-available_backends = ['interp', 'c', 'openmp']
-try:
-  import pycuda
-  available_backends.append('cuda')
-except:
-  pass 
 
 def expect(fn, args, expected, msg = None, valid_types = None):
   """
@@ -42,7 +36,13 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   untyped_fn = translate_function_value(fn)
   
-  for backend in ['cuda']: #available_backends:
+  available_backends = ['interp', 'c', 'openmp']
+
+  import cuda_backend 
+  if cuda_backend.device_info.has_gpu()
+    available_backends.append('cuda')
+
+  for backend in available_backends: #available_backends:
     try: 
       result = run_untyped_fn(untyped_fn, _copy_list(args), backend = backend)
       

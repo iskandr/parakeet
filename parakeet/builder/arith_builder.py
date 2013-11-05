@@ -1,6 +1,6 @@
 import numpy as np 
 from .. import prims 
-from ..syntax import Const, PrimCall, Var, If  
+from ..syntax import Const, PrimCall, Var, If, Select 
 from ..syntax.helpers import (zero, one, 
                               is_zero, is_one, const_bool, 
                               wrap_constants, get_types, wrap_if_constant)
@@ -98,7 +98,6 @@ class ArithBuilder(CoreBuilder):
     has_remainder = self.neq(m, zero(m.type), "has_remainder") 
     prod = self.mul(x, y, "prod")
     prod_is_positive = self.is_positive(prod, "prod_is_positive")
-    
     was_rounded_down = self.and_(has_remainder, prod_is_positive)
     div_plus_one = self.add(div_toward_zero, one(div_toward_zero.type), "div_plus_one")
     return self.select(was_rounded_down, div_plus_one, div_toward_zero, name = name)
@@ -167,28 +166,21 @@ class ArithBuilder(CoreBuilder):
         "Type mismatch between %s and %s" % (x, y)
     if x.__class__ is Const and y.__class__ is Const:
       return x if x.value < y.value else y 
-    
-    if name is None:
-      name = "min_temp"
-    result = self.fresh_var(x.type, name)
     cond = self.lte(x, y)
-    merge = {result.name:(x,y)}
-    self.blocks += If(cond, [], [], merge)
-    return result 
-
+    expr = Select(cond, x, y, type = x.type)
+    if name is None: return expr 
+    else: return self.assign_name(expr, name)
+    
   def max(self, x, y, name = None):
     assert x.type == y.type, \
         "Type mismatch between %s and %s" % (x, y)
     if x.__class__ is Const and y.__class__ is Const:
       return x if x.value > y.value else y 
-    if name is None:
-      name = "min_temp"
-    result = self.fresh_var(x.type, name)
     cond = self.gte(x, y)
-    merge = {result.name:(x,y)}
-    self.blocks += If(cond, [], [], merge)
-    return result   
-  
+    expr = Select(cond, x, y, type = x.type)
+    if name is None: return expr 
+    else: self.assign_name(expr, name)
+    
   def or_(self, x, y, name = None):
     if x.__class__ is Const and x.value:
       return x

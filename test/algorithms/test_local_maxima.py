@@ -2,8 +2,7 @@ import numpy as np
 import parakeet 
 import parakeet.c_backend
 
-parakeet.config.backend = 'cuda'
-
+from parakeet.testing_helpers import run_local_tests, expect 
 def wrap(pos, offset, bound):
     return ( pos + offset ) % bound
 
@@ -25,7 +24,7 @@ def python_local_maxima(data, wsize, mode=wrap):
   return result 
 
 @parakeet.jit 
-def parakeet_local_maxima(data, wsize, mode=wrap):
+def local_maxima(data, wsize, mode=wrap):
   def is_max(pos):
     def is_smaller_neighbor(offset):
       neighbor_idx = tuple(mode(p, o-w/2, w) for (p, o, w) in zip(pos, offset, wsize))
@@ -39,12 +38,9 @@ x = np.random.randn(*shape)
 wsize = (3,3,3,3)
 
 def test_local_maxima():
-  parakeet_result  = parakeet_local_maxima(x, wsize)
-  python_result = python_local_maxima(x, wsize) 
-  assert np.allclose(python_result,parakeet_result)
+  expect(local_maxima, [x, wsize], python_local_maxima(x, wsize))
   
 
-from parakeet.testing_helpers import run_local_tests
 
 if __name__ == '__main__':
     run_local_tests()

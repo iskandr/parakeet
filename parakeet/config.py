@@ -66,7 +66,7 @@ opt_copy_elimination = False
 opt_scalar_replacement = False
     
 # run verifier after each transformation 
-opt_verify = False
+opt_verify = True
 
 set_opt_level(default_opt_level)
 

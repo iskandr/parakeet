@@ -1,7 +1,7 @@
 from treelike import Node 
 
 from .. ndtypes import Float32, Float64, Int32, Int64
-from .. syntax import Var, Range 
+from .. syntax import Var, Range, ConstArray, ConstArrayLike, IndexMap
 from collect_vars import collect_var_names 
 from syntax_visitor import SyntaxVisitor 
 
@@ -20,6 +20,7 @@ zeros_float64 = ConstValue(0.0, Float64)
 zeros_int32 = ConstValue(0, Int32)
 zeros_int64 = ConstValue(0, Int64)
 
+
 class ConstElts(AbstractValue):
   """
   All elements known, represented as a numpy array 
@@ -31,6 +32,9 @@ class RangeArray(AbstractValue):
   Result of a range expression 
   """
   _members = ['start', 'step', 'type']
+
+class IndexMapResult(AbstractValue):
+  _members = ['fn']
 
 class Unknown(AbstractValue):
   _members = []
@@ -66,8 +70,14 @@ class IndexElimAnalysis(SyntaxVisitor):
           if lhs_name in self.array_values:
             self.array_values[rhs_name] = self.array_values[lhs_name]
         elif rhs_class is Range:
-          v = RangeArray(rhs.start, rhs.step, rhs.type.elt_type)
-          self.array_values[lhs_name] = v 
+          self.array_values[lhs_name] = RangeArray(rhs.start, rhs.step, rhs.type.elt_type)
+        """ 
+      
+        elif rhs_class in (ConstArray, ConstArrayLike):
+          self.array_values[lhs_name] = ConstValue(value = rhs.value, type = rhs.type) 
+        elif rhs_class is IndexMap:
+          self.array_values[lhs_name] = IndexMapResult(fn = rhs.fn)
+        """
       else:
         # if not a var, might be an index expression 
         for tainted_lhs_name in collect_var_names(lhs):

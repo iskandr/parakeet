@@ -15,9 +15,11 @@ check_pyobj_types = False
 #########################
 #  Verbose Printing     #
 #########################
-print_input_ir = False
+print_input_ir = True
+
 print_module_source = True
-print_line_numbers = False 
+print_line_numbers = True
+ 
 print_function_source = False
 
 print_commands = False

@@ -10,11 +10,10 @@ from ..openmp_backend import MulticoreCompiler
 from ..syntax import PrintString, SourceExpr
 from ..syntax.helpers import get_types, get_fn, get_closure_args, const_int, zero_i32, one_i32
 
+import config 
 import device_info 
 from cuda_syntax import threadIdx, blockIdx, blockDim 
 
-
-THREADS_PER_DIM = 16 
 
 class CudaCompiler(MulticoreCompiler):
   
@@ -54,8 +53,12 @@ class CudaCompiler(MulticoreCompiler):
     outer_closure_exprs = get_closure_args(clos)
     closure_arg_types = get_types(outer_closure_exprs)
     host_closure_args = self.visit_expr_list(outer_closure_exprs)
-    gpu_closure_args = self.build_kernel_args(host_closure_args, closure_arg_types)
-
+    
+    self.comment("Copying data from closure arguments to the GPU")
+    gpu_closure_args = \
+      [self.to_gpu(c_expr, t) for (c_expr, t) in 
+       zip(host_closure_args, closure_arg_types)]
+    
     input_types = fn.input_types 
     
     #nested_fn_name, outer_closure_args, input_types = \
@@ -84,7 +87,7 @@ class CudaCompiler(MulticoreCompiler):
     bound_types = (Int32,) * n_indices
     
     if self.use_constant_memory_for_args:
-      outer_input_types = bound_types 
+      outer_input_types = tuple(bound_types)
     else:
       outer_input_types = tuple(closure_arg_types) + bound_types
       
@@ -94,26 +97,28 @@ class CudaCompiler(MulticoreCompiler):
     parakeet_kernel, builder, input_vars  = build_fn(outer_input_types, name = kernel_name)
     
     if self.use_constant_memory_for_args:
-      closure_vars = []
+      inner_closure_vars = []
       for i, t in enumerate(closure_arg_types):
-        raw_name = "gpu_arg_" + fn.arg_names[i]
-        const_name = self.fresh_name(raw_name)
+        raw_name = fn.arg_names[i]
+        self.comment("Moving GPU arg #%d %s : %s to constant memory" % (i, raw_name, t))
+        const_name = self.fresh_name("gpu_arg_"  + raw_name)
         typename = self.to_ctype(t)
         self.add_decl("__constant__ %s %s" % (typename, const_name))
-        closure_vars.append(SourceExpr(const_name, type=t))
+        inner_closure_vars.append(SourceExpr(const_name, type=t))
         gpu_arg = gpu_closure_args[i]
-        self.append("cudaMemcpyToSymbol(%s, &%s, sizeof(%s));" % (const_name, gpu_arg, typename))
-        
-      
-      closure_vars = tuple(closure_vars)
-      
+        # in case this is a constant, should assign to a variable
+        first_char = gpu_arg[0]
+        if not first_char.isalpha():
+          gpu_arg = self.fresh_var(typename, "src_" + raw_name, gpu_arg)
+        self.append("cudaMemcpyToSymbolAsync(%s, &%s, sizeof(%s));" % (const_name, gpu_arg, typename))
+      inner_closure_vars = tuple(inner_closure_vars)
       # need to do a cudaMemcpyToSymbol for each gpu arg   
       bounds_vars = input_vars
   
     else:
       # TODO: use these to compute indices when n_indices > 3 or 
       # number of threads per block > 1  
-      closure_vars = input_vars[:n_closure_args]
+      inner_closure_vars = input_vars[:n_closure_args]
       bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
 
 
@@ -125,17 +130,36 @@ class CudaCompiler(MulticoreCompiler):
     """
     
     
-    start_idx = builder.add(threadIdx.x, builder.mul(blockDim.x, blockIdx.x))
+    BLOCKS_PER_SM = config.blocks_per_sm 
+    THREADS_PER_DIM = config.threads_per_block_dim 
+
+    start_idx = builder.add(builder.mul(blockDim.x, blockIdx.x, "base_x"), 
+                            threadIdx.x,  name = "start_x")
     start_indices = [start_idx]
+    
+    stop_x = builder.mul(builder.add(one_i32, blockIdx.x, "next_base_x"), 
+                         blockDim.x, "stop_x")
+    stop_x = builder.min(stop_x, bounds_vars[0], "stop_x") 
+    stop_indices = [stop_x]
     if n_indices == 1:
       step_sizes = [const_int(THREADS_PER_DIM**2, Int32)]
+       
     if n_indices > 1:
-      start_idx_y = builder.add(threadIdx.y, builder.mul(blockDim.y, blockIdx.y))
+
+      start_idx_y = builder.add(builder.mul(blockDim.y, blockIdx.y, "base_y"),
+                                threadIdx.y, "start_y")
       start_indices.append(start_idx_y)
+      
+      stop_y = builder.mul(builder.add(one_i32, blockIdx.y, "next_base_y"),
+                           blockDim.y, "stop_y") 
+      stop_y = builder.min(stop_y, bounds_vars[1], "stop_y") 
+      stop_indices.append(stop_y)
+      
       step_sizes = [const_int(THREADS_PER_DIM, Int32), const_int(THREADS_PER_DIM, Int32)]
       for i in xrange(2, n_indices):
         start_indices.append(zero_i32)
         step_sizes.append(one_i32)
+        stop_indices.append(bounds_vars[i])
         
     def loop_body(index_vars):
       if not isinstance(index_vars, (list,tuple)):
@@ -145,10 +169,10 @@ class CudaCompiler(MulticoreCompiler):
         index_args = (builder.tuple(indices),)
       else:
         index_args = indices
-      inner_args = tuple(closure_vars) + tuple(index_args)
+      inner_args = tuple(inner_closure_vars) + tuple(index_args)
       builder.call(fn, inner_args)
       
-    builder.nested_loops(bounds_vars, loop_body, start_indices, step_sizes, index_vars_as_list = True)
+    builder.nested_loops(stop_indices, loop_body, start_indices, step_sizes, index_vars_as_list = True)
     
     self.enter_kernel()
     c_kernel_name = self.get_fn_name(parakeet_kernel, 
@@ -159,19 +183,14 @@ class CudaCompiler(MulticoreCompiler):
     # self._kernel_cache[key] = c_kernel_name
     return c_kernel_name, gpu_closure_args, host_closure_args, closure_arg_types
   
-  def build_kernel_args(self, host_args, arg_types):
-    self.comment("copy closure arguments to the GPU")
-    gpu_args = \
-      [self.to_gpu(c_expr, t) for (c_expr, t) in 
-       zip(host_args, arg_types)]
-    self.synchronize("Copying from GPU to Host")
-    return gpu_args 
-  
   def launch_kernel(self, bounds, params, kernel_name):
-    n_bounds = len(bounds)
+    self.synchronize("Done copying arguments to GPU, prepare for kernel launch")
     
+    n_bounds = len(bounds)
     sm_count = device_info.num_multiprocessors(self.device)
-    n_blocks = sm_count * 8
+    n_blocks = sm_count * config.blocks_per_sm 
+    
+    THREADS_PER_DIM = config.threads_per_block_dim
     
     if n_bounds == 1:
       grid_dims = [n_blocks, 1, 1]
@@ -181,33 +200,16 @@ class CudaCompiler(MulticoreCompiler):
       grid_dims = [blocks_per_axis, blocks_per_axis, 1]
       block_dims = [THREADS_PER_DIM,THREADS_PER_DIM,1]
 
-    #assert len(bounds) <= 5
-    #grid_dims = [bounds[0]]
-    #if n_bounds > 1:
-    #  block_dims = [bounds[1]]
-    #else:
-    #  block_dims = ["1"]
-    
-    #if n_bounds > 2:
-    #  grid_dims.append(bounds[2])
-    #else:
-    #  grid_dims.append("1")
-    #grid_dims.append("1")
-    
-    #if n_bounds > 3: block_dims.append(bounds[3])
-    #else: block_dims.append("1")
-    #if n_bounds > 4: block_dims.append([4])
-    #else: block_dims.append("1")
-    
     grid_dims_str = "dim3(%s)" % ", ".join( str(d) for d in grid_dims)
     block_dims_str = "dim3(%s)" % ", ".join( str(d) for d in block_dims)
+    
     self.comment("kernel launch")
     
     kernel_args_str = ", ".join(params)
     self.append("%s<<<%s, %s>>>(%s);" % (kernel_name, grid_dims_str, block_dims_str, kernel_args_str))
   
     self.comment("After launching kernel, synchronize to make sure the computation is done")
-    self.synchronize("Kernel launch")
+    self.synchronize("Finished kernel launch")
     
     
   

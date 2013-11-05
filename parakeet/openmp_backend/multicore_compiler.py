@@ -42,7 +42,6 @@ class MulticoreCompiler(PyModuleCompiler):
   
   
   def get_fn_name(self, fn_expr, attributes = [], inline = True):
-    print "OpenMP get_fn_name"
     return PyModuleCompiler.get_fn_name(self, fn_expr, 
                                         compiler_kwargs = {'depth':self.depth}, 
                                         attributes = attributes, 
