@@ -1,7 +1,8 @@
 from .. import config 
 from ..analysis import (contains_adverbs, contains_calls, contains_loops, 
                         contains_structs, contains_slices)
-# from const_arg_specialization import ConstArgSpecialization 
+# from const_arg_specialization import ConstArgSpecialization
+from combine_nested_maps import CombineNestedMaps 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
 
@@ -24,6 +25,7 @@ from offset_propagation import OffsetPropagation
 from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
 from range_propagation import RangePropagation
+from recursive_apply import RecursiveApply
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
@@ -74,16 +76,20 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
 shape_elim = Phase(ShapeElimination,
                    config_param = 'opt_shape_elim')
 
-high_level_optimizations = Phase([
+high_level_optimizations = Phase([ 
+                                    
                                     inline_opt,
                                     symbolic_range_propagation,   
                                     licm,
+                                    
+                                    fusion_opt,
+                                    CombineNestedMaps,
+                                    # RecursiveApply,  
                                     fusion_opt, 
-                                    fusion_opt, 
-                                    LowerArrayOperators,
-                                    NegativeIndexElim,
-                                    symbolic_range_propagation,
-
+                                    LowerArrayOperators, 
+                                    NegativeIndexElim, 
+                                    symbolic_range_propagation
+            
                                  ], 
                                  depends_on = normalize,
                                  name = "HighLevelOpts", 
@@ -95,6 +101,7 @@ high_level_optimizations = Phase([
 copy_elim = Phase(CopyElimination, 
                   config_param = 'opt_copy_elimination', 
                   memoize = False)
+
 
 indexify = Phase([
                     IndexifyAdverbs, Simplify, DCE, 

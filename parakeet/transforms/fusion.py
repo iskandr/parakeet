@@ -92,8 +92,9 @@ class Fusion(Transform):
     self.use_counts = use_count(fn)
 
   def transform_TypedFn(self, fn):
-    import pipeline
-    return pipeline.high_level_optimizations(fn)
+    return Fusion().apply(fn)
+    #import pipeline
+    #return pipeline.high_level_optimizations(fn)
 
   def transform_Assign(self, stmt):
     if self.recursive:
@@ -173,3 +174,4 @@ class Fusion(Transform):
     if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb):
       self.adverb_bindings[stmt.lhs.name] = rhs
     return stmt
+  

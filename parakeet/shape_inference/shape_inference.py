@@ -382,6 +382,13 @@ class ShapeInference(SyntaxVisitor):
   def visit_Shape(self, expr):
     return self.tuple_from_shape(expr.array)
   
+  def visit_Transpose(self, expr):
+    shape = self.visit_expr(expr.array)
+    if shape.__class__ is Shape:
+      return Shape(tuple(reversed(shape.dims)))
+    else:
+      return shape 
+  
   def visit_AllocArray(self, expr):
     return self.shape_from_tuple(expr.shape)
     

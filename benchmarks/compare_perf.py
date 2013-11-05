@@ -9,7 +9,7 @@ from timer import timer
 
 def compare_perf(fn, args, numba= True, cpython = True, 
                  extra = {}, 
-                 backends = ('openmp', 'cuda'), 
+                 backends = ('c', 'openmp', 'cuda'), 
                  suppress_output = True):
   
   parakeet_fn = jit(fn)

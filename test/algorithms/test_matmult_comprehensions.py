@@ -13,7 +13,6 @@ matrices = [int_mat, float_mat, bool_mat]
 def dot(x,y):
   return sum(x*y)
 
-
 @jit 
 def matmult_comprehensions(X,Y):
   return np.array([[dot(x,y) for y in Y.T] for x in X])

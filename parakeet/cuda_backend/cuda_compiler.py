@@ -130,30 +130,47 @@ class CudaCompiler(MulticoreCompiler):
     """
     
     
-    BLOCKS_PER_SM = config.blocks_per_sm 
+    
     THREADS_PER_DIM = config.threads_per_block_dim 
 
-    start_idx = builder.add(builder.mul(blockDim.x, blockIdx.x, "base_x"), 
-                            threadIdx.x,  name = "start_x")
-    start_indices = [start_idx]
     
-    stop_x = builder.mul(builder.add(one_i32, blockIdx.x, "next_base_x"), 
-                         blockDim.x, "stop_x")
-    stop_x = builder.min(stop_x, bounds_vars[0], "stop_x") 
-    stop_indices = [stop_x]
     if n_indices == 1:
+      elts_per_block = builder.div(bounds_vars[0],  
+                                   const_int(THREADS_PER_DIM**2, Int32), 
+                                   "elts_per_block")
+      elts_per_block = builder.add(elts_per_block, one_i32, "elts_per_block")
+      base_idx = builder.mul(elts_per_block, blockIdx.x, "base_x")
+      start_idx = builder.add(base_idx, threadIdx.x, "start_x")  
+      
+      start_indices = [start_idx]
+    
+      stop_x = builder.mul(builder.add(one_i32, blockIdx.x, "next_base_x"), 
+                           elts_per_block, "stop_x")
+      stop_x = builder.min(stop_x, bounds_vars[0], "stop_x") 
+      stop_indices = [stop_x]
       step_sizes = [const_int(THREADS_PER_DIM**2, Int32)]
        
-    if n_indices > 1:
-
-      start_idx_y = builder.add(builder.mul(blockDim.y, blockIdx.y, "base_y"),
+    else:
+      elts_per_block = builder.div(bounds_vars[0],   
+                                   const_int(THREADS_PER_DIM, Int32),
+                                    "elts_per_block")
+      elts_per_block = builder.add(elts_per_block, one_i32, "elts_per_block")
+      base_x = builder.mul(elts_per_block, blockIdx.x, "base_x")
+      start_x = builder.add(base_x, threadIdx.x, "start_x")  
+      start_y = builder.add(builder.mul(elts_per_block, blockIdx.y, "base_y"),
                                 threadIdx.y, "start_y")
-      start_indices.append(start_idx_y)
       
+      start_indices = [start_x, start_y]
+      
+      stop_x = builder.mul(builder.add(one_i32, blockIdx.x, "next_base_x"), 
+                           elts_per_block, "stop_x")
+      stop_x = builder.min(stop_x, bounds_vars[0], "stop_x") 
+      stop_indices = [stop_x]
       stop_y = builder.mul(builder.add(one_i32, blockIdx.y, "next_base_y"),
-                           blockDim.y, "stop_y") 
-      stop_y = builder.min(stop_y, bounds_vars[1], "stop_y") 
-      stop_indices.append(stop_y)
+                           elts_per_block, "stop_y")
+      stop_y = builder.min(stop_y, bounds_vars[1], "stop_y")
+       
+      stop_indices = [stop_x, stop_y]
       
       step_sizes = [const_int(THREADS_PER_DIM, Int32), const_int(THREADS_PER_DIM, Int32)]
       for i in xrange(2, n_indices):

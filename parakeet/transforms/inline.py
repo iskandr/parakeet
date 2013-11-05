@@ -82,13 +82,15 @@ class Inliner(Transform):
 
 
   def transform_TypedFn(self, expr):
-    if self.fn.created_by is not None:
-      return self.fn.created_by.apply(expr)
-    else:
-      # at the very least, apply high level optimizations
-      import pipeline
-      return pipeline.high_level_optimizations.apply(expr)
-
+    return Inliner().apply(expr)
+    #if self.fn.created_by is not None:
+    #  return self.fn.created_by.apply(expr)
+    #else:
+    #  # at the very least, apply high level optimizations
+    #  import pipeline
+    #  return pipeline.high_level_optimizations.apply(expr)
+     
+  
   def transform_ExprStmt(self, stmt):
 
     return Transform.transform_ExprStmt(self, stmt)

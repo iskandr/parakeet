@@ -90,7 +90,7 @@ def const_scalar(x):
   elif is_python_int(x):
     return const_int(x)
   else:
-    assert is_python_float(x)
+    assert is_python_float(x), "Unexpected value %s" % x 
     return const_float(x)
 
 def make_tuple(elts):
