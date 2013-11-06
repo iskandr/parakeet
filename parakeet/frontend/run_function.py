@@ -49,6 +49,7 @@ def specialize(untyped, args, kwargs = {}, optimize = True):
   
   # propagate types through function representation and all
   # other functions it calls
+   
   typed_fn = type_inference.specialize(untyped, arg_types)
   if optimize: 
     from .. transforms.pipeline import normalize 
@@ -111,7 +112,6 @@ def run_untyped_fn(fn, args, kwargs = None, backend = None):
   if kwargs is None:
     kwargs = {}
   typed_fn, linear_args = specialize(fn, args, kwargs)
-  
   return run_typed_fn(typed_fn, linear_args, backend)
 
 def run_python_ast(fn_name, fn_args, fn_body, globals_dict, 

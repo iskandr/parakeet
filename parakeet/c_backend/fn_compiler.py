@@ -1,4 +1,5 @@
 from collections import namedtuple
+import numpy as np 
 
 from .. import names, prims  
 from ..ndtypes import (IntT, FloatT, TupleT, FnT, Type, BoolT, NoneT, Float32, Float64, Bool, 
@@ -172,6 +173,11 @@ class FnCompiler(BaseCompiler):
       return "0"
     
     assert isinstance(t, ScalarT), "Don't know how to translate Const %s : %s" % (expr,t)
+    v = expr.value 
+    if np.isinf(v):
+      return "INFINITY"
+    elif np.isnan(v):
+      return "NAN"
     return "%s" % expr.value 
   
   def visit_Var(self, expr):

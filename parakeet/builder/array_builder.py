@@ -1,9 +1,10 @@
 
 from ..ndtypes import (make_slice_type, make_array_type, ptr_type, 
                        ArrayT, TupleT, ScalarT, Type, PtrT, Int64, IntT, Float64)
-from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, Var, Select)
-from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none)
+from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, Var, Select, Expr)
+from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none, unwrap_constant)
 from core_builder import CoreBuilder 
+
 
 class ArrayBuilder(CoreBuilder):
   """
@@ -92,10 +93,11 @@ class ArrayBuilder(CoreBuilder):
       shape = self.attr(array, "shape")
       if dim is None:
         return shape
-      else:
-        assert isinstance(dim, (int, long))
-        dim_value = self.tuple_proj(shape, dim, explicit_struct = explicit_struct)
-        return self.assign_name(dim_value, "dim%d" % dim)
+      if isinstance(dim, Expr):
+        dim = unwrap_constant(dim)
+      assert isinstance(dim, (int, long)), "Expected array dimension to be an int, got %s" % dim 
+      dim_value = self.tuple_proj(shape, dim, explicit_struct = explicit_struct)
+      return self.assign_name(dim_value, "dim%d" % dim)
     else:
       return self.tuple([])
 

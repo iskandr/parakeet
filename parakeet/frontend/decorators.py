@@ -109,6 +109,7 @@ class macro(object):
     return wrapper 
     
   def __call__(self, *args, **kwargs):
+
     if self.call_from_python is not None:
       return self.call_from_python(*args, **kwargs)
     
@@ -120,16 +121,15 @@ class macro(object):
 
     n_pos = len(args)
     keywords = kwargs.keys()
-
-    static_pairs = ((k,kwargs.get(k)) for k in self.static_names)
+    static_pairs = tuple((k,kwargs.get(k)) for k in self.static_names)
+   
     dynamic_keywords = tuple(k for k in keywords
                                if k not in self.static_names)
 
-
+     
     untyped = self._create_wrapper(n_pos, static_pairs, dynamic_keywords)
+
     dynamic_kwargs = dict( (k, kwargs[k]) for k in dynamic_keywords)
-    
-    
     return run_untyped_fn(untyped, args, dynamic_kwargs, backend = backend_name)
     
 

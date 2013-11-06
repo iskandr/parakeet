@@ -1,6 +1,6 @@
 from .. import names 
 from ..builder import build_fn 
-from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT 
+from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT
 from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
                       Var, Return, UntypedFn, Expr)
 from ..syntax.helpers import unwrap_constant, get_types, none, zero_i64 
@@ -187,12 +187,14 @@ class IndexifyAdverbs(Transform):
     return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
 
   def get_axes(self, args, axis):
+    
+    
     if isinstance(axis, Expr):
-      axis = unwrap_constant(axis)
-      
-    if axis is None: 
-      args = [self.ravel(arg) for arg in args]
-      axis = 0
+      if isinstance(axis.type, TupleT):
+        axis_elts = self.tuple_elts(axis)
+        axis = axis_elts  
+      else:
+        axis = unwrap_constant(axis)
       
     if isinstance(axis, list):
       axes = tuple(axis)
@@ -300,21 +302,23 @@ class IndexifyAdverbs(Transform):
     fn = expr.fn 
     combine = expr.combine 
     init = expr.init 
-    args = expr.args
-
-    axis = expr.axis
-    if axis is  None or self.is_none(axis):
-      assert len(args) == 1
-      args = [self.ravel(args[0])]
-      axis = 0
-    else:
-      axis = unwrap_constant(axis)
-
+    
+    args = []
+    axes = []
+    raw_axes = self.get_axes(expr.args, expr.axis)
+    for axis, arg in zip(raw_axes, expr.args):
+      if self.is_none(axis):
+        axes.append(0)
+        args.append(self.ravel(arg))
+      else:
+        axes.append(axis)
+        args.append(arg)
+        
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
     if self.is_none(init):
-      assert len(args) == 1, "If 'init' not specified then can't have more than 1 arg"
-      init = self.index_along_axis(args[0], axis, self.int(0))
+      init_args = [self.index_along_axis(arg, axis, self.int(0)) for arg, axis in zip(args, axes)]
+      init = self.call(fn, init_args)
       index_offsets = (1,)
       assert init.type == fn.return_type
       nelts = self.sub(nelts, self.int(1), "nelts") 

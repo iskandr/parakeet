@@ -3,7 +3,7 @@ import numpy as np
 
 
 def dot(x,y):
-    return parakeet.reduce(min(x+y), axis = 0, init = np.inf)
+    return np.min(x+y)
 
 def matmult_high_level(X,Y):
   return np.array([[dot(x,y) for y in Y.T] for x in X])
@@ -19,8 +19,8 @@ def matmult_loops(X,Y,Z):
       Z[i,j] = total 
   return Z
 
-n, d = 2000, 500 
-m = 2000
+n, d = 500, 500
+m = 500
 X = np.random.randn(m,d)
 Y = np.random.randn(d,n)
 Z = np.zeros((m,n))

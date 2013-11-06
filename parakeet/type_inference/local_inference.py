@@ -15,15 +15,10 @@ from ..syntax import (Array, AllocArray, Attribute,
                       Transpose, Tuple, TupleProj, TypeValue,  Var,  
                       ForLoop, While, Assign, Return, If)
 
-from ..syntax.helpers import get_types, is_true, is_false, zero_i64, const_int, make_tuple
+from ..syntax.helpers import get_types, is_true, is_false, const_int
 from ..syntax.wrappers import build_untyped_prim_fn
 
 from ..transforms import Transform
-
-
-class InferenceFailed(Exception):
-  def __init__(self, msg):
-    self.msg = msg
 
 
 class LocalTypeInference(Transform):
@@ -41,10 +36,9 @@ class LocalTypeInference(Transform):
     from ..frontend import ast_conversion
     if not isinstance(expr, Expr):
       expr = ast_conversion.value_to_syntax(expr)
-    
     result = Transform.transform_expr(self, expr)  
-    assert result.type is not None,  \
-      "Unsupported expression encountered during type inference: %s" % (expr,)
+    assert result.type is not None, \
+       "Unsupported expression encountered during type inference: %s" % (expr,) 
     return result 
 
 

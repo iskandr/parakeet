@@ -2,7 +2,7 @@ from expr import Expr
 from treelike import Node
 
 class Stmt(Node):
-  pass
+  _members = ['source_info']
 
 def block_to_str(stmts):
   body_str = '\n'

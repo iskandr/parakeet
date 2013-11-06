@@ -20,11 +20,14 @@ from ..syntax import (Expr,
                       Slice,  Tuple, Array,
                       Const, Call, Index, 
                       FormalArgs, ActualArgs, 
-                      UntypedFn, Closure)
+                      UntypedFn, Closure, 
+                      SourceInfo)
  
 from ..syntax.helpers import (none, true, false, one_i64, zero_i64, 
                               is_python_constant, const)
 from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_expr_fn, build_untyped_cast_fn
+
+
  
 from ..transforms import subst_expr, subst_stmt_list
 
@@ -451,11 +454,13 @@ class AST_Translator(ast.NodeVisitor):
                             function_name = self.function_name, 
                             filename = self.filename)
   
-  
-
-      
   def visit(self, node):
     res = ast.NodeVisitor.visit(self, node)
+    source_info = SourceInfo(filename = self.filename, 
+                             line = getattr(node, 'lineno', None),
+                             col = getattr(node, 'e.col_offset', None), 
+                             function = self.function_name, )
+    res.source_info = source_info 
     return res 
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):

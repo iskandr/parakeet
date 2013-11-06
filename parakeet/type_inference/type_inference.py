@@ -10,22 +10,25 @@ from ..ndtypes import (Type,
 
 from ..syntax import adverb_helpers
 
-from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Const, Map,  
+from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Map,  
                       ActualArgs, FormalArgs, MissingArgsError, TooManyArgsError)
 
-from ..syntax.helpers import (get_type, get_types, unwrap_constant, 
+from ..syntax.helpers import (get_type, get_types,  
                               one_i64, zero_i64, none, true, false, 
                               gen_data_arg_names)
 from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_cast_fn
 
-from ..transforms import Simplify 
 
 from helpers import untyped_identity_function, make_typed_closure, _get_closure_type, _get_fundef
 from linearize_args import linearize_actual_args, flatten_actual_args
-from local_inference import LocalTypeInference, InferenceFailed 
+from local_inference import LocalTypeInference 
 from var_map import VarMap 
 
 
+class TypeInferenceError(Exception):
+  def __init__(self, msg, expr):
+    self.msg = msg
+    self.expr = expr 
 
 _invoke_type_cache = {}
 def invoke_result_type(fn, arg_types):

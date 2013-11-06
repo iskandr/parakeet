@@ -28,6 +28,7 @@ from seq_expr import Index, Enumerate, Len, Zip
 from stmt import (Stmt, Assign, Comment, ExprStmt, ForLoop, If, Return, While, ParFor, 
                   PrintString, block_to_str) 
 
+from source_info import SourceInfo
 from tuple_expr import Tuple, TupleProj
 
 from typed_fn import TypedFn 

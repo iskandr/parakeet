@@ -5,7 +5,7 @@ from .. ndtypes import NoneT
 class Expr(Node):
   
   
-  _members = ['type']
+  _members = ['type', 'source_info']
   
   def children(self):
     for v in self.itervalues():
