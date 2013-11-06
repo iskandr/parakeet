@@ -92,7 +92,7 @@ class Fusion(Transform):
     self.use_counts = use_count(fn)
 
   def transform_TypedFn(self, fn):
-    return Fusion().apply(fn)
+    return run_fusion(fn)
     #import pipeline
     #return pipeline.high_level_optimizations(fn)
 
@@ -175,3 +175,10 @@ class Fusion(Transform):
       self.adverb_bindings[stmt.lhs.name] = rhs
     return stmt
   
+from ..analysis import contains_adverbs, contains_calls
+def run_fusion(fn):
+  if contains_adverbs(fn) or contains_calls(fn):
+    return Fusion().apply(fn)
+  else:
+    return fn 
+      

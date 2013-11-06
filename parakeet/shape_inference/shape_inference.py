@@ -596,7 +596,6 @@ class ShapeInference(SyntaxVisitor):
   def visit_IndexMap(self, expr):
     shape_tuple = self.visit_expr(expr.shape)
     clos = self.visit_expr(expr.fn)
-    
     if isinstance(clos.fn.input_types[-1], TupleT):
       elt_result = symbolic_call(clos, [shape_tuple])
     else:

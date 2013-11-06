@@ -84,7 +84,7 @@ high_level_optimizations = Phase([
                                     
                                     fusion_opt,
                                     CombineNestedMaps,
-                                    # RecursiveApply,  
+                                    RecursiveApply,  
                                     fusion_opt, 
                                     LowerArrayOperators, 
                                     NegativeIndexElim, 

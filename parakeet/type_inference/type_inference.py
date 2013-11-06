@@ -329,6 +329,7 @@ class TypeInference(LocalTypeInference):
     
     
   def transform_Reduce(self, expr):
+    assert len(expr.args) > 0, "Can't have Reduce without any arguments %s" % expr 
     new_args = self.transform_args(expr.args, flat = True)
     arg_types = get_types(new_args)
     axis = self.transform_if_expr(expr.axis)
@@ -556,6 +557,7 @@ def _specialize(fn, arg_types, return_type = None):
 
 
 def specialize(fn, arg_types, return_type = None):
+
   if config.print_before_specialization:
     if return_type:
       print "==== Specializing", fn, "for input types", arg_types, "and return type", return_type

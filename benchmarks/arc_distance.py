@@ -58,7 +58,7 @@ def arc_distance_numpy_broadcast(a, b):
     distance_matrix = 2 * (np.arctan2(np.sqrt(temp), np.sqrt(1 - temp)))
     return distance_matrix
 
-from timer import compare_perf 
+from compare_perf import compare_perf 
 
 n = 1000 
 import numpy as np
