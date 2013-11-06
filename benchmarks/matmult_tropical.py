@@ -26,6 +26,6 @@ Y = np.random.randn(d,n)
 Z = np.zeros((m,n))
 from compare_perf import compare_perf
 
-#compare_perf(matmult_high_level, [X,Y],cpython=False, numba=False, suppress_output = False)
+compare_perf(matmult_high_level, [X,Y], cpython=True, numba=False)
 compare_perf(matmult_loops, [X, Y, Z], cpython=False)
 
