@@ -1,3 +1,6 @@
+import itertools 
+
+
 from .. import names 
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT
@@ -24,6 +27,10 @@ class IndexifyAdverbs(Transform):
   
   def fresh_fn_name(self, prefix, fn):
     return names.fresh(prefix + names.original(self.get_fn(fn).name))
+  
+  def fresh_index_names(self, n):
+    name_supply = itertools.cycle(["i","j","k","l","ii","jj","kk","ll"])
+    return [names.fresh(name_supply.next()) for _ in xrange(n)]
   
   _indexed_fn_cache = {}
   def indexify_fn(self, fn, axis,
@@ -68,13 +75,13 @@ class IndexifyAdverbs(Transform):
       
     
     n_indices = n_arrays if cartesian_product else 1
-    index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
-    
+    #index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
+    index_input_types = (Int64,) * n_indices  
     if output is None:
-      inner_input_types = closure_arg_types + array_arg_types + (index_input_type,)
+      inner_input_types = closure_arg_types + array_arg_types + index_input_types
       new_return_type = fn.return_type 
     else:
-      inner_input_types = (output.type,) + closure_arg_types +  array_arg_types + (index_input_type,)
+      inner_input_types = (output.type,) + closure_arg_types +  array_arg_types + index_input_types
       new_return_type = NoneType 
     
     
@@ -89,7 +96,10 @@ class IndexifyAdverbs(Transform):
     for old_input_name in fn.arg_names:
       input_names.append(names.refresh(old_input_name)) 
     
-    input_names.append(names.fresh("idx"))
+    
+    input_names.extend(self.fresh_index_names(n_indices))
+      
+    
     new_fn_name = self.fresh_fn_name("idx_", fn)
     
     new_fn, builder, input_vars = build_fn(inner_input_types, 
@@ -97,23 +107,28 @@ class IndexifyAdverbs(Transform):
                                            name = new_fn_name,  
                                            input_names = input_names)
 
-    index_input_var = input_vars[-1]
+    index_input_vars = input_vars[-n_indices:]
     if output is None:
       output_var = None
       closure_arg_vars = input_vars[:n_closure_args]
-      array_arg_vars = input_vars[n_closure_args:-1]
+      array_arg_vars = input_vars[n_closure_args:-n_indices]
     else:
       output_var = input_vars[0]
       closure_arg_vars = input_vars[1:n_closure_args+1]
-      array_arg_vars = input_vars[n_closure_args+1:-1]
+      array_arg_vars = input_vars[n_closure_args+1:-n_indices]
     
+    #if cartesian_product:
+    #  index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
+    #else:
+    #  assert isinstance(index_input_var.type, ScalarT), \
+    #    "Unexpected index type %s" % (index_input_var.type)
+    #  index_elts = [index_input_var] * n_arrays 
     if cartesian_product:
-      index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
+      index_elts = index_input_vars
     else:
-      assert isinstance(index_input_var.type, ScalarT), \
-        "Unexpected index type %s" % (index_input_var.type)
-      index_elts = [index_input_var] * n_arrays 
-    
+      assert len(index_input_vars) == 1
+      index_elts = index_input_vars * n_arrays 
+      
     slice_values = []
 
     for i, curr_array in enumerate(array_arg_vars):
@@ -130,7 +145,10 @@ class IndexifyAdverbs(Transform):
     if output is None: 
       builder.return_(elt_result)
     else:
-      builder.setidx(output_var, index_input_var, elt_result)
+      if len(index_elts) > 1:
+        builder.setidx(output_var, builder.tuple(index_elts), elt_result)
+      else:
+        builder.setidx(output_var, index_elts[0], elt_result)
       builder.return_(none)
     
     #inliner = Inliner()
@@ -264,8 +282,8 @@ class IndexifyAdverbs(Transform):
     fn = expr.fn 
     
     dims = self.tuple_elts(shape)
-    
-    if len(dims) == 1:
+    n_dims = len(dims)
+    if n_dims == 1:
       shape = dims[0]
     
     if output is None:
@@ -281,17 +299,34 @@ class IndexifyAdverbs(Transform):
                         for name, t in 
                         zip(closure_arg_names, old_closure_arg_types)]
     
-    idx_name = names.refresh(fn.arg_names[-1])
+    old_input_types = fn.input_types
+    last_input_type = old_input_types[-1]
+    index_is_tuple = isinstance(last_input_type, TupleT)
+    if index_is_tuple:
+      index_types = last_input_type.elt_types
+    else:
+      index_types = old_input_types[:-n_dims:]
+    
+    idx_names = self.fresh_index_names(n_dims)
+    assert len(index_types) == n_dims, \
+        "Mismatch between bounds of IndexMap %s and %d index formal arguments" % (dims, len(index_types))
     output_name = names.refresh("output")  
     
-    new_input_names = [output_name] + closure_arg_names + [idx_name]            
-    new_input_types =  [output.type]  + old_closure_arg_types + [fn.input_types[-1]]
+    new_input_names = [output_name] + closure_arg_names + idx_names            
+    new_input_types =  [output.type]  + old_closure_arg_types + list(index_types)
+    new_fn_name = names.fresh("idx_" + names.original(fn.name))
     new_fn, builder, input_vars = build_fn(new_input_types, NoneType,
-                                           name =  names.fresh("idx_" + names.original(fn.name)),  
+                                           name = new_fn_name,  
                                            input_names = new_input_names)
     output_var = input_vars[0]
-    idx_var = input_vars[-1]
-    builder.setidx(output_var, idx_var, builder.call(fn, new_closure_vars + [idx_var]))
+    
+    idx_vars = input_vars[-n_dims:]
+    if index_is_tuple:
+      elt_result = builder.call(fn, new_closure_vars + [builder.tuple(idx_vars)])
+    else:
+      elt_result = builder.call(fn, new_closure_vars + idx_vars)
+    if len(idx_vars) > 1:
+      builder.setidx(output_var, builder.tuple(idx_vars), elt_result)
     builder.return_(none)
     new_closure = self.closure(new_fn, (output,) + tuple(old_closure_args)  )
     self.parfor(new_closure, shape)
@@ -317,6 +352,7 @@ class IndexifyAdverbs(Transform):
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
     if self.is_none(init):
+
       init_args = [self.index_along_axis(arg, axis, self.int(0)) for arg, axis in zip(args, axes)]
       init = self.call(fn, init_args)
       index_offsets = (1,)
