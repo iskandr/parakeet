@@ -72,7 +72,6 @@ class IndexifyAdverbs(Transform):
     
     if key in self._indexed_fn_cache:
       return mk_closure()
-      
     
     n_indices = n_arrays if cartesian_product else 1
     #index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
@@ -83,7 +82,6 @@ class IndexifyAdverbs(Transform):
     else:
       inner_input_types = (output.type,) + closure_arg_types +  array_arg_types + index_input_types
       new_return_type = NoneType 
-    
     
     input_names = []
     if output is not None:
@@ -135,12 +133,13 @@ class IndexifyAdverbs(Transform):
       axis = axes[i]
       idx_expr = index_elts[i]
       if index_offsets is not None:
-        assert len(index_offsets) == len(array_arg_vars)
+        assert len(index_offsets) == len(array_arg_vars), \
+          "Different number of index offsets %s and array arguments %s" % \
+          (index_offsets, array_arg_vars)
         idx_expr = builder.add(idx_expr, builder.int(index_offsets[i]) )
       curr_slice = builder.slice_along_axis(curr_array, axis, idx_expr)
-      
       slice_values.append(curr_slice) 
-    
+
     elt_result = builder.call(fn, tuple(closure_arg_vars) + tuple(slice_values))
     if output is None: 
       builder.return_(elt_result)
@@ -254,8 +253,6 @@ class IndexifyAdverbs(Transform):
     index_fn = self.indexify_fn(expr.fn, axes, args, 
                                 cartesian_product=False, 
                                 output = output)
-    
-    
     self.parfor(index_fn, niters)
     return output 
   
@@ -280,16 +277,10 @@ class IndexifyAdverbs(Transform):
   def transform_IndexMap(self, expr, output = None):
     shape = expr.shape 
     fn = expr.fn 
-    
     dims = self.tuple_elts(shape)
     n_dims = len(dims)
-    if n_dims == 1:
-      shape = dims[0]
-    
-    if output is None:
-      output = self.create_output_array(fn, [shape], shape)
-    
-    
+    if n_dims == 1: shape = dims[0]
+    if output is None: output = self.create_output_array(fn, [shape], shape)
     old_closure_args = self.closure_elts(fn)
     old_closure_arg_types = get_types(old_closure_args)
     fn = self.get_fn(fn)
@@ -332,7 +323,6 @@ class IndexifyAdverbs(Transform):
     self.parfor(new_closure, shape)
     return output
   
-  
   def transform_Reduce(self, expr):
     fn = expr.fn 
     combine = expr.combine 
@@ -352,10 +342,9 @@ class IndexifyAdverbs(Transform):
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
     if self.is_none(init):
-
       init_args = [self.index_along_axis(arg, axis, self.int(0)) for arg, axis in zip(args, axes)]
       init = self.call(fn, init_args)
-      index_offsets = (1,)
+      index_offsets = (1,) * len(axes)
       assert init.type == fn.return_type
       nelts = self.sub(nelts, self.int(1), "nelts") 
     else:

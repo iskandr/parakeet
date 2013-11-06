@@ -19,8 +19,8 @@ def matmult_loops(X,Y,Z):
       Z[i,j] = total 
   return Z
 
-n, d = 2000, 500 
-m = 2000
+n, d = 800, 800 
+m = 800
 X = np.random.randn(m,d).astype('float64')
 Y = np.random.randn(d,n).astype('float64')
 Z = np.zeros((m,n)).astype('float64')

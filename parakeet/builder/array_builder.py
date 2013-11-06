@@ -121,7 +121,7 @@ class ArrayBuilder(CoreBuilder):
     if rank == 1:
       assert axis == 0
       return idx
-
+    
     indices = []
     for i in xrange(rank):
       if i == axis:
@@ -144,6 +144,8 @@ class ArrayBuilder(CoreBuilder):
     otherwise just return the array 
     """
     r = self.rank(arr)
+    if isinstance(axis, Expr):
+      axis = unwrap_constant(axis)
     if r > axis:
       index_tuple = self.build_slice_indices(r, axis, idx)
       return self.index(arr, index_tuple)
