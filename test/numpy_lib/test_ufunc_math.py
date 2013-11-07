@@ -3,10 +3,16 @@ import numpy as np
 from parakeet.testing_helpers import run_local_tests, expect 
 
 
-int_array = np.array([2,3])
-bool_array = np.array([True, True])
-float_array = np.array([1.0, 2.0])
-arrays = [int_array, bool_array, float_array]
+int_vec = np.array([2,3])
+int_mat = np.array([int_vec, int_vec])
+bool_vec = np.array([True, True])
+bool_mat = np.array([bool_vec, bool_vec])
+float32_vec = np.array([1.0, 2.0])
+float32_mat = np.array([float32_vec, float32_vec])
+float64_vec = np.array([-1.0, 100000.0])
+float64_mat = np.array([float64_vec, float64_vec])
+
+arrays = [int_vec, bool_vec, float32_vec, float64_mat]
 
 
 def unary(fn): 

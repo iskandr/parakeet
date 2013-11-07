@@ -2,7 +2,7 @@ from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT, TupleT, FnT, 
 from .. ndtypes import lower_rank 
 
 from .. syntax import Expr, Tuple, Var, Index, Closure, TypedFn 
-from .. syntax.helpers import get_types
+from .. syntax.helpers import get_types, get_elt_types 
 from collect_vars import collect_binding_names
 from syntax_visitor import SyntaxVisitor
 
@@ -166,7 +166,10 @@ class Verify(SyntaxVisitor):
       
   def visit_Call(self, expr):
     self.verify_call(expr.fn, expr.args)
-    
+  
+  def is_none(self, expr):
+    return expr is None or (hasattr(expr, 'type') and isinstance(expr.type, NoneT))
+  
   def visit_Map(self, expr):
     if expr.fn.__class__ is Closure: 
       closure_elts = tuple(expr.fn.args) 
@@ -175,7 +178,10 @@ class Verify(SyntaxVisitor):
       fn = expr.fn
       closure_elts = ()
     verify(fn)
-    elt_types = [lower_rank(arg.type, 1) for arg in expr.args]
+    if self.is_none(expr.axis):
+      elt_types = get_elt_types(expr.args)
+    else:
+      elt_types = [lower_rank(arg.type, 1) for arg in expr.args]
     arg_types = tuple(get_types(closure_elts)) + tuple(elt_types)
     args = tuple(closure_elts) + tuple(expr.args)                      
     self.check_fn_args(fn, args, arg_types)

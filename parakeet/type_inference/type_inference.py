@@ -135,7 +135,7 @@ class TypeInference(LocalTypeInference):
       assert len(arg_types) == 2, \
         "Expected two arguments but got [%s] in %s" % (", ".join(str(t) for t in arg_types), expr)
       xt, yt = arg_types
-      x, y = args 
+      x, y = args
       assert xt.__class__ is TupleT, \
         "Unexpected argument types (%s,%s) for operator %s" % (xt, yt, expr.prim)
       assert yt.__class__ is TupleT, \
@@ -144,15 +144,19 @@ class TypeInference(LocalTypeInference):
       y_elts = self.tuple_elts(y)
       nx = len(x_elts)
       ny = len(y_elts)
-      assert len(x_elts) == len(y_elts), "Can't compare tuple of unequal lengths %d and %d" % (nx, ny)
-        
-      if expr.prim is prims.equal:
+      if expr.prim is prims.add:
+        return self.tuple( tuple(x_elts) + tuple(y_elts) )
+      elif expr.prim is prims.equal:
+        assert len(x_elts) == len(y_elts), \
+          "Can't compare tuple of unequal lengths %d and %d" % (nx, ny)
         result = true  
         for (xi, yi) in zip(x_elts, y_elts):
           elts_eq = syntax.PrimCall(prims.equal, (xi, yi), type=Bool)
           result = syntax.PrimCall(prims.logical_and, (result, elts_eq), type=Bool) 
         return result  
       elif expr.prim is prims.not_equal:
+        assert len(x_elts) == len(y_elts), \
+          "Can't compare tuple of unequal lengths %d and %d" % (nx, ny)
         result = false  
         for (xi, yi) in zip(x_elts, y_elts):
           elts_eq = syntax.PrimCall(prims.not_equal, (xi, yi), type=Bool)
@@ -164,7 +168,8 @@ class TypeInference(LocalTypeInference):
     else:
       assert all(t.__class__ is not NoneT for t in arg_types), \
         "Invalid argument types for prim %s: %s" % (expr.prim, arg_types,)
-      typed_prim_fn = mk_prim_fn(expr.prim, get_elt_types(arg_types))
+      elt_types = [t.elt_type if isinstance(t, ArrayT) else t for t in arg_types]
+      typed_prim_fn = mk_prim_fn(expr.prim, elt_types)
       max_rank = adverb_helpers.max_rank(arg_types)
       if max_rank == 0:
         return self.call(typed_prim_fn, args)

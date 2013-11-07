@@ -74,8 +74,10 @@ class IndexifyAdverbs(Transform):
       return mk_closure()
     
     n_indices = n_arrays if cartesian_product else 1
+    
     #index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     index_input_types = (Int64,) * n_indices  
+    
     if output is None:
       inner_input_types = closure_arg_types + array_arg_types + index_input_types
       new_return_type = fn.return_type 
@@ -144,10 +146,11 @@ class IndexifyAdverbs(Transform):
     if output is None: 
       builder.return_(elt_result)
     else:
-      if len(index_elts) > 1:
-        builder.setidx(output_var, builder.tuple(index_elts), elt_result)
+      
+      if len(index_input_vars) > 1:
+        builder.setidx(output_var, builder.tuple(index_input_vars), elt_result)
       else:
-        builder.setidx(output_var, index_elts[0], elt_result)
+        builder.setidx(output_var, index_input_vars[0], elt_result)
       builder.return_(none)
     
     #inliner = Inliner()

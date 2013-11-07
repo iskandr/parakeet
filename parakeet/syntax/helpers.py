@@ -159,11 +159,12 @@ def get_types(exprs):
   else:
     return [expr.type for expr in exprs]
   
-def get_elt_type(t):
+def get_elt_type(expr):
+  t = expr.type 
   if isinstance(t, ScalarT):
     return t 
   else:
-    assert isinstance(t, ArrayT), "Expected array or scalar, not %s" % t
+    assert isinstance(t, ArrayT), "Expected array or scalar, not %s : %s" % (expr, t)
     return t.elt_type 
 
 def get_elt_types(ts):
