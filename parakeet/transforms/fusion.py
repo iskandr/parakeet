@@ -17,7 +17,12 @@ def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
   fused_formals = []
   fused_input_types = []
   fused_type_env = prev_fn.type_env.copy()
-  fused_name = names.fresh('fused')
+  next_name = names.original(next_fn.name)
+  prev_name = names.original(prev_fn.name)
+  if prev_name.startswith("fused_") or next_name.startswith("fused_"):
+    fused_name = names.fresh(prev_name + "_" + next_name)
+  else:
+    fused_name = names.fresh("fused_" + prev_name +  "_" + next_name)
 
   prev_closure_formals = prev_fn.arg_names[:len(prev_fixed_args)]
 
@@ -100,76 +105,79 @@ class Fusion(Transform):
     if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
-    if isinstance(rhs, DataAdverb) and \
-       rhs.__class__ is not OuterMap and \
-       inline.can_inline(self.get_fn(rhs.fn)):
+    if not isinstance(rhs, DataAdverb): return stmt 
+    # TODO: figure out why this is here
+    if rhs.__class__ is OuterMap: return stmt 
+    rhs_fn = self.get_fn(rhs.fn)
+    if not inline.can_inline(rhs_fn): return stmt 
+    args = rhs.args
+    if any(arg.__class__ not in (Var, Const) for arg in args): return stmt 
+    
+    arg_names = [arg.name for arg in args if arg.__class__ is Var]
+    unique_vars = set(arg_names)
+    adverb_vars = [name for name in unique_vars
+                  if name in self.adverb_bindings]
 
-      args = rhs.args
-      if all(arg.__class__ in (Var, Const) for arg in args):
-        arg_names = [arg.name for arg in args if arg.__class__ is Var]
-        unique_vars = set(arg_names)
-        adverb_vars = [name for name in unique_vars
-                       if name in self.adverb_bindings]
-
-        for arg_name in adverb_vars:
-          n_occurrences = sum((name == arg_name for name in arg_names))
-          if self.use_counts[arg_name] == n_occurrences:
-            prev_adverb = self.adverb_bindings[arg_name]
-            if inline.can_inline(self.get_fn(prev_adverb.fn)):
-             
-              # 
-              # Map(Map) -> Map
-              # Reduce(Map) -> Reduce 
-              # Scan(Map) -> Scan 
-              # 
-              if prev_adverb.__class__ is Map and rhs.axis == prev_adverb.axis:
-                surviving_array_args = []
-                fusion_args = []
-                for (pos, arg) in enumerate(rhs.args):
-                  c = arg.__class__
-                  if c is Var and arg.name == arg_name:
-                    fusion_args.append(None)
-                  elif c is Const:
-                    fusion_args.append(arg)
-                  else:
-                    surviving_array_args.append(arg)
-                    fusion_args.append(pos)
-                new_fn, clos_args = \
+    for arg_name in adverb_vars:
+      n_occurrences = sum((name == arg_name for name in arg_names))
+      if self.use_counts[arg_name] == n_occurrences:
+        prev_adverb = self.adverb_bindings[arg_name]
+        if inline.can_inline(self.get_fn(prev_adverb.fn)):
+          # 
+          # Map(Map) -> Map
+          # Reduce(Map) -> Reduce 
+          # Scan(Map) -> Scan
+          # ...but for some reason, not:
+          # OuterMap(Map) -> OuterMap 
+          # 
+          if prev_adverb.__class__ is Map and rhs.axis == prev_adverb.axis:
+            surviving_array_args = []
+            fusion_args = []
+            for (pos, arg) in enumerate(rhs.args):
+              c = arg.__class__
+              if c is Var and arg.name == arg_name:
+                fusion_args.append(None)
+              elif c is Const:
+                fusion_args.append(arg)
+              else:
+                surviving_array_args.append(arg)
+                fusion_args.append(pos)
+            new_fn, clos_args = \
                   fuse(self.get_fn(prev_adverb.fn),
                         self.closure_elts(prev_adverb.fn),
                         self.get_fn(rhs.fn),
                         self.closure_elts(rhs.fn),
                         fusion_args)
-                assert new_fn.return_type == self.return_type(rhs.fn)
-                del self.adverb_bindings[arg_name]
-                if self.fn.created_by is not None:
-                  new_fn = self.fn.created_by.apply(new_fn)
-                rhs.fn = self.closure(new_fn, clos_args)
-                rhs.args = prev_adverb.args + surviving_array_args
+            assert new_fn.return_type == self.return_type(rhs.fn)
+            del self.adverb_bindings[arg_name]
+            if self.fn.created_by is not None:
+              new_fn = self.fn.created_by.apply(new_fn)
+            rhs.fn = self.closure(new_fn, clos_args)
+            rhs.args = prev_adverb.args + surviving_array_args
                 
-              # 
-              # Reduce(IndexMap) -> IndexReduce
-              #   
-              elif prev_adverb.__class__ is IndexMap and \
-                   rhs.__class__ is Reduce and \
-                   len(rhs.args) == 1 and \
-                   (self.is_none(rhs.axis) or rhs.args[0].type.rank == 1):
+          # 
+          # Reduce(IndexMap) -> IndexReduce
+          #   
+          elif prev_adverb.__class__ is IndexMap and \
+                rhs.__class__ is Reduce and \
+                len(rhs.args) == 1 and \
+                (self.is_none(rhs.axis) or rhs.args[0].type.rank == 1):
                 
-                new_fn, clos_args = \
-                  fuse(self.get_fn(prev_adverb.fn),
+            new_fn, clos_args = \
+                fuse(self.get_fn(prev_adverb.fn),
                         self.closure_elts(prev_adverb.fn),
                         self.get_fn(rhs.fn),
                         self.closure_elts(rhs.fn),
                         rhs.args)
-                assert new_fn.return_type == self.return_type(rhs.fn)
-                del self.adverb_bindings[arg_name]
-                if self.fn.created_by is not None:
-                  new_fn = self.fn.created_by.apply(new_fn)
-                stmt.rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
+            assert new_fn.return_type == self.return_type(rhs.fn)
+            del self.adverb_bindings[arg_name]
+            if self.fn.created_by is not None:
+              new_fn = self.fn.created_by.apply(new_fn)
+            stmt.rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
                                   shape = prev_adverb.shape, 
                                   combine = rhs.combine, 
                                   type = rhs.type,
-                                  init = rhs.init )
+                                  init = rhs.init)
                 
     if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb):
       self.adverb_bindings[stmt.lhs.name] = rhs

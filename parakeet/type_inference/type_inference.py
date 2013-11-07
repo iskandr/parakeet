@@ -1,4 +1,6 @@
 from .. import config, names,  prims, syntax
+
+from ..builder import mk_prim_fn 
 from ..ndtypes import (Type, 
                        array_type, closure_type, tuple_type, type_conv, 
                        Bool, IntT, Int64,  ScalarT, ArrayT,  
@@ -13,7 +15,7 @@ from ..syntax import adverb_helpers
 from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Map,  
                       ActualArgs, FormalArgs, MissingArgsError, TooManyArgsError)
 
-from ..syntax.helpers import (get_type, get_types,  
+from ..syntax.helpers import (get_type, get_types,  get_elt_types, 
                               one_i64, zero_i64, none, true, false, 
                               gen_data_arg_names)
 from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_cast_fn
@@ -140,31 +142,41 @@ class TypeInference(LocalTypeInference):
         "Unexepcted argument types (%s,%s) for operator %s" % (xt, yt, expr.prim)
       x_elts = self.tuple_elts(x)
       y_elts = self.tuple_elts(y)
-      
-      if expr.prim == prims.equal:
-        nx = len(x_elts)
-        ny = len(y_elts)
-        assert len(x_elts) == len(y_elts), \
-          "Can't compare tuple of unequal lengths %d and %d" % (nx, ny)
+      nx = len(x_elts)
+      ny = len(y_elts)
+      assert len(x_elts) == len(y_elts), "Can't compare tuple of unequal lengths %d and %d" % (nx, ny)
+        
+      if expr.prim is prims.equal:
         result = true  
         for (xi, yi) in zip(x_elts, y_elts):
           elts_eq = syntax.PrimCall(prims.equal, (xi, yi), type=Bool)
           result = syntax.PrimCall(prims.logical_and, (result, elts_eq), type=Bool) 
         return result  
+      elif expr.prim is prims.not_equal:
+        result = false  
+        for (xi, yi) in zip(x_elts, y_elts):
+          elts_eq = syntax.PrimCall(prims.not_equal, (xi, yi), type=Bool)
+          result = syntax.PrimCall(prims.logical_or, (result, elts_eq), type=Bool) 
+        return result  
+      
       else:
-        assert False, "Unsupport tuple operation %s" % expr  
+        assert False, "Unsupported tuple operation %s" % expr  
     else:
       assert all(t.__class__ is not NoneT for t in arg_types), \
         "Invalid argument types for prim %s: %s" % (expr.prim, arg_types,)
-      prim_fn = build_untyped_prim_fn(expr.prim)
-
+      typed_prim_fn = mk_prim_fn(expr.prim, get_elt_types(arg_types))
       max_rank = adverb_helpers.max_rank(arg_types)
+      result_t = make_array_type(typed_prim_fn.return_type, max_rank)
+      return Map(fn = typed_prim_fn, args = args, type = result_t, axis = none)
+      """
       arg_names = gen_data_arg_names(len(arg_types))
       untyped_broadcast_fn = \
           adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
       typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
       result_t = typed_broadcast_fn.return_type
       return syntax.Call(typed_broadcast_fn, args, type = result_t)
+      """
+      
 
   def transform_Zip(self, expr):
     assert isinstance(expr.values, (list,tuple)), "Expected multiple values but got %s" % expr.values

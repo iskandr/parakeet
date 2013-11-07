@@ -53,3 +53,18 @@ def mk_cast_fn(from_type, to_type):
   b.return_(b.cast(x, to_type))
   _cast_fn_cache[key] = f
   return f
+
+_prim_fn_cache = {}
+def mk_prim_fn(prim, arg_types):
+  key = prim, tuple(arg_types)
+  if key in _prim_fn_cache:
+    return _prim_fn_cache[key]
+  
+  upcast_types = prim.expected_input_types(arg_types)
+  result_type = prim.result_type(upcast_types)
+  f, b, args = build_fn(arg_types, result_type)
+  # builder will auto-cast argument vars to appropriate types for the given primitive
+  b.return_(b.prim(prim, args))
+  _prim_fn_cache[key] = f 
+  return f 
+  

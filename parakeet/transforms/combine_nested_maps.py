@@ -35,9 +35,9 @@ class CombineNestedMaps(Transform):
                        shape = self.translate_expr(expr.shape, mapping,forbidden), 
                        type = expr.type)
   
-  def build_arg_mapping(self, fn, closure_elts, map_args):
+  def build_arg_mapping(self, fn, closure_elts, outer_args):
     
-    combined_args = tuple(closure_elts) + tuple(map_args)
+    combined_args = tuple(closure_elts) + tuple(outer_args)
     assert len(fn.arg_names) == len(combined_args), \
       "Mismatch between function with %d formals and given %d actual args" % \
       (len(fn.arg_names), len(combined_args))
@@ -60,60 +60,53 @@ class CombineNestedMaps(Transform):
         return None 
     return mapping 
   
-  def combine_maps(self, fn, closure_elts, map_args, outer_axis, result_type):
-    if len(fn.body) == 0:
-      return None 
+  def combine_maps(self, closure, outer_args, outer_axis, result_type):
+    fn = self.get_fn(closure)
+    closure_elts = self.closure_elts(closure)
+    
+    if len(fn.body) == 0: return None 
     stmt = fn.body[-1]
-    if stmt.__class__ is not Return:
-      return None 
+    if stmt.__class__ is not Return: return None 
     nested_expr = stmt.value 
-    if nested_expr.__class__ is not Map:
-      return None
     
-
-    arg_mapping = self.build_arg_mapping(fn, closure_elts, map_args)
-    if arg_mapping is None:
-
-      return None 
+    if nested_expr.__class__ not in (Map, OuterMap): return None
     
-    nested_map_args = nested_expr.args
-    n_nested_map_args = len(nested_map_args)
+    arg_mapping = self.build_arg_mapping(fn, closure_elts, outer_args)
+    if arg_mapping is None: return None 
+    
+    nested_outer_args = nested_expr.args
+    n_nested_outer_args = len(nested_outer_args)
     nested_map_closure_elts = self.closure_elts(nested_expr.fn) 
     nested_fn = self.get_fn(nested_expr.fn)
     nested_axis = nested_expr.axis
     
     # either both Maps specify an axis of traversal or neither do  
-    if self.is_none(outer_axis) != self.is_none(nested_axis):
- 
-      return None 
+    if self.is_none(outer_axis) != self.is_none(nested_axis): return None 
     
     
-    n_array_args = len(map_args)
+    n_array_args = len(outer_args)
     
     inner_array_names = fn.arg_names[-n_array_args:]
     
-    if len(nested_map_closure_elts) < len(inner_array_names):
-
-      return None 
+    if len(nested_map_closure_elts) < len(inner_array_names): return None 
     
     # if any of the last k closure arguments aren't array elements
     # then abandon ship 
     k = n_array_args
-    if any(closure_expr.__class__ is not Var or closure_expr.name not in inner_array_names
-           for closure_expr in nested_map_closure_elts[-k:]):
-
+    for closure_expr in nested_map_closure_elts[-k:]:
+      if closure_expr.__class__ is not Var or closure_expr.name not in inner_array_names:
         return None 
-    
+      
     # if the two Maps are both elementwise, then make the OuterMap 
     # also elementwise
 
-    remapped_inner_map_args = [self.translate_expr(e,arg_mapping)
-                               for e in nested_map_args]
+    remapped_inner_outer_args = [self.translate_expr(e,arg_mapping)
+                               for e in nested_outer_args]
     remapped_inner_closure_elts = [self.translate_expr(e, arg_mapping)
                                    for e in nested_map_closure_elts]
     
     new_closure_elts = remapped_inner_closure_elts[:-k]
-    new_map_args = remapped_inner_closure_elts[-k:] + remapped_inner_map_args    
+    new_outer_args = remapped_inner_closure_elts[-k:] + remapped_inner_outer_args    
     
 
     if self.is_none(outer_axis):
@@ -129,33 +122,33 @@ class CombineNestedMaps(Transform):
           "Axis argument must be None, int, or literal tuple, not %s" % nested_axis 
         inner_axes = tuple(nested_axis.elts) 
       else:
-        inner_axes = (nested_axis,) * n_nested_map_args
+        inner_axes = (nested_axis,) * n_nested_outer_args
        
       combined_axes = list(outer_axes + inner_axes)
-      for i, array_arg in enumerate(new_map_args):
+      for i, array_arg in enumerate(new_outer_args):
         if array_arg.__class__ is Transpose:
           old_axis = combined_axes[i]
           if not self.is_none(old_axis):
             combined_axes[i] = Const(value = array_arg.type.rank - old_axis.value - 1, 
                                      type = old_axis.type)
-            new_map_args[i] = array_arg.array
+            new_outer_args[i] = array_arg.array
       combined_axis = self.tuple(combined_axes)
-    new_expr = OuterMap(fn = self.closure(nested_fn, new_closure_elts),
-                        args = tuple(new_map_args),   
-                        axis = combined_axis, 
-                        type = result_type)
-  
-    return new_expr 
+    return  OuterMap(fn = self.closure(nested_fn, new_closure_elts),
+                     args = tuple(new_outer_args),   
+                     axis = combined_axis, 
+                     type = result_type)
     
   def transform_Map(self, expr):
-    fn = self.get_fn(expr.fn)
-    closure_elts = self.closure_elts(expr.fn)
-    map_args = expr.args 
-    axis = expr.axis 
-    new_expr = self.combine_maps(fn, closure_elts, map_args, axis, expr.type)
+    # can't turn Map(-, x, y) into an OuterMap since (x,y) are at the same iteration level 
+    if len(expr.args) != 1:
+      return expr
+    new_expr = self.combine_maps(expr.fn, expr.args, expr.axis, expr.type)
+    if new_expr is None: return expr 
+    else: return new_expr 
     
-    if new_expr is None:
-      return expr 
-    else:
-      return new_expr 
+  def transform_OuterMap(self, expr):
+    new_expr = self.combine_maps(expr.fn, expr.args, expr.axis, expr.type)
+    if new_expr is None: return expr 
+    else: return new_expr 
+    
     

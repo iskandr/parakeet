@@ -152,6 +152,8 @@ class Prim(object):
     elif arg_types in self._upcast_types:
       return self._upcast_types[arg_types]
     else:
+      assert all(isinstance(t, ScalarT) for t in arg_types), \
+        "Prim %s expects scalar inputs but given %s" % (self, arg_types)
       # search over all possible signatures to figure out 
       best_upcast_types = None
       best_distance = np.inf 
@@ -179,6 +181,8 @@ class Prim(object):
 class Float(Prim):
   """Always returns a float"""
   def expected_input_types(self, arg_types):
+    assert all(isinstance(t, ScalarT) for t in arg_types), \
+        "Prim %s expects scalar inputs but given %s" % (self, arg_types)
     max_nbytes = max(t.nbytes for t in arg_types)
     if max_nbytes <= 4:
       upcast_types = [Float32.combine(t) for t in arg_types]

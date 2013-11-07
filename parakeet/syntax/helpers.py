@@ -2,7 +2,7 @@ import numpy as np
 
 from .. ndtypes import (Int64, Int32, Float32, Float64, Bool, FloatT, IntT, BoolT, 
                         NoneType, ScalarT, make_slice_type, make_tuple_type, ClosureT, 
-                        FnT, Type, make_closure_type)
+                        FnT, Type, make_closure_type, ArrayT)
 
 from array_expr import Slice
 from expr  import Const, Var, Expr, Closure, ClosureElt 
@@ -158,6 +158,16 @@ def get_types(exprs):
     return exprs.transform(get_type)
   else:
     return [expr.type for expr in exprs]
+  
+def get_elt_type(t):
+  if isinstance(t, ScalarT):
+    return t 
+  else:
+    assert isinstance(t, ArrayT), "Expected array or scalar, not %s" % t
+    return t.elt_type 
+
+def get_elt_types(ts):
+  return [get_elt_type(t) for t in ts]
 
 def is_zero(expr):
   return expr.__class__ is Const and expr.value == 0

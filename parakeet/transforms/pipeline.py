@@ -76,22 +76,37 @@ symbolic_range_propagation = Phase([RangePropagation, OffsetPropagation],
 shape_elim = Phase(ShapeElimination,
                    config_param = 'opt_shape_elim')
 
+
+early_optimizations = Phase([
+                               inline_opt,
+                               symbolic_range_propagation,   
+                               licm,
+                             ],
+                            name = "EarlyOpt",
+                            copy = True, 
+                            memoize = True, 
+                            cleanup = [Simplify, DCE], 
+                            depends_on = normalize, 
+                            )
+
+adverb_optimizations = Phase([
+                                fusion_opt,
+                                CombineNestedMaps,
+                                fusion_opt, 
+                              ], 
+                             run_if = contains_adverbs, 
+                             depends_on = early_optimizations, 
+                             copy = True, 
+                             memoize = True, 
+                             cleanup = [Simplify, DCE])
+
 high_level_optimizations = Phase([ 
-                                    
-                                    inline_opt,
-                                    symbolic_range_propagation,   
-                                    licm,
-                                    
-                                    fusion_opt,
-                                    CombineNestedMaps,
-                                    RecursiveApply,  
-                                    fusion_opt, 
                                     LowerArrayOperators, 
                                     NegativeIndexElim, 
                                     symbolic_range_propagation
             
                                  ], 
-                                 depends_on = normalize,
+                                 depends_on = adverb_optimizations,
                                  name = "HighLevelOpts", 
                                  copy = True, 
                                  memoize = True, 
