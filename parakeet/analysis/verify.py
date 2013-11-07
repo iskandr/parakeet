@@ -294,5 +294,4 @@ def verify(fn):
       print "...called from:"
     print fn
     print 
-    Verify.call_stack = []
     raise 
