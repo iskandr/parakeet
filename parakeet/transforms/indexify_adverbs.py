@@ -296,7 +296,7 @@ class IndexifyAdverbs(Transform):
     if index_is_tuple:
       index_types = last_input_type.elt_types
     else:
-      index_types = old_input_types[:-n_dims:]
+      index_types = old_input_types[-n_dims:]
     
     idx_names = self.fresh_index_names(n_dims)
     assert len(index_types) == n_dims, \

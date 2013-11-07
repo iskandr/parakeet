@@ -3,6 +3,7 @@ from .. frontend import translate_function_value, jit, macro, typed_macro
 from .. ndtypes import make_tuple_type, TupleT, ArrayT, Int64 
 from .. syntax import (Map, Tuple,  Array, Attribute, 
                        TupleProj,  const_int, Zip, Len)
+import numpy as np 
 from adverbs import reduce, map 
 
 @jit 
@@ -23,7 +24,7 @@ def builtin_all(x, axis = None):
 
 @jit 
 def builtin_sum(x, axis = None):
-  return reduce(prims.add, x, init = 0, axis = axis)
+  return reduce(prims.add, x, init = False, axis = axis)
 
 
 @typed_macro 

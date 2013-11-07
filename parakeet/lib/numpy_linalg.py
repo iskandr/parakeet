@@ -2,9 +2,9 @@
 import numpy as np 
 
 from .. import prims 
-from ..frontend import jit, macro, typed_macro 
+from ..frontend import typed_macro 
 from ..ndtypes import ScalarT, ArrayT, make_array_type
-from ..syntax import Select, DelayUntilTyped, PrimCall, Call,  OuterMap, Map
+from ..syntax import PrimCall, Call,  OuterMap, Map
 from ..syntax.helpers import make_closure 
 
 def _get_vdot_fn(a, b):
