@@ -465,7 +465,7 @@ class AST_Translator(ast.NodeVisitor):
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
     if value is sum:
-      return mk_reduce_call(build_untyped_prim_fn(prims.add), positional, zero_i64)
+      return mk_reduce_call(build_untyped_prim_fn(prims.add), positional, false)
     
     elif value is max:
       if len(positional) == 1:

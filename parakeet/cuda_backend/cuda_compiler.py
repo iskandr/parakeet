@@ -1,5 +1,4 @@
 import numpy as np 
-import pycuda 
 
 from .. import names
 from ..builder import build_fn

@@ -104,7 +104,7 @@ class Verify(SyntaxVisitor):
     if isinstance(arr_t, ArrayT):
       rank  = arr_t.rank
       if isinstance(idx_t, TupleT):
-        n_indices = len(idx_t.elt_type)
+        n_indices = len(idx_t.elt_types)
       else: 
         n_indices = 1 
       assert rank >= n_indices, \

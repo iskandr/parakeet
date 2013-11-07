@@ -32,7 +32,7 @@ def run_vm(xtype, ytype):
   y = get_vector(ytype)
   
   y = y.reshape(mat_shape)
-  x = x[:y.shape[1]]
+  x = x[:y.shape[0]]
 
   expect(np.dot, [x,y], np.dot(x,y))
 
