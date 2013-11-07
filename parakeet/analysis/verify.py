@@ -1,4 +1,4 @@
-from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT, TupleT, FnT, Type
+from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT, TupleT, FnT, Type, SliceT
 from .. ndtypes import lower_rank 
 
 from .. syntax import Expr, Tuple, Var, Index, Closure, TypedFn 
@@ -7,12 +7,18 @@ from collect_vars import collect_binding_names
 from syntax_visitor import SyntaxVisitor
 
 class Verify(SyntaxVisitor):
+  call_stack = []
   def __init__(self, fn):
     SyntaxVisitor.__init__(self)
+    
     self.fn = fn
+    self.call_stack.append(fn)
     self.bound = set(fn.arg_names)
     self.seen_return = False 
 
+  def __del__(self):
+    self.call_stack.pop()
+    
   def bind_var(self, name):
     assert name not in self.bound, \
         "Error: variable %s already bound" % name
@@ -81,6 +87,29 @@ class Verify(SyntaxVisitor):
       "Expected effectful expression %s to have type %s but instead got %s" % \
       (stmt.value, NoneType, stmt.value.type)
   
+  def visit_Index(self, expr):
+    arr = expr.value
+    arr_t = arr.type  
+    idx = expr.index 
+    idx_t = idx.type 
+    assert arr.type is not None, \
+      "Error in indexing expression %s: %s lacks type" % (expr, arr) 
+    assert idx.type is not None, \
+      "Error in indexing expression %s: %s lacks type" % (expr, idx)
+    assert isinstance(arr.type, (TupleT, ArrayT)), \
+      "Expected %s to be an array or tuple" % arr
+    assert isinstance(idx.type, (TupleT, SliceT, NoneT, ScalarT)), \
+      "Expected index %s to be scalar or tuple" % idx
+     
+    if isinstance(arr_t, ArrayT):
+      rank  = arr_t.rank
+      if isinstance(idx_t, TupleT):
+        n_indices = len(idx_t.elt_type)
+      else: 
+        n_indices = 1 
+      assert rank >= n_indices, \
+        "Expected at most %d indices but found %d in expression %s" % (rank, n_indices, expr)
+  
   def check_fn_args(self, fn, args = None, arg_types = None):
     if arg_types is None: 
       assert args is not None, "Function args missing" 
@@ -145,6 +174,7 @@ class Verify(SyntaxVisitor):
     else:
       fn = expr.fn
       closure_elts = ()
+    verify(fn)
     elt_types = [lower_rank(arg.type, 1) for arg in expr.args]
     arg_types = tuple(get_types(closure_elts)) + tuple(elt_types)
     args = tuple(closure_elts) + tuple(expr.args)                      
@@ -215,6 +245,7 @@ class Verify(SyntaxVisitor):
     take tuples of indices but have to take each index as a separate parameter
     """
     fn, closure_arg_types = self.get_fn_and_closure(stmt.fn)
+    verify(fn)
     bounds_t = stmt.bounds.type
     assert len(fn.input_types) > 0, \
       "Problem with ParFor, can't call function %s which accepts 0 args" % fn.name 
@@ -256,5 +287,11 @@ def verify(fn):
     verifier.visit_block(fn.body)
     assert verifier.seen_return, "Never encountered Return statement"
   except:
-    print "[verify] Errors in body of function", repr(fn)
+    if fn.name == Verify.call_stack[-1].name:
+      print "Error in function"
+      print "---------------------"
+    else:
+      print "...called from:"
+    print fn
+    print 
     raise 

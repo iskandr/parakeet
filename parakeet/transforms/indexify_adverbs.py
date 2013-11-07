@@ -312,12 +312,17 @@ class IndexifyAdverbs(Transform):
     output_var = input_vars[0]
     
     idx_vars = input_vars[-n_dims:]
+
     if index_is_tuple:
       elt_result = builder.call(fn, new_closure_vars + [builder.tuple(idx_vars)])
     else:
       elt_result = builder.call(fn, new_closure_vars + idx_vars)
-    if len(idx_vars) > 1:
+    if len(idx_vars) == 1:
+      builder.setidx(output_var, idx_vars[0], elt_result)
+    else:
       builder.setidx(output_var, builder.tuple(idx_vars), elt_result)
+
+      
     builder.return_(none)
     new_closure = self.closure(new_fn, (output,) + tuple(old_closure_args)  )
     self.parfor(new_closure, shape)
