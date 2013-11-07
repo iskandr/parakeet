@@ -5,6 +5,7 @@ from ..syntax.helpers import get_fn
 from ..ndtypes import ScalarT, TupleT, ArrayT
 from ..c_backend import PyModuleCompiler
 
+import config 
 
 
 class MulticoreCompiler(PyModuleCompiler):
@@ -116,10 +117,17 @@ class MulticoreCompiler(PyModuleCompiler):
     
     if self.depth == 0:  
       release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
-      acquire_gil = "\nPy_END_ALLOW_THREADS\n"  
-      omp = "#pragma omp parallel for private(%s)" % ", ".join(private_vars)
-      if len(loop_vars) > 1:
-        omp += " collapse(%d)" % len(loop_vars) 
+      acquire_gil = "\nPy_END_ALLOW_THREADS\n" 
+      
+      
+      if config.collapse_nested_loops:
+        omp = "#pragma omp parallel for private(%s) schedule(%s, %d)" % \
+          (", ".join(private_vars), config.schedule, config.schedule_size)
+        if len(loop_vars) > 1:
+          omp += " collapse(%d)" % len(loop_vars)
+      else:
+        omp = "#pragma omp parallel for private(%s) schedule(%s, %d)" % \
+          (private_vars[0], config.schedule, config.schedule_size)
       return release_gil + omp + loops + acquire_gil    
     else:
       return loops 

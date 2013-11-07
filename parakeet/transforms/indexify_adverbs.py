@@ -3,11 +3,11 @@ import itertools
 
 from .. import names 
 from ..builder import build_fn 
-from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT
+from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT, ArrayT 
 from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
                       Var, Return, UntypedFn, Expr)
 from ..syntax.helpers import unwrap_constant, get_types, none, zero_i64 
-from ..syntax.adverb_helpers import max_rank_arg
+from ..syntax.adverb_helpers import max_rank_arg, max_rank
 from inline import Inliner 
 from transform import Transform
 
@@ -56,7 +56,7 @@ class IndexifyAdverbs(Transform):
     axes = self.get_axes(array_args, axis)
     
     key = (  fn.cache_key, 
-             axes, 
+             axes,
              closure_arg_types, 
              array_arg_types, 
              output is None,  
@@ -74,8 +74,29 @@ class IndexifyAdverbs(Transform):
     if key in self._indexed_fn_cache:
       return mk_closure()
     
-    n_indices = n_arrays if cartesian_product else 1
-    
+    if cartesian_product:
+      # if we're doing a cartesian product then each argument may need 
+      # a different number of indices depending on whether it's a scalar
+      # and when its axis is None or given as an int 
+      n_indices = 0
+      for axis, arg_t in zip(axes, array_arg_types):
+        if axis is None:
+          n_indices += self.rank(arg_t)
+        elif isinstance(arg_t, ArrayT):
+          n_indices += 1
+    else:
+      # if we're doing an element-wise map, 
+      # then either the axes are all None, in which case 
+      # we need indices for the largest arg
+      # or, we're just picking off one slice from 
+      # every argument 
+      if any(axis is None for axis in axes):
+        assert all(axis is None for axis in axes), "Incompatible axes %s" % axes 
+        n_indices = max_rank(array_arg_types)
+      else:
+        assert all(isinstance(axis, (int,long)) for axis in axes), "Invalid axes %s" % axes 
+        n_indices = 1
+        
     #index_input_type = Int64 if n_indices == 1 else repeat_tuple(Int64, n_arrays) 
     index_input_types = (Int64,) * n_indices  
     
@@ -132,8 +153,10 @@ class IndexifyAdverbs(Transform):
       
     slice_values = []
 
+    idx_counter = 0
     for i, curr_array in enumerate(array_arg_vars):
       axis = axes[i]
+      
       idx_expr = index_elts[i]
       if index_offsets is not None:
         assert len(index_offsets) == len(array_arg_vars), \
@@ -217,16 +240,23 @@ class IndexifyAdverbs(Transform):
         axis = axis_elts  
       else:
         axis = unwrap_constant(axis)
-      
+    
+    # unpack the axis argument into a tuple,  
+    # if only one axis was given, then repeat it as many times as we have args 
     if isinstance(axis, list):
       axes = tuple(axis)
     elif isinstance(axis, tuple):
       axes = axis
     else:
-      assert axis is None or isinstance(axis, (int,long)), "Invalid axis %s" % axis 
+      assert axis is None or isinstance(axis, (int,long)), "Invalid axis %s" % axis
       axes = (axis,) * len(args)
-       
+    
     assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
+    
+    if self.rank(max_rank_arg(args)) < 2:
+        # if we don't actually have any multidimensional arguments, 
+        # might as well make the axes just 0  
+      axes = tuple(0 if axis is None else axis for axis in axes)
     return axes 
   
   def niters(self, args, axes):

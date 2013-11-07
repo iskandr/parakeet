@@ -221,6 +221,5 @@ function_mappings = {
   np.linspace : lib.linspace, 
   np.vdot : lib.vdot, 
   np.dot : lib.dot,
-  np.linalg.norm : lib.norm,  
-  
+  np.linalg.norm : lib.linalg.norm,  
 }
