@@ -166,8 +166,14 @@ class TypeInference(LocalTypeInference):
         "Invalid argument types for prim %s: %s" % (expr.prim, arg_types,)
       typed_prim_fn = mk_prim_fn(expr.prim, get_elt_types(arg_types))
       max_rank = adverb_helpers.max_rank(arg_types)
+      if max_rank == 0:
+        return self.call(typed_prim_fn, args)
+      elif max_rank == 1:
+        axis = zero_i64 
+      else:
+        axis = none 
       result_t = make_array_type(typed_prim_fn.return_type, max_rank)
-      return Map(fn = typed_prim_fn, args = args, type = result_t, axis = none)
+      return Map(fn = typed_prim_fn, args = args, type = result_t, axis = axis)
       """
       arg_names = gen_data_arg_names(len(arg_types))
       untyped_broadcast_fn = \
