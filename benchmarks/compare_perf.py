@@ -37,15 +37,21 @@ def compare_perf(fn, args, numba= True, cpython = True,
     with timer('Python -- %s' % name, **kwargs):
       cpython_result = fn(*args)
   
+
+  rtol = 0.0001
+  if backend in ('cuda', 'gpu'):
+    atol = 0.001
+  else:
+    atol = 0.00001
   if parakeet_result is not None and cpython_result is not None:
-      assert np.allclose(cpython_result, parakeet_result), \
-        "Difference between Parakeet and CPython = %s" % \
-        np.sum(np.abs(cpython_result - parakeet_result))
+      assert np.allclose(cpython_result, parakeet_result, atol = atol, rtol = rtol), \
+        "Max elt difference between Parakeet and CPython = %s" % \
+        np.max(np.abs(cpython_result - parakeet_result))
   
   if numba_result is not None and cpython_result is not None:
-      assert np.allclose(cpython_result, numba_result), \
-        "Difference between Numba and CPython = %s" % \
-        np.sum(np.abs(cpython_result - numba_result))
+      assert np.allclose(cpython_result, numba_result, atol = atol, rtol = rtol), \
+        "Max elt difference between Numba and CPython = %s" % \
+        np.max(np.abs(cpython_result - numba_result))
 
   
   for name, impl in extra.iteritems():
@@ -54,8 +60,8 @@ def compare_perf(fn, args, numba= True, cpython = True,
     with timer("%s #2" % name, **kwargs):
       extra_result = impl(*args)
     if parakeet_result is not None:
-      assert np.allclose(parakeet_result, extra_result), \
-        "Difference between Parakeet and %s = %s" % \
-        (name, np.sum(np.abs(parakeet_result - extra_result)))
+      assert np.allclose(parakeet_result, extra_result, atol = atol, rtol = rtol), \
+        "Max elt difference between Parakeet and %s = %s" % \
+        (name, np.max(np.abs(parakeet_result - extra_result)))
 
 

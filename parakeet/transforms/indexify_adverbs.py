@@ -33,7 +33,8 @@ class IndexifyAdverbs(Transform):
     return [names.fresh(name_supply.next()) for _ in xrange(n)]
   
   _indexed_fn_cache = {}
-  def indexify_fn(self, fn, axis,
+  def indexify_fn(self, fn, 
+                   axis,
                    array_args, 
                    cartesian_product = False,
                    output = None, 
@@ -195,8 +196,11 @@ class IndexifyAdverbs(Transform):
 
     extra_dims = []
     if cartesian_product:
+      rank = self.rank(array)
       for array, axis in zip(array_args, axes):
-        if self.rank(array) > axis:
+        if axis is None:
+          dim = 1
+        elif rank > axis:
           dim = self.shape(array, axis)
         else:
           dim = 1 
@@ -207,8 +211,6 @@ class IndexifyAdverbs(Transform):
     return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
 
   def get_axes(self, args, axis):
-    
-    
     if isinstance(axis, Expr):
       if isinstance(axis.type, TupleT):
         axis_elts = self.tuple_elts(axis)
@@ -221,7 +223,7 @@ class IndexifyAdverbs(Transform):
     elif isinstance(axis, tuple):
       axes = axis
     else:
-      assert isinstance(axis, (int,long)), "Invalid axis %s" % axis 
+      assert axis is None or isinstance(axis, (int,long)), "Invalid axis %s" % axis 
       axes = (axis,) * len(args)
        
     assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
@@ -233,8 +235,9 @@ class IndexifyAdverbs(Transform):
     best_rank = 0 
     best_arg = None
     best_axis = None 
+
     for curr_arg, curr_axis in zip(args,axes):
-      r = self.rank(curr_arg) 
+      r = self.rank(curr_arg)
       if r > best_rank:
         best_arg = curr_arg 
         best_axis = curr_axis 
@@ -341,11 +344,11 @@ class IndexifyAdverbs(Transform):
     raw_axes = self.get_axes(expr.args, expr.axis)
     for axis, arg in zip(raw_axes, expr.args):
       if self.is_none(axis):
-        axes.append(0)
         args.append(self.ravel(arg))
+        axes.append(0)
       else:
-        axes.append(axis)
         args.append(arg)
+        axes.append(axis)
         
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
