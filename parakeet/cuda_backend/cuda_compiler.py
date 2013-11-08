@@ -31,7 +31,7 @@ class CudaCompiler(MulticoreCompiler):
     
     self.use_constant_memory_for_args = True
     MulticoreCompiler.__init__(self, 
-                               compiler_cmd = ['nvcc', '-arch=%s' % config.arch], 
+                               compiler_cmd = ['nvcc', '-arch=%s' % config.arch],
                                extra_link_flags = ['-lcudart'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',
@@ -45,7 +45,6 @@ class CudaCompiler(MulticoreCompiler):
   def enter_module_body(self):
     self.append('cudaSetDevice(%d);' % device_info.device_id(self.device))
   
-  
   def build_kernel(self, clos, bounds):
     n_indices = len(bounds)
     fn = get_fn(clos)
@@ -54,19 +53,13 @@ class CudaCompiler(MulticoreCompiler):
     host_closure_args = self.visit_expr_list(outer_closure_exprs)
     
     self.comment("Copying data from closure arguments to the GPU")
-    gpu_closure_args = \
-      [self.to_gpu(c_expr, t) for (c_expr, t) in 
-       zip(host_closure_args, closure_arg_types)]
     
+    read_only = [False] * len(host_closure_args)
+    write_only = [False] * len(host_closure_args)
+    
+    gpu_closure_args = self.args_to_gpu(host_closure_args, closure_arg_types, write_only)
     input_types = fn.input_types 
-    
-    #nested_fn_name, outer_closure_args, input_types = \
-    # self.get_fn_info(fn, attributes = ["__device__"])
-    #key = fn.cache_key, self.cache_key
-    #if key in self._kernel_cache:
-    #  kernel_name = self._kernel_cache[key]
-    #  return kernel_name, None #gpu_closure_args, host_closure_args, closure_arg_types
-    
+
     kernel_name = names.fresh("kernel_" + fn.name)
     
     if isinstance(input_types[-1], TupleT):
@@ -121,15 +114,6 @@ class CudaCompiler(MulticoreCompiler):
       bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
 
 
-    """
-       upper_bounds, 
-       loop_body, 
-       lower_bounds = None, 
-       step_sizes = None
-    """
-    
-    
-    
     THREADS_PER_DIM = config.threads_per_block_dim 
 
     
@@ -251,14 +235,6 @@ class CudaCompiler(MulticoreCompiler):
     self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types)
     return "/* done with ParFor */"
   
-  """
-  def visit_NumCores(self, expr):
-    # by default we're running sequentially 
-    sm_count = None # TODO
-    active_thread_blocks = 6 
-    return "%d" % (sm_count * active_thread_blocks)  
-  """
-  
   def in_host(self):
     return self.gpu_depth == 0
   
@@ -294,9 +270,6 @@ class CudaCompiler(MulticoreCompiler):
   def in_thread(self):
     return self.depth > 1
   
-  
-  
-  
   def pass_by_value(self, t):
     if isinstance(t, (ScalarT, NoneT, SliceT, FnT)):
       return True 
@@ -325,42 +298,75 @@ class CudaCompiler(MulticoreCompiler):
     self.check_gpu_error(context, error_code_var)
     
   
-  def to_gpu(self, c_expr, t):
+  def _to_gpu(self, c_expr, t, gpu_array_dict, memcpy = True):
     if self.pass_by_value(t):
       return c_expr
     elif isinstance(t, ArrayT):
+      
       ptr_t = "%s*" % self.to_ctype(t.elt_type)
       bytes_per_elt = t.elt_type.dtype.itemsize
-      src = "%s.data.raw_ptr" % c_expr  
+      
       dst = self.fresh_var(ptr_t, "gpu_ptr")
       nelts = "%s.size" % c_expr
       nbytes = self.fresh_var("int64_t", "nbytes", "%s * %d" % (nelts, bytes_per_elt))
-      # allocate the destination pointer on the GPU
       
-      self.append("cudaMalloc( (void**) &%s, %s);" % (dst, nbytes))
+      if memcpy:
+        src = "%s.data.raw_ptr" % c_expr   
+        memcpy_stmt = "cudaMemcpyAsync(%s, %s, %s, cudaMemcpyHostToDevice);" % (dst, src, nbytes)
+      else:
+        memcpy_stmt = "/* no memcpy for this %s : %s */" % (c_expr, t)
+      
+      # allocate the destination pointer on the GPU
+      malloc = "cudaMalloc( (void**) &%s, %s);" % (dst, nbytes)
+      alloc_and_copy_block = "%s\n%s" % (malloc, memcpy_stmt)
+
+      """
+      TODO: do this to cut down on allocations but also
+      need to track which arrays have been allocated so we 
+      can delete them later 
+      
+      if t in gpu_array_dict:
+        # if we've allocated some other args of the same type, 
+        # try reusing their pointers before allocating new memory 
+        for i, (prev_host, prev_gpu) in enumerate(gpu_array_dict[t]):
+          cond = "%s.data.raw_ptr == %s.data.raw_ptr && %s.size == %s.size" % \
+            (c_expr, prev_host, c_expr, prev_host)
+          self.append("%sif (%s) {%s = %s.data.raw_ptr;}" % \
+                        ("else " if i > 0 else "", cond, dst, prev_gpu))
+        self.append("else {%s}" % alloc_and_copy_block)
+      else:
+      """
+      self.append(alloc_and_copy_block)
+      
       self.check_gpu_error("cudaMalloc for %s : %s" % (c_expr, t))
       
-      # copy the contents of the host array to the GPU
-      self.append("cudaMemcpyAsync(%s, %s, %s, cudaMemcpyHostToDevice);" % (dst, src, nbytes))
-      
-      # self.check_gpu_error("Memcpy of %s : %s (%s -> %s)" % (c_expr, t, src, dst))
       # make an identical array descriptor but change its data pointer to the GPU location
       gpu_descriptor = self.fresh_var(self.to_ctype(t), "gpu_array", c_expr)
-      self.append("%s.data.raw_ptr = %s;" % (gpu_descriptor, dst))
+      self.append("%s.data.raw_ptr = %s;" % (gpu_descriptor, dst))    
+      gpu_array_dict.setdefault(t, []).append( (c_expr, gpu_descriptor) )
       return gpu_descriptor
     
     elif isinstance(t, (ClosureT, TupleT)):
       # copy contents of the host tuple into another struct
       gpu_tuple = self.fresh_var(self.to_ctype(t), "gpu_tuple", c_expr)
       for i, elt_t in enumerate(t.elt_types):
-        gpu_elt = self.to_gpu("%s.elt%d" % (c_expr, i), elt_t)
+        host_elt = "%s.elt%d" % (c_expr, i)
+        gpu_elt = self._to_gpu(host_elt, elt_t, gpu_array_dict)
         self.append("%s.elt%d = %s;" % (c_expr, i, gpu_elt))
       return gpu_tuple 
     else:
       assert False, "Unsupported type in CUDA backend %s" % t 
   
-  def list_to_gpu(self, host_values, types):
-    return [self.to_gpu(v,t) for (v,t) in zip(host_values, types)]
+  def args_to_gpu(self, host_values, types, write_only):
+    # keep track of arrays we've already moved to the GPU, 
+    # indexed by their type  
+    gpu_array_dict = {}
+    
+    gpu_args = []
+    for i,t in enumerate(types):
+      gpu_arg = self._to_gpu(host_values[i], t, gpu_array_dict, memcpy = not write_only[i])
+      gpu_args.append(gpu_arg)
+    return gpu_args 
   
   
   def to_host(self, host_value, gpu_value, t):

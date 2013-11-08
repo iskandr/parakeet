@@ -113,28 +113,32 @@ class Prim(object):
     for (t1, t2) in zip(types1, types2):
       if t1 != t2:
         assert isinstance(t1, ScalarT), "Expected scalar type but got %s" % t1
-        assert isinstance(t2, ScalarT), "Expected scalar type but got %s" % t2  
+        assert isinstance(t2, ScalarT), "Expected scalar type but got %s" % t2
+        # penalty just for being a different type   
         dist += 1 
         size_difference = t2.nbytes - t1.nbytes
+        # if we're downcasting, this sucks 
         if size_difference < 0:
           dist += 10000
+        # going from int to float of same type is mildly unsafe  
         elif size_difference > 0:
-          dist += np.log2(size_difference + 1)
+          dist += np.log2(size_difference)
+        elif size_difference == 0:
+          if isinstance(t2, FloatT) and not isinstance(t1, FloatT):
+            dist += 10
         # can't go from float to int 
         if isinstance(t1, FloatT) and not isinstance(t2, FloatT):
           dist += 1000
         # but going to from int to float is only minor penalty...
         elif isinstance(t2, FloatT) and not isinstance(t1, FloatT):
           dist += 1
-        
+
         # can't go from int to bool 
         if isinstance(t1, BoolT) and not isinstance(t2, BoolT):
           dist += 1
         elif isinstance(t2, BoolT) and not isinstance(t1, BoolT):
           dist += 1000
-        
-           
-        
+    print types1, types2, dist 
     return dist 
   
   def expected_input_types(self, arg_types):

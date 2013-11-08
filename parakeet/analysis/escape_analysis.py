@@ -1,6 +1,6 @@
 
 from .. import config
-from .. ndtypes import ScalarT 
+from .. ndtypes import ScalarT, ArrayT, TupleT, ClosureT, FnT, SliceT, NoneT
 from .. syntax import Var, Attribute, Tuple 
 from syntax_visitor import SyntaxVisitor
 
@@ -30,37 +30,85 @@ class EscapeAnalysis(SyntaxVisitor):
   names in the alias sets of y and z.  
   """
   
-  def visit_fn(self, fn):
-
-    self.scalars = set([])
+  def __init__(self, fresh_alloc_args = set([])):
+    self.fresh_alloc_args = fresh_alloc_args
+    self.immutable = set([])
     self.may_alias = {}
-    all_scalars = True 
-    # every name at least aliases it selfcollect_var_names
-    for (name,t) in fn.type_env.iteritems():
-      if isinstance(t, ScalarT):
-        self.scalars.add(name)
-      else:
-        self.may_alias[name] = set([name])
-        all_scalars = False 
-    
     self.may_escape = set([])
     self.may_return = set([])
+    
+  
+  def nested_array_types(self, t):
+    if isinstance(t, ArrayT):
+      return set([t])
+    elif isinstance(t, TupleT):
+      result = set([])
+      for elt_t in t.elt_types:
+        result.update(self.nested_array_types(elt_t))
+      return result 
+    elif isinstance(t, ClosureT):
+      result = set([])
+      for elt_t in t.arg_types:
+        result.update(self.nested_array_types(elt_t))
+      return result
+    else:
+      return set([])
+    
+  def immutable_type(self, t):
+    return isinstance(t, (ScalarT, NoneT, SliceT, FnT)) or len(self.nested_array_types(t)) == 0
+    
+  def visit_fn(self, fn):
+
+    all_scalars = True 
+    
+    # every name at least aliases it self
+    for (name,t) in fn.type_env.iteritems():
+
+      if self.immutable_type(t):
+        self.immutable.add(name)
+      else:
+        self.may_alias[name] = set([name])
+        all_scalars = False
+        
     
     if all_scalars:
       return  
     
+    # every arg also aliases at least all the other input of the same type 
+    # unless we were told it's a freshly allocated input
+    
+      
+    reverse_type_mapping = {}
+      
+    for name in fn.arg_names:
+      if name not in self.fresh_alloc_args:
+        t = fn.type_env[name]
+        for nested_t in self.nested_array_types(t):
+          reverse_type_mapping.setdefault(nested_t, set([])).add(name)
+          print reverse_type_mapping[nested_t]
+      
+    for name in fn.arg_names:
+      # 
+      # Every input argument should alias the other inputs of the same type 
+      # if they are both arrays or tuples which contain arrays 
+      # We must exclude, however, arguments which we're told explicitly were
+      # freshly allocated before we entered the function 
+      if name not in self.fresh_alloc_args:
+        t = fn.type_env[name]
+        for nested_t in self.nested_array_types(t):
+          self.may_alias[name].update(reverse_type_mapping[nested_t])
+
     self.visit_block(fn.body)
     
     # once we've accumulated all the aliases
     # anyone who points into the input data 
     # is also considered to be escaping 
-
     for name in fn.arg_names:
-      if name not in self.scalars:
+      if name not in self.immutable and name not in self.fresh_alloc_args:
         self.may_escape.update(self.may_alias[name])
     
     if config.print_escape_analysis: 
-      print "[EscapeAnalysis] In function %s" % fn.cache_key
+      print "[EscapeAnalysis] In function %s" % (fn.cache_key, )
       print "-------"
       print fn 
       print 
@@ -74,7 +122,7 @@ class EscapeAnalysis(SyntaxVisitor):
       print sorted(self.may_escape)
 
   def mark_escape(self, name):
-    if name not in self.scalars:
+    if name not in self.immutable:
       for alias in self.may_alias[name]:
         self.may_escape.add(alias)
   
@@ -84,7 +132,7 @@ class EscapeAnalysis(SyntaxVisitor):
   
   
   def mark_return(self, name):
-    if name not in self.scalars:
+    if name not in self.immutable:
       for alias in self.may_alias[name]:
         self.may_return.add(alias)
   
@@ -102,25 +150,25 @@ class EscapeAnalysis(SyntaxVisitor):
       d = tuple(a,e) 
     and we want the alias set of d to be {a,e,b,c}
     """
-    if lhs_name not in self.scalars:
+    if lhs_name not in self.immutable:
       combined_set = self.may_alias[lhs_name]
       for rhs_name in rhs_names:
-        if rhs_name not in self.scalars:
+        if rhs_name not in self.immutable:
           combined_set.update(self.may_alias[rhs_name])
       for alias in combined_set:
         self.may_alias[alias] = combined_set
       return combined_set  
   
   def update_escaped(self, lhs_name, rhs_alias_set):
-    if lhs_name not in self.scalars and \
+    if lhs_name not in self.immutable and \
        any(alias in self.may_escape for alias in rhs_alias_set):
-        self.may_escape.update(rhs_alias_set.difference(self.scalars))
+        self.may_escape.update(rhs_alias_set.difference(self.immutable))
         self.may_escape.add(lhs_name)
         
   def update_return(self, lhs_name, rhs_alias_set):
-    if lhs_name not in self.scalars and \
+    if lhs_name not in self.immutable and \
        any(alias in self.may_return for alias in rhs_alias_set):
-        self.may_return.update(rhs_alias_set.difference(self.scalars))
+        self.may_return.update(rhs_alias_set.difference(self.immutable))
         self.may_return.add(lhs_name)
     
   
@@ -193,12 +241,12 @@ class EscapeAnalysis(SyntaxVisitor):
       self.update_return(name, combined_set)
 
 _cache = {}
-def escape_analysis(fundef):
+def escape_analysis(fundef, fresh_alloc_args = set([])):
   key = fundef.cache_key
   if key in _cache:
     return _cache[key]
   else: 
-    analysis = EscapeAnalysis()
+    analysis = EscapeAnalysis(fresh_alloc_args = fresh_alloc_args)
     analysis.visit_fn(fundef)
     _cache[key] = analysis
     return analysis

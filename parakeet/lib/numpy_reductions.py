@@ -5,7 +5,7 @@ from adverbs import scan
 
 @jit 
 def prod(x, axis=None):
-  return reduce(prims.multiply, x, init=1, axis = axis)
+  return reduce(prims.multiply, x, init=True, axis = axis)
 
 @jit 
 def mean(x, axis = None):

@@ -1,9 +1,16 @@
 from .. ndtypes import ArrayT, PtrT 
-from .. syntax import Var, Alloc, ArrayView, Array, Struct, AllocArray
+from .. syntax import (Var, Alloc, ArrayView, Array, Struct, AllocArray, 
+                       Map, IndexMap, OuterMap, Scan, IndexScan, 
+                       ConstArray, ConstArrayLike
+                       )
 from syntax_visitor import SyntaxVisitor
  
 # from syntax import Adverb   
 
+array_alloc_classes = (AllocArray, Array, 
+                       Map, IndexMap, OuterMap, 
+                       Scan, IndexScan, 
+                       ConstArray, ConstArrayLike)
 
 class FindLocalArrays(SyntaxVisitor):
   def __init__(self):
@@ -51,7 +58,7 @@ class FindLocalArrays(SyntaxVisitor):
           left_stmt = self.local_allocs[left_name]
           right_stmt = self.local_allocs[right_name]
           if left_stmt == right_stmt:
-            self.local_allocs[new_name] = left_stmt      
+            self.local_allocs[new_name] = left_stmt
   
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ is Var:
@@ -72,5 +79,5 @@ class FindLocalArrays(SyntaxVisitor):
         if data_name in self.local_allocs:
           self.local_arrays[lhs_name] = stmt
           self.array_to_alloc[lhs_name] = data_name 
-      elif rhs_class is Array or AllocArray:
+      elif rhs_class in array_alloc_classes:
         self.local_arrays[stmt.lhs.name] = stmt
