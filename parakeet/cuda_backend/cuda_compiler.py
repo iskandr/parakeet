@@ -54,6 +54,7 @@ class CudaCompiler(MulticoreCompiler):
     
     self.comment("Copying data from closure arguments to the GPU")
     
+    
     read_only = [False] * len(host_closure_args)
     write_only = [False] * len(host_closure_args)
     
@@ -180,6 +181,8 @@ class CudaCompiler(MulticoreCompiler):
                                      inline = False)
     self.exit_kernel()
     
+    # set cache preference of the kernel we just built 
+    self.append("cudaFuncSetCacheConfig(%s, cudaFuncCachePreferL1);" % c_kernel_name)
     # self._kernel_cache[key] = c_kernel_name
     return c_kernel_name, gpu_closure_args, host_closure_args, closure_arg_types
   

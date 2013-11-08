@@ -102,7 +102,7 @@ print_functions_before_transforms =  [] #'Fusion']
 print_functions_after_transforms =   []
 
 # show aliases and escape sets
-print_escape_analysis = True
+print_escape_analysis = False
 
 # how long did each transform take?
 print_transform_timings = False

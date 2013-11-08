@@ -122,7 +122,7 @@ class Prim(object):
           dist += 10000
         # going from int to float of same type is mildly unsafe  
         elif size_difference > 0:
-          dist += np.log2(size_difference)
+          dist += np.log2(1 + size_difference)
         elif size_difference == 0:
           if isinstance(t2, FloatT) and not isinstance(t1, FloatT):
             dist += 10
@@ -138,7 +138,6 @@ class Prim(object):
           dist += 1
         elif isinstance(t2, BoolT) and not isinstance(t1, BoolT):
           dist += 1000
-    print types1, types2, dist 
     return dist 
   
   def expected_input_types(self, arg_types):

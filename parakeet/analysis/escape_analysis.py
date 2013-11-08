@@ -85,7 +85,7 @@ class EscapeAnalysis(SyntaxVisitor):
         t = fn.type_env[name]
         for nested_t in self.nested_array_types(t):
           reverse_type_mapping.setdefault(nested_t, set([])).add(name)
-          print reverse_type_mapping[nested_t]
+
       
     for name in fn.arg_names:
       # 
