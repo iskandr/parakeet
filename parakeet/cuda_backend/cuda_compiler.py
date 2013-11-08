@@ -31,7 +31,7 @@ class CudaCompiler(MulticoreCompiler):
     
     self.use_constant_memory_for_args = True
     MulticoreCompiler.__init__(self, 
-                               compiler_cmd = ['nvcc', '-arch=sm_13'], 
+                               compiler_cmd = ['nvcc', '-arch=%s' % config.arch], 
                                extra_link_flags = ['-lcudart'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',

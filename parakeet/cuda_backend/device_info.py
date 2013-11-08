@@ -1,7 +1,7 @@
 
 
-
-def get_cuda_devices(compute_capability = (1,3)):
+import config 
+def get_cuda_devices(compute_capability = config.compute_capability):
   try:
     import pycuda.autoinit
     import pycuda.driver  
@@ -23,7 +23,7 @@ def num_multiprocessors(cuda_device):
   return cuda_device.get_attribute(pycuda.driver.device_attribute.MULTIPROCESSOR_COUNT)
   
 
-def best_cuda_device(compute_capability = (1,3)):
+def best_cuda_device(compute_capability = config.compute_capability):
   devices = get_cuda_devices(compute_capability)
   if len(devices) == 0:
     return None
