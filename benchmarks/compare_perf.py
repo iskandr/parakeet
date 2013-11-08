@@ -40,7 +40,7 @@ def compare_perf(fn, args, numba= True, cpython = True,
 
   rtol = 0.0001
   if backend in ('cuda', 'gpu'):
-    atol = 0.001
+    atol = 0.0001
   else:
     atol = 0.00001
   if parakeet_result is not None and cpython_result is not None:

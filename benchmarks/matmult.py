@@ -17,7 +17,7 @@ def matmult_loops(X,Y,Z):
 
 n, d = 1200, 500
 m = 1200
-dtype = 'float64'
+dtype = 'float32'
 X = np.random.randn(m,d).astype(dtype)
 Y = np.random.randn(d,n).astype(dtype)
 Z = np.zeros((m,n)).astype(dtype)
