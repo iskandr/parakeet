@@ -19,7 +19,6 @@ CompiledFlatFn = namedtuple("CompiledFlatFn",
                              "declarations"))
 
 
-
 # mapping from (field_types, struct_name, field_names) to type names 
 _struct_type_names = {}
 
@@ -461,7 +460,22 @@ class FnCompiler(BaseCompiler):
     body += self.visit_merge_right(stmt.merge)
     body = self.indent("\n" + body) 
     s += "\n %(t)s %(var)s;"
-    s += "\nfor (%(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
+    up_loop = \
+        "\nfor (%(var)s = %(start)s; %(var)s < %(stop)s; %(var)s += %(step)s) {%(body)s}"
+    down_loop = \
+        "\nfor (%(var)s = %(start)s; %(var)s > %(stop)s; %(var)s += %(step)s) {%(body)s}"
+      
+    if stmt.step.__class__ is Const:
+      if stmt.step.value >= 0:
+        s += up_loop
+      else:
+        s += down_loop
+    else:
+      s += "if(%(step)s >= 0) {\n"
+      s += up_loop
+      s += "\n} else {\n"
+      s += down_loop
+      s += "\n}"
     return s % locals()
 
   def visit_Return(self, stmt):
@@ -548,8 +562,6 @@ class FnCompiler(BaseCompiler):
     for (%s = 0; %s < %s; ++%s) {
       %s
     }""" % (var, var, bound, var, nested )
-    
-
   
   def visit_TypedFn(self, expr):
     return self.get_fn_name(expr)

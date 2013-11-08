@@ -7,14 +7,12 @@ from ..c_backend import PyModuleCompiler
 
 import config 
 
-
 class MulticoreCompiler(PyModuleCompiler):
   
   def __init__(self, depth = 0, *args, **kwargs):
     self.depth = depth
     self.seen_parfor = None 
     PyModuleCompiler.__init__(self, *args, **kwargs)
-    
   
   @property 
   def cache_key(self):
@@ -121,13 +119,13 @@ class MulticoreCompiler(PyModuleCompiler):
       
       
       if config.collapse_nested_loops:
-        omp = "#pragma omp parallel for private(%s) schedule(%s, %d)" % \
-          (", ".join(private_vars), config.schedule, config.schedule_size)
+        omp = "#pragma omp parallel for private(%s) schedule(%s)" % \
+          (", ".join(private_vars), config.schedule)
         if len(loop_vars) > 1:
           omp += " collapse(%d)" % len(loop_vars)
       else:
-        omp = "#pragma omp parallel for private(%s) schedule(%s, %d)" % \
-          (private_vars[0], config.schedule, config.schedule_size)
+        omp = "#pragma omp parallel for private(%s) schedule(%s)" % \
+          (private_vars[0], config.schedule)
       return release_gil + omp + loops + acquire_gil    
     else:
       return loops 

@@ -9,6 +9,9 @@ def for_range_loop(start, stop, step):
 def test_for_range_loop():
   expect(for_range_loop, [1,10,2], for_range_loop(1,10,2))
 
+def test_for_backwards():
+  expect(for_range_loop, [10,1,-1], for_range_loop(10,1,-1))
+
 def count_loop(init, count):
   x = init
   while x < count:

@@ -38,9 +38,10 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   
   available_backends = ['interp', 'c', 'openmp']
 
-  import cuda_backend 
-  if cuda_backend.device_info.has_gpu():
-    available_backends.append('cuda')
+  #import cuda_backend 
+  #if cuda_backend.device_info.has_gpu():
+  #  available_backends.append('cuda')
+     
 
   for backend in available_backends: #available_backends:
     try: 
