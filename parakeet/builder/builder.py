@@ -2,15 +2,11 @@
 from ..ndtypes import make_array_type, TupleT, IntT, FnT, ClosureT, increase_rank
 from ..syntax import ArrayView, Struct, Expr, ParFor, IndexMap, UntypedFn, TypedFn 
 from ..syntax.helpers import zero_i64, get_types, one 
-from ..syntax.adverb_helpers import max_rank, max_rank_arg
 
-from arith_builder import ArithBuilder 
-from array_builder import ArrayBuilder
-from loop_builder import LoopBuilder 
 from call_builder import CallBuilder
 from adverb_builder import AdverbBuilder
 
-class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder, AdverbBuilder):
+class Builder(AdverbBuilder, CallBuilder):
   
 
   

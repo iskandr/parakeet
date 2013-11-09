@@ -133,7 +133,6 @@ class RewriteTyped(Transform):
         assert False, \
           "Scan with scalar init of type %s and accumulator of type %s not yet supported" % \
                     (expr.init.type, acc_type)
-    print expr 
     return expr
 
   def transform_Slice(self, expr):

@@ -308,12 +308,11 @@ class IndexifyAdverbs(Transform):
     axes = self.normalize_axes(args, expr.axis)
     
     fn = expr.fn 
-    outer_shape = self.iter_bounds(args, axes)
+    outer_shape = self.iter_bounds(args, axes, cartesian_product = True)
     # recursively descend down the function bodies to pull together nested ParFors 
     zero = self.int(0)
     
     first_values = [self.slice_along_axis(arg, axis, zero) 
-                    
                     for (arg,axis) in zip(args, axes)]
     # self.create_output_array(fn, inner_args, outer_shape, name)
     output =  self.create_output_array(fn, first_values, outer_shape)

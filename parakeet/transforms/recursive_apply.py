@@ -1,12 +1,75 @@
+
+from treelike import ScopedDict
+
+from ..ndtypes import NoneT, SliceT, ScalarT, ArrayT, FnT, ClosureT, TupleT, StructT
+from ..syntax import TypedFn
 from transform import Transform
 
 class RecursiveApply(Transform):  
-  def transform_TypedFn(self, expr):
+  cache = ScopedDict()
+  
+  def __init__(self, transform_to_apply = None):
+    Transform.__init__(self)
+    self.transform = transform_to_apply
+    self.cache.push()
+  
+  def __del__(self):
+    self.cache.pop()
+  
+  
+  def transform_type(self, t):
+    c = t.__class__ 
+    if c is ClosureT:
+      old_fn = t.fn 
+      if isinstance(old_fn, TypedFn):
+        new_fn = self.transform_TypedFn(old_fn)
+        if new_fn is not old_fn:
+          return ClosureT(new_fn, t.arg_types)
+    elif c is TupleT:
+      if all(isinstance(elt_t, (ScalarT, SliceT, NoneT, ArrayT)) for elt_t in t.elt_types):
+        return t 
+      new_elt_types = []
+      for elt_t in t.elt_types:
+        new_elt_types.append(self.transform_type(elt_t))
+      return TupleT(tuple(new_elt_types))
+    # if it's neither a closure nor a structure which could contain closures, 
+    # just return it 
+    return t 
     
-    if self.fn.created_by is not None:
-      result =  self.fn.created_by.apply(expr)
-      return result 
-    else:
-      # at the very least, apply high level optimizations
-      import pipeline
-      return pipeline.high_level_optimizations.apply(expr)
+      
+  def transform_TypedFn(self, expr):
+    key = expr.cache_key
+    if key in self.cache:
+      return self.cache[key]  
+    new_fn = self.transform.apply(expr)
+    self.cache[key] = new_fn 
+    return new_fn 
+  
+  def transform_Closure(self, expr):
+    args = self.transform_expr_list(expr.args)
+    new_fn = self.transform_expr(expr.fn)
+    return self.closure(new_fn, args)
+  
+  def transform_Var(self, expr):
+    expr.type = self.transform_type(expr.type)
+    return expr 
+  
+  def transform_Assign(self, stmt):
+    """
+    If we have an assignment like 
+      a : (Fn1T, Fn2T) = (fn1, fn2)
+    we might need to change it to 
+      a : (Fn1T', Fn2T') = (fn1', fn2') if the RHS functions get updated
+    """ 
+    stmt.rhs = self.transform_expr(stmt.rhs)
+    stmt.lhs.type = self.transform_type(stmt.lhs.type)
+    return stmt 
+  
+  def pre_apply(self, fn):
+    if self.transform is None:
+      self.transform = fn.created_by 
+    
+    assert self.transform is not None, "No transform specified for RecursiveApply"
+    for k,t in fn.type_env.items():
+      fn.type_env[k] = self.transform_type(t)
+    return fn   

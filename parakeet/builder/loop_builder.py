@@ -3,9 +3,10 @@ from .. import syntax
 from ..ndtypes import ScalarT, TupleT 
 from ..syntax import Expr, While, ForLoop, Const 
 from ..syntax.helpers import zero, one, zero_i32, zero_i64, wrap_if_constant
-from core_builder import CoreBuilder 
 
-class LoopBuilder(CoreBuilder):
+from array_builder import ArrayBuilder 
+
+class LoopBuilder(ArrayBuilder):
   
   """
   Builder for loops and things that use loops

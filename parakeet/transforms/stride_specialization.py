@@ -64,7 +64,8 @@ def specialize(fn, python_values, types = None):
 
     transforms = Phase([specializer, Simplify, DCE],
                         memoize = False, copy = True, 
-                        name = "StrideSpecialization for %s" % abstract_values)
+                        name = "StrideSpecialization for %s" % abstract_values, 
+                        recursive = False)
     new_fn = transforms.apply(fn)
 
   else:

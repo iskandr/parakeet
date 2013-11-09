@@ -3,10 +3,9 @@ from ..ndtypes import (make_slice_type, make_array_type, ptr_type,
                        ArrayT, TupleT, ScalarT, Type, PtrT, Int64, IntT, Float64)
 from ..syntax import (Alloc, AllocArray, ArrayView, Const, Index, Slice, Struct, Var, Select, Expr)
 from ..syntax.helpers import (const, zero_i64, wrap_if_constant, slice_none, unwrap_constant)
-from core_builder import CoreBuilder 
+from arith_builder import ArithBuilder
 
-
-class ArrayBuilder(CoreBuilder):
+class ArrayBuilder(ArithBuilder):
   """
   Builder for constructing arrays and getting their properties
   """

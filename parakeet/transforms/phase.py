@@ -2,6 +2,7 @@ from .. import config
 
 from .. syntax import TypedFn
 from clone_function import CloneFunction
+from recursive_apply import RecursiveApply
 from transform import Transform 
 
 name_stack = []
@@ -50,7 +51,8 @@ class Phase(object):
                rename = False,
                post_apply = None,
                memoize = True,
-               name = None):
+               name = None, 
+               recursive = True):
     self.cache = {}
     if not isinstance(transforms, (tuple, list)):
       transforms = [transforms]
@@ -76,6 +78,7 @@ class Phase(object):
     self.post_apply = post_apply
     self.memoize = memoize
     self.name = name
+    self.recursive = recursive 
 
   def __str__(self):
     if self.name:
@@ -108,7 +111,7 @@ class Phase(object):
     if self.config_param is not None and getattr(config, self.config_param) == False:
       return True
    
-    if self.memoize and (fn.created_by == self or self in fn.transform_history):
+    if self.memoize and  self in fn.transform_history:
       return True
     
     if self.run_if:
@@ -126,32 +129,34 @@ class Phase(object):
     
     original_key = fn.cache_key
     if original_key in self.cache:
-
       return self.cache[original_key]
 
     if self.depends_on and run_dependencies:
       fn = apply_transforms(fn, self.depends_on)
-      
-    if self.should_skip(fn):
-      return fn 
+    
     
     if self.copy:
       fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
       assert fn.cache_key not in self.cache, \
         "Typed function %s (key = %s) already registered" % \
         (fn.name, fn.cache_key)
-    
-    fn.transform_history.add(self)
-    fn = apply_transforms(fn, self.transforms, 
+        
+    if self.recursive:
+      fn = RecursiveApply(self).apply(fn)
+      
+    if not self.should_skip(fn):
+      fn = apply_transforms(fn, self.transforms, 
                           cleanup = self.cleanup, 
                           phase_name = str(self), 
                           transform_history = fn.transform_history)
     
-    if self.post_apply:
-      new_fn = self.post_apply(fn)
-      if new_fn.__class__ is TypedFn:
-        fn = new_fn
+      if self.post_apply:
+        new_fn = self.post_apply(fn)
+        if new_fn.__class__ is TypedFn:
+          fn = new_fn
 
+    fn.transform_history.add(self)
+      
     if self.memoize:
       self.cache[original_key] = fn
       self.cache[fn.cache_key] = fn
