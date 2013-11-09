@@ -147,8 +147,13 @@ class ArrayBuilder(CoreBuilder):
     
     if isinstance(axis, Expr):
       axis = unwrap_constant(axis)
+    idx = wrap_if_constant(idx)
     
     if r == 1 and (axis is None or axis == 0):
+      return self.index(arr, idx)
+    elif axis is None:
+      if isinstance(idx.type, ScalarT):
+        idx = self.tuple((idx,) * r)
       return self.index(arr, idx)
     elif r > axis:
       index_tuple = self.build_slice_indices(r, axis, idx)

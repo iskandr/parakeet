@@ -179,14 +179,6 @@ class TypeInference(LocalTypeInference):
         axis = none 
       result_t = make_array_type(typed_prim_fn.return_type, max_rank)
       return Map(fn = typed_prim_fn, args = args, type = result_t, axis = axis)
-      """
-      arg_names = gen_data_arg_names(len(arg_types))
-      untyped_broadcast_fn = \
-          adverb_helpers.nested_maps(prim_fn, max_rank, arg_names)
-      typed_broadcast_fn = specialize(untyped_broadcast_fn, arg_types)
-      result_t = typed_broadcast_fn.return_type
-      return syntax.Call(typed_broadcast_fn, args, type = result_t)
-      """
       
 
   def transform_Zip(self, expr):
@@ -291,10 +283,8 @@ class TypeInference(LocalTypeInference):
         zipped_elts.append([self.tuple_proj(arg,i) for arg in new_args])
       return self.tuple([self.invoke(closure, elts) for elts in zipped_elts])
     axis = self.transform_if_expr(expr.axis)
-    result_type, typed_fn = specialize_Map(closure.type, arg_types)
-    if axis is None or self.is_none(axis):
-      assert adverb_helpers.max_rank(arg_types) == 1
-      axis = zero_i64
+    axes = self.normalize_axes(new_args, axis)
+    result_type, typed_fn = specialize_Map(closure.type, arg_types, axes)
     return syntax.Map(fn = make_typed_closure(closure, typed_fn),
                        args = new_args,
                        axis = axis,
@@ -370,29 +360,12 @@ class TypeInference(LocalTypeInference):
       return self.invoke(map_fn, new_args)
     
     init_type = init.type if init else None
-    
-    if self.is_none(axis):
-      if adverb_helpers.max_rank(arg_types) > 1:
-        assert len(new_args) == 1, \
-          "Can't handle multiple reduction inputs and flattening from axis=None"
-        #x = new_args[0]
-        #return self.flatten_Reduce(map_fn, combine_fn, x, init)
-        #new_args = [self.ravel(new_args[0])]
-        #arg_types = get_types(new_args)
-        
-        # Expect that the arguments will get raveled before 
-        # the adverb gets evaluated 
-        axis = self.none
-        arg_types = [array_type.lower_rank(t, t.rank - 1) 
-                     for t in arg_types
-                     if t.rank > 1]
-      else:
-        axis = self.int(0)                        
-    
+    axes = self.normalize_axes(new_args, axis)
     result_type, typed_map_fn, typed_combine_fn = \
         specialize_Reduce(map_fn.type,
                           combine_fn.type,
                           arg_types, 
+                          axes, 
                           init_type)
     typed_map_closure = make_typed_closure (map_fn, typed_map_fn)
     typed_combine_closure = make_typed_closure(combine_fn, typed_combine_fn)
@@ -433,17 +406,14 @@ class TypeInference(LocalTypeInference):
     
     init_type = get_type(init) if init else None
     
+    axis = self.transform_if_expr(expr.axis)
+    axes = self.normalize_axes(new_args, axis)
     result_type, typed_map_fn, typed_combine_fn, typed_emit_fn = \
         specialize_Scan(map_fn.type, combine_fn.type, emit_fn.type,
-                        arg_types, init_type)
+                        arg_types, axes, init_type)
     map_fn.fn = typed_map_fn
     combine_fn.fn = typed_combine_fn
     emit_fn.fn = typed_emit_fn
-    axis = self.transform_if_expr(expr.axis)
-    if axis is None or self.is_none(axis):
-      assert adverb_helpers.max_rank(arg_types) == 1
-      axis = zero_i64
-      
     return syntax.Scan(fn = make_typed_closure(map_fn, typed_map_fn),
                        combine = make_typed_closure(combine_fn,
                                                     typed_combine_fn),
@@ -459,15 +429,13 @@ class TypeInference(LocalTypeInference):
     arg_types = get_types(new_args)
     n_args = len(arg_types)
     assert n_args > 0
-    result_type, typed_fn = specialize_OuterMap(closure.type, arg_types)
     axis = self.transform_if_expr(expr.axis)
-    if axis is None or self.is_none(axis):
-      axis = zero_i64
+    axes = self.normalize_axes(new_args, axis)
+    result_type, typed_fn = specialize_OuterMap(closure.type, arg_types, axes)
     result = syntax.OuterMap(fn = make_typed_closure(closure, typed_fn),
-                           args = new_args,
-                           axis = axis,
-                           type = result_type)
-
+                             args = new_args,
+                             axis = axis,
+                             type = result_type)
     return result 
 
   
@@ -646,20 +614,45 @@ def specialize_IndexReduce(fn, combine, n_indices, init = None):
   elt_type = typed_fn.return_type
   typed_combine = specialize(combine, (elt_type, elt_type))
   return elt_type, typed_fn, typed_combine 
-      
-def specialize_Map(map_fn, array_types):
-  elt_types = array_type.lower_ranks(array_types, 1)
+
+def peel_adverb_input_types(array_types, axes):
+  assert len(array_types) == len(axes), \
+    "Mismatch between types %s and axes %s" % (array_types, axes)
+  result = []
+  for t, axis in zip(array_types, axes):
+    if axis is None:
+      result.append(array_type.elt_type(t))
+    else:
+      result.append(array_type.lower_rank(t,1))
+  return tuple(result)
+
+def rank(t):
+  if t.__class__ is ArrayT:
+    return t.rank 
+  else:
+    return 0 
+
+def increase_adverb_output_rank(array_types, axes, elt_result_type, cartesian_product = False):
+  delta_rank = 0
+  assert len(array_types) == len(axes), \
+    "Mismatch between types %s and axes %s" % (array_types, axes)
+  for (t,axis) in zip(array_types, axes):
+    if axis is None: r = rank(t)
+    else: r = 1
+    if cartesian_product: delta_rank += r 
+    else: delta_rank = max(r, delta_rank)
+  return array_type.increase_rank(elt_result_type, delta_rank)
+
+def specialize_Map(map_fn, array_types, axes):
+  
+  elt_types = peel_adverb_input_types(array_types, axes)
   typed_map_fn = specialize(map_fn, elt_types)
   elt_result_t = typed_map_fn.return_type
-  result_t = array_type.increase_rank(elt_result_t, 1)
+  result_t = increase_adverb_output_rank(array_types, axes, elt_result_t)
   return result_t, typed_map_fn
 
-def infer_Map(map_fn, array_types):
-  t, _ = specialize_Map(map_fn, array_types)
-  return t
-
-def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
-  _, typed_map_fn = specialize_Map(map_fn, array_types)
+def specialize_Reduce(map_fn, combine_fn, array_types, axes, init_type = None):
+  _, typed_map_fn = specialize_Map(map_fn, array_types, axes)
   elt_type = typed_map_fn.return_type
   if init_type is None or init_type.__class__ is NoneT:
     acc_type = elt_type
@@ -675,29 +668,18 @@ def specialize_Reduce(map_fn, combine_fn, array_types, init_type = None):
   #  "Expected accumulator types %s but encountered %s" % (acc_type, new_acc_type)
   return new_acc_type, typed_map_fn, typed_combine_fn
 
-def infer_Reduce(map_fn, combine_fn, array_types, init_type = None):
-  t, _, _ = specialize_Reduce(map_fn, combine_fn, array_types, init_type)
-  return t
-
-def specialize_Scan(map_fn, combine_fn, emit_fn, array_types, init_type = None):
+def specialize_Scan(map_fn, combine_fn, emit_fn, array_types, axes,  init_type = None):
   acc_type, typed_map_fn, typed_combine_fn = \
-      specialize_Reduce(map_fn, combine_fn, array_types, init_type)
+      specialize_Reduce(map_fn, combine_fn, array_types, axes, init_type)
   typed_emit_fn = specialize(emit_fn, [acc_type])
-  result_type = array_type.increase_rank(typed_emit_fn.return_type, 1)
-  return result_type, typed_map_fn, typed_combine_fn, typed_emit_fn
+  elt_result_t = typed_emit_fn.return_type
+  result_t = increase_adverb_output_rank(array_types, axes, elt_result_t)
+  return result_t, typed_map_fn, typed_combine_fn, typed_emit_fn
 
-def infer_Scan(map_fn, combine_fn, emit_fn, array_types, init_type = None):
-  t, _, _, _ = specialize_Scan(map_fn, combine_fn, emit_fn,
-                               array_types, init_type)
-  return t
-
-def specialize_OuterMap(fn, array_types):
-  elt_types = [lower_rank(t, 1) for t in array_types]
+def specialize_OuterMap(fn, array_types, axes):
+  elt_types = peel_adverb_input_types(array_types, axes)
   typed_map_fn = specialize(fn, elt_types)
   elt_result_t = typed_map_fn.return_type
-  result_t = array_type.increase_rank(elt_result_t, 2)
+  result_t = increase_adverb_output_rank(array_types, axes, elt_result_t, cartesian_product = True)
   return result_t, typed_map_fn
 
-def infer_OuterMap(fn, array_types):
-  t, _ = specialize_OuterMap(fn, array_types)
-  return t

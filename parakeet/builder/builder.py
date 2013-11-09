@@ -8,8 +8,9 @@ from arith_builder import ArithBuilder
 from array_builder import ArrayBuilder
 from loop_builder import LoopBuilder 
 from call_builder import CallBuilder
+from adverb_builder import AdverbBuilder
 
-class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder):
+class Builder(ArithBuilder, ArrayBuilder, CallBuilder, LoopBuilder, AdverbBuilder):
   
 
   

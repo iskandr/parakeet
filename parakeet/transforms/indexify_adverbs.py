@@ -4,10 +4,9 @@ import itertools
 from .. import names 
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT, ArrayT 
-from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
-                      Var, Return, UntypedFn, Expr)
+from ..syntax import (ParFor, IndexReduce, IndexScan, Index, Map, OuterMap, Var)
 from ..syntax.helpers import get_types, none, zero_i64 
-from ..syntax.adverb_helpers import max_rank_arg, max_rank, unwrap_constant 
+from ..syntax.adverb_helpers import max_rank_arg, max_rank 
 from transform import Transform
 
 
@@ -51,7 +50,7 @@ class IndexifyAdverbs(Transform):
     n_closure_args = len(closure_args)
     fn = self.get_fn(fn)
     
-    axes = self.get_axes(array_args, axis)
+    axes = self.normalize_axes(array_args, axis)
     
     key = (  fn.cache_key, 
              axes,
@@ -169,7 +168,7 @@ class IndexifyAdverbs(Transform):
   
   def get_slices(self, builder, array_arg_vars, axes, index_input_vars, cartesian_product): 
     slice_values = []
-    axes = self.get_axes(array_arg_vars, axes)
+    axes = self.normalize_axes(array_arg_vars, axes)
     # only gets incremented if we're doing a cartesian product
     if cartesian_product:
       idx_counter = 0
@@ -221,19 +220,6 @@ class IndexifyAdverbs(Transform):
 
   
 
-  def sizes_along_axis(self, xs, axis):
-    axis_sizes = [self.size_along_axis(x, axis)
-                  for x in xs
-                  if self.rank(x) > axis]
-
-    assert len(axis_sizes) > 0
-    # all arrays should agree in their dimensions along the
-    # axis we're iterating over
-    self.check_equal_sizes(axis_sizes)
-    return axis_sizes
-
-
-
   def create_map_output_array(self, 
                                  fn, array_args, axes, 
                                  cartesian_product = False, 
@@ -247,7 +233,7 @@ class IndexifyAdverbs(Transform):
       "Expected function, got %s" % (fn,)
     assert isinstance(array_args, (list,tuple)), \
       "Expected list of array args, got %s" % (array_args,)
-    axes = self.get_axes(array_args, axes)
+    axes = self.normalize_axes(array_args, axes)
     
     
     
@@ -297,61 +283,6 @@ class IndexifyAdverbs(Transform):
 
     return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
 
-  def get_axes(self, args, axis):
-    if isinstance(axis, Expr) and isinstance(axis.type, TupleT):
-      axis = self.tuple_elts(axis)
-          
-      
-    # unpack the axis argument into a tuple,  
-    # if only one axis was given, then repeat it as many times as we have args 
-    if isinstance(axis, (list, tuple)):
-      axes = tuple([unwrap_constant(elt) for elt in axis])
-    elif isinstance(axis, Expr):
-      axes = (unwrap_constant(axis),) * len(args) 
-    else:
-      assert axis is None or isinstance(axis, (int,long)), "Invalid axis %s" % axis
-      axes = (axis,) * len(args)
-    
-    assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
-    
-    if self.rank(max_rank_arg(args)) < 2:
-        # if we don't actually have any multidimensional arguments, 
-        # might as well make the axes just 0  
-      axes = tuple(0 if axis is None else axis for axis in axes)
-    return axes 
-  
-  def iter_bounds(self, args, axes):
-    
-    axes = self.get_axes(args, axes)
-   
-    assert len(args) == len(axes), "Mismatch between args %s and axes %s" % (args, axes) 
-    if any(axis is None for axis in axes):
-      # if any of the axes are None then just find the highest rank argument 
-      # which is going to be fully traversed and use its shape as the bounds
-      # for the generated ParFor
-      best_rank = -1 
-      best_arg = None 
-      for curr_arg, curr_axis in zip(args,axes):
-        r = self.rank(curr_arg)
-        if curr_axis is None and r > best_rank:
-          best_rank = r
-          best_arg = curr_arg 
-      return self.shape(best_arg) 
-       
-    else:
-      # if all axes are integer values, then keep the one with highest rank, 
-      # it's bad that we're not doing any error checking here to make sure that 
-      # all the non-scalar arguments have compatible shapes 
-      best_rank = -1  
-      best_arg = None
-      best_axis = None 
-      for curr_arg, curr_axis in zip(args,axes):
-        r = self.rank(curr_arg)
-        if r > best_rank:
-          best_arg = curr_arg 
-          best_axis = curr_axis
-          best_rank = r 
-      return self.shape(best_arg, best_axis)
   
   def transform_Map(self, expr, output = None):
     # TODO: 
@@ -359,7 +290,7 @@ class IndexifyAdverbs(Transform):
     
 
     args = self.transform_expr_list(expr.args)
-    axes = self.get_axes(args, expr.axis)
+    axes = self.normalize_axes(args, expr.axis)
     old_fn = expr.fn
 
     if output is None:
@@ -374,14 +305,16 @@ class IndexifyAdverbs(Transform):
   
   def transform_OuterMap(self, expr):
     args = self.transform_expr_list(expr.args)
-    axes = self.get_axes(args, expr.axis)
+    axes = self.normalize_axes(args, expr.axis)
     
     fn = expr.fn 
+    outer_shape = self.iter_bounds(args, axes)
     # recursively descend down the function bodies to pull together nested ParFors 
-    counts = [self.size_along_axis(arg, axis) for (arg,axis) in zip(args,axes)]
-    outer_shape = self.tuple(counts)
     zero = self.int(0)
-    first_values = [self.slice_along_axis(arg, axis, zero) for (arg,axis) in zip(args, axes)]
+    
+    first_values = [self.slice_along_axis(arg, axis, zero) 
+                    
+                    for (arg,axis) in zip(args, axes)]
     # self.create_output_array(fn, inner_args, outer_shape, name)
     output =  self.create_output_array(fn, first_values, outer_shape)
 
@@ -452,7 +385,7 @@ class IndexifyAdverbs(Transform):
     
     args = []
     axes = []
-    raw_axes = self.get_axes(expr.args, expr.axis)
+    raw_axes = self.normalize_axes(expr.args, expr.axis)
     for axis, arg in zip(raw_axes, expr.args):
       if self.is_none(axis):
         args.append(self.ravel(arg))
@@ -492,7 +425,7 @@ class IndexifyAdverbs(Transform):
     
     args = []
     axes = []
-    for (arg, axis)  in zip(expr.args,  self.get_axes(expr.args, expr.axis)):
+    for (arg, axis)  in zip(expr.args, self.normalize_axes(expr.args, expr.axis)):
       if axis is  None or self.is_none(axis):
         args.append(self.ravel(arg))
         axis = 0
@@ -527,9 +460,6 @@ class IndexifyAdverbs(Transform):
   def transform_Filter(self, expr):
     assert False, "Filter not implemented"
     
-  def transform_TypedFn(self, expr):
-    import pipeline 
-    return pipeline.indexify.apply(expr)
   
   def transform_Assign(self, stmt):
     """
@@ -543,7 +473,6 @@ class IndexifyAdverbs(Transform):
         return None 
       elif rhs_class is OuterMap:
         self.transform_OuterMap(stmt.rhs, output = stmt.lhs)
-       
     return Transform.transform_Assign(self, stmt)
 
   
