@@ -1,4 +1,5 @@
 treelike
 numpy
 scipy
+appdirs
 

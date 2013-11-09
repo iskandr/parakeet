@@ -77,6 +77,9 @@ shape_elim = Phase(ShapeElimination,
                    config_param = 'opt_shape_elim')
 
 
+
+
+
 early_optimizations = Phase([
                                inline_opt,
                                symbolic_range_propagation,   
@@ -171,13 +174,21 @@ index_elim = Phase([NegativeIndexElim, IndexElim], config_param = 'opt_index_eli
 
 lower_adverbs = Phase([LowerAdverbs, LowerSlices], run_if = contains_adverbs)
 
+
+# Currently incorrect in the presence of function calls
+# TODO: Make this mark an slices that are call arguments as read & written to
+load_elim = Phase(RedundantLoadElimination,
+                  config_param = 'opt_redundant_load_elimination', 
+                  run_if = lambda fn: not contains_calls(fn))
+
 loopify = Phase([lower_adverbs,
                  ParForToNestedLoops,
                  inline_opt,
                  LowerSlices, 
                  licm, 
                  shape_elim, 
-                 symbolic_range_propagation, 
+                 symbolic_range_propagation,
+                 load_elim,  
                  index_elim, 
                 ],
                 depends_on = after_indexify,
@@ -187,22 +198,12 @@ loopify = Phase([lower_adverbs,
                 name = "Loopify",
                 post_apply = print_loopy)
 
+
 ####################
 #                  #
 #     LOWERING     # 
 #                  #
 ####################
-
-scalar_repl = Phase(ScalarReplacement, 
-                    config_param = 'opt_scalar_replacement', 
-                    run_if = contains_loops)
-
-# Currently incorrect in the presence of function calls
-# TODO: Make this mark an slices that are call arguments as read & written to
-load_elim = Phase(RedundantLoadElimination,
-                  config_param = 'opt_redundant_load_elimination', 
-                  run_if = lambda fn: not contains_calls(fn))
-
 
 
 
@@ -223,9 +224,17 @@ lowering = Phase([
 #                          #
 ############################
 
+scalar_repl = Phase(ScalarReplacement, 
+                    config_param = 'opt_scalar_replacement', 
+                    run_if = contains_loops)
+
+
+
 unroll = Phase([LoopUnrolling, licm], 
                config_param = 'opt_loop_unrolling', 
                run_if = contains_loops)
+
+
 
 final_loop_optimizations = Phase([
                               licm, 

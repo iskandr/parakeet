@@ -144,9 +144,13 @@ class ArrayBuilder(CoreBuilder):
     otherwise just return the array 
     """
     r = self.rank(arr)
+    
     if isinstance(axis, Expr):
       axis = unwrap_constant(axis)
-    if r > axis:
+    
+    if r == 1 and (axis is None or axis == 0):
+      return self.index(arr, idx)
+    elif r > axis:
       index_tuple = self.build_slice_indices(r, axis, idx)
       return self.index(arr, index_tuple)
     else:
@@ -205,7 +209,7 @@ class ArrayBuilder(CoreBuilder):
 
     if self.is_tuple(idx):
       indices = self.tuple_elts(idx)
-    elif hasattr(idx, '__iter__'):
+    elif isinstance(idx, (list,tuple)) or hasattr(idx, '__iter__'):
       indices = tuple(map(wrap_if_constant,idx))
     else:
       indices = (wrap_if_constant(idx),)
@@ -218,7 +222,7 @@ class ArrayBuilder(CoreBuilder):
       indices = indices + extra
 
     if len(indices) > 1:
-      idx = self.tuple(indices, "index_tuple" if name is None else name)
+      idx = self.tuple(indices, name = name)
     else:
       idx = indices[0]
 
@@ -241,7 +245,7 @@ class ArrayBuilder(CoreBuilder):
       else:
         indices.append(slice_none)
 
-    index_tuple = self.tuple(indices, "indices")
+    index_tuple = self.tuple(indices)
 
 
     result_t = arr.type.index_type(index_tuple.type)

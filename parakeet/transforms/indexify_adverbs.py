@@ -47,7 +47,6 @@ class IndexifyAdverbs(Transform):
     
     array_arg_types = tuple(get_types(array_args))
 
-    n_arrays = len(array_arg_types)
     closure_args = self.closure_elts(fn)
     closure_arg_types = tuple(get_types(closure_args))
     n_closure_args = len(closure_args)
@@ -139,50 +138,86 @@ class IndexifyAdverbs(Transform):
       closure_arg_vars = input_vars[1:n_closure_args+1]
       array_arg_vars = input_vars[n_closure_args+1:-n_indices]
     
-    #if cartesian_product:
-    #  index_elts = self.tuple_elts(index_input_var) if n_indices > 1 else [index_input_var]
-    #else:
-    #  assert isinstance(index_input_var.type, ScalarT), \
-    #    "Unexpected index type %s" % (index_input_var.type)
-    #  index_elts = [index_input_var] * n_arrays 
-    if cartesian_product:
-      index_elts = index_input_vars
-    else:
-      assert len(index_input_vars) == 1
-      index_elts = index_input_vars * n_arrays 
-      
-    slice_values = []
+    slice_values = \
+      self.get_slices(builder, array_arg_vars, axes, index_input_vars, cartesian_product)
 
-    idx_counter = 0
-    for i, curr_array in enumerate(array_arg_vars):
-      axis = axes[i]
       
-      idx_expr = index_elts[i]
+    """
+      TODO: figure out what to do with index offsets
       if index_offsets is not None:
         assert len(index_offsets) == len(array_arg_vars), \
           "Different number of index offsets %s and array arguments %s" % \
           (index_offsets, array_arg_vars)
         idx_expr = builder.add(idx_expr, builder.int(index_offsets[i]) )
-      curr_slice = builder.slice_along_axis(curr_array, axis, idx_expr)
-      slice_values.append(curr_slice) 
+    """
+      
+
 
     elt_result = builder.call(fn, tuple(closure_arg_vars) + tuple(slice_values))
     if output is None: 
       builder.return_(elt_result)
     else:
-      
       if len(index_input_vars) > 1:
         builder.setidx(output_var, builder.tuple(index_input_vars), elt_result)
       else:
         builder.setidx(output_var, index_input_vars[0], elt_result)
       builder.return_(none)
-    
-    #inliner = Inliner()
-    #new_fn = inliner.apply(new_fn)
+
     self._indexed_fn_cache[key] = new_fn
     return mk_closure()
           
     
+  
+  def get_slices(self, builder, array_arg_vars, axes, index_input_vars, cartesian_product): 
+    slice_values = []
+
+    # only gets incremented if we're doing a cartesian product
+    if cartesian_product:
+      idx_counter = 0
+      for i, curr_array in enumerate(array_arg_vars):
+        axis = axes[i]
+        rank = curr_array.type.rank
+        if rank <= 1 and axis is None:
+          axis = 0
+           
+        if axis is None:
+          start = idx_counter
+          stop = idx_counter + rank
+          curr_indices = index_input_vars[start:stop]
+          idx_counter = stop 
+          curr_slice = builder.index(curr_array, curr_indices)
+        elif axis >= rank:
+          # if array doesn't have enough dims for the given axis, just it in whole 
+          curr_slice = curr_array  
+        else:
+          idx = index_input_vars[idx_counter]
+          idx_counter += 1
+          curr_slice = builder.slice_along_axis(curr_array, axis, idx)
+        slice_values.append(curr_slice)
+    else:
+      for i, curr_array in enumerate(array_arg_vars):
+        axis = axes[i]
+        rank = curr_array.type.rank
+
+        if rank <= 1 and axis is None:
+          axis = 0
+        if axis is None:
+          assert len(index_input_vars) <= rank, \
+            "Insufficient indices for array arg %s : %s" % (curr_array, curr_array.type)
+            
+          # to be compatible with NumPy's broadcasting, we pull out the *last* r
+          # indices so that Matrix + Vector will replicate the vector as columns, not rows
+          curr_indices = index_input_vars[-rank:]
+          curr_slice = builder.index(curr_array, curr_indices)
+        elif axis >= rank:
+          # if we're trying to map over axis 1 of a 1-d object, then there aren't
+          # enough dims to slice anything, so it just gets passed in without modification 
+          curr_slice = curr_array 
+        else:
+          curr_slice = builder.slice_along_axis(curr_array, axis, index_input_vars[0])
+        slice_values.append(curr_slice)
+    return slice_values
+
   
 
   def sizes_along_axis(self, xs, axis):
@@ -198,9 +233,10 @@ class IndexifyAdverbs(Transform):
 
 
 
-  def create_map_output_array(self, fn, array_args, axes, 
-                            cartesian_product = False, 
-                            name = "output"):
+  def create_map_output_array(self, 
+                                 fn, array_args, axes, 
+                                 cartesian_product = False, 
+                                name = "output"):
     """
     Given a function and its argument, use shape inference to figure out the
     result shape of the array and preallocate it.  If the result should be a
@@ -213,14 +249,38 @@ class IndexifyAdverbs(Transform):
     axes = self.get_axes(array_args, axes)
     
     
+    
+    n_indices = 0
+    for arg, axis in zip(array_args, axes):
+      r = self.rank(arg)
+      if r == 0:
+        continue 
+      if axis is None:
+        if cartesian_product:
+          n_indices += self.rank(arg)
+        else:
+          n_indices = max(n_indices, self.rank(arg))
+      elif r <= axis:
+        continue 
+      else:
+        if cartesian_product:
+          n_indices += 1
+        else:
+          n_indices = max(n_indices, 1)
+           
     # take the 0'th slice just to have a value in hand 
-    inner_args = [self.slice_along_axis(array, axis, zero_i64)
-                  for array, axis in zip(array_args, axes)]
-
-    extra_dims = []
+    inner_args = self.get_slices(builder = self, 
+                                 array_arg_vars = array_args, 
+                                 axes = axes, 
+                                 index_input_vars = [zero_i64] * (n_indices),
+                                 cartesian_product = cartesian_product)
+     
+                  
+    
     if cartesian_product:
-      rank = self.rank(array)
+      extra_dims = []
       for array, axis in zip(array_args, axes):
+        rank = self.rank(array)
         if axis is None:
           dim = 1
         elif rank > axis:
@@ -228,9 +288,12 @@ class IndexifyAdverbs(Transform):
         else:
           dim = 1 
         extra_dims.append(dim)
+      outer_shape_tuple = self.tuple(extra_dims)
     else:
-      extra_dims.append(self.niters(array_args, axes))
-    outer_shape_tuple = self.tuple(extra_dims)
+      outer_shape_tuple = self.iter_bounds(array_args, axes)
+      if isinstance(outer_shape_tuple.type, ScalarT):
+        outer_shape_tuple = self.tuple([outer_shape_tuple])
+
     return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
 
   def get_axes(self, args, axis):
@@ -259,19 +322,38 @@ class IndexifyAdverbs(Transform):
       axes = tuple(0 if axis is None else axis for axis in axes)
     return axes 
   
-  def niters(self, args, axes):
+  def iter_bounds(self, args, axes):
+    
     axes = self.get_axes(args, axes)
-    assert len(args) == len(axes)
-    best_rank = 0 
-    best_arg = None
-    best_axis = None 
-
-    for curr_arg, curr_axis in zip(args,axes):
-      r = self.rank(curr_arg)
-      if r > best_rank:
-        best_arg = curr_arg 
-        best_axis = curr_axis 
-    return self.shape(best_arg, best_axis)
+   
+    assert len(args) == len(axes), "Mismatch between args %s and axes %s" % (args, axes) 
+    if any(axis is None for axis in axes):
+      # if any of the axes are None then just find the highest rank argument 
+      # which is going to be fully traversed and use its shape as the bounds
+      # for the generated ParFor
+      best_rank = -1 
+      best_arg = None 
+      for curr_arg, curr_axis in zip(args,axes):
+        r = self.rank(curr_arg)
+        if curr_axis is None and r > best_rank:
+          best_rank = r
+          best_arg = curr_arg 
+      return self.shape(best_arg) 
+       
+    else:
+      # if all axes are integer values, then keep the one with highest rank, 
+      # it's bad that we're not doing any error checking here to make sure that 
+      # all the non-scalar arguments have compatible shapes 
+      best_rank = -1  
+      best_arg = None
+      best_axis = None 
+      for curr_arg, curr_axis in zip(args,axes):
+        r = self.rank(curr_arg)
+        if r > best_rank:
+          best_arg = curr_arg 
+          best_axis = curr_axis
+          best_rank = r 
+      return self.shape(best_arg, best_axis)
   
   def transform_Map(self, expr, output = None):
     # TODO: 
@@ -285,11 +367,11 @@ class IndexifyAdverbs(Transform):
     if output is None:
       output = self.create_map_output_array(old_fn, args, axes)
 
-    niters = self.niters(args, axes)
+    bounds = self.iter_bounds(args, axes)
     index_fn = self.indexify_fn(expr.fn, axes, args, 
                                 cartesian_product=False, 
                                 output = output)
-    self.parfor(index_fn, niters)
+    self.parfor(index_fn, bounds)
     return output 
   
   def transform_OuterMap(self, expr):
@@ -379,7 +461,7 @@ class IndexifyAdverbs(Transform):
       else:
         args.append(arg)
         axes.append(axis)
-        
+    
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
     if self.is_none(init):
@@ -390,14 +472,14 @@ class IndexifyAdverbs(Transform):
       nelts = self.sub(nelts, self.int(1), "nelts") 
     else:
       index_offsets = None
-      
+    
+    
     index_fn = self.indexify_fn(fn, 
                                 axis, 
                                 args, 
                                 cartesian_product=False, 
                                 index_offsets = index_offsets)
 
-    
     return IndexReduce(fn = index_fn, 
                        init = init, 
                        combine = combine, 
@@ -407,26 +489,27 @@ class IndexifyAdverbs(Transform):
   def transform_Scan(self, expr, output = None):
     combine = expr.combine 
     init = expr.init 
-    args = expr.args
-
-    axis = expr.axis
-    if axis is  None or self.is_none(axis):
-      assert len(args) == 1
-      args = [self.ravel(args[0])]
-      axis = 0
-    else:
-      axis = unwrap_constant(axis)
     
-    niters = self.niters(args, axis)
+    
+    args = []
+    axes = []
+    for (arg, axis)  in zip(expr.args,  self.get_axes(expr.args, expr.axis)):
+      if axis is  None or self.is_none(axis):
+        args.append(self.ravel(arg))
+        axis = 0
+      else:
+        args.append(arg)
+      axes.append(axis)
+     
+    bounds = self.iter_bounds(args, axes)
     
     if self.is_none(init):
       assert len(args) == 1
       init = self.index_along_axis(args[0], axis, self.int(0))# self.call(index_fn, [self.int(0)])  
       index_offsets = (1,)
-      niters = self.sub(niters, self.int(1), "niters")
+      bounds = self.sub(bounds, self.int(1), "niters")
     else:
       index_offsets = None
-      
       
     index_fn = self.indexify_fn(expr.fn, 
                                 axis, 
@@ -439,7 +522,7 @@ class IndexifyAdverbs(Transform):
                      init = init, 
                      combine = combine,
                      emit = expr.emit, 
-                     shape = niters,
+                     shape = bounds,
                      type = expr.type)
   
   def transform_Filter(self, expr):

@@ -2,7 +2,7 @@ import numpy as np
 import time 
 
 import parakeet 
-from parakeet.testing_helpers import expect_each, run_local_tests, eq
+from parakeet.testing_helpers import expect_each, run_local_tests
 
 
 size = (5,5)
@@ -11,24 +11,10 @@ int_mat = np.random.random_integers(0,255,size=size)
 
 matrices = [float_mat, int_mat]
 
-def diff_x(I):
-  m = I.shape[0]
-  return (I[1:, :] - I[:m-1, :])[:, 1:]
-
-def test_diff_x():
-  expect_each(diff_x, diff_x, matrices)
-
-def diff_y(I):
-  n = I.shape[1]
-  return (I[:, 1:] - I[:, :n-1])[1:, :]
-
-def test_diff_y():
-  expect_each(diff_x, diff_x, matrices)
-
-
 def harris(I):
-  dx = diff_x(I)
-  dy = diff_y(I)
+  m,n = I.shape 
+  dx = (I[1:, :] - I[:m-1, :])[:, 1:]
+  dy = (I[:, 1:] - I[:, :n-1])[1:, :]
   #
   #   At each point we build a matrix
   #   of derivative products

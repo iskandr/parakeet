@@ -9,10 +9,7 @@ import subprocess
 import time 
 
 from tempfile import NamedTemporaryFile
-
 import config 
-
-
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
@@ -74,7 +71,7 @@ numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
 include_dirs = python_include_dirs + numpy_include_dirs 
 
 def get_opt_flags():
-  opt_flags = ['-O3'] 
+  opt_flags = [config.opt_level] 
   if config.sse2:
     opt_flags.append('-msse2')
   if config.fast_math:
@@ -90,8 +87,6 @@ def get_compiler_flags(compiler, extra_flags = [], compiler_flag_prefix = None):
     compiler_flags.append(flag)
 
   add_flag('-fPIC')
-    
-  # compiler_flags.extend(['-Wall', '-Wno-unused-variable'])
   
   if config.debug:
     # nvcc understands debug mode flags
@@ -167,7 +162,8 @@ def create_source_file(src,
     src_file = NamedTemporaryFile(suffix = src_extension,  
                                   prefix =  prefix, 
                                   delete = False,
-                                  mode = 'w')
+                                  mode = 'w', 
+                                  )
     src_filename = src_file.name 
   else:
     src_file = open(src_filename, 'w')
@@ -254,7 +250,7 @@ def compile_object(src,
     compiler = get_compiler()
   
   src_file = create_source_file(src, 
-                                fn_name = fn_name, 
+                                fn_name = fn_name,
                                 src_filename = src_filename, 
                                 declarations = declarations,
                                 extra_function_sources = extra_function_sources,  
@@ -272,6 +268,7 @@ def compile_object(src,
   compiler_cmd += ['-c', src_filename, '-o', object_name]
   
   run_cmd(compiler_cmd, label = "Compile source")
+  
   return CompiledObject(src = src, 
                         src_filename = src_filename, 
                         object_filename = object_name, 
@@ -353,16 +350,7 @@ def compile_module(src,
   env["LD_LIBRARY_PATH"] = python_lib_dir
   run_cmd(linker_cmd, env = env, label = "Linking")
   
-  #if mac_os:
-  #  # Annoyingly have to patch up the shared library to point to the correct Python
-  #  change_cmd = ['install_name_tool', '-change', '%s' % python_lib_full, 
-  #                python_lib_dir + "/%s" % python_lib_full, 
-  #                shared_name]
-  #  if print_commands: print " ".join(change_cmd)
-  #  subprocess.check_output(change_cmd)
-  # delete the .o file since we don't need it anymore 
-  # os.remove(object_name)
-  
+
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)

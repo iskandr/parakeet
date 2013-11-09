@@ -3,6 +3,7 @@
 ##########################
 fast_math = True 
 sse2 = True 
+opt_level = '-O2'
 # overload the default compiler path  
 compiler_path = None
 

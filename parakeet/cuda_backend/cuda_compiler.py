@@ -161,7 +161,9 @@ class CudaCompiler(MulticoreCompiler):
         start_indices.append(zero_i32)
         step_sizes.append(one_i32)
         stop_indices.append(bounds_vars[i])
-        
+    
+    
+    
     def loop_body(index_vars):
       if not isinstance(index_vars, (list,tuple)):
         pass
@@ -397,6 +399,13 @@ class CudaCompiler(MulticoreCompiler):
       gpu_value = gpu_values[i]
       self.to_host(host_value, gpu_value, t)
     
+  def visit_Alloc(self, expr):
+    assert self.in_host(), "Can't dynamically allocate memory in GPU code"
+    return MulticoreCompiler.visit_Alloc(self, expr)
+  
+  def visit_AllocArray(self, expr):
+    assert self.in_host(), "Can't dynamically allocate memory in GPU code"
+    return MulticoreCompiler.visit_AllocArray(self, expr)
 
   """
   def visit_IndexReduce(self, expr):

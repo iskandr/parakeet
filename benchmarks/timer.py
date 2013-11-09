@@ -8,13 +8,14 @@ import tempfile
 class timer(object):
   def __init__(self, name = None, newline = True, 
                suppress_stdout = True, 
-               suppress_stderr = True):
+               suppress_stderr = True,
+               propagate_exceptions = False):
     self.name = name 
     self.start_t = time.time()
     self.newline = newline
     self.suppress_stdout = suppress_stdout
     self.suppress_stderr = suppress_stderr
-    
+    self.propagate_exceptions = propagate_exceptions 
   def __enter__(self):
     if self.suppress_stdout:
       stdout_newfile = tempfile.NamedTemporaryFile()
@@ -50,5 +51,9 @@ class timer(object):
       s += "FAILED with %s '%s'" % (name, exc_value)
     print s 
     # don't raise exceptions
-    return exc_type is not KeyboardInterrupt
+    if self.propagate_exceptions:
+      return False 
+    else:
+      return exc_type is not KeyboardInterrupt
+    
 
