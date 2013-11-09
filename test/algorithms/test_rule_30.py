@@ -1,4 +1,3 @@
-import matplotlib.pylab as pylab
 import numpy as np
 import parakeet
 
@@ -37,6 +36,7 @@ def test_rule30():
     output = np.vstack((output,cur))
 
   if plot:
+    import matplotlib.pylab as pylab
     pylab.matshow(output,cmap = pylab.cm.gray)
     pylab.show()
 

@@ -1,19 +1,47 @@
 
-from ..ndtypes import TupleT
+from ..ndtypes import TupleT, ScalarT
 from ..syntax import Expr 
 from ..syntax.adverb_helpers import max_rank_arg, max_rank, unwrap_constant 
-from ..syntax.helpers import unwrap_constant
+from ..syntax.helpers import unwrap_constant, wrap_if_constant 
  
 from loop_builder import LoopBuilder
 
 class AdverbBuilder(LoopBuilder):
 
+  def list_none_axes(self, args, axis):
+    axes = self.normalize_expr_axes(args, axis)
+    return [self.is_none(axis) for axis in axes]
+  
+  def normalize_expr_axes(self, args, axis):
+    """
+    Given a list of arguments to an adverb and some value 
+    or expression representing the axis/axes of iteration, 
+    return a tuple of axis expressions, one per argument
+    """
+    axis = wrap_if_constant(axis)
+    assert isinstance(axis, Expr), "Unexpected axis %s" % axis
+    
+    if isinstance(axis.type, TupleT):
+      axes = self.tuple_elts(axis)
+    else:
+      assert isinstance(axis.type, ScalarT), "Unexpected axis %s : %s" % (axis, axis.type)
+      axes = (axis,) * len(args)
+    
+    assert len(axes) == len(args), "Wrong number of axes (%d) for %d args" % (len(axes), len(args))
+    
+    if self.rank(max_rank_arg(args)) < 2:
+        # if we don't actually have any multidimensional arguments, 
+        # might as well make the axes just 0  
+      axes = tuple(self.int(0) if self.is_none(axis) else axis for axis in axes)
+    return axes 
+    
   def normalize_axes(self, args, axis):
     """
     Given a list of arguments to an adverb and some value 
     or expression representing the axis/axes of iteration, 
-    return a tuple of axes, one per argument
+    return a tuple of axis values, one per argument
     """
+
     if isinstance(axis, Expr) and isinstance(axis.type, TupleT):
       axis = self.tuple_elts(axis)
           

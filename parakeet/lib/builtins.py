@@ -26,7 +26,6 @@ def builtin_all(x, axis = None):
 def builtin_sum(x, axis = None):
   return reduce(prims.add, x, init = False, axis = axis)
 
-
 @typed_macro 
 def builtin_tuple(xt):
   if isinstance(xt.type, TupleT):

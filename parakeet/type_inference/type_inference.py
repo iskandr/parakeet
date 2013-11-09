@@ -86,6 +86,7 @@ class TypeInference(LocalTypeInference):
 
   
   def transform_fn(self, f):
+  
     """
     If you're calling a Type, turn it into a wrapper function around the Cast expression. 
     If you're calling a Prim, turn it into a wrapper function around the PrimCall expression.
@@ -451,8 +452,6 @@ def infer_types(untyped_fn, types):
   inferred types throughout the program and inserts adverbs for scalar operators
   applied to arrays
   """
-
-
   
   var_map = VarMap()
   typed_args = untyped_fn.args.transform(rename_fn = var_map.rename)
