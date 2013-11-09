@@ -6,9 +6,8 @@ from ..builder import build_fn
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT, ArrayT 
 from ..syntax import (ParFor, IndexReduce, IndexScan, IndexFilter, Index, Map, OuterMap, 
                       Var, Return, UntypedFn, Expr)
-from ..syntax.helpers import unwrap_constant, get_types, none, zero_i64 
-from ..syntax.adverb_helpers import max_rank_arg, max_rank
-from inline import Inliner 
+from ..syntax.helpers import get_types, none, zero_i64 
+from ..syntax.adverb_helpers import max_rank_arg, max_rank, unwrap_constant 
 from transform import Transform
 
 
@@ -170,7 +169,7 @@ class IndexifyAdverbs(Transform):
   
   def get_slices(self, builder, array_arg_vars, axes, index_input_vars, cartesian_product): 
     slice_values = []
-
+    axes = self.get_axes(array_arg_vars, axes)
     # only gets incremented if we're doing a cartesian product
     if cartesian_product:
       idx_counter = 0
@@ -186,13 +185,12 @@ class IndexifyAdverbs(Transform):
           curr_indices = index_input_vars[start:stop]
           idx_counter = stop 
           curr_slice = builder.index(curr_array, curr_indices)
-        elif axis >= rank:
-          # if array doesn't have enough dims for the given axis, just it in whole 
-          curr_slice = curr_array  
-        else:
+        if rank > axis:
           idx = index_input_vars[idx_counter]
           idx_counter += 1
           curr_slice = builder.slice_along_axis(curr_array, axis, idx)
+        else:
+          curr_slice = curr_array 
         slice_values.append(curr_slice)
     else:
       for i, curr_array in enumerate(array_arg_vars):
@@ -209,12 +207,15 @@ class IndexifyAdverbs(Transform):
           # indices so that Matrix + Vector will replicate the vector as columns, not rows
           curr_indices = index_input_vars[-rank:]
           curr_slice = builder.index(curr_array, curr_indices)
-        elif axis >= rank:
-          # if we're trying to map over axis 1 of a 1-d object, then there aren't
-          # enough dims to slice anything, so it just gets passed in without modification 
-          curr_slice = curr_array 
+        if rank > axis:
+          curr_slice = builder.slice_along_axis(curr_array, axis, index_input_vars[0]) 
         else:
-          curr_slice = builder.slice_along_axis(curr_array, axis, index_input_vars[0])
+          # if we're trying to map over axis 1 of a 1-d object, then there aren't
+          # enough dims to slice anything, so it just gets passed in without modification
+          
+          curr_slice = curr_array 
+        
+          
         slice_values.append(curr_slice)
     return slice_values
 
@@ -297,19 +298,16 @@ class IndexifyAdverbs(Transform):
     return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
 
   def get_axes(self, args, axis):
-    if isinstance(axis, Expr):
-      if isinstance(axis.type, TupleT):
-        axis_elts = self.tuple_elts(axis)
-        axis = axis_elts  
-      else:
-        axis = unwrap_constant(axis)
-    
+    if isinstance(axis, Expr) and isinstance(axis.type, TupleT):
+      axis = self.tuple_elts(axis)
+          
+      
     # unpack the axis argument into a tuple,  
     # if only one axis was given, then repeat it as many times as we have args 
-    if isinstance(axis, list):
-      axes = tuple(axis)
-    elif isinstance(axis, tuple):
-      axes = axis
+    if isinstance(axis, (list, tuple)):
+      axes = tuple([unwrap_constant(elt) for elt in axis])
+    elif isinstance(axis, Expr):
+      axes = (unwrap_constant(axis),) * len(args) 
     else:
       assert axis is None or isinstance(axis, (int,long)), "Invalid axis %s" % axis
       axes = (axis,) * len(args)
@@ -386,6 +384,7 @@ class IndexifyAdverbs(Transform):
     first_values = [self.slice_along_axis(arg, axis, zero) for (arg,axis) in zip(args, axes)]
     # self.create_output_array(fn, inner_args, outer_shape, name)
     output =  self.create_output_array(fn, first_values, outer_shape)
+
     loop_body = self.indexify_fn(fn, axes, args, 
                                  cartesian_product = True, 
                                  output = output)

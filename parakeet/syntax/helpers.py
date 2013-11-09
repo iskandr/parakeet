@@ -125,6 +125,9 @@ def unwrap_constant(x):
   else:
     assert is_python_constant(x)
     return x
+  
+def unwrap_constants(xs):
+  return [unwrap_constant(x) for x in xs]
 
 def wrap_if_constant(x):
   """
