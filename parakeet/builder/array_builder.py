@@ -179,7 +179,7 @@ class ArrayBuilder(CoreBuilder):
   def check_equal_sizes(self, sizes):
     pass
   
-  def index(self, arr, idx, temp = True, name = None):
+  def index(self, arr, idx, temp = False, name = None):
     """Index into array or tuple differently depending on the type"""
     
     temp = temp or name is not None
@@ -193,6 +193,7 @@ class ArrayBuilder(CoreBuilder):
       # Just be sure to catch this as an error in
       # the user's code earlier in the pipeline.
       return arr
+    
     if isinstance(arr_t, TupleT):
       if isinstance(idx, Const):
         idx = idx.value

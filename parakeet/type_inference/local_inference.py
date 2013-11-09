@@ -374,6 +374,7 @@ class LocalTypeInference(Transform):
     return Assign(lhs, rhs)
   
   def transform_If(self, stmt):
+
     cond = self.transform_expr(stmt.cond) 
 
     assert isinstance(cond.type, ScalarT), \

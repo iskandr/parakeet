@@ -185,7 +185,7 @@ class IndexifyAdverbs(Transform):
           curr_indices = index_input_vars[start:stop]
           idx_counter = stop 
           curr_slice = builder.index(curr_array, curr_indices)
-        if rank > axis:
+        elif rank > axis:
           idx = index_input_vars[idx_counter]
           idx_counter += 1
           curr_slice = builder.slice_along_axis(curr_array, axis, idx)
@@ -207,7 +207,7 @@ class IndexifyAdverbs(Transform):
           # indices so that Matrix + Vector will replicate the vector as columns, not rows
           curr_indices = index_input_vars[-rank:]
           curr_slice = builder.index(curr_array, curr_indices)
-        if rank > axis:
+        elif rank > axis:
           curr_slice = builder.slice_along_axis(curr_array, axis, index_input_vars[0]) 
         else:
           # if we're trying to map over axis 1 of a 1-d object, then there aren't

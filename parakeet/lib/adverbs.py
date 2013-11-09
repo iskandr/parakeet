@@ -22,7 +22,7 @@ def map(f, *args, **kwds):
     axis = kwds['axis']
     del kwds['axis']
   else:
-    axis = zero_i64
+    axis = none
   assert len(kwds) == 0, "map got unexpected keywords %s" % (kwds.keys())
   return Map(fn = f, args = args, axis = axis)
 each = map

@@ -29,7 +29,7 @@ def _scalar_sign(x):
   
 @jit
 def sign(x):
-  return map(_scalar_sign,x)
+  return map(_scalar_sign, x)
 
 @jit 
 def reciprocal(x):
