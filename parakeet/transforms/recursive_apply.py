@@ -70,6 +70,8 @@ class RecursiveApply(Transform):
       self.transform = fn.created_by 
     
     assert self.transform is not None, "No transform specified for RecursiveApply"
+    fn.input_types = tuple(self.transform_type(t) for t in fn.input_types)
+    fn.return_type = self.transform_type(fn.return_type)
     for k,t in fn.type_env.items():
       fn.type_env[k] = self.transform_type(t)
     return fn   

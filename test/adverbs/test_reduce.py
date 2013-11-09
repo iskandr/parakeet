@@ -24,6 +24,15 @@ def test_bool_sum():
 def sqr_dist(y, x):
   return sum((x-y)*(x-y))
 
+def test_sqr_dist():
+  z = a[0]
+  def run_sqr_dist(c):
+    return sqr_dist(z, c)
+  par_rslt = parakeet.each(run_sqr_dist, a)
+  py_rslt = np.array(map(run_sqr_dist, a))
+  assert testing_helpers.eq(par_rslt, py_rslt), \
+      "Expected %s but got %s" % (py_rslt, par_rslt)
+
 def reduce_2d(Ys):
   init = parakeet.zeros_like(Ys[0])
   return parakeet.reduce(parakeet.add, Ys, init = init, axis = 0)
@@ -33,15 +42,6 @@ def test_2d_reduce():
   np_rslt = np.sum(a, 0)
   assert testing_helpers.eq(par_rslt, np_rslt), \
     "Expected %s but got %s" % (np_rslt, par_rslt)
-
-def test_sqr_dist():
-  z = a[0]
-  def run_sqr_dist(c):
-    return sqr_dist(z, c)
-  par_rslt = parakeet.each(run_sqr_dist, a)
-  py_rslt = np.array(map(run_sqr_dist, a))
-  assert testing_helpers.eq(par_rslt, py_rslt), \
-      "Expected %s but got %s" % (py_rslt, par_rslt)
 
 def avg_along_axis_0(Xs):
   assign = np.array([0,0,1,0,1,0,1,0,1,1])

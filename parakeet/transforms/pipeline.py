@@ -122,6 +122,15 @@ copy_elim = Phase(CopyElimination,
                   memoize = False)
 
 
+def print_indexified(fn):
+  if config.print_indexified_function:
+    print
+    print "=== Indexified function ==="
+    print
+    print repr(fn)
+    print
+
+
 indexify = Phase([
                     IndexifyAdverbs, Simplify, DCE, 
                  ],
@@ -129,7 +138,8 @@ indexify = Phase([
                  run_if = contains_adverbs, 
                  depends_on= high_level_optimizations, 
                  copy = True,
-                 memoize = True) 
+                 memoize = True, 
+                 post_apply = print_indexified) 
 
 after_indexify = Phase([copy_elim, Simplify, DCE, 
                         LowerSlices, 
@@ -161,7 +171,6 @@ def print_loopy(fn):
     print
     print repr(fn)
     print
-
 
 
 

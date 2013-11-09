@@ -150,12 +150,13 @@ class MulticoreCompiler(PyModuleCompiler):
     
   def visit_IndexScan(self, expr):
     """
-    For now, just use a sequential implementation for reductions
+    For now, just use a sequential implementation for scans
     """
     assert isinstance(expr.type, ArrayT), "Expected output of Scan to be an array"
-
+    
     bounds = self.tuple_to_var_list(expr.shape)
     n_vars = len(bounds)
+    
     combine_name, combine_closure_args, _ = self.get_fn_info(expr.combine)
     loop_vars = self.loop_vars(n_vars)
     
@@ -165,6 +166,7 @@ class MulticoreCompiler(PyModuleCompiler):
     assert expr.init is not None, "Accumulator required but not given"
     
     elt_t = get_fn(expr.fn).return_type 
+    assert isinstance(elt_t, ScalarT), "Scans of non-scalar values (%s) not yet implemented" % elt_t
     elt = self.fresh_var(elt_t, "elt")
     body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
     acc = self.fresh_var(expr.init.type, "acc", self.visit_expr(expr.init))

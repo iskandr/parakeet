@@ -7,11 +7,12 @@ from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
 from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType, SliceT, FnT
 
-from .. syntax import (AllocArray, Assign, ExprStmt, 
+from .. syntax import (AllocArray, Assign, ExprStmt, Expr, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
                        Slice, Index, Array, ArrayView, Attribute, Struct, Select, 
                        PrimCall, Call, TypedFn, UntypedFn, 
-                       OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, FilterReduce)
+                       OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, 
+                       IndexScan, FilterReduce)
 from .. syntax.helpers import (collect_constants, is_one, is_zero, is_false, is_true, all_constants,
                                get_types, slice_none_t, const_int, one, none, true, false, slice_none) 
 import subst
@@ -51,52 +52,6 @@ class Simplify(Transform):
   def immutable_type(self, t):
     return t not in self.mutable_types
 
-  def children(self, expr, allow_mutable = False):
-    c = expr.__class__
-
-    if c is Const or c is Var:
-      return ()
-    elif c is PrimCall or c is Closure:
-      return expr.args
-    elif c is ClosureElt:
-      return (expr.closure,)
-    elif c is Tuple:
-      return expr.elts
-    elif c is TupleProj:
-      return (expr.tuple,)
-    # WARNING: this is only valid
-    # if attributes are immutable
-    elif c is Attribute:
-      return (expr.value,)
-    elif c is Slice:
-      return (expr.start, expr.stop, expr.step)
-    elif c is Cast:
-      return (expr.value,)
-    elif c is Map or c is OuterMap or c is IndexMap:
-      return expr.args
-    elif c is Scan or c is Reduce or c is IndexReduce or c is FilterReduce:
-      args = tuple(expr.args)
-      init = (expr.init,) if expr.init else ()
-      return init + args
-    elif c is Call:
-      # assume all Calls might modify their arguments
-      if allow_mutable or all(self.immutable(arg) for arg in expr.args):
-        return expr.args
-      else:
-        return None
-
-    if allow_mutable or self.immutable_type(expr.type):
-      if c is Array:
-        return expr.elts
-      elif c is ArrayView:
-        return (expr.data, expr.shape, expr.strides, expr.offset, expr.size)
-      elif c is Struct:
-        return expr.args
-      elif c is AllocArray:
-        return (expr.shape,)
-      elif c is Attribute:
-        return (expr.value,)
-    return None
 
   _immutable_classes = set([Const,  Var, 
                             Closure, ClosureElt, 
@@ -105,6 +60,8 @@ class Simplify(Transform):
                             TypedFn, UntypedFn, 
                             ArrayView, 
                             Slice, 
+                            Map, Reduce, Scan, OuterMap, 
+                            IndexMap, IndexReduce, IndexScan, 
                             ])
   
   def immutable(self, expr):
@@ -289,10 +246,14 @@ class Simplify(Transform):
       expr.args = args
       return expr
 
-  
+  def transform_if_simple_expr(self, expr):
+    if isinstance(expr, Expr):
+      return self.transform_simple_expr(expr)
+    else:
+      return expr 
+    
   def transform_simple_expr(self, expr, name = None):
-    if name is None: 
-      name = "temp"
+    if name is None: name = "temp"
     result = self.transform_expr(expr)
     if not self.is_simple(result):
       return self.assign_name(result, name)
@@ -492,6 +453,21 @@ class Simplify(Transform):
     stmt.fn = self.transform_expr(stmt.fn)
     return stmt
   
+  def transform_Reduce(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.init = self.transform_if_simple_expr(expr.init)
+    expr.args = self.transform_simple_exprs(expr.args)
+    return expr 
+  
+  def transform_Scan(self, expr):
+    expr.fn = self.transform_expr(expr.fn)
+    expr.combine = self.transform_expr(expr.combine)
+    expr.emit = self.transform_expr(expr.emit)
+    expr.init = self.transform_if_simple_expr(expr.init)
+    expr.args = self.transform_simple_exprs(expr.args)
+    return expr 
+  
   def transform_IndexMap(self, expr):
     expr.fn = self.transform_expr(expr.fn)
     expr.shape = self.transform_shape(expr.shape)
@@ -500,7 +476,7 @@ class Simplify(Transform):
   def transform_IndexReduce(self, expr):
     expr.fn = self.transform_if_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
-    expr.init = self.transform_if_expr(expr.init)
+    expr.init = self.transform_if_simple_expr(expr.init)
     expr.shape = self.transform_shape(expr.shape)
     return expr 
   
@@ -508,7 +484,7 @@ class Simplify(Transform):
     expr.fn = self.transform_if_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     expr.emit = self.transform_if_expr(expr.emit)
-    expr.init = self.transform_if_expr(expr.init)
+    expr.init = self.transform_if_simple_expr(expr.init)
     expr.shape = self.transform_shape(expr.shape)
     return expr 
   
@@ -521,18 +497,6 @@ class Simplify(Transform):
   def transform_ConstArrayLike(self, expr):
     expr.array = self.transform_simple_expr(expr.array)
     expr.value = self.transform_simple_expr(expr.value)
-  
-  def transform_Reduce(self, expr):
-    
-    init = self.transform_expr(expr.init)
-    if not self.is_simple(init):
-      expr.init = self.assign_name(init, 'init')
-    else:
-      expr.init = init
-    expr.args = self.transform_simple_exprs(expr.args)
-    expr.fn = self.transform_expr(expr.fn)
-    expr.combine = self.transform_expr(expr.combine)
-    return expr  
   
   def temp_in_block(self, expr, block, name = None):
     """

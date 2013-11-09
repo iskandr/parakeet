@@ -71,13 +71,10 @@ class IndexElimAnalysis(SyntaxVisitor):
             self.array_values[rhs_name] = self.array_values[lhs_name]
         elif rhs_class is Range:
           self.array_values[lhs_name] = RangeArray(rhs.start, rhs.step, rhs.type.elt_type)
-        """ 
-      
         elif rhs_class in (ConstArray, ConstArrayLike):
           self.array_values[lhs_name] = ConstValue(value = rhs.value, type = rhs.type) 
         elif rhs_class is IndexMap:
           self.array_values[lhs_name] = IndexMapResult(fn = rhs.fn)
-        """
       else:
         # if not a var, might be an index expression 
         for tainted_lhs_name in collect_var_names(lhs):

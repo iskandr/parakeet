@@ -418,6 +418,7 @@ class IndexifyAdverbs(Transform):
                        type = expr.type)
    
   def transform_Scan(self, expr, output = None):
+    
     combine = expr.combine 
     init = expr.init 
     

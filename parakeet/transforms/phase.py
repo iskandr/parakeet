@@ -137,12 +137,13 @@ class Phase(object):
     
     if self.copy:
       fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
-      assert fn.cache_key not in self.cache, \
-        "Typed function %s (key = %s) already registered" % \
-        (fn.name, fn.cache_key)
-        
+      if fn.cache_key  in self.cache:
+        "Warning: Typed function %s (key = %s) already registered, encountered while cloning before %s" % \
+        (fn.name, fn.cache_key, self)
+    
     if self.recursive:
       fn = RecursiveApply(self).apply(fn)
+    
       
     if not self.should_skip(fn):
       fn = apply_transforms(fn, self.transforms, 
