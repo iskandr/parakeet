@@ -1,7 +1,5 @@
 
 from parakeet import jit
-from numba import autojit, config 
-config.print_function = False 
 import numpy as np 
 
 from timer import timer 
@@ -31,6 +29,7 @@ def compare_perf(fn, args, numba= True, cpython = True,
       parakeet_result = parakeet_fn(*args, _backend = backend)
 
   if numba:
+    from numba import autojit, config 
     numba_fn = autojit(fn)
     with timer('Numba #1 -- %s' % name, **kwargs):
       numba_result = numba_fn(*args)
