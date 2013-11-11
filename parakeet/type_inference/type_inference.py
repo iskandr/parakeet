@@ -372,8 +372,8 @@ class TypeInference(LocalTypeInference):
     if init_type and init_type != result_type and \
        array_type.rank(init_type) < array_type.rank(result_type):
       assert len(new_args) == 1
-      #assert is_zero(axis), "Unexpected axis %s : %s" % (axis, axis.type)
       arg = new_args[0]
+      assert False, "Change this to index along the adverb's axis"
       first_elt = syntax.Index(arg, zero_i64, 
                                type = arg.type.index_type(zero_i64))
       first_combine = specialize(combine_fn, (init_type, first_elt.type))

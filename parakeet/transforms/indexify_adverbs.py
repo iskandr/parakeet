@@ -395,7 +395,8 @@ class IndexifyAdverbs(Transform):
     
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
-    if self.is_none(init):
+    if init is None or self.is_none(init):
+      
       init_args = [self.index_along_axis(arg, axis, self.int(0)) for arg, axis in zip(args, axes)]
       init = self.call(fn, init_args)
       index_offsets = (1,) * len(axes)
