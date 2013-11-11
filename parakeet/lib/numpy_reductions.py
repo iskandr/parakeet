@@ -1,5 +1,5 @@
 
-from ..frontend import jit
+from ..frontend import jit, axis_macro 
 from .. import prims 
 from adverbs import scan 
 

@@ -11,13 +11,12 @@ from ..ndtypes import (Type,
                        ClosureT)
 
 from ..syntax import adverb_helpers
-
-from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Map,  
+from ..syntax import (UntypedFn, TypedFn, Closure,  Var, Map, Expr, 
                       ActualArgs, FormalArgs, MissingArgsError, TooManyArgsError)
 
 from ..syntax.helpers import (get_type, get_types,  get_elt_types, 
                               one_i64, zero_i64, none, true, false, 
-                              gen_data_arg_names)
+                              gen_data_arg_names, unwrap_constant)
 from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_cast_fn
 
 
@@ -113,8 +112,6 @@ class TypeInference(LocalTypeInference):
     typed_fn = specialize(untyped_fn, arg_types)
     return syntax.Call(typed_fn, tuple(args), typed_fn.return_type)
 
-
-  
   def transform_PrimCall(self, expr):
     args = self.transform_args(expr.args)
 
@@ -461,7 +458,8 @@ def infer_types(untyped_fn, types):
   unbound_keywords = []
   def keyword_fn(local_name, value):
     unbound_keywords.append(local_name)
-    
+    if isinstance(value, Expr):
+      value = unwrap_constant(value) 
     return type_conv.typeof(value)
 
   try: 

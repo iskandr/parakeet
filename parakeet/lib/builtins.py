@@ -1,10 +1,16 @@
 from .. import prims 
-from .. frontend import translate_function_value, jit, macro, typed_macro 
+
+from .. frontend import translate_function_value, jit, macro, typed_macro, axis_macro 
 from .. ndtypes import make_tuple_type, TupleT, ArrayT, Int64 
 from .. syntax import (Map, Tuple,  Array, Attribute, 
-                       TupleProj,  const_int, Zip, Len)
+                       TupleProj,  const_int, Zip, Len, Reduce)
+from ..syntax.helpers import none, false  
+
 import numpy as np 
 from adverbs import reduce, map 
+
+def _identity(x):
+  return x 
 
 @jit 
 def builtin_or(x, y):
@@ -22,9 +28,11 @@ def builtin_any(x, axis=None):
 def builtin_all(x, axis = None):
   return reduce(builtin_and, x, axis = axis, init = True)
 
-@jit 
+
+@axis_macro 
 def builtin_sum(x, axis = None):
-  return reduce(prims.add, x, init = False, axis = axis)
+  #return reduce(prims.add, x, init = False, axis = axis)
+  return Reduce(fn = translate_function_value(_identity), combine = prims.add, args = (x,),  init = false, axis = axis)
 
 @typed_macro 
 def builtin_tuple(xt):
