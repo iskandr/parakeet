@@ -373,17 +373,17 @@ class TypeInference(LocalTypeInference):
        array_type.rank(init_type) < array_type.rank(result_type):
       assert len(new_args) == 1
       arg = new_args[0]
-      assert False, "Change this to index along the adverb's axis"
-      first_elt = syntax.Index(arg, zero_i64, 
-                               type = arg.type.index_type(zero_i64))
+      first_elt = self.slice_along_axis(arg, axis, zero_i64)
+      #assert False, "Change this to index along the adverb's axis"
+      #first_elt = syntax.Index(arg, zero_i64, 
+      #                         type = arg.type.index_type(zero_i64))
       first_combine = specialize(combine_fn, (init_type, first_elt.type))
+      
       first_combine_closure = make_typed_closure(combine_fn, first_combine)
-      init = syntax.Call(first_combine_closure, (init, first_elt), 
-                                 type = first_combine.return_type)
+      init = self.call(first_combine_closure, (init, first_elt))
       slice_rest = syntax.Slice(start = one_i64, stop = none, step = one_i64, 
                                    type = array_type.SliceT(Int64, NoneType, Int64))
-      rest = syntax.Index(arg, slice_rest, 
-                             type = arg.type.index_type(slice_rest))
+      rest = self.slice_along_axis(arg, axis, slice_rest)
       new_args = (rest,)  
     
     return syntax.Reduce(fn = typed_map_closure,
