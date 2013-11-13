@@ -15,7 +15,7 @@ backend = 'openmp'
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
   
-default_opt_level = 2 
+default_opt_level = 2
 
 def set_opt_level(n):
   assert 0 <= n <= 3, "Invalid optimization level %d" % n
@@ -90,7 +90,7 @@ print_specialized_function = True
 print_indexified_function = True 
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?

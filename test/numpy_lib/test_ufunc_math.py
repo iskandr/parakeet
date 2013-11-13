@@ -12,7 +12,7 @@ bool_mat = np.array([bool_vec, bool_vec])
 float32_vec = np.array([1.0, 2.0], dtype='float32')
 float32_mat = np.array([float32_vec, float32_vec])
 
-float64_vec = np.array([-1.0, 100000.0])
+float64_vec = np.array([1.0, 10.0])
 float64_mat = np.array([float64_vec, float64_vec])
 
 arrays = [int_vec, bool_vec, float32_vec, float64_mat]

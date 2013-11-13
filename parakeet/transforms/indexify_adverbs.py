@@ -395,8 +395,11 @@ class IndexifyAdverbs(Transform):
     
     max_arg = max_rank_arg(args)
     nelts = self.shape(max_arg, axis)
-    if init is None or self.is_none(init):
+    
+    if self.is_none(axis):
+      nelts = self.prod(nelts)
       
+    if init is None or self.is_none(init):
       init_args = [self.index_along_axis(arg, axis, self.int(0)) for arg, axis in zip(args, axes)]
       init = self.call(fn, init_args)
       index_offsets = (1,) * len(axes)
@@ -404,7 +407,6 @@ class IndexifyAdverbs(Transform):
       nelts = self.sub(nelts, self.int(1), "nelts") 
     else:
       index_offsets = None
-    
     
     index_fn = self.indexify_fn(fn, 
                                 axis, 
@@ -427,7 +429,7 @@ class IndexifyAdverbs(Transform):
     args = []
     axes = []
     for (arg, axis)  in zip(expr.args, self.normalize_axes(expr.args, expr.axis)):
-      if axis is  None or self.is_none(axis):
+      if self.is_none(axis):
         args.append(self.ravel(arg))
         axis = 0
       else:
@@ -435,12 +437,14 @@ class IndexifyAdverbs(Transform):
       axes.append(axis)
      
     bounds = self.iter_bounds(args, axes)
-    
+
     if self.is_none(init):
       assert len(args) == 1
-      init = self.index_along_axis(args[0], axis, self.int(0))# self.call(index_fn, [self.int(0)])  
-      index_offsets = (1,)
-      bounds = self.sub(bounds, self.int(1), "niters")
+      init_args = [self.index_along_axis(arg, axis, self.int(0))
+                   for arg in args]
+      init = self.call(expr.fn, init_args)  
+      index_offsets = (1,) * len(bounds)
+      bounds = tuple(self.sub(bound, self.int(1), "scan_niters") for bound in bounds)
     else:
       index_offsets = None
       

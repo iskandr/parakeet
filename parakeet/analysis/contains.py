@@ -107,7 +107,7 @@ class ContainsParFor(SyntaxVisitor):
 @memoize 
 def contains_parfor(fn):
   try:
-    ContainsParFor.visit_fn(fn)
+    ContainsParFor().visit_fn(fn)
     return False 
   except Yes:
     return True 
@@ -125,4 +125,22 @@ def contains_functions(fn):
     return False 
   except Yes:
     return True 
+
+class ContainsAlloc(SyntaxVisitor):
+  def visit_Alloc(self, _):
+    raise Yes()
+  
+  def visit_AllocArray(self, _):
+    raise Yes()
+  
+  def visit_TypedFn(self, fn):
+    if contains_alloc(fn):
+      raise Yes()  
       
+@memoize 
+def contains_alloc(fn):
+  try:
+    ContainsAlloc().visit_fn(fn) 
+    return False 
+  except Yes:
+    return True    
