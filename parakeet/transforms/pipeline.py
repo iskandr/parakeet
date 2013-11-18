@@ -31,6 +31,7 @@ from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from shape_propagation import ShapePropagation
 from simplify import Simplify
+from specialize_fn_args import SpecializeFnArgs
 
 ####################################
 #                                  #
@@ -95,7 +96,9 @@ early_optimizations = Phase([
 adverb_optimizations = Phase([
                                 fusion_opt,
                                 CombineNestedMaps,
+                                SpecializeFnArgs,
                                 fusion_opt, 
+                                SpecializeFnArgs,
                               ], 
                              run_if = contains_adverbs, 
                              depends_on = early_optimizations, 
@@ -104,10 +107,12 @@ adverb_optimizations = Phase([
                              cleanup = [Simplify, DCE])
 
 high_level_optimizations = Phase([ 
-                                    LowerArrayOperators, 
-                                    NegativeIndexElim, 
-                                    symbolic_range_propagation
-            
+                                    LowerArrayOperators,
+                                     
+                                    NegativeIndexElim,
+                                    shape_elim, 
+                                    symbolic_range_propagation, 
+                                    
                                  ], 
                                  depends_on = adverb_optimizations,
                                  name = "HighLevelOpts", 
@@ -144,7 +149,6 @@ indexify = Phase([
 after_indexify = Phase([copy_elim, Simplify, DCE, 
                         LowerSlices, 
                         inline_opt, Simplify, DCE, 
-                        ShapePropagation, 
                         IndexMapElimination], 
                        name = "AfterIndexify", 
                        depends_on = indexify, 

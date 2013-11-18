@@ -1,6 +1,7 @@
 import parakeet
 import numpy as np 
 
+ 
 def matmult_high_level(X,Y):
   return np.array([[np.dot for y in Y.T] for x in X])
 
@@ -57,7 +58,6 @@ except:
   pass 
 
 compare_perf(matmult_high_level, [X,Y],
-	     backends = (), 
              cpython=True, 
              # numba can't run the nested comprehensions so we use
              # a special loopy version instead 

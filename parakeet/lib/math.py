@@ -1,7 +1,7 @@
 from ..frontend import jit 
 
 import numpy as np 
-import math 
+
 
 
 @jit
@@ -93,4 +93,4 @@ def true_divide(x, y):
 
 @jit 
 def floor_divide(x, y):
-  return math.floor(x / y)  
+  return np.floor(x / y)  

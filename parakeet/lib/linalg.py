@@ -8,7 +8,7 @@ from ..syntax import PrimCall, Call,  OuterMap, Map
 from ..syntax.helpers import make_closure 
 
 def _get_vdot_fn(a, b):
-  from numpy_reductions import vdot  
+  from reductions  import vdot  
   from ..frontend import ast_conversion 
   vdot_untyped = ast_conversion.translate_function_value(vdot)
   from ..type_inference import specialize

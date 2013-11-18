@@ -1,7 +1,3 @@
-
- 
-from ..config import set_opt_level
-
 from ast_conversion import translate_function_value, translate_function_ast
 from closure_specializations import print_specializations
 from decorators import jit, macro, staged_macro, typed_macro, axis_macro

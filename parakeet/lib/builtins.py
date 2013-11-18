@@ -1,16 +1,8 @@
 from .. import prims 
 
-from .. frontend import translate_function_value, jit, macro, typed_macro, axis_macro 
-from .. ndtypes import make_tuple_type, TupleT, ArrayT, Int64 
-from .. syntax import (Map, Tuple,  Array, Attribute, 
-                       TupleProj,  const_int, Zip, Len, Reduce)
-from ..syntax.helpers import none, false, true 
-
-import numpy as np 
-from adverbs import reduce, map 
-
-
-
+from .. frontend import jit,  typed_macro 
+from .. ndtypes import make_tuple_type, TupleT, ArrayT
+from ..syntax import Tuple, Array 
 
 @jit 
 def builtin_or(x, y):

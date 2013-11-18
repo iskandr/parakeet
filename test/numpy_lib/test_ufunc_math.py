@@ -15,11 +15,12 @@ float32_mat = np.array([float32_vec, float32_vec])
 float64_vec = np.array([1.0, 10.0])
 float64_mat = np.array([float64_vec, float64_vec])
 
-arrays = [int_vec, bool_vec, float32_vec, float64_mat]
+vecs = [int_vec, bool_vec, float32_vec, float64_vec]
+mats = [int_mat, bool_mat, float32_mat, float64_mat]
 
 
 def unary(fn): 
-  for x in arrays:
+  for x in mats:
     try:
       expected = fn(x)
     except:
@@ -29,8 +30,8 @@ def unary(fn):
     expect(fn, [x], expected, fn.__name__ + "-" + str(x.dtype) + str(len(x.shape)))
 
 def binary(fn):
-  for x in arrays:
-    for y in arrays:
+  for x in mats:
+    for y in mats:
       expect(fn, [x,y], fn(x,y), x.dtype)
       
 def test_add():

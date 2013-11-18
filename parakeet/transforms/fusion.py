@@ -1,8 +1,10 @@
 from ..  import names, syntax
 from ..analysis.use_analysis import use_count 
+from ..ndtypes import ArrayT 
 from ..transforms import inline, Transform 
 from .. syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
 from .. syntax import IndexMap, IndexReduce, Map, Reduce, OuterMap 
+from ..syntax.helpers import zero_i64, none 
 
 def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
   if syntax.helpers.is_identity_fn(next_fn):
@@ -58,7 +60,6 @@ def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
     elif isinstance(arg, int):
       # positional arg which is not being fused out
       inner_name = next_fn.arg_names[arg]
-
       inner_type = next_fn.type_env[inner_name]
       new_name = names.refresh(inner_name)
       fused_formals.append(new_name)
@@ -101,29 +102,52 @@ class Fusion(Transform):
     #import pipeline
     #return pipeline.high_level_optimizations(fn)
 
+  def has_required_rank(self, var_name, required_rank):
+    if var_name not in self.type_env:
+      return False 
+    t = self.type_env[var_name]
+    if t.__class__ is ArrayT:
+      return t.rank == required_rank
+    else:
+      return required_rank == 0 
+    
   def transform_Assign(self, stmt):
     if self.recursive:
       stmt.rhs = self.transform_expr(stmt.rhs)
     rhs = stmt.rhs
     if not isinstance(rhs, DataAdverb): return stmt 
-    # TODO: figure out why this is here
-    if rhs.__class__ is OuterMap: return stmt 
+    
+    # TODO: figure out how to fuse OuterMap(Map(...), some_other_arg)
+    if rhs.__class__ is OuterMap: return stmt
+     
     rhs_fn = self.get_fn(rhs.fn)
-    if not inline.can_inline(rhs_fn): return stmt 
+
+    if not inline.can_inline(rhs_fn): return stmt
+     
     args = rhs.args
     if any(arg.__class__ not in (Var, Const) for arg in args): return stmt 
     
     arg_names = [arg.name for arg in args if arg.__class__ is Var]
     unique_vars = set(arg_names)
-    adverb_vars = [name for name in unique_vars
-                  if name in self.adverb_bindings]
 
-    for arg_name in adverb_vars:
+     
+    valid_fusion_vars = [name for name in unique_vars
+                         if name in self.adverb_bindings]
+    
+    # only fuse over variables which of the same rank as whatever is the largest
+    # array being processed by this operator 
+    max_rank = max(self.rank(arg) for arg in args)
+        
+    valid_fusion_vars = [name for name in valid_fusion_vars
+                         if self.has_required_rank(name,max_rank)]
+    for arg_name in valid_fusion_vars:
       n_occurrences = sum((name == arg_name for name in arg_names))
       prev_adverb = self.adverb_bindings[arg_name]
       prev_adverb_fn = self.get_fn(prev_adverb.fn)
+      
       if not inline.can_inline(prev_adverb_fn):
-        continue 
+        continue
+       
       # 
       # Map(Map) -> Map
       # Reduce(Map) -> Reduce 
@@ -143,12 +167,14 @@ class Fusion(Transform):
           else:
             surviving_array_args.append(arg)
             fusion_args.append(pos)
+        
         new_fn, clos_args = \
               fuse(self.get_fn(prev_adverb.fn),
                    self.closure_elts(prev_adverb.fn),
                    self.get_fn(rhs.fn),
                    self.closure_elts(rhs.fn),
                    fusion_args)
+
         assert new_fn.return_type == self.return_type(rhs.fn)
         
         if self.use_counts[arg_name] == n_occurrences:
@@ -157,7 +183,7 @@ class Fusion(Transform):
           new_fn = self.fn.created_by.apply(new_fn)
         rhs.fn = self.closure(new_fn, clos_args)
         rhs.args = prev_adverb.args + surviving_array_args
-            
+         
       # 
       # Reduce(IndexMap) -> IndexReduce
       #   
@@ -175,6 +201,7 @@ class Fusion(Transform):
         assert new_fn.return_type == self.return_type(rhs.fn)
         if self.use_counts[arg_name] == n_occurrences:
           del self.adverb_bindings[arg_name]
+        
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
         stmt.rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 

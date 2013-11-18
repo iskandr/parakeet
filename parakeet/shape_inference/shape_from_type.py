@@ -25,6 +25,7 @@ class Converter(object):
   def from_type(self, t):
     if isinstance(t, ScalarT):
       return self.fresh_var()
+    
     elif t.__class__ is ArrayT:
       dim_vars = [self.fresh_var() for _ in range(t.rank)]
       return Shape(dim_vars)

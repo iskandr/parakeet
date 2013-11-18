@@ -42,10 +42,13 @@ class CoreBuilder(object):
   
   def assign(self, lhs, rhs):
     self.insert_stmt(Assign(lhs, rhs))
-    
+  
   def return_(self, value):
     self.blocks += [Return(value)]  
-    
+  
+  def return_none(self):
+    self.return_(none)
+  
   def return_tuple(self, values):
     self.return_(self.tuple(values, name = None))
     

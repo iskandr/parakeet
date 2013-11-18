@@ -15,42 +15,19 @@ backend = 'openmp'
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
   
-default_opt_level = 2
-
-def set_opt_level(n):
-  assert 0 <= n <= 3, "Invalid optimization level %d" % n
-  g = globals()
-
-  for name in ('opt_inline', 
-               'opt_fusion', 
-               'opt_index_elimination',
-               'opt_range_propagation'):
-    g[name] = n > 0
     
-  for name in ('opt_licm', 
-               'opt_redundant_load_elimination', 
-               'opt_stack_allocation', 
-               'opt_shape_elim',
-               'opt_copy_elimination',
-               'stride_specialization', 
-               ):
-    g[name] = n > 1 
-    
-  for name in ('opt_loop_unrolling',):
-    g[name] = n > 2 
-    
-opt_inline = False
-opt_fusion = False
-opt_index_elimination = False
+opt_inline = True
+opt_fusion = True
+opt_index_elimination = True
 opt_range_propagation = False
 
-opt_licm = False
-opt_redundant_load_elimination = False
-opt_stack_allocation = False
-opt_shape_elim = False
+opt_licm = True
+opt_redundant_load_elimination = True
+opt_stack_allocation = True
+opt_shape_elim = True
 
 # recompile functions for distinct patterns of unit strides
-stride_specialization = False
+stride_specialization = True 
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -62,17 +39,16 @@ opt_loop_unrolling = False
 #
 #   with 
 #     a = b[i:j]  
-opt_copy_elimination = False
+opt_copy_elimination = True
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
 
-opt_scalar_replacement = False
+opt_scalar_replacement = True
     
 # run verifier after each transformation 
 opt_verify = True
 
-set_opt_level(default_opt_level)
 
 
 #####################################
@@ -80,17 +56,17 @@ set_opt_level(default_opt_level)
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True
+print_specialized_function = False
 
 # show function after all data adverbs like Map/Reduce/Scan have been 
 # lowered to use indexing explicitly into their inputs 
-print_indexified_function = True 
+print_indexified_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?
@@ -100,10 +76,10 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms =  []
+print_functions_before_transforms =  [] #'IndexifyAdverbs', "ShapeElimination"]
                                         
 # show the function produced by each transformation?
-print_functions_after_transforms =   []
+print_functions_after_transforms =   []# 'IndexifyAdverbs', "ShapeElimination"]
 
 # show aliases and escape sets
 print_escape_analysis = False

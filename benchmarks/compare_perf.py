@@ -21,6 +21,7 @@ def compare_perf(fn, args, numba= True, cpython = True,
             'suppress_stderr':suppress_output,
             'propagate_exceptions' : propagate_exceptions
            }
+  backend = None 
   for backend in backends:
     with timer('Parakeet (backend = %s) #1 -- %s' % (backend, name), **kwargs):
       parakeet_result = parakeet_fn(*args, _backend = backend)

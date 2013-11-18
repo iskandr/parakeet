@@ -14,7 +14,9 @@ from .. syntax import (AllocArray, Assign, ExprStmt, Expr,
                        OuterMap, Map, Reduce, Scan, IndexMap, IndexReduce, 
                        IndexScan, FilterReduce)
 from .. syntax.helpers import (collect_constants, is_one, is_zero, is_false, is_true, all_constants,
-                               get_types, slice_none_t, const_int, one, none, true, false, slice_none) 
+                               get_types, 
+                               slice_none_t, const_int, one, none, true, false, slice_none, 
+                               zero_i64) 
 import subst
 import transform 
 from transform import Transform
@@ -437,14 +439,24 @@ class Simplify(Transform):
     expr.args = self.transform_simple_exprs(expr.args)
     expr.fn = self.transform_expr(expr.fn)
     expr.axis = self.transform_if_expr(expr.axis)
+    
+    
+    max_rank = max(self.rank(arg) for arg in expr.args)
+    # if an axis is the Python value None, turn it into the IR expression for None
+    if max_rank == 1 and self.is_none(expr.axis): expr.axis = zero_i64
+    elif expr.axis is None: expr.axis = none   
     return expr  
   
   def transform_OuterMap(self, expr):
     expr.args = self.transform_simple_exprs(expr.args)
     expr.fn = self.transform_expr(expr.fn)
     expr.axis = self.transform_if_expr(expr.axis)
-    return expr 
-  
+    max_rank = max(self.rank(arg) for arg in expr.args)
+    # if an axis is the Python value None, turn it into the IR expression for None
+    if max_rank == 1 and self.is_none(expr.axis): expr.axis = zero_i64
+    elif expr.axis is None: expr.axis = none   
+    return expr  
+    
   def transform_shape(self, expr):
     if isinstance(expr, Tuple):
       expr.elts = tuple(self.transform_simple_exprs(expr.elts))
@@ -462,7 +474,11 @@ class Simplify(Transform):
     expr.combine = self.transform_expr(expr.combine)
     expr.init = self.transform_if_simple_expr(expr.init)
     expr.args = self.transform_simple_exprs(expr.args)
-    return expr 
+    # if an axis is the Python value None, turn it into the IR expression for None
+    max_rank = max(self.rank(arg) for arg in expr.args)
+    if max_rank == 1 and self.is_none(expr.axis): expr.axis = zero_i64
+    elif expr.axis is None: expr.axis = none   
+    return expr  
   
   def transform_Scan(self, expr):
     expr.fn = self.transform_expr(expr.fn)
@@ -470,7 +486,11 @@ class Simplify(Transform):
     expr.emit = self.transform_expr(expr.emit)
     expr.init = self.transform_if_simple_expr(expr.init)
     expr.args = self.transform_simple_exprs(expr.args)
-    return expr 
+    max_rank = max(self.rank(arg) for arg in expr.args)
+    if max_rank == 1 and self.is_none(expr.axis): expr.axis = zero_i64
+    elif expr.axis is None: expr.axis = none   
+    return expr  
+   
   
   def transform_IndexMap(self, expr):
     expr.fn = self.transform_expr(expr.fn)

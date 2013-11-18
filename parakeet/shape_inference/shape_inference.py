@@ -1,8 +1,8 @@
 
 from .. import syntax, prims 
 from ..analysis import OffsetAnalysis, SyntaxVisitor
-from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT
-from ..syntax import unwrap_constant 
+from ..ndtypes import  ArrayT, ScalarT, SliceT, TupleT, NoneT
+from ..syntax import unwrap_constant, Expr  
 
 import shape
 import shape_from_type
@@ -40,7 +40,10 @@ class ShapeInference(SyntaxVisitor):
       return value.rank
     else:
       return 0
-
+  
+  def max_rank(self, values):
+    return max(self.rank(v) for v in values)
+  
   def int(self, x):
     return const(x)
 
@@ -611,40 +614,89 @@ class ShapeInference(SyntaxVisitor):
     elt_result = symbolic_call(fn, [bounds])
     return symbolic_call(combine, [acc_shape, elt_result])
 
+  def normalize_axes(self, axis, args):
+    if isinstance(axis, Expr):
+      axis = unwrap_constant(axis)
+    if isinstance(axis,tuple):
+      axes = axis 
+    else:
+      axes = (axis,) * len(args)
+    
+    assert len(axes) == len(args), \
+      "Mismatch between args %s and axes %s" % (args, axis)
+    return axes 
+  
+  def adverb_elt_shapes(self, arg_shapes, axes, max_rank):
+    elt_shapes = []
+    for arg_shape, axis in zip(arg_shapes, axes):
+      if axis is None:
+        elt_shapes.append(any_scalar)
+      elif self.rank(arg_shape) == max_rank:
+        elt_shapes.append(self.slice_along_axis(arg_shape, axis))
+      else:
+        elt_shapes.append(arg_shape)
+    return elt_shapes 
+
+
+  def inner_map_result_shape(self, elt_result, arg_shapes, axes, max_rank):
+    
+    for i, arg_shape in enumerate(arg_shapes):
+      r = self.rank(arg_shape)
+      if r == max_rank:
+        axis = axes[i]
+        if axis is None:
+          combined_dims = dims(arg_shape) + dims(elt_result)
+          if len(combined_dims) > 0:
+            return Shape(combined_dims)
+          else:
+            return any_scalar 
+        else:
+          return increase_rank(elt_result, 0, arg_shape.dims[axis])
+    return elt_result
+
+    
+  def outer_map_result_shape(self, elt_result, arg_shapes, axes, max_rank):
+    result_dims = list(dims(elt_result))
+    for i, arg_shape in enumerate(arg_shapes):
+      r = self.rank(arg_shape)
+      if r > 0:
+        axis = axes[i]
+        if axis is None:
+          result_dims.extend(arg_shape.dims)
+        else:
+          result_dims.append(arg_shape.dims[axis])
+    return Shape(result_dims)
+    
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
-    axis = unwrap_constant(expr.axis)
-    assert axis is not None, "Unexpected axis=None in Map %s" % expr 
-    elt_shapes = [self.slice_along_axis(arg, axis) for arg in arg_shapes]
+    axes = self.normalize_axes(expr.axis, expr.args)
+    max_rank = self.max_rank(arg_shapes)
+    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes, max_rank)    
     elt_result = symbolic_call(fn, elt_shapes)
-    
-    outer_dim = None 
-    max_rank = 0
-    for arg_shape in arg_shapes:
-      if isinstance(arg_shape, Shape) and len(arg_shape.dims) > max_rank:
-        max_rank = len(arg_shape.dims)
-        outer_dim = arg_shape.dims[axis]
-    if outer_dim is not None:
-      return shape.increase_rank(elt_result, axis, outer_dim)
-    else:
-      return elt_result 
+    return self.inner_map_result_shape(elt_result, arg_shapes, axes, max_rank)
     
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     arg_shapes = self.visit_expr_list(expr.args)
-    init = self.visit_expr(expr.init) if expr.init else None
-    axis = unwrap_constant(expr.axis)
-    if axis is None:
-      assert len(arg_shapes) == 1
-      arg_shapes = [self.ravel(arg_shapes[0])]
-      axis = 0
-    if init is None:
-      assert len(arg_shapes) == 1
-      init = self.slice_along_axis(arg_shapes[0], axis)
-    elt_shapes = [self.slice_along_axis(arg, axis) for arg in arg_shapes]
+    
+    axes = self.normalize_axes(expr.axis, expr.args)
+    max_rank = self.max_rank(arg_shapes)
+    elt_shapes = []
+    for arg, axis in zip(arg_shapes, axes):
+      if axis is None:
+        elt_shapes.append(self.ravel(arg))
+      elif self.rank(arg) == max_rank:
+        elt_shapes.append(self.slice_along_axis(arg, axis))
+      else:
+        elt_shapes.append(arg)
+    
     elt_result = symbolic_call(fn, elt_shapes)
+    if expr.init is None or expr.init.type.__class__ is NoneT:
+      init = elt_result
+    else:
+      init = self.visit_expr(expr.init) 
     return symbolic_call(combine, [init, elt_result])
       
   def visit_Scan(self, expr):
@@ -658,7 +710,12 @@ class ShapeInference(SyntaxVisitor):
 
   def visit_OuterMap(self, expr):
     fn = self.visit_expr(expr.fn)
-    assert False, "OuterMap needs an implementation"
+    arg_shapes = self.visit_expr_list(expr.args)
+    max_rank = self.max_rank(arg_shapes)
+    axes = self.normalize_axes(expr.axis, expr.args)
+    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes, max_rank)    
+    elt_result = symbolic_call(fn, elt_shapes)
+    return self.outer_map_result_shape(elt_result, arg_shapes, axes, max_rank)
 
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ in (syntax.Var, syntax.Tuple):
