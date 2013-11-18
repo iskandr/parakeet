@@ -4,7 +4,7 @@ import itertools
 from .. import names 
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT, ArrayT 
-from ..syntax import (ParFor, IndexReduce, IndexScan, Index, Map, OuterMap, Var)
+from ..syntax import (ParFor, IndexReduce, IndexScan, Index, Map, OuterMap, Var, Const)
 from ..syntax.helpers import get_types, none, zero_i64 
 from ..syntax.adverb_helpers import max_rank_arg, max_rank 
 from transform import Transform
@@ -52,6 +52,7 @@ class IndexifyAdverbs(Transform):
     
     axes = self.normalize_axes(array_args, axis)
     
+    
     key = (  fn.cache_key, 
              axes,
              closure_arg_types, 
@@ -60,7 +61,7 @@ class IndexifyAdverbs(Transform):
              cartesian_product, 
              index_offsets, 
            )
-    
+
     def mk_closure():
       new_fn = self._indexed_fn_cache[key] 
       if output is None:
@@ -136,8 +137,19 @@ class IndexifyAdverbs(Transform):
       closure_arg_vars = input_vars[1:n_closure_args+1]
       array_arg_vars = input_vars[n_closure_args+1:-n_indices]
     
+    if index_offsets is None:
+      slice_indices = index_input_vars
+    else:
+      assert len(index_offsets) == len(index_input_vars), \
+        "Mismatch between index variables %s and offsets %s" % (index_input_vars, index_offsets)
+      slice_indices = []
+      for i, offset in enumerate(index_offsets):
+        if isinstance(offset, (int,long)):
+          offset = self.int(offset)
+        assert isinstance(offset, Const), "Expected constant offset but got %s" % offset
+        slice_indices.append(builder.add(index_input_vars[i], offset))
     slice_values = \
-      self.get_slices(builder, array_arg_vars, axes, index_input_vars, cartesian_product)
+      self.get_slices(builder, array_arg_vars, axes, slice_indices, cartesian_product)
 
       
     """
@@ -166,7 +178,7 @@ class IndexifyAdverbs(Transform):
           
     
   
-  def get_slices(self, builder, array_arg_vars, axes, index_input_vars, cartesian_product): 
+  def get_slices(self, builder, array_arg_vars, axes, index_input_vars, cartesian_product = False): 
     slice_values = []
     axes = self.normalize_axes(array_arg_vars, axes)
     # only gets incremented if we're doing a cartesian product
@@ -254,7 +266,8 @@ class IndexifyAdverbs(Transform):
           n_indices += 1
         else:
           n_indices = max(n_indices, 1)
-           
+    
+    
     # take the 0'th slice just to have a value in hand 
     inner_args = self.get_slices(builder = self, 
                                  array_arg_vars = array_args, 

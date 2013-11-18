@@ -256,3 +256,21 @@ def may_alias(fundef):
 
 def may_escape(fundef):
   return escape_analysis(fundef).may_escape
+
+
+# TODO: 
+# actually generate all this info! 
+from collections import namedtuple 
+FunctionInfo = namedtuple("FunctionInfo", 
+  ("pure", # nothing in this function will ever write to any array's data
+   "allocates",        # does this function allocate new arrays?
+   "unused", # which local variables never get used?
+   
+   "may_alias",       # alias relationships between local variables
+   "may_escape",      # which variables may alias a returned array's data?
+    
+   "may_read_arrays",  # which arrays may have their data read in this function? 
+   "may_write_arrays",   # which arrays may have their data written to in this function?
+   "always_returns_fresh_array", # is the array returned always something locally allocated?
+  ))
+
