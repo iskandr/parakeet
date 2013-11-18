@@ -319,6 +319,7 @@ class Transform(Builder):
     else:
       assert isinstance(result, Expr), \
         "Invalid result type in transformation: %s" % (type(result),)
+      result.source_info = expr.source_info 
       return result 
   
   def transform_lhs_Var(self, expr):

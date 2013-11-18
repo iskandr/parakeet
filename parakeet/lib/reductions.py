@@ -6,7 +6,7 @@ from adverbs import scan
 from .. frontend import translate_function_value
 
 from .. syntax import Reduce
-from ..syntax.helpers import none, false, true 
+from ..syntax.helpers import none, false, true, zero_i8, one_i8 
 
  
 from adverbs import reduce
@@ -21,8 +21,6 @@ def mk_reduce(combiner, x, init, axis):
                 args = (x,),  
                 init = init, 
                 axis = axis)
-
-
 
 @axis_macro
 def reduce_min(x, axis = None):
@@ -44,8 +42,7 @@ def reduce_all(x, axis = None):
 
 @axis_macro 
 def reduce_sum(x, axis = None):
-  return mk_reduce(prims.add, x, init = false, axis = axis)
-
+  return mk_reduce(prims.add, x, init = zero_i8, axis = axis)
 
 @jit 
 def builtin_min(x, y = None):
@@ -64,7 +61,7 @@ def builtin_max(x, y = None):
 
 @jit 
 def prod(x, axis=None):
-  return reduce(prims.multiply, x, init=True, axis = axis)
+  return reduce(prims.multiply, x, init=one_i8, axis = axis)
 
 @jit 
 def mean(x, axis = None):

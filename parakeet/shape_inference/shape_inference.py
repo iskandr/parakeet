@@ -472,7 +472,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
     name = expr.name
-    
+    print "ATTR", v, v.__class__,  name 
     if v.__class__ is Shape:
       if name == 'shape':
         return Tuple(v.dims)
@@ -603,16 +603,28 @@ class ShapeInference(SyntaxVisitor):
       elt_result = symbolic_call(clos, [shape_tuple])
     else:
       elt_result = symbolic_call(clos, shape_tuple.elts)
-    return combine_dims(shape_tuple, elt_result)
+    return make_shape(combine_dims(shape_tuple, elt_result))
     
     
   def visit_IndexReduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     bounds = self.visit_expr(expr.shape)
-    acc_shape = self.visit_expr(expr.init)
-    elt_result = symbolic_call(fn, [bounds])
-    return symbolic_call(combine, [acc_shape, elt_result])
+    elt_shape = symbolic_call(fn, [bounds])
+    init_shape = elt_shape if self.expr_is_none(expr.init) else self.visit_expr(expr.init) 
+    return symbolic_call(combine, [init_shape, elt_shape])
+
+  def visit_IndexScan(self, expr):
+    fn = self.visit_expr(expr.fn)
+    combine = self.visit_expr(expr.combine)
+    emit = self.visit_expr(expr.emit)
+    bounds = self.visit_expr(expr.shape)
+    elt_shape = symbolic_call(fn, [bounds])
+    init_shape = elt_shape if self.expr_is_none(expr.init) else self.visit_expr(expr.init) 
+    acc_shape = symbolic_call(combine, [init_shape, elt_shape])
+    output_elt_shape = symbolic_call(emit, [acc_shape])
+    return make_shape(combine_dims(bounds, output_elt_shape))
+
 
   def normalize_axes(self, axis, args):
     if isinstance(axis, Expr):
@@ -626,20 +638,22 @@ class ShapeInference(SyntaxVisitor):
       "Mismatch between args %s and axes %s" % (args, axis)
     return axes 
   
-  def adverb_elt_shapes(self, arg_shapes, axes, max_rank):
+  def adverb_elt_shapes(self, arg_shapes, axes):
+    """
+    Slice into array shapes along the specified axis 
+    """
     elt_shapes = []
     for arg_shape, axis in zip(arg_shapes, axes):
       if axis is None:
         elt_shapes.append(any_scalar)
-      elif self.rank(arg_shape) == max_rank:
+      elif axis < self.rank(arg_shape):
         elt_shapes.append(self.slice_along_axis(arg_shape, axis))
       else:
         elt_shapes.append(arg_shape)
     return elt_shapes 
 
-
-  def inner_map_result_shape(self, elt_result, arg_shapes, axes, max_rank):
-    
+  def inner_map_result_shape(self, elt_result, arg_shapes, axes):
+    max_rank = self.max_rank(arg_shapes)    
     for i, arg_shape in enumerate(arg_shapes):
       r = self.rank(arg_shape)
       if r == max_rank:
@@ -653,9 +667,8 @@ class ShapeInference(SyntaxVisitor):
         else:
           return increase_rank(elt_result, 0, arg_shape.dims[axis])
     return elt_result
-
     
-  def outer_map_result_shape(self, elt_result, arg_shapes, axes, max_rank):
+  def outer_map_result_shape(self, elt_result, arg_shapes, axes):
     result_dims = list(dims(elt_result))
     for i, arg_shape in enumerate(arg_shapes):
       r = self.rank(arg_shape)
@@ -665,61 +678,55 @@ class ShapeInference(SyntaxVisitor):
           result_dims.extend(arg_shape.dims)
         else:
           result_dims.append(arg_shape.dims[axis])
-    return Shape(result_dims)
+    return make_shape(result_dims)
     
   def visit_Map(self, expr):
     arg_shapes = self.visit_expr_list(expr.args)
     fn = self.visit_expr(expr.fn)
     axes = self.normalize_axes(expr.axis, expr.args)
-    max_rank = self.max_rank(arg_shapes)
-    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes, max_rank)    
+    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes)    
     elt_result = symbolic_call(fn, elt_shapes)
-    return self.inner_map_result_shape(elt_result, arg_shapes, axes, max_rank)
-    
+    return self.inner_map_result_shape(elt_result, arg_shapes, axes)
+  
+  def expr_is_none(self, expr):
+    return expr is None or expr.type.__class__ is NoneT
+  
   def visit_Reduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     arg_shapes = self.visit_expr_list(expr.args)
-    
     axes = self.normalize_axes(expr.axis, expr.args)
-    max_rank = self.max_rank(arg_shapes)
-    elt_shapes = []
-    for arg, axis in zip(arg_shapes, axes):
-      if axis is None:
-        elt_shapes.append(self.ravel(arg))
-      elif self.rank(arg) == max_rank:
-        elt_shapes.append(self.slice_along_axis(arg, axis))
-      else:
-        elt_shapes.append(arg)
-    
+    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes)
     elt_result = symbolic_call(fn, elt_shapes)
-    if expr.init is None or expr.init.type.__class__ is NoneT:
-      init = elt_result
-    else:
-      init = self.visit_expr(expr.init) 
+    init = elt_result if self.expr_is_none(expr.init) else self.visit_expr(expr.init) 
     return symbolic_call(combine, [init, elt_result])
       
   def visit_Scan(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
-    emit = self.visit_expr(expr.emit)
     arg_shapes = self.visit_expr_list(expr.args)
-    init = self.visit_expr(expr.init) if expr.init else None
-    axis = unwrap_constant(expr.axis)
-    assert False, "Scan needs an implementation"
-
+    axes = self.normalize_axes(expr.axis, expr.args)
+    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes)
+    elt_result = symbolic_call(fn, elt_shapes)
+    init = elt_result if self.expr_is_none(expr.init) else self.visit_expr(expr.init) 
+    acc_shape = symbolic_call(combine, [init, elt_result])
+    emit = self.visit_expr(expr.emit)
+    emit_shape = symbolic_call(emit, [acc_shape])
+    return self.inner_map_result_shape(emit_shape, arg_shapes, axes)
+    
   def visit_OuterMap(self, expr):
     fn = self.visit_expr(expr.fn)
     arg_shapes = self.visit_expr_list(expr.args)
-    max_rank = self.max_rank(arg_shapes)
     axes = self.normalize_axes(expr.axis, expr.args)
-    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes, max_rank)    
+    elt_shapes = self.adverb_elt_shapes(arg_shapes, axes)    
     elt_result = symbolic_call(fn, elt_shapes)
-    return self.outer_map_result_shape(elt_result, arg_shapes, axes, max_rank)
+    return self.outer_map_result_shape(elt_result, arg_shapes, axes)
 
   def visit_Assign(self, stmt):
+    print stmt 
     if stmt.lhs.__class__ in (syntax.Var, syntax.Tuple):
       rhs = self.visit_expr(stmt.rhs)
+      print ">>", rhs 
       bind_syntax(stmt.lhs, rhs, self.value_env)
 
   def visit_Return(self, stmt):

@@ -8,7 +8,7 @@ from array_expr import (AllocArray, Array, ArrayExpr,  ArrayView,
                         ConstArray, ConstArrayLike,
                         Range, Ravel, Reshape, 
                         Shape, Slice, Strides, 
-                        Transpose, Where)
+                        Transpose)
   
 
 from delay_until_typed import DelayUntilTyped

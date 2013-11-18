@@ -35,10 +35,12 @@ class ShapeElimination(Transform):
     t = expr.type 
     c = t.__class__ 
     if c is TupleT:
-      elts = [TupleProj(expr,i,type=elt_t) for i, elt_t in t.elt_types]
+      elts = [TupleProj(expr,i,type=elt_t) 
+              for i, elt_t in enumerate(t.elt_types)]
       self.fill_shape_vars_list(elts)
     elif c is ClosureT:
-      elts = [ClosureElt(expr,i,type=elt_t) for i, elt_t in t.arg_types]
+      elts = [ClosureElt(expr,i,type=elt_t) 
+              for i, elt_t in enumerate(t.arg_types)]
       self.fill_shape_vars_list(elts)
     elif c is ArrayT:
       shape = Attribute(expr, 'shape', t.shape_t)

@@ -86,6 +86,8 @@ class Map(DataAdverb):
 class OuterMap(DataAdverb):
   pass 
 
+
+
 class DataAccumulative(DataAdverb, Accumulative):
   pass 
 
@@ -115,17 +117,29 @@ class Scan(DataAccumulative, HasEmit):
     return s
 
 
+
+
 class Filter(Adverb):
   """
   Filters its arguments using the boolean predicate field 'fn'
   """
   pass 
 
+class HasPred(Filter):
+  _members = ['pred']
+
+
+class Where(DataAdverb):
+  """
+  Applies 'fn' to each element of the arguments and 
+  returns indices where 'pred' is True for the resulting
+  element values
+  """
+  _members = ['pred']
+
 class IndexFilter(IndexAdverb, Filter):
   pass 
 
-class HasPred(Filter):
-  _members = ['pred']
 
 class FilterReduce(Reduce, Filter):
   """

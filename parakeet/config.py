@@ -43,12 +43,10 @@ opt_copy_elimination = True
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
-
-opt_scalar_replacement = True
+opt_scalar_replacement = False
     
 # run verifier after each transformation 
 opt_verify = True
-
 
 
 #####################################
@@ -56,14 +54,14 @@ opt_verify = True
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = False
+print_untyped_function = True
 
 # show the higher level typed function after specialization?
-print_specialized_function = False
+print_specialized_function = True
 
 # show function after all data adverbs like Map/Reduce/Scan have been 
 # lowered to use indexing explicitly into their inputs 
-print_indexified_function = False
+print_indexified_function = True
 
 # print function after all adverbs have been turned to loops
 print_loopy_function = False

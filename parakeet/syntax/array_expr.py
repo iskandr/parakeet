@@ -58,13 +58,19 @@ class ConstArrayLike(ArrayExpr):
 
 class Range(ArrayExpr):
   _members = ['start', 'stop', 'step']
+  
+  def __str__(self):
+    return "Range(start = %s, stop = %s, step = %s)" % (self.start, self.stop, self.step)
 
 class AllocArray(ArrayExpr):
   """Allocate an unfilled array of the given shape and type"""
-  _members = ['shape', 'elt_type']
+  _members = ['shape', 'elt_type'] # TODO: support a 'fill' field 
   
   def children(self):
     yield self.shape
+    
+  def __str__(self):
+    return "AllocArray(shape = %s, elt_type = %s)" % (self.shape, self.elt_type)
 
 
 class ArrayView(ArrayExpr):
@@ -85,6 +91,8 @@ class Ravel(ArrayExpr):
   def children(self):
     return (self.array,)
 
+  def __str__(self):
+    return "Ravel(%s)" % self.array 
 
 class Reshape(ArrayExpr):
   _members = ['array', 'shape']
@@ -92,24 +100,29 @@ class Reshape(ArrayExpr):
   def children(self):
     yield self.array 
     yield self.shape
+    
+  def __str__(self):
+    return "Reshape(%s, %s)" % (self.array, self.shape)
 
 class Shape(ArrayExpr):
   _members = ['array']
   
+  def __str__(self):
+    return "Shape(%s)" % self.array 
+  
 class Strides(ArrayExpr):
   _members = ['array']
+  
+  def __str__(self):
+    return "Strides(%s)" % self.array 
+  
     
 class Transpose(ArrayExpr):
   _members = ['array']
   
   def children(self):
-    yield self.array 
-    
-class Where(ArrayExpr):
-  """
-  Given a boolean array, returns its true indices 
-  """
-  _members = ['array']
+    yield self.array
   
-  def children(self):
-    yield self.array 
+  def __str__(self):
+    return "%s.T" % self.array 
+    

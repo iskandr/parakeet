@@ -96,8 +96,8 @@ class CopyElimination(Transform):
       return stmt 
     
     for lhs_depends_on in collect_var_names(stmt.lhs):
-      created_on = self.usedef.created_on[lhs_depends_on]
-      if created_on >= prev_path:
+      created_on = self.usedef.created_on.get(lhs_depends_on)
+      if created_on is None or created_on >= prev_path:
         return stmt 
              
     array_stmt.rhs = stmt.lhs
