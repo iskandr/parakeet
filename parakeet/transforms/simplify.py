@@ -418,14 +418,18 @@ class Simplify(Transform):
           return self.cast(self.mul(x, x, "sqr"), expr.type)
       elif prim == prims.logical_and:
         if is_true(x):
-          return y 
+          return y
+        elif is_true(y):
+          return x  
         elif is_false(x) or is_false(y):
           return false 
       elif prim == prims.logical_or:
         if is_true(x) or is_true(y):
-          return true 
-        elif is_false(x) or is_false(y):
-          return false 
+          return true
+        elif is_false(x):
+          return y 
+        elif is_false(y):
+          return x 
     expr.args = args
     return expr 
   

@@ -242,7 +242,7 @@ class EscapeAnalysis(SyntaxVisitor):
 
 _cache = {}
 def escape_analysis(fundef, fresh_alloc_args = set([])):
-  key = fundef.cache_key
+  key = fundef.cache_key, frozenset(fresh_alloc_args)
   if key in _cache:
     return _cache[key]
   else: 

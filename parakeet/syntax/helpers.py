@@ -119,10 +119,13 @@ def unwrap_constant(x):
     if x.__class__ is Tuple:
       return tuple(unwrap_constant(elt) for elt in x.elts)
     elif x.type is NoneType:
-      return None 
+      return None
+    elif x.__class__ is UntypedFn:
+      return x 
     assert x.__class__ is Const, \
         "Expected constant, got %s : %s" % (x, x.type)
     return x.value
+  
   else:
     assert is_python_constant(x)
     return x

@@ -564,7 +564,7 @@ def compile_fn(fundef):
     print
   compiler.llvm_context.run_passes(compiler.llvm_fn)
 
-  if llvm_config.print_optimized_llvm:
+  if config.print_generated_code:
     print "=== LLVM after optimizations =="
     print
     print compiler.llvm_context.module

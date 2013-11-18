@@ -15,6 +15,7 @@ from ..ndtypes import (TupleT,  ArrayT,
 import type_mappings
 from fn_compiler import FnCompiler
 from compile_util import compile_module
+from .. import config as root_config 
 import config 
 
 def attr_from_kwargs(obj, kwargs, attr, value = None):
@@ -763,7 +764,7 @@ class PyModuleCompiler(FnCompiler):
                                  declarations =  self.declarations, 
                                  extra_compile_flags = self.extra_compile_flags, 
                                  extra_link_flags = self.extra_link_flags, 
-                                 print_source = config.print_module_source, 
+                                 print_source = root_config.print_generated_code, 
                                  compiler = self.compiler_cmd, 
                                  compiler_flag_prefix = self.compiler_flag_prefix, 
                                  linker_flag_prefix = self.linker_flag_prefix)

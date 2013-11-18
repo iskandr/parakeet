@@ -1,14 +1,14 @@
+
 from adverbs import * 
+from array_properties import *
+from array_constructors import *
 from builtins import * 
-from numpy_array import *
-from numpy_constructors import *
-from numpy_math import *
+from math import *
 from numpy_misc import *  
-from numpy_reductions import * 
+from reductions import * 
 from numpy_types import * 
 from patchmap import *
 
-from numpy_linalg import dot
-import numpy_linalg as linalg 
-
-import numpy_random as random 
+import linalg 
+from linalg import dot 
+import random 

@@ -90,7 +90,7 @@ print_specialized_function = True
 print_indexified_function = True 
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = False
+print_loopy_function = True
 
 # show lower level typed function before
 # it gets translated to LLVM?
@@ -116,6 +116,10 @@ print_transform_names = False
 
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
+
+# tell the backend to print whatever code it generates, 
+# whether it's C, CUDA, or LLVM 
+print_generated_code = False 
 
 #####################################
 #         DESPERATE MEASURES        #

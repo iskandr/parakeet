@@ -1,40 +1,8 @@
 import math  
 import numpy as np
 import lib, prims   
-from syntax import Zip, Len, build_untyped_cast_fn 
+from syntax import Zip, Len
 
-property_mappings = {
-  'dtype' : lib.get_elt_type,                
-  # 'imag' : lib.imag,      
-  'itemsize' : lib.itemsize,
-  'real' :  lib.identity, # ain't no complex numbers yet 
-  'shape' : lib.shape, 
-  'size' : lib.size,   
-  # 'strides' : lib.strides, 
-  'ndim' : lib.rank, 
-  'T' : lib.transpose, 
-}
-
-method_mappings = {
-  'fill' : lib.fill, 
-  'any' : lib.builtin_any, 
-  'all' : lib.builtin_all, 
-  'argmax' : lib.argmax, 
-  # 'argsort' : lib.argsort, 
-  'copy' : lib.copy, 
-  'cumprod' : lib.cumprod, 
-  'cumsum' : lib.cumsum, 
-  'dot' : lib.dot, 
-  'fill' : lib.fill, 
-  'flatten' : lib.ravel, 
-  # 'diagonal' : lib.diagonal, 
-  'mean' : lib.mean, 
-  'max' : lib.reduce_max,
-  'min' : lib.reduce_min, 
-  'ravel' : lib.ravel, 
-  'transpose' : lib.transpose,
-  'sum' : lib.builtin_sum,
-  }
 
 function_mappings = {
   # PYTHON BUILTINS          
@@ -51,9 +19,9 @@ function_mappings = {
   len : Len,  
   min : lib.builtin_min,
   max : lib.builtin_max,
-  all : lib.builtin_all, 
-  any : lib.builtin_any, 
-  sum : lib.builtin_sum, 
+  all : lib.reduce_all, 
+  any : lib.reduce_any, 
+  sum : lib.reduce_sum, 
   abs : prims.abs,  
   pow : prims.power, 
   
@@ -93,13 +61,13 @@ function_mappings = {
   np.min : lib.reduce_min, 
   np.max : lib.reduce_max,
   
-  np.argmin : lib.numpy_reductions.argmin, 
-  np.argmax : lib.numpy_reductions.argmax, 
+  np.argmin : lib.argmin, 
+  np.argmax : lib.argmax, 
   
-  np.all : lib.builtin_all, 
+  np.all : lib.reduce_all, 
   
-  np.any : lib.builtin_any, 
-  np.sum : lib.builtin_sum, 
+  np.any : lib.reduce_any, 
+  np.sum : lib.reduce_sum, 
   np.prod : lib.prod, 
   np.mean : lib.mean, 
   
@@ -125,8 +93,8 @@ function_mappings = {
   np.multiply : prims.multiply,
    
   np.divide : prims.divide, 
-  np.floor_divide : lib.numpy_math.floor_divide, 
-  np.true_divide : lib.numpy_math.true_divide, 
+  np.floor_divide : lib.floor_divide, 
+  np.true_divide : lib.true_divide, 
    
   np.mod : prims.remainder,
   np.remainder : prims.remainder,
@@ -140,9 +108,9 @@ function_mappings = {
   math.sqrt : prims.sqrt, 
   np.sqrt : prims.sqrt, 
   
-  np.sign : lib.numpy_math.sign, 
-  np.reciprocal : lib.numpy_math.reciprocal, 
-  np.conjugate : lib.numpy_math.conjugate,
+  np.sign : lib.sign, 
+  np.reciprocal : lib.reciprocal, 
+  np.conjugate : lib.conjugate,
   
   # ROUNDING
   
@@ -160,7 +128,7 @@ function_mappings = {
   np.round : prims.round,
  
   # LOGS AND EXPONENTIATION 
-  np.square : lib.numpy_math.square,
+  np.square : lib.square,
   math.pow : prims.power, 
   np.power : prims.power,
   
@@ -183,8 +151,8 @@ function_mappings = {
   np.log1p : prims.log1p,
   math.log1p : prims.log1p, 
   
-  np.logaddexp : lib.numpy_math.logaddexp, 
-  np.logaddexp2 : lib.numpy_math.logaddexp2, 
+  np.logaddexp : lib.logaddexp, 
+  np.logaddexp2 : lib.logaddexp2, 
   
   # TRIG 
   np.cos : prims.cos, 
@@ -213,8 +181,8 @@ function_mappings = {
   np.arcsinh : prims.arcsinh, 
   math.acosh : prims.arccosh, 
   np.arccosh : prims.arccosh,
-  np.rad2deg : lib.numpy_math.rad2deg, 
-  np.deg2rad : lib.numpy_math.deg2rad,  
+  np.rad2deg : lib.rad2deg, 
+  np.deg2rad : lib.deg2rad,  
   # np.hypot : lib.hypot,
   
   np.where : lib.where,
@@ -223,3 +191,40 @@ function_mappings = {
   np.dot : lib.dot,
   np.linalg.norm : lib.linalg.norm,  
 }
+
+property_mappings = {
+  'dtype' : lib.get_elt_type,                
+  # 'imag' : lib.imag,      
+  'itemsize' : lib.itemsize,
+  'real' :  lib.identity, # ain't no complex numbers yet 
+  'shape' : lib.shape, 
+  'size' : lib.size,   
+  # 'strides' : lib.strides, 
+  'ndim' : lib.rank, 
+  'T' : lib.transpose, 
+}
+
+
+method_mappings = {
+  'fill' : lib.fill, 
+  'any' : lib.reduce_any, 
+  'all' : lib.reduce_all, 
+  'argmax' : lib.argmax, 
+  # 'argsort' : lib.argsort, 
+  'copy' : lib.copy, 
+  'cumprod' : lib.cumprod, 
+  'cumsum' : lib.cumsum, 
+  'dot' : lib.dot, 
+  'fill' : lib.fill, 
+  'flatten' : lib.ravel, 
+  # 'diagonal' : lib.diagonal, 
+  
+  'mean' : lib.mean, 
+  
+  'min' : lib.reduce_min,
+  'max' : lib.reduce_max,
+  
+  'ravel' : lib.ravel, 
+  'transpose' : lib.transpose,
+  'sum' : lib.reduce_sum,
+  }

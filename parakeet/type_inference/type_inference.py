@@ -458,6 +458,7 @@ def infer_types(untyped_fn, types):
   unbound_keywords = []
   def keyword_fn(local_name, value):
     unbound_keywords.append(local_name)
+
     if isinstance(value, Expr):
       value = unwrap_constant(value) 
     return type_conv.typeof(value)

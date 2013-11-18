@@ -15,3 +15,21 @@ def _select(cond, trueval, falseval):
 def where(cond, trueval, falseval):
   #return Select(cond, trueval, falseval )
   return map(_select, cond, trueval, falseval)
+
+
+@jit 
+def diff(x):
+  """
+  TODO:
+    - axis selection
+    - preserve size by filling with zeros
+    - allow n'th differences by recursion
+  """
+  return x[1:] - x[:-1]
+
+
+@jit 
+def fill(x, v):
+  for i in range(len(x)):
+    x[i] = v 
+ 

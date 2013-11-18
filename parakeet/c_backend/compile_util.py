@@ -9,6 +9,7 @@ import subprocess
 import time 
 
 from tempfile import NamedTemporaryFile
+from .. import config as root_config 
 import config 
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
@@ -148,8 +149,8 @@ def create_source_file(src,
                          print_source = None, 
                          src_extension = None):
   
-  if print_source is None: 
-    print_source = config.print_module_source
+  if print_source is None:
+    print_source = root_config.print_generated_code
 
   if fn_name is None:
     prefix = "parakeet_"
@@ -241,7 +242,7 @@ def compile_object(src,
                    compiler_flag_prefix  = None):
   
   if print_source is None: 
-    print_source = config.print_module_source
+    print_source = root_config.print_generated_code
   if print_commands is None: 
     print_commands = config.print_commands
   if src_extension is None:
@@ -294,7 +295,7 @@ def compile_module(src,
                      linker_flag_prefix = None):
   
   if print_source is None:
-    print_source = config.print_module_source
+    print_source = root_config.print_generated_code 
   if print_commands is None:
     print_commands = config.print_commands
 

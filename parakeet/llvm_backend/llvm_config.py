@@ -1,3 +1,5 @@
+
+
 ######################################
 #        OPTIMIZER OPTIONS           #
 ######################################
@@ -19,10 +21,9 @@ llvm_verify = True
 # print generated assembly of compiled functions
 print_x86 = False
 
-
 # show LLVM bytecode before optimization passes
-print_unoptimized_llvm = True
+print_unoptimized_llvm = False
 
 # show LLVM bytecode after optimizations
-print_optimized_llvm = False
+# print_optimized_llvm = False 
 

@@ -18,7 +18,9 @@ check_pyobj_types = False
 #########################
 print_input_ir = False
 
-print_module_source = False
+# replaced by ..config.print_generated_code
+#   print_module_source = False
+
 print_line_numbers = False
  
 print_function_source = False
