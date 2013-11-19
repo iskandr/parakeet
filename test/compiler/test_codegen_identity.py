@@ -1,4 +1,4 @@
-from treelike.testing_helpers import run_local_tests, expect_eq
+from parakeet.testing_helpers import run_local_tests, expect_eq
 
 import parakeet
 

@@ -1,4 +1,4 @@
-from treelike import Traversal 
+from dsltools import Traversal 
 
 from ..syntax import const  
 from ..ndtypes import ArrayT, ClosureT, ScalarT, TupleT 

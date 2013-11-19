@@ -1,5 +1,5 @@
 from expr import Expr 
-from treelike import Node
+from dsltools import Node
 
 class Stmt(Node):
   _members = ['source_info']

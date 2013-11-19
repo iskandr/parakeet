@@ -46,7 +46,6 @@ def run_mm(xtype, ytype):
 #
 # Vector-Vector
 #
-
 def test_dot_vv_i64_i32():
   run_vv('int64', 'int32')
 
@@ -73,7 +72,6 @@ def test_dot_vv_f32_f32():
 
 def test_dot_vv_bool_bool():
   run_vv('bool', 'bool')
-
 #
 # Matrix-Matrix
 #
@@ -101,7 +99,6 @@ def test_dot_mv_i64_i32():
 #
 # Vector-Matrix
 #
-
 def test_dot_vm_i64_i32():
   run_vm('int64', 'int32')
 

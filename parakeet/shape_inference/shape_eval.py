@@ -1,4 +1,4 @@
-from treelike import Traversal
+from dsltools import Traversal
  
 import types 
 import numpy as np 

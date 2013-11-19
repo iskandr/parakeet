@@ -1,4 +1,4 @@
-from treelike import Node 
+from dsltools import Node 
 
 from .. ndtypes import Float32, Float64, Int32, Int64
 from .. syntax import Var, Range, ConstArray, ConstArrayLike, IndexMap

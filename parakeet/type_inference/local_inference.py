@@ -420,13 +420,12 @@ class LocalTypeInference(Transform):
     return While(cond, body, merge)
 
   def transform_ForLoop(self, stmt):
-    self.infer_left_flow(stmt.merge)
     start = self.transform_expr(stmt.start)
     stop = self.transform_expr(stmt.stop)
     step = self.transform_expr(stmt.step)
     lhs_t = start.type.combine(stop.type).combine(step.type)
     var = self.annotate_lhs(stmt.var, lhs_t)
-
+    self.infer_left_flow(stmt.merge)
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
     return ForLoop(var, start, stop, step, body, merge)

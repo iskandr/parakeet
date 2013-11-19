@@ -5,7 +5,7 @@ import types
 from collections import OrderedDict
 
 import numpy as np
-from treelike import NestedBlocks, ScopedDict
+from dsltools import NestedBlocks, ScopedDict
  
 from .. import config, names, prims, syntax
 
@@ -23,7 +23,7 @@ from ..syntax import (Expr,
                       UntypedFn, Closure, 
                       SourceInfo)
  
-from ..syntax.helpers import (none, true, false, one_i64, zero_i64, zero_i8,  
+from ..syntax.helpers import (none, true, false, one_i64, zero_i64, zero_i32, one_i32, 
                               is_python_constant, const)
 from ..syntax.wrappers import build_untyped_prim_fn, build_untyped_expr_fn, build_untyped_cast_fn
 
@@ -465,7 +465,7 @@ class AST_Translator(ast.NodeVisitor):
     
   def translate_value_call(self, value, positional, keywords_dict= {}, starargs_expr = None):
     if value is sum:
-      return mk_reduce_call(build_untyped_prim_fn(prims.add), positional, zero_i8)
+      return mk_reduce_call(build_untyped_prim_fn(prims.add), positional, false)
     
     elif value is max:
       if len(positional) == 1:

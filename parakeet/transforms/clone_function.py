@@ -1,7 +1,7 @@
 from .. import names 
 from .. syntax import (TypedFn, Var, Const, Attribute, Index, PrimCall, 
-                       If, Assign, While, ExprStmt, Return, ForLoop,  
-                       Slice, Struct, Tuple, TupleProj, Cast, Alloc,
+                       If, Assign, While, ExprStmt, Return, ForLoop, ParFor,  
+                       Slice, Struct, Tuple, TupleProj, Cast, Alloc, Closure, 
                        Map, Reduce, Scan, IndexMap, IndexReduce, IndexScan)      
 from transform import Transform 
 
@@ -10,42 +10,57 @@ class CloneFunction(Transform):
   Copy all the objects in the AST of a function
   """
   def __init__(self, parent_transform = None, 
-                rename = False, 
-                recursive = False):
+                      rename = False):
     Transform.__init__(self)
     self.rename = rename 
-    self.recursive = recursive
+    # self.recursive = recursive
     self.parent_transform = parent_transform 
      
   def transform_Var(self, expr):
     return Var(expr.name, type = expr.type)
   
   def transform_expr(self, expr):
+    new_expr = self._transform_expr(expr)
+    new_expr.type = expr.type 
+    new_expr.source_info = expr.source_info 
+    return new_expr 
+  
+  def _transform_expr(self, expr):
     c = expr.__class__
     if c is Var:
-      return self.transform_Var(expr)  
+      return Var(expr.name)
+      
     elif c is Const:
-      return Const(expr.value, type = expr.type)
+      return Const(expr.value)
+    
     elif c is Tuple:
       new_elts = tuple(self.transform_expr(elt) for elt in expr.elts)
-      return Tuple(elts = new_elts, type = expr.type)
+      return Tuple(elts = new_elts)
+    
     elif c is Attribute:
       value = self.transform_expr(expr.value)
-      return Attribute(value, expr.name, type = expr.type)
+      return Attribute(value, expr.name)
+    
     elif c is Index:
       value = self.transform_expr(expr.value)
       index = self.transform_expr(expr.index)
-      return Index(value, index, type = expr.type)
+      return Index(value, index)
+    
     elif c is PrimCall:
       args = tuple(self.transform_expr(elt) for elt in expr.args)
-      return PrimCall(expr.prim, args, type = expr.type)
+      return PrimCall(expr.prim, args)
+    
     elif c is TypedFn:
-      if self.recursive:
-        cloner = CloneFunction(rename = self.rename, recursive = True)
-        return cloner.apply(expr)
-      else:
-        return expr 
-      
+      #if self.recursive:
+      #  cloner = CloneFunction(rename = self.rename, recursive = True)
+      #  return cloner.apply(expr)
+      #else:
+      return expr 
+    
+    elif c is Closure: 
+      args = self.transform_expr_tuple(expr.args)
+      return Closure(fn = expr.fn, args = args)
+    
     elif c is Slice: 
       start = self.transform_if_expr(expr.start)
       stop = self.transform_if_expr(expr.stop)
@@ -65,21 +80,25 @@ class CloneFunction(Transform):
      
     elif c is Alloc:
       return Alloc(count = self.transform_expr(expr.count), 
-                   elt_type = expr.elt_type, 
-                   type = expr.type)
+                   elt_type = expr.elt_type)
     elif c is Map:
-      return Map(fn = expr.fn, 
-                 args = self.transform_expr_list(expr.args), 
-                 axis = self.transform_if_expr(expr.axis), 
-                 type = expr.type)
-       
+      return Map(fn = self.transform_expr(expr.fn), 
+                  args = self.transform_expr_list(expr.args), 
+                  axis = self.transform_if_expr(expr.axis), 
+                 )
+    elif c is Reduce: 
+      return Reduce(fn = self.transform_expr(expr.fn), 
+                    combine = self.transform_expr(expr.combine), 
+                    args = self.transform_expr_list(expr.args), 
+                    axis = self.transform_if_expr(expr.axis), 
+                    init = self.transform_if_expr(expr.init), 
+                  )
     else:
       args = {}
       for member_name in expr.members():
         old_value = getattr(expr, member_name)
         new_value = self.transform_if_expr(old_value)
         args[member_name] = new_value
-      
       return expr.__class__(**args)
   
   def transform_Assign(self, stmt):
@@ -116,6 +135,11 @@ class CloneFunction(Transform):
     new_body = self.transform_block(stmt.body)
     new_merge = self.transform_merge(stmt.merge)
     return ForLoop(new_var, new_start, new_stop, new_step, new_body, new_merge)  
+  
+  def transform_ParFor(self, stmt):
+    new_bounds = self.transform_expr(stmt.bounds)
+    new_fn = self.transform_expr(stmt.fn)
+    return ParFor(fn = new_fn, bounds = new_bounds)
   
   def pre_apply(self, old_fn):
     new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])

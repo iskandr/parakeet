@@ -1,9 +1,12 @@
 
-from treelike import ScopedDict
+from dsltools import ScopedDict
 
-from ..ndtypes import NoneT, SliceT, ScalarT, ArrayT, FnT, ClosureT, TupleT, StructT
+from .. import config 
+from ..analysis.verify import verify
+from ..ndtypes import NoneT, SliceT, ScalarT, ArrayT, ClosureT, TupleT, PtrT, StructT 
 from ..syntax import TypedFn
 from transform import Transform
+
 
 class RecursiveApply(Transform):  
   cache = ScopedDict()
@@ -17,6 +20,20 @@ class RecursiveApply(Transform):
     self.cache.pop()
   
   
+  first_order_types = (SliceT, NoneT, ArrayT, PtrT)
+  
+  def contains_function_type(self, t):
+    c = t.__class__ 
+    if c is ClosureT: 
+      return True 
+    elif c is TupleT: 
+      return any(self.contains_function_type(elt_t) for elt_t in t.elt_types)
+    elif c in self.first_order_types or isinstance(t, ScalarT):
+      return False 
+    else:
+      assert isinstance(t, StructT), "Unexpected type %s" % t
+      return any(self.contains_function_type(field_t) for field_t in t.field_types)
+    
   def transform_type(self, t):
     c = t.__class__ 
     if c is ClosureT:
@@ -25,9 +42,7 @@ class RecursiveApply(Transform):
         new_fn = self.transform_TypedFn(old_fn)
         if new_fn is not old_fn:
           return ClosureT(new_fn, t.arg_types)
-    elif c is TupleT:
-      if all(isinstance(elt_t, (ScalarT, SliceT, NoneT, ArrayT)) for elt_t in t.elt_types):
-        return t 
+    elif c is TupleT and self.contains_function_type(t):
       new_elt_types = []
       for elt_t in t.elt_types:
         new_elt_types.append(self.transform_type(elt_t))
@@ -42,6 +57,12 @@ class RecursiveApply(Transform):
     if key in self.cache:
       return self.cache[key]  
     new_fn = self.transform.apply(expr)
+    if config.opt_verify:
+      try: 
+        verify(new_fn)
+      except:
+        print "[RecursiveApply] Error after applying %s to function %s" % (self.transform, expr)
+        raise 
     self.cache[key] = new_fn 
     return new_fn 
   
@@ -52,7 +73,7 @@ class RecursiveApply(Transform):
   
   def transform_Var(self, expr):
     expr.type = self.transform_type(expr.type)
-    return expr 
+    return expr
   
   def transform_Assign(self, stmt):
     """

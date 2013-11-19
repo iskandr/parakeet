@@ -1,6 +1,6 @@
 import ctypes
 
-from treelike import Node
+from dsltools import Node
 
 class TypeFailure(Exception):
   def __init__(self, msg):

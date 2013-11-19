@@ -368,6 +368,9 @@ class ShapeInference(SyntaxVisitor):
   def visit_Alloc(self, expr):
     return Ptr(any_scalar)
 
+  def visit_Cast(self, expr):
+    return any_scalar 
+  
   def visit_TypeValue(self, expr):
     return unknown_value
   

@@ -1,6 +1,6 @@
 
 from .. import config
-from .. ndtypes import ScalarT, ArrayT, TupleT, ClosureT, FnT, SliceT, NoneT
+from .. ndtypes import ScalarT, ArrayT, PtrT, TupleT, ClosureT, FnT, SliceT, NoneT
 from .. syntax import Var, Attribute, Tuple 
 from syntax_visitor import SyntaxVisitor
 
@@ -38,29 +38,34 @@ class EscapeAnalysis(SyntaxVisitor):
     self.may_return = set([])
     
   
-  def nested_array_types(self, t):
-    if isinstance(t, ArrayT):
+  def nested_mutable_types(self, t):
+    if isinstance(t, (PtrT, ArrayT)):
       return set([t])
     elif isinstance(t, TupleT):
       result = set([])
       for elt_t in t.elt_types:
-        result.update(self.nested_array_types(elt_t))
+        result.update(self.nested_mutable_types(elt_t))
       return result 
     elif isinstance(t, ClosureT):
       result = set([])
       for elt_t in t.arg_types:
-        result.update(self.nested_array_types(elt_t))
+        result.update(self.nested_mutable_types(elt_t))
       return result
     else:
       return set([])
     
   def immutable_type(self, t):
-    return isinstance(t, (ScalarT, NoneT, SliceT, FnT)) or len(self.nested_array_types(t)) == 0
-    
+    return isinstance(t, (ScalarT, NoneT, SliceT, FnT)) or len(self.nested_mutable_types(t)) == 0
+  
+  def immutable_name(self, name):
+    if name in self.immutable:
+      return True 
+    return self.immutable_type(self.type_env.get(name))
+  
   def visit_fn(self, fn):
 
     all_scalars = True 
-    
+    self.type_env = fn.type_env 
     # every name at least aliases it self
     for (name,t) in fn.type_env.iteritems():
 
@@ -69,8 +74,7 @@ class EscapeAnalysis(SyntaxVisitor):
       else:
         self.may_alias[name] = set([name])
         all_scalars = False
-        
-    
+
     if all_scalars:
       return  
     
@@ -83,7 +87,7 @@ class EscapeAnalysis(SyntaxVisitor):
     for name in fn.arg_names:
       if name not in self.fresh_alloc_args:
         t = fn.type_env[name]
-        for nested_t in self.nested_array_types(t):
+        for nested_t in self.nested_mutable_types(t):
           reverse_type_mapping.setdefault(nested_t, set([])).add(name)
 
       
@@ -95,7 +99,7 @@ class EscapeAnalysis(SyntaxVisitor):
       # freshly allocated before we entered the function 
       if name not in self.fresh_alloc_args:
         t = fn.type_env[name]
-        for nested_t in self.nested_array_types(t):
+        for nested_t in self.nested_mutable_types(t):
           self.may_alias[name].update(reverse_type_mapping[nested_t])
 
     self.visit_block(fn.body)
@@ -153,7 +157,7 @@ class EscapeAnalysis(SyntaxVisitor):
     if lhs_name not in self.immutable:
       combined_set = self.may_alias[lhs_name]
       for rhs_name in rhs_names:
-        if rhs_name not in self.immutable:
+        if not self.immutable_name(rhs_name):
           combined_set.update(self.may_alias[rhs_name])
       for alias in combined_set:
         self.may_alias[alias] = combined_set
@@ -218,6 +222,7 @@ class EscapeAnalysis(SyntaxVisitor):
   def visit_Assign(self, stmt):
     lhs_names = set(self.collect_lhs_names(stmt.lhs))
     rhs_names = set(collect_nonscalar_names(stmt.rhs))
+ 
     for lhs_name in lhs_names:
       self.update_aliases(lhs_name, rhs_names)
 

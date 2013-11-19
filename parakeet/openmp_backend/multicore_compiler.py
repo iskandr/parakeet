@@ -1,7 +1,7 @@
 import multiprocessing 
 
 from ..syntax import Expr, Tuple
-from ..syntax.helpers import get_fn 
+from ..syntax.helpers import get_fn, return_type
 from ..ndtypes import ScalarT, TupleT, ArrayT
 from ..c_backend import PyModuleCompiler
 
@@ -139,7 +139,9 @@ class MulticoreCompiler(PyModuleCompiler):
     combine_name, combine_closure_args, _ = self.get_fn_info(expr.combine)
     loop_vars = self.loop_vars(n_vars)
     assert expr.init is not None, "Accumulator required but not given"
-    elt = self.fresh_var(expr.type, "elt")
+    
+    
+    elt = self.fresh_var(return_type(expr.fn), "elt")
 
     body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
     acc = self.fresh_var(expr.type, "acc", self.visit_expr(expr.init))
@@ -165,7 +167,7 @@ class MulticoreCompiler(PyModuleCompiler):
     
     assert expr.init is not None, "Accumulator required but not given"
     
-    elt_t = get_fn(expr.fn).return_type 
+    elt_t = return_type(expr.fn) 
     assert isinstance(elt_t, ScalarT), "Scans of non-scalar values (%s) not yet implemented" % elt_t
     elt = self.fresh_var(elt_t, "elt")
     body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)

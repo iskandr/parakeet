@@ -1,4 +1,3 @@
-
 from ..ndtypes import make_array_type, TupleT, IntT, FnT, ClosureT, increase_rank
 from ..syntax import ArrayView, Struct, Expr, ParFor, IndexMap, UntypedFn, TypedFn 
 from ..syntax.helpers import zero_i64, get_types, one 

@@ -54,6 +54,7 @@ one_i64 = one(Int64)
 one_f32 = one(Float32)
 one_f64 = one(Float64)
 
+
 none_t = NoneType
 none = Const(None, type = none_t)
 
@@ -227,6 +228,9 @@ def get_fn(maybe_closure):
     return maybe_closure.type.fn 
   else:
     assert False, "Can't get function from %s" % maybe_closure 
+
+def return_type(maybe_closure):
+  return get_fn(maybe_closure).return_type
 
 def get_closure_args(maybe_closure):
   if isinstance(maybe_closure, Type):

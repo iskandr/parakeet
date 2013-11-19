@@ -74,6 +74,7 @@ class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""
 
   _members = []
+  
 
 class BoolT(IntT):
   """

@@ -1,17 +1,16 @@
-from treelike import NestedBlocks
+from dsltools import NestedBlocks
 
 from .. import syntax, names 
-from ..ndtypes import (make_array_type, make_tuple_type, 
+from ..ndtypes import (make_tuple_type, 
                        Int32, Int64, SliceT, TupleT, ScalarT, StructT, NoneT, 
                        ArrayT, FnT, ClosureT, NoneType) 
 from ..syntax import (Assign, Return, If,    
                       ArrayView, Attribute, Cast, Const, Closure,  Comment, Expr, 
                       Index, PrimCall,   Struct, Slice, Tuple, TupleProj, TypedFn, Var, 
                       AllocArray, ArrayExpr, Adverb, Select)
-from ..syntax.helpers import (wrap_if_constant, 
-                              const_bool, const_int, const_float, get_types,  
-                              one_i64, zero_i64, 
-                              zero, none)
+
+from ..syntax.helpers import (const_bool, const_int, get_types,  
+                              one_i64, zero, none)
 
 class CoreBuilder(object):
   none = syntax.none

@@ -70,7 +70,8 @@ class IndexifyAdverbs(Transform):
         return self.closure(new_fn, (output, ) + closure_args + array_args)
     
     if key in self._indexed_fn_cache:
-      return mk_closure()
+      result = mk_closure()
+      return result 
     
     if cartesian_product:
       # if we're doing a cartesian product then each argument may need 

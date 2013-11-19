@@ -4,7 +4,7 @@ import numpy as np
 
 from nose.tools import nottest
 
-from treelike.testing_helpers import eq, expect_eq, run_local_tests
+from dsltools.testing_helpers import eq, expect_eq, run_local_tests
   
 from . import (type_conv, type_inference, config, 
               specialize, translate_function_value,

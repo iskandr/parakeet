@@ -1,5 +1,5 @@
 
-from treelike import ScopedDict
+from dsltools import ScopedDict
 
 from .. import prims, syntax 
 from .. analysis.collect_vars import collect_var_names

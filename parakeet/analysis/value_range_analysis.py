@@ -1,4 +1,5 @@
-from treelike import  ScopedDict 
+from dsltools import  ScopedDict
+ 
 
 from .. import prims  
 from ..ndtypes import NoneT, NoneType, get_rank 

@@ -62,7 +62,6 @@ class ShapeElimination(Transform):
   def fill_shape_vars_list(self, arg_exprs):
     for e in arg_exprs:
       self.fill_shape_vars(e)
-    
 
   def transform_Var(self, expr):
     #print expr, self.shape_env.get(expr.name) 
@@ -73,6 +72,7 @@ class ShapeElimination(Transform):
         return syntax.Const(value = v.value, type = expr.type)
       elif v.__class__ is shape.Var: 
         new_expr = self.shape_vars[v.num]
+        
         if new_expr != expr:
           return self.cast(self.shape_vars[v.num], expr.type)
     return expr

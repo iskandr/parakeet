@@ -1,14 +1,14 @@
 from .. import names 
-from treelike import NestedBlocks
-from ..builder import build_fn, Builder
+
+from ..builder import Builder
 from ..ndtypes import (ScalarT, NoneT, NoneType, ArrayT, SliceT, TupleT, make_tuple_type, 
-                       Int64, PtrT, ptr_type, ClosureT, make_closure_type, FnT, StructT, 
+                       Int64, PtrT, ptr_type, ClosureT, FnT, StructT, 
                        TypeValueT)
-from ..syntax import (Var, Attribute, Tuple, TupleProj, Closure, ClosureElt, Const,
-                      Struct, Index, TypedFn, Return, Stmt, Assign, Alloc, AllocArray, 
+from ..syntax import (Var, Tuple, 
+                      Index, TypedFn, Return, Stmt, Assign, Alloc,  
                       ParFor, PrimCall, If, While, ForLoop, Call, Expr, 
-                      IndexMap, IndexReduce, ExprStmt) 
-from ..syntax.helpers import none, const_int, slice_none 
+                      IndexReduce, ExprStmt) 
+from ..syntax.helpers import none, const_int
 
 from transform import Transform
 

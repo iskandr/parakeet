@@ -1,4 +1,4 @@
-from treelike import NestedBlocks
+from dsltools import NestedBlocks
 
 from .. import names, syntax
 from ..ndtypes import NoneType 

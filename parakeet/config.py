@@ -19,18 +19,12 @@ backend = 'openmp'
 opt_inline = True
 opt_fusion = True
 opt_index_elimination = True
-opt_range_propagation = False
+opt_range_propagation = True
 
 opt_licm = True
 opt_redundant_load_elimination = True
 opt_stack_allocation = True
 opt_shape_elim = True
-
-# recompile functions for distinct patterns of unit strides
-stride_specialization = True 
-
-# may dramatically increase compile time
-opt_loop_unrolling = False
 
 # replace 
 #   a = alloc
@@ -40,6 +34,12 @@ opt_loop_unrolling = False
 #   with 
 #     a = b[i:j]  
 opt_copy_elimination = True
+
+# recompile functions for distinct patterns of unit strides
+stride_specialization = True 
+
+# may dramatically increase compile time
+opt_loop_unrolling = False
 
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 

@@ -1,11 +1,11 @@
 
-from treelike import ScopedSet 
+from dsltools import ScopedSet 
 
 from .. analysis.collect_vars import collect_var_names, collect_binding_names
 from .. analysis.escape_analysis import may_alias
 from .. analysis.syntax_visitor import SyntaxVisitor
 
-from .. ndtypes import ImmutableT 
+from .. ndtypes import ImmutableT, ArrayT, PtrT 
 from .. syntax import Var, Assign, Return, While, If, Index, Alloc, AllocArray  
 from .. syntax import Array, ArrayView, Slice, Struct 
 
@@ -99,14 +99,15 @@ class Find_LICM_Candidates(SyntaxVisitor):
     self.mark_safe_assignments(stmt.false, volatile_in_scope)
 
   def is_mutable_alloc(self, expr):
-    c = expr.__class__
-    
-    return c is Alloc or \
-           c is AllocArray or \
-           c is Array or \
-           c is ArrayView or \
-           c is Slice or  \
-           (c is Struct and not isinstance(expr.type, ImmutableT))
+    return isinstance(expr.type, (PtrT, ArrayT)) 
+    #c = expr.__class__
+    #return c in (Alloc, AllocArray, )
+    #return c is Alloc or \
+    #       c is AllocArray or \
+    #       c is Array or \
+    #       c is ArrayView or \
+    #       c is 
+    #       (c is Struct and not isinstance(expr.type, ImmutableT))
 
   def visit_Assign(self, stmt):
      

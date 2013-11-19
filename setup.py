@@ -30,8 +30,8 @@ setup(
                 },
     install_requires=[
       'numpy>=1.7',       
-      'treelike',
-      'appdirs', 
+      'dsltools',
+      #'appdirs', 
       # LLVM is optional as long as you use the C backend 
       # 'llvmpy',
       # SciPy is required for some of the tests but due to popular complaints

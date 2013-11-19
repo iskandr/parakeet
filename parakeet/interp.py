@@ -260,36 +260,50 @@ def eval_fn(fn, actuals):
     def expr_Len():
       return len(eval_expr(expr.value))
     
+    def normalize_axes(axis, args):
+      if isinstance(axis, Expr):
+        axis = eval_expr(axis)
+        
+      if isinstance(axis, tuple):
+        axes = axis 
+      else:
+        axes = (axis,) * len(args)
+      
+      assert len(axes) == len(args)
+    
     def expr_Map():
       fn = eval_expr(expr.fn)
       args = [eval_expr(arg) for arg in expr.args]
-      if isinstance(expr.axis, (int, long)):
-        axis = expr.axis 
-      else:
-        axis = eval_expr(expr.axis)
-        
-      if axis is None:
-        args = [np.ravel(arg) for arg in args]
-        axis = 0
-        
+      axes = normalize_axes(expr.axis, args)
+      
       largest_rank = 0
       largest_arg = None
-      
-      for arg in args:
+      iter_space = None
+      for arg, axis  in zip(args, axes):
         rank = rankof(arg) 
-        if rank > largest_rank:
+        if rank > largest_rank and (axis is None or axis < rank):
           largest_rank = rank 
           largest_arg = arg
+          if axis is None: 
+            iter_space = largest_arg.shape 
+          else:
+            iter_space = [largest_arg.shape[axis]]
+          
       if largest_rank == 0:
-        return eval_fn(fn, args) 
-      niters = largest_arg.shape[axis]
+        return eval_fn(fn, args)
+
       results = []
-      for i in xrange(niters):
+      for idx in np.ndindex(iter_space):
         elt_args = []
-        for arg in args:
+        for arg, axis in zip(args, axes):
           r = rankof(arg)
-          if r > 0:
-            indices = [slice(None) if j != axis else i for j in xrange(rankof(arg)) ]
+          if r == 0:
+            elt_args.append(arg)
+          if axis is None:
+            curr_indices = idx[-(largest_rank - r):]
+            elt_args.append(arg[tuple(curr_indices)])
+          elif r > axis:
+            indices = [slice(None) if j != axis else idx[0] for j in xrange(rankof(arg)) ]
             elt_args.append(arg[tuple(indices)])
           else:
             elt_args.append(arg)

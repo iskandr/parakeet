@@ -1,4 +1,4 @@
-from treelike import Node 
+from dsltools import Node 
 
 from .. ndtypes import NoneT
 

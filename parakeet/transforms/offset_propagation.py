@@ -3,7 +3,7 @@ from .. analysis.offset_analysis import OffsetAnalysis
 from .. syntax import Var, Const 
 from .. syntax.helpers import true, false, const
 from transform import Transform 
-#from treelike.scoped_set import ScopedSet
+
 
 class OffsetPropagation(Transform):
   def pre_apply(self, fn):

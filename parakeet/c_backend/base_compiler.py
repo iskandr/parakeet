@@ -88,7 +88,7 @@ class BaseCompiler(object):
     
     # not valid chars!
     if not any(c.isalpha() for c in prefix):
-      prefix = "temp" + prefix 
+      prefix = self.fresh_name("temp" + prefix) 
       
     if version == 1 and not is_reserved(prefix):
       return prefix 

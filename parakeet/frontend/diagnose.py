@@ -1,8 +1,8 @@
-import sys 
-from treelike.testing_helpers import eq
+
+from dsltools.testing_helpers import eq
 from run_function import specialize 
 from ..transforms import Phase, Transform, CloneFunction
-from ..transforms.pipeline import lowering, loopify
+from ..transforms.pipeline import loopify
 
 def transform_name(t):
   assert not isinstance(t, Phase)

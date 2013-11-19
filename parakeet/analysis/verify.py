@@ -250,6 +250,7 @@ class Verify(SyntaxVisitor):
     ordinary or flattened functions as arguments and the latter don't 
     take tuples of indices but have to take each index as a separate parameter
     """
+    self.visit_expr(stmt.bounds)
     fn, closure_arg_types = self.get_fn_and_closure(stmt.fn)
     verify(fn)
     bounds_t = stmt.bounds.type
