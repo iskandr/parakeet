@@ -50,14 +50,9 @@ Dependencies
 
 Parakeet is written for Python 2.7 (sorry internet) and depends on:
 
-* [treelike](https://github.com/iskandr/treelike)
+* [dsltools](https://github.com/iskandr/dsltools)
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
-* [NumPy and SciPy](http://www.scipy.org/install.html)
-
-Optional (if using the LLVM backend):
-
-* [llvmpy](http://www.llvmpy.org/#quickstart)
-
+* [NumPy](http://www.scipy.org/install.html)
 
 
 How does it work? 
