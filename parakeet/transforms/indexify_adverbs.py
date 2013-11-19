@@ -4,7 +4,7 @@ import itertools
 from .. import names 
 from ..builder import build_fn 
 from ..ndtypes import Int64, repeat_tuple, NoneType, ScalarT, TupleT, ArrayT 
-from ..syntax import (ParFor, IndexReduce, IndexScan, Index, Map, OuterMap, Var, Const)
+from ..syntax import (ParFor, IndexReduce, IndexScan, Index, Map, OuterMap, Var, Const, Expr)
 from ..syntax.helpers import get_types, none, zero_i64 
 from ..syntax.adverb_helpers import max_rank_arg, max_rank 
 from transform import Transform
@@ -138,30 +138,9 @@ class IndexifyAdverbs(Transform):
       closure_arg_vars = input_vars[1:n_closure_args+1]
       array_arg_vars = input_vars[n_closure_args+1:-n_indices]
     
-    if index_offsets is None:
-      slice_indices = index_input_vars
-    else:
-      assert len(index_offsets) == len(index_input_vars), \
-        "Mismatch between index variables %s and offsets %s" % (index_input_vars, index_offsets)
-      slice_indices = []
-      for i, offset in enumerate(index_offsets):
-        if isinstance(offset, (int,long)):
-          offset = self.int(offset)
-        assert isinstance(offset, Const), "Expected constant offset but got %s" % offset
-        slice_indices.append(builder.add(index_input_vars[i], offset))
     slice_values = \
-      self.get_slices(builder, array_arg_vars, axes, slice_indices, cartesian_product)
-
-      
-    """
-      TODO: figure out what to do with index offsets
-      if index_offsets is not None:
-        assert len(index_offsets) == len(array_arg_vars), \
-          "Different number of index offsets %s and array arguments %s" % \
-          (index_offsets, array_arg_vars)
-        idx_expr = builder.add(idx_expr, builder.int(index_offsets[i]) )
-    """
-      
+      self.get_slices(builder, array_arg_vars, axes, index_input_vars, 
+                      cartesian_product, index_offsets)
 
 
     elt_result = builder.call(fn, tuple(closure_arg_vars) + tuple(slice_values))
@@ -179,7 +158,8 @@ class IndexifyAdverbs(Transform):
           
     
   
-  def get_slices(self, builder, array_arg_vars, axes, index_input_vars, cartesian_product = False): 
+  def get_slices(self, builder, array_arg_vars, axes, index_input_vars, 
+                 cartesian_product = False, index_offsets = None): 
     slice_values = []
     axes = self.normalize_axes(array_arg_vars, axes)
     # only gets incremented if we're doing a cartesian product
@@ -220,7 +200,15 @@ class IndexifyAdverbs(Transform):
           curr_indices = index_input_vars[-rank:]
           curr_slice = builder.index(curr_array, curr_indices)
         elif rank > axis:
-          curr_slice = builder.slice_along_axis(curr_array, axis, index_input_vars[0]) 
+          curr_idx = index_input_vars[0]
+          print i, curr_idx 
+          if index_offsets is not None:
+            assert len(index_offsets) > i
+            curr_offset = index_offsets[i]
+            if not isinstance(curr_offset, Expr): 
+              curr_offset = builder.int(curr_offset)
+            curr_idx = builder.add(curr_idx, curr_offset)
+          curr_slice = builder.slice_along_axis(curr_array, axis, curr_idx) 
         else:
           # if we're trying to map over axis 1 of a 1-d object, then there aren't
           # enough dims to slice anything, so it just gets passed in without modification
