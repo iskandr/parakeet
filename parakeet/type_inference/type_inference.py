@@ -289,58 +289,7 @@ class TypeInference(LocalTypeInference):
                        type = result_type)
 
 
-  def flatten_Reduce(self, map_fn, combine, x, init):
-    """Turn an axis-less reduction into a IndexReduce"""
-    shape = self.shape(x)
-    n_indices = self.rank(x)
-    # build a function from indices which picks out the data elements
-    # need for the original map_fn
- 
-    
-    outer_closure_args = self.closure_elts(map_fn)
-    args_obj = FormalArgs()
-    inner_closure_vars = []
-    for i in xrange(len(outer_closure_args)):
-      visible_name = "c%d" % i
-      name = names.fresh(visible_name)
-      args_obj.add_positional(name, visible_name)
-      inner_closure_vars.append(Var(name))
-    
-    data_arg_name = names.fresh("x")
-    data_arg_var = Var(data_arg_name)
-    idx_arg_name = names.fresh("i")
-    idx_arg_var = Var(idx_arg_name)
-    
-    args_obj.add_positional(data_arg_name, "x")
-    args_obj.add_positional(idx_arg_name, "i")
-    
-    idx_expr = syntax.Index(data_arg_var, idx_arg_var)
-    inner_fn = self.get_fn(map_fn)
-    fn_call_expr = syntax.Call(inner_fn, tuple(inner_closure_vars)  + (idx_expr,))
-    idx_fn = UntypedFn(name = names.fresh("idx_map"),
-                       args = args_obj, 
-                       body =  [syntax.Return(fn_call_expr)]
-                       )
-    
-    #t = closure_type.make_closure_type(typed_fn, get_types(closure_args))
-    #return Closure(typed_fn, closure_args, t)
-    outer_closure_args = tuple(outer_closure_args) + (x,)
   
-    idx_closure_t = closure_type.make_closure_type(idx_fn, get_types(outer_closure_args))
-    
-    idx_closure = Closure(idx_fn, args = outer_closure_args, type = idx_closure_t)
-    
-    result_type, typed_fn, typed_combine = \
-      specialize_IndexReduce(idx_closure, combine, n_indices, init)
-    if not self.is_none(init):
-      init = self.cast(init, typed_combine.return_type)
-    return syntax.IndexReduce(shape = shape, 
-                              fn = make_typed_closure(idx_closure, typed_fn),
-                              combine = make_typed_closure(combine, typed_combine),
-                              init = init,   
-                              type = result_type)
-    
-    
     
   def transform_Reduce(self, expr):
     assert len(expr.args) > 0, "Can't have Reduce without any arguments %s" % expr 
@@ -349,35 +298,38 @@ class TypeInference(LocalTypeInference):
     axis = self.transform_if_expr(expr.axis)
 
     map_fn = self.transform_fn(expr.fn if expr.fn else untyped_identity_function) 
-    combine_fn = self.transform_fn(expr.combine)
     
-    init = self.transform_expr(expr.init) if expr.init else None
     
     # if there aren't any arrays, just treat this as a function call
     if all(isinstance(t, ScalarT) for t in arg_types):
       return self.invoke(map_fn, new_args)
     
-    init_type = init.type if init else None
+    combine_fn = self.transform_fn(expr.combine)
+    if self.is_none(expr.init):
+      init = none 
+    else: 
+      init = self.transform_expr(expr.init)
+      
     axes = self.normalize_axes(new_args, axis)
     result_type, typed_map_fn, typed_combine_fn = \
-        specialize_Reduce(map_fn.type,
-                          combine_fn.type,
-                          arg_types, 
-                          axes, 
-                          init_type)
+      specialize_Reduce(map_fn.type,
+                        combine_fn.type,
+                        arg_types, 
+                        axes, 
+                        init.type)  
+
     typed_map_closure = make_typed_closure (map_fn, typed_map_fn)
     typed_combine_closure = make_typed_closure(combine_fn, typed_combine_fn)
     
-    
-    if init_type and init_type != result_type and \
-       array_type.rank(init_type) < array_type.rank(result_type):
-      assert len(new_args) == 1
+    # if we encounter init = 0 for a Reduce which produces an array
+    # then need to broadcast to get an initial value of the appropriate rank 
+    if init.type.__class__ is not NoneT and \
+       init.type != result_type and \
+       array_type.rank(init.type) < array_type.rank(result_type):
+      assert len(new_args) == 1, "Can't have more than one arg in " % expr  
       arg = new_args[0]
       first_elt = self.slice_along_axis(arg, axis, zero_i64)
-      #assert False, "Change this to index along the adverb's axis"
-      #first_elt = syntax.Index(arg, zero_i64, 
-      #                         type = arg.type.index_type(zero_i64))
-      first_combine = specialize(combine_fn, (init_type, first_elt.type))
+      first_combine = specialize(combine_fn, (init.type, first_elt.type))
       
       first_combine_closure = make_typed_closure(combine_fn, first_combine)
       init = self.call(first_combine_closure, (init, first_elt))
@@ -656,14 +608,11 @@ def specialize_Reduce(map_fn, combine_fn, array_types, axes, init_type = None):
     acc_type = elt_type
   else:
     acc_type = init_type
-
   typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
   new_acc_type = typed_combine_fn.return_type
   if new_acc_type != acc_type:
     typed_combine_fn = specialize(combine_fn, [new_acc_type, elt_type])
     new_acc_type = typed_combine_fn.return_type
-  #assert new_acc_type == acc_type, \
-  #  "Expected accumulator types %s but encountered %s" % (acc_type, new_acc_type)
   return new_acc_type, typed_map_fn, typed_combine_fn
 
 def specialize_Scan(map_fn, combine_fn, emit_fn, array_types, axes,  init_type = None):

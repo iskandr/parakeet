@@ -33,7 +33,7 @@ def local_maxima(data, wsize, mode=wrap):
   return parakeet.imap(is_max, data.shape)
   
 
-shape = (4,5,3,3)
+shape = (4,3,3,3)
 x = np.random.randn(*shape)
 wsize = (3,3,3,3)
 

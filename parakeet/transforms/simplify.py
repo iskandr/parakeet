@@ -119,6 +119,7 @@ class Simplify(Transform):
 
     while name in self.bindings:
       prev_expr = expr 
+        
       expr = self.bindings[name]
       if expr.__class__ is Var:
         name = expr.name
@@ -199,6 +200,7 @@ class Simplify(Transform):
 
     if new_tuple.__class__ is Var and new_tuple.name in self.bindings:
       tuple_expr = self.bindings[new_tuple.name]
+      
       if tuple_expr.__class__ is Tuple:
         assert idx < len(tuple_expr.elts), \
           "Too few elements in tuple %s : %s, elts = %s" % (expr, tuple_expr.type, tuple_expr.elts)
@@ -207,9 +209,12 @@ class Simplify(Transform):
         assert idx < len(tuple_expr.args), \
           "Too few args in closure %s : %s, elts = %s" % (expr, tuple_expr.type, tuple_expr.elts) 
         return tuple_expr.args[idx]
+    
 
-    if not self.is_simple(new_tuple):
-      new_tuple = self.assign_name(new_tuple, "tuple")
+    #if not self.is_simple(new_tuple):
+    #  complex_expr = new_tuple 
+    #  new_tuple = self.assign_name(complex_expr, "tuple")
+    #  print "MADE ME A NEW TUPLE", complex_expr, new_tuple 
     expr.tuple = new_tuple
     return expr
 
@@ -750,8 +755,10 @@ class Simplify(Transform):
     return stmt
 
   def transform_ForLoop(self, stmt):
+    
+
     merge = self.enter_loop(stmt.merge)
-    stmt.body = self.transform_block(stmt.body)
+    stmt.body = self.transform_block(stmt.body) 
     stmt.merge = self.transform_merge(merge,
                                       left_block = self.blocks.current(),
                                       right_block = stmt.body)

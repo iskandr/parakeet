@@ -166,7 +166,11 @@ class LocalTypeInference(Transform):
     return self.tuple(elts)
 
   def transform_Const(self, expr):
-    return Const(expr.value, type_conv.typeof(expr.value))
+    if expr.type is None:
+      t = type_conv.typeof(expr.value)
+    else:
+      t = expr.type 
+    return Const(expr.value, type = t)
   
 
   def transform_Shape(self, expr):

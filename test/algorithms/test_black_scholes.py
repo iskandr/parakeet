@@ -1,5 +1,5 @@
 from parakeet import jit 
-from parakeet.testing_helpers import eq, run_local_tests
+from parakeet.testing_helpers import eq, run_local_tests, expect 
 
 from numpy import exp, log, sqrt
 
@@ -34,9 +34,7 @@ def test_black_scholes():
   x2 = (True, 10.0, 10.0, 2.0, 2.0, 2.0)
   xs = [x1, x2]
   for x in xs:
-    par_rslt = black_scholes_parakeet(*x)
-    py_rslt = black_scholes(*x)
-    assert eq(par_rslt, py_rslt)
+    expect(black_scholes, x, black_scholes(*x))
 
 if __name__ == '__main__':
   run_local_tests()

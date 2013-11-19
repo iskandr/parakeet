@@ -78,6 +78,7 @@ function_mappings = {
   
   # ARRAY CONSTRUCTORS 
   np.array : lib.array, 
+  np.tile : lib.tile, 
   np.arange  : lib.arange, 
   
   np.empty_like : lib.empty_like, 

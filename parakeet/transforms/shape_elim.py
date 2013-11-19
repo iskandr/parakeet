@@ -1,5 +1,5 @@
 from .. import syntax
-from ..ndtypes import ArrayT, SliceT, ScalarT, TupleT, Int64, StructT, ClosureT
+from ..ndtypes import ArrayT, SliceT, ScalarT, TupleT, Int64, StructT, ClosureT, IntT
 from ..syntax import Attribute, TupleProj, Var, ClosureElt
 from ..shape_inference import shape_env, shape
 from ..transforms import Transform
@@ -68,10 +68,13 @@ class ShapeElimination(Transform):
     #print expr, self.shape_env.get(expr.name) 
     if expr.name in self.shape_env:
       v = self.shape_env[expr.name]
-      if v.__class__ is shape.Const:
+      # don't trust shape propagation to correctly handle floating point errors
+      if v.__class__ is shape.Const and isinstance(expr.type, IntT):
         return syntax.Const(value = v.value, type = expr.type)
       elif v.__class__ is shape.Var: 
-        return self.cast(self.shape_vars[v.num], expr.type)
+        new_expr = self.shape_vars[v.num]
+        if new_expr != expr:
+          return self.cast(self.shape_vars[v.num], expr.type)
     return expr
   
   def transform_lhs(self, lhs):

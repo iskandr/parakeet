@@ -1,8 +1,9 @@
 import numpy as np
 
 from ..frontend import macro, jit 
-from ..syntax import UntypedFn, Return, Cast, TypedFn, TypeValue, Array, Tuple, Expr, Closure 
-from ..syntax.helpers import get_types  
+from ..syntax import (UntypedFn, Return, Cast, TypedFn, TypeValue, Array, Tuple, Expr, Closure, 
+                      TupleProj) 
+from ..syntax.helpers import get_types, make_tuple  
 from ..ndtypes import (type_conv, TypeValueT, ArrayT, IntT, 
                        make_tuple_type, TupleT, ScalarT, ClosureT, FnT, Type)
 
@@ -63,6 +64,7 @@ def _get_shape(value):
   if isinstance(value.type, ArrayT):
     assert value.__class__ is Array, "Don't know how to convert %s into tuple" % value
     elts = value.elts 
+    
     elt_types = get_types(elts)
     assert all(isinstance(t, IntT) for t in elt_types), \
       "Shape elements must be integers, not %s" % elt_types
@@ -74,6 +76,18 @@ def _get_shape(value):
   elif isinstance(value.type, ScalarT):
     assert isinstance(value.type, IntT), \
       "Can't make shape tuple from non-integer scalar %s : %s" % (value, value.type)
-    return Tuple(elts = (value,), type = make_tuple_type((value.type,)))
-  assert False, "Can't make shape tuple from value %s : %s" % (value, value.type)  
+    return make_tuple((value,))
+  assert False, "Can't make shape tuple from value %s : %s" % (value, value.type)
+  
+def _get_tuple_elts(expr, cast_type = None):
+  elts = []
+  for i, tuple_elt_t in enumerate(expr.type.elt_types):
+    if expr.__class__ is Tuple:
+      tuple_elt = expr.elts[i]
+    else:
+      tuple_elt = TupleProj(expr, i, type = tuple_elt_t)
+    if cast_type is not None and tuple_elt_t != cast_type:
+      tuple_elt = Cast(tuple_elt, type = cast_type)
+    elts.append(tuple_elt)
+  return tuple(elts)  
     

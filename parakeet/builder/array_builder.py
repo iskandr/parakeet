@@ -87,16 +87,19 @@ class ArrayBuilder(ArithBuilder):
     else:
       return 0
 
-  def shape(self, array, dim = None, explicit_struct = False):
+  def shape(self, array, dim = None, explicit_struct = False, temp = True):
     if isinstance(array.type, ArrayT):
-      shape = self.attr(array, "shape")
+      shape = self.attr(array, "shape", temp = temp)
       if dim is None:
         return shape
       if isinstance(dim, Expr):
         dim = unwrap_constant(dim)
       assert isinstance(dim, (int, long)), "Expected array dimension to be an int, got %s" % dim 
       dim_value = self.tuple_proj(shape, dim, explicit_struct = explicit_struct)
-      return self.assign_name(dim_value, "dim%d" % dim)
+      if temp:
+        return self.assign_name(dim_value, "dim%d" % dim)
+      else:
+        return dim_value 
     else:
       return self.tuple([])
 

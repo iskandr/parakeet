@@ -1,4 +1,4 @@
-from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT, TupleT, FnT, Type, SliceT
+from .. ndtypes import ArrayT, NoneT, NoneType, ScalarT, ClosureT, TupleT, FnT, Type, SliceT, PtrT
 from .. ndtypes import lower_rank 
 
 from .. syntax import Expr, Tuple, Var, Index, Closure, TypedFn 
@@ -96,8 +96,8 @@ class Verify(SyntaxVisitor):
       "Error in indexing expression %s: %s lacks type" % (expr, arr) 
     assert idx.type is not None, \
       "Error in indexing expression %s: %s lacks type" % (expr, idx)
-    assert isinstance(arr.type, (TupleT, ArrayT)), \
-      "Expected %s to be an array or tuple" % arr
+    assert isinstance(arr.type, (TupleT, ArrayT, PtrT)), \
+      "Expected %s to be an array, pointer, or tuple" % arr
     assert isinstance(idx.type, (TupleT, SliceT, NoneT, ScalarT)), \
       "Expected index %s to be scalar or tuple" % idx
      

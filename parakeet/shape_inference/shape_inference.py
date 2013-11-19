@@ -7,7 +7,7 @@ from ..syntax import unwrap_constant, Expr
 import shape
 import shape_from_type
 from shape import (Var, Const, Shape, Tuple, Closure, Slice, Scalar, Unknown, 
-                   ConstSlice, Struct, AnyScalar, Add, Mult, Div, Sub, 
+                   ConstSlice, Struct, AnyScalar, Add, Mult, Div, Sub, Mod, 
                    any_scalar, unknown_value, const, any_value, combine_list, 
                    increase_rank, make_shape, is_zero, is_one, Ptr,
                    dims, combine_dims     
@@ -50,48 +50,80 @@ class ShapeInference(SyntaxVisitor):
   def bool(self, x):
     return const(x)
 
+
+  _scalar_shape_classes = (Const, Var, Add, Sub, Mult, Div, Mod,  AnyScalar)
   def add(self, x, y):
-    if is_zero(x):
-      return y
-    elif is_zero(y):
-      return x
-    elif isinstance(x, Const) and isinstance(y, Const):
-      return const(x.value + y.value)
-    elif isinstance(x, AnyScalar) or isinstance(y, AnyScalar):
-      return any_scalar
+    cx = x.__class__ 
+    cy = y.__class__ 
+
+    if cx in self._scalar_shape_classes and cy in self._scalar_shape_classes:
+      if is_zero(x):
+        return y
+      elif is_zero(y):
+        return x
+      elif cx is Const and cy is Const: 
+        return const(x.value + y.value)
+      elif cx is AnyScalar or cy is AnyScalar:
+        return any_scalar
+      else:
+        return Add(x,y)
     else:
-      return Add(x,y)
+      return any_value 
 
   def sub(self, x, y):
-    if is_zero(y):
-      return x
-    elif isinstance(x, Const) and isinstance(y, Const):
-      return const(x.value - y.value)
-    elif isinstance(x, AnyScalar) or isinstance(y, AnyScalar):
-      return any_scalar
+    cx = x.__class__ 
+    cy = y.__class__ 
+    if cx in self._scalar_shape_classes and cy in self._scalar_shape_classes:
+      if is_zero(y):
+        return x
+      elif cx is Const and cy is Const: 
+        return const(x.value - y.value)
+      elif cx is AnyScalar or cy is AnyScalar:
+        return any_scalar
+      elif x == y: 
+        return Const(0)
+      else:
+        return Sub(x, y)
     else:
-      return Sub(x, y)
+      return any_value 
 
   def mul(self, x, y):
-    if is_zero(x) or is_zero(y):
-      return const(0)
-    elif is_one(x):
-      return y
-    elif is_one(y):
-      return x
+    cx = x.__class__ 
+    cy = y.__class__ 
+
+    if cx in self._scalar_shape_classes and cy in self._scalar_shape_classes:
+      if is_zero(x) or is_zero(y):
+        return const(0)
+      elif is_one(x):
+        return y
+      elif is_one(y):
+        return x
+      elif cx is AnyScalar or cy is AnyScalar:
+        return any_scalar
+      else:
+        return Mult(x,y)
     else:
-      return Mult(x,y)
+      return any_value
     
   def div(self, x, y):
-    assert not is_zero(y)
-    if is_one(y):
-      return x
-    elif isinstance(x, Const) and isinstance(y, Const):
-      return const(int(x.value / y.value))
-    elif isinstance(x, AnyScalar) or isinstance(y, AnyScalar):
-      return any_scalar
+    assert not is_zero(y), "Encountered divide by zero during shape inference"
+    cx = x.__class__ 
+    cy = y.__class__ 
+
+    if cx in self._scalar_shape_classes and cy in self._scalar_shape_classes:
+      if is_one(y):
+        return x
+      elif cx is AnyScalar or cy is AnyScalar:
+        return any_scalar
+      elif cx is Const and cy is Const:
+        return const(int(x.value / y.value))
+      elif x == y:
+        return const(1)
+      else:
+        return Div(x, y)
     else:
-      return Div(x, y)
+      return any_value 
+      
 
   def shape(self, x):
     if isinstance(x, Shape):
@@ -252,7 +284,7 @@ class ShapeInference(SyntaxVisitor):
     return x
   
   def visit_fn(self, fn):
-    assert isinstance(fn, syntax.TypedFn)
+    assert isinstance(fn, syntax.TypedFn), "Expected typed function, got %s" % fn 
     self.fn = fn 
     self.value_env = {}
     self.equivalence_classes = {}
@@ -355,6 +387,9 @@ class ShapeInference(SyntaxVisitor):
     return Closure(fn, [])
 
 
+  def visit_UntypedFn(self, fn):
+    return Closure(fn, [])
+  
   def visit_TypedFn(self, fn):
     return Closure(fn, [])
 
@@ -472,7 +507,7 @@ class ShapeInference(SyntaxVisitor):
   def visit_Attribute(self, expr):
     v = self.visit_expr(expr.value)
     name = expr.name
-    print "ATTR", v, v.__class__,  name 
+
     if v.__class__ is Shape:
       if name == 'shape':
         return Tuple(v.dims)
@@ -525,7 +560,12 @@ class ShapeInference(SyntaxVisitor):
     elif p == prims.divide:
       return self.div(args[0], args[1])
     else:
-      return shape.combine_list(args, preserve_const = False)
+      result = shape.combine_list(args, preserve_const = False)
+      if result.__class__ is Shape:
+        return result
+      else:
+        # once a scalar passes through some prim, it's not longer the same value!
+        return any_scalar 
 
   def visit_Select(self, expr):
     cond = self.visit_expr(expr.cond)
@@ -723,10 +763,8 @@ class ShapeInference(SyntaxVisitor):
     return self.outer_map_result_shape(elt_result, arg_shapes, axes)
 
   def visit_Assign(self, stmt):
-    print stmt 
     if stmt.lhs.__class__ in (syntax.Var, syntax.Tuple):
       rhs = self.visit_expr(stmt.rhs)
-      print ">>", rhs 
       bind_syntax(stmt.lhs, rhs, self.value_env)
 
   def visit_Return(self, stmt):

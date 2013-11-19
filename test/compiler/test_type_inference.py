@@ -26,6 +26,7 @@ def add(x,y):
 
 def test_add_bools():
   """
+  test_add_bools:
   Parakeet booleans don't behave like the default Python type but rather like
   numpy.bool8, where (+) == (or) and (*) == (and)
   """

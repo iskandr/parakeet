@@ -15,7 +15,7 @@ def _get_vdot_fn(a, b):
   vec_type_a = make_array_type(a.type.elt_type, 1) 
   vec_type_b = make_array_type(b.type.elt_type, 1)
   result_scalar_type = a.type.elt_type.combine(b.type.elt_type)
-  
+ 
   vdot_typed = specialize(vdot_untyped, [vec_type_a, vec_type_b] )
 
   assert vdot_typed.return_type == result_scalar_type, \

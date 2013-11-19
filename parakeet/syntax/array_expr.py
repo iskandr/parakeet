@@ -125,4 +125,14 @@ class Transpose(ArrayExpr):
   
   def __str__(self):
     return "%s.T" % self.array 
+  
+class Tile(ArrayExpr):
+  _members = ["array", "reps"]
+  
+  def children(self):
+    yield self.array 
+    yield self.reps 
+    
+  def __str__(self):
+    return "Tile(%s, %s)" % (self.array, self.reps)
     

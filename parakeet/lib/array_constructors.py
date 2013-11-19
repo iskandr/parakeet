@@ -2,17 +2,17 @@ import __builtin__
 import numpy as np 
 
 from .. frontend.decorators import jit, macro, typed_macro 
-from .. ndtypes import (TypeValueT, ScalarT, make_array_type, make_tuple_type, Float64, 
-                        type_conv, ArrayT, TupleT, IntT, Int64) 
-from .. syntax import (Range, Cast, AllocArray, TupleProj, Array, ConstArray, ConstArrayLike)
+from .. ndtypes import ( make_array_type,  combine_type_list, repeat_tuple,  
+                         ArrayT, TupleT,  Int64, ScalarT) 
+from .. syntax import (Range, Cast, AllocArray, TupleProj, Array, 
+                       ConstArray, ConstArrayLike, Index, Shape)
 
-from ..syntax.helpers import get_types, one_i64, zero_i64
+from ..syntax.helpers import get_types, one_i64, zero_i64, make_tuple
 
 from adverbs import imap 
 from numpy_types import float64
-from lib_helpers import _get_type, _get_shape    
-from parakeet.ndtypes.core_types import combine_type_list
-from parakeet.syntax.helpers import make_tuple
+from lib_helpers import _get_type, _get_shape, _get_tuple_elts
+
 
 @macro
 def arange(n, *xs, **kwds):
@@ -26,7 +26,7 @@ def arange(n, *xs, **kwds):
   array_t = make_array_type(elt_t, 1) 
   count = __builtin__.len(xs)
   assert 0 <= count <= 2, "Too many args for range: %s" % ((n,) + tuple(xs))
-  
+ 
   if count == 0:
     start = zero_i64 
     stop = n 
@@ -122,7 +122,9 @@ def linspace(start, stop, num = 50, endpoint = True):
   else:
     step = (stop-start)/float(num)
     return np.arange(0, num) * step + start 
- 
+
+
+
 @typed_macro
 def array(value, dtype = None):
   if dtype is not None:
@@ -137,13 +139,32 @@ def array(value, dtype = None):
     assert all(isinstance(t, ScalarT) for t in elt_types), \
       "Can only make array from tuple of scalars, not %s : %s" % (value, value.type)
     elt_t = combine_type_list(value.type.elt_types)
+    array_elts = _get_tuple_elts(value, cast_type = elt_t)
     array_t = make_array_type(elt_t, 1)
-    array_elts = []
-    for i, tuple_elt_t in enumerate(value.type.elt_types):
-      tuple_elt = TupleProj(value, i, type = tuple_elt_t)
-      if tuple_elt_t != elt_t:
-        tuple_elt = Cast(tuple_elt, type = elt_t)
-      array_elts.append(tuple_elt)
-    return Array(elts = tuple(array_elts), type = array_t)
+    return Array(elts = array_elts, type = array_t)
 
-
+@typed_macro
+def tile(A, reps):
+  reps = _get_shape(reps)
+  reps_dims = len(reps.type.elt_types)
+  if reps_dims == 0:
+    return A 
+  A_rank = A.type.rank if isinstance(A.type, ArrayT) else 0 
+  if A_rank == 0:
+    # array scalars, ugh!
+    if isinstance(A.type, ArrayT):
+      A = Index(A, make_tuple(()), type = A.elt_type)
+    assert isinstance(A.type, ScalarT), "First argument to 'tile' must be array or scalar"
+    array_t = make_array_type(A.type, reps_dims)
+    return ConstArray(value = A, shape = reps, type = array_t)
+  else:
+    A_shape = Shape(A, type = repeat_tuple(Int64, A_rank))
+    A_shape_elts = _get_tuple_elts(A_shape)
+    reps_elts = _get_tuple_elts(reps)
+    result_shape_elts = []
+    assert False, "np.tile not yet implemented"
+    #for i in xrange(max(len(A_shape_elts), len(reps_elts))):
+      
+    #result = AllocArray()
+    
+  

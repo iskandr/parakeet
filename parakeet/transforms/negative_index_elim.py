@@ -51,8 +51,9 @@ class NegativeIndexElim(RangeTransform):
     index_ranges = [self.get(idx_elt) for idx_elt in index_elts]
     
     assert len(index_ranges) == len(index_elts)
-    shape = self.shape(expr.value)
+    shape = self.shape(expr.value, temp = False)
     shape_elts = self.tuple_elts(shape)
+  
     assert len(shape_elts) == len(index_elts), \
       "Mismatch between number of indices %d and rank %d in %s"  % \
       (len(index_elts), len(shape_elts), expr)
