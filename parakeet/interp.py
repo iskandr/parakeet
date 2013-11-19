@@ -32,7 +32,7 @@ def rankof(x):
   return x.ndim if hasattr(x, 'ndim') else 0 
 
 def eval(fn, actuals):
-
+  
   result = eval_fn(fn, actuals)
   import ctypes 
   if isinstance(result, ctypes.Structure):
@@ -40,6 +40,7 @@ def eval(fn, actuals):
   return result 
    
 def eval_fn(fn, actuals):
+  print fn 
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -90,6 +91,7 @@ def eval_fn(fn, actuals):
     
     def expr_Attribute():
       value = eval_expr(expr.value)
+      assert hasattr(value, expr.name)
       if expr.name == 'offset':
         if value.base is None:
           return 0
@@ -102,6 +104,11 @@ def eval_fn(fn, actuals):
       
       elif expr.name == 'strides':
         return _strides(value)
+      
+      elif expr.name == 'step':
+        step = getattr(value, 'step', 1)
+        if step is None: step = 1 
+        return step 
       
       elif isinstance(value, tuple):
         if expr.name.startswith('elt'):
@@ -411,7 +418,6 @@ def eval_fn(fn, actuals):
 
   def assign(lhs, rhs, env):
     if isinstance(lhs, Var):
-      
       env[lhs.name] = rhs
     elif isinstance(lhs, Tuple):
       assert isinstance(rhs, tuple)
@@ -437,51 +443,6 @@ def eval_fn(fn, actuals):
         eval_fn(fn, (idx,))
   
     
-  def eval_parfor_shiver(clos, bounds):
-    assert hasattr(clos, "__call__"), "Unexpected fn %s" % (clos,) 
-    assert isinstance(bounds, (int,long,tuple)), "Invalid bounds %s" % (bounds,)
-    
-    if isinstance(clos, ClosureVal):
-      fn = clos.fn
-      fixed_args = clos.fixed_args 
-    else:
-      fn = clos 
-      fixed_args = ()
-    
-    
-    if isinstance(bounds, (tuple,list)) and len(bounds) == 1:
-      bounds = bounds[0]
-    
-    
-    full_args = tuple(fixed_args) + (bounds,)
-    
-    if isinstance(fn, TypedFn):
-      typed = fn
-      linear_args = fixed_args  
-    else:
-      from frontend import specialize 
-      typed, linear_args = specialize(fn, full_args)
-    
-    import transforms
-    import llvm_backend
-    from llvm_backend import ctypes_to_generic_value
-    lowered_fn = transforms.pipeline.lowering(fn)
-    llvm_fn = llvm_backend.compile_fn(lowered_fn).llvm_fn 
-    
-    expected_types = typed.input_types[:-1]
-    
-    ctypes_inputs = [t.from_python(v) 
-                     for (v,t) 
-                     in zip(linear_args, expected_types)]
-    
-    gv_inputs = [ctypes_to_generic_value(cv, t) 
-                 for (cv,t) 
-                 in zip(ctypes_inputs, expected_types)]
-    
-    import shiver 
-    shiver.parfor(llvm_fn, bounds, 
-                  fixed_args = gv_inputs, 
-                  ee = llvm_backend.global_context.exec_engine)  
     
   def eval_stmt(stmt):
 
@@ -491,7 +452,6 @@ def eval_fn(fn, actuals):
     
     elif isinstance(stmt, Assign):
       value = eval_expr(stmt.rhs)
-      # print stmt, "=", value 
       assign(stmt.lhs, value, env)
 
     elif isinstance(stmt, If):

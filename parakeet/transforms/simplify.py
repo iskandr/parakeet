@@ -441,6 +441,7 @@ class Simplify(Transform):
     return expr 
   
   def transform_Map(self, expr):
+
     expr.args = self.transform_simple_exprs(expr.args)
     expr.fn = self.transform_expr(expr.fn)
     expr.axis = self.transform_if_expr(expr.axis)

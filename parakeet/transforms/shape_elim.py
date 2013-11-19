@@ -1,5 +1,5 @@
 from .. import syntax
-from ..ndtypes import ArrayT, SliceT, ScalarT, TupleT, Int64, StructT, ClosureT, IntT
+from ..ndtypes import ArrayT, SliceT, ScalarT, TupleT, Int64, StructT, ClosureT, IntT, NoneT 
 from ..syntax import Attribute, TupleProj, Var, ClosureElt
 from ..shape_inference import shape_env, shape
 from ..transforms import Transform
@@ -51,9 +51,13 @@ class ShapeElimination(Transform):
                 for field_name, field_type in zip(t.field_names, t.field_types)]
       self.fill_shape_vars_list(fields)
     elif c is SliceT:
-      fields = [Attribute(expr, 'start', type = Int64), 
-                Attribute(expr, 'stop', type = Int64), 
-                Attribute(expr, 'step', type = Int64)]
+      fields = []
+      start_t = expr.type.start_type 
+      if start_t != NoneT: fields.append(Attribute(expr, 'start', type = start_t))
+      stop_t = expr.type.stop_type 
+      if stop_t != NoneT: fields.append(Attribute(expr, 'stop', type = stop_t))
+      step_t = expr.type.step_type 
+      if step_t != NoneT: fields.append(Attribute(expr, 'step', type = step_t))
       self.fill_shape_vars_list(fields)
     elif isinstance(t, ScalarT):
       self.shape_vars[self.shape_var_counter.get()] = expr 

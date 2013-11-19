@@ -171,6 +171,7 @@ class Verify(SyntaxVisitor):
     return expr is None or (hasattr(expr, 'type') and isinstance(expr.type, NoneT))
   
   def visit_Map(self, expr):
+    assert len(expr.args) > 0, "Can't have Map without array arguments"
     if expr.fn.__class__ is Closure: 
       closure_elts = tuple(expr.fn.args) 
       fn = expr.fn.fn 

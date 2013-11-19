@@ -1,6 +1,6 @@
 import numpy as np 
 
-from .. ndtypes import ( Int8, Int32, Int64,  Float32, Float64, Bool, FloatT, IntT, BoolT, 
+from .. ndtypes import ( Int8, Int24, Int32, Int64,  Float32, Float64, Bool, FloatT, IntT, BoolT, 
                         NoneType, ScalarT, make_slice_type, make_tuple_type, ClosureT, 
                         FnT, Type, make_closure_type, ArrayT)
 
@@ -32,6 +32,7 @@ def zero(t):
 
 false = zero(Bool)
 zero_i8 = zero(Int8)
+zero_i24 = zero(Int24)
 zero_i32 = zero(Int32)
 zero_i64 = zero(Int64)
 zero_f32 = zero(Float32)

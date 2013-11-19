@@ -16,7 +16,6 @@ class IndexElim(Transform):
     self.array_values = analysis.array_values
      
   def transform_Index(self, expr):
-
     if expr.value.__class__ is not Var: return expr 
     x = expr.value.name 
     if x not in self.array_values: return expr

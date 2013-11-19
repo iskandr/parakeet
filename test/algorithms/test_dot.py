@@ -12,7 +12,7 @@ def loop_dot(x,y):
   result = x[0] * y[0]
   i = 1
   while i < n:
-    result = result + x[i] * y[i]
+    result += x[i] * y[i]
     i = i + 1
   return result
 

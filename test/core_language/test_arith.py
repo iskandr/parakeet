@@ -3,8 +3,8 @@ from parakeet import jit, testing_helpers
 
 
 values = [1, 
-          1.0, 
-          True, 
+          1.0,
+          np.array([True, True, True]), 
           #np.array([1,2,3], dtype='int8'),
           np.array([1,2,3], dtype='int16'),
           #np.array([1,2,3], dtype='int32'), 

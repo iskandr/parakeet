@@ -116,7 +116,9 @@ class Prim(object):
         assert isinstance(t2, ScalarT), "Expected scalar type but got %s" % t2
         # penalty just for being a different type   
         dist += 1 
+        
         size_difference = t2.nbytes - t1.nbytes
+        
         # if we're downcasting, this sucks 
         if size_difference < 0:
           dist += 10000
@@ -263,7 +265,14 @@ bitwise_and = Bitwise(np.bitwise_and, 'BitAnd', '&')
 bitwise_or = Bitwise(np.bitwise_or, 'BitOr', '|')
 bitwise_xor = Bitwise(np.bitwise_xor, 'BitXor', '^')
 
+# Adding booleans in Python results in an integer, 
+# but add *arrays* of booleans gives a boolean result
+# ----
+# Since Parakeet unifies the scalar and broadcast behavior of 
+# primitive functions, I had to pick one of these two behaviors
+# and went with Boolean + Boolean = Integer (since np.mean(bool) is useful) 
 add = Arith(np.add, 'Add', '+')
+
 subtract = Arith(np.subtract, 'Sub', '-')
 multiply = Arith(np.multiply, 'Mult', '*')
 

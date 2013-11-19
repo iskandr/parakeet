@@ -50,9 +50,6 @@ class SpecializeFnArgs(Transform):
       inner_name = inner_arg_names[pos]
       if arg.__class__ is Const:
         const[inner_name] = arg 
-      elif arg in new_closure_args:
-        prev_pos = new_closure_args.index(arg)
-        remap[inner_name] = new_inner_names[prev_pos]
       elif arg in new_array_args:
         prev_pos = len(new_closure_args) + new_array_args.index(arg)
         remap[inner_name] = new_inner_names[prev_pos]

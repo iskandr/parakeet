@@ -2,7 +2,8 @@ from .. import names
 from .. syntax import (TypedFn, Var, Const, Attribute, Index, PrimCall, 
                        If, Assign, While, ExprStmt, Return, ForLoop, ParFor,  
                        Slice, Struct, Tuple, TupleProj, Cast, Alloc, Closure, 
-                       Map, Reduce, Scan, IndexMap, IndexReduce, IndexScan)      
+                       Map, Reduce, Scan, IndexMap, IndexReduce, IndexScan, 
+                       UntypedFn )      
 from transform import Transform 
 
 class CloneFunction(Transform):
@@ -56,7 +57,8 @@ class CloneFunction(Transform):
       #  return cloner.apply(expr)
       #else:
       return expr 
-    
+    elif c is UntypedFn:
+      return expr 
     elif c is Closure: 
       args = self.transform_expr_tuple(expr.args)
       return Closure(fn = expr.fn, args = args)
@@ -93,13 +95,12 @@ class CloneFunction(Transform):
                     axis = self.transform_if_expr(expr.axis), 
                     init = self.transform_if_expr(expr.init), 
                   )
+   
     else:
-      args = {}
-      for member_name in expr.members():
-        old_value = getattr(expr, member_name)
-        new_value = self.transform_if_expr(old_value)
-        args[member_name] = new_value
-      return expr.__class__(**args)
+      args = {}  
+      for k,v in expr.__dict__.iteritems():
+        args[k] = self.transform_if_expr(v)
+      return c(**args)
   
   def transform_Assign(self, stmt):
 
@@ -142,7 +143,9 @@ class CloneFunction(Transform):
     return ParFor(fn = new_fn, bounds = new_bounds)
   
   def pre_apply(self, old_fn):
-    new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])
+    new_fundef_args = old_fn.__dict__.copy()
+    del new_fundef_args['type']
+    # new_fundef_args = dict([(m, getattr(old_fn, m)) for m in old_fn._members])
     # create a fresh function with a distinct name and the
     # transformed body and type environment
     if self.rename: 

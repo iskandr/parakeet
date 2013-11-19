@@ -17,19 +17,43 @@ class TypedFn(Expr):
   The body of a TypedFn should contain Expr nodes which have been extended with
   a 'type' attribute
   """
-
-  _members = ['name',
-              'arg_names',
-              'body',
-              'input_types',
-              'return_type',
-              'type_env',
-              # these last two get filled by
-              # transformation/optimizations later
-              'created_by',
-              'transform_history', 
-             ]
   
+  def __init__(self, name, arg_names, body, 
+                input_types, return_type,
+                type_env, 
+                created_by = None,
+                transform_history = None,  
+                source_info = None):
+    
+    assert isinstance(name, str), "Invalid typed function name: %s" % (name,)
+    self.name = name 
+    
+    assert isinstance(arg_names, (list, tuple)), "Invalid typed function arguments: %s" % (arg_names,)
+    self.arg_names = arg_names 
+
+    assert isinstance(input_types, (list, tuple)), "Invalid input types: %s" % (input_types,)
+    self.input_types = tuple(input_types)    
+    
+    assert isinstance(return_type, Type), "Invalid return type: %s" % (return_type,)
+    self.return_type = return_type 
+    
+    assert isinstance(body, list), "Invalid body for typed function: %s" % (body,)
+    self.body = body 
+    
+    assert isinstance(type_env, dict), "Invalid type environment: %s" % (type_env,)
+    self.type_env = type_env 
+
+    self.type = make_fn_type(self.input_types, self.return_type)
+    
+    self.created_by = created_by 
+    
+    if transform_history is None: transform_history = set([])
+    self.transform_history = transform_history
+    
+    
+    self.source_info = source_info 
+
+
   @property 
   def cache_key(self):
     return self.name, self.created_by, self.version
@@ -38,31 +62,6 @@ class TypedFn(Expr):
   def version(self):
     return frozenset(self.transform_history)
   
-  def node_init(self):
-    assert isinstance(self.body, list), \
-        "Invalid body for typed function: %s" % (self.body,)
-    assert isinstance(self.arg_names, (list, tuple)), \
-        "Invalid typed function arguments: %s" % (self.arg_names,)
-    assert isinstance(self.name, str), \
-        "Invalid typed function name: %s" % (self.name,)
-
-    if isinstance(self.input_types, list):
-      self.input_types = tuple(self.input_types)
-
-    assert isinstance(self.input_types, tuple), \
-        "Invalid input types: %s" % (self.input_types,)
-    assert isinstance(self.return_type, Type), \
-        "Invalid return type: %s" % (self.return_type,)
-    assert isinstance(self.type_env, dict), \
-        "Invalid type environment: %s" % (self.type_env,)
-
-    self.type = make_fn_type(self.input_types, self.return_type)
-    
-    if self.transform_history is None:
-      self.transform_history = set([])
-
-
-
   def __repr__(self):
     arg_strings = []
 

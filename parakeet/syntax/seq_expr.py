@@ -1,22 +1,28 @@
 from expr import Expr 
 
 class SeqExpr(Expr):
-  pass 
+  def __init__(self, value, type = None, source_info = None):
+    self.value = value 
+    self.type = type 
+    self.source_info = source_info 
 
-class Enumerate(SeqExpr):
-  _members = ['value']
-  
   def children(self):
     yield self.value 
-    
-class Zip(SeqExpr):
-  _members = ['values']
+
+class Enumerate(SeqExpr):
+  pass 
   
+class Zip(SeqExpr):
+  def __init__(self, values, type = None, source_info = None):
+    self.values = tuple(values) 
+    self.type = type 
+    self.source_info = source_info
+    
   def children(self):
-    yield self.values
+    return self.values
 
 class Len(SeqExpr):
-  _members = ['value']
+  pass 
   
 class Index(SeqExpr):
   """
@@ -24,7 +30,12 @@ class Index(SeqExpr):
     - make all user-defined indexing check_negative=True by default 
     - implement backend logic for lowering check_negative 
   """
-  _members = ['value', 'index', 'check_negative']
+  def __init__(self, value, index, check_negative = None, type = None, source_info = None):
+    self.value = value 
+    self.index = index 
+    self.check_negative = check_negative 
+    self.type = type 
+    self.source_info = source_info
   
   def __eq__(self, other):
     return other.__class__ is Index and \

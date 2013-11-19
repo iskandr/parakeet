@@ -17,7 +17,7 @@ from ptr_type import PtrT, ptr_type
 
 from scalar_types import (ScalarT, 
                           IntT, FloatT, BoolT, SignedT, UnsignedT, ComplexT, 
-                          Int8, Int16, Int32, Int64, 
+                          Int8, Int16, Int24, Int32, Int64, 
                           UInt8, UInt16, UInt32, UInt64, 
                           Bool, Float32, Float64, 
                           Complex64, Complex128, 

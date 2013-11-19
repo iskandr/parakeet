@@ -138,6 +138,7 @@ class ShapeInference(SyntaxVisitor):
     return make_shape(dims)
 
   def index(self, arr, idx):
+
     if isinstance(arr, Scalar):
       return arr
     assert arr.__class__ is Shape
@@ -608,12 +609,13 @@ class ShapeInference(SyntaxVisitor):
   def visit_Index(self, expr):
     arr = self.visit_expr(expr.value)
     idx = self.visit_expr(expr.index)
-
+    
     if arr.__class__ is Tuple and idx.__class__ is Const:
       return arr[idx.value]
     elif arr.__class__ is Shape:
       if isinstance(idx, Scalar):
         return shape.lower_rank(arr, 0)
+      
       elif idx.__class__ is Shape:
         assert len(idx.dims) <= len(arr.dims), \
             "Can't index into rank %d array with rank %d indices" % \
@@ -624,11 +626,13 @@ class ShapeInference(SyntaxVisitor):
         return shape.make_shape(dims)
       else:
         return self.index(arr, idx)
+      
     elif arr.__class__ is Ptr:
       assert isinstance(arr.elt_shape, Scalar)
       assert isinstance(idx, Scalar)
       
       return any_scalar
+    
     if isinstance(arr, Scalar):
       assert False, "Expected %s to be array, shape inference found scalar" % (arr,)
     elif arr == shape.any_value:
@@ -766,10 +770,10 @@ class ShapeInference(SyntaxVisitor):
     return self.outer_map_result_shape(elt_result, arg_shapes, axes)
 
   def visit_Assign(self, stmt):
+    rhs = self.visit_expr(stmt.rhs)
     if stmt.lhs.__class__ in (syntax.Var, syntax.Tuple):
-      rhs = self.visit_expr(stmt.rhs)
       bind_syntax(stmt.lhs, rhs, self.value_env)
-
+    
   def visit_Return(self, stmt):
     new_value = self.visit_expr(stmt.value)
     old_value = self.value_env.get("$return", unknown_value)

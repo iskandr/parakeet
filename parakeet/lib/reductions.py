@@ -5,11 +5,12 @@ from adverbs import scan
 
 from .. frontend import translate_function_value
 
-from .. syntax import Reduce
-from ..syntax.helpers import none, false, true 
+from .. syntax import Reduce, Const 
+from ..syntax.helpers import none, false, true, one_i32, zero_i32, zero_i24
  
 from adverbs import reduce
 from builtins import builtin_and, builtin_or
+from parakeet.syntax.delay_until_typed import DelayUntilTyped
 
 def _identity(x):
   return x 
@@ -41,8 +42,8 @@ def reduce_all(x, axis = None):
 
 @axis_macro 
 def reduce_sum(x, axis = None):
-  return mk_reduce(prims.add, x, init = false, axis = axis)
-
+  return mk_reduce(prims.add, x, init = zero_i24, axis = axis)
+  
 @jit 
 def builtin_min(x, y = None):
   if y is None:

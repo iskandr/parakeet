@@ -2,10 +2,13 @@ from dsltools import Node
 
 from .. ndtypes import NoneT
 
-class Expr(Node):
+class Expr(object):
+  # _members = ['type', 'source_info']
   
-  
-  _members = ['type', 'source_info']
+    
+  @classmethod
+  def node_type(cls):
+    return cls.__name__
   
   def children(self):
     for v in self.itervalues():
@@ -32,7 +35,10 @@ class Expr(Node):
     return hash(elts)
    
 class Const(Expr):
-  _members = ['value']
+  def __init__(self, value, type = None, source_info = None):
+    self.value = value 
+    self.type = type 
+    self.source_info = source_info 
   
   def children(self):
     return ()
@@ -63,10 +69,17 @@ class Const(Expr):
            self.type != other.type
 
 class Var(Expr):
-  _members = ['name']
+  def __init__(self, name, type = None, source_info = None):
+    assert name is not None 
+    self.name = name
+    self.type = type 
+    self.source_info = source_info 
 
-  def node_init(self):
-    assert self.name is not None
+  # it's possible to speed things up a little
+  # by by-passing the Node construct 
+  #_members = ['name']
+  #def node_init(self):
+  #  assert self.name is not None
     
   def short_str(self):
     return self.name
@@ -100,7 +113,11 @@ class Var(Expr):
     return ()
 
 class Attribute(Expr):
-  _members = ['value', 'name']
+  def __init__(self, value, name, type = None, source_info = None):
+    self.value = value 
+    self.name = name 
+    self.type = type 
+    self.source_info = source_info 
 
   def children(self):
     yield self.value
@@ -117,12 +134,13 @@ class Attribute(Expr):
            self.value == other.value
 
 
-
-
 class Closure(Expr):
   """Create a closure which points to a global fn with a list of partial args"""
-
-  _members = ['fn', 'args']
+  def __init__(self, fn, args, type = None, source_info = None):
+    self.fn = fn 
+    self.args = args 
+    self.type = type 
+    self.source_info = source_info 
 
   def __str__(self):
     fn_str = str(self.fn) #self.fn.name if hasattr(self.fn, 'name') else str(self.fn)
@@ -144,8 +162,12 @@ class Closure(Expr):
     return hash((self.fn, tuple(self.args)))
 
 class Call(Expr):
-  _members = ['fn', 'args']
-
+  def __init__(self, fn, args, type = None, source_info = None):
+    self.fn = fn 
+    self.args = args 
+    self.type = type 
+    self.source_info = source_info 
+    
   def __str__(self):
     #if isinstance(self.fn, (Fn, TypedFn)):
     #  fn_name = self.fn.name
@@ -173,7 +195,13 @@ class PrimCall(Expr):
   """
   Call a primitive function, the "prim" field should be a prims.Prim object
   """
-  _members = ['prim', 'args']
+  def __init__(self, prim, args, type = None, source_info = None):
+    self.prim = prim 
+    self.args = args 
+    self.type = type 
+    self.source_info = source_info 
+    
+  #_members = ['prim', 'args']
   
   def _arg_str(self, i):
     arg = self.args[i]
@@ -232,8 +260,12 @@ class PrimCall(Expr):
 
 
 class ClosureElt(Expr):
-  _members = ['closure', 'index']
-
+  def __init__(self, closure, index, type = None, source_info = None):
+    self.closure = closure 
+    self.index = index 
+    self.type = type 
+    self.source_info = source_info 
+    
   def __str__(self):
     return "ClosureElt(%s, %d)" % (self.closure, self.index)
 
@@ -244,8 +276,13 @@ class ClosureElt(Expr):
     return hash((self.closure, self.index))
 
 class Cast(Expr):
-  # inherits the member 'type' from Expr, but for Cast nodes it is mandatory
-  _members = ['value']
+  def __init__(self, value, type, source_info = None):
+    self.value = value 
+    self.type = type 
+    self.source_info = source_info 
+
+  def children(self):
+    yield self.value 
 
   def __hash__(self):
     return hash(self.value)
@@ -254,7 +291,14 @@ class Cast(Expr):
     return "Cast(%s : %s)" % (self.value, self.type) 
 
 class Select(Expr):
-  _members = ['cond', 'true_value', 'false_value']
+  def __init__(self, cond, true_value, false_value, type = None, source_info = None):
+    self.cond = cond 
+    self.true_value = true_value 
+    self.false_value = false_value 
+    self.type = type 
+    self.source_info = source_info 
+    
+  # _members = ['cond', 'true_value', 'false_value']
   
   def __hash__(self):
     return hash((self.cond, self.true_value, self.false_value))

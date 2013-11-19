@@ -1,9 +1,10 @@
+from dsltools import Node 
 from expr import Expr
   
 
 
-class Adverb(Expr):
-  _members = ['fn', 'output']
+class Adverb(Expr, Node):
+  _members = ['fn', 'output', 'type', 'source_info']
   
   def node_init(self):
     assert self.fn, "Can't construct adverb %s without a function argument" % self 

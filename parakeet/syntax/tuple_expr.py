@@ -4,10 +4,11 @@ from expr import Const
 from seq_expr import SeqExpr
 
 class Tuple(SeqExpr):
-  _members = ['elts']
-
-  def node_init(self):
-    self.elts = tuple(self.elts)
+  def __init__(self, elts, type = None, source_info = None):
+    self.elts = tuple(elts)
+    self.type = type 
+    self.source_info = source_info 
+    
     if self.type is None and all(e.type is not None for e in self.elts):
       self.type = make_tuple_type(tuple(e.type for e in self.elts))
   
@@ -34,9 +35,12 @@ class Tuple(SeqExpr):
 
 
 class TupleProj(SeqExpr):
-  _members = ['tuple', 'index']
+  def __init__(self, tuple, index, type = None, source_info = None):
+    self.tuple = tuple 
+    self.index = index 
+    self.type = type 
+    self.source_info = source_info 
 
-  def node_init(self):
     if self.type is None:
       if self.tuple.type is not None and self.index.__class__ is Const:
         self.type = self.tuple.type.elt_types[self.index.value]

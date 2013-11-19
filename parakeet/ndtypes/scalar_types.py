@@ -107,10 +107,36 @@ class SignedT(IntT):
     assert dtypes.is_signed(self.dtype)
 
 Int8 = register_scalar_type(SignedT, dtypes.int8)
-Int16 = register_scalar_type(SignedT, dtypes.int16)
+Int16 = register_scalar_type(SignedT, dtypes.int16) 
 Int32 = register_scalar_type(SignedT, dtypes.int32)
 Int64 = register_scalar_type(SignedT, dtypes.int64,
                              equiv_python_types = [int, long])
+
+class Int24T(SignedT):
+  """
+  We don't actually support 24-bit integers, but they're useful  
+  for implemented corner-case casting logic, such as summing booleans
+  """
+  def __init__(self):
+    self.name = "int24"
+    self.nbytes = 3 
+    
+  def combine(self, other):
+    if isinstance(other, IntT):
+      if other.nbytes <= self.nbytes:
+        return Int32 
+    return other 
+  
+  def __hash__(self):
+    return hash("int24")
+
+  def __eq__(self, other):
+    return self.__class__ is other.__class__ 
+    
+  def __ne__(self, other):
+    return self.__class__ is not other.__class__
+  
+Int24 = Int24T()
 
 class FloatT(ScalarT):
   _members = []

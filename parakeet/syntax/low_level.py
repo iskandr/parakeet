@@ -7,8 +7,11 @@ class Struct(Expr):
   syntax node, signifying explicit struct allocation
   """
 
-  _members = ['args']
-
+  def __init__(self, args, type = None, source_info = None):
+    self.args = tuple(args)
+    self.type = type 
+    self.source_info = source_info 
+    
   def __str__(self):
     return "Struct(%s) : %s" % \
            (", ".join(str(arg) for arg in self.args), self.type)
@@ -22,9 +25,13 @@ class Struct(Expr):
 
 class Alloc(Expr):
   """Allocates a block of data, returns a pointer"""
-
-  _members = ['elt_type', 'count']
-
+  
+  def __init__(self, elt_type, count, type = None, source_info = None):
+    self.elt_type = elt_type 
+    self.count = count 
+    self.type = type 
+    self.source_info = source_info
+  
   def __str__(self):
     return "alloc<%s>[%s] : %s" % (self.elt_type, self.count, self.type)
 
@@ -36,8 +43,11 @@ class Alloc(Expr):
 
 class Free(Expr):
   """Free a manually allocated block of memory"""
-  _members = ['value']
-  
+  def __init__(self, value, type = None, source_info = None):
+    self.value = value 
+    self.type = type 
+    self.source_info = source_info
+    
   def __str__(self):
     return "free(%s)" % self.value 
   
@@ -55,7 +65,6 @@ class NumCores(Expr):
   ParFor is actually being mapped 
   to executing threads/thread blocks/etc..
   """
-  _members = []
   
   def __str__(self):
     return "NUM_CORES"
@@ -79,8 +88,13 @@ class SourceExpr(Expr):
   should only be used from within a backend that knows what
   the target code should look like 
   """
-  _members = ['text']
+  def __init__(self, text, type = None, source_info = None):
+    self.text = text 
+    self.type = type 
+    self.source_info = source_info 
   
+  def __str__(self):
+    return "SourceExpr(%s)" % self.text 
 
 class SourceStmt(Stmt):
   """
@@ -88,5 +102,11 @@ class SourceStmt(Stmt):
   should only be used from within a backend that knows what
   the target code should look like 
   """
-  _members = ['text']
+  def __init__(self, text, type = None, source_info = None):
+    self.text = text 
+    self.type = type 
+    self.source_info = source_info 
+    
+  def __str__(self):
+    return "SourceStmt(%s)" % self.text 
   

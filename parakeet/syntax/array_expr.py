@@ -5,13 +5,19 @@ class ArrayExpr(SeqExpr):
   Common base class for first-order array operations 
   that don't change the underlying data 
   """
-  pass
+  def __init__(self, array, type = None, source_info = None):
+    self.array = array 
+    self.type = type 
+    self.source_info = source_info 
+    
+  def children(self):
+    yield self.array 
 
 class Array(ArrayExpr):
-  _members = ['elts']
-
-  def node_init(self):
-    self.elts = tuple(self.elts)
+  def __init__(self, elts, type = None, source_info = None):
+    self.elts = tuple(elts) 
+    self.type = type 
+    self.source_info = source_info 
 
   def children(self):
     return self.elts
@@ -20,7 +26,13 @@ class Array(ArrayExpr):
     return hash(self.elts)
 
 class Slice(ArrayExpr):
-  _members = ['start', 'stop', 'step']
+  def __init__(self, start, stop, step, type = None, source_info = None):
+    self.start = start 
+    self.stop = stop 
+    self.step = step 
+    self.type = type 
+    self.source_info = source_info 
+
 
   def __str__(self):
     return "%s:%s:%s"  % \
@@ -46,26 +58,58 @@ class Slice(ArrayExpr):
     return hash((self.start, self.stop, self.step))
 
 class ConstArray(ArrayExpr):
-  _members = ['shape', 'value']
+  def __init__(self, shape, value, type = None, source_info = None):
+    self.shape = shape 
+    self.value = value 
+    self.type = type 
+    self.source_info = source_info 
 
+  def children(self):
+    yield self.shape 
+    yield self.value 
+  
 class ConstArrayLike(ArrayExpr):
   """
   Create an array with the same shape as the first arg, but with all values set
   to the second arg
   """
 
-  _members = ['array', 'value']
+  def __init__(self, array, value, type = None, source_info = None):
+    self.array = array 
+    self.value = value 
+    self.type = type 
+    self.source_info = source_info 
+  
+  def children(self):
+    yield self.array 
+    yield self.value   
 
 class Range(ArrayExpr):
-  _members = ['start', 'stop', 'step']
+  def __init__(self, start, stop, step, type = None, source_info = None):
+    self.start = start 
+    self.stop = stop 
+    self.step = step 
+    self.type = type 
+    self.source_info = source_info 
+
+  def children(self):
+    yield self.start 
+    yield self.stop 
+    yield self.step 
+  
   
   def __str__(self):
     return "Range(start = %s, stop = %s, step = %s)" % (self.start, self.stop, self.step)
 
 class AllocArray(ArrayExpr):
   """Allocate an unfilled array of the given shape and type"""
-  _members = ['shape', 'elt_type'] # TODO: support a 'fill' field 
-  
+  def __init__(self, shape, elt_type, type = None, source_info = None):
+    # TODO: support a 'fill' field 
+    self.shape = shape 
+    self.elt_type = elt_type 
+    self.type = type 
+    self.source_info = source_info 
+
   def children(self):
     yield self.shape
     
@@ -75,8 +119,14 @@ class AllocArray(ArrayExpr):
 
 class ArrayView(ArrayExpr):
   """Create a new view on already allocated underlying data"""
-
-  _members = ['data', 'shape', 'strides', 'offset', 'size']
+  def __init__(self, data, shape, strides, offset, size, type = None, source_info = None):
+    self.data = data 
+    self.shape = shape 
+    self.strides = strides 
+    self.offset = offset 
+    self.size = size 
+    self.type = type 
+    self.source_info = source_info
 
   def children(self):
     yield self.data
@@ -86,8 +136,6 @@ class ArrayView(ArrayExpr):
     yield self.size
 
 class Ravel(ArrayExpr):
-  _members = ['array']
-  
   def children(self):
     return (self.array,)
 
@@ -95,7 +143,12 @@ class Ravel(ArrayExpr):
     return "Ravel(%s)" % self.array 
 
 class Reshape(ArrayExpr):
-  _members = ['array', 'shape']
+  def __init__(self, array, shape, type = None, source_info = None):
+    self.array = array 
+    self.shape = shape 
+    self.type = type 
+    self.source_info = source_info
+
   
   def children(self):
     yield self.array 
@@ -105,21 +158,16 @@ class Reshape(ArrayExpr):
     return "Reshape(%s, %s)" % (self.array, self.shape)
 
 class Shape(ArrayExpr):
-  _members = ['array']
   
   def __str__(self):
     return "Shape(%s)" % self.array 
   
 class Strides(ArrayExpr):
-  _members = ['array']
-  
   def __str__(self):
     return "Strides(%s)" % self.array 
   
     
 class Transpose(ArrayExpr):
-  _members = ['array']
-  
   def children(self):
     yield self.array
   
@@ -127,8 +175,12 @@ class Transpose(ArrayExpr):
     return "%s.T" % self.array 
   
 class Tile(ArrayExpr):
-  _members = ["array", "reps"]
-  
+  def __init__(self, array, reps, type = None, source_info = None):
+    self.array = array 
+    self.reps = reps 
+    self.type = type 
+    self.source_info = source_info 
+
   def children(self):
     yield self.array 
     yield self.reps 
