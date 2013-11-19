@@ -40,11 +40,9 @@ def arc_distance_for_loops(a, b):
 def test_arc_distance_for_loops():
   testing_helpers.expect(arc_distance_for_loops, [a,b], arc_distance_for_loops(a,b))
 
-
+"""
 def arc_distance_tile(a, b):
-    """
-    Calculates the pairwise arc distance between all points in vector a and b.
-    """
+    "Calculates the pairwise arc distance between all points in vector a and b."
     theta_1 = np.tile(a[:, 0], (b.shape[0], 1)).T
     phi_1 = np.tile(a[:, 1], (b.shape[0], 1)).T
 
@@ -62,6 +60,7 @@ def arc_distance_tile(a, b):
 def test_arc_distance_tile():
   testing_helpers.expect(arc_distance_tile, [a,b], arc_distance_tile(a,b))
 
+"""
 
 """
 # data-dependent broadcasting will never work with static

@@ -21,9 +21,9 @@ def loop_row_sums(x):
   for i in xrange(1,n_rows):
     y[i, :] = y[i-1, :] + x[i, :]
   return y
-
+"""
 def test_scan_add_2d():
   expect_each(running_sum, loop_row_sums, [int_2d, float_2d])
-
+"""
 if __name__ == '__main__':
   run_local_tests()

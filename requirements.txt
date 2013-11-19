@@ -1,5 +1,4 @@
-treelike
+dsltools
 numpy
 scipy
-appdirs
 

@@ -74,7 +74,7 @@ print_lowered_function = False
 print_before_specialization = False
 
 # show the input function to each transformation?
-print_functions_before_transforms =  ['Fusion']
+print_functions_before_transforms =  []
                                         
 # show the function produced by each transformation?
 print_functions_after_transforms =   []
