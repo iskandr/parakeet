@@ -6,7 +6,7 @@ virtualenv:
   system_site_packages: true
 
 before_install:
- - sudo apt-get install -qq python-scipy python-dev python-numpy python-setuptools python-scipy libatlas-dev libatlas3-base 
+ - sudo apt-get install -qq python-devpython-setuptools python-numpy python-scipy  
 
 # command to install dependencies
 install: "pip install -r requirements.txt --use-mirrors"
