@@ -37,7 +37,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   untyped_fn = translate_function_value(fn)
   
   available_backends = ['interp', 'c', 'openmp']
-  #available_backends = []
+
   #import cuda_backend 
   #if cuda_backend.device_info.has_gpu():
   #  available_backends.append('cuda')
