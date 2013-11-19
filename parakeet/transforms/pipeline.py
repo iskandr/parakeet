@@ -1,7 +1,7 @@
 from .. import config 
 from ..analysis import (contains_adverbs, contains_calls, contains_loops, 
-                        contains_structs, contains_slices)
-# from const_arg_specialization import ConstArgSpecialization
+                        contains_structs)
+
 from combine_nested_maps import CombineNestedMaps 
 from copy_elimination import CopyElimination
 from dead_code_elim import DCE
@@ -25,11 +25,9 @@ from offset_propagation import OffsetPropagation
 from parfor_to_nested_loops import ParForToNestedLoops
 from phase import Phase
 from range_propagation import RangePropagation
-from recursive_apply import RecursiveApply
 from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
-from shape_propagation import ShapePropagation
 from simplify import Simplify
 from specialize_fn_args import SpecializeFnArgs
 

@@ -1,5 +1,6 @@
 from ..builder import build_fn
-from ..ndtypes import ArrayT, lower_rank 
+from ..ndtypes import ArrayT, lower_rank
+from ..prims import Prim  
 from ..syntax import Return, Map 
 from ..syntax.helpers import is_identity_fn, unwrap_constant
 from transform import Transform
