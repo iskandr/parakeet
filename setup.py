@@ -34,7 +34,4 @@ setup(
       #'appdirs', 
       # LLVM is optional as long as you use the C backend 
       # 'llvmpy',
-      # SciPy is required for some of the tests but due to popular complaints
-      # I dropped it as a dependency for Parakeet itself
-      # 'scipy',  
     ])

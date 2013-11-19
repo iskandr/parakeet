@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.spatial
 import time
 
 import parakeet
@@ -7,7 +6,7 @@ from parakeet import allpairs, each
 from parakeet.testing_helpers import eq, run_local_tests
 
 def python_update_assignments(X, centroids):
-  dists = scipy.spatial.distance.cdist(X, centroids, 'sqeuclidean')
+  dists = [[np.sum( (x-y) ** 2) for y in centroids] for x in X]
   return np.argmin(dists, 1)
 
 def python_update_centroids(X, assignments, k):
@@ -99,35 +98,6 @@ def test_kmeans():
   assert eq(parakeet_C, python_C), \
       "Expected %s but got %s" % (python_C, parakeet_C)
 
-def test_kmeans_perf():
-  n = 160
-  d = 20
-  X = np.random.randn(n*d).reshape(n,d)
-  k = 5 
-  niters = 2
-  assignments = np.random.randint(0, k, size = n)
-#
-#  start = time.time()
-#  _ = python_kmeans(X, k, niters, assignments)
-#  python_time = time.time() - start
-
-  # run parakeet once to warm up the compiler
-  start = time.time()
-  _ = parakeet_kmeans(X, k, niters, assignments)
-  parakeet_with_comp = time.time() - start
-
-  start = time.time()
-  _ = parakeet_kmeans(X, k, niters, assignments)
-  parakeet_time = time.time() - start
-
-  #speedup = python_time / parakeet_time
-  print "Parakeet time:", parakeet_with_comp
-  print "Parakeet w/out compilation:", parakeet_time
-  #print "Python time", python_time
-
-#  assert speedup > 1, \
-#      "Parakeet too slow! Python time = %s, Parakeet = %s, %.1fX slowdown " % \
-#      (python_time, parakeet_time, 1/speedup)
 
 if __name__ == '__main__':
   run_local_tests()

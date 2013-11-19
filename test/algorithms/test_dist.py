@@ -1,5 +1,4 @@
 import numpy as np
-import scipy.spatial 
 import time 
 
 import parakeet 
@@ -19,12 +18,12 @@ def allpairs_dist_comprehensions_internal(X,Y):
     return np.sum( (x-y)**2 )
   return np.array([[local_sqr_dist(x,y) for y in Y] for x in X])
 
-m = 10 
+m = 2
 n = 3
 d = 5 
 X = np.random.randn(m,d)
 Y = np.random.randn(n,d)
-python_dists = scipy.spatial.distance.cdist(X,Y,'sqeuclidean')
+python_dists = np.array([[sqr_dist(x,y) for y in Y] for x in X])
 
 def test_dists_adverb():
   testing_helpers.expect(allpairs_dist_adverb, [X,Y], python_dists)

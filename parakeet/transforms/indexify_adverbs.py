@@ -201,7 +201,6 @@ class IndexifyAdverbs(Transform):
           curr_slice = builder.index(curr_array, curr_indices)
         elif rank > axis:
           curr_idx = index_input_vars[0]
-          print i, curr_idx 
           if index_offsets is not None:
             assert len(index_offsets) > i
             curr_offset = index_offsets[i]
