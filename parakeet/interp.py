@@ -40,7 +40,7 @@ def eval(fn, actuals):
   return result 
    
 def eval_fn(fn, actuals):
-  print fn 
+  
   if isinstance(fn, np.dtype):
     return fn.type(*actuals)
   elif isinstance(fn, TypedFn):
@@ -91,7 +91,7 @@ def eval_fn(fn, actuals):
     
     def expr_Attribute():
       value = eval_expr(expr.value)
-      assert hasattr(value, expr.name)
+      
       if expr.name == 'offset':
         if value.base is None:
           return 0
@@ -118,6 +118,7 @@ def eval_fn(fn, actuals):
         return value[field]
         
       else:
+        assert hasattr(value, expr.name), "Missing attribute %s from value %s" % (expr.name, value)
         return getattr(value, expr.name)
 
     def expr_Alloc():

@@ -54,17 +54,17 @@ opt_verify = True
 #####################################
 
 # show untyped IR after it's translated from Python?
-print_untyped_function = True
+print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = True 
+print_specialized_function = False 
 
 # show function after all data adverbs like Map/Reduce/Scan have been 
 # lowered to use indexing explicitly into their inputs 
-print_indexified_function = True
+print_indexified_function = False
 
 # print function after all adverbs have been turned to loops
-print_loopy_function = True
+print_loopy_function = False
 
 # show lower level typed function before
 # it gets translated to LLVM?

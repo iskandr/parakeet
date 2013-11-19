@@ -105,41 +105,41 @@ class Fusion(Transform):
   def has_required_rank(self, var_name, required_rank):
     if var_name not in self.type_env:
       return False 
+    
     t = self.type_env[var_name]
+     
     if t.__class__ is ArrayT:
       return t.rank == required_rank
     else:
       return required_rank == 0 
-    
-  def transform_Assign(self, stmt):
-    if self.recursive:
-      stmt.rhs = self.transform_expr(stmt.rhs)
-    rhs = stmt.rhs
-    if not isinstance(rhs, DataAdverb): return stmt 
+  
+  def fuse_expr(self, rhs):
+    if not isinstance(rhs, DataAdverb): return rhs 
     
     # TODO: figure out how to fuse OuterMap(Map(...), some_other_arg)
-    if rhs.__class__ is OuterMap: return stmt
+    # if rhs.__class__ is OuterMap: return stmt
      
     rhs_fn = self.get_fn(rhs.fn)
 
-    if not inline.can_inline(rhs_fn): return stmt
-     
+    if not inline.can_inline(rhs_fn): return rhs
+
     args = rhs.args
-    if any(arg.__class__ not in (Var, Const) for arg in args): return stmt 
+    if any(arg.__class__ not in (Var, Const) for arg in args): return rhs 
     
     arg_names = [arg.name for arg in args if arg.__class__ is Var]
     unique_vars = set(arg_names)
-
+    
      
     valid_fusion_vars = [name for name in unique_vars
                          if name in self.adverb_bindings]
-    
+
     # only fuse over variables which of the same rank as whatever is the largest
     # array being processed by this operator 
     max_rank = max(self.rank(arg) for arg in args)
-        
+
     valid_fusion_vars = [name for name in valid_fusion_vars
                          if self.has_required_rank(name,max_rank)]
+    
     for arg_name in valid_fusion_vars:
       n_occurrences = sum((name == arg_name for name in arg_names))
       prev_adverb = self.adverb_bindings[arg_name]
@@ -147,6 +147,11 @@ class Fusion(Transform):
       
       if not inline.can_inline(prev_adverb_fn):
         continue
+      
+      # if we're doing a cartesian product between inputs then 
+      # can't introduce multiple new array arguments 
+      if rhs.__class__ is OuterMap and len(prev_adverb.args) != 1:
+        continue 
        
       # 
       # Map(Map) -> Map
@@ -156,6 +161,7 @@ class Fusion(Transform):
       # OuterMap(Map) -> OuterMap 
       # 
       if prev_adverb.__class__ is Map and rhs.axis == prev_adverb.axis:
+   
         surviving_array_args = []
         fusion_args = []
         for (pos, arg) in enumerate(rhs.args):
@@ -183,7 +189,7 @@ class Fusion(Transform):
           new_fn = self.fn.created_by.apply(new_fn)
         rhs.fn = self.closure(new_fn, clos_args)
         rhs.args = prev_adverb.args + surviving_array_args
-         
+      
       # 
       # Reduce(IndexMap) -> IndexReduce
       #   
@@ -204,15 +210,37 @@ class Fusion(Transform):
         
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
-        stmt.rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
+        rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
                                shape = prev_adverb.shape, 
                                combine = rhs.combine, 
                                type = rhs.type,
                                init = rhs.init)
-                
-    if stmt.lhs.__class__ is Var and isinstance(rhs, Adverb):
-      self.adverb_bindings[stmt.lhs.name] = rhs
+    return rhs 
+
+    
+  
+  def transform_Assign(self, stmt):
+    old_rhs = stmt.rhs 
+    if self.recursive: 
+      old_rhs = self.transform_expr(old_rhs)
+    
+    if not isinstance(old_rhs, DataAdverb):
+      return stmt 
+
+    new_rhs = self.fuse_expr(old_rhs)
+    if stmt.lhs.__class__ is Var and isinstance(new_rhs, Adverb):
+      self.adverb_bindings[stmt.lhs.name] = new_rhs
+    stmt.rhs = new_rhs
     return stmt
+  
+  def transform_Return(self, stmt):
+    old_rhs = stmt.value 
+    if not isinstance(old_rhs, DataAdverb):
+      return stmt 
+    new_rhs = self.fuse_expr(old_rhs)
+    stmt.value = new_rhs 
+    return stmt 
+
   
 from ..analysis import contains_adverbs, contains_calls
 def run_fusion(fn):

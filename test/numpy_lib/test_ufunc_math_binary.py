@@ -21,12 +21,7 @@ mats = [int_mat, bool_mat, float32_mat, float64_mat]
 def binary(fn):
   for x in mats:
     for y in mats:
-      # to save on testing time, which 
-      # is getting quite slow, only test mixed
-      # types since these seem to be the most
-      # interesting cases 
-      if x is not y:
-        expect(fn, [x,y], fn(x,y), x.dtype)
+      expect(fn, [x,y], fn(x,y), x.dtype)
       
 def test_add():
   binary(np.add)
