@@ -1,3 +1,4 @@
+from ..ndtypes import Float64, make_array_type
 from seq_expr import SeqExpr 
 
 class ArrayExpr(SeqExpr):
@@ -19,6 +20,9 @@ class Array(ArrayExpr):
     self.type = type 
     self.source_info = source_info 
 
+  def __str__(self):
+    return "[%s]" % ", ".join(str(e) for e in self.elts)
+  
   def children(self):
     return self.elts
 
@@ -67,7 +71,29 @@ class ConstArray(ArrayExpr):
   def children(self):
     yield self.shape 
     yield self.value 
-  
+
+class DiagonalArray(ArrayExpr):
+  """
+  Build a zero array with a filled value on its diagonal 
+  Use this to implement np.diag, np.eye 
+  """
+  def __init__(self, shape, value, offset = None, type = None, source_info = None):
+    self.shape = shape 
+    self.value = value 
+    self.offset = offset
+    self.type = type 
+    self.source_info = source_info
+    
+  def __str__(self):
+    return "DiagonalArray(shape = %s, value = %s, offset = %s)" % \
+      (self.shape, self.value, self.offset)
+        
+  def children(self):
+    yield self.shape 
+    yield self.value 
+    if self.offset is not None:
+      yield self.offset 
+    
 class ConstArrayLike(ArrayExpr):
   """
   Create an array with the same shape as the first arg, but with all values set

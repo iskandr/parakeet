@@ -21,7 +21,7 @@ class DelayUntilTyped(Expr):
     
     self.fn = fn 
     self.source_info = source_info 
-    
+    self.type = None 
     
   def children(self):
     return tuple(self.values) + tuple(self.keywords.values())  

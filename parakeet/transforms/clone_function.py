@@ -5,6 +5,7 @@ from .. syntax import (TypedFn, Var, Const, Attribute, Index, PrimCall,
                        Map, Reduce, Scan, IndexMap, IndexReduce, IndexScan, 
                        UntypedFn )      
 from transform import Transform 
+from parakeet.syntax.delay_until_typed import DelayUntilTyped
 
 class CloneFunction(Transform):
   """
@@ -95,11 +96,13 @@ class CloneFunction(Transform):
                     axis = self.transform_if_expr(expr.axis), 
                     init = self.transform_if_expr(expr.init), 
                   )
-   
+     
     else:
       args = {}  
       for k,v in expr.__dict__.iteritems():
         args[k] = self.transform_if_expr(v)
+      if c is DelayUntilTyped and 'type' in args:
+        del args['type']
       return c(**args)
   
   def transform_Assign(self, stmt):
