@@ -1,3 +1,2 @@
 dsltools
 numpy
-scipy
