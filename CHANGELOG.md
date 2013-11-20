@@ -1,3 +1,21 @@
+### 0.21 / November 19th, 2013 ### 
+
+- Got rid of testing dependency on SciPy
+- Deleted unused and unfinished optimizations
+- Small misc. bugs 
+
+### 0.20 / November 19th, 2013 ###
+
+The last release added experimental CUDA support but the performance was terrible. This release includes lots of tweaks and optimizations necessary for getting beneficial speedups on the GPU. However, the default backend remains OpenMP since some program constructs will not work on the GPU and the nvcc compile times are unacceptably slow.
+
+- Expanded and generalized fusion optimization
+- Filled in missing methods from shape inference
+- Using ShapeElimination on every function (repurposes the shape inference results as a symbolic execution optimization)
+- Fixed lots of small bugs in other optimizations exposed by ShapeElimination
+- Shaved off small amount of compile time by moving away from Node pseudo-ASTs to regular Python constructors
+- Hackishly added int24 just as a sentinel for default values in reductions that need to cast up to int32 from bool, int8, int16.
+- Eliminate redundant & constant array operator arguments with SpecializeFnArgs
+
 ### 0.19 / November 4th, 2013 ###
 
 - Added experimental CUDA backend (use by passing _backend='cuda' to functions wrapped by @jit)

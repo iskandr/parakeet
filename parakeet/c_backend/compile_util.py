@@ -42,7 +42,6 @@ preprocessor_defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 
 config_vars = distutils.sysconfig.get_config_vars()
 
-
 def get_compiler(_cache = {}):
   if config.compiler_path:
     return config.compiler_path
@@ -175,6 +174,11 @@ def create_source_file(src,
     src_file.write(d)
     src_file.write("\n")
   
+  # when compiling with NVCC, other headers get implicitly included 
+  # and cause warnings since Python redefines this constant 
+  if config.undef_posix_c_source:
+    src_file.write("#undef _XOPEN_SOURCE\n")
+    src_file.write("#undef _POSIX_C_SOURCE\n")
   for header in extra_headers + c_headers:
     src_file.write("#include <%s>\n" % header)
   

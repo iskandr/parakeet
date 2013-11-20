@@ -37,4 +37,7 @@ use_distutils = False
 # show all the warnings? 
 suppress_compiler_output = False 
 
-
+# when compiling with NVCC, other headers get implicitly included 
+# and cause warnings since Python redefines _POSIX_C_SOURCE  
+# we can undefine it before including Python.h to get rid of those warnings 
+undef_posix_c_source = True 
