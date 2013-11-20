@@ -152,7 +152,9 @@ class IndexifyAdverbs(Transform):
       else:
         builder.setidx(output_var, index_input_vars[0], elt_result)
       builder.return_(none)
-
+    
+    new_fn.created_by = self 
+    new_fn.transform_history = self.fn.transform_history 
     self._indexed_fn_cache[key] = new_fn
     return mk_closure()
           
@@ -325,7 +327,8 @@ class IndexifyAdverbs(Transform):
     return output 
   
   def transform_IndexMap(self, expr, output = None):
-    shape = expr.shape 
+    shape = expr.shape
+    
     fn = expr.fn 
     dims = self.tuple_elts(shape)
     n_dims = len(dims)
@@ -340,6 +343,7 @@ class IndexifyAdverbs(Transform):
                         for name, t in 
                         zip(closure_arg_names, old_closure_arg_types)]
     
+      
     old_input_types = fn.input_types
     last_input_type = old_input_types[-1]
     index_is_tuple = isinstance(last_input_type, TupleT)
@@ -362,7 +366,19 @@ class IndexifyAdverbs(Transform):
     output_var = input_vars[0]
     
     idx_vars = input_vars[-n_dims:]
-
+    
+    if not self.is_none(expr.start_index):
+      if isinstance(expr.start_index.type, ScalarT):
+        idx_vars = [builder.add(idx, expr.start_index, "idx") for idx in idx_vars]
+      else:
+        start_indices = builder.tuple_elts(expr.start_index)
+        assert len(start_indices) == len(idx_vars), \
+          "Mismatch between number of indices %s and start offsets %s" % (idx_vars, start_indices)
+        idx_vars = [builder.add(idx, offset, "idx%d") 
+                    for i, (idx,offset) 
+                    in enumerate(zip(idx_vars, start_indices))]
+           
+    
     if index_is_tuple:
       elt_result = builder.call(fn, new_closure_vars + [builder.tuple(idx_vars)])
     else:

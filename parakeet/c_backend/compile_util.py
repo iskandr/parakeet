@@ -158,7 +158,7 @@ def create_module_source(raw_src, fn_name,
     decl = decl.strip()
     if not decl.endswith(";"):
       decl += ";"
-    src_lines.appned(decl)
+    src_lines.append(decl)
     
   src_lines.extend(extra_function_sources)
   
@@ -220,6 +220,18 @@ def create_source_file(src,
         
   return src_file 
 
+class CommandFailed(Exception):
+  def __init__(self, cmd, env, label):
+    self.cmd = cmd 
+    self.env = env 
+    self.label = label 
+    
+  def __str__(self):
+    return "CommandFailed(%s)" % self.cmd 
+  
+  def __repr__(self):
+    return "CommandFailed(cmd=%s, env=%s, label=%s)" % (self.cmd, self.env, self.label)
+  
 def run_cmd(cmd, env = None, label = ""):
   if config.print_commands: 
     print " ".join(cmd)
@@ -228,15 +240,14 @@ def run_cmd(cmd, env = None, label = ""):
   
   # first compile silently
   # if you encounter an error, then recompile with output printing
-  if config.suppress_compiler_output: 
-    with open(os.devnull, "w") as fnull:
-      try:  
+  try:
+    if config.suppress_compiler_output: 
+      with open(os.devnull, "w") as fnull:
         subprocess.check_call(cmd, stdout = fnull, stderr = fnull, env = env)
-      except:
-        print "Parakeet encountered error(s) during compilation: "
-        print subprocess.check_output(cmd, env = env)
-  else:
-    subprocess.check_call(cmd, env = env)
+    else:
+      subprocess.check_call(cmd, env = env)
+  except:
+    raise CommandFailed(cmd, env, label)
     
   if config.print_command_elapsed_time: 
     if label:
@@ -314,10 +325,8 @@ def compile_with_distutils(extension_name,
                     extra_objects=extra_objects,
                     extra_compile_args=compiler_flags,
                     extra_link_args=linker_flags)
-    #args = ['build_ext'] #args = [quiet, "build_ext"]']
-    script_args = ['build_ext']
-    if not print_commands:
-      script_args.append("--quiet")
+  
+    script_args = ['build_ext', '--quiet']
     setup_args = {"script_name": None,
                   "script_args": script_args, 
                   }
@@ -331,6 +340,7 @@ def compile_with_distutils(extension_name,
     dist.parse_config_files(config_files)
     dist.parse_command_line()
     obj_build_ext = dist.get_command_obj("build_ext")
+    
     dist.run_commands()
     shared_name = obj_build_ext.get_outputs()[0]
     return shared_name
@@ -377,20 +387,7 @@ def compile_module_from_source(
   
   if compiler is None: compiler = get_compiler()
   
-  if config.use_distutils and \
-     compiler_flag_prefix is None and \
-     linker_flag_prefix is None and \
-     compiler_is_gnu(compiler):
-    
-    import hashlib
-    digest = hashlib.sha224(full_src).hexdigest()
-    shared_name = compile_with_distutils(fn_name + "_" + digest, 
-                                         src_filename,
-                                         extra_objects, 
-                                         extra_compile_flags,
-                                         extra_link_flags,
-                                         print_commands)
-  else:
+  try:
     compiled_object = compile_object(src_filename, 
                                      fn_name = fn_name,
                                      src_extension = src_extension,  
@@ -409,6 +406,23 @@ def compile_module_from_source(
     
     if config.delete_temp_files:
       os.remove(object_name)
+  except CommandFailed:
+    # if normal compilation fails, try distutils instead
+    if not compiler_is_gnu(compiler):
+      raise 
+    if compiler_flag_prefix or linker_flag_prefix:
+      raise 
+     
+    import hashlib
+    digest = hashlib.sha224(full_src).hexdigest()
+    shared_name = compile_with_distutils(fn_name + "_" + digest, 
+                                         src_filename,
+                                         extra_objects, 
+                                         extra_compile_flags,
+                                         extra_link_flags,
+                                         print_commands)
+    
+
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)

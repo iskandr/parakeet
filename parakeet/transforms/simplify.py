@@ -476,6 +476,7 @@ class Simplify(Transform):
     return stmt
   
   def transform_Reduce(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
     expr.fn = self.transform_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     expr.init = self.transform_if_simple_expr(expr.init)
@@ -487,6 +488,7 @@ class Simplify(Transform):
     return expr  
   
   def transform_Scan(self, expr):
+    expr.axis = self.transform_if_expr(expr.axis)
     expr.fn = self.transform_expr(expr.fn)
     expr.combine = self.transform_expr(expr.combine)
     expr.emit = self.transform_expr(expr.emit)

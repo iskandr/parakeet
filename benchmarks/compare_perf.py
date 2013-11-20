@@ -8,7 +8,7 @@ from timer import timer
 def compare_perf(fn, args, numba= True, cpython = True, 
                  extra = {}, 
                  backends = ('c', 'openmp', 'cuda'), 
-                 suppress_output = True,
+                 suppress_output = False,
                  propagate_exceptions = False):
 
   

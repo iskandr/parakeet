@@ -146,21 +146,27 @@ def eval_fn(fn, actuals):
       offset = eval_expr(expr.offset)
       dtype = expr.type.elt_type.dtype
       bytes_per_elt = dtype.itemsize
+      byte_offset = offset * bytes_per_elt
+      byte_strides = tuple(si * bytes_per_elt for si in  strides)
       if False:
         print expr 
-        print "data", data 
+        print "data", data
+        print "shape(data)", np.shape(data)
+      
         print "shape",  shape 
         print "strides", strides
         print "offset", offset 
         print "itemsize", bytes_per_elt
+        print "byte strides", byte_strides 
+        print "byte offset", byte_offset 
         
       if isinstance(data, np.ndarray):
         data = data.data 
  
       return np.ndarray(shape = shape, 
-                        offset = offset * bytes_per_elt, 
+                        offset = byte_offset,  
                         buffer = data, 
-                        strides = tuple(si * bytes_per_elt for si in  strides), 
+                        strides = byte_strides, 
                         dtype = np.dtype(dtype))
       
       

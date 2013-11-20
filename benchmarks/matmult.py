@@ -1,9 +1,8 @@
 import parakeet
 import numpy as np 
-
  
 def matmult_high_level(X,Y):
-  return np.array([[np.dot for y in Y.T] for x in X])
+  return np.array([[np.dot(x,y) for y in Y.T] for x in X])
 
 
 n, d = 1200, 1200
@@ -63,6 +62,6 @@ compare_perf(matmult_high_level, [X,Y],
              # a special loopy version instead 
              numba=False,
              extra = extra, 
-             suppress_output = True,
+             suppress_output = False,
              propagate_exceptions = False)
 

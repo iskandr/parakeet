@@ -5,7 +5,13 @@ from .. ndtypes import NoneT
 class Expr(object):
   # _members = ['type', 'source_info']
   
-    
+  def __str__(self):
+    fields = ["%s = %s" % (k,v) for (k,v) in self.__dict__.iteritems()]
+    return "%s(%s)" % (self.__class__.__name__, ", ".join(fields))
+  
+  def __repr__(self):
+    return str(self)
+  
   @classmethod
   def node_type(cls):
     return cls.__name__

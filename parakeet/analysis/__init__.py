@@ -4,7 +4,8 @@ from collect_vars import (collect_binding_names,
                           collect_var_names_from_exprs, 
                           collect_var_names_list)
 from contains import (contains_adverbs, contains_calls, contains_functions, 
-                      contains_loops, contains_slices, contains_structs)
+                      contains_loops, contains_slices, contains_structs, 
+                      contains_array_operators)
  
 from escape_analysis import may_alias, may_escape, escape_analysis 
 import find_constant_strides

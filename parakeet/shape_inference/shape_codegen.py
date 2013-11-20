@@ -99,6 +99,7 @@ class ShapeCodegen(Traversal):
     assert False, "Unexpected closure in result shape: %s" % (v,)
 
 def make_shape_expr(codegen, symbolic_shape, input_exprs):
+  
   """
   Given a codegen object we're currently using to create a function, and a
   symbolic result shape of a function call (along with the input expressions
@@ -108,5 +109,6 @@ def make_shape_expr(codegen, symbolic_shape, input_exprs):
 
   if isinstance(symbolic_shape, Scalar):
     return codegen.tuple([])
+
   shape_codegen = ShapeCodegen(codegen, input_exprs)
   return shape_codegen.visit(symbolic_shape)

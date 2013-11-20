@@ -644,20 +644,25 @@ class ShapeInference(SyntaxVisitor):
 
   
   def visit_IndexMap(self, expr):
-    shape_tuple = self.visit_expr(expr.shape)
+    bounds = self.visit_expr(expr.shape)
     clos = self.visit_expr(expr.fn)
-    if isinstance(clos.fn.input_types[-1], TupleT):
-      elt_result = symbolic_call(clos, [shape_tuple])
+    if isinstance(clos.fn.input_types[-1], TupleT) or bounds.__class__ is not Tuple:
+      indices = [bounds]
     else:
-      elt_result = symbolic_call(clos, shape_tuple.elts)
-    return make_shape(combine_dims(shape_tuple, elt_result))
+      indices = bounds.elts 
+    elt_result = symbolic_call(clos, indices)
+    return make_shape(combine_dims(bounds, elt_result))
     
     
   def visit_IndexReduce(self, expr):
     fn = self.visit_expr(expr.fn)
     combine = self.visit_expr(expr.combine)
     bounds = self.visit_expr(expr.shape)
-    elt_shape = symbolic_call(fn, [bounds])
+    if isinstance(fn.fn.input_types[-1], TupleT) or bounds.__class__ is not Tuple:
+      indices = [bounds]
+    else:
+      indices = bounds.elts
+    elt_shape = symbolic_call(fn, indices)
     init_shape = elt_shape if self.expr_is_none(expr.init) else self.visit_expr(expr.init) 
     return symbolic_call(combine, [init_shape, elt_shape])
 
@@ -666,7 +671,11 @@ class ShapeInference(SyntaxVisitor):
     combine = self.visit_expr(expr.combine)
     emit = self.visit_expr(expr.emit)
     bounds = self.visit_expr(expr.shape)
-    elt_shape = symbolic_call(fn, [bounds])
+    if isinstance(fn.fn.input_types[-1], TupleT) or bounds.__class__ is not Tuple:
+      indices = [bounds]
+    else:
+      indices = bounds.elts
+    elt_shape = symbolic_call(fn, indices)
     init_shape = elt_shape if self.expr_is_none(expr.init) else self.visit_expr(expr.init) 
     acc_shape = symbolic_call(combine, [init_shape, elt_shape])
     output_elt_shape = symbolic_call(emit, [acc_shape])

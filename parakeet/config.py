@@ -17,14 +17,23 @@ backend = 'openmp'
   
     
 opt_inline = True
+
 opt_fusion = True
+opt_combine_nested_maps = True
+
+opt_specialize_fn_args = True 
+
+# experimental!
+opt_simplify_array_operators = False
+
 opt_index_elimination = True
 opt_range_propagation = True
 
 opt_licm = True
 opt_redundant_load_elimination = True
 opt_stack_allocation = True
-opt_shape_elim = True
+
+opt_shape_elim = True 
 
 # replace 
 #   a = alloc

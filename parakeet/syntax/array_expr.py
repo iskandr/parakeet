@@ -160,6 +160,10 @@ class ArrayView(ArrayExpr):
     self.type = type 
     self.source_info = source_info
 
+  def __str__(self):
+    return "ArrayView(data = %s, shape = %s, strides = %s, offset = %s, size = %s)" % \
+      (self.data, self.shape, self.strides, self.offset, self.size)
+      
   def children(self):
     yield self.data
     yield self.shape

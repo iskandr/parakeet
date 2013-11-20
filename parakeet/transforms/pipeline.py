@@ -1,6 +1,6 @@
 from .. import config 
 from ..analysis import (contains_adverbs, contains_calls, contains_loops, 
-                        contains_structs)
+                        contains_structs, contains_array_operators)
 
 from combine_nested_maps import CombineNestedMaps 
 from copy_elimination import CopyElimination
@@ -29,6 +29,7 @@ from redundant_load_elim import RedundantLoadElimination
 from scalar_replacement import ScalarReplacement
 from shape_elim import ShapeElimination
 from simplify import Simplify
+from simplify_array_operators import SimplifyArrayOperators
 from specialize_fn_args import SpecializeFnArgs
 
 ####################################
@@ -89,14 +90,33 @@ early_optimizations = Phase([
                             memoize = True, 
                             cleanup = [Simplify, DCE], 
                             depends_on = normalize, 
+ 
                             )
+
+simplify_array_operators = Phase([SimplifyArrayOperators], 
+                                 copy = False, 
+                                 memoize = False, 
+                                 run_if = contains_array_operators, 
+                                 config_param = "opt_simplify_array_operators")
+
+combine_nested_maps = Phase([CombineNestedMaps],
+                            copy = False, 
+                            memoize = False, 
+                            run_if = contains_adverbs, 
+                            config_param = "opt_combine_nested_maps")
+
+arg_specialization = Phase([SpecializeFnArgs],
+                           copy = False, 
+                           memoize = False, 
+                           config_param = "opt_specialize_fn_args")
 
 adverb_optimizations = Phase([
                                 fusion_opt,
-                                CombineNestedMaps,
-                                SpecializeFnArgs,
+                                simplify_array_operators, 
+                                combine_nested_maps,
+                                arg_specialization,
                                 fusion_opt, 
-                                SpecializeFnArgs,
+                                arg_specialization,
                               ], 
                              run_if = contains_adverbs, 
                              depends_on = early_optimizations, 

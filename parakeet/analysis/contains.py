@@ -1,5 +1,5 @@
 from ..ndtypes import ScalarT, PtrT, NoneT, TupleT, FnT, ClosureT 
-from .. syntax import Adverb, ParFor, Closure, UntypedFn, TypedFn 
+from .. syntax import Adverb, ParFor, Closure, UntypedFn, TypedFn, ArrayExpr  
 
 from syntax_visitor import SyntaxVisitor
 
@@ -143,4 +143,21 @@ def contains_alloc(fn):
     ContainsAlloc().visit_fn(fn) 
     return False 
   except Yes:
-    return True    
+    return True
+
+class ContainsArrayOperators(SyntaxVisitor):
+  def visit_expr(self, expr):
+    """
+    We're assuming that array expressions only occur on RHS of assignments
+    and aren't nested. It's up to Simplify to de-nest them
+    """
+    if isinstance(expr, ArrayExpr):
+      raise Yes()
+  
+@memoize 
+def contains_array_operators(fn):
+  try:
+    ContainsArrayOperators().visit_fn(fn) 
+    return False 
+  except Yes:
+    return True        
