@@ -23,11 +23,11 @@ CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                        "fn_signature"))
 
 CompiledObject = collections.namedtuple("CompiledObject", 
-                                        ("src",
+                                        (
                                          "src_filename",  
                                          "object_filename", 
                                          "fn_name",
-                                         "fn_signature"))
+                                         ))
 
   
 c_headers = ["stdint.h",  "math.h",  "signal.h"]
@@ -38,7 +38,7 @@ python_headers = core_python_headers + numpy_headers
 
 # went to some annoying effort to clean up all the array->flags, &c that have been 
 # replaced with PyArray_FLAGS in NumPy 1.7 
-preprocessor_defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+global_preprocessor_defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 
 config_vars = distutils.sysconfig.get_config_vars()
 
@@ -170,15 +170,17 @@ def create_source_file(src,
   else:
     src_file = open(src_filename, 'w')
   
+  # when compiling with NVCC, other headers get implicitly included 
+  # and cause warnings since Python redefines this constant
+  preprocessor_defs = list(global_preprocessor_defs) 
+  if config.undef_posix_c_source:
+    preprocessor_defs.append("#undef _XOPEN_SOURCE")
+    preprocessor_defs.append("#undef _POSIX_C_SOURCE")
+  
   for d in preprocessor_defs:
     src_file.write(d)
     src_file.write("\n")
   
-  # when compiling with NVCC, other headers get implicitly included 
-  # and cause warnings since Python redefines this constant 
-  if config.undef_posix_c_source:
-    src_file.write("#undef _XOPEN_SOURCE\n")
-    src_file.write("#undef _POSIX_C_SOURCE\n")
   for header in extra_headers + c_headers:
     src_file.write("#include <%s>\n" % header)
   
@@ -221,7 +223,7 @@ def run_cmd(cmd, env = None, label = ""):
         print "Parakeet encountered error(s) during compilation: "
         print subprocess.check_output(cmd, env = env)
   else:
-    print subprocess.check_output(cmd, env = env)
+    subprocess.check_call(cmd, env = env)
     
   if config.print_command_elapsed_time: 
     if label:
@@ -229,39 +231,21 @@ def run_cmd(cmd, env = None, label = ""):
     else:
       print "Elapsed time:", time.time() - t 
 
-def compile_object(src, 
+def compile_object(src_filename, 
                      fn_name = None,  
-                     fn_signature = None,
-                     src_filename = None, 
                      src_extension = None, 
                      declarations = [],
-                     extra_function_sources = [], 
-                     extra_headers = python_headers, 
                      extra_objects = [], 
                      extra_compile_flags = [], 
-                     print_source = None, 
                      print_commands = None, 
                      compiler = None, 
                      compiler_flag_prefix  = None):
   
-  if print_source is None: 
-    print_source = root_config.print_generated_code
-  if print_commands is None: 
-    print_commands = config.print_commands
-  if src_extension is None:
-    src_extension = get_source_extension()
-  if compiler is None:
-    compiler = get_compiler()
   
-  src_file = create_source_file(src, 
-                                fn_name = fn_name,
-                                src_filename = src_filename, 
-                                declarations = declarations,
-                                extra_function_sources = extra_function_sources,  
-                                extra_headers = extra_headers,
-                                print_source = print_source, 
-                                src_extension = src_extension)
-  src_filename = src_file.name
+  if print_commands is None:  print_commands = config.print_commands
+  if src_extension is None: src_extension = get_source_extension()
+  if compiler is None: compiler = get_compiler()
+    
   object_name = src_filename.replace(src_extension, object_extension)
   compiler_flags = get_compiler_flags(compiler, extra_compile_flags, compiler_flag_prefix)
   
@@ -274,11 +258,9 @@ def compile_object(src,
   compiler_cmd += ['-c', src_filename, '-o', object_name]
   run_cmd(compiler_cmd, label = "Compile source")
   
-  return CompiledObject(src = src, 
-                        src_filename = src_filename, 
+  return CompiledObject(src_filename = src_filename, 
                         object_filename = object_name, 
-                        fn_name = fn_name, 
-                        fn_signature = fn_signature)
+                        fn_name = fn_name)
 
 def link_module(compiler, object_name, shared_name, 
                  extra_objects = [], 
@@ -301,27 +283,26 @@ def link_module(compiler, object_name, shared_name,
   run_cmd(linker_cmd, env = env, label = "Linking")
 
   
-def compile_module(src, 
-                     fn_name,
-                     fn_signature = None,  
-                     src_filename = None,
-                     src_extension = None, 
-                     declarations = [],
-                     extra_function_sources = [], 
-                     extra_headers = [],  
-                     extra_objects = [],
-                     extra_compile_flags = [], 
-                     extra_link_flags = [], 
-                     print_source = None, 
-                     print_commands = None, 
-                     compiler = None, 
-                     compiler_flag_prefix = None, 
-                     linker_flag_prefix = None):
+def compile_module_from_source(
+      src, 
+      fn_name,
+      fn_signature = None,  
+      src_filename = None,
+      src_extension = None, 
+      declarations = [],
+      extra_function_sources = [], 
+      extra_headers = [],  
+      extra_objects = [],
+      extra_compile_flags = [], 
+      extra_link_flags = [], 
+      print_source = None, 
+      print_commands = None, 
+      compiler = None, 
+      compiler_flag_prefix = None, 
+      linker_flag_prefix = None):
   
-  if print_source is None:
-    print_source = root_config.print_generated_code 
-  if print_commands is None:
-    print_commands = config.print_commands
+  if print_source is None: print_source = root_config.print_generated_code 
+  if print_commands is None: print_commands = config.print_commands
 
   src += """
     static PyMethodDef %(fn_name)sMethods[] = {
@@ -342,32 +323,60 @@ def compile_module(src,
   
 
   if src_extension is None: src_extension = get_source_extension()
+  
+  
+  src_file = create_source_file(src, 
+                                fn_name = fn_name,
+                                src_filename = src_filename, 
+                                declarations = declarations,
+                                extra_function_sources = extra_function_sources,  
+                                extra_headers = python_headers + extra_headers,
+                                print_source = print_source, 
+                                src_extension = src_extension)
+  src_filename = src_file.name
+  
   if compiler is None: compiler = get_compiler()
   
   if compiler in ('gcc', 'g++') and config.use_distutils:
-    assert False, "You should be using distutils!"
+    # copied largely from pyxbuild 
+    from distutils.dist import Distribution
+    from distutils.extension import Extension
+    
+    ext = Extension(name=fn_name, sources=[src_filename])
+    #args = ['build_ext'] #args = [quiet, "build_ext"]']
+    setup_args = {"script_name": None,
+                  "script_args": ['build_ext']
+                  }
+    dist = Distribution(setup_args)
+    if not dist.ext_modules: dist.ext_modules = []
+    dist.ext_modules.append(ext)
+    # I have no idea how distutils works or why I have to do any of this 
+    config_files = dist.find_config_files()
+    try: config_files.remove('setup.cfg')
+    except ValueError: pass
+    dist.parse_config_files(config_files)
+    dist.parse_command_line()
+    obj_build_ext = dist.get_command_obj("build_ext")
+    dist.run_commands()
+    object_name = None 
+    shared_name = obj_build_ext.get_outputs()[0]
   else:
-    compiled_object = compile_object(src, 
-                                     fn_name,
-                                     src_filename  = src_filename,
+    compiled_object = compile_object(src_filename, 
+                                     fn_name = fn_name,
                                      src_extension = src_extension,  
-                                     declarations = declarations,
-                                     extra_function_sources = extra_function_sources, 
-                                     extra_headers = python_headers + extra_headers,  
                                      extra_objects = extra_objects,
                                      extra_compile_flags = extra_compile_flags, 
-                                     print_source = print_source, 
                                      print_commands = print_commands, 
                                      compiler = compiler, 
                                      compiler_flag_prefix = compiler_flag_prefix)
   
-    src_filename = compiled_object.src_filename
     object_name = compiled_object.object_filename
     shared_name = src_filename.replace(src_extension, shared_extension)
     link_module(compiler, object_name, shared_name, 
                 extra_objects = extra_objects, 
                 extra_link_flags = extra_link_flags, 
                 linker_flag_prefix = linker_flag_prefix)
+  
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)

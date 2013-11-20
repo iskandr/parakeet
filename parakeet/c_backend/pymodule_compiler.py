@@ -14,7 +14,7 @@ from ..ndtypes import (TupleT,  ArrayT,
 
 import type_mappings
 from fn_compiler import FnCompiler
-from compile_util import compile_module
+from compile_util import compile_module_from_source
 from .. import config as root_config 
 import config 
 
@@ -755,19 +755,20 @@ class PyModuleCompiler(FnCompiler):
     ordered_function_sources = [self.extra_functions[extra_sig] for 
                                 extra_sig in self.extra_function_signatures]
 
-    compiled_fn = compile_module(src, 
-                                 fn_name = name,
-                                 fn_signature = sig, 
-                                 src_extension = self.src_extension,
-                                 extra_objects = set(self.extra_objects),
-                                 extra_function_sources = ordered_function_sources, 
-                                 declarations =  self.declarations, 
-                                 extra_compile_flags = self.extra_compile_flags, 
-                                 extra_link_flags = self.extra_link_flags, 
-                                 print_source = root_config.print_generated_code, 
-                                 compiler = self.compiler_cmd, 
-                                 compiler_flag_prefix = self.compiler_flag_prefix, 
-                                 linker_flag_prefix = self.linker_flag_prefix)
+    compiled_fn = compile_module_from_source(
+      src, 
+      fn_name = name,
+      fn_signature = sig, 
+      src_extension = self.src_extension,
+      extra_objects = set(self.extra_objects),
+      extra_function_sources = ordered_function_sources, 
+      declarations =  self.declarations, 
+      extra_compile_flags = self.extra_compile_flags, 
+      extra_link_flags = self.extra_link_flags, 
+      print_source = root_config.print_generated_code, 
+      compiler = self.compiler_cmd, 
+      compiler_flag_prefix = self.compiler_flag_prefix, 
+      linker_flag_prefix = self.linker_flag_prefix)
     self._entry_compile_cache[key]  = compiled_fn
     return compiled_fn
 

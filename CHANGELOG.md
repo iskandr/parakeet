@@ -1,3 +1,8 @@
+### 0.22 / November 19th, 2013 ### 
+
+- Changed NumPy calls to use newer API, cuts down on number of compile warnings
+- Use distutils for vanilla compilation with gcc, may overcome some of the insanity on Windows
+
 ### 0.21 / November 19th, 2013 ### 
 
 - Got rid of testing dependency on SciPy
