@@ -1,16 +1,19 @@
 import collections 
 import distutils 
 import imp 
-import numpy.distutils as npdist 
-import numpy.distutils.system_info as np_sysinfo 
+
 import os
-import platform
-import subprocess  
-import time 
 
 from tempfile import NamedTemporaryFile
+
 from .. import config as root_config 
 import config 
+from system_info import (python_lib_dir,  
+                         windows,  
+                         get_source_extension, object_extension, shared_extension,  
+                         get_compiler)
+from flags import get_compiler_flags, get_linker_flags
+from shell_command import CommandFailed, run_cmd 
 
 CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                       ("c_fn", 
@@ -38,105 +41,6 @@ python_headers = core_python_headers + numpy_headers
 # went to some annoying effort to clean up all the array->flags, &c that have been 
 # replaced with PyArray_FLAGS in NumPy 1.7 
 global_preprocessor_defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
-
-config_vars = distutils.sysconfig.get_config_vars()
-
-def get_compiler(_cache = {}):
-  if config.compiler_path:
-    return config.compiler_path
-  if config.pure_c in _cache:
-    return _cache[config.pure_c]
-  for compiler in [('gcc' if config.pure_c else 'g++'), 
-                   'icc', 
-                   'clang']:
-    path = distutils.spawn.find_executable(compiler)
-    if path:
-      _cache[config.pure_c] = path
-      return path 
-  assert False, "No compiler found!"
-    
-
-def get_source_extension():
-  return ".c" if config.pure_c else ".cpp"
-
-object_extension = ".o"
-shared_extension = np_sysinfo.get_shared_lib_extension(True)
-
-
-mac_os = platform.system() == 'Darwin'
-windows = platform.system() == 'Windows'
-
-python_include_dirs = [distutils.sysconfig.get_python_inc()]
-
-numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
-include_dirs = python_include_dirs + numpy_include_dirs 
-
-def get_opt_flags():
-  opt_flags = [config.opt_level] 
-  if config.sse2:
-    opt_flags.append('-msse2')
-  if config.fast_math:
-    opt_flags.append('-ffast-math')
-  return opt_flags 
-
-def get_compiler_flags(extra_flags = [], compiler_flag_prefix = None):
-  compiler_flags = ['-I%s' % path for path in include_dirs]
-  
-  def add_flag(flag):
-    if compiler_flag_prefix is not None:
-      compiler_flags.append(compiler_flag_prefix)
-    compiler_flags.append(flag)
-
-  add_flag('-fPIC')
-  
-  if config.debug:
-    # nvcc understands debug mode flags
-    compiler_flags.extend(['-g', '-O0'])
-  else:
-    for flag in get_opt_flags():
-      add_flag(flag)
-
-  if not config.pure_c: 
-    add_flag('-fpermissive')
-
-  for flag in extra_flags:
-    add_flag(flag)
-    
-  return compiler_flags   
-
-python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
-python_version = distutils.sysconfig.get_python_version()
-
-def get_linker_flags(extra_flags = [], linker_flag_prefix = None):
-  # for whatever reason nvcc is OK with the -shared linker flag
-  # but not with the -fPIC compiler flag 
-  linker_flags = ['-shared']
-  
-  def add_flag(flag):
-    if linker_flag_prefix is not None:
-      linker_flags.append(linker_flag_prefix)
-    linker_flags.append(flag)
-    
-  add_flag('-lm')
-  if windows:
-    # crazy stupid hack for exposing Python symbols
-    # even though we're compiling a shared library, why does Windows care?
-    # why does windows even exist? 
-    inc_dir = distutils.sysconfig.get_python_inc()
-    base = os.path.split(inc_dir)[0]
-    lib_dir = base + "\libs"
-    add_flag('-L' + lib_dir)
-    libname = 'python' + distutils.sysconfig.get_python_version().replace('.', '')
-    add_flag('-l' + libname)
-    
-  if mac_os:
-    add_flag("-Wl,-undefined")
-    add_flag("-Wl,dynamic_lookup")
-    
-  for flag in extra_flags:
-    add_flag(flag)
-  return linker_flags 
-
 
 
 def create_module_source(raw_src, fn_name, 
@@ -186,24 +90,17 @@ def create_module_source(raw_src, fn_name,
   if print_source is None: print_source = root_config.print_generated_code  
   if print_source:
     for i, line in enumerate(full_src.splitlines()):
-        if config.print_line_numbers:
-          print i+1, " ", line
-        else:
-          print line
+        if config.print_line_numbers: print i+1, " ", line
+        else: print line
   return full_src    
 
 def create_source_file(src, 
                          fn_name = None, 
                          src_filename = None, 
                          src_extension = None):
-  
-  
-
   if fn_name is None: prefix = "parakeet_"
   else: prefix = "parakeet_%s_" % fn_name
-  
   if src_extension is None: src_extension = get_source_extension()
-      
   if src_filename is None:
     src_file = NamedTemporaryFile(suffix = src_extension,  
                                   prefix =  prefix, 
@@ -215,45 +112,8 @@ def create_source_file(src,
     src_file = open(src_filename, 'w')
   
   src_file.write(src)  
-  
   src_file.close()
-        
   return src_file 
-
-class CommandFailed(Exception):
-  def __init__(self, cmd, env, label):
-    self.cmd = cmd 
-    self.env = env 
-    self.label = label 
-    
-  def __str__(self):
-    return "CommandFailed(%s)" % self.cmd 
-  
-  def __repr__(self):
-    return "CommandFailed(cmd=%s, env=%s, label=%s)" % (self.cmd, self.env, self.label)
-  
-def run_cmd(cmd, env = None, label = ""):
-  if config.print_commands: 
-    print " ".join(cmd)
-  if config.print_command_elapsed_time: 
-    t = time.time()
-  
-  # first compile silently
-  # if you encounter an error, then recompile with output printing
-  try:
-    if config.suppress_compiler_output: 
-      with open(os.devnull, "w") as fnull:
-        subprocess.check_call(cmd, stdout = fnull, stderr = fnull, env = env)
-    else:
-      subprocess.check_call(cmd, env = env)
-  except:
-    raise CommandFailed(cmd, env, label)
-    
-  if config.print_command_elapsed_time: 
-    if label:
-      print "%s, elapsed time: %0.4f" % (label, time.time() - t)
-    else:
-      print "Elapsed time:", time.time() - t 
 
 def compile_object(src_filename, 
                      fn_name = None,  
