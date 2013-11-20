@@ -6,7 +6,7 @@ from actual_args import ActualArgs
 
 from array_expr import (AllocArray, Array, ArrayExpr,  ArrayView,
                         ConstArray, ConstArrayLike,
-                        Diag, Eye, 
+                        DiagonalArray, 
                         Range, Ravel, Reshape, 
                         Shape, Slice, Strides, 
                         Transpose)

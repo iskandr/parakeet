@@ -36,7 +36,9 @@ numpy_headers = ['numpy/arrayobject.h', 'numpy/arrayscalars.h']
 
 python_headers = core_python_headers + numpy_headers 
 
-cpp_defs = [] #"#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
+# went to some annoying effort to clean up all the array->flags, &c that have been 
+# replaced with PyArray_FLAGS in NumPy 1.7 
+preprocessor_defs = ["#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"]
 
 config_vars = distutils.sysconfig.get_config_vars()
 
@@ -169,7 +171,7 @@ def create_source_file(src,
   else:
     src_file = open(src_filename, 'w')
   
-  for d in cpp_defs:
+  for d in preprocessor_defs:
     src_file.write(d)
     src_file.write("\n")
   
@@ -197,10 +199,6 @@ def create_source_file(src,
           print i+1, " ", line
         else:
           print line   
-    #print subprocess.check_output(['cat', '-n',  src_filename])
-  
-  
-  
   return src_file 
 
 def run_cmd(cmd, env = None, label = ""):
@@ -210,15 +208,16 @@ def run_cmd(cmd, env = None, label = ""):
     t = time.time()
   
   # first compile silently
-  # if you encounter an error, then recompile with output printing 
-  with open(os.devnull, "w") as fnull:
-    try:  
-      
-      subprocess.check_call(cmd, stdout = fnull, stderr = fnull, env = env)
-    except:
-      print "Parakeet encountered error(s) during compilation: "
-      subprocess.check_output(cmd, env = env)
-      
+  # if you encounter an error, then recompile with output printing
+  if config.suppress_compiler_output: 
+    with open(os.devnull, "w") as fnull:
+      try:  
+        subprocess.check_call(cmd, stdout = fnull, stderr = fnull, env = env)
+      except:
+        print "Parakeet encountered error(s) during compilation: "
+        print subprocess.check_output(cmd, env = env)
+  else:
+    print subprocess.check_output(cmd, env = env)
     
   if config.print_command_elapsed_time: 
     if label:
@@ -227,19 +226,19 @@ def run_cmd(cmd, env = None, label = ""):
       print "Elapsed time:", time.time() - t 
 
 def compile_object(src, 
-                   fn_name = None,  
-                   fn_signature = None,
-                   src_filename = None, 
-                   src_extension = None, 
-                   declarations = [],
-                   extra_function_sources = [], 
-                   extra_headers = python_headers, 
-                   extra_objects = [], 
-                   extra_compile_flags = [], 
-                   print_source = None, 
-                   print_commands = None, 
-                   compiler = None, 
-                   compiler_flag_prefix  = None):
+                     fn_name = None,  
+                     fn_signature = None,
+                     src_filename = None, 
+                     src_extension = None, 
+                     declarations = [],
+                     extra_function_sources = [], 
+                     extra_headers = python_headers, 
+                     extra_objects = [], 
+                     extra_compile_flags = [], 
+                     print_source = None, 
+                     print_commands = None, 
+                     compiler = None, 
+                     compiler_flag_prefix  = None):
   
   if print_source is None: 
     print_source = root_config.print_generated_code
@@ -261,13 +260,14 @@ def compile_object(src,
   src_filename = src_file.name
   object_name = src_filename.replace(src_extension, object_extension)
   compiler_flags = get_compiler_flags(compiler, extra_compile_flags, compiler_flag_prefix)
+  
   if isinstance(compiler, (list,tuple)):
     compiler_cmd = list(compiler)
   else:
-    compiler_cmd = [compiler] 
+    compiler_cmd = [compiler]
+    
   compiler_cmd += compiler_flags 
   compiler_cmd += ['-c', src_filename, '-o', object_name]
-  
   run_cmd(compiler_cmd, label = "Compile source")
   
   return CompiledObject(src = src, 
@@ -275,7 +275,27 @@ def compile_object(src,
                         object_filename = object_name, 
                         fn_name = fn_name, 
                         fn_signature = fn_signature)
+
+def link_module(compiler, object_name, shared_name, 
+                 extra_objects = [], 
+                 extra_link_flags = [], 
+                 linker_flag_prefix = None):
+  linker_flags = get_linker_flags(compiler, extra_link_flags, linker_flag_prefix) 
   
+  if isinstance(compiler, (list,tuple)):
+    linker_cmd = list(compiler)
+  else:
+    linker_cmd = [compiler]
+  linker_cmd += [object_name] 
+  linker_cmd += linker_flags 
+  linker_cmd += list(extra_objects) 
+  linker_cmd += ['-o', shared_name]
+
+  env = os.environ.copy()
+  if not windows:
+    env["LD_LIBRARY_PATH"] = python_lib_dir
+  run_cmd(linker_cmd, env = env, label = "Linking")
+
   
 def compile_module(src, 
                      fn_name,
@@ -319,39 +339,31 @@ def compile_module(src,
 
   if src_extension is None: src_extension = get_source_extension()
   if compiler is None: compiler = get_compiler()
-  compiled_object = compile_object(src, 
-                                   fn_name,
-                                   src_filename  = src_filename,
-                                   src_extension = src_extension,  
-                                   declarations = declarations,
-                                   extra_function_sources = extra_function_sources, 
-                                   extra_headers = python_headers + extra_headers,  
-                                   extra_objects = extra_objects,
-                                   extra_compile_flags = extra_compile_flags, 
-                                   print_source = print_source, 
-                                   print_commands = print_commands, 
-                                   compiler = compiler, 
-                                   compiler_flag_prefix = compiler_flag_prefix)
   
-  src_filename = compiled_object.src_filename
-  object_name = compiled_object.object_filename
-  shared_name = src_filename.replace(src_extension, shared_extension)
-  linker_flags = get_linker_flags(compiler, extra_link_flags, linker_flag_prefix) 
-  
-  if isinstance(compiler, (list,tuple)):
-    linker_cmd = list(compiler)
+  if compiler in ('gcc', 'g++') and config.use_distutils:
+    assert False, "You should be using distutils!"
   else:
-    linker_cmd = [compiler]
-  linker_cmd += [object_name] 
-  linker_cmd += linker_flags 
-  linker_cmd += list(extra_objects) 
-  linker_cmd += ['-o', shared_name]
-
-  env = os.environ.copy()
-  env["LD_LIBRARY_PATH"] = python_lib_dir
-  run_cmd(linker_cmd, env = env, label = "Linking")
+    compiled_object = compile_object(src, 
+                                     fn_name,
+                                     src_filename  = src_filename,
+                                     src_extension = src_extension,  
+                                     declarations = declarations,
+                                     extra_function_sources = extra_function_sources, 
+                                     extra_headers = python_headers + extra_headers,  
+                                     extra_objects = extra_objects,
+                                     extra_compile_flags = extra_compile_flags, 
+                                     print_source = print_source, 
+                                     print_commands = print_commands, 
+                                     compiler = compiler, 
+                                     compiler_flag_prefix = compiler_flag_prefix)
   
-
+    src_filename = compiled_object.src_filename
+    object_name = compiled_object.object_filename
+    shared_name = src_filename.replace(src_extension, shared_extension)
+    link_module(compiler, object_name, shared_name, 
+                extra_objects = extra_objects, 
+                extra_link_flags = extra_link_flags, 
+                linker_flag_prefix = linker_flag_prefix)
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)

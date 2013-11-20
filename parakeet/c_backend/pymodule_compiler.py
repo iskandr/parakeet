@@ -71,7 +71,7 @@ class PyModuleCompiler(FnCompiler):
     return result 
   
   def unbox_array(self, boxed_array, elt_type, ndims, target = "array_value"):
-    shape_ptr = self.fresh_var("npy_intp*", "shape_ptr", "PyArray_DIMS(%s)" % boxed_array)
+    shape_ptr = self.fresh_var("npy_intp*", "shape_ptr", "PyArray_DIMS((PyArrayObject*)%s)" % boxed_array)
     strides_bytes = self.fresh_var("npy_intp*", "strides_bytes", 
                                    "PyArray_STRIDES( (PyArrayObject*) %s)" % boxed_array)
 
@@ -424,7 +424,7 @@ class PyModuleCompiler(FnCompiler):
     self.check_array(v)
     c_struct_type = self.to_ctype(parakeet_ptr_t)
     c_ptr_type = type_mappings.to_ctype(parakeet_ptr_t) 
-    data_field = "(%s) (((PyArrayObject*) %s)->data)" % (c_ptr_type, v) 
+    data_field = "(%s) PyArray_DATA(((PyArrayObject*) %s))" % (c_ptr_type, v) 
     # get the data field but also fill the base object 
     return self.fresh_var(c_struct_type, "data", "{%s, %s}" % (data_field, v))
  
@@ -434,7 +434,7 @@ class PyModuleCompiler(FnCompiler):
         self.check_array(v)
         struct_type = self.to_ctype(t)
         ptr_type = type_mappings.to_ctype(t) 
-        data_field = "(%s) (((PyArrayObject*) %s)->data)" % (ptr_type, v) 
+        data_field = "(%s) PyArray_DATA(((PyArrayObject*) %s))" % (ptr_type, v) 
         # get the data field but also fill the base object 
         return self.fresh_var(struct_type, "data", "{%s, %s}" % (data_field, v))
       else:
@@ -607,9 +607,9 @@ class PyModuleCompiler(FnCompiler):
     if base not in ("0", "NULL"):
       self.append("""
         if (%s) { 
-          %s->base = %s;
+          PyArray_SetBaseObject(%s, %s); 
           Py_INCREF(%s);  
-          %s->flags &= ~NPY_ARRAY_OWNDATA; 
+          PyArray_CLEARFLAGS(%s, NPY_ARRAY_OWNDATA); 
         }""" % (base, vec, base, base, vec))
         
     numpy_strides = self.fresh_var("npy_intp*", "numpy_strides")
@@ -622,8 +622,8 @@ class PyModuleCompiler(FnCompiler):
     
     self.append("""
       // clear both fortran and c layout flags 
-      ((PyArrayObject*) %(vec)s)->flags &= ~NPY_F_CONTIGUOUS;
-      ((PyArrayObject*) %(vec)s)->flags &= ~NPY_C_CONTIGUOUS;
+      PyArray_CLEARFLAGS((PyArrayObject*) %(vec)s, NPY_ARRAY_F_CONTIGUOUS);  
+      PyArray_CLEARFLAGS((PyArrayObject*) %(vec)s, NPY_ARRAY_C_CONTIGUOUS);
     """ % locals())
     
     f_layout_strides = ["1"]
@@ -650,8 +650,8 @@ class PyModuleCompiler(FnCompiler):
     self.append("""
       // it's possible that *neither* of the above flags should be on
       // which is why we enable them separately here 
-      if (%(is_f_layout)s) { ((PyArrayObject*)%(vec)s)->flags |= NPY_F_CONTIGUOUS; }
-      if (%(is_c_layout)s) { ((PyArrayObject*)%(vec)s)->flags |= NPY_C_CONTIGUOUS; }
+      if (%(is_f_layout)s) { PyArray_ENABLEFLAGS((PyArrayObject*)%(vec)s, NPY_ARRAY_F_CONTIGUOUS); }
+      if (%(is_c_layout)s) { PyArray_ENABLEFLAGS((PyArrayObject*)%(vec)s, NPY_ARRAY_C_CONTIGUOUS); }
     """ % locals())
     return vec
   

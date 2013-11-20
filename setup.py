@@ -1,15 +1,24 @@
 #!/usr/bin/env python
 
-from setuptools import setup, Extension, find_packages
+from setuptools import setup, find_packages
 import os 
-import sys
 
 import parakeet.version
+
+readme_filename = os.path.join(os.path.dirname(__file__), 'README.md')
+with open(readme_filename, 'r') as f:
+  readme = f.read()
+  
+try:
+  import pypandoc
+  readme = pypandoc.convert(readme, to='rst', format='md')
+except:
+  print "Conversion of long_description from markdown to reStructuredText failed, skipping..."
 
 setup(
     name="parakeet",
     description="Runtime compiler for numerical Python.",
-    long_description=open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
+    long_description=readme,
     classifiers=['Development Status :: 3 - Alpha',
                  'Topic :: Software Development :: Libraries',
                  'License :: OSI Approved :: BSD License',
@@ -25,8 +34,8 @@ setup(
     packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
     package_dir={ 
                   'parakeet.benchmarks' : './benchmarks', 
+                  'parakeet.test' : './test',
                   'parakeet.examples' : './examples', 
-                  'parakeet.test' : './test' 
                 },
     install_requires=[
       'numpy>=1.7',       

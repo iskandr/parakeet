@@ -93,7 +93,13 @@ class DiagonalArray(ArrayExpr):
     yield self.value 
     if self.offset is not None:
       yield self.offset 
-    
+
+class ExtractDiagonal(ArrayExpr):
+  """
+  Go from an n-d input array to 1-d vector of diagonal elements
+  """ 
+  pass 
+
 class ConstArrayLike(ArrayExpr):
   """
   Create an array with the same shape as the first arg, but with all values set

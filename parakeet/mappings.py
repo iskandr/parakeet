@@ -74,12 +74,10 @@ function_mappings = {
   
   np.abs : prims.abs, 
 
-  
-  
   # ARRAY CONSTRUCTORS 
   np.array : lib.array, 
   np.tile : lib.tile, 
-  np.eye : Eye, 
+  # np.eye : , 
   np.arange  : lib.arange, 
   
   np.empty_like : lib.empty_like, 

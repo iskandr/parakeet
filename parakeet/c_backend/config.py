@@ -18,9 +18,6 @@ check_pyobj_types = False
 #########################
 print_input_ir = False
 
-# replaced by ..config.print_generated_code
-#   print_module_source = False
-
 print_line_numbers = False
  
 print_function_source = False
@@ -32,3 +29,12 @@ print_command_elapsed_time = False
 # Generate a .c file or a .cpp? 
 pure_c = True
 delete_temp_files = True 
+
+# if compiling C or OpenMP we can skip some of the craziness and 
+# have distutils figure out the system config and compiler for us 
+use_distutils = False
+
+# show all the warnings? 
+suppress_compiler_output = False 
+
+
