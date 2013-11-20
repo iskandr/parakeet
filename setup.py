@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 import os 
 
-import parakeet.version
+import parakeet.package_info
 
 readme_filename = os.path.join(os.path.dirname(__file__), 'README.md')
 with open(readme_filename, 'r') as f:
@@ -28,8 +28,8 @@ setup(
     author="Alex Rubinsteyn",
     author_email="alexr@cs.nyu.edu",
     license="BSD",
-    version=parakeet.version.__version__,
-    url=parakeet.version.__website__, 
+    version=parakeet.package_info.__version__,
+    url=parakeet.package_info.__website__, 
     download_url = 'https://github.com/iskandr/parakeet/releases', 
     packages=find_packages() + ['parakeet.test', 'parakeet.benchmarks', 'parakeet.examples'], 
     package_dir={ 

@@ -1,6 +1,13 @@
 import config
 
-from version import *
+import package_info 
+__author__ = package_info.__author__
+__email__ = package_info.__email__
+__desc__ = package_info.__desc__
+__license__ = package_info.__license__
+__version__ = package_info.__version__
+__website__ = package_info.__website__
+
 from ndtypes import * 
 
 from analysis import SyntaxVisitor, verify
