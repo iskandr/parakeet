@@ -17,7 +17,6 @@ CompiledPyFn = collections.namedtuple("CompiledPyFn",
                                        "src_filename", 
                                        "module", 
                                        "shared_filename", 
-                                       "object_filename",
                                        "src", 
                                        "fn_name",
                                        "fn_signature"))
@@ -80,7 +79,7 @@ def get_opt_flags():
     opt_flags.append('-ffast-math')
   return opt_flags 
 
-def get_compiler_flags(compiler, extra_flags = [], compiler_flag_prefix = None):
+def get_compiler_flags(extra_flags = [], compiler_flag_prefix = None):
   compiler_flags = ['-I%s' % path for path in include_dirs]
   
   def add_flag(flag):
@@ -108,7 +107,7 @@ def get_compiler_flags(compiler, extra_flags = [], compiler_flag_prefix = None):
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
 python_version = distutils.sysconfig.get_python_version()
 
-def get_linker_flags(compiler, extra_flags = [], linker_flag_prefix = None):
+def get_linker_flags(extra_flags = [], linker_flag_prefix = None):
   # for whatever reason nvcc is OK with the -shared linker flag
   # but not with the -fPIC compiler flag 
   linker_flags = ['-shared']
@@ -239,7 +238,7 @@ def compile_object(src_filename,
                      extra_compile_flags = [], 
                      print_commands = None, 
                      compiler = None, 
-                     compiler_flag_prefix  = None):
+                     compiler_flag_prefix = None):
   
   
   if print_commands is None:  print_commands = config.print_commands
@@ -247,7 +246,7 @@ def compile_object(src_filename,
   if compiler is None: compiler = get_compiler()
     
   object_name = src_filename.replace(src_extension, object_extension)
-  compiler_flags = get_compiler_flags(compiler, extra_compile_flags, compiler_flag_prefix)
+  compiler_flags = get_compiler_flags(extra_compile_flags, compiler_flag_prefix)
   
   if isinstance(compiler, (list,tuple)):
     compiler_cmd = list(compiler)
@@ -266,7 +265,7 @@ def link_module(compiler, object_name, shared_name,
                  extra_objects = [], 
                  extra_link_flags = [], 
                  linker_flag_prefix = None):
-  linker_flags = get_linker_flags(compiler, extra_link_flags, linker_flag_prefix) 
+  linker_flags = get_linker_flags(extra_link_flags, linker_flag_prefix) 
   
   if isinstance(compiler, (list,tuple)):
     linker_cmd = list(compiler)
@@ -282,6 +281,49 @@ def link_module(compiler, object_name, shared_name,
     env["LD_LIBRARY_PATH"] = python_lib_dir
   run_cmd(linker_cmd, env = env, label = "Linking")
 
+def compile_with_distutils(fn_name, src_filename,
+                              extra_objects = [], 
+                              extra_compiler_flags = [],
+                              extra_link_flags = [],   
+                              print_commands = False):
+
+    # copied largely from pyxbuild 
+    from distutils.dist import Distribution
+    from distutils.extension import Extension
+    
+    compiler_flags = get_compiler_flags(extra_compiler_flags)
+    linker_flags = get_linker_flags(extra_link_flags)
+    ext = Extension(name=fn_name, 
+                    sources=[src_filename],
+                    extra_objects=extra_objects,
+                    extra_compile_args=compiler_flags,
+                    extra_link_args=linker_flags)
+    #args = ['build_ext'] #args = [quiet, "build_ext"]']
+    script_args = ['build_ext']
+    if not print_commands:
+      script_args.append("--quiet")
+    setup_args = {"script_name": None,
+                  "script_args": script_args, 
+                  }
+    dist = Distribution(setup_args)
+    if not dist.ext_modules: dist.ext_modules = []
+    dist.ext_modules.append(ext)
+    # I have no idea how distutils works or why I have to do any of this 
+    config_files = dist.find_config_files()
+    try: config_files.remove('setup.cfg')
+    except ValueError: pass
+    dist.parse_config_files(config_files)
+    dist.parse_command_line()
+    obj_build_ext = dist.get_command_obj("build_ext")
+    dist.run_commands()
+    shared_name = obj_build_ext.get_outputs()[0]
+    return shared_name
+  
+def compiler_is_gnu(compiler):
+  return (compiler.endswith("gcc") or
+          compiler.endswith("gcc.exe") or 
+          compiler.endswith("g++") or 
+          compiler.endswith("g++.exe"))
   
 def compile_module_from_source(
       src, 
@@ -337,29 +379,15 @@ def compile_module_from_source(
   
   if compiler is None: compiler = get_compiler()
   
-  if compiler in ('gcc', 'g++') and config.use_distutils:
-    # copied largely from pyxbuild 
-    from distutils.dist import Distribution
-    from distutils.extension import Extension
-    
-    ext = Extension(name=fn_name, sources=[src_filename])
-    #args = ['build_ext'] #args = [quiet, "build_ext"]']
-    setup_args = {"script_name": None,
-                  "script_args": ['build_ext']
-                  }
-    dist = Distribution(setup_args)
-    if not dist.ext_modules: dist.ext_modules = []
-    dist.ext_modules.append(ext)
-    # I have no idea how distutils works or why I have to do any of this 
-    config_files = dist.find_config_files()
-    try: config_files.remove('setup.cfg')
-    except ValueError: pass
-    dist.parse_config_files(config_files)
-    dist.parse_command_line()
-    obj_build_ext = dist.get_command_obj("build_ext")
-    dist.run_commands()
-    object_name = None 
-    shared_name = obj_build_ext.get_outputs()[0]
+  if config.use_distutils and \
+     compiler_flag_prefix is None and \
+     linker_flag_prefix is None and \
+     compiler_is_gnu(compiler):
+    shared_name = compile_with_distutils(fn_name, src_filename,
+                                         extra_objects, 
+                                         extra_compile_flags,
+                                         extra_link_flags,
+                                         print_commands)
   else:
     compiled_object = compile_object(src_filename, 
                                      fn_name = fn_name,
@@ -376,7 +404,9 @@ def compile_module_from_source(
                 extra_objects = extra_objects, 
                 extra_link_flags = extra_link_flags, 
                 linker_flag_prefix = linker_flag_prefix)
-  
+    
+    if config.delete_temp_files:
+      os.remove(object_name)
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)
@@ -390,7 +420,6 @@ def compile_module_from_source(
   
   if config.delete_temp_files:
     os.remove(src_filename)
-    os.remove(object_name)
     # window's can't just untether inodes like a UNIX
     # ...have to eventually think of a plan to clean these things up
     if not windows: os.remove(shared_name)
@@ -398,7 +427,6 @@ def compile_module_from_source(
   compiled_fn = CompiledPyFn(c_fn = c_fn, 
                              module = module, 
                              shared_filename =  shared_name,
-                             object_filename = object_name, 
                              src = src, 
                              src_filename = src_filename,
                              fn_name = fn_name, 
