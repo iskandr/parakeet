@@ -11,7 +11,7 @@ compiler_path = None
 # Insert Debugging Code  #
 ##########################
 debug = False
-check_pyobj_types = False 
+check_pyobj_types = True 
 
 #########################
 #  Verbose Printing     #
@@ -32,7 +32,7 @@ delete_temp_files = True
 
 # if compiling C or OpenMP we can skip some of the craziness and 
 # have distutils figure out the system config and compiler for us 
-use_distutils = False
+use_distutils = True
 
 # show all the warnings? 
 suppress_compiler_output = False 

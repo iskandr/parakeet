@@ -139,25 +139,70 @@ def get_linker_flags(extra_flags = [], linker_flag_prefix = None):
 
 
 
+def create_module_source(raw_src, fn_name, 
+                            extra_headers = [], 
+                            declarations = [], 
+                            extra_function_sources = [], 
+                            print_source = None):
+    # when compiling with NVCC, other headers get implicitly included 
+  # and cause warnings since Python redefines this constant
+  src_lines = list(global_preprocessor_defs) 
+  if config.undef_posix_c_source:
+    src_lines.append("#undef _XOPEN_SOURCE")
+    src_lines.append("#undef _POSIX_C_SOURCE")
+  
+  for header in extra_headers + c_headers:
+    src_lines.append("#include <%s>" % header)
+  
+  for decl in declarations:
+    decl = decl.strip()
+    if not decl.endswith(";"):
+      decl += ";"
+    src_lines.appned(decl)
+    
+  src_lines.extend(extra_function_sources)
+  
+  src_lines.append(raw_src)
+  module_init = """
+    \n\n
+    static PyMethodDef %(fn_name)sMethods[] = {
+      {"%(fn_name)s",  %(fn_name)s, METH_VARARGS,
+       "%(fn_name)s"},
+
+      {NULL, NULL, 0, NULL}        /* Sentinel */
+    };
+  
+    PyMODINIT_FUNC
+    init%(fn_name)s(void)
+    {
+      //Py_Initialize();
+      Py_InitModule("%(fn_name)s", %(fn_name)sMethods);
+      import_array();
+    }
+  """ % locals()
+  src_lines.append(module_init)
+  full_src =  "\n".join(src_lines)
+  
+  if print_source is None: print_source = root_config.print_generated_code  
+  if print_source:
+    for i, line in enumerate(full_src.splitlines()):
+        if config.print_line_numbers:
+          print i+1, " ", line
+        else:
+          print line
+  return full_src    
 
 def create_source_file(src, 
                          fn_name = None, 
                          src_filename = None, 
-                         declarations = [],
-                         extra_function_sources = [], 
-                         extra_headers = [], 
-                         print_source = None, 
                          src_extension = None):
   
-  if print_source is None:
-    print_source = root_config.print_generated_code
+  
 
-  if fn_name is None:
-    prefix = "parakeet_"
-  else:
-    prefix = "parakeet_%s_" % fn_name
-  if src_extension is None:
-    src_extension = get_source_extension()
+  if fn_name is None: prefix = "parakeet_"
+  else: prefix = "parakeet_%s_" % fn_name
+  
+  if src_extension is None: src_extension = get_source_extension()
       
   if src_filename is None:
     src_file = NamedTemporaryFile(suffix = src_extension,  
@@ -169,41 +214,10 @@ def create_source_file(src,
   else:
     src_file = open(src_filename, 'w')
   
-  # when compiling with NVCC, other headers get implicitly included 
-  # and cause warnings since Python redefines this constant
-  preprocessor_defs = list(global_preprocessor_defs) 
-  if config.undef_posix_c_source:
-    preprocessor_defs.append("#undef _XOPEN_SOURCE")
-    preprocessor_defs.append("#undef _POSIX_C_SOURCE")
+  src_file.write(src)  
   
-  for d in preprocessor_defs:
-    src_file.write(d)
-    src_file.write("\n")
-  
-  for header in extra_headers + c_headers:
-    src_file.write("#include <%s>\n" % header)
-  
-  for decl in declarations:
-    decl = decl.strip()
-    if not decl.endswith(";"):
-      decl += ";"
-    decl += "\n"
-    src_file.write(decl)
-  
-  for other_fn_src in extra_function_sources:
-    src_file.write(other_fn_src)
-    src_file.write("\n")
-  
-  src_file.write(src)
   src_file.close()
-      
-  if print_source:
-    with open(src_filename, 'r') as src_file_readonly:
-      for i, line in enumerate(src_file_readonly.read().splitlines()):
-        if config.print_line_numbers:
-          print i+1, " ", line
-        else:
-          print line   
+        
   return src_file 
 
 def run_cmd(cmd, env = None, label = ""):
@@ -281,7 +295,8 @@ def link_module(compiler, object_name, shared_name,
     env["LD_LIBRARY_PATH"] = python_lib_dir
   run_cmd(linker_cmd, env = env, label = "Linking")
 
-def compile_with_distutils(fn_name, src_filename,
+def compile_with_distutils(extension_name, 
+                              src_filename,
                               extra_objects = [], 
                               extra_compiler_flags = [],
                               extra_link_flags = [],   
@@ -293,7 +308,8 @@ def compile_with_distutils(fn_name, src_filename,
     
     compiler_flags = get_compiler_flags(extra_compiler_flags)
     linker_flags = get_linker_flags(extra_link_flags)
-    ext = Extension(name=fn_name, 
+    
+    ext = Extension(name=extension_name, 
                     sources=[src_filename],
                     extra_objects=extra_objects,
                     extra_compile_args=compiler_flags,
@@ -326,7 +342,7 @@ def compiler_is_gnu(compiler):
           compiler.endswith("g++.exe"))
   
 def compile_module_from_source(
-      src, 
+      partial_src, 
       fn_name,
       fn_signature = None,  
       src_filename = None,
@@ -345,35 +361,17 @@ def compile_module_from_source(
   
   if print_source is None: print_source = root_config.print_generated_code 
   if print_commands is None: print_commands = config.print_commands
-
-  src += """
-    static PyMethodDef %(fn_name)sMethods[] = {
-      {"%(fn_name)s",  %(fn_name)s, METH_VARARGS,
-       "%(fn_name)s"},
-
-      {NULL, NULL, 0, NULL}        /* Sentinel */
-    };
-  
-    PyMODINIT_FUNC
-    init%(fn_name)s(void)
-    {
-      //Py_Initialize();
-      Py_InitModule("%(fn_name)s", %(fn_name)sMethods);
-      import_array();
-    }
-    """ % locals()  
-  
-
   if src_extension is None: src_extension = get_source_extension()
   
+  full_src = create_module_source(partial_src, fn_name, 
+                                 extra_headers = python_headers + extra_headers, 
+                                 declarations = declarations,  
+                                 extra_function_sources = extra_function_sources, 
+                                 print_source = print_source)
   
-  src_file = create_source_file(src, 
+  src_file = create_source_file(full_src, 
                                 fn_name = fn_name,
                                 src_filename = src_filename, 
-                                declarations = declarations,
-                                extra_function_sources = extra_function_sources,  
-                                extra_headers = python_headers + extra_headers,
-                                print_source = print_source, 
                                 src_extension = src_extension)
   src_filename = src_file.name
   
@@ -383,7 +381,11 @@ def compile_module_from_source(
      compiler_flag_prefix is None and \
      linker_flag_prefix is None and \
      compiler_is_gnu(compiler):
-    shared_name = compile_with_distutils(fn_name, src_filename,
+    
+    import hashlib
+    digest = hashlib.sha224(full_src).hexdigest()
+    shared_name = compile_with_distutils(fn_name + "_" + digest, 
+                                         src_filename,
                                          extra_objects, 
                                          extra_compile_flags,
                                          extra_link_flags,
@@ -427,7 +429,7 @@ def compile_module_from_source(
   compiled_fn = CompiledPyFn(c_fn = c_fn, 
                              module = module, 
                              shared_filename =  shared_name,
-                             src = src, 
+                             src = full_src, 
                              src_filename = src_filename,
                              fn_name = fn_name, 
                              fn_signature = fn_signature)
