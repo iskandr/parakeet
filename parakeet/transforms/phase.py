@@ -127,13 +127,13 @@ class Phase(object):
     
   def apply(self, fn, run_dependencies = True):
     
+      
     if self.memoize:
+      original_key = fn.cache_key
       if fn.created_by is self:
         return fn 
-      original_key = fn.cache_key
-      cached_fn = self.cache.get(original_key)
-      if cached_fn is not None:
-        return cached_fn 
+      if original_key in self.cache:
+        return self.cache[original_key] 
     
     if self.depends_on and run_dependencies:
       fn = apply_transforms(fn, self.depends_on)

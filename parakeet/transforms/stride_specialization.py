@@ -112,10 +112,10 @@ def specialize(fn, python_values, types = None):
   
   abstract_values = tuple(abstract_values)
   key = (fn.cache_key, abstract_values)
-  result = _cache.get(key)
-  if result is not None:
-    return result 
-  elif any(has_unit_stride(v) for v in abstract_values):
+  if key in _cache:
+    return _cache[key]
+  
+  if any(has_unit_stride(v) for v in abstract_values):
     specializer = StrideSpecializer(abstract_values)
 
     transforms = Phase([specializer, Simplify, DCE],
