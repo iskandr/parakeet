@@ -10,7 +10,43 @@ from stmt import block_to_str
 #  Constructs below here are only used in the typed representation
 #
 ################################################################################
-
+class TransformHistory(object):
+  """
+  Sequence of transforms which have been applied to a function, 
+  used for caching to avoid repeating a transformation
+  """
+  
+  def __init__(self, transforms = None):
+    self.transforms = () if transforms is None else transforms 
+    self.transform_set = frozenset(self.transforms) 
+    self._hash = hash(self.transform_set)
+    
+  def __contains__(self, T):
+    return T in self.transform_set
+  
+  def add(self, T):
+    self.transforms = self.transforms + (T,)
+    self.transform_set = self.transform_set.union(frozenset([T]))
+    self._hash = hash(self.transform_set)
+  
+  @property
+  def cache_key(self):
+    return self.transform_set
+  
+  def __hash__(self):
+    return self._hash
+  
+  def __eq__(self, other):
+    return self.transform_set == other.transform_set
+  
+  def __ne__(self, other):
+    return self.transform_set != other.transform_set 
+  
+  def __str__(self):
+    return str(self.transforms)
+  
+  def copy(self):
+    return TransformHistory()
 
 class TypedFn(Expr):
   """
@@ -47,20 +83,20 @@ class TypedFn(Expr):
     
     self.created_by = created_by 
     
-    if transform_history is None: transform_history = set([])
+    if transform_history is None: 
+      transform_history = TransformHistory()
     self.transform_history = transform_history
-    
     
     self.source_info = source_info 
 
 
   @property 
   def cache_key(self):
-    return self.name, self.created_by, self.version
+    return self.name, self.created_by, self.transform_history
   
   @property
   def version(self):
-    return frozenset(self.transform_history)
+    return self.transform_history.cache_key 
   
   def __repr__(self):
     arg_strings = []

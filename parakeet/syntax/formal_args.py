@@ -1,3 +1,4 @@
+from itertools import izip
 from .. import names 
 from actual_args import ActualArgs
 
@@ -141,7 +142,7 @@ class FormalArgs(object):
     env = {}
     values, extra = self.linearize_values(actuals, keyword_fn, tuple_elts_fn)
 
-    for (k,v) in zip(self.nonlocals + tuple(self.positional), values):
+    for (k,v) in izip(self.nonlocals + tuple(self.positional), values):
       env[k] = v
 
     if self.starargs:
@@ -152,16 +153,22 @@ class FormalArgs(object):
     return env
 
   def linearize_values(self, actuals, keyword_fn = None, tuple_elts_fn = iter):
-    if isinstance(actuals, (list, tuple)):
-      actuals = ActualArgs(actuals)
-
-    positional_values = actuals.positional
-
-    if actuals.starargs:
-      starargs_elts = tuple(tuple_elts_fn(actuals.starargs))
+    if isinstance(actuals, ActualArgs):
+      keyword_values = actuals.keywords
+      starargs = actuals.starargs
+      positional_values = actuals.positional
+    else:
+      keyword_values = {}
+      starargs = None 
+      positional_values = actuals
+    
+    if len(positional_values) == len(self.positional) and \
+       len(keyword_values) == 0 and starargs is None:
+      return positional_values, () 
+      
+    if starargs:
+      starargs_elts = tuple(tuple_elts_fn(starargs))
       positional_values = positional_values + starargs_elts
-
-    keyword_values = actuals.keywords
 
     n = self.n_args
     result = [None] * n
@@ -173,10 +180,10 @@ class FormalArgs(object):
       bound[i] = True
 
     if len(positional_values) > n:
-      extra = list(positional_values[n:])
+      extra = tuple(positional_values[n:])
       positional_values = positional_values[:n]
     else:
-      extra = []
+      extra = ()
 
     for (i,p) in enumerate(positional_values):
       assign(i, p)
@@ -195,7 +202,7 @@ class FormalArgs(object):
     missing_args = [arg_slots[i] for i in xrange(n) if not bound[i]]
     if len(missing_args) > 0:
       raise MissingArgsError(missing_args)
-    return result, extra
+    return tuple(result), extra
   
 
   def linearize_without_defaults(self, actuals, tuple_elts_fn = tuple):

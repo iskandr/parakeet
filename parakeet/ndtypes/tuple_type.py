@@ -7,18 +7,22 @@ from core_types import IncompatibleTypes, StructT, ImmutableT
 
 class TupleT(StructT, ImmutableT):
   rank = 0
-  _members = ['elt_types']
-
+  def __init__(self, elt_types):
+    if elt_types is None:
+      elt_types = ()
+    else:
+      elt_types = tuple(elt_types)
+    self.elt_types = elt_types
+    self._fields_ = [("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)]
+    self._hash = hash(elt_types)
+    
   # signals to type inference algorithm to pass the value of an index into
   # index_type rather than its type
   static_indexing = True
 
-  def node_init(self):
-    if self.elt_types is None:
-      self.elt_types = ()
-    self.elt_types = tuple(self.elt_types)
-    self._fields_ = [("elt%d" % i, t) for (i,t) in enumerate(self.elt_types)]
-
+  def children(self):
+    return self.elt_types
+  
   def from_python(self, python_tuple, _keep_forever = []):
     # _keep_forever.append(python_tuple)
     converted_elts = []
@@ -51,7 +55,7 @@ class TupleT(StructT, ImmutableT):
     return other.__class__ is TupleT and self.elt_types == other.elt_types
 
   def __hash__(self):
-    return hash(self.elt_types)
+    return self._hash 
 
   def __str__(self):
     return "tuple(%s)" % ", ".join([str(t) for t in self.elt_types])

@@ -127,29 +127,31 @@ class Phase(object):
     
   def apply(self, fn, run_dependencies = True):
     
-    original_key = fn.cache_key
-    if original_key in self.cache:
-      return self.cache[original_key]
-
+    if self.memoize:
+      if fn.created_by is self:
+        return fn 
+      original_key = fn.cache_key
+      cached_fn = self.cache.get(original_key)
+      if cached_fn is not None:
+        return cached_fn 
+    
     if self.depends_on and run_dependencies:
       fn = apply_transforms(fn, self.depends_on)
-    
     
     if self.copy:
       fn = CloneFunction(parent_transform = self, rename = self.rename).apply(fn)
       if fn.cache_key  in self.cache:
-        "Warning: Typed function %s (key = %s) already registered, encountered while cloning before %s" % \
+        print "Warning: Typed function %s (key = %s) already registered, encountered while cloning before %s" % \
         (fn.name, fn.cache_key, self)
     
     if self.recursive:
       fn = RecursiveApply(self).apply(fn)
-    
       
     if not self.should_skip(fn):
       fn = apply_transforms(fn, self.transforms, 
-                          cleanup = self.cleanup, 
-                          phase_name = str(self), 
-                          transform_history = fn.transform_history)
+                           cleanup = self.cleanup, 
+                           phase_name = str(self), 
+                           transform_history = fn.transform_history)
     
       if self.post_apply:
         new_fn = self.post_apply(fn)

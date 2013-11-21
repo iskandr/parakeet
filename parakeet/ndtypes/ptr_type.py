@@ -15,26 +15,28 @@ class PtrT(ConcreteT):
   usable fields, so it's up to our ctypes_repr and llvm_backend to appropriately
   interpret objects of this type.
   """
-
-  _members = ['elt_type']
-
+  def __init__(self, elt_type):
+    self.elt_type = elt_type 
+    self._ctypes_repr = ctypes.POINTER(self.elt_type.ctypes_repr)
+    self._hash =  hash(elt_type)
+    
   rank = 1
   def index_type(self, idx):
     assert isinstance(idx, IntT), \
         "Index into pointer must be of type int, got %s" % (idx)
     return self.elt_type
 
-  def node_init(self):
-    self._ctypes_repr = ctypes.POINTER(self.elt_type.ctypes_repr)
+  def children(self):
+    return self.elt_type
 
   def __str__(self):
     return "ptr(%s)" % self.elt_type
 
   def __eq__(self, other):
-    return isinstance(other, PtrT) and self.elt_type == other.elt_type
+    return other.__class__ is PtrT and self.elt_type == other.elt_type
 
   def __hash__(self):
-    return hash(self.elt_type)
+    return self._hash 
 
   def __repr__(self):
     return str(self)

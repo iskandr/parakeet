@@ -16,12 +16,10 @@ from fn_type import make_fn_type, FnT
 from ptr_type import PtrT, ptr_type 
 
 from scalar_types import (ScalarT, 
-                          IntT, FloatT, BoolT, SignedT, UnsignedT, ComplexT, 
+                          IntT, FloatT, BoolT, SignedT, UnsignedT,  
                           Int8, Int16, Int24, Int32, Int64, 
                           UInt8, UInt16, UInt32, UInt64, 
                           Bool, Float32, Float64, 
-                          Complex64, Complex128, 
-                          ConstIntT, 
                           is_scalar_subtype, is_scalar, all_scalars, 
                           from_dtype, from_char_code)
   

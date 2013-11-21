@@ -1,6 +1,6 @@
 import ctypes
 
-from dsltools import Node
+#from dsltools import Node
 
 class TypeFailure(Exception):
   def __init__(self, msg):
@@ -17,10 +17,13 @@ class IncompatibleTypes(Exception):
   def __str__(self):
     return repr(self)
 
-class Type(Node):
+class Type(object):
   def combine(self, other):
     raise IncompatibleTypes(self, other)
 
+  def children(self):
+    return ()
+  
   def __hash__(self):
     assert False, "Hash function not implemented for type %s" % (self,)
 
@@ -30,15 +33,20 @@ class Type(Node):
   def __ne__(self, other):
     return not (self == other)
   
+  def __str__(self):
+    return self.__class__.__name__
 
 class AnyT(Type):
   """top of the type lattice, absorbs all types"""
 
+  def __hash__(self):
+    return 101
+  
   def combine(self, other):
     return self
 
   def __eq__(self, other):
-    return isinstance(other, AnyT)
+    return other.__class__ is AnyT
 
 # since there's only one Any type, just create an instance of the same name
 Any = AnyT()
@@ -46,15 +54,18 @@ Any = AnyT()
 class UnknownT(Type):
   """Bottom of the type lattice, absorbed by all other types"""
 
+  _hash = hash("unknown")
+  
   def __hash__(self):
-    return hash("unknown")
+    return self._hash 
+  
   
   _members = []
   def  combine(self, other):
     return other
 
   def __eq__(self, other):
-    return isinstance(other, UnknownT)
+    return other.__class__ is UnknownT
 
 #single instance of the Unknown type with same name
 Unknown = UnknownT()
@@ -197,13 +208,17 @@ class TypeValueT(ImmutableT):
   Materialization of a type into a value 
   """
   rank = 0
-  _members = ['type']
+  
+  def __init__(self, type):
+    self.type = type 
+    self._hash = hash(self.type)
+  #_members = ['type']
   
   def __str__(self):
     return "TypeValue(%s)" % self.type 
   
   def __hash__(self):
-    return hash(self.type)
+    return self._hash 
   
   def __eq__(self, other):
     return other.__class__ is TypeValueT and self.type == other.type

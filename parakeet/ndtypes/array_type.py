@@ -29,13 +29,14 @@ PyBuffer_New = ctypes.pythonapi.PyBuffer_New
 PyBuffer_FromReadWriteMemory = ctypes.pythonapi.PyBuffer_FromReadWriteMemory
 
 class ArrayT(StructT):
-  _members = ['elt_type', 'rank']
-
-  def node_init(self):
-    assert isinstance(self.elt_type, ScalarT), \
+  
+  def __init__(self, elt_type, rank):
+    assert isinstance(elt_type, ScalarT), \
       "Can't create array with element type %s, currently only scalar elements supported" % \
       (self.elt_type,)
-        
+    self.elt_type = elt_type
+    self.rank = rank 
+    
     tuple_t = repeat_tuple(Int64, self.rank)
 
     self.shape_t = tuple_t
@@ -49,7 +50,14 @@ class ArrayT(StructT):
       ('size', Int64),
       # ('dtype', TypeValueT(self.elt_type))
     ]
+    self._hash = hash( (elt_type, rank) )
   
+  def children(self):
+    yield self.elt_type
+    yield self.shape_t
+    yield self.strides_t
+    yield self.ptr_t 
+     
   def dtype(self):
     return self.elt_type.dtype
 
@@ -64,7 +72,7 @@ class ArrayT(StructT):
         self.rank == other.rank
 
   def __hash__(self):
-    return hash((self.elt_type, self.rank))
+    return self._hash 
 
   def combine(self, other):
     if self == other:

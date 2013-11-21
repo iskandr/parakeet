@@ -37,7 +37,7 @@ class ActualArgs(object):
     self.positional = positional
     self.keywords = keywords
     self.starargs = starargs
-
+    
   def transform(self, fn, keyword_name_fn = None, keyword_value_fn = None):
     new_pos = [fn(pos_arg) for pos_arg in self.positional]
     new_keywords = {}
@@ -49,10 +49,9 @@ class ActualArgs(object):
     return ActualArgs(new_pos, new_keywords, new_starargs)
 
   def __eq__(self, other):
-    if len(self.positional) != len(other.positional) or \
+    if self.positional != other.positional or \
        len(self.keywords) != len(other.keywords) or \
-       self.starargs != other.starargs or \
-       any(t1 != t2 for (t1, t2) in zip(self.positional, other.positional)):
+       self.starargs != other.starargs:
       return False
     for (k,v) in self.keywords.iteritems():
       if k not in other.keywords:
@@ -75,10 +74,8 @@ class ActualArgs(object):
     return str(self)
 
   def __hash__(self):
-    kwd_tuple = tuple(self.keywords.items())
-    full_tuple = self.positional + kwd_tuple + (self.starargs,)
-    return hash(full_tuple)
-
+    return hash(self.positional + tuple(self.keywords.items()) + (self.starargs,))
+  
   def __iter__(self):
     return combine_iters(iter(self.positional),
                          self.keywords.itervalues(),

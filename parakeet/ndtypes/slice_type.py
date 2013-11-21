@@ -3,15 +3,22 @@ import type_conv
 from core_types import StructT, ImmutableT, IncompatibleTypes
 
 class SliceT(StructT, ImmutableT):
-  _members = ['start_type', 'stop_type', 'step_type']
-
-  def node_init(self):
+  def __init__(self, start_type, stop_type, step_type):
+    self.start_type = start_type
+    self.stop_type = stop_type 
+    self.step_type = step_type
     self._fields_ = [
-      ('start', self.start_type),
-      ('stop', self.stop_type),
-      ('step', self.step_type),
+      ('start', start_type),
+      ('stop', stop_type),
+      ('step', step_type),
     ]
-
+    self._hash = hash((self.start_type, self.stop_type, self.step_type))
+  
+  def children(self):
+    yield self.start_type
+    yield self.stop_type
+    yield self.step_type
+    
   def __eq__(self, other):
     return self is other or \
       (other.__class__ is SliceT and
@@ -20,7 +27,7 @@ class SliceT(StructT, ImmutableT):
        self.step_type == other.step_type)
 
   def __hash__(self):
-    return hash((self.start_type, self.stop_type, self.step_type))
+    return self._hash 
 
   def combine(self, other):
     if self == other:

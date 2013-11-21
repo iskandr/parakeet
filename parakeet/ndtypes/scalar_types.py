@@ -9,29 +9,25 @@ from core_types import IncompatibleTypes, ImmutableT
 # don't actually tag any values with this
 class ScalarT(ImmutableT):
   rank = 0
-  _members = ['dtype']
-
-  def node_init(self):
-    assert isinstance(self.dtype, np.dtype), "Expected dtype, got %s" % self.dtype
+  
+  def __init__(self, dtype):
+    self.dtype = dtype 
     self.name = self.dtype.name
     self.nbytes = self.dtype.itemsize
-
+    self._hash = hash(self.dtype)
+    
   @property
   def ctypes_repr(self):
     return dtypes.to_ctypes(self.dtype)
 
   def __eq__(self, other):
-    if self is other:
-      return True 
-    if self.__class__ is not other.__class__:
-      return False 
-    return self.nbytes == other.nbytes
+    return (self is other) or ( self.__class__ is other.__class__ and self.nbytes == other.nbytes)
   
   def __ne__(self, other):
     return not (self == other) 
   
   def __hash__(self):
-    return hash(self.dtype)
+    return self._hash
 
   def __repr__(self):
     return self.name
@@ -43,10 +39,9 @@ class ScalarT(ImmutableT):
     return self
 
   def combine(self, other):
-     
-    if isinstance(other, ScalarT):
+    if hasattr(other, 'dtype'):
       combined_dtype = np.promote_types(self.dtype, other.dtype)
-      if combined_dtype == self.dtype:
+      if combined_dtype == self.dtype: 
         return self
       elif combined_dtype == other.dtype:
         return other
@@ -80,9 +75,9 @@ class BoolT(IntT):
   The type is called BoolT to distinguish it from its only instantiation called
   Bool.
   """
-
-  def node_init(self):
-    assert dtypes.is_bool(self.dtype)
+  
+  def __init__(self, dtype):
+    ScalarT.__init__(self, dtype)
     self.name = 'bool'
 
   def __eq__(self, other):
@@ -91,9 +86,7 @@ class BoolT(IntT):
 Bool = register_scalar_type(BoolT, dtypes.bool8, equiv_python_types = [bool])
 
 class UnsignedT(IntT):
-  def node_init(self):
-    assert dtypes.is_unsigned(self.dtype), \
-        "Expected unsigned but got %s" % self.dtype
+  pass 
 
 UInt8 = register_scalar_type(UnsignedT, dtypes.uint8)
 
@@ -102,8 +95,7 @@ UInt32 = register_scalar_type(UnsignedT, dtypes.uint32)
 UInt64 = register_scalar_type(UnsignedT, dtypes.uint64)
 
 class SignedT(IntT):
-  def node_init(self):
-    assert dtypes.is_signed(self.dtype)
+  pass 
 
 Int8 = register_scalar_type(SignedT, dtypes.int8)
 Int16 = register_scalar_type(SignedT, dtypes.int16) 
@@ -118,7 +110,8 @@ class Int24T(SignedT):
   """
   def __init__(self):
     self.name = "int24"
-    self.nbytes = 3 
+    self.nbytes = 3
+    self._hash = hash("int24")
     
   def combine(self, other):
     if isinstance(other, IntT):
@@ -127,8 +120,8 @@ class Int24T(SignedT):
     return other 
   
   def __hash__(self):
-    return hash("int24")
-
+    return self._hash 
+  
   def __eq__(self, other):
     return self.__class__ is other.__class__ 
     
@@ -146,44 +139,14 @@ Float32 = register_scalar_type(FloatT, dtypes.float32)
 Float64 = register_scalar_type(FloatT, dtypes.float64,
                                equiv_python_types = [float])
 
-def complex_conj(x):
-  np.complex(x.real, -x.imag)
 
-class ComplexT(ScalarT):
-  _members = ['elt_type']
-  _props_ = [('conjugate', complex_conj)]
-
-  def node_init(self):
-    assert dtypes.is_float(self.elt_type), \
-        "Expected fields of complex to be floating, got %s" % self.elt_type
-    assert dtypes.is_complex(self.dtype)
-    self._fields_ = [('real', self.elt_type), ('imag', self.elt_type)]
-
-Complex64 = ComplexT(dtypes.float32, dtypes.complex64)
-Complex128 = ComplexT(dtypes.float64, dtypes.complex128)
-
-class ConstIntT(IntT):
-  """
-  Integer constants get a special type all to their lonesome selves, so we can
-  assign types to expressions like "(1,2,3)[0]".
-  """
-
-  _members = ['value']
-
-  def __init__(self, value):
-    self.dtype = dtypes.int64
-    self.value = value
-
-  def combine(self, other):
-    if isinstance(other, ConstIntT) and other.value == self.value:
-      return self
-    else:
-      return IntT.combine(self, other)
 
 def is_scalar_subtype(t1, t2):
   return isinstance(t1, ScalarT) and \
          isinstance(t2, ScalarT) and \
-         ((t1 == t2) or (t1.nbytes < t2.nbytes) or \
+         ((t1 is t2) or 
+          (t1 == t2) or 
+          (t1.nbytes < t2.nbytes) or 
           (isinstance(t1, IntT) and isinstance(t2, FloatT)))
 
 def from_dtype(dtype):
@@ -204,4 +167,4 @@ def is_scalar(t):
   return isinstance(t, ScalarT)
 
 def all_scalars(ts):
-  return all(map(is_scalar, ts))
+  return all(is_scalar(t) for t in  ts)

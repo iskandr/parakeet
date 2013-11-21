@@ -745,8 +745,9 @@ class PyModuleCompiler(FnCompiler):
     # we include the compiler's class as part of the key
     # since this function might get reused by descendant backends like OpenMP and CUDA
     key = parakeet_fn.cache_key, self.__class__ 
-    if key in self._entry_compile_cache:
-      return self._entry_compile_cache[key]
+    compiled_fn = self._entry_compile_cache.get(key)
+    if compiled_fn is not None:
+      return compiled_fn 
     
     name, sig, src = self.visit_fn(parakeet_fn)
     

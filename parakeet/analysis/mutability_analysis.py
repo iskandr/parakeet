@@ -35,21 +35,18 @@ class TypeBasedMutabilityAnalysis(SyntaxVisitor):
     For any type other than a Tuple or Closure, try 
     marking all its children 
     """
-    for name in t.members():
-      v = getattr(t, name)
-      self._mark(v)
-    if isinstance(t, StructT):
-      for (_, field_type) in t._fields_:
-        self._mark_type(field_type) 
+    for elt_t in t.children():
+      self._mark_type(elt_t)
+ 
   
-      
+  """    
   def _mark(self, obj):
     if isinstance(obj, Type):
       self._mark_type(obj)
     elif isinstance(obj, (tuple, list)):
       for child in obj:
         self._mark(child)
-        
+  """   
   def visit_merge(self, phi_nodes):
     pass 
     

@@ -153,7 +153,7 @@ class IndexifyAdverbs(Transform):
         builder.setidx(output_var, index_input_vars[0], elt_result)
       builder.return_(none)
     
-    new_fn.created_by = self 
+    new_fn.created_by = self.fn.created_by 
     new_fn.transform_history = self.fn.transform_history 
     self._indexed_fn_cache[key] = new_fn
     return mk_closure()
@@ -363,6 +363,7 @@ class IndexifyAdverbs(Transform):
     new_fn, builder, input_vars = build_fn(new_input_types, NoneType,
                                            name = new_fn_name,  
                                            input_names = new_input_names)
+    new_fn.created_by = self.fn.created_by 
     output_var = input_vars[0]
     
     idx_vars = input_vars[-n_dims:]

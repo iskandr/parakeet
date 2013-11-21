@@ -10,24 +10,25 @@ import type_conv
 ###########################################
 
 class ClosureT(StructT, ImmutableT):
-  _members = ['fn', 'arg_types']
-
-  max_id = 0
-  # map each distinct closure_type to an integer id
-  id_numbers = {}
-
-  def node_init(self):
-    if self.arg_types is None:
-      self.arg_types = ()
-    elif not hasattr(self.arg_types, '__iter__'):
-      self.arg_types = tuple([self.arg_types])
-    elif not isinstance(self.arg_types, tuple):
-      self.arg_types = tuple(self.arg_types)
-
-    self._fields_ = [] #('fn_id', Int64)]
-    for (i, t) in enumerate(self.arg_types):
-      self._fields_.append( ('arg%d' % i, t) )
-
+  def __init__(self, fn, arg_types):
+    
+    self.fn = fn 
+    
+    if arg_types is None:
+      arg_types = ()
+    elif not hasattr(arg_types, '__iter__'):
+      arg_types = tuple([arg_types])
+    else:
+      arg_types = tuple(arg_types)
+      
+    self.arg_types = arg_types 
+    self._hash = hash( (fn,) + arg_types)
+    
+    self._fields_ = [
+      ('arg%d' % i, t)
+      for (i, t) in enumerate(arg_types)
+    ]
+     
     self.specializations = {}
     if self in self.id_numbers:
       self.id = self.id_numbers[self]
@@ -35,9 +36,16 @@ class ClosureT(StructT, ImmutableT):
       self.id = self.max_id
       self.id_numbers[self] = self.id
       self.max_id += 1
+  
+  def children(self):
+    return self.arg_types
+  
+  max_id = 0
+  # map each distinct closure_type to an integer id
+  id_numbers = {}
 
   def __hash__(self):
-    return hash( (self.fn,) + self.arg_types)
+    return self._hash 
 
   def __eq__(self, other):
     
