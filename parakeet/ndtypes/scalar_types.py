@@ -15,11 +15,7 @@ class ScalarT(ImmutableT):
     self.name = self.dtype.name
     self.nbytes = self.dtype.itemsize
     self._hash = hash(self.dtype)
-    
-  @property
-  def ctypes_repr(self):
-    return dtypes.to_ctypes(self.dtype)
-
+  
   def __eq__(self, other):
     return (self is other) or ( self.__class__ is other.__class__ and self.nbytes == other.nbytes)
   
@@ -38,6 +34,9 @@ class ScalarT(ImmutableT):
   def index_type(self, _):
     return self
 
+  def convert_python_value(self, x):
+    return self.dtype.type(x)
+  
   def combine(self, other):
     if hasattr(other, 'dtype'):
       combined_dtype = np.promote_types(self.dtype, other.dtype)
@@ -66,8 +65,8 @@ def register_scalar_type(ParakeetClass, dtype, equiv_python_types = []):
 
 class IntT(ScalarT):
   """Base class for bool, signed and unsigned"""
+  pass 
 
-  _members = []
   
 
 class BoolT(IntT):
@@ -131,15 +130,11 @@ class Int24T(SignedT):
 Int24 = Int24T()
 
 class FloatT(ScalarT):
-  _members = []
-  def node_init(self):
-    assert dtypes.is_float(self.dtype)
+  pass 
 
 Float32 = register_scalar_type(FloatT, dtypes.float32)
 Float64 = register_scalar_type(FloatT, dtypes.float64,
                                equiv_python_types = [float])
-
-
 
 def is_scalar_subtype(t1, t2):
   return isinstance(t1, ScalarT) and \

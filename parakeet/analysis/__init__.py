@@ -8,8 +8,7 @@ from contains import (contains_adverbs, contains_calls, contains_functions,
                       contains_array_operators)
  
 from escape_analysis import may_alias, may_escape, escape_analysis 
-import find_constant_strides
-from find_constant_strides import FindConstantStrides
+
 from find_local_arrays import FindLocalArrays
 from index_elim_analysis import IndexElimAnalysis
 from inline_allowed import can_inline

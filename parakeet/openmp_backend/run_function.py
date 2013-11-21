@@ -2,7 +2,7 @@ from .. import config
 
 from ..c_backend.prepare_args import prepare_args  
 from ..transforms.pipeline import after_indexify, final_loop_optimizations, flatten  
-from ..transforms.stride_specialization import specialize
+from ..value_specialization import specialize
 
 from multicore_compiler import MulticoreCompiler 
 
@@ -10,7 +10,7 @@ def run(fn, args):
   args = prepare_args(args, fn.input_types)
   fn = after_indexify(fn)
   fn = final_loop_optimizations.apply(fn)
-  if config.stride_specialization:
+  if config.value_specialization:
     fn = specialize(fn, python_values = args)
   compiled_fn = MulticoreCompiler().compile_entry(fn)
   assert len(args) == len(fn.input_types)

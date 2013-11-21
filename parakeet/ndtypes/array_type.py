@@ -1,33 +1,9 @@
-
-import ctypes
-import numpy as np
-
-
-
-
 from core_types import StructT, IncompatibleTypes, NoneT, Type, NoneType   
 from ptr_type import ptr_type
 from scalar_types import Int64, ScalarT, IntT 
 from tuple_type import TupleT, repeat_tuple
 from slice_type import SliceT
   
-def buffer_info(buf, ptr_type = ctypes.c_void_p):
-  """Given a python buffer, return its address and length"""
-
-  assert isinstance(buf, buffer)
-  address = ptr_type()
-  length = ctypes.c_ssize_t()
-  obj = ctypes.py_object(buf)
-  ctypes.pythonapi.PyObject_AsReadBuffer(obj, ctypes.byref(address),
-                                         ctypes.byref(length))
-  return address, length.value
-
-ctypes.pythonapi.PyBuffer_New.argtypes = (ctypes.c_ulong,)
-ctypes.pythonapi.PyBuffer_New.restype = ctypes.py_object
-
-PyBuffer_New = ctypes.pythonapi.PyBuffer_New
-PyBuffer_FromReadWriteMemory = ctypes.pythonapi.PyBuffer_FromReadWriteMemory
-
 class ArrayT(StructT):
   
   def __init__(self, elt_type, rank):
@@ -119,69 +95,6 @@ class ArrayT(StructT):
       return make_array_type(self.elt_type, result_rank)
     else:
       return self.elt_type
-
-  # WARNING:
-  # until we have garbage collection figured out, we'll
-  # leak memory from arrays we allocate in the conversion routine
-  _store_forever = []
-  _seen_ptr = set([])
-  def from_python(self, x):
-    if not isinstance(x, np.ndarray):
-      print "Warning: Copying %s into Parakeet, will never get deleted" % \
-          (type(x))
-      x = np.asarray(x)
-      self._store_forever.append(x)
-
-    nelts = x.size 
-    elt_size = x.dtype.itemsize
-    # total_bytes = nelts * elt_size
-    if x.base is not None:
-      if isinstance(x.base, np.ndarray):
-        ptr = x.base.ctypes.data_as(self.ptr_t.ctypes_repr)
-        offset_bytes = x.ctypes.data  - x.base.ctypes.data 
-      else:
-        assert isinstance(x.base, buffer)
-        ptr, _ = buffer_info(x.base, self.ptr_t.ctypes_repr)
-        offset_bytes = x.ctypes.data - ctypes.addressof(ptr.contents) 
-      offset = offset_bytes / elt_size
-    else:
-      ptr = x.ctypes.data_as(self.ptr_t.ctypes_repr)
-      offset = 0
-   
-    ctypes_shape = self.shape_t.from_python(x.shape)
-    strides_in_elts = tuple([s / elt_size for s in x.strides])
-    ctypes_strides = self.strides_t.from_python(strides_in_elts)
-    return self.ctypes_repr(ptr, 
-                            ctypes.pointer(ctypes_shape),
-                            ctypes.pointer(ctypes_strides), 
-                            offset, 
-                            nelts)
-    
-  def to_python(self, obj):
-    """
-    For now, to avoid to dealing with the messiness of ownership, we just always
-    copy data on the way out of Parakeet
-    """
-
-    shape = self.shape_t.to_python(obj.shape.contents)
-
-    elt_size = self.elt_type.nbytes
-    strides_in_elts = self.strides_t.to_python(obj.strides.contents)
-    strides_in_bytes = tuple([s * elt_size for s in strides_in_elts])
-
-    base_ptr = obj.data
-
-    nbytes = obj.size * elt_size
-
-    dest_buf = PyBuffer_New(nbytes)
-    dest_ptr, _ = buffer_info(dest_buf, self.ptr_t.ctypes_repr)
-    ctypes.memmove(dest_ptr, base_ptr, nbytes)
-
-    
-    return np.ndarray(shape, dtype = self.elt_type.dtype,
-                      buffer = dest_buf,
-                      strides = strides_in_bytes,
-                      offset = obj.offset * elt_size)
 
 _array_types = {}
 def make_array_type(elt_t, rank):

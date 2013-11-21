@@ -7,11 +7,6 @@ class SliceT(StructT, ImmutableT):
     self.start_type = start_type
     self.stop_type = stop_type 
     self.step_type = step_type
-    self._fields_ = [
-      ('start', start_type),
-      ('stop', stop_type),
-      ('step', step_type),
-    ]
     self._hash = hash((self.start_type, self.stop_type, self.step_type))
   
   def children(self):
@@ -42,17 +37,7 @@ class SliceT(StructT, ImmutableT):
   def __repr__(self):
     return str(self)
 
-  def from_python(self, py_slice):
-    start = self.start_type.from_python(py_slice.start)
-    stop = self.stop_type.from_python(py_slice.stop)
-    step = self.step_type.from_python(py_slice.step)
-    return self.ctypes_repr(start, stop, step)
 
-  def to_python(self, obj):
-    start = self.start_type.to_python(obj.start)
-    stop = self.stop_type.to_python(obj.stop)
-    step = self.step_type.to_python(obj.step)
-    return slice(start, stop, step)
 
 _slice_type_cache = {}
 def make_slice_type(start_t, stop_t, step_t):

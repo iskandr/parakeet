@@ -1,5 +1,3 @@
-import ctypes 
-
 from core_types import ConcreteT
 from scalar_types import IntT 
 
@@ -17,7 +15,6 @@ class PtrT(ConcreteT):
   """
   def __init__(self, elt_type):
     self.elt_type = elt_type 
-    self._ctypes_repr = ctypes.POINTER(self.elt_type.ctypes_repr)
     self._hash =  hash(elt_type)
     
   rank = 1

@@ -44,9 +44,6 @@ opt_shape_elim = True
 #     a = b[i:j]  
 opt_copy_elimination = True
 
-# recompile functions for distinct patterns of unit strides
-stride_specialization = True 
-
 # may dramatically increase compile time
 opt_loop_unrolling = False
 
@@ -56,6 +53,10 @@ opt_scalar_replacement = False
     
 # run verifier after each transformation 
 opt_verify = True
+
+# recompile functions for distinct patterns of unit strides and 0 or 1 input values 
+value_specialization = True 
+
 
 
 #####################################

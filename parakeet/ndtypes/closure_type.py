@@ -23,27 +23,12 @@ class ClosureT(StructT, ImmutableT):
       
     self.arg_types = arg_types 
     self._hash = hash( (fn,) + arg_types)
-    
-    self._fields_ = [
-      ('arg%d' % i, t)
-      for (i, t) in enumerate(arg_types)
-    ]
-     
-    self.specializations = {}
-    if self in self.id_numbers:
-      self.id = self.id_numbers[self]
-    else:
-      self.id = self.max_id
-      self.id_numbers[self] = self.id
-      self.max_id += 1
   
+    self.specializations = {}
+
   def children(self):
     return self.arg_types
   
-  max_id = 0
-  # map each distinct closure_type to an integer id
-  id_numbers = {}
-
   def __hash__(self):
     return self._hash 
 
@@ -67,31 +52,7 @@ class ClosureT(StructT, ImmutableT):
                                                    for t in self.arg_types))
 
 
-  
-  def from_python(self, python_fn):
-    from ..frontend import ast_conversion
-    
-    untyped_fundef = ast_conversion.translate_function_value(python_fn)
-    closure_args = untyped_fundef.python_nonlocals()
-    closure_arg_types = map(type_conv.typeof, closure_args)
 
-    closure_t = make_closure_type(untyped_fundef, closure_arg_types)
-    closure_id = id_of_closure_type(closure_t)
-
-    def field_value(closure_arg):
-      obj = type_conv.from_python(closure_arg)
-      parakeet_type = type_conv.typeof(closure_arg)
-      if isinstance(parakeet_type, StructT):
-        return ctypes.pointer(obj)
-      else:
-        return obj
-
-    converted_args = [field_value(closure_arg) for closure_arg in closure_args]
-    return closure_t.ctypes_repr(closure_id, *converted_args)
-
-
-  def to_python(self, parakeet_fn):
-    raise RuntimeError("TODO: Just return a compiled_fn wrapper")
 
   def combine(self, other):
     if isinstance(other, ClosureSet):
@@ -116,32 +77,6 @@ def make_closure_type(fn, closure_arg_types = []):
     return t
 
 
-
-
-"""
-Map each (untyped fn id, fixed arg) types to a distinct integer so that the
-runtime representation of closures just need to carry this ID
-"""
-
-closure_type_to_id = {}
-id_to_closure_type = {}
-max_id = 0
-
-def id_of_closure_type(closure_t):
-  global max_id
-  assert isinstance(closure_t, ClosureT), \
-      "Expected closure type, got: " + str(closure_t)
-  if closure_t in closure_type_to_id:
-    return closure_type_to_id[closure_t]
-  else:
-    num = max_id
-    max_id += 1
-    closure_type_to_id[closure_t] = num
-    return num
-
-def closure_type_from_id(num):
-  assert num in id_to_closure_type
-  return id_to_closure_type[num]
 
 
 
