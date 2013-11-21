@@ -1,5 +1,5 @@
 import numpy as np 
-
+from numpy import ndarray 
 
 from .. import syntax 
 from .. syntax.helpers import const 
@@ -73,13 +73,14 @@ def has_unit_stride(abstract_value):
 
 
 def from_python(python_value):
-  if isinstance(python_value, np.ndarray):
+  t = type(python_value)
+  if t is ndarray:
     elt_size = python_value.dtype.itemsize 
     strides = []
     for s in python_value.strides:
       strides.append(specialization_const(s/elt_size)) 
     return abstract_array(strides)
-  elif isinstance(python_value, tuple):
+  elif t is tuple:
     return abstract_tuple(from_python_list(python_value))
   elif python_value == 0:
     return zero 

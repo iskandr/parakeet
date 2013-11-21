@@ -28,29 +28,30 @@ unknown = Unknown()
 class Tuple(AbstractValue):
   def __init__(self, elts):
     self.elts = tuple(elts)
+    self._hash = hash(self.elts)
   
   def __str__(self):
     return "Tuple(%s)" % ", ".join(str(elt) for elt in self.elts)
   
   def __hash__(self):
-    return hash(self.elts)
+    return self._hash 
   
   def __eq__(self, other):
-    return other.__class__ is Tuple and \
-      len(self.elts) == len(other.elts) and \
-      all(e1 == e2 for (e1,e2) in zip(self.elts, other.elts))
+    return other.__class__ is Tuple and self.elts == other.elts 
+      
   
 class Array(AbstractValue):
   # mark known strides with integer constants 
   # and all others as unknown
   def __init__(self, strides):
     self.strides = strides
+    self._hash = hash(self.strides.elts) + 1
   
   def __str__(self):
     return "Array(strides = %s)" % self.strides
   
   def __hash__(self):
-    return hash(self.strides.elts)
+    return self._hash 
   
   def __eq__(self, other):
     return other.__class__ is Array and \

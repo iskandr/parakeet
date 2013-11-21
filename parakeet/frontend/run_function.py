@@ -5,6 +5,11 @@ from ..ndtypes import type_conv, Type
 from ..syntax import UntypedFn, TypedFn, ActualArgs
 from ..transforms import pipeline
 
+from .. import c_backend
+from .. import openmp_backend 
+
+import ast_conversion
+
 def prepare_args(fn, args, kwargs):
   """
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
@@ -12,7 +17,7 @@ def prepare_args(fn, args, kwargs):
   """
   assert not isinstance(fn, TypedFn), "[prepare_args] Only works for untyped functions"
   if not isinstance(fn, UntypedFn):
-    import ast_conversion
+
     fn = ast_conversion.translate_function_value(fn)   
     
   nonlocals = list(fn.python_nonlocals())
@@ -38,7 +43,6 @@ def specialize(untyped, args, kwargs = {}, optimize = True):
   """
 
   if not isinstance(untyped, UntypedFn):
-    import ast_conversion
     untyped = ast_conversion.translate_function_value(untyped)
        
   arg_values, arg_types = prepare_args(untyped, args, kwargs)
@@ -58,27 +62,23 @@ def specialize(untyped, args, kwargs = {}, optimize = True):
   return typed_fn, linear_args 
 
 def run_typed_fn(fn, args, backend = None):
-  
-  assert isinstance(fn, TypedFn)
   actual_types = tuple(type_conv.typeof(arg) for arg in  args)
   expected_types = fn.input_types
   assert actual_types == expected_types, \
     "Arg type mismatch, expected %s but got %s" % \
     (expected_types, actual_types)
-
   
   if backend is None:
     backend = config.backend
     
   if backend == 'c':
-    from .. import c_backend
     return c_backend.run(fn, args)
    
   elif backend == 'openmp':
-    from .. import openmp_backend 
     return openmp_backend.run(fn, args)
   
   elif backend == 'cuda':
+    # only selectively import cuda_backend since it required PyCUDA
     from .. import cuda_backend 
     return cuda_backend.run(fn, args)
   
@@ -120,15 +120,14 @@ def run_python_ast(fn_name, fn_args, fn_body, globals_dict,
   Instead of giving Parakeet a function to parse, you can construct a Python 
   AST yourself and then have that converted into a Typed Parakeet function
   """
-  import ast_conversion
   untyped = ast_conversion.translate_function_ast(fn_name, fn_args, fn_body, globals_dict)
   return run_untyped_fn(untyped, arg_values, kwarg_values, backend)
-    
+
+
 def run_python_fn(fn, args, kwargs = None, backend = None):
   """
   Given a python function, run it in Parakeet on the supplied args
   """
-  import ast_conversion
   # translate from the Python AST to Parakeet's untyped format
   untyped = ast_conversion.translate_function_value(fn)
   return run_untyped_fn(untyped, args, kwargs, backend)

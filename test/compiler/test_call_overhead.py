@@ -8,7 +8,7 @@ def identity(x,y,z):
 jit_identity = jit(identity)
 
 def test_call_overhead_identity():
-  n = 1000
+  n = 2000
   x = 3 
   start_t = time.time()
   for i in xrange(n):
@@ -22,6 +22,7 @@ def test_call_overhead_identity():
     jit_identity(x,x,x)
   parakeet_time = time.time() - start_t
   print "Parakeet time for %d calls: %f" % (n, parakeet_time)
+  print "Slowdown = %f" % (parakeet_time / python_time )
   assert parakeet_time < 1000 * python_time, "Excessive call overhead: %f Python vs. %f Parakeet" % (python_time, parakeet_time)
 
 

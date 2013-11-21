@@ -991,49 +991,14 @@ _known_python_functions = {}
 _currently_processing = set([])
 
 
-import threading 
-def translate_function_value(fn, _lock = threading.RLock()):
-  """
-  Prevent two threads from clobbering the recursion logic by both entering 
-  the translation code
-  """
-  with _lock: 
-    return _translate_function_value(fn)
-
 def _translate_function_value(fn):
-  
-  # if it's already a Parakeet function, just return it 
-  if isinstance(fn, UntypedFn):
-    return fn 
-  
-  # short-circuit logic for turning dtypes and Python types into 
-  # functions for casting from any value to those types 
-  if isinstance(fn, (np.dtype, int, long, float, bool)): 
-    return build_untyped_cast_fn(fn)
-      
-  # any builtin or numpy library function should have an entry here
-  from ..mappings import function_mappings 
-  if fn in function_mappings:
-    fn = function_mappings[fn]
- 
-  # ...unless we forgot to add it to mappings but some equivalent primitive 
-  # got registered 
-  if fn in prims.prim_lookup_by_value:
-    fn = prims.prim_lookup_by_value[fn]
-  
-  # if the function has been wrapped with a decorator, unwrap it 
-  while isinstance(fn, jit):
-    fn = fn.f
-
-  if fn in _known_python_functions:
-    return _known_python_functions[fn]
-  
-  assert is_hashable(fn), "Can't convert unhashable value: %s" % (fn,)
+  """
+  The core of function translation, should only end up here 
+  if the python function's intermediate representation isn't cached
+  """
   assert fn not in _currently_processing, \
     "Recursion detected through function value %s" % (fn,)
 
-  original_fn = fn
-  
   if isinstance(fn, Prim):
     fundef = build_untyped_prim_fn(fn)
   elif isinstance(fn, (Type, np.dtype, int, bool, long, float)):
@@ -1048,7 +1013,8 @@ def _translate_function_value(fn):
     # then we're really dealing with a Python function
     # so get to work pulling apart its AST and translating
     # it into Parakeet IR
-    assert type(fn) not in (types.BuiltinFunctionType, types.TypeType, np.ufunc, types.MethodType), \
+    assert type(fn) not in \
+      (types.BuiltinFunctionType, types.TypeType, np.ufunc, types.MethodType), \
       "Unsupported function: %s" % (fn,) 
     
     _currently_processing.add(fn) 
@@ -1081,8 +1047,48 @@ def _translate_function_value(fn):
       print "[ast_conversion] Translated %s into untyped function:\n%s" % (fn, repr(fundef))
   
     _currently_processing.remove(fn)              
-    _known_python_functions[original_fn] = fundef
-     
-  _known_python_functions[fn] = fundef 
+    _known_python_functions[fn] = fundef
+  return fundef 
+
+import threading 
+_lock = threading.RLock()
+
+def translate_function_value(fn):
+  if fn in _known_python_functions:
+    return _known_python_functions[fn]
   
+  # if it's already a Parakeet function, just return it 
+  if isinstance(fn, UntypedFn):
+    return fn 
+  
+  # short-circuit logic for turning dtypes and Python types into 
+  # functions for casting from any value to those types 
+  elif isinstance(fn, (np.dtype, int, long, float, bool)): 
+    fundef = build_untyped_cast_fn(fn)
+      
+  else:
+    
+    # none of the obvious shortcuts worked, 
+    # we're going to have to translate this function for real 
+    from ..mappings import function_mappings 
+    if fn in function_mappings:
+      fn = function_mappings[fn]
+ 
+    # ...unless we forgot to add it to mappings but some equivalent primitive 
+    # got registered 
+    if fn in prims.prim_lookup_by_value:
+      fn = prims.prim_lookup_by_value[fn]
+  
+    # if the function has been wrapped with a decorator, unwrap it 
+    while isinstance(fn, jit):
+      fn = fn.f
+    
+    # check again if, after unwrapping the function a bunch, it isn't in the cache 
+    if fn in _known_python_functions:
+      return _known_python_functions[fn]
+  
+    with _lock:
+      fundef = _translate_function_value(fn)
+           
+  _known_python_functions[fn] = fundef 
   return fundef 

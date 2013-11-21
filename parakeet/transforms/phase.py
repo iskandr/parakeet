@@ -1,3 +1,5 @@
+from itertools import izip 
+
 from .. import config
 
 from .. syntax import TypedFn
@@ -79,6 +81,7 @@ class Phase(object):
     self.memoize = memoize
     self.name = name
     self.recursive = recursive 
+    self._hash = hash(str(self))
 
   def __str__(self):
     if self.name:
@@ -99,10 +102,19 @@ class Phase(object):
     return str(self)
 
   def __eq__(self, other):
-    return str(self) == str(other)
+    if self is other:
+      return True
+    
+    else:
+      return (self.__class__ is other.__class__) and\
+             (self.name == other.name) and \
+             (self.copy == other.copy) and \
+             (self.memoize == other.memoize) and \
+             (len(self.transforms) == len(other.transforms)) and \
+             (all(t1 == t2 for t1, t2 in izip(self.transforms, other.transforms))) 
 
   def __hash__(self):
-    return hash(str(self))
+    return self._hash 
   
   def __call__(self, fn, run_dependencies = True):
     return self.apply(fn, run_dependencies)

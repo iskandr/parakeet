@@ -3,7 +3,7 @@ import numpy as np
 
 from .. import names, prims  
 from ..ndtypes import (IntT, FloatT, TupleT, FnT, Type, BoolT, NoneT, Float32, Float64, Bool, 
-                       ClosureT, ScalarT, PtrT, NoneType, ArrayT, SliceT)    
+                       ClosureT, ScalarT, PtrT, NoneType, ArrayT, SliceT, TypeValueT)    
 from ..syntax import (Const, Var,  PrimCall, Attribute, TupleProj, Tuple, ArrayView,
                       Expr, Closure, TypedFn)
 # from ..syntax.helpers import get_types   
@@ -123,21 +123,24 @@ class FnCompiler(BaseCompiler):
   
 
   def to_ctype(self, parakeet_type):
-    if isinstance(parakeet_type, TupleT):
+    if isinstance(parakeet_type, (NoneT, ScalarT)):
+      return type_mappings.to_ctype(parakeet_type)
+    
+    elif isinstance(parakeet_type, TupleT):
       return self.struct_type_from_fields(parakeet_type.elt_types)
-    elif isinstance(parakeet_type, ClosureT):
-      return self.struct_type_from_fields(parakeet_type.arg_types)
     elif isinstance(parakeet_type, PtrT):
       return self.ptr_struct_type(parakeet_type.elt_type)
     elif isinstance(parakeet_type, ArrayT):
       elt_t = parakeet_type.elt_type 
       rank = parakeet_type.rank 
       return self.array_struct_type(elt_t, rank)
+    
     elif isinstance(parakeet_type, SliceT):
       return self.slice_struct_type()
-    elif isinstance(parakeet_type, (NoneT, ScalarT)):
-      return type_mappings.to_ctype(parakeet_type)
-    
+    elif isinstance(parakeet_type, ClosureT):
+      return self.struct_type_from_fields(parakeet_type.arg_types)
+    elif isinstance(parakeet_type, TypeValueT):
+      return "int"
     else:
       assert False, "Don't know how to make C type for %s" % parakeet_type
     
