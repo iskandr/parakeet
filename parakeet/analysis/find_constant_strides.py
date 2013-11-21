@@ -1,7 +1,7 @@
 
 import numpy as np 
 
-from .. ndtypes import ArrayT, StructT, TupleT, type_conv   
+from .. ndtypes import ArrayT, TupleT   
 from .. syntax import TypedFn, Var
 from syntax_visitor import SyntaxVisitor
 
@@ -11,10 +11,19 @@ class AbstractValue(object):
   
   def __hash__(self):
     return hash(str(self))
+  
+  def __eq__(self):
+    return False 
+  
+  def __ne__(self, other):
+    return not (self == other)
 
 class Unknown(AbstractValue):
   def __str__(self):
     return "unknown"
+  
+  def __eq__(self, other):
+    return other.__class__ is Unknown 
 
 unknown = Unknown()
 
@@ -24,6 +33,9 @@ class Tuple(AbstractValue):
   
   def __str__(self):
     return "Tuple(%s)" % ", ".join(str(elt) for elt in self.elts)
+  
+  def __hash__(self):
+    return hash(self.elts)
   
   def __eq__(self, other):
     return other.__class__ is Tuple and \
@@ -38,6 +50,9 @@ class Array(AbstractValue):
   
   def __str__(self):
     return "Array(strides = %s)" % self.strides
+  
+  def __hash__(self):
+    return hash(self.strides.elts)
   
   def __eq__(self, other):
     return other.__class__ is Array and \
@@ -71,6 +86,9 @@ class Const(AbstractValue):
                       "Expected scalar but got %s : %s" % (value, type(value)) 
     self.value = value
   
+  def __hash__(self):
+    return int(self.value) 
+  
   def __str__(self):
     return str(self.value)
   
@@ -96,50 +114,7 @@ def abstract_tuple(elts):
 def abstract_array(strides):
   return Array(abstract_tuple(strides))
 
-def from_internal_repr(parakeet_type, v):
-  if v is None:
-    return unknown
-  elif hasattr(v, 'contents'):
-    v = v.contents
-    
-  if parakeet_type.__class__ is TupleT:
-    elts = []
-    for (i,elt_t) in enumerate(parakeet_type.elt_types):
-      elt_value = hasattr(v, "elt%d" % i)
-      elts.append(from_internal_repr(elt_t, elt_value))
-    return abstract_tuple(elts)
-  elif parakeet_type.__class__ is ArrayT:
-    strides_field = getattr(v, 'strides').contents
-    strides = []
-    for i in xrange(parakeet_type.rank):
-      s = int(getattr(strides_field, 'elt%d'%i))
-      strides.append(specialization_const(s))
-    return abstract_array(strides)  
-  elif isinstance(parakeet_type, StructT):
-    fields = {}
-    for (field_name, field_type) in parakeet_type._fields_:
-      field_value = getattr(v, field_name)
-      abstract_field = from_internal_repr(field_type, field_value)
-      fields[field_name] = abstract_field
-    return Struct(fields)        
-  return unknown
 
-def from_python(python_value):
-  if isinstance(python_value, np.ndarray):
-    elt_size = python_value.dtype.itemsize 
-    strides = []
-    for s in python_value.strides:
-      strides.append(specialization_const(s/elt_size)) 
-    return abstract_array(strides)
-  elif isinstance(python_value, tuple):
-    return abstract_tuple(from_python_list(python_value))
-  else:
-    parakeet_type = type_conv.typeof(python_value)
-    parakeet_value = type_conv.from_python(python_value)
-    return from_internal_repr(parakeet_type, parakeet_value)
-  
-def from_python_list(python_values):
-  return [from_python(v) for v in python_values] 
 
 def bind_list(arg_names, abstract_values):
   assert len(arg_names) == len(abstract_values)

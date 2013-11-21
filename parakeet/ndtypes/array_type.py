@@ -1,15 +1,16 @@
 
 import ctypes
 import numpy as np
-import type_conv
 
-import core_types
 
-from core_types import StructT, IncompatibleTypes, NoneT 
+
+
+from core_types import StructT, IncompatibleTypes, NoneT, Type, NoneType   
 from ptr_type import ptr_type
 from scalar_types import Int64, ScalarT, IntT 
 from tuple_type import TupleT, repeat_tuple
-from slice_type import SliceT, make_slice_type  
+from slice_type import SliceT
+  
 def buffer_info(buf, ptr_type = ctypes.c_void_p):
   """Given a python buffer, return its address and length"""
 
@@ -56,6 +57,8 @@ class ArrayT(StructT):
     return "array%d(%s)" % (self.rank, self.elt_type)
 
   def __eq__(self, other):
+    if self is other:
+      return True 
     return other.__class__ is ArrayT and \
         self.elt_type == other.elt_type and \
         self.rank == other.rank
@@ -82,7 +85,7 @@ class ArrayT(StructT):
     Given the type of my indices, what type of array will result?
     """
 
-    if not isinstance(idx, core_types.Type):
+    if not isinstance(idx, Type):
       idx = idx.type
 
     if idx.__class__ is TupleT:
@@ -94,7 +97,7 @@ class ArrayT(StructT):
     n_required = self.rank
     if n_required > n_indices:
       n_missing = n_required - n_indices
-      extra_indices = [core_types.NoneType] * n_missing
+      extra_indices = [NoneType] * n_missing
       indices = indices + extra_indices
 
     # we lose one result dimension for each int in the index set
@@ -121,8 +124,7 @@ class ArrayT(StructT):
       x = np.asarray(x)
       self._store_forever.append(x)
 
-    
-    nelts = reduce(lambda x,y: x*y, x.shape)
+    nelts = x.size 
     elt_size = x.dtype.itemsize
     # total_bytes = nelts * elt_size
     if x.base is not None:
@@ -176,16 +178,14 @@ class ArrayT(StructT):
 _array_types = {}
 def make_array_type(elt_t, rank):
   key = (elt_t, rank)
-  if key in _array_types:
-    return _array_types[key]
-  else:
-    if rank == 0:
-      t = elt_t
-    else:
-      t = ArrayT(elt_t, rank)
-    _array_types[key] = t
-    return t
-
+  arr_t = _array_types.get(key)
+  if arr_t is None: 
+    if rank == 0:  
+      arr_t = elt_t 
+    else: 
+      arr_t = ArrayT(elt_t, rank)
+    _array_types[key] = arr_t
+  return arr_t
 
 def elt_type(t):
   if t.__class__ is ArrayT:
@@ -194,7 +194,7 @@ def elt_type(t):
     return t
 
 def elt_types(ts):
-  return map(elt_type, ts)
+  return [elt_type(t) for t in ts]
 
 def lower_rank(t, r):
   if t.__class__ is ArrayT:

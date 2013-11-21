@@ -12,8 +12,7 @@ class ScalarT(ImmutableT):
   _members = ['dtype']
 
   def node_init(self):
-    assert isinstance(self.dtype, np.dtype), \
-        "Expected dtype, got %s" % self.dtype
+    assert isinstance(self.dtype, np.dtype), "Expected dtype, got %s" % self.dtype
     self.name = self.dtype.name
     self.nbytes = self.dtype.itemsize
 
@@ -192,9 +191,10 @@ def from_dtype(dtype):
     assert hasattr(dtype, 'dtype'), "Expected a dtype but %s" % dtype 
     value = dtype(0)
     dtype = value.dtype 
-  assert dtype in _dtype_to_parakeet_type, \
-    "Don't know how to make Parakeet scalar type from dtype %s" % dtype
-  return _dtype_to_parakeet_type[dtype]
+  parakeet_type = _dtype_to_parakeet_type.get(dtype)
+  if parakeet_type is None:
+    assert False, "Don't know how to make Parakeet scalar type from dtype %s" % dtype
+  return parakeet_type
 
 def from_char_code(c):
   numpy_type = np.typeDict[c]

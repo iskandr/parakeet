@@ -47,7 +47,8 @@ class TupleT(StructT, ImmutableT):
     raise RuntimeError("Do tuples have dtypes?")
 
   def __eq__(self, other):
-    return isinstance(other, TupleT) and self.elt_types == other.elt_types
+    if self is other: return True 
+    return other.__class__ is TupleT and self.elt_types == other.elt_types
 
   def __hash__(self):
     return hash(self.elt_types)
@@ -95,12 +96,12 @@ def repeat_tuple(t, n):
   """Given the base type t, construct the n-tuple t*t*...*t"""
 
   elt_types = tuple([t] * n)
-  if elt_types in _tuple_types:
-    return _tuple_types[elt_types]
-  else:
-    tuple_t = TupleT(elt_types)
-    _tuple_types[elt_types] = tuple_t
-    return tuple_t
+  tuple_t = _tuple_types.get(elt_types)
+  if tuple_t is not None:
+    return tuple_t 
+  tuple_t = TupleT(elt_types)
+  _tuple_types[elt_types] = tuple_t
+  return tuple_t
 
 def make_tuple_type(elt_types):
   """
@@ -109,11 +110,11 @@ def make_tuple_type(elt_types):
   """
 
   key = tuple(elt_types)
-  if key in _tuple_types:
-    return _tuple_types[key]
-  else:
-    t = TupleT(key)
-    _tuple_types[key] = t
-    return t
+  tuple_t = _tuple_types.get(key)
+  if tuple_t is not None:
+    return tuple_t 
+  tuple_t = TupleT(key)
+  _tuple_types[key] = tuple_t
+  return tuple_t
 
 empty_tuple_t = make_tuple_type(())

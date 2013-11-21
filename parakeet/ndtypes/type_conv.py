@@ -39,12 +39,21 @@ def equiv_type(python_type):
       "No type mapping found for %s" % python_type
   return _type_mapping[python_type]
 
+class InvalidType(Exception):
+  def __init__(self, python_value, python_type):
+    self.python_value = python_value
+    self.python_type = python_type 
+    
+  def __str__(self):
+    return "Don't know how to convert value %s : %s" % (self.python_value, self.python_type)
+
 def typeof(python_value):
   python_type = type(python_value)
-  assert python_type in _typeof_functions, \
-      "Don't know how to convert value %s : %s" % (python_value, python_type)
-  return _typeof_functions[python_type](python_value)
-
+  parakeet_type_lookup = _typeof_functions.get(python_type)
+  if parakeet_type_lookup is None:
+    raise InvalidType(python_value, python_type)
+  return parakeet_type_lookup(python_value)
+  
 def from_python(python_value):
   """
   Look up the ctypes representation of the corresponding parakeet type and call
