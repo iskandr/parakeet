@@ -1,3 +1,7 @@
+### 0.23 / November 21st, 2013 ### 
+
+- Generalized StrideSpecialization to ValueSpecialization 
+- Significantly decreased overhead of calling into Parakeet (though still ~500x slower than a normal Python call)
 
 ### 0.22 / November 20th, 2013 ### 
 
