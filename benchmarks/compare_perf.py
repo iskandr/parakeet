@@ -49,14 +49,16 @@ def compare_perf(fn, args, numba= True, cpython = True,
   else:
     atol = 0.00001
   if parakeet_result is not None and cpython_result is not None:
+      diffs = np.abs(cpython_result - parakeet_result)
       assert np.allclose(cpython_result, parakeet_result, atol = atol, rtol = rtol), \
-        "Max elt difference between Parakeet and CPython = %s" % \
-        np.max(np.abs(cpython_result - parakeet_result))
+        "Max elt difference between Parakeet and CPython = %s (median = %s, min = %s)" % \
+        (np.max(diffs), np.median(diffs), np.min(diffs))
   
   if numba_result is not None and cpython_result is not None:
+      diffs = np.abs(cpython_result - numba_result)
       assert np.allclose(cpython_result, numba_result, atol = atol, rtol = rtol), \
-        "Max elt difference between Numba and CPython = %s" % \
-        np.max(np.abs(cpython_result - numba_result))
+        "Max elt difference between Numba and CPython = %s (median = %s, min = %s)" % \
+        (np.max(diffs), np.median(diffs), np.min(diffs))
 
 
   
@@ -66,7 +68,8 @@ def compare_perf(fn, args, numba= True, cpython = True,
     with timer("%s #2" % name, **kwargs):
       extra_result = impl(*args)
     if parakeet_result is not None:
+      diffs = np.abs(parakeet_result - extra_result)
       assert np.allclose(parakeet_result, extra_result, atol = atol, rtol = rtol), \
-        "Max elt difference between Parakeet and %s = %s" % \
-        (name, np.max(np.abs(parakeet_result - extra_result)))
+        "Max elt difference between Parakeet and %s = %s (median = %s, min = %s)" % \
+        (name, np.max(diffs), np.median(diffs), np.min(diffs))
 

@@ -296,6 +296,21 @@ class CudaCompiler(MulticoreCompiler):
         printf( "Error after %s: %%s\\n",  cudaGetErrorString(%s) );
       }
     """ % (error_code_var, context, error_code_var))
+    
+    if self.module_entry:
+      self.append("""
+        /* TODO: use setjmp/longjmp or C++ exceptions to propagate exceptions 
+           outside of the entry function 
+        */ 
+        if (cudaSuccess != %s) {
+          PyErr_Format(PyExc_SystemError, 
+                      "Parakeet GPU Error after %%s: %%s", 
+                      "%s", 
+                      cudaGetErrorString(%s)); 
+          return NULL; 
+        }
+      """ % (error_code_var, context, error_code_var))
+          
   
   def synchronize(self, context = None):
     error_code_var = self.fresh_name("cuda_err")

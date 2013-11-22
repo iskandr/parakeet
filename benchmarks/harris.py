@@ -27,7 +27,7 @@ def harris(I):
 
 from compare_perf import compare_perf 
 m,n = 1920, 1080
-dtype = 'uint8'
+dtype = 'float64'
 I = np.random.randn(m,n).astype(dtype)
 
-compare_perf(harris, [I], propagate_exceptions=True, backends = ('openmp',))
+compare_perf(harris, [I], propagate_exceptions=True, backends= ("c", "openmp"))

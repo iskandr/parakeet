@@ -10,11 +10,12 @@ class CommandFailed(Exception):
     self.env = env 
     self.label = label 
     
+    
   def __str__(self):
     return "CommandFailed(%s)" % self.cmd 
   
   def __repr__(self):
-    return "CommandFailed(cmd=%s, env=%s, label=%s)" % (self.cmd, self.env, self.label)
+    return "CommandFailed(cmd=%s, env=%s, label=%s)" % (" ".join(self.cmd), self.env, self.label)
   
 def run_cmd(cmd, env = None, label = ""):
   if config.print_commands: 
