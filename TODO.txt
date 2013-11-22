@@ -1,15 +1,11 @@
 Now:
-- CUDA support for ParFor
 - Use tree-structured pattern for scalar IndexReduce/IndexScan
 - infer which arguments don't need to be copied back to the GPU
  
 
 Next:
-- Combine nested maps into single ParFor 
 - Indexing by boolean masks
 - Support 'output' parameter of ufuncs 
-- Turn StrideSpecialization into SmallConstSpecialization
-- UnusedArgElim to get rid of function inputs that don't get used
 - PreallocArrays to move locally used allocation of arrays out functions into their calling scope
 - Garbage collection (or, at least, statically inferred deallocations)
 
