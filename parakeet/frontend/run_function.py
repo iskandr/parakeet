@@ -33,7 +33,7 @@ def prepare_args(fn, args, kwargs):
   return arg_values, arg_types
   
 
-def specialize(untyped, args, kwargs = {}, optimize = True):
+def specialize(untyped, args, kwargs = {}, optimize = False):
   """
   Translate, specialize and begin to optimize the given function for the types
   of the supplies arguments.

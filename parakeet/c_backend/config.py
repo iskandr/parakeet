@@ -11,7 +11,7 @@ compiler_path = None
 # Insert Debugging Code  #
 ##########################
 debug = False
-check_pyobj_types = True 
+check_pyobj_types = False 
 
 #########################
 #  Verbose Printing     #

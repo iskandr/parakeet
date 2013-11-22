@@ -49,8 +49,9 @@ class InvalidType(Exception):
 
 def typeof(python_value):
   python_type = type(python_value)
-  parakeet_type_lookup = _typeof_functions.get(python_type)
-  if parakeet_type_lookup is None:
+  try:
+    parakeet_type_lookup = _typeof_functions[python_type]
+  except:
     raise InvalidType(python_value, python_type)
   return parakeet_type_lookup(python_value)
   
