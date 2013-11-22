@@ -1,7 +1,8 @@
 
 from .. import names, syntax 
-from ..ndtypes import (IncompatibleTypes, ScalarT, 
-                       Bool, Type,  ArrayT, Int64, TupleT, 
+from ..ndtypes import (IncompatibleTypes, 
+                       Bool, Type,  ArrayT, Int64, TupleT,
+                       NoneT, SliceT, ScalarT,  
                        make_tuple_type, make_array_type)
 from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index, Map, 
                       ConstArrayLike, Const)
@@ -177,32 +178,40 @@ class RewriteTyped(Transform):
     # and multi-dimensional indexing
     
     index = expr.index
-    #if index.type.__class__ is TupleT:
-    #  indices = index.elts 
-    #else:
-    #  indices = [index]
-    
-    if index.type.__class__ is ArrayT:
-      assert index.type.rank == 1, \
-        "Don't yet support indexing by %s" % index.type 
-      
-      index_elt_t = index.type.elt_type
-      
-      if index_elt_t == Bool:
-        assert False, "Indexing by boolean vector not yet implemented"
-        #index_array = Where(expr.index)
-        #index_elt_t = Int64
-      else:
-        index_array = expr.index 
-      index_array = expr.index 
-      index_fn = self.get_index_fn(expr.value.type, index_elt_t)
-      index_closure = self.closure(index_fn, [expr.value])
-      return Map(fn = index_closure, 
-                 args = [index_array], 
-                 type = expr.value.type, 
-                 axis = zero_i64)
+    if index.type.__class__ is TupleT:
+      indices = self.tuple_elts(index) 
     else:
+      indices = [index]
+    
+    if all(isinstance(idx.type, (NoneT, SliceT, ScalarT)) for idx in indices):
       return expr 
+    
+    new_indices = []
+    for index in indices:
+      if index.type.__class__ is ArrayT:
+        assert index.type.rank == 1, \
+          "Don't yet support indexing by %s" % index.type 
+      
+        index_elt_t = index.type.elt_type
+      
+        if index_elt_t == Bool:
+          assert False, "Indexing by boolean vector not yet implemented"
+          #index_array = Where(expr.index)
+          #index_elt_t = Int64
+        else:
+          index_array = expr.index 
+        index_array = expr.index 
+        index_fn = self.get_index_fn(expr.value.type, index_elt_t)
+        index_closure = self.closure(index_fn, [expr.value])
+        return Map(fn = index_closure, 
+                   args = [index_array], 
+                   type = expr.value.type, 
+                   axis = zero_i64)
+    if len(new_indices) == 1:
+      expr.index = new_indices[0]
+    else:
+      expr.index = self.tuple(new_indices)
+    return expr 
   
   def transform_Assign(self, stmt):
     new_lhs = self.transform_lhs(stmt.lhs)

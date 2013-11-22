@@ -1,6 +1,6 @@
 from core_types import StructT, IncompatibleTypes, NoneT, Type, NoneType   
 from ptr_type import ptr_type
-from scalar_types import Int64, ScalarT, IntT 
+from scalar_types import Int64, ScalarT, IntT, BoolT
 from tuple_type import TupleT, repeat_tuple
 from slice_type import SliceT
   
@@ -87,7 +87,7 @@ class ArrayT(StructT):
     # we lose one result dimension for each int in the index set
     result_rank = n_required
     for t in indices:
-      if isinstance(t, IntT):
+      if isinstance(t, (BoolT, IntT)):
         result_rank -= 1
       else:
         assert isinstance(t,  (TupleT, NoneT, SliceT, ArrayT, )),  "Unexpected index type: %s " % t
