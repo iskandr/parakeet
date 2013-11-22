@@ -26,7 +26,7 @@ class ValueSpecializer(Transform):
   def lookup_expr(self, expr):
     c = expr.__class__ 
     if c is syntax.Var:
-      return self.env[expr.name]
+      return self.env.get(expr.name, unknown)
     else:
       return unknown 
     

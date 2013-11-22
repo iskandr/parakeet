@@ -5,8 +5,9 @@ from core_types import StructT, ImmutableT, IncompatibleTypes
 class SliceT(StructT, ImmutableT):
   def __init__(self, start_type, stop_type, step_type):
     self.start_type = start_type
-    self.stop_type = stop_type 
+    self.stop_type = stop_type
     self.step_type = step_type
+    self._fields_ = [('start',start_type), ('stop', stop_type), ('step', step_type)]
     self._hash = hash((self.start_type, self.stop_type, self.step_type))
   
   def children(self):
@@ -22,22 +23,19 @@ class SliceT(StructT, ImmutableT):
        self.step_type == other.step_type)
 
   def __hash__(self):
-    return self._hash 
+    return self._hash
 
   def combine(self, other):
-    if self == other:
-      return self
-    else:
-      raise IncompatibleTypes(self, other)
+    if self == other: return self
+    else:raise IncompatibleTypes(self, other)
 
   def __str__(self):
-    return "SliceT(%s, %s, %s)" % (self.start_type, self.stop_type,
+    return "SliceT(%s, %s, %s)" % (self.start_type,
+                                   self.stop_type,
                                    self.step_type)
 
   def __repr__(self):
     return str(self)
-
-
 
 _slice_type_cache = {}
 def make_slice_type(start_t, stop_t, step_t):

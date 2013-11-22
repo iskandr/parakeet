@@ -2,7 +2,7 @@
 from .. import names, syntax 
 from ..ndtypes import (IncompatibleTypes, ScalarT, 
                        Bool, Type,  ArrayT, Int64, TupleT, 
-                       make_tuple_type)
+                       make_tuple_type, make_array_type)
 from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index, Map, 
                       ConstArrayLike, Const)
 from ..syntax.helpers import get_types, zero_i64, one_i64, none, const 
@@ -21,7 +21,6 @@ class RewriteTyped(Transform):
       self.fn_return_type = self.fn.type_env["$return"]
     else:
       self.fn_return_type = self.forced_return_type
-      
   
   def post_apply(self, fn):
     fn.return_type = self.fn_return_type  
@@ -125,7 +124,7 @@ class RewriteTyped(Transform):
            isinstance(expr.axis, Const) and \
            len(expr.args) == 1:
         arr_slice = self.slice_along_axis(expr.args[0], expr.axis, zero_i64)
-        init_type = ArrayT(elt_type = expr.init.type, rank = arr_slice.type.rank)
+        init_type = make_array_type(elt_type = expr.init.type, rank = arr_slice.type.rank)
         expr.init = ConstArrayLike(array = arr_slice, 
                                    value = expr.init, 
                                    type = init_type)

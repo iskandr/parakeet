@@ -421,7 +421,7 @@ def infer_types(untyped_fn, types):
                            starargs_fn = tuple_type.make_tuple_type)
   except (MissingArgsError, TooManyArgsError) as e:
     e.fn_name = untyped_fn.name 
-    raise e 
+    raise e
   except: 
     print "Error while calling %s with types %s" % (untyped_fn, types)
     raise
@@ -490,7 +490,6 @@ def _specialize(fn, arg_types, return_type = None):
   pulls out untyped functions from closures, wraps argument lists in ActualArgs
   objects and performs memoization
   """
-
   if fn.__class__ is TypedFn:
     return fn
   typed_fundef = infer_types(fn, arg_types)
@@ -545,9 +544,7 @@ def infer_return_type(untyped, arg_types):
   Given a function definition and some input types, gives back the return type
   and implicitly generates a specialized version of the function.
   """
-
-  typed = specialize(untyped, arg_types)
-  return typed.return_type
+  return specialize(untyped, arg_types).return_type
 
 def specialize_IndexMap(fn, n_indices):
   idx_type = make_tuple_type( (Int64,) * n_indices) if n_indices > 1 else Int64

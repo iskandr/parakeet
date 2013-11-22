@@ -163,7 +163,8 @@ class FormalArgs(object):
       positional_values = actuals
     
     if len(positional_values) == len(self.positional) and \
-       len(keyword_values) == 0 and starargs is None:
+       len(keyword_values) == 0 and starargs is None and \
+       len(self.defaults) == 0:
       return positional_values, () 
       
     if starargs:

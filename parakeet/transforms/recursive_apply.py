@@ -3,7 +3,8 @@ from dsltools import ScopedDict
 
 from .. import config 
 from ..analysis.verify import verify
-from ..ndtypes import NoneT, SliceT, ScalarT, ArrayT, ClosureT, TupleT, PtrT, StructT 
+from ..ndtypes import (NoneT, SliceT, ScalarT, ArrayT, ClosureT, TupleT, PtrT, 
+                       StructT, make_closure_type) 
 from ..syntax import TypedFn
 from transform import Transform
 
@@ -41,7 +42,7 @@ class RecursiveApply(Transform):
       if isinstance(old_fn, TypedFn):
         new_fn = self.transform_TypedFn(old_fn)
         if new_fn is not old_fn:
-          return ClosureT(new_fn, t.arg_types)
+          return make_closure_type(new_fn, t.arg_types)
     elif c is TupleT and self.contains_function_type(t):
       new_elt_types = []
       for elt_t in t.elt_types:

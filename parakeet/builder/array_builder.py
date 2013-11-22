@@ -10,9 +10,6 @@ class ArrayBuilder(ArithBuilder):
   Builder for constructing arrays and getting their properties
   """
   
-  
-
-
   def elt_type(self, x):
     if isinstance(x, Type):
       try:
@@ -88,7 +85,7 @@ class ArrayBuilder(ArithBuilder):
       return 0
 
   def shape(self, array, dim = None, explicit_struct = False, temp = True):
-    if isinstance(array.type, ArrayT):
+    if array.type.__class__ is ArrayT:
       shape = self.attr(array, "shape", temp = temp)
       if dim is None:
         return shape
@@ -288,7 +285,7 @@ class ArrayBuilder(ArithBuilder):
     assert ndims == len(shape.type.elt_types)
 
     elt_t = data.type.elt_type
-    array_t = ArrayT(elt_t, ndims)
+    array_t = make_array_type(elt_t, ndims)
     return ArrayView(data = data, shape = shape, strides = strides, 
                      offset = offset, size = nelts, 
                      type = array_t)

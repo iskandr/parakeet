@@ -140,7 +140,7 @@ class LocalTypeInference(Transform):
     if not self.is_none(start): elt_t = elt_t.combine(start.type)
     if not self.is_none(stop): elt_t = elt_t.combine(stop.type)
     if not self.is_none(step): elt_t = elt_t.combine(step.type)
-    array_t = ArrayT(elt_t, 1)
+    array_t = make_array_type(elt_t, 1)
     return Range(start, stop, step, type = array_t)
 
   def transform_Slice(self, expr):
@@ -156,6 +156,7 @@ class LocalTypeInference(Transform):
     if old_name not in self.var_map._vars:
       raise names.NameNotFound(old_name)
     new_name = self.var_map.lookup(old_name)
+    
     assert new_name in self.type_env, \
         "Unknown var %s (previously %s)" % (new_name, old_name)
     t = self.type_env[new_name]
@@ -429,10 +430,4 @@ class LocalTypeInference(Transform):
     body = self.transform_block(stmt.body)
     merge = self.transform_phi_nodes(stmt.merge)
     return ForLoop(var, start, stop, step, body, merge)
-  
-  #def keyword_types(self, kwds):
-  #  keyword_types = {}
-  #  for (k,v) in kwds.iteritems():
-  #    keyword_types[k] = get_type(v)
-  #  return keyword_types
-  
+
