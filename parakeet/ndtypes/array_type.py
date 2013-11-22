@@ -9,7 +9,7 @@ class ArrayT(StructT):
   def __init__(self, elt_type, rank):
     assert isinstance(elt_type, ScalarT), \
       "Can't create array with element type %s, currently only scalar elements supported" % \
-      (self.elt_type,)
+      (elt_type,)
     self.elt_type = elt_type
     self.rank = rank 
     

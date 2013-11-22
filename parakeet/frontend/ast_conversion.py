@@ -54,7 +54,6 @@ class UnsupportedSyntax(Exception):
       return "Parakeet doesn't support %s" % self.node.__class__.__name__
 
 
-
   
 class ExternalValue(object):
   """
@@ -237,12 +236,20 @@ class AST_Translator(ast.NodeVisitor):
     self.python_refs[local_name] = ref
     return Var(local_name)
   
+  def is_visible_name(self, name):
+    if name in self.scopes:
+      return True 
+    if self.parent:
+      return self.parent.is_visible_name(name)
+    else:
+      return self.is_global(name)
+      
   def lookup(self, name):
     #if name in reserved_names:
     #  return reserved_names[name]
     if name in self.scopes:
       return Var(self.scopes[name])
-    elif self.parent:
+    elif self.parent and self.parent.is_visible_name(name):
       # don't actually keep the outer binding name, we just
       # need to check that it's possible and tell the outer scope
       # to register any necessary python refs
@@ -676,8 +683,9 @@ class AST_Translator(ast.NodeVisitor):
     return Select(cond, if_true, if_false)
     
   def visit_lhs(self, lhs):
+    
     if isinstance(lhs, ast.Name):
-      return self.fresh_var(lhs.id)
+      return  self.fresh_var(lhs.id)
     elif isinstance(lhs, ast.Tuple):
       return syntax.Tuple( map(self.visit_lhs, lhs.elts))
     else:
@@ -685,7 +693,7 @@ class AST_Translator(ast.NodeVisitor):
       res = self.visit(lhs)
       return res
 
-  def visit_Assign(self, stmt):
+  def visit_Assign(self, stmt):  
     # important to evaluate RHS before LHS for statements like 'x = x + 1'
     ssa_rhs = self.visit(stmt.value)
     ssa_lhs = self.visit_lhs(stmt.targets[0])
@@ -943,7 +951,11 @@ def translate_function_ast(name, args, body,
     assert parent
     fn = UntypedFn(ssa_fn_name, ssa_args, body, [], original_outer_names, doc_string = doc_string)
     if len(original_outer_names) > 0:
-      outer_ssa_vars = [parent.lookup(x) for x in original_outer_names]
+      try: 
+        outer_ssa_vars = [parent.lookup(x) for x in original_outer_names]
+      except NameNotFound:
+        print "Failure while trying to look up non-local names used by function %s" % name 
+        raise 
       return syntax.Closure(fn, outer_ssa_vars)
     else:
       return fn
