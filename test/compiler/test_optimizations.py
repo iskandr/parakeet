@@ -2,7 +2,7 @@ import numpy as np
 
 import parakeet
 from parakeet import config, each, syntax
-from parakeet.transforms.pipeline import lowering
+from parakeet.transforms.pipeline import lowering, high_level_optimizations
 from parakeet.analysis.syntax_visitor import SyntaxVisitor
 from parakeet.testing_helpers import expect, run_local_tests
 
@@ -147,6 +147,20 @@ def test_copy_elimination():
   assert n_loops <= n_expected, \
       "Too many loops generated! Expected at most 2, got %d" % n_loops
 
+def allpairs_dist(x):
+  return np.array([[np.sqrt(np.sum( (x1-x2)**2)) for x2 in x] for x1 in x])
+
+from parakeet.syntax import OuterMap, Return  
+def test_combine_nested_maps():
+  x = np.array([[1,2], [3,4]])
+  typed_fn = parakeet.typed_repr(allpairs_dist, [x])
+  typed_fn = high_level_optimizations.apply(typed_fn)
+  assert len(typed_fn.body) == 1
+  stmt = typed_fn.body[0]
+  assert stmt.__class__ is Return 
+  v = stmt.value 
+  assert v.__class__ is OuterMap
+  assert len(v.args) == 2
   
 if __name__ == '__main__':
   run_local_tests()
