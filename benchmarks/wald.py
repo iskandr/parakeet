@@ -16,8 +16,10 @@ def rep(f, n = 1000, d = 10000):
   for i in xrange(n):
     f(1,2,rands,urands,1,0)
 
+n = 1000
+
 t = time.time()
-rep(wald)
+rep(wald, n)
 py_t = time.time() - t 
 
 
@@ -25,16 +27,16 @@ waldjit = jit(wald)
 #warmup
 rep(waldjit, 1)
 t = time.time()
-rep(waldjit)
+rep(waldjit, n)
 par_t = time.time() - t 
 
 config.value_specialization = False 
 rep(waldjit, 1)
 t = time.time()
-rep(waldjit)
+rep(waldjit, n)
 par_t_no_specialization = time.time() - t 
 
-print "Python time:", py_t 
-print "Parakeet time w/ value specialization:", par_t  
-print "Parakeet time w/out value specialization", par_t_no_specialization 
+print "Python time per call:", 1000 * (py_t / n), "ms"
+print "Parakeet time w/ value specialization:",  1000 * (par_t  / n), "ms"
+print "Parakeet time w/out value specialization", 1000 * (par_t_no_specialization  / n), "ms"
 
