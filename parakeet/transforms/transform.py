@@ -206,14 +206,14 @@ class Transform(Builder):
   
   def transform_IndexReduce(self, expr):
     expr.fn = self.transform_expr(expr.fn)
-    expr.combine = self.transform_expr(expr.combine)
+    expr.combine = self.transform_if_expr(expr.combine)
     expr.shape = self.transform_expr(expr.shape)
     expr.init = self.transform_if_expr(expr.init)
     return expr
   
   def transform_IndexScan(self, expr):
     expr.fn = self.transform_expr(expr.fn)
-    expr.combine = self.transform_expr(expr.combine)
+    expr.combine = self.transform_if_expr(expr.combine)
     expr.shape = self.transform_expr(expr.shape)
     expr.init = self.transform_if_expr(expr.init)
     return expr
@@ -228,7 +228,7 @@ class Transform(Builder):
     expr.axis = self.transform_if_expr(expr.axis)
     expr.init = self.transform_if_expr(expr.init)
     expr.fn = self.transform_expr(expr.fn)
-    expr.combine = self.transform_expr(expr.combine)
+    expr.combine = self.transform_if_expr(expr.combine)
     expr.args = self.transform_expr_list(expr.args)
     return expr
   
@@ -236,7 +236,7 @@ class Transform(Builder):
     expr.axis = self.transform_if_expr(expr.axis)
     expr.init = self.transform_if_expr(expr.init)
     expr.fn = self.transform_expr(expr.fn)
-    expr.combine = self.transform_expr(expr.combine)
+    expr.combine = self.transform_if_expr(expr.combine)
     expr.args = self.transform_expr_list(expr.args)
     expr.emit = self.transform_expr(expr.emit)
     return expr

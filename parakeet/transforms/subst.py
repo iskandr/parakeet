@@ -19,7 +19,7 @@ class RewriteVars(Transform):
       new_right = self.transform_expr(r)
       new_merge[new_name] = new_left, new_right
     return new_merge
-
+  
   def transform_Var(self, expr):
     new_value = self.rename_dict.get(expr.name, expr.name)
     if new_value.__class__ is str:

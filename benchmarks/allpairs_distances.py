@@ -33,8 +33,6 @@ print "Computing distances between %d and %d %s vectors of length %d" % \
 import parakeet
 
 parakeet_dists = parakeet.jit(sqr_dists)
-parakeet_dists(X,Y)
-parakeet_dists(X,Y)
 
 with timer('Parakeet (comprehensions) #1'):
   parakeet_dists(X,Y)

@@ -17,7 +17,7 @@ def _identity(x):
 
 def mk_reduce(combiner, x, init, axis):
   return Reduce(fn = translate_function_value(_identity), 
-                combine = combiner, 
+                combine = translate_function_value(combiner), 
                 args = (x,),  
                 init = init, 
                 axis = axis)

@@ -10,8 +10,6 @@ class jit(object):
   def __init__(self, f):
     self.f = f
     self.fn = f
-    #import ast_conversion 
-    #self.untyped = ast_conversion.translate_function_value(f)
 
   def __call__(self, *args, **kwargs):
     if '_backend' in kwargs:
