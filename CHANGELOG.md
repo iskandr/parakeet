@@ -1,14 +1,14 @@
-### 0.23 / November 21st, 2013 ### 
+### 0.23 / November 21st, 2013 ###
 
 - Generalized StrideSpecialization to ValueSpecialization 
 - Significantly decreased overhead of calling into Parakeet (though still ~500x slower than a normal Python call)
 
-### 0.22 / November 20th, 2013 ### 
+### 0.22 / November 20th, 2013 ###
 
 - Changed NumPy calls to use newer API, cuts down on number of compile warnings
 - If compilation fails, retry using distutils, may help some people on Windows
 
-### 0.21 / November 19th, 2013 ### 
+### 0.21 / November 19th, 2013 ###
 
 - Got rid of testing dependency on SciPy
 - Deleted unused and unfinished optimizations
