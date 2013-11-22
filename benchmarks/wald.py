@@ -1,7 +1,6 @@
-from parakeet import jit
+from parakeet import jit, config 
 import time 
 import numpy as np 
-
 def wald(v, a, rands, u_rands, sigma, accum):
     mu = a / v
     lam = a**2 / sigma**2
@@ -10,21 +9,32 @@ def wald(v, a, rands, u_rands, sigma, accum):
     z = u_rands[:, accum]
     return x
 
-waldjit = jit(wald)
 
-rands = np.random.randn(10000, 1)
-urands = np.random.rand(10000, 1)
+def rep(f,n = 1000):
+  rands = np.random.randn(10000, 1)
+  urands = np.random.rand(10000, 1)
+  for i in xrange(n):
+    f(1,2,rands,urands,1,0)
+
 t = time.time()
-for i in xrange(100):
-  wald(1,2,rands,urands,1,0)
+rep(wald)
 py_t = time.time() - t 
 
+
+waldjit = jit(wald)
 #warmup
-waldjit(1, 2, rands, urands, 1, 0)
+rep(waldjit, 1)
 t = time.time()
-for i in xrange(100):
-  wald(1,2,rands,urands,1,0)
+rep(waldjit)
 par_t = time.time() - t 
 
+config.value_specialization = False 
+rep(waldjit, 1)
+t = time.time()
+rep(waldjit)
+par_t_no_specialization = time.time() - t 
+
 print "Python time:", py_t 
-print "Parakeet time:", par_t  
+print "Parakeet time w/ value specialization:", par_t  
+print "Parakeet time w/out value specialization", par_t_no_specialization 
+
