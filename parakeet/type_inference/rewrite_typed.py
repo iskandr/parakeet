@@ -186,33 +186,29 @@ class RewriteTyped(Transform):
     if all(isinstance(idx.type, (NoneT, SliceT, ScalarT)) for idx in indices):
       return expr 
     
-    new_indices = []
+    map_args = []
+    index_elt_types = []
+    
     for index in indices:
       if index.type.__class__ is ArrayT:
         assert index.type.rank == 1, \
           "Don't yet support indexing by %s" % index.type 
-      
         index_elt_t = index.type.elt_type
-      
         if index_elt_t == Bool:
           assert False, "Indexing by boolean vector not yet implemented"
           #index_array = Where(expr.index)
           #index_elt_t = Int64
         else:
-          index_array = expr.index 
-        index_array = expr.index 
-        index_fn = self.get_index_fn(expr.value.type, index_elt_t)
-        index_closure = self.closure(index_fn, [expr.value])
-        return Map(fn = index_closure, 
-                   args = [index_array], 
+          map_args.append(expr.index)
+      else:
+        map_args.append(expr.index) 
+    index_fn = self.get_index_fn(expr.value.type, index_elt_types)
+    index_closure = self.closure(index_fn, [expr.value])
+    return Map(fn = index_closure, 
+                   args = map_args, 
                    type = expr.value.type, 
-                   axis = zero_i64)
-    if len(new_indices) == 1:
-      expr.index = new_indices[0]
-    else:
-      expr.index = self.tuple(new_indices)
-    return expr 
-  
+                   axis = none)
+    
   def transform_Assign(self, stmt):
     new_lhs = self.transform_lhs(stmt.lhs)
     lhs_t = new_lhs.type
