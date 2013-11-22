@@ -10,9 +10,9 @@ def wald(v, a, rands, u_rands, sigma, accum):
     return x
 
 
-def rep(f,n = 1000):
-  rands = np.random.randn(10000, 1)
-  urands = np.random.rand(10000, 1)
+def rep(f, n = 1000, d = 10000):
+  rands = np.random.randn(d, 1)
+  urands = np.random.rand(d, 1)
   for i in xrange(n):
     f(1,2,rands,urands,1,0)
 
