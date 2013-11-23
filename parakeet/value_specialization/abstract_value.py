@@ -26,6 +26,9 @@ class Unknown(AbstractValue):
 unknown = Unknown()
 
 class Tuple(AbstractValue):
+  
+  __slots__ = ['elts', '_hash']
+  
   def __init__(self, elts):
     self.elts = tuple(elts)
     self._hash = hash(self.elts)
@@ -43,6 +46,9 @@ class Tuple(AbstractValue):
 class Array(AbstractValue):
   # mark known strides with integer constants 
   # and all others as unknown
+  
+  __slots__ = ['strides', '_hash']
+  
   def __init__(self, strides):
     self.strides = strides
     self._hash = hash(self.strides.elts) + 1
@@ -82,6 +88,7 @@ class Struct(AbstractValue):
 
    
 class Const(AbstractValue):
+  __slots__ = ['value']
   def __init__(self, value):
     self.value = value
   

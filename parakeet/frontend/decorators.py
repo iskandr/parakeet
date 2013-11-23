@@ -4,12 +4,13 @@ from .. import names
 from .. syntax import (Expr, Var, Const, Return, UntypedFn, FormalArgs, DelayUntilTyped,  
                        const, is_python_constant)
 
-from run_function import run_python_fn, run_untyped_fn 
+from run_function import run_untyped_fn, run_typed_fn, specialize 
 
 class jit(object):
   def __init__(self, f):
     self.f = f
     self.fn = f
+    self.untyped = None 
 
   def __call__(self, *args, **kwargs):
     if '_backend' in kwargs:
@@ -17,7 +18,13 @@ class jit(object):
       del kwargs['_backend']
     else:
       backend_name = None
-    return run_python_fn(self.f, args, kwargs, backend = backend_name)
+    
+    if self.untyped is None:
+      import ast_conversion 
+      self.untyped = ast_conversion.translate_function_value(self.fn)
+    
+    typed_fn, linear_args = specialize(self.untyped, args, kwargs)
+    return run_typed_fn(typed_fn, linear_args, backend_name)
 
 
 class macro(object):

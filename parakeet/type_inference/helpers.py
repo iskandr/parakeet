@@ -60,8 +60,6 @@ def _get_fundef(fn):
   return UntypedFn.registry[fn]
 
 def _get_closure_type(fn):
-  assert isinstance(fn, (UntypedFn, TypedFn, ClosureT, Closure, Var)), \
-    "Expected function, got %s" % fn
   c = fn.__class__ 
   if c is ClosureT:
     return fn

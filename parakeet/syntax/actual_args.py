@@ -32,11 +32,14 @@ def maybe_iter(obj):
     return iter(obj)
 
 class ActualArgs(object):
+  __slots__ = ['positional', 'keywords', 'starargs', "_hash"]
+  
   def __init__(self, positional, keywords = {}, starargs = None):
     positional = tuple(positional)
-    self.positional = positional
+    self.positional = positional 
     self.keywords = keywords
     self.starargs = starargs
+    self._hash = hash(positional) + len(self.keywords) + hash(self.starargs)
     
   def transform(self, fn, keyword_name_fn = None, keyword_value_fn = None):
     new_pos = [fn(pos_arg) for pos_arg in self.positional]
@@ -74,7 +77,7 @@ class ActualArgs(object):
     return str(self)
 
   def __hash__(self):
-    return hash(self.positional + tuple(self.keywords.items()) + (self.starargs,))
+    return self._hash 
   
   def __iter__(self):
     return combine_iters(iter(self.positional),

@@ -1,3 +1,5 @@
+from itertools import izip 
+
 from .. import config, names,  prims, syntax
 
 from ..builder import mk_prim_fn 
@@ -496,30 +498,27 @@ def _specialize(fn, arg_types, return_type = None):
   from rewrite_typed import rewrite_typed
   return rewrite_typed(typed_fundef, return_type)
 
-
-
-
 def specialize(fn, arg_types, return_type = None):
+  if fn.__class__ is TypedFn:
+    assert len(fn.input_types) == len(arg_types)
+    assert all(t1 == t2 for t1,t2 in izip(fn.input_types, arg_types))
+    if return_type is not None: assert fn.return_type == return_type 
+    return fn
+  elif isinstance(arg_types, (list, tuple)):
+    arg_types = ActualArgs(arg_types)
+    
+  closure_t = _get_closure_type(fn)
+  key = arg_types, return_type
+  
+  if key in closure_t.specializations:
+    return closure_t.specializations[key]
 
   if config.print_before_specialization:
     if return_type:
       print "==== Specializing", fn, "for input types", arg_types, "and return type", return_type
     else:  
       print "=== Specializing", fn, "for types", arg_types 
-  if fn.__class__ is TypedFn:
-    assert len(fn.input_types) == len(arg_types)
-    assert all(t1 == t2 for t1,t2 in zip(fn.input_types, arg_types))
-    if return_type is not None:
-      assert fn.return_type == return_type 
-    return fn
   
-  if isinstance(arg_types, (list, tuple)):
-    arg_types = ActualArgs(arg_types)
-  closure_t = _get_closure_type(fn)
-  key = arg_types, return_type
-  if key in closure_t.specializations:
-    return closure_t.specializations[key]
-
   full_arg_types = arg_types.prepend_positional(closure_t.arg_types)
   fundef = _get_fundef(closure_t.fn)
   typed =  _specialize(fundef, full_arg_types, return_type)

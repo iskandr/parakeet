@@ -1,7 +1,7 @@
 
 from .. import config, type_inference 
 from ..analysis import contains_loops 
-from ..ndtypes import type_conv, Type 
+from ..ndtypes import type_conv, Type, typeof  
 from ..syntax import UntypedFn, TypedFn, ActualArgs
 from ..transforms import pipeline
 
@@ -10,25 +10,26 @@ from .. import openmp_backend
 
 import ast_conversion
 
+# get types of all inputs
+def _typeof(arg):
+  try:
+    return typeof(arg)
+  except:
+    if hasattr(arg, 'type') and isinstance(arg.type, Type): 
+      return arg.type
+    else:
+      raise 
+  
 def prepare_args(fn, args, kwargs):
   """
   Fetch the function's nonlocals and return an ActualArgs object of both the arg
   values and their types
   """
-  assert not isinstance(fn, TypedFn), "[prepare_args] Only works for untyped functions"
+  #assert not isinstance(fn, TypedFn), "[prepare_args] Only works for untyped functions"
   if not isinstance(fn, UntypedFn):
-
     fn = ast_conversion.translate_function_value(fn)   
-    
-  nonlocals = list(fn.python_nonlocals())
-  arg_values = ActualArgs(nonlocals + list(args), kwargs)
-
-  # get types of all inputs
-  def _typeof(arg):
-    if hasattr(arg, 'type') and isinstance(arg.type, Type):
-      return arg.type 
-    else:
-      return type_conv.typeof(arg)
+  nonlocals = tuple(fn.python_nonlocals())
+  arg_values = ActualArgs(nonlocals + tuple(args), kwargs)
   arg_types = arg_values.transform(_typeof)
   return arg_values, arg_types
   
