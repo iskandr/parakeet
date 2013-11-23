@@ -39,7 +39,7 @@ class ActualArgs(object):
     self.positional = positional 
     self.keywords = keywords
     self.starargs = starargs
-    self._hash = hash(positional) + len(self.keywords) + hash(self.starargs)
+    self._hash = None 
     
   def transform(self, fn, keyword_name_fn = None, keyword_value_fn = None):
     new_pos = [fn(pos_arg) for pos_arg in self.positional]
@@ -77,6 +77,8 @@ class ActualArgs(object):
     return str(self)
 
   def __hash__(self):
+    if self._hash is None:
+      self._hash = hash(self.positional) + len(self.keywords) + hash(self.starargs)
     return self._hash 
   
   def __iter__(self):
