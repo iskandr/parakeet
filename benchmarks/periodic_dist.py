@@ -44,11 +44,11 @@ def parakeet_dist(x, y, z, L, periodicX, periodicY, periodicZ):
   dx = np.array([[periodic_diff(x1, x2, periodicX) for x1 in x] for x2 in x])
   dy = np.array([[periodic_diff(y1, y2, periodicY) for y1 in y] for y2 in y])
   dz = np.array([[periodic_diff(z1, z2, periodicZ) for z1 in z] for z2 in z])
-  d = np.sqrt(dx**2 + dy**2 + dz**2)
+  d = dx**2 + dy**2 + dz**2
   for i in xrange(N):
     for j in xrange(N):
-      if d[i,j] == 0:
-        d[i,j] = -1 
+      if d[i,j] == 0: d[i,j] = -1 
+      else: d[i,j] = np.sqrt(d[i,j])
   return d, dx, dy, dz 
 
 def periodic_diff(x1, x2, L, periodic):

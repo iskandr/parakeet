@@ -1,10 +1,13 @@
 Now:
-- Use tree-structured pattern for scalar IndexReduce/IndexScan
-- infer which arguments don't need to be copied back to the GPU
- 
-
-Next:
+- fill in ParFor.read_only/write_only to avoid extra copying to/from the GPU
 - Indexing by boolean masks
+- LShift/RShift prims 
+- Short-Circuit Or/And expressions
+- Multiple comparisons chained with short-circuit And
+
+Soon:
+- Coarse parallelism for groups of IndexReduce/IndexScan results
+- Fine grained tree-structured parallelism for IndexReduce/IndexScan inside CUDA kernels
 - Support 'output' parameter of ufuncs 
 - PreallocArrays to move locally used allocation of arrays out functions into their calling scope
 - Garbage collection (or, at least, statically inferred deallocations)
@@ -17,4 +20,4 @@ Maybe never?
 - Adverb-level vectorization 
 
 Old:
-- Only run tiling on perfectly nested code
+- Run tiling on perfectly nested code
