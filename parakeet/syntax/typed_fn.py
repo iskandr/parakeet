@@ -114,7 +114,7 @@ class TypedFn(Expr):
     # return "TypedFn(%s : %s => %s)" % (self.name, self.input_types, self.return_type)
 
   def __hash__(self):
-    return hash(self.name)
+    return hash(self.name) + hash(self.created_by)
 
   def children(self):
     return ()

@@ -14,13 +14,12 @@ def run(fn, args):
   transformed_fn = final_loop_optimizations.apply(transformed_fn)
   if value_specialization: 
     transformed_fn = specialize(transformed_fn, args)
-  
+
   key = transformed_fn.cache_key
   if key in _cache:
-    c_fn = _cache[key]
-  else:
-    compiled_fn = PyModuleCompiler().compile_entry(transformed_fn)
-    c_fn = compiled_fn.c_fn 
-    _cache[key] = c_fn 
+    return _cache[key](*args)
+  compiled_fn = PyModuleCompiler().compile_entry(transformed_fn)
+  c_fn = compiled_fn.c_fn 
+  _cache[key] = c_fn 
   return c_fn(*args)
   
