@@ -7,14 +7,16 @@ from .. syntax import (none, zero_i64,
                        Filter, FilterReduce) 
 
 from .. frontend import macro, staged_macro, jit,  translate_function_value 
-
+from lib_helpers import _get_shape 
 @jit 
 def identity(x):
   return x
 
 @macro 
-def parfor(shape, fn):
-  return ParFor(fn = fn, shape = shape)
+def parfor(fn, bounds):
+  fn = translate_function_value(fn)
+  bounds = _get_shape(bounds)
+  return ParFor(fn = fn, bounds = bounds)
 
 @staged_macro("axis")
 def map(f, *args, **kwds):

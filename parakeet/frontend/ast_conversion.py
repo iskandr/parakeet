@@ -1085,6 +1085,7 @@ def translate_function_value(fn):
     from ..mappings import function_mappings 
     if fn in function_mappings:
       fn = function_mappings[fn]
+      
  
     # ...unless we forgot to add it to mappings but some equivalent primitive 
     # got registered 

@@ -75,13 +75,13 @@ class ArrayT(StructT):
     if idx.__class__ is TupleT:
       indices = idx.elt_types
     else:
-      indices = [idx]
+      indices = (idx,)
 
     n_indices = len(indices)
     n_required = self.rank
     if n_required > n_indices:
       n_missing = n_required - n_indices
-      extra_indices = [NoneType] * n_missing
+      extra_indices = (NoneType,) * n_missing
       indices = indices + extra_indices
 
     # we lose one result dimension for each int in the index set
