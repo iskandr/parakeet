@@ -33,7 +33,7 @@ windows = platform.system() == 'Windows'
 
 python_include_dirs = [distutils.sysconfig.get_python_inc()]
 numpy_include_dirs = npdist.misc_util.get_numpy_include_dirs()
-include_dirs = python_include_dirs + numpy_include_dirs 
+include_dirs = numpy_include_dirs + python_include_dirs 
 
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
 python_version = distutils.sysconfig.get_python_version()

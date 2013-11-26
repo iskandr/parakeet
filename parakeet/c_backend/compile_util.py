@@ -1,7 +1,5 @@
 import collections 
-import distutils 
 import imp 
-
 import os
 
 from tempfile import NamedTemporaryFile
@@ -11,7 +9,8 @@ import config
 from system_info import (python_lib_dir,  
                          windows,  
                          get_source_extension, object_extension, shared_extension,  
-                         get_compiler)
+                         get_compiler, 
+                         include_dirs)
 from flags import get_compiler_flags, get_linker_flags
 from shell_command import CommandFailed, run_cmd 
 
@@ -182,6 +181,7 @@ def compile_with_distutils(extension_name,
     
     ext = Extension(name=extension_name, 
                     sources=[src_filename],
+                    include_dirs = include_dirs,  
                     extra_objects=extra_objects,
                     extra_compile_args=compiler_flags,
                     extra_link_args=linker_flags)
@@ -206,8 +206,7 @@ def compile_with_distutils(extension_name,
     return shared_name
   
 def compiler_is_gnu(compiler):
-  if isinstance(compiler, (list,tuple)):
-    compiler = compiler[0]
+  if isinstance(compiler, (list,tuple)): compiler = compiler[0]
   return (compiler.endswith("gcc") or
           compiler.endswith("gcc.exe") or 
           compiler.endswith("g++") or 

@@ -3,10 +3,10 @@ from .. import names, syntax
 from ..ndtypes import (IncompatibleTypes, 
                        Bool, Type,  ArrayT, Int64, TupleT,
                        NoneT, SliceT, ScalarT,  
-                       make_tuple_type, make_array_type)
-from ..syntax import (Assign, Tuple, TupleProj, Var, Cast, Return, Index, Map, 
+                       make_tuple_type, make_array_type, lower_rank)
+from ..syntax import (Assign, Tuple, Var, Cast, Return, Index, Map, 
                       ConstArrayLike, Const)
-from ..syntax.helpers import get_types, zero_i64, one_i64, none, const 
+from ..syntax.helpers import get_types, zero_i64, none, const 
 from ..transforms import Transform 
 
 
@@ -150,25 +150,47 @@ class RewriteTyped(Transform):
     return expr
   
 
-  def get_index_fn(self, array_t, idx_t,  _index_function_cache = {}):
-    key = (array_t, idx_t) 
+  def get_index_fn(self, array_t, index_types, _index_function_cache = {}):
+    index_types = tuple(index_types)
+    key = (array_t, index_types) 
     if key in _index_function_cache:
       return _index_function_cache[key]
     array_name = names.fresh("array")
     array_var = Var(array_name, type = array_t)
-    idx_name = names.fresh("idx")
-    idx_var = Var(idx_name, type = idx_t)
-    if idx_t is not Int64:
-      idx_var = Cast(value = idx_var,  type = Int64)
-    elt_t = array_t.index_type(idx_t)
-
+    idx_vars = []
+    idx_names = []
+    idx_types = []
+    lower_rank_by = 0
+    type_env = {array_name:array_t}
+    
+    for i, idx_t in enumerate(index_types):
+      # indexing with None or a Slice doesn't decrease the rank
+      # whereas by a scalar does 
+      if isinstance(idx_t, ScalarT):
+        lower_rank_by += 1 
+      idx_name = names.fresh("idx%d" % (i+1))
+      idx_names.append(idx_name)
+      idx_var = Var(idx_name, type = idx_t)
+      if idx_t is not Int64:
+        idx_var = Cast(value = idx_var,  type = Int64)
+        idx_t = Int64 
+      idx_types.append(index_types)
+      idx_vars.append(idx_var)
+      type_env[idx_name] = idx_t
+    
+    elt_t = lower_rank(array_t, lower_rank_by)
+    if len(idx_vars) > 1:
+      idx = Tuple(idx_vars, type = make_tuple_type(index_types))
+    else:
+      idx = idx_vars[0]
+    
     fn = syntax.TypedFn(
         name = names.fresh("fancy_indexing_helper"), 
-        arg_names = (array_name, idx_name),
-        input_types = (array_t, idx_t),
+        arg_names = (array_name,) + tuple(idx_names),
+        input_types = (array_t,) + tuple(index_types),
         return_type = elt_t,
-        type_env = {array_name:array_t, idx_name:idx_t}, 
-        body = [Return (Index(array_var, idx_var, type = elt_t))]) 
+        type_env = type_env, 
+        body = [Return (Index(array_var, idx, type = elt_t))]) 
     _index_function_cache[key] = fn 
     return fn 
     
@@ -194,14 +216,18 @@ class RewriteTyped(Transform):
         assert index.type.rank == 1, \
           "Don't yet support indexing by %s" % index.type 
         index_elt_t = index.type.elt_type
+        
         if index_elt_t == Bool:
           assert False, "Indexing by boolean vector not yet implemented"
           #index_array = Where(expr.index)
           #index_elt_t = Int64
         else:
           map_args.append(expr.index)
+          index_elt_types.append(index_elt_t)
       else:
-        map_args.append(expr.index) 
+        map_args.append(expr.index)
+        index_elt_types.append(expr.index.type)
+      
     index_fn = self.get_index_fn(expr.value.type, index_elt_types)
     index_closure = self.closure(index_fn, [expr.value])
     return Map(fn = index_closure, 
