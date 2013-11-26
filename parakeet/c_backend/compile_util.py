@@ -206,6 +206,8 @@ def compile_with_distutils(extension_name,
     return shared_name
   
 def compiler_is_gnu(compiler):
+  if isinstance(compiler, (list,tuple)):
+    compiler = compiler[0]
   return (compiler.endswith("gcc") or
           compiler.endswith("gcc.exe") or 
           compiler.endswith("g++") or 

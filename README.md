@@ -54,6 +54,14 @@ Parakeet is written for Python 2.7 (sorry internet) and depends on:
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
 * [NumPy](http://www.scipy.org/install.html)
 
+The default backend (which uses OpenMP) requires gcc 4.4+. 
+
+*Windows*: If you have a 32-bit Windows install, your compiler should come from [Cygwin](http://cygwin.com/install.html) or [MinGW](http://www.mingw.org/). Getting Parakeet working on 64-bit Windows is non-trivial and seems to require [colossal hacks](http://eli.thegreenplace.net/2008/06/28/compiling-python-extensions-with-distutils-and-mingw/).
+
+*Mac OS X*: By default, your machine probably either has only [clang](http://clang.llvm.org/) or an outdated version of gcc. You can get a more recent version of gcc using [HomeBrew](http://apple.stackexchange.com/questions/38222/how-do-i-install-gcc-via-homebrew)
+
+If you want to use the CUDA backend, you need to have an NVIDIA graphics card and install both the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) and [PyCUDA](http://mathema.tician.de/software/pycuda/). 
+
 
 How does it work? 
 ====
