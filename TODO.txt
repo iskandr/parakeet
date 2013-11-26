@@ -18,6 +18,7 @@ On pause:
 
 Maybe never?
 - Adverb-level vectorization 
+- Revive the LLVM backend but using the Python C API at the extension boundary, use as default for Windows
 
 Old:
 - Run tiling on perfectly nested code

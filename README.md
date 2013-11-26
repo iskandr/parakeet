@@ -99,7 +99,7 @@ Backends
 ===
 Parakeet currently supports compilation to sequential C, multi-core C with OpenMP (default), or LLVM (deprecated). To switch between these options change `parakeet.config.backend` to one of:
 
-  * *"openmp"*: also compiles with gcc, but parallel operators run across multiple cores (default)
+  * *"openmp"*: compiles with gcc, parallel operators run across multiple cores (default)
   * *"c"*: lowers all parallel operators to loops, compile sequential code with gcc
   * *"cuda"*: launch parallel operations on the GPU (experimental)
   * *"llvm"*: older backend, has fallen behind and some programs may not work
