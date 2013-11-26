@@ -93,7 +93,7 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * Some NumPy library functions like `np.ones` and `np.sin` (look at the [mappings](https://github.com/iskandr/parakeet/blob/master/parakeet/mappings.py) module for a full list)
   * List literals (interpreted as array construction)
   * List comprehensions (interpreted as array comprehensions)
-  * Parakeet's higher order array operations like parakeet.map, parakeet.reduce
+  * Parakeet's higher order array operations like `parakeet.imap`, `parakeet.scan`, and `parakeet.allpairs`
 
 Backends
 ===
