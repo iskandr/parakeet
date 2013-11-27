@@ -38,12 +38,15 @@ def get_compiler_flags(extra_flags = [], compiler_flag_prefix = None):
   return compiler_flags   
 
 
-def get_linker_flags(extra_flags = [], linker_flag_prefix = None, shared = True):
-  # for whatever reason nvcc is OK with the -shared linker flag
-  # but not with the -fPIC compiler flag
-  linker_flags = [] 
+def get_linker_flags(extra_flags = [], 
+                     linker_flag_prefix = None, 
+                     shared = True):
   if shared:
+    # for whatever reason nvcc is OK with the -shared linker flag
+    # but not with the -fPIC compiler flag
     linker_flags = ['-shared']
+  else:
+    linker_flags = []
   
   def add_flag(flag):
     if linker_flag_prefix is not None:
