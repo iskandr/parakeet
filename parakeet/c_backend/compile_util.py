@@ -177,7 +177,9 @@ def compile_with_distutils(extension_name,
     from distutils.extension import Extension
     
     compiler_flags = get_compiler_flags(extra_compiler_flags)
-    linker_flags = get_linker_flags(extra_link_flags)
+    # don't need -shared in the flags since the default CC on Mac OS 
+    # might specify -bundle instead and the two are mutually exclusive
+    linker_flags = get_linker_flags(extra_link_flags, shared=False)
     
     ext = Extension(name=extension_name, 
                     sources=[src_filename],
