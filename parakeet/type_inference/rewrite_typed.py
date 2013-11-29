@@ -109,30 +109,36 @@ class RewriteTyped(Transform):
 
   def transform_Reduce(self, expr):
     acc_type = self.return_type(expr.combine)
-    if expr.init and \
-        not self.is_none(expr.init) and \
-        expr.init.type != acc_type:
-      assert len(expr.args) == 1
-      expr.init = self.coerce_expr(expr.init, acc_type)
+    init = self.transform_if_expr(expr.init)
+    args = self.transform_expr_tuple(expr.args)
+    if init and not self.is_none(init) and init.type != acc_type:
+      assert len(args) == 1
+      init = self.coerce_expr(init, acc_type)
+    expr.args = args 
+    expr.init = init
     return expr
     
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)
-    if expr.init and not self.is_none(expr.init) and expr.init.type != acc_type:
+    init = self.transform_if_expr(expr.init)
+    args = self.transform_expr_tuple(expr.args)
+    if init and not self.is_none(init) and init.type != acc_type:
       if isinstance(acc_type, ScalarT):
-        expr.init = self.coerce_expr(expr.init, acc_type)
-      elif isinstance(expr.init.type, ScalarT) and \
+        init = self.coerce_expr(init, acc_type)
+      elif isinstance(init.type, ScalarT) and \
            isinstance(expr.axis, Const) and \
-           len(expr.args) == 1:
-        arr_slice = self.slice_along_axis(expr.args[0], expr.axis, zero_i64)
+           len(args) == 1:
+        arr_slice = self.slice_along_axis(args[0], expr.axis, zero_i64)
         init_type = make_array_type(elt_type = expr.init.type, rank = arr_slice.type.rank)
-        expr.init = ConstArrayLike(array = arr_slice, 
+        init = ConstArrayLike(array = arr_slice, 
                                    value = expr.init, 
                                    type = init_type)
       else:
         assert False, \
           "Scan with scalar init of type %s and accumulator of type %s not yet supported" % \
                     (expr.init.type, acc_type)
+    expr.args = args
+    expr.init = init
     return expr
 
   def transform_Slice(self, expr):
@@ -198,7 +204,7 @@ class RewriteTyped(Transform):
     # TODO: Make fancy indexing work 
     # with multiple indices, boolean index elements, 
     # and multi-dimensional indexing
-    
+
     index = expr.index
     if index.type.__class__ is TupleT:
       indices = self.tuple_elts(index) 
