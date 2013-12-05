@@ -475,7 +475,7 @@ class PyModuleCompiler(FnCompiler):
       else:
         return "%s.size" % v
        
-    elif attr in ('start', 'stop', 'step'):
+    elif attr in ('start', 'stop', 'step') or attr.startswith("elt"):
       if boxed:
         self.check_slice(v)
         obj = "((PySliceObject*)%s)->%s" % (v, attr)

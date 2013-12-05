@@ -29,6 +29,8 @@ class TransformHistory(object):
     self.transform_set = self.transform_set.union(frozenset([T]))
     self._hash = hash(self.transform_set)
   
+
+  
   @property
   def cache_key(self):
     return self.transform_set
@@ -43,7 +45,10 @@ class TransformHistory(object):
     return self.transform_set != other.transform_set 
   
   def __str__(self):
-    return str(self.transforms)
+    return "TransformHistory(%s)" % str(self.transforms)
+  
+  def __repr__(self):
+    return str(self)
   
   def copy(self):
     return TransformHistory()

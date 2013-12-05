@@ -1,5 +1,5 @@
 from prepare_args import prepare_args
-from ..transforms.pipeline  import loopify, final_loop_optimizations  
+from ..transforms.pipeline  import lower_to_loops
 from ..value_specialization import specialize
 from ..config import value_specialization
 from pymodule_compiler import PyModuleCompiler 
@@ -9,11 +9,11 @@ from pymodule_compiler import PyModuleCompiler
 _cache = {}
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
+
+  fn = lower_to_loops(fn)
   
-  transformed_fn = loopify.apply(fn)
-  transformed_fn = final_loop_optimizations.apply(transformed_fn)
   if value_specialization: 
-    transformed_fn = specialize(transformed_fn, args)
+    transformed_fn = specialize(fn, args)
 
   key = transformed_fn.cache_key
   if key in _cache:

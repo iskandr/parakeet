@@ -1,6 +1,7 @@
 import multiprocessing 
 
-from ..syntax import Expr, Tuple
+from .. import prims 
+from ..syntax import Expr, Tuple, Assign, Return, Var, PrimCall 
 from ..syntax.helpers import get_fn, return_type
 from ..ndtypes import ScalarT, TupleT, ArrayT
 from ..c_backend import PyModuleCompiler
@@ -103,6 +104,20 @@ class MulticoreCompiler(PyModuleCompiler):
   def exit_parfor(self):
     self.depth -= 1
 
+  def omp_pragma(self, n_loops, private_vars, reduce_op = None, reduce_vars = None):
+    if config.collapse_nested_loops:
+      omp = "#pragma omp parallel for private(%s) schedule(%s)" % \
+        (", ".join(private_vars), config.schedule)
+      if n_loops > 1:
+        omp += " collapse(%d)" % n_loops
+    else:
+      omp = "#pragma omp parallel for private(%s) schedule(%s)" % \
+          (private_vars[0], config.schedule)
+    
+    if reduce_op:
+      omp += " reduction (%s:%s)" % (reduce_op, ", ".join(reduce_vars))
+    return omp 
+  
   def visit_ParFor(self, stmt):
     bounds = self.tuple_to_var_list(stmt.bounds)
     n_vars = len(bounds)
@@ -116,38 +131,122 @@ class MulticoreCompiler(PyModuleCompiler):
     if self.depth == 0:  
       release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
       acquire_gil = "\nPy_END_ALLOW_THREADS\n" 
-      
-      
-      if config.collapse_nested_loops:
-        omp = "#pragma omp parallel for private(%s) schedule(%s)" % \
-          (", ".join(private_vars), config.schedule)
-        if len(loop_vars) > 1:
-          omp += " collapse(%d)" % len(loop_vars)
-      else:
-        omp = "#pragma omp parallel for private(%s) schedule(%s)" % \
-          (private_vars[0], config.schedule)
+      omp = self.omp_pragma(len(loop_vars), private_vars)
       return release_gil + omp + loops + acquire_gil    
     else:
       return loops 
      
+  
+  
+  def get_binop_prim(self, fn):
+    """
+    If function is a simple binary operator, then return its prim, 
+    otherwise return None
+    """
+
+    if len(fn.input_types) != 2:
+      return None
+      
+    t1, t2 = fn.input_types
+    if t1 != t2:
+      return None 
+    if not isinstance(t1, ScalarT):
+      return None 
+    if not isinstance(t2, ScalarT):
+      return None 
+    body = fn.body
+
+    if len(body) == 2:
+      s1 = body[0]
+      s2 = body[1]
+      if s1.__class__ is not Assign:
+        return None
+      rhs = s1.rhs
+      if rhs.__class__ is not PrimCall:
+        return None 
+      args = rhs.args 
+      if len(args) != 2:
+        return None
+      x,y = args 
+      if x.__class__ is not Var or y.__class__ is not Var:
+        return None 
+      if x.name != fn.arg_names[0] or y.name != fn.arg_names[1]:
+        return None 
+      if s2.__class__ is not Return:
+        return None 
+      if s2.value.__class__ is not Var:
+        return None 
+      if s2.value != s1.lhs:
+        return None
+      return s1.rhs.prim
+    elif len(body) == 1:
+      s = body[0]
+      if s.__class__ is not Return:
+        return None
+      v = s.value 
+      if v.__class__ is not PrimCall:
+        return None 
+      args = v.args 
+      if len(args) != 2:
+        return None
+      x,y = args 
+      if x.__class__ is not Var or y.__class__ is not Var:
+        return None 
+      if x.name != fn.arg_names[0] or y.name != fn.arg_names[1]:
+        return None 
+      return v.prim 
+       
+    
+      
   def visit_IndexReduce(self, expr):
     """
     For now, just use a sequential implementation for reductions
     """
     bounds = self.tuple_to_var_list(expr.shape)
     n_vars = len(bounds)
-    combine_name, combine_closure_args, _ = self.get_fn_info(expr.combine)
+    acc = self.fresh_var(expr.type, "acc", self.visit_expr(expr.init))
+    # try to get a simple primitive to use as the OpenMP combiner
+    # if this isn't possible then run the loops sequentially
+    #
+    # TODO: instead of falling back on sequential execution 
+    # use complex combiners by generating one 
+    # accumulator value per thread and then combining those
+    combine_prim = self.get_binop_prim(expr.combine)
+    if combine_prim is prims.add:
+      omp_reduce_op = "+"
+    elif combine_prim is prims.multiply:
+      omp_reduce_op = "*"
+    elif combine_prim is prims.logical_and:
+      omp_reduce_op = "&&"
+    elif combine_prim is prims.logical_or:
+      omp_reduce_op = "||"
+    else:
+      omp_reduce_op = None 
+ 
     loop_vars = self.loop_vars(n_vars)
     assert expr.init is not None, "Accumulator required but not given"
-    
-    
     elt = self.fresh_var(return_type(expr.fn), "elt")
+    if omp_reduce_op: self.enter_parfor()
+    body, private_vars = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
+    if omp_reduce_op:
+      body += "\n%s = %s %s %s;" % (acc, acc, omp_reduce_op, elt)
+    else:
+      combine_name, combine_closure_args, _ = self.get_fn_info(expr.combine)
+      combine_arg_str = ", ".join(tuple(combine_closure_args) + (acc, elt))
+      body += "\n%s = %s(%s);\n" % (acc, combine_name, combine_arg_str)
+    loops = self.build_loops(loop_vars, bounds, body)
+    if omp_reduce_op: 
+      self.exit_parfor()
 
-    body, _ = self.build_loop_body(expr.fn, loop_vars, target_name = elt)
-    acc = self.fresh_var(expr.type, "acc", self.visit_expr(expr.init))
-    combine_arg_str = ", ".join(tuple(combine_closure_args) + (acc, elt))
-    body += "\n%s = %s(%s);\n" % (acc, combine_name, combine_arg_str)
-    self.append(self.build_loops(loop_vars, bounds, body))
+    if omp_reduce_op and self.depth == 0:
+      
+      release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
+      acquire_gil = "\nPy_END_ALLOW_THREADS\n" 
+      omp = self.omp_pragma(len(loop_vars), private_vars, 
+                            reduce_op = omp_reduce_op, 
+                            reduce_vars = [acc])
+      loops = release_gil + omp + loops + acquire_gil    
+    self.append(loops)
     return acc 
     
   def visit_IndexScan(self, expr):

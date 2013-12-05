@@ -47,13 +47,13 @@ class OffsetAnalysis(SyntaxVisitor):
     if expr.prim is prims.add:
       x, y = expr.args
       if x.__class__ is Var and y.__class__ is Const:
-        return (x.name, y.value)
+        return (x.name, int(y.value))
       elif y.__class__ is Var and x.__class__ is Const:
-        return (y.name, x.value)
+        return (y.name, int(x.value))
     elif expr.prim is prims.subtract:
       x, y = expr.args
       if x.__class__ is Var and y.__class__ is Const:
-        return (x.name, -y.value)
+        return (x.name, -int(y.value))
     return None
   
   def visit_Assign(self, stmt):

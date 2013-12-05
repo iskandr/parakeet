@@ -339,7 +339,7 @@ class TypeInference(LocalTypeInference):
                                    type = array_type.SliceT(Int64, NoneType, Int64))
       rest = self.slice_along_axis(arg, axis, slice_rest)
       new_args = (rest,)  
-    
+
     return syntax.Reduce(fn = typed_map_closure,
                          combine = typed_combine_closure,
                          args = new_args,
@@ -589,10 +589,9 @@ def increase_adverb_output_rank(array_types, axes, elt_result_type, cartesian_pr
     else: delta_rank = max(r, delta_rank)
   return array_type.increase_rank(elt_result_type, delta_rank)
 
-def specialize_Map(map_fn, array_types, axes):
-  
+def specialize_Map(map_fn, array_types, axes, return_type = None):
   elt_types = peel_adverb_input_types(array_types, axes)
-  typed_map_fn = specialize(map_fn, elt_types)
+  typed_map_fn = specialize(map_fn, elt_types, return_type = return_type)
   elt_result_t = typed_map_fn.return_type
   result_t = increase_adverb_output_rank(array_types, axes, elt_result_t)
   return result_t, typed_map_fn
@@ -606,8 +605,9 @@ def specialize_Reduce(map_fn, combine_fn, array_types, axes, init_type = None):
     acc_type = init_type
   typed_combine_fn = specialize(combine_fn, [acc_type, elt_type])
   new_acc_type = typed_combine_fn.return_type
-  if new_acc_type != acc_type:
-    typed_combine_fn = specialize(combine_fn, [new_acc_type, elt_type])
+  if new_acc_type != acc_type or typed_map_fn.return_type != new_acc_type:
+    _, typed_map_fn = specialize_Map(map_fn, array_types, axes, return_type = new_acc_type)
+    typed_combine_fn = specialize(combine_fn, [new_acc_type, new_acc_type])
     new_acc_type = typed_combine_fn.return_type
   return new_acc_type, typed_map_fn, typed_combine_fn
 

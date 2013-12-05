@@ -5,7 +5,8 @@ from .. import prims, syntax
 from .. analysis.collect_vars import collect_var_names
 from .. analysis.mutability_analysis import TypeBasedMutabilityAnalysis
 from .. analysis.use_analysis import use_count
-from .. ndtypes import ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType, SliceT, FnT
+from .. ndtypes import (ArrayT,  ClosureT, NoneT, ScalarT, TupleT, ImmutableT, NoneType, 
+                        SliceT, FnT, FloatT)
 
 from .. syntax import (AllocArray, Assign, ExprStmt, Expr, 
                        Const, Var, Tuple, TupleProj, Closure, ClosureElt, Cast,
@@ -16,7 +17,7 @@ from .. syntax import (AllocArray, Assign, ExprStmt, Expr,
 from .. syntax.helpers import (collect_constants, is_one, is_zero, is_false, is_true, all_constants,
                                get_types, 
                                slice_none_t, const_int, one, none, true, false, slice_none, 
-                               zero_i64) 
+                               zero_i64, one_i64) 
 import subst
 import transform 
 from transform import Transform
@@ -421,8 +422,17 @@ class Simplify(Transform):
           return self.cast(x, expr.type)
         elif is_zero(y):
           return one(expr.type)
-        elif y.__class__ is Const and y.value == 2:
-          return self.cast(self.mul(x, x, "sqr"), expr.type)
+        elif y.__class__ is Const:
+          if y.value == 2:
+            return self.cast(self.mul(x, x, "sqr"), expr.type)
+          elif y.value == 1:
+            return self.cast(x, expr.type)
+          elif y.value == 0:
+            return self.cast(one_i64, expr.type)
+          elif y.value == 0.5 and isinstance(expr.type, FloatT):
+            expr.prim = prims.sqrt
+            expr.args = (self.cast(x, expr.type),)
+            return expr
       elif prim == prims.logical_and:
         if is_true(x):
           return y

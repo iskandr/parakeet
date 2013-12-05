@@ -138,13 +138,15 @@ class Phase(object):
     return not (self.should_skip(fn) or self.is_cached(fn)) 
     
   def apply(self, fn, run_dependencies = True):
-    
-      
+
     if self.memoize:
+      
       original_key = fn.cache_key
       if fn.created_by is self:
-        return fn 
-      if original_key in self.cache:
+        return fn
+      elif self in fn.transform_history:
+        return fn   
+      elif original_key in self.cache:
         return self.cache[original_key] 
     
     if self.depends_on and run_dependencies:
