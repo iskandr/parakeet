@@ -27,7 +27,7 @@ def growcut_python(image, state, state_next, window_radius):
             state_next[i, j, 1] = defense_strength
     return changes
     
-N = 500
+N = 100
 dtype = np.double
 image = np.zeros((N, N, 3), dtype=dtype)
 state = np.zeros((N, N, 2), dtype=dtype)
@@ -40,6 +40,28 @@ state[0, 0, 1] = 1
 
 window_radius = 10
 
+import parakeet 
+def growcut_par(image, state, window_radius):
+    height = image.shape[0]
+    width = image.shape[1]
+    def attack((i,j)):
+            winning_colony = state[i, j, 0]
+            defense_strength = state[i, j, 1]
+            for jj in xrange(max(j-window_radius,0), min(j+window_radius+1, width)):
+                for ii in xrange(max(i-window_radius, 0), min(i+window_radius+1, height)):
+                    if ii != i or jj != j:
+                        d = image[i, j, :] - image[ii, jj, :]
+                        s = np.sum(d**2) 
+                        gval = 1.0 - np.sqrt(s) / np.sqrt(3)
+                        attack_strength = gval * state[ii, jj, 1]
+                        if attack_strength > defense_strength:
+                            defense_strength = attack_strength
+                            winning_colony = state[ii, jj, 0]
+            state_next[i, j, 0] = winning_colony
+            state_next[i, j, 1] = defense_strength
+            return [winning_colony, defense_strength]
+    return parakeet.imap(attack, (height, width))
+
 from compare_perf import compare_perf 
 
-compare_perf(growcut_python, [image, state, state_next, window_radius], suppress_output = False)
+compare_perf(growcut_par, [image, state, window_radius], suppress_output = False, propagate_exceptions = True)
