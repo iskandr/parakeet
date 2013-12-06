@@ -36,8 +36,12 @@ bound = 1.5
 lim = 1000
 cutoff = 1e6 
 
-from numba import autojit 
+extra = {}
+try:
+  from numba import autojit 
+  extra['numba'] = autojit(julia_loops)
+except:
+  print "Failed to import Numba" 
 
-
-compare_perf(julia, [cr, ci, N, bound, lim, cutoff], numba = False, extra = {'numba':autojit(julia_loops)})
+compare_perf(julia, [cr, ci, N, bound, lim, cutoff], numba = False, extra = extra)
 
