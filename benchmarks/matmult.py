@@ -4,9 +4,12 @@ def matmult_high_level(X,Y):
   return np.array([[np.dot(x,y) for y in Y.T] for x in X])
 
 
-n, d = 2500, 20
-m = 2500
-dtype = 'float64'
+#
+#n, d = 2500, 20
+#m = 2500
+
+n,d,m = 1200,1200,1200
+dtype = 'float32'
 X = np.random.randn(m,d).astype(dtype)
 Y = np.random.randn(d,n).astype(dtype)
 

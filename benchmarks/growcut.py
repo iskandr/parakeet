@@ -27,7 +27,7 @@ def growcut_python(image, state, state_next, window_radius):
             state_next[i, j, 1] = defense_strength
     return changes
     
-N = 50
+N = 500
 dtype = np.double
 image = np.zeros((N, N, 3), dtype=dtype)
 state = np.zeros((N, N, 2), dtype=dtype)
