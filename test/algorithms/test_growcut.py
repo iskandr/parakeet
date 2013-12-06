@@ -26,20 +26,25 @@ def growcut_python(image, state, state_next, window_radius):
             state_next[i, j, 0] = winning_colony
             state_next[i, j, 1] = defense_strength
     return changes
-    
-N = 500
-dtype = np.double
-image = np.zeros((N, N, 3), dtype=dtype)
-state = np.zeros((N, N, 2), dtype=dtype)
-state_next = np.empty_like(state)
 
-# colony 1 is strength 1 at position 0,0
-# colony 0 is strength 0 at all other positions
-state[0, 0, 0] = 1
-state[0, 0, 1] = 1
+from parakeet.testing_helpers import expect, run_local_tests 
 
-window_radius = 10
+def run_growcut(N = 3, window_radius = 2):
+  image = np.zeros((N, N, 3), dtype=np.double)
+  state = np.zeros((N, N, 2), dtype=np.double)
+  state_next = np.empty_like(state)
 
-from compare_perf import compare_perf 
+  # colony 1 is strength 1 at position 0,0
+  # colony 0 is strength 0 at all other positions
+  state[0, 0, 0] = 1
+  state[0, 0, 1] = 1
+  growcut_python(image, state, state_next, window_radius)
+  return state_next 
 
-compare_perf(growcut_python, [image, state, state_next, window_radius], suppress_output = False)
+def test_growcut():
+  res = run_growcut()
+  expect(run_growcut, [], res)
+
+
+if __name__ == "__main__":
+  run_local_tests()
