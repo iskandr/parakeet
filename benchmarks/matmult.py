@@ -1,13 +1,12 @@
 import parakeet
 import numpy as np 
- 
 def matmult_high_level(X,Y):
   return np.array([[np.dot(x,y) for y in Y.T] for x in X])
 
 
-n, d = 1200, 1200
-m = 1200
-dtype = 'float32'
+n, d = 2500, 20
+m = 2500
+dtype = 'float64'
 X = np.random.randn(m,d).astype(dtype)
 Y = np.random.randn(d,n).astype(dtype)
 
@@ -57,7 +56,7 @@ except:
   pass 
 
 compare_perf(matmult_high_level, [X,Y],
-             cpython=True, 
+             cpython=True,
              # numba can't run the nested comprehensions so we use
              # a special loopy version instead 
              numba=False,

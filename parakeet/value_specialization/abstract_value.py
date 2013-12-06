@@ -47,11 +47,13 @@ class Array(AbstractValue):
   # mark known strides with integer constants 
   # and all others as unknown
   
-  __slots__ = ['strides', '_hash']
+  __slots__ = ['strides', 'shape', 'offset' '_hash']
   
-  def __init__(self, strides):
+  def __init__(self, strides, shape = unknown, offset = unknown):
     self.strides = strides
-    self._hash = hash(self.strides.elts) + 1
+    self.shape = shape
+    self.offset = offset 
+    self._hash = hash(self.shape) + hash(self.offset) + hash(self.strides.elts) + 1
   
   def __str__(self):
     return "Array(strides = %s)" % self.strides

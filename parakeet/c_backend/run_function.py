@@ -13,12 +13,13 @@ def run(fn, args):
   fn = lower_to_loops(fn)
   
   if value_specialization: 
-    transformed_fn = specialize(fn, args)
+    fn = specialize(fn, args)
 
-  key = transformed_fn.cache_key
+  key = fn.cache_key
   if key in _cache:
+    "YOU IN THE CACHE!"
     return _cache[key](*args)
-  compiled_fn = PyModuleCompiler().compile_entry(transformed_fn)
+  compiled_fn = PyModuleCompiler().compile_entry(fn)
   c_fn = compiled_fn.c_fn 
   _cache[key] = c_fn 
   return c_fn(*args)

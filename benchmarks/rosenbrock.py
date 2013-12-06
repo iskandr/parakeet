@@ -31,7 +31,7 @@ def rosen_der_loops(x):
   return der
 
 if __name__ == '__main__':
-  N = 10**5
+  N = 10**7
   x = np.arange(N) / float(N)
   jit(rosen_der_np)(x) 
   from compare_perf import compare_perf

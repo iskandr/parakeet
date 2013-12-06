@@ -239,7 +239,6 @@ class MulticoreCompiler(PyModuleCompiler):
       self.exit_parfor()
 
     if omp_reduce_op and self.depth == 0:
-      
       release_gil = "\nPy_BEGIN_ALLOW_THREADS\n"
       acquire_gil = "\nPy_END_ALLOW_THREADS\n" 
       omp = self.omp_pragma(len(loop_vars), private_vars, 

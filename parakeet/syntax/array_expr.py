@@ -135,12 +135,17 @@ class Range(ArrayExpr):
 
 class AllocArray(ArrayExpr):
   """Allocate an unfilled array of the given shape and type"""
-  def __init__(self, shape, elt_type, type = None, source_info = None):
+  def __init__(self, shape, elt_type, type = None, order = "C", source_info = None):
     # TODO: support a 'fill' field 
     self.shape = shape 
     self.elt_type = elt_type 
     self.type = type 
     self.source_info = source_info 
+    
+    # TODO: let user specify layout orders
+    assert order == "C", \
+      "Layouts other than row-major not yet supported, invalid option order = '%s'" % order 
+    self.order = order
 
   def children(self):
     yield self.shape

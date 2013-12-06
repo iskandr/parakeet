@@ -4,7 +4,7 @@ import numpy as np
 from .. ndtypes import ArrayT, TupleT   
 from .. syntax import TypedFn, Var
 from ..analysis import SyntaxVisitor
-from abstract_value import one, zero, Const, unknown, Tuple, Array, Struct, abstract_tuple  
+from abstract_value import one, zero, Const, unknown, Tuple, Array, Struct, abstract_tuple, abstract_array  
 
 
 
@@ -59,6 +59,32 @@ class FindConstantValues(SyntaxVisitor):
   def visit_Var(self, expr):
     return self.env.get(expr.name, unknown)
   
+  def visit_ArrayView(self, expr):
+    strides_tuple = self.visit_expr(expr.strides)
+    if strides_tuple.__class__ is Const:
+      strides_tuple =  abstract_tuple([strides_tuple])
+    shape_tuple = self.visit_expr(expr.shape)
+    if shape_tuple.__class__ is Const:
+      shape_tuple = abstract_tuple([shape_tuple])
+    offset = self.visit_expr(expr.offset)
+    if strides_tuple.__class__ is Tuple or shape_tuple.__class__ is Tuple or offset.__class__ is Const:
+      return Array(strides_tuple, shape_tuple, offset)
+    else:
+      return unknown 
+  
+  def visit_AllocArray(self, expr):
+    if expr.order == "C":
+      elts = (unknown,) * (expr.type.rank-1) + (one,)
+      strides =  abstract_tuple(elts)
+    elif expr.order == "F":
+      elts = (one, ) + (unknown,) * (expr.type.rank-1) 
+      strides = abstract_tuple(elts)
+    else:
+      strides = unknown 
+    shape = self.visit_expr(expr.shape)
+    offset = Const(0)
+    return Array(strides, shape, offset)
+  
   def visit_Const(self, expr):
     if expr.value == 0:
       return zero
@@ -77,11 +103,19 @@ class FindConstantValues(SyntaxVisitor):
       return value.elts[pos]
     elif value.__class__ is Array and expr.name == 'strides':
       return value.strides
+    elif value.__class__ is Array and expr.name == 'shape':
+      return value.shape
+    elif value.__class__ is Array and expr.name == 'offset':
+      return value.offset
+    
     elif value.__class__ is Struct and expr.name in value.fields:
       return value.fields[expr.name]
     else:
       return unknown
 
+  def visit_Tuple(self, expr):
+    return abstract_tuple(self.visit_expr_list(expr.elts))
+  
   def visit_TupleProj(self, expr):
     value = self.visit_expr(expr.tuple)
     if isinstance(value, Tuple):
