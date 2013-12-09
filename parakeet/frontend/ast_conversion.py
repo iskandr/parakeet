@@ -15,7 +15,7 @@ from ..prims import Prim
 from ..syntax import (Expr, 
                       Assign, If, ForLoop, Return,  
                       Var, PrimCall, Cast,  Select, 
-                      Map, Reduce, 
+                      Map, Reduce, IndexMap, 
                       Enumerate, Zip, Len, Range,    
                       Slice,  Tuple, Array,
                       Const, Call, Index, 
@@ -598,7 +598,7 @@ class AST_Translator(ast.NodeVisitor):
 
   def visit_GeneratorExp(self, expr):
     return self.visit_ListComp(expr)
-    
+  
   def visit_ListComp(self, expr):
     gens = expr.generators
     assert len(gens) == 1
@@ -614,12 +614,12 @@ class AST_Translator(ast.NodeVisitor):
       arg_vars = [ast.Tuple(elts = target.elts)]
     # build a lambda as a Python ast representing 
     # what we do to each element 
-
+    
     args = ast.arguments(args = arg_vars, 
                          vararg = None,  
                          kwarg = None,  
                          defaults = ())
-
+    
     fn = translate_function_ast(name = "comprehension_map", 
                                 args = args, 
                                 body = [ast.Return(expr.elt)], 
@@ -627,8 +627,16 @@ class AST_Translator(ast.NodeVisitor):
     seq = self.visit(gen.iter)
     ifs = gen.ifs
     assert len(ifs) == 0, "Parakeet: Conditions in array comprehensions not yet supported"
-    return Map(fn = fn, args=(seq,), axis = zero_i64)
-      
+    # short-circuit conversion from Map(Range) to IndexMap for simple cases
+    if seq.__class__ is Range and \
+      (seq.start is None or seq.start == zero_i64) and  \
+      (seq.step is None or seq.step == one_i64):
+      return IndexMap(fn = fn, shape = seq.stop)
+    else:
+      return Map(fn = fn, args=(seq,), axis = zero_i64)
+    
+
+    
   def visit_Attribute(self, expr):
     # TODO:
     # Recursive lookup to see if:

@@ -98,6 +98,6 @@ from compare_perf import compare_perf
 
 N = 1600
 x = y = z = hs= qts = mass = rhos = np.random.rand(N)
-nx=ny=40
+nx=ny=120
 args = (x,y,z,hs,qts,mass,rhos,nx,ny, 0.0, 1.0, 0.0, 1.0)
-compare_perf(render_image, args)
+compare_perf(render_image, args, numba = False, backends= ('c',))

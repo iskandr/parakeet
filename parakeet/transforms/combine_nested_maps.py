@@ -12,7 +12,6 @@ from clone_function import CloneFunction
 from transform import Transform
 
 class CombineNestedMaps(Transform):
-
   def translate_expr(self, expr, mapping, forbidden = set([])):
       c = expr.__class__ 
       if c is Var:
@@ -175,9 +174,7 @@ class CombineNestedMaps(Transform):
     # can't turn Map(-, x, y) into an OuterMap since (x,y) are at the same iteration level 
     if len(expr.args) != 1:
       return expr
-
     new_expr = self.combine_maps(expr.fn, expr.args, expr.axis, expr.type)
-
     if new_expr is None: return expr 
     else: return new_expr 
     
@@ -185,5 +182,5 @@ class CombineNestedMaps(Transform):
     new_expr = self.combine_maps(expr.fn, expr.args, expr.axis, expr.type)
     if new_expr is None: return expr 
     else: return new_expr 
-    
+  
     

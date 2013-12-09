@@ -26,8 +26,8 @@ def harris(I):
   return det - k * tr * tr
 
 from compare_perf import compare_perf 
-m,n = 1920, 1080
-dtype = 'float64'
-I = np.random.randn(m,n).astype(dtype)
+m,n = 2400, 2400
+dtype = 'uint8' 
+I = (np.random.randn(m,n) ** 2).astype(dtype)
 
-compare_perf(harris, [I], propagate_exceptions=True, backends= ("c", "openmp"))
+compare_perf(harris, [I], propagate_exceptions=True, backends= ("c", "openmp"), numba = False)

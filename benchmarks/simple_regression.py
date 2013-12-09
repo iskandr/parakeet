@@ -21,4 +21,4 @@ y = slope * x + offset
 
 
 from compare_perf import compare_perf 
-compare_perf(fit_simple_regression, (x,y))
+compare_perf(fit_simple_regression, (x,y), numba=False)

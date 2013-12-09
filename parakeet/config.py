@@ -23,9 +23,6 @@ opt_combine_nested_maps = True
 
 opt_specialize_fn_args = True 
 
-# experimental!
-opt_simplify_array_operators = False
-
 opt_index_elimination = True
 opt_range_propagation = True
 
@@ -50,12 +47,15 @@ opt_loop_unrolling = False
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
 opt_scalar_replacement = False
+
+# experimental!
+opt_simplify_array_operators = False
     
 # run verifier after each transformation 
 opt_verify = False
 
 # recompile functions for distinct patterns of unit strides and 0 or 1 input values 
-value_specialization = True 
+value_specialization = False 
 
 
 
