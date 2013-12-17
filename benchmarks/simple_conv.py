@@ -9,11 +9,9 @@ def conv_3x3_trim(x, weights):
                     for j in xrange(1, x.shape[1] -2)]
                     for i in xrange(1, x.shape[0] -2)])
  
-
-x = np.random.randn(1200,1200).astype('float32')
+x = np.random.randn(1500,1500).astype('float32')
 w = np.random.randn(3,3).astype('float32')
-compare_perf(conv_3x3_trim, [x,w])
-
+#compare_perf(conv_3x3_trim, [x,w])
 
 w = np.random.randn(3,3).astype('float32')
 # Simple convolution of 5x5 patches from a given array x
@@ -28,7 +26,6 @@ def conv_3x3_trim_loops(image, weights):
           result[i,j] += image[i-ii+1, j-jj+1] * weights[ii, jj] 
   return result
 
-
 compare_perf(conv_3x3_trim_loops, [x,w])
 
 import parakeet 
@@ -41,4 +38,4 @@ def conv_3x3_imap(image, weights):
       return total 
   w,h = image.shape
   return parakeet.imap(compute, (w-2,h-2))
-compare_perf(conv_3x3_imap, [x,w])
+compare_perf(conv_3x3_imap, [x,w], backends=('openmp', 'cuda',))

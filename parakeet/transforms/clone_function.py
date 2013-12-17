@@ -143,7 +143,8 @@ class CloneFunction(Transform):
   def transform_ParFor(self, stmt):
     new_bounds = self.transform_expr(stmt.bounds)
     new_fn = self.transform_expr(stmt.fn)
-    return ParFor(fn = new_fn, bounds = new_bounds)
+    return ParFor(fn = new_fn, bounds = new_bounds, 
+                  read_only = stmt.read_only, write_only = stmt.write_only)
   
   def pre_apply(self, old_fn):
     new_fundef_args = old_fn.__dict__.copy()

@@ -287,6 +287,12 @@ class IndexifyAdverbs(Transform):
     return self.create_output_array(fn, inner_args, outer_shape_tuple, name)
 
   
+  def insert_parfor(self, index_fn, bounds, n_read_only, n_write_only=1):
+    read_only = ([False] * n_write_only) + ([True] * n_read_only)
+    write_only = ([True] * n_write_only) + ([False] * n_read_only)
+    stmt = ParFor(index_fn, bounds, read_only = read_only, write_only = write_only)
+    self.blocks += stmt 
+    
   def transform_Map(self, expr, output = None):
     # TODO: 
     # - recursively descend down the function bodies to pull together nested ParFors
@@ -303,7 +309,9 @@ class IndexifyAdverbs(Transform):
     index_fn = self.indexify_fn(expr.fn, axes, args, 
                                 cartesian_product=False, 
                                 output = output)
-    self.parfor(index_fn, bounds)
+    
+    
+    self.insert_parfor(index_fn, bounds, n_read_only = len(args), n_write_only = 1)
     return output 
   
   def transform_OuterMap(self, expr):
@@ -323,7 +331,7 @@ class IndexifyAdverbs(Transform):
     loop_body = self.indexify_fn(fn, axes, args, 
                                  cartesian_product = True, 
                                  output = output)
-    self.parfor(loop_body, outer_shape)
+    self.insert_parfor(loop_body, outer_shape, len(args))
     return output 
   
   def transform_IndexMap(self, expr, output = None):
@@ -375,7 +383,7 @@ class IndexifyAdverbs(Transform):
         start_indices = builder.tuple_elts(expr.start_index)
         assert len(start_indices) == len(idx_vars), \
           "Mismatch between number of indices %s and start offsets %s" % (idx_vars, start_indices)
-        idx_vars = [builder.add(idx, offset, "idx%d") 
+        idx_vars = [builder.add(idx, offset, "idx%d" % i) 
                     for i, (idx,offset) 
                     in enumerate(zip(idx_vars, start_indices))]
            
@@ -392,7 +400,7 @@ class IndexifyAdverbs(Transform):
       
     builder.return_(none)
     new_closure = self.closure(new_fn, (output,) + tuple(old_closure_args)  )
-    self.parfor(new_closure, shape)
+    self.insert_parfor(new_closure, shape, len(old_closure_args))
     return output
   
   def transform_Reduce(self, expr):
@@ -482,7 +490,16 @@ class IndexifyAdverbs(Transform):
   
   def transform_Filter(self, expr):
     assert False, "Filter not implemented"
-    
+  
+  def transform_FilterReduce(self, expr):
+    raise NotImplemented
+  
+  def transform_IndexFilter(self, expr):
+    raise NotImplemented 
+  
+  def transform_IndexFilterReduce(self, expr):
+    raise NotImplemented 
+  
   
   def transform_Assign(self, stmt):
     """

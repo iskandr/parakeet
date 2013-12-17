@@ -22,12 +22,12 @@ def harris(I):
   C = dx * dy
   tr = A + B
   det = A * B - C * C
-  k = 0.05
+  k = np.float32(0.05)
   return det - k * tr * tr
 
 from compare_perf import compare_perf 
 m,n = 2400, 2400
-dtype = 'uint8' 
+dtype = 'float32' 
 I = (np.random.randn(m,n) ** 2).astype(dtype)
 
-compare_perf(harris, [I], propagate_exceptions=True, backends= ("c", "openmp"), numba = False)
+compare_perf(harris, [I], propagate_exceptions=True)

@@ -12,7 +12,7 @@ def fit_simple_regression(x,y):
 
 import numpy as np 
 
-N = 10**7
+N = 2*10**7
 x = np.random.randn(N).astype('float64')
 slope = 903.29
 offset = 102.1
@@ -21,4 +21,4 @@ y = slope * x + offset
 
 
 from compare_perf import compare_perf 
-compare_perf(fit_simple_regression, (x,y), numba=False)
+compare_perf(fit_simple_regression, (x,y), numba=True)

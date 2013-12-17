@@ -117,7 +117,7 @@ class ForLoop(Stmt):
   
   
 class ParFor(Stmt):
-  _members = ['fn', 'bounds']
+  _members = ['fn', 'bounds', 'read_only', 'write_only']
 
   def __str__(self):
     return "ParFor(fn = %s, bounds = %s)" % (self.fn, self.bounds)
