@@ -190,6 +190,9 @@ function_mappings = {
   np.vdot : lib.vdot, 
   np.dot : lib.dot,
   np.linalg.norm : lib.linalg.norm,  
+  
+  math.erf : lib.prob.erf, 
+  math.erfc : lib.prob.erfc, 
 }
 
 property_mappings = {

@@ -1,6 +1,30 @@
 from ..frontend import jit
 import numpy as np
 
+def CND(x):
+  """
+  Simpler approximation of the cumulative normal density. 
+  """
+  a1 = 0.31938153
+  a2 = -0.356563782
+  a3 = 1.781477937
+  a4 = -1.821255978
+  a5 = 1.330274429
+  L = abs(x)
+  K = 1.0 / (1.0 + 0.2316419 * L)
+  w = 1.0 - 1.0/np.sqrt(2*3.141592653589793)* np.exp(-1*L*L/2.) * (a1*K +
+      a2*K*K + a3*K*K*K + a4*K*K*K*K + a5*K*K*K*K*K)
+  if x<0:
+    w = 1.0-w
+  return w
+
+def erf(x):
+  return 2 * CND(x * 1.4142135623730951) - 1
+
+def erfc(x):
+  return 2 * (1 - CND(x * 1.4142135623730951)) 
+
+"""
 P = np.asarray([
   2.46196981473530512524E-10,
   5.64189564831068821977E-1,
@@ -91,7 +115,7 @@ def ndtr(a):
   return y
 
 
-@jit
+
 def erfc(a):
   if a < 0.0:
     x = -a
@@ -125,7 +149,6 @@ def erfc(a):
   return y
 
 
-@jit
 def erf(x):
   if np.abs(x) > 1.0:
     return 1.0 - erfc(x)
@@ -133,4 +156,4 @@ def erf(x):
 
   y = x * polevl(z, T, 4) / p1evl(z, U, 5)
   return (y)
-
+"""
