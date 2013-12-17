@@ -27,4 +27,5 @@ class ArrayWriteAnalysis(SyntaxVisitor):
       
     
   def visit_Index(self):
+    pass 
    
