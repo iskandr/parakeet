@@ -7,4 +7,5 @@ class ExtractParallelLoops(Transform):
     Transform.__init__(self)
     
   def enter_loop(self, var):
+    pass 
     
