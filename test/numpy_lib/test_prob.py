@@ -12,4 +12,4 @@ def test_erf():
   testing_helpers.expect(math.erf, [1], math.erf(1))
   
 if __name__ == "__main__":
-    testing_helpers.run_local_tests()
+  testing_helpers.run_local_tests()
