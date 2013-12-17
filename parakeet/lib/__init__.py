@@ -9,6 +9,7 @@ from reductions import *
 from numpy_types import * 
 from patchmap import *
 
+import prob
 import linalg 
 from linalg import dot 
 import random 
