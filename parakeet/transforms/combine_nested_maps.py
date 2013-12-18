@@ -2,9 +2,9 @@ from collections import namedtuple
 
 from ..analysis import collect_var_names_from_exprs
 from ..ndtypes import TupleT 
-from ..syntax import (Return, Map, OuterMap, Tuple, Var, Closure, Assign, 
+from ..syntax import (Return, Map, OuterMap, IndexMap, Tuple, TupleProj, Var, Closure, Assign, 
                       Const, TypedFn, UntypedFn, Ravel, Shape, Strides, Transpose, 
-                      Where, Reshape) 
+                      Reshape, Where, Compress) 
 from ..syntax.helpers import none   
 
 from subst import subst_expr_list
@@ -12,35 +12,54 @@ from clone_function import CloneFunction
 from transform import Transform
 
 class CombineNestedMaps(Transform):
-  def translate_expr(self, expr, mapping, forbidden = set([])):
-      c = expr.__class__ 
-      if c is Var:
-        if expr.name in forbidden:
-          return None 
-        return mapping[expr.name]
-      elif c in (Const, TypedFn, UntypedFn):
-        return expr 
-      
-      elif c is Tuple:
-        return Tuple(elts = tuple(self.translate_expr(elt,mapping,forbidden) 
-                                  for elt in expr.elts), type = expr.type)
-      elif c is Closure:
-        return Closure(fn = expr.fn, 
-                       args = tuple(self.translate_expr(elt, mapping,forbidden) 
-                                    for elt in expr.args), type = expr.type)
-      elif c in (Ravel, Shape, Strides, Transpose, Where):
-        return c(array = self.translate_expr(expr.array, mapping,forbidden), type = expr.type)
-      elif c is Reshape:
-        return Reshape(array = self.translate_expr(expr.array, mapping,forbidden), 
-                       shape = self.translate_expr(expr.shape, mapping,forbidden), 
-                       type = expr.type)
   
-  def build_arg_mapping(self, fn, closure_elts, outer_args):
-    
-    combined_args = tuple(closure_elts) + tuple(outer_args)
-    assert len(fn.arg_names) == len(combined_args), \
-      "Mismatch between function with %d formals and given %d actual args" % \
-      (len(fn.arg_names), len(combined_args))
+  def translate_expr(self, expr, mapping, forbidden = set([])):
+    c = expr.__class__ 
+    if c is Var:
+      if expr.name not in forbidden and expr.name in mapping: 
+        return mapping[expr.name]
+      else:
+        return None
+    elif c in (Const, TypedFn, UntypedFn):
+      return expr
+    elif c is Tuple:
+      elts = tuple(self.translate_expr(elt,mapping,forbidden) for elt in expr.elts)
+      if any(elt is None for elt in elts): return None
+      return Tuple(elts = elts, type = expr.type)
+    elif c is Closure:
+      args = tuple(self.translate_expr(elt, mapping,forbidden) for elt in expr.args)
+      if any(arg is None for arg in args): return None
+      return Closure(fn = expr.fn, 
+                     args = args, 
+                     type = expr.type)
+    elif c in (Ravel, Shape, Strides, Transpose, Where):
+      array = self.translate_expr(expr.array, mapping, forbidden)
+      if array is None: return None 
+      return c(array = array, type = expr.type)
+    elif c is Compress:
+      condition = self.translate_expr(expr.condition, mapping, forbidden)
+      data = self.translate_expr(expr.data, mapping, forbidden)
+      if condition is None or data is None: return None
+      return c(condition = condition, 
+               data = data, 
+               type = expr.type)
+    elif c is TupleProj:
+      tup = self.translate_expr(expr.tuple, mapping, forbidden)
+      if tup is None: return None
+      return c(tuple = tup, 
+               index = expr.index,  
+               type = expr.type)
+    elif c is Reshape:
+      array = self.translate_expr(expr.array, mapping,forbidden)
+      shape = self.translate_expr(expr.shape, mapping,forbidden)
+      if array is None or shape is None: return None 
+      return Reshape(array = array, shape = shape,  type = expr.type)
+
+  def build_arg_mapping(self, fn, closure_elts, outer_args = None):  
+    if outer_args:
+      combined_args = tuple(closure_elts) + tuple(outer_args)
+    else:
+      combined_args = closure_elts 
     mapping = {}
     for name, expr in zip(fn.arg_names, combined_args):
       mapping[name] = expr  
@@ -60,24 +79,32 @@ class CombineNestedMaps(Transform):
         return None 
     return mapping 
   
-  def combine_maps(self, closure, outer_args, outer_axis, result_type):
-    fn = self.get_fn(closure)
-    closure_elts = self.closure_elts(closure)
-    
+  def dissect_nested_fn(self, fn, valid_adverb_classes = (Map,OuterMap)):
     if len(fn.body) == 0: 
       return None 
+    
     stmt = fn.body[-1]
+    
     if stmt.__class__ is not Return: 
       return None 
     
     nested_expr = stmt.value 
-    if nested_expr.__class__ not in (Map, OuterMap): 
+    if nested_expr.__class__ not in valid_adverb_classes: 
       return None
     
+    return nested_expr
+    
+    
+  
+  def combine_maps(self, closure, outer_args, outer_axis, result_type):
+    fn = self.get_fn(closure)
+    closure_elts = self.closure_elts(closure)
+    
+    nested_expr = self.dissect_nested_fn(fn)
+    if nested_expr is None: return None
+     
     arg_mapping = self.build_arg_mapping(fn, closure_elts, outer_args)
-
-    if arg_mapping is None: 
-      return None 
+    if arg_mapping is None: return None 
     
     nested_outer_args = nested_expr.args
     n_nested_outer_args = len(nested_outer_args)
@@ -86,15 +113,13 @@ class CombineNestedMaps(Transform):
     nested_axis = nested_expr.axis
     
     # either both Maps specify an axis of traversal or neither do  
-    if self.is_none(outer_axis) != self.is_none(nested_axis): 
-      return None 
+    if self.is_none(outer_axis) != self.is_none(nested_axis): return None 
     
     
     n_array_args = len(outer_args)
     
     inner_array_names = fn.arg_names[-n_array_args:]
-    if len(nested_map_closure_elts) < len(inner_array_names): 
-      return None 
+    if len(nested_map_closure_elts) < len(inner_array_names):  return None 
 
 
     
@@ -170,6 +195,63 @@ class CombineNestedMaps(Transform):
                      axis = combined_axis, 
                      type = result_type)
     
+  
+  def combine_index_maps(self, closure, shape, result_type):
+    fn = self.get_fn(closure)
+    closure_elts = self.closure_elts(closure)
+    
+    
+    nested_expr = self.dissect_nested_fn(fn, (IndexMap,))
+    if nested_expr is None: return None
+    
+    inner_shape = nested_expr.shape 
+    
+    arg_mapping = self.build_arg_mapping(fn, closure_elts)
+    if arg_mapping is None:  return None
+    
+
+    nested_map_closure_elts = self.closure_elts(nested_expr.fn) 
+    nested_fn = self.get_fn(nested_expr.fn)
+
+    
+    # if there's ohe outer arg and it's stuck at the back of the
+    # nested args list, try permuting the arguments to make a nested fnh
+    # that's compatible with OuterMap   
+    if len(nested_map_closure_elts) > 1 and \
+       nested_map_closure_elts[0].__class__ is Var and \
+       nested_map_closure_elts[0].name == fn.arg_names[-1]:
+      permute_fn = CloneFunction().apply(nested_fn)
+      permute_input_types = list(permute_fn.input_types)
+      permute_arg_names = list(permute_fn.arg_names)
+      permute_closure_elts = list(nested_map_closure_elts)
+      first_name = permute_arg_names[0]
+      first_type = permute_input_types[0]
+      first_closure_elt = permute_closure_elts[0]
+      permute_input_types[:-1] = permute_input_types[1:]
+      permute_arg_names[:-1] = permute_arg_names[1:]
+      permute_closure_elts[:-1] = permute_closure_elts[1:]
+      permute_input_types[-1] = first_type
+      permute_arg_names[-1] = first_name
+      permute_closure_elts[-1] = first_closure_elt
+      permute_fn.input_types = tuple(permute_input_types)
+      permute_fn.arg_names = tuple(permute_arg_names)
+      nested_fn = permute_fn 
+      nested_map_closure_elts = tuple(permute_closure_elts)
+    
+
+    remapped_inner_closure_elts = [self.translate_expr(e, arg_mapping)
+                                   for e in nested_map_closure_elts]
+    remapped_inner_shape = self.translate_expr(inner_shape, arg_mapping)
+    
+      
+    # if the two Maps are both elementwise, then make the OuterMap 
+    # also elementwise
+    
+    return  IndexMap(fn = self.closure(nested_fn, remapped_inner_closure_elts),
+                     shape = remapped_inner_shape,    
+                     type = result_type)
+  
+  
   def transform_Map(self, expr):
     # can't turn Map(-, x, y) into an OuterMap since (x,y) are at the same iteration level 
     if len(expr.args) != 1:
@@ -177,10 +259,12 @@ class CombineNestedMaps(Transform):
     new_expr = self.combine_maps(expr.fn, expr.args, expr.axis, expr.type)
     if new_expr is None: return expr 
     else: return new_expr 
-    
+  
   def transform_OuterMap(self, expr):
     new_expr = self.combine_maps(expr.fn, expr.args, expr.axis, expr.type)
     if new_expr is None: return expr 
     else: return new_expr 
   
-    
+  def transform_IndexMap(self, expr):
+    return self.combine_index_maps(expr.fn, expr.shape, expr.type)
+      

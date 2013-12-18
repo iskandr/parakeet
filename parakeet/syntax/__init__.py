@@ -5,11 +5,13 @@ from adverb_helpers import *
 from actual_args import ActualArgs 
 
 from array_expr import (AllocArray, Array, ArrayExpr,  ArrayView,
+                        Compress, 
                         ConstArray, ConstArrayLike,
                         DiagonalArray, 
                         Range, Ravel, Reshape, 
                         Shape, Slice, Strides, 
-                        Transpose)
+                        Transpose, 
+                        Where)
   
 
 from delay_until_typed import DelayUntilTyped

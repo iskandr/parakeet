@@ -5,7 +5,14 @@ from parakeet import jit
  
 @jit
 def conv_3x3_trim(x, weights):
-  return np.array([[(x[i-1:i+2, j-1:j+2]*weights).sum() 
+  def compute_pixel(i,j):
+    total = 0
+    for ii in xrange(3):
+        for jj in xrange(3):
+          total += weights[ii,jj] * x[i-ii+1, j-jj+1]
+    return total 
+
+  return np.array([[compute_pixel(i,j)
                     for j in xrange(1, x.shape[1] -2)]
                     for i in xrange(1, x.shape[0] -2)])
  
