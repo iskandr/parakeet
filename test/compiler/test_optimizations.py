@@ -161,6 +161,31 @@ def test_combine_nested_maps():
   v = stmt.value 
   assert v.__class__ is OuterMap
   assert len(v.args) == 2
+
+
+def allpairs_add_imap(n):
+  return np.array([[i+j for j in xrange(n)] for i in xrange(n)])
+
+
+from parakeet.syntax import IndexMap, PrimCall, get_fn
+def test_combine_nested_index_maps():
+  n = 3
+  typed_fn = parakeet.typed_repr(allpairs_add_imap, [n])
+  typed_fn = high_level_optimizations.apply(typed_fn)
+  print typed_fn 
+  assert len(typed_fn.body) == 1
+  stmt = typed_fn.body[0]
+  assert stmt.__class__ is Return 
+  v = stmt.value 
+  assert v.__class__ is IndexMap
+  nested_fn = get_fn(v.fn) 
+  assert len(nested_fn.body) == 1
+  nested_stmt = nested_fn.body[0]
+  assert nested_stmt.__class__ is Return 
+  nested_value = nested_stmt.value 
+  assert nested_value.__class__ is PrimCall 
   
+ 
+
 if __name__ == '__main__':
   run_local_tests()

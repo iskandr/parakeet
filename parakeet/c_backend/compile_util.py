@@ -248,9 +248,9 @@ def compile_module_from_source(
                                  extra_function_sources = extra_function_sources, 
                                  print_source = print_source)
 
-  import hashlib
-  digest = hashlib.sha224(full_src).hexdigest()
 
+  digest = hashlib.sha224(full_src).hexdigest()
+  
   if config.cache_dir:
     cached_name = os.path.join(config.cache_dir, digest + shared_extension)
     have_cached_version = os.path.exists(cached_name)
