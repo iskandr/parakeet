@@ -12,6 +12,8 @@ To accelerate a function, wrap it with Parakeet's **@jit** decorator:
 import numpy as np 
 from parakeet import jit 
 
+alpha = 0.5
+beta = 0.3
 x = np.array([1,2,3])
 y = np.tanh(x * alpha) + beta
    
