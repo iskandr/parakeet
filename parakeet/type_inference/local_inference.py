@@ -1,5 +1,5 @@
 from .. import names
-from ..ndtypes import (StructT, Type, Unknown,
+from ..ndtypes import (StructT, Type, Unknown, SliceT,
                        ArrayT, TypeValueT, TupleT,
                        ScalarT, IntT, Int64,  Bool, Float64,    
                        combine_type_list, increase_rank, lower_rank,  
@@ -15,7 +15,7 @@ from ..syntax import (Array, AllocArray, Attribute,
                       Transpose, Tuple, TupleProj, TypeValue,  Var,  
                       ForLoop, While, Assign, Return, If)
 
-from ..syntax.helpers import get_types, is_true, is_false, const_int
+from ..syntax.helpers import get_types, is_true, is_false, const_int, unwrap_constant, make_tuple
 from ..syntax.wrappers import build_untyped_prim_fn
 
 from ..transforms import Transform
@@ -45,17 +45,30 @@ class LocalTypeInference(Transform):
   def transform_Index(self, expr):
     value = self.transform_expr(expr.value)
     index = self.transform_expr(expr.index)
+    
+    
     if isinstance(value.type, TupleT):
-      assert isinstance(index.type, IntT)
-      assert index.__class__  is Const
-      i = index.value
-      assert isinstance(i, int)
+      
+      assert isinstance(index.type, (SliceT, IntT)), \
+        "Tuple index can't be %s" % (index.type,)
+      assert isinstance(index, (Const, Slice)), \
+        "Unexpected tuple index %s" % (index,)
+      i = unwrap_constant(index)
+      assert isinstance(i, (int, slice, tuple)), \
+        "Unexpected tuple index %s" % (i,)
+      
       elt_types = value.type.elt_types
-      assert i < len(elt_types), \
+      if isinstance(i, int):
+        assert i < len(elt_types), \
           "Can't get element %d of length %d tuple %s : %s" % \
           (i, len(elt_types), value, value.type)
-      elt_t = value.type.elt_types[i]
-      return TupleProj(value, i, type = elt_t)
+        elt_t = value.type.elt_types[i]
+        return TupleProj(value, i, type = elt_t)
+      else:
+        assert isinstance(i, slice)
+        elt_indices = range(len(elt_types))[i]
+        elts = [TupleProj(value, i, type = elt_types[i]) for i in elt_indices]
+        return make_tuple(elts)
     else:
       result_type = value.type.index_type(index.type)
       return Index(value, index, type = result_type)

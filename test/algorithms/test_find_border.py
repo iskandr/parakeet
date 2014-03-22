@@ -1,5 +1,9 @@
 import numpy as np
+import parakeet 
 from parakeet.testing_helpers import expect, run_local_tests
+
+parakeet.config.print_untyped_function = True
+parakeet.config.print_specialized_function = True
 
 def find_border(is_background):
   h, w = is_background.shape[:2]

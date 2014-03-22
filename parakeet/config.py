@@ -1,7 +1,8 @@
-######################################
+  ######################################
 #          BACKEND SELECTION         #
 ######################################
 #
+#  'auto'  : use either 'c' or 'openmp' depending on availability of OpenMP
 #  'c': sequential, use gcc or clang to compile
 #  'openmp': multi-threaded execution for array operations, requires gcc 4.4+
 #  'llvm': deprecated
@@ -9,7 +10,7 @@
 #  'cuda': experimental GPU support
 #
 
-backend = 'openmp' 
+backend = 'auto' 
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #

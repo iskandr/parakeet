@@ -22,6 +22,6 @@ from lib import *
 from prims import *
 
 from frontend import jit, macro, run_python_fn, run_untyped_fn, run_typed_fn
-from frontend import typed_repr, specialize, find_broken_transform
+from frontend import typed_repr, specialize, find_broken_transform, openmp_available
 
 

@@ -122,6 +122,11 @@ def unwrap_constant(x):
   if isinstance(x, Expr):
     if x.__class__ is Tuple:
       return tuple(unwrap_constant(elt) for elt in x.elts)
+    elif x.__class__ is Slice:
+      return slice(
+        unwrap_constant(x.start),
+        unwrap_constant(x.stop),
+        unwrap_constant(x.step))
     elif x.type is NoneType:
       return None
     elif x.__class__ is UntypedFn:

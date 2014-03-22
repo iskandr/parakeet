@@ -11,7 +11,7 @@ from . import (type_conv, type_inference, config,
               find_broken_transform,
               run_untyped_fn, 
               run_typed_fn, 
-              run_python_fn)
+              run_python_fn, openmp_available)
 
 
 
@@ -36,8 +36,10 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   untyped_fn = translate_function_value(fn)
   
-  available_backends = ['interp', 'c', 'openmp']
-
+  available_backends = ['interp', 'c']
+  if openmp_available():
+    available_backends.append('openmp')
+    
   #import cuda_backend 
   #if cuda_backend.device_info.has_gpu():
   #  available_backends.append('cuda')
