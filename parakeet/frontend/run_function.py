@@ -1,10 +1,7 @@
-import os
-import subprocess
-  
+
 from .. import config, type_inference 
-from ..analysis import contains_loops 
 from ..ndtypes import type_conv, Type, typeof  
-from ..syntax import UntypedFn, TypedFn, ActualArgs
+from ..syntax import UntypedFn, ActualArgs
 from ..transforms import pipeline
 
 from .. import c_backend
@@ -64,13 +61,6 @@ def specialize(untyped, args, kwargs = {}, optimize = False):
     typed_fn = normalize.apply(typed_fn)
   return typed_fn, linear_args 
 
-def openmp_available():
-  cmd = """echo "int main() {}" | clang -fopenmp -x c++ -"""
-  with open(os.devnull, 'w') as devnull:
-    p = subprocess.Popen(cmd, shell=True, stderr = devnull, stdout = devnull)
-  p.wait()
-  code = p.returncode
-  return code == 0
    
 def run_typed_fn(fn, args, backend = None):
   actual_types = tuple(type_conv.typeof(arg) for arg in  args)
@@ -78,12 +68,7 @@ def run_typed_fn(fn, args, backend = None):
   assert actual_types == expected_types, \
     "Arg type mismatch, expected %s but got %s" % \
     (expected_types, actual_types)
-  
-  if config.backend == 'auto':
-    if openmp_available():
-      config.backend = 'openmp'
-    else:
-      config.backend = 'c'
+
       
   if backend is None:
     backend = config.backend

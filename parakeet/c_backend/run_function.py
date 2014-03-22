@@ -17,7 +17,6 @@ def run(fn, args):
 
   key = fn.cache_key
   if key in _cache:
-    "YOU IN THE CACHE!"
     return _cache[key](*args)
   compiled_fn = PyModuleCompiler().compile_entry(fn)
   c_fn = compiled_fn.c_fn 

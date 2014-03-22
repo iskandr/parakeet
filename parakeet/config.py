@@ -10,7 +10,8 @@
 #  'cuda': experimental GPU support
 #
 
-backend = 'auto' 
+from system_info import openmp_available
+backend = 'openmp' if openmp_available else 'c'
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
