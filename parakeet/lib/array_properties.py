@@ -19,7 +19,6 @@ def ravel(x):
 def reshape(x):
   return Reshape(x)
 
-
 @typed_macro 
 def get_elt_type(x):
   elt_t = ndtypes.elt_type(x.type)

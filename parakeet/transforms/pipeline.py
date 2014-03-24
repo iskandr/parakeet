@@ -156,6 +156,7 @@ def print_indexified(fn):
 
 indexify = Phase([
                     IndexifyAdverbs, Simplify, DCE, 
+                    
                  ],
                  name = "Indexify",  
                  run_if = contains_adverbs, 
@@ -164,7 +165,7 @@ indexify = Phase([
                  memoize = True, 
                  post_apply = print_indexified) 
 
-after_indexify = Phase([copy_elim, Simplify, DCE, 
+optimize_indexified_code = Phase([copy_elim, Simplify, DCE, 
                         LowerSlices, 
                         inline_opt, Simplify, DCE, 
                         IndexMapElimination], 
@@ -175,7 +176,7 @@ after_indexify = Phase([copy_elim, Simplify, DCE,
 
 
 flatten = Phase([Flatten, inline_opt, Simplify, DCE ], name="Flatten", 
-                depends_on=after_indexify,
+                depends_on=optimize_indexified_code,
                 run_if = contains_structs,  
                 copy=True, 
                 memoize = True)
@@ -213,6 +214,8 @@ load_elim = Phase(RedundantLoadElimination,
                   config_param = 'opt_redundant_load_elimination', 
                   run_if = lambda fn: not contains_calls(fn))
 
+
+
 loopify = Phase([lower_adverbs,
                  ParForToNestedLoops,
                  inline_opt,
@@ -223,7 +226,7 @@ loopify = Phase([lower_adverbs,
                  load_elim,  
                  index_elim, 
                 ],
-                depends_on = after_indexify,
+                depends_on = optimize_indexified_code,
                 cleanup = [Simplify, DCE],
                 copy = True,
                 memoize = True, 
@@ -242,13 +245,15 @@ loopify = Phase([lower_adverbs,
 lowering = Phase([
                     LowerIndexing,
                     licm,
-                    LowerStructs,
                  ],
-                 depends_on = loopify,
-                 memoize = True, 
-                 copy = True,
                  name = "Lowering", 
                  cleanup = [Simplify, DCE])
+
+lower_structs = Phase([LowerStructs], 
+                      depends_on = lowering, 
+
+                      name = "LowerStructs", 
+                      cleanup = [Simplify, DCE])
 
 ############################
 #                          #
@@ -260,23 +265,32 @@ scalar_repl = Phase(ScalarReplacement,
                     config_param = 'opt_scalar_replacement', 
                     run_if = contains_loops)
 
-
-
 unroll = Phase([LoopUnrolling, licm], 
                config_param = 'opt_loop_unrolling', 
                run_if = contains_loops)
 
-
-
-final_loop_optimizations = Phase([
+final_optimizations = Phase([
                               licm, 
                               unroll, 
                               load_elim, 
                               scalar_repl, 
                               Simplify
                             ],
+                           depends_on = lowering, 
                            cleanup = [Simplify, DCE], 
-                           copy = False, 
-                           memoize = True,\
                            name = "FinalLoopOptimizations"
                            )
+
+lower_to_loops = Phase([loopify, lowering, final_optimizations], 
+                       name = "LowerToLoops", 
+                       copy = True, 
+                       recursive = True, 
+                       memoize = True, 
+                       depends_on = optimize_indexified_code, 
+                       )
+lower_to_adverbs = Phase([lowering, final_optimizations], 
+                         name = "LowerToLoops", 
+                         copy = True, 
+                         recursive = True, 
+                         memoize = True, 
+                         depends_on = optimize_indexified_code,)

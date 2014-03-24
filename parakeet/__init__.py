@@ -8,6 +8,7 @@ __license__ = package_info.__license__
 __version__ = package_info.__version__
 __website__ = package_info.__website__
 
+from system_info import openmp_available
 from ndtypes import * 
 
 from analysis import SyntaxVisitor, verify

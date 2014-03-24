@@ -33,39 +33,58 @@ class ValueSpecializer(Transform):
   def lookup_expr_list(self, exprs):
     return [self.lookup_expr(e) for e in exprs]
   
-  def transform_ParFor(self, stmt):
-    fn = self.get_fn(stmt.fn)
-    closure_elts = self.closure_elts(stmt.fn)
+  def specialize_closure(self, clos):
+    fn = self.get_fn(clos)
+    closure_elts = self.closure_elts(clos)
     abstract_values = self.lookup_expr_list(closure_elts)
     # all the index arguments have to be marked unknown 
     for _ in xrange(len(abstract_values), len(fn.input_types)):
       abstract_values.append(unknown)
-    new_fn = specialize_abstract_values(fn, tuple(abstract_values))
-    stmt.fn = self.closure(new_fn, closure_elts)
+    specialized_fn = specialize_abstract_values(fn, tuple(abstract_values))
+    return self.closure(specialized_fn, closure_elts)
+  
+  def transform_IndexReduce(self, stmt):
+    stmt.init = self.transform_if_expr(stmt.init)
+    stmt.fn = self.specialize_closure(stmt.fn)
+    stmt.combine = self.specialize_closure(stmt.combine)
+    stmt.shape = self.transform_expr(stmt.shape)
+    return stmt 
+  
+  def transform_IndexScan(self, stmt):
+    stmt.init = self.transform_if_expr(stmt.init)
+    stmt.fn = self.specialize_closure(stmt.fn)
+    stmt.combine = self.specialize_closure(stmt.combine)
+    stmt.emit = self.specialize_closure(stmt.emit)
+    stmt.shape = self.transform_expr(stmt.shape)
+    return stmt 
+  
+  def transform_ParFor(self, stmt):
+    stmt.fn = self.specialize_closure(stmt.fn)
+    stmt.bounds = self.transform_expr(stmt.bounds)
     return stmt 
     
   def transform_Var(self, expr):
     if expr.name in self.env:
       abstract_value = self.env[expr.name]
       if abstract_value.__class__ is Const:
-        expr.value = expr.type.convert_python_value(abstract_value.value)
+        return syntax.Const(value = abstract_value.value, type = expr.type)
     return expr
   
   def transform_lhs(self, lhs):
     return lhs
   
-def has_unit_stride(abstract_value):
+def has_small_const(abstract_value):
   c = abstract_value.__class__
   
   if c is Const:
-    return abstract_value.value == 1
+    return abstract_value.value in (0,1)
   elif c is Array:
-    return has_unit_stride(abstract_value.strides)
+    return has_small_const(abstract_value.strides)
   elif c is Tuple:
-    return any(has_unit_stride(elt) 
+    return any(has_small_const(elt) 
                for elt in abstract_value.elts)
   elif c is Struct:
-    return any(has_unit_stride(field_val) 
+    return any(has_small_const(field_val) 
                for field_val 
                in abstract_value.fields.itervalues())
   else:
@@ -78,8 +97,10 @@ def from_python(python_value):
     elt_size = python_value.dtype.itemsize 
     strides = []
     for s in python_value.strides:
-      strides.append(specialization_const(s/elt_size)) 
-    return abstract_array(strides)
+      strides.append(specialization_const(s/elt_size))
+    strides = abstract_tuple(strides)
+    shape = abstract_tuple([specialization_const(dim) for dim in python_value.shape])
+    return Array(strides, shape)
   elif t is tuple:
     return abstract_tuple(from_python_list(python_value))
   elif python_value == 0:
@@ -98,7 +119,7 @@ def specialize_abstract_values(fn, abstract_values):
   key = (fn.cache_key, abstract_values)
   if key in _cache:
     return _cache[key]
-  if any(has_unit_stride(v) for v in abstract_values):
+  if any(has_small_const(v) for v in abstract_values):
     specializer = ValueSpecializer(abstract_values)
     transforms = Phase([specializer, Simplify, DCE],
                         memoize = False, 

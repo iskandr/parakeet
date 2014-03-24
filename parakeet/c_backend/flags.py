@@ -38,10 +38,15 @@ def get_compiler_flags(extra_flags = [], compiler_flag_prefix = None):
   return compiler_flags   
 
 
-def get_linker_flags(extra_flags = [], linker_flag_prefix = None):
-  # for whatever reason nvcc is OK with the -shared linker flag
-  # but not with the -fPIC compiler flag 
-  linker_flags = ['-shared']
+def get_linker_flags(extra_flags = [], 
+                     linker_flag_prefix = None, 
+                     shared = True):
+  if shared:
+    # for whatever reason nvcc is OK with the -shared linker flag
+    # but not with the -fPIC compiler flag
+    linker_flags = ['-shared']
+  else:
+    linker_flags = []
   
   def add_flag(flag):
     if linker_flag_prefix is not None:
@@ -60,6 +65,7 @@ def get_linker_flags(extra_flags = [], linker_flag_prefix = None):
     libname = 'python' + distutils.sysconfig.get_python_version().replace('.', '')
     add_flag('-l' + libname)
     
+  # add_flag('-Wl,-dynamic')
   if mac_os:
     add_flag("-Wl,-undefined")
     add_flag("-Wl,dynamic_lookup")

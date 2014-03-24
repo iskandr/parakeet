@@ -1,8 +1,7 @@
 
 from .. import config, type_inference 
-from ..analysis import contains_loops 
 from ..ndtypes import type_conv, Type, typeof  
-from ..syntax import UntypedFn, TypedFn, ActualArgs
+from ..syntax import UntypedFn, ActualArgs
 from ..transforms import pipeline
 
 from .. import c_backend
@@ -62,16 +61,18 @@ def specialize(untyped, args, kwargs = {}, optimize = False):
     typed_fn = normalize.apply(typed_fn)
   return typed_fn, linear_args 
 
+   
 def run_typed_fn(fn, args, backend = None):
   actual_types = tuple(type_conv.typeof(arg) for arg in  args)
   expected_types = fn.input_types
   assert actual_types == expected_types, \
     "Arg type mismatch, expected %s but got %s" % \
     (expected_types, actual_types)
-  
+
+      
   if backend is None:
     backend = config.backend
-    
+  
   if backend == 'c':
     return c_backend.run(fn, args)
    

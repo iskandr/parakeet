@@ -117,26 +117,14 @@ class Scan(DataAccumulative, HasEmit):
           self.fn_to_str(self.emit))
     return s
 
-
-
-
-class Filter(Adverb):
-  """
-  Filters its arguments using the boolean predicate field 'fn'
-  """
-  pass 
-
-class HasPred(Filter):
-  _members = ['pred']
-
-
-class Where(DataAdverb):
+class Filter(DataAdverb):
   """
   Applies 'fn' to each element of the arguments and 
-  returns indices where 'pred' is True for the resulting
+  returns indices where 'pred' is True for the 
   element values
   """
   _members = ['pred']
+  
 
 class IndexFilter(IndexAdverb, Filter):
   pass 

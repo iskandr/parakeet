@@ -22,16 +22,18 @@ def fdtd(input_grid, steps):
                     grid[x,y] += old_grid[x,y+1]
                 if 0 < y-1 and y-1 < l_y:
                     grid[x,y] += old_grid[x,y-1]
-
                 grid[x,y] /= 2.0
                 grid[x,y] -= previous_grid[x,y]
-
     return grid
 
 N = 1000
 steps = 20 
-input_grid = np.random.randn(N,N).astype('float32')
+input_grid = np.random.randn(N,N).astype('float64')
+
+import parakeet
+parakeet.config.print_generated_code = True 
 
 from compare_perf import compare_perf 
 compare_perf(fdtd, [input_grid, steps], backends = ('c', 'openmp', 'cuda'))
+
 

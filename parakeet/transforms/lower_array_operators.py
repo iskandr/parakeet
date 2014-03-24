@@ -105,6 +105,7 @@ class LowerArrayOperators(Transform):
     
       value = builder.add(builder.mul(idx, inner_step), inner_start)
       builder.return_(builder.cast(value, output_type))
+      fn.created_by = self.fn.created_by 
       _range_fn_cache[key] = fn
     
     closure_args = []
@@ -209,6 +210,7 @@ class LowerArrayOperators(Transform):
       return _const_fn_cache[key]
     fn, builder, _ = build_fn([idx_type], value.type)
     builder.return_(value)
+    fn.created_by = self.fn.created_by 
     _const_fn_cache[key] = fn 
     return fn 
     

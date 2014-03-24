@@ -32,7 +32,8 @@ class CudaCompiler(MulticoreCompiler):
     self.use_constant_memory_for_args = True
     MulticoreCompiler.__init__(self, 
                                compiler_cmd = ['nvcc', '-arch=%s' % config.arch],
-                               extra_link_flags = ['-lcudart'], 
+                               extra_compile_flags = ['-fopenmp'],
+                               extra_link_flags = ['-lcudart', '-lgomp'], 
                                src_extension = '.cu',  
                                compiler_flag_prefix = '-Xcompiler',
                                linker_flag_prefix = '-Xlinker', 
@@ -45,7 +46,7 @@ class CudaCompiler(MulticoreCompiler):
   def enter_module_body(self):
     self.append('cudaSetDevice(%d);' % device_info.device_id(self.device))
   
-  def build_kernel(self, clos, bounds):
+  def build_kernel(self, clos, bounds, write_only = None):
     n_indices = len(bounds)
     fn = get_fn(clos)
     outer_closure_exprs = get_closure_args(clos)
@@ -54,9 +55,9 @@ class CudaCompiler(MulticoreCompiler):
     
     self.comment("Copying data from closure arguments to the GPU")
     
-    
-    read_only = [False] * len(host_closure_args)
-    write_only = [False] * len(host_closure_args)
+    if write_only is None:
+      write_only = [False] * len(host_closure_args)
+    assert len(write_only) >= len(host_closure_args) 
     
     gpu_closure_args = self.args_to_gpu(host_closure_args, closure_arg_types, write_only)
     input_types = fn.input_types 
@@ -225,9 +226,11 @@ class CudaCompiler(MulticoreCompiler):
     if n_indices > 5 or not self.in_host():
       return MulticoreCompiler.visit_ParFor(self, stmt)
 
-    
+    # rely on annotation to tell us which arguments don't 
+    # have to be moved to/from the GPU
+    write_only = getattr(stmt, 'write_only')
     kernel_name, gpu_closure_args, host_closure_args, closure_arg_types  = \
-      self.build_kernel(stmt.fn, bounds)
+      self.build_kernel(stmt.fn, bounds, write_only)
     
     if self.use_constant_memory_for_args:
       params = bounds 
@@ -237,8 +240,11 @@ class CudaCompiler(MulticoreCompiler):
     self.launch_kernel(bounds, params, kernel_name)
     
     self.comment("copy arguments back from the GPU to the host")
-    self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types)
+    
+    read_only = getattr(stmt, 'read_only')
+    self.list_to_host(host_closure_args, gpu_closure_args, closure_arg_types, read_only)
     return "/* done with ParFor */"
+  
   
   def in_host(self):
     return self.gpu_depth == 0
@@ -408,11 +414,12 @@ class CudaCompiler(MulticoreCompiler):
     else:
       assert False, "Unsupported type in CUDA backend %s" % t 
       
-  def list_to_host(self, host_values, gpu_values, types):
+  def list_to_host(self, host_values, gpu_values, types, skip = None):
     for i, t in enumerate(types):
-      host_value = host_values[i]
-      gpu_value = gpu_values[i]
-      self.to_host(host_value, gpu_value, t)
+      if skip is None or not skip[i]:
+        host_value = host_values[i]
+        gpu_value = gpu_values[i]
+        self.to_host(host_value, gpu_value, t)
     
   def visit_Alloc(self, expr):
     assert self.in_host(), "Can't dynamically allocate memory in GPU code"
@@ -422,22 +429,180 @@ class CudaCompiler(MulticoreCompiler):
     assert self.in_host(), "Can't dynamically allocate memory in GPU code"
     return MulticoreCompiler.visit_AllocArray(self, expr)
 
-  """
-  def visit_IndexReduce(self, expr):
-    fn =  self.get_fn(expr.fn, qualifier = "device")
-    combine = self.get_fn(expr.combine, qualifier = "device")
-    if self.in_host():
-      #
-      # weave two device functions together into a  reduce kernel
-      #
-      pass 
- 
-  
-  def visit_IndexScan(self, expr):
-    fn =  self.get_fn(expr.fn, qualifier = "device")
-    combine = self.get_fn(expr.combine, qualifier = "device")
-    emit = self.get_fn(expr.emit, qualifier = "device")
-    if self.in_host():
-      pass 
-  """
 
+  def use_closure(self, clos):
+    fn = get_fn(clos)
+    closure_exprs = get_closure_args(clos)
+    closure_arg_types = get_types(closure_exprs)
+    host_closure_args = self.visit_expr_list(closure_exprs)
+    gpu_closure_args = self.args_to_gpu(host_closure_args, closure_arg_types)
+    return fn, closure_exprs, closure_arg_types, host_closure_args, gpu_closure_args 
+  
+  def build_1d_reduce_kernel(self, map_clos, combine_clos, count):
+    n_indices = 1
+    map_fn, map_closure_exprs, map_closure_arg_types, \
+      map_host_closure_args, map_gpu_closure_args = self.use_closure(map_clos)
+    combine_fn, combine_closure_exprs, combine_closure_arg_types, \
+      combine_host_closure_args, combine_gpu_closure_args = self.use_closure(combine_clos)
+    
+    self.comment("Copying data from closure arguments to the GPU")
+   
+    map_input_types = map_fn.input_types
+    combine_input_types = combine_fn.input_types 
+
+    kernel_name = names.fresh("reduce_kernel_" + map_fn.name + "_" + combine_fn.name)
+    
+    if isinstance(map_input_types[-1], TupleT):
+      index_types = map_input_types[-1].elt_types   
+      index_as_tuple = True
+      # if function takes a tuple of 
+      map_closure_arg_types = map_input_types[:-1]
+    else:
+      index_types = map_input_types[-n_indices:]
+      index_as_tuple = False
+      closure_arg_types = map_input_types[:-n_indices]
+      
+    n_closure_args = len(closure_arg_types)
+    assert len(outer_closure_exprs) == n_closure_args, \
+      "Mismatch between closure formal args %s and given %s" % (", ".join(closure_arg_types),
+                                                                ", ".join(outer_closure_exprs))
+    bound_types = (Int32,) * n_indices
+    
+    if self.use_constant_memory_for_args:
+      outer_input_types = tuple(bound_types)
+    else:
+      outer_input_types = tuple(closure_arg_types) + bound_types
+      
+    
+        
+    
+    parakeet_kernel, builder, input_vars  = build_fn(outer_input_types, name = kernel_name)
+    
+    if self.use_constant_memory_for_args:
+      inner_closure_vars = []
+      for i, t in enumerate(closure_arg_types):
+        raw_name = fn.arg_names[i]
+        self.comment("Moving GPU arg #%d %s : %s to constant memory" % (i, raw_name, t))
+        const_name = self.fresh_name("gpu_arg_"  + raw_name)
+        typename = self.to_ctype(t)
+        self.add_decl("__constant__ %s %s" % (typename, const_name))
+        inner_closure_vars.append(SourceExpr(const_name, type=t))
+        gpu_arg = gpu_closure_args[i]
+        # in case this is a constant, should assign to a variable
+        first_char = gpu_arg[0]
+        if not first_char.isalpha():
+          gpu_arg = self.fresh_var(typename, "src_" + raw_name, gpu_arg)
+        self.append("cudaMemcpyToSymbolAsync(%s, &%s, sizeof(%s));" % (const_name, gpu_arg, typename))
+      inner_closure_vars = tuple(inner_closure_vars)
+      # need to do a cudaMemcpyToSymbol for each gpu arg   
+      bounds_vars = input_vars
+  
+    else:
+      # TODO: use these to compute indices when n_indices > 3 or 
+      # number of threads per block > 1  
+      inner_closure_vars = input_vars[:n_closure_args]
+      bounds_vars = input_vars[n_closure_args:(n_closure_args + n_indices)]
+
+
+    THREADS_PER_DIM = config.threads_per_block_dim 
+
+    
+    if n_indices == 1:
+      elts_per_block = builder.div(bounds_vars[0],  
+                                   const_int(THREADS_PER_DIM**2, Int32), 
+                                   "elts_per_block")
+      elts_per_block = builder.add(elts_per_block, one_i32, "elts_per_block")
+      base_idx = builder.mul(elts_per_block, blockIdx.x, "base_x")
+      start_idx = builder.add(base_idx, threadIdx.x, "start_x")  
+      
+      start_indices = [start_idx]
+    
+      stop_x = builder.mul(builder.add(one_i32, blockIdx.x, "next_base_x"), 
+                           elts_per_block, "stop_x")
+      stop_x = builder.min(stop_x, bounds_vars[0], "stop_x") 
+      stop_indices = [stop_x]
+      step_sizes = [const_int(THREADS_PER_DIM**2, Int32)]
+       
+    else:
+      elts_per_block = builder.div(bounds_vars[0],   
+                                   const_int(THREADS_PER_DIM, Int32),
+                                    "elts_per_block")
+      elts_per_block = builder.add(elts_per_block, one_i32, "elts_per_block")
+      base_x = builder.mul(elts_per_block, blockIdx.x, "base_x")
+      start_x = builder.add(base_x, threadIdx.x, "start_x")  
+      start_y = builder.add(builder.mul(elts_per_block, blockIdx.y, "base_y"),
+                                threadIdx.y, "start_y")
+      
+      start_indices = [start_x, start_y]
+      
+      stop_x = builder.mul(builder.add(one_i32, blockIdx.x, "next_base_x"), 
+                           elts_per_block, "stop_x")
+      stop_x = builder.min(stop_x, bounds_vars[0], "stop_x") 
+      stop_indices = [stop_x]
+      stop_y = builder.mul(builder.add(one_i32, blockIdx.y, "next_base_y"),
+                           elts_per_block, "stop_y")
+      stop_y = builder.min(stop_y, bounds_vars[1], "stop_y")
+       
+      stop_indices = [stop_x, stop_y]
+      
+      step_sizes = [const_int(THREADS_PER_DIM, Int32), const_int(THREADS_PER_DIM, Int32)]
+      for i in xrange(2, n_indices):
+        start_indices.append(zero_i32)
+        step_sizes.append(one_i32)
+        stop_indices.append(bounds_vars[i])
+    
+    
+    
+    def loop_body(index_vars):
+      if not isinstance(index_vars, (list,tuple)):
+        pass
+      indices = [builder.cast(idx, t) for idx, t in zip(index_vars,index_types)]
+      if index_as_tuple:
+        index_args = (builder.tuple(indices),)
+      else:
+        index_args = indices
+      inner_args = tuple(inner_closure_vars) + tuple(index_args)
+      builder.call(fn, inner_args)
+      
+    builder.nested_loops(stop_indices, loop_body, start_indices, step_sizes, index_vars_as_list = True)
+    
+    self.enter_kernel()
+    c_kernel_name = self.get_fn_name(parakeet_kernel, 
+                                     attributes = ["__global__"], 
+                                     inline = False)
+    self.exit_kernel()
+    
+    # set cache preference of the kernel we just built 
+    self.append("cudaFuncSetCacheConfig(%s, cudaFuncCachePreferL1);" % c_kernel_name)
+    # self._kernel_cache[key] = c_kernel_name
+    return c_kernel_name, gpu_closure_args, host_closure_args, closure_arg_types
+  
+  def visit_IndexReduce(self, expr):
+    # for now only supporting scalar reductions on the GPU
+    bounds = self.tuple_to_var_list(expr.shape)
+    if isinstance(expr.type, ScalarT) and len(bounds) == 1 and False:
+      n = bounds[0]
+      if expr.init is None:
+        init = None
+      else:
+        init = self.visit_expr(expr.init)
+      
+      # launch map & first round of reductions 
+      n = self.div(n, )
+      # loop while n > 1
+    
+      kernel_name, gpu_closure_args, host_closure_args, closure_arg_types  = \
+        self.build_kernel(expr.fn, bounds)
+    
+      if self.use_constant_memory_for_args:
+        params = bounds 
+      else:
+        params = tuple(gpu_closure_args) + tuple(bounds)
+      
+      self.launch_kernel(bounds, params, kernel_name)
+      return "/* done with ParFor */"  
+    else:
+      return MulticoreCompiler.visit_IndexReduce(self, expr) 
+
+
+         

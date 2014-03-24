@@ -73,7 +73,6 @@ class SimplifyArrayOperators(Transform):
     return expr 
       
   def transform_Assign(self, stmt):
-    
     if isinstance(stmt.lhs, Var):
       if isinstance(stmt.rhs, (ArrayExpr, Adverb)):
         self.bind(stmt.lhs.name, stmt.rhs)
@@ -83,6 +82,11 @@ class SimplifyArrayOperators(Transform):
         self.mark_dirty(name)
       for name in collect_var_names(stmt.rhs):
         self.mark_dirty(name)
+    return stmt 
+  
+  def transform_Return(self, stmt):
+    if isinstance(stmt.value, Adverb):
+      stmt.value = self.transform_expr(stmt.value)
     return stmt 
   
   def transform_block(self, stmts):

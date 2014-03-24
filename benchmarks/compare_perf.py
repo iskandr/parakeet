@@ -42,6 +42,19 @@ def compare_perf(fn, args, numba= True, cpython = True,
     with timer('Python -- %s' % name, **kwargs):
       cpython_result = fn(*args)
   
+  
+  for name, impl in extra.iteritems():
+    with timer("%s #1" % name, **kwargs):
+      impl(*args)
+    with timer("%s #2" % name, **kwargs):
+      extra_result = impl(*args)
+
+
+    if python_result is not None:
+      diffs = np.abs(parakeet_result - extra_result)
+      assert np.allclose(parakeet_result, extra_result, atol = atol, rtol = rtol), \
+        "Max elt difference between Parakeet and %s = %s (median = %s, min = %s)" % \
+        (name, np.max(diffs), np.median(diffs), np.min(diffs))
 
   rtol = 0.0001
   if backend in ('cuda', 'gpu'):
@@ -60,16 +73,4 @@ def compare_perf(fn, args, numba= True, cpython = True,
         "Max elt difference between Numba and CPython = %s (median = %s, min = %s)" % \
         (np.max(diffs), np.median(diffs), np.min(diffs))
 
-
-  
-  for name, impl in extra.iteritems():
-    with timer("%s #1" % name, **kwargs):
-      impl(*args)
-    with timer("%s #2" % name, **kwargs):
-      extra_result = impl(*args)
-    if parakeet_result is not None:
-      diffs = np.abs(parakeet_result - extra_result)
-      assert np.allclose(parakeet_result, extra_result, atol = atol, rtol = rtol), \
-        "Max elt difference between Parakeet and %s = %s (median = %s, min = %s)" % \
-        (name, np.max(diffs), np.median(diffs), np.min(diffs))
 

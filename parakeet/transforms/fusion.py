@@ -187,6 +187,7 @@ class Fusion(Transform):
           del self.adverb_bindings[arg_name]
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
+        new_fn.created_by = self.fn.created_by  
         rhs.fn = self.closure(new_fn, clos_args)
         rhs.args = prev_adverb.args + surviving_array_args
       
@@ -210,15 +211,38 @@ class Fusion(Transform):
         
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
+        new_fn.created_by = self.fn.created_by 
         rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
                                shape = prev_adverb.shape, 
                                combine = rhs.combine, 
                                type = rhs.type,
                                init = rhs.init)
+      # 
+      # Map(IndexMap) -> IndexMap
+      #   
+      elif prev_adverb.__class__ is IndexMap and \
+            rhs.__class__ is Map and \
+            len(rhs.args) == 1 and \
+            (self.is_none(rhs.axis) or rhs.args[0].type.rank == 1):
+        new_fn, clos_args = \
+            fuse(self.get_fn(prev_adverb.fn),
+                 self.closure_elts(prev_adverb.fn),
+                 self.get_fn(rhs.fn),
+                 self.closure_elts(rhs.fn),
+                 rhs.args)
+        assert new_fn.return_type == self.return_type(rhs.fn)
+        if self.use_counts[arg_name] == n_occurrences: 
+          del self.adverb_bindings[arg_name]
+        
+        if self.fn.created_by is not None:
+          new_fn = self.fn.created_by.apply(new_fn)
+        new_fn.created_by = self.fn.created_by 
+        rhs = IndexMap(fn = self.closure(new_fn, clos_args), 
+                       shape = prev_adverb.shape, 
+                       type = rhs.type)
     return rhs 
 
-    
-  
+
   def transform_Assign(self, stmt):
     old_rhs = stmt.rhs 
     if self.recursive: 

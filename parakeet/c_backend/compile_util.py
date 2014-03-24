@@ -1,34 +1,42 @@
-import collections 
-import imp 
+import collections
+import hashlib
+import imp
 import os
 
 from tempfile import NamedTemporaryFile
 
 from .. import config as root_config 
 import config 
+  
 from system_info import (python_lib_dir,  
-                         windows,  
+                         windows, 
                          get_source_extension, object_extension, shared_extension,  
                          get_compiler, 
                          include_dirs)
 from flags import get_compiler_flags, get_linker_flags
 from shell_command import CommandFailed, run_cmd 
 
-CompiledPyFn = collections.namedtuple("CompiledPyFn",
-                                      ("c_fn", 
-                                       "src_filename", 
-                                       "module", 
-                                       "shared_filename", 
-                                       "src", 
-                                       "fn_name",
-                                       "fn_signature"))
+CompiledPyFn = collections.namedtuple(
+  "CompiledPyFn",
+  (
+     "c_fn", 
+     "src_filename", 
+     "module", 
+     "shared_filename", 
+     "src", 
+     "fn_name",
+     "fn_signature"
+  )
+)
 
-CompiledObject = collections.namedtuple("CompiledObject", 
-                                        (
-                                         "src_filename",  
-                                         "object_filename", 
-                                         "fn_name",
-                                         ))
+CompiledObject = collections.namedtuple(
+  "CompiledObject", 
+  (
+    "src_filename",  
+    "object_filename", 
+    "fn_name",
+  )
+)
 
   
 c_headers = ["stdint.h",  "math.h",  "signal.h"]
@@ -99,6 +107,7 @@ def create_source_file(src,
                          src_extension = None):
   if fn_name is None: prefix = "parakeet_"
   else: prefix = "parakeet_%s_" % fn_name
+
   if src_extension is None: src_extension = get_source_extension()
   if src_filename is None:
     src_file = NamedTemporaryFile(suffix = src_extension,  
@@ -108,21 +117,26 @@ def create_source_file(src,
                                   )
     src_filename = src_file.name 
   else:
+    src_dir = os.path.dirname(src_filename)
+    if not os.path.exists(src_dir):
+      os.makedirs(src_dir)
+
     src_file = open(src_filename, 'w')
   
   src_file.write(src)  
   src_file.close()
   return src_file 
 
-def compile_object(src_filename, 
-                     fn_name = None,  
-                     src_extension = None, 
-                     declarations = [],
-                     extra_objects = [], 
-                     extra_compile_flags = [], 
-                     print_commands = None, 
-                     compiler = None, 
-                     compiler_flag_prefix = None):
+def compile_object(
+      src_filename, 
+      fn_name = None,  
+      src_extension = None, 
+      declarations = [],
+      extra_objects = [], 
+      extra_compile_flags = [], 
+      print_commands = None, 
+      compiler = None, 
+      compiler_flag_prefix = None):
   
   
   if print_commands is None:  print_commands = config.print_commands
@@ -145,10 +159,11 @@ def compile_object(src_filename,
                         object_filename = object_name, 
                         fn_name = fn_name)
 
-def link_module(compiler, object_name, shared_name, 
-                 extra_objects = [], 
-                 extra_link_flags = [], 
-                 linker_flag_prefix = None):
+def link_module(
+      compiler, object_name, shared_name, 
+      extra_objects = [], 
+      extra_link_flags = [], 
+      linker_flag_prefix = None):
   linker_flags = get_linker_flags(extra_link_flags, linker_flag_prefix) 
   
   if isinstance(compiler, (list,tuple)):
@@ -177,7 +192,9 @@ def compile_with_distutils(extension_name,
     from distutils.extension import Extension
     
     compiler_flags = get_compiler_flags(extra_compiler_flags)
-    linker_flags = get_linker_flags(extra_link_flags)
+    # don't need -shared in the flags since the default CC on Mac OS 
+    # might specify -bundle instead and the two are mutually exclusive
+    linker_flags = get_linker_flags(extra_link_flags, shared=False)
     
     ext = Extension(name=extension_name, 
                     sources=[src_filename],
@@ -211,7 +228,7 @@ def compiler_is_gnu(compiler):
           compiler.endswith("gcc.exe") or 
           compiler.endswith("g++") or 
           compiler.endswith("g++.exe"))
-  
+
 def compile_module_from_source(
       partial_src, 
       fn_name,
@@ -239,67 +256,85 @@ def compile_module_from_source(
                                  declarations = declarations,  
                                  extra_function_sources = extra_function_sources, 
                                  print_source = print_source)
+
+
+  digest = hashlib.sha224(full_src).hexdigest()
   
-  src_file = create_source_file(full_src, 
-                                fn_name = fn_name,
-                                src_filename = src_filename, 
-                                src_extension = src_extension)
-  src_filename = src_file.name
-  
-  if compiler is None: compiler = get_compiler()
-  
-  try:
-    compiled_object = compile_object(src_filename, 
-                                     fn_name = fn_name,
-                                     src_extension = src_extension,  
-                                     extra_objects = extra_objects,
-                                     extra_compile_flags = extra_compile_flags, 
-                                     print_commands = print_commands, 
-                                     compiler = compiler, 
-                                     compiler_flag_prefix = compiler_flag_prefix)
-  
-    object_name = compiled_object.object_filename
-    shared_name = src_filename.replace(src_extension, shared_extension)
-    link_module(compiler, object_name, shared_name, 
-                extra_objects = extra_objects, 
-                extra_link_flags = extra_link_flags, 
-                linker_flag_prefix = linker_flag_prefix)
-    
-    if config.delete_temp_files:
-      os.remove(object_name)
-  except CommandFailed:
-    # if normal compilation fails, try distutils instead
-    if not compiler_is_gnu(compiler):
-      raise 
-    if compiler_flag_prefix or linker_flag_prefix:
-      raise 
-     
-    import hashlib
-    digest = hashlib.sha224(full_src).hexdigest()
-    shared_name = compile_with_distutils(fn_name + "_" + digest, 
-                                         src_filename,
-                                         extra_objects, 
-                                         extra_compile_flags,
-                                         extra_link_flags,
-                                         print_commands)
-    
+  if config.cache_dir:
+    cached_name = os.path.join(config.cache_dir, fn_name + "_" + digest + shared_extension)
+    have_cached_version = os.path.exists(cached_name)
+  else:
+    cached_name = None
+    have_cached_version = False
+
+  if have_cached_version:
+    shared_name = cached_name
+  else:
+    src_file = create_source_file(full_src,
+                                  fn_name = fn_name,
+                                  src_filename = src_filename,
+                                  src_extension = src_extension)
+    src_filename = src_file.name
+
+    if compiler is None: compiler = get_compiler()
+
+    try:
+      compiled_object = compile_object(src_filename,
+                                       fn_name = fn_name,
+                                       src_extension = src_extension,
+                                       extra_objects = extra_objects,
+                                       extra_compile_flags = extra_compile_flags,
+                                       print_commands = print_commands,
+                                       compiler = compiler,
+                                       compiler_flag_prefix = compiler_flag_prefix)
+
+      object_name = compiled_object.object_filename
+      shared_name = src_filename.replace(src_extension, shared_extension)
+      link_module(compiler, object_name, shared_name,
+                  extra_objects = extra_objects,
+                  extra_link_flags = extra_link_flags,
+                  linker_flag_prefix = linker_flag_prefix)
+
+      if config.delete_temp_files:
+        os.remove(object_name)
+    except CommandFailed:
+      # if normal compilation fails, try distutils instead
+      if not compiler_is_gnu(compiler):
+        raise
+      if compiler_flag_prefix or linker_flag_prefix:
+        raise
+
+      shared_name = compile_with_distutils(fn_name + "_" + digest,
+                                           src_filename,
+                                           extra_objects,
+                                           extra_compile_flags,
+                                           extra_link_flags,
+                                           print_commands)
+
+  # if we're caching generated modules, move our output
+  # over to the cache directory before loading it up.
+  if config.cache_dir and not have_cached_version:
+    if print_commands:
+      print 'Caching... %s -> %s' % (shared_name, cached_name)
+    if not os.path.exists(config.cache_dir):
+      os.makedirs(config.cache_dir)
+    os.rename(shared_name, cached_name)
+    shared_name = cached_name
 
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)
-  
   #on a UNIX-style filesystem it should be OK to delete a file while it's open
   #since the inode will just float untethered from any name
   #If we ever support windows we should find some other way to delete the .dll 
-  
-  
   c_fn = getattr(module,fn_name)
   
-  if config.delete_temp_files:
+  if config.delete_temp_files and src_filename is not None:
     os.remove(src_filename)
-    # window's can't just untether inodes like a UNIX
-    # ...have to eventually think of a plan to clean these things up
-    if not windows: os.remove(shared_name)
+    if not config.cache_dir:
+      # window's can't just untether inodes like a UNIX
+      # ...have to eventually think of a plan to clean these things up
+      if not windows: os.remove(shared_name)
     
   compiled_fn = CompiledPyFn(c_fn = c_fn, 
                              module = module, 

@@ -93,6 +93,8 @@ class DiagonalArray(ArrayExpr):
     yield self.value 
     if self.offset is not None:
       yield self.offset 
+      
+
 
 class ExtractDiagonal(ArrayExpr):
   """
@@ -133,14 +135,20 @@ class Range(ArrayExpr):
   def __str__(self):
     return "Range(start = %s, stop = %s, step = %s)" % (self.start, self.stop, self.step)
 
+
 class AllocArray(ArrayExpr):
   """Allocate an unfilled array of the given shape and type"""
-  def __init__(self, shape, elt_type, type = None, source_info = None):
+  def __init__(self, shape, elt_type, type = None, order = "C", source_info = None):
     # TODO: support a 'fill' field 
     self.shape = shape 
     self.elt_type = elt_type 
     self.type = type 
     self.source_info = source_info 
+    
+    # TODO: let user specify layout orders
+    assert order == "C", \
+      "Layouts other than row-major not yet supported, invalid option order = '%s'" % order 
+    self.order = order
 
   def children(self):
     yield self.shape
@@ -224,3 +232,32 @@ class Tile(ArrayExpr):
   def __str__(self):
     return "Tile(%s, %s)" % (self.array, self.reps)
     
+
+class Where(ArrayExpr):
+  """
+  Return the non-zero indices of the array
+  """
+  def __init__(self, array):
+    self.array = array 
+    
+  def __str__(self):
+    return "Where(%s)" % self.array 
+  
+  def children(self):
+    yield self.array 
+  
+  
+class Compress(ArrayExpr):
+  """
+  Slice into array 'data' at positions where 'condition' is True
+  """ 
+  def __init__(self, condition, data):
+    self.condition = condition 
+    self.data = data 
+  
+  def __str__(self):
+    return "Compress(%s, %s)" % (self.condition, self.data)
+  
+  def children(self):
+    yield self.data 
+    yield self.data 

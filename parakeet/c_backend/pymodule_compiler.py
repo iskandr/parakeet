@@ -1,16 +1,10 @@
 from ..analysis import use_count
 from ..syntax import Tuple,  Expr
  
-from ..ndtypes import (TupleT,  ArrayT, 
-                       NoneT, NoneType,  
-                       elt_type, ScalarT, 
-                       FloatT, 
-                       BoolT,  
-                       IntT,  Int64, SignedT,
-                       PtrT,  
-                       ClosureT, 
-                       SliceT, ptr_type)
- 
+from ..ndtypes import (
+  TupleT,  ArrayT,  NoneT, elt_type, ScalarT, FloatT, BoolT,  
+  IntT,  Int64, SignedT, PtrT, ClosureT, SliceT, ptr_type
+)
 
 import type_mappings
 from fn_compiler import FnCompiler
@@ -475,7 +469,7 @@ class PyModuleCompiler(FnCompiler):
       else:
         return "%s.size" % v
        
-    elif attr in ('start', 'stop', 'step'):
+    elif attr in ('start', 'stop', 'step') or attr.startswith("elt"):
       if boxed:
         self.check_slice(v)
         obj = "((PySliceObject*)%s)->%s" % (v, attr)

@@ -147,9 +147,9 @@ function_mappings = {
   math.log10 : prims.log10, 
    
   np.log2 : prims.log2,
-   
+  
   np.log1p : prims.log1p,
-  math.log1p : prims.log1p, 
+  math.log1p : prims.log1p,
   
   np.logaddexp : lib.logaddexp, 
   np.logaddexp2 : lib.logaddexp2, 

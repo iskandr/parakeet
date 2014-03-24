@@ -12,7 +12,6 @@ def builtin_or(x, y):
 def builtin_and(x, y):
   return x and y
 
-
 @typed_macro 
 def builtin_tuple(xt):
   if isinstance(xt.type, TupleT):

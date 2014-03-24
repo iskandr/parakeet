@@ -1,7 +1,8 @@
-######################################
+  ######################################
 #          BACKEND SELECTION         #
 ######################################
 #
+#  'auto'  : use either 'c' or 'openmp' depending on availability of OpenMP
 #  'c': sequential, use gcc or clang to compile
 #  'openmp': multi-threaded execution for array operations, requires gcc 4.4+
 #  'llvm': deprecated
@@ -9,7 +10,8 @@
 #  'cuda': experimental GPU support
 #
 
-backend = 'openmp' 
+from system_info import openmp_available
+backend = 'openmp' if openmp_available else 'c'
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
@@ -23,16 +25,12 @@ opt_combine_nested_maps = True
 
 opt_specialize_fn_args = True 
 
-# experimental!
-opt_simplify_array_operators = False
-
 opt_index_elimination = True
 opt_range_propagation = True
 
 opt_licm = True
 opt_redundant_load_elimination = True
 opt_stack_allocation = True
-
 opt_shape_elim = True 
 
 # replace 
@@ -42,7 +40,8 @@ opt_shape_elim = True
 #
 #   with 
 #     a = b[i:j]  
-opt_copy_elimination = True
+# TODO: fix it, currently breaks rule30
+opt_copy_elimination = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -50,6 +49,9 @@ opt_loop_unrolling = False
 # suspiciously complex optimizations may introduce bugs 
 # TODO: comb through carefully 
 opt_scalar_replacement = False
+
+# experimental!
+opt_simplify_array_operators = False
     
 # run verifier after each transformation 
 opt_verify = False
