@@ -23,7 +23,8 @@ class CombineNestedMaps(Transform):
   #    return None 
   
   def translate_exprs(self, exprs, mapping, forbidden):
-      results = tuple(self.translate_expr(elt,mapping,forbidden) for elt in exprs)
+      results = tuple(self.translate_expr(elt, mapping, forbidden) 
+                      for elt in exprs)
       if any(elt is None for elt in results): 
         raise CombineFailed()
       else:
@@ -221,6 +222,12 @@ class CombineNestedMaps(Transform):
     fn = self.get_fn(closure)
     closure_elts = self.closure_elts(closure)
     
+    #n_outer_args = len(fn.input_types)
+    n_outer_closure_args = len(closure_elts)
+    #n_outer_indices = n_outer_args - n_outer_closure_args
+    outer_arg_names = fn.arg_names
+    outer_index_names = outer_arg_names[n_outer_closure_args:]
+    #outer_index_types = fn.input_types[n_outer_closure_args:]
     
     nested_expr = self.dissect_nested_fn(fn, (IndexMap,))
     if nested_expr is None: return None
@@ -231,48 +238,36 @@ class CombineNestedMaps(Transform):
     if arg_mapping is None:  return None
     
 
-    nested_map_closure_elts = self.closure_elts(nested_expr.fn) 
-    nested_fn = self.get_fn(nested_expr.fn)
-
+    nested_map_closure_elts = self.closure_elts(nested_expr.fn)
     
-    # if there's ohe outer arg and it's stuck at the back of the
-    # nested args list, try permuting the arguments to make a nested fnh
-    # that's compatible with OuterMap   
-    if len(nested_map_closure_elts) > 1 and \
-       nested_map_closure_elts[0].__class__ is Var and \
-       nested_map_closure_elts[0].name == fn.arg_names[-1]:
-      permute_fn = CloneFunction().apply(nested_fn)
-      permute_input_types = list(permute_fn.input_types)
-      permute_arg_names = list(permute_fn.arg_names)
-      permute_closure_elts = list(nested_map_closure_elts)
-      first_name = permute_arg_names[0]
-      first_type = permute_input_types[0]
-      first_closure_elt = permute_closure_elts[0]
-      permute_input_types[:-1] = permute_input_types[1:]
-      permute_arg_names[:-1] = permute_arg_names[1:]
-      permute_closure_elts[:-1] = permute_closure_elts[1:]
-      permute_input_types[-1] = first_type
-      permute_arg_names[-1] = first_name
-      permute_closure_elts[-1] = first_closure_elt
-      permute_fn.input_types = tuple(permute_input_types)
-      permute_fn.arg_names = tuple(permute_arg_names)
-      nested_fn = permute_fn 
-      nested_map_closure_elts = tuple(permute_closure_elts)
+      
+    # inner closure args must be remapped to the index args of the outer fn 
+    for i, nested_closure_elt in enumerate(nested_map_closure_elts):
+      if nested_closure_elt.__class__ is not Var:
+        return None
+      nested_closure_name = nested_closure_elt.name
+      if nested_closure_name not in outer_index_names:
+        return None
+      pos = outer_index_names.index(nested_closure_name)
+      # for now, can't change order of arguments
+      if i != pos:
+        return None
     
     try:
-      remapped_inner_closure_elts = [self.translate_expr(e, arg_mapping)
-                                     for e in nested_map_closure_elts]
       remapped_inner_shape = self.translate_expr(inner_shape, arg_mapping)
     except CombineFailed:
       return None
+    
+    
+    nested_fn = self.get_fn(nested_expr.fn)
       
     # if the two Maps are both elementwise, then make the OuterMap 
     # also elementwise
-    
-    return  IndexMap(fn = self.closure(nested_fn, remapped_inner_closure_elts),
-                     shape = remapped_inner_shape,    
+    new_closure_elts = ()
+    combined_shape = self.concat_tuples(shape, remapped_inner_shape, "combined_shape")
+    return  IndexMap(fn = self.closure(nested_fn, new_closure_elts),
+                     shape = combined_shape,    
                      type = result_type)
-  
   
   def transform_Map(self, expr):
     # can't turn Map(-, x, y) into an OuterMap since (x,y) are at the same iteration level 

@@ -1,11 +1,16 @@
 
 from .. import names, syntax 
-from ..ndtypes import (IncompatibleTypes, 
-                       Bool, Type,  ArrayT, Int64, TupleT,
-                       NoneT, SliceT, ScalarT,  
-                       make_tuple_type, make_array_type, lower_rank)
-from ..syntax import (Assign, Tuple, Var, Cast, Return, Index, Map, 
-                      ConstArrayLike, Const)
+from ..builder import mk_cast_fn 
+from ..ndtypes import (
+  IncompatibleTypes, 
+  Bool, Type,  ArrayT, Int64, TupleT,
+  NoneT, SliceT, ScalarT,  
+  make_tuple_type, make_array_type, lower_rank
+)
+
+from ..syntax import (
+  Assign, Tuple, Var, Return, Index, Map, ConstArrayLike, Const, Cast
+)
 from ..syntax.helpers import get_types, zero_i64, none, const 
 from ..transforms import Transform 
 
@@ -40,12 +45,19 @@ class RewriteTyped(Transform):
         for elt, elt_t in zip(expr.elts, t.elt_types):
           new_elts.append(self.coerce_expr(elt, elt_t))
         return Tuple(new_elts, type = t)
+    elif isinstance(expr.type, ArrayT) and \
+        isinstance(t, ArrayT) and \
+        expr.type.rank == t.rank:
+      scalar_from_t = expr.type.elt_type
+      scalar_to_t = t.elt_type
+      caster = mk_cast_fn(scalar_from_t, scalar_to_t)
+      return Map(fn = caster, args = (expr,), type = t)
     else:
       assert \
           isinstance(expr.type, ScalarT) and \
           isinstance(t, ScalarT), \
           "Can't cast type %s into %s" % (expr.type, t)
-      return syntax.Cast(expr, type=t)
+      return Cast(expr, type=t)
 
   def transform_merge(self, merge):
     new_merge = {}

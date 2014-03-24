@@ -62,22 +62,28 @@ none = Const(None, type = none_t)
 slice_none_t = make_slice_type(none_t, none_t, none_t)
 slice_none = Slice(none, none, none, type = slice_none_t)
 
+_py_int_types = (
+  int, 
+  long, 
+  np.int8, 
+  np.int16, 
+  np.int32, 
+  np.int64, 
+  np.uint8, 
+  np.uint32,
+  np.uint64
+)
 def is_python_int(x):
-  return isinstance(x, (int, 
-                        long, 
-                        np.int8, 
-                        np.int16, 
-                        np.int32, 
-                        np.int64, 
-                        np.uint8, 
-                        np.uint32,
-                        np.uint64))
+  return isinstance(x, _py_int_types)
+
+_py_float_types = (float, np.float32, np.float64)
 
 def is_python_float(x):
-  return isinstance(x, (float, np.float32, np.float64 ))
+  return isinstance(x, _py_float_types)
 
+_py_bool_types = (bool, np.bool, np.bool8, np.bool_)
 def is_python_bool(x):
-  return isinstance(x, (bool, np.bool, np.bool8, np.bool_))
+  return isinstance(x, _py_bool_types)
 
 def is_python_scalar(x):
   return isinstance(x,  (bool, int, long, float)) or isinstance(x, np.ScalarType)

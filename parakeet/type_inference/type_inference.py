@@ -584,7 +584,6 @@ def increase_adverb_output_rank(array_types, axes, elt_result_type, cartesian_pr
   return array_type.increase_rank(elt_result_type, delta_rank)
 
 def specialize_Map(map_fn, array_types, axes, return_type = None):
-  print "specialize_Map", array_types, return_type
   elt_types = peel_adverb_input_types(array_types, axes)
   typed_map_fn = specialize(map_fn, elt_types, return_type = return_type)
   elt_result_t = typed_map_fn.return_type

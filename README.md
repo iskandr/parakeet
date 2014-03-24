@@ -53,7 +53,7 @@ Parakeet is written for Python 2.7 (sorry internet) and depends on:
 * [dsltools](https://github.com/iskandr/dsltools)
 * [nose](https://nose.readthedocs.org/en/latest/) for unit tests
 * [NumPy](http://www.scipy.org/install.html)
-* appdirs
+* [appdirs](https://pypi.python.org/pypi/appdirs/)
 
 The default backend (which uses OpenMP) requires `gcc` 4.4+. 
 
