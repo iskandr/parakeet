@@ -1,16 +1,10 @@
 from ..analysis import use_count
 from ..syntax import Tuple,  Expr
  
-from ..ndtypes import (TupleT,  ArrayT, 
-                       NoneT, NoneType,  
-                       elt_type, ScalarT, 
-                       FloatT, 
-                       BoolT,  
-                       IntT,  Int64, SignedT,
-                       PtrT,  
-                       ClosureT, 
-                       SliceT, ptr_type)
- 
+from ..ndtypes import (
+  TupleT,  ArrayT,  NoneT, elt_type, ScalarT, FloatT, BoolT,  
+  IntT,  Int64, SignedT, PtrT, ClosureT, SliceT, ptr_type
+)
 
 import type_mappings
 from fn_compiler import FnCompiler

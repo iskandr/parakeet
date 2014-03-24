@@ -118,7 +118,6 @@ class TypeInference(LocalTypeInference):
     args = self.transform_args(expr.args)
 
     arg_types = get_types(args)
-
     if all(isinstance(t, ScalarT) for t in arg_types):
       upcast_types = expr.prim.expected_input_types(arg_types)
       result_type = expr.prim.result_type(upcast_types)
@@ -290,8 +289,6 @@ class TypeInference(LocalTypeInference):
                        axis = axis,
                        type = result_type)
 
-
-  
     
   def transform_Reduce(self, expr):
     assert len(expr.args) > 0, "Can't have Reduce without any arguments %s" % expr 
@@ -300,29 +297,29 @@ class TypeInference(LocalTypeInference):
     axis = self.transform_if_expr(expr.axis)
 
     map_fn = self.transform_fn(expr.fn if expr.fn else untyped_identity_function) 
-    
-    
+    combine_fn = self.transform_fn(expr.combine)
+   
     # if there aren't any arrays, just treat this as a function call
     if all(isinstance(t, ScalarT) for t in arg_types):
-      return self.invoke(map_fn, new_args)
+      scalar_result = self.invoke(map_fn, new_args)
+      cast_t = self.invoke_type(combine_fn, [scalar_result, scalar_result])
+      return self.cast(scalar_result, cast_t)
     
-    combine_fn = self.transform_fn(expr.combine)
     if self.is_none(expr.init):
       init = none 
     else: 
       init = self.transform_expr(expr.init)
-      
+    
     axes = self.normalize_axes(new_args, axis)
     result_type, typed_map_fn, typed_combine_fn = \
       specialize_Reduce(map_fn.type,
                         combine_fn.type,
                         arg_types, 
                         axes, 
-                        init.type)  
+                        init.type)
 
     typed_map_closure = make_typed_closure (map_fn, typed_map_fn)
     typed_combine_closure = make_typed_closure(combine_fn, typed_combine_fn)
-    
     # if we encounter init = 0 for a Reduce which produces an array
     # then need to broadcast to get an initial value of the appropriate rank 
     if init.type.__class__ is not NoneT and \
@@ -389,9 +386,6 @@ class TypeInference(LocalTypeInference):
                              axis = axis,
                              type = result_type)
     return result 
-
-  
-  
 
 
 def infer_types(untyped_fn, types):
@@ -590,6 +584,7 @@ def increase_adverb_output_rank(array_types, axes, elt_result_type, cartesian_pr
   return array_type.increase_rank(elt_result_type, delta_rank)
 
 def specialize_Map(map_fn, array_types, axes, return_type = None):
+  print "specialize_Map", array_types, return_type
   elt_types = peel_adverb_input_types(array_types, axes)
   typed_map_fn = specialize(map_fn, elt_types, return_type = return_type)
   elt_result_t = typed_map_fn.return_type
@@ -599,6 +594,7 @@ def specialize_Map(map_fn, array_types, axes, return_type = None):
 def specialize_Reduce(map_fn, combine_fn, array_types, axes, init_type = None):
   _, typed_map_fn = specialize_Map(map_fn, array_types, axes)
   elt_type = typed_map_fn.return_type
+  
   if init_type is None or init_type.__class__ is NoneT:
     acc_type = elt_type
   else:

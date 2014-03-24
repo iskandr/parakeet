@@ -16,21 +16,27 @@ from system_info import (python_lib_dir,
 from flags import get_compiler_flags, get_linker_flags
 from shell_command import CommandFailed, run_cmd 
 
-CompiledPyFn = collections.namedtuple("CompiledPyFn",
-                                      ("c_fn", 
-                                       "src_filename", 
-                                       "module", 
-                                       "shared_filename", 
-                                       "src", 
-                                       "fn_name",
-                                       "fn_signature"))
+CompiledPyFn = collections.namedtuple(
+  "CompiledPyFn",
+  (
+     "c_fn", 
+     "src_filename", 
+     "module", 
+     "shared_filename", 
+     "src", 
+     "fn_name",
+     "fn_signature"
+  )
+)
 
-CompiledObject = collections.namedtuple("CompiledObject", 
-                                        (
-                                         "src_filename",  
-                                         "object_filename", 
-                                         "fn_name",
-                                         ))
+CompiledObject = collections.namedtuple(
+  "CompiledObject", 
+  (
+    "src_filename",  
+    "object_filename", 
+    "fn_name",
+  )
+)
 
   
 c_headers = ["stdint.h",  "math.h",  "signal.h"]
@@ -121,15 +127,16 @@ def create_source_file(src,
   src_file.close()
   return src_file 
 
-def compile_object(src_filename, 
-                     fn_name = None,  
-                     src_extension = None, 
-                     declarations = [],
-                     extra_objects = [], 
-                     extra_compile_flags = [], 
-                     print_commands = None, 
-                     compiler = None, 
-                     compiler_flag_prefix = None):
+def compile_object(
+      src_filename, 
+      fn_name = None,  
+      src_extension = None, 
+      declarations = [],
+      extra_objects = [], 
+      extra_compile_flags = [], 
+      print_commands = None, 
+      compiler = None, 
+      compiler_flag_prefix = None):
   
   
   if print_commands is None:  print_commands = config.print_commands
@@ -152,10 +159,11 @@ def compile_object(src_filename,
                         object_filename = object_name, 
                         fn_name = fn_name)
 
-def link_module(compiler, object_name, shared_name, 
-                 extra_objects = [], 
-                 extra_link_flags = [], 
-                 linker_flag_prefix = None):
+def link_module(
+      compiler, object_name, shared_name, 
+      extra_objects = [], 
+      extra_link_flags = [], 
+      linker_flag_prefix = None):
   linker_flags = get_linker_flags(extra_link_flags, linker_flag_prefix) 
   
   if isinstance(compiler, (list,tuple)):
@@ -253,7 +261,7 @@ def compile_module_from_source(
   digest = hashlib.sha224(full_src).hexdigest()
   
   if config.cache_dir:
-    cached_name = os.path.join(config.cache_dir, digest + shared_extension)
+    cached_name = os.path.join(config.cache_dir, fn_name + "_" + digest + shared_extension)
     have_cached_version = os.path.exists(cached_name)
   else:
     cached_name = None
@@ -316,7 +324,6 @@ def compile_module_from_source(
   if print_commands:
     print "Loading newly compiled extension module %s..." % shared_name
   module =  imp.load_dynamic(fn_name, shared_name)
-  
   #on a UNIX-style filesystem it should be OK to delete a file while it's open
   #since the inode will just float untethered from any name
   #If we ever support windows we should find some other way to delete the .dll 

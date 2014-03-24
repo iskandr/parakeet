@@ -40,7 +40,7 @@ setup(
     install_requires=[
       'numpy>=1.7',       
       'dsltools',
-      #'appdirs', 
+      'appdirs',
       # LLVM is optional as long as you use the C backend 
       # 'llvmpy',
     ])

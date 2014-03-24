@@ -34,13 +34,14 @@ delete_temp_files = True
 
 # Directory to use for caching generated modules.
 # Set to None to disable caching.
-cache_dir = '/tmp/parakeet'
+from appdirs import user_cache_dir
+cache_dir = user_cache_dir('parakeet')
 
 # if compiling C or OpenMP we can skip some of the craziness and 
 # have distutils figure out the system config and compiler for us 
 use_distutils = True
 
-# show all the warnings? 
+# show all the warnings? w
 suppress_compiler_output = False 
 
 # when compiling with NVCC, other headers get implicitly included 

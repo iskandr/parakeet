@@ -13,8 +13,19 @@ def run(fn, method_name):
     method = getattr(v, method_name)
     expected = method()
     result = fn(v)
-    assert expected.dtype == result.dtype, "Mismatching dtype, expected %s but got %s" % (expected.dtype, result.dtype)
-    assert np.allclose(expected, result), "For test input %s, expected %s but got %s" % (v, expected, result)
+    try:
+      if result == expected:
+        return
+    except:
+      pass 
+    if hasattr(expected, 'dtype') and hasattr(result, 'dtype'):
+      assert expected.dtype == result.dtype, \
+        "Mismatching dtype, expected %s but got %s" % (expected.dtype, result.dtype)
+    else:
+      assert type(expected) == type(result), \
+        "Mismatching type, expected %s but got %s" % (type(expected), type(result))
+    assert np.allclose(expected, result), \
+      "For test input %s, expected %s but got %s" % (v, expected, result)
 
 def test_min():
   def call_min(x):

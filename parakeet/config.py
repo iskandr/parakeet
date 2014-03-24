@@ -31,7 +31,6 @@ opt_range_propagation = True
 opt_licm = True
 opt_redundant_load_elimination = True
 opt_stack_allocation = True
-
 opt_shape_elim = True 
 
 # replace 
@@ -41,7 +40,8 @@ opt_shape_elim = True
 #
 #   with 
 #     a = b[i:j]  
-opt_copy_elimination = True
+# TODO: fix it, currently breaks rule30
+opt_copy_elimination = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
@@ -57,7 +57,7 @@ opt_simplify_array_operators = False
 opt_verify = False
 
 # recompile functions for distinct patterns of unit strides and 0 or 1 input values 
-value_specialization = False 
+value_specialization = True 
 
 
 

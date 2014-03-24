@@ -65,6 +65,7 @@ def get_linker_flags(extra_flags = [],
     libname = 'python' + distutils.sysconfig.get_python_version().replace('.', '')
     add_flag('-l' + libname)
     
+  # add_flag('-Wl,-dynamic')
   if mac_os:
     add_flag("-Wl,-undefined")
     add_flag("-Wl,dynamic_lookup")

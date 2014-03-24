@@ -507,6 +507,9 @@ class FnCompiler(BaseCompiler):
     return self.indent("\n" + self.pop())
       
   
+  # TODO: set inline=True
+  # currently causes shared lib loading errors since symbol for 
+  # inlined function gets stripped out of the .so 
   def get_fn_name(self, expr, compiler_kwargs = {}, attributes = [], inline = True):
     if expr.__class__ is  TypedFn:
       fn = expr 
@@ -618,8 +621,7 @@ class FnCompiler(BaseCompiler):
     body_str = self.visit_block(fn.body) 
     
     if inline:
-      # "__attribute__((always_inline))",
-      attributes = attributes + ["inline"]
+      attributes = attributes + ["static inline"]
     attr_str = " ".join(attributes)
     sig = "%s %s(%s)" % (return_type, c_fn_name, args_str)
     src = "%s %s {\n\n%s}" % (attr_str, sig, body_str) 
@@ -650,7 +652,6 @@ class FnCompiler(BaseCompiler):
       return self._flat_compile_cache[key]
     
     name, sig, src = self.visit_flat_fn(parakeet_fn, attributes = attributes, inline = inline)
-      
     
     result = CompiledFlatFn(
       name = name, 

@@ -6,12 +6,11 @@ from nose.tools import nottest
 
 from dsltools.testing_helpers import eq, expect_eq, run_local_tests
   
-from . import (type_conv, type_inference, config, 
-              specialize, translate_function_value,
-              find_broken_transform,
-              run_untyped_fn, 
-              run_typed_fn, 
-              run_python_fn, openmp_available)
+from . import (
+  type_conv, type_inference, config, 
+  translate_function_value, find_broken_transform,
+  run_untyped_fn, openmp_available
+)
 
 
 
@@ -37,7 +36,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
   untyped_fn = translate_function_value(fn)
   
   available_backends = ['interp', 'c']
-  if openmp_available():
+  if openmp_available:
     available_backends.append('openmp')
     
   #import cuda_backend 
