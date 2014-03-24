@@ -227,6 +227,8 @@ class CombineNestedMaps(Transform):
     #n_outer_indices = n_outer_args - n_outer_closure_args
     outer_arg_names = fn.arg_names
     outer_index_names = outer_arg_names[n_outer_closure_args:]
+    print "OUTER ARG NAMES", outer_arg_names
+    print "OUTER INDEX NAMES", outer_index_names
     #outer_index_types = fn.input_types[n_outer_closure_args:]
     
     nested_expr = self.dissect_nested_fn(fn, (IndexMap,))
@@ -242,17 +244,31 @@ class CombineNestedMaps(Transform):
     
       
     # inner closure args must be remapped to the index args of the outer fn 
+    
+    remapped_closure_args = []
+    fixed_closure_args_done = False
     for i, nested_closure_elt in enumerate(nested_map_closure_elts):
       if nested_closure_elt.__class__ is not Var:
         return None
       nested_closure_name = nested_closure_elt.name
-      if nested_closure_name not in outer_index_names:
-        return None
-      pos = outer_index_names.index(nested_closure_name)
-      # for now, can't change order of arguments
-      if i != pos:
-        return None
-    
+      
+      if nested_closure_name in outer_index_names:
+        fixed_closure_args_done = True
+        pos = outer_index_names.index(nested_closure_name)
+        # for now, can't change order of arguments
+        if i != pos:
+          return None
+      else:
+        # can't do static/data closure args, followed by indices,
+        # followed by more data args
+        # TODO: just a new function and permute all the arguments 
+        if fixed_closure_args_done:
+          return None
+        elif nested_closure_name not in arg_mapping:
+          return None
+        remapped_closure_args.append(arg_mapping[nested_closure_name])
+          
+        
     try:
       remapped_inner_shape = self.translate_expr(inner_shape, arg_mapping)
     except CombineFailed:
@@ -263,9 +279,9 @@ class CombineNestedMaps(Transform):
       
     # if the two Maps are both elementwise, then make the OuterMap 
     # also elementwise
-    new_closure_elts = ()
+
     combined_shape = self.concat_tuples(shape, remapped_inner_shape, "combined_shape")
-    return  IndexMap(fn = self.closure(nested_fn, new_closure_elts),
+    return  IndexMap(fn = self.closure(nested_fn, tuple(remapped_closure_args)),
                      shape = combined_shape,    
                      type = result_type)
   

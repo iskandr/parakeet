@@ -28,7 +28,8 @@ def rotT_loops(T, g):
 
 T = np.random.randn(3,3,3,3)
 g = np.random.randn(3,3)
-import parakeet 
-parakeet.config.print_specialized_function = True 
+
+#parakeet.config.print_specialized_function = True 
 #parakeet.config.print_indexified_function = True 
+#parakeet.config.print_loopy_function = True
 rotT_loops(T,g)

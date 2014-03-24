@@ -1,6 +1,5 @@
 import parakeet
 import numpy as np 
-parakeet.config.print_generated_code = True  
 
 @parakeet.jit
 def matmult(X,Y):
