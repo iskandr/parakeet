@@ -1,3 +1,9 @@
+## 0.24 / March 24th, 2014 ###
+- cache compiled code by hash of generated C source
+- tuple slicing
+- fixed (or disabled) unreliable optimizations
+- casting between array types using map over elements
+
 ### 0.23 / November 21st, 2013 ###
 
 - Generalized StrideSpecialization to ValueSpecialization 
