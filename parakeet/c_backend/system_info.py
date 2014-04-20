@@ -38,3 +38,5 @@ include_dirs = numpy_include_dirs + python_include_dirs
 python_lib_dir = distutils.sysconfig.get_python_lib() + "/../../"
 python_version = distutils.sysconfig.get_python_version()
 
+from appdirs import user_cache_dir
+cache_dir = user_cache_dir('parakeet')

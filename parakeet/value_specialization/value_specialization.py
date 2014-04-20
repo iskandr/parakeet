@@ -118,6 +118,8 @@ _cache = {}
 def specialize_abstract_values(fn, abstract_values):
   key = (fn.cache_key, abstract_values)
   if key in _cache:
+    print "FOUND VALUE SPECIALIZATION", key 
+    print _cache[key]
     return _cache[key]
   if any(has_small_const(v) for v in abstract_values):
     specializer = ValueSpecializer(abstract_values)
@@ -127,6 +129,7 @@ def specialize_abstract_values(fn, abstract_values):
                         name = "StrideSpecialization for %s" % (abstract_values,), 
                         recursive = False)
     new_fn = transforms.apply(fn)
+    assert new_fn.cache_key != fn.cache_key
   else:
     new_fn = fn
   _cache[key] = new_fn

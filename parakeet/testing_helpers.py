@@ -35,7 +35,7 @@ def expect(fn, args, expected, msg = None, valid_types = None):
 
   untyped_fn = translate_function_value(fn)
   
-  available_backends = ['interp', 'c']
+  available_backends = ['interp', 'c',]
   if openmp_available:
     available_backends.append('openmp')
     

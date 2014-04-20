@@ -4,8 +4,19 @@ from ..value_specialization import specialize
 from ..config import value_specialization
 from pymodule_compiler import PyModuleCompiler 
 
+def run(fn, args):  
+  args = prepare_args(args, fn.input_types)
 
+  fn = lower_to_loops(fn)
+  
+  if value_specialization: 
+    fn = specialize(fn, args)
+  
+  compiled_fn = PyModuleCompiler().compile_entry(fn)
+  c_fn = compiled_fn.c_fn 
+  return c_fn(*args)
 
+"""
 _cache = {}
 def run(fn, args):
   args = prepare_args(args, fn.input_types)
@@ -14,12 +25,13 @@ def run(fn, args):
   
   if value_specialization: 
     fn = specialize(fn, args)
-
+  
   key = fn.cache_key
   if key in _cache:
-    return _cache[key](*args)
-  compiled_fn = PyModuleCompiler().compile_entry(fn)
-  c_fn = compiled_fn.c_fn 
-  _cache[key] = c_fn 
+    c_fn = _cache[key]
+  else:
+    compiled_fn = PyModuleCompiler().compile_entry(fn)
+    c_fn = compiled_fn.c_fn 
+    _cache[key] = c_fn 
   return c_fn(*args)
-  
+"""

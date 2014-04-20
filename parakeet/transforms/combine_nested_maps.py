@@ -227,8 +227,6 @@ class CombineNestedMaps(Transform):
     #n_outer_indices = n_outer_args - n_outer_closure_args
     outer_arg_names = fn.arg_names
     outer_index_names = outer_arg_names[n_outer_closure_args:]
-    print "OUTER ARG NAMES", outer_arg_names
-    print "OUTER INDEX NAMES", outer_index_names
     #outer_index_types = fn.input_types[n_outer_closure_args:]
     
     nested_expr = self.dissect_nested_fn(fn, (IndexMap,))

@@ -54,7 +54,7 @@ opt_scalar_replacement = False
 opt_simplify_array_operators = False
     
 # run verifier after each transformation 
-opt_verify = False
+opt_verify = True
 
 # recompile functions for distinct patterns of unit strides and 0 or 1 input values 
 value_specialization = True 
@@ -105,7 +105,7 @@ print_specialized_function_names = False
 
 # tell the backend to print whatever code it generates, 
 # whether it's C, CUDA, or LLVM 
-print_generated_code = False 
+print_generated_code = True 
 
 #####################################
 #         DESPERATE MEASURES        #

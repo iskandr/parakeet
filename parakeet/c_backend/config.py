@@ -31,11 +31,7 @@ pure_c = True
 
 # Throw away .c and .o files
 delete_temp_files = True
-
-# Directory to use for caching generated modules.
-# Set to None to disable caching.
-from appdirs import user_cache_dir
-cache_dir = user_cache_dir('parakeet')
+ 
 
 # if compiling C or OpenMP we can skip some of the craziness and 
 # have distutils figure out the system config and compiler for us 
@@ -48,3 +44,8 @@ suppress_compiler_output = False
 # and cause warnings since Python redefines _POSIX_C_SOURCE  
 # we can undefine it before including Python.h to get rid of those warnings 
 undef_posix_c_source = True 
+
+
+# Directory to use for caching generated modules.
+# Set to None to disable caching.
+from system_info import cache_dir
