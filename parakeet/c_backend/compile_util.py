@@ -2,6 +2,7 @@ import collections
 import hashlib
 import imp
 import os
+import shutil
 
 from tempfile import NamedTemporaryFile
 
@@ -318,7 +319,7 @@ def compile_module_from_source(
       print 'Caching... %s -> %s' % (shared_name, cached_name)
     if not os.path.exists(config.cache_dir):
       os.makedirs(config.cache_dir)
-    os.rename(shared_name, cached_name)
+    shutil.move(shared_name, cached_name)
     shared_name = cached_name
 
   if print_commands:

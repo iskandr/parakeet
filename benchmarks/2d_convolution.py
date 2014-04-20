@@ -1,6 +1,6 @@
 import parakeet
 import numpy as np 
-from timer import compare_perf
+from compare_perf import compare_perf
 
 
 
