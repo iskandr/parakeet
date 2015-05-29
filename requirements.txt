@@ -1,3 +1,4 @@
 dsltools
 numpy
 appdirs
+nose
