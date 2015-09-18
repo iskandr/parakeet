@@ -1,5 +1,7 @@
-Parakeet
+Parakeet 
 ====
+
+*This project is no longer being maintained*
 
 Parakeet is a runtime accelerator for an array-oriented subset of Python. 
 If you're doing a lot of number crunching in Python, 
