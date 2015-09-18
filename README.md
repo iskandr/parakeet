@@ -1,11 +1,16 @@
 Parakeet 
 ====
 
-*This project is no longer being maintained*
-
 Parakeet is a runtime accelerator for an array-oriented subset of Python. 
 If you're doing a lot of number crunching in Python, 
 Parakeet may be able to significantly speed up your code. 
+
+
+**This project is no longer being maintained**. *In retrospect, I don't think that whole-function type specialization at the AST level is a scalable approach to speeding up Python. General-purpose Python code should probably be accelerated using a 
+bytecode JIT and numerical code using a DSL with explicit parallels operators ([GCT] looks promising).*
+
+Example
+=======
 
 
 To accelerate a function, wrap it with Parakeet's **@jit** decorator:
