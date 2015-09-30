@@ -1,12 +1,11 @@
-
 from .. import syntax
 from .. builder import Builder
-from .. ndtypes import SliceT, make_array_type, ArrayT 
+from .. ndtypes import SliceT, make_array_type, ArrayT
 from .. ndtypes import NoneT, ScalarT, Int64, PtrT, IntT
-from .. syntax import Const, Index, Tuple, Var, ArrayView, Assign, Slice, Struct
+from .. syntax import (Index, Tuple, Var, ArrayView, Assign, Slice, Struct)
 from ..syntax.helpers import zero_i64, one_i64
+from .transform import Transform
 
-from transform import Transform
 
 class LowerIndexing(Transform):
   def pre_apply(self, fn):
@@ -20,8 +19,9 @@ class LowerIndexing(Transform):
       else:
         return stored.args[idx]
     else:
-      return Builder.tuple_proj(self, tup, idx,
-                                  explicit_struct = explicit_struct)
+      return Builder.tuple_proj(
+        self, tup, idx,
+        explicit_struct=explicit_struct)
 
   def attr(self, obj, field):
     if obj.__class__ is Var and obj.name in self.bindings:
@@ -61,17 +61,17 @@ class LowerIndexing(Transform):
           start =  zero_i64
         else:
           start = self.attr(idx, "start")
-        
+
         if isinstance(idx_t.step_type, NoneT):
           step = one_i64
         else:
           step = self.attr(idx, "step")
-        
+
         if isinstance(idx_t.stop_type, NoneT):
           stop = shape_i
         else:
           stop = self.attr(idx, "stop")
-        
+
         offset_i = self.mul(start, stride_i, "offset_%d" % i)
         elt_offset = self.add(elt_offset, offset_i)
         dim_i = self.sub(stop, start, "dim_%d" % i)
@@ -141,8 +141,8 @@ class LowerIndexing(Transform):
         assert lhs_i.__class__ not in (ArrayView, Tuple)
         self.assign(lhs_i, rhs_i)
       return None
-    
-    
+
+
     elif lhs_class is Index:
       lhs = self.transform_Index(lhs)
       if lhs.__class__ is ArrayView:

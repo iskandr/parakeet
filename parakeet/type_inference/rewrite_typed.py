@@ -1,36 +1,35 @@
 
-from .. import names, syntax 
-from ..builder import mk_cast_fn 
+from .. import names, syntax
+from ..builder import mk_cast_fn
 from ..ndtypes import (
-  IncompatibleTypes, 
+  IncompatibleTypes,
   Bool, Type,  ArrayT, Int64, TupleT,
-  NoneT, SliceT, ScalarT,  
+  NoneT, SliceT, ScalarT,
   make_tuple_type, make_array_type, lower_rank
 )
 
 from ..syntax import (
   Assign, Tuple, Var, Return, Index, Map, ConstArrayLike, Const, Cast
 )
-from ..syntax.helpers import get_types, zero_i64, none, const 
-from ..transforms import Transform 
+from ..syntax.helpers import get_types, zero_i64, none, const
+from ..transforms import Transform
 
 
 class RewriteTyped(Transform):
   def __init__(self, return_type = None):
     Transform.__init__(self, verify = False)
-    self.forced_return_type = return_type 
-    
-    
+    self.forced_return_type = return_type
+
+
   def pre_apply(self, fn):
-    
     if self.forced_return_type is None:
       self.fn_return_type = self.fn.type_env["$return"]
     else:
       self.fn_return_type = self.forced_return_type
-  
+
   def post_apply(self, fn):
-    fn.return_type = self.fn_return_type  
-  
+    fn.return_type = self.fn_return_type
+
   def coerce_expr(self, expr, t):
     assert t is not None
     expr = self.transform_expr(expr)
@@ -126,10 +125,10 @@ class RewriteTyped(Transform):
     if init and not self.is_none(init) and init.type != acc_type:
       assert len(args) == 1
       init = self.coerce_expr(init, acc_type)
-    expr.args = args 
+    expr.args = args
     expr.init = init
     return expr
-    
+
   def transform_Scan(self, expr):
     acc_type = self.return_type(expr.combine)
     init = self.transform_if_expr(expr.init)
@@ -142,8 +141,8 @@ class RewriteTyped(Transform):
            len(args) == 1:
         arr_slice = self.slice_along_axis(args[0], expr.axis, zero_i64)
         init_type = make_array_type(elt_type = expr.init.type, rank = arr_slice.type.rank)
-        init = ConstArrayLike(array = arr_slice, 
-                                   value = expr.init, 
+        init = ConstArrayLike(array = arr_slice,
+                                   value = expr.init,
                                    type = init_type)
       else:
         assert False, \
@@ -166,11 +165,11 @@ class RewriteTyped(Transform):
       expr.type = slice_t
     """
     return expr
-  
+
 
   def get_index_fn(self, array_t, index_types, _index_function_cache = {}):
     index_types = tuple(index_types)
-    key = (array_t, index_types) 
+    key = (array_t, index_types)
     if key in _index_function_cache:
       return _index_function_cache[key]
     array_name = names.fresh("array")
@@ -180,61 +179,61 @@ class RewriteTyped(Transform):
     idx_types = []
     lower_rank_by = 0
     type_env = {array_name:array_t}
-    
+
     for i, idx_t in enumerate(index_types):
       # indexing with None or a Slice doesn't decrease the rank
-      # whereas by a scalar does 
+      # whereas by a scalar does
       if isinstance(idx_t, ScalarT):
-        lower_rank_by += 1 
+        lower_rank_by += 1
       idx_name = names.fresh("idx%d" % (i+1))
       idx_names.append(idx_name)
       idx_var = Var(idx_name, type = idx_t)
       if idx_t is not Int64:
         idx_var = Cast(value = idx_var,  type = Int64)
-        idx_t = Int64 
+        idx_t = Int64
       idx_types.append(index_types)
       idx_vars.append(idx_var)
       type_env[idx_name] = idx_t
-    
+
     elt_t = lower_rank(array_t, lower_rank_by)
     if len(idx_vars) > 1:
       idx = Tuple(idx_vars, type = make_tuple_type(index_types))
     else:
       idx = idx_vars[0]
-    
+
     fn = syntax.TypedFn(
-        name = names.fresh("fancy_indexing_helper"), 
+        name = names.fresh("fancy_indexing_helper"),
         arg_names = (array_name,) + tuple(idx_names),
         input_types = (array_t,) + tuple(index_types),
         return_type = elt_t,
-        type_env = type_env, 
-        body = [Return (Index(array_var, idx, type = elt_t))]) 
-    _index_function_cache[key] = fn 
-    return fn 
-    
+        type_env = type_env,
+        body = [Return (Index(array_var, idx, type = elt_t))])
+    _index_function_cache[key] = fn
+    return fn
+
   def transform_Index(self, expr):
-    # TODO: Make fancy indexing work 
-    # with multiple indices, boolean index elements, 
+    # TODO: Make fancy indexing work
+    # with multiple indices, boolean index elements,
     # and multi-dimensional indexing
 
     index = expr.index
     if index.type.__class__ is TupleT:
-      indices = self.tuple_elts(index) 
+      indices = self.tuple_elts(index)
     else:
       indices = [index]
-    
+
     if all(isinstance(idx.type, (NoneT, SliceT, ScalarT)) for idx in indices):
-      return expr 
-    
+      return expr
+
     map_args = []
     index_elt_types = []
-    
+
     for index in indices:
       if index.type.__class__ is ArrayT:
         assert index.type.rank == 1, \
-          "Don't yet support indexing by %s" % index.type 
+          "Don't yet support indexing by %s" % index.type
         index_elt_t = index.type.elt_type
-        
+
         if index_elt_t == Bool:
           assert False, "Indexing by boolean vector not yet implemented"
           #index_array = Where(expr.index)
@@ -245,49 +244,49 @@ class RewriteTyped(Transform):
       else:
         map_args.append(expr.index)
         index_elt_types.append(expr.index.type)
-      
+
     index_fn = self.get_index_fn(expr.value.type, index_elt_types)
     index_closure = self.closure(index_fn, [expr.value])
-    return Map(fn = index_closure, 
-                   args = map_args, 
-                   type = expr.value.type, 
+    return Map(fn = index_closure,
+                   args = map_args,
+                   type = expr.value.type,
                    axis = none)
-    
+
   def transform_Assign(self, stmt):
     new_lhs = self.transform_lhs(stmt.lhs)
     lhs_t = new_lhs.type
     rhs = self.transform_expr(stmt.rhs)
     assert lhs_t is not None, "Expected a type for %s!" % stmt.lhs
-    if new_lhs.__class__ is Tuple: 
+    if new_lhs.__class__ is Tuple:
       rhs = self.assign_name(rhs)
       for (i, lhs_elt) in enumerate(new_lhs.elts):
         if lhs_elt.__class__ is Var:
-          name = names.original(lhs_elt.name) 
+          name = names.original(lhs_elt.name)
         else:
-          name = None 
+          name = None
         idx = self.index(rhs, i, name = name )
         elt_stmt = self.transform_Assign(Assign(lhs_elt, idx))
         self.blocks.append_to_current(elt_stmt)
-      return None  
+      return None
     elif new_lhs.__class__ is Index and \
          isinstance(new_lhs.value.type, ArrayT) and \
          isinstance(rhs.type, ScalarT):
       new_rhs = self.coerce_expr(rhs, new_lhs.value.type.elt_type)
       assert new_rhs.type and isinstance(new_rhs.type, Type), \
           "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
-      
+
       stmt.lhs = new_lhs
       stmt.rhs = new_rhs
-      return stmt 
+      return stmt
 
-    else:     
+    else:
       new_rhs = self.coerce_expr(rhs, lhs_t)
       assert new_rhs.type and isinstance(new_rhs.type, Type), \
           "Expected type annotation on %s, but got %s" % (new_rhs, new_rhs.type)
       stmt.lhs = new_lhs
       stmt.rhs = new_rhs
       return stmt
-    
+
   def transform_If(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, Bool)
     stmt.true = self.transform_block(stmt.true)
@@ -306,8 +305,8 @@ class RewriteTyped(Transform):
     stmt.step = self.coerce_expr(stmt.step, var_t)
     stmt.body = self.transform_block(stmt.body)
     stmt.merge = self.transform_merge(stmt.merge)
-    return stmt 
-  
+    return stmt
+
   def transform_While(self, stmt):
     stmt.cond = self.coerce_expr(stmt.cond, Bool)
     stmt.body = self.transform_block(stmt.body)

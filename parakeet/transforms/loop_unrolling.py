@@ -1,7 +1,7 @@
 from .. import syntax
 from .. syntax import Const, ForLoop, Var
 from .. syntax.helpers import const_int
-from ..transforms import CloneStmt 
+from ..transforms import CloneStmt
 
 from loop_transform import LoopTransform
 
@@ -100,7 +100,7 @@ class LoopUnrolling(LoopTransform):
     n_total_iters = self.sub(stop, start, name = "niters")
     n_unrolled_iters = self.div(n_total_iters, unrolled_step, name = "unrolled_iters")
     # Python's division doesn't behave like C, so that small_negative/big_positive = -1
-    # ..which is crappy when expecting truncation! 
+    # ..which is crappy when expecting truncation!
     n_unrolled_iters = self.max(n_unrolled_iters, self.int(0), name = "unrolled_iters")
     trunc = self.mul(n_unrolled_iters, unrolled_step, "trunc")
     unrolled_stop = self.add(stmt.start, trunc, "unrolled_stop")

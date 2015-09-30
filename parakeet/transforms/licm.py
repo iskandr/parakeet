@@ -1,13 +1,13 @@
 
-from dsltools import ScopedSet 
+from dsltools import ScopedSet
 
 from .. analysis.collect_vars import collect_var_names, collect_binding_names
 from .. analysis.escape_analysis import may_alias
 from .. analysis.syntax_visitor import SyntaxVisitor
 
-from .. ndtypes import ImmutableT, ArrayT, PtrT 
-from .. syntax import Var, Assign, Return, While, If, Index, Alloc, AllocArray  
-from .. syntax import Array, ArrayView, Slice, Struct 
+from .. ndtypes import ImmutableT, ArrayT, PtrT
+from .. syntax import Var, Assign, Return, While, If, Index, Alloc, AllocArray
+from .. syntax import Array, ArrayView, Slice, Struct
 
 from transform import Transform
 
@@ -91,7 +91,7 @@ class Find_LICM_Candidates(SyntaxVisitor):
   def visit_If(self, stmt):
     self.volatile_vars.push(stmt.merge.keys())
     self.visit_expr(stmt.cond)
-    SyntaxVisitor.visit_If(self, stmt) 
+    SyntaxVisitor.visit_If(self, stmt)
     if self.does_block_return(stmt.true) or self.does_block_return(stmt.false):
       self.mark_curr_block_returns()
     volatile_in_scope = self.volatile_vars.pop()
@@ -99,21 +99,21 @@ class Find_LICM_Candidates(SyntaxVisitor):
     self.mark_safe_assignments(stmt.false, volatile_in_scope)
 
   def is_mutable_alloc(self, expr):
-    return isinstance(expr.type, (PtrT, ArrayT)) 
+    return isinstance(expr.type, (PtrT, ArrayT))
     #c = expr.__class__
     #return c in (Alloc, AllocArray, )
     #return c is Alloc or \
     #       c is AllocArray or \
     #       c is Array or \
     #       c is ArrayView or \
-    #       c is 
+    #       c is
     #       (c is Struct and not isinstance(expr.type, ImmutableT))
 
   def visit_Assign(self, stmt):
-     
+
     lhs_names = collect_binding_names(stmt.lhs)
     rhs_names = collect_var_names(stmt.rhs)
-   
+
     for x in lhs_names:
       dependencies = self.depends_on.get(x, set([]))
       dependencies.update(rhs_names)
@@ -127,18 +127,18 @@ class Find_LICM_Candidates(SyntaxVisitor):
         pass
       else:
         self.volatile_vars.update(lhs_names)
-    # mark any array writes as volatile 
+    # mark any array writes as volatile
     if stmt.lhs.__class__ is Index:
       assert stmt.lhs.value.__class__ is Var, \
-        "Expected LHS array to be variable but instead got %s" % stmt  
+        "Expected LHS array to be variable but instead got %s" % stmt
       self.volatile_vars.add(stmt.lhs.value.name)
-      #print 
+      #print
       #print "STMT", stmt
-      #print "lhs names", lhs_names 
-      #print "rhs names", rhs_names 
+      #print "lhs names", lhs_names
+      #print "rhs names", rhs_names
       #print "volatile vars", self.volatile_vars
-      #print 
-      
+      #print
+
 
 class LoopInvariantCodeMotion(Transform):
   def __init__(self):
@@ -180,7 +180,7 @@ class LoopInvariantCodeMotion(Transform):
             target_level = max(self.binding_depth[d] for d in deps)
           else:
             target_level = 0
- 
+
           if target_level >= 0 and target_level < self.blocks.depth():
             self.blocks._blocks[target_level].append(stmt)
             self.binding_depth[name] = target_level

@@ -1,9 +1,9 @@
 
 from .. import names
-from .. analysis import contains_calls, can_inline  
+from .. analysis import contains_calls, can_inline
 from .. syntax import (If, Assign, While, Return, ForLoop, Var, TypedFn, Const, ExprStmt)
 
- 
+
 from subst import subst_stmt_list
 from transform import Transform
 
@@ -89,12 +89,12 @@ class Inliner(Transform):
     #  # at the very least, apply high level optimizations
     #  import pipeline
     #  return pipeline.high_level_optimizations.apply(expr)
-     
-  
+
+
   def transform_ExprStmt(self, stmt):
 
     return Transform.transform_ExprStmt(self, stmt)
-  
+
   def transform_Call(self, expr):
 
     fn = self.transform_expr(expr.fn)
@@ -103,23 +103,22 @@ class Inliner(Transform):
       closure_args = self.closure_elts(fn)
       if not can_inline(target):
         # print "[Warning] Can't inline %s" % target
-        return expr  
+        return expr
       self.count += 1
       curr_block = self.blocks.current()
       combined_args = tuple(closure_args) + tuple(expr.args)
       result_var = do_inline(target, combined_args,
-                             self.type_env, curr_block)    
+                             self.type_env, curr_block)
       return result_var
     else:
       return expr
 
 
-  
+
   def apply(self, fn):
     if contains_calls(fn):
       return Transform.apply(self, fn)
     else:
       return fn
-    
 
-  
+

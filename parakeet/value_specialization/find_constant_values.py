@@ -1,21 +1,17 @@
 
-import numpy as np 
+import numpy as np
 
-from .. ndtypes import ArrayT, TupleT   
+from .. ndtypes import ArrayT, TupleT
 from .. syntax import TypedFn, Var
 from ..analysis import SyntaxVisitor
-from abstract_value import one, zero, Const, unknown, Tuple, Array, Struct, abstract_tuple, abstract_array  
-
-
-
-
+from abstract_value import one, zero, Const, unknown, Tuple, Array, Struct, abstract_tuple, abstract_array
 
 def bind_list(arg_names, abstract_values):
   assert len(arg_names) == len(abstract_values)
   env = {}
   for name, abstract_value in zip(arg_names, abstract_values):
     env[name] = abstract_value
-  return env 
+  return env
 
 _cache = {}
 def symbolic_call(fn, symbolic_inputs):
@@ -25,40 +21,40 @@ def symbolic_call(fn, symbolic_inputs):
   analysis = FindConstantValues(fn, symbolic_inputs)
   return_value = analysis.visit_fn(fn)
   result = (analysis.env, return_value)
-  _cache[key] = result 
-  return result 
+  _cache[key] = result
+  return result
 
 class FindConstantValues(SyntaxVisitor):
   def __init__(self, fn, abstract_values):
     self.env = bind_list(fn.arg_names, abstract_values)
-    self.return_value = None 
-    
+    self.return_value = None
+
   def visit_expr(self, expr):
     result = SyntaxVisitor.visit_expr(self, expr)
-    if result is None: 
+    if result is None:
       return unknown
-    else: 
-      return result 
-  
+    else:
+      return result
+
   def visit_fn(self, fn):
     SyntaxVisitor.visit_fn(self, fn)
-    
+
     if self.return_value is None:
-      return unknown 
+      return unknown
     else:
       return self.return_value
-  
+
   def visit_Call(self, expr):
-    if expr.fn.__class__ is TypedFn: 
+    if expr.fn.__class__ is TypedFn:
       args = self.visit_expr_list(expr.args)
       _, return_value = symbolic_call(expr.fn, args)
-      return return_value 
+      return return_value
     else:
-      return unknown 
+      return unknown
 
   def visit_Var(self, expr):
     return self.env.get(expr.name, unknown)
-  
+
   def visit_ArrayView(self, expr):
     strides_tuple = self.visit_expr(expr.strides)
     if strides_tuple.__class__ is Const:
@@ -70,31 +66,31 @@ class FindConstantValues(SyntaxVisitor):
     if strides_tuple.__class__ is Tuple or shape_tuple.__class__ is Tuple or offset.__class__ is Const:
       return Array(strides_tuple, shape_tuple, offset)
     else:
-      return unknown 
-  
+      return unknown
+
   def visit_AllocArray(self, expr):
     if expr.order == "C":
       elts = (unknown,) * (expr.type.rank-1) + (one,)
       strides =  abstract_tuple(elts)
     elif expr.order == "F":
-      elts = (one, ) + (unknown,) * (expr.type.rank-1) 
+      elts = (one, ) + (unknown,) * (expr.type.rank-1)
       strides = abstract_tuple(elts)
     else:
-      strides = unknown 
+      strides = unknown
     shape = self.visit_expr(expr.shape)
     offset = Const(0)
     return Array(strides, shape, offset)
-  
+
   def visit_Const(self, expr):
     if expr.value == 0:
       return zero
     elif expr.value == 1:
-      return one 
+      return one
     elif isinstance(expr.value, int):
       return Const(int(expr.value))
     else:
       return unknown
-  
+
   def visit_Attribute(self, expr):
     value = self.visit_expr(expr.value)
     if value.__class__ is Tuple:
@@ -107,7 +103,7 @@ class FindConstantValues(SyntaxVisitor):
       return value.shape
     elif value.__class__ is Array and expr.name == 'offset':
       return value.offset
-    
+
     elif value.__class__ is Struct and expr.name in value.fields:
       return value.fields[expr.name]
     else:
@@ -115,14 +111,14 @@ class FindConstantValues(SyntaxVisitor):
 
   def visit_Tuple(self, expr):
     return abstract_tuple(self.visit_expr_list(expr.elts))
-  
+
   def visit_TupleProj(self, expr):
     value = self.visit_expr(expr.tuple)
     if isinstance(value, Tuple):
       return value.elts[expr.index]
     else:
-      return unknown 
-    
+      return unknown
+
   def visit_PrimCall(self, expr):
     abstract_values = self.visit_expr_list(expr.args)
     if all(v.__class__ is Const for v in abstract_values):
@@ -140,24 +136,24 @@ class FindConstantValues(SyntaxVisitor):
       stride_val = self.visit_expr(stride_arg)
       return Array(stride_val)
     else:
-      return unknown   
-    
+      return unknown
+
   def visit_Alloc(self, expr):
-    return unknown 
-  
+    return unknown
+
   def visit_Index(self, expr):
-    return unknown 
-  
+    return unknown
+
   def visit_Assign(self, stmt):
     if stmt.lhs.__class__ is Var:
       value = self.visit_expr(stmt.rhs)
       assert value is not None, \
-        "%s : %s returned None in ConstantStride analysis" % (stmt.rhs, stmt.rhs.node_type()) 
-      self.env[stmt.lhs.name] = value 
-      
+        "%s : %s returned None in ConstantStride analysis" % (stmt.rhs, stmt.rhs.node_type())
+      self.env[stmt.lhs.name] = value
+
   def visit_Return(self, stmt):
     value = self.visit_expr(stmt.value)
     if self.return_value is None:
-      self.return_value = value 
+      self.return_value = value
     elif self.return_value != value:
-      self.return_value = unknown 
+      self.return_value = unknown

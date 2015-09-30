@@ -10,20 +10,24 @@
 #  'cuda': experimental GPU support
 #
 
-from system_info import openmp_available
+from __future__ import print_function, division, absolute_import
+
+from .system_info import openmp_available
+
+
 backend = 'openmp' if openmp_available else 'c'
 
 ######################################
 #        PARAKEET OPTIMIZATIONS      #
 ######################################
-  
-    
+
+
 opt_inline = True
 
 opt_fusion = True
 opt_combine_nested_maps = True
 
-opt_specialize_fn_args = True 
+opt_specialize_fn_args = True
 
 opt_index_elimination = True
 opt_range_propagation = True
@@ -31,33 +35,33 @@ opt_range_propagation = True
 opt_licm = True
 opt_redundant_load_elimination = True
 opt_stack_allocation = True
-opt_shape_elim = True 
+opt_shape_elim = True
 
-# replace 
+# replace
 #   a = alloc
 #   ...
 #   b[i:j] = a
 #
-#   with 
-#     a = b[i:j]  
+#   with
+#     a = b[i:j]
 # TODO: fix it, currently breaks rule30
 opt_copy_elimination = False
 
 # may dramatically increase compile time
 opt_loop_unrolling = False
 
-# suspiciously complex optimizations may introduce bugs 
-# TODO: comb through carefully 
+# suspiciously complex optimizations may introduce bugs
+# TODO: comb through carefully
 opt_scalar_replacement = False
 
 # experimental!
 opt_simplify_array_operators = False
-    
-# run verifier after each transformation 
+
+# run verifier after each transformation
 opt_verify = True
 
-# recompile functions for distinct patterns of unit strides and 0 or 1 input values 
-value_specialization = True 
+# recompile functions for distinct patterns of unit strides and 0 or 1 input values
+value_specialization = True
 
 
 
@@ -69,10 +73,10 @@ value_specialization = True
 print_untyped_function = False
 
 # show the higher level typed function after specialization?
-print_specialized_function = False 
+print_specialized_function = False
 
-# show function after all data adverbs like Map/Reduce/Scan have been 
-# lowered to use indexing explicitly into their inputs 
+# show function after all data adverbs like Map/Reduce/Scan have been
+# lowered to use indexing explicitly into their inputs
 print_indexified_function = False
 
 # print function after all adverbs have been turned to loops
@@ -82,12 +86,12 @@ print_loopy_function = False
 # it gets translated to LLVM?
 print_lowered_function = False
 
-# before starting function specialization, print the fn name and input types 
+# before starting function specialization, print the fn name and input types
 print_before_specialization = False
 
 # show the input function to each transformation?
 print_functions_before_transforms =  []
-                                        
+
 # show the function produced by each transformation?
 print_functions_after_transforms =   []
 
@@ -103,13 +107,13 @@ print_transform_names = False
 # at exit, print the names of all specialized functions
 print_specialized_function_names = False
 
-# tell the backend to print whatever code it generates, 
-# whether it's C, CUDA, or LLVM 
-print_generated_code = True 
+# tell the backend to print whatever code it generates,
+# whether it's C, CUDA, or LLVM
+print_generated_code = True
 
 #####################################
 #         DESPERATE MEASURES        #
 #####################################
 
-testing_find_broken_transform = False 
+testing_find_broken_transform = False
 

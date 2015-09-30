@@ -3,7 +3,7 @@
 from .. import syntax
 from .. analysis.collect_vars import collect_var_names_list
 from .. analysis.use_analysis import use_count
-from .. syntax import Assign, Const, Index, PrimCall, Tuple, TupleProj, Var, Closure, ClosureElt 
+from .. syntax import Assign, Const, Index, PrimCall, Tuple, TupleProj, Var, Closure, ClosureElt
 from transform import Transform
 
 
@@ -13,7 +13,7 @@ class DCE(Transform):
 
   def pre_apply(self, fn):
     self.use_counts = use_count(fn)
-    
+
   def is_live(self, name):
     count = self.use_counts.get(name)
     return count and count > 0
@@ -44,10 +44,10 @@ class DCE(Transform):
         self.decref(r)
     return new_merge
 
-  
+
   def save_lhs_tuple(self, lhs):
     """
-    If there's a Tuple assignment on the LHS 
+    If there's a Tuple assignment on the LHS
     then all the variables must be kept alive
     together if any of them survive
     """
@@ -55,13 +55,13 @@ class DCE(Transform):
       if elt.__class__ is Tuple:
         self.save_lhs_tuple(elt)
       else:
-        assert elt.__class__ is Var 
+        assert elt.__class__ is Var
         if not self.is_live(elt.name):
-          self.use_counts[elt.name] = 1 
-    
+          self.use_counts[elt.name] = 1
+
   def transform_Assign(self, stmt):
     if self.is_live_lhs(stmt.lhs):
-      if stmt.lhs.__class__ is Tuple: 
+      if stmt.lhs.__class__ is Tuple:
         self.save_lhs_tuple(stmt.lhs)
       return stmt
     self.decref(stmt.rhs)
@@ -75,11 +75,11 @@ class DCE(Transform):
       return True
 
     rhs_counts = {}
-    
+
     if cond.__class__ is not Var:
       return False
     rhs_counts[cond.name] = 1
- 
+
     def process_rhs(expr):
       klass = expr.__class__
       if klass is Var:
@@ -97,7 +97,7 @@ class DCE(Transform):
       elif klass is Index:
         process_rhs(expr.value)
         process_rhs(expr.index)
-      elif klass is Closure: 
+      elif klass is Closure:
         process_rhs(expr.fn)
         for arg in expr.args:
           process_rhs(arg)
@@ -132,9 +132,9 @@ class DCE(Transform):
   def transform_If(self, stmt):
     cond = stmt.cond
 
-    # Process the phi-merge first 
-    # so that variables dead after the If 
-    # statement can become dead inside it 
+    # Process the phi-merge first
+    # so that variables dead after the If
+    # statement can become dead inside it
     stmt.merge = self.transform_merge(stmt.merge)
 
     stmt.true = self.transform_block(stmt.true)
@@ -158,12 +158,12 @@ class DCE(Transform):
 
   def transform_Return(self, stmt):
     return stmt
-  
+
   def transform_ExprStmt(self, stmt):
     if self.is_pure(stmt.value):
-      return None 
+      return None
     else:
-      return stmt 
+      return stmt
 
   def transform_ForLoop(self, stmt):
     stmt.merge = self.transform_merge(stmt.merge)

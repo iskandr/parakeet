@@ -3,5 +3,5 @@ __email__   = 'alex -dot- rubinsteyn -at- gmail -dot- com'
 __desc__    = 'Runtime compiler for numerical Python'
 __license__     = 'BSD3'
 __version__     = '0.24'
-__website__     = 'http://www.parakeetpython.com' 
+__website__     = 'http://www.parakeetpython.com'
 

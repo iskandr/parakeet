@@ -14,7 +14,7 @@ class LoopTransform(Transform):
            not self.is_simple_block(stmt.false):
           return False
       elif stmt.__class__ not in (Assign, ExprStmt):
-        return False 
+        return False
     return True
 
   def pre_apply(self, fn):
@@ -24,7 +24,7 @@ class LoopTransform(Transform):
     """Gather the variables whose values change between loop iterations"""
     for stmt in loop_body:
       assert stmt.__class__ in (Assign, If, ExprStmt), \
-        "Unexpected statement in simple block: %s" % stmt 
+        "Unexpected statement in simple block: %s" % stmt
       if stmt.__class__ is Assign:
         lhs_names = collect_binding_names(stmt.lhs)
         rhs_names = collect_var_names(stmt.rhs)
@@ -42,10 +42,10 @@ class LoopTransform(Transform):
       for stmt in loop_body:
         if stmt.__class__ is Assign:
           if stmt.lhs.__class__ is Index:
-            assert stmt.lhs.value.__class__ is Var, "Unexpected LHS %s" % stmt.lhs 
+            assert stmt.lhs.value.__class__ is Var, "Unexpected LHS %s" % stmt.lhs
             writes.setdefault(stmt.lhs.value.name, set([])).add(stmt.lhs.index)
           if stmt.rhs.__class__ is Index:
-            assert stmt.rhs.value.__class__ is Var, "Unexpected LHS %s" % stmt.lhs 
+            assert stmt.rhs.value.__class__ is Var, "Unexpected LHS %s" % stmt.lhs
             reads.setdefault(stmt.rhs.value.name, set([])).add(stmt.rhs.index)
       return reads, writes
 

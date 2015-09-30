@@ -1,10 +1,10 @@
 from ..  import names, syntax
-from ..analysis.use_analysis import use_count 
-from ..ndtypes import ArrayT 
-from ..transforms import inline, Transform 
+from ..analysis.use_analysis import use_count
+from ..ndtypes import ArrayT
+from ..transforms import inline, Transform
 from .. syntax import Var, Const,  Return, TypedFn, DataAdverb, Adverb
-from .. syntax import IndexMap, IndexReduce, Map, Reduce, OuterMap 
-from ..syntax.helpers import zero_i64, none 
+from .. syntax import IndexMap, IndexReduce, Map, Reduce, OuterMap
+from ..syntax.helpers import zero_i64, none
 
 def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
   if syntax.helpers.is_identity_fn(next_fn):
@@ -84,7 +84,7 @@ def fuse(prev_fn, prev_fixed_args, next_fn, next_fixed_args, fusion_args):
                    type_env = fused_type_env)
 
   combined_args = prev_fixed_args + next_fixed_args
-  return new_fn, combined_args 
+  return new_fn, combined_args
 
 class Fusion(Transform):
   def __init__(self, recursive=True):
@@ -104,64 +104,64 @@ class Fusion(Transform):
 
   def has_required_rank(self, var_name, required_rank):
     if var_name not in self.type_env:
-      return False 
-    
+      return False
+
     t = self.type_env[var_name]
-     
+
     if t.__class__ is ArrayT:
       return t.rank == required_rank
     else:
-      return required_rank == 0 
-  
+      return required_rank == 0
+
   def fuse_expr(self, rhs):
-    if not isinstance(rhs, DataAdverb): return rhs 
-    
+    if not isinstance(rhs, DataAdverb): return rhs
+
     # TODO: figure out how to fuse OuterMap(Map(...), some_other_arg)
     # if rhs.__class__ is OuterMap: return stmt
-     
+
     rhs_fn = self.get_fn(rhs.fn)
 
     if not inline.can_inline(rhs_fn): return rhs
 
     args = rhs.args
-    if any(arg.__class__ not in (Var, Const) for arg in args): return rhs 
-    
+    if any(arg.__class__ not in (Var, Const) for arg in args): return rhs
+
     arg_names = [arg.name for arg in args if arg.__class__ is Var]
     unique_vars = set(arg_names)
-    
-     
+
+
     valid_fusion_vars = [name for name in unique_vars
                          if name in self.adverb_bindings]
 
     # only fuse over variables which of the same rank as whatever is the largest
-    # array being processed by this operator 
+    # array being processed by this operator
     max_rank = max(self.rank(arg) for arg in args)
 
     valid_fusion_vars = [name for name in valid_fusion_vars
                          if self.has_required_rank(name,max_rank)]
-    
+
     for arg_name in valid_fusion_vars:
       n_occurrences = sum((name == arg_name for name in arg_names))
       prev_adverb = self.adverb_bindings[arg_name]
       prev_adverb_fn = self.get_fn(prev_adverb.fn)
-      
+
       if not inline.can_inline(prev_adverb_fn):
         continue
-      
-      # if we're doing a cartesian product between inputs then 
-      # can't introduce multiple new array arguments 
+
+      # if we're doing a cartesian product between inputs then
+      # can't introduce multiple new array arguments
       if rhs.__class__ is OuterMap and len(prev_adverb.args) != 1:
-        continue 
-       
-      # 
+        continue
+
+      #
       # Map(Map) -> Map
-      # Reduce(Map) -> Reduce 
+      # Reduce(Map) -> Reduce
       # Scan(Map) -> Scan
       # ...but for some reason, not:
-      # OuterMap(Map) -> OuterMap 
-      # 
+      # OuterMap(Map) -> OuterMap
+      #
       if prev_adverb.__class__ is Map and rhs.axis == prev_adverb.axis:
-   
+
         surviving_array_args = []
         fusion_args = []
         for (pos, arg) in enumerate(rhs.args):
@@ -173,7 +173,7 @@ class Fusion(Transform):
           else:
             surviving_array_args.append(arg)
             fusion_args.append(pos)
-        
+
         new_fn, clos_args = \
               fuse(self.get_fn(prev_adverb.fn),
                    self.closure_elts(prev_adverb.fn),
@@ -182,23 +182,23 @@ class Fusion(Transform):
                    fusion_args)
 
         assert new_fn.return_type == self.return_type(rhs.fn)
-        
+
         if self.use_counts[arg_name] == n_occurrences:
           del self.adverb_bindings[arg_name]
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
-        new_fn.created_by = self.fn.created_by  
+        new_fn.created_by = self.fn.created_by
         rhs.fn = self.closure(new_fn, clos_args)
         rhs.args = prev_adverb.args + surviving_array_args
-      
-      # 
+
+      #
       # Reduce(IndexMap) -> IndexReduce
-      #   
+      #
       elif prev_adverb.__class__ is IndexMap and \
             rhs.__class__ is Reduce and \
             len(rhs.args) == 1 and \
             (self.is_none(rhs.axis) or rhs.args[0].type.rank == 1):
-              
+
         new_fn, clos_args = \
             fuse(self.get_fn(prev_adverb.fn),
                  self.closure_elts(prev_adverb.fn),
@@ -208,18 +208,18 @@ class Fusion(Transform):
         assert new_fn.return_type == self.return_type(rhs.fn)
         if self.use_counts[arg_name] == n_occurrences:
           del self.adverb_bindings[arg_name]
-        
+
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
-        new_fn.created_by = self.fn.created_by 
-        rhs = IndexReduce(fn = self.closure(new_fn, clos_args), 
-                               shape = prev_adverb.shape, 
-                               combine = rhs.combine, 
+        new_fn.created_by = self.fn.created_by
+        rhs = IndexReduce(fn = self.closure(new_fn, clos_args),
+                               shape = prev_adverb.shape,
+                               combine = rhs.combine,
                                type = rhs.type,
                                init = rhs.init)
-      # 
+      #
       # Map(IndexMap) -> IndexMap
-      #   
+      #
       elif prev_adverb.__class__ is IndexMap and \
             rhs.__class__ is Map and \
             len(rhs.args) == 1 and \
@@ -231,45 +231,45 @@ class Fusion(Transform):
                  self.closure_elts(rhs.fn),
                  rhs.args)
         assert new_fn.return_type == self.return_type(rhs.fn)
-        if self.use_counts[arg_name] == n_occurrences: 
+        if self.use_counts[arg_name] == n_occurrences:
           del self.adverb_bindings[arg_name]
-        
+
         if self.fn.created_by is not None:
           new_fn = self.fn.created_by.apply(new_fn)
-        new_fn.created_by = self.fn.created_by 
-        rhs = IndexMap(fn = self.closure(new_fn, clos_args), 
-                       shape = prev_adverb.shape, 
+        new_fn.created_by = self.fn.created_by
+        rhs = IndexMap(fn = self.closure(new_fn, clos_args),
+                       shape = prev_adverb.shape,
                        type = rhs.type)
-    return rhs 
+    return rhs
 
 
   def transform_Assign(self, stmt):
-    old_rhs = stmt.rhs 
-    if self.recursive: 
+    old_rhs = stmt.rhs
+    if self.recursive:
       old_rhs = self.transform_expr(old_rhs)
-    
+
     if not isinstance(old_rhs, DataAdverb):
-      return stmt 
+      return stmt
 
     new_rhs = self.fuse_expr(old_rhs)
     if stmt.lhs.__class__ is Var and isinstance(new_rhs, Adverb):
       self.adverb_bindings[stmt.lhs.name] = new_rhs
     stmt.rhs = new_rhs
     return stmt
-  
-  def transform_Return(self, stmt):
-    old_rhs = stmt.value 
-    if not isinstance(old_rhs, DataAdverb):
-      return stmt 
-    new_rhs = self.fuse_expr(old_rhs)
-    stmt.value = new_rhs 
-    return stmt 
 
-  
+  def transform_Return(self, stmt):
+    old_rhs = stmt.value
+    if not isinstance(old_rhs, DataAdverb):
+      return stmt
+    new_rhs = self.fuse_expr(old_rhs)
+    stmt.value = new_rhs
+    return stmt
+
+
 from ..analysis import contains_adverbs, contains_calls
 def run_fusion(fn):
   if contains_adverbs(fn) or contains_calls(fn):
     return Fusion().apply(fn)
   else:
-    return fn 
-      
+    return fn
+

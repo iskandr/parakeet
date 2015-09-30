@@ -1,4 +1,4 @@
-from .. import names 
+from .. import names
 from .. analysis.collect_vars import  collect_binding_names
 from .. syntax import Var, Assign, ForLoop
 from clone_function import CloneFunction

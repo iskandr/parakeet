@@ -28,14 +28,14 @@ class CopyElimination(Transform):
     self.may_escape = escape_info.may_escape
     self.may_alias = escape_info.may_alias
     self.may_return = escape_info.may_return
-    
+
     self.usedef = UseDefAnalysis()
     self.usedef.visit_fn(fn)
 
-    
+
     self.pointers_by_size = {}
     self.arrays_by_size = {}
-    
+
 
   def no_array_aliases(self, array_name):
     alias_set = self.may_alias.get(array_name, [])
@@ -49,7 +49,7 @@ class CopyElimination(Transform):
 
   def is_array_alloc(self, expr):
     return expr.__class__ in [ArrayView, Struct, AllocArray] or isinstance(expr, Adverb)
-    
+
   def transform_Assign(self, stmt):
     # pattern match only on statements of the form
     # dest[complex_indexing] = src
@@ -60,8 +60,8 @@ class CopyElimination(Transform):
     # ...then transform the code so instead of allocating src
 
     if stmt.lhs.__class__ is not Index or stmt.lhs.value.__class__ is not Var:
-      return stmt 
-    
+      return stmt
+
     lhs_name = stmt.lhs.value.name
 
     # why assign to an array if it never gets used?
@@ -69,37 +69,36 @@ class CopyElimination(Transform):
        lhs_name not in self.may_escape and \
        self.no_array_aliases(lhs_name):
       return None
-    
+
     # only match statements like array[idx] = some_rhs_var
     if stmt.lhs.type.__class__ is not ArrayT or stmt.rhs.__class__ is not Var:
-      return stmt 
-    
+      return stmt
+
     curr_path = self.usedef.stmt_paths[id(stmt)]
     rhs_name = stmt.rhs.name
 
-    
+
     if lhs_name in self.usedef.first_use and self.usedef.first_use[lhs_name] <= curr_path:
-      return stmt 
-    
+      return stmt
+
     if self.usedef.last_use[rhs_name] != curr_path:
       return stmt
-    
+
     if rhs_name in self.may_return:
-      return stmt  
-    
+      return stmt
+
     if rhs_name not in self.local_arrays:
-      return stmt 
-            
+      return stmt
+
     array_stmt = self.local_arrays[rhs_name]
     prev_path = self.usedef.stmt_paths[id(array_stmt)]
     if not self.is_array_alloc(array_stmt.rhs):
-      return stmt 
-    
+      return stmt
+
     for lhs_depends_on in collect_var_names(stmt.lhs):
       created_on = self.usedef.created_on.get(lhs_depends_on)
       if created_on is None or created_on >= prev_path:
-        return stmt 
-             
+        return stmt
+
     array_stmt.rhs = stmt.lhs
     return None
-    

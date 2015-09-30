@@ -1,8 +1,8 @@
 
-from .. import names 
+from .. import names
 from ..ndtypes import ClosureT, make_closure_type
-from ..syntax import Expr, UntypedFn, Closure, Var, Return, ClosureElt, TypedFn, FormalArgs  
-from ..syntax.helpers import get_types 
+from ..syntax import Expr, UntypedFn, Closure, Var, Return, ClosureElt, TypedFn, FormalArgs
+from ..syntax.helpers import get_types
 
 def unpack_closure(closure):
   """
@@ -14,8 +14,8 @@ def unpack_closure(closure):
   if closure.__class__ is ClosureT:
     fn, closure_args = closure.fn, closure.arg_types
   elif closure.__class__ is Closure:
-    fn = closure.fn 
-    closure_args = closure.args 
+    fn = closure.fn
+    closure_args = closure.args
   elif closure.type.__class__ is ClosureT:
     fn, arg_types = closure.type.fn, closure.type.arg_types
     closure_args = \
@@ -46,21 +46,21 @@ def mk_untyped_identity():
   fn_name = names.fresh('identity')
   args_obj = FormalArgs()
   args_obj.add_positional(var_name)
-  return UntypedFn(name = fn_name, 
-                   args = args_obj, 
+  return UntypedFn(name = fn_name,
+                   args = args_obj,
                    body = [Return(var_expr)])
 
 untyped_identity_function = mk_untyped_identity()
 
 def _get_fundef(fn):
-  c = fn.__class__ 
+  c = fn.__class__
   if c is UntypedFn or c is TypedFn:
     return fn
   assert c is str, "Unexpected function %s : %s"  % (fn, fn.type)
   return UntypedFn.registry[fn]
 
 def _get_closure_type(fn):
-  c = fn.__class__ 
+  c = fn.__class__
   if c is ClosureT:
     return fn
   elif c is Closure:

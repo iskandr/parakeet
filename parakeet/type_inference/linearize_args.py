@@ -25,9 +25,9 @@ def linearize_arg_types(fn, args):
   untyped_fundef, closure_args = unpack_closure(fn)
   if isinstance(args, (list, tuple)):
     args = ActualArgs(args)
-    
+
   if not isinstance(untyped_fundef.args, FormalArgs):
-    assert False, "Expected function %s to have FormalArgs" % untyped_fundef.name 
+    assert False, "Expected function %s to have FormalArgs" % untyped_fundef.name
     #formals = FormalArgs()
     #for arg in untyped_fundef.args:
     #  formals.add_positional(arg)
@@ -40,12 +40,12 @@ def linearize_arg_types(fn, args):
   def keyword_fn(_, v):
     return type_conv.typeof(v)
 
-  try: 
+  try:
     linear_args, extra = formals.linearize_values(args, keyword_fn = keyword_fn)
   except UnexpectedKeyword as e:
-    e.fn_name = untyped_fundef.name  
-    raise 
-      
+    e.fn_name = untyped_fundef.name
+    raise
+
   return untyped_fundef, tuple(linear_args + extra)
 
 def tuple_elts(tup):
@@ -78,10 +78,10 @@ def linearize_actual_args(fn, args):
       try:
         combined_args = untyped_fn.args.linearize_without_defaults(args, tuple_elts)
       except UnexpectedKeyword as e:
-        e.fn_name = fn.name 
-        raise 
-          
+        e.fn_name = fn.name
+        raise
+
     else:
       combined_args = list(args)
-    
+
     return untyped_fn, combined_args, arg_types

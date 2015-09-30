@@ -1,5 +1,5 @@
 
-from .. import names 
+from .. import names
 
 class VarMap:
   def __init__(self):
