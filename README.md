@@ -3,7 +3,7 @@ Parakeet
 
 **This project is no longer being maintained**. 
 
-Parakeet was a runtime accelerator for an array-oriented subset of Python. In retrospect, I don't think that whole-function type specialization at the AST level is a scalable approach to speeding up a sufficiently large subset of Python. General-purpose Python code should probably be accelerated using a bytecode JIT and high-performance numerical code using a DSL with explicit parallel operators, [GCT](http://joschu.github.io/index.html#Announcing CGT) looks promising.
+Parakeet was a runtime accelerator for an array-oriented subset of Python. In retrospect, I don't think that whole-function type specialization at the AST level is a scalable approach to speeding up a sufficiently large subset of Python. General-purpose Python code should probably be accelerated using a bytecode JIT, whereas high-performance numerical code should use a DSL with explicit parallel operators. 
 
 
 
