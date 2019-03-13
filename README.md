@@ -1,12 +1,11 @@
 Parakeet 
 ====
 
-Parakeet is a runtime accelerator for an array-oriented subset of Python. 
-If you're doing a lot of number crunching in Python, 
-Parakeet may be able to significantly speed up your code. 
-
-
 **This project is no longer being maintained**. *In retrospect, I don't think that whole-function type specialization at the AST level is a scalable approach to speeding up a sufficiently large subset of Python. General-purpose Python code should probably be accelerated using a bytecode JIT and high-performance numerical code using a DSL with explicit parallel operators ([GCT](http://joschu.github.io/index.html#Announcing CGT) looks promising).*
+
+
+Parakeet was a runtime accelerator for an array-oriented subset of Python. 
+
 
 Example
 =======
@@ -81,7 +80,6 @@ These typed functions are then churned through many optimizations before finally
 More information
 ===
 
-  * Read more about Parakeet on the [project website](http://www.parakeetpython.com) 
   * Ask questions on the [discussion group](http://groups.google.com/forum/#!forum/parakeet-python)
   * Watch the [Parakeet presentation](https://vimeo.com/73895275) from this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year 
   * Contact the [main developer](http://www.rubinsteyn.com) directly
