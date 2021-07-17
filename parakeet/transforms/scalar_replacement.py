@@ -110,7 +110,7 @@ class ScalarReplacement(LoopTransform):
         stmt.merge[loop_var.name] = (input_var, final_var)
       
       self.blocks.append(stmt)
-      # write out the results back to memeory 
+      # write out the results back to memory 
       for ( (array_name, index_expr), loop_var) in loop_scalars.iteritems():
         array_type = self.type_env[array_name]
         lhs = self.index(Var(array_name, type = array_type), index_expr, temp = False)

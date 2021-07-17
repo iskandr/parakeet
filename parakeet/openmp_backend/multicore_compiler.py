@@ -75,7 +75,7 @@ class MulticoreCompiler(PyModuleCompiler):
     last_input_type = input_types[-1]
     body = ""
     if isinstance(last_input_type, TupleT):
-      # make a tupke out of the loop variables
+      # make a tuple out of the loop variables
       
       c_tuple_t = self.to_ctype(last_input_type)
       index_tuple = self.fresh_var(c_tuple_t, "index_tuple")
