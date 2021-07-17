@@ -163,7 +163,7 @@ class ArrayBuilder(ArithBuilder):
   def output_slice(self, output, axis, idx):
     """
     Create an expression which acts as an LHS output location 
-    for a slice throught the variable 'output' along the given axis
+    for a slice through the variable 'output' along the given axis
     """
     r = self.rank(output)
     if r > 1:
