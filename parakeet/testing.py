@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from .api import available_backends, jit
@@ -16,11 +18,14 @@ _backends: list[str] | None = None
 
 
 def test_backends() -> list[str]:
-    """Backends exercised by :func:`expect` (CPU ones that work on this machine)."""
+    """Backends exercised by :func:`expect` and :func:`check`: the CPU ones that
+    work on this machine, or the comma separated list in ``$PARAKEET_TEST_BACKENDS``
+    (e.g. ``cuda`` to push a whole test suite through a GPU)."""
     global _backends
     if _backends is None:
+        requested = [b.strip() for b in os.environ.get("PARAKEET_TEST_BACKENDS", "").split(",") if b.strip()]
         avail = available_backends()
-        _backends = [b for b in ("c", "threads", "gcd", "openmp") if avail.get(b) == "ok"]
+        _backends = requested or [b for b in ("c", "threads", "gcd", "openmp") if avail.get(b) == "ok"]
     return _backends
 
 

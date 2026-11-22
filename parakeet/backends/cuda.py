@@ -24,7 +24,7 @@ from ..errors import BackendUnavailable, InternalError
 from ..types import BufType, ScalarType
 from . import runtime_c, toolchain
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars
-from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error
+from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions
 
 BLOCK = 256
 
@@ -374,27 +374,26 @@ class CudaDevice(DeviceBase):
         flag = drv.zeros(1, np.int32)
         info = drv.zeros(4, np.int64)
         args += [flag, info]
-        device_bufs: dict[int, list] = {}
-        for v in plan.bufs:
-            pk = _PkBuf.from_address(getattr(ctx, v.name))
-            addr, nbytes = pk.data or 0, pk.nbytes
-            entry = device_bufs.get(addr)
-            if entry is None:
-                itemsize = v.type.elt.itemsize
-                count = nbytes // itemsize
-                if count > 0:
-                    raw = (ctypes.c_char * (count * itemsize)).from_address(addr)
-                    host = np.frombuffer(raw, dtype=v.type.elt.dtype, count=count)
-                else:
-                    host = np.zeros(1, dtype=v.type.elt.dtype)
-                entry = device_bufs[addr] = [drv.to_device(host), host, False, count]
+        # one device buffer per group of overlapping host ranges (see merge_regions)
+        pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
+        regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
+        hosts, devs = [], []
+        for addr, nbytes in regions:
+            if nbytes > 0:
+                host = np.frombuffer((ctypes.c_char * nbytes).from_address(addr), dtype=np.uint8)
+            else:
+                host = np.zeros(16, dtype=np.uint8)
+            hosts.append(host)
+            devs.append(drv.to_device(host))
+        written = set()
+        for v, (r, off) in zip(plan.bufs, where):
             if v.uid in plan.written:
-                entry[2] = True
-            args.append(entry[0])
+                written.add(r)
+            args.append(devs[r][off:] if off else devs[r])
         drv.launch(plan.compiled, plan, n, args)
-        for dev, host, written, count in device_bufs.values():
-            if written and count > 0:
-                drv.to_host(dev, host)
+        for r in sorted(written):
+            if regions[r][1] > 0:
+                drv.to_host(devs[r], hosts[r])
         code = int(drv.read(flag)[0])
         if code:
             raise make_runtime_error(plan.errors[code - 1], [int(x) for x in drv.read(info)])

@@ -79,6 +79,30 @@ def run_everywhere(backend, dtype, rtol):
         assert diff is None, f"{backend}/{fn.__name__}: {diff}"
 
 
+def aliased_arguments(backend, dtype):
+    """Arguments of one GPU kernel that share memory must share a device buffer."""
+    a = np.arange(500, dtype=dtype).reshape(50, 10)
+
+    def dists(a, z):
+        return parakeet.each(lambda row: np.sum((row - z) * (row - z)), a)
+
+    def dists_view_first(z, a):
+        return parakeet.each(lambda row: np.sum((row - z) * (row - z)), a)
+
+    def both(a, b, n):
+        a[:n] = b[:n] + a[:n] * 2
+
+    with parakeet.options(device_threshold=1):
+        for z in (a[0], a[3], a[::-1][0], a[:, 2][:10]):
+            assert same(jit(dists)(a, z, _backend=backend), dists(a, z), 1e-6) is None
+            assert same(jit(dists_view_first)(z, a, _backend=backend), dists(a, z), 1e-6) is None
+        for lo in (0, 1, 7):
+            x, y = np.arange(64, dtype=dtype), np.arange(64, dtype=dtype)
+            both(x[lo : lo + 20], x[40:60], 20)
+            jit(both)(y[lo : lo + 20], y[40:60], 20, _backend=backend)
+            assert np.array_equal(x, y)
+
+
 @pytest.mark.parametrize("backend", CPU_BACKENDS)
 def test_cpu_backends_agree_with_numpy(backend):
     run_everywhere(backend, np.float64, 1e-10)
@@ -90,6 +114,11 @@ def test_metal_agrees_with_numpy():
     with warnings.catch_warnings():
         warnings.simplefilter("error", parakeet.FallbackWarning)  # float32 programs must not fall back
         run_everywhere("metal", np.float32, 2e-6)
+
+
+@needs_metal
+def test_metal_aliased_arguments():
+    aliased_arguments("metal", np.float32)
 
 
 @needs_metal
@@ -158,6 +187,7 @@ with warnings.catch_warnings():
     warnings.simplefilter('error', parakeet.FallbackWarning)
     tb.run_everywhere('cuda', np.float64, 1e-10)
     tb.run_everywhere('cuda', np.float32, 2e-6)
+    tb.aliased_arguments('cuda', np.float64)
 f = jit(lambda x, idx: x[idx] * 2, backend='cuda')
 x = np.zeros(50_000)
 spec = f.specialize(x, np.arange(50_000))

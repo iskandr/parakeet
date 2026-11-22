@@ -19,7 +19,7 @@ from ..errors import BackendUnavailable, InternalError
 from ..types import BufType, ScalarType
 from . import runtime_c
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars, expr_types, used_vars
-from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error
+from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions
 
 _MATH = {
     "sqrt": "sqrt", "exp": "exp", "exp2": "exp2", "log": "log", "log10": "log10", "log2": "log2",
@@ -321,24 +321,22 @@ class MetalDevice(DeviceBase):
         info_buf = self.dev.newBufferWithLength_options_(64, Metal.MTLResourceStorageModeShared)
         ctypes.memset(self._address(flag_buf), 0, 16)
 
-        device_bufs: dict[int, tuple] = {}
-        bound = []
-        for v in plan.bufs:
-            pk = _PkBuf.from_address(getattr(ctx, v.name))
-            addr, nbytes = pk.data or 0, pk.nbytes
-            entry = device_bufs.get(addr)
-            if entry is None:
-                buf, zero_copy = self._buffer(addr, nbytes, shared=not (pk.flags & 1))
-                entry = device_bufs[addr] = [buf, zero_copy, nbytes, False]
-            if v.uid in plan.written:
-                entry[3] = True
-            bound.append(entry[0])
+        # one Metal buffer per group of overlapping host ranges (see merge_regions)
+        pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
+        regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
+        external = [False] * len(regions)
+        written = [False] * len(regions)
+        for v, pk, (r, _) in zip(plan.bufs, pks, where):
+            external[r] = external[r] or bool(pk.flags & 1)
+            written[r] = written[r] or v.uid in plan.written
+        device_bufs = [self._buffer(addr, nbytes, shared=not ext) for (addr, nbytes), ext in zip(regions, external)]
+        bound = [(device_bufs[r][0], off) for r, off in where]
 
         cb = self.queue.commandBuffer()
         enc = cb.computeCommandEncoder()
         enc.setComputePipelineState_(pso)
-        for k, b in enumerate([arg_buf, flag_buf, info_buf, *bound]):
-            enc.setBuffer_offset_atIndex_(b, 0, k)
+        for k, (b, off) in enumerate([(arg_buf, 0), (flag_buf, 0), (info_buf, 0), *bound]):
+            enc.setBuffer_offset_atIndex_(b, off, k)
         width = min(int(pso.maxTotalThreadsPerThreadgroup()), n)
         enc.dispatchThreads_threadsPerThreadgroup_(Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(max(width, 1), 1, 1))
         enc.endEncoding()
@@ -346,8 +344,8 @@ class MetalDevice(DeviceBase):
         cb.waitUntilCompleted()
         if cb.error() is not None:
             raise RuntimeError(f"Metal failed to run a kernel: {cb.error()}")
-        for addr, (buf, zero_copy, nbytes, written) in device_bufs.items():
-            if written and not zero_copy and nbytes > 0:
+        for (addr, nbytes), (buf, zero_copy), was_written in zip(regions, device_bufs, written):
+            if was_written and not zero_copy and nbytes > 0:
                 ctypes.memmove(addr, self._address(buf), nbytes)
         flag = ctypes.c_int32.from_address(self._address(flag_buf)).value
         if flag:

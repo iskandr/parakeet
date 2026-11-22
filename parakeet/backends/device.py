@@ -32,6 +32,38 @@ def ctype_of(t: ScalarType):
     return _CTYPES[t.name]
 
 
+def merge_regions(spans: list[tuple[int, int]]) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """Group host byte ranges ``(address, nbytes)`` that overlap.
+
+    Arguments of one kernel may alias (``a`` and ``a[0]``, two views of one
+    array, ...).  Each connected group of overlapping ranges must live in a
+    single device buffer, otherwise a store through one name is invisible
+    through the other and copies back to the host would clobber each other.
+
+    Returns ``(regions, where)``: the merged ``(address, nbytes)`` regions and,
+    for every input span, ``(region index, byte offset inside the region)``.
+    Empty spans each get a region of their own.
+    """
+    regions: list[tuple[int, int]] = []
+    where: list[tuple[int, int]] = [(0, 0)] * len(spans)
+    order = sorted((i for i, (_, n) in enumerate(spans) if n > 0), key=lambda i: spans[i])
+    lo = hi = -1
+    for i in order:
+        addr, n = spans[i]
+        if regions and addr < hi:
+            hi = max(hi, addr + n)
+            regions[-1] = (lo, hi - lo)
+        else:
+            lo, hi = addr, addr + n
+            regions.append((lo, n))
+        where[i] = (len(regions) - 1, addr - lo)
+    for i, (_, n) in enumerate(spans):
+        if n <= 0:
+            regions.append((0, 0))
+            where[i] = (len(regions) - 1, 0)
+    return regions, where
+
+
 def make_runtime_error(info: ir.ErrorInfo, args: list[int]) -> BaseException:
     """Build the Python exception for a failure reported by generated code."""
     cls = getattr(builtins, info.exc, RuntimeError)
@@ -163,6 +195,8 @@ class DeviceBase:
 
     def __init__(self) -> None:
         self._state = _CallState()
+        #: number of loops that actually ran on the device (diagnostics)
+        self.launches = 0
         self._callback = DEVICE_FN(self._launch)  # keep alive: C holds its address
         self.callback_address = ctypes.cast(self._callback, ctypes.c_void_p).value or 0
 
@@ -192,6 +226,7 @@ class DeviceBase:
             if plan is None or plan.failed:
                 return 1
             self.run(plan, ctx_addr, total, nchunks)
+            self.launches += 1
             return 0
         except BaseException as e:  # noqa: BLE001 - must not propagate through C frames
             token.pending = e
