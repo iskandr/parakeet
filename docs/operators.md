@@ -21,6 +21,7 @@ import parakeet as pk
 | `pk.parfor(f, shape)` | call `f(idx)` for its side effects, in parallel |
 | `pk.filter(pred, x)` | the elements of `x` for which `pred` is true |
 | `pk.pmap1(f, x, w)`, `pk.pmap2(f, x, (wx, wy))` | `f` applied to a sliding window around each element |
+| `pk.grad(f, argnum=0)`, `pk.value_and_grad(f, argnum=0)` | the gradient of a scalar-valued `f` — see [Gradients](autodiff.md) |
 
 ```python
 pk.map(lambda row: row / row.sum(), X)  # normalise rows

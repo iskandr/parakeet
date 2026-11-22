@@ -59,6 +59,43 @@ is nothing like the M1 Pro above, and this NumPy has no fast `float32` `tanh`.
 Arrays are copied to the GPU and back on every call, which is most of the time
 in the rows where CUDA loses: nothing stays on the device between calls.
 
+### Where the GPU starts to win
+
+`python benchmarks/crossover.py` times the same kernel across sizes. On the same
+kind of machine (Tesla T4, 2 CPU threads, float32), after tiling and with
+gradients:
+
+| kernel | size | NumPy | one core | 2 threads | CUDA |
+|---|---|---:|---:|---:|---:|
+| `np.tanh(x * a) + b` | 100k | 0.18 ms | 3.3 ms | 2.6 ms | 0.77 ms |
+| | 1M | 1.7 ms | 29.9 ms | 30.6 ms | 2.8 ms |
+| | 10M | 39.0 ms | 277 ms | 164 ms | 75.5 ms |
+| all-pairs distances | 1k × 64 | 9.3 ms | 0.42 ms | 0.41 ms | 0.77 ms |
+| | 100k × 64 | 760 ms | 34.5 ms | 27.3 ms | 42.5 ms |
+| matrix product | 512² | 2.5 ms | 10.1 ms | 8.0 ms | 14.3 ms |
+| | 1024² | 24.8 ms | 62.3 ms | 63.1 ms | 49.6 ms |
+| | 2048² | 145 ms | 510 ms | 654 ms | 375 ms |
+| Julia set | 256² | – | 5.2 ms | 3.0 ms | 0.81 ms |
+| | 1024² | – | 82.2 ms | 47.0 ms | 6.4 ms |
+| | 2048² | – | 338 ms | 197 ms | 78.2 ms |
+| Harris corners | 1024² | 9.7 ms | 2.9 ms | 4.0 ms | 3.0 ms |
+| | 4096² | 292 ms | 77.0 ms | 88.8 ms | 133 ms |
+| MLP gradient (784-256-10) | batch 64 | – | 3.7 ms | 4.1 ms | 5.5 ms |
+| | batch 4096 | – | 231 ms | 189 ms | 139 ms |
+| decision tree fit (32 features) | 100k rows | – | 4.2 s | 3.0 s | 2.9 s (CPU) |
+
+The GPU wins once each element costs real arithmetic (the Julia set from the
+smallest size, `tanh` from about 100k elements) and the result is not much
+bigger than the work that produced it. It ties or loses when a loop mostly
+moves memory, because every launch pays for the copy both ways: Harris at
+4096² and all-pairs at 100k rows are slower on the device than on two CPU
+threads. Loops below `config.device_threshold` (32,768 iterations) never leave
+the CPU, which is why the decision tree, whose parallel loops run over 32
+features, is a CPU program on every backend.
+
+The matrix product is the tiled one: on this machine it is within 2.5–3.5× of
+NumPy's OpenBLAS on one core.
+
 ## Reading the numbers
 
 **Where Parakeet wins.** Expressions with several operations (no temporaries,
