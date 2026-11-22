@@ -319,7 +319,13 @@ class CFamilyEmitter:
     raise Unsupported("reference counting")
 
   def par_loop(self, s: ir.ParLoop, out: list[str], indent: int) -> None:
-    raise Unsupported("nested parallel loop")
+    # a loop of exactly one chunk is a region the host outlines into its own
+    # function; anywhere else it is just its body
+    if not (isinstance(s.nchunks, ir.Const) and s.nchunks.value == 1):
+      raise Unsupported("nested parallel loop")
+    pad = "  " * indent
+    out.append(f"{pad}{s.chunk.name} = 0; {s.start.name} = 0; {s.stop.name} = {self.expr(s.total)};")
+    self.block(s.body, out, indent)
 
 
 # ---------------------------------------------------------------------------

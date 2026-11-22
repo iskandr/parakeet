@@ -80,6 +80,11 @@ floating-point operations yield `inf`/`nan` rather than raising.
 :   Evaluate every array expression into its own temporary. Useful to check
     whether a problem is related to loop fusion.
 
+`parakeet.find_broken_transform(fn, inputs)`
+:   Switch the optimizations on one at a time — fusion, tiling, the C
+    optimizer, parallel loops, the GPU — and name the first one that makes the
+    result differ from plain Python (or from `expected`, if given).
+
 `parakeet.clear_cache()`
 :   Delete cached compiled modules (they are keyed by the generated source and
     compiler, so this is never *needed* for correctness).

@@ -230,10 +230,9 @@ def tiled_map(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], elt, leng
 
   work: list = []
   with el.in_block(work):
-    if el.can_parallel(shape):
-      el.par_loop(total, body, base_depth=2)
-    else:
-      body(None, ZERO, total)
+    # where it cannot run in parallel it is still a loop of one chunk: the
+    # backend compiles that as a function of its own, and identical ones once
+    el.par_loop(total, body, nchunks=None if el.can_parallel(shape) else ONE, base_depth=2)
   el.emit(If(cmp("gt", total, 0), work, []))
   el.record_store(out)
   return out

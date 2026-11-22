@@ -67,9 +67,10 @@ GrowCut, pairwise kernels), and anything that can use all cores.
 
 **Where it does not.**
 
-* *Dense linear algebra.* `X @ Y` is a straightforward triple loop here; NumPy
-  calls a tuned BLAS that is one to two orders of magnitude faster. Compute
-  matrix products with NumPy and pass the result in.
+* *Dense linear algebra.* `X @ Y` is [tiled](#tiling) and uses every core, but
+  it is still generated C against a hand-tuned BLAS: expect NumPy to be 3–10×
+  faster on large matrices (more where the BLAS has hardware Parakeet cannot
+  reach, such as Apple's AMX units).
 * *Single-threaded transcendental functions.* NumPy ships SIMD implementations
   of `tanh`, `sin`, `exp`, ...; Parakeet's sequential backend calls the C math
   library one element at a time (the `tanh` row). With threads it is ahead again.
@@ -80,6 +81,33 @@ GrowCut, pairwise kernels), and anything that can use all cores.
   badly because the array is copied to and from the device on every launch.
 * *Tiny inputs.* A call into compiled code costs a few microseconds of argument
   marshalling; a NumPy call on a 10-element array is cheaper.
+
+## Tiling
+
+A *matmul-shaped* operation is a map over pairs whose element is a reduction
+over data picked by each member of the pair: a matrix product, `allpairs`
+distances, a tropical product. Evaluated row by row, every row of the result
+sweeps over all of the second operand, which stops fitting in cache long before
+the arrays are large. Parakeet recognises the shape — any two-dimensional map
+whose element function is one reduction plus straight-line code, whoever wrote
+it — and does two things:
+
+* **tiles** the inner dimension, so a cache-sized block of the second operand is
+  reused for every row before moving on (`config.tile_bytes`, by default half of
+  a core's L2 cache);
+* **jams** the reductions of a 2×4 block of elements into one loop, so each
+  loaded value is used several times.
+
+Neither changes what is computed, only the order. `a @ b` on 1024×1024 float64
+(Apple M1 Max):
+
+| | one core | all cores |
+|---|---:|---:|
+| untiled | 190 ms | 43 ms |
+| tiled | 92 ms | 13 ms |
+| NumPy (Accelerate) | | 4.5 ms |
+
+`@jit(tiling=False)` or `config.tiling = False` turns it off.
 
 ## Tips
 

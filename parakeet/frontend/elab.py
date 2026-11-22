@@ -585,19 +585,24 @@ class Elaborator(ArrayMixin):
       pos[0] += 1
       return Const(key[2], key[1])
     if tag == "a":
+      leaf = pos[0]
       pos[0] += 1
       elt, rank, layout, ones = key[1], key[2], key[3], key[4]
+      fixed = key[5] if len(key) > 5 else (None,) * rank  # dimensions this specialization is keyed on
       buf = Var(name, BufType(elt))
       off = Var(name + "_off", I)
       shape_vars = tuple(Var(f"{name}_n{k}", I) for k in range(rank))
       self.nonneg.update(v.uid for v in shape_vars)
       self.nonneg.add(off.uid)
       shape: list[Expr] = []
-      for v, one in zip(shape_vars, ones):
+      for k, (v, one) in enumerate(zip(shape_vars, ones)):
         if one:
           shape.append(ONE)
+        elif fixed[k] is not None:
+          shape.append(Const(fixed[k], I))
         else:
           self.not_one.add(v.uid)
+          self.param_origin[v.uid] = (source, (leaf, k))
           shape.append(v)
       if layout == "C":
         stride_vars = None
@@ -724,14 +729,31 @@ class Elaborator(ArrayMixin):
     """Return the Python value of ``v``, which must be known at compile time."""
     if isinstance(v, Const):
       return v.value
-    if isinstance(v, Var):
-      origin = self.param_origin.get(v.uid)
-      if origin is not None:
-        source, index = origin
-        if source == "arg":
-          self.state.static_leaves.add(index)
-        else:
-          self.state.static_implicit.add((source[1], index))
+    if isinstance(v, Expr):
+      # scalar arguments and array dimensions this value is computed from
+      # become part of the specialization key; then it folds to a constant
+      found = False
+      stack, seen = [v], 0
+      while stack and seen < 1000:
+        e = stack.pop()
+        seen += 1
+        if isinstance(e, Var):
+          origin = self.param_origin.get(e.uid)
+          if origin is not None:
+            source, index = origin
+            if source == "arg":
+              self.state.static_leaves.add(index)
+            else:
+              self.state.static_implicit.add((source[1], index))
+            found = True
+          elif e.uid in self.pure_defs:
+            stack.append(self.pure_defs[e.uid])
+        elif isinstance(e, (ops.Prim, ops.Cast)):
+          stack.extend(e.args if isinstance(e, ops.Prim) else (e.arg,))
+        elif not isinstance(e, Const):
+          found = False
+          break
+      if found:
         self.restart("static argument")
     if isinstance(v, Expr):
       raise self.error(

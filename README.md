@@ -95,6 +95,7 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * List literals (interpreted as array construction)
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's higher order array operations like `parakeet.imap`, `parakeet.scan`, and `parakeet.allpairs`
+  * Gradients: `parakeet.grad(f)` differentiates the array operators, so a training step is one compiled function (see [Gradients](https://iskandr.github.io/parakeet/autodiff/))
 
 Results and their dtypes match NumPy 2. The [language reference](https://iskandr.github.io/parakeet/language/) lists the places where Parakeet deliberately differs from CPython: one type per variable, no recursion, no classes, no `try`, no complex numbers.
 

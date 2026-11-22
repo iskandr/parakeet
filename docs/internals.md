@@ -88,3 +88,25 @@ array its buffer pointer, offset, shape and strides. Results come back the same
 way. Arrays allocated by compiled code are handed to NumPy without copying, with
 a finalizer that drops the native reference; views of inputs come back as NumPy
 views of the caller's array.
+
+## Transforms
+
+Two things rewrite the program rather than fall out of how it is elaborated
+(`parakeet/transforms/`):
+
+* **Tiling** (`tiling.py`). When a two-dimensional map is about to be built,
+  its element function is elaborated once to see whether it is a single
+  reduction plus straight-line code. If so the map is evaluated a cache-sized
+  tile of columns at a time, and the reductions of each 2×4 block of elements
+  are collected (instead of each emitting its own loop) and emitted as one
+  loop with eight accumulators.
+* **Differentiation** (`autodiff.py`, `derivatives.py`). `grad` elaborates its
+  function with a tape that records each array operator applied to a
+  differentiated value — at the level of `elementwise`, `reduce`, `matmul` and
+  `map`, where each has a one-line derivative rule — then walks the tape
+  backwards emitting the adjoint computation with the same building blocks.
+  Scalars are differentiated straight from their expression trees, and a view
+  of an array is the same view of its adjoint buffer. Assignments and stores
+  the tape cannot account for *taint* what they write; reaching a tainted
+  value during the backward pass is a compile error.
+

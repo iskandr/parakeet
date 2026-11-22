@@ -8,6 +8,21 @@ unchanged; everything underneath is new.
 
 ### Highlights
 
+- **`grad` and `value_and_grad`:** reverse-mode differentiation as an adverb.
+  Element-wise operators, reductions, matrix products, views, `map` and
+  `allpairs` with your own functions all have derivative rules; loops of known
+  length are unrolled; anything without a rule raises instead of returning a
+  wrong gradient. `examples/nanogpt.py` and `examples/convnet.py` train with it.
+- **Tiling:** two-dimensional maps of reductions (`@`, `allpairs` distances, ...)
+  run a cache-sized tile at a time with their reductions jammed 2×4. A
+  1024×1024 matrix product is 2× faster on one core and 3× on all of them.
+- `np.sort` and `np.argsort` take `axis` and sort every lane in parallel
+  (N-d input used to be flattened without saying so).
+- The dimensions of an array argument can be compile-time constants when the
+  code needs them to be (`range(w.shape[0])` in a loop that must be unrolled).
+- `parakeet.macro` and `parakeet.find_broken_transform` are back, and the code
+  is laid out in `frontend/`, `syntax/`, `transforms/` and `lib/` again.
+- Faster compiles for large functions: identical loop bodies are compiled once.
 - **Checked on real NVIDIA hardware.** The whole suite passes with every
   parallel loop forced onto a Tesla T4 (`tools/colab_job.py`, run on demand
   with `runplz colab`; not part of CI).
@@ -50,8 +65,8 @@ unchanged; everything underneath is new.
 ### Removed
 
 - Python 2 support, the LLVM backend, the `interp` backend (use
-  `backend="python"`), `macro`/`typed_macro`/`staged_macro`, and the old
-  `config.opt_*` / `config.print_*` flags.
+  `backend="python"`), `typed_macro`/`staged_macro`, and most of the old
+  `config.opt_*` flags.
 
 ---
 

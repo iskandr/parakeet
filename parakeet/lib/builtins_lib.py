@@ -251,7 +251,7 @@ def _all(el, x):
 def _sorted(el, x):
   from . import pure
 
-  return el.call(el.lift(pure.sort), [el.as_array(x)])
+  return pure.sort1d.__parakeet_impl__(el, el.as_array(x))
 
 
 @register(isinstance)

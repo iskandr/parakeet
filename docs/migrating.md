@@ -12,13 +12,14 @@ their names, and most 0.x programs run after the usual Python 2 → 3 changes
 | `"interp"` backend | `"python"` (runs the original function) |
 | `"cuda"` via PyCUDA + `nvcc` | `"cuda"` via CuPy, no toolkit install; new `"metal"` backend |
 | `f(x, _backend="c")` | unchanged; also `@jit(backend="c")` |
-| `@macro`, `@typed_macro`, `@staged_macro` | removed — arguments such as `axis` are specialised automatically |
+| `@macro` | still there, with a different contract: the function gets the compiler and the compile-time *values* of its arguments instead of syntax nodes (this is how `map`, `reduce` and the NumPy functions are defined). `@typed_macro` and `@staged_macro` are gone — arguments such as `axis` are specialised automatically |
 | `parakeet.testing_helpers` | `parakeet.testing` (the old name still imports) |
 | `config.opt_fusion`, `config.print_specialized_function`, `config.print_generated_code` | still accepted, as aliases of `fusion`, `print_ir` and `print_code`; the other `opt_*` flags are gone (see [Configuration](configuration.md)) |
 | `parakeet.prims.add`, `parakeet.ndtypes.Int64`, `Float64`, ... | unchanged |
 | tuple parameters `def f((a, b))` | not valid Python 3; unpack in the body |
 | `typed_repr(f, args)`, `specialize(f, args)`, `run_python_fn(f, args)` | unchanged (also `f.specialize(*args).ir`) |
-| `find_broken_transform` | removed: there is no transformation pipeline to bisect |
+| `find_broken_transform(fn, inputs, expected)` | unchanged in spirit: it switches fusion, tiling, the C optimizer and parallel loops on one at a time and names the first that changes the result |
+| `parakeet.frontend`, `parakeet.syntax`, `parakeet.transforms`, `parakeet.lib` | the same packages, with new contents: the staged interpreter, the loop IR, and tiling / differentiation |
 | `parakeet.rank`, `size`, `shape`, `erf`, `norm`, ... | unchanged |
 
 ## Behaviour changes

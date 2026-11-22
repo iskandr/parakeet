@@ -181,6 +181,13 @@ def _reduce(el, f, x, init, axis, what: str):
   ax = _axis_arg(el, axis)
   if isinstance(ax, tuple):
     raise el.error(StaticValueError, f"{what}() takes a single axis (or None)")
+  tape = el.tape
+  if tape is not None and not tape.muted and isinstance(f, prims.UFunc) and f.name in ("add", "mul", "min", "max"):
+    if (init is None or isinstance(init, Expr)) and tape.is_active(el, x):
+      # the reductions that have a derivative rule
+      from .numpy_lib import _reduce_prim
+
+      return _reduce_prim(el, f.name, x, ax, init, what)
   if ax is None and not isinstance(init, ArrayVal):
     if x.rank == 0:
       v = el.as_scalar(x)

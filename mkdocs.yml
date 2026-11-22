@@ -33,6 +33,7 @@ nav:
       - The compiled language: language.md
       - Backends and GPUs: backends.md
       - Data-parallel operators: operators.md
+      - Gradients: autodiff.md
       - Errors and debugging: debugging.md
       - Performance: performance.md
       - How it works: internals.md

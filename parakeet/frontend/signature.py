@@ -298,7 +298,8 @@ def count_leaves(key: Key) -> int:
 
 def with_static_leaves(key: Key, leaves: list, static: frozenset[int], _pos: list | None = None) -> Key:
   """Rewrite ``key`` so that the scalar leaves whose indices are in ``static``
-  become compile-time constants (``("c", type, value)``)."""
+  become compile-time constants (``("c", type, value)``).  An entry
+  ``(index, k)`` does the same for dimension ``k`` of the array leaf ``index``."""
   pos = _pos if _pos is not None else [0]
   tag = key[0]
   if tag == "s":
@@ -309,7 +310,11 @@ def with_static_leaves(key: Key, leaves: list, static: frozenset[int], _pos: lis
       return ("c", key[1], v.item() if isinstance(v, np.generic) else v)
     return key
   if tag == "a":
+    i = pos[0]
     pos[0] += 1
+    fixed = tuple(int(leaves[i].shape[k]) if (i, k) in static else None for k in range(key[2]))
+    if any(d is not None for d in fixed):
+      return (*key[:5], fixed)
     return key
   if tag == "r":
     i = pos[0]

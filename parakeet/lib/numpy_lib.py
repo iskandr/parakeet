@@ -884,6 +884,35 @@ def cumprod(el, a, axis=None, dtype=None, out=None):
 # ---------------------------------------------------------------------------
 
 
+def _sorted(el, a, axis, one_lane, what: str):
+  """Apply a 1-d sorting routine along ``axis`` (every lane in parallel)."""
+  a = _arr(el, a)
+  if axis is None or a.rank <= 1:
+    return one_lane(el, a)
+  k = norm_axis(el, axis, a.rank)
+  lanes = along_axis(el, a, k, lambda lane: one_lane(el, lane), what)
+  # the sorted axis comes out last: put it back where it was
+  perm = list(range(k)) + [a.rank - 1] + list(range(k, a.rank - 1))
+  return el.transpose(el.as_concrete(lanes), perm)
+
+
+@register(np.sort)
+def sort(el, a, axis=-1, kind=None, order=None):
+  """Sorted copy of ``a`` along ``axis`` (stable, whatever ``kind`` asks for; NaNs last)."""
+  from . import pure
+
+  return _sorted(el, a, axis, pure.sort1d.__parakeet_impl__, "sort")
+
+
+@register(np.argsort)
+@method("argsort")
+def argsort(el, a, axis=-1, kind=None, order=None):
+  """Indices that sort ``a`` along ``axis`` (stable, whatever ``kind`` asks for; NaNs last)."""
+  from . import pure
+
+  return _sorted(el, a, axis, pure.argsort1d.__parakeet_impl__, "argsort")
+
+
 @register(np.where)
 def where(el, condition, x=None, y=None):
   if x is None and y is None:

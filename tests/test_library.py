@@ -326,3 +326,36 @@ def test_unsupported_function_message():
 
   with pytest.raises(parakeet.UnsupportedError, match="cumsum"):
     h(np.zeros(4))
+
+
+def test_sort_and_argsort_along_an_axis():
+  rng = np.random.default_rng(3)
+  a = rng.integers(0, 20, (4, 5, 3)).astype(float)  # plenty of ties: the sort has to be stable
+  for axis in (-1, 0, 1, 2, None):
+    np.testing.assert_array_equal(jit(lambda a, axis: np.sort(a, axis=axis))(a, axis), np.sort(a, axis=axis))
+    np.testing.assert_array_equal(
+      jit(lambda a, axis: np.argsort(a, axis=axis))(a, axis), np.argsort(a, axis=axis, kind="stable")
+    )
+  # the default is the last axis, not the flattened array
+  np.testing.assert_array_equal(jit(lambda a: np.sort(a))(a), np.sort(a))
+  np.testing.assert_array_equal(jit(lambda a: a.argsort())(a[0]), a[0].argsort(kind="stable"))
+  np.testing.assert_array_equal(jit(lambda a: sorted(a))(a[0, 0]), sorted(a[0, 0]))
+
+
+def test_array_dimensions_become_constants_when_needed():
+  @jit
+  def zeros_like_rows(x):
+    return (0,) * x.shape[1]  # the length of a tuple has to be known when compiling
+
+  assert zeros_like_rows(np.zeros((2, 3))) == (0, 0, 0)
+  assert zeros_like_rows(np.zeros((7, 3))) == (0, 0, 0)  # the other dimension is free
+  assert zeros_like_rows(np.zeros((2, 5))) == (0,) * 5
+  assert len(zeros_like_rows.specializations) == 2
+
+
+def test_lambdas_on_one_line_are_told_apart():
+  x = np.arange(4.0)
+  f = jit(lambda a, k=1: np.minimum(a, k))
+  g = jit(lambda a, k=1: np.maximum(a, k))  # noqa: E702
+  np.testing.assert_array_equal(f(x), np.minimum(x, 1))
+  np.testing.assert_array_equal(g(x), np.maximum(x, 1))

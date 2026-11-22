@@ -125,14 +125,21 @@ def _find_node(tree: ast.AST, code: pytypes.CodeType) -> FuncNode | None:
       if isinstance(const, pytypes.CodeType) and const.co_code == code.co_code:
         if const.co_consts == code.co_consts and const.co_names == code.co_names:
           return node
-  try:  # fall back on the column recorded in the code object
-    col = next(iter(code.co_positions()))[2]
-    best = [n for n in candidates if n.col_offset <= (col or 0)]
-    if best:
-      return max(best, key=lambda n: n.col_offset)
-  except (StopIteration, AttributeError, TypeError):
-    pass
-  return candidates[0]
+  # fall back on the columns recorded in the code object: the instructions of
+  # a lambda's body lie inside the lambda
+  try:
+    cols = [p[2] for p in code.co_positions() if p[0] == code.co_firstlineno and p[2]]
+  except (AttributeError, TypeError):
+    cols = []
+  if cols:
+    col = min(cols)
+    inside = [n for n in candidates if n.col_offset <= col < (getattr(n, "end_col_offset", None) or col + 1)]
+    if inside:
+      return max(inside, key=lambda n: n.col_offset)
+  raise UnsupportedError(
+    f"cannot tell apart the lambdas on line {code.co_firstlineno} of {code.co_filename}; "
+    "put them on separate lines (or use def)"
+  )
 
 
 def get_source(fn: pytypes.FunctionType) -> FunctionSource:

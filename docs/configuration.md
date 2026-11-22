@@ -10,6 +10,8 @@ variable before importing Parakeet.
 | `backend` | `"auto"` | `PARAKEET_BACKEND` | see [Backends](backends.md) |
 | `bounds_check` | `True` | `PARAKEET_BOUNDS_CHECK` | raise `IndexError` for bad indices |
 | `fusion` | `True` | `PARAKEET_FUSION` | fuse array expressions into single loops |
+| `tiling` | `True` | `PARAKEET_TILING` | tile matmul-shaped loops for cache locality (see [Performance](performance.md#tiling)) |
+| `tile_bytes` | half of L2 | `PARAKEET_TILE_BYTES` | bytes of operand data in one tile |
 | `num_threads` | all cores | `PARAKEET_NUM_THREADS` | threads used by multi-core backends |
 | `parallel_grain` | `8192` | `PARAKEET_PARALLEL_GRAIN` | minimum iterations per chunk for cheap loops |
 | `device_threshold` | `32768` | `PARAKEET_DEVICE_THRESHOLD` | minimum loop size sent to a GPU |

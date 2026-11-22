@@ -32,9 +32,9 @@ def linspace(start, stop, num=50, endpoint=True):
   return y
 
 
-@source(np.sort)
-def sort(a, axis=-1, kind=None):
-  """Bottom-up merge sort of a 1-d array (stable, whatever ``kind`` asks for; NaNs sort last)."""
+@source()
+def sort1d(a):
+  """Bottom-up merge sort of a 1-d array (stable; NaNs sort last)."""
   x = np.ravel(a).copy()
   n = len(x)
   tmp = np.empty_like(x)
@@ -59,9 +59,9 @@ def sort(a, axis=-1, kind=None):
   return x
 
 
-@source(np.argsort)
-def argsort(a, axis=-1, kind=None):
-  """Indices that sort a 1-d array (stable, whatever ``kind`` asks for; NaNs sort last)."""
+@source()
+def argsort1d(a):
+  """Indices that sort a 1-d array (stable; NaNs sort last)."""
   v = np.ravel(a)
   n = len(v)
   x = np.arange(n)

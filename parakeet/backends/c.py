@@ -7,6 +7,7 @@ here and divert eligible parallel loops to a device.
 from __future__ import annotations
 
 import ctypes
+import re
 from dataclasses import dataclass, field
 
 from ..config import config
@@ -28,6 +29,9 @@ class KernelInfo:
   device: object = None  # backend-specific compiled kernel
 
 
+_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
 class HostEmitter(CFamilyEmitter):
   def __init__(self, fn: ir.Function, device=None):
     super().__init__()
@@ -35,6 +39,8 @@ class HostEmitter(CFamilyEmitter):
     self.device = device
     self.functions: list[str] = []
     self.kernels: list[KernelInfo] = []
+    self.bodies: dict[str, int] = {}  # canonical text of an outlined loop body -> the kernel that owns it
+    self.nesting = 0  # > 0 while printing the body of an outlined loop
     self.loop_info: dict[int, tuple[bool, bool]] = {}
     self.n_labels = 0
     self.label_used = False
@@ -165,7 +171,11 @@ class HostEmitter(CFamilyEmitter):
     lines.append(f"  {s.start.name} = {s.chunk.name} * ctx->csize;")
     lines.append(f"  {s.stop.name} = {s.start.name} + ctx->csize;")
     lines.append(f"  if ({s.stop.name} > ctx->total) {s.stop.name} = ctx->total;")
-    self.block(s.body, lines, 1)
+    self.nesting += 1
+    try:
+      self.block(s.body, lines, 1)
+    finally:
+      self.nesting -= 1
     lines.append("  return;")
     if self.label_used:
       lines.append(f"{self.fail_label}:")
@@ -174,26 +184,44 @@ class HostEmitter(CFamilyEmitter):
       lines.append("  return;")
     lines.append("}")
     lines.append("")
+    # Loops that differ only in which variables they touch (the matmuls of a
+    # network's layers, say) share one compiled body: C compilers are slow on
+    # thousands of lines of near-identical code
+    names = {v.name for v in free} | {v.name for v in defined.values()} | {s.chunk.name}
+    order: dict[str, str] = {}
+
+    def canonical(m) -> str:
+      tok = m.group(0)
+      base = tok[:-2] if tok.endswith("_d") and tok[:-2] in names else tok
+      if base not in names:
+        return tok
+      return order.setdefault(base, f"v{len(order)}") + tok[len(base) :]
+
+    text = "\n".join(lines).replace(f"pk_ctx_{k}", "pk_ctx_K").replace(f"pk_body_{k}", "pk_body_K")
+    text = _IDENT.sub(canonical, text.replace(self.fail_label, "pk_fail_K"))
     self.fail_label, self.label_used = saved
-    self.functions.append("\n".join(lines))
+    shared = self.bodies.setdefault(text, k)
+    if shared == k:
+      self.functions.append("\n".join(lines))
+    fields = [v.name for v in self.kernels[shared].free]
 
     # device kernel (if this loop is eligible)
     on_device = False
-    if self.device is not None:
+    if self.device is not None and not self.nesting:
       on_device = self.device.add_kernel(info, self)
 
     # launch site
     total, nchunks = self.expr(s.total), self.expr(s.nchunks)
     out.append(f"{pad}{{")
-    out.append(f"{pad}  pk_ctx_{k} c;")
+    out.append(f"{pad}  pk_ctx_{shared} c;")
     out.append(f"{pad}  c.rt = rt; c.total = {total};")
     out.append(f"{pad}  c.csize = ({nchunks}) > 0 ? (c.total + ({nchunks}) - 1) / ({nchunks}) : 0;")
-    for v in free:
+    for name, v in zip(fields, free):
       if isinstance(v.type, BufType):
-        out.append(f"{pad}  c.{v.name} = {v.name}; c.{v.name}_d = {v.name}_d;")
+        out.append(f"{pad}  c.{name} = {v.name}; c.{name}_d = {v.name}_d;")
       else:
-        out.append(f"{pad}  c.{v.name} = {v.name};")
-    launch = f"pk_parallel_for(rt, pk_body_{k}, &c, {nchunks});"
+        out.append(f"{pad}  c.{name} = {v.name};")
+    launch = f"pk_parallel_for(rt, pk_body_{shared}, &c, {nchunks});"
     if on_device:
       out.append(
         f"{pad}  if (!(rt->device && c.total >= rt->gpu_min && "

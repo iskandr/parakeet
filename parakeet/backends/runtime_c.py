@@ -152,6 +152,7 @@ _PRELUDE_TEMPLATE = r"""
   #include <malloc.h>
   #define PK_EXPORT __declspec(dllexport)
   #define PK_INLINE static __forceinline
+  #define PK_OUTLINE static __declspec(noinline)
   #define PK_UNLIKELY(x) (x)
   PK_INLINE int64_t pk_atomic_add(volatile int64_t* p, int64_t v) {
     return _InterlockedExchangeAdd64((volatile __int64*)p, v) + v;
@@ -167,6 +168,9 @@ _PRELUDE_TEMPLATE = r"""
     #define PK_EXPORT __attribute__((visibility("default")))
   #endif
   #define PK_INLINE static inline __attribute__((always_inline, unused))
+  /* called from very many places in generated code: inlining them there only
+     makes the C compiler slow */
+  #define PK_OUTLINE static __attribute__((noinline, unused))
   #define PK_UNLIKELY(x) __builtin_expect(!!(x), 0)
   PK_INLINE int64_t pk_atomic_add(volatile int64_t* p, int64_t v) { return __sync_add_and_fetch(p, v); }
   PK_INLINE bool pk_atomic_cas(volatile int32_t* p, int32_t expect, int32_t val) {
@@ -209,7 +213,7 @@ typedef struct pk_call {
 
 #define PK_ERR_MEMORY (-1)
 
-static void pk_fail(pk_call* rt, int32_t id, int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
+PK_OUTLINE void pk_fail(pk_call* rt, int32_t id, int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
   if (pk_atomic_cas(&rt->err_code, 0, 1)) {
     rt->err_id = id;
     rt->err_args[0] = a0; rt->err_args[1] = a1; rt->err_args[2] = a2; rt->err_args[3] = a3;
@@ -234,7 +238,7 @@ static void pk_aligned_free(void* p) {
 #endif
 }
 
-static pk_buf* pk_alloc(pk_call* rt, int64_t count, int64_t itemsize, int zero) {
+PK_OUTLINE pk_buf* pk_alloc(pk_call* rt, int64_t count, int64_t itemsize, int zero) {
   if (count < 0 || (itemsize > 0 && count > INT64_C(0x7fffffffffff) / itemsize)) {
     pk_fail(rt, PK_ERR_MEMORY, count, itemsize, 0, 0);
     return NULL;
@@ -263,14 +267,14 @@ PK_INLINE void pk_incref(pk_buf* b) {
   if (b) pk_atomic_add(&b->refcount, 1);
 }
 
-static void pk_drop(pk_buf* b) {
+PK_OUTLINE void pk_drop(pk_buf* b) {
   if (b && pk_atomic_add(&b->refcount, -1) == 0 && !(b->flags & PK_EXTERNAL)) {
     pk_aligned_free(b->data);
     free(b);
   }
 }
 
-PK_INLINE void pk_release(pk_buf** pb) {
+PK_OUTLINE void pk_release(pk_buf** pb) {
   pk_buf* b = *pb;
   if (b) { *pb = NULL; pk_drop(b); }
 }
@@ -278,7 +282,7 @@ PK_INLINE void pk_release(pk_buf** pb) {
 /* Called from Python when the last NumPy view of a result goes away. */
 PK_EXPORT void pk_decref(void* b) { pk_drop((pk_buf*)b); }
 
-static void pk_export(pk_call* rt, pk_buf* b, pk_buf** exts, int n_ext, int64_t* io) {
+PK_OUTLINE void pk_export(pk_call* rt, pk_buf* b, pk_buf** exts, int n_ext, int64_t* io) {
   int k;
   if (!b) b = pk_alloc(rt, 0, 1, 0);
   for (k = 0; k < n_ext; k++) {
@@ -296,7 +300,7 @@ static void pk_export(pk_call* rt, pk_buf* b, pk_buf** exts, int n_ext, int64_t*
 
 typedef void (*pk_body_fn)(void* ctx, int64_t chunk);
 
-static int64_t pk_num_chunks(pk_call* rt, int64_t total, int reduce, int heavy, int on_device) {
+PK_OUTLINE int64_t pk_num_chunks(pk_call* rt, int64_t total, int reduce, int heavy, int on_device) {
   int64_t want, size;
   if (total <= 0) return 0;
   if (on_device && rt->device && total >= rt->gpu_min) {
@@ -318,7 +322,7 @@ static int64_t pk_num_chunks(pk_call* rt, int64_t total, int reduce, int heavy, 
 typedef void (*pk_parfor_fn)(pk_body_fn fn, void* ctx, int64_t nchunks, int64_t nthreads);
 typedef int32_t (*pk_device_fn)(int32_t kernel, void* ctx, int64_t total, int64_t nchunks);
 
-static void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t nchunks) {
+PK_OUTLINE void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t nchunks) {
   int64_t c;
   if (nchunks > 1 && rt->nthreads > 1 && rt->parfor) {
     ((pk_parfor_fn)rt->parfor)(fn, ctx, nchunks, rt->nthreads);

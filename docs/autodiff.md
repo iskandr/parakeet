@@ -1,0 +1,157 @@
+# Gradients
+
+`grad` turns a function into its gradient. It is an adverb like `map` and
+`reduce`: it is applied while your code is compiled, and what comes out is
+ordinary loops that are fused, tiled and run in parallel like everything else.
+
+```python
+import numpy as np
+from parakeet import grad, value_and_grad
+
+
+def loss(w, x, y):
+  return np.mean((np.tanh(x @ w) - y) ** 2)
+
+
+g = grad(loss)(w, x, y)  # d loss / d w, shaped like w
+value, g = value_and_grad(loss)(w, x, y)
+gw, gx = grad(loss, (0, 1))(w, x, y)  # several arguments at once
+```
+
+The function has to return one floating point number. The arguments you
+differentiate with respect to can be floats, float arrays, or tuples of those
+nested however you like — the gradient comes back with the same structure:
+
+```python
+def mlp(params, x, y):
+  (w1, b1), (w2, b2) = params
+  h = np.tanh(x @ w1 + b1)
+  return np.mean((h @ w2 + b2 - y) ** 2)
+
+
+(gw1, gb1), (gw2, gb2) = grad(mlp)(params, x, y)
+```
+
+`grad(f)` can be called from plain Python, where it compiles on first use, or
+inside a `@jit` function, where the whole training step becomes one compiled
+function:
+
+```python
+@jit
+def descend(w, x, y, rate, steps):
+  for _ in range(steps):
+    w = w - rate * grad(loss)(w, x, y)
+  return w
+```
+
+[`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py)
+trains a small transformer this way, and
+[`examples/convnet.py`](https://github.com/iskandr/parakeet/blob/master/examples/convnet.py)
+a convolutional network.
+
+## What can be differentiated
+
+| | |
+|---|---|
+| arithmetic and math functions | `+ - * / **`, `np.exp`, `np.tanh`, `np.maximum`, `np.where`, `np.abs`, `np.clip`, … with broadcasting |
+| reductions | `np.sum`, `np.mean`, `np.var`, `np.std`, `np.max`, `np.min`, `np.prod`, `np.linalg.norm`, with `axis` and `keepdims`; `parakeet.reduce` with `add`, `multiply`, `minimum`, `maximum` |
+| linear algebra | `@`, `np.dot`, `np.matmul` for vectors and matrices |
+| views | slicing, `x.T`, `reshape`, `ravel`, `np.transpose`, `x[:, None]` |
+| indexing with arrays | `x[idx]`, `x[rows, cols]` |
+| building arrays | `np.concatenate`, `np.stack`, `np.array([a, b, c])`, comprehensions |
+| adverbs | `map`/`each`, `allpairs`, `imap` with your own functions, including functions that use arrays from outside |
+| scalar code | anything written with scalars, conditional expressions included |
+
+Derivatives of `min`, `max`, `abs` and friends at a tie follow the usual
+conventions: ties in a reduction share the gradient equally.
+
+## Loops and branches
+
+The derivative is laid out when the function is compiled, so the compiler has
+to know how many times each operation runs.
+
+A `for` loop over a tuple, or over a `range` whose length is known when the
+function is compiled, is **unrolled**: a literal, a scalar argument, or the
+shape of an array all work. Such an argument becomes part of what the function
+is specialized on, exactly like `axis=`.
+
+```python
+def deep(weights, x):  # a tuple of matrices
+  for w in weights:
+    x = np.tanh(x @ w)
+  return np.sum(x)
+
+
+def correlate(x, kernel):
+  out = x[: len(x) - len(kernel) + 1] * 0.0
+  for i in range(len(kernel)):  # unrolled: one specialization per kernel length
+    out = out + x[i : i + len(out)] * kernel[i]
+  return np.sum(out**2)
+```
+
+Loops that do not touch differentiated values are left alone, so a training
+loop around `grad` is an ordinary loop.
+
+What cannot be unrolled cannot be differentiated: `while` loops, loops over the
+elements of an array of unknown length, and anything longer than 4096
+iterations. Use an array operation or an adverb instead — `np.sum`,
+`parakeet.map`, a comprehension.
+
+An `if` statement whose condition is only known at run time cannot assign or
+compute differentiated values. Write the choice as a value:
+
+```python
+y = np.where(x > 0, x, 0.1 * x)  # arrays
+s = a if a > b else b  # scalars
+```
+
+A guard that only raises (`if n == 0: raise ValueError(...)`) is fine.
+
+## Arrays are values
+
+Differentiated arrays cannot be modified in place. Assigning elements one at a
+time, updating an array after it was used, or overwriting an input all raise an
+error; build a new array instead (`out = out + term`, a comprehension,
+`np.concatenate`).
+
+## The gradient is right or there is none
+
+Parakeet never returns a gradient that silently ignores part of your function.
+If something on the way from the arguments to the result has no derivative
+rule — `np.cumsum`, `np.sort`, a `reduce` with your own function — you get an
+`UnsupportedError` naming it:
+
+```text
+UnsupportedError: cannot differentiate through cumsum() (line 12): its derivative is not implemented
+```
+
+Second derivatives (`grad` of a function that calls `grad`) are not supported.
+
+## Cost
+
+A gradient costs about two to three times the function. Element-wise chains
+are fused in both directions; a matrix product's derivative is two more
+(tiled) matrix products.
+
+Two things are slower than they could be:
+
+* the derivative of `map`/`allpairs` with your own function runs one element
+  at a time on a single thread, because every element may add to the gradient
+  of an array the function captured;
+* loops are unrolled, so a long unrolled loop makes for a long compile.
+
+## How it works
+
+While the function is elaborated, a tape records each array operator applied
+to a value that depends on the differentiated arguments. The record is made
+where the operator still has its algebraic meaning, so each rule is one line:
+an element-wise operator becomes a map of the scalar function's partial
+derivative, a sum broadcasts its adjoint back, a matrix product becomes two
+more, a `map` differentiates its function again per element.
+
+Scalars are not recorded. An expression in Parakeet's IR is already a record
+of how it was computed, so the adjoint of a scalar is pushed straight down its
+expression tree. Views are not recorded either: a slice of an array is the
+same slice of its adjoint.
+
+See [`parakeet/transforms/autodiff.py`](https://github.com/iskandr/parakeet/blob/master/parakeet/transforms/autodiff.py).
