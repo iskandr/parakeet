@@ -236,7 +236,7 @@ class ForRange(Stmt):
   body: list[Stmt]
   scope: Scope
   simd: bool = False  # iterations are independent: safe to vectorise
-  reduction: tuple | None = None  # (op, accumulator): an associative fold, may be reordered
+  reduction: tuple | None = None  # (op, accumulator or accumulators): associative folds, may be reordered
 
 
 @dataclass(eq=False, slots=True)

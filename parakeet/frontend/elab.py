@@ -232,6 +232,7 @@ class Elaborator(ArrayMixin):
     self._keep: list = []
     self.results: list = []
     self.pure_defs: dict[int, Expr] = {}
+    self.jam = None  # set while a tiled map collects its elements' reductions
 
   # ================================================================ plumbing
 

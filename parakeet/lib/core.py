@@ -378,6 +378,12 @@ def build_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> Array
     el.loop_depth -= 1
 
   if isinstance(r, Expr):
+    if weight >= INF_COST:
+      from ..transforms import tiling
+
+      length = tiling.probe(el, shape, fn, probe)
+      if length is not None:
+        return tiling.tiled_map(el, shape, fn, r_type, length, what)
 
     def at(idx):
       v = fn(tuple(idx))
@@ -547,6 +553,10 @@ def reduce_values(
     el.loop_depth -= 1
   if assume_associative is not None:
     associative = assume_associative
+  if el.jam is not None:
+    red = el.jam.capture(el, shape, elem, combine, init, acc_type, assoc_op if associative else None, what)
+    if red is not None:
+      return red
 
   total = el.tmp(ops.iprod(shape), "total")
   acc = Var("acc", acc_type)

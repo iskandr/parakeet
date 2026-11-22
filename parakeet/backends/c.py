@@ -92,12 +92,13 @@ class HostEmitter(CFamilyEmitter):
     if red is None or not toolchain.supports_simd_pragmas():
       return None
     op, acc = red
+    accs = acc if isinstance(acc, (list, tuple)) else [acc]
     simple = all(
       isinstance(b, (ir.Assign, ir.Comment)) or (isinstance(b, ir.ReleaseScope) and not b.scope.owned) for b in s.body
     )
-    if acc.type.kind != "f" or not simple:
+    if any(a.type.kind != "f" for a in accs) or not simple:
       return None
-    return f"#pragma omp simd reduction({'+' if op == 'add' else '*'}:{acc.name})"
+    return f"#pragma omp simd reduction({'+' if op == 'add' else '*'}:{', '.join(a.name for a in accs)})"
 
   def rtcall(self, e: ir.RtCall) -> str:
     args = ", ".join(self.expr(a) for a in e.args)

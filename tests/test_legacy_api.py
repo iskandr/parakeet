@@ -1,6 +1,7 @@
 """The names Parakeet 0.x exported are still there and still mean the same thing."""
 
 import numpy as np
+import pytest
 
 import parakeet
 from parakeet import Float64, Int64, prims, run_python_fn, specialize, typed_repr
@@ -55,3 +56,29 @@ def test_array_property_functions():
   assert f(np.zeros((3, 4))) == (2, 12, (3, 4))
   assert parakeet.rank(np.zeros((3, 4))) == 2
   assert abs(parakeet.jit(lambda x: parakeet.erf(x))(0.5) - 0.5204998778) < 1e-9
+
+
+def test_macro_defines_a_staged_function():
+  @parakeet.macro
+  def twice(el, x):
+    return el.binop("add", x, x)
+
+  @parakeet.jit
+  def f(x):
+    return twice(x) + 1
+
+  np.testing.assert_array_equal(f(np.arange(4.0)), 2 * np.arange(4.0) + 1)
+  # like the built-in adverbs, a macro can be called straight from Python
+  np.testing.assert_array_equal(twice(np.arange(3)), [0, 2, 4])
+  with pytest.raises(TypeError, match="expects a function"):
+    parakeet.macro(3)
+
+
+def test_find_broken_transform_blames_the_right_step(capsys):
+  def scaled(x, a):
+    return np.tanh(x * a) + 1.0
+
+  x = np.linspace(-1, 1, 50)
+  assert parakeet.find_broken_transform(scaled, [x, 0.5]) is None
+  assert "Nothing broke" in capsys.readouterr().out
+  assert parakeet.find_broken_transform(scaled, [x, 0.5], expected=x, print_functions=False) == "frontend"
