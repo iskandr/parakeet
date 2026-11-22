@@ -1,115 +1,118 @@
-  ######################################
-#          BACKEND SELECTION         #
-######################################
-#
-#  'auto'  : use either 'c' or 'openmp' depending on availability of OpenMP
-#  'c': sequential, use gcc or clang to compile
-#  'openmp': multi-threaded execution for array operations, requires gcc 4.4+
-#  'llvm': deprecated
-#  'interp': interpreter, will be dreadfully slow
-#  'cuda': experimental GPU support
-#
+"""Global configuration.
 
-from system_info import openmp_available
-backend = 'openmp' if openmp_available else 'c'
+Change settings by assigning attributes of ``parakeet.config``, temporarily
+with ``with parakeet.options(backend="c"): ...``, per function with
+``@jit(backend=..., bounds_check=...)`` or through ``PARAKEET_*`` environment
+variables (read once at import).
+"""
 
-######################################
-#        PARAKEET OPTIMIZATIONS      #
-######################################
-  
-    
-opt_inline = True
+from __future__ import annotations
 
-opt_fusion = True
-opt_combine_nested_maps = True
+import contextlib
+import os
+import sys
+from dataclasses import dataclass, field, fields
 
-opt_specialize_fn_args = True 
-
-opt_index_elimination = True
-opt_range_propagation = True
-
-opt_licm = True
-opt_redundant_load_elimination = True
-opt_stack_allocation = True
-opt_shape_elim = True 
-
-# replace 
-#   a = alloc
-#   ...
-#   b[i:j] = a
-#
-#   with 
-#     a = b[i:j]  
-# TODO: fix it, currently breaks rule30
-opt_copy_elimination = False
-
-# may dramatically increase compile time
-opt_loop_unrolling = False
-
-# suspiciously complex optimizations may introduce bugs 
-# TODO: comb through carefully 
-opt_scalar_replacement = False
-
-# experimental!
-opt_simplify_array_operators = False
-    
-# run verifier after each transformation 
-opt_verify = False
-
-# recompile functions for distinct patterns of unit strides and 0 or 1 input values 
-value_specialization = True 
+BACKENDS = ("auto", "c", "multicore", "threads", "openmp", "gcd", "metal", "mps", "cuda", "python")
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    return v.strip().lower() not in ("0", "false", "no", "off", "")
 
-#####################################
-#            DEBUG OUTPUT           #
-#####################################
 
-# show untyped IR after it's translated from Python?
-print_untyped_function = False
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ[name])
+    except (KeyError, ValueError):
+        return default
 
-# show the higher level typed function after specialization?
-print_specialized_function = False 
 
-# show function after all data adverbs like Map/Reduce/Scan have been 
-# lowered to use indexing explicitly into their inputs 
-print_indexified_function = False
+@dataclass
+class Config:
+    #: "auto" (best multi-core strategy), "c" (single-threaded), "multicore",
+    #: "threads", "openmp", "gcd", "metal" (alias "mps"), "cuda", or "python"
+    #: (run the original function uncompiled, for debugging).
+    backend: str = field(default_factory=lambda: os.environ.get("PARAKEET_BACKEND", "auto"))
+    #: Check array indices (IndexError instead of memory corruption).
+    bounds_check: bool = field(default_factory=lambda: _env_bool("PARAKEET_BOUNDS_CHECK", True))
+    #: Fuse array expressions into single loops.
+    fusion: bool = field(default_factory=lambda: _env_bool("PARAKEET_FUSION", True))
+    #: Worker threads for multi-core backends (default: all cores).
+    num_threads: int = field(default_factory=lambda: _env_int("PARAKEET_NUM_THREADS", os.cpu_count() or 1))
+    #: Minimum number of cheap loop iterations per chunk before threads are used.
+    parallel_grain: int = field(default_factory=lambda: _env_int("PARAKEET_PARALLEL_GRAIN", 8192))
+    #: Minimum loop size before a loop is sent to a GPU.
+    device_threshold: int = field(default_factory=lambda: _env_int("PARAKEET_DEVICE_THRESHOLD", 32768))
+    #: Number of partial results used for reductions on a GPU.
+    device_reduce_chunks: int = 8192
+    #: What to do when a loop cannot run on the requested GPU: "warn" (run on
+    #: the CPU and warn once), "silent" (run on the CPU) or "error".
+    device_fallback: str = field(default_factory=lambda: os.environ.get("PARAKEET_DEVICE_FALLBACK", "warn"))
+    #: C compiler executable (default: $PARAKEET_CC, $CC, then cc/gcc/clang).
+    cc: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CC") or os.environ.get("CC"))
+    #: Extra flags appended to the C compiler command line.
+    cflags: tuple[str, ...] = ()
+    #: Optimisation level passed to the C compiler.
+    opt_level: int = 3
+    #: Allow value-changing floating point optimisations (-ffast-math).
+    fast_math: bool = False
+    #: Where compiled modules are cached (default: per-user cache directory).
+    cache_dir: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CACHE_DIR"))
+    #: Print the typed IR / generated source of everything that gets compiled.
+    print_ir: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_IR", False))
+    print_code: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_CODE", False))
 
-# print function after all adverbs have been turned to loops
-print_loopy_function = False
+    def __setattr__(self, name: str, value) -> None:
+        if name not in _FIELD_NAMES:
+            raise AttributeError(
+                f"parakeet.config has no setting {name!r} (settings: {', '.join(sorted(_FIELD_NAMES))})"
+            )
+        if name == "backend":
+            value = normalize_backend(value)
+        if name == "device_fallback" and value not in ("warn", "silent", "error"):
+            raise ValueError("device_fallback must be 'warn', 'silent' or 'error'")
+        if name == "num_threads":
+            value = max(1, int(value))
+        object.__setattr__(self, name, value)
 
-# show lower level typed function before
-# it gets translated to LLVM?
-print_lowered_function = False
+    def as_dict(self) -> dict:
+        return {f.name: getattr(self, f.name) for f in fields(self)}
 
-# before starting function specialization, print the fn name and input types 
-print_before_specialization = False
 
-# show the input function to each transformation?
-print_functions_before_transforms =  []
-                                        
-# show the function produced by each transformation?
-print_functions_after_transforms =   []
+_FIELD_NAMES = frozenset(f.name for f in fields(Config))
 
-# show aliases and escape sets
-print_escape_analysis = False
 
-# how long did each transform take?
-print_transform_timings = False
+def normalize_backend(name: str) -> str:
+    if not isinstance(name, str):
+        raise TypeError(f"backend must be a string, got {type(name).__name__}")
+    key = name.strip().lower()
+    aliases = {"mps": "metal", "seq": "c", "serial": "c", "interp": "python", "pthreads": "threads"}
+    if key == "gpu":
+        key = "metal" if sys.platform == "darwin" else "cuda"
+    key = aliases.get(key, key)
+    if key not in BACKENDS:
+        raise ValueError(f"unknown backend {name!r}; choose one of: {', '.join(BACKENDS)}")
+    return key
 
-# print each transform's name when it runs
-print_transform_names = False
 
-# at exit, print the names of all specialized functions
-print_specialized_function_names = False
+config = Config()
 
-# tell the backend to print whatever code it generates, 
-# whether it's C, CUDA, or LLVM 
-print_generated_code = False 
 
-#####################################
-#         DESPERATE MEASURES        #
-#####################################
+@contextlib.contextmanager
+def options(**settings):
+    """Temporarily override configuration settings.
 
-testing_find_broken_transform = False 
-
+    >>> with parakeet.options(backend="c", bounds_check=False):
+    ...     result = f(x)
+    """
+    saved = {k: getattr(config, k) for k in settings}
+    try:
+        for k, v in settings.items():
+            setattr(config, k, v)
+        yield config
+    finally:
+        for k, v in saved.items():
+            setattr(config, k, v)

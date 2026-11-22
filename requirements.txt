@@ -1,4 +1,0 @@
-dsltools
-numpy
-appdirs
-nose

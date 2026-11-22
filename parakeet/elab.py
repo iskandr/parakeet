@@ -1,0 +1,2216 @@
+"""The frontend: turn a Python function plus argument types into typed loop IR.
+
+The :class:`Elaborator` is a *staged interpreter*.  It walks the Python AST of
+the function with an environment of compile-time values (see
+:mod:`parakeet.values`) and emits IR for whatever can only be known at run
+time.  Calls are inlined, closures and tuples disappear, and array expressions
+are fused (see :mod:`parakeet.arrays`).
+
+Three things cannot be decided in a single forward pass, and are handled by
+*restarting* elaboration with better assumptions recorded in
+:class:`ElabState`:
+
+* the type of a variable modified in a loop (widened until stable),
+* whether an array expression must be evaluated eagerly,
+* which scalar arguments must be compile-time constants (e.g. ``axis``).
+"""
+
+from __future__ import annotations
+
+import ast
+import builtins
+import contextlib
+import types as pytypes
+from dataclasses import dataclass, field
+from typing import Any
+
+import numpy as np
+
+from . import ops, scalars
+from .arrays import ArrayMixin, LiveRoots, Restart
+from .errors import (
+    CompileError,
+    InternalError,
+    ParakeetError,
+    SourceLocation,
+    StaticValueError,
+    TypeInferenceError,
+    UnsupportedError,
+)
+from .ir import (
+    ArrayParam,
+    ArrayResult,
+    Assign,
+    Break,
+    Const,
+    Continue,
+    Expr,
+    ForRange,
+    Function,
+    If,
+    Incref,
+    Null,
+    Release,
+    ReleaseScope,
+    Scope,
+    Var,
+    While,
+    is_trivial,
+    walk_expr,
+)
+from .ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
+from .signature import CODE_FUNCTIONS, STAGED, Key, Ref, Unsupported, classify, type_value, with_static_leaves
+from .source import FunctionSource, assigned_names, get_source
+from .types import Bool, BufType, ScalarType, WeakBool, WeakFloat, WeakInt, join
+from .values import (
+    ArrayVal,
+    BoundMethod,
+    Closure,
+    EnumerateVal,
+    Partial,
+    PyFunc,
+    RangeVal,
+    Root,
+    TypeVal,
+    Undefined,
+    ZipVal,
+    describe,
+)
+
+MAX_INLINE_DEPTH = 100
+_MISSING = object()
+
+
+@dataclass
+class Options:
+    """Frontend switches (part of every specialization key)."""
+
+    bounds_check: bool = True
+    parallel: bool = True
+    fusion: bool = True
+
+    def key(self) -> tuple:
+        return (self.bounds_check, self.parallel, self.fusion)
+
+
+@dataclass
+class ElabState:
+    """Assumptions that survive restarts of one specialization."""
+
+    eager: set[int] = field(default_factory=set)
+    strict: set[int] = field(default_factory=set)
+    keep: list = field(default_factory=list)  # keeps AST nodes alive so ids stay unique
+    hints: dict = field(default_factory=dict)
+    static_leaves: set[int] = field(default_factory=set)
+    static_implicit: set = field(default_factory=set)
+    restarts: int = 0
+
+
+@dataclass(eq=False)
+class Implicit:
+    """A global/closure value read by compiled code, re-fetched on every call."""
+
+    key: tuple
+    getter: Any
+    type_key: Key
+    static: frozenset[int]
+
+
+@dataclass(eq=False)
+class Ret:
+    value: Any = _MISSING
+    target: Any = _MISSING
+    vtype: Any = None
+    flag: Var | None = None
+    done: bool = False
+
+
+@dataclass(eq=False)
+class LoopCtx:
+    node: ast.AST
+    home: Scope
+    pre_block: list
+    scope: Scope
+    carried: dict = field(default_factory=dict)
+    post: dict = field(default_factory=dict)
+    post_names: tuple = ()
+    static: dict = field(default_factory=dict)
+    ret_seen: bool = False
+
+
+@dataclass(eq=False)
+class Frame:
+    src: FunctionSource
+    node: ast.AST
+    env: dict
+    lexical: Frame | None
+    cells: dict | None
+    globals: dict
+    path: tuple
+    scope: Scope
+    entry_block: list
+    entry_pos: int
+    call_loc: SourceLocation | None
+    locals: frozenset
+    ret: Ret = field(default_factory=Ret)
+    loops: list = field(default_factory=list)
+
+
+@dataclass(eq=False)
+class TargetInfo:
+    home: Scope
+    hint_key: Any
+    slot: Var | None = None
+
+
+@dataclass(eq=False)
+class Elaborated:
+    function: Function
+    result_spec: tuple
+    implicits: list[Implicit]
+    writes_unknown: bool
+
+
+_BINOPS = {
+    ast.Add: "add", ast.Sub: "sub", ast.Mult: "mul", ast.Div: "div", ast.FloorDiv: "floordiv",
+    ast.Mod: "mod", ast.Pow: "pow", ast.BitAnd: "bitand", ast.BitOr: "bitor",
+    ast.BitXor: "bitxor", ast.LShift: "lshift", ast.RShift: "rshift",
+}  # fmt: skip
+_CMPOPS = {ast.Eq: "eq", ast.NotEq: "ne", ast.Lt: "lt", ast.LtE: "le", ast.Gt: "gt", ast.GtE: "ge"}
+_UNARY = {ast.USub: "neg", ast.UAdd: "pos", ast.Invert: "invert"}
+_SYMBOL = {
+    "add": "+", "sub": "-", "mul": "*", "div": "/", "floordiv": "//", "mod": "%", "pow": "**",
+    "bitand": "&", "bitor": "|", "bitxor": "^", "lshift": "<<", "rshift": ">>", "eq": "==",
+    "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "neg": "-", "pos": "+", "invert": "~",
+}  # fmt: skip
+_EXCEPTIONS = {
+    n: getattr(builtins, n)
+    for n in (
+        "ValueError TypeError IndexError ZeroDivisionError AssertionError RuntimeError "
+        "ArithmeticError OverflowError KeyError NotImplementedError FloatingPointError"
+    ).split()
+}
+
+
+def _sanitize(name: str) -> str:
+    out = "".join(c if (c.isascii() and (c.isalnum() or c == "_")) else "_" for c in name)
+    return out if out and not out[0].isdigit() else "v" + out
+
+
+class Elaborator(ArrayMixin):
+    def __init__(self, fn: pytypes.FunctionType, arg_keys: tuple, state: ElabState, options: Options):
+        self.state = state
+        self.options = options
+        self.root_fn = fn
+        self.arg_keys = arg_keys
+        self.fn_scope = Scope("function")
+        self.scope = self.fn_scope
+        self.entry_block: list = []
+        self.body_block: list = []
+        self.block = self.body_block
+        self.loop_depth = 0
+        self.par_depth = 0
+        self.frames: list[Frame] = []
+        self.node_stack: list[ast.AST] = []
+        self.params: list = []
+        self.param_origin: dict[int, tuple] = {}
+        self.implicits: list[Implicit] = []
+        self.implicit_cache: dict = {}
+        self.array_params: list[ArrayParam] = []
+        self.mutables: set[int] = set()
+        self.nonneg: set[int] = set()
+        self.not_one: set[int] = set()
+        self.facts: dict[int, int] = {}
+        self.upper: dict[int, Expr] = {}
+        self.stores: list = []
+        self.writes_unknown = False
+        self.journal: list | None = None
+        self.targets: dict[int, TargetInfo] = {}
+        self._keep: list = []
+        self.results: list = []
+        self.pure_defs: dict[int, Expr] = {}
+
+    # ================================================================ plumbing
+
+    @property
+    def frame(self) -> Frame:
+        return self.frames[-1]
+
+    def emit(self, stmt) -> None:
+        self.block.append(stmt)
+
+    def tmp(self, e, name: str = "t") -> Expr:
+        """Bind a non-trivial scalar expression to a fresh variable."""
+        if isinstance(e, int):
+            return Const(e, I)
+        if is_trivial(e):
+            return e
+        v = Var(name, e.type)
+        self.block.append(Assign(v, e))
+        if e.type.kind in "iu":
+            if self.is_nonneg(e):
+                self.nonneg.add(v.uid)
+            self.pure_defs[v.uid] = e
+        return v
+
+    def copy_scalar(self, e: Expr, name: str = "t") -> Expr:
+        if isinstance(e, Const):
+            return e
+        v = Var(name, e.type)
+        self.block.append(Assign(v, e))
+        return v
+
+    def save_facts(self):
+        return dict(self.facts), set(self.nonneg), set(self.not_one)
+
+    def restore_facts(self, saved) -> None:
+        self.facts, self.nonneg, self.not_one = dict(saved[0]), set(saved[1]), set(saved[2])
+
+    @contextlib.contextmanager
+    def in_block(self, blk: list, scope: Scope | None = None, loop: bool = False, par: bool = False):
+        saved = (self.block, self.scope, self.save_facts())
+        self.block = blk
+        if scope is not None:
+            self.scope = scope
+        self.loop_depth += loop
+        self.par_depth += par
+        try:
+            yield
+        finally:
+            self.loop_depth -= loop
+            self.par_depth -= par
+            self.block, self.scope = saved[0], saved[1]
+            self.restore_facts(saved[2])
+
+    @contextlib.contextmanager
+    def trial(self):
+        """Elaborate into a scratch block whose effects are discarded."""
+        blk: list = []
+        owned_len = len(self.scope.owned)
+        stores_len = len(self.stores)
+        journal, self.journal = self.journal, []
+        writes = self.writes_unknown
+        param_writes = [p.writes for p in self.array_params]
+        n_frames = len(self.frames)
+        try:
+            with self.in_block(blk):
+                yield blk
+        finally:
+            for arr, uses in reversed(self.journal):
+                arr.uses = uses
+            self.journal = journal
+            del self.scope.owned[owned_len:]
+            del self.stores[stores_len:]
+            del self.frames[n_frames:]
+            self.writes_unknown = writes
+            for p, w in zip(self.array_params, param_writes):
+                p.writes = w
+
+    def capture(self):
+        """Snapshot the lexical context so user code can be elaborated later
+        (when a delayed array is finally evaluated) exactly as it would have
+        been now."""
+        return (list(self.frames), [dict(f.env) for f in self.frames], list(self.node_stack))
+
+    @contextlib.contextmanager
+    def restored(self, ctx):
+        frames, envs, nodes = ctx
+        saved_frames, saved_nodes = self.frames, self.node_stack
+        saved_envs = [f.env for f in frames]
+        self.frames, self.node_stack = list(frames), list(nodes)
+        for f, e in zip(frames, envs):
+            f.env = dict(e)
+        try:
+            yield
+        finally:
+            for f, e in zip(frames, saved_envs):
+                f.env = e
+            self.frames, self.node_stack = saved_frames, saved_nodes
+
+    def loc(self, node: ast.AST | None = None) -> SourceLocation | None:
+        if not self.frames:
+            return None
+        if node is None:
+            node = self.node_stack[-1] if self.node_stack else None
+        fr = self.frame
+        if node is not None and not hasattr(node, "lineno"):
+            node = None
+        return fr.src.location(node)
+
+    def call_chain(self) -> tuple[SourceLocation, ...]:
+        return tuple(f.call_loc for f in self.frames if f.call_loc is not None)
+
+    def error(self, cls, message: str, node: ast.AST | None = None, hint: str | None = None) -> CompileError:
+        return cls(message, self.loc(node), self.call_chain(), hint)
+
+    def hint_get(self, key):
+        return self.state.hints.get(key)
+
+    def restart(self, why: str) -> None:
+        raise Restart(why)
+
+    # ============================================================== value types
+
+    def vtype(self, v) -> tuple:
+        """Hashable type descriptor of a compile-time value."""
+        if isinstance(v, Expr):
+            return ("s", v.type)
+        if isinstance(v, ArrayVal):
+            return ("a", v.elt, v.rank)
+        if isinstance(v, tuple):
+            return ("t", *[self.vtype(x) for x in v])
+        if v is None:
+            return ("n",)
+        if isinstance(v, TypeVal):
+            return ("ty", v.type)
+        if isinstance(v, Closure):
+            return ("cl", id(v.node))
+        if isinstance(v, PyFunc):
+            return ("fn", v.fn.__code__)
+        if isinstance(v, str):
+            return ("str", v)
+        if isinstance(v, RangeVal):
+            return ("r",)
+        if isinstance(v, slice):
+            return ("sl", self.vtype(v.start), self.vtype(v.stop), self.vtype(v.step))
+        if isinstance(v, BoundMethod):
+            return ("bm", v.name, self.vtype(v.obj))
+        if isinstance(v, Undefined):
+            return ("undef",)
+        return ("o", id(v))
+
+    def join_vtypes(self, a, b):
+        if a is None:
+            return b
+        if b is None:
+            return a
+        if a == b:
+            return a
+        if a[0] != b[0]:
+            return None
+        if a[0] == "s":
+            return ("s", join(a[1], b[1]))
+        if a[0] == "a":
+            if a[2] != b[2]:
+                return None
+            return ("a", join(a[1], b[1]).strong, a[2])
+        if a[0] in ("t", "sl"):
+            if len(a) != len(b):
+                return None
+            parts = [self.join_vtypes(x, y) for x, y in zip(a[1:], b[1:])]
+            if any(p is None for p in parts):
+                return None
+            return (a[0], *parts)
+        return None
+
+    def describe_vtype(self, t) -> str:
+        if t[0] == "s":
+            return describe(Var("x", t[1]))
+        if t[0] == "a":
+            return f"array[{t[1].name}, {t[2]}d]"
+        if t[0] == "t":
+            return "(" + ", ".join(self.describe_vtype(x) for x in t[1:]) + ")"
+        if t[0] == "n":
+            return "None"
+        return {"cl": "function", "fn": "function", "ty": "dtype", "str": "str", "r": "range"}.get(t[0], "object")
+
+    # ================================================================ targets
+
+    def make_target(
+        self,
+        vt,
+        like,
+        name: str,
+        home: Scope,
+        hint_key=None,
+        init_block: list | None = None,
+        unknown_roots: bool = False,
+    ):
+        """A mutable twin of a value of type ``vt`` (for variables that merge)."""
+        tag = vt[0]
+        name = _sanitize(name)
+        if tag == "s":
+            var = Var(name, vt[1])
+            self.mutables.add(var.uid)
+            if init_block is not None:
+                init_block.append(Assign(var, Const(0, vt[1])))
+            return var
+        if tag == "a":
+            elt, rank = vt[1], vt[2]
+            buf = Var(name, BufType(elt))
+            off = Var(name + "_off", I)
+            shape = tuple(Var(f"{name}_n{k}", I) for k in range(rank))
+            strides = tuple(Var(f"{name}_s{k}", I) for k in range(rank))
+            for v in (buf, off, *shape, *strides):
+                self.mutables.add(v.uid)
+            self.nonneg.update(v.uid for v in shape)
+            if init_block is not None:
+                init_block.append(Assign(buf, Null(buf.type)))
+                for v in (off, *shape, *strides):
+                    init_block.append(Assign(v, ZERO))
+            unknown = unknown_roots or (hint_key is not None and self.hint_get((hint_key, "roots")) == "unknown")
+            arr = ArrayVal(
+                elt, shape, buf=buf, offset=off, strides=strides,
+                roots=None if unknown else LiveRoots((), hint_key),
+            )  # fmt: skip
+            self.targets[id(arr)] = TargetInfo(home, hint_key)
+            self._keep.append(arr)
+            return arr
+        if tag in ("t", "sl"):
+            likes = like if isinstance(like, tuple) else (like.start, like.stop, like.step)
+            parts = tuple(
+                self.make_target(
+                    t, x, f"{name}_{k}", home, None if hint_key is None else (hint_key, k), init_block, unknown_roots
+                )
+                for k, (t, x) in enumerate(zip(vt[1:], likes))
+            )
+            return parts if tag == "t" else slice(*parts)
+        return like  # static values merge only with themselves
+
+    def assign_target(self, target, v) -> None:
+        if isinstance(target, Var):
+            self.emit(Assign(target, cast(self.as_scalar(v, "value"), target.type)))
+        elif isinstance(target, ArrayVal):
+            info = self.targets[id(target)]
+            c = self.as_concrete(self.cast_array(v, target.elt))
+            self.emit(Assign(target.buf, c.buf))
+            self.emit(Assign(target.offset, c.offset))
+            for tv, sv in zip(target.shape + target.strides, c.shape + c.strides):
+                self.emit(Assign(tv, sv))
+            roots = self.get_roots(c)
+            live = target.roots
+            if isinstance(live, LiveRoots):
+                if roots is None:
+                    self._roots_unknown(target, live)
+                else:
+                    new = roots - live.known
+                    if new:
+                        if live.consulted:
+                            self._roots_unknown(target, live)
+                        else:
+                            live.known |= new
+            if roots is None or any(r.scope is not None and not r.scope.encloses(info.home) for r in roots):
+                if info.slot is None:
+                    info.slot = Var("keep", target.buf.type)
+                    info.home.owned.append(info.slot)
+                self.emit(Incref(c.buf))
+                self.emit(Release(info.slot))
+                self.emit(Assign(info.slot, c.buf))
+        elif isinstance(target, tuple):
+            for t, x in zip(target, v):
+                self.assign_target(t, x)
+        elif isinstance(target, slice):
+            for t, x in zip((target.start, target.stop, target.step), (v.start, v.stop, v.step)):
+                self.assign_target(t, x)
+
+    def _roots_unknown(self, target: ArrayVal, live: LiveRoots) -> None:
+        if live.consulted:
+            if live.hint_key is None:
+                raise InternalError("alias information of a merged array changed after use")
+            self.state.hints[(live.hint_key, "roots")] = "unknown"
+            self.restart("array aliasing")
+        target.roots = None
+
+    def refs_mutable(self, e: Expr) -> bool:
+        return any(isinstance(x, Var) and x.uid in self.mutables for x in walk_expr(e))
+
+    def snapshot(self, v):
+        """Copy a value out of mutable variables (for simultaneous assignment)."""
+        if isinstance(v, Expr):
+            return self.copy_scalar(v) if self.refs_mutable(v) else v
+        if isinstance(v, ArrayVal):
+            if v.buf is None:
+                return self.as_concrete(v)
+            comps = (v.buf, v.offset, *v.shape, *v.strides)
+            if not any(isinstance(c, Var) and c.uid in self.mutables for c in comps):
+                return v
+            buf = Var("snap", v.buf.type)
+            self.emit(Assign(buf, v.buf))
+            return ArrayVal(
+                v.elt, tuple(self.copy_scalar(s) for s in v.shape), buf=buf,
+                offset=self.copy_scalar(v.offset), strides=tuple(self.copy_scalar(s) for s in v.strides),
+                roots=self.get_roots(v), contig=v.contig,
+            )  # fmt: skip
+        if isinstance(v, tuple):
+            return tuple(self.snapshot(x) for x in v)
+        return v
+
+    @staticmethod
+    def static_equal(a, b) -> bool:
+        if a is b:
+            return True
+        if isinstance(a, Const) and isinstance(b, Const):
+            return a.type is b.type and a.value == b.value and type(a.value) is type(b.value)
+        if isinstance(a, TypeVal) and isinstance(b, TypeVal):
+            return a.type is b.type
+        if isinstance(a, str) and isinstance(b, str):
+            return a == b
+        if isinstance(a, tuple) and isinstance(b, tuple):
+            return len(a) == len(b) and all(Elaborator.static_equal(x, y) for x, y in zip(a, b))
+        return False
+
+    # ============================================================== parameters
+
+    def value_from_key(self, key: Key, source, pos: list[int], name: str = "arg"):
+        """Build the compile-time value for a classified argument, creating
+        IR parameters for its runtime leaves."""
+        tag = key[0]
+        name = _sanitize(name)
+        if tag == "s":
+            v = Var(name, key[1])
+            self.params.append(v)
+            self.param_origin[v.uid] = (source, pos[0])
+            pos[0] += 1
+            return v
+        if tag == "c":
+            pos[0] += 1
+            return Const(key[2], key[1])
+        if tag == "a":
+            pos[0] += 1
+            elt, rank, layout, ones = key[1], key[2], key[3], key[4]
+            buf = Var(name, BufType(elt))
+            off = Var(name + "_off", I)
+            shape_vars = tuple(Var(f"{name}_n{k}", I) for k in range(rank))
+            self.nonneg.update(v.uid for v in shape_vars)
+            self.nonneg.add(off.uid)
+            shape: list[Expr] = []
+            for v, one in zip(shape_vars, ones):
+                if one:
+                    shape.append(ONE)
+                else:
+                    self.not_one.add(v.uid)
+                    shape.append(v)
+            if layout == "C":
+                stride_vars = None
+                with self.in_entry():
+                    strides = self.c_strides(shape)
+            else:
+                stride_vars = tuple(Var(f"{name}_s{k}", I) for k in range(rank))
+                strides = stride_vars
+            param = ArrayParam(buf, off, shape_vars, stride_vars)
+            self.params.append(param)
+            self.array_params.append(param)
+            root = Root(None, name, param)
+            return ArrayVal(
+                elt, tuple(shape), buf=buf, offset=off, strides=strides,
+                roots=frozenset({root}), contig=layout == "C",
+            )  # fmt: skip
+        if tag == "t":
+            return tuple(self.value_from_key(k, source, pos, f"{name}_{i}") for i, k in enumerate(key[1:]))
+        if tag == "n":
+            return None
+        if tag == "str":
+            return key[1]
+        if tag == "e":
+            return Ellipsis
+        if tag == "sl":
+            parts = [self.value_from_key(k, source, pos, name) for k in key[1:]]
+            return slice(*parts)
+        if tag == "r":
+            parts = [self.value_from_key(("s", WeakInt), source, pos, name) for _ in range(3)]
+            return RangeVal(*parts)
+        if tag == "ty":
+            return self.type_val(key[1])
+        if tag == "fn":
+            code, cells = key[1], key[3]
+            if isinstance(cells, Ref):
+                return PyFunc(cells.obj, {})
+            fn = CODE_FUNCTIONS[code]
+            cell_values = {}
+            for cname, ckey in cells:
+                if ckey == ("unbound",):
+                    cell_values[cname] = Undefined(cname, "is a closure variable that has not been assigned yet")
+                else:
+                    cell_values[cname] = self.value_from_key(ckey, source, pos, cname)
+            return PyFunc(fn, cell_values)
+        if tag == "o":
+            return key[1].obj
+        raise InternalError(f"unknown key {key!r}")
+
+    @contextlib.contextmanager
+    def in_entry(self):
+        saved = self.block
+        self.block = self.entry_block
+        try:
+            yield
+        finally:
+            self.block = saved
+
+    @staticmethod
+    def type_val(t) -> TypeVal:
+        if t is bool:
+            return TypeVal(WeakBool)
+        if t is int:
+            return TypeVal(WeakInt)
+        if t is float:
+            return TypeVal(WeakFloat)
+        return TypeVal(t)
+
+    def implicit_value(self, key: tuple, getter, obj):
+        """The value of a global / closure variable / default object.
+
+        Data (scalars, arrays) becomes a hidden runtime parameter that is
+        re-read on every call; everything else is guarded by identity."""
+        hit = self.implicit_cache.get(key, _MISSING)
+        if hit is not _MISSING:
+            return hit
+        leaves: list = []
+        try:
+            k = classify(obj, leaves)
+        except Unsupported:
+            self.implicit_cache[key] = obj
+            return obj
+        static = frozenset(i for kk, i in self.state.static_implicit if kk == key)
+        k2 = with_static_leaves(k, leaves, static)
+        self.implicits.append(Implicit(key, getter, k2, static))
+        value = self.value_from_key(k2, ("imp", key), [0], key[-1] if isinstance(key[-1], str) else "g")
+        self.implicit_cache[key] = value
+        return value
+
+    def lift(self, obj):
+        """Convert a Python object met at compile time into a value."""
+        if isinstance(obj, bool):
+            return Const(obj, WeakBool)
+        if isinstance(obj, int):
+            return Const(obj, WeakInt)
+        if isinstance(obj, float):
+            return Const(obj, WeakFloat)
+        if obj is None or isinstance(obj, str) or obj is Ellipsis:
+            return obj
+        if isinstance(obj, np.generic):
+            try:
+                tv = type_value(obj.dtype)
+            except Unsupported as e:
+                raise self.error(UnsupportedError, str(e)) from None
+            return Const(obj.item(), tv)
+        if isinstance(obj, tuple):
+            return tuple(self.lift(x) for x in obj)
+        try:
+            tv = type_value(obj)
+        except Unsupported as e:
+            raise self.error(UnsupportedError, str(e)) from None
+        if tv is not None:
+            return self.type_val(tv)
+        if hasattr(obj, "__parakeet_fn__"):
+            obj = obj.__parakeet_fn__
+        if isinstance(obj, pytypes.FunctionType) and obj in STAGED:
+            return obj
+        if isinstance(obj, (np.ndarray, pytypes.FunctionType, list)):
+            return self.implicit_value(("const", id(obj)), lambda o=obj: o, obj)
+        return obj
+
+    def require_static(self, v, what: str):
+        """Return the Python value of ``v``, which must be known at compile time."""
+        if isinstance(v, Const):
+            return v.value
+        if isinstance(v, Var):
+            origin = self.param_origin.get(v.uid)
+            if origin is not None:
+                source, index = origin
+                if source == "arg":
+                    self.state.static_leaves.add(index)
+                else:
+                    self.state.static_implicit.add((source[1], index))
+                self.restart("static argument")
+        if isinstance(v, Expr):
+            raise self.error(
+                StaticValueError,
+                f"{what} must be a compile-time constant",
+                hint="use a literal, or a value computed only from literals and scalar arguments "
+                "passed directly to the compiled function",
+            )
+        return v
+
+    def static_int(self, v, what: str) -> int:
+        if isinstance(v, ArrayVal) and v.rank == 0:
+            v = self.elem(v, ())
+        value = self.require_static(v, what)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise self.error(TypeInferenceError, f"{what} must be an integer, got {describe(v)}")
+        return value
+
+    def static_bool(self, v, what: str) -> bool:
+        value = self.require_static(v, what)
+        if not isinstance(value, (bool, int)):
+            raise self.error(TypeInferenceError, f"{what} must be a boolean, got {describe(v)}")
+        return bool(value)
+
+    # ================================================================== entry
+
+    def run(self) -> Elaborated:
+        # variable names only need to be unique within one function; restarting
+        # the numbering makes the generated source (and so the on-disk cache
+        # key) independent of what was compiled before
+        Var._counter = 0
+        fn = self.root_fn
+        src = get_source(fn)
+        pos = [0]
+        arg_values = [self.value_from_key(k, "arg", pos, n) for k, n in zip(self.arg_keys[1], self.arg_keys[0])]
+        self.n_arg_leaves = pos[0]
+        cells = {}
+        for cname, ckey in self.arg_keys[2]:
+            if ckey == ("unbound",):
+                cells[cname] = Undefined(cname, "is a closure variable that has not been assigned yet")
+            else:
+                cells[cname] = self.value_from_key(ckey, "arg", pos, cname)
+        root = PyFunc(fn, cells)
+        try:
+            result = self.call_user(root, [], {}, None, env=dict(zip(self.arg_keys[0], arg_values)))
+            spec = self.export(result)
+        except CompileError as e:
+            if e.location is None and self.frames:
+                e.location = self.loc()
+            raise
+        function = Function(
+            _sanitize(fn.__name__), self.params, self.entry_block + self.body_block,
+            self.results, self.fn_scope, src.location(),
+        )  # fmt: skip
+        return Elaborated(function, spec, self.implicits, self.writes_unknown)
+
+    def export(self, v) -> tuple:
+        """Turn the function's result into IR results plus a decoding spec."""
+        if isinstance(v, Expr):
+            self.results.append(self.tmp(v, "res"))
+            return ("s", v.type)
+        if isinstance(v, ArrayVal):
+            c = self.as_concrete(v)
+            self.emit(Incref(c.buf))
+            self.results.append(ArrayResult(c.buf, c.offset, c.shape, c.strides, c.elt))
+            return ("a", c.elt, c.rank)
+        if isinstance(v, tuple):
+            return ("t", *[self.export(x) for x in v])
+        if v is None:
+            return ("n",)
+        if isinstance(v, str):
+            return ("static", v)
+        if isinstance(v, TypeVal):
+            return ("static", v.type.dtype if not v.type.weak else v.type.python_type())
+        if isinstance(v, RangeVal):
+            for part in (v.start, v.stop, v.step):
+                self.results.append(self.tmp(cast(part, WeakInt), "res"))
+            return ("r",)
+        if isinstance(v, Undefined):
+            raise self.error(CompileError, f"result variable '{v.name}' {v.reason}")
+        raise self.error(
+            UnsupportedError,
+            f"cannot return a {describe(v)} from compiled code to Python",
+            hint="compiled functions can return scalars, arrays, tuples of those, or None",
+        )
+
+    # ================================================================ calling
+
+    def call_user(self, fnval, args: list, kwargs: dict, node: ast.AST | None, env: dict | None = None):
+        if isinstance(fnval, PyFunc):
+            try:
+                src = get_source(fnval.fn)
+            except CompileError as e:
+                if e.location is None:
+                    e.location, e.call_chain = self.loc(node), self.call_chain()
+                raise
+            fnode = src.node
+            lexical = None
+            cells = fnval.cells
+            if cells is None:
+                cells = self._lift_cells(fnval.fn)
+                fnval.cells = cells
+            gl = fnval.fn.__globals__
+            name = fnval.fn.__name__
+        else:
+            src = fnval.frame.src
+            fnode = fnval.node
+            lexical = fnval.frame
+            cells = None
+            gl = fnval.frame.globals
+            name = fnval.name
+        if any(f.node is fnode for f in self.frames):
+            raise self.error(
+                UnsupportedError,
+                f"recursive call to {name}()",
+                node,
+                hint="Parakeet inlines every call, so recursion cannot be compiled; rewrite it as a loop",
+            )
+        if len(self.frames) >= MAX_INLINE_DEPTH:
+            raise self.error(UnsupportedError, f"calls nested more than {MAX_INLINE_DEPTH} deep", node)
+        call_loc = self.loc(node) if self.frames else None
+        if env is None:
+            env = self.bind_arguments(fnval, fnode, name, args, kwargs, node)
+        else:
+            env = {k: self.bindable(v, k) for k, v in env.items()}
+        sig = tuple(self.vtype(v) for v in env.values())
+        parent_path = self.frame.path if self.frames else ()
+        path = parent_path + ((id(node) if node is not None else 0, id(fnode), sig),)
+        local_names = _local_names(fnode)
+        sub_src = src if src.node is fnode else FunctionSource(fnode, src.filename, name)
+        frame = Frame(
+            sub_src, fnode, env, lexical, cells, gl, path, self.scope, self.block,
+            len(self.block), call_loc, local_names,
+        )  # fmt: skip
+        facts = self.save_facts()
+        self.frames.append(frame)
+        depth = len(self.node_stack)
+        try:
+            if isinstance(fnode, ast.Lambda):
+                result = self.eval(fnode.body)
+            else:
+                self.exec_block(fnode.body)
+                ret = frame.ret
+                if ret.target is not _MISSING:
+                    result = ret.target
+                elif ret.done:
+                    result = ret.value
+                else:
+                    result = None
+        finally:
+            del self.node_stack[depth:]
+            self.frames.pop()
+            if self.block is not frame.entry_block:
+                self.block = frame.entry_block
+                self.restore_facts(facts)
+        return result
+
+    def _lift_cells(self, fn) -> dict:
+        cells = {}
+        code = fn.__code__
+        for cname, cell in zip(code.co_freevars, fn.__closure__ or ()):
+            try:
+                contents = cell.cell_contents
+            except ValueError:
+                cells[cname] = Undefined(cname, "is a closure variable that has not been assigned yet")
+                continue
+            if isinstance(contents, (bool, int, float, np.generic, np.ndarray, tuple, list, pytypes.FunctionType)):
+                cells[cname] = self.implicit_value(("cell", id(cell), cname), lambda c=cell: c.cell_contents, contents)
+            else:
+                cells[cname] = self.lift(contents)
+        return cells
+
+    def bind_arguments(self, fnval, fnode, name: str, args: list, kwargs: dict, node) -> dict:
+        a: ast.arguments = fnode.args
+        positional = [p.arg for p in a.posonlyargs + a.args]
+        n_posonly = len(a.posonlyargs)
+        env: dict[str, Any] = {}
+        if len(args) > len(positional) and a.vararg is None:
+            raise self.error(
+                TypeInferenceError,
+                f"{name}() takes {len(positional)} positional argument{'s' * (len(positional) != 1)} "
+                f"but {len(args)} were given",
+                node,
+            )
+        for pname, v in zip(positional, args):
+            env[pname] = v
+        if a.vararg is not None:
+            env[a.vararg.arg] = tuple(args[len(positional) :])
+        kwonly = [p.arg for p in a.kwonlyargs]
+        for k, v in kwargs.items():
+            if k in env and k in positional:
+                raise self.error(TypeInferenceError, f"{name}() got multiple values for argument '{k}'", node)
+            if (k in positional and positional.index(k) >= n_posonly) or k in kwonly:
+                env[k] = v
+            else:
+                raise self.error(TypeInferenceError, f"{name}() got an unexpected keyword argument '{k}'", node)
+        if a.kwarg is not None:
+            raise self.error(UnsupportedError, f"{name}() takes **{a.kwarg.arg}, which is not supported", node)
+        # defaults
+        if isinstance(fnval, PyFunc):
+            fn = fnval.fn
+            n_def = len(fn.__defaults__ or ())
+            first = len(positional) - n_def
+            for i, pname in enumerate(positional):
+                if pname not in env and i >= first:
+                    env[pname] = self._default(fn, i - first, None)
+            for pname in kwonly:
+                if pname not in env and fn.__kwdefaults__ and pname in fn.__kwdefaults__:
+                    env[pname] = self._default(fn, None, pname)
+        else:
+            first = len(positional) - len(fnval.defaults)
+            for i, pname in enumerate(positional):
+                if pname not in env and i >= first:
+                    env[pname] = fnval.defaults[i - first]
+            for pname in kwonly:
+                if pname not in env and pname in fnval.kw_defaults:
+                    env[pname] = fnval.kw_defaults[pname]
+        missing = [p for p in positional + kwonly if p not in env]
+        if missing:
+            raise self.error(
+                TypeInferenceError,
+                f"{name}() missing {len(missing)} required argument{'s' * (len(missing) != 1)}: "
+                + ", ".join(repr(m) for m in missing),
+                node,
+            )
+        # parameters are variables: bind them like assignments
+        order = positional + ([a.vararg.arg] if a.vararg else []) + kwonly
+        return {p: self.bindable(env[p], p) for p in order}
+
+    def _default(self, fn, index, kwname):
+        if index is not None:
+            obj = fn.__defaults__[index]
+            key = ("default", id(fn.__code__), index)
+
+            def getter(fn=fn, index=index):
+                return fn.__defaults__[index]
+
+        else:
+            obj = fn.__kwdefaults__[kwname]
+            key = ("kwdefault", id(fn.__code__), kwname)
+
+            def getter(fn=fn, kwname=kwname):
+                return fn.__kwdefaults__[kwname]
+
+        if isinstance(obj, (np.ndarray, pytypes.FunctionType, list)) or hasattr(obj, "__parakeet_fn__"):
+            return self.implicit_value(key, getter, obj)
+        return self.lift(obj)
+
+    def call(self, fn, args: list, kwargs: dict | None = None, node: ast.AST | None = None):
+        """Call any callable value."""
+        kwargs = kwargs or {}
+        if isinstance(fn, (PyFunc, Closure)):
+            return self.call_user(fn, args, kwargs, node)
+        from . import lib
+
+        if isinstance(fn, BoundMethod):
+            impl = lib.lookup_method(fn.obj, fn.name)
+            if impl is None:
+                raise self.error(UnsupportedError, f"method '{fn.name}' of {describe(fn.obj)} is not supported", node)
+            return lib.invoke(self, impl, [fn.obj, *args], kwargs, fn.name)
+        if isinstance(fn, TypeVal):
+            return lib.invoke(self, lib.convert, [fn.type, *args], kwargs, fn.type.name)
+        if isinstance(fn, Partial):
+            return self.call(fn.fn, [*fn.args, *args], {**fn.kwargs, **kwargs}, node)
+        if isinstance(fn, scalars.UFunc):
+            return lib.invoke(self, lib.call_ufunc, [fn, *args], kwargs, fn.name)
+        impl = lib.lookup(fn)
+        if impl is not None:
+            return lib.invoke(self, impl, args, kwargs, getattr(fn, "__name__", "function"))
+        if (isinstance(fn, pytypes.FunctionType) and fn not in STAGED) or hasattr(fn, "__parakeet_fn__"):
+            return self.call(self.lift(fn), args, kwargs, node)
+        if isinstance(fn, (Expr, ArrayVal, tuple)) or fn is None:
+            raise self.error(TypeInferenceError, f"{describe(fn)} is not callable", node)
+        raise self.error(UnsupportedError, lib.unsupported_message(fn), node)
+
+    # =============================================================== statements
+
+    def exec_block(self, stmts: list[ast.stmt]) -> bool:
+        """Elaborate statements; True if control cannot fall off the end."""
+        for stmt in stmts:
+            self.node_stack.append(stmt)
+            try:
+                method = getattr(self, "exec_" + type(stmt).__name__, None)
+                if method is None:
+                    raise self.error(
+                        UnsupportedError,
+                        f"'{_stmt_name(stmt)}' statements are not supported in compiled code",
+                        stmt,
+                    )
+                try:
+                    terminated = method(stmt)
+                except (Restart, ParakeetError):
+                    raise
+                except RecursionError:
+                    raise self.error(CompileError, "expression nesting too deep to compile", stmt) from None
+                except Exception as e:  # a bug in Parakeet: say where we were
+                    raise InternalError(
+                        f"{type(e).__name__}: {e}\nwhile compiling\n{self.loc(stmt).frame() if self.loc(stmt) else '?'}"
+                    ) from e
+            except CompileError as e:
+                if e.location is None:
+                    e.location, e.call_chain = self.loc(stmt), self.call_chain()
+                raise
+            finally:
+                self.node_stack.pop()
+            if terminated:
+                return True
+        return False
+
+    def exec_Pass(self, node) -> bool:
+        return False
+
+    def exec_Expr(self, node: ast.Expr) -> bool:
+        if isinstance(node.value, ast.Constant):
+            return False  # docstring
+        self.eval(node.value)
+        return False
+
+    def bindable(self, v, name: str):
+        """Prepare a value for being held in a variable."""
+        if isinstance(v, Expr) and not is_trivial(v):
+            return self.tmp(v, _sanitize(name))
+        if isinstance(v, tuple):
+            return tuple(self.bindable(x, name) for x in v)
+        return v
+
+    def bind(self, name: str, v) -> None:
+        self.frame.env[name] = self.bindable(v, name)
+
+    def assign(self, target: ast.expr, v) -> None:
+        if isinstance(target, ast.Name):
+            self.bind(target.id, v)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            if any(isinstance(e, ast.Starred) for e in target.elts):
+                raise self.error(UnsupportedError, "starred assignment targets are not supported", target)
+            parts = self.unpack(v, len(target.elts), target)
+            for t, x in zip(target.elts, parts):
+                self.assign(t, x)
+        elif isinstance(target, ast.Subscript):
+            obj = self.eval(target.value)
+            index = self.eval_index(target.slice)
+            if isinstance(obj, ArrayVal):
+                if isinstance(v, tuple):
+                    v = self.as_array(v)
+                self.setitem(obj, index, v)
+            else:
+                raise self.error(TypeInferenceError, f"{describe(obj)} does not support item assignment", target)
+        elif isinstance(target, ast.Attribute):
+            raise self.error(UnsupportedError, "assigning to attributes is not supported", target)
+        else:
+            raise self.error(UnsupportedError, "unsupported assignment target", target)
+
+    def unpack(self, v, n: int, node=None) -> list:
+        if isinstance(v, tuple):
+            if len(v) != n:
+                raise self.error(
+                    TypeInferenceError,
+                    f"cannot unpack {len(v)} value{'s' * (len(v) != 1)} into {n} target{'s' * (n != 1)}",
+                    node,
+                )
+            return list(v)
+        if isinstance(v, ArrayVal) and v.rank >= 1:
+            dim = v.shape[0]
+            if isinstance(dim, Const):
+                if dim.value != n:
+                    raise self.error(
+                        TypeInferenceError, f"cannot unpack array of length {dim.value} into {n} targets", node
+                    )
+            else:
+                self.check(
+                    cmp("eq", dim, n), "ValueError", f"cannot unpack array of length {{0}} into {n} targets", dim
+                )
+            return [self.getitem(v, Const(k, I)) for k in range(n)]
+        raise self.error(TypeInferenceError, f"cannot unpack {describe(v)}", node)
+
+    def exec_Assign(self, node: ast.Assign) -> bool:
+        v = self.eval(node.value)
+        if len(node.targets) > 1:
+            v = self.bindable(v, "t")
+        for target in node.targets:
+            self.assign(target, v)
+        return False
+
+    def exec_AnnAssign(self, node: ast.AnnAssign) -> bool:
+        if node.value is not None:
+            self.assign(node.target, self.eval(node.value))
+        return False
+
+    def exec_AugAssign(self, node: ast.AugAssign) -> bool:
+        op = _BINOPS.get(type(node.op))
+        target = node.target
+        if isinstance(target, ast.Name):
+            cur = self.load_name(target.id, target)
+            rhs = self.eval(node.value)
+            if isinstance(cur, ArrayVal):
+                # NumPy semantics: arrays are updated in place
+                new = self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs)
+                if not isinstance(new, ArrayVal) or new.rank != cur.rank:
+                    self.bind(target.id, new)
+                    return False
+                if not np.can_cast(new.elt.dtype, cur.elt.dtype, "same_kind"):
+                    raise self.error(
+                        TypeInferenceError,
+                        f"cannot cast the result of '{_SYMBOL.get(op, '@')}=' from {new.elt.name} to "
+                        f"{cur.elt.name} in place",
+                        hint=f"write `{target.id} = {target.id} {_SYMBOL.get(op, '@')} ...` to create a new array",
+                    )
+                self.force_inplace(cur)
+                self.store_array(cur, new)
+            else:
+                self.bind(target.id, self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs))
+        elif isinstance(target, ast.Subscript):
+            obj = self.eval(target.value)
+            if not isinstance(obj, ArrayVal):
+                raise self.error(TypeInferenceError, f"{describe(obj)} does not support item assignment", target)
+            index = self.bindable(self.eval_index(target.slice), "idx")
+            self.force_inplace(obj)
+            cur = self.getitem(obj, index)
+            rhs = self.eval(node.value)
+            new = self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs)
+            self.setitem(obj, index, new)
+        else:
+            raise self.error(UnsupportedError, "unsupported augmented assignment target", target)
+        return False
+
+    def exec_FunctionDef(self, node: ast.FunctionDef) -> bool:
+        for d in node.decorator_list:
+            dv = self.eval(d)
+            if not getattr(dv, "__parakeet_decorator__", False):
+                raise self.error(UnsupportedError, "decorators on nested functions are not supported", d)
+        self.frame.env[node.name] = self.make_closure(node, node.name)
+        return False
+
+    def make_closure(self, node, name: str) -> Closure:
+        a = node.args
+        defaults = [self.bindable(self.eval(d), "default") for d in a.defaults]
+        kw_defaults = {
+            p.arg: self.bindable(self.eval(d), "default") for p, d in zip(a.kwonlyargs, a.kw_defaults) if d is not None
+        }
+        return Closure(node, self.frame, defaults, kw_defaults, name)
+
+    def exec_Assert(self, node: ast.Assert) -> bool:
+        cond = self.truth(self.eval(node.test), node.test)
+        msg = ""
+        if node.msg is not None:
+            m = self.eval(node.msg)
+            msg = m if isinstance(m, str) else "assertion failed"
+        if isinstance(cond, Const) and cond.value:
+            return False
+        self.check(cond, "AssertionError", _escape(msg))
+        return False
+
+    def exec_Raise(self, node: ast.Raise) -> bool:
+        exc_name, msg = "RuntimeError", ""
+        if node.exc is not None:
+            target = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+            cls = self.eval(target)
+            if not (isinstance(cls, type) and cls.__name__ in _EXCEPTIONS and _EXCEPTIONS[cls.__name__] is cls):
+                raise self.error(
+                    UnsupportedError,
+                    "only built-in exceptions can be raised from compiled code: " + ", ".join(sorted(_EXCEPTIONS)),
+                    node,
+                )
+            exc_name = cls.__name__
+            if isinstance(node.exc, ast.Call) and node.exc.args:
+                m = self.eval(node.exc.args[0])
+                if not isinstance(m, str):
+                    raise self.error(UnsupportedError, "exception messages must be string literals", node)
+                msg = m
+        self.check(Const(False, Bool), exc_name, _escape(msg))
+        return True
+
+    def exec_Delete(self, node: ast.Delete) -> bool:
+        for t in node.targets:
+            if not isinstance(t, ast.Name):
+                raise self.error(UnsupportedError, "only plain variables can be deleted", t)
+            self.frame.env[t.id] = Undefined(t.id, "was deleted")
+        return False
+
+    # ---- control flow ---------------------------------------------------------
+
+    def exec_If(self, node: ast.If) -> bool:
+        cond = self.truth(self.eval(node.test), node.test)
+        if isinstance(cond, Const):
+            return self.exec_block(node.body if cond.value else node.orelse)
+        cond = self.tmp(cond, "cond")
+        fr = self.frame
+        base_env = fr.env
+        outer = self.block
+        facts = self.save_facts()
+        then_blk: list = []
+        else_blk: list = []
+
+        fr.env = dict(base_env)
+        self.block = then_blk
+        t_term = self.exec_block(node.body)
+        then_env, then_end, then_facts = fr.env, self.block, self.save_facts()
+
+        self.restore_facts(facts)
+        fr.env = dict(base_env)
+        self.block = else_blk
+        e_term = self.exec_block(node.orelse)
+        else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
+
+        outer.append(If(cond, then_blk, else_blk))
+        if t_term and e_term:
+            self.block, fr.env = outer, base_env
+            self.restore_facts(facts)
+            return True
+        if t_term:
+            self.block, fr.env = else_end, else_env
+            self.restore_facts(else_facts)
+            return False
+        if e_term:
+            self.block, fr.env = then_end, then_env
+            self.restore_facts(then_facts)
+            return False
+        self.restore_facts(facts)
+        fr.env = self.merge_envs(then_env, then_end, else_env, else_end, outer)
+        self.block = outer
+        return False
+
+    def merge_envs(self, env_a: dict, blk_a: list, env_b: dict, blk_b: list, outer: list) -> dict:
+        merged: dict[str, Any] = {}
+        for name in env_a.keys() | env_b.keys():
+            va, vb = env_a.get(name, _MISSING), env_b.get(name, _MISSING)
+            if va is vb:
+                merged[name] = va
+                continue
+            if va is _MISSING or vb is _MISSING or isinstance(va, Undefined) or isinstance(vb, Undefined):
+                merged[name] = Undefined(name)
+                continue
+            if self.static_equal(va, vb):
+                merged[name] = va
+                continue
+            merged[name] = self.merge_values(name, va, blk_a, vb, blk_b)
+        return merged
+
+    def merge_values(self, name: str, va, blk_a: list, vb, blk_b: list):
+        ta, tb = self.vtype(va), self.vtype(vb)
+        vt = self.join_vtypes(ta, tb)
+        if vt is None or vt[0] not in ("s", "a", "t", "sl", "n"):
+            return Undefined(
+                name,
+                f"has incompatible types on different paths ({self.describe_vtype(ta)} vs {self.describe_vtype(tb)})",
+            )
+        if not self._mergeable(vt, va, vb):
+            return Undefined(name, "holds different functions or objects on different paths")
+        target = self.make_target(vt, va, name, self.scope)
+        saved = self.block
+        for blk, v in ((blk_a, va), (blk_b, vb)):
+            self.block = blk
+            self.assign_target(target, v)
+        self.block = saved
+        return target
+
+    def _mergeable(self, vt, va, vb) -> bool:
+        if vt[0] in ("s", "a", "n"):
+            return True
+        if vt[0] == "t":
+            return all(self._mergeable(t, x, y) for t, x, y in zip(vt[1:], va, vb))
+        if vt[0] == "sl":
+            return all(
+                self._mergeable(t, x, y)
+                for t, x, y in zip(vt[1:], (va.start, va.stop, va.step), (vb.start, vb.stop, vb.step))
+            )
+        return self.static_equal(va, vb)
+
+    # ---- loops ----------------------------------------------------------------
+
+    def begin_loop(self, node: ast.AST, names: frozenset[str]) -> LoopCtx:
+        fr = self.frame
+        ctx = LoopCtx(node, self.scope, self.block, self.new_scope("loop"))
+        outside = fr.src.loads_outside(node)
+        post = []
+        for name in sorted(names):
+            v = fr.env.get(name, _MISSING)
+            if v is _MISSING or isinstance(v, Undefined):
+                if name in outside:
+                    post.append(name)
+                continue
+            hint_key = (fr.path, id(node), name)
+            vt = self.join_vtypes(self.vtype(v), self.hint_get(hint_key))
+            if vt is None or vt[0] not in ("s", "a", "t", "sl"):
+                ctx.static[name] = v  # functions, None, ...: must not change in the loop
+                continue
+            target = self.make_target(vt, v, name, self.scope, hint_key)
+            self.assign_target(target, v)
+            ctx.carried[name] = (target, vt)
+            fr.env[name] = target
+        ctx.post_names = tuple(post)
+        fr.loops.append(ctx)
+        return ctx
+
+    def sync(self, ctx: LoopCtx) -> None:
+        """Write the current values of loop-carried variables to their homes."""
+        fr = self.frame
+        pending = []
+        for name, (target, vt) in ctx.carried.items():
+            v = fr.env.get(name, _MISSING)
+            if v is target:
+                continue
+            if v is _MISSING or isinstance(v, Undefined):
+                continue
+            new = self.join_vtypes(vt, self.vtype(v))
+            if new is None:
+                raise self.error(
+                    TypeInferenceError,
+                    f"variable '{name}' changes type inside a loop: {self.describe_vtype(vt)} "
+                    f"becomes {self.describe_vtype(self.vtype(v))}",
+                )
+            if new != vt:
+                self.state.hints[(fr.path, id(ctx.node), name)] = new
+                self.restart("loop variable type")
+            pending.append((target, v))
+        for name, before in ctx.static.items():
+            v = fr.env.get(name, _MISSING)
+            if v is not _MISSING and not self.static_equal(v, before):
+                raise self.error(
+                    TypeInferenceError,
+                    f"variable '{name}' changes from {describe(before)} to {describe(v)} inside a loop",
+                    hint=f"initialise '{name}' before the loop with a value of its final type",
+                )
+        for name in ctx.post_names:
+            v = fr.env.get(name, _MISSING)
+            if v is _MISSING or isinstance(v, Undefined):
+                continue
+            vt_v = self.vtype(v)
+            if vt_v[0] not in ("s", "a", "t", "sl"):
+                continue
+            hint_key = (fr.path, id(ctx.node), name)
+            entry = ctx.post.get(name)
+            if entry is None:
+                vt = self.join_vtypes(vt_v, self.hint_get(hint_key))
+                if vt is None:
+                    continue
+                target = self.make_target(vt, v, name, ctx.home, hint_key, init_block=ctx.pre_block)
+                entry = ctx.post[name] = (target, vt)
+            target, vt = entry
+            new = self.join_vtypes(vt, vt_v)
+            if new is None:
+                ctx.post[name] = (Undefined(name, "has different types on different loop iterations"), vt)
+                continue
+            if new != vt:
+                self.state.hints[hint_key] = new
+                self.restart("loop variable type")
+            if not isinstance(target, Undefined):
+                pending.append((target, v))
+        if len(pending) > 1:
+            pending = [(t, self.snapshot(v)) for t, v in pending]
+        for target, v in pending:
+            self.assign_target(target, v)
+
+    def end_loop(self, ctx: LoopCtx) -> None:
+        fr = self.frame
+        fr.loops.pop()
+        for name, (target, _) in ctx.carried.items():
+            fr.env[name] = target
+        for name in ctx.post_names:
+            entry = ctx.post.get(name)
+            if entry is None:
+                fr.env.pop(name, None)
+            else:
+                fr.env[name] = entry[0]
+        # names assigned in the body but neither carried nor needed afterwards
+        for name in assigned_names(ctx.node.body, ctx.node) | _target_names(ctx.node):  # type: ignore[attr-defined]
+            if name in ctx.static:
+                fr.env[name] = ctx.static[name]
+            elif name not in ctx.carried and name not in ctx.post_names and name in fr.env:
+                fr.env[name] = Undefined(name, "is only assigned inside a loop that may not have run")
+        if ctx.ret_seen:
+            flag = fr.ret.flag
+            if fr.loops:
+                outer = fr.loops[-1]
+                outer.ret_seen = True
+                self.emit(If(flag, [ReleaseScope(outer.scope), Break()], []))
+            else:
+                rest: list = []
+                self.emit(If(ops.lnot(flag), rest, []))
+                self.block = rest
+
+    def exec_While(self, node: ast.While) -> bool:
+        if node.orelse:
+            raise self.error(UnsupportedError, "'while ... else' is not supported", node)
+        names = assigned_names(node.body, node) | assigned_names(node.test)
+        ctx = self.begin_loop(node, names)
+        blk: list = []
+        with self.in_block(blk, ctx.scope, loop=True):
+            cond = self.truth(self.eval(node.test), node.test)
+            if not (isinstance(cond, Const) and cond.value):
+                self.emit(If(ops.lnot(cond), [ReleaseScope(ctx.scope), Break()], []))
+            if not self.exec_block(node.body):
+                self.sync(ctx)
+                self.emit(ReleaseScope(ctx.scope))
+        self.emit(While(blk, ctx.scope))
+        self.end_loop(ctx)
+        return False
+
+    def exec_For(self, node: ast.For) -> bool:
+        if node.orelse:
+            raise self.error(UnsupportedError, "'for ... else' is not supported", node)
+        it = self.eval(node.iter)
+        if isinstance(it, tuple):
+            return self._unrolled_for(node, it)
+        if isinstance(it, RangeVal):
+            start, stop, step = (
+                self.tmp(x, n) for x, n in zip((it.start, it.stop, it.step), ("start", "stop", "step"))
+            )
+            length = None
+            getter = None
+        else:
+            length, getter = self.iter_source(it, node.iter)
+            start, stop, step = ZERO, self.tmp(length, "n"), ONE
+        names = assigned_names(node.body, node) | _target_names(node)
+        ctx = self.begin_loop(node, names)
+        var = Var("i", I)
+        if self.is_nonneg(start) and isinstance(step, Const) and step.value > 0:
+            self.nonneg.add(var.uid)
+        if isinstance(step, Const) and step.value > 0:
+            self.upper[var.uid] = stop
+        blk: list = []
+        with self.in_block(blk, ctx.scope, loop=True):
+            self.assign(node.target, var if getter is None else getter(var))
+            if not self.exec_block(node.body):
+                self.sync(ctx)
+                self.emit(ReleaseScope(ctx.scope))
+        if not isinstance(step, Const):
+            self.check(cmp("ne", step, 0), "ValueError", "range() arg 3 must not be zero")
+        self.emit(ForRange(var, start, stop, step, blk, ctx.scope))
+        self.end_loop(ctx)
+        return False
+
+    def _unrolled_for(self, node: ast.For, items: tuple) -> bool:
+        inner = _inner_loop_nodes(node)
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Break, ast.Continue)) and id(sub) not in inner:
+                raise self.error(UnsupportedError, "break/continue inside a loop over a tuple is not supported", sub)
+        for item in items:
+            self.assign(node.target, item)
+            if self.exec_block(node.body):
+                return True
+        return False
+
+    def iter_source(self, v, node=None):
+        """``(length, getter)`` for a value being iterated at run time."""
+        if isinstance(v, ArrayVal):
+            if v.rank == 0:
+                raise self.error(TypeInferenceError, "iteration over a 0-d array", node)
+            if v.buf is None and v.cost > 24:
+                v = self.as_concrete(v)
+            self.consume(v)
+            return v.shape[0], lambda i: self.axis_view(v, 0, i, consumed=True)
+        if isinstance(v, RangeVal):
+            start, step = self.tmp(v.start), self.tmp(v.step)
+            return self.range_length(v), lambda i: iadd(start, imul(i, step))
+        if isinstance(v, ZipVal):
+            parts = [self.iter_source(x, node) for x in v.items]
+            length = parts[0][0]
+            for other, _ in parts[1:]:
+                length = ops.imin(length, other)
+            return self.tmp(length, "n"), lambda i: tuple(g(i) for _, g in parts)
+        if isinstance(v, EnumerateVal):
+            length, getter = self.iter_source(v.item, node)
+            start = self.tmp(v.start)
+            return length, lambda i: (iadd(start, i), getter(i))
+        if isinstance(v, tuple):
+            arr = self.as_array(v)
+            return self.iter_source(arr, node)
+        raise self.error(TypeInferenceError, f"{describe(v)} is not iterable", node)
+
+    def range_length(self, r: RangeVal) -> Expr:
+        start, stop, step = r.start, r.stop, r.step
+        if isinstance(step, Const):
+            if step.value == 0:
+                raise self.error(StaticValueError, "range() arg 3 must not be zero")
+            if step.value > 0:
+                span = isub(stop, start)
+                n = span if step.value == 1 else ops.idiv(iadd(span, step.value - 1), step)
+            else:
+                n = ops.idiv(iadd(isub(start, stop), -step.value - 1), -step.value)
+            length = self.tmp(ops.imax(n, 0), "n")
+        else:
+            step = self.tmp(step)
+            self.check(cmp("ne", step, 0), "ValueError", "range() arg 3 must not be zero")
+            pos = cmp("gt", step, 0)
+            mag = ops.select(pos, step, isub(0, step))
+            dist = ops.select(pos, isub(stop, start), isub(start, stop))
+            length = self.tmp(ops.imax(ops.idiv(iadd(dist, isub(mag, 1)), mag), 0), "n")
+        if isinstance(length, Var):
+            self.nonneg.add(length.uid)
+        return length
+
+    def _innermost_loop(self, node) -> LoopCtx:
+        fr = self.frame
+        if not fr.loops:
+            raise self.error(CompileError, f"'{_stmt_name(node)}' outside loop", node)
+        return fr.loops[-1]
+
+    def exec_Break(self, node) -> bool:
+        ctx = self._innermost_loop(node)
+        self.sync(ctx)
+        self.emit(ReleaseScope(ctx.scope))
+        self.emit(Break())
+        return True
+
+    def exec_Continue(self, node) -> bool:
+        ctx = self._innermost_loop(node)
+        self.sync(ctx)
+        self.emit(ReleaseScope(ctx.scope))
+        self.emit(Continue())
+        return True
+
+    def exec_Return(self, node: ast.Return) -> bool:
+        v = self.eval(node.value) if node.value is not None else None
+        fr = self.frame
+        ret = fr.ret
+        if self.block is fr.entry_block and not fr.loops and ret.target is _MISSING:
+            ret.value, ret.done = v, True
+            return True
+        v = self.bindable(v, "ret")
+        vt = self.vtype(v)
+        hint_key = (fr.path, "ret")
+        if ret.target is _MISSING:
+            joined = self.join_vtypes(vt, self.hint_get(hint_key))
+            if joined is None:
+                joined = vt
+            ret.vtype = joined
+            if joined[0] in ("s", "a", "t", "sl"):
+                ret.target = self.make_target(joined, v, "ret", fr.scope, hint_key)
+            else:
+                ret.target = v
+        else:
+            joined = self.join_vtypes(ret.vtype, vt)
+            if joined is None or (joined[0] not in ("s", "a", "t", "sl", "n") and not self.static_equal(ret.target, v)):
+                raise self.error(
+                    TypeInferenceError,
+                    f"function returns values of incompatible types: {self.describe_vtype(ret.vtype)} "
+                    f"and {self.describe_vtype(vt)}",
+                    node,
+                )
+            if joined != ret.vtype:
+                self.state.hints[hint_key] = joined
+                self.restart("return type")
+        if ret.vtype[0] in ("s", "a", "t", "sl"):
+            self.assign_target(ret.target, v)
+        if fr.loops:
+            if ret.flag is None:
+                ret.flag = Var("returned", Bool)
+                self.mutables.add(ret.flag.uid)
+                fr.entry_block.insert(fr.entry_pos, Assign(ret.flag, Const(False, Bool)))
+            self.emit(Assign(ret.flag, Const(True, Bool)))
+            inner = fr.loops[-1]
+            inner.ret_seen = True
+            self.emit(ReleaseScope(inner.scope))
+            self.emit(Break())
+        return True
+
+    # ============================================================== expressions
+
+    def eval(self, node: ast.expr):
+        self.node_stack.append(node)
+        try:
+            method = getattr(self, "eval_" + type(node).__name__, None)
+            if method is None:
+                raise self.error(
+                    UnsupportedError, f"'{type(node).__name__}' expressions are not supported in compiled code", node
+                )
+            v = method(node)
+            if id(node) in self.state.eager:
+                v = self.force_eager(v)
+            return v
+        except CompileError as e:
+            if e.location is None:
+                e.location, e.call_chain = self.loc(node), self.call_chain()
+            raise
+        finally:
+            self.node_stack.pop()
+
+    def force_eager(self, v):
+        if isinstance(v, ArrayVal):
+            return self.as_concrete(v)
+        if isinstance(v, tuple):
+            return tuple(self.force_eager(x) for x in v)
+        return v
+
+    def eval_Constant(self, node: ast.Constant):
+        v = node.value
+        if isinstance(v, (bool, int, float)) or v is None or isinstance(v, str) or v is Ellipsis:
+            if isinstance(v, int) and not isinstance(v, bool) and not -(2**63) <= v < 2**64:
+                raise self.error(StaticValueError, f"integer literal {v} does not fit in 64 bits", node)
+            return self.lift(v) if not (isinstance(v, int) and v >= 2**63) else Const(v, ScalarType("uint64"))
+        raise self.error(UnsupportedError, f"{type(v).__name__} literals are not supported", node)
+
+    def load_name(self, name: str, node=None):
+        fr: Frame | None = self.frame
+        last = fr
+        while fr is not None:
+            v = fr.env.get(name, _MISSING)
+            if v is not _MISSING:
+                if isinstance(v, Undefined):
+                    raise self.error(CompileError, f"variable '{name}' {v.reason}", node)
+                return v
+            if name in fr.locals:
+                raise self.error(CompileError, f"local variable '{name}' is used before it is assigned", node)
+            if fr.cells is not None and name in fr.cells:
+                v = fr.cells[name]
+                if isinstance(v, Undefined):
+                    raise self.error(CompileError, f"variable '{name}' {v.reason}", node)
+                return v
+            last = fr
+            fr = fr.lexical
+        g = last.globals
+        if name in g:
+            obj = g[name]
+            if isinstance(obj, pytypes.ModuleType):
+                return obj
+            if g.get("__parakeet_lib__"):
+                return self.lift(obj)
+            return self.implicit_value(("global", id(g), name), lambda g=g, name=name: g[name], obj)
+        b = builtins.__dict__
+        if name in b:
+            return self.lift(b[name])
+        raise self.error(CompileError, f"name '{name}' is not defined", node)
+
+    def eval_Name(self, node: ast.Name):
+        return self.load_name(node.id, node)
+
+    def eval_NamedExpr(self, node: ast.NamedExpr):
+        v = self.bindable(self.eval(node.value), node.target.id)
+        self.frame.env[node.target.id] = v
+        return v
+
+    def eval_Tuple(self, node: ast.Tuple):
+        out = []
+        for e in node.elts:
+            if isinstance(e, ast.Starred):
+                v = self.eval(e.value)
+                out.extend(self.unpack_star(v, e))
+            else:
+                out.append(self.eval(e))
+        return tuple(out)
+
+    def unpack_star(self, v, node) -> list:
+        if isinstance(v, tuple):
+            return list(v)
+        if isinstance(v, ArrayVal) and v.rank >= 1 and isinstance(v.shape[0], Const):
+            return [self.getitem(v, Const(k, I)) for k in range(v.shape[0].value)]
+        raise self.error(
+            TypeInferenceError, f"cannot unpack {describe(v)} with '*': its length is not known at compile time", node
+        )
+
+    def eval_List(self, node: ast.List):
+        from . import lib
+
+        items = self.eval_Tuple(node)  # type: ignore[arg-type]
+        return lib.array_literal(self, list(items))
+
+    def eval_Slice(self, node: ast.Slice):
+        return slice(
+            None if node.lower is None else self.eval(node.lower),
+            None if node.upper is None else self.eval(node.upper),
+            None if node.step is None else self.eval(node.step),
+        )
+
+    def eval_index(self, node: ast.expr):
+        if isinstance(node, ast.Tuple):
+            return tuple(self.eval(e) for e in node.elts)
+        return self.eval(node)
+
+    def eval_Subscript(self, node: ast.Subscript):
+        obj = self.eval(node.value)
+        index = self.eval_index(node.slice)
+        return self.subscript(obj, index, node)
+
+    def subscript(self, obj, index, node=None):
+        if isinstance(obj, ArrayVal):
+            if isinstance(index, tuple):
+                index = tuple(self._index_item(x) for x in index)
+            else:
+                index = self._index_item(index)
+            return self.getitem(obj, index)
+        if isinstance(obj, tuple):
+            return self.tuple_index(obj, index, node)
+        if isinstance(obj, RangeVal):
+            return self.getitem(self.range_array(obj), index)
+        if isinstance(obj, Expr):
+            if index == () or index is Ellipsis:
+                return obj
+            raise self.error(TypeInferenceError, f"a scalar ({describe(obj)}) cannot be indexed", node)
+        raise self.error(TypeInferenceError, f"{describe(obj)} is not subscriptable", node)
+
+    def _index_item(self, x):
+        if isinstance(x, tuple):  # x[(1, 2), ...]: a sequence index is an integer array
+            return self.as_array(x)
+        if isinstance(x, RangeVal):
+            return self.range_array(x)
+        return x
+
+    def tuple_index(self, tup: tuple, index, node=None):
+        if isinstance(index, slice):
+            parts = [
+                None if p is None else self.static_int(p, "tuple slice bounds")
+                for p in (index.start, index.stop, index.step)
+            ]
+            return tup[slice(*parts)]
+        if isinstance(index, ArrayVal) and index.rank == 0:
+            index = self.elem(index, ())
+        if not isinstance(index, Expr) or index.type.kind not in "iub":
+            raise self.error(TypeInferenceError, f"tuple indices must be integers, not {describe(index)}", node)
+        if isinstance(index, Const):
+            i = int(index.value)
+            if not -len(tup) <= i < len(tup):
+                raise self.error(StaticValueError, f"tuple index {i} out of range for tuple of length {len(tup)}", node)
+            return tup[i]
+        # run-time index: possible when all elements have one scalar type
+        vts = [self.vtype(x) for x in tup]
+        joined = vts[0] if vts else None
+        for t in vts[1:]:
+            joined = self.join_vtypes(joined, t) if joined is not None else None
+        if joined is None or joined[0] != "s":
+            return tup[self.static_int(index, "the index of a tuple with elements of different types")]
+        i = self.normalize_index(index, Const(len(tup), I))
+        out = cast(tup[-1], joined[1])
+        for k in range(len(tup) - 2, -1, -1):
+            out = ops.select(cmp("eq", i, k), cast(tup[k], joined[1]), out)
+        return self.tmp(out, "elt")
+
+    def eval_Attribute(self, node: ast.Attribute):
+        obj = self.eval(node.value)
+        return self.getattr(obj, node.attr, node)
+
+    def getattr(self, obj, name: str, node=None):
+        from . import lib
+
+        if isinstance(obj, (ArrayVal, Expr)):
+            prop = lib.lookup_property(name)
+            if prop is not None:
+                return prop(self, obj)
+            if lib.lookup_method(obj, name) is not None:
+                return BoundMethod(obj, name)
+            raise self.error(
+                UnsupportedError,
+                f"attribute '{name}' of {describe(obj)} is not supported",
+                node,
+                hint=lib.suggest_attribute(name),
+            )
+        if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:
+            if isinstance(obj, TypeVal):
+                if name == "itemsize":
+                    return Const(obj.type.itemsize, I)
+                if name == "type":
+                    return obj
+            raise self.error(TypeInferenceError, f"{describe(obj)} has no attribute '{name}'", node)
+        try:
+            value = getattr(obj, name)
+        except AttributeError:
+            raise self.error(CompileError, f"{describe(obj)} has no attribute '{name}'", node) from None
+        return self.lift(value)
+
+    # ---- operators ---------------------------------------------------------------
+
+    def eval_BinOp(self, node: ast.BinOp):
+        a = self.eval(node.left)
+        b = self.eval(node.right)
+        if isinstance(node.op, ast.MatMult):
+            return self.matmul(a, b)
+        return self.binop(_BINOPS[type(node.op)], a, b)
+
+    def matmul(self, a, b):
+        from . import lib
+
+        return lib.matmul(self, a, b)
+
+    def binop(self, op: str, a, b):
+        if isinstance(a, tuple) or isinstance(b, tuple):
+            if op == "add" and isinstance(a, tuple) and isinstance(b, tuple):
+                return a + b
+            if op == "mul":
+                tup, n = (a, b) if isinstance(a, tuple) else (b, a)
+                if isinstance(n, Expr) and not isinstance(tup, Expr):
+                    return tup * self.static_int(n, "tuple repetition count")
+            a = self.as_array(a) if isinstance(a, tuple) else a
+            b = self.as_array(b) if isinstance(b, tuple) else b
+        return self.apply_ufunc(scalars.UFUNCS[op], [a, b], python=True, symbol=_SYMBOL[op])
+
+    def operand(self, v, symbol: str = ""):
+        """Scalar expression or array for use in an element-wise operation."""
+        if isinstance(v, (Expr, ArrayVal)):
+            return v
+        if isinstance(v, RangeVal):
+            return self.range_array(v)
+        if isinstance(v, tuple):
+            return self.as_array(v)
+        what = f"operand of '{symbol}'" if symbol else "operand"
+        raise self.error(TypeInferenceError, f"unsupported {what}: {describe(v)}")
+
+    def apply_ufunc(self, uf: scalars.UFunc, args: list, python: bool = False, symbol: str = ""):
+        vals = [self.operand(a, symbol or uf.name) for a in args]
+        if len(vals) != uf.nin:
+            raise self.error(TypeInferenceError, f"{uf.name} takes {uf.nin} argument(s), got {len(vals)}")
+        if not any(isinstance(v, ArrayVal) and v.rank > 0 for v in vals):
+            # as in NumPy, arithmetic on 0-d arrays yields scalars
+            vals = [self.tmp(self.elem(v, ()), "x") if isinstance(v, ArrayVal) else v for v in vals]
+        types = tuple(v.elt if isinstance(v, ArrayVal) else v.type for v in vals)
+        all_weak = all(t.weak for t in types)
+        if python and all_weak and uf.kind == "pow" and types[0].kind != "f" and types[1].kind != "f":
+            if isinstance(vals[1], Const) and vals[1].value < 0:
+                types = (WeakFloat, WeakFloat)
+        try:
+            ins, out = scalars.resolve(uf, types, python)
+        except TypeError as e:
+            shown = ", ".join(describe(v) for v in vals)
+            raise self.error(
+                TypeInferenceError, f"'{symbol or uf.name}' is not supported for operands ({shown}): {e}"
+            ) from None
+        if python and all_weak and uf.kind in ("div", "intdiv") and not any(isinstance(v, ArrayVal) for v in vals):
+            vals[1] = self.tmp(vals[1])
+            self.check(
+                ops.prim("ne", (vals[1], Const(0, vals[1].type)), Bool), "ZeroDivisionError",
+                "float division by zero" if out.kind == "f" and uf.kind == "div" else "division by zero",
+            )  # fmt: skip
+        if not any(isinstance(v, ArrayVal) for v in vals):
+            return uf.emit(tuple(cast(v, t) for v, t in zip(vals, ins)), out)
+
+        def f(*xs):
+            return uf.emit(tuple(cast(x, t) for x, t in zip(xs, ins)), out)
+
+        return self.elementwise(vals, f, out.strong, cost=uf.cost)
+
+    def eval_UnaryOp(self, node: ast.UnaryOp):
+        v = self.eval(node.operand)
+        if isinstance(node.op, ast.Not):
+            return ops.lnot(self.truth(v, node.operand))
+        op = _UNARY[type(node.op)]
+        if op == "pos" and isinstance(v, (Expr, ArrayVal)):
+            return v
+        if isinstance(v, Const) and op == "neg" and v.type.weak and v.type.kind != "b":
+            return Const(-v.value, v.type)
+        return self.apply_ufunc(scalars.UFUNCS[op], [v], python=True, symbol=_SYMBOL[op])
+
+    def truth(self, v, node=None) -> Expr:
+        """Python truthiness as a boolean expression."""
+        if isinstance(v, Expr):
+            if v.type.kind == "b":
+                return v
+            return cast(v, WeakBool if v.type.weak else Bool)
+        if isinstance(v, ArrayVal):
+            if v.rank == 0:
+                return cast(self.tmp(self.elem(v, ())), Bool)
+            if all(isinstance(d, Const) for d in v.shape) and all(d.value == 1 for d in v.shape):
+                return cast(self.tmp(self.elem(v, (ZERO,) * v.rank)), Bool)
+            raise self.error(
+                TypeInferenceError,
+                "the truth value of an array with more than one element is ambiguous",
+                node,
+                hint="use np.any(...) or np.all(...) (or .any() / .all())",
+            )
+        if v is None:
+            return ops.FALSE
+        if isinstance(v, (tuple, str)):
+            return Const(len(v) > 0, WeakBool)
+        if isinstance(v, Undefined):
+            raise self.error(CompileError, f"variable '{v.name}' {v.reason}", node)
+        return ops.TRUE
+
+    def eval_BoolOp(self, node: ast.BoolOp):
+        is_and = isinstance(node.op, ast.And)
+        result = self.eval(node.values[0])
+        for sub in node.values[1:]:
+            result = self._short_circuit(is_and, result, sub)
+        return result
+
+    def _short_circuit(self, is_and: bool, left, right_node: ast.expr):
+        cond = self.truth(left, right_node)
+        if isinstance(cond, Const):
+            take_right = bool(cond.value) == is_and
+            return self.eval(right_node) if take_right else left
+        cond = self.tmp(cond, "cond")
+        blk: list = []
+        with self.in_block(blk):
+            right = self.eval(right_node)
+            end_blk = self.block
+        lt, rt = self.vtype(left), self.vtype(right)
+        both_bool = lt[0] == "s" and rt[0] == "s" and lt[1].kind == "b" and rt[1].kind == "b"
+        if not blk and both_bool:
+            out_t = WeakBool if (lt[1].weak and rt[1].weak) else Bool
+            return ops.prim("and" if is_and else "or", (cond, right), out_t)
+        vt = self.join_vtypes(lt, rt)
+        if vt is None or vt[0] not in ("s", "a"):
+            raise self.error(
+                TypeInferenceError,
+                f"operands of '{'and' if is_and else 'or'}' have incompatible types: "
+                f"{describe(left)} and {describe(right)}",
+                right_node,
+            )
+        target = self.make_target(vt, left, "bool", self.scope)
+        self.assign_target(target, left)
+        saved = self.block
+        self.block = end_blk
+        self.assign_target(target, right)
+        self.block = saved
+        self.emit(If(cond, blk, []) if is_and else If(cond, [], blk))
+        return target
+
+    def eval_IfExp(self, node: ast.IfExp):
+        cond = self.truth(self.eval(node.test), node.test)
+        if isinstance(cond, Const):
+            return self.eval(node.body if cond.value else node.orelse)
+        cond = self.tmp(cond, "cond")
+        a_blk: list = []
+        b_blk: list = []
+        with self.in_block(a_blk):
+            a = self.eval(node.body)
+            a_end = self.block
+        with self.in_block(b_blk):
+            b = self.eval(node.orelse)
+            b_end = self.block
+        ta, tb = self.vtype(a), self.vtype(b)
+        if not a_blk and not b_blk and ta[0] == "s" and tb[0] == "s":
+            t = join(ta[1], tb[1])
+            return ops.select(cond, cast(a, t), cast(b, t))
+        if self.static_equal(a, b):
+            return a
+        merged = self.merge_values("ifexp", a, a_end, b, b_end)
+        if isinstance(merged, Undefined):
+            raise self.error(
+                TypeInferenceError,
+                f"both branches of a conditional expression must have compatible types, got "
+                f"{describe(a)} and {describe(b)}",
+                node,
+            )
+        self.emit(If(cond, a_blk, b_blk))
+        return merged
+
+    def eval_Compare(self, node: ast.Compare):
+        left = self.eval(node.left)
+        result = None
+        for op, right_node in zip(node.ops, node.comparators):
+            right = self.eval(right_node)
+            if len(node.ops) > 1:
+                right = self.bindable(right, "cmp")
+            part = self.compare(op, left, right, node)
+            result = part if result is None else self.logical_and(result, part)
+            left = right
+        return result
+
+    def logical_and(self, a, b):
+        if isinstance(a, Expr) and isinstance(b, Expr):
+            ta, tb = self.truth(a), self.truth(b)
+            return ops.prim("and", (ta, tb), WeakBool if (ta.type.weak and tb.type.weak) else Bool)
+        return self.apply_ufunc(scalars.UFUNCS["logical_and"], [a, b])
+
+    def compare(self, op: ast.cmpop, a, b, node=None):
+        if isinstance(op, (ast.Is, ast.IsNot)):
+            same = self._identical(a, b)
+            return Const(same if isinstance(op, ast.Is) else not same, WeakBool)
+        if isinstance(op, (ast.In, ast.NotIn)):
+            from . import lib
+
+            res = cast(self.truth(lib.contains(self, b, a)), WeakBool)
+            return res if isinstance(op, ast.In) else ops.lnot(res)
+        name = _CMPOPS[type(op)]
+        if (a is None or b is None or isinstance(a, (str, TypeVal)) or isinstance(b, (str, TypeVal))) and name in (
+            "eq",
+            "ne",
+        ):
+            eq = self.static_equal(a, b)
+            return Const(eq if name == "eq" else not eq, WeakBool)
+        if isinstance(a, tuple) and isinstance(b, tuple):
+            if name in ("eq", "ne"):
+                if len(a) != len(b):
+                    return Const(name == "ne", WeakBool)
+                acc: Expr = ops.TRUE
+                for x, y in zip(a, b):
+                    acc = ops.land(acc, self.truth(self.compare(ast.Eq(), x, y, node)))
+                return acc if name == "eq" else ops.lnot(acc)
+            raise self.error(UnsupportedError, "ordering comparisons between tuples are not supported", node)
+        return self.apply_ufunc(scalars.UFUNCS[name], [a, b], python=True, symbol=_SYMBOL[name])
+
+    @staticmethod
+    def _identical(a, b) -> bool:
+        if a is b:
+            return True
+        if isinstance(a, TypeVal) and isinstance(b, TypeVal):
+            return a.type is b.type
+        if isinstance(a, Const) and isinstance(b, Const) and a.type.kind == "b" and b.type.kind == "b":
+            return a.value == b.value
+        return False
+
+    # ---- calls, lambdas, comprehensions ---------------------------------------------
+
+    def eval_Call(self, node: ast.Call):
+        fn = self.eval(node.func)
+        args: list = []
+        for a in node.args:
+            if isinstance(a, ast.Starred):
+                args.extend(self.unpack_star(self.eval(a.value), a))
+            else:
+                args.append(self.eval(a))
+        kwargs = {}
+        for kw in node.keywords:
+            if kw.arg is None:
+                raise self.error(UnsupportedError, "'**' argument unpacking is not supported", node)
+            kwargs[kw.arg] = self.eval(kw.value)
+        return self.call(fn, args, kwargs, node)
+
+    def eval_Lambda(self, node: ast.Lambda):
+        return self.make_closure(node, "<lambda>")
+
+    def _comprehension(self, node, elt: ast.expr):
+        from . import lib
+
+        if len(node.generators) != 1:
+            raise self.error(
+                UnsupportedError,
+                "comprehensions with more than one 'for' are not supported",
+                node,
+                hint="nest comprehensions instead: [[f(x, y) for y in ys] for x in xs]",
+            )
+        gen = node.generators[0]
+        if gen.is_async:
+            raise self.error(UnsupportedError, "async comprehensions are not supported", node)
+        source = self.eval(gen.iter)
+        fr = self.frame
+
+        def bind_and(fn):
+            def run(item):
+                saved = dict(fr.env)
+                try:
+                    self.assign(gen.target, item)
+                    return fn()
+                finally:
+                    fr.env.clear()
+                    fr.env.update(saved)
+
+            return run
+
+        if isinstance(source, tuple):
+            items = [
+                bind_and(lambda: self.eval(elt))(x)
+                for x in source
+                if not gen.ifs or self._static_filter(gen, x, bind_and)
+            ]
+            return lib.array_literal(self, items)
+        length, getter = self.iter_source(source, gen.iter)
+        body = bind_and(lambda: self.eval(elt))
+        if gen.ifs:
+
+            def keep():
+                acc: Expr = ops.TRUE
+                for cond in gen.ifs:
+                    acc = ops.land(acc, self.truth(self.eval(cond), cond))
+                return acc
+
+            flags = lib.build_map(self, (length,), lambda idx: bind_and(keep)(getter(idx[0])))
+            picks = self.nonzero1d(flags)
+            return lib.build_map(self, picks.shape, lambda idx: body(getter(self.tmp(self.elem(picks, idx), "i"))))
+        return lib.build_map(self, (self.tmp(length, "n"),), lambda idx: body(getter(idx[0])))
+
+    def _static_filter(self, gen, item, bind_and) -> bool:
+        def keep():
+            for cond in gen.ifs:
+                if not self.static_bool(self.truth(self.eval(cond), cond), "a filter over a tuple"):
+                    return False
+            return True
+
+        return bind_and(keep)(item)
+
+    def eval_ListComp(self, node: ast.ListComp):
+        return self._comprehension(node, node.elt)
+
+    def eval_GeneratorExp(self, node: ast.GeneratorExp):
+        return self._comprehension(node, node.elt)
+
+    def eval_JoinedStr(self, node):
+        raise self.error(UnsupportedError, "f-strings are not supported in compiled code", node)
+
+    # ================================================================ coercions
+
+    def as_scalar(self, v, what: str = "value") -> Expr:
+        if isinstance(v, Expr):
+            return v
+        if type(v) in (bool, int, float):
+            return self.lift(v)
+        if isinstance(v, ArrayVal):
+            if v.rank == 0:
+                return self.tmp(self.elem(v, ()), "x")
+            if all(isinstance(d, Const) and d.value == 1 for d in v.shape):
+                return self.tmp(self.elem(v, (ZERO,) * v.rank), "x")
+            raise self.error(TypeInferenceError, f"{what} must be a scalar, got {describe(v)}")
+        raise self.error(TypeInferenceError, f"{what} must be a scalar, got {describe(v)}")
+
+    def as_index(self, v, what: str = "index") -> Expr:
+        v = self.as_scalar(v, what)
+        if v.type.kind not in "iub":
+            raise self.error(TypeInferenceError, f"{what} must be integers, got {describe(v)}")
+        return cast(v, I)
+
+    def as_array(self, v, what: str = "value") -> ArrayVal:
+        from . import lib
+
+        if isinstance(v, ArrayVal):
+            return v
+        if isinstance(v, Expr):
+            return self.scalar_to_array(v)
+        if isinstance(v, tuple):
+            return lib.array_literal(self, list(v))
+        if isinstance(v, RangeVal):
+            return self.range_array(v)
+        raise self.error(TypeInferenceError, f"{what} must be an array, got {describe(v)}")
+
+    def range_array(self, r: RangeVal) -> ArrayVal:
+        start, step = self.tmp(r.start), self.tmp(r.step)
+        n = self.range_length(r)
+        from .types import Int64
+
+        return self.delayed(Int64, (n,), lambda idx: cast(iadd(start, imul(idx[0], step)), Int64), cost=1)
+
+    def as_dtype(self, v, what: str = "dtype") -> ScalarType:
+        """A strong element type from a dtype-like value."""
+        if isinstance(v, TypeVal):
+            return v.type.strong
+        if isinstance(v, str):
+            try:
+                tv = type_value(np.dtype(v))
+            except (TypeError, Unsupported) as e:
+                raise self.error(TypeInferenceError, f"invalid {what} {v!r}: {e}") from None
+            return tv
+        if isinstance(v, (ArrayVal,)):
+            return v.elt
+        raise self.error(TypeInferenceError, f"{what} must be a dtype, got {describe(v)}")
+
+    def shape_tuple(self, v, what: str = "shape") -> tuple[Expr, ...]:
+        """Normalise an int / tuple / small array into a tuple of dimensions."""
+        if isinstance(v, Expr):
+            return (self.as_index(v, what),)
+        if isinstance(v, tuple):
+            return tuple(self.as_index(x, what) for x in v)
+        if isinstance(v, ArrayVal):
+            if v.rank == 0:
+                return (self.as_index(self.elem(v, ()), what),)
+            if v.rank == 1 and isinstance(v.shape[0], Const):
+                if v.elt.kind not in "iu":
+                    raise self.error(TypeInferenceError, f"{what} must be integers, got {describe(v)}")
+                return tuple(self.tmp(cast(self.elem(v, (Const(k, I),)), I), "dim") for k in range(v.shape[0].value))
+            raise self.error(
+                StaticValueError,
+                f"the number of dimensions in {what} must be known at compile time",
+                hint="pass a tuple such as (n, m) instead of an array",
+            )
+        raise self.error(TypeInferenceError, f"{what} must be an int or a tuple of ints, got {describe(v)}")
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+_locals_cache: dict[int, tuple[ast.AST, frozenset[str]]] = {}
+
+
+def _local_names(fnode) -> frozenset[str]:
+    hit = _locals_cache.get(id(fnode))
+    if hit is not None and hit[0] is fnode:
+        return hit[1]
+    if isinstance(fnode, ast.Lambda):
+        names: frozenset[str] = frozenset()
+    else:
+        names = assigned_names(fnode.body)
+    a = fnode.args
+    params = {p.arg for p in a.posonlyargs + a.args + a.kwonlyargs}
+    if a.vararg:
+        params.add(a.vararg.arg)
+    result = frozenset(names - params)
+    _locals_cache[id(fnode)] = (fnode, result)
+    return result
+
+
+def _target_names(node) -> frozenset[str]:
+    target = getattr(node, "target", None)
+    if target is None:
+        return frozenset()
+    return frozenset(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+
+
+def _inner_loop_nodes(node) -> set:
+    out: set = set()
+    for child in ast.walk(node):
+        if child is not node and isinstance(child, (ast.For, ast.While)):
+            out.update(id(n) for n in ast.walk(child))
+    return out
+
+
+def _stmt_name(node) -> str:
+    return {
+        "Try": "try", "With": "with", "Global": "global", "Nonlocal": "nonlocal", "Import": "import",
+        "ImportFrom": "import", "ClassDef": "class", "AsyncFunctionDef": "async def",
+        "Match": "match", "Break": "break", "Continue": "continue", "TryStar": "try",
+        "AsyncFor": "async for", "AsyncWith": "async with",
+    }.get(type(node).__name__, type(node).__name__)  # fmt: skip
+
+
+def _escape(msg: str) -> str:
+    return msg.replace("{", "{{").replace("}", "}}")

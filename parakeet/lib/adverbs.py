@@ -1,124 +1,375 @@
+"""Parakeet's higher-order array operators: map, reduce, scan, allpairs, ...
+
+Inside compiled code these are fused with their function arguments.  Called
+directly from Python they compile a small wrapper on the fly, so
+``parakeet.map(f, x)`` works without decorating anything.
+"""
+
+from __future__ import annotations
+
+import builtins
+import functools
+
+from .. import ops, scalars
+from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
+from ..ir import Const, Expr
+from ..ops import I, cmp
+from ..values import CHEAP_COST, ArrayVal, RangeVal, describe
+from . import core
+from .core import FUNCTIONS, NAMES, along_axis, build_map, norm_axis, reduce_arrays, reduce_values, scan_values
 
 
-from .. syntax import (none, zero_i64, 
-                       Map, Reduce, Scan, 
-                       IndexMap, IndexReduce, 
-                       ParFor, OuterMap,
-                       Filter, FilterReduce) 
+class LibFunction:
+    """A library function usable inside compiled code *and* callable from Python."""
 
-from .. frontend import macro, staged_macro, jit,  translate_function_value 
-from lib_helpers import _get_shape 
-@jit 
-def identity(x):
-  return x
+    def __init__(self, name: str, impl, doc: str | None = None):
+        self.__name__ = name
+        self.__qualname__ = name
+        self.__doc__ = doc or impl.__doc__
+        self.__module__ = "parakeet"
+        self.impl = impl
+        FUNCTIONS[self] = impl
+        NAMES[self] = name
 
-@macro 
-def parfor(fn, bounds):
-  fn = translate_function_value(fn)
-  bounds = _get_shape(bounds)
-  return ParFor(fn = fn, bounds = bounds)
+    def __repr__(self) -> str:
+        return f"<parakeet function {self.__name__}>"
 
-@staged_macro("axis")
-def map(f, *args, **kwds):
-  if 'axis' in kwds:
-    axis = kwds['axis']
-    del kwds['axis']
-  else:
-    axis = zero_i64
-  assert len(kwds) == 0, "map got unexpected keywords %s" % (kwds.keys())
-  return Map(fn = f, args = args, axis = axis)
+    def __call__(self, *args, **kwargs):
+        from ..api import call_staged
+
+        return call_staged(self, args, kwargs)
+
+
+def libfunction(name: str | None = None):
+    def deco(impl):
+        return LibFunction(name or impl.__name__, impl)
+
+    return deco
+
+
+def _arrayish(el, v):
+    """Arrays stay arrays; tuples/ranges become arrays; scalars pass through."""
+    if isinstance(v, (tuple, RangeVal)):
+        return el.as_array(v)
+    return v
+
+
+def _prepare(el, a: ArrayVal) -> ArrayVal:
+    """Make ``a`` safe to slice once per iteration of a data-parallel loop."""
+    if a.buf is None and a.cost > CHEAP_COST:
+        a = el.as_concrete(a)
+    el.consume(a)
+    return a
+
+
+def _axis_arg(el, axis, what: str = "axis"):
+    if axis is None:
+        return None
+    if isinstance(axis, tuple):
+        return tuple(el.static_int(a, what) for a in axis)
+    return el.static_int(axis, what)
+
+
+@libfunction("map")
+def map(el, f, *args, axis=0):  # noqa: A001
+    """Apply ``f`` to every element along ``axis`` of the argument arrays.
+
+    With ``axis=None`` the function is applied to every scalar element (with
+    broadcasting).  Non-array arguments are passed to every call unchanged."""
+    if not args:
+        raise el.error(TypeInferenceError, "map() needs at least one array argument")
+    vals = [_arrayish(el, a) for a in args]
+    arrays = [a for a in vals if isinstance(a, ArrayVal) and a.rank > 0]
+    if not arrays:
+        return el.call(f, [el.as_scalar(v) if isinstance(v, ArrayVal) else v for v in vals])
+    ax = _axis_arg(el, axis)
+    if ax is None:
+        shape = el.broadcast_shapes([a.shape for a in arrays], "arguments of map")
+        adapted = []
+        for v in vals:
+            if isinstance(v, ArrayVal):
+                if v.rank == 0:
+                    adapted.append(el.as_scalar(v))
+                else:
+                    v = _prepare(el, v)
+                    adapted.append(el.broadcast_to(v, shape, consumed=True))
+            else:
+                adapted.append(v)
+
+        def at(idx):
+            return el.call(f, [el.tmp(el.elem(a, idx), "x") if isinstance(a, ArrayVal) else a for a in adapted])
+
+        return build_map(el, shape, at, "map")
+    if isinstance(ax, tuple):
+        raise el.error(StaticValueError, "map() takes a single axis (or None)")
+    n = None
+    prepared = []
+    for v in vals:
+        if isinstance(v, ArrayVal) and v.rank > 0:
+            k = norm_axis(el, ax, v.rank)
+            v = _prepare(el, v)
+            dim = v.shape[k]
+            if n is None:
+                n = dim
+            elif not el.dim_equal(n, dim):
+                el.check(
+                    cmp("eq", n, dim), "ValueError", "arguments of map have different lengths ({0} and {1})", n, dim
+                )
+            prepared.append((v, k))
+        elif isinstance(v, ArrayVal):
+            prepared.append((el.as_scalar(v), None))
+        else:
+            prepared.append((v, None))
+
+    def at(idx):
+        return el.call(f, [v if k is None else el.axis_view(v, k, idx[0], consumed=True) for v, k in prepared])
+
+    return build_map(el, (n,), at, "map")
+
+
 each = map
 
-@staged_macro("axis")
-def allpairs(f, x, y, axis = 0):
-  return OuterMap(fn = f, args = (x,y), axis = axis)
 
-@staged_macro("axis")
-def outer_map(f, *args, **kwds):
-  if 'axes' in kwds:
-    assert 'axis' not in kwds, "Can't have both 'axis' and 'axes' as keywords"
-    axis = kwds['axes']
-    del kwds['axes'] 
-    
-  elif 'axis' in kwds:
-    axis = kwds['axis']
-    del kwds['axis']
-  else:
-    axis = zero_i64
-  assert len(kwds) == 0, "outer_map got unexpected keywords %s" % (kwds.keys())
-  return OuterMap(fn = f, args = args, axis = axis)
-
-@staged_macro("axis")
-def reduce(f, *args, **kwds):
-  if 'axis' in kwds:
-    axis = kwds['axis']
-    del kwds['axis']
-  else: 
-    axis = none
-  if 'init' in kwds:
-    init = kwds['init']
-    del kwds['init']
-  else:
-    init = none 
-  assert len(kwds) == 0, "reduce got unexpected keywords %s" % (kwds.keys())
-  
-  ident = translate_function_value(identity)
-  return Reduce(fn = ident, 
-                combine = f, 
-                args = args,
-                init = init,
-                axis = axis)
-
-@staged_macro("axis")
-def scan(f, *args, **kwds):
-  axis = kwds.get('axis', zero_i64)
-  init = kwds.get('init', none)
-  
-  ident = translate_function_value(identity)
-  return Scan(fn = ident,  
-                     combine = f,
-                     emit = ident, 
-                     args = args,
-                     init = init,
-                     axis = axis)
-@macro
-def imap(fn, shape):
-  return IndexMap(shape = shape, fn = fn)
+@libfunction("allpairs")
+def allpairs(el, f, x, y, axis=0):
+    """``result[i, j] = f(x[i], y[j])`` for all pairs of elements along ``axis``."""
+    return outer_map.impl(el, f, x, y, axis=axis)
 
 
-@macro
-def ireduce(fn, combine, shape, init = None):
-  return IndexReduce(fn = fn, combine=combine, shape = shape, init = init)
+@libfunction("outer_map")
+def outer_map(el, f, *args, axis=0, axes=None):
+    """Apply ``f`` to every combination of elements of the argument arrays."""
+    if axes is not None:
+        axis = axes
+    ax = _axis_arg(el, axis)
+    vals = [el.as_array(_arrayish(el, a)) for a in args]
+    if not vals:
+        raise el.error(TypeInferenceError, "outer_map() needs at least one array argument")
+    if not isinstance(ax, tuple):
+        ax = (ax,) * len(vals)
+    if len(ax) != len(vals):
+        raise el.error(StaticValueError, f"outer_map() got {len(vals)} arrays but {len(ax)} axes")
+    prepared = []
+    shape = []
+    for v, a in zip(vals, ax):
+        if v.rank == 0:
+            raise el.error(TypeInferenceError, "outer_map() arguments must be at least 1-dimensional")
+        if a is None:
+            v = _prepare(el, el.flat_view(v))
+            k = 0
+        else:
+            k = norm_axis(el, a, v.rank)
+            v = _prepare(el, v)
+        prepared.append((v, k))
+        shape.append(v.shape[k])
 
-@staged_macro("axis")
-def filter(pred, *args, **kwds):
-  if 'axis' in kwds:
-    axis = kwds['axis']
-    del kwds['axis']
-  else:
-    axis = zero_i64
-  assert len(kwds) == 0, "filter got unexpected keywords %s" % (kwds.keys())
-  return Filter(fn = pred, args = args, axis = axis)
+    def at(idx):
+        return el.call(f, [el.axis_view(v, k, i, consumed=True) for (v, k), i in zip(prepared, idx)])
+
+    return build_map(el, tuple(shape), at, "allpairs")
 
 
-@staged_macro("axis")
-def filter_reduce(f, pred, *args, **kwds):
-  if 'axis' in kwds:
-    axis = kwds['axis']
-    del kwds['axis']
-  else: 
-    axis = none
-  if 'init' in kwds:
-    init = kwds['init']
-    del kwds['init']
-  else:
-    init = none 
-  assert len(kwds) == 0, "reduce got unexpected keywords %s" % (kwds.keys())
-  
-  ident = translate_function_value(identity)
-  return FilterReduce(fn = ident, 
-                      pred = pred, 
-                      combine = f, 
-                      args = args,
-                      init = init,
-                      axis = axis)
+def _reduce(el, f, x, init, axis, what: str):
+    x = _arrayish(el, x)
+    if not isinstance(x, ArrayVal):
+        raise el.error(TypeInferenceError, f"{what}() expects an array, got {describe(x)}")
+    if isinstance(init, ArrayVal) and init.rank == 0:
+        init = el.as_scalar(init)
+
+    def combine(a, b):
+        return el.call(f, [a, b])
+
+    ax = _axis_arg(el, axis)
+    if isinstance(ax, tuple):
+        raise el.error(StaticValueError, f"{what}() takes a single axis (or None)")
+    if ax is None and not isinstance(init, ArrayVal):
+        if x.rank == 0:
+            v = el.as_scalar(x)
+            return v if init is None else combine(init, v)
+        x = _prepare(el, x)
+        return reduce_values(el, x.shape, lambda idx: el.tmp(el.elem(x, idx), "x"), combine, init, what)
+    k = norm_axis(el, 0 if ax is None else ax, x.rank)
+    if x.rank == 1 and not isinstance(init, ArrayVal):
+        x = _prepare(el, x)
+        return reduce_values(el, x.shape, lambda idx: el.tmp(el.elem(x, idx), "x"), combine, init, what)
+    if isinstance(f, scalars.UFunc) and (init is None or isinstance(init, Expr)):
+        # element-wise combiner: reduce each 1-d lane independently (and in parallel)
+        return along_axis(
+            el, x, k,
+            lambda lane: reduce_values(
+                el, lane.shape, lambda idx: el.tmp(el.elem(lane, idx), "x"), combine, init, what
+            ),
+            what,
+        )  # fmt: skip
+    x = _prepare(el, x)
+    return reduce_arrays(el, x.shape[k], lambda i: el.axis_view(x, k, i, consumed=True), combine, init, what)
+
+
+@libfunction("reduce")
+def reduce(el, f, x, init=None, axis=None):  # noqa: A001
+    """Fold ``f`` over the elements of ``x`` (all of them, or slices along ``axis``).
+
+    ``f`` should be associative: recognised primitives (add, multiply, min,
+    max, logical/bitwise and/or) are reduced in parallel."""
+    return _reduce(el, f, x, init, axis, "reduce")
+
+
+@core.register(functools.reduce)
+def _functools_reduce(el, f, x, initial=None):
+    x = _arrayish(el, x)
+    if isinstance(x, ArrayVal):
+        return _reduce(el, f, x, initial, 0, "reduce")
+    raise el.error(TypeInferenceError, f"reduce() expects an array or tuple, got {describe(x)}")
+
+
+@libfunction("scan")
+def scan(el, f, x, init=None, axis=0):
+    """Running fold: ``result[i] = f(result[i - 1], x[i])``."""
+    x = el.as_array(_arrayish(el, x))
+    ax = _axis_arg(el, axis)
+    if isinstance(init, ArrayVal) and init.rank == 0:
+        init = el.as_scalar(init)
+    if init is not None and not isinstance(init, Expr):
+        raise el.error(UnsupportedError, "scan() with an array-valued 'init' is not supported")
+
+    def combine(a, b):
+        return el.call(f, [a, b])
+
+    if ax is None or x.rank == 1:
+        if x.rank != 1:
+            x = el.flat_view(x)
+        x = _prepare(el, x)
+        return scan_values(el, x.shape[0], lambda i: el.tmp(el.elem(x, (i,)), "x"), combine, init)
+    return scan_axis(el, x, norm_axis(el, ax, x.rank), combine, init)
+
+
+def scan_axis(el, x: ArrayVal, k: int, combine, init=None) -> ArrayVal:
+    """Running fold along axis ``k`` of a multi-dimensional array."""
+    from ..ir import Assign, Store, Var
+    from ..types import join
+
+    x = _prepare(el, x)
+    # accumulator type
+    acc_type = init.type if init is not None else x.elt
+    el.loop_depth += 1
+    try:
+        for _ in range(6):
+            with el.trial():
+                r = combine(Var("acc", acc_type), Var("x", x.elt))
+                if not isinstance(r, Expr):
+                    raise el.error(TypeInferenceError, "the function passed to scan must return a scalar")
+                r_type = r.type
+            new = join(acc_type, r_type)
+            if new is acc_type:
+                break
+            acc_type = new
+    finally:
+        el.loop_depth -= 1
+    out = el.alloc_array(acc_type.strong, x.shape, label="scan")
+    lead = x.shape[:k] + x.shape[k + 1 :]
+    n = x.shape[k]
+
+    def lane(idx):
+        full = lambda i: tuple(idx[:k]) + (i,) + tuple(idx[k:])  # noqa: E731
+        acc = Var("acc", acc_type)
+        el.mutables.add(acc.uid)
+        if init is not None:
+            el.emit(Assign(acc, ops.cast(init, acc_type)))
+
+            def body(i):
+                el.emit(Assign(acc, ops.cast(el.as_scalar(combine(acc, el.tmp(el.elem(x, full(i)), "x"))), acc_type)))
+                el.emit(Store(out.buf, el.index_expr(out, full(i)), ops.cast(acc, acc_type.strong)))
+
+            el.for_range(ops.ZERO, n, body)
+        else:
+            from ..ir import If
+
+            first: list = []
+            with el.in_block(first):
+                el.emit(Assign(acc, ops.cast(el.elem(x, full(ops.ZERO)), acc_type)))
+                el.emit(Store(out.buf, el.index_expr(out, full(ops.ZERO)), ops.cast(acc, acc_type.strong)))
+            el.emit(If(cmp("gt", n, 0), first, []))
+
+            def body(i):
+                el.emit(Assign(acc, ops.cast(el.as_scalar(combine(acc, el.tmp(el.elem(x, full(i)), "x"))), acc_type)))
+                el.emit(Store(out.buf, el.index_expr(out, full(i)), ops.cast(acc, acc_type.strong)))
+
+            el.for_range(ops.ONE, n, body)
+
+    el.loop_nest(lead, lane)
+    return out
+
+
+def _index_value(idx, scalar_index: bool):
+    return idx[0] if scalar_index else tuple(idx)
+
+
+@libfunction("imap")
+def imap(el, f, shape):
+    """Array of the given ``shape`` with ``result[idx] = f(idx)``.
+
+    ``f`` receives an integer when ``shape`` is an integer, otherwise a tuple."""
+    scalar_index = isinstance(shape, Expr) or (isinstance(shape, ArrayVal) and shape.rank == 0)
+    dims = el.check_dims(el.shape_tuple(shape, "the shape passed to imap"))
+    return build_map(el, dims, lambda idx: el.call(f, [_index_value(idx, scalar_index)]), "imap")
+
+
+@libfunction("ireduce")
+def ireduce(el, f, shape, init=None, combine=None):
+    """Reduce ``f(idx)`` over every index of ``shape`` with ``combine``
+    (defaults to addition)."""
+    scalar_index = isinstance(shape, Expr)
+    dims = el.check_dims(el.shape_tuple(shape, "the shape passed to ireduce"))
+    comb = combine if combine is not None else scalars.UFUNCS["add"]
+    return reduce_values(
+        el, dims, lambda idx: el.as_scalar(el.call(f, [_index_value(idx, scalar_index)]), "ireduce element"),
+        lambda a, b: el.call(comb, [a, b]), init, "ireduce",
+    )  # fmt: skip
+
+
+@libfunction("parfor")
+def parfor(el, f, bounds):
+    """Call ``f(idx)`` for every index below ``bounds``, in parallel, for its
+    side effects (typically writes to a preallocated output array)."""
+    scalar_index = isinstance(bounds, Expr)
+    dims = el.check_dims(el.shape_tuple(bounds, "the bounds passed to parfor"))
+
+    def body(idx):
+        el.call(f, [_index_value(idx, scalar_index)])
+
+    el.loop_nest(dims, body)
+    return None
+
+
+@libfunction("filter")
+def filter(el, pred, x):  # noqa: A001
+    """Elements of ``x`` (along its first axis) for which ``pred`` is true."""
+    x = el.as_array(_arrayish(el, x))
+    mask = map.impl(el, pred, x, axis=0)
+    if not isinstance(mask, ArrayVal) or mask.rank != 1:
+        raise el.error(TypeInferenceError, "the predicate passed to filter must return a scalar")
+    mask = el.cast_array(mask, _bool())
+    return el.getitem(el.as_concrete(x) if x.buf is None and x.cost > CHEAP_COST else x, mask)
+
+
+def _bool():
+    from ..types import Bool
+
+    return Bool
+
+
+@core.register(builtins.map)
+def _builtin_map(el, f, *args):
+    return map.impl(el, f, *args, axis=0)
+
+
+@core.register(builtins.filter)
+def _builtin_filter(el, pred, x):
+    return filter.impl(el, pred, x)
+
+
+__all__ = [
+    "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
+    "parfor", "filter", "scan_axis",
+]  # fmt: skip
+_ = (Const, I)

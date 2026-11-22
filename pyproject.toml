@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "parakeet"
+dynamic = ["version"]
+description = "Runtime compiler for numerical Python: fused, parallel native code for CPUs and GPUs from NumPy-style functions"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Alex Rubinsteyn" }]
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0"]
+keywords = ["jit", "compiler", "numpy", "parallel", "gpu", "metal", "cuda", "array"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: BSD License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Compilers",
+]
+
+[project.optional-dependencies]
+metal = ["pyobjc-framework-Metal>=10.0; sys_platform == 'darwin'"]
+cuda11 = ["cupy-cuda11x>=13.0"]
+cuda12 = ["cupy-cuda12x>=13.0"]
+dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.6"]
+docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.25"]
+
+[project.urls]
+Homepage = "https://github.com/iskandr/parakeet"
+Documentation = "https://iskandr.github.io/parakeet/"
+Issues = "https://github.com/iskandr/parakeet/issues"
+Changelog = "https://github.com/iskandr/parakeet/blob/master/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "parakeet/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["parakeet"]
+
+[tool.hatch.build.targets.sdist]
+include = ["parakeet", "tests", "examples", "benchmarks", "docs", "README.md", "CHANGELOG.md", "LICENSE", "mkdocs.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+  "ignore:.*random_integers.*:DeprecationWarning",
+  "ignore::parakeet.errors.FallbackWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["site"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+  "E501",  # line length is handled by the formatter
+  "E741",  # single-letter names are conventional in numerical code
+  "B008",
+  "B023",  # closures over loop variables are used deliberately (and immediately)
+  "B905",  # zip() without strict= : lengths are checked by construction
+]
+
+[tool.ruff.lint.per-file-ignores]
+# tests exercise exactly the constructs lint rules warn about
+"tests/**" = ["E", "F", "B", "UP", "I", "W"]
+"examples/**" = ["E731"]
+"benchmarks/**" = ["E731", "E402"]
+"parakeet/__init__.py" = ["F401"]
+"parakeet/testing_helpers.py" = ["F401", "F403"]
+
+[tool.ruff.format]
+quote-style = "double"
