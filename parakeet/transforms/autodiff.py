@@ -1,0 +1,1018 @@
+"""Reverse-mode differentiation of the array operators.
+
+``grad(f)`` is an adverb like ``map`` or ``reduce``: it is applied while the
+calling function is elaborated, and what it produces is ordinary loop IR that
+is fused, tiled and parallelised with the rest.
+
+While ``f`` is elaborated a :class:`Tape` records each array operator applied
+to a value that depends on the differentiated arguments.  The record is made
+where the operator still has its algebraic meaning, so every rule below is
+one line of algebra:
+
+===============  ==========================================================
+element-wise     a map of the scalar function's partial derivative
+                 (:mod:`parakeet.transforms.derivatives`), summed over the
+                 dimensions the argument was broadcast along
+reduce           ``add``: the adjoint broadcast back; ``min``/``max``: sent
+                 to the winning elements; ``multiply``: times the product of
+                 the others
+matmul           two more matmuls
+map, allpairs    a loop over the same index space that differentiates the
+                 element function again, one element at a time
+views            none: a slice of an array is the same slice of its adjoint
+===============  ==========================================================
+
+Scalars are not recorded at all.  An IR expression is its own tape, and a
+variable bound to one remembers its definition, so the adjoint of a scalar
+is pushed straight down its expression tree.
+
+The tape is static but the program is not: a loop body runs many times, a
+branch maybe never.  An operator applied to a differentiated value anywhere
+but in straight-line code therefore asks for the enclosing loop to be
+unrolled (possible when its trip count is a compile-time constant) and is an
+error otherwise.  Anything else that could carry a derivative past the tape
+unseen - a variable merged after a branch, an element stored into an array -
+is *tainted*, and meeting a tainted value during differentiation is an error
+too.  The gradient is right or there is none.
+"""
+
+from __future__ import annotations
+
+import ast
+import copy
+from typing import Any
+
+from .. import prims
+from ..errors import InternalError, TypeInferenceError, UnsupportedError
+from ..ndtypes import Bool, BufType, ScalarType
+from ..syntax import ops
+from ..syntax.ir import Assign, Cast, Const, Expr, Load, Prim, Store, Var, same, walk_stmts
+from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, isub
+from ..syntax.values import CHEAP_COST, ArrayVal, describe
+from .derivatives import backprop, is_float
+
+MAX_UNROLL = 4096
+UF = prims.UFUNCS
+
+
+# ---------------------------------------------------------------------------
+# what depends on a differentiated value
+# ---------------------------------------------------------------------------
+
+
+def depends(el, e: Expr) -> bool:
+  """Does the float expression ``e`` mention a value under differentiation?"""
+  stack = [e]
+  while stack:
+    e = stack.pop()
+    if isinstance(e, Const) or not is_float(e):
+      continue
+    if isinstance(e, Var):
+      if e.uid in el.ad_vars:
+        return True
+    elif isinstance(e, Load):
+      if e.buf.uid in el.ad_bufs:
+        return True
+    elif isinstance(e, Prim):
+      stack.extend(e.args)
+    elif isinstance(e, Cast):
+      stack.append(e.arg)
+  return False
+
+
+def note_def(el, v: Var, e: Expr) -> None:
+  """``v`` was just bound to the pure expression ``e``."""
+  if is_float(e):
+    el.defs[v.uid] = e
+    if depends(el, e):
+      el.ad_vars.add(v.uid)
+
+
+def observe(el, stmt) -> None:
+  """Taint whatever a statement the tape does not know about writes to."""
+  for s in walk_stmts([stmt]):
+    if isinstance(s, Assign):
+      t = s.var.type
+      if isinstance(t, BufType):
+        if isinstance(s.value, Var) and s.value.uid in el.ad_bufs:
+          el.ad_bufs.add(s.var.uid)
+          el.tainted_bufs.setdefault(s.var.uid, _info(el, "an array chosen at run time (after a branch or in a loop)"))
+      elif t.kind == "f" and s.var.uid not in el.defs and depends(el, s.value):
+        el.ad_vars.add(s.var.uid)
+        el.tainted_vars.setdefault(s.var.uid, _info(el, "a variable assigned in a branch or a loop"))
+    elif isinstance(s, Store):
+      if is_float(s.value) and depends(el, s.value):
+        el.ad_bufs.add(s.buf.uid)
+        el.tainted_bufs.setdefault(s.buf.uid, _info(el, "an array whose elements were assigned one by one"))
+
+
+def _info(el, what: str) -> tuple:
+  return (el.loc(), what, el.blame())
+
+
+def _tainted(el, info) -> UnsupportedError:
+  loc, what, blamed = info
+  where = f" (line {loc.lineno})" if loc is not None and getattr(loc, "lineno", None) else ""
+  if blamed is not None:
+    return el.error(
+      UnsupportedError, f"cannot differentiate through {blamed}(){where}: its derivative is not implemented"
+    )
+  return el.error(
+    UnsupportedError,
+    f"cannot differentiate through {what}{where}",
+    hint="build the value with array operations instead: np.where or a conditional expression for a choice, "
+    "a comprehension, parakeet.map or a NumPy function for an array, parakeet.reduce or np.sum for a total",
+  )
+
+
+# ---------------------------------------------------------------------------
+# where adjoints accumulate
+# ---------------------------------------------------------------------------
+
+
+class ScalarAdj:
+  """The adjoint of a scalar variable."""
+
+  def __init__(self, tape: Tape, var: Var, source: Node | None = None):
+    self.tape = tape
+    self.var = var
+    self.source = source
+    self.parts: list[Expr] = []
+    self.cell: Var | None = None  # a one-element buffer, for adjoints added inside loops
+    self.needs_cell = False
+
+  def add(self, el, c: Expr, via: Tape) -> None:
+    if via.dry and self.tape is not via:
+      self.needs_cell = True
+      return
+    c = cast(c, self.var.type)
+    if el.block is self.tape.home:
+      self.parts.append(el.tmp(c, "adj"))
+      return
+    if self.cell is None:
+      raise InternalError("adjoint of a scalar is needed inside a loop that was not anticipated")
+    el.emit(
+      Store(self.cell, ZERO, ops.prim("add", (Load(self.cell, ZERO), cast(c, self.cell.type.elt)), self.cell.type.elt))
+    )
+
+  def allocate(self, el) -> None:
+    if self.needs_cell and self.cell is None:
+      arr = el.alloc_array(self.var.type.strong, (ONE,), zero=True, label="adj")
+      self.cell = arr.buf
+
+  def total(self, el) -> Expr | None:
+    t = self.var.type
+    total: Expr | None = None
+    for p in self.parts:
+      total = p if total is None else ops.prim("add", (total, p), t)
+    if self.cell is not None:
+      c = cast(Load(self.cell, ZERO), t)
+      total = c if total is None else ops.prim("add", (total, c), t)
+    return None if total is None else el.tmp(total, "adj")
+
+
+class RootAdj:
+  """The adjoint of a dense array.  Views of the array are the same views of
+  the adjoint, so slicing, transposing and reshaping need no rules."""
+
+  def __init__(self, tape: Tape, arr: ArrayVal, source: Node | None = None):
+    self.tape = tape
+    self.arr = arr
+    self.source = source
+    self.whole: ArrayVal | None = None  # sum of the contributions covering the whole array
+    self.buf: ArrayVal | None = None  # zero-initialised accumulator, when views or loops need one
+    self.needs_buffer = False
+    self.stored: Any = None
+
+  def is_whole(self, el, v: ArrayVal) -> bool:
+    a = self.arr
+    return v is a or (
+      v.rank == a.rank
+      and same(v.offset, a.offset)
+      and all(el.dim_equal(x, y) for x, y in zip(v.shape, a.shape))
+      and all(same(x, y) for x, y in zip(v.strides, a.strides))
+    )
+
+  def allocate(self, el) -> None:
+    if self.buf is None:
+      self.buf = el.alloc_array(self.arr.elt, self.arr.shape, zero=True, label="adj")
+
+  def _ensure(self, el) -> ArrayVal:
+    if self.buf is None:
+      if el.block is not self.tape.home:
+        raise InternalError("adjoint of an array is needed inside a loop that was not anticipated")
+      self.allocate(el)
+    return self.buf  # type: ignore[return-value]
+
+  def view(self, el, v: ArrayVal) -> ArrayVal:
+    buf = self._ensure(el)
+    out = ArrayVal(
+      self.arr.elt, v.shape, buf=buf.buf, offset=el.tmp(isub(v.offset, self.arr.offset), "off"),
+      strides=v.strides, roots=buf.roots, contig=False,
+    )  # fmt: skip
+    out.inj = v.inj
+    return out
+
+  def add(self, el, v: ArrayVal, g, via: Tape) -> None:
+    if self.stored is not None:
+      raise _tainted(el, self.stored)
+    if via.dry and self.tape is not via:
+      self.needs_buffer = True
+      return
+    at_home = el.block is self.tape.home
+    if self.buf is None and at_home and self.is_whole(el, v) and isinstance(g, ArrayVal):
+      g = settled(el, el.cast_array(g, self.arr.elt))
+      self.whole = g if self.whole is None else el.apply_ufunc(UF["add"], [self.whole, g])
+      return
+    accumulate(el, self.view(el, v), g)
+
+  def scatter(self, el, pos: Expr, c: Expr, via: Tape) -> None:
+    if self.stored is not None:
+      raise _tainted(el, self.stored)
+    if via.dry and self.tape is not via:
+      self.needs_buffer = True
+      return
+    buf = self._ensure(el)
+    elt = self.arr.elt
+    p = el.tmp(isub(pos, self.arr.offset), "pos")
+    el.emit(Store(buf.buf, p, ops.prim("add", (Load(buf.buf, p), cast(c, elt)), elt)))
+
+  def total(self, el) -> ArrayVal | None:
+    if self.stored is not None:
+      raise _tainted(el, self.stored)
+    if self.buf is None:
+      return self.whole
+    if self.whole is not None:
+      accumulate(el, self.buf, self.whole)
+      self.whole = None
+    return self.buf
+
+
+def settled(el, g: ArrayVal) -> ArrayVal:
+  """An adjoint that will be held on to.  Cheap expressions stay delayed and
+  fuse into whatever uses them; anything expensive is evaluated now, before
+  a store into some adjoint buffer could make it stale."""
+  if g.buf is None and g.cost > CHEAP_COST:
+    return el.as_concrete(g)
+  return g
+
+
+def accumulate(el, dest: ArrayVal, g) -> None:
+  """``dest += g`` for a view of an adjoint buffer."""
+  elt = dest.elt
+  if isinstance(g, ArrayVal):
+    if g.buf is None and g.cost > CHEAP_COST:
+      g = el.as_concrete(g)
+    el.consume(g)
+    g = el.broadcast_to(g, dest.shape, consumed=True)
+
+  def body(idx):
+    pos = el.tmp(el.index_expr(dest, idx), "pos")
+    x = el.elem(g, idx) if isinstance(g, ArrayVal) else g
+    el.emit(Store(dest.buf, pos, ops.prim("add", (Load(dest.buf, pos), cast(x, elt)), elt)))
+
+  if not isinstance(g, ArrayVal):
+    g = el.tmp(g, "g")
+  # two indices of a view that broadcasts (or repeats) hit the same element
+  el.loop_nest(dest.shape, body, parallel=dest.inj)
+  el.record_store(dest)
+
+
+# ---------------------------------------------------------------------------
+# the tape
+# ---------------------------------------------------------------------------
+
+
+class Node:
+  """One recorded operator application."""
+
+  __slots__ = ("kind", "inputs", "out", "info", "g", "holder", "tick", "origin")
+
+  def __init__(self, kind: str, inputs: tuple, info: Any = None):
+    self.kind = kind
+    self.inputs = inputs
+    self.info = info
+    self.out: Any = None
+    self.tick = 0
+    self.origin: Any = None  # stands in for an AST node as the origin of arrays its rule creates
+    self.g: ArrayVal | None = None  # adjoint of a delayed result
+    self.holder: RootAdj | ScalarAdj | None = None  # adjoint of a concrete or scalar result
+
+
+class Tape:
+  def __init__(self, el, parent: Tape | None = None, dry: bool = False, key: tuple = ()):
+    self.parent = parent
+    self.dry = dry
+    self.key = key  # identifies this tape across restarts of the elaboration
+    self.sites: dict[tuple, int] = {}
+    self.block = el.block  # operators are only recorded in this block: straight-line code
+    self.home: list | None = None  # where the backward pass is emitted
+    self.outer_loops = {id(ctx) for fr in el.frames for ctx in fr.loops}
+    self.nodes: list[Node] = []
+    self.roots: dict[int, RootAdj] = {}
+    self.scalars: dict[int, ScalarAdj] = {}
+    self.delayed: dict[int, Node] = {}
+    self.known: dict[int, bool] = {}
+    self.keep: list = []
+    self.muted = 0
+    self.tick = 0  # orders recorded operators, allocations and in-place stores
+    self.born: dict = {}  # root -> tick of its allocation (roots not listed are older than the tape)
+    self.stored_at: dict = {}  # root -> tick of the last store into it
+    self.unknown_store = -1  # tick of the last store into an array whose origin is unknown
+
+  # ---- lookup --------------------------------------------------------------------
+
+  def find_root(self, uid: int) -> RootAdj | None:
+    t: Tape | None = self
+    while t is not None:
+      r = t.roots.get(uid)
+      if r is not None:
+        return r
+      t = t.parent
+    return None
+
+  def find_scalar(self, uid: int) -> ScalarAdj | None:
+    t: Tape | None = self
+    while t is not None:
+      s = t.scalars.get(uid)
+      if s is not None:
+        return s
+      t = t.parent
+    return None
+
+  def find_delayed(self, arr: ArrayVal) -> tuple[Tape, Node] | None:
+    t: Tape | None = self
+    while t is not None:
+      n = t.delayed.get(id(arr))
+      if n is not None:
+        return t, n
+      t = t.parent
+    return None
+
+  # ---- activity --------------------------------------------------------------------
+
+  def is_active(self, el, v) -> bool:
+    """Does ``v`` carry a derivative?  Raises if it does but the tape lost track of it."""
+    if isinstance(v, Expr):
+      return is_float(v) and depends(el, v)
+    if isinstance(v, tuple):
+      return any(self.is_active(el, x) for x in v)
+    if not isinstance(v, ArrayVal) or v.elt.kind != "f":
+      return False
+    if v.buf is not None:
+      uid = v.buf.uid
+      if uid not in el.ad_bufs:
+        return False
+      if uid in el.tainted_bufs:
+        raise _tainted(el, el.tainted_bufs[uid])
+      root = self.find_root(uid)
+      if root is None:
+        raise InternalError("an array depends on a differentiated value but has no adjoint")
+      if root.stored is not None:
+        raise _tainted(el, root.stored)
+      return True
+    if self.find_delayed(v) is not None:
+      return True
+    return self.classify(el, v)
+
+  def classify(self, el, arr: ArrayVal) -> bool:
+    """Activity of a delayed array no rule produced: evaluate one element."""
+    hit = self.known.get(id(arr))
+    if hit is not None:
+      return hit
+    probe = tuple(Var("i", I) for _ in arr.shape)
+    for p, d in zip(probe, arr.shape):
+      el.nonneg.add(p.uid)
+      el.upper[p.uid] = d
+    self.muted += 1
+    el.loop_depth += 1
+    try:
+      with el.trial():
+        r = arr.fn(probe)
+        active = depends(el, r)
+        if active:
+          # the element must be a pure expression of differentiated values
+          self.push(el, r, Const(1.0, r.type), dry=True)
+    finally:
+      el.loop_depth -= 1
+      self.muted -= 1
+    self.known[id(arr)] = active
+    self.keep.append(arr)
+    if active:
+      node = Node("opaque", (arr,))
+      self.record(el, node)
+      self.delayed[id(arr)] = node
+      node.out = arr
+    return active
+
+  # ---- recording ---------------------------------------------------------------------
+
+  def record(self, el, node: Node) -> None:
+    if el.block is not self.block:
+      self.not_static(el)
+    self.tick += 1
+    node.tick = self.tick
+    self.nodes.append(node)
+    # Arrays the rule of this operator creates need an origin that is the same
+    # object every time the function is elaborated: the n-th operator of its
+    # kind recorded while evaluating a given piece of source
+    site = el.node_stack[-1] if el.node_stack else None
+    where = (id(site), node.kind)
+    n = self.sites[where] = self.sites.get(where, 0) + 1
+    key = (*self.key, id(site), node.kind, n)
+    origin = el.state.tokens.get(key)
+    if origin is None:
+      origin = el.state.tokens[key] = copy.copy(site) if isinstance(site, ast.AST) else ast.Pass()
+      el.state.keep.append(site)
+    node.origin = origin
+
+  def not_static(self, el) -> None:
+    for fr in reversed(el.frames):
+      if fr.loops and id(fr.loops[-1]) not in self.outer_loops:
+        el.request_unroll(fr, fr.loops[-1].node)
+    raise el.no_derivative(
+      "cannot differentiate an array operation that only runs conditionally",
+      hint="use np.where or a conditional expression (a if c else b) instead of an if statement",
+    )
+
+  def register(self, el, node: Node, out) -> None:
+    """Make ``out`` the result of ``node``."""
+    node.out = out
+    if isinstance(out, Expr):
+      if isinstance(out, Var):
+        node.holder = self.scalars[out.uid] = ScalarAdj(self, out, node)
+        el.ad_vars.add(out.uid)
+        el.tainted_vars.pop(out.uid, None)
+    elif out.buf is not None:
+      node.holder = self.root(el, out, node)
+    else:
+      self.delayed[id(out)] = node
+      self.keep.append(out)
+
+  def root(self, el, arr: ArrayVal, source: Node | None = None) -> RootAdj:
+    r = self.roots[arr.buf.uid] = RootAdj(self, arr, source)
+    el.ad_bufs.add(arr.buf.uid)
+    el.tainted_bufs.pop(arr.buf.uid, None)
+    return r
+
+  def leaf_scalar(self, el, v: Var) -> ScalarAdj:
+    s = self.scalars[v.uid] = ScalarAdj(self, v)
+    el.ad_vars.add(v.uid)
+    return s
+
+  # ---- hooks called by the frontend ------------------------------------------------------
+
+  def elementwise(self, el, args: list, active: list[bool], fn, elt: ScalarType, cost: int):
+    # the backward pass evaluates the arguments again: they must be cheap to re-read
+    args = [el.as_concrete(a) if isinstance(a, ArrayVal) and a.buf is None and a.cost > CHEAP_COST else a for a in args]
+    args = [a if isinstance(a, ArrayVal) else el.tmp(a) for a in args]
+    self.muted += 1
+    try:
+      out = el.elementwise_plain(args, fn, elt, cost)
+    finally:
+      self.muted -= 1
+    node = Node("elementwise", tuple(args), (tuple(active), fn, elt, cost))
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
+  def materialized(self, el, arr: ArrayVal, out: ArrayVal) -> None:
+    """``out`` is a fresh copy of ``arr``."""
+    if arr.elt.kind != "f" or out.buf.uid not in el.tainted_bufs:
+      return  # nothing that was copied depends on a differentiated value
+    if not self.is_active(el, arr):
+      raise _tainted(el, el.tainted_bufs[out.buf.uid])
+    node = Node("alias", (arr,))
+    self.record(el, node)
+    self.register(el, node, out)
+
+  def reduce(self, el, plain, op: str, a: ArrayVal, axis, init, what: str, keepdims):
+    if op != "add" and a.buf is None and a.cost > CHEAP_COST:
+      a = el.as_concrete(a)
+    self.muted += 1
+    try:
+      out = plain(el, op, a, axis, init, what, keepdims)
+      if isinstance(out, ArrayVal):
+        out = el.as_concrete(out)
+    finally:
+      self.muted -= 1
+    if not isinstance(keepdims, bool):
+      keepdims = el.static_bool(keepdims, "keepdims")
+    node = Node("reduce", (a,), (op, axis, keepdims))
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
+  def matmul(self, el, plain, a: ArrayVal, b: ArrayVal, what: str):
+    self.muted += 1
+    try:
+      out = plain(el, a, b, what)
+      if isinstance(out, ArrayVal):
+        out = el.as_concrete(out)
+    finally:
+      self.muted -= 1
+    node = Node("matmul", (a, b), (self.is_active(el, a), self.is_active(el, b)))
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
+  def pack(self, el, parts: list[tuple[ArrayVal, Any]], out: ArrayVal) -> None:
+    """``out`` was assembled from ``parts``: (view of out, value stored there)."""
+    live = [(view, v) for view, v in parts if self.is_active(el, v)]
+    if not live:
+      return
+    node = Node("pack", tuple(v for _, v in live), [view for view, _ in live])
+    self.record(el, node)
+    self.register(el, node, out)
+
+  def map(self, el, plain, shape, fn, what: str):
+    """A map whose element function is user code: None if it carries no derivative."""
+    from ..lib.core import sub_view
+
+    shape = tuple(el.tmp(d, "n") for d in shape)
+    context = el.capture()
+
+    def at(idx):
+      with el.restored(context):
+        return fn(idx)
+
+    probe = tuple(Var("i", I) for _ in shape)
+    for p, d in zip(probe, shape):
+      el.nonneg.add(p.uid)
+      el.upper[p.uid] = d
+    el.loop_depth += 1
+    try:
+      with el.trial():
+        child = Tape(el, self, dry=True, key=(*self.key, id(el.node_stack[-1]) if el.node_stack else 0, "probe"))
+        el.tape = child
+        try:
+          r = at(probe)
+        finally:
+          el.tape = self
+        if isinstance(r, tuple):
+          return None  # the plain map reports the error
+        active = child.is_active(el, r)
+        if active:
+          if isinstance(r, ArrayVal):
+            seed: Any = el.alloc_array(r.elt, r.shape, label="seed")
+          else:
+            seed = Var("seed", r.type)
+          el.tape = None
+          try:
+            child.backward(el, r, seed)
+          finally:
+            el.tape = self
+    finally:
+      el.loop_depth -= 1
+    if not active:
+      return None
+    el.tape = None
+    try:
+      out = el.as_concrete(el.as_array(plain(el, shape, at, what)))
+    finally:
+      el.tape = self
+    node = Node("map", (), (shape, at, sub_view))
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
+  def note_alloc(self, root) -> None:
+    self.tick += 1
+    self.born[root] = self.tick
+
+  def note_store(self, el, arr: ArrayVal) -> None:
+    """Part of ``arr`` was overwritten by code the tape did not record."""
+    self.tick += 1
+    roots = el.get_roots(arr)
+    if roots is None:
+      self.unknown_store = self.tick
+    else:
+      for r in roots:
+        self.stored_at[r] = self.tick
+    if arr.buf is None:
+      return
+    root = self.find_root(arr.buf.uid)
+    if root is not None and root.stored is None:
+      root.stored = _info(el, "an array that is modified in place after it was computed")
+
+  # ---- the backward pass --------------------------------------------------------------------
+
+  def add(self, el, v, g) -> None:
+    """Add ``g`` to the adjoint of ``v``."""
+    if isinstance(v, Expr):
+      if is_float(v) and depends(el, v):
+        self.push(el, v, el.as_scalar(g, "adjoint") if isinstance(g, ArrayVal) else g)
+      return
+    if not isinstance(v, ArrayVal) or v.elt.kind != "f":
+      return
+    if v.buf is not None:
+      if v.buf.uid in el.tainted_bufs:
+        raise _tainted(el, el.tainted_bufs[v.buf.uid])
+      root = self.find_root(v.buf.uid)
+      if root is not None:
+        root.add(el, v, g, self)
+      return
+    found = self.find_delayed(v)
+    if found is None:
+      return
+    owner, node = found
+    if owner is not self or el.block is not self.home:
+      if self.dry:
+        return
+      raise InternalError("adjoint of a delayed array is needed outside the tape that owns it")
+    g = settled(el, el.cast_array(el.as_array(g), v.elt))
+    node.g = g if node.g is None else el.apply_ufunc(UF["add"], [node.g, g])
+
+  def push(self, el, e: Expr, seed: Expr, dry: bool = False) -> None:
+    """Send the adjoint ``seed`` of the scalar ``e`` down to what it was computed from."""
+    via = _DRY if dry else self
+
+    def on_var(v: Var, adj: Expr):
+      s = self.find_scalar(v.uid)
+      if s is not None:
+        s.add(el, adj, via)
+        return None
+      if v.uid in el.tainted_vars:
+        raise _tainted(el, el.tainted_vars[v.uid])
+      return el.defs.get(v.uid)
+
+    def on_load(load: Load, adj: Expr) -> None:
+      uid = load.buf.uid
+      if uid in el.tainted_bufs:
+        raise _tainted(el, el.tainted_bufs[uid])
+      root = self.find_root(uid)
+      if root is not None:
+        root.scatter(el, load.index, adj, via)
+
+    backprop(el, e, seed, on_var, on_load, live=lambda x: depends(el, x))
+
+  def backward(self, el, out, seed) -> None:
+    """Emit the adjoint computation of everything recorded, given ``d out = seed``."""
+    self.home = el.block
+    for r in list(self.roots.values()):
+      if r.needs_buffer:
+        r.allocate(el)
+    for s in list(self.scalars.values()):
+      s.allocate(el)
+    self.add(el, out, seed)
+    for node in reversed(self.nodes):
+      holder = node.holder
+      if holder is not None:
+        g = holder.total(el)
+      else:
+        g = node.g
+      if g is None:
+        continue
+      el.node_stack.append(node.origin)
+      try:
+        _BACKWARD[node.kind](self, el, node, g)
+      finally:
+        el.node_stack.pop()
+
+  def stale(self, el, node: Node, v=None) -> None:
+    """The backward pass is about to read again what ``node`` read (the array
+    ``v``, or anything at all): it must still hold what the forward pass saw."""
+    if v is None:
+      # anything that existed when the operator ran
+      changed = self.unknown_store > node.tick or any(
+        t > node.tick and self.born.get(r, 0) < node.tick for r, t in self.stored_at.items()
+      )
+    elif isinstance(v, ArrayVal) and v.buf is not None:
+      roots = el.get_roots(v)
+      if roots is None:
+        changed = self.unknown_store > node.tick or any(t > node.tick for t in self.stored_at.values())
+      else:
+        changed = self.unknown_store > node.tick or any(self.stored_at.get(r, 0) > node.tick for r in roots)
+    else:
+      changed = False  # delayed arrays are checked (and re-evaluated eagerly) by the frontend itself
+    if changed:
+      raise el.error(
+        UnsupportedError,
+        "cannot differentiate: an array is modified in place after a differentiated computation used it",
+        hint="assign the modified array to a new variable instead of updating it in place",
+      )
+
+
+class _Dry:
+  """Stands in for a tape when a push only has to find out what it would touch."""
+
+  dry = True
+
+
+_DRY: Any = _Dry()
+
+
+# ---------------------------------------------------------------------------
+# rules
+# ---------------------------------------------------------------------------
+
+
+def unbroadcast(el, g: ArrayVal, target):
+  """Sum ``g`` over the dimensions along which ``target`` was broadcast to it."""
+  from ..lib.numpy_lib import reduce_plain
+
+  zero = Const(0, g.elt)
+  if not isinstance(target, ArrayVal) or target.rank == 0:
+    return g if g.rank == 0 else reduce_plain(el, "add", g, None, zero, "sum", False)
+  lead = g.rank - target.rank
+  axes = list(range(lead))
+  for k, d in enumerate(target.shape):
+    if el.dim_equal(d, g.shape[k + lead]):
+      continue
+    if isinstance(d, Const) and d.value == 1:
+      axes.append(k + lead)
+      continue
+    # whether this dimension was stretched is only known at run time
+    out = el.alloc_array(g.elt, target.shape, zero=True, label="adj")
+    accumulate(el, el.broadcast_to(out, g.shape), g)
+    return out
+  if not axes:
+    return g
+  if lead:
+    g = reduce_plain(el, "add", g, tuple(range(lead)), zero, "sum", False)
+    axes = [a - lead for a in axes if a >= lead]
+  if axes:
+    g = reduce_plain(el, "add", g, tuple(axes), zero, "sum", True)
+  return g
+
+
+def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  active, fn, elt, cost = node.info
+  args = node.inputs
+  n = len(args)
+  if sum(active) > 1 and g.buf is None and g.cost > CHEAP_COST:
+    g = el.as_concrete(g)
+  for a in args:
+    tape.stale(el, node, a)
+  for k in range(n):
+    if not active[k]:
+      continue
+    a = args[k]
+    t = a.elt if isinstance(a, ArrayVal) else a.type.strong
+
+    def partial(*xs, k=k, t=t):
+      *xs, gv = xs
+      mark = Var._counter
+      leaves = []
+      for x in xs:
+        leaf = Var("x", x.type)
+        el.block.append(Assign(leaf, x))
+        leaves.append(leaf)
+      r = fn(*leaves)
+      found: list[Expr] = []
+
+      def on_var(v: Var, adj: Expr):
+        if v is leaves[k]:
+          found.append(adj)
+          return None
+        return el.defs.get(v.uid) if v.uid > mark else None
+
+      backprop(el, r, cast(gv, r.type), on_var, lambda load, adj: None)
+      return cast(found[0], t) if found else Const(0.0, t)
+
+    contrib = el.elementwise_plain([*args, g], partial, t, cost + 4)
+    tape.add(el, a, unbroadcast(el, contrib, a))
+
+
+def _alias(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  tape.add(el, node.inputs[0], g)
+
+
+def _opaque(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  arr = node.inputs[0]
+  if g.buf is None and g.cost > CHEAP_COST:
+    g = el.as_concrete(g)
+  el.consume(g)
+  el.check_fresh(arr)
+  tape.stale(el, node)
+
+  def body(idx):
+    tape.push(el, arr.fn(tuple(idx)), el.tmp(el.elem(g, idx), "g"))
+
+  el.seq_nest(arr.shape, body)
+
+
+def _reduce(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.numpy_lib import _axes, reduce_plain
+
+  (a,) = node.inputs
+  op, axis, keepdims = node.info
+  y = node.out
+  axes = _axes(el, axis, a.rank)
+  elt = a.elt
+
+  def spread(v):
+    """A reduced value, shaped so that it broadcasts against ``a``."""
+    if not isinstance(v, ArrayVal):
+      return cast(v, elt)
+    if not keepdims and axes is not None and len(axes) < a.rank:
+      v = el.expand_dims(v, axes)
+    return v
+
+  gb = spread(g)
+  if op == "add":
+    contrib = gb
+  else:
+    tape.stale(el, node, a)
+    yb = spread(y)
+    if op == "mul":
+      # every element's partial derivative is the product of the others
+      contrib = el.apply_ufunc(UF["div"], [el.apply_ufunc(UF["mul"], [gb, yb]), a])
+    else:
+      # ties share the adjoint equally
+      hit = el.apply_ufunc(UF["eq"], [a, yb])
+      if hit.buf is None:
+        hit = el.as_concrete(hit)
+      count = reduce_plain(el, "add", el.cast_array(hit, elt), axis, Const(0, elt), "sum", True)
+      if isinstance(count, ArrayVal) and count.buf is None:
+        count = el.as_concrete(count)
+      one = Const(1, elt)
+      share = el.apply_ufunc(UF["div"], [gb, el.apply_ufunc(UF["max"], [count, one])])
+      if isinstance(share, Expr):
+        share = el.tmp(share)
+      zero = Const(0, elt)
+      contrib = el.elementwise_plain([hit, share], lambda h, s: ops.select(cast(h, Bool), cast(s, elt), zero), elt, 1)
+  if not isinstance(contrib, ArrayVal) or contrib.rank != a.rank:
+    scalar = el.tmp(contrib if isinstance(contrib, Expr) else el.as_scalar(contrib))
+    contrib = el.delayed(elt, a.shape, lambda idx: cast(scalar, elt), cost=0)
+  else:
+    contrib = el.broadcast_to(contrib, a.shape)
+  tape.add(el, a, contrib)
+
+
+def _matmul(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.numpy_lib import matmul_plain
+
+  a, b = node.inputs
+  active_a, active_b = node.info
+  tape.stale(el, node, a)
+  tape.stale(el, node, b)
+  if isinstance(g, ArrayVal) and g.buf is None:
+    g = el.as_concrete(g)
+
+  def outer(u, v):
+    return el.apply_ufunc(UF["mul"], [el.expand_dims(u, [1]), el.expand_dims(v, [0])])
+
+  if a.rank == 1 and b.rank == 1:
+    ga, gb = el.apply_ufunc(UF["mul"], [g, b]), el.apply_ufunc(UF["mul"], [g, a])
+  elif a.rank == 2 and b.rank == 2:
+    ga = matmul_plain(el, g, el.transpose(b), "matmul") if active_a else None
+    gb = matmul_plain(el, el.transpose(a), g, "matmul") if active_b else None
+  elif a.rank == 2:
+    ga = outer(g, b) if active_a else None
+    gb = matmul_plain(el, el.transpose(a), g, "matmul") if active_b else None
+  else:
+    ga = matmul_plain(el, b, g, "matmul") if active_a else None
+    gb = outer(a, g) if active_b else None
+  if active_a:
+    tape.add(el, a, ga)
+  if active_b:
+    tape.add(el, b, gb)
+
+
+def _pack(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  holder = node.holder
+  assert isinstance(holder, RootAdj)
+  for view, v in zip(node.info, node.inputs):
+    part = holder.view(el, view) if holder.buf is not None else _same_view(el, g, holder.arr, view)
+    tape.add(el, v, part if isinstance(v, ArrayVal) else el.as_scalar(part, "adjoint"))
+
+
+def _same_view(el, g: ArrayVal, arr: ArrayVal, view: ArrayVal) -> ArrayVal:
+  """The part of ``g`` (an adjoint of ``arr``) that corresponds to ``view`` of ``arr``."""
+  g = el.as_concrete(g)
+  out = ArrayVal(
+    g.elt, view.shape, buf=g.buf, offset=el.tmp(iadd(g.offset, isub(view.offset, arr.offset)), "off"),
+    strides=view.strides, roots=g.roots,
+  )  # fmt: skip
+  out.inj = view.inj
+  return out
+
+
+def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  shape, at, sub_view = node.info
+  tape.stale(el, node)
+  g = el.as_concrete(g)
+  lead = len(shape)
+
+  def body(idx):
+    child = Tape(el, tape, key=(*tape.key, id(node.origin)))
+    el.tape = child
+    try:
+      r = at(tuple(idx))
+    finally:
+      el.tape = None
+    if isinstance(r, ArrayVal):
+      seed: Any = sub_view(el, g, idx) if g.rank > lead else el.tmp(el.elem(g, idx), "g")
+    else:
+      seed = el.tmp(el.elem(g, idx), "g")
+    child.backward(el, r, seed)
+
+  el.seq_nest(shape, body)
+
+
+_BACKWARD = {
+  "elementwise": _elementwise,
+  "alias": _alias,
+  "opaque": _opaque,
+  "reduce": _reduce,
+  "matmul": _matmul,
+  "pack": _pack,
+  "map": _map,
+}
+
+
+# ---------------------------------------------------------------------------
+# grad
+# ---------------------------------------------------------------------------
+
+
+def _wrt_leaf(el, tape: Tape, v, what: str):
+  """A differentiated argument as the function will see it, plus how to read
+  its adjoint afterwards."""
+  if isinstance(v, tuple):
+    parts = [_wrt_leaf(el, tape, x, what) for x in v]
+    return tuple(p[0] for p in parts), tuple(p[1] for p in parts)
+  if isinstance(v, Expr) and is_float(v):
+    leaf = Var("x", v.type)
+    el.block.append(Assign(leaf, v))
+    return leaf, tape.leaf_scalar(el, leaf)
+  if isinstance(v, ArrayVal) and v.elt.kind == "f":
+    # the adjoint mirrors the memory of the array, so the array must be dense and its own
+    if v.buf is None or not v.contig or v.buf.uid in el.ad_bufs:
+      v = el.materialize(v, "x")
+    return v, tape.root(el, v)
+  raise el.error(
+    TypeInferenceError,
+    f"{what} differentiates with respect to floating point scalars and arrays (and tuples of them), not {describe(v)}",
+  )
+
+
+def _adjoint(el, holder, v):
+  if isinstance(holder, tuple):
+    return tuple(_adjoint(el, h, x) for h, x in zip(holder, v))
+  if isinstance(holder, ScalarAdj):
+    total = holder.total(el)
+    return Const(0.0, holder.var.type) if total is None else total
+  total = holder.total(el)
+  if total is None:
+    return el.alloc_array(v.elt, v.shape, zero=True, label="grad")
+  return el.as_concrete(el.cast_array(total, v.elt))
+
+
+def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, what: str):
+  """Elaborate ``f(*args)`` and the gradient of its (scalar) result."""
+  if el.tape is not None or el.ad_live:
+    raise el.error(UnsupportedError, f"{what} inside a function that is itself being differentiated is not supported")
+  if isinstance(argnum, tuple):
+    wrt = [el.static_int(a, f"the argument numbers passed to {what}") for a in argnum]
+    single = False
+  else:
+    wrt = [el.static_int(argnum, f"the argument number passed to {what}")]
+    single = True
+  for k in wrt:
+    if not 0 <= k < len(args):
+      raise el.error(
+        TypeInferenceError,
+        f"{what}: there is no positional argument {k} (the function was called with {len(args)})",
+      )
+  if len(set(wrt)) != len(wrt):
+    raise el.error(TypeInferenceError, f"{what}: argument numbers must be distinct")
+  args = [el.bindable(a, "arg") for a in args]
+  tape = Tape(el)
+  el.ad_live += 1
+  try:
+    holders = {}
+    for k in wrt:
+      args[k], holders[k] = _wrt_leaf(el, tape, args[k], what)
+    el.tape = tape
+    try:
+      out = el.call(f, args, kwargs)
+    finally:
+      el.tape = None
+    if isinstance(out, ArrayVal) and out.rank == 0:
+      out = el.as_scalar(out)
+    if not isinstance(out, Expr) or not is_float(out):
+      raise el.error(
+        TypeInferenceError,
+        f"{what} needs a function that returns a floating point scalar; this one returns {describe(out)}",
+        hint="reduce the result to one number first, for example with np.sum or np.mean",
+      )
+    out = el.tmp(out, "value")
+    tape.backward(el, out, Const(1.0, out.type))
+    grads = [_adjoint(el, holders[k], args[k]) for k in wrt]
+  finally:
+    el.ad_live -= 1
+    el.tape = None
+    if not el.ad_live:
+      # nothing depends on a differentiated value any more
+      el.ad_vars.clear()
+      el.ad_bufs.clear()
+      el.tainted_vars.clear()
+      el.tainted_bufs.clear()
+  result = grads[0] if single else tuple(grads)
+  return (out, result) if with_value else result
+
+
+__all__ = ["MAX_UNROLL", "Tape", "accumulate", "depends", "differentiate", "note_def", "observe", "unbroadcast"]
+_ = cmp

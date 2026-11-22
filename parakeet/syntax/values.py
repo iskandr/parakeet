@@ -44,7 +44,7 @@ class ArrayVal:
 
   __slots__ = (
         "elt", "shape", "buf", "offset", "strides", "fn", "roots", "cost", "contig",
-        "depth", "epoch", "block", "origin", "uses", "reads",
+        "depth", "epoch", "block", "origin", "uses", "reads", "inj", "base",
     )  # fmt: skip
 
   def __init__(
@@ -78,6 +78,8 @@ class ArrayVal:
     self.block: Any = None
     self.origin: Any = None
     self.uses = 0
+    self.inj = False  # concrete: every index addresses a different element
+    self.base: ArrayVal | None = None  # the contiguous array this is a view of, when known
 
   @property
   def rank(self) -> int:

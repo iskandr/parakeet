@@ -49,6 +49,7 @@ from .lib.adverbs import (
   allpairs,
   each,
   filter,  # noqa: A004
+  grad,
   imap,
   ireduce,
   map,  # noqa: A004
@@ -56,6 +57,7 @@ from .lib.adverbs import (
   parfor,
   reduce,
   scan,
+  value_and_grad,
 )
 from .lib.pure import pmap1 as _pmap1
 from .lib.pure import pmap2 as _pmap2
@@ -151,6 +153,6 @@ __all__ = [
     "ireduce", "jit", "lib", "map", "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "reduce", "run", "scan", "seed",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "typed_repr",
-    "find_broken_transform", "frontend", "macro", "syntax", "transforms",
+    "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",
     "Bool", "Float32", "Float64", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64",
 ]  # fmt: skip

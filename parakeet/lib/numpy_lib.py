@@ -18,6 +18,7 @@ from .core import (
   convert,
   method,
   norm_axis,
+  packing,
   prop,
   reduce_values,
   register,
@@ -506,10 +507,13 @@ def concatenate(el, arrays, axis=0, dtype=None):
   shape = first.shape[:k] + (el.tmp(total, "n"),) + first.shape[k + 1 :]
   out = el.alloc_array(elt, shape, label="cat")
   pos: Expr = ZERO
-  for a in arrs:
-    mapping = [(d, pos if d == k else ZERO, ONE) for d in range(rank)]
-    el.store_array(el.remap(out, a.shape, mapping), a)
-    pos = el.tmp(iadd(pos, a.shape[k]), "pos")
+  with packing(el, out) as parts:
+    for a in arrs:
+      mapping = [(d, pos if d == k else ZERO, ONE) for d in range(rank)]
+      view = el.remap(out, a.shape, mapping)
+      el.store_array(view, a)
+      parts.append((view, a))
+      pos = el.tmp(iadd(pos, a.shape[k]), "pos")
   return out
 
 
@@ -665,6 +669,15 @@ def _reduce_prim(el, op: str, a, axis=None, init: Expr | None = None, what: str 
   a = _arr(el, a)
   if elt is not None:
     a = el.cast_array(a, elt)
+  tape = el.tape
+  if tape is not None and not tape.muted and a.rank > 0 and op in ("add", "mul", "min", "max"):
+    if tape.is_active(el, a):
+      return tape.reduce(el, reduce_plain, op, a, axis, init, what, keepdims)
+  return reduce_plain(el, op, a, axis, init, what, keepdims)
+
+
+def reduce_plain(el, op: str, a: ArrayVal, axis, init, what: str, keepdims):
+  """Reduce ``a`` with the primitive ``op`` over ``axis`` (None: everything)."""
   spec = UF[op]
 
   def combine(x, y):
@@ -1093,25 +1106,40 @@ def matmul(el, a, b, what: str = "matmul"):
       cmp("eq", inner_a, inner_b), "ValueError", what + ": shapes are not aligned ({0} vs {1})", inner_a, inner_b
     )
     el.assume_equal(inner_a, inner_b)
+  tape = el.tape
+  if tape is not None and not tape.muted and (tape.is_active(el, a) or tape.is_active(el, b)):
+    return tape.matmul(el, matmul_plain, a, b, what)
+  return matmul_plain(el, a, b, what)
+
+
+def _rows(el, a: ArrayVal, label: str = "rows") -> ArrayVal:
+  """``a`` with rows that are contiguous in memory (copied if they are not):
+  the inner loop of a product should walk both operands with stride one."""
+  if a.buf is None:
+    return a
+  if isinstance(a.strides[-1], Const) and a.strides[-1].value == 1:
+    return a
+  return el.materialize(a, label)
+
+
+def matmul_plain(el, a: ArrayVal, b: ArrayVal, what: str = "matmul"):
+  """The product of two arrays of rank 1 or 2 whose inner dimensions agree."""
   if a.rank == 1 and b.rank == 1:
     return _dot1(el, a, b)
-  if a.rank == 2 and b.rank == 2:
-    # walk both operands along contiguous rows: copy b transposed once
-    b = el.materialize(el.transpose(b), "bt")
-    el.consume(a)
-    return build_map(
-            el, (a.shape[0], b.shape[0]),
-            lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), el.axis_view(b, 0, idx[1], True)), what,
-        )  # fmt: skip
+  if a.rank == 1:
+    # a @ b is b.T @ a: the rows of b.T are what gets multiplied with a
+    a, b = el.transpose(b), a
+  a = _rows(el, a)
   el.consume(a)
-  el.consume(b)
-  if a.rank == 2 and b.rank == 1:
+  if b.rank == 1:
+    el.consume(b)
     return build_map(el, (a.shape[0],), lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), b), what)
-  if a.rank == 1 and b.rank == 2:
-    return build_map(el, (b.shape[1],), lambda idx: _dot1(el, a, el.axis_view(b, 1, idx[0], True)), what)
+  # the columns of b as rows: a view if b is itself a transpose, otherwise one copy
+  bt = _rows(el, el.transpose(b), "bt")
+  el.consume(bt)
   return build_map(
-        el, (a.shape[0], b.shape[1]),
-        lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), el.axis_view(b, 1, idx[1], True)), what,
+        el, (a.shape[0], bt.shape[0]),
+        lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), el.axis_view(bt, 0, idx[1], True)), what,
     )  # fmt: skip
 
 

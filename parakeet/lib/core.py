@@ -8,6 +8,7 @@ Implementations are registered against the Python objects they stand for
 
 from __future__ import annotations
 
+import contextlib
 import difflib
 import inspect
 import types as pytypes
@@ -137,8 +138,12 @@ def invoke(el, impl: Callable, args: list, kwargs: dict, name: str):
           if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY):
             extra[pname] = el.lift(p.default)
       if extra:
-        return impl(*bound.args, **{**bound.kwargs, **extra})
-  return impl(el, *args, **kwargs)
+        args, kwargs = list(bound.args[1:]), {**bound.kwargs, **extra}
+  el.lib_calls.append((name, len(el.frames)))
+  try:
+    return impl(el, *args, **kwargs)
+  finally:
+    el.lib_calls.pop()
 
 
 def unsupported_message(fn) -> str:
@@ -231,8 +236,10 @@ def array_literal(el, items: list, dtype: ScalarType | None = None) -> ArrayVal:
       arr = el.delayed(elt, (Const(n, I),), fn, cost=n)
     else:
       arr = el.alloc_array(elt, (Const(n, I),), label="lit")
-      for k, v in enumerate(vals):
-        el.emit(Store(arr.buf, Const(k, I), v))
+      with packing(el, arr) as parts:
+        for k, v in enumerate(vals):
+          el.emit(Store(arr.buf, Const(k, I), v))
+          parts.append((element_view(arr, k), v))
     return arr
   arrays = []
   for x in items:
@@ -266,14 +273,41 @@ def stack_arrays(el, arrays: list[ArrayVal], axis: int = 0, dtype: ScalarType | 
   axis = norm_axis(el, axis, rank)
   shape = inner[:axis] + (Const(len(arrays), I),) + inner[axis:]
   out = el.alloc_array(elt, shape, label="stack")
-  for k, a in enumerate(arrays):
+  with packing(el, out) as parts:
+    for k, a in enumerate(arrays):
+      if rank == 1:
+        el.emit(Store(out.buf, Const(k, I), cast(el.elem(a, ()), elt)))
+        parts.append((element_view(out, k), a))
+      else:
+        view = el.axis_view(out, axis, Const(k, I))
+        el.store_array(view, a)
+        parts.append((view, a))
     if rank == 1:
-      el.emit(Store(out.buf, Const(k, I), cast(el.elem(a, ()), elt)))
-    else:
-      el.store_array(el.axis_view(out, axis, Const(k, I)), a)
-  if rank == 1:
-    el.record_store(out)
+      el.record_store(out)
   return out
+
+
+@contextlib.contextmanager
+def packing(el, out: ArrayVal):
+  """Assemble the new array ``out`` from parts.  The body appends
+  ``(view of out, value stored there)`` pairs; under differentiation that is
+  all the tape needs to route the adjoint of ``out`` back to the parts."""
+  parts: list = []
+  tape = el.tape
+  if tape is None or tape.muted:
+    yield parts
+    return
+  tape.muted += 1
+  try:
+    yield parts
+  finally:
+    tape.muted -= 1
+  tape.pack(el, parts, out)
+
+
+def element_view(arr: ArrayVal, k: int) -> ArrayVal:
+  """Element ``k`` of a 1-d array as a 0-d view."""
+  return ArrayVal(arr.elt, (), buf=arr.buf, offset=ops.iadd(arr.offset, Const(k, I)), strides=(), roots=arr.roots)
 
 
 def norm_axis(el, axis, rank: int, what: str = "axis") -> int:
@@ -336,6 +370,15 @@ def build_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> Array
   ``fn`` is elaborated once in a scratch block to learn the result type; if
   it yields scalars the result stays delayed so it fuses with its consumer.
   """
+  tape = el.tape
+  if tape is not None and not tape.muted:
+    out = tape.map(el, plain_map, shape, fn, what)
+    if out is not None:
+      return out
+  return plain_map(el, shape, fn, what)
+
+
+def plain_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> ArrayVal:
   shape = tuple(el.tmp(d, "n") for d in shape)
   probe = tuple(Var("i", I) for _ in shape)
   for v, d in zip(probe, shape):

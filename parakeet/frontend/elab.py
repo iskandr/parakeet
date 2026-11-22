@@ -74,6 +74,7 @@ from ..syntax.values import (
   ZipVal,
   describe,
 )
+from ..transforms import autodiff as _autodiff
 from .arrays import ArrayMixin, LiveRoots, Restart
 from .signature import CODE_FUNCTIONS, STAGED, Key, Ref, Unsupported, classify, type_value, with_static_leaves
 from .source import FunctionSource, assigned_names, get_source
@@ -106,6 +107,7 @@ class ElabState:
   hints: dict = field(default_factory=dict)
   static_leaves: set[int] = field(default_factory=set)
   static_implicit: set = field(default_factory=set)
+  tokens: dict = field(default_factory=dict)  # stand-in origins for arrays made by the backward pass
   restarts: int = 0
 
 
@@ -233,6 +235,15 @@ class Elaborator(ArrayMixin):
     self.results: list = []
     self.pure_defs: dict[int, Expr] = {}
     self.jam = None  # set while a tiled map collects its elements' reductions
+    # reverse-mode differentiation (parakeet.transforms.autodiff)
+    self.tape = None  # records array operators applied to differentiated values
+    self.ad_live = 0  # > 0 between the start of a grad() and the end of its backward pass
+    self.ad_vars: set[int] = set()  # float variables that depend on a differentiated value
+    self.ad_bufs: set[int] = set()  # buffers holding such values
+    self.tainted_vars: dict[int, tuple] = {}  # ... that the tape cannot see through
+    self.tainted_bufs: dict[int, tuple] = {}
+    self.defs: dict[int, Expr] = {}  # pure definitions of float variables
+    self.lib_calls: list[tuple[str, int]] = []  # library functions being elaborated (name, frame depth)
 
   # ================================================================ plumbing
 
@@ -242,6 +253,8 @@ class Elaborator(ArrayMixin):
 
   def emit(self, stmt) -> None:
     self.block.append(stmt)
+    if self.tape is not None:
+      _autodiff.observe(self, stmt)
 
   def tmp(self, e, name: str = "t") -> Expr:
     """Bind a non-trivial scalar expression to a fresh variable."""
@@ -255,13 +268,15 @@ class Elaborator(ArrayMixin):
       if self.is_nonneg(e):
         self.nonneg.add(v.uid)
       self.pure_defs[v.uid] = e
+    elif self.ad_live:
+      _autodiff.note_def(self, v, e)
     return v
 
   def copy_scalar(self, e: Expr, name: str = "t") -> Expr:
     if isinstance(e, Const):
       return e
     v = Var(name, e.type)
-    self.block.append(Assign(v, e))
+    self.emit(Assign(v, e))
     return v
 
   def save_facts(self):
@@ -595,10 +610,12 @@ class Elaborator(ArrayMixin):
       self.params.append(param)
       self.array_params.append(param)
       root = Root(None, name, param)
-      return ArrayVal(
+      arr = ArrayVal(
                 elt, tuple(shape), buf=buf, offset=off, strides=strides,
                 roots=frozenset({root}), contig=layout == "C",
             )  # fmt: skip
+      arr.inj = layout == "C"
+      return arr
     if tag == "t":
       return tuple(self.value_from_key(k, source, pos, f"{name}_{i}") for i, k in enumerate(key[1:]))
     if tag == "n":
@@ -986,6 +1003,9 @@ class Elaborator(ArrayMixin):
       return lib.invoke(self, impl, args, kwargs, getattr(fn, "__name__", "function"))
     if (isinstance(fn, pytypes.FunctionType) and fn not in STAGED) or hasattr(fn, "__parakeet_fn__"):
       return self.call(self.lift(fn), args, kwargs, node)
+    staged = getattr(fn, "__parakeet_value__", None)
+    if staged is not None:
+      return self.call(staged(self), args, kwargs, node)
     if isinstance(fn, (Expr, ArrayVal, tuple)) or fn is None:
       raise self.error(TypeInferenceError, f"{describe(fn)} is not callable", node)
     raise self.error(UnsupportedError, lib.unsupported_message(fn), node)
@@ -1214,6 +1234,16 @@ class Elaborator(ArrayMixin):
     e_term = self.exec_block(node.orelse)
     else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
 
+    if t_term != e_term:
+      # a guard: one branch never falls through.  If all it does is raise, what
+      # follows always runs, so it continues in the enclosing block
+      taken, taken_end = (else_blk, else_end) if t_term else (then_blk, then_end)
+      if taken_end is taken and _only_raises(node.body if t_term else node.orelse):
+        outer.append(If(cond, then_blk, []) if t_term else If(cond, [], else_blk))
+        outer.extend(taken)
+        self.block, fr.env = outer, else_env if t_term else then_env
+        self.restore_facts(else_facts if t_term else then_facts)
+        return False
     outer.append(If(cond, then_blk, else_blk))
     if t_term and e_term:
       self.block, fr.env = outer, base_env
@@ -1295,6 +1325,8 @@ class Elaborator(ArrayMixin):
       if vt is None or vt[0] not in ("s", "a", "t", "sl"):
         ctx.static[name] = v  # functions, None, ...: must not change in the loop
         continue
+      if self.carries_derivative(v):
+        self.request_unroll(fr, node)
       target = self.make_target(vt, v, name, self.scope, hint_key)
       self.assign_target(target, v)
       ctx.carried[name] = (target, vt)
@@ -1323,6 +1355,8 @@ class Elaborator(ArrayMixin):
       if new != vt:
         self.state.hints[(fr.path, id(ctx.node), name)] = new
         self.restart("loop variable type")
+      if self.carries_derivative(v):
+        self.request_unroll(fr, ctx.node)
       pending.append((target, v))
     for name, before in ctx.static.items():
       v = fr.env.get(name, _MISSING)
@@ -1390,9 +1424,74 @@ class Elaborator(ArrayMixin):
         self.emit(If(ops.lnot(flag), rest, []))
         self.block = rest
 
+  def blame(self) -> str | None:
+    """The library function whose own code (not a function passed to it) is
+    being elaborated, for error messages."""
+    best = None
+    for name, depth in reversed(self.lib_calls):
+      if name in ("gradient", "value_and_gradient"):
+        break
+      # every function entered since that call has to be library code
+      if not all(f.globals.get("__parakeet_lib__") for f in self.frames[depth:]):
+        break
+      best = name
+    return best
+
+  def no_derivative(self, message: str, node: ast.AST | None = None, hint: str | None = None) -> CompileError:
+    name = self.blame()
+    if name is not None:
+      return self.error(UnsupportedError, f"cannot differentiate through {name}(): its derivative is not implemented")
+    return self.error(UnsupportedError, message, node, hint)
+
+  def request_unroll(self, fr: Frame, node: ast.AST) -> None:
+    """A loop turned out to update differentiated values: start over and
+    unroll it, so that every iteration gets its own place on the tape."""
+    key = (fr.path, id(node), "unroll")
+    if not self.hint_get(key):
+      self.state.hints[key] = True
+      self.state.keep.append(node)
+      self.restart("unroll differentiated loop")
+    raise self.no_derivative(
+      "cannot differentiate through this loop",
+      node,
+      hint="a loop that updates differentiated values has to be unrolled, which needs a 'for' loop over a "
+      "range or tuple whose length is a compile-time constant; otherwise use parakeet.reduce, np.sum or "
+      "another array operation",
+    )
+
+  def carries_derivative(self, v) -> bool:
+    return self.tape is not None and self.tape.is_active(self, v)
+
+  def _unroll(self, node: ast.For, it) -> bool:
+    what = "the bounds of a loop that updates differentiated values"
+    try:
+      if isinstance(it, RangeVal):
+        r = range(*(self.static_int(x, what) for x in (it.start, it.stop, it.step)))
+        if len(r) > _autodiff.MAX_UNROLL:
+          raise self.no_derivative(
+            f"cannot differentiate through a loop of {len(r)} iterations: it would have to be unrolled",
+            node,
+            hint="use an array operation, parakeet.map or parakeet.reduce instead",
+          )
+        items: tuple = tuple(Const(i, WeakInt) for i in r)
+      elif isinstance(it, ArrayVal) and it.rank >= 1 and isinstance(it.shape[0], Const):
+        items = tuple(self.getitem(it, Const(k, I)) for k in range(it.shape[0].value))
+      else:
+        raise self.error(StaticValueError, "not a range")
+    except StaticValueError:
+      raise self.no_derivative(
+        "cannot differentiate through a loop whose length is only known at run time",
+        node,
+        hint="a loop that updates differentiated values has to be unrolled: loop over a range of a literal or "
+        "of a scalar argument of the compiled function, or use parakeet.reduce, np.sum or another array operation",
+      ) from None
+    return self._unrolled_for(node, items)
+
   def exec_While(self, node: ast.While) -> bool:
     if node.orelse:
       raise self.error(UnsupportedError, "'while ... else' is not supported", node)
+    if self.hint_get((self.frame.path, id(node), "unroll")):
+      self.request_unroll(self.frame, node)
     names = assigned_names(node.body, node) | assigned_names(node.test)
     ctx = self.begin_loop(node, names)
     blk: list = []
@@ -1413,6 +1512,8 @@ class Elaborator(ArrayMixin):
     it = self.eval(node.iter)
     if isinstance(it, tuple):
       return self._unrolled_for(node, it)
+    if self.hint_get((self.frame.path, id(node), "unroll")):
+      return self._unroll(node, it)
     if isinstance(it, RangeVal):
       start, stop, step = (self.tmp(x, n) for x, n in zip((it.start, it.stop, it.step), ("start", "stop", "step")))
       length = None
@@ -2177,6 +2278,13 @@ def _local_names(fnode) -> frozenset[str]:
   result = frozenset(names - params)
   _locals_cache[id(fnode)] = (fnode, result)
   return result
+
+
+def _only_raises(stmts: list[ast.stmt]) -> bool:
+  """Does this branch end by raising, with no other way out?"""
+  if not stmts or not isinstance(stmts[-1], ast.Raise):
+    return False
+  return not any(isinstance(n, (ast.Return, ast.Break, ast.Continue)) for s in stmts for n in ast.walk(s))
 
 
 def _target_names(node) -> frozenset[str]:

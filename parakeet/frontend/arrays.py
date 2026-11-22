@@ -63,6 +63,7 @@ class ArrayMixin:
   par_depth: int
   state: Any
   options: Any
+  tape: Any  # the autodiff tape recording array operators, if any
 
   # ------------------------------------------------------------------ roots
 
@@ -102,6 +103,8 @@ class ArrayMixin:
       for r in roots:
         if r.param is not None:
           r.param.writes = True
+    if self.tape is not None:
+      self.tape.note_store(self, arr)
 
   # --------------------------------------------------------------- creation
 
@@ -132,10 +135,14 @@ class ArrayMixin:
     self.emit(Alloc(buf, self.tmp(iprod(shape), "count"), zero))
     self.scope.owned.append(buf)
     root = Root(self.scope, label)
-    return ArrayVal(
+    if self.tape is not None:
+      self.tape.note_alloc(root)
+    arr = ArrayVal(
             elt, shape, buf=buf, offset=ZERO, strides=self.c_strides(shape),
             roots=frozenset({root}), contig=True,
         )  # fmt: skip
+    arr.inj = True
+    return arr
 
   def delayed(
     self,
@@ -221,6 +228,9 @@ class ArrayMixin:
     self.consume(arr)
     out = self.alloc_array(arr.elt, arr.shape, label=label)
     self.fill(out, arr)
+    tape = self.tape
+    if tape is not None and not tape.muted:
+      tape.materialized(self, arr, out)
     return out
 
   def fill(self, dest: ArrayVal, src, parallel: bool = True) -> None:
@@ -469,6 +479,7 @@ class ArrayMixin:
     indexed by ``start + idx[j] * step`` (or just ``start`` if ``j`` is None).
     """
     shape = tuple(shape)
+    arr = self.settle(arr)
     if arr.buf is not None:
       offset = arr.offset
       strides: list[Expr] = [ZERO] * len(shape)
@@ -476,10 +487,27 @@ class ArrayMixin:
         offset = iadd(offset, imul(start, s))
         if j is not None:
           strides[j] = iadd(strides[j], imul(step, s))
-      return ArrayVal(
+      out = ArrayVal(
                 arr.elt, shape, buf=arr.buf, offset=self.tmp(offset, "off"),
                 strides=tuple(self.tmp(s, "stride") for s in strides), roots=arr.roots,
             )  # fmt: skip
+      base = arr if arr.contig else arr.base
+      if base is not None:
+        if (
+          len(shape) == base.rank
+          and same(out.offset, base.offset)
+          and all(a is b for a, b in zip(out.strides, base.strides))
+          and all(a is b for a, b in zip(out.shape, base.shape))
+        ):
+          return base  # e.g. the transpose of a transpose
+        out.base = base
+      used = [j for j, _, _ in mapping if j is not None]
+      out.inj = (
+        arr.inj
+        and sorted(used) == list(range(len(shape)))
+        and all(isinstance(step, Const) and step.value != 0 for j, _, step in mapping if j is not None)
+      )
+      return out
     if not consumed:
       self.check_fresh(arr)
       if self.loop_depth > arr.depth:
@@ -499,6 +527,16 @@ class ArrayMixin:
     if out.buf is None:
       out.epoch = arr.epoch
     return out
+
+  def settle(self, arr: ArrayVal) -> ArrayVal:
+    """Under differentiation, evaluate a delayed array that carries a
+    derivative before taking a view of it: views of a concrete array need no
+    rule of their own (they are the same views of its adjoint)."""
+    tape = self.tape
+    if tape is not None and not tape.muted and arr.buf is None and self.block is tape.block:
+      if tape.find_delayed(arr) is not None:
+        return self.as_concrete(arr)
+    return arr
 
   def axis_view(self, arr: ArrayVal, axis: int, i: Expr, consumed: bool = False):
     """``arr`` with ``axis`` fixed at ``i``: a scalar for 1-d arrays, else a view."""
@@ -545,6 +583,7 @@ class ArrayMixin:
 
   def reshape(self, arr: ArrayVal, shape: Sequence[Expr], checked: bool = False) -> ArrayVal:
     shape = list(shape)
+    arr = self.settle(arr)
     unknown = [k for k, d in enumerate(shape) if isinstance(d, Const) and d.value == -1]
     size = self.tmp(iprod(arr.shape), "size")
     if len(unknown) > 1:
@@ -568,11 +607,16 @@ class ArrayMixin:
     shape_t = tuple(self.tmp(d, "dim") for d in shape)
     if len(shape_t) == arr.rank and all(self.dim_equal(a, b) for a, b in zip(shape_t, arr.shape)):
       return arr
+    if arr.buf is not None and not arr.contig and self.tape is not None and not self.tape.muted:
+      if self.tape.is_active(self, arr):
+        arr = self.materialize(arr)  # then the reshaped array is a view again
     if arr.buf is not None and arr.contig:
-      return ArrayVal(
+      out = ArrayVal(
                 arr.elt, shape_t, buf=arr.buf, offset=arr.offset,
                 strides=self.c_strides(shape_t), roots=arr.roots, contig=True,
             )  # fmt: skip
+      out.inj = arr.inj
+      return out
     if arr.rank <= 1 and len(shape_t) >= 1 and arr.buf is not None:
       # a strided 1-d (or 0-d) source: scale the C strides of the new shape
       base = arr.strides[0] if arr.rank == 1 else ZERO
@@ -679,6 +723,14 @@ class ArrayMixin:
 
     ``args`` mixes arrays and scalar expressions; scalars are passed through.
     """
+    tape = self.tape
+    if tape is not None and not tape.muted and elt.kind == "f":
+      active = [tape.is_active(self, a) for a in args]
+      if any(active):
+        return tape.elementwise(self, list(args), active, fn, elt, cost)
+    return self.elementwise_plain(args, fn, elt, cost)
+
+  def elementwise_plain(self, args: Sequence[Any], fn: Callable[..., Expr], elt: ScalarType, cost: int = 1) -> ArrayVal:
     arrays = [a for a in args if isinstance(a, ArrayVal)]
     shape = self.broadcast_shapes([a.shape for a in arrays])
     adapted: list[Any] = []

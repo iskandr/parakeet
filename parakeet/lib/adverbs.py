@@ -357,6 +357,84 @@ def _bool():
   return Bool
 
 
+# ---------------------------------------------------------------------------
+# grad: the adverb that turns a function into its derivative
+# ---------------------------------------------------------------------------
+
+
+@libfunction("gradient")
+def _gradient(el, f, *args, argnum=0, **kwargs):
+  from ..transforms import autodiff
+
+  return autodiff.differentiate(el, f, argnum, list(args), kwargs, False, "grad")
+
+
+@libfunction("value_and_gradient")
+def _value_and_gradient(el, f, *args, argnum=0, **kwargs):
+  from ..transforms import autodiff
+
+  return autodiff.differentiate(el, f, argnum, list(args), kwargs, True, "value_and_grad")
+
+
+class Gradient:
+  """What :func:`grad` returns: call it like the function it differentiates."""
+
+  def __init__(self, fn, argnum, impl: LibFunction):
+    if not callable(fn):
+      raise TypeError(f"{impl.__name__.replace('ient', '')} expects a function, got {type(fn).__name__}")
+    nums = argnum if isinstance(argnum, tuple) else (argnum,)
+    if not nums or not all(isinstance(k, int) and not isinstance(k, bool) and k >= 0 for k in nums):
+      raise TypeError("argnum must be a non-negative integer or a tuple of them")
+    self.fn = fn
+    self.argnum = argnum
+    self.impl = impl
+    self.__name__ = getattr(fn, "__name__", "function")
+    self.__doc__ = getattr(fn, "__doc__", None)
+
+  def __repr__(self) -> str:
+    return f"<parakeet {self.impl.__name__} of {self.__name__}>"
+
+  def __call__(self, *args, **kwargs):
+    from ..api import call_staged
+
+    return call_staged(self.impl, (self.fn, *args), {**kwargs, "argnum": self.argnum})
+
+  def __parakeet_value__(self, el):
+    from ..syntax.values import Partial
+
+    return Partial(self.impl, (el.lift(self.fn),), {"argnum": el.lift(self.argnum)})
+
+
+def grad(f, argnum=0):
+  """The gradient of the scalar-valued function ``f`` with respect to its
+  argument number ``argnum`` (or, for a tuple, to each of those arguments).
+
+  ``grad(f)(*args)`` takes the arguments of ``f`` and returns an array shaped
+  like the differentiated argument (a tuple of arrays for a tuple of
+  argument numbers; nested tuples of parameters give nested tuples of
+  gradients).  Works inside compiled code and from plain Python."""
+  return Gradient(f, argnum, _gradient)
+
+
+def value_and_grad(f, argnum=0):
+  """Like :func:`grad`, but the new function returns ``(f(*args), gradient)``."""
+  return Gradient(f, argnum, _value_and_gradient)
+
+
+@core.register(grad)
+def _grad_staged(el, f, argnum=0):
+  from ..syntax.values import Partial
+
+  return Partial(_gradient, (f,), {"argnum": argnum})
+
+
+@core.register(value_and_grad)
+def _value_and_grad_staged(el, f, argnum=0):
+  from ..syntax.values import Partial
+
+  return Partial(_value_and_gradient, (f,), {"argnum": argnum})
+
+
 @core.register(builtins.map)
 def _builtin_map(el, f, *args):
   return map.impl(el, f, *args, axis=0)
@@ -369,6 +447,6 @@ def _builtin_filter(el, pred, x):
 
 __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
-    "parfor", "filter", "scan_axis",
+    "parfor", "filter", "scan_axis", "grad", "value_and_grad", "Gradient",
 ]  # fmt: skip
 _ = (Const, I)
