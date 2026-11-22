@@ -285,14 +285,24 @@ class MetalDevice(DeviceBase):
       buf = self.dev.newBufferWithBytesNoCopy_length_options_deallocator_(mem, nbytes, opts, None)
       if buf is not None:
         return buf, True
-    if nbytes > 0:
+    if nbytes >= length:
       mem = (ctypes.c_char * nbytes).from_address(addr)
       buf = self.dev.newBufferWithBytes_length_options_(mem, length, opts)
     else:
       buf = self.dev.newBufferWithLength_options_(length, opts)
     if buf is None:
       raise MemoryError(f"Metal could not allocate a {length}-byte buffer")
+    if 0 < nbytes < length:  # smaller than the smallest buffer: copy what there is
+      ctypes.memmove(self._address(buf), addr, nbytes)
     return buf, False
+
+  def upload(self, addr: int, nbytes: int, external: bool):
+    return self._buffer(addr, nbytes, shared=not external)
+
+  def download(self, dev, addr: int, nbytes: int) -> None:
+    buf, zero_copy = dev
+    if not zero_copy:
+      ctypes.memmove(addr, self._address(buf), nbytes)
 
   def run(self, plan: KernelPlan, ctx_addr: int, total: int, nchunks: int) -> None:
     if plan.compiled is None:
@@ -321,11 +331,12 @@ class MetalDevice(DeviceBase):
     pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
     regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
     external = [False] * len(regions)
-    written = [False] * len(regions)
+    written = set()
     for v, pk, (r, _) in zip(plan.bufs, pks, where):
       external[r] = external[r] or bool(pk.flags & 1)
-      written[r] = written[r] or v.uid in plan.written
-    device_bufs = [self._buffer(addr, nbytes, shared=not ext) for (addr, nbytes), ext in zip(regions, external)]
+      if v.uid in plan.written:
+        written.add(r)
+    device_bufs = self.acquire(regions, written, external)
     bound = [(device_bufs[r][0], off) for r, off in where]
 
     cb = self.queue.commandBuffer()
@@ -340,9 +351,6 @@ class MetalDevice(DeviceBase):
     cb.waitUntilCompleted()
     if cb.error() is not None:
       raise RuntimeError(f"Metal failed to run a kernel: {cb.error()}")
-    for (addr, nbytes), (buf, zero_copy), was_written in zip(regions, device_bufs, written):
-      if was_written and not zero_copy and nbytes > 0:
-        ctypes.memmove(addr, self._address(buf), nbytes)
     flag = ctypes.c_int32.from_address(self._address(flag_buf)).value
     if flag:
       info = (ctypes.c_int64 * 4).from_address(self._address(info_buf))

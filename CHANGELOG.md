@@ -13,6 +13,17 @@ unchanged; everything underneath is new.
   `allpairs` with your own functions all have derivative rules; loops of known
   length are unrolled; anything without a rule raises instead of returning a
   wrong gradient. `examples/nanogpt.py` and `examples/convnet.py` train with it.
+- **More of `grad`:** `cumsum`, `sort`, `einsum`, stacks of matrices, folds
+  with any function, and `if` statements on run-time conditions (both branches
+  run, results are selected). The derivative of a `map` runs in parallel.
+- **General operators:** `reduce`, `scan` and `filter` take several arrays
+  with `map=` (and `emit=`); `np.einsum`; `@` on stacks; reductions over
+  several axes in one pass; tiling for maps of any rank.
+- **Parallel primitives:** prefix scans (`cumsum`), filters (`x[mask]`,
+  `nonzero`) and `argmin`/`argmax` run in parallel, on CPUs and GPUs.
+- **GPU:** arrays stay on the device between the loops of one call; a loop is
+  sent to the device by the work in it, not its element count.
+- **BLAS:** float matrix products call the BLAS NumPy uses.
 - **Tiling:** two-dimensional maps of reductions (`@`, `allpairs` distances, ...)
   run a cache-sized tile at a time with their reductions jammed 2×4. A
   1024×1024 matrix product is 2× faster on one core and 3× on all of them.

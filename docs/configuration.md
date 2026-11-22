@@ -12,9 +12,10 @@ variable before importing Parakeet.
 | `fusion` | `True` | `PARAKEET_FUSION` | fuse array expressions into single loops |
 | `tiling` | `True` | `PARAKEET_TILING` | tile matmul-shaped loops for cache locality (see [Performance](performance.md#tiling)) |
 | `tile_bytes` | half of L2 | `PARAKEET_TILE_BYTES` | bytes of operand data in one tile |
+| `blas` | `True` | `PARAKEET_BLAS` | hand float matrix products to the BLAS NumPy uses (CPU backends) |
 | `num_threads` | all cores | `PARAKEET_NUM_THREADS` | threads used by multi-core backends |
 | `parallel_grain` | `8192` | `PARAKEET_PARALLEL_GRAIN` | minimum iterations per chunk for cheap loops |
-| `device_threshold` | `32768` | `PARAKEET_DEVICE_THRESHOLD` | minimum loop size sent to a GPU |
+| `device_threshold` | `32768` | `PARAKEET_DEVICE_THRESHOLD` | minimum work (elements × estimated inner iterations each) for a loop to go to a GPU |
 | `device_reduce_chunks` | `8192` | – | partial results used by GPU reductions |
 | `device_fallback` | `"warn"` | `PARAKEET_DEVICE_FALLBACK` | `"warn"`, `"silent"` or `"error"` when a loop cannot run on the GPU |
 | `cc` | auto | `PARAKEET_CC`, `CC` | C compiler executable |

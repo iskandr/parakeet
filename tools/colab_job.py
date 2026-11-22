@@ -117,6 +117,7 @@ def hardware_check(tpu: bool = False):
     stage("cupy", [py, "-c", "import cupy; cupy.show_config()"])
     (repo / "_cuda_core.py").write_text(CUDA_CORE)
     stage("cuda_core", [py, "_cuda_core.py"])
+    stage("showcase", [py, "benchmarks/gpu_showcase.py", "--json", str(out / "showcase.json")], timeout=3000)
     stage("crossover", [py, "benchmarks/crossover.py", "--json", str(out / "crossover.json")], timeout=3000)
     stats = out / "device_stats.txt"
     gpu_env = {

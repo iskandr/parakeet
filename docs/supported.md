@@ -45,22 +45,22 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `np.concat` | `np.concatenate` | `np.conj` | `np.conjugate` |
 | `np.convolve` | `np.copy` | `np.count_nonzero` | `np.cross` |
 | `np.cumprod` | `np.cumsum` | `np.diag` | `np.diagonal` |
-| `np.diff` | `np.dot` | `np.dtype` | `np.empty` |
-| `np.empty_like` | `np.expand_dims` | `np.eye` | `np.flatnonzero` |
-| `np.flip` | `np.fliplr` | `np.flipud` | `np.full` |
-| `np.full_like` | `np.histogram` | `np.hstack` | `np.identity` |
-| `np.inner` | `np.isclose` | `np.isscalar` | `np.linspace` |
-| `np.matmul` | `np.max` | `np.mean` | `np.median` |
-| `np.min` | `np.mod` | `np.moveaxis` | `np.ndim` |
-| `np.nonzero` | `np.ones` | `np.ones_like` | `np.outer` |
-| `np.permute_dims` | `np.pow` | `np.prod` | `np.promote_types` |
-| `np.ravel` | `np.real` | `np.repeat` | `np.reshape` |
-| `np.result_type` | `np.round` | `np.searchsorted` | `np.shape` |
-| `np.size` | `np.sort` | `np.squeeze` | `np.stack` |
-| `np.std` | `np.sum` | `np.swapaxes` | `np.tile` |
-| `np.trace` | `np.transpose` | `np.tril` | `np.triu` |
-| `np.true_divide` | `np.var` | `np.vdot` | `np.vstack` |
-| `np.where` | `np.zeros` | `np.zeros_like` |  |
+| `np.diff` | `np.dot` | `np.dtype` | `np.einsum` |
+| `np.empty` | `np.empty_like` | `np.expand_dims` | `np.eye` |
+| `np.flatnonzero` | `np.flip` | `np.fliplr` | `np.flipud` |
+| `np.full` | `np.full_like` | `np.histogram` | `np.hstack` |
+| `np.identity` | `np.inner` | `np.isclose` | `np.isscalar` |
+| `np.linspace` | `np.matmul` | `np.max` | `np.mean` |
+| `np.median` | `np.min` | `np.mod` | `np.moveaxis` |
+| `np.ndim` | `np.nonzero` | `np.ones` | `np.ones_like` |
+| `np.outer` | `np.permute_dims` | `np.pow` | `np.prod` |
+| `np.promote_types` | `np.ravel` | `np.real` | `np.repeat` |
+| `np.reshape` | `np.result_type` | `np.round` | `np.searchsorted` |
+| `np.shape` | `np.size` | `np.sort` | `np.squeeze` |
+| `np.stack` | `np.std` | `np.sum` | `np.swapaxes` |
+| `np.tile` | `np.trace` | `np.transpose` | `np.tril` |
+| `np.triu` | `np.true_divide` | `np.var` | `np.vdot` |
+| `np.vstack` | `np.where` | `np.zeros` | `np.zeros_like` |
 
 ## `np.linalg` and `np.random`
 

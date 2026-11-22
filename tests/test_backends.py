@@ -398,3 +398,82 @@ def test_functions_without_source_are_explained():
   exec("def f(x):\n    return x + 1\n", ns)  # noqa: S102
   with pytest.raises(parakeet.UnsupportedError, match="cannot find the source code"):
     jit(ns["f"])(1)
+
+
+def resident_arrays(backend, dtype=np.float32):
+  """Arrays stay on the device between the loops of one call, and host code
+  in between still sees (and is seen by) what the device computed."""
+  dev = parakeet.api.get_backend(backend).device()
+  counts = {"up": 0, "down": 0}
+  cls = type(dev)
+  upload, download = cls.upload, cls.download
+
+  def counting_upload(self, addr, nbytes, external):
+    counts["up"] += 1
+    return upload(self, addr, nbytes, external)
+
+  def counting_download(self, d, addr, nbytes):
+    counts["down"] += 1
+    return download(self, d, addr, nbytes)
+
+  @jit
+  def chain(x, steps):
+    for _ in range(steps):
+      x = np.sin(x) * 0.5 + x * x * 0.25
+    return x
+
+  @jit
+  def mixed(x):
+    y = np.tanh(x) * 2.0  # device
+    y[0] = 7.0  # the host stores into what the device just wrote
+    z = y + 1.0  # the device has to see that store
+    s = 0.0
+    for i in range(4):
+      s += z[i]  # the host reads what the device wrote
+    w = np.sqrt(np.abs(z))
+    return s, w, np.cumsum(w[:1000]), w[w > 1.6], np.argmax(w)
+
+  x = np.random.default_rng(0).random(200_000).astype(dtype)
+  cls.upload, cls.download = counting_upload, counting_download
+  try:
+    with parakeet.options(backend=backend, device_threshold=1, device_fallback="error"):
+      before = dev.launches
+      got = chain(x, 10)
+      assert dev.launches - before == 10
+      # one upload of the input and one download of the result, not ten of each
+      assert counts["down"] == 1 and counts["up"] <= 11, counts
+      got_mixed = mixed(x)
+  finally:
+    cls.upload, cls.download = upload, download
+  want = x.astype(np.float64)
+  for _ in range(10):
+    want = np.sin(want) * 0.5 + want * want * 0.25
+  np.testing.assert_allclose(got, want, rtol=1e-4)
+  y = np.tanh(x.astype(np.float64)) * 2.0
+  y[0] = 7.0
+  z = y + 1.0
+  w = np.sqrt(np.abs(z))
+  s, gw, gc, gf, ga = got_mixed
+  assert np.isclose(s, z[:4].sum(), rtol=1e-5)
+  np.testing.assert_allclose(gw, w, rtol=1e-5)
+  np.testing.assert_allclose(gc, np.cumsum(w[:1000]), rtol=1e-4)
+  np.testing.assert_allclose(gf, w[w > 1.6], rtol=1e-5)
+  assert ga == np.argmax(gw)
+
+
+@needs_metal
+def test_metal_keeps_arrays_on_the_device():
+  resident_arrays("metal")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_cuda_simulator_keeps_arrays_on_the_device(tmp_path):
+  code = """
+import numpy as np
+import tests.test_backends as tb
+tb.resident_arrays('cuda', np.float32)
+tb.resident_arrays('cuda', np.float64)
+print('resident-ok')
+"""
+  proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
+  assert proc.returncode == 0 and "resident-ok" in proc.stdout, proc.stdout + proc.stderr

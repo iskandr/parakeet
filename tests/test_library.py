@@ -368,7 +368,7 @@ def test_matmul_through_blas_on_any_layout(dtype):
     pytest.skip("no BLAS found next to NumPy")
   rng = np.random.default_rng(0)
   A, B, big = (rng.random(s).astype(dtype) for s in ((7, 9), (9, 5), (20, 20)))
-  f = jit(lambda a, b: a @ b)
+  f = jit(lambda a, b: a @ b, backend="auto")  # GPU backends keep the product in their own kernels
   assert "gemm" in f.specialize(A, B).ir
   cases = [
     (A, B), (B.T, A.T), (A[::2], B), (A[:, ::2], B[::2]), (A[::-1], B), (A, B[:, ::-1]), (A, B[:, 0]), (A[0], B),

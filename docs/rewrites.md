@@ -1,0 +1,210 @@
+# Rewrite rules and optimizations
+
+Everything Parakeet does to a program between your source and the loops it
+runs, in one place, and how that compares with the two theses that describe
+the original system:
+
+* **[R]** Alex Rubinsteyn, *Runtime Compilation of Array-Oriented Python
+  Programs* (NYU, 2014) — the operators and their fusion rules.
+* **[H]** Eric Hielscher, *Locality Optimization for Data Parallel Programs*
+  (NYU, 2013) — tiling.
+
+The short version: the rules are the same algebra, applied differently. The
+original compiler built a typed syntax tree of operators and ran a pipeline of
+passes over it. This one never builds the tree. An array expression is a
+*delayed* value — a function from index to element — and a rule fires at the
+moment an operator is applied to one. `F ∘ G` below means "the element
+function of the result is `F` applied to the element function of the
+argument"; no pass looks for the pattern afterwards.
+
+## Operators
+
+| [R] §4.6 | here |
+|---|---|
+| `Map(f, X1..Xn, axis)` | `map(f, x1, ..., xn, axis=0)`, `each`; `axis=None` for every scalar |
+| `OuterMap(f, X1..Xn, axis)` | `outer_map(f, x1, ..., xn)`, `allpairs(f, x, y)` |
+| `IndexMap(f, shape)` | `imap(f, shape)` |
+| `Reduce(f, ⊕, X1..Xn, init, axis)` | `reduce(⊕, x1, ..., xn, map=f, init=, axis=)` |
+| `IndexReduce(f, ⊕, shape)` | `ireduce(f, shape, init=, combine=⊕)` |
+| `Scan(f, ⊕, emit, X1..Xn, init, axis)` | `scan(⊕, x1, ..., xn, map=f, emit=, init=, axis=)` |
+| `Filter(f, pred, X1..Xn)` | `filter(pred, x1, ..., xn, map=f)` |
+| `ParFor(f, bounds)` | `parfor(f, bounds)` |
+| `FilterReduce`, `IndexFilter`, `IndexScan`, `IndexFilterReduce` | no operator of their own; written as a composition (see the fusion table for what that costs) |
+| — | `grad(f)`, `value_and_grad(f)` |
+
+Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,
+`np.cumsum` a `scan`, `a @ b` and `np.einsum` a map of reductions, a
+comprehension an `imap`.
+
+## Fusion
+
+### Vertical: a producer into its consumer
+
+| rule ([R] Fig. 6.1) | status |
+|---|---|
+| `Map(g, Map(f, X))` ⇒ `Map(g∘f, X)` | yes |
+| `Map(g, IndexMap(f, σ))` ⇒ `IndexMap(g∘f, σ)` | yes |
+| `OuterMap(g, Map(f, X1), X2..)` ⇒ `OuterMap(λ. g(f(x1), x2..), X1..)` | yes |
+| `Reduce(g, ⊕, Map(f, X))` ⇒ `Reduce(g∘f, ⊕, X)` | yes |
+| `Reduce(g, ⊕, IndexMap(f, σ))` ⇒ `IndexReduce(g∘f, ⊕, σ)` | yes |
+| `Scan(g, ⊕, ε, Map(f, X))` ⇒ `Scan(g∘f, ⊕, ε, X)` | yes |
+| `Filter(g, pred, Map(f, X))` ⇒ `Filter(g∘f, pred∘f, X)` | yes: the predicate and the kept values both read the unfused map |
+| `Map(g, Filter(f, pred, X))` ⇒ `Filter(g∘f, pred, X)` | yes: the selected elements are a delayed gather that the map fuses into |
+| `Map(g, Scan(f, ⊕, ε, X))` ⇒ `Scan(f, ⊕, g∘ε, X)` | **no**: a scan always stores its running values; `g` (or `emit=`) is a second, fused pass over them |
+| `Reduce(g, ⊕, Filter(f, p, X))` ⇒ `FilterReduce(g∘f, ⊕, p, X)` | **no**: the indices of the kept elements are built first. Write `np.sum(np.where(p, x, 0))` for one pass |
+| `Filter(g, p2, Filter(f, p1, X))` ⇒ one filter | **no**: two compactions |
+
+**Side conditions.** [R] states one: nothing may modify the intermediate array
+between producer and consumer, decided by alias analysis. Here every delayed
+array records how many stores had happened when it was created; if a store
+that may alias what it reads has happened by the time it is consumed,
+elaboration restarts with that expression evaluated eagerly where it was
+written.
+
+[R] states no condition on how often the intermediate is used, so fusing
+could duplicate work. Here a delayed array that costs more than a few
+operations per element may be consumed once; a second consumer, or a consumer
+inside a loop, triggers the same restart. That is the main correction to the
+thesis's rules.
+
+### Nested: a map of maps
+
+| rule ([R] Fig. 6.2) | status |
+|---|---|
+| `Map(λxi. Map(f, xi), x)` ⇒ `Map(f, x)` | yes, when the inner map is cheap and its shape does not depend on `xi`: the result is one delayed array over the whole index space |
+| `Map(λxi. Map(f, y), x)` ⇒ `OuterMap(f, x, y)` | yes, same condition |
+| `IndexMap(λi. IndexMap(f, σ2), σ1)` ⇒ `IndexMap(f, σ1 ++ σ2)` | yes, same condition |
+
+When the inner map is expensive the outer loop runs in parallel and each inner
+result is written into its row of one output array: no per-row allocation, but
+not one flat loop either.
+
+### Horizontal: two consumers of one array
+
+| rule ([R] Fig. 6.3) | status |
+|---|---|
+| `a = Reduce(f, ⊕1, X); b = Reduce(g, ⊕2, X)` ⇒ `a, b = Reduce(f×g, ⊕1×⊕2, X)` | **no**: two loops. Not implemented |
+
+The one place reductions *are* run together is tiling (below): the
+reductions of neighbouring elements of a map share a loop.
+
+## Reductions and scans
+
+* **Associativity.** [R] calls the combiner "commutative" and never requires
+  associativity; [H] requires both. Here a fold is regrouped (run in chunks,
+  vectorized) only when its combiner is recognisably one of `+ * min max and
+  or & | ^`, however it was written (`np.add`, `lambda a, b: a + b`). Any
+  other function is folded strictly left to right.
+* **Several axes at once.** `Reduce` over axes `A` of `X` ⇒ a map over the
+  other axes of one reduction over a block: the reduced axes are moved last (a
+  view) and each block is folded in a single pass.
+* **A reduction with a payload.** `argmin`/`argmax` fold `(value, index)`
+  pairs per chunk and combine the pairs in index order, so the first of equal
+  elements still wins.
+* **Parallel scan.** `Scan(⊕, X)` with an associative primitive ⇒ fold every
+  chunk; prefix the chunk totals; scan every chunk from its prefix.
+* **Parallel filter.** `X[mask]` ⇒ count per chunk; prefix the counts; every
+  chunk writes its survivors from its own offset.
+
+## Linear algebra
+
+* `a @ b` ⇒ `Map((i, j) ↦ Reduce(+, a[i, :] * b[:, j]))`: a map of
+  reductions like any other, so it fuses with what feeds it.
+* **Layout.** The inner loop should walk both operands with stride one: `b`
+  is replaced by its transpose copied once, unless it is already the transpose
+  of a contiguous array, and `transpose(transpose(x))` ⇒ `x`.
+* **Stacks.** `A @ B` with `B` a matrix ⇒ reshape the stack to one tall matrix,
+  one product, reshape back.
+* **Einstein summation.** `einsum(spec, X1..Xn)` ⇒ view every operand in one
+  index space (output labels, then summed labels), multiply element-wise,
+  reduce the trailing block. `'ij,jk->ik'` exactly ⇒ `@`.
+* **BLAS.** A product of two float matrices outside a parallel loop ⇒
+  `cblas_?gemm` from the library NumPy itself uses, with the transpose flags
+  set for transposed views. (`config.blas = False` keeps the generated loops.)
+
+## Tiling
+
+| [H] | here |
+|---|---|
+| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | one level: a map of rank ≥ 2 whose element is one reduction plus straight-line code has its last dimension cut into tiles, hoisted outside the others |
+| register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **jamming**: the reductions of a 2×4 block of elements share one loop with eight accumulators |
+| `TiledReduce`, `TiledScan` | no |
+| cache tile sizes found by an online search between a pessimistic and an optimistic estimate | a fixed estimate: as many rows as fit in half of L2 (`config.tile_bytes`) |
+| aborts unless each function body is a single adverb (simple algorithm) | aborts unless the element is exactly one reduction; anything else is a plain parallel map |
+
+[H] reports that tiling slows down a stencil (an 11×11 blur). Stencils are not
+a map of reductions over two different operands, so they are never tiled here.
+
+## Scalars and shapes
+
+Done while expressions are built; there is no simplification pass:
+
+* constant folding with NumPy's semantics;
+* `x + 0`, `x - 0`, `x * 1`, `x // 1` ⇒ `x` and `x * 0` ⇒ `0` for integers
+  (not floats: `-0.0` and `nan`); `select(c, a, b)` with constant `c`;
+  `not not x`; `and`/`or` with a constant side;
+* `x ** 2` ⇒ `x * x`, `x ** 0.5` ⇒ `sqrt(x)`, `x ** 1` ⇒ `x`;
+* a slice of a slice, a transpose, a `reshape` of a contiguous array, an
+  `expand_dims` are arithmetic on offset and strides: no copy, no loop;
+* dimensions proven equal (by a broadcast check that already ran) are not
+  checked again; an index known to be within its loop's bound gets no bounds
+  check.
+
+**Specialization on values** ([R] ch. 6.6 partially evaluates on inputs equal
+to 0 or 1). Here: a dimension of length 1 is always a constant (which is what
+makes broadcasting static — [R] lists `200x1 + 1x300` as giving a wrong
+answer); a scalar argument or an array dimension becomes a constant when the
+code needs one (`axis=`, the length of a tuple, a loop that has to be
+unrolled).
+
+Left to the C compiler, which does them well on the loops it is given: common
+subexpressions, dead code, loop-invariant code motion, scalar replacement,
+unrolling, vectorization. [R]'s pipeline did these itself, on its own IR.
+
+## Parallelism and placement
+
+* Every map, reduction, scan, filter and `parfor` is a parallel loop over
+  chunks; a parallel loop inside another is a sequential one.
+* A loop goes to the GPU when *elements × estimated inner iterations per
+  element* reaches `config.device_threshold`: a short loop over long rows goes,
+  a long loop of cheap elements below the threshold does not.
+* Between the loops of one call, arrays stay on the device. Host code that
+  reads or writes array memory itself asks for the device's copies first.
+
+## Differentiation
+
+`grad(f)` adds one rule per operator, applied in reverse order of the
+operators `f` applied ([details](autodiff.md)):
+
+| operator | adjoint of its argument, given the adjoint `ȳ` of its result |
+|---|---|
+| `Map(f, X)` element-wise | `Map(∂f/∂x · ȳ, X)`, summed over broadcast dimensions |
+| `Reduce(+, X)` | `ȳ` broadcast to `X` |
+| `Reduce(max, X)` | `ȳ` where `X` equals the result, shared between ties |
+| `Reduce(*, X)` | `ȳ · result / X` |
+| `Reduce(f, X)`, any `f` | the fold replayed backwards over its stored running values |
+| `Scan(+, X)` | `Scan(+)` of `ȳ` from the other end |
+| `A @ B` | `ȳ @ Bᵀ` and `Aᵀ @ ȳ` |
+| view (slice, transpose, reshape) | the same view of the adjoint |
+| gather `X[i]` | scatter-add of `ȳ` at `i` |
+| `sort(X)` | gather by the sorting permutation, so: scatter by it |
+| `Map(f, X)` with any `f` | `f` differentiated again per element, in parallel, each chunk adding to its own copy of the adjoints |
+| `if c: A else: B` | both run; values and adjoints are selected by `c` |
+
+## What the theses have that this does not
+
+* Horizontal fusion of reductions.
+* `FilterReduce` and filter-filter fusion in one pass; `emit` fused into a scan.
+* Recursive tiling of deeper adverb nests, `TiledReduce`/`TiledScan`, and the
+  online search for tile sizes.
+* Its own low-level optimizer (it relies on the C compiler instead).
+
+## What this has that the theses do not
+
+* Differentiation; `einsum`; products of stacks.
+* Parallel scans, filters and index-carrying reductions.
+* The cost and single-use conditions on fusion, and checked aliasing.
+* Static unit-dimension broadcasting; `break`/`continue`/early `return`;
+  bounds and shape checks that raise.
+* Metal and CUDA kernels from the same loops, launch by work, arrays resident
+  on the device.

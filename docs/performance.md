@@ -104,10 +104,11 @@ GrowCut, pairwise kernels), and anything that can use all cores.
 
 **Where it does not.**
 
-* *Dense linear algebra.* `X @ Y` is [tiled](#tiling) and uses every core, but
-  it is still generated C against a hand-tuned BLAS: expect NumPy to be 3–10×
-  faster on large matrices (more where the BLAS has hardware Parakeet cannot
-  reach, such as Apple's AMX units).
+* *Dense linear algebra, when there is no BLAS to call.* A product of two
+  float matrices is handed to the BLAS NumPy itself uses, so it costs what it
+  costs in NumPy. Parakeet's own [tiled](#tiling) loops run everything else
+  that has that shape (integer products, `allpairs` distances, products inside
+  a parallel map or on a GPU) and are 3–10× behind a hand-tuned BLAS.
 * *Single-threaded transcendental functions.* NumPy ships SIMD implementations
   of `tanh`, `sin`, `exp`, ...; Parakeet's sequential backend calls the C math
   library one element at a time (the `tanh` row). With threads it is ahead again.
@@ -144,7 +145,9 @@ Neither changes what is computed, only the order. `a @ b` on 1024×1024 float64
 | tiled | 92 ms | 13 ms |
 | NumPy (Accelerate) | | 4.5 ms |
 
-`@jit(tiling=False)` or `config.tiling = False` turns it off.
+`@jit(tiling=False)` or `config.tiling = False` turns it off. The timings
+above are with `config.blas = False`; by default a float matrix product on a
+CPU backend calls the BLAS and takes the NumPy time.
 
 ## Tips
 

@@ -828,7 +828,8 @@ def _parallel_scan(el, n: Expr, elem, combine, init, acc_type, out: ArrayVal) ->
 
     el.for_range(ops.iadd(start, 1), stop, body)
 
-  el.par_loop(n, scan_chunk, nchunks=nchunks)
+  # not a map as far as backends are concerned: each chunk needs its own starting value
+  el.par_loop(n, scan_chunk, kind="reduce", nchunks=nchunks)
 
 
 def along_axis(el, arr: ArrayVal, axis: int, fn: Callable[[ArrayVal], Any], what: str = "reduction") -> Any:

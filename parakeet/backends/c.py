@@ -89,7 +89,21 @@ class HostEmitter(CFamilyEmitter):
     out.append(f"{pad}pk_incref({self.expr(s.buf)});")
 
   def release(self, v: ir.Var, out: list[str], pad: str) -> None:
+    if self.device is not None and not self.nesting:
+      out.append(f"{pad}if (PK_UNLIKELY(rt->dev_live)) pk_dev_forget(rt, {v.name});")
     out.append(f"{pad}pk_release(&{v.name});")
+
+  def stmt(self, s: ir.Stmt, out: list[str], indent: int) -> None:
+    # arrays may be on the device: host code that touches array memory itself
+    # (not through a parallel loop, which decides at its launch) syncs first
+    if self.device is not None and not self.nesting and not isinstance(s, ir.ParLoop):
+      if isinstance(s, ir.Store) or any(
+        isinstance(x, ir.Load) or (isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm")
+        for e in ir.stmt_exprs(s)
+        for x in ir.walk_expr(e)
+      ):
+        out.append("  " * indent + "PK_DEV_SYNC(rt);")
+    super().stmt(s, out, indent)
 
   def loop_pragma(self, s: ir.ForRange) -> str | None:
     # a floating point fold may only be vectorised if the compiler is told
@@ -222,13 +236,15 @@ class HostEmitter(CFamilyEmitter):
       else:
         out.append(f"{pad}  c.{name} = {v.name};")
     launch = f"pk_parallel_for(rt, pk_body_{shared}, &c, {nchunks});"
+    sync = "PK_DEV_SYNC(rt); " if self.device is not None and not self.nesting else ""
     if on_device:
       out.append(
-        f"{pad}  if (!(rt->device && c.total >= pk_device_min(rt, {self.expr(s.work) if s.work is not None else 1}) && "
-        f"((pk_device_fn)rt->device)({k}, &c, c.total, {nchunks}) == 0)) {launch}"
+        f"{pad}  if (rt->device && c.total >= pk_device_min(rt, {self.expr(s.work) if s.work is not None else 1}) && "
+        f"((pk_device_fn)rt->device)({k}, &c, c.total, {nchunks}) == 0) rt->dev_live = 1;"
       )
+      out.append(f"{pad}  else {{ {sync}{launch} }}")
     else:
-      out.append(f"{pad}  {launch}")
+      out.append(f"{pad}  {sync}{launch}")
     out.append(f"{pad}}}")
     self.label_used = True
     out.append(f"{pad}if (PK_UNLIKELY(rt->err_code)) goto {self.fail_label};")
@@ -328,11 +344,11 @@ class HostEmitter(CFamilyEmitter):
     self.n_io, self.n_fo = o_pos, fo_pos
     tail.append("  if (PK_UNLIKELY(rt->err_code)) goto pk_fail_0;")
     for v in fn.scope.owned:  # results hold their own references by now
-      tail.append(f"  pk_release(&{v.name});")
+      self.release(v, tail, "  ")
     tail.append("  return 0;")
     tail.append("pk_fail_0:")
     for v in owned_vars(fn.body, fn.scope):
-      tail.append(f"  pk_release(&{v.name});")
+      self.release(v, tail, "  ")
     tail.append("  eo[0] = rt->err_id;")
     tail.append("  eo[1] = rt->err_args[0]; eo[2] = rt->err_args[1]; eo[3] = rt->err_args[2]; eo[4] = rt->err_args[3];")
     tail.append("  return 1;")

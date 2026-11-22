@@ -209,6 +209,7 @@ typedef struct pk_call {
   void* device;
   uint64_t rng_key;
   volatile int64_t rng_counter;
+  int64_t dev_live; /* arrays are on the device: flush before the host touches array memory */
   int64_t blas;    /* bit 0: there is one; bit 1: it takes 64-bit integers */
   void* gemm[2];   /* cblas_sgemm, cblas_dgemm */
 } pk_call;
@@ -365,6 +366,18 @@ PK_INLINE int64_t pk_device_min(pk_call* rt, int64_t work) {
 
 typedef void (*pk_parfor_fn)(pk_body_fn fn, void* ctx, int64_t nchunks, int64_t nthreads);
 typedef int32_t (*pk_device_fn)(int32_t kernel, void* ctx, int64_t total, int64_t nchunks);
+
+/* Arrays stay on the device between the loops of one call.  Before host code
+   reads or writes array memory it brings the host copies up to date; before
+   it frees a buffer it tells the device to drop its copy. */
+PK_OUTLINE void pk_dev_flush(pk_call* rt) {
+  rt->dev_live = 0;
+  if (rt->device) ((pk_device_fn)rt->device)(-1, rt, 0, 0);
+}
+PK_OUTLINE void pk_dev_forget(pk_call* rt, pk_buf* b) {
+  if (b && b->refcount == 1 && !(b->flags & PK_EXTERNAL) && rt->device) ((pk_device_fn)rt->device)(-2, b->data, 0, 0);
+}
+#define PK_DEV_SYNC(rt) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_flush(rt); } while (0)
 
 PK_OUTLINE void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t nchunks) {
   int64_t c;

@@ -34,6 +34,7 @@ nav:
       - Backends and GPUs: backends.md
       - Data-parallel operators: operators.md
       - Gradients: autodiff.md
+      - Rewrite rules and optimizations: rewrites.md
       - Errors and debugging: debugging.md
       - Performance: performance.md
       - How it works: internals.md

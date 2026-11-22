@@ -55,7 +55,9 @@ a convolutional network.
 |---|---|
 | arithmetic and math functions | `+ - * / **`, `np.exp`, `np.tanh`, `np.maximum`, `np.where`, `np.abs`, `np.clip`, … with broadcasting |
 | reductions | `np.sum`, `np.mean`, `np.var`, `np.std`, `np.max`, `np.min`, `np.prod`, `np.linalg.norm`, with `axis` and `keepdims`; `parakeet.reduce` with `add`, `multiply`, `minimum`, `maximum` |
-| linear algebra | `@`, `np.dot`, `np.matmul` for vectors and matrices |
+| linear algebra | `@`, `np.dot`, `np.matmul` for vectors, matrices and stacks of matrices; `np.einsum` |
+| running and ordered | `np.cumsum`, `parakeet.scan(add, x)`, `np.sort` |
+| folds | `parakeet.reduce(f, x)` with any function `f` |
 | views | slicing, `x.T`, `reshape`, `ravel`, `np.transpose`, `x[:, None]` |
 | indexing with arrays | `x[idx]`, `x[rows, cols]` |
 | building arrays | `np.concatenate`, `np.stack`, `np.array([a, b, c])`, comprehensions |
@@ -97,15 +99,22 @@ elements of an array of unknown length, and anything longer than 4096
 iterations. Use an array operation or an adverb instead — `np.sum`,
 `parakeet.map`, a comprehension.
 
-An `if` statement whose condition is only known at run time cannot assign or
-compute differentiated values. Write the choice as a value:
+An `if` statement whose condition is only known at run time is differentiated
+by running **both** branches and choosing between their results, which is what
+`np.where` does. That is only possible when running the branch not taken has
+no effect, so the branches may only assign variables: no `return`, `raise`,
+`break`, no stores into arrays, no in-place updates. Remember that both sides
+are computed: `if x > 0: y = np.log(x)` evaluates the logarithm either way.
 
 ```python
-y = np.where(x > 0, x, 0.1 * x)  # arrays
-s = a if a > b else b  # scalars
+if np.sum(x) > 10.0:  # fine
+  h, scale = np.tanh(h), 2.0
+else:
+  h, scale = h * h, 3.0
 ```
 
-A guard that only raises (`if n == 0: raise ValueError(...)`) is fine.
+A guard that only raises (`if n == 0: raise ValueError(...)`) is fine too, and
+is not run for both sides.
 
 ## Arrays are values
 
@@ -118,11 +127,11 @@ error; build a new array instead (`out = out + term`, a comprehension,
 
 Parakeet never returns a gradient that silently ignores part of your function.
 If something on the way from the arguments to the result has no derivative
-rule — `np.cumsum`, `np.sort`, a `reduce` with your own function — you get an
-`UnsupportedError` naming it:
+rule — `np.cumprod`, `np.convolve`, a `scan` with your own function — you get
+an `UnsupportedError` naming it:
 
 ```text
-UnsupportedError: cannot differentiate through cumsum() (line 12): its derivative is not implemented
+UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
 ```
 
 Second derivatives (`grad` of a function that calls `grad`) are not supported.
@@ -131,14 +140,17 @@ Second derivatives (`grad` of a function that calls `grad`) are not supported.
 
 A gradient costs about two to three times the function. Element-wise chains
 are fused in both directions; a matrix product's derivative is two more
-(tiled) matrix products.
+matrix products.
 
-Two things are slower than they could be:
+The derivative of `map`/`allpairs` with your own function runs in parallel
+like the map itself. Every element may add to the gradient of an array the
+function captured (the weights of a network mapped over a batch), so each
+chunk of the loop adds to a copy of its own and the copies are summed at the
+end: a reduction whose accumulator is the whole gradient. That costs memory:
+one copy of the captured parameters per thread, up to 256 MB, beyond which
+fewer chunks are used.
 
-* the derivative of `map`/`allpairs` with your own function runs one element
-  at a time on a single thread, because every element may add to the gradient
-  of an array the function captured;
-* loops are unrolled, so a long unrolled loop makes for a long compile.
+Loops are unrolled, so a long unrolled loop makes for a long compile.
 
 ## How it works
 

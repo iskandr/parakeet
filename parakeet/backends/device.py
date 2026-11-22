@@ -178,6 +178,17 @@ class DevicePlanner:
 class _CallState(threading.local):
   def __init__(self) -> None:
     self.stack: list = []
+    self.cache: dict[int, _Resident] = {}
+
+
+class _Resident:
+  """Host memory that currently also lives on the device."""
+
+  __slots__ = ("addr", "nbytes", "dev", "dirty")
+
+  def __init__(self, addr: int, nbytes: int, dev) -> None:
+    self.addr, self.nbytes, self.dev = addr, nbytes, dev
+    self.dirty = False  # the device copy is newer than the host's
 
 
 class _Token:
@@ -210,14 +221,76 @@ class DeviceBase:
     stack = self._state.stack
     if stack and stack[-1] is token:
       stack.pop()
+    if not stack:
+      try:
+        self.flush()  # whatever is still only on the device belongs to the caller now
+      except BaseException as e:  # noqa: BLE001
+        self._state.cache.clear()
+        token.pending = token.pending or e
     return token.pending
 
   def run(self, plan: KernelPlan, ctx_addr: int, total: int, nchunks: int) -> None:  # pragma: no cover
     raise NotImplementedError
 
+  # -- arrays that stay on the device between the loops of one call.  Host
+  # code asks for a flush before it touches array memory itself (see the
+  # PK_DEV_SYNC calls the C backend emits), so between two flushes the device
+  # copy of anything a kernel wrote is the only current one.
+
+  def upload(self, addr: int, nbytes: int, external: bool):  # pragma: no cover
+    raise NotImplementedError
+
+  def download(self, dev, addr: int, nbytes: int) -> None:  # pragma: no cover
+    raise NotImplementedError
+
+  def acquire(self, regions: list[tuple[int, int]], written: set[int], external: list[bool]) -> list:
+    """Device buffers for host memory ``regions``, uploaded only if they are not there already."""
+    cache = self._state.cache
+    out = []
+    for r, (addr, nbytes) in enumerate(regions):
+      if nbytes <= 0:
+        out.append(self.upload(addr, 0, external[r]))
+        continue
+      hit = cache.get(addr)
+      if hit is None or hit.nbytes != nbytes:
+        for other in [e for e in cache.values() if e.addr < addr + nbytes and addr < e.addr + e.nbytes]:
+          self._retire(other, True)
+        hit = cache[addr] = _Resident(addr, nbytes, self.upload(addr, nbytes, external[r]))
+      hit.dirty = hit.dirty or r in written
+      out.append(hit.dev)
+    return out
+
+  def _retire(self, entry: _Resident, download: bool) -> None:
+    self._state.cache.pop(entry.addr, None)
+    if download and entry.dirty:
+      self.download(entry.dev, entry.addr, entry.nbytes)
+
+  def flush(self) -> None:
+    """Bring the host up to date and forget what is on the device."""
+    for entry in list(self._state.cache.values()):
+      self._retire(entry, True)
+
+  def forget(self, addr: int) -> None:
+    """The host is about to free the memory at ``addr``."""
+    entry = self._state.cache.get(addr)
+    if entry is not None:
+      self._retire(entry, False)
+
   def _launch(self, kernel: int, ctx_addr: int, total: int, nchunks: int) -> int:
-    """Returns 0 if the loop ran (or failed for good); 1 to run it on the CPU."""
+    """Returns 0 if the loop ran (or failed for good); 1 to run it on the CPU.
+    Kernel -1 is a request to flush, -2 to forget the buffer at ``ctx_addr``."""
     stack = self._state.stack
+    if kernel < 0:
+      try:
+        if kernel == -1:
+          self.flush()
+        else:
+          self.forget(ctx_addr or 0)
+      except BaseException as e:  # noqa: BLE001 - must not propagate through C frames
+        self._state.cache.clear()
+        if stack:
+          stack[-1].pending = stack[-1].pending or e
+      return 0
     if not stack:
       return 1
     token = stack[-1]

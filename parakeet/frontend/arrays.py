@@ -1226,7 +1226,8 @@ class ArrayMixin:
 
       self.for_range(start, stop, body)
 
-    self.par_loop(n, write_chunk, nchunks=nchunks)
+    # not a map as far as backends are concerned: each chunk writes from its own start
+    self.par_loop(n, write_chunk, kind="reduce", nchunks=nchunks)
     return out
 
   # ------------------------------------------------------------------ checks

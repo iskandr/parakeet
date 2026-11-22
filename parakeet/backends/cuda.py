@@ -72,6 +72,8 @@ __device__ void pk_fail(int* flag, long long* info, int id, long long a0, long l
 )
 
 # Stand-ins for the CUDA runtime so a kernel can be compiled as ordinary C++.
+_SIM_LOCK = threading.Lock()
+
 SIM_SHIM = r"""
 #include <cmath>
 #include <cstring>
@@ -80,7 +82,9 @@ using std::isnan; using std::isinf; using std::isfinite; using std::signbit;
 #define __global__
 #define __forceinline__ inline
 struct pk_dim3 { unsigned int x, y, z; };
-static thread_local pk_dim3 blockIdx, blockDim, threadIdx;
+/* not thread_local: a process may load thousands of kernels, and there are only a few
+   hundred thread-local slots.  The simulator runs one launch at a time instead. */
+static pk_dim3 blockIdx, blockDim, threadIdx;
 static inline int atomicCAS(int* p, int compare, int value) {
   int old = *p;
   if (old == compare) *p = value;
@@ -315,7 +319,8 @@ class SimulatorDriver:
         box = np.array([a])
         keep.append(box)
         ptrs[i] = box.ctypes.data
-    kernel.pk_sim_launch(grid, BLOCK, ptrs)
+    with _SIM_LOCK:
+      kernel.pk_sim_launch(grid, BLOCK, ptrs)
 
   def to_host(self, dev, host: np.ndarray) -> None:
     host[...] = dev
@@ -355,6 +360,16 @@ class CudaDevice(DeviceBase):
   def planner(self) -> CudaPlanner:
     return CudaPlanner(self)
 
+  @staticmethod
+  def _host(addr: int, nbytes: int):
+    return np.frombuffer((ctypes.c_char * nbytes).from_address(addr), dtype=np.uint8)
+
+  def upload(self, addr: int, nbytes: int, external: bool):
+    return self.driver.to_device(self._host(addr, nbytes) if nbytes > 0 else np.zeros(16, dtype=np.uint8))
+
+  def download(self, dev, addr: int, nbytes: int) -> None:
+    self.driver.to_host(dev, self._host(addr, nbytes))
+
   def run(self, plan: KernelPlan, ctx_addr: int, total: int, nchunks: int) -> None:
     drv = self.driver
     if plan.compiled is None:
@@ -375,23 +390,11 @@ class CudaDevice(DeviceBase):
     # one device buffer per group of overlapping host ranges (see merge_regions)
     pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
     regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
-    hosts, devs = [], []
-    for addr, nbytes in regions:
-      if nbytes > 0:
-        host = np.frombuffer((ctypes.c_char * nbytes).from_address(addr), dtype=np.uint8)
-      else:
-        host = np.zeros(16, dtype=np.uint8)
-      hosts.append(host)
-      devs.append(drv.to_device(host))
-    written = set()
-    for v, (r, off) in zip(plan.bufs, where):
-      if v.uid in plan.written:
-        written.add(r)
+    written = {r for v, (r, _) in zip(plan.bufs, where) if v.uid in plan.written}
+    devs = self.acquire(regions, written, [False] * len(regions))
+    for r, off in where:
       args.append(devs[r][off:] if off else devs[r])
     drv.launch(plan.compiled, plan, n, args)
-    for r in sorted(written):
-      if regions[r][1] > 0:
-        drv.to_host(devs[r], hosts[r])
     code = int(drv.read(flag)[0])
     if code:
       raise make_runtime_error(plan.errors[code - 1], [int(x) for x in drv.read(info)])
