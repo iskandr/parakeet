@@ -332,6 +332,7 @@ class ArrayMixin:
     kind: str = "map",
     nchunks: Expr | None = None,
     base_depth: int = 1,
+    work: Expr | None = None,
   ) -> Expr:
     """Emit a chunked parallel loop over ``[0, total)``.
 
@@ -352,7 +353,11 @@ class ArrayMixin:
       body(chunk, start, stop)
       self.emit(ReleaseScope(scope))
     heavy = loop_depth(blk) > base_depth
-    self.emit(ParLoop(total, nchunks, chunk, start, stop, blk, scope, kind, self.loc(), heavy))
+    if kind != "map":
+      work = None  # the chunks of a fold are tied to its partial results: size alone decides
+    elif work is None and heavy:
+      work = self.tmp(inner_work(self, blk, base_depth), "work")
+    self.emit(ParLoop(total, nchunks, chunk, start, stop, blk, scope, kind, self.loc(), heavy, work))
     return nchunks
 
   def unravel(self, flat: Expr, shape: Sequence[Expr]) -> tuple[Expr, ...]:
@@ -1145,6 +1150,8 @@ class ArrayMixin:
     mask = self.as_concrete(mask) if mask.cost > CHEAP_COST else mask
     self.consume(mask)
     n = mask.shape[0]
+    if self.can_parallel((n,)):
+      return self._compact(mask, n)
     count = Var("count", I)
     self.mutables.add(count.uid)
     self.nonneg.add(count.uid)
@@ -1170,6 +1177,57 @@ class ArrayMixin:
     self.for_range(ZERO, n, body)
     return out
 
+  def _compact(self, mask: ArrayVal, n: Expr) -> ArrayVal:
+    """Parallel compaction: count the true elements of every chunk, turn the
+    counts into where each chunk writes, then let every chunk write."""
+    nchunks = self.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
+    if isinstance(nchunks, Var):
+      self.nonneg.add(nchunks.uid)
+    starts = self.alloc_array(Int64, (nchunks,), label="starts")
+
+    def count_chunk(chunk, start, stop):
+      count = Var("count", I)
+      self.mutables.add(count.uid)
+      self.emit(Assign(count, ZERO))
+      self.for_range(start, stop, lambda i: self.emit(Assign(count, iadd(count, ops.cast(self.elem(mask, (i,)), I)))))
+      self.emit(Store(starts.buf, chunk, ops.cast(count, Int64)))
+
+    self.par_loop(n, count_chunk, kind="reduce", nchunks=nchunks)
+    running = Var("nnz", I)
+    self.mutables.add(running.uid)
+    self.nonneg.add(running.uid)
+    self.emit(Assign(running, ZERO))
+
+    def shift(c):
+      here = self.copy_scalar(ops.cast(Load(starts.buf, c), I), "count")
+      self.emit(Store(starts.buf, c, ops.cast(running, Int64)))
+      self.emit(Assign(running, iadd(running, here)))
+
+    self.for_range(ZERO, nchunks, shift)
+    total = self.copy_scalar(running, "nnz")
+    if isinstance(total, Var):
+      self.nonneg.add(total.uid)
+    out = self.alloc_array(Int64, (total,), label="idx")
+
+    def write_chunk(chunk, start, stop):
+      pos = Var("pos", I)
+      self.mutables.add(pos.uid)
+      self.emit(Assign(pos, ops.cast(Load(starts.buf, chunk), I)))
+
+      def body(i):
+        self.emit(
+          If(
+            ops.cast(self.elem(mask, (i,)), Bool),
+            [Store(out.buf, pos, ops.cast(i, Int64)), Assign(pos, iadd(pos, 1))],
+            [],
+          )
+        )
+
+      self.for_range(start, stop, body)
+
+    self.par_loop(n, write_chunk, nchunks=nchunks)
+    return out
+
   # ------------------------------------------------------------------ checks
 
   def check(self, cond: Expr, exc: str, fmt: str, *args: Expr) -> None:
@@ -1177,6 +1235,41 @@ class ArrayMixin:
       if cond.value:
         return
     self.emit(Check(cond, ErrorInfo(exc, fmt, self.loc()), tuple(ops._i(a) for a in args)))
+
+
+def inner_work(el, block: list, skip: int) -> Expr:
+  """Roughly how many inner loop iterations one element of a parallel loop
+  costs: the trip counts of the loops below the ``skip`` levels that walk
+  the chunk itself, where they can be computed before the loop starts."""
+  from ..backends.cfamily import defined_vars
+  from ..lib.core import outer_expr
+
+  inner = set(defined_vars(block, into_parloops=True))
+
+  def trips(s: ForRange) -> Expr:
+    span = isub(s.stop, s.start)
+    if isinstance(s.step, Const) and s.step.value > 1:
+      span = idiv(span, s.step)
+    known = outer_expr(el, span, inner)
+    return imax(known, 1) if known is not None else Const(8, I)
+
+  def cost(stmts: list, skip: int) -> Expr:
+    total: Expr = ZERO
+    for s in stmts:
+      if isinstance(s, ForRange):
+        w = cost(s.body, skip - 1) if skip > 0 else imul(trips(s), imax(cost(s.body, 0), 1))
+      elif isinstance(s, While):
+        w = cost(s.body, skip - 1) if skip > 0 else imul(Const(8, I), imax(cost(s.body, 0), 1))
+      elif isinstance(s, If):
+        w = imax(cost(s.then, skip), cost(s.orelse, skip))
+      elif isinstance(s, ParLoop):
+        w = cost(s.body, skip)
+      else:
+        continue
+      total = iadd(total, w)
+    return total
+
+  return imax(cost(block, skip), 1)
 
 
 def is_zero(e: Expr) -> bool:

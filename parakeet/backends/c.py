@@ -224,7 +224,7 @@ class HostEmitter(CFamilyEmitter):
     launch = f"pk_parallel_for(rt, pk_body_{shared}, &c, {nchunks});"
     if on_device:
       out.append(
-        f"{pad}  if (!(rt->device && c.total >= rt->gpu_min && "
+        f"{pad}  if (!(rt->device && c.total >= pk_device_min(rt, {self.expr(s.work) if s.work is not None else 1}) && "
         f"((pk_device_fn)rt->device)({k}, &c, c.total, {nchunks}) == 0)) {launch}"
       )
     else:

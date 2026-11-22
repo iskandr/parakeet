@@ -302,6 +302,7 @@ class ParLoop(Stmt):
   kind: str = "map"  # "map" | "reduce"
   loc: SourceLocation | None = None
   heavy: bool = False  # each iteration contains loops of its own
+  work: Expr | None = None  # estimated inner iterations per element (None: one), valid just before the loop
 
 
 @dataclass(eq=False, slots=True)

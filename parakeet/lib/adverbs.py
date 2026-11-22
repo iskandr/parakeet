@@ -127,6 +127,7 @@ def map(el, f, *args, axis=0):  # noqa: A001
 
 
 each = map
+_MAP = map  # the adverbs below take a keyword argument called ``map``
 
 
 @libfunction("allpairs")
@@ -211,17 +212,41 @@ def _reduce(el, f, x, init, axis, what: str):
   return reduce_arrays(el, x.shape[k], lambda i: el.axis_view(x, k, i, consumed=True), combine, init, what)
 
 
+def _zipped(el, xs: tuple, init, fn, axis, what: str):
+  """The sequence an adverb folds over: one array, or ``fn`` mapped over
+  several (never built: the map fuses into the fold).  A trailing scalar
+  after a single array is the old positional ``init``."""
+  xs = list(xs)
+  if init is None and len(xs) == 2 and fn is None and isinstance(xs[1], Expr):
+    init = xs.pop()
+  if not xs:
+    raise el.error(TypeInferenceError, f"{what}() needs at least one array argument")
+  if fn is None:
+    if len(xs) > 1:
+      raise el.error(
+        TypeInferenceError,
+        f"{what}() over {len(xs)} arrays needs map=: a function that turns one element of each into the value to fold",
+      )
+    return xs[0], init
+  return _MAP.impl(el, fn, *xs, axis=0 if axis is None and what != "reduce" else axis), init
+
+
 @libfunction("reduce")
-def reduce(el, f, x, init=None, axis=None):  # noqa: A001
-  """Fold ``f`` over the elements of ``x`` (all of them, or slices along ``axis``).
+def reduce(el, f, *xs, init=None, axis=None, map=None):  # noqa: A001, A002
+  """Fold ``f`` over the elements of an array (all of them, or slices along ``axis``).
+
+  With ``map=g`` and several arrays, the fold is over ``g(x1[i], ..., xn[i])``:
+  ``reduce(add, x, y, map=multiply)`` is a dot product, and no array of
+  products is ever built.
 
   ``f`` should be associative: recognised primitives (add, multiply, min,
   max, logical/bitwise and/or) are reduced in parallel."""
+  x, init = _zipped(el, xs, init, map, axis, "reduce")
   return _reduce(el, f, x, init, axis, "reduce")
 
 
 @core.register(functools.reduce)
-def _functools_reduce(el, f, x, initial=None):
+def _functools_reduce(el, f, x, initial=None):  # noqa: D401
   x = _arrayish(el, x)
   if isinstance(x, ArrayVal):
     return _reduce(el, f, x, initial, 0, "reduce")
@@ -229,8 +254,17 @@ def _functools_reduce(el, f, x, initial=None):
 
 
 @libfunction("scan")
-def scan(el, f, x, init=None, axis=0):
-  """Running fold: ``result[i] = f(result[i - 1], x[i])``."""
+def scan(el, f, *xs, init=None, axis=0, map=None, emit=None):  # noqa: A002
+  """Running fold: ``result[i] = f(result[i - 1], x[i])``.
+
+  ``map=g`` folds over ``g(x1[i], ..., xn[i])`` for several arrays, and
+  ``emit=h`` gives ``h`` of each running value instead of the value itself."""
+  x, init = _zipped(el, xs, init, map, axis, "scan")
+  out = _scan(el, f, x, init, axis)
+  return out if emit is None else _MAP.impl(el, emit, out, axis=None)
+
+
+def _scan(el, f, x, init, axis):
   x = el.as_array(_arrayish(el, x))
   ax = _axis_arg(el, axis)
   if isinstance(init, ArrayVal) and init.rank == 0:
@@ -348,14 +382,26 @@ def parfor(el, f, bounds):
 
 
 @libfunction("filter")
-def filter(el, pred, x):  # noqa: A001
-  """Elements of ``x`` (along its first axis) for which ``pred`` is true."""
-  x = el.as_array(_arrayish(el, x))
-  mask = map.impl(el, pred, x, axis=0)
+def filter(el, pred, *xs, map=None):  # noqa: A001, A002
+  """Elements of ``x`` (along its first axis) for which ``pred`` is true.
+
+  Given several arrays, ``pred`` sees one element of each and ``map=g``
+  says what to keep: ``g(x1[i], ..., xn[i])`` where the predicate holds."""
+  if not xs:
+    raise el.error(TypeInferenceError, "filter() needs at least one array argument")
+  if len(xs) > 1 and map is None:
+    raise el.error(
+      TypeInferenceError, f"filter() over {len(xs)} arrays needs map=: what to keep of each selected element"
+    )
+  xs = [el.as_array(_arrayish(el, x)) for x in xs]
+  xs = [el.as_concrete(x) if x.buf is None and x.cost > CHEAP_COST else x for x in xs]
+  mask = _MAP.impl(el, pred, *xs, axis=0)
   if not isinstance(mask, ArrayVal) or mask.rank != 1:
     raise el.error(TypeInferenceError, "the predicate passed to filter must return a scalar")
-  mask = el.cast_array(mask, _bool())
-  return el.getitem(el.as_concrete(x) if x.buf is None and x.cost > CHEAP_COST else x, mask)
+  mask = el.as_concrete(el.cast_array(mask, _bool()))
+  if map is None:
+    return el.getitem(xs[0], mask)
+  return _MAP.impl(el, map, *[el.getitem(x, mask) for x in xs], axis=0)
 
 
 def _bool():

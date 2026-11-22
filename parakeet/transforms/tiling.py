@@ -124,7 +124,8 @@ def tiled_map(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], elt, leng
     i, j = ij
     return element(((i,) if len(lead) == 1 else el.unravel(i, lead)) + (j,))
 
-  tile = tile_size(el, el.tmp(length, "len"), elt.itemsize)
+  reduce_length = el.tmp(length, "len")
+  tile = tile_size(el, reduce_length, elt.itemsize)
 
   def index(e, bound: Expr) -> Expr:
     v = el.tmp(e, "i")
@@ -243,7 +244,7 @@ def tiled_map(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], elt, leng
   with el.in_block(work):
     # where it cannot run in parallel it is still a loop of one chunk: the
     # backend compiles that as a function of its own, and identical ones once
-    el.par_loop(total, body, nchunks=None if el.can_parallel(shape) else ONE, base_depth=2)
+    el.par_loop(total, body, nchunks=None if el.can_parallel(shape) else ONE, base_depth=2, work=reduce_length)
   el.emit(If(cmp("gt", total, 0), work, []))
   el.record_store(out)
   return out
