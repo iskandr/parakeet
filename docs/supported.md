@@ -78,14 +78,14 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `.T` | `.dtype` | `.flat` | `.imag` |
 | `.itemsize` | `.nbytes` | `.ndim` | `.real` |
 | `.shape` | `.size` | `.all()` | `.any()` |
-| `.argmax()` | `.argmin()` | `.astype()` | `.clip()` |
-| `.conj()` | `.conjugate()` | `.copy()` | `.cumprod()` |
-| `.cumsum()` | `.diagonal()` | `.dot()` | `.fill()` |
-| `.flatten()` | `.item()` | `.max()` | `.mean()` |
-| `.min()` | `.nonzero()` | `.prod()` | `.ravel()` |
-| `.reshape()` | `.round()` | `.squeeze()` | `.std()` |
-| `.sum()` | `.swapaxes()` | `.tolist()` | `.trace()` |
-| `.transpose()` | `.var()` |  |  |
+| `.argmax()` | `.argmin()` | `.argsort()` | `.astype()` |
+| `.clip()` | `.conj()` | `.conjugate()` | `.copy()` |
+| `.cumprod()` | `.cumsum()` | `.diagonal()` | `.dot()` |
+| `.fill()` | `.flatten()` | `.item()` | `.max()` |
+| `.mean()` | `.min()` | `.nonzero()` | `.prod()` |
+| `.ravel()` | `.reshape()` | `.round()` | `.squeeze()` |
+| `.std()` | `.sum()` | `.swapaxes()` | `.tolist()` |
+| `.trace()` | `.transpose()` | `.var()` |  |
 
 ## Python builtins
 
