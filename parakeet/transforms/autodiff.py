@@ -46,7 +46,7 @@ from .. import prims
 from ..errors import InternalError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, BufType, ScalarType
 from ..syntax import ops
-from ..syntax.ir import Assign, Cast, Const, Expr, Load, Prim, Store, Var, same, walk_stmts
+from ..syntax.ir import Assign, Cast, Const, Expr, Load, Prim, Store, Var, same, walk_expr, walk_stmts
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, isub
 from ..syntax.values import CHEAP_COST, ArrayVal, describe
 from .derivatives import backprop, is_float
@@ -191,6 +191,7 @@ class RootAdj:
     self.buf: ArrayVal | None = None  # zero-initialised accumulator, when views or loops need one
     self.needs_buffer = False
     self.stored: Any = None
+    self.mutable = False  # stored into by recorded operators: adjoints live in the buffer only
     self.redirect: ArrayVal | None = None  # this chunk's own copy of the accumulator in a parallel loop
 
   def is_whole(self, el, v: ArrayVal) -> bool:
@@ -234,7 +235,7 @@ class RootAdj:
       via.touched.add(self)
       return
     at_home = el.block is self.tape.home
-    if self.buf is None and at_home and self.is_whole(el, v) and isinstance(g, ArrayVal):
+    if self.buf is None and at_home and not self.mutable and self.is_whole(el, v) and isinstance(g, ArrayVal):
       g = settled(el, el.cast_array(g, self.arr.elt))
       self.whole = g if self.whole is None else el.apply_ufunc(UF["add"], [self.whole, g])
       return
@@ -602,6 +603,78 @@ class Tape:
     self.register(el, node, out)
     return out
 
+  def detach(self, arr: ArrayVal) -> ArrayVal:
+    """``arr`` is about to be turned into a concrete array in place.  If it is
+    the delayed result of a recorded operator, hand that role to a copy of
+    the delayed value, which is what gets evaluated."""
+    node = self.delayed.pop(id(arr), None)
+    if node is None:
+      return arr
+    ghost = ArrayVal(arr.elt, arr.shape, fn=arr.fn, roots=arr.roots, cost=arr.cost, reads=arr.reads)
+    ghost.depth, ghost.epoch, ghost.block, ghost.origin, ghost.uses = (
+      arr.depth,
+      arr.epoch,
+      arr.block,
+      arr.origin,
+      arr.uses,
+    )
+    self.delayed[id(ghost)] = node
+    self.keep.append(ghost)
+    node.out = ghost
+    return ghost
+
+  def _mutable_root(self, el, dest: ArrayVal, active: bool) -> RootAdj | None:
+    """The adjoint of the array ``dest`` is a view of, if a store into it can be recorded."""
+    uid = dest.buf.uid
+    if uid in el.tainted_bufs:
+      raise _tainted(el, el.tainted_bufs[uid])
+    root = self.find_root(uid)
+    if root is None:
+      if not active:
+        return None  # nothing differentiated is involved
+      base = dest if dest.contig else dest.base
+      if base is None or base.buf is not dest.buf:
+        return None  # not a view of a whole array we know: the store taints it instead
+      root = self.root(el, base)
+    if root.tape is not self:
+      raise el.no_derivative(
+        "cannot differentiate a store into an array from outside the function being mapped",
+        hint="return the values and let the map build the array",
+      )
+    root.mutable = root.needs_buffer = True
+    return root
+
+  def store(self, el, dest: ArrayVal, value) -> bool:
+    """``dest[...] = value``.  Its adjoint: what arrives for the stored region
+    belongs to ``value``, and nothing of it to what was there before."""
+    active = self.is_active(el, value)
+    root = self._mutable_root(el, dest, active)
+    if root is None:
+      return False
+    self.muted += 1
+    try:
+      el.store_array_plain(dest, value)
+    finally:
+      self.muted -= 1
+    el.tainted_bufs.pop(dest.buf.uid, None)
+    self.record(el, Node("store", (value,), (dest, root, active)))
+    return True
+
+  def store_element(self, el, arr: ArrayVal, pos: Expr, v: Expr) -> bool:
+    active = self.is_active(el, v)
+    root = self._mutable_root(el, arr, active)
+    if root is None:
+      return False
+    self.muted += 1
+    try:
+      el.emit(Store(arr.buf, pos, v))
+      el.record_store(arr)
+    finally:
+      self.muted -= 1
+    el.tainted_bufs.pop(arr.buf.uid, None)
+    self.record(el, Node("store_element", (v,), (pos, root, active)))
+    return True
+
   def pack(self, el, parts: list[tuple[ArrayVal, Any]], out: ArrayVal) -> None:
     """``out`` was assembled from ``parts``: (view of out, value stored there)."""
     live = [(view, v) for view, v in parts if self.is_active(el, v)]
@@ -680,7 +753,7 @@ class Tape:
     if arr.buf is None:
       return
     root = self.find_root(arr.buf.uid)
-    if root is not None and root.stored is None:
+    if root is not None and root.stored is None and not self.muted:
       root.stored = _info(el, "an array that is modified in place after it was computed")
 
   # ---- the backward pass --------------------------------------------------------------------
@@ -749,7 +822,7 @@ class Tape:
         g = holder.total(el)
       else:
         g = node.g
-      if g is None:
+      if g is None and node.kind not in ("store", "store_element"):
         continue
       el.node_stack.append(node.origin)
       try:
@@ -824,19 +897,48 @@ def unbroadcast(el, g: ArrayVal, target):
   return g
 
 
+def _mentioned(el, exprs: list[Expr]) -> set[int]:
+  """Identities of everything the expressions are computed from, through the
+  definitions of the variables they use."""
+  out: set[int] = set()
+  stack = list(exprs)
+  while stack:
+    for x in walk_expr(stack.pop()):
+      if id(x) in out:
+        continue
+      out.add(id(x))
+      if isinstance(x, Var) and x.uid in el.defs:
+        stack.append(el.defs[x.uid])
+  return out
+
+
 def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   active, fn, elt, cost = node.info
   args = node.inputs
   n = len(args)
   if sum(active) > 1 and g.buf is None and g.cost > CHEAP_COST:
     g = el.as_concrete(g)
-  for a in args:
-    tape.stale(el, node, a)
   for k in range(n):
     if not active[k]:
       continue
     a = args[k]
     t = a.elt if isinstance(a, ArrayVal) else a.type.strong
+    # the arguments this derivative reads must still hold what the operator saw
+    # (the derivative of a sum reads none: x += y can be undone without the old x)
+    with el.trial():
+      probes = [Var("x", x.elt if isinstance(x, ArrayVal) else x.type) for x in args]
+      seen: list[Expr] = []
+      backprop(
+        el,
+        fn(*probes),
+        Var("g", elt),
+        lambda v, adj, k=k: seen.append(adj) if v is probes[k] else el.defs.get(v.uid),
+        lambda *_: None,
+      )
+      used = _mentioned(el, seen)
+    for x, probe in zip(args, probes):
+      if id(probe) in used:
+        tape.stale(el, node, x)
 
     def partial(*xs, k=k, t=t):
       *xs, gv = xs
@@ -1049,6 +1151,28 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
     s.add(el, reduce_plain(el, "add", c, None, Const(0, c.elt), "sum", False), tape)
 
 
+def _store(tape: Tape, el, node: Node, g) -> None:
+  dest, root, active = node.info
+  (value,) = node.inputs
+  region = root.view(el, dest)
+  taken = el.materialize(region, "adj") if active else None
+  el.fill(region, Const(0.0, region.elt))
+  el.record_store(region)
+  if taken is not None:
+    tape.add(el, value, unbroadcast(el, taken, value))
+
+
+def _store_element(tape: Tape, el, node: Node, g) -> None:
+  pos, root, active = node.info
+  (v,) = node.inputs
+  buf = root.target(el)
+  p = el.tmp(iadd(buf.offset, isub(pos, root.arr.offset)), "pos")
+  taken = el.copy_scalar(Load(buf.buf, p), "g")
+  el.emit(Store(buf.buf, p, Const(0.0, buf.elt)))
+  if active:
+    tape.add(el, v, taken)
+
+
 def _cumsum(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   """d cumsum: every element feeds all the later ones, a cumsum from the other end."""
   from ..lib.numpy_lib import cumulative_plain, flip
@@ -1112,6 +1236,8 @@ _BACKWARD = {
   "pack": _pack,
   "map": _map,
   "cumsum": _cumsum,
+  "store": _store,
+  "store_element": _store_element,
   "fold": _fold,
 }
 

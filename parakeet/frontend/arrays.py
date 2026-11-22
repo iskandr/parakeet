@@ -255,9 +255,14 @@ class ArrayMixin:
       return
     if self.block is not arr.block:
       self.conflict(arr, "mutated after a branch")
-    out = self.materialize(arr)
+    source = arr
+    tape = self.tape
+    if tape is not None and not tape.muted:
+      source = tape.detach(arr)  # the tape knows this array as a delayed value: keep that apart
+    out = self.materialize(source)
     arr.buf, arr.offset, arr.strides = out.buf, out.offset, out.strides
     arr.shape, arr.roots, arr.contig, arr.fn, arr.reads = out.shape, out.roots, True, None, None
+    arr.inj = True
 
   # ------------------------------------------------------------------- loops
 
@@ -979,7 +984,11 @@ class ArrayMixin:
           )
         value = self.elem(value, ())
       v = ops.cast(self.as_scalar(value, "assigned value"), arr.elt)
-      self.emit(Store(arr.buf, self.index_expr(arr, idx), v))
+      pos = self.tmp(self.index_expr(arr, idx), "pos")
+      tape = self.tape
+      if tape is not None and not tape.muted and arr.elt.kind == "f" and tape.store_element(self, arr, pos, v):
+        return
+      self.emit(Store(arr.buf, pos, v))
       self.record_store(arr)
       return
     dest = self.remap(arr, shape, mapping)
@@ -1008,6 +1017,12 @@ class ArrayMixin:
 
   def store_array(self, dest: ArrayVal, value) -> None:
     """``dest[...] = value`` with NumPy broadcasting and overlap semantics."""
+    tape = self.tape
+    if tape is not None and not tape.muted and dest.elt.kind == "f" and tape.store(self, dest, value):
+      return
+    self.store_array_plain(dest, value)
+
+  def store_array_plain(self, dest: ArrayVal, value) -> None:
     if isinstance(value, ArrayVal):
       if value.rank > dest.rank:
         # NumPy allows leading length-1 dimensions on the right-hand side

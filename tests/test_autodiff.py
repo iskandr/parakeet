@@ -426,12 +426,52 @@ def test_loops_that_cannot_be_unrolled():
 
 
 def test_in_place_updates():
-  def element_by_element(w, x):
+  def elements(w, x):
     out = np.zeros(3)
     for i in range(3):
-      out[i] = np.sum(w[:, i])
+      out[i] = np.sum(w[:, i]) * (i + 1.0)
     return np.sum(out * out)
 
+  def slices(w, x):
+    out = np.zeros((6, 3))
+    out[:3] = x[:3] @ w
+    out[3:] = np.tanh(x[3:] @ w)
+    return np.sum(out**2)
+
+  def accumulated(w, x):
+    out = np.zeros((6, 3))
+    for i in range(2):
+      out += x @ w * (i + 1.0)
+    out[0] += 1.0
+    return np.sum(out * out)
+
+  def overwritten(w, x):
+    h = w * 2.0
+    y = np.sum(h * 3.0)
+    h[0, 0] = 5.0  # the earlier use needs the adjoint of h, not its old value
+    return y + np.sum(h * h)
+
+  def argument_overwritten(w, x):
+    w[1] = x[0, :3]
+    return np.sum(w * w)
+
+  def read_and_written(w, x):
+    out = w * 1.0
+    out[0] = out[1] * out[2]
+    out[:, 0] = out[:, 1] + 1.0
+    return np.sum(out**3)
+
+  def scaled_in_place(w, x):
+    h = w * 1.0
+    h *= x[0, :3]
+    return np.sum(h * h)
+
+  for f in (elements, slices, accumulated, overwritten, argument_overwritten, read_and_written, scaled_in_place):
+    want = numeric(lambda w, f=f: f(w.copy(), X), [W + 0.5], 0)
+    np.testing.assert_allclose(grad(f)(W + 0.5, X), want, rtol=1e-4, atol=1e-6, err_msg=f.__name__)
+
+
+def test_values_overwritten_before_their_derivative_needed_them():
   def modified_afterwards(w, x):
     h = w * 2.0
     y = np.sum(np.tanh(h))
@@ -443,9 +483,14 @@ def test_in_place_updates():
     x[0, 0] = 9.0
     return y
 
-  refused(element_by_element, W, X, match="assigned one by one")
+  def stored_through_an_index_array(w, x):
+    out = np.zeros(4)
+    out[np.array([0, 2])] = w[:2, 0]
+    return np.sum(out)
+
   refused(modified_afterwards, W, X, match="modified in place")
   refused(input_modified, W, X.copy(), match="modified in place")
+  refused(stored_through_an_index_array, W, X, match="assigned one by one")
 
 
 def test_library_functions_without_a_derivative_are_named():
