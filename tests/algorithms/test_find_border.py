@@ -28,8 +28,13 @@ def find_border(is_background):
 
 
 def test_find_border():
-    is_background = np.empty((20, 20), dtype=np.bool)
-    expect(find_border, [is_background], find_border(is_background))
+    # (the original test used np.empty: uninitialised bytes that are not valid bools)
+    is_background = np.ones((20, 20), dtype=np.bool)
+    is_background[3:15, 5:17] = np.random.default_rng(0).random((12, 12)) > 0.5
+    is_background[3, 8] = is_background[14, 9] = is_background[7, 5] = is_background[9, 16] = False
+    expected = find_border(is_background)
+    assert expected == (3, 5, 16, 14)
+    expect(find_border, [is_background], expected)
 
 
 if __name__ == "__main__":
