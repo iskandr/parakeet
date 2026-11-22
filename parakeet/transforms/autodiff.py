@@ -107,11 +107,13 @@ def observe(el, stmt) -> None:
 
 
 def _info(el, what: str) -> tuple:
-  return (el.loc(), what, el.blame())
+  return (el.loc(), what, el.blame(), el.if_stack[-1] if el.if_stack else None)
 
 
 def _tainted(el, info) -> UnsupportedError:
-  loc, what, blamed = info
+  loc, what, blamed, branch = info
+  if branch is not None:
+    el.request_both(*branch)  # start over running both branches, if this one allows it
   where = f" (line {loc.lineno})" if loc is not None and getattr(loc, "lineno", None) else ""
   if blamed is not None:
     return el.error(
@@ -306,6 +308,7 @@ class Tape:
     self.key = key  # identifies this tape across restarts of the elaboration
     self.sites: dict[tuple, int] = {}
     self.block = el.block  # operators are only recorded in this block: straight-line code
+    self.if_depth = len(el.if_stack)
     self.home: list | None = None  # where the backward pass is emitted
     self.outer_loops = {id(ctx) for fr in el.frames for ctx in fr.loops}
     self.nodes: list[Node] = []
@@ -427,13 +430,19 @@ class Tape:
     node.origin = origin
 
   def not_static(self, el) -> None:
+    if len(el.if_stack) > self.if_depth:
+      el.request_both(*el.if_stack[-1])
     for fr in reversed(el.frames):
       if fr.loops and id(fr.loops[-1]) not in self.outer_loops:
         el.request_unroll(fr, fr.loops[-1].node)
-    raise el.no_derivative(
-      "cannot differentiate an array operation that only runs conditionally",
-      hint="use np.where or a conditional expression (a if c else b) instead of an if statement",
+    message = "cannot differentiate an array operation that only runs conditionally"
+    hint = (
+      "an if statement can be differentiated when its branches only assign variables (no return, raise, "
+      "loop exit or stores into arrays); otherwise use np.where or a conditional expression"
     )
+    if el.if_stack and not el.if_stack[-1][0].globals.get("__parakeet_lib__"):
+      raise el.error(UnsupportedError, message, el.if_stack[-1][1], hint)  # the user's own if statement
+    raise el.no_derivative(message, hint=hint)
 
   def register(self, el, node: Node, out) -> None:
     """Make ``out`` the result of ``node``."""
@@ -516,6 +525,69 @@ class Tape:
     self.register(el, node, out)
     return out
 
+  def op(self, el, kind: str, inputs: tuple, info, compute):
+    """Record an operator whose result ``compute()`` builds without help."""
+    self.muted += 1
+    try:
+      out = compute()
+      if isinstance(out, ArrayVal):
+        out = el.as_concrete(out)
+    finally:
+      self.muted -= 1
+    node = Node(kind, tuple(inputs), info)
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
+  def fold(self, el, combine, x: ArrayVal, init, what: str):
+    """A fold with an arbitrary function.  Its derivative needs every running
+    value, so the fold is computed as a scan and replayed backwards."""
+    from ..lib.core import scan_values
+
+    if x.rank != 1:
+      x = el.flat_view(x)
+    if x.buf is None and x.cost > CHEAP_COST:
+      x = el.as_concrete(x)
+    n = el.tmp(x.shape[0], "n")
+    context = el.capture()
+
+    def step(acc, xi):
+      with el.restored(context):
+        return el.as_scalar(combine(acc, xi), "reduction result")
+
+    self.muted += 1
+    try:
+      if init is None:
+        el.check(cmp("gt", n, 0), "ValueError", f"zero-size array to {what}, which has no identity")
+      accs = el.as_concrete(scan_values(el, n, lambda i: el.tmp(el.elem(x, (i,)), "x"), combine, init, what))
+      out = Var("red", accs.elt)
+      el.mutables.add(out.uid)
+      if init is None:
+        el.emit(Assign(out, Load(accs.buf, isub(n, 1))))
+      else:
+        from ..syntax.ir import If
+
+        el.emit(Assign(out, cast(init, accs.elt)))
+        el.emit(If(cmp("gt", n, 0), [Assign(out, Load(accs.buf, isub(n, 1)))], []))
+    finally:
+      self.muted -= 1
+    info = (accs, init, step, n)
+    # what the backward loop will add to, found out now
+    probe = Var("i", I)
+    el.nonneg.add(probe.uid)
+    el.upper[probe.uid] = n
+    el.loop_depth += 1
+    try:
+      with el.trial():
+        cell = el.alloc_array(accs.elt, (ONE,), zero=True, label="adj")
+        _fold_step(self, el, x, info, probe, cell, dry=True, key="probe")
+    finally:
+      el.loop_depth -= 1
+    node = Node("fold", (x,), info)
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
   def pack(self, el, parts: list[tuple[ArrayVal, Any]], out: ArrayVal) -> None:
     """``out`` was assembled from ``parts``: (view of out, value stored there)."""
     live = [(view, v) for view, v in parts if self.is_active(el, v)]
@@ -584,6 +656,8 @@ class Tape:
     """Part of ``arr`` was overwritten by code the tape did not record."""
     self.tick += 1
     roots = el.get_roots(arr)
+    if roots is None and arr.buf is not None:
+      roots = el.reach.get(arr.buf.uid)  # a merged variable: what it may refer to
     if roots is None:
       self.unknown_store = self.tick
     else:
@@ -669,20 +743,19 @@ class Tape:
       finally:
         el.node_stack.pop()
 
-  def stale(self, el, node: Node, v=None) -> None:
+  def stale(self, el, node: Node, v=None, roots_known: bool = False) -> None:
     """The backward pass is about to read again what ``node`` read (the array
     ``v``, or anything at all): it must still hold what the forward pass saw."""
+    blind = self.unknown_store > node.tick  # a store through a variable of unknown origin
     if v is None:
       # anything that existed when the operator ran
-      changed = self.unknown_store > node.tick or any(
-        t > node.tick and self.born.get(r, 0) < node.tick for r, t in self.stored_at.items()
-      )
-    elif isinstance(v, ArrayVal) and v.buf is not None:
+      changed = blind or any(t > node.tick and self.born.get(r, 0) < node.tick for r, t in self.stored_at.items())
+    elif isinstance(v, ArrayVal) and (v.buf is not None or roots_known):
       roots = el.get_roots(v)
       if roots is None:
-        changed = self.unknown_store > node.tick or any(t > node.tick for t in self.stored_at.values())
+        changed = blind or any(t > node.tick for t in self.stored_at.values())
       else:
-        changed = self.unknown_store > node.tick or any(self.stored_at.get(r, 0) > node.tick for r in roots)
+        changed = blind or any(self.stored_at.get(r, 0) > node.tick for r in roots)
     else:
       changed = False  # delayed arrays are checked (and re-evaluated eagerly) by the frontend itself
     if changed:
@@ -783,8 +856,8 @@ def _opaque(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   if g.buf is None and g.cost > CHEAP_COST:
     g = el.as_concrete(g)
   el.consume(g)
-  el.check_fresh(arr)
-  tape.stale(el, node)
+  # a delayed array knows which arrays it reads; without that, anything older counts
+  tape.stale(el, node, arr if arr.roots is not None else None, roots_known=True)
 
   def body(idx):
     tape.push(el, arr.fn(tuple(idx)), el.tmp(el.elem(g, idx), "g"))
@@ -911,6 +984,60 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   el.seq_nest(shape, body)
 
 
+def _cumsum(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  """d cumsum: every element feeds all the later ones, a cumsum from the other end."""
+  from ..lib.numpy_lib import cumulative_plain, flip
+
+  (a,) = node.inputs
+  axis = node.info
+  g = el.as_concrete(g)
+  along = None if g.rank == 1 else axis
+  back = flip(el, el.as_concrete(cumulative_plain(el, flip(el, g, along), along, "add")), along)
+  if back.rank != a.rank:
+    back = el.reshape(el.as_concrete(back), a.shape, checked=True)
+  tape.add(el, a, back)
+
+
+def _fold_step(tape: Tape, el, x: ArrayVal, info, i: Expr, cell: ArrayVal, dry: bool, key) -> None:
+  """One step of a fold, backwards: the adjoint of the running value after
+  element ``i`` (in ``cell``) becomes that of the one before, and of ``x[i]``."""
+  accs, init, step, _ = info
+  t = accs.elt
+  before = Load(accs.buf, ops.imax(isub(i, 1), 0))
+  if init is not None:
+    before = ops.select(cmp("gt", i, 0), before, cast(init, t))
+  acc = Var("acc", t)
+  el.block.append(Assign(acc, before))
+  child = Tape(el, tape, dry=dry, key=(*tape.key, key))
+  leaf = child.leaf_scalar(el, acc)
+  el.tape = child
+  try:
+    r = step(acc, el.tmp(el.elem(x, (i,)), "x"))
+  finally:
+    el.tape = None
+  child.backward(el, r, el.tmp(Load(cell.buf, ZERO), "g"))
+  total = leaf.total(el)
+  el.emit(Store(cell.buf, ZERO, cast(total, t) if total is not None else Const(0.0, t)))
+
+
+def _fold(tape: Tape, el, node: Node, g: Expr) -> None:
+  (x,) = node.inputs
+  accs, init, step, n = node.info
+  tape.stale(el, node)
+  cell = el.alloc_array(accs.elt, (ONE,), zero=True, label="adj")
+  el.emit(Store(cell.buf, ZERO, cast(g, accs.elt)))
+  lower = ZERO if init is not None else ONE
+  el.for_range(
+    isub(n, 1), isub(lower, 1), lambda i: _fold_step(tape, el, x, node.info, i, cell, False, id(node.origin)),
+    step=Const(-1, I),
+  )  # fmt: skip
+  rest = el.tmp(Load(cell.buf, ZERO), "g")
+  if init is None:
+    tape.add(el, el.tmp(el.elem(x, (ZERO,)), "x"), rest)  # the fold started from x[0]
+  else:
+    tape.add(el, init, rest)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -919,6 +1046,8 @@ _BACKWARD = {
   "matmul": _matmul,
   "pack": _pack,
   "map": _map,
+  "cumsum": _cumsum,
+  "fold": _fold,
 }
 
 

@@ -890,12 +890,22 @@ def argmax(el, a, axis=None, out=None, keepdims=False):
 
 
 def _cumulative(el, a, axis, op: str, dtype):
-  from .adverbs import scan_axis
-  from .core import scan_values
-
   a = _arr(el, a)
   elt = el.as_dtype(dtype) if dtype is not None else _sum_type(a.elt)
   a = el.cast_array(a, elt)
+  tape = el.tape
+  if tape is not None and not tape.muted and op == "add" and elt.kind == "f" and tape.is_active(el, a):
+    if a.buf is None and a.cost > CHEAP_COST:
+      a = el.as_concrete(a)
+    return tape.op(el, "cumsum", (a,), axis, lambda: cumulative_plain(el, a, axis, op))
+  return cumulative_plain(el, a, axis, op)
+
+
+def cumulative_plain(el, a: ArrayVal, axis, op: str):
+  """Running fold of ``a`` with the primitive ``op`` along ``axis`` (None: flattened)."""
+  from .adverbs import scan_axis
+  from .core import scan_values
+
   spec = UF[op]
 
   def combine(x, y):
@@ -945,7 +955,29 @@ def sort(el, a, axis=-1, kind=None, order=None):
   """Sorted copy of ``a`` along ``axis`` (stable, whatever ``kind`` asks for; NaNs last)."""
   from . import pure
 
+  tape = el.tape
+  if tape is not None and not tape.muted and tape.is_active(el, _arr(el, a)):
+    # differentiable: the sorted array is the input indexed by its sorting permutation
+    a = _arr(el, a)
+    if a.buf is None and a.cost > CHEAP_COST:
+      a = el.as_concrete(a)
+    if axis is None and a.rank > 1:
+      a = el.flat_view(a)
+    order = el.as_concrete(argsort(el, a, axis, kind))
+    return take_along(el, a, order, -1 if axis is None else axis)
   return _sorted(el, a, axis, pure.sort1d.__parakeet_impl__, "sort")
+
+
+def take_along(el, a: ArrayVal, index: ArrayVal, axis) -> ArrayVal:
+  """``a`` with position ``index[...]`` picked along ``axis`` at every element."""
+  k = norm_axis(el, axis, a.rank)
+  el.consume(a)
+
+  def at(idx):
+    j = cast(el.tmp(el.elem(index, idx), "j"), I)
+    return el.elem(a, tuple(idx[:k]) + (j,) + tuple(idx[k + 1 :]))
+
+  return el.delayed(a.elt, a.shape, at, roots=el.union_roots(el.get_roots(a), el.get_roots(index)), cost=a.cost + 2)
 
 
 @register(np.argsort)

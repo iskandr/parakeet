@@ -339,22 +339,66 @@ def refused(f, *args, match, argnum=0, error=parakeet.UnsupportedError):
     grad(f, argnum)(*args)
 
 
-def test_branches_on_runtime_values():
+def test_if_statements_run_both_branches_and_choose():
   def assigned(w, x):
     s = np.sum(w)
     if x[0, 0] > 0.5:
       s = s * 2.0
-    return s
+    return s * s
 
   def computed(w, x):
-    if x[0, 0] > 0.5:
-      y = np.sum(w * 2.0)
+    h = x @ w
+    if np.sum(x) > 10.0:
+      h, k = np.tanh(h), 2.0
     else:
-      y = np.sum(w * 3.0)
-    return y
+      h, k = h * h, 3.0
+    return np.sum(h) * k
 
-  refused(assigned, W, X, match="assigned in a branch")
-  refused(computed, W, X, match="only runs conditionally")
+  def nested(w, x):
+    s = np.sum(w * w)
+    if x[0, 0] > 0.2:
+      if x[1, 1] > 0.5:
+        s = s * 3.0
+      else:
+        s = s + np.sum(w)
+    return s
+
+  def in_a_map(w, x):
+    def f(row):
+      t = np.sum(row @ w)
+      if t > 1.5:
+        t = t * t
+      return t
+
+    return np.sum(each(f, x))
+
+  for f in (assigned, computed, nested, in_a_map):
+    for x in (X, X * 0.1, X * 3.0):  # both sides of every condition
+      np.testing.assert_allclose(grad(f)(W, x), numeric(f, [W, x], 0), rtol=1e-4, atol=1e-6, err_msg=f.__name__)
+
+
+def test_branches_that_cannot_be_chosen_between():
+  def returns(w, x):
+    if x[0, 0] > 0.5:
+      return np.sum(w)
+    return np.sum(w * w)
+
+  def stores(w, x):
+    out = np.zeros(3)
+    if x[0, 0] > 0.5:
+      out[0] = np.sum(w)
+    return np.sum(out)
+
+  def updates_in_place(w, x):
+    h = w * 2.0
+    if x[0, 0] > 0.5:
+      h = h + 1.0
+      h += w
+    return np.sum(h)
+
+  refused(returns, W, X, match="only runs conditionally")
+  refused(stores, W, X, match="only runs conditionally")
+  refused(updates_in_place, W, X, match="in-place update inside an if statement")
 
 
 def test_loops_that_cannot_be_unrolled():
@@ -405,10 +449,33 @@ def test_in_place_updates():
 
 
 def test_library_functions_without_a_derivative_are_named():
-  refused(lambda w: np.sum(np.cumsum(w)), W, match=r"cumsum\(\)")
-  refused(lambda w: np.sum(np.sort(w.ravel())[:2]), W, match=r"sort\(\)")
-  refused(lambda w: parakeet.reduce(lambda a, b: a * b + 1.0, w.ravel()), W, match=r"reduce\(\)")
-  refused(lambda w: np.sum(parakeet.scan(parakeet.add, w.ravel())), W, match=r"scan\(\)")
+  refused(lambda w: np.sum(np.cumprod(w)), W, match=r"cumprod\(\)")
+  refused(lambda w: np.sum(np.convolve(w.ravel(), w.ravel())), W, match=r"convolve\(\)")
+  refused(lambda w: np.sum(parakeet.scan(parakeet.multiply, w.ravel())), W, match=r"scan\(\)")
+
+
+def test_cumsum_sort_and_folds():
+  v = RNG.random(7) + 0.5
+  check(lambda a: np.sum(np.cumsum(a) ** 2), v)
+  check(lambda a: np.sum(np.cumsum(a, axis=1) * np.cumsum(a, axis=0)) + np.sum(np.cumsum(a) ** 2), X)
+  check(lambda a: np.sum(parakeet.scan(parakeet.add, a) ** 3), v)
+  check(lambda a: np.sum(np.sort(a) * np.arange(7.0)), v)
+  check(lambda a: np.sum(np.sort(a, axis=0) * a[::-1]) + np.sum(np.sort(a)[:, :2]), X)
+  check(lambda a: np.sort(a.ravel())[3] * 2.0, X)
+  # a fold with any function: the running values are kept and replayed backwards
+  check(lambda a: parakeet.reduce(lambda acc, x: acc * 0.9 + x * x, a), v)
+  check(lambda a, s: parakeet.reduce(lambda acc, x: acc * x + s, a, init=s), v, 0.7, wrt=(0, 1))
+  check(lambda a, w: parakeet.reduce(lambda acc, x: np.tanh(acc + x * np.sum(w)), a, init=0.1), v, X, wrt=(0, 1))
+  check(lambda c, x: parakeet.reduce(lambda acc, ci: acc * x + ci, c), v, 0.8, wrt=(0, 1))  # Horner
+
+
+def test_stacked_products_and_einsum():
+  a, b, m = RNG.random((3, 4, 5)), RNG.random((3, 5, 6)), RNG.random((5, 6))
+  check(lambda a, b: np.sum(np.tanh(a @ b)), a, b, wrt=(0, 1))
+  check(lambda a, b: np.sum((a @ b) ** 2), a, m, wrt=(0, 1))
+  check(lambda a, b: np.sum(np.einsum("bij,bjk->bik", a, b) ** 2), a, b, wrt=(0, 1))
+  check(lambda a, b: np.sum(np.einsum("ij,jk->i", a, b) ** 3), m.T.copy(), m, wrt=(0, 1))
+  check(lambda a: np.sum(np.sum(a, axis=(0, 2)) ** 2) + np.sum(np.max(a, axis=(1, 2))), a)
 
 
 def test_wrong_uses():

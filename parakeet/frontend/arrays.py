@@ -925,9 +925,10 @@ class ArrayMixin:
     if any(isinstance(it, ArrayVal) for it in items):
       shape, src_index, base = self._fancy_plan(arr, items)
       cost = base.cost + 2
+      index_roots = [self.get_roots(it) for it in items if isinstance(it, ArrayVal)]
       return self.delayed(
                 arr.elt, shape, lambda idx: self.elem(base, src_index(idx)),
-                roots=self.get_roots(base), cost=cost,
+                roots=self.union_roots(self.get_roots(base), *index_roots), cost=cost,
             )  # fmt: skip
     shape, mapping = self._basic_plan(arr, items)
     if not shape and all(j is None for j, _, _ in mapping) and arr.rank > 0:

@@ -189,6 +189,10 @@ def _reduce(el, f, x, init, axis, what: str):
       from .numpy_lib import _reduce_prim
 
       return _reduce_prim(el, f.name, x, ax, init, what)
+  if tape is not None and not tape.muted and (init is None or isinstance(init, Expr)):
+    if (ax is None or x.rank == 1) and x.rank > 0 and (tape.is_active(el, x) or tape.is_active(el, init)):
+      # any other function: keep the running values and replay the fold backwards
+      return tape.fold(el, combine, x, init, what)
   if ax is None and not isinstance(init, ArrayVal):
     if x.rank == 0:
       v = el.as_scalar(x)
@@ -267,6 +271,12 @@ def scan(el, f, *xs, init=None, axis=0, map=None, emit=None):  # noqa: A002
 def _scan(el, f, x, init, axis):
   x = el.as_array(_arrayish(el, x))
   ax = _axis_arg(el, axis)
+  tape = el.tape
+  if tape is not None and not tape.muted and isinstance(f, prims.UFunc) and f.name == "add" and init is None:
+    if tape.is_active(el, x):
+      from .numpy_lib import _cumulative
+
+      return _cumulative(el, x, None if ax is None else Const(ax, I), "add", None)
   if isinstance(init, ArrayVal) and init.rank == 0:
     init = el.as_scalar(init)
   if init is not None and not isinstance(init, Expr):

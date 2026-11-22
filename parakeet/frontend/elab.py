@@ -243,6 +243,9 @@ class Elaborator(ArrayMixin):
     self.tainted_vars: dict[int, tuple] = {}  # ... that the tape cannot see through
     self.tainted_bufs: dict[int, tuple] = {}
     self.defs: dict[int, Expr] = {}  # pure definitions of float variables
+    self.if_stack: list = []  # (frame, node) of the if statements with a run-time condition being elaborated
+    self.both_depth = 0  # > 0 inside an if statement whose branches are both being run
+    self.reach: dict[int, set | None] = {}  # buffer of a merged array -> the allocations it may be
     self.lib_calls: list[tuple[str, int]] = []  # library functions being elaborated (name, frame depth)
 
   # ================================================================ plumbing
@@ -497,6 +500,14 @@ class Elaborator(ArrayMixin):
       for tv, sv in zip(target.shape + target.strides, c.shape + c.strides):
         self.emit(Assign(tv, sv))
       roots = self.get_roots(c)
+      # which allocations a merged variable may refer to, kept even when its
+      # alias information is given up on: a store through it reaches only those
+      source = roots if roots is not None else self.reach.get(c.buf.uid)
+      mine = self.reach.setdefault(target.buf.uid, set())
+      if source is None or mine is None:
+        self.reach[target.buf.uid] = None
+      else:
+        mine |= source
       live = target.roots
       if isinstance(live, LiveRoots):
         if roots is None:
@@ -1153,6 +1164,12 @@ class Elaborator(ArrayMixin):
         if not isinstance(new, ArrayVal) or new.rank != cur.rank:
           self.bind(target.id, new)
           return False
+        if self.both_depth:
+          raise self.no_derivative(
+            "cannot differentiate an in-place update inside an if statement",
+            node,
+            hint=f"write `{target.id} = {target.id} {_SYMBOL.get(op, '@')} ...` so the branch makes a new array",
+          )
         if not np.can_cast(new.elt.dtype, cur.elt.dtype, "same_kind"):
           raise self.error(
             TypeInferenceError,
@@ -1239,22 +1256,28 @@ class Elaborator(ArrayMixin):
       return self.exec_block(node.body if cond.value else node.orelse)
     cond = self.tmp(cond, "cond")
     fr = self.frame
+    if self.hint_get((fr.path, id(node), "both")):
+      return self._if_both(node, cond)
     base_env = fr.env
     outer = self.block
     facts = self.save_facts()
     then_blk: list = []
     else_blk: list = []
 
-    fr.env = dict(base_env)
-    self.block = then_blk
-    t_term = self.exec_block(node.body)
-    then_env, then_end, then_facts = fr.env, self.block, self.save_facts()
+    self.if_stack.append((fr, node))
+    try:
+      fr.env = dict(base_env)
+      self.block = then_blk
+      t_term = self.exec_block(node.body)
+      then_env, then_end, then_facts = fr.env, self.block, self.save_facts()
 
-    self.restore_facts(facts)
-    fr.env = dict(base_env)
-    self.block = else_blk
-    e_term = self.exec_block(node.orelse)
-    else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
+      self.restore_facts(facts)
+      fr.env = dict(base_env)
+      self.block = else_blk
+      e_term = self.exec_block(node.orelse)
+      else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
+    finally:
+      self.if_stack.pop()
 
     if t_term != e_term:
       # a guard: one branch never falls through.  If all it does is raise, what
@@ -1280,9 +1303,60 @@ class Elaborator(ArrayMixin):
       self.restore_facts(then_facts)
       return False
     self.restore_facts(facts)
-    fr.env = self.merge_envs(then_env, then_end, else_env, else_end, outer)
+    self.if_stack.append((fr, node))  # the merged variables are assigned on behalf of this statement
+    try:
+      fr.env = self.merge_envs(then_env, then_end, else_env, else_end, outer)
+    finally:
+      self.if_stack.pop()
     self.block = outer
     return False
+
+  def request_both(self, fr: Frame, node: ast.If) -> None:
+    """A branch computes differentiated values: start over and run both
+    branches, choosing between their results (the derivative of a choice is
+    the choice of the derivatives).  Returns if this ``if`` cannot be treated so."""
+    key = (fr.path, id(node), "both")
+    if not self.hint_get(key) and _selectable(node):
+      self.state.hints[key] = True
+      self.state.keep.append(node)
+      self.restart("differentiated if statement")
+
+  def _if_both(self, node: ast.If, cond: Expr) -> bool:
+    fr = self.frame
+    base = fr.env
+    self.both_depth += 1
+    try:
+      fr.env = dict(base)
+      self.exec_block(node.body)
+      env_a = fr.env
+      fr.env = dict(base)
+      self.exec_block(node.orelse)
+      env_b = fr.env
+    finally:
+      self.both_depth -= 1
+    merged: dict[str, Any] = {}
+    for name in env_a.keys() | env_b.keys():
+      va, vb = env_a.get(name, _MISSING), env_b.get(name, _MISSING)
+      if va is vb or (va is not _MISSING and vb is not _MISSING and self.static_equal(va, vb)):
+        merged[name] = va
+      elif va is _MISSING or vb is _MISSING or isinstance(va, Undefined) or isinstance(vb, Undefined):
+        merged[name] = Undefined(name)
+      else:
+        merged[name] = self._choose(cond, va, vb, name)
+    fr.env = merged
+    return False
+
+  def _choose(self, cond: Expr, a, b, name: str):
+    if isinstance(a, tuple) and isinstance(b, tuple) and len(a) == len(b):
+      return tuple(self._choose(cond, x, y, name) for x, y in zip(a, b))
+    if isinstance(a, Expr) and isinstance(b, Expr):
+      t = join(a.type, b.type)
+      return self.tmp(ops.select(cond, cast(a, t), cast(b, t)), _sanitize(name))
+    if isinstance(a, (Expr, ArrayVal)) and isinstance(b, (Expr, ArrayVal)):
+      from ..lib.numpy_lib import where
+
+      return where(self, cond, a, b)
+    return Undefined(name, "holds different kinds of values on the two branches of a differentiated if statement")
 
   def merge_envs(self, env_a: dict, blk_a: list, env_b: dict, blk_b: list, outer: list) -> dict:
     merged: dict[str, Any] = {}
@@ -2300,6 +2374,23 @@ def _local_names(fnode) -> frozenset[str]:
   result = frozenset(names - params)
   _locals_cache[id(fnode)] = (fnode, result)
   return result
+
+
+def _selectable(node: ast.If) -> bool:
+  """Can both branches be run and their results chosen between?  Only if
+  running the branch not taken has no effect: plain assignments to variables."""
+  for stmt in node.body + node.orelse:
+    for n in ast.walk(stmt):
+      if isinstance(n, (ast.Return, ast.Break, ast.Continue, ast.Raise, ast.Assert, ast.While, ast.Delete)):
+        return False
+      if isinstance(n, ast.Expr) and not isinstance(n.value, ast.Constant):
+        return False
+      if isinstance(n, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+        for t in targets:
+          if any(isinstance(m, (ast.Subscript, ast.Attribute)) for m in ast.walk(t)):
+            return False
+  return True
 
 
 def _only_raises(stmts: list[ast.stmt]) -> bool:
