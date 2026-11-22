@@ -60,6 +60,31 @@ These numbers predate arrays staying on the device between the loops of a
 call; the copy to the GPU and back on every *call* is still there, and is most
 of the time in the rows where CUDA loses.
 
+### A big GPU on the work it is for
+
+`python benchmarks/gpu_showcase.py` on an NVIDIA A100 (Google Colab, 12 CPU
+threads, float32). The same Python source runs in every column.
+
+| kernel | size | NumPy | one core | 12 threads | A100 | A100 vs 12 threads |
+|---|---|---:|---:|---:|---:|---:|
+| n-body forces | 16,384 bodies | – | 1393 ms | 238 ms | 7.5 ms | 32× |
+| k-means assignment | 2M points × 256 centers × 16 | 2247 ms | 9551 ms | 1913 ms | 75.8 ms | 25× |
+| heat equation, 200 steps | 2048² | 7821 ms | 4532 ms | 370 ms | 118 ms | 3.1× |
+| Black-Scholes | 20M options | 625 ms | 1746 ms | 227 ms | 111 ms | 2.0× |
+| Julia set | 4096² | – | 1425 ms | 155 ms | 95.5 ms | 1.6× |
+
+The first two are what a GPU is for: every element needs thousands of
+operations and the result is small. The n-body kernel is 186× faster than one
+core. The last three are bounded by moving their arrays across the bus once
+each way (Black-Scholes reads 240 MB and writes 80 MB); the heat equation is
+600 loops over a grid that never leaves the device between them, which before
+arrays stayed on the device took 1.4 s here.
+
+A float matrix product is *not* in this table: on the CPU it goes to the BLAS
+(24 ms for 2048² on this machine), on the GPU it is Parakeet's own kernel
+(73 ms). Dense linear algebra on a GPU wants cuBLAS, which Parakeet does not
+call.
+
 ### Where the GPU starts to win
 
 `python benchmarks/crossover.py` times the same kernel across sizes. On the same

@@ -84,10 +84,11 @@ including `float64` are supported. The same per-loop fallback rules apply.
     *simulator* (`PARAKEET_CUDA_SIMULATE=1`) that compiles the generated kernels
     as C++ and executes their thread grid on the CPU.
 
-    On real hardware the backend was last checked on a Tesla T4 (Google Colab,
-    driver 580, CuPy with CUDA 12, Python 3.13): the whole test suite with every
-    parallel loop forced onto the GPU (666 tests, about 680,000 kernel launches,
-    including the tiled products and the gradient tests),
+    On real hardware the backend was last checked on an A100 (Google Colab,
+    CuPy with CUDA 13, Python 3.13), and before that on a Tesla T4: the whole
+    test suite with every parallel loop forced onto the GPU (688 tests,
+    including the tiled products, the gradient tests and arrays kept on the
+    device between loops),
     the examples and the benchmarks all passed. That check is run on demand,
     not by CI:
 
