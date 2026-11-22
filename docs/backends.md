@@ -86,7 +86,8 @@ including `float64` are supported. The same per-loop fallback rules apply.
 
     On real hardware the backend was last checked on a Tesla T4 (Google Colab,
     driver 580, CuPy with CUDA 12, Python 3.13): the whole test suite with every
-    parallel loop forced onto the GPU (595 tests, about 3,200 kernel launches),
+    parallel loop forced onto the GPU (666 tests, about 680,000 kernel launches,
+    including the tiled products and the gradient tests),
     the examples and the benchmarks all passed. That check is run on demand,
     not by CI:
 
