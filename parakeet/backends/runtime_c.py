@@ -188,6 +188,11 @@ _PRELUDE_TEMPLATE = r"""
 /* ---- buffers ------------------------------------------------------------ */
 
 #define PK_EXTERNAL 1
+/* what the host has put into a buffer it allocated: nothing yet (the contents
+   do not matter) or zeros.  A device need not copy such a buffer over. */
+#define PK_FRESH 2
+#define PK_ZEROED 4
+#define PK_UNTOUCHED (PK_FRESH | PK_ZEROED)
 #define PK_PAGE 16384
 
 typedef struct pk_buf {
@@ -262,7 +267,7 @@ PK_OUTLINE pk_buf* pk_alloc(pk_call* rt, int64_t count, int64_t itemsize, int ze
   b->data = data;
   b->nbytes = (int64_t)size;
   b->refcount = 1;
-  b->flags = 0;
+  b->flags = zero ? PK_ZEROED : PK_FRESH;
   return b;
 }
 

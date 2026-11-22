@@ -32,6 +32,18 @@ def ctype_of(t: ScalarType):
   return _CTYPES[t.name]
 
 
+def untouched_regions(pks: list, where: list[tuple[int, int]], n_regions: int) -> list[int]:
+  """Per region: 2 if the host never wrote any buffer in it, 4 if it only
+  zeroed them, else 0.  The buffers' flags are cleared: from here on their
+  contents are whatever the device makes of them."""
+  kinds = [6] * n_regions
+  for pk, (r, _) in zip(pks, where):
+    kinds[r] &= pk.flags
+  for pk in pks:
+    pk.flags &= ~6
+  return [4 if k & 4 else (2 if k & 2 else 0) for k in kinds]
+
+
 def merge_regions(spans: list[tuple[int, int]]) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
   """Group host byte ranges ``(address, nbytes)`` that overlap.
 
@@ -237,16 +249,19 @@ class DeviceBase:
   # PK_DEV_SYNC calls the C backend emits), so between two flushes the device
   # copy of anything a kernel wrote is the only current one.
 
-  def upload(self, addr: int, nbytes: int, external: bool):  # pragma: no cover
+  def upload(self, addr: int, nbytes: int, external: bool, untouched: int = 0):  # pragma: no cover
+    """A device buffer for host memory.  ``untouched`` says the host never
+    wrote there (2) or only zeroed it (4): nothing has to be copied."""
     raise NotImplementedError
 
   def download(self, dev, addr: int, nbytes: int) -> None:  # pragma: no cover
     raise NotImplementedError
 
-  def acquire(self, regions: list[tuple[int, int]], written: set[int], external: list[bool]) -> list:
+  def acquire(self, regions, written: set[int], external: list[bool], untouched: list[int] | None = None) -> list:
     """Device buffers for host memory ``regions``, uploaded only if they are not there already."""
     cache = self._state.cache
     out = []
+    untouched = untouched or [0] * len(regions)
     for r, (addr, nbytes) in enumerate(regions):
       if nbytes <= 0:
         out.append(self.upload(addr, 0, external[r]))
@@ -255,7 +270,7 @@ class DeviceBase:
       if hit is None or hit.nbytes != nbytes:
         for other in [e for e in cache.values() if e.addr < addr + nbytes and addr < e.addr + e.nbytes]:
           self._retire(other, True)
-        hit = cache[addr] = _Resident(addr, nbytes, self.upload(addr, nbytes, external[r]))
+        hit = cache[addr] = _Resident(addr, nbytes, self.upload(addr, nbytes, external[r], untouched[r]))
       hit.dirty = hit.dirty or r in written
       out.append(hit.dev)
     return out

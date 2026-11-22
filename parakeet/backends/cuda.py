@@ -24,7 +24,15 @@ from ..ndtypes import BufType, ScalarType
 from ..syntax import ir
 from . import runtime_c, toolchain
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars
-from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions
+from .device import (
+  DeviceBase,
+  DevicePlanner,
+  KernelPlan,
+  ctype_of,
+  make_runtime_error,
+  merge_regions,
+  untouched_regions,
+)
 
 BLOCK = 256
 
@@ -207,12 +215,15 @@ class CuPyDriver:
   def zeros(self, n: int, dtype):
     return self.cp.zeros(n, dtype=dtype)
 
+  def empty(self, nbytes: int):
+    return self.cp.empty(nbytes, dtype=np.uint8)
+
   def launch(self, kernel, plan: KernelPlan, n: int, args: list) -> None:
     grid = (n + BLOCK - 1) // BLOCK
     kernel((grid,), (BLOCK,), tuple(args))
 
   def to_host(self, dev, host: np.ndarray) -> None:
-    host[...] = self.cp.asnumpy(dev)
+    dev.get(out=host)  # straight into the host's memory, no intermediate array
 
   def read(self, dev) -> np.ndarray:
     return self.cp.asnumpy(dev)
@@ -308,6 +319,9 @@ class SimulatorDriver:
   def zeros(self, n: int, dtype):
     return np.zeros(n, dtype=dtype)
 
+  def empty(self, nbytes: int):
+    return np.full(nbytes, 0xA5, dtype=np.uint8)  # recognisable garbage: nothing may rely on it
+
   def launch(self, kernel, plan: KernelPlan, n: int, args: list) -> None:
     grid = (n + BLOCK - 1) // BLOCK
     keep = []
@@ -364,8 +378,14 @@ class CudaDevice(DeviceBase):
   def _host(addr: int, nbytes: int):
     return np.frombuffer((ctypes.c_char * nbytes).from_address(addr), dtype=np.uint8)
 
-  def upload(self, addr: int, nbytes: int, external: bool):
-    return self.driver.to_device(self._host(addr, nbytes) if nbytes > 0 else np.zeros(16, dtype=np.uint8))
+  def upload(self, addr: int, nbytes: int, external: bool, untouched: int = 0):
+    if nbytes <= 0:
+      return self.driver.to_device(np.zeros(16, dtype=np.uint8))
+    if untouched == 4:
+      return self.driver.zeros(nbytes, np.uint8)
+    if untouched == 2:
+      return self.driver.empty(nbytes)
+    return self.driver.to_device(self._host(addr, nbytes))
 
   def download(self, dev, addr: int, nbytes: int) -> None:
     self.driver.to_host(dev, self._host(addr, nbytes))
@@ -391,7 +411,7 @@ class CudaDevice(DeviceBase):
     pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
     regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
     written = {r for v, (r, _) in zip(plan.bufs, where) if v.uid in plan.written}
-    devs = self.acquire(regions, written, [False] * len(regions))
+    devs = self.acquire(regions, written, [False] * len(regions), untouched_regions(pks, where, len(regions)))
     for r, off in where:
       args.append(devs[r][off:] if off else devs[r])
     drv.launch(plan.compiled, plan, n, args)

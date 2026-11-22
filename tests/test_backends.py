@@ -408,9 +408,9 @@ def resident_arrays(backend, dtype=np.float32):
   cls = type(dev)
   upload, download = cls.upload, cls.download
 
-  def counting_upload(self, addr, nbytes, external):
-    counts["up"] += 1
-    return upload(self, addr, nbytes, external)
+  def counting_upload(self, addr, nbytes, external, untouched=0):
+    counts["up"] += 0 if untouched else 1  # a buffer the host never wrote is not copied
+    return upload(self, addr, nbytes, external, untouched)
 
   def counting_download(self, d, addr, nbytes):
     counts["down"] += 1
@@ -441,7 +441,8 @@ def resident_arrays(backend, dtype=np.float32):
       got = chain(x, 10)
       assert dev.launches - before == 10
       # one upload of the input and one download of the result, not ten of each
-      assert counts["down"] == 1 and counts["up"] <= 11, counts
+      # (Metal shares host memory instead of copying, and reports every buffer it wraps)
+      assert counts["down"] == 1 and (counts["up"] == 1 if backend == "cuda" else counts["up"] <= 11), counts
       got_mixed = mixed(x)
   finally:
     cls.upload, cls.download = upload, download

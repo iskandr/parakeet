@@ -5,6 +5,7 @@ It needs `runplz <https://github.com/pirl-unc/runplz>`_ and a Colab account::
 
     runplz colab tools/colab_job.py                  # NVIDIA T4, real CUDA
     PK_COLAB_GPU=A100 runplz colab tools/colab_job.py
+    PK_COLAB_STAGES=cuda_core,showcase runplz colab tools/colab_job.py   # only some stages
     PK_COLAB_TPU=v5e1 runplz colab tools/colab_job.py   # TPU host (CPU backends + probe)
 
 Logs and a ``summary.json`` land in ``out/``.
@@ -68,7 +69,7 @@ except Exception as e:
 
 
 @app.function(image=image, gpu=GPU, timeout=90 * 60)
-def hardware_check(tpu: bool = False):
+def hardware_check(tpu: bool = False, stages: str = ""):
   import json
   import pathlib
   import subprocess
@@ -80,7 +81,11 @@ def hardware_check(tpu: bool = False):
   out.mkdir(parents=True, exist_ok=True)
   summary = {}
 
+  only = [x for x in stages.split(",") if x]
+
   def stage(name, cmd, env=None, timeout=3600):
+    if only and name not in only and name not in ("system", "install"):
+      return 0
     print(f"\n===== {name}: {' '.join(cmd)}", flush=True)
     t0 = time.time()
     full_env = dict(os.environ, PYTHONPATH=str(repo), **(env or {}))
@@ -137,4 +142,4 @@ def hardware_check(tpu: bool = False):
 
 @app.local_entrypoint()
 def main():
-  hardware_check.remote(tpu=bool(TPU))
+  hardware_check.remote(tpu=bool(TPU), stages=os.environ.get("PK_COLAB_STAGES", ""))

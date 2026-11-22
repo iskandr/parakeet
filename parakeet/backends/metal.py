@@ -296,7 +296,7 @@ class MetalDevice(DeviceBase):
       ctypes.memmove(self._address(buf), addr, nbytes)
     return buf, False
 
-  def upload(self, addr: int, nbytes: int, external: bool):
+  def upload(self, addr: int, nbytes: int, external: bool, untouched: int = 0):
     return self._buffer(addr, nbytes, shared=not external)
 
   def download(self, dev, addr: int, nbytes: int) -> None:

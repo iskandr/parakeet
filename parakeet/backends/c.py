@@ -103,6 +103,8 @@ class HostEmitter(CFamilyEmitter):
         for x in ir.walk_expr(e)
       ):
         out.append("  " * indent + "PK_DEV_SYNC(rt);")
+        if isinstance(s, ir.Store):
+          out.append("  " * indent + f"{s.buf.name}->flags &= ~PK_UNTOUCHED;")
     super().stmt(s, out, indent)
 
   def loop_pragma(self, s: ir.ForRange) -> str | None:
@@ -236,7 +238,11 @@ class HostEmitter(CFamilyEmitter):
       else:
         out.append(f"{pad}  c.{name} = {v.name};")
     launch = f"pk_parallel_for(rt, pk_body_{shared}, &c, {nchunks});"
-    sync = "PK_DEV_SYNC(rt); " if self.device is not None and not self.nesting else ""
+    sync = ""
+    if self.device is not None and not self.nesting:
+      # run on the CPU: bring the host copies up to date, and note what it writes
+      stored = {x.buf.uid for x in ir.walk_stmts(s.body) if isinstance(x, ir.Store)}
+      sync = "PK_DEV_SYNC(rt); " + "".join(f"{v.name}->flags &= ~PK_UNTOUCHED; " for v in free if v.uid in stored)
     if on_device:
       out.append(
         f"{pad}  if (rt->device && c.total >= pk_device_min(rt, {self.expr(s.work) if s.work is not None else 1}) && "
