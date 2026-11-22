@@ -11,7 +11,7 @@ from __future__ import annotations
 PAGE = 16384  # allocation granularity for large buffers (a multiple of every page size we target)
 
 # ia[0..7]: nthreads, grain, parfor fn, device fn, gpu_min, rng key, device chunks, reserved
-HEADER_SLOTS = 8
+HEADER_SLOTS = 12
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +209,8 @@ typedef struct pk_call {
   void* device;
   uint64_t rng_key;
   volatile int64_t rng_counter;
+  int64_t blas;    /* bit 0: there is one; bit 1: it takes 64-bit integers */
+  void* gemm[2];   /* cblas_sgemm, cblas_dgemm */
 } pk_call;
 
 #define PK_ERR_MEMORY (-1)
@@ -315,6 +317,39 @@ PK_OUTLINE int64_t pk_num_chunks(pk_call* rt, int64_t total, int reduce, int hea
   if (want > total) want = total;
   size = (total + want - 1) / want;
   return (total + size - 1) / size;
+}
+
+/* C = op(A) op(B) through the BLAS found at run time: C is m x n and
+   contiguous, A and B are row-major with leading dimensions lda and ldb,
+   taken transposed when ta / tb are set. */
+#define PK_GEMM_TYPES(NAME, INT, REAL) \
+  typedef void (*NAME)(int, int, int, INT, INT, INT, REAL, const REAL*, INT, const REAL*, INT, REAL, REAL*, INT);
+PK_GEMM_TYPES(pk_sgemm32, int, float)
+PK_GEMM_TYPES(pk_sgemm64, int64_t, float)
+PK_GEMM_TYPES(pk_dgemm32, int, double)
+PK_GEMM_TYPES(pk_dgemm64, int64_t, double)
+
+PK_OUTLINE int64_t pk_gemm(pk_call* rt, int64_t dbl, pk_buf* c, int64_t c_off, pk_buf* a, int64_t a_off,
+                           int64_t lda, int64_t ta, pk_buf* b, int64_t b_off, int64_t ldb, int64_t tb,
+                           int64_t m, int64_t n, int64_t k) {
+  int64_t item = dbl ? 8 : 4;
+  int64_t a_cols = ta ? m : k, b_cols = tb ? k : n;
+  void* fn = rt->gemm[dbl ? 1 : 0];
+  char* cp = (char*)c->data + c_off * item;
+  if (m <= 0 || n <= 0) return 1;
+  if (k <= 0) { memset(cp, 0, (size_t)(m * n * item)); return 1; }
+  if (lda < a_cols) lda = a_cols;
+  if (ldb < b_cols) ldb = b_cols;
+  if (dbl) {
+    const double* ap = (const double*)a->data + a_off; const double* bp = (const double*)b->data + b_off;
+    if (rt->blas & 2) ((pk_dgemm64)fn)(101, ta ? 112 : 111, tb ? 112 : 111, m, n, k, 1.0, ap, lda, bp, ldb, 0.0, (double*)cp, n);
+    else ((pk_dgemm32)fn)(101, ta ? 112 : 111, tb ? 112 : 111, (int)m, (int)n, (int)k, 1.0, ap, (int)lda, bp, (int)ldb, 0.0, (double*)cp, (int)n);
+  } else {
+    const float* ap = (const float*)a->data + a_off; const float* bp = (const float*)b->data + b_off;
+    if (rt->blas & 2) ((pk_sgemm64)fn)(101, ta ? 112 : 111, tb ? 112 : 111, m, n, k, 1.0f, ap, lda, bp, ldb, 0.0f, (float*)cp, n);
+    else ((pk_sgemm32)fn)(101, ta ? 112 : 111, tb ? 112 : 111, (int)m, (int)n, (int)k, 1.0f, ap, (int)lda, bp, (int)ldb, 0.0f, (float*)cp, (int)n);
+  }
+  return 1;
 }
 
 PK_INLINE int64_t pk_num_threads(pk_call* rt) { return rt->nthreads > 1 && rt->parfor ? rt->nthreads : 1; }

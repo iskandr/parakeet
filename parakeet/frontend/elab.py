@@ -92,9 +92,10 @@ class Options:
   fusion: bool = True
   tiling: bool = True
   tile_bytes: int = 256 * 1024
+  blas: bool = False  # hand float matrix products to the BLAS NumPy uses
 
   def key(self) -> tuple:
-    return (self.bounds_check, self.parallel, self.fusion, self.tiling, self.tile_bytes)
+    return (self.bounds_check, self.parallel, self.fusion, self.tiling, self.tile_bytes, self.blas)
 
 
 @dataclass

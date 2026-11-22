@@ -69,6 +69,9 @@ class Config:
   tiling: bool = field(default_factory=lambda: _env_bool("PARAKEET_TILING", True))
   #: Bytes of operand data one tile may span (default: half of a core's L2 cache).
   tile_bytes: int = field(default_factory=lambda: _env_int("PARAKEET_TILE_BYTES", 0) or default_tile_bytes())
+  #: Call the BLAS that NumPy uses for float matrix products (CPU backends).
+  #: Off: every product is Parakeet's own generated, tiled loop nest.
+  blas: bool = field(default_factory=lambda: _env_bool("PARAKEET_BLAS", True))
   #: Worker threads for multi-core backends (default: all cores).
   num_threads: int = field(default_factory=lambda: _env_int("PARAKEET_NUM_THREADS", os.cpu_count() or 1))
   #: Minimum number of cheap loop iterations per chunk before threads are used.

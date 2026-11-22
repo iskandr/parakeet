@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from .backends import blas
 from .config import config, normalize_backend
 from .errors import BackendUnavailable, CompileError, FallbackWarning, InternalError, ParakeetError
 from .frontend import signature as sig
@@ -309,7 +310,7 @@ class Backend:
     return [
             nthreads, max(1, config.parallel_grain), rt.parfor,
             0 if dev is None else dev.callback_address, config.device_threshold, 0,
-            config.device_reduce_chunks, 0,
+            config.device_reduce_chunks, *blas.header(), 0, 0,
         ]  # fmt: skip
 
   def build(self, function):
@@ -515,6 +516,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       fusion=config.fusion if self.fusion is None else self.fusion,
       tiling=config.tiling if self.tiling is None else self.tiling,
       tile_bytes=config.tile_bytes,
+      blas=config.blas,
     )
 
   # ---- calling -------------------------------------------------------------------
@@ -548,6 +550,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     backend = get_backend(backend_name or self.backend)
     options = self._options()
     options.parallel = backend.parallel
+    options.blas = options.blas and backend.device_kind is None and blas.available()
     toolchain_key = (config.cc, config.opt_level, config.fast_math, tuple(config.cflags))
     variant = (backend.cache_key(), options.key(), names, toolchain_key)
     type_key = (variant, arg_keys, cell_keys)

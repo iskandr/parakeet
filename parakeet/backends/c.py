@@ -256,6 +256,7 @@ class HostEmitter(CFamilyEmitter):
     head.append("  rt->nthreads = ia[0]; rt->grain = ia[1];")
     head.append("  rt->parfor = (void*)(intptr_t)ia[2]; rt->device = (void*)(intptr_t)ia[3];")
     head.append("  rt->gpu_min = ia[4]; rt->rng_key = (uint64_t)ia[5]; rt->device_chunks = ia[6];")
+    head.append("  rt->blas = ia[7]; rt->gemm[0] = (void*)(intptr_t)ia[8]; rt->gemm[1] = (void*)(intptr_t)ia[9];")
     i_pos, f_pos = HEADER_SLOTS, 0
     ext: list[str] = []
     param_uids: set[int] = set()

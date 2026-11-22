@@ -10,6 +10,13 @@ from parakeet import allpairs, jit
 from parakeet.transforms import tiling
 
 
+@pytest.fixture(autouse=True)
+def generated_products():
+  """These tests are about Parakeet's own loops, not the BLAS it would otherwise call."""
+  with parakeet.options(blas=False):
+    yield
+
+
 @jit
 def matmul(a, b):
   return a @ b

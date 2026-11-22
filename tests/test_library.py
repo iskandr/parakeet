@@ -358,3 +358,27 @@ def test_lambdas_on_one_line_are_told_apart():
   f, g = jit(lambda a, k=1: np.minimum(a, k)), jit(lambda a, k=1: np.maximum(a, k))
   np.testing.assert_array_equal(f(x), np.minimum(x, 1))
   np.testing.assert_array_equal(g(x), np.maximum(x, 1))
+
+
+@pytest.mark.parametrize("dtype", [np.float64, np.float32])
+def test_matmul_through_blas_on_any_layout(dtype):
+  from parakeet.backends import blas
+
+  if not blas.available():
+    pytest.skip("no BLAS found next to NumPy")
+  rng = np.random.default_rng(0)
+  A, B, big = (rng.random(s).astype(dtype) for s in ((7, 9), (9, 5), (20, 20)))
+  f = jit(lambda a, b: a @ b)
+  assert "gemm" in f.specialize(A, B).ir
+  cases = [
+    (A, B), (B.T, A.T), (A[::2], B), (A[:, ::2], B[::2]), (A[::-1], B), (A, B[:, ::-1]), (A, B[:, 0]), (A[0], B),
+    (A[:, 0], A), (big[::3, 1:10], big[2:11, ::4]), (big.T[1:8, 2:11], big.T[5:14, ::7]),
+    (np.broadcast_to(A[0], (4, 9)), B), (A[:0], B), (A[:, :0], B[:0]), (A[3, ::2], B[::2]),
+  ]  # fmt: skip
+  for a, b in cases:
+    got, want = f(a, b), a @ b
+    assert got.shape == want.shape and got.dtype == dtype
+    np.testing.assert_allclose(got, want, rtol=1e-4)
+  with parakeet.options(blas=False):
+    assert "gemm" not in f.specialize(A, B).ir
+    np.testing.assert_allclose(f(A, B), A @ B, rtol=1e-4)

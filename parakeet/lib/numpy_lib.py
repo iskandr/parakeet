@@ -1227,10 +1227,66 @@ def _rows(el, a: ArrayVal, label: str = "rows") -> ArrayVal:
   return el.materialize(a, label)
 
 
+def _blas_matrix(el, x: ArrayVal, row: bool):
+  """``x`` as a BLAS operand: (array, leading dimension, transposed?).  A
+  vector is one row or one column; anything whose layout is not rows or
+  columns at a fixed positive distance is copied."""
+  if x.buf is None or not (x.contig or x.inj):
+    x = el.materialize(x, "blas")
+  if x.rank == 1:
+    (s,) = x.strides
+    unit = isinstance(s, Const) and s.value == 1
+    if not unit and not (el.is_nonneg(s) and x.inj):
+      x = el.materialize(x, "blas")
+      unit = True
+    # one row: k values next to each other, or the transpose of a column
+    return (x, x.shape[0], False) if (row and unit) else (x, x.strides[0], row)
+  s0, s1 = x.strides
+  if isinstance(s1, Const) and s1.value == 1 and el.is_nonneg(s0):
+    return x, s0, False
+  if isinstance(s0, Const) and s0.value == 1 and el.is_nonneg(s1):
+    return x, s1, True
+  x = el.materialize(x, "blas")
+  return x, x.strides[0], False
+
+
+def _gemm(el, a: ArrayVal, b: ArrayVal) -> ArrayVal:
+  """``a @ b`` by the BLAS matrix product."""
+  m = ONE if a.rank == 1 else a.shape[0]
+  n = ONE if b.rank == 1 else b.shape[1]
+  k = b.shape[0]
+  shape = (() if a.rank == 1 else (m,)) + (() if b.rank == 1 else (n,))
+  a, lda, ta = _blas_matrix(el, a, row=True)
+  b, ldb, tb = _blas_matrix(el, b, row=False)
+  out = el.alloc_array(a.elt, shape, label="out")
+  flag = lambda t: Const(int(t), I)  # noqa: E731
+  args = (
+    flag(a.elt.name == "float64"),
+    out.buf,
+    out.offset,
+    a.buf,
+    a.offset,
+    lda,
+    flag(ta),
+    b.buf,
+    b.offset,
+    ldb,
+    flag(tb),
+    m,
+    n,
+    k,
+  )
+  el.tmp(RtCall("gemm", args, I), "blas")
+  el.record_store(out)
+  return out
+
+
 def matmul_plain(el, a: ArrayVal, b: ArrayVal, what: str = "matmul"):
   """The product of two arrays of rank 1 or 2 whose inner dimensions agree."""
   if a.rank == 1 and b.rank == 1:
     return _dot1(el, a, b)
+  if el.options.blas and el.par_depth == 0 and a.elt is b.elt and a.elt.name in ("float32", "float64"):
+    return _gemm(el, a, b)
   if a.rank == 1:
     # a @ b is b.T @ a: the rows of b.T are what gets multiplied with a
     a, b = el.transpose(b), a
