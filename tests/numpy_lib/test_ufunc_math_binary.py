@@ -23,65 +23,65 @@ from parakeet import jit
 
 
 def binary(fn):
-    for x in mats:
-        for y in mats:
-            try:
-                expected = fn(x, y)
-            except TypeError:
-                # NumPy rejects this combination (e.g. bool - bool): so must Parakeet
-                with pytest.raises(TypeError):
-                    jit(fn)(x, y)
-                continue
-            expect(fn, [x, y], expected)
+  for x in mats:
+    for y in mats:
+      try:
+        expected = fn(x, y)
+      except TypeError:
+        # NumPy rejects this combination (e.g. bool - bool): so must Parakeet
+        with pytest.raises(TypeError):
+          jit(fn)(x, y)
+        continue
+      expect(fn, [x, y], expected)
 
 
 def test_add():
-    binary(np.add)
+  binary(np.add)
 
 
 def test_subtract():
-    binary(np.subtract)
+  binary(np.subtract)
 
 
 def test_multiply():
-    binary(np.multiply)
+  binary(np.multiply)
 
 
 def test_divide():
-    binary(np.divide)
+  binary(np.divide)
 
 
 def test_logaddexp():
-    binary(np.logaddexp)
+  binary(np.logaddexp)
 
 
 def test_logaddexp2():
-    binary(np.logaddexp2)
+  binary(np.logaddexp2)
 
 
 def test_true_divide():
-    binary(np.true_divide)
+  binary(np.true_divide)
 
 
 def test_floor_divide():
-    binary(np.floor_divide)
+  binary(np.floor_divide)
 
 
 def test_power():
-    binary(np.power)
+  binary(np.power)
 
 
 def test_remainder():
-    binary(np.remainder)
+  binary(np.remainder)
 
 
 def test_mod():
-    binary(np.mod)
+  binary(np.mod)
 
 
 def test_fmod():
-    binary(np.fmod)
+  binary(np.fmod)
 
 
 if __name__ == "__main__":
-    run_local_tests()
+  run_local_tests()

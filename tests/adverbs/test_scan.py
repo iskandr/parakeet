@@ -10,20 +10,20 @@ float_2d = np.array([float_1d, float_1d, float_1d])
 
 
 def running_sum(x):
-    return scan(add, x, init=0)
+  return scan(add, x, init=0)
 
 
 def test_scan_add_1d():
-    expect_each(running_sum, np.cumsum, [int_1d, float_1d])
+  expect_each(running_sum, np.cumsum, [int_1d, float_1d])
 
 
 def loop_row_sums(x):
-    n_rows = x.shape[0]
-    y = np.zeros_like(x)
-    y[0, :] = x[0, :]
-    for i in range(1, n_rows):
-        y[i, :] = y[i - 1, :] + x[i, :]
-    return y
+  n_rows = x.shape[0]
+  y = np.zeros_like(x)
+  y[0, :] = x[0, :]
+  for i in range(1, n_rows):
+    y[i, :] = y[i - 1, :] + x[i, :]
+  return y
 
 
 """
@@ -31,4 +31,4 @@ def test_scan_add_2d():
   expect_each(running_sum, loop_row_sums, [int_2d, float_2d])
 """
 if __name__ == "__main__":
-    run_local_tests()
+  run_local_tests()

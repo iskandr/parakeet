@@ -329,8 +329,8 @@ static void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t nchun
 """
 
 PRELUDE = _PRELUDE_TEMPLATE.replace(
-    "@@HELPERS@@",
-    "\n".join([HELPERS_INT, HELPERS_FLOAT_DEF, HELPERS_F32, HELPERS_F64, HELPERS_RNG, HELPERS_RNG_F64, _RNG_KEY]),
+  "@@HELPERS@@",
+  "\n".join([HELPERS_INT, HELPERS_FLOAT_DEF, HELPERS_F32, HELPERS_F64, HELPERS_RNG, HELPERS_RNG_F64, _RNG_KEY]),
 )
 
 

@@ -5,23 +5,23 @@ from parakeet import jit, testing_helpers
 
 
 def init(W):
-    C = W.copy()
-    # if E is not None:
-    #  C[~E] = np.inf
-    for i in range(C.shape[0]):
-        C[i, i] = 0
-    return C
+  C = W.copy()
+  # if E is not None:
+  #  C[~E] = np.inf
+  for i in range(C.shape[0]):
+    C[i, i] = 0
+  return C
 
 
 def loop_dists(W):
-    C = init(W)
-    m, n = C.shape
-    # assert m == n
-    for k in range(n):
-        for i in range(n):
-            for j in range(n):
-                C[i, j] = min(C[i, j], C[i, k] + C[k, j])
-    return C
+  C = init(W)
+  m, n = C.shape
+  # assert m == n
+  for k in range(n):
+    for i in range(n):
+      for j in range(n):
+        C[i, j] = min(C[i, j], C[i, k] + C[k, j])
+  return C
 
 
 """
@@ -69,11 +69,11 @@ def parakeet_dists(W, E = None):
 
 
 def test_dists():
-    n = 10
-    W = (np.random.randn(n, n) * 2) ** 2
+  n = 10
+  W = (np.random.randn(n, n) * 2) ** 2
 
-    testing_helpers.expect(loop_dists, [W], loop_dists(W))
-    """
+  testing_helpers.expect(loop_dists, [W], loop_dists(W))
+  """
   C1 = outer_dists(W)
   C2 = np_dists(W)
   assert np.all(np.ravel(C1 == C2)), \
@@ -86,4 +86,4 @@ def test_dists():
 
 
 if __name__ == "__main__":
-    testing_helpers.run_local_tests()
+  testing_helpers.run_local_tests()

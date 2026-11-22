@@ -17,85 +17,100 @@ BACKENDS = ("auto", "c", "multicore", "threads", "openmp", "gcd", "metal", "mps"
 
 
 def _env_bool(name: str, default: bool) -> bool:
-    v = os.environ.get(name)
-    if v is None:
-        return default
-    return v.strip().lower() not in ("0", "false", "no", "off", "")
+  v = os.environ.get(name)
+  if v is None:
+    return default
+  return v.strip().lower() not in ("0", "false", "no", "off", "")
 
 
 def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.environ[name])
-    except (KeyError, ValueError):
-        return default
+  try:
+    return int(os.environ[name])
+  except (KeyError, ValueError):
+    return default
 
 
 @dataclass
 class Config:
-    #: "auto" (best multi-core strategy), "c" (single-threaded), "multicore",
-    #: "threads", "openmp", "gcd", "metal" (alias "mps"), "cuda", or "python"
-    #: (run the original function uncompiled, for debugging).
-    backend: str = field(default_factory=lambda: os.environ.get("PARAKEET_BACKEND", "auto"))
-    #: Check array indices (IndexError instead of memory corruption).
-    bounds_check: bool = field(default_factory=lambda: _env_bool("PARAKEET_BOUNDS_CHECK", True))
-    #: Fuse array expressions into single loops.
-    fusion: bool = field(default_factory=lambda: _env_bool("PARAKEET_FUSION", True))
-    #: Worker threads for multi-core backends (default: all cores).
-    num_threads: int = field(default_factory=lambda: _env_int("PARAKEET_NUM_THREADS", os.cpu_count() or 1))
-    #: Minimum number of cheap loop iterations per chunk before threads are used.
-    parallel_grain: int = field(default_factory=lambda: _env_int("PARAKEET_PARALLEL_GRAIN", 8192))
-    #: Minimum loop size before a loop is sent to a GPU.
-    device_threshold: int = field(default_factory=lambda: _env_int("PARAKEET_DEVICE_THRESHOLD", 32768))
-    #: Number of partial results used for reductions on a GPU.
-    device_reduce_chunks: int = 8192
-    #: What to do when a loop cannot run on the requested GPU: "warn" (run on
-    #: the CPU and warn once), "silent" (run on the CPU) or "error".
-    device_fallback: str = field(default_factory=lambda: os.environ.get("PARAKEET_DEVICE_FALLBACK", "warn"))
-    #: C compiler executable (default: $PARAKEET_CC, $CC, then cc/gcc/clang).
-    cc: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CC") or os.environ.get("CC"))
-    #: Extra flags appended to the C compiler command line.
-    cflags: tuple[str, ...] = ()
-    #: Optimisation level passed to the C compiler.
-    opt_level: int = 3
-    #: Allow value-changing floating point optimisations (-ffast-math).
-    fast_math: bool = False
-    #: Where compiled modules are cached (default: per-user cache directory).
-    cache_dir: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CACHE_DIR"))
-    #: Print the typed IR / generated source of everything that gets compiled.
-    print_ir: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_IR", False))
-    print_code: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_CODE", False))
+  #: "auto" (best multi-core strategy), "c" (single-threaded), "multicore",
+  #: "threads", "openmp", "gcd", "metal" (alias "mps"), "cuda", or "python"
+  #: (run the original function uncompiled, for debugging).
+  backend: str = field(default_factory=lambda: os.environ.get("PARAKEET_BACKEND", "auto"))
+  #: Check array indices (IndexError instead of memory corruption).
+  bounds_check: bool = field(default_factory=lambda: _env_bool("PARAKEET_BOUNDS_CHECK", True))
+  #: Fuse array expressions into single loops.
+  fusion: bool = field(default_factory=lambda: _env_bool("PARAKEET_FUSION", True))
+  #: Worker threads for multi-core backends (default: all cores).
+  num_threads: int = field(default_factory=lambda: _env_int("PARAKEET_NUM_THREADS", os.cpu_count() or 1))
+  #: Minimum number of cheap loop iterations per chunk before threads are used.
+  parallel_grain: int = field(default_factory=lambda: _env_int("PARAKEET_PARALLEL_GRAIN", 8192))
+  #: Minimum loop size before a loop is sent to a GPU.
+  device_threshold: int = field(default_factory=lambda: _env_int("PARAKEET_DEVICE_THRESHOLD", 32768))
+  #: Number of partial results used for reductions on a GPU.
+  device_reduce_chunks: int = 8192
+  #: What to do when a loop cannot run on the requested GPU: "warn" (run on
+  #: the CPU and warn once), "silent" (run on the CPU) or "error".
+  device_fallback: str = field(default_factory=lambda: os.environ.get("PARAKEET_DEVICE_FALLBACK", "warn"))
+  #: C compiler executable (default: $PARAKEET_CC, $CC, then cc/gcc/clang).
+  cc: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CC") or os.environ.get("CC"))
+  #: Extra flags appended to the C compiler command line.
+  cflags: tuple[str, ...] = ()
+  #: Optimisation level passed to the C compiler.
+  opt_level: int = 3
+  #: Allow value-changing floating point optimisations (-ffast-math).
+  fast_math: bool = False
+  #: Where compiled modules are cached (default: per-user cache directory).
+  cache_dir: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CACHE_DIR"))
+  #: Print the typed IR / generated source of everything that gets compiled.
+  print_ir: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_IR", False))
+  print_code: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_CODE", False))
 
-    def __setattr__(self, name: str, value) -> None:
-        if name not in _FIELD_NAMES:
-            raise AttributeError(
-                f"parakeet.config has no setting {name!r} (settings: {', '.join(sorted(_FIELD_NAMES))})"
-            )
-        if name == "backend":
-            value = normalize_backend(value)
-        if name == "device_fallback" and value not in ("warn", "silent", "error"):
-            raise ValueError("device_fallback must be 'warn', 'silent' or 'error'")
-        if name == "num_threads":
-            value = max(1, int(value))
-        object.__setattr__(self, name, value)
+  def __getattr__(self, name: str):
+    # only reached for names that are not settings: the option names of Parakeet 0.x
+    if name in LEGACY_NAMES:
+      return getattr(self, LEGACY_NAMES[name])
+    raise AttributeError(f"parakeet.config has no setting {name!r}")
 
-    def as_dict(self) -> dict:
-        return {f.name: getattr(self, f.name) for f in fields(self)}
+  def __setattr__(self, name: str, value) -> None:
+    name = LEGACY_NAMES.get(name, name)
+    if name not in _FIELD_NAMES:
+      raise AttributeError(f"parakeet.config has no setting {name!r} (settings: {', '.join(sorted(_FIELD_NAMES))})")
+    if name == "backend":
+      value = normalize_backend(value)
+    if name == "device_fallback" and value not in ("warn", "silent", "error"):
+      raise ValueError("device_fallback must be 'warn', 'silent' or 'error'")
+    if name == "num_threads":
+      value = max(1, int(value))
+    object.__setattr__(self, name, value)
 
+  def as_dict(self) -> dict:
+    return {f.name: getattr(self, f.name) for f in fields(self)}
+
+
+# option names used by Parakeet 0.x, still accepted
+LEGACY_NAMES = {
+  "opt_fusion": "fusion",
+  "print_specialized_function": "print_ir",
+  "print_loopy_function": "print_ir",
+  "print_lowered_function": "print_ir",
+  "print_generated_code": "print_code",
+  "compiler_path": "cc",
+}
 
 _FIELD_NAMES = frozenset(f.name for f in fields(Config))
 
 
 def normalize_backend(name: str) -> str:
-    if not isinstance(name, str):
-        raise TypeError(f"backend must be a string, got {type(name).__name__}")
-    key = name.strip().lower()
-    aliases = {"mps": "metal", "seq": "c", "serial": "c", "interp": "python", "pthreads": "threads"}
-    if key == "gpu":
-        key = "metal" if sys.platform == "darwin" else "cuda"
-    key = aliases.get(key, key)
-    if key not in BACKENDS:
-        raise ValueError(f"unknown backend {name!r}; choose one of: {', '.join(BACKENDS)}")
-    return key
+  if not isinstance(name, str):
+    raise TypeError(f"backend must be a string, got {type(name).__name__}")
+  key = name.strip().lower()
+  aliases = {"mps": "metal", "seq": "c", "serial": "c", "interp": "python", "pthreads": "threads"}
+  if key == "gpu":
+    key = "metal" if sys.platform == "darwin" else "cuda"
+  key = aliases.get(key, key)
+  if key not in BACKENDS:
+    raise ValueError(f"unknown backend {name!r}; choose one of: {', '.join(BACKENDS)}")
+  return key
 
 
 config = Config()
@@ -103,16 +118,16 @@ config = Config()
 
 @contextlib.contextmanager
 def options(**settings):
-    """Temporarily override configuration settings.
+  """Temporarily override configuration settings.
 
-    >>> with parakeet.options(backend="c", bounds_check=False):
-    ...     result = f(x)
-    """
-    saved = {k: getattr(config, k) for k in settings}
-    try:
-        for k, v in settings.items():
-            setattr(config, k, v)
-        yield config
-    finally:
-        for k, v in saved.items():
-            setattr(config, k, v)
+  >>> with parakeet.options(backend="c", bounds_check=False):
+  ...     result = f(x)
+  """
+  saved = {k: getattr(config, k) for k in settings}
+  try:
+    for k, v in settings.items():
+      setattr(config, k, v)
+    yield config
+  finally:
+    for k, v in saved.items():
+      setattr(config, k, v)

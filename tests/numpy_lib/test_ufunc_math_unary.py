@@ -23,76 +23,76 @@ from parakeet import jit
 
 
 def unary(fn):
-    for x in mats:
-        try:
-            expected = fn(x)
-        except TypeError:
-            # NumPy rejects this dtype (e.g. the negative of a bool array): so must Parakeet
-            with pytest.raises(TypeError):
-                jit(fn)(x)
-            continue
-        expect(fn, [x], expected, fn.__name__ + "-" + str(x.dtype) + str(len(x.shape)))
+  for x in mats:
+    try:
+      expected = fn(x)
+    except TypeError:
+      # NumPy rejects this dtype (e.g. the negative of a bool array): so must Parakeet
+      with pytest.raises(TypeError):
+        jit(fn)(x)
+      continue
+    expect(fn, [x], expected, fn.__name__ + "-" + str(x.dtype) + str(len(x.shape)))
 
 
 def test_negative():
-    unary(np.negative)
+  unary(np.negative)
 
 
 def test_absolute():
-    unary(np.absolute)
+  unary(np.absolute)
 
 
 def test_rint():
-    unary(np.rint)
+  unary(np.rint)
 
 
 def test_sign():
-    unary(np.sign)
+  unary(np.sign)
 
 
 def test_conj():
-    unary(np.conj)
+  unary(np.conj)
 
 
 def test_exp():
-    unary(np.exp)
+  unary(np.exp)
 
 
 def test_exp2():
-    unary(np.exp2)
+  unary(np.exp2)
 
 
 def test_log():
-    unary(np.log)
+  unary(np.log)
 
 
 def test_log2():
-    unary(np.log2)
+  unary(np.log2)
 
 
 def test_log10():
-    unary(np.log10)
+  unary(np.log10)
 
 
 def test_expm1():
-    unary(np.expm1)
+  unary(np.expm1)
 
 
 def test_log1p():
-    unary(np.log1p)
+  unary(np.log1p)
 
 
 def test_sqrt():
-    unary(np.sqrt)
+  unary(np.sqrt)
 
 
 def test_square():
-    unary(np.square)
+  unary(np.square)
 
 
 def test_reciprocal():
-    unary(np.reciprocal)
+  unary(np.reciprocal)
 
 
 def test_ones_like():
-    unary(np.ones_like)
+  unary(np.ones_like)

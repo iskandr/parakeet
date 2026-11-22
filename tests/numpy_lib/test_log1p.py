@@ -15,26 +15,26 @@ scalars = [True, 1, 1.0]
 vecs = []
 mats = []
 for dtype_name in dtypes:
-    scalars.append(np.dtype(dtype_name).type(3))
-    vecs.append(vec.astype(dtype_name))
-    mats.append(mat.astype(dtype_name))
+  scalars.append(np.dtype(dtype_name).type(3))
+  vecs.append(vec.astype(dtype_name))
+  mats.append(mat.astype(dtype_name))
 
 
 def test_log1p_scalar():
-    for scalar in scalars:
-        print(scalar, type(scalar))
-        expect(np.log1p, [scalar], np.log1p(scalar))
+  for scalar in scalars:
+    print(scalar, type(scalar))
+    expect(np.log1p, [scalar], np.log1p(scalar))
 
 
 def test_log1p_vec():
-    for vec in vecs:
-        expect(np.log1p, [vec], np.log1p(vec))
+  for vec in vecs:
+    expect(np.log1p, [vec], np.log1p(vec))
 
 
 def test_log1p_mat():
-    for mat in mats:
-        expect(np.log1p, [mat], np.log1p(mat))
+  for mat in mats:
+    expect(np.log1p, [mat], np.log1p(mat))
 
 
 if __name__ == "__main__":
-    run_local_tests()
+  run_local_tests()

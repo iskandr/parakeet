@@ -38,8 +38,26 @@ results vary a lot between CPUs, compilers and array sizes.
 | Julia set (1000²) | 401 ms | 6.0 ms (67×) | 6.1 ms (66×) |
 | matrix product (300²) | 0.06 ms | 0.42 ms | 3.9 ms |
 
-No CUDA numbers are given because the CUDA backend has not been run on NVIDIA
-hardware yet (see [Backends](backends.md#nvidia-gpus-cuda)).
+## GPU (float32, CUDA on a Tesla T4)
+
+A Google Colab T4 instance: the host has only 2 CPU threads, so `"multicore"`
+is nothing like the M1 Pro above, and this NumPy has no fast `float32` `tanh`.
+
+| benchmark | NumPy | `"multicore"` (2 threads) | `"cuda"` |
+|---|---:|---:|---:|
+| `np.tanh(x * a) + b` (4M) | 7.4 ms | 60.5 ms (0.1×) | 14.6 ms (0.5×) |
+| Euclidean norm (4M) | 6.9 ms | 1.9 ms (3.6×) | 8.3 ms (0.8×) |
+| arc distance (4M) | 53.0 ms | 179 ms (0.3×) | 42.8 ms (1.2×) |
+| Rosenbrock derivative (4M) | 35.5 ms | 12.1 ms (2.9×) | 16.8 ms (2.1×) |
+| Harris corner response (2000²) | 46.0 ms | 15.1 ms (3.0×) | 15.2 ms (3.0×) |
+| diffusion stencil, 20 steps (1000²) | 79.1 ms | 38.0 ms (2.1×) | 98.8 ms (0.8×) |
+| all-pairs distances (40k × 64 × 32) | 313 ms | 17.1 ms (18×) | 13.3 ms (24×) |
+| 3×3 convolution (2000²) | 64.4 ms | 48.7 ms (1.3×) | 44.1 ms (1.5×) |
+| Julia set (1000²) | 1064 ms | 43.4 ms (25×) | 10.6 ms (101×) |
+| matrix product (300²) | 7.6 ms | 4.8 ms (1.6×) | 2.7 ms (2.8×) |
+
+Arrays are copied to the GPU and back on every call, which is most of the time
+in the rows where CUDA loses: nothing stays on the device between calls.
 
 ## Reading the numbers
 

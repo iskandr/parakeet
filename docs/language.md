@@ -53,12 +53,12 @@ Compiled code follows NumPy semantics for views and mutation:
 ```python
 @jit
 def f(x):
-    v = x[1:]  # a view of the caller's array
-    v[0] = 0  # ... so this modifies x
-    x += 1  # in place, visible to the caller
-    y = x * 2  # a new array
-    x[1:] = x[:-1]  # overlapping assignment behaves as if a temporary were made
-    return y
+  v = x[1:]  # a view of the caller's array
+  v[0] = 0  # ... so this modifies x
+  x += 1  # in place, visible to the caller
+  y = x * 2  # a new array
+  x[1:] = x[:-1]  # overlapping assignment behaves as if a temporary were made
+  return y
 ```
 
 * Basic indexing (`x[i, 1:-1, ::2, None, ...]`), integer-array indexing and

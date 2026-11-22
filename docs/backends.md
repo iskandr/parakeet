@@ -46,7 +46,7 @@ thread pool does.
 ```python
 @jit(backend="metal")
 def blur_energy(img):
-    return (img[1:-1, 1:-1] * 4 - img[:-2, 1:-1] - img[2:, 1:-1] - img[1:-1, :-2] - img[1:-1, 2:]) ** 2
+  return (img[1:-1, 1:-1] * 4 - img[:-2, 1:-1] - img[2:, 1:-1] - img[1:-1, :-2] - img[1:-1, 2:]) ** 2
 ```
 
 Each eligible parallel loop is also compiled to a Metal compute kernel; the host
@@ -72,7 +72,7 @@ reported as normal Python exceptions.
 ```python
 @jit(backend="cuda")
 def distances(X, C):
-    return parakeet.allpairs(lambda a, b: np.sum((a - b) ** 2), X, C)
+  return parakeet.allpairs(lambda a, b: np.sum((a - b) ** 2), X, C)
 ```
 
 Kernels are compiled at run time by CuPy's `RawKernel` (NVRTC), so only the
@@ -80,12 +80,31 @@ NVIDIA driver and a CuPy wheel matching your CUDA version are needed. All dtypes
 including `float64` are supported. The same per-loop fallback rules apply.
 
 !!! note "Validation status"
-    The CUDA code generator is tested in CI with a *simulator*
-    (`PARAKEET_CUDA_SIMULATE=1`) that compiles the generated kernels as C++ and
-    executes their thread grid on the CPU. That exercises kernel generation,
-    argument passing, buffer transfer and error reporting, but not NVRTC or
-    CuPy themselves: at the time of writing this backend has not been run on
-    physical NVIDIA hardware. Please report what you see.
+    CI has no NVIDIA hardware, so there the CUDA code generator runs against a
+    *simulator* (`PARAKEET_CUDA_SIMULATE=1`) that compiles the generated kernels
+    as C++ and executes their thread grid on the CPU.
+
+    On real hardware the backend was last checked on a Tesla T4 (Google Colab,
+    driver 580, CuPy with CUDA 12, Python 3.13): the whole test suite with every
+    parallel loop forced onto the GPU (595 tests, about 3,200 kernel launches),
+    the examples and the benchmarks all passed. That check is run on demand,
+    not by CI:
+
+    ```bash
+    pip install runplz google-colab-cli
+    runplz colab tools/colab_job.py          # T4; PK_COLAB_GPU=A100 for others
+    ```
+
+    To push your own test suite through a GPU set `PARAKEET_TEST_BACKENDS=cuda`
+    (the backends used by `parakeet.testing.expect` and `check`) and
+    `PARAKEET_DEVICE_THRESHOLD=1` (so small arrays go to the device too).
+
+### What about TPUs?
+
+No. A TPU only runs programs compiled by XLA, which wants whole-array operations
+with static shapes; Parakeet generates scalar loops in C-like kernel languages.
+Parakeet's CPU backends do work on a Colab TPU host (24 x86 cores), which is all
+`PK_COLAB_TPU=v5e1 runplz colab tools/colab_job.py` checks.
 
 ## How data moves
 

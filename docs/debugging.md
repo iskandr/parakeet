@@ -36,7 +36,7 @@ line that failed:
 ```python
 @jit
 def third(x):
-    return x[2]
+  return x[2]
 
 
 third(np.zeros(2))

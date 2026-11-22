@@ -8,6 +8,16 @@ unchanged; everything underneath is new.
 
 ### Highlights
 
+- **Checked on real NVIDIA hardware.** The whole suite passes with every
+  parallel loop forced onto a Tesla T4 (`tools/colab_job.py`, run on demand
+  with `runplz colab`; not part of CI).
+- **Reads like Parakeet again:** two-space indentation, `parakeet.prims` and
+  `parakeet.ndtypes`, and the 0.x helpers `typed_repr`, `specialize`,
+  `run_python_fn`, `openmp_available`, `rank`/`size`/`shape`, plus the old
+  `config.opt_fusion` / `config.print_*` option names.
+- Fixed: two arguments of one GPU kernel that view the same memory now share a
+  device buffer (previously one of them could read a truncated copy).
+
 - **Python 3.11+ and NumPy 2**, no dependencies besides NumPy and a C compiler
   (the `dsltools`, `appdirs`, `llvmpy` and PyCUDA dependencies are gone).
 - **New frontend.** Functions are elaborated directly into a typed loop IR:

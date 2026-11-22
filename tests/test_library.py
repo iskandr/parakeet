@@ -17,44 +17,44 @@ I = RNG.integers(-5, 6, size=(3, 4))  # noqa: E741
 
 
 def test_reductions_all_axes():
-    def f(x):
-        return (
+  def f(x):
+    return (
             x.sum(), x.sum(axis=0), x.sum(axis=1), np.sum(x, axis=-1), x.prod(axis=0), x.min(), x.max(axis=1),
             np.mean(x), x.mean(axis=0), x.std(), x.var(axis=1), np.any(x > 0.5), np.all(x > 0.5, axis=0),
             np.argmin(x), np.argmax(x, axis=0), x.argmax(axis=1), np.count_nonzero(x > 0.3), np.count_nonzero(x > 0.3, axis=1),
         )  # fmt: skip
 
-    check(f, A)
-    check(f, I)
-    check(f, A.astype(np.float32), rtol=1e-6)
-    check(f, I.astype(np.int8))
-    check(f, I > 0)
+  check(f, A)
+  check(f, I)
+  check(f, A.astype(np.float32), rtol=1e-6)
+  check(f, I.astype(np.int8))
+  check(f, I > 0)
 
 
 def test_reductions_keepdims_and_tuples():
-    def f(x):
-        return (
-            x.sum(axis=0, keepdims=True),
-            x.mean(axis=1, keepdims=True),
-            x.sum(axis=(0, 1)),
-            x.max(axis=(1, 2)),
-            x.sum(axis=(0, 2), keepdims=True),
-        )
+  def f(x):
+    return (
+      x.sum(axis=0, keepdims=True),
+      x.mean(axis=1, keepdims=True),
+      x.sum(axis=(0, 1)),
+      x.max(axis=(1, 2)),
+      x.sum(axis=(0, 2), keepdims=True),
+    )
 
-    check(f, RNG.random((2, 3, 4)))
+  check(f, RNG.random((2, 3, 4)))
 
 
 def test_cumulative():
-    def f(x):
-        return np.cumsum(x), x.cumsum(axis=0), x.cumsum(axis=1), np.cumprod(x, axis=1), np.cumsum(x[0])
+  def f(x):
+    return np.cumsum(x), x.cumsum(axis=0), x.cumsum(axis=1), np.cumprod(x, axis=1), np.cumsum(x[0])
 
-    check(f, A)
-    check(f, I)
+  check(f, A)
+  check(f, I)
 
 
 def test_constructors():
-    def f(n, m):
-        return (
+  def f(n, m):
+    return (
             np.zeros(n), np.ones((n, m)), np.empty((n, m)).shape, np.full((n,), 2.5), np.zeros((n, m), dtype=np.int32),
             np.ones(n, dtype="float32"), np.arange(n), np.arange(1, n), np.arange(0, n, 2), np.arange(n, 0, -2),
             np.arange(0.5, 3.0, 0.25), np.linspace(0, 1, n), np.linspace(1, 3, n, endpoint=False), np.eye(n),
@@ -62,73 +62,73 @@ def test_constructors():
             np.full((2, 2), n), np.arange(n, dtype=np.float32),
         )  # fmt: skip
 
-    check(f, 4, 3)
+  check(f, 4, 3)
 
 
 def test_like_constructors():
-    def f(x):
-        return (
-            np.zeros_like(x),
-            np.ones_like(x),
-            np.full_like(x, 3),
-            np.empty_like(x).shape,
-            np.zeros_like(x, dtype=np.float32),
-            x.copy(),
-            np.array(x),
-            np.asarray(x) is not None,
-        )
+  def f(x):
+    return (
+      np.zeros_like(x),
+      np.ones_like(x),
+      np.full_like(x, 3),
+      np.empty_like(x).shape,
+      np.zeros_like(x, dtype=np.float32),
+      x.copy(),
+      np.array(x),
+      np.asarray(x) is not None,
+    )
 
-    check(f, I)
-    check(f, A)
+  check(f, I)
+  check(f, A)
 
 
 def test_shape_manipulation():
-    def f(x):
-        return (
+  def f(x):
+    return (
             x.T, x.reshape(5, 4), x.reshape(-1), x.reshape((2, -1)), np.reshape(x, (10, 2)), x.ravel(), x.flatten(),
             np.transpose(x), x.transpose(1, 0), np.swapaxes(x, 0, 1), np.expand_dims(x, 1), np.squeeze(x[:, :1], axis=1),
             np.squeeze(x[:1], axis=0), np.atleast_2d(x[0]), np.flip(x), np.flip(x, 0), np.fliplr(x), x.T.reshape(-1),
             x[::2].ravel(), x[:, ::2].reshape(-1), np.broadcast_to(x[0], (3, 5)), np.moveaxis(x, 0, 1),
         )  # fmt: skip
 
-    check(f, A)
+  check(f, A)
 
 
 def test_joining():
-    def f(x, y, v):
-        return (
+  def f(x, y, v):
+    return (
             np.concatenate((x, y)), np.concatenate([x, y], axis=1), np.concatenate((v, v, v)), np.stack((x, y)),
             np.stack((x, y), axis=2), np.vstack((x, y)), np.hstack((x, y)), np.hstack((v, v)), np.column_stack((v, v)),
             np.array([v, v * 2]), np.concatenate((x, y), axis=None), np.tile(v, 2), np.tile(x, (2, 1)), np.repeat(v, 2),
         )  # fmt: skip
 
-    check(f, A, B, V)
+  check(f, A, B, V)
 
 
 def test_linear_algebra():
-    def f(a, b, v):
-        return (
+  def f(a, b, v):
+    return (
             np.dot(v, v), a @ b.T, np.dot(a, v[:5]), v[:4] @ a, np.dot(a, 2.0), np.vdot(v, v), np.inner(v, v),
             np.outer(v, v[:3]), np.trace(a), np.diag(a), np.diag(v), np.diag(a, 1), np.linalg.norm(v),
             np.linalg.norm(a), np.linalg.norm(v, 1), np.linalg.norm(v, np.inf), np.linalg.norm(a, axis=1),
             np.tril(a), np.triu(a, 1), np.cross(v[:3], v[3:6]),
         )  # fmt: skip
 
-    check(f, A, B, V)
+  check(f, A, B, V)
 
 
 def test_matmul_shape_errors():
-    @jit
-    def f(a, b):
-        return a @ b
+  @jit
+  def f(a, b):
+    return a @ b
 
-    with pytest.raises(ValueError, match="aligned"):
-        f(np.zeros((2, 3)), np.zeros((2, 3)))
+  with pytest.raises(ValueError, match="aligned"):
+    f(np.zeros((2, 3)), np.zeros((2, 3)))
 
 
 def test_elementwise_functions():
-    def f(x, y):
-        return (
+  def f(x, y):
+    return (
             np.where(x > y, x, y), np.where(x > 0.5, 1, 0), np.clip(x, 0.2, 0.8), x.clip(0.3), np.round(x * 10),
             np.around(x, 2), np.abs(x - y), np.sign(x - y), np.square(x), np.sqrt(x), np.exp(x), np.log(y),
             np.log1p(x), np.expm1(x), np.sin(x), np.cos(x), np.tan(x), np.arcsin(x), np.arccos(x), np.arctan(x),
@@ -142,95 +142,95 @@ def test_elementwise_functions():
             np.fabs(x - y),
         )  # fmt: skip
 
-    check(f, A, B, rtol=1e-12)
-    check(f, A.astype(np.float32), B.astype(np.float32), rtol=3e-7)
+  check(f, A, B, rtol=1e-12)
+  check(f, A.astype(np.float32), B.astype(np.float32), rtol=3e-7)
 
 
 def test_integer_ufuncs():
-    def f(x, y):
-        return (
+  def f(x, y):
+    return (
             x & y, x | y, x ^ y, ~x, x << 2, x >> 1, np.bitwise_and(x, y), np.left_shift(x, 1), np.abs(x), np.sign(x),
             np.square(x), np.floor_divide(x, 3), np.remainder(x, 3), np.power(x, 2), np.minimum(x, y), -x, +x, x == y,
             x != y, np.sqrt(np.abs(x)), np.isnan(x), np.floor(x), np.where(x > 0, x, -x),
         )  # fmt: skip
 
-    check(f, I, I[::-1].copy())
-    check(f, I.astype(np.int16), I[::-1].astype(np.int16))
+  check(f, I, I[::-1].copy())
+  check(f, I.astype(np.int16), I[::-1].astype(np.int16))
 
 
 def test_nan_handling():
-    def f(x):
-        return (
-            x.min(),
-            x.max(),
-            np.argmax(x),
-            np.argmin(x),
-            np.maximum(x, 0.0),
-            np.fmax(x, 0.0),
-            x.sum(),
-            np.isnan(x).sum(),
-            np.sign(x),
-        )
+  def f(x):
+    return (
+      x.min(),
+      x.max(),
+      np.argmax(x),
+      np.argmin(x),
+      np.maximum(x, 0.0),
+      np.fmax(x, 0.0),
+      x.sum(),
+      np.isnan(x).sum(),
+      np.sign(x),
+    )
 
-    check(f, np.array([1.0, np.nan, -2.0, np.inf]))
-    check(f, np.array([np.inf, -np.inf, 3.0]))
+  check(f, np.array([1.0, np.nan, -2.0, np.inf]))
+  check(f, np.array([np.inf, -np.inf, 3.0]))
 
 
 def test_comparison_helpers():
-    def f(x, y):
-        return (
-            np.allclose(x, y),
-            np.allclose(x, x + 1e-10),
-            np.isclose(x, y),
-            np.array_equal(x, y),
-            np.array_equal(x, x.copy()),
-            np.array_equal(x, x[:2]),
-        )
+  def f(x, y):
+    return (
+      np.allclose(x, y),
+      np.allclose(x, x + 1e-10),
+      np.isclose(x, y),
+      np.array_equal(x, y),
+      np.array_equal(x, x.copy()),
+      np.array_equal(x, x[:2]),
+    )
 
-    check(f, A, B)
+  check(f, A, B)
 
 
 def test_differences_and_sorting():
-    def f(v):
-        return (
-            np.diff(v),
-            np.diff(v, 2),
-            np.sort(v),
-            np.argsort(v, kind="stable"),
-            np.median(v),
-            np.searchsorted(np.sort(v), 0.5),
-            np.array(sorted(v)),
-        )
+  def f(v):
+    return (
+      np.diff(v),
+      np.diff(v, 2),
+      np.sort(v),
+      np.argsort(v, kind="stable"),
+      np.median(v),
+      np.searchsorted(np.sort(v), 0.5),
+      np.array(sorted(v)),
+    )
 
-    check(f, V)
-    check(f, np.array([3, 1, 2, 9, 0, 5, 5, 2]))
+  check(f, V)
+  check(f, np.array([3, 1, 2, 9, 0, 5, 5, 2]))
 
 
 def test_diff_axes():
-    def f(x):
-        return np.diff(x, axis=0), np.diff(x, axis=1), np.diff(x > 0.5)
+  def f(x):
+    return np.diff(x, axis=0), np.diff(x, axis=1), np.diff(x > 0.5)
 
-    check(f, A)
+  check(f, A)
 
 
 def test_nonzero_and_convolve():
-    def f(v):
-        return np.nonzero(v > 0.5)[0], np.flatnonzero(v > 0.5), np.where(v > 0.5)[0], np.convolve(v, v[:3])
+  def f(v):
+    return np.nonzero(v > 0.5)[0], np.flatnonzero(v > 0.5), np.where(v > 0.5)[0], np.convolve(v, v[:3])
 
-    check(f, V)
+  check(f, V)
 
 
 def test_histogram():
-    def f(v):
-        return np.histogram(v, 5)
+  def f(v):
+    return np.histogram(v, 5)
 
-    counts, edges = check(f, V)
-    assert counts.sum() == len(V)
+  counts, edges = check(f, V)
+  assert counts.sum() == len(V)
 
 
 def test_builtins():
-    def f(v, t):
-        return (
+  def f(v, t):
+    return (
             len(v), len(t), sum(v), sum(t), min(v), max(v), min(t), max(3, 1, 2), abs(-2.5), any(v > 0.5), all(v > 0.5),
             sum(x * x for x in v), max(x - 0.5 for x in v), tuple(t), bool(t[0]), int(v[0] * 10), float(len(v)),
             round(2.567, 1), round(2.5), round(3.5), pow(2, 5), divmod(17, 5), isinstance(v, np.ndarray), isinstance(t, tuple),
@@ -238,19 +238,19 @@ def test_builtins():
             0.123 in v, len(range(2, 11, 3)), np.array(list(reversed(range(4)))), sum(range(5)), sum((1, 2, 3)),
         )  # fmt: skip
 
-    check(f, V, (1, 2, 3))
+  check(f, V, (1, 2, 3))
 
 
 def test_builtin_sum_of_matrix_adds_rows():
-    def f(x):
-        return sum(x), sum(sum(x))
+  def f(x):
+    return sum(x), sum(sum(x))
 
-    check(f, A)
+  check(f, A)
 
 
 def test_math_module():
-    def f(x):
-        return (
+  def f(x):
+    return (
             math.sqrt(x), math.exp(x), math.log(x), math.log(x, 2), math.log10(x), math.log2(x), math.sin(x), math.cos(x),
             math.tan(x), math.atan(x), math.atan2(x, 2.0), math.sinh(x), math.cosh(x), math.tanh(x), math.floor(x * 3),
             math.ceil(x * 3), math.trunc(-x * 3), math.fabs(-x), math.pow(x, 3), math.hypot(x, 4.0), math.erf(x),
@@ -259,70 +259,70 @@ def test_math_module():
             math.asinh(x), math.isfinite(x), math.inf > x,
         )  # fmt: skip
 
-    check(f, 0.75, rtol=1e-12)
-    check(f, 2)
+  check(f, 0.75, rtol=1e-12)
+  check(f, 2)
 
 
 def test_math_domain_checks():
-    @jit
-    def f(x):
-        return math.floor(x)
+  @jit
+  def f(x):
+    return math.floor(x)
 
-    assert f(2.7) == 2 and type(f(2.7)) is int
-    with pytest.raises(ValueError, match="NaN or infinity"):
-        f(float("nan"))
+  assert f(2.7) == 2 and type(f(2.7)) is int
+  with pytest.raises(ValueError, match="NaN or infinity"):
+    f(float("nan"))
 
 
 def test_properties_and_methods():
-    def f(x):
-        return (
+  def f(x):
+    return (
             x.shape, x.ndim, x.size, x.itemsize, x.nbytes, x.T.shape, x.real, x.dtype == np.float64, x.astype(np.int32),
             x.item(0), x[0].tolist() if False else 0, x.copy().fill(2), x.conj(), x.round(1), x.clip(0.2, 0.4), x.dot(x.T),
             x.trace(), x.diagonal(), x.swapaxes(0, 1), x.squeeze().shape, x.nonzero if False else 0,
         )  # fmt: skip
 
-    check(f, A)
+  check(f, A)
 
 
 def test_dtype_values():
-    def f(x, dt):
-        y = np.zeros(3, dtype=x.dtype)
-        z = np.ones(2, dtype=dt)
-        return (
-            y,
-            z,
-            dt(3),
-            x.dtype(2.5) if False else 0,
-            np.float32(2.5),
-            np.int8(100),
-            np.uint8(200),
-            np.bool_(5),
-            int(2.9),
-            float(3),
-        )
+  def f(x, dt):
+    y = np.zeros(3, dtype=x.dtype)
+    z = np.ones(2, dtype=dt)
+    return (
+      y,
+      z,
+      dt(3),
+      x.dtype(2.5) if False else 0,
+      np.float32(2.5),
+      np.int8(100),
+      np.uint8(200),
+      np.bool_(5),
+      int(2.9),
+      float(3),
+    )
 
-    check(f, np.arange(3, dtype=np.int16), np.float32)
-    check(f, np.arange(3.0), np.int64)
+  check(f, np.arange(3, dtype=np.int16), np.float32)
+  check(f, np.arange(3.0), np.int64)
 
 
 def test_unsupported_function_message():
-    @jit
-    def f(x):
-        return np.fft.fft(x)
+  @jit
+  def f(x):
+    return np.fft.fft(x)
 
-    with pytest.raises(parakeet.UnsupportedError, match="fft"):
-        f(np.zeros(4))
+  with pytest.raises(parakeet.UnsupportedError, match="fft"):
+    f(np.zeros(4))
 
-    @jit
-    def g(x):
-        return np.cumsm(x)
+  @jit
+  def g(x):
+    return np.cumsm(x)
 
-    with pytest.raises(parakeet.CompileError, match="cumsm"):
-        g(np.zeros(4))
+  with pytest.raises(parakeet.CompileError, match="cumsm"):
+    g(np.zeros(4))
 
-    @jit
-    def h(x):
-        return x.cumsm()
+  @jit
+  def h(x):
+    return x.cumsm()
 
-    with pytest.raises(parakeet.UnsupportedError, match="cumsum"):
-        h(np.zeros(4))
+  with pytest.raises(parakeet.UnsupportedError, match="cumsum"):
+    h(np.zeros(4))

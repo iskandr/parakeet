@@ -10,36 +10,36 @@ y = np.tanh(x) * alpha + beta
 
 @jit
 def numpy_expressions(x, alpha=0.5, beta=0.3):
-    return np.tanh(x) * alpha + beta
+  return np.tanh(x) * alpha + beta
 
 
 def test_numpy_expressions():
-    res = numpy_expressions(x)
-    assert np.allclose(res, y), "Expected %s but got %s" % (y, res)
+  res = numpy_expressions(x)
+  assert np.allclose(res, y), "Expected %s but got %s" % (y, res)
 
 
 @jit
 def loopy(x, alpha=0.5, beta=0.3):
-    y = np.empty_like(x, dtype=float)
-    for i in range(len(x)):
-        y[i] = np.tanh(x[i]) * alpha + beta
-    return y
+  y = np.empty_like(x, dtype=float)
+  for i in range(len(x)):
+    y[i] = np.tanh(x[i]) * alpha + beta
+  return y
 
 
 def test_loopy():
-    res = loopy(x)
-    assert np.allclose(res, y), "Expected %s but got %s" % (y, res)
+  res = loopy(x)
+  assert np.allclose(res, y), "Expected %s but got %s" % (y, res)
 
 
 @jit
 def comprehension(x, alpha=0.5, beta=0.3):
-    return np.array([np.tanh(xi) * alpha + beta for xi in x])
+  return np.array([np.tanh(xi) * alpha + beta for xi in x])
 
 
 def test_comprehensions():
-    res = comprehension(x)
-    assert np.allclose(res, y), "Expected %s but got %s" % (y, res)
+  res = comprehension(x)
+  assert np.allclose(res, y), "Expected %s but got %s" % (y, res)
 
 
 if __name__ == "__main__":
-    testing_helpers.run_local_tests()
+  testing_helpers.run_local_tests()

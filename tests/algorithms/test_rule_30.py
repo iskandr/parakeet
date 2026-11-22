@@ -8,37 +8,37 @@ init = np.array(([0] * (size // 2)) + [1] + ([0] * (size - size // 2 - 1)))
 
 
 def rule30(extended, i):
-    a = extended[i - 1]
-    b = extended[i]
-    c = extended[i + 1]
+  a = extended[i - 1]
+  b = extended[i]
+  c = extended[i + 1]
 
-    if (
-        (a == 1 and b == 0 and c == 0)
-        or (a == 0 and b == 1 and c == 1)
-        or (a == 0 and b == 1 and c == 0)
-        or (a == 0 and b == 0 and c == 1)
-    ):
-        return 1
-    else:
-        return 0
+  if (
+    (a == 1 and b == 0 and c == 0)
+    or (a == 0 and b == 1 and c == 1)
+    or (a == 0 and b == 1 and c == 0)
+    or (a == 0 and b == 0 and c == 1)
+  ):
+    return 1
+  else:
+    return 0
 
 
 def test_rule30():
-    output = init.copy()
-    cur = init
-    zero_array = np.array([0])
-    indices = np.arange(1, size + 1)
-    for _ in range(size // 2):
-        extended = np.concatenate((zero_array, cur, zero_array))
+  output = init.copy()
+  cur = init
+  zero_array = np.array([0])
+  indices = np.arange(1, size + 1)
+  for _ in range(size // 2):
+    extended = np.concatenate((zero_array, cur, zero_array))
 
-        def run_rule30(i):
-            return rule30(extended, i)
+    def run_rule30(i):
+      return rule30(extended, i)
 
-        parakeet_iter = parakeet.map(run_rule30, indices)
-        cur = np.array(list(map(run_rule30, indices)))
-        assert eq(parakeet_iter, cur), "Parakeet result (%s) didn't match Python result(%s)" % (parakeet_iter, cur)
-        output = np.vstack((output, cur))
+    parakeet_iter = parakeet.map(run_rule30, indices)
+    cur = np.array(list(map(run_rule30, indices)))
+    assert eq(parakeet_iter, cur), "Parakeet result (%s) didn't match Python result(%s)" % (parakeet_iter, cur)
+    output = np.vstack((output, cur))
 
 
 if __name__ == "__main__":
-    run_local_tests()
+  run_local_tests()

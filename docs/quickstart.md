@@ -23,7 +23,7 @@ from parakeet import jit
 
 @jit
 def rms(x):
-    return np.sqrt(np.mean(x * x))
+  return np.sqrt(np.mean(x * x))
 
 
 x = np.random.rand(1_000_000)
@@ -51,12 +51,12 @@ functions are inlined automatically — they do not need their own `@jit`.
 
 ```python
 def sqr_dist(a, b):
-    return np.sum((a - b) ** 2)
+  return np.sum((a - b) ** 2)
 
 
 @jit
 def nearest(X, centroids):
-    return np.array([np.argmin([sqr_dist(x, c) for c in centroids]) for x in X])
+  return np.array([np.argmin([sqr_dist(x, c) for c in centroids]) for x in X])
 ```
 
 ## Picking a backend
@@ -69,7 +69,7 @@ def f(x): ...
 f(x, _backend="c")  # per call
 parakeet.config.backend = "threads"  # process-wide
 with parakeet.options(backend="c", num_threads=1):  # temporarily
-    f(x)
+  f(x)
 ```
 
 See [Backends and GPUs](backends.md).

@@ -12,32 +12,32 @@ matrices = [float_mat, int_mat, bool_mat]
 
 
 def each_sum(X):
-    return parakeet.each(np.sum, X)
+  return parakeet.each(np.sum, X)
 
 
 def test_each_sum():
-    expect_each(each_sum, lambda X: np.sum(X, axis=1), matrices)
+  expect_each(each_sum, lambda X: np.sum(X, axis=1), matrices)
 
 
 def sum_cols(X):
-    return np.sum(X, axis=0)
+  return np.sum(X, axis=0)
 
 
 def test_col_sum():
-    expect_each(sum_cols, lambda X: np.sum(X, axis=0), matrices)
+  expect_each(sum_cols, lambda X: np.sum(X, axis=0), matrices)
 
 
 def sum_rows(X):
-    return np.sum(X, axis=1)
+  return np.sum(X, axis=1)
 
 
 def test_sum_rows():
-    expect_each(sum_rows, lambda X: np.sum(X, axis=1), matrices)
+  expect_each(sum_rows, lambda X: np.sum(X, axis=1), matrices)
 
 
 def test_sum_elts():
-    expect_each(np.sum, np.sum, matrices)
+  expect_each(np.sum, np.sum, matrices)
 
 
 if __name__ == "__main__":
-    run_local_tests()
+  run_local_tests()

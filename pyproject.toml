@@ -61,6 +61,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 120
+indent-width = 2  # as Parakeet has always been written
 target-version = "py311"
 extend-exclude = ["site"]
 

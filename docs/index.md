@@ -12,16 +12,16 @@ from parakeet import jit
 
 @jit
 def scaled_tanh(x, alpha=0.5, beta=0.3):
-    return np.tanh(x * alpha) + beta  # one loop, no temporaries, all cores
+  return np.tanh(x * alpha) + beta  # one loop, no temporaries, all cores
 
 
 @jit
 def count_inside(points, radius):
-    n = 0
-    for i in range(len(points)):  # explicit loops are fine too
-        if points[i, 0] ** 2 + points[i, 1] ** 2 < radius**2:
-            n += 1
-    return n
+  n = 0
+  for i in range(len(points)):  # explicit loops are fine too
+    if points[i, 0] ** 2 + points[i, 1] ** 2 < radius**2:
+      n += 1
+  return n
 ```
 
 <div class="grid cards" markdown>

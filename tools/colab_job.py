@@ -69,69 +69,69 @@ except Exception as e:
 
 @app.function(image=image, gpu=GPU, timeout=90 * 60)
 def hardware_check(tpu: bool = False):
-    import json
-    import pathlib
-    import subprocess
-    import sys
-    import time
+  import json
+  import pathlib
+  import subprocess
+  import sys
+  import time
 
-    repo = pathlib.Path(__file__).resolve().parents[1]
-    out = pathlib.Path(os.environ.get("RUNPLZ_OUT", "/content/out"))
-    out.mkdir(parents=True, exist_ok=True)
-    summary = {}
+  repo = pathlib.Path(__file__).resolve().parents[1]
+  out = pathlib.Path(os.environ.get("RUNPLZ_OUT", "/content/out"))
+  out.mkdir(parents=True, exist_ok=True)
+  summary = {}
 
-    def stage(name, cmd, env=None, timeout=3600):
-        print(f"\n===== {name}: {' '.join(cmd)}", flush=True)
-        t0 = time.time()
-        full_env = dict(os.environ, PYTHONPATH=str(repo), **(env or {}))
-        try:
-            p = subprocess.run(cmd, cwd=repo, env=full_env, capture_output=True, text=True, timeout=timeout)
-            rc, text = p.returncode, p.stdout + p.stderr
-        except subprocess.TimeoutExpired as e:
-            rc, text = 124, f"TIMEOUT after {timeout}s\n{e.stdout or ''}"
-        (out / f"{name}.log").write_text(text)
-        tail = "\n".join(text.splitlines()[-25:])
-        print(tail, flush=True)
-        summary[name] = {"rc": rc, "seconds": round(time.time() - t0, 1), "last_line": text.strip().splitlines()[-1:]}
-        return rc
+  def stage(name, cmd, env=None, timeout=3600):
+    print(f"\n===== {name}: {' '.join(cmd)}", flush=True)
+    t0 = time.time()
+    full_env = dict(os.environ, PYTHONPATH=str(repo), **(env or {}))
+    try:
+      p = subprocess.run(cmd, cwd=repo, env=full_env, capture_output=True, text=True, timeout=timeout)
+      rc, text = p.returncode, p.stdout + p.stderr
+    except subprocess.TimeoutExpired as e:
+      rc, text = 124, f"TIMEOUT after {timeout}s\n{e.stdout or ''}"
+    (out / f"{name}.log").write_text(text)
+    tail = "\n".join(text.splitlines()[-25:])
+    print(tail, flush=True)
+    summary[name] = {"rc": rc, "seconds": round(time.time() - t0, 1), "last_line": text.strip().splitlines()[-1:]}
+    return rc
 
-    py = sys.executable
-    stage("system", ["bash", "-c", "nvidia-smi; nproc; free -g | head -2; cc --version | head -1; python --version"])
-    stage("install", [py, "-m", "pip", "install", "-q", "-e", ".", "pytest", "pytest-xdist"])
-    stage(
-        "versions",
-        [
-            py,
-            "-c",
-            "import numpy, parakeet; print(numpy.__version__, parakeet.__version__, parakeet.available_backends())",
-        ],
-    )
+  py = sys.executable
+  stage("system", ["bash", "-c", "nvidia-smi; nproc; free -g | head -2; cc --version | head -1; python --version"])
+  stage("install", [py, "-m", "pip", "install", "-q", "-e", ".", "pytest", "pytest-xdist"])
+  stage(
+    "versions",
+    [
+      py,
+      "-c",
+      "import numpy, parakeet; print(numpy.__version__, parakeet.__version__, parakeet.available_backends())",
+    ],
+  )
 
-    if tpu:
-        (repo / "_tpu_probe.py").write_text(TPU_PROBE)
-        stage("tpu_probe", [py, "_tpu_probe.py"])
-        stage("cpu_suite", [py, "-m", "pytest", "tests", "-q", "-n", "8", "-p", "no:cacheprovider"])
-        stage("benchmarks", [py, "benchmarks/run.py"])
-    else:
-        stage("cupy", [py, "-c", "import cupy; cupy.show_config()"])
-        (repo / "_cuda_core.py").write_text(CUDA_CORE)
-        stage("cuda_core", [py, "_cuda_core.py"])
-        stats = out / "device_stats.txt"
-        gpu_env = {
+  if tpu:
+    (repo / "_tpu_probe.py").write_text(TPU_PROBE)
+    stage("tpu_probe", [py, "_tpu_probe.py"])
+    stage("cpu_suite", [py, "-m", "pytest", "tests", "-q", "-n", "8", "-p", "no:cacheprovider"])
+    stage("benchmarks", [py, "benchmarks/run.py"])
+  else:
+    stage("cupy", [py, "-c", "import cupy; cupy.show_config()"])
+    (repo / "_cuda_core.py").write_text(CUDA_CORE)
+    stage("cuda_core", [py, "_cuda_core.py"])
+    stats = out / "device_stats.txt"
+    gpu_env = {
             "PARAKEET_BACKEND": "cuda", "PARAKEET_TEST_BACKENDS": "cuda", "PARAKEET_DEVICE_THRESHOLD": "1",
             "PARAKEET_DEVICE_FALLBACK": "silent", "PARAKEET_DEVICE_STATS": str(stats),
         }  # fmt: skip
-        stage("cuda_suite", [py, "-m", "pytest", "tests", "-q", "-n", "2", "-p", "tools.device_stats",
+    stage("cuda_suite", [py, "-m", "pytest", "tests", "-q", "-n", "2", "-p", "tools.device_stats",
                              "-p", "no:cacheprovider"], env=gpu_env, timeout=4200)  # fmt: skip
-        stage("cuda_examples", [py, "-m", "pytest", "tests/test_examples.py", "-q", "-p", "tools.device_stats",
+    stage("cuda_examples", [py, "-m", "pytest", "tests/test_examples.py", "-q", "-p", "tools.device_stats",
                                 "-p", "no:cacheprovider"],
               env={"PARAKEET_BACKEND": "cuda", "PARAKEET_DEVICE_STATS": str(out / "device_stats_examples.txt")})  # fmt: skip
-        stage("cpu_suite", [py, "-m", "pytest", "tests", "-q", "-n", "2", "-p", "no:cacheprovider"])
-        stage("benchmarks_gpu", [py, "benchmarks/run.py", "--gpu"])
-    (out / "summary.json").write_text(json.dumps(summary, indent=2))
-    print(json.dumps(summary, indent=2), flush=True)
+    stage("cpu_suite", [py, "-m", "pytest", "tests", "-q", "-n", "2", "-p", "no:cacheprovider"])
+    stage("benchmarks_gpu", [py, "benchmarks/run.py", "--gpu"])
+  (out / "summary.json").write_text(json.dumps(summary, indent=2))
+  print(json.dumps(summary, indent=2), flush=True)
 
 
 @app.local_entrypoint()
 def main():
-    hardware_check.remote(tpu=bool(TPU))
+  hardware_check.remote(tpu=bool(TPU))

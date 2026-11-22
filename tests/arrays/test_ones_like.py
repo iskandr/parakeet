@@ -14,36 +14,36 @@ bool_mat = np.array([bool_vec, bool_vec])
 
 
 def test_ones_like():
-    expect(np.ones_like, [int_vec], np.ones_like(int_vec))
+  expect(np.ones_like, [int_vec], np.ones_like(int_vec))
 
 
 def test_ones_like_intmat():
-    expect(np.ones_like, [int_mat], np.ones_like(int_mat))
+  expect(np.ones_like, [int_mat], np.ones_like(int_mat))
 
 
 def test_ones_like_floatvec():
-    expect(np.ones_like, [float_vec], np.ones_like(float_vec))
+  expect(np.ones_like, [float_vec], np.ones_like(float_vec))
 
 
 def test_ones_like_floatmat():
-    expect(np.ones_like, [float_mat], np.ones_like(float_mat))
+  expect(np.ones_like, [float_mat], np.ones_like(float_mat))
 
 
 def test_ones_like_boolvec():
-    expect(np.ones_like, [bool_vec], np.ones_like(bool_vec))
+  expect(np.ones_like, [bool_vec], np.ones_like(bool_vec))
 
 
 def test_ones_like_boolmat():
-    expect(np.ones_like, [bool_mat], np.ones_like(bool_mat))
+  expect(np.ones_like, [bool_mat], np.ones_like(bool_mat))
 
 
 def test_ones_like_boolvec_to_float():
-    expect(np.ones_like, [bool_vec, np.dtype("float")], np.ones_like(bool_vec, dtype=np.dtype("float")))
+  expect(np.ones_like, [bool_vec, np.dtype("float")], np.ones_like(bool_vec, dtype=np.dtype("float")))
 
 
 def test_ones_like_boolmat_to_float():
-    expect(np.ones_like, [bool_mat, np.dtype("float")], np.ones_like(bool_mat, dtype=np.dtype("float")))
+  expect(np.ones_like, [bool_mat, np.dtype("float")], np.ones_like(bool_mat, dtype=np.dtype("float")))
 
 
 if __name__ == "__main__":
-    run_local_tests()
+  run_local_tests()
