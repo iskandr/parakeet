@@ -22,9 +22,13 @@ def gini_after_split(left, right, n_left, n_right):
   return (n_left - sq_left / n_left) + (n_right - sq_right / n_right)
 
 
-def scan_feature(j, X, y, order, lo, hi, totals, scores, positions):
-  """Best place to cut feature ``j``'s ordering of the segment [lo, hi)."""
-  left = np.zeros(len(totals))
+def scan_feature(j, X, y, order, lo, hi, totals, counts, scores, positions):
+  """Best place to cut feature ``j``'s ordering of the segment [lo, hi).
+
+  ``counts[j]`` is this feature's own scratch space for the class counts to
+  the left of the cut, so the loop allocates nothing (a GPU kernel cannot)."""
+  left = counts[j]
+  left[:] = 0.0
   best, where = np.inf, lo
   for i in range(lo, hi - 1):
     s = order[i, j]
@@ -62,6 +66,7 @@ def fit(X, y, n_classes, max_depth, min_samples):
   order = np.argsort(X, axis=0)
   scratch = np.zeros((n, d), dtype=np.int64)
   goes_left = np.zeros(n, dtype=np.bool_)
+  counts = np.zeros((d, n_classes))
   scores = np.zeros(d)
   positions = np.zeros(d, dtype=np.int64)
   max_nodes = 2 * n + 1
@@ -82,7 +87,7 @@ def fit(X, y, n_classes, max_depth, min_samples):
     label[node] = np.argmax(totals)
     if hi - lo < min_samples or depth >= max_depth or np.max(totals) == hi - lo:
       continue
-    parfor(lambda j: scan_feature(j, X, y, order, lo, hi, totals, scores, positions), d)
+    parfor(lambda j: scan_feature(j, X, y, order, lo, hi, totals, counts, scores, positions), d)
     j = np.argmin(scores)
     if scores[j] == np.inf:
       continue  # no feature takes two different values here
