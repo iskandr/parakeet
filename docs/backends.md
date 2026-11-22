@@ -109,16 +109,34 @@ Parakeet's CPU backends do work on a Colab TPU host (24 x86 cores), which is all
 
 ## How data moves
 
-Arrays live in host memory. For each GPU loop Parakeet makes the arrays it uses
-available to the device and brings back the ones it wrote:
+Arrays belong to the host, but **within one call they stay on the device**.
 
-* Metal: arrays allocated by compiled code are page-aligned and shared with the
-  GPU without copying (Apple Silicon has unified memory); arrays that came from
-  NumPy are copied in, and copied back if written.
-* CUDA: arrays are copied to the device and written arrays copied back.
+* The first GPU loop that uses an array puts it on the device. A buffer the
+  host allocated and has not written to yet (the output of the loop, usually)
+  is created there directly: nothing is copied. On Metal, arrays allocated by
+  compiled code are shared with the GPU without copying at all.
+* Later loops find the array already there. What a loop wrote stays on the
+  device; it is not copied back after every loop.
+* Host code that reads or writes array memory itself (an explicit Python
+  loop, a loop that fell back to the CPU, a call into the BLAS) first asks for
+  everything the device has changed. So does the end of the call.
+* A temporary that is freed before anyone on the host looked at it is never
+  copied back.
 
-This keeps semantics simple and exact, but it means a GPU only pays off when the
-loop does substantially more arithmetic than memory traffic. A program that runs
-many cheap loops over the same large array (an explicit stencil iterated a
-hundred times, say) is usually faster on the multi-core backend; see
-[Performance](performance.md).
+A chain of array operations on a GPU therefore costs one upload of its inputs
+and one download of its result, however many loops it has. Mixing GPU loops
+with scalar host loops over the same arrays works, and gives the same answers,
+but pays for a download and an upload each time the two alternate.
+
+**Which loops go to the device.** A loop is sent when its number of elements
+times the estimated inner iterations per element reaches
+`config.device_threshold`, and it has at least 1024 elements. A loop over
+5,000 rows that each need a 10,000-step inner loop goes; a loop over 20,000
+cheap elements stays on the CPU, where the launch would cost more than the
+work; so does a loop over 32 features however long each one's scan is,
+because a device runs one (slow) thread per element and 32 of them are no
+match for a few CPU cores.
+
+Between calls nothing stays on the device: arguments are uploaded again on the
+next call. A function that is called in a tight Python loop on the same large
+array pays that every time — put the loop inside the compiled function.

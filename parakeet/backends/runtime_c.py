@@ -363,8 +363,13 @@ PK_INLINE int64_t pk_num_threads(pk_call* rt) { return rt->nthreads > 1 && rt->p
 /* A loop goes to the device when the work in it is worth the launch: its
    size times the inner iterations each element is estimated to need. */
 PK_INLINE int64_t pk_device_min(pk_call* rt, int64_t work) {
+  /* ...and when the loop is wide enough: a device runs one slow thread per
+     element, so a few dozen elements cannot use it however heavy each is. */
+  int64_t width = rt->gpu_min < 1024 ? rt->gpu_min : 1024;
+  int64_t need;
   if (work < 1) work = 1;
-  return (rt->gpu_min + work - 1) / work;
+  need = (rt->gpu_min + work - 1) / work;
+  return need > width ? need : width;
 }
 
 /* ---- hooks supplied by the Python side on every call --------------------- */

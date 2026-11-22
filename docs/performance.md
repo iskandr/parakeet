@@ -56,8 +56,9 @@ is nothing like the M1 Pro above, and this NumPy has no fast `float32` `tanh`.
 | Julia set (1000²) | 1064 ms | 43.4 ms (25×) | 10.6 ms (101×) |
 | matrix product (300²) | 7.6 ms | 4.8 ms (1.6×) | 2.7 ms (2.8×) |
 
-Arrays are copied to the GPU and back on every call, which is most of the time
-in the rows where CUDA loses: nothing stays on the device between calls.
+These numbers predate arrays staying on the device between the loops of a
+call; the copy to the GPU and back on every *call* is still there, and is most
+of the time in the rows where CUDA loses.
 
 ### Where the GPU starts to win
 
