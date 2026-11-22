@@ -47,7 +47,7 @@ def mlp_step(params, x, y):
 
 
 def tree_fit(X, y):
-  return decision_tree.fit.__parakeet_fn__(X, y, 8, 64, 2)
+  return decision_tree.fit(X, y, 8, 64, 2)
 
 
 def cases(rng):
