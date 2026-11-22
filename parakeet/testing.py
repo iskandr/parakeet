@@ -103,7 +103,9 @@ def same(actual, expected, rtol: float = 1e-6) -> str | None:
             ok = np.array_equal(actual, expected)
         return None if ok else f"expected\n{expected!r}\ngot\n{actual!r}"
     if isinstance(expected, np.generic):
-        if type(actual) is not type(expected):
+        # compare dtypes, not classes: np.intc and np.int32 are distinct classes
+        # with the same dtype on some platforms
+        if not isinstance(actual, np.generic) or actual.dtype != expected.dtype:
             return f"expected {type(expected).__name__} {expected!r}, got {type(actual).__name__} {actual!r}"
     elif type(actual) is not type(expected):
         return f"expected {type(expected).__name__} {expected!r}, got {type(actual).__name__} {actual!r}"

@@ -196,7 +196,7 @@ def test_differences_and_sorting():
             np.diff(v),
             np.diff(v, 2),
             np.sort(v),
-            np.argsort(v),
+            np.argsort(v, kind="stable"),
             np.median(v),
             np.searchsorted(np.sort(v), 0.5),
             np.array(sorted(v)),
