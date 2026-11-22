@@ -142,12 +142,18 @@ class ScalarAdj:
     self.parts: list[Expr] = []
     self.cell: Var | None = None  # a one-element buffer, for adjoints added inside loops
     self.needs_cell = False
+    self.redirect: tuple | None = None  # (buffer, index): this chunk's own cell in a parallel loop
 
   def add(self, el, c: Expr, via: Tape) -> None:
     if via.dry and self.tape is not via:
       self.needs_cell = True
+      via.touched.add(self)
       return
     c = cast(c, self.var.type)
+    if self.redirect is not None:
+      buf, at = self.redirect
+      el.emit(Store(buf, at, ops.prim("add", (Load(buf, at), cast(c, buf.type.elt)), buf.type.elt)))
+      return
     if el.block is self.tape.home:
       self.parts.append(el.tmp(c, "adj"))
       return
@@ -185,6 +191,7 @@ class RootAdj:
     self.buf: ArrayVal | None = None  # zero-initialised accumulator, when views or loops need one
     self.needs_buffer = False
     self.stored: Any = None
+    self.redirect: ArrayVal | None = None  # this chunk's own copy of the accumulator in a parallel loop
 
   def is_whole(self, el, v: ArrayVal) -> bool:
     a = self.arr
@@ -206,10 +213,14 @@ class RootAdj:
       self.allocate(el)
     return self.buf  # type: ignore[return-value]
 
+  def target(self, el) -> ArrayVal:
+    """Where adjoints are being accumulated right now."""
+    return self.redirect if self.redirect is not None else self._ensure(el)
+
   def view(self, el, v: ArrayVal) -> ArrayVal:
-    buf = self._ensure(el)
+    buf = self.target(el)
     out = ArrayVal(
-      self.arr.elt, v.shape, buf=buf.buf, offset=el.tmp(isub(v.offset, self.arr.offset), "off"),
+      self.arr.elt, v.shape, buf=buf.buf, offset=el.tmp(iadd(buf.offset, isub(v.offset, self.arr.offset)), "off"),
       strides=v.strides, roots=buf.roots, contig=False,
     )  # fmt: skip
     out.inj = v.inj
@@ -220,6 +231,7 @@ class RootAdj:
       raise _tainted(el, self.stored)
     if via.dry and self.tape is not via:
       self.needs_buffer = True
+      via.touched.add(self)
       return
     at_home = el.block is self.tape.home
     if self.buf is None and at_home and self.is_whole(el, v) and isinstance(g, ArrayVal):
@@ -233,10 +245,11 @@ class RootAdj:
       raise _tainted(el, self.stored)
     if via.dry and self.tape is not via:
       self.needs_buffer = True
+      via.touched.add(self)
       return
-    buf = self._ensure(el)
+    buf = self.target(el)
     elt = self.arr.elt
-    p = el.tmp(isub(pos, self.arr.offset), "pos")
+    p = el.tmp(iadd(buf.offset, isub(pos, self.arr.offset)), "pos")
     el.emit(Store(buf.buf, p, ops.prim("add", (Load(buf.buf, p), cast(c, elt)), elt)))
 
   def total(self, el) -> ArrayVal | None:
@@ -318,6 +331,7 @@ class Tape:
     self.known: dict[int, bool] = {}
     self.keep: list = []
     self.muted = 0
+    self.touched: set = set()  # (a dry run) the adjoints of enclosing tapes it would add to
     self.tick = 0  # orders recorded operators, allocations and in-place stores
     self.born: dict = {}  # root -> tick of its allocation (roots not listed are older than the tape)
     self.stored_at: dict = {}  # root -> tick of the last store into it
@@ -643,7 +657,7 @@ class Tape:
       out = el.as_concrete(el.as_array(plain(el, shape, at, what)))
     finally:
       el.tape = self
-    node = Node("map", (), (shape, at, sub_view))
+    node = Node("map", (), (shape, at, sub_view, list(child.touched)))
     self.record(el, node)
     self.register(el, node, out)
     return out
@@ -770,6 +784,7 @@ class _Dry:
   """Stands in for a tape when a push only has to find out what it would touch."""
 
   dry = True
+  touched: set = set()
 
 
 _DRY: Any = _Dry()
@@ -962,8 +977,19 @@ def _same_view(el, g: ArrayVal, arr: ArrayVal, view: ArrayVal) -> ArrayVal:
   return out
 
 
+PRIVATE_BYTES = 1 << 28  # memory a parallel backward loop may spend on per-chunk accumulators
+
+
 def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
-  shape, at, sub_view = node.info
+  """Differentiate the element function again for every element.
+
+  Every element may add to the adjoint of anything its function used, so in
+  parallel each chunk of the loop gets accumulators of its own, summed at
+  the end: a reduction whose accumulator is the whole set of adjoints."""
+  from ..lib.numpy_lib import reduce_plain
+  from ..syntax.ir import RtCall
+
+  shape, at, sub_view, touched = node.info
   tape.stale(el, node)
   g = el.as_concrete(g)
   lead = len(shape)
@@ -981,7 +1007,46 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
       seed = el.tmp(el.elem(g, idx), "g")
     child.backward(el, r, seed)
 
-  el.seq_nest(shape, body)
+  roots = [t for t in touched if isinstance(t, RootAdj)]
+  scalars = [t for t in touched if isinstance(t, ScalarAdj)]
+  if not el.can_parallel(shape) or any(r.stored is not None for r in roots):
+    el.seq_nest(shape, body)
+    return
+  total = el.tmp(ops.iprod(shape), "total")
+  sizes: Expr = Const(len(scalars) + 1, I)
+  for r in roots:
+    r.target(el)  # the shared accumulator has to exist before the loop
+    sizes = iadd(sizes, ops.iprod(r.arr.shape))
+  budget = Const(PRIVATE_BYTES // 8, I)
+  nchunks = ops.imin(ops.imin(total, RtCall("num_threads", (), I)), ops.imax(ops.idiv(budget, sizes), 1))
+  nchunks = el.tmp(ops.imax(nchunks, 1), "nchunks")
+  if isinstance(nchunks, Var):
+    el.nonneg.add(nchunks.uid)
+  private = [el.alloc_array(r.arr.elt, (nchunks, *r.arr.shape), zero=True, label="adj") for r in roots]
+  cells = [el.alloc_array(s.var.type.strong, (nchunks,), zero=True, label="adj") for s in scalars]
+
+  def chunk_body(chunk, start, stop):
+    saved = [r.redirect for r in roots], [s.redirect for s in scalars]
+    try:
+      for r, p in zip(roots, private):
+        r.redirect = sub_view(el, p, (chunk,))
+        r.redirect.inj = True
+      for s, c in zip(scalars, cells):
+        s.redirect = (c.buf, chunk)
+      el.chunk_iter(shape, start, stop, body)
+    finally:
+      for r, old in zip(roots, saved[0]):
+        r.redirect = old
+      for s, old in zip(scalars, saved[1]):
+        s.redirect = old
+
+  # a fold, as far as backends are concerned: the chunks are tied to the accumulators
+  el.par_loop(total, chunk_body, kind="reduce", nchunks=nchunks, base_depth=1 if lead == 1 else 2)
+  for r, p in zip(roots, private):
+    summed = reduce_plain(el, "add", p, Const(0, I), Const(0, p.elt), "sum", False)
+    accumulate(el, r.view(el, r.arr), summed)
+  for s, c in zip(scalars, cells):
+    s.add(el, reduce_plain(el, "add", c, None, Const(0, c.elt), "sum", False), tape)
 
 
 def _cumsum(tape: Tape, el, node: Node, g: ArrayVal) -> None:
