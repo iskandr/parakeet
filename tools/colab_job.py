@@ -112,10 +112,12 @@ def hardware_check(tpu: bool = False):
     stage("tpu_probe", [py, "_tpu_probe.py"])
     stage("cpu_suite", [py, "-m", "pytest", "tests", "-q", "-n", "8", "-p", "no:cacheprovider"])
     stage("benchmarks", [py, "benchmarks/run.py"])
+    stage("crossover", [py, "benchmarks/crossover.py", "--json", str(out / "crossover.json")], timeout=3000)
   else:
     stage("cupy", [py, "-c", "import cupy; cupy.show_config()"])
     (repo / "_cuda_core.py").write_text(CUDA_CORE)
     stage("cuda_core", [py, "_cuda_core.py"])
+    stage("crossover", [py, "benchmarks/crossover.py", "--json", str(out / "crossover.json")], timeout=3000)
     stats = out / "device_stats.txt"
     gpu_env = {
             "PARAKEET_BACKEND": "cuda", "PARAKEET_TEST_BACKENDS": "cuda", "PARAKEET_DEVICE_THRESHOLD": "1",

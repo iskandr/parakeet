@@ -355,7 +355,6 @@ def test_array_dimensions_become_constants_when_needed():
 
 def test_lambdas_on_one_line_are_told_apart():
   x = np.arange(4.0)
-  f = jit(lambda a, k=1: np.minimum(a, k))
-  g = jit(lambda a, k=1: np.maximum(a, k))  # noqa: E702
+  f, g = jit(lambda a, k=1: np.minimum(a, k)), jit(lambda a, k=1: np.maximum(a, k))
   np.testing.assert_array_equal(f(x), np.minimum(x, 1))
   np.testing.assert_array_equal(g(x), np.maximum(x, 1))
