@@ -1,23 +1,29 @@
-from parakeet import jit 
+"""Least-squares line fit from scalar reductions."""
 
-def covariance(x,y):
-  return ((x-x.mean()) * (y-y.mean())).mean()
+import numpy as np
 
-@jit 
-def fit_simple_regression(x,y):
-  slope = covariance(x,y) / covariance(x,x)
-  offset = y.mean() - slope * x.mean() 
-  return slope, offset
+from parakeet import jit
 
-import numpy as np 
 
-N = 10**4
-x = np.random.randn(N).astype('float64')
-slope = 903.29
-offset = 102.1
-y = slope * x + offset
+def covariance(x, y):
+    return ((x - x.mean()) * (y - y.mean())).mean()
 
-slope_estimate, offset_estimate = fit_simple_regression(x,y)
 
-print "Expected slope =", slope, "offset =", offset
-print "Parakeet slope =", slope_estimate, "offset =", offset_estimate
+@jit
+def fit_simple_regression(x, y):
+    slope = covariance(x, y) / covariance(x, x)
+    offset = y.mean() - slope * x.mean()
+    return slope, offset
+
+
+def main(n: int = 100_000):
+    rng = np.random.default_rng(6)
+    x = rng.normal(size=n)
+    y = 3 * x + 2 + rng.normal(size=n) * 0.01
+    slope, offset = fit_simple_regression(x, y)
+    assert abs(slope - 3) < 0.01 and abs(offset - 2) < 0.01
+    return slope, offset
+
+
+if __name__ == "__main__":
+    print(main())
