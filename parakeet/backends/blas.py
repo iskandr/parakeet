@@ -41,6 +41,11 @@ def find() -> tuple[int, int, bool, str] | None:
   """``(address of sgemm, address of dgemm, 64-bit integers?, library)``, or None."""
   if os.environ.get("PARAKEET_BLAS", "1").strip().lower() in ("0", "false", "no", "off"):
     return None
+  if sys.platform == "win32" and os.environ.get("PARAKEET_BLAS", "") != "force":
+    # A product with constant small shapes came back as zeros from NumPy's
+    # OpenBLAS on Windows (and only there); until that is understood, Windows
+    # uses Parakeet's own loops.  PARAKEET_BLAS=force turns the BLAS on anyway.
+    return None
   for path in _libraries():
     try:
       lib = ctypes.CDLL(path)
