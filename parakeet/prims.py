@@ -12,8 +12,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import ops
-from .ir import Const, Expr
 from .ndtypes import (
   Bool,
   ScalarType,
@@ -22,7 +20,9 @@ from .ndtypes import (
   WeakInt,
   resolve_ufunc,
 )
-from .ops import cast, prim
+from .syntax import ops
+from .syntax.ir import Const, Expr
+from .syntax.ops import cast, prim
 
 
 @dataclass(frozen=True, eq=False)

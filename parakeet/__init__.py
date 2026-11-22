@@ -20,7 +20,7 @@ import math as _math
 
 import numpy as _np
 
-from . import errors, lib, ndtypes, prims
+from . import errors, frontend, lib, ndtypes, prims, syntax, transforms
 from ._version import __version__
 from .api import (
   Specialization,
@@ -43,6 +43,8 @@ from .errors import (
   TypeInferenceError,
   UnsupportedError,
 )
+from .frontend.decorators import macro
+from .frontend.diagnose import find_broken_transform
 from .lib.adverbs import (
   allpairs,
   each,
@@ -149,5 +151,6 @@ __all__ = [
     "ireduce", "jit", "lib", "map", "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "reduce", "run", "scan", "seed",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "typed_repr",
+    "find_broken_transform", "frontend", "macro", "syntax", "transforms",
     "Bool", "Float32", "Float64", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64",
 ]  # fmt: skip

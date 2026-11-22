@@ -1,6 +1,6 @@
 """Array machinery of the frontend: views, broadcasting, fusion and loops.
 
-Everything here is mixed into :class:`parakeet.elab.Elaborator`.  The central
+Everything here is mixed into :class:`parakeet.frontend.elab.Elaborator`.  The central
 idea is that array expressions are *delayed*: ``np.tanh(x * a) + b`` builds a
 function from index to element, and a loop is only emitted when something
 consumes the array (a store, a reduction, the function's return).  A delayed
@@ -13,9 +13,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from . import ops
-from .errors import InternalError, StaticValueError, TypeInferenceError, UnsupportedError
-from .ir import (
+from ..errors import InternalError, StaticValueError, TypeInferenceError, UnsupportedError
+from ..ndtypes import Bool, BufType, Int64, ScalarType
+from ..syntax import ops
+from ..syntax.ir import (
   Alloc,
   Assign,
   Break,
@@ -35,9 +36,8 @@ from .ir import (
   While,
   same,
 )
-from .ndtypes import Bool, BufType, Int64, ScalarType
-from .ops import ONE, ZERO, I, cmp, iadd, idiv, imax, imin, imod, imul, iprod, isub, land, lor
-from .values import CHEAP_COST, INF_COST, ArrayVal, Root, describe
+from ..syntax.ops import ONE, ZERO, I, cmp, iadd, idiv, imax, imin, imod, imul, iprod, isub, land, lor
+from ..syntax.values import CHEAP_COST, INF_COST, ArrayVal, Root, describe
 
 
 class Restart(Exception):
@@ -328,7 +328,7 @@ class ArrayMixin:
     ``base_depth`` is the loop nesting the chunk iteration itself needs;
     anything deeper means each element is expensive ("heavy"), which lets
     the runtime use threads even for few elements."""
-    from .backends.cfamily import loop_depth
+    from ..backends.cfamily import loop_depth
 
     if nchunks is None:
       nchunks = self.tmp(RtCall("num_chunks", (total, Const(kind == "reduce", Bool)), I), "nchunks")

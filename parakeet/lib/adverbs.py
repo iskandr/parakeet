@@ -10,11 +10,12 @@ from __future__ import annotations
 import builtins
 import functools
 
-from .. import ops, prims
+from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
-from ..ir import Const, Expr
-from ..ops import I, cmp
-from ..values import CHEAP_COST, ArrayVal, RangeVal, describe
+from ..syntax import ops
+from ..syntax.ir import Const, Expr
+from ..syntax.ops import I, cmp
+from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, describe
 from . import core
 from .core import FUNCTIONS, NAMES, along_axis, build_map, norm_axis, reduce_arrays, reduce_values, scan_values
 
@@ -243,8 +244,8 @@ def scan(el, f, x, init=None, axis=0):
 
 def scan_axis(el, x: ArrayVal, k: int, combine, init=None) -> ArrayVal:
   """Running fold along axis ``k`` of a multi-dimensional array."""
-  from ..ir import Assign, Store, Var
   from ..ndtypes import join
+  from ..syntax.ir import Assign, Store, Var
 
   x = _prepare(el, x)
   # accumulator type
@@ -280,7 +281,7 @@ def scan_axis(el, x: ArrayVal, k: int, combine, init=None) -> ArrayVal:
 
       el.for_range(ops.ZERO, n, body)
     else:
-      from ..ir import If
+      from ..syntax.ir import If
 
       first: list = []
       with el.in_block(first):

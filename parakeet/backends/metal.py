@@ -13,10 +13,10 @@ import ctypes
 import sys
 import threading
 
-from .. import ir
 from ..config import config
 from ..errors import BackendUnavailable, InternalError
 from ..ndtypes import BufType, ScalarType
+from ..syntax import ir
 from . import runtime_c
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars, expr_types, used_vars
 from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions

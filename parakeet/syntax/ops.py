@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 
+from ..ndtypes import Bool, ScalarType, WeakBool, WeakInt
 from .ir import Cast, Const, Expr, Prim
-from .ndtypes import Bool, ScalarType, WeakBool, WeakInt
 
 I = WeakInt  # type of all shape/index arithmetic (a Python int)  # noqa: E741
 

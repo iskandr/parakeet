@@ -2,7 +2,7 @@
 
 While a function is elaborated every Python expression evaluates to one of:
 
-* an :class:`~parakeet.ir.Expr` - a runtime scalar,
+* an :class:`~parakeet.syntax.ir.Expr` - a runtime scalar,
 * an :class:`ArrayVal` - an array, either *concrete* (a strided view of a
   buffer) or *delayed* (a function from index to element, fused into whatever
   consumes it),
@@ -18,8 +18,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..ndtypes import ScalarType
 from .ir import Expr, Scope, Var
-from .ndtypes import ScalarType
 
 INF_COST = 10**9
 CHEAP_COST = 24  # delayed arrays at most this expensive may be re-evaluated freely

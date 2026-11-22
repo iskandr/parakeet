@@ -22,8 +22,8 @@ from .numpy_lib import matmul
 
 def contains(el, container, item):
   """``item in container`` for tuples and arrays of scalars."""
-  from .. import ops
-  from ..values import ArrayVal, RangeVal
+  from ..syntax import ops
+  from ..syntax.values import ArrayVal, RangeVal
 
   if isinstance(container, tuple):
     acc = ops.FALSE
@@ -37,7 +37,7 @@ def contains(el, container, item):
 
     return numpy_lib.any_(el, el.apply_ufunc(UFUNCS["eq"], [container, item]))
   from ..errors import TypeInferenceError
-  from ..values import describe
+  from ..syntax.values import describe
 
   raise el.error(TypeInferenceError, f"argument of type {describe(container)} is not iterable")
 

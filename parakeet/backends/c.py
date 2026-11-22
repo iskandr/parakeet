@@ -9,9 +9,9 @@ from __future__ import annotations
 import ctypes
 from dataclasses import dataclass, field
 
-from .. import ir
 from ..config import config
 from ..ndtypes import BufType, ScalarType
+from ..syntax import ir
 from . import toolchain
 from .cfamily import CFamilyEmitter, defined_vars, owned_vars, used_vars
 from .runtime_c import HEADER_SLOTS, PRELUDE

@@ -16,15 +16,16 @@ from typing import Any
 
 import numpy as np
 
-from .. import ops, prims
-from .. import signature as _signature
+from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
-from ..ir import Assign, Const, Expr, RtCall, Store, Var, walk_expr, walk_stmts
-from ..ir import Check as _Check
-from ..ir import Comment as _Comment
+from ..frontend import signature as _signature
 from ..ndtypes import Bool, Float64, Int64, ScalarType, join
-from ..ops import ZERO, I, cast, cmp
-from ..values import CHEAP_COST, INF_COST, ArrayVal, PyFunc, RangeVal, TypeVal, describe
+from ..syntax import ops
+from ..syntax.ir import Assign, Const, Expr, RtCall, Store, Var, walk_expr, walk_stmts
+from ..syntax.ir import Check as _Check
+from ..syntax.ir import Comment as _Comment
+from ..syntax.ops import ZERO, I, cast, cmp
+from ..syntax.values import CHEAP_COST, INF_COST, ArrayVal, PyFunc, RangeVal, TypeVal, describe
 
 FUNCTIONS: dict[Any, Callable] = _signature.STAGED
 METHODS: dict[str, Callable] = {}
@@ -298,7 +299,7 @@ def block_weight(block: list) -> int:
 
 
 def _defined_vars(block: list) -> set[int]:
-  from ..ir import stmt_defs
+  from ..syntax.ir import stmt_defs
 
   out: set[int] = set()
   for s in walk_stmts(block):
@@ -445,7 +446,7 @@ def build_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> Array
   with el.in_block(none):
     empty = el.alloc_array(r_elt, shape + (ZERO,) * r_rank, label="out")
     el.assign_target(target, empty)
-  from ..ir import If
+  from ..syntax.ir import If
 
   outer_blk.append(If(cmp("gt", total, 0), some, none))
   return target
@@ -572,7 +573,7 @@ def reduce_values(
       el.emit(Store(partials.buf, chunk, cast(local, acc_type.strong)))
 
     el.par_loop(total, chunk_body, kind="reduce", nchunks=nchunks, base_depth=1 if len(shape) == 1 else 2)
-    from ..ir import Load
+    from ..syntax.ir import Load
 
     def partial(c):
       return cast(Load(partials.buf, c), acc_type)
@@ -672,7 +673,7 @@ def scan_values(el, n: Expr, elem, combine, init=None, what: str = "scan") -> Ar
 
     el.for_range(ZERO, n, body)
   else:
-    from ..ir import If
+    from ..syntax.ir import If
 
     first: list = []
     with el.in_block(first):

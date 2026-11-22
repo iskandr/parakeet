@@ -19,9 +19,9 @@ import threading
 
 import numpy as np
 
-from .. import ir
 from ..errors import BackendUnavailable, InternalError
 from ..ndtypes import BufType, ScalarType
+from ..syntax import ir
 from . import runtime_c, toolchain
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars
 from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions

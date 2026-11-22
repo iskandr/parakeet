@@ -13,9 +13,9 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from .. import ir
 from ..errors import SourceLocation
 from ..ndtypes import BufType, ScalarType
+from ..syntax import ir
 from .cfamily import Unsupported, defined_vars, used_vars
 
 DEVICE_FN = ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64)

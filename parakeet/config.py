@@ -30,6 +30,30 @@ def _env_int(name: str, default: int) -> int:
     return default
 
 
+def default_tile_bytes() -> int:
+  """Half of the per-core L2 cache, within sane limits (256 KiB if unknown)."""
+  l2 = 0
+  try:
+    if sys.platform == "darwin":
+      import subprocess
+
+      for key in ("hw.perflevel0.l2cachesize", "hw.l2cachesize"):
+        out = subprocess.run(["sysctl", "-n", key], capture_output=True, text=True, timeout=5).stdout.strip()
+        if out.isdigit() and int(out) > 0:
+          l2 = int(out)
+          break
+    elif sys.platform.startswith("linux"):
+      with open("/sys/devices/system/cpu/cpu0/cache/index2/size") as f:
+        text = f.read().strip().upper()
+      scale = {"K": 1024, "M": 1024 * 1024}.get(text[-1:], 1)
+      l2 = int(text.rstrip("KM")) * scale
+  except (OSError, ValueError, ImportError):
+    l2 = 0
+  if l2 <= 0:
+    return 256 * 1024
+  return min(max(l2 // 2, 64 * 1024), 1024 * 1024)
+
+
 @dataclass
 class Config:
   #: "auto" (best multi-core strategy), "c" (single-threaded), "multicore",
@@ -40,6 +64,11 @@ class Config:
   bounds_check: bool = field(default_factory=lambda: _env_bool("PARAKEET_BOUNDS_CHECK", True))
   #: Fuse array expressions into single loops.
   fusion: bool = field(default_factory=lambda: _env_bool("PARAKEET_FUSION", True))
+  #: Tile the loops of matmul-shaped operations (a map over pairs of rows whose
+  #: element is a reduction) so each tile of operands stays in cache.
+  tiling: bool = field(default_factory=lambda: _env_bool("PARAKEET_TILING", True))
+  #: Bytes of operand data one tile may span (default: half of a core's L2 cache).
+  tile_bytes: int = field(default_factory=lambda: _env_int("PARAKEET_TILE_BYTES", 0) or default_tile_bytes())
   #: Worker threads for multi-core backends (default: all cores).
   num_threads: int = field(default_factory=lambda: _env_int("PARAKEET_NUM_THREADS", os.cpu_count() or 1))
   #: Minimum number of cheap loop iterations per chunk before threads are used.
@@ -81,6 +110,8 @@ class Config:
       raise ValueError("device_fallback must be 'warn', 'silent' or 'error'")
     if name == "num_threads":
       value = max(1, int(value))
+    if name == "tile_bytes":
+      value = max(1024, int(value))
     object.__setattr__(self, name, value)
 
   def as_dict(self) -> dict:

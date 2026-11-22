@@ -7,12 +7,13 @@ import math
 
 import numpy as np
 
-from .. import ops, prims
+from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
-from ..ir import Const, Expr
 from ..ndtypes import Bool, WeakBool, WeakFloat, WeakInt
-from ..ops import I, cast, cmp
-from ..values import ArrayVal, EnumerateVal, RangeVal, TypeVal, ZipVal, describe
+from ..syntax import ops
+from ..syntax.ir import Const, Expr
+from ..syntax.ops import I, cast, cmp
+from ..syntax.values import ArrayVal, EnumerateVal, RangeVal, TypeVal, ZipVal, describe
 from . import numpy_lib as npl
 from .core import norm_axis, reduce_values, register
 

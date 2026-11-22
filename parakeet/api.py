@@ -16,13 +16,13 @@ from typing import Any
 
 import numpy as np
 
-from . import signature as sig
-from .arrays import Restart
 from .config import config, normalize_backend
-from .elab import Elaborated, Elaborator, ElabState, Options
 from .errors import BackendUnavailable, CompileError, FallbackWarning, InternalError, ParakeetError
-from .ir import ArrayParam, fmt_function
+from .frontend import signature as sig
+from .frontend.arrays import Restart
+from .frontend.elab import Elaborated, Elaborator, ElabState, Options
 from .ndtypes import ScalarType
+from .syntax.ir import ArrayParam, fmt_function
 
 MAX_RESTARTS = 500
 _U64 = 2**64
@@ -434,6 +434,8 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       Raise ``IndexError`` for out-of-range indices instead of crashing.
   ``fusion``
       Fuse array expressions into single loops.
+  ``tiling``
+      Tile matmul-shaped loops for cache locality.
   """
 
   __parakeet_decorator__ = True
@@ -447,7 +449,13 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     return super().__new__(cls)
 
   def __init__(
-    self, fn=None, *, backend: str | None = None, bounds_check: bool | None = None, fusion: bool | None = None
+    self,
+    fn=None,
+    *,
+    backend: str | None = None,
+    bounds_check: bool | None = None,
+    fusion: bool | None = None,
+    tiling: bool | None = None,
   ):
     if hasattr(fn, "__parakeet_fn__"):
       fn = fn.__parakeet_fn__
@@ -461,6 +469,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     self.backend = None if backend is None else normalize_backend(backend)
     self.bounds_check = bounds_check
     self.fusion = fusion
+    self.tiling = tiling
     functools.update_wrapper(self, fn)
     self._signature: inspect.Signature | None = None
     self._simple: tuple | None = None
@@ -504,6 +513,8 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       bounds_check=config.bounds_check if self.bounds_check is None else self.bounds_check,
       parallel=True,
       fusion=config.fusion if self.fusion is None else self.fusion,
+      tiling=config.tiling if self.tiling is None else self.tiling,
+      tile_bytes=config.tile_bytes,
     )
 
   # ---- calling -------------------------------------------------------------------
@@ -537,7 +548,8 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     backend = get_backend(backend_name or self.backend)
     options = self._options()
     options.parallel = backend.parallel
-    variant = (backend.cache_key(), options.key(), names)
+    toolchain_key = (config.cc, config.opt_level, config.fast_math, tuple(config.cflags))
+    variant = (backend.cache_key(), options.key(), names, toolchain_key)
     type_key = (variant, arg_keys, cell_keys)
     static = table.static.get(type_key, frozenset())
     full_key = (variant, *_rewrite_keys(arg_keys, cell_keys, leaves, static))

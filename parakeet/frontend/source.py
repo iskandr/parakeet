@@ -9,7 +9,7 @@ import os
 import types as pytypes
 from dataclasses import dataclass
 
-from .errors import SourceLocation, UnsupportedError
+from ..errors import SourceLocation, UnsupportedError
 
 FuncNode = ast.FunctionDef | ast.Lambda
 

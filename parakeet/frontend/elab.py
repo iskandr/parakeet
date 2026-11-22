@@ -2,9 +2,9 @@
 
 The :class:`Elaborator` is a *staged interpreter*.  It walks the Python AST of
 the function with an environment of compile-time values (see
-:mod:`parakeet.values`) and emits IR for whatever can only be known at run
+:mod:`parakeet.syntax.values`) and emits IR for whatever can only be known at run
 time.  Calls are inlined, closures and tuples disappear, and array expressions
-are fused (see :mod:`parakeet.arrays`).
+are fused (see :mod:`parakeet.frontend.arrays`).
 
 Three things cannot be decided in a single forward pass, and are handled by
 *restarting* elaboration with better assumptions recorded in
@@ -26,9 +26,8 @@ from typing import Any
 
 import numpy as np
 
-from . import ops, prims
-from .arrays import ArrayMixin, LiveRoots, Restart
-from .errors import (
+from .. import prims
+from ..errors import (
   CompileError,
   InternalError,
   ParakeetError,
@@ -37,7 +36,9 @@ from .errors import (
   TypeInferenceError,
   UnsupportedError,
 )
-from .ir import (
+from ..ndtypes import Bool, BufType, ScalarType, WeakBool, WeakFloat, WeakInt, join
+from ..syntax import ops
+from ..syntax.ir import (
   ArrayParam,
   ArrayResult,
   Assign,
@@ -58,11 +59,8 @@ from .ir import (
   is_trivial,
   walk_expr,
 )
-from .ndtypes import Bool, BufType, ScalarType, WeakBool, WeakFloat, WeakInt, join
-from .ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
-from .signature import CODE_FUNCTIONS, STAGED, Key, Ref, Unsupported, classify, type_value, with_static_leaves
-from .source import FunctionSource, assigned_names, get_source
-from .values import (
+from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
+from ..syntax.values import (
   ArrayVal,
   BoundMethod,
   Closure,
@@ -76,6 +74,9 @@ from .values import (
   ZipVal,
   describe,
 )
+from .arrays import ArrayMixin, LiveRoots, Restart
+from .signature import CODE_FUNCTIONS, STAGED, Key, Ref, Unsupported, classify, type_value, with_static_leaves
+from .source import FunctionSource, assigned_names, get_source
 
 MAX_INLINE_DEPTH = 100
 _MISSING = object()
@@ -88,9 +89,11 @@ class Options:
   bounds_check: bool = True
   parallel: bool = True
   fusion: bool = True
+  tiling: bool = True
+  tile_bytes: int = 256 * 1024
 
   def key(self) -> tuple:
-    return (self.bounds_check, self.parallel, self.fusion)
+    return (self.bounds_check, self.parallel, self.fusion, self.tiling, self.tile_bytes)
 
 
 @dataclass
@@ -964,7 +967,7 @@ class Elaborator(ArrayMixin):
     kwargs = kwargs or {}
     if isinstance(fn, (PyFunc, Closure)):
       return self.call_user(fn, args, kwargs, node)
-    from . import lib
+    from .. import lib
 
     if isinstance(fn, BoundMethod):
       impl = lib.lookup_method(fn.obj, fn.name)
@@ -1655,7 +1658,7 @@ class Elaborator(ArrayMixin):
     )
 
   def eval_List(self, node: ast.List):
-    from . import lib
+    from .. import lib
 
     items = self.eval_Tuple(node)  # type: ignore[arg-type]
     return lib.array_literal(self, list(items))
@@ -1734,7 +1737,7 @@ class Elaborator(ArrayMixin):
     return self.getattr(obj, node.attr, node)
 
   def getattr(self, obj, name: str, node=None):
-    from . import lib
+    from .. import lib
 
     if isinstance(obj, (ArrayVal, Expr)):
       prop = lib.lookup_property(name)
@@ -1771,7 +1774,7 @@ class Elaborator(ArrayMixin):
     return self.binop(_BINOPS[type(node.op)], a, b)
 
   def matmul(self, a, b):
-    from . import lib
+    from .. import lib
 
     return lib.matmul(self, a, b)
 
@@ -1957,7 +1960,7 @@ class Elaborator(ArrayMixin):
       same = self._identical(a, b)
       return Const(same if isinstance(op, ast.Is) else not same, WeakBool)
     if isinstance(op, (ast.In, ast.NotIn)):
-      from . import lib
+      from .. import lib
 
       res = cast(self.truth(lib.contains(self, b, a)), WeakBool)
       return res if isinstance(op, ast.In) else ops.lnot(res)
@@ -2010,7 +2013,7 @@ class Elaborator(ArrayMixin):
     return self.make_closure(node, "<lambda>")
 
   def _comprehension(self, node, elt: ast.expr):
-    from . import lib
+    from .. import lib
 
     if len(node.generators) != 1:
       raise self.error(
@@ -2097,7 +2100,7 @@ class Elaborator(ArrayMixin):
     return cast(v, I)
 
   def as_array(self, v, what: str = "value") -> ArrayVal:
-    from . import lib
+    from .. import lib
 
     if isinstance(v, ArrayVal):
       return v
@@ -2112,7 +2115,7 @@ class Elaborator(ArrayMixin):
   def range_array(self, r: RangeVal) -> ArrayVal:
     start, step = self.tmp(r.start), self.tmp(r.step)
     n = self.range_length(r)
-    from .ndtypes import Int64
+    from ..ndtypes import Int64
 
     return self.delayed(Int64, (n,), lambda idx: cast(iadd(start, imul(idx[0], step)), Int64), cost=1)
 

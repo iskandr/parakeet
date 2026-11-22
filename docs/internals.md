@@ -2,9 +2,9 @@
 
 ```text
  Python function + argument types
-        │  elaborate (parakeet/elab.py, arrays.py, lib/)
+        │  elaborate (parakeet/frontend/, lib/)
         ▼
- typed loop IR (parakeet/ir.py)  ──►  f.specialize(x).ir
+ typed loop IR (parakeet/syntax/ir.py)  ──►  f.specialize(x).ir
         │  print as C (backends/c.py)        ├─► Metal kernels (backends/metal.py)
         ▼                                    └─► CUDA kernels  (backends/cuda.py)
  system C compiler ─► shared library, cached on disk ─► called through ctypes

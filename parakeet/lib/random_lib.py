@@ -12,11 +12,11 @@ import math
 
 import numpy as np
 
-from .. import ops
 from ..errors import UnsupportedError
-from ..ir import Const, Expr, RtCall, Var
 from ..ndtypes import Float64, Int64, WeakFloat, WeakInt
-from ..ops import I, cast, cmp, iadd, imul
+from ..syntax import ops
+from ..syntax.ir import Const, Expr, RtCall, Var
+from ..syntax.ops import I, cast, cmp, iadd, imul
 from .core import register
 from .pure import source
 

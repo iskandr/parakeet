@@ -11,9 +11,9 @@ import math
 
 import numpy as np
 
-from .. import ir
 from ..errors import InternalError
 from ..ndtypes import BufType, ScalarType
+from ..syntax import ir
 
 _CMP = {"eq": "==", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}
 _C_MATH = {

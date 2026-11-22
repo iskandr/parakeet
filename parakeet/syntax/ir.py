@@ -14,8 +14,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-from .errors import SourceLocation
-from .ndtypes import Bool, BufType, Int64, ScalarType
+from ..errors import SourceLocation
+from ..ndtypes import Bool, BufType, Int64, ScalarType
 
 # --------------------------------------------------------------------------
 # expressions

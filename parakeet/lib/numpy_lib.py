@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from .. import ops, prims
+from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
-from ..ir import Assign, Const, Expr, If, Store, Var
 from ..ndtypes import Bool, Float32, Float64, Int64, ScalarType, UInt64, WeakBool, join, weak_of_kind
-from ..ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
-from ..values import CHEAP_COST, ArrayVal, RangeVal, TypeVal, describe
+from ..syntax import ops
+from ..syntax.ir import Assign, Const, Expr, If, Store, Var
+from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
+from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, TypeVal, describe
 from .core import (
   along_axis,
   array_literal,

@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from .ndtypes import (
+from ..ndtypes import (
   Float32,
   ScalarType,
   WeakBool,
