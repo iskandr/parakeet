@@ -116,12 +116,26 @@ else:
 A guard that only raises (`if n == 0: raise ValueError(...)`) is fine too, and
 is not run for both sides.
 
-## Arrays are values
+## Writing into arrays
 
-Differentiated arrays cannot be modified in place. Assigning elements one at a
-time, updating an array after it was used, or overwriting an input all raise an
-error; build a new array instead (`out = out + term`, a comprehension,
-`np.concatenate`).
+Stores are differentiated: assigning a slice, an element, or updating in place
+all work, in straight-line code and in loops that can be unrolled.
+
+```python
+out = np.zeros((n, 3))
+out[:3] = x[:3] @ w
+out[3:] = np.tanh(x[3:] @ w)
+out += bias
+```
+
+Going backwards, whatever adjoint arrived for the stored region belongs to the
+value that was stored, and the region starts again from zero.
+
+One thing cannot work: overwriting a value that an earlier operation's
+derivative still has to read. `y = np.tanh(h); h[0] = 5.0` is refused, because
+the derivative of `tanh` needs the old `h`; `y = np.sum(h * 3.0); h[0] = 5.0`
+is fine, because that derivative does not. Stores through an array of indices
+(`out[idx] = v`) are not differentiated.
 
 ## The gradient is right or there is none
 
@@ -134,7 +148,23 @@ an `UnsupportedError` naming it:
 UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
 ```
 
-Second derivatives (`grad` of a function that calls `grad`) are not supported.
+## Second derivatives
+
+`grad` of a function that calls `grad` works for element-wise operators,
+reductions, matrix products and views — enough for gradient penalties and
+Hessian-vector products:
+
+```python
+def penalty(w, x):
+  g = grad(loss)(w, x)  # the gradient, as part of the function
+  return np.sum(g * g)
+
+
+grad(penalty)(w, x)  # 2 H g, reverse over reverse
+```
+
+It is refused, by name, through `map` with your own function, indexing with
+arrays, `cumsum`, `sort`, folds and `np.stack`/`np.concatenate`.
 
 ## Cost
 

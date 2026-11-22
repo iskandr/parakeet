@@ -528,11 +528,55 @@ def test_wrong_uses():
   refused(lambda w, x: x @ w, W, X, match="returns a floating point scalar", error=T_)
   refused(lambda a: np.sum(a), np.arange(4), match="floating point scalars and arrays", error=T_)
   refused(loss, W, X, T, argnum=5, match="no positional argument 5", error=T_)
-  refused(lambda w: np.sum(grad(lambda a: np.sum(a * a))(w)), W, match="itself being differentiated")
   with pytest.raises(TypeError, match="expects a function"):
     grad(3)
   with pytest.raises(TypeError, match="argnum"):
     grad(loss, -1)
+
+
+def test_second_derivatives():
+  x = RNG.random(5) + 0.5
+  a = RNG.random((5, 5))
+  a = a + a.T
+  functions = [
+    lambda x: np.sum(x**4),
+    lambda x: x @ (a @ x),
+    lambda x: np.sum(np.tanh(x) * x),
+    lambda x: np.log(np.sum(np.exp(x))),
+    lambda x: np.sum((x[:, None] * x[None, :]) ** 2) + np.max(x) ** 2,
+    lambda x: np.var(x) * np.mean(x) + np.sum(np.sqrt(x)),
+  ]
+  for f in functions:
+    # the gradient of |grad f|^2 is 2 H grad f: one compiled function, reverse over reverse
+    def penalty(x, f=f):
+      g = grad(f)(x)
+      return np.sum(g * g)
+
+    first = grad(f)
+    want = numeric(lambda x, first=first: float(np.sum(first(x) ** 2)), [x], 0, eps=1e-5)
+    np.testing.assert_allclose(grad(penalty)(x), want, rtol=2e-3, atol=1e-5)
+
+  # a network's weights
+  def smooth(w):
+    g = grad(lambda w: np.mean(np.tanh(X @ w) ** 2))(w)
+    return np.sum(g * g)
+
+  first = grad(lambda w: np.mean(np.tanh(X @ w) ** 2))
+  want = numeric(lambda w: float(np.sum(first(w) ** 2)), [W], 0, eps=1e-5)
+  np.testing.assert_allclose(grad(smooth)(W), want, rtol=2e-3, atol=1e-6)
+  # and plain scalars
+  d2 = grad(lambda t: grad(lambda u: np.sin(u) * u * u)(t))(0.7)
+  assert np.isclose(d2, (2 - 0.49) * np.sin(0.7) + 4 * 0.7 * np.cos(0.7))
+
+
+def test_second_derivatives_that_are_refused():
+  x = RNG.random(5) + 0.5
+  through_map = lambda x: np.sum(grad(lambda a: np.sum(each(lambda r: np.sum(r * r), a.reshape(5, 1))))(x) ** 2)  # noqa: E731
+  through_gather = lambda x: np.sum(grad(lambda a: np.sum(a[np.array([0, 2, 2])] ** 3))(x) ** 2)  # noqa: E731
+  through_cumsum = lambda x: np.sum(grad(lambda a: np.sum(np.cumsum(a) ** 2))(x) ** 2)  # noqa: E731
+  refused(through_map, x, match="second derivatives through map")
+  refused(through_gather, x, match="second derivatives through this indexing")
+  refused(through_cumsum, x, match="second derivatives through cumsum")
 
 
 def test_unknown_derivative_of_a_primitive():

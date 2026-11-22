@@ -39,6 +39,7 @@ too.  The gradient is right or there is none.
 from __future__ import annotations
 
 import ast
+import contextlib
 import copy
 from typing import Any
 
@@ -225,6 +226,7 @@ class RootAdj:
       strides=v.strides, roots=buf.roots, contig=False,
     )  # fmt: skip
     out.inj = v.inj
+    out.base = buf if buf.contig else buf.base
     return out
 
   def add(self, el, v: ArrayVal, g, via: Tape) -> None:
@@ -251,7 +253,7 @@ class RootAdj:
     buf = self.target(el)
     elt = self.arr.elt
     p = el.tmp(iadd(buf.offset, isub(pos, self.arr.offset)), "pos")
-    el.emit(Store(buf.buf, p, ops.prim("add", (Load(buf.buf, p), cast(c, elt)), elt)))
+    store_element(el, buf, p, ops.prim("add", (Load(buf.buf, p), cast(c, elt)), elt))
 
   def total(self, el) -> ArrayVal | None:
     if self.stored is not None:
@@ -273,9 +275,22 @@ def settled(el, g: ArrayVal) -> ArrayVal:
   return g
 
 
+def store_element(el, arr: ArrayVal, pos: Expr, v: Expr) -> None:
+  """``arr.buf[pos] = v``, recorded if a tape is listening."""
+  tape = el.tape
+  if tape is not None and not tape.muted and tape.store_element(el, arr, pos, v):
+    return
+  el.emit(Store(arr.buf, pos, v))
+  el.record_store(arr)
+
+
 def accumulate(el, dest: ArrayVal, g) -> None:
   """``dest += g`` for a view of an adjoint buffer."""
   elt = dest.elt
+  if el.tape is not None:
+    # the gradient being built is itself differentiated: an ordinary, recorded update
+    el.store_array(dest, el.apply_ufunc(UF["add"], [dest, g]))
+    return
   if isinstance(g, ArrayVal):
     if g.buf is None and g.cost > CHEAP_COST:
       g = el.as_concrete(g)
@@ -316,9 +331,11 @@ class Node:
 
 
 class Tape:
-  def __init__(self, el, parent: Tape | None = None, dry: bool = False, key: tuple = ()):
+  def __init__(self, el, parent: Tape | None = None, dry: bool = False, key: tuple = (), outer: Tape | None = None):
     self.parent = parent
     self.dry = dry
+    # the tape of a gradient this whole computation is itself being differentiated by (grad of grad)
+    self.outer = outer
     self.key = key  # identifies this tape across restarts of the elaboration
     self.sites: dict[tuple, int] = {}
     self.block = el.block  # operators are only recorded in this block: straight-line code
@@ -337,6 +354,28 @@ class Tape:
     self.born: dict = {}  # root -> tick of its allocation (roots not listed are older than the tape)
     self.stored_at: dict = {}  # root -> tick of the last store into it
     self.unknown_store = -1  # tick of the last store into an array whose origin is unknown
+
+  @contextlib.contextmanager
+  def computing(self, el):
+    """While a recorded operator computes its result this tape steps aside.
+    If the gradient being built is itself being differentiated, the enclosing
+    tape records that computation instead."""
+    if self.outer is None:
+      self.muted += 1
+      try:
+        yield
+      finally:
+        self.muted -= 1
+    else:
+      el.tape = self.outer
+      try:
+        yield
+      finally:
+        el.tape = self
+
+  def first_order(self, el, what: str) -> None:
+    if self.outer is not None:
+      raise el.error(UnsupportedError, f"second derivatives through {what} are not supported")
 
   # ---- lookup --------------------------------------------------------------------
 
@@ -385,6 +424,8 @@ class Tape:
         raise _tainted(el, el.tainted_bufs[uid])
       root = self.find_root(uid)
       if root is None:
+        if self.outer is not None:
+          return False  # it matters to the enclosing gradient only: a constant here
         raise InternalError("an array depends on a differentiated value but has no adjoint")
       if root.stored is not None:
         raise _tainted(el, root.stored)
@@ -417,6 +458,7 @@ class Tape:
     self.known[id(arr)] = active
     self.keep.append(arr)
     if active:
+      self.first_order(el, "this indexing or library function")
       node = Node("opaque", (arr,))
       self.record(el, node)
       self.delayed[id(arr)] = node
@@ -490,22 +532,24 @@ class Tape:
     # the backward pass evaluates the arguments again: they must be cheap to re-read
     args = [el.as_concrete(a) if isinstance(a, ArrayVal) and a.buf is None and a.cost > CHEAP_COST else a for a in args]
     args = [a if isinstance(a, ArrayVal) else el.tmp(a) for a in args]
-    self.muted += 1
-    try:
-      out = el.elementwise_plain(args, fn, elt, cost)
-    finally:
-      self.muted -= 1
+    with self.computing(el):
+      out = el.elementwise(args, fn, elt, cost)
     node = Node("elementwise", tuple(args), (tuple(active), fn, elt, cost))
     self.record(el, node)
     self.register(el, node, out)
     return out
 
-  def materialized(self, el, arr: ArrayVal, out: ArrayVal) -> None:
+  def materialized(self, el, arr: ArrayVal, out: ArrayVal, info=None) -> None:
     """``out`` is a fresh copy of ``arr``."""
-    if arr.elt.kind != "f" or out.buf.uid not in el.tainted_bufs:
+    info = info or el.tainted_bufs.get(out.buf.uid)
+    if arr.elt.kind != "f" or info is None:
       return  # nothing that was copied depends on a differentiated value
+    if self.outer is not None:
+      self.outer.materialized(el, arr, out, info)
     if not self.is_active(el, arr):
-      raise _tainted(el, el.tainted_bufs[out.buf.uid])
+      if self.outer is not None:
+        return
+      raise _tainted(el, info)
     node = Node("alias", (arr,))
     self.record(el, node)
     self.register(el, node, out)
@@ -513,13 +557,12 @@ class Tape:
   def reduce(self, el, plain, op: str, a: ArrayVal, axis, init, what: str, keepdims):
     if op != "add" and a.buf is None and a.cost > CHEAP_COST:
       a = el.as_concrete(a)
-    self.muted += 1
-    try:
-      out = plain(el, op, a, axis, init, what, keepdims)
+    from ..lib.numpy_lib import _reduce_prim
+
+    with self.computing(el):
+      out = _reduce_prim(el, op, a, axis, init, what, keepdims)
       if isinstance(out, ArrayVal):
         out = el.as_concrete(out)
-    finally:
-      self.muted -= 1
     if not isinstance(keepdims, bool):
       keepdims = el.static_bool(keepdims, "keepdims")
     node = Node("reduce", (a,), (op, axis, keepdims))
@@ -528,13 +571,12 @@ class Tape:
     return out
 
   def matmul(self, el, plain, a: ArrayVal, b: ArrayVal, what: str):
-    self.muted += 1
-    try:
-      out = plain(el, a, b, what)
+    from ..lib.numpy_lib import matmul
+
+    with self.computing(el):
+      out = matmul(el, a, b, what)
       if isinstance(out, ArrayVal):
         out = el.as_concrete(out)
-    finally:
-      self.muted -= 1
     node = Node("matmul", (a, b), (self.is_active(el, a), self.is_active(el, b)))
     self.record(el, node)
     self.register(el, node, out)
@@ -542,6 +584,7 @@ class Tape:
 
   def op(self, el, kind: str, inputs: tuple, info, compute):
     """Record an operator whose result ``compute()`` builds without help."""
+    self.first_order(el, kind)
     self.muted += 1
     try:
       out = compute()
@@ -559,6 +602,7 @@ class Tape:
     value, so the fold is computed as a scan and replayed backwards."""
     from ..lib.core import scan_values
 
+    self.first_order(el, "a fold with a function of your own")
     if x.rank != 1:
       x = el.flat_view(x)
     if x.buf is None and x.cost > CHEAP_COST:
@@ -603,13 +647,14 @@ class Tape:
     self.register(el, node, out)
     return out
 
-  def detach(self, arr: ArrayVal) -> ArrayVal:
+  def detach(self, el, arr: ArrayVal) -> ArrayVal:
     """``arr`` is about to be turned into a concrete array in place.  If it is
     the delayed result of a recorded operator, hand that role to a copy of
     the delayed value, which is what gets evaluated."""
     node = self.delayed.pop(id(arr), None)
     if node is None:
       return arr
+    self.first_order(el, "an in-place update of an expression")
     ghost = ArrayVal(arr.elt, arr.shape, fn=arr.fn, roots=arr.roots, cost=arr.cost, reads=arr.reads)
     ghost.depth, ghost.epoch, ghost.block, ghost.origin, ghost.uses = (
       arr.depth,
@@ -651,11 +696,8 @@ class Tape:
     root = self._mutable_root(el, dest, active)
     if root is None:
       return False
-    self.muted += 1
-    try:
-      el.store_array_plain(dest, value)
-    finally:
-      self.muted -= 1
+    with self.computing(el):
+      el.store_array(dest, value)
     el.tainted_bufs.pop(dest.buf.uid, None)
     self.record(el, Node("store", (value,), (dest, root, active)))
     return True
@@ -665,12 +707,8 @@ class Tape:
     root = self._mutable_root(el, arr, active)
     if root is None:
       return False
-    self.muted += 1
-    try:
-      el.emit(Store(arr.buf, pos, v))
-      el.record_store(arr)
-    finally:
-      self.muted -= 1
+    with self.computing(el):
+      store_element(el, arr, pos, v)
     el.tainted_bufs.pop(arr.buf.uid, None)
     self.record(el, Node("store_element", (v,), (pos, root, active)))
     return True
@@ -680,6 +718,7 @@ class Tape:
     live = [(view, v) for view, v in parts if self.is_active(el, v)]
     if not live:
       return
+    self.first_order(el, "building an array from parts")
     node = Node("pack", tuple(v for _, v in live), [view for view, _ in live])
     self.record(el, node)
     self.register(el, node, out)
@@ -725,6 +764,7 @@ class Tape:
       el.loop_depth -= 1
     if not active:
       return None
+    self.first_order(el, f"{what} with a function of your own")
     el.tape = None
     try:
       out = el.as_concrete(el.as_array(plain(el, shape, at, what)))
@@ -870,7 +910,7 @@ _DRY: Any = _Dry()
 
 def unbroadcast(el, g: ArrayVal, target):
   """Sum ``g`` over the dimensions along which ``target`` was broadcast to it."""
-  from ..lib.numpy_lib import reduce_plain
+  from ..lib.numpy_lib import _reduce_prim as reduce_plain
 
   zero = Const(0, g.elt)
   if not isinstance(target, ArrayVal) or target.rank == 0:
@@ -947,6 +987,7 @@ def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
       for x in xs:
         leaf = Var("x", x.type)
         el.block.append(Assign(leaf, x))
+        note_def(el, leaf, x)  # an enclosing gradient differentiates through this copy
         leaves.append(leaf)
       r = fn(*leaves)
       found: list[Expr] = []
@@ -955,12 +996,14 @@ def _elementwise(tape: Tape, el, node: Node, g: ArrayVal) -> None:
         if v is leaves[k]:
           found.append(adj)
           return None
+        if any(v is leaf for leaf in leaves):
+          return None  # another argument: a constant for this partial derivative
         return el.defs.get(v.uid) if v.uid > mark else None
 
       backprop(el, r, cast(gv, r.type), on_var, lambda load, adj: None)
       return cast(found[0], t) if found else Const(0.0, t)
 
-    contrib = el.elementwise_plain([*args, g], partial, t, cost + 4)
+    contrib = el.elementwise([*args, g], partial, t, cost + 4)
     tape.add(el, a, unbroadcast(el, contrib, a))
 
 
@@ -983,7 +1026,8 @@ def _opaque(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 
 def _reduce(tape: Tape, el, node: Node, g) -> None:
-  from ..lib.numpy_lib import _axes, reduce_plain
+  from ..lib.numpy_lib import _axes
+  from ..lib.numpy_lib import _reduce_prim as reduce_plain
 
   (a,) = node.inputs
   op, axis, keepdims = node.info
@@ -1021,7 +1065,7 @@ def _reduce(tape: Tape, el, node: Node, g) -> None:
       if isinstance(share, Expr):
         share = el.tmp(share)
       zero = Const(0, elt)
-      contrib = el.elementwise_plain([hit, share], lambda h, s: ops.select(cast(h, Bool), cast(s, elt), zero), elt, 1)
+      contrib = el.elementwise([hit, share], lambda h, s: ops.select(cast(h, Bool), cast(s, elt), zero), elt, 1)
   if not isinstance(contrib, ArrayVal) or contrib.rank != a.rank:
     scalar = el.tmp(contrib if isinstance(contrib, Expr) else el.as_scalar(contrib))
     contrib = el.delayed(elt, a.shape, lambda idx: cast(scalar, elt), cost=0)
@@ -1031,7 +1075,7 @@ def _reduce(tape: Tape, el, node: Node, g) -> None:
 
 
 def _matmul(tape: Tape, el, node: Node, g) -> None:
-  from ..lib.numpy_lib import matmul_plain
+  from ..lib.numpy_lib import matmul as matmul_plain
 
   a, b = node.inputs
   active_a, active_b = node.info
@@ -1156,8 +1200,7 @@ def _store(tape: Tape, el, node: Node, g) -> None:
   (value,) = node.inputs
   region = root.view(el, dest)
   taken = el.materialize(region, "adj") if active else None
-  el.fill(region, Const(0.0, region.elt))
-  el.record_store(region)
+  el.store_array(region, Const(0.0, region.elt))
   if taken is not None:
     tape.add(el, value, unbroadcast(el, taken, value))
 
@@ -1167,8 +1210,8 @@ def _store_element(tape: Tape, el, node: Node, g) -> None:
   (v,) = node.inputs
   buf = root.target(el)
   p = el.tmp(iadd(buf.offset, isub(pos, root.arr.offset)), "pos")
-  taken = el.copy_scalar(Load(buf.buf, p), "g")
-  el.emit(Store(buf.buf, p, Const(0.0, buf.elt)))
+  taken = el.tmp(Load(buf.buf, p), "g") if el.tape is not None else el.copy_scalar(Load(buf.buf, p), "g")
+  store_element(el, buf, p, Const(0.0, buf.elt))
   if active:
     tape.add(el, v, taken)
 
@@ -1256,6 +1299,8 @@ def _wrt_leaf(el, tape: Tape, v, what: str):
   if isinstance(v, Expr) and is_float(v):
     leaf = Var("x", v.type)
     el.block.append(Assign(leaf, v))
+    if tape.outer is not None:
+      note_def(el, leaf, v)  # the enclosing gradient differentiates through the copy
     return leaf, tape.leaf_scalar(el, leaf)
   if isinstance(v, ArrayVal) and v.elt.kind == "f":
     # the adjoint mirrors the memory of the array, so the array must be dense and its own
@@ -1282,8 +1327,9 @@ def _adjoint(el, holder, v):
 
 def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, what: str):
   """Elaborate ``f(*args)`` and the gradient of its (scalar) result."""
-  if el.tape is not None or el.ad_live:
-    raise el.error(UnsupportedError, f"{what} inside a function that is itself being differentiated is not supported")
+  outer = el.tape  # set when this gradient is itself being differentiated
+  if outer is not None and (outer.muted or outer.parent is not None):
+    raise el.error(UnsupportedError, f"{what} inside a function that is mapped and differentiated is not supported")
   if isinstance(argnum, tuple):
     wrt = [el.static_int(a, f"the argument numbers passed to {what}") for a in argnum]
     single = False
@@ -1299,7 +1345,7 @@ def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, wha
   if len(set(wrt)) != len(wrt):
     raise el.error(TypeInferenceError, f"{what}: argument numbers must be distinct")
   args = [el.bindable(a, "arg") for a in args]
-  tape = Tape(el)
+  tape = Tape(el, outer=outer)
   el.ad_live += 1
   try:
     holders = {}
@@ -1309,7 +1355,7 @@ def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, wha
     try:
       out = el.call(f, args, kwargs)
     finally:
-      el.tape = None
+      el.tape = outer
     if isinstance(out, ArrayVal) and out.rank == 0:
       out = el.as_scalar(out)
     if not isinstance(out, Expr) or not is_float(out):
@@ -1323,7 +1369,7 @@ def differentiate(el, f, argnum, args: list, kwargs: dict, with_value: bool, wha
     grads = [_adjoint(el, holders[k], args[k]) for k in wrt]
   finally:
     el.ad_live -= 1
-    el.tape = None
+    el.tape = outer
     if not el.ad_live:
       # nothing depends on a differentiated value any more
       el.ad_vars.clear()

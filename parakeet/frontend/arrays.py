@@ -258,7 +258,7 @@ class ArrayMixin:
     source = arr
     tape = self.tape
     if tape is not None and not tape.muted:
-      source = tape.detach(arr)  # the tape knows this array as a delayed value: keep that apart
+      source = tape.detach(self, arr)  # the tape knows this array as a delayed value: keep that apart
     out = self.materialize(source)
     arr.buf, arr.offset, arr.strides = out.buf, out.offset, out.strides
     arr.shape, arr.roots, arr.contig, arr.fn, arr.reads = out.shape, out.roots, True, None, None
