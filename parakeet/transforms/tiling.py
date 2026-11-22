@@ -28,6 +28,7 @@ straight-line code; if so :func:`tiled_map` evaluates the map in tiles.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -78,9 +79,9 @@ def probe(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], probe_idx: tu
   from ..lib.core import _defined_vars, block_weight, outer_expr
   from ..syntax.values import INF_COST
 
-  if not el.options.tiling or len(shape) != 2 or el.jam is not None:
+  if not el.options.tiling or len(shape) < 2 or el.jam is not None:
     return None
-  if all(isinstance(d, Const) for d in shape) and shape[0].value * shape[1].value < MIN_STATIC_SIZE:
+  if all(isinstance(d, Const) for d in shape) and math.prod(d.value for d in shape) < MIN_STATIC_SIZE:
     return None
   el.loop_depth += 1
   try:
@@ -110,9 +111,19 @@ def tile_size(el, length: Expr, itemsize: int) -> Expr:
 
 
 def tiled_map(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], elt, length: Expr, what: str) -> ArrayVal:
-  """Evaluate ``out[i, j] = fn((i, j))`` into a new array, in tiles."""
-  n_i, n_j = shape
+  """Evaluate ``out[..., j] = fn((..., j))`` into a new array, in tiles of
+  the last dimension.  The dimensions before it are one long row index."""
+  lead, n_j = tuple(shape[:-1]), shape[-1]
+  n_i = el.tmp(ops.iprod(lead), "rows")
+  if isinstance(n_i, Var):
+    el.nonneg.add(n_i.uid)
   out = el.alloc_array(elt, shape, label="out")
+  element = fn
+
+  def fn(ij):
+    i, j = ij
+    return element(((i,) if len(lead) == 1 else el.unravel(i, lead)) + (j,))
+
   tile = tile_size(el, el.tmp(length, "len"), elt.itemsize)
 
   def index(e, bound: Expr) -> Expr:
@@ -123,7 +134,7 @@ def tiled_map(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], elt, leng
     return v
 
   def store(i: Expr, j: Expr, v) -> None:
-    el.emit(Store(out.buf, el.index_expr(out, (i, j)), cast(el.as_scalar(v, f"result of {what}"), elt)))
+    el.emit(Store(out.buf, iadd(imul(i, n_j), j), cast(el.as_scalar(v, f"result of {what}"), elt)))
 
   def single(i: Expr, j: Expr) -> None:
     store(i, j, fn((i, j)))

@@ -692,10 +692,18 @@ def reduce_plain(el, op: str, a: ArrayVal, axis, init, what: str, keepdims):
     return el.as_scalar(a)
   if axes is None or len(axes) == a.rank:
     res = over(a)
+  elif len(axes) == 1:
+    res = along_axis(el, a, axes[0], over, what)
   else:
-    res = a
-    for k in reversed(axes):
-      res = along_axis(el, res, k, over, what)
+    # several axes at once: move them to the end and reduce each trailing block in one pass
+    from .core import sub_view
+
+    kept = [k for k in range(a.rank) if k not in axes]
+    arr = el.transpose(a, kept + axes)
+    if arr.buf is None and arr.cost > CHEAP_COST:
+      arr = el.as_concrete(arr)
+    el.consume(arr)
+    res = build_map(el, arr.shape[: len(kept)], lambda idx: over(sub_view(el, arr, idx)), what)
   return _keepdims(el, res, a, axes, keepdims)
 
 
@@ -1124,7 +1132,7 @@ def matmul(el, a, b, what: str = "matmul"):
       return el.apply_ufunc(UF["mul"], [a, b])
     raise el.error(TypeInferenceError, "matmul: input operands must be arrays, not scalars (use * instead)")
   if a.rank > 2 or b.rank > 2:
-    raise el.error(UnsupportedError, f"{what} is only supported for 1-d and 2-d arrays")
+    return _stacked_matmul(el, a, b, what)
   a = el.as_concrete(a) if a.buf is None and a.cost > 2 else a
   b = el.as_concrete(b) if b.buf is None and b.cost > 2 else b
   inner_a, inner_b = a.shape[-1], b.shape[0]
@@ -1170,6 +1178,97 @@ def matmul_plain(el, a: ArrayVal, b: ArrayVal, what: str = "matmul"):
         el, (a.shape[0], bt.shape[0]),
         lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), el.axis_view(bt, 0, idx[1], True)), what,
     )  # fmt: skip
+
+
+def _stacked_matmul(el, a: ArrayVal, b: ArrayVal, what: str):
+  """Products of stacks of matrices: the last two dimensions multiply, the
+  ones before them broadcast (for ``dot``, they combine like an outer product)."""
+  if what == "dot" and a.rank > 1 and b.rank > 2:
+    raise el.error(UnsupportedError, "dot of two arrays with more than 2 dimensions is not supported; use @ or einsum")
+  if b.rank <= 2:
+    # every row of every matrix in the stack times b: one big matrix product
+    lead = a.shape[:-1]
+    flat = matmul(el, el.reshape(a, (Const(-1, I), a.shape[-1])), b, what)
+    return el.reshape(el.as_array(flat), lead + (() if b.rank == 1 else (b.shape[1],)), checked=True)
+  if a.rank == 1:
+    a = el.expand_dims(a, [0])
+    out = _stacked_matmul(el, a, b, what)
+    return el.getitem(out, (Ellipsis, Const(0, I), slice(None)))
+  # labels: batch dimensions right-aligned and shared, then i,k and k,j
+  batch = max(a.rank, b.rank) - 2
+  i, k, j = batch, batch + 1, batch + 2
+  la = list(range(batch - (a.rank - 2), batch)) + [i, k]
+  lb = list(range(batch - (b.rank - 2), batch)) + [k, j]
+  return contract(el, [a, b], [la, lb], list(range(batch)) + [i, j], what, broadcast=True)
+
+
+def contract(el, operands: list[ArrayVal], labels: list[list[int]], out: list[int], what: str, broadcast=False):
+  """Einstein summation.  Each operand's dimensions carry labels; the result
+  has the dimensions ``out``, and every label not in it is summed over.
+
+  The operands are viewed in one index space (result labels, then summed
+  ones), multiplied element by element, and the trailing block is reduced:
+  a map of reductions, fused, parallel, tiled when it is two-dimensional."""
+  summed = sorted({x for ls in labels for x in ls} - set(out))
+  space = list(out) + summed
+  sizes: dict[int, Expr] = {}
+  views = []
+  for arr, ls in zip(operands, labels):
+    if len(set(ls)) != len(ls):
+      raise el.error(UnsupportedError, f"{what}: a repeated subscript within one operand (a diagonal) is not supported")
+    for x, d in zip(ls, arr.shape):
+      known = sizes.get(x)
+      if known is None or (broadcast and isinstance(known, Const) and known.value == 1):
+        sizes[x] = d
+      elif not el.dim_equal(known, d) and not (broadcast and isinstance(d, Const) and d.value == 1):
+        if isinstance(known, Const) and isinstance(d, Const):
+          raise el.error(TypeInferenceError, f"{what}: dimensions do not match ({known.value} vs {d.value})")
+        el.check(cmp("eq", known, d), "ValueError", what + ": dimensions do not match ({0} vs {1})", known, d)
+        el.assume_equal(known, d)
+    if arr.buf is None and arr.cost > 2:
+      arr = el.as_concrete(arr)
+    order = sorted(range(len(ls)), key=lambda n: space.index(ls[n]))
+    view = el.transpose(arr, order)
+    missing = [n for n, x in enumerate(space) if x not in ls]
+    views.append(el.expand_dims(view, missing) if missing else view)
+  prod_ = views[0]
+  for v in views[1:]:
+    prod_ = el.apply_ufunc(UF["mul"], [prod_, v])
+  if not summed:
+    return prod_
+  axes = tuple(Const(n, I) for n in range(len(out), len(space)))
+  return _reduce_prim(el, "add", prod_, axes, Const(0, prod_.elt), what)
+
+
+@register(np.einsum)
+def einsum(el, subscripts, *operands):
+  """``np.einsum`` for explicit or implicit subscripts without ellipses."""
+  spec = el.require_static(subscripts, "the subscripts of einsum")
+  if not isinstance(spec, str):
+    raise el.error(TypeInferenceError, "einsum expects a subscript string such as 'ij,jk->ik' as its first argument")
+  spec = spec.replace(" ", "")
+  if "." in spec:
+    raise el.error(UnsupportedError, "einsum with an ellipsis ('...') is not supported; name every dimension")
+  lhs, arrow, rhs = spec.partition("->")
+  terms = lhs.split(",")
+  arrs = [_arr(el, x, "an operand of einsum") for x in operands]
+  if len(terms) != len(arrs):
+    raise el.error(TypeInferenceError, f"einsum: {len(terms)} subscript groups for {len(arrs)} operands")
+  for t, arr in zip(terms, arrs):
+    if not t.isalpha() and t != "":
+      raise el.error(StaticValueError, f"einsum: invalid subscripts {t!r}")
+    if len(t) != arr.rank:
+      raise el.error(TypeInferenceError, f"einsum: subscripts {t!r} do not match an operand with {arr.rank} dimensions")
+  letters = "".join(terms)
+  if not arrow:
+    rhs = "".join(sorted(c for c in set(letters) if letters.count(c) == 1))
+  if len(set(rhs)) != len(rhs) or not set(rhs) <= set(letters):
+    raise el.error(StaticValueError, f"einsum: invalid output subscripts {rhs!r}")
+  if len(arrs) == 2 and len(terms[0]) == 2 and len(terms[1]) == 2 and len(rhs) == 2:
+    (i, k), (k2, j) = terms
+    if k == k2 and rhs == i + j and len({i, j, k}) == 3:
+      return matmul(el, arrs[0], arrs[1], "einsum")  # exactly a matrix product
+  return contract(el, arrs, [[ord(c) for c in t] for t in terms], [ord(c) for c in rhs], "einsum")
 
 
 @register(np.matmul)
