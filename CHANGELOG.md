@@ -1,3 +1,52 @@
+# Changelog
+
+## 1.0.0a1 (unreleased)
+
+A ground-up rewrite for modern Python.  The `@jit` decorator, the adverbs
+(`map`, `reduce`, `scan`, `allpairs`, `imap`, ...) and the overall idea are
+unchanged; everything underneath is new.
+
+### Highlights
+
+- **Python 3.11+ and NumPy 2**, no dependencies besides NumPy and a C compiler
+  (the `dsltools`, `appdirs`, `llvmpy` and PyCUDA dependencies are gone).
+- **New frontend.** Functions are elaborated directly into a typed loop IR:
+  calls are inlined, closures/tuples/slices are resolved at compile time, and
+  array expressions are fused into their consumers.
+- **Backends:** sequential C; multi-core through a built-in thread pool, OpenMP
+  or Grand Central Dispatch; **Apple GPUs through Metal**; **NVIDIA GPUs through
+  CUDA** (CuPy/NVRTC, no `nvcc` needed).  GPU backends fall back to the CPU per
+  loop, with a warning that says why.
+- **NumPy-exact typing** (NEP 50): result dtypes match NumPy, including the
+  treatment of Python scalars.
+- **Safety:** bounds checks, shape checks, division and domain checks raise the
+  same exceptions NumPy/Python would; compile errors carry the source location
+  and the chain of inlined calls; reference-counted temporaries are freed
+  eagerly (no more leaks in loops).
+- **Much larger language subset:** early `return`, `break`/`continue`, `while`,
+  keyword/default/`*args` arguments, walrus, `assert`/`raise`, boolean-mask and
+  integer-array indexing (reads and writes), in-place operators with NumPy
+  aliasing semantics, 0-d and empty arrays, all integer/float dtypes.
+- **Much larger library:** ~200 NumPy functions and methods, `np.random`
+  (a counter-based generator that is reproducible in parallel and on GPUs),
+  sorting, `math`, and most numeric builtins.
+- Globals and closure variables are read at call time (no stale constants);
+  arguments that must be compile-time constants (such as `axis`) are
+  specialised on demand.
+- Compiled modules are cached on disk and shared between processes.
+- `parakeet.config`, `parakeet.options(...)`, `PARAKEET_*` environment
+  variables, `f.specialize(...).ir/.source/.kernels`, `available_backends()`.
+
+### Removed
+
+- Python 2 support, the LLVM backend, the `interp` backend (use
+  `backend="python"`), `macro`/`typed_macro`/`staged_macro`, and the old
+  `config.opt_*` / `config.print_*` flags.
+
+---
+
+# Releases before the rewrite
+
 ## 0.24 / March 24th, 2014 ###
 - cache compiled code by hash of generated C source
 - tuple slicing

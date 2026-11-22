@@ -1,0 +1,67 @@
+site_name: Parakeet
+site_description: Runtime compiler for numerical Python - fused, parallel native code for CPUs and GPUs
+site_url: https://iskandr.github.io/parakeet/
+repo_url: https://github.com/iskandr/parakeet
+repo_name: iskandr/parakeet
+edit_uri: edit/master/docs/
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle: { icon: material/weather-night, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle: { icon: material/weather-sunny, name: Switch to light mode }
+
+nav:
+  - Home: index.md
+  - Getting started: quickstart.md
+  - Guide:
+      - The compiled language: language.md
+      - Backends and GPUs: backends.md
+      - Data-parallel operators: operators.md
+      - Errors and debugging: debugging.md
+      - Performance: performance.md
+      - How it works: internals.md
+  - Reference:
+      - Supported functions: supported.md
+      - API: api.md
+      - Configuration: configuration.md
+  - Migrating from 0.x: migrating.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.highlight: { anchor_linenums: true }
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets: { base_path: ["."] , check_paths: true }
+  - pymdownx.tabbed: { alternate_style: true }
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: false
+            heading_level: 3
+            docstring_style: google
+            members_order: source

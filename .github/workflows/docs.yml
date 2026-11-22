@@ -1,0 +1,25 @@
+name: Publish docs
+
+# Builds the documentation site and publishes it to the gh-pages branch
+# (https://iskandr.github.io/parakeet/) whenever master changes.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[docs]"
+      - run: mkdocs gh-deploy --force --strict --message "Deploy docs for {sha}"

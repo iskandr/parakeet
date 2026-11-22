@@ -1,116 +1,151 @@
-Parakeet 
-====
+# Parakeet
 
-**This project is no longer being maintained**. 
+[![CI](https://github.com/iskandr/parakeet/actions/workflows/ci.yml/badge.svg)](https://github.com/iskandr/parakeet/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-iskandr.github.io%2Fparakeet-blue)](https://iskandr.github.io/parakeet/)
 
-Parakeet was a runtime accelerator for an array-oriented subset of Python. In retrospect, I don't think that whole-function type specialization at the AST level is a scalable approach to speeding up a sufficiently large subset of Python. General-purpose Python code should probably be accelerated using a bytecode JIT, whereas high-performance numerical code should use a DSL with explicit parallel operators. 
+**Parakeet is a runtime compiler for numerical Python.** Decorate an array-oriented
+function with `@jit` and Parakeet compiles a type-specialised native version the
+first time you call it: array expressions are fused into single loops, and those
+loops run on every CPU core or on a GPU (Apple Metal or NVIDIA CUDA).
+
+```python
+import numpy as np
+from parakeet import jit
 
 
-
-
-Example
-=======
-
-
-To accelerate a function, wrap it with Parakeet's **@jit** decorator:
-
-```python 
-import numpy as np 
-from parakeet import jit 
-
-alpha = 0.5
-beta = 0.3
-x = np.array([1,2,3])
-y = np.tanh(x * alpha) + beta
-   
 @jit
-def fast(x, alpha = 0.5, beta = 0.3):
-  return np.tanh(x * alpha) + beta 
-   
-@jit 
-def loopy(x, alpha = 0.5, beta = 0.3):
-  y = np.empty_like(x, dtype = float)
-  for i in xrange(len(x)):
-    y[i] = np.tanh(x[i] * alpha) + beta
-  return y
-     
-@jit
-def comprehension(x, alpha = 0.5, beta = 0.3):
-  return np.array([np.tanh(xi*alpha) + beta for xi in x])
-  
-assert np.allclose(fast(x), y)
-assert np.allclose(loopy(x), y)
-assert np.allclose(comprehension(x), y)
+def fast(x, alpha=0.5, beta=0.3):
+    return np.tanh(x * alpha) + beta  # one fused, multi-threaded loop
 
+
+@jit
+def loopy(x, alpha=0.5, beta=0.3):
+    y = np.empty_like(x, dtype=float)
+    for i in range(len(x)):  # plain loops are compiled too
+        y[i] = np.tanh(x[i] * alpha) + beta
+    return y
+
+
+@jit
+def comprehension(x, alpha=0.5, beta=0.3):
+    return np.array([np.tanh(xi * alpha) + beta for xi in x])
+
+
+x = np.array([1, 2, 3])
+assert np.allclose(fast(x), np.tanh(x * 0.5) + 0.3)
+assert np.allclose(loopy(x), fast(x)) and np.allclose(comprehension(x), fast(x))
 ```
 
+Full documentation: **<https://iskandr.github.io/parakeet/>**
+
+## Install
+
+```bash
+pip install parakeet                 # needs Python 3.11+, NumPy 2 and a C compiler
+pip install "parakeet[metal]"        # + Apple GPU backend (macOS)
+pip install "parakeet[cuda12]"       # + NVIDIA GPU backend (CuPy for CUDA 12)
+```
+
+A C compiler is the only system requirement: the Xcode command line tools on
+macOS (`xcode-select --install`), `gcc` or `clang` on Linux, MinGW-w64 or LLVM
+on Windows. If none is found, Parakeet says so and tells you how to fix it.
+
+## Backends
+
+| `backend=` | What runs your loops | Requirements |
+|---|---|---|
+| `"auto"` (default) | best multi-core strategy available | C compiler |
+| `"c"` | one thread | C compiler |
+| `"threads"` | Parakeet's own thread pool | POSIX threads |
+| `"openmp"` / `"gcd"` | OpenMP / Grand Central Dispatch | OpenMP runtime / macOS |
+| `"metal"` (alias `"mps"`) | Apple GPU, falling back to the CPU per loop | `parakeet[metal]` |
+| `"cuda"` | NVIDIA GPU, falling back to the CPU per loop | `parakeet[cuda12]` |
+| `"python"` | the original function, uncompiled (for debugging) | – |
+
+```python
+@jit(backend="metal")
+def distances(X, C):  # float32 in, float32 out
+    return parakeet.allpairs(lambda a, b: np.sum((a - b) ** 2), X, C)
 
 
-Install
-====
-You should be able to install Parakeet from its [PyPI package](https://pypi.python.org/pypi/parakeet/) by running:
+parakeet.available_backends()  # what works on this machine, and why not
+```
 
-    pip install parakeet
+Choose a backend per function (`@jit(backend=...)`), per call (`f(x, _backend="c")`),
+globally (`parakeet.config.backend = ...`, or `PARAKEET_BACKEND`), or temporarily
+(`with parakeet.options(backend="c"): ...`).
 
+## What can be compiled
 
-Dependencies
-====
+A statically typeable, array-oriented subset of Python:
 
-Parakeet is written for Python 2.7 (sorry internet) and depends on:
+* scalars, tuples, slices, `if`/`for`/`while`/`break`/`continue`, early `return`
+* nested functions, lambdas and closures; default, keyword and `*args` arguments
+* NumPy arrays of bool, (u)int8–64, float32/64 with views, broadcasting,
+  boolean-mask and integer-array indexing, in-place updates
+* ~200 NumPy functions and methods (ufuncs, reductions with `axis=`, constructors,
+  shape manipulation, `np.linalg.norm`, `np.random`, sorting, ...) plus `math`
+  and the usual builtins — see the [full list](https://iskandr.github.io/parakeet/supported/)
+* list literals and comprehensions (as arrays)
+* Parakeet's data-parallel operators: `parakeet.map`, `reduce`, `scan`,
+  `allpairs`, `imap`, `parfor`, ...
 
-* [dsltools](https://github.com/iskandr/dsltools)
-* [nose](https://nose.readthedocs.org/en/latest/) for unit tests
-* [NumPy](http://www.scipy.org/install.html)
-* [appdirs](https://pypi.python.org/pypi/appdirs/)
+Result values *and dtypes* match NumPy (including NumPy 2 promotion rules); the
+[language reference](https://iskandr.github.io/parakeet/language/) lists the
+deliberate differences. Anything outside the subset fails at compile time with
+an error that points at your source line:
 
-The default backend (which uses OpenMP) requires `gcc` 4.4+. 
+```text
+parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
+  File "demo.py", line 7, in spectrum
+    return np.fft.fft(x)
+           ^^^^^^^^^^^^^
+```
 
-*Windows*: If you have a 32-bit Windows install, your compiler should come from [Cygwin](http://cygwin.com/install.html) or [MinGW](http://www.mingw.org/). Getting Parakeet working on 64-bit Windows is non-trivial and seems to require [colossal hacks](http://eli.thegreenplace.net/2008/06/28/compiling-python-extensions-with-distutils-and-mingw/).
+Runtime problems raise the exception NumPy would have raised (`IndexError`,
+`ValueError`, `ZeroDivisionError`, ...) instead of crashing — bounds checks are
+on by default and can be disabled with `@jit(bounds_check=False)`.
 
-*Mac OS X*: By default, your machine probably either has only [clang](http://clang.llvm.org/) or an outdated version of `gcc`. You can get a more recent version using [HomeBrew](http://apple.stackexchange.com/questions/38222/how-do-i-install-gcc-via-homebrew)
+## Performance
 
-If you want to use the CUDA backend, you need to have an NVIDIA graphics card and install both the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) and [PyCUDA](http://mathema.tician.de/software/pycuda/). 
+Best-of-5 wall-clock times on an Apple M1 Pro (10 cores), Python 3.12, NumPy 2.5,
+from `python benchmarks/run.py`; "×" is speed-up over the NumPy version of the
+same code.
 
+| benchmark (float64) | NumPy | Parakeet, 1 thread | Parakeet, 10 threads |
+|---|---:|---:|---:|
+| `np.tanh(x * a) + b`, 4M elements | 14.5 ms | 24.8 ms (0.6×) | 3.5 ms (4.2×) |
+| Euclidean norm, 4M elements | 3.4 ms | 1.1 ms (3.1×) | 0.65 ms (5.3×) |
+| arc distance, 4M elements | 174 ms | 174 ms (1.0×) | 23 ms (7.5×) |
+| Harris corner response, 2000×2000 | 19.4 ms | 4.0 ms (4.9×) | 1.1 ms (17×) |
+| all-pairs distances, 40k×64×32 | 103 ms | 11.1 ms (9.2×) | 1.6 ms (66×) |
+| 3×3 convolution, 2000×2000 | 21.2 ms | 9.1 ms (2.3×) | 1.4 ms (15×) |
+| Julia set, 1000×1000 | 402 ms | 47 ms (8.5×) | 6.1 ms (66×) |
+| matrix product, 300×300 | 0.16 ms | 4.1 ms | 0.72 ms |
 
-How does it work? 
-====
-Your untyped function gets used as a template from which multiple *type specializations* are generated 
-(for each distinct set of input types). 
-These typed functions are then churned through many optimizations before finally getting translated into native code. 
+Parakeet is fastest where NumPy allocates temporaries or needs Python loops. It
+does **not** replace BLAS (matrix products) and its single-threaded code does not
+use vectorised math libraries (`tanh`, `sin`, ...), where NumPy can be ahead.
+GPU numbers, and when a GPU is *slower*, are in the
+[performance notes](https://iskandr.github.io/parakeet/performance/).
 
-More information
-===
+## How it works
 
-  * Ask questions on the [discussion group](http://groups.google.com/forum/#!forum/parakeet-python)
-  * Watch the [Parakeet presentation](https://vimeo.com/73895275) from this year's [PyData Boston](http://pydata.org/bos2013), look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python) from last year 
-  * Contact the [main developer](http://www.rubinsteyn.com) directly
+Your function is a template. On each call with new argument types Parakeet
+elaborates its Python source into a typed loop IR — inlining calls, resolving
+closures and tuples at compile time, and keeping array expressions *delayed* so
+they fuse into whatever consumes them — then prints that IR as C (plus Metal or
+CUDA kernels for parallel loops), compiles it with the system compiler, and
+caches the result on disk. `f.specialize(x).ir` shows the IR; `.source` the C.
 
+## History
 
+Parakeet was first written in 2012–2014 by Alex Rubinsteyn and Eric Hielscher at
+NYU for Python 2 ([HotPar '12 paper](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python)).
+Version 1.0 is a ground-up rewrite for modern Python that keeps the original
+interface and ideas; the original code lives on in the Git history (tag
+`v0.23.2` and earlier). See the [migration notes](https://iskandr.github.io/parakeet/migrating/).
 
-Supported language features
-====
+## License
 
-Parakeet cannot accelerate arbitrary Python code, it only supports a limited subset of the language:
-
-  * Scalar operations (i.e. `x + 3 * y`)
-  * Control flow (if-statements, loops, etc...)
-  * Nested functions and lambdas
-  * Tuples
-  * Slices
-  * NumPy array expressions (i.e. `x[1:, :] + 2 * y[:-1, ::2]`)
-  * Some NumPy library functions like `np.ones` and `np.sin` (look at the [mappings](https://github.com/iskandr/parakeet/blob/master/parakeet/mappings.py) module for a full list)
-  * List literals (interpreted as array construction)
-  * List comprehensions (interpreted as array comprehensions)
-  * Parakeet's higher order array operations like `parakeet.imap`, `parakeet.scan`, and `parakeet.allpairs`
-
-Backends
-===
-Parakeet currently supports compilation to sequential C, multi-core C with OpenMP (default), or LLVM (deprecated). To switch between these options change `parakeet.config.backend` to one of:
-
-  * *"openmp"*: compiles with gcc, parallel operators run across multiple cores (default)
-  * *"c"*: lowers all parallel operators to loops, compile sequential code with gcc
-  * *"cuda"*: launch parallel operations on the GPU (experimental)
-  * *"llvm"*: older backend, has fallen behind and some programs may not work
-  * *"interp"* : pure Python intepreter used for debugging optimizations, only try this if you think CPython is about 10,000x too fast for your taste 
-
-
+BSD 3-clause; see [LICENSE](LICENSE).
