@@ -75,6 +75,36 @@ def same_shape(a: tuple[Expr, ...], b: tuple[Expr, ...], defs: dict[int, Expr]) 
   return len(a) == len(b) and all(key(resolved(x, defs)) == key(resolved(y, defs)) for x, y in zip(a, b))
 
 
+def record_check_equality(s: ir.Stmt, defs: dict[int, Expr]) -> None:
+  """Record proven scalar integer equalities from ``check (a == b)`` into ``defs``.
+
+  Maps the higher-uid variable to the lower-uid variable (or constant) so
+  ``defs`` stays acyclic and downstream passes (e.g. ``same_shape`` in sibling
+  reduction fusion for ``allpairs``) recognize checked-equal dimensions."""
+  if not (isinstance(s, ir.Check) and isinstance(s.cond, ir.Prim) and s.cond.op == "eq" and len(s.cond.args) == 2):
+    return
+  a = resolved(s.cond.args[0], defs)
+  b = resolved(s.cond.args[1], defs)
+  if isinstance(a, Var) and isinstance(b, Const) and not isinstance(a.type, ir.BufType) and a.type.kind in "iu":
+    if a.uid not in defs:
+      defs[a.uid] = b
+  elif isinstance(b, Var) and isinstance(a, Const) and not isinstance(b.type, ir.BufType) and b.type.kind in "iu":
+    if b.uid not in defs:
+      defs[b.uid] = a
+  elif (
+    isinstance(a, Var)
+    and isinstance(b, Var)
+    and a.uid != b.uid
+    and not isinstance(a.type, ir.BufType)
+    and not isinstance(b.type, ir.BufType)
+    and a.type.kind in "iu"
+    and b.type.kind in "iu"
+  ):
+    hi, lo = (a, b) if a.uid > b.uid else (b, a)
+    if hi.uid not in defs:
+      defs[hi.uid] = lo
+
+
 def uses(stmts: list, uids: set[int]) -> bool:
   for s in ir.walk_stmts(stmts):
     for e in ir.stmt_exprs(s):
@@ -406,19 +436,19 @@ def squeeze_unit_map(s: IndexMap) -> IndexMap | None:
 
 
 def split_invariant_map(s: IndexMap) -> list[ir.Stmt] | None:
-  """Hoist an ``IndexReduce`` (and its setup) out of trailing ``IndexMap`` axes
-  that it does not depend on.
+  """Hoist an ``IndexReduce`` (and its setup) out of any ``IndexMap`` axes
+  that it does not depend on (leading, middle, or trailing).
 
-  Fixes ``O(M * N^2)`` redundant recomputation in expressions like
-  ``x - np.max(x, axis=1, keepdims=True)`` (``softmax``, ``layer_norm``),
-  turning ``map i, j over (M, N): [reduce(i); body(i, j)]`` into
-  ``map i over (M,): [reduce(i); nested map j over (N,): body(i, j)]``."""
+  Fixes ``O(M * N^2)`` / ``O(M^2 * N)`` redundant recomputation in expressions
+  like ``x - np.max(x, axis=1, keepdims=True)`` (``softmax``, ``layer_norm``)
+  and ``x - np.mean(x, axis=0, keepdims=True)`` (column variance / batch norm),
+  splitting into an outer map over the axes the reduction depends on wrapping
+  the reduction and an inner map over the invariant axes."""
   from ..syntax.ops import ZERO, cmp, iprod
 
   if s.ordered or s.scope.owned or len(s.shape) < 2:
     return None
   body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
-  # Find the last IndexReduce in the top-level body (with straight-line setup before it)
   red_positions = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
   if not red_positions:
     return None
@@ -427,46 +457,45 @@ def split_invariant_map(s: IndexMap) -> list[ir.Stmt] | None:
   tail = body[last_red + 1 :]
   if not tail or any(isinstance(t, ir.Store) for t in prefix):
     return None
-  # Find the rightmost outer axis index used anywhere in ``prefix``
   used_uids = {
     x.uid for st in ir.walk_stmts(prefix) for e in ir.stmt_exprs(st) for x in ir.walk_expr(e) if isinstance(x, Var)
   }
-  split = 0
-  for k, idx_var in enumerate(s.index):
-    if idx_var.uid in used_uids:
-      split = k + 1
-  if split >= len(s.index):
-    return None  # prefix depends on the innermost axis (e.g. matmul)
+  used_axes = [k for k, idx_var in enumerate(s.index) if idx_var.uid in used_uids]
+  inv_axes = [k for k, idx_var in enumerate(s.index) if idx_var.uid not in used_uids]
+  if not inv_axes:
+    return None  # prefix depends on all axes (e.g. matmul)
 
   prefix_can_raise = any(
     isinstance(x, ir.Check) or (isinstance(x, IndexReduce) and any(f.empty is not None for f in x.folds))
     for x in ir.walk_stmts(prefix)
   )
+  inv_shape = tuple(s.shape[k] for k in inv_axes)
+  inv_index = tuple(s.index[k] for k in inv_axes)
   tail_scope = ir.Scope("loop")
   inner_map = IndexMap(
-    s.shape[split:],
-    s.index[split:],
+    inv_shape,
+    inv_index,
     tail + [ir.ReleaseScope(tail_scope)],
     tail_scope,
     False,
-    s.parallel if split == 0 else False,
+    s.parallel if not used_axes else False,
     s.loc,
   )
-  if split == 0:
+  if not used_axes:
     # Invariant to ALL axes of the map: hoist completely before the map
     if prefix_can_raise:
       total = iprod(s.shape)
       return [ir.If(cmp("gt", total, ZERO), prefix + [inner_map], [])]
     return prefix + [inner_map]
 
-  # Invariant to trailing axes ``s.index[split:]``: split into outer map over
-  # ``s.shape[:split]`` containing ``prefix`` followed by nested map over ``s.shape[split:]``
+  # Invariant to ``inv_axes``: outer map over ``used_axes`` containing ``prefix``
+  # followed by nested map over ``inv_axes``.
   inner_block: list[ir.Stmt] = prefix + [inner_map]
   if prefix_can_raise:
-    inner_block = [ir.If(cmp("gt", iprod(s.shape[split:]), ZERO), inner_block, [])]
+    inner_block = [ir.If(cmp("gt", iprod(inv_shape), ZERO), inner_block, [])]
   outer_map = IndexMap(
-    s.shape[:split],
-    s.index[:split],
+    tuple(s.shape[k] for k in used_axes),
+    tuple(s.index[k] for k in used_axes),
     inner_block + [ir.ReleaseScope(s.scope)],
     s.scope,
     False,
@@ -524,10 +553,12 @@ def vertical_block(
   """Walk ``block`` squeezing unit axes, hoisting invariant reductions,
   flattening nested maps, and fusing adjacent producer-consumer operators."""
   changed = False
+  local_defs = dict(defs)
   normalized: list = []
   for s in block:
+    record_check_equality(s, local_defs)
     for b in ir.sub_blocks(s):
-      b[:], inner = vertical_block(b, readers, defs, allocs, store_counts, gone, options)
+      b[:], inner = vertical_block(b, readers, local_defs, allocs, store_counts, gone, options)
       changed |= inner
     if isinstance(s, IndexMap):
       squeezed = squeeze_unit_map(s)
@@ -539,17 +570,19 @@ def vertical_block(
         normalized.extend(split_out)
         changed = True
         continue
-      flat = combine_nested_map(s, defs)
+      flat = combine_nested_map(s, local_defs)
       if flat is not None:
         s = flat
         changed = True
     normalized.append(s)
   block = normalized
   out: list = []
+  pair_defs = dict(defs)
   k = 0
   while k < len(block):
     s = block[k]
     k += 1
+    record_check_equality(s, pair_defs)
     if not isinstance(s, (IndexMap, IndexScan)):
       out.append(s)
       continue
@@ -563,6 +596,7 @@ def vertical_block(
       isinstance(x, ir.Check) or (isinstance(x, IndexReduce) and any(f.empty is not None for f in x.folds))
       for x in ir.walk_stmts([s])
     )
+    step_defs = dict(pair_defs)
     while j < len(block):
       t = block[j]
       if isinstance(t, ir.Comment):
@@ -576,6 +610,7 @@ def vertical_block(
         and all(pure(a) for a in t.args)
         and not uses([t], producer_defs | producer_writes)
       ):
+        record_check_equality(t, step_defs)
         between.append(t)
       elif (
         isinstance(t, Assign)
@@ -589,10 +624,11 @@ def vertical_block(
       j += 1
     nxt = block[j] if j < len(block) else None
     if nxt is not None and isinstance(nxt, (IndexMap, IndexFilter, IndexReduce)):
-      res = fuse_vertical_pair(s, nxt, readers, defs, allocs, store_counts, options)
+      res = fuse_vertical_pair(s, nxt, readers, step_defs, allocs, store_counts, options)
       if res is not None:
         fused, dead_buf = res
         out.extend(between)
+        pair_defs = step_defs
         out.append(fused)
         gone.add(dead_buf)
         k = j + 1
@@ -640,9 +676,39 @@ class Survivors(Cloner):
     self.inrange: set[int] = {f.index.uid}  # variables equal to the filter's index
     self.ok = True
 
+  def is_survivor_index(self, e: Expr) -> bool:
+    """True if ``e`` is ``self.k`` or ``self.k * select(f.count == 1, 0, 1)``
+    (which equals ``self.k`` for every ``0 <= self.k < f.count``)."""
+    if e is self.k:
+      return True
+    r = resolved(e, self.defs)
+    if r is self.k:
+      return True
+    if isinstance(r, ir.Prim) and r.op == "mul" and len(r.args) == 2:
+      a, b = r.args
+      if b is self.k:
+        a, b = b, a
+      if a is self.k and isinstance(b, ir.Prim) and b.op == "select" and len(b.args) == 3:
+        cond, t_val, f_val = b.args
+        if (
+          isinstance(cond, ir.Prim)
+          and cond.op == "eq"
+          and len(cond.args) == 2
+          and (
+            (cond.args[0] is self.f.count and isinstance(cond.args[1], Const) and cond.args[1].value == 1)
+            or (cond.args[1] is self.f.count and isinstance(cond.args[0], Const) and cond.args[0].value == 1)
+          )
+          and isinstance(t_val, Const)
+          and t_val.value == 0
+          and isinstance(f_val, Const)
+          and f_val.value == 1
+        ):
+          return True
+    return False
+
   def expr(self, e: Expr) -> Expr:
     if isinstance(e, ir.Load) and e.buf is self.f.out:
-      if e.index is not self.k:
+      if not self.is_survivor_index(e.index):
         self.ok = False
       return ir.Cast(self.f.index, e.type) if e.type is not self.f.index.type else self.f.index
     if isinstance(e, Var):
@@ -879,14 +945,135 @@ def filter_filter(first: IndexFilter, second: IndexFilter, rest: list, readers: 
   return fused, new_rest
 
 
-def filter_reduce(f: IndexFilter, r: IndexReduce, readers: dict[int, int], defs: dict[int, Expr]):
+def filter_signature(f: IndexFilter, defs: dict[int, Expr]):
+  """Structural alpha-invariant key for a pure ``IndexFilter`` (or ``None`` if effectful)."""
+  if f.scope.owned or has_effects(f.body):
+    return None
+  local_idx: dict[int, int] = {f.index.uid: 0}
+
+  def ek(e: Expr):
+    if isinstance(e, Var):
+      if e.uid in local_idx:
+        return ("loc", local_idx[e.uid], e.type)
+      return ("var", e.uid)
+    if isinstance(e, Const):
+      return ("c", e.value, e.type)
+    if isinstance(e, ir.Load):
+      return ("ld", e.buf.uid, ek(e.index))
+    if isinstance(e, ir.Prim):
+      return ("p", e.op, e.type, tuple(ek(a) for a in e.args))
+    if isinstance(e, ir.Cast):
+      return ("t", e.type, ek(e.arg))
+    if isinstance(e, ir.RtCall):
+      return ("rt", e.name, e.pure, e.type, tuple(ek(a) for a in e.args))
+    return ("?", id(e))
+
+  body_keys = []
+  for st in f.body:
+    if isinstance(st, ir.Comment):
+      continue
+    if isinstance(st, Assign) and not isinstance(st.var.type, ir.BufType) and pure(st.value):
+      vk = ek(st.value)
+      slot = local_idx[st.var.uid] = len(local_idx)
+      body_keys.append(("assign", slot, st.var.type, vk))
+    elif isinstance(st, ir.ReleaseScope) and st.scope is f.scope:
+      continue
+    else:
+      return None
+  return (key(resolved(f.n, defs)), tuple(body_keys), ek(f.keep))
+
+
+def _is_trivial_self_broadcast_check(s: ir.Stmt) -> bool:
+  """True for ``check ((x == x) or ...)`` left after deduplicating identical filters."""
+  if not isinstance(s, ir.Check):
+    return False
+  c = s.cond
+  while isinstance(c, ir.Prim) and c.op == "or" and len(c.args) == 2:
+    if isinstance(c.args[0], ir.Prim) and c.args[0].op == "eq" and key(c.args[0].args[0]) == key(c.args[0].args[1]):
+      return True
+    c = c.args[1]
+  return isinstance(c, ir.Prim) and c.op == "eq" and key(c.args[0]) == key(c.args[1])
+
+
+class _FoldIdenticalSelect(Cloner):
+  """Substitute ``subst`` and fold ``select(cond, x, x) -> x``."""
+
+  def expr(self, e: Expr) -> Expr:
+    out = super().expr(e)
+    if isinstance(out, ir.Prim) and out.op == "select" and len(out.args) == 3 and key(out.args[1]) == key(out.args[2]):
+      return out.args[1]
+    return out
+
+
+def dedup_filters(
+  block: list, readers: dict[int, int], defs: dict[int, Expr], allocs: set[int], gone: set[int]
+) -> tuple[list, bool]:
+  """Eliminate duplicate pure ``IndexFilter``s with identical predicates (e.g.
+  ``mask = x > 0; np.sum(x[mask] * w[mask])``) so downstream ``FilterReduce``
+  sees a single filter."""
+  changed = False
+  local_defs = dict(defs)
+  seen: dict[object, tuple[IndexFilter, set[int]]] = {}
+  out: list = []
+  k = 0
+  while k < len(block):
+    s = block[k]
+    k += 1
+    record_check_equality(s, local_defs)
+    if isinstance(s, IndexFilter):
+      sig = filter_signature(s, local_defs)
+      rest = block[k:]
+      can_dedup = (
+        sig is not None
+        and sig in seen
+        and readers.get(s.out.uid, 0) == count_reads_in(rest, s.out)
+        and readers.get(s.count.uid, 0) == count_reads_in(rest, s.count)
+        and not any(isinstance(t, ir.Incref) and t.buf is s.out for t in ir.walk_stmts(rest))
+      )
+      if can_dedup:
+        prev, _ = seen[sig]
+        # Replace s.out -> prev.out and s.count -> prev.count in the rest of block
+        subst = {s.out.uid: prev.out, s.count.uid: prev.count}
+        rew = _FoldIdenticalSelect(subst)
+        for v in defined(rest).values():
+          rew.m[v.uid] = v
+        new_rest = []
+        for t in rest:
+          nt = rew.stmt(t)
+          if _is_trivial_self_broadcast_check(nt):
+            continue
+          new_rest.append(nt)
+        gone.add(s.out.uid)
+        out.extend(new_rest)
+        return out, True
+      if sig is not None:
+        reads, _ = buffer_accesses(s.body)
+        seen[sig] = (s, reads)
+      out.append(s)
+      continue
+    # Invalidate cached filters if this statement may write to any buffer they read
+    _, writes = buffer_accesses([s])
+    if writes:
+      for sig in [sg for sg, (_, reads) in seen.items() if buffers_may_alias(reads, writes, allocs)]:
+        del seen[sig]
+    out.append(s)
+  return out, changed
+
+
+def filter_reduce(
+  f: IndexFilter,
+  r: IndexReduce,
+  readers: dict[int, int],
+  defs: dict[int, Expr],
+  dead_count_reads: int = 0,
+):
   """Fuse an ``IndexFilter`` followed by an ``IndexReduce`` over its survivors
   into one guarded ``IndexReduce`` with no intermediate index array."""
   from .lowering import identity
 
   if len(r.shape) != 1 or r.where is not None or any(g.init is None for g in r.folds):
     return None
-  if r.shape[0] is not f.count:
+  if resolved(r.shape[0], defs) is not f.count:
     return None
   # f.count is only computed at the end of the fused loop, so r's body/inits cannot read it
   if uses(r.body, {f.count.uid}) or any(
@@ -902,7 +1089,8 @@ def filter_reduce(f: IndexFilter, r: IndexReduce, readers: dict[int, int], defs:
   inside = count_reads_in([r], f.out)
   if readers.get(f.out.uid, 0) != inside:
     return None
-  if readers.get(f.count.uid, 0) > 1:  # someone else wants to know how many survived
+  remaining_count_reads = readers.get(f.count.uid, 0) - dead_count_reads
+  if remaining_count_reads > 1:  # someone else wants to know how many survived
     a, b = Var("acc", f.count.type), Var("x", f.count.type)
     folds.append(
       ir.Fold(
@@ -917,33 +1105,96 @@ def filter_reduce(f: IndexFilter, r: IndexReduce, readers: dict[int, int], defs:
   return IndexReduce((f.n,), (f.index,), body, folds, scope, r.home, parallel, r.loc, list(f.body), f.keep)
 
 
-def filter_block(block: list, readers: dict[int, int], defs: dict[int, Expr], gone: set[int]) -> tuple[list, bool]:
-  """Walk ``block`` collapsing ``Filter->Filter`` and ``Filter->Reduce`` pairs."""
+def filter_block(
+  block: list, readers: dict[int, int], defs: dict[int, Expr], allocs: set[int], gone: set[int]
+) -> tuple[list, bool]:
+  """Walk ``block`` deduplicating identical filters and collapsing
+  ``Filter->Filter`` and ``Filter->Reduce`` pairs."""
   changed = False
+  local_defs = dict(defs)
   for s in block:
+    record_check_equality(s, local_defs)
     for b in ir.sub_blocks(s):
-      b[:], inner = filter_block(b, readers, defs, gone)
+      b[:], inner = filter_block(b, readers, local_defs, allocs, gone)
       changed |= inner
+  block, deduped = dedup_filters(block, readers, defs, allocs, gone)
+  if deduped:
+    return block, True
   out: list = []
+  walk_defs = dict(defs)
   k = 0
   while k < len(block):
     s = block[k]
     k += 1
+    record_check_equality(s, walk_defs)
+    if not isinstance(s, IndexFilter):
+      out.append(s)
+      continue
     nxt = block[k] if k < len(block) else None
-    if isinstance(s, IndexFilter) and isinstance(nxt, IndexFilter):
-      res = filter_filter(s, nxt, block[k + 1 :], readers, defs)
+    if isinstance(nxt, IndexFilter):
+      res = filter_filter(s, nxt, block[k + 1 :], readers, walk_defs)
       if res is not None:
         fused, new_rest = res
         out.append(fused)
         out.extend(new_rest)
         gone.add(s.out.uid)
         return out, True
-    if isinstance(s, IndexFilter) and isinstance(nxt, IndexReduce):
-      fused = filter_reduce(s, nxt, readers, defs)
+    # Step over pure checks/comments/scalar assigns between IndexFilter and IndexReduce
+    j = k
+    hoist: list = []
+    bridge_assigns: list[Assign] = []
+    step_defs = dict(walk_defs)
+    while j < len(block):
+      t = block[j]
+      if isinstance(t, ir.Comment):
+        hoist.append(t)
+      elif (
+        isinstance(t, ir.Check)
+        and pure(t.cond)
+        and all(pure(a) for a in t.args)
+        and not uses([t], {s.out.uid, s.count.uid})
+      ):
+        record_check_equality(t, step_defs)
+        hoist.append(t)
+      elif (
+        isinstance(t, Assign)
+        and not isinstance(t.var.type, ir.BufType)
+        and pure(t.value)
+        and not uses([t], {s.out.uid})
+      ):
+        if uses([t], {s.count.uid}):
+          bridge_assigns.append(t)
+        else:
+          hoist.append(t)
+        if t.var.type.kind in "iu":
+          step_defs[t.var.uid] = t.value
+      else:
+        break
+      j += 1
+    nxt = block[j] if j < len(block) else None
+    if isinstance(nxt, IndexReduce):
+      # Bridge assigns (e.g. dim = nnz, bmul = select(nnz == 1, 0, 1)) that are only read
+      # by nxt (and eliminated by Survivors) do not keep s.count alive!
+      rest_after = block[j + 1 :]
+      dead_bridges = [a for a in bridge_assigns if count_reads_in(rest_after, a.var) == 0]
+      dead_count_reads = (
+        sum(count_reads_in([a], s.count) for a in dead_bridges) if len(dead_bridges) == len(bridge_assigns) else 0
+      )
+      # Also account for r.shape[0] being an alias (e.g. dim_15) rather than s.count directly
+      if len(dead_bridges) == len(bridge_assigns) and nxt.shape and nxt.shape[0] is not s.count:
+        dead_count_reads = max(dead_count_reads - 1, 0)
+      fused = filter_reduce(s, nxt, readers, step_defs, dead_count_reads=dead_count_reads)
       if fused is not None:
-        out.append(fused)
+        out.extend(hoist)
+        walk_defs = step_defs
+        # Keep any bridge assigns still referenced after nxt
+        if len(dead_bridges) < len(bridge_assigns):
+          out.append(fused)
+          out.extend(a for a in bridge_assigns if a not in dead_bridges)
+        else:
+          out.append(fused)
         gone.add(s.out.uid)
-        k += 1
+        k = j + 1
         changed = True
         continue
     out.append(s)
@@ -951,12 +1202,13 @@ def filter_block(block: list, readers: dict[int, int], defs: dict[int, Expr], go
 
 
 def fuse_filters(fn: ir.Function, options) -> None:
-  """Filter-Filter and FilterReduce fusion."""
+  """Filter deduplication, Filter-Filter, and FilterReduce fusion."""
   if not options.fusion:
     return
   for _ in range(4):
     gone: set[int] = set()
-    fn.body[:], changed = filter_block(fn.body, count_readers(fn), pure_defs(fn.body), gone)
+    allocs, _ = function_buffer_info(fn)
+    fn.body[:], changed = filter_block(fn.body, count_readers(fn), pure_defs(fn.body), allocs, gone)
     if gone:
       drop_buffers(fn, gone, drop_allocs=True)
     if not changed:
@@ -1032,42 +1284,62 @@ def absorb_map(a: IndexMap, b: IndexMap) -> None:
 
 def fuse_block(block: list, defs: dict[int, Expr], allocs: set[int]) -> list:
   """Walk ``block`` merging adjacent compatible reductions and maps."""
+  local_defs = dict(defs)
   for s in block:
+    record_check_equality(s, local_defs)
     for b in ir.sub_blocks(s):
-      b[:] = fuse_block(b, defs, allocs)
+      b[:] = fuse_block(b, local_defs, allocs)
   out: list = []
+  walk_defs = dict(defs)
   k = 0
   while k < len(block):
     s = block[k]
     k += 1
+    record_check_equality(s, walk_defs)
     if isinstance(s, IndexReduce):
-      # ``s`` may sink past scalar definitions that do not need its result,
-      # to meet the next reduction
+      # ``s`` may sink past independent scalar definitions (hoisted before ``s``)
+      # and step past pure scalar post-processing of its own results (sunk after ``s``)
+      # to fuse with an independent sibling reduction.
+      sunk: list = []
+      sunk_defs: set[int] = {v.uid for f in s.folds for v in (f.result, *(p.result for p in f.payloads))}
       while True:
-        results = {v.uid for f in s.folds for v in (f.result, *(p.result for p in f.payloads))}
-        between: list = []
+        hoist: list = []
+        sink_more: list = []
+        sink_more_defs = set(sunk_defs)
+        step_defs = dict(walk_defs)
         j = k
-        while j < len(block) and isinstance(block[j], (Assign, ir.Comment)):
+        while j < len(block):
           t = block[j]
-          if isinstance(t, Assign) and (isinstance(t.var.type, ir.BufType) or not pure(t.value) or uses([t], results)):
+          if isinstance(t, ir.Comment):
+            hoist.append(t)
+          elif isinstance(t, Assign) and not isinstance(t.var.type, ir.BufType) and pure(t.value):
+            if uses([t], sink_more_defs):
+              sink_more.append(t)
+              sink_more_defs.add(t.var.uid)
+            else:
+              hoist.append(t)
+          else:
             break
-          between.append(t)
           j += 1
         nxt = block[j] if j < len(block) else None
-        if not isinstance(nxt, IndexReduce) or uses([nxt], results) or not compatible(s, nxt, defs):
+        if not isinstance(nxt, IndexReduce) or uses([nxt], sink_more_defs) or not compatible(s, nxt, step_defs):
           break
-        out.extend(between)
+        out.extend(hoist)
+        sunk.extend(sink_more)
+        sunk_defs = sink_more_defs | {v.uid for f in nxt.folds for v in (f.result, *(p.result for p in f.payloads))}
         absorb(s, nxt)
         k = j + 1
       out.append(s)
+      out.extend(sunk)
       continue
     if isinstance(s, IndexMap):
-      sunk: list = []
+      sunk = []
       while True:
         _, a_writes = buffer_accesses(s.body)
         map_outputs = set(defined([s])) | a_writes
-        hoist: list = []
-        sink_more: list = []
+        hoist = []
+        sink_more = []
+        step_defs = dict(walk_defs)
         j = k
         while j < len(block):
           t = block[j]
@@ -1088,7 +1360,7 @@ def fuse_block(block: list, defs: dict[int, Expr], allocs: set[int]) -> list:
             break
           j += 1
         nxt = block[j] if j < len(block) else None
-        if not isinstance(nxt, IndexMap) or not compatible_maps(s, nxt, defs, allocs):
+        if not isinstance(nxt, IndexMap) or not compatible_maps(s, nxt, step_defs, allocs):
           break
         out.extend(hoist)
         sunk.extend(sink_more)
@@ -1120,12 +1392,15 @@ __all__ = [
   "combine_nested_map",
   "compatible",
   "compatible_maps",
+  "dedup_filters",
   "filter_filter",
   "filter_reduce",
+  "filter_signature",
   "fuse_filters",
   "fuse_siblings",
   "fuse_vertical",
   "fuse_vertical_pair",
+  "record_check_equality",
   "split_invariant_map",
   "squeeze_unit_map",
 ]

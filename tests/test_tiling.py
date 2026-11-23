@@ -694,3 +694,59 @@ def test_squeeze_unit_map_and_split_invariant_map_softmax_layernorm():
       (x - mu) / np.sqrt(((x - mu) ** 2).mean(axis=1, keepdims=True) + 1e-5) * g + b,
       rtol=1e-6,
     )
+
+
+def test_audit_fixes_cosine_allpairs_col_var_filter_dedup_and_sunk_sibling_reduce():
+  @jit
+  def cosine_allpairs(x, y):
+    return allpairs(
+      lambda u, v: np.sum(u * v) / (np.sqrt(np.sum(u * u)) * np.sqrt(np.sum(v * v)) + 1e-6),
+      x,
+      y,
+    )
+
+  @jit
+  def sum_pos_scaled(x, w):
+    mask = x > 0.0
+    return np.sum(x[mask] * w[mask])
+
+  @jit
+  def col_center(x):
+    return x - np.mean(x, axis=0, keepdims=True)
+
+  @jit
+  def mean_and_sumsq(x):
+    m = np.sum(x) / len(x)
+    s2 = np.sum(x * x)
+    return m, s2
+
+  rng = np.random.default_rng(31)
+  with parakeet.options(verify=True):
+    # 1. Checked-equality propagation lets cosine_allpairs sibling-fuse all 3 reductions and tile
+    x = rng.standard_normal((16, 20))
+    y = rng.standard_normal((12, 20))
+    want_cos = (x @ y.T) / (np.linalg.norm(x, axis=1, keepdims=True) * np.linalg.norm(y, axis=1)[None, :] + 1e-6)
+    np.testing.assert_allclose(cosine_allpairs(x, y), want_cos, rtol=1e-6)
+    cos_spec = cosine_allpairs.specialize(x, y)
+    assert "tile" in cos_spec.ir and cos_spec.ir.count("parallel[map]") == 1
+
+    # 2. Duplicate IndexFilter CSE collapses mask=x>0; sum(x[mask]*w[mask]) into 1 FilterReduce loop
+    a = rng.standard_normal(2000)
+    w = rng.standard_normal(2000)
+    np.testing.assert_allclose(sum_pos_scaled(a, w), (a[a > 0.0] * w[a > 0.0]).sum(), rtol=1e-6)
+    assert n_loops(sum_pos_scaled.specialize(a, w)) == 1
+    assert sum_pos_scaled(np.array([-1.0, -2.0]), np.array([3.0, 4.0])) == 0.0
+    assert sum_pos_scaled(np.array([2.0, -1.0]), np.array([5.0, 4.0])) == 10.0  # nnz == 1 broadcast edge case
+    with pytest.raises(IndexError):
+      sum_pos_scaled(np.ones(4), np.ones(5))
+
+    # 3. Generalized split_invariant_map hoists leading-axis-invariant reductions (axis=0)
+    np.testing.assert_allclose(col_center(x), x - x.mean(axis=0, keepdims=True), rtol=1e-6)
+    assert col_center(np.zeros((0, 5))).shape == (0, 5)
+    assert col_center(np.zeros((5, 0))).shape == (5, 0)
+
+    # 4. Dependent scalar post-processing (m = sum(x)/n) sinks past independent sibling reduction
+    m_got, s2_got = mean_and_sumsq(a)
+    np.testing.assert_allclose(m_got, a.mean(), rtol=1e-6)
+    np.testing.assert_allclose(s2_got, (a * a).sum(), rtol=1e-6)
+    assert n_loops(mean_and_sumsq.specialize(a)) == 1

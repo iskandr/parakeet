@@ -1186,7 +1186,6 @@ def matmul(el, a, b, what: str = "matmul"):
   if a.rank > 2 or b.rank > 2:
     return _stacked_matmul(el, a, b, what)
   a = el.as_concrete(a) if a.buf is None and a.cost > 2 else a
-  b = el.as_concrete(b) if b.buf is None and b.cost > 2 else b
   inner_a, inner_b = a.shape[-1], b.shape[0]
   if not el.dim_equal(inner_a, inner_b):
     if isinstance(inner_a, Const) and isinstance(inner_b, Const):
@@ -1197,6 +1196,7 @@ def matmul(el, a, b, what: str = "matmul"):
     el.assume_equal(inner_a, inner_b)
   tape = el.tape
   if tape is not None and not tape.muted and (tape.is_active(el, a) or tape.is_active(el, b)):
+    b = el.as_concrete(b) if b.buf is None and b.cost > 2 else b
     return tape.matmul(el, matmul_plain, a, b, what)
   return matmul_plain(el, a, b, what)
 
@@ -1277,10 +1277,13 @@ def matmul_plain(el, a: ArrayVal, b: ArrayVal, what: str = "matmul"):
   a = _rows(el, a)
   el.consume(a)
   if b.rank == 1:
+    b = el.as_concrete(b) if b.buf is None and b.cost > 2 else b
     el.consume(b)
     return build_map(el, (a.shape[0],), lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), b), what)
-  # the columns of b as rows: a view if b is itself a transpose, otherwise one copy
-  bt = _rows(el, el.transpose(b), "bt")
+  # the columns of b as rows: a view if b is itself a transpose; if b is an expensive
+  # delayed expression (e.g. cos(x)), materialize its transpose directly in one pass
+  bt_view = el.transpose(b)
+  bt = el.materialize(bt_view, "bt") if b.buf is None and b.cost > 2 else _rows(el, bt_view, "bt")
   el.consume(bt)
   return build_map(
         el, (a.shape[0], bt.shape[0]),
