@@ -56,11 +56,21 @@ class Loops:
       self.emit(Assign(v, e))
     return tuple(into)
 
-  def chunk(self, shape, index: tuple[Var, ...], start: Expr, stop: Expr, body: list, scope: Scope, reduction=None):
+  def chunk(
+    self,
+    shape,
+    index: tuple[Var, ...],
+    start: Expr,
+    stop: Expr,
+    body: list,
+    scope: Scope,
+    reduction=None,
+    simd: bool = True,
+  ):
     """Run ``body`` for the flat positions ``[start, stop)`` in order, with
     ``index`` bound to each position's index."""
     if len(shape) == 1:
-      self.emit(ForRange(index[0], start, stop, ONE, body, scope, True, reduction))
+      self.emit(ForRange(index[0], start, stop, ONE, body, scope, simd, reduction))
       return
     inner = shape[-1]
     flat = Var("flat", I)
@@ -72,16 +82,16 @@ class Loops:
     j0 = lp.tmp(isub(flat, imul(row, inner)), "j0")
     j1 = lp.tmp(imin(inner, iadd(j0, isub(stop, flat))), "j1")
     lp.unravel(row, shape[:-1], into=index[:-1])
-    lp.emit(ForRange(index[-1], j0, j1, ONE, body, scope, True, reduction))
+    lp.emit(ForRange(index[-1], j0, j1, ONE, body, scope, simd, reduction))
     lp.emit(Assign(flat, iadd(flat, isub(j1, j0))))
     self.emit(While(blk, Scope("loop")))
 
-  def nest(self, shape, index: tuple[Var, ...], body: list, scope: Scope, reduction=None) -> None:
+  def nest(self, shape, index: tuple[Var, ...], body: list, scope: Scope, reduction=None, simd: bool = True) -> None:
     """Plain loops over ``shape`` in index order."""
     blk, sc = body, scope
     for k in range(len(shape) - 1, -1, -1):
       last = k == len(shape) - 1
-      loop = ForRange(index[k], ZERO, shape[k], ONE, blk, sc, last, reduction if last else None)
+      loop = ForRange(index[k], ZERO, shape[k], ONE, blk, sc, last and simd, reduction if last else None)
       blk, sc = [loop], Scope("loop")
     self.block.extend(blk)
 
@@ -132,7 +142,7 @@ def depth(block: list) -> int:
     inner = max((depth(b) for b in ir.sub_blocks(s)), default=0)
     if isinstance(s, (ForRange, While)):
       inner += 1
-    elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
+    elif isinstance(s, (ir.IndexMap, ir.IndexReduce, ir.IndexScatter)):
       inner += len(s.shape)
     elif isinstance(s, ir.IndexTile):
       inner += sum(1 for d in s.tile_shape if d is not None)
@@ -187,7 +197,7 @@ def work(defs: dict[int, Expr], block: list, bound: tuple[Var, ...] = ()) -> Exp
         w = imul(Const(8, I), imax(cost(s.body), 1))
       elif isinstance(s, If):
         w = imax(cost(s.then), cost(s.orelse))
-      elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
+      elif isinstance(s, (ir.IndexMap, ir.IndexReduce, ir.IndexScatter)):
         w = imul(known(iprod(s.shape)), imax(cost(s.body), 1))
       elif isinstance(s, ir.IndexTile):
         # Total tiles times inner tile work (approximated by inner body cost)
@@ -257,15 +267,19 @@ def step(
     subst[p.a.uid] = pa
     subst[p.b.uid] = px if not f.combine else lp.tmp(px, "px")
   if not f.combine:
-    lp.emit(Assign(acc, subst_expr(f.combined, subst)))
-    for p, pa in zip(f.payloads, p_accs):
-      lp.emit(Assign(pa, subst_expr(p.combined, subst)))
+    new_acc = lp.tmp(subst_expr(f.combined, subst), "nacc") if f.payloads else subst_expr(f.combined, subst)
+    new_pas = [lp.tmp(subst_expr(p.combined, subst), "npacc") for p in f.payloads]
+    lp.emit(Assign(acc, new_acc))
+    for pa, npa in zip(p_accs, new_pas):
+      lp.emit(Assign(pa, npa))
     return
   c = Cloner(subst)
   lp.block.extend(c.block(f.combine))
-  lp.emit(Assign(acc, c.expr(f.combined)))
-  for p, pa in zip(f.payloads, p_accs):
-    lp.emit(Assign(pa, c.expr(p.combined)))
+  new_acc = lp.tmp(c.expr(f.combined), "nacc") if f.payloads else c.expr(f.combined)
+  new_pas = [lp.tmp(c.expr(p.combined), "npacc") for p in f.payloads]
+  lp.emit(Assign(acc, new_acc))
+  for pa, npa in zip(p_accs, new_pas):
+    lp.emit(Assign(pa, npa))
   lp.owner.owned.extend(c.scope(scratch).owned)  # this copy's buffers go with its surroundings
 
 
@@ -799,6 +813,133 @@ def lower_tile(lp: Loops, s: ir.IndexTile, defs: dict[int, Expr], owner: Scope) 
   lp.emit(If(cmp("gt", total_tiles, 0), work_blk, []))
 
 
+PRIVATIZE_MAX = 65536  # max destination elements for thread-privatized parallel scatter
+PRIVATIZE_MIN_WORK = 4096  # minimum scatter iterations before parallelizing
+
+
+def lower_scatter(lp: Loops, s: ir.IndexScatter) -> None:
+  """Lower an :class:`~parakeet.syntax.ir.IndexScatter` (``ReduceByIndex``).
+
+  When ``s.parallel`` is True and ``s.op`` is associative with an identity
+  (``add``, ``mul``, ``min``, ``max``), small-to-medium destinations
+  (``<= PRIVATIZE_MAX``) run in parallel via thread-privatized partial buffers
+  combined into ``s.buf``—working portably across multi-core CPU, CUDA, and
+  Metal without requiring float/int64 atomics. Larger or sequential scatters
+  lower to a tight sequential loop nest."""
+  shape = tuple(lp.tmp(d, "sn") for d in s.shape)
+  elt = s.buf.type.elt
+
+  def make_step_body(
+    body_stmts: list, target: Expr, value: Expr, where: Expr | None, scope: Scope, dst: Var, base: Expr
+  ) -> list:
+    pos = target if base is ZERO else iadd(base, target)
+    val = cast(value, elt)
+    if s.op == "assign":
+      upd: ir.Stmt = Store(dst, pos, val)
+    else:
+      cur = cast(Load(dst, pos), elt)
+      upd = Store(dst, pos, cast(ops.prim(s.op, (cur, val), elt), elt))
+    blk = list(body_stmts)
+    if where is not None:
+      blk.append(If(where, [upd], []))
+    else:
+      blk.append(upd)
+    blk.append(ir.ReleaseScope(scope))
+    return blk
+
+  ident = identity(s.op, elt) if s.op in ("add", "mul", "min", "max") else None
+  if not s.parallel or ident is None:
+    lp.nest(shape, s.index, make_step_body(s.body, s.target, s.value, s.where, s.scope, s.buf, ZERO), s.scope)
+    return
+
+  total = lp.tmp(iprod(shape), "total")
+  dsize = lp.tmp(s.dest_size, "dsize")
+  can_priv = ops.prim(
+    "and",
+    (
+      cmp("ge", total, Const(PRIVATIZE_MIN_WORK, I)),
+      ops.prim("and", (cmp("gt", dsize, ZERO), cmp("le", dsize, Const(PRIVATIZE_MAX, I))), Bool),
+    ),
+    Bool,
+  )
+
+  # Parallel privatized branch
+  par_blk: list = []
+  par_lp = lp.sub(par_blk)
+  nchunks = par_lp.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
+  priv = Var("priv", BufType(elt))
+  priv_n = par_lp.tmp(imul(nchunks, dsize), "priv_n")
+  if s.op == "add":
+    par_lp.emit(Alloc(priv, priv_n, zero=True))
+  else:
+    par_lp.emit(Alloc(priv, priv_n))
+    par_lp.parallel(
+      priv_n,
+      lambda inner, _ch, start, stop: inner.emit(
+        ForRange(
+          (iv := Var("j", I)),
+          start,
+          stop,
+          ONE,
+          [Store(priv, iv, cast(ident, elt))],
+          Scope("loop"),
+          simd=True,
+        )
+      ),
+      loc=s.loc,
+    )
+  lp.owner.owned.append(priv)
+
+  # Clone s.body / target / value / where for the parallel branch so its Var uids stay distinct from the sequential branch
+  cl = Cloner()
+  p_index = tuple(cl.var(v) for v in s.index)
+  p_body = [cl.stmt(t) for t in s.body]
+  p_target = cl.expr(s.target)
+  p_value = cl.expr(s.value)
+  p_where = None if s.where is None else cl.expr(s.where)
+  p_scope = cl.scope(s.scope)
+
+  def scatter_chunk(inner: Loops, chunk: Var, start: Expr, stop: Expr) -> None:
+    base = inner.tmp(imul(chunk, dsize), "pbase")
+    inner.chunk(
+      shape,
+      p_index,
+      start,
+      stop,
+      make_step_body(p_body, p_target, p_value, p_where, p_scope, priv, base),
+      p_scope,
+      simd=False,
+    )
+
+  par_lp.parallel(total, scatter_chunk, kind="reduce", nchunks=nchunks, loc=s.loc, heavy=depth(s.body) > 0)
+
+  # Combine privatized partials into s.buf in parallel across destination elements
+  def combine_chunk(inner: Loops, _ch: Var, start: Expr, stop: Expr) -> None:
+    j = Var("j", I)
+    c = Var("c", I)
+    acc = Var("acc", elt)
+    c_body = [
+      Assign(acc, cast(ops.prim(s.op, (acc, cast(Load(priv, iadd(imul(c, dsize), j)), elt)), elt), elt)),
+    ]
+    j_body = [
+      Assign(acc, cast(Load(s.buf, j), elt)),
+      ForRange(c, ZERO, nchunks, ONE, c_body, Scope("loop")),
+      Store(s.buf, j, acc),
+    ]
+    inner.emit(ForRange(j, start, stop, ONE, j_body, Scope("loop"), simd=True))
+
+  par_lp.parallel(dsize, combine_chunk, kind="map", loc=s.loc)
+  par_lp.emit(ir.Release(priv))
+
+  # Sequential fallback branch (small input or very large destination buffer)
+  seq_blk: list = []
+  lp.sub(seq_blk).nest(
+    shape, s.index, make_step_body(s.body, s.target, s.value, s.where, s.scope, s.buf, ZERO), s.scope, simd=False
+  )
+
+  lp.emit(If(can_priv, par_blk, seq_blk))
+
+
 # ---------------------------------------------------------------------------
 # the pass
 # ---------------------------------------------------------------------------
@@ -810,6 +951,10 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
   for s in block:
     if isinstance(s, ir.IndexTile):
       lower_tile(Loops(out, defs, owner), s, defs, owner)
+      continue
+    if isinstance(s, ir.IndexScatter):
+      s.body[:] = lower_block(s.body, defs, s.scope)
+      lower_scatter(Loops(out, defs, owner), s)
       continue
     if isinstance(s, ir.IndexReduce):
       s.body[:] = lower_block(s.body, defs, s.scope)
@@ -849,6 +994,8 @@ def lower(fn: ir.Function) -> None:
 
 
 __all__ = [
+  "PRIVATIZE_MAX",
+  "PRIVATIZE_MIN_WORK",
   "Loops",
   "depth",
   "emit_tile_stage",
@@ -856,6 +1003,7 @@ __all__ = [
   "jam_register_tile",
   "lower",
   "lower_block",
+  "lower_scatter",
   "lower_tile",
   "outer_expr",
   "pure_defs",

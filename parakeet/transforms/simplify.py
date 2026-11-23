@@ -21,7 +21,7 @@ to an input array, an impure runtime call) is kept.
 from __future__ import annotations
 
 from ..syntax import ir
-from ..syntax.ir import Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, Var
+from ..syntax.ir import Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, IndexScatter, Var
 
 EFFECTS = (
   ir.Store,
@@ -32,6 +32,7 @@ EFFECTS = (
   ir.IndexMap,
   ir.IndexFilter,
   ir.IndexScan,
+  ir.IndexScatter,
   ir.ParLoop,
   ir.While,
 )
@@ -76,6 +77,10 @@ def buffer_liveness(fn: ir.Function) -> tuple[set[int], set[int], set[int]]:
       stored_bufs.add(s.buf.uid)
       _note_exprs(s.index, read_bufs)
       _note_exprs(s.value, read_bufs)
+    elif isinstance(s, IndexScatter):
+      stored_bufs.add(s.buf.uid)
+      for e in (*s.shape, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,))):
+        _note_exprs(e, read_bufs)
     else:
       _note_exprs(ir.stmt_exprs(s), read_bufs)
   for r in fn.results:
@@ -180,6 +185,10 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         and not has_effects(s.fold.combine)
         and pure_writes_only(s.emit, dead_bufs)
       ):
+        changed = True
+        continue
+    elif isinstance(s, IndexScatter):
+      if not s.scope.owned and s.buf.uid in dead_bufs and pure_writes_only(s.body, dead_bufs):
         changed = True
         continue
     elif isinstance(s, ir.Alloc):

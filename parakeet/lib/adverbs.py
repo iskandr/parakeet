@@ -14,7 +14,7 @@ from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..syntax import ops
 from ..syntax.ir import Const, Expr
-from ..syntax.ops import I, cmp
+from ..syntax.ops import ZERO, I, cast, cmp
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, describe
 from . import core
 from .core import FUNCTIONS, NAMES, along_axis, build_map, norm_axis, reduce_arrays, reduce_values, scan_values
@@ -422,6 +422,39 @@ def filter_reduce(el, f, pred, *xs, map=None, init=None, axis=None):  # noqa: A0
   return reduce.impl(el, f, selected, init=init, axis=axis)
 
 
+@libfunction("scatter_add")
+def scatter_add(el, n, idx, values):
+  """Generalized ``ReduceByIndex`` scatter-add: return a 1-d array of length
+  ``n`` where ``out[idx[i]] += values[i]`` for every ``i``.
+
+  Preserves ``values.dtype`` (supporting ``float32`` on Metal/CUDA as well as
+  ``float64``/``int64``), lowers to parallel privatized buffers via
+  :class:`~parakeet.syntax.ir.IndexScatter`, and differentiates via gather."""
+  from .numpy_lib import _arr, _emit_scatter_add
+
+  size = cast(el.as_scalar(n, "n"), I)
+  el.check(cmp("ge", size, ZERO), "ValueError", "scatter_add() length must not be negative")
+  idx_arr = _arr(el, idx)
+  val_arr = _arr(el, values)
+  if idx_arr.rank != 1 or val_arr.rank != 1:
+    raise el.error(TypeInferenceError, "scatter_add() expects 1-d idx and values arrays")
+  if idx_arr.elt.kind not in "iu":
+    raise el.error(TypeInferenceError, f"scatter_add() idx must be integer, got {idx_arr.elt}")
+  el.check(cmp("eq", idx_arr.shape[0], val_arr.shape[0]), "ValueError", "scatter_add() idx and values lengths differ")
+
+  tape = el.tape
+  if tape is not None and not tape.muted and tape.is_active(el, val_arr):
+    from ..transforms.autodiff import Node
+
+    with tape.computing(el):
+      out = _emit_scatter_add(el, size, idx_arr, val_arr, val_arr.elt.strong, check_bounds=True)
+    node = Node("scatter_add", (val_arr,), (idx_arr,))
+    tape.record(el, node)
+    tape.register(el, node, out)
+    return out
+  return _emit_scatter_add(el, size, idx_arr, val_arr, val_arr.elt.strong, check_bounds=True)
+
+
 def _bool():
   from ..ndtypes import Bool
 
@@ -518,6 +551,6 @@ def _builtin_filter(el, pred, x):
 
 __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
-    "parfor", "filter", "filter_reduce", "scan_axis", "grad", "value_and_grad", "Gradient",
+    "parfor", "filter", "filter_reduce", "scatter_add", "scan_axis", "grad", "value_and_grad", "Gradient",
 ]  # fmt: skip
 _ = (Const, I)

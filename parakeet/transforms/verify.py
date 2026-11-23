@@ -35,6 +35,7 @@ from ..syntax.ir import (
   IndexMap,
   IndexReduce,
   IndexScan,
+  IndexScatter,
   IndexTile,
   Load,
   ParLoop,
@@ -299,6 +300,37 @@ def verify(fn: Function, phase: str = "") -> Function:
         check_expr(s.keep, body_vis, "IndexFilter predicate")
         visible.add(s.out.uid)
         visible.add(s.count.uid)
+      elif isinstance(s, IndexScatter):
+        if len(s.shape) != len(s.index):
+          _fail(fn, phase, f"IndexScatter rank mismatch: {len(s.shape)} dims vs {len(s.index)} indices")
+        if s.op not in ("add", "mul", "min", "max", "assign"):
+          _fail(fn, phase, f"IndexScatter has unknown op {s.op!r}")
+        if not isinstance(s.buf.type, BufType):
+          _fail(fn, phase, f"IndexScatter destination {s.buf.name} has non-buffer type {s.buf.type}")
+        if s.buf.uid not in visible:
+          _fail(fn, phase, f"IndexScatter destination {s.buf.name} is not in scope")
+        if not _is_int(s.dest_size.type):
+          _fail(fn, phase, f"IndexScatter dest_size has non-integer type {s.dest_size.type}")
+        check_expr(s.dest_size, visible, "IndexScatter dest_size")
+        for d in s.shape:
+          if not _is_int(d.type):
+            _fail(fn, phase, f"IndexScatter shape dim has non-integer type {d.type}")
+          check_expr(d, visible, "IndexScatter shape")
+        for v in s.index:
+          if not _is_int(v.type):
+            _fail(fn, phase, f"IndexScatter index {v.name} has non-integer type {v.type}")
+        check_scope(s.scope)
+        body_vis = set(visible)
+        body_vis.update(v.uid for v in s.index)
+        check_block(s.body, body_vis)
+        if not _is_int(s.target.type):
+          _fail(fn, phase, f"IndexScatter target has non-integer type {s.target.type}")
+        check_expr(s.target, body_vis, "IndexScatter target")
+        check_expr(s.value, body_vis, "IndexScatter value")
+        if s.where is not None:
+          if not isinstance(s.where.type, ScalarType):
+            _fail(fn, phase, f"IndexScatter where guard has non-scalar type {s.where.type}")
+          check_expr(s.where, body_vis, "IndexScatter where")
       elif isinstance(s, IndexScan):
         if not _is_int(s.n.type):
           _fail(fn, phase, f"IndexScan length has non-integer type {s.n.type}")

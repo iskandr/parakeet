@@ -19,12 +19,14 @@ from __future__ import annotations
 
 from ..syntax import ir
 from ..syntax.clone import Cloner, defined
-from ..syntax.ir import Assign, Check, Const, Expr, If, IndexFilter, IndexMap, IndexReduce, Scope, Var
+from ..syntax.ir import Assign, Check, Const, Expr, If, IndexFilter, IndexMap, IndexReduce, IndexScatter, Scope, Var
 from ..syntax.ops import ZERO, cmp, iprod
 from .analysis import IndexFacts, is_pure_expr
 
 
-def hoist_checks_from_op(s: IndexMap | IndexReduce | IndexFilter, facts: IndexFacts) -> tuple[list[ir.Stmt], bool]:
+def hoist_checks_from_op(
+  s: IndexMap | IndexReduce | IndexFilter | IndexScatter, facts: IndexFacts
+) -> tuple[list[ir.Stmt], bool]:
   """Lift loop-invariant :class:`Check` statements from the leading straight-line
   prefix of ``s`` before ``s``, guarded by ``if prod(shape) > 0``."""
   if isinstance(s, IndexMap):
@@ -42,6 +44,10 @@ def hoist_checks_from_op(s: IndexMap | IndexReduce | IndexFilter, facts: IndexFa
   elif isinstance(s, IndexFilter):
     shape = (s.n,)
     bound = {s.index.uid}
+    body = s.body
+  elif isinstance(s, IndexScatter):
+    shape = s.shape
+    bound = {v.uid for v in s.index}
     body = s.body
   else:
     return [s], False
@@ -189,7 +195,7 @@ def normalize_block(block: list[ir.Stmt], facts: IndexFacts) -> tuple[list[ir.St
             out.append(t)
         changed = True
         continue
-    if isinstance(s, (IndexMap, IndexReduce, IndexFilter)):
+    if isinstance(s, (IndexMap, IndexReduce, IndexFilter, IndexScatter)):
       hoisted, h = hoist_checks_from_op(s, local)
       out.extend(hoisted)
       changed |= h

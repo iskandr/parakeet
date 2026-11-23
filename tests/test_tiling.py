@@ -830,3 +830,120 @@ def test_index_facts_affine_fusion_and_target_aware_interchange():
     assert sqr_dists(np.zeros((0, 4)), np.zeros((3, 5))).shape == (0, 3)
     with pytest.raises(ValueError, match="broadcast"):
       sqr_dists(np.zeros((2, 4)), np.zeros((3, 5)))
+
+
+def test_index_scatter_bincount_scatter_add_fusion_and_autodiff():
+  @jit
+  def hist_unweighted(idx, minlength):
+    return np.bincount(idx, minlength=minlength)
+
+  @jit
+  def hist_weighted_fused(idx, x):
+    # Map (x * 2 + 1) fuses vertically into IndexScatter!
+    w = (x * 2.0 + 1.0).copy()
+    return np.bincount(idx, weights=w)
+
+  @jit
+  def scatter_f32(n, idx, vals):
+    return parakeet.scatter_add(n, idx, vals)
+
+  rng = np.random.default_rng(33)
+  with parakeet.options(verify=True):
+    # Small (sequential path) AND large (privatized parallel path >= 4096)
+    for size, nbins in ((0, 0), (0, 5), (17, 4), (10_000, 64)):
+      idx = rng.integers(0, max(nbins, 1), size=size, dtype=np.int64)
+      w = rng.standard_normal(size)
+      np.testing.assert_array_equal(hist_unweighted(idx, nbins), np.bincount(idx, minlength=nbins))
+      if size > 0:
+        np.testing.assert_allclose(hist_weighted_fused(idx, w), np.bincount(idx, weights=w * 2.0 + 1.0), rtol=1e-10)
+        # Float32 scatter_add (works natively on CPU, CUDA, and Metal)
+        w32 = w.astype(np.float32)
+        np.testing.assert_allclose(
+          scatter_f32(nbins, idx, w32),
+          np.bincount(idx, weights=w32, minlength=nbins).astype(np.float32),
+          rtol=1e-4,
+          atol=1e-4,
+        )
+    # Operator IR uses IndexScatter, and Map -> Scatter vertical fusion eliminates the temp buffer for w!
+    idx_big = rng.integers(0, 32, size=8000, dtype=np.int64)
+    w_big = rng.standard_normal(8000)
+    spec = hist_weighted_fused.specialize(idx_big, w_big)
+    assert "scatter[add]" in spec.operators
+    assert "arr_" not in spec.ir  # w = (x * 2 + 1).copy() fused away completely into IndexScatter!
+    assert "2.0" in spec.ir and "priv_" in spec.ir
+
+    # Negative index & error checks
+    neg_idx = np.array([-1, 0, -2, 1], dtype=np.int64)
+    vals = np.array([1.5, 2.0, 3.0, 4.5])
+    np.testing.assert_allclose(parakeet.scatter_add(4, neg_idx, vals), np.array([2.0, 4.5, 3.0, 1.5]))
+    with pytest.raises(ValueError, match="negative"):
+      hist_unweighted(np.array([0, -1, 2], dtype=np.int64), 0)
+    with pytest.raises(IndexError, match="out of bounds"):
+      scatter_f32(4, np.array([0, 4], dtype=np.int64), np.array([1.0, 2.0], dtype=np.float32))
+
+    # Reverse-mode AD through scatter_add AND weighted bincount (adjoint is gather!)
+    idx_ad = np.array([0, 2, 0, 1, 2], dtype=np.int64)
+    v_ad = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    scale = np.array([10.0, 20.0, 30.0])
+
+    @jit
+    def loss_scatter(v):
+      s = parakeet.scatter_add(3, idx_ad, v)
+      return np.sum(s * s * scale)
+
+    @jit
+    def loss_bincount(v):
+      s = np.bincount(idx_ad, weights=v, minlength=3)
+      return np.sum(s * s * scale)
+
+    # d/dv_i sum_k (scale_k * s_k^2) = 2 * scale[idx_i] * s[idx_i]
+    s_ref = np.bincount(idx_ad, weights=v_ad, minlength=3)
+    want_grad = 2.0 * scale[idx_ad] * s_ref[idx_ad]
+    np.testing.assert_allclose(parakeet.grad(loss_scatter)(v_ad), want_grad, rtol=1e-10)
+    np.testing.assert_allclose(parakeet.grad(loss_bincount)(v_ad), want_grad, rtol=1e-10)
+
+
+def test_online_monoidal_logsumexp_and_softmax():
+  @jit
+  def logsumexp_1d(x):
+    m = np.max(x)
+    return m + np.log(np.sum(np.exp(x - m)))
+
+  @jit
+  def logsumexp_2d(x):
+    m = np.max(x, axis=1, keepdims=True)
+    return m[:, 0] + np.log(np.sum(np.exp(x - m), axis=1))
+
+  @jit
+  def online_softmax_2d(x):
+    m = np.max(x, axis=1, keepdims=True)
+    return np.exp(x - m) / np.sum(np.exp(x - m), axis=1, keepdims=True)
+
+  rng = np.random.default_rng(34)
+  with parakeet.options(verify=True):
+    # 1D logsumexp fuses into 1 SINGLE parallel reduction loop (1 pass over x!)
+    for x in (
+      rng.standard_normal(10_000),
+      rng.standard_normal(500) + 1000.0,  # large values: must not overflow!
+      np.array([42.0]),
+      np.array([1.0, -np.inf, 2.0]),
+    ):
+      m = x.max()
+      want = float(m + np.log(np.exp(x - m).sum()))
+      np.testing.assert_allclose(logsumexp_1d(x), want, rtol=1e-12)
+    spec_1d = logsumexp_1d.specialize(rng.standard_normal(10_000))
+    assert n_loops(spec_1d) == 1
+    with parakeet.options(skip_transforms=("sibling fusion",)):
+      assert n_loops(logsumexp_1d.specialize(rng.standard_normal(10_000))) == 2
+    with pytest.raises(ValueError, match="no identity"):
+      logsumexp_1d(np.zeros(0))
+
+    # 2D row-wise logsumexp and online_softmax (zero temp array!)
+    x2 = rng.standard_normal((32, 64)) + 500.0
+    m2 = x2.max(axis=1, keepdims=True)
+    want_lse2 = m2[:, 0] + np.log(np.exp(x2 - m2).sum(axis=1))
+    want_sm2 = np.exp(x2 - m2) / np.exp(x2 - m2).sum(axis=1, keepdims=True)
+    np.testing.assert_allclose(logsumexp_2d(x2), want_lse2, rtol=1e-12)
+    np.testing.assert_allclose(online_softmax_2d(x2), want_sm2, rtol=1e-12)
+    sm_spec = online_softmax_2d.specialize(x2)
+    assert sm_spec.ir.count("alloc(") == 1 and sm_spec.ir.count("parallel[map]") == 1

@@ -17,13 +17,15 @@ The short version: the rules are the same algebra, applied in two places.
   the result is `F` applied to the element function of the argument"; no pass
   looks for the pattern afterwards.
 * **In the middle end.** What elaboration produces is the original's
-  *indexified* level: statements `IndexMap`, `IndexReduce`, `IndexScan` and
-  `IndexFilter` over index spaces, with ordinary scalar code as their bodies (`Specialization.operators`
-  prints it). Passes rewrite those statements — dead code elimination, vertical
-  fusion (map/scan/filter/reduce), filter fusion (filter-filter and
-  filter-reduce), sibling fusion (reductions and maps), reduction interchange
-  and tiling — and a last pass, `LowerAdverbs` in spirit, turns them into loops.
-  `parakeet.transforms.pipeline.PASSES` is the list;
+  *indexified* level: statements `IndexMap`, `IndexReduce`, `IndexScan`,
+  `IndexFilter`, and `IndexScatter` over index spaces, with ordinary scalar code
+  as their bodies (`Specialization.operators` prints it). Passes rewrite those
+  statements — invariant-check/unit-axis normalization, dead code elimination,
+  vertical fusion (exact and affine map/scan/filter/reduce/scatter), filter
+  fusion (filter-filter and filter-reduce), sibling and online monoidal fusion
+  (reductions, maps, and 1-pass `logsumexp`/`softmax`), target-aware reduction
+  interchange and tiling — and a last pass, `LowerAdverbs` in spirit, turns them
+  into loops. `parakeet.transforms.pipeline.PASSES` is the list;
   `find_broken_transform` switches its members on one at a time.
 
 ```
@@ -51,6 +53,7 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
 | `FilterReduce`, `IndexFilterReduce` | `filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)` — and any reduction over a filter also *becomes* one (see fusion) |
 | `IndexScan(f, ⊕, emit, shape)` | what `scan`, `np.cumsum` and `np.cumprod` are built on: an `IndexScan` statement, whose `emit` is a block (it stores the running value) |
+| — | `IndexScatter` (`parakeet.scatter_add`, `np.bincount`): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
 | — | `grad(f)`, `value_and_grad(f)` |
 
 Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,
@@ -63,11 +66,12 @@ comprehension an `imap`.
 
 | rule ([R] Fig. 6.1) | status |
 |---|---|
-| `Map(g, Map(f, X))` ⇒ `Map(g∘f, X)` | yes |
+| `Map(g, Map(f, X))` ⇒ `Map(g∘f, X)` | yes — including affine coordinate inversion (`AffineInlineBufferLoad`) for transpose, shifted-slice, and stencil fusion, plus cost-bounded multi-consumer fusion |
 | `Map(g, IndexMap(f, σ))` ⇒ `IndexMap(g∘f, σ)` | yes |
 | `OuterMap(g, Map(f, X1), X2..)` ⇒ `OuterMap(λ. g(f(x1), x2..), X1..)` | yes |
 | `Reduce(g, ⊕, Map(f, X))` ⇒ `Reduce(g∘f, ⊕, X)` | yes |
 | `Reduce(g, ⊕, IndexMap(f, σ))` ⇒ `IndexReduce(g∘f, ⊕, σ)` | yes |
+| `Scatter(⊕, idx, Map(f, X))` ⇒ `IndexScatter(⊕, idx, f(X))` | **yes** (`transforms/fusion.py`): elementwise weight maps fuse directly into `np.bincount` / `parakeet.scatter_add` |
 | `Scan(g, ⊕, ε, Map(f, X))` ⇒ `Scan(g∘f, ⊕, ε, X)` | yes |
 | `Filter(g, pred, Map(f, X))` ⇒ `Filter(g∘f, pred∘f, X)` | yes: the predicate and the kept values both read the unfused map |
 | `Map(g, Filter(f, pred, X))` ⇒ `Filter(g∘f, pred, X)` | yes: the selected elements are a delayed gather that the map fuses into |
@@ -146,7 +150,10 @@ is dropped: the index is the loop's own.
   view) and each block is folded in a single pass.
 * **A reduction with a payload.** `argmin`/`argmax` fold `(value, index)`
   pairs per chunk and combine the pairs in index order, so the first of equal
-  elements still wins.
+  elements still wins. The same `Fold.payloads` monoid machinery also fuses
+  dependent `m = max(x); s = sum(exp(x - m))` pairs into a single parallel
+  associative `(m, s)` pass (`fuse_online_logsumexp`) for 1-pass `logsumexp`
+  and zero-temp `softmax`.
 * **Parallel scan.** `Scan(⊕, X)` with an associative primitive ⇒ fold every
   chunk; prefix the chunk totals; scan every chunk from its prefix.
 * **Parallel filter.** `X[mask]` ⇒ count per chunk; prefix the counts; every
@@ -172,7 +179,7 @@ is dropped: the index is the loop's own.
 
 | [H] | here |
 |---|---|
-| `PermuteReductions`: interchange a strided inner reduction with a stride-1 outer map | **yes** (`transforms/tiling.py`, *reduction interchange*): when an `IndexMap` of any rank wraps a commutative+associative `IndexReduce` whose inner axis is strided while the map's last index has unit stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized strip of contiguous output columns |
+| `PermuteReductions`: interchange a strided inner reduction with a stride-1 outer map | **yes** (`transforms/tiling.py`, *target-aware reduction interchange*): on CPU, when an `IndexMap` of any rank wraps a commutative+associative `IndexReduce` whose inner axis is strided while the map's last index has unit stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized strip of contiguous output columns; on GPU (`TargetProfile.is_gpu`), interchange is skipped so warp/SIMD threads coalesce across columns directly |
 | `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | **generalized `IndexTile` + `TileStage` operators** (`syntax/ir.py`, `transforms/tiling.py`, `transforms/lowering.py`): any `IndexMap` of rank ≥ 2 wrapping one `IndexReduce` (any number of folds and `Payload`s) plus straight-line prologues/epilogues (`a @ b`, batched 3D+ matmul, `allpairs`, `einsum`, `np.tanh(a @ b + c)`) is rewritten into nested `IndexTile(level="cache")` → `IndexTile(level="register")` operators on CPU, and extracts maximal row/col/k `TileStage`s for GPU `__shared__` (CUDA) and `threadgroup` (Metal) block tiling (`backends/tiled_gpu.py`) |
 | register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **general N-D register jamming** (`lowering.jam_register_tile`) on CPU (exact hyper-rectangle partition jamming `2×4` interior blocks and partial remainder faces) + **`4×4` / `2×2` per-thread register micro-tiles** on CUDA and Metal |
 | `TiledReduce`, `TiledScan` | `PermuteReductions` (L1 column-strip tiled reduction) + invariant row-reduction hoisting (`split_invariant_map` / `squeeze_unit_map` for `softmax` and `layer_norm`); `TiledScan` not yet implemented |

@@ -58,6 +58,7 @@ from .lib.adverbs import (
   parfor,
   reduce,
   scan,
+  scatter_add,
   value_and_grad,
 )
 from .lib.pure import pmap1 as _pmap1
@@ -121,7 +122,7 @@ for _name in (
   "tanh arcsinh arccosh arctanh floor ceil trunc rint round square sign reciprocal hypot "
   "zeros ones empty full zeros_like ones_like empty_like full_like arange linspace eye identity "
   "array asarray copy sum prod mean std var min max argmin argmax any all cumsum cumprod dot vdot "
-  "inner outer transpose ravel reshape where clip diff concatenate stack vstack hstack "
+  "inner outer transpose ravel reshape where clip diff concatenate stack vstack hstack bincount "
   "int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64 bool_ "
   "rad2deg deg2rad logaddexp logaddexp2 isnan isinf isfinite "
   "tile real conjugate shape size ndim"
@@ -153,7 +154,7 @@ __all__ = [
     "Specialization", "StaticValueError", "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "clear_cache", "config", "each", "errors", "filter", "imap",
     "ireduce", "jit", "lib", "map", "options", "outer_map", "parfor", "pmap1", "pmap2",
-    "pmap2_trim", "reduce", "run", "scan", "seed",
+    "pmap2_trim", "reduce", "run", "scan", "scatter_add", "seed",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "typed_repr",
     "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",
     "Bool", "Float32", "Float64", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64",

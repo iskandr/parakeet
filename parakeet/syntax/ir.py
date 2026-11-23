@@ -492,7 +492,33 @@ class IndexTile(Stmt):
   shared_tile: SharedTilePlan | None = None
 
 
-OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan, IndexTile)
+@dataclass(eq=False, slots=True)
+class IndexScatter(Stmt):
+  """Generalized scatter-reduce (``ReduceByIndex`` / histogram / scatter-add):
+  for every coordinate ``index`` in ``shape``, evaluate ``body`` and fold
+  ``value`` into ``buf[target]`` using associative ``op`` (``"add"``, ``"mul"``,
+  ``"min"``, ``"max"``, or ``"assign"``), optionally guarded by ``where``.
+
+  Lowers to thread-privatized partial buffers combined into ``buf`` when
+  ``parallel`` and ``dest_size`` fits the privatization budget (works cleanly
+  on multi-core CPU, CUDA, and Metal without requiring float/int64 atomics),
+  falling back to a sequential loop otherwise."""
+
+  shape: tuple[Expr, ...]
+  index: tuple[Var, ...]
+  body: list[Stmt]
+  buf: Var
+  dest_size: Expr
+  target: Expr
+  value: Expr
+  op: str  # "add" | "mul" | "min" | "max" | "assign"
+  scope: Scope
+  parallel: bool = True
+  loc: SourceLocation | None = None
+  where: Expr | None = None
+
+
+OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan, IndexTile, IndexScatter)
 
 
 @dataclass(eq=False, slots=True)
@@ -552,7 +578,7 @@ class Function:
 def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
   if isinstance(s, If):
     return (s.then, s.orelse)
-  if isinstance(s, (ForRange, While, ParLoop, IndexMap, IndexFilter)):
+  if isinstance(s, (ForRange, While, ParLoop, IndexMap, IndexFilter, IndexScatter)):
     return (s.body,)
   if isinstance(s, IndexTile):
     return (*[st.body for st in s.stages], s.body)
@@ -583,6 +609,8 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     return (s.cond, *s.args)
   if isinstance(s, IndexMap):
     return s.shape
+  if isinstance(s, IndexScatter):
+    return (*s.shape, s.buf, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,)))
   if isinstance(s, IndexTile):
     out: list[Expr] = list(s.shape) + [d for d in s.tile_shape if d is not None]
     for st in s.stages:
@@ -617,6 +645,8 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
   if isinstance(s, ParLoop):
     return (s.chunk, s.start, s.stop)
   if isinstance(s, IndexMap):
+    return s.index
+  if isinstance(s, IndexScatter):
     return s.index
   if isinstance(s, IndexTile):
     defs: list[Var] = [*s.origin, *s.extent]
@@ -772,6 +802,14 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       out.append(f"{pad}{how}filter {s.index.name} over ({fmt_expr(s.n)}):")
       out += fmt_block(s.body, indent + 1)
       out.append(f"{pad}    {s.out.name}, {s.count.name} = keep({s.index.name}, where={fmt_expr(s.keep)})")
+    elif isinstance(s, IndexScatter):
+      how = "parallel " if s.parallel else ""
+      out.append(
+        f"{pad}{how}scatter[{s.op}] {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):"
+      )
+      out += fmt_block(s.body, indent + 1)
+      guard = "" if s.where is None else f" if {fmt_expr(s.where)}"
+      out.append(f"{pad}    {s.buf.name}[{fmt_expr(s.target)}] {s.op}= {fmt_expr(s.value)}{guard}")
     elif isinstance(s, Check):
       out.append(f"{pad}check {fmt_expr(s.cond)}  # else {s.err.exc}: {s.err.fmt}")
     elif isinstance(s, Comment):

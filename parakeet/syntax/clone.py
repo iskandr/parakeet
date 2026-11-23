@@ -155,6 +155,21 @@ class Cloner:
         x(s.n), self.var(s.index), b(s.body), x(s.keep), self.var(s.out), self.var(s.count), self.scope(s.scope),
         s.parallel, s.loc,
       )  # fmt: skip
+    if isinstance(s, ir.IndexScatter):
+      return ir.IndexScatter(
+        tuple(x(d) for d in s.shape),
+        tuple(self.var(v) for v in s.index),
+        b(s.body),
+        x(s.buf),  # type: ignore[arg-type]
+        x(s.dest_size),
+        x(s.target),
+        x(s.value),
+        s.op,
+        self.scope(s.scope),
+        s.parallel,
+        s.loc,
+        None if s.where is None else x(s.where),
+      )
     raise TypeError(f"cannot clone {type(s).__name__}")
 
 

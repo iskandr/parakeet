@@ -8,7 +8,7 @@ from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, Float32, Float64, Int64, ScalarType, UInt64, WeakBool, join, weak_of_kind
 from ..syntax import ops
-from ..syntax.ir import Assign, Const, Expr, If, RtCall, Store, Var
+from ..syntax.ir import Assign, Const, Expr, If, IndexScatter, RtCall, Scope, Store, Var
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, TypeVal, describe
 from .core import (
@@ -1008,6 +1008,87 @@ def nonzero(el, a):
 def flatnonzero(el, a):
   a = _arr(el, a)
   return el.nonzero1d(el.cast_array(el.flat_view(a) if a.rank != 1 else a, Bool))
+
+
+def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_elt, check_bounds: bool) -> ArrayVal:
+  """Allocate a zeroed 1-d array of length ``n`` and emit an :class:`IndexScatter`
+  summing ``values`` (or ``1``) into ``out[idx[i]]``."""
+  idx = el.as_concrete(idx) if idx.buf is None and idx.cost > CHEAP_COST else idx
+  if values is not None and values.buf is None and values.cost > CHEAP_COST:
+    values = el.as_concrete(values)
+  el.consume(idx)
+  if values is not None:
+    el.consume(values)
+  out = el.alloc_array(out_elt, (n,), zero=True, label="scatter")
+  iv = Var("i", I)
+  sc = Scope("scatter")
+  body: list = []
+  with el.in_block(body, sc, loop=True, par=el.par_depth == 0):
+    raw = cast(el.tmp(el.elem(idx, (iv,)), "idx"), I)
+    if check_bounds:
+      pos = el.tmp(ops.select(cmp("lt", raw, ZERO), iadd(raw, n), raw), "pos")
+      if el.options.bounds_check:
+        el.check(
+          ops.prim("and", (cmp("ge", pos, ZERO), cmp("lt", pos, n)), Bool),
+          "IndexError",
+          "index {0} is out of bounds for axis 0 with size {1}",
+          raw,
+          n,
+        )
+    else:
+      pos = raw
+    val = cast(el.tmp(el.elem(values, (iv,)), "val"), out_elt) if values is not None else Const(1, out_elt)
+  el.emit(IndexScatter((idx.shape[0],), (iv,), body, out.buf, n, pos, val, "add", sc, el.par_depth == 0, el.loc()))
+  el.record_store(out)
+  return out
+
+
+@register(np.bincount)
+def bincount(el, x, weights=None, minlength=0):
+  """Count occurrences of each non-negative integer in 1-d ``x`` (optionally weighted),
+  lowered through :class:`~parakeet.syntax.ir.IndexScatter`."""
+  x = _arr(el, x)
+  if x.rank != 1:
+    raise el.error(TypeInferenceError, "bincount() expects a 1-d array")
+  if x.elt.kind not in "iu":
+    raise el.error(TypeInferenceError, f"bincount() expects an integer array, got {x.elt}")
+  ml = cast(el.as_scalar(minlength, "minlength"), I)
+  el.check(cmp("ge", ml, ZERO), "ValueError", "'minlength' must not be negative")
+
+  w = None
+  if weights is not None:
+    w = _arr(el, weights)
+    if w.rank != 1:
+      raise el.error(TypeInferenceError, "bincount() weights must be 1-d")
+    el.check(cmp("eq", w.shape[0], x.shape[0]), "ValueError", "The weights and list don't have the same length.")
+    out_elt = Float64
+  else:
+    out_elt = Int64
+
+  x = el.as_concrete(x) if x.buf is None and x.cost > 0 else x
+  n = x.shape[0]
+  out_len = Var("bins_n", I)
+  el.emit(Assign(out_len, ml))
+  nonempty: list = []
+  with el.in_block(nonempty):
+    x_min = _reduce_prim(el, "min", x, None, None, "bincount")
+    x_max = _reduce_prim(el, "max", x, None, None, "bincount")
+    el.check(cmp("ge", cast(x_min, I), ZERO), "ValueError", "'list' argument must have no negative elements")
+    need = iadd(cast(x_max, I), ONE)
+    el.emit(Assign(out_len, ops.imax(ml, need)))
+  el.emit(If(cmp("gt", n, ZERO), nonempty, []))
+
+  tape = el.tape
+  if w is not None and tape is not None and not tape.muted and tape.is_active(el, w):
+    from ..transforms.autodiff import Node
+
+    with tape.computing(el):
+      out = _emit_scatter_add(el, out_len, x, w, out_elt, check_bounds=False)
+    node = Node("scatter_add", (w,), (x,))
+    tape.record(el, node)
+    tape.register(el, node, out)
+    return out
+  return _emit_scatter_add(el, out_len, x, w, out_elt, check_bounds=False)
 
 
 @register(np.clip)

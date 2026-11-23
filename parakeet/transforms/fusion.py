@@ -23,7 +23,7 @@ from __future__ import annotations
 from ..ndtypes import Bool
 from ..syntax import ir, ops
 from ..syntax.clone import Cloner, defined
-from ..syntax.ir import Assign, Const, Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, Var
+from ..syntax.ir import Assign, Const, Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, IndexScatter, Var
 from .analysis import (
   CHEAP_FUSE_COST,
   BufferInfo,
@@ -539,6 +539,31 @@ def fuse_vertical_pair(
           consumer.folds[:] = new_folds
           return consumer, buf.uid
 
+    if isinstance(consumer, IndexScatter) and facts.same_shape(producer.shape, consumer.shape):
+      # Map -> Scatter: fuse producer elementwise map directly into IndexScatter
+      elem = Var("v", buf.type.elt)
+      inliner = Cloner({u.uid: v for u, v in zip(producer.index, consumer.index)})
+      inlined_prefix = inliner.block(prefix)
+      inlined_value = inliner.expr(value)
+      p_facts = facts.fork()
+      for t in inlined_prefix:
+        p_facts.record_stmt(t)
+      expected_key = p_facts.expr_key(inliner.expr(store_index))
+      c_facts = facts.fork()
+      for t in consumer.body:
+        c_facts.record_stmt(t)
+      rewriter = InlineBufferLoad({v.uid: v for v in defined([consumer]).values()}, buf, expected_key, elem, c_facts)
+      new_body = [rewriter.stmt(t) for t in consumer.body]
+      new_target = rewriter.expr(consumer.target)
+      new_value = rewriter.expr(consumer.value)
+      new_where = None if consumer.where is None else rewriter.expr(consumer.where)
+      if rewriter.ok and rewriter.replaced == consumer_reads:
+        consumer.body[:] = inlined_prefix + [Assign(elem, inlined_value)] + new_body
+        consumer.target = new_target
+        consumer.value = new_value
+        consumer.where = new_where
+        return consumer, buf.uid
+
   # ---- Scan -> Map ----------------------------------------------------------
   scan_match = match_single_output_scan(producer, facts, alloc_set, store_counts)
   if scan_match is not None and isinstance(consumer, IndexMap) and not consumer.ordered and len(consumer.shape) == 1:
@@ -656,7 +681,7 @@ def _try_fuse_multi_consumers(
   while j < len(rest) and found_reads < total_reads:
     t = rest[j]
     j += 1
-    if isinstance(t, (IndexMap, IndexReduce, IndexFilter)) and count_reads_in([t], buf) > 0:
+    if isinstance(t, (IndexMap, IndexReduce, IndexFilter, IndexScatter)) and count_reads_in([t], buf) > 0:
       c_reads = count_reads_in([t], buf)
       # Clone consumer before attempting partial fusion so failed multi-consumer attempts never mutate IR
       t_copy = Cloner({v.uid: v for v in defined([t]).values()}).stmt(t)
@@ -673,7 +698,7 @@ def _try_fuse_multi_consumers(
         if found_reads < total_reads:
           return None
       continue
-    if uses([t], {buf.uid} | producer_defs):
+    if uses([t], {buf.uid} | producer_defs) or uses([producer], set(defined([t]))):
       return None
     _, w = buffer_accesses([t])
     if binfo.may_alias(producer_reads, w):
@@ -736,7 +761,7 @@ def vertical_block(
     j = k
     between: list = []
     producer_defs = set(defined([s]))
-    _, producer_writes = buffer_accesses([s])
+    producer_reads, producer_writes = buffer_accesses([s])
     producer_cannot_raise = producer_writes <= binfo.local_allocs and not any(
       isinstance(x, ir.Check) or (isinstance(x, IndexReduce) and any(f.empty is not None for f in x.folds))
       for x in ir.walk_stmts([s])
@@ -756,6 +781,17 @@ def vertical_block(
         and not isinstance(t.var.type, ir.BufType)
         and pure(t.value)
         and not uses([t], producer_defs | producer_writes)
+        and not uses([s], {t.var.uid})
+      ):
+        step_facts.record_stmt(t)
+        between.append(t)
+      elif (
+        producer_cannot_raise
+        and isinstance(t, ir.If)
+        and not uses([t], producer_defs | producer_writes)
+        and not uses([s], set(defined([t])))
+        and not any(isinstance(x, (ir.Break, ir.Continue)) for x in ir.walk_stmts([t]))
+        and not binfo.may_alias(producer_reads, buffer_accesses([t])[1])
       ):
         step_facts.record_stmt(t)
         between.append(t)
@@ -763,7 +799,7 @@ def vertical_block(
         break
       j += 1
     nxt = block[j] if j < len(block) else None
-    if nxt is not None and isinstance(nxt, (IndexMap, IndexFilter, IndexReduce)):
+    if nxt is not None and isinstance(nxt, (IndexMap, IndexFilter, IndexReduce, IndexScatter)):
       res = fuse_vertical_pair(s, nxt, binfo.readers, step_facts, binfo, binfo.store_counts, options)
       if res is not None:
         fused, dead_buf = res
@@ -1399,6 +1435,111 @@ def absorb(a: IndexReduce, b: IndexReduce) -> None:
   a.scope.owned.extend(cloner.scope(b.scope).owned)
 
 
+def _resolve_local_expr(e: Expr, local_assigns: dict[int, Expr], budget: int = 12) -> Expr:
+  """Inline single-assignment local variables within a reduction body."""
+  if isinstance(e, Var) and e.uid in local_assigns and budget > 0:
+    return _resolve_local_expr(local_assigns[e.uid], local_assigns, budget - 1)
+  if isinstance(e, ir.Prim):
+    return ir.Prim(e.op, tuple(_resolve_local_expr(a, local_assigns, budget - 1) for a in e.args), e.type)
+  if isinstance(e, ir.Cast):
+    return ir.Cast(_resolve_local_expr(e.arg, local_assigns, budget - 1), e.type)
+  if isinstance(e, ir.Load):
+    return ir.Load(e.buf, _resolve_local_expr(e.index, local_assigns, budget - 1))
+  return e
+
+
+def _alpha_expr_key(e: Expr, idx_slots: dict[int, int], facts: IndexFacts) -> object:
+  """Alpha-invariant key for comparing two reduction bodies' value expressions."""
+  if isinstance(e, Var):
+    if e.uid in idx_slots:
+      return ("idx", idx_slots[e.uid], e.type)
+    if not isinstance(e.type, ir.BufType) and e.type.kind in "iu":
+      return ("iv", facts.expr_key(e))
+    return ("v", e.uid)
+  if isinstance(e, Const):
+    return ("c", e.value, e.type)
+  if isinstance(e, ir.Load):
+    return ("ld", e.buf.uid, _alpha_expr_key(e.index, idx_slots, facts))
+  if isinstance(e, ir.Prim):
+    return ("p", e.op, e.type, tuple(_alpha_expr_key(a, idx_slots, facts) for a in e.args))
+  if isinstance(e, ir.Cast):
+    return ("t", e.type, _alpha_expr_key(e.arg, idx_slots, facts))
+  if isinstance(e, ir.RtCall):
+    return ("rt", e.name, e.pure, e.type, tuple(_alpha_expr_key(a, idx_slots, facts) for a in e.args))
+  return ("?", id(e))
+
+
+def fuse_online_logsumexp(a: IndexReduce, b: IndexReduce, facts: IndexFacts) -> IndexReduce | None:
+  """Fuse adjacent ``m = max(x)`` followed by ``s = sum(exp(x - m))`` over the
+  same index space into ONE single-pass associative monoidal :class:`IndexReduce`
+  using :class:`~parakeet.syntax.ir.Payload`:
+
+      (m_a, s_a) (+) (m_b, s_b) = (m_new, s_a * exp(m_a - m_new) + s_b * exp(m_b - m_new))
+      where m_new = max(m_a, m_b).
+  """
+  if len(a.folds) != 1 or len(b.folds) != 1:
+    return None
+  if a.where is not None or b.where is not None or a.parallel != b.parallel:
+    return None
+  if len(a.shape) != len(b.shape) or not facts.same_shape(a.shape, b.shape):
+    return None
+  if has_effects(a.body) or has_effects(b.body) or a.scope.owned or b.scope.owned:
+    return None
+  f1, f2 = a.folds[0], b.folds[0]
+  if f1.op != "max" or f1.init is not None or f1.combine or f1.payloads or f1.a.type.kind != "f":
+    return None
+  if (
+    f2.op != "add"
+    or f2.combine
+    or f2.payloads
+    or f2.a.type is not f1.a.type
+    or not (isinstance(f2.init, Const) and f2.init.value == 0.0)
+  ):
+    return None
+
+  a_locals = {t.var.uid: t.value for t in a.body if isinstance(t, Assign)}
+  b_locals = {t.var.uid: t.value for t in b.body if isinstance(t, Assign)}
+  v1 = _resolve_local_expr(f1.value, a_locals)
+  v2 = _resolve_local_expr(f2.value, b_locals)
+  # Match v2 == exp(x2 - f1.result)
+  if not (isinstance(v2, ir.Prim) and v2.op == "exp" and len(v2.args) == 1):
+    return None
+  sub_expr = v2.args[0]
+  if not (isinstance(sub_expr, ir.Prim) and sub_expr.op == "sub" and len(sub_expr.args) == 2):
+    return None
+  x2, sub_rhs = sub_expr.args
+  if sub_rhs is not f1.result:
+    return None
+
+  idx_a = {v.uid: k for k, v in enumerate(a.index)}
+  idx_b = {v.uid: k for k, v in enumerate(b.index)}
+  if _alpha_expr_key(v1, idx_a, facts) != _alpha_expr_key(x2, idx_b, facts):
+    return None
+
+  t = f1.a.type
+  ma, mb = Var("ma", t), Var("mb", t)
+  sa, sb = Var("sa", t), Var("sb", t)
+  mnew = Var("mnew", t)
+  comb_stmts: list[ir.Stmt] = [Assign(mnew, ops.prim("max", (ma, mb), t))]
+  scale_a = ops.prim("mul", (sa, ops.prim("exp", (ops.prim("sub", (ma, mnew), t),), t)), t)
+  scale_b = ops.prim("mul", (sb, ops.prim("exp", (ops.prim("sub", (mb, mnew), t),), t)), t)
+  snew = ops.prim("add", (scale_a, scale_b), t)
+  payload = ir.Payload(f2.result, Const(1.0, t), sa, sb, snew)
+  fused_fold = ir.Fold(
+    result=f1.result,
+    value=f1.value,
+    a=ma,
+    b=mb,
+    combine=comb_stmts,
+    combined=mnew,
+    init=None,
+    op="online_lse",
+    empty=f1.empty,
+    payloads=[payload],
+  )
+  return IndexReduce(a.shape, a.index, list(a.body), [fused_fold], a.scope, a.home, a.parallel, a.loc)
+
+
 def contains_reduce(s: IndexMap) -> bool:
   """True if ``s`` wraps an ``IndexReduce`` (e.g. a matmul or row-reduction)."""
   return any(isinstance(t, IndexReduce) for t in ir.walk_stmts(s.body))
@@ -1479,14 +1620,24 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
             break
           j += 1
         nxt = block[j] if j < len(block) else None
-        if not isinstance(nxt, IndexReduce) or uses([nxt], sink_more_defs) or not compatible(s, nxt, step_facts):
-          break
-        out.extend(hoist)
-        walk_facts = step_facts
-        sunk.extend(sink_more)
-        sunk_defs = sink_more_defs | {v.uid for f in nxt.folds for v in (f.result, *(p.result for p in f.payloads))}
-        absorb(s, nxt)
-        k = j + 1
+        if isinstance(nxt, IndexReduce):
+          if not uses([nxt], sink_more_defs) and compatible(s, nxt, step_facts):
+            out.extend(hoist)
+            walk_facts = step_facts
+            sunk.extend(sink_more)
+            sunk_defs = sink_more_defs | {v.uid for f in nxt.folds for v in (f.result, *(p.result for p in f.payloads))}
+            absorb(s, nxt)
+            k = j + 1
+            continue
+          # Online monoidal fusion: m = max(x); s = sum(exp(x - m)) -> 1-pass (m, s) monoid
+          if not sink_more and (online := fuse_online_logsumexp(s, nxt, step_facts)) is not None:
+            out.extend(hoist)
+            walk_facts = step_facts
+            s = online
+            sunk_defs = sunk_defs | {v.uid for f in s.folds for v in (f.result, *(p.result for p in f.payloads))}
+            k = j + 1
+            continue
+        break
       out.append(s)
       out.extend(sunk)
       continue
@@ -1559,6 +1710,7 @@ __all__ = [
   "filter_reduce",
   "filter_signature",
   "fuse_filters",
+  "fuse_online_logsumexp",
   "fuse_siblings",
   "fuse_vertical",
   "fuse_vertical_pair",

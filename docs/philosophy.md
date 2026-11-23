@@ -46,23 +46,26 @@ function, Parakeet defines NumPy operations, comprehensions, matrix products,
 and `einsum` in terms of a tiny set of data-parallel operators (*adverbs*):
 
 * `IndexMap` — independent element-wise / slice-wise computation over an index space
-* `IndexReduce` — associative or sequential folds (including payload folds such as `argmin`/`argmax` and guarded `FilterReduce`)
+* `IndexReduce` — associative or sequential folds (including multi-payload monoids such as `argmin`/`argmax` and 1-pass online `logsumexp`/`softmax`, plus guarded `FilterReduce`)
 * `IndexScan` — prefix folds with an `emit` stage
 * `IndexFilter` — stream compaction of indices matching a predicate
+* `IndexScatter` — index-directed associative scatter-reductions (`np.bincount`, `parakeet.scatter_add`), lowered via thread-privatized parallel bins on CPU, CUDA, and Metal
 
 Every higher-level construct—whether written as `np.tanh(x * a) + b`, a list
-comprehension, `a @ b`, `np.cumsum`, `x[x > 0]`, or `parakeet.allpairs`—lowers
-to these four operator statements (`f.specialize(*args).operators`).
+comprehension, `a @ b`, `np.cumsum`, `x[x > 0]`, `np.bincount`, or
+`parakeet.allpairs`—lowers to these five operator statements
+(`f.specialize(*args).operators`).
 
 ### 3. Algebraic fusion *before* loop lowering ([R] Ch. 6)
 
 Once a program is expressed in adverbs, optimizations become concise algebraic
-identities instead of fragile loop-nest analyses:
+identities instead of fragile loop-nest analyses, backed by a single shared
+`IndexFacts` affine analysis and `BufferInfo` alias/cost table:
 
-* **Vertical fusion** ([R] Fig. 6.1): `Map ∘ Map` (including matmul epilogues like `np.tanh(a @ b + c)`), `Map ∘ Scan` into `IndexScan.emit`, `Map → Filter`, `Map → Reduce`, `Filter ∘ Filter` (short-circuiting), and `Reduce ∘ Filter ⇒ FilterReduce` (single zero-allocation pass).
+* **Vertical fusion** ([R] Fig. 6.1): `Map ∘ Map` (including matmul epilogues like `np.tanh(a @ b + c)`, affine transpose/slice/stencil fusion, and cost-bounded multi-consumer fusion), `Map ∘ Scan` into `IndexScan.emit`, `Map → Filter`, `Map → Reduce`, `Map → Scatter`, `Filter ∘ Filter` (short-circuiting), and `Reduce ∘ Filter ⇒ FilterReduce` (single zero-allocation pass).
 * **Nested map flattening** ([R] Fig. 6.2, `CombineNestedMaps`): `IndexMap` inside `IndexMap` collapses into one multi-dimensional `IndexMap`, exposing the full 2D/ND index space to multi-core CPUs and GPUs.
-* **Horizontal / sibling fusion** ([R] Fig. 6.3): adjacent `IndexReduce`s (`x.min(), x.max()`, `x.argmin(), x.argmax()`) and independent `IndexMap`s (`np.sin(x), np.cos(x)`) over the same index space share one loop.
-* **Dead-operator elimination**: pure maps, reductions, scans, filters, and unused allocations nobody reads are removed before lowering.
+* **Horizontal / sibling & online monoidal fusion** ([R] Fig. 6.3): adjacent `IndexReduce`s (`x.min(), x.max()`, `x.argmin(), x.argmax()`) and independent `IndexMap`s (`np.sin(x), np.cos(x)`) share one loop, and dependent `m = max(x); s = sum(exp(x - m))` pairs collapse into a single parallel associative `(m, s)` monoid pass via `Fold.payloads` (`logsumexp`, 1-loop `softmax`).
+* **Dead-operator elimination**: pure maps, reductions, scans, filters, scatters, and unused allocations nobody reads are removed before lowering.
 
 Parakeet 1.0 also adds the side conditions the original thesis omitted:
 single-use / cost guards (so fusion never silently duplicates expensive work),
@@ -137,7 +140,7 @@ sorting, indexing/masks, `@`/`dot`/`einsum`, `np.linalg.norm`, and parallel
 * Matrix decompositions and solvers (`np.linalg.svd`, `solve`, `inv`, `eig`,
   `cholesky`, `qr`, `det`, `lstsq`)
 * Signal/spectral transforms (`np.fft.*`)
-* Variable-cardinality set/grouping ops (`np.unique`, `np.bincount`, `np.lexsort`, `np.isin`)
+* Variable-cardinality set/grouping ops (`np.unique`, `np.lexsort`, `np.isin`)
 * SciPy modules (`scipy.special`, `scipy.optimize`, `scipy.ndimage`, ...)
 
 ### Automatic differentiation (`grad` / `value_and_grad`)
@@ -161,8 +164,10 @@ Boundaries:
   by the condition, so branches touching differentiated values cannot contain
   array stores, `return`, `break`, or `raise`.
 * **Missing derivative rules (refused loudly):** `cumprod`, `convolve`,
-  user-defined `scan` combiners, scatter-stores (`out[idx] = v`), and
-  overwriting an array still needed by an earlier operation's backward pass.
+  user-defined `scan` combiners, in-place indexed assignment (`out[idx] = v`;
+  use `parakeet.scatter_add` / `np.bincount(..., weights=w)` for differentiable
+  scatter-add), and overwriting an array still needed by an earlier
+  operation's backward pass.
 * **Second derivatives:** work for element-wise ops, reductions, `@`, and
   views; not yet supported through `map`, gather indexing, or `cumsum`.
 

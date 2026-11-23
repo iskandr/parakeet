@@ -597,6 +597,16 @@ def buffer_accesses(stmts: list) -> tuple[set[int], set[int]]:
         for x in ir.walk_expr(e):
           if isinstance(x, Load):
             reads.add(x.buf.uid)
+    elif isinstance(s, ir.IndexScatter):
+      writes.add(s.buf.uid)
+      if s.op != "assign":
+        reads.add(s.buf.uid)
+      for e in (*s.shape, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,))):
+        for x in ir.walk_expr(e):
+          if isinstance(x, Load):
+            reads.add(x.buf.uid)
+          elif isinstance(x, Var) and isinstance(x.type, ir.BufType):
+            reads.add(x.uid)
     else:
       for e in ir.stmt_exprs(s):
         for x in ir.walk_expr(e):
@@ -646,6 +656,11 @@ class BufferInfo:
         info.store_counts[s.buf.uid] = info.store_counts.get(s.buf.uid, 0) + 1
         note_expr(s.index)
         note_expr(s.value)
+        continue
+      elif isinstance(s, ir.IndexScatter):
+        info.store_counts[s.buf.uid] = info.store_counts.get(s.buf.uid, 0) + 1
+        for e in (*s.shape, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,))):
+          note_expr(e)
         continue
       elif isinstance(s, ir.Incref) and isinstance(s.buf, Var):
         info.escapes.add(s.buf.uid)

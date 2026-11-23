@@ -1356,6 +1356,15 @@ def _fold(tape: Tape, el, node: Node, g: Expr) -> None:
     tape.add(el, init, rest)
 
 
+def _scatter_add(tape: Tape, el, node: Node, g: ArrayVal) -> None:
+  (values,) = node.inputs
+  (idx,) = node.info
+  # Adjoint of scatter_add(n, idx, values) w.r.t. values is gather: d_values = g[idx]
+  g = el.as_concrete(g)
+  gathered = el.getitem(g, idx)
+  tape.add(el, values, gathered)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1368,6 +1377,7 @@ _BACKWARD = {
   "store": _store,
   "store_element": _store_element,
   "fold": _fold,
+  "scatter_add": _scatter_add,
 }
 
 
