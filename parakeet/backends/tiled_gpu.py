@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import math
 
-from ..ndtypes import BufType, ScalarType
+from ..ndtypes import BufType, Float32, ScalarType
 from ..syntax import ir
+from ..target import TargetProfile
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars, expr_types, used_vars
 from .device import KernelPlan
 
-BLOCK_THREADS = 256  # 16 x 16 threads per block / threadgroup
+BLOCK_THREADS = 256  # 16 x 16 threads per block / threadgroup for general SIMT tiled kernels
+MATRIX_UNIT_THREADS = 128  # 4 warps / SIMD-groups (2 x 2) for simdgroup_matrix & wmma kernels
 NTX = 16
 NTY = 16
 BK = 16
@@ -32,13 +34,23 @@ DEFAULT_SHARED_BUDGET = 24 * 1024  # 24 KiB target -> high occupancy on CUDA & M
 
 
 def choose_tile_config(
-  plan: ir.SharedTilePlan, max_shared_bytes: int = DEFAULT_SHARED_BUDGET
+  plan: ir.SharedTilePlan,
+  max_shared_bytes: int | None = None,
+  profile: TargetProfile | None = None,
 ) -> tuple[int, int, int, int, int] | None:
   """Analytically choose ``(BM, BN, BK, TM, TN)`` from ``plan``'s stage types,
   accumulator count, and target shared-memory budget."""
+  budget = (
+    max_shared_bytes
+    if max_shared_bytes is not None
+    else (profile.shared_budget() if profile is not None else DEFAULT_SHARED_BUDGET)
+  )
   n_accs = sum(1 + len(f.payloads) for f in plan.mixed_folds)
   candidates: list[tuple[int, int, int, int, int]] = []
   if n_accs <= 2:
+    # Larger BK=32 on CUDA GPUs with >= 32 KiB per-block shared budget halves barrier overhead
+    if profile is not None and profile.kind == "cuda" and budget >= 32 * 1024:
+      candidates.append((64, 64, 32, 4, 4))
     candidates.append((64, 64, BK, 4, 4))
   if n_accs <= 8:
     candidates.append((32, 32, BK, 2, 2))
@@ -54,9 +66,59 @@ def choose_tile_config(
         needed += bn * (bk + 1) * elt_bytes
       else:
         needed += bk * elt_bytes
-    if needed <= max_shared_bytes:
+    if needed <= budget:
       return bm, bn, bk, tm, tn
   return None
+
+
+def match_matrix_unit_plan(plan: ir.SharedTilePlan) -> tuple[int, int, ir.Fold, float] | None:
+  """Return ``(row_stage_idx, col_stage_idx, fold, init_float)`` when ``plan``
+  is a float32 sum-of-products contraction eligible for hardware matrix-unit
+  tiling (Metal ``simdgroup_matrix`` or CUDA ``nvcuda::wmma``)."""
+  if plan.has_mixed_loads or len(plan.stages) != 2 or len(plan.mixed_folds) != 1:
+    return None
+  if set(plan.stage_sides) != {"row", "col"}:
+    return None
+  row_idx = plan.stage_sides.index("row")
+  col_idx = plan.stage_sides.index("col")
+  if plan.stages[row_idx].buf.type.elt != Float32 or plan.stages[col_idx].buf.type.elt != Float32:
+    return None
+  f = plan.mixed_folds[0]
+  if f.op != "add" or f.combine or f.payloads or f.a.type != Float32:
+    return None
+  if not isinstance(f.init, ir.Const):
+    return None
+  # Resolve straight-line Assigns inside mixed_body and confirm f.value == row_sv * col_sv
+  defs: dict[int, ir.Expr] = {}
+  for s in plan.mixed_body:
+    if isinstance(s, ir.Comment):
+      continue
+    if not isinstance(s, ir.Assign):
+      return None
+    defs[s.var.uid] = s.value
+
+  def unwrap(e: ir.Expr, depth: int = 8) -> ir.Expr:
+    while depth > 0:
+      if isinstance(e, ir.Cast) and e.type == Float32:
+        e = e.arg
+      elif isinstance(e, ir.Var) and e.uid in defs:
+        e = defs[e.uid]
+      else:
+        break
+      depth -= 1
+    return e
+
+  val = unwrap(f.value)
+  if not isinstance(val, ir.Prim) or val.op != "mul" or len(val.args) != 2:
+    return None
+  a = unwrap(val.args[0])
+  b = unwrap(val.args[1])
+  if not (isinstance(a, ir.Var) and isinstance(b, ir.Var)):
+    return None
+  want = {plan.stage_vars[row_idx].uid, plan.stage_vars[col_idx].uid}
+  if {a.uid, b.uid} != want:
+    return None
+  return row_idx, col_idx, f, float(f.init.value)
 
 
 def tiled_num_blocks(tiled_meta: dict, ctx) -> int:
@@ -185,6 +247,302 @@ def _emit_fold_step(
   out.append(f"{pad}}}")
 
 
+def _generate_matrix_unit_kernel(
+  loop: ir.ParLoop,
+  plan: ir.SharedTilePlan,
+  free: list[ir.Var],
+  target: str,
+  em: CFamilyEmitter,
+  prelude: str,
+  row_idx: int,
+  col_idx: int,
+  fold: ir.Fold,
+  init_val: float,
+  max_buffers: int | None = None,
+) -> KernelPlan:
+  """Generate a hardware matrix-unit block-tiled kernel:
+
+  * ``target == "metal"``: Apple Silicon ``simdgroup_matrix<float, 8, 8>`` (full
+    IEEE FP32, 128 threads = 4 SIMD-groups, ``64x64x32`` block, 17.5 KiB SRAM).
+  * ``target == "cuda"``: NVIDIA Ampere+ ``nvcuda::wmma`` TF32 Tensor Cores
+    (128 threads = 4 warps, ``64x64x16`` block, 9.25 KiB SMEM).
+
+  Both support arbitrary batch rank, arbitrary fused prologue stages (``sin(a) @
+  cos(b)``), non-multiple-of-tile tail bounds, and arbitrary fused epilogues
+  (``np.tanh(a @ b + c)``) with zero extra shared memory.
+  """
+  is_cuda = target == "cuda"
+  bm, bn, bk = 64, 64, 16
+  bk_shift = bk.bit_length() - 1
+  a_stride = bk + 4  # 20 floats (16-byte aligned + bank-conflict-free)
+  # Metal simdgroup_load supports hardware transpose -> store B contiguously [BN x (BK+4)] (10 KiB total -> 3x occupancy!)
+  # CUDA wmma stores B transposed [BK x (BN+4)] (9.25 KiB total)
+  b_stride = (bn + 4) if is_cuda else (bk + 4)
+  b_size = (bk * b_stride) if is_cuda else (bn * b_stride)
+  idx_t = "long long" if is_cuda else "long"
+  sh_qual = "__shared__" if is_cuda else "threadgroup"
+  barrier = "__syncthreads();" if is_cuda else "threadgroup_barrier(mem_flags::mem_threadgroup);"
+  fail_zero = "0LL" if is_cuda else "0L"
+
+  scalars = [v for v in free if not isinstance(v.type, BufType)]
+  bufs = [v for v in free if isinstance(v.type, BufType)]
+  if max_buffers is not None and len(bufs) > max_buffers:
+    raise Unsupported(f"it uses {len(bufs)} arrays ({target} kernels are limited to {max_buffers})")
+
+  for t in _plan_types(plan):
+    em.ctype(t)
+  for v in free:
+    em.ctype(v.type.elt if isinstance(v.type, BufType) else v.type)
+
+  if not is_cuda:
+    scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
+
+  if is_cuda:
+    hdr = "#ifndef PK_CUDA_SIMULATE\n#include <mma.h>\n#endif\n" + prelude
+  else:
+    hdr = prelude.replace("#include <metal_stdlib>", "#include <metal_stdlib>\n#include <metal_simdgroup_matrix>", 1)
+
+  lines: list[str] = [hdr]
+  if is_cuda:
+    params = ["long long pk_total", "long long pk_csize"]
+    params += [f"{em.ctype(v.type)} {v.name}" for v in scalars]
+    params += ["int* pk_flag", "long long* pk_info"]
+    params += [f"{em.ctype(v.type.elt)}* {v.name}_d" for v in bufs]
+    lines.append('extern "C" __global__ void pk_kernel(' + ",\n    ".join(params) + ") {")
+  else:
+    lines += ["struct pk_args {", "  long total;", "  long csize;"]
+    for v in scalars:
+      lines.append(f"  {em.ctype(v.type)} {v.name};")
+    lines.append("};")
+    params = [
+      "constant pk_args& pk_a [[buffer(0)]]",
+      "device atomic_int* pk_flag [[buffer(1)]]",
+      "device long* pk_info [[buffer(2)]]",
+    ]
+    for k, v in enumerate(bufs):
+      params.append(f"device {em.ctype(v.type.elt)}* {v.name}_d [[buffer({k + 3})]]")
+    params.append("uint3 pk_bid [[threadgroup_position_in_grid]]")
+    params.append("uint3 pk_ltid [[thread_position_in_threadgroup]]")
+    params.append("uint pk_sgid_u [[simdgroup_index_in_threadgroup]]")
+    params.append("uint pk_lane_u [[thread_index_in_simdgroup]]")
+    lines.append("kernel void pk_kernel(" + ",\n    ".join(params) + ") {")
+    for v in scalars:
+      lines.append(f"  const {em.ctype(v.type)} {v.name} = pk_a.{v.name};")
+
+  # Block / warp / SIMD-group coordinates (4 warps arranged 2 x 2)
+  if is_cuda:
+    lines.append(f"  const {idx_t} pk_blk = ({idx_t})blockIdx.x;")
+    lines.append(f"  const {idx_t} pk_tid = ({idx_t})threadIdx.x;")
+    lines.append(f"  const {idx_t} pk_sgid = pk_tid >> 5;")
+    lines.append(f"  const {idx_t} pk_lane = pk_tid & 31;")
+  else:
+    lines.append(f"  const {idx_t} pk_blk = ({idx_t})pk_bid.x;")
+    lines.append(f"  const {idx_t} pk_tid = ({idx_t})pk_ltid.x;")
+    lines.append(f"  const {idx_t} pk_sgid = ({idx_t})pk_sgid_u;")
+    lines.append(f"  const {idx_t} pk_lane = ({idx_t})pk_lane_u;")
+  lines.append(f"  const {idx_t} pk_sg_m = pk_sgid >> 1;")
+  lines.append(f"  const {idx_t} pk_sg_n = pk_sgid & 1;")
+
+  # Shape dimensions & block unraveling (supports arbitrary batch rank >= 0)
+  lines.append(f"  const {idx_t} pk_M = ({idx_t})({em.expr(plan.shape[-2])});")
+  lines.append(f"  const {idx_t} pk_N = ({idx_t})({em.expr(plan.shape[-1])});")
+  lines.append(f"  const {idx_t} pk_K = ({idx_t})({em.expr(plan.reduce.shape[0])});")
+  lines.append(f"  const {idx_t} pk_nb_n = (pk_N + {bn - 1}) / {bn};")
+  lines.append(f"  const {idx_t} pk_nb_m = (pk_M + {bm - 1}) / {bm};")
+  lines.append(f"  const {idx_t} pk_blk_n = pk_blk % pk_nb_n;")
+  lines.append(f"  const {idx_t} pk_rem0 = pk_blk / pk_nb_n;")
+  lines.append(f"  const {idx_t} pk_blk_m = pk_rem0 % pk_nb_m;")
+  if len(plan.shape) > 2:
+    lines.append(f"  {idx_t} pk_bflat = pk_rem0 / pk_nb_m;")
+    batch_dims = plan.shape[:-2]
+    batch_vars = plan.index[:-2]
+    for b_idx in range(len(batch_dims) - 1, 0, -1):
+      d_expr = em.expr(batch_dims[b_idx])
+      bv = batch_vars[b_idx]
+      lines.append(f"  const {idx_t} {bv.name} = pk_bflat % ({idx_t})({d_expr});")
+      lines.append(f"  pk_bflat = pk_bflat / ({idx_t})({d_expr});")
+    lines.append(f"  const {idx_t} {batch_vars[0].name} = pk_bflat;")
+  lines.append(f"  const {idx_t} pk_i0 = pk_blk_m * {bm};")
+  lines.append(f"  const {idx_t} pk_j0 = pk_blk_n * {bn};")
+
+  for chk in plan.pre_checks:
+    eid = em.error_id(chk.err)
+    cargs = [f"({idx_t})({em.expr(a)})" for a in chk.args[:4]]
+    cargs += [fail_zero] * (4 - len(cargs))
+    lines.append(f"  if (!({em.expr(chk.cond)})) {{")
+    lines.append("    if (pk_M > 0 && pk_N > 0 && pk_tid == 0) {")
+    lines.append(f"      pk_fail(pk_flag, pk_info, {eid}, {', '.join(cargs)});")
+    lines.append("    }")
+    lines.append("    return;")
+    lines.append("  }")
+
+  # Shared / threadgroup tiles (pk_sh_a also reused for zero-overhead epilogue staging)
+  lines.append(f"  {sh_qual} float pk_sh_a[{bm * a_stride}];")
+  lines.append(f"  {sh_qual} float pk_sh_b[{b_size}];")
+
+  init_lit = repr(float(init_val)) + ("f" if is_cuda else "")
+  if is_cuda:
+    lines.append("  using namespace nvcuda::wmma;")
+    lines.append("  fragment<accumulator, 16, 16, 8, float> pk_c[2][2];")
+    lines.append("  #pragma unroll")
+    lines.append("  for (int pk_rm = 0; pk_rm < 2; ++pk_rm) {")
+    lines.append("    #pragma unroll")
+    lines.append("    for (int pk_rn = 0; pk_rn < 2; ++pk_rn) {")
+    lines.append(f"      fill_fragment(pk_c[pk_rm][pk_rn], {init_lit});")
+    lines.append("    }")
+    lines.append("  }")
+  else:
+    lines.append("  simdgroup_float8x8 pk_c[4][4];")
+    lines.append("  #pragma unroll")
+    lines.append("  for (int pk_rm = 0; pk_rm < 4; ++pk_rm) {")
+    lines.append("    #pragma unroll")
+    lines.append("    for (int pk_rn = 0; pk_rn < 4; ++pk_rn) {")
+    lines.append(f"      pk_c[pk_rm][pk_rn] = make_filled_simdgroup_matrix<float, 8, 8>({init_lit});")
+    lines.append("    }")
+    lines.append("  }")
+
+  st_row = plan.stages[row_idx]
+  st_col = plan.stages[col_idx]
+  lines.append(f"  for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
+  # Cooperative load of row stage A[BM x BK]
+  lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {bm * bk}; pk_idx += {MATRIX_UNIT_THREADS}) {{")
+  lines.append(f"      const {idx_t} pk_ti = pk_idx >> {bk_shift};")
+  lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
+  lines.append(f"      const {idx_t} {st_row.index[0].name} = pk_i0 + pk_ti;")
+  lines.append(f"      const {idx_t} {st_row.index[1].name} = pk_k0 + pk_tk;")
+  lines.append(f"      if ({st_row.index[0].name} < pk_M && {st_row.index[1].name} < pk_K) {{")
+  _emit_decl_locals(em, st_row.body, {st_row.index[0].uid, st_row.index[1].uid}, lines, "        ")
+  em.block(st_row.body, lines, 4)
+  lines.append(f"        pk_sh_a[pk_ti * {a_stride} + pk_tk] = (float)({em.expr(st_row.value)});")
+  lines.append("      } else {")
+  lines.append(f"        pk_sh_a[pk_ti * {a_stride} + pk_tk] = 0.0f;")
+  lines.append("      }")
+  lines.append("    }")
+  # Cooperative load of col stage B (transposed [BK x BN] on CUDA; contiguous [BN x BK] on Metal w/ HW transpose)
+  lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {bn * bk}; pk_idx += {MATRIX_UNIT_THREADS}) {{")
+  lines.append(f"      const {idx_t} pk_tj = pk_idx >> {bk_shift};")
+  lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
+  lines.append(f"      const {idx_t} {st_col.index[0].name} = pk_j0 + pk_tj;")
+  lines.append(f"      const {idx_t} {st_col.index[1].name} = pk_k0 + pk_tk;")
+  b_idx_expr = f"pk_tk * {b_stride} + pk_tj" if is_cuda else f"pk_tj * {b_stride} + pk_tk"
+  lines.append(f"      if ({st_col.index[0].name} < pk_N && {st_col.index[1].name} < pk_K) {{")
+  _emit_decl_locals(em, st_col.body, {st_col.index[0].uid, st_col.index[1].uid}, lines, "        ")
+  em.block(st_col.body, lines, 4)
+  lines.append(f"        pk_sh_b[{b_idx_expr}] = (float)({em.expr(st_col.value)});")
+  lines.append("      } else {")
+  lines.append(f"        pk_sh_b[{b_idx_expr}] = 0.0f;")
+  lines.append("      }")
+  lines.append("    }")
+  lines.append(f"    {barrier}")
+
+  # Hardware matrix-unit MMA loop (zero-padded out-of-bounds elements -> branchless!)
+  if is_cuda:
+    lines.append("    #pragma unroll")
+    lines.append(f"    for ({idx_t} pk_tk = 0; pk_tk < {bk}; pk_tk += 8) {{")
+    lines.append("      fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa[2];")
+    lines.append("      fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb[2];")
+    for rm in range(2):
+      lines.append(
+        f"      load_matrix_sync(pk_fa[{rm}], &pk_sh_a[(pk_sg_m * 32 + {rm * 16}) * {a_stride} + pk_tk], {a_stride});"
+      )
+    for rn in range(2):
+      lines.append(
+        f"      load_matrix_sync(pk_fb[{rn}], &pk_sh_b[pk_tk * {b_stride} + pk_sg_n * 32 + {rn * 16}], {b_stride});"
+      )
+    for rm in range(2):
+      for rn in range(2):
+        lines.append(f"      mma_sync(pk_c[{rm}][{rn}], pk_fa[{rm}], pk_fb[{rn}], pk_c[{rm}][{rn}]);")
+    lines.append("    }")
+  else:
+    lines.append("    #pragma unroll")
+    lines.append(f"    for ({idx_t} pk_tk = 0; pk_tk < {bk}; pk_tk += 8) {{")
+    lines.append("      simdgroup_float8x8 pk_fa[4];")
+    lines.append("      simdgroup_float8x8 pk_fb[4];")
+    for rm in range(4):
+      lines.append(
+        f"      simdgroup_load(pk_fa[{rm}], &pk_sh_a[(pk_sg_m * 32 + {rm * 8}) * {a_stride} + pk_tk], {a_stride});"
+      )
+    for rn in range(4):
+      lines.append(
+        f"      simdgroup_load(pk_fb[{rn}], &pk_sh_b[(pk_sg_n * 32 + {rn * 8}) * {b_stride} + pk_tk], {b_stride}, ulong2(0, 0), true);"
+      )
+    for rm in range(4):
+      for rn in range(4):
+        lines.append(
+          f"      simdgroup_multiply_accumulate(pk_c[{rm}][{rn}], pk_fa[{rm}], pk_fb[{rn}], pk_c[{rm}][{rn}]);"
+        )
+    lines.append("    }")
+  lines.append(f"    {barrier}")
+  lines.append("  }")
+
+  # Epilogue: stage tiles through dead pk_sh_a (4 * 256 = 1024 <= BM * a_stride floats) and run plan.after
+  epilogue_before = _collect_epilogue_before(plan.before, plan.after)
+  epilogue_stmts = epilogue_before + plan.after
+  i_var, j_var = plan.index[-2], plan.index[-1]
+  skip_ep = {fold.result.uid, i_var.uid, j_var.uid}
+
+  if is_cuda:
+    lines.append("  float* pk_ep = &pk_sh_a[pk_sgid * 256];")
+    lines.append("  for (int pk_rm = 0; pk_rm < 2; ++pk_rm) {")
+    lines.append("    for (int pk_rn = 0; pk_rn < 2; ++pk_rn) {")
+    lines.append("      store_matrix_sync(pk_ep, pk_c[pk_rm][pk_rn], 16, mem_row_major);")
+    lines.append("      __syncwarp();")
+    lines.append(f"      for ({idx_t} pk_e = pk_lane; pk_e < 256; pk_e += 32) {{")
+    lines.append(f"        const {idx_t} {i_var.name} = pk_i0 + pk_sg_m * 32 + pk_rm * 16 + (pk_e >> 4);")
+    lines.append(f"        const {idx_t} {j_var.name} = pk_j0 + pk_sg_n * 32 + pk_rn * 16 + (pk_e & 15);")
+    lines.append(f"        if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
+    lines.append(f"          const float {fold.result.name} = pk_ep[pk_e];")
+    _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "          ")
+    em.block(epilogue_stmts, lines, 5)
+    lines.append("        }")
+    lines.append("      }")
+    lines.append("      __syncwarp();")
+    lines.append("    }")
+    lines.append("  }")
+  else:
+    lines.append("  threadgroup float* pk_ep = &pk_sh_a[pk_sgid * 256];")
+    lines.append("  for (int pk_rm = 0; pk_rm < 4; ++pk_rm) {")
+    for rn in range(4):
+      lines.append(f"    simdgroup_store(pk_c[pk_rm][{rn}], pk_ep + {rn * 8}, 32);")
+    lines.append("    simdgroup_barrier(mem_flags::mem_threadgroup);")
+    lines.append(f"    for ({idx_t} pk_e = pk_lane; pk_e < 256; pk_e += 32) {{")
+    lines.append(f"      const {idx_t} {i_var.name} = pk_i0 + pk_sg_m * 32 + pk_rm * 8 + (pk_e >> 5);")
+    lines.append(f"      const {idx_t} {j_var.name} = pk_j0 + pk_sg_n * 32 + (pk_e & 31);")
+    lines.append(f"      if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
+    lines.append(f"        const float {fold.result.name} = pk_ep[pk_e];")
+    _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "        ")
+    em.block(epilogue_stmts, lines, 4)
+    lines.append("      }")
+    lines.append("    }")
+    lines.append("    simdgroup_barrier(mem_flags::mem_threadgroup);")
+    lines.append("  }")
+
+  lines.append("}")
+
+  written = {s.buf.uid for s in ir.walk_stmts(plan.after) if isinstance(s, ir.Store)}
+  shape_meta = [("c", int(d.value)) if isinstance(d, ir.Const) else ("v", d.name) for d in plan.shape]
+  return KernelPlan(
+    loop=loop,
+    source="\n".join(lines),
+    scalars=scalars,
+    bufs=bufs,
+    errors=em.errors,
+    written={v.uid for v in bufs if v.uid in written},
+    extra={
+      "tiled": {
+        "bm": bm,
+        "bn": bn,
+        "bk": bk,
+        "tm": 4,
+        "tn": 4,
+        "threads": MATRIX_UNIT_THREADS,
+        "matrix_unit": "wmma" if is_cuda else "simdgroup_matrix",
+        "shape": shape_meta,
+      }
+    },
+  )
+
+
 def generate_tiled_gpu_kernel(
   loop: ir.ParLoop,
   free: list[ir.Var],
@@ -192,9 +550,15 @@ def generate_tiled_gpu_kernel(
   em: CFamilyEmitter,
   prelude: str,
   max_buffers: int | None = None,
+  profile: TargetProfile | None = None,
 ) -> KernelPlan | None:
   """Generate a cooperative ``__shared__`` (``target="cuda"``) or ``threadgroup``
   (``target="metal"``) block-tiled GPU kernel for ``loop.shared_tile``.
+
+  When ``profile`` reports a supported hardware matrix unit (Apple Silicon
+  ``simdgroup_matrix`` for exact float32, or CUDA ``sm_80+`` ``wmma`` when
+  ``profile.tensor_cores`` is enabled) and ``loop.shared_tile`` is a float32
+  sum-of-products contraction, emits a matrix-unit kernel directly.
 
   Returns ``None`` if the plan exceeds SRAM limits (so the caller can fall back
   to the ordinary 1D GPU loop), or raises :class:`Unsupported` if the body uses
@@ -203,10 +567,25 @@ def generate_tiled_gpu_kernel(
   plan = loop.shared_tile
   if plan is None:
     return None
-  cfg = choose_tile_config(plan)
+
+  if profile is not None and profile.matrix_unit is not None:
+    mu = profile.matrix_unit
+    use_mu = (target == "metal" and mu.kind == "simdgroup_matrix") or (
+      target == "cuda" and mu.kind == "wmma" and profile.tensor_cores
+    )
+    if use_mu:
+      mm = match_matrix_unit_plan(plan)
+      if mm is not None:
+        row_idx, col_idx, fold, init_val = mm
+        return _generate_matrix_unit_kernel(
+          loop, plan, free, target, em, prelude, row_idx, col_idx, fold, init_val, max_buffers=max_buffers
+        )
+
+  cfg = choose_tile_config(plan, profile=profile)
   if cfg is None:
     return None
   bm, bn, bk, tm, tn = cfg
+  bk_shift = bk.bit_length() - 1
   pad_k = bk + 1
 
   scalars = [v for v in free if not isinstance(v.type, BufType)]
@@ -356,7 +735,7 @@ def generate_tiled_gpu_kernel(
     if side == "row":
       total_elts = bm * bk
       lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {total_elts}; pk_idx += {BLOCK_THREADS}) {{")
-      lines.append(f"      const {idx_t} pk_ti = pk_idx >> 4;")
+      lines.append(f"      const {idx_t} pk_ti = pk_idx >> {bk_shift};")
       lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_i0 + pk_ti;")
       lines.append(f"      const {idx_t} {st.index[1].name} = pk_k0 + pk_tk;")
@@ -371,7 +750,7 @@ def generate_tiled_gpu_kernel(
     elif side == "col":
       total_elts = bn * bk
       lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {total_elts}; pk_idx += {BLOCK_THREADS}) {{")
-      lines.append(f"      const {idx_t} pk_tj = pk_idx >> 4;")
+      lines.append(f"      const {idx_t} pk_tj = pk_idx >> {bk_shift};")
       lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_j0 + pk_tj;")
       lines.append(f"      const {idx_t} {st.index[1].name} = pk_k0 + pk_tk;")
@@ -492,7 +871,7 @@ def generate_tiled_gpu_kernel(
     bufs=bufs,
     errors=em.errors,
     written={v.uid for v in bufs if v.uid in written},
-    extra={"tiled": {"bm": bm, "bn": bn, "bk": bk, "tm": tm, "tn": tn, "shape": shape_meta}},
+    extra={"tiled": {"bm": bm, "bn": bn, "bk": bk, "tm": tm, "tn": tn, "threads": BLOCK_THREADS, "shape": shape_meta}},
   )
 
 
@@ -500,7 +879,9 @@ __all__ = [
   "BK",
   "BLOCK_THREADS",
   "DEFAULT_SHARED_BUDGET",
+  "MATRIX_UNIT_THREADS",
   "choose_tile_config",
   "generate_tiled_gpu_kernel",
+  "match_matrix_unit_plan",
   "tiled_num_blocks",
 ]

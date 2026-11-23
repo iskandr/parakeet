@@ -23,13 +23,18 @@ import numpy as _np
 from . import errors, frontend, lib, ndtypes, prims, syntax, transforms
 from ._version import __version__
 from .api import (
+  DeviceArray,
   Specialization,
+  TargetProfile,
   available_backends,
   jit,
   run,
   run_python_fn,
   seed,
   specialize,
+  target_profile,
+  to_device,
+  to_host,
   typed_repr,
 )
 from .config import config, options
@@ -77,6 +82,7 @@ from .ndtypes import (
   UInt32,
   UInt64,
 )
+from .target import MatrixUnit
 from .transforms.verify import verify
 
 pmap1 = jit(_pmap1)
@@ -150,12 +156,14 @@ def clear_cache() -> int:
 
 
 __all__ = [
-    "BackendError", "BackendUnavailable", "CompileError", "FallbackWarning", "ParakeetError",
-    "Specialization", "StaticValueError", "TypeInferenceError", "UnsupportedError", "__version__",
+    "BackendError", "BackendUnavailable", "CompileError", "DeviceArray", "FallbackWarning",
+    "MatrixUnit", "ParakeetError", "Specialization", "StaticValueError", "TargetProfile",
+    "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "clear_cache", "config", "each", "errors", "filter", "imap",
     "ireduce", "jit", "lib", "map", "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "reduce", "run", "scan", "scatter_add", "seed",
-    "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "typed_repr",
+    "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
+    "to_device", "to_host", "typed_repr",
     "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",
     "Bool", "Float32", "Float64", "Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64",
 ]  # fmt: skip

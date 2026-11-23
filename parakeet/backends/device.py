@@ -13,6 +13,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 from ..errors import SourceLocation
 from ..ndtypes import BufType, ScalarType
 from ..syntax import ir
@@ -118,8 +120,9 @@ class DevicePlanner:
 
   name = "device"
 
-  def __init__(self, device: DeviceBase):
+  def __init__(self, device: DeviceBase, profile=None):
     self.device = device
+    self.profile = profile if profile is not None else getattr(device, "profile", None)
     self.plans: dict[int, KernelPlan | None] = {}
     self.fallbacks: list[tuple[SourceLocation | None, str]] = []
 
@@ -192,10 +195,115 @@ class DevicePlanner:
         warn_fallback(msg)
 
 
+class DeviceArray:
+  """An array resident on a GPU device (Metal or CUDA) across ``@jit`` calls.
+
+  Created with :func:`parakeet.to_device` or returned automatically by a
+  ``@jit`` function called with ``DeviceArray`` inputs.  Passing a
+  ``DeviceArray`` into subsequent ``@jit`` calls on the same device avoids
+  redundant host-to-device uploads, and GPU-computed outputs are promoted
+  directly to ``DeviceArray`` without device-to-host downloads — keeping
+  weights, gradients, and optimizer state resident on the GPU throughout a
+  training loop.
+
+  Call :meth:`numpy` or :func:`parakeet.to_host` (or ``np.asarray(da)``) to
+  bring the contents back to host memory.
+  """
+
+  __parakeet_device_array__ = True
+  __slots__ = ("_dev_buf", "_device", "_dirty", "_host")
+
+  def __init__(self, host: np.ndarray, device: DeviceBase, dev_buf: Any = None, *, dirty: bool = False) -> None:
+    if not host.flags.c_contiguous:
+      host = np.ascontiguousarray(host)
+    self._host = host
+    self._device = device
+    self._dev_buf = dev_buf
+    self._dirty = dirty
+
+  @property
+  def shape(self) -> tuple[int, ...]:
+    return self._host.shape
+
+  @property
+  def dtype(self) -> np.dtype:
+    return self._host.dtype
+
+  @property
+  def ndim(self) -> int:
+    return self._host.ndim
+
+  @property
+  def size(self) -> int:
+    return self._host.size
+
+  @property
+  def nbytes(self) -> int:
+    return self._host.nbytes
+
+  @property
+  def strides(self) -> tuple[int, ...]:
+    return self._host.strides
+
+  @property
+  def device(self) -> str:
+    return self._device.name
+
+  @property
+  def on_device(self) -> bool:
+    return self._dev_buf is not None
+
+  @property
+  def _host_addr(self) -> int:
+    return self._host.ctypes.data
+
+  def sync_host(self) -> np.ndarray:
+    """Bring the host backing array up to date if the device copy is newer."""
+    if self._dirty and self._dev_buf is not None and self._host.nbytes > 0:
+      self._device.download(self._dev_buf, self._host_addr, self._host.nbytes)
+      self._device.downloads += 1
+      self._dirty = False
+    return self._host
+
+  def ensure_device(self) -> Any:
+    """Ensure a device buffer exists for this array, uploading once if needed."""
+    if self._dev_buf is None:
+      nbytes = self._host.nbytes
+      self._dev_buf = self._device.upload(self._host_addr, nbytes, external=True, untouched=0)
+      if nbytes > 0:
+        self._device.uploads += 1
+      self._dirty = False
+    return self._dev_buf
+
+  def numpy(self) -> np.ndarray:
+    """Synchronize to host and return a NumPy ``ndarray`` copy."""
+    return self.sync_host().copy()
+
+  def copy(self) -> DeviceArray:
+    """Return an independent copy resident on the same device."""
+    arr = self.sync_host().copy()
+    da = DeviceArray(arr, self._device)
+    if self._dev_buf is not None:
+      da.ensure_device()
+    return da
+
+  def __array__(self, dtype=None, copy=None):
+    arr = self.sync_host()
+    if dtype is not None:
+      return arr.astype(dtype, copy=True)
+    return arr.copy() if copy else arr
+
+  def __repr__(self) -> str:
+    state = "resident" if self._dev_buf is not None else "host-staged"
+    return f"DeviceArray(shape={self.shape}, dtype={self.dtype}, device={self.device!r}, {state})"
+
+
 class _CallState(threading.local):
   def __init__(self) -> None:
     self.stack: list = []
     self.cache: dict[int, _Resident] = {}
+    self.pinned: dict[int, DeviceArray] = {}
+    self.writable_pinned: set[int] = set()
 
 
 class _Resident:
@@ -225,13 +333,28 @@ class DeviceBase:
     self._state = _CallState()
     #: number of loops that actually ran on the device (diagnostics)
     self.launches = 0
+    #: number of host->device copies performed (diagnostics)
+    self.uploads = 0
+    #: number of device->host copies performed (diagnostics)
+    self.downloads = 0
     self._callback = DEVICE_FN(self._launch)  # keep alive: C holds its address
     self.callback_address = ctypes.cast(self._callback, ctypes.c_void_p).value or 0
 
   # -- call bracketing (see api.Specialization.run)
-  def begin_call(self, spec, arrays):
+  def begin_call(
+    self,
+    spec,
+    arrays,
+    pinned: list[tuple[DeviceArray, bool]] | None = None,
+  ):
     token = _Token(spec)
     self._state.stack.append(token)
+    if pinned:
+      for da, writes in pinned:
+        addr = da._host_addr
+        self._state.pinned[addr] = da
+        if writes:
+          self._state.writable_pinned.add(addr)
     return token
 
   def end_call(self, token) -> BaseException | None:
@@ -240,18 +363,21 @@ class DeviceBase:
       stack.pop()
     if not stack:
       try:
-        self.flush()  # whatever is still only on the device belongs to the caller now
+        self.flush(mid_call=False)  # non-promoted GPU outputs belong to the caller now
       except BaseException as e:  # noqa: BLE001
         self._state.cache.clear()
         token.pending = token.pending or e
+      finally:
+        self._state.pinned.clear()
+        self._state.writable_pinned.clear()
     return token.pending
 
   def run(self, plan: KernelPlan, ctx_addr: int, total: int, nchunks: int) -> None:  # pragma: no cover
     raise NotImplementedError
 
-  # -- arrays that stay on the device between the loops of one call.  Host
-  # code asks for a flush before it touches array memory itself (see the
-  # PK_DEV_SYNC calls the C backend emits), so between two flushes the device
+  # -- arrays that stay on the device between the loops of one call (and across
+  # calls when wrapped in DeviceArray).  Host code asks for a flush before it
+  # touches array memory itself (PK_DEV_SYNC), so between two flushes the device
   # copy of anything a kernel wrote is the only current one.
 
   def upload(self, addr: int, nbytes: int, external: bool, untouched: int = 0):  # pragma: no cover
@@ -265,30 +391,65 @@ class DeviceBase:
   def acquire(self, regions, written: set[int], external: list[bool], untouched: list[int] | None = None) -> list:
     """Device buffers for host memory ``regions``, uploaded only if they are not there already."""
     cache = self._state.cache
+    pinned = self._state.pinned
     out = []
     untouched = untouched or [0] * len(regions)
     for r, (addr, nbytes) in enumerate(regions):
       if nbytes <= 0:
         out.append(self.upload(addr, 0, external[r]))
         continue
+      da = pinned.get(addr)
+      if da is not None and da.nbytes == nbytes:
+        dev_buf = da.ensure_device()
+        if r in written:
+          da._dirty = True
+        out.append(dev_buf)
+        continue
       hit = cache.get(addr)
       if hit is None or hit.nbytes != nbytes:
         for other in [e for e in cache.values() if e.addr < addr + nbytes and addr < e.addr + e.nbytes]:
           self._retire(other, True)
-        hit = cache[addr] = _Resident(addr, nbytes, self.upload(addr, nbytes, external[r], untouched[r]))
+        # If this region overlaps a pinned DeviceArray (e.g. a slice view), sync it to host first
+        for pda in list(pinned.values()):
+          if pda._host_addr < addr + nbytes and addr < pda._host_addr + pda.nbytes:
+            pda.sync_host()
+            if r in written:
+              pda._dev_buf = None
+        dev_buf = self.upload(addr, nbytes, external[r], untouched[r])
+        if untouched[r] == 0:
+          self.uploads += 1
+        hit = cache[addr] = _Resident(addr, nbytes, dev_buf)
       hit.dirty = hit.dirty or r in written
       out.append(hit.dev)
     return out
+
+  def promote(self, arr: np.ndarray) -> DeviceArray:
+    """Promote a freshly computed output ``arr`` into a persistent :class:`DeviceArray`
+    without downloading it if its buffer is already resident in the call cache."""
+    addr = arr.ctypes.data
+    entry = self._state.cache.get(addr)
+    if entry is not None and entry.nbytes == arr.nbytes and arr.flags.c_contiguous:
+      self._state.cache.pop(addr, None)
+      return DeviceArray(arr, self, entry.dev, dirty=entry.dirty)
+    return DeviceArray(arr, self, None, dirty=False)
 
   def _retire(self, entry: _Resident, download: bool) -> None:
     self._state.cache.pop(entry.addr, None)
     if download and entry.dirty:
       self.download(entry.dev, entry.addr, entry.nbytes)
+      self.downloads += 1
 
-  def flush(self) -> None:
-    """Bring the host up to date and forget what is on the device."""
+  def flush(self, mid_call: bool = True) -> None:
+    """Bring the host up to date and forget non-persistent buffers on the device."""
     for entry in list(self._state.cache.values()):
       self._retire(entry, True)
+    if mid_call:
+      for da in self._state.pinned.values():
+        if da._dirty and da._dev_buf is not None:
+          da.sync_host()
+        if da._host_addr in self._state.writable_pinned:
+          # Host code may mutate this writable input before the next GPU kernel
+          da._dev_buf = None
 
   def forget(self, addr: int) -> None:
     """The host is about to free the memory at ``addr``."""

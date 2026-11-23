@@ -117,6 +117,20 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
   mutations back.
   """
   t = type(value)
+  if getattr(t, "__parakeet_device_array__", False):
+    host = value._host
+    elt = _DIRECT.get(host.dtype)
+    if elt is None:
+      return classify(value.numpy(), leaves, fixups)
+    leaves.append(value)
+    shape = host.shape
+    return (
+      "a",
+      elt,
+      len(shape),
+      "C" if host.flags.c_contiguous else "S",
+      tuple([d == 1 for d in shape]),
+    )
   if t is np.ndarray:
     elt = _DIRECT.get(value.dtype)
     if elt is None or not value.flags.aligned or not value.dtype.isnative:

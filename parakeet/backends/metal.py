@@ -17,9 +17,18 @@ from ..config import config
 from ..errors import BackendUnavailable, InternalError
 from ..ndtypes import BufType, ScalarType
 from ..syntax import ir
+from ..target import MatrixUnit, TargetProfile
 from . import runtime_c
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars, expr_types, used_vars
-from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions
+from .device import (
+  DeviceBase,
+  DevicePlanner,
+  KernelPlan,
+  ctype_of,
+  make_runtime_error,
+  merge_regions,
+  untouched_regions,
+)
 from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel, tiled_num_blocks
 
 _MATH = {
@@ -170,7 +179,15 @@ class MetalPlanner(DevicePlanner):
   def generate(self, loop: ir.ParLoop, free: list[ir.Var]) -> KernelPlan:
     em = MetalEmitter()
     if loop.shared_tile is not None:
-      tiled_plan = generate_tiled_gpu_kernel(loop, free, "metal", em, PRELUDE, max_buffers=self.max_buffers)
+      tiled_plan = generate_tiled_gpu_kernel(
+        loop,
+        free,
+        "metal",
+        em,
+        PRELUDE,
+        max_buffers=self.max_buffers,
+        profile=self.profile,
+      )
       if tiled_plan is not None:
         return tiled_plan
     defined = defined_vars(loop.body, into_parloops=True)
@@ -263,10 +280,44 @@ class MetalDevice(DeviceBase):
       )
     self.queue = self.dev.newCommandQueue()
     self.device_name = str(self.dev.name())
+    self.profile = self._query_profile()
     super().__init__()
 
-  def planner(self) -> MetalPlanner:
-    return MetalPlanner(self)
+  def _query_profile(self) -> TargetProfile:
+    Metal = self.Metal
+    smem = int(getattr(self.dev, "maxThreadgroupMemoryLength", lambda: 32 * 1024)())
+    mt = self.dev.maxThreadsPerThreadgroup()
+    max_threads = int(mt.width) if hasattr(mt, "width") else 1024
+    unified = bool(getattr(self.dev, "hasUnifiedMemory", lambda: True)())
+    has_sg = False
+    for fam_name in ("MTLGPUFamilyApple7", "MTLGPUFamilyMetal3"):
+      fam = getattr(Metal, fam_name, None)
+      if fam is not None:
+        try:
+          if self.dev.supportsFamily_(fam):
+            has_sg = True
+            break
+        except Exception:  # noqa: BLE001
+          pass
+    mat = MatrixUnit("simdgroup_matrix", 8, 8, 8, ("float32",), ("float32",)) if has_sg else None
+    return TargetProfile(
+      kind="metal",
+      name=self.device_name,
+      num_compute_units=0,
+      vector_width=32,
+      l1_bytes=smem,
+      l2_bytes=0,
+      tile_bytes=config.tile_bytes,
+      shared_mem_bytes=smem,
+      max_threads_per_block=max_threads,
+      unified_memory=unified,
+      supports_float64=False,
+      matrix_unit=mat,
+      prefer_interchange=False,
+    )
+
+  def planner(self, profile: TargetProfile | None = None) -> MetalPlanner:
+    return MetalPlanner(self, profile or self.profile)
 
   # ---- kernels -----------------------------------------------------------------
 
@@ -354,7 +405,7 @@ class MetalDevice(DeviceBase):
       external[r] = external[r] or bool(pk.flags & 1)
       if v.uid in plan.written:
         written.add(r)
-    device_bufs = self.acquire(regions, written, external)
+    device_bufs = self.acquire(regions, written, external, untouched_regions(pks, where, len(regions)))
     bound = [(device_bufs[r][0], off) for r, off in where]
 
     cb = self.queue.commandBuffer()
@@ -363,9 +414,8 @@ class MetalDevice(DeviceBase):
     for k, (b, off) in enumerate([(arg_buf, 0), (flag_buf, 0), (info_buf, 0), *bound]):
       enc.setBuffer_offset_atIndex_(b, off, k)
     if tiled_meta is not None:
-      enc.dispatchThreadgroups_threadsPerThreadgroup_(
-        Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(BLOCK_THREADS, 1, 1)
-      )
+      tpg = int(tiled_meta.get("threads", BLOCK_THREADS))
+      enc.dispatchThreadgroups_threadsPerThreadgroup_(Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(tpg, 1, 1))
     else:
       width = min(int(pso.maxTotalThreadsPerThreadgroup()), n)
       enc.dispatchThreads_threadsPerThreadgroup_(Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(max(width, 1), 1, 1))

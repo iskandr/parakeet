@@ -95,11 +95,20 @@ than recovering structure from raw `for` loops:
   operators on CPU (arbitrary N-D register jamming with exact remainder-face
   partitioning) and automatically extracts maximal row/col/k prologue
   `TileStage`s into a `SharedTilePlan` for GPU backends.
-* **GPU `__shared__` (CUDA) & `threadgroup` (Metal) block tiling**: analytically
-  sized `(BM, BN, BK, TM, TN)` tiles (up to `64×64×16` with `4×4` per-thread
-  register micro-tiles and bank-conflict-free `+1` padding) stage arbitrary
-  fused prologues into SRAM once per tile and keep fused epilogues
-  (`np.tanh(a @ b + c)`) in registers with zero extra HBM round-trips.
+* **GPU `__shared__` (CUDA) & `threadgroup` (Metal) block tiling & hardware matrix units**:
+  queried via [`TargetProfile`](https://github.com/iskandr/parakeet/blob/master/parakeet/target.py),
+  analytically sized `(BM, BN, BK, TM, TN)` tiles (up to `64×64×32` on CUDA and
+  `64×64×16` on Metal with bank-conflict-free padding) stage arbitrary fused
+  prologues into SRAM once per tile and keep fused epilogues
+  (`np.tanh(a @ b + c)`) in registers with zero extra HBM round-trips. On Apple
+  Silicon Metal, float32 sum-of-products contractions automatically emit
+  hardware `simdgroup_matrix<float, 8, 8>` (full IEEE FP32); on CUDA `sm_80+`
+  GPUs, `config.tensor_cores=True` (or `fast_math=True`) emits `nvcuda::wmma`
+  TF32 Tensor Core kernels.
+* **Persistent GPU residency (`DeviceArray`)**: `parakeet.to_device(tree)` and
+  `parakeet.to_host(tree)` keep weights, gradients, and optimizer state tuples
+  resident on CUDA/Metal across `@jit` calls with zero per-step host↔device
+  copies.
 
 ### 5. Verifiable, inspectable, fail-loud compilation
 
@@ -180,12 +189,14 @@ Boundaries:
   on the CPU instead of CUDA/Metal.
 * **GPU matrix multiplication & cuBLAS:** CPU backends call BLAS for standalone
   float `A @ B`; GPU backends run Parakeet's cooperative `__shared__` (CUDA) /
-  `threadgroup` (Metal) block-tiled + register-micro-tiled kernels (handling
-  arbitrary contractions, fused prologues like `sin(a) @ cos(b)`, `allpairs`,
-  and fused epilogues like `np.tanh(a @ b + c)` in a single kernel), rather
-  than calling cuBLAS or Tensor Cores (`mma`). Very large standalone GEMMs are
-  therefore still faster in Tensor-Core cuBLAS, while fused contractions and
-  custom `allpairs` workloads benefit directly from single-kernel SRAM reuse.
+  `threadgroup` (Metal) block-tiled kernels — including Apple Silicon
+  `simdgroup_matrix` (exact FP32, automatic) and NVIDIA `nvcuda::wmma` TF32
+  Tensor Cores (`config.tensor_cores=True` on `sm_80+`) — handling arbitrary
+  contractions, fused prologues like `sin(a) @ cos(b)`, `allpairs`, and fused
+  epilogues like `np.tanh(a @ b + c)` in a single kernel, rather than calling
+  cuBLAS. Very large standalone GEMMs are still faster in hand-tuned cuBLAS,
+  while fused contractions and custom `allpairs` workloads benefit directly
+  from single-kernel SRAM reuse.
 * **Online autotuning & tiled scans:** tile sizes are chosen analytically from
   cache/SRAM/register budgets (`config.tile_bytes`, GPU shared-memory budget)
   rather than Hielscher's runtime online search, and chunked GPU `TiledScan`

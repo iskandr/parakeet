@@ -19,9 +19,11 @@ import threading
 
 import numpy as np
 
+from ..config import config
 from ..errors import BackendUnavailable, InternalError
 from ..ndtypes import BufType, ScalarType
 from ..syntax import ir
+from ..target import MatrixUnit, TargetProfile
 from . import runtime_c, toolchain
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars
 from .device import (
@@ -103,11 +105,13 @@ static inline long long min(long long a, long long b) { return a < b ? a : b; }
 """
 
 SIM_SHIM_TILED = r"""
+#define PK_CUDA_SIMULATE 1
 #include <cmath>
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <vector>
 using std::isnan; using std::isinf; using std::isfinite; using std::signbit;
 #define __device__ static
@@ -142,8 +146,60 @@ struct pk_sim_barrier_t {
   }
 };
 static pk_sim_barrier_t pk_sim_barrier;
+static pk_sim_barrier_t pk_sim_warp_barriers[8];
 static inline void __syncthreads() { pk_sim_barrier.wait(); }
+static inline void __syncwarp(unsigned int mask = 0xffffffffu) {
+  (void)mask;
+  pk_sim_warp_barriers[(threadIdx.x >> 5) & 7].wait();
+}
 static inline long long min(long long a, long long b) { return a < b ? a : b; }
+namespace nvcuda { namespace wmma {
+  struct matrix_a {};
+  struct matrix_b {};
+  struct accumulator {};
+  struct row_major {};
+  struct col_major {};
+  namespace precision { struct tf32 {}; }
+  enum layout_t { mem_row_major, mem_col_major };
+  template <typename Use, int M, int N, int K, typename T, typename Layout = void>
+  struct fragment {
+    static constexpr int R = (std::is_same<Use, matrix_b>::value) ? K : M;
+    static constexpr int C = (std::is_same<Use, matrix_a>::value) ? K : N;
+    float x[R * C];
+  };
+  template <typename Frag>
+  static inline void fill_fragment(Frag& f, float v) {
+    for (int i = 0; i < Frag::R * Frag::C; ++i) f.x[i] = v;
+  }
+  template <typename Frag>
+  static inline void load_matrix_sync(Frag& f, const float* p, unsigned int ldm) {
+    for (int r = 0; r < Frag::R; ++r)
+      for (int c = 0; c < Frag::C; ++c)
+        f.x[r * Frag::C + c] = p[r * ldm + c];
+  }
+  template <int M, int N, int K, typename T, typename LA, typename LB>
+  static inline void mma_sync(
+      fragment<accumulator, M, N, K, float>& d,
+      const fragment<matrix_a, M, N, K, T, LA>& a,
+      const fragment<matrix_b, M, N, K, T, LB>& b,
+      const fragment<accumulator, M, N, K, float>& c) {
+    for (int i = 0; i < M; ++i)
+      for (int j = 0; j < N; ++j) {
+        float acc = c.x[i * N + j];
+        for (int k = 0; k < K; ++k) acc += a.x[i * K + k] * b.x[k * N + j];
+        d.x[i * N + j] = acc;
+      }
+  }
+  template <int M, int N, int K>
+  static inline void store_matrix_sync(float* p, const fragment<accumulator, M, N, K, float>& f, unsigned int ldm, layout_t) {
+    if ((threadIdx.x & 31u) == 0u) {
+      for (int r = 0; r < M; ++r)
+        for (int c = 0; c < N; ++c)
+          p[r * ldm + c] = f.x[r * N + c];
+    }
+    __syncwarp();
+  }
+} }
 """
 
 
@@ -190,7 +246,7 @@ class CudaPlanner(DevicePlanner):
   def generate(self, loop: ir.ParLoop, free: list[ir.Var]) -> KernelPlan:
     em = CudaEmitter()
     if loop.shared_tile is not None:
-      tiled_plan = generate_tiled_gpu_kernel(loop, free, "cuda", em, PRELUDE)
+      tiled_plan = generate_tiled_gpu_kernel(loop, free, "cuda", em, PRELUDE, profile=self.profile)
       if tiled_plan is not None:
         return tiled_plan
     defined = defined_vars(loop.body, into_parloops=True)
@@ -251,7 +307,54 @@ class CuPyDriver:
     if count < 1:
       raise BackendUnavailable("CuPy is installed but no CUDA device was found on this machine")
     self.cp = cupy
-    self.device_name = f"CUDA device 0 of {count}"
+    self.profile = self._query_profile(cupy, count)
+    self.device_name = self.profile.name
+
+  @staticmethod
+  def _query_profile(cupy, count: int) -> TargetProfile:
+    name = f"CUDA device 0 of {count}"
+    sm_count = 0
+    warp = 32
+    smem = 48 * 1024
+    l2 = 0
+    max_threads = 1024
+    integrated = False
+    cc = (0, 0)
+    try:
+      props = cupy.cuda.runtime.getDeviceProperties(0)
+      raw_name = props.get("name", b"")
+      if raw_name:
+        name = raw_name.decode("utf-8", errors="replace") if isinstance(raw_name, bytes) else str(raw_name)
+    except Exception:  # noqa: BLE001
+      pass
+    try:
+      attrs = cupy.cuda.Device(0).attributes
+      sm_count = int(attrs.get("MultiProcessorCount", 0))
+      warp = int(attrs.get("WarpSize", 32)) or 32
+      smem = int(attrs.get("MaxSharedMemoryPerBlock", 48 * 1024)) or 48 * 1024
+      l2 = int(attrs.get("L2CacheSize", 0))
+      max_threads = int(attrs.get("MaxThreadsPerBlock", 1024)) or 1024
+      integrated = bool(attrs.get("Integrated", 0))
+      cc = (int(attrs.get("ComputeCapabilityMajor", 0)), int(attrs.get("ComputeCapabilityMinor", 0)))
+    except Exception:  # noqa: BLE001
+      pass
+    mat = MatrixUnit("wmma", 16, 16, 8, ("float32",), ("float32",)) if cc >= (8, 0) else None
+    return TargetProfile(
+      kind="cuda",
+      name=name,
+      num_compute_units=sm_count,
+      vector_width=warp,
+      l1_bytes=smem,
+      l2_bytes=l2,
+      tile_bytes=config.tile_bytes,
+      shared_mem_bytes=smem,
+      max_threads_per_block=max_threads,
+      unified_memory=integrated,
+      supports_float64=True,
+      compute_capability=cc,
+      matrix_unit=mat,
+      prefer_interchange=False,
+    )
 
   def compile(self, plan: KernelPlan):
     kernel = self.cp.RawKernel(plan.source, "pk_kernel")
@@ -268,8 +371,9 @@ class CuPyDriver:
     return self.cp.empty(nbytes, dtype=np.uint8)
 
   def launch(self, kernel, plan: KernelPlan, n: int, args: list) -> None:
-    if plan.extra.get("tiled") is not None:
-      kernel((n,), (BLOCK_THREADS,), tuple(args))
+    tiled_meta = plan.extra.get("tiled")
+    if tiled_meta is not None:
+      kernel((n,), (int(tiled_meta.get("threads", BLOCK_THREADS)),), tuple(args))
       return
     grid = (n + BLOCK - 1) // BLOCK
     kernel((grid,), (BLOCK,), tuple(args))
@@ -292,6 +396,22 @@ class SimulatorDriver:
     if tc.kind == "msvc" or os.name == "nt":
       raise BackendUnavailable("the CUDA simulator is only available on POSIX systems with GCC or Clang")
     self.cxx = self._find_cxx(tc)
+    self.profile = TargetProfile(
+      kind="cuda",
+      name=self.device_name,
+      num_compute_units=4,
+      vector_width=32,
+      l1_bytes=48 * 1024,
+      l2_bytes=4 * 1024 * 1024,
+      tile_bytes=config.tile_bytes,
+      shared_mem_bytes=48 * 1024,
+      max_threads_per_block=1024,
+      unified_memory=False,
+      supports_float64=True,
+      compute_capability=(8, 0),
+      matrix_unit=MatrixUnit("wmma", 16, 16, 8, ("float32",), ("float32",)),
+      prefer_interchange=False,
+    )
 
   @staticmethod
   def _find_cxx(tc) -> str:
@@ -328,6 +448,7 @@ class SimulatorDriver:
         "  if (grid <= 0 || block <= 0) return;\n"
         "  blockDim.x = (unsigned int)block;\n"
         "  pk_sim_barrier.init(block);\n"
+        "  for (int w = 0; w < 8; ++w) pk_sim_warp_barriers[w].init(block >= 32 ? 32 : block);\n"
         "  std::vector<std::thread> threads;\n"
         "  threads.reserve((size_t)block);\n"
         "  for (long long t = 0; t < block; t++) {\n"
@@ -404,8 +525,9 @@ class SimulatorDriver:
     return np.full(nbytes, 0xA5, dtype=np.uint8)  # recognisable garbage: nothing may rely on it
 
   def launch(self, kernel, plan: KernelPlan, n: int, args: list) -> None:
-    if plan.extra.get("tiled") is not None:
-      grid, block = n, BLOCK_THREADS
+    tiled_meta = plan.extra.get("tiled")
+    if tiled_meta is not None:
+      grid, block = n, int(tiled_meta.get("threads", BLOCK_THREADS))
     else:
       grid, block = (n + BLOCK - 1) // BLOCK, BLOCK
     keep = []
@@ -452,11 +574,12 @@ class CudaDevice(DeviceBase):
     simulate = os.environ.get("PARAKEET_CUDA_SIMULATE", "").strip().lower() not in ("", "0", "false", "no")
     self.driver = SimulatorDriver() if simulate else CuPyDriver()
     self.device_name = self.driver.device_name
+    self.profile = self.driver.profile
     self.simulated = simulate
     super().__init__()
 
-  def planner(self) -> CudaPlanner:
-    return CudaPlanner(self)
+  def planner(self, profile: TargetProfile | None = None) -> CudaPlanner:
+    return CudaPlanner(self, profile or self.profile)
 
   @staticmethod
   def _host(addr: int, nbytes: int):

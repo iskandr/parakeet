@@ -947,3 +947,149 @@ def test_online_monoidal_logsumexp_and_softmax():
     np.testing.assert_allclose(online_softmax_2d(x2), want_sm2, rtol=1e-12)
     sm_spec = online_softmax_2d.specialize(x2)
     assert sm_spec.ir.count("alloc(") == 1 and sm_spec.ir.count("parallel[map]") == 1
+
+
+def test_queried_target_profile_matrix_unit_and_device_array():
+  from parakeet.target import MatrixUnit, TargetProfile
+
+  # 1. CPU TargetProfile queries real host attributes
+  cpu_prof = parakeet.target_profile("multicore")
+  assert isinstance(cpu_prof, TargetProfile)
+  assert cpu_prof.kind == "cpu"
+  assert cpu_prof.num_compute_units >= 1
+  assert cpu_prof.l1_bytes >= 16 * 1024
+  assert cpu_prof.l2_bytes >= 64 * 1024
+  assert cpu_prof.vector_width >= 4
+  assert cpu_prof.prefer_interchange is True
+  assert 128 <= cpu_prof.interchange_tile() <= 512
+
+  # 2. TargetProfile heuristics for CUDA & Metal
+  cuda_prof = TargetProfile(
+    kind="cuda",
+    name="NVIDIA L4",
+    num_compute_units=58,
+    vector_width=32,
+    shared_mem_bytes=48 * 1024,
+    max_threads_per_block=1024,
+    unified_memory=False,
+    supports_float64=True,
+    compute_capability=(8, 9),
+    matrix_unit=MatrixUnit("wmma", 16, 16, 8, ("float32",), ("float32",)),
+    prefer_interchange=False,
+    tensor_cores=True,
+  )
+  assert cuda_prof.shared_budget() == 48 * 1024
+  assert cuda_prof.reduce_chunks(8192) == 58 * 32
+  assert cuda_prof.reduce_chunks(1024) == 1024  # explicit user override respected
+
+  # 3. GPU backends (Metal if available, CUDA if available or simulated):
+  #    verify hardware matrix-unit codegen + persistent DeviceArray residency!
+  @jit
+  def matmul_f32(a, b):
+    return a @ b
+
+  @jit
+  def fused_mlp_f32(a, b, bias):
+    return np.tanh(np.sin(a) @ np.cos(b) + bias)
+
+  @jit
+  def batched_mm_f32(a, b):
+    return a @ b
+
+  @jit
+  def sgd_step(params, x, y, lr):
+    w1, w2 = params
+    h = np.tanh(x @ w1)
+    pred = h @ w2
+    err = pred - y
+    dw2 = h.T @ err
+    dh = (err @ w2.T) * (np.float32(1.0) - h * h)
+    dw1 = x.T @ dh
+    return (w1 - lr * dw1, w2 - lr * dw2)
+
+  @jit(backend="c")
+  def cpu_sum(a):
+    return np.sum(a)
+
+  avail = parakeet.available_backends()
+  gpu_backends = [b for b in ("metal", "cuda") if avail.get(b) == "ok"]
+  rng = np.random.default_rng(77)
+
+  for bname in gpu_backends:
+    with parakeet.options(backend=bname, device_threshold=1, verify=True):
+      prof = parakeet.target_profile(bname)
+      assert prof.kind == bname
+      assert prof.shared_mem_bytes >= 16 * 1024
+      assert prof.prefer_interchange is False
+
+      # Non-multiple-of-64 and large shapes, fused prologue+epilogue, and 3D batched matmul
+      for M, N, K in ((7, 5, 13), (65, 63, 35), (128, 128, 96)):
+        a = rng.standard_normal((M, K)).astype(np.float32) * 0.2
+        b = rng.standard_normal((K, N)).astype(np.float32) * 0.2
+        bias = rng.standard_normal((1, N)).astype(np.float32) * 0.1
+        np.testing.assert_allclose(matmul_f32(a, b), a @ b, rtol=1e-3, atol=1e-4)
+        np.testing.assert_allclose(
+          fused_mlp_f32(a, b, bias), np.tanh(np.sin(a) @ np.cos(b) + bias), rtol=1e-3, atol=1e-4
+        )
+      a3 = rng.standard_normal((3, 70, 35)).astype(np.float32) * 0.2
+      b3 = rng.standard_normal((3, 35, 66)).astype(np.float32) * 0.2
+      np.testing.assert_allclose(batched_mm_f32(a3, b3), a3 @ b3, rtol=1e-3, atol=1e-4)
+
+      # Verify hardware matrix-unit kernel is actually emitted when supported
+      if bname == "metal" and prof.matrix_unit is not None:
+        spec_m = matmul_f32.specialize(a, b)
+        assert any("simdgroup_multiply_accumulate" in k for k in spec_m.kernels)
+        spec_f = fused_mlp_f32.specialize(a, b, bias)
+        assert any("simdgroup_multiply_accumulate" in k for k in spec_f.kernels)
+      if bname == "cuda" and prof.matrix_unit is not None:
+        with parakeet.options(tensor_cores=True):
+          a_tc = rng.standard_normal((65, 35)).astype(np.float32) * 0.2
+          b_tc = rng.standard_normal((35, 63)).astype(np.float32) * 0.2
+          bias_tc = rng.standard_normal((1, 63)).astype(np.float32) * 0.1
+          np.testing.assert_allclose(matmul_f32(a_tc, b_tc), a_tc @ b_tc, rtol=2e-3, atol=2e-3)
+          np.testing.assert_allclose(
+            fused_mlp_f32(a_tc, b_tc, bias_tc), np.tanh(np.sin(a_tc) @ np.cos(b_tc) + bias_tc), rtol=2e-3, atol=2e-3
+          )
+          spec_tc = matmul_f32.specialize(a_tc, b_tc)
+          assert any("mma_sync" in k for k in spec_tc.kernels)
+
+      # Persistent DeviceArray residency across a multi-step training loop:
+      # ZERO host->device uploads and ZERO device->host downloads during steady-state steps!
+      w1_h = rng.standard_normal((64, 64)).astype(np.float32) * 0.1
+      w2_h = rng.standard_normal((64, 64)).astype(np.float32) * 0.1
+      x_h = rng.standard_normal((64, 64)).astype(np.float32) * 0.2
+      y_h = rng.standard_normal((64, 64)).astype(np.float32) * 0.2
+      lr = np.float32(0.01)
+
+      params_d = parakeet.to_device((w1_h, w2_h), backend=bname)
+      x_d = parakeet.to_device(x_h, backend=bname)
+      y_d = parakeet.to_device(y_h, backend=bname)
+      assert all(isinstance(p, parakeet.DeviceArray) and p.on_device for p in params_d)
+
+      # Warmup compile + first step
+      params_d = sgd_step(params_d, x_d, y_d, lr)
+      assert all(isinstance(p, parakeet.DeviceArray) and p.on_device for p in params_d)
+
+      dev = parakeet.api.get_backend(bname).device()
+      up_before, dn_before = dev.uploads, dev.downloads
+      for _ in range(3):
+        params_d = sgd_step(params_d, x_d, y_d, lr)
+      assert dev.uploads == up_before, f"expected 0 H2D uploads in resident loop, got {dev.uploads - up_before}"
+      assert dev.downloads == dn_before, f"expected 0 D2H downloads in resident loop, got {dev.downloads - dn_before}"
+
+      # Verify numerical match vs NumPy reference over 4 steps
+      rw1, rw2 = w1_h.copy(), w2_h.copy()
+      for _ in range(4):
+        rh = np.tanh(x_h @ rw1)
+        rerr = rh @ rw2 - y_h
+        rdw2 = rh.T @ rerr
+        rdh = (rerr @ rw2.T) * (np.float32(1.0) - rh * rh)
+        rdw1 = x_h.T @ rdh
+        rw1 = rw1 - lr * rdw1
+        rw2 = rw2 - lr * rdw2
+      got_w1, got_w2 = parakeet.to_host(params_d)
+      np.testing.assert_allclose(got_w1, rw1, rtol=1e-3, atol=1e-4)
+      np.testing.assert_allclose(got_w2, rw2, rtol=1e-3, atol=1e-4)
+
+      # Cross-backend interop: passing a DeviceArray to CPU backend auto-syncs cleanly
+      np.testing.assert_allclose(cpu_sum(params_d[0]), float(rw1.sum()), rtol=1e-4)

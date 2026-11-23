@@ -17,13 +17,15 @@ from typing import Any
 import numpy as np
 
 from .backends import blas
+from .backends.device import DeviceArray
 from .config import config, normalize_backend
 from .errors import BackendUnavailable, CompileError, FallbackWarning, InternalError, ParakeetError
 from .frontend import signature as sig
 from .frontend.arrays import Restart
-from .frontend.elab import Elaborated, Elaborator, ElabState, Options, TargetProfile
+from .frontend.elab import Elaborated, Elaborator, ElabState, Options
 from .ndtypes import ScalarType
 from .syntax.ir import ArrayParam, fmt_function
+from .target import TargetProfile
 
 MAX_RESTARTS = 500
 _U64 = 2**64
@@ -154,10 +156,14 @@ class Specialization:
   def run(self, leaves: list):
     mod = self.module
     backend = self.backend
+    dev = backend._device
     ia: list[int] = backend.header()
     ia[5] = _next_rng_key()
     fa: list[float] = []
     arrays: list[np.ndarray] = []
+    input_das: list[DeviceArray | None] = []
+    pinned: list[tuple[DeviceArray, bool]] = []
+    keep_on_device = False
     it = iter(leaves)
     for entry in self.plan:
       v = next(it)
@@ -172,32 +178,52 @@ class Specialization:
           ia.append(iv - _U64 if iv >= _I63 else iv)
       else:
         _, elt, rank, strided, param = entry
-        if param.writes and not v.flags.writeable:
-          raise ValueError("assignment destination is read-only")
-        arrays.append(v)
-        ptr = v.ctypes.data
-        if strided:
-          low, high = _byte_bounds(v)
-          itemsize = elt.itemsize
-          ia += [low, high - low, (ptr - low) // itemsize, *v.shape]
-          ia += [s // itemsize for s in v.strides]
+        da: DeviceArray | None = None
+        if isinstance(v, DeviceArray):
+          if dev is not None and v._device is dev:
+            da = v
+            keep_on_device = True
+            pinned.append((da, param.writes))
+            arr = da._host
+          else:
+            arr = v.sync_host()
         else:
-          ia += [ptr, v.nbytes, 0, *v.shape]
+          arr = v
+        if param.writes and not arr.flags.writeable:
+          raise ValueError("assignment destination is read-only")
+        arrays.append(arr)
+        input_das.append(da)
+        ptr = arr.ctypes.data
+        if strided:
+          low, high = _byte_bounds(arr)
+          itemsize = elt.itemsize
+          ia += [low, high - low, (ptr - low) // itemsize, *arr.shape]
+          ia += [s // itemsize for s in arr.strides]
+        else:
+          ia += [ptr, arr.nbytes, 0, *arr.shape]
     n = len(ia)
     ia_c = (ctypes.c_int64 * n)(*ia)
     fa_c = (ctypes.c_double * (len(fa) or 1))(*fa)
     io = (ctypes.c_int64 * mod.n_io)()
     fo = (ctypes.c_double * mod.n_fo)()
     eo = (ctypes.c_int64 * 5)()
-    token = backend.begin_call(self, arrays)
+    token = backend.begin_call(self, arrays, pinned)
+    decoded = None
     try:
       status = mod.entry(ia_c, fa_c, io, fo, eo)
+      if status == 0 and keep_on_device and dev is not None and token is not None and token.pending is None:
+        # Promote GPU-resident outputs to DeviceArray BEFORE end_call flushes the device cache
+        decoded = self._decode(
+          self.result_spec, iter(mod.results_plan), io, fo, arrays, promote_dev=dev, input_das=input_das
+        )
     finally:
       pending = backend.end_call(token)
     if pending is not None:
       raise pending
     if status:
       raise self._error(eo)
+    if decoded is not None:
+      return decoded
     results = iter(mod.results_plan)
     return self._decode(self.result_spec, results, io, fo, arrays)
 
@@ -210,7 +236,7 @@ class Specialization:
 
     return make_runtime_error(self.module.errors[eid], [eo[i] for i in range(1, 5)])
 
-  def _decode(self, spec, results, io, fo, arrays):
+  def _decode(self, spec, results, io, fo, arrays, promote_dev=None, input_das=None):
     tag = spec[0]
     if tag == "s":
       _, t, pos = next(results)
@@ -226,6 +252,8 @@ class Specialization:
       if kind == 1:
         keep = arrays[ref]
         if keep.ctypes.data == addr and keep.shape == shape and keep.strides == strides:
+          if promote_dev is not None and input_das is not None and input_das[ref] is not None:
+            return input_das[ref]
           return keep
         readonly = not keep.flags.writeable
       else:
@@ -236,9 +264,12 @@ class Specialization:
       )
       if kind == 0:
         weakref.finalize(mem, _safe_decref, self.module.decref, ref)
-      return np.asarray(mem)
+      arr = np.asarray(mem)
+      if promote_dev is not None:
+        return promote_dev.promote(arr)
+      return arr
     if tag == "t":
-      return tuple(self._decode(s, results, io, fo, arrays) for s in spec[1:])
+      return tuple(self._decode(s, results, io, fo, arrays, promote_dev, input_das) for s in spec[1:])
     if tag == "n":
       return None
     if tag == "static":
@@ -313,27 +344,29 @@ class Backend:
     rt = self.runtime()
     nthreads = config.num_threads if self.parallel else 1
     dev = self._device
+    prof = getattr(dev, "profile", None) if dev is not None else None
+    rchunks = prof.reduce_chunks(config.device_reduce_chunks) if prof is not None else config.device_reduce_chunks
     return [
             nthreads, max(1, config.parallel_grain), rt.parfor,
             0 if dev is None else dev.callback_address, config.device_threshold, 0,
-            config.device_reduce_chunks, *blas.header(), 0, 0,
+            rchunks, *blas.header(), 0, 0,
         ]  # fmt: skip
 
-  def build(self, function):
+  def build(self, function, profile: TargetProfile | None = None):
     from .backends.c import CModule
 
     dev = self.device()
-    planner = None if dev is None else dev.planner()
+    planner = None if dev is None else dev.planner(profile)
     module = CModule(function, planner)
     if planner is not None:
       planner.report_fallbacks(function.name)
     return module
 
-  def begin_call(self, spec: Specialization, arrays):
+  def begin_call(self, spec: Specialization, arrays, pinned=None):
     dev = self._device
     if dev is None:
       return None
-    return dev.begin_call(spec, arrays)
+    return dev.begin_call(spec, arrays, pinned)
 
   def end_call(self, token):
     if token is None:
@@ -377,6 +410,61 @@ def available_backends() -> dict[str, str]:
     except ParakeetError as e:
       out[name] = "unavailable: " + str(e).splitlines()[0]
   return out
+
+
+def target_profile(backend: str | None = None) -> TargetProfile:
+  """Return the queried :class:`~parakeet.target.TargetProfile` for ``backend``
+  (defaults to ``parakeet.config.backend``)."""
+  bname = normalize_backend(backend or config.backend)
+  if bname == "python":
+    return TargetProfile.for_device(None, config.tile_bytes)
+  b = get_backend(bname)
+  return TargetProfile.for_device(
+    b.device_kind,
+    config.tile_bytes,
+    device=b.device(),
+    tensor_cores=config.tensor_cores or config.fast_math,
+  )
+
+
+def to_device(value, backend: str | None = None):
+  """Move a NumPy array (or nested tuple of arrays, such as model parameters and
+  optimizer state) onto a GPU backend as persistent :class:`DeviceArray`s.
+
+  When ``backend`` is ``None``, uses ``parakeet.config.backend`` (or ``"gpu"``
+  if the current backend is a CPU backend).
+  """
+  bname = normalize_backend(backend or (config.backend if config.backend in ("metal", "mps", "cuda") else "gpu"))
+  b = get_backend(bname)
+  dev = b.device()
+  if dev is None:
+    raise ValueError(f"to_device() requires a GPU backend ('metal' or 'cuda'), got {bname!r}")
+
+  def _move(x):
+    if isinstance(x, tuple):
+      return tuple(_move(e) for e in x)
+    if isinstance(x, DeviceArray):
+      if x._device is dev:
+        x.ensure_device()
+        return x
+      x = x.numpy()
+    if isinstance(x, np.ndarray):
+      arr = np.ascontiguousarray(x)
+      da = DeviceArray(arr, dev)
+      da.ensure_device()
+      return da
+    return x
+
+  return _move(value)
+
+
+def to_host(value):
+  """Bring a :class:`DeviceArray` (or nested tuple of them) back to host NumPy arrays."""
+  if isinstance(value, tuple):
+    return tuple(to_host(e) for e in value)
+  if isinstance(value, DeviceArray):
+    return value.numpy()
+  return value
 
 
 # ---------------------------------------------------------------------------
@@ -558,7 +646,12 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     options = self._options()
     options.parallel = backend.parallel
     options.blas = options.blas and backend.device_kind is None and blas.available()
-    options.target = TargetProfile.for_device(backend.device_kind, options.tile_bytes)
+    options.target = TargetProfile.for_device(
+      backend.device_kind,
+      options.tile_bytes,
+      device=backend.device(),
+      tensor_cores=config.tensor_cores or config.fast_math,
+    )
     toolchain_key = (config.cc, config.opt_level, config.fast_math, tuple(config.cflags))
     variant = (backend.cache_key(), options.key(), names, toolchain_key)
     type_key = (variant, arg_keys, cell_keys)
@@ -632,7 +725,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       print(elaborated.operators)
     trace = (lambda name, fn: print(f"--- after {name} ---\n{fmt_function(fn)}")) if config.print_ir else None
     pipeline.run(elaborated.function, options, trace)
-    module = backend.build(elaborated.function)
+    module = backend.build(elaborated.function, options.target)
     spec = Specialization(self.fn.__name__, keys, elaborated, module, backend, type_key)
     with table.lock:
       table.static[type_key] = static

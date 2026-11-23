@@ -160,7 +160,9 @@ def should_interchange(s: IndexMap, m: Shape, defs: dict[int, Expr]) -> bool:
   return unit_map_strided_reduce
 
 
-def interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> list:
+def interchanged(
+  s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_width_val: int = INTERCHANGE_TILE
+) -> list:
   """Swap ``m.reduce`` outside an L1-cached strip of ``s.index[-1]`` so the
   innermost loop walks both the input and the tile accumulator with stride 1."""
   out: list = []
@@ -171,8 +173,8 @@ def interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> 
   lead = tuple(lp.tmp(d, "n") for d in s.shape[:-1])
   ncols = lp.tmp(s.shape[-1], "n_j")
   n_rows = lp.tmp(iprod(lead), "rows") if lead else ONE
-  tile_width = Const(INTERCHANGE_TILE, I)
-  n_tiles = lp.tmp(idiv(iadd(ncols, INTERCHANGE_TILE - 1), tile_width), "ntiles")
+  tile_width = Const(tile_width_val, I)
+  n_tiles = lp.tmp(idiv(iadd(ncols, tile_width_val - 1), tile_width), "ntiles")
   total = lp.tmp(imul(n_rows, n_tiles), "total")
   extent = tuple(lp.tmp(d, "k") for d in m.extent)
   total_k = lp.tmp(iprod(extent), "k_total")
@@ -310,24 +312,26 @@ def interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> 
   return out
 
 
-def interchange_block(block: list, defs: dict[int, Expr], owner: Scope, metal_f64_only: bool = False) -> list:
+def interchange_block(
+  block: list, defs: dict[int, Expr], owner: Scope, metal_f64_only: bool = False, tile_width_val: int = INTERCHANGE_TILE
+) -> list:
   """Rewrite eligible strided map-of-reduction statements throughout ``block``."""
   out: list = []
   for s in block:
     if isinstance(s, If):
-      s.then[:] = interchange_block(s.then, defs, owner, metal_f64_only)
-      s.orelse[:] = interchange_block(s.orelse, defs, owner, metal_f64_only)
+      s.then[:] = interchange_block(s.then, defs, owner, metal_f64_only, tile_width_val)
+      s.orelse[:] = interchange_block(s.orelse, defs, owner, metal_f64_only, tile_width_val)
     elif isinstance(s, IndexReduce):
-      s.body[:] = interchange_block(s.body, defs, s.scope, metal_f64_only)
+      s.body[:] = interchange_block(s.body, defs, s.scope, metal_f64_only, tile_width_val)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = interchange_block(s.body, defs, s.scope, metal_f64_only)
+      s.body[:] = interchange_block(s.body, defs, s.scope, metal_f64_only, tile_width_val)
     m = match(s, defs, min_rank=1)
     if (
       m is not None
       and (not metal_f64_only or any(f.a.type.name == "float64" for f in m.reduce.folds))
       and should_interchange(s, m, defs)  # type: ignore[arg-type]
     ):
-      out.extend(interchanged(s, m, defs, owner))  # type: ignore[arg-type]
+      out.extend(interchanged(s, m, defs, owner, tile_width_val))  # type: ignore[arg-type]
     else:
       out.append(s)
   return out
@@ -342,11 +346,12 @@ def interchange(fn: ir.Function, options) -> None:
   if not options.tiling:
     return
   target = getattr(options, "target", None)
+  tw = target.interchange_tile() if target is not None else INTERCHANGE_TILE
   if target is not None and not target.prefer_interchange:
-    if target.kind == "metal":
-      fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, metal_f64_only=True)
+    if not target.supports_float64:
+      fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, metal_f64_only=True, tile_width_val=tw)
     return
-  fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope)
+  fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, tile_width_val=tw)
 
 
 # ---------------------------------------------------------------------------
