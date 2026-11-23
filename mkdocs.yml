@@ -25,6 +25,10 @@ theme:
       primary: teal
       accent: amber
       toggle: { icon: material/weather-sunny, name: Switch to light mode }
+  favicon: assets/logo.png
+
+extra_css:
+  - stylesheets/extra.css
 
 nav:
   - Home: index.md

@@ -1,0 +1,11 @@
+/* Keep the classic parakeetpython.com logo crisp in both light and dark modes. */
+.pk-hero-logo {
+  display: block;
+  max-width: 460px;
+  width: 100%;
+  height: auto;
+  margin: 0 0 1.25rem 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  background-color: #eff3ff;
+}

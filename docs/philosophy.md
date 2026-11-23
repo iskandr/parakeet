@@ -1,18 +1,21 @@
 # Core ideas, history, and boundaries
 
 Parakeet began at New York University as a research compiler by **Alex
-Rubinsteyn** (`@iskandr`) and **Eric Hielscher** (`@hielscher`) — originally
-hosted at `parakeetpython.com` and described in:
+Rubinsteyn** (`@iskandr`), with major contributions from **Eric Hielscher**
+(`@hielscher`) and **Nathaniel Weinman**, guidance from **Dennis Shasha**, and
+advice from **Russell Power** — originally hosted at `parakeetpython.com` and
+described in:
 
-* **Alex Rubinsteyn**, *Runtime Compilation of Array-Oriented Python Programs*
+* **Alex Rubinsteyn**, [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/visual/files/Rubinsteyn_Alex.pdf)
   (PhD thesis, NYU, 2014) — type/value specialization, data-parallel adverbs,
   and algebraic fusion.
 * **Eric Hielscher**, *Locality Optimization for Data Parallel Programs*
   (PhD thesis, NYU, 2013) — tiling, register blocking, and loop interchange
   over adverb trees.
-* Earlier papers and talks: HotPar '12 (*Parakeet: A Just-In-Time Parallel
-  Accelerator for Python*), PyData Boston '13, and the
-  [2013 architecture post](http://www.phi-node.com/2013/01/a-journey-through-parakeet.html).
+* Earlier papers and talks: [HotPar '12](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python)
+  (*Parakeet: A Just-In-Time Parallel Accelerator for Python*),
+  [PyData Boston '13](https://vimeo.com/73895275), and
+  [PyData NYC '13](https://vimeo.com/79556629) (*Python on the GPU with Parakeet*).
 
 Parakeet 1.0 is a ground-up rewrite for Python 3.11+, NumPy 2, Apple Metal,
 NVIDIA CUDA, and reverse-mode automatic differentiation (`grad`), built to
