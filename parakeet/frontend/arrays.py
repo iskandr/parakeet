@@ -368,8 +368,6 @@ class ArrayMixin:
     heavy = loop_depth(blk) > base_depth
     if kind != "map":
       work = None  # the chunks of a fold are tied to its partial results: size alone decides
-    elif work is None and heavy:
-      work = self.tmp(inner_work(self, blk, base_depth), "work")
     self.emit(ParLoop(total, nchunks, chunk, start, stop, blk, scope, kind, self.loc(), heavy, work))
     return nchunks
 
@@ -1196,41 +1194,6 @@ class ArrayMixin:
       if cond.value:
         return
     self.emit(Check(cond, ErrorInfo(exc, fmt, self.loc()), tuple(ops._i(a) for a in args)))
-
-
-def inner_work(el, block: list, skip: int) -> Expr:
-  """Roughly how many inner loop iterations one element of a parallel loop
-  costs: the trip counts of the loops below the ``skip`` levels that walk
-  the chunk itself, where they can be computed before the loop starts."""
-  from ..backends.cfamily import defined_vars
-  from ..lib.core import outer_expr
-
-  inner = set(defined_vars(block, into_parloops=True))
-
-  def trips(s: ForRange) -> Expr:
-    span = isub(s.stop, s.start)
-    if isinstance(s.step, Const) and s.step.value > 1:
-      span = idiv(span, s.step)
-    known = outer_expr(el, span, inner)
-    return imax(known, 1) if known is not None else Const(8, I)
-
-  def cost(stmts: list, skip: int) -> Expr:
-    total: Expr = ZERO
-    for s in stmts:
-      if isinstance(s, ForRange):
-        w = cost(s.body, skip - 1) if skip > 0 else imul(trips(s), imax(cost(s.body, 0), 1))
-      elif isinstance(s, While):
-        w = cost(s.body, skip - 1) if skip > 0 else imul(Const(8, I), imax(cost(s.body, 0), 1))
-      elif isinstance(s, If):
-        w = imax(cost(s.then, skip), cost(s.orelse, skip))
-      elif isinstance(s, ParLoop):
-        w = cost(s.body, skip)
-      else:
-        continue
-      total = iadd(total, w)
-    return total
-
-  return imax(cost(block, skip), 1)
 
 
 def is_zero(e: Expr) -> bool:

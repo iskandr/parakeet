@@ -543,3 +543,25 @@ def test_ir_verifier_catches_invalid_ir_and_legacy_config_aliases():
   fn = ir.Function("broken", [], [ir.Assign(ir.Var("y", parakeet.Float64), bad_var)], [], ir.Scope("fn"))
   with pytest.raises(InternalError, match="not in scope"):
     parakeet.verify(fn)
+
+
+def test_argmin_argmax_are_payload_index_reduce_and_sibling_fuse():
+  @jit
+  def arg_extremes(x):
+    return np.argmin(x), np.argmax(x)
+
+  rng = np.random.default_rng(28)
+  x = rng.random(5000)
+  spec = arg_extremes.specialize(x)
+  # Pure operator IR: no lowered ParLoop or ForRange before lowering
+  assert "reduce " in spec.operators and "parallel[" not in spec.operators and "for " not in spec.operators
+  # Sibling fusion merges argmin + argmax into a single parallel reduction loop!
+  assert n_loops(spec) == 1
+  assert arg_extremes(x) == (int(np.argmin(x)), int(np.argmax(x)))
+  # Ties and NaN follow NumPy (first wins)
+  tied = np.array([3.0, 1.0, 5.0, 1.0, 5.0])
+  assert arg_extremes(tied) == (1, 2)
+  with_nan = np.array([3.0, np.nan, 5.0, np.nan])
+  assert arg_extremes(with_nan) == (1, 1)
+  with pytest.raises(ValueError, match="empty"):
+    arg_extremes(np.zeros(0))

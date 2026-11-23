@@ -341,27 +341,11 @@ def _defined_vars(block: list) -> set[int]:
   return out
 
 
-def outer_expr(el, e: Expr, inner: set[int], depth: int = 0) -> Expr | None:
-  """Rewrite ``e`` so it no longer mentions variables defined in a scratch
-  block (by substituting their pure definitions); None if impossible."""
-  if isinstance(e, Const):
-    return e
-  if isinstance(e, Var):
-    if e.uid not in inner:
-      return e
-    d = el.pure_defs.get(e.uid)
-    if d is None or depth > 40:
-      return None
-    return outer_expr(el, d, inner, depth + 1)
-  if isinstance(e, ops.Prim):
-    args = [outer_expr(el, a, inner, depth + 1) for a in e.args]
-    if any(a is None for a in args):
-      return None
-    return ops.prim(e.op, tuple(args), e.type)  # type: ignore[arg-type]
-  if isinstance(e, ops.Cast):
-    a = outer_expr(el, e.arg, inner, depth + 1)
-    return None if a is None else cast(a, e.type)
-  return None
+def outer_expr(el, e: Expr, inner: set[int]) -> Expr | None:
+  """Rewrite ``e`` so it no longer mentions variables defined in ``inner``."""
+  from ..transforms.lowering import outer_expr as _outer_expr
+
+  return _outer_expr(el.pure_defs, e, inner)
 
 
 def build_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> ArrayVal:
@@ -477,14 +461,10 @@ def plain_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> Array
                 )  # fmt: skip
       el.store_array(sub_view(el, out, idx), sub)
 
-    if el.can_parallel(shape):
-      el.par_loop(
-        el.tmp(ops.isub(total, 1)),
-        lambda c, start, stop: el.chunk_iter(shape, ops.iadd(start, 1), ops.iadd(stop, 1), body),
-        base_depth=1 if len(shape) == 1 else 2,
-      )
-    else:
-      el.chunk_iter(shape, ops.ONE, total, body)
+    rest = el.tmp(ops.isub(total, 1), "rest")
+    el.index_map(
+      (rest,), lambda flat: body(el.unravel(ops.iadd(flat[0], 1), shape)), ordered=not el.can_parallel(shape)
+    )
     el.assign_target(target, out)
   with el.in_block(none):
     empty = el.alloc_array(r_elt, shape + (ZERO,) * r_rank, label="out")

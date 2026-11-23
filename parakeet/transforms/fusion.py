@@ -919,7 +919,7 @@ def fuse_block(block: list, defs: dict[int, Expr], allocs: set[int]) -> list:
       # ``s`` may sink past scalar definitions that do not need its result,
       # to meet the next reduction
       while True:
-        results = {f.result.uid for f in s.folds}
+        results = {v.uid for f in s.folds for v in ((f.result, f.payload[0]) if f.payload is not None else (f.result,))}
         between: list = []
         j = k
         while j < len(block) and isinstance(block[j], (Assign, ir.Comment)):

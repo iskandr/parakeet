@@ -8,7 +8,7 @@ from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, Float32, Float64, Int64, ScalarType, UInt64, WeakBool, join, weak_of_kind
 from ..syntax import ops
-from ..syntax.ir import Assign, Const, Expr, If, Load, RtCall, Store, Var
+from ..syntax.ir import Assign, Const, Expr, If, RtCall, Store, Var
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, TypeVal, describe
 from .core import (
@@ -815,60 +815,44 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
     return Const(0, Int64)
 
   def lane(v: ArrayVal):
+    from ..syntax.ir import ErrorInfo, Fold, IndexReduce
+
     v = _use(el, v)
-    n = v.shape[0]
-    el.check(cmp("gt", n, 0), "ValueError", f"attempt to get {what} of an empty sequence")
+    n = el.tmp(v.shape[0], "n")
+    index = Var("i", I)
+    el.nonneg.add(index.uid)
+    el.upper[index.uid] = n
+    threads = el.can_parallel((n,))
+    body: list = []
+    scope = el.new_scope("loop")
+    with el.in_block(body, scope, loop=True, par=threads):
+      value = el.tmp(el.elem(v, (index,)), "x")
 
-    def beats(x: Expr, best: Expr) -> Expr:
-      better = ops.prim(op, (x, best), Bool)
-      if v.elt.kind == "f":  # the first NaN wins, as in NumPy
-        better = ops.land(ops.lor(better, ops.prim("isnan", (x,), Bool)), ops.lnot(ops.prim("isnan", (best,), Bool)))
-      return better
-
-    def fold(start: Expr, stop: Expr):
-      """Best element of [start, stop) and where it is: a reduction whose
-      accumulator carries a payload."""
-      best = Var("best", v.elt)
-      where = Var("where", Int64)
-      el.mutables.update((best.uid, where.uid))
-      el.emit(Assign(best, el.elem(v, (start,))))
-      el.emit(Assign(where, cast(start, Int64)))
-
-      def body(i):
-        x = el.tmp(el.elem(v, (i,)), "x")
-        el.emit(If(beats(x, best), [Assign(best, x), Assign(where, cast(i, Int64))], []))
-
-      el.for_range(iadd(start, 1), stop, body)
-      return best, where
-
-    if not el.can_parallel((n,)):
-      return el.copy_scalar(fold(ZERO, n)[1], "arg")
-    # one (best, where) pair per chunk; chunks are in index order, so the
-    # first of several equal elements still wins when they are combined
-    nchunks = el.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
-    if isinstance(nchunks, Var):
-      el.nonneg.add(nchunks.uid)
-    bests = el.alloc_array(v.elt, (nchunks,), label="bests")
-    wheres = el.alloc_array(Int64, (nchunks,), label="wheres")
-
-    def chunk_body(chunk, start, stop):
-      best, where = fold(start, stop)
-      el.emit(Store(bests.buf, chunk, best))
-      el.emit(Store(wheres.buf, chunk, where))
-
-    el.par_loop(n, chunk_body, kind="reduce", nchunks=nchunks)
-    best = Var("best", v.elt)
-    where = Var("where", Int64)
-    el.mutables.update((best.uid, where.uid))
-    el.emit(Assign(best, Load(bests.buf, ZERO)))
-    el.emit(Assign(where, Load(wheres.buf, ZERO)))
-
-    def combine(c):
-      x = el.tmp(Load(bests.buf, c), "x")
-      el.emit(If(beats(x, best), [Assign(best, x), Assign(where, Load(wheres.buf, c))], []))
-
-    el.for_range(ONE, nchunks, combine)
-    return el.copy_scalar(where, "arg")
+    best_a, cand_b = Var("best", v.elt), Var("x", v.elt)
+    where_a, idx_b = Var("where", Int64), Var("idx", Int64)
+    better = ops.prim(op, (cand_b, best_a), Bool)
+    if v.elt.kind == "f":  # the first NaN wins, as in NumPy
+      better = ops.land(
+        ops.lor(better, ops.prim("isnan", (cand_b,), Bool)), ops.lnot(ops.prim("isnan", (best_a,), Bool))
+      )
+    take = Var("take", Bool)
+    combine_blk = [Assign(take, better)]
+    best_res, arg_res = Var("best", v.elt), Var("arg", Int64)
+    empty = ErrorInfo("ValueError", f"attempt to get {what} of an empty sequence", el.loc())
+    fold = Fold(
+      best_res,
+      value,
+      best_a,
+      cand_b,
+      combine_blk,
+      ops.select(take, cand_b, best_a),
+      init=None,
+      op=what,
+      empty=empty,
+      payload=(arg_res, cast(index, Int64), where_a, idx_b, ops.select(take, idx_b, where_a)),
+    )
+    el.emit(IndexReduce((n,), (index,), body, [fold], scope, el.scope, threads, el.loc()))
+    return arg_res
 
   if axis is None:
     return lane(el.flat_view(a) if a.rank != 1 else a)

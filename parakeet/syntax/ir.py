@@ -336,7 +336,10 @@ class Fold:
 
   ``combine`` is the block that computes ``combined`` from the accumulator
   ``a`` and the next value ``b``; ``op`` names it when it is an associative
-  primitive (the fold may then be regrouped and vectorised)."""
+  operation (the fold may then be regrouped across chunks and, for ``add``/``mul``,
+  vectorised).  An optional ``payload`` carries a second value updated alongside
+  ``a`` (e.g. the winning index in ``argmin``/``argmax``):
+  ``(payload_result, payload_value, payload_a, payload_b, payload_combined)``."""
 
   result: Var
   value: Expr
@@ -347,6 +350,7 @@ class Fold:
   init: Expr | None = None
   op: str | None = None
   empty: ErrorInfo | None = None  # raised for an empty index space when there is no init
+  payload: tuple[Var, Expr, Var, Var, Expr] | None = None
 
 
 @dataclass(eq=False, slots=True)
@@ -501,6 +505,8 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     out = list(s.shape) + ([s.where] if s.where is not None else [])
     for f in s.folds:
       out += [f.value, f.combined] + ([f.init] if f.init is not None else [])
+      if f.payload is not None:
+        out += [f.payload[1], f.payload[4]]
     return tuple(out)
   return ()
 
@@ -524,7 +530,12 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
   if isinstance(s, IndexScan):
     return (s.index, s.fold.result, s.fold.a, s.fold.b)
   if isinstance(s, IndexReduce):
-    return (*s.index, *[v for f in s.folds for v in (f.result, f.a, f.b)])
+    defs: list[Var] = list(s.index)
+    for f in s.folds:
+      defs.extend((f.result, f.a, f.b))
+      if f.payload is not None:
+        defs.extend((f.payload[0], f.payload[2], f.payload[3]))
+    return tuple(defs)
   return ()
 
 
@@ -621,11 +632,21 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       out += fmt_block(s.body, indent + (1 if s.where is None else 2))
       for f in s.folds:
         init = "" if f.init is None else f", init={fmt_expr(f.init)}"
-        if f.op is not None and not f.combine:
-          how = f.op
+        if f.payload is not None:
+          p_res, p_val, p_a, p_b, p_comb = f.payload
+          how = (
+            f.op
+            or f"lambda ({f.a.name}, {p_a.name}), ({f.b.name}, {p_b.name}): ({fmt_expr(f.combined)}, {fmt_expr(p_comb)})"
+          )
+          out.append(
+            f"{pad}    {f.result.name}, {p_res.name} = fold({how}, ({fmt_expr(f.value)}, {fmt_expr(p_val)}){init})"
+          )
         else:
-          how = f"lambda {f.a.name}, {f.b.name}: {fmt_expr(f.combined)}"
-        out.append(f"{pad}    {f.result.name}: {f.result.type} = fold({how}, {fmt_expr(f.value)}{init})")
+          if f.op is not None and not f.combine:
+            how = f.op
+          else:
+            how = f"lambda {f.a.name}, {f.b.name}: {fmt_expr(f.combined)}"
+          out.append(f"{pad}    {f.result.name}: {f.result.type} = fold({how}, {fmt_expr(f.value)}{init})")
         if f.op is None or f.combine:
           out += fmt_block(f.combine, indent + 2)
     elif isinstance(s, IndexScan):

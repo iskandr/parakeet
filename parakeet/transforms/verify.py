@@ -228,10 +228,18 @@ def verify(fn: Function, phase: str = "") -> Function:
           check_expr(f.value, body_vis, f"IndexReduce fold value for {f.result.name}")
           comb_vis = set(body_vis)
           comb_vis.update((f.a.uid, f.b.uid))
+          if f.payload is not None:
+            p_res, p_val, p_a, p_b, p_comb = f.payload
+            check_expr(p_val, body_vis, f"IndexReduce payload value for {p_res.name}")
+            comb_vis.update((p_a.uid, p_b.uid))
           check_block(f.combine, comb_vis)
           check_expr(f.combined, comb_vis, f"IndexReduce combiner for {f.result.name}")
+          if f.payload is not None:
+            check_expr(f.payload[4], comb_vis, f"IndexReduce payload combiner for {f.payload[0].name}")
         for f in s.folds:
           visible.add(f.result.uid)
+          if f.payload is not None:
+            visible.add(f.payload[0].uid)
       elif isinstance(s, IndexFilter):
         if not _is_int(s.n.type):
           _fail(fn, phase, f"IndexFilter length has non-integer type {s.n.type}")

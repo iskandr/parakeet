@@ -150,7 +150,14 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
       b[:], inner = sweep(b, live, dead_bufs, stored_bufs, gone)
       changed |= inner
     if isinstance(s, IndexReduce):
-      keep = [f for f in s.folds if f.result.uid in live or f.init is None or has_effects(f.combine)]
+      keep = [
+        f
+        for f in s.folds
+        if f.result.uid in live
+        or (f.payload is not None and f.payload[0].uid in live)
+        or f.init is None
+        or has_effects(f.combine)
+      ]
       if not keep and not has_effects(s.body) and not has_effects(s.pre):
         changed = True
         continue

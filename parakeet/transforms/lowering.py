@@ -215,23 +215,45 @@ def lower_map(lp: Loops, s: ir.IndexMap) -> None:
 # ---------------------------------------------------------------------------
 
 
-def step(lp: Loops, f: ir.Fold, acc: Var, x: Expr, scratch: Scope) -> None:
-  """``acc = combine(acc, x)``; ``scratch`` owns what the combine block allocates."""
+def step(
+  lp: Loops,
+  f: ir.Fold,
+  acc: Var,
+  x: Expr,
+  scratch: Scope,
+  p_acc: Var | None = None,
+  p_x: Expr | None = None,
+) -> None:
+  """Fold ``x`` (and optional payload ``p_x``) into ``acc`` (and ``p_acc``)."""
+  subst: dict[int, Expr] = {f.a.uid: acc, f.b.uid: x if not f.combine else lp.tmp(x, "x")}
+  if f.payload is not None:
+    assert p_acc is not None and p_x is not None
+    _, _, p_a, p_b, p_combined = f.payload
+    subst[p_a.uid] = p_acc
+    subst[p_b.uid] = p_x if not f.combine else lp.tmp(p_x, "px")
   if not f.combine:
-    lp.emit(Assign(acc, subst_expr(f.combined, {f.a.uid: acc, f.b.uid: x})))
+    lp.emit(Assign(acc, subst_expr(f.combined, subst)))
+    if f.payload is not None:
+      assert p_acc is not None
+      lp.emit(Assign(p_acc, subst_expr(p_combined, subst)))
     return
-  c = Cloner({f.a.uid: acc, f.b.uid: lp.tmp(x, "x")})
+  c = Cloner(subst)
   lp.block.extend(c.block(f.combine))
   lp.emit(Assign(acc, c.expr(f.combined)))
+  if f.payload is not None:
+    assert p_acc is not None
+    lp.emit(Assign(p_acc, c.expr(p_combined)))
   lp.owner.owned.extend(c.scope(scratch).owned)  # this copy's buffers go with its surroundings
 
 
-def first(lp: Loops, s: ir.IndexReduce, at: tuple[Expr, ...], accs: list[Var]) -> None:
-  """Start every accumulator from the value at index ``at``."""
+def first(lp: Loops, s: ir.IndexReduce, at: tuple[Expr, ...], accs: list[Var], p_accs: list[Var | None]) -> None:
+  """Start every accumulator (and optional payload) from the value at index ``at``."""
   c = Cloner({v.uid: e for v, e in zip(s.index, at)})
   lp.block.extend(c.block(s.body))
-  for f, acc in zip(s.folds, accs):
+  for f, acc, p_acc in zip(s.folds, accs, p_accs):
     lp.emit(Assign(acc, cast(c.expr(f.value), acc.type)))
+    if f.payload is not None and p_acc is not None:
+      lp.emit(Assign(p_acc, cast(c.expr(f.payload[1]), p_acc.type)))
   if s.scope.owned:
     lp.owner.owned.extend(c.scope(s.scope).owned)  # what the copy allocated is released with its surroundings
 
@@ -264,7 +286,7 @@ def hint(s: ir.IndexReduce, accs: list[Var]):
   if s.where is not None:
     return None
   op = s.folds[0].op
-  if op in ("add", "mul") and all(f.op == op and not f.combine for f in s.folds):
+  if op in ("add", "mul") and all(f.op == op and not f.combine and f.payload is None for f in s.folds):
     return (op, list(accs))
   return None
 
@@ -275,13 +297,14 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
   folds = s.folds
   seeded = folds[0].init is not None  # all folds of one statement agree on this
   accs = [Var("acc", f.a.type) for f in folds]
+  p_accs: list[Var | None] = [Var("pacc", f.payload[2].type) if f.payload is not None else None for f in folds]
   body = list(s.body)
 
-  def steps(inner: Loops, targets: list[Var]) -> list:
+  def steps(inner: Loops, targets: list[Var], p_targets: list[Var | None]) -> list:
     blk = list(body)
     sub = inner.sub(blk, s.scope)
-    for f, acc, sc in zip(folds, targets, scratch):
-      step(sub, f, acc, f.value, sc)
+    for f, acc, p_acc, sc in zip(folds, targets, p_targets, scratch):
+      step(sub, f, acc, f.value, sc, p_acc, None if f.payload is None else f.payload[1])
     if s.where is not None:  # FilterReduce: the element counts only where the predicate holds
       blk = [*s.pre, If(s.where, blk, [])]
     blk.append(ir.ReleaseScope(s.scope))
@@ -296,30 +319,46 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
   if s.parallel and all(f.op is not None for f in folds):
     nchunks = lp.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
     partials = []
+    p_partials: list[Var | None] = []
     for f in folds:
       buf = Var("partials", BufType(f.a.type.strong))
       lp.emit(Alloc(buf, nchunks))
       lp.owner.owned.append(buf)  # for the error path; released below as soon as they are combined
       partials.append(buf)
+      if f.payload is not None:
+        pbuf = Var("p_partials", BufType(f.payload[2].type.strong))
+        lp.emit(Alloc(pbuf, nchunks))
+        lp.owner.owned.append(pbuf)
+        p_partials.append(pbuf)
+      else:
+        p_partials.append(None)
 
     def chunk_body(inner: Loops, chunk, start, stop):
       local = [Var("acc", f.a.type) for f in folds]
+      p_local: list[Var | None] = [Var("pacc", f.payload[2].type) if f.payload is not None else None for f in folds]
       if s.where is None:
-        first(inner, s, inner.unravel(start, shape), local)
-        inner.chunk(shape, s.index, iadd(start, 1), stop, steps(inner, local), s.scope, hint(s, local))
+        first(inner, s, inner.unravel(start, shape), local, p_local)
+        inner.chunk(shape, s.index, iadd(start, 1), stop, steps(inner, local, p_local), s.scope, hint(s, local))
       else:  # the first element may not count: start from the identity instead
         for f, acc in zip(folds, local):
           inner.emit(Assign(acc, identity(f.op, f.a.type)))
-        inner.chunk(shape, s.index, start, stop, steps(inner, local), s.scope)
-      for f, buf, acc in zip(folds, partials, local):
+        inner.chunk(shape, s.index, start, stop, steps(inner, local, p_local), s.scope)
+      for f, buf, acc, pbuf, p_acc in zip(folds, partials, local, p_partials, p_local):
         inner.emit(Store(buf, chunk, cast(acc, f.a.type.strong)))
+        if pbuf is not None and p_acc is not None and f.payload is not None:
+          inner.emit(Store(pbuf, chunk, cast(p_acc, f.payload[2].type.strong)))
 
     lp.parallel(total, chunk_body, kind="reduce", nchunks=nchunks, loc=s.loc, heavy=depth(body) > 0)
 
     def combine_partials(c: Expr) -> list:
       blk: list = []
-      for f, buf, acc in zip(folds, partials, accs):
-        blk.append(Assign(acc, cast(ops.prim(f.op, (acc, cast(Load(buf, c), acc.type)), acc.type), acc.type)))
+      sub = lp.sub(blk)
+      for f, buf, acc, pbuf, p_acc, sc in zip(folds, partials, accs, p_partials, p_accs, scratch):
+        loaded = cast(Load(buf, c), acc.type)
+        if f.payload is not None and pbuf is not None and p_acc is not None:
+          step(sub, f, acc, loaded, sc, p_acc, cast(Load(pbuf, c), p_acc.type))
+        else:
+          blk.append(Assign(acc, cast(ops.prim(f.op, (acc, loaded), acc.type), acc.type)))
       return blk
 
     c = Var("c", I)
@@ -329,21 +368,28 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
       lp.emit(ForRange(c, ZERO, nchunks, ONE, combine_partials(c), Scope("loop")))
     else:
       check_not_empty()
-      for buf, acc in zip(partials, accs):
+      for buf, acc, pbuf, p_acc in zip(partials, accs, p_partials, p_accs):
         lp.emit(Assign(acc, cast(Load(buf, ZERO), acc.type)))
+        if pbuf is not None and p_acc is not None:
+          lp.emit(Assign(p_acc, cast(Load(pbuf, ZERO), p_acc.type)))
       lp.emit(ForRange(c, ONE, nchunks, ONE, combine_partials(c), Scope("loop")))
     for buf in partials:
       lp.emit(ir.Release(buf))
+    for pbuf in p_partials:
+      if pbuf is not None:
+        lp.emit(ir.Release(pbuf))
   elif seeded:
     for f, acc in zip(folds, accs):
       lp.emit(Assign(acc, cast(f.init, acc.type)))
-    lp.nest(shape, s.index, steps(lp, accs), s.scope, hint(s, accs))
+    lp.nest(shape, s.index, steps(lp, accs, p_accs), s.scope, hint(s, accs))
   else:
     check_not_empty()
-    first(lp, s, lp.unravel(ZERO, shape), accs)
-    lp.chunk(shape, s.index, ONE, total, steps(lp, accs), s.scope, hint(s, accs))
-  for f, acc in zip(folds, accs):
+    first(lp, s, lp.unravel(ZERO, shape), accs, p_accs)
+    lp.chunk(shape, s.index, ONE, total, steps(lp, accs, p_accs), s.scope, hint(s, accs))
+  for f, acc, p_acc in zip(folds, accs, p_accs):
     lp.emit(Assign(f.result, acc))
+    if f.payload is not None and p_acc is not None:
+      lp.emit(Assign(f.payload[0], p_acc))
 
 
 # ---------------------------------------------------------------------------

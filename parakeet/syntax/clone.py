@@ -71,9 +71,13 @@ class Cloner:
     return [self.stmt(s) for s in block]
 
   def fold(self, f: ir.Fold) -> ir.Fold:
+    payload = None
+    if f.payload is not None:
+      p_res, p_val, p_a, p_b, p_comb = f.payload
+      payload = (self.var(p_res), self.expr(p_val), self.var(p_a), self.var(p_b), self.expr(p_comb))
     return ir.Fold(
       self.var(f.result), self.expr(f.value), self.var(f.a), self.var(f.b), [self.stmt(s) for s in f.combine],
-      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty,
+      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty, payload,
     )  # fmt: skip
 
   def stmt(self, s: ir.Stmt) -> ir.Stmt:
