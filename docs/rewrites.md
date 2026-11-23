@@ -49,7 +49,7 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `Filter(f, pred, X1..Xn)` | `filter(pred, x1, ..., xn, map=f)` |
 | `ParFor(f, bounds)` | `parfor(f, bounds)` |
 | `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
-| `FilterReduce`, `IndexFilterReduce` | not written by hand: a reduction over a filter *becomes* one (see fusion) |
+| `FilterReduce`, `IndexFilterReduce` | `filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)` — and any reduction over a filter also *becomes* one (see fusion) |
 | `IndexScan(f, ⊕, emit, shape)` | what `scan`, `np.cumsum` and `np.cumprod` are built on: an `IndexScan` statement, whose `emit` is a block (it stores the running value) |
 | — | `grad(f)`, `value_and_grad(f)` |
 
@@ -96,9 +96,12 @@ thesis's rules.
 | `Map(λxi. Map(f, y), x)` ⇒ `OuterMap(f, x, y)` | yes, same condition |
 | `IndexMap(λi. IndexMap(f, σ2), σ1)` ⇒ `IndexMap(f, σ1 ++ σ2)` | yes, same condition |
 
-When the inner map is expensive the outer loop runs in parallel and each inner
-result is written into its row of one output array: no per-row allocation, but
-not one flat loop either.
+When the inner map is expensive, elaboration emits a nested `IndexMap`
+writing directly into its row of one output array (no per-row allocation), and
+the middle-end `vertical fusion` pass (`CombineNestedMaps`) flattens it into a
+single multi-dimensional `IndexMap` whenever the inner shape does not depend on
+the outer index — exposing the full 2D/ND index space to multi-core CPUs and
+GPUs.
 
 ### Horizontal: two consumers of one array
 

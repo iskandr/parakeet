@@ -402,10 +402,24 @@ def filter(el, pred, *xs, map=None):  # noqa: A001, A002
   mask = _MAP.impl(el, pred, *xs, axis=0)
   if not isinstance(mask, ArrayVal) or mask.rank != 1:
     raise el.error(TypeInferenceError, "the predicate passed to filter must return a scalar")
-  mask = el.as_concrete(el.cast_array(mask, _bool()))
+  mask = el.cast_array(mask, _bool())
+  idx = el.nonzero1d(mask)
   if map is None:
-    return el.getitem(xs[0], mask)
-  return _MAP.impl(el, map, *[el.getitem(x, mask) for x in xs], axis=0)
+    return el.getitem(xs[0], idx)
+  return _MAP.impl(el, map, *[el.getitem(x, idx) for x in xs], axis=0)
+
+
+@libfunction("filter_reduce")
+def filter_reduce(el, f, pred, *xs, map=None, init=None, axis=None):  # noqa: A002
+  """Reduce with ``f`` over the elements of ``xs`` where ``pred`` holds.
+
+  Equivalent to ``reduce(f, filter(pred, *xs, map=map), init=init, axis=axis)``
+  and fused by the middle end into a single guarded reduction loop with no
+  intermediate index array when ``init`` is given."""
+  if not xs:
+    raise el.error(TypeInferenceError, "filter_reduce() needs at least one array argument")
+  selected = filter.impl(el, pred, *xs, map=map)
+  return reduce.impl(el, f, selected, init=init, axis=axis)
 
 
 def _bool():
@@ -504,6 +518,6 @@ def _builtin_filter(el, pred, x):
 
 __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
-    "parfor", "filter", "scan_axis", "grad", "value_and_grad", "Gradient",
+    "parfor", "filter", "filter_reduce", "scan_axis", "grad", "value_and_grad", "Gradient",
 ]  # fmt: skip
 _ = (Const, I)

@@ -99,9 +99,12 @@ class Config:
   fast_math: bool = False
   #: Where compiled modules are cached (default: per-user cache directory).
   cache_dir: str | None = field(default_factory=lambda: os.environ.get("PARAKEET_CACHE_DIR"))
-  #: Print the typed IR / generated source of everything that gets compiled.
+  #: Print the operator IR / typed loop IR / generated source of everything that gets compiled.
+  print_operators: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_OPERATORS", False))
   print_ir: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_IR", False))
   print_code: bool = field(default_factory=lambda: _env_bool("PARAKEET_PRINT_CODE", False))
+  #: Run the IR verifier before passes, after every pass, and after lowering.
+  verify: bool = field(default_factory=lambda: _env_bool("PARAKEET_VERIFY", True))
 
   def __getattr__(self, name: str):
     # only reached for names that are not settings: the option names of Parakeet 0.x
@@ -132,6 +135,8 @@ class Config:
 # option names used by Parakeet 0.x, still accepted
 LEGACY_NAMES = {
   "opt_fusion": "fusion",
+  "opt_verify": "verify",
+  "print_indexified_function": "print_operators",
   "print_specialized_function": "print_ir",
   "print_loopy_function": "print_ir",
   "print_lowered_function": "print_ir",

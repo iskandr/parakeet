@@ -24,8 +24,10 @@ variable before importing Parakeet.
 | `opt_level` | `3` | – | compiler optimisation level |
 | `fast_math` | `False` | – | allow value-changing floating-point optimisations |
 | `cache_dir` | per-user cache | `PARAKEET_CACHE_DIR` | where compiled modules are stored |
+| `print_operators` | `False` | `PARAKEET_PRINT_OPERATORS` | print the operator IR before the middle-end passes (`print_indexified_function`) |
 | `print_ir` | `False` | `PARAKEET_PRINT_IR` | print the IR of everything compiled |
 | `print_code` | `False` | `PARAKEET_PRINT_CODE` | print the generated C |
+| `verify` | `True` | `PARAKEET_VERIFY` | run `parakeet.verify` before passes, after each pass, and after lowering (`opt_verify`) |
 
 `PARAKEET_CUDA_SIMULATE=1` makes `backend="cuda"` use the CPU simulator described
 in [Backends](backends.md#nvidia-gpus-cuda).

@@ -49,6 +49,7 @@ from .lib.adverbs import (
   allpairs,
   each,
   filter,  # noqa: A004
+  filter_reduce,
   grad,
   imap,
   ireduce,
@@ -75,6 +76,7 @@ from .ndtypes import (
   UInt32,
   UInt64,
 )
+from .transforms.verify import verify
 
 pmap1 = jit(_pmap1)
 pmap2 = jit(_pmap2)

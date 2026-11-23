@@ -11,8 +11,10 @@ runs.
 
 from __future__ import annotations
 
+from ..config import config
 from ..syntax import ir
 from . import fusion, lowering, simplify, tiling
+from .verify import verify
 
 PASSES: list[tuple[str, object]] = [
   ("dead code", simplify.dead_code),
@@ -26,13 +28,20 @@ PASSES: list[tuple[str, object]] = [
 
 def run(fn: ir.Function, options, trace=None) -> None:
   """Optimize and lower ``fn`` in place; ``trace(name, fn)`` is told after every pass."""
+  check = config.verify
+  if check:
+    verify(fn, "before passes")
   off = set(getattr(options, "skip", ()))
   for name, apply in PASSES:
     if name not in off:
       apply(fn, options)  # type: ignore[operator]
+      if check:
+        verify(fn, f"after {name}")
       if trace is not None:
         trace(name, fn)
   lowering.lower(fn)
+  if check:
+    verify(fn, "after lowering")
 
 
 def names() -> list[str]:

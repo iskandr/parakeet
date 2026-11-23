@@ -627,7 +627,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     from .transforms import pipeline
 
     elaborated.operators = fmt_function(elaborated.function)  # before the passes: the operator level
-    if config.print_ir:
+    if config.print_operators or config.print_ir:
       print(elaborated.operators)
     trace = (lambda name, fn: print(f"--- after {name} ---\n{fmt_function(fn)}")) if config.print_ir else None
     pipeline.run(elaborated.function, options, trace)

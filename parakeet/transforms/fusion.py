@@ -24,7 +24,7 @@ from ..ndtypes import Bool
 from ..syntax import ir
 from ..syntax.clone import Cloner, defined
 from ..syntax.ir import Assign, Const, Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, Var
-from .lowering import pure_defs
+from .lowering import outer_expr, pure_defs
 from .simplify import drop_buffers, has_effects
 
 
@@ -362,6 +362,42 @@ def _try_fuse_vertical_pair(
   return None
 
 
+def _flatten_nested_map(outer: IndexMap, defs: dict[int, Expr]) -> IndexMap | None:
+  """``CombineNestedMaps`` (thesis Fig. 6.2): flatten ``IndexMap(S1, i -> IndexMap(S2, j -> body))``
+  into ``IndexMap(S1 ++ S2, (i, j) -> body)`` when ``S2`` does not depend on ``i``."""
+  if outer.scope.owned:
+    return None
+  body = [t for t in outer.body if not (isinstance(t, ir.ReleaseScope) and t.scope is outer.scope)]
+  if not body or not isinstance(body[-1], IndexMap):
+    return None
+  inner = body[-1]
+  prefix = body[:-1]
+  if outer.ordered != inner.ordered:
+    return None
+  if not all(
+    isinstance(t, (Assign, ir.Comment))
+    and (not isinstance(t, Assign) or (not isinstance(t.var.type, ir.BufType) and pure(t.value)))
+    for t in prefix
+  ):
+    return None
+  outer_locals = set(defined(prefix)) | {v.uid for v in outer.index}
+  local_defs = _local_int_defs(prefix, defs)
+  lifted_shape = [outer_expr(local_defs, d, outer_locals) for d in inner.shape]
+  if any(d is None for d in lifted_shape):
+    return None
+  inner_body = [t for t in inner.body if not (isinstance(t, ir.ReleaseScope) and t.scope is inner.scope)]
+  outer.scope.owned.extend(inner.scope.owned)
+  return IndexMap(
+    outer.shape + tuple(lifted_shape),  # type: ignore[arg-type]
+    outer.index + inner.index,
+    prefix + inner_body + [ir.ReleaseScope(outer.scope)],
+    outer.scope,
+    outer.ordered,
+    outer.parallel or inner.parallel,
+    outer.loc,
+  )
+
+
 def _vertical_block(
   block: list,
   readers: dict[int, int],
@@ -371,12 +407,17 @@ def _vertical_block(
   gone: set[int],
   options,
 ) -> tuple[list, bool]:
-  """Walk ``block`` fusing adjacent producer-consumer operators vertically."""
+  """Walk ``block`` flattening nested maps and fusing adjacent producer-consumer operators."""
   changed = False
-  for s in block:
+  for i, s in enumerate(block):
     for b in ir.sub_blocks(s):
       b[:], inner = _vertical_block(b, readers, defs, allocs, store_counts, gone, options)
       changed |= inner
+    if isinstance(s, IndexMap):
+      flat = _flatten_nested_map(s, defs)
+      if flat is not None:
+        block[i] = flat
+        changed = True
   out: list = []
   k = 0
   while k < len(block):

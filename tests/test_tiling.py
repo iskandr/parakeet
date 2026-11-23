@@ -492,3 +492,54 @@ def test_ir_body_sharing_and_diagnose_c_backend():
   # find_broken_transform on backend="c" must not duplicate "c" as "parallel loops"
   with parakeet.options(backend="c"):
     assert parakeet.find_broken_transform(lambda x: np.sum(x * x), [a], print_transforms=False) is None
+
+
+def test_filter_reduce_adverb_and_combine_nested_maps():
+  rng = np.random.default_rng(27)
+  x = rng.uniform(-1.0, 1.0, 2000)
+  w = rng.random(2000)
+
+  @jit
+  def weighted_pos_sum(a, b):
+    return parakeet.filter_reduce(parakeet.add, lambda u, v: u > 0.0, a, b, map=lambda u, v: u * v, init=0.0)
+
+  np.testing.assert_allclose(weighted_pos_sum(x, w), (x[x > 0.0] * w[x > 0.0]).sum())
+  assert n_loops(weighted_pos_sum.specialize(x, w)) == 1
+  # Also callable directly from Python
+  np.testing.assert_allclose(parakeet.filter_reduce(parakeet.add, lambda v: v > 0.0, x, init=0.0), x[x > 0.0].sum())
+
+  # CombineNestedMaps (thesis Fig. 6.2): nested expensive maps flatten into one 2D parallel map
+  @jit
+  def nested_expensive(m):
+    def inner(v):
+      for _ in range(6):
+        v = np.tanh(v) + 0.1
+      return v
+
+    return parakeet.each(lambda row: parakeet.each(inner, row), m)
+
+  m = rng.random((4, 64))
+  want = m.copy()
+  for _ in range(6):
+    want = np.tanh(want) + 0.1
+  np.testing.assert_allclose(nested_expensive(m), want)
+  nspec = nested_expensive.specialize(m)
+  # Elaboration emits outer map + inner map + row-copy map with a per-row temp buffer;
+  # vertical fusion eliminates the per-row temp buffer and CombineNestedMaps flattens into one 2D parallel map!
+  assert nspec.operators.count("map ") == 3 and "release(" in nspec.operators
+  assert nspec.ir.count("parallel[map]") == 1 and "release(" not in nspec.ir
+  assert "(m_n0_" in nspec.ir and "m_n1_" in nspec.ir
+
+
+def test_ir_verifier_catches_invalid_ir_and_legacy_config_aliases():
+  from parakeet.errors import InternalError
+  from parakeet.syntax import ir
+
+  assert parakeet.config.opt_verify is parakeet.config.verify
+  assert parakeet.config.print_indexified_function is parakeet.config.print_operators
+
+  # Construct a deliberately broken Function referencing an unbound variable
+  bad_var = ir.Var("ghost", parakeet.Float64)
+  fn = ir.Function("broken", [], [ir.Assign(ir.Var("y", parakeet.Float64), bad_var)], [], ir.Scope("fn"))
+  with pytest.raises(InternalError, match="not in scope"):
+    parakeet.verify(fn)
