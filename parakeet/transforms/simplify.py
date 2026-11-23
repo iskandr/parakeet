@@ -60,8 +60,8 @@ def read_vars(fn: ir.Function) -> set[int]:
   return out
 
 
-def _buffer_liveness(fn: ir.Function) -> tuple[set[int], set[int], set[int]]:
-  """``(local_allocs, read_bufs, stored_bufs)`` across ``fn``.
+def buffer_liveness(fn: ir.Function) -> tuple[set[int], set[int], set[int]]:
+  """Return ``(local_allocs, read_bufs, stored_bufs)`` across ``fn``.
 
   ``read_bufs`` collects every buffer variable that is loaded, returned,
   reference-counted, assigned to another variable, or passed to a runtime call
@@ -97,7 +97,7 @@ def has_effects(block: list) -> bool:
   )
 
 
-def _pure_writes_only(block: list, dead_bufs: set[int]) -> bool:
+def pure_writes_only(block: list, dead_bufs: set[int]) -> bool:
   """True if ``block`` has no observable effects other than stores into ``dead_bufs``."""
   for s in ir.walk_stmts(block):
     if isinstance(s, ir.Store):
@@ -165,7 +165,7 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         s.folds[:] = keep
         changed = True
     elif isinstance(s, IndexMap):
-      if not s.scope.owned and _pure_writes_only(s.body, dead_bufs):
+      if not s.scope.owned and pure_writes_only(s.body, dead_bufs):
         changed = True
         continue
     elif isinstance(s, IndexFilter):
@@ -178,7 +178,7 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         not s.scope.owned
         and not has_effects(s.body)
         and not has_effects(s.fold.combine)
-        and _pure_writes_only(s.emit, dead_bufs)
+        and pure_writes_only(s.emit, dead_bufs)
       ):
         changed = True
         continue
@@ -196,7 +196,7 @@ def dead_code(fn: ir.Function, options) -> None:
   gone: set[int] = set()
   for _ in range(8):  # removing one dead operator can make its producers dead too
     live = read_vars(fn)
-    allocs, read_bufs, stored_bufs = _buffer_liveness(fn)
+    allocs, read_bufs, stored_bufs = buffer_liveness(fn)
     dead_bufs = allocs - read_bufs
     fn.body[:], changed = sweep(fn.body, live, dead_bufs, stored_bufs, gone)
     if gone:
@@ -206,4 +206,4 @@ def dead_code(fn: ir.Function, options) -> None:
       break
 
 
-__all__ = ["dead_code", "drop_buffers", "has_effects", "read_vars"]
+__all__ = ["buffer_liveness", "dead_code", "drop_buffers", "has_effects", "pure_writes_only", "read_vars", "sweep"]

@@ -140,9 +140,15 @@ class HostEmitter(CFamilyEmitter):
 
   # ---- parallel loops ------------------------------------------------------
 
-  def _loop_signature(self, s: ir.ParLoop, defined: dict[int, ir.Var]) -> tuple[tuple, list[ir.Var]]:
-    """Structural IR key of ``s`` up to alpha-renaming, plus free variables in
-    first-appearance order so structurally identical loops share one body."""
+  def loop_signature(self, s: ir.ParLoop, defined: dict[int, ir.Var]) -> tuple[tuple, list[ir.Var]]:
+    """Return ``(signature_key, free_vars)`` for structural body deduplication.
+
+    ``signature_key`` is a hashable tuple representing ``s.body`` up to
+    alpha-renaming of local and free variables (preserving scalar/buffer types,
+    constants, ops, checks, and owned buffers).  ``free_vars`` lists the
+    captured outer variables in their order of first appearance in ``s.body``,
+    so any two ``ParLoop``s with equal ``signature_key`` share one compiled C
+    context struct and ``pk_body_k`` function without re-emitting C text."""
     free: list[ir.Var] = []
     free_index: dict[int, int] = {}
     local_index: dict[int, int] = {s.chunk.uid: -1, s.start.uid: -2, s.stop.uid: -3}
@@ -261,7 +267,7 @@ class HostEmitter(CFamilyEmitter):
     defined = defined_vars(s.body, into_parloops=True)
     for v in (s.chunk, s.start, s.stop):
       defined[v.uid] = v
-    ir_key, free = self._loop_signature(s, defined)
+    ir_key, free = self.loop_signature(s, defined)
     info = KernelInfo(k, s, free)
     self.kernels.append(info)
     info.fields = [("rt", "ptr", None), ("total", "scalar", None), ("csize", "scalar", None)]

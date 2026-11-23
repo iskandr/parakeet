@@ -88,8 +88,8 @@ def match(s: ir.Stmt, defs: dict[int, Expr], min_rank: int = 2) -> Shape | None:
 # ---------------------------------------------------------------------------
 
 
-def _linear_stride(e: Expr, v: Var, defs: dict[int, Expr], budget: int = 20) -> Expr | None:
-  """Coefficient of ``v`` in an affine integer expression ``e``, or None."""
+def linear_stride(e: Expr, v: Var, defs: dict[int, Expr], budget: int = 20) -> Expr | None:
+  """Return the affine coefficient of ``v`` in integer expression ``e``, or ``None``."""
   if budget <= 0:
     return None
   if isinstance(e, Const):
@@ -98,19 +98,19 @@ def _linear_stride(e: Expr, v: Var, defs: dict[int, Expr], budget: int = 20) -> 
     if e is v:
       return ONE
     d = defs.get(e.uid)
-    return ZERO if d is None else _linear_stride(d, v, defs, budget - 1)
+    return ZERO if d is None else linear_stride(d, v, defs, budget - 1)
   if isinstance(e, ir.Cast):
-    return _linear_stride(e.arg, v, defs, budget - 1)
+    return linear_stride(e.arg, v, defs, budget - 1)
   if isinstance(e, ir.Prim):
     if e.op in ("add", "sub") and len(e.args) == 2:
-      a = _linear_stride(e.args[0], v, defs, budget - 1)
-      b = _linear_stride(e.args[1], v, defs, budget - 1)
+      a = linear_stride(e.args[0], v, defs, budget - 1)
+      b = linear_stride(e.args[1], v, defs, budget - 1)
       if a is None or b is None:
         return None
       return iadd(a, b) if e.op == "add" else isub(a, b)
     if e.op == "mul" and len(e.args) == 2:
-      a = _linear_stride(e.args[0], v, defs, budget - 1)
-      b = _linear_stride(e.args[1], v, defs, budget - 1)
+      a = linear_stride(e.args[0], v, defs, budget - 1)
+      b = linear_stride(e.args[1], v, defs, budget - 1)
       if a is None or b is None:
         return None
       if isinstance(a, Const) and a.value == 0:
@@ -119,16 +119,17 @@ def _linear_stride(e: Expr, v: Var, defs: dict[int, Expr], budget: int = 20) -> 
         return imul(a, e.args[1])
       return None
     if e.op == "neg" and len(e.args) == 1:
-      a = _linear_stride(e.args[0], v, defs, budget - 1)
+      a = linear_stride(e.args[0], v, defs, budget - 1)
       return None if a is None else isub(ZERO, a)
   return None
 
 
-def _is_const(e: Expr | None, val: int) -> bool:
+def is_const(e: Expr | None, val: int) -> bool:
+  """True if ``e`` is a constant equal to ``val``."""
   return isinstance(e, Const) and e.value == val
 
 
-def _should_interchange(s: IndexMap, m: Shape, defs: dict[int, Expr]) -> bool:
+def should_interchange(s: IndexMap, m: Shape, defs: dict[int, Expr]) -> bool:
   """True when the reduction is associative+commutative and walks memory
   strided along its own inner index while ``s.index[-1]`` has unit stride."""
   red = m.reduce
@@ -155,16 +156,16 @@ def _should_interchange(s: IndexMap, m: Shape, defs: dict[int, Expr]) -> bool:
     for e in ir.stmt_exprs(t):
       for x in ir.walk_expr(e):
         if isinstance(x, Load):
-          reduce_stride = _linear_stride(x.index, reduce_inner, local_defs)
-          map_stride = _linear_stride(x.index, map_inner, local_defs)
-          if _is_const(reduce_stride, 1):
+          reduce_stride = linear_stride(x.index, reduce_inner, local_defs)
+          map_stride = linear_stride(x.index, map_inner, local_defs)
+          if is_const(reduce_stride, 1):
             return False  # already contiguous along the reduction axis
-          if _is_const(map_stride, 1) and reduce_stride is not None and not _is_const(reduce_stride, 0):
+          if is_const(map_stride, 1) and reduce_stride is not None and not is_const(reduce_stride, 0):
             unit_map_strided_reduce = True
   return unit_map_strided_reduce
 
 
-def _interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> list:
+def interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> list:
   """Swap ``m.reduce`` outside an L1-cached strip of ``s.index[-1]`` so the
   innermost loop walks both the input and the tile accumulator with stride 1."""
   out: list = []
@@ -314,20 +315,20 @@ def _interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) ->
   return out
 
 
-def _interchange_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
+def interchange_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
   """Rewrite eligible strided map-of-reduction statements throughout ``block``."""
   out: list = []
   for s in block:
     if isinstance(s, If):
-      s.then[:] = _interchange_block(s.then, defs, owner)
-      s.orelse[:] = _interchange_block(s.orelse, defs, owner)
+      s.then[:] = interchange_block(s.then, defs, owner)
+      s.orelse[:] = interchange_block(s.orelse, defs, owner)
     elif isinstance(s, IndexReduce):
-      s.body[:] = _interchange_block(s.body, defs, s.scope)
+      s.body[:] = interchange_block(s.body, defs, s.scope)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = _interchange_block(s.body, defs, s.scope)
+      s.body[:] = interchange_block(s.body, defs, s.scope)
     m = match(s, defs, min_rank=1)
-    if m is not None and _should_interchange(s, m, defs):  # type: ignore[arg-type]
-      out.extend(_interchanged(s, m, defs, owner))  # type: ignore[arg-type]
+    if m is not None and should_interchange(s, m, defs):  # type: ignore[arg-type]
+      out.extend(interchanged(s, m, defs, owner))  # type: ignore[arg-type]
     else:
       out.append(s)
   return out
@@ -337,7 +338,7 @@ def interchange(fn: ir.Function, options) -> None:
   """PermuteReductions: interchange strided map-of-reduction loops into
   L1-tiled contiguous SIMD loops."""
   if options.tiling:
-    fn.body[:] = _interchange_block(fn.body, pure_defs(fn.body), fn.scope)
+    fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope)
 
 
 # ---------------------------------------------------------------------------
@@ -489,4 +490,19 @@ def tiling(fn: ir.Function, options) -> None:
     fn.body[:] = tile_block(fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes)
 
 
-__all__ = ["INTERCHANGE_TILE", "UNROLL_I", "UNROLL_J", "interchange", "jam", "match", "tile_size", "tiled", "tiling"]
+__all__ = [
+  "INTERCHANGE_TILE",
+  "UNROLL_I",
+  "UNROLL_J",
+  "interchange",
+  "interchange_block",
+  "interchanged",
+  "jam",
+  "linear_stride",
+  "match",
+  "should_interchange",
+  "tile_block",
+  "tile_size",
+  "tiled",
+  "tiling",
+]
