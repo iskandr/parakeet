@@ -29,6 +29,7 @@ theme:
 nav:
   - Home: index.md
   - Getting started: quickstart.md
+  - Core ideas & boundaries: philosophy.md
   - Guide:
       - The compiled language: language.md
       - Backends and GPUs: backends.md

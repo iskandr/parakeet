@@ -20,6 +20,7 @@ import parakeet as pk
 | `pk.ireduce(f, shape, init=None, combine=add)` | reduce `f(idx)` over every index |
 | `pk.parfor(f, shape)` | call `f(idx)` for its side effects, in parallel |
 | `pk.filter(pred, x, ..., map=None)` | the elements of `x` for which `pred` is true; with several arrays, `map(x[i], y[i], ...)` where `pred(x[i], y[i], ...)` holds |
+| `pk.filter_reduce(f, pred, x, ..., map=None, init=None, axis=None)` | reduce with `f` over elements where `pred` holds (fuses into one zero-allocation guarded reduction loop when `init` is given) |
 | `pk.pmap1(f, x, w)`, `pk.pmap2(f, x, (wx, wy))` | `f` applied to a sliding window around each element |
 | `pk.grad(f, argnum=0)`, `pk.value_and_grad(f, argnum=0)` | the gradient of a scalar-valued `f` — see [Gradients](autodiff.md) |
 

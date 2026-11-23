@@ -1,0 +1,167 @@
+# Core ideas, history, and boundaries
+
+Parakeet began at New York University as a research compiler by **Alex
+Rubinsteyn** (`@iskandr`) and **Eric Hielscher** (`@hielscher`) — originally
+hosted at `parakeetpython.com` and described in:
+
+* **Alex Rubinsteyn**, *Runtime Compilation of Array-Oriented Python Programs*
+  (PhD thesis, NYU, 2014) — type/value specialization, data-parallel adverbs,
+  and algebraic fusion.
+* **Eric Hielscher**, *Locality Optimization for Data Parallel Programs*
+  (PhD thesis, NYU, 2013) — tiling, register blocking, and loop interchange
+  over adverb trees.
+* Earlier papers and talks: HotPar '12 (*Parakeet: A Just-In-Time Parallel
+  Accelerator for Python*), PyData Boston '13, and the
+  [2013 architecture post](http://www.phi-node.com/2013/01/a-journey-through-parakeet.html).
+
+Parakeet 1.0 is a ground-up rewrite for Python 3.11+, NumPy 2, Apple Metal,
+NVIDIA CUDA, and reverse-mode automatic differentiation (`grad`), built to
+preserve the algebraic spirit of those theses while generalizing their
+operators and fixing the places where the original rules were unsound or
+incomplete.
+
+---
+
+## Core thesis ideas that define Parakeet
+
+### 1. Specialization replaces dynamic dispatch ([R] Ch. 3 & §6.6)
+
+Python has no static types, yet numerical kernels are almost always monomorphic
+at each call site. Parakeet uses an untyped Python function as a template and
+generates a native *specialization* for each distinct combination of argument
+dtypes, ranks, memory layouts (contiguous vs. strided), and tuple structure.
+
+When an expression's type or rank depends on a runtime value (such as `axis=`,
+a tuple length, or a unit dimension `1` that governs broadcasting), Parakeet
+specializes on that value automatically—resolving the famous broadcasting bug
+noted in [R] (`200×1 + 1×300`) statically.
+
+### 2. A small closed algebra of data-parallel adverbs ([R] Ch. 4)
+
+Rather than implementing hundreds of bespoke C/CUDA kernels for every NumPy
+function, Parakeet defines NumPy operations, comprehensions, matrix products,
+and `einsum` in terms of a tiny set of data-parallel operators (*adverbs*):
+
+* `IndexMap` — independent element-wise / slice-wise computation over an index space
+* `IndexReduce` — associative or sequential folds (including payload folds such as `argmin`/`argmax` and guarded `FilterReduce`)
+* `IndexScan` — prefix folds with an `emit` stage
+* `IndexFilter` — stream compaction of indices matching a predicate
+
+Every higher-level construct—whether written as `np.tanh(x * a) + b`, a list
+comprehension, `a @ b`, `np.cumsum`, `x[x > 0]`, or `parakeet.allpairs`—lowers
+to these four operator statements (`f.specialize(*args).operators`).
+
+### 3. Algebraic fusion *before* loop lowering ([R] Ch. 6)
+
+Once a program is expressed in adverbs, optimizations become concise algebraic
+identities instead of fragile loop-nest analyses:
+
+* **Vertical fusion** ([R] Fig. 6.1): `Map ∘ Map` (including matmul epilogues like `np.tanh(a @ b + c)`), `Map ∘ Scan` into `IndexScan.emit`, `Map → Filter`, `Map → Reduce`, `Filter ∘ Filter` (short-circuiting), and `Reduce ∘ Filter ⇒ FilterReduce` (single zero-allocation pass).
+* **Nested map flattening** ([R] Fig. 6.2, `CombineNestedMaps`): `IndexMap` inside `IndexMap` collapses into one multi-dimensional `IndexMap`, exposing the full 2D/ND index space to multi-core CPUs and GPUs.
+* **Horizontal / sibling fusion** ([R] Fig. 6.3): adjacent `IndexReduce`s (`x.min(), x.max()`, `x.argmin(), x.argmax()`) and independent `IndexMap`s (`np.sin(x), np.cos(x)`) over the same index space share one loop.
+* **Dead-operator elimination**: pure maps, reductions, scans, filters, and unused allocations nobody reads are removed before lowering.
+
+Parakeet 1.0 also adds the side conditions the original thesis omitted:
+single-use / cost guards (so fusion never silently duplicates expensive work),
+alias tracking, explicit associativity checks (non-associative folds stay
+sequential), and keeping SIMD-vectorizable float sums separate from non-SIMD
+folds.
+
+### 4. Locality from the same algebra ([H] 2013)
+
+Cache locality optimizations match directly on the operator IR rather than
+recovering structure from raw `for` loops:
+
+* **Reduction interchange (`PermuteReductions`)**: when an `IndexMap` wraps a
+  strided commutative+associative `IndexReduce` whose outer map index has unit
+  stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized
+  strip of contiguous output columns.
+* **Tiling and jamming (`TiledMap`)**: any `IndexMap` of rank ≥ 2 wrapping a
+  single `IndexReduce` plus straight-line code (`a @ b`, `allpairs` distances,
+  `einsum`, fused epilogues) is tiled over its last dimension and jammed 2×4 by
+  applying sibling fusion to copies of the reduction body.
+
+### 5. Verifiable, inspectable, fail-loud compilation
+
+* `parakeet.verify` (`config.verify` / legacy `opt_verify`) checks scoping,
+  typing, and buffer-ownership invariants before passes, after every pass, and
+  after lowering.
+* `f.specialize(*args).operators`, `.ir`, `.source`, and `.kernels` expose
+  every stage of compilation.
+* `parakeet.find_broken_transform` bisects the pipeline one pass at a time.
+* Unsupported Python/NumPy constructs fail at compile time with the exact
+  source caret and inlined call chain instead of silently falling back or
+  returning wrong numbers.
+
+---
+
+## The boundary: what does *not* work yet
+
+Parakeet is an array-oriented numerical compiler, not a drop-in replacement for
+all of CPython or SciPy. Knowing the boundary up front avoids surprises:
+
+### Python language & types
+
+| Works | Not supported yet |
+|---|---|
+| `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64` scalars & arrays (any rank/strides) | Complex numbers (`complex64`/`complex128`), native `float16` compute (`float16` is widened to `float32`), structured/record dtypes, object/string arrays |
+| Fixed-structure tuples (nested arbitrarily), `slice`, `range`, `zip`, `enumerate` | `dict`, `set`, runtime string manipulation, user-defined classes / methods (`self`) |
+| List literals and comprehensions as fixed-shape arrays | Mutable/dynamically resized Python lists (`.append`, `.extend`, ragged lists) |
+| `if`/`elif`/`else`, `for`, `while`, `break`, `continue`, early `return`, nested `def`/`lambda`, closures, `assert`, `raise` | `try`/`except`, `with`, generators (`yield`), `global`/`nonlocal`, `import` inside `@jit`, `**kwargs`, recursion |
+| Static array rank; compile-time specialization on `axis`, `keepdims`, `dtype`, tuple lengths | Value-dependent output rank (e.g. unguided `np.squeeze(x)` without `axis=`), dynamically typed variables that cannot unify |
+
+### NumPy & SciPy library coverage
+
+Roughly 200 core NumPy functions and ufuncs are built in (see
+[Supported functions](supported.md)), covering arithmetic, reductions, scans,
+sorting, indexing/masks, `@`/`dot`/`einsum`, `np.linalg.norm`, and parallel
+`np.random`. Not yet built in:
+
+* Matrix decompositions and solvers (`np.linalg.svd`, `solve`, `inv`, `eig`,
+  `cholesky`, `qr`, `det`, `lstsq`)
+* Signal/spectral transforms (`np.fft.*`)
+* Variable-cardinality set/grouping ops (`np.unique`, `np.bincount`, `np.lexsort`, `np.isin`)
+* SciPy modules (`scipy.special`, `scipy.optimize`, `scipy.ndimage`, ...)
+
+### Automatic differentiation (`grad` / `value_and_grad`)
+
+`grad` differentiates element-wise ops, reductions (`sum`, `prod` zero-safe,
+`min`, `max`, general folds, active `initial`), `cumsum`, `sort`, `@` (and
+stacks), `einsum`, views/concatenation, gather/scatter, `map`/`allpairs` with
+user functions, and pure runtime `if` branches—enough to train small
+transformers ([`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py))
+and convnets ([`examples/convnet.py`](https://github.com/iskandr/parakeet/blob/master/examples/convnet.py)).
+Boundaries:
+
+* **Still an elaboration-time tape, not yet an IR-to-IR pass:** differentiation
+  records operators during elaboration rather than transforming `IndexMap` /
+  `IndexReduce` statements directly.
+* **No dynamic-length loops over differentiated values:** `for` loops with a
+  compile-time-known length (≤ 4096, such as transformer layers or kernel
+  offsets) unroll and differentiate; `while` loops or loops over runtime array
+  lengths are refused (rewrite with `reduce`/`map`/`scan`).
+* **Pure runtime `if` branches only:** both branches execute and are selected
+  by the condition, so branches touching differentiated values cannot contain
+  array stores, `return`, `break`, or `raise`.
+* **Missing derivative rules (refused loudly):** `cumprod`, `convolve`,
+  user-defined `scan` combiners, scatter-stores (`out[idx] = v`), and
+  overwriting an array still needed by an earlier operation's backward pass.
+* **Second derivatives:** work for element-wise ops, reductions, `@`, and
+  views; not yet supported through `map`, gather indexing, or `cumsum`.
+
+### GPU & locality boundaries
+
+* **Apple Metal has no hardware `float64`:** `float64` loops fall back to CPU
+  cores with a warning; use `float32` for Metal acceleration.
+* **No per-thread heap allocation on GPU:** a `ParLoop` that allocates
+  temporary arrays or selects between buffer aliases inside the loop body runs
+  on the CPU instead of CUDA/Metal.
+* **GPU matrix multiplication:** CPU backends call BLAS for standalone float
+  `A @ B`; GPU backends currently run Parakeet's generated CUDA/Metal loops
+  without cuBLAS or block-level `__shared__` memory tiling. Large standalone
+  dense GEMMs are therefore slower than cuBLAS today—though extending the
+  existing `tiling.match` pattern with shared-memory GPU tiling is the natural
+  next step, enabling fused prologue + contraction + epilogue kernels with no
+  extra HBM round-trips.
+* **Single-level tiling:** deeper recursive adverb tiling, `TiledReduce`,
+  `TiledScan`, and online tile-size search from [H] are not implemented.
