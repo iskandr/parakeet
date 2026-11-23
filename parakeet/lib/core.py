@@ -22,7 +22,7 @@ from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..frontend import signature as _signature
 from ..ndtypes import Bool, Float64, Int64, ScalarType, join
 from ..syntax import ops
-from ..syntax.ir import Assign, Const, Expr, RtCall, Store, Var, walk_expr, walk_stmts
+from ..syntax.ir import Assign, Const, Expr, Store, Var, walk_expr, walk_stmts
 from ..syntax.ir import Check as _Check
 from ..syntax.ir import Comment as _Comment
 from ..syntax.ops import ZERO, I, cast, cmp
@@ -685,33 +685,26 @@ def scan_values(el, n: Expr, elem, combine, init=None, what: str = "scan") -> Ar
   finally:
     el.loop_depth -= 1
   out = el.alloc_array(acc_type.strong, (n,), label="scan")
-  if _is_associative(el, combine, acc_type, x_type) and el.can_parallel((n,)):
-    _parallel_scan(el, n, elem, combine, init, acc_type, out)
-    return out
-  acc = Var("acc", acc_type)
-  el.mutables.add(acc.uid)
-  if init is not None:
-    el.emit(Assign(acc, cast(init, acc_type)))
+  # the scan itself is an operator statement; what loops it becomes is up to the passes
+  from ..syntax.ir import Fold, IndexScan
 
-    def body(i):
-      el.emit(Assign(acc, cast(el.as_scalar(combine(acc, elem(i)), "scan result"), acc_type)))
-      el.emit(Store(out.buf, i, cast(acc, acc_type.strong)))
-
-    el.for_range(ZERO, n, body)
-  else:
-    from ..syntax.ir import If
-
-    first: list = []
-    with el.in_block(first):
-      el.emit(Assign(acc, cast(el.as_scalar(elem(ZERO), "element"), acc_type)))
-      el.emit(Store(out.buf, ZERO, cast(acc, acc_type.strong)))
-    el.emit(If(cmp("gt", n, 0), first, []))
-
-    def body(i):
-      el.emit(Assign(acc, cast(el.as_scalar(combine(acc, elem(i)), "scan result"), acc_type)))
-      el.emit(Store(out.buf, i, cast(acc, acc_type.strong)))
-
-    el.for_range(ops.ONE, n, body)
+  threads = _is_associative(el, combine, acc_type, x_type) and el.can_parallel((n,))
+  index = Var("i", I)
+  el.nonneg.add(index.uid)
+  el.upper[index.uid] = n
+  body: list = []
+  scope = el.new_scope("loop")
+  with el.in_block(body, scope, loop=True, par=threads):
+    value = el.tmp(el.as_scalar(elem(index), "element"), "x")
+  a, b = Var("acc", acc_type), Var("x", value.type)
+  combine_block: list = []
+  with el.in_block(combine_block, loop=True):
+    combined = cast(el.as_scalar(combine(a, b), "scan result"), acc_type)
+  result = Var("run", acc_type)
+  fold = Fold(result, value, a, b, combine_block, combined, None if init is None else cast(init, acc_type))
+  el.emit(
+    IndexScan(n, index, body, fold, [Store(out.buf, index, cast(result, acc_type.strong))], scope, threads, el.loc())
+  )
   return out
 
 
@@ -732,74 +725,6 @@ def _is_associative(el, combine, acc_type, x_type) -> bool:
       )
   finally:
     el.loop_depth -= 1
-
-
-def _parallel_scan(el, n: Expr, elem, combine, init, acc_type, out: ArrayVal) -> None:
-  """Prefix scan in two parallel passes: fold every chunk, turn the chunk
-  totals into each chunk's starting value, then scan the chunks."""
-  from ..syntax.ir import If, Load
-
-  strong = acc_type.strong
-  nchunks = el.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
-  if isinstance(nchunks, Var):
-    el.nonneg.add(nchunks.uid)
-  carries = el.alloc_array(strong, (nchunks,), label="carries")
-
-  def step(acc: Var, x) -> None:
-    el.emit(Assign(acc, cast(el.as_scalar(combine(acc, x), "scan result"), acc_type)))
-
-  def fold(chunk, start, stop):
-    acc = Var("acc", acc_type)
-    el.mutables.add(acc.uid)
-    el.emit(Assign(acc, cast(el.as_scalar(elem(start), "element"), acc_type)))
-    el.for_range(ops.iadd(start, 1), stop, lambda i: step(acc, elem(i)))
-    el.emit(Store(carries.buf, chunk, cast(acc, strong)))
-
-  el.par_loop(n, fold, kind="reduce", nchunks=nchunks)
-  # carries[c] becomes the fold of everything before chunk c
-  carry = Var("carry", acc_type)
-  el.mutables.add(carry.uid)
-
-  def shift(c):
-    total = el.copy_scalar(cast(Load(carries.buf, c), acc_type), "total")
-    el.emit(Store(carries.buf, c, cast(carry, strong)))
-    step(carry, total)
-
-  if init is not None:
-    el.emit(Assign(carry, cast(init, acc_type)))
-    el.for_range(ZERO, nchunks, shift)
-  else:
-    some: list = []
-    with el.in_block(some):
-      el.emit(Assign(carry, cast(Load(carries.buf, ZERO), acc_type)))
-      el.for_range(ops.ONE, nchunks, shift)
-    el.emit(If(cmp("gt", nchunks, 0), some, []))
-
-  def scan_chunk(chunk, start, stop):
-    acc = Var("acc", acc_type)
-    el.mutables.add(acc.uid)
-    first = el.copy_scalar(cast(el.as_scalar(elem(start), "element"), acc_type), "x")
-    before = cast(Load(carries.buf, chunk), acc_type)
-    if init is not None:
-      el.emit(Assign(acc, before))
-      step(acc, first)
-    else:
-      # the first chunk has nothing before it
-      joined: list = []
-      with el.in_block(joined):
-        el.emit(Assign(acc, before))
-        step(acc, first)
-      el.emit(If(cmp("gt", chunk, 0), joined, [Assign(acc, first)]))
-    el.emit(Store(out.buf, start, cast(acc, strong)))
-
-    def body(i):
-      step(acc, elem(i))
-      el.emit(Store(out.buf, i, cast(acc, strong)))
-
-    el.for_range(ops.iadd(start, 1), stop, body)
-
-  # not a map as far as backends are concerned: each chunk needs its own starting value
-  el.par_loop(n, scan_chunk, kind="reduce", nchunks=nchunks)
 
 
 def along_axis(el, arr: ArrayVal, axis: int, fn: Callable[[ArrayVal], Any], what: str = "reduction") -> Any:

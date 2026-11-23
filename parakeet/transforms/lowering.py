@@ -113,7 +113,7 @@ def depth(block: list) -> int:
       inner += 1
     elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
       inner += len(s.shape)
-    elif isinstance(s, ir.IndexFilter):
+    elif isinstance(s, (ir.IndexFilter, ir.IndexScan)):
       inner += 1
     best = max(best, inner)
   return best
@@ -166,7 +166,7 @@ def work(defs: dict[int, Expr], block: list, bound: tuple[Var, ...] = ()) -> Exp
         w = imax(cost(s.then), cost(s.orelse))
       elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
         w = imul(known(iprod(s.shape)), imax(cost(s.body), 1))
-      elif isinstance(s, ir.IndexFilter):
+      elif isinstance(s, (ir.IndexFilter, ir.IndexScan)):
         w = imul(known(s.n), imax(cost(s.body), 1))
       elif isinstance(s, ParLoop):
         w = cost(s.body)
@@ -410,6 +410,99 @@ def lower_filter(lp: Loops, s: ir.IndexFilter) -> None:
 
 
 # ---------------------------------------------------------------------------
+# IndexScan
+# ---------------------------------------------------------------------------
+
+
+def lower_scan(lp: Loops, s: ir.IndexScan, scratch: Scope) -> None:
+  """A loop that carries the accumulator; when the combiner is associative,
+  two parallel passes instead: fold every chunk, turn the chunk totals into
+  each chunk's starting value, then scan the chunks."""
+  f = s.fold
+  n = lp.tmp(s.n, "n")
+  seeded = f.init is not None
+  strong = f.a.type.strong
+
+  def value_at(inner: Loops, at: Expr, acc: Var, emit: bool, join: Expr | None = None, unless: Expr | None = None):
+    """``acc`` = the value at ``at`` (folded onto ``join`` if given, except
+    where ``unless`` holds), from a copy of the body."""
+    c = Cloner({s.index.uid: at})
+    result = c.var(f.result)
+    inner.block.extend(c.block(s.body))
+    x = inner.tmp(c.expr(f.value), "x")
+    if join is None:
+      inner.emit(Assign(acc, cast(x, acc.type)))
+    else:
+      joined: list = [Assign(acc, join)]
+      step(inner.sub(joined), f, acc, x, scratch)
+      inner.block.extend(joined if unless is None else [If(unless, [Assign(acc, cast(x, acc.type))], joined)])
+    if emit:
+      inner.emit(Assign(result, acc))
+      inner.block.extend(c.stmt(t) for t in s.emit)
+    inner.owner.owned.extend(c.scope(s.scope).owned)
+
+  def rest(inner: Loops, start: Expr, stop: Expr, acc: Var, emit: bool, fresh: bool) -> None:
+    """Fold (and with ``emit``, emit) the indices ``[start, stop)`` onto ``acc``."""
+    c = Cloner() if fresh else None
+    index = s.index if c is None else c.var(s.index)
+    scope = s.scope if c is None else c.scope(s.scope)
+    blk = list(s.body) if c is None else c.block(s.body)
+    step(inner.sub(blk, scope), f, acc, f.value if c is None else c.expr(f.value), scratch)
+    if emit:
+      result = f.result if c is None else c.var(f.result)
+      blk.append(Assign(result, acc))
+      blk.extend(s.emit if c is None else [c.stmt(t) for t in s.emit])
+    blk.append(ir.ReleaseScope(scope))
+    inner.emit(ForRange(index, start, stop, ONE, blk, scope))
+
+  if not s.parallel:
+    acc = Var("acc", f.a.type)
+    if seeded:
+      lp.emit(Assign(acc, cast(f.init, acc.type)))
+      rest(lp, ZERO, n, acc, True, False)
+    else:
+      head: list = []
+      value_at(lp.sub(head), ZERO, acc, True)
+      lp.emit(If(cmp("gt", n, 0), head, []))
+      rest(lp, ONE, n, acc, True, False)
+    return
+
+  nchunks = lp.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
+  carries = Var("carries", BufType(strong))
+  lp.emit(Alloc(carries, nchunks))
+  lp.owner.owned.append(carries)  # for the error path; released below
+
+  def fold_chunk(inner: Loops, chunk, start, stop):
+    acc = Var("acc", f.a.type)
+    value_at(inner, start, acc, False)
+    rest(inner, iadd(start, 1), stop, acc, False, True)
+    inner.emit(Store(carries, chunk, cast(acc, strong)))
+
+  # neither loop is a map as far as backends are concerned: a chunk is a unit
+  lp.parallel(n, fold_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+  # carries[c] becomes the fold of everything before chunk c
+  carry, c, total = Var("carry", f.a.type), Var("c", I), Var("total", f.a.type)
+  shift: list = [Assign(total, cast(Load(carries, c), total.type)), Store(carries, c, cast(carry, strong))]
+  step(lp.sub(shift), f, carry, total, scratch)
+  if seeded:
+    lp.emit(Assign(carry, cast(f.init, carry.type)))
+    lp.emit(ForRange(c, ZERO, nchunks, ONE, shift, Scope("loop")))
+  else:
+    some = [Assign(carry, cast(Load(carries, ZERO), carry.type)), ForRange(c, ONE, nchunks, ONE, shift, Scope("loop"))]
+    lp.emit(If(cmp("gt", nchunks, 0), some, []))
+
+  def scan_chunk(inner: Loops, chunk, start, stop):
+    acc = Var("acc", f.a.type)
+    before = cast(Load(carries, chunk), acc.type)
+    # without an init the first chunk has nothing before it
+    value_at(inner, start, acc, True, join=before, unless=None if seeded else cmp("eq", chunk, 0))
+    rest(inner, iadd(start, 1), stop, acc, True, False)
+
+  lp.parallel(n, scan_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+  lp.emit(ir.Release(carries))
+
+
+# ---------------------------------------------------------------------------
 # the pass
 # ---------------------------------------------------------------------------
 
@@ -433,6 +526,13 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
     if isinstance(s, ir.IndexFilter):
       s.body[:] = lower_block(s.body, defs, s.scope)
       lower_filter(Loops(out, defs, owner), s)
+      continue
+    if isinstance(s, ir.IndexScan):
+      s.body[:] = lower_block(s.body, defs, s.scope)
+      s.emit[:] = lower_block(s.emit, defs, s.scope)
+      scratch = Scope("fold")
+      s.fold.combine[:] = lower_block(s.fold.combine, defs, scratch)
+      lower_scan(Loops(out, defs, owner), s, scratch)
       continue
     if isinstance(s, If):
       s.then[:] = lower_block(s.then, defs, owner)

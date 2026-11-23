@@ -119,6 +119,10 @@ class Cloner:
         tuple(x(d) for d in s.shape), tuple(self.var(v) for v in s.index), b(s.body), [self.fold(f) for f in s.folds],
         self.scope(s.scope), self.home or s.home, s.parallel, s.loc, b(s.pre), None if s.where is None else x(s.where),
       )  # fmt: skip
+    if isinstance(s, ir.IndexScan):
+      return ir.IndexScan(
+        x(s.n), self.var(s.index), b(s.body), self.fold(s.fold), b(s.emit), self.scope(s.scope), s.parallel, s.loc
+      )
     if isinstance(s, ir.IndexFilter):
       return ir.IndexFilter(
         x(s.n), self.var(s.index), b(s.body), x(s.keep), self.var(s.out), self.var(s.count), self.scope(s.scope),

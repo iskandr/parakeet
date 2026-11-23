@@ -52,7 +52,7 @@ Three questions cannot be answered in one forward pass, so elaboration is
 
 The result is a small imperative language: typed scalar variables, flat buffers
 with load/store, `if`, counted and unbounded loops, allocation with scoped
-release and runtime checks. On top of it sit two *operator statements*, which
+release and runtime checks. On top of it sit four *operator statements*, which
 is as much of the original's adverb tree as the middle end needs:
 
 * `IndexMap(shape, index, body)`: run `body` for every index; the iterations
@@ -63,6 +63,8 @@ is as much of the original's adverb tree as the middle end needs:
   the indices at which a predicate holds count.
 * `IndexFilter(n, index, body, keep)`: the indices at which `keep` holds, in
   order, as a new array.
+* `IndexScan(n, index, body, fold, emit)`: a running fold; `emit` runs at
+  every index with the running value.
 
 `spec.operators` prints a function at this level, `spec.ir` after the passes.
 The last pass (`transforms/lowering.py`) replaces the operator statements by
@@ -119,7 +121,9 @@ statements, in order; `config.skip_transforms` leaves any of them out:
   its last dimension at a time. Inside a tile the body is instantiated for a
   2×4 block of elements (`syntax/clone.py` copies IR blocks) and the eight
   reductions are fused into one with eight folds.
-* **Lowering** (`lowering.py`). Always last: operators to loops.
+* **Lowering** (`lowering.py`). Always last: operators to loops. This is
+  where a reduction, scan or filter that may run in parallel gets its
+  per-chunk partial results and its second pass.
 
 One thing still rewrites the program while it is elaborated:
 

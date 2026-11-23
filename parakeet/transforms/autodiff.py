@@ -47,7 +47,21 @@ from .. import prims
 from ..errors import InternalError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, BufType, ScalarType
 from ..syntax import ops
-from ..syntax.ir import Assign, Cast, Const, Expr, IndexReduce, Load, Prim, Store, Var, same, walk_expr, walk_stmts
+from ..syntax.ir import (
+  Assign,
+  Cast,
+  Const,
+  Expr,
+  IndexReduce,
+  IndexScan,
+  Load,
+  Prim,
+  Store,
+  Var,
+  same,
+  walk_expr,
+  walk_stmts,
+)
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, isub
 from ..syntax.values import CHEAP_COST, ArrayVal, describe
 from .derivatives import backprop, is_float
@@ -106,6 +120,13 @@ def observe(el, stmt) -> None:
         if is_float(f.result) and (depends(el, f.value) or (f.init is not None and depends(el, f.init))):
           el.ad_vars.add(f.result.uid)
           el.tainted_vars.setdefault(f.result.uid, _info(el, "a reduction"))
+    elif isinstance(s, IndexScan):
+      f = s.fold
+      if is_float(f.result) and (depends(el, f.value) or (f.init is not None and depends(el, f.init))):
+        for st in s.emit:
+          if isinstance(st, Store):
+            el.ad_bufs.add(st.buf.uid)
+            el.tainted_bufs.setdefault(st.buf.uid, _info(el, "a scan"))
     elif isinstance(s, Store):
       if is_float(s.value) and depends(el, s.value):
         el.ad_bufs.add(s.buf.uid)

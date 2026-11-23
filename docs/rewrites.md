@@ -17,8 +17,8 @@ The short version: the rules are the same algebra, applied in two places.
   the result is `F` applied to the element function of the argument"; no pass
   looks for the pattern afterwards.
 * **In the middle end.** What elaboration produces is the original's
-  *indexified* level: statements `IndexMap` and `IndexReduce` over index
-  spaces, with ordinary scalar code as their bodies (`Specialization.operators`
+  *indexified* level: statements `IndexMap`, `IndexReduce`, `IndexScan` and
+  `IndexFilter` over index spaces, with ordinary scalar code as their bodies (`Specialization.operators`
   prints it). Passes rewrite those statements — sibling fusion, tiling — and a
   last pass, `LowerAdverbs` in spirit, turns them into loops.
   `parakeet.transforms.pipeline.PASSES` is the list;
@@ -48,7 +48,7 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `ParFor(f, bounds)` | `parfor(f, bounds)` |
 | `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
 | `FilterReduce`, `IndexFilterReduce` | not written by hand: a reduction over a filter *becomes* one (see fusion) |
-| `IndexScan` | no statement of its own yet; `scan` emits its loops directly |
+| `IndexScan(f, ⊕, emit, shape)` | what `scan`, `np.cumsum` and `np.cumprod` are built on: an `IndexScan` statement, whose `emit` is a block (it stores the running value) |
 | — | `grad(f)`, `value_and_grad(f)` |
 
 Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,
@@ -237,7 +237,7 @@ operators `f` applied ([details](autodiff.md)):
 * Horizontal fusion of maps (of reductions: yes).
 * A middle end that does *everything*: vertical fusion and differentiation
   still happen while elaborating, not as passes over the operator statements.
-* Filter-filter fusion; `emit` fused into a scan; scans as operator statements.
+* Filter-filter fusion; a consumer fused into a scan's `emit`.
 * Recursive tiling of deeper adverb nests, `TiledReduce`/`TiledScan`, and the
   online search for tile sizes.
 * Its own low-level optimizer (it relies on the C compiler instead).

@@ -17,7 +17,7 @@ unchanged; everything underneath is new.
   with any function, and `if` statements on run-time conditions (both branches
   run, results are selected). The derivative of a `map` runs in parallel.
 - **A middle end:** elaboration now produces operator statements (`IndexMap`,
-  `IndexReduce`, printed by `spec.operators`) and a pipeline of passes rewrites
+  `IndexReduce`, `IndexScan`, `IndexFilter`, printed by `spec.operators`) and a pipeline of passes rewrites
   them before they become loops. Tiling is one such pass, a pattern match on
   the IR instead of a trial elaboration; **sibling fusion** is new
   (`x.min(), x.max()` is one loop), and so are **filter-reduce fusion**

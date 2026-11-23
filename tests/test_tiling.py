@@ -286,3 +286,18 @@ def test_filters_that_are_needed_stay():
   assert min_kept(x) == y.min()
   with pytest.raises(ValueError, match="no identity"):
     min_kept(np.zeros(9))
+
+
+def test_every_adverb_has_a_statement():
+  @jit
+  def all_four(x):
+    return np.cumsum(x), np.nonzero(x > 0.5)[0], np.sum(x), x * 2.0
+
+  x = np.random.default_rng(12).random(3000)
+  ops = all_four.specialize(x).operators
+  for word in ("scan ", "filter ", "reduce ", "map "):
+    assert word in ops
+  assert "for " not in ops  # no loops before lowering
+  got = all_four(x)
+  np.testing.assert_allclose(got[0], np.cumsum(x))
+  np.testing.assert_array_equal(got[1], np.nonzero(x > 0.5)[0])

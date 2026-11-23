@@ -386,7 +386,24 @@ class IndexFilter(Stmt):
   loc: SourceLocation | None = None
 
 
-OPERATORS = (IndexMap, IndexReduce, IndexFilter)
+@dataclass(eq=False, slots=True)
+class IndexScan(Stmt):
+  """A running fold over ``[0, n)``: at every index, in order, the value
+  ``body`` computes is folded in, and ``emit`` runs with ``fold.result``
+  holding the running value (it usually stores it).  ``parallel`` says the
+  combiner is associative, so chunks may be folded independently first."""
+
+  n: Expr
+  index: Var
+  body: list[Stmt]
+  fold: Fold
+  emit: list[Stmt]
+  scope: Scope
+  parallel: bool = False
+  loc: SourceLocation | None = None
+
+
+OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan)
 
 
 @dataclass(eq=False, slots=True)
@@ -450,6 +467,8 @@ def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
     return (s.body,)
   if isinstance(s, IndexReduce):
     return (s.pre, s.body, *[f.combine for f in s.folds])
+  if isinstance(s, IndexScan):
+    return (s.body, s.fold.combine, s.emit)
   return ()
 
 
@@ -475,6 +494,9 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     return s.shape
   if isinstance(s, IndexFilter):
     return (s.n, s.keep)
+  if isinstance(s, IndexScan):
+    f = s.fold
+    return (s.n, f.value, f.combined) + ((f.init,) if f.init is not None else ())
   if isinstance(s, IndexReduce):
     out = list(s.shape) + ([s.where] if s.where is not None else [])
     for f in s.folds:
@@ -499,6 +521,8 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     return s.index
   if isinstance(s, IndexFilter):
     return (s.index, s.out, s.count)
+  if isinstance(s, IndexScan):
+    return (s.index, s.fold.result, s.fold.a, s.fold.b)
   if isinstance(s, IndexReduce):
     return (*s.index, *[v for f in s.folds for v in (f.result, f.a, f.b)])
   return ()
@@ -604,6 +628,17 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
         out.append(f"{pad}    {f.result.name}: {f.result.type} = fold({how}, {fmt_expr(f.value)}{init})")
         if f.op is None or f.combine:
           out += fmt_block(f.combine, indent + 2)
+    elif isinstance(s, IndexScan):
+      how, f = "parallel " if s.parallel else "", s.fold
+      out.append(f"{pad}{how}scan {s.index.name} over ({fmt_expr(s.n)}):")
+      out += fmt_block(s.body, indent + 1)
+      init = "" if f.init is None else f", init={fmt_expr(f.init)}"
+      out.append(
+        f"{pad}    {f.result.name}: {f.result.type} = "
+        f"fold(lambda {f.a.name}, {f.b.name}: {fmt_expr(f.combined)}, {fmt_expr(f.value)}{init})"
+      )
+      out += fmt_block(f.combine, indent + 2)
+      out += fmt_block(s.emit, indent + 1)
     elif isinstance(s, IndexFilter):
       how = "parallel " if s.parallel else ""
       out.append(f"{pad}{how}filter {s.index.name} over ({fmt_expr(s.n)}):")

@@ -19,7 +19,18 @@ from __future__ import annotations
 from ..syntax import ir
 from ..syntax.ir import Expr, IndexReduce, Var
 
-EFFECTS = (ir.Store, ir.Check, ir.Alloc, ir.Incref, ir.Release, ir.IndexMap, ir.IndexFilter, ir.ParLoop, ir.While)
+EFFECTS = (
+  ir.Store,
+  ir.Check,
+  ir.Alloc,
+  ir.Incref,
+  ir.Release,
+  ir.IndexMap,
+  ir.IndexFilter,
+  ir.IndexScan,
+  ir.ParLoop,
+  ir.While,
+)
 
 
 def read_vars(fn: ir.Function) -> set[int]:
