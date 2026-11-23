@@ -20,7 +20,9 @@ unchanged; everything underneath is new.
   `IndexReduce`, printed by `spec.operators`) and a pipeline of passes rewrites
   them before they become loops. Tiling is one such pass, a pattern match on
   the IR instead of a trial elaboration; **sibling fusion** is new
-  (`x.min(), x.max()` is one loop); `find_broken_transform` bisects the pass
+  (`x.min(), x.max()` is one loop), and so are **filter-reduce fusion**
+  (`np.sum(x[x > 0])` is one loop and allocates nothing) and removal of
+  reductions nobody reads; `find_broken_transform` bisects the pass
   list; `config.skip_transforms` switches passes off.
 - **General operators:** `reduce`, `scan` and `filter` take several arrays
   with `map=` (and `emit=`); `np.einsum`; `@` on stacks; reductions over

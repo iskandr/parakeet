@@ -59,7 +59,10 @@ is as much of the original's adverb tree as the middle end needs:
   are independent.
 * `IndexReduce(shape, index, body, folds)`: fold the values `body` computes
   at every index; each `Fold` has its combiner as a block of IR and, when the
-  combiner is a known associative primitive, its name.
+  combiner is a known associative primitive, its name. With `where`, only
+  the indices at which a predicate holds count.
+* `IndexFilter(n, index, body, keep)`: the indices at which `keep` holds, in
+  order, as a new array.
 
 `spec.operators` prints a function at this level, `spec.ir` after the passes.
 The last pass (`transforms/lowering.py`) replaces the operator statements by
@@ -105,6 +108,10 @@ views of the caller's array.
 `parakeet/transforms/pipeline.py` lists the passes over the operator
 statements, in order; `config.skip_transforms` leaves any of them out:
 
+* **Dead code** (`simplify.py`). Reductions nobody reads are removed (the C
+  compiler cannot remove a parallel loop).
+* **Filter-reduce fusion** (`fusion.py`). A reduction over what an
+  `IndexFilter` kept becomes a guarded `IndexReduce`: no index array.
 * **Sibling fusion** (`fusion.py`). Adjacent reductions over the same index
   space become one `IndexReduce` with several folds.
 * **Tiling** (`tiling.py`). An `IndexMap` of rank two or more whose body is a

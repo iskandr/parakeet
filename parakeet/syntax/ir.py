@@ -352,7 +352,11 @@ class Fold:
 @dataclass(eq=False, slots=True)
 class IndexReduce(Stmt):
   """Fold the values ``body`` computes at every index of ``shape`` (in index
-  order, unless every fold's ``op`` allows regrouping)."""
+  order, unless every fold's ``op`` allows regrouping).
+
+  With ``where`` it is the thesis's *FilterReduce*: ``pre`` runs at every
+  index, and only where ``where`` then holds does ``body`` run and its value
+  get folded.  Such a reduction always has an ``init``."""
 
   shape: tuple[Expr, ...]
   index: tuple[Var, ...]
@@ -362,9 +366,27 @@ class IndexReduce(Stmt):
   home: Scope  # owns the temporaries lowering needs
   parallel: bool = False
   loc: SourceLocation | None = None
+  pre: list[Stmt] = field(default_factory=list)
+  where: Expr | None = None
 
 
-OPERATORS = (IndexMap, IndexReduce)
+@dataclass(eq=False, slots=True)
+class IndexFilter(Stmt):
+  """The indices in ``[0, n)`` at which ``keep`` holds, in order: allocates
+  the int64 buffer ``out`` and sets ``count`` to how many there are."""
+
+  n: Expr
+  index: Var
+  body: list[Stmt]
+  keep: Expr
+  out: Var
+  count: Var
+  scope: Scope
+  parallel: bool = False
+  loc: SourceLocation | None = None
+
+
+OPERATORS = (IndexMap, IndexReduce, IndexFilter)
 
 
 @dataclass(eq=False, slots=True)
@@ -424,10 +446,10 @@ class Function:
 def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
   if isinstance(s, If):
     return (s.then, s.orelse)
-  if isinstance(s, (ForRange, While, ParLoop, IndexMap)):
+  if isinstance(s, (ForRange, While, ParLoop, IndexMap, IndexFilter)):
     return (s.body,)
   if isinstance(s, IndexReduce):
-    return (s.body, *[f.combine for f in s.folds])
+    return (s.pre, s.body, *[f.combine for f in s.folds])
   return ()
 
 
@@ -451,8 +473,10 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     return (s.cond, *s.args)
   if isinstance(s, IndexMap):
     return s.shape
+  if isinstance(s, IndexFilter):
+    return (s.n, s.keep)
   if isinstance(s, IndexReduce):
-    out = list(s.shape)
+    out = list(s.shape) + ([s.where] if s.where is not None else [])
     for f in s.folds:
       out += [f.value, f.combined] + ([f.init] if f.init is not None else [])
     return tuple(out)
@@ -473,6 +497,8 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     return (s.chunk, s.start, s.stop)
   if isinstance(s, IndexMap):
     return s.index
+  if isinstance(s, IndexFilter):
+    return (s.index, s.out, s.count)
   if isinstance(s, IndexReduce):
     return (*s.index, *[v for f in s.folds for v in (f.result, f.a, f.b)])
   return ()
@@ -565,7 +591,10 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
     elif isinstance(s, IndexReduce):
       how = "parallel " if s.parallel else ""
       out.append(f"{pad}{how}reduce {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):")
-      out += fmt_block(s.body, indent + 1)
+      out += fmt_block(s.pre, indent + 1)
+      if s.where is not None:
+        out.append(f"{pad}    where {fmt_expr(s.where)}:")
+      out += fmt_block(s.body, indent + (1 if s.where is None else 2))
       for f in s.folds:
         init = "" if f.init is None else f", init={fmt_expr(f.init)}"
         if f.op is not None and not f.combine:
@@ -575,6 +604,11 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
         out.append(f"{pad}    {f.result.name}: {f.result.type} = fold({how}, {fmt_expr(f.value)}{init})")
         if f.op is None or f.combine:
           out += fmt_block(f.combine, indent + 2)
+    elif isinstance(s, IndexFilter):
+      how = "parallel " if s.parallel else ""
+      out.append(f"{pad}{how}filter {s.index.name} over ({fmt_expr(s.n)}):")
+      out += fmt_block(s.body, indent + 1)
+      out.append(f"{pad}    {s.out.name}, {s.count.name} = keep({s.index.name}, where={fmt_expr(s.keep)})")
     elif isinstance(s, Check):
       out.append(f"{pad}check {fmt_expr(s.cond)}  # else {s.err.exc}: {s.err.fmt}")
     elif isinstance(s, Comment):

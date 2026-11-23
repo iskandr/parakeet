@@ -153,7 +153,7 @@ def test_operators_are_printed_before_the_passes():
 def test_passes_can_be_skipped_by_name():
   from parakeet.transforms import pipeline
 
-  assert pipeline.names() == ["dead code", "sibling fusion", "tiling"]
+  assert pipeline.names() == ["dead code", "filter-reduce fusion", "sibling fusion", "tiling"]
   a = np.arange(64.0).reshape(8, 8)
   with parakeet.options(skip_transforms=("tiling",)):
     assert "tile" not in matmul.specialize(a, a).ir
@@ -225,3 +225,64 @@ def test_reductions_nobody_reads_are_removed():
     assert n_loops(wasteful.specialize(x)) == 2
   with pytest.raises(ValueError, match="no identity"):
     wasteful_but_checked(x, 1000)
+
+
+# ---- FilterReduce -----------------------------------------------------------
+
+
+@jit
+def sum_kept(x):
+  return np.sum(x[x > 0.5])
+
+
+@jit
+def mean_square_kept(x):
+  y = x[x > 0.5]
+  return np.sum(y * y) / len(y)  # the number of survivors is one more fold
+
+
+@jit
+def weights_kept(x, w):
+  return np.sum(w[x > 0.5])  # a filter of one array selecting from another
+
+
+@jit
+def kept_and_returned(x):
+  y = x[x > 0.5]
+  return np.sum(y), y  # the kept elements are needed: the filter stays
+
+
+@jit
+def min_kept(x):
+  return np.min(x[x > 0.5])  # no init: an empty selection has to raise
+
+
+def test_a_reduction_over_a_filter_is_one_loop():
+  x = np.random.default_rng(10).random(5000)
+  w = np.arange(5000)
+  y = x[x > 0.5]
+  for fn, args, want in (
+    (sum_kept, (x,), y.sum()),
+    (mean_square_kept, (x,), (y * y).mean()),
+    (weights_kept, (x, w), w[x > 0.5].sum()),
+  ):
+    np.testing.assert_allclose(fn(*args), want)
+    spec = fn.specialize(*args)
+    assert "filter" in spec.operators and n_loops(spec) == 1 and "idx" not in spec.ir
+    with parakeet.options(skip_transforms=("filter-reduce fusion",)):
+      np.testing.assert_allclose(fn(*args), want)
+      assert n_loops(fn.specialize(*args)) == 3
+  assert sum_kept(np.zeros(0)) == 0.0 and sum_kept(np.zeros(7)) == 0.0
+  with parakeet.options(num_threads=1):
+    np.testing.assert_allclose(sum_kept(x), y.sum())
+
+
+def test_filters_that_are_needed_stay():
+  x = np.random.default_rng(11).random(5000)
+  y = x[x > 0.5]
+  total, kept = kept_and_returned(x)
+  np.testing.assert_allclose(total, y.sum())
+  np.testing.assert_array_equal(kept, y)
+  assert min_kept(x) == y.min()
+  with pytest.raises(ValueError, match="no identity"):
+    min_kept(np.zeros(9))

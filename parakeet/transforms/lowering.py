@@ -113,6 +113,8 @@ def depth(block: list) -> int:
       inner += 1
     elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
       inner += len(s.shape)
+    elif isinstance(s, ir.IndexFilter):
+      inner += 1
     best = max(best, inner)
   return best
 
@@ -164,6 +166,8 @@ def work(defs: dict[int, Expr], block: list, bound: tuple[Var, ...] = ()) -> Exp
         w = imax(cost(s.then), cost(s.orelse))
       elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
         w = imul(known(iprod(s.shape)), imax(cost(s.body), 1))
+      elif isinstance(s, ir.IndexFilter):
+        w = imul(known(s.n), imax(cost(s.body), 1))
       elif isinstance(s, ParLoop):
         w = cost(s.body)
       else:
@@ -232,8 +236,33 @@ def first(lp: Loops, s: ir.IndexReduce, at: tuple[Expr, ...], accs: list[Var]) -
     lp.owner.owned.extend(c.scope(s.scope).owned)  # what the copy allocated is released with its surroundings
 
 
+def identity(op: str | None, t) -> Const | None:
+  """The value that changes nothing when folded with ``op``, if there is one."""
+  import numpy as np
+
+  kind = t.kind
+  if op in ("add", "or", "bitor", "bitxor"):
+    return Const(False if kind == "b" else 0, t)
+  if op in ("mul", "and"):
+    return Const(True if kind == "b" else 1, t)
+  if op == "bitand" and kind in "biu":
+    return Const(True, t) if kind == "b" else Const(int(np.array(-1).astype(t.strong.name)), t)
+  if op in ("min", "max"):
+    top = op == "min"
+    if kind == "f":
+      return Const(float("inf") if top else float("-inf"), t)
+    if kind == "b":
+      return Const(top, t)
+    if kind in "iu":
+      info = np.iinfo(t.strong.name)
+      return Const(int(info.max if top else info.min), t)
+  return None
+
+
 def hint(s: ir.IndexReduce, accs: list[Var]):
   """Tell backends the loop is a fold that may be vectorised."""
+  if s.where is not None:
+    return None
   op = s.folds[0].op
   if op in ("add", "mul") and all(f.op == op and not f.combine for f in s.folds):
     return (op, list(accs))
@@ -253,6 +282,8 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
     sub = inner.sub(blk, s.scope)
     for f, acc, sc in zip(folds, targets, scratch):
       step(sub, f, acc, f.value, sc)
+    if s.where is not None:  # FilterReduce: the element counts only where the predicate holds
+      blk = [*s.pre, If(s.where, blk, [])]
     blk.append(ir.ReleaseScope(s.scope))
     return blk
 
@@ -273,8 +304,13 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
 
     def chunk_body(inner: Loops, chunk, start, stop):
       local = [Var("acc", f.a.type) for f in folds]
-      first(inner, s, inner.unravel(start, shape), local)
-      inner.chunk(shape, s.index, iadd(start, 1), stop, steps(inner, local), s.scope, hint(s, local))
+      if s.where is None:
+        first(inner, s, inner.unravel(start, shape), local)
+        inner.chunk(shape, s.index, iadd(start, 1), stop, steps(inner, local), s.scope, hint(s, local))
+      else:  # the first element may not count: start from the identity instead
+        for f, acc in zip(folds, local):
+          inner.emit(Assign(acc, identity(f.op, f.a.type)))
+        inner.chunk(shape, s.index, start, stop, steps(inner, local), s.scope)
       for f, buf, acc in zip(folds, partials, local):
         inner.emit(Store(buf, chunk, cast(acc, f.a.type.strong)))
 
@@ -311,6 +347,69 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# IndexFilter
+# ---------------------------------------------------------------------------
+
+
+def lower_filter(lp: Loops, s: ir.IndexFilter) -> None:
+  """Compaction: count, allocate, write.  In parallel: count the survivors
+  of every chunk, turn the counts into where each chunk writes, then let
+  every chunk write."""
+  n = lp.tmp(s.n, "n")
+
+  def counting(inner: Loops, start: Expr, stop: Expr, count: Var) -> None:
+    c = Cloner()  # the body runs in both passes
+    i = c.var(s.index)
+    blk = c.block(s.body)
+    blk.append(Assign(count, iadd(count, cast(c.expr(s.keep), I))))
+    blk.append(ir.ReleaseScope(c.scope(s.scope)))
+    inner.emit(Assign(count, ZERO))
+    inner.emit(ForRange(i, start, stop, ONE, blk, c.scope(s.scope), True, ("add", [count])))
+
+  def writing(inner: Loops, start: Expr, stop: Expr, pos: Var) -> None:
+    blk = list(s.body)
+    blk.append(If(s.keep, [Store(s.out, pos, cast(s.index, s.out.type.elt)), Assign(pos, iadd(pos, 1))], []))
+    blk.append(ir.ReleaseScope(s.scope))
+    inner.emit(ForRange(s.index, start, stop, ONE, blk, s.scope))
+
+  if not s.parallel:
+    count = Var("count", I)
+    counting(lp, ZERO, n, count)
+    lp.emit(Assign(s.count, count))
+    lp.emit(Alloc(s.out, s.count))
+    pos = Var("pos", I)
+    lp.emit(Assign(pos, ZERO))
+    writing(lp, ZERO, n, pos)
+    return
+  nchunks = lp.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
+  starts = Var("starts", BufType(I))
+  lp.emit(Alloc(starts, nchunks))
+  lp.owner.owned.append(starts)  # for the error path; released below
+
+  def count_chunk(inner: Loops, chunk, start, stop):
+    count = Var("count", I)
+    counting(inner, start, stop, count)
+    inner.emit(Store(starts, chunk, count))
+
+  # neither loop is a map as far as backends are concerned: a chunk is a unit
+  lp.parallel(n, count_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+  running, c, here = Var("nnz", I), Var("c", I), Var("count", I)
+  lp.emit(Assign(running, ZERO))
+  shift = [Assign(here, Load(starts, c)), Store(starts, c, running), Assign(running, iadd(running, here))]
+  lp.emit(ForRange(c, ZERO, nchunks, ONE, shift, Scope("loop")))
+  lp.emit(Assign(s.count, running))
+  lp.emit(Alloc(s.out, s.count))
+
+  def write_chunk(inner: Loops, chunk, start, stop):
+    pos = Var("pos", I)
+    inner.emit(Assign(pos, Load(starts, chunk)))
+    writing(inner, start, stop, pos)
+
+  lp.parallel(n, write_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+  lp.emit(ir.Release(starts))
+
+
+# ---------------------------------------------------------------------------
 # the pass
 # ---------------------------------------------------------------------------
 
@@ -321,6 +420,7 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
   for s in block:
     if isinstance(s, ir.IndexReduce):
       s.body[:] = lower_block(s.body, defs, s.scope)
+      s.pre[:] = lower_block(s.pre, defs, s.scope)
       scratch = [Scope("fold") for _ in s.folds]
       for f, sc in zip(s.folds, scratch):
         f.combine[:] = lower_block(f.combine, defs, sc)
@@ -329,6 +429,10 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
     if isinstance(s, ir.IndexMap):
       s.body[:] = lower_block(s.body, defs, s.scope)
       lower_map(Loops(out, defs, owner), s)
+      continue
+    if isinstance(s, ir.IndexFilter):
+      s.body[:] = lower_block(s.body, defs, s.scope)
+      lower_filter(Loops(out, defs, owner), s)
       continue
     if isinstance(s, If):
       s.then[:] = lower_block(s.then, defs, owner)
@@ -344,4 +448,4 @@ def lower(fn: ir.Function) -> None:
   fn.body[:] = lower_block(fn.body, pure_defs(fn.body), fn.scope)
 
 
-__all__ = ["Loops", "depth", "lower", "lower_block", "outer_expr", "pure_defs", "work"]
+__all__ = ["Loops", "depth", "identity", "lower", "lower_block", "outer_expr", "pure_defs", "work"]

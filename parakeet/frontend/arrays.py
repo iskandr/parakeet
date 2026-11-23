@@ -26,6 +26,7 @@ from ..syntax.ir import (
   Expr,
   ForRange,
   If,
+  IndexFilter,
   IndexMap,
   Load,
   ParLoop,
@@ -130,10 +131,13 @@ class ArrayMixin:
       out.append(d)
     return tuple(out)
 
-  def alloc_array(self, elt: ScalarType, shape: Sequence[Expr], zero: bool = False, label: str = "arr") -> ArrayVal:
+  def alloc_array(
+    self, elt: ScalarType, shape: Sequence[Expr], zero: bool = False, label: str = "arr", alloc: bool = True
+  ) -> ArrayVal:
     shape = self.check_dims(shape)
     buf = Var(label, BufType(elt))
-    self.emit(Alloc(buf, self.tmp(iprod(shape), "count"), zero))
+    if alloc:
+      self.emit(Alloc(buf, self.tmp(iprod(shape), "count"), zero))
     self.scope.owned.append(buf)
     root = Root(self.scope, label)
     if self.tape is not None:
@@ -1166,87 +1170,23 @@ class ArrayMixin:
     return shape, src_index, base
 
   def nonzero1d(self, mask: ArrayVal) -> ArrayVal:
-    """Positions of the true elements of a 1-d boolean array (int64 array)."""
+    """Positions of the true elements of a 1-d boolean array (int64 array):
+    an :class:`~parakeet.syntax.ir.IndexFilter`."""
     mask = self.as_concrete(mask) if mask.cost > CHEAP_COST else mask
     self.consume(mask)
-    n = mask.shape[0]
-    if self.can_parallel((n,)):
-      return self._compact(mask, n)
-    count = Var("count", I)
-    self.mutables.add(count.uid)
+    n = self.tmp(mask.shape[0], "n")
+    index = Var("i", I)
+    self.nonneg.add(index.uid)
+    self.upper[index.uid] = n
+    threads = self.can_parallel((n,))
+    blk: list = []
+    scope = self.new_scope("loop")
+    with self.in_block(blk, scope, loop=True, par=threads):
+      keep = self.tmp(ops.cast(self.elem(mask, (index,)), Bool), "keep")
+    count = Var("nnz", I)
     self.nonneg.add(count.uid)
-    self.emit(Assign(count, ZERO))
-    self.for_range(ZERO, n, lambda i: self.emit(Assign(count, iadd(count, ops.cast(self.elem(mask, (i,)), I)))))
-    total = self.tmp(count, "nnz")
-    if isinstance(total, Var):
-      self.nonneg.add(total.uid)
-    out = self.alloc_array(Int64, (total,), label="idx")
-    pos = Var("pos", I)
-    self.mutables.add(pos.uid)
-    self.emit(Assign(pos, ZERO))
-
-    def body(i):
-      self.emit(
-        If(
-          ops.cast(self.elem(mask, (i,)), Bool),
-          [Store(out.buf, pos, ops.cast(i, Int64)), Assign(pos, iadd(pos, 1))],
-          [],
-        )
-      )
-
-    self.for_range(ZERO, n, body)
-    return out
-
-  def _compact(self, mask: ArrayVal, n: Expr) -> ArrayVal:
-    """Parallel compaction: count the true elements of every chunk, turn the
-    counts into where each chunk writes, then let every chunk write."""
-    nchunks = self.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
-    if isinstance(nchunks, Var):
-      self.nonneg.add(nchunks.uid)
-    starts = self.alloc_array(Int64, (nchunks,), label="starts")
-
-    def count_chunk(chunk, start, stop):
-      count = Var("count", I)
-      self.mutables.add(count.uid)
-      self.emit(Assign(count, ZERO))
-      self.for_range(start, stop, lambda i: self.emit(Assign(count, iadd(count, ops.cast(self.elem(mask, (i,)), I)))))
-      self.emit(Store(starts.buf, chunk, ops.cast(count, Int64)))
-
-    self.par_loop(n, count_chunk, kind="reduce", nchunks=nchunks)
-    running = Var("nnz", I)
-    self.mutables.add(running.uid)
-    self.nonneg.add(running.uid)
-    self.emit(Assign(running, ZERO))
-
-    def shift(c):
-      here = self.copy_scalar(ops.cast(Load(starts.buf, c), I), "count")
-      self.emit(Store(starts.buf, c, ops.cast(running, Int64)))
-      self.emit(Assign(running, iadd(running, here)))
-
-    self.for_range(ZERO, nchunks, shift)
-    total = self.copy_scalar(running, "nnz")
-    if isinstance(total, Var):
-      self.nonneg.add(total.uid)
-    out = self.alloc_array(Int64, (total,), label="idx")
-
-    def write_chunk(chunk, start, stop):
-      pos = Var("pos", I)
-      self.mutables.add(pos.uid)
-      self.emit(Assign(pos, ops.cast(Load(starts.buf, chunk), I)))
-
-      def body(i):
-        self.emit(
-          If(
-            ops.cast(self.elem(mask, (i,)), Bool),
-            [Store(out.buf, pos, ops.cast(i, Int64)), Assign(pos, iadd(pos, 1))],
-            [],
-          )
-        )
-
-      self.for_range(start, stop, body)
-
-    # not a map as far as backends are concerned: each chunk writes from its own start
-    self.par_loop(n, write_chunk, kind="reduce", nchunks=nchunks)
+    out = self.alloc_array(Int64, (count,), label="idx", alloc=False)  # the statement allocates it
+    self.emit(IndexFilter(n, index, blk, keep, out.buf, count, scope, threads, self.loc()))
     return out
 
   # ------------------------------------------------------------------ checks

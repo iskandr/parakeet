@@ -46,7 +46,9 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `Scan(f, ⊕, emit, X1..Xn, init, axis)` | `scan(⊕, x1, ..., xn, map=f, emit=, init=, axis=)` |
 | `Filter(f, pred, X1..Xn)` | `filter(pred, x1, ..., xn, map=f)` |
 | `ParFor(f, bounds)` | `parfor(f, bounds)` |
-| `FilterReduce`, `IndexFilter`, `IndexScan`, `IndexFilterReduce` | no operator of their own; written as a composition (see the fusion table for what that costs) |
+| `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
+| `FilterReduce`, `IndexFilterReduce` | not written by hand: a reduction over a filter *becomes* one (see fusion) |
+| `IndexScan` | no statement of its own yet; `scan` emits its loops directly |
 | — | `grad(f)`, `value_and_grad(f)` |
 
 Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,
@@ -110,6 +112,22 @@ unseeded, and both must stay vectorizable — a float sum is not fused with a
 two statements are stepped over when they do not use the first result.
 
 Tiling (below) uses the same rule on copies of one reduction.
+
+### A filter into a reduction
+
+| rule ([R] Fig. 6.1) | status |
+|---|---|
+| `Reduce(g, ⊕, Filter(f, p, X))` ⇒ `FilterReduce(g ∘ f, ⊕, p, X)` | **yes** (`transforms/fusion.py`): an `IndexFilter` followed by an `IndexReduce` over what it kept becomes one guarded `IndexReduce` over the filter's own index space. `np.sum(x[x > 0])` is one parallel loop and allocates nothing (about 3× faster on 5M elements) |
+| `Filter(q, Filter(p, X))` ⇒ `Filter(p ∧ q, X)` | no: two compactions |
+| `Map(f, Filter(p, X))` ⇒ one loop | half: the map is a delayed array over the kept indices, so it fuses with its consumer but the compaction still runs first |
+
+Conditions: nothing else reads the kept indices (returning `x[mask]` keeps
+the filter); the reduction has an `init`, because the first element may not
+survive (`np.min(x[mask])` stays two steps so that an empty selection still
+raises); it runs in parallel only when every fold has an identity to start a
+chunk from. If the number of survivors is used (`np.mean`), counting it is
+one more fold. Inside the fused loop the bounds check on the gathered index
+is dropped: the index is the loop's own.
 
 ## Reductions and scans
 
@@ -219,7 +237,7 @@ operators `f` applied ([details](autodiff.md)):
 * Horizontal fusion of maps (of reductions: yes).
 * A middle end that does *everything*: vertical fusion and differentiation
   still happen while elaborating, not as passes over the operator statements.
-* `FilterReduce` and filter-filter fusion in one pass; `emit` fused into a scan.
+* Filter-filter fusion; `emit` fused into a scan; scans as operator statements.
 * Recursive tiling of deeper adverb nests, `TiledReduce`/`TiledScan`, and the
   online search for tile sizes.
 * Its own low-level optimizer (it relies on the C compiler instead).

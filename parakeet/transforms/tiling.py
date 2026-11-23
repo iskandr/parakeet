@@ -69,6 +69,8 @@ def match(s: ir.Stmt, defs: dict[int, Expr]) -> Shape | None:
   if len(where) != 1 or not all(isinstance(t, STRAIGHT) for k, t in enumerate(body) if k != where[0]):
     return None
   red = body[where[0]]
+  if red.where is not None:
+    return None
   if any(isinstance(t.var.type, ir.BufType) for t in body if isinstance(t, Assign)):
     return None
   inner = set(defined(s.body)) | {v.uid for v in s.index}
@@ -139,7 +141,7 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
   n_j = lp.tmp(s.shape[-1], "n")
   n_i = lp.tmp(iprod(lead), "rows")
   length = lp.tmp(iprod(m.extent), "len")
-  itemsize = getattr(m.reduce.folds[0].a.type, "itemsize", 8)
+  itemsize = m.reduce.folds[0].a.type.bits // 8
   tile = tile_size(lp, length, itemsize, tile_bytes)
 
   def at(inner: Loops, i: Expr, j: Expr) -> tuple[Expr, ...]:

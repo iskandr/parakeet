@@ -19,7 +19,7 @@ from __future__ import annotations
 from ..syntax import ir
 from ..syntax.ir import Expr, IndexReduce, Var
 
-EFFECTS = (ir.Store, ir.Check, ir.Alloc, ir.Incref, ir.Release, ir.IndexMap, ir.ParLoop, ir.While)
+EFFECTS = (ir.Store, ir.Check, ir.Alloc, ir.Incref, ir.Release, ir.IndexMap, ir.IndexFilter, ir.ParLoop, ir.While)
 
 
 def read_vars(fn: ir.Function) -> set[int]:
@@ -61,7 +61,7 @@ def sweep(block: list, live: set[int]) -> tuple[list, bool]:
       changed |= inner
     if isinstance(s, IndexReduce):
       keep = [f for f in s.folds if f.result.uid in live or f.init is None or has_effects(f.combine)]
-      if not keep and not has_effects(s.body):
+      if not keep and not has_effects(s.body) and not has_effects(s.pre):
         changed = True
         continue
       if keep and len(keep) < len(s.folds):

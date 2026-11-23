@@ -83,7 +83,7 @@ floating-point operations yield `inf`/`nan` rather than raising.
 
 `parakeet.find_broken_transform(fn, inputs)`
 :   Switch the optimizations on one at a time — fusion, each pass of the
-    middle end (sibling fusion, tiling), the C optimizer, parallel loops, the
+    middle end (dead code, filter-reduce fusion, sibling fusion, tiling), the C optimizer, parallel loops, the
     GPU — and name the first one that makes the
     result differ from plain Python (or from `expected`, if given).
 

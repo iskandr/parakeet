@@ -16,6 +16,7 @@ from . import fusion, lowering, simplify, tiling
 
 PASSES: list[tuple[str, object]] = [
   ("dead code", simplify.dead_code),
+  ("filter-reduce fusion", fusion.fuse_filters),
   ("sibling fusion", fusion.fuse_siblings),
   ("tiling", tiling.tiling),
 ]
