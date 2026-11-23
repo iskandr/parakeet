@@ -153,7 +153,7 @@ def test_operators_are_printed_before_the_passes():
 def test_passes_can_be_skipped_by_name():
   from parakeet.transforms import pipeline
 
-  assert pipeline.names() == ["sibling fusion", "tiling"]
+  assert pipeline.names() == ["dead code", "sibling fusion", "tiling"]
   a = np.arange(64.0).reshape(8, 8)
   with parakeet.options(skip_transforms=("tiling",)):
     assert "tile" not in matmul.specialize(a, a).ir
@@ -203,3 +203,25 @@ def test_reductions_that_must_not_be_fused_are_not():
   assert n_loops(chained.specialize(x)) == 2
   np.testing.assert_allclose(mixed(x), (x.sum(), x.max()))
   assert n_loops(mixed.specialize(x)) == 2
+
+
+@jit
+def wasteful(x):
+  unused = np.sum(x * x)  # noqa: F841
+  return x.max()
+
+
+@jit
+def wasteful_but_checked(x, i):
+  unused = np.min(x[i:])  # noqa: F841 - raises when there is nothing left
+  return x.max()
+
+
+def test_reductions_nobody_reads_are_removed():
+  x = np.random.default_rng(9).random(1000)
+  assert wasteful(x) == x.max()
+  assert n_loops(wasteful.specialize(x)) == 1
+  with parakeet.options(skip_transforms=("dead code", "sibling fusion")):
+    assert n_loops(wasteful.specialize(x)) == 2
+  with pytest.raises(ValueError, match="no identity"):
+    wasteful_but_checked(x, 1000)

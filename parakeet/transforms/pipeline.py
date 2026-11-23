@@ -12,9 +12,10 @@ runs.
 from __future__ import annotations
 
 from ..syntax import ir
-from . import fusion, lowering, tiling
+from . import fusion, lowering, simplify, tiling
 
 PASSES: list[tuple[str, object]] = [
+  ("dead code", simplify.dead_code),
   ("sibling fusion", fusion.fuse_siblings),
   ("tiling", tiling.tiling),
 ]
