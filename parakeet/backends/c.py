@@ -38,6 +38,7 @@ class HostEmitter(CFamilyEmitter):
     self.kernels: list[KernelInfo] = []
     self.bodies: dict[tuple, int] = {}  # structural IR key of an outlined loop body -> the kernel that owns it
     self.nesting = 0  # > 0 while printing the body of an outlined loop
+    self._host_sync_suppressed = False
     self.loop_info: dict[int, tuple[bool, bool]] = {}
     self.n_labels = 0
     self.label_used = False
@@ -90,18 +91,55 @@ class HostEmitter(CFamilyEmitter):
       out.append(f"{pad}if (PK_UNLIKELY(rt->dev_live)) pk_dev_forget(rt, {v.name});")
     out.append(f"{pad}pk_release(&{v.name});")
 
+  def _emit_host_sync(self, stmts: list[ir.Stmt], out: list[str], pad: str, local_defs: set[int]) -> bool:
+    """Emit per-buffer ``PK_DEV_SYNC_READ`` / ``PK_DEV_SYNC_WRITE`` for outer
+    buffers touched by ``stmts``.  Returns True if handled (or no sync needed)."""
+    has_gemm = False
+    writes: dict[int, ir.Var] = {}
+    reads: dict[int, ir.Var] = {}
+    for st in stmts:
+      if isinstance(st, ir.Store) and st.buf.uid not in local_defs:
+        writes[st.buf.uid] = st.buf
+      for e in ir.stmt_exprs(st):
+        for x in ir.walk_expr(e):
+          if isinstance(x, ir.Load) and x.buf.uid not in local_defs:
+            reads[x.buf.uid] = x.buf
+          elif isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm":
+            has_gemm = True
+    if has_gemm:
+      out.append(f"{pad}PK_DEV_SYNC(rt);")
+      return True
+    for uid, b in reads.items():
+      if uid not in writes:
+        out.append(f"{pad}PK_DEV_SYNC_READ(rt, {b.name});")
+    for b in writes.values():
+      out.append(f"{pad}PK_DEV_SYNC_WRITE(rt, {b.name});")
+      out.append(f"{pad}{b.name}->flags &= ~PK_UNTOUCHED;")
+    return True
+
   def stmt(self, s: ir.Stmt, out: list[str], indent: int) -> None:
-    # arrays may be on the device: host code that touches array memory itself
-    # (not through a parallel loop, which decides at its launch) syncs first
-    if self.device is not None and not self.nesting and not isinstance(s, ir.ParLoop):
-      if isinstance(s, ir.Store) or any(
-        isinstance(x, ir.Load) or (isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm")
-        for e in ir.stmt_exprs(s)
-        for x in ir.walk_expr(e)
-      ):
-        out.append("  " * indent + "PK_DEV_SYNC(rt);")
-        if isinstance(s, ir.Store):
-          out.append("  " * indent + f"{s.buf.name}->flags &= ~PK_UNTOUCHED;")
+    # Arrays may be on the device: host code that touches array memory itself
+    # syncs only the specific buffers it reads/writes (keeping all other live
+    # tensors resident on the GPU).
+    if (
+      self.device is not None and not self.nesting and not self._host_sync_suppressed and not isinstance(s, ir.ParLoop)
+    ):
+      pad = "  " * indent
+      if isinstance(s, (ir.ForRange, ir.While)):
+        inner = list(ir.walk_stmts([s]))
+        if not any(isinstance(t, ir.ParLoop) for t in inner) and not any(
+          isinstance(t, ir.Assign) and isinstance(t.var.type, BufType) for t in inner
+        ):
+          local_bufs = {t.var.uid for t in inner if isinstance(t, ir.Alloc)}
+          self._emit_host_sync(inner, out, pad, local_bufs)
+          self._host_sync_suppressed = True
+          try:
+            super().stmt(s, out, indent)
+          finally:
+            self._host_sync_suppressed = False
+          return
+      else:
+        self._emit_host_sync([s], out, pad, set())
     super().stmt(s, out, indent)
 
   def loop_pragma(self, s: ir.ForRange) -> str | None:
@@ -263,9 +301,13 @@ class HostEmitter(CFamilyEmitter):
       shared_key = (
         tuple(expr_key(d) for d in s.shared_tile.shape),
         tuple(expr_key(d) for d in s.shared_tile.reduce.shape),
+        tuple(
+          (chk.err.exc, chk.err.fmt, chk.err.loc, expr_key(chk.cond), tuple(expr_key(a) for a in chk.args[:4]))
+          for chk in s.shared_tile.pre_checks
+        ),
       )
     free_types = tuple(v.type for v in free)
-    return (free_types, body_key, owned_key, shared_key), free
+    return (s.kind, free_types, body_key, owned_key, shared_key), free
 
   def par_loop(self, s: ir.ParLoop, out: list[str], indent: int) -> None:
     pad = "  " * indent
@@ -332,10 +374,15 @@ class HostEmitter(CFamilyEmitter):
       self.functions.append("\n".join(lines))
     fields = [v.name for v in self.kernels[shared].free]
 
-    # device kernel (if this loop is eligible)
+    # device kernel (shared across structurally identical loops so repeated
+    # transformer layers compile one GPU kernel instead of L copies!)
     on_device = False
     if self.device is not None and not self.nesting:
-      on_device = self.device.add_kernel(info, self)
+      if shared == k:
+        on_device = self.device.add_kernel(info, self)
+      else:
+        info.device = self.kernels[shared].device
+        on_device = info.device is not None
 
     # launch site
     total, nchunks = self.expr(s.total), self.expr(s.nchunks)
@@ -351,13 +398,34 @@ class HostEmitter(CFamilyEmitter):
     launch = f"pk_parallel_for(rt, pk_body_{shared}, &c, {nchunks});"
     sync = ""
     if self.device is not None and not self.nesting:
-      # run on the CPU: bring the host copies up to date, and note what it writes
-      stored = {x.buf.uid for x in ir.walk_stmts(s.body) if isinstance(x, ir.Store)}
-      sync = "PK_DEV_SYNC(rt); " + "".join(f"{v.name}->flags &= ~PK_UNTOUCHED; " for v in free if v.uid in stored)
+      # run on the CPU: sync only the specific buffers this loop touches
+      inner_stmts = list(ir.walk_stmts(s.body))
+      stored = {x.buf.uid for x in inner_stmts if isinstance(x, ir.Store)}
+      loaded = {
+        x.buf.uid for st in inner_stmts for e in ir.stmt_exprs(st) for x in ir.walk_expr(e) if isinstance(x, ir.Load)
+      }
+      has_gemm = any(
+        isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm"
+        for st in inner_stmts
+        for e in ir.stmt_exprs(st)
+        for x in ir.walk_expr(e)
+      )
+      if has_gemm:
+        sync = "PK_DEV_SYNC(rt); " + "".join(f"{v.name}->flags &= ~PK_UNTOUCHED; " for v in free if v.uid in stored)
+      else:
+        parts = []
+        for v in free:
+          if not isinstance(v.type, BufType):
+            continue
+          if v.uid in stored:
+            parts.append(f"PK_DEV_SYNC_WRITE(rt, {v.name}); {v.name}->flags &= ~PK_UNTOUCHED; ")
+          elif v.uid in loaded:
+            parts.append(f"PK_DEV_SYNC_READ(rt, {v.name}); ")
+        sync = "".join(parts)
     if on_device:
       out.append(
         f"{pad}  if (rt->device && c.total >= pk_device_min(rt, {self.expr(s.work) if s.work is not None else 1}) && "
-        f"((pk_device_fn)rt->device)({k}, &c, c.total, {nchunks}) == 0) rt->dev_live = 1;"
+        f"((pk_device_fn)rt->device)({shared}, &c, c.total, {nchunks}) == 0) rt->dev_live = 1;"
       )
       out.append(f"{pad}  else {{ {sync}{launch} }}")
     else:

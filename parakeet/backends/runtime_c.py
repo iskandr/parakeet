@@ -387,7 +387,13 @@ PK_OUTLINE void pk_dev_flush(pk_call* rt) {
 PK_OUTLINE void pk_dev_forget(pk_call* rt, pk_buf* b) {
   if (b && b->refcount == 1 && !(b->flags & PK_EXTERNAL) && rt->device) ((pk_device_fn)rt->device)(-2, b->data, 0, 0);
 }
+PK_OUTLINE void pk_dev_sync_buf(pk_call* rt, pk_buf* b, int write) {
+  if (b && b->data && b->nbytes > 0 && rt->device)
+    ((pk_device_fn)rt->device)(write ? -4 : -3, b->data, b->nbytes, 0);
+}
 #define PK_DEV_SYNC(rt) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_flush(rt); } while (0)
+#define PK_DEV_SYNC_READ(rt, b) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_sync_buf(rt, b, 0); } while (0)
+#define PK_DEV_SYNC_WRITE(rt, b) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_sync_buf(rt, b, 1); } while (0)
 
 PK_OUTLINE void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t nchunks) {
   int64_t c;

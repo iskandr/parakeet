@@ -590,6 +590,8 @@ class CudaDevice(DeviceBase):
     self.device_name = self.driver.device_name
     self.profile = self.driver.profile
     self.simulated = simulate
+    self._flag = self.driver.zeros(1, np.int32)
+    self._info = self.driver.zeros(4, np.int64)
     super().__init__()
 
   def planner(self, profile: TargetProfile | None = None) -> CudaPlanner:
@@ -632,8 +634,8 @@ class CudaDevice(DeviceBase):
     args: list = [np.int64(total), np.int64(csize)]
     for v in plan.scalars:
       args.append(v.type.dtype.type(getattr(ctx, v.name)))
-    flag = drv.zeros(1, np.int32)
-    info = drv.zeros(4, np.int64)
+    flag = self._flag
+    info = self._info
     args += [flag, info]
     # one device buffer per group of overlapping host ranges (see merge_regions)
     pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
@@ -643,9 +645,13 @@ class CudaDevice(DeviceBase):
     for r, off in where:
       args.append(devs[r][off:] if off else devs[r])
     drv.launch(plan.compiled, plan, n, args)
-    code = int(drv.read(flag)[0])
-    if code:
-      raise make_runtime_error(plan.errors[code - 1], [int(x) for x in drv.read(info)])
+    # Only synchronize & read error flag for kernels that actually contain Check statements!
+    if plan.errors:
+      code = int(drv.read(flag)[0])
+      if code:
+        err_args = [int(x) for x in drv.read(info)]
+        flag.fill(0)
+        raise make_runtime_error(plan.errors[code - 1], err_args)
 
 
 _ = ctype_of

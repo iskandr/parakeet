@@ -180,7 +180,13 @@ class DevicePlanner:
     return True
 
   def kernel_sources(self) -> list[str]:
-    return [p.source for p in self.plans.values() if p is not None]
+    seen: set[int] = set()
+    out: list[str] = []
+    for p in self.plans.values():
+      if p is not None and id(p) not in seen:
+        seen.add(id(p))
+        out.append(p.source)
+    return out
 
   def report_fallbacks(self, function_name: str) -> None:
     """Tell the user (once, at compile time) which loops stay on the CPU."""
@@ -451,6 +457,34 @@ class DeviceBase:
           # Host code may mutate this writable input before the next GPU kernel
           da._dev_buf = None
 
+  def sync_buf(self, addr: int, nbytes: int, write: bool = False) -> None:
+    """Bring only device buffers overlapping ``[addr, addr + nbytes)`` into host sync.
+
+    When ``write`` is False (host read), dirty overlapping buffers are downloaded
+    and kept clean on the device so later GPU reads need no re-upload.  When
+    ``write`` is True (host write), overlapping device entries are also evicted
+    so subsequent GPU kernels upload the host-modified data.  All non-overlapping
+    live tensors remain resident on the GPU untouched.
+    """
+    if nbytes <= 0:
+      return
+    end = addr + nbytes
+    cache = self._state.cache
+    for entry in list(cache.values()):
+      if entry.addr < end and addr < entry.addr + entry.nbytes:
+        if entry.dirty:
+          self.download(entry.dev, entry.addr, entry.nbytes)
+          self.downloads += 1
+          entry.dirty = False
+        if write:
+          cache.pop(entry.addr, None)
+    for da in self._state.pinned.values():
+      if da._host_addr < end and addr < da._host_addr + da.nbytes:
+        if da._dirty and da._dev_buf is not None:
+          da.sync_host()
+        if write:
+          da._dev_buf = None
+
   def forget(self, addr: int) -> None:
     """The host is about to free the memory at ``addr``."""
     entry = self._state.cache.get(addr)
@@ -459,14 +493,19 @@ class DeviceBase:
 
   def _launch(self, kernel: int, ctx_addr: int, total: int, nchunks: int) -> int:
     """Returns 0 if the loop ran (or failed for good); 1 to run it on the CPU.
-    Kernel -1 is a request to flush, -2 to forget the buffer at ``ctx_addr``."""
+    Kernel -1 flushes all buffers, -2 forgets ``ctx_addr``, -3 syncs a single
+    buffer for host read, and -4 syncs+invalidates a single buffer for host write."""
     stack = self._state.stack
     if kernel < 0:
       try:
         if kernel == -1:
           self.flush()
-        else:
+        elif kernel == -2:
           self.forget(ctx_addr or 0)
+        elif kernel == -3:
+          self.sync_buf(ctx_addr or 0, total, write=False)
+        elif kernel == -4:
+          self.sync_buf(ctx_addr or 0, total, write=True)
       except BaseException as e:  # noqa: BLE001 - must not propagate through C frames
         self._state.cache.clear()
         if stack:
