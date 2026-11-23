@@ -583,6 +583,8 @@ class Tape:
   def reduce(self, el, plain, op: str, a: ArrayVal, axis, init, what: str, keepdims):
     if op != "add" and a.buf is None and a.cost > CHEAP_COST:
       a = el.as_concrete(a)
+    if init is not None:
+      init = el.tmp(init)
     from ..lib.numpy_lib import _reduce_prim
 
     with self.computing(el):
@@ -591,7 +593,10 @@ class Tape:
         out = el.as_concrete(out)
     if not isinstance(keepdims, bool):
       keepdims = el.static_bool(keepdims, "keepdims")
-    node = Node("reduce", (a,), (op, axis, keepdims))
+    active_a = self.is_active(el, a)
+    active_init = init is not None and self.is_active(el, init)
+    inputs = (a, init) if init is not None else (a,)
+    node = Node("reduce", inputs, (op, axis, keepdims, active_a, active_init))
     self.record(el, node)
     self.register(el, node, out)
     return out
@@ -790,6 +795,10 @@ class Tape:
       el.loop_depth -= 1
     if not active:
       return None
+    if self.dry:
+      for t in child.touched:
+        if t.tape is not self:
+          self.touched.add(t)
     self.first_order(el, f"{what} with a function of your own")
     el.tape = None
     try:
@@ -908,7 +917,7 @@ class Tape:
       if roots is None:
         changed = blind or any(t > node.tick for t in self.stored_at.values())
       else:
-        changed = blind or any(self.stored_at.get(r, 0) > node.tick for r in roots)
+        changed = blind or any(t > node.tick and el.may_alias(roots, {r}) for r, t in self.stored_at.items())
     else:
       changed = False  # delayed arrays are checked (and re-evaluated eagerly) by the frontend itself
     if changed:
@@ -1055,8 +1064,9 @@ def _reduce(tape: Tape, el, node: Node, g) -> None:
   from ..lib.numpy_lib import _axes
   from ..lib.numpy_lib import _reduce_prim as reduce_plain
 
-  (a,) = node.inputs
-  op, axis, keepdims = node.info
+  a = node.inputs[0]
+  init = node.inputs[1] if len(node.inputs) > 1 else None
+  op, axis, keepdims, active_a, active_init = node.info
   y = node.out
   axes = _axes(el, axis, a.rank)
   elt = a.elt
@@ -1069,35 +1079,80 @@ def _reduce(tape: Tape, el, node: Node, g) -> None:
       v = el.expand_dims(v, axes)
     return v
 
+  def to_a(contrib):
+    if not isinstance(contrib, ArrayVal) or contrib.rank != a.rank:
+      scalar = el.tmp(contrib if isinstance(contrib, Expr) else el.as_scalar(contrib))
+      return el.delayed(elt, a.shape, lambda idx: cast(scalar, elt), cost=0)
+    return el.broadcast_to(contrib, a.shape)
+
+  def sum_all(v):
+    if not isinstance(v, ArrayVal) or v.rank == 0:
+      return v if isinstance(v, Expr) else el.as_scalar(v)
+    return reduce_plain(el, "add", v, None, Const(0, elt), "sum", False)
+
   gb = spread(g)
   if op == "add":
-    contrib = gb
-  else:
-    tape.stale(el, node, a)
-    yb = spread(y)
-    if op == "mul":
-      # every element's partial derivative is the product of the others
-      contrib = el.apply_ufunc(UF["div"], [el.apply_ufunc(UF["mul"], [gb, yb]), a])
+    if active_a:
+      tape.add(el, a, to_a(gb))
+    if active_init:
+      tape.add(el, init, sum_all(g))
+    return
+  tape.stale(el, node, a)
+  yb = spread(y)
+  zero = Const(0, elt)
+  one = Const(1, elt)
+  if op == "mul":
+    # Zero-safe derivative of prod: handle 0, 1, or >=2 zeros along the reduced axis
+    if active_a:
+      is_zero = el.apply_ufunc(UF["eq"], [a, zero])
+      if is_zero.buf is None:
+        is_zero = el.as_concrete(is_zero)
+      n_zeros = reduce_plain(el, "add", el.cast_array(is_zero, elt), axis, zero, "sum", True)
+      if isinstance(n_zeros, ArrayVal) and n_zeros.buf is None:
+        n_zeros = el.as_concrete(n_zeros)
+      safe_a = el.elementwise([is_zero, a], lambda z, x: ops.select(cast(z, Bool), one, cast(x, elt)), elt, 1)
+      nonzero_prod = reduce_plain(el, "mul", safe_a, axis, one if init is None else cast(init, elt), "prod", True)
+      if isinstance(nonzero_prod, ArrayVal) and nonzero_prod.buf is None:
+        nonzero_prod = el.as_concrete(nonzero_prod)
+
+      def prod_partial(is_zero_el, zero_count, prod_other, safe_val, grad_val):
+        """Zero-safe derivative of a product: 0 zeros -> prod/x, 1 zero -> prod of others at that zero, >=2 -> 0."""
+        at_zero = ops.select(cmp("eq", zero_count, one), prod_other, zero)
+        at_nonzero = ops.select(cmp("eq", zero_count, zero), ops.prim("div", (prod_other, safe_val), elt), zero)
+        return ops.prim("mul", (cast(grad_val, elt), ops.select(cast(is_zero_el, Bool), at_zero, at_nonzero)), elt)
+
+      contrib = el.elementwise([is_zero, n_zeros, nonzero_prod, safe_a, gb], prod_partial, elt, 4)
+      tape.add(el, a, to_a(contrib))
+    if active_init:
+      prod_a = reduce_plain(el, "mul", a, axis, one, "prod", keepdims)
+      tape.add(el, init, sum_all(el.apply_ufunc(UF["mul"], [g, prod_a])))
+    return
+  # min / max: ties (including initial, if supplied) share the adjoint equally
+  hit = el.apply_ufunc(UF["eq"], [a, yb])
+  if hit.buf is None:
+    hit = el.as_concrete(hit)
+  count = reduce_plain(el, "add", el.cast_array(hit, elt), axis, zero, "sum", True)
+  init_hit = None
+  if init is not None:
+    init_c = cast(init, elt)
+    init_hit = el.apply_ufunc(UF["eq"], [init_c, yb])
+    count = el.apply_ufunc(
+      UF["add"], [count, el.cast_array(init_hit, elt) if isinstance(init_hit, ArrayVal) else cast(init_hit, elt)]
+    )
+  if isinstance(count, ArrayVal) and count.buf is None:
+    count = el.as_concrete(count)
+  share = el.apply_ufunc(UF["div"], [gb, el.apply_ufunc(UF["max"], [count, one])])
+  if isinstance(share, Expr):
+    share = el.tmp(share)
+  if active_a:
+    contrib = el.elementwise([hit, share], lambda h, s: ops.select(cast(h, Bool), cast(s, elt), zero), elt, 1)
+    tape.add(el, a, to_a(contrib))
+  if active_init and init_hit is not None:
+    if isinstance(init_hit, ArrayVal) or isinstance(share, ArrayVal):
+      init_share = el.elementwise([init_hit, share], lambda h, s: ops.select(cast(h, Bool), cast(s, elt), zero), elt, 1)
     else:
-      # ties share the adjoint equally
-      hit = el.apply_ufunc(UF["eq"], [a, yb])
-      if hit.buf is None:
-        hit = el.as_concrete(hit)
-      count = reduce_plain(el, "add", el.cast_array(hit, elt), axis, Const(0, elt), "sum", True)
-      if isinstance(count, ArrayVal) and count.buf is None:
-        count = el.as_concrete(count)
-      one = Const(1, elt)
-      share = el.apply_ufunc(UF["div"], [gb, el.apply_ufunc(UF["max"], [count, one])])
-      if isinstance(share, Expr):
-        share = el.tmp(share)
-      zero = Const(0, elt)
-      contrib = el.elementwise([hit, share], lambda h, s: ops.select(cast(h, Bool), cast(s, elt), zero), elt, 1)
-  if not isinstance(contrib, ArrayVal) or contrib.rank != a.rank:
-    scalar = el.tmp(contrib if isinstance(contrib, Expr) else el.as_scalar(contrib))
-    contrib = el.delayed(elt, a.shape, lambda idx: cast(scalar, elt), cost=0)
-  else:
-    contrib = el.broadcast_to(contrib, a.shape)
-  tape.add(el, a, contrib)
+      init_share = ops.select(cast(init_hit, Bool), cast(share, elt), zero)
+    tape.add(el, init, sum_all(init_share))
 
 
 def _matmul(tape: Tape, el, node: Node, g) -> None:
@@ -1140,7 +1195,8 @@ def _pack(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 def _same_view(el, g: ArrayVal, arr: ArrayVal, view: ArrayVal) -> ArrayVal:
   """The part of ``g`` (an adjoint of ``arr``) that corresponds to ``view`` of ``arr``."""
-  g = el.as_concrete(g)
+  if g.buf is None or not g.contig:
+    g = el.materialize(g)
   out = ArrayVal(
     g.elt, view.shape, buf=g.buf, offset=el.tmp(iadd(g.offset, isub(view.offset, arr.offset)), "off"),
     strides=view.strides, roots=g.roots,
@@ -1167,7 +1223,7 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   lead = len(shape)
 
   def body(idx):
-    child = Tape(el, tape, key=(*tape.key, id(node.origin)))
+    child = Tape(el, tape, dry=tape.dry, key=(*tape.key, id(node.origin)))
     el.tape = child
     try:
       r = at(tuple(idx))
@@ -1178,10 +1234,14 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
     else:
       seed = el.tmp(el.elem(g, idx), "g")
     child.backward(el, r, seed)
+    if tape.dry:
+      for t in child.touched:
+        if t.tape is not tape:
+          tape.touched.add(t)
 
   roots = [t for t in touched if isinstance(t, RootAdj)]
   scalars = [t for t in touched if isinstance(t, ScalarAdj)]
-  if not el.can_parallel(shape) or any(r.stored is not None for r in roots):
+  if tape.dry or not el.can_parallel(shape) or any(r.stored is not None for r in roots):
     el.seq_nest(shape, body)
     return
   total = el.tmp(ops.iprod(shape), "total")

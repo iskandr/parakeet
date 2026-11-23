@@ -746,28 +746,40 @@ class Elaborator(ArrayMixin):
     if isinstance(v, Expr):
       # scalar arguments and array dimensions this value is computed from
       # become part of the specialization key; then it folds to a constant
-      found = False
-      stack, seen = [v], 0
-      while stack and seen < 1000:
-        e = stack.pop()
+      new_leaves: list = []
+      new_implicit: list = []
+      visited: set[int] = set()
+      stack, seen, ok = [v], 0, True
+      while stack:
         seen += 1
+        if seen > 1000:
+          ok = False
+          break
+        e = stack.pop()
         if isinstance(e, Var):
+          if e.uid in visited:
+            continue
+          visited.add(e.uid)
           origin = self.param_origin.get(e.uid)
           if origin is not None:
             source, index = origin
             if source == "arg":
-              self.state.static_leaves.add(index)
+              new_leaves.append(index)
             else:
-              self.state.static_implicit.add((source[1], index))
-            found = True
+              new_implicit.append((source[1], index))
           elif e.uid in self.pure_defs:
             stack.append(self.pure_defs[e.uid])
+          else:
+            ok = False
+            break
         elif isinstance(e, (ops.Prim, ops.Cast)):
           stack.extend(e.args if isinstance(e, ops.Prim) else (e.arg,))
         elif not isinstance(e, Const):
-          found = False
+          ok = False
           break
-      if found:
+      if ok and (new_leaves or new_implicit):
+        self.state.static_leaves.update(new_leaves)
+        self.state.static_implicit.update(new_implicit)
         self.restart("static argument")
     if isinstance(v, Expr):
       raise self.error(

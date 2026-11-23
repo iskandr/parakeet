@@ -57,6 +57,8 @@ def find_broken_transform(fn, inputs, expected=None, print_transforms: bool = Tr
   steps = list(STEPS)
   if final_backend in ("metal", "cuda"):
     steps.append((f"{final_backend} kernels", {"backend": final_backend}))
+  elif final_backend == "c":
+    steps.pop()
   elif final_backend not in ("auto", "multicore", "python"):
     steps[-1] = (steps[-1][0], {"backend": final_backend})
   settings = dict(_BASELINE)

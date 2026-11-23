@@ -55,9 +55,12 @@ def _one_plus_square(x: Expr, t: ScalarType) -> Expr:
 
 def _pow(args, r, t):
   a, b = args
+  if isinstance(b, Const) and b.value == 0:
+    return (None, None)
   da = _f("mul", t, b, _f("pow", t, a, _f("sub", t, b, _c(1.0, t))))
   if isinstance(b, Const):
     return (da, None)
+  da = ops.select(prim("eq", (b, _c(0.0, t)), Bool), _c(0.0, t), da)
   # d/db a**b = a**b * log(a), which only exists for a positive base
   db = ops.select(_gt0(a), _f("mul", t, r, _f("log", t, a)), _c(0.0, t))
   return (da, db)
@@ -145,11 +148,17 @@ def is_float(e: Expr) -> bool:
   return isinstance(e.type, ScalarType) and e.type.kind == "f"
 
 
-def partials(el, e: Prim):
+# ops whose partial-derivative rule reads the result expression ``r``
+_USES_RESULT = frozenset({"div", "pow", "sqrt", "cbrt", "exp", "exp2", "expm1", "tan", "tanh", "hypot"})
+
+
+def partials(el, e: Prim, r: Expr | None = None):
   rule = PARTIALS.get(e.op)
   if rule is None:
     raise el.error(UnsupportedError, f"the derivative of {_SPELLING.get(e.op, e.op)} is not implemented")
-  return rule(e.args, e, e.type)
+  if r is None:
+    r = el.tmp(e, "r") if e.op in _USES_RESULT else e
+  return rule(e.args, r, e.type)
 
 
 def backprop(el, root: Expr, seed: Expr, on_var: Callable, on_load: Callable, live: Callable | None = None) -> None:
@@ -163,8 +172,24 @@ def backprop(el, root: Expr, seed: Expr, on_var: Callable, on_load: Callable, li
   """
   pending: dict[int, list[Expr]] = {}
   variables: dict[int, Var] = {}
+  memo: dict[int, Expr] = {}
 
-  def visit(e: Expr, adj: Expr) -> None:
+  def eval_once(e: Expr) -> Expr:
+    """Bind ``e`` (and any inner ops that need their result) once bottom-up."""
+    hit = memo.get(id(e))
+    if hit is not None:
+      return hit
+    if isinstance(e, Prim):
+      args = tuple(eval_once(a) if isinstance(a, Prim) and a.op in _USES_RESULT else a for a in e.args)
+      rebuilt = e if all(x is y for x, y in zip(args, e.args)) else Prim(e.op, args, e.type)
+      v = el.tmp(rebuilt, "r")
+      memo[id(e)] = v
+      return v
+    return e
+
+  def visit(e: Expr, adj: Expr, bound: Var | None = None) -> None:
+    if bound is not None:
+      memo[id(e)] = bound
     stack = [(e, adj)]
     while stack:
       e, adj = stack.pop()
@@ -187,7 +212,8 @@ def backprop(el, root: Expr, seed: Expr, on_var: Callable, on_load: Callable, li
           stack.append((a, ops.select(c, adj, zero)))
           stack.append((b, ops.select(c, zero, adj)))
           continue
-        parts = partials(el, e)
+        r = eval_once(e) if e.op in _USES_RESULT else e
+        parts = partials(el, e, r)
         if sum(1 for p in parts if p is not None) > 1:
           adj = el.tmp(adj, "adj")
         for arg, p in zip(e.args, parts):
@@ -210,7 +236,7 @@ def backprop(el, root: Expr, seed: Expr, on_var: Callable, on_load: Callable, li
     total = el.tmp(total, "adj")
     definition = on_var(v, total)
     if definition is not None:
-      visit(definition, total)
+      visit(definition, total, bound=v)
 
 
 __all__ = ["PARTIALS", "backprop", "is_float", "partials"]

@@ -7,14 +7,14 @@ here and divert eligible parallel loops to a device.
 from __future__ import annotations
 
 import ctypes
-import re
+import math
 from dataclasses import dataclass, field
 
 from ..config import config
 from ..ndtypes import BufType, ScalarType
 from ..syntax import ir
 from . import toolchain
-from .cfamily import CFamilyEmitter, defined_vars, owned_vars, used_vars
+from .cfamily import CFamilyEmitter, defined_vars, owned_vars
 from .runtime_c import HEADER_SLOTS, PRELUDE
 
 
@@ -29,9 +29,6 @@ class KernelInfo:
   device: object = None  # backend-specific compiled kernel
 
 
-_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-
-
 class HostEmitter(CFamilyEmitter):
   def __init__(self, fn: ir.Function, device=None):
     super().__init__()
@@ -39,7 +36,7 @@ class HostEmitter(CFamilyEmitter):
     self.device = device
     self.functions: list[str] = []
     self.kernels: list[KernelInfo] = []
-    self.bodies: dict[str, int] = {}  # canonical text of an outlined loop body -> the kernel that owns it
+    self.bodies: dict[tuple, int] = {}  # structural IR key of an outlined loop body -> the kernel that owns it
     self.nesting = 0  # > 0 while printing the body of an outlined loop
     self.loop_info: dict[int, tuple[bool, bool]] = {}
     self.n_labels = 0
@@ -143,81 +140,183 @@ class HostEmitter(CFamilyEmitter):
 
   # ---- parallel loops ------------------------------------------------------
 
+  def _loop_signature(self, s: ir.ParLoop, defined: dict[int, ir.Var]) -> tuple[tuple, list[ir.Var]]:
+    """Structural IR key of ``s`` up to alpha-renaming, plus free variables in
+    first-appearance order so structurally identical loops share one body."""
+    free: list[ir.Var] = []
+    free_index: dict[int, int] = {}
+    local_index: dict[int, int] = {s.chunk.uid: -1, s.start.uid: -2, s.stop.uid: -3}
+
+    def var_key(v: ir.Var) -> tuple:
+      if v.uid in defined:
+        slot = local_index.get(v.uid)
+        if slot is None:
+          slot = local_index[v.uid] = len(local_index)
+        return ("local", slot, v.type)
+      slot = free_index.get(v.uid)
+      if slot is None:
+        slot = free_index[v.uid] = len(free)
+        free.append(v)
+      return ("free", slot, v.type)
+
+    def expr_key(e: ir.Expr) -> tuple:
+      if isinstance(e, ir.Var):
+        return var_key(e)
+      if isinstance(e, ir.Const):
+        val = e.value
+        if isinstance(val, float):
+          # Distinguish NaN and signed zero (-0.0 vs +0.0) in float constants
+          tag = ("nan",) if math.isnan(val) else (val, math.copysign(1.0, val))
+          return ("const", e.type, tag)
+        return ("const", e.type, type(val), val)
+      if isinstance(e, ir.Prim):
+        return ("prim", e.op, e.type, tuple(expr_key(a) for a in e.args))
+      if isinstance(e, ir.Cast):
+        return ("cast", e.type, expr_key(e.arg))
+      if isinstance(e, ir.Load):
+        return ("load", var_key(e.buf), expr_key(e.index))
+      if isinstance(e, ir.RtCall):
+        return ("rtcall", e.name, e.pure, e.type, tuple(expr_key(a) for a in e.args))
+      if isinstance(e, ir.Null):
+        return ("null", e.type)
+      return ("other", id(e))
+
+    def block_key(stmts: list[ir.Stmt]) -> tuple:
+      items = []
+      for t in stmts:
+        if isinstance(t, ir.Comment):
+          continue
+        if isinstance(t, ir.Assign):
+          chunk_hint = (
+            self.loop_info.get(t.var.uid, (False, False))
+            if isinstance(t.value, ir.RtCall) and t.value.name == "num_chunks"
+            else None
+          )
+          items.append(("assign", var_key(t.var), expr_key(t.value), chunk_hint))
+        elif isinstance(t, ir.Store):
+          items.append(("store", var_key(t.buf), expr_key(t.index), expr_key(t.value)))
+        elif isinstance(t, ir.If):
+          items.append(("if", expr_key(t.cond), block_key(t.then), block_key(t.orelse)))
+        elif isinstance(t, ir.ForRange):
+          reduction = t.reduction
+          if reduction is not None:
+            accs = reduction[1] if isinstance(reduction[1], (list, tuple)) else [reduction[1]]
+            reduction = (reduction[0], tuple(var_key(a) for a in accs))
+          items.append(
+            (
+              "for",
+              var_key(t.var),
+              expr_key(t.start),
+              expr_key(t.stop),
+              expr_key(t.step),
+              t.simd,
+              reduction,
+              block_key(t.body),
+            )
+          )
+        elif isinstance(t, ir.While):
+          items.append(("while", block_key(t.body)))
+        elif isinstance(t, ir.Break):
+          items.append(("break",))
+        elif isinstance(t, ir.Continue):
+          items.append(("continue",))
+        elif isinstance(t, ir.Alloc):
+          items.append(("alloc", var_key(t.var), expr_key(t.count), t.zero))
+        elif isinstance(t, ir.Incref):
+          items.append(("incref", expr_key(t.buf)))
+        elif isinstance(t, ir.Release):
+          items.append(("release", var_key(t.var)))
+        elif isinstance(t, ir.ReleaseScope):
+          if t.scope.owned:
+            items.append(("release_scope", tuple(var_key(v) for v in t.scope.owned)))
+        elif isinstance(t, ir.Check):
+          items.append(
+            ("check", (t.err.exc, t.err.fmt, t.err.loc), expr_key(t.cond), tuple(expr_key(a) for a in t.args[:4]))
+          )
+        elif isinstance(t, ir.ParLoop):
+          items.append(
+            (
+              "parloop",
+              t.kind,
+              expr_key(t.total),
+              expr_key(t.nchunks),
+              var_key(t.chunk),
+              var_key(t.start),
+              var_key(t.stop),
+              block_key(t.body),
+            )
+          )
+        else:
+          items.append((type(t).__name__, id(t)))
+      return tuple(items)
+
+    body_key = block_key(s.body)
+    owned_key = tuple(var_key(v) for v in owned_vars(s.body, s.scope))
+    free_types = tuple(v.type for v in free)
+    return (free_types, body_key, owned_key), free
+
   def par_loop(self, s: ir.ParLoop, out: list[str], indent: int) -> None:
     pad = "  " * indent
     k = len(self.kernels)
     defined = defined_vars(s.body, into_parloops=True)
     for v in (s.chunk, s.start, s.stop):
       defined[v.uid] = v
-    used = used_vars(s.body)
-    free = [v for uid, v in sorted(used.items()) if uid not in defined]
+    ir_key, free = self._loop_signature(s, defined)
     info = KernelInfo(k, s, free)
     self.kernels.append(info)
-
-    # context struct
-    lines = ["typedef struct {", "  pk_call* rt;", "  int64_t total;", "  int64_t csize;"]
     info.fields = [("rt", "ptr", None), ("total", "scalar", None), ("csize", "scalar", None)]
     for v in free:
       if isinstance(v.type, BufType):
-        lines.append(f"  pk_buf* {v.name}; {self.ctype(v.type.elt)}* {v.name}_d;")
         info.fields.append((v.name, "buf", v.type.elt))
       else:
-        lines.append(f"  {self.ctype(v.type)} {v.name};")
         info.fields.append((v.name, "scalar", v.type))
-    lines.append(f"}} pk_ctx_{k};")
-    lines.append("")
 
-    # outlined body
-    lines.append(f"static void pk_body_{k}(void* ctx_, int64_t {s.chunk.name}) {{")
-    lines.append(f"  pk_ctx_{k}* ctx = (pk_ctx_{k}*)ctx_;")
-    lines.append("  pk_call* rt = ctx->rt;")
-    for v in free:
-      if isinstance(v.type, BufType):
-        ct = self.ctype(v.type.elt)
-        lines.append(f"  pk_buf* const {v.name} = ctx->{v.name}; {ct}* const {v.name}_d = ctx->{v.name}_d;")
-      else:
-        lines.append(f"  const {self.ctype(v.type)} {v.name} = ctx->{v.name};")
-    for _uid, v in sorted(defined.items()):
-      if v is not s.chunk:
-        self.declare(v, lines)
-    saved = (self.fail_label, self.label_used)
-    self.n_labels += 1
-    self.fail_label, self.label_used = f"pk_fail_{self.n_labels}", False
-    lines.append("  if (rt->err_code) return;")
-    lines.append(f"  {s.start.name} = {s.chunk.name} * ctx->csize;")
-    lines.append(f"  {s.stop.name} = {s.start.name} + ctx->csize;")
-    lines.append(f"  if ({s.stop.name} > ctx->total) {s.stop.name} = ctx->total;")
-    self.nesting += 1
-    try:
-      self.block(s.body, lines, 1)
-    finally:
-      self.nesting -= 1
-    lines.append("  return;")
-    if self.label_used:
-      lines.append(f"{self.fail_label}:")
-      for v in owned_vars(s.body, s.scope):
-        lines.append(f"  pk_release(&{v.name});")
-      lines.append("  return;")
-    lines.append("}")
-    lines.append("")
-    # Loops that differ only in which variables they touch (the matmuls of a
-    # network's layers, say) share one compiled body: C compilers are slow on
-    # thousands of lines of near-identical code
-    names = {v.name for v in free} | {v.name for v in defined.values()} | {s.chunk.name}
-    order: dict[str, str] = {}
-
-    def canonical(m) -> str:
-      tok = m.group(0)
-      base = tok[:-2] if tok.endswith("_d") and tok[:-2] in names else tok
-      if base not in names:
-        return tok
-      return order.setdefault(base, f"v{len(order)}") + tok[len(base) :]
-
-    text = "\n".join(lines).replace(f"pk_ctx_{k}", "pk_ctx_K").replace(f"pk_body_{k}", "pk_body_K")
-    text = _IDENT.sub(canonical, text.replace(self.fail_label, "pk_fail_K"))
-    self.fail_label, self.label_used = saved
-    shared = self.bodies.setdefault(text, k)
+    # Loops with the same IR structure share one compiled body (no C-text
+    # canonicalization or duplicate codegen)
+    shared = self.bodies.setdefault(ir_key, k)
     if shared == k:
+      lines = ["typedef struct {", "  pk_call* rt;", "  int64_t total;", "  int64_t csize;"]
+      for v in free:
+        if isinstance(v.type, BufType):
+          lines.append(f"  pk_buf* {v.name}; {self.ctype(v.type.elt)}* {v.name}_d;")
+        else:
+          lines.append(f"  {self.ctype(v.type)} {v.name};")
+      lines.append(f"}} pk_ctx_{k};")
+      lines.append("")
+
+      lines.append(f"static void pk_body_{k}(void* ctx_, int64_t {s.chunk.name}) {{")
+      lines.append(f"  pk_ctx_{k}* ctx = (pk_ctx_{k}*)ctx_;")
+      lines.append("  pk_call* rt = ctx->rt;")
+      for v in free:
+        if isinstance(v.type, BufType):
+          ct = self.ctype(v.type.elt)
+          lines.append(f"  pk_buf* const {v.name} = ctx->{v.name}; {ct}* const {v.name}_d = ctx->{v.name}_d;")
+        else:
+          lines.append(f"  const {self.ctype(v.type)} {v.name} = ctx->{v.name};")
+      for _uid, v in sorted(defined.items()):
+        if v is not s.chunk:
+          self.declare(v, lines)
+      saved = (self.fail_label, self.label_used)
+      self.n_labels += 1
+      self.fail_label, self.label_used = f"pk_fail_{self.n_labels}", False
+      lines.append("  if (rt->err_code) return;")
+      lines.append(f"  {s.start.name} = {s.chunk.name} * ctx->csize;")
+      lines.append(f"  {s.stop.name} = {s.start.name} + ctx->csize;")
+      lines.append(f"  if ({s.stop.name} > ctx->total) {s.stop.name} = ctx->total;")
+      self.nesting += 1
+      try:
+        self.block(s.body, lines, 1)
+      finally:
+        self.nesting -= 1
+      lines.append("  return;")
+      if self.label_used:
+        lines.append(f"{self.fail_label}:")
+        for v in owned_vars(s.body, s.scope):
+          lines.append(f"  pk_release(&{v.name});")
+        lines.append("  return;")
+      lines.append("}")
+      lines.append("")
+      self.fail_label, self.label_used = saved
       self.functions.append("\n".join(lines))
     fields = [v.name for v in self.kernels[shared].free]
 

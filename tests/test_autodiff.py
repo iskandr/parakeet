@@ -597,3 +597,100 @@ def test_backends_agree(backend):
   for a, b in zip(got, want):
     for u, v in zip(a, b):
       np.testing.assert_allclose(u, v, rtol=1e-10)
+
+
+# ---- edge cases and regressions ---------------------------------------------
+
+
+def test_nested_concatenate_and_stack_non_zero_axis():
+  a = RNG.random((3, 4))
+  b = RNG.random((3, 2))
+  c = RNG.random((3, 5))
+  w = RNG.random((3, 11))
+  check(
+    lambda a, b, c: np.sum(np.concatenate((np.concatenate((a, b), axis=1), c), axis=1) * w),
+    a,
+    b,
+    c,
+    wrt=(0, 1, 2),
+  )
+  u, v = RNG.random((3, 4)), RNG.random((3, 4))
+  ws = RNG.random((3, 4, 2))
+  check(lambda u, v: np.sum(np.stack((u, v), axis=2) ** 2 * ws), u, v, wrt=(0, 1))
+
+
+def test_prod_with_zeros_and_initial():
+  x0 = np.array([2.0, 3.0, 5.0])
+  x1 = np.array([2.0, 0.0, 5.0])
+  x2 = np.array([0.0, 3.0, 0.0])
+  check(lambda a: np.prod(a), x0)
+  np.testing.assert_allclose(grad(lambda a: np.prod(a))(x1), np.array([0.0, 10.0, 0.0]))
+  np.testing.assert_allclose(grad(lambda a: np.prod(a))(x2), np.array([0.0, 0.0, 0.0]))
+  m = np.array([[2.0, 0.0, 3.0], [4.0, 5.0, 0.0], [0.0, 0.0, 7.0]])
+  np.testing.assert_allclose(
+    grad(lambda a: np.sum(np.prod(a, axis=1)))(m),
+    np.array([[0.0, 6.0, 0.0], [0.0, 0.0, 20.0], [0.0, 0.0, 0.0]]),
+  )
+  # active initial/init across add, mul, max, min
+  check(lambda a, s: np.sum(a, initial=s), x0, 1.5, wrt=(0, 1))
+  check(lambda a, s: np.prod(a, initial=s), x0, 2.0, wrt=(0, 1))
+  g_a, g_s = grad(lambda a, s: np.prod(a, initial=s), (0, 1))(x0, 0.0)
+  np.testing.assert_allclose(g_a, np.zeros_like(x0))
+  np.testing.assert_allclose(g_s, 30.0)
+  g_a, g_s = grad(lambda a, s: np.prod(a, initial=s), (0, 1))(x1, 2.0)
+  np.testing.assert_allclose(g_a, np.array([0.0, 20.0, 0.0]))
+  np.testing.assert_allclose(g_s, 0.0)
+  # max tie with initial shares the gradient
+  g_a, g_s = grad(lambda a, s: np.max(a, initial=s), (0, 1))(np.array([1.0, 5.0, 2.0]), 5.0)
+  np.testing.assert_allclose(g_a, np.array([0.0, 0.5, 0.0]))
+  np.testing.assert_allclose(g_s, 0.5)
+  check(lambda a, s: np.min(a, initial=s), np.array([2.0, 5.0, 3.0]), 1.0, wrt=(0, 1))
+  check(lambda a, s: parakeet.reduce(parakeet.multiply, a, init=s), x0, 1.5, wrt=(0, 1))
+
+
+def test_nested_map_captures_outer_differentiated_values():
+  x = RNG.random((4, 3))
+  w = RNG.random(3)
+  check(
+    lambda x, w: np.sum(each(lambda r: np.sum(each(lambda z: z * np.sum(w), r)), x)),
+    x,
+    w,
+    wrt=(0, 1),
+  )
+  check(
+    lambda x, s: np.sum(allpairs(lambda u, v: np.sum((u - v * s) ** 2), x, x)),
+    x,
+    1.3,
+    wrt=(0, 1),
+  )
+
+
+def test_aliased_parameter_mutation_is_refused():
+  def mutates_alias(a, b):
+    y = np.sum(a * a)
+    b[0] = 9.0
+    return y
+
+  x = RNG.random(4)
+  refused(mutates_alias, x, x, argnum=0, match="modified in place")
+
+
+def test_pow_zero_to_zero_and_deep_scalar_backprop():
+  g_const = grad(lambda x: x**0.0)(0.0)
+  assert np.isfinite(g_const) and g_const == 0.0
+  g_x, g_y = grad(lambda x, y: x**y, (0, 1))(0.0, 0.0)
+  assert np.isfinite(g_x) and g_x == 0.0
+  assert np.isfinite(g_y) and g_y == 0.0
+
+  def deep_tanh(x):
+    y = x
+    for _ in range(8):
+      y = np.tanh(y)
+    return y
+
+  g_fn = grad(deep_tanh)
+  got = g_fn(0.3)
+  want = numeric(deep_tanh, [0.3], 0)
+  assert np.isclose(got, want, rtol=1e-5)
+  # Must be O(N) in C code, not O(2^N)
+  assert jit(lambda t: grad(deep_tanh)(t)).specialize(0.3).source.count("tanh(") <= 20

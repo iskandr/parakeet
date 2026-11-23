@@ -671,7 +671,7 @@ def _reduce_prim(el, op: str, a, axis=None, init: Expr | None = None, what: str 
     a = el.cast_array(a, elt)
   tape = el.tape
   if tape is not None and not tape.muted and a.rank > 0 and op in ("add", "mul", "min", "max"):
-    if tape.is_active(el, a):
+    if tape.is_active(el, a) or (init is not None and tape.is_active(el, init)):
       return tape.reduce(el, reduce_plain, op, a, axis, init, what, keepdims)
   return reduce_plain(el, op, a, axis, init, what, keepdims)
 
