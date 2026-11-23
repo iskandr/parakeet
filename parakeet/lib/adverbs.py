@@ -184,7 +184,9 @@ def _reduce(el, f, x, init, axis, what: str):
     raise el.error(StaticValueError, f"{what}() takes a single axis (or None)")
   tape = el.tape
   if tape is not None and not tape.muted and isinstance(f, prims.UFunc) and f.name in ("add", "mul", "min", "max"):
-    if (init is None or isinstance(init, Expr)) and tape.is_active(el, x):
+    if (init is None or isinstance(init, Expr)) and (
+      tape.is_active(el, x) or (init is not None and tape.is_active(el, init))
+    ):
       # the reductions that have a derivative rule
       from .numpy_lib import _reduce_prim
 
@@ -294,9 +296,10 @@ def _scan(el, f, x, init, axis):
 
 
 def scan_axis(el, x: ArrayVal, k: int, combine, init=None) -> ArrayVal:
-  """Running fold along axis ``k`` of a multi-dimensional array."""
+  """Running fold along axis ``k`` of a multi-dimensional array: a map of
+  :class:`~parakeet.syntax.ir.IndexScan` statements."""
   from ..ndtypes import join
-  from ..syntax.ir import Assign, Store, Var
+  from ..syntax.ir import Fold, IndexScan, Store, Var
 
   x = _prepare(el, x)
   # accumulator type
@@ -321,30 +324,21 @@ def scan_axis(el, x: ArrayVal, k: int, combine, init=None) -> ArrayVal:
 
   def lane(idx):
     full = lambda i: tuple(idx[:k]) + (i,) + tuple(idx[k:])  # noqa: E731
-    acc = Var("acc", acc_type)
-    el.mutables.add(acc.uid)
-    if init is not None:
-      el.emit(Assign(acc, ops.cast(init, acc_type)))
-
-      def body(i):
-        el.emit(Assign(acc, ops.cast(el.as_scalar(combine(acc, el.tmp(el.elem(x, full(i)), "x"))), acc_type)))
-        el.emit(Store(out.buf, el.index_expr(out, full(i)), ops.cast(acc, acc_type.strong)))
-
-      el.for_range(ops.ZERO, n, body)
-    else:
-      from ..syntax.ir import If
-
-      first: list = []
-      with el.in_block(first):
-        el.emit(Assign(acc, ops.cast(el.elem(x, full(ops.ZERO)), acc_type)))
-        el.emit(Store(out.buf, el.index_expr(out, full(ops.ZERO)), ops.cast(acc, acc_type.strong)))
-      el.emit(If(cmp("gt", n, 0), first, []))
-
-      def body(i):
-        el.emit(Assign(acc, ops.cast(el.as_scalar(combine(acc, el.tmp(el.elem(x, full(i)), "x"))), acc_type)))
-        el.emit(Store(out.buf, el.index_expr(out, full(i)), ops.cast(acc, acc_type.strong)))
-
-      el.for_range(ops.ONE, n, body)
+    index = Var("i", I)
+    el.nonneg.add(index.uid)
+    el.upper[index.uid] = n
+    body: list = []
+    scope = el.new_scope("loop")
+    with el.in_block(body, scope, loop=True):
+      value = el.tmp(el.as_scalar(el.elem(x, full(index)), "element"), "x")
+    a, b = Var("acc", acc_type), Var("x", value.type)
+    combine_block: list = []
+    with el.in_block(combine_block, loop=True):
+      combined = ops.cast(el.as_scalar(combine(a, b), "scan result"), acc_type)
+    result = Var("run", acc_type)
+    fold = Fold(result, value, a, b, combine_block, combined, None if init is None else ops.cast(init, acc_type))
+    emit = [Store(out.buf, el.index_expr(out, full(index)), ops.cast(result, acc_type.strong))]
+    el.emit(IndexScan(n, index, body, fold, emit, scope, False, el.loc()))
 
   el.loop_nest(lead, lane)
   return out

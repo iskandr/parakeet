@@ -1,52 +1,47 @@
-"""Tiling: run matmul-shaped maps a cache-sized block at a time.
+"""Tiling and reduction interchange for map-of-reduction operators.
 
-A *matmul-shaped* operation is a map whose element is a reduction over data
-selected by the map's index: a matrix product, all-pairs distances, a
-tropical product, the assignment step of k-means, a stack of any of those.
-At the operator level that is a pattern, not a guess::
+*reduction interchange* (``PermuteReductions``)::
+
+    map i.., j over (.., m):
+      reduce k.. over (K..):
+        fold(op, x[.., k, j])        # unit stride in j, strided in k
+
+When the inner reduction walks memory with a large stride while the map's last
+index ``j`` has unit stride (``np.sum(X, axis=0)``, ``np.mean(X, axis=0)``),
+interchanging the loops over L1-sized tiles of ``j`` turns every load and
+accumulator update into a contiguous SIMD loop.
+
+*tiling and jamming* (``TiledMap``)::
 
     map i.., j over (.., m):          # any rank >= 2
       straight-line code
       reduce k.. over (K..):          # one reduction, of any rank,
         fold(...), fold(...)          #   with any number of folds
-      straight-line code              # the "epilogue": sqrt, a store, ...
+      straight-line code              # the "epilogue": sqrt, tanh, a store, ...
 
 Evaluated row by row, every row of the result sweeps over all of the ``j``
-operand, which stops fitting in cache long before the arrays are large.  Two
-rewrites fix that, and neither changes what is computed:
-
-*tiling*
-    the ``j`` loop is cut into tiles and hoisted outside the loops before
-    it, so a tile of the ``j`` operand is reused for every row while it is
-    still in cache.  Legal for any map: its elements are independent.
-
-*jamming*
-    the reductions of a small block of elements (``UNROLL_I`` rows by
-    ``UNROLL_J`` columns) become one reduction with a fold per element, so
-    every operand element that was loaded is used several times.  Each
-    element still folds its own terms in the original order.  This is
-    sibling fusion (see :mod:`.fusion`) applied to copies of the map's body.
-
-The tile size is a heuristic, not a search: as many ``j`` rows as fit in
-``config.tile_bytes`` (half of a core's L2 cache unless set).
-
-Nothing here knows about dot products, and nothing is elaborated twice: the
-body of the map is an IR block, and a tile is made of copies of it.
+operand, which stops fitting in cache long before the arrays are large.
+Cutting ``j`` into cache-sized tiles and jamming a 2x4 block of reductions
+into one multi-fold ``IndexReduce`` keeps the ``j`` tile in cache and reuses
+every loaded value.
 """
 
 from __future__ import annotations
 
 import math
 
+from ..ndtypes import Bool, BufType
 from ..syntax import ir, ops
 from ..syntax.clone import Cloner, defined
-from ..syntax.ir import Assign, Const, Expr, ForRange, If, IndexMap, IndexReduce, Scope, Var
-from ..syntax.ops import ONE, ZERO, I, cmp, iadd, idiv, imax, imin, imul, iprod, isub
+from ..syntax.ir import Alloc, Assign, Const, Expr, ForRange, If, IndexMap, IndexReduce, Load, RtCall, Scope, Store, Var
+from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, iprod, isub
 from .lowering import Loops, outer_expr, pure_defs
 
 UNROLL_I = 2
 UNROLL_J = 4
 MIN_STATIC_SIZE = 256  # maps known to be smaller than this are not worth tiling
+INTERCHANGE_TILE = 256  # L1-sized strip of contiguous output columns (256 * 8B = 2 KiB)
+COMMUTATIVE_OPS = frozenset({"add", "mul", "min", "max", "and", "or", "bitand", "bitor", "bitxor"})
 
 STRAIGHT = (ir.Assign, ir.Store, ir.Check, ir.Comment)
 
@@ -57,12 +52,16 @@ class Shape:
   __slots__ = ("after", "before", "extent", "reduce")
 
 
-def match(s: ir.Stmt, defs: dict[int, Expr]) -> Shape | None:
+def match(s: ir.Stmt, defs: dict[int, Expr], min_rank: int = 2) -> Shape | None:
   """Is ``s`` a map whose element is one reduction and straight-line code,
   over an index space that does not depend on the element?"""
-  if not isinstance(s, IndexMap) or s.ordered or len(s.shape) < 2 or s.scope.owned:
+  if not isinstance(s, IndexMap) or s.ordered or len(s.shape) < min_rank or s.scope.owned:
     return None
-  if all(isinstance(d, Const) for d in s.shape) and math.prod(d.value for d in s.shape) < MIN_STATIC_SIZE:
+  if (
+    min_rank >= 2
+    and all(isinstance(d, Const) for d in s.shape)
+    and math.prod(d.value for d in s.shape) < MIN_STATIC_SIZE
+  ):
     return None
   body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
   where = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
@@ -73,6 +72,8 @@ def match(s: ir.Stmt, defs: dict[int, Expr]) -> Shape | None:
     return None
   if any(isinstance(t.var.type, ir.BufType) for t in body if isinstance(t, Assign)):
     return None
+  if any(isinstance(t, ir.Store) for t in body[: where[0]]):
+    return None
   inner = set(defined(s.body)) | {v.uid for v in s.index}
   extent = [outer_expr(defs, d, inner) for d in red.shape]
   if any(d is None for d in extent):
@@ -80,6 +81,268 @@ def match(s: ir.Stmt, defs: dict[int, Expr]) -> Shape | None:
   m = Shape()
   m.before, m.reduce, m.after, m.extent = body[: where[0]], red, body[where[0] + 1 :], tuple(extent)
   return m
+
+
+# ---------------------------------------------------------------------------
+# reduction interchange (PermuteReductions)
+# ---------------------------------------------------------------------------
+
+
+def _linear_stride(e: Expr, v: Var, defs: dict[int, Expr], budget: int = 20) -> Expr | None:
+  """Coefficient of ``v`` in an affine integer expression ``e``, or None."""
+  if budget <= 0:
+    return None
+  if isinstance(e, Const):
+    return ZERO
+  if isinstance(e, Var):
+    if e is v:
+      return ONE
+    d = defs.get(e.uid)
+    return ZERO if d is None else _linear_stride(d, v, defs, budget - 1)
+  if isinstance(e, ir.Cast):
+    return _linear_stride(e.arg, v, defs, budget - 1)
+  if isinstance(e, ir.Prim):
+    if e.op in ("add", "sub") and len(e.args) == 2:
+      a = _linear_stride(e.args[0], v, defs, budget - 1)
+      b = _linear_stride(e.args[1], v, defs, budget - 1)
+      if a is None or b is None:
+        return None
+      return iadd(a, b) if e.op == "add" else isub(a, b)
+    if e.op == "mul" and len(e.args) == 2:
+      a = _linear_stride(e.args[0], v, defs, budget - 1)
+      b = _linear_stride(e.args[1], v, defs, budget - 1)
+      if a is None or b is None:
+        return None
+      if isinstance(a, Const) and a.value == 0:
+        return imul(e.args[0], b)
+      if isinstance(b, Const) and b.value == 0:
+        return imul(a, e.args[1])
+      return None
+    if e.op == "neg" and len(e.args) == 1:
+      a = _linear_stride(e.args[0], v, defs, budget - 1)
+      return None if a is None else isub(ZERO, a)
+  return None
+
+
+def _is_const(e: Expr | None, val: int) -> bool:
+  return isinstance(e, Const) and e.value == val
+
+
+def _should_interchange(s: IndexMap, m: Shape, defs: dict[int, Expr]) -> bool:
+  """True when the reduction is associative+commutative and walks memory
+  strided along its own inner index while ``s.index[-1]`` has unit stride."""
+  red = m.reduce
+  if red.scope.owned:
+    return False
+  if isinstance(s.shape[-1], Const) and s.shape[-1].value < 4:
+    return False
+  if not all(f.op in COMMUTATIVE_OPS and not f.combine for f in red.folds):
+    return False
+  if len({f.init is not None for f in red.folds}) != 1:
+    return False
+  if not all(isinstance(t, (Assign, ir.Comment)) for t in m.before + red.body):
+    return False
+  inner = set(defined(s.body)) | {v.uid for v in s.index}
+  if any(f.init is not None and outer_expr(defs, f.init, inner) is None for f in red.folds):
+    return False
+  local_defs = dict(defs)
+  for t in m.before + red.body:
+    if isinstance(t, Assign) and not isinstance(t.var.type, BufType) and t.var.type.kind in "iu":
+      local_defs[t.var.uid] = t.value
+  map_inner, reduce_inner = s.index[-1], red.index[-1]
+  unit_map_strided_reduce = False
+  for t in ir.walk_stmts(red.body):
+    for e in ir.stmt_exprs(t):
+      for x in ir.walk_expr(e):
+        if isinstance(x, Load):
+          reduce_stride = _linear_stride(x.index, reduce_inner, local_defs)
+          map_stride = _linear_stride(x.index, map_inner, local_defs)
+          if _is_const(reduce_stride, 1):
+            return False  # already contiguous along the reduction axis
+          if _is_const(map_stride, 1) and reduce_stride is not None and not _is_const(reduce_stride, 0):
+            unit_map_strided_reduce = True
+  return unit_map_strided_reduce
+
+
+def _interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> list:
+  """Swap ``m.reduce`` outside an L1-cached strip of ``s.index[-1]`` so the
+  innermost loop walks both the input and the tile accumulator with stride 1."""
+  out: list = []
+  lp = Loops(out, defs, owner)
+  red = m.reduce
+  folds = red.folds
+  seeded = folds[0].init is not None
+  lead = tuple(lp.tmp(d, "n") for d in s.shape[:-1])
+  ncols = lp.tmp(s.shape[-1], "n_j")
+  n_rows = lp.tmp(iprod(lead), "rows") if lead else ONE
+  tile_width = Const(INTERCHANGE_TILE, I)
+  n_tiles = lp.tmp(idiv(iadd(ncols, INTERCHANGE_TILE - 1), tile_width), "ntiles")
+  total = lp.tmp(imul(n_rows, n_tiles), "total")
+  extent = tuple(lp.tmp(d, "k") for d in m.extent)
+  total_k = lp.tmp(iprod(extent), "k_total")
+
+  def emit_tile(inner: Loops, row_coords: tuple[Expr, ...], j0: Expr, tile_len: Expr, base: Expr, acc_bufs: list[Var]):
+    """Compute one ``tile_len``-wide strip of columns for ``row_coords``."""
+
+    def emit_tile_step(step_lp: Loops, t: Var, k_coords: tuple[Expr, ...], init_only: bool) -> None:
+      """Evaluate the reduction body at ``(row_coords, j0 + t, k_coords)`` and
+      either initialize or fold into ``acc_bufs``."""
+      j = iadd(j0, t)
+      subst = {v.uid: e for v, e in zip(s.index, (*row_coords, j))}
+      subst.update({v.uid: e for v, e in zip(red.index, k_coords)})
+      cloner = Cloner(subst)
+      for v in defined(m.before + red.body).values():
+        cloner.var(v)
+      step_lp.block.extend(cloner.stmt(st) for st in m.before)
+      step_lp.block.extend(cloner.stmt(st) for st in red.body)
+      pos = iadd(base, t)
+      for f, buf in zip(folds, acc_bufs):
+        val = cast(cloner.expr(f.value), f.a.type)
+        if init_only:
+          step_lp.emit(Store(buf, pos, cast(val, f.a.type.strong)))
+        else:
+          cur = cast(Load(buf, pos), f.a.type)
+          step_lp.emit(Store(buf, pos, cast(ops.prim(f.op, (cur, val), f.a.type), f.a.type.strong)))
+
+    # 1. Initialize tile accumulators
+    init_body: list = []
+    t_init = Var("t", I)
+    if seeded:
+      for f, buf in zip(folds, acc_bufs):
+        init_body.append(Store(buf, iadd(base, t_init), cast(f.init, f.a.type.strong)))
+    else:
+      emit_tile_step(inner.sub(init_body), t_init, (ZERO,) * len(extent), init_only=True)
+    inner.emit(ForRange(t_init, ZERO, tile_len, ONE, init_body, Scope("loop"), simd=True))
+
+    # 2. Sweep the reduction space, vectorizing across the contiguous tile of j
+    def step_k(k_lp: Loops, k_coords: tuple[Expr, ...]) -> None:
+      t_step = Var("t", I)
+      step_body: list = []
+      emit_tile_step(k_lp.sub(step_body), t_step, k_coords, init_only=False)
+      k_lp.emit(ForRange(t_step, ZERO, tile_len, ONE, step_body, Scope("loop"), simd=True))
+
+    if seeded:
+      k_vars = tuple(Var("k", I) for _ in extent)
+      body_k: list = []
+      step_k(inner.sub(body_k), k_vars)
+      inner.nest(extent, k_vars, body_k, Scope("loop"))
+    else:
+      k_flat = Var("kf", I)
+      body_k = []
+      k_lp = inner.sub(body_k)
+      k_coords = (k_flat,) if len(extent) == 1 else k_lp.unravel(k_flat, extent)
+      step_k(k_lp, k_coords)
+      inner.emit(ForRange(k_flat, ONE, total_k, ONE, body_k, Scope("loop")))
+
+    # 3. Epilogue (store / mean division / sqrt / ...)
+    t_end = Var("t", I)
+    epilogue: list = []
+    subst = {v.uid: e for v, e in zip(s.index, (*row_coords, iadd(j0, t_end)))}
+    epilogue_cloner = Cloner(subst)
+    before_defs = defined(m.before)
+    after_uses = {
+      x.uid for st in ir.walk_stmts(m.after) for e in ir.stmt_exprs(st) for x in ir.walk_expr(e) if isinstance(x, Var)
+    }
+    if before_defs.keys() & after_uses:
+      for v in before_defs.values():
+        epilogue_cloner.var(v)
+      epilogue.extend(epilogue_cloner.stmt(st) for st in m.before)
+    for v in defined(m.after).values():
+      epilogue_cloner.var(v)
+    for f, buf in zip(folds, acc_bufs):
+      epilogue.append(Assign(epilogue_cloner.var(f.result), cast(Load(buf, iadd(base, t_end)), f.result.type)))
+    epilogue.extend(epilogue_cloner.stmt(st) for st in m.after)
+    inner.emit(
+      ForRange(
+        t_end, ZERO, tile_len, ONE, epilogue, Scope("loop"), simd=not any(isinstance(st, ir.Check) for st in m.after)
+      )
+    )
+
+  def run_range(inner: Loops, start: Expr, stop: Expr, base: Expr, acc_bufs: list[Var]) -> None:
+    def one_tile(body_lp: Loops, flat: Var) -> None:
+      if lead:
+        row = body_lp.tmp(idiv(flat, n_tiles), "row")
+        tile_idx = body_lp.tmp(isub(flat, imul(row, n_tiles)), "ti")
+        row_coords = (row,) if len(lead) == 1 else body_lp.unravel(row, lead)
+      else:
+        tile_idx = flat
+        row_coords = ()
+      j0 = body_lp.tmp(imul(tile_idx, tile_width), "j0")
+      tile_len = body_lp.tmp(imin(tile_width, isub(ncols, j0)), "tlen")
+      emit_tile(body_lp, row_coords, j0, tile_len, base, acc_bufs)
+
+    loop(inner, start, stop, one_tile, name="tile")
+
+  work: list = []
+  work_lp = lp.sub(work)
+  if not seeded:
+    for f in folds:
+      if f.empty is not None:
+        work_lp.emit(ir.Check(cmp("gt", total_k, 0), f.empty))
+        break
+  if s.parallel:
+    nchunks = work_lp.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
+    acc_bufs = []
+    for f in folds:
+      buf = Var("tile_acc", BufType(f.a.type.strong))
+      work_lp.emit(Alloc(buf, imul(nchunks, tile_width)))
+      owner.owned.append(buf)
+      acc_bufs.append(buf)
+    work_lp.parallel(
+      total,
+      lambda inner, chunk, start, stop: run_range(
+        inner, start, stop, inner.tmp(imul(chunk, tile_width), "base"), acc_bufs
+      ),
+      kind="reduce",
+      nchunks=nchunks,
+      loc=s.loc,
+      heavy=True,
+    )
+    for buf in acc_bufs:
+      work_lp.emit(ir.Release(buf))
+  else:
+    acc_bufs = []
+    for f in folds:
+      buf = Var("tile_acc", BufType(f.a.type.strong))
+      work_lp.emit(Alloc(buf, tile_width))
+      owner.owned.append(buf)
+      acc_bufs.append(buf)
+    run_range(work_lp, ZERO, total, ZERO, acc_bufs)
+    for buf in acc_bufs:
+      work_lp.emit(ir.Release(buf))
+  lp.emit(If(cmp("gt", total, 0), work, []))
+  return out
+
+
+def _interchange_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
+  """Rewrite eligible strided map-of-reduction statements throughout ``block``."""
+  out: list = []
+  for s in block:
+    if isinstance(s, If):
+      s.then[:] = _interchange_block(s.then, defs, owner)
+      s.orelse[:] = _interchange_block(s.orelse, defs, owner)
+    elif isinstance(s, IndexReduce):
+      s.body[:] = _interchange_block(s.body, defs, s.scope)
+    elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
+      s.body[:] = _interchange_block(s.body, defs, s.scope)
+    m = match(s, defs, min_rank=1)
+    if m is not None and _should_interchange(s, m, defs):  # type: ignore[arg-type]
+      out.extend(_interchanged(s, m, defs, owner))  # type: ignore[arg-type]
+    else:
+      out.append(s)
+  return out
+
+
+def interchange(fn: ir.Function, options) -> None:
+  """PermuteReductions: interchange strided map-of-reduction loops into
+  L1-tiled contiguous SIMD loops."""
+  if options.tiling:
+    fn.body[:] = _interchange_block(fn.body, pure_defs(fn.body), fn.scope)
+
+
+# ---------------------------------------------------------------------------
+# tiling and jamming (TiledMap)
+# ---------------------------------------------------------------------------
 
 
 def element(lp: Loops, s: IndexMap, m: Shape, at: tuple[Expr, ...]) -> None:
@@ -226,4 +489,4 @@ def tiling(fn: ir.Function, options) -> None:
     fn.body[:] = tile_block(fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes)
 
 
-__all__ = ["UNROLL_I", "UNROLL_J", "jam", "match", "tile_size", "tiled", "tiling"]
+__all__ = ["INTERCHANGE_TILE", "UNROLL_I", "UNROLL_J", "interchange", "jam", "match", "tile_size", "tiled", "tiling"]

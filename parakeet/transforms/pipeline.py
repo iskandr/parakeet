@@ -1,6 +1,6 @@
 """The middle end: passes over the operator statements, then lowering.
 
-    elaboration  ->  IndexMap / IndexReduce over loop IR
+    elaboration  ->  IndexMap / IndexReduce / IndexScan / IndexFilter
                  ->  [ passes ]  ->  loops  ->  backends
 
 Each pass takes a function and rewrites it in place.  ``PASSES`` is the
@@ -16,8 +16,10 @@ from . import fusion, lowering, simplify, tiling
 
 PASSES: list[tuple[str, object]] = [
   ("dead code", simplify.dead_code),
-  ("filter-reduce fusion", fusion.fuse_filters),
+  ("vertical fusion", fusion.fuse_vertical),
+  ("filter fusion", fusion.fuse_filters),
   ("sibling fusion", fusion.fuse_siblings),
+  ("reduction interchange", tiling.interchange),
   ("tiling", tiling.tiling),
 ]
 

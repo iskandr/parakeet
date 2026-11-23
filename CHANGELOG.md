@@ -19,11 +19,15 @@ unchanged; everything underneath is new.
 - **A middle end:** elaboration now produces operator statements (`IndexMap`,
   `IndexReduce`, `IndexScan`, `IndexFilter`, printed by `spec.operators`) and a pipeline of passes rewrites
   them before they become loops. Tiling is one such pass, a pattern match on
-  the IR instead of a trial elaboration; **sibling fusion** is new
-  (`x.min(), x.max()` is one loop), and so are **filter-reduce fusion**
-  (`np.sum(x[x > 0])` is one loop and allocates nothing) and removal of
-  reductions nobody reads; `find_broken_transform` bisects the pass
-  list; `config.skip_transforms` switches passes off.
+  the IR instead of a trial elaboration; **vertical fusion** (`Map→Map`
+  including matmul epilogues, `Scan→Map` into `emit`, `Map→Filter`,
+  `Map→Reduce`), **filter fusion** (`Filter→Filter` and `Filter→Reduce`:
+  `np.sum(x[x > 0])` is one loop and allocates nothing), **sibling fusion**
+  (`x.min(), x.max()` and `np.sin(x), np.cos(x)` each share one loop),
+  **reduction interchange** (`np.sum(X, axis=0)` becomes L1-tiled contiguous
+  SIMD loops), and dead-operator elimination all run at this level;
+  `find_broken_transform` bisects the pass list; `config.skip_transforms`
+  switches passes off.
 - **General operators:** `reduce`, `scan` and `filter` take several arrays
   with `map=` (and `emit=`); `np.einsum`; `@` on stacks; reductions over
   several axes in one pass; tiling for maps of any rank.

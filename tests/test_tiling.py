@@ -153,7 +153,14 @@ def test_operators_are_printed_before_the_passes():
 def test_passes_can_be_skipped_by_name():
   from parakeet.transforms import pipeline
 
-  assert pipeline.names() == ["dead code", "filter-reduce fusion", "sibling fusion", "tiling"]
+  assert pipeline.names() == [
+    "dead code",
+    "vertical fusion",
+    "filter fusion",
+    "sibling fusion",
+    "reduction interchange",
+    "tiling",
+  ]
   a = np.arange(64.0).reshape(8, 8)
   with parakeet.options(skip_transforms=("tiling",)):
     assert "tile" not in matmul.specialize(a, a).ir
@@ -269,7 +276,7 @@ def test_a_reduction_over_a_filter_is_one_loop():
     np.testing.assert_allclose(fn(*args), want)
     spec = fn.specialize(*args)
     assert "filter" in spec.operators and n_loops(spec) == 1 and "idx" not in spec.ir
-    with parakeet.options(skip_transforms=("filter-reduce fusion",)):
+    with parakeet.options(skip_transforms=("filter fusion",)):
       np.testing.assert_allclose(fn(*args), want)
       assert n_loops(fn.specialize(*args)) == 3
   assert sum_kept(np.zeros(0)) == 0.0 and sum_kept(np.zeros(7)) == 0.0
@@ -301,3 +308,187 @@ def test_every_adverb_has_a_statement():
   got = all_four(x)
   np.testing.assert_allclose(got[0], np.cumsum(x))
   np.testing.assert_array_equal(got[1], np.nonzero(x > 0.5)[0])
+
+
+# ---- vertical fusion, filter-filter, horizontal maps, interchange, DCE ------
+
+
+@jit
+def scan_then_map(x):
+  return np.cumsum(x) * 2.0 + 1.0
+
+
+@jit
+def matmul_epilogue(a, b, c):
+  # .copy() produces a concrete IndexMap in spec.operators so middle-end
+  # vertical fusion fuses the tanh(... + c) epilogue right into the tiled matmul
+  m = (a @ b).copy()
+  return np.tanh(m + c)
+
+
+@jit
+def double_filter(x):
+  y = parakeet.filter(lambda v: v > 0.0, x)
+  return parakeet.filter(lambda v: 1.0 / v < 2.0, y)
+
+
+@jit
+def double_filter_sum(x):
+  y = parakeet.filter(lambda v: v > 0.0, x)
+  return np.sum(parakeet.filter(lambda v: v < 0.75, y))
+
+
+@jit
+def sibling_maps(x):
+  return np.sin(x), np.cos(x)
+
+
+@jit
+def dependent_maps(x):
+  a = x.copy()
+  b = a * 2.0
+  return a, b
+
+
+@jit
+def col_sum(x):
+  return np.sum(x, axis=0)
+
+
+@jit
+def col_mean_bias(x, bias):
+  return np.tanh(np.mean(x, axis=0) + bias)
+
+
+@jit
+def col_min(x):
+  return np.min(x, axis=0)
+
+
+@jit
+def col_sum_3d(x):
+  return np.sum(x, axis=(0, 1))
+
+
+@jit
+def dead_ops(x):
+  _a = x.copy()  # noqa: F841
+  _b = x[x > 0.5]  # noqa: F841
+  _c = np.cumsum(x)  # noqa: F841
+  return np.sum(x)
+
+
+@jit
+def cumsum_2d(x):
+  return np.cumsum(x, axis=1)
+
+
+def test_vertical_fusion_scan_and_matmul_epilogue():
+  rng = np.random.default_rng(20)
+  x = rng.random(2000)
+  np.testing.assert_allclose(scan_then_map(x), np.cumsum(x) * 2.0 + 1.0)
+  spec = scan_then_map.specialize(x)
+  assert "parallel[map]" not in spec.ir
+  with parakeet.options(skip_transforms=("vertical fusion",)):
+    np.testing.assert_allclose(scan_then_map(x), np.cumsum(x) * 2.0 + 1.0)
+    assert "parallel[map]" in scan_then_map.specialize(x).ir
+
+  a, b, c = rng.random((32, 24)), rng.random((24, 32)), rng.random((32, 32))
+  np.testing.assert_allclose(matmul_epilogue(a, b, c), np.tanh(a @ b + c))
+  mspec = matmul_epilogue.specialize(a, b, c)
+  assert mspec.operators.count("map ") == 3
+  # 1 map to transpose b + 1 tiled map with the tanh(... + c) epilogue fused in
+  assert "tile" in mspec.ir and mspec.ir.count("parallel[map]") == 2
+  with parakeet.options(skip_transforms=("vertical fusion",)):
+    assert matmul_epilogue.specialize(a, b, c).ir.count("parallel[map]") == 3
+
+
+def test_filter_filter_fusion_and_short_circuit():
+  rng = np.random.default_rng(21)
+  x = rng.uniform(-1.0, 1.0, 2000)
+  x[0] = 0.0  # must short-circuit before 1.0 / v
+  want = x[(x > 0.0) & (np.where(x > 0.0, 1.0 / np.where(x > 0.0, x, 1.0), 9.0) < 2.0)]
+  np.testing.assert_allclose(double_filter(x), want)
+  # One filter needs 2 parallel[reduce] passes (count + scatter), not 4
+  assert n_loops(double_filter.specialize(x)) == 2
+  with parakeet.options(skip_transforms=("filter fusion",)):
+    np.testing.assert_allclose(double_filter(x), want)
+    assert n_loops(double_filter.specialize(x)) == 4
+
+  np.testing.assert_allclose(double_filter_sum(x), x[(x > 0.0) & (x < 0.75)].sum())
+  assert n_loops(double_filter_sum.specialize(x)) == 1
+
+
+def test_horizontal_map_fusion():
+  x = np.random.default_rng(22).random(2000)
+  s, c = sibling_maps(x)
+  np.testing.assert_allclose(s, np.sin(x))
+  np.testing.assert_allclose(c, np.cos(x))
+  assert sibling_maps.specialize(x).ir.count("parallel[map]") == 1
+  with parakeet.options(skip_transforms=("sibling fusion",)):
+    assert sibling_maps.specialize(x).ir.count("parallel[map]") == 2
+
+  # dependent maps must not merge when the second reads what the first writes
+  a, b = dependent_maps(x)
+  np.testing.assert_allclose(a, x)
+  np.testing.assert_allclose(b, x * 2.0)
+  assert dependent_maps.specialize(x).ir.count("parallel[map]") == 2
+
+
+def test_reduction_interchange():
+  rng = np.random.default_rng(23)
+  for rows, cols in ((0, 0), (0, 5), (1, 1), (3, 4), (7, 63), (7, 64), (7, 65), (7, 255), (7, 256), (7, 257)):
+    x = rng.random((rows, cols))
+    np.testing.assert_allclose(col_sum(x), x.sum(axis=0))
+    if rows > 0:
+      b = rng.random(cols)
+      np.testing.assert_allclose(col_mean_bias(x, b), np.tanh(x.mean(axis=0) + b))
+      np.testing.assert_allclose(col_min(x), x.min(axis=0))
+    elif cols > 0:
+      with pytest.raises(ValueError, match="no identity"):
+        col_min(x)
+
+  x = rng.random((32, 300))
+  assert "tile_acc" in col_sum.specialize(x).ir
+  with parakeet.options(skip_transforms=("reduction interchange",)):
+    assert "tile_acc" not in col_sum.specialize(x).ir
+    np.testing.assert_allclose(col_sum(x), x.sum(axis=0))
+
+  x3 = rng.random((5, 7, 300))
+  np.testing.assert_allclose(col_sum_3d(x3), x3.sum(axis=(0, 1)))
+  assert "tile_acc" in col_sum_3d.specialize(x3).ir
+
+
+def test_dead_maps_filters_and_scans_are_removed():
+  x = np.random.default_rng(24).random(1000)
+  np.testing.assert_allclose(dead_ops(x), x.sum())
+  spec = dead_ops.specialize(x)
+  assert "parallel[map]" not in spec.ir and n_loops(spec) == 1
+
+
+def test_multidim_scan_emits_index_scan():
+  x = np.random.default_rng(25).random((8, 12))
+  ops = cumsum_2d.specialize(x).operators
+  assert "map " in ops and "scan " in ops and "for " not in ops
+  np.testing.assert_allclose(cumsum_2d(x), np.cumsum(x, axis=1))
+
+
+def test_ir_body_sharing_and_diagnose_c_backend():
+  @jit
+  def repeated_maps(a, b, c):
+    # Each call produces an identical ParLoop structure (and includes bounds checks
+    # if indexing); structural IR hashing must share one compiled pk_body_.
+    return np.sin(a) + 1.0, np.sin(b) + 1.0, np.sin(c) + 1.0
+
+  rng = np.random.default_rng(26)
+  a, b, c = rng.random(500), rng.random(500), rng.random(500)
+  with parakeet.options(skip_transforms=("sibling fusion",)):
+    src = repeated_maps.specialize(a, b, c).source
+    assert src.count("static void pk_body_") == 1
+    out = repeated_maps(a, b, c)
+    for got, arr in zip(out, (a, b, c)):
+      np.testing.assert_allclose(got, np.sin(arr) + 1.0)
+
+  # find_broken_transform on backend="c" must not duplicate "c" as "parallel loops"
+  with parakeet.options(backend="c"):
+    assert parakeet.find_broken_transform(lambda x: np.sum(x * x), [a], print_transforms=False) is None

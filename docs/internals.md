@@ -84,9 +84,10 @@ expressions and statements; subclasses supply type names, math functions and
 failure handling.
 
 * The **host** program is always C. Each `ParLoop` body is outlined into a
-  function taking a context struct, and launched through a function pointer
-  supplied at call time — the thread pool, OpenMP, GCD or a plain loop — so the
-  same compiled module serves every CPU backend.
+  function taking a context struct (bodies with identical IR structure up to
+  alpha-renaming share one compiled function), and launched through a function
+  pointer supplied at call time — the thread pool, OpenMP, GCD or a plain loop —
+  so the same compiled module serves every CPU backend.
 * For **GPU** backends each eligible `ParLoop` is additionally printed as a
   Metal or CUDA kernel. At run time the host code calls back into Python, which
   binds the buffers and dispatches the kernel; if the loop is not eligible, is
@@ -110,12 +111,23 @@ views of the caller's array.
 `parakeet/transforms/pipeline.py` lists the passes over the operator
 statements, in order; `config.skip_transforms` leaves any of them out:
 
-* **Dead code** (`simplify.py`). Reductions nobody reads are removed (the C
-  compiler cannot remove a parallel loop).
-* **Filter-reduce fusion** (`fusion.py`). A reduction over what an
-  `IndexFilter` kept becomes a guarded `IndexReduce`: no index array.
-* **Sibling fusion** (`fusion.py`). Adjacent reductions over the same index
-  space become one `IndexReduce` with several folds.
+* **Dead code** (`simplify.py`). Pure `IndexMap`, `IndexReduce`, `IndexFilter`,
+  `IndexScan` and unused `Alloc` statements nobody reads are removed to a fixed
+  point (the C compiler cannot remove a parallel loop).
+* **Vertical fusion** (`fusion.py`). Producer-consumer operator pairs
+  (`Map→Map` including epilogues like `np.tanh(a @ b + c)`, `Scan→Map` into
+  `IndexScan.emit`, `Map→Filter`, `Map→Reduce`) collapse into one operator and
+  drop the intermediate buffer.
+* **Filter fusion** (`fusion.py`). Adjacent `IndexFilter`s collapse into a
+  single short-circuiting filter (`Filter→Filter`), and a reduction over what an
+  `IndexFilter` kept becomes a guarded `IndexReduce` with no index array
+  (`Filter→Reduce`).
+* **Sibling fusion** (`fusion.py`). Adjacent `IndexReduce`s or independent
+  `IndexMap`s over the same index space share one loop.
+* **Reduction interchange** (`tiling.py`). `PermuteReductions`: a strided
+  commutative+associative `IndexReduce` inside a stride-1 `IndexMap`
+  (`np.sum(X, axis=0)`) is interchanged over L1-sized strips of contiguous
+  output columns.
 * **Tiling** (`tiling.py`). An `IndexMap` of rank two or more whose body is a
   single `IndexReduce` plus straight-line code is run a cache-sized tile of
   its last dimension at a time. Inside a tile the body is instantiated for a

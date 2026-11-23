@@ -19,8 +19,10 @@ The short version: the rules are the same algebra, applied in two places.
 * **In the middle end.** What elaboration produces is the original's
   *indexified* level: statements `IndexMap`, `IndexReduce`, `IndexScan` and
   `IndexFilter` over index spaces, with ordinary scalar code as their bodies (`Specialization.operators`
-  prints it). Passes rewrite those statements — sibling fusion, tiling — and a
-  last pass, `LowerAdverbs` in spirit, turns them into loops.
+  prints it). Passes rewrite those statements — dead code elimination, vertical
+  fusion (map/scan/filter/reduce), filter fusion (filter-filter and
+  filter-reduce), sibling fusion (reductions and maps), reduction interchange
+  and tiling — and a last pass, `LowerAdverbs` in spirit, turns them into loops.
   `parakeet.transforms.pipeline.PASSES` is the list;
   `find_broken_transform` switches its members on one at a time.
 
@@ -69,9 +71,9 @@ comprehension an `imap`.
 | `Scan(g, ⊕, ε, Map(f, X))` ⇒ `Scan(g∘f, ⊕, ε, X)` | yes |
 | `Filter(g, pred, Map(f, X))` ⇒ `Filter(g∘f, pred∘f, X)` | yes: the predicate and the kept values both read the unfused map |
 | `Map(g, Filter(f, pred, X))` ⇒ `Filter(g∘f, pred, X)` | yes: the selected elements are a delayed gather that the map fuses into |
-| `Map(g, Scan(f, ⊕, ε, X))` ⇒ `Scan(f, ⊕, g∘ε, X)` | **no**: a scan always stores its running values; `g` (or `emit=`) is a second, fused pass over them |
-| `Reduce(g, ⊕, Filter(f, p, X))` ⇒ `FilterReduce(g∘f, ⊕, p, X)` | **no**: the indices of the kept elements are built first. Write `np.sum(np.where(p, x, 0))` for one pass |
-| `Filter(g, p2, Filter(f, p1, X))` ⇒ one filter | **no**: two compactions |
+| `Map(g, Scan(f, ⊕, ε, X))` ⇒ `Scan(f, ⊕, g∘ε, X)` | **yes** (`transforms/fusion.py`): a consumer `IndexMap` whose single input is an `IndexScan`'s output fuses into the scan's `emit` block (`np.cumsum(x) * 2.0 + 1.0` runs in one scan pass) |
+| `Reduce(g, ⊕, Filter(f, p, X))` ⇒ `FilterReduce(g∘f, ⊕, p, X)` | **yes** (`transforms/fusion.py`): becomes a guarded `IndexReduce` with no index array (see below) |
+| `Filter(g, p2, Filter(f, p1, X))` ⇒ `Filter(g∘f, p1 ∧ (p2∘f), X)` | **yes** (`transforms/fusion.py`): short-circuiting single compaction, which also feeds into `FilterReduce` |
 
 **Side conditions.** [R] states one: nothing may modify the intermediate array
 between producer and consumer, decided by alias analysis. Here every delayed
@@ -103,7 +105,7 @@ not one flat loop either.
 | rule ([R] Fig. 6.3) | status |
 |---|---|
 | `a = Reduce(f, ⊕1, X); b = Reduce(g, ⊕2, X)` ⇒ `a, b = Reduce(f×g, ⊕1×⊕2, X)` | **yes**, as *sibling fusion* (`transforms/fusion.py`): two `IndexReduce` statements over the same index space, the second not using the first's result, become one statement with two folds. `x.min(), x.max()` reads `x` once |
-| the same for two `Map`s over one array | no (each is its own loop unless they fuse vertically) |
+| `a = Map(f, X); b = Map(g, X)` ⇒ `a, b = Map(f×g, X)` | **yes** (`transforms/fusion.py`): two pure `IndexMap` statements over the same index space where the second does not read what the first writes share one loop (`np.sin(x), np.cos(x)` reads `x` once) |
 
 Conditions the thesis leaves out: the index spaces must be provably equal
 (the same expression once shape variables are resolved), both seeded or both
@@ -113,13 +115,13 @@ two statements are stepped over when they do not use the first result.
 
 Tiling (below) uses the same rule on copies of one reduction.
 
-### A filter into a reduction
+### Filter fusion
 
 | rule ([R] Fig. 6.1) | status |
 |---|---|
 | `Reduce(g, ⊕, Filter(f, p, X))` ⇒ `FilterReduce(g ∘ f, ⊕, p, X)` | **yes** (`transforms/fusion.py`): an `IndexFilter` followed by an `IndexReduce` over what it kept becomes one guarded `IndexReduce` over the filter's own index space. `np.sum(x[x > 0])` is one parallel loop and allocates nothing (about 3× faster on 5M elements) |
-| `Filter(q, Filter(p, X))` ⇒ `Filter(p ∧ q, X)` | no: two compactions |
-| `Map(f, Filter(p, X))` ⇒ one loop | half: the map is a delayed array over the kept indices, so it fuses with its consumer but the compaction still runs first |
+| `Filter(q, Filter(p, X))` ⇒ `Filter(p ∧ q, X)` | **yes** (`transforms/fusion.py`): adjacent `IndexFilter` statements where the second filters the first's survivors collapse into one short-circuiting `IndexFilter` (and if reduced afterwards, into one `FilterReduce`) |
+| `Map(f, Filter(p, X))` ⇒ one loop | half: the map is a delayed array over the kept indices, so it fuses with its consumer (or directly into `FilterReduce`) but a returned filter still compacts first |
 
 Conditions: nothing else reads the kept indices (returning `x[mask]` keeps
 the filter); the reduction has an `init`, because the first element may not
@@ -167,7 +169,8 @@ is dropped: the index is the loop's own.
 
 | [H] | here |
 |---|---|
-| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | one level, as a pattern on the operator statements: an `IndexMap` of rank ≥ 2 whose body is one `IndexReduce` (any rank, any number of folds) plus straight-line code, over an index space that does not depend on the element, has its last dimension cut into tiles, hoisted outside the others |
+| `PermuteReductions`: interchange a strided inner reduction with a stride-1 outer map | **yes** (`transforms/tiling.py`, *reduction interchange*): when an `IndexMap` of any rank wraps a commutative+associative `IndexReduce` whose inner axis is strided while the map's last index has unit stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized strip of contiguous output columns |
+| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | one level, as a pattern on the operator statements: an `IndexMap` of rank ≥ 2 whose body is one `IndexReduce` (any rank, any number of folds) plus straight-line code (including vertically fused epilogues such as `np.tanh(a @ b + c)`), over an index space that does not depend on the element, has its last dimension cut into tiles, hoisted outside the others |
 | register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **jamming**: the body is copied for a 2×4 block of elements and the eight copies of its reduction are sibling-fused into one `IndexReduce` with eight folds |
 | `TiledReduce`, `TiledScan` | no |
 | cache tile sizes found by an online search between a pessimistic and an optimistic estimate | a fixed estimate: as many rows as fit in half of L2 (`config.tile_bytes`) |
@@ -222,7 +225,7 @@ operators `f` applied ([details](autodiff.md)):
 | `Map(f, X)` element-wise | `Map(∂f/∂x · ȳ, X)`, summed over broadcast dimensions |
 | `Reduce(+, X)` | `ȳ` broadcast to `X` |
 | `Reduce(max, X)` | `ȳ` where `X` equals the result, shared between ties |
-| `Reduce(*, X)` | `ȳ · result / X` |
+| `Reduce(*, X)` | `ȳ · result / X`, with a zero-safe branch (exact when one or more elements are zero) |
 | `Reduce(f, X)`, any `f` | the fold replayed backwards over its stored running values |
 | `Scan(+, X)` | `Scan(+)` of `ȳ` from the other end |
 | `A @ B` | `ȳ @ Bᵀ` and `Aᵀ @ ȳ` |
@@ -234,10 +237,10 @@ operators `f` applied ([details](autodiff.md)):
 
 ## What the theses have that this does not
 
-* Horizontal fusion of maps (of reductions: yes).
-* A middle end that does *everything*: vertical fusion and differentiation
-  still happen while elaborating, not as passes over the operator statements.
-* Filter-filter fusion; a consumer fused into a scan's `emit`.
+* Differentiation as an IR-to-IR pass over the operator statements (here `grad`
+  still records operators on a tape during elaboration, while element-wise
+  expressions fuse both by construction during elaboration and in the
+  middle-end vertical fusion pass).
 * Recursive tiling of deeper adverb nests, `TiledReduce`/`TiledScan`, and the
   online search for tile sizes.
 * Its own low-level optimizer (it relies on the C compiler instead).
