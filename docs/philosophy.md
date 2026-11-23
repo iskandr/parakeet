@@ -70,19 +70,33 @@ alias tracking, explicit associativity checks (non-associative folds stay
 sequential), and keeping SIMD-vectorizable float sums separate from non-SIMD
 folds.
 
-### 4. Locality from the same algebra ([H] 2013)
+### 4. Generalized tiling & locality from the same algebra ([H] 2013)
 
-Cache locality optimizations match directly on the operator IR rather than
-recovering structure from raw `for` loops:
+Cache, register, and GPU SRAM locality optimizations all operate on the same
+operator IR via two composable operators—`IndexTile` and `TileStage`—rather
+than recovering structure from raw `for` loops:
 
 * **Reduction interchange (`PermuteReductions`)**: when an `IndexMap` wraps a
   strided commutative+associative `IndexReduce` whose outer map index has unit
   stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized
   strip of contiguous output columns.
-* **Tiling and jamming (`TiledMap`)**: any `IndexMap` of rank ≥ 2 wrapping a
-  single `IndexReduce` plus straight-line code (`a @ b`, `allpairs` distances,
-  `einsum`, fused epilogues) is tiled over its last dimension and jammed 2×4 by
-  applying sibling fusion to copies of the reduction body.
+* **Invariant map splitting & unit-axis squeezing**: `keepdims=True` unit axes
+  are squeezed and inner reductions independent of trailing map axes are
+  hoisted (`softmax`, `layer_norm`), eliminating redundant $O(M \cdot N^2)$
+  recomputation and collapsing multi-pass row normalizations into single
+  L1-resident loops.
+* **Nested `IndexTile` + `TileStage` (CPU cache/register & GPU SRAM)**: any
+  N-D `IndexMap` wrapping an `IndexReduce` plus straight-line code (`a @ b`,
+  batched 3D+ matmul, `allpairs`, `einsum`, fused prologues & epilogues) is
+  rewritten into nested `IndexTile(level="cache")` → `IndexTile(level="register")`
+  operators on CPU (arbitrary N-D register jamming with exact remainder-face
+  partitioning) and automatically extracts maximal row/col/k prologue
+  `TileStage`s into a `SharedTilePlan` for GPU backends.
+* **GPU `__shared__` (CUDA) & `threadgroup` (Metal) block tiling**: analytically
+  sized `(BM, BN, BK, TM, TN)` tiles (up to `64×64×16` with `4×4` per-thread
+  register micro-tiles and bank-conflict-free `+1` padding) stage arbitrary
+  fused prologues into SRAM once per tile and keep fused epilogues
+  (`np.tanh(a @ b + c)`) in registers with zero extra HBM round-trips.
 
 ### 5. Verifiable, inspectable, fail-loud compilation
 
@@ -159,12 +173,15 @@ Boundaries:
 * **No per-thread heap allocation on GPU:** a `ParLoop` that allocates
   temporary arrays or selects between buffer aliases inside the loop body runs
   on the CPU instead of CUDA/Metal.
-* **GPU matrix multiplication:** CPU backends call BLAS for standalone float
-  `A @ B`; GPU backends currently run Parakeet's generated CUDA/Metal loops
-  without cuBLAS or block-level `__shared__` memory tiling. Large standalone
-  dense GEMMs are therefore slower than cuBLAS today—though extending the
-  existing `tiling.match` pattern with shared-memory GPU tiling is the natural
-  next step, enabling fused prologue + contraction + epilogue kernels with no
-  extra HBM round-trips.
-* **Single-level tiling:** deeper recursive adverb tiling, `TiledReduce`,
-  `TiledScan`, and online tile-size search from [H] are not implemented.
+* **GPU matrix multiplication & cuBLAS:** CPU backends call BLAS for standalone
+  float `A @ B`; GPU backends run Parakeet's cooperative `__shared__` (CUDA) /
+  `threadgroup` (Metal) block-tiled + register-micro-tiled kernels (handling
+  arbitrary contractions, fused prologues like `sin(a) @ cos(b)`, `allpairs`,
+  and fused epilogues like `np.tanh(a @ b + c)` in a single kernel), rather
+  than calling cuBLAS or Tensor Cores (`mma`). Very large standalone GEMMs are
+  therefore still faster in Tensor-Core cuBLAS, while fused contractions and
+  custom `allpairs` workloads benefit directly from single-kernel SRAM reuse.
+* **Online autotuning & tiled scans:** tile sizes are chosen analytically from
+  cache/SRAM/register budgets (`config.tile_bytes`, GPU shared-memory budget)
+  rather than Hielscher's runtime online search, and chunked GPU `TiledScan`
+  is not yet implemented.

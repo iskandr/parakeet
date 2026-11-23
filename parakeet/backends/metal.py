@@ -20,11 +20,12 @@ from ..syntax import ir
 from . import runtime_c
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars, expr_types, used_vars
 from .device import DeviceBase, DevicePlanner, KernelPlan, ctype_of, make_runtime_error, merge_regions
+from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel, tiled_num_blocks
 
 _MATH = {
     "sqrt": "sqrt", "exp": "exp", "exp2": "exp2", "log": "log", "log10": "log10", "log2": "log2",
     "sin": "sin", "cos": "cos", "tan": "tan", "arcsin": "asin", "arccos": "acos", "arctan": "atan",
-    "sinh": "sinh", "cosh": "cosh", "tanh": "tanh", "arcsinh": "asinh", "arccosh": "acosh",
+    "sinh": "sinh", "cosh": "cosh", "tanh": "pk_tanh", "arcsinh": "asinh", "arccosh": "acosh",
     "arctanh": "atanh", "floor": "floor", "ceil": "ceil", "trunc": "trunc", "rint": "rint",
     "arctan2": "atan2", "copysign": "copysign",
     # not in the Metal standard library: implemented in the prelude below
@@ -51,6 +52,12 @@ using namespace metal;
   + runtime_c.HELPERS_F32
   + runtime_c.HELPERS_RNG
   + r"""
+PK_INLINE float pk_tanh(float x) {
+  /* Apple Metal's built-in tanh(x) overflows to NaN for x > ~44 in float32. */
+  if (x > 20.0f) return 1.0f;
+  if (x < -20.0f) return -1.0f;
+  return tanh(x);
+}
 PK_INLINE float pk_log1p(float x) {
   float u = 1.0f + x;
   return (u == 1.0f) ? x : (log(u) * (x / (u - 1.0f)));
@@ -162,6 +169,10 @@ class MetalPlanner(DevicePlanner):
 
   def generate(self, loop: ir.ParLoop, free: list[ir.Var]) -> KernelPlan:
     em = MetalEmitter()
+    if loop.shared_tile is not None:
+      tiled_plan = generate_tiled_gpu_kernel(loop, free, "metal", em, PRELUDE, max_buffers=self.max_buffers)
+      if tiled_plan is not None:
+        return tiled_plan
     defined = defined_vars(loop.body, into_parloops=True)
     scalars = [v for v in free if not isinstance(v.type, BufType)]
     bufs = [v for v in free if isinstance(v.type, BufType)]
@@ -310,12 +321,19 @@ class MetalDevice(DeviceBase):
     pso = plan.compiled
     Metal = self.Metal
     ctx = plan.host_struct.from_address(ctx_addr)
-    if plan.loop.kind == "map":
-      n = min(total, 1 << 22)  # one GPU thread per element when possible
+    tiled_meta = plan.extra.get("tiled")
+    if tiled_meta is not None:
+      num_blocks = tiled_num_blocks(tiled_meta, ctx)
+      if num_blocks <= 0:
+        return
+      n, csize = num_blocks, 1
     else:
-      n = nchunks
-    csize = -(-total // n)
-    n = -(-total // csize)
+      if plan.loop.kind == "map":
+        n = min(total, 1 << 22)  # one GPU thread per element when possible
+      else:
+        n = nchunks
+      csize = -(-total // n)
+      n = -(-total // csize)
     args = plan.arg_struct()
     args.total, args.csize = total, csize
     for v in plan.scalars:
@@ -344,8 +362,13 @@ class MetalDevice(DeviceBase):
     enc.setComputePipelineState_(pso)
     for k, (b, off) in enumerate([(arg_buf, 0), (flag_buf, 0), (info_buf, 0), *bound]):
       enc.setBuffer_offset_atIndex_(b, off, k)
-    width = min(int(pso.maxTotalThreadsPerThreadgroup()), n)
-    enc.dispatchThreads_threadsPerThreadgroup_(Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(max(width, 1), 1, 1))
+    if tiled_meta is not None:
+      enc.dispatchThreadgroups_threadsPerThreadgroup_(
+        Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(BLOCK_THREADS, 1, 1)
+      )
+    else:
+      width = min(int(pso.maxTotalThreadsPerThreadgroup()), n)
+      enc.dispatchThreads_threadsPerThreadgroup_(Metal.MTLSizeMake(n, 1, 1), Metal.MTLSizeMake(max(width, 1), 1, 1))
     enc.endEncoding()
     cb.commit()
     cb.waitUntilCompleted()

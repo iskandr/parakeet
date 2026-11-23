@@ -33,6 +33,7 @@ from .device import (
   merge_regions,
   untouched_regions,
 )
+from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel, tiled_num_blocks
 
 BLOCK = 256
 
@@ -101,6 +102,50 @@ static inline int atomicCAS(int* p, int compare, int value) {
 static inline long long min(long long a, long long b) { return a < b ? a : b; }
 """
 
+SIM_SHIM_TILED = r"""
+#include <cmath>
+#include <condition_variable>
+#include <cstring>
+#include <mutex>
+#include <thread>
+#include <vector>
+using std::isnan; using std::isinf; using std::isfinite; using std::signbit;
+#define __device__ static
+#define __global__
+#define __forceinline__ inline
+#define __shared__ static
+struct pk_dim3 { unsigned int x, y, z; };
+static pk_dim3 blockIdx, blockDim;
+static thread_local pk_dim3 threadIdx;
+static std::mutex pk_atomic_mtx;
+static inline int atomicCAS(int* p, int compare, int value) {
+  std::lock_guard<std::mutex> lk(pk_atomic_mtx);
+  int old = *p;
+  if (old == compare) *p = value;
+  return old;
+}
+struct pk_sim_barrier_t {
+  std::mutex m;
+  std::condition_variable cv;
+  long long total = 0, count = 0, gen = 0;
+  void init(long long n) { total = n; count = 0; gen = 0; }
+  void wait() {
+    std::unique_lock<std::mutex> lk(m);
+    long long g = gen;
+    if (++count == total) {
+      count = 0;
+      ++gen;
+      cv.notify_all();
+    } else {
+      cv.wait(lk, [&] { return gen != g; });
+    }
+  }
+};
+static pk_sim_barrier_t pk_sim_barrier;
+static inline void __syncthreads() { pk_sim_barrier.wait(); }
+static inline long long min(long long a, long long b) { return a < b ? a : b; }
+"""
+
 
 class CudaEmitter(CFamilyEmitter):
   def ctype(self, t: ScalarType) -> str:
@@ -144,6 +189,10 @@ class CudaPlanner(DevicePlanner):
 
   def generate(self, loop: ir.ParLoop, free: list[ir.Var]) -> KernelPlan:
     em = CudaEmitter()
+    if loop.shared_tile is not None:
+      tiled_plan = generate_tiled_gpu_kernel(loop, free, "cuda", em, PRELUDE)
+      if tiled_plan is not None:
+        return tiled_plan
     defined = defined_vars(loop.body, into_parloops=True)
     scalars = [v for v in free if not isinstance(v.type, BufType)]
     bufs = [v for v in free if isinstance(v.type, BufType)]
@@ -219,6 +268,9 @@ class CuPyDriver:
     return self.cp.empty(nbytes, dtype=np.uint8)
 
   def launch(self, kernel, plan: KernelPlan, n: int, args: list) -> None:
+    if plan.extra.get("tiled") is not None:
+      kernel((n,), (BLOCK_THREADS,), tuple(args))
+      return
     grid = (n + BLOCK - 1) // BLOCK
     kernel((grid,), (BLOCK,), tuple(args))
 
@@ -269,23 +321,49 @@ class SimulatorDriver:
     for v in plan.bufs:
       casts.append(f"({em.ctype(v.type.elt)}*)a[{k}]")
       k += 1
-    trampoline = (
-      '\nextern "C" __attribute__((visibility("default"))) '
-      "void pk_sim_launch(long long grid, long long block, void** a) {\n"
-      "  for (long long b = 0; b < grid; b++) {\n"
-      "    for (long long t = 0; t < block; t++) {\n"
-      "      blockIdx.x = (unsigned int)b; blockDim.x = (unsigned int)block; threadIdx.x = (unsigned int)t;\n"
-      f"      pk_kernel({', '.join(casts)});\n"
-      "    }\n  }\n}\n"
-    )
-    source = SIM_SHIM + plan.source + trampoline
-    path = self._build(source)
+    if plan.extra.get("tiled") is not None:
+      trampoline = (
+        '\nextern "C" __attribute__((visibility("default"))) '
+        "void pk_sim_launch(long long grid, long long block, void** a) {\n"
+        "  if (grid <= 0 || block <= 0) return;\n"
+        "  blockDim.x = (unsigned int)block;\n"
+        "  pk_sim_barrier.init(block);\n"
+        "  std::vector<std::thread> threads;\n"
+        "  threads.reserve((size_t)block);\n"
+        "  for (long long t = 0; t < block; t++) {\n"
+        "    threads.emplace_back([&, t]() {\n"
+        "      threadIdx.x = (unsigned int)t;\n"
+        "      for (long long b = 0; b < grid; b++) {\n"
+        "        pk_sim_barrier.wait();\n"
+        "        if (t == 0) blockIdx.x = (unsigned int)b;\n"
+        "        pk_sim_barrier.wait();\n"
+        f"        pk_kernel({', '.join(casts)});\n"
+        "        pk_sim_barrier.wait();\n"
+        "      }\n"
+        "    });\n"
+        "  }\n"
+        "  for (auto& th : threads) th.join();\n"
+        "}\n"
+      )
+      source = SIM_SHIM_TILED + plan.source + trampoline
+    else:
+      trampoline = (
+        '\nextern "C" __attribute__((visibility("default"))) '
+        "void pk_sim_launch(long long grid, long long block, void** a) {\n"
+        "  for (long long b = 0; b < grid; b++) {\n"
+        "    for (long long t = 0; t < block; t++) {\n"
+        "      blockIdx.x = (unsigned int)b; blockDim.x = (unsigned int)block; threadIdx.x = (unsigned int)t;\n"
+        f"      pk_kernel({', '.join(casts)});\n"
+        "    }\n  }\n}\n"
+      )
+      source = SIM_SHIM + plan.source + trampoline
+    path = self._build(source, threaded=plan.extra.get("tiled") is not None)
     lib = toolchain.load(path)
     lib.pk_sim_launch.restype = None
     lib.pk_sim_launch.argtypes = [ctypes.c_int64, ctypes.c_int64, ctypes.c_void_p]
     return lib
 
-  def _build(self, source: str):
+  def _build(self, source: str, threaded: bool = False):
     import hashlib
     import subprocess
     import tempfile
@@ -301,7 +379,10 @@ class SimulatorDriver:
       src = Path(d) / "kernel.cpp"
       src.write_text(source)
       tmp = Path(d) / out.name
-      cmd = [self.cxx, "-O1", "-std=c++14", "-fwrapv", "-w", "-shared", "-fPIC", str(src), "-o", str(tmp)]
+      cmd = [self.cxx, "-O1", "-std=c++14", "-fwrapv", "-w", "-shared", "-fPIC"]
+      if threaded:
+        cmd.append("-pthread")
+      cmd += [str(src), "-o", str(tmp)]
       proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
       if proc.returncode != 0:
         kept = cdir / f"failed_{digest}.cpp"
@@ -323,7 +404,10 @@ class SimulatorDriver:
     return np.full(nbytes, 0xA5, dtype=np.uint8)  # recognisable garbage: nothing may rely on it
 
   def launch(self, kernel, plan: KernelPlan, n: int, args: list) -> None:
-    grid = (n + BLOCK - 1) // BLOCK
+    if plan.extra.get("tiled") is not None:
+      grid, block = n, BLOCK_THREADS
+    else:
+      grid, block = (n + BLOCK - 1) // BLOCK, BLOCK
     keep = []
     ptrs = (ctypes.c_void_p * len(args))()
     for i, a in enumerate(args):
@@ -334,7 +418,7 @@ class SimulatorDriver:
         keep.append(box)
         ptrs[i] = box.ctypes.data
     with _SIM_LOCK:
-      kernel.pk_sim_launch(grid, BLOCK, ptrs)
+      kernel.pk_sim_launch(grid, block, ptrs)
 
   def to_host(self, dev, host: np.ndarray) -> None:
     host[...] = dev
@@ -395,12 +479,19 @@ class CudaDevice(DeviceBase):
     if plan.compiled is None:
       plan.compiled = drv.compile(plan)
     ctx = plan.host_struct.from_address(ctx_addr)
-    if plan.loop.kind == "map":
-      n = min(total, 1 << 24)  # one GPU thread per element when possible
+    tiled_meta = plan.extra.get("tiled")
+    if tiled_meta is not None:
+      n = tiled_num_blocks(tiled_meta, ctx)
+      if n <= 0:
+        return
+      csize = 1
     else:
-      n = nchunks
-    csize = -(-total // n)
-    n = -(-total // csize)
+      if plan.loop.kind == "map":
+        n = min(total, 1 << 24)  # one GPU thread per element when possible
+      else:
+        n = nchunks
+      csize = -(-total // n)
+      n = -(-total // csize)
     args: list = [np.int64(total), np.int64(csize)]
     for v in plan.scalars:
       args.append(v.type.dtype.type(getattr(ctx, v.name)))

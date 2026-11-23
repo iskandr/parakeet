@@ -303,6 +303,7 @@ class ParLoop(Stmt):
   loc: SourceLocation | None = None
   heavy: bool = False  # each iteration contains loops of its own
   work: Expr | None = None  # estimated inner iterations per element (None: one), valid just before the loop
+  shared_tile: SharedTilePlan | None = None  # optional GPU __shared__/threadgroup block-tiling plan
 
 
 # ---- operators -------------------------------------------------------------
@@ -437,6 +438,31 @@ class TileStage:
   scope: Scope
 
 
+@dataclass(eq=False)
+class SharedTilePlan:
+  """GPU ``__shared__`` / ``threadgroup`` block-tiling plan for an N-D
+  map-of-reduction (any batch rank, any number of staged prologue inputs,
+  arbitrary folds/payloads, and arbitrary epilogue).
+
+  Attached to an outer :class:`IndexTile` by :mod:`parakeet.transforms.tiling`
+  and preserved onto its lowered :class:`ParLoop` so CUDA and Metal backends
+  emit cooperative shared-memory + register-blocked kernels while the CPU
+  runs ``ParLoop.body``."""
+
+  shape: tuple[Expr, ...]  # (batch..., M, N)
+  index: tuple[Var, ...]  # (b..., i, j)
+  before: list[Stmt]  # original map setup statements (for epilogue / mixed deps)
+  reduce: IndexReduce  # original inner reduction (1D extent K)
+  after: list[Stmt]  # epilogue statements (activation, bias, output stores)
+  stages: list[TileStage]  # staged operands/prologues
+  stage_sides: tuple[str, ...]  # parallel to stages: "row" | "col" | "k"
+  stage_vars: tuple[Var, ...]  # scalar placeholder Vars in mixed_body/mixed_folds
+  mixed_body: list[Stmt]  # reduction body with staged expressions replaced by stage_vars
+  mixed_folds: list[Fold]  # reduction folds with staged expressions replaced by stage_vars
+  has_mixed_loads: bool = False  # True if mixed_body/mixed_folds still contain global Loads
+  pre_checks: list[Check] = field(default_factory=list)  # uniform (i,j-invariant) checks from before
+
+
 @dataclass(eq=False, slots=True)
 class IndexTile(Stmt):
   """Split an N-dimensional index space ``shape`` into tiles of ``tile_shape``.
@@ -463,6 +489,7 @@ class IndexTile(Stmt):
   level: str = "cache"  # "cache" | "shared" | "register"
   parallel: bool = True
   loc: SourceLocation | None = None
+  shared_tile: SharedTilePlan | None = None
 
 
 OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan, IndexTile)

@@ -258,8 +258,14 @@ class HostEmitter(CFamilyEmitter):
 
     body_key = block_key(s.body)
     owned_key = tuple(var_key(v) for v in owned_vars(s.body, s.scope))
+    shared_key = None
+    if s.shared_tile is not None:
+      shared_key = (
+        tuple(expr_key(d) for d in s.shared_tile.shape),
+        tuple(expr_key(d) for d in s.shared_tile.reduce.shape),
+      )
     free_types = tuple(v.type for v in free)
-    return (free_types, body_key, owned_key), free
+    return (free_types, body_key, owned_key, shared_key), free
 
   def par_loop(self, s: ir.ParLoop, out: list[str], indent: int) -> None:
     pad = "  " * indent

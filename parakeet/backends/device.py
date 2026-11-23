@@ -132,6 +132,11 @@ class DevicePlanner:
     for v in (loop.chunk, loop.start, loop.stop):
       defined[v.uid] = v
     used = used_vars(loop.body)
+    if loop.shared_tile is not None:
+      for e in (*loop.shared_tile.shape, *loop.shared_tile.reduce.shape):
+        for x in ir.walk_expr(e):
+          if isinstance(x, ir.Var):
+            used[x.uid] = x
     return [v for uid, v in sorted(used.items()) if uid not in defined]
 
   def plan(self, loop: ir.ParLoop) -> KernelPlan | None:

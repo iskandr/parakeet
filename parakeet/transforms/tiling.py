@@ -383,17 +383,261 @@ def tile_size(lp: Loops, length: Expr, itemsize: int, tile_bytes: int) -> Expr:
   return size
 
 
+def extract_shared_tile_plan(
+  s: IndexMap, m: Shape, shape: tuple[Expr, ...], extent: tuple[Expr, ...]
+) -> ir.SharedTilePlan | None:
+  """Analyze a map-of-reduction ``(s, m)`` and extract a general
+  :class:`~parakeet.syntax.ir.SharedTilePlan` for GPU ``__shared__`` /
+  ``threadgroup`` block tiling.
+
+  Automatically discovers every maximal pure sub-expression in the inner
+  reduction that loads from memory along ``(batch..., row, k)``,
+  ``(batch..., col, k)``, or ``(k,)`` — including fused prologues like
+  ``sin(a) @ cos(b)``, ``allpairs``, multi-input contractions, and batched 3D+
+  matmul — and lifts each into a :class:`~parakeet.syntax.ir.TileStage`.
+  """
+  red = m.reduce
+  if not s.parallel or len(shape) < 2 or len(extent) != 1:
+    return None
+  if red.scope.owned or red.where is not None:
+    return None
+  if any(isinstance(t, ir.Check) for t in red.body):
+    return None
+
+  i_var, j_var = s.index[-2], s.index[-1]
+  k_var = red.index[0]
+  i_uid, j_uid, k_uid = i_var.uid, j_var.uid, k_var.uid
+  k_dim = extent[0]
+
+  all_assigns = [t for t in m.before + red.body if isinstance(t, Assign)]
+  def_map: dict[int, Assign] = {t.var.uid: t for t in all_assigns}
+  order_map: dict[int, int] = {t.var.uid: idx for idx, t in enumerate(all_assigns)}
+  mask_cache: dict[int, tuple[bool, bool, bool, bool, bool]] = {}
+
+  def expr_mask(e: Expr) -> tuple[bool, bool, bool, bool, bool]:
+    """Return ``(uses_i, uses_j, uses_k, has_load, is_pure)``."""
+    if isinstance(e, Var):
+      uid = e.uid
+      if uid == i_uid:
+        return (True, False, False, False, True)
+      if uid == j_uid:
+        return (False, True, False, False, True)
+      if uid == k_uid:
+        return (False, False, True, False, True)
+      if uid in mask_cache:
+        return mask_cache[uid]
+      d = def_map.get(uid)
+      if d is None:
+        return (False, False, False, False, True)
+      res = expr_mask(d.value)
+      mask_cache[uid] = res
+      return res
+    if isinstance(e, Const):
+      return (False, False, False, False, True)
+    if isinstance(e, Load):
+      ui, uj, uk, _, p = expr_mask(e.index)
+      return (ui, uj, uk, True, p)
+    if isinstance(e, ir.Prim):
+      ui = uj = uk = hl = False
+      p = True
+      for a in e.args:
+        ai, aj, ak, al, ap = expr_mask(a)
+        ui |= ai
+        uj |= aj
+        uk |= ak
+        hl |= al
+        p &= ap
+      return (ui, uj, uk, hl, p)
+    if isinstance(e, ir.Cast):
+      return expr_mask(e.arg)
+    if isinstance(e, ir.RtCall):
+      ui = uj = uk = hl = False
+      p = e.pure
+      for a in e.args:
+        ai, aj, ak, al, ap = expr_mask(a)
+        ui |= ai
+        uj |= aj
+        uk |= ak
+        hl |= al
+        p &= ap
+      return (ui, uj, uk, hl, p)
+    return (False, False, False, False, False)
+
+  def stage_side(e: Expr) -> str | None:
+    if isinstance(e.type, BufType):
+      return None
+    ui, uj, uk, hl, p = expr_mask(e)
+    if not (p and hl and uk):
+      return None
+    if ui and not uj:
+      return "row"
+    if uj and not ui:
+      return "col"
+    if not ui and not uj:
+      return "k"
+    return None
+
+  def expr_key(e: Expr):
+    if isinstance(e, Var):
+      return ("v", e.uid)
+    if isinstance(e, Const):
+      return ("c", e.value, e.type)
+    if isinstance(e, Load):
+      return ("l", e.buf.uid, expr_key(e.index))
+    if isinstance(e, ir.Prim):
+      return ("p", e.op, e.type, tuple(expr_key(a) for a in e.args))
+    if isinstance(e, ir.Cast):
+      return ("t", e.type, expr_key(e.arg))
+    if isinstance(e, ir.RtCall):
+      return ("r", e.name, e.type, tuple(expr_key(a) for a in e.args))
+    return ("?", id(e))
+
+  def collect_deps(e: Expr, seen: set[int]) -> None:
+    for x in ir.walk_expr(e):
+      if isinstance(x, Var) and x.uid in def_map and x.uid not in seen:
+        seen.add(x.uid)
+        collect_deps(def_map[x.uid].value, seen)
+
+  stages: list[ir.TileStage] = []
+  stage_sides: list[str] = []
+  stage_vars: list[Var] = []
+  staged_by_key: dict[object, Var] = {}
+
+  def make_stage(e: Expr, side: str) -> Var:
+    ek = (side, expr_key(e))
+    existing = staged_by_key.get(ek)
+    if existing is not None:
+      return existing
+    dep_uids: set[int] = set()
+    collect_deps(e, dep_uids)
+    dep_stmts = [def_map[u] for u in sorted(dep_uids, key=lambda u: order_map[u])]
+    st_k = Var("sk", I)
+    if side == "row":
+      st_i = Var("si", I)
+      st_index: tuple[Var, ...] = (st_i, st_k)
+      st_shape: tuple[Expr, ...] = (shape[-2], k_dim)
+      subst: dict[int, Expr] = {i_uid: st_i, k_uid: st_k}
+    elif side == "col":
+      st_j = Var("sj", I)
+      st_index = (st_j, st_k)
+      st_shape = (shape[-1], k_dim)
+      subst = {j_uid: st_j, k_uid: st_k}
+    else:
+      st_index = (st_k,)
+      st_shape = (k_dim,)
+      subst = {k_uid: st_k}
+    cl = Cloner(subst)
+    for st in dep_stmts:
+      cl.var(st.var)
+    st_body = [cl.stmt(st) for st in dep_stmts]
+    st_val = cl.expr(e)
+    idx = len(stages)
+    sbuf = Var(f"sh_{idx}", BufType(e.type.strong))
+    svar = Var(f"sv_{idx}", e.type)
+    stages.append(ir.TileStage(sbuf, st_shape, st_index, st_body, st_val, Scope("stage")))
+    stage_sides.append(side)
+    stage_vars.append(svar)
+    staged_by_key[ek] = svar
+    return svar
+
+  def rewrite_expr(e: Expr) -> Expr:
+    side = stage_side(e)
+    if side is not None:
+      return make_stage(e, side)
+    if isinstance(e, ir.Prim):
+      return ir.Prim(e.op, tuple(rewrite_expr(a) for a in e.args), e.type)
+    if isinstance(e, ir.Cast):
+      return ir.Cast(rewrite_expr(e.arg), e.type)
+    if isinstance(e, Load):
+      return Load(e.buf, rewrite_expr(e.index))
+    if isinstance(e, ir.RtCall):
+      return ir.RtCall(e.name, tuple(rewrite_expr(a) for a in e.args), e.type, e.pure)
+    return e
+
+  # Rewrite only mixed statements in red.body and fold values; single-side assigns
+  # are subsumed by maximal staged expressions unless still referenced by mixed code.
+  mixed_body: list[ir.Stmt] = []
+  emitted_uids: set[int] = set()
+  for st in red.body:
+    if isinstance(st, ir.Comment):
+      continue
+    if isinstance(st, Assign) and stage_side(st.value) is not None:
+      continue
+    if isinstance(st, Assign):
+      mixed_body.append(Assign(st.var, rewrite_expr(st.value)))
+      emitted_uids.add(st.var.uid)
+    else:
+      return None
+
+  mixed_folds: list[ir.Fold] = []
+  for f in red.folds:
+    new_payloads = [ir.Payload(p.result, rewrite_expr(p.value), p.a, p.b, p.combined) for p in f.payloads]
+    mixed_folds.append(
+      ir.Fold(f.result, rewrite_expr(f.value), f.a, f.b, f.combine, f.combined, f.init, f.op, f.empty, new_payloads)
+    )
+
+  if not any(side in ("row", "col") for side in stage_sides):
+    return None
+
+  # Collect uniform (i,j,k-invariant, load-free) checks from m.before; reject any non-uniform ones
+  pre_checks: list[ir.Check] = []
+  local_uids = set(def_map) | {i_uid, j_uid, k_uid}
+  for t in m.before:
+    if isinstance(t, ir.Check):
+      for e in (t.cond, *t.args):
+        ui, uj, uk, hl, p = expr_mask(e)
+        if ui or uj or uk or hl or not p or any(isinstance(x, Var) and x.uid in local_uids for x in ir.walk_expr(e)):
+          return None
+      pre_checks.append(t)
+
+  # Pull in any remaining non-staged local Assigns from m.before + red.body still
+  # referenced by mixed_body / mixed_folds (e.g. a non-k invariant or 3D mixed load).
+  needed: set[int] = set()
+  for st in mixed_body:
+    for e in ir.stmt_exprs(st):
+      collect_deps(e, needed)
+  for f in mixed_folds:
+    collect_deps(f.value, needed)
+    for p in f.payloads:
+      collect_deps(p.value, needed)
+  prefix_deps = [def_map[u] for u in sorted(needed - emitted_uids, key=lambda u: order_map[u])]
+  full_mixed_body = prefix_deps + mixed_body
+  has_mixed_loads = any(
+    isinstance(x, Load) for st in full_mixed_body for e in ir.stmt_exprs(st) for x in ir.walk_expr(e)
+  ) or any(
+    isinstance(x, Load) for f in mixed_folds for e in (f.value, *(p.value for p in f.payloads)) for x in ir.walk_expr(e)
+  )
+  return ir.SharedTilePlan(
+    shape=shape,
+    index=s.index,
+    before=list(m.before),
+    reduce=ir.IndexReduce(extent, red.index, red.body, red.folds, red.scope, red.home, False, red.loc),
+    after=list(m.after),
+    stages=stages,
+    stage_sides=tuple(stage_sides),
+    stage_vars=tuple(stage_vars),
+    mixed_body=full_mixed_body,
+    mixed_folds=mixed_folds,
+    has_mixed_loads=has_mixed_loads,
+    pre_checks=pre_checks,
+  )
+
+
 def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int) -> list:
   """Rewrite a matmul-shaped ``IndexMap`` into nested :class:`IndexTile`
   operators: an outer L2 ``level="cache"`` tile over rows and columns wrapping
-  an inner ``level="register"`` micro-tile (``UNROLL_I x UNROLL_J``)."""
+  an inner ``level="register"`` micro-tile (``UNROLL_I x UNROLL_J``), with an
+  optional :class:`~parakeet.syntax.ir.SharedTilePlan` for GPU shared-memory
+  block tiling."""
   out: list = []
   lp = Loops(out, defs, owner)
   rank = len(s.shape)
   shape = tuple(lp.tmp(d, "n") for d in s.shape)
-  length = lp.tmp(iprod(m.extent), "len")
+  extent = tuple(lp.tmp(d, "k") for d in m.extent)
+  length = lp.tmp(iprod(extent), "len")
   itemsize = m.reduce.folds[0].a.type.bits // 8
   col_tile = tile_size(lp, length, itemsize, tile_bytes)
+  shared_plan = extract_shared_tile_plan(s, m, shape, extent)
 
   # Outer cache tile: step leading batch axes 1-by-1, tile rows by ROW_TILE and columns by col_tile
   cache_tile_shape: tuple[Expr | None, ...] = (
@@ -447,6 +691,7 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
     level="cache",
     parallel=s.parallel,
     loc=s.loc,
+    shared_tile=shared_plan,
   )
   out.append(cache_tile)
   return out
@@ -481,6 +726,7 @@ __all__ = [
   "ROW_TILE",
   "UNROLL_I",
   "UNROLL_J",
+  "extract_shared_tile_plan",
   "interchange",
   "interchange_block",
   "interchanged",

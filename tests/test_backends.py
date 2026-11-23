@@ -165,6 +165,63 @@ def test_metal_reports_runtime_errors():
     f(x, np.arange(50_000) * 2)
 
 
+@needs_metal
+def test_metal_shared_memory_tiled_kernels():
+  @jit(backend="metal")
+  def matmul(a, b):
+    return a @ b
+
+  @jit(backend="metal")
+  def fused_mlp(a, b, c):
+    return np.tanh(a @ b + c)
+
+  @jit(backend="metal")
+  def fused_prologue_epilogue(x, y, bias):
+    return np.tanh(parakeet.allpairs(lambda u, v: np.sum(np.sin(u) * np.cos(v)), x, y) + bias)
+
+  @jit(backend="metal")
+  def tropical(x, y):
+    return parakeet.allpairs(lambda u, v: np.min(u + v), x, y)
+
+  @jit(backend="metal")
+  def large_tanh(x):
+    return np.tanh(x)
+
+  rng = np.random.default_rng(101)
+  with parakeet.options(device_threshold=1, blas=False):
+    # Regression test: Apple Metal built-in tanh overflows to NaN for |x| > ~44
+    t_in = np.array([-100.0, -50.0, -1.0, 0.0, 1.0, 50.0, 100.0], dtype=np.float32)
+    np.testing.assert_allclose(large_tanh(t_in), np.tanh(t_in), rtol=1e-5, atol=1e-6)
+
+    for m, k, n in ((1, 1, 1), (17, 33, 19), (65, 35, 67)):
+      a = rng.standard_normal((m, k)).astype(np.float32)
+      b = rng.standard_normal((k, n)).astype(np.float32)
+      c = rng.standard_normal((m, n)).astype(np.float32)
+      np.testing.assert_allclose(matmul(a, b), a @ b, rtol=1e-3, atol=1e-3)
+      np.testing.assert_allclose(fused_mlp(a, b, c), np.tanh(a @ b + c), rtol=1e-3, atol=1e-3)
+
+    x = rng.standard_normal((65, 35)).astype(np.float32)
+    y = rng.standard_normal((67, 35)).astype(np.float32)
+    bias = rng.standard_normal((65, 67)).astype(np.float32)
+    np.testing.assert_allclose(
+      fused_prologue_epilogue(x, y, bias), np.tanh(np.sin(x) @ np.cos(y).T + bias), rtol=1e-3, atol=1e-3
+    )
+    spec_ap = fused_prologue_epilogue.specialize(x, y, bias)
+    assert len(spec_ap.kernels) == 1
+    assert "threadgroup " in spec_ap.kernels[0] and "threadgroup_barrier" in spec_ap.kernels[0]
+
+    np.testing.assert_allclose(tropical(x, y), (x[:, None, :] + y[None, :, :]).min(-1), rtol=1e-4)
+    with pytest.raises(ValueError, match="no identity"):
+      tropical(np.zeros((3, 0), dtype=np.float32), np.zeros((4, 0), dtype=np.float32))
+    with pytest.raises(ValueError, match="broadcast"):
+      tropical(np.zeros((3, 4), dtype=np.float32), np.zeros((4, 5), dtype=np.float32))
+
+    ba = rng.standard_normal((3, 33, 19)).astype(np.float32)
+    bb = rng.standard_normal((3, 19, 35)).astype(np.float32)
+    np.testing.assert_allclose(matmul(ba, bb), ba @ bb, rtol=1e-3, atol=1e-3)
+    assert any("threadgroup " in k for k in matmul.specialize(ba, bb).kernels)
+
+
 def run_script(tmp_path, code, **env_extra):
   """Run ``code`` as a script in a fresh interpreter (compiled functions need a source file)."""
   script = tmp_path / "script.py"
@@ -203,6 +260,65 @@ print('simulated-cuda-ok')
 """
   out = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
   assert "simulated-cuda-ok" in out.stdout, out.stdout + out.stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_cuda_shared_memory_tiled_kernels_in_simulator(tmp_path):
+  """Verify cooperative __shared__ + __syncthreads() block-tiled CUDA kernels
+  (matmul, fused prologue+contraction+epilogue, unseeded allpairs, 3D batched)."""
+  code = """
+import numpy as np, parakeet
+from parakeet import allpairs, jit
+
+@jit(backend='cuda')
+def matmul(a, b):
+    return a @ b
+
+@jit(backend='cuda')
+def fused_prologue_epilogue(x, y, bias):
+    return np.tanh(allpairs(lambda u, v: np.sum(np.sin(u) * np.cos(v)), x, y) + bias)
+
+@jit(backend='cuda')
+def tropical(x, y):
+    return allpairs(lambda u, v: np.min(u + v), x, y)
+
+rng = np.random.default_rng(102)
+with parakeet.options(device_threshold=1, blas=False):
+    for dtype, tol in ((np.float32, 1e-3), (np.float64, 1e-10)):
+        a = rng.standard_normal((19, 35)).astype(dtype)
+        b = rng.standard_normal((35, 21)).astype(dtype)
+        np.testing.assert_allclose(matmul(a, b), a @ b, rtol=tol, atol=tol)
+        assert any('__shared__' in k and '__syncthreads()' in k for k in matmul.specialize(a, b).kernels)
+
+    x = rng.standard_normal((19, 35)).astype(np.float32)
+    y = rng.standard_normal((23, 35)).astype(np.float32)
+    bias = rng.standard_normal((19, 23)).astype(np.float32)
+    np.testing.assert_allclose(
+        fused_prologue_epilogue(x, y, bias), np.tanh(np.sin(x) @ np.cos(y).T + bias), rtol=1e-3, atol=1e-3
+    )
+    spec_ap = fused_prologue_epilogue.specialize(x, y, bias)
+    assert len(spec_ap.kernels) == 1 and '__shared__' in spec_ap.kernels[0] and '__syncthreads()' in spec_ap.kernels[0]
+
+    np.testing.assert_allclose(tropical(x, y), (x[:, None, :] + y[None, :, :]).min(-1), rtol=1e-4)
+    for bad_x, bad_y, match in (
+        (np.zeros((3, 0), dtype=np.float32), np.zeros((4, 0), dtype=np.float32), 'no identity'),
+        (np.zeros((3, 4), dtype=np.float32), np.zeros((4, 5), dtype=np.float32), 'broadcast'),
+    ):
+        try:
+            tropical(bad_x, bad_y)
+        except ValueError as e:
+            assert match in str(e), str(e)
+        else:
+            raise SystemExit(f'expected ValueError ({match})')
+
+    ba = rng.standard_normal((3, 17, 19)).astype(np.float32)
+    bb = rng.standard_normal((3, 19, 21)).astype(np.float32)
+    np.testing.assert_allclose(matmul(ba, bb), ba @ bb, rtol=1e-3, atol=1e-3)
+    assert any('__shared__' in k for k in matmul.specialize(ba, bb).kernels)
+print('cuda-shared-tile-ok')
+"""
+  out = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
+  assert "cuda-shared-tile-ok" in out.stdout, out.stdout + out.stderr
 
 
 def test_cuda_without_cupy_explains_what_to_install():
