@@ -13,11 +13,12 @@ from __future__ import annotations
 
 from ..config import config
 from ..syntax import ir
-from . import fusion, lowering, simplify, tiling
+from . import fusion, lowering, normalize, simplify, tiling
 from .verify import verify
 
 PASSES: list[tuple[str, object]] = [
   ("dead code", simplify.dead_code),
+  ("normalize", normalize.normalize),
   ("vertical fusion", fusion.fuse_vertical),
   ("filter fusion", fusion.fuse_filters),
   ("sibling fusion", fusion.fuse_siblings),

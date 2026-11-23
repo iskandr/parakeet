@@ -83,6 +83,22 @@ MAX_INLINE_DEPTH = 100
 _MISSING = object()
 
 
+@dataclass(frozen=True)
+class TargetProfile:
+  """Target hardware locality profile passed to middle-end locality passes."""
+
+  kind: str = "cpu"  # "cpu" | "cuda" | "metal"
+  tile_bytes: int = 256 * 1024
+  shared_mem_bytes: int = 24 * 1024
+  prefer_interchange: bool = True  # CPU cores benefit from L1 column-strip interchange; GPUs coalesce across warps
+
+  @classmethod
+  def for_device(cls, device_kind: str | None, tile_bytes: int) -> TargetProfile:
+    if device_kind in ("cuda", "metal"):
+      return cls(kind=device_kind, tile_bytes=tile_bytes, shared_mem_bytes=24 * 1024, prefer_interchange=False)
+    return cls(kind="cpu", tile_bytes=tile_bytes, shared_mem_bytes=0, prefer_interchange=True)
+
+
 @dataclass
 class Options:
   """Frontend switches (part of every specialization key)."""
@@ -94,9 +110,19 @@ class Options:
   tile_bytes: int = 256 * 1024
   blas: bool = False  # hand float matrix products to the BLAS NumPy uses
   skip: tuple = ()  # middle-end passes not to run
+  target: TargetProfile = field(default_factory=TargetProfile)
 
   def key(self) -> tuple:
-    return (self.bounds_check, self.parallel, self.fusion, self.tiling, self.tile_bytes, self.blas, self.skip)
+    return (
+      self.bounds_check,
+      self.parallel,
+      self.fusion,
+      self.tiling,
+      self.tile_bytes,
+      self.blas,
+      self.skip,
+      self.target,
+    )
 
 
 @dataclass

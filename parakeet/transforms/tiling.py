@@ -50,6 +50,7 @@ from ..syntax.ir import (
   Var,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, iprod, isub
+from .analysis import IndexFacts
 from .lowering import Loops, outer_expr, pure_defs
 
 UNROLL_I = 2
@@ -106,38 +107,16 @@ def match(s: ir.Stmt, defs: dict[int, Expr], min_rank: int = 2) -> Shape | None:
 
 def linear_stride(e: Expr, v: Var, defs: dict[int, Expr], budget: int = 20) -> Expr | None:
   """Return the affine coefficient of ``v`` in integer expression ``e``, or ``None``."""
-  if budget <= 0:
-    return None
-  if isinstance(e, Const):
-    return ZERO
-  if isinstance(e, Var):
-    if e is v:
-      return ONE
-    d = defs.get(e.uid)
-    return ZERO if d is None else linear_stride(d, v, defs, budget - 1)
-  if isinstance(e, ir.Cast):
-    return linear_stride(e.arg, v, defs, budget - 1)
-  if isinstance(e, ir.Prim):
-    if e.op in ("add", "sub") and len(e.args) == 2:
-      a = linear_stride(e.args[0], v, defs, budget - 1)
-      b = linear_stride(e.args[1], v, defs, budget - 1)
-      if a is None or b is None:
-        return None
-      return iadd(a, b) if e.op == "add" else isub(a, b)
-    if e.op == "mul" and len(e.args) == 2:
-      a = linear_stride(e.args[0], v, defs, budget - 1)
-      b = linear_stride(e.args[1], v, defs, budget - 1)
-      if a is None or b is None:
-        return None
-      if isinstance(a, Const) and a.value == 0:
-        return imul(e.args[0], b)
-      if isinstance(b, Const) and b.value == 0:
-        return imul(a, e.args[1])
-      return None
-    if e.op == "neg" and len(e.args) == 1:
-      a = linear_stride(e.args[0], v, defs, budget - 1)
-      return None if a is None else isub(ZERO, a)
-  return None
+  facts = IndexFacts(defs)
+  for x in ir.walk_expr(e):
+    if isinstance(x, Var):
+      facts.note_var(x)
+  for d in defs.values():
+    for x in ir.walk_expr(d):
+      if isinstance(x, Var):
+        facts.note_var(x)
+  facts.note_var(v)
+  return facts.stride_of(e, v)
 
 
 def is_const(e: Expr | None, val: int) -> bool:
@@ -331,19 +310,23 @@ def interchanged(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope) -> 
   return out
 
 
-def interchange_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
+def interchange_block(block: list, defs: dict[int, Expr], owner: Scope, metal_f64_only: bool = False) -> list:
   """Rewrite eligible strided map-of-reduction statements throughout ``block``."""
   out: list = []
   for s in block:
     if isinstance(s, If):
-      s.then[:] = interchange_block(s.then, defs, owner)
-      s.orelse[:] = interchange_block(s.orelse, defs, owner)
+      s.then[:] = interchange_block(s.then, defs, owner, metal_f64_only)
+      s.orelse[:] = interchange_block(s.orelse, defs, owner, metal_f64_only)
     elif isinstance(s, IndexReduce):
-      s.body[:] = interchange_block(s.body, defs, s.scope)
+      s.body[:] = interchange_block(s.body, defs, s.scope, metal_f64_only)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = interchange_block(s.body, defs, s.scope)
+      s.body[:] = interchange_block(s.body, defs, s.scope, metal_f64_only)
     m = match(s, defs, min_rank=1)
-    if m is not None and should_interchange(s, m, defs):  # type: ignore[arg-type]
+    if (
+      m is not None
+      and (not metal_f64_only or any(f.a.type.name == "float64" for f in m.reduce.folds))
+      and should_interchange(s, m, defs)  # type: ignore[arg-type]
+    ):
       out.extend(interchanged(s, m, defs, owner))  # type: ignore[arg-type]
     else:
       out.append(s)
@@ -352,9 +335,18 @@ def interchange_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
 
 def interchange(fn: ir.Function, options) -> None:
   """PermuteReductions: interchange strided map-of-reduction loops into
-  L1-tiled contiguous SIMD loops."""
-  if options.tiling:
-    fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope)
+  L1-tiled contiguous SIMD loops on CPU targets.
+
+  Skipped on CUDA (and for float32 on Metal), where warp threads already walk
+  adjacent output columns in lockstep with coalesced memory reads."""
+  if not options.tiling:
+    return
+  target = getattr(options, "target", None)
+  if target is not None and not target.prefer_interchange:
+    if target.kind == "metal":
+      fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, metal_f64_only=True)
+    return
+  fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope)
 
 
 # ---------------------------------------------------------------------------

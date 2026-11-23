@@ -221,6 +221,15 @@ def test_metal_shared_memory_tiled_kernels():
     np.testing.assert_allclose(matmul(ba, bb), ba @ bb, rtol=1e-3, atol=1e-3)
     assert any("threadgroup " in k for k in matmul.specialize(ba, bb).kernels)
 
+    # TargetProfile skips CPU tile_acc interchange for float32 on Metal (warps coalesce X[k*N+j])
+    @jit(backend="metal")
+    def col_sum_gpu(m):
+      return np.sum(m, axis=0)
+
+    cm = rng.standard_normal((32, 300)).astype(np.float32)
+    np.testing.assert_allclose(col_sum_gpu(cm), cm.sum(axis=0), rtol=1e-4)
+    assert "tile_acc" not in col_sum_gpu.specialize(cm).ir
+
 
 def run_script(tmp_path, code, **env_extra):
   """Run ``code`` as a script in a fresh interpreter (compiled functions need a source file)."""
@@ -315,6 +324,15 @@ with parakeet.options(device_threshold=1, blas=False):
     bb = rng.standard_normal((3, 19, 21)).astype(np.float32)
     np.testing.assert_allclose(matmul(ba, bb), ba @ bb, rtol=1e-3, atol=1e-3)
     assert any('__shared__' in k for k in matmul.specialize(ba, bb).kernels)
+
+    # TargetProfile skips CPU tile_acc interchange on CUDA (warps coalesce X[k*N+j] directly)
+    @jit(backend='cuda')
+    def col_sum_cuda(m):
+        return np.sum(m, axis=0)
+
+    cm = rng.standard_normal((32, 300)).astype(np.float32)
+    np.testing.assert_allclose(col_sum_cuda(cm), cm.sum(axis=0), rtol=1e-4)
+    assert 'tile_acc' not in col_sum_cuda.specialize(cm).ir
 print('cuda-shared-tile-ok')
 """
   out = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")

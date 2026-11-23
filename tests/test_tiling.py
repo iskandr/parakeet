@@ -155,6 +155,7 @@ def test_passes_can_be_skipped_by_name():
 
   assert pipeline.names() == [
     "dead code",
+    "normalize",
     "vertical fusion",
     "filter fusion",
     "sibling fusion",
@@ -449,14 +450,17 @@ def test_reduction_interchange():
         col_min(x)
 
   x = rng.random((32, 300))
-  assert "tile_acc" in col_sum.specialize(x).ir
-  with parakeet.options(skip_transforms=("reduction interchange",)):
-    assert "tile_acc" not in col_sum.specialize(x).ir
-    np.testing.assert_allclose(col_sum(x), x.sum(axis=0))
+  # CPU targets use L1 column-strip interchange (tile_acc); CUDA skips it so warps coalesce X[k*N+j] directly
+  with parakeet.options(backend="multicore"):
+    assert "tile_acc" in col_sum.specialize(x).ir
+    with parakeet.options(skip_transforms=("reduction interchange",)):
+      assert "tile_acc" not in col_sum.specialize(x).ir
+      np.testing.assert_allclose(col_sum(x), x.sum(axis=0))
 
   x3 = rng.random((5, 7, 300))
   np.testing.assert_allclose(col_sum_3d(x3), x3.sum(axis=(0, 1)))
-  assert "tile_acc" in col_sum_3d.specialize(x3).ir
+  with parakeet.options(backend="multicore"):
+    assert "tile_acc" in col_sum_3d.specialize(x3).ir
 
 
 def test_dead_maps_filters_and_scans_are_removed():
@@ -750,3 +754,79 @@ def test_audit_fixes_cosine_allpairs_col_var_filter_dedup_and_sunk_sibling_reduc
     np.testing.assert_allclose(m_got, a.mean(), rtol=1e-6)
     np.testing.assert_allclose(s2_got, (a * a).sum(), rtol=1e-6)
     assert n_loops(mean_and_sumsq.specialize(a)) == 1
+
+
+def test_index_facts_affine_fusion_and_target_aware_interchange():
+  from parakeet.ndtypes import Int64
+  from parakeet.syntax import ir, ops
+  from parakeet.transforms.analysis import IndexFacts
+
+  # 1. IndexFacts canonical polynomial equality, transitive checked equalities, stride_of, decompose_row_major
+  i, j, n, m, k = (ir.Var(name, Int64) for name in ("i", "j", "n", "m", "k"))
+  facts = IndexFacts()
+  for v in (i, j, n, m, k):
+    facts.note_var(v)
+  facts.bind_index(i, n)
+  facts.bind_index(j, m)
+  assert facts.same_expr(ops.iadd(ops.imul(i, m), j), ops.iadd(j, ops.imul(m, i)))
+  assert facts.same_expr(ops.isub(ops.iadd(i, 1), 1), i)
+  facts.record_equality(n, k)
+  assert facts.same_expr(n, k)
+  assert facts.same_expr(facts.stride_of(ops.iadd(ops.imul(i, m), j), i), m)
+  assert facts.same_expr(facts.stride_of(ops.iadd(ops.imul(i, m), j), j), ops.ONE)
+  coords = facts.decompose_row_major(ops.iadd(ops.imul(i, m), j), (n, m))
+  assert coords is not None and facts.same_expr(coords[0], i) and facts.same_expr(coords[1], j)
+  # Flat reshape index (bound n * m, NOT < m) must be safely rejected
+  flat = ir.Var("flat", Int64)
+  facts.bind_index(flat, ops.imul(n, m))
+  assert facts.decompose_row_major(flat, (n, m)) is None
+
+  # 2. Affine transpose fusion: cos(a).copy().T.copy() collapses into 1 map & 1 alloc!
+  @jit
+  def fused_transpose(a):
+    y = np.cos(a).copy()
+    return y.T.copy()
+
+  # 3. Cheap stencil fusion vs expensive non-duplication
+  @jit
+  def cheap_stencil(x):
+    y = (x * 2.0 + 1.0).copy()
+    return y[1:] - y[:-1]
+
+  @jit
+  def expensive_stencil(x):
+    y = np.exp(x).copy()
+    return y[1:] - y[:-1]
+
+  # 4. Cheap multi-consumer fusion: y = (x * 2 + 1).copy(); return sin(y), cos(y) -> 2 allocs, 1 map!
+  @jit
+  def multi_consumer_cheap(x):
+    y = (x * 2.0 + 1.0).copy()
+    return np.sin(y), np.cos(y)
+
+  rng = np.random.default_rng(32)
+  a = rng.standard_normal((16, 24))
+  x = rng.standard_normal(500)
+  with parakeet.options(verify=True):
+    np.testing.assert_allclose(fused_transpose(a), np.cos(a).T, rtol=1e-6)
+    tspec = fused_transpose.specialize(a)
+    assert tspec.ir.count("alloc(") == 1 and tspec.ir.count("parallel[map]") == 1
+
+    np.testing.assert_allclose(cheap_stencil(x), (x * 2.0 + 1.0)[1:] - (x * 2.0 + 1.0)[:-1], rtol=1e-6)
+    cspec = cheap_stencil.specialize(x)
+    assert cspec.ir.count("alloc(") == 1 and cspec.ir.count("parallel[map]") == 1
+
+    np.testing.assert_allclose(expensive_stencil(x), np.exp(x)[1:] - np.exp(x)[:-1], rtol=1e-6)
+    espec = expensive_stencil.specialize(x)
+    assert espec.ir.count("alloc(") == 2  # expensive exp must stay materialized
+
+    s_got, c_got = multi_consumer_cheap(x)
+    np.testing.assert_allclose(s_got, np.sin(x * 2.0 + 1.0), rtol=1e-6)
+    np.testing.assert_allclose(c_got, np.cos(x * 2.0 + 1.0), rtol=1e-6)
+    mspec = multi_consumer_cheap.specialize(x)
+    assert mspec.ir.count("alloc(") == 2 and mspec.ir.count("parallel[map]") == 1
+
+    # 5. Invariant check hoisting preserves empty-array semantics on allpairs
+    assert sqr_dists(np.zeros((0, 4)), np.zeros((3, 5))).shape == (0, 3)
+    with pytest.raises(ValueError, match="broadcast"):
+      sqr_dists(np.zeros((2, 4)), np.zeros((3, 5)))

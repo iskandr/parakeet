@@ -21,7 +21,7 @@ from .config import config, normalize_backend
 from .errors import BackendUnavailable, CompileError, FallbackWarning, InternalError, ParakeetError
 from .frontend import signature as sig
 from .frontend.arrays import Restart
-from .frontend.elab import Elaborated, Elaborator, ElabState, Options
+from .frontend.elab import Elaborated, Elaborator, ElabState, Options, TargetProfile
 from .ndtypes import ScalarType
 from .syntax.ir import ArrayParam, fmt_function
 
@@ -558,6 +558,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
     options = self._options()
     options.parallel = backend.parallel
     options.blas = options.blas and backend.device_kind is None and blas.available()
+    options.target = TargetProfile.for_device(backend.device_kind, options.tile_bytes)
     toolchain_key = (config.cc, config.opt_level, config.fast_math, tuple(config.cflags))
     variant = (backend.cache_key(), options.key(), names, toolchain_key)
     type_key = (variant, arg_keys, cell_keys)
