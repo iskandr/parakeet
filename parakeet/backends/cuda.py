@@ -307,6 +307,7 @@ class CuPyDriver:
     if count < 1:
       raise BackendUnavailable("CuPy is installed but no CUDA device was found on this machine")
     self.cp = cupy
+    self._compiled_cache: dict[str, object] = {}
     self.profile = self._query_profile(cupy, count)
     self.device_name = self.profile.name
 
@@ -325,17 +326,26 @@ class CuPyDriver:
       raw_name = props.get("name", b"")
       if raw_name:
         name = raw_name.decode("utf-8", errors="replace") if isinstance(raw_name, bytes) else str(raw_name)
+      maj, minor = int(props.get("major", 0)), int(props.get("minor", 0))
+      if maj > 0:
+        cc = (maj, minor)
     except Exception:  # noqa: BLE001
       pass
     try:
-      attrs = cupy.cuda.Device(0).attributes
+      dev = cupy.cuda.Device(0)
+      attrs = dev.attributes
       sm_count = int(attrs.get("MultiProcessorCount", 0))
       warp = int(attrs.get("WarpSize", 32)) or 32
       smem = int(attrs.get("MaxSharedMemoryPerBlock", 48 * 1024)) or 48 * 1024
       l2 = int(attrs.get("L2CacheSize", 0))
       max_threads = int(attrs.get("MaxThreadsPerBlock", 1024)) or 1024
       integrated = bool(attrs.get("Integrated", 0))
-      cc = (int(attrs.get("ComputeCapabilityMajor", 0)), int(attrs.get("ComputeCapabilityMinor", 0)))
+      if cc == (0, 0):
+        cc_str = str(getattr(dev, "compute_capability", "") or "")
+        if len(cc_str) >= 2 and cc_str.isdigit():
+          cc = (int(cc_str[:-1]), int(cc_str[-1]))
+        else:
+          cc = (int(attrs.get("ComputeCapabilityMajor", 0)), int(attrs.get("ComputeCapabilityMinor", 0)))
     except Exception:  # noqa: BLE001
       pass
     mat = MatrixUnit("wmma", 16, 16, 8, ("float32",), ("float32",)) if cc >= (8, 0) else None
@@ -357,8 +367,12 @@ class CuPyDriver:
     )
 
   def compile(self, plan: KernelPlan):
+    cached = self._compiled_cache.get(plan.source)
+    if cached is not None:
+      return cached
     kernel = self.cp.RawKernel(plan.source, "pk_kernel")
     kernel.compile()  # surface compilation problems here, not at first launch
+    self._compiled_cache[plan.source] = kernel
     return kernel
 
   def to_device(self, host: np.ndarray):
