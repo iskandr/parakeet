@@ -421,12 +421,6 @@ def plain_map(el, shape, fn: Callable[[tuple], Any], what: str = "map") -> Array
     el.loop_depth -= 1
 
   if isinstance(r, Expr):
-    if weight >= INF_COST:
-      from ..transforms import tiling
-
-      length = tiling.probe(el, shape, fn, probe)
-      if length is not None:
-        return tiling.tiled_map(el, shape, fn, r_type, length, what)
 
     def at(idx):
       v = fn(tuple(idx))
@@ -596,56 +590,32 @@ def reduce_values(
     el.loop_depth -= 1
   if assume_associative is not None:
     associative = assume_associative
-  if el.jam is not None:
-    red = el.jam.capture(el, shape, elem, combine, init, acc_type, assoc_op if associative else None, what)
-    if red is not None:
-      return red
+  # the fold itself is an operator statement; what loops it becomes is up to the passes
+  from ..syntax.ir import ErrorInfo, Fold, IndexReduce
 
-  total = el.tmp(ops.iprod(shape), "total")
-  acc = Var("acc", acc_type)
-  el.mutables.add(acc.uid)
-  empty_msg = f"zero-size array to {what}, which has no identity"
-
-  def step(target: Var, x) -> None:
-    el.emit(Assign(target, cast(el.as_scalar(combine(target, x), "reduction result"), acc_type)))
-
-  def hint(target: Var):
-    """Tell backends this loop is a reorderable fold (enables SIMD)."""
-    return (assoc_op, target) if (associative and assoc_op in ("add", "mul")) else None
-
-  if associative and el.can_parallel(shape):
-    nchunks = el.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
-    el.nonneg.add(nchunks.uid) if isinstance(nchunks, Var) else None
-    partials = el.alloc_array(acc_type.strong, (nchunks,), label="partials")
-
-    def chunk_body(chunk, start, stop):
-      local = Var("acc", acc_type)
-      el.mutables.add(local.uid)
-      el.emit(Assign(local, cast(el.as_scalar(elem(el.unravel(start, shape)), "element"), acc_type)))
-      el.chunk_iter(shape, ops.iadd(start, 1), stop, lambda idx: step(local, elem(idx)), reduction=hint(local))
-      el.emit(Store(partials.buf, chunk, cast(local, acc_type.strong)))
-
-    el.par_loop(total, chunk_body, kind="reduce", nchunks=nchunks, base_depth=1 if len(shape) == 1 else 2)
-    from ..syntax.ir import Load
-
-    def partial(c):
-      return cast(Load(partials.buf, c), acc_type)
-
-    if init is not None:
-      el.emit(Assign(acc, cast(init, acc_type)))
-      el.for_range(ZERO, nchunks, lambda c: step(acc, partial(c)))
-    else:
-      el.check(cmp("gt", total, 0), "ValueError", empty_msg)
-      el.emit(Assign(acc, partial(ZERO)))
-      el.for_range(ops.ONE, nchunks, lambda c: step(acc, partial(c)))
-  elif init is not None:
-    el.emit(Assign(acc, cast(init, acc_type)))
-    el.seq_nest(shape, lambda idx: step(acc, elem(idx)), reduction=hint(acc))
-  else:
-    el.check(cmp("gt", total, 0), "ValueError", empty_msg)
-    el.emit(Assign(acc, cast(el.as_scalar(elem(el.unravel(ZERO, shape)), "element"), acc_type)))
-    el.chunk_iter(shape, ops.ONE, total, lambda idx: step(acc, elem(idx)), reduction=hint(acc))
-  return el.copy_scalar(acc, "red")
+  index = tuple(Var("i", I) for _ in shape)
+  for v, d in zip(index, shape):
+    el.nonneg.add(v.uid)
+    el.upper[v.uid] = d
+  threads = bool(associative and assoc_op is not None and el.can_parallel(shape))
+  body: list = []
+  scope = el.new_scope("loop")
+  with el.in_block(body, scope, loop=True, par=threads):
+    value = el.tmp(el.as_scalar(elem(index), "element"), "x")
+  a, b = Var("acc", acc_type), Var("x", value.type)
+  combine_block: list = []
+  with el.in_block(combine_block, loop=True):
+    combined = cast(el.as_scalar(combine(a, b), "reduction result"), acc_type)
+  result = Var("red", acc_type)
+  empty = (
+    None if init is not None else ErrorInfo("ValueError", f"zero-size array to {what}, which has no identity", el.loc())
+  )
+  fold = Fold(
+    result, value, a, b, combine_block, combined, None if init is None else cast(init, acc_type),
+    assoc_op if associative else None, empty,
+  )  # fmt: skip
+  el.emit(IndexReduce(shape, index, body, [fold], scope, el.scope, threads, el.loc()))
+  return result
 
 
 def reduce_arrays(el, n: Expr, elem: Callable[[Expr], Any], combine, init=None, what: str = "reduce"):

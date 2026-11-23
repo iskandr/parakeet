@@ -305,6 +305,68 @@ class ParLoop(Stmt):
   work: Expr | None = None  # estimated inner iterations per element (None: one), valid just before the loop
 
 
+# ---- operators -------------------------------------------------------------
+#
+# The frontend does not emit the loops of an array operation itself.  It
+# emits one of the statements below, whose body is a block of this same IR
+# parameterised by index variables; the passes in parakeet.transforms rewrite
+# them (fusion, tiling) and the last one lowers them to the loops above.
+
+
+@dataclass(eq=False, slots=True)
+class IndexMap(Stmt):
+  """Run ``body`` once for every index of ``shape``.
+
+  Unless ``ordered``, the iterations are independent: they may run in any
+  order or at the same time, and the body writes nothing but array elements
+  no other iteration touches."""
+
+  shape: tuple[Expr, ...]
+  index: tuple[Var, ...]
+  body: list[Stmt]
+  scope: Scope
+  ordered: bool = False
+  parallel: bool = True  # may use threads or a device (false: nested in a parallel loop, or tiny)
+  loc: SourceLocation | None = None
+
+
+@dataclass(eq=False, slots=True)
+class Fold:
+  """One accumulator of an :class:`IndexReduce`: ``result = fold(combine, value(idx))``.
+
+  ``combine`` is the block that computes ``combined`` from the accumulator
+  ``a`` and the next value ``b``; ``op`` names it when it is an associative
+  primitive (the fold may then be regrouped and vectorised)."""
+
+  result: Var
+  value: Expr
+  a: Var
+  b: Var
+  combine: list[Stmt]
+  combined: Expr
+  init: Expr | None = None
+  op: str | None = None
+  empty: ErrorInfo | None = None  # raised for an empty index space when there is no init
+
+
+@dataclass(eq=False, slots=True)
+class IndexReduce(Stmt):
+  """Fold the values ``body`` computes at every index of ``shape`` (in index
+  order, unless every fold's ``op`` allows regrouping)."""
+
+  shape: tuple[Expr, ...]
+  index: tuple[Var, ...]
+  body: list[Stmt]
+  folds: list[Fold]
+  scope: Scope
+  home: Scope  # owns the temporaries lowering needs
+  parallel: bool = False
+  loc: SourceLocation | None = None
+
+
+OPERATORS = (IndexMap, IndexReduce)
+
+
 @dataclass(eq=False, slots=True)
 class Check(Stmt):
   """Fail with ``err`` unless ``cond`` holds."""
@@ -362,8 +424,10 @@ class Function:
 def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
   if isinstance(s, If):
     return (s.then, s.orelse)
-  if isinstance(s, (ForRange, While, ParLoop)):
+  if isinstance(s, (ForRange, While, ParLoop, IndexMap)):
     return (s.body,)
+  if isinstance(s, IndexReduce):
+    return (s.body, *[f.combine for f in s.folds])
   return ()
 
 
@@ -385,6 +449,13 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     return (s.total, s.nchunks)
   if isinstance(s, Check):
     return (s.cond, *s.args)
+  if isinstance(s, IndexMap):
+    return s.shape
+  if isinstance(s, IndexReduce):
+    out = list(s.shape)
+    for f in s.folds:
+      out += [f.value, f.combined] + ([f.init] if f.init is not None else [])
+    return tuple(out)
   return ()
 
 
@@ -400,6 +471,10 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     return (s.var,)
   if isinstance(s, ParLoop):
     return (s.chunk, s.start, s.stop)
+  if isinstance(s, IndexMap):
+    return s.index
+  if isinstance(s, IndexReduce):
+    return (*s.index, *[v for f in s.folds for v in (f.result, f.a, f.b)])
   return ()
 
 
@@ -483,6 +558,23 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
         f"in chunks({fmt_expr(s.total)}, n={fmt_expr(s.nchunks)}):"
       )
       out += fmt_block(s.body, indent + 1) or [f"{pad}    pass"]
+    elif isinstance(s, IndexMap):
+      how = "ordered " if s.ordered else ("" if s.parallel else "nested ")
+      out.append(f"{pad}{how}map {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):")
+      out += fmt_block(s.body, indent + 1) or [f"{pad}    pass"]
+    elif isinstance(s, IndexReduce):
+      how = "parallel " if s.parallel else ""
+      out.append(f"{pad}{how}reduce {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):")
+      out += fmt_block(s.body, indent + 1)
+      for f in s.folds:
+        init = "" if f.init is None else f", init={fmt_expr(f.init)}"
+        if f.op is not None and not f.combine:
+          how = f.op
+        else:
+          how = f"lambda {f.a.name}, {f.b.name}: {fmt_expr(f.combined)}"
+        out.append(f"{pad}    {f.result.name}: {f.result.type} = fold({how}, {fmt_expr(f.value)}{init})")
+        if f.op is None or f.combine:
+          out += fmt_block(f.combine, indent + 2)
     elif isinstance(s, Check):
       out.append(f"{pad}check {fmt_expr(s.cond)}  # else {s.err.exc}: {s.err.fmt}")
     elif isinstance(s, Comment):

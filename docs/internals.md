@@ -52,9 +52,20 @@ Three questions cannot be answered in one forward pass, so elaboration is
 
 The result is a small imperative language: typed scalar variables, flat buffers
 with load/store, `if`, counted and unbounded loops, allocation with scoped
-release, runtime checks, and a single parallel construct — `ParLoop` — that runs
-its body for each chunk of an index range. Reductions are `ParLoop`s that write
-one partial result per chunk, combined afterwards.
+release and runtime checks. On top of it sit two *operator statements*, which
+is as much of the original's adverb tree as the middle end needs:
+
+* `IndexMap(shape, index, body)`: run `body` for every index; the iterations
+  are independent.
+* `IndexReduce(shape, index, body, folds)`: fold the values `body` computes
+  at every index; each `Fold` has its combiner as a block of IR and, when the
+  combiner is a known associative primitive, its name.
+
+`spec.operators` prints a function at this level, `spec.ir` after the passes.
+The last pass (`transforms/lowering.py`) replaces the operator statements by
+loops and by the single parallel construct — `ParLoop` — that runs its body
+for each chunk of an index range. A parallel reduction is a `ParLoop` that
+writes one partial result per chunk, combined afterwards.
 
 Memory management is static: a buffer belongs to the loop iteration (or
 function) that allocated it and is released when that scope ends, unless it
@@ -91,15 +102,20 @@ views of the caller's array.
 
 ## Transforms
 
-Two things rewrite the program rather than fall out of how it is elaborated
-(`parakeet/transforms/`):
+`parakeet/transforms/pipeline.py` lists the passes over the operator
+statements, in order; `config.skip_transforms` leaves any of them out:
 
-* **Tiling** (`tiling.py`). When a two-dimensional map is about to be built,
-  its element function is elaborated once to see whether it is a single
-  reduction plus straight-line code. If so the map is evaluated a cache-sized
-  tile of columns at a time, and the reductions of each 2×4 block of elements
-  are collected (instead of each emitting its own loop) and emitted as one
-  loop with eight accumulators.
+* **Sibling fusion** (`fusion.py`). Adjacent reductions over the same index
+  space become one `IndexReduce` with several folds.
+* **Tiling** (`tiling.py`). An `IndexMap` of rank two or more whose body is a
+  single `IndexReduce` plus straight-line code is run a cache-sized tile of
+  its last dimension at a time. Inside a tile the body is instantiated for a
+  2×4 block of elements (`syntax/clone.py` copies IR blocks) and the eight
+  reductions are fused into one with eight folds.
+* **Lowering** (`lowering.py`). Always last: operators to loops.
+
+One thing still rewrites the program while it is elaborated:
+
 * **Differentiation** (`autodiff.py`, `derivatives.py`). `grad` elaborates its
   function with a tape that records each array operator applied to a
   differentiated value — at the level of `elementwise`, `reduce`, `matmul` and

@@ -67,7 +67,8 @@ floating-point operations yield `inf`/`nan` rather than raising.
 
 `f.specialize(*args)`
 :   Compile for example arguments without running and return a
-    [`Specialization`](api.md): `.ir` (typed loop IR), `.source` (C),
+    [`Specialization`](api.md): `.operators` (maps and reductions over index
+    spaces, as elaborated), `.ir` (typed loop IR after the passes), `.source` (C),
     `.kernels` (GPU kernel sources), `.signature`.
 
 `f.inspect(*args)`
@@ -81,8 +82,9 @@ floating-point operations yield `inf`/`nan` rather than raising.
     whether a problem is related to loop fusion.
 
 `parakeet.find_broken_transform(fn, inputs)`
-:   Switch the optimizations on one at a time — fusion, tiling, the C
-    optimizer, parallel loops, the GPU — and name the first one that makes the
+:   Switch the optimizations on one at a time — fusion, each pass of the
+    middle end (sibling fusion, tiling), the C optimizer, parallel loops, the
+    GPU — and name the first one that makes the
     result differ from plain Python (or from `expected`, if given).
 
 `parakeet.clear_cache()`

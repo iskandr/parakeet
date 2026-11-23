@@ -69,6 +69,12 @@ class Config:
   tiling: bool = field(default_factory=lambda: _env_bool("PARAKEET_TILING", True))
   #: Bytes of operand data one tile may span (default: half of a core's L2 cache).
   tile_bytes: int = field(default_factory=lambda: _env_int("PARAKEET_TILE_BYTES", 0) or default_tile_bytes())
+  #: Names of middle-end passes to leave out (see ``parakeet.transforms.pipeline.names()``).
+  skip_transforms: tuple = field(
+    default_factory=lambda: tuple(
+      s.strip() for s in os.environ.get("PARAKEET_SKIP_TRANSFORMS", "").split(",") if s.strip()
+    )
+  )
   #: Call the BLAS that NumPy uses for float matrix products (CPU backends).
   #: Off: every product is Parakeet's own generated, tiled loop nest.
   blas: bool = field(default_factory=lambda: _env_bool("PARAKEET_BLAS", True))
@@ -113,6 +119,8 @@ class Config:
       raise ValueError("device_fallback must be 'warn', 'silent' or 'error'")
     if name == "num_threads":
       value = max(1, int(value))
+    if name == "skip_transforms":
+      value = (value,) if isinstance(value, str) else tuple(value)
     if name == "tile_bytes":
       value = max(1024, int(value))
     object.__setattr__(self, name, value)

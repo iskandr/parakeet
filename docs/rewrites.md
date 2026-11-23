@@ -9,13 +9,30 @@ the original system:
 * **[H]** Eric Hielscher, *Locality Optimization for Data Parallel Programs*
   (NYU, 2013) — tiling.
 
-The short version: the rules are the same algebra, applied differently. The
-original compiler built a typed syntax tree of operators and ran a pipeline of
-passes over it. This one never builds the tree. An array expression is a
-*delayed* value — a function from index to element — and a rule fires at the
-moment an operator is applied to one. `F ∘ G` below means "the element
-function of the result is `F` applied to the element function of the
-argument"; no pass looks for the pattern afterwards.
+The short version: the rules are the same algebra, applied in two places.
+
+* **While elaborating.** An array expression is a *delayed* value — a function
+  from index to element — and the vertical fusion rules fire at the moment an
+  operator is applied to one. `F ∘ G` below means "the element function of
+  the result is `F` applied to the element function of the argument"; no pass
+  looks for the pattern afterwards.
+* **In the middle end.** What elaboration produces is the original's
+  *indexified* level: statements `IndexMap` and `IndexReduce` over index
+  spaces, with ordinary scalar code as their bodies (`Specialization.operators`
+  prints it). Passes rewrite those statements — sibling fusion, tiling — and a
+  last pass, `LowerAdverbs` in spirit, turns them into loops.
+  `parakeet.transforms.pipeline.PASSES` is the list;
+  `find_broken_transform` switches its members on one at a time.
+
+```
+map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see it
+    off_29: int64 = (x_off_2 + (i_27 * x_n1_4))
+    off_30: int64 = (y_off_7 + (i_28 * y_n1_9))
+    reduce i_35 over (x_n1_4):
+        x_36: float64 = (x_1[(off_29 + i_35)] * y_6[(off_30 + i_35)])
+        red_39: float64 = fold(add, x_36, init=0.0)
+    arr_24[((i_27 * y_n0_8) + i_28)] = red_39
+```
 
 ## Operators
 
@@ -83,10 +100,16 @@ not one flat loop either.
 
 | rule ([R] Fig. 6.3) | status |
 |---|---|
-| `a = Reduce(f, ⊕1, X); b = Reduce(g, ⊕2, X)` ⇒ `a, b = Reduce(f×g, ⊕1×⊕2, X)` | **no**: two loops. Not implemented |
+| `a = Reduce(f, ⊕1, X); b = Reduce(g, ⊕2, X)` ⇒ `a, b = Reduce(f×g, ⊕1×⊕2, X)` | **yes**, as *sibling fusion* (`transforms/fusion.py`): two `IndexReduce` statements over the same index space, the second not using the first's result, become one statement with two folds. `x.min(), x.max()` reads `x` once |
+| the same for two `Map`s over one array | no (each is its own loop unless they fuse vertically) |
 
-The one place reductions *are* run together is tiling (below): the
-reductions of neighbouring elements of a map share a loop.
+Conditions the thesis leaves out: the index spaces must be provably equal
+(the same expression once shape variables are resolved), both seeded or both
+unseeded, and both must stay vectorizable — a float sum is not fused with a
+`max`, which would cost the sum its SIMD loop. Scalar definitions between the
+two statements are stepped over when they do not use the first result.
+
+Tiling (below) uses the same rule on copies of one reduction.
 
 ## Reductions and scans
 
@@ -126,8 +149,8 @@ reductions of neighbouring elements of a map share a loop.
 
 | [H] | here |
 |---|---|
-| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | one level: a map of rank ≥ 2 whose element is one reduction plus straight-line code has its last dimension cut into tiles, hoisted outside the others |
-| register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **jamming**: the reductions of a 2×4 block of elements share one loop with eight accumulators |
+| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | one level, as a pattern on the operator statements: an `IndexMap` of rank ≥ 2 whose body is one `IndexReduce` (any rank, any number of folds) plus straight-line code, over an index space that does not depend on the element, has its last dimension cut into tiles, hoisted outside the others |
+| register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **jamming**: the body is copied for a 2×4 block of elements and the eight copies of its reduction are sibling-fused into one `IndexReduce` with eight folds |
 | `TiledReduce`, `TiledScan` | no |
 | cache tile sizes found by an online search between a pessimistic and an optimistic estimate | a fixed estimate: as many rows as fit in half of L2 (`config.tile_bytes`) |
 | aborts unless each function body is a single adverb (simple algorithm) | aborts unless the element is exactly one reduction; anything else is a plain parallel map |
@@ -193,7 +216,9 @@ operators `f` applied ([details](autodiff.md)):
 
 ## What the theses have that this does not
 
-* Horizontal fusion of reductions.
+* Horizontal fusion of maps (of reductions: yes).
+* A middle end that does *everything*: vertical fusion and differentiation
+  still happen while elaborating, not as passes over the operator statements.
 * `FilterReduce` and filter-filter fusion in one pass; `emit` fused into a scan.
 * Recursive tiling of deeper adverb nests, `TiledReduce`/`TiledScan`, and the
   online search for tile sizes.

@@ -11,6 +11,7 @@ variable before importing Parakeet.
 | `bounds_check` | `True` | `PARAKEET_BOUNDS_CHECK` | raise `IndexError` for bad indices |
 | `fusion` | `True` | `PARAKEET_FUSION` | fuse array expressions into single loops |
 | `tiling` | `True` | `PARAKEET_TILING` | tile matmul-shaped loops for cache locality (see [Performance](performance.md#tiling)) |
+| `skip_transforms` | `()` | `PARAKEET_SKIP_TRANSFORMS` | names of middle-end passes not to run (`"sibling fusion"`, `"tiling"`; comma-separated in the environment) |
 | `tile_bytes` | half of L2 | `PARAKEET_TILE_BYTES` | bytes of operand data in one tile |
 | `blas` | `True` | `PARAKEET_BLAS` | hand float matrix products to the BLAS NumPy uses (CPU backends; not yet on Windows, where `PARAKEET_BLAS=force` opts in) |
 | `num_threads` | all cores | `PARAKEET_NUM_THREADS` | threads used by multi-core backends |

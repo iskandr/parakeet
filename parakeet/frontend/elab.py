@@ -93,9 +93,10 @@ class Options:
   tiling: bool = True
   tile_bytes: int = 256 * 1024
   blas: bool = False  # hand float matrix products to the BLAS NumPy uses
+  skip: tuple = ()  # middle-end passes not to run
 
   def key(self) -> tuple:
-    return (self.bounds_check, self.parallel, self.fusion, self.tiling, self.tile_bytes, self.blas)
+    return (self.bounds_check, self.parallel, self.fusion, self.tiling, self.tile_bytes, self.blas, self.skip)
 
 
 @dataclass
@@ -175,6 +176,7 @@ class Elaborated:
   result_spec: tuple
   implicits: list[Implicit]
   writes_unknown: bool
+  operators: str = ""  # the function before the middle-end passes, as text
 
 
 _BINOPS = {

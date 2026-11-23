@@ -1,253 +1,227 @@
 """Tiling: run matmul-shaped maps a cache-sized block at a time.
 
-A *matmul-shaped* operation is a map over pairs ``(i, j)`` whose element is a
-reduction over data selected by ``i`` and data selected by ``j``: a matrix
-product, all-pairs distances, a tropical product, the assignment step of
-k-means.  Evaluated row by row, every row of the result sweeps over all of
-the ``j`` operand, which stops fitting in cache long before the arrays are
-large.  Two rewrites fix that, and neither changes what is computed:
+A *matmul-shaped* operation is a map whose element is a reduction over data
+selected by the map's index: a matrix product, all-pairs distances, a
+tropical product, the assignment step of k-means, a stack of any of those.
+At the operator level that is a pattern, not a guess::
+
+    map i.., j over (.., m):          # any rank >= 2
+      straight-line code
+      reduce k.. over (K..):          # one reduction, of any rank,
+        fold(...), fold(...)          #   with any number of folds
+      straight-line code              # the "epilogue": sqrt, a store, ...
+
+Evaluated row by row, every row of the result sweeps over all of the ``j``
+operand, which stops fitting in cache long before the arrays are large.  Two
+rewrites fix that, and neither changes what is computed:
 
 *tiling*
-    the ``j`` loop is cut into tiles and hoisted outside the ``i`` loop, so a
-    tile of the ``j`` operand is reused for every ``i`` while it is still in
-    cache.  Legal for any map: its elements are independent.
+    the ``j`` loop is cut into tiles and hoisted outside the loops before
+    it, so a tile of the ``j`` operand is reused for every row while it is
+    still in cache.  Legal for any map: its elements are independent.
 
 *jamming*
     the reductions of a small block of elements (``UNROLL_I`` rows by
-    ``UNROLL_J`` columns) are fused into a single loop with one accumulator
-    each, so every operand element that was loaded is used several times.
-    Each element still folds its own terms in the original order.
+    ``UNROLL_J`` columns) become one reduction with a fold per element, so
+    every operand element that was loaded is used several times.  Each
+    element still folds its own terms in the original order.  This is
+    sibling fusion (see :mod:`.fusion`) applied to copies of the map's body.
 
 The tile size is a heuristic, not a search: as many ``j`` rows as fit in
 ``config.tile_bytes`` (half of a core's L2 cache unless set).
 
-Nothing here knows about dot products.  :func:`probe` runs the element
-function once and asks whether it consists of a single reduction plus
-straight-line code; if so :func:`tiled_map` evaluates the map in tiles.
+Nothing here knows about dot products, and nothing is elaborated twice: the
+body of the map is an IR block, and a tile is made of copies of it.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
-from typing import Any
 
-from ..errors import InternalError
-from ..syntax import ops
-from ..syntax.ir import Assign, Const, Expr, Store, Var
-from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, isub
-from ..syntax.values import ArrayVal
+from ..syntax import ir, ops
+from ..syntax.clone import Cloner, defined
+from ..syntax.ir import Assign, Const, Expr, ForRange, If, IndexMap, IndexReduce, Scope, Var
+from ..syntax.ops import ONE, ZERO, I, cmp, iadd, idiv, imax, imin, imul, iprod, isub
+from .lowering import Loops, outer_expr, pure_defs
 
 UNROLL_I = 2
 UNROLL_J = 4
 MIN_STATIC_SIZE = 256  # maps known to be smaller than this are not worth tiling
 
-
-class Capture:
-  """One reduction whose loop a :class:`Jam` will emit."""
-
-  __slots__ = ("shape", "elem", "combine", "init", "acc_type", "assoc_op", "what", "pos", "red", "context")
+STRAIGHT = (ir.Assign, ir.Store, ir.Check, ir.Comment)
 
 
-class Jam:
-  """Collects the reductions of the elements being elaborated instead of
-  letting each emit its own loop (installed as ``el.jam``)."""
+class Shape:
+  """What :func:`match` found: the map is ``before; reduce; after``."""
 
-  def __init__(self, block: list):
-    self.block = block
-    self.captures: list[Capture] = []
-    self.declined = False
-
-  def capture(self, el, shape, elem, combine, init, acc_type, assoc_op, what: str) -> Var | None:
-    """Take over a reduction about to be emitted; None to leave it alone."""
-    if len(shape) != 1 or el.block is not self.block or self.captures:
-      self.declined = True
-      return None
-    c = Capture()
-    c.shape, c.elem, c.combine, c.init = shape, elem, combine, init
-    c.acc_type, c.assoc_op, c.what = acc_type, assoc_op, what
-    c.pos = len(el.block)
-    c.red = Var("red", acc_type)
-    c.context = el.capture()
-    self.captures.append(c)
-    return c.red
+  __slots__ = ("after", "before", "extent", "reduce")
 
 
-def probe(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], probe_idx: tuple[Var, ...]) -> Expr | None:
-  """If the map of ``fn`` over ``shape`` is worth tiling, the length of its
-  elements' reduction (as an expression valid outside the loops)."""
-  from ..lib.core import _defined_vars, block_weight, outer_expr
-  from ..syntax.values import INF_COST
-
-  if not el.options.tiling or len(shape) < 2 or el.jam is not None:
+def match(s: ir.Stmt, defs: dict[int, Expr]) -> Shape | None:
+  """Is ``s`` a map whose element is one reduction and straight-line code,
+  over an index space that does not depend on the element?"""
+  if not isinstance(s, IndexMap) or s.ordered or len(s.shape) < 2 or s.scope.owned:
     return None
-  if all(isinstance(d, Const) for d in shape) and math.prod(d.value for d in shape) < MIN_STATIC_SIZE:
+  if all(isinstance(d, Const) for d in s.shape) and math.prod(d.value for d in s.shape) < MIN_STATIC_SIZE:
     return None
-  el.loop_depth += 1
-  try:
-    with el.trial() as blk:
-      el.jam = jam = Jam(blk)
-      try:
-        r = fn(probe_idx)
-      finally:
-        el.jam = None
-      if jam.declined or len(jam.captures) != 1 or not isinstance(r, Expr) or block_weight(blk) >= INF_COST:
-        return None
-      inner = _defined_vars(blk) | {v.uid for v in probe_idx}
-      return outer_expr(el, jam.captures[0].shape[0], inner)
-  finally:
-    el.loop_depth -= 1
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  where = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
+  if len(where) != 1 or not all(isinstance(t, STRAIGHT) for k, t in enumerate(body) if k != where[0]):
+    return None
+  red = body[where[0]]
+  if any(isinstance(t.var.type, ir.BufType) for t in body if isinstance(t, Assign)):
+    return None
+  inner = set(defined(s.body)) | {v.uid for v in s.index}
+  extent = [outer_expr(defs, d, inner) for d in red.shape]
+  if any(d is None for d in extent):
+    return None  # ragged: elements fold different numbers of terms
+  m = Shape()
+  m.before, m.reduce, m.after, m.extent = body[: where[0]], red, body[where[0] + 1 :], tuple(extent)
+  return m
 
 
-def tile_size(el, length: Expr, itemsize: int) -> Expr:
+def element(lp: Loops, s: IndexMap, m: Shape, at: tuple[Expr, ...]) -> None:
+  """One element of the map, as it was written."""
+  c = Cloner({v.uid: e for v, e in zip(s.index, at)})
+  lp.block.extend(c.block(m.before + [m.reduce] + m.after))
+
+
+def jam(lp: Loops, s: IndexMap, m: Shape, ats: list[tuple[Expr, ...]]) -> None:
+  """The elements at ``ats`` with their reductions fused into one."""
+  red = m.reduce
+  index = tuple(Var("k", I) for _ in red.index)
+  scope = Scope("loop")
+  body: list = []
+  folds: list = []
+  tails: list = []
+  for at in ats:
+    c = Cloner({v.uid: e for v, e in zip(s.index, at)})
+    c.m.update({v.uid: k for v, k in zip(red.index, index)})
+    for v in defined(m.before + [red] + m.after).values():
+      c.var(v)
+    lp.block.extend(c.stmt(t) for t in m.before)
+    body.extend(c.stmt(t) for t in red.body)
+    folds.extend(c.fold(f) for f in red.folds)
+    scope.owned.extend(c.scope(red.scope).owned)
+    tails.append([c.stmt(t) for t in m.after])
+  lp.emit(IndexReduce(m.extent, index, body, folds, scope, red.home, False, red.loc))
+  for tail in tails:
+    lp.block.extend(tail)
+
+
+def loop(lp: Loops, start: Expr, stop: Expr, fill, step: Expr = ONE, name: str = "i") -> None:
+  v = Var(name, I)
+  blk: list = []
+  scope = Scope("loop")
+  fill(lp.sub(blk, scope), v)
+  lp.emit(ForRange(v, start, stop, step, blk, scope))
+
+
+def tile_size(lp: Loops, length: Expr, itemsize: int, tile_bytes: int) -> Expr:
   """How many ``j`` rows of ``length`` elements make one tile."""
-  budget = max(el.options.tile_bytes // max(itemsize, 1), 1)
+  budget = max(tile_bytes // max(itemsize, 1), 1)
   rows = idiv(Const(budget, I), imax(length, 1))
   whole = imul(idiv(rows, UNROLL_J), UNROLL_J)
-  size = el.tmp(imax(whole, UNROLL_J), "tile")
-  if isinstance(size, Var):
-    el.nonneg.add(size.uid)
+  size = lp.tmp(imax(whole, UNROLL_J), "tile")
+  if isinstance(size, Const):  # the printed IR says so either way
+    v = Var("tile", I)
+    lp.emit(Assign(v, size))
+    size = v
   return size
 
 
-def tiled_map(el, shape: tuple[Expr, ...], fn: Callable[[tuple], Any], elt, length: Expr, what: str) -> ArrayVal:
-  """Evaluate ``out[..., j] = fn((..., j))`` into a new array, in tiles of
-  the last dimension.  The dimensions before it are one long row index."""
-  lead, n_j = tuple(shape[:-1]), shape[-1]
-  n_i = el.tmp(ops.iprod(lead), "rows")
-  if isinstance(n_i, Var):
-    el.nonneg.add(n_i.uid)
-  out = el.alloc_array(elt, shape, label="out")
-  element = fn
+def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int) -> list:
+  """The loops of ``s``, in tiles of its last dimension.  The dimensions
+  before it are one long row index."""
+  out: list = []
+  lp = Loops(out, defs, owner)
+  lead = tuple(lp.tmp(d, "n") for d in s.shape[:-1])
+  n_j = lp.tmp(s.shape[-1], "n")
+  n_i = lp.tmp(iprod(lead), "rows")
+  length = lp.tmp(iprod(m.extent), "len")
+  itemsize = getattr(m.reduce.folds[0].a.type, "itemsize", 8)
+  tile = tile_size(lp, length, itemsize, tile_bytes)
 
-  def fn(ij):
-    i, j = ij
-    return element(((i,) if len(lead) == 1 else el.unravel(i, lead)) + (j,))
+  def at(inner: Loops, i: Expr, j: Expr) -> tuple[Expr, ...]:
+    return ((inner.tmp(i, "i"),) if len(lead) == 1 else inner.unravel(inner.tmp(i, "i"), lead)) + (inner.tmp(j, "j"),)
 
-  reduce_length = el.tmp(length, "len")
-  tile = tile_size(el, reduce_length, elt.itemsize)
+  def single(inner: Loops, i: Expr, j: Expr) -> None:
+    element(inner, s, m, at(inner, i, j))
 
-  def index(e, bound: Expr) -> Expr:
-    v = el.tmp(e, "i")
-    if isinstance(v, Var):
-      el.nonneg.add(v.uid)
-      el.upper[v.uid] = bound
-    return v
-
-  def store(i: Expr, j: Expr, v) -> None:
-    el.emit(Store(out.buf, iadd(imul(i, n_j), j), cast(el.as_scalar(v, f"result of {what}"), elt)))
-
-  def single(i: Expr, j: Expr) -> None:
-    store(i, j, fn((i, j)))
-
-  def jammed(i: Expr, j: Expr) -> None:
-    """The block of elements ``[i, i + UNROLL_I) x [j, j + UNROLL_J)``."""
-    parts = []
-    for p in range(UNROLL_I):
-      for q in range(UNROLL_J):
-        ip, jq = index(iadd(i, p), n_i), index(iadd(j, q), n_j)
-        blk: list = []
-        with el.in_block(blk):
-          el.jam = jam = Jam(blk)
-          try:
-            v = fn((ip, jq))
-          finally:
-            el.jam = None
-          if len(jam.captures) != 1:
-            raise InternalError(f"tiling {what}: an element stopped being a single reduction")
-          store(ip, jq, v)
-        parts.append((blk, jam.captures[0]))
-    for blk, c in parts:
-      el.block.extend(blk[: c.pos])
-    accs = []
-    first = parts[0][1]
-    start: Expr = ZERO
-    for _, c in parts:
-      acc = Var("acc", c.acc_type)
-      el.mutables.add(acc.uid)
-      accs.append(acc)
-      if c.init is not None:
-        el.emit(Assign(acc, cast(c.init, c.acc_type)))
-      else:
-        el.check(cmp("gt", c.shape[0], 0), "ValueError", f"zero-size array to {c.what}, which has no identity")
-        with el.restored(c.context):
-          el.emit(Assign(acc, cast(el.as_scalar(c.elem((ZERO,)), "element"), c.acc_type)))
-        start = ONE
-
-    def step(k: Var) -> None:
-      el.upper[k.uid] = first.shape[0]
-      for (_, c), acc in zip(parts, accs):
-        with el.restored(c.context):
-          x = c.elem((k,))
-          el.emit(Assign(acc, cast(el.as_scalar(c.combine(acc, x), "reduction result"), c.acc_type)))
-
-    foldable = first.assoc_op in ("add", "mul") and all(c.assoc_op == first.assoc_op for _, c in parts)
-    el.for_range(
-      start, first.shape[0], step, simd=True, name="k", reduction=(first.assoc_op, accs) if foldable else None
-    )
-    for (_, c), acc in zip(parts, accs):
-      el.emit(Assign(c.red, acc))
-    for blk, c in parts:
-      el.block.extend(blk[c.pos :])
-
-  def span(row: Expr, lo: Expr, hi: Expr) -> None:
+  def span(inner: Loops, row: Expr, lo: Expr, hi: Expr) -> None:
     """Columns ``[lo, hi)`` of one row, an element at a time."""
-    el.for_range(lo, hi, lambda j: single(row, index(j, n_j)), name="j")
+    loop(inner, lo, hi, lambda body, j: single(body, row, j), name="j")
 
-  def rows(r0: Expr, r1: Expr) -> None:
+  def rows(inner: Loops, r0: Expr, r1: Expr) -> None:
     """Complete rows ``[r0, r1)``, a tile of columns at a time."""
-    i_jam = el.tmp(iadd(r0, imul(idiv(isub(r1, r0), UNROLL_I), UNROLL_I)), "i_jam")
+    i_jam = inner.tmp(iadd(r0, imul(idiv(isub(r1, r0), UNROLL_I), UNROLL_I)), "i_jam")
 
-    def tile_body(j0: Var) -> None:
-      el.nonneg.add(j0.uid)
-      j1 = el.tmp(imin(n_j, iadd(j0, tile)), "j1")
-      j_jam = el.tmp(iadd(j0, imul(idiv(isub(j1, j0), UNROLL_J), UNROLL_J)), "j_jam")
+    def tile_body(t: Loops, j0: Var) -> None:
+      j1 = t.tmp(imin(n_j, iadd(j0, tile)), "j1")
+      j_jam = t.tmp(iadd(j0, imul(idiv(isub(j1, j0), UNROLL_J), UNROLL_J)), "j_jam")
 
-      def block_rows(i: Var) -> None:
-        el.upper[i.uid] = n_i
-        el.for_range(j0, j_jam, lambda j: jammed(i, j), step=Const(UNROLL_J, I), name="j")
+      def block_rows(b: Loops, i: Var) -> None:
+        def block(e: Loops, j: Var) -> None:
+          jam(e, s, m, [at(e, iadd(i, p), iadd(j, q)) for p in range(UNROLL_I) for q in range(UNROLL_J)])
 
-        def leftover(j: Var) -> None:
-          el.upper[j.uid] = n_j
+        def leftover(e: Loops, j: Var) -> None:
           for p in range(UNROLL_I):
-            single(index(iadd(i, p), n_i), j)
+            single(e, iadd(i, p), j)
 
-        el.for_range(j_jam, j1, leftover, name="j")
+        loop(b, j0, j_jam, block, step=Const(UNROLL_J, I), name="j")
+        loop(b, j_jam, j1, leftover, name="j")
 
-      el.for_range(r0, i_jam, block_rows, step=Const(UNROLL_I, I), name="i")
-      el.for_range(i_jam, r1, lambda i: span(index(i, n_i), j0, j1), name="i")
+      loop(t, r0, i_jam, block_rows, step=Const(UNROLL_I, I), name="i")
+      loop(t, i_jam, r1, lambda b, i: span(b, i, j0, j1), name="i")
 
-    el.for_range(ZERO, n_j, tile_body, step=tile, name="j0")
+    loop(inner, ZERO, n_j, tile_body, step=tile, name="j0")
 
-  def body(chunk, start: Expr, stop: Expr) -> None:
+  def chunk(inner: Loops, _chunk, start: Expr, stop: Expr) -> None:
     """Flat positions ``[start, stop)``: the end of a row, whole rows, the
     beginning of a row."""
-    r0 = index(idiv(start, n_j), n_i)
-    c0 = el.tmp(isub(start, imul(r0, n_j)), "c0")
-    lead_end = el.tmp(ops.select(cmp("gt", c0, 0), imin(stop, imul(iadd(r0, 1), n_j)), start), "lead_end")
-    span(r0, c0, iadd(c0, isub(lead_end, start)))
-    first_row = el.tmp(ops.select(cmp("gt", c0, 0), iadd(r0, 1), r0), "first_row")
-    last_row = el.tmp(idiv(stop, n_j), "last_row")  # may be one past the end
-    for v in (first_row, lead_end, last_row):
-      if isinstance(v, Var):
-        el.nonneg.add(v.uid)
+    r0 = inner.tmp(idiv(start, n_j), "r0")
+    c0 = inner.tmp(isub(start, imul(r0, n_j)), "c0")
+    lead_end = inner.tmp(ops.select(cmp("gt", c0, 0), imin(stop, imul(iadd(r0, 1), n_j)), start), "lead_end")
+    span(inner, r0, c0, iadd(c0, isub(lead_end, start)))
+    first_row = inner.tmp(ops.select(cmp("gt", c0, 0), iadd(r0, 1), r0), "first_row")
+    last_row = inner.tmp(idiv(stop, n_j), "last_row")  # may be one past the end
     # a chunk inside a single row has no complete rows (and first_row > last_row)
-    rows(first_row, el.tmp(imax(first_row, last_row), "rows_end"))
-    tail_start = el.tmp(imax(lead_end, imul(last_row, n_j)), "tail_start")
-    span(last_row, isub(tail_start, imul(last_row, n_j)), isub(stop, imul(last_row, n_j)))
+    rows(inner, first_row, inner.tmp(imax(first_row, last_row), "rows_end"))
+    tail_start = inner.tmp(imax(lead_end, imul(last_row, n_j)), "tail_start")
+    span(inner, last_row, isub(tail_start, imul(last_row, n_j)), isub(stop, imul(last_row, n_j)))
 
-  total = el.tmp(imul(n_i, n_j), "total")
-  # an empty row would make the row arithmetic divide by zero; there is nothing to do then anyway
-  from ..syntax.ir import If
-
+  total = lp.tmp(imul(n_i, n_j), "total")
   work: list = []
-  with el.in_block(work):
-    # where it cannot run in parallel it is still a loop of one chunk: the
-    # backend compiles that as a function of its own, and identical ones once
-    el.par_loop(total, body, nchunks=None if el.can_parallel(shape) else ONE, base_depth=2, work=reduce_length)
-  el.emit(If(cmp("gt", total, 0), work, []))
-  el.record_store(out)
+  # where it cannot run in parallel it is still a loop of one chunk: the
+  # backend compiles that as a function of its own
+  lp.sub(work).parallel(total, chunk, nchunks=None if s.parallel else ONE, loc=s.loc, work=length, heavy=True)
+  # an empty row would make the row arithmetic divide by zero; there is nothing to do then anyway
+  lp.emit(If(cmp("gt", total, 0), work, []))
   return out
 
 
-__all__ = ["Jam", "UNROLL_I", "UNROLL_J", "probe", "tile_size", "tiled_map"]
+def tile_block(block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int) -> list:
+  out: list = []
+  for s in block:
+    if isinstance(s, If):
+      s.then[:] = tile_block(s.then, defs, owner, tile_bytes)
+      s.orelse[:] = tile_block(s.orelse, defs, owner, tile_bytes)
+    elif isinstance(s, IndexReduce):
+      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes)
+    elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
+      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes)
+    m = match(s, defs)
+    if m is None:
+      out.append(s)
+    else:
+      out.extend(tiled(s, m, defs, owner, tile_bytes))  # type: ignore[arg-type]
+  return out
+
+
+def tiling(fn: ir.Function, options) -> None:
+  """TiledMap: tile and jam every matmul-shaped map of ``fn``."""
+  if options.tiling:
+    fn.body[:] = tile_block(fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes)
+
+
+__all__ = ["UNROLL_I", "UNROLL_J", "jam", "match", "tile_size", "tiled", "tiling"]

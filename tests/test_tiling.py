@@ -138,3 +138,68 @@ def test_find_broken_transform_names_tiling_as_a_step():
     parakeet.find_broken_transform(lambda a, b: a @ b, args, expected=np.zeros((6, 4)), print_transforms=False)
     == "frontend"
   )
+
+
+# ---- the middle end ---------------------------------------------------------
+
+
+def test_operators_are_printed_before_the_passes():
+  a = np.zeros((8, 8))
+  spec = matmul.specialize(a, a)
+  assert "map " in spec.operators and "reduce " in spec.operators and "fold(add" in spec.operators
+  assert "parallel" not in spec.operators and "parallel" in spec.ir
+
+
+def test_passes_can_be_skipped_by_name():
+  from parakeet.transforms import pipeline
+
+  assert pipeline.names() == ["sibling fusion", "tiling"]
+  a = np.arange(64.0).reshape(8, 8)
+  with parakeet.options(skip_transforms=("tiling",)):
+    assert "tile" not in matmul.specialize(a, a).ir
+    np.testing.assert_allclose(matmul(a, a), a @ a)
+
+
+@jit
+def extremes(x):
+  return x.min(), x.max()
+
+
+@jit
+def moments(x):
+  return np.sum(x), np.sum(x * x)
+
+
+@jit
+def chained(x):
+  m = np.sum(x) / len(x)
+  return np.sum((x - m) ** 2)  # needs the first result: cannot be fused with it
+
+
+@jit
+def mixed(x):
+  return np.sum(x), np.max(x)  # fusing would cost the sum its vector loop
+
+
+def n_loops(spec):
+  return spec.ir.count("parallel[reduce]")
+
+
+def test_sibling_reductions_share_a_loop():
+  x = np.random.default_rng(7).random(1000)
+  for fn, want in ((extremes, (x.min(), x.max())), (moments, (x.sum(), (x * x).sum()))):
+    np.testing.assert_allclose(fn(x), want)
+    assert n_loops(fn.specialize(x)) == 1
+    with parakeet.options(skip_transforms=("sibling fusion",)):
+      np.testing.assert_allclose(fn(x), want)
+      assert n_loops(fn.specialize(x)) == 2
+  with pytest.raises(ValueError, match="no identity"):
+    extremes(np.zeros(0))
+
+
+def test_reductions_that_must_not_be_fused_are_not():
+  x = np.random.default_rng(8).random(1000)
+  np.testing.assert_allclose(chained(x), ((x - x.mean()) ** 2).sum())
+  assert n_loops(chained.specialize(x)) == 2
+  np.testing.assert_allclose(mixed(x), (x.sum(), x.max()))
+  assert n_loops(mixed.specialize(x)) == 2

@@ -16,6 +16,12 @@ unchanged; everything underneath is new.
 - **More of `grad`:** `cumsum`, `sort`, `einsum`, stacks of matrices, folds
   with any function, and `if` statements on run-time conditions (both branches
   run, results are selected). The derivative of a `map` runs in parallel.
+- **A middle end:** elaboration now produces operator statements (`IndexMap`,
+  `IndexReduce`, printed by `spec.operators`) and a pipeline of passes rewrites
+  them before they become loops. Tiling is one such pass, a pattern match on
+  the IR instead of a trial elaboration; **sibling fusion** is new
+  (`x.min(), x.max()` is one loop); `find_broken_transform` bisects the pass
+  list; `config.skip_transforms` switches passes off.
 - **General operators:** `reduce`, `scan` and `filter` take several arrays
   with `map=` (and `emit=`); `np.einsum`; `@` on stacks; reductions over
   several axes in one pass; tiling for maps of any rank.

@@ -47,7 +47,7 @@ from .. import prims
 from ..errors import InternalError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, BufType, ScalarType
 from ..syntax import ops
-from ..syntax.ir import Assign, Cast, Const, Expr, Load, Prim, Store, Var, same, walk_expr, walk_stmts
+from ..syntax.ir import Assign, Cast, Const, Expr, IndexReduce, Load, Prim, Store, Var, same, walk_expr, walk_stmts
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, isub
 from ..syntax.values import CHEAP_COST, ArrayVal, describe
 from .derivatives import backprop, is_float
@@ -101,6 +101,11 @@ def observe(el, stmt) -> None:
       elif t.kind == "f" and s.var.uid not in el.defs and depends(el, s.value):
         el.ad_vars.add(s.var.uid)
         el.tainted_vars.setdefault(s.var.uid, _info(el, "a variable assigned in a branch or a loop"))
+    elif isinstance(s, IndexReduce):
+      for f in s.folds:
+        if is_float(f.result) and (depends(el, f.value) or (f.init is not None and depends(el, f.init))):
+          el.ad_vars.add(f.result.uid)
+          el.tainted_vars.setdefault(f.result.uid, _info(el, "a reduction"))
     elif isinstance(s, Store):
       if is_float(s.value) and depends(el, s.value):
         el.ad_bufs.add(s.buf.uid)

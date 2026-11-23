@@ -26,6 +26,7 @@ from ..syntax.ir import (
   Expr,
   ForRange,
   If,
+  IndexMap,
   Load,
   ParLoop,
   ReleaseScope,
@@ -302,33 +303,36 @@ class ArrayMixin:
     return True
 
   def loop_nest(self, shape: Sequence[Expr], body: Callable[[tuple[Expr, ...]], None], parallel: bool = True) -> None:
-    """Run ``body(idx)`` for every index of ``shape`` (in parallel if allowed)."""
+    """Run ``body(idx)`` for every index of ``shape``: an ``IndexMap`` whose
+    iterations are independent (``parallel=False``: in index order)."""
     if not shape:
       body(())
       return
-    if parallel and self.can_parallel(shape):
-      total = self.tmp(iprod(shape), "total")
-      self.par_loop(
-        total,
-        lambda chunk, start, stop: self.chunk_iter(shape, start, stop, body),
-        base_depth=1 if len(shape) == 1 else 2,
-      )
-    else:
-      self.seq_nest(shape, body)
+    self.index_map(shape, body, ordered=not parallel)
 
-  def seq_nest(self, shape: Sequence[Expr], body, _idx: tuple = (), reduction: tuple | None = None) -> None:
-    if len(_idx) == len(shape):
-      body(_idx)
+  def seq_nest(self, shape: Sequence[Expr], body) -> None:
+    """``body(idx)`` for every index of ``shape``, in order."""
+    if not shape:
+      body(())
       return
-    dim = shape[len(_idx)]
-    last = len(_idx) == len(shape) - 1
-    self.for_range(
-      ZERO,
-      dim,
-      lambda i: self.seq_nest(shape, body, _idx + (i,), reduction),
-      simd=last,
-      reduction=reduction if last else None,
-    )
+    self.index_map(shape, body, ordered=True)
+
+  def index_map(self, shape: Sequence[Expr], body: Callable[[tuple[Expr, ...]], None], ordered: bool = False) -> None:
+    """Emit an :class:`~parakeet.syntax.ir.IndexMap` whose body is what
+    ``body(idx)`` elaborates to.  Which loops it becomes is decided later, by
+    the passes in :mod:`parakeet.transforms`."""
+    shape = tuple(self.tmp(d, "n") for d in shape)
+    index = tuple(Var("i", I) for _ in shape)
+    for v, d in zip(index, shape):
+      self.nonneg.add(v.uid)
+      self.upper[v.uid] = d
+    threads = not ordered and self.can_parallel(shape)
+    blk: list = []
+    scope = self.new_scope("loop")
+    with self.in_block(blk, scope, loop=True, par=threads):
+      body(index)
+      self.emit(ReleaseScope(scope))
+    self.emit(IndexMap(shape, index, blk, scope, ordered, threads, self.loc()))
 
   def par_loop(
     self,
@@ -344,7 +348,7 @@ class ArrayMixin:
     ``base_depth`` is the loop nesting the chunk iteration itself needs;
     anything deeper means each element is expensive ("heavy"), which lets
     the runtime use threads even for few elements."""
-    from ..backends.cfamily import loop_depth
+    from ..transforms.lowering import depth as loop_depth
 
     if nchunks is None:
       nchunks = self.tmp(RtCall("num_chunks", (total, Const(kind == "reduce", Bool)), I), "nchunks")

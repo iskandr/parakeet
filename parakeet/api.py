@@ -121,8 +121,14 @@ class Specialization:
 
   @property
   def ir(self) -> str:
-    """The typed loop IR of this specialization, as text."""
+    """The typed loop IR of this specialization (after every pass), as text."""
     return fmt_function(self.function)
+
+  @property
+  def operators(self) -> str:
+    """The function as the frontend produced it: array operators (map, reduce)
+    over index spaces, before the passes of :mod:`parakeet.transforms.pipeline`."""
+    return self.elaborated.operators
 
   @property
   def source(self) -> str:
@@ -517,6 +523,7 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       tiling=config.tiling if self.tiling is None else self.tiling,
       tile_bytes=config.tile_bytes,
       blas=config.blas,
+      skip=tuple(sorted(config.skip_transforms)),
     )
 
   # ---- calling -------------------------------------------------------------------
@@ -617,8 +624,13 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
       except CompileError as e:
         e.add_note(f"while compiling {self.fn.__qualname__}({', '.join(sig.describe(k) for k in arg_keys)})")
         raise
+    from .transforms import pipeline
+
+    elaborated.operators = fmt_function(elaborated.function)  # before the passes: the operator level
     if config.print_ir:
-      print(fmt_function(elaborated.function))
+      print(elaborated.operators)
+    trace = (lambda name, fn: print(f"--- after {name} ---\n{fmt_function(fn)}")) if config.print_ir else None
+    pipeline.run(elaborated.function, options, trace)
     module = backend.build(elaborated.function)
     spec = Specialization(self.fn.__name__, keys, elaborated, module, backend, type_key)
     with table.lock:

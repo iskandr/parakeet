@@ -1,9 +1,10 @@
 """Find out which optimization breaks a function.
 
-Parakeet has no pass pipeline to replay one transform at a time: fusion
-happens while a function is elaborated, tiling while its loops are built, and
-the rest is the C compiler and the parallel runtime.  What can be done is to
-switch those on one after another and see where the answer changes.
+Start with everything off, then switch things on one after another and see
+where the answer changes: fusion of array expressions (done by the frontend
+as it elaborates), each pass of the middle end in the order it runs
+(:mod:`parakeet.transforms.pipeline`), the C compiler's optimizer, and
+finally the parallel runtime.
 """
 
 from __future__ import annotations
@@ -13,15 +14,18 @@ import numpy as np
 from ..api import jit
 from ..config import config, normalize_backend, options
 from ..testing import eq
+from ..transforms import pipeline
 
 # (name, settings switched on at this step), applied cumulatively
+# (name, settings switched on at this step), applied cumulatively; a pass is
+# switched on by no longer skipping it
 STEPS = (
   ("fusion", {"fusion": True}),
-  ("tiling", {"tiling": True}),
+  *[(name, {"run": name}) for name in pipeline.names()],
   ("C optimizer", {"opt_level": None}),
   ("parallel loops", {"backend": "auto"}),
 )
-_BASELINE = {"backend": "c", "fusion": False, "tiling": False, "opt_level": 0}
+_BASELINE = {"backend": "c", "fusion": False, "opt_level": 0, "skip_transforms": tuple(pipeline.names())}
 
 
 def _copy(x):
@@ -81,7 +85,10 @@ def find_broken_transform(fn, inputs, expected=None, print_transforms: bool = Tr
     return "frontend"
   for name, switched_on in steps:
     for k, v in switched_on.items():
-      settings[k] = full[k] if v is None else v
+      if k == "run":
+        settings["skip_transforms"] = tuple(p for p in settings["skip_transforms"] if p != v)
+      else:
+        settings[k] = full[k] if v is None else v
     if not attempt(name):
       say(f"The culprit is: {name}")
       return name
