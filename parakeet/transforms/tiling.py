@@ -33,12 +33,28 @@ import math
 from ..ndtypes import Bool, BufType
 from ..syntax import ir, ops
 from ..syntax.clone import Cloner, defined
-from ..syntax.ir import Alloc, Assign, Const, Expr, ForRange, If, IndexMap, IndexReduce, Load, RtCall, Scope, Store, Var
+from ..syntax.ir import (
+  Alloc,
+  Assign,
+  Const,
+  Expr,
+  ForRange,
+  If,
+  IndexMap,
+  IndexReduce,
+  IndexTile,
+  Load,
+  RtCall,
+  Scope,
+  Store,
+  Var,
+)
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, iprod, isub
 from .lowering import Loops, outer_expr, pure_defs
 
 UNROLL_I = 2
 UNROLL_J = 4
+ROW_TILE = 32  # cache-tile row strip height for multi-core rectangular tiling
 MIN_STATIC_SIZE = 256  # maps known to be smaller than this are not worth tiling
 INTERCHANGE_TILE = 256  # L1-sized strip of contiguous output columns (256 * 8B = 2 KiB)
 COMMUTATIVE_OPS = frozenset({"add", "mul", "min", "max", "and", "or", "bitand", "bitor", "bitxor"})
@@ -342,37 +358,8 @@ def interchange(fn: ir.Function, options) -> None:
 
 
 # ---------------------------------------------------------------------------
-# tiling and jamming (TiledMap)
+# tiling and jamming (IndexTile)
 # ---------------------------------------------------------------------------
-
-
-def element(lp: Loops, s: IndexMap, m: Shape, at: tuple[Expr, ...]) -> None:
-  """One element of the map, as it was written."""
-  c = Cloner({v.uid: e for v, e in zip(s.index, at)})
-  lp.block.extend(c.block(m.before + [m.reduce] + m.after))
-
-
-def jam(lp: Loops, s: IndexMap, m: Shape, ats: list[tuple[Expr, ...]]) -> None:
-  """The elements at ``ats`` with their reductions fused into one."""
-  red = m.reduce
-  index = tuple(Var("k", I) for _ in red.index)
-  scope = Scope("loop")
-  body: list = []
-  folds: list = []
-  tails: list = []
-  for at in ats:
-    c = Cloner({v.uid: e for v, e in zip(s.index, at)})
-    c.m.update({v.uid: k for v, k in zip(red.index, index)})
-    for v in defined(m.before + [red] + m.after).values():
-      c.var(v)
-    lp.block.extend(c.stmt(t) for t in m.before)
-    body.extend(c.stmt(t) for t in red.body)
-    folds.extend(c.fold(f) for f in red.folds)
-    scope.owned.extend(c.scope(red.scope).owned)
-    tails.append([c.stmt(t) for t in m.after])
-  lp.emit(IndexReduce(m.extent, index, body, folds, scope, red.home, False, red.loc))
-  for tail in tails:
-    lp.block.extend(tail)
 
 
 def loop(lp: Loops, start: Expr, stop: Expr, fill, step: Expr = ONE, name: str = "i") -> None:
@@ -397,72 +384,71 @@ def tile_size(lp: Loops, length: Expr, itemsize: int, tile_bytes: int) -> Expr:
 
 
 def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int) -> list:
-  """The loops of ``s``, in tiles of its last dimension.  The dimensions
-  before it are one long row index."""
+  """Rewrite a matmul-shaped ``IndexMap`` into nested :class:`IndexTile`
+  operators: an outer L2 ``level="cache"`` tile over rows and columns wrapping
+  an inner ``level="register"`` micro-tile (``UNROLL_I x UNROLL_J``)."""
   out: list = []
   lp = Loops(out, defs, owner)
-  lead = tuple(lp.tmp(d, "n") for d in s.shape[:-1])
-  n_j = lp.tmp(s.shape[-1], "n")
-  n_i = lp.tmp(iprod(lead), "rows")
+  rank = len(s.shape)
+  shape = tuple(lp.tmp(d, "n") for d in s.shape)
   length = lp.tmp(iprod(m.extent), "len")
   itemsize = m.reduce.folds[0].a.type.bits // 8
-  tile = tile_size(lp, length, itemsize, tile_bytes)
+  col_tile = tile_size(lp, length, itemsize, tile_bytes)
 
-  def at(inner: Loops, i: Expr, j: Expr) -> tuple[Expr, ...]:
-    return ((inner.tmp(i, "i"),) if len(lead) == 1 else inner.unravel(inner.tmp(i, "i"), lead)) + (inner.tmp(j, "j"),)
+  # Outer cache tile: step leading batch axes 1-by-1, tile rows by ROW_TILE and columns by col_tile
+  cache_tile_shape: tuple[Expr | None, ...] = (
+    *(ONE,) * (rank - 2),
+    Const(ROW_TILE, I),
+    col_tile,
+  )
+  cache_origin = tuple(Var("t0", I) for _ in range(rank))
+  cache_extent = tuple(Var("te", I) for _ in range(rank))
 
-  def single(inner: Loops, i: Expr, j: Expr) -> None:
-    element(inner, s, m, at(inner, i, j))
+  # Inner register micro-tile over the cache tile's clamped extent
+  reg_tile_shape: tuple[Expr | None, ...] = (
+    *(None,) * (rank - 2),
+    Const(UNROLL_I, I),
+    Const(UNROLL_J, I),
+  )
+  reg_origin = tuple(Var("r0", I) for _ in range(rank))
+  reg_extent = tuple(Var("re", I) for _ in range(rank))
 
-  def span(inner: Loops, row: Expr, lo: Expr, hi: Expr) -> None:
-    """Columns ``[lo, hi)`` of one row, an element at a time."""
-    loop(inner, lo, hi, lambda body, j: single(body, row, j), name="j")
+  # Single-element IndexMap inside the register tile (coords = cache_origin + reg_origin + elem_idx)
+  elem_index = tuple(Var("u", I) for _ in range(rank))
+  subst = {v.uid: iadd(iadd(co, ro), u) for v, co, ro, u in zip(s.index, cache_origin, reg_origin, elem_index)}
+  cloner = Cloner(subst)
+  elem_body = cloner.block(m.before + [m.reduce] + m.after)
+  elem_scope = Scope("loop")
+  elem_body.append(ir.ReleaseScope(elem_scope))
+  elem_map = IndexMap(reg_extent, elem_index, elem_body, elem_scope, False, False, s.loc)
 
-  def rows(inner: Loops, r0: Expr, r1: Expr) -> None:
-    """Complete rows ``[r0, r1)``, a tile of columns at a time."""
-    i_jam = inner.tmp(iadd(r0, imul(idiv(isub(r1, r0), UNROLL_I), UNROLL_I)), "i_jam")
-
-    def tile_body(t: Loops, j0: Var) -> None:
-      j1 = t.tmp(imin(n_j, iadd(j0, tile)), "j1")
-      j_jam = t.tmp(iadd(j0, imul(idiv(isub(j1, j0), UNROLL_J), UNROLL_J)), "j_jam")
-
-      def block_rows(b: Loops, i: Var) -> None:
-        def block(e: Loops, j: Var) -> None:
-          jam(e, s, m, [at(e, iadd(i, p), iadd(j, q)) for p in range(UNROLL_I) for q in range(UNROLL_J)])
-
-        def leftover(e: Loops, j: Var) -> None:
-          for p in range(UNROLL_I):
-            single(e, iadd(i, p), j)
-
-        loop(b, j0, j_jam, block, step=Const(UNROLL_J, I), name="j")
-        loop(b, j_jam, j1, leftover, name="j")
-
-      loop(t, r0, i_jam, block_rows, step=Const(UNROLL_I, I), name="i")
-      loop(t, i_jam, r1, lambda b, i: span(b, i, j0, j1), name="i")
-
-    loop(inner, ZERO, n_j, tile_body, step=tile, name="j0")
-
-  def chunk(inner: Loops, _chunk, start: Expr, stop: Expr) -> None:
-    """Flat positions ``[start, stop)``: the end of a row, whole rows, the
-    beginning of a row."""
-    r0 = inner.tmp(idiv(start, n_j), "r0")
-    c0 = inner.tmp(isub(start, imul(r0, n_j)), "c0")
-    lead_end = inner.tmp(ops.select(cmp("gt", c0, 0), imin(stop, imul(iadd(r0, 1), n_j)), start), "lead_end")
-    span(inner, r0, c0, iadd(c0, isub(lead_end, start)))
-    first_row = inner.tmp(ops.select(cmp("gt", c0, 0), iadd(r0, 1), r0), "first_row")
-    last_row = inner.tmp(idiv(stop, n_j), "last_row")  # may be one past the end
-    # a chunk inside a single row has no complete rows (and first_row > last_row)
-    rows(inner, first_row, inner.tmp(imax(first_row, last_row), "rows_end"))
-    tail_start = inner.tmp(imax(lead_end, imul(last_row, n_j)), "tail_start")
-    span(inner, last_row, isub(tail_start, imul(last_row, n_j)), isub(stop, imul(last_row, n_j)))
-
-  total = lp.tmp(imul(n_i, n_j), "total")
-  work: list = []
-  # where it cannot run in parallel it is still a loop of one chunk: the
-  # backend compiles that as a function of its own
-  lp.sub(work).parallel(total, chunk, nchunks=None if s.parallel else ONE, loc=s.loc, work=length, heavy=True)
-  # an empty row would make the row arithmetic divide by zero; there is nothing to do then anyway
-  lp.emit(If(cmp("gt", total, 0), work, []))
+  reg_scope = Scope("loop")
+  reg_tile = IndexTile(
+    cache_extent,
+    reg_tile_shape,
+    reg_origin,
+    reg_extent,
+    [],
+    [elem_map, ir.ReleaseScope(reg_scope)],
+    reg_scope,
+    level="register",
+    parallel=False,
+    loc=s.loc,
+  )
+  cache_scope = Scope("loop")
+  cache_tile = IndexTile(
+    shape,
+    cache_tile_shape,
+    cache_origin,
+    cache_extent,
+    [],
+    [reg_tile, ir.ReleaseScope(cache_scope)],
+    cache_scope,
+    level="cache",
+    parallel=s.parallel,
+    loc=s.loc,
+  )
+  out.append(cache_tile)
   return out
 
 
@@ -492,12 +478,12 @@ def tiling(fn: ir.Function, options) -> None:
 
 __all__ = [
   "INTERCHANGE_TILE",
+  "ROW_TILE",
   "UNROLL_I",
   "UNROLL_J",
   "interchange",
   "interchange_block",
   "interchanged",
-  "jam",
   "linear_stride",
   "match",
   "should_interchange",

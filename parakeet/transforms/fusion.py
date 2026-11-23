@@ -29,12 +29,30 @@ from .simplify import drop_buffers, has_effects
 
 
 def resolved(e: Expr, defs: dict[int, Expr], budget: int = 20) -> Expr:
-  """``e`` with single-assignment integer variables replaced by their definitions."""
+  """``e`` with single-assignment integer variables replaced by their definitions
+  and trivial additive/multiplicative identities (``x + 0``, ``x * 1``, ``x * 0``) folded."""
   if isinstance(e, Var):
     d = defs.get(e.uid)
     return e if d is None or budget <= 0 else resolved(d, defs, budget - 1)
   if isinstance(e, ir.Prim):
-    return ir.Prim(e.op, tuple(resolved(a, defs, budget - 1) for a in e.args), e.type)
+    args = tuple(resolved(a, defs, budget - 1) for a in e.args)
+    if len(args) == 2:
+      a, b = args
+      if e.op == "add":
+        if isinstance(a, Const) and a.value == 0:
+          return b
+        if isinstance(b, Const) and b.value == 0:
+          return a
+      elif e.op == "sub" and isinstance(b, Const) and b.value == 0:
+        return a
+      elif e.op == "mul":
+        if isinstance(a, Const) and a.value == 1:
+          return b
+        if isinstance(b, Const) and b.value == 1:
+          return a
+        if (isinstance(a, Const) and a.value == 0) or (isinstance(b, Const) and b.value == 0):
+          return Const(0, e.type)
+    return ir.Prim(e.op, args, e.type)
   if isinstance(e, ir.Cast):
     return ir.Cast(resolved(e.arg, defs, budget - 1), e.type)
   return e
@@ -362,6 +380,102 @@ def fuse_vertical_pair(
   return None
 
 
+def squeeze_unit_map(s: IndexMap) -> IndexMap | None:
+  """Drop ``Const(1)`` axes from an ``IndexMap`` by substituting ``0``.
+
+  Turns ``keepdims=True`` maps like ``map i, j over (M, 1)`` into ``map i over (M,)``,
+  enabling vertical and sibling fusion with ``(M,)`` consumers (e.g. ``layer_norm``)."""
+  if len(s.shape) < 2 or not any(isinstance(d, Const) and d.value == 1 for d in s.shape):
+    return None
+  kept_shape: list[Expr] = []
+  kept_index: list[Var] = []
+  subst: dict[int, Expr] = {}
+  for d, v in zip(s.shape, s.index):
+    if isinstance(d, Const) and d.value == 1:
+      subst[v.uid] = Const(0, v.type)
+    else:
+      kept_shape.append(d)
+      kept_index.append(v)
+  if not kept_shape:
+    return None
+  cl = Cloner(subst)
+  for v in defined(s.body).values():
+    cl.var(v)
+  new_body = [cl.stmt(t) for t in s.body]
+  return IndexMap(tuple(kept_shape), tuple(kept_index), new_body, cl.scope(s.scope), s.ordered, s.parallel, s.loc)
+
+
+def split_invariant_map(s: IndexMap) -> list[ir.Stmt] | None:
+  """Hoist an ``IndexReduce`` (and its setup) out of trailing ``IndexMap`` axes
+  that it does not depend on.
+
+  Fixes ``O(M * N^2)`` redundant recomputation in expressions like
+  ``x - np.max(x, axis=1, keepdims=True)`` (``softmax``, ``layer_norm``),
+  turning ``map i, j over (M, N): [reduce(i); body(i, j)]`` into
+  ``map i over (M,): [reduce(i); nested map j over (N,): body(i, j)]``."""
+  from ..syntax.ops import ZERO, cmp, iprod
+
+  if s.ordered or s.scope.owned or len(s.shape) < 2:
+    return None
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  # Find the last IndexReduce in the top-level body (with straight-line setup before it)
+  red_positions = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
+  if not red_positions:
+    return None
+  last_red = red_positions[-1]
+  prefix = body[: last_red + 1]
+  tail = body[last_red + 1 :]
+  if not tail or any(isinstance(t, ir.Store) for t in prefix):
+    return None
+  # Find the rightmost outer axis index used anywhere in ``prefix``
+  used_uids = {
+    x.uid for st in ir.walk_stmts(prefix) for e in ir.stmt_exprs(st) for x in ir.walk_expr(e) if isinstance(x, Var)
+  }
+  split = 0
+  for k, idx_var in enumerate(s.index):
+    if idx_var.uid in used_uids:
+      split = k + 1
+  if split >= len(s.index):
+    return None  # prefix depends on the innermost axis (e.g. matmul)
+
+  prefix_can_raise = any(
+    isinstance(x, ir.Check) or (isinstance(x, IndexReduce) and any(f.empty is not None for f in x.folds))
+    for x in ir.walk_stmts(prefix)
+  )
+  tail_scope = ir.Scope("loop")
+  inner_map = IndexMap(
+    s.shape[split:],
+    s.index[split:],
+    tail + [ir.ReleaseScope(tail_scope)],
+    tail_scope,
+    False,
+    s.parallel if split == 0 else False,
+    s.loc,
+  )
+  if split == 0:
+    # Invariant to ALL axes of the map: hoist completely before the map
+    if prefix_can_raise:
+      total = iprod(s.shape)
+      return [ir.If(cmp("gt", total, ZERO), prefix + [inner_map], [])]
+    return prefix + [inner_map]
+
+  # Invariant to trailing axes ``s.index[split:]``: split into outer map over
+  # ``s.shape[:split]`` containing ``prefix`` followed by nested map over ``s.shape[split:]``
+  inner_block: list[ir.Stmt] = prefix + [inner_map]
+  if prefix_can_raise:
+    inner_block = [ir.If(cmp("gt", iprod(s.shape[split:]), ZERO), inner_block, [])]
+  outer_map = IndexMap(
+    s.shape[:split],
+    s.index[:split],
+    inner_block + [ir.ReleaseScope(s.scope)],
+    s.scope,
+    False,
+    s.parallel,
+    s.loc,
+  )
+  return [outer_map]
+
+
 def combine_nested_map(outer: IndexMap, defs: dict[int, Expr]) -> IndexMap | None:
   """``CombineNestedMaps`` (thesis Fig. 6.2): flatten ``IndexMap(S1, i -> IndexMap(S2, j -> body))``
   into ``IndexMap(S1 ++ S2, (i, j) -> body)`` when ``S2`` does not depend on ``i``."""
@@ -407,17 +521,30 @@ def vertical_block(
   gone: set[int],
   options,
 ) -> tuple[list, bool]:
-  """Walk ``block`` flattening nested maps and fusing adjacent producer-consumer operators."""
+  """Walk ``block`` squeezing unit axes, hoisting invariant reductions,
+  flattening nested maps, and fusing adjacent producer-consumer operators."""
   changed = False
-  for i, s in enumerate(block):
+  normalized: list = []
+  for s in block:
     for b in ir.sub_blocks(s):
       b[:], inner = vertical_block(b, readers, defs, allocs, store_counts, gone, options)
       changed |= inner
     if isinstance(s, IndexMap):
+      squeezed = squeeze_unit_map(s)
+      if squeezed is not None:
+        s = squeezed
+        changed = True
+      split_out = split_invariant_map(s)
+      if split_out is not None:
+        normalized.extend(split_out)
+        changed = True
+        continue
       flat = combine_nested_map(s, defs)
       if flat is not None:
-        block[i] = flat
+        s = flat
         changed = True
+    normalized.append(s)
+  block = normalized
   out: list = []
   k = 0
   while k < len(block):
@@ -917,7 +1044,7 @@ def fuse_block(block: list, defs: dict[int, Expr], allocs: set[int]) -> list:
       # ``s`` may sink past scalar definitions that do not need its result,
       # to meet the next reduction
       while True:
-        results = {v.uid for f in s.folds for v in ((f.result, f.payload[0]) if f.payload is not None else (f.result,))}
+        results = {v.uid for f in s.folds for v in (f.result, *(p.result for p in f.payloads))}
         between: list = []
         j = k
         while j < len(block) and isinstance(block[j], (Assign, ir.Comment)):
@@ -999,4 +1126,6 @@ __all__ = [
   "fuse_siblings",
   "fuse_vertical",
   "fuse_vertical_pair",
+  "split_invariant_map",
+  "squeeze_unit_map",
 ]

@@ -331,15 +331,27 @@ class IndexMap(Stmt):
 
 
 @dataclass(eq=False, slots=True)
+class Payload:
+  """One auxiliary value carried alongside a :class:`Fold` accumulator (e.g.
+  the winning index in ``argmin``/``argmax``, or running counts/sums in online
+  variance / online softmax)."""
+
+  result: Var
+  value: Expr
+  a: Var
+  b: Var
+  combined: Expr
+
+
+@dataclass(eq=False, slots=True)
 class Fold:
   """One accumulator of an :class:`IndexReduce`: ``result = fold(combine, value(idx))``.
 
   ``combine`` is the block that computes ``combined`` from the accumulator
   ``a`` and the next value ``b``; ``op`` names it when it is an associative
   operation (the fold may then be regrouped across chunks and, for ``add``/``mul``,
-  vectorised).  An optional ``payload`` carries a second value updated alongside
-  ``a`` (e.g. the winning index in ``argmin``/``argmax``):
-  ``(payload_result, payload_value, payload_a, payload_b, payload_combined)``."""
+  vectorised).  ``payloads`` carries zero, one, or many auxiliary values updated
+  alongside ``a`` by the same combiner."""
 
   result: Var
   value: Expr
@@ -350,7 +362,7 @@ class Fold:
   init: Expr | None = None
   op: str | None = None
   empty: ErrorInfo | None = None  # raised for an empty index space when there is no init
-  payload: tuple[Var, Expr, Var, Var, Expr] | None = None
+  payloads: list[Payload] = field(default_factory=list)
 
 
 @dataclass(eq=False, slots=True)
@@ -407,7 +419,53 @@ class IndexScan(Stmt):
   loc: SourceLocation | None = None
 
 
-OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan)
+@dataclass(eq=False, slots=True)
+class TileStage:
+  """An N-dimensional tile of an input expression (or fused prologue) staged
+  into a tile-local buffer before an :class:`IndexTile`'s body runs.
+
+  Works for any number of inputs, any rank, and any axis traversal: ``body``
+  computes ``value`` at tile-local coordinates ``index`` over ``shape`` and
+  writes into ``buf`` (L1 scratch on CPU, ``__shared__`` / ``threadgroup``
+  memory on GPUs)."""
+
+  buf: Var
+  shape: tuple[Expr, ...]
+  index: tuple[Var, ...]
+  body: list[Stmt]
+  value: Expr
+  scope: Scope
+
+
+@dataclass(eq=False, slots=True)
+class IndexTile(Stmt):
+  """Split an N-dimensional index space ``shape`` into tiles of ``tile_shape``.
+
+  Along each axis ``k``:
+
+  * if ``tile_shape[k]`` is an expression ``B``, ``origin[k]`` steps by ``B``
+    across ``[0, shape[k])`` and ``extent[k] = min(B, shape[k] - origin[k])``;
+  * if ``tile_shape[k] is None``, axis ``k`` is left whole (``origin[k] = 0``,
+    ``extent[k] = shape[k]``).
+
+  ``body`` holds ordinary operator IR (including nested :class:`IndexTile`s),
+  so multi-level cache blocking, K-tiling, reduction interchange, register
+  jamming, and GPU shared-memory tiling are all compositions of one operator.
+  """
+
+  shape: tuple[Expr, ...]
+  tile_shape: tuple[Expr | None, ...]
+  origin: tuple[Var, ...]
+  extent: tuple[Var, ...]
+  stages: list[TileStage]
+  body: list[Stmt]
+  scope: Scope
+  level: str = "cache"  # "cache" | "shared" | "register"
+  parallel: bool = True
+  loc: SourceLocation | None = None
+
+
+OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan, IndexTile)
 
 
 @dataclass(eq=False, slots=True)
@@ -469,6 +527,8 @@ def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
     return (s.then, s.orelse)
   if isinstance(s, (ForRange, While, ParLoop, IndexMap, IndexFilter)):
     return (s.body,)
+  if isinstance(s, IndexTile):
+    return (*[st.body for st in s.stages], s.body)
   if isinstance(s, IndexReduce):
     return (s.pre, s.body, *[f.combine for f in s.folds])
   if isinstance(s, IndexScan):
@@ -496,6 +556,12 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     return (s.cond, *s.args)
   if isinstance(s, IndexMap):
     return s.shape
+  if isinstance(s, IndexTile):
+    out: list[Expr] = list(s.shape) + [d for d in s.tile_shape if d is not None]
+    for st in s.stages:
+      out.extend(st.shape)
+      out.append(st.value)
+    return tuple(out)
   if isinstance(s, IndexFilter):
     return (s.n, s.keep)
   if isinstance(s, IndexScan):
@@ -505,8 +571,8 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     out = list(s.shape) + ([s.where] if s.where is not None else [])
     for f in s.folds:
       out += [f.value, f.combined] + ([f.init] if f.init is not None else [])
-      if f.payload is not None:
-        out += [f.payload[1], f.payload[4]]
+      for p in f.payloads:
+        out += [p.value, p.combined]
     return tuple(out)
   return ()
 
@@ -525,16 +591,22 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     return (s.chunk, s.start, s.stop)
   if isinstance(s, IndexMap):
     return s.index
+  if isinstance(s, IndexTile):
+    defs: list[Var] = [*s.origin, *s.extent]
+    for st in s.stages:
+      defs.append(st.buf)
+      defs.extend(st.index)
+    return tuple(defs)
   if isinstance(s, IndexFilter):
     return (s.index, s.out, s.count)
   if isinstance(s, IndexScan):
     return (s.index, s.fold.result, s.fold.a, s.fold.b)
   if isinstance(s, IndexReduce):
-    defs: list[Var] = list(s.index)
+    defs = list(s.index)
     for f in s.folds:
       defs.extend((f.result, f.a, f.b))
-      if f.payload is not None:
-        defs.extend((f.payload[0], f.payload[2], f.payload[3]))
+      for p in f.payloads:
+        defs.extend((p.result, p.a, p.b))
     return tuple(defs)
   return ()
 
@@ -623,6 +695,18 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       how = "ordered " if s.ordered else ("" if s.parallel else "nested ")
       out.append(f"{pad}{how}map {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):")
       out += fmt_block(s.body, indent + 1) or [f"{pad}    pass"]
+    elif isinstance(s, IndexTile):
+      how = "parallel " if s.parallel else ""
+      tiles = ", ".join("*" if d is None else fmt_expr(d) for d in s.tile_shape)
+      coords = ", ".join(f"({o.name}:{e.name})" for o, e in zip(s.origin, s.extent))
+      out.append(f"{pad}{how}tile[{s.level}] {coords} over ({', '.join(map(fmt_expr, s.shape))}) by ({tiles}):")
+      for st in s.stages:
+        out.append(
+          f"{pad}    stage {st.buf.name}[{', '.join(v.name for v in st.index)}] over ({', '.join(map(fmt_expr, st.shape))}):"
+        )
+        out += fmt_block(st.body, indent + 2)
+        out.append(f"{pad}        = {fmt_expr(st.value)}")
+      out += fmt_block(s.body, indent + 1) or [f"{pad}    pass"]
     elif isinstance(s, IndexReduce):
       how = "parallel " if s.parallel else ""
       out.append(f"{pad}{how}reduce {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):")
@@ -632,15 +716,11 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       out += fmt_block(s.body, indent + (1 if s.where is None else 2))
       for f in s.folds:
         init = "" if f.init is None else f", init={fmt_expr(f.init)}"
-        if f.payload is not None:
-          p_res, p_val, p_a, p_b, p_comb = f.payload
-          how = (
-            f.op
-            or f"lambda ({f.a.name}, {p_a.name}), ({f.b.name}, {p_b.name}): ({fmt_expr(f.combined)}, {fmt_expr(p_comb)})"
-          )
-          out.append(
-            f"{pad}    {f.result.name}, {p_res.name} = fold({how}, ({fmt_expr(f.value)}, {fmt_expr(p_val)}){init})"
-          )
+        if f.payloads:
+          lhs = ", ".join([f.result.name, *(p.result.name for p in f.payloads)])
+          vals = ", ".join([fmt_expr(f.value), *(fmt_expr(p.value) for p in f.payloads)])
+          how = f.op or f"lambda ({f.a.name}, ...), ({f.b.name}, ...): ({fmt_expr(f.combined)}, ...)"
+          out.append(f"{pad}    {lhs} = fold({how}, ({vals}){init})")
         else:
           if f.op is not None and not f.combine:
             how = f.op

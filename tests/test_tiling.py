@@ -565,3 +565,132 @@ def test_argmin_argmax_are_payload_index_reduce_and_sibling_fuse():
   assert arg_extremes(with_nan) == (1, 1)
   with pytest.raises(ValueError, match="empty"):
     arg_extremes(np.zeros(0))
+
+
+def test_index_tile_and_tile_stage_ir_verify_clone_and_lower():
+  from parakeet.ndtypes import BufType, Float64, Int64
+  from parakeet.syntax import ir, ops
+  from parakeet.syntax.clone import Cloner
+  from parakeet.transforms import lowering
+
+  # Build a 2D IndexTile with a TileStage that stages an input strip into a tile-local
+  # buffer and copies its doubled values into an output buffer, then verify, clone, and lower.
+  inp = ir.Var("inp", BufType(Float64))
+  out = ir.Var("out", BufType(Float64))
+  off_in = ir.Var("off_in", Int64)
+  off_out = ir.Var("off_out", Int64)
+  n = ir.Var("n", Int64)
+  m = ir.Var("m", Int64)
+  p_in = ir.ArrayParam(inp, off_in, (n, m), None)
+  p_out = ir.ArrayParam(out, off_out, (n, m), None, writes=True)
+
+  t0, t1 = ir.Var("t0", Int64), ir.Var("t1", Int64)
+  te0, te1 = ir.Var("te0", Int64), ir.Var("te1", Int64)
+  sbuf = ir.Var("stage", BufType(Float64))
+  si, sj = ir.Var("si", Int64), ir.Var("sj", Int64)
+  sval = ir.Load(inp, ops.iadd(ops.imul(ops.iadd(t0, si), m), ops.iadd(t1, sj)))
+  stage = ir.TileStage(sbuf, (te0, te1), (si, sj), [], sval, ir.Scope("stage"))
+
+  ui, uj = ir.Var("ui", Int64), ir.Var("uj", Int64)
+  loaded = ir.Load(sbuf, ops.iadd(ops.imul(ui, te1), uj))
+  doubled = ops.prim("mul", (loaded, ir.Const(2.0, Float64)), Float64)
+  imap_scope = ir.Scope("loop")
+  imap = ir.IndexMap(
+    (te0, te1),
+    (ui, uj),
+    [
+      ir.Store(out, ops.iadd(ops.imul(ops.iadd(t0, ui), m), ops.iadd(t1, uj)), doubled),
+      ir.ReleaseScope(imap_scope),
+    ],
+    imap_scope,
+    False,
+    False,
+  )
+  tile_scope = ir.Scope("tile")
+  tile = ir.IndexTile(
+    (n, m),
+    (ir.Const(4, Int64), ir.Const(8, Int64)),
+    (t0, t1),
+    (te0, te1),
+    [stage],
+    [imap, ir.ReleaseScope(tile_scope)],
+    tile_scope,
+    level="cache",
+    parallel=True,
+  )
+  fn = ir.Function("staged_double", [p_in, p_out], [tile], [], ir.Scope("fn"))
+  parakeet.verify(fn, "index_tile")
+  text = ir.fmt_function(fn)
+  assert "tile[cache]" in text and "stage " in text
+
+  # Cloner must preserve validity with fresh variable uids
+  cloned_body = Cloner({inp.uid: inp, out.uid: out, n.uid: n, m.uid: m}).block(fn.body)
+  fn2 = ir.Function("staged_double_copy", [p_in, p_out], cloned_body, [], ir.Scope("fn"))
+  parakeet.verify(fn2, "cloned_index_tile")
+
+  # Lowering must produce valid verified loop IR with no remaining IndexTile
+  lowering.lower(fn)
+  parakeet.verify(fn, "lowered_index_tile")
+  assert "tile[cache]" not in ir.fmt_function(fn)
+  assert "parallel[map]" in ir.fmt_function(fn)
+
+
+def test_squeeze_unit_map_and_split_invariant_map_softmax_layernorm():
+  @jit
+  def softmax(x):
+    m = np.max(x, axis=1, keepdims=True)
+    e = np.exp(x - m)
+    return e / np.sum(e, axis=1, keepdims=True)
+
+  @jit
+  def layer_norm(x, g, b):
+    mu = np.mean(x, axis=1, keepdims=True)
+    var = np.mean((x - mu) ** 2, axis=1, keepdims=True)
+    return (x - mu) / np.sqrt(var + 1e-5) * g + b
+
+  rng = np.random.default_rng(29)
+  for rows, cols in ((0, 5), (1, 1), (4, 7), (32, 64)):
+    x = rng.standard_normal((rows, cols))
+    g = rng.standard_normal(cols)
+    b = rng.standard_normal(cols)
+    if rows > 0:
+      e = np.exp(x - x.max(axis=1, keepdims=True))
+      np.testing.assert_allclose(softmax(x), e / e.sum(axis=1, keepdims=True), rtol=1e-6)
+      mu = x.mean(axis=1, keepdims=True)
+      want_ln = (x - mu) / np.sqrt(((x - mu) ** 2).mean(axis=1, keepdims=True) + 1e-5) * g + b
+      np.testing.assert_allclose(layer_norm(x, g, b), want_ln, rtol=1e-6)
+    else:
+      assert softmax(x).shape == (0, cols)
+      assert layer_norm(x, g, b).shape == (0, cols)
+
+  # Empty trailing axis preserves exact semantics (zero elements -> empty (3, 0) result);
+  # non-empty output with empty reduced operand still raises on np.max without identity.
+  assert softmax(np.zeros((3, 0))).shape == (3, 0)
+
+  @jit
+  def add_row_max(x, y):
+    return x + np.max(y, axis=1, keepdims=True)
+
+  with pytest.raises(ValueError, match="no identity"):
+    add_row_max(np.zeros((3, 4)), np.zeros((3, 0)))
+
+  x = rng.standard_normal((32, 64))
+  g = rng.standard_normal(64)
+  b = rng.standard_normal(64)
+  # layer_norm collapses to 1 single parallel loop and 1 allocation (0 temp buffers!)
+  ln_spec = layer_norm.specialize(x, g, b)
+  assert ln_spec.ir.count("alloc(") == 1
+  assert ln_spec.ir.count("parallel[map]") == 1
+  # Verify with parakeet.config.verify enabled across all passes
+  with parakeet.options(verify=True):
+    np.testing.assert_allclose(
+      softmax(x),
+      np.exp(x - x.max(axis=1, keepdims=True)) / np.exp(x - x.max(axis=1, keepdims=True)).sum(axis=1, keepdims=True),
+      rtol=1e-6,
+    )
+    mu = x.mean(axis=1, keepdims=True)
+    np.testing.assert_allclose(
+      layer_norm(x, g, b),
+      (x - mu) / np.sqrt(((x - mu) ** 2).mean(axis=1, keepdims=True) + 1e-5) * g + b,
+      rtol=1e-6,
+    )

@@ -71,14 +71,24 @@ class Cloner:
     return [self.stmt(s) for s in block]
 
   def fold(self, f: ir.Fold) -> ir.Fold:
-    payload = None
-    if f.payload is not None:
-      p_res, p_val, p_a, p_b, p_comb = f.payload
-      payload = (self.var(p_res), self.expr(p_val), self.var(p_a), self.var(p_b), self.expr(p_comb))
+    payloads = [
+      ir.Payload(self.var(p.result), self.expr(p.value), self.var(p.a), self.var(p.b), self.expr(p.combined))
+      for p in f.payloads
+    ]
     return ir.Fold(
       self.var(f.result), self.expr(f.value), self.var(f.a), self.var(f.b), [self.stmt(s) for s in f.combine],
-      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty, payload,
+      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty, payloads,
     )  # fmt: skip
+
+  def tile_stage(self, st: ir.TileStage) -> ir.TileStage:
+    return ir.TileStage(
+      self.var(st.buf),
+      tuple(self.expr(d) for d in st.shape),
+      tuple(self.var(v) for v in st.index),
+      [self.stmt(t) for t in st.body],
+      self.expr(st.value),
+      self.scope(st.scope),
+    )
 
   def stmt(self, s: ir.Stmt) -> ir.Stmt:
     x, b = self.expr, lambda blk: [self.stmt(t) for t in blk]
@@ -118,6 +128,19 @@ class Cloner:
         tuple(x(d) for d in s.shape), tuple(self.var(v) for v in s.index), b(s.body), self.scope(s.scope),
         s.ordered, s.parallel, s.loc,
       )  # fmt: skip
+    if isinstance(s, ir.IndexTile):
+      return ir.IndexTile(
+        tuple(x(d) for d in s.shape),
+        tuple(None if d is None else x(d) for d in s.tile_shape),
+        tuple(self.var(v) for v in s.origin),
+        tuple(self.var(v) for v in s.extent),
+        [self.tile_stage(st) for st in s.stages],
+        b(s.body),
+        self.scope(s.scope),
+        s.level,
+        s.parallel,
+        s.loc,
+      )
     if isinstance(s, ir.IndexReduce):
       return ir.IndexReduce(
         tuple(x(d) for d in s.shape), tuple(self.var(v) for v in s.index), b(s.body), [self.fold(f) for f in s.folds],

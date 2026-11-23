@@ -154,7 +154,7 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         f
         for f in s.folds
         if f.result.uid in live
-        or (f.payload is not None and f.payload[0].uid in live)
+        or any(p.result.uid in live for p in f.payloads)
         or f.init is None
         or has_effects(f.combine)
       ]

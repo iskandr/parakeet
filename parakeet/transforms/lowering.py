@@ -113,6 +113,8 @@ def depth(block: list) -> int:
       inner += 1
     elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
       inner += len(s.shape)
+    elif isinstance(s, ir.IndexTile):
+      inner += sum(1 for d in s.tile_shape if d is not None)
     elif isinstance(s, (ir.IndexFilter, ir.IndexScan)):
       inner += 1
     best = max(best, inner)
@@ -166,6 +168,10 @@ def work(defs: dict[int, Expr], block: list, bound: tuple[Var, ...] = ()) -> Exp
         w = imax(cost(s.then), cost(s.orelse))
       elif isinstance(s, (ir.IndexMap, ir.IndexReduce)):
         w = imul(known(iprod(s.shape)), imax(cost(s.body), 1))
+      elif isinstance(s, ir.IndexTile):
+        # Total tiles times inner tile work (approximated by inner body cost)
+        tiled = [d for d, b in zip(s.shape, s.tile_shape) if b is not None]
+        w = imul(known(iprod(tiled)) if tiled else ONE, imax(cost(s.body), 1))
       elif isinstance(s, (ir.IndexFilter, ir.IndexScan)):
         w = imul(known(s.n), imax(cost(s.body), 1))
       elif isinstance(s, ParLoop):
@@ -221,39 +227,35 @@ def step(
   acc: Var,
   x: Expr,
   scratch: Scope,
-  p_acc: Var | None = None,
-  p_x: Expr | None = None,
+  p_accs: list[Var] = (),  # type: ignore[assignment]
+  p_xs: list[Expr] = (),  # type: ignore[assignment]
 ) -> None:
-  """Fold ``x`` (and optional payload ``p_x``) into ``acc`` (and ``p_acc``)."""
+  """Fold ``x`` (and any carried payloads ``p_xs``) into ``acc`` (and ``p_accs``)."""
   subst: dict[int, Expr] = {f.a.uid: acc, f.b.uid: x if not f.combine else lp.tmp(x, "x")}
-  if f.payload is not None:
-    assert p_acc is not None and p_x is not None
-    _, _, p_a, p_b, p_combined = f.payload
-    subst[p_a.uid] = p_acc
-    subst[p_b.uid] = p_x if not f.combine else lp.tmp(p_x, "px")
+  for p, pa, px in zip(f.payloads, p_accs, p_xs):
+    subst[p.a.uid] = pa
+    subst[p.b.uid] = px if not f.combine else lp.tmp(px, "px")
   if not f.combine:
     lp.emit(Assign(acc, subst_expr(f.combined, subst)))
-    if f.payload is not None:
-      assert p_acc is not None
-      lp.emit(Assign(p_acc, subst_expr(p_combined, subst)))
+    for p, pa in zip(f.payloads, p_accs):
+      lp.emit(Assign(pa, subst_expr(p.combined, subst)))
     return
   c = Cloner(subst)
   lp.block.extend(c.block(f.combine))
   lp.emit(Assign(acc, c.expr(f.combined)))
-  if f.payload is not None:
-    assert p_acc is not None
-    lp.emit(Assign(p_acc, c.expr(p_combined)))
+  for p, pa in zip(f.payloads, p_accs):
+    lp.emit(Assign(pa, c.expr(p.combined)))
   lp.owner.owned.extend(c.scope(scratch).owned)  # this copy's buffers go with its surroundings
 
 
-def first(lp: Loops, s: ir.IndexReduce, at: tuple[Expr, ...], accs: list[Var], p_accs: list[Var | None]) -> None:
-  """Start every accumulator (and optional payload) from the value at index ``at``."""
+def first(lp: Loops, s: ir.IndexReduce, at: tuple[Expr, ...], accs: list[Var], p_accs: list[list[Var]]) -> None:
+  """Start every accumulator (and its carried payloads) from the value at index ``at``."""
   c = Cloner({v.uid: e for v, e in zip(s.index, at)})
   lp.block.extend(c.block(s.body))
-  for f, acc, p_acc in zip(s.folds, accs, p_accs):
+  for f, acc, pas in zip(s.folds, accs, p_accs):
     lp.emit(Assign(acc, cast(c.expr(f.value), acc.type)))
-    if f.payload is not None and p_acc is not None:
-      lp.emit(Assign(p_acc, cast(c.expr(f.payload[1]), p_acc.type)))
+    for p, pa in zip(f.payloads, pas):
+      lp.emit(Assign(pa, cast(c.expr(p.value), pa.type)))
   if s.scope.owned:
     lp.owner.owned.extend(c.scope(s.scope).owned)  # what the copy allocated is released with its surroundings
 
@@ -286,7 +288,7 @@ def hint(s: ir.IndexReduce, accs: list[Var]):
   if s.where is not None:
     return None
   op = s.folds[0].op
-  if op in ("add", "mul") and all(f.op == op and not f.combine and f.payload is None for f in s.folds):
+  if op in ("add", "mul") and all(f.op == op and not f.combine and not f.payloads for f in s.folds):
     return (op, list(accs))
   return None
 
@@ -297,14 +299,14 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
   folds = s.folds
   seeded = folds[0].init is not None  # all folds of one statement agree on this
   accs = [Var("acc", f.a.type) for f in folds]
-  p_accs: list[Var | None] = [Var("pacc", f.payload[2].type) if f.payload is not None else None for f in folds]
+  p_accs = [[Var("pacc", p.a.type) for p in f.payloads] for f in folds]
   body = list(s.body)
 
-  def steps(inner: Loops, targets: list[Var], p_targets: list[Var | None]) -> list:
+  def steps(inner: Loops, targets: list[Var], p_targets: list[list[Var]]) -> list:
     blk = list(body)
     sub = inner.sub(blk, s.scope)
-    for f, acc, p_acc, sc in zip(folds, targets, p_targets, scratch):
-      step(sub, f, acc, f.value, sc, p_acc, None if f.payload is None else f.payload[1])
+    for f, acc, pas, sc in zip(folds, targets, p_targets, scratch):
+      step(sub, f, acc, f.value, sc, pas, [p.value for p in f.payloads])
     if s.where is not None:  # FilterReduce: the element counts only where the predicate holds
       blk = [*s.pre, If(s.where, blk, [])]
     blk.append(ir.ReleaseScope(s.scope))
@@ -319,23 +321,23 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
   if s.parallel and all(f.op is not None for f in folds):
     nchunks = lp.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
     partials = []
-    p_partials: list[Var | None] = []
+    p_partials: list[list[Var]] = []
     for f in folds:
       buf = Var("partials", BufType(f.a.type.strong))
       lp.emit(Alloc(buf, nchunks))
       lp.owner.owned.append(buf)  # for the error path; released below as soon as they are combined
       partials.append(buf)
-      if f.payload is not None:
-        pbuf = Var("p_partials", BufType(f.payload[2].type.strong))
+      pbufs: list[Var] = []
+      for p in f.payloads:
+        pbuf = Var("p_partials", BufType(p.a.type.strong))
         lp.emit(Alloc(pbuf, nchunks))
         lp.owner.owned.append(pbuf)
-        p_partials.append(pbuf)
-      else:
-        p_partials.append(None)
+        pbufs.append(pbuf)
+      p_partials.append(pbufs)
 
     def chunk_body(inner: Loops, chunk, start, stop):
       local = [Var("acc", f.a.type) for f in folds]
-      p_local: list[Var | None] = [Var("pacc", f.payload[2].type) if f.payload is not None else None for f in folds]
+      p_local = [[Var("pacc", p.a.type) for p in f.payloads] for f in folds]
       if s.where is None:
         first(inner, s, inner.unravel(start, shape), local, p_local)
         inner.chunk(shape, s.index, iadd(start, 1), stop, steps(inner, local, p_local), s.scope, hint(s, local))
@@ -343,20 +345,21 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
         for f, acc in zip(folds, local):
           inner.emit(Assign(acc, identity(f.op, f.a.type)))
         inner.chunk(shape, s.index, start, stop, steps(inner, local, p_local), s.scope)
-      for f, buf, acc, pbuf, p_acc in zip(folds, partials, local, p_partials, p_local):
+      for f, buf, acc, pbufs, pas in zip(folds, partials, local, p_partials, p_local):
         inner.emit(Store(buf, chunk, cast(acc, f.a.type.strong)))
-        if pbuf is not None and p_acc is not None and f.payload is not None:
-          inner.emit(Store(pbuf, chunk, cast(p_acc, f.payload[2].type.strong)))
+        for p, pbuf, pa in zip(f.payloads, pbufs, pas):
+          inner.emit(Store(pbuf, chunk, cast(pa, p.a.type.strong)))
 
     lp.parallel(total, chunk_body, kind="reduce", nchunks=nchunks, loc=s.loc, heavy=depth(body) > 0)
 
     def combine_partials(c: Expr) -> list:
       blk: list = []
       sub = lp.sub(blk)
-      for f, buf, acc, pbuf, p_acc, sc in zip(folds, partials, accs, p_partials, p_accs, scratch):
+      for f, buf, acc, pbufs, pas, sc in zip(folds, partials, accs, p_partials, p_accs, scratch):
         loaded = cast(Load(buf, c), acc.type)
-        if f.payload is not None and pbuf is not None and p_acc is not None:
-          step(sub, f, acc, loaded, sc, p_acc, cast(Load(pbuf, c), p_acc.type))
+        if f.payloads or f.combine:
+          p_loaded = [cast(Load(pbuf, c), pa.type) for pbuf, pa in zip(pbufs, pas)]
+          step(sub, f, acc, loaded, sc, pas, p_loaded)
         else:
           blk.append(Assign(acc, cast(ops.prim(f.op, (acc, loaded), acc.type), acc.type)))
       return blk
@@ -368,15 +371,15 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
       lp.emit(ForRange(c, ZERO, nchunks, ONE, combine_partials(c), Scope("loop")))
     else:
       check_not_empty()
-      for buf, acc, pbuf, p_acc in zip(partials, accs, p_partials, p_accs):
+      for buf, acc, pbufs, pas in zip(partials, accs, p_partials, p_accs):
         lp.emit(Assign(acc, cast(Load(buf, ZERO), acc.type)))
-        if pbuf is not None and p_acc is not None:
-          lp.emit(Assign(p_acc, cast(Load(pbuf, ZERO), p_acc.type)))
+        for pbuf, pa in zip(pbufs, pas):
+          lp.emit(Assign(pa, cast(Load(pbuf, ZERO), pa.type)))
       lp.emit(ForRange(c, ONE, nchunks, ONE, combine_partials(c), Scope("loop")))
     for buf in partials:
       lp.emit(ir.Release(buf))
-    for pbuf in p_partials:
-      if pbuf is not None:
+    for pbufs in p_partials:
+      for pbuf in pbufs:
         lp.emit(ir.Release(pbuf))
   elif seeded:
     for f, acc in zip(folds, accs):
@@ -386,10 +389,10 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
     check_not_empty()
     first(lp, s, lp.unravel(ZERO, shape), accs, p_accs)
     lp.chunk(shape, s.index, ONE, total, steps(lp, accs, p_accs), s.scope, hint(s, accs))
-  for f, acc, p_acc in zip(folds, accs, p_accs):
+  for f, acc, pas in zip(folds, accs, p_accs):
     lp.emit(Assign(f.result, acc))
-    if f.payload is not None and p_acc is not None:
-      lp.emit(Assign(f.payload[0], p_acc))
+    for p, pa in zip(f.payloads, pas):
+      lp.emit(Assign(p.result, pa))
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +552,233 @@ def lower_scan(lp: Loops, s: ir.IndexScan, scratch: Scope) -> None:
 
 
 # ---------------------------------------------------------------------------
+# IndexTile
+# ---------------------------------------------------------------------------
+
+
+def row_major_index(index: tuple[Expr, ...], shape: tuple[Expr, ...]) -> Expr:
+  """Flat row-major offset of ``index`` inside ``shape``."""
+  if not index:
+    return ZERO
+  acc = index[0]
+  for i, d in zip(index[1:], shape[1:]):
+    acc = iadd(imul(acc, d), i)
+  return acc
+
+
+def emit_tile_stage(lp: Loops, st: ir.TileStage, defs: dict[int, Expr], owner: Scope) -> None:
+  """Fill a tile-local staged buffer ``st.buf`` over ``st.shape``."""
+  shape = tuple(lp.tmp(d, "sn") for d in st.shape)
+  count = lp.tmp(iprod(shape), "scount")
+  lp.emit(Alloc(st.buf, count))
+  owner.owned.append(st.buf)
+  body = lower_block(list(st.body), defs, st.scope)
+  body.append(Store(st.buf, row_major_index(st.index, shape), cast(st.value, st.buf.type.elt)))
+  body.append(ir.ReleaseScope(st.scope))
+  lp.nest(shape, st.index, body, st.scope)
+
+
+def jam_register_tile(lp: Loops, s: ir.IndexTile, defs: dict[int, Expr], owner: Scope) -> bool:
+  """Lower a compile-time ``level="register"`` N-D micro-tile whose body is
+  ``before; IndexReduce; after`` by jamming all ``prod(tile_shape)`` copies of
+  the inner reduction into one multi-fold ``IndexReduce`` (generalized N-D
+  register blocking)."""
+  import itertools
+
+  from ..syntax.clone import defined
+
+  if s.stages or s.scope.owned:
+    return False
+  body = [t for t in s.body if not (isinstance(t, ir.ReleaseScope) and t.scope is s.scope)]
+  # Body must be an inner IndexMap over ``s.extent`` whose body is before; IndexReduce; after
+  if len(body) != 1 or not isinstance(body[0], ir.IndexMap) or body[0].ordered or body[0].scope.owned:
+    return False
+  imap = body[0]
+  if len(imap.shape) != len(s.shape):
+    return False
+  factors: list[int] = []
+  for b in s.tile_shape:
+    if b is None:
+      factors.append(1)
+    elif isinstance(b, Const) and b.value >= 1:
+      factors.append(int(b.value))
+    else:
+      return False
+  if all(f == 1 for f in factors):
+    return False
+  ibody = [t for t in imap.body if not (isinstance(t, ir.ReleaseScope) and t.scope is imap.scope)]
+  where = [k for k, t in enumerate(ibody) if isinstance(t, ir.IndexReduce)]
+  if len(where) != 1:
+    return False
+  red = ibody[where[0]]
+  if red.where is not None:
+    return False
+  before, after = ibody[: where[0]], ibody[where[0] + 1 :]
+  if any(isinstance(t, ir.Store) for t in before):
+    return False
+
+  # Reduction extent must not depend on the jammed element coordinates
+  elem_vars = {v.uid for v in (*s.origin, *s.extent, *imap.index)} | set(defined(before))
+  if any(outer_expr(defs, d, elem_vars) is None for d in red.shape):
+    return False
+
+  shape = tuple(lp.tmp(d, "rn") for d in s.shape)
+
+  def emit_single(inner: Loops, coords: tuple[Expr, ...]) -> None:
+    # Single element at global-within-tile ``coords``: origin = coords, extent = 1, imap.index = 0
+    subst: dict[int, Expr] = {}
+    for o, e, v, c in zip(s.origin, s.extent, imap.index, coords):
+      subst[o.uid] = c
+      subst[e.uid] = ONE
+      subst[v.uid] = ZERO
+    cl = Cloner(subst)
+    inner.block.extend(lower_block(cl.block(before + [red] + after), defs, owner))
+
+  def emit_jammed(inner: Loops, base_coords: tuple[Expr, ...], block_sizes: tuple[int, ...]) -> None:
+    """Jam all ``prod(block_sizes)`` elements starting at ``base_coords`` into one IndexReduce."""
+    k_index = tuple(Var("k", I) for _ in red.index)
+    r_scope = Scope("loop")
+    r_body: list = []
+    r_folds: list = []
+    tails: list[list] = []
+    local_defs = defined(before + [red] + after).values()
+    offsets = list(itertools.product(*(range(b) for b in block_sizes)))
+    for off in offsets:
+      subst: dict[int, Expr] = {}
+      for o, e, v, bc, d in zip(s.origin, s.extent, imap.index, base_coords, off):
+        subst[o.uid] = iadd(bc, d) if d else bc
+        subst[e.uid] = ONE
+        subst[v.uid] = ZERO
+      for kv, nk in zip(red.index, k_index):
+        subst[kv.uid] = nk
+      cl = Cloner(subst)
+      for v in local_defs:
+        cl.var(v)
+      inner.block.extend(lower_block([cl.stmt(t) for t in before], defs, owner))
+      r_body.extend(cl.stmt(t) for t in red.body)
+      r_folds.extend(cl.fold(f) for f in red.folds)
+      r_scope.owned.extend(cl.scope(red.scope).owned)
+      tails.append([cl.stmt(t) for t in after])
+    c0 = Cloner({o.uid: bc for o, bc in zip(s.origin, base_coords)})
+    r_extent = tuple(c0.expr(d) for d in red.shape)
+    fused = ir.IndexReduce(r_extent, k_index, r_body, r_folds, r_scope, red.home, False, red.loc)
+    inner.block.extend(lower_block([fused], defs, owner))
+    for tail in tails:
+      inner.block.extend(lower_block(tail, defs, owner))
+
+  # Partition the N-D box ``shape`` into disjoint hyper-rectangles: each axis k
+  # with factor f > 1 splits into [0, full_k) (step f, block size f) and
+  # [full_k, shape[k]) (step 1, block size 1). Every leaf with prod(block_sizes) > 1
+  # jams its full sub-block (including partial remainder faces along full prefix axes).
+  fulls = [lp.tmp(imul(idiv(d, f), f), "jam_end") if f > 1 else d for d, f in zip(shape, factors)]
+
+  def recurse(
+    inner: Loops,
+    axis: int,
+    coords: tuple[Expr, ...],
+    block_sizes: tuple[int, ...],
+    all_full: bool,
+  ) -> None:
+    if axis == len(shape):
+      if any(b > 1 for b in block_sizes):
+        emit_jammed(inner, coords, block_sizes)
+      else:
+        emit_single(inner, coords)
+      return
+    f = factors[axis]
+    if f == 1 or not all_full:
+      v = Var("i", I)
+      blk: list = []
+      sc = Scope("loop")
+      recurse(inner.sub(blk, sc), axis + 1, (*coords, v), (*block_sizes, 1), all_full)
+      inner.emit(ForRange(v, ZERO, shape[axis], ONE, blk, sc))
+      return
+    # Full micro-tile range [0, fulls[axis]) with step f
+    v_full = Var("i", I)
+    blk_full: list = []
+    sc_full = Scope("loop")
+    recurse(inner.sub(blk_full, sc_full), axis + 1, (*coords, v_full), (*block_sizes, f), True)
+    inner.emit(ForRange(v_full, ZERO, fulls[axis], Const(f, I), blk_full, sc_full))
+    # Remainder [fulls[axis], shape[axis]) with step 1
+    v_rem = Var("i", I)
+    blk_rem: list = []
+    sc_rem = Scope("loop")
+    recurse(inner.sub(blk_rem, sc_rem), axis + 1, (*coords, v_rem), (*block_sizes, 1), False)
+    inner.emit(ForRange(v_rem, fulls[axis], shape[axis], ONE, blk_rem, sc_rem))
+
+  recurse(lp, 0, (), (), True)
+  return True
+
+
+def lower_tile(lp: Loops, s: ir.IndexTile, defs: dict[int, Expr], owner: Scope) -> None:
+  """Lower an N-dimensional :class:`~parakeet.syntax.ir.IndexTile` at any level
+  (``"cache"``, ``"shared"``, or ``"register"``)."""
+  if s.level == "register" and jam_register_tile(lp, s, defs, owner):
+    return
+
+  shape = tuple(lp.tmp(d, "tn") for d in s.shape)
+  tile_sizes = tuple(None if b is None else lp.tmp(b, "tile") for b in s.tile_shape)
+  tiled_axes = [k for k, b in enumerate(tile_sizes) if b is not None]
+
+  def emit_tile_body(inner: Loops, tile_indices: tuple[Expr, ...], tile_owner: Scope) -> None:
+    ti_iter = iter(tile_indices)
+    for o, e, dim, b in zip(s.origin, s.extent, shape, tile_sizes):
+      if b is None:
+        inner.emit(Assign(o, ZERO))
+        inner.emit(Assign(e, dim))
+      else:
+        t_idx = next(ti_iter)
+        if isinstance(b, Const) and b.value == 1:
+          inner.emit(Assign(o, t_idx))
+          inner.emit(Assign(e, ONE))
+        else:
+          orig = inner.tmp(imul(t_idx, b), "t0")
+          inner.emit(Assign(o, orig))
+          inner.emit(Assign(e, imin(b, isub(dim, orig))))
+    for st in s.stages:
+      emit_tile_stage(inner, st, defs, tile_owner)
+    inner.block.extend(lower_block(list(s.body), defs, s.scope))
+    for st in s.stages:
+      inner.emit(ir.Release(st.buf))
+    inner.emit(ir.ReleaseScope(s.scope))
+
+  if not tiled_axes:
+    emit_tile_body(lp, (), owner)
+    return
+
+  ntiles = tuple(
+    shape[k]
+    if (isinstance(tile_sizes[k], Const) and tile_sizes[k].value == 1)
+    else lp.tmp(idiv(isub(iadd(shape[k], tile_sizes[k]), 1), tile_sizes[k]), "ntiles")  # type: ignore[arg-type]
+    for k in tiled_axes
+  )
+
+  if not s.parallel:
+    # Sequential N-D loop nest over tiles
+    t_vars = tuple(Var("t", I) for _ in tiled_axes)
+    inner_blk: list = []
+    emit_tile_body(lp.sub(inner_blk, owner), t_vars, owner)
+    lp.nest(ntiles, t_vars, inner_blk, Scope("loop"))
+    return
+
+  total_tiles = lp.tmp(iprod(ntiles), "total_tiles")
+  heavy = depth(s.body) > 0
+  est = lp.tmp(work(defs, s.body, (*s.origin, *s.extent)), "work") if heavy else None
+
+  def chunk_body(inner: Loops, _chunk, start: Expr, stop: Expr) -> None:
+    flat = Var("tile", I)
+    one_blk: list = []
+    one_lp = inner.sub(one_blk, inner.owner)
+    t_coords = (flat,) if len(ntiles) == 1 else one_lp.unravel(flat, ntiles)
+    emit_tile_body(one_lp, t_coords, inner.owner)
+    inner.emit(ForRange(flat, start, stop, ONE, one_blk, Scope("loop")))
+
+  work_blk: list = []
+  lp.sub(work_blk, owner).parallel(total_tiles, chunk_body, loc=s.loc, work=est, heavy=heavy)
+  lp.emit(If(cmp("gt", total_tiles, 0), work_blk, []))
+
+
+# ---------------------------------------------------------------------------
 # the pass
 # ---------------------------------------------------------------------------
 
@@ -557,6 +787,9 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
   """``owner`` is the scope whose release covers buffers allocated in ``block``."""
   out: list = []
   for s in block:
+    if isinstance(s, ir.IndexTile):
+      lower_tile(Loops(out, defs, owner), s, defs, owner)
+      continue
     if isinstance(s, ir.IndexReduce):
       s.body[:] = lower_block(s.body, defs, s.scope)
       s.pre[:] = lower_block(s.pre, defs, s.scope)
@@ -594,4 +827,17 @@ def lower(fn: ir.Function) -> None:
   fn.body[:] = lower_block(fn.body, pure_defs(fn.body), fn.scope)
 
 
-__all__ = ["Loops", "depth", "identity", "lower", "lower_block", "outer_expr", "pure_defs", "work"]
+__all__ = [
+  "Loops",
+  "depth",
+  "emit_tile_stage",
+  "identity",
+  "jam_register_tile",
+  "lower",
+  "lower_block",
+  "lower_tile",
+  "outer_expr",
+  "pure_defs",
+  "row_major_index",
+  "work",
+]

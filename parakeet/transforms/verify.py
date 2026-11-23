@@ -35,6 +35,7 @@ from ..syntax.ir import (
   IndexMap,
   IndexReduce,
   IndexScan,
+  IndexTile,
   Load,
   ParLoop,
   Release,
@@ -83,6 +84,9 @@ def verify(fn: Function, phase: str = "") -> Function:
       allocated_bufs.add(s.var.uid)
     elif isinstance(s, IndexFilter):
       allocated_bufs.add(s.out.uid)
+    elif isinstance(s, IndexTile):
+      for st in s.stages:
+        allocated_bufs.add(st.buf.uid)
     elif isinstance(s, Assign) and isinstance(s.var.type, BufType):
       allocated_bufs.add(s.var.uid)
 
@@ -201,6 +205,43 @@ def verify(fn: Function, phase: str = "") -> Function:
         body_vis = set(visible)
         body_vis.update(v.uid for v in s.index)
         check_block(s.body, body_vis)
+      elif isinstance(s, IndexTile):
+        rank = len(s.shape)
+        if len(s.tile_shape) != rank or len(s.origin) != rank or len(s.extent) != rank:
+          _fail(fn, phase, f"IndexTile rank mismatch: shape={rank}, tile={len(s.tile_shape)}")
+        if s.level not in ("cache", "shared", "register"):
+          _fail(fn, phase, f"IndexTile has unknown level {s.level!r}")
+        for d in s.shape:
+          if not _is_int(d.type):
+            _fail(fn, phase, f"IndexTile shape dim has non-integer type {d.type}")
+          check_expr(d, visible, "IndexTile shape")
+        for b in s.tile_shape:
+          if b is not None:
+            if not _is_int(b.type):
+              _fail(fn, phase, f"IndexTile tile_shape has non-integer type {b.type}")
+            check_expr(b, visible, "IndexTile tile_shape")
+        for v in (*s.origin, *s.extent):
+          if not _is_int(v.type):
+            _fail(fn, phase, f"IndexTile coordinate {v.name} has non-integer type {v.type}")
+        check_scope(s.scope)
+        body_vis = set(visible)
+        body_vis.update(v.uid for v in (*s.origin, *s.extent))
+        for st in s.stages:
+          if not isinstance(st.buf.type, BufType):
+            _fail(fn, phase, f"TileStage buffer {st.buf.name} has non-buffer type {st.buf.type}")
+          if len(st.shape) != len(st.index):
+            _fail(fn, phase, f"TileStage rank mismatch on {st.buf.name}")
+          for d in st.shape:
+            if not _is_int(d.type):
+              _fail(fn, phase, f"TileStage shape dim has non-integer type {d.type}")
+            check_expr(d, body_vis, f"TileStage shape for {st.buf.name}")
+          check_scope(st.scope)
+          stage_vis = set(body_vis)
+          stage_vis.update(v.uid for v in st.index)
+          check_block(st.body, stage_vis)
+          check_expr(st.value, stage_vis, f"TileStage value for {st.buf.name}")
+          body_vis.add(st.buf.uid)
+        check_block(s.body, body_vis)
       elif isinstance(s, IndexReduce):
         if len(s.shape) != len(s.index):
           _fail(fn, phase, f"IndexReduce rank mismatch: {len(s.shape)} dims vs {len(s.index)} indices")
@@ -228,18 +269,17 @@ def verify(fn: Function, phase: str = "") -> Function:
           check_expr(f.value, body_vis, f"IndexReduce fold value for {f.result.name}")
           comb_vis = set(body_vis)
           comb_vis.update((f.a.uid, f.b.uid))
-          if f.payload is not None:
-            p_res, p_val, p_a, p_b, p_comb = f.payload
-            check_expr(p_val, body_vis, f"IndexReduce payload value for {p_res.name}")
-            comb_vis.update((p_a.uid, p_b.uid))
+          for p in f.payloads:
+            check_expr(p.value, body_vis, f"IndexReduce payload value for {p.result.name}")
+            comb_vis.update((p.a.uid, p.b.uid))
           check_block(f.combine, comb_vis)
           check_expr(f.combined, comb_vis, f"IndexReduce combiner for {f.result.name}")
-          if f.payload is not None:
-            check_expr(f.payload[4], comb_vis, f"IndexReduce payload combiner for {f.payload[0].name}")
+          for p in f.payloads:
+            check_expr(p.combined, comb_vis, f"IndexReduce payload combiner for {p.result.name}")
         for f in s.folds:
           visible.add(f.result.uid)
-          if f.payload is not None:
-            visible.add(f.payload[0].uid)
+          for p in f.payloads:
+            visible.add(p.result.uid)
       elif isinstance(s, IndexFilter):
         if not _is_int(s.n.type):
           _fail(fn, phase, f"IndexFilter length has non-integer type {s.n.type}")
