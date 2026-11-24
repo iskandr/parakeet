@@ -175,25 +175,39 @@ def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
 @parakeet.jit
 def tropical_min_plus(a, b):
   """One min-plus matrix product: C[i,j] = min_k (A[i,k] + B[k,j])."""
-  m, n = a.shape[0], b.shape[1]
-  k = a.shape[1]
-  return dsl.imap(
-    lambda ij: dsl.ireduce(lambda r: a[ij[0], r] + b[r, ij[1]], k, combine=parakeet.minimum),
-    (m, n),
-  )
+
+  def cheapest_path(cell):
+    source, destination = cell
+
+    def through(via):
+      return a[source, via] + b[via, destination]
+
+    return dsl.ireduce(through, a.shape[1], combine=parakeet.minimum)
+
+  return dsl.imap(cheapest_path, (a.shape[0], b.shape[1]))
 
 
 # --8<-- [end:tropical_min_plus]
+
+
+# --8<-- [start:squared_distance]
+def squared_distance(query, reference):
+  return np.sum((query - reference) ** np.float32(2))
+
+
+# --8<-- [end:squared_distance]
 
 
 # --8<-- [start:exact_1nn]
 @parakeet.jit
 def exact_1nn(x_query, x_ref):
   """Exact nearest-neighbor index per query row."""
-  return dsl.map(
-    lambda q: np.argmin(dsl.map(lambda r: np.sum((q - r) ** np.float32(2.0)), x_ref)),
-    x_query,
-  )
+
+  def nearest_to(query):
+    distances = dsl.map(lambda reference: squared_distance(query, reference), x_ref)
+    return np.argmin(distances)
+
+  return dsl.map(nearest_to, x_query)
 
 
 # --8<-- [end:exact_1nn]
@@ -210,18 +224,15 @@ def nearest_numpy(queries, references):
 
 
 # --8<-- [start:nearest_fold]
-def squared_distance(query, reference):
-  return np.sum((query - reference) ** np.float32(2))
-
-
 class Winner(NamedTuple):
   distance: np.float32
   index: np.int64
 
 
 def first_minimum(left, right):
-  take_right = (np.isnan(right.distance) or right.distance < left.distance) and not np.isnan(left.distance)
-  return right if take_right else left
+  # Keep the first NaN. Among finite values, replace only on strict improvement.
+  right_wins = np.isnan(right.distance) or right.distance < left.distance
+  return right if right_wins and not np.isnan(left.distance) else left
 
 
 @parakeet.jit
@@ -260,11 +271,14 @@ def smooth_fold(queries, references, observations):
   values = observations.reshape(references.shape[0])
   scores = dsl.allpairs(squared_distance, queries, references)
 
-  def lift(distance, j):
-    w = 1 / (1 + distance)
-    return WeightedSum(w, w * values[j])
+  def contribution(distance_squared, ref_index):
+    weight = 1 / (1 + distance_squared)
+    return WeightedSum(weight, weight * values[ref_index])
 
-  return dsl.fold(lift, add_sums, scores, axis=1, indexed=True, emit=lambda s: s.weighted_value / s.weight)
+  def weighted_mean(total):
+    return total.weighted_value / total.weight
+
+  return dsl.fold(contribution, add_sums, scores, axis=1, indexed=True, emit=weighted_mean)
 
 
 # --8<-- [end:weighted_fold]
@@ -278,7 +292,7 @@ def smooth_fold(queries, references, observations):
 # --8<-- [start:gbdt_best_split]
 @parakeet.jit
 def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
-  """Histogram scatter-add + prefix sums + argmax gain in 8 lines (XGBoost/LightGBM core)."""
+  """Return the split bin with the highest gain and the gain at that bin."""
   g_hist = dsl.iscatter(nbins, bin_ids, grads)
   h_hist = dsl.iscatter(nbins, bin_ids, hess)
   g_left = np.cumsum(g_hist)
