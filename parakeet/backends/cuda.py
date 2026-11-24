@@ -271,7 +271,7 @@ class CudaPlanner(DevicePlanner):
   def generate(self, loop: ir.ParLoop, free: list[ir.Var]) -> KernelPlan:
     em = CudaEmitter()
     if loop.monoidal_tile is not None:
-      mon_plan = generate_monoidal_gpu_kernel(loop, free, "cuda", em, PRELUDE)
+      mon_plan = generate_monoidal_gpu_kernel(loop, free, "cuda", em, PRELUDE, profile=self.profile)
       if mon_plan is not None:
         return mon_plan
     if loop.shared_tile is not None:
