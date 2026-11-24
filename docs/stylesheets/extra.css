@@ -1,11 +1,68 @@
-/* Keep the classic parakeetpython.com logo crisp in both light and dark modes. */
-.pk-hero-logo {
-  display: block;
-  max-width: 460px;
-  width: 100%;
-  height: auto;
-  margin: 0 0 1.25rem 0;
-  padding: 0.6rem 0.9rem;
-  border-radius: 10px;
-  background-color: #eff3ff;
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #245744;
+  --md-primary-bg-color: #fff;
+  --md-accent-fg-color: #176083;
+  --md-typeset-a-color: #216849;
+  --pk-panel: #edf4ef;
+  --pk-edge: #bfd3c6;
+  --pk-ink: #203a30;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #203f34;
+  --md-accent-fg-color: #9cdaec;
+  --md-typeset-a-color: #9fdbb7;
+  --pk-panel: #24382f;
+  --pk-edge: #435d50;
+  --pk-ink: #e6f1e8;
+}
+
+.pk-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.03fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  padding: clamp(0.75rem, 3vw, 2.25rem) 0;
+}
+
+.pk-identity h1 { margin: 0; }
+.pk-identity h1 .headerlink { display: none; }
+.pk-wordmark { display: block; width: min(100%, 16rem); height: auto; }
+[data-md-color-scheme="slate"] .pk-wordmark {
+  background: #f0f6ef;
+  border-radius: .25rem;
+  padding: .5rem;
+}
+
+.pk-identity .pk-lead {
+  color: var(--pk-ink);
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -.045em;
+  line-height: 1.12;
+  margin: .8em 0 .4em;
+  max-width: 16em;
+}
+
+.pk-identity .md-button {
+  margin: .4rem .25rem 0 0;
+  padding: .43em .9em;
+}
+
+.pk-example {
+  background: var(--pk-panel);
+  border-inline-start: .22rem solid var(--pk-edge);
+  border-radius: .2rem;
+  padding: clamp(.75rem, 2vw, 1.35rem);
+}
+
+.pk-example h2 { color: var(--pk-ink); font-size: 1.15rem; font-weight: 600; margin: 0; }
+.pk-example pre > code { background: var(--md-default-bg-color); font-size: .67rem; }
+.pk-example p:last-child { margin-bottom: 0; }
+.md-typeset table:not([class]) { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 60em) {
+  .pk-intro { grid-template-columns: minmax(0, 1fr); max-width: 40rem; }
+  .pk-wordmark { width: min(100%, 13rem); }
+  .pk-example { max-width: 34rem; }
 }

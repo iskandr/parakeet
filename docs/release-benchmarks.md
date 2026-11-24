@@ -1,12 +1,18 @@
-# Release benchmarks for 1.0.0a1
+# Release benchmarks
 
-On a four-vCPU Modal worker, both Parakeet frontends compiled exact nearest-neighbor search to a tiled fold. At 1,024 queries, 4,096 references and 32 features, the DSL took **6.132 ms**, broadcasting NumPy under JIT **6.593 ms**, Faiss flat search **9.577 ms**, and PyKeOps **18.246 ms**. At 256 queries, 1,024 references and three features, Faiss took **0.033 ms** and Parakeet took **0.638 ms**. The ranking depends on shape and hardware.
+Five forward workloads compare Parakeet with general-purpose array compilers and specialist libraries. The tables report warmed median latency. Smaller values are faster. [Download all timing samples and validation results (JSON)](assets/modal-alpha-comparison.json).
 
-All GPU numbers below come from **one physical NVIDIA A10** in one Modal container. Broadcasting NumPy under Parakeet beat KeOps for large 1-NN and Gaussian regression. Faiss led large exact search, and compiled PyTorch led Gaussian regression. The largest performance gap was linear cross-entropy.
+![CPU exact nearest-neighbor timings for three implementations. Faiss Flat leads at the small shape, while Parakeet with broadcasting NumPy leads at the large shape. Each panel has its own time scale.](assets/cpu-nearest-neighbor.png)
+
+Four CPU threads, exact 1-NN, float32. Panels show queries × references × features, with independent time scales. At the small shape Faiss took **0.033 ms**. At the large shape Parakeet's NumPy function took **6.593 ms** and its nested-map DSL took **6.132 ms**.
+
+On the NVIDIA A10, Faiss led large exact search and compiled PyTorch led Gaussian regression. Parakeet beat PyKeOps for both at the large shape. All GPU comparisons ran on the same physical card.
 
 ## Pairwise workloads
 
 Warmed median latency in milliseconds. Small is 256 × 1,024 × 3 and large is 1,024 × 4,096 × 32, in query × reference × feature order. Gaussian regression returns four normalized weighted sums per query.
+
+### Four-vCPU worker
 
 | Four-vCPU implementation | Small 1-NN | Large 1-NN | Small Gaussian | Large Gaussian |
 |---|---:|---:|---:|---:|
@@ -18,6 +24,8 @@ Warmed median latency in milliseconds. Small is 256 × 1,024 × 3 and large is 1
 | scikit-learn brute-force neighbors | 1.042 | 6.647 | — | — |
 | NumPy broadcasting | 9.899 | 326.690 | 10.915 | 359.939 |
 
+### NVIDIA A10
+
 | NVIDIA A10 implementation | Small 1-NN | Large 1-NN | Small Gaussian | Large Gaussian |
 |---|---:|---:|---:|---:|
 | Parakeet, broadcasting NumPy | 0.261 | 0.796 | 0.226 | 1.130 |
@@ -28,6 +36,8 @@ Warmed median latency in milliseconds. Small is 256 × 1,024 × 3 and large is 1
 | torch.compile over broadcasting | 0.053 | 0.416 | 0.074 | 0.487 |
 | JAX jit, broadcasting | 0.115 | 0.424 | 0.098 | 0.663 |
 | CuPy, broadcasting | 0.483 | 12.359 | 0.527 | 12.736 |
+
+### Memory and dispatch
 
 The CPU IR allocates a 16 × 128 float32 score tile (8 KiB) and 192 bytes of row summaries per active query strip. The CUDA broadcast form allocates a float32 query-by-reference matrix (16 MiB at the large shape) and runs two kernels. The nested DSL form allocates one reference-length row inside the query loop. Strict CUDA execution rejected it at both sizes. On Metal we also verified the fallback diagnostic for the DSL and two launches for broadcasting. These are IR allocations and dispatch counts. Peak process memory was not measured.
 
