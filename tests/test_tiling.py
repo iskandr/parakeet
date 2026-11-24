@@ -159,7 +159,9 @@ def test_passes_can_be_skipped_by_name():
     "vertical fusion",
     "filter fusion",
     "sibling fusion",
+    "contraction reassociation",
     "monoidal tiling",
+    "chunkwise scan",
     "reduction interchange",
     "tiling",
   ]

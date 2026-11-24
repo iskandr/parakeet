@@ -53,7 +53,7 @@ from ..syntax.ir import (
   TileStage,
   Var,
 )
-from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, iprod
+from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imod, imul, iprod
 from .analysis import BufferInfo, IndexFacts, TileInterval, is_pure_expr, tile_predicate_guards
 from .lowering import row_major_index
 from .simplify import drop_buffers
@@ -1066,6 +1066,102 @@ def _derive_law5_guards(
   return af_out, at_out, (i0, j0)
 
 
+def _stage_uses_var(st: TileStage, uid: int) -> bool:
+  for s in ir.walk_stmts(st.body):
+    for e in ir.stmt_exprs(s):
+      if _expr_uses_uids(e, {uid}):
+        return True
+  return _expr_uses_uids(st.value, {uid})
+
+
+def _maybe_fold_gqa_group(
+  sc: _ScoreContraction,
+  v_stage: TileStage,
+  v_batch: tuple[Var, ...],
+) -> tuple[_ScoreContraction, TileStage, tuple[Var, ...], list[Stmt]]:
+  """Law 3 (GQA / Shared-KV Head-Group Tiling):
+
+  When the trailing batch axis ``g`` of ``Q`` (extent ``G``) does not appear in
+  ``K`` or ``V`` (e.g. Grouped-Query Attention ``Q: (B, H_kv, G, T_q, D)``,
+  ``K, V: (B, H_kv, 1, T_kv, D)``), fold ``g`` into the query row axis::
+
+      i_eff = g * M + i    (extent G * M)
+
+  so a single SRAM load of ``K`` and ``V`` serves all ``G`` query heads
+  simultaneously (cutting KV cache HBM traffic by ``G``).  Row-major layouts of
+  ``O``, ``m``, and ``l`` are bit-for-bit unchanged.
+  """
+  if not sc.batch_shape or len(v_batch) != len(sc.batch_index):
+    return sc, v_stage, v_batch, []
+  # Keep Law 5 causal/sliding-window interval pruning intact when masked with symbolic M > 1
+  if sc.mask_cond is not None or sc.mask_buf is not None:
+    if not (isinstance(sc.m_dim, Const) and int(sc.m_dim.value) == 1):
+      return sc, v_stage, v_batch, []
+  g_var = sc.batch_index[-1]
+  g_dim = sc.batch_shape[-1]
+  vg_var = v_batch[-1]
+  if not _stage_uses_var(sc.q_stage, g_var.uid):
+    return sc, v_stage, v_batch, []
+  if _stage_uses_var(sc.k_stage, g_var.uid) or _stage_uses_var(v_stage, vg_var.uid):
+    return sc, v_stage, v_batch, []
+  if sc.mask_cond is not None and _expr_uses_uids(sc.mask_cond, {g_var.uid}):
+    return sc, v_stage, v_batch, []
+  if sc.mask_index is not None and _expr_uses_uids(sc.mask_index, {g_var.uid}):
+    return sc, v_stage, v_batch, []
+
+  m_eff_v = Var("gqa_meff", I)
+  prelude: list[Stmt] = [Assign(m_eff_v, imul(g_dim, sc.m_dim))]
+  i_eff = Var("gqa_ieff", I)
+  k_new = Var("gqa_k", I)
+  g_loc = Var("gqa_g", I)
+  i_loc = Var("gqa_i", I)
+  q_cl = Cloner({g_var.uid: g_loc, sc.q_stage.index[0].uid: i_loc, sc.q_stage.index[1].uid: k_new})
+  q_body: list[Stmt] = [
+    Assign(g_loc, idiv(i_eff, sc.m_dim)),
+    Assign(i_loc, imod(i_eff, sc.m_dim)),
+    *(q_cl.stmt(t) for t in sc.q_stage.body),
+  ]
+  q_folded = TileStage(
+    buf=Var("gqa_qbuf", sc.q_stage.buf.type),
+    shape=(m_eff_v, sc.k_dim),
+    index=(i_eff, k_new),
+    body=q_body,
+    value=q_cl.expr(sc.q_stage.value),
+    scope=Scope("stage"),
+  )
+  # Mask uses i = 0 when M == 1
+  mask_cond = sc.mask_cond
+  mask_index = sc.mask_index
+  if mask_cond is not None:
+    mask_cond = Cloner({sc.i_var.uid: ZERO}).expr(mask_cond)
+  if mask_index is not None:
+    mask_index = Cloner({sc.i_var.uid: ZERO}).expr(mask_index)
+
+  sc_folded = _ScoreContraction(
+    stmt_idx=sc.stmt_idx,
+    stmt=sc.stmt,
+    out_buf=sc.out_buf,
+    elt=sc.elt,
+    batch_shape=sc.batch_shape[:-1],
+    batch_index=sc.batch_index[:-1],
+    m_dim=m_eff_v,
+    n_dim=sc.n_dim,
+    k_dim=sc.k_dim,
+    i_var=sc.i_var,
+    j_var=sc.j_var,
+    q_stage=q_folded,
+    k_stage=sc.k_stage,
+    score_op=sc.score_op,
+    score_scale=sc.score_scale,
+    mask_cond=mask_cond,
+    mask_buf=sc.mask_buf,
+    mask_index=mask_index,
+    mask_fill=sc.mask_fill,
+    pre_checks=sc.pre_checks,
+  )
+  return sc_folded, v_stage, v_batch[:-1], prelude
+
+
 def _build_flash_monoid_tile(
   sc: _ScoreContraction,
   o_buf: Var,
@@ -1977,9 +2073,11 @@ def _fuse_block(
                     out.append(h_st)
                   for chk in sc.pre_checks:
                     out.append(chk)
-                  tile = _build_flash_monoid_tile(sc, o_buf, d_dim, v_stage, v_batch, m_buf, l_buf, None, f3)
+                  sc_f, v_st_f, v_b_f, gqa_pre = _maybe_fold_gqa_group(sc, v_stage, v_batch)
+                  out.extend(gqa_pre)
+                  tile = _build_flash_monoid_tile(sc_f, o_buf, d_dim, v_st_f, v_b_f, m_buf, l_buf, None, f3)
                   out.extend(
-                    _maybe_wrap_flash_decoding(sc, o_buf, d_dim, v_stage, v_batch, m_buf, l_buf, tile, f3, owner, target)
+                    _maybe_wrap_flash_decoding(sc_f, o_buf, d_dim, v_st_f, v_b_f, m_buf, l_buf, tile, f3, owner, target)
                   )
                   gone.update(dead_uids)
                   walk_facts = f3
