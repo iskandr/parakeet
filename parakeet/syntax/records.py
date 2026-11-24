@@ -30,6 +30,11 @@ def record_type(obj):
     return Record(dict, tuple(obj))
   if isinstance(obj, tuple) and isinstance(names := getattr(cls, "_fields", None), tuple):
     return Record(cls, names)
-  if not isinstance(obj, type) and is_dataclass(obj) and cls.__dataclass_params__.frozen:
+  if (
+    not isinstance(obj, type)
+    and is_dataclass(obj)
+    and cls.__dataclass_params__.frozen
+    and not cls.__module__.startswith("parakeet.")
+  ):
     return Record(cls, tuple(f.name for f in fields(obj)))
   return None
