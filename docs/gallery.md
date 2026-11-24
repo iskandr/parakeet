@@ -7,7 +7,7 @@ how two partial results combine. `dsl.kernel` is an alias for `parakeet.jit`.
 
 Start with [one nearest-neighbor query](#exact-nearest-neighbor), then
 [change what the fold remembers](#inverse-distance-smoothing). For a complete
-training program, try [nanoGPT](#nanogpt). The snippets
+training program, try [nanoGPT](gallery/nanogpt.md). The snippets
 come from executable examples. From an installed source checkout, run
 `python -m examples.algebraic_gallery` for the numerical checks.
 
@@ -93,56 +93,10 @@ a nonempty reference set.
 ## nanoGPT
 
 Train a two-layer transformer to predict the next character in a short text.
-The example builds token and position embeddings, applies two causal attention
-heads per layer, and trains the whole model with Adam. Run it from the source
-checkout. It prints the loss at steps 1, 20, 40 and 60 and checks that the final
-loss is below 80% of the initial loss.
-
-```bash
-python -m examples.nanogpt
-```
-
-For the text fragment `para`, the inputs are `p a r` and the targets are
-`a r a`. Within a sequence, the causal mask lets each position attend to
-itself and earlier characters. Across the batch, sequences are independent
-and share the same model parameters.
-
-=== "Map over sequences"
-
-    `tokens` and `targets` both have shape `(batch, context)`. Each call to
-    `loss_for_sequence` gets one input row and its matching target row.
-    `dsl.map` returns one loss per sequence. Their mean is the scalar used to
-    train the model.
-
-    ```python
-    --8<-- "examples/nanogpt.py:gpt_batch"
-    ```
-
-=== "Attend within one sequence"
-
-    Each head scores pairs of positions with a matrix product. The causal
-    mask is applied before softmax. Each row of the resulting weights mixes
-    the visible value vectors.
-
-    ```python
-    --8<-- "examples/nanogpt.py:gpt_attention"
-    ```
-
-=== "Take one optimizer step"
-
-    `value_and_grad(loss)` compiles the loss and its reverse pass. The gradient
-    has the same nested tuple structure as `params`. Adam carries a first
-    moment `m` and a second moment `v` for each parameter across steps.
-
-    ```python
-    --8<-- "examples/nanogpt.py:gpt_update"
-    ```
-
-The runnable example uses Python for Adam. The separate CUDA benchmark keeps
-parameters on the GPU and compiles Adam into the training step. [Complete training
-example](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py) ·
-[GPU benchmark](https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py) ·
-[Colab training results](release-benchmarks.md#nanogpt-training).
+The [complete nanoGPT walkthrough](gallery/nanogpt.md) shows the entire runnable
+program in order, from the first import to the final training step. It follows
+one input sequence through causal attention, then uses `dsl.map` and
+`value_and_grad` to train on a batch.
 
 ## Gaussian kernel regression
 
