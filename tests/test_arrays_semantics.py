@@ -432,7 +432,8 @@ def test_unsupported_argument_types():
   def f(x):
     return x
 
-  for bad in ({"a": 1}, np.array(["a", "b"]), np.array([1 + 2j]), object(), 2**70):
+  assert f({"a": 1}) == {"a": 1}
+  for bad in ({0: 1}, {"a": object()}, np.array(["a", "b"]), np.array([1 + 2j]), object(), 2**70):
     with pytest.raises(TypeError):
       f(bad)
 
