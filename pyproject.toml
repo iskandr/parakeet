@@ -86,5 +86,5 @@ ignore = [
 
 [tool.ruff.format]
 # The gallery's fenced blocks hold MkDocs include directives for the source examples.
-exclude = ["docs/gallery.md"]
+exclude = ["docs/gallery.md", "docs/gallery/nanogpt.md"]
 quote-style = "double"
