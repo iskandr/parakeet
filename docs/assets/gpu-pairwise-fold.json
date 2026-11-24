@@ -1,0 +1,769 @@
+{
+  "release_baseline": {
+    "gpu": "NVIDIA A10G",
+    "total_memory_bytes": 23707451392,
+    "cuda_driver_version": 13050,
+    "cupy_version": "13.6.0",
+    "numpy_version": "2.2.6",
+    "method": "Warmed synchronized calls, device-resident float32 inputs, exact indices, no fallback.",
+    "warmups": 3,
+    "repeats": 21,
+    "rows": [
+      {
+        "queries": 1024,
+        "references": 1024,
+        "features": 32,
+        "source": "numpy",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "arr_22",
+            "dtype": "float32",
+            "bytes": 4194304,
+            "shared_score_tile": false
+          }
+        ],
+        "samples_ms": [
+          0.830861,
+          0.320054,
+          0.320974,
+          0.311714,
+          0.301643,
+          0.303253,
+          0.293343,
+          0.295594,
+          0.294434,
+          0.291004,
+          0.312774,
+          0.292374,
+          0.291014,
+          0.295884,
+          0.293734,
+          0.288513,
+          0.300993,
+          0.320484,
+          0.292874,
+          0.292353,
+          0.309614
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.295884,
+        "giga_pairs_per_s": 3.5438753024834058
+      },
+      {
+        "queries": 1024,
+        "references": 1024,
+        "features": 32,
+        "source": "dsl",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "arr_59",
+            "dtype": "float32",
+            "bytes": 4096,
+            "shared_score_tile": false
+          }
+        ],
+        "unsupported": "exact_1nn: a parallel loop will run on the CPU instead of CUDA because it allocates temporary arrays inside the loop"
+      },
+      {
+        "queries": 1024,
+        "references": 4096,
+        "features": 32,
+        "source": "numpy",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "arr_22",
+            "dtype": "float32",
+            "bytes": 16777216,
+            "shared_score_tile": false
+          }
+        ],
+        "samples_ms": [
+          1.081573,
+          0.86249,
+          0.858401,
+          0.855101,
+          0.856421,
+          0.85273,
+          0.87433,
+          0.85026,
+          0.86529,
+          0.853541,
+          0.852431,
+          0.84646,
+          0.85139,
+          0.848911,
+          0.847741,
+          0.865881,
+          0.850571,
+          0.848,
+          0.85182,
+          0.848171,
+          0.856001
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.85273,
+        "giga_pairs_per_s": 4.918677658813458
+      },
+      {
+        "queries": 1024,
+        "references": 4096,
+        "features": 32,
+        "source": "dsl",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "arr_59",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": false
+          }
+        ],
+        "unsupported": "exact_1nn: a parallel loop will run on the CPU instead of CUDA because it allocates temporary arrays inside the loop"
+      },
+      {
+        "queries": 1024,
+        "references": 16384,
+        "features": 32,
+        "source": "numpy",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "arr_22",
+            "dtype": "float32",
+            "bytes": 67108864,
+            "shared_score_tile": false
+          }
+        ],
+        "samples_ms": [
+          2.952966,
+          2.897665,
+          2.893325,
+          2.892846,
+          2.892836,
+          2.920546,
+          2.918525,
+          2.898425,
+          2.899125,
+          2.918666,
+          2.900636,
+          2.912816,
+          2.911066,
+          2.889906,
+          2.892706,
+          2.892646,
+          2.887135,
+          2.937806,
+          2.931536,
+          2.897275,
+          2.894525
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 2.898425,
+        "giga_pairs_per_s": 5.788390591441904
+      },
+      {
+        "queries": 1024,
+        "references": 16384,
+        "features": 32,
+        "source": "dsl",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "arr_59",
+            "dtype": "float32",
+            "bytes": 65536,
+            "shared_score_tile": false
+          }
+        ],
+        "unsupported": "exact_1nn: a parallel loop will run on the CPU instead of CUDA because it allocates temporary arrays inside the loop"
+      }
+    ]
+  },
+  "candidate": {
+    "gpu": "NVIDIA A10G",
+    "total_memory_bytes": 23707451392,
+    "cuda_driver_version": 13050,
+    "cupy_version": "13.6.0",
+    "numpy_version": "2.2.6",
+    "method": "Warmed synchronized calls, device-resident float32 inputs, exact indices, no fallback.",
+    "warmups": 3,
+    "repeats": 21,
+    "rows": [
+      {
+        "queries": 1024,
+        "references": 1024,
+        "features": 32,
+        "source": "numpy",
+        "enabled": false,
+        "ir_scratch": [
+          {
+            "buffer": "arr_22",
+            "dtype": "float32",
+            "bytes": 4194304,
+            "shared_score_tile": false
+          }
+        ],
+        "samples_ms": [
+          0.307513,
+          0.291873,
+          0.291373,
+          0.294134,
+          0.298083,
+          0.293424,
+          0.286903,
+          0.286084,
+          0.286684,
+          0.286603,
+          0.290583,
+          0.286043,
+          0.288493,
+          0.298973,
+          0.285684,
+          0.288633,
+          0.285344,
+          0.288583,
+          0.284184,
+          0.286593,
+          0.287964
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.288493,
+        "giga_pairs_per_s": 3.6346670456475545
+      },
+      {
+        "queries": 1024,
+        "references": 1024,
+        "features": 32,
+        "source": "numpy",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "tile_summary_69",
+            "dtype": "float32",
+            "bytes": 65536,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "tile_summary_70",
+            "dtype": "int64",
+            "bytes": 131072,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "score_tile_67",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": true
+          }
+        ],
+        "samples_ms": [
+          0.163802,
+          0.137292,
+          0.131452,
+          0.129272,
+          0.130872,
+          0.130422,
+          0.142582,
+          0.138751,
+          0.136562,
+          0.154212,
+          0.157562,
+          0.131302,
+          0.173803,
+          0.155532,
+          0.141222,
+          0.131761,
+          0.129841,
+          0.135421,
+          0.134512,
+          0.129482,
+          0.130941
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.135421,
+        "giga_pairs_per_s": 7.7430826828926085
+      },
+      {
+        "queries": 1024,
+        "references": 1024,
+        "features": 32,
+        "source": "dsl",
+        "enabled": false,
+        "ir_scratch": [
+          {
+            "buffer": "arr_59",
+            "dtype": "float32",
+            "bytes": 4096,
+            "shared_score_tile": false
+          }
+        ],
+        "unsupported": "exact_1nn: a parallel loop will run on the CPU instead of CUDA because it allocates temporary arrays inside the loop"
+      },
+      {
+        "queries": 1024,
+        "references": 1024,
+        "features": 32,
+        "source": "dsl",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "tile_summary_86",
+            "dtype": "float32",
+            "bytes": 65536,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "tile_summary_87",
+            "dtype": "int64",
+            "bytes": 131072,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "score_tile_84",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": true
+          }
+        ],
+        "samples_ms": [
+          0.146781,
+          0.151732,
+          0.163102,
+          0.140152,
+          0.138881,
+          0.139472,
+          0.137982,
+          0.132322,
+          0.130171,
+          0.129502,
+          0.135062,
+          0.128622,
+          0.138621,
+          0.139912,
+          0.133532,
+          0.165242,
+          0.126942,
+          0.158502,
+          0.155562,
+          0.135261,
+          0.147472
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.138881,
+        "giga_pairs_per_s": 7.5501760499996395
+      },
+      {
+        "queries": 1024,
+        "references": 4096,
+        "features": 32,
+        "source": "numpy",
+        "enabled": false,
+        "ir_scratch": [
+          {
+            "buffer": "arr_22",
+            "dtype": "float32",
+            "bytes": 16777216,
+            "shared_score_tile": false
+          }
+        ],
+        "samples_ms": [
+          0.85257,
+          0.870731,
+          0.84369,
+          0.842941,
+          0.84245,
+          0.84648,
+          0.84218,
+          0.84113,
+          0.846611,
+          0.84203,
+          0.859271,
+          0.84438,
+          0.841321,
+          0.890531,
+          0.83689,
+          0.84246,
+          0.85816,
+          0.84398,
+          0.842741,
+          0.83639,
+          0.83637
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.842941,
+        "giga_pairs_per_s": 4.975797831639462
+      },
+      {
+        "queries": 1024,
+        "references": 4096,
+        "features": 32,
+        "source": "numpy",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "tile_summary_69",
+            "dtype": "float32",
+            "bytes": 262144,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "tile_summary_70",
+            "dtype": "int64",
+            "bytes": 524288,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "score_tile_67",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": true
+          }
+        ],
+        "samples_ms": [
+          0.182412,
+          0.190262,
+          0.179802,
+          0.178163,
+          0.190812,
+          0.190413,
+          0.208422,
+          0.192393,
+          0.178652,
+          0.190383,
+          0.193392,
+          0.177623,
+          0.191883,
+          0.211242,
+          0.190992,
+          0.177812,
+          0.189813,
+          0.178922,
+          0.190302,
+          0.177432,
+          0.192383
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.190302,
+        "giga_pairs_per_s": 22.040251810280502
+      },
+      {
+        "queries": 1024,
+        "references": 4096,
+        "features": 32,
+        "source": "dsl",
+        "enabled": false,
+        "ir_scratch": [
+          {
+            "buffer": "arr_59",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": false
+          }
+        ],
+        "unsupported": "exact_1nn: a parallel loop will run on the CPU instead of CUDA because it allocates temporary arrays inside the loop"
+      },
+      {
+        "queries": 1024,
+        "references": 4096,
+        "features": 32,
+        "source": "dsl",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "tile_summary_86",
+            "dtype": "float32",
+            "bytes": 262144,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "tile_summary_87",
+            "dtype": "int64",
+            "bytes": 524288,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "score_tile_84",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": true
+          }
+        ],
+        "samples_ms": [
+          0.178563,
+          0.192422,
+          0.191243,
+          0.192172,
+          0.178372,
+          0.179842,
+          0.178602,
+          0.178992,
+          0.191712,
+          0.198872,
+          0.179762,
+          0.178782,
+          0.178232,
+          0.192922,
+          0.179163,
+          0.191862,
+          0.177432,
+          0.191183,
+          0.178083,
+          0.191612,
+          0.180182
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.179842,
+        "giga_pairs_per_s": 23.322160563160995
+      },
+      {
+        "queries": 1024,
+        "references": 16384,
+        "features": 32,
+        "source": "numpy",
+        "enabled": false,
+        "ir_scratch": [
+          {
+            "buffer": "arr_22",
+            "dtype": "float32",
+            "bytes": 67108864,
+            "shared_score_tile": false
+          }
+        ],
+        "samples_ms": [
+          3.054748,
+          3.060518,
+          3.083408,
+          3.041047,
+          3.133878,
+          3.058908,
+          3.070088,
+          3.049868,
+          3.070838,
+          3.051727,
+          3.128289,
+          3.062628,
+          3.056147,
+          3.055308,
+          3.054287,
+          3.107808,
+          3.286871,
+          3.017577,
+          3.079088,
+          3.033487,
+          3.140109
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 3.060518,
+        "giga_pairs_per_s": 5.481822358175969
+      },
+      {
+        "queries": 1024,
+        "references": 16384,
+        "features": 32,
+        "source": "numpy",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "tile_summary_69",
+            "dtype": "float32",
+            "bytes": 1048576,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "tile_summary_70",
+            "dtype": "int64",
+            "bytes": 2097152,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "score_tile_67",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": true
+          }
+        ],
+        "samples_ms": [
+          0.477206,
+          0.471206,
+          0.455615,
+          0.456246,
+          0.452945,
+          0.468716,
+          0.458406,
+          0.469375,
+          0.457496,
+          0.458206,
+          0.469505,
+          0.457605,
+          0.469985,
+          0.456786,
+          0.468996,
+          0.457495,
+          0.470545,
+          0.453205,
+          0.452555,
+          0.469215,
+          0.460966
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.458406,
+        "giga_pairs_per_s": 36.59903229887916
+      },
+      {
+        "queries": 1024,
+        "references": 16384,
+        "features": 32,
+        "source": "dsl",
+        "enabled": false,
+        "ir_scratch": [
+          {
+            "buffer": "arr_59",
+            "dtype": "float32",
+            "bytes": 65536,
+            "shared_score_tile": false
+          }
+        ],
+        "unsupported": "exact_1nn: a parallel loop will run on the CPU instead of CUDA because it allocates temporary arrays inside the loop"
+      },
+      {
+        "queries": 1024,
+        "references": 16384,
+        "features": 32,
+        "source": "dsl",
+        "enabled": true,
+        "ir_scratch": [
+          {
+            "buffer": "tile_summary_86",
+            "dtype": "float32",
+            "bytes": 1048576,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "tile_summary_87",
+            "dtype": "int64",
+            "bytes": 2097152,
+            "shared_score_tile": false
+          },
+          {
+            "buffer": "score_tile_84",
+            "dtype": "float32",
+            "bytes": 16384,
+            "shared_score_tile": true
+          }
+        ],
+        "samples_ms": [
+          0.471706,
+          0.472856,
+          0.470496,
+          0.471196,
+          0.456816,
+          0.471306,
+          0.470916,
+          0.456105,
+          0.470306,
+          0.454086,
+          0.455716,
+          0.474486,
+          0.457726,
+          0.453926,
+          0.469025,
+          0.457226,
+          0.459685,
+          0.485436,
+          0.475495,
+          0.470466,
+          0.468345
+        ],
+        "launches": 42,
+        "uploads": 0,
+        "downloads": 0,
+        "median_ms": 0.470306,
+        "giga_pairs_per_s": 35.67297886907673
+      }
+    ],
+    "edge_checks": [
+      {
+        "workload": "numpy-l2-argmin",
+        "has_nan": false,
+        "shape": [
+          71,
+          259,
+          17
+        ]
+      },
+      {
+        "workload": "dsl-l2-argmin",
+        "has_nan": false,
+        "shape": [
+          71,
+          259,
+          17
+        ]
+      },
+      {
+        "workload": "numpy-l1-argmax",
+        "has_nan": false,
+        "shape": [
+          71,
+          259,
+          17
+        ]
+      },
+      {
+        "workload": "numpy-l2-argmin",
+        "has_nan": true,
+        "shape": [
+          71,
+          259,
+          17
+        ]
+      },
+      {
+        "workload": "dsl-l2-argmin",
+        "has_nan": true,
+        "shape": [
+          71,
+          259,
+          17
+        ]
+      },
+      {
+        "workload": "numpy-l1-argmax",
+        "has_nan": true,
+        "shape": [
+          71,
+          259,
+          17
+        ]
+      }
+    ]
+  },
+  "compiler_source_sha256": "98e55bb35bcd0ffa589a0b8a5f8f83b1810915a5cbc2d4cbf4926d8f48ceebae",
+  "release_revision": "7ddd90a10427847f7efea4ca025ad331f4e097a7",
+  "revision": "defe1d848d1f03f0e4b95f813d4f99857d6edf4c"
+}

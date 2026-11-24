@@ -7,7 +7,7 @@ from pathlib import Path
 
 import modal
 
-baseline = "ff7ebd7be1cc3ea2247364e88072237caa548a39"
+baseline = "7ddd90a10427847f7efea4ca025ad331f4e097a7"
 root = Path(__file__).resolve().parents[1]
 image = (
   modal.Image.from_registry("nvidia/cuda:12.6.3-devel-ubuntu22.04", add_python="3.11")
