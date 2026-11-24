@@ -82,7 +82,7 @@ def bench_jax(fn, args, warmup=5, iters=20):
   return {"compile_s": round(compile_s, 2), "median_ms": round(float(np.median(ts)), 3)}, out
 
 # --- Kernels ---
-@dsl.kernel
+@parakeet.jit
 def pk_rbf(xq, xt, yt, ng):
   d2 = np.sum((xq[:, None, :] - xt[None, :, :]) ** np.float32(2.0), axis=-1)
   s = d2 * ng
@@ -99,7 +99,7 @@ def jx_rbf(xq, xt, yt, ng):
   p = jax.nn.softmax(d2 * ng, axis=-1)
   return p @ yt
 
-@dsl.kernel
+@parakeet.jit
 def pk_flash_causal(q, k, v):
   T = q.shape[-2]
   mask = np.arange(T)[:, None] >= np.arange(T)[None, :]
@@ -119,7 +119,7 @@ def jx_flash_naive(q, k, v):
   s = jnp.where(mask, jnp.matmul(q, jnp.swapaxes(k, -1, -2)) * 0.125, -1e9)
   return jnp.matmul(jax.nn.softmax(s, axis=-1), v)
 
-@dsl.kernel
+@parakeet.jit
 def pk_mla(q, c, wuk, wuv):
   k = c @ wuk
   v = c @ wuv
@@ -139,7 +139,7 @@ def jx_mla(q, c, wuk, wuv):
   s = (q @ k.T) * 0.0625
   return jax.nn.softmax(s, axis=-1) @ v
 
-@dsl.kernel
+@parakeet.jit
 def pk_tropical(a, b):
   m, n = a.shape[0], b.shape[1]
   k = a.shape[1]
@@ -154,7 +154,7 @@ def th_tropical(a, b):
 def jx_tropical(a, b):
   return jnp.min(a[:, :, None] + b[None, :, :], axis=1)
 
-@dsl.kernel
+@parakeet.jit
 def pk_1nn(xq, xr):
   return dsl.map(lambda q: np.argmin(dsl.map(lambda r: np.sum((q - r) ** np.float32(2.0)), xr)), xq)
 
@@ -164,7 +164,7 @@ def th_1nn(xq, xr):
 def jx_1nn(xq, xr):
   return jnp.argmin(jnp.sum((xq[:, None, :] - xr[None, :, :]) ** 2, axis=-1), axis=-1)
 
-@dsl.kernel
+@parakeet.jit
 def pk_cce(h, w, tgt):
   logits = h @ w
   m = np.max(logits, axis=-1, keepdims=True)

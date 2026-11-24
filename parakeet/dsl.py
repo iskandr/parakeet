@@ -7,9 +7,10 @@ how Parakeet's six algebraic laws transform a concise specification into
 fused, SRAM-tiled, or chunkwise-dual native kernels::
 
     import numpy as np
+    import parakeet
     from parakeet import dsl
 
-    @dsl.kernel
+    @parakeet.jit
     def flash_attention(q, k, v):
         s = (q @ k.T) * np.float32(0.125)
         e = np.exp(s - np.max(s, axis=-1, keepdims=True))
@@ -163,8 +164,8 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
   """Compile-only algebraic rewrite inspection for ``fn`` on the types of ``args``.
 
   Works reliably on cold or warm specializations (including repeated calls and
-  calls after ordinary execution), supports plain functions, ``@jit`` /
-  ``@dsl.kernel`` functions, and ``grad`` / ``value_and_grad`` wrappers without
+  calls after ordinary execution), supports plain functions,
+  ``@parakeet.jit`` functions, and ``grad`` / ``value_and_grad`` wrappers without
   executing ``fn`` or mutating global compiler state.
   """
   snapshots: dict[str, str] = {}

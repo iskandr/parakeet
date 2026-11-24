@@ -188,10 +188,11 @@ fired, which `MonoidalTilePlan`s were synthesized, and the before/after IR:
 
 ```python
 import numpy as np
+import parakeet
 from parakeet import dsl
 
 
-@dsl.kernel
+@parakeet.jit
 def causal_attention(q, k, v):
   causal = dsl.imap(lambda ij: ij[0] >= ij[1], (q.shape[0], k.shape[0]))
   s = np.where(causal, (q @ k.T) * np.float32(0.125), np.float32(-1e9))

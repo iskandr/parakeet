@@ -24,7 +24,7 @@ from parakeet import dsl, value_and_grad
 
 
 # --8<-- [start:causal_flash_attention]
-@dsl.kernel
+@parakeet.jit
 def causal_flash_attention(q, k, v):
   T = q.shape[-2]
   idx = np.arange(T)
@@ -38,7 +38,7 @@ def causal_flash_attention(q, k, v):
 # --8<-- [end:causal_flash_attention]
 
 
-@dsl.kernel
+@parakeet.jit
 def sliding_window_attention(q, k, v, window):
   T = q.shape[-2]
   idx = np.arange(T)
@@ -77,7 +77,7 @@ def cut_cross_entropy(h, w, targets):
 
 
 # --8<-- [start:deepseek_mla]
-@dsl.kernel
+@parakeet.jit
 def deepseek_mla(q, c_kv, w_uk, w_uv):
   k = c_kv @ w_uk
   v = c_kv @ w_uv
@@ -96,7 +96,7 @@ def deepseek_mla(q, c_kv, w_uk, w_uv):
 
 
 # --8<-- [start:gqa_attention]
-@dsl.kernel
+@parakeet.jit
 def gqa_attention(q, k, v):
   # q: (B, H_kv, G, T_q, D), k, v: (B, H_kv, 1, T_kv, D)
   scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
@@ -114,7 +114,7 @@ def gqa_attention(q, k, v):
 
 
 # --8<-- [start:mamba2_ssd]
-@dsl.kernel
+@parakeet.jit
 def mamba2_ssd(q, k, v, a):
   T = q.shape[0]
   out = np.empty((T, v.shape[1]), dtype=np.float32)
@@ -134,7 +134,7 @@ def mamba2_ssd(q, k, v, a):
 
 
 # --8<-- [start:iir_exponential_filter]
-@dsl.kernel
+@parakeet.jit
 def iir_exponential_filter(a, b):
   T = a.shape[0]
   out = np.empty_like(b)
@@ -154,7 +154,7 @@ def iir_exponential_filter(a, b):
 
 
 # --8<-- [start:rbf_kernel_regression]
-@dsl.kernel
+@parakeet.jit
 def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
   d2 = np.sum((x_query[:, None, :] - x_train[None, :, :]) ** np.float32(2.0), axis=-1)
   s = d2 * neg_gamma
@@ -171,7 +171,7 @@ def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
 
 
 # --8<-- [start:tropical_min_plus]
-@dsl.kernel
+@parakeet.jit
 def tropical_min_plus(a, b):
   """One min-plus matrix product: C[i,j] = min_k (A[i,k] + B[k,j])."""
   m, n = a.shape[0], b.shape[1]
@@ -186,7 +186,7 @@ def tropical_min_plus(a, b):
 
 
 # --8<-- [start:exact_1nn]
-@dsl.kernel
+@parakeet.jit
 def exact_1nn(x_query, x_ref):
   """Exact nearest-neighbor index per query row."""
   return dsl.map(
@@ -204,7 +204,7 @@ def exact_1nn(x_query, x_ref):
 
 
 # --8<-- [start:gbdt_best_split]
-@dsl.kernel
+@parakeet.jit
 def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
   """Histogram scatter-add + prefix sums + argmax gain in 8 lines (XGBoost/LightGBM core)."""
   g_hist = dsl.iscatter(nbins, bin_ids, grads)
