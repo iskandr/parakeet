@@ -53,3 +53,25 @@ def test_ties_nans_and_edges(backend):
     with pytest.raises(ValueError, match="broadcast"):
       f(x, y[:, :3], _backend=backend)
     np.testing.assert_array_equal(f(x[:, :0], y[:, :0], _backend=backend), np.zeros(len(x), dtype=np.int64))
+
+
+def test_empty_pairwise_domains_preserve_source_evaluation():
+  points = np.empty((0, 3), dtype=np.float32)
+  with pytest.raises(ValueError, match="argmin.*empty"):
+    numpy_1nn(points, points, _backend="c")
+  assert exact_1nn(points, points, _backend="c").shape == (0,)
+
+
+def test_empty_reduced_dimensions_with_no_output_lanes():
+  @pk.jit
+  def reduce_axis(fn, array, axis):
+    return fn(array, axis=axis)
+
+  array = np.empty((0, 0, 2))
+  for fn in (np.argmin, np.argmax, np.min, np.max):
+    with pytest.raises(ValueError):
+      reduce_axis(fn, array, 1)
+    np.testing.assert_array_equal(reduce_axis(fn, array, 2), fn(array, axis=2))
+  for fn in (np.min, np.max):
+    with pytest.raises(ValueError):
+      reduce_axis(fn, array, (1, 2))

@@ -692,6 +692,10 @@ def reduce_plain(el, op: str, a: ArrayVal, axis, init, what: str, keepdims):
   axes = _axes(el, axis, a.rank)
   if a.rank == 0:
     return el.as_scalar(a)
+  if init is None and axes is not None and len(axes) < a.rank:
+    # NumPy validates the reduced domain even when no output lanes will run.
+    for k in axes:
+      el.check(cmp("gt", a.shape[k], 0), "ValueError", f"zero-size array to {what}, which has no identity")
   if axes is None or len(axes) == a.rank:
     res = over(a)
   elif len(axes) == 1:
@@ -874,6 +878,8 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
   if axis is None:
     return lane(el.flat_view(a) if a.rank != 1 else a)
   k = norm_axis(el, axis, a.rank)
+  if a.rank > 1:
+    el.check(cmp("gt", a.shape[k], 0), "ValueError", f"attempt to get {what} of an empty sequence")
   res = along_axis(el, a, k, lane, what, stream=stream)
   return _keepdims(el, res, a, [k], keepdims)
 
