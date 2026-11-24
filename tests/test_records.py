@@ -4,6 +4,7 @@ from typing import NamedTuple
 import numpy as np
 
 import parakeet as pk
+from parakeet.testing import test_backends
 
 
 class Pair(NamedTuple):
@@ -77,7 +78,7 @@ def test_structured_fold_keeps_chunk_order_and_applies_seed_once():
     expected = Pair(2, 7)
     for v in x:
       expected = compose(expected, Pair(-1, v))
-    for backend in ("c", "threads"):
+    for backend in test_backends():
       got = recurrence(x, _backend=backend)
       assert type(got) is Pair and got == expected
 
@@ -115,6 +116,6 @@ def test_welford_and_leftmost_argmin_folds():
   keys = rng.integers(1, 10, len(x))
   keys[[19, 21000]] = 0
   rows = np.column_stack((keys, np.arange(len(x))))
-  for backend in ("c", "threads"):
+  for backend in test_backends():
     np.testing.assert_allclose(variance(x, _backend=backend), np.var(x), rtol=1e-7)
     assert lowest(rows, _backend=backend) == np.argmin(keys)

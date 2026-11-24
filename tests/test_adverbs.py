@@ -206,6 +206,8 @@ def test_reduce_preserves_value_changing_casts_as_non_associative():
   is not associative and must match an ordered Python left fold across all backends."""
   import functools
 
+  from parakeet.testing import test_backends
+
   def count_nonzero(acc, x):
     return acc + np.bool_(x)
 
@@ -216,10 +218,8 @@ def test_reduce_preserves_value_changing_casts_as_non_associative():
   arr = np.ones(200_000, dtype=np.int64)
   arr[::5] = 0
   expected = functools.reduce(lambda acc, v: acc + bool(v), arr.tolist(), 0)
-  with parakeet.options(backend="c"):
-    assert int(count_c(arr)) == expected
-  with parakeet.options(backend="threads"):
-    assert int(count_c(arr)) == expected
+  for backend in test_backends():
+    assert int(count_c(arr, _backend=backend)) == expected
 
 
 def test_mapped_reduce_and_scan_fold_the_mapped_axis():
