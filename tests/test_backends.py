@@ -612,3 +612,32 @@ print('resident-ok')
 """
   proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
   assert proc.returncode == 0 and "resident-ok" in proc.stdout, proc.stdout + proc.stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_cuda_split_k_wmma_in_simulator(tmp_path):
+  """Verify Split-K WMMA codegen and exact numerical correctness for low-grid,
+  deep-K weight-gradient GEMMs (e.g. dW = X.T @ dY)."""
+  code = """
+import numpy as np, parakeet
+from parakeet import jit
+
+@jit(backend='cuda')
+def dw_gemm(x, dy):
+    return x.T @ dy
+
+rng = np.random.default_rng(77)
+x = rng.standard_normal((512, 64)).astype(np.float32)
+dy = rng.standard_normal((512, 64)).astype(np.float32)
+with parakeet.options(device_threshold=1, blas=False, tensor_cores=True):
+    spec = dw_gemm.specialize(x, dy)
+    src = "\\n".join(spec.kernels)
+    assert "nvcuda::wmma" in src, src
+    assert "pk_split_k" in src and "atomicAdd" in src, src
+    got = dw_gemm(x, dy)
+want = x.T @ dy
+np.testing.assert_allclose(got, want, rtol=1e-3, atol=1e-3)
+print('split-k-ok')
+"""
+  proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
+  assert proc.returncode == 0 and "split-k-ok" in proc.stdout, proc.stdout + proc.stderr

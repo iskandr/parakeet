@@ -46,7 +46,7 @@ function, Parakeet defines NumPy operations, comprehensions, matrix products,
 and `einsum` in terms of a tiny set of data-parallel operators (*adverbs*):
 
 * `IndexMap` — independent element-wise / slice-wise computation over an index space
-* `IndexReduce` — associative or sequential folds (including multi-payload monoids such as `argmin`/`argmax` and 1-pass online `logsumexp`/`softmax`, plus guarded `FilterReduce`)
+* `IndexReduce` — associative or sequential folds (including multi-carry monoids such as `argmin`/`argmax` and 1-pass online `logsumexp`/`softmax`, plus guarded `FilterReduce`)
 * `IndexScan` — prefix folds with an `emit` stage
 * `IndexFilter` — stream compaction of indices matching a predicate
 * `IndexScatter` — index-directed associative scatter-reductions (`np.bincount`, `parakeet.scatter_add`), lowered via thread-privatized parallel bins on CPU, CUDA, and Metal
@@ -64,7 +64,7 @@ identities instead of fragile loop-nest analyses, backed by a single shared
 
 * **Vertical fusion** ([R] Fig. 6.1): `Map ∘ Map` (including matmul epilogues like `np.tanh(a @ b + c)`, affine transpose/slice/stencil fusion, and cost-bounded multi-consumer fusion), `Map ∘ Scan` into `IndexScan.emit`, `Map → Filter`, `Map → Reduce`, `Map → Scatter`, `Filter ∘ Filter` (short-circuiting), and `Reduce ∘ Filter ⇒ FilterReduce` (single zero-allocation pass).
 * **Nested map flattening** ([R] Fig. 6.2, `CombineNestedMaps`): `IndexMap` inside `IndexMap` collapses into one multi-dimensional `IndexMap`, exposing the full 2D/ND index space to multi-core CPUs and GPUs.
-* **Horizontal / sibling & online monoidal fusion** ([R] Fig. 6.3): adjacent `IndexReduce`s (`x.min(), x.max()`, `x.argmin(), x.argmax()`) and independent `IndexMap`s (`np.sin(x), np.cos(x)`) share one loop, and dependent `m = max(x); s = sum(exp(x - m))` pairs collapse into a single parallel associative `(m, s)` monoid pass via `Fold.payloads` (`logsumexp`, 1-loop `softmax`).
+* **Horizontal / sibling & online monoidal fusion** ([R] Fig. 6.3): adjacent `IndexReduce`s (`x.min(), x.max()`, `x.argmin(), x.argmax()`) and independent `IndexMap`s (`np.sin(x), np.cos(x)`) share one loop, and dependent `m = max(x); s = sum(exp(x - m))` pairs collapse into a single parallel associative `(m, s)` monoid pass via `Fold.carries` (`logsumexp`, 1-loop `softmax`).
 * **Dead-operator elimination**: pure maps, reductions, scans, filters, scatters, and unused allocations nobody reads are removed before lowering.
 
 Parakeet 1.0 also adds the side conditions the original thesis omitted:

@@ -270,17 +270,17 @@ def verify(fn: Function, phase: str = "") -> Function:
           check_expr(f.value, body_vis, f"IndexReduce fold value for {f.result.name}")
           comb_vis = set(body_vis)
           comb_vis.update((f.a.uid, f.b.uid))
-          for p in f.payloads:
-            check_expr(p.value, body_vis, f"IndexReduce payload value for {p.result.name}")
-            comb_vis.update((p.a.uid, p.b.uid))
+          for c in f.carries:
+            check_expr(c.value, body_vis, f"IndexReduce carry value for {c.result.name}")
+            comb_vis.update((c.a.uid, c.b.uid))
           check_block(f.combine, comb_vis)
           check_expr(f.combined, comb_vis, f"IndexReduce combiner for {f.result.name}")
-          for p in f.payloads:
-            check_expr(p.combined, comb_vis, f"IndexReduce payload combiner for {p.result.name}")
+          for c in f.carries:
+            check_expr(c.combined, comb_vis, f"IndexReduce carry combiner for {c.result.name}")
         for f in s.folds:
           visible.add(f.result.uid)
-          for p in f.payloads:
-            visible.add(p.result.uid)
+          for c in f.carries:
+            visible.add(c.result.uid)
       elif isinstance(s, IndexFilter):
         if not _is_int(s.n.type):
           _fail(fn, phase, f"IndexFilter length has non-integer type {s.n.type}")

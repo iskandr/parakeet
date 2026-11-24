@@ -71,13 +71,13 @@ class Cloner:
     return [self.stmt(s) for s in block]
 
   def fold(self, f: ir.Fold) -> ir.Fold:
-    payloads = [
-      ir.Payload(self.var(p.result), self.expr(p.value), self.var(p.a), self.var(p.b), self.expr(p.combined))
-      for p in f.payloads
+    carries = [
+      ir.Carry(self.var(c.result), self.expr(c.value), self.var(c.a), self.var(c.b), self.expr(c.combined))
+      for c in f.carries
     ]
     return ir.Fold(
       self.var(f.result), self.expr(f.value), self.var(f.a), self.var(f.b), [self.stmt(s) for s in f.combine],
-      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty, payloads,
+      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty, carries,
     )  # fmt: skip
 
   def tile_stage(self, st: ir.TileStage) -> ir.TileStage:

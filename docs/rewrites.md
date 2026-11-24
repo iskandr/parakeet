@@ -148,9 +148,9 @@ is dropped: the index is the loop's own.
 * **Several axes at once.** `Reduce` over axes `A` of `X` ⇒ a map over the
   other axes of one reduction over a block: the reduced axes are moved last (a
   view) and each block is folded in a single pass.
-* **A reduction with a payload.** `argmin`/`argmax` fold `(value, index)`
+* **A reduction with carried state (`Carry`).** `argmin`/`argmax` fold `(value, index)`
   pairs per chunk and combine the pairs in index order, so the first of equal
-  elements still wins. The same `Fold.payloads` monoid machinery also fuses
+  elements still wins. The same `Fold.carries` monoid machinery also fuses
   dependent `m = max(x); s = sum(exp(x - m))` pairs into a single parallel
   associative `(m, s)` pass (`fuse_online_logsumexp`) for 1-pass `logsumexp`
   and zero-temp `softmax`.
@@ -180,7 +180,7 @@ is dropped: the index is the loop's own.
 | [H] | here |
 |---|---|
 | `PermuteReductions`: interchange a strided inner reduction with a stride-1 outer map | **yes** (`transforms/tiling.py`, *target-aware reduction interchange*): on CPU, when an `IndexMap` of any rank wraps a commutative+associative `IndexReduce` whose inner axis is strided while the map's last index has unit stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized strip of contiguous output columns; on GPU (`TargetProfile.is_gpu`), interchange is skipped so warp/SIMD threads coalesce across columns directly |
-| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | **generalized `IndexTile` + `TileStage` operators** (`syntax/ir.py`, `transforms/tiling.py`, `transforms/lowering.py`): any `IndexMap` of rank ≥ 2 wrapping one `IndexReduce` (any number of folds and `Payload`s) plus straight-line prologues/epilogues (`a @ b`, batched 3D+ matmul, `allpairs`, `einsum`, `np.tanh(a @ b + c)`) is rewritten into nested `IndexTile(level="cache")` → `IndexTile(level="register")` operators on CPU, and extracts maximal row/col/k `TileStage`s for GPU `__shared__` (CUDA) and `threadgroup` (Metal) block tiling (`backends/tiled_gpu.py`) |
+| `Map(f, X)` ⇒ `TiledMap(f↑, X)`, applied recursively through a nest of adverbs, stopping at a `Reduce` | **generalized `IndexTile` + `TileStage` operators** (`syntax/ir.py`, `transforms/tiling.py`, `transforms/lowering.py`): any `IndexMap` of rank ≥ 2 wrapping one `IndexReduce` (any number of folds and `Carry` states) plus straight-line prologues/epilogues (`a @ b`, batched 3D+ matmul, `allpairs`, `einsum`, `np.tanh(a @ b + c)`) is rewritten into nested `IndexTile(level="cache")` → `IndexTile(level="register")` operators on CPU, and extracts maximal row/col/k `TileStage`s for GPU `__shared__` (CUDA) and `threadgroup` (Metal) block tiling (`backends/tiled_gpu.py`) |
 | register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace | **general N-D register jamming** (`lowering.jam_register_tile`) on CPU (exact hyper-rectangle partition jamming `2×4` interior blocks and partial remainder faces) + **`4×4` / `2×2` per-thread register micro-tiles** on CUDA and Metal |
 | `TiledReduce`, `TiledScan` | `PermuteReductions` (L1 column-strip tiled reduction) + invariant row-reduction hoisting (`split_invariant_map` / `squeeze_unit_map` for `softmax` and `layer_norm`); `TiledScan` not yet implemented |
 | cache tile sizes found by an online search between a pessimistic and an optimistic estimate | analytical compile-time sizing from queried `TargetProfile` (`parakeet/target.py`: CPU L1/L2/SIMD, CUDA SMs/SMEM/compute capability, Metal threadgroup memory/Apple7 `simdgroup_matrix`), with hardware matrix-unit lowering (`simdgroup_matrix` on Metal, `nvcuda::wmma` TF32 on CUDA `sm_80+` with `config.tensor_cores=True`) |

@@ -561,7 +561,7 @@ def test_ir_verifier_catches_invalid_ir_and_legacy_config_aliases():
     parakeet.verify(fn)
 
 
-def test_argmin_argmax_are_payload_index_reduce_and_sibling_fuse():
+def test_argmin_argmax_are_carry_index_reduce_and_sibling_fuse():
   @jit
   def arg_extremes(x):
     return np.argmin(x), np.argmax(x)

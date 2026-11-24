@@ -815,7 +815,7 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
     return Const(0, Int64)
 
   def lane(v: ArrayVal):
-    from ..syntax.ir import ErrorInfo, Fold, IndexReduce, Payload
+    from ..syntax.ir import Carry, ErrorInfo, Fold, IndexReduce
 
     v = _use(el, v)
     n = el.tmp(v.shape[0], "n")
@@ -849,7 +849,7 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
       init=None,
       op=what,
       empty=empty,
-      payloads=[Payload(arg_res, cast(index, Int64), where_a, idx_b, ops.select(take, idx_b, where_a))],
+      carries=[Carry(arg_res, cast(index, Int64), where_a, idx_b, ops.select(take, idx_b, where_a))],
     )
     el.emit(IndexReduce((n,), (index,), body, [fold], scope, el.scope, threads, el.loc()))
     return arg_res

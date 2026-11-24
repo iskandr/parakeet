@@ -261,22 +261,22 @@ def step(
   p_accs: list[Var] = (),  # type: ignore[assignment]
   p_xs: list[Expr] = (),  # type: ignore[assignment]
 ) -> None:
-  """Fold ``x`` (and any carried payloads ``p_xs``) into ``acc`` (and ``p_accs``)."""
+  """Fold ``x`` (and any carried states ``p_xs``) into ``acc`` (and ``p_accs``)."""
   subst: dict[int, Expr] = {f.a.uid: acc, f.b.uid: x if not f.combine else lp.tmp(x, "x")}
-  for p, pa, px in zip(f.payloads, p_accs, p_xs):
-    subst[p.a.uid] = pa
-    subst[p.b.uid] = px if not f.combine else lp.tmp(px, "px")
+  for c, pa, px in zip(f.carries, p_accs, p_xs):
+    subst[c.a.uid] = pa
+    subst[c.b.uid] = px if not f.combine else lp.tmp(px, "px")
   if not f.combine:
-    new_acc = lp.tmp(subst_expr(f.combined, subst), "nacc") if f.payloads else subst_expr(f.combined, subst)
-    new_pas = [lp.tmp(subst_expr(p.combined, subst), "npacc") for p in f.payloads]
+    new_acc = lp.tmp(subst_expr(f.combined, subst), "nacc") if f.carries else subst_expr(f.combined, subst)
+    new_pas = [lp.tmp(subst_expr(c.combined, subst), "npacc") for c in f.carries]
     lp.emit(Assign(acc, new_acc))
     for pa, npa in zip(p_accs, new_pas):
       lp.emit(Assign(pa, npa))
     return
   c = Cloner(subst)
   lp.block.extend(c.block(f.combine))
-  new_acc = lp.tmp(c.expr(f.combined), "nacc") if f.payloads else c.expr(f.combined)
-  new_pas = [lp.tmp(c.expr(p.combined), "npacc") for p in f.payloads]
+  new_acc = lp.tmp(c.expr(f.combined), "nacc") if f.carries else c.expr(f.combined)
+  new_pas = [lp.tmp(c.expr(cy.combined), "npacc") for cy in f.carries]
   lp.emit(Assign(acc, new_acc))
   for pa, npa in zip(p_accs, new_pas):
     lp.emit(Assign(pa, npa))
@@ -284,13 +284,13 @@ def step(
 
 
 def first(lp: Loops, s: ir.IndexReduce, at: tuple[Expr, ...], accs: list[Var], p_accs: list[list[Var]]) -> None:
-  """Start every accumulator (and its carried payloads) from the value at index ``at``."""
+  """Start every accumulator (and its carried states) from the value at index ``at``."""
   c = Cloner({v.uid: e for v, e in zip(s.index, at)})
   lp.block.extend(c.block(s.body))
   for f, acc, pas in zip(s.folds, accs, p_accs):
     lp.emit(Assign(acc, cast(c.expr(f.value), acc.type)))
-    for p, pa in zip(f.payloads, pas):
-      lp.emit(Assign(pa, cast(c.expr(p.value), pa.type)))
+    for cy, pa in zip(f.carries, pas):
+      lp.emit(Assign(pa, cast(c.expr(cy.value), pa.type)))
   if s.scope.owned:
     lp.owner.owned.extend(c.scope(s.scope).owned)  # what the copy allocated is released with its surroundings
 
@@ -323,7 +323,7 @@ def hint(s: ir.IndexReduce, accs: list[Var]):
   if s.where is not None:
     return None
   op = s.folds[0].op
-  if op in ("add", "mul") and all(f.op == op and not f.combine and not f.payloads for f in s.folds):
+  if op in ("add", "mul") and all(f.op == op and not f.combine and not f.carries for f in s.folds):
     return (op, list(accs))
   return None
 
@@ -334,14 +334,14 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
   folds = s.folds
   seeded = folds[0].init is not None  # all folds of one statement agree on this
   accs = [Var("acc", f.a.type) for f in folds]
-  p_accs = [[Var("pacc", p.a.type) for p in f.payloads] for f in folds]
+  p_accs = [[Var("pacc", cy.a.type) for cy in f.carries] for f in folds]
   body = list(s.body)
 
   def steps(inner: Loops, targets: list[Var], p_targets: list[list[Var]]) -> list:
     blk = list(body)
     sub = inner.sub(blk, s.scope)
     for f, acc, pas, sc in zip(folds, targets, p_targets, scratch):
-      step(sub, f, acc, f.value, sc, pas, [p.value for p in f.payloads])
+      step(sub, f, acc, f.value, sc, pas, [cy.value for cy in f.carries])
     if s.where is not None:  # FilterReduce: the element counts only where the predicate holds
       blk = [*s.pre, If(s.where, blk, [])]
     blk.append(ir.ReleaseScope(s.scope))
@@ -363,8 +363,8 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
       lp.owner.owned.append(buf)  # for the error path; released below as soon as they are combined
       partials.append(buf)
       pbufs: list[Var] = []
-      for p in f.payloads:
-        pbuf = Var("p_partials", BufType(p.a.type.strong))
+      for cy in f.carries:
+        pbuf = Var("p_partials", BufType(cy.a.type.strong))
         lp.emit(Alloc(pbuf, nchunks))
         lp.owner.owned.append(pbuf)
         pbufs.append(pbuf)
@@ -372,7 +372,7 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
 
     def chunk_body(inner: Loops, chunk, start, stop):
       local = [Var("acc", f.a.type) for f in folds]
-      p_local = [[Var("pacc", p.a.type) for p in f.payloads] for f in folds]
+      p_local = [[Var("pacc", cy.a.type) for cy in f.carries] for f in folds]
       if s.where is None:
         first(inner, s, inner.unravel(start, shape), local, p_local)
         inner.chunk(shape, s.index, iadd(start, 1), stop, steps(inner, local, p_local), s.scope, hint(s, local))
@@ -382,8 +382,8 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
         inner.chunk(shape, s.index, start, stop, steps(inner, local, p_local), s.scope)
       for f, buf, acc, pbufs, pas in zip(folds, partials, local, p_partials, p_local):
         inner.emit(Store(buf, chunk, cast(acc, f.a.type.strong)))
-        for p, pbuf, pa in zip(f.payloads, pbufs, pas):
-          inner.emit(Store(pbuf, chunk, cast(pa, p.a.type.strong)))
+        for cy, pbuf, pa in zip(f.carries, pbufs, pas):
+          inner.emit(Store(pbuf, chunk, cast(pa, cy.a.type.strong)))
 
     lp.parallel(total, chunk_body, kind="reduce", nchunks=nchunks, loc=s.loc, heavy=depth(body) > 0)
 
@@ -392,7 +392,7 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
       sub = lp.sub(blk)
       for f, buf, acc, pbufs, pas, sc in zip(folds, partials, accs, p_partials, p_accs, scratch):
         loaded = cast(Load(buf, c), acc.type)
-        if f.payloads or f.combine:
+        if f.carries or f.combine:
           p_loaded = [cast(Load(pbuf, c), pa.type) for pbuf, pa in zip(pbufs, pas)]
           step(sub, f, acc, loaded, sc, pas, p_loaded)
         else:
@@ -426,8 +426,8 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
     lp.chunk(shape, s.index, ONE, total, steps(lp, accs, p_accs), s.scope, hint(s, accs))
   for f, acc, pas in zip(folds, accs, p_accs):
     lp.emit(Assign(f.result, acc))
-    for p, pa in zip(f.payloads, pas):
-      lp.emit(Assign(p.result, pa))
+    for cy, pa in zip(f.carries, pas):
+      lp.emit(Assign(cy.result, pa))
 
 
 # ---------------------------------------------------------------------------

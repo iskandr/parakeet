@@ -1472,7 +1472,7 @@ def _alpha_expr_key(e: Expr, idx_slots: dict[int, int], facts: IndexFacts) -> ob
 def fuse_online_logsumexp(a: IndexReduce, b: IndexReduce, facts: IndexFacts) -> IndexReduce | None:
   """Fuse adjacent ``m = max(x)`` followed by ``s = sum(exp(x - m))`` over the
   same index space into ONE single-pass associative monoidal :class:`IndexReduce`
-  using :class:`~parakeet.syntax.ir.Payload`:
+  using :class:`~parakeet.syntax.ir.Carry`:
 
       (m_a, s_a) (+) (m_b, s_b) = (m_new, s_a * exp(m_a - m_new) + s_b * exp(m_b - m_new))
       where m_new = max(m_a, m_b).
@@ -1486,12 +1486,12 @@ def fuse_online_logsumexp(a: IndexReduce, b: IndexReduce, facts: IndexFacts) -> 
   if has_effects(a.body) or has_effects(b.body) or a.scope.owned or b.scope.owned:
     return None
   f1, f2 = a.folds[0], b.folds[0]
-  if f1.op != "max" or f1.init is not None or f1.combine or f1.payloads or f1.a.type.kind != "f":
+  if f1.op != "max" or f1.init is not None or f1.combine or f1.carries or f1.a.type.kind != "f":
     return None
   if (
     f2.op != "add"
     or f2.combine
-    or f2.payloads
+    or f2.carries
     or f2.a.type is not f1.a.type
     or not (isinstance(f2.init, Const) and f2.init.value == 0.0)
   ):
@@ -1524,7 +1524,7 @@ def fuse_online_logsumexp(a: IndexReduce, b: IndexReduce, facts: IndexFacts) -> 
   scale_a = ops.prim("mul", (sa, ops.prim("exp", (ops.prim("sub", (ma, mnew), t),), t)), t)
   scale_b = ops.prim("mul", (sb, ops.prim("exp", (ops.prim("sub", (mb, mnew), t),), t)), t)
   snew = ops.prim("add", (scale_a, scale_b), t)
-  payload = ir.Payload(f2.result, Const(1.0, t), sa, sb, snew)
+  carry = ir.Carry(f2.result, Const(1.0, t), sa, sb, snew)
   fused_fold = ir.Fold(
     result=f1.result,
     value=f1.value,
@@ -1535,7 +1535,7 @@ def fuse_online_logsumexp(a: IndexReduce, b: IndexReduce, facts: IndexFacts) -> 
     init=None,
     op="online_lse",
     empty=f1.empty,
-    payloads=[payload],
+    carries=[carry],
   )
   return IndexReduce(a.shape, a.index, list(a.body), [fused_fold], a.scope, a.home, a.parallel, a.loc)
 
@@ -1676,7 +1676,7 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
       # and step past pure scalar post-processing of its own results (sunk after ``s``)
       # to fuse with an independent sibling reduction.
       sunk: list = []
-      sunk_defs: set[int] = {v.uid for f in s.folds for v in (f.result, *(p.result for p in f.payloads))}
+      sunk_defs: set[int] = {v.uid for f in s.folds for v in (f.result, *(c.result for c in f.carries))}
       while True:
         hoist: list = []
         sink_more: list = []
@@ -1703,7 +1703,7 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
             out.extend(hoist)
             walk_facts = step_facts
             sunk.extend(sink_more)
-            sunk_defs = sink_more_defs | {v.uid for f in nxt.folds for v in (f.result, *(p.result for p in f.payloads))}
+            sunk_defs = sink_more_defs | {v.uid for f in nxt.folds for v in (f.result, *(c.result for c in f.carries))}
             absorb(s, nxt)
             k = j + 1
             continue
@@ -1712,7 +1712,7 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
             out.extend(hoist)
             walk_facts = step_facts
             s = online
-            sunk_defs = sunk_defs | {v.uid for f in s.folds for v in (f.result, *(p.result for p in f.payloads))}
+            sunk_defs = sunk_defs | {v.uid for f in s.folds for v in (f.result, *(c.result for c in f.carries))}
             k = j + 1
             continue
         break

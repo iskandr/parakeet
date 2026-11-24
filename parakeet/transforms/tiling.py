@@ -349,7 +349,7 @@ def should_split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], target
     return False
   if not target.supports_float64 and any(f.a.type.name == "float64" for f in red.folds):
     return False
-  if not all(f.op in COMMUTATIVE_OPS and not f.combine and not f.payloads for f in red.folds):
+  if not all(f.op in COMMUTATIVE_OPS and not f.combine and not f.carries for f in red.folds):
     return False
   if not all(isinstance(t, (Assign, ir.Comment)) for t in m.before + red.body):
     return False
@@ -767,9 +767,9 @@ def extract_shared_tile_plan(
 
   mixed_folds: list[ir.Fold] = []
   for f in red.folds:
-    new_payloads = [ir.Payload(p.result, rewrite_expr(p.value), p.a, p.b, p.combined) for p in f.payloads]
+    new_carries = [ir.Carry(c.result, rewrite_expr(c.value), c.a, c.b, c.combined) for c in f.carries]
     mixed_folds.append(
-      ir.Fold(f.result, rewrite_expr(f.value), f.a, f.b, f.combine, f.combined, f.init, f.op, f.empty, new_payloads)
+      ir.Fold(f.result, rewrite_expr(f.value), f.a, f.b, f.combine, f.combined, f.init, f.op, f.empty, new_carries)
     )
 
   if "row" not in stage_sides or "col" not in stage_sides:
@@ -794,14 +794,14 @@ def extract_shared_tile_plan(
       collect_deps(e, needed)
   for f in mixed_folds:
     collect_deps(f.value, needed)
-    for p in f.payloads:
-      collect_deps(p.value, needed)
+    for c in f.carries:
+      collect_deps(c.value, needed)
   prefix_deps = [def_map[u] for u in sorted(needed - emitted_uids, key=lambda u: order_map[u])]
   full_mixed_body = prefix_deps + mixed_body
   has_mixed_loads = any(
     isinstance(x, Load) for st in full_mixed_body for e in ir.stmt_exprs(st) for x in ir.walk_expr(e)
   ) or any(
-    isinstance(x, Load) for f in mixed_folds for e in (f.value, *(p.value for p in f.payloads)) for x in ir.walk_expr(e)
+    isinstance(x, Load) for f in mixed_folds for e in (f.value, *(c.value for c in f.carries)) for x in ir.walk_expr(e)
   )
   return ir.SharedTilePlan(
     shape=shape,

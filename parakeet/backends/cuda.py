@@ -28,7 +28,9 @@ from ..syntax import ir
 from ..target import MatrixUnit, TargetProfile
 from . import runtime_c, toolchain
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars
+from .cuda_rt import MAX_BUFS, MAX_SCALARS, MAX_TILED_DIMS, PkCuKDesc, try_load_native_cuda_rt
 from .device import (
+  DeviceArray,
   DeviceBase,
   DevicePlanner,
   KernelPlan,
@@ -695,8 +697,92 @@ def _build_fast_meta(plan: KernelPlan):
         dims.append((0, val))
       else:
         dims.append((1, getattr(cls, val).offset))
-    tiled_spec = (tiled_meta["bm"], tiled_meta["bn"], tuple(dims))
+    sk_meta = tiled_meta.get("split_k")
+    sk_spec = None
+    if sk_meta is not None:
+      k_kind, k_val = sk_meta["k_dim"]
+      sk_spec = (0 if k_kind == "c" else 1, k_val if k_kind == "c" else getattr(cls, k_val).offset, sk_meta["out_buf_idx"])
+    tiled_spec = (tiled_meta["bm"], tiled_meta["bn"], tuple(dims), sk_spec)
   return (ctx_size, tuple(scalars), buf_offsets, written_mask, tiled_spec, plan.loop.kind == "map")
+
+
+def _build_native_descs(spec) -> tuple[ctypes.Array, int] | None:
+  """Build a C ``PkCuKDesc[]`` array for every kernel of ``spec.module`` once
+  all device kernels have been compiled.  Returns ``None`` if any kernel is not
+  yet compiled."""
+  kernels = spec.module.kernels
+  n = len(kernels)
+  if n == 0:
+    return None
+  for k in kernels:
+    p = k.device
+    if p is not None and p.compiled is None:
+      return None
+  arr = (PkCuKDesc * n)()
+  for idx, k in enumerate(kernels):
+    p = k.device
+    d = arr[idx]
+    if p is None or p.failed:
+      d.cpu_only = 1
+      continue
+    if p.compiled is None or p.host_struct is None:
+      continue
+    if len(p.scalars) > MAX_SCALARS or len(p.bufs) > MAX_BUFS:
+      continue
+    fn = p.compiled
+    fn_ptr = getattr(fn, "ptr", None)
+    if fn_ptr is None:
+      kern = getattr(fn, "kernel", None)
+      if kern is None and hasattr(fn, "compile"):
+        fn.compile()
+        kern = getattr(fn, "kernel", None)
+      fn_ptr = getattr(kern, "ptr", None) if kern is not None else None
+    if not fn_ptr:
+      continue
+    cls = p.host_struct
+    d.cu_fn = int(fn_ptr)
+    d.is_map = 1 if p.loop.kind == "map" else 0
+    d.has_errors = 1 if p.errors else 0
+    tiled_meta = p.extra.get("tiled")
+    if tiled_meta is not None:
+      shape = tiled_meta["shape"]
+      if len(shape) > MAX_TILED_DIMS:
+        d.cu_fn = 0
+        continue
+      d.is_tiled = 1
+      d.block_threads = int(tiled_meta.get("threads", BLOCK_THREADS))
+      d.bm = int(tiled_meta["bm"])
+      d.bn = int(tiled_meta["bn"])
+      d.n_dims = len(shape)
+      for di, (kind, val) in enumerate(shape):
+        if kind == "c":
+          d.dim_is_var[di] = 0
+          d.dim_val[di] = int(val)
+        else:
+          d.dim_is_var[di] = 1
+          d.dim_val[di] = int(getattr(cls, val).offset)
+      sk_meta = tiled_meta.get("split_k")
+      if sk_meta is not None:
+        d.split_k_enabled = 1
+        k_kind, k_val = sk_meta["k_dim"]
+        if k_kind == "c":
+          d.split_k_dim_is_var = 0
+          d.split_k_dim_val = int(k_val)
+        else:
+          d.split_k_dim_is_var = 1
+          d.split_k_dim_val = int(getattr(cls, k_val).offset)
+        d.split_k_out_buf = int(sk_meta["out_buf_idx"])
+    else:
+      d.is_tiled = 0
+      d.block_threads = BLOCK
+    d.n_scalars = len(p.scalars)
+    for si, v in enumerate(p.scalars):
+      d.scalar_offsets[si] = int(getattr(cls, v.name).offset)
+    d.n_bufs = len(p.bufs)
+    for bi, v in enumerate(p.bufs):
+      d.buf_offsets[bi] = int(getattr(cls, v.name).offset)
+      d.buf_written[bi] = 1 if v.uid in p.written else 0
+  return arr, n
 
 
 class CudaDevice(DeviceBase):
@@ -722,10 +808,115 @@ class CudaDevice(DeviceBase):
     self._err_cap = 256
     self._err_flags = self.driver.zeros(self._err_cap, np.int32)
     self._err_infos = self.driver.zeros(self._err_cap * 4, np.int64)
+    self._native = None if simulate else try_load_native_cuda_rt()
     super().__init__()
+    self._py_callback_addr = self.callback_address
+    if self._native is not None:
+      self._native.lib.pk_cu_set_fallback(self._py_callback_addr)
+      self.callback_address = self._native.dispatch_address
+
+  def begin_call(self, spec, arrays, pinned=None):
+    token = super().begin_call(spec, arrays, pinned)
+    if self._native is not None and len(self._state.stack) == 1:
+      descs = getattr(spec.module, "_cu_descs", None)
+      if descs is None:
+        descs = _build_native_descs(spec)
+        if descs is not None:
+          spec.module._cu_descs = descs
+      if descs is not None:
+        descs_arr, n_kernels = descs
+        cp = self.driver.cp
+        stream_ptr = int(cp.cuda.get_current_stream().ptr)
+        lib = self._native.lib
+        lib.pk_cu_begin_call(
+          stream_ptr,
+          int(self.profile.num_compute_units),
+          self._py_callback_addr,
+          ctypes.addressof(descs_arr),
+          n_kernels,
+          int(self._flag.data.ptr),
+          int(self._info.data.ptr),
+          int(self._err_flags.data.ptr),
+          int(self._err_infos.data.ptr),
+          self._err_cap,
+        )
+        pin_das = []
+        if pinned:
+          for pin_idx, (da, _writes) in enumerate(pinned):
+            dev_buf = da.ensure_device()
+            lib.pk_cu_add_pinned(da._addr, int(dev_buf.data.ptr), da._nbytes, pin_idx, 1 if da._dirty else 0)
+            pin_das.append(da)
+        self._state.native_token = token
+        self._state.native_pinned = pin_das
+        self._state.native_descs = descs_arr
+    return token
+
+  def promote(self, arr: np.ndarray) -> DeviceArray:
+    if self._native is not None and getattr(self._state, "native_token", None) is not None:
+      if arr.flags.c_contiguous:
+        addr = arr.ctypes.data
+        nbytes = arr.nbytes
+        out_dptr = ctypes.c_uint64(0)
+        out_cap = ctypes.c_int64(0)
+        out_dirty = ctypes.c_int32(0)
+        if self._native.lib.pk_cu_take_output(
+          addr, nbytes, ctypes.byref(out_dptr), ctypes.byref(out_cap), ctypes.byref(out_dirty)
+        ):
+          cp = self.driver.cp
+          owner = self._native.make_owner(out_dptr.value, out_cap.value)
+          mem = cp.cuda.UnownedMemory(out_dptr.value, out_cap.value, owner)
+          dev_buf = cp.ndarray((nbytes,), dtype=np.uint8, memptr=cp.cuda.MemoryPointer(mem, 0))
+          return DeviceArray(arr, self, dev_buf, dirty=bool(out_dirty.value))
+    return super().promote(arr)
+
+  def end_call(self, token):
+    if getattr(self._state, "native_token", None) is token:
+      self._state.native_token = None
+      pin_das = self._state.native_pinned
+      self._state.native_pinned = ()
+      self._state.native_descs = None
+      n_pin = len(pin_das)
+      out_dirty = (ctypes.c_int32 * max(n_pin, 1))()
+      out_inval = (ctypes.c_int32 * max(n_pin, 1))()
+      out_stats = (ctypes.c_int64 * 7)()
+      out_err_count = ctypes.c_int32(0)
+      out_err_kernels = (ctypes.c_int32 * self._err_cap)()
+      self._native.lib.pk_cu_end_call(
+        out_dirty, out_inval, n_pin, out_stats, ctypes.byref(out_err_count), out_err_kernels
+      )
+      py_used = bool(out_stats[3])
+      self._last_native_fallback = (int(out_stats[4]), int(out_stats[5]), int(out_stats[6]))
+      for i, da in enumerate(pin_das):
+        if py_used:
+          if out_dirty[i]:
+            da._dirty = True
+        else:
+          da._dirty = bool(out_dirty[i])
+        if out_inval[i]:
+          da._dev_buf = None
+      self.launches += int(out_stats[0])
+      self.uploads += int(out_stats[1])
+      self.downloads += int(out_stats[2])
+      n_err = int(out_err_count.value)
+      if n_err > 0:
+        ks = token.spec.module.kernels
+        for slot in range(n_err):
+          p = ks[int(out_err_kernels[slot])].device
+          if p is not None:
+            self._state.pending_checks.append((slot, p))
+    return super().end_call(token)
 
   def _check_pending_errors(self) -> None:
     pending = self._state.pending_checks
+    if self._native is not None and getattr(self._state, "native_token", None) is not None and self._state.stack:
+      out_err_kernels = (ctypes.c_int32 * self._err_cap)()
+      n_c_err = int(self._native.lib.pk_cu_drain_pending_errs(out_err_kernels, self._err_cap))
+      if n_c_err > 0:
+        ks = self._state.stack[-1].spec.module.kernels
+        for slot in range(n_c_err):
+          p = ks[int(out_err_kernels[slot])].device
+          if p is not None:
+            pending.append((slot, p))
     if not pending:
       return
     n = len(pending)
@@ -781,16 +972,28 @@ class CudaDevice(DeviceBase):
       fast = plan.extra["_fast"] = _build_fast_meta(plan)
     ctx_size, scalar_specs, buf_offsets, written_mask, tiled_spec, is_map = fast
     raw_ctx = ctypes.string_at(ctx_addr, ctx_size)
+    split_k_out_idx = -1
+    split_k_val = 1
     if tiled_spec is not None:
-      bm, bn, dim_specs = tiled_spec
+      bm, bn, dim_specs, sk_spec = tiled_spec
       dims = [val if kind == 0 else struct.unpack_from("<q", raw_ctx, val)[0] for kind, val in dim_specs]
       if any(d <= 0 for d in dims):
         return
       batch = math.prod(dims[:-2]) if len(dims) > 2 else 1
-      n = batch * ((dims[-2] + bm - 1) // bm) * ((dims[-1] + bn - 1) // bn)
-      if n <= 0:
+      base_blocks = batch * ((dims[-2] + bm - 1) // bm) * ((dims[-1] + bn - 1) // bn)
+      if base_blocks <= 0:
         return
+      n = base_blocks
       csize = 1
+      if sk_spec is not None and self.profile.num_compute_units > 0 and base_blocks < self.profile.num_compute_units:
+        k_kind, k_val, ob_idx = sk_spec
+        k_dim = k_val if k_kind == 0 else struct.unpack_from("<q", raw_ctx, k_val)[0]
+        if k_dim >= 256:
+          sk = min(16, max(1, (self.profile.num_compute_units * 2) // base_blocks), k_dim // 64)
+          if sk > 1:
+            split_k_val = sk
+            split_k_out_idx = ob_idx
+            split_k_exact_bytes = batch * dims[-2] * dims[-1] * 4
     else:
       if is_map:
         n = min(total, 1 << 24)  # one GPU thread per element when possible
@@ -872,6 +1075,15 @@ class CudaDevice(DeviceBase):
       devs = self.acquire(regions, written, [False] * len(regions), untouched_regions(pks, where, len(regions)))
       for r, off in where:
         args.append(devs[r][off:] if off else devs[r])
+
+    if disjoint and split_k_val > 1 and 0 <= split_k_out_idx < n_bufs:
+      _, ob_nbytes, ob_flags = infos[split_k_out_idx]
+      if (ob_flags & 6) or ob_nbytes == split_k_exact_bytes:
+        out_dev = args[len(args) - n_bufs + split_k_out_idx]
+        if not (ob_flags & 4):
+          out_dev.fill(0)
+        n = n * split_k_val
+        args[1] = np.int64(split_k_val)
 
     drv.launch(plan.compiled, plan, n, args)
 

@@ -10,7 +10,7 @@ register-blocked GPU kernel supporting:
 * arbitrary number of staged row/col/k prologue expressions (``a @ b``,
   ``sin(a) @ cos(b)``, ``allpairs``, multi-input contractions),
 * arbitrary folds (seeded or unseeded, associative or custom ``combine``,
-  multiple folds, and arbitrary ``Payload``s), and
+  multiple folds, and arbitrary ``Carry``s), and
 * arbitrary fused epilogues (``np.tanh(a @ b + c)``, ``sqrt(...) + 1.0``).
 """
 
@@ -45,7 +45,7 @@ def choose_tile_config(
     if max_shared_bytes is not None
     else (profile.shared_budget() if profile is not None else DEFAULT_SHARED_BUDGET)
   )
-  n_accs = sum(1 + len(f.payloads) for f in plan.mixed_folds)
+  n_accs = sum(1 + len(f.carries) for f in plan.mixed_folds)
   candidates: list[tuple[int, int, int, int, int]] = []
   if n_accs <= 2:
     # Larger BK=32 on CUDA GPUs with >= 32 KiB per-block shared budget halves barrier overhead
@@ -125,7 +125,7 @@ def match_matrix_unit_plan(plan: ir.SharedTilePlan) -> tuple[int, int, ir.Fold, 
   if plan.stages[row_idx].buf.type.elt != Float32 or plan.stages[col_idx].buf.type.elt != Float32:
     return None
   f = plan.mixed_folds[0]
-  if f.op != "add" or f.combine or f.payloads or f.a.type != Float32:
+  if f.op != "add" or f.combine or f.carries or f.a.type != Float32:
     return None
   if not isinstance(f.init, ir.Const):
     return None
@@ -219,11 +219,11 @@ def _plan_types(plan: ir.SharedTilePlan) -> set[ScalarType]:
         if isinstance(x.type, ScalarType):
           types.add(x.type)
     types |= expr_types(f.combine)
-    for p in f.payloads:
-      for v in (p.result, p.a, p.b):
+    for c in f.carries:
+      for v in (c.result, c.a, c.b):
         if isinstance(v.type, ScalarType):
           types.add(v.type)
-      for e in (p.value, p.combined):
+      for e in (c.value, c.combined):
         for x in ir.walk_expr(e):
           if isinstance(x.type, ScalarType):
             types.add(x.type)
@@ -256,8 +256,8 @@ def _emit_fold_step(
   out: list[str],
   pad: str,
 ) -> None:
-  """Emit one accumulation step updating ``acc_name`` (and any payload accumulators)."""
-  if not f.combine and not f.payloads and f.op is not None:
+  """Emit one accumulation step updating ``acc_name`` (and any carried accumulators)."""
+  if not f.combine and not f.carries and f.op is not None:
     if f.op == "add" and f.a.type.kind == "f":
       out.append(f"{pad}{acc_name} += ({em.ctype(f.a.type)})({val_expr});")
       return
@@ -272,20 +272,50 @@ def _emit_fold_step(
     out.append(f"{pad}  {acc_name} = {comb_expr}; }}")
     return
 
-  # General combine block and/or multi-payload fold
+  # General combine block and/or multi-carry fold
   out.append(f"{pad}{{")
   out.append(f"{pad}  const {em.ctype(f.a.type)} {f.a.name} = {acc_name};")
   out.append(f"{pad}  const {em.ctype(f.b.type)} {f.b.name} = ({em.ctype(f.b.type)})({val_expr});")
-  for p, pacc, pval in zip(f.payloads, pacc_names, pval_exprs):
-    out.append(f"{pad}  const {em.ctype(p.a.type)} {p.a.name} = {pacc};")
-    out.append(f"{pad}  const {em.ctype(p.b.type)} {p.b.name} = ({pval});")
-  skip = {f.a.uid, f.b.uid} | {p.a.uid for p in f.payloads} | {p.b.uid for p in f.payloads}
+  for c, pacc, pval in zip(f.carries, pacc_names, pval_exprs):
+    out.append(f"{pad}  const {em.ctype(c.a.type)} {c.a.name} = {pacc};")
+    out.append(f"{pad}  const {em.ctype(c.b.type)} {c.b.name} = ({pval});")
+  skip = {f.a.uid, f.b.uid} | {c.a.uid for c in f.carries} | {c.b.uid for c in f.carries}
   _emit_decl_locals(em, f.combine, skip, out, pad + "  ")
   em.block(f.combine, out, len(pad) // 2 + 1)
   out.append(f"{pad}  {acc_name} = {em.expr(f.combined)};")
-  for p, pacc in zip(f.payloads, pacc_names):
-    out.append(f"{pad}  {pacc} = {em.expr(p.combined)};")
+  for c, pacc in zip(f.carries, pacc_names):
+    out.append(f"{pad}  {pacc} = {em.expr(c.combined)};")
   out.append(f"{pad}}}")
+
+
+def _match_pure_store_epilogue(plan: ir.SharedTilePlan, fold: ir.Fold) -> tuple[list[ir.Stmt], ir.Store] | None:
+  """Return ``(index_assigns, store)`` when ``plan``'s epilogue is a pure
+  linear ``out[idx] = fold.result`` store into a float32 buffer (eligible for
+  Split-K WMMA accumulation via ``atomicAdd``)."""
+  epilogue_before = _collect_epilogue_before(plan.before, plan.after)
+  stmts = [s for s in epilogue_before + plan.after if not isinstance(s, ir.Comment)]
+  if not stmts or not isinstance(stmts[-1], ir.Store):
+    return None
+  st = stmts[-1]
+  if st.atomic is not None or st.buf.type.elt != Float32:
+    return None
+  if any(not isinstance(s, ir.Assign) for s in stmts[:-1]):
+    return None
+  defs = {s.var.uid: s.value for s in stmts[:-1] if isinstance(s, ir.Assign)}
+  v: ir.Expr = st.value
+  for _ in range(8):
+    if isinstance(v, ir.Cast) and v.type == Float32:
+      v = v.arg
+    elif isinstance(v, ir.Var) and v.uid in defs:
+      v = defs[v.uid]
+    else:
+      break
+  if not (isinstance(v, ir.Var) and v.uid == fold.result.uid):
+    return None
+  idx_uids = {x.uid for x in ir.walk_expr(st.index) if isinstance(x, ir.Var)}
+  if fold.result.uid in idx_uids:
+    return None
+  return stmts[:-1], st
 
 
 def _generate_matrix_unit_kernel(
@@ -384,14 +414,31 @@ def _generate_matrix_unit_kernel(
   lines.append(f"  const {idx_t} pk_sg_m = pk_sgid >> 1;")
   lines.append(f"  const {idx_t} pk_sg_n = pk_sgid & 1;")
 
-  # Shape dimensions & block unraveling (supports arbitrary batch rank >= 0)
+  pure_ep = _match_pure_store_epilogue(plan, fold) if (is_cuda and init_val == 0.0) else None
+  split_k_out_buf = -1
+  if pure_ep is not None:
+    out_uid = pure_ep[1].buf.uid
+    for b_i, bv in enumerate(bufs):
+      if bv.uid == out_uid:
+        split_k_out_buf = b_i
+        break
+  split_k_enabled = split_k_out_buf >= 0
+
+  # Shape dimensions & block unraveling (supports arbitrary batch rank >= 0 and Split-K on CUDA)
   lines.append(f"  const {idx_t} pk_M = ({idx_t})({em.expr(plan.shape[-2])});")
   lines.append(f"  const {idx_t} pk_N = ({idx_t})({em.expr(plan.shape[-1])});")
   lines.append(f"  const {idx_t} pk_K = ({idx_t})({em.expr(plan.reduce.shape[0])});")
   lines.append(f"  const {idx_t} pk_nb_n = (pk_N + {bn - 1}) / {bn};")
   lines.append(f"  const {idx_t} pk_nb_m = (pk_M + {bm - 1}) / {bm};")
-  lines.append(f"  const {idx_t} pk_blk_n = pk_blk % pk_nb_n;")
-  lines.append(f"  const {idx_t} pk_rem0 = pk_blk / pk_nb_n;")
+  if split_k_enabled:
+    lines.append(f"  const {idx_t} pk_split_k = pk_csize > 1 ? pk_csize : 1;")
+    lines.append(f"  const {idx_t} pk_sk = pk_blk % pk_split_k;")
+    lines.append(f"  const {idx_t} pk_tile_blk = pk_blk / pk_split_k;")
+    blk_expr = "pk_tile_blk"
+  else:
+    blk_expr = "pk_blk"
+  lines.append(f"  const {idx_t} pk_blk_n = {blk_expr} % pk_nb_n;")
+  lines.append(f"  const {idx_t} pk_rem0 = {blk_expr} / pk_nb_n;")
   lines.append(f"  const {idx_t} pk_blk_m = pk_rem0 % pk_nb_m;")
   if len(plan.shape) > 2:
     lines.append(f"  {idx_t} pk_bflat = pk_rem0 / pk_nb_m;")
@@ -448,7 +495,15 @@ def _generate_matrix_unit_kernel(
   bn_shift = bn.bit_length() - 1
   row_d0_fast = _stage_prefers_dim0_fast(st_row)
   col_d0_fast = _stage_prefers_dim0_fast(st_col)
-  lines.append(f"  for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
+  if split_k_enabled:
+    lines.append(f"  const {idx_t} pk_ktiles = (pk_K + {bk - 1}) / {bk};")
+    lines.append(f"  const {idx_t} pk_kt_per = (pk_ktiles + pk_split_k - 1) / pk_split_k;")
+    lines.append(f"  const {idx_t} pk_k_start = (pk_sk * pk_kt_per) * {bk};")
+    lines.append(f"  const {idx_t} pk_k_end = min(pk_K, ((pk_sk + 1) * pk_kt_per) * {bk});")
+    lines.append("  if (pk_split_k > 1 && pk_k_start >= pk_K) return;")
+    lines.append(f"  for ({idx_t} pk_k0 = pk_k_start; pk_k0 < pk_k_end; pk_k0 += {bk}) {{")
+  else:
+    lines.append(f"  for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
   # Cooperative load of row stage A[BM x BK] (coalesced along whichever of i/k is unit-stride)
   lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {bm * bk}; pk_idx += {MATRIX_UNIT_THREADS}) {{")
   if row_d0_fast:
@@ -545,8 +600,20 @@ def _generate_matrix_unit_kernel(
     lines.append(f"        const {idx_t} {j_var.name} = pk_j0 + pk_sg_n * 32 + pk_rn * 16 + (pk_e & 15);")
     lines.append(f"        if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
     lines.append(f"          const float {fold.result.name} = pk_ep[pk_e];")
-    _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "          ")
-    em.block(epilogue_stmts, lines, 5)
+    if split_k_enabled and pure_ep is not None:
+      prefix_ep, store_ep = pure_ep
+      _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "          ")
+      em.block(prefix_ep, lines, 5)
+      st_idx = em.expr(store_ep.index)
+      st_val = em.expr(store_ep.value)
+      lines.append("          if (pk_split_k > 1) {")
+      lines.append(f"            atomicAdd(&{em.data(store_ep.buf)}[{st_idx}], {st_val});")
+      lines.append("          } else {")
+      lines.append(f"            {em.data(store_ep.buf)}[{st_idx}] = {st_val};")
+      lines.append("          }")
+    else:
+      _emit_decl_locals(em, epilogue_stmts, skip_ep, lines, "          ")
+      em.block(epilogue_stmts, lines, 5)
     lines.append("        }")
     lines.append("      }")
     lines.append("      __syncwarp();")
@@ -574,6 +641,22 @@ def _generate_matrix_unit_kernel(
 
   written = {s.buf.uid for s in ir.walk_stmts(plan.after) if isinstance(s, ir.Store)}
   shape_meta = [("c", int(d.value)) if isinstance(d, ir.Const) else ("v", d.name) for d in plan.shape]
+  tiled_info: dict = {
+    "bm": bm,
+    "bn": bn,
+    "bk": bk,
+    "tm": 4,
+    "tn": 4,
+    "threads": MATRIX_UNIT_THREADS,
+    "matrix_unit": "wmma" if is_cuda else "simdgroup_matrix",
+    "shape": shape_meta,
+  }
+  if split_k_enabled:
+    kd = plan.reduce.shape[0]
+    tiled_info["split_k"] = {
+      "k_dim": ("c", int(kd.value)) if isinstance(kd, ir.Const) else ("v", kd.name),
+      "out_buf_idx": split_k_out_buf,
+    }
   return KernelPlan(
     loop=loop,
     source="\n".join(lines),
@@ -581,18 +664,7 @@ def _generate_matrix_unit_kernel(
     bufs=bufs,
     errors=em.errors,
     written={v.uid for v in bufs if v.uid in written},
-    extra={
-      "tiled": {
-        "bm": bm,
-        "bn": bn,
-        "bk": bk,
-        "tm": 4,
-        "tn": 4,
-        "threads": MATRIX_UNIT_THREADS,
-        "matrix_unit": "wmma" if is_cuda else "simdgroup_matrix",
-        "shape": shape_meta,
-      }
-    },
+    extra={"tiled": tiled_info},
   )
 
 
@@ -753,21 +825,21 @@ def generate_tiled_gpu_kernel(
       size = bk
     lines.append(f"  {sh_qual} {ct} pk_sh_{s_idx}[{size}];")
 
-  # Register accumulators for TM x TN micro-tile across all folds (and any payloads)
+  # Register accumulators for TM x TN micro-tile across all folds (and any carries)
   for f_idx, f in enumerate(plan.mixed_folds):
     ct = em.ctype(f.a.type)
     init_expr = em.expr(f.init) if f.init is not None else _zero_literal(f.a.type)
     for mi in range(tm):
       for nj in range(tn):
         lines.append(f"  {ct} pk_acc_{f_idx}_{mi}_{nj} = ({ct})({init_expr});")
-        for p_idx, p in enumerate(f.payloads):
-          pct = em.ctype(p.a.type)
-          lines.append(f"  {pct} pk_pacc_{f_idx}_{p_idx}_{mi}_{nj} = {_zero_literal(p.a.type)};")
+        for c_idx, c in enumerate(f.carries):
+          cct = em.ctype(c.a.type)
+          lines.append(f"  {cct} pk_pacc_{f_idx}_{c_idx}_{mi}_{nj} = {_zero_literal(c.a.type)};")
 
   # Inspect which coordinate vars mixed_body / mixed_folds reference
   mixed_used = used_vars(plan.mixed_body)
   for f in plan.mixed_folds:
-    for e in (f.value, *(p.value for p in f.payloads)):
+    for e in (f.value, *(c.value for c in f.carries)):
       for x in ir.walk_expr(e):
         if isinstance(x, ir.Var):
           mixed_used[x.uid] = x
@@ -882,14 +954,14 @@ def generate_tiled_gpu_kernel(
       em.block(plan.mixed_body, lines, len(pad) // 2)
       for f_idx, f in enumerate(plan.mixed_folds):
         acc_name = f"pk_acc_{f_idx}_{mi}_{nj}"
-        pacc_names = [f"pk_pacc_{f_idx}_{p_idx}_{mi}_{nj}" for p_idx in range(len(f.payloads))]
+        pacc_names = [f"pk_pacc_{f_idx}_{c_idx}_{mi}_{nj}" for c_idx in range(len(f.carries))]
         val_expr = em.expr(f.value)
-        pval_exprs = [em.expr(p.value) for p in f.payloads]
+        pval_exprs = [em.expr(c.value) for c in f.carries]
         if f.init is None:
           lines.append(f"{pad}if (pk_k0 == 0 && pk_tk == 0) {{")
           lines.append(f"{pad}  {acc_name} = ({em.ctype(f.a.type)})({val_expr});")
-          for p, pacc, pval in zip(f.payloads, pacc_names, pval_exprs):
-            lines.append(f"{pad}  {pacc} = ({em.ctype(p.a.type)})({pval});")
+          for c, pacc, pval in zip(f.carries, pacc_names, pval_exprs):
+            lines.append(f"{pad}  {pacc} = ({em.ctype(c.a.type)})({pval});")
           lines.append(f"{pad}}} else {{")
           _emit_fold_step(em, f, acc_name, pacc_names, val_expr, pval_exprs, lines, pad + "  ")
           lines.append(f"{pad}}}")
@@ -907,7 +979,7 @@ def generate_tiled_gpu_kernel(
   epilogue_before = _collect_epilogue_before(plan.before, plan.after)
   epilogue_stmts = epilogue_before + plan.after
   fold_result_uids = {f.result.uid for f in plan.mixed_folds} | {
-    p.result.uid for f in plan.mixed_folds for p in f.payloads
+    c.result.uid for f in plan.mixed_folds for c in f.carries
   }
   for mi in range(tm):
     for nj in range(tn):
@@ -917,8 +989,8 @@ def generate_tiled_gpu_kernel(
       lines.append(f"    if ({i_var.name} < pk_M && {j_var.name} < pk_N) {{")
       for f_idx, f in enumerate(plan.mixed_folds):
         lines.append(f"      const {em.ctype(f.result.type)} {f.result.name} = pk_acc_{f_idx}_{mi}_{nj};")
-        for p_idx, p in enumerate(f.payloads):
-          lines.append(f"      const {em.ctype(p.result.type)} {p.result.name} = pk_pacc_{f_idx}_{p_idx}_{mi}_{nj};")
+        for c_idx, c in enumerate(f.carries):
+          lines.append(f"      const {em.ctype(c.result.type)} {c.result.name} = pk_pacc_{f_idx}_{c_idx}_{mi}_{nj};")
       _emit_decl_locals(em, epilogue_stmts, fold_result_uids | {i_var.uid, j_var.uid}, lines, "      ")
       em.block(epilogue_stmts, lines, 3)
       lines.append("    }")

@@ -333,10 +333,10 @@ class IndexMap(Stmt):
 
 
 @dataclass(eq=False, slots=True)
-class Payload:
-  """One auxiliary value carried alongside a :class:`Fold` accumulator (e.g.
-  the winning index in ``argmin``/``argmax``, or running counts/sums in online
-  variance / online softmax)."""
+class Carry:
+  """One extra monoid state carried alongside a :class:`Fold` accumulator
+  (e.g. the winning index in ``argmin``/``argmax``, running counts/sums in
+  online variance / online softmax, or a running output tile in FlashAttention)."""
 
   result: Var
   value: Expr
@@ -352,7 +352,7 @@ class Fold:
   ``combine`` is the block that computes ``combined`` from the accumulator
   ``a`` and the next value ``b``; ``op`` names it when it is an associative
   operation (the fold may then be regrouped across chunks and, for ``add``/``mul``,
-  vectorised).  ``payloads`` carries zero, one, or many auxiliary values updated
+  vectorised).  ``carries`` holds zero, one, or many extra monoid states updated
   alongside ``a`` by the same combiner."""
 
   result: Var
@@ -364,7 +364,7 @@ class Fold:
   init: Expr | None = None
   op: str | None = None
   empty: ErrorInfo | None = None  # raised for an empty index space when there is no init
-  payloads: list[Payload] = field(default_factory=list)
+  carries: list[Carry] = field(default_factory=list)
 
 
 @dataclass(eq=False, slots=True)
@@ -443,7 +443,7 @@ class TileStage:
 class SharedTilePlan:
   """GPU ``__shared__`` / ``threadgroup`` block-tiling plan for an N-D
   map-of-reduction (any batch rank, any number of staged prologue inputs,
-  arbitrary folds/payloads, and arbitrary epilogue).
+  arbitrary folds/carries, and arbitrary epilogue).
 
   Attached to an outer :class:`IndexTile` by :mod:`parakeet.transforms.tiling`
   and preserved onto its lowered :class:`ParLoop` so CUDA and Metal backends
@@ -627,8 +627,8 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     out = list(s.shape) + ([s.where] if s.where is not None else [])
     for f in s.folds:
       out += [f.value, f.combined] + ([f.init] if f.init is not None else [])
-      for p in f.payloads:
-        out += [p.value, p.combined]
+      for c in f.carries:
+        out += [c.value, c.combined]
     return tuple(out)
   return ()
 
@@ -663,8 +663,8 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     defs = list(s.index)
     for f in s.folds:
       defs.extend((f.result, f.a, f.b))
-      for p in f.payloads:
-        defs.extend((p.result, p.a, p.b))
+      for c in f.carries:
+        defs.extend((c.result, c.a, c.b))
     return tuple(defs)
   return ()
 
@@ -775,9 +775,9 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       out += fmt_block(s.body, indent + (1 if s.where is None else 2))
       for f in s.folds:
         init = "" if f.init is None else f", init={fmt_expr(f.init)}"
-        if f.payloads:
-          lhs = ", ".join([f.result.name, *(p.result.name for p in f.payloads)])
-          vals = ", ".join([fmt_expr(f.value), *(fmt_expr(p.value) for p in f.payloads)])
+        if f.carries:
+          lhs = ", ".join([f.result.name, *(c.result.name for c in f.carries)])
+          vals = ", ".join([fmt_expr(f.value), *(fmt_expr(c.value) for c in f.carries)])
           how = f.op or f"lambda ({f.a.name}, ...), ({f.b.name}, ...): ({fmt_expr(f.combined)}, ...)"
           out.append(f"{pad}    {lhs} = fold({how}, ({vals}){init})")
         else:
