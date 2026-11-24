@@ -85,4 +85,6 @@ ignore = [
 "parakeet/testing_helpers.py" = ["F401", "F403"]
 
 [tool.ruff.format]
+# The gallery's fenced blocks hold MkDocs include directives for the source examples.
+exclude = ["docs/gallery.md"]
 quote-style = "double"

@@ -29,11 +29,12 @@ before generating native code for CPUs, Apple Metal or NVIDIA CUDA.
 import numpy as np
 from parakeet import jit
 
+
 @jit
 def nearest(x, y):
-    delta = x[:, None, :] - y[None, :, :]
-    d2 = np.sum(delta ** np.float32(2), axis=2)
-    return np.argmin(d2, axis=1)
+  delta = x[:, None, :] - y[None, :, :]
+  d2 = np.sum(delta ** np.float32(2), axis=2)
+  return np.argmin(d2, axis=1)
 ```
 
 On CPU, Parakeet computes distances a tile at a time and keeps the winning
