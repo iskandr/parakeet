@@ -79,7 +79,7 @@ def _metal_available() -> bool:
   return sys.platform == "darwin" and pk.available_backends().get("metal") == "ok"
 
 
-@pytest.mark.parametrize("backend", ["c", "threads"])
+@pytest.mark.parametrize("backend", ["c", "multicore"])
 def test_extrema_value_reuse_cpu(backend):
   with pk.options(backend=backend):
     # Basic & tie-breaking
