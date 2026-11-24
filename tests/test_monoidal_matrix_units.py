@@ -50,7 +50,7 @@ def _ref_attn(q, k, v, mask=None, fill=-1e9):
   return ((e / e.sum(-1, keepdims=True)) @ v.astype("d")).astype(np.float32)
 
 
-def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str) -> None:
+def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str | None) -> None:
   rng = np.random.default_rng(19)
   opts = {"backend": backend, "blas": False, "device_fallback": "error", "device_threshold": 1}
   if backend == "cuda":
@@ -67,7 +67,8 @@ def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str) ->
       k = rng.standard_normal(shape_kv, dtype=np.float32) * np.float32(0.2)
       v = rng.standard_normal(shape_kv, dtype=np.float32) * np.float32(0.2)
       spec = causal_flash_attention.specialize(q, k, v)
-      assert any(marker in src for src in spec.kernels), f"expected {marker} in generated kernel"
+      if marker is not None:
+        assert any(marker in src for src in spec.kernels), f"expected {marker} in generated kernel"
       out = pk.to_host(causal_flash_attention(*pk.to_device((q, k, v), backend=backend)))
       T = shape_q[-2]
       ref = _ref_attn(q, k, v, mask=np.tril(np.ones((T, T), dtype=bool)))
@@ -93,7 +94,8 @@ def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str) ->
     # Leave cols 64..127 completely False to exercise all-false tile skipping
     bmask[:, 128:] = rng.random((M, N - 128)) > 0.5
     spec_bm = _bool_masked_attention.specialize(q2, k2, v2, bmask)
-    assert any(marker in src for src in spec_bm.kernels)
+    if marker is not None:
+      assert any(marker in src for src in spec_bm.kernels)
     out_bm = pk.to_host(_bool_masked_attention(*pk.to_device((q2, k2, v2, bmask), backend=backend)))
     np.testing.assert_allclose(out_bm, _ref_attn(q2, k2, v2, mask=bmask), rtol=1e-3, atol=1e-3)
 
@@ -118,7 +120,8 @@ def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str) ->
     tgt[0] = -1  # negative target index wrap check
     cce = pk.jit(cut_cross_entropy)
     spec_cce = cce.specialize(h, w, tgt)
-    assert any(marker in src for src in spec_cce.kernels)
+    if marker is not None:
+      assert any(marker in src for src in spec_cce.kernels)
     loss = cce(*pk.to_device((h, w, tgt), backend=backend))
     logits = h.astype("d") @ w.astype("d")
     z = logits - logits.max(1, keepdims=True)
@@ -141,4 +144,6 @@ def test_monoidal_wmma_cuda():
 def test_monoidal_simdgroup_metal():
   if not _metal_available():
     pytest.skip("Metal backend unavailable")
-  _run_matrix_unit_checks("metal", tensor_cores=False, marker="simdgroup_float8x8")
+  mu = pk.target_profile("metal").matrix_unit
+  has_simdgroup = mu is not None and mu.kind == "simdgroup_matrix"
+  _run_matrix_unit_checks("metal", tensor_cores=False, marker="simdgroup_float8x8" if has_simdgroup else None)
