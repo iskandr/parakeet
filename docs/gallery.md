@@ -141,7 +141,8 @@ and share the same model parameters.
 The runnable example uses Python for Adam. The separate CUDA benchmark keeps
 parameters on the GPU and compiles Adam into the training step. [Complete training
 example](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py) ·
-[GPU benchmark](https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py).
+[GPU benchmark](https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py) ·
+[Colab training results](release-benchmarks.md#nanogpt-training).
 
 ## Gaussian kernel regression
 
@@ -260,16 +261,3 @@ samples. [Release benchmarks](release-benchmarks.md).
 | Mamba-2 SSD, length 2,048, widths 64 | 58.25 ms | 1.08 ms | Chunkwise scan |
 | Latent attention, 4 queries and 2,048 keys, widths 64 and 256 | 1.86 ms | 0.22 ms | Contraction reassociation |
 | Affine IIR filter, length 262,144 | 0.63 ms | 0.27 ms | Chunkwise scan |
-
-??? details "Earlier training-step timings on an NVIDIA L4"
-
-    These warmed end-to-end nanoGPT timings include forward, backward and Adam.
-    The small model has batch 16, sequence length 64, width 128 and two layers.
-    The medium model has batch 32, sequence length 128, width 256 and four layers.
-
-    | Model | Parakeet TF32 | Parakeet FP32 | PyTorch eager | Compiled PyTorch | JAX JIT |
-    |---|---:|---:|---:|---:|---:|
-    | Small | 6.44 ms | 8.04 ms | 9.15 ms | 3.58 ms | 1.58 ms |
-    | Medium | 32.15 ms | 47.05 ms | 19.28 ms | 15.15 ms | 9.18 ms |
-
-    [Training benchmark source](https://github.com/iskandr/parakeet/blob/v1.0.0/tools/colab_nanogpt_bench.py).
