@@ -30,6 +30,7 @@ CUDA_RT_SOURCE = r"""
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
+#include <pthread.h>
 
 #define PK_EXPORT __attribute__((visibility("default")))
 #define PK_MAX_SCALARS 64
@@ -45,6 +46,7 @@ typedef int CUresult;
 typedef uint64_t CUdeviceptr;
 typedef void* CUfunction;
 typedef void* CUstream;
+typedef void* CUcontext;
 
 typedef CUresult (*fn_cuLaunchKernel)(
     CUfunction f,
@@ -58,6 +60,7 @@ typedef CUresult (*fn_cuMemsetD8Async)(CUdeviceptr dstDevice, unsigned char uc, 
 typedef CUresult (*fn_cuMemcpyHtoDAsync)(CUdeviceptr dstDevice, const void* srcHost, size_t ByteCount, CUstream hStream);
 typedef CUresult (*fn_cuMemcpyDtoH)(void* dstHost, CUdeviceptr srcDevice, size_t ByteCount);
 typedef CUresult (*fn_cuStreamSynchronize)(CUstream hStream);
+typedef CUresult (*fn_cuCtxGetCurrent)(CUcontext* pctx);
 
 typedef int32_t (*pk_py_fallback_fn)(int32_t kernel, void* ctx, int64_t total, int64_t nchunks);
 
@@ -108,8 +111,8 @@ typedef struct {
   int32_t count;
 } pk_bucket;
 
+/* Process-global driver table (immutable after pk_cu_init under g_init_mu) */
 typedef struct {
-  /* CUDA driver function pointers */
   fn_cuLaunchKernel launch;
   fn_cuMemAlloc mem_alloc;
   fn_cuMemFree mem_free;
@@ -117,9 +120,17 @@ typedef struct {
   fn_cuMemcpyHtoDAsync htod_async;
   fn_cuMemcpyDtoH dtoh;
   fn_cuStreamSynchronize stream_sync;
+  fn_cuCtxGetCurrent ctx_get_current;
+  pk_py_fallback_fn default_fallback;
   int32_t ready;
+} pk_cu_drv;
 
-  /* Size-bucketed GPU freelist (persists across calls) */
+/* Per-host-thread active call state + stream/context-bound freelist */
+typedef struct {
+  /* Size-bucketed GPU freelist bound to (pool_ctx, pool_stream) on this host thread */
+  int32_t pool_inited;
+  CUcontext pool_ctx;
+  CUstream pool_stream;
   pk_bucket buckets[PK_NUM_BUCKETS];
 
   /* Active call state */
@@ -153,7 +164,9 @@ typedef struct {
   int32_t n_used;
 } pk_cu_rt;
 
-static pk_cu_rt g_rt;
+static pthread_mutex_t g_init_mu = PTHREAD_MUTEX_INITIALIZER;
+static pk_cu_drv g_drv;
+static __thread pk_cu_rt t_rt;
 
 static inline uint32_t pk_hash_u64(uint64_t x) {
   x ^= x >> 33;
@@ -178,6 +191,18 @@ static inline int pk_bucket_idx(int64_t nbytes, int64_t* out_cap) {
   return idx;
 }
 
+static void pk_pool_drain(pk_cu_rt* rt) {
+  if (g_drv.stream_sync && rt->pool_inited) {
+    g_drv.stream_sync(rt->pool_stream);
+  }
+  for (int b = 0; b < PK_NUM_BUCKETS; ++b) {
+    for (int i = 0; i < rt->buckets[b].count; ++i) {
+      if (rt->buckets[b].ptrs[i]) g_drv.mem_free(rt->buckets[b].ptrs[i]);
+    }
+    rt->buckets[b].count = 0;
+  }
+}
+
 static CUdeviceptr pk_pool_alloc(pk_cu_rt* rt, int64_t nbytes, int64_t* out_cap) {
   int64_t cap = nbytes;
   int b = pk_bucket_idx(nbytes, &cap);
@@ -187,7 +212,7 @@ static CUdeviceptr pk_pool_alloc(pk_cu_rt* rt, int64_t nbytes, int64_t* out_cap)
   }
   if (b < 0) cap = nbytes;
   CUdeviceptr dptr = 0;
-  if (rt->mem_alloc(&dptr, (size_t)cap) != 0) return 0;
+  if (g_drv.mem_alloc(&dptr, (size_t)cap) != 0) return 0;
   *out_cap = cap;
   return dptr;
 }
@@ -200,7 +225,12 @@ static void pk_pool_free(pk_cu_rt* rt, CUdeviceptr dptr, int64_t cap) {
     rt->buckets[b].ptrs[rt->buckets[b].count++] = dptr;
     return;
   }
-  rt->mem_free(dptr);
+  g_drv.mem_free(dptr);
+}
+
+static inline void pk_sync_and_dtoh(pk_cu_rt* rt, void* dst, CUdeviceptr src, size_t nbytes) {
+  if (g_drv.stream_sync) g_drv.stream_sync(rt->stream);
+  g_drv.dtoh(dst, src, nbytes);
 }
 
 static pk_tbl_entry* pk_tbl_find(pk_cu_rt* rt, uint64_t addr) {
@@ -253,14 +283,14 @@ static void pk_cu_flush_to_host_internal(pk_cu_rt* rt, int include_pinned) {
     if (e->occupied != 1) continue;
     if (e->pinned) {
       if (include_pinned && e->dirty && !e->invalidated && e->dptr && e->nbytes > 0) {
-        rt->dtoh((void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
+        pk_sync_and_dtoh(rt, (void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
         rt->downloads++;
         e->dirty = 0;
       }
       continue;
     }
     if (e->dirty && e->dptr && e->nbytes > 0) {
-      rt->dtoh((void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
+      pk_sync_and_dtoh(rt, (void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
       rt->downloads++;
       e->dirty = 0;
     }
@@ -271,34 +301,72 @@ static void pk_cu_flush_to_host_internal(pk_cu_rt* rt, int include_pinned) {
 }
 
 PK_EXPORT int32_t pk_cu_init(void) {
-  if (g_rt.ready) return 0;
+  pthread_mutex_lock(&g_init_mu);
+  if (g_drv.ready) {
+    pthread_mutex_unlock(&g_init_mu);
+    return 0;
+  }
   void* lib = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_NOLOAD);
   if (!lib) lib = dlopen("libcuda.so.1", RTLD_LAZY);
-  if (!lib) return 1;
-  g_rt.launch = (fn_cuLaunchKernel)dlsym(lib, "cuLaunchKernel");
-  g_rt.mem_alloc = (fn_cuMemAlloc)dlsym(lib, "cuMemAlloc_v2");
-  if (!g_rt.mem_alloc) g_rt.mem_alloc = (fn_cuMemAlloc)dlsym(lib, "cuMemAlloc");
-  g_rt.mem_free = (fn_cuMemFree)dlsym(lib, "cuMemFree_v2");
-  if (!g_rt.mem_free) g_rt.mem_free = (fn_cuMemFree)dlsym(lib, "cuMemFree");
-  g_rt.memset_async = (fn_cuMemsetD8Async)dlsym(lib, "cuMemsetD8Async");
-  g_rt.htod_async = (fn_cuMemcpyHtoDAsync)dlsym(lib, "cuMemcpyHtoDAsync_v2");
-  if (!g_rt.htod_async) g_rt.htod_async = (fn_cuMemcpyHtoDAsync)dlsym(lib, "cuMemcpyHtoDAsync");
-  g_rt.dtoh = (fn_cuMemcpyDtoH)dlsym(lib, "cuMemcpyDtoH_v2");
-  if (!g_rt.dtoh) g_rt.dtoh = (fn_cuMemcpyDtoH)dlsym(lib, "cuMemcpyDtoH");
-  g_rt.stream_sync = (fn_cuStreamSynchronize)dlsym(lib, "cuStreamSynchronize");
-  if (!g_rt.launch || !g_rt.mem_alloc || !g_rt.mem_free || !g_rt.memset_async || !g_rt.htod_async || !g_rt.dtoh) {
+  if (!lib) {
+    pthread_mutex_unlock(&g_init_mu);
+    return 1;
+  }
+  g_drv.launch = (fn_cuLaunchKernel)dlsym(lib, "cuLaunchKernel");
+  g_drv.mem_alloc = (fn_cuMemAlloc)dlsym(lib, "cuMemAlloc_v2");
+  if (!g_drv.mem_alloc) g_drv.mem_alloc = (fn_cuMemAlloc)dlsym(lib, "cuMemAlloc");
+  g_drv.mem_free = (fn_cuMemFree)dlsym(lib, "cuMemFree_v2");
+  if (!g_drv.mem_free) g_drv.mem_free = (fn_cuMemFree)dlsym(lib, "cuMemFree");
+  g_drv.memset_async = (fn_cuMemsetD8Async)dlsym(lib, "cuMemsetD8Async");
+  g_drv.htod_async = (fn_cuMemcpyHtoDAsync)dlsym(lib, "cuMemcpyHtoDAsync_v2");
+  if (!g_drv.htod_async) g_drv.htod_async = (fn_cuMemcpyHtoDAsync)dlsym(lib, "cuMemcpyHtoDAsync");
+  g_drv.dtoh = (fn_cuMemcpyDtoH)dlsym(lib, "cuMemcpyDtoH_v2");
+  if (!g_drv.dtoh) g_drv.dtoh = (fn_cuMemcpyDtoH)dlsym(lib, "cuMemcpyDtoH");
+  g_drv.stream_sync = (fn_cuStreamSynchronize)dlsym(lib, "cuStreamSynchronize");
+  g_drv.ctx_get_current = (fn_cuCtxGetCurrent)dlsym(lib, "cuCtxGetCurrent");
+  if (!g_drv.launch || !g_drv.mem_alloc || !g_drv.mem_free || !g_drv.memset_async || !g_drv.htod_async || !g_drv.dtoh) {
+    pthread_mutex_unlock(&g_init_mu);
     return 2;
   }
-  g_rt.ready = 1;
+  g_drv.ready = 1;
+  pthread_mutex_unlock(&g_init_mu);
+  return 0;
+}
+
+PK_EXPORT int32_t pk_cu_init_custom(
+    void* launch, void* mem_alloc, void* mem_free,
+    void* memset_async, void* htod_async, void* dtoh, void* stream_sync) {
+  pthread_mutex_lock(&g_init_mu);
+  g_drv.launch = (fn_cuLaunchKernel)launch;
+  g_drv.mem_alloc = (fn_cuMemAlloc)mem_alloc;
+  g_drv.mem_free = (fn_cuMemFree)mem_free;
+  g_drv.memset_async = (fn_cuMemsetD8Async)memset_async;
+  g_drv.htod_async = (fn_cuMemcpyHtoDAsync)htod_async;
+  g_drv.dtoh = (fn_cuMemcpyDtoH)dtoh;
+  g_drv.stream_sync = (fn_cuStreamSynchronize)stream_sync;
+  g_drv.ctx_get_current = NULL;
+  g_drv.ready = 1;
+  pthread_mutex_unlock(&g_init_mu);
   return 0;
 }
 
 PK_EXPORT void pk_cu_set_fallback(void* py_fallback) {
-  g_rt.py_fallback = (pk_py_fallback_fn)py_fallback;
+  pthread_mutex_lock(&g_init_mu);
+  g_drv.default_fallback = (pk_py_fallback_fn)py_fallback;
+  pthread_mutex_unlock(&g_init_mu);
 }
 
-PK_EXPORT void pk_cu_pool_free_block(uint64_t dptr, int64_t cap) {
-  if (g_rt.ready && dptr) pk_pool_free(&g_rt, dptr, cap);
+PK_EXPORT void pk_cu_pool_free_block(uint64_t dptr, int64_t cap, void* owner_stream) {
+  if (!g_drv.ready || !dptr) return;
+  pk_cu_rt* rt = &t_rt;
+  CUcontext cur_ctx = NULL;
+  if (g_drv.ctx_get_current) g_drv.ctx_get_current(&cur_ctx);
+  if (rt->pool_inited && rt->pool_stream == (CUstream)owner_stream && rt->pool_ctx == cur_ctx) {
+    pk_pool_free(rt, (CUdeviceptr)dptr, cap);
+    return;
+  }
+  if (g_drv.stream_sync) g_drv.stream_sync((CUstream)owner_stream);
+  g_drv.mem_free((CUdeviceptr)dptr);
 }
 
 PK_EXPORT void pk_cu_begin_call(
@@ -306,13 +374,21 @@ PK_EXPORT void pk_cu_begin_call(
     const void* descs, int32_t n_kernels,
     uint64_t flag_dptr, uint64_t info_dptr,
     uint64_t err_flags_dptr, uint64_t err_infos_dptr, int32_t err_cap) {
-  pk_cu_rt* rt = &g_rt;
+  pk_cu_rt* rt = &t_rt;
+  CUcontext cur_ctx = NULL;
+  if (g_drv.ctx_get_current) g_drv.ctx_get_current(&cur_ctx);
+  if (rt->pool_inited && (rt->pool_stream != (CUstream)stream || rt->pool_ctx != cur_ctx)) {
+    pk_pool_drain(rt);
+  }
+  rt->pool_inited = 1;
+  rt->pool_stream = (CUstream)stream;
+  rt->pool_ctx = cur_ctx;
   for (int k = 0; k < rt->n_used; ++k) rt->tbl[rt->used_slots[k]].occupied = 0;
   rt->n_used = 0;
   rt->active = 1;
   rt->py_cache_nonempty = 0;
   rt->sm_count = sm_count;
-  rt->stream = stream;
+  rt->stream = (CUstream)stream;
   rt->py_fallback = (pk_py_fallback_fn)py_fallback;
   rt->descs = (const pk_cu_kdesc*)descs;
   rt->n_kernels = n_kernels;
@@ -332,7 +408,7 @@ PK_EXPORT void pk_cu_begin_call(
 
 PK_EXPORT void pk_cu_add_pinned(
     uint64_t host_addr, uint64_t dptr, int64_t nbytes, int32_t pin_idx, int32_t initial_dirty) {
-  pk_tbl_entry* e = pk_tbl_insert(&g_rt, host_addr);
+  pk_tbl_entry* e = pk_tbl_insert(&t_rt, host_addr);
   if (!e) return;
   e->dptr = dptr;
   e->nbytes = nbytes;
@@ -344,7 +420,7 @@ PK_EXPORT void pk_cu_add_pinned(
 }
 
 PK_EXPORT int32_t pk_cu_drain_pending_errs(int32_t* out_err_kernels, int32_t max_n) {
-  pk_cu_rt* rt = &g_rt;
+  pk_cu_rt* rt = &t_rt;
   int32_t n = rt->pending_err_count;
   if (n > max_n) n = max_n;
   for (int i = 0; i < n; ++i) out_err_kernels[i] = rt->pending_err_kernels[i];
@@ -353,7 +429,7 @@ PK_EXPORT int32_t pk_cu_drain_pending_errs(int32_t* out_err_kernels, int32_t max
 }
 
 PK_EXPORT int32_t pk_cu_take_output(uint64_t host_addr, int64_t nbytes, uint64_t* out_dptr, int64_t* out_cap, int32_t* out_dirty) {
-  pk_tbl_entry* e = pk_tbl_find(&g_rt, host_addr);
+  pk_tbl_entry* e = pk_tbl_find(&t_rt, host_addr);
   if (!e || e->pinned || e->nbytes < nbytes) return 0;
   *out_dptr = e->dptr;
   *out_cap = e->cap;
@@ -369,7 +445,7 @@ PK_EXPORT int32_t pk_cu_take_output(uint64_t host_addr, int64_t nbytes, uint64_t
 PK_EXPORT void pk_cu_end_call(
     int32_t* out_pin_dirty, int32_t* out_pin_inval, int32_t n_pinned,
     int64_t* out_stats, int32_t* out_err_count, int32_t* out_err_kernels) {
-  pk_cu_rt* rt = &g_rt;
+  pk_cu_rt* rt = &t_rt;
   for (int k = 0; k < rt->n_used; ++k) {
     pk_tbl_entry* e = &rt->tbl[rt->used_slots[k]];
     if (e->occupied != 1) {
@@ -385,7 +461,7 @@ PK_EXPORT void pk_cu_end_call(
       continue;
     }
     if (e->dirty && e->dptr && e->nbytes > 0) {
-      rt->dtoh((void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
+      pk_sync_and_dtoh(rt, (void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
       rt->downloads++;
     }
     pk_pool_free(rt, e->dptr, e->cap);
@@ -409,7 +485,7 @@ PK_EXPORT void pk_cu_end_call(
 static int pk_cu_check_errs_inline(pk_cu_rt* rt) {
   if (rt->pending_err_count <= 0) return 0;
   int32_t flags[PK_MAX_ERR_SLOTS];
-  rt->dtoh(flags, rt->err_flags_dptr, (size_t)rt->pending_err_count * sizeof(int32_t));
+  pk_sync_and_dtoh(rt, flags, rt->err_flags_dptr, (size_t)rt->pending_err_count * sizeof(int32_t));
   for (int i = 0; i < rt->pending_err_count; ++i) {
     if (flags[i] != 0) return 1; /* error happened! leave flags set for Python to raise */
   }
@@ -436,9 +512,10 @@ static int32_t pk_cu_fallback_with_flush(
 }
 
 PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64_t nchunks) {
-  pk_cu_rt* rt = &g_rt;
-  if (!rt->active || !rt->ready) {
-    return rt->py_fallback ? rt->py_fallback(kernel, ctx, total, nchunks) : 1;
+  pk_cu_rt* rt = &t_rt;
+  if (!rt->active || !g_drv.ready) {
+    pk_py_fallback_fn fb = rt->py_fallback ? rt->py_fallback : g_drv.default_fallback;
+    return fb ? fb(kernel, ctx, total, nchunks) : 1;
   }
 
   /* Control messages: -1 flush, -2 forget, -3 sync read, -4 sync write */
@@ -470,7 +547,7 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
           if (e->occupied != 1 || e->invalidated) continue;
           if (e->host_addr < end && addr < e->host_addr + (uint64_t)e->nbytes) {
             if (e->dirty && e->dptr && e->nbytes > 0) {
-              rt->dtoh((void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
+              pk_sync_and_dtoh(rt, (void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
               rt->downloads++;
               e->dirty = 0;
             }
@@ -568,9 +645,9 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
         return pk_cu_fallback_with_flush(rt, kernel, ctx, total, nchunks, 6, 0);
       }
       if (fl & 4) {
-        rt->memset_async(dptr, 0, (size_t)sizes[i], rt->stream);
+        g_drv.memset_async(dptr, 0, (size_t)sizes[i], rt->stream);
       } else if (!(fl & 2)) {
-        rt->htod_async(dptr, (const void*)(uintptr_t)addrs[i], (size_t)sizes[i], rt->stream);
+        g_drv.htod_async(dptr, (const void*)(uintptr_t)addrs[i], (size_t)sizes[i], rt->stream);
         rt->uploads++;
       }
       pk_tbl_entry* ne = pk_tbl_insert(rt, addrs[i]);
@@ -619,7 +696,7 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
         if (sk > 16) sk = 16;
         if (sk > 1) {
           if (!(orig_flags[ob] & 4)) {
-            rt->memset_async(dptrs[ob], 0, (size_t)sizes[ob], rt->stream);
+            g_drv.memset_async(dptrs[ob], 0, (size_t)sizes[ob], rt->stream);
           }
           grid = base_blocks * sk;
           k_csize = sk;
@@ -663,7 +740,7 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
     kargs[pos++] = &dptrs[i];
   }
 
-  CUresult rc = rt->launch(kd->cu_fn, (unsigned int)grid, 1u, 1u, (unsigned int)block, 1u, 1u, 0u, rt->stream, kargs, NULL);
+  CUresult rc = g_drv.launch(kd->cu_fn, (unsigned int)grid, 1u, 1u, (unsigned int)block, 1u, 1u, 0u, rt->stream, kargs, NULL);
   if (rc != 0) {
     return pk_cu_fallback_with_flush(rt, kernel, ctx, total, nchunks, 8, (int)rc);
   }
@@ -700,18 +777,20 @@ class PkCuKDesc(ctypes.Structure):
 
 class _CBlockOwner:
   """Keeps a C-freelist GPU allocation alive while wrapped in a CuPy ndarray
-  and returns it straight to the C freelist on garbage collection."""
+  and returns it straight to the C freelist on garbage collection (only when
+  freed on the owning thread and stream; otherwise frees via ``cuMemFree``)."""
 
-  __slots__ = ("_cap", "_dptr", "_free_fn")
+  __slots__ = ("_cap", "_dptr", "_free_fn", "_stream")
 
-  def __init__(self, free_fn, dptr: int, cap: int) -> None:
+  def __init__(self, free_fn, dptr: int, cap: int, stream: int = 0) -> None:
     self._free_fn = free_fn
     self._dptr = dptr
     self._cap = cap
+    self._stream = stream
 
   def __del__(self) -> None:
     try:
-      self._free_fn(self._dptr, self._cap)
+      self._free_fn(self._dptr, self._cap, self._stream)
     except Exception:  # noqa: BLE001 - interpreter shutdown
       pass
 
@@ -719,18 +798,20 @@ class _CBlockOwner:
 class NativeCudaRuntime:
   """Wrapper around the compiled ``pk_cuda_rt`` shared library."""
 
-  def __init__(self) -> None:
-    extra = ("-ldl",) if sys.platform.startswith("linux") else ()
+  def __init__(self, init_driver: bool = True) -> None:
+    extra = ("-ldl", "-pthread") if sys.platform.startswith("linux") else ("-pthread",)
     path = toolchain.compile_shared(CUDA_RT_SOURCE, extra_flags=extra, tag="cuda_rt", opt_level=2)
     lib = toolchain.load(path)
     lib.pk_cu_init.restype = ctypes.c_int32
     lib.pk_cu_init.argtypes = []
-    if lib.pk_cu_init() != 0:
+    lib.pk_cu_init_custom.restype = ctypes.c_int32
+    lib.pk_cu_init_custom.argtypes = [ctypes.c_void_p] * 7
+    if init_driver and lib.pk_cu_init() != 0:
       raise RuntimeError("libcuda.so.1 driver symbols unavailable")
     lib.pk_cu_set_fallback.restype = None
     lib.pk_cu_set_fallback.argtypes = [ctypes.c_void_p]
     lib.pk_cu_pool_free_block.restype = None
-    lib.pk_cu_pool_free_block.argtypes = [ctypes.c_uint64, ctypes.c_int64]
+    lib.pk_cu_pool_free_block.argtypes = [ctypes.c_uint64, ctypes.c_int64, ctypes.c_void_p]
     lib.pk_cu_begin_call.restype = None
     lib.pk_cu_begin_call.argtypes = [
       ctypes.c_void_p,
@@ -774,8 +855,8 @@ class NativeCudaRuntime:
     self.lib = lib
     self.dispatch_address = ctypes.cast(lib.pk_cu_dispatch, ctypes.c_void_p).value or 0
 
-  def make_owner(self, dptr: int, cap: int) -> _CBlockOwner:
-    return _CBlockOwner(self.lib.pk_cu_pool_free_block, dptr, cap)
+  def make_owner(self, dptr: int, cap: int, stream: int = 0) -> _CBlockOwner:
+    return _CBlockOwner(self.lib.pk_cu_pool_free_block, dptr, cap, stream)
 
 
 def try_load_native_cuda_rt() -> NativeCudaRuntime | None:

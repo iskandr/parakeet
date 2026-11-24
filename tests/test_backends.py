@@ -641,3 +641,154 @@ print('split-k-ok')
 """
   proc = run_script(tmp_path, code, PARAKEET_CUDA_SIMULATE="1")
   assert proc.returncode == 0 and "split-k-ok" in proc.stdout, proc.stdout + proc.stderr
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="NativeCudaRuntime uses POSIX pthreads/dlopen")
+def test_native_cuda_rt_thread_isolation():
+  """Verify that two concurrent host threads with distinct streams, kernel descriptors,
+  buffer tables, and deferred error slots stay completely isolated in ``pk_cuda_rt``."""
+  import ctypes
+  import threading
+
+  from parakeet.backends.cuda_rt import NativeCudaRuntime, PkCuKDesc
+
+  rt = NativeCudaRuntime(init_driver=False)
+  lib = rt.lib
+
+  # Minimal in-process mock CUDA driver backed by host malloc/memcpy
+  launched_records: list[tuple[int, int, int]] = []
+  rec_lock = threading.Lock()
+  alloc_ptrs: dict[int, ctypes.Array] = {}
+
+  @ctypes.CFUNCTYPE(
+    ctypes.c_int,
+    ctypes.c_void_p,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+  )
+  def mock_launch(fn, gx, gy, gz, bx, by, bz, shmem, stream, kargs, extra):
+    with rec_lock:
+      launched_records.append((int(fn or 0), int(stream or 0), int(gx)))
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_uint64), ctypes.c_size_t)
+  def mock_alloc(out_ptr, nbytes):
+    buf = (ctypes.c_uint8 * max(nbytes, 1))()
+    addr = ctypes.addressof(buf)
+    with rec_lock:
+      alloc_ptrs[addr] = buf
+    out_ptr[0] = addr
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_uint64)
+  def mock_free(dptr):
+    with rec_lock:
+      alloc_ptrs.pop(int(dptr), None)
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_uint64, ctypes.c_ubyte, ctypes.c_size_t, ctypes.c_void_p)
+  def mock_memset(dptr, val, n, stream):
+    ctypes.memset(int(dptr), int(val), int(n))
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p)
+  def mock_htod(dst, src, n, stream):
+    ctypes.memmove(int(dst), int(src), int(n))
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_uint64, ctypes.c_size_t)
+  def mock_dtoh(dst, src, n):
+    ctypes.memmove(int(dst), int(src), int(n))
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
+  def mock_sync(stream):
+    return 0
+
+  @ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p, ctypes.c_int64, ctypes.c_int64)
+  def mock_fallback(k, ctx, total, nchunks):
+    return 99
+
+  rc = lib.pk_cu_init_custom(
+    ctypes.cast(mock_launch, ctypes.c_void_p),
+    ctypes.cast(mock_alloc, ctypes.c_void_p),
+    ctypes.cast(mock_free, ctypes.c_void_p),
+    ctypes.cast(mock_memset, ctypes.c_void_p),
+    ctypes.cast(mock_htod, ctypes.c_void_p),
+    ctypes.cast(mock_dtoh, ctypes.c_void_p),
+    ctypes.cast(mock_sync, ctypes.c_void_p),
+  )
+  assert rc == 0
+
+  barrier = threading.Barrier(2)
+  errors: list[BaseException] = []
+  results: dict[int, tuple[int, int, list[int]]] = {}
+
+  def worker(tid: int):
+    try:
+      stream_id = 0x1000 + tid * 0x100
+      fn_id = 0x2000 + tid * 0x100
+      descs = (PkCuKDesc * 1)()
+      descs[0].cu_fn = fn_id
+      descs[0].is_map = 1
+      descs[0].has_errors = 1 if tid == 1 else 0
+      descs[0].block_threads = 64
+      descs[0].n_scalars = 0
+      descs[0].n_bufs = 0
+
+      err_flags = (ctypes.c_int32 * 8)()
+      err_infos = (ctypes.c_int64 * 32)()
+      flag0 = ctypes.c_int32(0)
+      info0 = (ctypes.c_int64 * 4)()
+
+      lib.pk_cu_begin_call(
+        stream_id,
+        8,
+        ctypes.cast(mock_fallback, ctypes.c_void_p),
+        ctypes.addressof(descs),
+        1,
+        ctypes.addressof(flag0),
+        ctypes.addressof(info0),
+        ctypes.addressof(err_flags),
+        ctypes.addressof(err_infos),
+        8,
+      )
+      # Both threads overlap inside active calls simultaneously!
+      barrier.wait()
+      dummy_ctx = (ctypes.c_uint8 * 64)()
+      for _ in range(3 + tid):
+        assert lib.pk_cu_dispatch(0, ctypes.addressof(dummy_ctx), 128, 1) == 0
+      barrier.wait()
+
+      out_dirty = (ctypes.c_int32 * 1)()
+      out_inval = (ctypes.c_int32 * 1)()
+      out_stats = (ctypes.c_int64 * 7)()
+      out_err_n = ctypes.c_int32(0)
+      out_err_k = (ctypes.c_int32 * 8)()
+      lib.pk_cu_end_call(out_dirty, out_inval, 0, out_stats, ctypes.byref(out_err_n), out_err_k)
+      results[tid] = (int(out_stats[0]), int(out_err_n.value), [int(out_err_k[i]) for i in range(out_err_n.value)])
+    except BaseException as e:  # noqa: BLE001
+      errors.append(e)
+
+  t0 = threading.Thread(target=worker, args=(0,))
+  t1 = threading.Thread(target=worker, args=(1,))
+  t0.start()
+  t1.start()
+  t0.join()
+  t1.join()
+
+  assert not errors, errors
+  assert results[0] == (3, 0, [])
+  assert results[1] == (4, 4, [0, 0, 0, 0])
+  # Verify every launch matched its own thread's (fn_id, stream_id) pair!
+  assert sum(1 for fn, st, _ in launched_records if fn == 0x2000 and st == 0x1000) == 3
+  assert sum(1 for fn, st, _ in launched_records if fn == 0x2100 and st == 0x1100) == 4
+

@@ -803,17 +803,26 @@ class CudaDevice(DeviceBase):
     self.device_name = self.driver.device_name
     self.profile = self.driver.profile
     self.simulated = simulate
-    self._flag = self.driver.zeros(1, np.int32)
-    self._info = self.driver.zeros(4, np.int64)
     self._err_cap = 256
-    self._err_flags = self.driver.zeros(self._err_cap, np.int32)
-    self._err_infos = self.driver.zeros(self._err_cap * 4, np.int64)
     self._native = None if simulate else try_load_native_cuda_rt()
     super().__init__()
     self._py_callback_addr = self.callback_address
     if self._native is not None:
       self._native.lib.pk_cu_set_fallback(self._py_callback_addr)
       self.callback_address = self._native.dispatch_address
+
+  def _err_bufs(self):
+    """Per-host-thread GPU error flag/info buffers so concurrent threads never collide."""
+    bufs = getattr(self._state, "err_bufs", None)
+    if bufs is None:
+      bufs = (
+        self.driver.zeros(1, np.int32),
+        self.driver.zeros(4, np.int64),
+        self.driver.zeros(self._err_cap, np.int32),
+        self.driver.zeros(self._err_cap * 4, np.int64),
+      )
+      self._state.err_bufs = bufs
+    return bufs
 
   def begin_call(self, spec, arrays, pinned=None):
     token = super().begin_call(spec, arrays, pinned)
@@ -827,6 +836,7 @@ class CudaDevice(DeviceBase):
         descs_arr, n_kernels = descs
         cp = self.driver.cp
         stream_ptr = int(cp.cuda.get_current_stream().ptr)
+        flag_buf, info_buf, err_flags, err_infos = self._err_bufs()
         lib = self._native.lib
         lib.pk_cu_begin_call(
           stream_ptr,
@@ -834,10 +844,10 @@ class CudaDevice(DeviceBase):
           self._py_callback_addr,
           ctypes.addressof(descs_arr),
           n_kernels,
-          int(self._flag.data.ptr),
-          int(self._info.data.ptr),
-          int(self._err_flags.data.ptr),
-          int(self._err_infos.data.ptr),
+          int(flag_buf.data.ptr),
+          int(info_buf.data.ptr),
+          int(err_flags.data.ptr),
+          int(err_infos.data.ptr),
           self._err_cap,
         )
         pin_das = []
@@ -849,6 +859,7 @@ class CudaDevice(DeviceBase):
         self._state.native_token = token
         self._state.native_pinned = pin_das
         self._state.native_descs = descs_arr
+        self._state.native_stream = stream_ptr
     return token
 
   def promote(self, arr: np.ndarray) -> DeviceArray:
@@ -863,7 +874,9 @@ class CudaDevice(DeviceBase):
           addr, nbytes, ctypes.byref(out_dptr), ctypes.byref(out_cap), ctypes.byref(out_dirty)
         ):
           cp = self.driver.cp
-          owner = self._native.make_owner(out_dptr.value, out_cap.value)
+          owner = self._native.make_owner(
+            out_dptr.value, out_cap.value, getattr(self._state, "native_stream", 0)
+          )
           mem = cp.cuda.UnownedMemory(out_dptr.value, out_cap.value, owner)
           dev_buf = cp.ndarray((nbytes,), dtype=np.uint8, memptr=cp.cuda.MemoryPointer(mem, 0))
           return DeviceArray(arr, self, dev_buf, dirty=bool(out_dirty.value))
@@ -922,13 +935,14 @@ class CudaDevice(DeviceBase):
     n = len(pending)
     items = list(pending)
     pending.clear()
-    flags = np.array(self.driver.read(self._err_flags[:n]), copy=True)
+    _, _, err_flags, err_infos = self._err_bufs()
+    flags = np.array(self.driver.read(err_flags[:n]), copy=True)
     if flags.any():
-      self._err_flags[:n].fill(0)
+      err_flags[:n].fill(0)
       for slot, plan in items:
         code = int(flags[slot])
         if code:
-          info = self.driver.read(self._err_infos[slot * 4 : slot * 4 + 4])
+          info = self.driver.read(err_infos[slot * 4 : slot * 4 + 4])
           raise make_runtime_error(plan.errors[code - 1], [int(x) for x in info])
 
   def flush(self, mid_call: bool = True) -> None:
@@ -1004,17 +1018,18 @@ class CudaDevice(DeviceBase):
     args: list = [np.int64(total), np.int64(csize)]
     for off, unpack, np_type in scalar_specs:
       args.append(np_type(unpack(raw_ctx, off)[0]))
+    flag_buf, info_buf, err_flags, err_infos = self._err_bufs()
     if plan.errors:
       pending = self._state.pending_checks
       if len(pending) >= self._err_cap:
         self._check_pending_errors()
       slot = len(pending)
-      flag = self._err_flags[slot : slot + 1]
-      info = self._err_infos[slot * 4 : slot * 4 + 4]
+      flag = err_flags[slot : slot + 1]
+      info = err_infos[slot * 4 : slot * 4 + 4]
       pending.append((slot, plan))
     else:
-      flag = self._flag
-      info = self._info
+      flag = flag_buf
+      info = info_buf
     args += [flag, info]
 
     # Fast path for disjoint buffers (avoids sorting / merge_regions on 99.9% of launches!)
