@@ -244,6 +244,67 @@ def _zipped(el, xs: tuple, init, fn, axis, what: str):
   return mapped, init, fold_axis
 
 
+@libfunction("fold")
+def fold(el, lift, merge, x, init):
+  """Fold scalar tuples in input order using a caller-supplied associative merge.
+
+  Each input row is lifted to a summary. The seed is applied exactly once.
+  """
+  from ..syntax import ir
+  from ..syntax.ir import Var
+  from ..syntax.records import record_type
+
+  if el.tape is not None and not el.tape.muted:
+    raise el.no_derivative("differentiation through a custom fold is not implemented")
+  x = el.as_array(_arrayish(el, x))
+  if x.rank == 0 or not isinstance(init, tuple) or not init or not all(isinstance(v, Expr) for v in init):
+    raise el.error(TypeInferenceError, "fold needs an array and a nonempty tuple of scalar initial values")
+  record = record_type(init)
+  pack = record.build if record else tuple
+
+  def state(v):
+    if not isinstance(v, tuple) or type(v) is not type(init) or len(v) != len(init):
+      raise el.error(TypeInferenceError, "fold lift and merge must preserve the initial state structure")
+    if any(not isinstance(t, Expr) or t.type.strong is not seed.type.strong for t, seed in zip(v, init)):
+      raise el.error(TypeInferenceError, "fold lift and merge must preserve the state field dtypes")
+    return v
+
+  x = _prepare(el, x)
+  n = x.shape[0]
+  shape = (n,)
+  idx = Var("i", I)
+  el.nonneg.add(idx.uid)
+  el.upper[idx.uid] = n
+  home = el.scope
+  scope = el.new_scope("loop")
+  parallel = el.can_parallel(shape)
+  body, combine = [], []
+  with el.in_block(body, scope, loop=True, par=parallel):
+    values = state(el.call(lift, [el.axis_view(x, 0, idx, consumed=True)]))
+  left = pack(Var("left", v.type) for v in init)
+  right = pack(Var("right", v.type) for v in init)
+  with el.in_block(combine, loop=True):
+    merged = state(el.call(merge, [left, right]))
+  if any(
+    isinstance(s, ir.Store)
+    or any(isinstance(e, ir.RtCall) and not e.pure for expr in ir.stmt_exprs(s) for e in ir.walk_expr(expr))
+    for s in ir.walk_stmts([*body, *combine])
+  ):
+    raise el.error(UnsupportedError, "fold lift and merge must be pure scalar computations")
+
+  results = pack(Var("field", v.type) for v in init)
+  carries = [ir.Carry(*parts) for parts in list(zip(results, values, left, right, merged))[1:]]
+  reduction = ir.Fold(results[0], values[0], left[0], right[0], combine, merged[0], op="structured", carries=carries)
+  answer = el.make_target(el.vtype(init), init, "state", home)
+  el.assign_target(answer, init)
+  nonempty = []
+  with el.in_block(nonempty):
+    el.emit(ir.IndexReduce(shape, (idx,), body, [reduction], scope, home, parallel, el.loc()))
+    el.assign_target(answer, state(el.call(merge, [init, results])))
+  el.emit(ir.If(cmp("gt", n, ZERO), nonempty, []))
+  return answer
+
+
 @libfunction("reduce")
 def reduce(el, f, *xs, init=None, axis=None, map=None):  # noqa: A001, A002
   """Fold ``f`` over the elements of an array (all of them, or slices along ``axis``).

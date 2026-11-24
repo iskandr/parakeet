@@ -60,3 +60,23 @@ def test_paired_histogram_fusion():
   np.testing.assert_allclose(gbdt_best_split(*args), expected)
   with np.testing.assert_raises(IndexError):
     hist(np.array([15]), np.array([1]), np.array([]))
+
+
+def test_structured_fold_keeps_chunk_order_and_applies_seed_once():
+  from parakeet import dsl
+
+  def compose(left, right):
+    return Pair(right.x * left.x, right.x * left.y + right.y)
+
+  @pk.jit
+  def recurrence(x):
+    return dsl.fold(lambda v: Pair(np.int64(-1), v), compose, x, init=Pair(np.int64(2), np.int64(7)))
+
+  for n in (0, 1, 10001):
+    x = np.arange(n, dtype=np.int64)
+    expected = Pair(2, 7)
+    for v in x:
+      expected = compose(expected, Pair(-1, v))
+    for backend in ("c", "threads"):
+      got = recurrence(x, _backend=backend)
+      assert type(got) is Pair and got == expected

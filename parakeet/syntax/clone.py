@@ -71,14 +71,24 @@ class Cloner:
     return [self.stmt(s) for s in block]
 
   def fold(self, f: ir.Fold) -> ir.Fold:
+    result, a, b = self.var(f.result), self.var(f.a), self.var(f.b)
+    bindings = [(self.var(c.result), self.var(c.a), self.var(c.b)) for c in f.carries]
+    combine = self.block(f.combine)
     carries = [
-      ir.Carry(self.var(c.result), self.expr(c.value), self.var(c.a), self.var(c.b), self.expr(c.combined))
-      for c in f.carries
+      ir.Carry(r, self.expr(c.value), ca, cb, self.expr(c.combined)) for c, (r, ca, cb) in zip(f.carries, bindings)
     ]
     return ir.Fold(
-      self.var(f.result), self.expr(f.value), self.var(f.a), self.var(f.b), [self.stmt(s) for s in f.combine],
-      self.expr(f.combined), None if f.init is None else self.expr(f.init), f.op, f.empty, carries,
-    )  # fmt: skip
+      result,
+      self.expr(f.value),
+      a,
+      b,
+      combine,
+      self.expr(f.combined),
+      None if f.init is None else self.expr(f.init),
+      f.op,
+      f.empty,
+      carries,
+    )
 
   def tile_stage(self, st: ir.TileStage) -> ir.TileStage:
     return ir.TileStage(

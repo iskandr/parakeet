@@ -69,3 +69,15 @@ NumPy's own pairwise summation: expect differences in the last digits.
 the comparison and logical/bitwise operators are first-class functions for use
 with the operators above. Outside compiled code they behave like the NumPy
 ufuncs of the same name.
+
+### Structured reductions
+
+`dsl.fold(lift, merge, x, init)` lifts each axis-0 slice of `x` to a
+nonempty tuple or named tuple of scalar fields. The pure `merge(left, right)`
+must be associative and return the same field types. Chunks may regroup adjacent
+values while preserving input order. The initial state is applied once, and is
+the result for empty input. Read any field of the result in compiled code.
+
+For example, affine updates `s -> a*s + b` compose in order with
+`merge(left, right) = (right[0]*left[0], right[0]*left[1] + right[1])`.
+Custom folds currently support forward evaluation.

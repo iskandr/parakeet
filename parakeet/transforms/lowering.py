@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from ..ndtypes import Bool, BufType
 from ..syntax import ir, ops
-from ..syntax.clone import Cloner, subst_expr
+from ..syntax.clone import Cloner
 from ..syntax.ir import Alloc, Assign, Break, Const, Expr, ForRange, If, Load, ParLoop, RtCall, Scope, Store, Var, While
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, iprod, isub
 
@@ -268,20 +268,16 @@ def step(
   for c, pa, px in zip(f.carries, p_accs, p_xs):
     subst[c.a.uid] = pa
     subst[c.b.uid] = px if not f.combine else lp.tmp(px, "px")
-  if not f.combine:
-    new_acc = lp.tmp(subst_expr(f.combined, subst), "nacc") if f.carries else subst_expr(f.combined, subst)
-    new_pas = [lp.tmp(subst_expr(c.combined, subst), "npacc") for c in f.carries]
-    lp.emit(Assign(acc, new_acc))
-    for pa, npa in zip(p_accs, new_pas):
-      lp.emit(Assign(pa, npa))
-    return
   c = Cloner(subst)
   lp.block.extend(c.block(f.combine))
-  new_acc = lp.tmp(c.expr(f.combined), "nacc") if f.carries else c.expr(f.combined)
-  new_pas = [lp.tmp(c.expr(cy.combined), "npacc") for cy in f.carries]
-  lp.emit(Assign(acc, new_acc))
-  for pa, npa in zip(p_accs, new_pas):
-    lp.emit(Assign(pa, npa))
+  destinations = [acc, *p_accs]
+  values = [c.expr(f.combined), *(c.expr(cy.combined) for cy in f.carries)]
+  if f.carries:
+    # Tuple assignment must also snapshot bare accumulator variables (e.g. swaps).
+    saved = [Var("next", v.type) for v in values]
+    lp.block.extend(Assign(tmp, v) for tmp, v in zip(saved, values))
+    values = saved
+  lp.block.extend(Assign(dst, val) for dst, val in zip(destinations, values))
   lp.owner.owned.extend(c.scope(scratch).owned)  # this copy's buffers go with its surroundings
 
 
@@ -394,7 +390,7 @@ def lower_reduce(lp: Loops, s: ir.IndexReduce, scratch: list[Scope]) -> None:
       sub = lp.sub(blk)
       for f, buf, acc, pbufs, pas, sc in zip(folds, partials, accs, p_partials, p_accs, scratch):
         loaded = cast(Load(buf, c), acc.type)
-        if f.carries or f.combine:
+        if f.carries or f.combine or f.op == "structured":
           p_loaded = [cast(Load(pbuf, c), pa.type) for pbuf, pa in zip(pbufs, pas)]
           step(sub, f, acc, loaded, sc, pas, p_loaded)
         else:
