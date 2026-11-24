@@ -429,11 +429,23 @@ def test_horizontal_map_fusion():
   with parakeet.options(skip_transforms=("sibling fusion",)):
     assert sibling_maps.specialize(x).ir.count("parallel[map]") == 2
 
-  # dependent maps must not merge when the second reads what the first writes
+  # Same-index dependent maps fuse write-through into 1 loop (keeping both outputs!)
   a, b = dependent_maps(x)
   np.testing.assert_allclose(a, x)
   np.testing.assert_allclose(b, x * 2.0)
-  assert dependent_maps.specialize(x).ir.count("parallel[map]") == 2
+  assert dependent_maps.specialize(x).ir.count("parallel[map]") == 1
+
+  # Cross-index dependent maps (b[i] reads a[N - 1 - i]) must NOT merge!
+  @jit
+  def cross_index_dependent(x):
+    a = x.copy()
+    b = a[::-1].copy()
+    return a, b
+
+  a2, b2 = cross_index_dependent(x)
+  np.testing.assert_allclose(a2, x)
+  np.testing.assert_allclose(b2, x[::-1])
+  assert cross_index_dependent.specialize(x).ir.count("parallel[map]") == 2
 
 
 def test_reduction_interchange():

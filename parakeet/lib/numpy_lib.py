@@ -1355,16 +1355,23 @@ def matmul_plain(el, a: ArrayVal, b: ArrayVal, what: str = "matmul"):
   if a.rank == 1:
     # a @ b is b.T @ a: the rows of b.T are what gets multiplied with a
     a, b = el.transpose(b), a
-  a = _rows(el, a)
+  target = getattr(el.options, "target", None)
+  gpu_native = target is not None and target.is_gpu and (target.supports_float64 or a.elt.name != "float64")
+  if not gpu_native:
+    a = _rows(el, a)
   el.consume(a)
   if b.rank == 1:
     b = el.as_concrete(b) if b.buf is None and b.cost > 2 else b
     el.consume(b)
     return build_map(el, (a.shape[0],), lambda idx: _dot1(el, el.axis_view(a, 0, idx[0], True), b), what)
-  # the columns of b as rows: a view if b is itself a transpose; if b is an expensive
-  # delayed expression (e.g. cos(x)), materialize its transpose directly in one pass
+  # On CPU, make columns of b contiguous as rows (bt) so the inner SIMD dot product
+  # walks both operands with stride 1.  On GPU, SharedTilePlan loads tiles cooperatively
+  # into SRAM with coalesced indexing directly from b (no transpose copy kernel needed!).
   bt_view = el.transpose(b)
-  bt = el.materialize(bt_view, "bt") if b.buf is None and b.cost > 2 else _rows(el, bt_view, "bt")
+  if gpu_native and b.buf is not None:
+    bt = bt_view
+  else:
+    bt = el.materialize(bt_view, "bt") if b.buf is None and b.cost > 2 else _rows(el, bt_view, "bt")
   el.consume(bt)
   return build_map(
         el, (a.shape[0], bt.shape[0]),

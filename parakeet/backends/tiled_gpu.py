@@ -71,6 +71,47 @@ def choose_tile_config(
   return None
 
 
+def _stage_prefers_dim0_fast(st: ir.TileStage) -> bool:
+  """Return True when a 2D ``TileStage(index=(d0, d1))`` loads memory with unit
+  stride along ``d0`` rather than ``d1`` (e.g., an un-transposed C-contiguous
+  ``B[k, j]`` where ``d0 = j, d1 = k``).  Mapping adjacent GPU threads along the
+  unit-stride axis ensures 100% warp-coalesced HBM loads with zero transpose copy."""
+  if len(st.index) != 2:
+    return False
+  d0, d1 = st.index
+  local_defs = {t.var.uid: t.value for t in st.body if isinstance(t, ir.Assign)}
+
+  def has_unit(e: ir.Expr, target_uid: int, depth: int = 8) -> bool:
+    if depth <= 0:
+      return False
+    if isinstance(e, ir.Var):
+      if e.uid == target_uid:
+        return True
+      if e.uid in local_defs:
+        return has_unit(local_defs[e.uid], target_uid, depth - 1)
+      return False
+    if isinstance(e, ir.Prim):
+      if e.op in ("add", "sub"):
+        return any(has_unit(a, target_uid, depth - 1) for a in e.args)
+      if e.op == "mul" and len(e.args) == 2:
+        a, b = e.args
+        if isinstance(a, ir.Const) and a.value == 1:
+          return has_unit(b, target_uid, depth - 1)
+        if isinstance(b, ir.Const) and b.value == 1:
+          return has_unit(a, target_uid, depth - 1)
+    return False
+
+  unit0 = unit1 = False
+  for expr in (*[e for t in st.body for e in ir.stmt_exprs(t)], st.value):
+    for x in ir.walk_expr(expr):
+      if isinstance(x, ir.Load):
+        if has_unit(x.index, d0.uid):
+          unit0 = True
+        if has_unit(x.index, d1.uid):
+          unit1 = True
+  return unit0 and not unit1
+
+
 def match_matrix_unit_plan(plan: ir.SharedTilePlan) -> tuple[int, int, ir.Fold, float] | None:
   """Return ``(row_stage_idx, col_stage_idx, fold, init_float)`` when ``plan``
   is a float32 sum-of-products contraction eligible for hardware matrix-unit
@@ -403,11 +444,19 @@ def _generate_matrix_unit_kernel(
 
   st_row = plan.stages[row_idx]
   st_col = plan.stages[col_idx]
+  bm_shift = bm.bit_length() - 1
+  bn_shift = bn.bit_length() - 1
+  row_d0_fast = _stage_prefers_dim0_fast(st_row)
+  col_d0_fast = _stage_prefers_dim0_fast(st_col)
   lines.append(f"  for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
-  # Cooperative load of row stage A[BM x BK]
+  # Cooperative load of row stage A[BM x BK] (coalesced along whichever of i/k is unit-stride)
   lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {bm * bk}; pk_idx += {MATRIX_UNIT_THREADS}) {{")
-  lines.append(f"      const {idx_t} pk_ti = pk_idx >> {bk_shift};")
-  lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
+  if row_d0_fast:
+    lines.append(f"      const {idx_t} pk_tk = pk_idx >> {bm_shift};")
+    lines.append(f"      const {idx_t} pk_ti = pk_idx & {bm - 1};")
+  else:
+    lines.append(f"      const {idx_t} pk_ti = pk_idx >> {bk_shift};")
+    lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
   lines.append(f"      const {idx_t} {st_row.index[0].name} = pk_i0 + pk_ti;")
   lines.append(f"      const {idx_t} {st_row.index[1].name} = pk_k0 + pk_tk;")
   lines.append(f"      if ({st_row.index[0].name} < pk_M && {st_row.index[1].name} < pk_K) {{")
@@ -418,10 +467,14 @@ def _generate_matrix_unit_kernel(
   lines.append(f"        pk_sh_a[pk_ti * {a_stride} + pk_tk] = 0.0f;")
   lines.append("      }")
   lines.append("    }")
-  # Cooperative load of col stage B (transposed [BK x BN] on CUDA; contiguous [BN x BK] on Metal w/ HW transpose)
+  # Cooperative load of col stage B (coalesced along whichever of j/k is unit-stride)
   lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {bn * bk}; pk_idx += {MATRIX_UNIT_THREADS}) {{")
-  lines.append(f"      const {idx_t} pk_tj = pk_idx >> {bk_shift};")
-  lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
+  if col_d0_fast:
+    lines.append(f"      const {idx_t} pk_tk = pk_idx >> {bn_shift};")
+    lines.append(f"      const {idx_t} pk_tj = pk_idx & {bn - 1};")
+  else:
+    lines.append(f"      const {idx_t} pk_tj = pk_idx >> {bk_shift};")
+    lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
   lines.append(f"      const {idx_t} {st_col.index[0].name} = pk_j0 + pk_tj;")
   lines.append(f"      const {idx_t} {st_col.index[1].name} = pk_k0 + pk_tk;")
   b_idx_expr = f"pk_tk * {b_stride} + pk_tj" if is_cuda else f"pk_tj * {b_stride} + pk_tk"
@@ -729,14 +782,21 @@ def generate_tiled_gpu_kernel(
   lines.append(f"  for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
 
   # Phase 1: cooperative load of all staged operands / prologues
+  bm_shift = bm.bit_length() - 1
+  bn_shift = bn.bit_length() - 1
   for s_idx, (st, side) in enumerate(zip(plan.stages, plan.stage_sides)):
     ct = em.ctype(st.buf.type.elt)
     zero = _zero_literal(st.buf.type.elt)
+    d0_fast = _stage_prefers_dim0_fast(st)
     if side == "row":
       total_elts = bm * bk
       lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {total_elts}; pk_idx += {BLOCK_THREADS}) {{")
-      lines.append(f"      const {idx_t} pk_ti = pk_idx >> {bk_shift};")
-      lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
+      if d0_fast:
+        lines.append(f"      const {idx_t} pk_tk = pk_idx >> {bm_shift};")
+        lines.append(f"      const {idx_t} pk_ti = pk_idx & {bm - 1};")
+      else:
+        lines.append(f"      const {idx_t} pk_ti = pk_idx >> {bk_shift};")
+        lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_i0 + pk_ti;")
       lines.append(f"      const {idx_t} {st.index[1].name} = pk_k0 + pk_tk;")
       lines.append(f"      if ({st.index[0].name} < pk_M && {st.index[1].name} < pk_K) {{")
@@ -750,8 +810,12 @@ def generate_tiled_gpu_kernel(
     elif side == "col":
       total_elts = bn * bk
       lines.append(f"    for ({idx_t} pk_idx = pk_tid; pk_idx < {total_elts}; pk_idx += {BLOCK_THREADS}) {{")
-      lines.append(f"      const {idx_t} pk_tj = pk_idx >> {bk_shift};")
-      lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
+      if d0_fast:
+        lines.append(f"      const {idx_t} pk_tk = pk_idx >> {bn_shift};")
+        lines.append(f"      const {idx_t} pk_tj = pk_idx & {bn - 1};")
+      else:
+        lines.append(f"      const {idx_t} pk_tj = pk_idx >> {bk_shift};")
+        lines.append(f"      const {idx_t} pk_tk = pk_idx & {bk - 1};")
       lines.append(f"      const {idx_t} {st.index[0].name} = pk_j0 + pk_tj;")
       lines.append(f"      const {idx_t} {st.index[1].name} = pk_k0 + pk_tk;")
       lines.append(f"      if ({st.index[0].name} < pk_N && {st.index[1].name} < pk_K) {{")

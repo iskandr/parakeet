@@ -280,6 +280,7 @@ class MetalDevice(DeviceBase):
       )
     self.queue = self.dev.newCommandQueue()
     self.device_name = str(self.dev.name())
+    self._compiled_cache: dict[str, object] = {}
     self.profile = self._query_profile()
     super().__init__()
 
@@ -322,6 +323,9 @@ class MetalDevice(DeviceBase):
   # ---- kernels -----------------------------------------------------------------
 
   def compile(self, plan: KernelPlan):
+    cached = self._compiled_cache.get(plan.source)
+    if cached is not None:
+      return cached
     Metal = self.Metal
     opts = Metal.MTLCompileOptions.alloc().init()
     if hasattr(opts, "setMathMode_") and hasattr(Metal, "MTLMathModeSafe"):
@@ -335,7 +339,69 @@ class MetalDevice(DeviceBase):
     pso, err = self.dev.newComputePipelineStateWithFunction_error_(fn, None)
     if pso is None:
       raise InternalError(f"Metal could not create a pipeline for a generated kernel: {err}")
+    self._compiled_cache[plan.source] = pso
     return pso
+
+  def compile_module(self, plans: list[KernelPlan]) -> None:
+    """Compile all unique uncompiled Metal kernels of a module in ONE Metal
+    library invocation."""
+    todo: list[KernelPlan] = []
+    seen_src: set[str] = set()
+    for p in plans:
+      if p.compiled is not None:
+        continue
+      cached = self._compiled_cache.get(p.source)
+      if cached is not None:
+        p.compiled = cached
+        continue
+      if p.source not in seen_src:
+        seen_src.add(p.source)
+        todo.append(p)
+    if len(todo) <= 1:
+      for p in todo:
+        p.compiled = self.compile(p)
+      return
+    marker = "struct pk_args {"
+    needs_sg = any("#include <metal_simdgroup_matrix>" in p.source for p in todo)
+    hdr = (
+      PRELUDE.replace("#include <metal_stdlib>", "#include <metal_stdlib>\n#include <metal_simdgroup_matrix>", 1)
+      if needs_sg
+      else PRELUDE
+    )
+    parts: list[str] = [hdr]
+    ok = True
+    for idx, p in enumerate(todo):
+      pos = p.source.find(marker)
+      if pos < 0:
+        ok = False
+        break
+      body = p.source[pos:].replace("pk_args", f"pk_args_{idx}").replace("pk_kernel", f"pk_kernel_{idx}", 1)
+      parts.append(body)
+    if not ok:
+      for p in todo:
+        p.compiled = self.compile(p)
+      return
+    Metal = self.Metal
+    opts = Metal.MTLCompileOptions.alloc().init()
+    if hasattr(opts, "setMathMode_") and hasattr(Metal, "MTLMathModeSafe"):
+      opts.setMathMode_(Metal.MTLMathModeSafe)
+    else:
+      opts.setFastMathEnabled_(False)
+    lib, err = self.dev.newLibraryWithSource_options_error_("\n".join(parts), opts, None)
+    if lib is None:
+      for p in todo:
+        p.compiled = self.compile(p)
+      return
+    for idx, p in enumerate(todo):
+      fn = lib.newFunctionWithName_(f"pk_kernel_{idx}")
+      pso, err = self.dev.newComputePipelineStateWithFunction_error_(fn, None)
+      if pso is None:
+        raise InternalError(f"Metal could not create a pipeline for a generated kernel: {err}")
+      self._compiled_cache[p.source] = pso
+      p.compiled = pso
+    for p in plans:
+      if p.compiled is None:
+        p.compiled = self._compiled_cache.get(p.source)
 
   def _buffer(self, addr: int, nbytes: int, shared: bool):
     """A Metal buffer for host memory: zero-copy when page aligned."""
@@ -368,7 +434,11 @@ class MetalDevice(DeviceBase):
 
   def run(self, plan: KernelPlan, ctx_addr: int, total: int, nchunks: int) -> None:
     if plan.compiled is None:
-      plan.compiled = self.compile(plan)
+      if self._state.stack:
+        mod_plans = [k.device for k in self._state.stack[-1].spec.module.kernels if k.device is not None]
+        self.compile_module(mod_plans)
+      if plan.compiled is None:
+        plan.compiled = self.compile(plan)
     pso = plan.compiled
     Metal = self.Metal
     ctx = plan.host_struct.from_address(ctx_addr)

@@ -1576,6 +1576,84 @@ def absorb_map(a: IndexMap, b: IndexMap) -> None:
   a.scope.owned.extend(cloner.scope(b.scope).owned)
 
 
+def fuse_write_through_map(a: IndexMap, b: IndexMap, facts: IndexFacts, allocs: set[int] | BufferInfo) -> bool:
+  """Merge dependent same-shape ``IndexMap`` ``b`` into ``a`` when ``b`` reads
+  local buffers written by ``a`` at the exact same index (e.g. Adam's
+  ``mn, vn -> pn`` or saved forward activations).  Keeps ``a``'s stores
+  (write-through) while passing the computed values directly in registers to ``b``."""
+  if a.ordered != b.ordered or a.parallel != b.parallel or not facts.same_shape(a.shape, b.shape):
+    return False
+  if contains_reduce(a) or contains_reduce(b):
+    return False
+  a_reads, a_writes = buffer_accesses(a.body)
+  b_reads, b_writes = buffer_accesses(b.body)
+  # b must not overwrite anything a reads or writes
+  if buffers_may_alias(b_writes, a_reads | a_writes, allocs):
+    return False
+  local_allocs = allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs
+  shared_uids = a_writes & b_reads
+  if not shared_uids or not (shared_uids <= local_allocs):
+    return False
+  # Every buffer in a_writes that may alias b_reads must be in shared_uids (all local)
+  if buffers_may_alias(a_writes - shared_uids, b_reads, allocs):
+    return False
+  if any(isinstance(t, ir.Check) for t in ir.walk_stmts(b.body)) and any(u not in local_allocs for u in a_writes):
+    return False
+  # Each shared buffer must have exactly one top-level Store in a.body (no nested writes)
+  a_body = [t for t in a.body if not (isinstance(t, ir.ReleaseScope) and t.scope is a.scope)]
+  store_pos: dict[int, int] = {}
+  store_stmts: dict[int, ir.Store] = {}
+  for idx, t in enumerate(a_body):
+    if isinstance(t, ir.Store) and t.buf.uid in shared_uids:
+      if t.buf.uid in store_pos:
+        return False
+      store_pos[t.buf.uid] = idx
+      store_stmts[t.buf.uid] = t
+    else:
+      _, inner_w = buffer_accesses([t])
+      if inner_w & shared_uids:
+        return False
+  if set(store_pos) != shared_uids:
+    return False
+  # Build facts for a.body and clone b.body onto a.index
+  a_facts = facts.fork()
+  for t in a_body:
+    a_facts.record_stmt(t)
+  b_body = [t for t in b.body if not (isinstance(t, ir.ReleaseScope) and t.scope is b.scope)]
+  cloner = Cloner({v.uid: v for v in defined([b]).values()})
+  cloner.m.update({v.uid: i for v, i in zip(b.index, a.index)})
+  b_cloned = [cloner.stmt(t) for t in b_body]
+  b_facts = a_facts.fork()
+  for t in b_cloned:
+    b_facts.record_stmt(t)
+  # Replace every Load of each shared buffer in b_cloned with a fresh scalar Var holding a's stored value
+  repl_vars: dict[int, Var] = {}
+  cur_b = b_cloned
+  for uid in sorted(shared_uids):
+    st = store_stmts[uid]
+    v = Var("wt", st.buf.type.elt)
+    expected_key = a_facts.expr_key(st.index)
+    n_reads = count_reads_in(cur_b, st.buf)
+    rew = InlineBufferLoad({x.uid: x for x in defined(cur_b).values()}, st.buf, expected_key, v, b_facts)
+    nxt_b = [rew.stmt(t) for t in cur_b]
+    if not rew.ok or rew.replaced != n_reads:
+      return False
+    cur_b = nxt_b
+    repl_vars[uid] = v
+  # Commit: rewrite each shared Store(buf, idx, val) in a_body to Assign(v, val); Store(buf, idx, v)
+  new_a: list[ir.Stmt] = []
+  for t in a_body:
+    if isinstance(t, ir.Store) and t.buf.uid in repl_vars:
+      v = repl_vars[t.buf.uid]
+      new_a.append(Assign(v, t.value))
+      new_a.append(ir.Store(t.buf, t.index, v))
+    else:
+      new_a.append(t)
+  a.body[:] = new_a + cur_b + [ir.ReleaseScope(a.scope)]
+  a.scope.owned.extend(cloner.scope(b.scope).owned)
+  return True
+
+
 def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int] | BufferInfo) -> list:
   """Walk ``block`` merging adjacent compatible reductions and maps."""
   facts = defs.fork() if isinstance(defs, IndexFacts) else IndexFacts(defs)
@@ -1644,7 +1722,7 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
     if isinstance(s, IndexMap):
       sunk = []
       while True:
-        _, a_writes = buffer_accesses(s.body)
+        a_reads, a_writes = buffer_accesses(s.body)
         map_outputs = set(defined([s])) | a_writes
         hoist = []
         sink_more = []
@@ -1670,13 +1748,96 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
             break
           j += 1
         nxt = block[j] if j < len(block) else None
-        if not isinstance(nxt, IndexMap) or not compatible_maps(s, nxt, step_facts, allocs):
-          break
-        out.extend(hoist)
-        walk_facts = step_facts
-        sunk.extend(sink_more)
-        absorb_map(s, nxt)
-        k = j + 1
+        if isinstance(nxt, IndexMap):
+          nxt_r, nxt_w = buffer_accesses(nxt.body)
+          if len(a_reads | a_writes | nxt_r | nxt_w) <= 20:
+            if compatible_maps(s, nxt, step_facts, allocs):
+              out.extend(hoist)
+              walk_facts = step_facts
+              sunk.extend(sink_more)
+              absorb_map(s, nxt)
+              k = j + 1
+              continue
+            if fuse_write_through_map(s, nxt, step_facts, allocs):
+              out.extend(hoist)
+              walk_facts = step_facts
+              sunk.extend(sink_more)
+              k = j + 1
+              continue
+        # Bounded lookahead: pull later independent same-shape maps (e.g. Adam's pn/mn/vn
+        # separated by other parameter tensors) into s while keeping buffer count <= 20.
+        if not contains_reduce(s) and not s.ordered:
+          merged_ahead = False
+          a_reads, a_writes = buffer_accesses(s.body)
+          s_bufs = a_reads | a_writes
+          if len(s_bufs) < 20:
+            def_defs: set[int] = set()
+            def_reads: set[int] = set()
+            def_writes: set[int] = set()
+            hoist_assign_idx: dict[int, int] = {}
+            alloc_idx_by_uid: dict[int, tuple[int, list[int]]] = {}
+            scan_facts = walk_facts.fork()
+            limit = min(len(block), k + 320)
+            for m in range(k, limit):
+              t = block[m]
+              if isinstance(t, ir.Comment):
+                continue
+              if isinstance(t, ir.Alloc):
+                need_assigns = [
+                  hoist_assign_idx[x.uid]
+                  for x in ir.walk_expr(t.count)
+                  if isinstance(x, Var) and x.uid in hoist_assign_idx
+                ]
+                needed_uids = {block[idx].var.uid for idx in need_assigns}
+                if not uses([t], (def_defs - needed_uids) | def_writes | map_outputs):
+                  alloc_idx_by_uid[t.var.uid] = (m, need_assigns)
+                def_defs.add(t.var.uid)
+                continue
+              if isinstance(t, Assign) and not isinstance(t.var.type, ir.BufType) and pure(t.value):
+                scan_facts.record_stmt(t)
+                if not uses([t], def_defs | def_writes | map_outputs):
+                  hoist_assign_idx[t.var.uid] = m
+                def_defs.add(t.var.uid)
+                continue
+              if isinstance(t, ir.Incref):
+                continue
+              if isinstance(t, IndexMap) and not contains_reduce(t) and not t.ordered:
+                tr, tw = buffer_accesses(t.body)
+                hoist_indices: set[int] = set()
+                hoisted_uids: set[int] = set()
+                for u in tw:
+                  if u in alloc_idx_by_uid:
+                    a_idx, dep_assigns = alloc_idx_by_uid[u]
+                    hoist_indices.add(a_idx)
+                    hoisted_uids.add(u)
+                    for da in dep_assigns:
+                      hoist_indices.add(da)
+                      hoisted_uids.add(block[da].var.uid)
+                rem_defs = def_defs - hoisted_uids
+                if (
+                  len(s_bufs | tr | tw) <= 20
+                  and not uses([t], rem_defs)
+                  and not buffers_may_alias(tr, def_writes, allocs)
+                  and not buffers_may_alias(tw, def_reads | def_writes, allocs)
+                ):
+                  is_compat = compatible_maps(s, t, scan_facts, allocs)
+                  if is_compat or fuse_write_through_map(s, t, scan_facts, allocs):
+                    if is_compat:
+                      absorb_map(s, t)
+                    for idx in sorted(hoist_indices):
+                      out.append(block[idx])
+                    for idx in sorted({m, *hoist_indices}, reverse=True):
+                      block.pop(idx)
+                    merged_ahead = True
+                    break
+                def_defs |= set(defined([t]))
+                def_reads |= tr
+                def_writes |= tw
+                continue
+              break
+          if merged_ahead:
+            continue
+        break
       out.append(s)
       out.extend(sunk)
       continue

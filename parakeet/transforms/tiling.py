@@ -51,7 +51,7 @@ from ..syntax.ir import (
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imax, imin, imul, iprod, isub
 from .analysis import IndexFacts
-from .lowering import Loops, outer_expr, pure_defs
+from .lowering import Loops, identity, outer_expr, pure_defs, row_major_index
 
 UNROLL_I = 2
 UNROLL_J = 4
@@ -337,12 +337,210 @@ def interchange_block(
   return out
 
 
-def interchange(fn: ir.Function, options) -> None:
-  """PermuteReductions: interchange strided map-of-reduction loops into
-  L1-tiled contiguous SIMD loops on CPU targets.
+def should_split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], target) -> bool:
+  """True when an ``IndexMap`` wrapping an associative ``IndexReduce`` is a
+  non-contraction axis reduction on GPU that benefits from 2D Split-K
+  parallelism when its outer grid is smaller than the GPU's compute capacity
+  (e.g. backward bias/LayerNorm reductions ``sum(x, axis=(0, 1))``)."""
+  red = m.reduce
+  if s.ordered or not s.parallel or s.scope.owned or red.scope.owned:
+    return False
+  if not red.folds:
+    return False
+  if not target.supports_float64 and any(f.a.type.name == "float64" for f in red.folds):
+    return False
+  if not all(f.op in COMMUTATIVE_OPS and not f.combine and not f.payloads for f in red.folds):
+    return False
+  if not all(isinstance(t, (Assign, ir.Comment)) for t in m.before + red.body):
+    return False
+  if any(isinstance(t, ir.Check) for t in ir.walk_stmts(m.after)):
+    return False
+  # Static tiny reduction or already huge static outer grid: skip
+  if all(isinstance(d, Const) for d in m.extent) and math.prod(d.value for d in m.extent) < 128:
+    return False
+  min_threads = max(target.num_compute_units * 256, 4096)
+  if all(isinstance(d, Const) for d in s.shape) and math.prod(d.value for d in s.shape) >= min_threads:
+    return False
+  # Leave 2D+ contractions (matmul / allpairs / einsum) for SharedTilePlan GPU tiling!
+  if len(s.shape) >= 2 and extract_shared_tile_plan(s, m, s.shape, m.extent) is not None:
+    return False
+  return True
 
-  Skipped on CUDA (and for float32 on Metal), where warp threads already walk
-  adjacent output columns in lockstep with coalesced memory reads."""
+
+def split_gpu_reduce(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, target) -> list:
+  """Rewrite a low-occupancy GPU axis reduction into a runtime-guarded 2-pass
+  Split-K reduction:
+
+  * Pass 1: parallel ``IndexMap`` over ``(split, *out_shape)`` (with
+    ``out_shape[-1]`` fastest for 100% warp-coalesced HBM reads), reducing
+    balanced slices ``[p*R/split, (p+1)*R/split)`` into ``partials``.
+  * Pass 2: parallel ``IndexMap`` over ``out_shape`` combining ``split``
+    partials and running ``m.after``.
+  """
+  out: list = []
+  lp = Loops(out, defs, owner)
+  red = m.reduce
+  folds = red.folds
+  out_shape = tuple(lp.tmp(d, "n") for d in s.shape)
+  out_total = lp.tmp(iprod(out_shape), "out_n")
+  red_shape = tuple(lp.tmp(d, "k") for d in m.extent)
+  red_total = lp.tmp(iprod(red_shape), "red_n")
+  min_threads = max(target.num_compute_units * 256, 4096)
+  cond = ops.prim(
+    "and",
+    (
+      ops.prim("and", (cmp("gt", out_total, ZERO), cmp("lt", out_total, Const(min_threads, I))), Bool),
+      cmp("ge", red_total, Const(128, I)),
+    ),
+    Bool,
+  )
+
+  then_blk: list = []
+  tlp = Loops(then_blk, defs, owner)
+  want = idiv(iadd(Const(min_threads, I), isub(out_total, ONE)), out_total)
+  split = tlp.tmp(imin(Const(64, I), imin(idiv(red_total, Const(32, I)), imax(want, Const(2, I)))), "split")
+  part_n = tlp.tmp(imul(split, out_total), "part_n")
+  pbufs: list[Var] = []
+  for f in folds:
+    pb = Var("gpart", BufType(f.a.type.strong))
+    owner.owned.append(pb)
+    tlp.emit(Alloc(pb, part_n, zero=False))
+    pbufs.append(pb)
+
+  # Pass 1: parallel over (split, *out_shape) -> coalesced along out_shape[-1]
+  p_var = Var("p", I)
+  p_out_idx = tuple(Var("i", I) for _ in out_shape)
+  p1_scope = Scope("loop")
+  p1_body: list = []
+  p1_lp = Loops(p1_body, defs, p1_scope)
+  k0 = p1_lp.tmp(idiv(imul(p_var, red_total), split), "k0")
+  k1 = p1_lp.tmp(idiv(imul(iadd(p_var, ONE), red_total), split), "k1")
+
+  # Clone m.before onto p_out_idx (keep map of before-var uids for red.body)
+  b_subst = {v.uid: u for v, u in zip(s.index, p_out_idx)}
+  b_cloner = Cloner(b_subst)
+  for v in defined(m.before).values():
+    b_cloner.var(v)
+  p1_body.extend(b_cloner.stmt(t) for t in m.before)
+
+  def emit_step(step_lp: Loops, r_coords: tuple[Expr, ...], accs: list[Var], init_only: bool) -> None:
+    r_cloner = Cloner(dict(b_cloner.m))
+    for v, e in zip(red.index, r_coords):
+      r_cloner.m[v.uid] = e
+    for v in defined(red.body).values():
+      r_cloner.var(v)
+    step_lp.block.extend(r_cloner.stmt(t) for t in red.body)
+    for f, acc in zip(folds, accs):
+      val = cast(r_cloner.expr(f.value), f.a.type)
+      if init_only:
+        step_lp.emit(Assign(acc, val))
+      else:
+        step_lp.emit(Assign(acc, cast(ops.prim(f.op, (acc, val), f.a.type), f.a.type)))
+
+  accs = [Var("acc", f.a.type) for f in folds]
+  all_id = all(identity(f.op, f.a.type) is not None for f in folds)
+  if all_id:
+    for f, acc in zip(folds, accs):
+      id_val = identity(f.op, f.a.type)
+      assert id_val is not None
+      p1_lp.emit(Assign(acc, cast(id_val, f.a.type)))
+    k_start = k0
+  else:
+    # Unseeded without identity: seed from k0 (guaranteed k0 < k1 since split <= red_total // 32)
+    r0 = (k0,) if len(red_shape) == 1 else p1_lp.unravel(k0, red_shape)
+    emit_step(p1_lp, r0, accs, init_only=True)
+    k_start = iadd(k0, ONE)
+
+  kf = Var("kf", I)
+  k_blk: list = []
+  k_scope = Scope("loop")
+  k_lp = Loops(k_blk, defs, k_scope)
+  r_coords = (kf,) if len(red_shape) == 1 else k_lp.unravel(kf, red_shape)
+  emit_step(k_lp, r_coords, accs, init_only=False)
+  k_blk.append(ir.ReleaseScope(k_scope))
+  p1_lp.emit(ForRange(kf, k_start, k1, ONE, k_blk, k_scope, simd=False))
+
+  out_flat1 = row_major_index(p_out_idx, out_shape)
+  part_pos1 = p1_lp.tmp(iadd(imul(p_var, out_total), out_flat1), "ppos")
+  for f, acc, pb in zip(folds, accs, pbufs):
+    p1_lp.emit(Store(pb, part_pos1, cast(acc, f.a.type.strong)))
+  p1_body.append(ir.ReleaseScope(p1_scope))
+  tlp.emit(IndexMap((split, *out_shape), (p_var, *p_out_idx), p1_body, p1_scope, False, True, s.loc))
+
+  # Pass 2: parallel over out_shape combining the split partials + running m.after
+  c_out_idx = tuple(Var("j", I) for _ in out_shape)
+  p2_scope = Scope("loop")
+  p2_body: list = []
+  p2_lp = Loops(p2_body, defs, p2_scope)
+  b2_cloner = Cloner({v.uid: u for v, u in zip(s.index, c_out_idx)})
+  for v in defined(m.before).values():
+    b2_cloner.var(v)
+  p2_body.extend(b2_cloner.stmt(t) for t in m.before)
+
+  out_flat2 = p2_lp.tmp(row_major_index(c_out_idx, out_shape), "oflat")
+  accs2 = [Var("cacc", f.a.type) for f in folds]
+  seeded_all = all(f.init is not None for f in folds)
+  if seeded_all:
+    for f, acc in zip(folds, accs2):
+      p2_lp.emit(Assign(acc, cast(b2_cloner.expr(f.init), f.a.type)))  # type: ignore[arg-type]
+    p_start = ZERO
+  else:
+    for f, acc, pb in zip(folds, accs2, pbufs):
+      v0 = cast(Load(pb, out_flat2), f.a.type)
+      if f.init is not None:
+        v0 = cast(ops.prim(f.op, (cast(b2_cloner.expr(f.init), f.a.type), v0), f.a.type), f.a.type)
+      p2_lp.emit(Assign(acc, v0))
+    p_start = ONE
+
+  pc = Var("pc", I)
+  c_blk: list = []
+  c_scope = Scope("loop")
+  c_lp = Loops(c_blk, defs, c_scope)
+  p_pos2 = c_lp.tmp(iadd(imul(pc, out_total), out_flat2), "ppos")
+  for f, acc, pb in zip(folds, accs2, pbufs):
+    pv = cast(Load(pb, p_pos2), f.a.type)
+    c_lp.emit(Assign(acc, cast(ops.prim(f.op, (acc, pv), f.a.type), f.a.type)))
+  c_blk.append(ir.ReleaseScope(c_scope))
+  p2_lp.emit(ForRange(pc, p_start, split, ONE, c_blk, c_scope, simd=False))
+
+  after_cloner = Cloner(dict(b2_cloner.m))
+  for f, acc in zip(folds, accs2):
+    after_cloner.m[f.result.uid] = acc
+  for v in defined(m.after).values():
+    after_cloner.var(v)
+  p2_body.extend(after_cloner.stmt(t) for t in m.after)
+  p2_body.append(ir.ReleaseScope(p2_scope))
+  tlp.emit(IndexMap(out_shape, c_out_idx, p2_body, p2_scope, False, True, s.loc))
+
+  for pb in pbufs:
+    tlp.emit(ir.Release(pb))
+
+  lp.emit(If(cond, then_blk, [s]))
+  return out
+
+
+def split_gpu_reduce_block(block: list, defs: dict[int, Expr], owner: Scope, target) -> list:
+  """Apply :func:`split_gpu_reduce` across eligible axis reductions in ``block``."""
+  out: list = []
+  for s in block:
+    if isinstance(s, If):
+      s.then[:] = split_gpu_reduce_block(s.then, defs, owner, target)
+      s.orelse[:] = split_gpu_reduce_block(s.orelse, defs, owner, target)
+    elif isinstance(s, IndexReduce):
+      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target)
+    elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
+      s.body[:] = split_gpu_reduce_block(s.body, defs, s.scope, target)
+    m = match(s, defs, min_rank=1)
+    if m is not None and should_split_gpu_reduce(s, m, defs, target):  # type: ignore[arg-type]
+      out.extend(split_gpu_reduce(s, m, defs, owner, target))  # type: ignore[arg-type]
+    else:
+      out.append(s)
+  return out
+
+
+def interchange(fn: ir.Function, options) -> None:
+  """PermuteReductions on CPU, and 2D Split-K parallelization of low-occupancy
+  axis reductions on GPU targets."""
   if not options.tiling:
     return
   target = getattr(options, "target", None)
@@ -350,6 +548,7 @@ def interchange(fn: ir.Function, options) -> None:
   if target is not None and not target.prefer_interchange:
     if not target.supports_float64:
       fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, metal_f64_only=True, tile_width_val=tw)
+    fn.body[:] = split_gpu_reduce_block(fn.body, pure_defs(fn.body), fn.scope, target)
     return
   fn.body[:] = interchange_block(fn.body, pure_defs(fn.body), fn.scope, tile_width_val=tw)
 

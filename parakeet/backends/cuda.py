@@ -13,8 +13,10 @@ machines without NVIDIA hardware; it is not a way to run CUDA code fast.
 from __future__ import annotations
 
 import ctypes
+import math
 import os
 import shutil
+import struct
 import threading
 
 import numpy as np
@@ -35,7 +37,7 @@ from .device import (
   merge_regions,
   untouched_regions,
 )
-from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel, tiled_num_blocks
+from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel
 
 BLOCK = 256
 
@@ -375,6 +377,54 @@ class CuPyDriver:
     self._compiled_cache[plan.source] = kernel
     return kernel
 
+  def compile_module(self, plans: list[KernelPlan]) -> None:
+    """Compile all unique uncompiled CUDA kernels of a module in ONE NVRTC
+    ``RawModule`` invocation instead of one NVRTC call per kernel."""
+    todo: list[KernelPlan] = []
+    seen_src: set[str] = set()
+    for p in plans:
+      if p.compiled is not None:
+        continue
+      cached = self._compiled_cache.get(p.source)
+      if cached is not None:
+        p.compiled = cached
+        continue
+      if p.source not in seen_src:
+        seen_src.add(p.source)
+        todo.append(p)
+    if len(todo) <= 1:
+      for p in todo:
+        p.compiled = self.compile(p)
+      return
+    marker = 'extern "C" __global__ void pk_kernel('
+    needs_mma = any("#include <mma.h>" in p.source for p in todo)
+    parts: list[str] = []
+    if needs_mma:
+      parts.append("#include <mma.h>")
+    parts.append(PRELUDE)
+    ok = True
+    for idx, p in enumerate(todo):
+      pos = p.source.find(marker)
+      if pos < 0:
+        ok = False
+        break
+      fn_src = p.source[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1)
+      parts.append(fn_src)
+    if not ok:
+      for p in todo:
+        p.compiled = self.compile(p)
+      return
+    mod = self.cp.RawModule(code="\n".join(parts))
+    mod.compile()
+    for idx, p in enumerate(todo):
+      fn = mod.get_function(f"pk_k{idx}")
+      self._compiled_cache[p.source] = fn
+      p.compiled = fn
+    # Also attach compiled functions to any duplicate plans sharing the same source
+    for p in plans:
+      if p.compiled is None:
+        p.compiled = self._compiled_cache.get(p.source)
+
   def to_device(self, host: np.ndarray):
     return self.cp.asarray(host)
 
@@ -572,6 +622,39 @@ class _PkBuf(ctypes.Structure):
   ]
 
 
+_STRUCT_FMT = {
+  "bool": "?", "int8": "b", "int16": "h", "int32": "i", "int64": "q",
+  "uint8": "B", "uint16": "H", "uint32": "I", "uint64": "Q",
+  "float32": "f", "float64": "d",
+}  # fmt: skip
+
+_PKBUF_UNPACK = struct.Struct("<Qq8xq").unpack_from
+_UNPACK_P = struct.Struct("<Q").unpack_from
+
+
+def _build_fast_meta(plan: KernelPlan):
+  """Precompute byte offsets into ``plan.host_struct`` for fast kernel dispatch."""
+  cls = plan.host_struct
+  ctx_size = ctypes.sizeof(cls)
+  scalars = []
+  for v in plan.scalars:
+    off = getattr(cls, v.name).offset
+    scalars.append((off, struct.Struct("<" + _STRUCT_FMT[v.type.name]).unpack_from, v.type.dtype.type))
+  buf_offsets = tuple(getattr(cls, v.name).offset for v in plan.bufs)
+  written_mask = tuple(v.uid in plan.written for v in plan.bufs)
+  tiled_meta = plan.extra.get("tiled")
+  tiled_spec = None
+  if tiled_meta is not None:
+    dims = []
+    for kind, val in tiled_meta["shape"]:
+      if kind == "c":
+        dims.append((0, val))
+      else:
+        dims.append((1, getattr(cls, val).offset))
+    tiled_spec = (tiled_meta["bm"], tiled_meta["bn"], tuple(dims))
+  return (ctx_size, tuple(scalars), buf_offsets, written_mask, tiled_spec, plan.loop.kind == "map")
+
+
 class CudaDevice(DeviceBase):
   name = "cuda"
   _instance: CudaDevice | None = None
@@ -616,34 +699,92 @@ class CudaDevice(DeviceBase):
   def run(self, plan: KernelPlan, ctx_addr: int, total: int, nchunks: int) -> None:
     drv = self.driver
     if plan.compiled is None:
-      plan.compiled = drv.compile(plan)
-    ctx = plan.host_struct.from_address(ctx_addr)
-    tiled_meta = plan.extra.get("tiled")
-    if tiled_meta is not None:
-      n = tiled_num_blocks(tiled_meta, ctx)
+      if hasattr(drv, "compile_module") and self._state.stack:
+        mod_plans = [k.device for k in self._state.stack[-1].spec.module.kernels if k.device is not None]
+        drv.compile_module(mod_plans)
+      if plan.compiled is None:
+        plan.compiled = drv.compile(plan)
+    fast = plan.extra.get("_fast")
+    if fast is None:
+      fast = plan.extra["_fast"] = _build_fast_meta(plan)
+    ctx_size, scalar_specs, buf_offsets, written_mask, tiled_spec, is_map = fast
+    raw_ctx = ctypes.string_at(ctx_addr, ctx_size)
+    if tiled_spec is not None:
+      bm, bn, dim_specs = tiled_spec
+      dims = [val if kind == 0 else struct.unpack_from("<q", raw_ctx, val)[0] for kind, val in dim_specs]
+      if any(d <= 0 for d in dims):
+        return
+      batch = math.prod(dims[:-2]) if len(dims) > 2 else 1
+      n = batch * ((dims[-2] + bm - 1) // bm) * ((dims[-1] + bn - 1) // bn)
       if n <= 0:
         return
       csize = 1
     else:
-      if plan.loop.kind == "map":
+      if is_map:
         n = min(total, 1 << 24)  # one GPU thread per element when possible
       else:
         n = nchunks
       csize = -(-total // n)
       n = -(-total // csize)
     args: list = [np.int64(total), np.int64(csize)]
-    for v in plan.scalars:
-      args.append(v.type.dtype.type(getattr(ctx, v.name)))
+    for off, unpack, np_type in scalar_specs:
+      args.append(np_type(unpack(raw_ctx, off)[0]))
     flag = self._flag
     info = self._info
     args += [flag, info]
-    # one device buffer per group of overlapping host ranges (see merge_regions)
-    pks = [_PkBuf.from_address(getattr(ctx, v.name)) for v in plan.bufs]
-    regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
-    written = {r for v, (r, _) in zip(plan.bufs, where) if v.uid in plan.written}
-    devs = self.acquire(regions, written, [False] * len(regions), untouched_regions(pks, where, len(regions)))
-    for r, off in where:
-      args.append(devs[r][off:] if off else devs[r])
+
+    # Fast path for disjoint buffers (avoids sorting / merge_regions on 99.9% of launches!)
+    n_bufs = len(buf_offsets)
+    pk_ptrs = [_UNPACK_P(raw_ctx, off)[0] for off in buf_offsets]
+    infos = [_PKBUF_UNPACK(ctypes.string_at(ptr, 32)) for ptr in pk_ptrs]
+    disjoint = True
+    for i in range(n_bufs):
+      a0, s0, _ = infos[i]
+      if s0 <= 0:
+        disjoint = False
+        break
+      e0 = a0 + s0
+      for j in range(i + 1, n_bufs):
+        a1, s1, _ = infos[j]
+        if a0 < a1 + s1 and a1 < e0:
+          disjoint = False
+          break
+      if not disjoint:
+        break
+
+    if disjoint:
+      pinned = self._state.pinned
+      cache = self._state.cache
+      for i in range(n_bufs):
+        addr, nbytes, flags = infos[i]
+        w = written_mask[i]
+        if flags & 6:
+          ctypes.c_int64.from_address(pk_ptrs[i] + 24).value = flags & ~6
+        da = pinned.get(addr)
+        if da is not None and da.nbytes == nbytes:
+          dev_buf = da.ensure_device()
+          if w:
+            da._dirty = True
+          args.append(dev_buf)
+          continue
+        hit = cache.get(addr)
+        if hit is not None and hit.nbytes == nbytes:
+          if w:
+            hit.dirty = True
+          args.append(hit.dev)
+          continue
+        # Slow acquire for cache miss (handles overlap with cached/pinned regions cleanly)
+        unt = 4 if (flags & 4) else (2 if (flags & 2) else 0)
+        devs = self.acquire([(addr, nbytes)], {0} if w else set(), [False], [unt])
+        args.append(devs[0])
+    else:
+      pks = [_PkBuf.from_address(ptr) for ptr in pk_ptrs]
+      regions, where = merge_regions([(pk.data or 0, pk.nbytes) for pk in pks])
+      written = {r for w, (r, _) in zip(written_mask, where) if w}
+      devs = self.acquire(regions, written, [False] * len(regions), untouched_regions(pks, where, len(regions)))
+      for r, off in where:
+        args.append(devs[r][off:] if off else devs[r])
+
     drv.launch(plan.compiled, plan, n, args)
     # Only synchronize & read error flag for kernels that actually contain Check statements!
     if plan.errors:
