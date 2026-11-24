@@ -620,7 +620,7 @@ def extract_shared_tile_plan(
   )
 
 
-def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int) -> list:
+def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None) -> list:
   """Rewrite a matmul-shaped ``IndexMap`` into nested :class:`IndexTile`
   operators: an outer L2 ``level="cache"`` tile over rows and columns wrapping
   an inner ``level="register"`` micro-tile (``UNROLL_I x UNROLL_J``), with an
@@ -633,8 +633,14 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
   extent = tuple(lp.tmp(d, "k") for d in m.extent)
   length = lp.tmp(iprod(extent), "len")
   itemsize = m.reduce.folds[0].a.type.bits // 8
-  col_tile = tile_size(lp, length, itemsize, tile_bytes)
   shared_plan = extract_shared_tile_plan(s, m, shape, extent)
+  if target is not None and target.is_gpu and shared_plan is None:
+    # On GPU, never wrap a non-contraction map-of-reduction (e.g. LayerNorm / Softmax)
+    # in a CPU cache-tile loop: that would collapse thousands of parallel GPU threads
+    # into a handful of serial 32x32 cache-tile threads.
+    if target.supports_float64 or not any(f.a.type.name == "float64" for f in m.reduce.folds):
+      return [s]
+  col_tile = tile_size(lp, length, itemsize, tile_bytes)
 
   # Outer cache tile: step leading batch axes 1-by-1, tile rows by ROW_TILE and columns by col_tile
   cache_tile_shape: tuple[Expr | None, ...] = (
@@ -694,28 +700,28 @@ def tiled(s: IndexMap, m: Shape, defs: dict[int, Expr], owner: Scope, tile_bytes
   return out
 
 
-def tile_block(block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int) -> list:
+def tile_block(block: list, defs: dict[int, Expr], owner: Scope, tile_bytes: int, target=None) -> list:
   out: list = []
   for s in block:
     if isinstance(s, If):
-      s.then[:] = tile_block(s.then, defs, owner, tile_bytes)
-      s.orelse[:] = tile_block(s.orelse, defs, owner, tile_bytes)
+      s.then[:] = tile_block(s.then, defs, owner, tile_bytes, target)
+      s.orelse[:] = tile_block(s.orelse, defs, owner, tile_bytes, target)
     elif isinstance(s, IndexReduce):
-      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes)
+      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target)
     elif isinstance(s, (IndexMap, ForRange, ir.While, ir.ParLoop)):
-      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes)
+      s.body[:] = tile_block(s.body, defs, s.scope, tile_bytes, target)
     m = match(s, defs)
     if m is None:
       out.append(s)
     else:
-      out.extend(tiled(s, m, defs, owner, tile_bytes))  # type: ignore[arg-type]
+      out.extend(tiled(s, m, defs, owner, tile_bytes, target))  # type: ignore[arg-type]
   return out
 
 
 def tiling(fn: ir.Function, options) -> None:
   """TiledMap: tile and jam every matmul-shaped map of ``fn``."""
   if options.tiling:
-    fn.body[:] = tile_block(fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes)
+    fn.body[:] = tile_block(fn.body, pure_defs(fn.body), fn.scope, options.tile_bytes, getattr(options, "target", None))
 
 
 __all__ = [

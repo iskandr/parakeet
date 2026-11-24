@@ -518,9 +518,11 @@ class ArrayMixin:
           return base  # e.g. the transpose of a transpose
         out.base = base
       used = [j for j, _, _ in mapping if j is not None]
+      non_unit = [k for k, d in enumerate(shape) if not (isinstance(d, Const) and d.value <= 1)]
       out.inj = (
         arr.inj
-        and sorted(used) == list(range(len(shape)))
+        and len(used) == len(set(used))
+        and all(k in used for k in non_unit)
         and all(isinstance(step, Const) and step.value != 0 for j, _, step in mapping if j is not None)
       )
       return out
