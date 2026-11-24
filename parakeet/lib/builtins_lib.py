@@ -55,7 +55,9 @@ def _zip(el, *items, strict=False):
   if not items:
     return ()
   flag = el.truth(el.lift(strict) if type(strict) is bool else strict)
-  if all(isinstance(x, tuple) for x in items) and (len({len(x) for x in items}) == 1 or (isinstance(flag, Const) and not flag.value)):
+  if all(isinstance(x, tuple) for x in items) and (
+    len({len(x) for x in items}) == 1 or (isinstance(flag, Const) and not flag.value)
+  ):
     return tuple(builtins.zip(*items))
   return ZipVal(tuple(items), flag)
 

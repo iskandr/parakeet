@@ -1483,7 +1483,9 @@ class Elaborator(ArrayMixin):
   def begin_loop(self, node: ast.AST, names: frozenset[str]) -> LoopCtx:
     fr = self.frame
     ctx = LoopCtx(node, self.scope, self.block, self.new_scope("loop"))
-    outside = fr.src.loads_outside(node) | {n.id for stmt in node.orelse for n in ast.walk(stmt) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+    outside = fr.src.loads_outside(node) | {
+      n.id for stmt in node.orelse for n in ast.walk(stmt) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+    }
     post = []
     for name in sorted(names):
       v = fr.env.get(name, _MISSING)
@@ -1677,12 +1679,16 @@ class Elaborator(ArrayMixin):
 
   def exec_For(self, node: ast.For) -> bool:
     it = self.eval(node.iter)
-    if isinstance(it, tuple):
+    tuple_domain = isinstance(it, tuple)
+    if tuple_domain and (not it or not _loop_transfers(node.body)):
       return self._unrolled_for(node, it)
     if self.hint_get((self.frame.path, id(node), "unroll")):
       return self._unroll(node, it)
     end_checks = []
-    if isinstance(it, RangeVal):
+    if tuple_domain:
+      length, getter = self._tuple_loop_domain(it, node)
+      start, stop, step = ZERO, length, ONE
+    elif isinstance(it, RangeVal):
       start, stop, step = (self.tmp(x, n) for x, n in zip((it.start, it.stop, it.step), ("start", "stop", "step")))
       length = None
       getter = None
@@ -1709,26 +1715,42 @@ class Elaborator(ArrayMixin):
     return self._finish_loop(ctx, node, end_checks)
 
   def _track_exhaustion(self, ctx, needed):
-    if needed:
+    if needed and any(isinstance(t, ast.Break) for t in _loop_transfers(ctx.node.body)):
       ctx.exhausted = Var("exhausted", Bool)
       self.mutables.add(ctx.exhausted.uid)
       self.emit(Assign(ctx.exhausted, ops.TRUE))
 
   def _finish_loop(self, ctx, node, end_checks):
     self.end_loop(ctx)
+    if ctx.exhausted is None:
+      self.block.extend(end_checks)
+      return self.exec_block(node.orelse)
     if end_checks:
       self.emit(If(ctx.exhausted, end_checks, []))
     if node.orelse:
-      guard = ast.copy_location(ast.If(test=ast.Constant(True), body=node.orelse, orelse=[]), node)
-      self.state.keep.append(guard)
+      key = (id(node), "else guard")
+      guard = self.hint_get(key)
+      if guard is None:
+        guard = ast.copy_location(ast.If(test=ast.Constant(True), body=node.orelse, orelse=[]), node)
+        self.state.hints[key] = guard
       return self._conditional(guard, ctx.exhausted)
     return False
 
+  def _tuple_loop_domain(self, items, node):
+    """Select a fixed product of scalar columns without promoting unlike fields."""
+    if all(isinstance(x, Expr) and x.type is items[0].type for x in items):
+      return Const(len(items), I), lambda i: self.tuple_index(items, i, node)
+    first = items[0]
+    if isinstance(first, tuple) and all(type(x) is type(first) and len(x) == len(first) for x in items):
+      columns = [self._tuple_loop_domain(col, node)[1] for col in zip(*items)]
+      record = record_type(first)
+      pack = record.build if record else tuple
+      return Const(len(items), I), lambda i: pack(get(i) for get in columns)
+    raise self.error(UnsupportedError, "break/continue in a tuple loop requires matching scalar or record types", node)
+
   def _unrolled_for(self, node: ast.For, items: tuple) -> bool:
-    inner = _inner_loop_nodes(node)
-    for sub in ast.walk(node):
-      if isinstance(sub, (ast.Break, ast.Continue)) and id(sub) not in inner:
-        raise self.error(UnsupportedError, "break/continue inside a loop over a tuple is not supported", sub)
+    if items and _loop_transfers(node.body):
+      raise self.error(UnsupportedError, "break/continue in an unrolled differentiated loop is unsupported", node)
     for item in items:
       self.assign(node.target, item)
       if self.exec_block(node.body):
@@ -1769,7 +1791,11 @@ class Elaborator(ArrayMixin):
           live = ops.land(live, ops.lnot(ended))
         with self.in_block(end_checks):
           for n, _ in parts[1:]:
-            self.check(ops.lor(ops.lnot(v.strict), cmp("eq", parts[0][0], n)), "ValueError", "zip() arguments have different lengths")
+            self.check(
+              ops.lor(ops.lnot(v.strict), cmp("eq", parts[0][0], n)),
+              "ValueError",
+              "zip() arguments have different lengths",
+            )
       return self.tmp(length, "n"), lambda i: tuple(g(i) for _, g in parts)
     if isinstance(v, EnumerateVal):
       length, getter = self.iter_source(v.item, node, end_checks)
@@ -2257,6 +2283,7 @@ class Elaborator(ArrayMixin):
 
   def eval_Compare(self, node: ast.Compare):
     left = self.eval(node.left)
+
     def part(k, lhs):
       right_node = node.comparators[k]
       right = self.eval(right_node)
@@ -2534,12 +2561,19 @@ def _target_names(node) -> frozenset[str]:
   return frozenset(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
 
 
-def _inner_loop_nodes(node) -> set:
-  out: set = set()
-  for child in ast.walk(node):
-    if child is not node and isinstance(child, (ast.For, ast.While)):
-      out.update(id(n) for n in ast.walk(child))
-  return out
+def _loop_transfers(body):
+  """Breaks and continues targeting this loop, including those in an inner loop's else."""
+  pending = list(body)
+  transfers = []
+  while pending:
+    stmt = pending.pop()
+    if isinstance(stmt, (ast.Break, ast.Continue)):
+      transfers.append(stmt)
+    elif isinstance(stmt, (ast.For, ast.While)):
+      pending.extend(stmt.orelse)
+    elif not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+      pending.extend(ast.iter_child_nodes(stmt))
+  return transfers
 
 
 def _stmt_name(node) -> str:
