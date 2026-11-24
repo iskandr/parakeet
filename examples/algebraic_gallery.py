@@ -5,19 +5,9 @@ when available)::
 
     python examples/algebraic_gallery.py
 
-Each workload is 5–15 lines of ordinary NumPy/Python that Parakeet's six
-algebraic laws automatically rewrite into frontier-grade kernels:
-
-1. Causal & Sliding-Window FlashAttention (fwd + D_i-recomputed bwd) — Laws 1, 2, 5
-2. Apple Cut Cross-Entropy (fwd + SRAM-recomputed bwd, zero M x V logits) — Laws 1, 2
-3. DeepSeek MLA Weight Absorption + FlashMLA — Laws 3 + 1
-4. Llama-3 GQA Shared-KV Head-Group Tiling — Laws 3 + 1
-5. Mamba-2 State-Space Duality (6-line recurrence -> 4 batched GEMMs) — Law 4
-6. Parallel Prefix IIR / Exponential Filter (TileScan) — Law 4
-7. Fused RBF / Gaussian Kernel Regression (Nadaraya-Watson, zero N x M matrix!) — Law 1
-8. Tropical All-Pairs Shortest Path (min/+) & Exact 1-NN (Carry fold) — Tiling + Carry
-9. GBDT Histogram Building + Prefix-Sum Best-Split Finding — IndexScatter + TileScan + Carry
-"""
+The examples cover pairwise folds, normalized weighted sums, contraction
+reassociation, affine scans, min-plus products and keyed histograms.
+The documentation gallery imports its code snippets from this module."""
 
 from __future__ import annotations
 
@@ -33,6 +23,7 @@ from parakeet import dsl, value_and_grad
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:causal_flash_attention]
 @dsl.kernel
 def causal_flash_attention(q, k, v):
   T = q.shape[-2]
@@ -42,6 +33,9 @@ def causal_flash_attention(q, k, v):
   s = np.where(mask, np.matmul(q, np.swapaxes(k, -1, -2)) * scale, np.float32(-1e9))
   e = np.exp(s - np.max(s, axis=-1, keepdims=True))
   return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
+
+
+# --8<-- [end:causal_flash_attention]
 
 
 @dsl.kernel
@@ -64,6 +58,7 @@ def causal_flash_loss(q, k, v):
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:cut_cross_entropy]
 def cut_cross_entropy(h, w, targets):
   logits = h @ w
   m = np.max(logits, axis=-1, keepdims=True)
@@ -73,11 +68,15 @@ def cut_cross_entropy(h, w, targets):
   return -np.mean(picked - lse)
 
 
+# --8<-- [end:cut_cross_entropy]
+
+
 # ---------------------------------------------------------------------------
 # 3. DeepSeek MLA Weight Absorption -> FlashMLA (Laws 3 + 1)
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:deepseek_mla]
 @dsl.kernel
 def deepseek_mla(q, c_kv, w_uk, w_uv):
   k = c_kv @ w_uk
@@ -88,11 +87,15 @@ def deepseek_mla(q, c_kv, w_uk, w_uv):
   return (e / np.sum(e, axis=-1, keepdims=True)) @ v
 
 
+# --8<-- [end:deepseek_mla]
+
+
 # ---------------------------------------------------------------------------
 # 4. Llama-3 GQA Shared-KV Head-Group Tiling (Laws 3 + 1)
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:gqa_attention]
 @dsl.kernel
 def gqa_attention(q, k, v):
   # q: (B, H_kv, G, T_q, D), k, v: (B, H_kv, 1, T_kv, D)
@@ -102,11 +105,15 @@ def gqa_attention(q, k, v):
   return np.matmul(e / np.sum(e, axis=-1, keepdims=True), v)
 
 
+# --8<-- [end:gqa_attention]
+
+
 # ---------------------------------------------------------------------------
 # 5. Mamba-2 State-Space Duality (6-line recurrence -> 4 batched GEMMs, Law 4)
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:mamba2_ssd]
 @dsl.kernel
 def mamba2_ssd(q, k, v, a):
   T = q.shape[0]
@@ -118,11 +125,15 @@ def mamba2_ssd(q, k, v, a):
   return out
 
 
+# --8<-- [end:mamba2_ssd]
+
+
 # ---------------------------------------------------------------------------
 # 6. Parallel Prefix Exponential / IIR Filter (Law 4 TileScan)
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:iir_exponential_filter]
 @dsl.kernel
 def iir_exponential_filter(a, b):
   T = a.shape[0]
@@ -134,29 +145,35 @@ def iir_exponential_filter(a, b):
   return out
 
 
+# --8<-- [end:iir_exponential_filter]
+
+
 # ---------------------------------------------------------------------------
 # 7. Fused RBF / Gaussian Kernel Regression (Nadaraya-Watson, zero N x M!)
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:rbf_kernel_regression]
 @dsl.kernel
 def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
-  # Mathematically identical to softmax(-gamma * ||x_q - x_t||^2) @ y_train,
-  # compiled into 1-pass O(N + M) SRAM-tiled flash_monoid (zero N x M matrix!).
   d2 = np.sum((x_query[:, None, :] - x_train[None, :, :]) ** np.float32(2.0), axis=-1)
   s = d2 * neg_gamma
   e = np.exp(s - np.max(s, axis=-1, keepdims=True))
   return (e / np.sum(e, axis=-1, keepdims=True)) @ y_train
 
 
+# --8<-- [end:rbf_kernel_regression]
+
+
 # ---------------------------------------------------------------------------
-# 8. Tropical Min-Plus Shortest Path & Exact 1-NN (Tiling + Carry)
+# 8. Tropical Min-Plus Product & Exact 1-NN (Tiling + Carry)
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:tropical_min_plus]
 @dsl.kernel
 def tropical_min_plus(a, b):
-  """One Floyd-Warshall / Bellman-Ford tropical matrix step: C[i,j] = min_k (A[i,k] + B[k,j])."""
+  """One min-plus matrix product: C[i,j] = min_k (A[i,k] + B[k,j])."""
   m, n = a.shape[0], b.shape[1]
   k = a.shape[1]
   return dsl.imap(
@@ -165,13 +182,20 @@ def tropical_min_plus(a, b):
   )
 
 
+# --8<-- [end:tropical_min_plus]
+
+
+# --8<-- [start:exact_1nn]
 @dsl.kernel
 def exact_1nn(x_query, x_ref):
-  """Exact nearest-neighbor index per query row (zero N x M distance matrix!)."""
+  """Exact nearest-neighbor index per query row."""
   return dsl.map(
     lambda q: np.argmin(dsl.map(lambda r: np.sum((q - r) ** np.float32(2.0)), x_ref)),
     x_query,
   )
+
+
+# --8<-- [end:exact_1nn]
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +203,7 @@ def exact_1nn(x_query, x_ref):
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:gbdt_best_split]
 @dsl.kernel
 def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
   """Histogram scatter-add + prefix sums + argmax gain in 8 lines (XGBoost/LightGBM core)."""
@@ -193,6 +218,9 @@ def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
   gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
   best_bin = np.argmax(gain)
   return best_bin, gain[best_bin]
+
+
+# --8<-- [end:gbdt_best_split]
 
 
 def _bench(fn, args, iters=10):
