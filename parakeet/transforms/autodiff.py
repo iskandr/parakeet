@@ -439,6 +439,8 @@ class Tape:
     """Does ``v`` carry a derivative?  Raises if it does but the tape lost track of it."""
     if isinstance(v, Expr):
       return is_float(v) and depends(el, v)
+    if record := record_type(v):
+      return self.is_active(el, record.values(v))
     if isinstance(v, tuple):
       return any(self.is_active(el, x) for x in v)
     if not isinstance(v, ArrayVal) or v.elt.kind != "f":

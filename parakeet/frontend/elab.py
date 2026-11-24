@@ -450,6 +450,10 @@ class Elaborator(ArrayMixin):
       return describe(Var("x", t[1]))
     if t[0] == "a":
       return f"array[{t[1].name}, {t[2]}d]"
+    if t[0] == "rec":
+      schema, fields = t[1], t[2][1:]
+      parts = (f"{name}={self.describe_vtype(field)}" for name, field in zip(schema.names, fields))
+      return f"{schema.cls.__name__}({', '.join(parts)})"
     if t[0] == "t":
       return "(" + ", ".join(self.describe_vtype(x) for x in t[1:]) + ")"
     if t[0] == "n":
@@ -1068,7 +1072,18 @@ class Elaborator(ArrayMixin):
     from .. import lib
 
     if isinstance(fn, type) and issubclass(fn, tuple) and hasattr(fn, "_fields"):
-      return fn(*args, **kwargs)
+      try:
+        result = fn(*args, **kwargs)
+      except TypeError as e:
+        raise self.error(TypeInferenceError, str(e), node) from None
+      # Explicit arguments are already staged. Only Python-supplied defaults need lifting.
+      return tuple.__new__(
+        fn,
+        (
+          self.lift(value) if i >= len(args) and name not in kwargs else value
+          for i, (name, value) in enumerate(zip(fn._fields, result))
+        ),
+      )
     if isinstance(fn, BoundMethod):
       impl = lib.lookup_method(fn.obj, fn.name)
       if impl is None:
