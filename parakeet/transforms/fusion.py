@@ -555,12 +555,12 @@ def fuse_vertical_pair(
       rewriter = InlineBufferLoad({v.uid: v for v in defined([consumer]).values()}, buf, expected_key, elem, c_facts)
       new_body = [rewriter.stmt(t) for t in consumer.body]
       new_target = rewriter.expr(consumer.target)
-      new_value = rewriter.expr(consumer.value)
+      new_updates = [ir.ScatterUpdate(u.buf, rewriter.expr(u.value), u.op) for u in consumer.updates]
       new_where = None if consumer.where is None else rewriter.expr(consumer.where)
       if rewriter.ok and rewriter.replaced == consumer_reads:
         consumer.body[:] = inlined_prefix + [Assign(elem, inlined_value)] + new_body
         consumer.target = new_target
-        consumer.value = new_value
+        consumer.updates = new_updates
         consumer.where = new_where
         return consumer, buf.uid
 
@@ -1654,6 +1654,81 @@ def fuse_write_through_map(a: IndexMap, b: IndexMap, facts: IndexFacts, allocs: 
   return True
 
 
+def _fuse_keyed_updates(a: IndexScatter, b: IndexScatter, facts: IndexFacts, allocs) -> bool:
+  """Merge independent updates to the same key, sharing its computation and checks."""
+  if a.scope.owned or b.scope.owned or a.parallel != b.parallel or a.where is not None or b.where is not None:
+    return False
+  if not facts.same_shape(a.shape, b.shape) or not facts.same_expr(a.dest_size, b.dest_size):
+    return False
+  ra, wa = buffer_accesses([a])
+  rb, wb = buffer_accesses([b])
+  local = allocs.local_allocs if isinstance(allocs, BufferInfo) else allocs
+  if not (wa | wb) <= local:
+    return False
+  if buffers_may_alias(wa, rb | wb, allocs) or buffers_may_alias(wb, ra, allocs):
+    return False
+  if any(
+    not isinstance(t, (ir.Check, Assign)) or not all(pure(e) for e in ir.stmt_exprs(t)) for t in (*a.body, *b.body)
+  ):
+    return False
+  if not all(pure(u.value) for u in (*a.updates, *b.updates)):
+    return False
+  cl = Cloner({y.uid: x for x, y in zip(a.index, b.index)})
+  common = 0
+  for x, y in zip(a.body, b.body):
+    if isinstance(x, Assign) and isinstance(y, Assign) and ir.same(x.value, cl.expr(y.value)):
+      cl.m[y.var.uid] = x.var
+    elif isinstance(x, ir.Check) and isinstance(y, ir.Check) and (x.err.exc, x.err.fmt) == (y.err.exc, y.err.fmt):
+      if (
+        not ir.same(x.cond, cl.expr(y.cond))
+        or len(x.args) != len(y.args)
+        or not all(ir.same(ex, cl.expr(ey)) for ex, ey in zip(x.args, y.args))
+      ):
+        return False
+    else:
+      break
+    common += 1
+  if not ir.same(a.target, cl.expr(b.target)) or any(
+    isinstance(t, ir.Check) for t in (*a.body[common:], *b.body[common:])
+  ):
+    return False
+  a.body.extend(cl.block(b.body[common:]))
+  a.updates.extend(ir.ScatterUpdate(u.buf, cl.expr(u.value), u.op) for u in b.updates)
+  return True
+
+
+def _scatter_siblings(block, k, s, facts, allocs, out):
+  """Cross only shape checks and fresh destinations. On a shape error, reproduce
+  earlier per-index checks before raising the later error."""
+  while k < len(block):
+    j = k
+    while j < len(block) and isinstance(block[j], (ir.Check, ir.Alloc)):
+      if any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(block[j]) for x in ir.walk_expr(e)):
+        break
+      j += 1
+    if j == len(block) or not isinstance(block[j], IndexScatter):
+      break
+    nxt = block[j]
+    fresh = {t.var.uid for t in block[k:j] if isinstance(t, ir.Alloc)}
+    if fresh - {u.buf.uid for u in nxt.updates} or uses([s], fresh):
+      break
+    # Keep only the prefix through the last bounds check for the cold error path.
+    last = max((i + 1 for i, t in enumerate(s.body) if isinstance(t, ir.Check)), default=0)
+    validation = s.body[:last]
+    if not _fuse_keyed_updates(s, nxt, facts, allocs):
+      break
+    for t in block[k:j]:
+      if validation and isinstance(t, ir.Check):
+        cl = Cloner()
+        indices = tuple(cl.var(v) for v in s.index)
+        check_map = IndexMap(s.shape, indices, cl.block(validation), cl.scope(s.scope), parallel=False)
+        out.append(ir.If(ops.lnot(t.cond), [check_map, t], []))
+      else:
+        out.append(t)
+    k = j + 1
+  return k
+
+
 def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int] | BufferInfo) -> list:
   """Walk ``block`` merging adjacent compatible reductions and maps."""
   facts = defs.fork() if isinstance(defs, IndexFacts) else IndexFacts(defs)
@@ -1671,6 +1746,8 @@ def fuse_block(block: list, defs: dict[int, Expr] | IndexFacts, allocs: set[int]
     s = block[k]
     k += 1
     walk_facts.record_stmt(s)
+    if isinstance(s, IndexScatter):
+      k = _scatter_siblings(block, k, s, walk_facts, allocs, out)
     if isinstance(s, IndexReduce):
       # ``s`` may sink past independent scalar definitions (hoisted before ``s``)
       # and step past pure scalar post-processing of its own results (sunk after ``s``)

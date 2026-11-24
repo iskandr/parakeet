@@ -160,11 +160,9 @@ class Cloner:
         tuple(x(d) for d in s.shape),
         tuple(self.var(v) for v in s.index),
         b(s.body),
-        x(s.buf),  # type: ignore[arg-type]
         x(s.dest_size),
         x(s.target),
-        x(s.value),
-        s.op,
+        [ir.ScatterUpdate(x(u.buf), x(u.value), u.op) for u in s.updates],
         self.scope(s.scope),
         s.parallel,
         s.loc,

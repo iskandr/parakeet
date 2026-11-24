@@ -8,7 +8,7 @@ from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, Float32, Float64, Int64, ScalarType, UInt64, WeakBool, join, weak_of_kind
 from ..syntax import ops
-from ..syntax.ir import Assign, Const, Expr, If, IndexScatter, RtCall, Scope, Store, Var
+from ..syntax.ir import Assign, Const, Expr, If, IndexScatter, RtCall, ScatterUpdate, Scope, Store, Var
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, TypeVal, describe
 from .core import (
@@ -1038,7 +1038,11 @@ def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_e
     else:
       pos = raw
     val = cast(el.tmp(el.elem(values, (iv,)), "val"), out_elt) if values is not None else Const(1, out_elt)
-  el.emit(IndexScatter((idx.shape[0],), (iv,), body, out.buf, n, pos, val, "add", sc, el.par_depth == 0, el.loc()))
+  el.emit(
+    IndexScatter(
+      (idx.shape[0],), (iv,), body, n, pos, [ScatterUpdate(out.buf, val, "add")], sc, el.par_depth == 0, el.loc()
+    )
+  )
   el.record_store(out)
   return out
 

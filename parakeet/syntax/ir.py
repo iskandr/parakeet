@@ -539,6 +539,13 @@ class IndexTile(Stmt):
 
 
 @dataclass(eq=False, slots=True)
+class ScatterUpdate:
+  buf: Var
+  value: Expr
+  op: str
+
+
+@dataclass(eq=False, slots=True)
 class IndexScatter(Stmt):
   """Generalized scatter-reduce (``ReduceByIndex`` / histogram / scatter-add):
   for every coordinate ``index`` in ``shape``, evaluate ``body`` and fold
@@ -553,11 +560,9 @@ class IndexScatter(Stmt):
   shape: tuple[Expr, ...]
   index: tuple[Var, ...]
   body: list[Stmt]
-  buf: Var
   dest_size: Expr
   target: Expr
-  value: Expr
-  op: str  # "add" | "mul" | "min" | "max" | "assign"
+  updates: list[ScatterUpdate]
   scope: Scope
   parallel: bool = True
   loc: SourceLocation | None = None
@@ -656,7 +661,13 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
   if isinstance(s, IndexMap):
     return s.shape
   if isinstance(s, IndexScatter):
-    return (*s.shape, s.buf, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,)))
+    return (
+      *s.shape,
+      s.dest_size,
+      s.target,
+      *(e for u in s.updates for e in (u.buf, u.value)),
+      *(() if s.where is None else (s.where,)),
+    )
   if isinstance(s, IndexTile):
     out: list[Expr] = list(s.shape) + [d for d in s.tile_shape if d is not None]
     for st in s.stages:
@@ -852,11 +863,12 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
     elif isinstance(s, IndexScatter):
       how = "parallel " if s.parallel else ""
       out.append(
-        f"{pad}{how}scatter[{s.op}] {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):"
+        f"{pad}{how}scatter[{','.join(u.op for u in s.updates)}] {', '.join(v.name for v in s.index)} over ({', '.join(map(fmt_expr, s.shape))}):"
       )
       out += fmt_block(s.body, indent + 1)
       guard = "" if s.where is None else f" if {fmt_expr(s.where)}"
-      out.append(f"{pad}    {s.buf.name}[{fmt_expr(s.target)}] {s.op}= {fmt_expr(s.value)}{guard}")
+      for u in s.updates:
+        out.append(f"{pad}    {u.buf.name}[{fmt_expr(s.target)}] {u.op}= {fmt_expr(u.value)}{guard}")
     elif isinstance(s, Check):
       out.append(f"{pad}check {fmt_expr(s.cond)}  # else {s.err.exc}: {s.err.fmt}")
     elif isinstance(s, Comment):

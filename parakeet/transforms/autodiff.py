@@ -1397,7 +1397,7 @@ def _scatter_add(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
 
 def _gather(tape: Tape, el, node: Node, g) -> None:
-  from ..syntax.ir import IndexScatter
+  from ..syntax.ir import IndexScatter, ScatterUpdate
 
   (base,) = node.inputs
   shape, src_index, index_arrays = node.info
@@ -1428,7 +1428,11 @@ def _gather(tape: Tape, el, node: Node, g) -> None:
     target = el.tmp(el.index_expr(adj_view, src_index(idx_vars)), "pos")
     val_expr = el.elem(g, idx_vars) if isinstance(g, ArrayVal) else g
     val = el.tmp(cast(val_expr, adj_view.elt), "g")
-  el.emit(IndexScatter(shape_t, idx_vars, blk, adj_view.buf, dest_size, target, val, "add", scope, threads, el.loc()))
+  el.emit(
+    IndexScatter(
+      shape_t, idx_vars, blk, dest_size, target, [ScatterUpdate(adj_view.buf, val, "add")], scope, threads, el.loc()
+    )
+  )
   el.record_store(adj_view)
 
 

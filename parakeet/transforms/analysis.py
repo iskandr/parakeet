@@ -623,10 +623,15 @@ def buffer_accesses(stmts: list) -> tuple[set[int], set[int]]:
           if isinstance(x, Load):
             reads.add(x.buf.uid)
     elif isinstance(s, ir.IndexScatter):
-      writes.add(s.buf.uid)
-      if s.op != "assign":
-        reads.add(s.buf.uid)
-      for e in (*s.shape, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,))):
+      writes.update(u.buf.uid for u in s.updates)
+      reads.update(u.buf.uid for u in s.updates if u.op != "assign")
+      for e in (
+        *s.shape,
+        s.dest_size,
+        s.target,
+        *(u.value for u in s.updates),
+        *(() if s.where is None else (s.where,)),
+      ):
         for x in ir.walk_expr(e):
           if isinstance(x, Load):
             reads.add(x.buf.uid)
@@ -683,8 +688,15 @@ class BufferInfo:
         note_expr(s.value)
         continue
       elif isinstance(s, ir.IndexScatter):
-        info.store_counts[s.buf.uid] = info.store_counts.get(s.buf.uid, 0) + 1
-        for e in (*s.shape, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,))):
+        for u in s.updates:
+          info.store_counts[u.buf.uid] = info.store_counts.get(u.buf.uid, 0) + 1
+        for e in (
+          *s.shape,
+          s.dest_size,
+          s.target,
+          *(u.value for u in s.updates),
+          *(() if s.where is None else (s.where,)),
+        ):
           note_expr(e)
         continue
       elif isinstance(s, ir.Incref) and isinstance(s.buf, Var):

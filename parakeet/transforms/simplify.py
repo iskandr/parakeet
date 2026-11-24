@@ -78,8 +78,14 @@ def buffer_liveness(fn: ir.Function) -> tuple[set[int], set[int], set[int]]:
       _note_exprs(s.index, read_bufs)
       _note_exprs(s.value, read_bufs)
     elif isinstance(s, IndexScatter):
-      stored_bufs.add(s.buf.uid)
-      for e in (*s.shape, s.dest_size, s.target, s.value, *(() if s.where is None else (s.where,))):
+      stored_bufs.update(u.buf.uid for u in s.updates)
+      for e in (
+        *s.shape,
+        s.dest_size,
+        s.target,
+        *(u.value for u in s.updates),
+        *(() if s.where is None else (s.where,)),
+      ):
         _note_exprs(e, read_bufs)
     else:
       _note_exprs(ir.stmt_exprs(s), read_bufs)
@@ -188,7 +194,7 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         changed = True
         continue
     elif isinstance(s, IndexScatter):
-      if not s.scope.owned and s.buf.uid in dead_bufs and pure_writes_only(s.body, dead_bufs):
+      if not s.scope.owned and all(u.buf.uid in dead_bufs for u in s.updates) and pure_writes_only(s.body, dead_bufs):
         changed = True
         continue
     elif isinstance(s, ir.Alloc):

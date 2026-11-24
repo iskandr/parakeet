@@ -839,140 +839,95 @@ def lower_scatter(lp: Loops, s: ir.IndexScatter, target=None) -> None:
   combined into ``s.buf``. Larger or sequential scatters lower to a tight
   sequential loop nest."""
   shape = tuple(lp.tmp(d, "sn") for d in s.shape)
-  elt = s.buf.type.elt
+  total = lp.tmp(iprod(shape), "total")
+  dests = [u.buf for u in s.updates]
 
+  def iteration(cl, dests, base=ZERO, atomic=False):
+    body = cl.block(s.body)
+    pos = cl.expr(s.target)
+    pos = pos if base is ZERO else iadd(base, pos)
+    stores = []
+    for u, dst in zip(s.updates, dests, strict=True):
+      elt = dst.type.elt
+      val = cast(cl.expr(u.value), elt)
+      if not atomic and u.op != "assign":
+        val = ops.prim(u.op, (Load(dst, pos), val), elt)
+      stores.append(Store(dst, pos, val, atomic="add" if atomic else None))
+    body.extend(stores if s.where is None else [If(cl.expr(s.where), stores, [])])
+    body.append(ir.ReleaseScope(cl.scope(s.scope)))
+    return body
+
+  atomic_types = {"float32", "float64", "int32", "uint32"}
   if (
     target is not None
     and target.kind == "cuda"
     and s.parallel
-    and s.op == "add"
-    and elt.name in ("float32", "float64", "int32", "uint32")
+    and all(u.op == "add" and u.buf.type.elt.name in atomic_types for u in s.updates)
   ):
-    upd = Store(s.buf, s.target, cast(s.value, elt), atomic="add")
-    blk = list(s.body)
-    blk.append(If(s.where, [upd], []) if s.where is not None else upd)
-    blk.append(ir.ReleaseScope(s.scope))
-    total = lp.tmp(iprod(shape), "total")
+    cl = Cloner()
+    indices = tuple(cl.var(v) for v in s.index)
+    body = iteration(cl, dests, atomic=True)
     heavy = depth(s.body) > 0
     est = lp.tmp(work(lp.defs, s.body, s.index), "work") if heavy else None
     lp.parallel(
       total,
-      lambda inner, chunk, start, stop: inner.chunk(shape, s.index, start, stop, blk, s.scope, simd=False),
+      lambda sub, ch, a, b: sub.chunk(shape, indices, a, b, body, cl.scope(s.scope)),
       loc=s.loc,
       work=est,
       heavy=heavy,
     )
     return
 
-  def make_step_body(
-    body_stmts: list, target: Expr, value: Expr, where: Expr | None, scope: Scope, dst: Var, base: Expr
-  ) -> list:
-    pos = target if base is ZERO else iadd(base, target)
-    val = cast(value, elt)
-    if s.op == "assign":
-      upd: ir.Stmt = Store(dst, pos, val)
-    else:
-      cur = cast(Load(dst, pos), elt)
-      upd = Store(dst, pos, cast(ops.prim(s.op, (cur, val), elt), elt))
-    blk = list(body_stmts)
-    if where is not None:
-      blk.append(If(where, [upd], []))
-    else:
-      blk.append(upd)
-    blk.append(ir.ReleaseScope(scope))
-    return blk
-
-  ident = identity(s.op, elt) if s.op in ("add", "mul", "min", "max") else None
-  if not s.parallel or ident is None:
-    lp.nest(shape, s.index, make_step_body(s.body, s.target, s.value, s.where, s.scope, s.buf, ZERO), s.scope)
+  seq = []
+  cl = Cloner()
+  indices = tuple(cl.var(v) for v in s.index)
+  lp.sub(seq).nest(shape, indices, iteration(cl, dests), cl.scope(s.scope), simd=False)
+  if not s.parallel or any(identity(u.op, u.buf.type.elt) is None for u in s.updates):
+    lp.block.extend(seq)
     return
 
-  total = lp.tmp(iprod(shape), "total")
   dsize = lp.tmp(s.dest_size, "dsize")
-  can_priv = ops.prim(
-    "and",
-    (
-      cmp("ge", total, Const(PRIVATIZE_MIN_WORK, I)),
-      ops.prim("and", (cmp("gt", dsize, ZERO), cmp("le", dsize, Const(PRIVATIZE_MAX, I))), Bool),
-    ),
-    Bool,
+  can_priv = ops.land(
+    cmp("ge", total, Const(PRIVATIZE_MIN_WORK, I)),
+    ops.land(cmp("gt", dsize, ZERO), cmp("le", dsize, Const(PRIVATIZE_MAX // len(dests), I))),
   )
+  par = []
+  sub = lp.sub(par)
+  nchunks = sub.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
+  size = sub.tmp(imul(nchunks, dsize), "priv_n")
+  private = [Var("priv", dst.type) for dst in dests]
+  for u, buf in zip(s.updates, private, strict=True):
+    sub.emit(Alloc(buf, size, zero=u.op == "add"))
+    lp.owner.owned.append(buf)
+    if u.op != "add":
+      j = Var("j", I)
+      init = Store(buf, j, identity(u.op, buf.type.elt))
+      sub.parallel(
+        size, lambda inner, ch, a, b: inner.emit(ForRange(j, a, b, ONE, [init], Scope("loop"), simd=True)), loc=s.loc
+      )
 
-  # Parallel privatized branch
-  par_blk: list = []
-  par_lp = lp.sub(par_blk)
-  nchunks = par_lp.tmp(RtCall("num_chunks", (total, Const(True, Bool)), I), "nchunks")
-  priv = Var("priv", BufType(elt))
-  priv_n = par_lp.tmp(imul(nchunks, dsize), "priv_n")
-  if s.op == "add":
-    par_lp.emit(Alloc(priv, priv_n, zero=True))
-  else:
-    par_lp.emit(Alloc(priv, priv_n))
-    par_lp.parallel(
-      priv_n,
-      lambda inner, _ch, start, stop: inner.emit(
-        ForRange(
-          (iv := Var("j", I)),
-          start,
-          stop,
-          ONE,
-          [Store(priv, iv, cast(ident, elt))],
-          Scope("loop"),
-          simd=True,
-        )
-      ),
-      loc=s.loc,
-    )
-  lp.owner.owned.append(priv)
-
-  # Clone s.body / target / value / where for the parallel branch so its Var uids stay distinct from the sequential branch
-  cl = Cloner()
-  p_index = tuple(cl.var(v) for v in s.index)
-  p_body = [cl.stmt(t) for t in s.body]
-  p_target = cl.expr(s.target)
-  p_value = cl.expr(s.value)
-  p_where = None if s.where is None else cl.expr(s.where)
-  p_scope = cl.scope(s.scope)
-
-  def scatter_chunk(inner: Loops, chunk: Var, start: Expr, stop: Expr) -> None:
+  def scatter_chunk(inner, chunk, start, stop):
+    cl = Cloner()
+    indices = tuple(cl.var(v) for v in s.index)
     base = inner.tmp(imul(chunk, dsize), "pbase")
-    inner.chunk(
-      shape,
-      p_index,
-      start,
-      stop,
-      make_step_body(p_body, p_target, p_value, p_where, p_scope, priv, base),
-      p_scope,
-      simd=False,
-    )
+    inner.chunk(shape, indices, start, stop, iteration(cl, private, base), cl.scope(s.scope), simd=False)
 
-  par_lp.parallel(total, scatter_chunk, kind="reduce", nchunks=nchunks, loc=s.loc, heavy=depth(s.body) > 0)
+  sub.parallel(total, scatter_chunk, kind="reduce", nchunks=nchunks, loc=s.loc, heavy=depth(s.body) > 0)
 
-  # Combine privatized partials into s.buf in parallel across destination elements
-  def combine_chunk(inner: Loops, _ch: Var, start: Expr, stop: Expr) -> None:
-    j = Var("j", I)
-    c = Var("c", I)
-    acc = Var("acc", elt)
-    c_body = [
-      Assign(acc, cast(ops.prim(s.op, (acc, cast(Load(priv, iadd(imul(c, dsize), j)), elt)), elt), elt)),
-    ]
-    j_body = [
-      Assign(acc, cast(Load(s.buf, j), elt)),
-      ForRange(c, ZERO, nchunks, ONE, c_body, Scope("loop")),
-      Store(s.buf, j, acc),
-    ]
-    inner.emit(ForRange(j, start, stop, ONE, j_body, Scope("loop"), simd=True))
+  def combine_chunk(inner, chunk, start, stop):
+    j, c = Var("j", I), Var("c", I)
+    init, steps, stores = [], [], []
+    for u, buf in zip(s.updates, private, strict=True):
+      acc = Var("acc", buf.type.elt)
+      init.append(Assign(acc, Load(u.buf, j)))
+      steps.append(Assign(acc, ops.prim(u.op, (acc, Load(buf, iadd(imul(c, dsize), j))), acc.type)))
+      stores.append(Store(u.buf, j, acc))
+    body = [*init, ForRange(c, ZERO, nchunks, ONE, steps, Scope("loop")), *stores]
+    inner.emit(ForRange(j, start, stop, ONE, body, Scope("loop"), simd=True))
 
-  par_lp.parallel(dsize, combine_chunk, kind="map", loc=s.loc)
-  par_lp.emit(ir.Release(priv))
-
-  # Sequential fallback branch (small input or very large destination buffer)
-  seq_blk: list = []
-  lp.sub(seq_blk).nest(
-    shape, s.index, make_step_body(s.body, s.target, s.value, s.where, s.scope, s.buf, ZERO), s.scope, simd=False
-  )
-
-  lp.emit(If(can_priv, par_blk, seq_blk))
+  sub.parallel(dsize, combine_chunk, kind="map", loc=s.loc)
+  par.extend(ir.Release(buf) for buf in private)
+  lp.emit(If(can_priv, par, seq))
 
 
 # ---------------------------------------------------------------------------

@@ -303,12 +303,15 @@ def verify(fn: Function, phase: str = "") -> Function:
       elif isinstance(s, IndexScatter):
         if len(s.shape) != len(s.index):
           _fail(fn, phase, f"IndexScatter rank mismatch: {len(s.shape)} dims vs {len(s.index)} indices")
-        if s.op not in ("add", "mul", "min", "max", "assign"):
-          _fail(fn, phase, f"IndexScatter has unknown op {s.op!r}")
-        if not isinstance(s.buf.type, BufType):
-          _fail(fn, phase, f"IndexScatter destination {s.buf.name} has non-buffer type {s.buf.type}")
-        if s.buf.uid not in visible:
-          _fail(fn, phase, f"IndexScatter destination {s.buf.name} is not in scope")
+        if not s.updates:
+          _fail(fn, phase, "empty scatter")
+        for u in s.updates:
+          if u.op not in ("add", "mul", "min", "max", "assign"):
+            _fail(fn, phase, f"IndexScatter has unknown op {u.op!r}")
+          if not isinstance(u.buf.type, BufType):
+            _fail(fn, phase, f"IndexScatter destination {u.buf.name} has non-buffer type {u.buf.type}")
+          if u.buf.uid not in visible:
+            _fail(fn, phase, f"IndexScatter destination {u.buf.name} is not in scope")
         if not _is_int(s.dest_size.type):
           _fail(fn, phase, f"IndexScatter dest_size has non-integer type {s.dest_size.type}")
         check_expr(s.dest_size, visible, "IndexScatter dest_size")
@@ -326,7 +329,8 @@ def verify(fn: Function, phase: str = "") -> Function:
         if not _is_int(s.target.type):
           _fail(fn, phase, f"IndexScatter target has non-integer type {s.target.type}")
         check_expr(s.target, body_vis, "IndexScatter target")
-        check_expr(s.value, body_vis, "IndexScatter value")
+        for u in s.updates:
+          check_expr(u.value, body_vis, "IndexScatter value")
         if s.where is not None:
           if not isinstance(s.where.type, ScalarType):
             _fail(fn, phase, f"IndexScatter where guard has non-scalar type {s.where.type}")
