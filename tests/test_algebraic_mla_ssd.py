@@ -5,6 +5,10 @@ Parallel Affine Prefix Scan / TileScan).
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
@@ -228,6 +232,17 @@ def _affine_scan_1d(a, b, s0):
 
 
 @parakeet.jit
+def _affine_scan_exclusive_1d(a, b, s0):
+  T = a.shape[0]
+  out = np.empty_like(b)
+  s = s0
+  for t in range(T):
+    out[t] = s
+    s = a[t] * s + b[t]
+  return out, s
+
+
+@parakeet.jit
 def _affine_scan_batched(a, b):
   B, T = a.shape
   out = np.empty_like(b)
@@ -270,6 +285,36 @@ def test_law4_affine_tile_scan_1d_and_batched():
     ref_out, ref_fin = _affine_ref_1d(a, b, s0)
     np.testing.assert_allclose(out, ref_out, rtol=1e-4, atol=1e-4)
     np.testing.assert_allclose(fin, ref_fin, rtol=1e-4, atol=1e-4)
+
+  # Exclusive affine scan (stores state BEFORE update) across a partial final chunk (T=129)
+  a_ex = np.ones(129, dtype=np.float32)
+  b_ex = np.ones(129, dtype=np.float32)
+  has_ex_chunks, ex_dump = _inspect_ir_at(
+    _affine_scan_exclusive_1d,
+    (a_ex, b_ex, np.float32(0.0)),
+    "chunkwise scan",
+    lambda fn: any(isinstance(s, ir.Alloc) and s.var.name.startswith("ts_chA") for s in ir.walk_stmts(fn.body)),
+    blas=False,
+    verify=True,
+  )
+  assert has_ex_chunks, f"Expected TileScan for exclusive scan:\n{ex_dump}"
+  with parakeet.options(backend="c", blas=False, verify=True):
+    ex_out, ex_fin = _affine_scan_exclusive_1d(a_ex, b_ex, np.float32(0.0))
+  np.testing.assert_allclose(ex_out, np.arange(129, dtype=np.float32), rtol=1e-5, atol=1e-5)
+  np.testing.assert_allclose(ex_fin, np.float32(129.0), rtol=1e-5, atol=1e-5)
+  # Also verify non-trivial (a, b) with non-zero s0 on partial chunk T=135
+  a_ex2 = rng.uniform(0.8, 0.99, size=(135,)).astype(np.float32)
+  b_ex2 = rng.standard_normal((135,)).astype(np.float32)
+  s0_ex2 = np.float32(2.5)
+  with parakeet.options(blas=False, verify=True):
+    ex2_out, ex2_fin = _affine_scan_exclusive_1d(a_ex2, b_ex2, s0_ex2)
+  ref_ex2 = np.empty_like(b_ex2)
+  s_ref = np.float32(s0_ex2)
+  for t in range(135):
+    ref_ex2[t] = s_ref
+    s_ref = np.float32(a_ex2[t] * s_ref + b_ex2[t])
+  np.testing.assert_allclose(ex2_out, ref_ex2, rtol=1e-4, atol=1e-4)
+  np.testing.assert_allclose(ex2_fin, s_ref, rtol=1e-4, atol=1e-4)
 
   # Batched 2D scan (e.g. multi-channel IIR / GBDT histogram prefix sums)
   a2 = rng.uniform(0.9, 1.0, size=(6, 195)).astype(np.float32)
@@ -377,9 +422,13 @@ def _run_gpu_laws34(backend: str):
   np.testing.assert_allclose(ssd_s, ref_s, rtol=1e-4, atol=1e-4)
 
 
-def test_cuda_simulator_laws34(monkeypatch):
-  monkeypatch.setenv("PARAKEET_CUDA_SIMULATE", "1")
-  _run_gpu_laws34("cuda")
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_cuda_simulator_laws34(tmp_path):
+  script = tmp_path / "run_laws34_sim.py"
+  script.write_text('from tests.test_algebraic_mla_ssd import _run_gpu_laws34\n_run_gpu_laws34("cuda")\nprint("laws34-sim-ok")\n')
+  env = dict(os.environ, PARAKEET_CUDA_SIMULATE="1")
+  proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env, check=False)
+  assert proc.returncode == 0 and "laws34-sim-ok" in proc.stdout, proc.stdout + proc.stderr
 
 
 @pytest.mark.skipif(parakeet.available_backends().get("metal") != "ok", reason="Metal GPU unavailable")

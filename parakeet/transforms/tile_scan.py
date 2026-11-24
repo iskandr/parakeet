@@ -177,7 +177,7 @@ class _AffineLoopMatch:
   a_expr: Expr
   b_expr: Expr
   pre_assigns: list[Assign]
-  stores: list[Store]
+  stores: list[tuple[Store, bool]]  # (store, before_update: True = exclusive, False = inclusive)
   checks: list[Check]
   next_var_uid: int
 
@@ -194,6 +194,7 @@ def _match_affine_for_range(loop: ForRange, outer_vars: dict[int, Var]) -> _Affi
   if len(carried) != 1:
     return None
   update_stmt = carried[0]
+  upd_pos = body.index(update_stmt)
   state_var = update_stmt.var
   elt = state_var.type
   if elt not in (Float32, Float64):
@@ -210,27 +211,31 @@ def _match_affine_for_range(loop: ForRange, outer_vars: dict[int, Var]) -> _Affi
   if not (is_pure_expr(a_expr) and is_pure_expr(b_expr)):
     return None
 
-  # Check stores: each store must write the new state value (update_stmt.value or state_var after update)
-  stores = [s for s in body if isinstance(s, Store)]
-  if not stores:
+  # Check stores and classify each as exclusive (pre-update state) vs inclusive (post-update state)
+  raw_stores = [(idx_s, s) for idx_s, s in enumerate(body) if isinstance(s, Store)]
+  if not raw_stores:
     return None
   next_var_uid = update_stmt.value.uid if isinstance(update_stmt.value, Var) else -1
-  written_bufs = {st.buf.uid for st in stores}
+  written_bufs = {st.buf.uid for _, st in raw_stores}
   # Ensure a_expr and b_expr do not read from any buffer written by stores (no memory-carried loop dep!)
   for ex in (a_expr, b_expr):
     for x in ir.walk_expr(ex):
       if isinstance(x, Load) and x.buf.uid in written_bufs:
         return None
-  for st in stores:
+  classified_stores: list[tuple[Store, bool]] = []
+  for st_pos, st in raw_stores:
     if st.atomic is not None:
       return None
-    sv = st.value
-    if not (
-      (isinstance(sv, Var) and sv.uid in (state_var.uid, next_var_uid))
-      or ir.same(_resolve_local(sv, val_map), resolved_next)
-    ):
-      return None
     if _expr_uses_uids(st.index, {state_var.uid, next_var_uid}):
+      return None
+    sv = st.value
+    if isinstance(sv, Var) and sv.uid == state_var.uid:
+      # Reading state_var before update_stmt is exclusive; after update_stmt is inclusive
+      classified_stores.append((st, st_pos < upd_pos))
+    elif (isinstance(sv, Var) and sv.uid == next_var_uid) or ir.same(_resolve_local(sv, val_map), resolved_next):
+      # Explicitly storing the computed next state is always inclusive
+      classified_stores.append((st, False))
+    else:
       return None
 
   checks = [s for s in body if isinstance(s, Check)]
@@ -244,7 +249,7 @@ def _match_affine_for_range(loop: ForRange, outer_vars: dict[int, Var]) -> _Affi
     a_expr=a_expr,
     b_expr=b_expr,
     pre_assigns=local_assigns,
-    stores=stores,
+    stores=classified_stores,
     checks=checks,
     next_var_uid=next_var_uid,
   )
@@ -370,13 +375,19 @@ def _rewrite_affine_loop(
   cl3 = Cloner({**{bv.uid: nb for bv, nb in zip(batch_index, s3_b)}, t_var.uid: s3_t})
   a3 = cl3.expr(m.a_expr)
   b3 = cl3.expr(m.b_expr)
-  s3_loop_body: list[Stmt] = [
-    Assign(s3_st, ops.prim("add", (ops.prim("mul", (a3, s3_st), elt), b3), elt)),
-  ]
   val_map = {a.var.uid: a.value for a in m.pre_assigns}
-  for st in m.stores:
-    st_idx_resolved = _resolve_local(st.index, val_map)
-    s3_loop_body.append(Store(st.buf, cl3.expr(st_idx_resolved), cast(s3_st, st.buf.type.elt)))
+  s3_loop_body: list[Stmt] = []
+  # Emit exclusive (pre-update) stores before advancing s3_st
+  for st, before_update in m.stores:
+    if before_update:
+      st_idx_resolved = _resolve_local(st.index, val_map)
+      s3_loop_body.append(Store(st.buf, cl3.expr(st_idx_resolved), cast(s3_st, st.buf.type.elt)))
+  s3_loop_body.append(Assign(s3_st, ops.prim("add", (ops.prim("mul", (a3, s3_st), elt), b3), elt)))
+  # Emit inclusive (post-update) stores after advancing s3_st
+  for st, before_update in m.stores:
+    if not before_update:
+      st_idx_resolved = _resolve_local(st.index, val_map)
+      s3_loop_body.append(Store(st.buf, cl3.expr(st_idx_resolved), cast(s3_st, st.buf.type.elt)))
   s3_scope = Scope("loop")
   s3_body: list[Stmt] = [
     Assign(s3_start, imul(s3_c, chunk_c)),
