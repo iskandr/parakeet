@@ -1,203 +1,201 @@
-# Core ideas, history, and boundaries
+# Ideas, history, and boundaries
 
-Parakeet began at New York University as a research compiler by **Alex
+Parakeet began at New York University in 2012 as a research compiler by **Alex
 Rubinsteyn** (`@iskandr`), with major contributions from **Eric Hielscher**
 (`@hielscher`) and **Nathaniel Weinman**, guidance from **Dennis Shasha**, and
-advice from **Russell Power** — originally hosted at `parakeetpython.com` and
-described in:
+advice from **Russell Power**. The original project was hosted at
+`parakeetpython.com` and documented in:
 
 * **Alex Rubinsteyn**, [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/visual/files/Rubinsteyn_Alex.pdf)
-  (PhD thesis, NYU, 2014) — type/value specialization, data-parallel adverbs,
-  and algebraic fusion.
+  (PhD thesis, NYU, 2014) — type and value specialization, data-parallel
+  adverbs, and algebraic fusion.
 * **Eric Hielscher**, *Locality Optimization for Data Parallel Programs*
   (PhD thesis, NYU, 2013) — tiling, register blocking, and loop interchange
   over adverb trees.
-* Earlier papers and talks: [HotPar '12](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python)
+* Papers and talks: [HotPar '12](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python)
   (*Parakeet: A Just-In-Time Parallel Accelerator for Python*),
   [PyData Boston '13](https://vimeo.com/73895275), and
   [PyData NYC '13](https://vimeo.com/79556629) (*Python on the GPU with Parakeet*).
 
-Parakeet 1.0 is a ground-up rewrite for Python 3.11+, NumPy 2, Apple Metal,
-NVIDIA CUDA, and reverse-mode automatic differentiation (`grad`), built to
-preserve the algebraic spirit of those theses while generalizing their
-operators and fixing the places where the original rules were unsound or
-incomplete.
+When the original Python 2 codebase was retired, its README left behind a
+lesson: general Python is the wrong abstraction for high-performance numerical
+code, and compilers do much better when programs are expressed over a small set
+of explicit data-parallel operators.
+
+Parakeet 1.0 is a ground-up rewrite for Python 3.11+ and NumPy 2 that tests how
+far those original ideas can go on modern hardware. It keeps the familiar
+`@jit` interface and NumPy frontend, preserves the adverb algebra in its middle
+end, fixes the soundness gaps noted in the theses, and extends the same
+machinery to Apple Metal, NVIDIA CUDA, reverse-mode automatic differentiation
+(`grad`), and tiled monoidal reductions.
 
 ---
 
-## Core thesis ideas that define Parakeet
+## Five ideas that shape Parakeet
 
-### 1. Specialization replaces dynamic dispatch ([R] Ch. 3 & §6.6)
+### 1. Specialize on types and shapes at call time
 
-Python has no static types, yet numerical kernels are almost always monomorphic
-at each call site. Parakeet uses an untyped Python function as a template and
-generates a native *specialization* for each distinct combination of argument
-dtypes, ranks, memory layouts (contiguous vs. strided), and tuple structure.
+Python is dynamically typed, yet numerical functions are almost always called
+with the same dtypes and ranks at a given call site. Parakeet treats your
+Python function as a template and compiles a native *specialization* for each
+distinct combination of argument dtypes, array ranks, memory layouts
+(contiguous vs. strided), and container structure.
 
-When an expression's type or rank depends on a runtime value (such as `axis=`,
-a tuple length, or a unit dimension `1` that governs broadcasting), Parakeet
-specializes on that value automatically—resolving the famous broadcasting bug
-noted in [R] (`200×1 + 1×300`) statically.
+When an expression's type or rank depends on a value — such as `axis=`, a tuple
+length, or a unit dimension of length `1` that controls broadcasting — Parakeet
+specializes on that value automatically. That resolves the broadcasting corner
+case noted in Rubinsteyn's thesis (`200×1 + 1×300`) statically at compile time.
 
-### 2. A small closed algebra of data-parallel adverbs ([R] Ch. 4)
+### 2. Lower everything to five data-parallel operators
 
-Rather than implementing hundreds of bespoke C/CUDA kernels for every NumPy
-function, Parakeet defines NumPy operations, comprehensions, matrix products,
-and `einsum` in terms of a tiny set of data-parallel operators (*adverbs*):
+Instead of maintaining hundreds of hand-written C or GPU kernels for every
+NumPy function, Parakeet defines array expressions, comprehensions, matrix
+products, `einsum`, and user-written adverbs in terms of five operator
+statements:
 
-* `IndexMap` — independent element-wise / slice-wise computation over an index space
-* `IndexReduce` — associative or sequential folds (including multi-carry monoids such as `argmin`/`argmax` and 1-pass online `logsumexp`/`softmax`, plus guarded `FilterReduce`)
-* `IndexScan` — prefix folds with an `emit` stage
+* `IndexMap` — independent computation over an index space
+* `IndexReduce` — associative or sequential folds (including multi-carry state
+  such as `argmin`/`argmax` and online `logsumexp`, plus guarded filtered
+  reductions)
+* `IndexScan` — prefix folds with an optional emit stage
 * `IndexFilter` — stream compaction of indices matching a predicate
-* `IndexScatter` — index-directed associative scatter-reductions (`np.bincount`, `parakeet.scatter_add`), lowered via thread-privatized parallel bins on CPU, CUDA, and Metal
+* `IndexScatter` — associative index-directed scatter-add (`np.bincount`,
+  `parakeet.scatter_add`)
 
-Every higher-level construct—whether written as `np.tanh(x * a) + b`, a list
-comprehension, `a @ b`, `np.cumsum`, `x[x > 0]`, `np.bincount`, or
-`parakeet.allpairs`—lowers to these five operator statements
-(`f.specialize(*args).operators`).
+You can inspect a function at this level at any time via
+`f.specialize(*args).operators`.
 
-### 3. Algebraic fusion *before* loop lowering ([R] Ch. 6)
+### 3. Fuse algebraically before lowering to loops
 
-Once a program is expressed in adverbs, optimizations become concise algebraic
-identities instead of fragile loop-nest analyses, backed by a single shared
-`IndexFacts` affine analysis and `BufferInfo` alias/cost table:
+Because programs stay in this small operator IR until the end of the pipeline,
+optimizations are algebraic identities rather than fragile loop-nest analyses:
 
-* **Vertical fusion** ([R] Fig. 6.1): `Map ∘ Map` (including matmul epilogues like `np.tanh(a @ b + c)`, affine transpose/slice/stencil fusion, and cost-bounded multi-consumer fusion), `Map ∘ Scan` into `IndexScan.emit`, `Map → Filter`, `Map → Reduce`, `Map → Scatter`, `Filter ∘ Filter` (short-circuiting), and `Reduce ∘ Filter ⇒ FilterReduce` (single zero-allocation pass).
-* **Nested map flattening** ([R] Fig. 6.2, `CombineNestedMaps`): `IndexMap` inside `IndexMap` collapses into one multi-dimensional `IndexMap`, exposing the full 2D/ND index space to multi-core CPUs and GPUs.
-* **Horizontal / sibling & online monoidal fusion** ([R] Fig. 6.3): adjacent `IndexReduce`s (`x.min(), x.max()`, `x.argmin(), x.argmax()`) and independent `IndexMap`s (`np.sin(x), np.cos(x)`) share one loop, and dependent `m = max(x); s = sum(exp(x - m))` pairs collapse into a single parallel associative `(m, s)` monoid pass via `Fold.carries` (`logsumexp`, 1-loop `softmax`).
-* **Dead-operator elimination**: pure maps, reductions, scans, filters, scatters, and unused allocations nobody reads are removed before lowering.
+* **Vertical fusion** collapses producer-consumer chains — map into map
+  (including transposes, slices, stencils, and matmul epilogues like
+  `np.tanh(a @ b + c)`), map into reduce/scan/filter/scatter, map after scan,
+  filter into filter, and filter into reduce (turning `np.sum(x[x > 0])` into
+  one zero-allocation loop).
+* **Nested map flattening** turns a map inside a map into one multi-dimensional
+  `IndexMap`, exposing the full index space to CPU threads and GPU grids.
+* **Sibling and online fusion** lets independent consumers over the same index
+  space share a pass (`x.min(), x.max()`, `np.sin(x), np.cos(x)`, or sibling
+  histograms with the same bin IDs) and merges dependent `max` + `sum(exp(x - m))`
+  pairs into a single associative pass.
+* **Dead-operator elimination** drops pure operators and allocations that
+  nothing reads before loops are emitted.
 
-Parakeet 1.0 also adds the side conditions the original thesis omitted:
-single-use / cost guards (so fusion never silently duplicates expensive work),
-alias tracking, explicit associativity checks (non-associative folds stay
-sequential), and keeping SIMD-vectorizable float sums separate from non-SIMD
-folds.
+Parakeet 1.0 adds the safety conditions the 2014 thesis omitted: cost and
+single-use guards so fusion never silently duplicates expensive work, alias
+checks, and explicit associativity checks so non-associative user folds stay
+strictly left-to-right.
 
-### 4. Generalized tiling & locality from the same algebra ([H] 2013)
+### 4. Tile for cache and GPU shared memory from the same IR
 
-Cache, register, and GPU SRAM locality optimizations all operate on the same
-operator IR via two composable operators—`IndexTile` and `TileStage`—rather
-than recovering structure from raw `for` loops:
+Following Hielscher's 2013 thesis, locality transformations operate directly on
+the operator statements before loop lowering:
 
-* **Reduction interchange (`PermuteReductions`)**: when an `IndexMap` wraps a
-  strided commutative+associative `IndexReduce` whose outer map index has unit
-  stride (`np.sum(X, axis=0)`), the reduction is hoisted outside an L1-sized
-  strip of contiguous output columns.
-* **Invariant map splitting & unit-axis squeezing**: `keepdims=True` unit axes
-  are squeezed and inner reductions independent of trailing map axes are
-  hoisted (`softmax`, `layer_norm`), eliminating redundant $O(M \cdot N^2)$
-  recomputation and collapsing multi-pass row normalizations into single
-  L1-resident loops.
-* **Nested `IndexTile` + `TileStage` (CPU cache/register & GPU SRAM)**: any
-  N-D `IndexMap` wrapping an `IndexReduce` plus straight-line code (`a @ b`,
-  batched 3D+ matmul, `allpairs`, `einsum`, fused prologues & epilogues) is
-  rewritten into nested `IndexTile(level="cache")` → `IndexTile(level="register")`
-  operators on CPU (arbitrary N-D register jamming with exact remainder-face
-  partitioning) and automatically extracts maximal row/col/k prologue
-  `TileStage`s into a `SharedTilePlan` for GPU backends.
-* **GPU `__shared__` (CUDA) & `threadgroup` (Metal) block tiling & hardware matrix units**:
-  queried via [`TargetProfile`](https://github.com/iskandr/parakeet/blob/master/parakeet/target.py),
-  analytically sized `(BM, BN, BK, TM, TN)` tiles (up to `64×64×32` on CUDA and
-  `64×64×16` on Metal with bank-conflict-free padding) stage arbitrary fused
-  prologues into SRAM once per tile and keep fused epilogues
-  (`np.tanh(a @ b + c)`) in registers with zero extra HBM round-trips. On Apple
-  Silicon Metal, float32 sum-of-products contractions automatically emit
-  hardware `simdgroup_matrix<float, 8, 8>` (full IEEE FP32); on CUDA `sm_80+`
-  GPUs, `config.tensor_cores=True` (or `fast_math=True`) emits `nvcuda::wmma`
-  TF32 Tensor Core kernels.
-* **Persistent GPU residency (`DeviceArray`)**: `parakeet.to_device(tree)` and
-  `parakeet.to_host(tree)` keep weights, gradients, and optimizer state tuples
-  resident on CUDA/Metal across `@jit` calls with zero per-step host↔device
-  copies.
+* **Reduction interchange** hoists strided inner reductions (such as
+  `np.sum(X, axis=0)`) outside L1-sized strips of contiguous output columns on
+  CPU, while leaving them coalesced across threads on GPU.
+* **Invariant hoisting** squeezes unit `keepdims=True` axes and lifts row-level
+  reductions so normalizations like `softmax` and `layer_norm` stay L1-resident.
+* **Cache, register, and GPU SRAM tiling** rewrites maps wrapping reductions
+  (`a @ b`, `allpairs`, `einsum`, tropical products, and fused prologues or
+  epilogues) into nested cache and register tiles on CPU and cooperatively
+  staged shared-memory tiles on CUDA and Metal. On Apple Silicon Metal, float32
+  contractions use `simdgroup_matrix` automatically; on CUDA `sm_80+`,
+  `config.tensor_cores=True` enables `nvcuda::wmma` TF32 Tensor Cores.
+* **Algebraic laws for modern reductions** extend the exact same tiling
+  machinery to rescaled semiring monoids (online softmax, Gaussian kernel
+  regression, attention, cut cross-entropy), contraction reassociation,
+  chunkwise affine/bilinear scans, and tile-interval mask pruning. See
+  [Algebraic laws](algebra.md).
+* **Persistent GPU residency** (`parakeet.to_device` / `to_host`) keeps
+  arrays and parameter tuples on CUDA or Metal across calls without repeated
+  host copies.
 
-### 5. Verifiable, inspectable, fail-loud compilation
+### 5. Inspectable, fail-loud compilation
 
-* `parakeet.verify` (`config.verify` / legacy `opt_verify`) checks scoping,
-  typing, and buffer-ownership invariants before passes, after every pass, and
-  after lowering.
-* `f.specialize(*args).operators`, `.ir`, `.source`, and `.kernels` expose
-  every stage of compilation.
-* `parakeet.find_broken_transform` bisects the pipeline one pass at a time.
-* Unsupported Python/NumPy constructs fail at compile time with the exact
-  source caret and inlined call chain instead of silently falling back or
-  returning wrong numbers.
+* `parakeet.verify` checks scoping, types, and buffer ownership before passes,
+  after every pass, and after lowering.
+* `f.specialize(*args)` exposes `.operators`, `.ir`, `.source`, and `.kernels`.
+* `parakeet.dsl.show_rewrite(f, *args)` summarizes which algebraic laws fired.
+* `parakeet.find_broken_transform` bisects the middle-end passes one by one.
+* Unsupported Python or NumPy features fail at compile time with the exact
+  source caret and inlined call chain instead of silently falling back.
 
 ---
 
-## The boundary: what does *not* work yet
+## What does *not* work yet
 
-Parakeet is an array-oriented numerical compiler, not a drop-in replacement for
-all of CPython or SciPy. Knowing the boundary up front avoids surprises:
+Parakeet is a numerical compiler, not a drop-in replacement for all of CPython
+or SciPy. Knowing the boundary up front avoids surprises.
 
-### Python language & types
+### Python language and types
 
 | Works | Not supported yet |
 |---|---|
-| `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64` scalars & arrays (any rank/strides) | Complex numbers (`complex64`/`complex128`), native `float16` compute (`float16` is widened to `float32`), structured/record dtypes, object/string arrays |
-| Nested tuples, NamedTuples, fixed string-key dictionaries, plain frozen dataclasses, `slice`, `range`, `zip`, `enumerate` | Dynamic dictionary keys, `set`, runtime string manipulation, arbitrary user-defined classes and methods |
-| List literals and comprehensions as fixed-shape arrays | Mutable/dynamically resized Python lists (`.append`, `.extend`, ragged lists) |
-| `if`/`elif`/`else`, `for`, `while`, `break`, `continue`, early `return`, nested `def`/`lambda`, closures, `assert`, `raise` | `try`/`except`, `with`, generators (`yield`), `global`/`nonlocal`, `import` inside `@jit`, `**kwargs`, recursion |
-| Static array rank; compile-time specialization on `axis`, `keepdims`, `dtype`, tuple lengths | Value-dependent output rank (e.g. unguided `np.squeeze(x)` without `axis=`), dynamically typed variables that cannot unify |
+| `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64` scalars and arrays (any rank or strides) | Complex numbers (`complex64`/`complex128`), native `float16` compute (`float16` is widened to `float32`), structured/record dtypes, object or string arrays |
+| Nested tuples, `NamedTuple`s, fixed string-key dicts, plain frozen dataclasses, `slice`, `range`, `zip`, `enumerate` | Dynamic dictionary keys, `set`, runtime string manipulation, arbitrary user classes and methods |
+| List literals and comprehensions as fixed-shape arrays | Mutable or dynamically resized Python lists (`.append`, `.extend`, ragged lists) |
+| `if`/`elif`/`else`, `for`, `while`, `for`/`while ... else`, `break`, `continue`, early `return`, nested `def`/`lambda`, closures, `assert`, `raise` | `try`/`except`, `with`, generators (`yield`), `global`/`nonlocal`, `import` inside `@jit`, `**kwargs`, recursion |
+| Static array rank; compile-time specialization on `axis`, `keepdims`, `dtype`, tuple lengths | Value-dependent output rank (e.g. `np.squeeze(x)` without `axis=`), variables whose types cannot unify |
 
-### NumPy & SciPy library coverage
+### NumPy and SciPy coverage
 
-Roughly 200 core NumPy functions and ufuncs are built in (see
+About 200 core NumPy functions and ufuncs are built in (see
 [Supported functions](supported.md)), covering arithmetic, reductions, scans,
-sorting, indexing/masks, `@`/`dot`/`einsum`, `np.linalg.norm`, and parallel
-`np.random`. Not yet built in:
+sorting, masks and fancy indexing, `@`/`dot`/`einsum`, `np.linalg.norm`, and
+parallel `np.random`. Not yet built in:
 
 * Matrix decompositions and solvers (`np.linalg.svd`, `solve`, `inv`, `eig`,
   `cholesky`, `qr`, `det`, `lstsq`)
-* Signal/spectral transforms (`np.fft.*`)
-* Variable-cardinality set/grouping ops (`np.unique`, `np.lexsort`, `np.isin`)
+* Spectral transforms (`np.fft.*`)
+* Variable-cardinality set operations (`np.unique`, `np.lexsort`, `np.isin`)
 * SciPy modules (`scipy.special`, `scipy.optimize`, `scipy.ndimage`, ...)
 
 ### Automatic differentiation (`grad` / `value_and_grad`)
 
-`grad` differentiates element-wise ops, reductions (`sum`, `prod` zero-safe,
-`min`, `max`, general folds, active `initial`), `cumsum`, `sort`, `@` (and
-stacks), `einsum`, views/concatenation, gather/scatter, `map`/`allpairs` with
-user functions, and pure runtime `if` branches—enough to train small
-transformers ([`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py))
-and convnets ([`examples/convnet.py`](https://github.com/iskandr/parakeet/blob/master/examples/convnet.py)).
-Boundaries:
+`grad` differentiates element-wise operations, reductions (`sum`, zero-safe
+`prod`, `min`, `max`, general folds), `cumsum`, `sort`, `@`, `einsum`, views
+and concatenation, gather and `scatter_add`, `map`/`allpairs` with user
+functions, and pure runtime `if` branches — enough to train small transformers
+([`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/nanogpt.py))
+and convnets
+([`examples/convnet.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convnet.py)).
+Current boundaries:
 
-* **Still an elaboration-time tape, not yet an IR-to-IR pass:** differentiation
-  records operators during elaboration rather than transforming `IndexMap` /
-  `IndexReduce` statements directly.
+* **Elaboration-time tape:** differentiation records operators during
+  elaboration (with an algebraic tape optimizer for attention, cross-entropy,
+  and norms) rather than running as an IR-to-IR pass over lowered operators.
 * **No dynamic-length loops over differentiated values:** `for` loops with a
-  compile-time-known length (≤ 4096, such as transformer layers or kernel
-  offsets) unroll and differentiate; `while` loops or loops over runtime array
-  lengths are refused (rewrite with `reduce`/`map`/`scan`).
+  compile-time-known length (up to 4,096) unroll and differentiate; `while`
+  loops or loops over runtime array lengths are refused (rewrite with
+  `reduce`, `map`, or `scan`).
 * **Pure runtime `if` branches only:** both branches execute and are selected
   by the condition, so branches touching differentiated values cannot contain
   array stores, `return`, `break`, or `raise`.
 * **Missing derivative rules (refused loudly):** `cumprod`, `convolve`,
   user-defined `scan` combiners, in-place indexed assignment (`out[idx] = v`;
-  use `parakeet.scatter_add` / `np.bincount(..., weights=w)` for differentiable
-  scatter-add), and overwriting an array still needed by an earlier
-  operation's backward pass.
-* **Second derivatives:** work for element-wise ops, reductions, `@`, and
-  views; not yet supported through `map`, gather indexing, or `cumsum`.
+  use `parakeet.scatter_add` or `np.bincount(..., weights=w)` instead), and
+  overwriting an array still needed by an earlier backward rule.
+* **Second derivatives:** work through element-wise ops, reductions, `@`, and
+  views; not yet through `map`, gather indexing, or `cumsum`.
 
-### GPU & locality boundaries
+### GPU and locality boundaries
 
 * **Apple Metal has no hardware `float64`:** `float64` loops fall back to CPU
-  cores with a warning; use `float32` for Metal acceleration.
-* **No per-thread heap allocation on GPU:** a `ParLoop` that allocates
-  temporary arrays or selects between buffer aliases inside the loop body runs
-  on the CPU instead of CUDA/Metal.
-* **GPU matrix multiplication & cuBLAS:** CPU backends call BLAS for standalone
-  float `A @ B`; GPU backends run Parakeet's cooperative `__shared__` (CUDA) /
-  `threadgroup` (Metal) block-tiled kernels — including Apple Silicon
-  `simdgroup_matrix` (exact FP32, automatic) and NVIDIA `nvcuda::wmma` TF32
-  Tensor Cores (`config.tensor_cores=True` on `sm_80+`) — handling arbitrary
-  contractions, fused prologues like `sin(a) @ cos(b)`, `allpairs`, and fused
-  epilogues like `np.tanh(a @ b + c)` in a single kernel, rather than calling
-  cuBLAS. Very large standalone GEMMs are still faster in hand-tuned cuBLAS,
-  while fused contractions and custom `allpairs` workloads benefit directly
-  from single-kernel SRAM reuse.
-* **Online autotuning & tiled scans:** tile sizes are chosen analytically from
-  cache/SRAM/register budgets (`config.tile_bytes`, GPU shared-memory budget)
-  rather than Hielscher's runtime online search, and chunked GPU `TiledScan`
-  is not yet implemented.
+  cores with a warning; use `float32` on Metal.
+* **No per-thread heap allocation on GPU:** a parallel loop that allocates
+  temporary arrays or selects between buffer aliases inside its body runs on
+  CPU instead of CUDA or Metal.
+* **Dense GEMM vs. cuBLAS:** CPU backends call NumPy's BLAS for standalone
+  float `A @ B`. GPU backends run Parakeet's own shared-memory tiled kernels
+  (including Metal `simdgroup_matrix` and optional CUDA TF32 WMMA), which fuse
+  prologues and epilogues in one kernel but trail hand-tuned cuBLAS on large
+  standalone matrix multiplies.
+* **Analytical tile sizing:** tile sizes are picked analytically from target
+  cache and shared-memory budgets (`config.tile_bytes`) rather than Hielscher's
+  online runtime search. Chunkwise `TileScan` handles affine and bilinear
+  recurrences; general cache-tiled `TiledScan` for arbitrary scans is not
+  implemented.
