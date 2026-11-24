@@ -134,7 +134,7 @@ all of CPython or SciPy. Knowing the boundary up front avoids surprises:
 | Works | Not supported yet |
 |---|---|
 | `bool`, `int8`–`int64`, `uint8`–`uint64`, `float32`, `float64` scalars & arrays (any rank/strides) | Complex numbers (`complex64`/`complex128`), native `float16` compute (`float16` is widened to `float32`), structured/record dtypes, object/string arrays |
-| Fixed-structure tuples (nested arbitrarily), `slice`, `range`, `zip`, `enumerate` | `dict`, `set`, runtime string manipulation, user-defined classes / methods (`self`) |
+| Nested tuples, NamedTuples, fixed string-key dictionaries, plain frozen dataclasses, `slice`, `range`, `zip`, `enumerate` | Dynamic dictionary keys, `set`, runtime string manipulation, arbitrary user-defined classes and methods |
 | List literals and comprehensions as fixed-shape arrays | Mutable/dynamically resized Python lists (`.append`, `.extend`, ragged lists) |
 | `if`/`elif`/`else`, `for`, `while`, `break`, `continue`, early `return`, nested `def`/`lambda`, closures, `assert`, `raise` | `try`/`except`, `with`, generators (`yield`), `global`/`nonlocal`, `import` inside `@jit`, `**kwargs`, recursion |
 | Static array rank; compile-time specialization on `axis`, `keepdims`, `dtype`, tuple lengths | Value-dependent output rank (e.g. unguided `np.squeeze(x)` without `axis=`), dynamically typed variables that cannot unify |

@@ -12,12 +12,14 @@ code deliberately differs from running the same function in CPython.
 | NumPy scalars (`np.float32(1)`, ...) | scalars of exactly that dtype |
 | NumPy arrays | bool, int8–int64, uint8–uint64, float32, float64; any number of dimensions, any strides |
 | tuples (also nested) | compile-time structures of the above |
+| NamedTuples and plain frozen dataclasses | fields can hold scalar and array leaves and are accessible by name |
+| dictionaries with fixed string keys | key order is part of the structure, with lookup by literal key |
 | lists, list comprehensions | **arrays** (there are no Python lists in compiled code) |
 | `None`, strings, dtypes, functions, modules | compile-time constants |
 | `slice`, `range`, `zip`, `enumerate` | supported as values and in loops |
 
 `float16` data is widened to `float32`. Complex numbers, object arrays, structured
-dtypes, dictionaries, sets and user-defined classes are not supported; passing
+dtypes, general-purpose mutable containers, sets and arbitrary class instances are not supported; passing
 one raises a `TypeError` naming the type.
 
 Type promotion follows NumPy 2 (NEP 50) exactly: `float32_array * 2.0` stays

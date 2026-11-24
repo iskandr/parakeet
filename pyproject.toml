@@ -13,7 +13,7 @@ requires-python = ">=3.11"
 dependencies = ["numpy>=2.0"]
 keywords = ["jit", "compiler", "numpy", "parallel", "gpu", "metal", "cuda", "array"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: BSD License",
@@ -37,8 +37,9 @@ dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.6"]
 docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.25"]
 
 [project.urls]
-Homepage = "https://github.com/iskandr/parakeet"
-Documentation = "https://iskandr.github.io/parakeet/"
+Homepage = "https://rubinsteyn.com/parakeet/"
+Repository = "https://github.com/iskandr/parakeet"
+Documentation = "https://rubinsteyn.com/parakeet/"
 Issues = "https://github.com/iskandr/parakeet/issues"
 Changelog = "https://github.com/iskandr/parakeet/blob/master/CHANGELOG.md"
 

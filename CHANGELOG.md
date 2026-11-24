@@ -1,10 +1,25 @@
 # Changelog
 
-## 1.0.0a1 (unreleased)
+## 1.0.0 (November 24, 2026)
 
 A ground-up rewrite for modern Python.  The `@jit` decorator, the adverbs
 (`map`, `reduce`, `scan`, `allpairs`, `imap`, ...) and the overall idea are
 unchanged; everything underneath is new.
+
+### Algebraic operators
+
+- The same CPU tile schedule serves exact nearest-neighbor queries written as
+  broadcasting NumPy or nested parallel maps. It merges a distance and index
+  per query and preserves the first index on ties.
+- Two weighted histograms over shared bin IDs can fuse into a single traversal.
+  Structured folds accept tuples and named records with a user-defined merge.
+- Algebraic rewrites cover online normalized sums, their gradients, reassociation
+  of contractions, and chunked affine scans. The rewrite inspector shows which
+  passes fired for a given function and input.
+- The [gallery](https://rubinsteyn.com/parakeet/gallery/) includes runnable
+  examples. The [release benchmarks](https://rubinsteyn.com/parakeet/release-benchmarks/)
+  compare five workloads with general-purpose and specialist implementations on
+  a four-vCPU worker and an NVIDIA A10.
 
 ### Highlights
 

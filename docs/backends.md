@@ -10,8 +10,8 @@ parallel loops inside it are executed.
 | `"threads"` | Parakeet's persistent thread pool | POSIX; fork-safe; no extra runtime library |
 | `"gcd"` | Grand Central Dispatch | macOS |
 | `"openmp"` | the compiler's OpenMP runtime | needs `libgomp`/`libomp` (macOS: `brew install libomp`) |
-| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]==1.0.0a1"` |
-| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]==1.0.0a1"` (CuPy) |
+| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]==1.0.0"` |
+| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]==1.0.0"` (CuPy) |
 | `"python"` | — | runs the original function uncompiled |
 
 ```python
@@ -84,8 +84,7 @@ including `float64` are supported. The same per-loop fallback rules apply.
     *simulator* (`PARAKEET_CUDA_SIMULATE=1`) that compiles the generated kernels
     as C++ and executes their thread grid on the CPU.
 
-    On real hardware the backend was last checked on an A100 (Google Colab,
-    CuPy with CUDA 13, Python 3.13), and before that on a Tesla T4: the whole
+    The [1.0 release comparison](release-benchmarks.md) ran on a physical NVIDIA A10 with strict device dispatch. Earlier checks on an A100 (Google Colab, CuPy with CUDA 13, Python 3.13) and Tesla T4 covered the whole
     test suite with every parallel loop forced onto the GPU (688 tests,
     including the tiled products, the gradient tests and arrays kept on the
     device between loops),
@@ -138,6 +137,7 @@ work; so does a loop over 32 features however long each one's scan is,
 because a device runs one (slow) thread per element and 32 of them are no
 match for a few CPU cores.
 
-Between calls nothing stays on the device: arguments are uploaded again on the
-next call. A function that is called in a tight Python loop on the same large
-array pays that every time — put the loop inside the compiled function.
+Use `parakeet.to_device(x, backend="cuda")` or `backend="metal"` to reuse
+resident array inputs across calls. Pass the resulting device arrays to a
+compiled function and call `parakeet.to_host(result)` when Python needs the
+data. Operations which run on the host can still require transfers.

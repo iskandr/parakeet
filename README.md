@@ -2,7 +2,7 @@ Parakeet
 ====
 
 [![CI](https://github.com/iskandr/parakeet/actions/workflows/ci.yml/badge.svg)](https://github.com/iskandr/parakeet/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-iskandr.github.io%2Fparakeet-blue)](https://iskandr.github.io/parakeet/)
+[![Docs](https://img.shields.io/badge/docs-Parakeet-blue)](https://rubinsteyn.com/parakeet/)
 
 Parakeet is a runtime accelerator for an array-oriented subset of Python. It compiles native versions of a function for each distinct set of input types, fuses the array expressions inside it into single loops, and runs those loops on every core or on a GPU. Parakeet also exposes data parallel operators (`map`, `reduce`, `scan`, `allpairs`) which enable high-level optimizations and parallelization.
 
@@ -51,11 +51,11 @@ assert np.allclose(comprehension(x), y)
 Install
 ====
 
-From a checkout of the rewrite, run `python -m pip install .` (or `".[metal]"` / `".[cuda12]"` in place of `.`). Once the alpha is published, install the same version from PyPI with
+Parakeet 1.0 requires Python 3.11 or later and a C compiler.
 
-    pip install "parakeet==1.0.0a1"                 # CPU backends
-    pip install "parakeet[metal]==1.0.0a1"        # + Apple GPUs
-    pip install "parakeet[cuda12]==1.0.0a1"       # + NVIDIA GPUs
+    pip install "parakeet==1.0.0"                 # CPU backends
+    pip install "parakeet[metal]==1.0.0"        # + Apple GPUs
+    pip install "parakeet[cuda12]==1.0.0"       # + NVIDIA GPUs
 
 
 Dependencies
@@ -90,16 +90,16 @@ Parakeet cannot accelerate arbitrary Python code, it only supports a limited sub
   * Scalar operations (i.e. `x + 3 * y`)
   * Control flow (if-statements, loops, `break`, `continue`, early returns)
   * Nested functions, lambdas and closures; default, keyword and `*args` arguments
-  * Tuples
+  * Nested tuples, NamedTuples, fixed-key dictionaries and plain frozen dataclasses at the JIT boundary
   * Slices
   * NumPy array expressions (i.e. `x[1:, :] + 2 * y[:-1, ::2]`), with broadcasting, boolean masks, integer-array indexing and in-place updates
-  * About 200 NumPy library functions and methods like `np.ones`, `np.sin` and `x.sum(axis = 0)`, plus `math`, `np.random` and the usual builtins (look at the [full list](https://iskandr.github.io/parakeet/supported/))
+  * About 200 NumPy library functions and methods like `np.ones`, `np.sin` and `x.sum(axis = 0)`, plus `math`, `np.random` and the usual builtins (look at the [full list](https://rubinsteyn.com/parakeet/supported/))
   * List literals (interpreted as array construction)
   * List comprehensions (interpreted as array comprehensions)
   * Parakeet's higher order array operations like `parakeet.imap`, `parakeet.scan`, and `parakeet.allpairs`
-  * Gradients: `parakeet.grad(f)` differentiates the array operators, so a training step is one compiled function (see [Gradients](https://iskandr.github.io/parakeet/autodiff/))
+  * Gradients: `parakeet.grad(f)` differentiates the array operators, so a training step is one compiled function (see [Gradients](https://rubinsteyn.com/parakeet/autodiff/))
 
-Results and their dtypes match NumPy 2. The [language reference](https://iskandr.github.io/parakeet/language/) lists the places where Parakeet deliberately differs from CPython: one type per variable, no recursion, no classes, no `try`, no complex numbers.
+Results and their dtypes match NumPy 2. The [language reference](https://rubinsteyn.com/parakeet/language/) lists the places where Parakeet deliberately differs from CPython: one type per variable, no recursion, no classes, no `try`, no complex numbers.
 
 Anything outside the subset fails when the function is compiled, with an error that points at your code:
 
@@ -135,6 +135,8 @@ GPUs only get the loops they can run. Apple GPUs have no `float64`, so on Metal 
 How fast is it?
 ====
 
+The [1.0 release benchmarks](https://rubinsteyn.com/parakeet/release-benchmarks/) compare five workloads on a four-vCPU worker and an NVIDIA A10. For 1,024 exact nearest-neighbor queries against 4,096 references with 32 features, the CPU medians were 6.59 ms for broadcasting NumPy compiled by Parakeet, 9.58 ms for Faiss flat search, and 18.25 ms for PyKeOps. For the smaller three-feature case Faiss took 0.033 ms and Parakeet took 0.664 ms. The report includes the input shapes, first-call costs, device dispatch checks, and raw measurements.
+
 Best of 5 on an Apple M1 Pro (10 cores) with `float64` data, from `python benchmarks/run.py`:
 
 | benchmark | NumPy | Parakeet, 1 thread | Parakeet, 10 threads |
@@ -148,15 +150,15 @@ Best of 5 on an Apple M1 Pro (10 cores) with `float64` data, from `python benchm
 | Julia set, 1000×1000 | 402 ms | 47 ms | 6.1 ms |
 | matrix product, 300×300 | 0.16 ms | 4.1 ms | 0.72 ms |
 
-Parakeet wins where NumPy allocates temporaries or where you would otherwise write a Python loop. It loses to BLAS on matrix products, and a single thread of Parakeet loses to NumPy's vectorized `tanh`. GPUs pay to copy your arrays over and back on every call, so they only help when there is a lot of arithmetic per element; the [performance notes](https://iskandr.github.io/parakeet/performance/) have the Metal and CUDA numbers, including the ones where the GPU is slower.
+Parakeet wins where NumPy allocates temporaries or where you would otherwise write a Python loop. It loses to BLAS on matrix products, and a single thread of Parakeet loses to NumPy's vectorized `tanh`. GPU launches and host transfers carry overhead. Use `parakeet.to_device` to reuse inputs across calls. The [performance notes](https://rubinsteyn.com/parakeet/performance/) have the Metal and CUDA numbers, including the ones where the GPU is slower.
 
 
 More information
 ===
 
-  * Read the [documentation](https://iskandr.github.io/parakeet/)
-  * Look at the [examples](examples) and the [benchmarks](benchmarks)
-  * Coming from Parakeet 0.x? The [migration notes](https://iskandr.github.io/parakeet/migrating/) list what changed
+  * Read the [documentation](https://rubinsteyn.com/parakeet/)
+  * Try the [runnable gallery](https://rubinsteyn.com/parakeet/gallery/) and compare the [benchmark results](https://rubinsteyn.com/parakeet/release-benchmarks/)
+  * Coming from Parakeet 0.x? The [migration notes](https://rubinsteyn.com/parakeet/migrating/) list what changed
   * Watch the [Parakeet presentation](https://vimeo.com/73895275) from PyData Boston 2013, or look at the [HotPar slides](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python)
 
 

@@ -6,10 +6,10 @@
 * A C compiler: the Xcode command line tools on macOS (`xcode-select --install`),
   `gcc` or `clang` on Linux, MinGW-w64 `gcc` or LLVM `clang` on Windows.
 
-During development, run `python -m pip install .` in a checkout of the rewrite. Once the alpha is available on PyPI, use the versioned install below.
+Install the release in your Python environment. For development, run `python -m pip install .` in a checkout.
 
 ```bash
-pip install "parakeet==1.0.0a1"
+pip install "parakeet==1.0.0"
 python -c "import parakeet; print(parakeet.available_backends())"
 ```
 
