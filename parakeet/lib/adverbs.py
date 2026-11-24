@@ -245,64 +245,108 @@ def _zipped(el, xs: tuple, init, fn, axis, what: str):
 
 
 @libfunction("fold")
-def fold(el, lift, merge, x, init):
-  """Fold scalar tuples in input order using a caller-supplied associative merge.
+def fold(el, lift, merge, x, init=None, *, axis=None, indexed=False, emit=None):
+  """Lift elements to scalar tuple states and merge adjacent states in input order.
 
-  Each input row is lifted to a summary. The seed is applied exactly once.
+  With no axis, lift each leading slice and return one state. With an axis,
+  fold the scalar lanes along that axis and project each state with `emit`.
+  An indexed lift receives (value, index) with the index local to its lane.
+  A supplied seed is applied once on the left; an unseeded empty fold raises.
   """
   from ..syntax import ir
-  from ..syntax.ir import Var
   from ..syntax.records import record_type
 
   if el.tape is not None and not el.tape.muted:
     raise el.no_derivative("differentiation through a custom fold is not implemented")
   x = el.as_array(_arrayish(el, x))
-  if x.rank == 0 or not isinstance(init, tuple) or not init or not all(isinstance(v, Expr) for v in init):
-    raise el.error(TypeInferenceError, "fold needs an array and a nonempty tuple of scalar initial values")
-  record = record_type(init)
-  pack = record.build if record else tuple
+  if x.rank == 0:
+    raise el.error(TypeInferenceError, "fold needs an array with at least one dimension")
+  indexed = indexed if isinstance(indexed, bool) else el.static_bool(indexed, "indexed")
 
-  def state(v):
-    if not isinstance(v, tuple) or type(v) is not type(init) or len(v) != len(init):
-      raise el.error(TypeInferenceError, "fold lift and merge must preserve the initial state structure")
-    if any(not isinstance(t, Expr) or t.type.strong is not seed.type.strong for t, seed in zip(v, init)):
-      raise el.error(TypeInferenceError, "fold lift and merge must preserve the state field dtypes")
+  def scalar_tuple(v):
+    if not isinstance(v, tuple) or not v or not all(isinstance(field, Expr) for field in v):
+      raise el.error(TypeInferenceError, "fold needs a nonempty tuple of scalar fields")
     return v
 
-  x = _prepare(el, x)
-  n = x.shape[0]
-  shape = (n,)
-  idx = Var("i", I)
-  el.nonneg.add(idx.uid)
-  el.upper[idx.uid] = n
-  home = el.scope
-  scope = el.new_scope("loop")
-  parallel = el.can_parallel(shape)
-  body, combine = [], []
-  with el.in_block(body, scope, loop=True, par=parallel):
-    values = state(el.call(lift, [el.axis_view(x, 0, idx, consumed=True)]))
-  left = pack(Var("left", v.type) for v in init)
-  right = pack(Var("right", v.type) for v in init)
-  with el.in_block(combine, loop=True):
-    merged = state(el.call(merge, [left, right]))
-  if any(isinstance(s, ir.Alloc) for s in ir.walk_stmts(combine)) or any(
-    isinstance(s, (ir.Store, ir.IndexScatter))
-    or any(isinstance(e, ir.RtCall) and not e.pure for expr in ir.stmt_exprs(s) for e in ir.walk_expr(expr))
-    for s in ir.walk_stmts([*body, *combine])
-  ):
-    raise el.error(UnsupportedError, "fold lift and merge must be pure scalar computations")
+  if init is not None:
+    scalar_tuple(init)
 
-  results = pack(Var("field", v.type) for v in init)
-  carries = [ir.Carry(*parts) for parts in list(zip(results, values, left, right, merged))[1:]]
-  reduction = ir.Fold(results[0], values[0], left[0], right[0], combine, merged[0], op="structured", carries=carries)
-  answer = el.make_target(el.vtype(init), init, "state", home)
-  el.assign_target(answer, init)
-  nonempty = []
+  def project(summary):
+    if emit is None:
+      return summary
+    return el.as_scalar(el.call(emit, [summary]), "fold projection")
+
+  def lane(arr):
+    n = arr.shape[0]
+    idx = ir.Var("i", I)
+    el.nonneg.add(idx.uid)
+    el.upper[idx.uid] = n
+    home = el.scope
+    scope = el.new_scope("loop")
+    parallel = el.can_parallel((n,))
+    body, combine = [], []
+    with el.in_block(body, scope, loop=True, par=parallel):
+      element = el.axis_view(arr, 0, idx, consumed=True)
+      values = scalar_tuple(el.call(lift, [element, idx] if indexed else [element]))
+
+    schema = init if init is not None else values
+    record = record_type(schema)
+    pack = record.build if record else tuple
+
+    def state(v):
+      if type(v) is not type(schema) or len(v) != len(schema):
+        raise el.error(TypeInferenceError, "fold lift and merge must preserve the state structure")
+      if any(not isinstance(t, Expr) or t.type.strong is not field.type.strong for t, field in zip(v, schema)):
+        raise el.error(TypeInferenceError, "fold lift and merge must preserve the state field dtypes")
+      return v
+
+    state(values)
+    left = pack(ir.Var("left", v.type) for v in schema)
+    right = pack(ir.Var("right", v.type) for v in schema)
+    with el.in_block(combine, loop=True):
+      merged = state(el.call(merge, [left, right]))
+    if any(isinstance(s, ir.Alloc) for s in ir.walk_stmts(combine)) or any(
+      isinstance(s, (ir.Store, ir.IndexScatter))
+      or any(isinstance(e, ir.RtCall) and not e.pure for expr in ir.stmt_exprs(s) for e in ir.walk_expr(expr))
+      for s in ir.walk_stmts([*body, *combine])
+    ):
+      raise el.error(UnsupportedError, "fold lift and merge must be pure scalar computations")
+
+    results = pack(ir.Var("field", v.type) for v in schema)
+    carries = [ir.Carry(*parts) for parts in list(zip(results, values, left, right, merged))[1:]]
+    empty = ir.ErrorInfo("ValueError", "cannot fold an empty lane without an initial state", el.loc())
+    reduction = ir.Fold(
+      results[0], values[0], left[0], right[0], combine, merged[0], op="structured", empty=empty, carries=carries
+    )
+    el.emit(ir.IndexReduce((n,), (idx,), body, [reduction], scope, home, parallel, el.loc()))
+    return project(results if init is None else state(el.call(merge, [init, results])))
+
+  k = None if axis is None else norm_axis(el, axis, x.rank)
+  if k is not None and x.rank > 1 and emit is None:
+    raise el.error(TypeInferenceError, "fold along an axis needs emit= to project each state to an output")
+
+  def reduce_lanes():
+    if k is None or x.rank == 1:
+      return lane(_prepare(el, x))
+    return along_axis(el, x, k, lane, "fold", stream=True)
+
+  if init is None:
+    if k is not None and x.rank > 1:
+      el.check(cmp("gt", x.shape[k], ZERO), "ValueError", "cannot fold an empty lane without an initial state")
+    return reduce_lanes()
+  # All lanes have the same length. Branch once so the nonempty case is an
+  # ordinary map of unseeded folds and each seed is merged exactly once.
+  nonempty, empty = [], []
   with el.in_block(nonempty):
-    el.emit(ir.IndexReduce(shape, (idx,), body, [reduction], scope, home, parallel, el.loc()))
-    el.assign_target(answer, state(el.call(merge, [init, results])))
-  el.emit(ir.If(cmp("gt", n, ZERO), nonempty, []))
-  return answer
+    a = reduce_lanes()
+  with el.in_block(empty):
+    if k is None or x.rank == 1:
+      b = project(init)
+    else:
+      b = build_map(el, x.shape[:k] + x.shape[k + 1 :], lambda _: project(init), "fold")
+  result = el.merge_values("fold", a, nonempty, b, empty)
+  el.emit(ir.If(cmp("gt", x.shape[k if k is not None else 0], ZERO), nonempty, empty))
+  return result
 
 
 @libfunction("reduce")

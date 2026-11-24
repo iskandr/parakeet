@@ -12,6 +12,7 @@ The documentation gallery imports its code snippets from this module."""
 from __future__ import annotations
 
 import time
+from typing import NamedTuple
 
 import numpy as np
 
@@ -198,6 +199,77 @@ def exact_1nn(x_query, x_ref):
 # --8<-- [end:exact_1nn]
 
 
+# --8<-- [start:nearest_numpy]
+@parakeet.jit
+def nearest_numpy(queries, references):
+  delta = queries[:, None, :] - references[None, :, :]
+  return np.argmin(np.sum(delta ** np.float32(2), axis=2), axis=1)
+
+
+# --8<-- [end:nearest_numpy]
+
+
+# --8<-- [start:nearest_fold]
+def squared_distance(query, reference):
+  return np.sum((query - reference) ** np.float32(2))
+
+
+class Winner(NamedTuple):
+  distance: np.float32
+  index: np.int64
+
+
+def first_minimum(left, right):
+  take_right = (np.isnan(right.distance) or right.distance < left.distance) and not np.isnan(left.distance)
+  return right if take_right else left
+
+
+@parakeet.jit
+def nearest_fold(queries, references):
+  scores = dsl.allpairs(squared_distance, queries, references)
+  return dsl.fold(Winner, first_minimum, scores, axis=1, indexed=True, emit=lambda winner: winner.index)
+
+
+# --8<-- [end:nearest_fold]
+
+
+# --8<-- [start:weighted_numpy]
+@parakeet.jit
+def smooth_numpy(queries, references, observations):
+  observations = observations.reshape(references.shape[0])
+  delta = queries[:, None, :] - references[None, :, :]
+  weights = 1 / (1 + np.sum(delta ** np.float32(2), axis=2))
+  return np.sum(weights * observations, axis=1) / np.sum(weights, axis=1)
+
+
+# --8<-- [end:weighted_numpy]
+
+
+# --8<-- [start:weighted_fold]
+class WeightedSum(NamedTuple):
+  weight: np.float32
+  weighted_value: np.float32
+
+
+def add_sums(left, right):
+  return WeightedSum(left.weight + right.weight, left.weighted_value + right.weighted_value)
+
+
+@parakeet.jit
+def smooth_fold(queries, references, observations):
+  values = observations.reshape(references.shape[0])
+  scores = dsl.allpairs(squared_distance, queries, references)
+
+  def lift(distance, j):
+    w = 1 / (1 + distance)
+    return WeightedSum(w, w * values[j])
+
+  return dsl.fold(lift, add_sums, scores, axis=1, indexed=True, emit=lambda s: s.weighted_value / s.weight)
+
+
+# --8<-- [end:weighted_fold]
+
+
 # ---------------------------------------------------------------------------
 # 9. GBDT Histogram Building + Prefix-Sum Best-Split Finding
 # ---------------------------------------------------------------------------
@@ -366,6 +438,13 @@ def main():
   print(
     f"7. Exact 1-NN Search (512x2048x32)            : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Carry + Zero N*M"
   )
+
+  np.testing.assert_array_equal(nearest_fold(xq, xt), nn_np)
+  np.testing.assert_array_equal(nearest_numpy(xq, xt), nn_np)
+  values = yt[:, 0]
+  expected = smooth_numpy.fn(xq, xt, values)
+  np.testing.assert_allclose(smooth_fold(xq, xt, values), expected, rtol=2e-5, atol=1e-6)
+  np.testing.assert_allclose(smooth_numpy(xq, xt, values), expected, rtol=2e-5, atol=1e-6)
 
   # 8. GBDT Histogram + Prefix-Sum Best Split
   bins = rng.integers(0, 256, size=(200_000,), dtype=np.int64)
