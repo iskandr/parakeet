@@ -80,3 +80,41 @@ def test_structured_fold_keeps_chunk_order_and_applies_seed_once():
     for backend in ("c", "threads"):
       got = recurrence(x, _backend=backend)
       assert type(got) is Pair and got == expected
+
+
+class Moments(NamedTuple):
+  count: int
+  mean: float
+  m2: float
+
+
+def test_welford_and_leftmost_argmin_folds():
+  from parakeet import dsl
+
+  def join(a, b):
+    n = a.count + b.count
+    delta = b.mean - a.mean
+    return Moments(n, a.mean + delta * b.count / n, a.m2 + b.m2 + delta * delta * a.count * b.count / n)
+
+  @pk.jit
+  def variance(x):
+    seed = Moments(np.int64(0), np.float64(0), np.float64(0))
+    s = dsl.fold(lambda v: Moments(np.int64(1), v, np.float64(0)), join, x, seed)
+    return s.m2 / s.count
+
+  @pk.jit
+  def lowest(rows):
+    def merge(left, right):
+      return left if left.x <= right.x else right
+
+    seed = Pair(np.int64(2**62), np.int64(-1))
+    return dsl.fold(lambda row: Pair(row[0], row[1]), merge, rows, seed).y
+
+  rng = np.random.default_rng(120)
+  x = rng.normal(1e6, 1, 24000)
+  keys = rng.integers(1, 10, len(x))
+  keys[[19, 21000]] = 0
+  rows = np.column_stack((keys, np.arange(len(x))))
+  for backend in ("c", "threads"):
+    np.testing.assert_allclose(variance(x, _backend=backend), np.var(x), rtol=1e-7)
+    assert lowest(rows, _backend=backend) == np.argmin(keys)
