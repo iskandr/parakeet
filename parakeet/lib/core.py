@@ -463,8 +463,26 @@ def sub_view(el, arr: ArrayVal, idx) -> ArrayVal:
 # ---------------------------------------------------------------------------
 
 
+def _is_lossless_widening(src, dst) -> bool:
+  """True when casting ``src -> dst`` preserves every value without narrowing or
+  truthiness collapse (e.g. ``int64 -> bool`` is NOT value-preserving)."""
+  if src.strong is dst.strong:
+    return True
+  if dst.kind == "b":
+    return False
+  if src.kind == "b":
+    return True
+  if src.kind == dst.kind:
+    return dst.bits >= src.bits
+  if src.kind == "u" and dst.kind == "i":
+    return dst.bits > src.bits
+  if src.kind in ("i", "u") and dst.kind == "f":
+    return (dst.bits == 32 and src.bits <= 16) or (dst.bits == 64 and src.bits <= 32)
+  return False
+
+
 def _strip(e: Expr) -> Expr:
-  while isinstance(e, ops.Cast):
+  while isinstance(e, ops.Cast) and _is_lossless_widening(e.arg.type, e.type):
     e = e.arg
   return e
 

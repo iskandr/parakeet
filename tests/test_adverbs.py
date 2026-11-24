@@ -199,3 +199,25 @@ def test_python_backend_runs_the_original_function():
 
   assert f(1) == 2 and calls == [1]
   check(lambda x: x + 1, 1)
+
+
+def test_reduce_preserves_value_changing_casts_as_non_associative():
+  """A combiner that applies a value-changing cast (like int64 -> bool or narrowing)
+  is not associative and must match an ordered Python left fold across all backends."""
+  import functools
+
+  def count_nonzero(acc, x):
+    return acc + np.bool_(x)
+
+  @jit
+  def count_c(x):
+    return parakeet.reduce(count_nonzero, x, init=0)
+
+  arr = np.ones(200_000, dtype=np.int64)
+  arr[::5] = 0
+  expected = functools.reduce(lambda acc, v: acc + bool(v), arr.tolist(), 0)
+  with parakeet.options(backend="c"):
+    assert int(count_c(arr)) == expected
+  with parakeet.options(backend="threads"):
+    assert int(count_c(arr)) == expected
+
