@@ -80,7 +80,16 @@ the result for empty input. Read any field of the result in compiled code.
 
 For example, affine updates `s -> a*s + b` compose in order with
 `merge(left, right) = (right[0]*left[0], right[0]*left[1] + right[1])`.
-Custom folds currently support forward evaluation.
+Custom folds support forward evaluation. The initial state is optional. With no
+seed, the first lifted element starts the fold and evaluating an empty lane
+raises `ValueError`.
+
+Use `axis=k` to fold the scalar values along each lane of a multidimensional
+array. Pass `emit=project` to return a scalar per lane. With `indexed=True`,
+`lift(value, index)` receives the zero-based position on that axis. The
+projection runs after the final merge, including on the seed for an empty lane.
+The [gallery](gallery.md#exact-nearest-neighbor) composes this operation with
+`allpairs` and uses the same score with two different merge rules.
 
 ### Tiled pairwise folds
 

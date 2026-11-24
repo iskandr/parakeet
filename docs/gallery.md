@@ -13,22 +13,53 @@ The examples use `import numpy as np`, `import parakeet` and
 and explicit operators such as `dsl.map`. The name `dsl.kernel` is an alias for
 `parakeet.jit`. [Browse the source](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py).
 
+The axis-fold examples below use the development version after 1.0.0. To run them,
+install the current checkout with `python -m pip install -e .`.
+
 ## Exact nearest neighbor
 
-Find the closest reference row for each query. The outer map assigns one output
-per query. The inner map computes distances, and `argmin` returns the first
-reference index at the minimum.
+Find the closest reference to each query. NumPy expresses the calculation as a
+distance matrix followed by `argmin`. In the explicit form, `allpairs` defines
+the query/reference domain. `Winner` gives each distance its reference index,
+and `first_minimum` merges adjacent winners. Equal distances keep the earlier
+index. The first NaN wins, matching NumPy.
 
-```python
---8<-- "examples/algebraic_gallery.py:exact_1nn"
-```
+=== "Broadcasting NumPy"
 
-The CPU compiler fuses the score and reduction in both this form and its
-broadcast NumPy equivalent. At 1,024 queries by 4,096 references, each active
-query strip needs an 8 KiB tile and 192 bytes of row summaries. The GPU fold
-developed after 1.0.0 shares each score tile within a thread block and writes
-one winning distance and index per query and reference tile. Both source forms
-run on CUDA and Metal. [Release and follow-up measurements](release-benchmarks.md#gpu-pairwise-fold-after-100).
+    ```python
+    --8<-- "examples/algebraic_gallery.py:nearest_numpy"
+    ```
+
+=== "Parallel operators"
+
+    ```python
+    --8<-- "examples/algebraic_gallery.py:nearest_fold"
+    ```
+
+With the axis-fold extension, both forms use the pairwise tile schedule on supported CPU,
+Metal and CUDA targets. The published 1.0.0 and post-release comparison used
+the nested-map spelling for the explicit implementation. [Measured timings,
+allocations and revision details](release-benchmarks.md#gpu-pairwise-fold-after-100).
+
+## Inverse-distance smoothing
+
+Use the same squared distances to predict a scalar observation at each query.
+Here each reference contributes `(w, w * value)` with `w = 1 / (1 + distance²)`.
+The compiler can compute the score once, add both fields over each tile, and
+divide the two totals after the final merge. These examples take nonempty
+reference arrays with one float32 observation per reference.
+
+=== "Broadcasting NumPy"
+
+    ```python
+    --8<-- "examples/algebraic_gallery.py:weighted_numpy"
+    ```
+
+=== "Parallel operators"
+
+    ```python
+    --8<-- "examples/algebraic_gallery.py:weighted_fold"
+    ```
 
 ## Gaussian kernel regression
 
