@@ -449,8 +449,8 @@ def _match_ssd_for_range(
 ) -> _SSDMatch | None:
   """Match Mamba-2 SSD / GLA bilinear matrix-state recurrence::
 
-      S = a[t] * S + k[t, :, None] * v[t, None, :]
-      out[t] = q[t] @ S
+  S = a[t] * S + k[t, :, None] * v[t, None, :]
+  out[t] = q[t] @ S
   """
   if not _is_unit_for_range(loop):
     return None

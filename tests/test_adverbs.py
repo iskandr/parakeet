@@ -260,5 +260,3 @@ def test_mapped_reduce_and_scan_fold_the_mapped_axis():
   expected_scan = np.cumsum(np.stack([2 * x[:, j] for j in range(3)], axis=0), axis=0)
   np.testing.assert_array_equal(scan_cols(x), expected_scan)
   np.testing.assert_array_equal(scan_cols_scalar_map(x), np.array([3, 8, 15]))
-
-

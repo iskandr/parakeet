@@ -294,7 +294,21 @@ def _generate_flash_monoid(
   lines.append("  const bool pk_q_hoisted = (pk_K <= 64);")
   lines.append("  if (pk_q_hoisted) {")
   _emit_stage_load_2d(
-    em, plan.stages["q"], "pk_sh_a", MONOID_BM, 64, q_fast_pad, "pk_i0", "0", "pk_M", "pk_K", ct, idx_t, lines, "    ", zero_lit
+    em,
+    plan.stages["q"],
+    "pk_sh_a",
+    MONOID_BM,
+    64,
+    q_fast_pad,
+    "pk_i0",
+    "0",
+    "pk_M",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "    ",
+    zero_lit,
   )
   lines.append("  }")
   lines.append(f"  {barrier}")
@@ -322,7 +336,9 @@ def _generate_flash_monoid(
       lines.append(f"    if ({em.expr(plan.tile_false_guard)}) {{")
       lines.append("      int pk_can_skip = 1;")
       lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {MONOID_BM}; ++pk_ri) {{")
-      lines.append(f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append(
+        f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}"
+      )
       lines.append("      }")
       lines.append("      if (pk_can_skip) continue;")
       lines.append("    }")
@@ -360,7 +376,9 @@ def _generate_flash_monoid(
       lines.append("    if (pk_any_mask == 0 && pk_all_valid) {")
       lines.append("      int pk_can_skip = 1;")
       lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {MONOID_BM}; ++pk_ri) {{")
-      lines.append(f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append(
+        f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}"
+      )
       lines.append("      }")
       lines.append("      if (pk_can_skip) continue;")
       lines.append("    }")
@@ -377,7 +395,21 @@ def _generate_flash_monoid(
   lines.append(f"    for (int pk_c = 0; pk_c < 8; ++pk_c) pk_s_acc[pk_c] = {zero_lit};")
   lines.append("    if (pk_q_hoisted) {")
   _emit_stage_load_2d(
-    em, plan.stages["k"], "pk_sh_b", MONOID_BN, 64, q_fast_pad, "pk_j0", "0", "pk_j_end", "pk_K", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["k"],
+    "pk_sh_b",
+    MONOID_BN,
+    64,
+    q_fast_pad,
+    "pk_j0",
+    "0",
+    "pk_j_end",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   lines.append(f"      {barrier}")
   lines.append("      #pragma unroll")
@@ -386,7 +418,9 @@ def _generate_flash_monoid(
   lines.append(f"        {ct} pk_dot = {zero_lit};")
   lines.append("        for (" + idx_t + " pk_kk = 0; pk_kk < pk_K; ++pk_kk) {")
   if plan.score_op == "sqdist":
-    lines.append(f"          {ct} pk_df = pk_sh_a[pk_r * {q_fast_pad} + pk_kk] - pk_sh_b[pk_jc * {q_fast_pad} + pk_kk];")
+    lines.append(
+      f"          {ct} pk_df = pk_sh_a[pk_r * {q_fast_pad} + pk_kk] - pk_sh_b[pk_jc * {q_fast_pad} + pk_kk];"
+    )
     lines.append("          pk_dot += pk_df * pk_df;")
   else:
     lines.append(f"          pk_dot += pk_sh_a[pk_r * {q_fast_pad} + pk_kk] * pk_sh_b[pk_jc * {q_fast_pad} + pk_kk];")
@@ -397,10 +431,38 @@ def _generate_flash_monoid(
   lines.append("    } else {")
   lines.append(f"      for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {MONOID_BK}) {{")
   _emit_stage_load_2d(
-    em, plan.stages["q"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_k0", "pk_M", "pk_K", ct, idx_t, lines, "        ", zero_lit
+    em,
+    plan.stages["q"],
+    "pk_sh_a",
+    MONOID_BM,
+    MONOID_BK,
+    k_pad,
+    "pk_i0",
+    "pk_k0",
+    "pk_M",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
   )
   _emit_stage_load_2d(
-    em, plan.stages["k"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_k0", "pk_j_end", "pk_K", ct, idx_t, lines, "        ", zero_lit
+    em,
+    plan.stages["k"],
+    "pk_sh_b",
+    MONOID_BN,
+    MONOID_BK,
+    k_pad,
+    "pk_j0",
+    "pk_k0",
+    "pk_j_end",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
   )
   lines.append(f"        {barrier}")
   lines.append(f"        const {idx_t} pk_klen = pk_K - pk_k0 < {MONOID_BK} ? pk_K - pk_k0 : {MONOID_BK};")
@@ -481,14 +543,30 @@ def _generate_flash_monoid(
   lines.append("    pk_sh_red[pk_r * 4 + pk_t] = pk_lsum;")
   lines.append(f"    {barrier}")
   lines.append("    if (pk_t == 0 && pk_gi < pk_M) {")
-  lines.append("      pk_sh_l[pk_r] = pk_sh_l[pk_r] * pk_al + (pk_sh_red[pk_r*4] + pk_sh_red[pk_r*4+1] + pk_sh_red[pk_r*4+2] + pk_sh_red[pk_r*4+3]);")
+  lines.append(
+    "      pk_sh_l[pk_r] = pk_sh_l[pk_r] * pk_al + (pk_sh_red[pk_r*4] + pk_sh_red[pk_r*4+1] + pk_sh_red[pk_r*4+2] + pk_sh_red[pk_r*4+3]);"
+  )
   lines.append("    }")
 
   # Accumulate O = alpha * O + P_tile @ V_tile (in chunks of BD=32; first 128 cols in registers!)
   lines.append(f"    const {idx_t} pk_jlen = pk_j_end - pk_j0 < {MONOID_BN} ? pk_j_end - pk_j0 : {MONOID_BN};")
   lines.append(f"    for ({idx_t} pk_d0 = 0; pk_d0 < pk_D; pk_d0 += {MONOID_BK}) {{")
   _emit_stage_load_2d(
-    em, plan.stages["v"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_d0", "pk_j_end", "pk_D", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["v"],
+    "pk_sh_b",
+    MONOID_BN,
+    MONOID_BK,
+    k_pad,
+    "pk_j0",
+    "pk_d0",
+    "pk_j_end",
+    "pk_D",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   lines.append(f"      {barrier}")
   lines.append("      for (int pk_c = 0; pk_c < 8; ++pk_c) {")
@@ -503,7 +581,9 @@ def _generate_flash_monoid(
   lines.append("            const int pk_slot = (int)((pk_d0 >> 2) + pk_c);")
   lines.append("            pk_o_reg[pk_slot] = pk_o_reg[pk_slot] * pk_al + pk_pv_sum;")
   lines.append("          } else {")
-  lines.append(f"            {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] = {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] * pk_al + pk_pv_sum;")
+  lines.append(
+    f"            {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] = {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] * pk_al + pk_pv_sum;"
+  )
   lines.append("          }")
   lines.append("        }")
   lines.append("      }")
@@ -548,7 +628,17 @@ def _generate_flash_monoid(
     bufs=bufs,
     errors=em.errors,
     written={v.uid for v in bufs if v.uid in written},
-    extra={"tiled": {"bm": MONOID_BM, "bn": 1, "bk": MONOID_BK, "tm": 1, "tn": 1, "threads": MONOID_THREADS, "shape": shape_meta}},
+    extra={
+      "tiled": {
+        "bm": MONOID_BM,
+        "bn": 1,
+        "bk": MONOID_BK,
+        "tm": 1,
+        "tn": 1,
+        "threads": MONOID_THREADS,
+        "shape": shape_meta,
+      }
+    },
   )
 
 
@@ -623,17 +713,47 @@ def _generate_flash_monoid_bwd(
   lines.append("  const bool pk_kv_hoisted = (pk_K <= 64 && pk_D <= 64);")
   lines.append("  if (pk_kv_hoisted) {")
   _emit_stage_load_2d(
-    em, plan.stages["k"], "pk_sh_b", MONOID_BN, 64, kv_fast_pad, "pk_j0", "0", "pk_N", "pk_K", ct, idx_t, lines, "    ", zero_lit
+    em,
+    plan.stages["k"],
+    "pk_sh_b",
+    MONOID_BN,
+    64,
+    kv_fast_pad,
+    "pk_j0",
+    "0",
+    "pk_N",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "    ",
+    zero_lit,
   )
   _emit_stage_load_2d(
-    em, plan.stages["v"], "pk_sh_v", MONOID_BN, 64, kv_fast_pad, "pk_j0", "0", "pk_N", "pk_D", ct, idx_t, lines, "    ", zero_lit
+    em,
+    plan.stages["v"],
+    "pk_sh_v",
+    MONOID_BN,
+    64,
+    kv_fast_pad,
+    "pk_j0",
+    "0",
+    "pk_N",
+    "pk_D",
+    ct,
+    idx_t,
+    lines,
+    "    ",
+    zero_lit,
   )
   lines.append("  }")
 
   # Register accumulators for dK[32 x K] and dV[32 x D] (first 128 cols in registers -> zero atomics!)
   lines.append(f"  {ct} pk_dk_reg[{MAX_REG_D // 4}];")
   lines.append(f"  {ct} pk_dv_reg[{MAX_REG_D // 4}];")
-  lines.append(f"  for (int pk_u = 0; pk_u < {MAX_REG_D // 4}; ++pk_u) {{ pk_dk_reg[pk_u] = {zero_lit}; pk_dv_reg[pk_u] = {zero_lit}; }}")
+  lines.append(
+    f"  for (int pk_u = 0; pk_u < {MAX_REG_D // 4}; ++pk_u) {{ pk_dk_reg[pk_u] = {zero_lit}; pk_dv_reg[pk_u] = {zero_lit}; }}"
+  )
   lines.append(f"  {barrier}")
 
   is_neg_inf_fill = isinstance(plan.mask_fill, ir.Const) and float(plan.mask_fill.value) == float("-inf")
@@ -684,7 +804,9 @@ def _generate_flash_monoid_bwd(
     else:
       lines.append("      int pk_can_skip = 1;")
       lines.append(f"      for ({idx_t} pk_qi = 0; pk_qi < {MONOID_BM}; ++pk_qi) {{")
-      lines.append(f"        if (pk_i0 + pk_qi < pk_M && !(pk_sh_lse[pk_qi] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append(
+        f"        if (pk_i0 + pk_qi < pk_M && !(pk_sh_lse[pk_qi] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}"
+      )
       lines.append("      }")
       lines.append("      if (pk_can_skip) continue;")
     lines.append("    }")
@@ -697,7 +819,9 @@ def _generate_flash_monoid_bwd(
       lines.append(f"    if ({em.expr(plan.tile_false_guard)}) {{")
       lines.append("      int pk_can_skip = 1;")
       lines.append(f"      for ({idx_t} pk_qi = 0; pk_qi < {MONOID_BM}; ++pk_qi) {{")
-      lines.append(f"        if (pk_i0 + pk_qi < pk_M && !(pk_sh_lse[pk_qi] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append(
+        f"        if (pk_i0 + pk_qi < pk_M && !(pk_sh_lse[pk_qi] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}"
+      )
       lines.append("      }")
       lines.append("      if (pk_can_skip) continue;")
       lines.append("    }")
@@ -706,10 +830,26 @@ def _generate_flash_monoid_bwd(
   # Fast hoisted-KV path (K, D <= 64): K & V never reloaded, dO loaded once and reused for dV!
   lines.append(f"    {ct} pk_s_acc[8];")
   lines.append(f"    {ct} pk_dp_acc[8];")
-  lines.append(f"    for (int pk_c = 0; pk_c < 8; ++pk_c) {{ pk_s_acc[pk_c] = {zero_lit}; pk_dp_acc[pk_c] = {zero_lit}; }}")
+  lines.append(
+    f"    for (int pk_c = 0; pk_c < 8; ++pk_c) {{ pk_s_acc[pk_c] = {zero_lit}; pk_dp_acc[pk_c] = {zero_lit}; }}"
+  )
   lines.append("    if (pk_kv_hoisted) {")
   _emit_stage_load_2d(
-    em, plan.stages["q"], "pk_sh_a", MONOID_BM, 64, kv_fast_pad, "pk_i0", "0", "pk_M", "pk_K", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["q"],
+    "pk_sh_a",
+    MONOID_BM,
+    64,
+    kv_fast_pad,
+    "pk_i0",
+    "0",
+    "pk_M",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   lines.append(f"      {barrier}")
   lines.append("      #pragma unroll")
@@ -723,7 +863,21 @@ def _generate_flash_monoid_bwd(
   lines.append("      }")
   lines.append(f"      {barrier}")
   _emit_stage_load_2d(
-    em, plan.stages["do"], "pk_sh_a", MONOID_BM, 64, kv_fast_pad, "pk_i0", "0", "pk_M", "pk_D", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["do"],
+    "pk_sh_a",
+    MONOID_BM,
+    64,
+    kv_fast_pad,
+    "pk_i0",
+    "0",
+    "pk_M",
+    "pk_D",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   lines.append(f"      {barrier}")
   lines.append("      #pragma unroll")
@@ -738,10 +892,38 @@ def _generate_flash_monoid_bwd(
   lines.append("    } else {")
   lines.append(f"      for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {MONOID_BK}) {{")
   _emit_stage_load_2d(
-    em, plan.stages["q"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_k0", "pk_M", "pk_K", ct, idx_t, lines, "        ", zero_lit
+    em,
+    plan.stages["q"],
+    "pk_sh_a",
+    MONOID_BM,
+    MONOID_BK,
+    k_pad,
+    "pk_i0",
+    "pk_k0",
+    "pk_M",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
   )
   _emit_stage_load_2d(
-    em, plan.stages["k"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_k0", "pk_N", "pk_K", ct, idx_t, lines, "        ", zero_lit
+    em,
+    plan.stages["k"],
+    "pk_sh_b",
+    MONOID_BN,
+    MONOID_BK,
+    k_pad,
+    "pk_j0",
+    "pk_k0",
+    "pk_N",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
   )
   lines.append(f"        {barrier}")
   lines.append(f"        const {idx_t} pk_klen = pk_K - pk_k0 < {MONOID_BK} ? pk_K - pk_k0 : {MONOID_BK};")
@@ -757,10 +939,38 @@ def _generate_flash_monoid_bwd(
   lines.append("      }")
   lines.append(f"      for ({idx_t} pk_d0 = 0; pk_d0 < pk_D; pk_d0 += {MONOID_BK}) {{")
   _emit_stage_load_2d(
-    em, plan.stages["do"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_d0", "pk_M", "pk_D", ct, idx_t, lines, "        ", zero_lit
+    em,
+    plan.stages["do"],
+    "pk_sh_a",
+    MONOID_BM,
+    MONOID_BK,
+    k_pad,
+    "pk_i0",
+    "pk_d0",
+    "pk_M",
+    "pk_D",
+    ct,
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
   )
   _emit_stage_load_2d(
-    em, plan.stages["v"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_d0", "pk_N", "pk_D", ct, idx_t, lines, "        ", zero_lit
+    em,
+    plan.stages["v"],
+    "pk_sh_b",
+    MONOID_BN,
+    MONOID_BK,
+    k_pad,
+    "pk_j0",
+    "pk_d0",
+    "pk_N",
+    "pk_D",
+    ct,
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
   )
   lines.append(f"        {barrier}")
   lines.append(f"        const {idx_t} pk_dlen = pk_D - pk_d0 < {MONOID_BK} ? pk_D - pk_d0 : {MONOID_BK};")
@@ -831,7 +1041,21 @@ def _generate_flash_monoid_bwd(
     lines.append("    } else {")
     lines.append(f"      for ({idx_t} pk_d0 = 0; pk_d0 < pk_D; pk_d0 += {MONOID_BK}) {{")
     _emit_stage_load_2d(
-      em, plan.stages["do"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_d0", "pk_M", "pk_D", ct, idx_t, lines, "        ", zero_lit
+      em,
+      plan.stages["do"],
+      "pk_sh_a",
+      MONOID_BM,
+      MONOID_BK,
+      k_pad,
+      "pk_i0",
+      "pk_d0",
+      "pk_M",
+      "pk_D",
+      ct,
+      idx_t,
+      lines,
+      "        ",
+      zero_lit,
     )
     lines.append(f"        {barrier}")
     lines.append("        for (int pk_c = 0; pk_c < 8; ++pk_c) {")
@@ -863,7 +1087,21 @@ def _generate_flash_monoid_bwd(
     lines.append("    if (pk_kv_hoisted) {")
     if act_k:
       _emit_stage_load_2d(
-        em, plan.stages["q"], "pk_sh_a", MONOID_BM, 64, kv_fast_pad, "pk_i0", "0", "pk_M", "pk_K", ct, idx_t, lines, "      ", zero_lit
+        em,
+        plan.stages["q"],
+        "pk_sh_a",
+        MONOID_BM,
+        64,
+        kv_fast_pad,
+        "pk_i0",
+        "0",
+        "pk_M",
+        "pk_K",
+        ct,
+        idx_t,
+        lines,
+        "      ",
+        zero_lit,
       )
       lines.append(f"      {barrier}")
       lines.append("      if (pk_gj < pk_N) {")
@@ -888,9 +1126,13 @@ def _generate_flash_monoid_bwd(
       lines.append("            if (pk_gk < pk_K) {")
       lines.append(f"              {ct} pk_dqv = {zero_lit};")
       lines.append(f"              for ({idx_t} pk_jj = 0; pk_jj < pk_jlen; ++pk_jj) {{")
-      lines.append(f"                pk_dqv += pk_sh_p[pk_jj * {s_pad} + pk_r] * pk_sh_b[pk_jj * {kv_fast_pad} + pk_gk];")
+      lines.append(
+        f"                pk_dqv += pk_sh_p[pk_jj * {s_pad} + pk_r] * pk_sh_b[pk_jj * {kv_fast_pad} + pk_gk];"
+      )
       lines.append("              }")
-      _emit_atomic_add(is_cuda, f"&{em.data(dq_buf)}[pk_qrow_flat * pk_K + pk_gk]", "pk_dqv", elt, lines, "              ")
+      _emit_atomic_add(
+        is_cuda, f"&{em.data(dq_buf)}[pk_qrow_flat * pk_K + pk_gk]", "pk_dqv", elt, lines, "              "
+      )
       lines.append("            }")
       lines.append("          }")
       lines.append("        }")
@@ -900,11 +1142,39 @@ def _generate_flash_monoid_bwd(
     lines.append(f"      for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {MONOID_BK}) {{")
     if act_k:
       _emit_stage_load_2d(
-        em, plan.stages["q"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_k0", "pk_M", "pk_K", ct, idx_t, lines, "        ", zero_lit
+        em,
+        plan.stages["q"],
+        "pk_sh_a",
+        MONOID_BM,
+        MONOID_BK,
+        k_pad,
+        "pk_i0",
+        "pk_k0",
+        "pk_M",
+        "pk_K",
+        ct,
+        idx_t,
+        lines,
+        "        ",
+        zero_lit,
       )
     if act_q:
       _emit_stage_load_2d(
-        em, plan.stages["k"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_k0", "pk_N", "pk_K", ct, idx_t, lines, "        ", zero_lit
+        em,
+        plan.stages["k"],
+        "pk_sh_b",
+        MONOID_BN,
+        MONOID_BK,
+        k_pad,
+        "pk_j0",
+        "pk_k0",
+        "pk_N",
+        "pk_K",
+        ct,
+        idx_t,
+        lines,
+        "        ",
+        zero_lit,
       )
     lines.append(f"        {barrier}")
     if act_k:
@@ -936,7 +1206,9 @@ def _generate_flash_monoid_bwd(
       lines.append(f"                for ({idx_t} pk_jj = 0; pk_jj < pk_jlen; ++pk_jj) {{")
       lines.append(f"                  pk_dqv += pk_sh_p[pk_jj * {s_pad} + pk_r] * pk_sh_b[pk_jj * {k_pad} + pk_kc];")
       lines.append("                }")
-      _emit_atomic_add(is_cuda, f"&{em.data(dq_buf)}[pk_qrow_flat * pk_K + pk_gk]", "pk_dqv", elt, lines, "                ")
+      _emit_atomic_add(
+        is_cuda, f"&{em.data(dq_buf)}[pk_qrow_flat * pk_K + pk_gk]", "pk_dqv", elt, lines, "                "
+      )
       lines.append("              }")
       lines.append("            }")
       lines.append("          }")
@@ -976,7 +1248,17 @@ def _generate_flash_monoid_bwd(
     bufs=bufs,
     errors=em.errors,
     written={v.uid for v in bufs if v.uid in written},
-    extra={"tiled": {"bm": MONOID_BN, "bn": 1, "bk": MONOID_BK, "tm": 1, "tn": 1, "threads": MONOID_THREADS, "shape": shape_meta}},
+    extra={
+      "tiled": {
+        "bm": MONOID_BN,
+        "bn": 1,
+        "bk": MONOID_BK,
+        "tm": 1,
+        "tn": 1,
+        "threads": MONOID_THREADS,
+        "shape": shape_meta,
+      }
+    },
   )
 
 
@@ -1061,10 +1343,38 @@ def _generate_monoid_lse(
   lines.append(f"    for (int pk_c = 0; pk_c < 8; ++pk_c) pk_s_acc[pk_c] = {zero_lit};")
   lines.append(f"    for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {MONOID_BK}) {{")
   _emit_stage_load_2d(
-    em, plan.stages["h"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_k0", "pk_M", "pk_K", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["h"],
+    "pk_sh_a",
+    MONOID_BM,
+    MONOID_BK,
+    k_pad,
+    "pk_i0",
+    "pk_k0",
+    "pk_M",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   _emit_stage_load_2d(
-    em, plan.stages["w"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_k0", "pk_N", "pk_K", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["w"],
+    "pk_sh_b",
+    MONOID_BN,
+    MONOID_BK,
+    k_pad,
+    "pk_j0",
+    "pk_k0",
+    "pk_N",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   lines.append(f"      {barrier}")
   lines.append(f"      const {idx_t} pk_klen = pk_K - pk_k0 < {MONOID_BK} ? pk_K - pk_k0 : {MONOID_BK};")
@@ -1127,7 +1437,9 @@ def _generate_monoid_lse(
   lines.append("    pk_sh_red[pk_r * 4 + pk_t] = pk_lsum;")
   lines.append(f"    {barrier}")
   lines.append("    if (pk_t == 0 && pk_gi < pk_M) {")
-  lines.append("      pk_sh_l[pk_r] += (pk_sh_red[pk_r*4] + pk_sh_red[pk_r*4+1] + pk_sh_red[pk_r*4+2] + pk_sh_red[pk_r*4+3]);")
+  lines.append(
+    "      pk_sh_l[pk_r] += (pk_sh_red[pk_r*4] + pk_sh_red[pk_r*4+1] + pk_sh_red[pk_r*4+2] + pk_sh_red[pk_r*4+3]);"
+  )
   lines.append("    }")
   lines.append(f"    {barrier}")
   lines.append("  }")
@@ -1157,7 +1469,17 @@ def _generate_monoid_lse(
     bufs=bufs,
     errors=em.errors,
     written={v.uid for v in bufs if v.uid in written},
-    extra={"tiled": {"bm": MONOID_BM, "bn": 1, "bk": MONOID_BK, "tm": 1, "tn": 1, "threads": MONOID_THREADS, "shape": shape_meta}},
+    extra={
+      "tiled": {
+        "bm": MONOID_BM,
+        "bn": 1,
+        "bk": MONOID_BK,
+        "tm": 1,
+        "tn": 1,
+        "threads": MONOID_THREADS,
+        "shape": shape_meta,
+      }
+    },
   )
 
 
@@ -1245,10 +1567,38 @@ def _generate_cce_bwd(
   lines.append(f"    for (int pk_c = 0; pk_c < 8; ++pk_c) pk_s_acc[pk_c] = {zero_lit};")
   lines.append(f"    for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {MONOID_BK}) {{")
   _emit_stage_load_2d(
-    em, plan.stages["h"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_k0", "pk_m_end", "pk_K", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["h"],
+    "pk_sh_a",
+    MONOID_BM,
+    MONOID_BK,
+    k_pad,
+    "pk_i0",
+    "pk_k0",
+    "pk_m_end",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   _emit_stage_load_2d(
-    em, plan.stages["w"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_k0", "pk_N", "pk_K", ct, idx_t, lines, "      ", zero_lit
+    em,
+    plan.stages["w"],
+    "pk_sh_b",
+    MONOID_BN,
+    MONOID_BK,
+    k_pad,
+    "pk_j0",
+    "pk_k0",
+    "pk_N",
+    "pk_K",
+    ct,
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
   )
   lines.append(f"      {barrier}")
   lines.append(f"      const {idx_t} pk_klen = pk_K - pk_k0 < {MONOID_BK} ? pk_K - pk_k0 : {MONOID_BK};")
@@ -1282,11 +1632,39 @@ def _generate_cce_bwd(
   lines.append(f"    for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {MONOID_BK}) {{")
   if act_w:
     _emit_stage_load_2d(
-      em, plan.stages["h"], "pk_sh_a", MONOID_BM, MONOID_BK, k_pad, "pk_i0", "pk_k0", "pk_m_end", "pk_K", ct, idx_t, lines, "      ", zero_lit
+      em,
+      plan.stages["h"],
+      "pk_sh_a",
+      MONOID_BM,
+      MONOID_BK,
+      k_pad,
+      "pk_i0",
+      "pk_k0",
+      "pk_m_end",
+      "pk_K",
+      ct,
+      idx_t,
+      lines,
+      "      ",
+      zero_lit,
     )
   if act_h:
     _emit_stage_load_2d(
-      em, plan.stages["w"], "pk_sh_b", MONOID_BN, MONOID_BK, k_pad, "pk_j0", "pk_k0", "pk_N", "pk_K", ct, idx_t, lines, "      ", zero_lit
+      em,
+      plan.stages["w"],
+      "pk_sh_b",
+      MONOID_BN,
+      MONOID_BK,
+      k_pad,
+      "pk_j0",
+      "pk_k0",
+      "pk_N",
+      "pk_K",
+      ct,
+      idx_t,
+      lines,
+      "      ",
+      zero_lit,
     )
   lines.append(f"      {barrier}")
   if act_w:
@@ -1347,7 +1725,17 @@ def _generate_cce_bwd(
     bufs=bufs,
     errors=em.errors,
     written={v.uid for v in bufs if v.uid in written},
-    extra={"tiled": {"bm": cce_m_chunk, "bn": MONOID_BN, "bk": MONOID_BK, "tm": 1, "tn": 1, "threads": MONOID_THREADS, "shape": shape_meta}},
+    extra={
+      "tiled": {
+        "bm": cce_m_chunk,
+        "bn": MONOID_BN,
+        "bk": MONOID_BK,
+        "tm": 1,
+        "tn": 1,
+        "threads": MONOID_THREADS,
+        "shape": shape_meta,
+      }
+    },
   )
 
 

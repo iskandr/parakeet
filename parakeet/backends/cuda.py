@@ -706,7 +706,11 @@ def _build_fast_meta(plan: KernelPlan):
     sk_spec = None
     if sk_meta is not None:
       k_kind, k_val = sk_meta["k_dim"]
-      sk_spec = (0 if k_kind == "c" else 1, k_val if k_kind == "c" else getattr(cls, k_val).offset, sk_meta["out_buf_idx"])
+      sk_spec = (
+        0 if k_kind == "c" else 1,
+        k_val if k_kind == "c" else getattr(cls, k_val).offset,
+        sk_meta["out_buf_idx"],
+      )
     tiled_spec = (tiled_meta["bm"], tiled_meta["bn"], tuple(dims), sk_spec)
   return (ctx_size, tuple(scalars), buf_offsets, written_mask, tiled_spec, plan.loop.kind == "map")
 
@@ -864,7 +868,6 @@ class CudaDevice(DeviceBase):
         self._state.native_token = token
         self._state.native_pinned = pin_das
         self._state.native_descs = descs_arr
-        self._state.native_stream = stream_ptr
     return token
 
   def promote(self, arr: np.ndarray) -> DeviceArray:
@@ -875,13 +878,19 @@ class CudaDevice(DeviceBase):
         out_dptr = ctypes.c_uint64(0)
         out_cap = ctypes.c_int64(0)
         out_dirty = ctypes.c_int32(0)
+        owner_ctx = ctypes.c_void_p()
+        generation = ctypes.c_uint64()
         if self._native.lib.pk_cu_take_output(
-          addr, nbytes, ctypes.byref(out_dptr), ctypes.byref(out_cap), ctypes.byref(out_dirty)
+          addr,
+          nbytes,
+          ctypes.byref(out_dptr),
+          ctypes.byref(out_cap),
+          ctypes.byref(out_dirty),
+          ctypes.byref(owner_ctx),
+          ctypes.byref(generation),
         ):
           cp = self.driver.cp
-          owner = self._native.make_owner(
-            out_dptr.value, out_cap.value, getattr(self._state, "native_stream", 0)
-          )
+          owner = self._native.make_owner(out_dptr.value, out_cap.value, owner_ctx.value, generation.value)
           mem = cp.cuda.UnownedMemory(out_dptr.value, out_cap.value, owner)
           dev_buf = cp.ndarray((nbytes,), dtype=np.uint8, memptr=cp.cuda.MemoryPointer(mem, 0))
           return DeviceArray(arr, self, dev_buf, dirty=bool(out_dirty.value))

@@ -224,7 +224,9 @@ def main():
 
   t_np, o_np = _bench(np_causal_attn, (q, k, v), iters=5)
   np.testing.assert_allclose(o_pk, o_np, rtol=1e-4, atol=1e-4)
-  print(f"1. Causal FlashAttention (B=1,H=4,T=256,D=64) : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | {rep_fa.laws_triggered}")
+  print(
+    f"1. Causal FlashAttention (B=1,H=4,T=256,D=64) : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | {rep_fa.laws_triggered}"
+  )
 
   # 2. Cut Cross-Entropy fwd+bwd
   h = rng.standard_normal((256, 64)).astype(np.float32) * 0.2
@@ -249,7 +251,9 @@ def main():
   np.testing.assert_allclose(lv, lv_np, rtol=1e-4, atol=1e-4)
   np.testing.assert_allclose(dh, dh_np, rtol=1e-4, atol=1e-4)
   np.testing.assert_allclose(dw, dw_np, rtol=1e-4, atol=1e-4)
-  print(f"2. Cut Cross-Entropy fwd+bwd (M=256,V=4096)   : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Laws 1 + 2")
+  print(
+    f"2. Cut Cross-Entropy fwd+bwd (M=256,V=4096)   : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Laws 1 + 2"
+  )
 
   # 3. DeepSeek MLA Decode
   qm = rng.standard_normal((4, 256)).astype(np.float32) * 0.2
@@ -267,7 +271,9 @@ def main():
 
   t_np, om_np = _bench(np_mla, (qm, cm, wuk, wuv), iters=10)
   np.testing.assert_allclose(om_pk, om_np, rtol=1e-4, atol=1e-4)
-  print(f"3. DeepSeek MLA Decode (Tq=4,Tkv=2048,dc=64)  : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Laws 3 + 1")
+  print(
+    f"3. DeepSeek MLA Decode (Tq=4,Tkv=2048,dc=64)  : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Laws 3 + 1"
+  )
 
   # 4. Mamba-2 SSD
   qs = rng.standard_normal((2048, 64)).astype(np.float32) * 0.1
@@ -287,7 +293,9 @@ def main():
 
   t_np, os_np = _bench(np_ssd, (qs, ks, vs, as_), iters=2)
   np.testing.assert_allclose(os_pk, os_np, rtol=1e-4, atol=1e-4)
-  print(f"4. Mamba-2 SSD (T=2048, D=64, V=64)           : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Law 4 SSD")
+  print(
+    f"4. Mamba-2 SSD (T=2048, D=64, V=64)           : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Law 4 SSD"
+  )
 
   # 5. Fused RBF Kernel Regression (Nadaraya-Watson)
   xq = rng.standard_normal((512, 32)).astype(np.float32)
@@ -305,7 +313,9 @@ def main():
 
   t_np, or_np = _bench(np_rbf, (xq, xt, yt, ng), iters=3)
   np.testing.assert_allclose(or_pk, or_np, rtol=1e-4, atol=1e-4)
-  print(f"5. RBF Kernel Regression (512x2048x32)        : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Law 1 (0 N*M!)")
+  print(
+    f"5. RBF Kernel Regression (512x2048x32)        : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Law 1 (0 N*M!)"
+  )
 
   # 6. Tropical Min-Plus Shortest Path
   ta = rng.uniform(0.1, 5.0, size=(256, 256)).astype(np.float32)
@@ -314,14 +324,20 @@ def main():
     t_pk, ot_pk = _bench(tropical_min_plus, (ta, tb), iters=5)
   t_np, ot_np = _bench(lambda a, b: np.min(a[:, :, None] + b[None, :, :], axis=1), (ta, tb), iters=3)
   np.testing.assert_allclose(ot_pk, ot_np, rtol=1e-5, atol=1e-5)
-  print(f"6. One Min-Plus Matrix Product (256x256)      : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Tiled Semiring")
+  print(
+    f"6. One Min-Plus Matrix Product (256x256)      : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Tiled Semiring"
+  )
 
   # 7. Exact 1-NN (zero N x M matrix!)
   with parakeet.options(blas=False):
     t_pk, nn_pk = _bench(exact_1nn, (xq, xt), iters=5)
-  t_np, nn_np = _bench(lambda a, b: np.argmin(np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=-1), axis=-1), (xq, xt), iters=3)
+  t_np, nn_np = _bench(
+    lambda a, b: np.argmin(np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=-1), axis=-1), (xq, xt), iters=3
+  )
   np.testing.assert_array_equal(nn_pk, nn_np)
-  print(f"7. Exact 1-NN Search (512x2048x32)            : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Carry + Zero N*M")
+  print(
+    f"7. Exact 1-NN Search (512x2048x32)            : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Carry + Zero N*M"
+  )
 
   # 8. GBDT Histogram + Prefix-Sum Best Split
   bins = rng.integers(0, 256, size=(200_000,), dtype=np.int64)
@@ -343,7 +359,9 @@ def main():
   t_np, (b_np, g_np) = _bench(np_gbdt, (bins, grads, hess, 256, lam), iters=10)
   assert int(b_pk) == b_np
   np.testing.assert_allclose(g_pk, g_np, rtol=1e-4, atol=1e-4)
-  print(f"8. GBDT Hist + Best-Split (N=200k, B=256)     : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Scatter+Scan+Carry")
+  print(
+    f"8. GBDT Hist + Best-Split (N=200k, B=256)     : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Scatter+Scan+Carry"
+  )
 
 
 if __name__ == "__main__":

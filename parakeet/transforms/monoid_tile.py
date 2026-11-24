@@ -139,7 +139,9 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
   (dot product or squared distance) plus optional scale and mask."""
   if not isinstance(s, IndexMap) or s.ordered or not s.parallel or len(s.shape) < 2 or s.scope.owned:
     return None
-  body = [t for t in s.body if not (isinstance(t, ReleaseScope) and t.scope is s.scope) and not isinstance(t, ir.Comment)]
+  body = [
+    t for t in s.body if not (isinstance(t, ReleaseScope) and t.scope is s.scope) and not isinstance(t, ir.Comment)
+  ]
   reds = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
   if len(reds) != 1:
     return None
@@ -431,7 +433,9 @@ def _match_row_max_transform_map(
   if not (isinstance(sub_e, Prim) and sub_e.op == "sub" and len(sub_e.args) == 2):
     return None
   ld, rhs = sub_e.args
-  if rhs is not f.result or not (isinstance(ld, Load) and ld.buf is in_buf and im_facts.same_expr(ld.index, expected_m)):
+  if rhs is not f.result or not (
+    isinstance(ld, Load) and ld.buf is in_buf and im_facts.same_expr(ld.index, expected_m)
+  ):
     return None
   max_chk = next((t for t in body if isinstance(t, Check)), None)
   return im_st.buf, m_buf, max_chk
@@ -549,15 +553,30 @@ def _extract_buf_score_mod(
     return (True, None, mask_cond, mask_buf, mask_index, mask_fill)
   if isinstance(core, Prim) and core.op == "mul" and len(core.args) == 2:
     a, b = core.args
-    if isinstance(a, Load) and a.buf is in_buf and facts.same_expr(a.index, expected_idx) and not _expr_uses_uids(b, inner_uids):
+    if (
+      isinstance(a, Load)
+      and a.buf is in_buf
+      and facts.same_expr(a.index, expected_idx)
+      and not _expr_uses_uids(b, inner_uids)
+    ):
       scale = b
       return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
-    if isinstance(b, Load) and b.buf is in_buf and facts.same_expr(b.index, expected_idx) and not _expr_uses_uids(a, inner_uids):
+    if (
+      isinstance(b, Load)
+      and b.buf is in_buf
+      and facts.same_expr(b.index, expected_idx)
+      and not _expr_uses_uids(a, inner_uids)
+    ):
       scale = a
       return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
   if isinstance(core, Prim) and core.op == "div" and len(core.args) == 2:
     a, b = core.args
-    if isinstance(a, Load) and a.buf is in_buf and facts.same_expr(a.index, expected_idx) and not _expr_uses_uids(b, inner_uids):
+    if (
+      isinstance(a, Load)
+      and a.buf is in_buf
+      and facts.same_expr(a.index, expected_idx)
+      and not _expr_uses_uids(b, inner_uids)
+    ):
       scale = ops.prim("div", (Const(1.0, core.type), b), core.type)
       return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
   if isinstance(core, Prim) and core.op == "neg" and len(core.args) == 1:
@@ -956,7 +975,9 @@ def _match_value_contraction(
 ) -> tuple[Var, Expr, TileStage, tuple[Var, ...]] | None:
   """Match ``IndexMap(*batch, M, D)`` doing ``O[b.., i, d] = reduce_j P[b.., i, j] * V[b.., j, d]``.
   Returns ``(out_buf, d_dim, v_stage, o_batch_index)``."""
-  if not isinstance(s, IndexMap) or s.ordered or not s.parallel or len(s.shape) != len(batch_shape) + 2 or s.scope.owned:
+  if (
+    not isinstance(s, IndexMap) or s.ordered or not s.parallel or len(s.shape) != len(batch_shape) + 2 or s.scope.owned
+  ):
     return None
   if not facts.same_shape(s.shape[:-1], (*batch_shape, m_dim)):
     return None
@@ -1256,7 +1277,9 @@ def _build_flash_monoid_tile(
   beta = Var("fbeta", elt)
   is_first = cmp("eq", j_lp, ZERO)
   j_blk.append(Assign(m_new, ops.select(is_first, s_cur, ops.prim("max", (m_acc, s_cur), elt))))
-  j_blk.append(Assign(alpha, ops.select(is_first, zero_c, ops.prim("exp", (ops.prim("sub", (m_acc, m_new), elt),), elt))))
+  j_blk.append(
+    Assign(alpha, ops.select(is_first, zero_c, ops.prim("exp", (ops.prim("sub", (m_acc, m_new), elt),), elt)))
+  )
   j_blk.append(Assign(beta, ops.select(is_first, one_c, ops.prim("exp", (ops.prim("sub", (s_cur, m_new), elt),), elt))))
   j_blk.append(Assign(l_acc, ops.prim("add", (ops.prim("mul", (l_acc, alpha), elt), beta), elt)))
   j_blk.append(Assign(m_acc, m_new))
@@ -1281,7 +1304,15 @@ def _build_flash_monoid_tile(
   d_end = Var("fd_end", I)
   end_pos = iadd(o_row_base, d_end)
   body.append(
-    ForRange(d_end, ZERO, d_dim, ONE, [Store(o_buf, end_pos, ops.prim("mul", (Load(o_buf, end_pos), inv_l), elt))], Scope("loop"), simd=True)
+    ForRange(
+      d_end,
+      ZERO,
+      d_dim,
+      ONE,
+      [Store(o_buf, end_pos, ops.prim("mul", (Load(o_buf, end_pos), inv_l), elt))],
+      Scope("loop"),
+      simd=True,
+    )
   )
   out_bufs: dict[str, Var] = {"o": o_buf}
   if m_buf is not None:
@@ -1423,7 +1454,9 @@ def _maybe_wrap_flash_decoding(
   o_row_base = Var("fdo_b", I)
   p1_body.append(Assign(o_row_base, imul(row_flat, d_dim)))
   d0 = Var("fdd0", I)
-  p1_body.append(ForRange(d0, ZERO, d_dim, ONE, [Store(o_part, iadd(o_row_base, d0), zero_c)], Scope("loop"), simd=True))
+  p1_body.append(
+    ForRange(d0, ZERO, d_dim, ONE, [Store(o_part, iadd(o_row_base, d0), zero_c)], Scope("loop"), simd=True)
+  )
   m_acc = Var("fdm_a", elt)
   l_acc = Var("fdl_a", elt)
   p1_body.append(Assign(m_acc, Const(float("-inf"), elt)))
@@ -1454,7 +1487,11 @@ def _maybe_wrap_flash_decoding(
     s_val = ops.prim("mul", (s_val, cast(sc.score_scale, elt)), elt)
   if sc.mask_fill is not None and (mask_cond is not None or sc.mask_buf is not None):
     c_cl = Cloner({i_m.uid: i_var, j_m.uid: j_lp})
-    cond_at: Expr = Load(sc.mask_buf, c_cl.expr(mask_index)) if (sc.mask_buf is not None and mask_index is not None) else c_cl.expr(mask_cond)  # type: ignore[arg-type]
+    cond_at: Expr = (
+      Load(sc.mask_buf, c_cl.expr(mask_index))
+      if (sc.mask_buf is not None and mask_index is not None)
+      else c_cl.expr(mask_cond)
+    )  # type: ignore[arg-type]
     s_val = ops.select(cond_at, s_val, cast(sc.mask_fill, elt))
   s_cur = Var("fds_c", elt)
   j_blk.append(Assign(s_cur, s_val))
@@ -1463,7 +1500,9 @@ def _maybe_wrap_flash_decoding(
   beta = Var("fdbe", elt)
   is_first = cmp("eq", j_lp, js_v)
   j_blk.append(Assign(m_new, ops.select(is_first, s_cur, ops.prim("max", (m_acc, s_cur), elt))))
-  j_blk.append(Assign(alpha, ops.select(is_first, zero_c, ops.prim("exp", (ops.prim("sub", (m_acc, m_new), elt),), elt))))
+  j_blk.append(
+    Assign(alpha, ops.select(is_first, zero_c, ops.prim("exp", (ops.prim("sub", (m_acc, m_new), elt),), elt)))
+  )
   j_blk.append(Assign(beta, ops.select(is_first, one_c, ops.prim("exp", (ops.prim("sub", (s_cur, m_new), elt),), elt))))
   j_blk.append(Assign(l_acc, ops.prim("add", (ops.prim("mul", (l_acc, alpha), elt), beta), elt)))
   j_blk.append(Assign(m_acc, m_new))
@@ -1472,7 +1511,11 @@ def _maybe_wrap_flash_decoding(
   vv = _inline_stage(v_st, (j_lp, d_lp), d_blk)
   op_pos = iadd(o_row_base, d_lp)
   d_blk.append(
-    Store(o_part, op_pos, ops.prim("add", (ops.prim("mul", (Load(o_part, op_pos), alpha), elt), ops.prim("mul", (beta, vv), elt)), elt))
+    Store(
+      o_part,
+      op_pos,
+      ops.prim("add", (ops.prim("mul", (Load(o_part, op_pos), alpha), elt), ops.prim("mul", (beta, vv), elt)), elt),
+    )
   )
   j_blk.append(ForRange(d_lp, ZERO, d_dim, ONE, d_blk, Scope("loop"), simd=True))
   p1_body.append(ForRange(j_lp, js_v, je_v, ONE, j_blk, Scope("loop")))
@@ -1542,7 +1585,9 @@ def _maybe_wrap_flash_decoding(
       ONE,
       sk,
       ONE,
-      [Assign(m_tot, ops.prim("max", (m_tot, Load(m_part, row_major_index((*cb_vars, p_lp1, ci_var), p1_shape))), elt))],
+      [
+        Assign(m_tot, ops.prim("max", (m_tot, Load(m_part, row_major_index((*cb_vars, p_lp1, ci_var), p1_shape))), elt))
+      ],
       Scope("loop"),
     )
   )
@@ -1560,7 +1605,14 @@ def _maybe_wrap_flash_decoding(
           l_tot,
           ops.prim(
             "add",
-            (l_tot, ops.prim("mul", (Load(l_part, pr2), ops.prim("exp", (ops.prim("sub", (Load(m_part, pr2), m_tot), elt),), elt)), elt)),
+            (
+              l_tot,
+              ops.prim(
+                "mul",
+                (Load(l_part, pr2), ops.prim("exp", (ops.prim("sub", (Load(m_part, pr2), m_tot), elt),), elt)),
+                elt,
+              ),
+            ),
             elt,
           ),
         )
@@ -1585,7 +1637,11 @@ def _maybe_wrap_flash_decoding(
       ZERO,
       sk,
       ONE,
-      [Assign(o_sum, ops.prim("add", (o_sum, ops.prim("mul", (Load(o_part, iadd(imul(pr3, d_dim), cd_lp)), w_p), elt)), elt))],
+      [
+        Assign(
+          o_sum, ops.prim("add", (o_sum, ops.prim("mul", (Load(o_part, iadd(imul(pr3, d_dim), cd_lp)), w_p), elt)), elt)
+        )
+      ],
       Scope("loop"),
     )
   )
@@ -1719,10 +1775,13 @@ def _match_cce_out_map(
   # Mode 2: log(f.result) + m_buf[row_flat] (or m_buf + log(f.result))
   if m_buf is not None and isinstance(ov, Prim) and ov.op == "add" and len(ov.args) == 2:
     a, b = ov.args
+
     def is_log(ex):
       return isinstance(ex, Prim) and ex.op == "log" and len(ex.args) == 1 and ex.args[0] is f.result
+
     def is_m(ex):
       return isinstance(ex, Load) and ex.buf is m_buf and f_facts.same_expr(ex.index, row_flat)
+
     if (is_log(a) and is_m(b)) or (is_log(b) and is_m(a)):
       return out_st.buf, s_buf, [], None, "lse"
 
@@ -2022,7 +2081,9 @@ def _fuse_block(
                 e_pos = p1b
                 matched_stmts.append(block[p1b])
 
-        if e_buf is not None and e_pos is not None and e_buf.uid in binfo.local_allocs and e_buf.uid not in binfo.escapes:
+        if (
+          e_buf is not None and e_pos is not None and e_buf.uid in binfo.local_allocs and e_buf.uid not in binfo.escapes
+        ):
           hoist2: list[Stmt] = []
           f2 = f_after_e.fork()
           p2 = _scan_to_next_map(e_pos + 1, f2, hoist2)
@@ -2039,9 +2100,7 @@ def _fuse_block(
               matched_stmts.append(block[p2])
             else:
               # Unfused form (when l_buf is also read by AD backward!): L_map followed by P_map
-              l_only = _match_row_reduce_map(
-                block[p2], e_buf, sc.batch_shape, sc.m_dim, sc.n_dim, f2, want_op="add"
-              )
+              l_only = _match_row_reduce_map(block[p2], e_buf, sc.batch_shape, sc.m_dim, sc.n_dim, f2, want_op="add")
               if l_only is not None:
                 l_buf = l_only
                 matched_stmts.append(block[p2])
@@ -2055,7 +2114,12 @@ def _fuse_block(
                     p_pos = p2b
                     matched_stmts.append(block[p2b])
 
-          if p_buf is not None and p_pos is not None and p_buf.uid in binfo.local_allocs and p_buf.uid not in binfo.escapes:
+          if (
+            p_buf is not None
+            and p_pos is not None
+            and p_buf.uid in binfo.local_allocs
+            and p_buf.uid not in binfo.escapes
+          ):
             hoist3: list[Stmt] = []
             f3 = f_after_p.fork()
             p3 = _scan_to_next_map(p_pos + 1, f3, hoist3, skip_independent_of={sc.out_buf.uid, e_buf.uid, p_buf.uid})
@@ -2233,7 +2297,13 @@ def _fuse_block(
                         pk_map_cand = block[p1d]
                         assert isinstance(pk_map_cand, IndexMap)
                         shape_ok = f_post.same_shape(pk_map_cand.shape, (sc.m_dim,))
-                        pk_m = _match_cce_picked_map(pk_map_cand, zb2, sc.m_dim, sc.n_dim, f_post, allow_dim_eq_check=shape_ok) if shape_ok else None
+                        pk_m = (
+                          _match_cce_picked_map(
+                            pk_map_cand, zb2, sc.m_dim, sc.n_dim, f_post, allow_dim_eq_check=shape_ok
+                          )
+                          if shape_ok
+                          else None
+                        )
                         if pk_m is not None:
                           pk_buf, idx_prefix, idx_j = pk_m
                           dead_uids = {sc.out_buf.uid, zb2.uid}
@@ -2247,7 +2317,15 @@ def _fuse_block(
                             for chk in sc.pre_checks:
                               out.append(chk)
                             tile = _build_monoid_lse_tile(
-                              sc, pk_buf, m_buf, s_exp_buf, pk_map_cand.index, idx_prefix, idx_j, "picked_minus_m", f_post
+                              sc,
+                              pk_buf,
+                              m_buf,
+                              s_exp_buf,
+                              pk_map_cand.index,
+                              idx_prefix,
+                              idx_j,
+                              "picked_minus_m",
+                              f_post,
                             )
                             out.append(tile)
                             gone.update(dead_uids)
@@ -2256,7 +2334,9 @@ def _fuse_block(
                             changed = True
                             continue
 
-        if z_buf is not None and z_pos is not None and z_buf.uid in binfo.local_allocs and z_buf.uid not in binfo.escapes:
+        if (
+          z_buf is not None and z_pos is not None and z_buf.uid in binfo.local_allocs and z_buf.uid not in binfo.escapes
+        ):
           hoist2 = []
           f2 = f_after_z.fork()
           p2 = _scan_to_next_map(z_pos + 1, f2, hoist2)
@@ -2276,9 +2356,7 @@ def _fuse_block(
                   out.append(chk)
                 out_map = block[p2]
                 assert isinstance(out_map, IndexMap)
-                tile = _build_monoid_lse_tile(
-                  sc, out_buf, m_buf, s_buf, out_map.index, idx_prefix, idx_j, mode, f2
-                )
+                tile = _build_monoid_lse_tile(sc, out_buf, m_buf, s_buf, out_map.index, idx_prefix, idx_j, mode, f2)
                 out.append(tile)
                 gone.update(dead_uids)
                 walk_facts = f2

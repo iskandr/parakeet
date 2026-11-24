@@ -566,7 +566,9 @@ def _scan_next_map(stmts: list[Stmt], pos: int, f: IndexFacts) -> int | None:
   return None
 
 
-def _match_softmax_chain(stmts: list[Stmt], start: int, sc: _ScoreContraction, facts: IndexFacts) -> tuple[Var, int] | None:
+def _match_softmax_chain(
+  stmts: list[Stmt], start: int, sc: _ScoreContraction, facts: IndexFacts
+) -> tuple[Var, int] | None:
   """Match either fused 2-map or unfused 4-map softmax after score contraction ``sc``.
 
   Returns ``(p_buf, last_map_idx)`` or ``None``.

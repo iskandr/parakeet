@@ -121,6 +121,8 @@ typedef struct {
   fn_cuMemcpyDtoH dtoh;
   fn_cuStreamSynchronize stream_sync;
   fn_cuCtxGetCurrent ctx_get_current;
+  CUresult (*ctx_push)(CUcontext);
+  CUresult (*ctx_pop)(CUcontext*);
   pk_py_fallback_fn default_fallback;
   int32_t ready;
 } pk_cu_drv;
@@ -128,10 +130,14 @@ typedef struct {
 /* Per-host-thread active call state + stream/context-bound freelist */
 typedef struct {
   /* Size-bucketed GPU freelist bound to (pool_ctx, pool_stream) on this host thread */
-  int32_t pool_inited;
-  CUcontext pool_ctx;
-  CUstream pool_stream;
+  CUcontext ctx;
+  CUstream stream;
+  uint64_t generation;
   pk_bucket buckets[PK_NUM_BUCKETS];
+} pk_pool;
+
+typedef struct {
+  pk_pool* pool;
 
   /* Active call state */
   int32_t active;
@@ -167,6 +173,12 @@ typedef struct {
 static pthread_mutex_t g_init_mu = PTHREAD_MUTEX_INITIALIZER;
 static pk_cu_drv g_drv;
 static __thread pk_cu_rt t_rt;
+/* Keep the pool in POSIX thread-specific storage. Its destructor may run
+   after compiler TLS or CUDA's current-context binding has been released. */
+static pthread_key_t pool_key;
+static pthread_once_t pool_once = PTHREAD_ONCE_INIT;
+static int pool_key_ok;
+static uint64_t pool_generation;
 
 static inline uint32_t pk_hash_u64(uint64_t x) {
   x ^= x >> 33;
@@ -191,24 +203,52 @@ static inline int pk_bucket_idx(int64_t nbytes, int64_t* out_cap) {
   return idx;
 }
 
-static void pk_pool_drain(pk_cu_rt* rt) {
-  if (g_drv.stream_sync && rt->pool_inited) {
-    g_drv.stream_sync(rt->pool_stream);
-  }
-  for (int b = 0; b < PK_NUM_BUCKETS; ++b) {
-    for (int i = 0; i < rt->buckets[b].count; ++i) {
-      if (rt->buckets[b].ptrs[i]) g_drv.mem_free(rt->buckets[b].ptrs[i]);
+static void pk_pool_destroy(void* ptr) {
+  pk_pool* pool = ptr;
+  /* A destroyed context already released its allocations. */
+  if (!pool->ctx || g_drv.ctx_push(pool->ctx) == 0) {
+    for (int b = 0; b < PK_NUM_BUCKETS; ++b) {
+      for (int i = 0; i < pool->buckets[b].count; ++i) {
+        g_drv.mem_free(pool->buckets[b].ptrs[i]);
+      }
     }
-    rt->buckets[b].count = 0;
+    if (pool->ctx) {
+      CUcontext popped;
+      g_drv.ctx_pop(&popped);
+    }
   }
+  free(pool);
+}
+
+static void pk_pool_key_init(void) {
+  pool_key_ok = pthread_key_create(&pool_key, pk_pool_destroy) == 0;
+}
+
+static pk_pool* pk_pool_bind(CUcontext ctx, CUstream stream) {
+  pthread_once(&pool_once, pk_pool_key_init);
+  if (!pool_key_ok) return NULL;
+  pk_pool* old = pthread_getspecific(pool_key);
+  if (old && old->ctx == ctx && old->stream == stream) return old;
+  pk_pool* next = calloc(1, sizeof(pk_pool));
+  if (pthread_setspecific(pool_key, next) != 0) {
+    free(next);
+    return NULL; /* old pool is still owned by its thread-specific key */
+  }
+  if (old) pk_pool_destroy(old);
+  if (next) {
+    next->ctx = ctx;
+    next->stream = stream;
+    next->generation = __atomic_add_fetch(&pool_generation, 1, __ATOMIC_RELAXED);
+  }
+  return next;
 }
 
 static CUdeviceptr pk_pool_alloc(pk_cu_rt* rt, int64_t nbytes, int64_t* out_cap) {
   int64_t cap = nbytes;
   int b = pk_bucket_idx(nbytes, &cap);
-  if (b >= 0 && rt->buckets[b].count > 0) {
+  if (rt->pool && b >= 0 && rt->pool->buckets[b].count > 0) {
     *out_cap = cap;
-    return rt->buckets[b].ptrs[--rt->buckets[b].count];
+    return rt->pool->buckets[b].ptrs[--rt->pool->buckets[b].count];
   }
   if (b < 0) cap = nbytes;
   CUdeviceptr dptr = 0;
@@ -217,12 +257,12 @@ static CUdeviceptr pk_pool_alloc(pk_cu_rt* rt, int64_t nbytes, int64_t* out_cap)
   return dptr;
 }
 
-static void pk_pool_free(pk_cu_rt* rt, CUdeviceptr dptr, int64_t cap) {
+static void pk_pool_free(pk_pool* pool, CUdeviceptr dptr, int64_t cap) {
   if (!dptr) return;
   int64_t want = cap;
   int b = pk_bucket_idx(cap, &want);
-  if (b >= 0 && want == cap && rt->buckets[b].count < PK_BUCKET_CAP) {
-    rt->buckets[b].ptrs[rt->buckets[b].count++] = dptr;
+  if (pool && b >= 0 && want == cap && pool->buckets[b].count < PK_BUCKET_CAP) {
+    pool->buckets[b].ptrs[pool->buckets[b].count++] = dptr;
     return;
   }
   g_drv.mem_free(dptr);
@@ -294,7 +334,7 @@ static void pk_cu_flush_to_host_internal(pk_cu_rt* rt, int include_pinned) {
       rt->downloads++;
       e->dirty = 0;
     }
-    pk_pool_free(rt, e->dptr, e->cap);
+    pk_pool_free(rt->pool, e->dptr, e->cap);
     e->dptr = 0;
     e->occupied = 2;
   }
@@ -324,7 +364,9 @@ PK_EXPORT int32_t pk_cu_init(void) {
   if (!g_drv.dtoh) g_drv.dtoh = (fn_cuMemcpyDtoH)dlsym(lib, "cuMemcpyDtoH");
   g_drv.stream_sync = (fn_cuStreamSynchronize)dlsym(lib, "cuStreamSynchronize");
   g_drv.ctx_get_current = (fn_cuCtxGetCurrent)dlsym(lib, "cuCtxGetCurrent");
-  if (!g_drv.launch || !g_drv.mem_alloc || !g_drv.mem_free || !g_drv.memset_async || !g_drv.htod_async || !g_drv.dtoh) {
+  g_drv.ctx_push = dlsym(lib, "cuCtxPushCurrent_v2");
+  g_drv.ctx_pop = dlsym(lib, "cuCtxPopCurrent_v2");
+  if (!g_drv.ctx_get_current || !g_drv.ctx_push || !g_drv.ctx_pop || !g_drv.launch || !g_drv.mem_alloc || !g_drv.mem_free || !g_drv.memset_async || !g_drv.htod_async || !g_drv.dtoh) {
     pthread_mutex_unlock(&g_init_mu);
     return 2;
   }
@@ -356,17 +398,23 @@ PK_EXPORT void pk_cu_set_fallback(void* py_fallback) {
   pthread_mutex_unlock(&g_init_mu);
 }
 
-PK_EXPORT void pk_cu_pool_free_block(uint64_t dptr, int64_t cap, void* owner_stream) {
+PK_EXPORT void pk_cu_pool_free_block(uint64_t dptr, int64_t cap, CUcontext owner_ctx, uint64_t generation) {
   if (!g_drv.ready || !dptr) return;
-  pk_cu_rt* rt = &t_rt;
+  pk_pool* pool = pool_key_ok ? pthread_getspecific(pool_key) : NULL;
   CUcontext cur_ctx = NULL;
   if (g_drv.ctx_get_current) g_drv.ctx_get_current(&cur_ctx);
-  if (rt->pool_inited && rt->pool_stream == (CUstream)owner_stream && rt->pool_ctx == cur_ctx) {
-    pk_pool_free(rt, (CUdeviceptr)dptr, cap);
+  if (pool && pool->generation == generation && cur_ctx == owner_ctx) {
+    pk_pool_free(pool, (CUdeviceptr)dptr, cap);
     return;
   }
-  if (g_drv.stream_sync) g_drv.stream_sync((CUstream)owner_stream);
+  /* cuMemFree on a synchronous cuMemAlloc allocation observes outstanding
+     work. An output can outlive its stream, host thread or CUDA context. */
+  if (owner_ctx && g_drv.ctx_push(owner_ctx) != 0) return;
   g_drv.mem_free((CUdeviceptr)dptr);
+  if (owner_ctx) {
+    CUcontext popped;
+    g_drv.ctx_pop(&popped);
+  }
 }
 
 PK_EXPORT void pk_cu_begin_call(
@@ -377,12 +425,7 @@ PK_EXPORT void pk_cu_begin_call(
   pk_cu_rt* rt = &t_rt;
   CUcontext cur_ctx = NULL;
   if (g_drv.ctx_get_current) g_drv.ctx_get_current(&cur_ctx);
-  if (rt->pool_inited && (rt->pool_stream != (CUstream)stream || rt->pool_ctx != cur_ctx)) {
-    pk_pool_drain(rt);
-  }
-  rt->pool_inited = 1;
-  rt->pool_stream = (CUstream)stream;
-  rt->pool_ctx = cur_ctx;
+  rt->pool = pk_pool_bind(cur_ctx, (CUstream)stream);
   for (int k = 0; k < rt->n_used; ++k) rt->tbl[rt->used_slots[k]].occupied = 0;
   rt->n_used = 0;
   rt->active = 1;
@@ -428,12 +471,15 @@ PK_EXPORT int32_t pk_cu_drain_pending_errs(int32_t* out_err_kernels, int32_t max
   return n;
 }
 
-PK_EXPORT int32_t pk_cu_take_output(uint64_t host_addr, int64_t nbytes, uint64_t* out_dptr, int64_t* out_cap, int32_t* out_dirty) {
+PK_EXPORT int32_t pk_cu_take_output(uint64_t host_addr, int64_t nbytes, uint64_t* out_dptr, int64_t* out_cap, int32_t* out_dirty, CUcontext* owner_ctx, uint64_t* generation) {
   pk_tbl_entry* e = pk_tbl_find(&t_rt, host_addr);
   if (!e || e->pinned || e->nbytes < nbytes) return 0;
   *out_dptr = e->dptr;
   *out_cap = e->cap;
   *out_dirty = e->dirty;
+  *generation = t_rt.pool ? t_rt.pool->generation : 0;
+  *owner_ctx = NULL;
+  if (g_drv.ctx_get_current) g_drv.ctx_get_current(owner_ctx);
   e->dptr = 0;
   e->occupied = 2;
   return 1;
@@ -464,7 +510,7 @@ PK_EXPORT void pk_cu_end_call(
       pk_sync_and_dtoh(rt, (void*)(uintptr_t)e->host_addr, e->dptr, (size_t)e->nbytes);
       rt->downloads++;
     }
-    pk_pool_free(rt, e->dptr, e->cap);
+    pk_pool_free(rt->pool, e->dptr, e->cap);
     e->dptr = 0;
     e->occupied = 0;
   }
@@ -524,7 +570,7 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
       uint64_t addr = (uint64_t)(uintptr_t)ctx;
       pk_tbl_entry* e = pk_tbl_find(rt, addr);
       if (e && !e->pinned) {
-        pk_pool_free(rt, e->dptr, e->cap);
+        pk_pool_free(rt->pool, e->dptr, e->cap);
         e->dptr = 0;
         e->occupied = 2;
       }
@@ -556,7 +602,7 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
                 e->invalidated = 1;
                 hit_pinned_write = 1;
               } else {
-                pk_pool_free(rt, e->dptr, e->cap);
+                pk_pool_free(rt->pool, e->dptr, e->cap);
                 e->dptr = 0;
                 e->occupied = 2;
               }
@@ -652,7 +698,7 @@ PK_EXPORT int32_t pk_cu_dispatch(int32_t kernel, void* ctx, int64_t total, int64
       }
       pk_tbl_entry* ne = pk_tbl_insert(rt, addrs[i]);
       if (!ne) {
-        pk_pool_free(rt, dptr, cap);
+        pk_pool_free(rt->pool, dptr, cap);
         return pk_cu_fallback_with_flush(rt, kernel, ctx, total, nchunks, 7, 0);
       }
       ne->dptr = dptr;
@@ -780,17 +826,18 @@ class _CBlockOwner:
   and returns it straight to the C freelist on garbage collection (only when
   freed on the owning thread and stream; otherwise frees via ``cuMemFree``)."""
 
-  __slots__ = ("_cap", "_dptr", "_free_fn", "_stream")
+  __slots__ = ("_cap", "_dptr", "_free_fn", "_ctx", "_generation")
 
-  def __init__(self, free_fn, dptr: int, cap: int, stream: int = 0) -> None:
+  def __init__(self, free_fn, dptr: int, cap: int, ctx, generation: int) -> None:
     self._free_fn = free_fn
     self._dptr = dptr
     self._cap = cap
-    self._stream = stream
+    self._ctx = ctx
+    self._generation = generation
 
   def __del__(self) -> None:
     try:
-      self._free_fn(self._dptr, self._cap, self._stream)
+      self._free_fn(self._dptr, self._cap, self._ctx, self._generation)
     except Exception:  # noqa: BLE001 - interpreter shutdown
       pass
 
@@ -800,7 +847,9 @@ class NativeCudaRuntime:
 
   def __init__(self, init_driver: bool = True) -> None:
     extra = ("-ldl", "-pthread") if sys.platform.startswith("linux") else ("-pthread",)
-    path = toolchain.compile_shared(CUDA_RT_SOURCE, extra_flags=extra, tag="cuda_rt", opt_level=2)
+    path = toolchain.compile_shared(
+      CUDA_RT_SOURCE, extra_flags=extra, tag="cuda_rt" if init_driver else "cuda_mock_rt", opt_level=2
+    )
     lib = toolchain.load(path)
     lib.pk_cu_init.restype = ctypes.c_int32
     lib.pk_cu_init.argtypes = []
@@ -811,7 +860,7 @@ class NativeCudaRuntime:
     lib.pk_cu_set_fallback.restype = None
     lib.pk_cu_set_fallback.argtypes = [ctypes.c_void_p]
     lib.pk_cu_pool_free_block.restype = None
-    lib.pk_cu_pool_free_block.argtypes = [ctypes.c_uint64, ctypes.c_int64, ctypes.c_void_p]
+    lib.pk_cu_pool_free_block.argtypes = [ctypes.c_uint64, ctypes.c_int64, ctypes.c_void_p, ctypes.c_uint64]
     lib.pk_cu_begin_call.restype = None
     lib.pk_cu_begin_call.argtypes = [
       ctypes.c_void_p,
@@ -842,6 +891,8 @@ class NativeCudaRuntime:
       ctypes.POINTER(ctypes.c_uint64),
       ctypes.POINTER(ctypes.c_int64),
       ctypes.POINTER(ctypes.c_int32),
+      ctypes.POINTER(ctypes.c_void_p),
+      ctypes.POINTER(ctypes.c_uint64),
     ]
     lib.pk_cu_end_call.restype = None
     lib.pk_cu_end_call.argtypes = [
@@ -855,8 +906,8 @@ class NativeCudaRuntime:
     self.lib = lib
     self.dispatch_address = ctypes.cast(lib.pk_cu_dispatch, ctypes.c_void_p).value or 0
 
-  def make_owner(self, dptr: int, cap: int, stream: int = 0) -> _CBlockOwner:
-    return _CBlockOwner(self.lib.pk_cu_pool_free_block, dptr, cap, stream)
+  def make_owner(self, dptr: int, cap: int, ctx, generation: int) -> _CBlockOwner:
+    return _CBlockOwner(self.lib.pk_cu_pool_free_block, dptr, cap, ctx, generation)
 
 
 def try_load_native_cuda_rt() -> NativeCudaRuntime | None:

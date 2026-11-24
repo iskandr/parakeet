@@ -425,12 +425,16 @@ def _run_gpu_laws34(backend: str):
 @pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
 def test_cuda_simulator_laws34(tmp_path):
   script = tmp_path / "run_laws34_sim.py"
-  script.write_text('from tests.test_algebraic_mla_ssd import _run_gpu_laws34\n_run_gpu_laws34("cuda")\nprint("laws34-sim-ok")\n')
+  script.write_text(
+    'from tests.test_algebraic_mla_ssd import _run_gpu_laws34\n_run_gpu_laws34("cuda")\nprint("laws34-sim-ok")\n'
+  )
   env = dict(os.environ, PARAKEET_CUDA_SIMULATE="1")
   proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env, check=False)
   assert proc.returncode == 0 and "laws34-sim-ok" in proc.stdout, proc.stdout + proc.stderr
 
 
-@pytest.mark.skipif(parakeet.available_backends().get("metal") != "ok", reason="Metal GPU unavailable")
-def test_metal_gpu_laws34():
-  _run_gpu_laws34("metal")
+@pytest.mark.parametrize("backend", ["metal", "cuda"])
+def test_gpu_laws34(backend):
+  if parakeet.available_backends().get(backend) != "ok":
+    pytest.skip(f"{backend} unavailable")
+  _run_gpu_laws34(backend)

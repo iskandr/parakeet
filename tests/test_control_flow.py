@@ -417,3 +417,30 @@ def test_walrus_and_delete():
 
   check(f, np.arange(5))
   check(f, np.arange(1))
+
+
+def test_conditional_expression_preserves_effects_with_equal_results():
+  def touch(a):
+    a[0] = 77
+    return 1
+
+  @jit
+  def f(flag, a):
+    return touch(a) if flag else 1
+
+  for flag in (True, False):
+    a = np.array([0])
+    assert f(flag, a) == 1
+    assert a[0] == (77 if flag else 0)
+
+
+def test_conditional_walrus_bindings_follow_the_taken_path():
+  def f(flag, n):
+    x = n
+    a = (x := n + 1) if flag else x
+    b = flag and (x := n + 2) > 0
+    c = flag or (x := n + 3) > 0
+    return a, b, c, x
+
+  for flag in (True, False):
+    check(f, flag, 4)

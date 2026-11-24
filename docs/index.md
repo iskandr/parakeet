@@ -22,6 +22,7 @@ def allpairs_dist(X, Y):
   """All-pairs squared Euclidean distances between rows of X and Y.
   Compiles to a cache-tiled, 2x4 jammed parallel loop with no intermediates
   (1000x1000 float64: ~26 ms on an M1 Max)."""
+
   def dist(x, y):
     return np.sum((x - y) ** 2)
 
@@ -57,16 +58,16 @@ dloss = pk.grad(lambda w, x: np.mean(np.tanh(x @ w) ** 2))  # differentiates arr
   to train small transformers and convnets.
 - **Fails loudly, nothing to set up.** Unsupported code is rejected at compile
   time with your source caret; bad indices and shapes raise ordinary Python
-  exceptions. `pip install parakeet` plus a C compiler.
+  exceptions. `pip install "parakeet==1.0.0a1"` plus a C compiler.
 
 </div>
 
 ## Install
 
 ```bash
-pip install parakeet                 # Python 3.11+, NumPy 2, a C compiler
-pip install "parakeet[metal]"        # + Apple GPU backend
-pip install "parakeet[cuda12]"       # + NVIDIA GPU backend (CUDA 12)
+pip install "parakeet==1.0.0a1"                 # Python 3.11+, NumPy 2, a C compiler
+pip install "parakeet[metal]==1.0.0a1"        # + Apple GPU backend
+pip install "parakeet[cuda12]==1.0.0a1"       # + NVIDIA GPU backend (CUDA 12)
 ```
 
 Continue with [Getting started](quickstart.md), or read

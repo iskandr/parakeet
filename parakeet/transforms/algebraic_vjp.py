@@ -332,7 +332,9 @@ def _bwd_norm(tape, el, node, g: ArrayVal) -> None:
   gx_mean = el.apply_ufunc(UF["mul"], [reduce_plain(el, "add", gx, Const(ax, I), Const(0, elt), "sum", True), inv_n])
   if is_layernorm:
     g_mean = el.apply_ufunc(UF["mul"], [reduce_plain(el, "add", g, Const(ax, I), Const(0, elt), "sum", True), inv_n])
-    inner = el.apply_ufunc(UF["sub"], [el.apply_ufunc(UF["sub"], [g, g_mean]), el.apply_ufunc(UF["mul"], [x_hat, gx_mean])])
+    inner = el.apply_ufunc(
+      UF["sub"], [el.apply_ufunc(UF["sub"], [g, g_mean]), el.apply_ufunc(UF["mul"], [x_hat, gx_mean])]
+    )
   else:
     inner = el.apply_ufunc(UF["sub"], [g, el.apply_ufunc(UF["mul"], [x_hat, gx_mean])])
   dx = el.apply_ufunc(UF["mul"], [inv_std, inner])
@@ -384,7 +386,9 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   # 1. O(B*H*T) pre-pass: lse = m + log(l), D = sum(dO * O, axis=-1)
   lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_out, el.apply_ufunc(UF["log"], [l_out])]))
   d_arr = el.as_concrete(
-    reduce_plain(el, "add", el.apply_ufunc(UF["mul"], [g, o_out]), Const(o_out.rank - 1, I), Const(0, elt), "sum", False)
+    reduce_plain(
+      el, "add", el.apply_ufunc(UF["mul"], [g, o_out]), Const(o_out.rank - 1, I), Const(0, elt), "sum", False
+    )
   )
 
   # Allocate dense zero-initialized gradients dQ, dK, dV
@@ -470,7 +474,11 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   cond_v: Var | None = None
   if mask_fill is not None and (mask_buf is not None or mask_cond is not None):
     c_cl = Cloner({i_m.uid: i_lp, j_m.uid: j_lp})
-    cond_e: Expr = Load(mask_buf, c_cl.expr(mask_index)) if (mask_buf is not None and mask_index is not None) else c_cl.expr(mask_cond)  # type: ignore[arg-type]
+    cond_e: Expr = (
+      Load(mask_buf, c_cl.expr(mask_index))
+      if (mask_buf is not None and mask_index is not None)
+      else c_cl.expr(mask_cond)
+    )  # type: ignore[arg-type]
     cond_v = Var("fbm", Bool)
     i_blk.append(Assign(cond_v, cond_e))
     s_eff: Expr = ops.select(cond_v, s_scaled, cast(mask_fill, elt))
@@ -510,7 +518,9 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     dv_blk: list[Stmt] = []
     dov2 = _inline_stage(do_st, (i_lp, dv_d), dv_blk)
     dv_pos = iadd(dv_base, dv_d)
-    dv_blk.append(Store(dv_arr.buf, dv_pos, ops.prim("add", (Load(dv_arr.buf, dv_pos), ops.prim("mul", (p_ij, dov2), elt)), elt)))
+    dv_blk.append(
+      Store(dv_arr.buf, dv_pos, ops.prim("add", (Load(dv_arr.buf, dv_pos), ops.prim("mul", (p_ij, dov2), elt)), elt))
+    )
     i_blk.append(ForRange(dv_d, ZERO, d_dim, ONE, dv_blk, Scope("loop"), simd=True))
 
   # dK[j, k] += ds_ij * Q[i, k]  and  dQ[i, k] += ds_ij * K[j, k]
@@ -524,11 +534,15 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     if active_k:
       qv2 = _inline_stage(q_st, (i_lp, dk_k), dk_blk)
       dk_pos = iadd(dk_base, dk_k)
-      dk_blk.append(Store(dk_arr.buf, dk_pos, ops.prim("add", (Load(dk_arr.buf, dk_pos), ops.prim("mul", (ds_ij, qv2), elt)), elt)))
+      dk_blk.append(
+        Store(dk_arr.buf, dk_pos, ops.prim("add", (Load(dk_arr.buf, dk_pos), ops.prim("mul", (ds_ij, qv2), elt)), elt))
+      )
     if active_q:
       kv2 = _inline_stage(k_st, (j_lp, dk_k), dk_blk)
       dq_pos = iadd(dq_base, dk_k)
-      dk_blk.append(Store(dq_arr.buf, dq_pos, ops.prim("add", (Load(dq_arr.buf, dq_pos), ops.prim("mul", (ds_ij, kv2), elt)), elt)))
+      dk_blk.append(
+        Store(dq_arr.buf, dq_pos, ops.prim("add", (Load(dq_arr.buf, dq_pos), ops.prim("mul", (ds_ij, kv2), elt)), elt))
+      )
     i_blk.append(ForRange(dk_k, ZERO, k_dim, ONE, dk_blk, Scope("loop"), simd=True))
 
   j_blk.append(ForRange(i_lp, ZERO, m_dim, ONE, i_blk, Scope("loop")))
@@ -677,11 +691,15 @@ def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
   if active_w:
     hv2 = _inline_stage(h_st, (i_lp, k2), k2_blk)
     dw_pos = iadd(imul(k2, n_dim), v_lp)
-    k2_blk.append(Store(dw_arr.buf, dw_pos, ops.prim("add", (Load(dw_arr.buf, dw_pos), ops.prim("mul", (dlog, hv2), elt)), elt)))
+    k2_blk.append(
+      Store(dw_arr.buf, dw_pos, ops.prim("add", (Load(dw_arr.buf, dw_pos), ops.prim("mul", (dlog, hv2), elt)), elt))
+    )
   if active_h:
     wv2 = _inline_stage(w_st, (v_lp, k2), k2_blk)
     dh_pos = iadd(imul(i_lp, k_dim), k2)
-    k2_blk.append(Store(dh_arr.buf, dh_pos, ops.prim("add", (Load(dh_arr.buf, dh_pos), ops.prim("mul", (dlog, wv2), elt)), elt)))
+    k2_blk.append(
+      Store(dh_arr.buf, dh_pos, ops.prim("add", (Load(dh_arr.buf, dh_pos), ops.prim("mul", (dlog, wv2), elt)), elt))
+    )
   i_blk.append(ForRange(k2, ZERO, k_dim, ONE, k2_blk, Scope("loop"), simd=True))
 
   v_blk.append(ForRange(i_lp, ZERO, m_dim, ONE, i_blk, Scope("loop")))
@@ -819,7 +837,12 @@ def optimize_tape(tape, el, out) -> None:
       op_m, _, _ = _probe_ew(el, nodes[cur_idx])
       if op_m == "select" and len(nodes[cur_idx].inputs) == 3:
         m_cond, m_then, m_else = nodes[cur_idx].inputs
-        if isinstance(m_cond, ArrayVal) and m_cond.elt is Bool and isinstance(m_else, Expr) and not isinstance(m_else, ArrayVal):
+        if (
+          isinstance(m_cond, ArrayVal)
+          and m_cond.elt is Bool
+          and isinstance(m_else, Expr)
+          and not isinstance(m_else, ArrayVal)
+        ):
           mask_arr = m_cond
           mask_fill = m_else
           extra_idxs.append(cur_idx)
@@ -1033,7 +1056,11 @@ def optimize_tape(tape, el, out) -> None:
     op_ae, _, _ = _probe_ew(el, nodes[add_eps_idx])
     if op_ae != "add" or len(nodes[add_eps_idx].inputs) != 2:
       continue
-    var_val = nodes[add_eps_idx].inputs[0] if isinstance(nodes[add_eps_idx].inputs[0], ArrayVal) else nodes[add_eps_idx].inputs[1]
+    var_val = (
+      nodes[add_eps_idx].inputs[0]
+      if isinstance(nodes[add_eps_idx].inputs[0], ArrayVal)
+      else nodes[add_eps_idx].inputs[1]
+    )
     var_idx = prod_by_id.get(id(var_val))
     if var_idx is None:
       continue
@@ -1055,7 +1082,9 @@ def optimize_tape(tape, el, out) -> None:
     op_p2, _, _ = _probe_ew(el, nodes[sq_idx])
     if op_p2 == "pow2":
       base_val = nodes[sq_idx].inputs[0]
-    elif op_p2 == "mul" and len(nodes[sq_idx].inputs) == 2 and _same_val(nodes[sq_idx].inputs[0], nodes[sq_idx].inputs[1]):
+    elif (
+      op_p2 == "mul" and len(nodes[sq_idx].inputs) == 2 and _same_val(nodes[sq_idx].inputs[0], nodes[sq_idx].inputs[1])
+    ):
       base_val = nodes[sq_idx].inputs[0]
     else:
       continue

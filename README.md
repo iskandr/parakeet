@@ -51,9 +51,11 @@ assert np.allclose(comprehension(x), y)
 Install
 ====
 
-    pip install parakeet                 # CPU backends
-    pip install "parakeet[metal]"        # + Apple GPUs
-    pip install "parakeet[cuda12]"       # + NVIDIA GPUs
+From a checkout of the rewrite, run `python -m pip install .` (or `".[metal]"` / `".[cuda12]"` in place of `.`). Once the alpha is published, install the same version from PyPI with
+
+    pip install "parakeet==1.0.0a1"                 # CPU backends
+    pip install "parakeet[metal]==1.0.0a1"        # + Apple GPUs
+    pip install "parakeet[cuda12]==1.0.0a1"       # + NVIDIA GPUs
 
 
 Dependencies

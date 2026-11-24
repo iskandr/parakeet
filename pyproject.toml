@@ -49,7 +49,7 @@ path = "parakeet/_version.py"
 packages = ["parakeet"]
 
 [tool.hatch.build.targets.sdist]
-include = ["parakeet", "tests", "examples", "benchmarks", "docs", "README.md", "CHANGELOG.md", "LICENSE", "mkdocs.yml"]
+include = ["parakeet", "tests", "examples", "benchmarks", "tools", "docs", "README.md", "CHANGELOG.md", "LICENSE", "mkdocs.yml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

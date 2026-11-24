@@ -186,9 +186,7 @@ def compile_shared(
 ) -> Path:
   """Compile ``source`` into a shared library; returns the (cached) path."""
   tc = (
-    get_toolchain()
-    if opt_level is None
-    else _toolchain(config.cc, opt_level, config.fast_math, tuple(config.cflags))
+    get_toolchain() if opt_level is None else _toolchain(config.cc, opt_level, config.fast_math, tuple(config.cflags))
   )
   digest = hashlib.sha256(
     "\0".join([source, tc.version, " ".join(tc.cc), " ".join(tc.flags), " ".join(extra_flags)]).encode()

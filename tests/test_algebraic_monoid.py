@@ -210,7 +210,11 @@ def test_law1_flash_attention_causal_and_sliding_window_cpu():
   assert plans_w == ["flash_monoid"], plans_w
   qi = np.arange(24)[:, None]
   kj = np.arange(24)[None, :]
-  sw = np.where((kj <= qi) & (qi - kj <= 8), (q.astype(np.float64) @ k.astype(np.float64).transpose(0, 1, 3, 2)) / np.sqrt(12.0), -1e9)
+  sw = np.where(
+    (kj <= qi) & (qi - kj <= 8),
+    (q.astype(np.float64) @ k.astype(np.float64).transpose(0, 1, 3, 2)) / np.sqrt(12.0),
+    -1e9,
+  )
   ew = np.exp(sw - sw.max(axis=3, keepdims=True))
   want_w = (ew / ew.sum(axis=3, keepdims=True)) @ v.astype(np.float64)
   np.testing.assert_allclose(got_w, want_w, rtol=1e-4, atol=1e-4)
@@ -365,7 +369,9 @@ def test_law2_flash_attention_and_cce_and_norm_vjps_cpu():
       y = xx / np.sqrt(var + 1e-5) * g1
       return float(np.sum(y * y))
 
-    np.testing.assert_allclose(dx_ln.ravel()[idx_flat], (f_ln(x64 + delta) - f_ln(x64 - delta)) / (2 * eps), rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(
+      dx_ln.ravel()[idx_flat], (f_ln(x64 + delta) - f_ln(x64 - delta)) / (2 * eps), rtol=1e-3, atol=1e-3
+    )
     np.testing.assert_allclose(
       dx_rms.ravel()[idx_flat], (f_rms(x64 + delta) - f_rms(x64 - delta)) / (2 * eps), rtol=1e-3, atol=1e-3
     )
@@ -442,8 +448,10 @@ print('monoidal-cuda-sim-ok')
   assert proc.returncode == 0 and "monoidal-cuda-sim-ok" in proc.stdout, proc.stdout + proc.stderr
 
 
-@pytest.mark.skipif(parakeet.available_backends().get("metal") != "ok", reason="Metal GPU unavailable")
-def test_metal_monoidal_flash_decode_cce_and_rbf():
+@pytest.mark.parametrize("backend", ["metal", "cuda"])
+def test_gpu_flash_decode_and_cce_gradients(backend):
+  if parakeet.available_backends().get(backend) != "ok":
+    pytest.skip(f"{backend} unavailable")
   rng = np.random.default_rng(22)
   q = rng.standard_normal((2, 2, 35, 20)).astype(np.float32)
   k = rng.standard_normal((2, 2, 35, 20)).astype(np.float32)
@@ -457,7 +465,7 @@ def test_metal_monoidal_flash_decode_cce_and_rbf():
   w = rng.standard_normal((20, 40)).astype(np.float32)
   tgt = rng.integers(0, 40, size=(36,), dtype=np.int64)
 
-  with parakeet.options(backend="metal", blas=False, device_threshold=1, device_fallback="error", verify=True):
+  with parakeet.options(backend=backend, blas=False, device_threshold=1, device_fallback="error", verify=True):
     av, (dq, dk, dv) = value_and_grad(_attn_loss, argnum=(0, 1, 2))(q, k, v, c)
     dec_got = jit(_attn_fwd)(qd, kd, vd, cd)
     cv, (dh, dw) = value_and_grad(_cce_fwd, argnum=(0, 1))(h, w, tgt)
@@ -478,7 +486,9 @@ def test_metal_monoidal_flash_decode_cce_and_rbf():
 
   sd = (qd.astype(np.float64) @ kd.astype(np.float64).transpose(0, 1, 3, 2)) * sc
   ed = np.exp(sd - sd.max(axis=3, keepdims=True))
-  np.testing.assert_allclose(dec_got, (ed / ed.sum(axis=3, keepdims=True)) @ vd.astype(np.float64), rtol=1e-4, atol=1e-4)
+  np.testing.assert_allclose(
+    dec_got, (ed / ed.sum(axis=3, keepdims=True)) @ vd.astype(np.float64), rtol=1e-4, atol=1e-4
+  )
 
   h64, w64 = h.astype(np.float64), w.astype(np.float64)
   z = h64 @ w64
@@ -545,4 +555,3 @@ print("finite-fill-ok")
   env = dict(os.environ, PARAKEET_CUDA_SIMULATE="1")
   proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env, check=False)
   assert proc.returncode == 0 and "finite-fill-ok" in proc.stdout, proc.stdout + proc.stderr
-

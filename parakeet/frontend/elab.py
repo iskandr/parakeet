@@ -609,7 +609,7 @@ class Elaborator(ArrayMixin):
       return a == b
     if record := record_type(a):
       return record == record_type(b) and Elaborator.static_equal(record.values(a), record.values(b))
-    if isinstance(a, tuple) and isinstance(b, tuple):
+    if isinstance(a, tuple) and type(a) is type(b):
       return len(a) == len(b) and all(Elaborator.static_equal(x, y) for x, y in zip(a, b))
     return False
 
@@ -1420,7 +1420,7 @@ class Elaborator(ArrayMixin):
       if record != record_type(b):
         return Undefined(name, "record types differ between branches")
       return record.build(self._choose(cond, record.values(a), record.values(b), name))
-    if isinstance(a, tuple) and isinstance(b, tuple) and len(a) == len(b):
+    if isinstance(a, tuple) and type(a) is type(b) and len(a) == len(b):
       return tuple(self._choose(cond, x, y, name) for x, y in zip(a, b))
     if isinstance(a, Expr) and isinstance(b, Expr):
       t = join(a.type, b.type)
@@ -2228,12 +2228,16 @@ class Elaborator(ArrayMixin):
       return eval_right() if take_right else left
     cond = self.tmp(cond, "cond")
     blk: list = []
+    skipped: list = []
+    before = self.frame.env
+    self.frame.env = dict(before)
     with self.in_block(blk):
       right = eval_right()
       end_blk = self.block
+    self.frame.env = self.merge_envs(self.frame.env, end_blk, before, skipped, self.block)
     lt, rt = self.vtype(left), self.vtype(right)
     both_bool = lt[0] == "s" and rt[0] == "s" and lt[1].kind == "b" and rt[1].kind == "b"
-    if not blk and both_bool:
+    if not blk and not skipped and both_bool:
       out_t = WeakBool if (lt[1].weak and rt[1].weak) else Bool
       return ops.prim("and" if is_and else "or", (cond, right), out_t)
     vt = self.join_vtypes(lt, rt)
@@ -2249,7 +2253,7 @@ class Elaborator(ArrayMixin):
     self.block = end_blk
     self.assign_target(target, right)
     self.block = saved
-    self.emit(If(cond, blk, []) if is_and else If(cond, [], blk))
+    self.emit(If(cond, blk, skipped) if is_and else If(cond, skipped, blk))
     return target
 
   def eval_IfExp(self, node: ast.IfExp):
@@ -2259,17 +2263,24 @@ class Elaborator(ArrayMixin):
     cond = self.tmp(cond, "cond")
     a_blk: list = []
     b_blk: list = []
+    base_env = self.frame.env
+    self.frame.env = dict(base_env)
     with self.in_block(a_blk):
       a = self.eval(node.body)
       a_end = self.block
+    a_env = self.frame.env
+    self.frame.env = dict(base_env)
     with self.in_block(b_blk):
       b = self.eval(node.orelse)
       b_end = self.block
+    self.frame.env = self.merge_envs(a_env, a_end, self.frame.env, b_end, self.block)
     ta, tb = self.vtype(a), self.vtype(b)
     if not a_blk and not b_blk and ta[0] == "s" and tb[0] == "s":
       t = join(ta[1], tb[1])
       return ops.select(cond, cast(a, t), cast(b, t))
     if self.static_equal(a, b):
+      if a_blk or b_blk:
+        self.emit(If(cond, a_blk, b_blk))
       return a
     merged = self.merge_values("ifexp", a, a_end, b, b_end)
     if isinstance(merged, Undefined):

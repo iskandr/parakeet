@@ -58,3 +58,17 @@ def test_record_diagnostic_distinguishes_schemas():
 
   with pytest.raises(TypeInferenceError, match=r"incompatible types: (Point.* and Weight|Weight.* and Point)"):
     pick(True, Point(0.0), Weight(0.0))
+
+
+def test_conditional_requires_same_record_schema_in_either_order():
+  @pk.jit
+  def plain_first(flag, x):
+    return (x, x) if flag else Point(x, x)
+
+  @pk.jit
+  def record_first(flag, x):
+    return Point(x, x) if flag else (x, x)
+
+  for f in (plain_first, record_first):
+    with pytest.raises(TypeInferenceError, match="compatible types"):
+      f(False, 3.0)

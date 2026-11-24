@@ -10,8 +10,8 @@ parallel loops inside it are executed.
 | `"threads"` | Parakeet's persistent thread pool | POSIX; fork-safe; no extra runtime library |
 | `"gcd"` | Grand Central Dispatch | macOS |
 | `"openmp"` | the compiler's OpenMP runtime | needs `libgomp`/`libomp` (macOS: `brew install libomp`) |
-| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]"` |
-| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]"` (CuPy) |
+| `"metal"` / `"mps"` | the Apple GPU | `pip install "parakeet[metal]==1.0.0a1"` |
+| `"cuda"` | an NVIDIA GPU | `pip install "parakeet[cuda12]==1.0.0a1"` (CuPy) |
 | `"python"` | — | runs the original function uncompiled |
 
 ```python

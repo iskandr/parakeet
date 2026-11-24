@@ -75,7 +75,9 @@ def test_dsl_show_rewrite_reports_all_algebraic_laws():
   r_hist = dsl.show_rewrite(_dsl_gbdt_hist, bins, grads, 16)
   assert r_hist.after_scatters >= 1
   assert any("IndexScatter" in x for x in r_hist.laws_triggered)
-  np.testing.assert_allclose(_dsl_gbdt_hist(bins, grads, 16), np.bincount(bins, weights=grads, minlength=16), rtol=1e-5, atol=1e-5)
+  np.testing.assert_allclose(
+    _dsl_gbdt_hist(bins, grads, 16), np.bincount(bins, weights=grads, minlength=16), rtol=1e-5, atol=1e-5
+  )
 
   assert parakeet.dsl is dsl
 
@@ -83,6 +85,7 @@ def test_dsl_show_rewrite_reports_all_algebraic_laws():
 def test_dsl_show_rewrite_reliable_on_warm_cache_and_grad():
   """Calling show_rewrite repeatedly, after ordinary execution, and on grad()
   wrappers must always return non-empty before/after IR without executing."""
+
   def sq_sum(x):
     return np.sum(x * x)
 
@@ -113,4 +116,3 @@ def test_dsl_show_rewrite_reliable_on_warm_cache_and_grad():
   wuv = rng.standard_normal((16, 32)).astype(np.float32)
   r_mla = dsl.show_rewrite(_dsl_mla, q, c_kv, wuk, wuv)
   assert any("cost-guarded" in law for law in r_mla.laws_triggered), r_mla.laws_triggered
-

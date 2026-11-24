@@ -92,7 +92,7 @@ same tiled computation:
 ```python
 @pk.jit
 def nearest(x, y):
-    return np.argmin(np.sum((x[:, None, :] - y[None, :, :]) ** np.float32(2), axis=2), axis=1)
+  return np.argmin(np.sum((x[:, None, :] - y[None, :, :]) ** np.float32(2), axis=2), axis=1)
 ```
 
 The compiler evaluates a bounded rectangle of scores, folds each row, and

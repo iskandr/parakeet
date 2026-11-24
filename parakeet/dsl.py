@@ -99,7 +99,12 @@ def _count_ops(ir_fn: ir.Function) -> tuple[int, int, int, int]:
   return maps, tiles, scatters, carries
 
 
-def _detect_laws(after_reassoc: ir.Function | None, after_monoid: ir.Function | None, after_scan: ir.Function | None, after_tiling: ir.Function | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _detect_laws(
+  after_reassoc: ir.Function | None,
+  after_monoid: ir.Function | None,
+  after_scan: ir.Function | None,
+  after_tiling: ir.Function | None,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
   laws: list[str] = []
   plans: list[str] = []
 
