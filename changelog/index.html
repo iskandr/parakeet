@@ -1,0 +1,1479 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Runtime compiler for numerical Python - fused, parallel native code for CPUs and GPUs">
+      
+      
+      
+        <link rel="canonical" href="https://rubinsteyn.com/parakeet/changelog/">
+      
+      
+        <link rel="prev" href="../migrating/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Changelog - Parakeet</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+3:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Sans 3";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#changelog" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Parakeet" class="md-header__button md-logo" aria-label="Parakeet" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Parakeet
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Changelog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/iskandr/parakeet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    iskandr/parakeet
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../quickstart/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../gallery/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Gallery
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../release-benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../philosophy/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../supported/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Parakeet" class="md-nav__button md-logo" aria-label="Parakeet" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Parakeet
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/iskandr/parakeet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    iskandr/parakeet
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core ideas and boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gradients
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws & frontier kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rewrites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules and optimizations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../supported/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported functions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 0.x
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#100-november-24-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.0.0 (November 24, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.0.0 (November 24, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#algebraic-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Algebraic operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Highlights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#100-november-24-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.0.0 (November 24, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.0.0 (November 24, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#algebraic-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Algebraic operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Highlights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="100-november-24-2026">1.0.0 (November 24, 2026)<a class="headerlink" href="#100-november-24-2026" title="Permanent link">&para;</a></h2>
+<p>A ground-up rewrite for modern Python.  The <code>@jit</code> decorator, the adverbs
+(<code>map</code>, <code>reduce</code>, <code>scan</code>, <code>allpairs</code>, <code>imap</code>, ...) and the overall idea are
+unchanged; everything underneath is new.</p>
+<h3 id="algebraic-operators">Algebraic operators<a class="headerlink" href="#algebraic-operators" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The same CPU tile schedule serves exact nearest-neighbor queries written as
+  broadcasting NumPy or nested parallel maps. It merges a distance and index
+  per query and preserves the first index on ties.</li>
+<li>Two weighted histograms over shared bin IDs can fuse into a single traversal.
+  Structured folds accept tuples and named records with a user-defined merge.</li>
+<li>Algebraic rewrites cover online normalized sums, their gradients, reassociation
+  of contractions, and chunked affine scans. The rewrite inspector shows which
+  passes fired for a given function and input.</li>
+<li>The <a href="https://rubinsteyn.com/parakeet/gallery/">gallery</a> includes runnable
+  examples. The <a href="https://rubinsteyn.com/parakeet/release-benchmarks/">release benchmarks</a>
+  compare five workloads with general-purpose and specialist implementations on
+  a four-vCPU worker and an NVIDIA A10.</li>
+</ul>
+<h3 id="highlights">Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>grad</code> and <code>value_and_grad</code>:</strong> reverse-mode differentiation as an adverb.
+  Element-wise operators, reductions, matrix products, views, <code>map</code> and
+  <code>allpairs</code> with your own functions all have derivative rules; loops of known
+  length are unrolled; anything without a rule raises instead of returning a
+  wrong gradient. <code>examples/nanogpt.py</code> and <code>examples/convnet.py</code> train with it.</li>
+<li><strong>More of <code>grad</code>:</strong> <code>cumsum</code>, <code>sort</code>, <code>einsum</code>, stacks of matrices, folds
+  with any function, and <code>if</code> statements on run-time conditions (both branches
+  run, results are selected). The derivative of a <code>map</code> runs in parallel.</li>
+<li><strong>A middle end:</strong> elaboration now produces operator statements (<code>IndexMap</code>,
+  <code>IndexReduce</code>, <code>IndexScan</code>, <code>IndexFilter</code>, printed by <code>spec.operators</code>) and a pipeline of passes rewrites
+  them before they become loops. Tiling is one such pass, a pattern match on
+  the IR instead of a trial elaboration; <strong>vertical fusion</strong> (<code>Map→Map</code>
+  including matmul epilogues, <code>Scan→Map</code> into <code>emit</code>, <code>Map→Filter</code>,
+  <code>Map→Reduce</code>), <strong>filter fusion</strong> (<code>Filter→Filter</code> and <code>Filter→Reduce</code>:
+  <code>np.sum(x[x &gt; 0])</code> is one loop and allocates nothing), <strong>sibling fusion</strong>
+  (<code>x.min(), x.max()</code> and <code>np.sin(x), np.cos(x)</code> each share one loop),
+  <strong>reduction interchange</strong> (<code>np.sum(X, axis=0)</code> becomes L1-tiled contiguous
+  SIMD loops), and dead-operator elimination all run at this level;
+  <code>find_broken_transform</code> bisects the pass list; <code>config.skip_transforms</code>
+  switches passes off.</li>
+<li><strong>General operators:</strong> <code>reduce</code>, <code>scan</code> and <code>filter</code> take several arrays
+  with <code>map=</code> (and <code>emit=</code>); <code>np.einsum</code>; <code>@</code> on stacks; reductions over
+  several axes in one pass; tiling for maps of any rank.</li>
+<li><strong>Parallel primitives:</strong> prefix scans (<code>cumsum</code>), filters (<code>x[mask]</code>,
+  <code>nonzero</code>) and <code>argmin</code>/<code>argmax</code> run in parallel, on CPUs and GPUs.</li>
+<li><strong>GPU:</strong> arrays stay on the device between the loops of one call; a loop is
+  sent to the device by the work in it, not its element count.</li>
+<li><strong>BLAS:</strong> float matrix products call the BLAS NumPy uses.</li>
+<li><strong>Tiling:</strong> two-dimensional maps of reductions (<code>@</code>, <code>allpairs</code> distances, ...)
+  run a cache-sized tile at a time with their reductions jammed 2×4. A
+  1024×1024 matrix product is 2× faster on one core and 3× on all of them.</li>
+<li><code>np.sort</code> and <code>np.argsort</code> take <code>axis</code> and sort every lane in parallel
+  (N-d input used to be flattened without saying so).</li>
+<li>The dimensions of an array argument can be compile-time constants when the
+  code needs them to be (<code>range(w.shape[0])</code> in a loop that must be unrolled).</li>
+<li><code>parakeet.macro</code> and <code>parakeet.find_broken_transform</code> are back, and the code
+  is laid out in <code>frontend/</code>, <code>syntax/</code>, <code>transforms/</code> and <code>lib/</code> again.</li>
+<li>Faster compiles for large functions: identical loop bodies are compiled once.</li>
+<li><strong>Checked on real NVIDIA hardware.</strong> The whole suite passes with every
+  parallel loop forced onto a Tesla T4 (<code>tools/colab_job.py</code>, run on demand
+  with <code>runplz colab</code>; not part of CI).</li>
+<li><strong>Reads like Parakeet again:</strong> two-space indentation, <code>parakeet.prims</code> and
+  <code>parakeet.ndtypes</code>, and the 0.x helpers <code>typed_repr</code>, <code>specialize</code>,
+  <code>run_python_fn</code>, <code>openmp_available</code>, <code>rank</code>/<code>size</code>/<code>shape</code>, plus the old
+  <code>config.opt_fusion</code> / <code>config.print_*</code> option names.</li>
+<li>
+<p>Fixed: two arguments of one GPU kernel that view the same memory now share a
+  device buffer (previously one of them could read a truncated copy).</p>
+</li>
+<li>
+<p><strong>Python 3.11+ and NumPy 2</strong>, no dependencies besides NumPy and a C compiler
+  (the <code>dsltools</code>, <code>appdirs</code>, <code>llvmpy</code> and PyCUDA dependencies are gone).</p>
+</li>
+<li><strong>New frontend.</strong> Functions are elaborated directly into a typed loop IR:
+  calls are inlined, closures/tuples/slices are resolved at compile time, and
+  array expressions are fused into their consumers.</li>
+<li><strong>Backends:</strong> sequential C; multi-core through a built-in thread pool, OpenMP
+  or Grand Central Dispatch; <strong>Apple GPUs through Metal</strong>; <strong>NVIDIA GPUs through
+  CUDA</strong> (CuPy/NVRTC, no <code>nvcc</code> needed).  GPU backends fall back to the CPU per
+  loop, with a warning that says why.</li>
+<li><strong>NumPy-exact typing</strong> (NEP 50): result dtypes match NumPy, including the
+  treatment of Python scalars.</li>
+<li><strong>Safety:</strong> bounds checks, shape checks, division and domain checks raise the
+  same exceptions NumPy/Python would; compile errors carry the source location
+  and the chain of inlined calls; reference-counted temporaries are freed
+  eagerly (no more leaks in loops).</li>
+<li><strong>Much larger language subset:</strong> early <code>return</code>, <code>break</code>/<code>continue</code>, <code>while</code>,
+  keyword/default/<code>*args</code> arguments, walrus, <code>assert</code>/<code>raise</code>, boolean-mask and
+  integer-array indexing (reads and writes), in-place operators with NumPy
+  aliasing semantics, 0-d and empty arrays, all integer/float dtypes.</li>
+<li><strong>Much larger library:</strong> ~200 NumPy functions and methods, <code>np.random</code>
+  (a counter-based generator that is reproducible in parallel and on GPUs),
+  sorting, <code>math</code>, and most numeric builtins.</li>
+<li>Globals and closure variables are read at call time (no stale constants);
+  arguments that must be compile-time constants (such as <code>axis</code>) are
+  specialised on demand.</li>
+<li>Compiled modules are cached on disk and shared between processes.</li>
+<li><code>parakeet.config</code>, <code>parakeet.options(...)</code>, <code>PARAKEET_*</code> environment
+  variables, <code>f.specialize(...).ir/.source/.kernels</code>, <code>available_backends()</code>.</li>
+</ul>
+<h3 id="removed">Removed<a class="headerlink" href="#removed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Python 2 support, the LLVM backend, the <code>interp</code> backend (use
+  <code>backend="python"</code>), <code>typed_macro</code>/<code>staged_macro</code>, and most of the old
+  <code>config.opt_*</code> flags.</li>
+</ul>
+<hr />
+<h1 id="releases-before-the-rewrite">Releases before the rewrite<a class="headerlink" href="#releases-before-the-rewrite" title="Permanent link">&para;</a></h1>
+<h2 id="024-march-24th-2014">0.24 / March 24th, 2014<a class="headerlink" href="#024-march-24th-2014" title="Permanent link">&para;</a></h2>
+<ul>
+<li>cache compiled code by hash of generated C source</li>
+<li>tuple slicing</li>
+<li>fixed (or disabled) unreliable optimizations</li>
+<li>casting between array types using map over elements</li>
+</ul>
+<h3 id="023-november-21st-2013">0.23 / November 21st, 2013<a class="headerlink" href="#023-november-21st-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Generalized StrideSpecialization to ValueSpecialization </li>
+<li>Significantly decreased overhead of calling into Parakeet (though still ~500x slower than a normal Python call)</li>
+</ul>
+<h3 id="022-november-20th-2013">0.22 / November 20th, 2013<a class="headerlink" href="#022-november-20th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Changed NumPy calls to use newer API, cuts down on number of compile warnings</li>
+<li>If compilation fails, retry using distutils, may help some people on Windows</li>
+</ul>
+<h3 id="021-november-19th-2013">0.21 / November 19th, 2013<a class="headerlink" href="#021-november-19th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Got rid of testing dependency on SciPy</li>
+<li>Deleted unused and unfinished optimizations</li>
+<li>Small misc. bugs </li>
+</ul>
+<h3 id="020-november-19th-2013">0.20 / November 19th, 2013<a class="headerlink" href="#020-november-19th-2013" title="Permanent link">&para;</a></h3>
+<p>The last release added experimental CUDA support but the performance was terrible. This release includes lots of tweaks and optimizations necessary for getting beneficial speedups on the GPU. However, the default backend remains OpenMP since some program constructs will not work on the GPU and the nvcc compile times are unacceptably slow.</p>
+<ul>
+<li>Expanded and generalized fusion optimization</li>
+<li>Filled in missing methods from shape inference</li>
+<li>Using ShapeElimination on every function (repurposes the shape inference results as a symbolic execution optimization)</li>
+<li>Fixed lots of small bugs in other optimizations exposed by ShapeElimination</li>
+<li>Shaved off small amount of compile time by moving away from Node pseudo-ASTs to regular Python constructors</li>
+<li>Hackishly added int24 just as a sentinel for default values in reductions that need to cast up to int32 from bool, int8, int16.</li>
+<li>Eliminate redundant &amp; constant array operator arguments with SpecializeFnArgs</li>
+</ul>
+<h3 id="019-november-4th-2013">0.19 / November 4th, 2013<a class="headerlink" href="#019-november-4th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Added experimental CUDA backend (use by passing _backend='cuda' to functions wrapped by @jit)</li>
+</ul>
+<h3 id="018-october-30th-2013">0.18 / October 30th, 2013<a class="headerlink" href="#018-october-30th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Added OpenMP backend (runs most map-like computations across multiple threads)</li>
+<li>Stack-allocate representations for all structured types in C</li>
+<li>Disabled Flattening -- tricky transform needs careful audit</li>
+<li>Debugged and enabled CopyElimination</li>
+<li>Fixed negative step in slices </li>
+<li>Added RLock around AST translation to play nice with Python threads (thanks Russell Power)</li>
+<li>Fixed link argument order for building on cygwin in Windows (thanks Yves-Rémi Van Eycke)</li>
+</ul>
+<h3 id="017-october-9th-2013">0.17 / October 9th, 2013<a class="headerlink" href="#017-october-9th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Added support for binding multiple variables in a for loop (i.e. "for (x,(y,z)) in enumerate(zip(ys,zs)):")</li>
+<li>More array constructors support 'dtype' argument </li>
+<li>macros can now generate wrapper functions with keyword arguments </li>
+<li>lib_helpers._get_type can pull element types out of a wider range of values </li>
+<li>Added more unit tests from Python benchmarks </li>
+<li>Added option to manually specify compiler in c_backend.config.compiler_path</li>
+<li>Slightly better support for negative indexing but negative step sizes are still mostly broken </li>
+</ul>
+<h3 id="0162-october-1st-2013">0.16.2 / October 1st, 2013<a class="headerlink" href="#0162-october-1st-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Moved version info into submodule so setup.py can run without full dependencies (thanks rjpower). </li>
+<li>Fixed support for references to global arrays.</li>
+<li>Make C backend respect runtime changes to config flags. </li>
+<li>Got rid of unncessary linking against libpython. </li>
+</ul>
+<h3 id="0161-september-30th-2013">0.16.1 / September 30th, 2013<a class="headerlink" href="#0161-september-30th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Fixed bugs in C backend and a several optimizatons.</li>
+<li>Only print stderr if C backend fails to compile.  </li>
+</ul>
+<h3 id="016-september-27th-2013">0.16 / September 27th, 2013<a class="headerlink" href="#016-september-27th-2013" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Added flattening transformation which gets rid of all structures except scalars and pointers.</li>
+<li>Created new C backend which compiles with either gcc or clang.</li>
+<li>Disabled some of the more powerful optimizations (i.e. scalar replacement) which might introduce bugs. </li>
+<li>Revamped the optimization pipeline to avoid running duplicate transformations and allow for better logging. </li>
+<li>"Indexify" all adverbs by turning them into ParFor/IndexReduce/IndexScan. </li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

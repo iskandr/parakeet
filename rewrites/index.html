@@ -1,0 +1,1966 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Runtime compiler for numerical Python - fused, parallel native code for CPUs and GPUs">
+      
+      
+      
+        <link rel="canonical" href="https://rubinsteyn.com/parakeet/rewrites/">
+      
+      
+        <link rel="prev" href="../algebra/">
+      
+      
+        <link rel="next" href="../debugging/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
+    
+    
+      
+        <title>Rewrite rules and optimizations - Parakeet</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+3:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Sans 3";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rewrite-rules-and-optimizations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Parakeet" class="md-header__button md-logo" aria-label="Parakeet" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Parakeet
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Rewrite rules and optimizations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/iskandr/parakeet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    iskandr/parakeet
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../quickstart/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../gallery/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Gallery
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../release-benchmarks/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Benchmarks
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../philosophy/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../supported/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Parakeet" class="md-nav__button md-logo" aria-label="Parakeet" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Parakeet
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/iskandr/parakeet" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    iskandr/parakeet
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gallery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-benchmarks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core ideas and boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The compiled language
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends and GPUs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data-parallel operators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gradients
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algebra/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algebraic laws & frontier kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules and optimizations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rewrite rules and optimizations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fusion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fusion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vertical-a-producer-into-its-consumer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vertical: a producer into its consumer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nested-a-map-of-maps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested: a map of maps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#horizontal-two-consumers-of-one-array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Horizontal: two consumers of one array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-fusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter fusion
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reductions-and-scans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reductions and scans
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linear-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear algebra
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tiling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scalars-and-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scalars and shapes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parallelism-and-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parallelism and placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#differentiation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differentiation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-theses-have-that-this-does-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the theses have that this does not
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-has-that-the-theses-do-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this has that the theses do not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../debugging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and debugging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../supported/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported functions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from 0.x
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fusion
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fusion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vertical-a-producer-into-its-consumer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vertical: a producer into its consumer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nested-a-map-of-maps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested: a map of maps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#horizontal-two-consumers-of-one-array" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Horizontal: two consumers of one array
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-fusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter fusion
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reductions-and-scans" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reductions and scans
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linear-algebra" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear algebra
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tiling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scalars-and-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scalars and shapes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parallelism-and-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parallelism and placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#differentiation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differentiation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-theses-have-that-this-does-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the theses have that this does not
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-has-that-the-theses-do-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this has that the theses do not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="rewrite-rules-and-optimizations">Rewrite rules and optimizations<a class="headerlink" href="#rewrite-rules-and-optimizations" title="Permanent link">&para;</a></h1>
+<p>Everything Parakeet does to a program between your source and the loops it
+runs, in one place, and how that compares with the two theses that describe
+the original system:</p>
+<ul>
+<li><strong>[R]</strong> Alex Rubinsteyn, <em>Runtime Compilation of Array-Oriented Python
+  Programs</em> (NYU, 2014) — the operators and their fusion rules.</li>
+<li><strong>[H]</strong> Eric Hielscher, <em>Locality Optimization for Data Parallel Programs</em>
+  (NYU, 2013) — tiling.</li>
+</ul>
+<p>The short version: the rules are the same algebra, applied in two places.</p>
+<ul>
+<li><strong>While elaborating.</strong> An array expression is a <em>delayed</em> value — a function
+  from index to element — and the vertical fusion rules fire at the moment an
+  operator is applied to one. <code>F ∘ G</code> below means "the element function of
+  the result is <code>F</code> applied to the element function of the argument"; no pass
+  looks for the pattern afterwards.</li>
+<li><strong>In the middle end.</strong> What elaboration produces is the original's
+  <em>indexified</em> level: statements <code>IndexMap</code>, <code>IndexReduce</code>, <code>IndexScan</code>,
+  <code>IndexFilter</code>, and <code>IndexScatter</code> over index spaces, with ordinary scalar code
+  as their bodies (<code>Specialization.operators</code> prints it). Passes rewrite those
+  statements — invariant-check/unit-axis normalization, dead code elimination,
+  vertical fusion (exact and affine map/scan/filter/reduce/scatter), filter
+  fusion (filter-filter and filter-reduce), sibling and online monoidal fusion
+  (reductions, maps, and 1-pass <code>logsumexp</code>/<code>softmax</code>), Law 3 bilinear
+  contraction reassociation &amp; MLA weight absorption, Law 1 &amp; 5 2-level
+  monoidal tiling (<code>flash_monoid</code>, <code>monoid_lse</code>, FlashDecoding Split-K, GQA
+  head-group folding, and affine tile-interval pruning), Law 4 chunkwise
+  state-space duality &amp; parallel affine prefix scan (<code>TileScan</code>), target-aware
+  reduction interchange and tiling — and a last pass, <code>LowerAdverbs</code> in spirit,
+  turns them into loops. <code>parakeet.transforms.pipeline.PASSES</code> is the list;
+  <code>find_broken_transform</code> switches its members on one at a time. See
+  <a href="../algebra/">Algebraic laws &amp; frontier kernels</a> for the mathematical laws
+  behind these passes and <a href="../gallery/">Gallery of examples</a> for runnable
+  benchmarks.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see it
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    off_29: int64 = (x_off_2 + (i_27 * x_n1_4))
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    off_30: int64 = (y_off_7 + (i_28 * y_n1_9))
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    reduce i_35 over (x_n1_4):
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        x_36: float64 = (x_1[(off_29 + i_35)] * y_6[(off_30 + i_35)])
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        red_39: float64 = fold(add, x_36, init=0.0)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    arr_24[((i_27 * y_n0_8) + i_28)] = red_39
+</code></pre></div>
+<h2 id="operators">Operators<a class="headerlink" href="#operators" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>[R] §4.6</th>
+<th>here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Map(f, X1..Xn, axis)</code></td>
+<td><code>map(f, x1, ..., xn, axis=0)</code>, <code>each</code>; <code>axis=None</code> for every scalar</td>
+</tr>
+<tr>
+<td><code>OuterMap(f, X1..Xn, axis)</code></td>
+<td><code>outer_map(f, x1, ..., xn)</code>, <code>allpairs(f, x, y)</code></td>
+</tr>
+<tr>
+<td><code>IndexMap(f, shape)</code></td>
+<td><code>imap(f, shape)</code></td>
+</tr>
+<tr>
+<td><code>Reduce(f, ⊕, X1..Xn, init, axis)</code></td>
+<td><code>reduce(⊕, x1, ..., xn, map=f, init=, axis=)</code></td>
+</tr>
+<tr>
+<td><code>IndexReduce(f, ⊕, shape)</code></td>
+<td><code>ireduce(f, shape, init=, combine=⊕)</code></td>
+</tr>
+<tr>
+<td><code>Scan(f, ⊕, emit, X1..Xn, init, axis)</code></td>
+<td><code>scan(⊕, x1, ..., xn, map=f, emit=, init=, axis=)</code></td>
+</tr>
+<tr>
+<td><code>Filter(f, pred, X1..Xn)</code></td>
+<td><code>filter(pred, x1, ..., xn, map=f)</code></td>
+</tr>
+<tr>
+<td><code>ParFor(f, bounds)</code></td>
+<td><code>parfor(f, bounds)</code></td>
+</tr>
+<tr>
+<td><code>IndexFilter(pred, shape)</code></td>
+<td>what <code>x[mask]</code>, <code>np.nonzero</code> and <code>filter</code> are built on: an <code>IndexFilter</code> statement</td>
+</tr>
+<tr>
+<td><code>FilterReduce</code>, <code>IndexFilterReduce</code></td>
+<td><code>filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)</code> — and any reduction over a filter also <em>becomes</em> one (see fusion)</td>
+</tr>
+<tr>
+<td><code>IndexScan(f, ⊕, emit, shape)</code></td>
+<td>what <code>scan</code>, <code>np.cumsum</code> and <code>np.cumprod</code> are built on: an <code>IndexScan</code> statement, whose <code>emit</code> is a block (it stores the running value)</td>
+</tr>
+<tr>
+<td>—</td>
+<td><code>IndexScatter</code> (<code>parakeet.scatter_add</code>, <code>np.bincount</code>): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint</td>
+</tr>
+<tr>
+<td>—</td>
+<td><code>grad(f)</code>, <code>value_and_grad(f)</code></td>
+</tr>
+</tbody>
+</table>
+<p>Every NumPy function is defined in terms of these: <code>np.sum</code> is a <code>reduce</code>,
+<code>np.cumsum</code> a <code>scan</code>, <code>a @ b</code> and <code>np.einsum</code> a map of reductions, a
+comprehension an <code>imap</code>.</p>
+<h2 id="fusion">Fusion<a class="headerlink" href="#fusion" title="Permanent link">&para;</a></h2>
+<h3 id="vertical-a-producer-into-its-consumer">Vertical: a producer into its consumer<a class="headerlink" href="#vertical-a-producer-into-its-consumer" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>rule ([R] Fig. 6.1)</th>
+<th>status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Map(g, Map(f, X))</code> ⇒ <code>Map(g∘f, X)</code></td>
+<td>yes — including affine coordinate inversion (<code>AffineInlineBufferLoad</code>) for transpose, shifted-slice, and stencil fusion, plus cost-bounded multi-consumer fusion</td>
+</tr>
+<tr>
+<td><code>Map(g, IndexMap(f, σ))</code> ⇒ <code>IndexMap(g∘f, σ)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>OuterMap(g, Map(f, X1), X2..)</code> ⇒ <code>OuterMap(λ. g(f(x1), x2..), X1..)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>Reduce(g, ⊕, Map(f, X))</code> ⇒ <code>Reduce(g∘f, ⊕, X)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>Reduce(g, ⊕, IndexMap(f, σ))</code> ⇒ <code>IndexReduce(g∘f, ⊕, σ)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>Scatter(⊕, idx, Map(f, X))</code> ⇒ <code>IndexScatter(⊕, idx, f(X))</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): elementwise weight maps fuse directly into <code>np.bincount</code> / <code>parakeet.scatter_add</code></td>
+</tr>
+<tr>
+<td><code>Scan(g, ⊕, ε, Map(f, X))</code> ⇒ <code>Scan(g∘f, ⊕, ε, X)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>Filter(g, pred, Map(f, X))</code> ⇒ <code>Filter(g∘f, pred∘f, X)</code></td>
+<td>yes: the predicate and the kept values both read the unfused map</td>
+</tr>
+<tr>
+<td><code>Map(g, Filter(f, pred, X))</code> ⇒ <code>Filter(g∘f, pred, X)</code></td>
+<td>yes: the selected elements are a delayed gather that the map fuses into</td>
+</tr>
+<tr>
+<td><code>Map(g, Scan(f, ⊕, ε, X))</code> ⇒ <code>Scan(f, ⊕, g∘ε, X)</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): a consumer <code>IndexMap</code> whose single input is an <code>IndexScan</code>'s output fuses into the scan's <code>emit</code> block (<code>np.cumsum(x) * 2.0 + 1.0</code> runs in one scan pass)</td>
+</tr>
+<tr>
+<td><code>Reduce(g, ⊕, Filter(f, p, X))</code> ⇒ <code>FilterReduce(g∘f, ⊕, p, X)</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): becomes a guarded <code>IndexReduce</code> with no index array (see below)</td>
+</tr>
+<tr>
+<td><code>Filter(g, p2, Filter(f, p1, X))</code> ⇒ <code>Filter(g∘f, p1 ∧ (p2∘f), X)</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): short-circuiting single compaction, which also feeds into <code>FilterReduce</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Side conditions.</strong> [R] states one: nothing may modify the intermediate array
+between producer and consumer, decided by alias analysis. Here every delayed
+array records how many stores had happened when it was created; if a store
+that may alias what it reads has happened by the time it is consumed,
+elaboration restarts with that expression evaluated eagerly where it was
+written.</p>
+<p>[R] states no condition on how often the intermediate is used, so fusing
+could duplicate work. Here a delayed array that costs more than a few
+operations per element may be consumed once; a second consumer, or a consumer
+inside a loop, triggers the same restart. That is the main correction to the
+thesis's rules.</p>
+<h3 id="nested-a-map-of-maps">Nested: a map of maps<a class="headerlink" href="#nested-a-map-of-maps" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>rule ([R] Fig. 6.2)</th>
+<th>status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Map(λxi. Map(f, xi), x)</code> ⇒ <code>Map(f, x)</code></td>
+<td>yes, when the inner map is cheap and its shape does not depend on <code>xi</code>: the result is one delayed array over the whole index space</td>
+</tr>
+<tr>
+<td><code>Map(λxi. Map(f, y), x)</code> ⇒ <code>OuterMap(f, x, y)</code></td>
+<td>yes, same condition</td>
+</tr>
+<tr>
+<td><code>IndexMap(λi. IndexMap(f, σ2), σ1)</code> ⇒ <code>IndexMap(f, σ1 ++ σ2)</code></td>
+<td>yes, same condition</td>
+</tr>
+</tbody>
+</table>
+<p>When the inner map is expensive, elaboration emits a nested <code>IndexMap</code>
+writing directly into its row of one output array (no per-row allocation), and
+the middle-end <code>vertical fusion</code> pass (<code>CombineNestedMaps</code>) flattens it into a
+single multi-dimensional <code>IndexMap</code> whenever the inner shape does not depend on
+the outer index — exposing the full 2D/ND index space to multi-core CPUs and
+GPUs.</p>
+<h3 id="horizontal-two-consumers-of-one-array">Horizontal: two consumers of one array<a class="headerlink" href="#horizontal-two-consumers-of-one-array" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>rule ([R] Fig. 6.3)</th>
+<th>status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>a = Reduce(f, ⊕1, X); b = Reduce(g, ⊕2, X)</code> ⇒ <code>a, b = Reduce(f×g, ⊕1×⊕2, X)</code></td>
+<td><strong>yes</strong>, as <em>sibling fusion</em> (<code>transforms/fusion.py</code>): two <code>IndexReduce</code> statements over the same index space, the second not using the first's result, become one statement with two folds. <code>x.min(), x.max()</code> reads <code>x</code> once</td>
+</tr>
+<tr>
+<td><code>a = Map(f, X); b = Map(g, X)</code> ⇒ <code>a, b = Map(f×g, X)</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): two pure <code>IndexMap</code> statements over the same index space where the second does not read what the first writes share one loop (<code>np.sin(x), np.cos(x)</code> reads <code>x</code> once)</td>
+</tr>
+</tbody>
+</table>
+<p>Conditions the thesis leaves out: the index spaces must be provably equal
+(the same expression once shape variables are resolved), both seeded or both
+unseeded, and both must stay vectorizable — a float sum is not fused with a
+<code>max</code>, which would cost the sum its SIMD loop. Scalar definitions between the
+two statements are stepped over when they do not use the first result.</p>
+<p>Tiling (below) uses the same rule on copies of one reduction.</p>
+<h3 id="filter-fusion">Filter fusion<a class="headerlink" href="#filter-fusion" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>rule ([R] Fig. 6.1)</th>
+<th>status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Reduce(g, ⊕, Filter(f, p, X))</code> ⇒ <code>FilterReduce(g ∘ f, ⊕, p, X)</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): an <code>IndexFilter</code> followed by an <code>IndexReduce</code> over what it kept becomes one guarded <code>IndexReduce</code> over the filter's own index space. <code>np.sum(x[x &gt; 0])</code> is one parallel loop and allocates nothing (about 3× faster on 5M elements)</td>
+</tr>
+<tr>
+<td><code>Filter(q, Filter(p, X))</code> ⇒ <code>Filter(p ∧ q, X)</code></td>
+<td><strong>yes</strong> (<code>transforms/fusion.py</code>): adjacent <code>IndexFilter</code> statements where the second filters the first's survivors collapse into one short-circuiting <code>IndexFilter</code> (and if reduced afterwards, into one <code>FilterReduce</code>)</td>
+</tr>
+<tr>
+<td><code>Map(f, Filter(p, X))</code> ⇒ one loop</td>
+<td>half: the map is a delayed array over the kept indices, so it fuses with its consumer (or directly into <code>FilterReduce</code>) but a returned filter still compacts first</td>
+</tr>
+</tbody>
+</table>
+<p>Conditions: nothing else reads the kept indices (returning <code>x[mask]</code> keeps
+the filter); the reduction has an <code>init</code>, because the first element may not
+survive (<code>np.min(x[mask])</code> stays two steps so that an empty selection still
+raises); it runs in parallel only when every fold has an identity to start a
+chunk from. If the number of survivors is used (<code>np.mean</code>), counting it is
+one more fold. Inside the fused loop the bounds check on the gathered index
+is dropped: the index is the loop's own.</p>
+<h2 id="reductions-and-scans">Reductions and scans<a class="headerlink" href="#reductions-and-scans" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Associativity.</strong> [R] calls the combiner "commutative" and never requires
+  associativity; [H] requires both. Here a fold is regrouped (run in chunks,
+  vectorized) only when its combiner is recognisably one of <code>+ * min max and
+  or &amp; | ^</code>, however it was written (<code>np.add</code>, <code>lambda a, b: a + b</code>). Any
+  other function is folded strictly left to right.</li>
+<li><strong>Several axes at once.</strong> <code>Reduce</code> over axes <code>A</code> of <code>X</code> ⇒ a map over the
+  other axes of one reduction over a block: the reduced axes are moved last (a
+  view) and each block is folded in a single pass.</li>
+<li><strong>A reduction with carried state (<code>Carry</code>).</strong> <code>argmin</code>/<code>argmax</code> fold <code>(value, index)</code>
+  pairs per chunk and combine the pairs in index order, so the first of equal
+  elements still wins. The same <code>Fold.carries</code> monoid machinery also fuses
+  dependent <code>m = max(x); s = sum(exp(x - m))</code> pairs into a single parallel
+  associative <code>(m, s)</code> pass (<code>fuse_online_logsumexp</code>) for 1-pass <code>logsumexp</code>
+  and zero-temp <code>softmax</code>.</li>
+<li><strong>Parallel scan.</strong> <code>Scan(⊕, X)</code> with an associative primitive ⇒ fold every
+  chunk; prefix the chunk totals; scan every chunk from its prefix.</li>
+<li><strong>Parallel filter.</strong> <code>X[mask]</code> ⇒ count per chunk; prefix the counts; every
+  chunk writes its survivors from its own offset.</li>
+</ul>
+<h2 id="linear-algebra">Linear algebra<a class="headerlink" href="#linear-algebra" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>a @ b</code> ⇒ <code>Map((i, j) ↦ Reduce(+, a[i, :] * b[:, j]))</code>: a map of
+  reductions like any other, so it fuses with what feeds it.</li>
+<li><strong>Layout.</strong> The inner loop should walk both operands with stride one: <code>b</code>
+  is replaced by its transpose copied once, unless it is already the transpose
+  of a contiguous array, and <code>transpose(transpose(x))</code> ⇒ <code>x</code>.</li>
+<li><strong>Stacks.</strong> <code>A @ B</code> with <code>B</code> a matrix ⇒ reshape the stack to one tall matrix,
+  one product, reshape back.</li>
+<li><strong>Einstein summation.</strong> <code>einsum(spec, X1..Xn)</code> ⇒ view every operand in one
+  index space (output labels, then summed labels), multiply element-wise,
+  reduce the trailing block. <code>'ij,jk-&gt;ik'</code> exactly ⇒ <code>@</code>.</li>
+<li><strong>BLAS.</strong> A product of two float matrices outside a parallel loop ⇒
+  <code>cblas_?gemm</code> from the library NumPy itself uses, with the transpose flags
+  set for transposed views. (<code>config.blas = False</code> keeps the generated loops.)</li>
+</ul>
+<h2 id="tiling">Tiling<a class="headerlink" href="#tiling" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>[H]</th>
+<th>here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PermuteReductions</code>: interchange a strided inner reduction with a stride-1 outer map</td>
+<td><strong>yes</strong> (<code>transforms/tiling.py</code>, <em>target-aware reduction interchange</em>): on CPU, when an <code>IndexMap</code> of any rank wraps a commutative+associative <code>IndexReduce</code> whose inner axis is strided while the map's last index has unit stride (<code>np.sum(X, axis=0)</code>), the reduction is hoisted outside an L1-sized strip of contiguous output columns; on GPU (<code>TargetProfile.is_gpu</code>), interchange is skipped so warp/SIMD threads coalesce across columns directly</td>
+</tr>
+<tr>
+<td><code>Map(f, X)</code> ⇒ <code>TiledMap(f↑, X)</code>, applied recursively through a nest of adverbs, stopping at a <code>Reduce</code></td>
+<td><strong>generalized <code>IndexTile</code> + <code>TileStage</code> operators</strong> (<code>syntax/ir.py</code>, <code>transforms/tiling.py</code>, <code>transforms/lowering.py</code>): any <code>IndexMap</code> of rank ≥ 2 wrapping one <code>IndexReduce</code> (any number of folds and <code>Carry</code> states) plus straight-line prologues/epilogues (<code>a @ b</code>, batched 3D+ matmul, <code>allpairs</code>, <code>einsum</code>, <code>np.tanh(a @ b + c)</code>) is rewritten into nested <code>IndexTile(level="cache")</code> → <code>IndexTile(level="register")</code> operators on CPU, and extracts maximal row/col/k <code>TileStage</code>s for GPU <code>__shared__</code> (CUDA) and <code>threadgroup</code> (Metal) block tiling (<code>backends/tiled_gpu.py</code>)</td>
+</tr>
+<tr>
+<td>register tiling: a second, innermost tiling with compile-time tile sizes, then unroll and scalar-replace</td>
+<td><strong>general N-D register jamming</strong> (<code>lowering.jam_register_tile</code>) on CPU (exact hyper-rectangle partition jamming <code>2×4</code> interior blocks and partial remainder faces) + <strong><code>4×4</code> / <code>2×2</code> per-thread register micro-tiles</strong> on CUDA and Metal</td>
+</tr>
+<tr>
+<td><code>TiledReduce</code>, <code>TiledScan</code></td>
+<td><code>PermuteReductions</code> (L1 column-strip tiled reduction) + invariant row-reduction hoisting (<code>split_invariant_map</code> / <code>squeeze_unit_map</code> for <code>softmax</code> and <code>layer_norm</code>); <code>TiledScan</code> not yet implemented</td>
+</tr>
+<tr>
+<td>cache tile sizes found by an online search between a pessimistic and an optimistic estimate</td>
+<td>analytical compile-time sizing from queried <code>TargetProfile</code> (<code>parakeet/target.py</code>: CPU L1/L2/SIMD, CUDA SMs/SMEM/compute capability, Metal threadgroup memory/Apple7 <code>simdgroup_matrix</code>), with hardware matrix-unit lowering (<code>simdgroup_matrix</code> on Metal, <code>nvcuda::wmma</code> TF32 on CUDA <code>sm_80+</code> with <code>config.tensor_cores=True</code>)</td>
+</tr>
+<tr>
+<td>aborts unless each function body is a single adverb (simple algorithm)</td>
+<td>aborts unless the element is exactly one reduction; anything else is a plain parallel map</td>
+</tr>
+</tbody>
+</table>
+<p>[H] reports that tiling slows down a stencil (an 11×11 blur). Stencils are not
+a map of reductions over two different operands, so they are never tiled here.</p>
+<h2 id="scalars-and-shapes">Scalars and shapes<a class="headerlink" href="#scalars-and-shapes" title="Permanent link">&para;</a></h2>
+<p>Done while expressions are built; there is no simplification pass:</p>
+<ul>
+<li>constant folding with NumPy's semantics;</li>
+<li><code>x + 0</code>, <code>x - 0</code>, <code>x * 1</code>, <code>x // 1</code> ⇒ <code>x</code> and <code>x * 0</code> ⇒ <code>0</code> for integers
+  (not floats: <code>-0.0</code> and <code>nan</code>); <code>select(c, a, b)</code> with constant <code>c</code>;
+  <code>not not x</code>; <code>and</code>/<code>or</code> with a constant side;</li>
+<li><code>x ** 2</code> ⇒ <code>x * x</code>, <code>x ** 0.5</code> ⇒ <code>sqrt(x)</code>, <code>x ** 1</code> ⇒ <code>x</code>;</li>
+<li>a slice of a slice, a transpose, a <code>reshape</code> of a contiguous array, an
+  <code>expand_dims</code> are arithmetic on offset and strides: no copy, no loop;</li>
+<li>dimensions proven equal (by a broadcast check that already ran) are not
+  checked again; an index known to be within its loop's bound gets no bounds
+  check.</li>
+</ul>
+<p><strong>Specialization on values</strong> ([R] ch. 6.6 partially evaluates on inputs equal
+to 0 or 1). Here: a dimension of length 1 is always a constant (which is what
+makes broadcasting static — [R] lists <code>200x1 + 1x300</code> as giving a wrong
+answer); a scalar argument or an array dimension becomes a constant when the
+code needs one (<code>axis=</code>, the length of a tuple, a loop that has to be
+unrolled).</p>
+<p>Left to the C compiler, which does them well on the loops it is given: common
+subexpressions, dead code, loop-invariant code motion, scalar replacement,
+unrolling, vectorization. [R]'s pipeline did these itself, on its own IR.</p>
+<h2 id="parallelism-and-placement">Parallelism and placement<a class="headerlink" href="#parallelism-and-placement" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Every map, reduction, scan, filter and <code>parfor</code> is a parallel loop over
+  chunks; a parallel loop inside another is a sequential one.</li>
+<li>A loop goes to the GPU when <em>elements × estimated inner iterations per
+  element</em> reaches <code>config.device_threshold</code>: a short loop over long rows goes,
+  a long loop of cheap elements below the threshold does not.</li>
+<li>Between the loops of one call, arrays stay on the device. Host code that
+  reads or writes array memory itself asks for the device's copies first.</li>
+</ul>
+<h2 id="differentiation">Differentiation<a class="headerlink" href="#differentiation" title="Permanent link">&para;</a></h2>
+<p><code>grad(f)</code> adds one rule per operator, applied in reverse order of the
+operators <code>f</code> applied (<a href="../autodiff/">details</a>):</p>
+<table>
+<thead>
+<tr>
+<th>operator</th>
+<th>adjoint of its argument, given the adjoint <code>ȳ</code> of its result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Map(f, X)</code> element-wise</td>
+<td><code>Map(∂f/∂x · ȳ, X)</code>, summed over broadcast dimensions</td>
+</tr>
+<tr>
+<td><code>Reduce(+, X)</code></td>
+<td><code>ȳ</code> broadcast to <code>X</code></td>
+</tr>
+<tr>
+<td><code>Reduce(max, X)</code></td>
+<td><code>ȳ</code> where <code>X</code> equals the result, shared between ties</td>
+</tr>
+<tr>
+<td><code>Reduce(*, X)</code></td>
+<td><code>ȳ · result / X</code>, with a zero-safe branch (exact when one or more elements are zero)</td>
+</tr>
+<tr>
+<td><code>Reduce(f, X)</code>, any <code>f</code></td>
+<td>the fold replayed backwards over its stored running values</td>
+</tr>
+<tr>
+<td><code>Scan(+, X)</code></td>
+<td><code>Scan(+)</code> of <code>ȳ</code> from the other end</td>
+</tr>
+<tr>
+<td><code>A @ B</code></td>
+<td><code>ȳ @ Bᵀ</code> and <code>Aᵀ @ ȳ</code></td>
+</tr>
+<tr>
+<td>view (slice, transpose, reshape)</td>
+<td>the same view of the adjoint</td>
+</tr>
+<tr>
+<td>gather <code>X[i]</code></td>
+<td>scatter-add of <code>ȳ</code> at <code>i</code></td>
+</tr>
+<tr>
+<td><code>sort(X)</code></td>
+<td>gather by the sorting permutation, so: scatter by it</td>
+</tr>
+<tr>
+<td><code>Map(f, X)</code> with any <code>f</code></td>
+<td><code>f</code> differentiated again per element, in parallel, each chunk adding to its own copy of the adjoints</td>
+</tr>
+<tr>
+<td><code>if c: A else: B</code></td>
+<td>both run; values and adjoints are selected by <code>c</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-the-theses-have-that-this-does-not">What the theses have that this does not<a class="headerlink" href="#what-the-theses-have-that-this-does-not" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Differentiation as an IR-to-IR pass over the operator statements (here <code>grad</code>
+  still records operators on a tape during elaboration, while element-wise
+  expressions fuse both by construction during elaboration and in the
+  middle-end vertical fusion pass).</li>
+<li>Recursive tiling of deeper adverb nests, <code>TiledReduce</code>/<code>TiledScan</code>, and the
+  online search for tile sizes.</li>
+<li>Its own low-level optimizer (it relies on the C compiler instead).</li>
+</ul>
+<h2 id="what-this-has-that-the-theses-do-not">What this has that the theses do not<a class="headerlink" href="#what-this-has-that-the-theses-do-not" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Differentiation; <code>einsum</code>; products of stacks.</li>
+<li>Parallel scans, filters and index-carrying reductions.</li>
+<li>The cost and single-use conditions on fusion, and checked aliasing.</li>
+<li>Static unit-dimension broadcasting; <code>break</code>/<code>continue</code>/early <code>return</code>;
+  bounds and shape checks that raise.</li>
+<li>Metal and CUDA kernels from the same loops, launch by work, arrays resident
+  on the device.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
