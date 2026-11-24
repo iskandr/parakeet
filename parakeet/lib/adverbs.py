@@ -285,8 +285,8 @@ def fold(el, lift, merge, x, init):
   right = pack(Var("right", v.type) for v in init)
   with el.in_block(combine, loop=True):
     merged = state(el.call(merge, [left, right]))
-  if any(
-    isinstance(s, ir.Store)
+  if any(isinstance(s, ir.Alloc) for s in ir.walk_stmts(combine)) or any(
+    isinstance(s, (ir.Store, ir.IndexScatter))
     or any(isinstance(e, ir.RtCall) and not e.pure for expr in ir.stmt_exprs(s) for e in ir.walk_expr(expr))
     for s in ir.walk_stmts([*body, *combine])
   ):
