@@ -2417,7 +2417,9 @@ class Elaborator(ArrayMixin):
     getters = []
     for gen in node.generators:
       if gen.ifs or gen.is_async:
-        raise self.error(UnsupportedError, "Cartesian comprehensions require unfiltered synchronous iterators", gen.iter)
+        raise self.error(
+          UnsupportedError, "Cartesian comprehensions require unfiltered synchronous iterators", gen.iter
+        )
       if any(isinstance(n, ast.Name) and n.id in bound for n in ast.walk(gen.iter)):
         raise self.error(UnsupportedError, "Cartesian comprehensions require independent iteration domains", gen.iter)
       if any(isinstance(n, ast.NamedExpr) for n in ast.walk(gen.iter)):
@@ -2428,10 +2430,13 @@ class Elaborator(ArrayMixin):
         length, getter = self.iter_source(self.eval(gen.iter), gen.iter, checks)
       # Inner iterators may never be entered. Only hoist scalar setup that
       # cannot raise, change visible state, or allocate temporary storage.
-      if checks or (getters and any(
-        not isinstance(s, Assign) or any(isinstance(e, (ir.RtCall, ir.Load)) for e in ir.walk_expr(s.value))
-        for s in setup
-      )):
+      if checks or (
+        getters
+        and any(
+          not isinstance(s, Assign) or any(isinstance(e, (ir.RtCall, ir.Load)) for e in ir.walk_expr(s.value))
+          for s in setup
+        )
+      ):
         raise self.error(UnsupportedError, "Cartesian iterator setup must be safe to hoist", gen.iter)
       self.block.extend(setup)
       shape.append(length)
@@ -2459,7 +2464,7 @@ class Elaborator(ArrayMixin):
         fr.env.update(saved)
 
     mapped = lib.build_map(self, tuple(shape), body, "Cartesian comprehension")
-    return self.reshape(mapped, (ops.iprod(shape), *mapped.shape[len(shape):]), checked=True)
+    return self.reshape(mapped, (ops.iprod(shape), *mapped.shape[len(shape) :]), checked=True)
 
   def _static_filter(self, gen, item, bind_and) -> bool:
     def keep():

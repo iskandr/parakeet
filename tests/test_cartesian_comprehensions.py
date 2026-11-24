@@ -37,3 +37,24 @@ def test_rectangular_ranges_and_dependent_rejection():
 
   with pytest.raises(UnsupportedError, match="independent"):
     triangular(np.arange(3))
+
+
+def test_cartesian_map_rejects_mutation_and_observable_inner_setup():
+  def write(a, v):
+    a[0] = v
+    return v
+
+  @pk.jit
+  def writes(xs, out):
+    return [write(out, x + y) for x in xs for y in xs]
+
+  @pk.jit
+  def unsafe(xs, lengths):
+    return [x * j for x in xs for j in range(lengths[0])]
+
+  out = np.array([123])
+  with pytest.raises(UnsupportedError, match="pure"):
+    writes(np.arange(3), out)
+  assert out[0] == 123
+  with pytest.raises(UnsupportedError, match="hoist"):
+    unsafe(np.arange(0), np.arange(0))
