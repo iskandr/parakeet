@@ -148,6 +148,16 @@ class CFamilyEmitter:
       return f"({args[0]} ? {args[1]} : {args[2]})"
     if op in ("isnan", "isinf", "isfinite", "signbit"):
       return self.predicate(op, args[0], at)
+    if op in ("popcount", "clz", "ctz"):
+      return f"(({ct})pk_{op}_{at.name}({args[0]}))"
+    if op in ("rotl", "rotr"):
+      return f"pk_{op}_{t.name}({args[0]}, {args[1]})"
+    if op == "bswap":
+      return f"pk_bswap_{t.name}({args[0]})"
+    if op == "bf16_to_f32":
+      return f"pk_bf16_to_f32({args[0]})"
+    if op == "f32_to_bf16":
+      return f"pk_f32_to_bf16({args[0]})"
     if t.kind == "f":
       return self.float_prim(op, args, t)
     if t.kind == "b":

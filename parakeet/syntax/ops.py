@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import struct
 
 import numpy as np
 
@@ -59,8 +60,12 @@ PREDICATES = {
 }
 # operations without a NumPy ufunc: folded with the math module
 MATH_ONLY = {"erf": math.erf, "erfc": math.erfc, "lgamma": math.lgamma, "tgamma": math.gamma}
+BITOPS = frozenset({"popcount", "clz", "ctz", "rotl", "rotr", "bswap"})
+BF16_OPS = frozenset({"bf16_to_f32", "f32_to_bf16"})
 
-ALL_OPS = (set(ARITH) | set(COMPARE) | set(LOGICAL) | set(FLOAT_UNARY) | set(PREDICATES) | set(MATH_ONLY)) | {"select"}
+ALL_OPS = (
+  set(ARITH) | set(COMPARE) | set(LOGICAL) | set(FLOAT_UNARY) | set(PREDICATES) | set(MATH_ONLY) | BITOPS | BF16_OPS
+) | {"select"}
 
 ASSOCIATIVE = frozenset({"add", "mul", "min", "max", "and", "or", "bitand", "bitor", "bitxor"})
 
@@ -85,11 +90,55 @@ def _np(c: Const):
   return c.type.dtype.type(c.value)
 
 
+def _fold_bitop(op: str, args: tuple[Const, ...], type: ScalarType) -> Const:
+  t0 = args[0].type
+  bits = t0.bits
+  mask = (1 << bits) - 1
+  u = int(args[0].value) & mask
+  if op == "popcount":
+    return Const(u.bit_count(), type)
+  if op == "clz":
+    return Const(bits if u == 0 else bits - u.bit_length(), type)
+  if op == "ctz":
+    return Const(bits if u == 0 else (u & -u).bit_length() - 1, type)
+  if op == "rotl":
+    r = int(args[1].value) & (bits - 1)
+    res = u if r == 0 else ((u << r) | (u >> (bits - r))) & mask
+    return Const(np.array(res, dtype=np.uint64).astype(type.dtype).item(), type)
+  if op == "rotr":
+    r = int(args[1].value) & (bits - 1)
+    res = u if r == 0 else ((u >> r) | (u << (bits - r))) & mask
+    return Const(np.array(res, dtype=np.uint64).astype(type.dtype).item(), type)
+  if op == "bswap":
+    nbytes = bits // 8
+    res = int.from_bytes(u.to_bytes(nbytes, "little"), "big")
+    return Const(np.array(res, dtype=np.uint64).astype(type.dtype).item(), type)
+  raise ValueError(op)
+
+
+def _fold_bf16(op: str, args: tuple[Const, ...], type: ScalarType) -> Const:
+  if op == "bf16_to_f32":
+    u16 = int(args[0].value) & 0xFFFF
+    f32 = struct.unpack("<f", struct.pack("<I", u16 << 16))[0]
+    return Const(np.float32(f32).item(), type)
+  f = np.float32(args[0].value)
+  u = struct.unpack("<I", struct.pack("<f", float(f)))[0]
+  if (u & 0x7FFFFFFF) > 0x7F800000:
+    res = ((u >> 16) | 0x0040) & 0xFFFF
+  else:
+    res = ((u + 0x7FFF + ((u >> 16) & 1)) >> 16) & 0xFFFF
+  return Const(res, type)
+
+
 def _fold(op: str, args: tuple[Const, ...], type: ScalarType) -> Const | None:
   t0 = args[0].type
   try:
     if op in MATH_ONLY:
       value = MATH_ONLY[op](args[0].value)
+    elif op in BITOPS:
+      return _fold_bitop(op, args, type)
+    elif op in BF16_OPS:
+      return _fold_bf16(op, args, type)
     elif op == "select":
       return Const(args[1].value if args[0].value else args[2].value, type)
     else:

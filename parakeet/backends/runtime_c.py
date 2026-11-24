@@ -65,6 +65,154 @@ PK_DEF_UNSIGNED(uint32_t, uint32, 32)
 PK_DEF_UNSIGNED(uint64_t, uint64, 64)
 """
 
+HELPERS_BITOPS = r"""
+#if defined(__METAL_VERSION__)
+PK_INLINE int32_t pk_popcount_u32(uint32_t x) { return (int32_t)popcount(x); }
+PK_INLINE int32_t pk_popcount_u64(uint64_t x) {
+  return (int32_t)(popcount((uint32_t)x) + popcount((uint32_t)(x >> 32)));
+}
+PK_INLINE int32_t pk_clz_u32(uint32_t x) { return (int32_t)clz(x); }
+PK_INLINE int32_t pk_clz_u64(uint64_t x) {
+  uint32_t hi = (uint32_t)(x >> 32);
+  return hi ? (int32_t)clz(hi) : (32 + (int32_t)clz((uint32_t)x));
+}
+PK_INLINE int32_t pk_ctz_u32(uint32_t x) { return (int32_t)ctz(x); }
+PK_INLINE int32_t pk_ctz_u64(uint64_t x) {
+  uint32_t lo = (uint32_t)x;
+  return lo ? (int32_t)ctz(lo) : (32 + (int32_t)ctz((uint32_t)(x >> 32)));
+}
+PK_INLINE float pk_bf16_to_f32(uint16_t h) { return as_type<float>(((uint32_t)h) << 16); }
+PK_INLINE uint16_t pk_f32_to_bf16(float f) {
+  uint32_t u = as_type<uint32_t>(f);
+  if ((u & 0x7fffffffu) > 0x7f800000u) return (uint16_t)((u >> 16) | 0x0040u);
+  return (uint16_t)((u + 0x7fffu + ((u >> 16) & 1u)) >> 16);
+}
+#elif defined(__CUDA_ARCH__)
+PK_INLINE int32_t pk_popcount_u32(uint32_t x) { return __popc(x); }
+PK_INLINE int32_t pk_popcount_u64(uint64_t x) { return __popcll(x); }
+PK_INLINE int32_t pk_clz_u32(uint32_t x) { return __clz((int)x); }
+PK_INLINE int32_t pk_clz_u64(uint64_t x) { return __clzll((long long)x); }
+PK_INLINE int32_t pk_ctz_u32(uint32_t x) { return x == 0 ? 32 : (__ffs((int)x) - 1); }
+PK_INLINE int32_t pk_ctz_u64(uint64_t x) { return x == 0 ? 64 : (__ffsll((long long)x) - 1); }
+PK_INLINE float pk_bf16_to_f32(uint16_t h) { return __uint_as_float(((uint32_t)h) << 16); }
+PK_INLINE uint16_t pk_f32_to_bf16(float f) {
+  uint32_t u = __float_as_uint(f);
+  if ((u & 0x7fffffffu) > 0x7f800000u) return (uint16_t)((u >> 16) | 0x0040u);
+  return (uint16_t)((u + 0x7fffu + ((u >> 16) & 1u)) >> 16);
+}
+#elif defined(_MSC_VER) && !defined(__clang__)
+PK_INLINE int32_t pk_popcount_u32(uint32_t x) {
+  x = x - ((x >> 1) & 0x55555555u);
+  x = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
+  return (int32_t)((((x + (x >> 4)) & 0x0f0f0f0fu) * 0x01010101u) >> 24);
+}
+PK_INLINE int32_t pk_popcount_u64(uint64_t x) {
+  return pk_popcount_u32((uint32_t)x) + pk_popcount_u32((uint32_t)(x >> 32));
+}
+PK_INLINE int32_t pk_clz_u32(uint32_t x) {
+  int32_t n = 32;
+  if (x >= 0x10000u) { n -= 16; x >>= 16; }
+  if (x >= 0x100u) { n -= 8; x >>= 8; }
+  if (x >= 0x10u) { n -= 4; x >>= 4; }
+  if (x >= 0x4u) { n -= 2; x >>= 2; }
+  if (x >= 0x2u) { n -= 1; x >>= 1; }
+  return n - (int32_t)x;
+}
+PK_INLINE int32_t pk_clz_u64(uint64_t x) {
+  uint32_t hi = (uint32_t)(x >> 32);
+  return hi ? pk_clz_u32(hi) : (32 + pk_clz_u32((uint32_t)x));
+}
+PK_INLINE int32_t pk_ctz_u32(uint32_t x) {
+  if (x == 0) return 32;
+  int32_t n = 0;
+  if ((x & 0x0000ffffu) == 0) { n += 16; x >>= 16; }
+  if ((x & 0x000000ffu) == 0) { n += 8; x >>= 8; }
+  if ((x & 0x0000000fu) == 0) { n += 4; x >>= 4; }
+  if ((x & 0x00000003u) == 0) { n += 2; x >>= 2; }
+  if ((x & 0x00000001u) == 0) { n += 1; }
+  return n;
+}
+PK_INLINE int32_t pk_ctz_u64(uint64_t x) {
+  uint32_t lo = (uint32_t)x;
+  return lo ? pk_ctz_u32(lo) : (32 + pk_ctz_u32((uint32_t)(x >> 32)));
+}
+PK_INLINE float pk_bf16_to_f32(uint16_t h) {
+  uint32_t u = ((uint32_t)h) << 16;
+  float f;
+  memcpy(&f, &u, 4);
+  return f;
+}
+PK_INLINE uint16_t pk_f32_to_bf16(float f) {
+  uint32_t u;
+  memcpy(&u, &f, 4);
+  if ((u & 0x7fffffffu) > 0x7f800000u) return (uint16_t)((u >> 16) | 0x0040u);
+  return (uint16_t)((u + 0x7fffu + ((u >> 16) & 1u)) >> 16);
+}
+#else
+PK_INLINE int32_t pk_popcount_u32(uint32_t x) { return (int32_t)__builtin_popcount(x); }
+PK_INLINE int32_t pk_popcount_u64(uint64_t x) { return (int32_t)__builtin_popcountll((unsigned long long)x); }
+PK_INLINE int32_t pk_clz_u32(uint32_t x) { return x == 0 ? 32 : (int32_t)__builtin_clz(x); }
+PK_INLINE int32_t pk_clz_u64(uint64_t x) { return x == 0 ? 64 : (int32_t)__builtin_clzll((unsigned long long)x); }
+PK_INLINE int32_t pk_ctz_u32(uint32_t x) { return x == 0 ? 32 : (int32_t)__builtin_ctz(x); }
+PK_INLINE int32_t pk_ctz_u64(uint64_t x) { return x == 0 ? 64 : (int32_t)__builtin_ctzll((unsigned long long)x); }
+PK_INLINE float pk_bf16_to_f32(uint16_t h) {
+  uint32_t u = ((uint32_t)h) << 16;
+  float f;
+  memcpy(&f, &u, 4);
+  return f;
+}
+PK_INLINE uint16_t pk_f32_to_bf16(float f) {
+  uint32_t u;
+  memcpy(&u, &f, 4);
+  if ((u & 0x7fffffffu) > 0x7f800000u) return (uint16_t)((u >> 16) | 0x0040u);
+  return (uint16_t)((u + 0x7fffu + ((u >> 16) & 1u)) >> 16);
+}
+#endif
+
+PK_INLINE uint8_t pk_bswap_u8(uint8_t x) { return x; }
+PK_INLINE uint16_t pk_bswap_u16(uint16_t x) { return (uint16_t)((x >> 8) | (x << 8)); }
+PK_INLINE uint32_t pk_bswap_u32(uint32_t x) {
+  return ((x & 0x000000ffu) << 24) | ((x & 0x0000ff00u) << 8) |
+         ((x & 0x00ff0000u) >> 8)  | ((x & 0xff000000u) >> 24);
+}
+PK_INLINE uint64_t pk_bswap_u64(uint64_t x) {
+  return ((uint64_t)pk_bswap_u32((uint32_t)x) << 32) | (uint64_t)pk_bswap_u32((uint32_t)(x >> 32));
+}
+
+#define PK_DEF_BITOPS_SMALL(T, N, UT, BITS, BSWAP) \
+  PK_INLINE int32_t pk_popcount_##N(T x) { return pk_popcount_u32((uint32_t)(UT)x); } \
+  PK_INLINE int32_t pk_clz_##N(T x) { UT u = (UT)x; return u == 0 ? BITS : (pk_clz_u32((uint32_t)u) - (32 - BITS)); } \
+  PK_INLINE int32_t pk_ctz_##N(T x) { UT u = (UT)x; return u == 0 ? BITS : pk_ctz_u32((uint32_t)u); } \
+  PK_INLINE T pk_rotl_##N(T x, int32_t k) { \
+    uint32_t r = ((uint32_t)k) & (BITS - 1); UT u = (UT)x; \
+    return (T)(r == 0 ? u : (UT)((u << r) | (u >> (BITS - r)))); } \
+  PK_INLINE T pk_rotr_##N(T x, int32_t k) { \
+    uint32_t r = ((uint32_t)k) & (BITS - 1); UT u = (UT)x; \
+    return (T)(r == 0 ? u : (UT)((u >> r) | (u << (BITS - r)))); } \
+  PK_INLINE T pk_bswap_##N(T x) { return (T)BSWAP((UT)x); }
+
+#define PK_DEF_BITOPS_64(T, N, UT) \
+  PK_INLINE int32_t pk_popcount_##N(T x) { return pk_popcount_u64((UT)x); } \
+  PK_INLINE int32_t pk_clz_##N(T x) { return pk_clz_u64((UT)x); } \
+  PK_INLINE int32_t pk_ctz_##N(T x) { return pk_ctz_u64((UT)x); } \
+  PK_INLINE T pk_rotl_##N(T x, int32_t k) { \
+    uint32_t r = ((uint32_t)k) & 63u; UT u = (UT)x; \
+    return (T)(r == 0 ? u : (UT)((u << r) | (u >> (64u - r)))); } \
+  PK_INLINE T pk_rotr_##N(T x, int32_t k) { \
+    uint32_t r = ((uint32_t)k) & 63u; UT u = (UT)x; \
+    return (T)(r == 0 ? u : (UT)((u >> r) | (u << (64u - r)))); } \
+  PK_INLINE T pk_bswap_##N(T x) { return (T)pk_bswap_u64((UT)x); }
+
+PK_DEF_BITOPS_SMALL(int8_t, int8, uint8_t, 8, pk_bswap_u8)
+PK_DEF_BITOPS_SMALL(uint8_t, uint8, uint8_t, 8, pk_bswap_u8)
+PK_DEF_BITOPS_SMALL(int16_t, int16, uint16_t, 16, pk_bswap_u16)
+PK_DEF_BITOPS_SMALL(uint16_t, uint16, uint16_t, 16, pk_bswap_u16)
+PK_DEF_BITOPS_SMALL(int32_t, int32, uint32_t, 32, pk_bswap_u32)
+PK_DEF_BITOPS_SMALL(uint32_t, uint32, uint32_t, 32, pk_bswap_u32)
+PK_DEF_BITOPS_64(int64_t, int64, uint64_t)
+PK_DEF_BITOPS_64(uint64_t, uint64, uint64_t)
+"""
+
 HELPERS_FLOAT_DEF = r"""
 #define PK_DEF_FLOAT(T, N, FMOD, FLOOR, COPYSIGN) \
   PK_INLINE T pk_min_##N(T a, T b) { return (a != a) ? a : ((b != b) ? b : (a < b ? a : b)); } \
@@ -461,7 +609,9 @@ PK_OUTLINE void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t n
 
 PRELUDE = _PRELUDE_TEMPLATE.replace(
   "@@HELPERS@@",
-  "\n".join([HELPERS_INT, HELPERS_FLOAT_DEF, HELPERS_F32, HELPERS_F64, HELPERS_RNG, HELPERS_RNG_F64, _RNG_KEY]),
+  "\n".join(
+    [HELPERS_INT, HELPERS_BITOPS, HELPERS_FLOAT_DEF, HELPERS_F32, HELPERS_F64, HELPERS_RNG, HELPERS_RNG_F64, _RNG_KEY]
+  ),
 )
 
 

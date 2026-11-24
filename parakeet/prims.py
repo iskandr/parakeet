@@ -7,6 +7,7 @@ dtypes match NumPy exactly) and how to lower itself to IR primitives.
 from __future__ import annotations
 
 import math
+import struct
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -14,7 +15,12 @@ import numpy as np
 
 from .ndtypes import (
   Bool,
+  Float32,
+  Float64,
+  Int32,
   ScalarType,
+  UInt8,
+  UInt16,
   WeakBool,
   WeakFloat,
   WeakInt,
@@ -33,6 +39,7 @@ class UFunc:
   kind: str
   emit: Callable[[tuple[Expr, ...], ScalarType], Expr]
   cost: int = 1
+  py: Callable | None = None
 
   def __repr__(self) -> str:
     return f"<parakeet ufunc {self.name}>"
@@ -43,6 +50,8 @@ class UFunc:
 
   def __call__(self, *args, **kwargs):
     """Outside compiled code these behave like the NumPy ufunc they model."""
+    if self.py is not None:
+      return self.py(*args, **kwargs)
     if self.np is None:
       import math
 
@@ -54,8 +63,8 @@ UFUNCS: dict[str, UFunc] = {}
 BY_NUMPY: dict[np.ufunc, UFunc] = {}
 
 
-def _register(name: str, nin: int, npf, kind: str, emit, cost: int = 1) -> UFunc:
-  uf = UFunc(name, nin, npf, kind, emit, cost)
+def _register(name: str, nin: int, npf, kind: str, emit, cost: int = 1, py=None) -> UFunc:
+  uf = UFunc(name, nin, npf, kind, emit, cost, py)
   UFUNCS[name] = uf
   if npf is not None and npf not in BY_NUMPY:
     BY_NUMPY[npf] = uf
@@ -182,6 +191,106 @@ _register("bitxor", 2, np.bitwise_xor, "bit", _bit("bitxor", "ne"))
 _register("invert", 1, np.invert, "invert", _bit("invert", "not"))
 _register("lshift", 2, np.left_shift, "shift", _direct("lshift"))
 _register("rshift", 2, np.right_shift, "shift", _direct("rshift"))
+
+
+def _py_bit_scalar(op: str, x, k=None):
+  if isinstance(x, bool):
+    bits = 8
+    u = int(x) & 0xFF
+  elif isinstance(x, int):
+    bits = 64
+    u = int(x) & ((1 << 64) - 1)
+  elif isinstance(x, np.integer):
+    bits = x.dtype.itemsize * 8
+    u = int(x) & ((1 << bits) - 1)
+  else:
+    raise TypeError(f"{op}() requires integer inputs")
+  if op == "popcount":
+    return u.bit_count()
+  if op == "clz":
+    return bits if u == 0 else bits - u.bit_length()
+  if op == "ctz":
+    return bits if u == 0 else (u & -u).bit_length() - 1
+  if op == "rotl":
+    r = int(k) & (bits - 1)
+    res = u if r == 0 else ((u << r) | (u >> (bits - r))) & ((1 << bits) - 1)
+    return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype)) if isinstance(x, np.integer) else res
+  if op == "rotr":
+    r = int(k) & (bits - 1)
+    res = u if r == 0 else ((u >> r) | (u << (bits - r))) & ((1 << bits) - 1)
+    return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype)) if isinstance(x, np.integer) else res
+  if op == "bswap":
+    res = int.from_bytes(u.to_bytes(bits // 8, "little"), "big")
+    return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype)) if isinstance(x, np.integer) else res
+  raise ValueError(op)
+
+
+def _py_bitop(op: str):
+  def fn(x, k=None):
+    if op in ("rotl", "rotr"):
+      if isinstance(x, np.ndarray) or isinstance(k, np.ndarray):
+        xa, ka = np.broadcast_arrays(np.asarray(x), np.asarray(k))
+        bits = xa.dtype.itemsize * 8
+        u = xa.view(np.dtype(f"u{xa.dtype.itemsize}")).astype(np.uint64)
+        r = (ka.astype(np.int64) & (bits - 1)).astype(np.uint64)
+        mask = np.uint64((1 << bits) - 1)
+        if op == "rotl":
+          res = np.where(r == 0, u, ((u << r) | (u >> (np.uint64(bits) - r))) & mask)
+        else:
+          res = np.where(r == 0, u, ((u >> r) | (u << (np.uint64(bits) - r))) & mask)
+        return res.astype(f"u{xa.dtype.itemsize}").view(xa.dtype)
+      return _py_bit_scalar(op, x, k)
+    if isinstance(x, np.ndarray):
+      if op == "bswap":
+        return x.byteswap()
+      flat = [_py_bit_scalar(op, v) for v in x.ravel()]
+      return np.array(flat, dtype=np.int32).reshape(x.shape)
+    res = _py_bit_scalar(op, x)
+    if op in ("popcount", "clz", "ctz") and isinstance(x, np.integer):
+      return np.int32(res)
+    return res
+
+  return fn
+
+
+def _py_bf16_to_f32(x):
+  if isinstance(x, np.ndarray):
+    u32 = x.astype(np.uint16).astype(np.uint32) << np.uint32(16)
+    return u32.view(np.float32)
+  u32 = (int(x) & 0xFFFF) << 16
+  return np.float32(struct.unpack("<f", struct.pack("<I", u32))[0])
+
+
+def _py_f32_to_bf16(x):
+  if isinstance(x, np.ndarray):
+    u = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
+    is_nan = (u & np.uint32(0x7FFFFFFF)) > np.uint32(0x7F800000)
+    nan_val = ((u >> np.uint32(16)) | np.uint32(0x0040)).astype(np.uint16)
+    rne_val = ((u + np.uint32(0x7FFF) + ((u >> np.uint32(16)) & np.uint32(1))) >> np.uint32(16)).astype(np.uint16)
+    return np.where(is_nan, nan_val, rne_val)
+  u = struct.unpack("<I", struct.pack("<f", float(np.float32(x))))[0]
+  if (u & 0x7FFFFFFF) > 0x7F800000:
+    return np.uint16(((u >> 16) | 0x0040) & 0xFFFF)
+  return np.uint16(((u + 0x7FFF + ((u >> 16) & 1)) >> 16) & 0xFFFF)
+
+
+def _bitwise_count_emit(xs, out):
+  (x,) = xs
+  if x.type.kind == "i":
+    x = prim("abs", (x,), x.type)
+  return cast(prim("popcount", (x,), Int32), out)
+
+
+_register("popcount", 1, None, "bitcount", _direct("popcount"), py=_py_bitop("popcount"))
+_register("clz", 1, None, "bitcount", _direct("clz"), py=_py_bitop("clz"))
+_register("ctz", 1, None, "bitcount", _direct("ctz"), py=_py_bitop("ctz"))
+_register("rotl", 2, None, "bitrot", _direct("rotl"), py=_py_bitop("rotl"))
+_register("rotr", 2, None, "bitrot", _direct("rotr"), py=_py_bitop("rotr"))
+_register("bswap", 1, None, "bswap", _direct("bswap"), py=_py_bitop("bswap"))
+_register("bf16_to_f32", 1, None, "bf16_to_f32", _direct("bf16_to_f32"), py=_py_bf16_to_f32)
+_register("f32_to_bf16", 1, None, "f32_to_bf16", _direct("f32_to_bf16"), py=_py_f32_to_bf16)
+if hasattr(np, "bitwise_count"):
+  _register("bitwise_count", 1, np.bitwise_count, "bitcount_np", _bitwise_count_emit)
 
 # ---- float functions --------------------------------------------------------
 
@@ -372,11 +481,37 @@ def resolve(uf: UFunc, types: tuple[ScalarType, ...], python: bool):
     res = resolve_weak(uf, types)
     if res is not None:
       return res
+  if uf.kind == "bitcount":
+    t0 = types[0]
+    if t0.kind == "f":
+      raise TypeError(f"{uf.name} requires integer operands, got {t0.name}")
+    if t0.weak:
+      return (WeakInt,), WeakInt
+    inp = UInt8 if t0.kind == "b" else t0
+    return (inp,), Int32
+  if uf.kind == "bitrot":
+    t0, t1 = types
+    if t0.kind == "f" or t1.kind == "f":
+      raise TypeError(f"{uf.name} requires integer operands, got {t0.name}, {t1.name}")
+    if t0.weak:
+      return (WeakInt, Int32), WeakInt
+    inp = UInt8 if t0.kind == "b" else t0
+    return (inp, Int32), inp
+  if uf.kind == "bswap":
+    t0 = types[0]
+    if t0.kind not in "iu":
+      raise TypeError(f"bswap requires integer operands, got {t0.name}")
+    return (t0,), t0
+  if uf.kind == "bf16_to_f32":
+    t0 = types[0]
+    if t0.kind not in "iu":
+      raise TypeError(f"bf16_to_f32 requires integer operands, got {t0.name}")
+    return (UInt16,), Float32
+  if uf.kind == "f32_to_bf16":
+    return (Float32,), UInt16
   if uf.np is None:
     out = WeakFloat if all(t.weak for t in types) else None
     if out is None:
-      from .ndtypes import Float32, Float64
-
       small = all(t.name == "float32" or t.weak for t in types)
       out = Float32 if small else Float64
     return (out,) * len(types), out
@@ -412,3 +547,11 @@ bitwise_and = UFUNCS["bitand"]
 bitwise_or = UFUNCS["bitor"]
 bitwise_xor = UFUNCS["bitxor"]
 bitwise_not = UFUNCS["invert"]
+popcount = UFUNCS["popcount"]
+clz = UFUNCS["clz"]
+ctz = UFUNCS["ctz"]
+rotl = UFUNCS["rotl"]
+rotr = UFUNCS["rotr"]
+bswap = UFUNCS["bswap"]
+bf16_to_f32 = UFUNCS["bf16_to_f32"]
+f32_to_bf16 = UFUNCS["f32_to_bf16"]

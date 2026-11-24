@@ -54,6 +54,14 @@ kernel = api.jit
 iscan = scan
 iscatter = scatter_add
 ifilter_reduce = filter_reduce
+popcount = prims.popcount
+clz = prims.clz
+ctz = prims.ctz
+rotl = prims.rotl
+rotr = prims.rotr
+bswap = prims.bswap
+bf16_to_f32 = prims.bf16_to_f32
+f32_to_bf16 = prims.f32_to_bf16
 
 
 @dataclass(frozen=True)
@@ -242,6 +250,11 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 __all__ = [
   "RewriteReport",
   "allpairs",
+  "bf16_to_f32",
+  "bswap",
+  "clz",
+  "ctz",
+  "f32_to_bf16",
   "filter_reduce",
   "fold",
   "grad",
@@ -254,8 +267,11 @@ __all__ = [
   "map",
   "outer_map",
   "parfor",
+  "popcount",
   "prims",
   "reduce",
+  "rotl",
+  "rotr",
   "scan",
   "scatter_add",
   "show_rewrite",
