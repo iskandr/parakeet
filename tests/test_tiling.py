@@ -683,9 +683,10 @@ def test_squeeze_unit_map_and_split_invariant_map_softmax_layernorm():
       assert softmax(x).shape == (0, cols)
       assert layer_norm(x, g, b).shape == (0, cols)
 
-  # Empty trailing axis preserves exact semantics (zero elements -> empty (3, 0) result);
-  # non-empty output with empty reduced operand still raises on np.max without identity.
-  assert softmax(np.zeros((3, 0))).shape == (3, 0)
+  # NumPy evaluates the row maximum before the empty elementwise result.
+  for impl in (softmax.fn, softmax):
+    with pytest.raises(ValueError, match="no identity"):
+      impl(np.zeros((3, 0)))
 
   @jit
   def add_row_max(x, y):
