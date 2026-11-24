@@ -40,6 +40,7 @@ from .device import (
   merge_regions,
   untouched_regions,
 )
+from .monoidal_gpu import generate_monoidal_gpu_kernel
 from .tiled_gpu import BLOCK_THREADS, generate_tiled_gpu_kernel
 
 BLOCK = 256
@@ -269,6 +270,10 @@ class CudaPlanner(DevicePlanner):
 
   def generate(self, loop: ir.ParLoop, free: list[ir.Var]) -> KernelPlan:
     em = CudaEmitter()
+    if loop.monoidal_tile is not None:
+      mon_plan = generate_monoidal_gpu_kernel(loop, free, "cuda", em, PRELUDE)
+      if mon_plan is not None:
+        return mon_plan
     if loop.shared_tile is not None:
       tiled_plan = generate_tiled_gpu_kernel(loop, free, "cuda", em, PRELUDE, profile=self.profile)
       if tiled_plan is not None:

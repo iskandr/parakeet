@@ -305,6 +305,7 @@ class ParLoop(Stmt):
   heavy: bool = False  # each iteration contains loops of its own
   work: Expr | None = None  # estimated inner iterations per element (None: one), valid just before the loop
   shared_tile: SharedTilePlan | None = None  # optional GPU __shared__/threadgroup block-tiling plan
+  monoidal_tile: MonoidalTilePlan | None = None  # optional GPU SRAM-tiled rescaled-monoid plan (Laws 1, 2, 5)
 
 
 # ---- operators -------------------------------------------------------------
@@ -464,6 +465,49 @@ class SharedTilePlan:
   pre_checks: list[Check] = field(default_factory=list)  # uniform (i,j-invariant) checks from before
 
 
+@dataclass(eq=False)
+class MonoidalTilePlan:
+  """SRAM-tiled rescaled-monoid execution plan (Laws 1, 2, 5) attached to an
+  :class:`IndexTile` / :class:`ParLoop`.
+
+  Unifies single-pass tiled semiring monoids that eliminate ``O(N^2)`` or
+  ``O(N*V)`` HBM materialization:
+
+  * ``"flash_monoid"``: 2-level online ``(m, l, O)`` monoid fusing
+    ``softmax(score_mod(Q @ K^T, mask)) @ V`` (plus Split-K FlashDecoding
+    and general pairwise kernel smoothing).
+  * ``"flash_monoid_bwd"``: ``D_i``-recomputed SRAM backward saving only
+    ``(Q, K, V, O, lse)`` — zero ``N x N`` HBM.
+  * ``"monoid_lse"``: 1-pass contraction + online ``(m, l)`` monoid + optional
+    ``O(M)`` target gather (Cut Cross-Entropy / pairwise LogSumExp).
+  * ``"cce_bwd"``: SRAM-recomputed linear cross-entropy backward saving only
+    ``(H, W, target, lse)`` — zero ``M x V`` HBM.
+  """
+
+  kind: str  # "flash_monoid" | "flash_monoid_bwd" | "monoid_lse" | "cce_bwd"
+  elt: ScalarType
+  batch_shape: tuple[Expr, ...]
+  batch_index: tuple[Var, ...]
+  m_dim: Expr
+  n_dim: Expr
+  k_dim: Expr
+  d_dim: Expr | None = None
+  stages: dict[str, TileStage] = field(default_factory=dict)
+  score_op: str = "dot"  # "dot" (sum_k a*b) | "sqdist" (sum_k (a-b)^2)
+  score_scale: Expr | None = None
+  mask_cond: Expr | None = None
+  mask_index_vars: tuple[Var, Var] | None = None
+  mask_buf: Var | None = None
+  mask_index: Expr | None = None
+  mask_fill: Expr | None = None
+  tile_false_guard: Expr | None = None
+  tile_true_guard: Expr | None = None
+  tile_origin_vars: tuple[Var, Var] | None = None
+  out_bufs: dict[str, Var] = field(default_factory=dict)
+  aux_exprs: dict[str, Expr] = field(default_factory=dict)
+  split_k: bool = False
+
+
 @dataclass(eq=False, slots=True)
 class IndexTile(Stmt):
   """Split an N-dimensional index space ``shape`` into tiles of ``tile_shape``.
@@ -491,6 +535,7 @@ class IndexTile(Stmt):
   parallel: bool = True
   loc: SourceLocation | None = None
   shared_tile: SharedTilePlan | None = None
+  monoidal_tile: MonoidalTilePlan | None = None
 
 
 @dataclass(eq=False, slots=True)

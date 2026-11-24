@@ -231,6 +231,31 @@ class IndexFacts:
         self.vars_by_uid[hi.uid] = hi
         self.vars_by_uid[lo.uid] = lo
         self._poly_cache.clear()
+    elif (
+      isinstance(a, Var)
+      and isinstance(rb, (Var, Const))
+      and not isinstance(a.type, ir.BufType)
+      and a.type.kind in "iu"
+      and not isinstance(ra, (Var, Const))
+    ):
+      # A Check(a == rb) where a was previously bound to a complex expr (e.g. select) simplifies a -> rb
+      self.defs[a.uid] = rb
+      self.vars_by_uid[a.uid] = a
+      if isinstance(rb, Var):
+        self.vars_by_uid[rb.uid] = rb
+      self._poly_cache.clear()
+    elif (
+      isinstance(b, Var)
+      and isinstance(ra, (Var, Const))
+      and not isinstance(b.type, ir.BufType)
+      and b.type.kind in "iu"
+      and not isinstance(rb, (Var, Const))
+    ):
+      self.defs[b.uid] = ra
+      self.vars_by_uid[b.uid] = b
+      if isinstance(ra, Var):
+        self.vars_by_uid[ra.uid] = ra
+      self._poly_cache.clear()
 
   def record_stmt(self, s: ir.Stmt) -> None:
     """Absorb integer definitions and checked equalities from ``s``."""
@@ -730,14 +755,242 @@ def op_cost(stmts: list[ir.Stmt]) -> int:
   return total
 
 
+# ---------------------------------------------------------------------------
+# Law 5: Affine Tile-Interval Bounds & Predicate Propagation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class TileInterval:
+  """Closed integer interval ``[lo, hi]`` over symbolic IR expressions."""
+
+  lo: Expr
+  hi: Expr
+
+
+def _bool_and(a: Expr, b: Expr) -> Expr:
+  from ..ndtypes import Bool
+
+  if isinstance(a, Const) and not a.value:
+    return Const(False, Bool)
+  if isinstance(b, Const) and not b.value:
+    return Const(False, Bool)
+  if isinstance(a, Const) and a.value:
+    return b
+  if isinstance(b, Const) and b.value:
+    return a
+  return ops.prim("and", (a, b), Bool)
+
+
+def _bool_or(a: Expr, b: Expr) -> Expr:
+  from ..ndtypes import Bool
+
+  if isinstance(a, Const) and a.value:
+    return Const(True, Bool)
+  if isinstance(b, Const) and b.value:
+    return Const(True, Bool)
+  if isinstance(a, Const) and not a.value:
+    return b
+  if isinstance(b, Const) and not b.value:
+    return a
+  return ops.prim("or", (a, b), Bool)
+
+
+def _simplify_cmp(op: str, lhs: Expr, rhs: Expr, facts: IndexFacts) -> Expr:
+  from ..ndtypes import Bool
+
+  diff = facts.affine(lhs).add(facts.affine(rhs), -1).is_const()
+  if diff is not None:
+    if op == "le":
+      return Const(diff <= 0, Bool)
+    if op == "lt":
+      return Const(diff < 0, Bool)
+    if op == "ge":
+      return Const(diff >= 0, Bool)
+    if op == "gt":
+      return Const(diff > 0, Bool)
+    if op == "eq":
+      return Const(diff == 0, Bool)
+    if op == "ne":
+      return Const(diff != 0, Bool)
+  return ops.cmp(op, lhs, rhs)
+
+
+def eval_interval(
+  e: Expr,
+  var_intervals: dict[int, TileInterval],
+  facts: IndexFacts,
+  budget: int = 24,
+) -> TileInterval | None:
+  """Compute a sound symbolic closed interval ``[lo, hi]`` for integer ``e``
+  given tile intervals for index variables (e.g. ``i in [i0, i0 + BM - 1]``)."""
+  if budget <= 0:
+    return None
+  if isinstance(e, Const) and not isinstance(e.value, bool) and isinstance(e.value, int):
+    return TileInterval(e, e)
+  if isinstance(e, Var):
+    iv = var_intervals.get(e.uid)
+    if iv is not None:
+      return iv
+    d = facts.defs.get(e.uid)
+    if d is not None:
+      return eval_interval(d, var_intervals, facts, budget - 1)
+    return TileInterval(e, e)
+  if isinstance(e, ir.Cast) and not isinstance(e.type, ir.BufType) and e.type.kind in "iu":
+    return eval_interval(e.arg, var_intervals, facts, budget - 1)
+  if isinstance(e, Prim):
+    if e.op == "neg" and len(e.args) == 1:
+      iv = eval_interval(e.args[0], var_intervals, facts, budget - 1)
+      return None if iv is None else TileInterval(ops.isub(ops.ZERO, iv.hi), ops.isub(ops.ZERO, iv.lo))
+    if e.op == "add" and len(e.args) == 2:
+      a = eval_interval(e.args[0], var_intervals, facts, budget - 1)
+      b = eval_interval(e.args[1], var_intervals, facts, budget - 1)
+      if a is None or b is None:
+        return None
+      return TileInterval(facts.resolve(ops.iadd(a.lo, b.lo)), facts.resolve(ops.iadd(a.hi, b.hi)))
+    if e.op == "sub" and len(e.args) == 2:
+      a = eval_interval(e.args[0], var_intervals, facts, budget - 1)
+      b = eval_interval(e.args[1], var_intervals, facts, budget - 1)
+      if a is None or b is None:
+        return None
+      return TileInterval(facts.resolve(ops.isub(a.lo, b.hi)), facts.resolve(ops.isub(a.hi, b.lo)))
+    if e.op == "mul" and len(e.args) == 2:
+      a = eval_interval(e.args[0], var_intervals, facts, budget - 1)
+      b = eval_interval(e.args[1], var_intervals, facts, budget - 1)
+      if a is None or b is None:
+        return None
+      ca = facts.affine(e.args[0]).is_const()
+      cb = facts.affine(e.args[1]).is_const()
+      if ca is not None:
+        c = Const(ca, ops.I)
+        if ca >= 0:
+          return TileInterval(facts.resolve(ops.imul(c, b.lo)), facts.resolve(ops.imul(c, b.hi)))
+        return TileInterval(facts.resolve(ops.imul(c, b.hi)), facts.resolve(ops.imul(c, b.lo)))
+      if cb is not None:
+        c = Const(cb, ops.I)
+        if cb >= 0:
+          return TileInterval(facts.resolve(ops.imul(a.lo, c)), facts.resolve(ops.imul(a.hi, c)))
+        return TileInterval(facts.resolve(ops.imul(a.hi, c)), facts.resolve(ops.imul(a.lo, c)))
+      return None
+    if e.op == "min" and len(e.args) == 2:
+      a = eval_interval(e.args[0], var_intervals, facts, budget - 1)
+      b = eval_interval(e.args[1], var_intervals, facts, budget - 1)
+      if a is None or b is None:
+        return None
+      return TileInterval(ops.imin(a.lo, b.lo), ops.imin(a.hi, b.hi))
+    if e.op == "max" and len(e.args) == 2:
+      a = eval_interval(e.args[0], var_intervals, facts, budget - 1)
+      b = eval_interval(e.args[1], var_intervals, facts, budget - 1)
+      if a is None or b is None:
+        return None
+      return TileInterval(ops.imax(a.lo, b.lo), ops.imax(a.hi, b.hi))
+  return None
+
+
+def tile_predicate_guards(
+  cond: Expr,
+  var_intervals: dict[int, TileInterval],
+  facts: IndexFacts,
+  budget: int = 24,
+) -> tuple[Expr, Expr]:
+  """Derive symbolic tile-level guards ``(always_false, always_true)`` for
+  boolean predicate ``cond`` over tile intervals ``var_intervals`` (Law 5).
+
+  * If ``always_false`` evaluates to True for a tile ``(i0, j0)``, every point
+    in the tile fails ``cond`` -> skip the entire tile.
+  * If ``always_true`` evaluates to True for a tile ``(i0, j0)``, every point
+    in the tile satisfies ``cond`` -> elide per-element masking inside the tile.
+  """
+  from ..ndtypes import Bool
+
+  false_c = Const(False, Bool)
+  true_c = Const(True, Bool)
+  if budget <= 0:
+    return (false_c, false_c)
+  if isinstance(cond, Const):
+    return (false_c, true_c) if cond.value else (true_c, false_c)
+  if isinstance(cond, Var):
+    d = facts.defs.get(cond.uid)
+    if d is not None:
+      return tile_predicate_guards(d, var_intervals, facts, budget - 1)
+    return (false_c, false_c)
+  if isinstance(cond, ir.Cast) and cond.type is Bool:
+    return tile_predicate_guards(cond.arg, var_intervals, facts, budget - 1)
+  if not isinstance(cond, Prim):
+    return (false_c, false_c)
+
+  op = cond.op
+  if op == "not" and len(cond.args) == 1:
+    af, at = tile_predicate_guards(cond.args[0], var_intervals, facts, budget - 1)
+    return (at, af)
+  if op in ("and", "bitand") and len(cond.args) == 2:
+    af1, at1 = tile_predicate_guards(cond.args[0], var_intervals, facts, budget - 1)
+    af2, at2 = tile_predicate_guards(cond.args[1], var_intervals, facts, budget - 1)
+    return (_bool_or(af1, af2), _bool_and(at1, at2))
+  if op in ("or", "bitor") and len(cond.args) == 2:
+    af1, at1 = tile_predicate_guards(cond.args[0], var_intervals, facts, budget - 1)
+    af2, at2 = tile_predicate_guards(cond.args[1], var_intervals, facts, budget - 1)
+    return (_bool_and(af1, af2), _bool_or(at1, at2))
+
+  # Rewrite abs(x) <= W / abs(x) < W / abs(x) >= W / abs(x) > W into exact linear clauses
+  if op in ("le", "lt", "ge", "gt") and len(cond.args) == 2:
+    lhs, rhs = cond.args
+    if isinstance(lhs, Prim) and lhs.op == "abs" and len(lhs.args) == 1:
+      x = lhs.args[0]
+      nx = ops.isub(ops.ZERO, x)
+      if op in ("le", "lt"):
+        c1 = ops.cmp(op, x, rhs)
+        c2 = ops.cmp(op, nx, rhs)
+        return tile_predicate_guards(ops.prim("and", (c1, c2), Bool), var_intervals, facts, budget - 1)
+      c1 = ops.cmp(op, x, rhs)
+      c2 = ops.cmp(op, nx, rhs)
+      return tile_predicate_guards(ops.prim("or", (c1, c2), Bool), var_intervals, facts, budget - 1)
+    if isinstance(rhs, Prim) and rhs.op == "abs" and len(rhs.args) == 1:
+      flip = {"le": "ge", "lt": "gt", "ge": "le", "gt": "lt"}[op]
+      return tile_predicate_guards(ops.cmp(flip, rhs, lhs), var_intervals, facts, budget - 1)
+
+  if op in ("le", "lt", "ge", "gt", "eq", "ne") and len(cond.args) == 2:
+    lhs, rhs = cond.args
+    a = eval_interval(lhs, var_intervals, facts, budget - 1)
+    b = eval_interval(rhs, var_intervals, facts, budget - 1)
+    if a is None or b is None:
+      return (false_c, false_c)
+    if op == "le":
+      return (_simplify_cmp("gt", a.lo, b.hi, facts), _simplify_cmp("le", a.hi, b.lo, facts))
+    if op == "lt":
+      return (_simplify_cmp("ge", a.lo, b.hi, facts), _simplify_cmp("lt", a.hi, b.lo, facts))
+    if op == "ge":
+      return (_simplify_cmp("lt", a.hi, b.lo, facts), _simplify_cmp("ge", a.lo, b.hi, facts))
+    if op == "gt":
+      return (_simplify_cmp("le", a.hi, b.lo, facts), _simplify_cmp("gt", a.lo, b.hi, facts))
+    if op == "eq":
+      af = _bool_or(_simplify_cmp("lt", a.hi, b.lo, facts), _simplify_cmp("lt", b.hi, a.lo, facts))
+      at = _bool_and(
+        _bool_and(_simplify_cmp("eq", a.lo, a.hi, facts), _simplify_cmp("eq", b.lo, b.hi, facts)),
+        _simplify_cmp("eq", a.lo, b.lo, facts),
+      )
+      return (af, at)
+    if op == "ne":
+      at = _bool_or(_simplify_cmp("lt", a.hi, b.lo, facts), _simplify_cmp("lt", b.hi, a.lo, facts))
+      af = _bool_and(
+        _bool_and(_simplify_cmp("eq", a.lo, a.hi, facts), _simplify_cmp("eq", b.lo, b.hi, facts)),
+        _simplify_cmp("eq", a.lo, b.lo, facts),
+      )
+      return (af, at)
+  return (false_c, false_c)
+
+
 __all__ = [
   "CHEAP_FUSE_COST",
   "LOOP_COST",
   "AffineExpr",
   "BufferInfo",
   "IndexFacts",
+  "TileInterval",
   "buffer_accesses",
+  "eval_interval",
   "expr_cost",
   "is_pure_expr",
   "op_cost",
+  "tile_predicate_guards",
 ]

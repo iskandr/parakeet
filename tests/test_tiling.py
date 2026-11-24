@@ -159,6 +159,7 @@ def test_passes_can_be_skipped_by_name():
     "vertical fusion",
     "filter fusion",
     "sibling fusion",
+    "monoidal tiling",
     "reduction interchange",
     "tiling",
   ]

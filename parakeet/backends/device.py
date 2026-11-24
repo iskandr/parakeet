@@ -140,6 +140,38 @@ class DevicePlanner:
         for x in ir.walk_expr(e):
           if isinstance(x, ir.Var):
             used[x.uid] = x
+    if loop.monoidal_tile is not None:
+      mp = loop.monoidal_tile
+      mp_bound: set[int] = {v.uid for v in mp.batch_index}
+      if mp.mask_index_vars is not None:
+        mp_bound.update(v.uid for v in mp.mask_index_vars)
+      if mp.tile_origin_vars is not None:
+        mp_bound.update(v.uid for v in mp.tile_origin_vars)
+      exprs: list[ir.Expr] = [*mp.batch_shape, mp.m_dim, mp.n_dim, mp.k_dim]
+      if mp.d_dim is not None:
+        exprs.append(mp.d_dim)
+      for e_opt in (mp.score_scale, mp.mask_cond, mp.mask_index, mp.mask_fill, mp.tile_false_guard, mp.tile_true_guard):
+        if e_opt is not None:
+          exprs.append(e_opt)
+      exprs.extend(mp.aux_exprs.values())
+      for e in exprs:
+        for x in ir.walk_expr(e):
+          if isinstance(x, ir.Var) and x.uid not in mp_bound:
+            used[x.uid] = x
+      if mp.mask_buf is not None:
+        used[mp.mask_buf.uid] = mp.mask_buf
+      for b in mp.out_bufs.values():
+        used[b.uid] = b
+      for st in mp.stages.values():
+        st_def = defined_vars(st.body, into_parloops=True)
+        for v in st.index:
+          st_def[v.uid] = v
+        for v_uid, v in used_vars(st.body).items():
+          if v_uid not in st_def and v_uid not in mp_bound:
+            used[v_uid] = v
+        for x in ir.walk_expr(st.value):
+          if isinstance(x, ir.Var) and x.uid not in st_def and x.uid not in mp_bound:
+            used[x.uid] = x
     return [v for uid, v in sorted(used.items()) if uid not in defined]
 
   def plan(self, loop: ir.ParLoop) -> KernelPlan | None:

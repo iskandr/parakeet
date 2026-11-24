@@ -909,7 +909,10 @@ class Tape:
 
   def backward(self, el, out, seed) -> None:
     """Emit the adjoint computation of everything recorded, given ``d out = seed``."""
+    from .algebraic_vjp import optimize_tape
+
     self.home = el.block
+    optimize_tape(self, el, out)
     for r in list(self.roots.values()):
       if r.needs_buffer:
         r.allocate(el)
@@ -1428,6 +1431,12 @@ def _gather(tape: Tape, el, node: Node, g) -> None:
   el.record_store(adj_view)
 
 
+def _algebraic_vjp(tape: Tape, el, node: Node, g) -> None:
+  from .algebraic_vjp import run_algebraic_vjp
+
+  run_algebraic_vjp(tape, el, node, g)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1442,6 +1451,7 @@ _BACKWARD = {
   "fold": _fold,
   "scatter_add": _scatter_add,
   "gather": _gather,
+  "algebraic_vjp": _algebraic_vjp,
 }
 
 

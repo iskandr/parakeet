@@ -312,8 +312,59 @@ class HostEmitter(CFamilyEmitter):
           for chk in s.shared_tile.pre_checks
         ),
       )
+    monoid_key = None
+    if s.monoidal_tile is not None:
+      mp = s.monoidal_tile
+      saved_def = set(defined)
+      for v in mp.batch_index:
+        defined[v.uid] = v
+      if mp.mask_index_vars is not None:
+        for v in mp.mask_index_vars:
+          defined[v.uid] = v
+      if mp.tile_origin_vars is not None:
+        for v in mp.tile_origin_vars:
+          defined[v.uid] = v
+
+      def _stage_key(st: ir.TileStage) -> tuple:
+        st_defs = defined_vars(st.body, into_parloops=True)
+        for v in st.index:
+          st_defs[v.uid] = v
+        added = [u for u in st_defs if u not in defined]
+        defined.update(st_defs)
+        try:
+          return (block_key(st.body), expr_key(st.value))
+        finally:
+          for u in added:
+            defined.pop(u, None)
+
+      try:
+        monoid_key = (
+          mp.kind,
+          mp.elt,
+          mp.score_op,
+          mp.split_k,
+          tuple(expr_key(d) for d in mp.batch_shape),
+          expr_key(mp.m_dim),
+          expr_key(mp.n_dim),
+          expr_key(mp.k_dim),
+          None if mp.d_dim is None else expr_key(mp.d_dim),
+          None if mp.score_scale is None else expr_key(mp.score_scale),
+          None if mp.mask_cond is None else expr_key(mp.mask_cond),
+          None if mp.mask_buf is None else var_key(mp.mask_buf),
+          None if mp.mask_index is None else expr_key(mp.mask_index),
+          None if mp.mask_fill is None else expr_key(mp.mask_fill),
+          None if mp.tile_false_guard is None else expr_key(mp.tile_false_guard),
+          None if mp.tile_true_guard is None else expr_key(mp.tile_true_guard),
+          tuple((k, var_key(b)) for k, b in sorted(mp.out_bufs.items())),
+          tuple((k, expr_key(e)) for k, e in sorted(mp.aux_exprs.items())),
+          tuple((k, _stage_key(st)) for k, st in sorted(mp.stages.items())),
+        )
+      finally:
+        for u in list(defined):
+          if u not in saved_def:
+            defined.pop(u, None)
     free_types = tuple(v.type for v in free)
-    return (s.kind, free_types, body_key, owned_key, shared_key), free
+    return (s.kind, free_types, body_key, owned_key, shared_key, monoid_key), free
 
   def par_loop(self, s: ir.ParLoop, out: list[str], indent: int) -> None:
     pad = "  " * indent

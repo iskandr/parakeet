@@ -105,6 +105,7 @@ class Loops:
     work=None,
     heavy=None,
     shared_tile=None,
+    monoidal_tile=None,
   ):
     """A chunked parallel loop; ``body(loops, chunk, start, stop)`` fills one chunk."""
     if nchunks is None:
@@ -130,6 +131,7 @@ class Loops:
         heavy,
         work if kind == "map" else None,
         shared_tile=shared_tile,
+        monoidal_tile=monoidal_tile,
       )
     )
     return nchunks
@@ -809,7 +811,15 @@ def lower_tile(lp: Loops, s: ir.IndexTile, defs: dict[int, Expr], owner: Scope) 
     inner.emit(ForRange(flat, start, stop, ONE, one_blk, Scope("loop")))
 
   work_blk: list = []
-  lp.sub(work_blk, owner).parallel(total_tiles, chunk_body, loc=s.loc, work=est, heavy=heavy, shared_tile=s.shared_tile)
+  lp.sub(work_blk, owner).parallel(
+    total_tiles,
+    chunk_body,
+    loc=s.loc,
+    work=est,
+    heavy=heavy,
+    shared_tile=s.shared_tile,
+    monoidal_tile=s.monoidal_tile,
+  )
   lp.emit(If(cmp("gt", total_tiles, 0), work_blk, []))
 
 
