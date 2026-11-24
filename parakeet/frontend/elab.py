@@ -2361,13 +2361,8 @@ class Elaborator(ArrayMixin):
   def _comprehension(self, node, elt: ast.expr):
     from .. import lib
 
-    if len(node.generators) != 1:
-      raise self.error(
-        UnsupportedError,
-        "comprehensions with more than one 'for' are not supported",
-        node,
-        hint="nest comprehensions instead: [[f(x, y) for y in ys] for x in xs]",
-      )
+    if len(node.generators) > 1:
+      return self._cartesian_comprehension(node, elt)
     gen = node.generators[0]
     if gen.is_async:
       raise self.error(UnsupportedError, "async comprehensions are not supported", node)
@@ -2411,6 +2406,60 @@ class Elaborator(ArrayMixin):
       result = self.as_concrete(result)
       self.block.extend(end_checks)
     return result
+
+  def _cartesian_comprehension(self, node, elt):
+    """Stage independent iteration domains once and retain Python's flat order."""
+    from .. import lib
+    from ..syntax import ir
+
+    bound = set()
+    shape = []
+    getters = []
+    for gen in node.generators:
+      if gen.ifs or gen.is_async:
+        raise self.error(UnsupportedError, "Cartesian comprehensions require unfiltered synchronous iterators", gen.iter)
+      if any(isinstance(n, ast.Name) and n.id in bound for n in ast.walk(gen.iter)):
+        raise self.error(UnsupportedError, "Cartesian comprehensions require independent iteration domains", gen.iter)
+      if any(isinstance(n, ast.NamedExpr) for n in ast.walk(gen.iter)):
+        raise self.error(UnsupportedError, "assignments in Cartesian iteration domains are unsupported", gen.iter)
+      setup = []
+      checks = []
+      with self.in_block(setup):
+        length, getter = self.iter_source(self.eval(gen.iter), gen.iter, checks)
+      # Inner iterators may never be entered. Only hoist scalar setup that
+      # cannot raise, change visible state, or allocate temporary storage.
+      if checks or (getters and any(
+        not isinstance(s, Assign) or any(isinstance(e, (ir.RtCall, ir.Load)) for e in ir.walk_expr(s.value))
+        for s in setup
+      )):
+        raise self.error(UnsupportedError, "Cartesian iterator setup must be safe to hoist", gen.iter)
+      self.block.extend(setup)
+      shape.append(length)
+      getters.append(getter)
+      bound.update(n.id for n in ast.walk(gen.target) if isinstance(n, ast.Name))
+    if any(isinstance(n, ast.NamedExpr) for n in ast.walk(elt)):
+      raise self.error(UnsupportedError, "assignments in Cartesian comprehension bodies are unsupported", elt)
+    fr = self.frame
+
+    def body(indices):
+      saved = dict(fr.env)
+      start = len(self.block)
+      try:
+        for gen, get, index in zip(node.generators, getters, indices):
+          self.assign(gen.target, get(index))
+        value = self.eval(elt)
+        for s in ir.walk_stmts(self.block[start:]):
+          if isinstance(s, (ir.Store, ir.IndexScatter)) or any(
+            isinstance(e, ir.RtCall) and not e.pure for x in ir.stmt_exprs(s) for e in ir.walk_expr(x)
+          ):
+            raise self.error(UnsupportedError, "Cartesian comprehension bodies must be pure", elt)
+        return value
+      finally:
+        fr.env.clear()
+        fr.env.update(saved)
+
+    mapped = lib.build_map(self, tuple(shape), body, "Cartesian comprehension")
+    return self.reshape(mapped, (ops.iprod(shape), *mapped.shape[len(shape):]), checked=True)
 
   def _static_filter(self, gen, item, bind_and) -> bool:
     def keep():

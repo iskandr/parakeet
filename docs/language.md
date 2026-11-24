@@ -39,6 +39,12 @@ Loop `else` runs on normal exhaustion, including an empty input. A break skips
 the corresponding else suite. Strict zip checks lengths at exhaustion. Chained
 scalar comparisons evaluate each reached operand once and short-circuit.
 
+Unfiltered multi-for comprehensions over independent ranges or arrays compile
+as Cartesian maps. The rightmost iterator varies fastest. A scalar consumer
+such as `sum(x * y for x in xs for y in ys)` can fuse the map into its
+reduction. Inner iterators with observable setup and dependent domains such as
+`for j in range(i)` are outside this subset.
+
 ## Functions
 
 * Any Python function called from compiled code is **inlined** — helpers do not
