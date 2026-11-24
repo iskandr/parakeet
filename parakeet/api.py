@@ -25,6 +25,7 @@ from .frontend.arrays import Restart
 from .frontend.elab import Elaborated, Elaborator, ElabState, Options
 from .ndtypes import ScalarType
 from .syntax.ir import ArrayParam, fmt_function
+from .syntax.records import record_type
 from .target import TargetProfile
 
 MAX_RESTARTS = 500
@@ -268,6 +269,8 @@ class Specialization:
       if promote_dev is not None:
         return promote_dev.promote(arr)
       return arr
+    if tag == "rec":
+      return spec[1].build(self._decode(spec[2], results, io, fo, arrays, promote_dev, input_das))
     if tag == "t":
       return tuple(self._decode(s, results, io, fo, arrays, promote_dev, input_das) for s in spec[1:])
     if tag == "n":
@@ -441,6 +444,8 @@ def to_device(value, backend: str | None = None):
     raise ValueError(f"to_device() requires a GPU backend ('metal' or 'cuda'), got {bname!r}")
 
   def _move(x):
+    if record := record_type(x):
+      return record.build(map(_move, record.values(x)))
     if isinstance(x, tuple):
       return tuple(_move(e) for e in x)
     if isinstance(x, DeviceArray):
@@ -460,6 +465,8 @@ def to_device(value, backend: str | None = None):
 
 def to_host(value):
   """Bring a :class:`DeviceArray` (or nested tuple of them) back to host NumPy arrays."""
+  if record := record_type(value):
+    return record.build(map(to_host, record.values(value)))
   if isinstance(value, tuple):
     return tuple(to_host(e) for e in value)
   if isinstance(value, DeviceArray):
@@ -505,6 +512,8 @@ def _passed_leaves(key, leaves: list, pos: list[int], out: list) -> None:
   elif tag == "r":
     out.extend(leaves[pos[0] : pos[0] + 3])
     pos[0] += 3
+  elif tag == "rec":
+    _passed_leaves(key[2], leaves, pos, out)
   elif tag in ("t", "sl"):
     for k in key[1:]:
       _passed_leaves(k, leaves, pos, out)

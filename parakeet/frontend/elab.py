@@ -60,6 +60,7 @@ from ..syntax.ir import (
   walk_expr,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
+from ..syntax.records import record_type
 from ..syntax.values import (
   ArrayVal,
   BoundMethod,
@@ -393,6 +394,8 @@ class Elaborator(ArrayMixin):
       return ("s", v.type)
     if isinstance(v, ArrayVal):
       return ("a", v.elt, v.rank)
+    if record := record_type(v):
+      return ("rec", record, self.vtype(record.values(v)))
     if isinstance(v, tuple):
       return ("t", *[self.vtype(x) for x in v])
     if v is None:
@@ -430,6 +433,9 @@ class Elaborator(ArrayMixin):
       if a[2] != b[2]:
         return None
       return ("a", join(a[1], b[1]).strong, a[2])
+    if a[0] == "rec":
+      parts = self.join_vtypes(a[2], b[2]) if a[1] == b[1] else None
+      return ("rec", a[1], parts) if parts is not None else None
     if a[0] in ("t", "sl"):
       if len(a) != len(b):
         return None
@@ -492,6 +498,9 @@ class Elaborator(ArrayMixin):
       self.targets[id(arr)] = TargetInfo(home, hint_key)
       self._keep.append(arr)
       return arr
+    if tag == "rec":
+      record = vt[1]
+      return record.build(self.make_target(vt[2], record.values(like), name, home, hint_key, init_block, unknown_roots))
     if tag in ("t", "sl"):
       likes = like if isinstance(like, tuple) else (like.start, like.stop, like.step)
       parts = tuple(
@@ -540,6 +549,8 @@ class Elaborator(ArrayMixin):
         self.emit(Incref(c.buf))
         self.emit(Release(info.slot))
         self.emit(Assign(info.slot, c.buf))
+    elif record := record_type(target):
+      self.assign_target(record.values(target), record.values(v))
     elif isinstance(target, tuple):
       for t, x in zip(target, v):
         self.assign_target(t, x)
@@ -575,6 +586,8 @@ class Elaborator(ArrayMixin):
                 offset=self.copy_scalar(v.offset), strides=tuple(self.copy_scalar(s) for s in v.strides),
                 roots=self.get_roots(v), contig=v.contig,
             )  # fmt: skip
+    if record := record_type(v):
+      return record.build(self.snapshot(x) for x in record.values(v))
     if isinstance(v, tuple):
       return tuple(self.snapshot(x) for x in v)
     return v
@@ -589,6 +602,8 @@ class Elaborator(ArrayMixin):
       return a.type is b.type
     if isinstance(a, str) and isinstance(b, str):
       return a == b
+    if record := record_type(a):
+      return record == record_type(b) and Elaborator.static_equal(record.values(a), record.values(b))
     if isinstance(a, tuple) and isinstance(b, tuple):
       return len(a) == len(b) and all(Elaborator.static_equal(x, y) for x, y in zip(a, b))
     return False
@@ -646,6 +661,8 @@ class Elaborator(ArrayMixin):
             )  # fmt: skip
       arr.inj = layout == "C"
       return arr
+    if tag == "rec":
+      return key[1].build(self.value_from_key(key[2], source, pos, name))
     if tag == "t":
       return tuple(self.value_from_key(k, source, pos, f"{name}_{i}") for i, k in enumerate(key[1:]))
     if tag == "n":
@@ -734,6 +751,8 @@ class Elaborator(ArrayMixin):
       except Unsupported as e:
         raise self.error(UnsupportedError, str(e)) from None
       return Const(obj.item(), tv)
+    if record := record_type(obj):
+      return record.build(self.lift(x) for x in record.values(obj))
     if isinstance(obj, tuple):
       return tuple(self.lift(x) for x in obj)
     try:
@@ -857,6 +876,8 @@ class Elaborator(ArrayMixin):
       self.emit(Incref(c.buf))
       self.results.append(ArrayResult(c.buf, c.offset, c.shape, c.strides, c.elt))
       return ("a", c.elt, c.rank)
+    if record := record_type(v):
+      return ("rec", record, self.export(record.values(v)))
     if isinstance(v, tuple):
       return ("t", *[self.export(x) for x in v])
     if v is None:
@@ -1046,6 +1067,8 @@ class Elaborator(ArrayMixin):
       return self.call_user(fn, args, kwargs, node)
     from .. import lib
 
+    if isinstance(fn, type) and issubclass(fn, tuple) and hasattr(fn, "_fields"):
+      return fn(*args, **kwargs)
     if isinstance(fn, BoundMethod):
       impl = lib.lookup_method(fn.obj, fn.name)
       if impl is None:
@@ -1116,6 +1139,8 @@ class Elaborator(ArrayMixin):
     """Prepare a value for being held in a variable."""
     if isinstance(v, Expr) and not is_trivial(v):
       return self.tmp(v, _sanitize(name))
+    if record := record_type(v):
+      return record.build(self.bindable(x, name) for x in record.values(v))
     if isinstance(v, tuple):
       return tuple(self.bindable(x, name) for x in v)
     return v
@@ -1373,6 +1398,10 @@ class Elaborator(ArrayMixin):
     return False
 
   def _choose(self, cond: Expr, a, b, name: str):
+    if record := record_type(a):
+      if record != record_type(b):
+        return Undefined(name, "record types differ between branches")
+      return record.build(self._choose(cond, record.values(a), record.values(b), name))
     if isinstance(a, tuple) and isinstance(b, tuple) and len(a) == len(b):
       return tuple(self._choose(cond, x, y, name) for x, y in zip(a, b))
     if isinstance(a, Expr) and isinstance(b, Expr):
@@ -1403,7 +1432,7 @@ class Elaborator(ArrayMixin):
   def merge_values(self, name: str, va, blk_a: list, vb, blk_b: list):
     ta, tb = self.vtype(va), self.vtype(vb)
     vt = self.join_vtypes(ta, tb)
-    if vt is None or vt[0] not in ("s", "a", "t", "sl", "n"):
+    if vt is None or vt[0] not in ("s", "a", "t", "sl", "rec", "n"):
       return Undefined(
         name,
         f"has incompatible types on different paths ({self.describe_vtype(ta)} vs {self.describe_vtype(tb)})",
@@ -1419,6 +1448,8 @@ class Elaborator(ArrayMixin):
     return target
 
   def _mergeable(self, vt, va, vb) -> bool:
+    if vt[0] == "rec":
+      return self._mergeable(vt[2], vt[1].values(va), vt[1].values(vb))
     if vt[0] in ("s", "a", "n"):
       return True
     if vt[0] == "t":
@@ -1444,7 +1475,7 @@ class Elaborator(ArrayMixin):
         continue
       hint_key = (fr.path, id(node), name)
       vt = self.join_vtypes(self.vtype(v), self.hint_get(hint_key))
-      if vt is None or vt[0] not in ("s", "a", "t", "sl"):
+      if vt is None or vt[0] not in ("s", "a", "t", "sl", "rec"):
         ctx.static[name] = v  # functions, None, ...: must not change in the loop
         continue
       if self.carries_derivative(v):
@@ -1493,7 +1524,7 @@ class Elaborator(ArrayMixin):
       if v is _MISSING or isinstance(v, Undefined):
         continue
       vt_v = self.vtype(v)
-      if vt_v[0] not in ("s", "a", "t", "sl"):
+      if vt_v[0] not in ("s", "a", "t", "sl", "rec"):
         continue
       hint_key = (fr.path, id(ctx.node), name)
       entry = ctx.post.get(name)
@@ -1757,13 +1788,15 @@ class Elaborator(ArrayMixin):
       if joined is None:
         joined = vt
       ret.vtype = joined
-      if joined[0] in ("s", "a", "t", "sl"):
+      if joined[0] in ("s", "a", "t", "sl", "rec"):
         ret.target = self.make_target(joined, v, "ret", fr.scope, hint_key)
       else:
         ret.target = v
     else:
       joined = self.join_vtypes(ret.vtype, vt)
-      if joined is None or (joined[0] not in ("s", "a", "t", "sl", "n") and not self.static_equal(ret.target, v)):
+      if joined is None or (
+        joined[0] not in ("s", "a", "t", "sl", "rec", "n") and not self.static_equal(ret.target, v)
+      ):
         raise self.error(
           TypeInferenceError,
           f"function returns values of incompatible types: {self.describe_vtype(ret.vtype)} "
@@ -1773,7 +1806,7 @@ class Elaborator(ArrayMixin):
       if joined != ret.vtype:
         self.state.hints[hint_key] = joined
         self.restart("return type")
-    if ret.vtype[0] in ("s", "a", "t", "sl"):
+    if ret.vtype[0] in ("s", "a", "t", "sl", "rec"):
       self.assign_target(ret.target, v)
     if fr.loops:
       if ret.flag is None:
@@ -1811,6 +1844,8 @@ class Elaborator(ArrayMixin):
   def force_eager(self, v):
     if isinstance(v, ArrayVal):
       return self.as_concrete(v)
+    if record := record_type(v):
+      return record.build(self.force_eager(x) for x in record.values(v))
     if isinstance(v, tuple):
       return tuple(self.force_eager(x) for x in v)
     return v
@@ -1911,6 +1946,10 @@ class Elaborator(ArrayMixin):
       else:
         index = self._index_item(index)
       return self.getitem(obj, index)
+    if isinstance(obj, dict):
+      if not isinstance(index, str) or index not in obj:
+        raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
+      return obj[index]
     if isinstance(obj, tuple):
       return self.tuple_index(obj, index, node)
     if isinstance(obj, RangeVal):
@@ -1975,6 +2014,10 @@ class Elaborator(ArrayMixin):
         node,
         hint=lib.suggest_attribute(name),
       )
+    if (record := record_type(obj)) and record.cls is not dict and name in record.names:
+      return getattr(obj, name)
+    if isinstance(obj, dict) or record is not None:
+      raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
     if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:
       if isinstance(obj, TypeVal):
         if name == "itemsize":

@@ -113,3 +113,12 @@ Parallel side effects
     elements in parallel and in any order. Reductions with a user-defined
     function assume it is associative only when Parakeet can prove it (for
     `+`, `*`, `min`, `max`, `&`, `|`, `^`); otherwise they run sequentially.
+
+## Fixed records at the call boundary
+
+Named tuples preserve their field names and result type. Plain frozen dataclasses
+and dictionaries with fixed string keys can contain arrays or nested records.
+Fields and keys are part of the specialization, while array data and scalar
+fields remain ordinary runtime arguments. A dictionary lookup in compiled code
+requires a known string key. Returning these containers reconstructs their
+structure and keeps the usual array view semantics.

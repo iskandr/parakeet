@@ -24,6 +24,7 @@ from ..ndtypes import (
   from_dtype,
   is_supported_dtype,
 )
+from ..syntax.records import record_type
 
 Key = tuple
 
@@ -197,7 +198,9 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
     if arr.size == 0 and arr.dtype == np.float64 and arr.ndim == 1:
       arr = np.empty(0, dtype=np.float64)
     return classify(arr, leaves, fixups)
-  if isinstance(value, tuple):  # namedtuple and friends
+  if record := record_type(value):
+    return ("rec", record, classify(record.values(value), leaves, fixups))
+  if isinstance(value, tuple):
     return ("t", *[classify(v, leaves, fixups) for v in value])
   if t is slice:
     return (
@@ -274,6 +277,8 @@ def describe(key: Key) -> str:
     return f"{describe(('s', key[1]))}={key[2]!r}"
   if tag == "a":
     return f"array[{key[1].name}, {key[2]}d{'' if key[3] == 'C' else ', strided'}]"
+  if tag == "rec":
+    return key[1].cls.__name__ + describe(key[2])
   if tag == "t":
     return "(" + ", ".join(describe(k) for k in key[1:]) + ("," if len(key) == 2 else "") + ")"
   if tag == "n":
@@ -301,6 +306,8 @@ def count_leaves(key: Key) -> int:
     return 1
   if tag == "r":
     return 3
+  if tag == "rec":
+    return count_leaves(key[2])
   if tag in ("t",):
     return sum(count_leaves(k) for k in key[1:])
   if tag == "sl":
@@ -334,6 +341,8 @@ def with_static_leaves(key: Key, leaves: list, static: frozenset[int], _pos: lis
     i = pos[0]
     pos[0] += 3
     return key
+  if tag == "rec":
+    return (tag, key[1], with_static_leaves(key[2], leaves, static, pos))
   if tag in ("t", "sl"):
     return (tag, *[with_static_leaves(k, leaves, static, pos) for k in key[1:]])
   if tag == "fn" and isinstance(key[3], tuple):

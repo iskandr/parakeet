@@ -63,6 +63,7 @@ from ..syntax.ir import (
   walk_stmts,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, isub
+from ..syntax.records import record_type
 from ..syntax.values import CHEAP_COST, ArrayVal, describe
 from .derivatives import backprop, is_float
 
@@ -1425,9 +1426,7 @@ def _gather(tape: Tape, el, node: Node, g) -> None:
     target = el.tmp(el.index_expr(adj_view, src_index(idx_vars)), "pos")
     val_expr = el.elem(g, idx_vars) if isinstance(g, ArrayVal) else g
     val = el.tmp(cast(val_expr, adj_view.elt), "g")
-  el.emit(
-    IndexScatter(shape_t, idx_vars, blk, adj_view.buf, dest_size, target, val, "add", scope, threads, el.loc())
-  )
+  el.emit(IndexScatter(shape_t, idx_vars, blk, adj_view.buf, dest_size, target, val, "add", scope, threads, el.loc()))
   el.record_store(adj_view)
 
 
@@ -1463,6 +1462,9 @@ _BACKWARD = {
 def _wrt_leaf(el, tape: Tape, v, what: str):
   """A differentiated argument as the function will see it, plus how to read
   its adjoint afterwards."""
+  if record := record_type(v):
+    values, holders = _wrt_leaf(el, tape, record.values(v), what)
+    return record.build(values), record.build(holders)
   if isinstance(v, tuple):
     parts = [_wrt_leaf(el, tape, x, what) for x in v]
     return tuple(p[0] for p in parts), tuple(p[1] for p in parts)
@@ -1484,6 +1486,8 @@ def _wrt_leaf(el, tape: Tape, v, what: str):
 
 
 def _adjoint(el, holder, v):
+  if record := record_type(holder):
+    return record.build(_adjoint(el, record.values(holder), record.values(v)))
   if isinstance(holder, tuple):
     return tuple(_adjoint(el, h, x) for h, x in zip(holder, v))
   if isinstance(holder, ScalarAdj):
