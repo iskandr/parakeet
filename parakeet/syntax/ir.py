@@ -441,6 +441,17 @@ class TileStage:
 
 
 @dataclass(eq=False)
+class TileRowFold:
+  """Finish a shared score tile by folding each valid row into an ordered partial state."""
+
+  scores: Var
+  origin: tuple[Var, Var]
+  width: Var
+  rows: IndexMap  # same row map as the tile body; ordinary lowering lowers its fold
+  tile_config: tuple[int, int, int, int, int]
+
+
+@dataclass(eq=False)
 class SharedTilePlan:
   """GPU ``__shared__`` / ``threadgroup`` block-tiling plan for an N-D
   map-of-reduction (any batch rank, any number of staged prologue inputs,
@@ -463,6 +474,7 @@ class SharedTilePlan:
   mixed_folds: list[Fold]  # reduction folds with staged expressions replaced by stage_vars
   has_mixed_loads: bool = False  # True if mixed_body/mixed_folds still contain global Loads
   pre_checks: list[Check] = field(default_factory=list)  # uniform (i,j-invariant) checks from before
+  row_fold: TileRowFold | None = None
 
 
 @dataclass(eq=False)

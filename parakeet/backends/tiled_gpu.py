@@ -20,7 +20,7 @@ import math
 
 from ..ndtypes import BufType, Float32, ScalarType
 from ..syntax import ir
-from ..target import TargetProfile
+from ..target import BK, DEFAULT_SHARED_BUDGET, TargetProfile, choose_tile_config
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars, expr_types, used_vars
 from .device import KernelPlan
 
@@ -28,47 +28,7 @@ BLOCK_THREADS = 256  # 16 x 16 threads per block / threadgroup for general SIMT 
 MATRIX_UNIT_THREADS = 128  # 4 warps / SIMD-groups (2 x 2) for simdgroup_matrix & wmma kernels
 NTX = 16
 NTY = 16
-BK = 16
 PAD = BK + 1  # +1 padding eliminates shared-memory bank conflicts (gcd(17, 32) = 1)
-DEFAULT_SHARED_BUDGET = 24 * 1024  # 24 KiB target -> high occupancy on CUDA & Metal
-
-
-def choose_tile_config(
-  plan: ir.SharedTilePlan,
-  max_shared_bytes: int | None = None,
-  profile: TargetProfile | None = None,
-) -> tuple[int, int, int, int, int] | None:
-  """Analytically choose ``(BM, BN, BK, TM, TN)`` from ``plan``'s stage types,
-  accumulator count, and target shared-memory budget."""
-  budget = (
-    max_shared_bytes
-    if max_shared_bytes is not None
-    else (profile.shared_budget() if profile is not None else DEFAULT_SHARED_BUDGET)
-  )
-  n_accs = sum(1 + len(f.carries) for f in plan.mixed_folds)
-  candidates: list[tuple[int, int, int, int, int]] = []
-  if n_accs <= 2:
-    # Larger BK=32 on CUDA GPUs with >= 32 KiB per-block shared budget halves barrier overhead
-    if profile is not None and profile.kind == "cuda" and budget >= 32 * 1024:
-      candidates.append((64, 64, 32, 4, 4))
-    candidates.append((64, 64, BK, 4, 4))
-  if n_accs <= 8:
-    candidates.append((32, 32, BK, 2, 2))
-  candidates.append((16, 16, BK, 1, 1))
-
-  for bm, bn, bk, tm, tn in candidates:
-    needed = 0
-    for st, side in zip(plan.stages, plan.stage_sides):
-      elt_bytes = max(st.buf.type.elt.bits // 8, 1)
-      if side == "row":
-        needed += bm * (bk + 1) * elt_bytes
-      elif side == "col":
-        needed += bn * (bk + 1) * elt_bytes
-      else:
-        needed += bk * elt_bytes
-    if needed <= budget:
-      return bm, bn, bk, tm, tn
-  return None
 
 
 def _stage_prefers_dim0_fast(st: ir.TileStage) -> bool:
@@ -693,7 +653,7 @@ def generate_tiled_gpu_kernel(
   if plan is None:
     return None
 
-  if profile is not None and profile.matrix_unit is not None:
+  if plan.row_fold is None and profile is not None and profile.matrix_unit is not None:
     mu = profile.matrix_unit
     use_mu = (target == "metal" and mu.kind == "simdgroup_matrix") or (
       target == "cuda" and mu.kind == "wmma" and profile.tensor_cores
@@ -706,7 +666,8 @@ def generate_tiled_gpu_kernel(
           loop, plan, free, target, em, prelude, row_idx, col_idx, fold, init_val, max_buffers=max_buffers
         )
 
-  cfg = choose_tile_config(plan, profile=profile)
+  row_fold = plan.row_fold
+  cfg = row_fold.tile_config if row_fold is not None else choose_tile_config(plan, profile=profile)
   if cfg is None:
     return None
   bm, bn, bk, tm, tn = cfg
@@ -824,6 +785,9 @@ def generate_tiled_gpu_kernel(
     else:
       size = bk
     lines.append(f"  {sh_qual} {ct} pk_sh_{s_idx}[{size}];")
+
+  if row_fold is not None:
+    lines.append(f"  {sh_qual} {em.ctype(row_fold.scores.type.elt)} {em.data(row_fold.scores)}[{bm * bn}];")
 
   # Register accumulators for TM x TN micro-tile across all folds (and any carries)
   for f_idx, f in enumerate(plan.mixed_folds):
@@ -996,9 +960,22 @@ def generate_tiled_gpu_kernel(
       lines.append("    }")
       lines.append("  }")
 
+  if row_fold is not None:
+    # The score producer and row reduction share SRAM. Each row folds a
+    # contiguous reference interval and writes its original structured state.
+    lines.append(f"  {barrier}")
+    lines.append(f"  if (pk_tid < {bm} && pk_i0 + pk_tid < pk_M) {{")
+    r, c = row_fold.origin
+    lines.append(f"    const {idx_t} {r.name} = pk_i0, {c.name} = pk_j0;")
+    lines.append(f"    const {idx_t} {row_fold.rows.index[0].name} = pk_tid;")
+    lines.append(f"    const {idx_t} {row_fold.width.name} = (pk_N - pk_j0 < {bn}) ? pk_N - pk_j0 : {bn};")
+    _emit_decl_locals(em, row_fold.rows.body, set(), lines, "    ")
+    em.block(row_fold.rows.body, lines, 2)
+    lines.append("  }")
   lines.append("}")
 
-  written = {s.buf.uid for s in ir.walk_stmts(plan.after) if isinstance(s, ir.Store)}
+  stores = row_fold.rows.body if row_fold is not None else plan.after
+  written = {s.buf.uid for s in ir.walk_stmts(stores) if isinstance(s, ir.Store)}
   shape_meta = [("c", int(d.value)) if isinstance(d, ir.Const) else ("v", d.name) for d in plan.shape]
   return KernelPlan(
     loop=loop,

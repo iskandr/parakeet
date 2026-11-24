@@ -8,6 +8,8 @@ merge that partial on the right. The score and merge are cloned from the IR.
 from ..syntax import ir, ops
 from ..syntax.clone import Cloner, defined
 from ..syntax.ops import ZERO, I, cmp, iadd, imul
+from ..target import choose_tile_config
+from . import lowering, tiling
 from .analysis import BufferInfo, buffer_accesses, is_pure_expr
 from .tiling import UNROLL_I, UNROLL_J
 
@@ -166,18 +168,115 @@ def _tile(rows, refs, fold, row_defs, checks, outputs):
   )
 
 
+def _gpu_tiles(rows, refs, fold, row_defs, checks, outputs, owner, target):
+  """Produce one structured partial per rectangular score tile, then reduce its rows in reference order."""
+  if not rows.parallel:
+    return None
+  row, col = rows.index[0], refs.index[0]
+  prefix = []
+  lp = lowering.Loops(prefix, {}, owner)
+  shape = tuple(lp.tmp(d, "pair_extent") for d in (rows.shape[0], refs.shape[0]))
+  point = ir.IndexMap(shape, (row, col), [*row_defs, *refs.body], ir.Scope("loop"))
+  match = tiling.match(point, {}, min_rank=1)
+  if match is None:
+    return None
+  # Register accumulators are initialized before tile coordinates are bound.
+  # Only a uniform seed is valid for every point, including padded edge lanes.
+  bound = set(defined(point.body)) | {row.uid, col.uid}
+  if _depends([f.init for f in match.reduce.folds], bound):
+    return None
+  plan = tiling.extract_shared_tile_plan(point, match, shape, match.extent)
+  if plan is None:
+    return None
+  scores = ir.Var("score_tile", ir.BufType(fold.value.type.strong))
+  cfg = choose_tile_config(plan, profile=target, score_bytes=scores.type.elt.itemsize)
+  if cfg is None:
+    return None
+  bm, bn = cfg[:2]
+  nq, nr = shape
+  blocks = lp.tmp(iadd(ops.idiv(nr, bn), ops.cast(cmp("ne", ops.imod(nr, bn), ZERO), I)), "ref_tiles")
+  fields = (fold, *fold.carries)
+  states = [ir.Var("tile_summary", ir.BufType(f.result.type.strong)) for f in fields]
+  owner.owned.extend(states)
+  count = lp.tmp(imul(nq, blocks), "summary_count")
+  prefix.append(ir.If(cmp("gt", nq, ZERO), [*checks, ir.Check(cmp("gt", nr, ZERO), fold.empty)], []))
+  prefix.extend(ir.Alloc(buf, count) for buf in states)
+
+  q0, j0 = ir.Var("query_base", I), ir.Var("ref_base", I)
+  height, width = ir.Var("query_count", I), ir.Var("ref_count", I)
+  r, j = ir.Var("r", I), ir.Var("j", I)
+  q, ref = iadd(q0, r), iadd(j0, j)
+  tile_scope = ir.Scope("loop")
+  tile_scope.owned.append(scores)
+  # Both the generic tile body and the shared-memory schedule compute the same
+  # point program. Only the location and lifetime of its tile differ.
+  plan.after.append(ir.Store(scores, iadd(imul(ops.imod(row, bm), bn), ops.imod(col, bn)), fold.value))
+  score_copy = Cloner({row.uid: q, col.uid: ref}, home=tile_scope)
+  score_body = score_copy.block(point.body)
+  score_body.append(ir.Store(scores, iadd(imul(r, bn), j), score_copy.expr(fold.value)))
+  score_map = ir.IndexMap((height, width), (r, j), score_body, ir.Scope("loop"), parallel=False)
+
+  row_copy = Cloner({row.uid: q, col.uid: ref}, home=tile_scope)
+  row_body = row_copy.block(row_defs)
+  local = row_copy.fold(fold)
+  local.value = ir.Load(scores, iadd(imul(r, bn), j))
+  local.empty = None  # Every dispatched reference tile has positive width.
+  row_body.append(ir.IndexReduce((width,), (j,), [], [local], ir.Scope("loop"), tile_scope))
+  dest = iadd(imul(q, blocks), ops.idiv(j0, bn))
+  row_body.extend(ir.Store(buf, dest, f.result) for buf, f in zip(states, (local, *local.carries)))
+  partial_rows = ir.IndexMap((height,), (r,), row_body, ir.Scope("loop"), parallel=False)
+  plan.row_fold = ir.TileRowFold(scores, (q0, j0), width, partial_rows, cfg)
+  tile = ir.IndexTile(
+    shape,
+    (ir.Const(bm, I), ir.Const(bn, I)),
+    (q0, j0),
+    (height, width),
+    [],
+    [
+      ir.Alloc(scores, ir.Const(bm * bn, I)),
+      score_map,
+      partial_rows,
+    ],
+    tile_scope,
+    level="shared",
+    loc=rows.loc,
+    shared_tile=plan,
+  )
+
+  tile_id = ir.Var("ref_tile", I)
+  merge_copy = Cloner(home=rows.scope)
+  merge_body = merge_copy.block(row_defs)
+  final = merge_copy.fold(fold)
+  at = iadd(imul(row, blocks), tile_id)
+  for f, buf in zip((final, *final.carries), states):
+    f.value = ir.Load(buf, at)
+  final.empty = None  # Checked before the first stage.
+  merge_body.append(ir.IndexReduce((blocks,), (tile_id,), [], [final], ir.Scope("loop"), rows.scope))
+  merge_body.extend(merge_copy.block(outputs))
+  merge = ir.IndexMap((nq,), (row,), merge_body, rows.scope, loc=rows.loc)
+  return [*prefix, tile, merge, *(ir.Release(buf) for buf in states)]
+
+
 def tile_pairwise_folds(fn, options):
-  if not (options.tiling and options.fusion) or options.target.is_gpu:
+  if not (options.tiling and options.fusion):
     return
   info = BufferInfo.analyze(fn)
 
-  def visit(block):
-    for i, s in enumerate(block):
+  def visit(block, owner):
+    out = []
+    for s in block:
       match = _match(s, info) if isinstance(s, ir.IndexMap) else None
       if match is not None:
-        block[i] = _tile(s, *match)
-      else:
-        for child in ir.sub_blocks(s):
-          visit(child)
+        if not options.target.is_gpu:
+          out.append(_tile(s, *match))
+          continue
+        tiles = _gpu_tiles(s, *match, owner, options.target)
+        if tiles is not None:
+          out.extend(tiles)
+          continue
+      for child in ir.sub_blocks(s):
+        visit(child, getattr(s, "scope", owner))
+      out.append(s)
+    block[:] = out
 
-  visit(fn.body)
+  visit(fn.body, fn.scope)

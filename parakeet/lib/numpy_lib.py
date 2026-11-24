@@ -825,12 +825,7 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
   if a.rank == 0:
     return Const(0, Int64)
 
-  stream = (
-    el.options.tiling
-    and el.options.fusion
-    and not el.options.target.is_gpu
-    and "pairwise fold tiling" not in el.options.skip
-  )
+  stream = el.options.tiling and el.options.fusion and "pairwise fold tiling" not in el.options.skip
 
   def lane(v: ArrayVal):
     from ..syntax.ir import Carry, ErrorInfo, Fold, IndexReduce
