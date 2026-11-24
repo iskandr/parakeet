@@ -27,13 +27,17 @@ Type promotion follows NumPy 2 (NEP 50) exactly: `float32_array * 2.0` stays
 
 Supported: assignment (including tuple unpacking, augmented and annotated
 assignment, `:=`), `if`/`elif`/`else`, `for` over ranges, arrays, tuples, `zip`
-and `enumerate`, `while`, `break`, `continue`, `return` anywhere, nested `def`
+and `enumerate`, optional `else` on `for` and `while`, `break`, `continue`, `return` anywhere, nested `def`
 and `lambda`, `assert`, `raise` of built-in exceptions with a literal message,
 `pass`, `del`.
 
 Not supported: `try`/`except`, `with`, classes, generators (`yield`), `global`
-/`nonlocal`, `import` inside a compiled function, `for ... else`, f-strings and
+/`nonlocal`, `import` inside a compiled function, f-strings and
 `print`. Each of these produces an `UnsupportedError` at the offending line.
+
+Loop `else` runs on normal exhaustion, including an empty input. A break skips
+the corresponding else suite. Strict zip checks lengths at exhaustion. Chained
+scalar comparisons evaluate each reached operand once and short-circuit.
 
 ## Functions
 

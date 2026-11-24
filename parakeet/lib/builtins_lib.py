@@ -53,10 +53,11 @@ def _range(el, start, stop=None, step=None):
 @register(zip)
 def _zip(el, *items, strict=False):
   if not items:
-    raise el.error(TypeInferenceError, "zip() needs at least one argument")
-  if all(isinstance(x, tuple) for x in items):
+    return ()
+  flag = el.truth(el.lift(strict) if type(strict) is bool else strict)
+  if all(isinstance(x, tuple) for x in items) and (len({len(x) for x in items}) == 1 or (isinstance(flag, Const) and not flag.value)):
     return tuple(builtins.zip(*items))
-  return ZipVal(tuple(items))
+  return ZipVal(tuple(items), flag)
 
 
 @register(enumerate)

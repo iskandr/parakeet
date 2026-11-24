@@ -155,6 +155,7 @@ class LoopCtx:
   post_names: tuple = ()
   static: dict = field(default_factory=dict)
   ret_seen: bool = False
+  exhausted: Var | None = None
 
 
 @dataclass(eq=False)
@@ -1317,7 +1318,9 @@ class Elaborator(ArrayMixin):
   # ---- control flow ---------------------------------------------------------
 
   def exec_If(self, node: ast.If) -> bool:
-    cond = self.truth(self.eval(node.test), node.test)
+    return self._conditional(node, self.truth(self.eval(node.test), node.test))
+
+  def _conditional(self, node: ast.If, cond: Expr) -> bool:
     if isinstance(cond, Const):
       return self.exec_block(node.body if cond.value else node.orelse)
     cond = self.tmp(cond, "cond")
@@ -1480,7 +1483,7 @@ class Elaborator(ArrayMixin):
   def begin_loop(self, node: ast.AST, names: frozenset[str]) -> LoopCtx:
     fr = self.frame
     ctx = LoopCtx(node, self.scope, self.block, self.new_scope("loop"))
-    outside = fr.src.loads_outside(node)
+    outside = fr.src.loads_outside(node) | {n.id for stmt in node.orelse for n in ast.walk(stmt) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
     post = []
     for name in sorted(names):
       v = fr.env.get(name, _MISSING)
@@ -1656,12 +1659,11 @@ class Elaborator(ArrayMixin):
     return self._unrolled_for(node, items)
 
   def exec_While(self, node: ast.While) -> bool:
-    if node.orelse:
-      raise self.error(UnsupportedError, "'while ... else' is not supported", node)
     if self.hint_get((self.frame.path, id(node), "unroll")):
       self.request_unroll(self.frame, node)
     names = assigned_names(node.body, node) | assigned_names(node.test)
     ctx = self.begin_loop(node, names)
+    self._track_exhaustion(ctx, node.orelse)
     blk: list = []
     with self.in_block(blk, ctx.scope, loop=True):
       cond = self.truth(self.eval(node.test), node.test)
@@ -1671,26 +1673,25 @@ class Elaborator(ArrayMixin):
         self.sync(ctx)
         self.emit(ReleaseScope(ctx.scope))
     self.emit(While(blk, ctx.scope))
-    self.end_loop(ctx)
-    return False
+    return self._finish_loop(ctx, node, [])
 
   def exec_For(self, node: ast.For) -> bool:
-    if node.orelse:
-      raise self.error(UnsupportedError, "'for ... else' is not supported", node)
     it = self.eval(node.iter)
     if isinstance(it, tuple):
       return self._unrolled_for(node, it)
     if self.hint_get((self.frame.path, id(node), "unroll")):
       return self._unroll(node, it)
+    end_checks = []
     if isinstance(it, RangeVal):
       start, stop, step = (self.tmp(x, n) for x, n in zip((it.start, it.stop, it.step), ("start", "stop", "step")))
       length = None
       getter = None
     else:
-      length, getter = self.iter_source(it, node.iter)
+      length, getter = self.iter_source(it, node.iter, end_checks)
       start, stop, step = ZERO, self.tmp(length, "n"), ONE
     names = assigned_names(node.body, node) | _target_names(node)
     ctx = self.begin_loop(node, names)
+    self._track_exhaustion(ctx, node.orelse or end_checks)
     var = Var("i", I)
     if self.is_nonneg(start) and isinstance(step, Const) and step.value > 0:
       self.nonneg.add(var.uid)
@@ -1705,7 +1706,22 @@ class Elaborator(ArrayMixin):
     if not isinstance(step, Const):
       self.check(cmp("ne", step, 0), "ValueError", "range() arg 3 must not be zero")
     self.emit(ForRange(var, start, stop, step, blk, ctx.scope))
+    return self._finish_loop(ctx, node, end_checks)
+
+  def _track_exhaustion(self, ctx, needed):
+    if needed:
+      ctx.exhausted = Var("exhausted", Bool)
+      self.mutables.add(ctx.exhausted.uid)
+      self.emit(Assign(ctx.exhausted, ops.TRUE))
+
+  def _finish_loop(self, ctx, node, end_checks):
     self.end_loop(ctx)
+    if end_checks:
+      self.emit(If(ctx.exhausted, end_checks, []))
+    if node.orelse:
+      guard = ast.copy_location(ast.If(test=ast.Constant(True), body=node.orelse, orelse=[]), node)
+      self.state.keep.append(guard)
+      return self._conditional(guard, ctx.exhausted)
     return False
 
   def _unrolled_for(self, node: ast.For, items: tuple) -> bool:
@@ -1717,9 +1733,9 @@ class Elaborator(ArrayMixin):
       self.assign(node.target, item)
       if self.exec_block(node.body):
         return True
-    return False
+    return self.exec_block(node.orelse)
 
-  def iter_source(self, v, node=None):
+  def iter_source(self, v, node=None, end_checks=None):
     """``(length, getter)`` for a value being iterated at run time."""
     if isinstance(v, ArrayVal):
       if v.rank == 0:
@@ -1732,13 +1748,31 @@ class Elaborator(ArrayMixin):
       start, step = self.tmp(v.start), self.tmp(v.step)
       return self.range_length(v), lambda i: iadd(start, imul(i, step))
     if isinstance(v, ZipVal):
-      parts = [self.iter_source(x, node) for x in v.items]
+      child_checks = [[] for _ in v.items]
+      parts = [self.iter_source(x, node, checks) for x, checks in zip(v.items, child_checks)]
       length = parts[0][0]
       for other, _ in parts[1:]:
         length = ops.imin(length, other)
+      if end_checks is not None:
+        # On the final next(), zip visits children left to right. Strict zip
+        # also probes remaining children when its first child is exhausted.
+        live = ops.TRUE
+        probe = ops.FALSE
+        for i, ((n, _), checks) in enumerate(zip(parts, child_checks)):
+          ended = cmp("eq", n, length)
+          if checks:
+            end_checks.append(If(ops.land(ops.lor(live, probe), ended), checks, []))
+          if i == 0:
+            probe = ops.land(v.strict, ended)
+          else:
+            probe = ops.land(probe, ended)
+          live = ops.land(live, ops.lnot(ended))
+        with self.in_block(end_checks):
+          for n, _ in parts[1:]:
+            self.check(ops.lor(ops.lnot(v.strict), cmp("eq", parts[0][0], n)), "ValueError", "zip() arguments have different lengths")
       return self.tmp(length, "n"), lambda i: tuple(g(i) for _, g in parts)
     if isinstance(v, EnumerateVal):
-      length, getter = self.iter_source(v.item, node)
+      length, getter = self.iter_source(v.item, node, end_checks)
       start = self.tmp(v.start)
       return length, lambda i: (iadd(start, i), getter(i))
     if isinstance(v, tuple):
@@ -1776,6 +1810,8 @@ class Elaborator(ArrayMixin):
 
   def exec_Break(self, node) -> bool:
     ctx = self._innermost_loop(node)
+    if ctx.exhausted is not None:
+      self.emit(Assign(ctx.exhausted, ops.FALSE))
     self.sync(ctx)
     self.emit(ReleaseScope(ctx.scope))
     self.emit(Break())
@@ -2156,18 +2192,18 @@ class Elaborator(ArrayMixin):
     is_and = isinstance(node.op, ast.And)
     result = self.eval(node.values[0])
     for sub in node.values[1:]:
-      result = self._short_circuit(is_and, result, sub)
+      result = self._short_circuit(is_and, result, lambda: self.eval(sub), sub)
     return result
 
-  def _short_circuit(self, is_and: bool, left, right_node: ast.expr):
+  def _short_circuit(self, is_and: bool, left, eval_right, right_node: ast.expr):
     cond = self.truth(left, right_node)
     if isinstance(cond, Const):
       take_right = bool(cond.value) == is_and
-      return self.eval(right_node) if take_right else left
+      return eval_right() if take_right else left
     cond = self.tmp(cond, "cond")
     blk: list = []
     with self.in_block(blk):
-      right = self.eval(right_node)
+      right = eval_right()
       end_blk = self.block
     lt, rt = self.vtype(left), self.vtype(right)
     both_bool = lt[0] == "s" and rt[0] == "s" and lt[1].kind == "b" and rt[1].kind == "b"
@@ -2221,15 +2257,16 @@ class Elaborator(ArrayMixin):
 
   def eval_Compare(self, node: ast.Compare):
     left = self.eval(node.left)
-    result = None
-    for op, right_node in zip(node.ops, node.comparators):
+    def part(k, lhs):
+      right_node = node.comparators[k]
       right = self.eval(right_node)
-      if len(node.ops) > 1:
-        right = self.bindable(right, "cmp")
-      part = self.compare(op, left, right, node)
-      result = part if result is None else self.logical_and(result, part)
-      left = right
-    return result
+      if k + 1 == len(node.ops):
+        return self.compare(node.ops[k], lhs, right, node)
+      right = self.bindable(right, "cmp")
+      condition = self.compare(node.ops[k], lhs, right, node)
+      return self._short_circuit(True, condition, lambda: part(k + 1, right), right_node)
+
+    return part(0, left)
 
   def logical_and(self, a, b):
     if isinstance(a, Expr) and isinstance(b, Expr):
@@ -2327,7 +2364,8 @@ class Elaborator(ArrayMixin):
         bind_and(lambda: self.eval(elt))(x) for x in source if not gen.ifs or self._static_filter(gen, x, bind_and)
       ]
       return lib.array_literal(self, items)
-    length, getter = self.iter_source(source, gen.iter)
+    end_checks = []
+    length, getter = self.iter_source(source, gen.iter, end_checks)
     body = bind_and(lambda: self.eval(elt))
     if gen.ifs:
 
@@ -2339,8 +2377,13 @@ class Elaborator(ArrayMixin):
 
       flags = lib.build_map(self, (length,), lambda idx: bind_and(keep)(getter(idx[0])))
       picks = self.nonzero1d(flags)
-      return lib.build_map(self, picks.shape, lambda idx: body(getter(self.tmp(self.elem(picks, idx), "i"))))
-    return lib.build_map(self, (self.tmp(length, "n"),), lambda idx: body(getter(idx[0])))
+      result = lib.build_map(self, picks.shape, lambda idx: body(getter(self.tmp(self.elem(picks, idx), "i"))))
+    else:
+      result = lib.build_map(self, (self.tmp(length, "n"),), lambda idx: body(getter(idx[0])))
+    if end_checks:
+      result = self.as_concrete(result)
+      self.block.extend(end_checks)
+    return result
 
   def _static_filter(self, gen, item, bind_and) -> bool:
     def keep():

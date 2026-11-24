@@ -147,6 +147,7 @@ class RangeVal:
 @dataclass(eq=False, slots=True)
 class ZipVal:
   items: tuple
+  strict: Expr
 
 
 @dataclass(eq=False, slots=True)
