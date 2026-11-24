@@ -438,3 +438,71 @@ def test_gpu_laws34(backend):
   if parakeet.available_backends().get(backend) != "ok":
     pytest.skip(f"{backend} unavailable")
   _run_gpu_laws34(backend)
+
+
+def test_affine_scan_preserves_order_with_shared_storage_and_repeated_stores():
+  @parakeet.jit
+  def overlap(a, b, out, s):
+    for t in range(a.shape[0]):
+      s = a[t] * s + b[t]
+      out[t] = s
+    return s
+
+  @parakeet.jit
+  def scatter(a, b, ix, s):
+    out = np.zeros_like(b)
+    for t in range(a.shape[0]):
+      s = a[t] * s + b[t]
+      out[ix[t]] = s
+    return out
+
+  a = np.full(257, 0.01, dtype="f")
+  b = np.linspace(0, 2, 258, dtype="f")
+  idx = np.arange(len(a)) % 7
+  with parakeet.options(verify=True, blas=False):
+    for backend in ("c", "multicore"):
+      original, got = b.copy(), b.copy()
+      expected = overlap.__wrapped__(a, original[:-1], original[1:], np.float32(1))
+      final = overlap(a, got[:-1], got[1:], np.float32(1), _backend=backend)
+      np.testing.assert_allclose(got, original, rtol=2e-6)
+      np.testing.assert_allclose(final, expected, rtol=2e-6)
+      np.testing.assert_allclose(
+        scatter(a, b[:-1], idx, np.float32(1), _backend=backend),
+        scatter.__wrapped__(a, b[:-1], idx, np.float32(1)),
+        rtol=2e-6,
+      )
+
+
+def test_ssd_preserves_permuted_state_side_effects_and_shape_errors():
+  @parakeet.jit
+  def permuted(q, k, v, a):
+    state = np.zeros((k.shape[1], v.shape[1]), dtype=np.float32)
+    out = np.empty((q.shape[0], v.shape[1]), dtype=np.float32)
+    for t in range(q.shape[0]):
+      state = a[t] * state[:, ::-1] + k[t][:, None] * v[t][None, :]
+      out[t] = q[t] @ state
+    return out, state
+
+  @parakeet.jit
+  def observed(q, k, v, a, seen):
+    state = np.zeros((k.shape[1], v.shape[1]), dtype=np.float32)
+    out = np.empty((q.shape[0], v.shape[1]), dtype=np.float32)
+    for t in range(q.shape[0]):
+      state = a[t] * state + k[t][:, None] * v[t][None, :]
+      out[t] = q[t] @ state
+      seen[t] = 1
+    return out, state
+
+  rng = np.random.default_rng(48)
+  q, k, v = rng.normal(size=(3, 140, 4)).astype("f")
+  a = rng.uniform(0.2, 0.85, len(q)).astype("f")
+  with parakeet.options(blas=False, verify=True):
+    seen = np.zeros(len(q), dtype="i")
+    for f, extra in ((permuted, ()), (observed, (seen,))):
+      result = f(q, k, v, a, *extra)
+      expected = f.__wrapped__(q, k, v, a, *(x.copy() for x in extra))
+      for r, e in zip(result, expected):
+        np.testing.assert_allclose(r, e, atol=2e-5)
+    np.testing.assert_array_equal(seen, np.ones_like(seen))
+    with pytest.raises(ValueError, match="align"):
+      _mamba2_ssd(q[:, :2], k, v, a)

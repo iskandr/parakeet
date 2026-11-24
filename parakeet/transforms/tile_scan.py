@@ -73,7 +73,7 @@ from ..syntax.ir import (
   Var,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, idiv, imin, imod, imul, iprod, isub
-from .analysis import IndexFacts, is_pure_expr
+from .analysis import BufferInfo, IndexFacts, buffer_accesses, is_pure_expr
 from .lowering import row_major_index
 from .monoid_tile import _expr_uses_uids, _resolve_local
 
@@ -182,7 +182,9 @@ class _AffineLoopMatch:
   next_var_uid: int
 
 
-def _match_affine_for_range(loop: ForRange, outer_vars: dict[int, Var]) -> _AffineLoopMatch | None:
+def _match_affine_for_range(
+  loop: ForRange, outer_vars: dict[int, Var], buffers: BufferInfo, facts: IndexFacts
+) -> _AffineLoopMatch | None:
   if not _is_unit_for_range(loop):
     return None
   body = [s for s in loop.body if not isinstance(s, (ir.Comment, ReleaseScope))]
@@ -216,17 +218,22 @@ def _match_affine_for_range(loop: ForRange, outer_vars: dict[int, Var]) -> _Affi
   if not raw_stores:
     return None
   next_var_uid = update_stmt.value.uid if isinstance(update_stmt.value, Var) else -1
-  written_bufs = {st.buf.uid for _, st in raw_stores}
-  # Ensure a_expr and b_expr do not read from any buffer written by stores (no memory-carried loop dep!)
-  for ex in (a_expr, b_expr):
-    for x in ir.walk_expr(ex):
-      if isinstance(x, Load) and x.buf.uid in written_bufs:
-        return None
+  reads, writes = buffer_accesses(body)
+  if buffers.may_alias(reads, writes) or not writes <= buffers.local_allocs:
+    return None
+  # Replaying chunks in parallel requires disjoint stores. The surrounding
+  # IndexMap (when present) already guarantees independence across batch lanes.
   classified_stores: list[tuple[Store, bool]] = []
+  indices = {}
   for st_pos, st in raw_stores:
-    if st.atomic is not None:
+    idx = _resolve_local(st.index, val_map)
+    stride = facts.stride_of(idx, loop.var)
+    if st.atomic is not None or not isinstance(stride, Const) or stride.value == 0:
       return None
-    if _expr_uses_uids(st.index, {state_var.uid, next_var_uid}):
+    if _expr_uses_uids(idx, {state_var.uid, next_var_uid}) or any(isinstance(e, Load) for e in ir.walk_expr(idx)):
+      return None
+    previous = indices.setdefault(st.buf.uid, idx)
+    if not facts.same_expr(previous, idx):
       return None
     sv = st.value
     if isinstance(sv, Var) and sv.uid == state_var.uid:
@@ -239,7 +246,11 @@ def _match_affine_for_range(loop: ForRange, outer_vars: dict[int, Var]) -> _Affi
       return None
 
   checks = [s for s in body if isinstance(s, Check)]
-  # Ensure all checks can be hoisted safely
+  # A check that refers to a loop-local temporary or the running state cannot
+  # execute in the outer scope, even if its condition omits the loop index.
+  loop_defs = {*val_map, state_var.uid}
+  if any(_expr_uses_uids(e, loop_defs) for check in checks for e in ir.stmt_exprs(check)):
+    return None
   if checks and not _hoist_upper_checks(checks, loop.var, loop.stop):
     return None
 
@@ -438,7 +449,7 @@ class _SSDMatch:
   v_var: Var
   out_buf: Var
   out_row_offset: Expr  # row base offset in out_buf for step t
-  checks: list[Check]
+  guard: Expr
   keep_var: Var | None
 
 
@@ -446,6 +457,7 @@ def _match_ssd_for_range(
   loop: ForRange,
   facts: IndexFacts,
   outer_vars: dict[int, Var],
+  buffers: BufferInfo,
 ) -> _SSDMatch | None:
   """Match Mamba-2 SSD / GLA bilinear matrix-state recurrence::
 
@@ -569,6 +581,7 @@ def _match_ssd_for_range(
   # 2. Match readout: optional transpose `rows[v, d] = S_next[d, v]`, then contraction
   #    `tmp[v] = sum_d q(t, d) * S_next[d, v]`, then optional copy `out[t, v] = tmp[v]`
   trans_buf: Var | None = None
+  trans_map: IndexMap | None = None
   read_map: IndexMap | None = None
   copy_map: IndexMap | None = None
   for idx_m, m in maps:
@@ -578,6 +591,7 @@ def _match_ssd_for_range(
       # Check transpose of next_buf_var
       m_stores = [st for st in m.body if isinstance(st, Store)]
       if len(m_stores) == 1 and isinstance(m_stores[0].value, Load) and m_stores[0].value.buf.uid == next_buf_var.uid:
+        trans_map = m
         trans_buf = m_stores[0].buf
         continue
     if len(m.shape) == 1 and read_map is None:
@@ -688,7 +702,120 @@ def _match_ssd_for_range(
       if isinstance(x, Load) and x.buf.uid in (out_buf.uid, state_buf_var.uid):
         return None
 
-  checks = [s for s in body if isinstance(s, Check)]
+  # Account for every operation the replacement would remove. In particular
+  # a loop with another visible write cannot be summarized by (state, output).
+  recognized_maps = {m for m in (upd_map, trans_map, read_map, copy_map) if m is not None}
+  if {m for _, m in maps} != recognized_maps or out_buf.uid not in buffers.local_allocs:
+    return None
+  if any(not isinstance(s, (Assign, Alloc, Check, IndexMap, Incref, Release, ReleaseScope, ir.Comment)) for s in body):
+    return None
+  for m in recognized_maps:
+    if m.ordered or any(
+      not isinstance(st, (Assign, Store, ReleaseScope, ir.Comment)) and st is not red for st in m.body
+    ):
+      return None
+  fold = red.folds[0]
+  if (
+    red.where is not None
+    or red.pre
+    or fold.carries
+    or fold.combine
+    or not isinstance(fold.init, Const)
+    or fold.init.value != 0
+    or any(not isinstance(st, (Assign, ReleaseScope, ir.Comment)) for st in red.body)
+    or not ir.same(r_stores[0].value, fold.result)
+  ):
+    return None
+  for st in ir.walk_stmts(body):
+    if isinstance(st, Assign) and not is_pure_expr(st.value):
+      return None
+    if isinstance(st, Store) and st.atomic is not None:
+      return None
+  if any(rb.value is not next_buf_var or rb.var not in (state_buf_var, keep_var) for rb in rebinds):
+    return None
+
+  # The optimized loop leaves the state's scalar metadata unchanged. Prove
+  # that one iteration preserves it on the fast path, including its shape,
+  # offset and strides. A failed guard executes the original ordered loop.
+  conditions = []
+  for st in body:
+    if isinstance(st, Assign) and st.var.uid in outer_vars and not isinstance(st.var.type, BufType):
+      conditions.append(cmp("eq", st.var, _resolve_local(st.value, outer_assigns)))
+    if isinstance(st, Check):
+      cond = _resolve_local(st.cond, outer_assigns)
+      if _expr_uses_uids(cond, {t_var.uid}):
+        if not (
+          isinstance(cond, Prim)
+          and cond.op == "lt"
+          and cond.args[0] is t_var
+          and not _expr_uses_uids(cond.args[1], {t_var.uid})
+        ):
+          return None
+        cond = cmp("le", t_dim, cond.args[1])
+      conditions.append(cond)
+
+  def dense_access(index, axes, strides):
+    """Prove affine dependence, then compare origin and each basis vector."""
+    ids = {axis.uid for axis in axes}
+
+    def affine(e):
+      if not _expr_uses_uids(e, ids) or isinstance(e, Var):
+        return True
+      if not isinstance(e, Prim) or e.op not in ("add", "sub", "mul"):
+        return False
+      if e.op == "mul" and all(_expr_uses_uids(x, ids) for x in e.args):
+        return False
+      return all(affine(x) for x in e.args)
+
+    if not affine(index):
+      return False
+    origin = dict.fromkeys(ids, ZERO)
+    conditions.append(cmp("eq", Cloner(origin).expr(index), ZERO))
+    for axis, stride in zip(axes, strides):
+      point = Cloner({**origin, axis.uid: ONE}).expr(index)
+      conditions.append(cmp("eq", point, stride))
+    return True
+
+  state_reads = [e for e in ir.walk_expr(rhs_u) if _is_s_load(e)]
+  if len(state_reads) != 1 or not dense_access(state_reads[0].index, upd_map.index, (v_inv, ONE)):
+    return None
+  if not dense_access(_resolve_local(st_u.index, u_locals), upd_map.index, (v_inv, ONE)):
+    return None
+  state_term = next(e for e in rfv.args if isinstance(e, Load) and e.buf.uid in s_read_uids)
+  rv = read_map.index[0]
+  strides = (d_inv, ONE) if trans_buf is not None and state_term.buf is trans_buf else (ONE, v_inv)
+  if not dense_access(state_term.index, (rv, rk_var), strides):
+    return None
+  if trans_map is not None:
+    tr = next(st for st in trans_map.body if isinstance(st, Store))
+    if not (
+      dense_access(_resolve_local(tr.index, outer_assigns), trans_map.index, (d_inv, ONE))
+      and dense_access(_resolve_local(tr.value.index, outer_assigns), trans_map.index, (ONE, v_inv))
+    ):
+      return None
+  if copy_map is not None:
+    if not (
+      dense_access(_resolve_local(r_stores[0].index, r_locals), (rv,), (ONE,))
+      and dense_access(_resolve_local(c_st.value.index, outer_assigns), (c_v,), (ONE,))
+    ):
+      return None
+  # Each time step owns a complete disjoint output row.
+  if not dense_access(out_row_offset, (t_var,), (v_inv,)):
+    return None
+  dimensions = [(d_dim, d_inv), (v_dim, v_inv), (red.shape[0], d_inv), (read_map.shape[0], v_inv)]
+  if copy_map is not None:
+    dimensions.append((copy_map.shape[0], v_inv))
+  if trans_map is not None:
+    dimensions.extend(zip(trans_map.shape, (v_inv, d_inv)))
+  for actual, expected in dimensions:
+    conditions.append(cmp("eq", _resolve_local(actual, outer_assigns), expected))
+  guard = cmp("ge", t_dim, Const(SSD_CHUNK, I))
+  for cond in conditions:
+    if _expr_uses_uids(cond, local_uids | {t_var.uid}) or any(
+      isinstance(e, (Load, ir.RtCall)) for e in ir.walk_expr(cond)
+    ):
+      return None
+    guard = ops.land(guard, cond)
   return _SSDMatch(
     t_var=t_var,
     t_dim=t_dim,
@@ -704,7 +831,7 @@ def _match_ssd_for_range(
     v_var=v_var,
     out_buf=out_buf,
     out_row_offset=out_row_offset,
-    checks=checks,
+    guard=guard,
     keep_var=keep_var,
   )
 
@@ -782,18 +909,6 @@ def _rewrite_ssd_loop(loop: ForRange, m: _SSDMatch, owner: Scope) -> list[Stmt]:
   chunk_c = Const(SSD_CHUNK, I)
   zero_c = Const(0.0, elt)
   one_c = Const(1.0, elt)
-
-  # Hoist bounds checks on t (skip broadcast checks on S_n0/S_n1 which use loop-local vars)
-  t_checks = [
-    chk
-    for chk in m.checks
-    if isinstance(chk.cond, Prim)
-    and chk.cond.op == "lt"
-    and len(chk.cond.args) == 2
-    and isinstance(chk.cond.args[0], Var)
-    and chk.cond.args[0].uid == m.t_var.uid
-  ]
-  hoisted_checks = _hoist_upper_checks(t_checks, m.t_var, t_dim)
 
   nc = Var("ssd_nc", I)
   nc_assign = Assign(nc, idiv(iadd(t_dim, Const(SSD_CHUNK - 1, I)), chunk_c))
@@ -1077,7 +1192,6 @@ def _rewrite_ssd_loop(loop: ForRange, m: _SSDMatch, owner: Scope) -> list[Stmt]:
 
   releases = [Release(b) for b in all_tmps]
   ssd_branch: list[Stmt] = [
-    *hoisted_checks,
     nc_assign,
     *allocs,
     step0_decay,
@@ -1093,7 +1207,7 @@ def _rewrite_ssd_loop(loop: ForRange, m: _SSDMatch, owner: Scope) -> list[Stmt]:
     *copy_final_s,
     *releases,
   ]
-  return [If(cmp("ge", t_dim, chunk_c), ssd_branch, [loop])]
+  return [If(m.guard, ssd_branch, [loop])]
 
 
 # ---------------------------------------------------------------------------
@@ -1101,7 +1215,7 @@ def _rewrite_ssd_loop(loop: ForRange, m: _SSDMatch, owner: Scope) -> list[Stmt]:
 # ---------------------------------------------------------------------------
 
 
-def _try_batched_affine_map(s: IndexMap, owner: Scope) -> list[Stmt] | None:
+def _try_batched_affine_map(s: IndexMap, owner: Scope, buffers: BufferInfo, facts: IndexFacts) -> list[Stmt] | None:
   """Lift ``IndexMap (*batch): s = init; ForRange(t, 0, T, 1): s = a*s + b; out[...] = s``."""
   if s.ordered or not s.shape or s.scope.owned:
     return None
@@ -1113,7 +1227,7 @@ def _try_batched_affine_map(s: IndexMap, owner: Scope) -> list[Stmt] | None:
   b_uids = {v.uid for v in s.index}
   if _expr_uses_uids(loop.stop, b_uids):
     return None
-  m = _match_affine_for_range(loop, {init_st.var.uid: init_st.var})
+  m = _match_affine_for_range(loop, {init_st.var.uid: init_st.var}, buffers, facts)
   if m is None or m.state_var.uid != init_st.var.uid:
     return None
   # Emit If(T > AFFINE_CHUNK, batched_tiled_scan, [s])
@@ -1133,6 +1247,7 @@ def _tile_scan_block(
   facts: IndexFacts,
   outer_vars: dict[int, Var],
   owner: Scope,
+  buffers: BufferInfo,
 ) -> list[Stmt]:
   out: list[Stmt] = []
   local_outer = dict(outer_vars)
@@ -1148,24 +1263,24 @@ def _tile_scan_block(
       out.append(
         If(
           s.cond,
-          _tile_scan_block(s.then, facts.fork(), local_outer, owner),
-          _tile_scan_block(s.orelse, facts.fork(), local_outer, owner),
+          _tile_scan_block(s.then, facts.fork(), local_outer, owner, buffers),
+          _tile_scan_block(s.orelse, facts.fork(), local_outer, owner, buffers),
         )
       )
     elif isinstance(s, IndexMap):
-      lifted = _try_batched_affine_map(s, owner)
+      lifted = _try_batched_affine_map(s, owner, buffers, facts)
       if lifted is not None:
         out.extend(lifted)
       else:
         out.append(s)
     elif isinstance(s, ForRange):
       # 1. Try scalar affine prefix scan (EMA / IIR / Kalman / LRU / GBDT)
-      am = _match_affine_for_range(s, local_outer)
+      am = _match_affine_for_range(s, local_outer, buffers, facts)
       if am is not None:
         out.extend(_rewrite_affine_loop(s, am, owner))
         continue
       # 2. Try bilinear matrix-state recurrence (Mamba-2 SSD / GLA)
-      sm = _match_ssd_for_range(s, facts, local_outer)
+      sm = _match_ssd_for_range(s, facts, local_outer, buffers)
       if sm is not None:
         out.extend(_rewrite_ssd_loop(s, sm, owner))
         continue
@@ -1178,7 +1293,7 @@ def _tile_scan_block(
           s.start,
           s.stop,
           s.step,
-          _tile_scan_block(s.body, facts.fork(), inner_outer, owner),
+          _tile_scan_block(s.body, facts.fork(), inner_outer, owner, buffers),
           s.scope,
           s.simd,
           s.reduction,
@@ -1214,7 +1329,7 @@ def tile_scans(fn: ir.Function, options) -> None:
     return
   facts = IndexFacts.from_function(fn)
   outer_vars = _param_vars(fn)
-  fn.body = _tile_scan_block(fn.body, facts, outer_vars, fn.scope)
+  fn.body = _tile_scan_block(fn.body, facts, outer_vars, fn.scope, BufferInfo.analyze(fn))
 
 
 __all__ = ["AFFINE_CHUNK", "SSD_CHUNK", "tile_scans"]
