@@ -9,7 +9,9 @@ python examples/algebraic_gallery.py
 ```
 
 The examples use `import numpy as np`, `import parakeet` and
-`from parakeet import dsl`. [Browse the source](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/algebraic_gallery.py).
+`from parakeet import dsl`. The same `@parakeet.jit` compiles both ordinary NumPy
+and explicit operators such as `dsl.map`. The name `dsl.kernel` is an alias for
+`parakeet.jit`. [Browse the source](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py).
 
 ## Exact nearest neighbor
 
