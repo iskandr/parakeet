@@ -1,5 +1,7 @@
 # Release benchmarks
 
+[Google Colab measurements for the post-release compiler](#google-colab-after-100) include exact search, Gaussian regression, nanoGPT training and first-call costs.
+
 Five forward workloads compare Parakeet with general-purpose array compilers and specialist libraries. The tables report warmed median latency. Smaller values are faster. [Download all timing samples and validation results (JSON)](assets/modal-alpha-comparison.json).
 
 ![CPU exact nearest-neighbor timings for three implementations. Faiss Flat leads at the small shape, while Parakeet with broadcasting NumPy leads at the large shape. Each panel has its own time scale.](assets/cpu-nearest-neighbor.png)
@@ -91,3 +93,52 @@ follow-up variants returned the exact reference indices with zero host transfers
 Each active follow-up block also uses a 16 KiB shared score tile. Run
 `modal run tools/modal_pairwise_fold.py --output pairwise.json` from the
 follow-up checkout to reproduce this comparison. [Raw samples, allocations and device counters](assets/gpu-pairwise-fold.json).
+
+## Google Colab after 1.0.0
+
+These measurements use one NVIDIA L4 and the CPU on the same Colab VM. The compiler revision is `0dcb7d5`. The release comparison uses GPU-resident inputs, explicit synchronization and numerical checks. CPU comparisons use four threads. GPU medians use 21 warmed calls and CPU medians use 11. [Download the samples, first-call times, allocation sizes and training results](assets/colab-l4-0dcb7d5.json).
+
+### Exact search and Gaussian regression
+
+At 1,024 queries × 4,096 references × 32 float32 features, the following methods return exact indices or four normalized weighted values per query. Faiss and scikit-learn times exclude index construction. All entries are milliseconds.
+
+| Implementation | CPU 1-NN | GPU 1-NN | CPU Gaussian | GPU Gaussian |
+|---|---:|---:|---:|---:|
+| Parakeet broadcasting | 8.050 | 0.223 | 42.990 | 1.053 |
+| Parakeet nested maps | 7.907 | 0.225 | — | — |
+| PyKeOps | 29.027 | 0.953 | 66.769 | 1.254 |
+| Faiss Flat | 8.417 | 0.150 | — | — |
+| scikit-learn brute | 6.492 | — | — | — |
+| Compiled PyTorch with cdist | — | 0.257 | — | 0.308 |
+| JAX JIT | — | 0.500 | — | 0.602 |
+
+At the large shape, Parakeet beat PyKeOps on both workloads on both devices. GPU Faiss led exact search, and compiled PyTorch with cdist led Gaussian regression among the measured GPU methods. GPU Faiss used its CUDA 12 wheel on the same L4. Scikit-learn brute search led this CPU nearest-neighbor comparison at 6.492 ms. At the small shape (256 × 1,024 × 3), CPU PyKeOps took 0.241 ms in the independent, interleaved KeOps sweep, versus 0.701 ms for Parakeet broadcasting.
+
+### Other GPU workloads
+
+The same reference-checked suite measured the following forward computations. The PyTorch baselines use scaled dot-product attention, cross-entropy over a linear projection, and a compiled scatter-based tree split respectively.
+
+| Workload | Parakeet | PyTorch | JAX JIT | CuPy |
+|---|---:|---:|---:|---:|
+| Causal attention, 4 heads × 512 × 64 | 0.493 | 0.104 | 0.145 | 0.490 |
+| Linear cross-entropy, 512 × 128 × 2,048 | 1.447 | 0.068 | 0.189 | 0.431 |
+| GBDT split, 262,144 rows and 256 bins | 0.370 | 0.208 | 0.244 | 0.647 |
+
+For the large Gaussian workload, JAX took 672 s on the first call and 0.602 ms once warm. The table excludes compilation for every method.
+
+### Scaling exact search
+
+The GPU NumPy 1-NN form took 0.542 ms at 16,384 references, compared with 2.597 ms on 1.0.0. The earlier compiler allocated a 64 MiB distance matrix. The current compiler used 3 MiB of global partial winners and a 16 KiB shared score tile per block. The detailed run checks equal-distance ties, first NaNs, and partially filled tiles.
+
+### Structured state
+
+At 1,024 × 4,096 × 32, the explicit ordered fold and broadcasting NumPy took 0.235 and 0.222 ms for nearest neighbor. For inverse-distance smoothing they took 0.270 and 0.275 ms. The explicit smoother used two kernel launches per call and the NumPy smoother used three. All four ran with strict CUDA dispatch and zero timed host transfers. [Read the two programs](gallery.md#inverse-distance-smoothing).
+
+### nanoGPT training
+
+Each step includes the forward pass, backpropagation and Adam. Both configurations use four attention heads. Parakeet and JAX compile the optimizer into the step. The PyTorch compiled column wraps the loss in `torch.compile` and calls the optimizer separately. Times are medians of 20 warmed steps in milliseconds. The download also includes first-call times and initial and final losses. [Run the smaller character-level training example](gallery.md#nanogpt).
+
+| Batch × context × width × layers | Parakeet FP32 | Parakeet TF32 | PyTorch eager | Compiled PyTorch | JAX JIT |
+|---|---:|---:|---:|---:|---:|
+| 16 × 64 × 128 × 2 | 8.439 | 6.833 | 9.217 | 3.515 | 1.619 |
+| 32 × 128 × 256 × 4 | 45.499 | 32.317 | 18.554 | 14.480 | 9.411 |
