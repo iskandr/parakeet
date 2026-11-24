@@ -30,6 +30,8 @@ from dataclasses import dataclass
 
 from . import api, config, prims
 from .lib.adverbs import (
+  Gradient,
+  LibFunction,
   allpairs,
   filter_reduce,
   grad,
@@ -44,7 +46,6 @@ from .lib.adverbs import (
   value_and_grad,
 )
 from .syntax import ir
-from .transforms import pipeline
 
 # Explicit operator aliases mapping 1-to-1 to Parakeet's five core adverbs
 kernel = api.jit
@@ -105,10 +106,14 @@ def _detect_laws(after_reassoc: ir.Function | None, after_monoid: ir.Function | 
       laws.append(label)
 
   if after_reassoc is not None:
-    for s in ir.walk_stmts(after_reassoc.body):
-      if isinstance(s, ir.Alloc) and s.var.name.startswith("reassoc_m"):
-        add_law("Law 3: Bilinear Contraction Reassociation / MLA Absorption")
-        break
+    guarded = any(
+      isinstance(s, ir.If) and any(isinstance(t, ir.Alloc) and t.var.name.startswith("reassoc_m") for t in s.then)
+      for s in ir.walk_stmts(after_reassoc.body)
+    )
+    if guarded:
+      add_law("Law 3: Bilinear Contraction Reassociation / MLA Absorption (cost-guarded in IR)")
+    elif any(isinstance(s, ir.Alloc) and s.var.name.startswith("reassoc_m") for s in ir.walk_stmts(after_reassoc.body)):
+      add_law("Law 3: Bilinear Contraction Reassociation / MLA Absorption")
 
   if after_monoid is not None:
     for s in ir.walk_stmts(after_monoid.body):
@@ -124,16 +129,15 @@ def _detect_laws(after_reassoc: ir.Function | None, after_monoid: ir.Function | 
         elif p.mask_buf is not None:
           add_law("Law 5: Boolean-Mask Tile Ballot Skipping")
         if p.split_k and "unnormalized" in p.aux_exprs:
-          add_law("Law 1: FlashDecoding Split-K Monoid Associativity")
+          add_law("Law 1: FlashDecoding Split-K Monoid Associativity (shape-guarded in IR)")
       if isinstance(s, ir.Assign) and s.var.name.startswith("gqa_meff"):
         add_law("Law 3: GQA Shared-KV Head-Group Tiling")
 
   if after_scan is not None:
-    for s in ir.walk_stmts(after_scan.body):
-      if isinstance(s, ir.Alloc) and s.var.name.startswith("ts_chA"):
-        add_law("Law 4: Chunkwise Parallel Affine Prefix Scan (TileScan)")
-      if isinstance(s, ir.Alloc) and s.var.name.startswith("ssd_Yi"):
-        add_law("Law 4: Chunkwise State-Space Duality (Mamba-2 SSD)")
+    if any(isinstance(s, ir.Alloc) and s.var.name.startswith("ts_chA") for s in ir.walk_stmts(after_scan.body)):
+      add_law("Law 4: Chunkwise Parallel Affine Prefix Scan (TileScan, length-guarded in IR)")
+    if any(isinstance(s, ir.Alloc) and s.var.name.startswith("ssd_Yi") for s in ir.walk_stmts(after_scan.body)):
+      add_law("Law 4: Chunkwise State-Space Duality (Mamba-2 SSD, length-guarded in IR)")
 
   if after_tiling is not None:
     for s in ir.walk_stmts(after_tiling.body):
@@ -146,66 +150,58 @@ def _detect_laws(after_reassoc: ir.Function | None, after_monoid: ir.Function | 
 
 
 def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **opts) -> RewriteReport:
-  """Compile ``fn`` for the types of ``args`` and report every algebraic rewrite applied.
+  """Compile-only algebraic rewrite inspection for ``fn`` on the types of ``args``.
 
-  ``fn`` may be a plain Python function, a ``@parakeet.jit`` / ``@dsl.kernel``
-  function, or a ``grad`` / ``value_and_grad`` wrapper.
+  Works reliably on cold or warm specializations (including repeated calls and
+  calls after ordinary execution), supports plain functions, ``@jit`` /
+  ``@dsl.kernel`` functions, and ``grad`` / ``value_and_grad`` wrappers without
+  executing ``fn`` or mutating global compiler state.
   """
-  # Always compile through a fresh jit wrapper so cached specializations never skip trace hooks
-  raw_fn = getattr(fn, "fn", fn)
-  target_fn = api.jit(raw_fn) if callable(raw_fn) and not hasattr(fn, "argnum") else fn
-
   snapshots: dict[str, str] = {}
   counts: dict[str, tuple[int, int, int, int]] = {}
-  orig_run = pipeline.run
-
-  # Snapshot lightweight summaries inside trace callback (before later passes mutate IR in-place)
   detected_laws: list[str] = []
   detected_plans: list[str] = []
 
-  def hooked(ir_fn: ir.Function, options, trace=None):
-    snapshots["before"] = ir.fmt_function(ir_fn)
-    counts["before"] = _count_ops(ir_fn)
-
-    def tr(name: str, f: ir.Function):
-      if name == "contraction reassociation":
-        lws, pls = _detect_laws(f, None, None, None)
-        detected_laws.extend(lws)
-        detected_plans.extend(pls)
-      elif name == "monoidal tiling":
-        lws, pls = _detect_laws(None, f, None, None)
-        detected_laws.extend(lws)
-        detected_plans.extend(pls)
-      elif name == "chunkwise scan":
-        lws, pls = _detect_laws(None, None, f, None)
-        detected_laws.extend(lws)
-        detected_plans.extend(pls)
-      elif name == "tiling":
-        lws, pls = _detect_laws(None, None, None, f)
-        detected_laws.extend(lws)
-        detected_plans.extend(pls)
-        snapshots["after"] = ir.fmt_function(f)
-        counts["after"] = _count_ops(f)
-      if trace is not None:
-        trace(name, f)
-
-    orig_run(ir_fn, options, trace=tr)
+  def observer(name: str, f: ir.Function) -> None:
+    if name == "before passes":
+      snapshots["before"] = ir.fmt_function(f)
+      counts["before"] = _count_ops(f)
+    elif name == "contraction reassociation":
+      lws, pls = _detect_laws(f, None, None, None)
+      detected_laws.extend(lws)
+      detected_plans.extend(pls)
+    elif name == "monoidal tiling":
+      lws, pls = _detect_laws(None, f, None, None)
+      detected_laws.extend(lws)
+      detected_plans.extend(pls)
+    elif name == "chunkwise scan":
+      lws, pls = _detect_laws(None, None, f, None)
+      detected_laws.extend(lws)
+      detected_plans.extend(pls)
+    elif name == "tiling":
+      lws, pls = _detect_laws(None, None, None, f)
+      detected_laws.extend(lws)
+      detected_plans.extend(pls)
+      snapshots["after"] = ir.fmt_function(f)
+      counts["after"] = _count_ops(f)
 
   run_opts = {"blas": blas, **opts}
   if backend is not None:
     run_opts["backend"] = backend
 
-  pipeline.run = hooked
-  try:
-    with config.options(**run_opts):
-      if hasattr(target_fn, "specialize"):
-        target_fn.specialize(*args)
-      else:
-        target_fn(*args)
-  finally:
-    pipeline.run = orig_run
+  with config.options(**run_opts):
+    if isinstance(fn, Gradient):
+      call_args = (fn.fn, *args)
+      call_kwargs = {"argnum": fn.argnum}
+      wrapper = api.staged_wrapper(fn.impl, call_args, call_kwargs)
+      wrapper.trace_passes(*call_args, _backend=backend, _trace=observer, **call_kwargs)
+    elif isinstance(fn, LibFunction):
+      wrapper = api.staged_wrapper(fn, args, {})
+      wrapper.trace_passes(*args, _backend=backend, _trace=observer)
+    else:
+      wrapper = fn if isinstance(fn, api.jit) else api.jit(fn)
+      wrapper.trace_passes(*args, _backend=backend, _trace=observer)
 
-  # Deduplicate preserving order
   uniq_laws = tuple(dict.fromkeys(detected_laws))
   uniq_plans = tuple(detected_plans)
   bm, _, _, _ = counts.get("before", (0, 0, 0, 0))

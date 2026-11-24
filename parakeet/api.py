@@ -735,6 +735,56 @@ class jit:  # noqa: N801 - decorator, lower-case by convention
 
   # ---- introspection ---------------------------------------------------------------
 
+  def trace_passes(self, *args, _backend: str | None = None, _trace=None, **kwargs):
+    """Elaborate and run the middle-end optimization passes for ``args`` without
+    building or executing a kernel and without consulting or mutating the
+    specialization cache.
+
+    ``_trace(stage_name, ir_fn)`` is invoked with ``"before passes"`` prior to
+    the pipeline and after every pass in :data:`parakeet.transforms.pipeline.PASSES`.
+    """
+    names, values = self._bind(args, kwargs)
+    leaves: list = []
+    fixups: list = []
+    try:
+      arg_keys = tuple([sig.classify(v, leaves, fixups) for v in values])
+      fn_key = sig.classify(self.fn, leaves, fixups)
+    except sig.Unsupported as e:
+      raise TypeError(f"{self.fn.__name__}(): {e}") from None
+    cell_keys = fn_key[3] if isinstance(fn_key[3], tuple) else ()
+    backend = get_backend(_backend or self.backend)
+    options = self._options()
+    options.parallel = backend.parallel
+    options.blas = options.blas and backend.device_kind is None and blas.available()
+    options.target = TargetProfile.for_device(
+      backend.device_kind,
+      options.tile_bytes,
+      device=backend.device(),
+      tensor_cores=config.tensor_cores or config.fast_math,
+    )
+    state = ElabState()
+    while True:
+      static = frozenset(state.static_leaves)
+      keys = _rewrite_keys(arg_keys, cell_keys, leaves, static)
+      try:
+        elaborated = Elaborator(self.fn, (names, *keys), state, options).run()
+        break
+      except Restart:
+        state.restarts += 1
+        if state.restarts > MAX_RESTARTS:
+          raise InternalError(
+            f"type inference for {self.fn.__name__} did not converge after {MAX_RESTARTS} attempts"
+          ) from None
+      except CompileError as e:
+        e.add_note(f"while compiling {self.fn.__qualname__}({', '.join(sig.describe(k) for k in arg_keys)})")
+        raise
+    from .transforms import pipeline
+
+    if _trace is not None:
+      _trace("before passes", elaborated.function)
+    pipeline.run(elaborated.function, options, _trace)
+    return elaborated.function
+
   def specialize(self, *args, **kwargs) -> Specialization:
     """Compile (without running) for the given example arguments."""
     backend_name = kwargs.pop("_backend", None)
@@ -819,9 +869,8 @@ def _openmp_available() -> bool:
 _wrappers: dict[tuple, jit] = {}
 
 
-def call_staged(libfn, args: tuple, kwargs: dict, backend: str | None = None, options: dict | None = None):
-  """Run a Parakeet library function (``parakeet.map`` ...) from Python by
-  compiling a small wrapper for this call shape."""
+def staged_wrapper(libfn, args: tuple, kwargs: dict, options: dict | None = None) -> jit:
+  """Return the cached :class:`jit` wrapper used to stage ``libfn`` for this call shape."""
   kwnames = tuple(sorted(kwargs))
   try:
     key = (libfn, len(args), kwnames, tuple(sorted((options or {}).items())))
@@ -839,6 +888,13 @@ def call_staged(libfn, args: tuple, kwargs: dict, backend: str | None = None, op
     ns: dict[str, Any] = {"__fn__": libfn}
     exec(compile(src, filename, "exec"), ns)  # noqa: S102 - fixed template, not user input
     wrapper = _wrappers[key] = jit(ns[name], **(options or {}))
+  return wrapper
+
+
+def call_staged(libfn, args: tuple, kwargs: dict, backend: str | None = None, options: dict | None = None):
+  """Run a Parakeet library function (``parakeet.map`` ...) from Python by
+  compiling a small wrapper for this call shape."""
+  wrapper = staged_wrapper(libfn, args, kwargs, options)
   if backend is not None:
     kwargs = {**kwargs, "_backend": backend}
   return wrapper(*args, **kwargs)

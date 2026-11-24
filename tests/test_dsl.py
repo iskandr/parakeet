@@ -78,3 +78,39 @@ def test_dsl_show_rewrite_reports_all_algebraic_laws():
   np.testing.assert_allclose(_dsl_gbdt_hist(bins, grads, 16), np.bincount(bins, weights=grads, minlength=16), rtol=1e-5, atol=1e-5)
 
   assert parakeet.dsl is dsl
+
+
+def test_dsl_show_rewrite_reliable_on_warm_cache_and_grad():
+  """Calling show_rewrite repeatedly, after ordinary execution, and on grad()
+  wrappers must always return non-empty before/after IR without executing."""
+  def sq_sum(x):
+    return np.sum(x * x)
+
+  x = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+  # Warm the specialization cache first via ordinary execution
+  jitted = parakeet.jit(sq_sum)
+  np.testing.assert_allclose(jitted(x), 30.0)
+
+  r1 = dsl.show_rewrite(sq_sum, x, backend="c")
+  r2 = dsl.show_rewrite(sq_sum, x, backend="c")
+  assert r1.before_ir and r1.after_ir
+  assert r2.before_ir and r2.after_ir
+  assert r1.before_maps == r2.before_maps and r1.after_maps == r2.after_maps
+
+  # Repeated inspection on grad(sq_sum) (compile-only, never empty on 2nd call)
+  g = parakeet.grad(sq_sum)
+  np.testing.assert_allclose(g(x), 2.0 * x)
+  rg1 = dsl.show_rewrite(g, x, backend="c")
+  rg2 = dsl.show_rewrite(g, x, backend="c")
+  assert rg1.before_ir and rg1.after_ir
+  assert rg2.before_ir and rg2.after_ir
+
+  # Cost-guarded reassociation is explicitly marked as cost-guarded in IR
+  rng = np.random.default_rng(1)
+  q = rng.standard_normal((2, 32)).astype(np.float32)
+  c_kv = rng.standard_normal((128, 16)).astype(np.float32)
+  wuk = rng.standard_normal((16, 32)).astype(np.float32)
+  wuv = rng.standard_normal((16, 32)).astype(np.float32)
+  r_mla = dsl.show_rewrite(_dsl_mla, q, c_kv, wuk, wuv)
+  assert any("cost-guarded" in law for law in r_mla.laws_triggered), r_mla.laws_triggered
+

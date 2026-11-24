@@ -314,7 +314,7 @@ def main():
     t_pk, ot_pk = _bench(tropical_min_plus, (ta, tb), iters=5)
   t_np, ot_np = _bench(lambda a, b: np.min(a[:, :, None] + b[None, :, :], axis=1), (ta, tb), iters=3)
   np.testing.assert_allclose(ot_pk, ot_np, rtol=1e-5, atol=1e-5)
-  print(f"6. Tropical Min-Plus APSP (256x256)           : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Tiled Semiring")
+  print(f"6. One Min-Plus Matrix Product (256x256)      : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np/t_pk:4.1f}x) | Tiled Semiring")
 
   # 7. Exact 1-NN (zero N x M matrix!)
   with parakeet.options(blas=False):

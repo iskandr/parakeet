@@ -21,7 +21,7 @@ python examples/algebraic_gallery.py
 | **Llama-3 GQA Shared-KV Head-Group Tiling** | **5 lines** | ~300 LOC Triton | Laws 3 + 1 | Folds head group $G$ into query tile; $G\times$ less KV-cache HBM reads |
 | **Mamba-2 State-Space Duality (SSD)** | **6 lines** | ~500 LOC Triton | Law 4 | Rewrites serial loop into 4 batched Tensor-Core GEMMs (**48× faster** than serial C!) |
 | **RBF / Gaussian Kernel Regression** | **5 lines** | ~250 LOC KeOps CUDA | Law 1 (`sqdist`) | Zero $O(N \cdot M)$ pairwise matrix (**17.9× faster** than NumPy on CPU!) |
-| **Tropical Min-Plus Shortest Paths (`min/+`)** | **5 lines** | ~200 LOC C++/CUDA | Register/SRAM Tiling | Semiring matmul over `(min, +)` with zero $O(N^3)$ temporary tensor |
+| **Tropical Min-Plus Matrix Product (`min/+`)** | **5 lines** | ~200 LOC C++/CUDA | Register/SRAM Tiling | One `(min, +)` semiring matrix product with zero $O(N^3)$ temporary tensor |
 | **Exact 1-NN Search** | **4 lines** | ~150 LOC CUDA / FAISS flat | `Carry` + Vertical Fusion | Zero $O(N \cdot M)$ distance matrix (**14.9× faster** than NumPy on CPU!) |
 | **GBDT Histogram + Prefix-Sum Best Split** | **9 lines** | ~400 LOC XGBoost/LightGBM C++ | `IndexScatter` + Scan + `Carry` | Privatized parallel histogram + prefix-sum split gain (**2.9× faster** than NumPy!) |
 | **Batched nanoGPT Training Step (fwd+bwd+Adam)** | **~45 lines** | ~2,000+ LOC custom kernels | Laws 1 + 2 + 5 + WMMA | **1.42× faster than PyTorch eager** on NVIDIA L4 (`6.44 ms` vs `9.15 ms`)! |
@@ -170,7 +170,7 @@ automatically compiles this 5-line function into the exact same 1-pass SRAM-tile
 
 ---
 
-## 6. Tropical min-plus shortest paths & exact 1-NN search
+## 6. One tropical min-plus matrix product & exact 1-NN search
 
 **5 lines — arbitrary semiring matmul & `Carry`-fused nearest neighbor:**
 
@@ -227,23 +227,37 @@ def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
 
 ## Verified benchmarks
 
-### CPU (Apple Silicon, `examples/algebraic_gallery.py`, `blas=False`)
+### Same-device pass-on vs pass-off rewrite speedups (Apple Silicon CPU, `blas=False`)
+
+To isolate the speedup of each algebraic pass on the **same device** (holding the
+backend and CPU constant, toggling only the named pass via `skip_transforms`):
+
+| Workload | Pass OFF (ms) | Pass ON (ms) | Rewrite Speedup | Pass Isolated |
+|---|---:|---:|---:|---|
+| **Mamba-2 SSD** (`T=2048, D=64, V=64`) | 58.25 ms | **1.08 ms** | **54.1×** | Law 4 (`chunkwise scan`) |
+| **DeepSeek MLA Decode** (`Tq=4, Tkv=2048, dc=64, dh=256`) | 1.86 ms | **0.22 ms** | **8.4×** | Law 3 (`contraction reassociation`) |
+| **Affine IIR Filter** (`T=262,144`) | 0.63 ms | **0.27 ms** | **2.3×** | Law 4 (`chunkwise scan`) |
+
+### CPU vs eager NumPy (`examples/algebraic_gallery.py`, Apple Silicon, `blas=False`)
 
 | Workload | Parakeet (ms) | NumPy (ms) | Speedup | Laws Fired |
 |---|---:|---:|---:|---|
-| **RBF Kernel Regression** (`512 × 2048 × 32`) | **4.37 ms** | 78.26 ms | **17.9×** | Law 1 (`sqdist`, zero $N\times M$) |
+| **RBF Kernel Regression** (`512 × 2048 × 32`) | **4.37 ms** | 78.26 ms | **17.9×** | Law 1 (`sqdist`, zero $N\times M$ allocation) |
 | **Exact 1-NN Search** (`512 × 2048 × 32`) | **1.69 ms** | 25.24 ms | **14.9×** | `Carry` + Vertical Fusion |
-| **Mamba-2 SSD** (`T=2048, D=64, V=64`) | **1.74 ms** | 13.70 ms | **7.9×** (48× vs serial C) | Law 4 (Chunkwise SSD) |
+| **Mamba-2 SSD** (`T=2048, D=64, V=64`) | **1.74 ms** | 13.70 ms | **7.9×** | Law 4 (Chunkwise SSD) |
 | **GBDT Hist + Best-Split** (`N=200k, B=256`) | **0.39 ms** | 1.11 ms | **2.9×** | `IndexScatter` + `IndexScan` + `Carry` |
-| **Tropical Min-Plus APSP** (`256 × 256`) | **3.64 ms** | 6.24 ms | **1.7×** | Semiring Tiling |
+| **One Min-Plus Matrix Product** (`256 × 256`) | **3.64 ms** | 6.24 ms | **1.7×** | Semiring Tiling |
 
-### Apple Metal GPU (`backend="metal"`, `blas=False`)
+### Apple Metal GPU vs eager CPU NumPy (`backend="metal"`, `blas=False`)
 
-| Workload | Parakeet Metal GPU (ms) | NumPy (ms) | Speedup | Memory / Law Highlight |
+*(Cross-device comparison: Parakeet compiled to Apple Metal GPU vs the eager CPU NumPy
+broadcast expression on the same Apple Silicon machine.)*
+
+| Workload | Parakeet Metal GPU (ms) | Eager CPU NumPy (ms) | Ratio | Memory / Law Highlight |
 |---|---:|---:|---:|---|
 | **RBF Kernel Regression** (`1024 × 4096 × 32`) | **6.06 ms** | 312.76 ms | **51.6×** | Zero $N \times M$ matrix (Law 1 `sqdist`) |
 | **Exact 1-NN Search** (`1024 × 4096 × 32`) | **5.96 ms** | 298.30 ms | **50.0×** | Zero $N \times M$ matrix (`Carry` fusion) |
-| **Tropical Min-Plus APSP** (`512 × 512`) | **4.70 ms** | 36.77 ms | **7.8×** | Zero $N^3$ tensor (SRAM semiring tile) |
+| **One Min-Plus Matrix Product** (`512 × 512`) | **4.70 ms** | 36.77 ms | **7.8×** | Zero $N^3$ tensor (SRAM semiring tile) |
 | **Causal FlashAttention** (`B=2, H=4, T=512, D=64`) | **7.49 ms** | 7.24 ms | **1.0×** | Zero $O(T^2)$ HBM allocation (Laws 1 + 5) |
 
 ### NVIDIA L4 GPU — End-to-End Batched nanoGPT Training Step (`tools/colab_nanogpt_bench.py`)
