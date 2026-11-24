@@ -1,28 +1,32 @@
 # Kernel gallery
 
-These examples compile ordinary NumPy functions and explicit data-parallel operators.
-Each code sample comes from the runnable gallery. From an installed source checkout,
-run the examples and their numerical checks with:
+The same `@parakeet.jit` compiles broadcasting NumPy and explicit data-parallel
+operators. Use `dsl.map` when the inputs line up row by row, `dsl.allpairs`
+when every left row meets every right row, and `dsl.fold` when you can describe
+how two partial results combine. `dsl.kernel` is an alias for `parakeet.jit`.
 
-```bash
-python examples/algebraic_gallery.py
+Start with [one nearest-neighbor query](#exact-nearest-neighbor), then
+[change what the fold remembers](#inverse-distance-smoothing). For a complete
+training program, try [nanoGPT](#nanogpt). The snippets
+come from executable examples. From an installed source checkout, run
+`python -m examples.algebraic_gallery` for the numerical checks.
+
+```python
+import numpy as np
+import parakeet
+from parakeet import dsl
+from typing import NamedTuple
 ```
-
-The examples use `import numpy as np`, `import parakeet` and
-`from parakeet import dsl`. The same `@parakeet.jit` compiles both ordinary NumPy
-and explicit operators such as `dsl.map`. The name `dsl.kernel` is an alias for
-`parakeet.jit`. [Browse the source](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py).
 
 The axis-fold examples below use the development version after 1.0.0. To run them,
 install the current checkout with `python -m pip install -e .`.
 
 ## Exact nearest neighbor
 
-Find the closest reference to each query. NumPy expresses the calculation as a
-distance matrix followed by `argmin`. In the explicit form, `allpairs` defines
-the query/reference domain. `Winner` gives each distance its reference index,
-and `first_minimum` merges adjacent winners. Equal distances keep the earlier
-index. The first NaN wins, matching NumPy.
+Given `Q` query rows and `R` reference rows with the same feature count,
+return `Q` reference indices. For a query at 1 and references at 0, 2 and 4,
+the squared distances are `[1, 1, 9]`. The answer is index `0` because it
+is the first minimum.
 
 === "Broadcasting NumPy"
 
@@ -30,11 +34,33 @@ index. The first NaN wins, matching NumPy.
     --8<-- "examples/algebraic_gallery.py:nearest_numpy"
     ```
 
-=== "Parallel operators"
+=== "Map and argmin"
+
+    For each query, map the same distance function over the references and
+    return the position of its smallest value. The outer map repeats that
+    search for every query.
 
     ```python
+    --8<-- "examples/algebraic_gallery.py:squared_distance"
+
+    --8<-- "examples/algebraic_gallery.py:exact_1nn"
+    ```
+
+=== "All pairs and a structured fold"
+
+    ```python
+    --8<-- "examples/algebraic_gallery.py:squared_distance"
+
     --8<-- "examples/algebraic_gallery.py:nearest_fold"
     ```
+
+Read the explicit form from `nearest_fold`. `allpairs` defines a logical
+`Q × R` array of squared distances. Folding along `axis=1` visits the
+references for one query. With `indexed=True`, `Winner` receives both the
+distance and its column index. Two adjacent groups can each report a winner.
+`first_minimum` keeps the left winner on ties and preserves the first NaN.
+Finally, `emit` extracts the index. This merge rule lets the compiler process
+tiles without storing the full distance matrix.
 
 With the axis-fold extension, both forms use the pairwise tile schedule on supported CPU,
 Metal and CUDA targets. The published 1.0.0 and post-release comparison used
@@ -43,11 +69,12 @@ allocations and revision details](release-benchmarks.md#gpu-pairwise-fold-after-
 
 ## Inverse-distance smoothing
 
-Use the same squared distances to predict a scalar observation at each query.
-Here each reference contributes `(w, w * value)` with `w = 1 / (1 + distance²)`.
-The compiler can compute the score once, add both fields over each tile, and
-divide the two totals after the final merge. These examples take nonempty
-reference arrays with one float32 observation per reference.
+Keep the query/reference pairs and `squared_distance` from nearest neighbor.
+Now each reference carries a scalar observation. A point at squared distance
+`d2` casts a vote with weight `1 / (1 + d2)`. To combine two groups, add their
+weight totals and their weighted observation totals. Divide once, after all
+groups have contributed. This implements a weighted mean for each query over
+a nonempty reference set.
 
 === "Broadcasting NumPy"
 
@@ -58,8 +85,63 @@ reference arrays with one float32 observation per reference.
 === "Parallel operators"
 
     ```python
+    --8<-- "examples/algebraic_gallery.py:squared_distance"
+
     --8<-- "examples/algebraic_gallery.py:weighted_fold"
     ```
+
+## nanoGPT
+
+Train a two-layer transformer to predict the next character in a short text.
+The example builds token and position embeddings, applies two causal attention
+heads per layer, and trains the whole model with Adam. Run it from the source
+checkout. It prints the loss at steps 1, 20, 40 and 60 and checks that the final
+loss is below 80% of the initial loss.
+
+```bash
+python -m examples.nanogpt
+```
+
+For the text fragment `para`, the inputs are `p a r` and the targets are
+`a r a`. Within a sequence, the causal mask lets each position attend to
+itself and earlier characters. Across the batch, sequences are independent
+and share the same model parameters.
+
+=== "Map over sequences"
+
+    `tokens` and `targets` both have shape `(batch, context)`. Each call to
+    `loss_for_sequence` gets one input row and its matching target row.
+    `dsl.map` returns one loss per sequence. Their mean is the scalar used to
+    train the model.
+
+    ```python
+    --8<-- "examples/nanogpt.py:gpt_batch"
+    ```
+
+=== "Attend within one sequence"
+
+    Each head scores pairs of positions with a matrix product. The causal
+    mask is applied before softmax. Each row of the resulting weights mixes
+    the visible value vectors.
+
+    ```python
+    --8<-- "examples/nanogpt.py:gpt_attention"
+    ```
+
+=== "Take one optimizer step"
+
+    `value_and_grad(loss)` compiles the loss and its reverse pass. The gradient
+    has the same nested tuple structure as `params`. Adam carries a first
+    moment `m` and a second moment `v` for each parameter across steps.
+
+    ```python
+    --8<-- "examples/nanogpt.py:gpt_update"
+    ```
+
+The runnable example uses Python for Adam. The separate CUDA benchmark keeps
+parameters on the GPU and compiles Adam into the training step. [Complete training
+example](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py) ·
+[GPU benchmark](https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py).
 
 ## Gaussian kernel regression
 
