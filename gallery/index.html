@@ -1328,12 +1328,14 @@ run the examples and their numerical checks with:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>examples/algebraic_gallery.py
 </code></pre></div>
 <p>The examples use <code>import numpy as np</code>, <code>import parakeet</code> and
-<code>from parakeet import dsl</code>. <a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/algebraic_gallery.py">Browse the source</a>.</p>
+<code>from parakeet import dsl</code>. The same <code>@parakeet.jit</code> compiles both ordinary NumPy
+and explicit operators such as <code>dsl.map</code>. The name <code>dsl.kernel</code> is an alias for
+<code>parakeet.jit</code>. <a href="https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py">Browse the source</a>.</p>
 <h2 id="exact-nearest-neighbor">Exact nearest neighbor<a class="headerlink" href="#exact-nearest-neighbor" title="Permanent link">&para;</a></h2>
 <p>Find the closest reference row for each query. The outer map assigns one output
 per query. The inner map computes distances, and <code>argmin</code> returns the first
 reference index at the minimum.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">exact_1nn</span><span class="p">(</span><span class="n">x_query</span><span class="p">,</span> <span class="n">x_ref</span><span class="p">):</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="sd">"""Exact nearest-neighbor index per query row."""</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  <span class="k">return</span> <span class="n">dsl</span><span class="o">.</span><span class="n">map</span><span class="p">(</span>
@@ -1351,7 +1353,7 @@ run on CUDA and Metal. <a href="../release-benchmarks/#gpu-pairwise-fold-after-1
 <p>Predict each query's value by weighting the reference values by distance. The
 maximum, weight sum and weighted output can be updated a tile at a time. This
 is also the reduction at the heart of softmax attention.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">rbf_kernel_regression</span><span class="p">(</span><span class="n">x_query</span><span class="p">,</span> <span class="n">x_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">neg_gamma</span><span class="p">):</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">x_query</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">x_train</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">d2</span> <span class="o">*</span> <span class="n">neg_gamma</span>
@@ -1362,7 +1364,7 @@ is also the reduction at the heart of softmax attention.</p>
 <p>Accumulate gradients and Hessians into the same bins. When their index
 expressions agree, the compiler can combine the two histogram traversals.
 Prefix sums then give the score for each possible split.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">gbdt_best_split</span><span class="p">(</span><span class="n">bin_ids</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="n">hess</span><span class="p">,</span> <span class="n">nbins</span><span class="p">,</span> <span class="n">reg_lambda</span><span class="p">):</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="sd">"""Histogram scatter-add + prefix sums + argmax gain in 8 lines (XGBoost/LightGBM core)."""</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  <span class="n">g_hist</span> <span class="o">=</span> <span class="n">dsl</span><span class="o">.</span><span class="n">iscatter</span><span class="p">(</span><span class="n">nbins</span><span class="p">,</span> <span class="n">bin_ids</span><span class="p">,</span> <span class="n">grads</span><span class="p">)</span>
@@ -1382,7 +1384,7 @@ Prefix sums then give the score for each possible split.</p>
 cell takes the cheapest two-leg path through an intermediate vertex. For an
 <code>m × k</code> matrix and a <code>k × n</code> matrix, the result has shape <code>m × n</code>. The indexed
 reduction avoids an <code>m × n × k</code> temporary.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">tropical_min_plus</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="sd">"""One min-plus matrix product: C[i,j] = min_k (A[i,k] + B[k,j])."""</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  <span class="n">m</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
@@ -1400,7 +1402,7 @@ from the inputs.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Causal attention</label><label for="__tabbed_1_2">Linear cross-entropy</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">causal_flash_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  <span class="n">T</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  <span class="n">idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
@@ -1433,7 +1435,7 @@ shares keys and values across several query heads.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Latent attention</label><label for="__tabbed_2_2">Grouped-query attention</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">deepseek_mla</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">c_kv</span><span class="p">,</span> <span class="n">w_uk</span><span class="p">,</span> <span class="n">w_uv</span><span class="p">):</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  <span class="n">k</span> <span class="o">=</span> <span class="n">c_kv</span> <span class="o">@</span> <span class="n">w_uk</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  <span class="n">v</span> <span class="o">=</span> <span class="n">c_kv</span> <span class="o">@</span> <span class="n">w_uv</span>
@@ -1444,7 +1446,7 @@ shares keys and values across several query heads.</p>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">gqa_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>  <span class="c1"># q: (B, H_kv, G, T_q, D), k, v: (B, H_kv, 1, T_kv, D)</span>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>  <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])))</span>
@@ -1463,7 +1465,7 @@ below expose two uses of this rule.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Scalar IIR filter</label><label for="__tabbed_3_2">Mamba-2 recurrence</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">iir_exponential_filter</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>  <span class="n">T</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>  <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
@@ -1475,7 +1477,7 @@ below expose two uses of this rule.</p>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">mamba2_ssd</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>  <span class="n">T</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 <a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>  <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">T</span><span class="p">,</span> <span class="n">v</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>

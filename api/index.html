@@ -2987,8 +2987,8 @@ call sites (outermost first) through which the failing code was inlined.</p>
 
         <p>Compile-only algebraic rewrite inspection for <code>fn</code> on the types of <code>args</code>.</p>
 <p>Works reliably on cold or warm specializations (including repeated calls and
-calls after ordinary execution), supports plain functions, <code>@jit</code> /
-<code>@dsl.kernel</code> functions, and <code>grad</code> / <code>value_and_grad</code> wrappers without
+calls after ordinary execution), supports plain functions,
+<code>@parakeet.jit</code> functions, and <code>grad</code> / <code>value_and_grad</code> wrappers without
 executing <code>fn</code> or mutating global compiler state.</p>
 
 
