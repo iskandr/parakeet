@@ -1361,7 +1361,15 @@ values while preserving input order. The initial state is applied once, and is
 the result for empty input. Read any field of the result in compiled code.</p>
 <p>For example, affine updates <code>s -&gt; a*s + b</code> compose in order with
 <code>merge(left, right) = (right[0]*left[0], right[0]*left[1] + right[1])</code>.
-Custom folds currently support forward evaluation.</p>
+Custom folds support forward evaluation. The initial state is optional. With no
+seed, the first lifted element starts the fold and evaluating an empty lane
+raises <code>ValueError</code>.</p>
+<p>Use <code>axis=k</code> to fold the scalar values along each lane of a multidimensional
+array. Pass <code>emit=project</code> to return a scalar per lane. With <code>indexed=True</code>,
+<code>lift(value, index)</code> receives the zero-based position on that axis. The
+projection runs after the final merge, including on the seed for an empty lane.
+The <a href="../gallery/#exact-nearest-neighbor">gallery</a> composes this operation with
+<code>allpairs</code> and uses the same score with two different merge rules.</p>
 <h3 id="tiled-pairwise-folds">Tiled pairwise folds<a class="headerlink" href="#tiled-pairwise-folds" title="Permanent link">&para;</a></h3>
 <p>On CPU, a map over queries can consume an associative structured fold over
 references whose inputs come from a feature reduction. For example, both the
