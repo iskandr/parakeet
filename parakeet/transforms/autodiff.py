@@ -1442,6 +1442,24 @@ def _algebraic_vjp(tape: Tape, el, node: Node, g) -> None:
   run_algebraic_vjp(tape, el, node, g)
 
 
+def _segmented_reduce_ad(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.ragged_lib import _segmented_reduce_vjp
+
+  _segmented_reduce_vjp(tape, el, node, g)
+
+
+def _segmented_softmax_ad(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.ragged_lib import _segmented_softmax_vjp
+
+  _segmented_softmax_vjp(tape, el, node, g)
+
+
+def _varlen_flash_attention_ad(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.ragged_lib import _varlen_flash_attention_vjp
+
+  _varlen_flash_attention_vjp(tape, el, node, g)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1457,7 +1475,19 @@ _BACKWARD = {
   "scatter_add": _scatter_add,
   "gather": _gather,
   "algebraic_vjp": _algebraic_vjp,
+  "segmented_reduce": _segmented_reduce_ad,
+  "segmented_softmax": _segmented_softmax_ad,
+  "varlen_flash_attention": _varlen_flash_attention_ad,
 }
+
+
+class _StaticLeaf:
+  """Non-differentiated structural leaf (e.g. integer CSR offsets in a RaggedArray)."""
+
+  __slots__ = ("value",)
+
+  def __init__(self, value):
+    self.value = value
 
 
 # ---------------------------------------------------------------------------
@@ -1468,6 +1498,11 @@ _BACKWARD = {
 def _wrt_leaf(el, tape: Tape, v, what: str):
   """A differentiated argument as the function will see it, plus how to read
   its adjoint afterwards."""
+  from ..ragged import RaggedArray
+
+  if isinstance(v, RaggedArray):
+    vals_in, vals_holder = _wrt_leaf(el, tape, v.values, what)
+    return RaggedArray(vals_in, v.offsets), RaggedArray(vals_holder, _StaticLeaf(v.offsets))
   if record := record_type(v):
     values, holders = _wrt_leaf(el, tape, record.values(v), what)
     return record.build(values), record.build(holders)
@@ -1492,6 +1527,8 @@ def _wrt_leaf(el, tape: Tape, v, what: str):
 
 
 def _adjoint(el, holder, v):
+  if isinstance(holder, _StaticLeaf):
+    return holder.value
   if record := record_type(holder):
     return record.build(_adjoint(el, record.values(holder), record.values(v)))
   if isinstance(holder, tuple):

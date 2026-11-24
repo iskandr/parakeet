@@ -53,6 +53,15 @@ from .lib.adverbs import (
   scatter_add,
   value_and_grad,
 )
+from .lib.ragged_lib import (
+  segment_ids,
+  segmented_map,
+  segmented_reduce,
+  segmented_scan,
+  segmented_softmax,
+  varlen_flash_attention,
+)
+from .ragged import RaggedArray
 from .syntax import ir
 
 # Explicit kernel decorator & operator aliases
@@ -315,6 +324,7 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 
 
 __all__ = [
+  "RaggedArray",
   "RewriteReport",
   "abs",
   "add",
@@ -384,6 +394,11 @@ __all__ = [
   "scan",
   "scatter",
   "scatter_add",
+  "segment_ids",
+  "segmented_map",
+  "segmented_reduce",
+  "segmented_scan",
+  "segmented_softmax",
   "show_rewrite",
   "sin",
   "sqrt",
@@ -395,6 +410,7 @@ __all__ = [
   "uint32",
   "uint64",
   "value_and_grad",
+  "varlen_flash_attention",
   "where",
   "zeros",
 ]

@@ -69,6 +69,14 @@ from .lib.adverbs import (
 from .lib.pure import pmap1 as _pmap1
 from .lib.pure import pmap2 as _pmap2
 from .lib.pure import pmap2_trim as _pmap2_trim
+from .lib.ragged_lib import (
+  segment_ids,
+  segmented_map,
+  segmented_reduce,
+  segmented_scan,
+  segmented_softmax,
+  varlen_flash_attention,
+)
 from .ndtypes import (
   Bool,
   Float32,
@@ -82,6 +90,7 @@ from .ndtypes import (
   UInt32,
   UInt64,
 )
+from .ragged import RaggedArray
 from .target import MatrixUnit
 from .transforms.verify import verify
 
@@ -165,12 +174,14 @@ def clear_cache() -> int:
 
 __all__ = [
     "BackendError", "BackendUnavailable", "CompileError", "DeviceArray", "FallbackWarning",
-    "MatrixUnit", "ParakeetError", "Specialization", "StaticValueError", "TargetProfile",
+    "MatrixUnit", "ParakeetError", "RaggedArray", "Specialization", "StaticValueError", "TargetProfile",
     "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "bf16_to_f32", "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
     "f32_to_bf16", "filter", "imap",
     "ireduce", "jit", "lib", "map", "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter_add", "seed",
+    "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
+    "varlen_flash_attention",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
     "to_device", "to_host", "typed_repr",
     "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",
