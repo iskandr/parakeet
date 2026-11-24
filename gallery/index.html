@@ -1565,7 +1565,8 @@ moment <code>m</code> and a second moment <code>v</code> for each parameter acro
 <p>The runnable example uses Python for Adam. The separate CUDA benchmark keeps
 parameters on the GPU and compiles Adam into the training step. <a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py">Complete training
 example</a> ·
-<a href="https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py">GPU benchmark</a>.</p>
+<a href="https://github.com/iskandr/parakeet/blob/master/tools/colab_nanogpt_bench.py">GPU benchmark</a> ·
+<a href="../release-benchmarks/#nanogpt-training">Colab training results</a>.</p>
 <h2 id="gaussian-kernel-regression">Gaussian kernel regression<a class="headerlink" href="#gaussian-kernel-regression" title="Permanent link">&para;</a></h2>
 <p>Predict each query's value by weighting the reference values by distance. The
 maximum, weight sum and weighted output can be updated a tile at a time. This
@@ -1756,43 +1757,6 @@ samples. <a href="../release-benchmarks/">Release benchmarks</a>.</p>
 </tr>
 </tbody>
 </table>
-<details class="details">
-<summary>Earlier training-step timings on an NVIDIA L4</summary>
-<p>These warmed end-to-end nanoGPT timings include forward, backward and Adam.
-The small model has batch 16, sequence length 64, width 128 and two layers.
-The medium model has batch 32, sequence length 128, width 256 and four layers.</p>
-<table>
-<thead>
-<tr>
-<th>Model</th>
-<th style="text-align: right;">Parakeet TF32</th>
-<th style="text-align: right;">Parakeet FP32</th>
-<th style="text-align: right;">PyTorch eager</th>
-<th style="text-align: right;">Compiled PyTorch</th>
-<th style="text-align: right;">JAX JIT</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Small</td>
-<td style="text-align: right;">6.44 ms</td>
-<td style="text-align: right;">8.04 ms</td>
-<td style="text-align: right;">9.15 ms</td>
-<td style="text-align: right;">3.58 ms</td>
-<td style="text-align: right;">1.58 ms</td>
-</tr>
-<tr>
-<td>Medium</td>
-<td style="text-align: right;">32.15 ms</td>
-<td style="text-align: right;">47.05 ms</td>
-<td style="text-align: right;">19.28 ms</td>
-<td style="text-align: right;">15.15 ms</td>
-<td style="text-align: right;">9.18 ms</td>
-</tr>
-</tbody>
-</table>
-<p><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/tools/colab_nanogpt_bench.py">Training benchmark source</a>.</p>
-</details>
 
 
 
