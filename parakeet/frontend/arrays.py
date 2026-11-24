@@ -220,7 +220,11 @@ class ArrayMixin:
     if self.journal is not None:
       self.journal.append((arr, arr.uses))
     arr.uses += 1
-    if arr.uses > 1 and arr.cost > CHEAP_COST:
+    if arr.uses > 1 and (
+      arr.cost > CHEAP_COST
+      or (arr.reads is not None and len(arr.reads) > 3)
+      or (isinstance(arr.roots, frozenset) and len(arr.roots) > 3)
+    ):
       self.conflict(arr, "evaluated more than once")
 
   def as_concrete(self, arr: ArrayVal) -> ArrayVal:
@@ -533,7 +537,11 @@ class ArrayMixin:
       if self.journal is not None:
         self.journal.append((arr, arr.uses))
       arr.uses += 1
-      if arr.uses > 1 and arr.cost > CHEAP_COST:
+      if arr.uses > 1 and (
+        arr.cost > CHEAP_COST
+        or (arr.reads is not None and len(arr.reads) > 3)
+        or (isinstance(arr.roots, frozenset) and len(arr.roots) > 3)
+      ):
         self.conflict(arr, "used more than once")
     src = arr.fn
     mapping = [(j, self.tmp(start), self.tmp(step)) for j, start, step in mapping]
@@ -936,6 +944,19 @@ class ArrayMixin:
       self.elem(it, ()) if isinstance(it, ArrayVal) and it.rank == 0 and it.elt.kind != "b" else it for it in items
     ]
     if any(isinstance(it, ArrayVal) for it in items):
+      tape = self.tape
+      if (
+        tape is not None
+        and not tape.muted
+        and not tape.dry
+        and tape.parent is None
+        and tape.outer is None
+        and arr.elt.kind == "f"
+        and tape.is_active(self, arr)
+      ):
+        gathered = tape.gather(self, arr, items)
+        if gathered is not None:
+          return gathered
       shape, src_index, base = self._fancy_plan(arr, items)
       cost = base.cost + 2
       index_roots = [self.get_roots(it) for it in items if isinstance(it, ArrayVal)]

@@ -613,6 +613,31 @@ class Tape:
     self.register(el, node, out)
     return out
 
+  def gather(self, el, arr: ArrayVal, items: list):
+    """Record fancy-indexing gather ``arr[idx...]`` so backward emits an
+    ``IndexScatter`` (parallel GPU ``atomicAdd`` / privatized CPU scatter)
+    instead of falling back to an opaque sequential loop."""
+    if el.block is not self.block:
+      self.not_static(el)
+    arr = el.as_concrete(arr)
+    index_arrays = tuple(it for it in items if isinstance(it, ArrayVal))
+    with self.computing(el):
+      shape, src_index, base = el._fancy_plan(arr, items)
+      if base.buf is None:
+        return None
+      index_roots = [el.get_roots(it) for it in index_arrays]
+      out = el.delayed(
+        base.elt,
+        shape,
+        lambda idx: el.elem(base, src_index(idx)),
+        roots=el.union_roots(el.get_roots(base), *index_roots),
+        cost=max(base.cost + 2, CHEAP_COST + 1),
+      )
+    node = Node("gather", (base,), (shape, src_index, index_arrays))
+    self.record(el, node)
+    self.register(el, node, out)
+    return out
+
   def op(self, el, kind: str, inputs: tuple, info, compute):
     """Record an operator whose result ``compute()`` builds without help."""
     self.first_order(el, kind)
@@ -1365,6 +1390,44 @@ def _scatter_add(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   tape.add(el, values, gathered)
 
 
+def _gather(tape: Tape, el, node: Node, g) -> None:
+  from ..syntax.ir import IndexScatter
+
+  (base,) = node.inputs
+  shape, src_index, index_arrays = node.info
+  tape.stale(el, node, base)
+  for ia in index_arrays:
+    tape.stale(el, node, ia)
+  root = tape.find_root(base.buf.uid)
+  if root is None:
+    return
+  if isinstance(g, ArrayVal):
+    if g.buf is None and g.cost > CHEAP_COST:
+      g = el.as_concrete(g)
+    el.consume(g)
+    g = el.broadcast_to(g, shape, consumed=True)
+  else:
+    g = el.tmp(g, "g")
+  adj_view = root.view(el, base)
+  dest_size = el.tmp(ops.iprod(root.arr.shape), "dsize")
+  shape_t = tuple(el.tmp(d, "n") for d in shape)
+  idx_vars = tuple(Var("i", I) for _ in shape_t)
+  for v, d in zip(idx_vars, shape_t):
+    el.nonneg.add(v.uid)
+    el.upper[v.uid] = d
+  threads = el.can_parallel(shape_t)
+  blk: list = []
+  scope = el.new_scope("loop")
+  with el.in_block(blk, scope, loop=True, par=threads):
+    target = el.tmp(el.index_expr(adj_view, src_index(idx_vars)), "pos")
+    val_expr = el.elem(g, idx_vars) if isinstance(g, ArrayVal) else g
+    val = el.tmp(cast(val_expr, adj_view.elt), "g")
+  el.emit(
+    IndexScatter(shape_t, idx_vars, blk, adj_view.buf, dest_size, target, val, "add", scope, threads, el.loc())
+  )
+  el.record_store(adj_view)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1378,6 +1441,7 @@ _BACKWARD = {
   "store_element": _store_element,
   "fold": _fold,
   "scatter_add": _scatter_add,
+  "gather": _gather,
 }
 
 

@@ -83,6 +83,12 @@ class HostEmitter(CFamilyEmitter):
     out.append(f"{pad}if (PK_UNLIKELY(!{name})) goto {self.fail_label};")
     out.append(f"{pad}{name}_d = ({ct}*){name}->data;")
 
+  def atomic_store(self, s: ir.Store, ct: str, value: str, out: list[str], pad: str) -> None:
+    if s.atomic == "add" and s.buf.type.elt.name in ("float32", "float64", "int32", "uint32"):
+      out.append(f"{pad}pk_atomic_add_{s.buf.type.elt.name}(&{self.data(s.buf)}[{self.expr(s.index)}], {value});")
+      return
+    super().atomic_store(s, ct, value, out, pad)
+
   def incref(self, s: ir.Incref, out: list[str], pad: str) -> None:
     out.append(f"{pad}pk_incref({self.expr(s.buf)});")
 
@@ -238,7 +244,7 @@ class HostEmitter(CFamilyEmitter):
           )
           items.append(("assign", var_key(t.var), expr_key(t.value), chunk_hint))
         elif isinstance(t, ir.Store):
-          items.append(("store", var_key(t.buf), expr_key(t.index), expr_key(t.value)))
+          items.append(("store", var_key(t.buf), expr_key(t.index), expr_key(t.value), t.atomic))
         elif isinstance(t, ir.If):
           items.append(("if", expr_key(t.cond), block_key(t.then), block_key(t.orelse)))
         elif isinstance(t, ir.ForRange):
@@ -551,7 +557,8 @@ class CModule:
     self.source = emitter.module()
     if config.print_code:
       print(self.source)
-    self.path = toolchain.compile_shared(self.source)
+    gpu_opt = (0 if len(self.source) > 256 * 1024 else 1) if (device is not None and config.opt_level > 0) else None
+    self.path = toolchain.compile_shared(self.source, opt_level=gpu_opt)
     self.lib = toolchain.load(self.path)
     self.entry = self.lib.pk_entry
     self.entry.restype = ctypes.c_int32

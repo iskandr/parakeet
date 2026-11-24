@@ -181,9 +181,15 @@ def _link_cmd(tc: Toolchain, src: Path, out: Path, extra: tuple[str, ...]) -> li
   return cmd
 
 
-def compile_shared(source: str, extra_flags: tuple[str, ...] = (), tag: str = "mod") -> Path:
+def compile_shared(
+  source: str, extra_flags: tuple[str, ...] = (), tag: str = "mod", opt_level: int | None = None
+) -> Path:
   """Compile ``source`` into a shared library; returns the (cached) path."""
-  tc = get_toolchain()
+  tc = (
+    get_toolchain()
+    if opt_level is None
+    else _toolchain(config.cc, opt_level, config.fast_math, tuple(config.cflags))
+  )
   digest = hashlib.sha256(
     "\0".join([source, tc.version, " ".join(tc.cc), " ".join(tc.flags), " ".join(extra_flags)]).encode()
   ).hexdigest()[:24]

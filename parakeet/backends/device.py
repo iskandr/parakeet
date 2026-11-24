@@ -42,7 +42,7 @@ def untouched_regions(pks: list, where: list[tuple[int, int]], n_regions: int) -
   for pk, (r, _) in zip(pks, where):
     kinds[r] &= pk.flags
   for pk in pks:
-    pk.flags &= ~6
+    pk.flags &= ~14
   return [4 if k & 4 else (2 if k & 2 else 0) for k in kinds]
 
 
@@ -217,12 +217,14 @@ class DeviceArray:
   """
 
   __parakeet_device_array__ = True
-  __slots__ = ("_dev_buf", "_device", "_dirty", "_host")
+  __slots__ = ("_addr", "_dev_buf", "_device", "_dirty", "_host", "_nbytes")
 
   def __init__(self, host: np.ndarray, device: DeviceBase, dev_buf: Any = None, *, dirty: bool = False) -> None:
     if not host.flags.c_contiguous:
       host = np.ascontiguousarray(host)
     self._host = host
+    self._addr = host.ctypes.data
+    self._nbytes = host.nbytes
     self._device = device
     self._dev_buf = dev_buf
     self._dirty = dirty
@@ -245,7 +247,7 @@ class DeviceArray:
 
   @property
   def nbytes(self) -> int:
-    return self._host.nbytes
+    return self._nbytes
 
   @property
   def strides(self) -> tuple[int, ...]:
@@ -261,7 +263,7 @@ class DeviceArray:
 
   @property
   def _host_addr(self) -> int:
-    return self._host.ctypes.data
+    return self._addr
 
   def sync_host(self) -> np.ndarray:
     """Bring the host backing array up to date if the device copy is newer."""
@@ -310,6 +312,7 @@ class _CallState(threading.local):
     self.cache: dict[int, _Resident] = {}
     self.pinned: dict[int, DeviceArray] = {}
     self.writable_pinned: set[int] = set()
+    self.pending_checks: list[tuple[int, KernelPlan]] = []
 
 
 class _Resident:
@@ -405,7 +408,7 @@ class DeviceBase:
         out.append(self.upload(addr, 0, external[r]))
         continue
       da = pinned.get(addr)
-      if da is not None and da.nbytes == nbytes:
+      if da is not None and da._nbytes == nbytes:
         dev_buf = da.ensure_device()
         if r in written:
           da._dirty = True
@@ -413,18 +416,24 @@ class DeviceBase:
         continue
       hit = cache.get(addr)
       if hit is None or hit.nbytes != nbytes:
-        for other in [e for e in cache.values() if e.addr < addr + nbytes and addr < e.addr + e.nbytes]:
+        end = addr + nbytes
+        for other in [e for e in cache.values() if e.addr < end and addr < e.addr + e.nbytes]:
           self._retire(other, True)
-        # If this region overlaps a pinned DeviceArray (e.g. a slice view), sync it to host first
-        for pda in list(pinned.values()):
-          if pda._host_addr < addr + nbytes and addr < pda._host_addr + pda.nbytes:
-            pda.sync_host()
-            if r in written:
-              pda._dev_buf = None
+        # Fresh pk_alloc buffers (untouched != 0) cannot overlap live pinned host arrays
+        if untouched[r] == 0:
+          for pda in list(pinned.values()):
+            paddr = pda._addr
+            if paddr < end and addr < paddr + pda._nbytes:
+              pda.sync_host()
+              if r in written:
+                pda._dev_buf = None
         dev_buf = self.upload(addr, nbytes, external[r], untouched[r])
         if untouched[r] == 0:
           self.uploads += 1
         hit = cache[addr] = _Resident(addr, nbytes, dev_buf)
+        if untouched[r] == 4:
+          # Host skipped memset (PK_LAZY_ZERO): device holds the only zeroed copy
+          hit.dirty = True
       hit.dirty = hit.dirty or r in written
       out.append(hit.dev)
     return out
@@ -433,10 +442,14 @@ class DeviceBase:
     """Promote a freshly computed output ``arr`` into a persistent :class:`DeviceArray`
     without downloading it if its buffer is already resident in the call cache."""
     addr = arr.ctypes.data
+    nbytes = arr.nbytes
     entry = self._state.cache.get(addr)
-    if entry is not None and entry.nbytes == arr.nbytes and arr.flags.c_contiguous:
+    if entry is not None and entry.nbytes >= nbytes and arr.flags.c_contiguous:
       self._state.cache.pop(addr, None)
-      return DeviceArray(arr, self, entry.dev, dirty=entry.dirty)
+      dev_buf = entry.dev
+      if entry.nbytes > nbytes and hasattr(dev_buf, "ndim"):
+        dev_buf = dev_buf[:nbytes]
+      return DeviceArray(arr, self, dev_buf, dirty=entry.dirty)
     return DeviceArray(arr, self, None, dirty=False)
 
   def _retire(self, entry: _Resident, download: bool) -> None:
@@ -479,7 +492,8 @@ class DeviceBase:
         if write:
           cache.pop(entry.addr, None)
     for da in self._state.pinned.values():
-      if da._host_addr < end and addr < da._host_addr + da.nbytes:
+      paddr = da._addr
+      if paddr < end and addr < paddr + da._nbytes:
         if da._dirty and da._dev_buf is not None:
           da.sync_host()
         if write:

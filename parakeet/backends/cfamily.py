@@ -228,11 +228,7 @@ class CFamilyEmitter:
     if isinstance(s, ir.Assign):
       self.assign(s, out, pad)
     elif isinstance(s, ir.Store):
-      ct = self.ctype(s.buf.type.elt)
-      value = self.expr(s.value)
-      if s.value.type is not s.buf.type.elt and s.value.type.name != s.buf.type.elt.name:
-        value = f"(({ct}){value})"
-      out.append(f"{pad}{self.data(s.buf)}[{self.expr(s.index)}] = {value};")
+      self.store(s, out, pad)
     elif isinstance(s, ir.If):
       out.append(f"{pad}if ({self.expr(s.cond)}) {{")
       self.block(s.then, out, indent + 1)
@@ -273,6 +269,19 @@ class CFamilyEmitter:
       self.assign_buf(s, out, pad)
     else:
       out.append(f"{pad}{s.var.name} = {self.expr(s.value)};")
+
+  def store(self, s: ir.Store, out: list[str], pad: str) -> None:
+    ct = self.ctype(s.buf.type.elt)
+    value = self.expr(s.value)
+    if s.value.type is not s.buf.type.elt and s.value.type.name != s.buf.type.elt.name:
+      value = f"(({ct}){value})"
+    if s.atomic is not None:
+      self.atomic_store(s, ct, value, out, pad)
+      return
+    out.append(f"{pad}{self.data(s.buf)}[{self.expr(s.index)}] = {value};")
+
+  def atomic_store(self, s: ir.Store, ct: str, value: str, out: list[str], pad: str) -> None:
+    raise Unsupported(f"atomic {s.atomic} store")
 
   def for_range(self, s: ir.ForRange, out: list[str], indent: int) -> None:
     pad = "  " * indent

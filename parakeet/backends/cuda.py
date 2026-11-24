@@ -32,6 +32,7 @@ from .device import (
   DeviceBase,
   DevicePlanner,
   KernelPlan,
+  _Resident,
   ctype_of,
   make_runtime_error,
   merge_regions,
@@ -103,6 +104,12 @@ static inline int atomicCAS(int* p, int compare, int value) {
   if (old == compare) *p = value;
   return old;
 }
+template <typename T>
+static inline T atomicAdd(T* p, T value) {
+  T old = *p;
+  *p = old + value;
+  return old;
+}
 static inline long long min(long long a, long long b) { return a < b ? a : b; }
 """
 
@@ -128,6 +135,13 @@ static inline int atomicCAS(int* p, int compare, int value) {
   std::lock_guard<std::mutex> lk(pk_atomic_mtx);
   int old = *p;
   if (old == compare) *p = value;
+  return old;
+}
+template <typename T>
+static inline T atomicAdd(T* p, T value) {
+  std::lock_guard<std::mutex> lk(pk_atomic_mtx);
+  T old = *p;
+  *p = old + value;
   return old;
 }
 struct pk_sim_barrier_t {
@@ -228,6 +242,12 @@ class CudaEmitter(CFamilyEmitter):
     args = [f"(long long)({self.expr(a)})" for a in s.args[:4]]
     args += ["0LL"] * (4 - len(args))
     out.append(f"{pad}if (!({self.expr(s.cond)})) {{ pk_fail(pk_flag, pk_info, {eid}, {', '.join(args)}); return; }}")
+
+  def atomic_store(self, s: ir.Store, ct: str, value: str, out: list[str], pad: str) -> None:
+    if s.atomic == "add" and s.buf.type.elt.name in ("float32", "float64", "int32", "uint32"):
+      out.append(f"{pad}atomicAdd(&{self.data(s.buf)}[{self.expr(s.index)}], {value});")
+      return
+    super().atomic_store(s, ct, value, out, pad)
 
   def release(self, v: ir.Var, out: list[str], pad: str) -> None:
     raise Unsupported("it allocates temporary arrays inside the loop")
@@ -378,8 +398,8 @@ class CuPyDriver:
     return kernel
 
   def compile_module(self, plans: list[KernelPlan]) -> None:
-    """Compile all unique uncompiled CUDA kernels of a module in ONE NVRTC
-    ``RawModule`` invocation instead of one NVRTC call per kernel."""
+    """Compile all unique uncompiled CUDA kernels of a module via batched
+    (and multi-threaded across CPU cores for large modules) NVRTC ``RawModule``s."""
     todo: list[KernelPlan] = []
     seen_src: set[str] = set()
     for p in plans:
@@ -397,27 +417,51 @@ class CuPyDriver:
         p.compiled = self.compile(p)
       return
     marker = 'extern "C" __global__ void pk_kernel('
-    needs_mma = any("#include <mma.h>" in p.source for p in todo)
-    parts: list[str] = []
-    if needs_mma:
-      parts.append("#include <mma.h>")
-    parts.append(PRELUDE)
-    ok = True
-    for idx, p in enumerate(todo):
-      pos = p.source.find(marker)
-      if pos < 0:
-        ok = False
-        break
-      fn_src = p.source[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1)
-      parts.append(fn_src)
-    if not ok:
-      for p in todo:
-        p.compiled = self.compile(p)
-      return
-    mod = self.cp.RawModule(code="\n".join(parts))
-    mod.compile()
-    for idx, p in enumerate(todo):
-      fn = mod.get_function(f"pk_k{idx}")
+    for p in todo:
+      if p.source.find(marker) < 0:
+        for q in todo:
+          q.compiled = self.compile(q)
+        return
+
+    def _build_chunk(chunk: list[KernelPlan]) -> list[tuple[KernelPlan, object]]:
+      needs_mma = any("#include <mma.h>" in p.source for p in chunk)
+      parts: list[str] = []
+      if needs_mma:
+        parts.append("#include <mma.h>")
+      parts.append(PRELUDE)
+      for idx, p in enumerate(chunk):
+        pos = p.source.find(marker)
+        parts.append(p.source[pos:].replace(marker, f'extern "C" __global__ void pk_k{idx}(', 1))
+      mod = self.cp.RawModule(code="\n".join(parts))
+      mod.compile()
+      return [(p, mod.get_function(f"pk_k{idx}")) for idx, p in enumerate(chunk)]
+
+    n_workers = min(len(todo) // 4, os.cpu_count() or 1, 8) if len(todo) >= 8 else 1
+    if n_workers <= 1:
+      results = _build_chunk(todo)
+    else:
+      from concurrent.futures import ThreadPoolExecutor
+
+      # Prime CuPy's lazily-cached CUDA path / NVRTC options on the main thread
+      # before fanning out across worker threads (assemble_cupy_compiler_options
+      # is not thread-safe on first call).
+      if not getattr(self, "_nvrtc_primed", False):
+        self.cp.RawKernel('extern "C" __global__ void pk_nvrtc_prime() {}', "pk_nvrtc_prime").compile()
+        self._nvrtc_primed = True
+
+      dev_id = int(self.cp.cuda.runtime.getDevice())
+      chunks = [todo[i::n_workers] for i in range(n_workers)]
+
+      def _worker(chunk: list[KernelPlan]):
+        with self.cp.cuda.Device(dev_id):
+          return _build_chunk(chunk)
+
+      results = []
+      with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for res in pool.map(_worker, chunks):
+          results.extend(res)
+
+    for p, fn in results:
       self._compiled_cache[p.source] = fn
       p.compiled = fn
     # Also attach compiled functions to any duplicate plans sharing the same source
@@ -675,7 +719,35 @@ class CudaDevice(DeviceBase):
     self.simulated = simulate
     self._flag = self.driver.zeros(1, np.int32)
     self._info = self.driver.zeros(4, np.int64)
+    self._err_cap = 256
+    self._err_flags = self.driver.zeros(self._err_cap, np.int32)
+    self._err_infos = self.driver.zeros(self._err_cap * 4, np.int64)
     super().__init__()
+
+  def _check_pending_errors(self) -> None:
+    pending = self._state.pending_checks
+    if not pending:
+      return
+    n = len(pending)
+    items = list(pending)
+    pending.clear()
+    flags = np.array(self.driver.read(self._err_flags[:n]), copy=True)
+    if flags.any():
+      self._err_flags[:n].fill(0)
+      for slot, plan in items:
+        code = int(flags[slot])
+        if code:
+          info = self.driver.read(self._err_infos[slot * 4 : slot * 4 + 4])
+          raise make_runtime_error(plan.errors[code - 1], [int(x) for x in info])
+
+  def flush(self, mid_call: bool = True) -> None:
+    self._check_pending_errors()
+    super().flush(mid_call=mid_call)
+
+  def sync_buf(self, addr: int, nbytes: int, write: bool = False) -> None:
+    if self._state.pending_checks:
+      self._check_pending_errors()
+    super().sync_buf(addr, nbytes, write=write)
 
   def planner(self, profile: TargetProfile | None = None) -> CudaPlanner:
     return CudaPlanner(self, profile or self.profile)
@@ -729,8 +801,17 @@ class CudaDevice(DeviceBase):
     args: list = [np.int64(total), np.int64(csize)]
     for off, unpack, np_type in scalar_specs:
       args.append(np_type(unpack(raw_ctx, off)[0]))
-    flag = self._flag
-    info = self._info
+    if plan.errors:
+      pending = self._state.pending_checks
+      if len(pending) >= self._err_cap:
+        self._check_pending_errors()
+      slot = len(pending)
+      flag = self._err_flags[slot : slot + 1]
+      info = self._err_infos[slot * 4 : slot * 4 + 4]
+      pending.append((slot, plan))
+    else:
+      flag = self._flag
+      info = self._info
     args += [flag, info]
 
     # Fast path for disjoint buffers (avoids sorting / merge_regions on 99.9% of launches!)
@@ -758,10 +839,10 @@ class CudaDevice(DeviceBase):
       for i in range(n_bufs):
         addr, nbytes, flags = infos[i]
         w = written_mask[i]
-        if flags & 6:
-          ctypes.c_int64.from_address(pk_ptrs[i] + 24).value = flags & ~6
+        if flags & 14:
+          ctypes.c_int64.from_address(pk_ptrs[i] + 24).value = flags & ~14
         da = pinned.get(addr)
-        if da is not None and da.nbytes == nbytes:
+        if da is not None and da._nbytes == nbytes:
           dev_buf = da.ensure_device()
           if w:
             da._dirty = True
@@ -773,8 +854,15 @@ class CudaDevice(DeviceBase):
             hit.dirty = True
           args.append(hit.dev)
           continue
-        # Slow acquire for cache miss (handles overlap with cached/pinned regions cleanly)
         unt = 4 if (flags & 4) else (2 if (flags & 2) else 0)
+        if unt and hit is None:
+          # Brand-new pk_alloc buffer: guaranteed disjoint from live pinned & cached buffers
+          dev_buf = self.upload(addr, nbytes, False, unt)
+          res = cache[addr] = _Resident(addr, nbytes, dev_buf)
+          res.dirty = w or (unt == 4)
+          args.append(dev_buf)
+          continue
+        # Slow acquire for cache miss (handles overlap with cached/pinned regions cleanly)
         devs = self.acquire([(addr, nbytes)], {0} if w else set(), [False], [unt])
         args.append(devs[0])
     else:
@@ -786,13 +874,6 @@ class CudaDevice(DeviceBase):
         args.append(devs[r][off:] if off else devs[r])
 
     drv.launch(plan.compiled, plan, n, args)
-    # Only synchronize & read error flag for kernels that actually contain Check statements!
-    if plan.errors:
-      code = int(drv.read(flag)[0])
-      if code:
-        err_args = [int(x) for x in drv.read(info)]
-        flag.fill(0)
-        raise make_runtime_error(plan.errors[code - 1], err_args)
 
 
 _ = ctype_of

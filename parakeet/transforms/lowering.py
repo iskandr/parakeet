@@ -817,17 +817,42 @@ PRIVATIZE_MAX = 65536  # max destination elements for thread-privatized parallel
 PRIVATIZE_MIN_WORK = 4096  # minimum scatter iterations before parallelizing
 
 
-def lower_scatter(lp: Loops, s: ir.IndexScatter) -> None:
+def lower_scatter(lp: Loops, s: ir.IndexScatter, target=None) -> None:
   """Lower an :class:`~parakeet.syntax.ir.IndexScatter` (``ReduceByIndex``).
 
-  When ``s.parallel`` is True and ``s.op`` is associative with an identity
-  (``add``, ``mul``, ``min``, ``max``), small-to-medium destinations
+  On CUDA targets, associative ``add`` scatters for native atomic element types
+  (``float32``, ``float64``, ``int32``, ``uint32``) lower directly to a single
+  parallel loop using hardware ``atomicAdd`` with zero scratch memory.
+  Otherwise, when ``s.parallel`` is True and ``s.op`` is associative with an
+  identity (``add``, ``mul``, ``min``, ``max``), small-to-medium destinations
   (``<= PRIVATIZE_MAX``) run in parallel via thread-privatized partial buffers
-  combined into ``s.buf``—working portably across multi-core CPU, CUDA, and
-  Metal without requiring float/int64 atomics. Larger or sequential scatters
-  lower to a tight sequential loop nest."""
+  combined into ``s.buf``. Larger or sequential scatters lower to a tight
+  sequential loop nest."""
   shape = tuple(lp.tmp(d, "sn") for d in s.shape)
   elt = s.buf.type.elt
+
+  if (
+    target is not None
+    and target.kind == "cuda"
+    and s.parallel
+    and s.op == "add"
+    and elt.name in ("float32", "float64", "int32", "uint32")
+  ):
+    upd = Store(s.buf, s.target, cast(s.value, elt), atomic="add")
+    blk = list(s.body)
+    blk.append(If(s.where, [upd], []) if s.where is not None else upd)
+    blk.append(ir.ReleaseScope(s.scope))
+    total = lp.tmp(iprod(shape), "total")
+    heavy = depth(s.body) > 0
+    est = lp.tmp(work(lp.defs, s.body, s.index), "work") if heavy else None
+    lp.parallel(
+      total,
+      lambda inner, chunk, start, stop: inner.chunk(shape, s.index, start, stop, blk, s.scope, simd=False),
+      loc=s.loc,
+      work=est,
+      heavy=heavy,
+    )
+    return
 
   def make_step_body(
     body_stmts: list, target: Expr, value: Expr, where: Expr | None, scope: Scope, dst: Var, base: Expr
@@ -945,7 +970,7 @@ def lower_scatter(lp: Loops, s: ir.IndexScatter) -> None:
 # ---------------------------------------------------------------------------
 
 
-def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
+def lower_block(block: list, defs: dict[int, Expr], owner: Scope, target=None) -> list:
   """``owner`` is the scope whose release covers buffers allocated in ``block``."""
   out: list = []
   for s in block:
@@ -953,44 +978,44 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope) -> list:
       lower_tile(Loops(out, defs, owner), s, defs, owner)
       continue
     if isinstance(s, ir.IndexScatter):
-      s.body[:] = lower_block(s.body, defs, s.scope)
-      lower_scatter(Loops(out, defs, owner), s)
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
+      lower_scatter(Loops(out, defs, owner), s, target)
       continue
     if isinstance(s, ir.IndexReduce):
-      s.body[:] = lower_block(s.body, defs, s.scope)
-      s.pre[:] = lower_block(s.pre, defs, s.scope)
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
+      s.pre[:] = lower_block(s.pre, defs, s.scope, target)
       scratch = [Scope("fold") for _ in s.folds]
       for f, sc in zip(s.folds, scratch):
-        f.combine[:] = lower_block(f.combine, defs, sc)
+        f.combine[:] = lower_block(f.combine, defs, sc, target)
       lower_reduce(Loops(out, defs, owner), s, scratch)
       continue
     if isinstance(s, ir.IndexMap):
-      s.body[:] = lower_block(s.body, defs, s.scope)
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
       lower_map(Loops(out, defs, owner), s)
       continue
     if isinstance(s, ir.IndexFilter):
-      s.body[:] = lower_block(s.body, defs, s.scope)
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
       lower_filter(Loops(out, defs, owner), s)
       continue
     if isinstance(s, ir.IndexScan):
-      s.body[:] = lower_block(s.body, defs, s.scope)
-      s.emit[:] = lower_block(s.emit, defs, s.scope)
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
+      s.emit[:] = lower_block(s.emit, defs, s.scope, target)
       scratch = Scope("fold")
-      s.fold.combine[:] = lower_block(s.fold.combine, defs, scratch)
+      s.fold.combine[:] = lower_block(s.fold.combine, defs, scratch, target)
       lower_scan(Loops(out, defs, owner), s, scratch)
       continue
     if isinstance(s, If):
-      s.then[:] = lower_block(s.then, defs, owner)
-      s.orelse[:] = lower_block(s.orelse, defs, owner)
+      s.then[:] = lower_block(s.then, defs, owner, target)
+      s.orelse[:] = lower_block(s.orelse, defs, owner, target)
     elif isinstance(s, (ForRange, While, ParLoop)):
-      s.body[:] = lower_block(s.body, defs, s.scope)
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
     out.append(s)
   return out
 
 
-def lower(fn: ir.Function) -> None:
+def lower(fn: ir.Function, target=None) -> None:
   """Replace every operator statement of ``fn`` by loops."""
-  fn.body[:] = lower_block(fn.body, pure_defs(fn.body), fn.scope)
+  fn.body[:] = lower_block(fn.body, pure_defs(fn.body), fn.scope, target)
 
 
 __all__ = [

@@ -425,6 +425,8 @@ class MetalDevice(DeviceBase):
     return buf, False
 
   def upload(self, addr: int, nbytes: int, external: bool, untouched: int = 0):
+    if untouched == 4 and nbytes > 0:
+      ctypes.memset(addr, 0, nbytes)
     return self._buffer(addr, nbytes, shared=not external)
 
   def download(self, dev, addr: int, nbytes: int) -> None:

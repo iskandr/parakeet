@@ -40,7 +40,7 @@ def run(fn: ir.Function, options, trace=None) -> None:
         verify(fn, f"after {name}")
       if trace is not None:
         trace(name, fn)
-  lowering.lower(fn)
+  lowering.lower(fn, target=getattr(options, "target", None))
   if check:
     verify(fn, "after lowering")
 

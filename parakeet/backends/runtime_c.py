@@ -160,6 +160,28 @@ _PRELUDE_TEMPLATE = r"""
   PK_INLINE bool pk_atomic_cas(volatile int32_t* p, int32_t expect, int32_t val) {
     return _InterlockedCompareExchange((volatile long*)p, (long)val, (long)expect) == (long)expect;
   }
+  PK_INLINE void pk_atomic_add_float32(float* p, float v) {
+    int32_t old_i, new_i;
+    float old_f, new_f;
+    do {
+      old_i = *(volatile int32_t*)p;
+      memcpy(&old_f, &old_i, 4);
+      new_f = old_f + v;
+      memcpy(&new_i, &new_f, 4);
+    } while (_InterlockedCompareExchange((volatile long*)p, (long)new_i, (long)old_i) != (long)old_i);
+  }
+  PK_INLINE void pk_atomic_add_float64(double* p, double v) {
+    int64_t old_i, new_i;
+    double old_f, new_f;
+    do {
+      old_i = *(volatile int64_t*)p;
+      memcpy(&old_f, &old_i, 8);
+      new_f = old_f + v;
+      memcpy(&new_i, &new_f, 8);
+    } while (_InterlockedCompareExchange64((volatile __int64*)p, (__int64)new_i, (__int64)old_i) != (__int64)old_i);
+  }
+  PK_INLINE void pk_atomic_add_int32(int32_t* p, int32_t v) { _InterlockedExchangeAdd((volatile long*)p, (long)v); }
+  PK_INLINE void pk_atomic_add_uint32(uint32_t* p, uint32_t v) { _InterlockedExchangeAdd((volatile long*)p, (long)v); }
 #else
   #if defined(_WIN32)
     #include <malloc.h>
@@ -176,6 +198,28 @@ _PRELUDE_TEMPLATE = r"""
   PK_INLINE bool pk_atomic_cas(volatile int32_t* p, int32_t expect, int32_t val) {
     return __sync_bool_compare_and_swap(p, expect, val);
   }
+  PK_INLINE void pk_atomic_add_float32(float* p, float v) {
+    uint32_t old_i, new_i;
+    float old_f, new_f;
+    do {
+      old_i = __atomic_load_n((uint32_t*)p, __ATOMIC_RELAXED);
+      memcpy(&old_f, &old_i, 4);
+      new_f = old_f + v;
+      memcpy(&new_i, &new_f, 4);
+    } while (!__sync_bool_compare_and_swap((uint32_t*)p, old_i, new_i));
+  }
+  PK_INLINE void pk_atomic_add_float64(double* p, double v) {
+    uint64_t old_i, new_i;
+    double old_f, new_f;
+    do {
+      old_i = __atomic_load_n((uint64_t*)p, __ATOMIC_RELAXED);
+      memcpy(&old_f, &old_i, 8);
+      new_f = old_f + v;
+      memcpy(&new_i, &new_f, 8);
+    } while (!__sync_bool_compare_and_swap((uint64_t*)p, old_i, new_i));
+  }
+  PK_INLINE void pk_atomic_add_int32(int32_t* p, int32_t v) { __sync_fetch_and_add(p, v); }
+  PK_INLINE void pk_atomic_add_uint32(uint32_t* p, uint32_t v) { __sync_fetch_and_add(p, v); }
 #endif
 
 #ifndef INFINITY
@@ -192,6 +236,7 @@ _PRELUDE_TEMPLATE = r"""
    do not matter) or zeros.  A device need not copy such a buffer over. */
 #define PK_FRESH 2
 #define PK_ZEROED 4
+#define PK_LAZY_ZERO 8
 #define PK_UNTOUCHED (PK_FRESH | PK_ZEROED)
 #define PK_PAGE 16384
 
@@ -263,12 +308,19 @@ PK_OUTLINE pk_buf* pk_alloc(pk_call* rt, int64_t count, int64_t itemsize, int ze
     pk_fail(rt, PK_ERR_MEMORY, count, itemsize, 0, 0);
     return NULL;
   }
-  if (zero) memset(data, 0, size);
+  if (zero && !rt->device) memset(data, 0, size);
   b->data = data;
   b->nbytes = (int64_t)size;
   b->refcount = 1;
-  b->flags = zero ? PK_ZEROED : PK_FRESH;
+  b->flags = zero ? (rt->device ? (PK_ZEROED | PK_LAZY_ZERO) : PK_ZEROED) : PK_FRESH;
   return b;
+}
+
+PK_OUTLINE void pk_ensure_zero(pk_buf* b) {
+  if (b && (b->flags & PK_LAZY_ZERO)) {
+    if (b->data && b->nbytes > 0) memset(b->data, 0, (size_t)b->nbytes);
+    b->flags &= ~PK_LAZY_ZERO;
+  }
 }
 
 PK_INLINE void pk_incref(pk_buf* b) {
@@ -293,6 +345,7 @@ PK_EXPORT void pk_decref(void* b) { pk_drop((pk_buf*)b); }
 PK_OUTLINE void pk_export(pk_call* rt, pk_buf* b, pk_buf** exts, int n_ext, int64_t* io) {
   int k;
   if (!b) b = pk_alloc(rt, 0, 1, 0);
+  if (PK_UNLIKELY(b && (b->flags & PK_LAZY_ZERO))) pk_ensure_zero(b);
   for (k = 0; k < n_ext; k++) {
     if (b == exts[k]) { io[0] = 1; io[1] = k; io[2] = (int64_t)(intptr_t)b->data; return; }
   }
@@ -338,6 +391,7 @@ PK_GEMM_TYPES(pk_dgemm64, int64_t, double)
 PK_OUTLINE int64_t pk_gemm(pk_call* rt, int64_t dbl, pk_buf* c, int64_t c_off, pk_buf* a, int64_t a_off,
                            int64_t lda, int64_t ta, pk_buf* b, int64_t b_off, int64_t ldb, int64_t tb,
                            int64_t m, int64_t n, int64_t k) {
+  pk_ensure_zero(c); pk_ensure_zero(a); pk_ensure_zero(b);
   int64_t item = dbl ? 8 : 4;
   int64_t a_cols = ta ? m : k, b_cols = tb ? k : n;
   void* fn = rt->gemm[dbl ? 1 : 0];
@@ -392,8 +446,8 @@ PK_OUTLINE void pk_dev_sync_buf(pk_call* rt, pk_buf* b, int write) {
     ((pk_device_fn)rt->device)(write ? -4 : -3, b->data, b->nbytes, 0);
 }
 #define PK_DEV_SYNC(rt) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_flush(rt); } while (0)
-#define PK_DEV_SYNC_READ(rt, b) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_sync_buf(rt, b, 0); } while (0)
-#define PK_DEV_SYNC_WRITE(rt, b) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_sync_buf(rt, b, 1); } while (0)
+#define PK_DEV_SYNC_READ(rt, b) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_sync_buf(rt, b, 0); if (PK_UNLIKELY((b) && ((b)->flags & PK_LAZY_ZERO))) pk_ensure_zero(b); } while (0)
+#define PK_DEV_SYNC_WRITE(rt, b) do { if (PK_UNLIKELY((rt)->dev_live)) pk_dev_sync_buf(rt, b, 1); if (PK_UNLIKELY((b) && ((b)->flags & PK_LAZY_ZERO))) pk_ensure_zero(b); } while (0)
 
 PK_OUTLINE void pk_parallel_for(pk_call* rt, pk_body_fn fn, void* ctx, int64_t nchunks) {
   int64_t c;

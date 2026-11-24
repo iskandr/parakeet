@@ -218,6 +218,7 @@ class Store(Stmt):
   buf: Var
   index: Expr
   value: Expr
+  atomic: str | None = None
 
 
 @dataclass(eq=False, slots=True)
@@ -714,7 +715,8 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
     if isinstance(s, Assign):
       out.append(f"{pad}{s.var.name}: {s.var.type} = {fmt_expr(s.value)}")
     elif isinstance(s, Store):
-      out.append(f"{pad}{s.buf.name}[{fmt_expr(s.index)}] = {fmt_expr(s.value)}")
+      op = f" {s.atomic}= /*atomic*/ " if s.atomic else " = "
+      out.append(f"{pad}{s.buf.name}[{fmt_expr(s.index)}]{op}{fmt_expr(s.value)}")
     elif isinstance(s, If):
       out.append(f"{pad}if {fmt_expr(s.cond)}:")
       out += fmt_block(s.then, indent + 1) or [f"{pad}    pass"]

@@ -95,7 +95,7 @@ class Cloner:
     if isinstance(s, ir.Assign):
       return ir.Assign(self.var(s.var), x(s.value))
     if isinstance(s, ir.Store):
-      return ir.Store(x(s.buf), x(s.index), x(s.value))  # type: ignore[arg-type]
+      return ir.Store(x(s.buf), x(s.index), x(s.value), s.atomic)  # type: ignore[arg-type]
     if isinstance(s, ir.If):
       return ir.If(x(s.cond), b(s.then), b(s.orelse))
     if isinstance(s, ir.ForRange):

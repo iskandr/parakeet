@@ -772,7 +772,7 @@ def extract_shared_tile_plan(
       ir.Fold(f.result, rewrite_expr(f.value), f.a, f.b, f.combine, f.combined, f.init, f.op, f.empty, new_payloads)
     )
 
-  if not any(side in ("row", "col") for side in stage_sides):
+  if "row" not in stage_sides or "col" not in stage_sides:
     return None
 
   # Collect uniform (i,j,k-invariant, load-free) checks from m.before; reject any non-uniform ones
