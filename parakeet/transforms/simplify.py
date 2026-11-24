@@ -21,7 +21,7 @@ to an input array, an impure runtime call) is kept.
 from __future__ import annotations
 
 from ..syntax import ir
-from ..syntax.ir import Expr, IndexFilter, IndexMap, IndexReduce, IndexScan, IndexScatter, Var
+from ..syntax.ir import Expr, IndexExpand, IndexFilter, IndexMap, IndexReduce, IndexScan, IndexScatter, Var
 
 EFFECTS = (
   ir.Store,
@@ -31,6 +31,7 @@ EFFECTS = (
   ir.Release,
   ir.IndexMap,
   ir.IndexFilter,
+  ir.IndexExpand,
   ir.IndexScan,
   ir.IndexScatter,
   ir.ParLoop,
@@ -184,6 +185,28 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         gone.add(s.out.uid)
         changed = True
         continue
+    elif isinstance(s, IndexExpand):
+      live_vals = [(buf, val) for buf, val in s.values if buf.uid in live]
+      dead_val_bufs = [buf for buf, _ in s.values if buf.uid not in live]
+      if (
+        s.offsets.uid not in live
+        and s.total.uid not in live
+        and not live_vals
+        and not has_effects(s.count_body)
+        and not has_effects(s.emit_body)
+      ):
+        gone.add(s.offsets.uid)
+        for buf, _ in s.values:
+          gone.add(buf.uid)
+        changed = True
+        continue
+      if dead_val_bufs and not has_effects(s.emit_body):
+        for buf in dead_val_bufs:
+          gone.add(buf.uid)
+        s.values[:] = live_vals
+        if not s.values:
+          s.emit_body[:] = []
+        changed = True
     elif isinstance(s, IndexScan):
       if (
         not s.scope.owned

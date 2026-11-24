@@ -8,7 +8,7 @@ backends print.
 
 from __future__ import annotations
 
-from ..ndtypes import Bool, BufType
+from ..ndtypes import Bool, BufType, Int64
 from ..syntax import ir, ops
 from ..syntax.clone import Cloner
 from ..syntax.ir import Alloc, Assign, Break, Const, Expr, ForRange, If, Load, ParLoop, RtCall, Scope, Store, Var, While
@@ -148,7 +148,7 @@ def depth(block: list) -> int:
       inner += len(s.shape)
     elif isinstance(s, ir.IndexTile):
       inner += sum(1 for d in s.tile_shape if d is not None)
-    elif isinstance(s, (ir.IndexFilter, ir.IndexScan)):
+    elif isinstance(s, (ir.IndexFilter, ir.IndexExpand, ir.IndexScan)):
       inner += 1
     best = max(best, inner)
   return best
@@ -207,6 +207,8 @@ def work(defs: dict[int, Expr], block: list, bound: tuple[Var, ...] = ()) -> Exp
         w = imul(known(iprod(tiled)) if tiled else ONE, imax(cost(s.body), 1))
       elif isinstance(s, (ir.IndexFilter, ir.IndexScan)):
         w = imul(known(s.n), imax(cost(s.body), 1))
+      elif isinstance(s, ir.IndexExpand):
+        w = imul(known(s.n), imax(iadd(cost(s.count_body), cost(s.emit_body)), 1))
       elif isinstance(s, ParLoop):
         w = cost(s.body)
       else:
@@ -489,6 +491,124 @@ def lower_filter(lp: Loops, s: ir.IndexFilter) -> None:
 
   lp.parallel(n, write_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
   lp.emit(ir.Release(starts))
+
+
+# ---------------------------------------------------------------------------
+# IndexExpand (1-to-K flatmap / ragged compaction)
+# ---------------------------------------------------------------------------
+
+
+def lower_expand(lp: Loops, s: ir.IndexExpand, target=None) -> None:
+  """Two-pass 1-to-K ragged compaction:
+  1. Compute ``count[i]`` into ``offsets[i + 1]`` in parallel.
+  2. In-place parallel inclusive prefix sum on ``offsets[1..n]`` -> CSR offsets + ``total``.
+  3. Allocate output buffers to ``total`` and emit ``k in [0, count[i])`` in parallel.
+  When ``s.values`` is empty (count-only DCE), step 3 is skipped completely."""
+  n = lp.tmp(s.n, "n")
+  n1 = lp.tmp(iadd(n, ONE), "n1")
+  lp.emit(Alloc(s.offsets, n1, zero=True))
+
+  # Pass 1: count[i] -> offsets[i + 1]
+  def count_range(inner: Loops, start: Expr, stop: Expr) -> None:
+    blk = list(s.count_body)
+    blk.append(Store(s.offsets, iadd(s.index, ONE), cast(s.count, Int64)))
+    blk.append(ir.ReleaseScope(s.count_scope))
+    inner.emit(ForRange(s.index, start, stop, ONE, blk, s.count_scope, True))
+
+  if not s.parallel:
+    count_range(lp, ZERO, n)
+    # Serial in-place inclusive scan of offsets[1..n]
+    run = Var("run", Int64)
+    lp.emit(Assign(run, Const(0, Int64)))
+    ci = Var("ci", I)
+    sblk = [
+      Assign(run, ops.prim("add", (run, Load(s.offsets, ci)), Int64)),
+      Store(s.offsets, ci, run),
+    ]
+    lp.emit(ForRange(ci, ONE, n1, ONE, sblk, Scope("loop")))
+  else:
+    w_count = work(lp.defs, s.count_body, (s.index,))
+    lp.parallel(n, lambda inner, _c, st, sp: count_range(inner, st, sp), loc=s.loc, work=w_count)
+
+    # Parallel in-place inclusive scan on offsets[1..n]
+    is_gpu = target is not None and target.is_gpu
+    nchunks = lp.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
+    carries = Var("carries", BufType(Int64))
+    lp.emit(Alloc(carries, nchunks))
+    lp.owner.owned.append(carries)
+
+    def sum_chunk(inner: Loops, chunk: Var, st: Expr, sp: Expr) -> None:
+      acc = Var("acc", Int64)
+      i = Var("i", I)
+      inner.emit(Assign(acc, Const(0, Int64)))
+      blk = [Assign(acc, ops.prim("add", (acc, Load(s.offsets, iadd(i, ONE))), Int64))]
+      inner.emit(ForRange(i, st, sp, ONE, blk, Scope("loop")))
+      inner.emit(Store(carries, chunk, acc))
+
+    lp.parallel(n, sum_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+
+    def scan_carries(inner: Loops) -> None:
+      run = Var("run", Int64)
+      c = Var("c", I)
+      cur = Var("cur", Int64)
+      inner.emit(Assign(run, Const(0, Int64)))
+      cblk = [
+        Assign(cur, Load(carries, c)),
+        Store(carries, c, run),
+        Assign(run, ops.prim("add", (run, cur), Int64)),
+      ]
+      inner.emit(ForRange(c, ZERO, nchunks, ONE, cblk, Scope("loop")))
+
+    if is_gpu:
+      lp.parallel(nchunks, lambda inner, _c, _st, _sp: scan_carries(inner), kind="reduce", nchunks=ONE, loc=s.loc)
+    else:
+      scan_carries(lp)
+
+    def add_chunk(inner: Loops, chunk: Var, st: Expr, sp: Expr) -> None:
+      run = Var("run", Int64)
+      i = Var("i", I)
+      inner.emit(Assign(run, Load(carries, chunk)))
+      blk = [
+        Assign(run, ops.prim("add", (run, Load(s.offsets, iadd(i, ONE))), Int64)),
+        Store(s.offsets, iadd(i, ONE), run),
+      ]
+      inner.emit(ForRange(i, st, sp, ONE, blk, Scope("loop")))
+
+    lp.parallel(n, add_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+    lp.emit(ir.Release(carries))
+
+  lp.emit(Assign(s.total, cast(Load(s.offsets, n), I)))
+
+  # Pass 2: emit values (skipped when count-only DCE cleared s.values)
+  if not s.values:
+    return
+  for buf, _ in s.values:
+    lp.emit(Alloc(buf, s.total))
+
+  def emit_range(inner: Loops, start: Expr, stop: Expr) -> None:
+    ei = Var("ei", I)
+    base = Var("base", I)
+    end = Var("end", I)
+    cnt = Var("cnt", I)
+    cl = Cloner({s.index.uid: ei})
+    k = cl.var(s.emit_index)
+    eblk = cl.block(s.emit_body)
+    for buf, val in s.values:
+      eblk.append(Store(buf, iadd(base, k), cl.expr(val)))
+    eblk.append(ir.ReleaseScope(cl.scope(s.emit_scope)))
+    outer_blk = [
+      Assign(base, cast(Load(s.offsets, ei), I)),
+      Assign(end, cast(Load(s.offsets, iadd(ei, ONE)), I)),
+      Assign(cnt, isub(end, base)),
+      ForRange(k, ZERO, cnt, ONE, eblk, cl.scope(s.emit_scope)),
+    ]
+    inner.emit(ForRange(ei, start, stop, ONE, outer_blk, Scope("loop")))
+
+  if not s.parallel:
+    emit_range(lp, ZERO, n)
+  else:
+    w_emit = imul(Const(4, I), work(lp.defs, s.emit_body, (s.index, s.emit_index)))
+    lp.parallel(n, lambda inner, _c, st, sp: emit_range(inner, st, sp), loc=s.loc, heavy=True, work=w_emit)
 
 
 # ---------------------------------------------------------------------------
@@ -1022,6 +1142,11 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope, target=None) -
     if isinstance(s, ir.IndexFilter):
       s.body[:] = lower_block(s.body, defs, s.scope, target)
       lower_filter(Loops(out, defs, owner), s)
+      continue
+    if isinstance(s, ir.IndexExpand):
+      s.count_body[:] = lower_block(s.count_body, defs, s.count_scope, target)
+      s.emit_body[:] = lower_block(s.emit_body, defs, s.emit_scope, target)
+      lower_expand(Loops(out, defs, owner), s, target)
       continue
     if isinstance(s, ir.IndexScan):
       s.body[:] = lower_block(s.body, defs, s.scope, target)

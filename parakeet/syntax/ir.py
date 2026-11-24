@@ -406,6 +406,30 @@ class IndexFilter(Stmt):
 
 
 @dataclass(eq=False, slots=True)
+class IndexExpand(Stmt):
+  """Two-pass 1-to-K ragged compaction (flatmap):
+  Pass 1 computes ``count`` for each ``index`` in ``[0, n)``, exclusive-scans
+  counts into ``offsets`` (length ``n + 1``) with ``total = offsets[n]``,
+  allocates each output buffer in ``values`` to length ``total``, and Pass 2
+  runs ``emit_body`` for ``emit_index`` in ``[0, count)`` storing each value at
+  ``offsets[index] + emit_index``."""
+
+  n: Expr
+  index: Var
+  count_body: list[Stmt]
+  count: Expr
+  emit_index: Var
+  emit_body: list[Stmt]
+  values: list[tuple[Var, Expr]]
+  offsets: Var
+  total: Var
+  count_scope: Scope
+  emit_scope: Scope
+  parallel: bool = True
+  loc: SourceLocation | None = None
+
+
+@dataclass(eq=False, slots=True)
 class IndexScan(Stmt):
   """A running fold over ``[0, n)``: at every index, in order, the value
   ``body`` computes is folded in, and ``emit`` runs with ``fold.result``
@@ -581,7 +605,7 @@ class IndexScatter(Stmt):
   where: Expr | None = None
 
 
-OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexScan, IndexTile, IndexScatter)
+OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexExpand, IndexScan, IndexTile, IndexScatter)
 
 
 @dataclass(eq=False, slots=True)
@@ -649,6 +673,8 @@ def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
     return (s.pre, s.body, *[f.combine for f in s.folds])
   if isinstance(s, IndexScan):
     return (s.body, s.fold.combine, s.emit)
+  if isinstance(s, IndexExpand):
+    return (s.count_body, s.emit_body)
   return ()
 
 
@@ -688,6 +714,8 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
     return tuple(out)
   if isinstance(s, IndexFilter):
     return (s.n, s.keep)
+  if isinstance(s, IndexExpand):
+    return (s.n, s.count, *(val for _, val in s.values))
   if isinstance(s, IndexScan):
     f = s.fold
     return (s.n, f.value, f.combined) + ((f.init,) if f.init is not None else ())
@@ -725,6 +753,8 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     return tuple(defs)
   if isinstance(s, IndexFilter):
     return (s.index, s.out, s.count)
+  if isinstance(s, IndexExpand):
+    return (s.index, s.emit_index, s.offsets, s.total, *(buf for buf, _ in s.values))
   if isinstance(s, IndexScan):
     return (s.index, s.fold.result, s.fold.a, s.fold.b)
   if isinstance(s, IndexReduce):
@@ -872,6 +902,19 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
       out.append(f"{pad}{how}filter {s.index.name} over ({fmt_expr(s.n)}):")
       out += fmt_block(s.body, indent + 1)
       out.append(f"{pad}    {s.out.name}, {s.count.name} = keep({s.index.name}, where={fmt_expr(s.keep)})")
+    elif isinstance(s, IndexExpand):
+      how = "parallel " if s.parallel else ""
+      outs = ", ".join(b.name for b, _ in s.values) or "()"
+      out.append(f"{pad}{how}expand {s.index.name} over ({fmt_expr(s.n)}) -> ({outs}), {s.offsets.name}:")
+      out += fmt_block(s.count_body, indent + 1)
+      out.append(f"{pad}    count = {fmt_expr(s.count)}")
+      if s.values:
+        out.append(f"{pad}    emit {s.emit_index.name} in range(count):")
+        out += fmt_block(s.emit_body, indent + 2)
+        for buf, val in s.values:
+          out.append(
+            f"{pad}        {buf.name}[{s.offsets.name}[{s.index.name}] + {s.emit_index.name}] = {fmt_expr(val)}"
+          )
     elif isinstance(s, IndexScatter):
       how = "parallel " if s.parallel else ""
       out.append(
