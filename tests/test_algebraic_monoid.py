@@ -490,3 +490,59 @@ def test_metal_monoidal_flash_decode_cce_and_rbf():
   np.testing.assert_allclose(cv, -np.mean(np.log(pz[np.arange(36), tgt])), rtol=1e-4, atol=1e-4)
   np.testing.assert_allclose(dh, dz @ w64.T, rtol=1e-4, atol=1e-4)
   np.testing.assert_allclose(dw, h64.T @ dz, rtol=1e-4, atol=1e-4)
+
+
+def _finite_fill_causal_sym(q, k, v):
+  causal = parakeet.imap(lambda ij: ij[1] <= ij[0], (q.shape[0], k.shape[0]))
+  s = np.where(causal, (q @ k.T) * np.float32(0.125), np.float32(0.0))
+  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
+
+
+def _finite_fill_causal_buf(q, k, v, mask):
+  s = np.where(mask, (q @ k.T) * np.float32(0.125), np.float32(0.0))
+  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
+
+
+def _finite_fill_loss_buf(q, k, v, mask):
+  return np.sum(_finite_fill_causal_buf(q, k, v, mask))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the simulator needs a POSIX C++ toolchain")
+def test_finite_fill_false_tile_not_skipped_fwd_and_bwd(tmp_path):
+  """Regression for finite mask fill across >= 2 tiles (64x64): an all-false
+  tile with finite fill (e.g. 0.0) contributes weight exp(fill - m) != 0 to both
+  forward softmax and backward dV, and must NOT be pruned."""
+  code = """
+import numpy as np, parakeet
+from parakeet import jit, value_and_grad
+import tests.test_algebraic_monoid as tm
+
+q = np.zeros((64, 8), dtype=np.float32)
+k = np.zeros((64, 8), dtype=np.float32)
+v = np.zeros((64, 8), dtype=np.float32)
+v[32:, :] = 1.0
+mask = np.tril(np.ones((64, 64), dtype=bool))
+
+with parakeet.options(backend="cuda", blas=False, device_threshold=1, device_fallback="error", verify=True):
+    out_sym = jit(tm._finite_fill_causal_sym)(q, k, v)
+    out_buf = jit(tm._finite_fill_causal_buf)(q, k, v, mask)
+    lv, (dq, dk, dv) = value_and_grad(tm._finite_fill_loss_buf, argnum=(0, 1, 2))(q, k, v, mask)
+
+np.testing.assert_allclose(out_sym, np.full((64, 8), 0.5, dtype=np.float32), rtol=1e-5, atol=1e-5)
+np.testing.assert_allclose(out_buf, np.full((64, 8), 0.5, dtype=np.float32), rtol=1e-5, atol=1e-5)
+# Exact reference gradients for uniform p = 1/64 across all 64 keys (even masked ones with fill=0!):
+# dV[j, d] = sum_i p[i, j] * 1.0 = 64 * (1/64) = 1.0 for every j in 0..63!
+np.testing.assert_allclose(lv, 64.0 * 8.0 * 0.5, rtol=1e-4, atol=1e-4)
+np.testing.assert_allclose(dv, np.ones((64, 8), dtype=np.float32), rtol=1e-4, atol=1e-4)
+np.testing.assert_allclose(dq, np.zeros((64, 8), dtype=np.float32), rtol=1e-4, atol=1e-4)
+np.testing.assert_allclose(dk, np.zeros((64, 8), dtype=np.float32), rtol=1e-4, atol=1e-4)
+print("finite-fill-ok")
+"""
+  script = tmp_path / "run_finite_fill.py"
+  script.write_text(code)
+  env = dict(os.environ, PARAKEET_CUDA_SIMULATE="1")
+  proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env, check=False)
+  assert proc.returncode == 0 and "finite-fill-ok" in proc.stdout, proc.stdout + proc.stderr
+

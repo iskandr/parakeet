@@ -306,13 +306,26 @@ def _generate_flash_monoid(
   else:
     lines.append(f"  const {idx_t} pk_j_start = 0;")
     lines.append(f"  const {idx_t} pk_j_end = pk_N;")
+  is_neg_inf_fill = isinstance(plan.mask_fill, ir.Const) and float(plan.mask_fill.value) == float("-inf")
+  skip_eps = _lit(105.0 if elt.bits <= 32 else 750.0, elt, is_cuda)
+
   lines.append(f"  for ({idx_t} pk_j0 = pk_j_start; pk_j0 < pk_j_end; pk_j0 += {MONOID_BN}) {{")
-  # Law 5 symbolic tile skip
+  # Law 5 symbolic tile skip: only skip when all-false tile contributes the exact reduction identity
+  # (mask_fill == -inf, or every active row already has l > 0 and m > mask_fill + skip_eps so exp(fill - m) == 0).
   if plan.tile_false_guard is not None and plan.tile_origin_vars is not None:
     i0_v, j0_v = plan.tile_origin_vars
     lines.append(f"    const {idx_t} {i0_v.name} = pk_i0;")
     lines.append(f"    const {idx_t} {j0_v.name} = pk_j0;")
-    lines.append(f"    if ({em.expr(plan.tile_false_guard)}) continue;")
+    if is_neg_inf_fill:
+      lines.append(f"    if ({em.expr(plan.tile_false_guard)}) continue;")
+    else:
+      lines.append(f"    if ({em.expr(plan.tile_false_guard)}) {{")
+      lines.append("      int pk_can_skip = 1;")
+      lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {MONOID_BM}; ++pk_ri) {{")
+      lines.append(f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append("      }")
+      lines.append("      if (pk_can_skip) continue;")
+      lines.append("    }")
   if plan.tile_true_guard is not None and plan.tile_origin_vars is not None:
     i0_v, j0_v = plan.tile_origin_vars
     if plan.tile_false_guard is None:
@@ -322,7 +335,7 @@ def _generate_flash_monoid(
   else:
     lines.append("    const bool pk_tile_all_true = false;")
 
-  # Law 5 boolean-mask ballot skip (skips entire upper-triangle KV tiles for runtime boolean masks too!)
+  # Law 5 boolean-mask ballot skip (gated on the same reduction-identity condition!)
   if has_mask_buf:
     assert plan.mask_index_vars is not None and plan.mask_buf is not None and plan.mask_index is not None
     mi_v, mj_v = plan.mask_index_vars
@@ -341,7 +354,16 @@ def _generate_flash_monoid(
     lines.append("      pk_sh_mask[pk_ml] = pk_mv;")
     lines.append("    }")
     lines.append(f"    {barrier}")
-    lines.append("    if (pk_any_mask == 0 && pk_all_valid) continue;")
+    if is_neg_inf_fill:
+      lines.append("    if (pk_any_mask == 0 && pk_all_valid) continue;")
+    else:
+      lines.append("    if (pk_any_mask == 0 && pk_all_valid) {")
+      lines.append("      int pk_can_skip = 1;")
+      lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {MONOID_BM}; ++pk_ri) {{")
+      lines.append(f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append("      }")
+      lines.append("      if (pk_can_skip) continue;")
+      lines.append("    }")
     lines.append("    if (pk_tid == 0 && !pk_all_valid) {")
     lines.append("      int pk_av = 1;")
     lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {MONOID_BM}; ++pk_ri) {{")
@@ -614,9 +636,12 @@ def _generate_flash_monoid_bwd(
   lines.append(f"  for (int pk_u = 0; pk_u < {MAX_REG_D // 4}; ++pk_u) {{ pk_dk_reg[pk_u] = {zero_lit}; pk_dv_reg[pk_u] = {zero_lit}; }}")
   lines.append(f"  {barrier}")
 
+  is_neg_inf_fill = isinstance(plan.mask_fill, ir.Const) and float(plan.mask_fill.value) == float("-inf")
+  skip_eps = _lit(105.0 if elt.bits <= 32 else 750.0, elt, is_cuda)
+
   # Inner loop over Q tiles i0 = 0, 32, ... < M
   lines.append(f"  for ({idx_t} pk_i0 = 0; pk_i0 < pk_M; pk_i0 += {MONOID_BM}) {{")
-  if plan.tile_false_guard is not None and plan.tile_origin_vars is not None:
+  if plan.tile_false_guard is not None and plan.tile_origin_vars is not None and is_neg_inf_fill:
     i0_v, j0_v = plan.tile_origin_vars
     lines.append(f"    const {idx_t} {i0_v.name} = pk_i0;")
     lines.append(f"    const {idx_t} {j0_v.name} = pk_j0;")
@@ -654,14 +679,28 @@ def _generate_flash_monoid_bwd(
     lines.append(f"    {barrier}")
     # Exact skip when mask is all-false AND every row's lse >> mask_fill (exp(fill - lse) == 0!)
     lines.append("    if (pk_any_mask == 0) {")
-    lines.append("      int pk_can_skip = 1;")
-    lines.append(f"      for ({idx_t} pk_qi = 0; pk_qi < {MONOID_BM}; ++pk_qi) {{")
-    lines.append(f"        if (pk_i0 + pk_qi < pk_M && pk_sh_lse[pk_qi] < pk_mfill + {_lit(100.0, elt, is_cuda)}) {{ pk_can_skip = 0; break; }}")
-    lines.append("      }")
-    lines.append("      if (pk_can_skip) continue;")
+    if is_neg_inf_fill:
+      lines.append("      continue;")
+    else:
+      lines.append("      int pk_can_skip = 1;")
+      lines.append(f"      for ({idx_t} pk_qi = 0; pk_qi < {MONOID_BM}; ++pk_qi) {{")
+      lines.append(f"        if (pk_i0 + pk_qi < pk_M && !(pk_sh_lse[pk_qi] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append("      }")
+      lines.append("      if (pk_can_skip) continue;")
     lines.append("    }")
   else:
     lines.append(f"    {barrier}")
+    if plan.tile_false_guard is not None and plan.tile_origin_vars is not None and not is_neg_inf_fill:
+      i0_v, j0_v = plan.tile_origin_vars
+      lines.append(f"    const {idx_t} {i0_v.name} = pk_i0;")
+      lines.append(f"    const {idx_t} {j0_v.name} = pk_j0;")
+      lines.append(f"    if ({em.expr(plan.tile_false_guard)}) {{")
+      lines.append("      int pk_can_skip = 1;")
+      lines.append(f"      for ({idx_t} pk_qi = 0; pk_qi < {MONOID_BM}; ++pk_qi) {{")
+      lines.append(f"        if (pk_i0 + pk_qi < pk_M && !(pk_sh_lse[pk_qi] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}")
+      lines.append("      }")
+      lines.append("      if (pk_can_skip) continue;")
+      lines.append("    }")
 
   # 1. Recompute S[j, i] = Q[i] . K[j] and dP[j, i] = dO[i] . V[j]
   # Fast hoisted-KV path (K, D <= 64): K & V never reloaded, dO loaded once and reused for dV!
