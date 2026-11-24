@@ -26,6 +26,8 @@ from .core import (
 )
 
 UF = prims.UFUNCS
+# NumPy 2.x has shipped both Python int and np.intp for the no-axis fast path.
+_COUNT_RETURNS_PYTHON_INT = type(np.count_nonzero(np.empty(0))) is int
 
 
 def _arr(el, v, what: str = "argument") -> ArrayVal:
@@ -756,7 +758,12 @@ def all_(el, a, axis=None, out=None, keepdims=False):
 @register(np.count_nonzero)
 def count_nonzero(el, a, axis=None, keepdims=False):
   a = el.cast_array(el.cast_array(_arr(el, a), Bool), Int64)
-  return _reduce_prim(el, "add", a, axis, Const(0, Int64), "count_nonzero", keepdims)
+  result = _reduce_prim(el, "add", a, axis, Const(0, Int64), "count_nonzero", keepdims)
+  if _COUNT_RETURNS_PYTHON_INT and axis is None and isinstance(result, Expr):
+    keep = keepdims if isinstance(keepdims, bool) else el.static_bool(keepdims, "keepdims")
+    if not keep:
+      return cast(result, I)
+  return result
 
 
 def _count(el, a: ArrayVal, axes) -> Expr:
