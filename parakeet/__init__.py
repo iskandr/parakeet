@@ -20,7 +20,7 @@ import math as _math
 
 import numpy as _np
 
-from . import errors, frontend, lib, ndtypes, prims, syntax, transforms
+from . import dsl, errors, frontend, lib, ndtypes, prims, syntax, transforms
 from ._version import __version__
 from .api import (
   DeviceArray,

@@ -39,6 +39,8 @@ nav:
       - Backends and GPUs: backends.md
       - Data-parallel operators: operators.md
       - Gradients: autodiff.md
+      - Algebraic laws & frontier kernels: algebra.md
+      - Gallery of examples: gallery.md
       - Rewrite rules and optimizations: rewrites.md
       - Errors and debugging: debugging.md
       - Performance: performance.md

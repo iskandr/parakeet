@@ -21,8 +21,10 @@ import parakeet as pk
 | `pk.parfor(f, shape)` | call `f(idx)` for its side effects, in parallel |
 | `pk.filter(pred, x, ..., map=None)` | the elements of `x` for which `pred` is true; with several arrays, `map(x[i], y[i], ...)` where `pred(x[i], y[i], ...)` holds |
 | `pk.filter_reduce(f, pred, x, ..., map=None, init=None, axis=None)` | reduce with `f` over elements where `pred` holds (fuses into one zero-allocation guarded reduction loop when `init` is given) |
+| `pk.scatter_add(n, idx, vals)` | index-directed associative scatter-add (`IndexScatter`) with thread-privatized parallel lowering and exact gather adjoint |
 | `pk.pmap1(f, x, w)`, `pk.pmap2(f, x, (wx, wy))` | `f` applied to a sliding window around each element |
 | `pk.grad(f, argnum=0)`, `pk.value_and_grad(f, argnum=0)` | the gradient of a scalar-valued `f` — see [Gradients](autodiff.md) |
+| `pk.dsl.show_rewrite(f, *args)` | inspect which of Parakeet's [six algebraic laws](algebra.md) rewrote `f` and view before/after IR |
 
 ```python
 pk.map(lambda row: row / row.sum(), X)  # normalise rows

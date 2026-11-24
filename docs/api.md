@@ -39,6 +39,12 @@
         - FallbackWarning
         - SourceLocation
 
+## Algebraic DSL & rewrite inspection
+
+::: parakeet.dsl.show_rewrite
+
+::: parakeet.dsl.RewriteReport
+
 ## Testing helpers
 
 ::: parakeet.testing

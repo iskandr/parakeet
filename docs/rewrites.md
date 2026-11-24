@@ -23,10 +23,17 @@ The short version: the rules are the same algebra, applied in two places.
   statements — invariant-check/unit-axis normalization, dead code elimination,
   vertical fusion (exact and affine map/scan/filter/reduce/scatter), filter
   fusion (filter-filter and filter-reduce), sibling and online monoidal fusion
-  (reductions, maps, and 1-pass `logsumexp`/`softmax`), target-aware reduction
-  interchange and tiling — and a last pass, `LowerAdverbs` in spirit, turns them
-  into loops. `parakeet.transforms.pipeline.PASSES` is the list;
-  `find_broken_transform` switches its members on one at a time.
+  (reductions, maps, and 1-pass `logsumexp`/`softmax`), Law 3 bilinear
+  contraction reassociation & MLA weight absorption, Law 1 & 5 2-level
+  monoidal tiling (`flash_monoid`, `monoid_lse`, FlashDecoding Split-K, GQA
+  head-group folding, and affine tile-interval pruning), Law 4 chunkwise
+  state-space duality & parallel affine prefix scan (`TileScan`), target-aware
+  reduction interchange and tiling — and a last pass, `LowerAdverbs` in spirit,
+  turns them into loops. `parakeet.transforms.pipeline.PASSES` is the list;
+  `find_broken_transform` switches its members on one at a time. See
+  [Algebraic laws & frontier kernels](algebra.md) for the mathematical laws
+  behind these passes and [Gallery of examples](gallery.md) for runnable
+  benchmarks.
 
 ```
 map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see it
