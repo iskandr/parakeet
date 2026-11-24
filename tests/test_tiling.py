@@ -162,6 +162,7 @@ def test_passes_can_be_skipped_by_name():
     "contraction reassociation",
     "monoidal tiling",
     "chunkwise scan",
+    "pairwise fold tiling",
     "reduction interchange",
     "tiling",
   ]

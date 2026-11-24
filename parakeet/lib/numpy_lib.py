@@ -814,10 +814,20 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
   if a.rank == 0:
     return Const(0, Int64)
 
+  stream = (
+    el.options.tiling
+    and el.options.fusion
+    and not el.options.target.is_gpu
+    and "pairwise fold tiling" not in el.options.skip
+  )
+
   def lane(v: ArrayVal):
     from ..syntax.ir import Carry, ErrorInfo, Fold, IndexReduce
 
-    v = _use(el, v)
+    if stream:
+      el.consume(v)
+    else:
+      v = _use(el, v)
     n = el.tmp(v.shape[0], "n")
     index = Var("i", I)
     el.nonneg.add(index.uid)
@@ -857,7 +867,7 @@ def _arg_extreme(el, a, axis, op: str, what: str, keepdims=False):
   if axis is None:
     return lane(el.flat_view(a) if a.rank != 1 else a)
   k = norm_axis(el, axis, a.rank)
-  res = along_axis(el, a, k, lane, what)
+  res = along_axis(el, a, k, lane, what, stream=stream)
   return _keepdims(el, res, a, [k], keepdims)
 
 

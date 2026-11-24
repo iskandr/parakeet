@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from ..config import config
 from ..syntax import ir
-from . import fusion, lowering, monoid_tile, normalize, reassociate, simplify, tile_scan, tiling
+from . import fusion, lowering, monoid_tile, normalize, pairwise_fold, reassociate, simplify, tile_scan, tiling
 from .verify import verify
 
 PASSES: list[tuple[str, object]] = [
@@ -25,6 +25,7 @@ PASSES: list[tuple[str, object]] = [
   ("contraction reassociation", reassociate.reassociate_contractions),
   ("monoidal tiling", monoid_tile.fuse_monoidal_tiles),
   ("chunkwise scan", tile_scan.tile_scans),
+  ("pairwise fold tiling", pairwise_fold.tile_pairwise_folds),
   ("reduction interchange", tiling.interchange),
   ("tiling", tiling.tiling),
 ]

@@ -167,7 +167,14 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
   detected_laws: list[str] = []
   detected_plans: list[str] = []
 
+  previous_tiles = 0
+
   def observer(name: str, f: ir.Function) -> None:
+    nonlocal previous_tiles
+    tiles = sum(isinstance(stmt, ir.IndexTile) for stmt in ir.walk_stmts(f.body))
+    if name == "pairwise fold tiling" and tiles > previous_tiles:
+      detected_laws.append("Pairwise map and ordered tile-summary fold")
+    previous_tiles = tiles
     if name == "before passes":
       snapshots["before"] = ir.fmt_function(f)
       counts["before"] = _count_ops(f)

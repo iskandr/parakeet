@@ -707,11 +707,13 @@ def _is_associative(el, combine, acc_type, x_type) -> bool:
     el.loop_depth -= 1
 
 
-def along_axis(el, arr: ArrayVal, axis: int, fn: Callable[[ArrayVal], Any], what: str = "reduction") -> Any:
+def along_axis(
+  el, arr: ArrayVal, axis: int, fn: Callable[[ArrayVal], Any], what: str = "reduction", *, stream=False
+) -> Any:
   """Apply ``fn`` to every 1-d slice of ``arr`` along ``axis`` (delayed)."""
   if arr.rank == 1:
     return fn(arr)
-  if arr.buf is None and arr.cost > CHEAP_COST:
+  if not stream and arr.buf is None and arr.cost > CHEAP_COST:
     arr = el.as_concrete(arr)
   el.consume(arr)
   lead = arr.shape[:axis] + arr.shape[axis + 1 :]

@@ -81,3 +81,23 @@ the result for empty input. Read any field of the result in compiled code.
 For example, affine updates `s -> a*s + b` compose in order with
 `merge(left, right) = (right[0]*left[0], right[0]*left[1] + right[1])`.
 Custom folds currently support forward evaluation.
+
+### Tiled pairwise folds
+
+On CPU, a map over queries can consume an associative structured fold over
+references whose inputs come from a feature reduction. For example, both the
+gallery's nested-map 1-NN and the following NumPy expression compile to the
+same tiled computation:
+
+```python
+@pk.jit
+def nearest(x, y):
+    return np.argmin(np.sum((x[:, None, :] - y[None, :, :]) ** np.float32(2), axis=2), axis=1)
+```
+
+The compiler evaluates a bounded rectangle of scores, folds each row, and
+merges consecutive tile summaries in reference order. Each summary carries the
+global reference index, so ties and NaNs retain their first-index semantics
+across tiles. The same rewrite handles other pure score reductions, including
+a sum of absolute differences followed by argmax. The rewrite inspector reports
+`Pairwise map and ordered tile-summary fold` when it applies.
