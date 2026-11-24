@@ -365,6 +365,7 @@ PK_OUTLINE int64_t pk_num_chunks(pk_call* rt, int64_t total, int reduce, int hea
   int64_t want, size;
   if (total <= 0) return 0;
   if (on_device && rt->device && total >= rt->gpu_min) {
+    if (reduce && !heavy && total <= 512) return 1;
     want = rt->device_chunks > 0 ? rt->device_chunks : 4096;
   } else {
     int64_t grain = heavy ? 1 : (rt->grain > 0 ? rt->grain : 1);

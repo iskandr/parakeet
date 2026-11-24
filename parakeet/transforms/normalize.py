@@ -19,9 +19,38 @@ from __future__ import annotations
 
 from ..syntax import ir
 from ..syntax.clone import Cloner, defined
-from ..syntax.ir import Assign, Check, Const, Expr, If, IndexFilter, IndexMap, IndexReduce, IndexScatter, Scope, Var
-from ..syntax.ops import ZERO, cmp, iprod
+from ..syntax.ir import (
+  Assign,
+  Check,
+  Const,
+  Expr,
+  If,
+  IndexFilter,
+  IndexMap,
+  IndexReduce,
+  IndexScatter,
+  Load,
+  Scope,
+  Var,
+)
+from ..syntax.ops import ZERO, cast, cmp, iprod
 from .analysis import IndexFacts, is_pure_expr
+
+
+def _ekey(e: Expr):
+  if isinstance(e, Var):
+    return ("v", e.uid)
+  if isinstance(e, Const):
+    return ("c", e.type, type(e.value), e.value)
+  if isinstance(e, ir.Prim):
+    return ("p", e.op, e.type, tuple(_ekey(a) for a in e.args))
+  if isinstance(e, ir.Cast):
+    return ("t", e.type, _ekey(e.arg))
+  if isinstance(e, Load):
+    return ("l", e.buf.uid, _ekey(e.index))
+  if isinstance(e, ir.RtCall):
+    return ("r", e.name, e.pure, e.type, tuple(_ekey(a) for a in e.args))
+  return ("o", id(e))
 
 
 def hoist_checks_from_op(
@@ -169,9 +198,209 @@ def split_invariant_map(s: IndexMap) -> list[ir.Stmt] | None:
   return [outer_map]
 
 
+def _inline_pure_expr(e: Expr, defs: dict[int, Expr], depth: int = 16) -> Expr:
+  """Substitute straight-line pure local definitions into ``e``."""
+  if depth <= 0:
+    return e
+  if isinstance(e, Var):
+    d = defs.get(e.uid)
+    return _inline_pure_expr(d, defs, depth - 1) if d is not None else e
+  if isinstance(e, ir.Prim):
+    return ir.Prim(e.op, tuple(_inline_pure_expr(a, defs, depth - 1) for a in e.args), e.type)
+  if isinstance(e, ir.Cast):
+    return ir.Cast(_inline_pure_expr(e.arg, defs, depth - 1), e.type)
+  if isinstance(e, Load):
+    return Load(e.buf, _inline_pure_expr(e.index, defs, depth - 1))
+  if isinstance(e, ir.RtCall):
+    return ir.RtCall(e.name, tuple(_inline_pure_expr(a, defs, depth - 1) for a in e.args), e.type, e.pure)
+  return e
+
+
+def _expr_matches_indexed(e: Expr, template: Expr, idx_uid: int, arg_aliases: set[int]) -> bool:
+  """True if ``e`` is identical to ``template`` with ``idx_uid`` replaced by a var in ``arg_aliases``."""
+  if isinstance(template, Var) and template.uid == idx_uid:
+    return isinstance(e, Var) and e.uid in arg_aliases
+  if type(e) is not type(template):
+    return False
+  if isinstance(e, Var):
+    return e.uid == template.uid  # type: ignore[union-attr]
+  if isinstance(e, Const):
+    return e.type == template.type and e.value == template.value and type(e.value) is type(template.value)  # type: ignore[union-attr]
+  if isinstance(e, Load):
+    return e.buf.uid == template.buf.uid and _expr_matches_indexed(e.index, template.index, idx_uid, arg_aliases)  # type: ignore[union-attr]
+  if isinstance(e, ir.Cast):
+    return e.type == template.type and _expr_matches_indexed(e.arg, template.arg, idx_uid, arg_aliases)  # type: ignore[union-attr]
+  if isinstance(e, ir.Prim):
+    return (
+      e.op == template.op  # type: ignore[union-attr]
+      and e.type == template.type
+      and len(e.args) == len(template.args)  # type: ignore[union-attr]
+      and all(_expr_matches_indexed(a, b, idx_uid, arg_aliases) for a, b in zip(e.args, template.args))  # type: ignore[union-attr]
+    )
+  if isinstance(e, ir.RtCall):
+    return (
+      e.name == template.name  # type: ignore[union-attr]
+      and e.pure
+      and template.pure  # type: ignore[union-attr]
+      and e.type == template.type
+      and len(e.args) == len(template.args)  # type: ignore[union-attr]
+      and all(_expr_matches_indexed(a, b, idx_uid, arg_aliases) for a, b in zip(e.args, template.args))  # type: ignore[union-attr]
+    )
+  return False
+
+
+def _is_inbounds_check_for(cond: Expr, aliases: set[int], shape_k) -> bool:
+  """True for ``(a >= 0) and (a < shape)`` where ``a`` is in ``aliases``."""
+  if not (isinstance(cond, ir.Prim) and cond.op == "and" and len(cond.args) == 2):
+    return False
+  lo, hi = cond.args
+  if not (isinstance(lo, ir.Prim) and lo.op == "ge" and isinstance(lo.args[0], Var) and lo.args[0].uid in aliases):
+    return False
+  if not (isinstance(lo.args[1], Const) and lo.args[1].value == 0):
+    return False
+  if not (isinstance(hi, ir.Prim) and hi.op == "lt" and isinstance(hi.args[0], Var) and hi.args[0].uid in aliases):
+    return False
+  return _ekey(hi.args[1]) == shape_k
+
+
+def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
+  """Replace ``f(arg)`` after a pure 1-D ``argmin``/``argmax`` reduction ``(best, arg)``
+  with ``best`` and drop the redundant bounds check on ``arg``.
+
+  Eliminates redundant recomputation of patterns like ``i = np.argmax(gain); return i, gain[i]``
+  and avoids host-side array downloads when ``gain`` lives on a GPU."""
+  # Active records: list of dicts with keys idx_uid, shape_k, val_expr, best_var, read_bufs, read_vars, aliases
+  active: list[dict] = []
+  out: list[ir.Stmt] = []
+  changed = False
+
+  def invalidate_for_stmt(st: ir.Stmt) -> None:
+    if not active:
+      return
+    if isinstance(st, (If, ir.ForRange, ir.While, ir.ParLoop, ir.IndexTile)):
+      active.clear()
+      return
+    written_bufs: set[int] = set()
+    written_vars: set[int] = set()
+    impure = False
+    for sub in ir.walk_stmts([st]):
+      if isinstance(sub, ir.Store):
+        written_bufs.add(sub.buf.uid)
+      elif isinstance(sub, IndexScatter):
+        written_bufs.update(u.buf.uid for u in sub.updates)
+      elif isinstance(sub, Assign):
+        written_vars.add(sub.var.uid)
+        if any(isinstance(x, ir.RtCall) and not x.pure for x in ir.walk_expr(sub.value)):
+          impure = True
+      elif isinstance(sub, ir.Release):
+        written_bufs.add(sub.var.uid)
+    if impure:
+      active.clear()
+      return
+    active[:] = [
+      rec for rec in active if not (rec["read_bufs"] & written_bufs) and not (rec["read_vars"] & written_vars)
+    ]
+
+  for s in block:
+    if isinstance(s, IndexReduce):
+      invalidate_for_stmt(s)
+      out.append(s)
+      if len(s.shape) == 1 and s.where is None and not s.scope.owned:
+        local_defs: dict[int, Expr] = {}
+        pure_body = True
+        for t in s.body:
+          if isinstance(t, (ir.Comment, ir.ReleaseScope)):
+            continue
+          if isinstance(t, Assign) and is_pure_expr(t.value):
+            local_defs[t.var.uid] = t.value
+          else:
+            pure_body = False
+            break
+        if pure_body:
+          idx_v = s.index[0]
+          shape_k = _ekey(s.shape[0])
+          for f in s.folds:
+            if f.op in ("argmin", "argmax") and f.init is None and f.empty is not None and len(f.carries) == 1:
+              cy = f.carries[0]
+              cy_val = _inline_pure_expr(cy.value, local_defs)
+              while isinstance(cy_val, ir.Cast):
+                cy_val = cy_val.arg
+              if isinstance(cy_val, Var) and cy_val.uid == idx_v.uid:
+                val_expr = _inline_pure_expr(f.value, local_defs)
+                if is_pure_expr(val_expr):
+                  rbufs = {x.buf.uid for x in ir.walk_expr(val_expr) if isinstance(x, Load)}
+                  rvars = {x.uid for x in ir.walk_expr(val_expr) if isinstance(x, Var) and x.uid != idx_v.uid}
+                  active.append(
+                    {
+                      "idx_uid": idx_v.uid,
+                      "shape_k": shape_k,
+                      "val_expr": val_expr,
+                      "best_var": f.result,
+                      "read_bufs": rbufs,
+                      "read_vars": rvars,
+                      "aliases": {cy.result.uid},
+                    }
+                  )
+      continue
+
+    if active and isinstance(s, Check):
+      if any(_is_inbounds_check_for(s.cond, rec["aliases"], rec["shape_k"]) for rec in active):
+        changed = True
+        continue
+
+    if active and isinstance(s, Assign):
+      val = s.value
+      # Track pure copies / integer casts / negative-index wraps of arg
+      for rec in active:
+        aliases = rec["aliases"]
+        if isinstance(val, Var) and val.uid in aliases:
+          aliases.add(s.var.uid)
+        elif isinstance(val, ir.Cast) and isinstance(val.arg, Var) and val.arg.uid in aliases and val.type.kind in "iu":
+          aliases.add(s.var.uid)
+        elif (
+          isinstance(val, ir.Prim)
+          and val.op == "select"
+          and len(val.args) == 3
+          and isinstance(val.args[0], ir.Prim)
+          and val.args[0].op == "lt"
+          and isinstance(val.args[0].args[0], Var)
+          and val.args[0].args[0].uid in aliases
+          and isinstance(val.args[0].args[1], Const)
+          and val.args[0].args[1].value == 0
+          and isinstance(val.args[1], ir.Prim)
+          and val.args[1].op == "add"
+          and isinstance(val.args[1].args[0], Var)
+          and val.args[1].args[0].uid in aliases
+          and _ekey(val.args[1].args[1]) == rec["shape_k"]
+          and isinstance(val.args[2], Var)
+          and val.args[2].uid in aliases
+        ):
+          aliases.add(s.var.uid)
+      # Replace re-evaluation of the reduced expression at arg with best_var
+      replaced = False
+      for rec in active:
+        if _expr_matches_indexed(val, rec["val_expr"], rec["idx_uid"], rec["aliases"]):
+          best = rec["best_var"]
+          if s.var.type == best.type or (s.var.type.kind == best.type.kind and s.var.type.bits == best.type.bits):
+            out.append(Assign(s.var, cast(best, s.var.type)))
+            changed = True
+            replaced = True
+            break
+      invalidate_for_stmt(s)
+      if not replaced:
+        out.append(s)
+      continue
+
+    invalidate_for_stmt(s)
+    out.append(s)
+  return out, changed
+
+
 def normalize_block(block: list[ir.Stmt], facts: IndexFacts) -> tuple[list[ir.Stmt], bool]:
   """Recursively normalize every operator in ``block``."""
   changed = False
+  block, reused = reuse_extrema_values(block)
+  changed |= reused
   local = facts.fork()
   out: list[ir.Stmt] = []
   for s in block:
