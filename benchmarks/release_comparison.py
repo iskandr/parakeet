@@ -228,6 +228,11 @@ def adapters(provider, task, host):
 
 
 def run(provider):
+  unsupported = ()
+  if provider == "array":
+    from parakeet.errors import BackendUnavailable
+
+    unsupported = (BackendUnavailable,)
   packages = {}
   for package in [
     "numpy",
@@ -300,9 +305,14 @@ def run(provider):
             if not item["launches_per_call"]:
               raise AssertionError("no CUDA kernel launched")
           item.update(median_ms=statistics.median(samples), samples_ms=samples)
+        except unsupported as exc:
+          if name == "pk-dsl" and task == "nn" and "temporary arrays inside the loop" in str(exc):
+            item["unsupported"] = str(exc)
+          else:
+            item["error"] = f"{type(exc).__name__}: {exc}"
         except Exception as exc:
           item["error"] = f"{type(exc).__name__}: {exc}"[:1600]
-        print(task, name, item.get("median_ms", item.get("error")), flush=True)
+        print(task, name, item.get("median_ms", item.get("unsupported", item.get("error"))), flush=True)
         result["rows"].append(item)
     except Exception as exc:
       result["rows"].append(dict(row, error=f"{type(exc).__name__}: {exc}"[:1600]))

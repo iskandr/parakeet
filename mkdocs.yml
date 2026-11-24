@@ -44,6 +44,7 @@ nav:
       - Rewrite rules and optimizations: rewrites.md
       - Errors and debugging: debugging.md
       - Performance: performance.md
+      - Release benchmarks: release-benchmarks.md
       - How it works: internals.md
   - Reference:
       - Supported functions: supported.md

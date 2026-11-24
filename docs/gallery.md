@@ -256,9 +256,10 @@ broadcast expression on the same Apple Silicon machine.)*
 | Workload | Parakeet Metal GPU (ms) | Eager CPU NumPy (ms) | Ratio | Memory / Law Highlight |
 |---|---:|---:|---:|---|
 | **RBF Kernel Regression** (`1024 × 4096 × 32`) | **6.06 ms** | 312.76 ms | **51.6×** | Zero $N \times M$ matrix (Law 1 `sqdist`) |
-| **Exact 1-NN Search** (`1024 × 4096 × 32`) | **5.96 ms** | 298.30 ms | **50.0×** | Zero $N \times M$ matrix (`Carry` fusion) |
 | **One Min-Plus Matrix Product** (`512 × 512`) | **4.70 ms** | 36.77 ms | **7.8×** | Zero $N^3$ tensor (SRAM semiring tile) |
 | **Causal FlashAttention** (`B=2, H=4, T=512, D=64`) | **7.49 ms** | 7.24 ms | **1.0×** | Zero $O(T^2)$ HBM allocation (Laws 1 + 5) |
+
+The gallery's nested-map 1-NN requests a temporary row inside the query loop. On Metal and CUDA that loop requires CPU fallback. The broadcast NumPy form runs on both GPUs and allocates a full float32 distance matrix. The CPU schedule tiles both forms. See the [same-device release benchmarks](release-benchmarks.md).
 
 ### NVIDIA L4 GPU — End-to-End Batched nanoGPT Training Step (`tools/colab_nanogpt_bench.py`)
 
