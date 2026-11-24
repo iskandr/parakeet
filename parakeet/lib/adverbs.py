@@ -221,7 +221,11 @@ def _reduce(el, f, x, init, axis, what: str):
 def _zipped(el, xs: tuple, init, fn, axis, what: str):
   """The sequence an adverb folds over: one array, or ``fn`` mapped over
   several (never built: the map fuses into the fold).  A trailing scalar
-  after a single array is the old positional ``init``."""
+  after a single array is the old positional ``init``.
+
+  Returns ``(seq, init, fold_axis)``: when ``fn`` is mapped along an axis,
+  :func:`map` stacks its per-slice results onto leading axis ``0``, so the
+  subsequent fold must consume axis ``0`` rather than the original ``axis``."""
   xs = list(xs)
   if init is None and len(xs) == 2 and fn is None and isinstance(xs[1], Expr):
     init = xs.pop()
@@ -233,8 +237,11 @@ def _zipped(el, xs: tuple, init, fn, axis, what: str):
         TypeInferenceError,
         f"{what}() over {len(xs)} arrays needs map=: a function that turns one element of each into the value to fold",
       )
-    return xs[0], init
-  return _MAP.impl(el, fn, *xs, axis=0 if axis is None and what != "reduce" else axis), init
+    return xs[0], init, axis
+  map_axis = 0 if axis is None and what != "reduce" else axis
+  mapped = _MAP.impl(el, fn, *xs, axis=map_axis)
+  fold_axis = None if map_axis is None else 0
+  return mapped, init, fold_axis
 
 
 @libfunction("reduce")
@@ -247,8 +254,8 @@ def reduce(el, f, *xs, init=None, axis=None, map=None):  # noqa: A001, A002
 
   ``f`` should be associative: recognised primitives (add, multiply, min,
   max, logical/bitwise and/or) are reduced in parallel."""
-  x, init = _zipped(el, xs, init, map, axis, "reduce")
-  return _reduce(el, f, x, init, axis, "reduce")
+  x, init, fold_axis = _zipped(el, xs, init, map, axis, "reduce")
+  return _reduce(el, f, x, init, fold_axis, "reduce")
 
 
 @core.register(functools.reduce)
@@ -265,8 +272,8 @@ def scan(el, f, *xs, init=None, axis=0, map=None, emit=None):  # noqa: A002
 
   ``map=g`` folds over ``g(x1[i], ..., xn[i])`` for several arrays, and
   ``emit=h`` gives ``h`` of each running value instead of the value itself."""
-  x, init = _zipped(el, xs, init, map, axis, "scan")
-  out = _scan(el, f, x, init, axis)
+  x, init, fold_axis = _zipped(el, xs, init, map, axis, "scan")
+  out = _scan(el, f, x, init, fold_axis)
   return out if emit is None else _MAP.impl(el, emit, out, axis=None)
 
 

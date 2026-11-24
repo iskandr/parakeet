@@ -221,3 +221,44 @@ def test_reduce_preserves_value_changing_casts_as_non_associative():
   with parakeet.options(backend="threads"):
     assert int(count_c(arr)) == expected
 
+
+def test_mapped_reduce_and_scan_fold_the_mapped_axis():
+  """When map= slices along an input axis, map stacks its results onto leading
+  axis 0; reduce and scan must fold that stacked axis (even on non-square inputs
+  and when the mapper changes slice rank)."""
+  x = np.arange(6, dtype=np.int64).reshape(2, 3)
+
+  @jit
+  def red_cols(a):
+    return parakeet.reduce(parakeet.add, a, a, map=parakeet.add, axis=1)
+
+  @jit
+  def red_cols_neg(a):
+    return parakeet.reduce(parakeet.add, a, a, map=parakeet.add, axis=-1)
+
+  @jit
+  def red_cols_scalar_map(a):
+    return parakeet.reduce(parakeet.add, a, map=lambda col: np.sum(col), axis=1)
+
+  @jit
+  def red_cols_outer_map(a):
+    return parakeet.reduce(parakeet.add, a, map=lambda col: col[:, None] * col[None, :], axis=1)
+
+  @jit
+  def scan_cols(a):
+    return parakeet.scan(parakeet.add, a, a, map=parakeet.add, axis=1)
+
+  @jit
+  def scan_cols_scalar_map(a):
+    return parakeet.scan(parakeet.add, a, map=lambda col: np.sum(col), axis=1)
+
+  np.testing.assert_array_equal(red_cols(x), np.array([6, 24]))
+  np.testing.assert_array_equal(red_cols_neg(x), np.array([6, 24]))
+  assert int(red_cols_scalar_map(x)) == 15
+  expected_outer = sum(np.outer(x[:, j], x[:, j]) for j in range(3))
+  np.testing.assert_array_equal(red_cols_outer_map(x), expected_outer)
+  expected_scan = np.cumsum(np.stack([2 * x[:, j] for j in range(3)], axis=0), axis=0)
+  np.testing.assert_array_equal(scan_cols(x), expected_scan)
+  np.testing.assert_array_equal(scan_cols_scalar_map(x), np.array([3, 8, 15]))
+
+
