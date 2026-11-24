@@ -34,7 +34,9 @@ extra_css:
 nav:
   - Home: index.md
   - Getting started: quickstart.md
-  - Gallery: gallery.md
+  - Gallery:
+      - Kernel gallery: gallery.md
+      - Train nanoGPT: gallery/nanogpt.md
   - Benchmarks: release-benchmarks.md
   - Guide:
       - Core ideas and boundaries: philosophy.md

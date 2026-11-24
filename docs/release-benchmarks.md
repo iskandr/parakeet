@@ -136,7 +136,7 @@ At 1,024 × 4,096 × 32, the explicit ordered fold and broadcasting NumPy took 0
 
 ### nanoGPT training
 
-Each step includes the forward pass, backpropagation and Adam. Both configurations use four attention heads. Parakeet and JAX compile the optimizer into the step. The PyTorch compiled column wraps the loss in `torch.compile` and calls the optimizer separately. Times are medians of 20 warmed steps in milliseconds. The download also includes first-call times and initial and final losses. [Run the smaller character-level training example](gallery.md#nanogpt).
+Each step includes the forward pass, backpropagation and Adam. Both configurations use four attention heads. Parakeet and JAX compile the optimizer into the step. The PyTorch compiled column wraps the loss in `torch.compile` and calls the optimizer separately. Times are medians of 20 warmed steps in milliseconds. The download also includes first-call times and initial and final losses. [Run the smaller character-level training example](gallery/nanogpt.md).
 
 | Batch × context × width × layers | Parakeet FP32 | Parakeet TF32 | PyTorch eager | Compiled PyTorch | JAX JIT |
 |---|---:|---:|---:|---:|---:|

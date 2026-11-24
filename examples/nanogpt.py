@@ -1,3 +1,4 @@
+# --8<-- [start:gpt_setup]
 """A character-level GPT trained with parakeet.value_and_grad.
 
 The model is a function over a tuple of parameter arrays: token and position
@@ -26,6 +27,9 @@ def softmax(x):
   return e / np.sum(e, axis=1, keepdims=True)
 
 
+# --8<-- [end:gpt_setup]
+
+
 # --8<-- [start:gpt_attention]
 def attention(x, wq, wk, wv, wo, causal):
   """Causal self-attention over one sequence: x is (T, C)."""
@@ -41,9 +45,6 @@ def attention(x, wq, wk, wv, wo, causal):
   return out
 
 
-# --8<-- [end:gpt_attention]
-
-
 def block(x, p, causal):
   g1, b1, wq, wk, wv, wo, g2, b2, w1, c1, w2, c2 = p
   x = x + attention(layer_norm(x, g1, b1), wq, wk, wv, wo, causal)
@@ -51,6 +52,10 @@ def block(x, p, causal):
   return x + h @ w2 + c2
 
 
+# --8<-- [end:gpt_attention]
+
+
+# --8<-- [start:gpt_loss]
 def sequence_loss(params, tokens, targets, causal):
   wte, wpe, blocks, gf, bf, head = params
   x = wte[tokens] + wpe
@@ -62,7 +67,6 @@ def sequence_loss(params, tokens, targets, causal):
   return -np.mean(logp[np.arange(len(targets)), targets])
 
 
-# --8<-- [start:gpt_batch]
 def loss(params, tokens, targets, causal):
   def loss_for_sequence(input_ids, next_ids):
     return sequence_loss(params, input_ids, next_ids, causal)
@@ -72,9 +76,10 @@ def loss(params, tokens, targets, causal):
 
 
 loss_and_grad = value_and_grad(loss)
-# --8<-- [end:gpt_batch]
+# --8<-- [end:gpt_loss]
 
 
+# --8<-- [start:gpt_params]
 def init(vocab, context, width, layers, rng):
   def w(*shape):
     return rng.normal(0.0, 0.02, shape)
@@ -90,6 +95,10 @@ def init(vocab, context, width, layers, rng):
   return (w(vocab, width), w(context, width), blocks, np.ones(width), np.zeros(width), w(width, vocab))
 
 
+# --8<-- [end:gpt_params]
+
+
+# --8<-- [start:gpt_update]
 def tree_map(f, *trees):
   if isinstance(trees[0], tuple):
     return tuple(tree_map(f, *parts) for parts in zip(*trees))
@@ -104,7 +113,6 @@ def adam(params, grads, m, v, step, lr=3e-3, b1=0.9, b2=0.99):
   return params, m, v
 
 
-# --8<-- [start:gpt_update]
 def train_step(params, m, v, step, tokens, targets, causal):
   value, grads = loss_and_grad(params, tokens, targets, causal)
   params, m, v = adam(params, grads, m, v, step)
@@ -114,6 +122,7 @@ def train_step(params, m, v, step, tokens, targets, causal):
 # --8<-- [end:gpt_update]
 
 
+# --8<-- [start:gpt_train]
 TEXT = (
   "parakeet compiles numerical python. it fuses array expressions into loops, "
   "runs them on every core, and now differentiates them too. "
@@ -145,3 +154,4 @@ def main(steps=60, batch=16, context=32, width=32, layers=2, seed=0, verbose=Fal
 
 if __name__ == "__main__":
   main(verbose=True)
+# --8<-- [end:gpt_train]
