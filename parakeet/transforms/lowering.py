@@ -871,7 +871,7 @@ def lower_scatter(lp: Loops, s: ir.IndexScatter, target=None) -> None:
     est = lp.tmp(work(lp.defs, s.body, s.index), "work") if heavy else None
     lp.parallel(
       total,
-      lambda sub, ch, a, b: sub.chunk(shape, indices, a, b, body, cl.scope(s.scope)),
+      lambda sub, ch, a, b: sub.chunk(shape, indices, a, b, body, cl.scope(s.scope), simd=False),
       loc=s.loc,
       work=est,
       heavy=heavy,

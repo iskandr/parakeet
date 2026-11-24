@@ -52,7 +52,9 @@ def test_paired_histogram_fusion():
     np.testing.assert_allclose(gh, np.bincount(i, weights=a, minlength=13))
     np.testing.assert_array_equal(hh, np.bincount(i, weights=b, minlength=13))
   args = i, a.astype("f"), b.astype("f"), 13, np.float32(1)
-  assert dsl.show_rewrite(gbdt_best_split, *args).after_scatters == 1
+  report = dsl.show_rewrite(gbdt_best_split, *args)
+  assert (report.before_scatters, report.after_scatters) == (2, 1)
+  assert "2 updates in one keyed traversal" in report.summary()
   with pk.options(skip_transforms=("sibling fusion",)):
     expected = gbdt_best_split(*args)
   np.testing.assert_allclose(gbdt_best_split(*args), expected)

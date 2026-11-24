@@ -68,6 +68,7 @@ class RewriteReport:
   after_tiles: int
   after_scatters: int
   after_carries: int
+  before_scatters: int = 0
 
   def summary(self) -> str:
     laws = ", ".join(self.laws_triggered) if self.laws_triggered else "(elementwise / standard tiling)"
@@ -77,7 +78,7 @@ class RewriteReport:
       f"  Laws triggered : {laws}\n"
       f"  Monoidal plans : {plans}\n"
       f"  Operators      : IndexMap {self.before_maps} -> {self.after_maps} | "
-      f"IndexTile {self.after_tiles} | IndexScatter {self.after_scatters} | Carry folds {self.after_carries}"
+      f"IndexTile {self.after_tiles} | IndexScatter {self.before_scatters} -> {self.after_scatters} | Carry folds {self.after_carries}"
     )
 
 
@@ -142,7 +143,10 @@ def _detect_laws(after_reassoc: ir.Function | None, after_monoid: ir.Function | 
   if after_tiling is not None:
     for s in ir.walk_stmts(after_tiling.body):
       if isinstance(s, ir.IndexScatter):
-        add_law("IndexScatter: Privatized Associative Scatter-Add")
+        if len(s.updates) > 1:
+          add_law(f"IndexScatter: {len(s.updates)} updates in one keyed traversal")
+        else:
+          add_law("IndexScatter: Privatized Associative Scatter-Add")
       elif isinstance(s, ir.IndexReduce) and any(f.carries for f in s.folds):
         add_law("Carry: Single-Pass Multi-State Monoid Fold")
 
@@ -204,7 +208,7 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 
   uniq_laws = tuple(dict.fromkeys(detected_laws))
   uniq_plans = tuple(detected_plans)
-  bm, _, _, _ = counts.get("before", (0, 0, 0, 0))
+  bm, _, bsc, _ = counts.get("before", (0, 0, 0, 0))
   am, at, asc, ac = counts.get("after", (0, 0, 0, 0))
   return RewriteReport(
     fn_name=getattr(fn, "__name__", getattr(getattr(fn, "fn", fn), "__name__", "fn")),
@@ -215,6 +219,7 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
     before_maps=bm,
     after_maps=am,
     after_tiles=at,
+    before_scatters=bsc,
     after_scatters=asc,
     after_carries=ac,
   )
