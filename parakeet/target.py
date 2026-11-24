@@ -16,6 +16,10 @@ import platform
 import subprocess
 import sys
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from .syntax import ir
 
 
 @dataclass(frozen=True)
@@ -211,8 +215,47 @@ def query_cpu_profile(tile_bytes: int = 256 * 1024) -> TargetProfile:
   )
 
 
-__all__ = [
-  "MatrixUnit",
-  "TargetProfile",
-  "query_cpu_profile",
-]
+BK = 16
+DEFAULT_SHARED_BUDGET = 24 * 1024
+
+
+def choose_tile_config(
+  plan: ir.SharedTilePlan,
+  max_shared_bytes: int | None = None,
+  profile: TargetProfile | None = None,
+  score_bytes: int = 0,
+) -> tuple[int, int, int, int, int] | None:
+  """Analytically choose ``(BM, BN, BK, TM, TN)`` from ``plan``'s stage types,
+  accumulator count, and target shared-memory budget."""
+  budget = (
+    max_shared_bytes
+    if max_shared_bytes is not None
+    else (profile.shared_budget() if profile is not None else DEFAULT_SHARED_BUDGET)
+  )
+  n_accs = sum(1 + len(f.carries) for f in plan.mixed_folds)
+  candidates: list[tuple[int, int, int, int, int]] = []
+  if n_accs <= 2:
+    # Larger BK=32 on CUDA GPUs with >= 32 KiB per-block shared budget halves barrier overhead
+    if profile is not None and profile.kind == "cuda" and budget >= 32 * 1024:
+      candidates.append((64, 64, 32, 4, 4))
+    candidates.append((64, 64, BK, 4, 4))
+  if n_accs <= 8:
+    candidates.append((32, 32, BK, 2, 2))
+  candidates.append((16, 16, BK, 1, 1))
+
+  for bm, bn, bk, tm, tn in candidates:
+    needed = bm * bn * score_bytes
+    for st, side in zip(plan.stages, plan.stage_sides):
+      elt_bytes = max(st.buf.type.elt.bits // 8, 1)
+      if side == "row":
+        needed += bm * (bk + 1) * elt_bytes
+      elif side == "col":
+        needed += bn * (bk + 1) * elt_bytes
+      else:
+        needed += bk * elt_bytes
+    if needed <= budget:
+      return bm, bn, bk, tm, tn
+  return None
+
+
+__all__ = ["BK", "DEFAULT_SHARED_BUDGET", "MatrixUnit", "TargetProfile", "choose_tile_config", "query_cpu_profile"]

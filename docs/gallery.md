@@ -23,9 +23,10 @@ reference index at the minimum.
 
 The CPU compiler fuses the score and reduction in both this form and its
 broadcast NumPy equivalent. At 1,024 queries by 4,096 references, each active
-query strip needs an 8 KiB tile and 192 bytes of row summaries. In the release
-benchmark, the broadcast CUDA version used a 16 MiB distance matrix and the
-nested DSL required CPU fallback. [Timings and allocation details](release-benchmarks.md#pairwise-workloads).
+query strip needs an 8 KiB tile and 192 bytes of row summaries. The GPU fold
+developed after 1.0.0 shares each score tile within a thread block and writes
+one winning distance and index per query and reference tile. Both source forms
+run on CUDA and Metal. [Release and follow-up measurements](release-benchmarks.md#gpu-pairwise-fold-after-100).
 
 ## Gaussian kernel regression
 

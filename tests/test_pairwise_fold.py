@@ -75,3 +75,69 @@ def test_empty_reduced_dimensions_with_no_output_lanes():
   for fn in (np.min, np.max):
     with pytest.raises(ValueError):
       reduce_axis(fn, array, (1, 2))
+
+
+def _check_gpu_row_fold(backend):
+  rng = np.random.default_rng(44)
+  x = rng.normal(size=(10, 12)).astype("f")[::2, ::2]
+  y = rng.normal(size=(277, 6)).astype("f")[::-1]
+  x[0] = y[3] = y[199]
+  with pk.options(backend=backend, device_threshold=1, device_fallback="error"):
+    for fn in (numpy_1nn, exact_1nn, farthest_l1):
+
+      def inspect(stage, fun):
+        if stage != "pairwise fold tiling":
+          return
+        [tile] = [s for s in ir.walk_stmts(fun.body) if isinstance(s, ir.IndexTile) and s.shared_tile]
+        row_fold = tile.shared_tile.row_fold
+        assert row_fold is not None
+        scratch = {s.var.uid for s in ir.walk_stmts(tile.body) if isinstance(s, ir.Alloc)}
+        assert scratch == {row_fold.scores.uid}
+        # Outside the block only the result and the two partial-state arrays survive.
+        outer = [s for s in fun.body if isinstance(s, ir.Alloc)]
+        assert len(outer) == 3
+        assert outer[1].count is outer[2].count
+
+      fn.trace_passes(x, y, _trace=inspect)
+      for refs in (y, y[:1], y[:65], y[:130]):
+        delta = x[:, None, :] - refs[None, :, :]
+        expected = (
+          np.argmax(np.abs(delta).sum(axis=-1), axis=1)
+          if fn is farthest_l1
+          else np.argmin((delta * delta).sum(axis=-1), axis=1)
+        )
+        np.testing.assert_array_equal(fn(x, refs), expected)
+      with_nan = y.copy()
+      with_nan[[7, 202], 1] = np.nan
+      np.testing.assert_array_equal(fn(x, with_nan), np.full(len(x), 7))
+      assert fn(x[:0], y).size == 0
+      if fn is exact_1nn:
+        assert fn(x[:0], y[:0]).size == 0
+      else:
+        with pytest.raises(ValueError, match="empty"):
+          fn(x[:0], y[:0])
+      np.testing.assert_array_equal(fn(x[:, :0], y[:, :0]), np.zeros(len(x)))
+      with pytest.raises(ValueError, match="empty"):
+        fn(x, y[:0])
+      with pytest.raises(ValueError, match="broadcast"):
+        fn(x, y[:, :2])
+
+
+@pytest.mark.skipif(pk.available_backends().get("metal") != "ok", reason="Metal device required")
+def test_metal_ordered_pairwise_fold():
+  _check_gpu_row_fold("metal")
+
+
+def test_cuda_simulated_ordered_pairwise_fold(tmp_path):
+  import sys
+
+  from tests.test_backends import run_script
+
+  if sys.platform == "win32":
+    pytest.skip("the CUDA simulator needs a POSIX C++ toolchain")
+  proc = run_script(
+    tmp_path,
+    "from tests.test_pairwise_fold import _check_gpu_row_fold\n_check_gpu_row_fold('cuda')",
+    PARAKEET_CUDA_SIMULATE="1",
+  )
+  assert proc.returncode == 0, proc.stdout + proc.stderr

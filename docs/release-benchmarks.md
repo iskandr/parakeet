@@ -68,3 +68,26 @@ modal run tools/modal_release_bench.py --output comparison.json
 - GPU inputs were uploaded before timing. The comparison includes dispatch, output production, internal transfers and synchronization for every call. Faiss database insertion, tree construction, sklearn fitting, imports and initial input upload were outside query timing. This measures repeated queries against a prepared reference set.
 - Each method ran once for first-call timing and validation, then three warmups, then 21 synchronized GPU samples or 11 CPU samples. Providers ran sequentially in separate processes on the same GPU. JAX used its own Python environment. PyTorch used highest float32 matmul precision with TF32 disabled, JAX used highest precision, and Parakeet used strict device fallback, a threshold of one and tensor cores disabled. PyTorch SDPA selected its own float32 backend.
 - First-call time includes execution and any lazy compilation. The large shape follows the small shape, so first calls can reuse specializations. For causal attention, Parakeet's first call took 1.692 s and its warmed median was 0.386 ms. The raw file includes first-call times, every sample, versions, validation error and the two strict-dispatch rejections. [Download the measurements](assets/modal-alpha-comparison.json).
+
+## GPU pairwise fold after 1.0.0
+
+The follow-up compiler evaluates each score tile in shared memory, writes one
+structured partial per query and reference tile, and merges consecutive partials
+in order. Both source forms use the same two CUDA launches. Tests also cover L1
+argmax, first-index ties, first NaNs and partial tiles on CUDA and Metal.
+
+On one Modal NVIDIA A10G, we compared release compiler `7ddd90a` with follow-up
+`defe1d8`. The workload used 1,024 queries and 32 features. All timings are
+warmed, synchronized medians from 21 calls with float32 data resident on device,
+TF32 disabled and fallback disabled. The release DSL required fallback. Both
+follow-up variants returned the exact reference indices with zero host transfers.
+
+| References | 1.0.0 NumPy (ms) | Follow-up NumPy (ms) | Follow-up DSL (ms) | 1.0.0 score matrix | Follow-up global summaries |
+|---:|---:|---:|---:|---:|---:|
+| 1,024 | 0.296 | 0.135 | 0.139 | 4 MiB | 192 KiB |
+| 4,096 | 0.853 | 0.190 | 0.180 | 16 MiB | 768 KiB |
+| 16,384 | 2.898 | 0.458 | 0.470 | 64 MiB | 3 MiB |
+
+Each active follow-up block also uses a 16 KiB shared score tile. Run
+`modal run tools/modal_pairwise_fold.py --output pairwise.json` from the
+follow-up checkout to reproduce this comparison. [Raw samples, allocations and device counters](assets/gpu-pairwise-fold.json).
