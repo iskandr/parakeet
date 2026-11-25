@@ -2940,11 +2940,28 @@ def _try_fuse_flash_jvp(block: list[Stmt], k: int, facts: IndexFacts, binfo: Buf
     # Identify m_buf (first 1-store max reduction of s_buf), l_buf (if stored), and (p_buf, dp_buf)
     if m_buf_out is None and len(st_stores) == 1:
       m_cand = _match_row_reduce_map(st, s_buf, batch_shape, m_dim, n_dim, walk_f, want_op="max")
-      if m_cand is None and any(
-        isinstance(r, IndexReduce) and any(f.op == "max" for f in r.folds) for r in ir.walk_stmts([st])
-      ):
-        m_cand = st_stores[0].buf
+      down_scale: Expr | None = None
+      if m_cand is None:
+        # Handle downstream scaling `max_j (s_buf[i, j] * scale)` when s_buf came from an unscaled matmul (e.g. blas=False)
+        reds_m = [
+          r for r in ir.walk_stmts([st]) if isinstance(r, IndexReduce) and len(r.folds) == 1 and r.folds[0].op == "max"
+        ]
+        if len(reds_m) == 1 and reds_m[0].where is None:
+          rm = reds_m[0]
+          loc_m = {t.var.uid: t.value for t in ir.walk_stmts([st]) if isinstance(t, Assign)}
+          fv = _resolve_local(rm.folds[0].value, loc_m)
+          loop_uids = {v.uid for v in (*st.index, *rm.index)}
+          if isinstance(fv, Load) and fv.buf.uid == s_buf.uid:
+            m_cand = st_stores[0].buf
+          elif isinstance(fv, Prim) and fv.op == "mul" and len(fv.args) == 2:
+            a0, a1 = _resolve_local(fv.args[0], loc_m), _resolve_local(fv.args[1], loc_m)
+            if isinstance(a0, Load) and a0.buf.uid == s_buf.uid and not _expr_uses_uids(a1, loop_uids):
+              m_cand, down_scale = st_stores[0].buf, a1
+            elif isinstance(a1, Load) and a1.buf.uid == s_buf.uid and not _expr_uses_uids(a0, loop_uids):
+              m_cand, down_scale = st_stores[0].buf, a0
       if m_cand is not None:
+        if down_scale is not None:
+          sc["scale"] = down_scale if sc["scale"] is None else ops.prim("mul", (sc["scale"], down_scale), elt)
         m_buf_out = m_cand
         mid_bufs.add(m_cand.uid)
         idx += 1

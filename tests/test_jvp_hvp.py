@@ -580,6 +580,15 @@ def test_flash_attention_jvp_and_hvp_zero_quadratic_allocs():
   assert any("Attention HVP" in law for law in rep_hvp.laws_triggered)
   assert not _has_quadratic_alloc(rep_hvp.after_ir)
 
+  # Also verify with blas=False (matches platforms without BLAS such as Windows CI)
+  with par.options(blas=False):
+    o_nb, do_nb = run_jvp(q, k, v, dq, dk, dv)
+    np.testing.assert_allclose(o_nb, o, rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(do_nb, fd_jvp, rtol=1e-5, atol=1e-6)
+    hq_nb, hk_nb, hv_nb = run_hvp(q, k, v, dq, dk, dv)
+    for got, p_, m_ in zip((hq_nb, hk_nb, hv_nb), gp, gm):
+      np.testing.assert_allclose(got, (p_ - m_) / (2 * eps), rtol=1e-5, atol=1e-6)
+
 
 def test_layernorm_jvp_hvp_and_multilayer_loop_attention_ad():
   def layernorm_loss(x):
