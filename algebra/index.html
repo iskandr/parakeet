@@ -873,6 +873,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#semantic-contract-real-algebraic-rewrites-vs-exact-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Semantic contract: real-algebraic rewrites vs. exact order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-six-laws-at-a-glance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -950,10 +961,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspecting-rewrites-with-parakeetdsl" class="md-nav__link">
+  <a href="#inspecting-rewrites-with-parakeetshow_rewrite" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspecting rewrites with parakeet.dsl
+        Inspecting rewrites with parakeet.show_rewrite
       
     </span>
   </a>
@@ -1314,6 +1325,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#semantic-contract-real-algebraic-rewrites-vs-exact-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Semantic contract: real-algebraic rewrites vs. exact order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-six-laws-at-a-glance" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1391,10 +1413,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspecting-rewrites-with-parakeetdsl" class="md-nav__link">
+  <a href="#inspecting-rewrites-with-parakeetshow_rewrite" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inspecting rewrites with parakeet.dsl
+        Inspecting rewrites with parakeet.show_rewrite
       
     </span>
   </a>
@@ -1431,13 +1453,26 @@ eliminating quadratic <code>O(N²)</code> or <code>O(M · V)</code> intermediate
 recurrences into parallel block passes, and avoiding saving giant intermediates
 for reverse-mode differentiation. Rather than adding special-purpose "layer"
 ops to the compiler, Parakeet encodes these transformations as six general
-algebraic laws over the same five operator statements (<code>IndexMap</code>,
-<code>IndexReduce</code>, <code>IndexScan</code>, <code>IndexFilter</code>, <code>IndexScatter</code>), multi-state <code>Carry</code>
-folds, and <code>IndexTile</code> / <code>TileStage</code> tiling.</p>
+algebraic laws over a small core of index-operator statements (<code>IndexMap</code>,
+<code>IndexReduce</code>, <code>IndexScan</code>, <code>IndexFilter</code>, <code>IndexExpand</code>, <code>IndexScatter</code>,
+<code>IndexWavefront</code>, and <code>IndexTile</code> / <code>TileStage</code>) plus multi-state <code>Carry</code>
+folds.</p>
 <p>Because the passes match operator algebra instead of model names, the same
 rules fire on Gaussian kernel regression, shortest-path products, exact
 nearest-neighbor search, histogram split-finding, and IIR filters as on
 attention, cross-entropy, and state-space models.</p>
+<h2 id="semantic-contract-real-algebraic-rewrites-vs-exact-order">Semantic contract: real-algebraic rewrites vs. exact order<a class="headerlink" href="#semantic-contract-real-algebraic-rewrites-vs-exact-order" title="Permanent link">&para;</a></h2>
+<p>Algebraic rewrites (parallel reduction, monoidal tiling, contraction
+reassociation, chunkwise affine scans, privatized scatter-add) rely on
+<strong>real-arithmetic associativity and commutativity</strong>: floating-point rounding
+order may differ in the last ULP relative to a left-to-right loop, just as in
+NumPy's pairwise summation or cuBLAS. That assumption is explicit and
+deliberate in Parakeet.</p>
+<p>Where order <em>is</em> semantically observable — equal-distance ties and first-NaN
+propagation in <code>argmin</code> / <code>argmax</code>, non-commutative structured <code>parakeet.fold</code>
+merges, or general sequential reductions — Parakeet preserves <strong>exact
+left-to-right merge order</strong> across chunks and tiles (and refuses to
+parallelize non-associative combiners).</p>
 <h2 id="the-six-laws-at-a-glance">The six laws at a glance<a class="headerlink" href="#the-six-laws-at-a-glance" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1620,7 +1655,7 @@ expressions and boolean connectives:</p>
 <h2 id="law-6-privatized-scatter-multi-state-carries">Law 6 — Privatized scatter &amp; multi-state carries<a class="headerlink" href="#law-6-privatized-scatter-multi-state-carries" title="Permanent link">&para;</a></h2>
 <p>Two patterns show up constantly outside dense linear algebra: accumulating into
 shared bins (<code>np.bincount</code>, <code>parakeet.scatter_add</code>) and folding structured
-state (<code>argmin</code>, Welford variance, custom <code>dsl.fold</code>).</p>
+state (<code>argmin</code>, Welford variance, custom <code>parakeet.fold</code>).</p>
 <ul>
 <li><strong>Keyed histogram fusion:</strong> sibling <code>IndexScatter</code> statements sharing the
   same index expression (such as gradient and Hessian histograms in a decision
@@ -1629,30 +1664,30 @@ state (<code>argmin</code>, Welford variance, custom <code>dsl.fold</code>).</p>
 <li><strong>Ordered multi-state carries and pairwise tile folds:</strong> <code>Fold.carries</code>
   tracks multiple scalar accumulators in one reduction pass while preserving
   chunk order (so leftmost ties in <code>argmin</code> or non-commutative compositions in
-  <code>dsl.fold</code> stay exact). <code>pairwise fold tiling</code> fuses a pairwise score
+  <code>parakeet.fold</code> stay exact). <code>pairwise fold tiling</code> fuses a pairwise score
   producer directly into an ordered fold over bounded tiles on both CPU and
   GPU — eliminating the full <code>N × M</code> distance matrix in both broadcasting NumPy
   and nested-map 1-NN.</li>
 </ul>
 <hr />
-<h2 id="inspecting-rewrites-with-parakeetdsl">Inspecting rewrites with <code>parakeet.dsl</code><a class="headerlink" href="#inspecting-rewrites-with-parakeetdsl" title="Permanent link">&para;</a></h2>
-<p>Call <a href="../api/"><code>parakeet.dsl.show_rewrite</code></a> on any function to see which laws
+<h2 id="inspecting-rewrites-with-parakeetshow_rewrite">Inspecting rewrites with <code>parakeet.show_rewrite</code><a class="headerlink" href="#inspecting-rewrites-with-parakeetshow_rewrite" title="Permanent link">&para;</a></h2>
+<p>Call <a href="../api/"><code>parakeet.show_rewrite</code></a> on any function to see which laws
 fired, which tiled plans were selected, and the operator IR before and after
 the middle-end passes:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="kn">import</span> <span class="n">dsl</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nd">@dsl</span><span class="o">.</span><span class="n">kernel</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">causal_attention</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  <span class="n">causal</span> <span class="o">=</span> <span class="n">dsl</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">dsl</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">causal</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span> <span class="o">@</span> <span class="n">k</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">dsl</span><span class="o">.</span><span class="n">f32</span><span class="p">(</span><span class="mf">0.125</span><span class="p">),</span> <span class="n">dsl</span><span class="o">.</span><span class="n">f32</span><span class="p">(</span><span class="o">-</span><span class="mf">1e9</span><span class="p">))</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  <span class="n">e</span> <span class="o">=</span> <span class="n">dsl</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">s</span> <span class="o">-</span> <span class="n">dsl</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">dsl</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="o">@</span> <span class="n">v</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  <span class="n">causal</span> <span class="o">=</span> <span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">causal</span><span class="p">,</span> <span class="p">(</span><span class="n">q</span> <span class="o">@</span> <span class="n">k</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">0.125</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="o">-</span><span class="mf">1e9</span><span class="p">))</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">s</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="o">@</span> <span class="n">v</span>
 <a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
 <a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
 <a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="nb">print</span><span class="p">(</span><span class="n">dsl</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">causal_attention</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="nb">print</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">causal_attention</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Parakeet Algebraic Rewrite Report for `causal_attention`
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  Laws triggered : Law 1: Rescaled Semiring Monoid Tile Fusion, Law 5: Affine Tile-Interval Mask Pruning

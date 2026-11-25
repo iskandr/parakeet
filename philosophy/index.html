@@ -756,10 +756,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-lower-everything-to-five-data-parallel-operators" class="md-nav__link">
+  <a href="#2-lower-everything-to-a-small-index-operator-core" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Lower everything to five data-parallel operators
+        2. Lower everything to a small index-operator core
       
     </span>
   </a>
@@ -1382,10 +1382,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-lower-everything-to-five-data-parallel-operators" class="md-nav__link">
+  <a href="#2-lower-everything-to-a-small-index-operator-core" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Lower everything to five data-parallel operators
+        2. Lower everything to a small index-operator core
       
     </span>
   </a>
@@ -1518,13 +1518,15 @@ Rubinsteyn</strong> (<code>@iskandr</code>), with major contributions from <stro
 advice from <strong>Russell Power</strong>. The original project was hosted at
 <code>parakeetpython.com</code> and documented in:</p>
 <ul>
-<li><strong>Alex Rubinsteyn</strong>, <a href="https://cs.nyu.edu/media/visual/files/Rubinsteyn_Alex.pdf"><em>Runtime Compilation of Array-Oriented Python Programs</em></a>
+<li><strong>Alex Rubinsteyn</strong>, <a href="https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf"><em>Runtime Compilation of Array-Oriented Python Programs</em></a>
   (PhD thesis, NYU, 2014) — type and value specialization, data-parallel
   adverbs, and algebraic fusion.</li>
-<li><strong>Eric Hielscher</strong>, <em>Locality Optimization for Data Parallel Programs</em>
-  (PhD thesis, NYU, 2013) — tiling, register blocking, and loop interchange
-  over adverb trees.</li>
-<li>Papers and talks: <a href="https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python">HotPar '12</a>
+<li><strong>Eric Hielscher, Alex Rubinsteyn, and Dennis Shasha</strong>,
+  <a href="https://arxiv.org/abs/1304.1835"><em>Locality Optimization for Data Parallel Programs</em></a>
+  (NYU CS Technical Report TR2013-955 / Eric Hielscher's 2013 NYU PhD thesis
+  work) — <code>TiledMap</code>, <code>TiledReduce</code>, and <code>TiledScan</code> for unified cache tiling,
+  register blocking, and loop interchange over adverb trees.</li>
+<li>Papers and talks: <a href="https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn">HotPar '12</a>
   (<em>Parakeet: A Just-In-Time Parallel Accelerator for Python</em>),
   <a href="https://vimeo.com/73895275">PyData Boston '13</a>, and
   <a href="https://vimeo.com/79556629">PyData NYC '13</a> (<em>Python on the GPU with Parakeet</em>).</li>
@@ -1551,23 +1553,28 @@ distinct combination of argument dtypes, array ranks, memory layouts
 length, or a unit dimension of length <code>1</code> that controls broadcasting — Parakeet
 specializes on that value automatically. That resolves the broadcasting corner
 case noted in Rubinsteyn's thesis (<code>200×1 + 1×300</code>) statically at compile time.</p>
-<h3 id="2-lower-everything-to-five-data-parallel-operators">2. Lower everything to five data-parallel operators<a class="headerlink" href="#2-lower-everything-to-five-data-parallel-operators" title="Permanent link">&para;</a></h3>
+<h3 id="2-lower-everything-to-a-small-index-operator-core">2. Lower everything to a small index-operator core<a class="headerlink" href="#2-lower-everything-to-a-small-index-operator-core" title="Permanent link">&para;</a></h3>
 <p>Instead of maintaining hundreds of hand-written C or GPU kernels for every
 NumPy function, Parakeet defines array expressions, comprehensions, matrix
-products, <code>einsum</code>, and user-written adverbs in terms of five operator
-statements:</p>
+products, <code>einsum</code>, and user-written adverbs in terms of a small set of core
+index-operator statements:</p>
 <ul>
 <li><code>IndexMap</code> — independent computation over an index space</li>
 <li><code>IndexReduce</code> — associative or sequential folds (including multi-carry state
   such as <code>argmin</code>/<code>argmax</code> and online <code>logsumexp</code>, plus guarded filtered
   reductions)</li>
 <li><code>IndexScan</code> — prefix folds with an optional emit stage</li>
-<li><code>IndexFilter</code> — stream compaction of indices matching a predicate</li>
+<li><code>IndexFilter</code> — 1-to-0/1 stream compaction of indices matching a predicate</li>
+<li><code>IndexExpand</code> — 1-to-K ragged compaction (<code>flatmap</code>, <code>filter_pairs</code>)</li>
 <li><code>IndexScatter</code> — associative index-directed scatter-add (<code>np.bincount</code>,
   <code>parakeet.scatter_add</code>)</li>
+<li><code>IndexWavefront</code> — anti-diagonal / banded 2D semiring dynamic programming
+  (<code>wavefront</code>, <code>batched_wavefront</code>, <code>soft_align</code>)</li>
+<li><code>IndexTile</code> — explicit cache and GPU shared-memory tile staging emitted by
+  the middle end</li>
 </ul>
 <p>You can inspect a function at this level at any time via
-<code>f.specialize(*args).operators</code>.</p>
+<code>f.specialize(*args).operators</code> or <code>parakeet.show_rewrite(f, *args)</code>.</p>
 <h3 id="3-fuse-algebraically-before-lowering-to-loops">3. Fuse algebraically before lowering to loops<a class="headerlink" href="#3-fuse-algebraically-before-lowering-to-loops" title="Permanent link">&para;</a></h3>
 <p>Because programs stay in this small operator IR until the end of the pipeline,
 optimizations are algebraic identities rather than fragile loop-nest analyses:</p>
