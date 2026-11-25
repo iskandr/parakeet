@@ -953,9 +953,11 @@ def _sorted(el, a, axis, one_lane, what: str):
 
 
 @register(np.sort)
-def sort(el, a, axis=-1, kind=None, order=None):
-  """Sorted copy of ``a`` along ``axis`` (stable, whatever ``kind`` asks for; NaNs last)."""
-  from . import pure
+def sort(el, a, axis=-1, kind=None, order=None, stable=None):
+  """Sorted copy of ``a`` along ``axis`` (stable parallel radix sort; NaNs last)."""
+  if order is not None:
+    raise el.error(UnsupportedError, "sort() 'order' argument is not supported")
+  from . import index_lib
 
   tape = el.tape
   if tape is not None and not tape.muted and tape.is_active(el, _arr(el, a)):
@@ -965,9 +967,9 @@ def sort(el, a, axis=-1, kind=None, order=None):
       a = el.as_concrete(a)
     if axis is None and a.rank > 1:
       a = el.flat_view(a)
-    order = el.as_concrete(argsort(el, a, axis, kind))
-    return take_along(el, a, order, -1 if axis is None else axis)
-  return _sorted(el, a, axis, pure.sort1d.__parakeet_impl__, "sort")
+    ord_arr = el.as_concrete(argsort(el, a, axis, kind))
+    return take_along(el, a, ord_arr, -1 if axis is None else axis)
+  return _sorted(el, a, axis, index_lib._sort_1d, "sort")
 
 
 def take_along(el, a: ArrayVal, index: ArrayVal, axis) -> ArrayVal:
@@ -984,11 +986,13 @@ def take_along(el, a: ArrayVal, index: ArrayVal, axis) -> ArrayVal:
 
 @register(np.argsort)
 @method("argsort")
-def argsort(el, a, axis=-1, kind=None, order=None):
-  """Indices that sort ``a`` along ``axis`` (stable, whatever ``kind`` asks for; NaNs last)."""
-  from . import pure
+def argsort(el, a, axis=-1, kind=None, order=None, stable=None):
+  """Indices that sort ``a`` along ``axis`` (stable parallel radix sort; NaNs last)."""
+  if order is not None:
+    raise el.error(UnsupportedError, "argsort() 'order' argument is not supported")
+  from . import index_lib
 
-  return _sorted(el, a, axis, pure.argsort1d.__parakeet_impl__, "argsort")
+  return _sorted(el, a, axis, index_lib._argsort_1d, "argsort")
 
 
 @register(np.where)

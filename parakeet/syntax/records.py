@@ -124,6 +124,7 @@ def record_type(obj):
     and (
       not cls.__module__.startswith("parakeet.")
       or (cls.__module__ == "parakeet.ragged" and cls.__name__ == "RaggedArray")
+      or (cls.__module__ == "parakeet.index" and cls.__name__ in ("SortedIndex", "FrozenHashTable"))
     )
   ):
     return Record(cls, tuple(f.name for f in fields(obj)))

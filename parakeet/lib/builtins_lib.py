@@ -10,6 +10,7 @@ import numpy as np
 
 from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
+from ..index import FrozenHashTable, SortedIndex
 from ..ndtypes import Bool, WeakBool, WeakFloat, WeakInt
 from ..ragged import RaggedArray
 from ..syntax import ops
@@ -37,6 +38,8 @@ def _len(el, x):
     if el.options.bounds_check:
       el.check(cmp("ge", x.offsets.shape[0], ops.ONE), "ValueError", "RaggedArray offsets must have length >= 1")
     return ops.isub(x.offsets.shape[0], ops.ONE)
+  if isinstance(x, (SortedIndex, FrozenHashTable)):
+    return x.keys.shape[0]
   if isinstance(x, (tuple, str)):
     return Const(len(x), I)
   if isinstance(x, RangeVal):

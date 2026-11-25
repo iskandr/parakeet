@@ -101,6 +101,7 @@ class HostEmitter(CFamilyEmitter):
     """Emit per-buffer ``PK_DEV_SYNC_READ`` / ``PK_DEV_SYNC_WRITE`` for outer
     buffers touched by ``stmts``.  Returns True if handled (or no sync needed)."""
     has_gemm = False
+    rt_bufs: dict[int, ir.Var] = {}
     writes: dict[int, ir.Var] = {}
     reads: dict[int, ir.Var] = {}
     for st in stmts:
@@ -110,10 +111,15 @@ class HostEmitter(CFamilyEmitter):
         for x in ir.walk_expr(e):
           if isinstance(x, ir.Load) and x.buf.uid not in local_defs:
             reads[x.buf.uid] = x.buf
-          elif isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm":
+          elif isinstance(x, ir.RtCall) and not x.pure and x.args and x.name in ("gemm", "argsort"):
             has_gemm = True
+            for a in x.args:
+              if isinstance(a, ir.Var) and isinstance(a.type, BufType) and a.uid not in local_defs:
+                rt_bufs[a.uid] = a
     if has_gemm:
       out.append(f"{pad}PK_DEV_SYNC(rt);")
+      for b in {**writes, **rt_bufs}.values():
+        out.append(f"{pad}{b.name}->flags &= ~PK_UNTOUCHED;")
       return True
     for uid, b in reads.items():
       if uid not in writes:
@@ -461,14 +467,20 @@ class HostEmitter(CFamilyEmitter):
       loaded = {
         x.buf.uid for st in inner_stmts for e in ir.stmt_exprs(st) for x in ir.walk_expr(e) if isinstance(x, ir.Load)
       }
-      has_gemm = any(
-        isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm"
-        for st in inner_stmts
-        for e in ir.stmt_exprs(st)
-        for x in ir.walk_expr(e)
-      )
+      rt_buf_uids: set[int] = set()
+      has_gemm = False
+      for st in inner_stmts:
+        for e in ir.stmt_exprs(st):
+          for x in ir.walk_expr(e):
+            if isinstance(x, ir.RtCall) and not x.pure and x.args and x.name in ("gemm", "argsort"):
+              has_gemm = True
+              for a in x.args:
+                if isinstance(a, ir.Var) and isinstance(a.type, BufType):
+                  rt_buf_uids.add(a.uid)
       if has_gemm:
-        sync = "PK_DEV_SYNC(rt); " + "".join(f"{v.name}->flags &= ~PK_UNTOUCHED; " for v in free if v.uid in stored)
+        sync = "PK_DEV_SYNC(rt); " + "".join(
+          f"{v.name}->flags &= ~PK_UNTOUCHED; " for v in free if v.uid in stored or v.uid in rt_buf_uids
+        )
       else:
         parts = []
         for v in free:

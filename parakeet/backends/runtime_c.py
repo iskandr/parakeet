@@ -563,6 +563,177 @@ PK_OUTLINE int64_t pk_gemm(pk_call* rt, int64_t dbl, pk_buf* c, int64_t c_off, p
 
 PK_INLINE int64_t pk_num_threads(pk_call* rt) { return rt->nthreads > 1 && rt->parfor ? rt->nthreads : 1; }
 
+/* ---- stable parallel 8-bit LSD radix argsort ----------------------------- */
+
+/* dtype tag: 0=bool, 1=i8, 2=u8, 3=i16, 4=u16, 5=i32, 6=u32, 7=i64, 8=u64, 9=f32, 10=f64 */
+PK_INLINE uint64_t pk_radix_key(const void* base, int64_t idx, int64_t dtype) {
+  switch (dtype) {
+    case 0: return (uint64_t)((const uint8_t*)base)[idx] ? 1u : 0u;
+    case 1: return (uint64_t)((uint8_t)(((const uint8_t*)base)[idx] ^ 0x80u));
+    case 2: return (uint64_t)((const uint8_t*)base)[idx];
+    case 3: return (uint64_t)((uint16_t)(((const uint16_t*)base)[idx] ^ 0x8000u));
+    case 4: return (uint64_t)((const uint16_t*)base)[idx];
+    case 5: return (uint64_t)(((const uint32_t*)base)[idx] ^ 0x80000000u);
+    case 6: return (uint64_t)((const uint32_t*)base)[idx];
+    case 7: return ((const uint64_t*)base)[idx] ^ UINT64_C(0x8000000000000000);
+    case 8: return ((const uint64_t*)base)[idx];
+    case 9: {
+      uint32_t u = ((const uint32_t*)base)[idx];
+      if (u == 0x80000000u) u = 0u;
+      if ((u & 0x7fffffffu) > 0x7f800000u) return UINT64_C(0xffffffff);
+      return (uint64_t)(u ^ ((u & 0x80000000u) ? 0xffffffffu : 0x80000000u));
+    }
+    default: {
+      uint64_t u = ((const uint64_t*)base)[idx];
+      if (u == UINT64_C(0x8000000000000000)) u = 0u;
+      if ((u & UINT64_C(0x7fffffffffffffff)) > UINT64_C(0x7ff0000000000000)) return UINT64_C(0xffffffffffffffff);
+      return u ^ ((u & UINT64_C(0x8000000000000000)) ? UINT64_C(0xffffffffffffffff) : UINT64_C(0x8000000000000000));
+    }
+  }
+}
+
+PK_INLINE int pk_radix_bytes(int64_t dtype) {
+  if (dtype <= 2) return 1;
+  if (dtype <= 4) return 2;
+  if (dtype <= 6 || dtype == 9) return 4;
+  return 8;
+}
+
+typedef struct pk_radix_ctx {
+  const uint64_t* keys_in;
+  uint64_t* keys_out;
+  const int64_t* idx_in;
+  int64_t* idx_out;
+  int64_t* hists;
+  int64_t n;
+  int64_t nchunks;
+  int shift;
+} pk_radix_ctx;
+
+static void pk_radix_hist_fn(void* raw, int64_t c) {
+  pk_radix_ctx* ctx = (pk_radix_ctx*)raw;
+  int64_t size = (ctx->n + ctx->nchunks - 1) / ctx->nchunks;
+  int64_t st = c * size, sp = st + size;
+  if (sp > ctx->n) sp = ctx->n;
+  int64_t* h = ctx->hists + c * 256;
+  memset(h, 0, 256 * sizeof(int64_t));
+  int sh = ctx->shift;
+  for (int64_t i = st; i < sp; i++) h[(ctx->keys_in[i] >> sh) & 255u]++;
+}
+
+static void pk_radix_scatter_fn(void* raw, int64_t c) {
+  pk_radix_ctx* ctx = (pk_radix_ctx*)raw;
+  int64_t size = (ctx->n + ctx->nchunks - 1) / ctx->nchunks;
+  int64_t st = c * size, sp = st + size;
+  if (sp > ctx->n) sp = ctx->n;
+  int64_t* h = ctx->hists + c * 256;
+  int sh = ctx->shift;
+  for (int64_t i = st; i < sp; i++) {
+    uint64_t k = ctx->keys_in[i];
+    int64_t pos = h[(k >> sh) & 255u]++;
+    ctx->keys_out[pos] = k;
+    ctx->idx_out[pos] = ctx->idx_in[i];
+  }
+}
+
+PK_OUTLINE int64_t pk_argsort(pk_call* rt, int64_t dtype, int64_t n, pk_buf* data_b, int64_t data_off,
+                              int64_t data_stride, pk_buf* out_b, int64_t out_off) {
+  pk_ensure_zero(data_b);
+  pk_ensure_zero(out_b);
+  if (n <= 0) return 1;
+  int64_t* out = (int64_t*)out_b->data + out_off;
+  if (n == 1) { out[0] = 0; return 1; }
+  int item = pk_radix_bytes(dtype);
+  const char* base = (const char*)data_b->data + data_off * item;
+  if (n <= 64) {
+    /* Stable insertion sort for tiny arrays (zero heap allocations) */
+    uint64_t ks[64];
+    for (int64_t i = 0; i < n; i++) {
+      ks[i] = pk_radix_key(base, i * data_stride, dtype);
+      out[i] = i;
+    }
+    for (int64_t i = 1; i < n; i++) {
+      uint64_t kv = ks[i];
+      int64_t iv = out[i];
+      int64_t j = i - 1;
+      while (j >= 0 && ks[j] > kv) {
+        ks[j + 1] = ks[j];
+        out[j + 1] = out[j];
+        j--;
+      }
+      ks[j + 1] = kv;
+      out[j + 1] = iv;
+    }
+    return 1;
+  }
+  uint64_t* ka = (uint64_t*)malloc((size_t)n * sizeof(uint64_t));
+  uint64_t* kb = (uint64_t*)malloc((size_t)n * sizeof(uint64_t));
+  int64_t* ia = (int64_t*)malloc((size_t)n * sizeof(int64_t));
+  int64_t* ib = (int64_t*)malloc((size_t)n * sizeof(int64_t));
+  if (!ka || !kb || !ia || !ib) {
+    free(ka); free(kb); free(ia); free(ib);
+    pk_fail(rt, PK_ERR_MEMORY, n, 16, 0, 0);
+    return 0;
+  }
+  for (int64_t i = 0; i < n; i++) {
+    ka[i] = pk_radix_key(base, i * data_stride, dtype);
+    ia[i] = i;
+  }
+  int nbytes = pk_radix_bytes(dtype);
+  int64_t nchunks = (n >= 16384 && rt->nthreads > 1 && rt->parfor) ? (rt->nthreads > 64 ? 64 : rt->nthreads) : 1;
+  int64_t* hists = (int64_t*)malloc((size_t)(nchunks * 256) * sizeof(int64_t));
+  if (!hists) {
+    free(ka); free(kb); free(ia); free(ib);
+    pk_fail(rt, PK_ERR_MEMORY, nchunks * 256, 8, 0, 0);
+    return 0;
+  }
+  uint64_t* ksrc = ka; uint64_t* kdst = kb;
+  int64_t* isrc = ia; int64_t* idst = ib;
+  for (int pass = 0; pass < nbytes; pass++) {
+    int sh = pass * 8;
+    if (nchunks == 1) {
+      int64_t* h = hists;
+      memset(h, 0, 256 * sizeof(int64_t));
+      for (int64_t i = 0; i < n; i++) h[(ksrc[i] >> sh) & 255u]++;
+      int skip = 0;
+      for (int b = 0; b < 256; b++) { if (h[b] == n) { skip = 1; break; } }
+      if (skip) continue;
+      int64_t sum = 0;
+      for (int b = 0; b < 256; b++) { int64_t t = h[b]; h[b] = sum; sum += t; }
+      for (int64_t i = 0; i < n; i++) {
+        uint64_t k = ksrc[i];
+        int64_t pos = h[(k >> sh) & 255u]++;
+        kdst[pos] = k;
+        idst[pos] = isrc[i];
+      }
+    } else {
+      pk_radix_ctx ctx = { ksrc, kdst, isrc, idst, hists, n, nchunks, sh };
+      ((void (*)(pk_body_fn, void*, int64_t, int64_t))rt->parfor)(pk_radix_hist_fn, &ctx, nchunks, rt->nthreads);
+      int skip = 0;
+      for (int b = 0; b < 256; b++) {
+        int64_t tot = 0;
+        for (int64_t c = 0; c < nchunks; c++) tot += hists[c * 256 + b];
+        if (tot == n) { skip = 1; break; }
+      }
+      if (skip) continue;
+      int64_t sum = 0;
+      for (int b = 0; b < 256; b++) {
+        for (int64_t c = 0; c < nchunks; c++) {
+          int64_t t = hists[c * 256 + b];
+          hists[c * 256 + b] = sum;
+          sum += t;
+        }
+      }
+      ((void (*)(pk_body_fn, void*, int64_t, int64_t))rt->parfor)(pk_radix_scatter_fn, &ctx, nchunks, rt->nthreads);
+    }
+    uint64_t* tk = ksrc; ksrc = kdst; kdst = tk;
+    int64_t* ti = isrc; isrc = idst; idst = ti;
+  }
+  memcpy(out, isrc, (size_t)n * sizeof(int64_t));
+  free(hists); free(ka); free(kb); free(ia); free(ib);
+  return 1;
+}
+
 /* A loop goes to the device when the work in it is worth the launch: its
    size times the inner iterations each element is estimated to need. */
 PK_INLINE int64_t pk_device_min(pk_call* rt, int64_t work) {
