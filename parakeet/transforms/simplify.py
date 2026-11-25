@@ -133,9 +133,10 @@ def drop_buffers(fn: ir.Function, gone: set[int], drop_allocs: bool = False) -> 
     return
   fn.scope.owned[:] = [v for v in fn.scope.owned if v.uid not in gone]
   for s in ir.walk_stmts(fn.body):
-    sc = getattr(s, "scope", None)
-    if sc is not None:
-      sc.owned[:] = [v for v in sc.owned if v.uid not in gone]
+    for attr in ("scope", "count_scope", "emit_scope"):
+      sc = getattr(s, attr, None)
+      if sc is not None:
+        sc.owned[:] = [v for v in sc.owned if v.uid not in gone]
 
   def drop_stmts(block: list) -> None:
     block[:] = [
@@ -189,7 +190,9 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
       live_vals = [(buf, val) for buf, val in s.values if buf.uid in live]
       dead_val_bufs = [buf for buf, _ in s.values if buf.uid not in live]
       if (
-        s.offsets.uid not in live
+        not s.count_scope.owned
+        and not s.emit_scope.owned
+        and s.offsets.uid not in live
         and s.total.uid not in live
         and not live_vals
         and not has_effects(s.count_body)
@@ -200,7 +203,7 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
           gone.add(buf.uid)
         changed = True
         continue
-      if dead_val_bufs and not has_effects(s.emit_body):
+      if dead_val_bufs and not s.emit_scope.owned and not has_effects(s.emit_body):
         for buf in dead_val_bufs:
           gone.add(buf.uid)
         s.values[:] = live_vals

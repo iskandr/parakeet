@@ -90,7 +90,13 @@ def flatmap(el, count_fn, emit_fn, *xs):
       el.check(cmp("eq", n, d), "ValueError", "flatmap() arguments have different lengths ({0} and {1})", n, d)
 
   tape = el.tape
-  ad_active = tape is not None and not tape.muted and any(tape.is_active(el, x) for x in xs)
+  ad_active = tape is not None and not tape.muted
+  if ad_active:
+    for x in xs:
+      if not isinstance(x, ArrayVal) and tape.is_active(el, x):
+        raise el.error(
+          UnsupportedError, "differentiating flatmap() with respect to non-array sequences is not supported"
+        )
 
   # Elaborate count_fn and emit_fn with tape paused (discrete topology / IndexExpand)
   saved_tape = el.tape
@@ -181,30 +187,31 @@ def flatmap(el, count_fn, emit_fn, *xs):
   if not ad_active:
     return RaggedArray(rebuild(out_arrays), offsets_arr)
 
-  # Differentiable path: discrete CSR offsets are fixed; replay emit_fn over flat edges via differentiable map!
+  # Differentiable path: discrete CSR offsets are fixed; gather array inputs via src_ids
+  # and replay emit_fn via differentiable map so both xs and closed-over params get exact grads!
   src_ids = segment_ids.impl(el, offsets_arr, total_var)
-
-  def _diff_elem(e_idx):
-    e = e_idx[0]
-    si = el.tmp(cast(el.elem(src_ids, (e,)), I), "si")
-    base = el.tmp(cast(el.elem(offsets_arr, (si,)), I), "base")
-    local_k = el.tmp(isub(e, base), "lk")
-    args_i = [get(si) for _, get in domains]
-    return el.call(emit_fn, [*args_i, local_k])
-
   from .adverbs import map as _pk_map
 
-  # Map over range(total_var) to produce differentiable output leaves
   edge_indices = el.range_array(RangeVal(ZERO, total_var, ONE))
+  bases = el.getitem(offsets_arr, src_ids)
+  local_ks = el.binop("sub", edge_indices, bases)
+  gathered_xs = [el.getitem(x, src_ids) if isinstance(x, ArrayVal) else None for x in xs]
 
-  def _map_one(e_scalar):
-    si = el.tmp(cast(el.elem(src_ids, (cast(e_scalar, I),)), I), "si")
-    base = el.tmp(cast(el.elem(offsets_arr, (si,)), I), "base")
-    local_k = el.tmp(isub(cast(e_scalar, I), base), "lk")
-    args_i = [get(si) for _, get in domains]
-    return el.call(emit_fn, [*args_i, local_k])
+  if all(g is not None for g in gathered_xs):
+    diff_vals = _pk_map.impl(el, emit_fn, *gathered_xs, local_ks, axis=0)
+  else:
 
-  diff_vals = _pk_map.impl(el, _map_one, edge_indices, axis=0)
+    def _map_one(*args):
+      e_scalar = args[-1]
+      si = el.tmp(cast(el.elem(src_ids, (cast(e_scalar, I),)), I), "si")
+      base = el.tmp(cast(el.elem(offsets_arr, (si,)), I), "base")
+      local_k = el.tmp(isub(cast(e_scalar, I), base), "lk")
+      it = iter(args[:-1])
+      call_args = [next(it) if g is not None else get(si) for g, (_, get) in zip(gathered_xs, domains)]
+      return el.call(emit_fn, [*call_args, local_k])
+
+    live_g = [g for g in gathered_xs if g is not None]
+    diff_vals = _pk_map.impl(el, _map_one, *live_g, edge_indices, axis=0)
   return RaggedArray(diff_vals, offsets_arr)
 
 
@@ -224,9 +231,14 @@ def filter_pairs(el, pred_fn, x, y, value_fn=None):
   ny = el.tmp(ny, "ny")
 
   tape = el.tape
-  ad_active = (
-    tape is not None and not tape.muted and value_fn is not None and (tape.is_active(el, x) or tape.is_active(el, y))
-  )
+  ad_active = tape is not None and not tape.muted and value_fn is not None
+  if ad_active:
+    if (not isinstance(x, ArrayVal) and tape.is_active(el, x)) or (
+      not isinstance(y, ArrayVal) and tape.is_active(el, y)
+    ):
+      raise el.error(
+        UnsupportedError, "differentiating filter_pairs() with respect to non-array sequences is not supported"
+      )
 
   # Step 1: Discrete two-pass CSR topology discovery (zero N*M allocation, tape paused)
   saved_tape = el.tape
