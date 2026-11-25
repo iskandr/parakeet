@@ -259,8 +259,8 @@ def _hashtable_probe(el, ht: FrozenHashTable, key) -> tuple[Expr, Expr]:
   with el.in_block(wbody, wscope, loop=True):
     el.emit(If(ops.lnot(cmp("lt", steps, cap)), [Break()], []))
     cur = el.tmp(el.elem(keys, (slot,)), "curk")
-    el.emit(If(ops.prim("eq", (cur, k_cast), Bool), [Assign(found, ops.TRUE), Break()], []))
     el.emit(If(ops.prim("eq", (cur, ek), Bool), [Break()], []))
+    el.emit(If(ops.prim("eq", (cur, k_cast), Bool), [Assign(found, ops.TRUE), Break()], []))
     el.emit(Assign(slot, ops.prim("bitand", (iadd(slot, ONE), mask), I)))
     el.emit(Assign(steps, iadd(steps, ONE)))
   el.emit(While(wbody, wscope))

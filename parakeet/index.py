@@ -91,6 +91,8 @@ class FrozenHashTable:
       raise ValueError(f"FrozenHashTable keys must be 1D, got shape {k.shape}")
     if len(k) != len(v):
       raise ValueError(f"FrozenHashTable keys ({len(k)}) and values ({len(v)}) must have equal length")
+    if k.dtype.kind not in "iu":
+      raise TypeError(f"FrozenHashTable keys must be integer dtype, got {k.dtype}")
     if k.dtype not in (np.int64, np.uint64):
       k = k.astype(np.int64)
     if empty_key is None:
@@ -128,12 +130,14 @@ class FrozenHashTable:
     slot = _mix64_scalar(int(key)) & mask
     ek = k.dtype.type(self.empty_key)
     kk = k.dtype.type(key)
+    if kk == ek:
+      return False
     for _ in range(len(k)):
       cur = k[slot]
-      if cur == kk:
-        return True
       if cur == ek:
         return False
+      if cur == kk:
+        return True
       slot = (slot + 1) & mask
     return False
 
@@ -146,11 +150,13 @@ class FrozenHashTable:
     slot = _mix64_scalar(int(key)) & mask
     ek = k.dtype.type(self.empty_key)
     kk = k.dtype.type(key)
+    if kk == ek:
+      return default
     for _ in range(len(k)):
       cur = k[slot]
-      if cur == kk:
-        return v[slot]
       if cur == ek:
         return default
+      if cur == kk:
+        return v[slot]
       slot = (slot + 1) & mask
     return default
