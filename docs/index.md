@@ -13,9 +13,10 @@ hide:
 
 <p class="pk-lead">A data-parallel compiler for numerical Python.</p>
 
-Write the calculation with NumPy or compose maps, folds and scans directly.
-Parakeet specializes the function for its inputs and fuses array operations
-before generating native code for CPUs, Apple Metal or NVIDIA CUDA.
+Write ordinary NumPy, loops, comprehensions, or explicit data-parallel
+operators (`map`, `reduce`, `scan`, `allpairs`). Parakeet specializes your
+function for its input types, fuses and tiles the array algebra, and compiles
+native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.
 
 [Get started](quickstart.md){ .md-button .md-button--primary }
 [Explore the gallery](gallery.md){ .md-button }
@@ -37,35 +38,67 @@ def nearest(x, y):
   return np.argmin(d2, axis=1)
 ```
 
-On CPU, Parakeet computes distances a tile at a time and keeps the winning
-reference index for each query. Ties return the first index.
+Parakeet computes distances a tile at a time on both CPU and GPU, keeping only
+the winning reference index per tile rather than allocating the full `N × M`
+distance matrix. Ties preserve NumPy's first-index rule.
 
 [Compare timings and allocations](release-benchmarks.md#pairwise-workloads)
 
 </div>
 </div>
 
-## Install Parakeet 1.0.0
+## Install
 
 ```bash
-python -m pip install "parakeet==1.0.0"
+python -m pip install parakeet
 ```
 
-Use Python 3.11 or newer, NumPy 2 and a C compiler. The getting started guide
-covers [your first compiled function](quickstart.md#your-first-compiled-function)
-and [choosing a backend](quickstart.md#picking-a-backend).
+Requires Python 3.11+, NumPy 2, and a system C compiler. For GPU backends,
+install `parakeet[metal]` on Apple Silicon or `parakeet[cuda12]` with an NVIDIA
+GPU.
 
-## Inside the compiler
+## One algebra underneath
 
-- **Fusion.** Two histogram expressions with the same bin IDs can accumulate
-  gradient and Hessian together in one traversal. [See the tree-split example](gallery.md#histograms-and-tree-splits).
-- **Tiling.** A normalized weighted sum can consume its scores in blocks.
-  Gaussian regression and attention share that reduction. [See the algebraic laws](algebra.md).
-- **Differentiation.** Differentiate a scalar loss over arrays with
-  `grad` or `value_and_grad`. [See the differentiation guide](autodiff.md).
-- **Inspection.** Examine the operator IR, the rewrites that fired and the
-  generated code. [Inspect a rewrite](gallery.md#inspect-a-rewrite).
+Since its beginnings in 2012, Parakeet has been built on a simple observation:
+most numerical Python — whether written as NumPy expressions, comprehensions,
+or explicit parallel operators — expresses the same handful of array
+computations: maps, reductions, scans, filters, and scatters.
 
-Parakeet began as a research compiler at New York University. The 1.0 rewrite
-retains its algebra of array operators and extends it to modern Python and GPUs.
-[History, papers and language boundaries](philosophy.md).
+```python
+@jit
+def scaled_tanh_numpy(x, alpha=0.5, beta=0.3):
+  return np.tanh(x * alpha) + beta
+
+
+@jit
+def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
+  return np.array([np.tanh(xi * alpha) + beta for xi in x])
+```
+
+Both lower to the same single fused parallel loop with no temporary arrays.
+Keeping that operator algebra intact through the middle end lets a small set of
+general passes do the heavy lifting:
+
+- **Fusion.** Chained array expressions, filtered reductions (`np.sum(x[x > 0])`),
+  and sibling histograms sharing the same bin IDs merge into one pass.
+  [See the tree-split example](gallery.md#histograms-and-tree-splits).
+- **Tiling and single-pass reductions.** Associative reductions and bilinear
+  products tile into cache or GPU shared memory, so Gaussian kernel regression,
+  nearest-neighbor search, and attention stream blocks instead of allocating
+  giant pairwise matrices. [Read the algebraic laws](algebra.md).
+- **Gradients.** `parakeet.grad` and `parakeet.value_and_grad` differentiate
+  the array operators directly, compiling a training step into one native
+  function. [Learn about gradients](autodiff.md).
+- **Inspection.** Every stage is visible: inspect the operator IR, see which
+  rewrites fired with `parakeet.dsl.show_rewrite`, or read the generated C,
+  Metal, or CUDA source. [Inspect a rewrite](gallery.md#inspect-a-rewrite).
+
+## Where to go next
+
+- **New to Parakeet?** Start with [Getting started](quickstart.md) — five
+  minutes from `pip install` to your first compiled function and generated C.
+- **Learn by example:** Browse the [Kernel gallery](gallery.md) for runnable
+  NumPy and data-parallel kernels, or check the [Release benchmarks](release-benchmarks.md).
+- **Go deeper:** Read [Ideas, history, and boundaries](philosophy.md) for the
+  continuity with the original 2012–2014 NYU compiler and an honest map of what
+  Parakeet does and does not support.

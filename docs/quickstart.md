@@ -6,15 +6,15 @@
 * A C compiler: the Xcode command line tools on macOS (`xcode-select --install`),
   `gcc` or `clang` on Linux, MinGW-w64 `gcc` or LLVM `clang` on Windows.
 
-Install the release in your Python environment. For development, run `python -m pip install .` in a checkout.
+Install Parakeet in your environment (or `python -m pip install .` in a local checkout):
 
 ```bash
-pip install "parakeet==1.0.0"
+pip install parakeet
 python -c "import parakeet; print(parakeet.available_backends())"
 ```
 
-`available_backends()` reports, for every backend, either `"ok"` or the reason it
-cannot be used on this machine and how to fix that.
+`available_backends()` reports, for every backend, either `"ok"` or the reason
+it cannot be used on this machine and how to fix it.
 
 ## Your first compiled function
 
@@ -38,7 +38,7 @@ Compilation takes a few hundred milliseconds per specialization (most of it in
 the C compiler) and is cached on disk, so a second run of your program starts
 fast.
 
-`jit` also works without the decorator syntax, including on lambdas and on NumPy
+`jit` also works without decorator syntax, including on lambdas and NumPy
 functions:
 
 ```python
@@ -61,6 +61,30 @@ def nearest(X, centroids):
   return np.array([np.argmin([sqr_dist(x, c) for c in centroids]) for x in X])
 ```
 
+You can also call Parakeet's data-parallel operators directly (`parakeet.map`,
+`reduce`, `scan`, `allpairs`, `scatter_add`, `dsl.fold`) when you want to apply
+a Python function over slices or pairs in parallel. See
+[Data-parallel operators](operators.md).
+
+## Gradients in one line
+
+Wrap any scalar-valued function with `parakeet.grad` or `parakeet.value_and_grad`.
+The forward and backward passes compile together into one native function:
+
+```python
+from parakeet import value_and_grad
+
+
+def mse_loss(w, x, y):
+  return np.mean((np.tanh(x @ w) - y) ** 2)
+
+
+loss_val, dw = value_and_grad(mse_loss)(w, x, y)
+```
+
+See [Gradients](autodiff.md) for nested parameter tuples, `NamedTuple`s, frozen
+dataclasses, and training loops.
+
 ## Picking a backend
 
 ```python
@@ -74,14 +98,16 @@ with parakeet.options(backend="c", num_threads=1):  # temporarily
   f(x)
 ```
 
-See [Backends and GPUs](backends.md).
+See [Backends and GPUs](backends.md) for multi-core tuning, Metal, CUDA, and
+keeping arrays resident on a GPU with `parakeet.to_device`.
 
 ## Looking inside
 
 ```python
 spec = rms.specialize(x)  # compile without running
-print(spec.ir)  # the typed, fused loop IR
-print(spec.source)  # the generated C
+print(spec.operators)  # high-level operator IR before middle-end passes
+print(spec.ir)  # typed, fused loop IR
+print(spec.source)  # generated C
 ```
 
 ```text
@@ -104,7 +130,8 @@ def rms(x_1: array[float64, 1d]):
 ```
 
 No temporary for `x * x` exists: the multiplication was fused into the parallel
-reduction.
+reduction. To see a high-level summary of which algebraic rewrites fired on a
+function, call `parakeet.dsl.show_rewrite(fn, *example_args).summary()`.
 
 ## When something is not supported
 
@@ -117,6 +144,18 @@ parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled cod
            ^^^^^^^^^^^^^
 ```
 
-Run the function uncompiled at any time with `backend="python"` to tell a bug in
-your code from a limitation of the compiler. More in
+Run the function uncompiled at any time with `backend="python"` to separate a
+bug in your code from a limitation of the compiler. More in
 [Errors and debugging](debugging.md).
+
+## Where to go next
+
+* [Kernel gallery](gallery.md) — runnable examples ranging from nearest-neighbor
+  search and tree splits to attention, state-space recurrences, and classic
+  numerical kernels.
+* [The compiled language](language.md) — exact types, statements, and where
+  Parakeet differs from CPython.
+* [Ideas, history, and boundaries](philosophy.md) — how Parakeet's 2012–2014
+  design evolved into 1.0 and what is not supported yet.
+* [Performance](performance.md) and [Release benchmarks](release-benchmarks.md) —
+  when Parakeet wins, when it doesn't, and measured numbers on CPU and GPU.

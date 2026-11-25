@@ -39,12 +39,12 @@ nav:
       - Train nanoGPT: gallery/nanogpt.md
   - Benchmarks: release-benchmarks.md
   - Guide:
-      - Core ideas and boundaries: philosophy.md
+      - Ideas, history, and boundaries: philosophy.md
       - The compiled language: language.md
       - Backends and GPUs: backends.md
       - Data-parallel operators: operators.md
       - Gradients: autodiff.md
-      - Algebraic laws & frontier kernels: algebra.md
+      - Algebraic laws: algebra.md
       - Rewrite rules and optimizations: rewrites.md
       - Errors and debugging: debugging.md
       - Performance: performance.md

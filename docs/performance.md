@@ -1,5 +1,11 @@
 # Performance
 
+!!! tip "Looking for cross-library benchmarks?"
+    For head-to-head 1.0 comparisons against PyTorch, JAX, CuPy, Faiss, and
+    PyKeOps on CPU and an NVIDIA A10, see [Release benchmarks](release-benchmarks.md).
+    This page explains *when* and *why* Parakeet wins or loses on CPUs and GPUs,
+    how cache tiling behaves, and practical tuning tips.
+
 All numbers on this page were measured with `python benchmarks/run.py` on an
 Apple M1 Pro (10 cores, 32 GB), macOS 26.5, Python 3.12.6, NumPy 2.5.5; best of
 five runs, compilation excluded. "NumPy" is the same computation written with

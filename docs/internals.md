@@ -4,20 +4,23 @@
  Python function + argument types
         │  elaborate (parakeet/frontend/, lib/)
         ▼
- typed loop IR (parakeet/syntax/ir.py)  ──►  f.specialize(x).ir
-        │  print as C (backends/c.py)        ├─► Metal kernels (backends/metal.py)
+ operator IR (IndexMap, IndexReduce, IndexScan, IndexFilter, IndexScatter)
+        │  middle-end passes + lowering (parakeet/transforms/)  ──►  f.specialize(x).operators / .ir
+        ▼
+ typed loop IR (parakeet/syntax/ir.py)
+        │  emit C (backends/c.py)            ├─► Metal kernels (backends/metal.py)
         ▼                                    └─► CUDA kernels  (backends/cuda.py)
  system C compiler ─► shared library, cached on disk ─► called through ctypes
 ```
 
 ## Specialization
 
-Calling a `@jit` function classifies its arguments — dtype, rank and layout of
-arrays, the types of scalars, the structure of tuples, the identity of functions
-— into a *type key*. Each distinct key gets one compiled *specialization*, cached
-per function. Values read from globals and closures are classified the same way
-on every call and passed as hidden arguments, so compiled code never sees stale
-data.
+Calling a `@jit` function classifies its arguments — dtype, rank, and layout of
+arrays, the types of scalars, the structure of tuples/records, and the identity
+of functions — into a *type key*. Each distinct key gets one compiled
+*specialization*, cached per function. Values read from globals and closures
+are classified the same way on every call and passed as hidden arguments, so
+compiled code never sees stale data.
 
 ## Elaboration
 
@@ -26,16 +29,17 @@ an environment of compile-time values and emits IR only for what must happen at
 run time.
 
 * **Scalars** are IR expressions with a NumPy type.
-* **Tuples, slices, functions, closures, dtypes** exist only at compile time.
-  Calling a function means elaborating its body in place, so by the time IR is
-  produced there are no calls, closures or tuples left.
-* **Arrays** are either *concrete* (a buffer plus offset, shape and strides as
+* **Tuples, NamedTuples, fixed-key dicts, frozen dataclasses, slices, functions,
+  closures, and dtypes** exist at compile time. Calling a helper function means
+  elaborating its body in place, so by the time IR is produced there are no
+  Python calls, closures, or tuple objects left.
+* **Arrays** are either *concrete* (a buffer plus offset, shape, and strides as
   scalar expressions — slicing is just arithmetic on those) or *delayed*: a
   function from index to element. `np.tanh(x * a) + b` builds a delayed array
-  three layers deep, and no loop is emitted until something consumes it: a
-  store, a reduction, or the `return`. That consumer's loop evaluates the whole
-  expression per element. This is how fusion happens — there is no separate
-  fusion pass.
+  three layers deep, and no operator is emitted until something consumes it: a
+  store, a reduction, or `return`. That consumer's operator evaluates the whole
+  expression per element. This handles basic element-wise fusion by
+  construction; larger multi-operator rewrites happen next in the middle end.
 
 Three questions cannot be answered in one forward pass, so elaboration is
 *restarted* with what it learned:
@@ -48,104 +52,114 @@ Three questions cannot be answered in one forward pass, so elaboration is
 3. which arguments must be compile-time constants (`axis=axis`), in which case
    the specialization is additionally keyed on that argument's value.
 
-## The IR
+## The operator IR
 
-The result is a small imperative language: typed scalar variables, flat buffers
-with load/store, `if`, counted and unbounded loops, allocation with scoped
-release and runtime checks. On top of it sit four *operator statements*, which
-is as much of the original's adverb tree as the middle end needs:
+The result of elaboration is a small imperative language: typed scalar
+variables, flat buffers with load/store, `if`, counted and unbounded loops,
+scoped buffer allocation, and runtime checks. On top of it sit five core
+*operator statements*, preserving the adverb algebra of the original NYU
+compiler:
 
-* `IndexMap(shape, index, body)`: run `body` for every index; the iterations
-  are independent.
-* `IndexReduce(shape, index, body, folds)`: fold the values `body` computes
-  at every index; each `Fold` has its combiner as a block of IR and, when the
-  combiner is a known associative primitive, its name. With `where`, only
-  the indices at which a predicate holds count.
-* `IndexFilter(n, index, body, keep)`: the indices at which `keep` holds, in
-  order, as a new array.
-* `IndexScan(n, index, body, fold, emit)`: a running fold; `emit` runs at
-  every index with the running value.
+* `IndexMap(shape, index, body)`: run `body` for every index; iterations are
+  independent.
+* `IndexReduce(shape, index, body, folds)`: fold the values `body` computes at
+  every index; each `Fold` stores its combiner block, an associative primitive
+  name when recognized, and optional multi-state `carries`. With `where`, only
+  indices satisfying a predicate participate.
+* `IndexFilter(n, index, body, keep)`: compact the indices where `keep` holds,
+  in order, into a new array.
+* `IndexScan(n, index, body, fold, emit)`: a running fold; `emit` runs at every
+  index with the running state.
+* `IndexScatter(shape, index, body, dest_size, target, updates)`: associative
+  index-directed scatter-add (`np.bincount`, `parakeet.scatter_add`),
+  supporting multiple fused updates over a shared key.
 
-`spec.operators` prints a function at this level, `spec.ir` after the passes.
-The last pass (`transforms/lowering.py`) replaces the operator statements by
-loops and by the single parallel construct — `ParLoop` — that runs its body
-for each chunk of an index range. A parallel reduction is a `ParLoop` that
-writes one partial result per chunk, combined afterwards.
+Tiling passes introduce `IndexTile` and `TileStage` nodes on top of the same
+IR. `spec.operators` prints a function before the middle-end passes, and
+`spec.ir` prints it after lowering. The final pass (`transforms/lowering.py`)
+replaces operator statements with loops and with the single parallel construct,
+`ParLoop`, which runs its body over chunks of an index range.
 
-Memory management is static: a buffer belongs to the loop iteration (or
-function) that allocated it and is released when that scope ends, unless it
-flows into a longer-lived variable, in which case a reference count keeps it
-alive. Parallel loop bodies never touch reference counts of shared buffers.
+Memory management is static: a buffer belongs to the scope that allocated it
+and is released when that scope ends, unless it escapes into a longer-lived
+variable, in which case a reference count keeps it alive. Parallel loop bodies
+never mutate reference counts of shared buffers.
+
+## Middle-end passes
+
+`parakeet/transforms/pipeline.py` lists the eleven passes over the operator
+statements in order (`parakeet.transforms.pipeline.names()`). Every pass is
+checked by `parakeet.verify` when `config.verify` is enabled, and
+`config.skip_transforms` can omit individual passes:
+
+1. **Dead code** (`simplify.py`): removes pure operator statements and unused
+   allocations that nothing reads, to a fixed point.
+2. **Normalize** (`normalize.py`): squeezes unit `keepdims=True` map axes and
+   hoists row-invariant inner reductions (`softmax`, `layer_norm`).
+3. **Vertical fusion** (`fusion.py`): collapses producer-consumer operator
+   pairs (`Map → Map` including affine transposes/slices and matmul epilogues,
+   `Scan → Map` into `IndexScan.emit`, `Map → Filter`, `Map → Reduce`,
+   `Map → Scatter`) and flattens nested maps.
+4. **Filter fusion** (`fusion.py`): merges adjacent `IndexFilter`s into one
+   short-circuiting filter and turns `Filter → Reduce` into a zero-allocation
+   guarded `IndexReduce`.
+5. **Sibling fusion** (`fusion.py`): merges independent `IndexReduce`s, pure
+   `IndexMap`s, compatible `IndexScatter`s sharing a key, and online
+   `max` + `sum(exp(x - m))` pairs into single passes.
+6. **Contraction reassociation** (`reassociate.py`): reorders chained bilinear
+   contractions when doing so saves FLOPs (including latent-attention
+   absorption).
+7. **Monoidal tiling** (`monoid_tile.py`): tiles rescaled semiring reductions
+   (attention, Split-K decoding, linear cross-entropy, Gaussian regression) and
+   applies affine tile-interval mask pruning.
+8. **Chunkwise scan** (`tile_scan.py`): rewrites affine and bilinear
+   matrix-state `for` recurrences into parallel chunkwise scans.
+9. **Pairwise fold tiling** (`pairwise_fold.py`): fuses pairwise score
+   producers into ordered tile-summary folds on CPU and GPU (such as exact 1-NN).
+10. **Reduction interchange** (`tiling.py`): hoists strided commutative,
+    associative inner reductions outside L1-sized contiguous output strips on
+    CPU (`PermuteReductions`).
+11. **Tiling** (`tiling.py`): rewrites maps wrapping reductions into nested
+    cache/register tiles on CPU and shared-memory tiles on CUDA and Metal.
+
+After those eleven passes, **lowering** (`lowering.py`) turns operators into
+loops and `ParLoop` chunks.
+
+One transform still runs during elaboration rather than as a middle-end pass:
+
+* **Differentiation** (`autodiff.py`, `derivatives.py`, `algebraic_vjp.py`):
+  `grad` elaborates the function with a tape that records array operators on
+  differentiated values, runs algebraic rematerialization rules (for attention,
+  cross-entropy, and norms), and walks the tape backwards to emit adjoint
+  operators. Scalars differentiate directly from their expression trees, and
+  views map to the same views of their adjoint buffers.
 
 ## Backends
 
-All targets are C-like, so one emitter (`backends/cfamily.py`) prints
-expressions and statements; subclasses supply type names, math functions and
-failure handling.
+All targets are C-like, so one emitter (`backends/cfamily.py`) prints scalar
+expressions and control flow while backend modules supply target types, math
+intrinsics, tiled GPU codegen (`backends/tiled_gpu.py`, `backends/monoidal_gpu.py`),
+and runtime error reporting.
 
 * The **host** program is always C. Each `ParLoop` body is outlined into a
-  function taking a context struct (bodies with identical IR structure up to
-  alpha-renaming share one compiled function), and launched through a function
-  pointer supplied at call time — the thread pool, OpenMP, GCD or a plain loop —
-  so the same compiled module serves every CPU backend.
-* For **GPU** backends each eligible `ParLoop` is additionally printed as a
-  Metal or CUDA kernel. At run time the host code calls back into Python, which
-  binds the buffers and dispatches the kernel; if the loop is not eligible, is
-  too small, or the device fails, the C version runs instead.
+  function taking a context struct (identical bodies up to alpha-renaming share
+  one compiled function) and dispatched through a function pointer supplied at
+  call time — the thread pool, OpenMP, GCD, or a sequential loop — so one
+  compiled library serves every CPU backend.
+* For **GPU** backends, eligible `ParLoop`s and tiled plans are also emitted as
+  Metal or CUDA kernels. Arrays stay resident on the device across consecutive
+  GPU kernels within a call (and across calls when wrapped with
+  `parakeet.to_device`).
 
-Scalar helper functions (Python/NumPy division and modulo semantics, integer
-power, shifts, NaN-propagating min/max, the random number generator) exist once
-as C text and are included verbatim in the C, Metal and CUDA preludes, which is
-why the backends agree bit-for-bit on integer results.
+Scalar helpers (Python/NumPy floor division and modulo, integer powers, shifts,
+NaN-propagating min/max, and the RNG) live once as C text and are included in
+the C, Metal, and CUDA preludes so all backends agree bit-for-bit on integer
+results.
 
 ## Calling convention
 
 A compiled entry point takes flat arrays of 64-bit slots: scalars, and for each
-array its buffer pointer, offset, shape and strides. Results come back the same
-way. Arrays allocated by compiled code are handed to NumPy without copying, with
-a finalizer that drops the native reference; views of inputs come back as NumPy
-views of the caller's array.
-
-## Transforms
-
-`parakeet/transforms/pipeline.py` lists the passes over the operator
-statements, in order; `config.skip_transforms` leaves any of them out:
-
-* **Dead code** (`simplify.py`). Pure `IndexMap`, `IndexReduce`, `IndexFilter`,
-  `IndexScan` and unused `Alloc` statements nobody reads are removed to a fixed
-  point (the C compiler cannot remove a parallel loop).
-* **Vertical fusion** (`fusion.py`). Producer-consumer operator pairs
-  (`Map→Map` including epilogues like `np.tanh(a @ b + c)`, `Scan→Map` into
-  `IndexScan.emit`, `Map→Filter`, `Map→Reduce`) collapse into one operator and
-  drop the intermediate buffer.
-* **Filter fusion** (`fusion.py`). Adjacent `IndexFilter`s collapse into a
-  single short-circuiting filter (`Filter→Filter`), and a reduction over what an
-  `IndexFilter` kept becomes a guarded `IndexReduce` with no index array
-  (`Filter→Reduce`).
-* **Sibling fusion** (`fusion.py`). Adjacent `IndexReduce`s or independent
-  `IndexMap`s over the same index space share one loop.
-* **Reduction interchange** (`tiling.py`). `PermuteReductions`: a strided
-  commutative+associative `IndexReduce` inside a stride-1 `IndexMap`
-  (`np.sum(X, axis=0)`) is interchanged over L1-sized strips of contiguous
-  output columns.
-* **Tiling** (`tiling.py`). An `IndexMap` of rank two or more whose body is a
-  single `IndexReduce` plus straight-line code is run a cache-sized tile of
-  its last dimension at a time. Inside a tile the body is instantiated for a
-  2×4 block of elements (`syntax/clone.py` copies IR blocks) and the eight
-  reductions are fused into one with eight folds.
-* **Lowering** (`lowering.py`). Always last: operators to loops. This is
-  where a reduction, scan or filter that may run in parallel gets its
-  per-chunk partial results and its second pass.
-
-One thing still rewrites the program while it is elaborated:
-
-* **Differentiation** (`autodiff.py`, `derivatives.py`). `grad` elaborates its
-  function with a tape that records each array operator applied to a
-  differentiated value — at the level of `elementwise`, `reduce`, `matmul` and
-  `map`, where each has a one-line derivative rule — then walks the tape
-  backwards emitting the adjoint computation with the same building blocks.
-  Scalars are differentiated straight from their expression trees, and a view
-  of an array is the same view of its adjoint buffer. Assignments and stores
-  the tape cannot account for *taint* what they write; reaching a tainted
-  value during the backward pass is a compile error.
-
+array its buffer pointer, offset, shape, and strides. Results return the same
+way. Buffers allocated by compiled code are handed to NumPy without copying
+using a finalizer that releases the native reference; views of inputs return as
+NumPy views of the caller's memory.
