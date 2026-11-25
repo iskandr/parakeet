@@ -1659,8 +1659,8 @@ def fuse_write_through_map(a: IndexMap, b: IndexMap, facts: IndexFacts, allocs: 
 
 
 def _fuse_keyed_updates(a: IndexScatter, b: IndexScatter, facts: IndexFacts, allocs) -> bool:
-  """Merge independent updates to the same key, sharing its computation and checks."""
-  if a.scope.owned or b.scope.owned or a.parallel != b.parallel or a.where is not None or b.where is not None:
+  """Merge independent updates to the same key (and guard), sharing its computation and checks."""
+  if a.scope.owned or b.scope.owned or a.parallel != b.parallel or (a.where is None) != (b.where is None):
     return False
   if not facts.same_shape(a.shape, b.shape) or not facts.same_expr(a.dest_size, b.dest_size):
     return False
@@ -1677,23 +1677,31 @@ def _fuse_keyed_updates(a: IndexScatter, b: IndexScatter, facts: IndexFacts, all
     return False
   if not all(pure(u.value) for u in (*a.updates, *b.updates)):
     return False
+
+  def _same_expr(ex: Expr, ey: Expr) -> bool:
+    if ir.same(ex, ey):
+      return True
+    return facts.same_expr(ex, ey)
+
   cl = Cloner({y.uid: x for x, y in zip(a.index, b.index)})
   common = 0
   for x, y in zip(a.body, b.body):
-    if isinstance(x, Assign) and isinstance(y, Assign) and ir.same(x.value, cl.expr(y.value)):
+    if isinstance(x, Assign) and isinstance(y, Assign) and _same_expr(x.value, cl.expr(y.value)):
       cl.m[y.var.uid] = x.var
     elif isinstance(x, ir.Check) and isinstance(y, ir.Check) and (x.err.exc, x.err.fmt) == (y.err.exc, y.err.fmt):
       if (
-        not ir.same(x.cond, cl.expr(y.cond))
+        not _same_expr(x.cond, cl.expr(y.cond))
         or len(x.args) != len(y.args)
-        or not all(ir.same(ex, cl.expr(ey)) for ex, ey in zip(x.args, y.args))
+        or not all(_same_expr(ex, cl.expr(ey)) for ex, ey in zip(x.args, y.args))
       ):
         return False
     else:
       break
     common += 1
-  if not ir.same(a.target, cl.expr(b.target)) or any(
-    isinstance(t, ir.Check) for t in (*a.body[common:], *b.body[common:])
+  if (
+    not _same_expr(a.target, cl.expr(b.target))
+    or (a.where is not None and not _same_expr(a.where, cl.expr(b.where)))
+    or any(isinstance(t, ir.Check) for t in (*a.body[common:], *b.body[common:]))
   ):
     return False
   a.body.extend(cl.block(b.body[common:]))
@@ -1702,11 +1710,15 @@ def _fuse_keyed_updates(a: IndexScatter, b: IndexScatter, facts: IndexFacts, all
 
 
 def _scatter_siblings(block, k, s, facts, allocs, out):
-  """Cross only shape checks and fresh destinations. On a shape error, reproduce
-  earlier per-index checks before raising the later error."""
+  """Cross only pure scalar defs, shape checks, and fresh destinations. On a shape error,
+  reproduce earlier per-index checks before raising the later error."""
+  step_facts = facts.fork()
   while k < len(block):
     j = k
-    while j < len(block) and isinstance(block[j], (ir.Check, ir.Alloc)):
+    while j < len(block) and (
+      isinstance(block[j], (ir.Check, ir.Alloc))
+      or (isinstance(block[j], Assign) and not isinstance(block[j].var.type, ir.BufType) and pure(block[j].value))
+    ):
       if any(isinstance(x, (ir.Load, ir.RtCall)) for e in ir.stmt_exprs(block[j]) for x in ir.walk_expr(e)):
         break
       j += 1
@@ -1716,10 +1728,12 @@ def _scatter_siblings(block, k, s, facts, allocs, out):
     fresh = {t.var.uid for t in block[k:j] if isinstance(t, ir.Alloc)}
     if fresh - {u.buf.uid for u in nxt.updates} or uses([s], fresh):
       break
+    for t in block[k:j]:
+      step_facts.record_stmt(t)
     # Keep only the prefix through the last bounds check for the cold error path.
     last = max((i + 1 for i, t in enumerate(s.body) if isinstance(t, ir.Check)), default=0)
     validation = s.body[:last]
-    if not _fuse_keyed_updates(s, nxt, facts, allocs):
+    if not _fuse_keyed_updates(s, nxt, step_facts, allocs):
       break
     for t in block[k:j]:
       if validation and isinstance(t, ir.Check):

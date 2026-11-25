@@ -57,7 +57,7 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
 | `FilterReduce`, `IndexFilterReduce` | `filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)` — and any reduction over a filter also *becomes* one (see fusion) |
 | `IndexScan(f, ⊕, emit, shape)` | what `scan`, `np.cumsum` and `np.cumprod` are built on: an `IndexScan` statement, whose `emit` is a block (it stores the running value) |
-| — | `IndexScatter` (`par.scatter_add`, `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += val` loops): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
+| — | `IndexScatter` (`par.scatter_add`, keyed generators `par.scatter_add(n, ((k, v) for ...))`, `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += val` loops, and inverted filtered comprehensions `[np.sum(vals[idx == b]) for b in range(n)]`): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
 | — | `grad`, `value_and_grad`, `jvp`, `vjp`, `linearize`, `linear_transpose`, `hvp`, `jacfwd`, `jacrev`, `hessian` |
 
 Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,

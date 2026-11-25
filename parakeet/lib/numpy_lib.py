@@ -1141,15 +1141,30 @@ def flatnonzero(el, a):
   return el.nonzero1d(el.cast_array(el.flat_view(a) if a.rank != 1 else a, Bool))
 
 
-def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_elt, check_bounds: bool) -> ArrayVal:
+def _emit_scatter_add(
+  el,
+  n: Expr,
+  idx: ArrayVal,
+  values: ArrayVal | None,
+  out_elt,
+  check_bounds: bool,
+  *,
+  where: ArrayVal | None = None,
+  ignore_oob: bool = False,
+) -> ArrayVal:
   """Allocate a zeroed 1-d array of length ``n`` and emit an :class:`IndexScatter`
-  summing ``values`` (or ``1``) into ``out[idx[i]]``."""
+  summing ``values`` (or ``1``) into ``out[idx[i]]``, optionally guarded by
+  ``where`` and/or ignoring out-of-range indices (``ignore_oob=True``)."""
   idx = el.as_concrete(idx) if idx.buf is None and idx.cost > CHEAP_COST else idx
   if values is not None and values.buf is None and values.cost > CHEAP_COST:
     values = el.as_concrete(values)
+  if where is not None and where.buf is None and where.cost > CHEAP_COST:
+    where = el.as_concrete(where)
   el.consume(idx)
   if values is not None:
     el.consume(values)
+  if where is not None:
+    el.consume(where)
   out = el.alloc_array(out_elt, (n,), zero=True, label="scatter")
   jvp = el.jvp
   d_out = None
@@ -1159,20 +1174,46 @@ def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_e
   sc = Scope("scatter")
   body: list = []
   updates: list[ScatterUpdate] = []
+  where_expr: Expr | None = None
+  el.nonneg.add(iv.uid)
+  el.upper[iv.uid] = idx.shape[0]
   with el.in_block(body, sc, loop=True, par=el.par_depth == 0):
     raw = cast(el.tmp(el.elem(idx, (iv,)), "idx"), I)
-    if check_bounds:
-      pos = el.tmp(ops.select(cmp("lt", raw, ZERO), iadd(raw, n), raw), "pos")
-      if el.options.bounds_check:
-        el.check(
-          ops.prim("and", (cmp("ge", pos, ZERO), cmp("lt", pos, n)), Bool),
-          "IndexError",
-          "index {0} is out of bounds for axis 0 with size {1}",
-          raw,
-          n,
-        )
+    cond: Expr | None = None
+    if where is not None:
+      cond = cast(el.tmp(el.elem(where, (iv,)), "cond"), Bool)
+    if ignore_oob:
+      in_bounds = el.tmp(ops.prim("and", (cmp("ge", raw, ZERO), cmp("lt", raw, n)), Bool), "inb")
+      cond = in_bounds if cond is None else el.tmp(ops.prim("and", (cond, in_bounds), Bool), "keep")
+      pos = el.tmp(ops.select(in_bounds, raw, ZERO), "pos")
+      where_expr = cond
+    elif check_bounds:
+      pos_w = el.tmp(ops.select(cmp("lt", raw, ZERO), iadd(raw, n), raw), "pos")
+      in_bounds = ops.prim("and", (cmp("ge", pos_w, ZERO), cmp("lt", pos_w, n)), Bool)
+      if cond is None:
+        if el.options.bounds_check:
+          el.check(
+            in_bounds,
+            "IndexError",
+            "index {0} is out of bounds for axis 0 with size {1}",
+            raw,
+            n,
+          )
+        pos = pos_w
+      else:
+        if el.options.bounds_check:
+          el.check(
+            ops.prim("or", (ops.lnot(cond), in_bounds), Bool),
+            "IndexError",
+            "index {0} is out of bounds for axis 0 with size {1}",
+            raw,
+            n,
+          )
+        pos = el.tmp(ops.select(cond, pos_w, ZERO), "pos")
+        where_expr = cond
     else:
       pos = raw
+      where_expr = cond
     val = cast(el.tmp(el.elem(values, (iv,)), "val"), out_elt) if values is not None else Const(1, out_elt)
     updates.append(ScatterUpdate(out.buf, val, "add"))
     if d_out is not None:
@@ -1180,7 +1221,9 @@ def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_e
       if dval is not None:
         with jvp.computing(el):
           updates.append(ScatterUpdate(d_out.buf, cast(el.tmp(dval, "dval"), out_elt), "add"))
-  el.emit(IndexScatter((idx.shape[0],), (iv,), body, n, pos, updates, sc, el.par_depth == 0, el.loc()))
+  el.emit(
+    IndexScatter((idx.shape[0],), (iv,), body, n, pos, updates, sc, el.par_depth == 0, el.loc(), where=where_expr)
+  )
   el.record_store(out)
   return out
 

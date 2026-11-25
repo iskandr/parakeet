@@ -10,10 +10,13 @@ from __future__ import annotations
 import builtins
 import functools
 
+import numpy as np
+
 from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
+from ..ndtypes import Int64
 from ..syntax import ops
-from ..syntax.ir import Const, Expr
+from ..syntax.ir import Const, Expr, Var
 from ..syntax.ops import ZERO, I, cast, cmp
 from ..syntax.values import CHEAP_COST, ArrayVal, RangeVal, describe
 from . import core
@@ -881,37 +884,117 @@ def filter_reduce(el, f, pred, *xs, map=None, init=None, axis=None):  # noqa: A0
   return reduce.impl(el, f, selected, init=init, axis=axis)
 
 
-@libfunction("scatter_add")
-def scatter_add(el, n, idx, values):
-  """Generalized ``ReduceByIndex`` scatter-add: return a 1-d array of length
-  ``n`` where ``out[idx[i]] += values[i]`` for every ``i``.
-
-  Preserves ``values.dtype`` (supporting ``float32`` on Metal/CUDA as well as
-  ``float64``/``int64``), lowers to parallel privatized buffers via
-  :class:`~parakeet.syntax.ir.IndexScatter`, and differentiates via gather."""
+def _scatter_add_impl(
+  el,
+  n,
+  idx,
+  values,
+  *,
+  where=None,
+  ignore_oob: bool = False,
+  out_elt=None,
+):
+  """Shared implementation for ``scatter_add``, keyed generator scatters, and
+  inverted filtered comprehensions."""
   from .numpy_lib import _arr, _emit_scatter_add
 
   size = cast(el.as_scalar(n, "n"), I)
   el.check(cmp("ge", size, ZERO), "ValueError", "scatter_add() length must not be negative")
   idx_arr = _arr(el, idx)
-  val_arr = _arr(el, values)
-  if idx_arr.rank != 1 or val_arr.rank != 1:
-    raise el.error(TypeInferenceError, "scatter_add() expects 1-d idx and values arrays")
+  if idx_arr.rank != 1:
+    raise el.error(TypeInferenceError, "scatter_add() expects 1-d idx array")
   if idx_arr.elt.kind not in "iu":
     raise el.error(TypeInferenceError, f"scatter_add() idx must be integer, got {idx_arr.elt}")
-  el.check(cmp("eq", idx_arr.shape[0], val_arr.shape[0]), "ValueError", "scatter_add() idx and values lengths differ")
+  val_arr = _arr(el, values) if values is not None else None
+  if val_arr is not None:
+    if val_arr.rank != 1:
+      raise el.error(TypeInferenceError, "scatter_add() expects 1-d idx and values arrays")
+    if not (
+      (
+        isinstance(idx_arr.shape[0], Var)
+        and isinstance(val_arr.shape[0], Var)
+        and idx_arr.shape[0].uid == val_arr.shape[0].uid
+      )
+      or (
+        isinstance(idx_arr.shape[0], Const)
+        and isinstance(val_arr.shape[0], Const)
+        and idx_arr.shape[0].value == val_arr.shape[0].value
+      )
+    ):
+      el.check(
+        cmp("eq", idx_arr.shape[0], val_arr.shape[0]), "ValueError", "scatter_add() idx and values lengths differ"
+      )
+  where_arr = _arr(el, where) if where is not None else None
+  if where_arr is not None:
+    if where_arr.rank != 1:
+      raise el.error(TypeInferenceError, "scatter_add() where mask must be 1-d")
+    if not (
+      (
+        isinstance(idx_arr.shape[0], Var)
+        and isinstance(where_arr.shape[0], Var)
+        and idx_arr.shape[0].uid == where_arr.shape[0].uid
+      )
+      or (
+        isinstance(idx_arr.shape[0], Const)
+        and isinstance(where_arr.shape[0], Const)
+        and idx_arr.shape[0].value == where_arr.shape[0].value
+      )
+    ):
+      el.check(
+        cmp("eq", idx_arr.shape[0], where_arr.shape[0]), "ValueError", "scatter_add() idx and where lengths differ"
+      )
 
+  elt = out_elt if out_elt is not None else (val_arr.elt.strong if val_arr is not None else Int64)
   tape = el.tape
-  if tape is not None and not tape.muted and tape.is_active(el, val_arr):
+  if tape is not None and not tape.muted and val_arr is not None and tape.is_active(el, val_arr):
     from ..transforms.autodiff import Node
 
     with tape.computing(el):
-      out = _emit_scatter_add(el, size, idx_arr, val_arr, val_arr.elt.strong, check_bounds=True)
-    node = Node("scatter_add", (val_arr,), (idx_arr,))
+      out = _emit_scatter_add(
+        el, size, idx_arr, val_arr, elt, check_bounds=not ignore_oob, where=where_arr, ignore_oob=ignore_oob
+      )
+    node = Node("scatter_add", (val_arr,), (idx_arr, where_arr, ignore_oob))
     tape.record(el, node)
     tape.register(el, node, out)
     return out
-  return _emit_scatter_add(el, size, idx_arr, val_arr, val_arr.elt.strong, check_bounds=True)
+  return _emit_scatter_add(
+    el, size, idx_arr, val_arr, elt, check_bounds=not ignore_oob, where=where_arr, ignore_oob=ignore_oob
+  )
+
+
+class _ScatterAddFunction(LibFunction):
+  def __call__(self, *args, **kwargs):
+    # Support 2-arg Python generator/iterable form outside @par.jit:
+    # par.scatter_add(n, ((idx[i], vals[i]) for i in range(N) if ...))
+    if len(args) == 2 and "values" not in kwargs and not isinstance(args[1], np.ndarray):
+      n = int(args[0])
+      if n < 0:
+        raise ValueError("scatter_add() length must not be negative")
+      pairs = list(args[1])
+      if not pairs:
+        return np.zeros(n, dtype=np.float64)
+      ks = np.asarray([p[0] for p in pairs], dtype=np.int64)
+      vs = np.asarray([p[1] for p in pairs])
+      return super().__call__(n, ks, vs)
+    return super().__call__(*args, **kwargs)
+
+
+def _scatter_add_entry(el, n, idx, values, where=None):
+  """Generalized ``ReduceByIndex`` scatter-add: return a 1-d array of length
+  ``n`` where ``out[idx[i]] += values[i]`` for every ``i`` (optionally guarded
+  by ``where``).
+
+  Also accepts a keyed generator expression inside ``@par.jit`` or Python::
+
+      par.scatter_add(n, ((idx[i], vals[i]) for i in range(len(idx)) if mask[i]))
+
+  Preserves ``values.dtype`` (supporting ``float32`` on Metal/CUDA as well as
+  ``float64``/``int64``), lowers to parallel privatized buffers via
+  :class:`~parakeet.syntax.ir.IndexScatter`, and differentiates via gather."""
+  return _scatter_add_impl(el, n, idx, values, where=where)
+
+
+scatter_add = _ScatterAddFunction("scatter_add", _scatter_add_entry)
 
 
 def _bool():
