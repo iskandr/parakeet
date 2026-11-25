@@ -237,8 +237,6 @@ measurement files, see [Release benchmarks](release-benchmarks.md).
 | Mamba-2 recurrence, length 2,048, widths 64 | 58.25 ms | 1.08 ms | Chunkwise scan |
 | Latent attention, 4 queries and 2,048 keys, widths 64 and 256 | 1.86 ms | 0.22 ms | Contraction reassociation |
 | Affine IIR filter, length 262,144 | 0.63 ms | 0.27 ms | Chunkwise scan |
-<<<<<<< HEAD
-=======
 
 ??? details "Earlier training-step timings on an NVIDIA L4"
 
@@ -253,4 +251,3 @@ measurement files, see [Release benchmarks](release-benchmarks.md).
     | Medium | 32.15 ms | 47.05 ms | 19.28 ms | 15.15 ms | 9.18 ms |
 
     [Training benchmark source](https://github.com/iskandr/parakeet/blob/v1.0.0/tools/colab_nanogpt_bench.py).
->>>>>>> 9de8781 (De-slop docs, fix unrendered math and stale IR descriptions, and emphasize 2012-2014 Parakeet continuity)

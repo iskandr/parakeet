@@ -70,9 +70,9 @@ compiler:
   in order, into a new array.
 * `IndexScan(n, index, body, fold, emit)`: a running fold; `emit` runs at every
   index with the running state.
-* `IndexScatter(n, index, body, updates)`: associative index-directed
-  scatter-add (`np.bincount`, `parakeet.scatter_add`), supporting multiple
-  fused updates over a shared key.
+* `IndexScatter(shape, index, body, dest_size, target, updates)`: associative
+  index-directed scatter-add (`np.bincount`, `parakeet.scatter_add`),
+  supporting multiple fused updates over a shared key.
 
 Tiling passes introduce `IndexTile` and `TileStage` nodes on top of the same
 IR. `spec.operators` prints a function before the middle-end passes, and
