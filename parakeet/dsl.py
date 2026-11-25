@@ -1,39 +1,45 @@
-"""Explicit data-parallel DSL & algebraic rewrite inspector for Parakeet.
+"""Self-contained data-parallel DSL & algebraic rewrite inspector for Parakeet.
 
-Unlike the NumPy frontend, :mod:`parakeet.dsl` does **not** rewrite or patch
-NumPy functions.  Instead, it exposes Parakeet's core data-parallel operators
-directly under explicit names alongside :func:`show_rewrite`, which inspects
-how Parakeet's six algebraic laws transform a concise specification into
-fused, SRAM-tiled, or chunkwise-dual native kernels::
+Parakeet offers two distinct, self-contained frontends over the same operator
+IR and algebraic compiler:
 
-    import numpy as np
-    import parakeet
-    from parakeet import dsl
+1. **NumPy frontend** (``@parakeet.jit`` + ``numpy``): compile ordinary
+   broadcasting NumPy code directly.
+2. **Explicit DSL** (``@dsl.kernel`` + ``dsl.*``): write data-parallel kernels
+   explicitly with ``dsl.map``, ``dsl.allpairs``, ``dsl.fold``, ``dsl.imap``,
+   ``dsl.ireduce``, ``dsl.scan``, ``dsl.scatter``, and ``dsl.*`` scalar/array
+   primitives — with **no** ``numpy`` or top-level ``parakeet`` syntax needed::
 
-    @parakeet.jit
-    def flash_attention(q, k, v):
-        s = (q @ k.T) * np.float32(0.125)
-        e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-        return (e / np.sum(e, axis=-1, keepdims=True)) @ v
+       from parakeet import dsl
 
-    report = dsl.show_rewrite(
-        flash_attention,
-        np.zeros((64, 64), np.float32),
-        np.zeros((64, 64), np.float32),
-        np.zeros((64, 64), np.float32),
-    )
-    print(report.summary())
+       @dsl.kernel
+       def tropical_min_plus(a, b):
+           m, k = a.shape
+           _, n = b.shape
+           return dsl.imap(
+               lambda i, j: dsl.ireduce(lambda r: a[i, r] + b[r, j], k, combine=dsl.min),
+               (m, n),
+           )
+
+Use :func:`show_rewrite` on either frontend to inspect which algebraic laws
+fired and compare the operator IR before and after compilation.
 """
 
 from __future__ import annotations
 
+import builtins as _builtins
 from dataclasses import dataclass
+
+import numpy as _np
 
 from . import api, config, prims
 from .lib.adverbs import (
+  _DSL_MAX,
+  _DSL_MIN,
   Gradient,
   LibFunction,
   allpairs,
+  filter,  # noqa: A004
   filter_reduce,
   fold,
   grad,
@@ -49,8 +55,9 @@ from .lib.adverbs import (
 )
 from .syntax import ir
 
-# Explicit operator aliases mapping 1-to-1 to Parakeet's five core adverbs
+# Explicit kernel decorator & operator aliases
 kernel = api.jit
+scatter = scatter_add
 iscan = scan
 iscatter = scatter_add
 ifilter_reduce = filter_reduce
@@ -62,6 +69,59 @@ rotr = prims.rotr
 bswap = prims.bswap
 bf16_to_f32 = prims.bf16_to_f32
 f32_to_bf16 = prims.f32_to_bf16
+
+# Self-contained elementwise combiners and math (disjoint from numpy / top-level parakeet)
+add = prims.add
+sub = prims.subtract
+mul = prims.multiply
+div = prims.divide
+min = _DSL_MIN  # noqa: A001
+max = _DSL_MAX  # noqa: A001
+minimum = prims.minimum
+maximum = prims.maximum
+mod = prims.remainder
+pow = prims.power  # noqa: A001
+and_ = prims.logical_and
+or_ = prims.logical_or
+bitand = prims.bitwise_and
+bitor = prims.bitwise_or
+bitxor = prims.bitwise_xor
+
+abs = prims.UFUNCS["abs"]  # noqa: A001
+neg = prims.negative
+exp = prims.UFUNCS["exp"]
+log = prims.UFUNCS["log"]
+sqrt = prims.UFUNCS["sqrt"]
+tanh = prims.UFUNCS["tanh"]
+sin = prims.UFUNCS["sin"]
+cos = prims.UFUNCS["cos"]
+isnan = _np.isnan
+isfinite = _np.isfinite
+where = _np.where
+
+# Array reductions & constructors (registered in Parakeet's compiler library)
+sum = _np.sum  # noqa: A001
+prod = _np.prod
+mean = _np.mean
+argmin = _np.argmin
+argmax = _np.argmax
+cumsum = _np.cumsum
+any = _np.any  # noqa: A001
+all = _np.all  # noqa: A001
+zeros = _np.zeros
+ones = _np.ones
+full = _np.full
+empty = _np.empty
+arange = _np.arange
+
+# Compact scalar dtype constructors (usable as casts and NamedTuple annotations)
+f32 = float32 = _np.float32
+f64 = float64 = _np.float64
+i32 = int32 = _np.int32
+i64 = int64 = _np.int64
+u32 = uint32 = _np.uint32
+u64 = uint64 = _np.uint64
+bool_ = _np.bool_
 
 
 @dataclass(frozen=True)
@@ -122,13 +182,16 @@ def _detect_laws(
       laws.append(label)
 
   if after_reassoc is not None:
-    guarded = any(
-      isinstance(s, ir.If) and any(isinstance(t, ir.Alloc) and t.var.name.startswith("reassoc_m") for t in s.then)
+    guarded = _builtins.any(
+      isinstance(s, ir.If)
+      and _builtins.any(isinstance(t, ir.Alloc) and t.var.name.startswith("reassoc_m") for t in s.then)
       for s in ir.walk_stmts(after_reassoc.body)
     )
     if guarded:
       add_law("Law 3: Bilinear Contraction Reassociation / MLA Absorption (cost-guarded in IR)")
-    elif any(isinstance(s, ir.Alloc) and s.var.name.startswith("reassoc_m") for s in ir.walk_stmts(after_reassoc.body)):
+    elif _builtins.any(
+      isinstance(s, ir.Alloc) and s.var.name.startswith("reassoc_m") for s in ir.walk_stmts(after_reassoc.body)
+    ):
       add_law("Law 3: Bilinear Contraction Reassociation / MLA Absorption")
 
   if after_monoid is not None:
@@ -150,9 +213,13 @@ def _detect_laws(
         add_law("Law 3: GQA Shared-KV Head-Group Tiling")
 
   if after_scan is not None:
-    if any(isinstance(s, ir.Alloc) and s.var.name.startswith("ts_chA") for s in ir.walk_stmts(after_scan.body)):
+    if _builtins.any(
+      isinstance(s, ir.Alloc) and s.var.name.startswith("ts_chA") for s in ir.walk_stmts(after_scan.body)
+    ):
       add_law("Law 4: Chunkwise Parallel Affine Prefix Scan (TileScan, length-guarded in IR)")
-    if any(isinstance(s, ir.Alloc) and s.var.name.startswith("ssd_Yi") for s in ir.walk_stmts(after_scan.body)):
+    if _builtins.any(
+      isinstance(s, ir.Alloc) and s.var.name.startswith("ssd_Yi") for s in ir.walk_stmts(after_scan.body)
+    ):
       add_law("Law 4: Chunkwise State-Space Duality (Mamba-2 SSD, length-guarded in IR)")
 
   if after_tiling is not None:
@@ -162,7 +229,7 @@ def _detect_laws(
           add_law(f"IndexScatter: {len(s.updates)} updates in one keyed traversal")
         else:
           add_law("IndexScatter: Privatized Associative Scatter-Add")
-      elif isinstance(s, ir.IndexReduce) and any(f.carries for f in s.folds):
+      elif isinstance(s, ir.IndexReduce) and _builtins.any(f.carries for f in s.folds):
         add_law("Carry: Single-Pass Multi-State Monoid Fold")
 
   return tuple(laws), tuple(plans)
@@ -185,7 +252,7 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 
   def observer(name: str, f: ir.Function) -> None:
     nonlocal previous_tiles
-    tiles = sum(isinstance(stmt, ir.IndexTile) for stmt in ir.walk_stmts(f.body))
+    tiles = _builtins.sum(isinstance(stmt, ir.IndexTile) for stmt in ir.walk_stmts(f.body))
     if name == "pairwise fold tiling" and tiles > previous_tiles:
       detected_laws.append("Pairwise map and ordered tile-summary fold")
     previous_tiles = tiles
@@ -249,31 +316,85 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 
 __all__ = [
   "RewriteReport",
+  "abs",
+  "add",
+  "all",
   "allpairs",
+  "and_",
+  "any",
+  "arange",
+  "argmax",
+  "argmin",
   "bf16_to_f32",
+  "bitand",
+  "bitor",
+  "bitxor",
+  "bool_",
   "bswap",
   "clz",
+  "cos",
   "ctz",
+  "cumsum",
+  "div",
+  "empty",
+  "exp",
+  "f32",
   "f32_to_bf16",
+  "f64",
+  "filter",
   "filter_reduce",
+  "float32",
+  "float64",
   "fold",
+  "full",
   "grad",
+  "i32",
+  "i64",
   "ifilter_reduce",
   "imap",
+  "int32",
+  "int64",
   "ireduce",
   "iscan",
   "iscatter",
+  "isfinite",
+  "isnan",
   "kernel",
+  "log",
   "map",
+  "max",
+  "maximum",
+  "mean",
+  "min",
+  "minimum",
+  "mod",
+  "mul",
+  "neg",
+  "ones",
+  "or_",
   "outer_map",
   "parfor",
   "popcount",
+  "pow",
   "prims",
+  "prod",
   "reduce",
   "rotl",
   "rotr",
   "scan",
+  "scatter",
   "scatter_add",
   "show_rewrite",
+  "sin",
+  "sqrt",
+  "sub",
+  "sum",
+  "tanh",
+  "u32",
+  "u64",
+  "uint32",
+  "uint64",
   "value_and_grad",
+  "where",
+  "zeros",
 ]

@@ -172,19 +172,15 @@ def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
 
 
 # --8<-- [start:tropical_min_plus]
-@parakeet.jit
+@dsl.kernel
 def tropical_min_plus(a, b):
-  """One min-plus matrix product: C[i,j] = min_k (A[i,k] + B[k,j])."""
-
-  def cheapest_path(cell):
-    source, destination = cell
-
-    def through(via):
-      return a[source, via] + b[via, destination]
-
-    return dsl.ireduce(through, a.shape[1], combine=parakeet.minimum)
-
-  return dsl.imap(cheapest_path, (a.shape[0], b.shape[1]))
+  """One min-plus matrix product: C[i, j] = min_r (A[i, r] + B[r, j])."""
+  m, k = a.shape
+  _, n = b.shape
+  return dsl.imap(
+    lambda i, j: dsl.ireduce(lambda r: a[i, r] + b[r, j], k, combine=dsl.min),
+    (m, n),
+  )
 
 
 # --8<-- [end:tropical_min_plus]
@@ -192,22 +188,20 @@ def tropical_min_plus(a, b):
 
 # --8<-- [start:squared_distance]
 def squared_distance(query, reference):
-  return np.sum((query - reference) ** np.float32(2))
+  return dsl.sum((query - reference) ** dsl.f32(2))
 
 
 # --8<-- [end:squared_distance]
 
 
 # --8<-- [start:exact_1nn]
-@parakeet.jit
+@dsl.kernel
 def exact_1nn(x_query, x_ref):
   """Exact nearest-neighbor index per query row."""
-
-  def nearest_to(query):
-    distances = dsl.map(lambda reference: squared_distance(query, reference), x_ref)
-    return np.argmin(distances)
-
-  return dsl.map(nearest_to, x_query)
+  return dsl.map(
+    lambda query: dsl.argmin(dsl.map(lambda reference: squared_distance(query, reference), x_ref)),
+    x_query,
+  )
 
 
 # --8<-- [end:exact_1nn]
@@ -225,17 +219,17 @@ def nearest_numpy(queries, references):
 
 # --8<-- [start:nearest_fold]
 class Winner(NamedTuple):
-  distance: np.float32
-  index: np.int64
+  distance: dsl.f32
+  index: dsl.i64
 
 
 def first_minimum(left, right):
   # Keep the first NaN. Among finite values, replace only on strict improvement.
-  right_wins = np.isnan(right.distance) or right.distance < left.distance
-  return right if right_wins and not np.isnan(left.distance) else left
+  right_wins = dsl.isnan(right.distance) or right.distance < left.distance
+  return right if right_wins and not dsl.isnan(left.distance) else left
 
 
-@parakeet.jit
+@dsl.kernel
 def nearest_fold(queries, references):
   scores = dsl.allpairs(squared_distance, queries, references)
   return dsl.fold(Winner, first_minimum, scores, axis=1, indexed=True, emit=lambda winner: winner.index)
@@ -258,15 +252,15 @@ def smooth_numpy(queries, references, observations):
 
 # --8<-- [start:weighted_fold]
 class WeightedSum(NamedTuple):
-  weight: np.float32
-  weighted_value: np.float32
+  weight: dsl.f32
+  weighted_value: dsl.f32
 
 
 def add_sums(left, right):
   return WeightedSum(left.weight + right.weight, left.weighted_value + right.weighted_value)
 
 
-@parakeet.jit
+@dsl.kernel
 def smooth_fold(queries, references, observations):
   values = observations.reshape(references.shape[0])
   scores = dsl.allpairs(squared_distance, queries, references)
@@ -290,19 +284,19 @@ def smooth_fold(queries, references, observations):
 
 
 # --8<-- [start:gbdt_best_split]
-@parakeet.jit
+@dsl.kernel
 def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
   """Return the split bin with the highest gain and the gain at that bin."""
-  g_hist = dsl.iscatter(nbins, bin_ids, grads)
-  h_hist = dsl.iscatter(nbins, bin_ids, hess)
-  g_left = np.cumsum(g_hist)
-  h_left = np.cumsum(h_hist)
+  g_hist = dsl.scatter(nbins, bin_ids, grads)
+  h_hist = dsl.scatter(nbins, bin_ids, hess)
+  g_left = dsl.cumsum(g_hist)
+  h_left = dsl.cumsum(h_hist)
   g_tot = g_left[nbins - 1]
   h_tot = h_left[nbins - 1]
   g_right = g_tot - g_left
   h_right = h_tot - h_left
   gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
-  best_bin = np.argmax(gain)
+  best_bin = dsl.argmax(gain)
   return best_bin, gain[best_bin]
 
 

@@ -169,7 +169,17 @@ def outer_map(el, f, *args, axis=0, axes=None):
   return build_map(el, tuple(shape), at, "allpairs")
 
 
+def _as_combiner_ufunc(f):
+  """Map polymorphic DSL combiners (e.g. ``dsl.min`` / ``dsl.max``) to their binary UFunc."""
+  if f is _DSL_MIN:
+    return prims.minimum
+  if f is _DSL_MAX:
+    return prims.maximum
+  return f
+
+
 def _reduce(el, f, x, init, axis, what: str):
+  f = _as_combiner_ufunc(f)
   x = _arrayish(el, x)
   if not isinstance(x, ArrayVal):
     raise el.error(TypeInferenceError, f"{what}() expects an array, got {describe(x)}")
@@ -456,42 +466,88 @@ def scan_axis(el, x: ArrayVal, k: int, combine, init=None) -> ArrayVal:
   return out
 
 
-def _index_value(idx, scalar_index: bool):
-  return idx[0] if scalar_index else tuple(idx)
+def _accepts_unpacked_index(f, ndim: int) -> bool:
+  """True when ``f`` should receive ``(i, j, ...)`` as ``ndim`` separate arguments
+  rather than a single index tuple ``ij``."""
+  import inspect
+
+  from ..syntax.values import Closure, Partial, PyFunc
+
+  if ndim < 2:
+    return False
+  if isinstance(f, prims.UFunc):
+    return f.nin == ndim
+  if isinstance(f, Partial):
+    return _accepts_unpacked_index(f.fn, ndim + len(f.args))
+  if isinstance(f, Closure):
+    a = f.node.args
+    if a.vararg is not None:
+      return False
+    n_pos = len(a.posonlyargs) + len(a.args)
+    n_req = n_pos - len(a.defaults)
+    return n_req <= ndim <= n_pos and not (n_req <= 1 <= n_pos)
+  fn_obj = f.fn if isinstance(f, PyFunc) else (f if callable(f) else None)
+  if fn_obj is not None:
+    try:
+      sig = inspect.signature(fn_obj)
+    except (TypeError, ValueError):
+      return False
+    n_pos = n_req = 0
+    for p in sig.parameters.values():
+      if p.kind == inspect.Parameter.VAR_POSITIONAL:
+        return False
+      if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
+        n_pos += 1
+        if p.default is inspect.Parameter.empty:
+          n_req += 1
+    return n_req <= ndim <= n_pos and not (n_req <= 1 <= n_pos)
+  return False
+
+
+def _index_args(f, idx, scalar_index: bool) -> list:
+  if scalar_index:
+    return [idx[0]]
+  if _accepts_unpacked_index(f, len(idx)):
+    return list(idx)
+  return [tuple(idx)]
 
 
 @libfunction("imap")
 def imap(el, f, shape):
-  """Array of the given ``shape`` with ``result[idx] = f(idx)``.
+  """Array of the given ``shape`` with ``result[i, j, ...] = f(i, j, ...)``.
 
-  ``f`` receives an integer when ``shape`` is an integer, otherwise a tuple."""
+  When ``shape`` is a tuple of length ``r >= 2``, ``f`` may take either ``r``
+  index arguments (``lambda i, j: ...``) or a single index tuple (``lambda ij: ...``)."""
   scalar_index = isinstance(shape, Expr) or (isinstance(shape, ArrayVal) and shape.rank == 0)
   dims = el.check_dims(el.shape_tuple(shape, "the shape passed to imap"))
-  return build_map(el, dims, lambda idx: el.call(f, [_index_value(idx, scalar_index)]), "imap")
+  return build_map(el, dims, lambda idx: el.call(f, _index_args(f, idx, scalar_index)), "imap")
 
 
 @libfunction("ireduce")
 def ireduce(el, f, shape, init=None, combine=None):
-  """Reduce ``f(idx)`` over every index of ``shape`` with ``combine``
-  (defaults to addition)."""
-  scalar_index = isinstance(shape, Expr)
+  """Reduce ``f(i, ...)`` over every index of ``shape`` with ``combine``
+  (defaults to addition).
+
+  When ``shape`` is a tuple of length ``r >= 2``, ``f`` may take either ``r``
+  index arguments (``lambda i, j: ...``) or a single index tuple."""
+  scalar_index = isinstance(shape, Expr) or (isinstance(shape, ArrayVal) and shape.rank == 0)
   dims = el.check_dims(el.shape_tuple(shape, "the shape passed to ireduce"))
-  comb = combine if combine is not None else prims.UFUNCS["add"]
+  comb = _as_combiner_ufunc(combine) if combine is not None else prims.UFUNCS["add"]
   return reduce_values(
-        el, dims, lambda idx: el.as_scalar(el.call(f, [_index_value(idx, scalar_index)]), "ireduce element"),
+        el, dims, lambda idx: el.as_scalar(el.call(f, _index_args(f, idx, scalar_index)), "ireduce element"),
         lambda a, b: el.call(comb, [a, b]), init, "ireduce",
     )  # fmt: skip
 
 
 @libfunction("parfor")
 def parfor(el, f, bounds):
-  """Call ``f(idx)`` for every index below ``bounds``, in parallel, for its
+  """Call ``f(i, ...)`` for every index below ``bounds``, in parallel, for its
   side effects (typically writes to a preallocated output array)."""
-  scalar_index = isinstance(bounds, Expr)
+  scalar_index = isinstance(bounds, Expr) or (isinstance(bounds, ArrayVal) and bounds.rank == 0)
   dims = el.check_dims(el.shape_tuple(bounds, "the bounds passed to parfor"))
 
   def body(idx):
-    el.call(f, [_index_value(idx, scalar_index)])
+    el.call(f, _index_args(f, idx, scalar_index))
 
   el.loop_nest(dims, body)
   return None
@@ -649,6 +705,33 @@ def _value_and_grad_staged(el, f, argnum=0):
   from ..syntax.values import Partial
 
   return Partial(_value_and_gradient, (f,), {"argnum": argnum})
+
+
+def _make_minmax(name: str, ufunc, np_reduce, np_binary):
+  """Build polymorphic ``dsl.min`` / ``dsl.max`` supporting both binary ``f(a, b)``
+  (including ``combine=dsl.min`` / ``reduce(dsl.min, x)``) and array reduction
+  ``f(x, axis=..., keepdims=...)``."""
+
+  def impl(el, x, y=None, *, axis=None, keepdims=False):
+    if y is not None:
+      return core.call_ufunc(el, ufunc, x, y)
+    return core.FUNCTIONS[np_reduce](el, x, axis=axis, keepdims=keepdims)
+
+  class _MinMaxOp(LibFunction):
+    def __call__(self, x, y=None, *, axis=None, keepdims=False):
+      if y is not None:
+        return np_binary(x, y)
+      return np_reduce(x, axis=axis, keepdims=keepdims)
+
+  return _MinMaxOp(
+    name, impl, doc=f"Elementwise binary ``{name}(a, b)`` or array reduction ``{name}(x, axis=..., keepdims=...)``."
+  )
+
+
+import numpy as _np_adverbs  # noqa: E402
+
+_DSL_MIN = _make_minmax("min", prims.minimum, _np_adverbs.min, _np_adverbs.minimum)
+_DSL_MAX = _make_minmax("max", prims.maximum, _np_adverbs.max, _np_adverbs.maximum)
 
 
 @core.register(builtins.map)
