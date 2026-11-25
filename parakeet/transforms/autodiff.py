@@ -668,54 +668,10 @@ class Tape:
     return out
 
   def fold(self, el, combine, x: ArrayVal, init, what: str):
-    """A fold with an arbitrary function.  Its derivative needs every running
-    value, so the fold is computed as a scan and replayed backwards."""
-    from ..lib.core import scan_values
+    """A fold with an arbitrary function, differentiated via O(sqrt(N)) checkpointing."""
+    from .ad_loops import checkpointed_fold
 
-    self.first_order(el, "a fold with a function of your own")
-    if x.rank != 1:
-      x = el.flat_view(x)
-    if x.buf is None and x.cost > CHEAP_COST:
-      x = el.as_concrete(x)
-    n = el.tmp(x.shape[0], "n")
-    context = el.capture()
-
-    def step(acc, xi):
-      with el.restored(context):
-        return el.as_scalar(combine(acc, xi), "reduction result")
-
-    self.muted += 1
-    try:
-      if init is None:
-        el.check(cmp("gt", n, 0), "ValueError", f"zero-size array to {what}, which has no identity")
-      accs = el.as_concrete(scan_values(el, n, lambda i: el.tmp(el.elem(x, (i,)), "x"), combine, init, what))
-      out = Var("red", accs.elt)
-      el.mutables.add(out.uid)
-      if init is None:
-        el.emit(Assign(out, Load(accs.buf, isub(n, 1))))
-      else:
-        from ..syntax.ir import If
-
-        el.emit(Assign(out, cast(init, accs.elt)))
-        el.emit(If(cmp("gt", n, 0), [Assign(out, Load(accs.buf, isub(n, 1)))], []))
-    finally:
-      self.muted -= 1
-    info = (accs, init, step, n)
-    # what the backward loop will add to, found out now
-    probe = Var("i", I)
-    el.nonneg.add(probe.uid)
-    el.upper[probe.uid] = n
-    el.loop_depth += 1
-    try:
-      with el.trial():
-        cell = el.alloc_array(accs.elt, (ONE,), zero=True, label="adj")
-        _fold_step(self, el, x, info, probe, cell, dry=True, key="probe")
-    finally:
-      el.loop_depth -= 1
-    node = Node("fold", (x,), info)
-    self.record(el, node)
-    self.register(el, node, out)
-    return out
+    return checkpointed_fold(self, el, combine, x, init, what)
 
   def detach(self, el, arr: ArrayVal) -> ArrayVal:
     """``arr`` is about to be turned into a concrete array in place.  If it is
@@ -923,23 +879,28 @@ class Tape:
 
   def backward(self, el, out, seed) -> None:
     """Emit the adjoint computation of everything recorded, given ``d out = seed``."""
+    from .ad_loops import _add_cotangent_tree
     from .algebraic_vjp import optimize_tape
 
     self.home = el.block
-    optimize_tape(self, el, out)
+    if isinstance(out, (Expr, ArrayVal)):
+      optimize_tape(self, el, out)
     for r in list(self.roots.values()):
       if r.needs_buffer:
         r.allocate(el)
     for s in list(self.scalars.values()):
       s.allocate(el)
-    self.add(el, out, seed)
+    if isinstance(out, (Expr, ArrayVal)):
+      self.add(el, out, seed)
+    else:
+      _add_cotangent_tree(self, el, out, seed)
     for node in reversed(self.nodes):
       holder = node.holder
       if holder is not None:
         g = holder.total(el)
       else:
         g = node.g
-      if g is None and node.kind not in ("store", "store_element"):
+      if g is None and node.kind not in ("store", "store_element", "custom_vjp", "checkpoint", "rev_for", "rev_while"):
         continue
       el.node_stack.append(node.origin)
       try:
@@ -1483,6 +1444,36 @@ def _soft_align_ad(tape: Tape, el, node: Node, g) -> None:
   _soft_align_vjp(tape, el, node, g)
 
 
+def _custom_vjp_ad(tape: Tape, el, node: Node, g) -> None:
+  from .ad_loops import backward_custom_vjp
+
+  backward_custom_vjp(tape, el, node, g)
+
+
+def _checkpoint_ad(tape: Tape, el, node: Node, g) -> None:
+  from .ad_loops import backward_checkpoint
+
+  backward_checkpoint(tape, el, node, g)
+
+
+def _rev_for_ad(tape: Tape, el, node: Node, g) -> None:
+  from .ad_loops import backward_rev_for
+
+  backward_rev_for(tape, el, node, g)
+
+
+def _fold_ckpt_ad(tape: Tape, el, node: Node, g) -> None:
+  from .ad_loops import backward_fold_ckpt
+
+  backward_fold_ckpt(tape, el, node, g)
+
+
+def _scan_ad(tape: Tape, el, node: Node, g) -> None:
+  from .ad_loops import backward_scan_ad
+
+  backward_scan_ad(tape, el, node, g)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1495,6 +1486,8 @@ _BACKWARD = {
   "store": _store,
   "store_element": _store_element,
   "fold": _fold,
+  "fold_ckpt": _fold_ckpt_ad,
+  "scan_ad": _scan_ad,
   "scatter_add": _scatter_add,
   "gather": _gather,
   "algebraic_vjp": _algebraic_vjp,
@@ -1503,6 +1496,10 @@ _BACKWARD = {
   "varlen_flash_attention": _varlen_flash_attention_ad,
   "block_sparse_attention": _block_sparse_attention_ad,
   "soft_align": _soft_align_ad,
+  "custom_vjp": _custom_vjp_ad,
+  "checkpoint": _checkpoint_ad,
+  "rev_for": _rev_for_ad,
+  "rev_while": _rev_for_ad,
 }
 
 
@@ -1520,19 +1517,19 @@ class _StaticLeaf:
 # ---------------------------------------------------------------------------
 
 
-def _wrt_leaf(el, tape: Tape, v, what: str):
+def _wrt_leaf(el, tape: Tape, v, what: str, *, in_record: bool = False):
   """A differentiated argument as the function will see it, plus how to read
   its adjoint afterwards."""
   from ..ragged import RaggedArray
 
   if isinstance(v, RaggedArray):
-    vals_in, vals_holder = _wrt_leaf(el, tape, v.values, what)
+    vals_in, vals_holder = _wrt_leaf(el, tape, v.values, what, in_record=True)
     return RaggedArray(vals_in, v.offsets), RaggedArray(vals_holder, _StaticLeaf(v.offsets))
   if record := record_type(v):
-    values, holders = _wrt_leaf(el, tape, record.values(v), what)
+    values, holders = _wrt_leaf(el, tape, record.values(v), what, in_record=True)
     return record.build(values), record.build(holders)
   if isinstance(v, tuple):
-    parts = [_wrt_leaf(el, tape, x, what) for x in v]
+    parts = [_wrt_leaf(el, tape, x, what, in_record=in_record) for x in v]
     return tuple(p[0] for p in parts), tuple(p[1] for p in parts)
   if isinstance(v, Expr) and is_float(v):
     leaf = Var("x", v.type)
@@ -1545,6 +1542,9 @@ def _wrt_leaf(el, tape: Tape, v, what: str):
     if v.buf is None or not v.contig or v.buf.uid in el.ad_bufs:
       v = el.materialize(v, "x")
     return v, tape.root(el, v)
+  if in_record:
+    # Discrete / structural metadata leaf inside a Record (int, bool, int64 indices, etc.)
+    return v, _StaticLeaf(v)
   raise el.error(
     TypeInferenceError,
     f"{what} differentiates with respect to floating point scalars and arrays (and tuples of them), not {describe(v)}",

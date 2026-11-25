@@ -175,10 +175,13 @@ Current boundaries:
 * **Elaboration-time tape:** differentiation records operators during
   elaboration (with an algebraic tape optimizer for attention, cross-entropy,
   and norms) rather than running as an IR-to-IR pass over lowered operators.
-* **No dynamic-length loops over differentiated values:** `for` loops with a
-  compile-time-known length (up to 4,096) unroll and differentiate; `while`
-  loops or loops over runtime array lengths are refused (rewrite with
-  `reduce`, `map`, or `scan`).
+* **Loops over differentiated values:** small static `for` loops (`<= 32`)
+  unroll for cross-iteration fusion; runtime-bound and long `for` loops use
+  IR-level `O(sqrt(T))` checkpointed reverse loops; data-dependent `while`
+  loops use fixed-slot stride-doubling checkpointing; and `par.checkpoint`,
+  `par.stop_gradient`, and `@par.custom_vjp` provide explicit control over
+  rematerialization and custom/implicit VJPs. Loops with `break`/`continue`
+  over active state remain refused loudly.
 * **Pure runtime `if` branches only:** both branches execute and are selected
   by the condition, so branches touching differentiated values cannot contain
   array stores, `return`, `break`, or `raise`.

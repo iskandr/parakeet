@@ -696,6 +696,12 @@ def _scan(el, f, x, init, axis):
     if x.rank != 1:
       x = el.flat_view(x)
     x = _prepare(el, x)
+    if (
+      tape is not None and not tape.muted and (tape.is_active(el, x) or (init is not None and tape.is_active(el, init)))
+    ):
+      from ..transforms.ad_loops import differentiate_scan
+
+      return differentiate_scan(tape, el, combine, x, init, "scan")
     return scan_values(el, x.shape[0], lambda i: el.tmp(el.elem(x, (i,)), "x"), combine, init)
   return scan_axis(el, x, norm_axis(el, ax, x.rank), combine, init)
 
@@ -1295,6 +1301,103 @@ def ipa_attention(el, q, k, v, coords_q, coords_k, gamma, *, scale=None, bias=No
   return emit_ipa_attention(el, q_a, k_a, v_a, xq_a, xk_a, g_e, scale=sc_e, bias=b_a)
 
 
+@libfunction("stop_gradient")
+def stop_gradient(el, x):
+  """Zero-copy gradient barrier: returns ``x`` with zero derivative under ``grad``."""
+  from ..transforms.ad_loops import stop_gradient_val
+
+  return stop_gradient_val(el, x)
+
+
+@libfunction("custom_vjp_call")
+def _custom_vjp_staged(el, fn, fwd, bwd, *args, **kwargs):
+  from ..transforms.ad_loops import custom_vjp_call
+
+  return custom_vjp_call(el, fn, fwd, bwd, list(args), kwargs)
+
+
+class CustomVJP:
+  """Function with a user-defined reverse-mode VJP rule (``@par.custom_vjp``).
+
+  Register forward and backward rules via ``.defvjp(fwd, bwd)``, where:
+  * ``fwd(*args) -> (output, residuals)``
+  * ``bwd(residuals, g_output) -> cotangent_or_tuple``
+  """
+
+  def __init__(self, fn):
+    if not callable(fn):
+      raise TypeError(f"custom_vjp expects a callable, got {type(fn).__name__}")
+    self.fn = fn
+    self.fwd = None
+    self.bwd = None
+    self.__name__ = getattr(fn, "__name__", "custom_vjp_fn")
+    self.__doc__ = getattr(fn, "__doc__", None)
+
+  def defvjp(self, fwd, bwd):
+    if not callable(fwd) or not callable(bwd):
+      raise TypeError("defvjp(fwd, bwd) expects two callables")
+    self.fwd = fwd
+    self.bwd = bwd
+    return self
+
+  def __repr__(self) -> str:
+    return f"<parakeet custom_vjp {self.__name__}>"
+
+  def __call__(self, *args, **kwargs):
+    return self.fn(*args, **kwargs)
+
+  def __parakeet_value__(self, el):
+    from ..syntax.values import Partial
+
+    return Partial(_custom_vjp_staged, (el.lift(self.fn), el.lift(self.fwd), el.lift(self.bwd)), {})
+
+
+def custom_vjp(fn):
+  """Decorate ``fn`` so it can register a custom reverse-mode VJP with ``.defvjp(fwd, bwd)``."""
+  return CustomVJP(fn)
+
+
+@libfunction("checkpoint_call")
+def _checkpoint_staged(el, fn, *args, **kwargs):
+  from ..transforms.ad_loops import checkpoint_call
+
+  return checkpoint_call(el, fn, list(args), kwargs)
+
+
+class Checkpointed:
+  """Rematerialized function wrapper returned by :func:`checkpoint`."""
+
+  def __init__(self, fn):
+    if not callable(fn):
+      raise TypeError(f"checkpoint expects a callable, got {type(fn).__name__}")
+    self.fn = fn
+    self.__name__ = getattr(fn, "__name__", "checkpointed")
+    self.__doc__ = getattr(fn, "__doc__", None)
+
+  def __repr__(self) -> str:
+    return f"<parakeet checkpoint {self.__name__}>"
+
+  def __call__(self, *args, **kwargs):
+    return self.fn(*args, **kwargs)
+
+  def __parakeet_value__(self, el):
+    from ..syntax.values import Partial
+
+    return Partial(_checkpoint_staged, (el.lift(self.fn),), {})
+
+
+def checkpoint(fn):
+  """Drop forward intermediates of ``fn`` and recompute them during ``grad``."""
+  return Checkpointed(fn)
+
+
+@core.register(checkpoint)
+def _checkpoint_inline(el, fn):
+  from ..syntax.values import Partial
+
+  return Partial(_checkpoint_staged, (fn,), {})
+
+
 @core.register(builtins.map)
 def _builtin_map(el, f, *args):
   return map.impl(el, f, *args, axis=0)
@@ -1308,6 +1411,7 @@ def _builtin_filter(el, pred, x):
 __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
     "parfor", "filter", "filter_reduce", "scatter_add", "scan_axis", "grad", "value_and_grad", "Gradient",
-    "topk_fold", "topk", "tanimoto_topk", "ipa_attention",
+    "topk_fold", "topk", "tanimoto_topk", "ipa_attention", "stop_gradient", "custom_vjp", "CustomVJP",
+    "checkpoint", "Checkpointed",
 ]  # fmt: skip
 _ = (Const, I)
