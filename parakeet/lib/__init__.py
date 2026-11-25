@@ -1,6 +1,6 @@
 """The library of functions available inside compiled code."""
 
-from . import adverbs, builtins_lib, numpy_lib, pure, ragged_lib, random_lib  # noqa: F401  (registration side effects)
+from . import adverbs, builtins_lib, numpy_lib, pure, index_lib, ragged_lib, random_lib  # noqa: F401, I001  (index_lib overrides pure.searchsorted)
 from .core import (
   FUNCTIONS,
   METHODS,
@@ -32,6 +32,12 @@ def contains(el, container, item):
     return acc
   if isinstance(container, RangeVal):
     container = el.range_array(container)
+  from ..index import FrozenHashTable, SortedIndex
+
+  if isinstance(container, SortedIndex):
+    return index_lib._sorted_index_contains(el, container, item)
+  if isinstance(container, FrozenHashTable):
+    return index_lib._hashtable_contains(el, container, item)
   if isinstance(container, ArrayVal):
     from ..prims import UFUNCS
 

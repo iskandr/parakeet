@@ -110,7 +110,7 @@ class HostEmitter(CFamilyEmitter):
         for x in ir.walk_expr(e):
           if isinstance(x, ir.Load) and x.buf.uid not in local_defs:
             reads[x.buf.uid] = x.buf
-          elif isinstance(x, ir.RtCall) and not x.pure and x.args and x.name == "gemm":
+          elif isinstance(x, ir.RtCall) and not x.pure and x.args and x.name in ("gemm", "argsort"):
             has_gemm = True
     if has_gemm:
       out.append(f"{pad}PK_DEV_SYNC(rt);")

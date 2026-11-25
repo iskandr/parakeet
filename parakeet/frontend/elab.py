@@ -2705,6 +2705,11 @@ class Elaborator(ArrayMixin):
       return getattr(obj, name)
     if record is not None and issubclass(record.cls, tuple) and name == "_replace":
       return BoundMethod(obj, "_replace")
+    if record is not None and record.cls.__module__ == "parakeet.index":
+      if (record.cls.__name__ == "SortedIndex" and name in ("get", "range")) or (
+        record.cls.__name__ == "FrozenHashTable" and name == "get"
+      ):
+        return BoundMethod(obj, name)
     if isinstance(obj, dict) or record is not None:
       raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
     if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:

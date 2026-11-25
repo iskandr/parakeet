@@ -33,6 +33,7 @@ from dataclasses import dataclass
 import numpy as _np
 
 from . import api, config, prims
+from .index import FrozenHashTable, SortedIndex
 from .lib.adverbs import (
   _DSL_MAX,
   _DSL_MIN,
@@ -328,8 +329,10 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 
 
 __all__ = [
+  "FrozenHashTable",
   "RaggedArray",
   "RewriteReport",
+  "SortedIndex",
   "abs",
   "add",
   "all",

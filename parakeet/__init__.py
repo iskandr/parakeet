@@ -50,6 +50,7 @@ from .errors import (
 )
 from .frontend.decorators import macro
 from .frontend.diagnose import find_broken_transform
+from .index import FrozenHashTable, SortedIndex
 from .lib.adverbs import (
   allpairs,
   each,
@@ -146,6 +147,7 @@ for _name in (
   "zeros ones empty full zeros_like ones_like empty_like full_like arange linspace eye identity "
   "array asarray copy sum prod mean std var min max argmin argmax any all cumsum cumprod dot vdot "
   "inner outer transpose ravel reshape where clip diff concatenate stack vstack hstack bincount "
+  "sort argsort unique searchsorted "
   "int8 int16 int32 int64 uint8 uint16 uint32 uint64 float32 float64 bool_ "
   "rad2deg deg2rad logaddexp logaddexp2 isnan isinf isfinite "
   "tile real conjugate shape size ndim"
@@ -174,7 +176,8 @@ def clear_cache() -> int:
 
 __all__ = [
     "BackendError", "BackendUnavailable", "CompileError", "DeviceArray", "FallbackWarning",
-    "MatrixUnit", "ParakeetError", "RaggedArray", "Specialization", "StaticValueError", "TargetProfile",
+    "FrozenHashTable", "MatrixUnit", "ParakeetError", "RaggedArray", "SortedIndex", "Specialization",
+    "StaticValueError", "TargetProfile",
     "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "bf16_to_f32", "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
     "f32_to_bf16", "filter", "imap",

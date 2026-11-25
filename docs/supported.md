@@ -59,9 +59,9 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `np.searchsorted` | `np.shape` | `np.size` | `np.sort` |
 | `np.squeeze` | `np.stack` | `np.std` | `np.sum` |
 | `np.swapaxes` | `np.tile` | `np.trace` | `np.transpose` |
-| `np.tril` | `np.triu` | `np.true_divide` | `np.var` |
-| `np.vdot` | `np.vstack` | `np.where` | `np.zeros` |
-| `np.zeros_like` |  |  |  |
+| `np.tril` | `np.triu` | `np.true_divide` | `np.unique` |
+| `np.var` | `np.vdot` | `np.vstack` | `np.where` |
+| `np.zeros` | `np.zeros_like` |  |  |
 
 ## `np.linalg` and `np.random`
 
@@ -83,11 +83,11 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `.astype()` | `.bit_count()` | `.clip()` | `.conj()` |
 | `.conjugate()` | `.copy()` | `.cumprod()` | `.cumsum()` |
 | `.diagonal()` | `.dot()` | `.fill()` | `.flatten()` |
-| `.item()` | `.max()` | `.mean()` | `.min()` |
-| `.nonzero()` | `.prod()` | `.ravel()` | `.reshape()` |
-| `.round()` | `.squeeze()` | `.std()` | `.sum()` |
-| `.swapaxes()` | `.tolist()` | `.trace()` | `.transpose()` |
-| `.var()` |  |  |  |
+| `.get()` | `.item()` | `.max()` | `.mean()` |
+| `.min()` | `.nonzero()` | `.prod()` | `.range()` |
+| `.ravel()` | `.reshape()` | `.round()` | `.squeeze()` |
+| `.std()` | `.sum()` | `.swapaxes()` | `.tolist()` |
+| `.trace()` | `.transpose()` | `.var()` |  |
 
 ## Python builtins
 
