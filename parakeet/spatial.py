@@ -105,6 +105,8 @@ class BlockMask:
     bq, bk = int(block_q), int(block_k)
     nq = (M + bq - 1) // bq
     nk = (N + bk - 1) // bk
+    if float(cutoff) < 0.0:
+      return cls.from_csr(np.zeros(nq + 1, dtype=np.int64), np.empty(0, dtype=np.int64), nk, bq, bk)
     r2 = float(cutoff) * float(cutoff)
 
     def _aabbs(c, bsz, nb):

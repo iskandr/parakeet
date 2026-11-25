@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from ..errors import TypeInferenceError
+from ..errors import TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, UInt64
 from ..spatial import BlockMask
 from ..syntax import ops
@@ -77,22 +77,38 @@ def morton_order(el, coords):
   # Compute finite bounding box per axis in O(N)
   from .numpy_lib import amax, amin
 
-  lo = el.alloc_array(elt, (Const(3, I),), label="m_lo")
-  hi = el.alloc_array(elt, (Const(3, I),), label="m_hi")
-  for axis_k in range(3):
-    col = el.getitem(c, (slice(None, None, None), Const(axis_k, I)))
-    # Replace NaNs with 0 for bbox calculation so NaN coordinates don't corrupt scaling
-    zero_f = Const(0.0, elt)
-    safe_col = el.delayed(
-      elt,
-      (n,),
-      lambda idx, _col=col: ops.select(ops.prim("isfinite", (el.elem(_col, idx),), Bool), el.elem(_col, idx), zero_f),
-      cost=2,
-    )
-    mn = el.as_scalar(amin(el, safe_col, None, False)) if not (isinstance(n, Const) and n.value == 0) else zero_f
-    mx = el.as_scalar(amax(el, safe_col, None, False)) if not (isinstance(n, Const) and n.value == 0) else zero_f
-    el.emit(Store(lo.buf, Const(axis_k, I), mn))
-    el.emit(Store(hi.buf, Const(axis_k, I), mx))
+  lo = el.alloc_array(elt, (Const(3, I),), zero=True, label="m_lo")
+  hi = el.alloc_array(elt, (Const(3, I),), zero=True, label="m_hi")
+  zero_f = Const(0.0, elt)
+  pos_inf = Const(math.inf, elt)
+  neg_inf = Const(-math.inf, elt)
+  bbox_blk: list = []
+  with el.in_block(bbox_blk):
+    for axis_k in range(3):
+      col = el.getitem(c, (slice(None, None, None), Const(axis_k, I)))
+      # Replace non-finite values with +inf for min and -inf for max so NaNs never skew finite bounds
+      safe_min = el.delayed(
+        elt,
+        (n,),
+        lambda idx, _col=col: ops.select(
+          ops.prim("isfinite", (el.elem(_col, idx),), Bool), el.elem(_col, idx), pos_inf
+        ),
+        cost=2,
+      )
+      safe_max = el.delayed(
+        elt,
+        (n,),
+        lambda idx, _col=col: ops.select(
+          ops.prim("isfinite", (el.elem(_col, idx),), Bool), el.elem(_col, idx), neg_inf
+        ),
+        cost=2,
+      )
+      mn = el.tmp(el.as_scalar(amin(el, safe_min, None, False)), "mn")
+      mx = el.tmp(el.as_scalar(amax(el, safe_max, None, False)), "mx")
+      valid = ops.land(ops.prim("isfinite", (mn,), Bool), ops.prim("isfinite", (mx,), Bool))
+      el.emit(Store(lo.buf, Const(axis_k, I), ops.select(valid, mn, zero_f)))
+      el.emit(Store(hi.buf, Const(axis_k, I), ops.select(valid, mx, zero_f)))
+  el.emit(If(cmp("gt", n, ZERO), bbox_blk, []))
 
   scale_max = Const(1048575.0, elt)  # 2^20 - 1
   eps = Const(1e-12, elt)
@@ -217,6 +233,10 @@ def spatial_cutoff_sum(el, coords_q, coords_k, values, cutoff, weight_fn, *, til
   vals = el.as_concrete(el.as_array(values, "values"))
   if cq.rank != 2 or ck.rank != 2 or cq.elt.kind != "f" or ck.elt.kind != "f":
     raise el.error(TypeInferenceError, "spatial_cutoff_sum() expects (M, 3) and (N, 3) float coordinate arrays")
+  if el.options.bounds_check:
+    el.check(cmp("eq", cq.shape[1], Const(3, I)), "ValueError", "spatial_cutoff_sum() requires coords_q shape (M, 3)")
+    el.check(cmp("eq", ck.shape[1], Const(3, I)), "ValueError", "spatial_cutoff_sum() requires coords_k shape (N, 3)")
+    el.check(cmp("eq", vals.shape[0], ck.shape[0]), "ValueError", "spatial_cutoff_sum() values/coords_k lengths differ")
   elt = cq.elt
   if ck.elt is not elt:
     ck = el.as_concrete(el.cast_array(ck, elt))
@@ -226,7 +246,12 @@ def spatial_cutoff_sum(el, coords_q, coords_k, values, cutoff, weight_fn, *, til
   if ts <= 0:
     raise el.error(TypeInferenceError, "tile_size must be positive")
   cut = el.tmp(cast(el.as_scalar(cutoff, "cutoff"), elt), "cut")
-  r2 = el.tmp(ops.prim("mul", (cut, cut), elt), "r2")
+  if el.tape is not None and not el.tape.muted and any(el.tape.is_active(el, x) for x in (cq, ck, vals, cut)):
+    raise el.error(UnsupportedError, "differentiating through spatial_cutoff_sum() is not supported")
+  r2 = el.tmp(
+    ops.select(cmp("lt", cut, Const(0.0, elt)), Const(-1.0, elt), ops.prim("mul", (cut, cut), elt)),
+    "r2",
+  )
 
   M, N = cq.shape[0], ck.shape[0]
   qmin, qmax, qnan, _ = _build_tile_aabbs(el, cq, ts)
@@ -345,8 +370,25 @@ def block_sparse_attention(el, q, k, v, block_mask, *, scale=None, causal=False,
   bk = el.static_int(block_mask.block_k, "block_k")
   is_causal = el.static_bool(causal, "causal") if not isinstance(causal, bool) else causal
   mask_arr = None if mask is None else el.as_concrete(el.as_array(mask, "mask"))
+  if el.options.bounds_check:
+    el.check(cmp("eq", k3.shape[0], B_flat), "ValueError", "block_sparse_attention() q and k batch sizes differ")
+    el.check(cmp("eq", v3.shape[0], B_flat), "ValueError", "block_sparse_attention() q and v batch sizes differ")
+    el.check(cmp("eq", k3.shape[2], K_dim), "ValueError", "block_sparse_attention() q and k feature dims differ")
+    el.check(cmp("eq", v3.shape[1], N), "ValueError", "block_sparse_attention() k and v sequence lengths differ")
+    if mask_arr is not None:
+      if mask_arr.rank != 2:
+        raise el.error(TypeInferenceError, "block_sparse_attention() mask must be 2D (M, N)")
+      el.check(cmp("eq", mask_arr.shape[0], M), "ValueError", "block_sparse_attention() mask rows != M")
+      el.check(cmp("eq", mask_arr.shape[1], N), "ValueError", "block_sparse_attention() mask cols != N")
   if scale is None:
-    sc = el.tmp(ops.prim("div", (Const(1.0, elt), ops.prim("sqrt", (cast(K_dim, elt),), elt)), elt), "scale")
+    sc = el.tmp(
+      ops.select(
+        cmp("gt", K_dim, ZERO),
+        ops.prim("div", (Const(1.0, elt), ops.prim("sqrt", (cast(K_dim, elt),), elt)), elt),
+        Const(0.0, elt),
+      ),
+      "scale",
+    )
   else:
     sc = el.tmp(cast(el.as_scalar(scale, "scale"), elt), "scale")
 
@@ -356,6 +398,8 @@ def block_sparse_attention(el, q, k, v, block_mask, *, scale=None, causal=False,
   row_idx = el.as_concrete(block_mask.row_idx)
 
   tape = el.tape
+  if tape is not None and not tape.muted and tape.is_active(el, sc):
+    raise el.error(UnsupportedError, "differentiating block_sparse_attention() with respect to scale is not supported")
   record_ad = (
     tape is not None and not tape.muted and (tape.is_active(el, q3) or tape.is_active(el, k3) or tape.is_active(el, v3))
   )
