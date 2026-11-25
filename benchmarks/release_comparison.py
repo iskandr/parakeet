@@ -8,8 +8,65 @@ import time
 import numpy as np
 
 
-def cases():
+def cases(scale: str = "release"):
+  """Yield ``(task, host_args, ref)`` benchmark cases.
+
+  ``scale="release"`` matches the published 1.0 comparison shapes.
+  ``scale="large"`` targets the OOM-frontier / SM-saturation regime where naive
+  materialization allocates 2–16 GiB intermediates on a 24 GiB GPU.
+  """
   rng = np.random.default_rng(123)
+  if scale == "large":
+    # 16,384 x 65,536 x 32 pairwise (4 GiB naive distance matrix)
+    n, m, d = 16384, 65536, 32
+    x = rng.standard_normal((n, d), dtype=np.float32)
+    y = rng.standard_normal((m, d), dtype=np.float32)
+    v = rng.standard_normal((m, 4), dtype=np.float32)
+    # Chunked float64 reference on a deterministic sample of rows (exact check without OOM)
+    sample_idx = np.linspace(0, n - 1, 64, dtype=np.int64)
+    y64, v64 = y.astype("d"), v.astype("d")
+    nn_s, rbf_s = [], []
+    for q_row in x[sample_idx]:
+      dist = np.square(y64 - q_row).sum(1)
+      nn_s.append(dist.argmin())
+      p = np.exp(dist.min() - dist)
+      rbf_s.append((p @ v64) / p.sum())
+    yield "nn", (x, y), (sample_idx, np.asarray(nn_s))
+    yield "rbf", (x, y, v), (sample_idx, np.asarray(rbf_s))
+
+    # Causal attention: B=4, H=16, T=4096, D=64 (4 GiB naive T^2 score matrix)
+    q, k, va = rng.standard_normal((3, 4, 16, 4096, 64), dtype=np.float32) * np.float32(0.2)
+    # Reference on (b=0, h=0, rows 0..31 & 4064..4095)
+    t_idx = np.concatenate([np.arange(32), np.arange(4064, 4096)])
+    q0, k0, v0 = q[0, 0, t_idx].astype("d"), k[0, 0].astype("d"), va[0, 0].astype("d")
+    sc = (q0 @ k0.T) / 8.0
+    sc = np.where(t_idx[:, None] >= np.arange(4096)[None, :], sc, -np.inf)
+    p = np.exp(sc - sc.max(-1, keepdims=True))
+    yield "causal", (q, k, va), (t_idx, (p / p.sum(-1, keepdims=True)) @ v0)
+
+    # Cut Cross-Entropy: M=4096, D=512, V=65536 (1 GiB float32 logits, 4+ GiB with bwd)
+    h = rng.standard_normal((4096, 512), dtype=np.float32) * np.float32(0.05)
+    w = rng.standard_normal((512, 65536), dtype=np.float32) * np.float32(0.05)
+    targets = rng.integers(65536, size=4096, dtype=np.int64)
+    losses = []
+    w64 = w.astype("d")
+    for start in range(0, 4096, 256):
+      hb = h[start : start + 256].astype("d")
+      tb = targets[start : start + 256]
+      lg = hb @ w64
+      z = lg - lg.max(1, keepdims=True)
+      losses.append(np.log(np.exp(z).sum(1)) - z[np.arange(len(hb)), tb])
+    yield "cce", (h, w, targets), np.mean(np.concatenate(losses))
+
+    # GBDT split: 10,000,000 rows x 256 bins
+    ids = rng.integers(256, size=10_000_000, dtype=np.int64)
+    g = rng.standard_normal(len(ids), dtype=np.float32) + np.where(ids < 71, -0.25, 0.25).astype("f")
+    hessian = rng.uniform(0.1, 1.0, len(ids)).astype("f")
+    gl, hl = [np.bincount(ids, weights=a, minlength=256).cumsum() for a in (g, hessian)]
+    gain = gl**2 / (hl + 1) + (gl[-1] - gl) ** 2 / (hl[-1] - hl + 1)
+    yield "split", (ids, g, hessian), np.array([gain.argmax(), gain.max()])
+    return
+
   for n, m, d in [(256, 1024, 3), (1024, 4096, 32)]:
     x = rng.standard_normal((n, d), dtype=np.float32)
     y = rng.standard_normal((m, d), dtype=np.float32)
@@ -109,7 +166,7 @@ def cpu_adapters(task, args):
   yield "numpy", lambda: broadcast(np, task, args)
 
 
-def adapters(provider, task, host):
+def adapters(provider, task, host, *, tensor_cores: bool = False):
   if provider == "cpu":
     for name, fn in cpu_adapters(task, host):
       yield name, fn, lambda out: None, np.asarray
@@ -128,7 +185,7 @@ def adapters(provider, task, host):
     )
 
     sync = cp.cuda.runtime.deviceSynchronize
-    with pk.options(backend="cuda", blas=False, device_fallback="error", device_threshold=1, tensor_cores=False):
+    with pk.options(backend="cuda", blas=False, device_fallback="error", device_threshold=1, tensor_cores=tensor_cores):
       args = pk.to_device(host, backend="cuda")
       for name, fn in {
         "cce": [("pk-numpy", pk.jit(cut_cross_entropy))],
@@ -148,7 +205,7 @@ def adapters(provider, task, host):
     import jax.numpy as jnp
 
     assert jax.devices()[0].platform == "gpu"
-    jax.config.update("jax_default_matmul_precision", "highest")
+    jax.config.update("jax_default_matmul_precision", "tensorfloat32" if tensor_cores else "highest")
     args = tuple(map(jax.device_put, host))
     jax.block_until_ready(args)
     fn = jax.jit(lambda *a: broadcast(jnp, task, a))
@@ -157,8 +214,8 @@ def adapters(provider, task, host):
 
   import torch
 
-  torch.set_float32_matmul_precision("highest")
-  torch.backends.cuda.matmul.allow_tf32 = False
+  torch.set_float32_matmul_precision("high" if tensor_cores else "highest")
+  torch.backends.cuda.matmul.allow_tf32 = bool(tensor_cores)
   args = tuple(torch.from_numpy(a).cuda() for a in host)
   sync = lambda out: torch.cuda.synchronize()
   cpu = lambda out: out.cpu().numpy()
@@ -227,7 +284,7 @@ def adapters(provider, task, host):
       yield "torch-compile-broadcast", lambda: direct(*args), sync, cpu
 
 
-def run(provider):
+def run(provider, *, scale: str = "release", tensor_cores: bool = False):
   unsupported = ()
   if provider == "array":
     from parakeet.errors import BackendUnavailable
@@ -250,7 +307,7 @@ def run(provider):
       packages[package] = importlib.metadata.version(package)
     except importlib.metadata.PackageNotFoundError:
       pass
-  result = {"packages": packages, "rows": []}
+  result = {"packages": packages, "scale": scale, "tensor_cores": tensor_cores, "rows": []}
   if provider == "cpu":
     import platform
 
@@ -263,12 +320,13 @@ def run(provider):
     result["gpu"] = subprocess.check_output(
       ["nvidia-smi", "--query-gpu=name,memory.total,driver_version", "--format=csv,noheader"], text=True
     ).strip()
-  for task, host, ref in cases():
+  atol, rtol = (3e-3, 5e-3) if tensor_cores else (3e-5, 5e-4)
+  for task, host, ref in cases(scale=scale):
     if (provider == "faiss" and task != "nn") or (provider in ("keops", "cpu") and task not in ("nn", "rbf")):
       continue
     row = {"task": task, "shapes": [list(a.shape) for a in host], "provider": provider}
     try:
-      for name, call, sync, to_host in adapters(provider, task, host):
+      for name, call, sync, to_host in adapters(provider, task, host, tensor_cores=tensor_cores):
         item = dict(row, method=name)
         try:
           if provider != "jax":
@@ -278,13 +336,18 @@ def run(provider):
           sync(out)
           item["first_call_s"] = time.perf_counter() - start
           actual = np.asarray(to_host(out))
-          if task == "split":
-            np.testing.assert_equal(actual[0], ref[0])
-          if task == "nn":
-            np.testing.assert_array_equal(actual, ref)
+          if isinstance(ref, tuple):
+            sample_idx, ref_vals = ref
+            actual_cmp = actual[0, 0, sample_idx] if task == "causal" else actual[sample_idx]
           else:
-            np.testing.assert_allclose(actual, ref, atol=3e-5, rtol=5e-4)
-          item["max_abs_error"] = float(np.abs(actual - ref).max())
+            actual_cmp, ref_vals = actual, ref
+          if task == "split":
+            np.testing.assert_equal(actual_cmp[0], ref_vals[0])
+          if task == "nn":
+            np.testing.assert_array_equal(actual_cmp, ref_vals)
+          else:
+            np.testing.assert_allclose(actual_cmp, ref_vals, atol=atol, rtol=rtol)
+          item["max_abs_error"] = float(np.abs(actual_cmp - ref_vals).max())
           for _ in range(3):
             sync(call())
           device = None
@@ -320,8 +383,14 @@ def run(provider):
 
 
 if __name__ == "__main__":
+  import argparse
   import json
-  import sys
   from pathlib import Path
 
-  Path(sys.argv[2]).write_text(json.dumps(run(sys.argv[1])))
+  parser = argparse.ArgumentParser(description="Run Parakeet release or large-scale OOM-frontier comparison.")
+  parser.add_argument("provider", choices=("cpu", "array", "faiss", "keops", "torch", "jax"))
+  parser.add_argument("output", type=Path)
+  parser.add_argument("--scale", choices=("release", "large"), default="release")
+  parser.add_argument("--tensor-cores", action="store_true")
+  cli = parser.parse_args()
+  cli.output.write_text(json.dumps(run(cli.provider, scale=cli.scale, tensor_cores=cli.tensor_cores)))

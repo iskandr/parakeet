@@ -21,9 +21,11 @@ both ``CudaDevice`` / ``NativeCudaRuntime`` (``cuLaunchKernel``) and
 
 from __future__ import annotations
 
-from ..ndtypes import BufType, ScalarType
+from ..ndtypes import BufType, Float32, ScalarType
 from ..syntax import ir, ops
 from ..syntax.ir import MonoidalTilePlan, ParLoop, TileStage, Var
+from ..target import TargetProfile
+from ..transforms.analysis import IndexFacts, TileInterval, tile_predicate_guards
 from .cfamily import CFamilyEmitter, Unsupported, defined_vars
 from .device import KernelPlan
 
@@ -32,6 +34,17 @@ MONOID_BN = 32
 MONOID_BK = 32
 MONOID_THREADS = 128  # 32 rows x 4 threads/row (4 warps / SIMD-groups)
 MAX_REG_D = 128  # 32 floats/thread * 4 threads/row = 128 columns in registers (clean fallback for larger D!)
+
+# Hardware matrix-unit geometry (4 warps / SIMD-groups, 128 threads):
+# - Metal simdgroup_matrix (8x8x8): BM=32, BN=32 (8 rows/SIMD-group, 4 lanes/row, 22 KiB SMEM, Q hoisted for K<=64!)
+# - CUDA wmma TF32 (16x16x8):       BM=64, BN=32 (16 rows/warp, 2 lanes/row, 37 KiB SMEM, Q hoisted for K<=64!)
+MM_BM = 64
+MM_BN = 32
+MM_BK = 32
+MM_THREADS = 128
+MM_METAL_BM = 32
+MM_METAL_BN = 32
+MM_METAL_BK = 32
 
 
 def _emit_decl_locals(em: CFamilyEmitter, stmts: list[ir.Stmt], skip_uids: set[int], out: list[str], pad: str) -> None:
@@ -1739,6 +1752,937 @@ def _generate_cce_bwd(
   )
 
 
+def _use_monoidal_matrix_unit(plan: MonoidalTilePlan, target: str, profile: TargetProfile | None) -> bool:
+  """True when ``plan`` can use hardware matrix units (Metal ``32x32x32``
+  ``simdgroup_matrix`` or CUDA ``64x32x32`` ``nvcuda::wmma`` TF32 Tensor Cores)."""
+  if profile is None or profile.matrix_unit is None:
+    return False
+  if plan.elt != Float32 or plan.score_op != "dot":
+    return False
+  if target == "metal":
+    return profile.matrix_unit.kind == "simdgroup_matrix"
+  if target == "cuda":
+    return profile.matrix_unit.kind == "wmma" and profile.tensor_cores
+  return False
+
+
+def _derive_mm_law5_guards(
+  plan: MonoidalTilePlan,
+  bm: int = MM_BM,
+  bn: int = MM_BN,
+) -> tuple[ir.Expr | None, ir.Expr | None, tuple[Var, Var] | None]:
+  """Re-derive Law 5 tile-interval guards for ``(bm, bn)`` from ``plan.mask_cond``."""
+  if plan.mask_cond is None or plan.mask_index_vars is None:
+    return None, None, None
+  mi_v, mj_v = plan.mask_index_vars
+  i0, j0 = plan.tile_origin_vars if plan.tile_origin_vars is not None else (Var("pk_ti0", ops.I), Var("pk_tj0", ops.I))
+  iv_map = {
+    mi_v.uid: TileInterval(i0, ops.iadd(i0, ir.Const(bm - 1, ops.I))),
+    mj_v.uid: TileInterval(j0, ops.iadd(j0, ir.Const(bn - 1, ops.I))),
+  }
+  af, at = tile_predicate_guards(plan.mask_cond, iv_map, IndexFacts())
+  af_out = None if (isinstance(af, ir.Const) and not af.value) else af
+  at_out = None if (isinstance(at, ir.Const) and not at.value) else at
+  if af_out is None and at_out is None:
+    return None, None, None
+  return af_out, at_out, (i0, j0)
+
+
+def _emit_mm_stage_load_2d(
+  em: CFamilyEmitter,
+  st: TileStage,
+  sh_name: str,
+  r_size: int,
+  c_size: int,
+  out_stride: int,
+  r0_expr: str,
+  c0_expr: str,
+  r_lim: str,
+  c_lim: str,
+  idx_t: str,
+  lines: list[str],
+  pad: str,
+  zero_lit: str,
+  transpose: bool = False,
+) -> None:
+  """Cooperatively load ``r_size x c_size`` tile of ``st`` into shared memory
+  (optionally transposed as ``sh[c * out_stride + r]``)."""
+  r_shift = r_size.bit_length() - 1
+  c_shift = c_size.bit_length() - 1
+  d0_fast = _stage_prefers_dim0_fast(st)
+  lines.append(f"{pad}for ({idx_t} pk_l = pk_tid; pk_l < {r_size * c_size}; pk_l += {MM_THREADS}) {{")
+  if d0_fast:
+    lines.append(f"{pad}  const {idx_t} pk_lc = pk_l >> {r_shift};")
+    lines.append(f"{pad}  const {idx_t} pk_lr = pk_l & {r_size - 1};")
+  else:
+    lines.append(f"{pad}  const {idx_t} pk_lr = pk_l >> {c_shift};")
+    lines.append(f"{pad}  const {idx_t} pk_lc = pk_l & {c_size - 1};")
+  lines.append(f"{pad}  const {idx_t} {st.index[0].name} = {r0_expr} + pk_lr;")
+  lines.append(f"{pad}  const {idx_t} {st.index[1].name} = {c0_expr} + pk_lc;")
+  sh_idx = f"pk_lc * {out_stride} + pk_lr" if transpose else f"pk_lr * {out_stride} + pk_lc"
+  lines.append(f"{pad}  if ({st.index[0].name} < {r_lim} && {st.index[1].name} < {c_lim}) {{")
+  _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, pad + "    ")
+  em.block(st.body, lines, (len(pad) + 4) // 2)
+  lines.append(f"{pad}    {sh_name}[{sh_idx}] = (float)({em.expr(st.value)});")
+  lines.append(f"{pad}  }} else {{")
+  lines.append(f"{pad}    {sh_name}[{sh_idx}] = {zero_lit};")
+  lines.append(f"{pad}  }}")
+  lines.append(f"{pad}}}")
+
+
+def _emit_mm_header(
+  em: CFamilyEmitter,
+  target: str,
+  prelude: str,
+  scalars: list[Var],
+  bufs: list[Var],
+) -> tuple[list[str], str, str, str, str]:
+  """Emit kernel header for hardware matrix-unit monoidal kernels."""
+  is_cuda = target == "cuda"
+  idx_t = "long long" if is_cuda else "long"
+  sh_qual = "__shared__" if is_cuda else "threadgroup"
+  barrier = "__syncthreads();" if is_cuda else "threadgroup_barrier(mem_flags::mem_threadgroup);"
+  warp_barrier = "__syncwarp();" if is_cuda else "simdgroup_barrier(mem_flags::mem_threadgroup);"
+  if is_cuda:
+    hdr = "#ifndef PK_CUDA_SIMULATE\n#include <mma.h>\n#endif\n" + prelude
+  else:
+    hdr = prelude.replace("#include <metal_stdlib>", "#include <metal_stdlib>\n#include <metal_simdgroup_matrix>", 1)
+  lines: list[str] = [hdr]
+  if is_cuda:
+    params = ["long long pk_total", "long long pk_csize"]
+    params += [f"{em.ctype(v.type)} {v.name}" for v in scalars]
+    params += ["int* pk_flag", "long long* pk_info"]
+    params += [f"{em.ctype(v.type.elt)}* {v.name}_d" for v in bufs]
+    lines.append('extern "C" __global__ void pk_kernel(' + ",\n    ".join(params) + ") {")
+    lines.append(f"  const {idx_t} pk_blk = ({idx_t})blockIdx.x;")
+    lines.append(f"  const {idx_t} pk_tid = ({idx_t})threadIdx.x;")
+    lines.append(f"  const {idx_t} pk_sgid = pk_tid >> 5;")
+    lines.append(f"  const {idx_t} pk_lane = pk_tid & 31;")
+    lines.append(f"  const {idx_t} pk_lr = pk_lane >> 1;")
+    lines.append(f"  const {idx_t} pk_lt = pk_lane & 1;")
+    lines.append(f"  const {idx_t} pk_r = pk_sgid * 16 + pk_lr;")
+  else:
+    lines += ["struct pk_args {", "  long total;", "  long csize;"]
+    for v in scalars:
+      lines.append(f"  {em.ctype(v.type)} {v.name};")
+    lines.append("};")
+    params = [
+      "constant pk_args& pk_a [[buffer(0)]]",
+      "device atomic_int* pk_flag [[buffer(1)]]",
+      "device long* pk_info [[buffer(2)]]",
+    ]
+    for k, v in enumerate(bufs):
+      params.append(f"device {em.ctype(v.type.elt)}* {v.name}_d [[buffer({k + 3})]]")
+    params.append("uint3 pk_bid [[threadgroup_position_in_grid]]")
+    params.append("uint3 pk_ltid [[thread_position_in_threadgroup]]")
+    params.append("uint pk_sgid_u [[simdgroup_index_in_threadgroup]]")
+    params.append("uint pk_lane_u [[thread_index_in_simdgroup]]")
+    lines.append("kernel void pk_kernel(" + ",\n    ".join(params) + ") {")
+    for v in scalars:
+      lines.append(f"  const {em.ctype(v.type)} {v.name} = pk_a.{v.name};")
+    lines.append(f"  const {idx_t} pk_blk = ({idx_t})pk_bid.x;")
+    lines.append(f"  const {idx_t} pk_tid = ({idx_t})pk_ltid.x;")
+    lines.append(f"  const {idx_t} pk_sgid = ({idx_t})pk_sgid_u;")
+    lines.append(f"  const {idx_t} pk_lane = ({idx_t})pk_lane_u;")
+    lines.append(f"  const {idx_t} pk_lr = pk_lane >> 2;")
+    lines.append(f"  const {idx_t} pk_lt = pk_lane & 3;")
+    lines.append(f"  const {idx_t} pk_r = pk_sgid * 8 + pk_lr;")
+  return lines, idx_t, sh_qual, barrier, warp_barrier
+
+
+def _generate_flash_monoid_matrix_unit(
+  loop: ParLoop,
+  plan: MonoidalTilePlan,
+  free: list[Var],
+  target: str,
+  em: CFamilyEmitter,
+  prelude: str,
+  max_buffers: int | None,
+) -> KernelPlan:
+  """Generate low-register, hoisted-Q hardware matrix-unit FlashAttention kernel
+  (Metal ``32x32`` ``simdgroup_matrix`` / CUDA ``64x32`` ``nvcuda::wmma`` TF32)."""
+  is_cuda = target == "cuda"
+  bm = MM_BM if is_cuda else MM_METAL_BM
+  bn = MM_BN if is_cuda else MM_METAL_BN
+  bk = MM_BK if is_cuda else MM_METAL_BK
+  lanes_per_row = 2 if is_cuda else 4
+  cols_per_lane = bn // lanes_per_row
+  q_hoist_stride = 68
+  k_stride = bk + 4
+  s_stride = bn + 4
+  b_kt_stride = bn + 4
+  b_elems = max(64 * b_kt_stride, bn * q_hoist_stride)
+  ep_per_warp = 256 if is_cuda else 64
+
+  zero_lit = "0.0f" if is_cuda else "0.0"
+  one_lit = "1.0f" if is_cuda else "1.0"
+  neg_inf = "((float)(-INFINITY))" if is_cuda else "(-INFINITY)"
+  expf = "expf" if is_cuda else "exp"
+  logf = "logf" if is_cuda else "log"
+  fmax = "fmaxf" if is_cuda else "fmax"
+
+  scalars = [v for v in free if not isinstance(v.type, BufType)]
+  bufs = [v for v in free if isinstance(v.type, BufType)]
+  if max_buffers is not None and len(bufs) > max_buffers:
+    raise Unsupported(f"it uses {len(bufs)} arrays ({target} kernels are limited to {max_buffers})")
+  for v in free:
+    em.ctype(v.type.elt if isinstance(v.type, BufType) else v.type)
+  if not is_cuda:
+    scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
+
+  lines, idx_t, sh_qual, barrier, warp_barrier = _emit_mm_header(em, target, prelude, scalars, bufs)
+  if is_cuda:
+    lines.append("  using namespace nvcuda::wmma;")
+  lines.append(f"  const {idx_t} pk_M = ({idx_t})({em.expr(plan.m_dim)});")
+  lines.append(f"  const {idx_t} pk_N = ({idx_t})({em.expr(plan.n_dim)});")
+  lines.append(f"  const {idx_t} pk_K = ({idx_t})({em.expr(plan.k_dim)});")
+  assert plan.d_dim is not None
+  lines.append(f"  const {idx_t} pk_D = ({idx_t})({em.expr(plan.d_dim)});")
+  _emit_batch_unravel(em, plan, "pk_M", bm, idx_t, lines)
+  lines.append(f"  const {idx_t} pk_i0 = pk_blk_r * {bm};")
+  lines.append(f"  const {idx_t} pk_gi = pk_i0 + pk_r;")
+  lines.append(f"  const {idx_t} pk_row_flat = pk_batch_id * pk_M + pk_gi;")
+  if plan.score_scale is not None:
+    lines.append(f"  const float pk_scale = (float)({em.expr(plan.score_scale)});")
+  if plan.mask_fill is not None:
+    lines.append(f"  const float pk_mfill = (float)({em.expr(plan.mask_fill)});")
+
+  lines.append(f"  {sh_qual} float pk_sh_a[{bm * q_hoist_stride}];")
+  lines.append(f"  {sh_qual} float pk_sh_b[{b_elems}];")
+  lines.append(f"  {sh_qual} float pk_sh_s[{bm * s_stride}];")
+  lines.append(f"  {sh_qual} float pk_sh_ep[{4 * ep_per_warp}];")
+  lines.append(f"  {sh_qual} float pk_sh_m[{bm}];")
+  lines.append(f"  {sh_qual} float pk_sh_l[{bm}];")
+  lines.append(f"  {sh_qual} float pk_sh_alpha[{bm}];")
+  lines.append(f"  {sh_qual} float pk_sh_red[{bm * lanes_per_row}];")
+
+  has_mask_buf = plan.mask_buf is not None and plan.mask_index is not None and plan.mask_fill is not None
+  has_mask_cond = plan.mask_cond is not None and plan.mask_fill is not None
+  if has_mask_buf:
+    lines.append(f"  {sh_qual} uint32_t pk_sh_mask[{bm}];")
+    lines.append(f"  {sh_qual} int pk_any_mask;")
+    lines.append(f"  {sh_qual} int pk_row_valid[{bm}];")
+    lines.append(f"  {sh_qual} int pk_all_valid;")
+    lines.append(f"  if (pk_tid < {bm}) pk_row_valid[pk_tid] = 0;")
+    lines.append("  if (pk_tid == 0) pk_all_valid = 0;")
+
+  o_buf = plan.out_bufs["o"]
+  lines.append("  if (pk_lt == 0) {")
+  lines.append(f"    pk_sh_m[pk_r] = {neg_inf};")
+  lines.append(f"    pk_sh_l[pk_r] = {zero_lit};")
+  lines.append("  }")
+  o_reg_cnt = MAX_REG_D // lanes_per_row
+  lines.append(f"  float pk_o_reg[{o_reg_cnt}];")
+  lines.append(f"  for (int pk_u = 0; pk_u < {o_reg_cnt}; ++pk_u) pk_o_reg[pk_u] = {zero_lit};")
+  lines.append(f"  if (pk_gi < pk_M && pk_D > {MAX_REG_D}) {{")
+  lines.append(f"    for ({idx_t} pk_d = pk_lt + {MAX_REG_D}; pk_d < pk_D; pk_d += {lanes_per_row}) {{")
+  lines.append(f"      {em.data(o_buf)}[pk_row_flat * pk_D + pk_d] = {zero_lit};")
+  lines.append("    }")
+  lines.append("  }")
+
+  lines.append("  const bool pk_q_hoisted = (pk_K <= 64);")
+  lines.append("  if (pk_q_hoisted) {")
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["q"],
+    "pk_sh_a",
+    bm,
+    64,
+    q_hoist_stride,
+    "pk_i0",
+    "0",
+    "pk_M",
+    "pk_K",
+    idx_t,
+    lines,
+    "    ",
+    zero_lit,
+  )
+  lines.append("  }")
+  lines.append(f"  {barrier}")
+
+  if "j_start" in plan.aux_exprs and "j_end" in plan.aux_exprs:
+    lines.append(f"  const {idx_t} pk_j_start = ({idx_t})({em.expr(plan.aux_exprs['j_start'])});")
+    lines.append(f"  const {idx_t} pk_j_end = ({idx_t})({em.expr(plan.aux_exprs['j_end'])});")
+  else:
+    lines.append(f"  const {idx_t} pk_j_start = 0;")
+    lines.append(f"  const {idx_t} pk_j_end = pk_N;")
+  is_neg_inf_fill = isinstance(plan.mask_fill, ir.Const) and float(plan.mask_fill.value) == float("-inf")
+  skip_eps = "105.0f" if is_cuda else "105.0"
+  tile_false_g, tile_true_g, origin_vars = _derive_mm_law5_guards(plan, bm, bn)
+
+  lines.append(f"  for ({idx_t} pk_j0 = pk_j_start; pk_j0 < pk_j_end; pk_j0 += {bn}) {{")
+  if tile_false_g is not None and origin_vars is not None:
+    i0_v, j0_v = origin_vars
+    lines.append(f"    const {idx_t} {i0_v.name} = pk_i0;")
+    lines.append(f"    const {idx_t} {j0_v.name} = pk_j0;")
+    if is_neg_inf_fill:
+      lines.append(f"    if ({em.expr(tile_false_g)}) continue;")
+    else:
+      lines.append(f"    if ({em.expr(tile_false_g)}) {{")
+      lines.append("      int pk_can_skip = 1;")
+      lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {bm}; ++pk_ri) {{")
+      lines.append(
+        f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}"
+      )
+      lines.append("      }")
+      lines.append("      if (pk_can_skip) continue;")
+      lines.append("    }")
+  if tile_true_g is not None and origin_vars is not None:
+    i0_v, j0_v = origin_vars
+    if tile_false_g is None:
+      lines.append(f"    const {idx_t} {i0_v.name} = pk_i0;")
+      lines.append(f"    const {idx_t} {j0_v.name} = pk_j0;")
+    lines.append(f"    const bool pk_tile_all_true = ({em.expr(tile_true_g)});")
+  else:
+    lines.append("    const bool pk_tile_all_true = false;")
+
+  if has_mask_buf:
+    assert plan.mask_index_vars is not None and plan.mask_buf is not None and plan.mask_index is not None
+    mi_v, mj_v = plan.mask_index_vars
+    lines.append("    if (pk_tid == 0) pk_any_mask = 0;")
+    lines.append(f"    {barrier}")
+    lines.append(f"    if (pk_tid < {bm}) {{")
+    lines.append(f"      const {idx_t} {mi_v.name} = pk_i0 + pk_tid;")
+    lines.append("      uint32_t pk_bits = 0u;")
+    lines.append(f"      if ({mi_v.name} < pk_M) {{")
+    lines.append("        for (int pk_b = 0; pk_b < 32; ++pk_b) {")
+    lines.append(f"          const {idx_t} {mj_v.name} = pk_j0 + pk_b;")
+    lines.append(f"          if ({mj_v.name} < pk_j_end && {em.data(plan.mask_buf)}[{em.expr(plan.mask_index)}]) {{")
+    lines.append("            pk_bits |= (1u << pk_b);")
+    lines.append("          }")
+    lines.append("        }")
+    lines.append("        if (pk_bits != 0u) { pk_any_mask = 1; pk_row_valid[pk_tid] = 1; }")
+    lines.append("      }")
+    lines.append("      pk_sh_mask[pk_tid] = pk_bits;")
+    lines.append("    }")
+    lines.append(f"    {barrier}")
+    if is_neg_inf_fill:
+      lines.append("    if (pk_any_mask == 0 && pk_all_valid) continue;")
+    else:
+      lines.append("    if (pk_any_mask == 0 && pk_all_valid) {")
+      lines.append("      int pk_can_skip = 1;")
+      lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {bm}; ++pk_ri) {{")
+      lines.append(
+        f"        if (pk_i0 + pk_ri < pk_M && !(pk_sh_l[pk_ri] > {zero_lit} && pk_sh_m[pk_ri] > pk_mfill + {skip_eps})) {{ pk_can_skip = 0; break; }}"
+      )
+      lines.append("      }")
+      lines.append("      if (pk_can_skip) continue;")
+      lines.append("    }")
+    lines.append("    if (pk_tid == 0 && !pk_all_valid) {")
+    lines.append("      int pk_av = 1;")
+    lines.append(f"      for ({idx_t} pk_ri = 0; pk_ri < {bm}; ++pk_ri) {{")
+    lines.append("        if (pk_i0 + pk_ri < pk_M && !pk_row_valid[pk_ri]) { pk_av = 0; break; }")
+    lines.append("      }")
+    lines.append("      pk_all_valid = pk_av;")
+    lines.append("    }")
+
+  if is_cuda:
+    lines.append("    fragment<accumulator, 16, 16, 8, float> pk_s_frag[2];")
+    lines.append("    fill_fragment(pk_s_frag[0], 0.0f);")
+    lines.append("    fill_fragment(pk_s_frag[1], 0.0f);")
+  else:
+    lines.append("    simdgroup_float8x8 pk_s_frag[4];")
+    for rn in range(4):
+      lines.append(f"    pk_s_frag[{rn}] = make_filled_simdgroup_matrix<float, 8, 8>(0.0);")
+
+  lines.append("    if (pk_q_hoisted) {")
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["k"],
+    "pk_sh_b",
+    bn,
+    64,
+    b_kt_stride if is_cuda else q_hoist_stride,
+    "pk_j0",
+    "0",
+    "pk_j_end",
+    "pk_K",
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
+    transpose=is_cuda,
+  )
+  lines.append(f"      {barrier}")
+  lines.append(f"      for ({idx_t} pk_tk = 0; pk_tk < pk_K; pk_tk += 8) {{")
+  if is_cuda:
+    lines.append("        fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa;")
+    lines.append("        fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb0, pk_fb1;")
+    lines.append(
+      f"        load_matrix_sync(pk_fa, &pk_sh_a[(pk_sgid * 16) * {q_hoist_stride} + pk_tk], {q_hoist_stride});"
+    )
+    lines.append(f"        load_matrix_sync(pk_fb0, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});")
+    lines.append(f"        load_matrix_sync(pk_fb1, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});")
+    lines.append("        mma_sync(pk_s_frag[0], pk_fa, pk_fb0, pk_s_frag[0]);")
+    lines.append("        mma_sync(pk_s_frag[1], pk_fa, pk_fb1, pk_s_frag[1]);")
+  else:
+    lines.append("        simdgroup_float8x8 pk_fa;")
+    lines.append(
+      f"        simdgroup_load(pk_fa, &pk_sh_a[(pk_sgid * 8) * {q_hoist_stride} + pk_tk], {q_hoist_stride});"
+    )
+    for rn in range(4):
+      lines.append("        { simdgroup_float8x8 pk_fb;")
+      lines.append(
+        f"          simdgroup_load(pk_fb, &pk_sh_b[({rn * 8}) * {q_hoist_stride} + pk_tk], {q_hoist_stride}, ulong2(0, 0), true);"
+      )
+      lines.append(f"          simdgroup_multiply_accumulate(pk_s_frag[{rn}], pk_fa, pk_fb, pk_s_frag[{rn}]); }}")
+  lines.append("      }")
+  lines.append("    } else {")
+  lines.append(f"      for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["q"],
+    "pk_sh_a",
+    bm,
+    bk,
+    k_stride,
+    "pk_i0",
+    "pk_k0",
+    "pk_M",
+    "pk_K",
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
+  )
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["k"],
+    "pk_sh_b",
+    bn,
+    bk,
+    b_kt_stride if is_cuda else k_stride,
+    "pk_j0",
+    "pk_k0",
+    "pk_j_end",
+    "pk_K",
+    idx_t,
+    lines,
+    "        ",
+    zero_lit,
+    transpose=is_cuda,
+  )
+  lines.append(f"        {barrier}")
+  lines.append(f"        const {idx_t} pk_klen = pk_K - pk_k0 < {bk} ? pk_K - pk_k0 : {bk};")
+  lines.append(f"        for ({idx_t} pk_tk = 0; pk_tk < pk_klen; pk_tk += 8) {{")
+  if is_cuda:
+    lines.append("          fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa;")
+    lines.append("          fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb0, pk_fb1;")
+    lines.append(f"          load_matrix_sync(pk_fa, &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride});")
+    lines.append(f"          load_matrix_sync(pk_fb0, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});")
+    lines.append(f"          load_matrix_sync(pk_fb1, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});")
+    lines.append("          mma_sync(pk_s_frag[0], pk_fa, pk_fb0, pk_s_frag[0]);")
+    lines.append("          mma_sync(pk_s_frag[1], pk_fa, pk_fb1, pk_s_frag[1]);")
+  else:
+    lines.append("          simdgroup_float8x8 pk_fa;")
+    lines.append(f"          simdgroup_load(pk_fa, &pk_sh_a[(pk_sgid * 8) * {k_stride} + pk_tk], {k_stride});")
+    for rn in range(4):
+      lines.append("          { simdgroup_float8x8 pk_fb;")
+      lines.append(
+        f"            simdgroup_load(pk_fb, &pk_sh_b[({rn * 8}) * {k_stride} + pk_tk], {k_stride}, ulong2(0, 0), true);"
+      )
+      lines.append(f"            simdgroup_multiply_accumulate(pk_s_frag[{rn}], pk_fa, pk_fb, pk_s_frag[{rn}]); }}")
+  lines.append("        }")
+  lines.append(f"        {barrier}")
+  lines.append("      }")
+  lines.append("    }")
+
+  if is_cuda:
+    lines.append(
+      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride}], pk_s_frag[0], {s_stride}, mem_row_major);"
+    )
+    lines.append(
+      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride} + 16], pk_s_frag[1], {s_stride}, mem_row_major);"
+    )
+  else:
+    for rn in range(4):
+      lines.append(
+        f"    simdgroup_store(pk_s_frag[{rn}], &pk_sh_s[(pk_sgid * 8) * {s_stride} + {rn * 8}], {s_stride});"
+      )
+  lines.append(f"    {warp_barrier}")
+
+  lines.append(f"    float pk_lmax = {neg_inf};")
+  lines.append(f"    for (int pk_c = 0; pk_c < {cols_per_lane}; ++pk_c) {{")
+  lines.append(f"      const {idx_t} pk_jc = pk_c * {lanes_per_row} + pk_lt;")
+  lines.append(f"      const {idx_t} pk_gj = pk_j0 + pk_jc;")
+  lines.append(f"      float pk_sv = {neg_inf};")
+  lines.append("      if (pk_gi < pk_M && pk_gj < pk_j_end) {")
+  lines.append(f"        pk_sv = pk_sh_s[pk_r * {s_stride} + pk_jc];")
+  if plan.score_scale is not None:
+    lines.append("        pk_sv *= pk_scale;")
+  if has_mask_buf:
+    lines.append("        if (!((pk_sh_mask[pk_r] >> pk_jc) & 1u)) pk_sv = pk_mfill;")
+  elif has_mask_cond:
+    assert plan.mask_index_vars is not None and plan.mask_cond is not None
+    mi_v, mj_v = plan.mask_index_vars
+    lines.append("        if (!pk_tile_all_true) {")
+    lines.append(f"          const {idx_t} {mi_v.name} = pk_gi;")
+    lines.append(f"          const {idx_t} {mj_v.name} = pk_gj;")
+    lines.append(f"          if (!({em.expr(plan.mask_cond)})) pk_sv = pk_mfill;")
+    lines.append("        }")
+  lines.append(f"        pk_lmax = {fmax}(pk_lmax, pk_sv);")
+  lines.append("      }")
+  lines.append(f"      pk_sh_s[pk_r * {s_stride} + pk_jc] = pk_sv;")
+  lines.append("    }")
+  lines.append(f"    pk_sh_red[pk_r * {lanes_per_row} + pk_lt] = pk_lmax;")
+  lines.append(f"    {warp_barrier}")
+
+  lines.append("    if (pk_lt == 0 && pk_gi < pk_M) {")
+  if lanes_per_row == 2:
+    lines.append(f"      float pk_tm = {fmax}(pk_sh_red[pk_r * 2], pk_sh_red[pk_r * 2 + 1]);")
+  else:
+    lines.append(
+      f"      float pk_tm = {fmax}({fmax}(pk_sh_red[pk_r * 4], pk_sh_red[pk_r * 4 + 1]), {fmax}(pk_sh_red[pk_r * 4 + 2], pk_sh_red[pk_r * 4 + 3]));"
+    )
+  lines.append("      float pk_mold = pk_sh_m[pk_r];")
+  lines.append(f"      if (pk_j0 == pk_j_start || pk_mold == {neg_inf}) {{")
+  lines.append("        pk_sh_m[pk_r] = pk_tm;")
+  lines.append(f"        pk_sh_alpha[pk_r] = {zero_lit};")
+  lines.append("      } else {")
+  lines.append(f"        float pk_mnew = {fmax}(pk_mold, pk_tm);")
+  lines.append("        pk_sh_m[pk_r] = pk_mnew;")
+  lines.append(f"        pk_sh_alpha[pk_r] = {expf}(pk_mold - pk_mnew);")
+  lines.append("      }")
+  lines.append(f"    }} else if (pk_lt == 0) {{ pk_sh_alpha[pk_r] = {zero_lit}; }}")
+  lines.append(f"    {warp_barrier}")
+
+  lines.append("    const float pk_mcur = pk_sh_m[pk_r];")
+  lines.append("    const float pk_al = pk_sh_alpha[pk_r];")
+  lines.append(f"    float pk_lsum = {zero_lit};")
+  lines.append(f"    for (int pk_c = 0; pk_c < {cols_per_lane}; ++pk_c) {{")
+  lines.append(f"      const {idx_t} pk_jc = pk_c * {lanes_per_row} + pk_lt;")
+  lines.append(f"      const {idx_t} pk_gj = pk_j0 + pk_jc;")
+  lines.append(f"      float pk_pv = {zero_lit};")
+  lines.append("      if (pk_gi < pk_M && pk_gj < pk_j_end) {")
+  lines.append(f"        float pk_sv2 = pk_sh_s[pk_r * {s_stride} + pk_jc];")
+  if is_neg_inf_fill:
+    lines.append(f"        pk_pv = (pk_sv2 > {neg_inf}) ? {expf}(pk_sv2 - pk_mcur) : {zero_lit};")
+  else:
+    lines.append(f"        pk_pv = {expf}(pk_sv2 - pk_mcur);")
+  lines.append("        pk_lsum += pk_pv;")
+  lines.append("      }")
+  lines.append(f"      pk_sh_s[pk_r * {s_stride} + pk_jc] = pk_pv;")
+  lines.append("    }")
+  lines.append(f"    pk_sh_red[pk_r * {lanes_per_row} + pk_lt] = pk_lsum;")
+  lines.append(f"    {warp_barrier}")
+  lines.append("    if (pk_lt == 0 && pk_gi < pk_M) {")
+  if lanes_per_row == 2:
+    lines.append("      pk_sh_l[pk_r] = pk_sh_l[pk_r] * pk_al + (pk_sh_red[pk_r * 2] + pk_sh_red[pk_r * 2 + 1]);")
+  else:
+    lines.append(
+      "      pk_sh_l[pk_r] = pk_sh_l[pk_r] * pk_al + (pk_sh_red[pk_r * 4] + pk_sh_red[pk_r * 4 + 1] + pk_sh_red[pk_r * 4 + 2] + pk_sh_red[pk_r * 4 + 3]);"
+    )
+  lines.append("    }")
+  lines.append(f"    {barrier}")
+
+  ep_ptr = (
+    f"float* pk_ep = &pk_sh_ep[pk_sgid * {ep_per_warp}];"
+    if is_cuda
+    else f"threadgroup float* pk_ep = &pk_sh_ep[pk_sgid * {ep_per_warp}];"
+  )
+  lines.append(f"    {ep_ptr}")
+  lines.append(f"    for ({idx_t} pk_d0 = 0; pk_d0 < pk_D; pk_d0 += 64) {{")
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["v"],
+    "pk_sh_b",
+    bn,
+    64,
+    q_hoist_stride,
+    "pk_j0",
+    "pk_d0",
+    "pk_j_end",
+    "pk_D",
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
+    transpose=False,
+  )
+  lines.append(f"      {barrier}")
+  if is_cuda:
+    lines.append("      for (int pk_rn = 0; pk_rn < 4; ++pk_rn) {")
+    lines.append("        if (pk_d0 + pk_rn * 16 >= pk_D) break;")
+    lines.append("        fragment<accumulator, 16, 16, 8, float> pk_pv;")
+    lines.append("        fill_fragment(pk_pv, 0.0f);")
+    lines.append("        #pragma unroll")
+    lines.append(f"        for (int pk_tk = 0; pk_tk < {bn}; pk_tk += 8) {{")
+    lines.append("          fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fp;")
+    lines.append("          fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fv;")
+    lines.append(f"          load_matrix_sync(pk_fp, &pk_sh_s[(pk_sgid * 16) * {s_stride} + pk_tk], {s_stride});")
+    lines.append(
+      f"          load_matrix_sync(pk_fv, &pk_sh_b[pk_tk * {q_hoist_stride} + pk_rn * 16], {q_hoist_stride});"
+    )
+    lines.append("          mma_sync(pk_pv, pk_fp, pk_fv, pk_pv);")
+    lines.append("        }")
+    lines.append("        store_matrix_sync(pk_ep, pk_pv, 16, mem_row_major);")
+    lines.append(f"        {warp_barrier}")
+    lines.append("        for (int pk_u = 0; pk_u < 8; ++pk_u) {")
+    lines.append(f"          const {idx_t} pk_col16 = pk_u * 2 + pk_lt;")
+    lines.append(f"          const {idx_t} pk_gd = pk_d0 + pk_rn * 16 + pk_col16;")
+    lines.append("          if (pk_gi < pk_M && pk_gd < pk_D) {")
+    lines.append("            const float pk_pv_sum = pk_ep[pk_lr * 16 + pk_col16];")
+    lines.append(f"            if (pk_d0 < {MAX_REG_D}) {{")
+    lines.append("              const int pk_slot = (int)((pk_d0 >> 1) + pk_rn * 8 + pk_u);")
+    lines.append("              pk_o_reg[pk_slot] = pk_o_reg[pk_slot] * pk_al + pk_pv_sum;")
+    lines.append("            } else {")
+    lines.append(
+      f"              {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] = {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] * pk_al + pk_pv_sum;"
+    )
+    lines.append("            }")
+    lines.append("          }")
+    lines.append("        }")
+    lines.append(f"        {warp_barrier}")
+    lines.append("      }")
+  else:
+    lines.append("      for (int pk_rn = 0; pk_rn < 8; ++pk_rn) {")
+    lines.append("        if (pk_d0 + pk_rn * 8 >= pk_D) break;")
+    lines.append("        simdgroup_float8x8 pk_pv = make_filled_simdgroup_matrix<float, 8, 8>(0.0);")
+    lines.append("        #pragma unroll")
+    lines.append(f"        for (int pk_tk = 0; pk_tk < {bn}; pk_tk += 8) {{")
+    lines.append("          simdgroup_float8x8 pk_fp, pk_fv;")
+    lines.append(f"          simdgroup_load(pk_fp, &pk_sh_s[(pk_sgid * 8) * {s_stride} + pk_tk], {s_stride});")
+    lines.append(f"          simdgroup_load(pk_fv, &pk_sh_b[pk_tk * {q_hoist_stride} + pk_rn * 8], {q_hoist_stride});")
+    lines.append("          simdgroup_multiply_accumulate(pk_pv, pk_fp, pk_fv, pk_pv);")
+    lines.append("        }")
+    lines.append("        simdgroup_store(pk_pv, pk_ep, 8);")
+    lines.append(f"        {warp_barrier}")
+    lines.append("        for (int pk_u = 0; pk_u < 2; ++pk_u) {")
+    lines.append(f"          const {idx_t} pk_col8 = pk_u * 4 + pk_lt;")
+    lines.append(f"          const {idx_t} pk_gd = pk_d0 + pk_rn * 8 + pk_col8;")
+    lines.append("          if (pk_gi < pk_M && pk_gd < pk_D) {")
+    lines.append("            const float pk_pv_sum = pk_ep[pk_lr * 8 + pk_col8];")
+    lines.append(f"            if (pk_d0 < {MAX_REG_D}) {{")
+    lines.append("              const int pk_slot = (int)((pk_d0 >> 2) + pk_rn * 2 + pk_u);")
+    lines.append("              pk_o_reg[pk_slot] = pk_o_reg[pk_slot] * pk_al + pk_pv_sum;")
+    lines.append("            } else {")
+    lines.append(
+      f"              {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] = {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] * pk_al + pk_pv_sum;"
+    )
+    lines.append("            }")
+    lines.append("          }")
+    lines.append("        }")
+    lines.append(f"        {warp_barrier}")
+    lines.append("      }")
+  lines.append(f"      {barrier}")
+  lines.append("    }")
+  lines.append("  }")
+
+  unnorm = "unnormalized" in plan.aux_exprs
+  lines.append("  if (pk_gi < pk_M) {")
+  if unnorm:
+    lines.append(f"    const float pk_inv_l = {one_lit};")
+  else:
+    lines.append(f"    const float pk_inv_l = {one_lit} / pk_sh_l[pk_r];")
+  lines.append(f"    for (int pk_u = 0; pk_u < {o_reg_cnt}; ++pk_u) {{")
+  lines.append(f"      const {idx_t} pk_gd = pk_u * {lanes_per_row} + pk_lt;")
+  lines.append("      if (pk_gd < pk_D) {")
+  lines.append(f"        {em.data(o_buf)}[pk_row_flat * pk_D + pk_gd] = pk_o_reg[pk_u] * pk_inv_l;")
+  lines.append("      }")
+  lines.append("    }")
+  lines.append(f"    for ({idx_t} pk_d = pk_lt + {MAX_REG_D}; pk_d < pk_D; pk_d += {lanes_per_row}) {{")
+  lines.append(f"      {em.data(o_buf)}[pk_row_flat * pk_D + pk_d] *= pk_inv_l;")
+  lines.append("    }")
+  lines.append("    if (pk_lt == 0) {")
+  if "m" in plan.out_bufs:
+    lines.append(f"      {em.data(plan.out_bufs['m'])}[pk_row_flat] = pk_sh_m[pk_r];")
+  if "l" in plan.out_bufs:
+    lines.append(f"      {em.data(plan.out_bufs['l'])}[pk_row_flat] = pk_sh_l[pk_r];")
+  if "lse" in plan.out_bufs:
+    lines.append(f"      {em.data(plan.out_bufs['lse'])}[pk_row_flat] = pk_sh_m[pk_r] + {logf}(pk_sh_l[pk_r]);")
+  lines.append("    }")
+  lines.append("  }")
+  lines.append("}")
+
+  written = {b.uid for b in plan.out_bufs.values()}
+  grid_shape = [*plan.batch_shape, plan.m_dim, ir.Const(1, ops.I)]
+  shape_meta = [("c", int(d.value)) if isinstance(d, ir.Const) else ("v", d.name) for d in grid_shape]
+  return KernelPlan(
+    loop=loop,
+    source="\n".join(lines),
+    scalars=scalars,
+    bufs=bufs,
+    errors=em.errors,
+    written={v.uid for v in bufs if v.uid in written},
+    extra={
+      "tiled": {
+        "bm": bm,
+        "bn": 1,
+        "bk": bk,
+        "tm": 1,
+        "tn": 1,
+        "threads": MM_THREADS,
+        "matrix_unit": "wmma" if is_cuda else "simdgroup_matrix",
+        "shape": shape_meta,
+      }
+    },
+  )
+
+
+def _generate_monoid_lse_matrix_unit(
+  loop: ParLoop,
+  plan: MonoidalTilePlan,
+  free: list[Var],
+  target: str,
+  em: CFamilyEmitter,
+  prelude: str,
+  max_buffers: int | None,
+) -> KernelPlan:
+  """Generate low-register hardware matrix-unit Cut Cross-Entropy / LogSumExp kernel
+  (Metal ``32x32x32`` ``simdgroup_matrix`` / CUDA ``64x32x32`` ``nvcuda::wmma`` TF32)."""
+  is_cuda = target == "cuda"
+  bm = MM_BM if is_cuda else MM_METAL_BM
+  bn = MM_BN if is_cuda else MM_METAL_BN
+  bk = MM_BK if is_cuda else MM_METAL_BK
+  lanes_per_row = 2 if is_cuda else 4
+  cols_per_lane = bn // lanes_per_row
+  k_stride = bk + 4
+  s_stride = bn + 4
+  b_kt_stride = bn + 4
+
+  zero_lit = "0.0f" if is_cuda else "0.0"
+  neg_inf = "((float)(-INFINITY))" if is_cuda else "(-INFINITY)"
+  expf = "expf" if is_cuda else "exp"
+  logf = "logf" if is_cuda else "log"
+  fmax = "fmaxf" if is_cuda else "fmax"
+
+  scalars = [v for v in free if not isinstance(v.type, BufType)]
+  bufs = [v for v in free if isinstance(v.type, BufType)]
+  if max_buffers is not None and len(bufs) > max_buffers:
+    raise Unsupported(f"it uses {len(bufs)} arrays ({target} kernels are limited to {max_buffers})")
+  for v in free:
+    em.ctype(v.type.elt if isinstance(v.type, BufType) else v.type)
+  if not is_cuda:
+    scalars = sorted(scalars, key=lambda v: -v.type.itemsize)
+
+  lines, idx_t, sh_qual, barrier, warp_barrier = _emit_mm_header(em, target, prelude, scalars, bufs)
+  if is_cuda:
+    lines.append("  using namespace nvcuda::wmma;")
+  lines.append(f"  const {idx_t} pk_M = ({idx_t})({em.expr(plan.m_dim)});")
+  lines.append(f"  const {idx_t} pk_N = ({idx_t})({em.expr(plan.n_dim)});")
+  lines.append(f"  const {idx_t} pk_K = ({idx_t})({em.expr(plan.k_dim)});")
+  _emit_batch_unravel(em, plan, "pk_M", bm, idx_t, lines)
+  lines.append(f"  const {idx_t} pk_i0 = pk_blk_r * {bm};")
+  lines.append(f"  const {idx_t} pk_gi = pk_i0 + pk_r;")
+  lines.append(f"  const {idx_t} pk_row_flat = pk_batch_id * pk_M + pk_gi;")
+  if plan.score_scale is not None:
+    lines.append(f"  const float pk_scale = (float)({em.expr(plan.score_scale)});")
+
+  lines.append(f"  {sh_qual} float pk_sh_a[{bm * k_stride}];")
+  lines.append(f"  {sh_qual} float pk_sh_b[{bk * b_kt_stride if is_cuda else bn * k_stride}];")
+  lines.append(f"  {sh_qual} float pk_sh_s[{bm * s_stride}];")
+  lines.append(f"  {sh_qual} float pk_sh_m[{bm}];")
+  lines.append(f"  {sh_qual} float pk_sh_l[{bm}];")
+  lines.append(f"  {sh_qual} float pk_sh_red[{bm * lanes_per_row}];")
+
+  has_target = "target_buf" in plan.aux_exprs and "target_index" in plan.aux_exprs
+  if has_target:
+    tbuf = plan.aux_exprs["target_buf"]
+    tidx = plan.aux_exprs["target_index"]
+    assert isinstance(tbuf, Var)
+    lines.append(f"  {sh_qual} {idx_t} pk_sh_tgt[{bm}];")
+    lines.append(f"  {sh_qual} float pk_sh_pick[{bm}];")
+    lines.append("  if (pk_lt == 0) {")
+    lines.append(f"    pk_sh_pick[pk_r] = {zero_lit};")
+    lines.append("    if (pk_gi < pk_M) {")
+    t_orig = next((x for x in ir.walk_expr(tidx) if isinstance(x, Var) and x.name.startswith("lo_")), None)
+    if t_orig is not None:
+      lines.append(f"      const {idx_t} {t_orig.name} = pk_gi;")
+    lines.append(f"      {idx_t} pk_tv = ({idx_t}){em.data(tbuf)}[{em.expr(tidx)}];")
+    lines.append("      if (pk_tv < 0) pk_tv += pk_N;")
+    lines.append("      pk_sh_tgt[pk_r] = pk_tv;")
+    lines.append("    } else {")
+    lines.append("      pk_sh_tgt[pk_r] = -1;")
+    lines.append("    }")
+    lines.append("  }")
+
+  lines.append("  if (pk_lt == 0) {")
+  lines.append(f"    pk_sh_m[pk_r] = {neg_inf};")
+  lines.append(f"    pk_sh_l[pk_r] = {zero_lit};")
+  lines.append("  }")
+  lines.append(f"  {barrier}")
+
+  lines.append(f"  for ({idx_t} pk_j0 = 0; pk_j0 < pk_N; pk_j0 += {bn}) {{")
+  if is_cuda:
+    lines.append("    fragment<accumulator, 16, 16, 8, float> pk_s_frag[2];")
+    lines.append("    fill_fragment(pk_s_frag[0], 0.0f);")
+    lines.append("    fill_fragment(pk_s_frag[1], 0.0f);")
+  else:
+    lines.append("    simdgroup_float8x8 pk_s_frag[4];")
+    for rn in range(4):
+      lines.append(f"    pk_s_frag[{rn}] = make_filled_simdgroup_matrix<float, 8, 8>(0.0);")
+
+  lines.append(f"    for ({idx_t} pk_k0 = 0; pk_k0 < pk_K; pk_k0 += {bk}) {{")
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["h"],
+    "pk_sh_a",
+    bm,
+    bk,
+    k_stride,
+    "pk_i0",
+    "pk_k0",
+    "pk_M",
+    "pk_K",
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
+  )
+  _emit_mm_stage_load_2d(
+    em,
+    plan.stages["w"],
+    "pk_sh_b",
+    bn,
+    bk,
+    b_kt_stride if is_cuda else k_stride,
+    "pk_j0",
+    "pk_k0",
+    "pk_N",
+    "pk_K",
+    idx_t,
+    lines,
+    "      ",
+    zero_lit,
+    transpose=is_cuda,
+  )
+  lines.append(f"      {barrier}")
+  lines.append(f"      const {idx_t} pk_klen = pk_K - pk_k0 < {bk} ? pk_K - pk_k0 : {bk};")
+  lines.append(f"      for ({idx_t} pk_tk = 0; pk_tk < pk_klen; pk_tk += 8) {{")
+  if is_cuda:
+    lines.append("        fragment<matrix_a, 16, 16, 8, precision::tf32, row_major> pk_fa;")
+    lines.append("        fragment<matrix_b, 16, 16, 8, precision::tf32, row_major> pk_fb0, pk_fb1;")
+    lines.append(f"        load_matrix_sync(pk_fa, &pk_sh_a[(pk_sgid * 16) * {k_stride} + pk_tk], {k_stride});")
+    lines.append(f"        load_matrix_sync(pk_fb0, &pk_sh_b[pk_tk * {b_kt_stride}], {b_kt_stride});")
+    lines.append(f"        load_matrix_sync(pk_fb1, &pk_sh_b[pk_tk * {b_kt_stride} + 16], {b_kt_stride});")
+    lines.append("        mma_sync(pk_s_frag[0], pk_fa, pk_fb0, pk_s_frag[0]);")
+    lines.append("        mma_sync(pk_s_frag[1], pk_fa, pk_fb1, pk_s_frag[1]);")
+  else:
+    lines.append("        simdgroup_float8x8 pk_fa;")
+    lines.append(f"        simdgroup_load(pk_fa, &pk_sh_a[(pk_sgid * 8) * {k_stride} + pk_tk], {k_stride});")
+    for rn in range(4):
+      lines.append("        { simdgroup_float8x8 pk_fb;")
+      lines.append(
+        f"          simdgroup_load(pk_fb, &pk_sh_b[({rn * 8}) * {k_stride} + pk_tk], {k_stride}, ulong2(0, 0), true);"
+      )
+      lines.append(f"          simdgroup_multiply_accumulate(pk_s_frag[{rn}], pk_fa, pk_fb, pk_s_frag[{rn}]); }}")
+  lines.append("      }")
+  lines.append(f"      {barrier}")
+  lines.append("    }")
+
+  if is_cuda:
+    lines.append(
+      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride}], pk_s_frag[0], {s_stride}, mem_row_major);"
+    )
+    lines.append(
+      f"    store_matrix_sync(&pk_sh_s[(pk_sgid * 16) * {s_stride} + 16], pk_s_frag[1], {s_stride}, mem_row_major);"
+    )
+  else:
+    for rn in range(4):
+      lines.append(
+        f"    simdgroup_store(pk_s_frag[{rn}], &pk_sh_s[(pk_sgid * 8) * {s_stride} + {rn * 8}], {s_stride});"
+      )
+  lines.append(f"    {warp_barrier}")
+
+  lines.append(f"    float pk_lmax = {neg_inf};")
+  lines.append(f"    for (int pk_c = 0; pk_c < {cols_per_lane}; ++pk_c) {{")
+  lines.append(f"      const {idx_t} pk_jc = pk_c * {lanes_per_row} + pk_lt;")
+  lines.append(f"      const {idx_t} pk_gj = pk_j0 + pk_jc;")
+  lines.append(f"      float pk_sv = {neg_inf};")
+  lines.append("      if (pk_gi < pk_M && pk_gj < pk_N) {")
+  lines.append(f"        pk_sv = pk_sh_s[pk_r * {s_stride} + pk_jc];")
+  if plan.score_scale is not None:
+    lines.append("        pk_sv *= pk_scale;")
+  if has_target:
+    lines.append("        if (pk_gj == pk_sh_tgt[pk_r]) pk_sh_pick[pk_r] = pk_sv;")
+  lines.append(f"        pk_lmax = {fmax}(pk_lmax, pk_sv);")
+  lines.append("      }")
+  lines.append(f"      pk_sh_s[pk_r * {s_stride} + pk_jc] = pk_sv;")
+  lines.append("    }")
+  lines.append(f"    pk_sh_red[pk_r * {lanes_per_row} + pk_lt] = pk_lmax;")
+  lines.append(f"    {warp_barrier}")
+
+  lines.append("    if (pk_lt == 0 && pk_gi < pk_M) {")
+  if lanes_per_row == 2:
+    lines.append(f"      float pk_tm = {fmax}(pk_sh_red[pk_r * 2], pk_sh_red[pk_r * 2 + 1]);")
+  else:
+    lines.append(
+      f"      float pk_tm = {fmax}({fmax}(pk_sh_red[pk_r * 4], pk_sh_red[pk_r * 4 + 1]), {fmax}(pk_sh_red[pk_r * 4 + 2], pk_sh_red[pk_r * 4 + 3]));"
+    )
+  lines.append("      if (pk_j0 == 0) {")
+  lines.append("        pk_sh_m[pk_r] = pk_tm;")
+  lines.append("      } else {")
+  lines.append("        float pk_mold = pk_sh_m[pk_r];")
+  lines.append(f"        float pk_mnew = {fmax}(pk_mold, pk_tm);")
+  lines.append("        pk_sh_m[pk_r] = pk_mnew;")
+  lines.append(f"        pk_sh_l[pk_r] *= {expf}(pk_mold - pk_mnew);")
+  lines.append("      }")
+  lines.append("    }")
+  lines.append(f"    {warp_barrier}")
+
+  lines.append("    const float pk_mcur = pk_sh_m[pk_r];")
+  lines.append(f"    float pk_lsum = {zero_lit};")
+  lines.append(f"    for (int pk_c = 0; pk_c < {cols_per_lane}; ++pk_c) {{")
+  lines.append(f"      const {idx_t} pk_jc = pk_c * {lanes_per_row} + pk_lt;")
+  lines.append(f"      const {idx_t} pk_gj = pk_j0 + pk_jc;")
+  lines.append("      if (pk_gi < pk_M && pk_gj < pk_N) {")
+  lines.append(f"        pk_lsum += {expf}(pk_sh_s[pk_r * {s_stride} + pk_jc] - pk_mcur);")
+  lines.append("      }")
+  lines.append("    }")
+  lines.append(f"    pk_sh_red[pk_r * {lanes_per_row} + pk_lt] = pk_lsum;")
+  lines.append(f"    {warp_barrier}")
+  lines.append("    if (pk_lt == 0 && pk_gi < pk_M) {")
+  if lanes_per_row == 2:
+    lines.append("      pk_sh_l[pk_r] += (pk_sh_red[pk_r * 2] + pk_sh_red[pk_r * 2 + 1]);")
+  else:
+    lines.append(
+      "      pk_sh_l[pk_r] += (pk_sh_red[pk_r * 4] + pk_sh_red[pk_r * 4 + 1] + pk_sh_red[pk_r * 4 + 2] + pk_sh_red[pk_r * 4 + 3]);"
+    )
+  lines.append("    }")
+  lines.append(f"    {barrier}")
+  lines.append("  }")
+
+  lines.append("  if (pk_lt == 0 && pk_gi < pk_M) {")
+  lines.append(f"    const float pk_lse = pk_sh_m[pk_r] + {logf}(pk_sh_l[pk_r]);")
+  if "m" in plan.out_bufs:
+    lines.append(f"    {em.data(plan.out_bufs['m'])}[pk_row_flat] = pk_sh_m[pk_r];")
+  if "l" in plan.out_bufs:
+    lines.append(f"    {em.data(plan.out_bufs['l'])}[pk_row_flat] = pk_sh_l[pk_r];")
+  if "out" in plan.out_bufs and has_target:
+    lines.append(f"    {em.data(plan.out_bufs['out'])}[pk_row_flat] = pk_sh_pick[pk_r] - pk_lse;")
+  if "picked_sub_m" in plan.out_bufs and has_target:
+    lines.append(f"    {em.data(plan.out_bufs['picked_sub_m'])}[pk_row_flat] = pk_sh_pick[pk_r] - pk_sh_m[pk_r];")
+  if "lse" in plan.out_bufs:
+    lines.append(f"    {em.data(plan.out_bufs['lse'])}[pk_row_flat] = pk_lse;")
+  lines.append("  }")
+  lines.append("}")
+
+  written = {b.uid for b in plan.out_bufs.values()}
+  grid_shape = [*plan.batch_shape, plan.m_dim, ir.Const(1, ops.I)]
+  shape_meta = [("c", int(d.value)) if isinstance(d, ir.Const) else ("v", d.name) for d in grid_shape]
+  return KernelPlan(
+    loop=loop,
+    source="\n".join(lines),
+    scalars=scalars,
+    bufs=bufs,
+    errors=em.errors,
+    written={v.uid for v in bufs if v.uid in written},
+    extra={
+      "tiled": {
+        "bm": bm,
+        "bn": 1,
+        "bk": bk,
+        "tm": 1,
+        "tn": 1,
+        "threads": MM_THREADS,
+        "matrix_unit": "wmma" if is_cuda else "simdgroup_matrix",
+        "shape": shape_meta,
+      }
+    },
+  )
+
+
 def generate_monoidal_gpu_kernel(
   loop: ParLoop,
   free: list[Var],
@@ -1746,20 +2690,36 @@ def generate_monoidal_gpu_kernel(
   em: CFamilyEmitter,
   prelude: str,
   max_buffers: int | None = None,
+  profile: TargetProfile | None = None,
 ) -> KernelPlan | None:
   """Generate a cooperative SRAM-tiled CUDA or Metal kernel for ``loop.monoidal_tile``."""
   plan = loop.monoidal_tile
   if plan is None:
     return None
+  use_mm = _use_monoidal_matrix_unit(plan, target, profile)
   if plan.kind == "flash_monoid":
+    if use_mm:
+      return _generate_flash_monoid_matrix_unit(loop, plan, free, target, em, prelude, max_buffers)
     return _generate_flash_monoid(loop, plan, free, target, em, prelude, max_buffers)
   if plan.kind == "flash_monoid_bwd":
     return _generate_flash_monoid_bwd(loop, plan, free, target, em, prelude, max_buffers)
   if plan.kind == "monoid_lse":
+    if use_mm:
+      return _generate_monoid_lse_matrix_unit(loop, plan, free, target, em, prelude, max_buffers)
     return _generate_monoid_lse(loop, plan, free, target, em, prelude, max_buffers)
   if plan.kind == "cce_bwd":
     return _generate_cce_bwd(loop, plan, free, target, em, prelude, max_buffers)
   return None
 
 
-__all__ = ["MONOID_BK", "MONOID_BM", "MONOID_BN", "MONOID_THREADS", "generate_monoidal_gpu_kernel"]
+__all__ = [
+  "MM_BK",
+  "MM_BM",
+  "MM_BN",
+  "MM_THREADS",
+  "MONOID_BK",
+  "MONOID_BM",
+  "MONOID_BN",
+  "MONOID_THREADS",
+  "generate_monoidal_gpu_kernel",
+]
