@@ -6,13 +6,15 @@ Rubinsteyn** (`@iskandr`), with major contributions from **Eric Hielscher**
 advice from **Russell Power**. The original project was hosted at
 `parakeetpython.com` and documented in:
 
-* **Alex Rubinsteyn**, [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/visual/files/Rubinsteyn_Alex.pdf)
+* **Alex Rubinsteyn**, [*Runtime Compilation of Array-Oriented Python Programs*](https://cs.nyu.edu/media/publications/rubinsteyn_alex.pdf)
   (PhD thesis, NYU, 2014) — type and value specialization, data-parallel
   adverbs, and algebraic fusion.
-* **Eric Hielscher**, *Locality Optimization for Data Parallel Programs*
-  (PhD thesis, NYU, 2013) — tiling, register blocking, and loop interchange
-  over adverb trees.
-* Papers and talks: [HotPar '12](https://www.usenix.org/conference/hotpar12/parakeet-just-time-parallel-accelerator-python)
+* **Eric Hielscher, Alex Rubinsteyn, and Dennis Shasha**,
+  [*Locality Optimization for Data Parallel Programs*](https://arxiv.org/abs/1304.1835)
+  (NYU CS Technical Report TR2013-955 / Eric Hielscher's 2013 NYU PhD thesis
+  work) — `TiledMap`, `TiledReduce`, and `TiledScan` for unified cache tiling,
+  register blocking, and loop interchange over adverb trees.
+* Papers and talks: [HotPar '12](https://www.usenix.org/conference/hotpar12/workshop-program/presentation/rubinsteyn)
   (*Parakeet: A Just-In-Time Parallel Accelerator for Python*),
   [PyData Boston '13](https://vimeo.com/73895275), and
   [PyData NYC '13](https://vimeo.com/79556629) (*Python on the GPU with Parakeet*).
@@ -46,24 +48,29 @@ length, or a unit dimension of length `1` that controls broadcasting — Parakee
 specializes on that value automatically. That resolves the broadcasting corner
 case noted in Rubinsteyn's thesis (`200×1 + 1×300`) statically at compile time.
 
-### 2. Lower everything to five data-parallel operators
+### 2. Lower everything to a small index-operator core
 
 Instead of maintaining hundreds of hand-written C or GPU kernels for every
 NumPy function, Parakeet defines array expressions, comprehensions, matrix
-products, `einsum`, and user-written adverbs in terms of five operator
-statements:
+products, `einsum`, and user-written adverbs in terms of a small set of core
+index-operator statements:
 
 * `IndexMap` — independent computation over an index space
 * `IndexReduce` — associative or sequential folds (including multi-carry state
   such as `argmin`/`argmax` and online `logsumexp`, plus guarded filtered
   reductions)
 * `IndexScan` — prefix folds with an optional emit stage
-* `IndexFilter` — stream compaction of indices matching a predicate
+* `IndexFilter` — 1-to-0/1 stream compaction of indices matching a predicate
+* `IndexExpand` — 1-to-K ragged compaction (`flatmap`, `filter_pairs`)
 * `IndexScatter` — associative index-directed scatter-add (`np.bincount`,
   `parakeet.scatter_add`)
+* `IndexWavefront` — anti-diagonal / banded 2D semiring dynamic programming
+  (`wavefront`, `batched_wavefront`, `soft_align`)
+* `IndexTile` — explicit cache and GPU shared-memory tile staging emitted by
+  the middle end
 
 You can inspect a function at this level at any time via
-`f.specialize(*args).operators`.
+`f.specialize(*args).operators` or `parakeet.show_rewrite(f, *args)`.
 
 ### 3. Fuse algebraically before lowering to loops
 

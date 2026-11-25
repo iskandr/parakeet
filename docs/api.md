@@ -40,13 +40,13 @@
 
 ::: parakeet.clear_cache
 
-## Algebraic DSL and rewrite inspection
+## Structured folds and rewrite inspection
 
-::: parakeet.dsl.show_rewrite
+::: parakeet.show_rewrite
 
-::: parakeet.dsl.RewriteReport
+::: parakeet.RewriteReport
 
-::: parakeet.dsl.fold
+::: parakeet.fold
 
 ## Diagnostics and verification
 

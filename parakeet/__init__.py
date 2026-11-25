@@ -4,9 +4,9 @@ Decorate an array-oriented function with :func:`jit` and Parakeet compiles a
 type-specialised native version the first time it is called::
 
     import numpy as np
-    from parakeet import jit
+    import parakeet as par
 
-    @jit
+    @par.jit
     def scaled_tanh(x, alpha=0.5, beta=0.3):
         return np.tanh(x * alpha) + beta
 
@@ -38,6 +38,7 @@ from .api import (
   typed_repr,
 )
 from .config import config, options
+from .dsl import RewriteReport, show_rewrite
 from .errors import (
   BackendError,
   BackendUnavailable,
@@ -56,8 +57,10 @@ from .lib.adverbs import (
   each,
   filter,  # noqa: A004
   filter_reduce,
+  fold,
   grad,
   imap,
+  ipa_attention,
   ireduce,
   map,  # noqa: A004
   outer_map,
@@ -65,6 +68,9 @@ from .lib.adverbs import (
   reduce,
   scan,
   scatter_add,
+  tanimoto_topk,
+  topk,
+  topk_fold,
   value_and_grad,
 )
 from .lib.expand_lib import filter_pairs, flatmap
@@ -102,6 +108,10 @@ from .transforms.verify import verify
 pmap1 = jit(_pmap1)
 pmap2 = jit(_pmap2)
 pmap2_trim = jit(_pmap2_trim)
+scatter = scatter_add
+iscan = scan
+iscatter = scatter_add
+ifilter_reduce = filter_reduce
 
 # Element-wise primitives usable as first-class functions, e.g. reduce(add, x)
 from .prims import (  # noqa: E402
@@ -180,15 +190,18 @@ def clear_cache() -> int:
 
 __all__ = [
     "BackendError", "BackendUnavailable", "BlockMask", "CompileError", "DeviceArray", "FallbackWarning",
-    "FrozenHashTable", "MatrixUnit", "ParakeetError", "RaggedArray", "SortedIndex", "Specialization",
-    "StaticValueError", "TargetProfile",
+    "FrozenHashTable", "MatrixUnit", "ParakeetError", "RaggedArray", "RewriteReport", "SortedIndex",
+    "Specialization", "StaticValueError", "TargetProfile",
     "TypeInferenceError", "UnsupportedError", "__version__",
-    "allpairs", "available_backends", "batched_wavefront", "bf16_to_f32", "block_sparse_attention", "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
-    "f32_to_bf16", "filter", "filter_pairs", "flatmap", "imap",
-    "ireduce", "jit", "lib", "map", "morton_order", "options", "outer_map", "parfor", "pmap1", "pmap2",
-    "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter_add", "seed",
+    "allpairs", "available_backends", "batched_wavefront", "bf16_to_f32", "block_sparse_attention",
+    "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
+    "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "flatmap", "fold", "ifilter_reduce",
+    "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jit", "lib", "map", "morton_order",
+    "options", "outer_map", "parfor", "pmap1", "pmap2",
+    "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter", "scatter_add", "seed",
     "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
-    "soft_align", "spatial_cutoff_sum", "varlen_flash_attention", "wavefront",
+    "show_rewrite", "soft_align", "spatial_cutoff_sum", "tanimoto_topk", "topk", "topk_fold",
+    "varlen_flash_attention", "wavefront",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
     "to_device", "to_host", "typed_repr",
     "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",

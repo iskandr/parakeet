@@ -1,47 +1,42 @@
 # Kernel gallery
 
-Parakeet gives you two clean, self-contained ways to write compiled kernels
-over the same algebraic IR:
+Parakeet compiles ordinary NumPy code and explicit data-parallel operators
+(`par.map`, `par.allpairs`, `par.fold`, `par.imap`, `par.ireduce`, `par.scatter_add`)
+through the **same** `@par.jit` decorator and the **same** algebraic IR.
 
-1. **NumPy frontend (`@parakeet.jit` + `np.*`):** Write ordinary NumPy
-   broadcasting, reductions, and matrix products.
-2. **Explicit DSL (`@dsl.kernel` + `dsl.*`):** Write data-parallel kernels
-   directly using `dsl.map`, `dsl.allpairs`, `dsl.fold`, `dsl.imap`,
-   `dsl.ireduce`, `dsl.scatter`, and `dsl.*` primitives (`dsl.min`, `dsl.sum`,
-   `dsl.argmin`, `dsl.isnan`, `dsl.f32`, ...) — no `np.*` or top-level
-   `parakeet.*` syntax required.
+**How this page is organized:** each section presents one numerical workload.
+Where a section has tabs, those tabs show **alternative ways to write the exact
+same computation** — broadcasting NumPy vs. explicit Parakeet operators — so
+you can compare how both lower to the same fused, tiled schedule.
 
-Start with [one nearest-neighbor query](#exact-nearest-neighbor) comparing both
-frontends side by side, then [change what the fold remembers](#inverse-distance-smoothing).
-For a complete end-to-end training script, try [nanoGPT](gallery/nanogpt.md).
-Every snippet below is included directly from runnable repository examples
-(`python -m examples.algebraic_gallery`).
+Start with [exact nearest-neighbor search](#exact-nearest-neighbor), then
+[swap the fold state](#inverse-distance-smoothing) to turn search into
+kernel smoothing. For a complete end-to-end training script, walk through
+[nanoGPT](gallery/nanogpt.md). For genomics, cheminformatics, and 3D protein
+kernels, see [Bioinformatics & structural biology](bioinformatics.md).
+
+Every snippet below is included directly from
+[`examples/algebraic_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py)
+and verified by `python -m examples.algebraic_gallery`.
 
 ```python
-# NumPy frontend:
-import numpy as np
-import parakeet
-
-# Explicit DSL frontend (self-contained — no numpy needed inside @dsl.kernel):
 from typing import NamedTuple
-from parakeet import dsl
+import numpy as np
+import parakeet as par
 ```
-
-The same `@parakeet.jit` decorator compiles both ordinary NumPy and explicit
-operators such as `dsl.map`, `dsl.allpairs`, `dsl.imap`, `dsl.ireduce`,
-`dsl.iscatter`, and `dsl.fold` (`dsl.kernel` is an alias for `parakeet.jit`).
-[Browse the source](https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py).
-
-The axis-fold examples below use the development version after 1.0.0. To run
-them, install the current checkout with `python -m pip install -e .`.
 
 ## Exact nearest neighbor
 
-Given `Q` query rows and `R` reference rows with the same feature count, return
-the index of the closest reference to each query. For a query at 1 and
-references at 0, 2, and 4, the squared distances are `[1, 1, 9]`, so the answer
-is index `0` because ties keep the earlier index (and the first NaN wins,
-matching NumPy).
+Exact nearest-neighbor search finds, for each of `Q` query vectors in
+$\mathbb{R}^D$, the index of the closest vector among `R` reference vectors
+under Euclidean distance. Writing this with broadcasting NumPy is two lines,
+but executing it eagerly allocates a full `Q × R` distance matrix — `64 MiB`
+at `Q = 1,024, R = 16,384` — that thrashes cache and GPU memory.
+
+Parakeet fuses the distance calculation directly into an ordered tiled
+reduction across `R`, keeping only a small score tile in L1 cache or GPU shared
+memory (`16 KiB` per block) and preserving NumPy's exact first-index rule on
+equal-distance ties and NaNs.
 
 === "Broadcasting NumPy"
 
@@ -49,11 +44,11 @@ matching NumPy).
     --8<-- "examples/algebraic_gallery.py:nearest_numpy"
     ```
 
-=== "Map and argmin"
+=== "Nested `par.map` and `argmin`"
 
-    For each query, map the same distance function over the references and
-    return the position of its smallest value. The outer map repeats that
-    search for every query.
+    For each query row, map the squared distance over all reference rows and
+    take `argmin`. The outer `par.map` runs that search in parallel across
+    queries.
 
     ```python
     --8<-- "examples/algebraic_gallery.py:squared_distance"
@@ -61,7 +56,11 @@ matching NumPy).
     --8<-- "examples/algebraic_gallery.py:exact_1nn"
     ```
 
-=== "All pairs and a structured fold"
+=== "`par.allpairs` and structured `par.fold`"
+
+    Define the logical `Q × R` domain with `par.allpairs`, pack each
+    `(distance, index)` pair into a `NamedTuple`, and reduce with an explicit
+    associative merge rule (`first_minimum`).
 
     ```python
     --8<-- "examples/algebraic_gallery.py:squared_distance"
@@ -69,21 +68,17 @@ matching NumPy).
     --8<-- "examples/algebraic_gallery.py:nearest_fold"
     ```
 
-In `nearest_fold`, `allpairs` defines the logical `Q × R` domain of squared
-distances, `Winner` pairs each distance with its reference index, and
-`first_minimum` merges adjacent winners while keeping left ties and the first
-NaN. With the axis-fold extension, both forms compile to the pairwise tile
-schedule on CPU, Metal, and CUDA without materializing the full `Q × R`
-distance matrix. The published 1.0.0 and post-release comparisons used the
-nested-map spelling for the explicit implementation. [Measured timings,
-allocations and revision details](release-benchmarks.md#gpu-pairwise-fold-after-100).
+All three spellings compile to the tiled pairwise schedule on CPU, Metal, and
+CUDA without allocating the `Q × R` distance matrix.
+[Compare timings, scaling, and scratch memory](release-benchmarks.md#scaling-exact-1-nn-with-reference-count).
 
 ## Inverse-distance smoothing
 
-Use the same squared distances to predict a scalar observation at each query.
-Each reference contributes `(w, w * value)` with `w = 1 / (1 + distance²)`. The
-compiler computes each score once, sums both fields over each tile, and divides
-the two totals after the final merge.
+Swap the fold state from `(min_distance, index)` to `(weight_sum, weighted_sum)`
+and the same squared distances predict a smoothed scalar observation at each
+query with weight $w_{ij} = 1 / (1 + \|q_i - r_j\|^2)$. Parakeet computes each
+distance once, sums both fields inside each tile, and divides the totals after
+the final merge.
 
 === "Broadcasting NumPy"
 
@@ -91,7 +86,7 @@ the two totals after the final merge.
     --8<-- "examples/algebraic_gallery.py:weighted_numpy"
     ```
 
-=== "Parallel operators"
+=== "`par.allpairs` and `par.fold`"
 
     ```python
     --8<-- "examples/algebraic_gallery.py:squared_distance"
@@ -99,21 +94,14 @@ the two totals after the final merge.
     --8<-- "examples/algebraic_gallery.py:weighted_fold"
     ```
 
-## nanoGPT
-
-Train a two-layer transformer to predict the next character in a short text.
-The [complete nanoGPT walkthrough](gallery/nanogpt.md) shows the entire runnable
-program in order, from the first import to the final training step. It follows
-one input sequence through causal attention, then uses `parakeet.map` and
-`parakeet.value_and_grad` to train on a batch.
-
 ## Gaussian kernel regression
 
-Predict each query's value by weighting reference values by squared distance
-(Nadaraya-Watson smoothing). The running maximum, weight sum, and weighted
-output form an associative monoid, so the compiler streams references in tiles
-instead of allocating an `N × M` weight matrix. That is the same monoidal
-reduction at the heart of softmax attention.
+Nadaraya-Watson kernel regression predicts each query's target vector by
+weighting reference observations with a Gaussian kernel
+$\exp(-\gamma \|q_i - x_j\|^2)$. Because the running maximum, weight sum, and
+weighted output form an associative rescaled monoid ([Law 1](algebra.md#law-1-rescaled-semiring-monoids)),
+Parakeet streams references in tiles instead of allocating an `N × M` weight
+matrix — the exact same monoidal pass that powers FlashAttention.
 
 ```python
 --8<-- "examples/algebraic_gallery.py:rbf_kernel_regression"
@@ -121,10 +109,11 @@ reduction at the heart of softmax attention.
 
 ## Histograms and tree splits
 
-Accumulate gradients and Hessians into the same bins, take prefix sums, and
-pick the best split — the core loop of histogram-based gradient boosted trees.
-When the two scatter-adds share the same bin-index expression, Parakeet fuses
-them into a single traversal of the observations.
+Histogram-based gradient boosted trees accumulate gradients and Hessians into
+feature bins, scan cumulative left/right sums, and pick the split bin with the
+highest gain. Because both `par.scatter_add` calls share the same `bin_ids`
+index array, Parakeet fuses them into a single privatized traversal over the
+observations ([Law 6](algebra.md#law-6-privatized-scatter-multi-state-carries)).
 
 ```python
 --8<-- "examples/algebraic_gallery.py:gbdt_best_split"
@@ -132,134 +121,104 @@ them into a single traversal of the observations.
 
 ## Min-plus matrix product
 
-Replace multiplication with addition and addition with minimum. Each cell takes
-the shortest two-leg path through an intermediate vertex. Writing the reduction
-directly over `(m, n)` and `k` avoids an `m × n × k` temporary and triggers the
-same cache and register tiling as ordinary matrix multiplication.
+In shortest-path and tropical algebra, matrix multiplication replaces `(*, +)`
+with `(+, min)`: $C_{ij} = \min_r (A_{ir} + B_{rj})$. Writing the inner
+reduction explicitly with `par.imap` and `par.ireduce(..., combine=par.minimum)`
+avoids an `m × n × k` broadcast tensor and triggers the same cache and register
+tiling as standard matrix multiplication.
 
 ```python
 --8<-- "examples/algebraic_gallery.py:tropical_min_plus"
 ```
 
-## Attention and linear cross-entropy
+## Causal attention
 
-Both computations normalize scores over a large inner dimension (`T` keys or `V`
-vocabulary entries) and fold them into a much smaller output. Tiling the
-monoidal reduction avoids materializing the `T × T` attention matrix or the
-`M × V` logit matrix, and the backward pass recomputes score tiles from the
-inputs instead of saving them on the tape.
+Write scaled dot-product attention with a causal mask in six lines of NumPy.
+Law 1 tiles the softmax-weighted contraction into a single streaming pass with
+no `T × T` score matrix, Law 5 proves upper-triangular tiles are completely
+masked and skips loading their keys and values, and Law 2 recomputes score
+tiles during `par.grad` instead of saving them on the backward tape.
 
-=== "Causal attention"
+```python
+--8<-- "examples/algebraic_gallery.py:causal_flash_attention"
+```
 
-    ```python
-    --8<-- "examples/algebraic_gallery.py:causal_flash_attention"
-    ```
+For a sliding window, intersect the mask with `(i - j) <= window`; interval
+analysis skips tiles outside the window automatically. See
+[Algebraic laws](algebra.md).
 
-=== "Linear cross-entropy"
+## Linear cross-entropy
 
-    ```python
-    --8<-- "examples/algebraic_gallery.py:cut_cross_entropy"
-    ```
+Computing cross-entropy over a large vocabulary `V` from hidden states
+`h @ w` normally materializes an `M × V` logit matrix. Law 1 tiles the
+contraction and `logsumexp` over vocabulary chunks while gathering the target
+logit on the fly, and Law 2 differentiates the loss with zero `M × V` memory.
 
-For a sliding window, restrict the mask to keys within the window. When
-interval analysis proves a whole tile is masked out, the tile is skipped before
-loading keys or values. See [Algebraic laws](algebra.md).
+```python
+--8<-- "examples/algebraic_gallery.py:cut_cross_entropy"
+```
 
-## Shared keys and compressed attention
+## Multi-head latent attention
 
-Multi-head latent attention writes expanded keys and values as matrix products
-with a shared low-rank latent `c_kv`. When the query length is small enough
-that reassociating the products saves FLOPs, the compiler absorbs `w_uk` into
-`q` and applies `w_uv` after attention — operating directly on `c_kv`.
-Grouped-query attention folds the query-head group into the query tile so
-shared keys and values are loaded once per group.
+Multi-head latent attention (MLA) projects keys and values from a shared
+low-rank latent `c_kv`. When the query length is small (such as autoregressive
+decoding), Law 3 reassociates `(q @ (c_kv @ w_uk).T)` by absorbing `w_uk` into
+`q` and deferring `w_uv` until after attention — running directly on `c_kv`.
 
-=== "Latent attention"
+```python
+--8<-- "examples/algebraic_gallery.py:deepseek_mla"
+```
 
-    ```python
-    --8<-- "examples/algebraic_gallery.py:deepseek_mla"
-    ```
+## Grouped-query attention
 
-=== "Grouped-query attention"
+When a head-group axis `G` in `q` broadcasts against a single shared KV head
+(`1` in `k` and `v`), Law 3 folds `G` into the query tile so all `G` query
+heads reuse one shared-memory load of `k` and `v`.
 
-    ```python
-    --8<-- "examples/algebraic_gallery.py:gqa_attention"
-    ```
+```python
+--8<-- "examples/algebraic_gallery.py:gqa_attention"
+```
 
-## Affine scans and state-space models
+## Exponential IIR filter
 
-Two successive affine updates compose into another affine update. That lets
-Parakeet split a plain Python `for t in range(T):` recurrence into fixed-size
-chunks, summarize each chunk in parallel, scan the much shorter sequence of
-chunk summaries, and finish each chunk independently. The same idea handles
-both a scalar exponential filter and a matrix-state recurrence.
+A plain Python `for t in range(T):` affine recurrence `s = a[t] * s + b[t]`
+has `O(T)` serial depth. Because affine maps compose associatively, Law 4
+rewrites the loop into a parallel chunkwise prefix scan (`TileScan`) across
+CPU cores or GPU threadblocks with no `O(T)` scratch arrays.
 
-=== "Scalar IIR filter"
+```python
+--8<-- "examples/algebraic_gallery.py:iir_exponential_filter"
+```
 
-    ```python
-    --8<-- "examples/algebraic_gallery.py:iir_exponential_filter"
-    ```
+## Mamba-2 state-space recurrence
 
-=== "Mamba-2 recurrence"
+The same Law 4 chunkwise duality generalizes to bilinear matrix-state
+recurrences: a 6-line Python loop over time rewrites into division-free
+chunkwise batched GEMMs that automatically lower to CPU register tiling, Metal
+`simdgroup_matrix`, and CUDA TF32 WMMA.
 
-    ```python
-    --8<-- "examples/algebraic_gallery.py:mamba2_ssd"
-    ```
+```python
+--8<-- "examples/algebraic_gallery.py:mamba2_ssd"
+```
 
-## Inspect a rewrite
+## nanoGPT end-to-end training
 
-Pass example arrays to `dsl.show_rewrite` to see which algebraic laws fired and
-compare the operator IR before and after the middle-end passes.
+Train a two-layer character-level transformer from scratch in pure NumPy +
+Parakeet. The [complete nanoGPT walkthrough](gallery/nanogpt.md) follows the
+entire runnable script in order, using `par.map` and `par.value_and_grad` to
+compile the forward pass, backward pass, and Adam optimizer into one native
+step.
+
+## Inspecting algebraic rewrites
+
+Call `par.show_rewrite(fn, *example_args)` on any compiled or plain Python
+function to inspect which algebraic laws fired and compare the operator IR
+before and after optimization:
 
 ```python
 rng = np.random.default_rng(0)
 q = rng.standard_normal((64, 8), dtype=np.float32)
 x = rng.standard_normal((256, 8), dtype=np.float32)
 y = rng.standard_normal((256, 4), dtype=np.float32)
-print(dsl.show_rewrite(rbf_kernel_regression, q, x, y, np.float32(-1)).summary())
+print(par.show_rewrite(rbf_kernel_regression, q, x, y, np.float32(-1)).summary())
 ```
-
-## Classic Parakeet examples
-
-The repository also includes the classic numerical, image-processing, and
-training scripts in [`examples/`](https://github.com/iskandr/parakeet/tree/v1.0.0/examples) — many carried forward from Parakeet 0.x:
-
-| Script | What it demonstrates |
-|---|---|
-| [`tanh_rescale.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/tanh_rescale.py) | NumPy expression, explicit loop, and comprehension compiling to the same fused loop |
-| [`matmult.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/matmult.py) | Matrix multiplication four ways: `@`, `allpairs`, comprehension, and loops |
-| [`kmeans.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/kmeans.py) | K-means clustering with comprehensions and no materialized distance matrix |
-| [`julia.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/julia.py) | Data-parallel map over pixels with a data-dependent inner loop |
-| [`growcut.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/growcut.py) | GrowCut image-segmentation cellular automaton |
-| [`finite_difference.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/finite_difference.py) | 2-D wave equation stencil with explicit loops |
-| [`convolution.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convolution.py) | 3×3 image convolution via nested comprehensions and helper inlining |
-| [`decision_tree.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/decision_tree.py) | Parallel feature-wise split search laid out like CudaTree |
-| [`convnet.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convnet.py) | Small convolutional network trained end-to-end with `parakeet.grad` |
-| [`nanogpt.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/nanogpt.py) | Character-level transformer trained with `value_and_grad` |
-
-## Pass-ablation timings
-
-These Apple Silicon measurements hold the CPU backend constant (with BLAS
-disabled) and toggle a single middle-end pass at a time, isolating what each
-rewrite contributes. For head-to-head comparisons across libraries and raw
-measurement files, see [Release benchmarks](release-benchmarks.md).
-
-| Workload | Pass disabled | Pass enabled | Pass |
-|---|---:|---:|---|
-| Mamba-2 recurrence, length 2,048, widths 64 | 58.25 ms | 1.08 ms | Chunkwise scan |
-| Latent attention, 4 queries and 2,048 keys, widths 64 and 256 | 1.86 ms | 0.22 ms | Contraction reassociation |
-| Affine IIR filter, length 262,144 | 0.63 ms | 0.27 ms | Chunkwise scan |
-
-??? details "Earlier training-step timings on an NVIDIA L4"
-
-    These warmed end-to-end `examples/nanogpt.py` timings include forward,
-    backward, and Adam. The small model has batch 16, sequence length 64, width
-    128, and two layers. The medium model has batch 32, sequence length 128,
-    width 256, and four layers.
-
-    | Model | Parakeet TF32 | Parakeet FP32 | PyTorch eager | Compiled PyTorch | JAX JIT |
-    |---|---:|---:|---:|---:|---:|
-    | Small | 6.44 ms | 8.04 ms | 9.15 ms | 3.58 ms | 1.58 ms |
-    | Medium | 32.15 ms | 47.05 ms | 19.28 ms | 15.15 ms | 9.18 ms |
-
-    [Training benchmark source](https://github.com/iskandr/parakeet/blob/v1.0.0/tools/colab_nanogpt_bench.py).

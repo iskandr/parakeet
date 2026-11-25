@@ -6,16 +6,16 @@ ordinary loops that are fused, tiled and run in parallel like everything else.
 
 ```python
 import numpy as np
-from parakeet import grad, value_and_grad
+import parakeet as par
 
 
 def loss(w, x, y):
   return np.mean((np.tanh(x @ w) - y) ** 2)
 
 
-g = grad(loss)(w, x, y)  # d loss / d w, shaped like w
-value, g = value_and_grad(loss)(w, x, y)
-gw, gx = grad(loss, (0, 1))(w, x, y)  # several arguments at once
+g = par.grad(loss)(w, x, y)  # d loss / d w, shaped like w
+value, g = par.value_and_grad(loss)(w, x, y)
+gw, gx = par.grad(loss, (0, 1))(w, x, y)  # several arguments at once
 ```
 
 The function has to return one floating point number. The arguments you
@@ -29,18 +29,18 @@ def mlp(params, x, y):
   return np.mean((h @ w2 + b2 - y) ** 2)
 
 
-(gw1, gb1), (gw2, gb2) = grad(mlp)(params, x, y)
+(gw1, gb1), (gw2, gb2) = par.grad(mlp)(params, x, y)
 ```
 
-`grad(f)` can be called from plain Python, where it compiles on first use, or
-inside a `@jit` function, where the whole training step becomes one compiled
-function:
+`par.grad(f)` can be called from plain Python, where it compiles on first use,
+or inside a `@par.jit` function, where the whole training step becomes one
+compiled function:
 
 ```python
-@jit
+@par.jit
 def descend(w, x, y, rate, steps):
   for _ in range(steps):
-    w = w - rate * grad(loss)(w, x, y)
+    w = w - rate * par.grad(loss)(w, x, y)
   return w
 ```
 

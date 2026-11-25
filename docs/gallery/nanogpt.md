@@ -121,6 +121,6 @@ the fixed `seed=0` above, the printed loss drops from **3.173** at step 1 to
 nearly identical values on CPU).
 
 For larger four-head training runs where the Adam update is also compiled into
-the training step, see the [nanoGPT training benchmark](../release-benchmarks.md#nanogpt-training).
+the training step, see the [nanoGPT training benchmark](../release-benchmarks.md#end-to-end-nanogpt-training-nvidia-l4).
 The compact two-head walkthrough above keeps Adam in plain Python so every line
 is easy to follow.

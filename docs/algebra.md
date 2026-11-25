@@ -10,14 +10,30 @@ eliminating quadratic `O(N²)` or `O(M · V)` intermediates, turning long serial
 recurrences into parallel block passes, and avoiding saving giant intermediates
 for reverse-mode differentiation. Rather than adding special-purpose "layer"
 ops to the compiler, Parakeet encodes these transformations as six general
-algebraic laws over the same five operator statements (`IndexMap`,
-`IndexReduce`, `IndexScan`, `IndexFilter`, `IndexScatter`), multi-state `Carry`
-folds, and `IndexTile` / `TileStage` tiling.
+algebraic laws over a small core of index-operator statements (`IndexMap`,
+`IndexReduce`, `IndexScan`, `IndexFilter`, `IndexExpand`, `IndexScatter`,
+`IndexWavefront`, and `IndexTile` / `TileStage`) plus multi-state `Carry`
+folds.
 
 Because the passes match operator algebra instead of model names, the same
 rules fire on Gaussian kernel regression, shortest-path products, exact
 nearest-neighbor search, histogram split-finding, and IIR filters as on
 attention, cross-entropy, and state-space models.
+
+## Semantic contract: real-algebraic rewrites vs. exact order
+
+Algebraic rewrites (parallel reduction, monoidal tiling, contraction
+reassociation, chunkwise affine scans, privatized scatter-add) rely on
+**real-arithmetic associativity and commutativity**: floating-point rounding
+order may differ in the last ULP relative to a left-to-right loop, just as in
+NumPy's pairwise summation or cuBLAS. That assumption is explicit and
+deliberate in Parakeet.
+
+Where order *is* semantically observable — equal-distance ties and first-NaN
+propagation in `argmin` / `argmax`, non-commutative structured `parakeet.fold`
+merges, or general sequential reductions — Parakeet preserves **exact
+left-to-right merge order** across chunks and tiles (and refuses to
+parallelize non-associative combiners).
 
 ## The six laws at a glance
 
@@ -187,7 +203,7 @@ expressions and boolean connectives:
 
 Two patterns show up constantly outside dense linear algebra: accumulating into
 shared bins (`np.bincount`, `parakeet.scatter_add`) and folding structured
-state (`argmin`, Welford variance, custom `dsl.fold`).
+state (`argmin`, Welford variance, custom `parakeet.fold`).
 
 * **Keyed histogram fusion:** sibling `IndexScatter` statements sharing the
   same index expression (such as gradient and Hessian histograms in a decision
@@ -196,34 +212,34 @@ state (`argmin`, Welford variance, custom `dsl.fold`).
 * **Ordered multi-state carries and pairwise tile folds:** `Fold.carries`
   tracks multiple scalar accumulators in one reduction pass while preserving
   chunk order (so leftmost ties in `argmin` or non-commutative compositions in
-  `dsl.fold` stay exact). `pairwise fold tiling` fuses a pairwise score
+  `parakeet.fold` stay exact). `pairwise fold tiling` fuses a pairwise score
   producer directly into an ordered fold over bounded tiles on both CPU and
   GPU — eliminating the full `N × M` distance matrix in both broadcasting NumPy
   and nested-map 1-NN.
 
 ---
 
-## Inspecting rewrites with `parakeet.dsl`
+## Inspecting rewrites with `parakeet.show_rewrite`
 
-Call [`parakeet.dsl.show_rewrite`](api.md) on any function to see which laws
+Call [`parakeet.show_rewrite`](api.md) on any function to see which laws
 fired, which tiled plans were selected, and the operator IR before and after
 the middle-end passes:
 
 ```python
 import numpy as np
-from parakeet import dsl
+import parakeet as par
 
 
-@dsl.kernel
+@par.jit
 def causal_attention(q, k, v):
-  causal = dsl.imap(lambda i, j: i >= j, (q.shape[0], k.shape[0]))
-  s = dsl.where(causal, (q @ k.T) * dsl.f32(0.125), dsl.f32(-1e9))
-  e = dsl.exp(s - dsl.max(s, axis=-1, keepdims=True))
-  return (e / dsl.sum(e, axis=-1, keepdims=True)) @ v
+  causal = par.imap(lambda i, j: i >= j, (q.shape[0], k.shape[0]))
+  s = np.where(causal, (q @ k.T) * np.float32(0.125), np.float32(-1e9))
+  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
+  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
 
 
 q = np.zeros((128, 64), np.float32)
-print(dsl.show_rewrite(causal_attention, q, q, q).summary())
+print(par.show_rewrite(causal_attention, q, q, q).summary())
 ```
 
 ```text

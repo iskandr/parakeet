@@ -28,10 +28,10 @@ native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.
 
 ```python
 import numpy as np
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def nearest(x, y):
   delta = x[:, None, :] - y[None, :, :]
   d2 = np.sum(delta ** np.float32(2), axis=2)
@@ -42,7 +42,7 @@ Parakeet computes distances a tile at a time on both CPU and GPU, keeping only
 the winning reference index per tile rather than allocating the full `N × M`
 distance matrix. Ties preserve NumPy's first-index rule.
 
-[Compare timings and allocations](release-benchmarks.md#pairwise-workloads)
+[Compare timings, scaling, and memory](release-benchmarks.md#at-a-glance-nvidia-l4-4-thread-cpu)
 
 </div>
 </div>
@@ -65,12 +65,12 @@ or explicit parallel operators — expresses the same handful of array
 computations: maps, reductions, scans, filters, and scatters.
 
 ```python
-@jit
+@par.jit
 def scaled_tanh_numpy(x, alpha=0.5, beta=0.3):
   return np.tanh(x * alpha) + beta
 
 
-@jit
+@par.jit
 def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 ```
@@ -90,8 +90,8 @@ general passes do the heavy lifting:
   the array operators directly, compiling a training step into one native
   function. [Learn about gradients](autodiff.md).
 - **Inspection.** Every stage is visible: inspect the operator IR, see which
-  rewrites fired with `parakeet.dsl.show_rewrite`, or read the generated C,
-  Metal, or CUDA source. [Inspect a rewrite](gallery.md#inspect-a-rewrite).
+  rewrites fired with `parakeet.show_rewrite`, or read the generated C,
+  Metal, or CUDA source. [Inspect a rewrite](gallery.md#inspecting-algebraic-rewrites).
 
 ## Where to go next
 
