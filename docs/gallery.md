@@ -123,12 +123,25 @@ same online monoidal pass that powers tiled attention below.
 
 Histogram-based gradient boosted trees accumulate gradients and Hessians into
 feature bins, scan cumulative left/right sums, and pick the split bin with the
-highest gain. You can write the bin accumulations with standard NumPy
-(`np.add.at`), plain Python `for` loops, or explicit `par.scatter_add` — all
-three lower to Parakeet's `IndexScatter` operator. Because both accumulations
-share the same `bin_ids` array, Parakeet fuses them into a single
+highest gain. You can write the bin accumulations as a declarative NumPy
+comprehension, with `np.add.at`, as a plain Python `for` loop, or with explicit
+`par.scatter_add` (including keyed generator expressions) — all four lower to
+Parakeet's $O(N)$ `IndexScatter` operator. Because both accumulations share the
+same `bin_ids` array, Parakeet fuses them into a single
 [thread-privatized traversal](algebra.md#law-6-privatized-scatter-multi-state-carries)
 over the observations.
+
+=== "Declarative comprehension"
+
+    A pull-style comprehension `[np.sum(grads[bin_ids == b]) for b in range(nbins)]`
+    (or `[sum(grads[i] for i in range(len(bin_ids)) if bin_ids[i] == b) for b in range(nbins)]`)
+    would cost $O(\text{nbins} \cdot N)$ naively. Parakeet inverts it
+    automatically to an $O(N)$ `IndexScatter` and fuses both histograms into
+    one pass.
+
+    ```python
+    --8<-- "examples/algebraic_gallery.py:gbdt_best_split_comprehension"
+    ```
 
 === "NumPy `np.add.at`"
 

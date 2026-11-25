@@ -3334,6 +3334,17 @@ class Elaborator(ArrayMixin):
 
   def eval_Call(self, node: ast.Call):
     fn = self.eval(node.func)
+    # Keyed generator scatter: par.scatter_add(n, ((idx, val) for ... [if ...]))
+    if (
+      len(node.args) == 2
+      and not node.keywords
+      and isinstance(node.args[1], (ast.GeneratorExp, ast.ListComp))
+      and not isinstance(node.args[0], ast.Starred)
+    ):
+      from ..lib.adverbs import _scatter_add_entry
+
+      if getattr(fn, "impl", None) is _scatter_add_entry:
+        return self._scatter_from_genexp(node.args[0], node.args[1], node)
     args: list = []
     for a in node.args:
       if isinstance(a, ast.Starred):
@@ -3347,6 +3358,427 @@ class Elaborator(ArrayMixin):
       kwargs[kw.arg] = self.eval(kw.value)
     return self.call(fn, args, kwargs, node)
 
+  def _direct_1d_range_slice(self, expr_n: ast.AST, target: ast.AST, source, n_len: Expr) -> ArrayVal | None:
+    """When iterating ``for i in range(n)`` (start=0, step=1), turn a direct
+    1-D subscript ``arr[i]`` into ``arr`` (or ``arr[:n]`` with one hoisted
+    bounds check) so the resulting ``IndexScatter`` has no per-element bounds
+    checks and fuses cleanly with sibling scatters."""
+    if (
+      not isinstance(target, ast.Name)
+      or not isinstance(source, RangeVal)
+      or not (isinstance(source.start, Const) and source.start.value == 0)
+      or not (isinstance(source.step, Const) and source.step.value == 1)
+    ):
+      return None
+    if (
+      isinstance(expr_n, ast.Subscript)
+      and isinstance(expr_n.value, ast.Name)
+      and isinstance(expr_n.slice, ast.Name)
+      and expr_n.slice.id == target.id
+    ):
+      arr = self.frame.env.get(expr_n.value.id, _MISSING)
+      if isinstance(arr, ArrayVal) and arr.rank == 1:
+        same_stop = (
+          isinstance(arr.shape[0], Var) and isinstance(source.stop, Var) and arr.shape[0].uid == source.stop.uid
+        ) or (
+          isinstance(arr.shape[0], Const) and isinstance(source.stop, Const) and arr.shape[0].value == source.stop.value
+        )
+        same_n = (isinstance(arr.shape[0], Var) and isinstance(n_len, Var) and arr.shape[0].uid == n_len.uid) or (
+          isinstance(arr.shape[0], Const) and isinstance(n_len, Const) and arr.shape[0].value == n_len.value
+        )
+        if same_stop or same_n:
+          return arr
+        self.check(
+          ops.cmp("le", n_len, arr.shape[0]),
+          "IndexError",
+          "index {0} is out of bounds for axis 0 with size {1}",
+          n_len,
+          arr.shape[0],
+        )
+        return self._slice_leading(arr, ZERO, n_len)
+    return None
+
+  def _scatter_from_genexp(self, n_node: ast.expr, gen_node: ast.GeneratorExp | ast.ListComp, call_node: ast.Call):
+    """Lower ``par.scatter_add(n, ((key, val) for target in iter [if ...]))``
+    directly to a single guarded :class:`IndexScatter` with zero intermediate arrays."""
+    from ..lib.adverbs import _scatter_add_impl
+    from ..ndtypes import Bool
+
+    if len(gen_node.generators) != 1:
+      raise self.error(UnsupportedError, "scatter_add() generator supports a single for-clause", gen_node)
+    gen = gen_node.generators[0]
+    if gen.is_async:
+      raise self.error(UnsupportedError, "async generators are not supported", gen_node)
+    if not isinstance(gen_node.elt, ast.Tuple) or len(gen_node.elt.elts) != 2:
+      raise self.error(
+        TypeInferenceError,
+        "scatter_add(n, gen) expects a generator of (index, value) pairs",
+        gen_node.elt,
+      )
+    key_node, val_node = gen_node.elt.elts
+    n_val = self.eval(n_node)
+    source = self.eval(gen.iter)
+    fr = self.frame
+
+    def _bind_eval(target_val, expr_node):
+      saved = dict(fr.env)
+      try:
+        self.assign(gen.target, target_val)
+        return self.eval(expr_node)
+      finally:
+        fr.env.clear()
+        fr.env.update(saved)
+
+    if isinstance(source, tuple):
+      from .. import lib
+
+      ks, vs = [], []
+      for item in source:
+        if gen.ifs:
+          if not self._static_filter(gen, item, lambda fn: lambda it: _bind_eval(it, fn)):
+            continue
+        ks.append(_bind_eval(item, key_node))
+        vs.append(_bind_eval(item, val_node))
+      if not ks:
+        from ..ndtypes import Float64
+
+        size = cast(self.as_scalar(n_val, "n"), I)
+        self.check(ops.cmp("ge", size, ZERO), "ValueError", "scatter_add() length must not be negative")
+        return self.alloc_array(Float64, (size,), zero=True, label="scatter")
+      return _scatter_add_impl(self, n_val, lib.array_literal(self, ks), lib.array_literal(self, vs))
+
+    end_checks: list = []
+    length, getter = self.iter_source(source, gen.iter, end_checks)
+    n_len = self.tmp(length, "n")
+
+    # Trial-probe element types for key, value, and optional filter predicates
+    probe_i = Var("i", I)
+    self.nonneg.add(probe_i.uid)
+    self.upper[probe_i.uid] = n_len
+    saved_env = dict(fr.env)
+    self.loop_depth += 1
+    try:
+      with self.trial():
+        item_p = getter(probe_i)
+        self.assign(gen.target, item_p)
+        kp = self.as_scalar(self.eval(key_node), "index")
+        if kp.type.kind not in "iu":
+          raise self.error(TypeInferenceError, f"scatter_add() index must be integer, got {kp.type}", key_node)
+        vp = self.as_scalar(self.eval(val_node), "value")
+        val_elt = vp.type.strong
+        for cond in gen.ifs:
+          self.truth(self.eval(cond), cond)
+    finally:
+      fr.env.clear()
+      fr.env.update(saved_env)
+      self.loop_depth -= 1
+
+    idx_direct = self._direct_1d_range_slice(key_node, gen.target, source, n_len)
+    val_direct = self._direct_1d_range_slice(val_node, gen.target, source, n_len)
+    where_direct = self._direct_1d_range_slice(gen.ifs[0], gen.target, source, n_len) if len(gen.ifs) == 1 else None
+    if where_direct is not None and where_direct.elt.kind != "b":
+      where_direct = self.cast_array(where_direct, Bool)
+
+    ctx = self.capture()
+
+    def _eval_key(coord):
+      with self.restored(ctx):
+        self.assign(gen.target, getter(coord[0]))
+        return cast(self.as_scalar(self.eval(key_node), "index"), I)
+
+    def _eval_val(coord):
+      with self.restored(ctx):
+        self.assign(gen.target, getter(coord[0]))
+        return cast(self.as_scalar(self.eval(val_node), "value"), val_elt)
+
+    idx_arr = idx_direct if idx_direct is not None else self.delayed(I, (n_len,), _eval_key, cost=2)
+    val_arr = val_direct if val_direct is not None else self.delayed(val_elt, (n_len,), _eval_val, cost=2)
+    where_arr = where_direct
+    if gen.ifs and where_arr is None:
+
+      def _eval_cond(coord):
+        with self.restored(ctx):
+          self.assign(gen.target, getter(coord[0]))
+          acc: Expr = ops.TRUE
+          for cond in gen.ifs:
+            acc = ops.land(acc, self.truth(self.eval(cond), cond))
+          return acc
+
+      where_arr = self.delayed(Bool, (n_len,), _eval_cond, cost=2)
+
+    out = _scatter_add_impl(self, n_val, idx_arr, val_arr, where=where_arr, ignore_oob=False)
+    if end_checks:
+      self.block.extend(end_checks)
+    return out
+
+  def _try_invert_scatter_comp(self, node, elt: ast.expr, b_name: str, stop_expr: Expr):
+    """Invert pull-style histogram comprehensions into O(N) ``IndexScatter``:
+    - ``[np.sum(vals[idx == b]) for b in range(n)]`` (and ``.sum()``, ``& mask``, ``np.where(..., 0)``, counts)
+    - ``[sum(vals[i] for i in range(N) if idx[i] == b) for b in range(n)]`` (and ``zip``, extra ``if``s)."""
+    import numpy as _np
+
+    from ..lib.adverbs import _scatter_add_impl
+    from ..ndtypes import Bool, Int64
+
+    def _has_name(tree: ast.AST, name: str) -> bool:
+      return any(isinstance(sub, ast.Name) and sub.id == name for sub in ast.walk(tree))
+
+    def _flatten_conj(expr: ast.expr, allow_bitand: bool) -> list[ast.expr]:
+      if isinstance(expr, ast.BoolOp) and isinstance(expr.op, ast.And):
+        out: list[ast.expr] = []
+        for v in expr.values:
+          out.extend(_flatten_conj(v, allow_bitand))
+        return out
+      if allow_bitand and isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.BitAnd):
+        return _flatten_conj(expr.left, True) + _flatten_conj(expr.right, True)
+      return [expr]
+
+    def _extract_bin_eq(conds: list[ast.expr], allow_bitand: bool) -> tuple[ast.expr, list[ast.expr]] | None:
+      flat: list[ast.expr] = []
+      for c in conds:
+        flat.extend(_flatten_conj(c, allow_bitand))
+      key_expr: ast.expr | None = None
+      extras: list[ast.expr] = []
+      for term in flat:
+        if (
+          isinstance(term, ast.Compare)
+          and len(term.ops) == 1
+          and isinstance(term.ops[0], ast.Eq)
+          and len(term.comparators) == 1
+        ):
+          left, right = term.left, term.comparators[0]
+          if isinstance(left, ast.Name) and left.id == b_name and not _has_name(right, b_name):
+            if key_expr is not None:
+              return None
+            key_expr = right
+            continue
+          if isinstance(right, ast.Name) and right.id == b_name and not _has_name(left, b_name):
+            if key_expr is not None:
+              return None
+            key_expr = left
+            continue
+        if _has_name(term, b_name):
+          return None
+        extras.append(term)
+      if key_expr is None:
+        return None
+      return key_expr, extras
+
+    def _is_zero_literal(expr: ast.expr) -> bool:
+      if isinstance(expr, ast.Constant) and isinstance(expr.value, (int, float)) and not isinstance(expr.value, bool):
+        return expr.value == 0
+      if (
+        isinstance(expr, ast.Call)
+        and len(expr.args) == 1
+        and not expr.keywords
+        and isinstance(expr.args[0], ast.Constant)
+        and isinstance(expr.args[0].value, (int, float))
+        and expr.args[0].value == 0
+      ):
+        return True
+      return False
+
+    # 1. Check `elt` is a sum(...) / np.sum(...) / X.sum() call
+    if not isinstance(elt, ast.Call):
+      return None
+    if elt.keywords:
+      # Only allow axis=None
+      if not all(
+        kw.arg == "axis" and isinstance(kw.value, ast.Constant) and kw.value.value is None for kw in elt.keywords
+      ):
+        return None
+    sum_arg: ast.expr | None = None
+    if isinstance(elt.func, ast.Attribute) and elt.func.attr == "sum" and len(elt.args) == 0:
+      # Could be `arr.sum()` OR `np.sum`? `np.sum` would have 1 arg, so 0 args means method `.sum()`.
+      sum_arg = elt.func.value
+    elif len(elt.args) == 1 and not isinstance(elt.args[0], ast.Starred):
+      try:
+        with self.trial():
+          fn_val = self.eval(elt.func)
+      except Exception:  # noqa: BLE001
+        return None
+      from ..lib import numpy_lib
+
+      if (
+        fn_val is builtins.sum
+        or fn_val is _np.sum
+        or fn_val is numpy_lib.sum
+        or getattr(fn_val, "impl", None) is getattr(numpy_lib.sum, "impl", object())
+      ):
+        sum_arg = elt.args[0]
+    if sum_arg is None:
+      return None
+
+    # 2. Case B2: `[sum(val_expr for target in iter if ... and key == b) for b in range(n)]`
+    if isinstance(sum_arg, (ast.GeneratorExp, ast.ListComp)):
+      if len(sum_arg.generators) != 1:
+        return None
+      g2 = sum_arg.generators[0]
+      if g2.is_async or not g2.ifs:
+        return None
+      if _has_name(g2.iter, b_name) or _has_name(sum_arg.elt, b_name) or _has_name(g2.target, b_name):
+        return None
+      extracted = _extract_bin_eq(g2.ifs, allow_bitand=False)
+      if extracted is None:
+        return None
+      key_ast, extra_ifs = extracted
+      fr = self.frame
+      saved_env = dict(fr.env)
+      self.loop_depth += 1
+      try:
+        with self.trial() as tblk:
+          src_p = self.eval(g2.iter)
+          if isinstance(src_p, tuple):
+            return None
+          len_p, get_p = self.iter_source(src_p, g2.iter, [])
+          probe_i = Var("i", I)
+          self.nonneg.add(probe_i.uid)
+          self.upper[probe_i.uid] = len_p
+          self.assign(g2.target, get_p(probe_i))
+          kp = self.as_scalar(self.eval(key_ast), "index")
+          if kp.type.kind not in "iu":
+            return None
+          vp = self.as_scalar(self.eval(sum_arg.elt), "value")
+          if vp.type.kind not in "iufb":
+            return None
+          val_elt = Int64 if vp.type.kind == "b" else vp.type.strong
+          for cond in extra_ifs:
+            self.truth(self.eval(cond), cond)
+          for st_ir in walk_stmts(tblk):
+            if isinstance(st_ir, (Store, IndexScatter)):
+              return None
+      except Exception:  # noqa: BLE001
+        return None
+      finally:
+        fr.env.clear()
+        fr.env.update(saved_env)
+        self.loop_depth -= 1
+
+      # Commit: invert to O(N) guarded IndexScatter!
+      n_bins = self.tmp(ops.imax(stop_expr, ZERO), "nbins")
+      end_checks: list = []
+      src2 = self.eval(g2.iter)
+      length2, getter2 = self.iter_source(src2, g2.iter, end_checks)
+      n_len = self.tmp(length2, "n")
+      idx_direct = self._direct_1d_range_slice(key_ast, g2.target, src2, n_len)
+      val_direct = self._direct_1d_range_slice(sum_arg.elt, g2.target, src2, n_len)
+      where_direct = self._direct_1d_range_slice(extra_ifs[0], g2.target, src2, n_len) if len(extra_ifs) == 1 else None
+      if where_direct is not None and where_direct.elt.kind != "b":
+        where_direct = self.cast_array(where_direct, Bool)
+      ctx = self.capture()
+
+      def _eval_key2(coord):
+        with self.restored(ctx):
+          self.assign(g2.target, getter2(coord[0]))
+          return cast(self.as_scalar(self.eval(key_ast), "index"), I)
+
+      def _eval_val2(coord):
+        with self.restored(ctx):
+          self.assign(g2.target, getter2(coord[0]))
+          return cast(self.as_scalar(self.eval(sum_arg.elt), "value"), val_elt)
+
+      idx_arr = idx_direct if idx_direct is not None else self.delayed(I, (n_len,), _eval_key2, cost=2)
+      val_arr = val_direct if val_direct is not None else self.delayed(val_elt, (n_len,), _eval_val2, cost=2)
+      where_arr = where_direct
+      if extra_ifs and where_arr is None:
+
+        def _eval_cond2(coord):
+          with self.restored(ctx):
+            self.assign(g2.target, getter2(coord[0]))
+            acc: Expr = ops.TRUE
+            for cond in extra_ifs:
+              acc = ops.land(acc, self.truth(self.eval(cond), cond))
+            return acc
+
+        where_arr = self.delayed(Bool, (n_len,), _eval_cond2, cost=2)
+
+      out = _scatter_add_impl(self, n_bins, idx_arr, val_arr, where=where_arr, ignore_oob=True, out_elt=val_elt)
+      if end_checks:
+        self.block.extend(end_checks)
+      return out
+
+    # 3. Case B1: NumPy masked sum `[np.sum(vals[idx == b]) for b in range(n)]`,
+    #    `[np.sum(np.where(idx == b, vals, 0)) for b in range(n)]`, or counts `[np.sum(idx == b) for b in range(n)]`
+    val_ast: ast.expr | None = None
+    cond_ast: ast.expr | None = None
+    if isinstance(sum_arg, ast.Subscript) and not _has_name(sum_arg.value, b_name):
+      val_ast = sum_arg.value
+      cond_ast = sum_arg.slice
+    elif isinstance(sum_arg, ast.Call) and len(sum_arg.args) == 3 and not sum_arg.keywords:
+      try:
+        with self.trial():
+          wfn = self.eval(sum_arg.func)
+      except Exception:  # noqa: BLE001
+        wfn = None
+      from ..lib import numpy_lib
+
+      if (
+        (wfn is _np.where or wfn is numpy_lib.where)
+        and _is_zero_literal(sum_arg.args[2])
+        and not _has_name(sum_arg.args[1], b_name)
+      ):
+        cond_ast = sum_arg.args[0]
+        val_ast = sum_arg.args[1]
+    if cond_ast is None:
+      cond_ast = sum_arg
+
+    extracted = _extract_bin_eq([cond_ast], allow_bitand=True)
+    if extracted is None:
+      return None
+    idx_ast, extra_masks = extracted
+
+    # Trial-probe arrays to confirm 1-D integer keys and compatible 1-D values/masks
+    try:
+      with self.trial() as tblk:
+        idx_p = self.eval(idx_ast)
+        if not isinstance(idx_p, ArrayVal) or idx_p.rank != 1 or idx_p.elt.kind not in "iu":
+          return None
+        val_p = self.eval(val_ast) if val_ast is not None else None
+        if val_p is not None:
+          if isinstance(val_p, ArrayVal):
+            if val_p.rank != 1:
+              return None
+          elif not isinstance(val_p, Expr) and type(val_p) not in (int, float, bool):
+            return None
+        for em in extra_masks:
+          mp = self.eval(em)
+          if not isinstance(mp, ArrayVal) or mp.rank != 1:
+            return None
+        for st_ir in walk_stmts(tblk):
+          if isinstance(st_ir, (Store, IndexScatter)):
+            return None
+    except Exception:  # noqa: BLE001
+      return None
+
+    # Commit: invert pull comprehension to O(N) guarded IndexScatter!
+    n_bins = self.tmp(ops.imax(stop_expr, ZERO), "nbins")
+    idx_arr = self.eval(idx_ast)
+    val_arr: ArrayVal | None = None
+    out_elt = Int64
+    if val_ast is not None:
+      v = self.eval(val_ast)
+      if isinstance(v, ArrayVal):
+        val_arr = v
+        out_elt = Int64 if v.elt.kind == "b" else v.elt.strong
+      else:
+        vs = self.as_scalar(v, "value")
+        out_elt = Int64 if vs.type.kind == "b" else vs.type.strong
+        val_arr = self.delayed(out_elt, idx_arr.shape, lambda _: cast(vs, out_elt), cost=0)
+    where_arr: ArrayVal | None = None
+    if extra_masks:
+      from ..prims import UFUNCS as _UF
+
+      cur = self.eval(extra_masks[0])
+      if cur.elt.kind != "b":
+        cur = self.cast_array(cur, Bool)
+      for em in extra_masks[1:]:
+        nxt = self.eval(em)
+        if nxt.elt.kind != "b":
+          nxt = self.cast_array(nxt, Bool)
+        cur = self.apply_ufunc(_UF["logical_and"], [cur, nxt])
+      where_arr = cur
+    return _scatter_add_impl(self, n_bins, idx_arr, val_arr, where=where_arr, ignore_oob=True, out_elt=out_elt)
+
   def eval_Lambda(self, node: ast.Lambda):
     return self.make_closure(node, "<lambda>")
 
@@ -3359,6 +3791,18 @@ class Elaborator(ArrayMixin):
     if gen.is_async:
       raise self.error(UnsupportedError, "async comprehensions are not supported", node)
     source = self.eval(gen.iter)
+    if (
+      not gen.ifs
+      and isinstance(gen.target, ast.Name)
+      and isinstance(source, RangeVal)
+      and isinstance(source.start, Const)
+      and source.start.value == 0
+      and isinstance(source.step, Const)
+      and source.step.value == 1
+    ):
+      inv = self._try_invert_scatter_comp(node, elt, gen.target.id, source.stop)
+      if inv is not None:
+        return inv
     fr = self.frame
 
     def bind_and(fn):

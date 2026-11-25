@@ -283,6 +283,24 @@ def smooth_fold(queries, references, observations):
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:gbdt_best_split_comprehension]
+@par.jit
+def gbdt_best_split_comprehension(bin_ids, grads, hess, nbins, reg_lambda):
+  """Declarative pull-style comprehension inverted to one fused O(N) scatter."""
+  g_hist = np.array([np.sum(grads[bin_ids == b]) for b in range(nbins)])
+  h_hist = np.array([np.sum(hess[bin_ids == b]) for b in range(nbins)])
+  g_left = np.cumsum(g_hist)
+  h_left = np.cumsum(h_hist)
+  g_right = g_left[nbins - 1] - g_left
+  h_right = h_left[nbins - 1] - h_left
+  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
+  best_bin = np.argmax(gain)
+  return best_bin, gain[best_bin]
+
+
+# --8<-- [end:gbdt_best_split_comprehension]
+
+
 # --8<-- [start:gbdt_best_split_numpy]
 @par.jit
 def gbdt_best_split_numpy(bin_ids, grads, hess, nbins, reg_lambda):
@@ -516,7 +534,7 @@ def main():
   t_np, (b_np, g_np) = _bench(np_gbdt, (bins, grads, hess, 256, lam), iters=10)
   assert int(b_pk) == b_np
   np.testing.assert_allclose(g_pk, g_np, rtol=1e-4, atol=1e-4)
-  for alt_fn in (gbdt_best_split_numpy, gbdt_best_split_loop):
+  for alt_fn in (gbdt_best_split_comprehension, gbdt_best_split_numpy, gbdt_best_split_loop):
     b_alt, g_alt = alt_fn(bins, grads, hess, 256, lam)
     assert int(b_alt) == b_np
     np.testing.assert_allclose(g_alt, g_np, rtol=1e-4, atol=1e-4)

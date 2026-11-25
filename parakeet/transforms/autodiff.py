@@ -1435,10 +1435,44 @@ def _fold(tape: Tape, el, node: Node, g: Expr) -> None:
 
 def _scatter_add(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   (values,) = node.inputs
-  (idx,) = node.info
-  # Adjoint of scatter_add(n, idx, values) w.r.t. values is gather: d_values = g[idx]
+  if len(node.info) == 1:
+    (idx,) = node.info
+    where_arr, ignore_oob = None, False
+  else:
+    idx, where_arr, ignore_oob = node.info
+  # Adjoint of scatter_add(n, idx, values, where=...) w.r.t. values is (guarded) gather: d_values = g[idx]
   g = el.as_concrete(g)
-  gathered = el.getitem(g, idx)
+  if where_arr is None and not ignore_oob:
+    gathered = el.getitem(g, idx)
+    tape.add(el, values, gathered)
+    return
+  from ..lib.numpy_lib import where as np_where
+
+  n_out = g.shape[0]
+  if ignore_oob:
+    inb = el.delayed(
+      Bool,
+      idx.shape,
+      lambda c: ops.prim(
+        "and", (ops.cmp("ge", cast(el.elem(idx, c), I), ZERO), ops.cmp("lt", cast(el.elem(idx, c), I), n_out)), Bool
+      ),
+      cost=1,
+    )
+    keep = (
+      inb
+      if where_arr is None
+      else el.delayed(
+        Bool,
+        idx.shape,
+        lambda c: ops.prim("and", (cast(el.elem(where_arr, c), Bool), cast(el.elem(inb, c), Bool)), Bool),
+        cost=2,
+      )
+    )
+  else:
+    keep = where_arr
+  safe_idx = np_where(el, keep, idx, ZERO)
+  zero_v = Const(0, g.elt.strong)
+  gathered = np_where(el, keep, el.getitem(g, safe_idx), zero_v)
   tape.add(el, values, gathered)
 
 
