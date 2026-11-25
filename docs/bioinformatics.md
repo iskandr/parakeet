@@ -77,7 +77,7 @@ differentiates through the 3D coordinates directly:
 ## 5. Banded Smith-Waterman alignment and DNA state-space scan
 
 Compiled two-row banded Smith-Waterman keeps only O(M) score scratch in L1
-cache, while 4-channel DNA exponential state-space recurrences automatically
+cache, while 1D DNA exponential state-space recurrences automatically
 rewrite into Law 4 chunkwise parallel affine prefix scans (`TileScan`):
 
 ```python

@@ -37,7 +37,7 @@ def encode_canonical_kmers_and_gc(seq_bytes, qual_bytes, k):
   kmers = np.empty((n_reads, n_kmers), dtype=np.uint64)
   gc_frac = np.empty((n_reads,), dtype=np.float32)
   mean_q = np.empty((n_reads,), dtype=np.float32)
-  mask = (np.uint64(1) << np.uint64(2 * k)) - np.uint64(1)
+  mask = (~np.uint64(0)) >> np.uint64(64 - 2 * k)
   rev_shift = np.uint64(2 * (k - 1))
 
   def process_read(r):

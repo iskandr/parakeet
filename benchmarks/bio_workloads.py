@@ -173,10 +173,12 @@ def main():
   reads = alphabet[rng.integers(0, 4, size=(4096, 150))]
   quals = rng.integers(53, 74, size=(4096, 150), dtype=np.uint8)
   encode_canonical_kmers_and_gc(reads, quals, 21)
-  t0 = time.perf_counter()
+  fq_times = []
   for _ in range(11):
+    t0 = time.perf_counter()
     encode_canonical_kmers_and_gc(reads, quals, 21)
-  ms_fq = (time.perf_counter() - t0) / 11 * 1e3
+    fq_times.append((time.perf_counter() - t0) * 1e3)
+  ms_fq = float(np.median(fq_times))
   mb_s = (reads.nbytes + quals.nbytes) / (ms_fq * 1e-3) / 1e6
   print(f"{'FASTQ 21-mer + QC (4096x150 bp)':<44} {ms_fq:14.2f} {'(throughput)':>14} {mb_s:7.1f} MB/s")
 
@@ -184,10 +186,12 @@ def main():
   decay = np.full((262_144,), 0.995, dtype=np.float32)
   track = rng.normal(size=(262_144,)).astype(np.float32)
   dna_ssm_scan(decay, track)
-  t0 = time.perf_counter()
+  ssm_times = []
   for _ in range(11):
+    t0 = time.perf_counter()
     dna_ssm_scan(decay, track)
-  ms_ssm = (time.perf_counter() - t0) / 11 * 1e3
+    ssm_times.append((time.perf_counter() - t0) * 1e3)
+  ms_ssm = float(np.median(ssm_times))
   print(
     f"{'DNA SSM scan (262k bp, Law 4 TileScan)':<44} {ms_ssm:14.2f} {'(TileScan)':>14} {262.144 / ms_ssm:7.1f} Mbp/s"
   )
