@@ -5,8 +5,6 @@ Run directly to verify exactness (including gradients) and compare speed against
     python -m examples.protein_and_layers
 """
 
-from __future__ import annotations
-
 import functools
 import operator
 import time
