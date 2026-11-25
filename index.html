@@ -463,10 +463,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-parakeet-100" class="md-nav__link">
+  <a href="#install" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install Parakeet 1.0.0
+        Install
       
     </span>
   </a>
@@ -474,10 +474,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inside-the-compiler" class="md-nav__link">
+  <a href="#one-algebra-underneath" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inside the compiler
+        One algebra underneath
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
       
     </span>
   </a>
@@ -727,7 +738,7 @@
   <span class="md-ellipsis">
     
   
-    Core ideas and boundaries
+    Ideas, history, and boundaries
   
 
     
@@ -867,7 +878,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws & frontier kernels
+    Algebraic laws
   
 
     
@@ -1239,10 +1250,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-parakeet-100" class="md-nav__link">
+  <a href="#install" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install Parakeet 1.0.0
+        Install
       
     </span>
   </a>
@@ -1250,10 +1261,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inside-the-compiler" class="md-nav__link">
+  <a href="#one-algebra-underneath" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inside the compiler
+        One algebra underneath
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
       
     </span>
   </a>
@@ -1286,9 +1308,10 @@
 <div class="pk-identity">
 <h1 id="_1"><img alt="Parakeet" class="pk-wordmark" height="520" src="assets/logo.png" width="1746" /><a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
 <p class="pk-lead">A data-parallel compiler for numerical Python.</p>
-<p>Write the calculation with NumPy or compose maps, folds and scans directly.
-Parakeet specializes the function for its inputs and fuses array operations
-before generating native code for CPUs, Apple Metal or NVIDIA CUDA.</p>
+<p>Write ordinary NumPy, loops, comprehensions, or explicit data-parallel
+operators (<code>map</code>, <code>reduce</code>, <code>scan</code>, <code>allpairs</code>). Parakeet specializes your
+function for its input types, fuses and tiles the array algebra, and compiles
+native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.</p>
 <p><a class="md-button md-button--primary" href="quickstart/">Get started</a>
 <a class="md-button" href="gallery/">Explore the gallery</a></p>
 </div>
@@ -1304,31 +1327,60 @@ before generating native code for CPUs, Apple Metal or NVIDIA CUDA.</p>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">delta</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">d2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div>
-<p>On CPU, Parakeet computes distances a tile at a time and keeps the winning
-reference index for each query. Ties return the first index.</p>
+<p>Parakeet computes distances a tile at a time on both CPU and GPU, keeping only
+the winning reference index per tile rather than allocating the full <code>N × M</code>
+distance matrix. Ties preserve NumPy's first-index rule.</p>
 <p><a href="release-benchmarks/#pairwise-workloads">Compare timings and allocations</a></p>
 </div>
 </div>
-<h2 id="install-parakeet-100">Install Parakeet 1.0.0<a class="headerlink" href="#install-parakeet-100" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"parakeet==1.0.0"</span>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>parakeet
 </code></pre></div>
-<p>Use Python 3.11 or newer, NumPy 2 and a C compiler. The getting started guide
-covers <a href="quickstart/#your-first-compiled-function">your first compiled function</a>
-and <a href="quickstart/#picking-a-backend">choosing a backend</a>.</p>
-<h2 id="inside-the-compiler">Inside the compiler<a class="headerlink" href="#inside-the-compiler" title="Permanent link">&para;</a></h2>
+<p>Requires Python 3.11+, NumPy 2, and a system C compiler. For GPU backends,
+install <code>parakeet[metal]</code> on Apple Silicon or <code>parakeet[cuda12]</code> with an NVIDIA
+GPU.</p>
+<h2 id="one-algebra-underneath">One algebra underneath<a class="headerlink" href="#one-algebra-underneath" title="Permanent link">&para;</a></h2>
+<p>Since its beginnings in 2012, Parakeet has been built on a simple observation:
+most numerical Python — whether written as NumPy expressions, comprehensions,
+or explicit parallel operators — expresses the same handful of array
+computations: maps, reductions, scans, filters, and scatters.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@jit</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_numpy</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nd">@jit</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">scaled_tanh_comp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">):</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">xi</span> <span class="o">*</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span> <span class="k">for</span> <span class="n">xi</span> <span class="ow">in</span> <span class="n">x</span><span class="p">])</span>
+</code></pre></div>
+<p>Both lower to the same single fused parallel loop with no temporary arrays.
+Keeping that operator algebra intact through the middle end lets a small set of
+general passes do the heavy lifting:</p>
 <ul>
-<li><strong>Fusion.</strong> Two histogram expressions with the same bin IDs can accumulate
-  gradient and Hessian together in one traversal. <a href="gallery/#histograms-and-tree-splits">See the tree-split example</a>.</li>
-<li><strong>Tiling.</strong> A normalized weighted sum can consume its scores in blocks.
-  Gaussian regression and attention share that reduction. <a href="algebra/">See the algebraic laws</a>.</li>
-<li><strong>Differentiation.</strong> Differentiate a scalar loss over arrays with
-  <code>grad</code> or <code>value_and_grad</code>. <a href="autodiff/">See the differentiation guide</a>.</li>
-<li><strong>Inspection.</strong> Examine the operator IR, the rewrites that fired and the
-  generated code. <a href="gallery/#inspect-a-rewrite">Inspect a rewrite</a>.</li>
+<li><strong>Fusion.</strong> Chained array expressions, filtered reductions (<code>np.sum(x[x &gt; 0])</code>),
+  and sibling histograms sharing the same bin IDs merge into one pass.
+  <a href="gallery/#histograms-and-tree-splits">See the tree-split example</a>.</li>
+<li><strong>Tiling and single-pass reductions.</strong> Associative reductions and bilinear
+  products tile into cache or GPU shared memory, so Gaussian kernel regression,
+  nearest-neighbor search, and attention stream blocks instead of allocating
+  giant pairwise matrices. <a href="algebra/">Read the algebraic laws</a>.</li>
+<li><strong>Gradients.</strong> <code>parakeet.grad</code> and <code>parakeet.value_and_grad</code> differentiate
+  the array operators directly, compiling a training step into one native
+  function. <a href="autodiff/">Learn about gradients</a>.</li>
+<li><strong>Inspection.</strong> Every stage is visible: inspect the operator IR, see which
+  rewrites fired with <code>parakeet.dsl.show_rewrite</code>, or read the generated C,
+  Metal, or CUDA source. <a href="gallery/#inspect-a-rewrite">Inspect a rewrite</a>.</li>
 </ul>
-<p>Parakeet began as a research compiler at New York University. The 1.0 rewrite
-retains its algebra of array operators and extends it to modern Python and GPUs.
-<a href="philosophy/">History, papers and language boundaries</a>.</p>
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>New to Parakeet?</strong> Start with <a href="quickstart/">Getting started</a> — five
+  minutes from <code>pip install</code> to your first compiled function and generated C.</li>
+<li><strong>Learn by example:</strong> Browse the <a href="gallery/">Kernel gallery</a> for runnable
+  NumPy and data-parallel kernels, or check the <a href="release-benchmarks/">Release benchmarks</a>.</li>
+<li><strong>Go deeper:</strong> Read <a href="philosophy/">Ideas, history, and boundaries</a> for the
+  continuity with the original 2012–2014 NYU compiler and an honest map of what
+  Parakeet does and does not support.</li>
+</ul>
 
 
 

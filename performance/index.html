@@ -652,7 +652,7 @@
   <span class="md-ellipsis">
     
   
-    Core ideas and boundaries
+    Ideas, history, and boundaries
   
 
     
@@ -792,7 +792,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws & frontier kernels
+    Algebraic laws
   
 
     
@@ -1406,6 +1406,13 @@
 
 
 <h1 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h1>
+<div class="admonition tip">
+<p class="admonition-title">Looking for cross-library benchmarks?</p>
+<p>For head-to-head 1.0 comparisons against PyTorch, JAX, CuPy, Faiss, and
+PyKeOps on CPU and an NVIDIA A10, see <a href="../release-benchmarks/">Release benchmarks</a>.
+This page explains <em>when</em> and <em>why</em> Parakeet wins or loses on CPUs and GPUs,
+how cache tiling behaves, and practical tuning tips.</p>
+</div>
 <p>All numbers on this page were measured with <code>python benchmarks/run.py</code> on an
 Apple M1 Pro (10 cores, 32 GB), macOS 26.5, Python 3.12.6, NumPy 2.5.5; best of
 five runs, compilation excluded. "NumPy" is the same computation written with

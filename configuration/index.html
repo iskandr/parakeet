@@ -647,7 +647,7 @@
   <span class="md-ellipsis">
     
   
-    Core ideas and boundaries
+    Ideas, history, and boundaries
   
 
     
@@ -787,7 +787,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws & frontier kernels
+    Algebraic laws
   
 
     
@@ -1175,8 +1175,8 @@
 <h1 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h1>
 <p>Settings live on <code>parakeet.config</code>. Assign to change them for the process, use
 <code>parakeet.options(...)</code> to change them temporarily, pass <code>backend</code>,
-<code>bounds_check</code> or <code>fusion</code> to <code>@jit</code> for one function, or set the environment
-variable before importing Parakeet.</p>
+<code>bounds_check</code>, <code>fusion</code>, or <code>tiling</code> to <code>@jit</code> for one function, or set the
+environment variable before importing Parakeet.</p>
 <table>
 <thead>
 <tr>
@@ -1209,19 +1209,19 @@ variable before importing Parakeet.</p>
 <td><code>tiling</code></td>
 <td><code>True</code></td>
 <td><code>PARAKEET_TILING</code></td>
-<td>tile matmul-shaped loops for cache locality (see <a href="../performance/#tiling">Performance</a>)</td>
+<td>tile matmul-shaped loops for cache/SRAM locality (see <a href="../performance/#tiling">Performance</a>)</td>
 </tr>
 <tr>
 <td><code>skip_transforms</code></td>
 <td><code>()</code></td>
 <td><code>PARAKEET_SKIP_TRANSFORMS</code></td>
-<td>names of middle-end passes not to run (<code>"dead code"</code>, <code>"vertical fusion"</code>, <code>"filter fusion"</code>, <code>"sibling fusion"</code>, <code>"reduction interchange"</code>, <code>"tiling"</code>; comma-separated in the environment)</td>
+<td>names of middle-end passes to omit (see <code>parakeet.transforms.pipeline.names()</code>: <code>"dead code"</code>, <code>"normalize"</code>, <code>"vertical fusion"</code>, <code>"filter fusion"</code>, <code>"sibling fusion"</code>, <code>"contraction reassociation"</code>, <code>"monoidal tiling"</code>, <code>"chunkwise scan"</code>, <code>"pairwise fold tiling"</code>, <code>"reduction interchange"</code>, <code>"tiling"</code>; comma-separated in the environment)</td>
 </tr>
 <tr>
 <td><code>tile_bytes</code></td>
 <td>half of L2</td>
 <td><code>PARAKEET_TILE_BYTES</code></td>
-<td>bytes of operand data in one tile</td>
+<td>bytes of operand data in one CPU tile</td>
 </tr>
 <tr>
 <td><code>blas</code></td>
@@ -1260,6 +1260,12 @@ variable before importing Parakeet.</p>
 <td><code>"warn"</code>, <code>"silent"</code> or <code>"error"</code> when a loop cannot run on the GPU</td>
 </tr>
 <tr>
+<td><code>tensor_cores</code></td>
+<td><code>False</code></td>
+<td><code>PARAKEET_TENSOR_CORES</code></td>
+<td>use TF32 Tensor Cores (<code>nvcuda::wmma</code>) for float32 contractions on CUDA <code>sm_80+</code> GPUs (Apple Metal float32 <code>simdgroup_matrix</code> is exact IEEE FP32 and enabled automatically)</td>
+</tr>
+<tr>
 <td><code>cc</code></td>
 <td>auto</td>
 <td><code>PARAKEET_CC</code>, <code>CC</code></td>
@@ -1281,7 +1287,7 @@ variable before importing Parakeet.</p>
 <td><code>fast_math</code></td>
 <td><code>False</code></td>
 <td>–</td>
-<td>allow value-changing floating-point optimisations</td>
+<td>allow value-changing floating-point optimisations (<code>-ffast-math</code>)</td>
 </tr>
 <tr>
 <td><code>cache_dir</code></td>
@@ -1293,7 +1299,7 @@ variable before importing Parakeet.</p>
 <td><code>print_operators</code></td>
 <td><code>False</code></td>
 <td><code>PARAKEET_PRINT_OPERATORS</code></td>
-<td>print the operator IR before the middle-end passes (<code>print_indexified_function</code>)</td>
+<td>print the operator IR before the middle-end passes (0.x alias: <code>print_indexified_function</code>)</td>
 </tr>
 <tr>
 <td><code>print_ir</code></td>
@@ -1311,7 +1317,7 @@ variable before importing Parakeet.</p>
 <td><code>verify</code></td>
 <td><code>True</code></td>
 <td><code>PARAKEET_VERIFY</code></td>
-<td>run <code>parakeet.verify</code> before passes, after each pass, and after lowering (<code>opt_verify</code>)</td>
+<td>run <code>parakeet.verify</code> before passes, after each pass, and after lowering (0.x alias: <code>opt_verify</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -1319,7 +1325,7 @@ variable before importing Parakeet.</p>
 in <a href="../backends/#nvidia-gpus-cuda">Backends</a>.</p>
 <p>Misspelt setting names raise <code>AttributeError</code> listing the valid ones.</p>
 <p>The default cache directory is <code>~/Library/Caches/parakeet</code> on macOS,
-<code>$XDG_CACHE_HOME/parakeet</code> (or <code>~/.cache/parakeet</code>) on Linux and
+<code>$XDG_CACHE_HOME/parakeet</code> (or <code>~/.cache/parakeet</code>) on Linux, and
 <code>%LOCALAPPDATA%\parakeet\Cache</code> on Windows.</p>
 
 

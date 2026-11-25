@@ -512,6 +512,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gradients-in-one-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gradients in one line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#picking-a-backend" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -538,6 +549,17 @@
     <span class="md-ellipsis">
       
         When something is not supported
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
       
     </span>
   </a>
@@ -760,7 +782,7 @@
   <span class="md-ellipsis">
     
   
-    Core ideas and boundaries
+    Ideas, history, and boundaries
   
 
     
@@ -900,7 +922,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws & frontier kernels
+    Algebraic laws
   
 
     
@@ -1292,6 +1314,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gradients-in-one-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gradients in one line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#picking-a-backend" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1318,6 +1351,17 @@
     <span class="md-ellipsis">
       
         When something is not supported
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-go-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to go next
       
     </span>
   </a>
@@ -1351,12 +1395,12 @@
 <li>A C compiler: the Xcode command line tools on macOS (<code>xcode-select --install</code>),
   <code>gcc</code> or <code>clang</code> on Linux, MinGW-w64 <code>gcc</code> or LLVM <code>clang</code> on Windows.</li>
 </ul>
-<p>Install the release in your Python environment. For development, run <code>python -m pip install .</code> in a checkout.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"parakeet==1.0.0"</span>
+<p>Install Parakeet in your environment (or <code>python -m pip install .</code> in a local checkout):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>parakeet
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import parakeet; print(parakeet.available_backends())"</span>
 </code></pre></div>
-<p><code>available_backends()</code> reports, for every backend, either <code>"ok"</code> or the reason it
-cannot be used on this machine and how to fix that.</p>
+<p><code>available_backends()</code> reports, for every backend, either <code>"ok"</code> or the reason
+it cannot be used on this machine and how to fix it.</p>
 <h2 id="your-first-compiled-function">Your first compiled function<a class="headerlink" href="#your-first-compiled-function" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="kn">import</span> <span class="n">jit</span>
@@ -1375,7 +1419,7 @@ cannot be used on this machine and how to fix that.</p>
 <p>Compilation takes a few hundred milliseconds per specialization (most of it in
 the C compiler) and is cached on disk, so a second run of your program starts
 fast.</p>
-<p><code>jit</code> also works without the decorator syntax, including on lambdas and on NumPy
+<p><code>jit</code> also works without decorator syntax, including on lambdas and NumPy
 functions:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">fast_rms</span> <span class="o">=</span> <span class="n">jit</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">)))</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">parakeet</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">rms</span><span class="o">.</span><span class="n">fn</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># compile-and-call in one step</span>
@@ -1391,51 +1435,84 @@ functions are inlined automatically — they do not need their own <code>@jit</c
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">nearest</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">centroids</span><span class="p">):</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">([</span><span class="n">sqr_dist</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">centroids</span><span class="p">])</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">X</span><span class="p">])</span>
 </code></pre></div>
-<h2 id="picking-a-backend">Picking a backend<a class="headerlink" href="#picking-a-backend" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="o">...</span>
+<p>You can also call Parakeet's data-parallel operators directly (<code>parakeet.map</code>,
+<code>reduce</code>, <code>scan</code>, <code>allpairs</code>, <code>scatter_add</code>, <code>dsl.fold</code>) when you want to apply
+a Python function over slices or pairs in parallel. See
+<a href="../operators/">Data-parallel operators</a>.</p>
+<h2 id="gradients-in-one-line">Gradients in one line<a class="headerlink" href="#gradients-in-one-line" title="Permanent link">&para;</a></h2>
+<p>Wrap any scalar-valued function with <code>parakeet.grad</code> or <code>parakeet.value_and_grad</code>.
+The forward and backward passes compile together into one native function:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="kn">import</span> <span class="n">value_and_grad</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">)</span>  <span class="c1"># per call</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">parakeet</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="s2">"threads"</span>  <span class="c1"># process-wide</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">with</span> <span class="n">parakeet</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># temporarily</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">mse_loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">loss_val</span><span class="p">,</span> <span class="n">dw</span> <span class="o">=</span> <span class="n">value_and_grad</span><span class="p">(</span><span class="n">mse_loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </code></pre></div>
-<p>See <a href="../backends/">Backends and GPUs</a>.</p>
+<p>See <a href="../autodiff/">Gradients</a> for nested parameter tuples, <code>NamedTuple</code>s, frozen
+dataclasses, and training loops.</p>
+<h2 id="picking-a-backend">Picking a backend<a class="headerlink" href="#picking-a-backend" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@jit</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"metal"</span><span class="p">)</span>  <span class="c1"># per function</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">):</span> <span class="o">...</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">)</span>  <span class="c1"># per call</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">parakeet</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">backend</span> <span class="o">=</span> <span class="s2">"threads"</span>  <span class="c1"># process-wide</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">with</span> <span class="n">parakeet</span><span class="o">.</span><span class="n">options</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="s2">"c"</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># temporarily</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>  <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</code></pre></div>
+<p>See <a href="../backends/">Backends and GPUs</a> for multi-core tuning, Metal, CUDA, and
+keeping arrays resident on a GPU with <code>parakeet.to_device</code>.</p>
 <h2 id="looking-inside">Looking inside<a class="headerlink" href="#looking-inside" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">rms</span><span class="o">.</span><span class="n">specialize</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># compile without running</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">ir</span><span class="p">)</span>  <span class="c1"># the typed, fused loop IR</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># the generated C</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">rms</span><span class="o">.</span><span class="n">specialize</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># compile without running</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">operators</span><span class="p">)</span>  <span class="c1"># high-level operator IR before middle-end passes</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">ir</span><span class="p">)</span>  <span class="c1"># typed, fused loop IR</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">source</span><span class="p">)</span>  <span class="c1"># generated C</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>def rms(x_1: array[float64, 1d]):
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    nchunks_9: int64? = @num_chunks(x_n0_3, True)
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    partials_10 = alloc(float64, nchunks_9)
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    parallel[reduce] for chunk_11, (start_12, stop_13) in chunks(x_n0_3, n=nchunks_9):
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        x_15: float64 = (x_1[(x_off_2 + start_12)] * x_1[(x_off_2 + start_12)])
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        acc_14: float64 = x_15
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        for i_16 in range((start_12 + 1), stop_13, 1):  # simd
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>            x_17: float64 = (x_1[(x_off_2 + i_16)] * x_1[(x_off_2 + i_16)])
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>            acc_14: float64 = (acc_14 + x_17)
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        partials_10[chunk_11] = acc_14
-<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    acc_8: float64 = 0.0
-<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    for i_18 in range(0, nchunks_9, 1):
-<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>        acc_8: float64 = (acc_8 + partials_10[i_18])
-<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    red_19: float64 = acc_8
-<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    res_20: float64 = sqrt((red_19 / float64(x_n0_3)))
-<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    return res_20
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>def rms(x_1: array[float64, 1d]):
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    nchunks_9: int64? = @num_chunks(x_n0_3, True)
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    partials_10 = alloc(float64, nchunks_9)
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    parallel[reduce] for chunk_11, (start_12, stop_13) in chunks(x_n0_3, n=nchunks_9):
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        x_15: float64 = (x_1[(x_off_2 + start_12)] * x_1[(x_off_2 + start_12)])
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        acc_14: float64 = x_15
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>        for i_16 in range((start_12 + 1), stop_13, 1):  # simd
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>            x_17: float64 = (x_1[(x_off_2 + i_16)] * x_1[(x_off_2 + i_16)])
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            acc_14: float64 = (acc_14 + x_17)
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        partials_10[chunk_11] = acc_14
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    acc_8: float64 = 0.0
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    for i_18 in range(0, nchunks_9, 1):
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>        acc_8: float64 = (acc_8 + partials_10[i_18])
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    red_19: float64 = acc_8
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    res_20: float64 = sqrt((red_19 / float64(x_n0_3)))
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>    return res_20
 </code></pre></div>
 <p>No temporary for <code>x * x</code> exists: the multiplication was fused into the parallel
-reduction.</p>
+reduction. To see a high-level summary of which algebraic rewrites fired on a
+function, call <code>parakeet.dsl.show_rewrite(fn, *example_args).summary()</code>.</p>
 <h2 id="when-something-is-not-supported">When something is not supported<a class="headerlink" href="#when-something-is-not-supported" title="Permanent link">&para;</a></h2>
 <p>You get a <code>CompileError</code> pointing at your code, not a crash:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  File "demo.py", line 6, in spectrum
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    return np.fft.fft(x)
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>           ^^^^^^^^^^^^^
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  File "demo.py", line 6, in spectrum
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    return np.fft.fft(x)
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>           ^^^^^^^^^^^^^
 </code></pre></div>
-<p>Run the function uncompiled at any time with <code>backend="python"</code> to tell a bug in
-your code from a limitation of the compiler. More in
+<p>Run the function uncompiled at any time with <code>backend="python"</code> to separate a
+bug in your code from a limitation of the compiler. More in
 <a href="../debugging/">Errors and debugging</a>.</p>
+<h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../gallery/">Kernel gallery</a> — runnable examples ranging from nearest-neighbor
+  search and tree splits to attention, state-space recurrences, and classic
+  numerical kernels.</li>
+<li><a href="../language/">The compiled language</a> — exact types, statements, and where
+  Parakeet differs from CPython.</li>
+<li><a href="../philosophy/">Ideas, history, and boundaries</a> — how Parakeet's 2012–2014
+  design evolved into 1.0 and what is not supported yet.</li>
+<li><a href="../performance/">Performance</a> and <a href="../release-benchmarks/">Release benchmarks</a> —
+  when Parakeet wins, when it doesn't, and measured numbers on CPU and GPU.</li>
+</ul>
 
 
 

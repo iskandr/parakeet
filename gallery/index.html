@@ -673,10 +673,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gallery-measurements" class="md-nav__link">
+  <a href="#classic-parakeet-examples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Gallery measurements
+        Classic Parakeet examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pass-ablation-timings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pass-ablation timings
       
     </span>
   </a>
@@ -820,7 +831,7 @@
   <span class="md-ellipsis">
     
   
-    Core ideas and boundaries
+    Ideas, history, and boundaries
   
 
     
@@ -960,7 +971,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws & frontier kernels
+    Algebraic laws
   
 
     
@@ -1429,10 +1440,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gallery-measurements" class="md-nav__link">
+  <a href="#classic-parakeet-examples" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Gallery measurements
+        Classic Parakeet examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pass-ablation-timings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pass-ablation timings
       
     </span>
   </a>
@@ -1460,27 +1482,29 @@
 
 
 <h1 id="kernel-gallery">Kernel gallery<a class="headerlink" href="#kernel-gallery" title="Permanent link">&para;</a></h1>
-<p>The same <code>@parakeet.jit</code> compiles broadcasting NumPy and explicit data-parallel
-operators. Use <code>dsl.map</code> when the inputs line up row by row, <code>dsl.allpairs</code>
-when every left row meets every right row, and <code>dsl.fold</code> when you can describe
-how two partial results combine. <code>dsl.kernel</code> is an alias for <code>parakeet.jit</code>.</p>
+<p>These examples show how short NumPy functions and explicit data-parallel
+operators compile into fused, tiled native kernels.</p>
 <p>Start with <a href="#exact-nearest-neighbor">one nearest-neighbor query</a>, then
 <a href="#inverse-distance-smoothing">change what the fold remembers</a>. For a complete
-training program, try <a href="nanogpt/">nanoGPT</a>. The snippets
-come from executable examples. From an installed source checkout, run
-<code>python -m examples.algebraic_gallery</code> for the numerical checks.</p>
+training program, try <a href="nanogpt/">nanoGPT</a>. Every snippet below is
+included directly from executable examples (<code>python -m examples.algebraic_gallery</code>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="kn">import</span> <span class="n">dsl</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">NamedTuple</span>
 </code></pre></div>
-<p>The axis-fold examples below use the development version after 1.0.0. To run them,
-install the current checkout with <code>python -m pip install -e .</code>.</p>
+<p>The same <code>@parakeet.jit</code> decorator compiles both ordinary NumPy and explicit
+operators such as <code>dsl.map</code>, <code>dsl.allpairs</code>, <code>dsl.imap</code>, <code>dsl.ireduce</code>,
+<code>dsl.iscatter</code>, and <code>dsl.fold</code> (<code>dsl.kernel</code> is an alias for <code>parakeet.jit</code>).
+<a href="https://github.com/iskandr/parakeet/blob/master/examples/algebraic_gallery.py">Browse the source</a>.</p>
+<p>The axis-fold examples below use the development version after 1.0.0. To run
+them, install the current checkout with <code>python -m pip install -e .</code>.</p>
 <h2 id="exact-nearest-neighbor">Exact nearest neighbor<a class="headerlink" href="#exact-nearest-neighbor" title="Permanent link">&para;</a></h2>
-<p>Given <code>Q</code> query rows and <code>R</code> reference rows with the same feature count,
-return <code>Q</code> reference indices. For a query at 1 and references at 0, 2 and 4,
-the squared distances are <code>[1, 1, 9]</code>. The answer is index <code>0</code> because it
-is the first minimum.</p>
+<p>Given <code>Q</code> query rows and <code>R</code> reference rows with the same feature count, return
+the index of the closest reference to each query. For a query at 1 and
+references at 0, 2, and 4, the squared distances are <code>[1, 1, 9]</code>, so the answer
+is index <code>0</code> because ties keep the earlier index (and the first NaN wins,
+matching NumPy).</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Broadcasting NumPy</label><label for="__tabbed_1_2">Map and argmin</label><label for="__tabbed_1_3">All pairs and a structured fold</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1535,24 +1559,19 @@ search for every query.</p>
 </div>
 </div>
 </div>
-<p>Read the explicit form from <code>nearest_fold</code>. <code>allpairs</code> defines a logical
-<code>Q × R</code> array of squared distances. Folding along <code>axis=1</code> visits the
-references for one query. With <code>indexed=True</code>, <code>Winner</code> receives both the
-distance and its column index. Two adjacent groups can each report a winner.
-<code>first_minimum</code> keeps the left winner on ties and preserves the first NaN.
-Finally, <code>emit</code> extracts the index. This merge rule lets the compiler process
-tiles without storing the full distance matrix.</p>
-<p>With the axis-fold extension, both forms use the pairwise tile schedule on supported CPU,
-Metal and CUDA targets. The published 1.0.0 and post-release comparison used
-the nested-map spelling for the explicit implementation. <a href="../release-benchmarks/#gpu-pairwise-fold-after-100">Measured timings,
+<p>In <code>nearest_fold</code>, <code>allpairs</code> defines the logical <code>Q × R</code> domain of squared
+distances, <code>Winner</code> pairs each distance with its reference index, and
+<code>first_minimum</code> merges adjacent winners while keeping left ties and the first
+NaN. With the axis-fold extension, both forms compile to the pairwise tile
+schedule on CPU, Metal, and CUDA without materializing the full <code>Q × R</code>
+distance matrix. The published 1.0.0 and post-release comparisons used the
+nested-map spelling for the explicit implementation. <a href="../release-benchmarks/#gpu-pairwise-fold-after-100">Measured timings,
 allocations and revision details</a>.</p>
 <h2 id="inverse-distance-smoothing">Inverse-distance smoothing<a class="headerlink" href="#inverse-distance-smoothing" title="Permanent link">&para;</a></h2>
-<p>Keep the query/reference pairs and <code>squared_distance</code> from nearest neighbor.
-Now each reference carries a scalar observation. A point at squared distance
-<code>d2</code> casts a vote with weight <code>1 / (1 + d2)</code>. To combine two groups, add their
-weight totals and their weighted observation totals. Divide once, after all
-groups have contributed. This implements a weighted mean for each query over
-a nonempty reference set.</p>
+<p>Use the same squared distances to predict a scalar observation at each query.
+Each reference contributes <code>(w, w * value)</code> with <code>w = 1 / (1 + distance²)</code>. The
+compiler computes each score once, sums both fields over each tile, and divides
+the two totals after the final merge.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Broadcasting NumPy</label><label for="__tabbed_2_2">Parallel operators</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1603,9 +1622,11 @@ program in order, from the first import to the final training step. It follows
 one input sequence through causal attention, then uses <code>dsl.map</code> and
 <code>value_and_grad</code> to train on a batch.</p>
 <h2 id="gaussian-kernel-regression">Gaussian kernel regression<a class="headerlink" href="#gaussian-kernel-regression" title="Permanent link">&para;</a></h2>
-<p>Predict each query's value by weighting the reference values by distance. The
-maximum, weight sum and weighted output can be updated a tile at a time. This
-is also the reduction at the heart of softmax attention.</p>
+<p>Predict each query's value by weighting reference values by squared distance
+(Nadaraya-Watson smoothing). The running maximum, weight sum, and weighted
+output form an associative monoid, so the compiler streams references in tiles
+instead of allocating an <code>N × M</code> weight matrix. That is the same monoidal
+reduction at the heart of softmax attention.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">rbf_kernel_regression</span><span class="p">(</span><span class="n">x_query</span><span class="p">,</span> <span class="n">x_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">neg_gamma</span><span class="p">):</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">x_query</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">x_train</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
@@ -1614,9 +1635,10 @@ is also the reduction at the heart of softmax attention.</p>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>  <span class="k">return</span> <span class="p">(</span><span class="n">e</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span> <span class="o">@</span> <span class="n">y_train</span>
 </code></pre></div>
 <h2 id="histograms-and-tree-splits">Histograms and tree splits<a class="headerlink" href="#histograms-and-tree-splits" title="Permanent link">&para;</a></h2>
-<p>Accumulate gradients and Hessians into the same bins. When their index
-expressions agree, the compiler can combine the two histogram traversals.
-Prefix sums then give the score for each possible split.</p>
+<p>Accumulate gradients and Hessians into the same bins, take prefix sums, and
+pick the best split — the core loop of histogram-based gradient boosted trees.
+When the two scatter-adds share the same bin-index expression, Parakeet fuses
+them into a single traversal of the observations.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">gbdt_best_split</span><span class="p">(</span><span class="n">bin_ids</span><span class="p">,</span> <span class="n">grads</span><span class="p">,</span> <span class="n">hess</span><span class="p">,</span> <span class="n">nbins</span><span class="p">,</span> <span class="n">reg_lambda</span><span class="p">):</span>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="sd">"""Return the split bin with the highest gain and the gain at that bin."""</span>
@@ -1633,10 +1655,10 @@ Prefix sums then give the score for each possible split.</p>
 <a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>  <span class="k">return</span> <span class="n">best_bin</span><span class="p">,</span> <span class="n">gain</span><span class="p">[</span><span class="n">best_bin</span><span class="p">]</span>
 </code></pre></div>
 <h2 id="min-plus-matrix-product">Min-plus matrix product<a class="headerlink" href="#min-plus-matrix-product" title="Permanent link">&para;</a></h2>
-<p>Replace multiplication with addition and addition with minimum. Each output
-cell takes the cheapest two-leg path through an intermediate vertex. For an
-<code>m × k</code> matrix and a <code>k × n</code> matrix, the result has shape <code>m × n</code>. The indexed
-reduction avoids an <code>m × n × k</code> temporary.</p>
+<p>Replace multiplication with addition and addition with minimum. Each cell takes
+the shortest two-leg path through an intermediate vertex. Writing the reduction
+directly over <code>(m, n)</code> and <code>k</code> avoids an <code>m × n × k</code> temporary and triggers the
+same cache and register tiling as ordinary matrix multiplication.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@parakeet</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">tropical_min_plus</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="sd">"""One min-plus matrix product: C[i,j] = min_k (A[i,k] + B[k,j])."""</span>
@@ -1652,10 +1674,11 @@ reduction avoids an <code>m × n × k</code> temporary.</p>
 <a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>  <span class="k">return</span> <span class="n">dsl</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">cheapest_path</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">b</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
 </code></pre></div>
 <h2 id="attention-and-linear-cross-entropy">Attention and linear cross-entropy<a class="headerlink" href="#attention-and-linear-cross-entropy" title="Permanent link">&para;</a></h2>
-<p>Both computations can normalize scores over tiles. In attention, the running
-state includes the weighted value vector. Cross-entropy needs the log
-normalizer and the target score. The backward pass can recompute the scores
-from the inputs.</p>
+<p>Both computations normalize scores over a large inner dimension (<code>T</code> keys or <code>V</code>
+vocabulary entries) and fold them into a much smaller output. Tiling the
+monoidal reduction avoids materializing the <code>T × T</code> attention matrix or the
+<code>M × V</code> logit matrix, and the backward pass recomputes score tiles from the
+inputs instead of saving them on the tape.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Causal attention</label><label for="__tabbed_3_2">Linear cross-entropy</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1682,13 +1705,16 @@ from the inputs.</p>
 </div>
 </div>
 </div>
-<p>For a sliding window, restrict the mask to keys within the window. When the
-mask and fill permit it, whole tiles can be skipped. <a href="../algebra/">Algebraic laws</a>.</p>
+<p>For a sliding window, restrict the mask to keys within the window. When
+interval analysis proves a whole tile is masked out, the tile is skipped before
+loading keys or values. See <a href="../algebra/">Algebraic laws</a>.</p>
 <h2 id="shared-keys-and-compressed-attention">Shared keys and compressed attention<a class="headerlink" href="#shared-keys-and-compressed-attention" title="Permanent link">&para;</a></h2>
-<p>DeepSeek's multi-head latent attention writes expanded keys and values as
-matrix products. When the shape makes it cheaper, the compiler reassociates
-these products to operate on compressed values. Grouped-query attention
-shares keys and values across several query heads.</p>
+<p>Multi-head latent attention writes expanded keys and values as matrix products
+with a shared low-rank latent <code>c_kv</code>. When the query length is small enough
+that reassociating the products saves FLOPs, the compiler absorbs <code>w_uk</code> into
+<code>q</code> and applies <code>w_uv</code> after attention — operating directly on <code>c_kv</code>.
+Grouped-query attention folds the query-head group into the query tile so
+shared keys and values are loaded once per group.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Latent attention</label><label for="__tabbed_4_2">Grouped-query attention</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1715,10 +1741,11 @@ shares keys and values across several query heads.</p>
 </div>
 </div>
 <h2 id="affine-scans-and-state-space-models">Affine scans and state-space models<a class="headerlink" href="#affine-scans-and-state-space-models" title="Permanent link">&para;</a></h2>
-<p>Two successive affine updates have an affine composition. A block of updates
-can summarize its effect on the incoming state, then blocks can combine their
-summaries in sequence order. The scalar filter and matrix-state recurrence
-below expose two uses of this rule.</p>
+<p>Two successive affine updates compose into another affine update. That lets
+Parakeet split a plain Python <code>for t in range(T):</code> recurrence into fixed-size
+chunks, summarize each chunk in parallel, scan the much shorter sequence of
+chunk summaries, and finish each chunk independently. The same idea handles
+both a scalar exponential filter and a matrix-state recurrence.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Scalar IIR filter</label><label for="__tabbed_5_2">Mamba-2 recurrence</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1748,20 +1775,72 @@ below expose two uses of this rule.</p>
 </div>
 </div>
 <h2 id="inspect-a-rewrite">Inspect a rewrite<a class="headerlink" href="#inspect-a-rewrite" title="Permanent link">&para;</a></h2>
-<p>Pass example arrays to the inspector to see which laws fired and compare the
-operator IR before and after compilation. This example uses the Gaussian
-regression function above.</p>
+<p>Pass example arrays to <code>dsl.show_rewrite</code> to see which algebraic laws fired and
+compare the operator IR before and after the middle-end passes.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">q</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">((</span><span class="mi">64</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 <a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">x</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">((</span><span class="mi">256</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 <a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">y</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">((</span><span class="mi">256</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">dsl</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">rbf_kernel_regression</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)))</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nb">print</span><span class="p">(</span><span class="n">dsl</span><span class="o">.</span><span class="n">show_rewrite</span><span class="p">(</span><span class="n">rbf_kernel_regression</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">summary</span><span class="p">())</span>
 </code></pre></div>
-<h2 id="gallery-measurements">Gallery measurements<a class="headerlink" href="#gallery-measurements" title="Permanent link">&para;</a></h2>
-<p>These earlier Apple Silicon measurements hold the CPU backend constant, with
-BLAS disabled, and toggle one compiler pass at a time. The release benchmark
-page compares complete implementations across libraries and provides the raw
-samples. <a href="../release-benchmarks/">Release benchmarks</a>.</p>
+<h2 id="classic-parakeet-examples">Classic Parakeet examples<a class="headerlink" href="#classic-parakeet-examples" title="Permanent link">&para;</a></h2>
+<p>The repository also includes the classic numerical, image-processing, and
+training scripts in <a href="https://github.com/iskandr/parakeet/tree/v1.0.0/examples"><code>examples/</code></a> — many carried forward from Parakeet 0.x:</p>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>What it demonstrates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/tanh_rescale.py"><code>tanh_rescale.py</code></a></td>
+<td>NumPy expression, explicit loop, and comprehension compiling to the same fused loop</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/matmult.py"><code>matmult.py</code></a></td>
+<td>Matrix multiplication four ways: <code>@</code>, <code>allpairs</code>, comprehension, and loops</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/kmeans.py"><code>kmeans.py</code></a></td>
+<td>K-means clustering with comprehensions and no materialized distance matrix</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/julia.py"><code>julia.py</code></a></td>
+<td>Data-parallel map over pixels with a data-dependent inner loop</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/growcut.py"><code>growcut.py</code></a></td>
+<td>GrowCut image-segmentation cellular automaton</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/finite_difference.py"><code>finite_difference.py</code></a></td>
+<td>2-D wave equation stencil with explicit loops</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convolution.py"><code>convolution.py</code></a></td>
+<td>3×3 image convolution via nested comprehensions and helper inlining</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/decision_tree.py"><code>decision_tree.py</code></a></td>
+<td>Parallel feature-wise split search laid out like CudaTree</td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convnet.py"><code>convnet.py</code></a></td>
+<td>Small convolutional network trained end-to-end with <code>parakeet.grad</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/nanogpt.py"><code>nanogpt.py</code></a></td>
+<td>Character-level transformer trained with <code>value_and_grad</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="pass-ablation-timings">Pass-ablation timings<a class="headerlink" href="#pass-ablation-timings" title="Permanent link">&para;</a></h2>
+<p>These Apple Silicon measurements hold the CPU backend constant (with BLAS
+disabled) and toggle a single middle-end pass at a time, isolating what each
+rewrite contributes. For head-to-head comparisons across libraries and raw
+measurement files, see <a href="../release-benchmarks/">Release benchmarks</a>.</p>
 <table>
 <thead>
 <tr>
@@ -1773,7 +1852,7 @@ samples. <a href="../release-benchmarks/">Release benchmarks</a>.</p>
 </thead>
 <tbody>
 <tr>
-<td>Mamba-2 SSD, length 2,048, widths 64</td>
+<td>Mamba-2 recurrence, length 2,048, widths 64</td>
 <td style="text-align: right;">58.25 ms</td>
 <td style="text-align: right;">1.08 ms</td>
 <td>Chunkwise scan</td>
@@ -1792,6 +1871,44 @@ samples. <a href="../release-benchmarks/">Release benchmarks</a>.</p>
 </tr>
 </tbody>
 </table>
+<details class="details">
+<summary>Earlier training-step timings on an NVIDIA L4</summary>
+<p>These warmed end-to-end <code>examples/nanogpt.py</code> timings include forward,
+backward, and Adam. The small model has batch 16, sequence length 64, width
+128, and two layers. The medium model has batch 32, sequence length 128,
+width 256, and four layers.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th style="text-align: right;">Parakeet TF32</th>
+<th style="text-align: right;">Parakeet FP32</th>
+<th style="text-align: right;">PyTorch eager</th>
+<th style="text-align: right;">Compiled PyTorch</th>
+<th style="text-align: right;">JAX JIT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small</td>
+<td style="text-align: right;">6.44 ms</td>
+<td style="text-align: right;">8.04 ms</td>
+<td style="text-align: right;">9.15 ms</td>
+<td style="text-align: right;">3.58 ms</td>
+<td style="text-align: right;">1.58 ms</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td style="text-align: right;">32.15 ms</td>
+<td style="text-align: right;">47.05 ms</td>
+<td style="text-align: right;">19.28 ms</td>
+<td style="text-align: right;">15.15 ms</td>
+<td style="text-align: right;">9.18 ms</td>
+</tr>
+</tbody>
+</table>
+<p><a href="https://github.com/iskandr/parakeet/blob/v1.0.0/tools/colab_nanogpt_bench.py">Training benchmark source</a>.</p>
+</details>
 
 
 

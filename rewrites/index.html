@@ -652,7 +652,7 @@
   <span class="md-ellipsis">
     
   
-    Core ideas and boundaries
+    Ideas, history, and boundaries
   
 
     
@@ -792,7 +792,7 @@
   <span class="md-ellipsis">
     
   
-    Algebraic laws & frontier kernels
+    Algebraic laws
   
 
     
@@ -1554,24 +1554,21 @@ the original system:</p>
   operator is applied to one. <code>F ∘ G</code> below means "the element function of
   the result is <code>F</code> applied to the element function of the argument"; no pass
   looks for the pattern afterwards.</li>
-<li><strong>In the middle end.</strong> What elaboration produces is the original's
-  <em>indexified</em> level: statements <code>IndexMap</code>, <code>IndexReduce</code>, <code>IndexScan</code>,
-  <code>IndexFilter</code>, and <code>IndexScatter</code> over index spaces, with ordinary scalar code
-  as their bodies (<code>Specialization.operators</code> prints it). Passes rewrite those
-  statements — invariant-check/unit-axis normalization, dead code elimination,
-  vertical fusion (exact and affine map/scan/filter/reduce/scatter), filter
-  fusion (filter-filter and filter-reduce), sibling and online monoidal fusion
-  (reductions, maps, and 1-pass <code>logsumexp</code>/<code>softmax</code>), Law 3 bilinear
-  contraction reassociation &amp; MLA weight absorption, Law 1 &amp; 5 2-level
-  monoidal tiling (<code>flash_monoid</code>, <code>monoid_lse</code>, FlashDecoding Split-K, GQA
-  head-group folding, and affine tile-interval pruning), Law 4 chunkwise
-  state-space duality &amp; parallel affine prefix scan (<code>TileScan</code>), target-aware
-  reduction interchange and tiling — and a last pass, <code>LowerAdverbs</code> in spirit,
-  turns them into loops. <code>parakeet.transforms.pipeline.PASSES</code> is the list;
-  <code>find_broken_transform</code> switches its members on one at a time. See
-  <a href="../algebra/">Algebraic laws &amp; frontier kernels</a> for the mathematical laws
-  behind these passes and <a href="../gallery/">Gallery of examples</a> for runnable
-  benchmarks.</li>
+<li><strong>In the middle end.</strong> Elaboration produces the original compiler's
+  <em>indexified</em> level: operator statements (<code>IndexMap</code>, <code>IndexReduce</code>,
+  <code>IndexScan</code>, <code>IndexFilter</code>, and <code>IndexScatter</code>) over index spaces with
+  ordinary scalar bodies (<code>Specialization.operators</code> prints it). Middle-end
+  passes rewrite those statements in order:
+  dead code elimination, normalization, vertical fusion (exact and affine
+  map/scan/filter/reduce/scatter), filter fusion, sibling and online monoidal
+  fusion, bilinear contraction reassociation (Law 3), monoidal tiling and
+  tile-interval pruning (Laws 1 &amp; 5), chunkwise affine/bilinear scans (Law 4),
+  pairwise fold tiling, reduction interchange, and cache/register/GPU tiling.
+  A final pass (<code>LowerAdverbs</code> in spirit) lowers operators into loops.
+  <code>parakeet.transforms.pipeline.PASSES</code> is the authoritative list, and
+  <code>find_broken_transform</code> toggles its passes on one at a time. See
+  <a href="../algebra/">Algebraic laws</a> for the mathematical identities behind these
+  passes and the <a href="../gallery/">Kernel gallery</a> for runnable examples.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see it
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    off_29: int64 = (x_off_2 + (i_27 * x_n1_4))
@@ -1862,7 +1859,7 @@ is dropped: the index is the loop's own.</p>
 </tr>
 <tr>
 <td><code>TiledReduce</code>, <code>TiledScan</code></td>
-<td><code>PermuteReductions</code> (L1 column-strip tiled reduction) + invariant row-reduction hoisting (<code>split_invariant_map</code> / <code>squeeze_unit_map</code> for <code>softmax</code> and <code>layer_norm</code>); <code>TiledScan</code> not yet implemented</td>
+<td><code>PermuteReductions</code> (L1 column-strip tiled reduction), invariant row-reduction hoisting (<code>split_invariant_map</code> / <code>squeeze_unit_map</code> for <code>softmax</code> and <code>layer_norm</code>), and chunkwise <code>TileScan</code> for affine/bilinear recurrences; Hielscher's general cache-tiled <code>TiledScan</code> over arbitrary scans is not implemented</td>
 </tr>
 <tr>
 <td>cache tile sizes found by an online search between a pessimistic and an optimistic estimate</td>
@@ -1976,7 +1973,7 @@ operators <code>f</code> applied (<a href="../autodiff/">details</a>):</p>
   still records operators on a tape during elaboration, while element-wise
   expressions fuse both by construction during elaboration and in the
   middle-end vertical fusion pass).</li>
-<li>Recursive tiling of deeper adverb nests, <code>TiledReduce</code>/<code>TiledScan</code>, and the
+<li>Recursive tiling of deeper adverb nests, general cache-tiled <code>TiledReduce</code>/<code>TiledScan</code> (outside affine/bilinear <code>TileScan</code>), and the
   online search for tile sizes.</li>
 <li>Its own low-level optimizer (it relies on the C compiler instead).</li>
 </ul>
