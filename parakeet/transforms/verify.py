@@ -38,6 +38,7 @@ from ..syntax.ir import (
   IndexScan,
   IndexScatter,
   IndexTile,
+  IndexWavefront,
   Load,
   ParLoop,
   Release,
@@ -338,6 +339,28 @@ def verify(fn: Function, phase: str = "") -> Function:
         visible.add(s.total.uid)
         for buf, _ in s.values:
           visible.add(buf.uid)
+      elif isinstance(s, IndexWavefront):
+        if not _is_int(s.m.type) or not _is_int(s.n.type):
+          _fail(fn, phase, "IndexWavefront dimensions must be integers")
+        check_expr(s.m, visible, "IndexWavefront m")
+        check_expr(s.n, visible, "IndexWavefront n")
+        if s.band is not None:
+          if not _is_int(s.band.type):
+            _fail(fn, phase, "IndexWavefront band must be integer")
+          check_expr(s.band, visible, "IndexWavefront band")
+        for e in (*s.init_top, *s.init_left, *s.init_corner):
+          check_expr(e, visible, "IndexWavefront init")
+        check_scope(s.scope)
+        body_vis = set(visible)
+        body_vis.update(v.uid for v in (s.i_var, s.j_var, *s.top_vars, *s.left_vars, *s.diag_vars))
+        check_block(s.body, body_vis)
+        for e in s.next_vals:
+          check_expr(e, body_vis, "IndexWavefront next_val")
+        visible.update(v.uid for v in s.results)
+        if s.track_max:
+          for v in (s.max_val, s.best_i, s.best_j):
+            if v is not None:
+              visible.add(v.uid)
       elif isinstance(s, IndexScatter):
         if len(s.shape) != len(s.index):
           _fail(fn, phase, f"IndexScatter rank mismatch: {len(s.shape)} dims vs {len(s.index)} indices")

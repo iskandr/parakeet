@@ -447,6 +447,34 @@ class IndexScan(Stmt):
 
 
 @dataclass(eq=False, slots=True)
+class IndexWavefront(Stmt):
+  """2D anti-diagonal wavefront DP over ``(m, n)`` with causal predecessors
+  ``(i-1, j)`` (top), ``(i, j-1)`` (left), and ``(i-1, j-1)`` (diag),
+  optionally banded to ``|i - j| <= band`` using O(m) rolling anti-diagonal rings."""
+
+  m: Expr
+  n: Expr
+  i_var: Var
+  j_var: Var
+  top_vars: tuple[Var, ...]
+  left_vars: tuple[Var, ...]
+  diag_vars: tuple[Var, ...]
+  init_top: tuple[Expr, ...]
+  init_left: tuple[Expr, ...]
+  init_corner: tuple[Expr, ...]
+  body: list[Stmt]
+  next_vals: tuple[Expr, ...]
+  results: tuple[Var, ...]
+  scope: Scope
+  band: Expr | None = None
+  track_max: bool = False
+  max_val: Var | None = None
+  best_i: Var | None = None
+  best_j: Var | None = None
+  loc: SourceLocation | None = None
+
+
+@dataclass(eq=False, slots=True)
 class TileStage:
   """An N-dimensional tile of an input expression (or fused prologue) staged
   into a tile-local buffer before an :class:`IndexTile`'s body runs.
@@ -605,7 +633,7 @@ class IndexScatter(Stmt):
   where: Expr | None = None
 
 
-OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexExpand, IndexScan, IndexTile, IndexScatter)
+OPERATORS = (IndexMap, IndexReduce, IndexFilter, IndexExpand, IndexScan, IndexWavefront, IndexTile, IndexScatter)
 
 
 @dataclass(eq=False, slots=True)
@@ -665,7 +693,7 @@ class Function:
 def sub_blocks(s: Stmt) -> tuple[list[Stmt], ...]:
   if isinstance(s, If):
     return (s.then, s.orelse)
-  if isinstance(s, (ForRange, While, ParLoop, IndexMap, IndexFilter, IndexScatter)):
+  if isinstance(s, (ForRange, While, ParLoop, IndexMap, IndexFilter, IndexScatter, IndexWavefront)):
     return (s.body,)
   if isinstance(s, IndexTile):
     return (*[st.body for st in s.stages], s.body)
@@ -719,6 +747,16 @@ def stmt_exprs(s: Stmt) -> tuple[Expr, ...]:
   if isinstance(s, IndexScan):
     f = s.fold
     return (s.n, f.value, f.combined) + ((f.init,) if f.init is not None else ())
+  if isinstance(s, IndexWavefront):
+    return (
+      s.m,
+      s.n,
+      *s.init_top,
+      *s.init_left,
+      *s.init_corner,
+      *s.next_vals,
+      *(() if s.band is None else (s.band,)),
+    )
   if isinstance(s, IndexReduce):
     out = list(s.shape) + ([s.where] if s.where is not None else [])
     for f in s.folds:
@@ -757,6 +795,17 @@ def stmt_defs(s: Stmt) -> tuple[Var, ...]:
     return (s.index, s.emit_index, s.offsets, s.total, *(buf for buf, _ in s.values))
   if isinstance(s, IndexScan):
     return (s.index, s.fold.result, s.fold.a, s.fold.b)
+  if isinstance(s, IndexWavefront):
+    extra = (s.max_val, s.best_i, s.best_j) if s.track_max and s.max_val is not None else ()
+    return (
+      s.i_var,
+      s.j_var,
+      *s.top_vars,
+      *s.left_vars,
+      *s.diag_vars,
+      *s.results,
+      *(v for v in extra if v is not None),
+    )
   if isinstance(s, IndexReduce):
     defs = list(s.index)
     for f in s.folds:
@@ -915,6 +964,13 @@ def fmt_block(block: list[Stmt], indent: int = 1) -> list[str]:
           out.append(
             f"{pad}        {buf.name}[{s.offsets.name}[{s.index.name}] + {s.emit_index.name}] = {fmt_expr(val)}"
           )
+    elif isinstance(s, IndexWavefront):
+      bstr = "" if s.band is None else f", band={fmt_expr(s.band)}"
+      out.append(f"{pad}wavefront ({s.i_var.name}, {s.j_var.name}) over ({fmt_expr(s.m)}, {fmt_expr(s.n)}{bstr}):")
+      out += fmt_block(s.body, indent + 1)
+      res_s = ", ".join(v.name for v in s.results)
+      nxt_s = ", ".join(fmt_expr(v) for v in s.next_vals)
+      out.append(f"{pad}    ({res_s}) = step({nxt_s})")
     elif isinstance(s, IndexScatter):
       how = "parallel " if s.parallel else ""
       out.append(

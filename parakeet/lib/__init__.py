@@ -10,6 +10,7 @@ from . import (  # noqa: F401, I001  (index_lib overrides pure.searchsorted)
   ragged_lib,
   random_lib,
   spatial_lib,
+  wavefront_lib,
 )
 from .core import (
   FUNCTIONS,

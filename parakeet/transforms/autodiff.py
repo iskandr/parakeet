@@ -1466,6 +1466,12 @@ def _block_sparse_attention_ad(tape: Tape, el, node: Node, g) -> None:
   _block_sparse_attention_vjp(tape, el, node, g)
 
 
+def _soft_align_ad(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.wavefront_lib import _soft_align_vjp
+
+  _soft_align_vjp(tape, el, node, g)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1485,6 +1491,7 @@ _BACKWARD = {
   "segmented_softmax": _segmented_softmax_ad,
   "varlen_flash_attention": _varlen_flash_attention_ad,
   "block_sparse_attention": _block_sparse_attention_ad,
+  "soft_align": _soft_align_ad,
 }
 
 

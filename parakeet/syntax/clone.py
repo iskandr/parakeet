@@ -160,6 +160,29 @@ class Cloner:
       return ir.IndexScan(
         x(s.n), self.var(s.index), b(s.body), self.fold(s.fold), b(s.emit), self.scope(s.scope), s.parallel, s.loc
       )
+    if isinstance(s, ir.IndexWavefront):
+      return ir.IndexWavefront(
+        x(s.m),
+        x(s.n),
+        self.var(s.i_var),
+        self.var(s.j_var),
+        tuple(self.var(v) for v in s.top_vars),
+        tuple(self.var(v) for v in s.left_vars),
+        tuple(self.var(v) for v in s.diag_vars),
+        tuple(x(e) for e in s.init_top),
+        tuple(x(e) for e in s.init_left),
+        tuple(x(e) for e in s.init_corner),
+        b(s.body),
+        tuple(x(e) for e in s.next_vals),
+        tuple(self.var(v) for v in s.results),
+        self.scope(s.scope),
+        None if s.band is None else x(s.band),
+        s.track_max,
+        None if s.max_val is None else self.var(s.max_val),
+        None if s.best_i is None else self.var(s.best_i),
+        None if s.best_j is None else self.var(s.best_j),
+        s.loc,
+      )
     if isinstance(s, ir.IndexFilter):
       return ir.IndexFilter(
         x(s.n), self.var(s.index), b(s.body), x(s.keep), self.var(s.out), self.var(s.count), self.scope(s.scope),

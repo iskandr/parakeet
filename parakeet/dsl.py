@@ -68,6 +68,7 @@ from .lib.ragged_lib import (
   varlen_flash_attention,
 )
 from .lib.spatial_lib import block_sparse_attention, morton_order, spatial_cutoff_sum
+from .lib.wavefront_lib import batched_wavefront, soft_align, wavefront
 from .ragged import RaggedArray
 from .spatial import BlockMask
 from .syntax import ir
@@ -346,6 +347,7 @@ __all__ = [
   "arange",
   "argmax",
   "argmin",
+  "batched_wavefront",
   "bf16_to_f32",
   "bitand",
   "bitor",
@@ -417,6 +419,7 @@ __all__ = [
   "segmented_softmax",
   "show_rewrite",
   "sin",
+  "soft_align",
   "spatial_cutoff_sum",
   "sqrt",
   "sub",
@@ -431,6 +434,7 @@ __all__ = [
   "uint64",
   "value_and_grad",
   "varlen_flash_attention",
+  "wavefront",
   "where",
   "zeros",
 ]
