@@ -35,6 +35,8 @@ from .lib.adverbs import (
   Gradient,
   LibFunction,
   allpairs,
+  checkpoint,
+  custom_vjp,
   filter,  # noqa: A004
   filter_reduce,
   fold,
@@ -48,6 +50,7 @@ from .lib.adverbs import (
   reduce,
   scan,
   scatter_add,
+  stop_gradient,
   tanimoto_topk,
   topk,
   topk_fold,
@@ -244,6 +247,10 @@ def _detect_laws(
           add_law("IndexScatter: Privatized Associative Scatter-Add")
       elif isinstance(s, ir.IndexReduce) and _builtins.any(f.carries for f in s.folds):
         add_law("Carry: Single-Pass Multi-State Monoid Fold")
+      elif isinstance(s, ir.Alloc) and (
+        s.var.name in ("ckpt", "wckpt", "fckpt") or s.var.name.startswith(("ckpt_", "wckpt_", "fckpt_"))
+      ):
+        add_law("AD: Checkpointed Reverse Loop")
 
   return tuple(laws), tuple(plans)
 
@@ -350,10 +357,12 @@ __all__ = [
   "block_sparse_attention",
   "bool_",
   "bswap",
+  "checkpoint",
   "clz",
   "cos",
   "ctz",
   "cumsum",
+  "custom_vjp",
   "div",
   "empty",
   "exp",
@@ -417,6 +426,7 @@ __all__ = [
   "soft_align",
   "spatial_cutoff_sum",
   "sqrt",
+  "stop_gradient",
   "sub",
   "sum",
   "tanh",

@@ -2106,38 +2106,99 @@ class Elaborator(ArrayMixin):
     )
 
   def carries_derivative(self, v) -> bool:
-    return self.tape is not None and self.tape.is_active(self, v)
+    return self.tape is not None and not self.tape.muted and self.tape.is_active(self, v)
 
   def _unroll(self, node: ast.For, it) -> bool:
+    from ..transforms import ad_loops
+
     what = "the bounds of a loop that updates differentiated values"
-    try:
-      if isinstance(it, RangeVal):
-        r = range(*(self.static_int(x, what) for x in (it.start, it.stop, it.step)))
-        if len(r) > _autodiff.MAX_UNROLL:
-          raise self.no_derivative(
-            f"cannot differentiate through a loop of {len(r)} iterations: it would have to be unrolled",
-            node,
-            hint="use an array operation, parakeet.map or parakeet.reduce instead",
-          )
-        items: tuple = tuple(Const(i, WeakInt) for i in r)
+    # Small compile-time constant loops keep fast straight-line unrolling;
+    # runtime-bound or large (> UNROLL_THRESHOLD) loops use IR checkpointed reverse loops.
+    can_checkpoint = (
+      self.tape is not None
+      and not self.tape.muted
+      and self.tape.outer is None
+      and not _loop_transfers(node.body)
+      and not node.orelse
+    )
+    if can_checkpoint:
+      if (
+        isinstance(it, RangeVal)
+        and isinstance(it.start, Const)
+        and isinstance(it.stop, Const)
+        and isinstance(it.step, Const)
+        and not isinstance(it.start.value, bool)
+        and isinstance(it.start.value, int)
+        and not isinstance(it.stop.value, bool)
+        and isinstance(it.stop.value, int)
+        and not isinstance(it.step.value, bool)
+        and isinstance(it.step.value, int)
+        and it.step.value != 0
+      ):
+        r = range(it.start.value, it.stop.value, it.step.value)
+        if len(r) <= ad_loops.UNROLL_THRESHOLD:
+          items: tuple = tuple(Const(i, WeakInt) for i in r)
+          return self._unrolled_for(node, items)
       elif isinstance(it, RaggedArray) and isinstance(it.offsets.shape[0], Const):
         n_seg = it.offsets.shape[0].value - 1
         items = tuple(self._ragged_getitem(it, Const(k, I), node) for k in range(max(0, n_seg)))
+        return self._unrolled_for(node, items)
       elif isinstance(it, ArrayVal) and it.rank >= 1 and isinstance(it.shape[0], Const):
-        items = tuple(self.getitem(it, Const(k, I)) for k in range(it.shape[0].value))
-      else:
+        if it.shape[0].value <= ad_loops.UNROLL_THRESHOLD:
+          items = tuple(self.getitem(it, Const(k, I)) for k in range(it.shape[0].value))
+          return self._unrolled_for(node, items)
+    else:
+      try:
+        if isinstance(it, RangeVal):
+          r = range(*(self.static_int(x, what) for x in (it.start, it.stop, it.step)))
+          if len(r) > _autodiff.MAX_UNROLL:
+            raise self.no_derivative(
+              f"cannot differentiate through a loop of {len(r)} iterations: it would have to be unrolled",
+              node,
+              hint="use an array operation, parakeet.map or parakeet.reduce instead",
+            )
+          items = tuple(Const(i, WeakInt) for i in r)
+          return self._unrolled_for(node, items)
+        if isinstance(it, RaggedArray) and isinstance(it.offsets.shape[0], Const):
+          n_seg = it.offsets.shape[0].value - 1
+          items = tuple(self._ragged_getitem(it, Const(k, I), node) for k in range(max(0, n_seg)))
+          return self._unrolled_for(node, items)
+        if isinstance(it, ArrayVal) and it.rank >= 1 and isinstance(it.shape[0], Const):
+          items = tuple(self.getitem(it, Const(k, I)) for k in range(it.shape[0].value))
+          return self._unrolled_for(node, items)
         raise self.error(StaticValueError, "not a range")
-    except StaticValueError:
-      raise self.no_derivative(
-        "cannot differentiate through a loop whose length is only known at run time",
-        node,
-        hint="a loop that updates differentiated values has to be unrolled: loop over a range of a literal or "
-        "of a scalar argument of the compiled function, or use parakeet.reduce, np.sum or another array operation",
-      ) from None
-    return self._unrolled_for(node, items)
+      except StaticValueError:
+        raise self.no_derivative(
+          "cannot differentiate through a loop whose length is only known at run time",
+          node,
+          hint="a loop that updates differentiated values has to be unrolled: loop over a range of a literal or "
+          "of a scalar argument of the compiled function, or use parakeet.reduce, np.sum or another array operation",
+        ) from None
+
+    # IR-level O(sqrt(T)) checkpointed reverse for-loop
+    end_checks: list = []
+    if isinstance(it, RangeVal):
+      start, stop, step = (self.tmp(x, n) for x, n in zip((it.start, it.stop, it.step), ("start", "stop", "step")))
+      getter = None
+    else:
+      length, getter = self.iter_source(it, node.iter, end_checks)
+      start, stop, step = ZERO, self.tmp(length, "n"), ONE
+    names = assigned_names(node.body, node) | _target_names(node)
+    return ad_loops.differentiate_for_loop(self, node, start, stop, step, getter, names, end_checks)
 
   def exec_While(self, node: ast.While) -> bool:
     if self.hint_get((self.frame.path, id(node), "unroll")):
+      if (
+        self.tape is not None
+        and not self.tape.muted
+        and self.tape.outer is None
+        and not _loop_transfers(node.body)
+        and not node.orelse
+      ):
+        from ..transforms import ad_loops
+
+        names = assigned_names(node.body, node) | assigned_names(node.test)
+        return ad_loops.differentiate_while_loop(self, node, names)
       self.request_unroll(self.frame, node)
     names = assigned_names(node.body, node) | assigned_names(node.test)
     ctx = self.begin_loop(node, names)

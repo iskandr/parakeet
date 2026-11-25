@@ -69,35 +69,56 @@ conventions: ties in a reduction share the gradient equally.
 
 ## Loops and branches
 
-The derivative is laid out when the function is compiled, so the compiler has
-to know how many times each operation runs.
+Parakeet differentiates **both** small static loops and arbitrary runtime-bound
+`for` and `while` loops:
 
-A `for` loop over a tuple, or over a `range` whose length is known when the
-function is compiled, is **unrolled**: a literal, a scalar argument, or the
-shape of an array all work. Such an argument becomes part of what the function
-is specialized on, exactly like `axis=`.
+* **Small static `for` loops** (compile-time trip count `<= 32` or iterating
+  over a heterogeneous tuple of weight matrices) are **unrolled** onto the tape
+  for zero checkpoint overhead and cross-iteration fusion.
+* **Runtime-bound and long `for` loops** (`for t in range(n):`, `for x in arr:`,
+  or static ranges longer than 32 iterations — including 10,000+ iterations)
+  compile to an **IR-level `O(sqrt(T))` checkpointed reverse loop** (`ForRange`)
+  with constant IR size and bounded memory.
+* **Data-dependent `while` loops** (`while err > tol:`) compile to a fixed-slot
+  stride-doubling **checkpointed reverse `While` loop** (`O(log T)` slots, zero
+  dynamic reallocation inside the loop).
+* **Custom `par.reduce` folds** use `O(sqrt(N))` checkpointed reverse mode, and
+  1-D **`par.scan`** with any user combiner is differentiable directly.
 
 ```python
-def deep(weights, x):  # a tuple of matrices
+def deep(weights, x):  # a tuple of matrices (unrolled)
   for w in weights:
     x = np.tanh(x @ w)
   return np.sum(x)
 
 
-def correlate(x, kernel):
-  out = x[: len(x) - len(kernel) + 1] * 0.0
-  for i in range(len(kernel)):  # unrolled: one specialization per kernel length
-    out = out + x[i : i + len(out)] * kernel[i]
-  return np.sum(out**2)
+def iir_loss(a, b, s0):  # runtime-length recurrence (O(sqrt(T)) checkpointed reverse loop)
+  s = s0
+  for t in range(a.shape[0]):
+    s = a[t] * s + b[t]
+  return s * s
 ```
 
 Loops that do not touch differentiated values are left alone, so a training
-loop around `grad` is an ordinary loop.
+loop around `par.grad` is an ordinary loop. Loops containing `break`,
+`continue`, or early `return` over differentiated state are refused loudly.
 
-What cannot be unrolled cannot be differentiated: `while` loops, loops over the
-elements of an array of unknown length, and anything longer than 4096
-iterations. Use an array operation or an adverb instead — `np.sum`,
-`parakeet.map`, a comprehension.
+## Custom rules, `stop_gradient`, and `checkpoint`
+
+* **`par.stop_gradient(x)`** detaches a scalar, array, tuple, record, or
+  `RaggedArray` from the tape with zero copy (useful for straight-through
+  estimators and detached targets):
+  ```python
+  y = x + par.stop_gradient(np.round(x) - x)
+  ```
+* **`@par.custom_vjp`** lets you attach custom `(fwd, bwd)` rules via
+  `.defvjp(fwd, bwd)` — supporting `NamedTuple` / frozen `@dataclass` /
+  `RaggedArray` residuals, higher-order AD, and Implicit Function Theorem
+  differentiation through `while`-loop equilibrium solvers without storing
+  iteration history.
+* **`@par.checkpoint`** (or `par.checkpoint(fn)(*args)`) drops a block's
+  forward intermediates and rematerializes them during the backward pass,
+  composing cleanly with Law 2 algebraic VJPs.
 
 An `if` statement whose condition is only known at run time is differentiated
 by running **both** branches and choosing between their results, which is what

@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.2.0 (November 25, 2026)
+
+Major automatic differentiation upgrade: IR-level checkpointed reverse loops
+for runtime-bound `for`/`while` loops, `par.fold`, and general `par.scan`,
+plus `par.stop_gradient`, `@par.custom_vjp`, and `@par.checkpoint` (AD Upgrade
+Wave 1, closing `#75` and advancing `#77`).
+
+### Reverse-mode AD through runtime & long loops
+
+- **IR-level $O(\sqrt{T})$ checkpointed reverse `for` loops:** Loops over
+  runtime-length ranges or arrays (`for t in range(T):`, `for t in range(weights.shape[0]):`)
+  and long static loops (`> 32` iterations) compile once to a two-level
+  checkpointed reverse loop in IR without unrolling or recompiling per length,
+  removing the `MAX_UNROLL = 4096` cliff.
+- **IR-level $O(\log T)$ checkpointed reverse `while` loops:** Runtime-converging
+  `while` loops (fixed-point solvers, adaptive ODE/relaxation steps) now
+  differentiate through a fixed-slot (`64` slots) stride-doubling online
+  checkpoint schedule with bounded memory.
+- **Checkpointed $O(\sqrt{N})$ `par.fold` & differentiable general `par.scan`:**
+  Arbitrary non-monoidal `par.reduce`/`par.fold` and 1-D `par.scan` now
+  differentiate via checkpointed reverse segments without storing full $O(N)$
+  histories.
+- **Rewrite inspection:** `par.show_rewrite(par.grad(...), ...)` now reports
+  `AD: Checkpointed Reverse Loop` when checkpointed reverse loops are emitted.
+
+### Explicit AD control primitives
+
+- **`par.stop_gradient(x)`:** Zero-copy gradient barrier across scalars, arrays,
+  tuples, `RaggedArray`, and records (for straight-through estimators, target
+  networks, and stop-gradient RL losses).
+- **`@par.custom_vjp` (`.defvjp(fwd, bwd)`):** User-defined reverse-mode rules
+  supporting multi-output pytree values, auxiliary residuals, and higher-order
+  differentiation.
+- **`@par.checkpoint` (rematerialization):** Explicit activation checkpointing
+  that re-runs the forward block during backpropagation while composing
+  cleanly with Law 2 FlashAttention / LayerNorm rematerialization.
+- **Record static metadata leaves:** Non-float fields inside `NamedTuple` and
+  frozen `@dataclass` records now pass through AD as zero-tangent static leaves.
+
 ## 1.1.0 (November 25, 2026)
 
 Major expansion of Parakeet's GPU schedules, algebraic data structures,

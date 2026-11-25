@@ -420,9 +420,19 @@ def test_loops_that_cannot_be_unrolled():
       s = s * 1.0
     return s
 
-  refused(runtime, W, X, match="length is only known at run time")
-  refused(forever, W, X, match="through this loop")
-  refused(long, W, match="100000 iterations")
+  def with_break(w):
+    s = np.sum(w)
+    for i in range(5):
+      if i == 3:
+        break
+      s = s * 1.5
+    return s
+
+  # Runtime-bound for, while, and >MAX_UNROLL loops now differentiate via IR checkpointed reverse loops!
+  check(runtime, W, X)
+  check(forever, W, X)
+  np.testing.assert_allclose(grad(long)(W), np.ones_like(W))
+  refused(with_break, W, match="break/continue")
 
 
 def test_in_place_updates():
@@ -496,7 +506,8 @@ def test_values_overwritten_before_their_derivative_needed_them():
 def test_library_functions_without_a_derivative_are_named():
   refused(lambda w: np.sum(np.cumprod(w)), W, match=r"cumprod\(\)")
   refused(lambda w: np.sum(np.convolve(w.ravel(), w.ravel())), W, match=r"convolve\(\)")
-  refused(lambda w: np.sum(parakeet.scan(parakeet.multiply, w.ravel())), W, match=r"scan\(\)")
+  # General 1-D parakeet.scan is now differentiable via reverse scan AD!
+  check(lambda w: np.sum(parakeet.scan(parakeet.multiply, w.ravel())), W)
 
 
 def test_cumsum_sort_and_folds():

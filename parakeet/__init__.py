@@ -54,6 +54,8 @@ from .frontend.diagnose import find_broken_transform
 from .index import FrozenHashTable, SortedIndex
 from .lib.adverbs import (
   allpairs,
+  checkpoint,
+  custom_vjp,
   each,
   filter,  # noqa: A004
   filter_reduce,
@@ -68,6 +70,7 @@ from .lib.adverbs import (
   reduce,
   scan,
   scatter_add,
+  stop_gradient,
   tanimoto_topk,
   topk,
   topk_fold,
@@ -194,13 +197,13 @@ __all__ = [
     "Specialization", "StaticValueError", "TargetProfile",
     "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "batched_wavefront", "bf16_to_f32", "block_sparse_attention",
-    "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
+    "bswap", "checkpoint", "clear_cache", "clz", "config", "ctz", "custom_vjp", "each", "errors",
     "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "flatmap", "fold", "ifilter_reduce",
     "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jit", "lib", "map", "morton_order",
     "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter", "scatter_add", "seed",
     "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
-    "show_rewrite", "soft_align", "spatial_cutoff_sum", "tanimoto_topk", "topk", "topk_fold",
+    "show_rewrite", "soft_align", "spatial_cutoff_sum", "stop_gradient", "tanimoto_topk", "topk", "topk_fold",
     "varlen_flash_attention", "wavefront",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
     "to_device", "to_host", "typed_repr",
