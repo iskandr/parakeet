@@ -6,6 +6,7 @@ import builtins
 import dataclasses
 import functools
 import inspect
+import itertools
 import math
 import operator
 import types as pytypes
@@ -21,7 +22,20 @@ from ..syntax import ops
 from ..syntax.ir import Const, Expr
 from ..syntax.ops import I, cast, cmp
 from ..syntax.records import StructuredView, record_type
-from ..syntax.values import ArrayVal, EnumerateVal, RangeVal, TypeVal, ZipVal, describe
+from ..syntax.values import (
+  ArrayVal,
+  BatchedVal,
+  ChainVal,
+  EnumerateVal,
+  FixedListVal,
+  ListVal,
+  ProductVal,
+  RangeVal,
+  TypeVal,
+  VecVal,
+  ZipVal,
+  describe,
+)
 from . import numpy_lib as npl
 from .core import method, norm_axis, reduce_values, register
 
@@ -44,11 +58,15 @@ def _len(el, x):
     return ops.isub(x.offsets.shape[0], ops.ONE)
   if isinstance(x, (SortedIndex, FrozenHashTable)):
     return x.keys.shape[0]
+  if isinstance(x, ListVal):
+    return Const(len(x.items), I)
+  if isinstance(x, (VecVal, FixedListVal)):
+    return x.length
   if isinstance(x, (tuple, str)):
     return Const(len(x), I)
   if isinstance(x, RangeVal):
     return el.range_length(x)
-  if isinstance(x, (ZipVal, EnumerateVal)):
+  if isinstance(x, (ZipVal, EnumerateVal, ChainVal, ProductVal, BatchedVal)):
     return el.iter_source(x)[0]
   raise el.error(TypeInferenceError, f"object of type {describe(x)} has no len()")
 
@@ -97,6 +115,92 @@ def _namedtuple_replace(el, obj, **changes):
     raise el.error(TypeInferenceError, f"got unexpected field name(s): {', '.join(sorted(unknown))}")
   vals = [changes[name] if name in changes else getattr(obj, name) for name in rec.names]
   return rec.build(vals)
+
+
+@register(RaggedArray.from_sequences, name="RaggedArray.from_sequences")
+def _ragged_from_sequences(el, sequences, dtype=None):
+  from ..ndtypes import Int64
+  from ..syntax.ir import Store
+
+  if isinstance(sequences, ListVal):
+    items = list(sequences.items)
+  elif isinstance(sequences, tuple):
+    items = list(sequences)
+  else:
+    raise el.error(
+      TypeInferenceError,
+      f"RaggedArray.from_sequences() expects a static list or tuple of arrays, got {describe(sequences)}",
+    )
+  n_segs = len(items)
+  if n_segs == 0:
+    elt = el.as_dtype(dtype) if dtype is not None else el.as_dtype(np.float32)
+    vals = el.alloc_array(elt, (ops.ZERO,), zero=False, label="rag_vals")
+    offs = el.alloc_array(Int64, (ops.ONE,), zero=True, label="rag_offs")
+    return RaggedArray(vals, offs)
+  arrs = [el.as_array(x, "RaggedArray sequence") for x in items]
+  elt = el.as_dtype(dtype) if dtype is not None else arrs[0].elt
+  if dtype is None:
+    for a in arrs[1:]:
+      from ..ndtypes import join as _join
+
+      elt = _join(elt, a.elt)
+  values = npl.concatenate(el, tuple(arrs), axis=0, dtype=TypeVal(elt))
+  offs = el.alloc_array(Int64, (Const(n_segs + 1, I),), zero=False, label="rag_offs")
+  running: Expr = ops.ZERO
+  el.emit(Store(offs.buf, ops.ZERO, ops.ZERO))
+  for k, a in builtins.enumerate(arrs):
+    running = el.tmp(ops.iadd(running, a.shape[0]), "roff")
+    el.emit(Store(offs.buf, Const(k + 1, I), running))
+  el.record_store(offs)
+  return RaggedArray(values, offs)
+
+
+@method("append")
+def _list_append(el, obj, value):
+  if isinstance(obj, ListVal):
+    return el.list_append(obj, value)
+  if isinstance(obj, VecVal):
+    return el.vec_append(obj, value)
+  if isinstance(obj, FixedListVal):
+    return el.fixed_list_append(obj, value)
+  raise el.error(TypeInferenceError, f"{describe(obj)} has no method 'append'")
+
+
+@method("extend")
+def _list_extend(el, obj, values):
+  if isinstance(obj, ListVal):
+    return el.list_extend(obj, values)
+  if isinstance(obj, VecVal):
+    return el.vec_extend(obj, values)
+  if isinstance(obj, FixedListVal):
+    return el.fixed_list_extend(obj, values)
+  raise el.error(TypeInferenceError, f"{describe(obj)} has no method 'extend'")
+
+
+@method("pop")
+def _list_pop(el, obj, index=None):
+  if isinstance(obj, ListVal):
+    return el.list_pop(obj, index)
+  if isinstance(obj, VecVal):
+    if index is not None:
+      raise el.error(UnsupportedError, "pop(index) on runtime list is not supported; use pop()")
+    return el.vec_pop(obj)
+  if isinstance(obj, FixedListVal):
+    if index is not None:
+      raise el.error(UnsupportedError, "pop(index) on fixed_list is not supported; use pop()")
+    return el.fixed_list_pop(obj)
+  raise el.error(TypeInferenceError, f"{describe(obj)} has no method 'pop'")
+
+
+@method("clear")
+def _list_clear(el, obj):
+  if isinstance(obj, ListVal):
+    return el.list_clear(obj)
+  if isinstance(obj, VecVal):
+    return el.vec_clear(obj)
+  if isinstance(obj, FixedListVal):
+    return el.fixed_list_clear(obj)
+  raise el.error(TypeInferenceError, f"{describe(obj)} has no method 'clear'")
 
 
 @method("bit_count")
@@ -167,6 +271,8 @@ def _reversed(el, x):
 
 @register(tuple)
 def _tuple(el, x=()):
+  if isinstance(x, ListVal):
+    return tuple(x.items)
   if isinstance(x, tuple):
     return x
   if isinstance(x, ArrayVal) and x.rank >= 1 and isinstance(x.shape[0], Const):
@@ -179,12 +285,18 @@ def _tuple(el, x=()):
 
 @register(list)
 def _list(el, x=()):
+  if isinstance(x, ListVal):
+    return ListVal(list(x.items), origin=x.origin, path=x.path, loop_depth=el.loop_depth, branch_depth=len(el.if_stack))
+  if isinstance(x, VecVal):
+    return el.vec_to_array(x)
+  if isinstance(x, FixedListVal):
+    return el.fixed_list_to_array(x)
+  if isinstance(x, (ChainVal, ProductVal, BatchedVal, ZipVal, EnumerateVal)):
+    return el.as_array(x)
   if isinstance(x, tuple) and not builtins.all(isinstance(v, Expr) for v in x):
-    # a sequence of non-scalars (e.g. zip of tuples) has no array form:
-    # keep it as an immutable sequence
     ranks = {v.rank if isinstance(v, ArrayVal) else None for v in x}
     if None in ranks or len(ranks) != 1:
-      return x
+      return ListVal(list(x), loop_depth=el.loop_depth, branch_depth=len(el.if_stack))
   return el.as_array(x, "argument of list()")
 
 
@@ -265,6 +377,17 @@ def _max(el, *args, key=None, default=None):
 def _sum(el, x, start=None):
   if start is None:
     start = Const(0, WeakInt)
+  if isinstance(x, ListVal):
+    x = tuple(x.items)
+  elif isinstance(x, VecVal):
+    x = el.vec_to_array(x)
+  elif isinstance(x, FixedListVal):
+    x = el.fixed_list_to_array(x)
+  elif isinstance(x, ChainVal):
+    acc = start
+    for part in x.items:
+      acc = _sum(el, part, acc)
+    return acc
   if isinstance(x, tuple):
     acc = start
     for v in x:
@@ -352,6 +475,8 @@ def _isinstance(el, x, types):
       return isinstance(x, ArrayVal)
     if t is tuple:
       return isinstance(x, tuple)
+    if t is list:
+      return isinstance(x, (ListVal, VecVal, FixedListVal))
     if t is dict:
       return isinstance(x, dict)
     if t is range:
@@ -600,6 +725,95 @@ def _print(el, *args, **kwargs):
     "print() is not available in compiled code",
     hint="return the value and print it from Python, or debug with @jit(backend='python')",
   )
+
+
+# ---------------------------------------------------------------------------
+# itertools
+# ---------------------------------------------------------------------------
+
+
+@register(itertools.pairwise, name="itertools.pairwise")
+def _it_pairwise(el, iterable):
+  if isinstance(iterable, ListVal):
+    iterable = tuple(iterable.items)
+  if isinstance(iterable, tuple):
+    return tuple(builtins.zip(iterable[:-1], iterable[1:]))
+  arr = el.as_array(iterable, "itertools.pairwise() argument")
+  if arr.rank == 0:
+    raise el.error(TypeInferenceError, "itertools.pairwise() requires a 1-d or higher array")
+  left = el.getitem(arr, slice(None, Const(-1, I), None))
+  right = el.getitem(arr, slice(ops.ONE, None, None))
+  return ZipVal((left, right), ops.FALSE)
+
+
+@register(itertools.islice, name="itertools.islice")
+def _it_islice(el, iterable, *args):
+  if len(args) == 1:
+    start, stop, step = None, args[0], None
+  elif len(args) == 2:
+    start, stop, step = args[0], args[1], None
+  elif len(args) == 3:
+    start, stop, step = args[0], args[1], args[2]
+  else:
+    raise el.error(TypeInferenceError, f"islice expected 2 to 4 arguments, got {len(args) + 1}")
+  if isinstance(iterable, ListVal):
+    iterable = tuple(iterable.items)
+  if isinstance(iterable, tuple):
+    s0 = None if start is None else el.static_int(start, "islice start")
+    s1 = None if stop is None else el.static_int(stop, "islice stop")
+    s2 = None if step is None else el.static_int(step, "islice step")
+    return iterable[slice(s0, s1, s2)]
+  if isinstance(iterable, RangeVal):
+    arr = el.range_array(iterable)
+    return el.getitem(arr, slice(start, stop, step))
+  arr = el.as_array(iterable, "itertools.islice() argument")
+  return el.getitem(arr, slice(start, stop, step))
+
+
+@register(itertools.chain, name="itertools.chain")
+def _it_chain(el, *iterables):
+  if builtins.all(isinstance(it, (tuple, ListVal)) for it in iterables):
+    out: list = []
+    for it in iterables:
+      out.extend(it.items if isinstance(it, ListVal) else it)
+    return tuple(out)
+  return ChainVal(tuple(iterables))
+
+
+@register(itertools.product, name="itertools.product")
+def _it_product(el, *iterables, repeat=1):
+  rep = repeat if isinstance(repeat, int) else el.static_int(repeat, "product repeat")
+  if rep < 0:
+    raise el.error(TypeInferenceError, "repeat argument cannot be negative")
+  pools = tuple(iterables) * rep
+  if not pools:
+    return ((),)
+  if builtins.all(isinstance(p, (tuple, ListVal)) for p in pools):
+    tpools = [tuple(p.items) if isinstance(p, ListVal) else p for p in pools]
+    return tuple(itertools.product(*tpools))
+  return ProductVal(pools)
+
+
+if hasattr(itertools, "batched"):
+
+  @register(itertools.batched, name="itertools.batched")
+  def _it_batched(el, iterable, n, strict=False):
+    strict_val = strict if isinstance(strict, bool) else el.static_bool(strict, "batched strict")
+    if isinstance(iterable, ListVal):
+      iterable = tuple(iterable.items)
+    if isinstance(iterable, tuple):
+      step = n if isinstance(n, int) else el.static_int(n, "batched n")
+      if step < 1:
+        raise el.error(StaticValueError, "n must be at least one")
+      if strict_val and len(iterable) % step != 0:
+        raise el.error(StaticValueError, "batched(): incomplete batch")
+      return tuple(iterable[i : i + step] for i in builtins.range(0, len(iterable), step))
+    nv = el.as_index(n, "batched n")
+    el.check(cmp("ge", nv, ops.ONE), "ValueError", "n must be at least one")
+    if strict_val:
+      length, _ = el.iter_source(iterable)
+      el.check(cmp("eq", ops.prim("mod", (length, nv), I), ops.ZERO), "ValueError", "batched(): incomplete batch")
+    return BatchedVal(iterable, nv)
 
 
 # ---------------------------------------------------------------------------

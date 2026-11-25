@@ -257,6 +257,11 @@ class CudaEmitter(CFamilyEmitter):
     raise Unsupported("it allocates temporary arrays inside the loop")
 
   def alloc(self, s: ir.Alloc, out: list[str], pad: str) -> None:
+    if s.stack and isinstance(s.count, ir.Const) and 1 <= int(s.count.value) <= 4096:
+      if s.zero:
+        z = "false" if s.var.type.elt.kind == "b" else "0"
+        out.append(f"{pad}for (int _zi = 0; _zi < {int(s.count.value)}; _zi++) {s.var.name}_d[_zi] = {z};")
+      return
     raise Unsupported("it allocates temporary arrays inside the loop")
 
   def assign_buf(self, s: ir.Assign, out: list[str], pad: str) -> None:
@@ -293,10 +298,18 @@ class CudaPlanner(DevicePlanner):
     lines.append(f"  const long long {loop.start.name} = {loop.chunk.name} * pk_csize;")
     lines.append(f"  if ({loop.start.name} >= pk_total) return;")
     lines.append(f"  const long long {loop.stop.name} = min({loop.start.name} + pk_csize, pk_total);")
+    stack_bufs = {
+      s.var.uid: int(s.count.value)
+      for s in ir.walk_stmts(loop.body)
+      if isinstance(s, ir.Alloc) and s.stack and isinstance(s.count, ir.Const) and 1 <= int(s.count.value) <= 4096
+    }
     for _uid, v in sorted(defined.items()):
       if v is loop.chunk or v is loop.start or v is loop.stop:
         continue
       if isinstance(v.type, BufType):
+        if v.uid in stack_bufs:
+          lines.append(f"  {em.ctype(v.type.elt)} {v.name}_d[{stack_bufs[v.uid]}];")
+          continue
         raise Unsupported("it creates arrays inside the loop")
       init = "false" if v.type.kind == "b" else "0"
       lines.append(f"  {em.ctype(v.type)} {v.name} = {init};")

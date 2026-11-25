@@ -40,6 +40,7 @@ from .lib.adverbs import (
   custom_vjp,
   filter,  # noqa: A004
   filter_reduce,
+  fixed_list,
   fold,
   grad,
   hessian,
@@ -386,6 +387,7 @@ __all__ = [
   "filter",
   "filter_pairs",
   "filter_reduce",
+  "fixed_list",
   "flatmap",
   "float32",
   "float64",

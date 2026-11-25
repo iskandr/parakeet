@@ -20,6 +20,22 @@ class FunctionSource:
   filename: str
   name: str
   _outside_loads: dict[int, frozenset[str]] | None = None
+  _mutated_lists: frozenset[str] | None = None
+
+  def mutated_list_names(self) -> frozenset[str]:
+    """Local variable names on which list-mutating methods are called."""
+    if self._mutated_lists is None:
+      names: set[str] = set()
+      for n in ast.walk(self.node):
+        if (
+          isinstance(n, ast.Call)
+          and isinstance(n.func, ast.Attribute)
+          and n.func.attr in ("append", "extend", "pop", "clear")
+          and isinstance(n.func.value, ast.Name)
+        ):
+          names.add(n.func.value.id)
+      self._mutated_lists = frozenset(names)
+    return self._mutated_lists
 
   def location(self, node: ast.AST | None = None) -> SourceLocation:
     node = node if node is not None else self.node

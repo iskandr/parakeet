@@ -45,6 +45,7 @@ from ..ndtypes import Bool, BufType, ScalarType, WeakBool, WeakFloat, WeakInt, j
 from ..ragged import RaggedArray
 from ..syntax import ops
 from ..syntax.ir import (
+  Alloc,
   ArrayParam,
   ArrayResult,
   Assign,
@@ -73,15 +74,21 @@ from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
 from ..syntax.records import Record, StructuredRow, StructuredView, record_type
 from ..syntax.values import (
   ArrayVal,
+  BatchedVal,
   BoundMethod,
+  ChainVal,
   Closure,
   EnumerateVal,
+  FixedListVal,
+  ListVal,
   Partial,
+  ProductVal,
   PyFunc,
   RangeVal,
   Root,
   TypeVal,
   Undefined,
+  VecVal,
   ZipVal,
   describe,
 )
@@ -275,6 +282,7 @@ class Elaborator(ArrayMixin):
     self.both_depth = 0  # > 0 inside an if statement whose branches are both being run
     self.reach: dict[int, set | None] = {}  # buffer of a merged array -> the allocations it may be
     self.lib_calls: list[tuple[str, int]] = []  # library functions being elaborated (name, frame depth)
+    self._force_list_node: ast.AST | None = None  # ast.List bound to a mutated local list name
 
   # ================================================================ plumbing
 
@@ -818,6 +826,10 @@ class Elaborator(ArrayMixin):
     if isinstance(obj, pytypes.MethodType) and (
       record_type(obj.__self__) is not None or isinstance(obj.__self__, type)
     ):
+      from .. import lib
+
+      if lib.lookup(obj) is not None:
+        return obj
       return Partial(self.lift(obj.__func__), (self.lift(obj.__self__),), {})
     if hasattr(obj, "__parakeet_fn__"):
       obj = obj.__parakeet_fn__
@@ -926,6 +938,17 @@ class Elaborator(ArrayMixin):
 
   def export(self, v) -> tuple:
     """Turn the function's result into IR results plus a decoding spec."""
+    if isinstance(v, VecVal):
+      return self.export(self.vec_to_array(v))
+    if isinstance(v, FixedListVal):
+      return self.export(self.fixed_list_to_array(v))
+    if isinstance(v, ListVal):
+      try:
+        with self.trial():
+          self.as_array(v)
+      except ParakeetError:
+        return self.export(tuple(v.items))
+      return self.export(self.as_array(v))
     if isinstance(v, Expr):
       self.results.append(self.tmp(v, "res"))
       return ("s", v.type)
@@ -1351,6 +1374,12 @@ class Elaborator(ArrayMixin):
         if isinstance(v, tuple):
           v = self.as_array(v)
         self.setitem(obj, index, v)
+      elif isinstance(obj, ListVal):
+        self.list_setitem(obj, index, v, target)
+      elif isinstance(obj, VecVal):
+        self.vec_setitem(obj, index, v, target)
+      elif isinstance(obj, FixedListVal):
+        self.fixed_list_setitem(obj, index, v, target)
       else:
         raise self.error(TypeInferenceError, f"{describe(obj)} does not support item assignment", target)
     elif isinstance(target, ast.Attribute):
@@ -1418,7 +1447,18 @@ class Elaborator(ArrayMixin):
     raise self.error(TypeInferenceError, f"cannot unpack {describe(v)}", node)
 
   def exec_Assign(self, node: ast.Assign) -> bool:
-    v = self.eval(node.value)
+    prev_force = self._force_list_node
+    if (
+      isinstance(node.value, ast.List)
+      and len(node.targets) == 1
+      and isinstance(node.targets[0], ast.Name)
+      and node.targets[0].id in self.frame.src.mutated_list_names()
+    ):
+      self._force_list_node = node.value
+    try:
+      v = self.eval(node.value)
+    finally:
+      self._force_list_node = prev_force
     if len(node.targets) > 1:
       v = self.bindable(v, "t")
     for target in node.targets:
@@ -2681,6 +2721,104 @@ class Elaborator(ArrayMixin):
 
   def exec_For(self, node: ast.For) -> bool:
     it = self.eval(node.iter)
+    if isinstance(it, ListVal):
+      it = tuple(it.items)
+    if isinstance(it, ChainVal):
+      if node.orelse or _loop_transfers(node.body):
+        # Fall back to single flat loop via iter_source when break/continue/else is present
+        pass
+      else:
+        for sub_it in it.items:
+          if isinstance(sub_it, ListVal):
+            sub_it = tuple(sub_it.items)
+          if isinstance(sub_it, tuple):
+            if self._unrolled_for(node, sub_it):
+              return True
+          else:
+            if self._exec_for_iterable(node, sub_it):
+              return True
+        return False
+    if isinstance(it, ProductVal) and not node.orelse and not _loop_transfers(node.body):
+      return self._exec_for_product(node, it)
+    if isinstance(it, BatchedVal):
+      return self._exec_for_batched(node, it)
+    return self._exec_for_iterable(node, it)
+
+  def _exec_for_product(self, node: ast.For, prod: ProductVal) -> bool:
+    """Lower ``for a, b, ... in itertools.product(p0, p1, ...):`` directly to nested loops."""
+    pools = prod.items
+    if not pools:
+      return False
+    end_checks_all: list = []
+    domains: list[tuple[Expr, Any]] = []
+    for p in pools:
+      if isinstance(p, ListVal):
+        p = tuple(p.items)
+      if isinstance(p, tuple):
+        domains.append((Const(len(p), I), lambda i, _p=p: self.tuple_index(_p, i, node)))
+      else:
+        checks: list = []
+        ln, gt = self.iter_source(p, node.iter, checks)
+        domains.append((self.tmp(ln, "pn"), gt))
+        end_checks_all.extend(checks)
+
+    names = assigned_names(node.body, node) | _target_names(node)
+
+    def _nest(level: int, chosen: list) -> None:
+      n_d, getter = domains[level]
+      ctx = self.begin_loop(node, names)
+      iv = Var(f"pi{level}", I)
+      self.nonneg.add(iv.uid)
+      self.upper[iv.uid] = n_d
+      blk: list = []
+      with self.in_block(blk, ctx.scope, loop=True):
+        val = getter(iv)
+        if level + 1 < len(domains):
+          _nest(level + 1, [*chosen, val])
+          self.sync(ctx)
+          self.emit(ReleaseScope(ctx.scope))
+        else:
+          self.assign(node.target, tuple([*chosen, val]))
+          if not self.exec_block(node.body):
+            self.sync(ctx)
+            self.emit(ReleaseScope(ctx.scope))
+      self.emit(ForRange(iv, ZERO, n_d, ONE, blk, ctx.scope))
+      self.end_loop(ctx)
+
+    _nest(0, [])
+    self.block.extend(end_checks_all)
+    return False
+
+  def _exec_for_batched(self, node: ast.For, bval: BatchedVal) -> bool:
+    """Lower ``for batch in itertools.batched(arr, n):`` into a chunked slice loop."""
+    arr = self.as_array(bval.item, "itertools.batched() argument")
+    if arr.rank == 0:
+      raise self.error(TypeInferenceError, "itertools.batched() requires a 1-d or higher array", node)
+    if arr.buf is None and arr.cost > 24:
+      arr = self.as_concrete(arr)
+    self.consume(arr)
+    total = self.tmp(arr.shape[0], "btot")
+    step = self.tmp(bval.n, "bstep")
+    n_batches = self.tmp(ops.prim("floordiv", (iadd(total, isub(step, ONE)), step), I), "nbatch")
+    names = assigned_names(node.body, node) | _target_names(node)
+    ctx = self.begin_loop(node, names)
+    self._track_exhaustion(ctx, node.orelse)
+    iv = Var("bi", I)
+    self.nonneg.add(iv.uid)
+    self.upper[iv.uid] = n_batches
+    blk: list = []
+    with self.in_block(blk, ctx.scope, loop=True):
+      s0 = self.tmp(imul(iv, step), "bs0")
+      s1 = self.tmp(ops.imin(iadd(s0, step), total), "bs1")
+      chunk = self._slice_leading(arr, s0, s1)
+      self.assign(node.target, chunk)
+      if not self.exec_block(node.body):
+        self.sync(ctx)
+        self.emit(ReleaseScope(ctx.scope))
+    self.emit(ForRange(iv, ZERO, n_batches, ONE, blk, ctx.scope))
+    return self._finish_loop(ctx, node, [])
+
+  def _exec_for_iterable(self, node: ast.For, it) -> bool:
     tuple_domain = isinstance(it, tuple)
     if tuple_domain and (not it or not _loop_transfers(node.body)):
       return self._unrolled_for(node, it)
@@ -2763,6 +2901,41 @@ class Elaborator(ArrayMixin):
 
   def iter_source(self, v, node=None, end_checks=None):
     """``(length, getter)`` for a value being iterated at run time."""
+    if isinstance(v, ListVal):
+      return self.iter_source(tuple(v.items), node, end_checks)
+    if isinstance(v, (VecVal, FixedListVal)):
+      return v.length, lambda i, _v=v: Load(_v.buf, i)
+    if isinstance(v, ChainVal):
+      arr = self.as_array(v, "itertools.chain()")
+      return self.iter_source(arr, node, end_checks)
+    if isinstance(v, ProductVal):
+      pools = v.items
+      if not pools:
+        return ONE, lambda _i: ()
+      parts = []
+      for p in pools:
+        if isinstance(p, ListVal):
+          p = tuple(p.items)
+        if isinstance(p, tuple):
+          parts.append((Const(len(p), I), lambda i, _p=p: self.tuple_index(_p, i, node)))
+        else:
+          parts.append(self.iter_source(p, node, end_checks))
+      lens = [self.tmp(ln, "pl") for ln, _ in parts]
+      total = self.tmp(ops.iprod(lens), "ptot")
+
+      def _get_prod(idx):
+        rem = idx
+        coords = [None] * len(parts)
+        for k in range(len(parts) - 1, -1, -1):
+          ln_k = lens[k]
+          if k == 0:
+            coords[k] = rem
+          else:
+            coords[k] = self.tmp(ops.prim("mod", (rem, ln_k), I), "pc")
+            rem = self.tmp(ops.prim("floordiv", (rem, ln_k), I), "pr")
+        return tuple(parts[k][1](coords[k]) for k in range(len(parts)))
+
+      return total, _get_prod
     if isinstance(v, ArrayVal):
       if v.rank == 0:
         raise self.error(TypeInferenceError, "iteration over a 0-d array", node)
@@ -3011,8 +3184,250 @@ class Elaborator(ArrayMixin):
   def eval_List(self, node: ast.List):
     from .. import lib
 
-    items = self.eval_Tuple(node)  # type: ignore[arg-type]
-    return lib.array_literal(self, list(items))
+    items = list(self.eval_Tuple(node))  # type: ignore[arg-type]
+    hint_key = (self.frame.path, id(node), "vec_elt")
+    vec_elt = self.hint_get(hint_key)
+    if vec_elt is not None:
+      return self._alloc_vec(vec_elt, items)
+    if not items or self._force_list_node is node:
+      return ListVal(
+        items,
+        origin=node,
+        path=self.frame.path,
+        loop_depth=self.loop_depth,
+        branch_depth=len(self.if_stack),
+      )
+    # Try building an ArrayVal for ordinary homogeneous numeric literals; fall back to ListVal for heterogeneous lists
+    try:
+      with self.trial():
+        lib.array_literal(self, items)
+    except ParakeetError:
+      return ListVal(
+        items,
+        origin=node,
+        path=self.frame.path,
+        loop_depth=self.loop_depth,
+        branch_depth=len(self.if_stack),
+      )
+    return lib.array_literal(self, items)
+
+  # ---- static ListVal, CPU VecVal, and GPU FixedListVal operations ----------
+
+  def _promote_list_to_vec(self, lst: ListVal, elt: ScalarType) -> None:
+    if lst.origin is None:
+      raise self.error(
+        UnsupportedError,
+        "cannot mutate a compile-time list inside a dynamic loop or branch without a list literal origin",
+      )
+    hint_key = (lst.path, id(lst.origin), "vec_elt")
+    prev = self.hint_get(hint_key)
+    target_elt = elt.strong if prev is None else join(prev, elt.strong).strong
+    self.state.hints[hint_key] = target_elt
+    self.restart("runtime growable list")
+
+  def _alloc_vec(self, elt: ScalarType, init_items: list) -> VecVal:
+    elt = elt.strong
+    init_cap = max(8, len(init_items))
+    buf = Var("vec_buf", BufType(elt))
+    slot = Var("vec_keep", BufType(elt))
+    length = Var("vec_len", I)
+    cap = Var("vec_cap", I)
+    for v in (buf, slot, length, cap):
+      self.mutables.add(v.uid)
+    self.nonneg.add(length.uid)
+    self.nonneg.add(cap.uid)
+    self.scope.owned.append(slot)
+    self.emit(Alloc(buf, Const(init_cap, I), zero=False))
+    self.emit(Assign(slot, buf))
+    self.emit(Assign(cap, Const(init_cap, I)))
+    for k, item in enumerate(init_items):
+      sv = cast(self.as_scalar(item, "list element"), elt)
+      self.emit(Store(buf, Const(k, I), sv))
+    self.emit(Assign(length, Const(len(init_items), I)))
+    return VecVal(buf, length, cap, elt, slot, self.scope)
+
+  def list_append(self, lst: ListVal, value) -> None:
+    if self.loop_depth > lst.loop_depth or len(self.if_stack) > lst.branch_depth:
+      sv = self.as_scalar(value, "list.append() element")
+      self._promote_list_to_vec(lst, sv.type)
+    lst.items.append(value)
+
+  def list_extend(self, lst: ListVal, values) -> None:
+    if self.loop_depth > lst.loop_depth or len(self.if_stack) > lst.branch_depth:
+      arr = self.as_array(values, "list.extend() iterable")
+      if arr.rank != 1:
+        raise self.error(TypeInferenceError, "runtime list.extend() expects a 1-d iterable")
+      self._promote_list_to_vec(lst, arr.elt)
+    if isinstance(values, ListVal):
+      lst.items.extend(values.items)
+    elif isinstance(values, tuple):
+      lst.items.extend(values)
+    elif isinstance(values, ArrayVal) and values.rank >= 1 and isinstance(values.shape[0], Const):
+      for k in range(values.shape[0].value):
+        lst.items.append(self.getitem(values, Const(k, I)))
+    else:
+      arr = self.as_array(values, "list.extend() iterable")
+      if arr.rank != 1:
+        raise self.error(TypeInferenceError, "list.extend() expects a 1-d iterable")
+      self._promote_list_to_vec(lst, arr.elt)
+
+  def list_pop(self, lst: ListVal, index=None):
+    if self.loop_depth > lst.loop_depth or len(self.if_stack) > lst.branch_depth:
+      elt = self.as_scalar(lst.items[0], "list element").type if lst.items else WeakFloat
+      self._promote_list_to_vec(lst, elt)
+    if not lst.items:
+      raise self.error(StaticValueError, "pop from empty list")
+    k = -1 if index is None else self.static_int(index, "list.pop() index")
+    if not -len(lst.items) <= k < len(lst.items):
+      raise self.error(StaticValueError, f"pop index {k} out of range")
+    return lst.items.pop(k)
+
+  def list_clear(self, lst: ListVal) -> None:
+    if self.loop_depth > lst.loop_depth or len(self.if_stack) > lst.branch_depth:
+      elt = self.as_scalar(lst.items[0], "list element").type if lst.items else WeakFloat
+      self._promote_list_to_vec(lst, elt)
+    lst.items.clear()
+
+  def list_setitem(self, lst: ListVal, index, value, node=None) -> None:
+    if self.loop_depth > lst.loop_depth or len(self.if_stack) > lst.branch_depth:
+      sv = self.as_scalar(value, "list element")
+      self._promote_list_to_vec(lst, sv.type)
+    k = self.static_int(index, "list index")
+    if not -len(lst.items) <= k < len(lst.items):
+      raise self.error(StaticValueError, f"list assignment index {k} out of range", node)
+    lst.items[k] = value
+
+  def vec_append(self, vec: VecVal, value) -> None:
+    sv = self.as_scalar(value, "list.append() element")
+    if join(vec.elt, sv.type.strong).strong is not vec.elt:
+      # Widen element type on restart if an int vec receives a float
+      new_elt = join(vec.elt, sv.type.strong).strong
+      for k, v in list(self.state.hints.items()):
+        if len(k) == 3 and k[2] == "vec_elt" and v is vec.elt:
+          self.state.hints[k] = new_elt
+      self.restart("runtime list element type widening")
+    val = self.tmp(cast(sv, vec.elt), "vval")
+    grow_blk: list = []
+    with self.in_block(grow_blk):
+      new_cap = self.tmp(imul(vec.cap, Const(2, I)), "ncap")
+      new_buf = Var("nbuf", BufType(vec.elt))
+      self.emit(Alloc(new_buf, new_cap, zero=False))
+      cp_i = Var("vi", I)
+      self.nonneg.add(cp_i.uid)
+      cp_scope = Scope("loop")
+      cp_body: list = [Store(new_buf, cp_i, Load(vec.buf, cp_i)), ReleaseScope(cp_scope)]
+      self.emit(ForRange(cp_i, ZERO, vec.length, ONE, cp_body, cp_scope, simd=True))
+      self.emit(Release(vec.slot))
+      self.emit(Assign(vec.slot, new_buf))
+      self.emit(Assign(vec.buf, new_buf))
+      self.emit(Assign(vec.cap, new_cap))
+    self.emit(If(cmp("ge", vec.length, vec.cap), grow_blk, []))
+    self.emit(Store(vec.buf, vec.length, val))
+    self.emit(Assign(vec.length, iadd(vec.length, ONE)))
+
+  def vec_extend(self, vec: VecVal, values) -> None:
+    length, getter = self.iter_source(values)
+    n = self.tmp(length, "en")
+    iv = Var("ei", I)
+    self.nonneg.add(iv.uid)
+    self.upper[iv.uid] = n
+    sc = Scope("loop")
+    blk: list = []
+    with self.in_block(blk, sc, loop=True):
+      self.vec_append(vec, getter(iv))
+      self.emit(ReleaseScope(sc))
+    self.emit(ForRange(iv, ZERO, n, ONE, blk, sc))
+
+  def vec_pop(self, vec: VecVal) -> Expr:
+    self.check(cmp("gt", vec.length, ZERO), "IndexError", "pop from empty list")
+    self.emit(Assign(vec.length, isub(vec.length, ONE)))
+    return self.tmp(Load(vec.buf, vec.length), "vpop")
+
+  def vec_clear(self, vec: VecVal) -> None:
+    self.emit(Assign(vec.length, ZERO))
+
+  def vec_getitem(self, vec: VecVal, index, node=None):
+    if isinstance(index, slice):
+      return self.getitem(self.vec_to_array(vec), index)
+    idx = self.normalize_index(self.as_index(index, "list index"), vec.length)
+    return self.tmp(Load(vec.buf, idx), "velem")
+
+  def vec_setitem(self, vec: VecVal, index, value, node=None) -> None:
+    idx = self.normalize_index(self.as_index(index, "list index"), vec.length)
+    sv = cast(self.as_scalar(value, "list element"), vec.elt)
+    self.emit(Store(vec.buf, idx, sv))
+
+  def vec_to_array(self, vec: VecVal) -> ArrayVal:
+    # Zero-copy 1-d view over the first `vec.length` elements of `vec.buf`
+    root = Root(vec.home, "vec")
+    length_snap = self.copy_scalar(vec.length, "vlen")
+    buf_snap = Var("vbuf", BufType(vec.elt))
+    self.emit(Assign(buf_snap, vec.buf))
+    arr = ArrayVal(
+      vec.elt,
+      (length_snap,),
+      buf=buf_snap,
+      offset=ZERO,
+      strides=(ONE,),
+      roots=frozenset({root}),
+      contig=True,
+    )
+    arr.inj = True
+    return arr
+
+  def fixed_list_append(self, fl: FixedListVal, value) -> None:
+    sv = self.tmp(cast(self.as_scalar(value, "fixed_list.append() element"), fl.elt), "fval")
+    if self.options.bounds_check:
+      self.check(
+        cmp("lt", fl.length, Const(fl.cap, I)),
+        "IndexError",
+        "fixed_list capacity {0} exceeded",
+        Const(fl.cap, I),
+      )
+    self.emit(Store(fl.buf, fl.length, sv))
+    self.emit(Assign(fl.length, iadd(fl.length, ONE)))
+
+  def fixed_list_extend(self, fl: FixedListVal, values) -> None:
+    length, getter = self.iter_source(values)
+    n = self.tmp(length, "fen")
+    iv = Var("fei", I)
+    self.nonneg.add(iv.uid)
+    self.upper[iv.uid] = n
+    sc = Scope("loop")
+    blk: list = []
+    with self.in_block(blk, sc, loop=True):
+      self.fixed_list_append(fl, getter(iv))
+      self.emit(ReleaseScope(sc))
+    self.emit(ForRange(iv, ZERO, n, ONE, blk, sc))
+
+  def fixed_list_pop(self, fl: FixedListVal) -> Expr:
+    if self.options.bounds_check:
+      self.check(cmp("gt", fl.length, ZERO), "IndexError", "pop from empty fixed_list")
+    self.emit(Assign(fl.length, isub(fl.length, ONE)))
+    return self.tmp(Load(fl.buf, fl.length), "fpop")
+
+  def fixed_list_clear(self, fl: FixedListVal) -> None:
+    self.emit(Assign(fl.length, ZERO))
+
+  def fixed_list_getitem(self, fl: FixedListVal, index, node=None):
+    idx = self.normalize_index(self.as_index(index, "fixed_list index"), fl.length)
+    return self.tmp(Load(fl.buf, idx), "felem")
+
+  def fixed_list_setitem(self, fl: FixedListVal, index, value, node=None) -> None:
+    idx = self.normalize_index(self.as_index(index, "fixed_list index"), fl.length)
+    sv = cast(self.as_scalar(value, "fixed_list element"), fl.elt)
+    self.emit(Store(fl.buf, idx, sv))
+
+  def fixed_list_to_array(self, fl: FixedListVal) -> ArrayVal:
+    # Copy stack buffer out to a heap ArrayVal (stack buffers cannot escape their scope)
+    n = self.copy_scalar(fl.length, "flen")
+    out = self.alloc_array(fl.elt, (n,), zero=False, label="fl_out")
+    iv = Var("fi", I)
+    self.nonneg.add(iv.uid)
+    sc = Scope("loop")
+    self.emit(ForRange(iv, ZERO, n, ONE, [Store(out.buf, iv, Load(fl.buf, iv)), ReleaseScope(sc)], sc, simd=True))
+    self.record_store(out)
+    return out
 
   def eval_Slice(self, node: ast.Slice):
     return slice(
@@ -3054,6 +3469,21 @@ class Elaborator(ArrayMixin):
       if not isinstance(index, str) or index not in obj:
         raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
       return obj[index]
+    if isinstance(obj, ListVal):
+      if isinstance(index, slice):
+        parts = [
+          None if p is None else self.static_int(p, "list slice bounds") for p in (index.start, index.stop, index.step)
+        ]
+        return ListVal(
+          list(obj.items[slice(*parts)]),
+          loop_depth=self.loop_depth,
+          branch_depth=len(self.if_stack),
+        )
+      return self.tuple_index(tuple(obj.items), index, node)
+    if isinstance(obj, VecVal):
+      return self.vec_getitem(obj, index, node)
+    if isinstance(obj, FixedListVal):
+      return self.fixed_list_getitem(obj, index, node)
     if isinstance(obj, tuple):
       return self.tuple_index(obj, index, node)
     if isinstance(obj, RangeVal):
@@ -3256,6 +3686,10 @@ class Elaborator(ArrayMixin):
         return Partial(self.lift(raw_attr), (obj,), {})
     if isinstance(obj, dict) or record is not None:
       raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
+    if isinstance(obj, (ListVal, VecVal, FixedListVal)):
+      if name in ("append", "extend", "pop", "clear"):
+        return BoundMethod(obj, name)
+      raise self.error(TypeInferenceError, f"{describe(obj)} has no attribute {name!r}", node)
     if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:
       if isinstance(obj, TypeVal):
         if name == "itemsize":
@@ -4155,6 +4589,20 @@ class Elaborator(ArrayMixin):
 
     if isinstance(v, ArrayVal):
       return v
+    if isinstance(v, ListVal):
+      return lib.array_literal(self, list(v.items))
+    if isinstance(v, VecVal):
+      return self.vec_to_array(v)
+    if isinstance(v, FixedListVal):
+      return self.fixed_list_to_array(v)
+    if isinstance(v, ChainVal):
+      from ..lib import numpy_lib as _npl
+
+      arrs = [self.as_array(x, "itertools.chain() item") for x in v.items]
+      return _npl.concatenate(self, tuple(arrs), axis=0)
+    if isinstance(v, (ProductVal, ZipVal, EnumerateVal)):
+      length, getter = self.iter_source(v)
+      return lib.build_map(self, (self.tmp(length, "n"),), lambda idx: getter(idx[0]))
     if isinstance(v, Expr):
       return self.scalar_to_array(v)
     if isinstance(v, tuple):
@@ -4224,6 +4672,8 @@ def _local_names(fnode) -> frozenset[str]:
   params = {p.arg for p in a.posonlyargs + a.args + a.kwonlyargs}
   if a.vararg:
     params.add(a.vararg.arg)
+  if a.kwarg:
+    params.add(a.kwarg.arg)
   result = frozenset(names - params)
   _locals_cache[id(fnode)] = (fnode, result)
   return result
