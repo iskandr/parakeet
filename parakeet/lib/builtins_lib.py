@@ -11,6 +11,7 @@ import numpy as np
 from .. import prims
 from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Bool, WeakBool, WeakFloat, WeakInt
+from ..ragged import RaggedArray
 from ..syntax import ops
 from ..syntax.ir import Const, Expr
 from ..syntax.ops import I, cast, cmp
@@ -32,6 +33,10 @@ def _len(el, x):
     if x.rank == 0:
       raise el.error(TypeInferenceError, "len() of a 0-d structured array")
     return x.shape[0]
+  if isinstance(x, RaggedArray):
+    if el.options.bounds_check:
+      el.check(cmp("ge", x.offsets.shape[0], ops.ONE), "ValueError", "RaggedArray offsets must have length >= 1")
+    return ops.isub(x.offsets.shape[0], ops.ONE)
   if isinstance(x, (tuple, str)):
     return Const(len(x), I)
   if isinstance(x, RangeVal):

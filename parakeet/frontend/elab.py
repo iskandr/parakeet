@@ -39,6 +39,7 @@ from ..errors import (
   UnsupportedError,
 )
 from ..ndtypes import Bool, BufType, ScalarType, WeakBool, WeakFloat, WeakInt, join
+from ..ragged import RaggedArray
 from ..syntax import ops
 from ..syntax.ir import (
   ArrayParam,
@@ -1092,6 +1093,14 @@ class Elaborator(ArrayMixin):
       return self.call_user(fn, args, kwargs, node)
     from .. import lib
 
+    if fn is RaggedArray:
+      if len(args) + len(kwargs) != 2:
+        raise self.error(TypeInferenceError, "RaggedArray() expects (values, offsets)", node)
+      vals = args[0] if len(args) >= 1 else kwargs.get("values")
+      offs = args[1] if len(args) >= 2 else kwargs.get("offsets")
+      if vals is None or offs is None:
+        raise self.error(TypeInferenceError, "RaggedArray() expects (values, offsets)", node)
+      return RaggedArray(vals, self.as_array(offs, "RaggedArray offsets"))
     if isinstance(fn, type) and issubclass(fn, tuple) and hasattr(fn, "_fields"):
       try:
         result = fn(*args, **kwargs)
@@ -2111,6 +2120,9 @@ class Elaborator(ArrayMixin):
             hint="use an array operation, parakeet.map or parakeet.reduce instead",
           )
         items: tuple = tuple(Const(i, WeakInt) for i in r)
+      elif isinstance(it, RaggedArray) and isinstance(it.offsets.shape[0], Const):
+        n_seg = it.offsets.shape[0].value - 1
+        items = tuple(self._ragged_getitem(it, Const(k, I), node) for k in range(max(0, n_seg)))
       elif isinstance(it, ArrayVal) and it.rank >= 1 and isinstance(it.shape[0], Const):
         items = tuple(self.getitem(it, Const(k, I)) for k in range(it.shape[0].value))
       else:
@@ -2269,6 +2281,11 @@ class Elaborator(ArrayMixin):
       if v.rank == 0:
         raise self.error(TypeInferenceError, "iteration over a 0-d structured array", node)
       return v.shape[0], lambda i: self._struct_index(v, i, node)
+    if isinstance(v, RaggedArray):
+      if self.options.bounds_check:
+        self.check(cmp("ge", v.offsets.shape[0], ONE), "ValueError", "RaggedArray offsets must have length >= 1")
+      n_seg = self.tmp(isub(v.offsets.shape[0], ONE), "nseg")
+      return n_seg, lambda i: self._ragged_getitem(v, i, node)
     if isinstance(v, tuple):
       arr = self.as_array(v)
       return self.iter_source(arr, node)
@@ -2503,6 +2520,8 @@ class Elaborator(ArrayMixin):
       if not isinstance(index, str) or index not in obj.names:
         raise self.error(StaticValueError, f"structured row has no field {index!r}", node)
       return obj.field(index)
+    if isinstance(obj, RaggedArray):
+      return self._ragged_getitem(obj, index, node)
     if isinstance(obj, dict):
       if not isinstance(index, str) or index not in obj:
         raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
@@ -2547,6 +2566,52 @@ class Elaborator(ArrayMixin):
     if new_rank <= 0:
       return StructuredRow(sv.dtype, sv.names, sliced)
     return StructuredView(sv.dtype, sv.names, sliced, new_rank)
+
+  def _slice_leading(self, v, start: Expr, stop: Expr):
+    if isinstance(v, RaggedArray):
+      sub_off = self.getitem(v.offsets, slice(start, iadd(stop, ONE), None))
+      base = self.tmp(cast(self.elem(v.offsets, (start,)), I), "rbase")
+      end = self.tmp(cast(self.elem(v.offsets, (stop,)), I), "rend")
+      rebased = self.binop("sub", sub_off, cast(base, sub_off.elt))
+      return RaggedArray(self._slice_leading(v.values, base, end), rebased)
+    if isinstance(v, ArrayVal):
+      return self.getitem(v, slice(start, stop, None))
+    if rec := record_type(v):
+      return rec.build(self._slice_leading(x, start, stop) for x in rec.values(v))
+    raise self.error(TypeInferenceError, f"cannot slice {describe(v)} along leading axis")
+
+  def _ragged_leading_len(self, v) -> Expr:
+    if isinstance(v, RaggedArray):
+      return isub(v.offsets.shape[0], ONE)
+    if isinstance(v, ArrayVal):
+      return v.shape[0]
+    if rec := record_type(v):
+      vals = rec.values(v)
+      return self._ragged_leading_len(vals[0]) if vals else ZERO
+    return ZERO
+
+  def _ragged_getitem(self, r: RaggedArray, index, node=None):
+    offsets = r.offsets
+    if self.options.bounds_check:
+      self.check(cmp("ge", offsets.shape[0], ONE), "ValueError", "RaggedArray offsets must have length >= 1")
+    n_seg = self.tmp(isub(offsets.shape[0], ONE), "nseg")
+    if isinstance(index, slice):
+      if index.step is not None and not (isinstance(index.step, Const) and index.step.value == 1):
+        raise self.error(UnsupportedError, "RaggedArray slicing only supports step == 1", node)
+      s = ZERO if index.start is None else self.as_index(index.start, "slice start")
+      e = n_seg if index.stop is None else self.as_index(index.stop, "slice stop")
+      s = ops.imax(ZERO, ops.imin(ops.select(cmp("lt", s, ZERO), iadd(s, n_seg), s), n_seg))
+      e = ops.imax(s, ops.imin(ops.select(cmp("lt", e, ZERO), iadd(e, n_seg), e), n_seg))
+      return self._slice_leading(r, s, e)
+    idx = self.normalize_index(self.as_index(index, "RaggedArray index"), n_seg)
+    start = self.tmp(cast(self.elem(offsets, (idx,)), I), "rstart")
+    stop = self.tmp(cast(self.elem(offsets, (iadd(idx, ONE),)), I), "rstop")
+    if self.options.bounds_check:
+      total = self._ragged_leading_len(r.values)
+      self.check(cmp("ge", start, ZERO), "ValueError", "RaggedArray offset must be non-negative")
+      self.check(cmp("le", start, stop), "ValueError", "RaggedArray offsets must be non-decreasing")
+      self.check(cmp("le", stop, total), "ValueError", "RaggedArray offset exceeds len(values)")
+    return self._slice_leading(r.values, start, stop)
 
   def _index_item(self, x):
     if isinstance(x, tuple):  # x[(1, 2), ...]: a sequence index is an integer array
@@ -2618,6 +2683,24 @@ class Elaborator(ArrayMixin):
       if name in obj.names:
         return obj.field(name)
       raise self.error(TypeInferenceError, f"structured row has no field {name!r}", node)
+    if isinstance(obj, RaggedArray):
+      if name == "values":
+        return obj.values
+      if name == "offsets":
+        return obj.offsets
+      if name == "num_segments":
+        if self.options.bounds_check:
+          self.check(cmp("ge", obj.offsets.shape[0], ONE), "ValueError", "RaggedArray offsets must have length >= 1")
+        return isub(obj.offsets.shape[0], ONE)
+      if name == "lengths":
+        if self.options.bounds_check:
+          self.check(cmp("ge", obj.offsets.shape[0], ONE), "ValueError", "RaggedArray offsets must have length >= 1")
+        return self.binop(
+          "sub",
+          self.getitem(obj.offsets, slice(ONE, None, None)),
+          self.getitem(obj.offsets, slice(None, Const(-1, I), None)),
+        )
+      raise self.error(TypeInferenceError, f"RaggedArray has no attribute {name!r}", node)
     if (record := record_type(obj)) and record.cls is not dict and name in record.names:
       return getattr(obj, name)
     if record is not None and issubclass(record.cls, tuple) and name == "_replace":

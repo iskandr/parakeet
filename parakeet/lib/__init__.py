@@ -1,6 +1,6 @@
 """The library of functions available inside compiled code."""
 
-from . import adverbs, builtins_lib, numpy_lib, pure, random_lib  # noqa: F401  (registration side effects)
+from . import adverbs, builtins_lib, numpy_lib, pure, ragged_lib, random_lib  # noqa: F401  (registration side effects)
 from .core import (
   FUNCTIONS,
   METHODS,
