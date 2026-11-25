@@ -1,5 +1,71 @@
 # Changelog
 
+## 1.1.0 (November 25, 2026)
+
+Major expansion of Parakeet's GPU schedules, algebraic data structures,
+scientific/bioinformatics primitives, and documentation — unified under one
+top-level `import parakeet as par` (`@par.jit`, `par.*`) interface.
+
+### Unified namespace, docs & benchmarks
+
+- **Single unified `parakeet` namespace:** Exported `fold`, `topk`,
+  `topk_fold`, `tanimoto_topk`, `ipa_attention`, `show_rewrite`,
+  `RewriteReport`, `scatter`, `iscan`, `iscatter`, and `ifilter_reduce`
+  directly on top-level `parakeet` (with `parakeet.dsl` retained as a
+  backward-compatible alias). Standardized examples and docs on
+  `import parakeet as par` (`@par.jit`, `par.*`).
+- **Reproducible benchmark figures & overhaul:** Added
+  `tools/gen_benchmark_figures.py` generating per-replicate scatter + IQR +
+  median SVGs (`bench-pairwise-l4.svg`, `bench-scaling-1nn.svg`,
+  `bench-workloads-l4.svg`) directly from `docs/assets/colab-l4-0dcb7d5.json`,
+  reorganized the [Benchmarks](https://rubinsteyn.com/parakeet/release-benchmarks/)
+  page by workload category, connected `README.md` directly to runnable
+  implementations, and updated the NYU history links (Rubinsteyn 2014 thesis,
+  Hielscher et al. 2013 `arXiv:1304.1835`, HotPar '12).
+- **Bioinformatics & structural biology guide:** Added the
+  [Bioinformatics & structural biology](https://rubinsteyn.com/parakeet/bioinformatics/)
+  gallery (`examples/bio_gallery.py`) and reproducible benchmark suite
+  (`benchmarks/bio_workloads.py`).
+
+### GPU schedules & matrix units
+
+- **Tiled GPU pairwise folds:** Broadcasting NumPy and nested-map/structured
+  `par.fold` exact 1-NN and inverse-distance smoothing now stream shared-memory
+  score tiles (`16 KiB`/block) on CUDA and Metal with exact first-index tie and
+  NaN semantics — **4.8× faster** (`2.60 ms → 0.54 ms`) and **21× less global
+  scratch** (`64 MiB → 3 MiB`) at `1,024 × 16,384 × 32` on NVIDIA L4.
+- **Hardware matrix units in monoidal kernels:** Enabled Metal
+  `simdgroup_matrix` and CUDA TF32 WMMA inside Law 1 rescaled-monoid kernels
+  (FlashAttention, RBF, linear cross-entropy, nanoGPT training).
+- **Device-resident GPU scans & reductions:** Kept GPU prefix scans, small GPU
+  reductions, and extrema values device-resident without host round-trips.
+
+### New algebraic primitives & data structures
+
+- **First-class `RaggedArray` (CSR) & segmented operators:** `RaggedArray`,
+  `segment_ids`, `segmented_map`, `segmented_reduce`, `segmented_scan`,
+  `segmented_softmax`, and differentiable `varlen_flash_attention` with ragged
+  reverse-mode AD (`par.grad` preserves offsets structurally).
+- **1-to-K ragged compaction (`IndexExpand`):** Added `par.flatmap` and
+  `par.filter_pairs` (two-pass count → prefix-sum → emit) with dead-output
+  elimination and AD gather support.
+- **Parallel sorting, search & lookup tables:** Parallel radix `sort` /
+  `argsort` / `unique`, fusible `searchsorted`, `SortedIndex`, and static
+  open-addressed `FrozenHashTable`.
+- **3D spatial pruning & block-sparse attention (Law 5 generalized):**
+  `morton_order`, 3D AABB `spatial_cutoff_sum`, and CSR `BlockMask`
+  `block_sparse_attention` with forward + backward AD.
+- **2D / banded semiring DP (`IndexWavefront`):** Added `par.wavefront`,
+  `par.batched_wavefront`, and Law 2 checkpointed differentiable
+  `par.soft_align` (Smith-Waterman / Needleman-Wunsch / soft-DTW).
+- **Vector-valued Carry folds & pair-biased / IPA attention:** Multi-slot
+  `Carry` folds powering exact `par.topk`, `par.topk_fold`, `par.tanimoto_topk`,
+  and Law 1+2 `par.ipa_attention`.
+- **Zero-copy bytes, bitops & Python ergonomics:** Zero-copy `uint8` bytes /
+  `mmap` inputs, `popcount`/`clz`/`ctz`/`rotl`/`rotr`/`bswap`, `bf16_to_f32` /
+  `f32_to_bf16`, `IntEnum`, scalar `match`/`case`, frozen `@dataclass`
+  `dataclasses.replace`, and structured NumPy views.
+
 ## 1.0.0 (November 24, 2026)
 
 A ground-up rewrite for modern Python.  The `@jit` decorator, the adverbs
