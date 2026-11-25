@@ -67,7 +67,9 @@ from .lib.ragged_lib import (
   segmented_softmax,
   varlen_flash_attention,
 )
+from .lib.spatial_lib import block_sparse_attention, morton_order, spatial_cutoff_sum
 from .ragged import RaggedArray
+from .spatial import BlockMask
 from .syntax import ir
 
 # Explicit kernel decorator & operator aliases
@@ -330,6 +332,7 @@ def show_rewrite(fn, *args, backend: str | None = None, blas: bool = False, **op
 
 
 __all__ = [
+  "BlockMask",
   "FrozenHashTable",
   "RaggedArray",
   "RewriteReport",
@@ -347,6 +350,7 @@ __all__ = [
   "bitand",
   "bitor",
   "bitxor",
+  "block_sparse_attention",
   "bool_",
   "bswap",
   "clz",
@@ -389,6 +393,7 @@ __all__ = [
   "min",
   "minimum",
   "mod",
+  "morton_order",
   "mul",
   "neg",
   "ones",
@@ -412,6 +417,7 @@ __all__ = [
   "segmented_softmax",
   "show_rewrite",
   "sin",
+  "spatial_cutoff_sum",
   "sqrt",
   "sub",
   "sum",

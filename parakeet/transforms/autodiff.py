@@ -1460,6 +1460,12 @@ def _varlen_flash_attention_ad(tape: Tape, el, node: Node, g) -> None:
   _varlen_flash_attention_vjp(tape, el, node, g)
 
 
+def _block_sparse_attention_ad(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.spatial_lib import _block_sparse_attention_vjp
+
+  _block_sparse_attention_vjp(tape, el, node, g)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1478,6 +1484,7 @@ _BACKWARD = {
   "segmented_reduce": _segmented_reduce_ad,
   "segmented_softmax": _segmented_softmax_ad,
   "varlen_flash_attention": _varlen_flash_attention_ad,
+  "block_sparse_attention": _block_sparse_attention_ad,
 }
 
 
