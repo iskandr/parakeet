@@ -19,27 +19,27 @@ import parakeet as par
 | `par.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)` | associative structured fold over tuple / `NamedTuple` states (tiles pairwise folds automatically) |
 | `par.scan(f, x, ..., init=None, axis=0, map=None, emit=None)` | running fold (a generalised `cumsum`); `emit=h` gives `h` of each running value |
 | `par.imap(f, shape)` | `result[i, j, ...] = f(i, j, ...)` for every index of `shape` (unpacks multi-axis indices automatically; 1-arg tuple `lambda ij:` also works) |
-| `par.ireduce(f, shape, init=None, combine=par.add)` | reduce `f(i, ...)` over every index of `shape` |
+| `par.ireduce(f, shape, init=None, combine=np.add)` | reduce `f(i, ...)` over every index of `shape` |
 | `par.parfor(f, shape)` | call `f(i, ...)` for its side effects, in parallel |
 | `par.filter(pred, x, ..., map=None)` | the elements of `x` for which `pred` is true; with several arrays, `map(x[i], y[i], ...)` where `pred(x[i], y[i], ...)` holds |
 | `par.filter_reduce(f, pred, x, ..., map=None, init=None, axis=None)` | reduce with `f` over elements where `pred` holds (fuses into one zero-allocation guarded reduction loop when `init` is given) |
 | `par.flatmap(count_fn, emit_fn, n)` / `par.filter_pairs(...)` | two-pass 1-to-K ragged compaction (`IndexExpand`) |
-| `par.scatter_add(n, idx, vals)` (alias `par.scatter`) | index-directed associative scatter-add (`IndexScatter`) with thread-privatized parallel lowering and exact gather adjoint |
+| `par.scatter_add(n, idx, vals)` (alias `par.scatter`) | index-directed associative scatter-add (`IndexScatter`) with thread-privatized parallel lowering and exact gather adjoint (also targeted automatically by `np.bincount`, `np.add.at`, and canonical `for i: out[idx[i]] += vals[i]` loops) |
 | `par.wavefront(...)` / `par.batched_wavefront(...)` / `par.soft_align(...)` | 2D and banded semiring dynamic programming (`IndexWavefront`) with checkpointed VJP |
-| `par.grad(f, argnum=0)`, `par.value_and_grad(f, argnum=0)` | reverse-mode gradient of a scalar-valued `f` — see [Gradients](autodiff.md) |
-| `par.show_rewrite(f, *args)` | inspect which of Parakeet's [six algebraic laws](algebra.md) rewrote `f` and view before/after IR |
+| `par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, `par.hvp`, `par.linearize`, `par.linear_transpose`, `par.jacfwd`, `par.jacrev`, `par.hessian` | composable reverse-mode, forward-mode, and higher-order AD — see [Automatic differentiation](autodiff.md) |
+| `par.show_rewrite(f, *args)` | inspect which algebraic optimizations rewrote `f` and view before/after IR — see [Algebraic laws](algebra.md) |
 
 ```python
 par.map(lambda row: row / np.sum(row), X)  # normalise rows
 par.allpairs(lambda a, b: np.sum((a - b) ** np.float32(2)), X, C)  # distance matrix
-par.reduce(par.maximum, X, axis=0)  # column maxima
+par.reduce(np.maximum, X, axis=0)  # column maxima
 par.imap(lambda i, j: i * 10 + j, (3, 4))  # an index-defined 2D array
 ```
 
 ```python
-par.reduce(par.add, x, y, map=par.multiply)  # a dot product; no array of products is built
-par.scan(par.add, x, y, map=lambda a, b: a - b)  # running sum of differences
-par.filter(lambda a, b: a > b, x, y, map=par.add)  # x + y where x > y
+par.reduce(np.add, x, y, map=np.multiply)  # a dot product; no array of products is built
+par.scan(np.add, x, y, map=lambda a, b: a - b)  # running sum of differences
+par.filter(lambda a, b: a > b, x, y, map=np.add)  # x + y where x > y
 ```
 
 For multi-dimensional shapes, `imap`, `ireduce`, and `parfor` unpack coordinates
@@ -65,17 +65,17 @@ All results must have the same shape — this is checked at run time
 `map`-like operators evaluate elements in parallel, in no particular order.
 `reduce` runs in parallel when the combining function is recognisably one of
 `+`, `*`, `min`, `max`, `and`, `or`, `&`, `|`, `^` (whether written as
-`par.add`, `np.add` or `lambda a, b: a + b`), and sequentially otherwise — so a
+`np.add`, `lambda a, b: a + b`, or `par.add`), and sequentially otherwise — so a
 non-associative function such as `lambda acc, x: acc * 0.5 + x` still gives the
 same answer as `functools.reduce`. Floating-point sums are reassociated, like
 NumPy's own pairwise summation: expect differences in the last digits.
 
-## Primitive functions
+## Primitive combiner functions
 
-`par.add`, `par.subtract`, `par.multiply`, `par.divide`, `par.minimum`, `par.maximum`,
-the comparison and logical/bitwise operators are first-class functions for use
-with the operators above. Outside compiled code they behave like the NumPy
-ufuncs of the same name.
+Standard NumPy ufuncs (`np.add`, `np.subtract`, `np.multiply`, `np.divide`,
+`np.minimum`, `np.maximum`) are the idiomatic combiners to pass to `par.reduce`,
+`par.ireduce`, `par.scan`, and `par.filter`. Parakeet also exports matching
+aliases (`par.add`, `par.minimum`, etc.) for backward compatibility.
 
 ### Structured reductions
 

@@ -213,9 +213,10 @@ def _add_cotangent_tree(tape, el, target, g) -> None:
 
 
 def stop_gradient_val(el, v):
-  """Zero-copy gradient barrier: detach ``v`` from the active AD tape."""
+  """Zero-copy gradient barrier: detach ``v`` from active reverse-mode tape and forward-mode JVP."""
   tape = el.tape
-  if tape is None:
+  jvp = el.jvp
+  if tape is None and (jvp is None or jvp.muted):
     return v
   if isinstance(v, RaggedArray):
     return RaggedArray(stop_gradient_val(el, v.values), v.offsets)
@@ -227,17 +228,23 @@ def stop_gradient_val(el, v):
     if not is_float(v):
       return v
     sg = Var("sg", v.type.strong)
-    # Emit directly to block without note_def / observe so depends(sg) is False.
+    # Emit directly to block without note_def / observe / jvp.scalar_t so derivative is zero.
     el.block.append(Assign(sg, cast(v, sg.type)))
     return sg
   if isinstance(v, ArrayVal):
     if v.elt.kind != "f":
       return v
-    tape.muted += 1
+    if tape is not None:
+      tape.muted += 1
+    if jvp is not None:
+      jvp.muted += 1
     try:
       c = el.as_concrete(v)
     finally:
-      tape.muted -= 1
+      if tape is not None:
+        tape.muted -= 1
+      if jvp is not None:
+        jvp.muted -= 1
     sg_buf = Var("sg", c.buf.type)
     el.block.append(Incref(c.buf))
     el.block.append(Assign(sg_buf, c.buf))
@@ -397,6 +404,12 @@ def backward_checkpoint(tape, el, node, _g) -> None:
 def _store_leaf_slot(el, buf_arr: ArrayVal, slot: Expr, val) -> None:
   if isinstance(val, Expr):
     el.emit(Store(buf_arr.buf, slot, cast(val, buf_arr.elt)))
+    jvp = el.jvp
+    if jvp is not None and not jvp.muted and buf_arr.buf.uid in jvp.buf_t:
+      dv = jvp.tangent_expr(el, val)
+      dbuf = jvp.buf_t[buf_arr.buf.uid]
+      with jvp.computing(el):
+        el.emit(Store(dbuf, slot, cast(dv, buf_arr.elt) if dv is not None else Const(0.0, buf_arr.elt)))
   else:
     el.store_array(el.axis_view(buf_arr, 0, slot), val)
 
@@ -409,16 +422,26 @@ def _load_leaf_slot(el, buf_arr: ArrayVal, slot: Expr, is_scalar: bool):
 
 def _copy_state_leaves(el, targets: list[Any], vals: list[Any]) -> None:
   """Copy updated leaf values into fixed-shape loop targets (ping-pong safe)."""
+  jvp = el.jvp
   snaps = []
   for tgt, v in zip(targets, vals):
     if isinstance(tgt, Var):
-      snaps.append((tgt, el.tmp(cast(el.as_scalar(v, "loop state"), tgt.type), "st")))
+      sv = el.tmp(cast(el.as_scalar(v, "loop state"), tgt.type), "st")
+      dsv = None
+      if jvp is not None and not jvp.muted and tgt.uid in jvp.targets:
+        dt = jvp.tangent_expr(el, sv)
+        with jvp.computing(el):
+          dsv = el.tmp(cast(dt, tgt.type) if dt is not None else Const(0.0, tgt.type), "dst")
+      snaps.append((tgt, sv, dsv))
     else:
       c = el.materialize(el.cast_array(v, tgt.elt), "st")
-      snaps.append((tgt, c))
-  for tgt, s in snaps:
+      snaps.append((tgt, c, None))
+  for tgt, s, ds in snaps:
     if isinstance(tgt, Var):
       el.emit(Assign(tgt, s))
+      if ds is not None and jvp is not None and tgt.uid in jvp.targets:
+        with jvp.computing(el):
+          el.emit(Assign(jvp.targets[tgt.uid], ds))
     else:
       el.store_array(tgt, s)
 
@@ -466,27 +489,41 @@ def _coerce_to_vtype(el, v, vt):
 
 def _alloc_state_buffers(el, leaves: list[Any], count: Expr, label: str) -> list[ArrayVal]:
   bufs: list[ArrayVal] = []
+  jvp = el.jvp
   for leaf in leaves:
     if isinstance(leaf, Expr):
-      bufs.append(el.alloc_array(leaf.type.strong, (count,), zero=True, label=label))
+      b = el.alloc_array(leaf.type.strong, (count,), zero=True, label=label)
     elif isinstance(leaf, ArrayVal):
-      bufs.append(el.alloc_array(leaf.elt, (count, *leaf.shape), zero=True, label=label))
+      b = el.alloc_array(leaf.elt, (count, *leaf.shape), zero=True, label=label)
     else:
       raise el.error(UnsupportedError, f"cannot checkpoint loop variable of type {describe(leaf)}")
+    if jvp is not None and not jvp.muted and b.elt.kind == "f":
+      jvp.ensure_zero_buf_tangent(el, b, label=f"d_{label}")
+    bufs.append(b)
   return bufs
 
 
 def _make_fixed_targets(el, leaves: list[Any], label: str) -> list[Any]:
   """Allocate fixed mutable scalar vars / fixed-shape contiguous buffers for loop state."""
   targets: list[Any] = []
+  jvp = el.jvp
   for i, leaf in enumerate(leaves):
     if isinstance(leaf, Expr):
       v = Var(f"{label}_{i}", leaf.type.strong)
       el.mutables.add(v.uid)
       el.emit(Assign(v, cast(leaf, v.type)))
+      if jvp is not None and not jvp.muted and v.type.kind == "f":
+        dv = Var(f"d_{label}_{i}", v.type)
+        el.mutables.add(dv.uid)
+        dl = jvp.tangent_expr(el, leaf)
+        with jvp.computing(el):
+          el.emit(Assign(dv, cast(dl, v.type) if dl is not None else Const(0.0, v.type)))
+        jvp.targets[v.uid] = dv
       targets.append(v)
     elif isinstance(leaf, ArrayVal):
       buf = el.alloc_array(leaf.elt, leaf.shape, label=f"{label}_{i}")
+      if jvp is not None and not jvp.muted and buf.elt.kind == "f":
+        jvp.ensure_zero_buf_tangent(el, buf, label=f"d_{label}_{i}")
       el.store_array(buf, leaf)
       targets.append(buf)
     else:
@@ -797,10 +834,16 @@ def differentiate_for_loop(
     el.emit(ForRange(t_var, ZERO, total, ONE, fwd_blk, fwd_scope))
     # Snapshot final state leaves into clean SSA outputs while muted, then register on tape
     raw_out_leaves = []
+    jvp = el.jvp
     for ct in cur_targets:
       if isinstance(ct, Var):
         v = Var("fout", ct.type)
         el.block.append(Assign(v, ct))
+        if jvp is not None and not jvp.muted and ct.uid in jvp.targets:
+          dv = Var("dfout", ct.type)
+          with jvp.computing(el):
+            el.block.append(Assign(dv, jvp.targets[ct.uid]))
+          jvp.scalar_t[v.uid] = dv
         raw_out_leaves.append(v)
       else:
         raw_out_leaves.append(el.materialize(ct, "fout"))
@@ -831,13 +874,22 @@ def backward_rev_for(tape, el, node, _g) -> None:
 
   g_leaves, _ = flatten_tree(g_out)
   adj_bufs: list[ArrayVal | None] = []
+  jvp = el.jvp
   for leaf, gl in zip(init_leaves, g_leaves):
     if isinstance(leaf, Expr) and is_float(leaf):
       ab = el.alloc_array(leaf.type.strong, (ONE,), zero=True, label="ladj")
+      if jvp is not None and not jvp.muted:
+        jvp.ensure_zero_buf_tangent(el, ab, label="d_ladj")
       el.emit(Store(ab.buf, ZERO, cast(gl, ab.elt)))
+      if jvp is not None and not jvp.muted and ab.buf.uid in jvp.buf_t:
+        dgl = jvp.tangent_expr(el, gl)
+        with jvp.computing(el):
+          el.emit(Store(jvp.buf_t[ab.buf.uid], ZERO, cast(dgl, ab.elt) if dgl is not None else Const(0.0, ab.elt)))
       adj_bufs.append(ab)
     elif isinstance(leaf, ArrayVal) and leaf.elt.kind == "f":
       ab = el.alloc_array(leaf.elt, leaf.shape, label="ladj")
+      if jvp is not None and not jvp.muted:
+        jvp.ensure_zero_buf_tangent(el, ab, label="d_ladj")
       el.store_array(ab, el.cast_array(gl, ab.elt))
       adj_bufs.append(ab)
     else:

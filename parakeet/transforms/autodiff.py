@@ -192,6 +192,13 @@ class ScalarAdj:
     if self.redirect is not None:
       buf, at = self.redirect
       el.emit(Store(buf, at, ops.prim("add", (Load(buf, at), cast(c, buf.type.elt)), buf.type.elt)))
+      jvp = el.jvp
+      if jvp is not None and not jvp.muted and buf.uid in jvp.buf_t:
+        dc = jvp.tangent_expr(el, c)
+        if dc is not None:
+          dbuf = jvp.buf_t[buf.uid]
+          with jvp.computing(el):
+            el.emit(Store(dbuf, at, ops.prim("add", (Load(dbuf, at), cast(dc, dbuf.type.elt)), dbuf.type.elt)))
       return
     if el.block is self.tape.home:
       self.parts.append(el.tmp(c, "adj"))
@@ -201,11 +208,20 @@ class ScalarAdj:
     el.emit(
       Store(self.cell, ZERO, ops.prim("add", (Load(self.cell, ZERO), cast(c, self.cell.type.elt)), self.cell.type.elt))
     )
+    jvp = el.jvp
+    if jvp is not None and not jvp.muted and self.cell.uid in jvp.buf_t:
+      dc = jvp.tangent_expr(el, c)
+      if dc is not None:
+        dcell = jvp.buf_t[self.cell.uid]
+        with jvp.computing(el):
+          el.emit(Store(dcell, ZERO, ops.prim("add", (Load(dcell, ZERO), cast(dc, dcell.type.elt)), dcell.type.elt)))
 
   def allocate(self, el) -> None:
     if self.needs_cell and self.cell is None:
       arr = el.alloc_array(self.var.type.strong, (ONE,), zero=True, label="adj")
       self.cell = arr.buf
+      if el.jvp is not None and not el.jvp.muted:
+        el.jvp.ensure_zero_buf_tangent(el, arr, label="d_adj")
 
   def total(self, el) -> Expr | None:
     t = self.var.type
@@ -245,6 +261,8 @@ class RootAdj:
   def allocate(self, el) -> None:
     if self.buf is None:
       self.buf = el.alloc_array(self.arr.elt, self.arr.shape, zero=True, label="adj")
+      if el.jvp is not None and not el.jvp.muted:
+        el.jvp.ensure_zero_buf_tangent(el, self.buf, label="d_adj")
 
   def _ensure(self, el) -> ArrayVal:
     if self.buf is None:
@@ -319,14 +337,20 @@ def store_element(el, arr: ArrayVal, pos: Expr, v: Expr) -> None:
   if tape is not None and not tape.muted and tape.store_element(el, arr, pos, v):
     return
   el.emit(Store(arr.buf, pos, v))
+  jvp = el.jvp
+  if jvp is not None and not jvp.muted and arr.buf.uid in jvp.buf_t:
+    dv = jvp.tangent_expr(el, v)
+    dbuf = jvp.buf_t[arr.buf.uid]
+    with jvp.computing(el):
+      el.emit(Store(dbuf, pos, cast(dv, arr.elt) if dv is not None else Const(0.0, arr.elt)))
   el.record_store(arr)
 
 
 def accumulate(el, dest: ArrayVal, g) -> None:
   """``dest += g`` for a view of an adjoint buffer."""
   elt = dest.elt
-  if el.tape is not None:
-    # the gradient being built is itself differentiated: an ordinary, recorded update
+  if el.tape is not None or (el.jvp is not None and not el.jvp.muted):
+    # the gradient being built is itself differentiated: an ordinary, recorded/JVP update
     el.store_array(dest, el.apply_ufunc(UF["add"], [dest, g]))
     return
   if isinstance(g, ArrayVal):
@@ -647,6 +671,10 @@ class Tape:
         roots=el.union_roots(el.get_roots(base), *index_roots),
         cost=max(base.cost + 2, CHEAP_COST + 1),
       )
+      if self.outer is not None and not self.outer.muted and self.outer.is_active(el, base):
+        outer_node = Node("gather", (base,), (shape, src_index, index_arrays))
+        self.outer.record(el, outer_node)
+        self.outer.register(el, outer_node, out)
     node = Node("gather", (base,), (shape, src_index, index_arrays))
     self.record(el, node)
     self.register(el, node, out)
@@ -654,14 +682,12 @@ class Tape:
 
   def op(self, el, kind: str, inputs: tuple, info, compute):
     """Record an operator whose result ``compute()`` builds without help."""
-    self.first_order(el, kind)
-    self.muted += 1
-    try:
+    if kind != "cumsum":
+      self.first_order(el, kind)
+    with self.computing(el):
       out = compute()
       if isinstance(out, ArrayVal):
         out = el.as_concrete(out)
-    finally:
-      self.muted -= 1
     node = Node(kind, tuple(inputs), info)
     self.record(el, node)
     self.register(el, node, out)
@@ -744,7 +770,6 @@ class Tape:
     live = [(view, v) for view, v in parts if self.is_active(el, v)]
     if not live:
       return
-    self.first_order(el, "building an array from parts")
     node = Node("pack", tuple(v for _, v in live), [view for view, _ in live])
     self.record(el, node)
     self.register(el, node, out)
@@ -794,12 +819,17 @@ class Tape:
       for t in child.touched:
         if t.tape is not self:
           self.touched.add(t)
-    self.first_order(el, f"{what} with a function of your own")
-    el.tape = None
+    saved_tape = el.tape
+    el.tape = self.outer
     try:
-      out = el.as_concrete(el.as_array(plain(el, shape, at, what)))
+      if self.outer is not None:
+        from ..lib.core import build_map
+
+        out = el.as_concrete(el.as_array(build_map(el, shape, at, what)))
+      else:
+        out = el.as_concrete(el.as_array(plain(el, shape, at, what)))
     finally:
-      el.tape = self
+      el.tape = saved_tape
     node = Node("map", (), (shape, at, sub_view, list(child.touched)))
     self.record(el, node)
     self.register(el, node, out)
@@ -883,8 +913,7 @@ class Tape:
     from .algebraic_vjp import optimize_tape
 
     self.home = el.block
-    if isinstance(out, (Expr, ArrayVal)):
-      optimize_tape(self, el, out)
+    optimize_tape(self, el, out)
     for r in list(self.roots.values()):
       if r.needs_buffer:
         r.allocate(el)
@@ -913,8 +942,10 @@ class Tape:
     ``v``, or anything at all): it must still hold what the forward pass saw."""
     blind = self.unknown_store > node.tick  # a store through a variable of unknown origin
     if v is None:
-      # anything that existed when the operator ran
-      changed = blind or any(t > node.tick and self.born.get(r, 0) < node.tick for r, t in self.stored_at.items())
+      # anything that existed when the operator ran (excluding internal backward adjoint buffers)
+      changed = blind or any(
+        t > node.tick and self.born.get(r, 0) < node.tick and r.label != "adj" for r, t in self.stored_at.items()
+      )
     elif isinstance(v, ArrayVal) and (v.buf is not None or roots_known):
       roots = el.get_roots(v)
       if roots is None:
@@ -1226,12 +1257,13 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   lead = len(shape)
 
   def body(idx):
-    child = Tape(el, tape, dry=tape.dry, key=(*tape.key, id(node.origin)))
+    saved_tape = el.tape
+    child = Tape(el, tape, outer=saved_tape, dry=tape.dry, key=(*tape.key, id(node.origin)))
     el.tape = child
     try:
       r = at(tuple(idx))
     finally:
-      el.tape = None
+      el.tape = saved_tape
     if isinstance(r, ArrayVal):
       seed: Any = sub_view(el, g, idx) if g.rank > lead else el.tmp(el.elem(g, idx), "g")
     else:
@@ -1244,7 +1276,39 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
 
   roots = [t for t in touched if isinstance(t, RootAdj)]
   scalars = [t for t in touched if isinstance(t, ScalarAdj)]
-  if tape.dry or not el.can_parallel(shape) or any(r.stored is not None for r in roots):
+  if not tape.dry and el.tape is not None and not el.tape.muted and len(roots) == 1 and not scalars:
+    r0 = roots[0]
+    if r0.arr.rank == lead and all(el.dim_equal(a, b) for a, b in zip(r0.arr.shape, shape)):
+      # Higher-order reverse-mode through scalar elementwise map: compute exact per-element
+      # derivative via JVP inside build_map so the enclosing tape differentiates cleanly.
+      from ..lib.core import build_map
+      from .jvp import JVPContext
+
+      def elem_grad_jvp(idx):
+        jctx = JVPContext(outer=el.jvp)
+        el.jvp_live += 1
+        saved_j = el.jvp
+        if r0.arr.buf is not None:
+          pos = el.tmp(el.index_expr(r0.arr, idx), "ohp")
+          jctx.buf_one_hot[r0.arr.buf.uid] = (pos, r0.arr.elt)
+        el.jvp = jctx
+        try:
+          r_val = at(tuple(idx))
+          _, dr_val = jctx.extract_primal_and_tangent(el, r_val)
+        finally:
+          el.jvp = saved_j
+          el.jvp_live -= 1
+        g_i = el.tmp(el.elem(g, idx), "g")
+        return ops.prim("mul", (cast(dr_val, r0.arr.elt), cast(g_i, r0.arr.elt)), r0.arr.elt)
+
+      grad_arr = build_map(el, shape, elem_grad_jvp, "map_grad")
+      tape.add(el, r0.arr, grad_arr)
+      return
+    raise el.error(
+      UnsupportedError,
+      "second derivatives through map with array elements are not supported with grad(grad(...)); use par.hvp() instead",
+    )
+  if tape.dry or el.tape is not None or not el.can_parallel(shape) or any(r.stored is not None for r in roots):
     el.seq_nest(shape, body)
     return
   total = el.tmp(ops.iprod(shape), "total")
@@ -1259,6 +1323,11 @@ def _map(tape: Tape, el, node: Node, g: ArrayVal) -> None:
     el.nonneg.add(nchunks.uid)
   private = [el.alloc_array(r.arr.elt, (nchunks, *r.arr.shape), zero=True, label="adj") for r in roots]
   cells = [el.alloc_array(s.var.type.strong, (nchunks,), zero=True, label="adj") for s in scalars]
+  if el.jvp is not None and not el.jvp.muted:
+    for p in private:
+      el.jvp.ensure_zero_buf_tangent(el, p, label="d_adj")
+    for c in cells:
+      el.jvp.ensure_zero_buf_tangent(el, c, label="d_adj")
 
   def chunk_body(chunk, start, stop):
     saved = [r.redirect for r in roots], [s.redirect for s in scalars]
@@ -1307,13 +1376,18 @@ def _store_element(tape: Tape, el, node: Node, g) -> None:
 
 def _cumsum(tape: Tape, el, node: Node, g: ArrayVal) -> None:
   """d cumsum: every element feeds all the later ones, a cumsum from the other end."""
-  from ..lib.numpy_lib import cumulative_plain, flip
+  from ..lib.numpy_lib import _cumulative, cumulative_plain, flip
 
   (a,) = node.inputs
   axis = node.info
   g = el.as_concrete(g)
   along = None if g.rank == 1 else axis
-  back = flip(el, el.as_concrete(cumulative_plain(el, flip(el, g, along), along, "add")), along)
+  flipped = flip(el, g, along)
+  if el.tape is not None and not el.tape.muted:
+    cs = _cumulative(el, flipped, along, "add", None)
+  else:
+    cs = cumulative_plain(el, flipped, along, "add")
+  back = flip(el, el.as_concrete(cs), along)
   if back.rank != a.rank:
     back = el.reshape(el.as_concrete(back), a.shape, checked=True)
   tape.add(el, a, back)
@@ -1386,6 +1460,34 @@ def _gather(tape: Tape, el, node: Node, g) -> None:
     g = el.broadcast_to(g, shape, consumed=True)
   else:
     g = el.tmp(g, "g")
+  if el.tape is not None and not el.tape.muted:
+    # Higher-order AD: route through recorded scatter_add so the outer tape differentiates it back to gather.
+    from ..lib.adverbs import scatter_add as _scatter_add_fn
+
+    dest_size = el.tmp(ops.iprod(base.shape), "dsize")
+    flat_g = (
+      el.flat_view(el.as_concrete(el.cast_array(g, base.elt)))
+      if isinstance(g, ArrayVal)
+      else el.broadcast_to(el.as_array(g), shape)
+    )
+    if isinstance(flat_g, ArrayVal) and flat_g.rank != 1:
+      flat_g = el.flat_view(el.as_concrete(flat_g))
+    # Build flat target indices relative to base's dense layout
+    dense_strides: list[Expr] = [ONE] * base.rank
+    for k in range(base.rank - 2, -1, -1):
+      dense_strides[k] = el.tmp(ops.imul(dense_strides[k + 1], base.shape[k + 1]), "ds")
+
+    def _flat_pos(iv):
+      coords = src_index(iv)
+      p: Expr = ZERO
+      for c, st in zip(coords, dense_strides):
+        p = iadd(p, ops.imul(c, st))
+      return p
+
+    flat_idx = el.flat_view(el.materialize(el.delayed(I, shape, _flat_pos, cost=2), "gidx"))
+    scattered = _scatter_add_fn.impl(el, dest_size, flat_idx, flat_g)
+    tape.add(el, base, el.reshape(scattered, base.shape, checked=False))
+    return
   adj_view = root.view(el, base)
   dest_size = el.tmp(ops.iprod(root.arr.shape), "dsize")
   shape_t = tuple(el.tmp(d, "n") for d in shape)
@@ -1396,16 +1498,71 @@ def _gather(tape: Tape, el, node: Node, g) -> None:
   threads = el.can_parallel(shape_t)
   blk: list = []
   scope = el.new_scope("loop")
+  updates: list[ScatterUpdate] = []
+  jvp = el.jvp
+  d_adj_buf = jvp.buf_t.get(adj_view.buf.uid) if (jvp is not None and not jvp.muted) else None
   with el.in_block(blk, scope, loop=True, par=threads):
     target = el.tmp(el.index_expr(adj_view, src_index(idx_vars)), "pos")
     val_expr = el.elem(g, idx_vars) if isinstance(g, ArrayVal) else g
     val = el.tmp(cast(val_expr, adj_view.elt), "g")
-  el.emit(
-    IndexScatter(
-      shape_t, idx_vars, blk, dest_size, target, [ScatterUpdate(adj_view.buf, val, "add")], scope, threads, el.loc()
-    )
-  )
+    updates.append(ScatterUpdate(adj_view.buf, val, "add"))
+    if d_adj_buf is not None:
+      dval = jvp.tangent_expr(el, val)
+      if dval is not None:
+        with jvp.computing(el):
+          updates.append(ScatterUpdate(d_adj_buf, el.tmp(cast(dval, adj_view.elt), "dg"), "add"))
+  el.emit(IndexScatter(shape_t, idx_vars, blk, dest_size, target, updates, scope, threads, el.loc()))
   el.record_store(adj_view)
+
+
+def _topk_ad(tape: Tape, el, node: Node, g) -> None:
+  """Adjoint of ``topk_fold`` / ``topk``: scatter incoming value cotangents through
+  ``idxs`` via ``IndexScatter`` (skipping sentinel ``idx < 0`` slots when ``k > n``)."""
+  from ..syntax.ir import IndexScatter, ScatterUpdate
+
+  (scores,) = node.inputs
+  idxs, ax = node.info
+  tape.stale(el, node, scores)
+  if isinstance(g, tuple):
+    g_vals = g[0]
+  else:
+    g_vals = g
+  if not isinstance(g_vals, ArrayVal):
+    return
+  g_vals = el.as_concrete(el.cast_array(g_vals, scores.elt))
+  idxs = el.as_concrete(idxs)
+  d_scores = el.alloc_array(scores.elt, scores.shape, zero=True, label="d_topk")
+  jvp = el.jvp
+  d_d_scores = None
+  if jvp is not None and not jvp.muted and jvp.has_tangent(el, g_vals):
+    d_d_scores = jvp.ensure_zero_buf_tangent(el, d_scores, label="dd_topk")
+  dest_size = el.tmp(ops.iprod(d_scores.shape), "dsize")
+  shape_t = tuple(el.tmp(d, "n") for d in g_vals.shape)
+  idx_vars = tuple(Var("i", I) for _ in shape_t)
+  for v, d in zip(idx_vars, shape_t):
+    el.nonneg.add(v.uid)
+    el.upper[v.uid] = d
+  threads = el.can_parallel(shape_t)
+  blk: list = []
+  scope = el.new_scope("loop")
+  updates: list[ScatterUpdate] = []
+  with el.in_block(blk, scope, loop=True, par=threads):
+    raw_k = cast(el.tmp(el.elem(idxs, idx_vars), "ti"), I)
+    valid = cmp("ge", raw_k, ZERO)
+    safe_k = ops.select(valid, raw_k, ZERO)
+    coords = tuple(idx_vars[:ax]) + (safe_k,) + tuple(idx_vars[ax + 1 :])
+    target = el.tmp(el.index_expr(d_scores, coords), "pos")
+    gv = el.tmp(el.elem(g_vals, idx_vars), "gv")
+    val = el.tmp(ops.select(valid, cast(gv, d_scores.elt), Const(0.0, d_scores.elt)), "g")
+    updates.append(ScatterUpdate(d_scores.buf, val, "add"))
+    if d_d_scores is not None:
+      dgv = jvp.tangent_expr(el, val)
+      if dgv is not None:
+        with jvp.computing(el):
+          updates.append(ScatterUpdate(d_d_scores.buf, el.tmp(cast(dgv, d_scores.elt), "dg"), "add"))
+  el.emit(IndexScatter(shape_t, idx_vars, blk, dest_size, target, updates, scope, threads, el.loc()))
+  el.record_store(d_scores)
+  tape.add(el, scores, d_scores)
 
 
 def _algebraic_vjp(tape: Tape, el, node: Node, g) -> None:
@@ -1490,6 +1647,7 @@ _BACKWARD = {
   "scan_ad": _scan_ad,
   "scatter_add": _scatter_add,
   "gather": _gather,
+  "topk": _topk_ad,
   "algebraic_vjp": _algebraic_vjp,
   "segmented_reduce": _segmented_reduce_ad,
   "segmented_softmax": _segmented_softmax_ad,
@@ -1536,11 +1694,18 @@ def _wrt_leaf(el, tape: Tape, v, what: str, *, in_record: bool = False):
     el.block.append(Assign(leaf, v))
     if tape.outer is not None:
       note_def(el, leaf, v)  # the enclosing gradient differentiates through the copy
+    elif el.jvp_live:
+      el.defs[leaf.uid] = v
     return leaf, tape.leaf_scalar(el, leaf)
   if isinstance(v, ArrayVal) and v.elt.kind == "f":
     # the adjoint mirrors the memory of the array, so the array must be dense and its own
     if v.buf is None or not v.contig or v.buf.uid in el.ad_bufs:
+      orig = v
       v = el.materialize(v, "x")
+      if tape.outer is not None and tape.outer.is_active(el, orig) and tape.outer.find_root(v.buf.uid) is None:
+        node = Node("alias", (orig,))
+        tape.outer.record(el, node)
+        tape.outer.register(el, node, v)
     return v, tape.root(el, v)
   if in_record:
     # Discrete / structural metadata leaf inside a Record (int, bool, int64 indices, etc.)

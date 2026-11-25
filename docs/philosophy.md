@@ -126,7 +126,7 @@ the operator statements before loop lowering:
 * `parakeet.verify` checks scoping, types, and buffer ownership before passes,
   after every pass, and after lowering.
 * `f.specialize(*args)` exposes `.operators`, `.ir`, `.source`, and `.kernels`.
-* `parakeet.dsl.show_rewrite(f, *args)` summarizes which algebraic laws fired.
+* `par.show_rewrite(f, *args)` summarizes which algebraic optimizations fired.
 * `parakeet.find_broken_transform` bisects the middle-end passes one by one.
 * Unsupported Python or NumPy features fail at compile time with the exact
   source caret and inlined call chain instead of silently falling back.
@@ -161,36 +161,48 @@ parallel `np.random`. Not yet built in:
 * Variable-cardinality set operations (`np.unique`, `np.lexsort`, `np.isin`)
 * SciPy modules (`scipy.special`, `scipy.optimize`, `scipy.ndimage`, ...)
 
-### Automatic differentiation (`grad` / `value_and_grad`)
+### Automatic differentiation (`grad`, `jvp`, `vjp`, `hvp`)
 
-`grad` differentiates element-wise operations, reductions (`sum`, zero-safe
-`prod`, `min`, `max`, general folds), `cumsum`, `sort`, `@`, `einsum`, views
-and concatenation, gather and `scatter_add`, `map`/`allpairs` with user
-functions, and pure runtime `if` branches — enough to train small transformers
-([`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/nanogpt.py))
+Parakeet provides reverse-mode (`par.grad`, `par.value_and_grad`, general
+non-scalar `par.vjp`), forward-mode (`par.jvp`, `par.linearize`), linear
+transposes (`par.linear_transpose`), and higher-order differentiation
+(`par.hvp`, `par.jacfwd`, `par.jacrev`, `par.hessian`) across element-wise
+operations, reductions (`sum`, zero-safe `prod`, `min`, `max`, general folds),
+`cumsum` and general `par.scan`, `sort` and `topk`, `FrozenHashTable.get` and
+`SortedIndex.get`, `@`, `einsum`, views and concatenation, gather and scatter
+(`np.add.at`, canonical `for`-loop scatter-add, `par.scatter_add`),
+`map`/`allpairs` with user functions, pure runtime `if` branches, and
+checkpointed `for`/`while` loops — enough to train transformers
+([`examples/nanogpt.py`](https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py))
 and convnets
-([`examples/convnet.py`](https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convnet.py)).
+([`examples/convnet.py`](https://github.com/iskandr/parakeet/blob/master/examples/convnet.py)).
 Current boundaries:
 
-* **Elaboration-time tape:** differentiation records operators during
-  elaboration (with an algebraic tape optimizer for attention, cross-entropy,
-  and norms) rather than running as an IR-to-IR pass over lowered operators.
+* **Elaboration-time tape & symbolic JVP:** reverse-mode differentiation
+  records operators on a tape during elaboration (with an algebraic tape
+  optimizer for zero-$O(T^2)$ attention VJP/HVP, linear cross-entropy, softmax,
+  and norms) rather than running as a separate IR-to-IR pass over lowered loops.
 * **Loops over differentiated values:** small static `for` loops (`<= 32`)
   unroll for cross-iteration fusion; runtime-bound and long `for` loops use
   IR-level `O(sqrt(T))` checkpointed reverse loops; data-dependent `while`
-  loops use fixed-slot stride-doubling checkpointing; and `par.checkpoint`,
-  `par.stop_gradient`, and `@par.custom_vjp` provide explicit control over
-  rematerialization and custom/implicit VJPs. Loops with `break`/`continue`
+  loops use fixed-slot stride-doubling checkpointing; forward-mode `jvp`
+  streams tangents in O(1) memory; and `par.checkpoint`, `par.stop_gradient`,
+  `@par.custom_vjp`, and `@par.custom_jvp` provide explicit control over
+  rematerialization and custom/implicit rules. Loops with `break`/`continue`
   over active state remain refused loudly.
-* **Pure runtime `if` branches only:** both branches execute and are selected
-  by the condition, so branches touching differentiated values cannot contain
-  array stores, `return`, `break`, or `raise`.
+* **Pure runtime `if` branches in reverse mode:** both branches execute and are
+  selected by the condition, so branches touching differentiated values cannot
+  contain array stores, `return`, `break`, or `raise`.
 * **Missing derivative rules (refused loudly):** `cumprod`, `convolve`,
-  user-defined `scan` combiners, in-place indexed assignment (`out[idx] = v`;
-  use `parakeet.scatter_add` or `np.bincount(..., weights=w)` instead), and
+  arbitrary indexed overwrites (`out[idx] = v`; use `np.add.at`,
+  `for i: out[idx[i]] += v`, or `par.scatter_add` for scatter-add), and
   overwriting an array still needed by an earlier backward rule.
-* **Second derivatives:** work through element-wise ops, reductions, `@`, and
-  views; not yet through `map`, gather indexing, or `cumsum`.
+* **Higher-order derivatives:** forward-over-reverse `par.hvp` and
+  `par.hessian` compose through element-wise ops, reductions, `@`, views,
+  checkpointed loops, LayerNorm, and zero-$O(T^2)$ attention; reverse-over-reverse
+  `grad(grad(...))` also supports `np.stack`, `np.cumsum`, gather indexing,
+  scatter-add, and scalar 1-to-1 `par.map`, while refusing non-scalar user
+  `map` bodies loudly.
 
 ### GPU and locality boundaries
 

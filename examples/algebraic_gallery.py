@@ -20,7 +20,7 @@ import parakeet as par
 from parakeet import value_and_grad
 
 # ---------------------------------------------------------------------------
-# 1. Causal FlashAttention + Sliding-Window FlexAttention (Laws 1, 2, 5)
+# 1. Causal Attention + Sliding-Window Attention
 # ---------------------------------------------------------------------------
 
 
@@ -55,7 +55,7 @@ def causal_flash_loss(q, k, v):
 
 
 # ---------------------------------------------------------------------------
-# 2. Apple Cut Cross-Entropy (zero M x V logit materialization, Laws 1 & 2)
+# 2. Linear Cross-Entropy (zero M x V logit materialization)
 # ---------------------------------------------------------------------------
 
 
@@ -73,7 +73,7 @@ def cut_cross_entropy(h, w, targets):
 
 
 # ---------------------------------------------------------------------------
-# 3. DeepSeek MLA Weight Absorption -> FlashMLA (Laws 3 + 1)
+# 3. Multi-Head Latent Attention (weight absorption + online monoidal tiling)
 # ---------------------------------------------------------------------------
 
 
@@ -92,7 +92,7 @@ def deepseek_mla(q, c_kv, w_uk, w_uv):
 
 
 # ---------------------------------------------------------------------------
-# 4. Llama-3 GQA Shared-KV Head-Group Tiling (Laws 3 + 1)
+# 4. Grouped-Query Attention (shared-KV head-group tiling)
 # ---------------------------------------------------------------------------
 
 
@@ -110,7 +110,7 @@ def gqa_attention(q, k, v):
 
 
 # ---------------------------------------------------------------------------
-# 5. Mamba-2 State-Space Duality (6-line recurrence -> 4 batched GEMMs, Law 4)
+# 5. Mamba-2 State-Space Recurrence (6-line loop -> chunkwise batched GEMMs)
 # ---------------------------------------------------------------------------
 
 
@@ -130,7 +130,7 @@ def mamba2_ssd(q, k, v, a):
 
 
 # ---------------------------------------------------------------------------
-# 6. Parallel Prefix Exponential / IIR Filter (Law 4 TileScan)
+# 6. Parallel Prefix Exponential / IIR Filter (chunkwise affine scan)
 # ---------------------------------------------------------------------------
 
 
@@ -178,7 +178,7 @@ def tropical_min_plus(a, b):
   m, k = a.shape
   _, n = b.shape
   return par.imap(
-    lambda i, j: par.ireduce(lambda r: a[i, r] + b[r, j], k, combine=par.minimum),
+    lambda i, j: par.ireduce(lambda r: a[i, r] + b[r, j], k, combine=np.minimum),
     (m, n),
   )
 
@@ -283,6 +283,48 @@ def smooth_fold(queries, references, observations):
 # ---------------------------------------------------------------------------
 
 
+# --8<-- [start:gbdt_best_split_numpy]
+@par.jit
+def gbdt_best_split_numpy(bin_ids, grads, hess, nbins, reg_lambda):
+  """Return the split bin with the highest gain and the gain at that bin."""
+  g_hist = np.zeros(nbins, dtype=np.float32)
+  h_hist = np.zeros(nbins, dtype=np.float32)
+  np.add.at(g_hist, bin_ids, grads)
+  np.add.at(h_hist, bin_ids, hess)
+  g_left = np.cumsum(g_hist)
+  h_left = np.cumsum(h_hist)
+  g_right = g_left[nbins - 1] - g_left
+  h_right = h_left[nbins - 1] - h_left
+  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
+  best_bin = np.argmax(gain)
+  return best_bin, gain[best_bin]
+
+
+# --8<-- [end:gbdt_best_split_numpy]
+
+
+# --8<-- [start:gbdt_best_split_loop]
+@par.jit
+def gbdt_best_split_loop(bin_ids, grads, hess, nbins, reg_lambda):
+  """Same histogram split written with a plain Python accumulation loop."""
+  g_hist = np.zeros(nbins, dtype=np.float32)
+  h_hist = np.zeros(nbins, dtype=np.float32)
+  for i in range(len(bin_ids)):
+    b = bin_ids[i]
+    g_hist[b] += grads[i]
+    h_hist[b] += hess[i]
+  g_left = np.cumsum(g_hist)
+  h_left = np.cumsum(h_hist)
+  g_right = g_left[nbins - 1] - g_left
+  h_right = h_left[nbins - 1] - h_left
+  gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
+  best_bin = np.argmax(gain)
+  return best_bin, gain[best_bin]
+
+
+# --8<-- [end:gbdt_best_split_loop]
+
+
 # --8<-- [start:gbdt_best_split]
 @par.jit
 def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
@@ -360,7 +402,7 @@ def main():
   np.testing.assert_allclose(dh, dh_np, rtol=1e-4, atol=1e-4)
   np.testing.assert_allclose(dw, dw_np, rtol=1e-4, atol=1e-4)
   print(
-    f"2. Cut Cross-Entropy fwd+bwd (M=256,V=4096)   : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Laws 1 + 2"
+    f"2. Cut Cross-Entropy fwd+bwd (M=256,V=4096)   : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Monoidal Tiling + Rematerialized AD"
   )
 
   # 3. DeepSeek MLA Decode
@@ -380,7 +422,7 @@ def main():
   t_np, om_np = _bench(np_mla, (qm, cm, wuk, wuv), iters=10)
   np.testing.assert_allclose(om_pk, om_np, rtol=1e-4, atol=1e-4)
   print(
-    f"3. DeepSeek MLA Decode (Tq=4,Tkv=2048,dc=64)  : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Laws 3 + 1"
+    f"3. DeepSeek MLA Decode (Tq=4,Tkv=2048,dc=64)  : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Weight Absorption + Monoidal Tiling"
   )
 
   # 4. Mamba-2 SSD
@@ -402,7 +444,7 @@ def main():
   t_np, os_np = _bench(np_ssd, (qs, ks, vs, as_), iters=2)
   np.testing.assert_allclose(os_pk, os_np, rtol=1e-4, atol=1e-4)
   print(
-    f"4. Mamba-2 SSD (T=2048, D=64, V=64)           : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Law 4 SSD"
+    f"4. Mamba-2 SSD (T=2048, D=64, V=64)           : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Chunkwise State-Space Scan"
   )
 
   # 5. Fused RBF Kernel Regression (Nadaraya-Watson)
@@ -422,7 +464,7 @@ def main():
   t_np, or_np = _bench(np_rbf, (xq, xt, yt, ng), iters=3)
   np.testing.assert_allclose(or_pk, or_np, rtol=1e-4, atol=1e-4)
   print(
-    f"5. RBF Kernel Regression (512x2048x32)        : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Law 1 (0 N*M!)"
+    f"5. RBF Kernel Regression (512x2048x32)        : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Online Monoidal Tiling (0 N*M)"
   )
 
   # 6. Tropical Min-Plus Shortest Path
@@ -474,6 +516,10 @@ def main():
   t_np, (b_np, g_np) = _bench(np_gbdt, (bins, grads, hess, 256, lam), iters=10)
   assert int(b_pk) == b_np
   np.testing.assert_allclose(g_pk, g_np, rtol=1e-4, atol=1e-4)
+  for alt_fn in (gbdt_best_split_numpy, gbdt_best_split_loop):
+    b_alt, g_alt = alt_fn(bins, grads, hess, 256, lam)
+    assert int(b_alt) == b_np
+    np.testing.assert_allclose(g_alt, g_np, rtol=1e-4, atol=1e-4)
   print(
     f"8. GBDT Hist + Best-Split (N=200k, B=256)     : PK={t_pk:6.2f}ms vs NumPy={t_np:6.2f}ms ({t_np / t_pk:4.1f}x) | Scatter+Scan+Carry"
   )

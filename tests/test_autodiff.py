@@ -586,8 +586,9 @@ def test_second_derivatives_that_are_refused():
   through_gather = lambda x: np.sum(grad(lambda a: np.sum(a[np.array([0, 2, 2])] ** 3))(x) ** 2)  # noqa: E731
   through_cumsum = lambda x: np.sum(grad(lambda a: np.sum(np.cumsum(a) ** 2))(x) ** 2)  # noqa: E731
   refused(through_map, x, match="second derivatives through map")
-  refused(through_gather, x, match="second derivatives through this indexing")
-  refused(through_cumsum, x, match="second derivatives through cumsum")
+  # gather and cumsum now support higher-order reverse-mode differentiation cleanly
+  check(through_gather, x)
+  check(through_cumsum, x)
 
 
 def test_unknown_derivative_of_a_primitive():

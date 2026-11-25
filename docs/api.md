@@ -16,11 +16,35 @@
     options:
       members: [operators, ir, source, kernels, signature]
 
-## Gradients
+## Automatic differentiation
 
 ::: parakeet.grad
 
 ::: parakeet.value_and_grad
+
+::: parakeet.jvp
+
+::: parakeet.vjp
+
+::: parakeet.linearize
+
+::: parakeet.linear_transpose
+
+::: parakeet.hvp
+
+::: parakeet.jacfwd
+
+::: parakeet.jacrev
+
+::: parakeet.hessian
+
+::: parakeet.stop_gradient
+
+::: parakeet.checkpoint
+
+::: parakeet.custom_vjp
+
+::: parakeet.custom_jvp
 
 ## Backends, devices, and settings
 

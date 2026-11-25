@@ -354,6 +354,8 @@ def match_single_output_map(
   prefix = body[:-1]
   if uses(prefix, {buf.uid}):
     return None
+  if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in ir.walk_stmts(prefix)):
+    return None
   facts = defs.fork() if isinstance(defs, IndexFacts) else IndexFacts(defs)
   for t in prefix:
     facts.record_stmt(t)
@@ -378,6 +380,8 @@ def match_single_output_scan(
     return None
   emit_prefix = emit[:-1]
   if uses(s.body + emit_prefix, {buf.uid}):
+    return None
+  if any(isinstance(t, (ir.Store, ir.IndexScatter)) for t in ir.walk_stmts(emit_prefix)):
     return None
   facts = defs.fork() if isinstance(defs, IndexFacts) else IndexFacts(defs)
   for t in s.body + emit_prefix:
