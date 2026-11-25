@@ -879,8 +879,11 @@ def lower_wavefront(lp: Loops, s: ir.IndexWavefront) -> None:
   last_d = ne.tmp(isub(num_diags, ONE), "wf_ld")
   last_base = ne.tmp(imul(ops.imod(last_d, Const(3, I)), m), "wf_lb")
   last_pos = ne.tmp(iadd(last_base, isub(m, ONE)), "wf_lp")
-  for f, rvar in enumerate(s.results):
-    ne.emit(Assign(rvar, cast(Load(rings[f], last_pos), rvar.type)))
+  read_last = [Assign(rvar, cast(Load(rings[f], last_pos), rvar.type)) for f, rvar in enumerate(s.results)]
+  if s.band is not None:
+    ne.emit(If(cmp("le", imax(isub(m, n), isub(n, m)), s.band), read_last, []))
+  else:
+    ne.block.extend(read_last)
 
   lp.emit(If(ops.land(cmp("gt", m, ZERO), cmp("gt", n, ZERO)), non_empty_blk, []))
   for rb in rings:

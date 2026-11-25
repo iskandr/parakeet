@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from ..errors import TypeInferenceError
+from ..errors import TypeInferenceError, UnsupportedError
 from ..ndtypes import Float64, Int64
 from ..syntax import ops
 from ..syntax.ir import Assign, Const, Expr, ForRange, If, IndexWavefront, Load, Scope, Store, Var
@@ -157,10 +157,16 @@ def batched_wavefront(
   band_e = None if band is None else el.as_index(band, "band")
   do_max = el.static_bool(track_max, "track_max") if not isinstance(track_max, bool) else track_max
 
-  # Compute max_m = max(1, max(m_lens)) once outside the parallel loop
+  # Compute max_m = max(1, max(m_lens)) once outside the parallel loop (safe on empty batch B == 0)
   from .numpy_lib import amax
 
-  max_m = el.tmp(imax(ONE, cast(el.as_scalar(amax(el, ms, None, False)), I)), "max_m")
+  max_m = Var("max_m", I)
+  el.mutables.add(max_m.uid)
+  el.emit(Assign(max_m, ONE))
+  bm_blk: list = []
+  with el.in_block(bm_blk):
+    el.emit(Assign(max_m, imax(ONE, cast(el.as_scalar(amax(el, ms, None, False)), I))))
+  el.emit(If(cmp("gt", B, ZERO), bm_blk, []))
   stride_b = el.tmp(imul(Const(3, I), max_m), "wf_sb")
   rings = [el.alloc_array(field_types[f], (imul(B, stride_b),), label=f"bwf_r{f}") for f in range(k_fields)]
   out_fields = [el.alloc_array(field_types[f], (B,), label=f"bwf_out{f}") for f in range(k_fields)]
@@ -246,8 +252,12 @@ def batched_wavefront(
       el.emit(ForRange(d, ZERO, num_d, ONE, dbody, dsc))
       last_base = el.tmp(iadd(b_off, imul(ops.imod(isub(num_d, ONE), Const(3, I)), max_m)), "lb")
       last_pos = el.tmp(iadd(last_base, isub(m, ONE)), "lp")
-      for f in range(k_fields):
-        el.emit(Store(out_fields[f].buf, b, Load(rings[f].buf, last_pos)))
+      store_last = [Store(out_fields[f].buf, b, Load(rings[f].buf, last_pos)) for f in range(k_fields)]
+      if band_e is not None:
+        el.emit(If(cmp("le", imax(isub(m, n), isub(n, m)), band_e), store_last, []))
+      else:
+        for st in store_last:
+          el.emit(st)
       if do_max:
         el.emit(Store(out_max.buf, b, mval))
         el.emit(Store(out_bi.buf, b, bi))
@@ -485,12 +495,18 @@ def soft_align(el, scores, gap_penalty, *, temperature=1.0, band=None, local=Tru
       if not is_local:
         last_even = cmp("eq", ops.imod(isub(M, ONE), Const(2, I)), ZERO)
         last_j = isub(N, ONE)
-        el.emit(Assign(out_var, ops.select(last_even, Load(row0.buf, last_j), Load(row1.buf, last_j))))
+        last_val = ops.select(last_even, Load(row0.buf, last_j), Load(row1.buf, last_j))
+        if band_e is not None:
+          in_band = cmp("le", imax(isub(M, N), isub(N, M)), band_e)
+          last_val = ops.select(in_band, last_val, Const(-math.inf, elt))
+        el.emit(Assign(out_var, last_val))
 
     el.emit(If(ops.land(cmp("gt", M, ZERO), cmp("gt", N, ZERO)), non_empty, []))
   finally:
     el.tape = saved_tape
 
+  if tape is not None and not tape.muted and tape.is_active(el, tau):
+    raise el.error(UnsupportedError, "differentiating soft_align() with respect to temperature is not supported")
   if record_ad:
     from ..transforms.autodiff import Node
 
