@@ -24,7 +24,7 @@ python benchmarks/bio_workloads.py
 |---|---|---|
 | FASTQ k-mers & read QC | `parfor` + `uint8` / `uint64` bitwise arithmetic | Python per-character loops and string copies |
 | Multi-channel BAM pileup | Keyed `IndexScatter` fusion | Redundant passes over alignment positions (`6 -> 1`) |
-| Chemical fingerprint screening | `pk.allpairs` + ordered `pk.fold` (`pairwise_fold`) | O(N · M) similarity matrix allocation |
+| Chemical fingerprint screening | `par.allpairs` + ordered `par.fold` (`pairwise_fold`) | O(N · M) similarity matrix allocation |
 | 3D protein RBF / equivariant attention | Law 1 rescaled-monoid tiling (`flash_monoid`) + `grad` | O(N²) pairwise distance & weight matrices |
 | Banded Smith-Waterman & genome SSMs | Two-row banded DP + Law 4 `TileScan` | Python DP interpreter overhead & sequential scan bottlenecks |
 
@@ -54,8 +54,8 @@ combines them into a single privatized traversal (`IndexScatter: 6 -> 1`):
 
 Chemical similarity screening compares query fingerprints `(N, 32)` against a
 compound library `(M, 32)` of packed `uint64` bitvectors (2,048 bits each).
-Combining a portable 64-bit SWAR popcount with `pk.allpairs` and an ordered
-`pk.fold` finds the closest library compound per query while preserving
+Combining a portable 64-bit SWAR popcount with `par.allpairs` and an ordered
+`par.fold` finds the closest library compound per query while preserving
 first-index ties:
 
 ```python
@@ -86,19 +86,19 @@ rewrite into Law 4 chunkwise parallel affine prefix scans (`TileScan`):
 
 ## Inspecting the rewrites
 
-Run `pk.show_rewrite` on any workload above to verify that scatter fusion,
+Run `par.show_rewrite` on any workload above to verify that scatter fusion,
 Law 1 monoidal tiling, or Law 4 chunkwise scans fired:
 
 ```python
 import numpy as np
-import parakeet as pk
+import parakeet as par
 from examples.bio_gallery import single_pass_pileup, protein_rbf_message_passing
 
 pos = np.zeros(10_000, np.int64)
 u8 = np.zeros(10_000, np.uint8)
-print(pk.show_rewrite(single_pass_pileup, pos, u8, u8, u8, 4096).summary())
+print(par.show_rewrite(single_pass_pileup, pos, u8, u8, u8, 4096).summary())
 
 coords = np.zeros((128, 3), np.float32)
 feats = np.zeros((128, 16), np.float32)
-print(pk.show_rewrite(protein_rbf_message_passing, coords, feats, np.float32(-0.05)).summary())
+print(par.show_rewrite(protein_rbf_message_passing, coords, feats, np.float32(-0.05)).summary())
 ```

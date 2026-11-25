@@ -20,10 +20,10 @@ it cannot be used on this machine and how to fix it.
 
 ```python
 import numpy as np
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def rms(x):
   return np.sqrt(np.mean(x * x))
 
@@ -38,48 +38,45 @@ Compilation takes a few hundred milliseconds per specialization (most of it in
 the C compiler) and is cached on disk, so a second run of your program starts
 fast.
 
-`jit` also works without decorator syntax, including on lambdas and NumPy
+`par.jit` also works without decorator syntax, including on lambdas and NumPy
 functions:
 
 ```python
-fast_rms = jit(lambda x: np.sqrt(np.mean(x * x)))
-parakeet.run(rms.fn, x)  # compile-and-call in one step
+fast_rms = par.jit(lambda x: np.sqrt(np.mean(x * x)))
+par.run(rms.fn, x)  # compile-and-call in one step
 ```
 
 ## Loops, comprehensions, helpers
 
 Anything in the [supported subset](language.md) can be mixed freely. Helper
-functions are inlined automatically — they do not need their own `@jit`.
+functions are inlined automatically — they do not need their own `@par.jit`.
 
 ```python
 def sqr_dist(a, b):
   return np.sum((a - b) ** 2)
 
 
-@jit
+@par.jit
 def nearest(X, centroids):
   return np.array([np.argmin([sqr_dist(x, c) for c in centroids]) for x in X])
 ```
 
-You can also call Parakeet's data-parallel operators directly (`parakeet.map`,
-`reduce`, `scan`, `allpairs`, `scatter_add`, `dsl.fold`) when you want to apply
-a Python function over slices or pairs in parallel. See
+You can also call Parakeet's data-parallel operators directly (`par.map`,
+`par.reduce`, `par.scan`, `par.allpairs`, `par.scatter_add`, `par.fold`) when
+you want to apply a Python function over slices or pairs in parallel. See
 [Data-parallel operators](operators.md).
 
 ## Gradients in one line
 
-Wrap any scalar-valued function with `parakeet.grad` or `parakeet.value_and_grad`.
+Wrap any scalar-valued function with `par.grad` or `par.value_and_grad`.
 The forward and backward passes compile together into one native function:
 
 ```python
-from parakeet import value_and_grad
-
-
 def mse_loss(w, x, y):
   return np.mean((np.tanh(x @ w) - y) ** 2)
 
 
-loss_val, dw = value_and_grad(mse_loss)(w, x, y)
+loss_val, dw = par.value_and_grad(mse_loss)(w, x, y)
 ```
 
 See [Gradients](autodiff.md) for nested parameter tuples, `NamedTuple`s, frozen
@@ -88,13 +85,13 @@ dataclasses, and training loops.
 ## Picking a backend
 
 ```python
-@jit(backend="metal")  # per function
+@par.jit(backend="metal")  # per function
 def f(x): ...
 
 
 f(x, _backend="c")  # per call
-parakeet.config.backend = "threads"  # process-wide
-with parakeet.options(backend="c", num_threads=1):  # temporarily
+par.config.backend = "threads"  # process-wide
+with par.options(backend="c", num_threads=1):  # temporarily
   f(x)
 ```
 

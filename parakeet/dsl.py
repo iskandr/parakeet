@@ -5,14 +5,14 @@ All data-parallel operators (``map``, ``imap``, ``ireduce``, ``allpairs``,
 :func:`show_rewrite` are exported directly on the top-level :mod:`parakeet`
 module and work both inside ``@parakeet.jit`` and directly from Python::
 
-    import parakeet as pk
+    import parakeet as par
 
-    @pk.jit
+    @par.jit
     def tropical_min_plus(a, b):
         m, k = a.shape
         _, n = b.shape
-        return pk.imap(
-            lambda i, j: pk.ireduce(lambda r: a[i, r] + b[r, j], k, combine=pk.minimum),
+        return par.imap(
+            lambda i, j: par.ireduce(lambda r: a[i, r] + b[r, j], k, combine=par.minimum),
             (m, n),
         )
 

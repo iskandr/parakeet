@@ -227,19 +227,19 @@ the middle-end passes:
 
 ```python
 import numpy as np
-import parakeet as pk
+import parakeet as par
 
 
-@pk.jit
+@par.jit
 def causal_attention(q, k, v):
-  causal = pk.imap(lambda i, j: i >= j, (q.shape[0], k.shape[0]))
+  causal = par.imap(lambda i, j: i >= j, (q.shape[0], k.shape[0]))
   s = np.where(causal, (q @ k.T) * np.float32(0.125), np.float32(-1e9))
   e = np.exp(s - np.max(s, axis=-1, keepdims=True))
   return (e / np.sum(e, axis=-1, keepdims=True)) @ v
 
 
 q = np.zeros((128, 64), np.float32)
-print(pk.show_rewrite(causal_attention, q, q, q).summary())
+print(par.show_rewrite(causal_attention, q, q, q).summary())
 ```
 
 ```text

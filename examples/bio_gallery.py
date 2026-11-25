@@ -16,7 +16,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-import parakeet as pk
+import parakeet as par
 
 # ---------------------------------------------------------------------------
 # 1. Zero-Copy uint8 FASTQ -> 2-Bit Canonical K-mer Encoding & Read QC
@@ -24,7 +24,7 @@ import parakeet as pk
 
 
 # --8<-- [start:fastq_kmer_gc]
-@pk.jit
+@par.jit
 def encode_canonical_kmers_and_gc(seq_bytes, qual_bytes, k):
   """Encode a batch of equal-length ASCII DNA reads (N, L) uint8 into:
   - canonical 2-bit k-mers (N, L - k + 1) uint64  [min(fwd, revcomp)]
@@ -62,7 +62,7 @@ def encode_canonical_kmers_and_gc(seq_bytes, qual_bytes, k):
     gc_frac[r] = np.float32(gc) / np.float32(read_len)
     mean_q[r] = np.float32(qsum) / np.float32(read_len)
 
-  pk.parfor(process_read, n_reads)
+  par.parfor(process_read, n_reads)
   return kmers, gc_frac, mean_q
 
 
@@ -75,7 +75,7 @@ def encode_canonical_kmers_and_gc(seq_bytes, qual_bytes, k):
 
 
 # --8<-- [start:bam_pileup_fused]
-@pk.jit
+@par.jit
 def single_pass_pileup(ref_pos, base_code, phred_q, is_rev, contig_len):
   """Accumulate A/C/G/T counts, quality sums, and reverse-strand counts across
   aligned base observations in one keyed IndexScatter traversal."""
@@ -87,12 +87,12 @@ def single_pass_pileup(ref_pos, base_code, phred_q, is_rev, contig_len):
   rev_i64 = is_rev.astype(np.int64)
 
   # All six histograms share `ref_pos` -> Parakeet fuses them into ONE traversal!
-  cnt_a = pk.scatter_add(contig_len, ref_pos, is_a)
-  cnt_c = pk.scatter_add(contig_len, ref_pos, is_c)
-  cnt_g = pk.scatter_add(contig_len, ref_pos, is_g)
-  cnt_t = pk.scatter_add(contig_len, ref_pos, is_t)
-  qual_sum = pk.scatter_add(contig_len, ref_pos, q_i64)
-  rev_cnt = pk.scatter_add(contig_len, ref_pos, rev_i64)
+  cnt_a = par.scatter_add(contig_len, ref_pos, is_a)
+  cnt_c = par.scatter_add(contig_len, ref_pos, is_c)
+  cnt_g = par.scatter_add(contig_len, ref_pos, is_g)
+  cnt_t = par.scatter_add(contig_len, ref_pos, is_t)
+  qual_sum = par.scatter_add(contig_len, ref_pos, q_i64)
+  rev_cnt = par.scatter_add(contig_len, ref_pos, rev_i64)
   return cnt_a, cnt_c, cnt_g, cnt_t, qual_sum, rev_cnt
 
 
@@ -123,7 +123,7 @@ def better_hit(left, right):
   return right if right.sim > left.sim else left
 
 
-@pk.jit
+@par.jit
 def tanimoto_nearest_hit(queries, library):
   """Find the closest library compound per query over packed uint64 fingerprints
   (N, W) x (M, W) using tiled pairwise folds with zero N x M allocation."""
@@ -134,12 +134,12 @@ def tanimoto_nearest_hit(queries, library):
     return np.sum(popcount64(q_row & l_row))
 
   # Stream intersection counts into an ordered fold over library compounds
-  inter = pk.allpairs(inter_bits, queries, library)
+  inter = par.allpairs(inter_bits, queries, library)
   denom = pop_q[:, None] + pop_l[None, :] - inter
   sim = np.where(
     denom > np.uint64(0), inter.astype(np.float32) / np.maximum(denom, np.uint64(1)).astype(np.float32), np.float32(0.0)
   )
-  return pk.fold(
+  return par.fold(
     lambda score, ref_idx: BestHit(score, ref_idx),
     better_hit,
     sim,
@@ -158,7 +158,7 @@ def tanimoto_nearest_hit(queries, library):
 
 
 # --8<-- [start:protein_rbf]
-@pk.jit
+@par.jit
 def protein_rbf_message_passing(coords, features, neg_inv_2sigma2):
   """3D radial-basis-function message passing over residue coordinates (N, 3).
 
@@ -176,7 +176,7 @@ def protein_rbf_loss(coords, features, targets, neg_inv_2sigma2):
   return np.mean(diff * diff)
 
 
-protein_coord_grad = pk.grad(protein_rbf_loss, argnum=0)
+protein_coord_grad = par.grad(protein_rbf_loss, argnum=0)
 # --8<-- [end:protein_rbf]
 
 
@@ -186,7 +186,7 @@ protein_coord_grad = pk.grad(protein_rbf_loss, argnum=0)
 
 
 # --8<-- [start:banded_sw_and_ssm]
-@pk.jit
+@par.jit
 def banded_smith_waterman(seq_a, seq_b, match_score, mismatch_pen, gap_pen, band_width):
   """Banded Smith-Waterman local alignment score over integer-encoded sequences.
 
@@ -225,7 +225,7 @@ def banded_smith_waterman(seq_a, seq_b, match_score, mismatch_pen, gap_pen, band
   return best
 
 
-@pk.jit
+@par.jit
 def dna_ssm_scan(decay, signal):
   """Exponential state-space scan along a DNA track (L,).
 
@@ -259,21 +259,21 @@ def main():
   bases = rng.integers(0, 4, size=(50_000,), dtype=np.uint8)
   phred = rng.integers(20, 42, size=(50_000,), dtype=np.uint8)
   rev = rng.integers(0, 2, size=(50_000,), dtype=np.uint8)
-  rep_p = pk.show_rewrite(single_pass_pileup, pos, bases, phred, rev, 4096)
+  rep_p = par.show_rewrite(single_pass_pileup, pos, bases, phred, rev, 4096)
   single_pass_pileup(pos, bases, phred, rev, 4096)
   print(f"2. BAM pileup    : IndexScatter {rep_p.before_scatters} -> {rep_p.after_scatters} | {rep_p.laws_triggered}")
 
   # 3. Morgan fingerprint Tanimoto screening
   q_fp = rng.integers(0, 2**63, size=(16, 32), dtype=np.uint64)
   l_fp = rng.integers(0, 2**63, size=(512, 32), dtype=np.uint64)
-  rep_t = pk.show_rewrite(tanimoto_nearest_hit, q_fp, l_fp)
+  rep_t = par.show_rewrite(tanimoto_nearest_hit, q_fp, l_fp)
   hits = tanimoto_nearest_hit(q_fp, l_fp)
   print(f"3. Tanimoto 1-NN : hits shape={hits.shape} | {rep_t.laws_triggered}")
 
   # 4. 3D Protein RBF message passing
   coords = rng.normal(size=(128, 3)).astype(np.float32) * 5.0
   feats = rng.normal(size=(128, 16)).astype(np.float32)
-  rep_r = pk.show_rewrite(protein_rbf_message_passing, coords, feats, np.float32(-0.05))
+  rep_r = par.show_rewrite(protein_rbf_message_passing, coords, feats, np.float32(-0.05))
   out_r = protein_rbf_message_passing(coords, feats, np.float32(-0.05))
   print(f"4. Protein RBF   : out shape={out_r.shape} | plans={rep_r.monoidal_plans}")
 
@@ -284,7 +284,7 @@ def main():
   score = banded_smith_waterman(sa, sb, np.float32(2.0), np.float32(-1.0), np.float32(-2.0), 16)
   decay = np.full((65_536,), 0.99, dtype=np.float32)
   track = rng.normal(size=(65_536,)).astype(np.float32)
-  rep_s = pk.show_rewrite(dna_ssm_scan, decay, track)
+  rep_s = par.show_rewrite(dna_ssm_scan, decay, track)
   dna_ssm_scan(decay, track)
   print(f"5. Banded SW/SSM : SW score={score:.1f} | SSM laws={rep_s.laws_triggered}")
 

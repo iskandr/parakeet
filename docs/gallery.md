@@ -1,8 +1,8 @@
 # Kernel gallery
 
 Parakeet compiles ordinary NumPy code and explicit data-parallel operators
-(`pk.map`, `pk.allpairs`, `pk.fold`, `pk.imap`, `pk.ireduce`, `pk.scatter_add`)
-through the **same** `@pk.jit` decorator and the **same** algebraic IR.
+(`par.map`, `par.allpairs`, `par.fold`, `par.imap`, `par.ireduce`, `par.scatter_add`)
+through the **same** `@par.jit` decorator and the **same** algebraic IR.
 
 **How this page is organized:** each section presents one numerical workload.
 Where a section has tabs, those tabs show **alternative ways to write the exact
@@ -22,7 +22,7 @@ and verified by `python -m examples.algebraic_gallery`.
 ```python
 from typing import NamedTuple
 import numpy as np
-import parakeet as pk
+import parakeet as par
 ```
 
 ## Exact nearest neighbor
@@ -44,10 +44,10 @@ equal-distance ties and NaNs.
     --8<-- "examples/algebraic_gallery.py:nearest_numpy"
     ```
 
-=== "Nested `pk.map` and `argmin`"
+=== "Nested `par.map` and `argmin`"
 
     For each query row, map the squared distance over all reference rows and
-    take `argmin`. The outer `pk.map` runs that search in parallel across
+    take `argmin`. The outer `par.map` runs that search in parallel across
     queries.
 
     ```python
@@ -56,9 +56,9 @@ equal-distance ties and NaNs.
     --8<-- "examples/algebraic_gallery.py:exact_1nn"
     ```
 
-=== "`pk.allpairs` and structured `pk.fold`"
+=== "`par.allpairs` and structured `par.fold`"
 
-    Define the logical `Q × R` domain with `pk.allpairs`, pack each
+    Define the logical `Q × R` domain with `par.allpairs`, pack each
     `(distance, index)` pair into a `NamedTuple`, and reduce with an explicit
     associative merge rule (`first_minimum`).
 
@@ -86,7 +86,7 @@ the final merge.
     --8<-- "examples/algebraic_gallery.py:weighted_numpy"
     ```
 
-=== "`pk.allpairs` and `pk.fold`"
+=== "`par.allpairs` and `par.fold`"
 
     ```python
     --8<-- "examples/algebraic_gallery.py:squared_distance"
@@ -111,7 +111,7 @@ matrix — the exact same monoidal pass that powers FlashAttention.
 
 Histogram-based gradient boosted trees accumulate gradients and Hessians into
 feature bins, scan cumulative left/right sums, and pick the split bin with the
-highest gain. Because both `pk.scatter_add` calls share the same `bin_ids`
+highest gain. Because both `par.scatter_add` calls share the same `bin_ids`
 index array, Parakeet fuses them into a single privatized traversal over the
 observations ([Law 6](algebra.md#law-6-privatized-scatter-multi-state-carries)).
 
@@ -123,7 +123,7 @@ observations ([Law 6](algebra.md#law-6-privatized-scatter-multi-state-carries)).
 
 In shortest-path and tropical algebra, matrix multiplication replaces `(*, +)`
 with `(+, min)`: $C_{ij} = \min_r (A_{ir} + B_{rj})$. Writing the inner
-reduction explicitly with `pk.imap` and `pk.ireduce(..., combine=pk.minimum)`
+reduction explicitly with `par.imap` and `par.ireduce(..., combine=par.minimum)`
 avoids an `m × n × k` broadcast tensor and triggers the same cache and register
 tiling as standard matrix multiplication.
 
@@ -137,7 +137,7 @@ Write scaled dot-product attention with a causal mask in six lines of NumPy.
 Law 1 tiles the softmax-weighted contraction into a single streaming pass with
 no `T × T` score matrix, Law 5 proves upper-triangular tiles are completely
 masked and skips loading their keys and values, and Law 2 recomputes score
-tiles during `pk.grad` instead of saving them on the backward tape.
+tiles during `par.grad` instead of saving them on the backward tape.
 
 ```python
 --8<-- "examples/algebraic_gallery.py:causal_flash_attention"
@@ -205,13 +205,13 @@ chunkwise batched GEMMs that automatically lower to CPU register tiling, Metal
 
 Train a two-layer character-level transformer from scratch in pure NumPy +
 Parakeet. The [complete nanoGPT walkthrough](gallery/nanogpt.md) follows the
-entire runnable script in order, using `pk.map` and `pk.value_and_grad` to
+entire runnable script in order, using `par.map` and `par.value_and_grad` to
 compile the forward pass, backward pass, and Adam optimizer into one native
 step.
 
 ## Inspecting algebraic rewrites
 
-Call `pk.show_rewrite(fn, *example_args)` on any compiled or plain Python
+Call `par.show_rewrite(fn, *example_args)` on any compiled or plain Python
 function to inspect which algebraic laws fired and compare the operator IR
 before and after optimization:
 
@@ -220,5 +220,5 @@ rng = np.random.default_rng(0)
 q = rng.standard_normal((64, 8), dtype=np.float32)
 x = rng.standard_normal((256, 8), dtype=np.float32)
 y = rng.standard_normal((256, 4), dtype=np.float32)
-print(pk.show_rewrite(rbf_kernel_regression, q, x, y, np.float32(-1)).summary())
+print(par.show_rewrite(rbf_kernel_regression, q, x, y, np.float32(-1)).summary())
 ```

@@ -4,9 +4,9 @@ Decorate an array-oriented function with :func:`jit` and Parakeet compiles a
 type-specialised native version the first time it is called::
 
     import numpy as np
-    from parakeet import jit
+    import parakeet as par
 
-    @jit
+    @par.jit
     def scaled_tanh(x, alpha=0.5, beta=0.3):
         return np.tanh(x * alpha) + beta
 

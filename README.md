@@ -34,7 +34,7 @@ code:
 
 ```python
 import numpy as np
-import parakeet as pk
+import parakeet as par
 
 alpha = 0.5
 beta = 0.3
@@ -42,12 +42,12 @@ x = np.array([1, 2, 3])
 y = np.tanh(x * alpha) + beta
 
 
-@pk.jit
+@par.jit
 def fast(x, alpha=0.5, beta=0.3):
   return np.tanh(x * alpha) + beta
 
 
-@pk.jit
+@par.jit
 def loopy(x, alpha=0.5, beta=0.3):
   y = np.empty_like(x, dtype=float)
   for i in range(len(x)):
@@ -55,7 +55,7 @@ def loopy(x, alpha=0.5, beta=0.3):
   return y
 
 
-@pk.jit
+@par.jit
 def comprehension(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 
@@ -115,8 +115,8 @@ compiling with your system C compiler, and caching the result on disk.
 
 Every stage is inspectable:
 
-* `pk.typed_repr(f, [x])` prints the typed IR,
-* `pk.show_rewrite(f, x)` summarizes which algebraic laws fired, and
+* `par.typed_repr(f, [x])` prints the typed IR,
+* `par.show_rewrite(f, x)` summarizes which algebraic laws fired, and
 * `f.specialize(x).source` prints the generated C, Metal, or CUDA source.
 
 
@@ -132,8 +132,8 @@ Parakeet compiles a static-type numerical subset of Python:
 * Slices, `range`, `zip`, `enumerate`
 * NumPy array expressions (`x[1:, :] + 2 * y[:-1, ::2]`), with broadcasting, boolean masks, integer-array indexing, and in-place updates
 * About 200 NumPy functions and methods (`np.ones`, `np.sin`, `x.sum(axis=0)`, `np.einsum`, `np.bincount`, `np.sort`, `np.argsort`, `np.searchsorted`, `np.random`, and the usual builtins — see the [full list](https://rubinsteyn.com/parakeet/supported/))
-* Explicit data-parallel operators (`pk.map`, `pk.imap`, `pk.ireduce`, `pk.reduce`, `pk.fold`, `pk.scan`, `pk.filter`, `pk.filter_reduce`, `pk.flatmap`, `pk.filter_pairs`, `pk.allpairs`, `pk.outer_map`, `pk.parfor`, `pk.scatter_add`, `pk.wavefront`)
-* Reverse-mode automatic differentiation (`pk.grad`, `pk.value_and_grad`) with algebraic rematerialization for attention, cross-entropy, norms, and soft sequence alignment
+* Explicit data-parallel operators (`par.map`, `par.imap`, `par.ireduce`, `par.reduce`, `par.fold`, `par.scan`, `par.filter`, `par.filter_reduce`, `par.flatmap`, `par.filter_pairs`, `par.allpairs`, `par.outer_map`, `par.parfor`, `par.scatter_add`, `par.wavefront`)
+* Reverse-mode automatic differentiation (`par.grad`, `par.value_and_grad`) with algebraic rematerialization for attention, cross-entropy, norms, and soft sequence alignment
 
 Unsupported constructs fail loudly at compile time with the exact source line:
 
@@ -164,9 +164,9 @@ backends with `parakeet.config.backend`:
 * `"cuda"`: runs eligible parallel operations on an NVIDIA GPU
 * `"python"`: runs your original function uncompiled — handy for checking whether a bug is in your code or the compiler
 
-You can also pick a backend per function (`@pk.jit(backend="metal")`), per call
-(`f(x, _backend="c")`), or for a block (`with pk.options(backend="c"): ...`).
-`pk.available_backends()` reports which backends work on your machine and what
+You can also pick a backend per function (`@par.jit(backend="metal")`), per call
+(`f(x, _backend="c")`), or for a block (`with par.options(backend="c"): ...`).
+`par.available_backends()` reports which backends work on your machine and what
 is missing for any that don't.
 
 GPUs only run loops they can execute natively. Apple GPUs lack hardware

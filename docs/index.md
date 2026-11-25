@@ -28,10 +28,10 @@ native code for multi-core CPUs, Apple Metal, and NVIDIA CUDA.
 
 ```python
 import numpy as np
-from parakeet import jit
+import parakeet as par
 
 
-@jit
+@par.jit
 def nearest(x, y):
   delta = x[:, None, :] - y[None, :, :]
   d2 = np.sum(delta ** np.float32(2), axis=2)
@@ -65,12 +65,12 @@ or explicit parallel operators — expresses the same handful of array
 computations: maps, reductions, scans, filters, and scatters.
 
 ```python
-@jit
+@par.jit
 def scaled_tanh_numpy(x, alpha=0.5, beta=0.3):
   return np.tanh(x * alpha) + beta
 
 
-@jit
+@par.jit
 def scaled_tanh_comp(x, alpha=0.5, beta=0.3):
   return np.array([np.tanh(xi * alpha) + beta for xi in x])
 ```
