@@ -867,6 +867,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-rules-stop_gradient-and-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom rules, stop_gradient, and checkpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#writing-into-arrays" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1325,6 +1336,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-rules-stop_gradient-and-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom rules, stop_gradient, and checkpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#writing-into-arrays" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1493,50 +1515,73 @@ a convolutional network.</p>
 <p>Derivatives of <code>min</code>, <code>max</code>, <code>abs</code> and friends at a tie follow the usual
 conventions: ties in a reduction share the gradient equally.</p>
 <h2 id="loops-and-branches">Loops and branches<a class="headerlink" href="#loops-and-branches" title="Permanent link">&para;</a></h2>
-<p>The derivative is laid out when the function is compiled, so the compiler has
-to know how many times each operation runs.</p>
-<p>A <code>for</code> loop over a tuple, or over a <code>range</code> whose length is known when the
-function is compiled, is <strong>unrolled</strong>: a literal, a scalar argument, or the
-shape of an array all work. Such an argument becomes part of what the function
-is specialized on, exactly like <code>axis=</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">deep</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>  <span class="c1"># a tuple of matrices</span>
+<p>Parakeet differentiates <strong>both</strong> small static loops and arbitrary runtime-bound
+<code>for</code> and <code>while</code> loops:</p>
+<ul>
+<li><strong>Small static <code>for</code> loops</strong> (compile-time trip count <code>&lt;= 32</code> or iterating
+  over a heterogeneous tuple of weight matrices) are <strong>unrolled</strong> onto the tape
+  for zero checkpoint overhead and cross-iteration fusion.</li>
+<li><strong>Runtime-bound and long <code>for</code> loops</strong> (<code>for t in range(n):</code>, <code>for x in arr:</code>,
+  or static ranges longer than 32 iterations — including 10,000+ iterations)
+  compile to an <strong>IR-level <code>O(sqrt(T))</code> checkpointed reverse loop</strong> (<code>ForRange</code>)
+  with constant IR size and bounded memory.</li>
+<li><strong>Data-dependent <code>while</code> loops</strong> (<code>while err &gt; tol:</code>) compile to a fixed-slot
+  stride-doubling <strong>checkpointed reverse <code>While</code> loop</strong> (<code>O(log T)</code> slots, zero
+  dynamic reallocation inside the loop).</li>
+<li><strong>Custom <code>par.reduce</code> folds</strong> use <code>O(sqrt(N))</code> checkpointed reverse mode, and
+  1-D <strong><code>par.scan</code></strong> with any user combiner is differentiable directly.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">deep</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>  <span class="c1"># a tuple of matrices (unrolled)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span><span class="p">:</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">correlate</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">kernel</span><span class="p">):</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  <span class="n">out</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.0</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="p">)):</span>  <span class="c1"># unrolled: one specialization per kernel length</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span> <span class="o">+</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">out</span><span class="p">)]</span> <span class="o">*</span> <span class="n">kernel</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">out</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">iir_loss</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">s0</span><span class="p">):</span>  <span class="c1"># runtime-length recurrence (O(sqrt(T)) checkpointed reverse loop)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">s0</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">s</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">*</span> <span class="n">s</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>  <span class="k">return</span> <span class="n">s</span> <span class="o">*</span> <span class="n">s</span>
 </code></pre></div>
 <p>Loops that do not touch differentiated values are left alone, so a training
-loop around <code>grad</code> is an ordinary loop.</p>
-<p>What cannot be unrolled cannot be differentiated: <code>while</code> loops, loops over the
-elements of an array of unknown length, and anything longer than 4096
-iterations. Use an array operation or an adverb instead — <code>np.sum</code>,
-<code>parakeet.map</code>, a comprehension.</p>
+loop around <code>par.grad</code> is an ordinary loop. Loops containing <code>break</code>,
+<code>continue</code>, or early <code>return</code> over differentiated state are refused loudly.</p>
+<h2 id="custom-rules-stop_gradient-and-checkpoint">Custom rules, <code>stop_gradient</code>, and <code>checkpoint</code><a class="headerlink" href="#custom-rules-stop_gradient-and-checkpoint" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>par.stop_gradient(x)</code></strong> detaches a scalar, array, tuple, record, or
+  <code>RaggedArray</code> from the tape with zero copy (useful for straight-through
+  estimators and detached targets):
+  <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">y</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">par</span><span class="o">.</span><span class="n">stop_gradient</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">-</span> <span class="n">x</span><span class="p">)</span>
+</code></pre></div></li>
+<li><strong><code>@par.custom_vjp</code></strong> lets you attach custom <code>(fwd, bwd)</code> rules via
+  <code>.defvjp(fwd, bwd)</code> — supporting <code>NamedTuple</code> / frozen <code>@dataclass</code> /
+  <code>RaggedArray</code> residuals, higher-order AD, and Implicit Function Theorem
+  differentiation through <code>while</code>-loop equilibrium solvers without storing
+  iteration history.</li>
+<li><strong><code>@par.checkpoint</code></strong> (or <code>par.checkpoint(fn)(*args)</code>) drops a block's
+  forward intermediates and rematerializes them during the backward pass,
+  composing cleanly with Law 2 algebraic VJPs.</li>
+</ul>
 <p>An <code>if</code> statement whose condition is only known at run time is differentiated
 by running <strong>both</strong> branches and choosing between their results, which is what
 <code>np.where</code> does. That is only possible when running the branch not taken has
 no effect, so the branches may only assign variables: no <code>return</code>, <code>raise</code>,
 <code>break</code>, no stores into arrays, no in-place updates. Remember that both sides
 are computed: <code>if x &gt; 0: y = np.log(x)</code> evaluates the logarithm either way.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">10.0</span><span class="p">:</span>  <span class="c1"># fine</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  <span class="n">h</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">h</span><span class="p">),</span> <span class="mf">2.0</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  <span class="n">h</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">,</span> <span class="mf">3.0</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">10.0</span><span class="p">:</span>  <span class="c1"># fine</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  <span class="n">h</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">h</span><span class="p">),</span> <span class="mf">2.0</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  <span class="n">h</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">h</span> <span class="o">*</span> <span class="n">h</span><span class="p">,</span> <span class="mf">3.0</span>
 </code></pre></div>
 <p>A guard that only raises (<code>if n == 0: raise ValueError(...)</code>) is fine too, and
 is not run for both sides.</p>
 <h2 id="writing-into-arrays">Writing into arrays<a class="headerlink" href="#writing-into-arrays" title="Permanent link">&para;</a></h2>
 <p>Stores are differentiated: assigning a slice, an element, or updating in place
 all work, in straight-line code and in loops that can be unrolled.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">out</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">@</span> <span class="n">w</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">out</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">out</span> <span class="o">+=</span> <span class="n">bias</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">out</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span> <span class="o">@</span> <span class="n">w</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">out</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span> <span class="o">@</span> <span class="n">w</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">out</span> <span class="o">+=</span> <span class="n">bias</span>
 </code></pre></div>
 <p>Going backwards, whatever adjoint arrived for the stored region belongs to the
 value that was stored, and the region starts again from zero.</p>
@@ -1550,18 +1595,18 @@ is fine, because that derivative does not. Stores through an array of indices
 If something on the way from the arguments to the result has no derivative
 rule — <code>np.cumprod</code>, <code>np.convolve</code>, a <code>scan</code> with your own function — you get
 an <code>UnsupportedError</code> naming it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
 </code></pre></div>
 <h2 id="second-derivatives">Second derivatives<a class="headerlink" href="#second-derivatives" title="Permanent link">&para;</a></h2>
 <p><code>grad</code> of a function that calls <code>grad</code> works for element-wise operators,
 reductions, matrix products and views — enough for gradient penalties and
 Hessian-vector products:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">penalty</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  <span class="n">g</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># the gradient, as part of the function</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">grad</span><span class="p">(</span><span class="n">penalty</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># 2 H g, reverse over reverse</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">penalty</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>  <span class="n">g</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="n">loss</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># the gradient, as part of the function</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>  <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">g</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">grad</span><span class="p">(</span><span class="n">penalty</span><span class="p">)(</span><span class="n">w</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>  <span class="c1"># 2 H g, reverse over reverse</span>
 </code></pre></div>
 <p>It is refused, by name, through <code>map</code> with your own function, indexing with
 arrays, <code>cumsum</code>, <code>sort</code>, folds and <code>np.stack</code>/<code>np.concatenate</code>.</p>

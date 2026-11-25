@@ -1182,6 +1182,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#120-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.2.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reverse-mode-ad-through-runtime-long-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reverse-mode AD through runtime &amp; long loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explicit-ad-control-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicit AD control primitives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#110-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1324,6 +1363,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#120-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.2.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reverse-mode-ad-through-runtime-long-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reverse-mode AD through runtime &amp; long loops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#explicit-ad-control-primitives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicit AD control primitives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#110-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1444,6 +1522,43 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="120-november-25-2026">1.2.0 (November 25, 2026)<a class="headerlink" href="#120-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Major automatic differentiation upgrade: IR-level checkpointed reverse loops
+for runtime-bound <code>for</code>/<code>while</code> loops, <code>par.fold</code>, and general <code>par.scan</code>,
+plus <code>par.stop_gradient</code>, <code>@par.custom_vjp</code>, and <code>@par.checkpoint</code> (AD Upgrade
+Wave 1, closing <code>#75</code> and advancing <code>#77</code>).</p>
+<h3 id="reverse-mode-ad-through-runtime-long-loops">Reverse-mode AD through runtime &amp; long loops<a class="headerlink" href="#reverse-mode-ad-through-runtime-long-loops" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>IR-level $O(\sqrt{T})$ checkpointed reverse <code>for</code> loops:</strong> Loops over
+  runtime-length ranges or arrays (<code>for t in range(T):</code>, <code>for t in range(weights.shape[0]):</code>)
+  and long static loops (<code>&gt; 32</code> iterations) compile once to a two-level
+  checkpointed reverse loop in IR without unrolling or recompiling per length,
+  removing the <code>MAX_UNROLL = 4096</code> cliff.</li>
+<li><strong>IR-level $O(\log T)$ checkpointed reverse <code>while</code> loops:</strong> Runtime-converging
+  <code>while</code> loops (fixed-point solvers, adaptive ODE/relaxation steps) now
+  differentiate through a fixed-slot (<code>64</code> slots) stride-doubling online
+  checkpoint schedule with bounded memory.</li>
+<li><strong>Checkpointed $O(\sqrt{N})$ <code>par.fold</code> &amp; differentiable general <code>par.scan</code>:</strong>
+  Arbitrary non-monoidal <code>par.reduce</code>/<code>par.fold</code> and 1-D <code>par.scan</code> now
+  differentiate via checkpointed reverse segments without storing full $O(N)$
+  histories.</li>
+<li><strong>Rewrite inspection:</strong> <code>par.show_rewrite(par.grad(...), ...)</code> now reports
+  <code>AD: Checkpointed Reverse Loop</code> when checkpointed reverse loops are emitted.</li>
+</ul>
+<h3 id="explicit-ad-control-primitives">Explicit AD control primitives<a class="headerlink" href="#explicit-ad-control-primitives" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>par.stop_gradient(x)</code>:</strong> Zero-copy gradient barrier across scalars, arrays,
+  tuples, <code>RaggedArray</code>, and records (for straight-through estimators, target
+  networks, and stop-gradient RL losses).</li>
+<li><strong><code>@par.custom_vjp</code> (<code>.defvjp(fwd, bwd)</code>):</strong> User-defined reverse-mode rules
+  supporting multi-output pytree values, auxiliary residuals, and higher-order
+  differentiation.</li>
+<li><strong><code>@par.checkpoint</code> (rematerialization):</strong> Explicit activation checkpointing
+  that re-runs the forward block during backpropagation while composing
+  cleanly with Law 2 FlashAttention / LayerNorm rematerialization.</li>
+<li><strong>Record static metadata leaves:</strong> Non-float fields inside <code>NamedTuple</code> and
+  frozen <code>@dataclass</code> records now pass through AD as zero-tangent static leaves.</li>
+</ul>
 <h2 id="110-november-25-2026">1.1.0 (November 25, 2026)<a class="headerlink" href="#110-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Major expansion of Parakeet's GPU schedules, algebraic data structures,
 scientific/bioinformatics primitives, and documentation — unified under one
