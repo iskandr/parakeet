@@ -1409,15 +1409,56 @@ class Elaborator(ArrayMixin):
     subject = self.bindable(self.eval(node.subject), "match_subj")
     return self._exec_match_cases(node, subject, list(node.cases), 0)
 
+  def _expand_match_or(self, pat: ast.pattern) -> list[ast.pattern]:
+    """Expand nested MatchOr patterns that bind names into a flat list of alternatives."""
+    if not self._pattern_binds_names(pat):
+      return [pat]
+    if isinstance(pat, ast.MatchOr):
+      out: list[ast.pattern] = []
+      for sub in pat.patterns:
+        out.extend(self._expand_match_or(sub))
+      return out
+    if isinstance(pat, ast.MatchAs):
+      if pat.pattern is None:
+        return [pat]
+      return [ast.MatchAs(pattern=sub, name=pat.name) for sub in self._expand_match_or(pat.pattern)]
+    if isinstance(pat, ast.MatchSequence):
+      choices = [self._expand_match_or(p) for p in pat.patterns]
+      if all(len(c) == 1 for c in choices):
+        return [pat]
+      combos: list[list[ast.pattern]] = [[]]
+      for c in choices:
+        combos = [[*prev, item] for prev in combos for item in c]
+      return [ast.MatchSequence(patterns=seq) for seq in combos]
+    if isinstance(pat, ast.MatchClass):
+      pos_choices = [self._expand_match_or(p) for p in pat.patterns]
+      kw_choices = [self._expand_match_or(p) for p in pat.kwd_patterns]
+      if all(len(c) == 1 for c in pos_choices) and all(len(c) == 1 for c in kw_choices):
+        return [pat]
+      pos_combos: list[list[ast.pattern]] = [[]]
+      for c in pos_choices:
+        pos_combos = [[*prev, item] for prev in pos_combos for item in c]
+      kw_combos: list[list[ast.pattern]] = [[]]
+      for c in kw_choices:
+        kw_combos = [[*prev, item] for prev in kw_combos for item in c]
+      return [
+        ast.MatchClass(cls=pat.cls, patterns=ps, kwd_attrs=pat.kwd_attrs, kwd_patterns=ks)
+        for ps in pos_combos
+        for ks in kw_combos
+      ]
+    return [pat]
+
   def _exec_match_cases(self, node: ast.Match, subject, cases: list[ast.match_case], idx: int) -> bool:
     if idx >= len(cases):
       return False
     case = cases[idx]
     pat = case.pattern
-    # Expand OR patterns that bind names into sequential cases so arbitrary types work.
-    if isinstance(pat, ast.MatchOr) and self._pattern_binds_names(pat):
-      expanded = [ast.match_case(pattern=sub, guard=case.guard, body=case.body) for sub in pat.patterns]
-      return self._exec_match_cases(node, subject, cases[:idx] + expanded + cases[idx + 1 :], idx)
+    # Expand any top-level or nested OR patterns that bind names into sequential cases.
+    if self._pattern_binds_names(pat):
+      alts = self._expand_match_or(pat)
+      if len(alts) > 1:
+        expanded = [ast.match_case(pattern=sub, guard=case.guard, body=case.body) for sub in alts]
+        return self._exec_match_cases(node, subject, cases[:idx] + expanded + cases[idx + 1 :], idx)
 
     fr = self.frame
     outer = self.block
@@ -1611,6 +1652,8 @@ class Elaborator(ArrayMixin):
       return cond, binds
     if isinstance(pat, ast.MatchValue):
       val = self.eval(pat.value)
+      if isinstance(subject, ArrayVal) or isinstance(val, ArrayVal):
+        return ops.FALSE, []
       if isinstance(subject, (str, type(None))) != isinstance(val, (str, type(None))):
         return ops.FALSE, []
       if isinstance(subject, tuple) != isinstance(val, tuple):
@@ -1698,11 +1741,14 @@ class Elaborator(ArrayMixin):
     cls = self.eval(pat.cls)
     if isinstance(cls, TypeVal):
       t = cls.type
-      ok = isinstance(subject, Expr) and (
-        (t.kind == "b" and subject.type.kind == "b")
-        or (t.kind in "iu" and subject.type.kind in "iu")
-        or (t.kind == "f" and subject.type.kind == "f")
-      )
+      if not t.weak:
+        ok = isinstance(subject, Expr) and subject.type.kind == t.kind and subject.type.bits == t.bits
+      else:
+        ok = isinstance(subject, Expr) and (
+          (t.kind == "b" and subject.type.kind == "b")
+          or (t.kind in "iu" and subject.type.kind in "iu")
+          or (t.kind == "f" and subject.type.kind == "f")
+        )
       if not ok:
         return ops.FALSE, []
       if pat.kwd_attrs or len(pat.patterns) > 1:
@@ -2472,11 +2518,29 @@ class Elaborator(ArrayMixin):
     raise self.error(TypeInferenceError, f"{describe(obj)} is not subscriptable", node)
 
   def _struct_index(self, sv: StructuredView, index, node=None):
+    if not sv._fields:
+      raise self.error(UnsupportedError, "indexing a zero-field structured array is not supported", node)
     if isinstance(index, tuple):
-      index = tuple(self._index_item(x) for x in index)
+      items = tuple(self._index_item(x) for x in index)
     else:
-      index = self._index_item(index)
-    sliced = tuple(self.getitem(f, index) for f in sv._fields)
+      items = (self._index_item(index),)
+    # Expand Ellipsis against sv.rank (not each field's subarray rank!) so subarray
+    # trailing axes are preserved untouched.
+    n_ell = sum(1 for x in items if x is Ellipsis)
+    if n_ell > 1:
+      raise self.error(TypeInferenceError, "an index can only have a single ellipsis ('...')", node)
+    if n_ell == 1:
+      explicit = sum(1 for x in items if x is not Ellipsis and x is not None)
+      fill = max(0, sv.rank - explicit)
+      expanded = []
+      for x in items:
+        if x is Ellipsis:
+          expanded.extend([slice(None)] * fill)
+        else:
+          expanded.append(x)
+      items = tuple(expanded)
+    idx_arg = items[0] if len(items) == 1 else items
+    sliced = tuple(self.getitem(f, idx_arg) for f in sv._fields)
     sub_rank = sv._fields[0].rank - sv.rank
     first_rank = sliced[0].rank if isinstance(sliced[0], ArrayVal) else 0
     new_rank = first_rank - sub_rank

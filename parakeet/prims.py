@@ -214,14 +214,20 @@ def _py_bit_scalar(op: str, x, k=None):
   if op == "rotl":
     r = int(k) & (bits - 1)
     res = u if r == 0 else ((u << r) | (u >> (bits - r))) & ((1 << bits) - 1)
-    return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype)) if isinstance(x, np.integer) else res
+    if isinstance(x, np.integer):
+      return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype))
+    return res - (1 << 64) if res >= (1 << 63) else res
   if op == "rotr":
     r = int(k) & (bits - 1)
     res = u if r == 0 else ((u >> r) | (u << (bits - r))) & ((1 << bits) - 1)
-    return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype)) if isinstance(x, np.integer) else res
+    if isinstance(x, np.integer):
+      return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype))
+    return res - (1 << 64) if res >= (1 << 63) else res
   if op == "bswap":
     res = int.from_bytes(u.to_bytes(bits // 8, "little"), "big")
-    return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype)) if isinstance(x, np.integer) else res
+    if isinstance(x, np.integer):
+      return type(x)(np.array(res, dtype=np.uint64).astype(x.dtype))
+    return res - (1 << 64) if res >= (1 << 63) else res
   raise ValueError(op)
 
 
@@ -233,11 +239,12 @@ def _py_bitop(op: str):
         bits = xa.dtype.itemsize * 8
         u = xa.view(np.dtype(f"u{xa.dtype.itemsize}")).astype(np.uint64)
         r = (ka.astype(np.int64) & (bits - 1)).astype(np.uint64)
+        inv_r = np.where(r == 0, np.uint64(0), np.uint64(bits) - r)
         mask = np.uint64((1 << bits) - 1)
         if op == "rotl":
-          res = np.where(r == 0, u, ((u << r) | (u >> (np.uint64(bits) - r))) & mask)
+          res = np.where(r == 0, u, ((u << r) | (u >> inv_r)) & mask)
         else:
-          res = np.where(r == 0, u, ((u >> r) | (u << (np.uint64(bits) - r))) & mask)
+          res = np.where(r == 0, u, ((u >> r) | (u << inv_r)) & mask)
         return res.astype(f"u{xa.dtype.itemsize}").view(xa.dtype)
       return _py_bit_scalar(op, x, k)
     if isinstance(x, np.ndarray):
@@ -277,7 +284,10 @@ def _py_f32_to_bf16(x):
 def _bitwise_count_emit(xs, out):
   (x,) = xs
   if x.type.kind == "i":
-    x = prim("abs", (x,), x.type)
+    u_t = ScalarType(f"uint{x.type.bits}")
+    u = cast(x, u_t)
+    neg_u = prim("sub", (Const(0, u_t), u), u_t)
+    x = ops.select(prim("lt", (x, Const(0, x.type)), Bool), neg_u, u)
   return cast(prim("popcount", (x,), Int32), out)
 
 

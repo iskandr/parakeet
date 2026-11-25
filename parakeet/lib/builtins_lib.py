@@ -59,6 +59,15 @@ def _dataclass_replace(el, obj, **changes):
   rec = record_type(obj)
   if rec is None or not dataclasses.is_dataclass(rec.cls):
     raise el.error(TypeInferenceError, f"replace() expects a frozen dataclass instance, got {describe(obj)}")
+  if hasattr(rec.cls, "__post_init__"):
+    raise el.error(UnsupportedError, f"replace() on dataclass {rec.cls.__name__} with __post_init__ is not supported")
+  init_fields = {f.name for f in dataclasses.fields(rec.cls) if f.init}
+  non_init = set(changes) & (set(rec.names) - init_fields)
+  if non_init:
+    raise el.error(
+      TypeInferenceError,
+      f"field(s) {', '.join(sorted(non_init))} of {rec.cls.__name__} are declared with init=False",
+    )
   unknown = set(changes) - set(rec.names)
   if unknown:
     raise el.error(TypeInferenceError, f"{rec.cls.__name__} has no field(s): {', '.join(sorted(unknown))}")
@@ -82,7 +91,15 @@ def _namedtuple_replace(el, obj, **changes):
 def _bit_count(el, x):
   if not isinstance(x, Expr) or x.type.kind not in "iub":
     raise el.error(TypeInferenceError, f"bit_count() requires an integer scalar, got {describe(x)}")
-  v = ops.prim("abs", (x,), x.type) if x.type.kind == "i" else x
+  if x.type.kind == "i":
+    from ..ndtypes import ScalarType
+
+    u_t = ScalarType(f"uint{x.type.bits}")
+    u = cast(x, u_t)
+    neg_u = ops.prim("sub", (Const(0, u_t), u), u_t)
+    v = ops.select(cmp("lt", x, Const(0, x.type)), neg_u, u)
+  else:
+    v = x
   return el.apply_ufunc(UF["popcount"], [v], python=x.type.weak)
 
 
