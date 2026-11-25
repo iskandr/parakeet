@@ -1,5 +1,5 @@
-"""Tests for 64x64x16 hardware matrix-unit monoidal GPU kernels
-(CUDA ``nvcuda::wmma`` TF32 Tensor Cores and Apple Metal ``simdgroup_matrix``)."""
+"""Tests for hardware matrix-unit monoidal GPU kernels
+(CUDA ``64x32x32`` ``nvcuda::wmma`` TF32 Tensor Cores and Apple Metal ``32x32x32`` ``simdgroup_matrix``)."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str | N
       ref = _ref_attn(q, k, v, mask=np.tril(np.ones((T, T), dtype=bool)))
       np.testing.assert_allclose(out, ref, rtol=1e-3, atol=1e-3)
 
-    # 2. Sliding-window attention (Law 5 64x64 tile skipping)
+    # 2. Sliding-window attention (Law 5 tile skipping)
     q = rng.standard_normal((1, 2, 135, 32), dtype=np.float32) * np.float32(0.2)
     k = rng.standard_normal((1, 2, 135, 32), dtype=np.float32) * np.float32(0.2)
     v = rng.standard_normal((1, 2, 135, 32), dtype=np.float32) * np.float32(0.2)
@@ -83,7 +83,7 @@ def _run_matrix_unit_checks(backend: str, *, tensor_cores: bool, marker: str | N
     sw_mask = (idx[:, None] >= idx[None, :]) & ((idx[:, None] - idx[None, :]) <= 20)
     np.testing.assert_allclose(out, _ref_attn(q, k, v, mask=sw_mask), rtol=1e-3, atol=1e-3)
 
-    # 3. Runtime boolean-mask attention (bit-packed 64x64 mask with all-false tiles!)
+    # 3. Runtime boolean-mask attention (bit-packed mask with all-false tiles!)
     M, N, K, D = 70, 140, 32, 48
     q2 = rng.standard_normal((M, K), dtype=np.float32) * np.float32(0.2)
     k2 = rng.standard_normal((N, K), dtype=np.float32) * np.float32(0.2)

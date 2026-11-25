@@ -21,7 +21,6 @@ both ``CudaDevice`` / ``NativeCudaRuntime`` (``cuLaunchKernel``) and
 
 from __future__ import annotations
 
-from ..config import config
 from ..ndtypes import BufType, Float32, ScalarType
 from ..syntax import ir, ops
 from ..syntax.ir import MonoidalTilePlan, ParLoop, TileStage, Var
@@ -1754,8 +1753,8 @@ def _generate_cce_bwd(
 
 
 def _use_monoidal_matrix_unit(plan: MonoidalTilePlan, target: str, profile: TargetProfile | None) -> bool:
-  """True when ``plan`` can use hardware matrix units (Metal ``simdgroup_matrix``
-  or CUDA ``nvcuda::wmma`` TF32 Tensor Cores) with ``64x64x16`` tiles."""
+  """True when ``plan`` can use hardware matrix units (Metal ``32x32x32``
+  ``simdgroup_matrix`` or CUDA ``64x32x32`` ``nvcuda::wmma`` TF32 Tensor Cores)."""
   if profile is None or profile.matrix_unit is None:
     return False
   if plan.elt != Float32 or plan.score_op != "dot":
@@ -1763,7 +1762,7 @@ def _use_monoidal_matrix_unit(plan: MonoidalTilePlan, target: str, profile: Targ
   if target == "metal":
     return profile.matrix_unit.kind == "simdgroup_matrix"
   if target == "cuda":
-    return profile.matrix_unit.kind == "wmma" and (config.tensor_cores or config.fast_math)
+    return profile.matrix_unit.kind == "wmma" and profile.tensor_cores
   return False
 
 
@@ -1917,7 +1916,7 @@ def _generate_flash_monoid_matrix_unit(
 
   zero_lit = "0.0f" if is_cuda else "0.0"
   one_lit = "1.0f" if is_cuda else "1.0"
-  neg_inf = "(-1e38f)" if is_cuda else "(-INFINITY)"
+  neg_inf = "((float)(-INFINITY))" if is_cuda else "(-INFINITY)"
   expf = "expf" if is_cuda else "exp"
   logf = "logf" if is_cuda else "log"
   fmax = "fmaxf" if is_cuda else "fmax"
@@ -2245,7 +2244,7 @@ def _generate_flash_monoid_matrix_unit(
   lines.append("        pk_sh_m[pk_r] = pk_mnew;")
   lines.append(f"        pk_sh_alpha[pk_r] = {expf}(pk_mold - pk_mnew);")
   lines.append("      }")
-  lines.append("    }")
+  lines.append(f"    }} else if (pk_lt == 0) {{ pk_sh_alpha[pk_r] = {zero_lit}; }}")
   lines.append(f"    {warp_barrier}")
 
   lines.append("    const float pk_mcur = pk_sh_m[pk_r];")
@@ -2443,7 +2442,7 @@ def _generate_monoid_lse_matrix_unit(
   b_kt_stride = bn + 4
 
   zero_lit = "0.0f" if is_cuda else "0.0"
-  neg_inf = "(-1e38f)" if is_cuda else "(-INFINITY)"
+  neg_inf = "((float)(-INFINITY))" if is_cuda else "(-INFINITY)"
   expf = "expf" if is_cuda else "exp"
   logf = "logf" if is_cuda else "log"
   fmax = "fmaxf" if is_cuda else "fmax"
