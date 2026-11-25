@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.7.0 (November 25, 2026)
+
+Adaptive 3-tier ragged parallelism, fused segmented 2D histograms with
+histogram subtraction, parallel ragged sample partitioning, and an end-to-end
+CudaTree-style adaptive BFS -> DFS GBDT tree builder and benchmark (closing
+`#82` and `#83`).
+
+### Irregular tree & ragged parallelism primitives
+
+- **`par.partition_by_size(offsets, block_thresh=1024, warp_thresh=64)` and
+  `par.segmented_parfor(body, offsets, ...)`:** Classifies CSR segments into
+  heavy, medium, and light work-size tiers so skewed power-law distributions
+  (such as 1 giant node alongside thousands of tiny leaves) dispatch cleanly
+  across CPU, multicore, Apple Metal, and CUDA without warp/SIMD-group
+  starvation.
+- **`par.segmented_histogram2d(node_ids, bins, grads, hess, n_nodes, n_bins)`:**
+  Single-pass fused 2D `(grad, hess, count)` scatter-add over `(node_id, bin_id)`
+  via `IndexScatter`, pairing directly with histogram subtraction
+  (`large_child = parent - small_child`) to cut histogram work by up to 2x.
+- **`par.ragged_partition(sample_ids, offsets, goes_left)`:** Parallel stable
+  partitioning of active CSR sample-index frontiers into left/right child
+  segments on CPU, multicore, Apple Metal, and CUDA.
+- **CudaTree adaptive BFS -> DFS GBDT example & benchmark:** Added
+  `examples/cudatree_gbdt.py` (level-wise BFS with histogram subtraction
+  handing off small subtrees to a single fused thread-per-subtree DFS kernel
+  using `par.fixed_list` scratch) and `benchmarks/tree_models.py` (median + IQR
+  benchmark on balanced and skewed datasets).
+
 ## 1.6.0 (November 25, 2026)
 
 Unboxed `complex64`/`complex128` arithmetic and Wirtinger AD, plus compiled

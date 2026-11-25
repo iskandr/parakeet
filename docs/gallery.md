@@ -277,13 +277,29 @@ so all `G` query heads reuse one shared-memory load of `k` and `v`.
 
 Parakeet lowers `@dataclass` records (frozen or non-frozen), pure methods,
 `@property`, `__call__`, structural `match`/`case`, compile-time `isinstance`,
-`functools.partial`, and `*args`/`**kwargs` away completely during elaboration
-- letting you write idiomatic scientific Python types that still compile to
+`functools.partial`, and `*args`/`**kwargs` away completely during elaboration,
+letting you write idiomatic scientific Python types that still compile to
 fused, tiled, differentiable native code (`examples/protein_and_layers.py`):
 
 ```python
 --8<-- "examples/protein_and_layers.py:protein_and_layers"
 ```
+
+### Unboxed complex FFT, Wirtinger AD, and FASTA/CSV byte parsing
+
+`examples/complex_fft_and_fasta.py` shows an iterative Cooley-Tukey radix-2 FFT
+and Wirtinger gradient (`par.value_and_grad`) in unboxed `complex64` alongside
+zero-`PyObject` FASTA/CSV byte ingestion via `par.split_bytes`, byte LUT
+remapping, and `par.parse_float32`.
+
+### Adaptive CudaTree BFS -> DFS GBDT
+
+`examples/cudatree_gbdt.py` combines level-wise BFS histogram construction with
+histogram subtraction (`large_child = parent - small_child`),
+`par.partition_by_size`, `par.ragged_partition`, and a single fused
+thread-per-subtree DFS completion pass using thread-local `par.fixed_list`
+scratch stacks (`benchmarks/tree_models.py` benchmarks balanced and skewed
+workloads).
 
 ### nanoGPT end-to-end training
 

@@ -92,8 +92,12 @@ from .lib.pure import pmap1 as _pmap1
 from .lib.pure import pmap2 as _pmap2
 from .lib.pure import pmap2_trim as _pmap2_trim
 from .lib.ragged_lib import (
+  partition_by_size,
+  ragged_partition,
   segment_ids,
+  segmented_histogram2d,
   segmented_map,
+  segmented_parfor,
   segmented_reduce,
   segmented_scan,
   segmented_softmax,
@@ -212,9 +216,9 @@ __all__ = [
     "f32_to_bf16", "filter", "filter_pairs", "filter_reduce", "fixed_list", "flatmap", "fold", "hessian", "hvp", "ifilter_reduce",
     "imap", "ipa_attention", "ireduce", "iscan", "iscatter", "jacfwd", "jacrev", "jit", "jvp", "lib",
     "linear_transpose", "linearize", "map", "morton_order",
-    "options", "outer_map", "parfor", "parse_float32", "parse_float64", "parse_int64", "pmap1", "pmap2",
-    "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter", "scatter_add", "seed",
-    "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
+    "options", "outer_map", "parfor", "parse_float32", "parse_float64", "parse_int64", "partition_by_size", "pmap1", "pmap2",
+    "pmap2_trim", "popcount", "ragged_partition", "reduce", "rotl", "rotr", "run", "scan", "scatter", "scatter_add", "seed",
+    "segment_ids", "segmented_histogram2d", "segmented_map", "segmented_parfor", "segmented_reduce", "segmented_scan", "segmented_softmax",
     "show_rewrite", "soft_align", "spatial_cutoff_sum", "split_bytes", "stop_gradient", "tanimoto_topk", "topk", "topk_fold",
     "varlen_flash_attention", "vjp", "wavefront",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",

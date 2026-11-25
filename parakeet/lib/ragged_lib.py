@@ -988,3 +988,239 @@ def _varlen_flash_attention_vjp(tape, el, node, g: ArrayVal) -> None:
       tape.add(el, k3, dk)
     if dv is not None:
       tape.add(el, v3, dv)
+
+
+# ---------------------------------------------------------------------------
+# Adaptive 3-tier ragged dispatch & CudaTree irregular tree primitives (#82)
+# ---------------------------------------------------------------------------
+
+
+@libfunction("partition_by_size")
+def partition_by_size(el, offsets, block_thresh=1024, warp_thresh=64):
+  """Classify CSR segments into ``(heavy_ids, medium_ids, light_ids)`` by length.
+
+  - ``heavy_ids``: segments with ``len >= block_thresh`` (data/block-parallel tier)
+  - ``medium_ids``: segments with ``warp_thresh <= len < block_thresh`` (warp/node-parallel tier)
+  - ``light_ids``: segments with ``0 < len < warp_thresh`` (thread-per-segment / DFS tier)
+  """
+  if isinstance(offsets, RaggedArray):
+    offsets = offsets.offsets
+  offsets = check_ragged_offsets(el, el.as_array(offsets, "offsets"))
+  b_th = el.tmp(el.as_index(block_thresh, "block_thresh"), "bth")
+  w_th = el.tmp(el.as_index(warp_thresh, "warp_thresh"), "wth")
+  n_seg = el.tmp(isub(offsets.shape[0], ONE), "nseg")
+  el.nonneg.add(n_seg.uid)
+
+  def _seg_len(idx):
+    b = idx[0]
+    return isub(cast(el.elem(offsets, (iadd(b, ONE),)), I), cast(el.elem(offsets, (b,)), I))
+
+  lens = el.as_concrete(el.delayed(I, (n_seg,), _seg_len, cost=2))
+  ids = el.delayed(Int64, (n_seg,), lambda idx: cast(idx[0], Int64), cost=0)
+
+  heavy_mask = el.delayed(ops.Bool, (n_seg,), lambda idx: cmp("ge", el.elem(lens, idx), b_th), cost=1)
+  med_mask = el.delayed(
+    ops.Bool,
+    (n_seg,),
+    lambda idx: ops.land(cmp("ge", el.elem(lens, idx), w_th), cmp("lt", el.elem(lens, idx), b_th)),
+    cost=2,
+  )
+  light_mask = el.delayed(
+    ops.Bool,
+    (n_seg,),
+    lambda idx: ops.land(cmp("gt", el.elem(lens, idx), ZERO), cmp("lt", el.elem(lens, idx), w_th)),
+    cost=2,
+  )
+
+  heavy = el.as_concrete(el.getitem(ids, heavy_mask))
+  medium = el.as_concrete(el.getitem(ids, med_mask))
+  light = el.as_concrete(el.getitem(ids, light_mask))
+  return (heavy, medium, light)
+
+
+@libfunction("segmented_parfor")
+def segmented_parfor(el, body, offsets, block_thresh=1024, warp_thresh=64):
+  """Run ``body(seg_id, start, stop)`` across CSR segments using 3-tier adaptive dispatch.
+
+  Separates heavy, medium, and light segments into distinct parallel launches so
+  skewed power-law workloads (e.g. one 100k-element segment alongside thousands
+  of 20-element segments) execute without GPU warp/SIMD-group starvation.
+  """
+  if isinstance(offsets, RaggedArray):
+    offsets = offsets.offsets
+  offsets = check_ragged_offsets(el, el.as_array(offsets, "offsets"))
+  heavy, medium, light = partition_by_size.impl(el, offsets, block_thresh, warp_thresh)
+
+  for tier in (heavy, medium, light):
+    n_t = tier.shape[0]
+
+    def _run_tier(idx, _tier=tier):
+      seg = el.tmp(cast(el.elem(_tier, (idx[0],)), I), "seg")
+      s = el.tmp(cast(el.elem(offsets, (seg,)), I), "s")
+      e = el.tmp(cast(el.elem(offsets, (iadd(seg, ONE),)), I), "e")
+      el.call(body, [cast(seg, Int64), cast(s, Int64), cast(e, Int64)], {})
+
+    el.index_map((n_t,), _run_tier, ordered=False)
+  return None
+
+
+@libfunction("segmented_histogram2d")
+def segmented_histogram2d(el, node_ids, bins, grads, hess, n_nodes, n_bins):
+  """Fused single-pass 2D ``(grad, hess, count)`` histograms over ``(node_id, bin_id)``.
+
+  Returns ``(g_hist, h_hist, c_hist)``, each of shape ``(n_nodes, n_bins)``.
+  Entries with ``node_id < 0`` or ``bin_id < 0`` are ignored cleanly.
+  """
+  from ..syntax.ir import IndexScatter, ScatterUpdate
+
+  nids = el.as_array(node_ids, "node_ids")
+  b = el.as_array(bins, "bins")
+  g = el.as_array(grads, "grads")
+  h = el.as_array(hess, "hess")
+  for arr, nm in ((nids, "node_ids"), (b, "bins"), (g, "grads"), (h, "hess")):
+    if arr.rank != 1:
+      raise el.error(TypeInferenceError, f"segmented_histogram2d() expects 1-d {nm}, got {describe(arr)}")
+  nn = el.tmp(el.as_index(n_nodes, "n_nodes"), "nnodes")
+  nb = el.tmp(el.as_index(n_bins, "n_bins"), "nbins")
+  el.nonneg.add(nn.uid)
+  el.nonneg.add(nb.uid)
+  total_slots = el.tmp(ops.imul(nn, nb), "nslots")
+  el.nonneg.add(total_slots.uid)
+
+  g_elt = g.elt if g.elt.is_float else Float64
+  h_elt = h.elt if h.elt.is_float else Float64
+  g_flat = el.alloc_array(g_elt, (total_slots,), zero=True, label="sh_g")
+  h_flat = el.alloc_array(h_elt, (total_slots,), zero=True, label="sh_h")
+  c_flat = el.alloc_array(Int64, (total_slots,), zero=True, label="sh_c")
+
+  n = nids.shape[0]
+  if el.options.bounds_check:
+    for other, nm in ((b, "bins"), (g, "grads"), (h, "hess")):
+      if not el.dim_equal(n, other.shape[0]):
+        el.check(
+          cmp("eq", n, other.shape[0]),
+          "ValueError",
+          f"segmented_histogram2d(): {nm} length ({{1}}) != node_ids length ({{0}})",
+          n,
+          other.shape[0],
+        )
+
+  iv = Var("hi", I)
+  el.nonneg.add(iv.uid)
+  el.upper[iv.uid] = n
+  sc = el.new_scope("loop")
+  blk: list = []
+  with el.in_block(blk, sc, loop=True, par=el.can_parallel((n,))):
+    nid = el.tmp(cast(el.elem(nids, (iv,)), I), "nid")
+    bid = el.tmp(cast(el.elem(b, (iv,)), I), "bid")
+    ok = el.tmp(
+      ops.land(
+        ops.land(cmp("ge", nid, ZERO), cmp("lt", nid, nn)),
+        ops.land(cmp("ge", bid, ZERO), cmp("lt", bid, nb)),
+      ),
+      "ok",
+    )
+    key = el.tmp(ops.select(ok, iadd(ops.imul(nid, nb), bid), ZERO), "hkey")
+    gv = el.tmp(cast(el.elem(g, (iv,)), g_elt), "gv")
+    hv = el.tmp(cast(el.elem(h, (iv,)), h_elt), "hv")
+    updates = [
+      ScatterUpdate(g_flat.buf, gv, "add"),
+      ScatterUpdate(h_flat.buf, hv, "add"),
+      ScatterUpdate(c_flat.buf, Const(1, Int64), "add"),
+    ]
+  el.emit(IndexScatter((n,), (iv,), blk, total_slots, key, updates, sc, parallel=el.can_parallel((n,)), where=ok))
+  for out in (g_flat, h_flat, c_flat):
+    el.record_store(out)
+  return (
+    el.reshape(g_flat, (nn, nb), checked=False),
+    el.reshape(h_flat, (nn, nb), checked=False),
+    el.reshape(c_flat, (nn, nb), checked=False),
+  )
+
+
+@libfunction("ragged_partition")
+def ragged_partition(el, sample_ids, offsets, goes_left):
+  """Partition each CSR segment ``[offsets[b], offsets[b+1])`` of ``sample_ids`` into left/right slices.
+
+  ``goes_left`` is a 1-d boolean array aligned with ``sample_ids`` (``goes_left[k]``
+  is True if element ``sample_ids[k]`` routes to the left child).
+  Returns ``(out_ids, left_counts, right_counts)`` where for each segment ``b``
+  with ``[s, e)``, ``out_ids[s : s + left_counts[b]]`` holds the left elements
+  and ``out_ids[s + left_counts[b] : e]`` holds the right elements (stable order).
+  """
+  sids = el.as_concrete(el.as_array(sample_ids, "sample_ids"))
+  gl = el.as_concrete(el.as_array(goes_left, "goes_left"))
+  if sids.rank != 1:
+    raise el.error(TypeInferenceError, f"ragged_partition() expects 1-d sample_ids, got {describe(sids)}")
+  if gl.rank != 1:
+    raise el.error(TypeInferenceError, f"ragged_partition() expects 1-d goes_left, got {describe(gl)}")
+  if isinstance(offsets, RaggedArray):
+    offsets = offsets.offsets
+  offsets = check_ragged_offsets(el, el.as_array(offsets, "offsets"), sids.shape[0])
+  n_seg = el.tmp(isub(offsets.shape[0], ONE), "nseg")
+  el.nonneg.add(n_seg.uid)
+
+  out_ids = el.alloc_array(sids.elt, sids.shape, zero=False, label="part_ids")
+  left_counts = el.alloc_array(Int64, (n_seg,), zero=False, label="lcnt")
+  right_counts = el.alloc_array(Int64, (n_seg,), zero=False, label="rcnt")
+
+  def _part_seg(idx):
+    b = idx[0]
+    s = el.tmp(cast(el.elem(offsets, (b,)), I), "s")
+    e = el.tmp(cast(el.elem(offsets, (iadd(b, ONE),)), I), "e")
+    n_l = Var("nl", I)
+    el.mutables.add(n_l.uid)
+    el.nonneg.add(n_l.uid)
+    el.emit(Assign(n_l, ZERO))
+
+    # Pass 1: scatter left items stably
+    k1 = Var("k1", I)
+    el.nonneg.add(k1.uid)
+    sc1 = el.new_scope("loop")
+    b1: list = []
+    with el.in_block(b1, sc1, loop=True):
+      is_l = cast(el.elem(gl, (k1,)), ops.Bool)
+      el.emit(
+        If(
+          is_l,
+          [
+            Store(out_ids.buf, iadd(s, n_l), el.elem(sids, (k1,))),
+            Assign(n_l, iadd(n_l, ONE)),
+          ],
+          [],
+        )
+      )
+    el.emit(ForRange(k1, s, e, ONE, b1, sc1))
+
+    # Pass 2: scatter right items stably
+    n_r = Var("nr", I)
+    el.mutables.add(n_r.uid)
+    el.nonneg.add(n_r.uid)
+    el.emit(Assign(n_r, ZERO))
+    mid = el.tmp(iadd(s, n_l), "mid")
+    k2 = Var("k2", I)
+    el.nonneg.add(k2.uid)
+    sc2 = el.new_scope("loop")
+    b2: list = []
+    with el.in_block(b2, sc2, loop=True):
+      is_l = cast(el.elem(gl, (k2,)), ops.Bool)
+      el.emit(
+        If(
+          ops.lnot(is_l),
+          [
+            Store(out_ids.buf, iadd(mid, n_r), el.elem(sids, (k2,))),
+            Assign(n_r, iadd(n_r, ONE)),
+          ],
+          [],
+        )
+      )
+    el.emit(ForRange(k2, s, e, ONE, b2, sc2))
+
+    el.emit(Store(left_counts.buf, b, cast(n_l, Int64)))
+    el.emit(Store(right_counts.buf, b, cast(n_r, Int64)))
+
+  el.index_map((n_seg,), _part_seg, ordered=False)
+  el.record_store(out_ids)
+  el.record_store(left_counts)
+  el.record_store(right_counts)
+  return (out_ids, left_counts, right_counts)
