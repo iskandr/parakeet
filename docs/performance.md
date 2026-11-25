@@ -9,7 +9,7 @@
 All numbers on this page were measured with `python benchmarks/run.py` on an
 Apple M1 Pro (10 cores, 32 GB), macOS 26.5, Python 3.12.6, NumPy 2.5.5; best of
 five runs, compilation excluded. "NumPy" is the same computation written with
-NumPy alone; "×" is the speed-up over it. Run the script on your own machine —
+NumPy alone; "×" is the speed-up over it. Run the script on your own machine -
 results vary a lot between CPUs, compilers and array sizes.
 
 ## CPU (float64)
@@ -26,8 +26,8 @@ results vary a lot between CPUs, compilers and array sizes.
 | 3×3 convolution (2000²) | 21.2 ms | 9.1 ms (2.3×) | 1.4 ms (15×) |
 | Julia set (1000²) | 402 ms | 47.2 ms (8.5×) | 6.1 ms (66×) |
 | matrix product (300²) | 0.16 ms | 4.1 ms | 0.72 ms |
-| explicit summation loop (4M) | — | 3.8 ms | 3.8 ms |
-| GrowCut step (64², radius 5) | — | 1.9 ms | 0.47 ms |
+| explicit summation loop (4M) | - | 3.8 ms | 3.8 ms |
+| GrowCut step (64², radius 5) | - | 1.9 ms | 0.47 ms |
 
 ## GPU (float32, Metal on the same machine)
 
@@ -158,9 +158,9 @@ A *matmul-shaped* operation is a map over pairs whose element is a reduction
 over data picked by each member of the pair: a matrix product, `allpairs`
 distances, a tropical product. Evaluated row by row, every row of the result
 sweeps over all of the second operand, which stops fitting in cache long before
-the arrays are large. Parakeet recognises the shape — any two-dimensional map
+the arrays are large. Parakeet recognises the shape; any two-dimensional map
 whose element function is one reduction plus straight-line code, whoever wrote
-it — and does two things:
+it; and does two things:
 
 * **tiles** the inner dimension, so a cache-sized block of the second operand is
   reused for every row before moving on (`config.tile_bytes`, by default half of

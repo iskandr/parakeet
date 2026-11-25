@@ -99,7 +99,7 @@ adjoint `Lᵀ` of a linear operator.
 ## Higher-order derivatives, HVPs, and Jacobians
 
 `par.hvp` computes Hessian-vector products via **forward-over-reverse AD**
-(`jvp(grad(f))`) in one fused pass — including through checkpointed loops,
+(`jvp(grad(f))`) in one fused pass; including through checkpointed loops,
 LayerNorm, and **zero-$O(T^2)$ rematerialized attention**:
 
 ```python
@@ -153,7 +153,7 @@ Parakeet differentiates **both** small static loops and arbitrary runtime-bound
   over a heterogeneous tuple of weight matrices) are **unrolled** onto the tape
   for zero checkpoint overhead and cross-iteration fusion.
 * **Runtime-bound and long `for` loops** (`for t in range(n):`, `for x in arr:`,
-  or static ranges longer than 32 iterations — including 10,000+ iterations)
+  or static ranges longer than 32 iterations; including 10,000+ iterations)
   compile to an **IR-level `O(sqrt(T))` checkpointed reverse loop** (`ForRange`)
   with constant IR size and bounded memory.
 * **Data-dependent `while` loops** (`while err > tol:`) compile to a fixed-slot
@@ -197,8 +197,7 @@ both sides.
   ```python
   y = x + par.stop_gradient(np.round(x) - x)
   ```
-* **`@par.custom_vjp`** attaches custom `(fwd, bwd)` rules via `.defvjp(fwd, bwd)`
-  — supporting `NamedTuple`, frozen `@dataclass`, and `RaggedArray` residuals,
+* **`@par.custom_vjp`** attaches custom `(fwd, bwd)` rules via `.defvjp(fwd, bwd)`: supporting `NamedTuple`, frozen `@dataclass`, and `RaggedArray` residuals,
   higher-order AD, and Implicit Function Theorem differentiation through
   `while`-loop equilibrium solvers without storing iteration history.
 * **`@par.custom_jvp`** attaches custom forward-mode rules via `.defjvp(jvp_rule)`:
@@ -241,9 +240,9 @@ value that an earlier operation's derivative still has to read
 ## The gradient is right or there is none
 
 Parakeet never returns a derivative that silently drops part of your function.
-If something on the path from inputs to output lacks a derivative rule — such
+If something on the path from inputs to output lacks a derivative rule; such
 as `np.cumprod`, `np.convolve`, or an arbitrary indexed overwrite
-`out[idx] = v` — you get an `UnsupportedError` naming it:
+`out[idx] = v`; you get an `UnsupportedError` naming it:
 
 ```text
 UnsupportedError: cannot differentiate through cumprod() (line 12): its derivative is not implemented
@@ -259,7 +258,7 @@ primals). Because rules operate at the index-operator level before lowering:
 * `parakeet/transforms/algebraic_vjp.py` runs a composable registry of
   algebraic rematerialization rules (`ALGEBRAIC_AD_RULES`) for FlashAttention
   (VJP, JVP, and HVP with zero $O(T^2)$ allocations), linear cross-entropy,
-  softmax, and LayerNorm / RMSNorm — both at top level and inside checkpointed
+  softmax, and LayerNorm / RMSNorm; both at top level and inside checkpointed
   loops.
 * Scalars and views are not recorded on the tape: scalar adjoints push straight
   down the expression tree, and a view of an array is the same view of its

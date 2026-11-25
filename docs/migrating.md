@@ -12,7 +12,7 @@ their names, and most 0.x programs run after the usual Python 2 → 3 changes
 | `"interp"` backend | `"python"` (runs the original function) |
 | `"cuda"` via PyCUDA + `nvcc` | `"cuda"` via CuPy, no toolkit install; new `"metal"` backend |
 | `f(x, _backend="c")` | unchanged; also `@jit(backend="c")` |
-| `@macro` | still there, with a different contract: the function gets the compiler and the compile-time *values* of its arguments instead of syntax nodes (this is how `map`, `reduce` and the NumPy functions are defined). `@typed_macro` and `@staged_macro` are gone — arguments such as `axis` are specialised automatically |
+| `@macro` | still there, with a different contract: the function gets the compiler and the compile-time *values* of its arguments instead of syntax nodes (this is how `map`, `reduce` and the NumPy functions are defined). `@typed_macro` and `@staged_macro` are gone; arguments such as `axis` are specialised automatically |
 | `parakeet.testing_helpers` | `parakeet.testing` (the old name still imports) |
 | `config.opt_fusion`, `config.print_specialized_function`, `config.print_generated_code` | still accepted, as aliases of `fusion`, `print_ir` and `print_code`; the other `opt_*` flags are gone (see [Configuration](configuration.md)) |
 | `parakeet.prims.add`, `parakeet.ndtypes.Int64`, `Float64`, ... | unchanged |
@@ -29,7 +29,7 @@ their names, and most 0.x programs run after the usual Python 2 → 3 changes
   no longer upcast `float32` arrays.
 * **Bounds are checked** by default. Programs that silently read out of bounds
   under 0.x now raise `IndexError`.
-* **`np.array(x)` copies**, `x += 1` updates in place, views alias — as in NumPy.
+* **`np.array(x)` copies**, `x += 1` updates in place, views alias: as in NumPy.
 * **Globals are read at call time** rather than captured at first compilation.
 * `parakeet.reduce` is parallel only for combiners known to be associative;
   0.x assumed associativity for any function.

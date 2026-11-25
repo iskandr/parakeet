@@ -7,7 +7,7 @@ the **same** algebraic IR.
 
 **How this page is organized:** the examples progress from straightforward
 pairwise NumPy fusion and histograms to custom semiring reductions, parallel
-recurrences, and modern attention and loss kernels — introducing Parakeet's
+recurrences, and modern attention and loss kernels; introducing Parakeet's
 capabilities one layer at a time. Where a section has tabs, those tabs show
 **alternative ways to write the exact same computation** (idiomatic NumPy vs.
 plain loops vs. explicit Parakeet operators) that all compile to the same
@@ -37,8 +37,8 @@ import parakeet as par
 Exact nearest-neighbor search finds, for each of `Q` query vectors in
 $\mathbb{R}^D$, the index of the closest vector among `R` reference vectors
 under Euclidean distance. Writing this with broadcasting NumPy is two lines,
-but executing it eagerly allocates a full `Q × R` distance matrix — `64 MiB`
-at `Q = 1,024, R = 16,384` — that thrashes cache and GPU memory.
+but executing it eagerly allocates a full `Q × R` distance matrix; `64 MiB`
+at `Q = 1,024, R = 16,384`; that thrashes cache and GPU memory.
 
 Parakeet fuses the distance calculation directly into an ordered tiled
 reduction across `R`, keeping only a small score tile in L1 cache or GPU shared
@@ -108,7 +108,7 @@ weighting reference observations with a Gaussian kernel
 $\exp(-\gamma \|q_i - x_j\|^2)$. Because the running maximum, weight sum, and
 weighted output form an associative
 [rescaled monoid](algebra.md#law-1-rescaled-semiring-monoids), Parakeet streams
-references in tiles instead of allocating an `N × M` weight matrix — the exact
+references in tiles instead of allocating an `N × M` weight matrix; the exact
 same online monoidal pass that powers tiled attention below.
 
 ```python
@@ -125,7 +125,7 @@ Histogram-based gradient boosted trees accumulate gradients and Hessians into
 feature bins, scan cumulative left/right sums, and pick the split bin with the
 highest gain. You can write the bin accumulations as a declarative NumPy
 comprehension, with `np.add.at`, as a plain Python `for` loop, or with explicit
-`par.scatter_add` (including keyed generator expressions) — all four lower to
+`par.scatter_add` (including keyed generator expressions); all four lower to
 Parakeet's $O(N)$ `IndexScatter` operator. Because both accumulations share the
 same `bin_ids` array, Parakeet fuses them into a single
 [thread-privatized traversal](algebra.md#law-6-privatized-scatter-multi-state-carries)
@@ -252,7 +252,7 @@ loss with zero `M × V` memory.
 Multi-head latent attention (MLA) projects keys and values from a shared
 low-rank latent `c_kv`. When the query length is small (such as autoregressive
 decoding), [bilinear contraction reassociation](algebra.md#law-3-bilinear-contraction-reassociation-shared-kv-tiling)
-absorbs `w_uk` into `q` and defers `w_uv` until after attention — running
+absorbs `w_uk` into `q` and defers `w_uv` until after attention; running
 tiled attention directly over the compressed latent `c_kv`.
 
 ```python
@@ -278,7 +278,7 @@ so all `G` query heads reuse one shared-memory load of `k` and `v`.
 Parakeet lowers `@dataclass` records (frozen or non-frozen), pure methods,
 `@property`, `__call__`, structural `match`/`case`, compile-time `isinstance`,
 `functools.partial`, and `*args`/`**kwargs` away completely during elaboration
-— letting you write idiomatic scientific Python types that still compile to
+- letting you write idiomatic scientific Python types that still compile to
 fused, tiled, differentiable native code (`examples/protein_and_layers.py`):
 
 ```python

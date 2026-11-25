@@ -49,7 +49,7 @@ par.run(rms.fn, x)  # compile-and-call in one step
 ## Loops, comprehensions, helpers
 
 Anything in the [supported subset](language.md) can be mixed freely. Helper
-functions are inlined automatically — they do not need their own `@par.jit`.
+functions are inlined automatically; they do not need their own `@par.jit`.
 
 ```python
 def sqr_dist(a, b):
@@ -147,12 +147,12 @@ bug in your code from a limitation of the compiler. More in
 
 ## Where to go next
 
-* [Kernel gallery](gallery.md) — runnable examples ranging from nearest-neighbor
+* [Kernel gallery](gallery.md): runnable examples ranging from nearest-neighbor
   search and tree splits to attention, state-space recurrences, and classic
   numerical kernels.
-* [The compiled language](language.md) — exact types, statements, and where
+* [The compiled language](language.md): exact types, statements, and where
   Parakeet differs from CPython.
-* [Ideas, history, and boundaries](philosophy.md) — how Parakeet's 2012–2014
-  design evolved into 1.0 and what is not supported yet.
-* [Performance](performance.md) and [Release benchmarks](release-benchmarks.md) —
+* [Ideas, history, and boundaries](philosophy.md): design principles, project
+  history, and current limits.
+* [Performance](performance.md) and [Release benchmarks](release-benchmarks.md):
   when Parakeet wins, when it doesn't, and measured numbers on CPU and GPU.

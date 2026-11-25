@@ -5,14 +5,14 @@ runs, in one place, and how that compares with the two theses that describe
 the original system:
 
 * **[R]** Alex Rubinsteyn, *Runtime Compilation of Array-Oriented Python
-  Programs* (NYU, 2014) — the operators and their fusion rules.
+  Programs* (NYU, 2014); the operators and their fusion rules.
 * **[H]** Eric Hielscher, *Locality Optimization for Data Parallel Programs*
-  (NYU, 2013) — tiling.
+  (NYU, 2013); tiling.
 
 The short version: the rules are the same algebra, applied in two places.
 
-* **While elaborating.** An array expression is a *delayed* value — a function
-  from index to element — and the vertical fusion rules fire at the moment an
+* **While elaborating.** An array expression is a *delayed* value: a function
+  from index to element; and the vertical fusion rules fire at the moment an
   operator is applied to one. `F ∘ G` below means "the element function of
   the result is `F` applied to the element function of the argument"; no pass
   looks for the pattern afterwards.
@@ -55,10 +55,10 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `Filter(f, pred, X1..Xn)` | `filter(pred, x1, ..., xn, map=f)` |
 | `ParFor(f, bounds)` | `parfor(f, bounds)` |
 | `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
-| `FilterReduce`, `IndexFilterReduce` | `filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)` — and any reduction over a filter also *becomes* one (see fusion) |
+| `FilterReduce`, `IndexFilterReduce` | `filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)`; and any reduction over a filter also *becomes* one (see fusion) |
 | `IndexScan(f, ⊕, emit, shape)` | what `scan`, `np.cumsum` and `np.cumprod` are built on: an `IndexScan` statement, whose `emit` is a block (it stores the running value) |
-| — | `IndexScatter` (`par.scatter_add`, keyed generators `par.scatter_add(n, ((k, v) for ...))`, `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += val` loops, and inverted filtered comprehensions `[np.sum(vals[idx == b]) for b in range(n)]`): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
-| — | `grad`, `value_and_grad`, `jvp`, `vjp`, `linearize`, `linear_transpose`, `hvp`, `jacfwd`, `jacrev`, `hessian` |
+| - | `IndexScatter` (`par.scatter_add`, keyed generators `par.scatter_add(n, ((k, v) for ...))`, `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += val` loops, and inverted filtered comprehensions `[np.sum(vals[idx == b]) for b in range(n)]`): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
+| - | `grad`, `value_and_grad`, `jvp`, `vjp`, `linearize`, `linear_transpose`, `hvp`, `jacfwd`, `jacrev`, `hessian` |
 
 Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,
 `np.cumsum` a `scan`, `a @ b` and `np.einsum` a map of reductions, a
@@ -70,7 +70,7 @@ comprehension an `imap`.
 
 | rule ([R] Fig. 6.1) | status |
 |---|---|
-| `Map(g, Map(f, X))` ⇒ `Map(g∘f, X)` | yes — including affine coordinate inversion (`AffineInlineBufferLoad`) for transpose, shifted-slice, and stencil fusion, plus cost-bounded multi-consumer fusion |
+| `Map(g, Map(f, X))` ⇒ `Map(g∘f, X)` | yes; including affine coordinate inversion (`AffineInlineBufferLoad`) for transpose, shifted-slice, and stencil fusion, plus cost-bounded multi-consumer fusion |
 | `Map(g, IndexMap(f, σ))` ⇒ `IndexMap(g∘f, σ)` | yes |
 | `OuterMap(g, Map(f, X1), X2..)` ⇒ `OuterMap(λ. g(f(x1), x2..), X1..)` | yes |
 | `Reduce(g, ⊕, Map(f, X))` ⇒ `Reduce(g∘f, ⊕, X)` | yes |
@@ -108,7 +108,7 @@ When the inner map is expensive, elaboration emits a nested `IndexMap`
 writing directly into its row of one output array (no per-row allocation), and
 the middle-end `vertical fusion` pass (`CombineNestedMaps`) flattens it into a
 single multi-dimensional `IndexMap` whenever the inner shape does not depend on
-the outer index — exposing the full 2D/ND index space to multi-core CPUs and
+the outer index; exposing the full 2D/ND index space to multi-core CPUs and
 GPUs.
 
 ### Horizontal: two consumers of one array
@@ -120,7 +120,7 @@ GPUs.
 
 Conditions the thesis leaves out: the index spaces must be provably equal
 (the same expression once shape variables are resolved), both seeded or both
-unseeded, and both must stay vectorizable — a float sum is not fused with a
+unseeded, and both must stay vectorizable; a float sum is not fused with a
 `max`, which would cost the sum its SIMD loop. Scalar definitions between the
 two statements are stepped over when they do not use the first result.
 
@@ -210,7 +210,7 @@ Done while expressions are built; there is no simplification pass:
 
 **Specialization on values** ([R] ch. 6.6 partially evaluates on inputs equal
 to 0 or 1). Here: a dimension of length 1 is always a constant (which is what
-makes broadcasting static — [R] lists `200x1 + 1x300` as giving a wrong
+makes broadcasting static; [R] lists `200x1 + 1x300` as giving a wrong
 answer); a scalar argument or an array dimension becomes a constant when the
 code needs one (`axis=`, the length of a tuple, a loop that has to be
 unrolled).

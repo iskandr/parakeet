@@ -49,7 +49,7 @@ reduction. Inner iterators with observable setup and dependent domains such as
 
 ## Functions
 
-* Any Python function called from compiled code is **inlined** — helpers do not
+* Any Python function called from compiled code is **inlined**: helpers do not
   need `@jit`. Recursion is therefore not possible and is reported as an error.
 * Positional, keyword, default, keyword-only, `*args`, and `**kwargs` arguments
   (as well as `**d` unpacking from compile-time dicts, `functools.partial`, and
@@ -88,7 +88,7 @@ One static type per variable
 :   A variable assigned an `int` on one path and a `float` on another is a
     `float` everywhere (the usual numeric promotion). A function returning `1`
     in one branch and `2.5` in another returns a `float` from both. Types that
-    cannot be unified — say an array and `None` — are an error if the variable
+    cannot be unified (say an array and `None`) are an error if the variable
     is used afterwards.
 
 Rank is static

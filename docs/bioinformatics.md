@@ -7,7 +7,7 @@ chemical fingerprint screening, 3D protein coordinate message passing, and
 banded dynamic programming alignments.
 
 Parakeet compiles these workloads directly from concise NumPy and data-parallel
-operators into fused, multi-core CPU and GPU code — without hand-writing C,
+operators into fused, multi-core CPU and GPU code; without hand-writing C,
 CUDA, or Metal.
 
 Every snippet below is included from [`examples/bio_gallery.py`](https://github.com/iskandr/parakeet/blob/master/examples/bio_gallery.py).
@@ -68,7 +68,7 @@ Pairwise radial-basis-function smoothing over 3D residue coordinates `(N, 3)`
 uses the same [rescaled-monoid](algebra.md#law-1-rescaled-semiring-monoids)
 structure as softmax attention. Online monoidal tiling fuses the
 squared-distance computation, softmax normalization, and feature aggregation
-into a single tiled pass with zero O(N²) score allocation — and `par.grad`
+into a single tiled pass with zero O(N²) score allocation; and `par.grad`
 differentiates through the 3D coordinates directly:
 
 ```python

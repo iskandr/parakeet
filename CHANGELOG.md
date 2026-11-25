@@ -17,7 +17,7 @@ dead-branch pruning; and `*args`/`**kwargs`, `functools.partial`, and
   leaves).
 - **Functional local field rebinding:** `obj.x = new_x`, nested `obj.a.b = v`,
   and augmented updates `obj.x += v` rebuild the compile-time record chain
-  functionally (value semantics, zero heap mutation) — including across loops
+  functionally (value semantics, zero heap mutation); including across loops
   and branches.
 - **Pure methods, `@property`, `@staticmethod`, `@classmethod`, & `__call__`:**
   Methods and properties on `@dataclass` and `NamedTuple` records inline like
@@ -141,7 +141,7 @@ Wave 1, closing `#75` and advancing `#77`).
 ## 1.1.0 (November 25, 2026)
 
 Major expansion of Parakeet's GPU schedules, algebraic data structures,
-scientific/bioinformatics primitives, and documentation — unified under one
+scientific/bioinformatics primitives, and documentation; unified under one
 top-level `import parakeet as par` (`@par.jit`, `par.*`) interface.
 
 ### Unified namespace, docs & benchmarks
@@ -170,7 +170,7 @@ top-level `import parakeet as par` (`@par.jit`, `par.*`) interface.
 - **Tiled GPU pairwise folds:** Broadcasting NumPy and nested-map/structured
   `par.fold` exact 1-NN and inverse-distance smoothing now stream shared-memory
   score tiles (`16 KiB`/block) on CUDA and Metal with exact first-index tie and
-  NaN semantics — **4.8× faster** (`2.60 ms → 0.54 ms`) and **21× less global
+  NaN semantics; **4.8× faster** (`2.60 ms → 0.54 ms`) and **21× less global
   scratch** (`64 MiB → 3 MiB`) at `1,024 × 16,384 × 32` on NVIDIA L4.
 - **Hardware matrix units in monoidal kernels:** Enabled Metal
   `simdgroup_matrix` and CUDA TF32 WMMA inside Law 1 rescaled-monoid kernels
