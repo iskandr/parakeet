@@ -1182,6 +1182,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#110-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unified-namespace-docs-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unified namespace, docs &amp; benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-schedules-matrix-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPU schedules &amp; matrix units
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-algebraic-primitives-data-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New algebraic primitives &amp; data structures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#100-november-24-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1274,6 +1324,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#110-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.1.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unified-namespace-docs-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unified namespace, docs &amp; benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-schedules-matrix-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPU schedules &amp; matrix units
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-algebraic-primitives-data-structures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New algebraic primitives &amp; data structures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#100-november-24-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1344,6 +1444,70 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="110-november-25-2026">1.1.0 (November 25, 2026)<a class="headerlink" href="#110-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Major expansion of Parakeet's GPU schedules, algebraic data structures,
+scientific/bioinformatics primitives, and documentation — unified under one
+top-level <code>import parakeet as par</code> (<code>@par.jit</code>, <code>par.*</code>) interface.</p>
+<h3 id="unified-namespace-docs-benchmarks">Unified namespace, docs &amp; benchmarks<a class="headerlink" href="#unified-namespace-docs-benchmarks" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Single unified <code>parakeet</code> namespace:</strong> Exported <code>fold</code>, <code>topk</code>,
+  <code>topk_fold</code>, <code>tanimoto_topk</code>, <code>ipa_attention</code>, <code>show_rewrite</code>,
+  <code>RewriteReport</code>, <code>scatter</code>, <code>iscan</code>, <code>iscatter</code>, and <code>ifilter_reduce</code>
+  directly on top-level <code>parakeet</code> (with <code>parakeet.dsl</code> retained as a
+  backward-compatible alias). Standardized examples and docs on
+  <code>import parakeet as par</code> (<code>@par.jit</code>, <code>par.*</code>).</li>
+<li><strong>Reproducible benchmark figures &amp; overhaul:</strong> Added
+  <code>tools/gen_benchmark_figures.py</code> generating per-replicate scatter + IQR +
+  median SVGs (<code>bench-pairwise-l4.svg</code>, <code>bench-scaling-1nn.svg</code>,
+  <code>bench-workloads-l4.svg</code>) directly from <code>docs/assets/colab-l4-0dcb7d5.json</code>,
+  reorganized the <a href="https://rubinsteyn.com/parakeet/release-benchmarks/">Benchmarks</a>
+  page by workload category, connected <code>README.md</code> directly to runnable
+  implementations, and updated the NYU history links (Rubinsteyn 2014 thesis,
+  Hielscher et al. 2013 <code>arXiv:1304.1835</code>, HotPar '12).</li>
+<li><strong>Bioinformatics &amp; structural biology guide:</strong> Added the
+  <a href="https://rubinsteyn.com/parakeet/bioinformatics/">Bioinformatics &amp; structural biology</a>
+  gallery (<code>examples/bio_gallery.py</code>) and reproducible benchmark suite
+  (<code>benchmarks/bio_workloads.py</code>).</li>
+</ul>
+<h3 id="gpu-schedules-matrix-units">GPU schedules &amp; matrix units<a class="headerlink" href="#gpu-schedules-matrix-units" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Tiled GPU pairwise folds:</strong> Broadcasting NumPy and nested-map/structured
+  <code>par.fold</code> exact 1-NN and inverse-distance smoothing now stream shared-memory
+  score tiles (<code>16 KiB</code>/block) on CUDA and Metal with exact first-index tie and
+  NaN semantics — <strong>4.8× faster</strong> (<code>2.60 ms → 0.54 ms</code>) and <strong>21× less global
+  scratch</strong> (<code>64 MiB → 3 MiB</code>) at <code>1,024 × 16,384 × 32</code> on NVIDIA L4.</li>
+<li><strong>Hardware matrix units in monoidal kernels:</strong> Enabled Metal
+  <code>simdgroup_matrix</code> and CUDA TF32 WMMA inside Law 1 rescaled-monoid kernels
+  (FlashAttention, RBF, linear cross-entropy, nanoGPT training).</li>
+<li><strong>Device-resident GPU scans &amp; reductions:</strong> Kept GPU prefix scans, small GPU
+  reductions, and extrema values device-resident without host round-trips.</li>
+</ul>
+<h3 id="new-algebraic-primitives-data-structures">New algebraic primitives &amp; data structures<a class="headerlink" href="#new-algebraic-primitives-data-structures" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>First-class <code>RaggedArray</code> (CSR) &amp; segmented operators:</strong> <code>RaggedArray</code>,
+  <code>segment_ids</code>, <code>segmented_map</code>, <code>segmented_reduce</code>, <code>segmented_scan</code>,
+  <code>segmented_softmax</code>, and differentiable <code>varlen_flash_attention</code> with ragged
+  reverse-mode AD (<code>par.grad</code> preserves offsets structurally).</li>
+<li><strong>1-to-K ragged compaction (<code>IndexExpand</code>):</strong> Added <code>par.flatmap</code> and
+  <code>par.filter_pairs</code> (two-pass count → prefix-sum → emit) with dead-output
+  elimination and AD gather support.</li>
+<li><strong>Parallel sorting, search &amp; lookup tables:</strong> Parallel radix <code>sort</code> /
+  <code>argsort</code> / <code>unique</code>, fusible <code>searchsorted</code>, <code>SortedIndex</code>, and static
+  open-addressed <code>FrozenHashTable</code>.</li>
+<li><strong>3D spatial pruning &amp; block-sparse attention (Law 5 generalized):</strong>
+  <code>morton_order</code>, 3D AABB <code>spatial_cutoff_sum</code>, and CSR <code>BlockMask</code>
+  <code>block_sparse_attention</code> with forward + backward AD.</li>
+<li><strong>2D / banded semiring DP (<code>IndexWavefront</code>):</strong> Added <code>par.wavefront</code>,
+  <code>par.batched_wavefront</code>, and Law 2 checkpointed differentiable
+  <code>par.soft_align</code> (Smith-Waterman / Needleman-Wunsch / soft-DTW).</li>
+<li><strong>Vector-valued Carry folds &amp; pair-biased / IPA attention:</strong> Multi-slot
+  <code>Carry</code> folds powering exact <code>par.topk</code>, <code>par.topk_fold</code>, <code>par.tanimoto_topk</code>,
+  and Law 1+2 <code>par.ipa_attention</code>.</li>
+<li><strong>Zero-copy bytes, bitops &amp; Python ergonomics:</strong> Zero-copy <code>uint8</code> bytes /
+  <code>mmap</code> inputs, <code>popcount</code>/<code>clz</code>/<code>ctz</code>/<code>rotl</code>/<code>rotr</code>/<code>bswap</code>, <code>bf16_to_f32</code> /
+  <code>f32_to_bf16</code>, <code>IntEnum</code>, scalar <code>match</code>/<code>case</code>, frozen <code>@dataclass</code>
+  <code>dataclasses.replace</code>, and structured NumPy views.</li>
+</ul>
 <h2 id="100-november-24-2026">1.0.0 (November 24, 2026)<a class="headerlink" href="#100-november-24-2026" title="Permanent link">&para;</a></h2>
 <p>A ground-up rewrite for modern Python.  The <code>@jit</code> decorator, the adverbs
 (<code>map</code>, <code>reduce</code>, <code>scan</code>, <code>allpairs</code>, <code>imap</code>, ...) and the overall idea are
