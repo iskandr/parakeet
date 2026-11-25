@@ -1432,8 +1432,8 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 <td>two-pass 1-to-K ragged compaction (<code>IndexExpand</code>)</td>
 </tr>
 <tr>
-<td><code>par.scatter_add(n, idx, vals)</code> (alias <code>par.scatter</code>)</td>
-<td>index-directed associative scatter-add (<code>IndexScatter</code>) with thread-privatized parallel lowering and exact gather adjoint (also targeted automatically by <code>np.bincount</code>, <code>np.add.at</code>, and canonical <code>for i: out[idx[i]] += vals[i]</code> loops)</td>
+<td><code>par.scatter_add(n, idx, vals, where=None)</code> / <code>par.scatter_add(n, ((k, v) for ...))</code></td>
+<td>index-directed associative scatter-add (<code>IndexScatter</code>) with thread-privatized parallel lowering and exact gather adjoint (also targeted automatically by <code>np.bincount</code>, <code>np.add.at</code>, canonical <code>for i: out[idx[i]] += vals[i]</code> loops, and filtered comprehensions like <code>[np.sum(vals[idx == b]) for b in range(n)]</code>)</td>
 </tr>
 <tr>
 <td><code>par.wavefront(...)</code> / <code>par.batched_wavefront(...)</code> / <code>par.soft_align(...)</code></td>
