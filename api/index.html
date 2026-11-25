@@ -3378,9 +3378,10 @@ executing <code>fn</code> or mutating global compiler state.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Lift elements to scalar tuple states and merge adjacent states in input order.</p>
+        <p>Lift elements to scalar/fixed-vector tuple states and merge adjacent states in input order.</p>
 <p>With no axis, lift each leading slice and return one state. With an axis,
-fold the scalar lanes along that axis and project each state with <code>emit</code>.
+fold the lanes along that axis and project each state with <code>emit</code> (which may
+return a scalar, a fixed-size array, or a tuple/NamedTuple of them).
 An indexed lift receives (value, index) with the index local to its lane.
 A supplied seed is applied once on the left; an unseeded empty fold raises.</p>
 
