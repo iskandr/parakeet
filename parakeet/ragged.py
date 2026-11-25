@@ -24,6 +24,7 @@ def _leading_len(v: Any) -> int:
 
 
 def _slice_leading(v: Any, start: int, stop: int):
+  stop = max(start, stop)
   if isinstance(v, RaggedArray):
     sub_off = np.asarray(v.offsets[start : stop + 1], dtype=np.int64)
     base = int(sub_off[0])
@@ -117,6 +118,7 @@ class RaggedArray:
       start, stop, step = idx.indices(n)
       if step != 1:
         raise ValueError("RaggedArray slicing only supports step == 1")
+      stop = max(start, stop)
       sub_off = np.asarray(off[start : stop + 1], dtype=np.int64)
       base = int(sub_off[0])
       end = int(sub_off[-1])

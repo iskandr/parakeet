@@ -2572,7 +2572,7 @@ class Elaborator(ArrayMixin):
       sub_off = self.getitem(v.offsets, slice(start, iadd(stop, ONE), None))
       base = self.tmp(cast(self.elem(v.offsets, (start,)), I), "rbase")
       end = self.tmp(cast(self.elem(v.offsets, (stop,)), I), "rend")
-      rebased = self.binop("sub", sub_off, base)
+      rebased = self.binop("sub", sub_off, cast(base, sub_off.elt))
       return RaggedArray(self._slice_leading(v.values, base, end), rebased)
     if isinstance(v, ArrayVal):
       return self.getitem(v, slice(start, stop, None))

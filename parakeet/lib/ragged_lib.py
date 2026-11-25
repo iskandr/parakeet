@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from .. import prims
-from ..errors import StaticValueError, TypeInferenceError
+from ..errors import StaticValueError, TypeInferenceError, UnsupportedError
 from ..ndtypes import Float32, Float64, Int64
 from ..ragged import RaggedArray
 from ..syntax import ops
@@ -113,7 +113,8 @@ def segment_ids(el, offsets, total_len=None):
   n_seg = el.tmp(isub(offsets.shape[0], ONE), "nseg")
   if total_len is None:
     total_len = el.tmp(cast(el.elem(offsets, (n_seg,)), I), "total")
-  out = el.alloc_array(Int64, (total_len,), zero=True, label="seg_ids")
+  out = el.alloc_array(Int64, (total_len,), zero=False, label="seg_ids")
+  el.store_array(out, Const(-1, Int64))
 
   def fill_seg(idx):
     b = idx[0]
@@ -153,6 +154,14 @@ def segmented_map(el, fn, ragged, *more):
           isub(offsets.shape[0], ONE),
           isub(o_off.shape[0], ONE),
         )
+
+        def _check_eq_off(idx, _o=o_off):
+          i = idx[0]
+          a = cast(el.elem(offsets, (i,)), I)
+          b = cast(el.elem(_o, (i,)), I)
+          el.check(cmp("eq", a, b), "ValueError", "segmented_map() RaggedArray offsets differ ({0} vs {1})", a, b)
+
+        el.index_map((offsets.shape[0],), _check_eq_off, ordered=False)
       extra_vals.append(other.values)
     else:
       extra_vals.append(other)
@@ -212,6 +221,8 @@ def segmented_reduce(el, op, ragged, init=None):
     init_e = None
 
   tape = el.tape
+  if tape is not None and not tape.muted and init_e is not None and tape.is_active(el, init_e):
+    raise el.error(UnsupportedError, "differentiating segmented_reduce() with respect to init is not supported")
   record_ad = (
     tape is not None
     and not tape.muted
@@ -367,7 +378,7 @@ def segmented_scan(el, op, ragged, *, exclusive=False, init=None):
     init_e = None
 
   trailing = vals.shape[1:]
-  out = el.alloc_array(out_elt, vals.shape, label="seg_scan")
+  out = el.alloc_array(out_elt, vals.shape, zero=True, label="seg_scan")
 
   def run_seg(idx):
     b = idx[0]
@@ -436,7 +447,7 @@ def segmented_softmax(el, ragged):
 
   tape = el.tape
   record_ad = tape is not None and not tape.muted and tape.is_active(el, vals)
-  out = el.alloc_array(elt, vals.shape, label="seg_sm")
+  out = el.alloc_array(elt, vals.shape, zero=True, label="seg_sm")
 
   def run_seg(idx):
     b = idx[0]
@@ -444,13 +455,15 @@ def segmented_softmax(el, ragged):
     s = el.tmp(cast(el.elem(offsets, (b,)), I), "s")
     e = el.tmp(cast(el.elem(offsets, (iadd(b, ONE),)), I), "e")
     then_blk: list = []
+    neg_inf_c = Const(-math.inf, elt)
+    zero_c = Const(0.0, elt)
     with el.in_block(then_blk):
-      # Online (m, l) pass
+      # Online (m, l) pass (guarded against -inf - (-inf) -> NaN)
       m = Var("m", elt)
       l_sum = Var("l", elt)
       el.mutables.update((m.uid, l_sum.uid))
-      el.emit(Assign(m, Const(-math.inf, elt)))
-      el.emit(Assign(l_sum, Const(0.0, elt)))
+      el.emit(Assign(m, neg_inf_c))
+      el.emit(Assign(l_sum, zero_c))
       k1 = Var("k1", I)
       el.nonneg.add(k1.uid)
       sc1 = el.new_scope("loop")
@@ -458,19 +471,24 @@ def segmented_softmax(el, ragged):
       with el.in_block(b1, sc1, loop=True):
         xk = el.tmp(el.elem(vals, (k1, *t_idx)), "x")
         m_new = el.tmp(ops.prim("max", (m, xk), elt), "mn")
-        scale_old = ops.prim("exp", (ops.prim("sub", (m, m_new), elt),), elt)
-        term = ops.prim("exp", (ops.prim("sub", (xk, m_new), elt),), elt)
+        scale_old = ops.select(
+          cmp("gt", m, neg_inf_c), ops.prim("exp", (ops.prim("sub", (m, m_new), elt),), elt), zero_c
+        )
+        term = ops.select(cmp("gt", xk, neg_inf_c), ops.prim("exp", (ops.prim("sub", (xk, m_new), elt),), elt), zero_c)
         el.emit(Assign(l_sum, ops.prim("add", (ops.prim("mul", (l_sum, scale_old), elt), term), elt)))
         el.emit(Assign(m, m_new))
       el.emit(ForRange(k1, s, e, ONE, b1, sc1))
-      inv_l = el.tmp(ops.prim("div", (Const(1.0, elt), l_sum), elt), "inv_l")
+      inv_l = el.tmp(
+        ops.select(cmp("gt", l_sum, zero_c), ops.prim("div", (Const(1.0, elt), l_sum), elt), zero_c), "inv_l"
+      )
       k2 = Var("k2", I)
       el.nonneg.add(k2.uid)
       sc2 = el.new_scope("loop")
       b2: list = []
       with el.in_block(b2, sc2, loop=True):
-        xk = el.elem(vals, (k2, *t_idx))
-        p = ops.prim("mul", (ops.prim("exp", (ops.prim("sub", (xk, m), elt),), elt), inv_l), elt)
+        xk = el.tmp(el.elem(vals, (k2, *t_idx)), "x")
+        num = ops.select(cmp("gt", xk, neg_inf_c), ops.prim("exp", (ops.prim("sub", (xk, m), elt),), elt), zero_c)
+        p = ops.prim("mul", (num, inv_l), elt)
         el.emit(Store(out.buf, el.index_expr(out, (k2, *t_idx)), p))
       el.emit(ForRange(k2, s, e, ONE, b2, sc2))
     el.emit(If(cmp("lt", s, e), then_blk, []))
@@ -630,6 +648,8 @@ def varlen_flash_attention(el, q, k, v, cu_seqlens=None, *, cu_seqlens_kv=None, 
     sc = el.tmp(cast(el.as_scalar(scale, "scale"), elt), "scale")
 
   tape = el.tape
+  if tape is not None and not tape.muted and tape.is_active(el, sc):
+    raise el.error(UnsupportedError, "differentiating varlen_flash_attention() with respect to scale is not supported")
   record_ad = (
     tape is not None and not tape.muted and (tape.is_active(el, q3) or tape.is_active(el, k3) or tape.is_active(el, v3))
   )
@@ -641,82 +661,94 @@ def varlen_flash_attention(el, q, k, v, cu_seqlens=None, *, cu_seqlens_kv=None, 
     q_seg = segment_ids.impl(el, off_q, total_q)
     out = el.alloc_array(elt, (total_q, H, D_dim), zero=True, label="vfa_out")
     lse = el.alloc_array(elt, (total_q, H), zero=True, label="vfa_lse") if record_ad else None
+    neg_inf_c = Const(-math.inf, elt)
+    zero_c = Const(0.0, elt)
 
     def fwd_token(idx):
       qi, h = idx
       b = el.tmp(cast(el.elem(q_seg, (qi,)), I), "b")
-      qs = el.tmp(cast(el.elem(off_q, (b,)), I), "qs")
-      ks = el.tmp(cast(el.elem(off_kv, (b,)), I), "ks")
-      ke = el.tmp(cast(el.elem(off_kv, (iadd(b, ONE),)), I), "ke")
-      qloc = el.tmp(isub(qi, qs), "qloc")
-      lo = ks
-      hi = ke
-      if is_causal:
-        hi = el.tmp(imin(hi, iadd(iadd(ks, qloc), ONE)), "hi")
-      if win is not None:
-        lo = el.tmp(imax(lo, isub(iadd(ks, qloc), win)), "lo")
-        if not is_causal:
-          hi = el.tmp(imin(hi, iadd(iadd(iadd(ks, qloc), win), ONE)), "hi")
+      valid_blk: list = []
+      with el.in_block(valid_blk):
+        qs = el.tmp(cast(el.elem(off_q, (b,)), I), "qs")
+        ks = el.tmp(cast(el.elem(off_kv, (b,)), I), "ks")
+        ke = el.tmp(cast(el.elem(off_kv, (iadd(b, ONE),)), I), "ke")
+        qloc = el.tmp(isub(qi, qs), "qloc")
+        lo = ks
+        hi = ke
+        if is_causal:
+          hi = el.tmp(imin(hi, iadd(iadd(ks, qloc), ONE)), "hi")
+        if win is not None:
+          lo = el.tmp(imax(lo, isub(iadd(ks, qloc), win)), "lo")
+          if not is_causal:
+            hi = el.tmp(imin(hi, iadd(iadd(iadd(ks, qloc), win), ONE)), "hi")
 
-      m = Var("m", elt)
-      l_acc = Var("l", elt)
-      el.mutables.update((m.uid, l_acc.uid))
-      el.emit(Assign(m, Const(-math.inf, elt)))
-      el.emit(Assign(l_acc, Const(0.0, elt)))
+        m = Var("m", elt)
+        l_acc = Var("l", elt)
+        el.mutables.update((m.uid, l_acc.uid))
+        el.emit(Assign(m, neg_inf_c))
+        el.emit(Assign(l_acc, zero_c))
 
-      # Online 1-pass (m, l, O) monoid over kj in [lo, hi)
-      kj = Var("kj", I)
-      el.nonneg.add(kj.uid)
-      kscope = el.new_scope("loop")
-      kbody: list = []
-      with el.in_block(kbody, kscope, loop=True):
-        # dot = sum_c Q[qi, h, c] * K[kj, h, c]
-        dot = Var("dot", elt)
-        el.mutables.add(dot.uid)
-        el.emit(Assign(dot, Const(0.0, elt)))
-        c = Var("c", I)
-        el.nonneg.add(c.uid)
-        cscope = el.new_scope("loop")
-        cbody: list = []
-        with el.in_block(cbody, cscope, loop=True):
-          qv = el.elem(q3, (qi, h, c))
-          kv = el.elem(k3, (kj, h, c))
-          el.emit(Assign(dot, ops.prim("add", (dot, ops.prim("mul", (qv, kv), elt)), elt)))
-        el.emit(ForRange(c, ZERO, K_dim, ONE, cbody, cscope))
-        score = el.tmp(ops.prim("mul", (dot, sc), elt), "score")
-        m_new = el.tmp(ops.prim("max", (m, score), elt), "mn")
-        alpha = el.tmp(ops.prim("exp", (ops.prim("sub", (m, m_new), elt),), elt), "alpha")
-        beta = el.tmp(ops.prim("exp", (ops.prim("sub", (score, m_new), elt),), elt), "beta")
-        el.emit(Assign(l_acc, ops.prim("add", (ops.prim("mul", (l_acc, alpha), elt), beta), elt)))
-        el.emit(Assign(m, m_new))
-        # Rescale running O[qi, h, d] and accumulate beta * V[kj, h, d]
-        d = Var("d", I)
-        el.nonneg.add(d.uid)
-        dscope = el.new_scope("loop")
-        dbody: list = []
-        with el.in_block(dbody, dscope, loop=True):
-          opos = el.index_expr(out, (qi, h, d))
-          cur = Load(out.buf, opos)
-          vv = el.elem(v3, (kj, h, d))
-          upd = ops.prim("add", (ops.prim("mul", (cur, alpha), elt), ops.prim("mul", (beta, vv), elt)), elt)
-          el.emit(Store(out.buf, opos, upd))
-        el.emit(ForRange(d, ZERO, D_dim, ONE, dbody, dscope))
-      el.emit(ForRange(kj, lo, hi, ONE, kbody, kscope))
+        # Online 1-pass (m, l, O) monoid over kj in [lo, hi) (guarded against -inf - (-inf))
+        kj = Var("kj", I)
+        el.nonneg.add(kj.uid)
+        kscope = el.new_scope("loop")
+        kbody: list = []
+        with el.in_block(kbody, kscope, loop=True):
+          dot = Var("dot", elt)
+          el.mutables.add(dot.uid)
+          el.emit(Assign(dot, zero_c))
+          c = Var("c", I)
+          el.nonneg.add(c.uid)
+          cscope = el.new_scope("loop")
+          cbody: list = []
+          with el.in_block(cbody, cscope, loop=True):
+            qv = el.elem(q3, (qi, h, c))
+            kv = el.elem(k3, (kj, h, c))
+            el.emit(Assign(dot, ops.prim("add", (dot, ops.prim("mul", (qv, kv), elt)), elt)))
+          el.emit(ForRange(c, ZERO, K_dim, ONE, cbody, cscope))
+          score = el.tmp(ops.prim("mul", (dot, sc), elt), "score")
+          m_new = el.tmp(ops.prim("max", (m, score), elt), "mn")
+          alpha = el.tmp(
+            ops.select(cmp("gt", m, neg_inf_c), ops.prim("exp", (ops.prim("sub", (m, m_new), elt),), elt), zero_c),
+            "alpha",
+          )
+          beta = el.tmp(
+            ops.select(
+              cmp("gt", score, neg_inf_c), ops.prim("exp", (ops.prim("sub", (score, m_new), elt),), elt), zero_c
+            ),
+            "beta",
+          )
+          el.emit(Assign(l_acc, ops.prim("add", (ops.prim("mul", (l_acc, alpha), elt), beta), elt)))
+          el.emit(Assign(m, m_new))
+          # Rescale running O[qi, h, d] and accumulate beta * V[kj, h, d]
+          d = Var("d", I)
+          el.nonneg.add(d.uid)
+          dscope = el.new_scope("loop")
+          dbody: list = []
+          with el.in_block(dbody, dscope, loop=True):
+            opos = el.index_expr(out, (qi, h, d))
+            cur = Load(out.buf, opos)
+            vv = el.elem(v3, (kj, h, d))
+            upd = ops.prim("add", (ops.prim("mul", (cur, alpha), elt), ops.prim("mul", (beta, vv), elt)), elt)
+            el.emit(Store(out.buf, opos, upd))
+          el.emit(ForRange(d, ZERO, D_dim, ONE, dbody, dscope))
+        el.emit(ForRange(kj, lo, hi, ONE, kbody, kscope))
 
-      # Normalize O[qi, h, :] /= l_acc (safe for empty [lo, hi))
-      has_any = cmp("gt", l_acc, Const(0.0, elt))
-      inv_l = el.tmp(ops.select(has_any, ops.prim("div", (Const(1.0, elt), l_acc), elt), Const(0.0, elt)), "inv_l")
-      d2 = Var("d2", I)
-      el.nonneg.add(d2.uid)
-      d2scope = el.new_scope("loop")
-      d2body: list = []
-      with el.in_block(d2body, d2scope, loop=True):
-        opos = el.index_expr(out, (qi, h, d2))
-        el.emit(Store(out.buf, opos, ops.prim("mul", (Load(out.buf, opos), inv_l), elt)))
-      el.emit(ForRange(d2, ZERO, D_dim, ONE, d2body, d2scope))
-      if lse is not None:
-        lse_val = ops.select(has_any, ops.prim("add", (m, ops.prim("log", (l_acc,), elt)), elt), Const(-math.inf, elt))
-        el.emit(Store(lse.buf, el.index_expr(lse, (qi, h)), lse_val))
+        # Normalize O[qi, h, :] /= l_acc (safe for empty [lo, hi))
+        has_any = cmp("gt", l_acc, zero_c)
+        inv_l = el.tmp(ops.select(has_any, ops.prim("div", (Const(1.0, elt), l_acc), elt), zero_c), "inv_l")
+        d2 = Var("d2", I)
+        el.nonneg.add(d2.uid)
+        d2scope = el.new_scope("loop")
+        d2body: list = []
+        with el.in_block(d2body, d2scope, loop=True):
+          opos = el.index_expr(out, (qi, h, d2))
+          el.emit(Store(out.buf, opos, ops.prim("mul", (Load(out.buf, opos), inv_l), elt)))
+        el.emit(ForRange(d2, ZERO, D_dim, ONE, d2body, d2scope))
+        if lse is not None:
+          lse_val = ops.select(has_any, ops.prim("add", (m, ops.prim("log", (l_acc,), elt)), elt), neg_inf_c)
+          el.emit(Store(lse.buf, el.index_expr(lse, (qi, h)), lse_val))
+      el.emit(If(cmp("ge", b, ZERO), valid_blk, []))
 
     el.index_map((total_q, H), fwd_token, ordered=False)
   finally:
@@ -782,70 +814,75 @@ def _varlen_flash_attention_vjp(tape, el, node, g: ArrayVal) -> None:
     def compute_dq(idx):
       qi, h = idx
       b = el.tmp(cast(el.elem(q_seg, (qi,)), I), "b")
-      qs = el.tmp(cast(el.elem(off_q, (b,)), I), "qs")
-      ks = el.tmp(cast(el.elem(off_kv, (b,)), I), "ks")
-      ke = el.tmp(cast(el.elem(off_kv, (iadd(b, ONE),)), I), "ke")
-      qloc = el.tmp(isub(qi, qs), "qloc")
-      lo, hi = ks, ke
-      if is_causal:
-        hi = el.tmp(imin(hi, iadd(iadd(ks, qloc), ONE)), "hi")
-      if win is not None:
-        lo = el.tmp(imax(lo, isub(iadd(ks, qloc), win)), "lo")
-        if not is_causal:
-          hi = el.tmp(imin(hi, iadd(iadd(iadd(ks, qloc), win), ONE)), "hi")
-      lse_i = el.tmp(el.elem(lse, (qi, h)), "lse_i")
-      d_i = el.tmp(el.elem(d_vec, (qi, h)), "d_i")
+      vb_q: list = []
+      with el.in_block(vb_q):
+        qs = el.tmp(cast(el.elem(off_q, (b,)), I), "qs")
+        ks = el.tmp(cast(el.elem(off_kv, (b,)), I), "ks")
+        ke = el.tmp(cast(el.elem(off_kv, (iadd(b, ONE),)), I), "ke")
+        qloc = el.tmp(isub(qi, qs), "qloc")
+        lo, hi = ks, ke
+        if is_causal:
+          hi = el.tmp(imin(hi, iadd(iadd(ks, qloc), ONE)), "hi")
+        if win is not None:
+          lo = el.tmp(imax(lo, isub(iadd(ks, qloc), win)), "lo")
+          if not is_causal:
+            hi = el.tmp(imin(hi, iadd(iadd(iadd(ks, qloc), win), ONE)), "hi")
+        lse_i = el.tmp(el.elem(lse, (qi, h)), "lse_i")
+        d_i = el.tmp(el.elem(d_vec, (qi, h)), "d_i")
 
-      kj = Var("kj", I)
-      el.nonneg.add(kj.uid)
-      ksc = el.new_scope("loop")
-      kb: list = []
-      with el.in_block(kb, ksc, loop=True):
-        dot = Var("dot", elt)
-        el.mutables.add(dot.uid)
-        el.emit(Assign(dot, Const(0.0, elt)))
-        c = Var("c", I)
-        el.nonneg.add(c.uid)
-        csc = el.new_scope("loop")
-        cb: list = []
-        with el.in_block(cb, csc, loop=True):
-          el.emit(
-            Assign(
-              dot, ops.prim("add", (dot, ops.prim("mul", (el.elem(q3, (qi, h, c)), el.elem(k3, (kj, h, c))), elt)), elt)
+        kj = Var("kj", I)
+        el.nonneg.add(kj.uid)
+        ksc = el.new_scope("loop")
+        kb: list = []
+        with el.in_block(kb, ksc, loop=True):
+          dot = Var("dot", elt)
+          el.mutables.add(dot.uid)
+          el.emit(Assign(dot, Const(0.0, elt)))
+          c = Var("c", I)
+          el.nonneg.add(c.uid)
+          csc = el.new_scope("loop")
+          cb: list = []
+          with el.in_block(cb, csc, loop=True):
+            el.emit(
+              Assign(
+                dot,
+                ops.prim("add", (dot, ops.prim("mul", (el.elem(q3, (qi, h, c)), el.elem(k3, (kj, h, c))), elt)), elt),
+              )
             )
-          )
-        el.emit(ForRange(c, ZERO, K_dim, ONE, cb, csc))
-        p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (ops.prim("mul", (dot, sc), elt), lse_i), elt),), elt), "p")
-        dp = Var("dp", elt)
-        el.mutables.add(dp.uid)
-        el.emit(Assign(dp, Const(0.0, elt)))
-        d = Var("d", I)
-        el.nonneg.add(d.uid)
-        dsc = el.new_scope("loop")
-        db: list = []
-        with el.in_block(db, dsc, loop=True):
-          el.emit(
-            Assign(
-              dp, ops.prim("add", (dp, ops.prim("mul", (el.elem(g, (qi, h, d)), el.elem(v3, (kj, h, d))), elt)), elt)
+          el.emit(ForRange(c, ZERO, K_dim, ONE, cb, csc))
+          p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (ops.prim("mul", (dot, sc), elt), lse_i), elt),), elt), "p")
+          dp = Var("dp", elt)
+          el.mutables.add(dp.uid)
+          el.emit(Assign(dp, Const(0.0, elt)))
+          d = Var("d", I)
+          el.nonneg.add(d.uid)
+          dsc = el.new_scope("loop")
+          db: list = []
+          with el.in_block(db, dsc, loop=True):
+            el.emit(
+              Assign(
+                dp,
+                ops.prim("add", (dp, ops.prim("mul", (el.elem(g, (qi, h, d)), el.elem(v3, (kj, h, d))), elt)), elt),
+              )
             )
-          )
-        el.emit(ForRange(d, ZERO, D_dim, ONE, db, dsc))
-        ds = el.tmp(ops.prim("mul", (ops.prim("mul", (p_ij, ops.prim("sub", (dp, d_i), elt)), elt), sc), elt), "ds")
-        c2 = Var("c2", I)
-        el.nonneg.add(c2.uid)
-        c2sc = el.new_scope("loop")
-        c2b: list = []
-        with el.in_block(c2b, c2sc, loop=True):
-          qpos = el.index_expr(dq, (qi, h, c2))
-          el.emit(
-            Store(
-              dq.buf,
-              qpos,
-              ops.prim("add", (Load(dq.buf, qpos), ops.prim("mul", (ds, el.elem(k3, (kj, h, c2))), elt)), elt),
+          el.emit(ForRange(d, ZERO, D_dim, ONE, db, dsc))
+          ds = el.tmp(ops.prim("mul", (ops.prim("mul", (p_ij, ops.prim("sub", (dp, d_i), elt)), elt), sc), elt), "ds")
+          c2 = Var("c2", I)
+          el.nonneg.add(c2.uid)
+          c2sc = el.new_scope("loop")
+          c2b: list = []
+          with el.in_block(c2b, c2sc, loop=True):
+            qpos = el.index_expr(dq, (qi, h, c2))
+            el.emit(
+              Store(
+                dq.buf,
+                qpos,
+                ops.prim("add", (Load(dq.buf, qpos), ops.prim("mul", (ds, el.elem(k3, (kj, h, c2))), elt)), elt),
+              )
             )
-          )
-        el.emit(ForRange(c2, ZERO, K_dim, ONE, c2b, c2sc))
-      el.emit(ForRange(kj, lo, hi, ONE, kb, ksc))
+          el.emit(ForRange(c2, ZERO, K_dim, ONE, c2b, c2sc))
+        el.emit(ForRange(kj, lo, hi, ONE, kb, ksc))
+      el.emit(If(cmp("ge", b, ZERO), vb_q, []))
 
     el.index_map((total_q, H), compute_dq, ordered=False)
     tape.add(el, q3, dq)
@@ -859,88 +896,92 @@ def _varlen_flash_attention_vjp(tape, el, node, g: ArrayVal) -> None:
     def compute_dkv(idx):
       kj, h = idx
       b = el.tmp(cast(el.elem(kv_seg, (kj,)), I), "b")
-      qs = el.tmp(cast(el.elem(off_q, (b,)), I), "qs")
-      qe = el.tmp(cast(el.elem(off_q, (iadd(b, ONE),)), I), "qe")
-      ks = el.tmp(cast(el.elem(off_kv, (b,)), I), "ks")
-      kloc = el.tmp(isub(kj, ks), "kloc")
-      # Invert causal & window bounds: qi_local >= kloc (if causal), kloc <= qi_local <= kloc + win (if causal+win), etc.
-      qlo, qhi = qs, qe
-      if is_causal:
-        qlo = el.tmp(imax(qlo, iadd(qs, kloc)), "qlo")
-      if win is not None:
-        if not is_causal:
-          qlo = el.tmp(imax(qlo, isub(iadd(qs, kloc), win)), "qlo")
-        qhi = el.tmp(imin(qhi, iadd(iadd(iadd(qs, kloc), win), ONE)), "qhi")
+      vb_kv: list = []
+      with el.in_block(vb_kv):
+        qs = el.tmp(cast(el.elem(off_q, (b,)), I), "qs")
+        qe = el.tmp(cast(el.elem(off_q, (iadd(b, ONE),)), I), "qe")
+        ks = el.tmp(cast(el.elem(off_kv, (b,)), I), "ks")
+        kloc = el.tmp(isub(kj, ks), "kloc")
+        # Invert causal & window bounds: qi_local >= kloc (if causal), kloc <= qi_local <= kloc + win (if causal+win), etc.
+        qlo, qhi = qs, qe
+        if is_causal:
+          qlo = el.tmp(imax(qlo, iadd(qs, kloc)), "qlo")
+        if win is not None:
+          if not is_causal:
+            qlo = el.tmp(imax(qlo, isub(iadd(qs, kloc), win)), "qlo")
+          qhi = el.tmp(imin(qhi, iadd(iadd(iadd(qs, kloc), win), ONE)), "qhi")
 
-      qi = Var("qi", I)
-      el.nonneg.add(qi.uid)
-      qsc = el.new_scope("loop")
-      qb: list = []
-      with el.in_block(qb, qsc, loop=True):
-        dot = Var("dot", elt)
-        el.mutables.add(dot.uid)
-        el.emit(Assign(dot, Const(0.0, elt)))
-        c = Var("c", I)
-        el.nonneg.add(c.uid)
-        csc = el.new_scope("loop")
-        cb: list = []
-        with el.in_block(cb, csc, loop=True):
-          el.emit(
-            Assign(
-              dot, ops.prim("add", (dot, ops.prim("mul", (el.elem(q3, (qi, h, c)), el.elem(k3, (kj, h, c))), elt)), elt)
-            )
-          )
-        el.emit(ForRange(c, ZERO, K_dim, ONE, cb, csc))
-        lse_i = el.elem(lse, (qi, h))
-        p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (ops.prim("mul", (dot, sc), elt), lse_i), elt),), elt), "p")
-        if dv is not None:
-          d = Var("d", I)
-          el.nonneg.add(d.uid)
-          dsc = el.new_scope("loop")
-          db: list = []
-          with el.in_block(db, dsc, loop=True):
-            vpos = el.index_expr(dv, (kj, h, d))
-            el.emit(
-              Store(
-                dv.buf,
-                vpos,
-                ops.prim("add", (Load(dv.buf, vpos), ops.prim("mul", (p_ij, el.elem(g, (qi, h, d))), elt)), elt),
-              )
-            )
-          el.emit(ForRange(d, ZERO, D_dim, ONE, db, dsc))
-        if dk is not None:
-          dp = Var("dp", elt)
-          el.mutables.add(dp.uid)
-          el.emit(Assign(dp, Const(0.0, elt)))
-          d2 = Var("d2", I)
-          el.nonneg.add(d2.uid)
-          d2sc = el.new_scope("loop")
-          d2b: list = []
-          with el.in_block(d2b, d2sc, loop=True):
+        qi = Var("qi", I)
+        el.nonneg.add(qi.uid)
+        qsc = el.new_scope("loop")
+        qb: list = []
+        with el.in_block(qb, qsc, loop=True):
+          dot = Var("dot", elt)
+          el.mutables.add(dot.uid)
+          el.emit(Assign(dot, Const(0.0, elt)))
+          c = Var("c", I)
+          el.nonneg.add(c.uid)
+          csc = el.new_scope("loop")
+          cb: list = []
+          with el.in_block(cb, csc, loop=True):
             el.emit(
               Assign(
-                dp,
-                ops.prim("add", (dp, ops.prim("mul", (el.elem(g, (qi, h, d2)), el.elem(v3, (kj, h, d2))), elt)), elt),
+                dot,
+                ops.prim("add", (dot, ops.prim("mul", (el.elem(q3, (qi, h, c)), el.elem(k3, (kj, h, c))), elt)), elt),
               )
             )
-          el.emit(ForRange(d2, ZERO, D_dim, ONE, d2b, d2sc))
-          d_i = el.elem(d_vec, (qi, h))
-          ds = el.tmp(ops.prim("mul", (ops.prim("mul", (p_ij, ops.prim("sub", (dp, d_i), elt)), elt), sc), elt), "ds")
-          c2 = Var("c2", I)
-          el.nonneg.add(c2.uid)
-          c2sc = el.new_scope("loop")
-          c2b: list = []
-          with el.in_block(c2b, c2sc, loop=True):
-            kpos = el.index_expr(dk, (kj, h, c2))
-            el.emit(
-              Store(
-                dk.buf,
-                kpos,
-                ops.prim("add", (Load(dk.buf, kpos), ops.prim("mul", (ds, el.elem(q3, (qi, h, c2))), elt)), elt),
+          el.emit(ForRange(c, ZERO, K_dim, ONE, cb, csc))
+          lse_i = el.elem(lse, (qi, h))
+          p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (ops.prim("mul", (dot, sc), elt), lse_i), elt),), elt), "p")
+          if dv is not None:
+            d = Var("d", I)
+            el.nonneg.add(d.uid)
+            dsc = el.new_scope("loop")
+            db: list = []
+            with el.in_block(db, dsc, loop=True):
+              vpos = el.index_expr(dv, (kj, h, d))
+              el.emit(
+                Store(
+                  dv.buf,
+                  vpos,
+                  ops.prim("add", (Load(dv.buf, vpos), ops.prim("mul", (p_ij, el.elem(g, (qi, h, d))), elt)), elt),
+                )
               )
-            )
-          el.emit(ForRange(c2, ZERO, K_dim, ONE, c2b, c2sc))
-      el.emit(ForRange(qi, qlo, qhi, ONE, qb, qsc))
+            el.emit(ForRange(d, ZERO, D_dim, ONE, db, dsc))
+          if dk is not None:
+            dp = Var("dp", elt)
+            el.mutables.add(dp.uid)
+            el.emit(Assign(dp, Const(0.0, elt)))
+            d2 = Var("d2", I)
+            el.nonneg.add(d2.uid)
+            d2sc = el.new_scope("loop")
+            d2b: list = []
+            with el.in_block(d2b, d2sc, loop=True):
+              el.emit(
+                Assign(
+                  dp,
+                  ops.prim("add", (dp, ops.prim("mul", (el.elem(g, (qi, h, d2)), el.elem(v3, (kj, h, d2))), elt)), elt),
+                )
+              )
+            el.emit(ForRange(d2, ZERO, D_dim, ONE, d2b, d2sc))
+            d_i = el.elem(d_vec, (qi, h))
+            ds = el.tmp(ops.prim("mul", (ops.prim("mul", (p_ij, ops.prim("sub", (dp, d_i), elt)), elt), sc), elt), "ds")
+            c2 = Var("c2", I)
+            el.nonneg.add(c2.uid)
+            c2sc = el.new_scope("loop")
+            c2b: list = []
+            with el.in_block(c2b, c2sc, loop=True):
+              kpos = el.index_expr(dk, (kj, h, c2))
+              el.emit(
+                Store(
+                  dk.buf,
+                  kpos,
+                  ops.prim("add", (Load(dk.buf, kpos), ops.prim("mul", (ds, el.elem(q3, (qi, h, c2))), elt)), elt),
+                )
+              )
+            el.emit(ForRange(c2, ZERO, K_dim, ONE, c2b, c2sc))
+        el.emit(ForRange(qi, qlo, qhi, ONE, qb, qsc))
+      el.emit(If(cmp("ge", b, ZERO), vb_kv, []))
 
     el.index_map((total_kv, H), compute_dkv, ordered=False)
     if dk is not None:
