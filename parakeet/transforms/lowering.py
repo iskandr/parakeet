@@ -496,10 +496,18 @@ def lower_filter(lp: Loops, s: ir.IndexFilter) -> None:
 # ---------------------------------------------------------------------------
 
 
-def lower_scan(lp: Loops, s: ir.IndexScan, scratch: Scope) -> None:
+GPU_SINGLE_SCAN_MAX = 2048  # max elements for a 1-launch GPU scan without carries round-trip
+
+
+def lower_scan(lp: Loops, s: ir.IndexScan, scratch: Scope, target=None) -> None:
   """A loop that carries the accumulator; when the combiner is associative,
   two parallel passes instead: fold every chunk, turn the chunk totals into
-  each chunk's starting value, then scan the chunks."""
+  each chunk's starting value, then scan the chunks.
+
+  On GPU targets, small scans (``n <= GPU_SINGLE_SCAN_MAX``) run in a single
+  1-chunk device kernel with zero ``carries`` buffer or host sync, and larger
+  scans prefix ``carries`` in a 1-chunk device kernel so no intermediate
+  host-device round-trip occurs."""
   f = s.fold
   n = lp.tmp(s.n, "n")
   seeded = f.init is not None
@@ -547,6 +555,63 @@ def lower_scan(lp: Loops, s: ir.IndexScan, scratch: Scope) -> None:
       value_at(lp.sub(head), ZERO, acc, True)
       lp.emit(If(cmp("gt", n, 0), head, []))
       rest(lp, ONE, n, acc, True, False)
+    return
+
+  if target is not None and target.is_gpu:
+    single_blk: list = []
+
+    def single_scan(inner: Loops, _chunk, start, stop):
+      acc = Var("acc", f.a.type)
+      if seeded:
+        inner.emit(Assign(acc, cast(f.init, acc.type)))
+        rest(inner, start, stop, acc, True, True)
+      else:
+        value_at(inner, start, acc, True)
+        rest(inner, iadd(start, 1), stop, acc, True, True)
+
+    single_run: list = []
+    lp.sub(single_run).parallel(n, single_scan, kind="reduce", nchunks=ONE, loc=s.loc, heavy=depth(s.body) > 0)
+    single_blk.append(If(cmp("gt", n, ZERO), single_run, []))
+
+    multi_blk: list = []
+    mlp = lp.sub(multi_blk)
+    nchunks = mlp.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
+    carries = Var("carries", BufType(strong))
+    mlp.emit(Alloc(carries, nchunks))
+    lp.owner.owned.append(carries)
+
+    def fold_chunk(inner: Loops, chunk, start, stop):
+      acc = Var("acc", f.a.type)
+      value_at(inner, start, acc, False)
+      rest(inner, iadd(start, 1), stop, acc, False, True)
+      inner.emit(Store(carries, chunk, cast(acc, strong)))
+
+    mlp.parallel(n, fold_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+
+    def prefix_carries(inner: Loops, _chunk, start, stop):
+      carry, c, total_v = Var("carry", f.a.type), Var("c", I), Var("total", f.a.type)
+      shift: list = [Assign(total_v, cast(Load(carries, c), total_v.type)), Store(carries, c, cast(carry, strong))]
+      step(inner.sub(shift), f, carry, total_v, scratch)
+      if seeded:
+        inner.emit(Assign(carry, cast(f.init, carry.type)))
+        inner.emit(ForRange(c, start, stop, ONE, shift, Scope("loop")))
+      else:
+        inner.emit(Assign(carry, cast(Load(carries, start), carry.type)))
+        inner.emit(ForRange(c, iadd(start, 1), stop, ONE, shift, Scope("loop")))
+
+    prefix_run: list = []
+    mlp.sub(prefix_run).parallel(nchunks, prefix_carries, kind="reduce", nchunks=ONE, loc=s.loc)
+    mlp.emit(If(cmp("gt", nchunks, ZERO), prefix_run, []))
+
+    def scan_chunk(inner: Loops, chunk, start, stop):
+      acc = Var("acc", f.a.type)
+      before = cast(Load(carries, chunk), acc.type)
+      value_at(inner, start, acc, True, join=before, unless=None if seeded else cmp("eq", chunk, 0))
+      rest(inner, iadd(start, 1), stop, acc, True, False)
+
+    mlp.parallel(n, scan_chunk, kind="reduce", nchunks=nchunks, loc=s.loc)
+    mlp.emit(ir.Release(carries))
+    lp.emit(If(cmp("le", n, Const(GPU_SINGLE_SCAN_MAX, I)), single_blk, multi_blk))
     return
 
   nchunks = lp.tmp(RtCall("num_chunks", (n, Const(True, Bool)), I), "nchunks")
@@ -963,7 +1028,7 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope, target=None) -
       s.emit[:] = lower_block(s.emit, defs, s.scope, target)
       scratch = Scope("fold")
       s.fold.combine[:] = lower_block(s.fold.combine, defs, scratch, target)
-      lower_scan(Loops(out, defs, owner), s, scratch)
+      lower_scan(Loops(out, defs, owner), s, scratch, target)
       continue
     if isinstance(s, If):
       s.then[:] = lower_block(s.then, defs, owner, target)
@@ -974,9 +1039,194 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope, target=None) -
   return out
 
 
+def _replace_var_in_expr(e: Expr, old_uid: int, new_var: Var) -> Expr:
+  if isinstance(e, Var):
+    return new_var if e.uid == old_uid else e
+  if isinstance(e, ir.Prim):
+    return ir.Prim(e.op, tuple(_replace_var_in_expr(a, old_uid, new_var) for a in e.args), e.type)
+  if isinstance(e, ir.Cast):
+    return ir.Cast(_replace_var_in_expr(e.arg, old_uid, new_var), e.type)
+  if isinstance(e, Load):
+    return Load(e.buf, _replace_var_in_expr(e.index, old_uid, new_var))
+  if isinstance(e, RtCall):
+    return RtCall(e.name, tuple(_replace_var_in_expr(a, old_uid, new_var) for a in e.args), e.type, e.pure)
+  return e
+
+
+def _replace_var_in_block(block: list, old_uid: int, new_var: Var) -> None:
+  for idx, s in enumerate(block):
+    if isinstance(s, Assign):
+      block[idx] = Assign(s.var, _replace_var_in_expr(s.value, old_uid, new_var))
+    elif isinstance(s, Store):
+      block[idx] = Store(
+        s.buf,
+        _replace_var_in_expr(s.index, old_uid, new_var),
+        _replace_var_in_expr(s.value, old_uid, new_var),
+        s.atomic,
+      )
+    elif isinstance(s, ir.Check):
+      block[idx] = ir.Check(
+        _replace_var_in_expr(s.cond, old_uid, new_var),
+        s.err,
+        tuple(_replace_var_in_expr(a, old_uid, new_var) for a in s.args),
+      )
+    elif isinstance(s, Alloc):
+      s.count = _replace_var_in_expr(s.count, old_uid, new_var)
+    elif isinstance(s, If):
+      s.cond = _replace_var_in_expr(s.cond, old_uid, new_var)
+      _replace_var_in_block(s.then, old_uid, new_var)
+      _replace_var_in_block(s.orelse, old_uid, new_var)
+    elif isinstance(s, ForRange):
+      s.start = _replace_var_in_expr(s.start, old_uid, new_var)
+      s.stop = _replace_var_in_expr(s.stop, old_uid, new_var)
+      s.step = _replace_var_in_expr(s.step, old_uid, new_var)
+      _replace_var_in_block(s.body, old_uid, new_var)
+    elif isinstance(s, While):
+      _replace_var_in_block(s.body, old_uid, new_var)
+    elif isinstance(s, ParLoop):
+      s.total = _replace_var_in_expr(s.total, old_uid, new_var)
+      s.nchunks = _replace_var_in_expr(s.nchunks, old_uid, new_var)
+      if s.work is not None:
+        s.work = _replace_var_in_expr(s.work, old_uid, new_var)
+      _replace_var_in_block(s.body, old_uid, new_var)
+
+
+def _count_var_in_stmts(stmts: list, uid: int) -> int:
+  n = 0
+  for s in ir.walk_stmts(stmts):
+    for e in ir.stmt_exprs(s):
+      for x in ir.walk_expr(e):
+        if isinstance(x, Var) and x.uid == uid:
+          n += 1
+  return n
+
+
+def sink_gpu_scalar_loads(fn: ir.Function, target=None) -> None:
+  """Move host scalar loads ``v = buf[idx]`` into consuming GPU ``ParLoop``s when
+  every use of ``v`` is inside those loops and ``buf`` is not mutated in between.
+
+  Prevents unnecessary host-side buffer downloads for scalars like
+  ``g_tot = g_left[nbins - 1]`` or ``x - x[-1]``."""
+  from .analysis import BufferInfo
+
+  binfo = BufferInfo.analyze(fn)
+  max_bufs = 28 if (target is not None and getattr(target, "name", None) == "metal") else None
+  def_count: dict[int, int] = {}
+  use_count: dict[int, int] = {}
+  for s in ir.walk_stmts(fn.body):
+    for v in ir.stmt_defs(s):
+      def_count[v.uid] = def_count.get(v.uid, 0) + 1
+    for e in ir.stmt_exprs(s):
+      for x in ir.walk_expr(e):
+        if isinstance(x, Var):
+          use_count[x.uid] = use_count.get(x.uid, 0) + 1
+  for r in fn.results:
+    if isinstance(r, Expr):
+      for x in ir.walk_expr(r):
+        if isinstance(x, Var):
+          use_count[x.uid] = use_count.get(x.uid, 0) + 1
+    else:
+      for name in getattr(type(r), "__dataclass_fields__", ()):
+        val = getattr(r, name)
+        if isinstance(val, Expr):
+          for x in ir.walk_expr(val):
+            if isinstance(x, Var):
+              use_count[x.uid] = use_count.get(x.uid, 0) + 1
+        elif isinstance(val, (tuple, list)):
+          for item in val:
+            if isinstance(item, Expr):
+              for x in ir.walk_expr(item):
+                if isinstance(x, Var):
+                  use_count[x.uid] = use_count.get(x.uid, 0) + 1
+
+  def _is_pure_invariant_index(e: Expr) -> bool:
+    for x in ir.walk_expr(e):
+      if isinstance(x, Load):
+        return False
+      if isinstance(x, RtCall) and not x.pure:
+        return False
+      if isinstance(x, Var) and def_count.get(x.uid, 0) > 1:
+        return False
+    return True
+
+  def _touches_buf_or_impure(st: ir.Stmt, buf_uid: int) -> bool:
+    written: set[int] = set()
+    for sub in ir.walk_stmts([st]):
+      if isinstance(sub, Store):
+        written.add(sub.buf.uid)
+      elif isinstance(sub, ir.Release):
+        written.add(sub.var.uid)
+      elif isinstance(sub, Assign) and any(
+        isinstance(x, RtCall) and not x.pure and x.name not in ("num_chunks", "num_threads", "rng_key")
+        for x in ir.walk_expr(sub.value)
+      ):
+        return True
+    return bool(written) and binfo.may_alias({buf_uid}, written)
+
+  def _loop_buf_uids(pl: ParLoop) -> set[int]:
+    uids: set[int] = set()
+    for sub in ir.walk_stmts(pl.body):
+      if isinstance(sub, Store):
+        uids.add(sub.buf.uid)
+      for e in ir.stmt_exprs(sub):
+        for x in ir.walk_expr(e):
+          if isinstance(x, Var) and isinstance(x.type, BufType):
+            uids.add(x.uid)
+    return uids
+
+  def walk_block(block: list) -> None:
+    for s in block:
+      for b in ir.sub_blocks(s):
+        walk_block(b)
+    drop: set[int] = set()
+    for i, s in enumerate(block):
+      if not (isinstance(s, Assign) and isinstance(s.value, Load) and not isinstance(s.var.type, BufType)):
+        continue
+      v = s.var
+      if def_count.get(v.uid, 0) != 1 or use_count.get(v.uid, 0) <= 0:
+        continue
+      buf = s.value.buf
+      idx_e = s.value.index
+      if not _is_pure_invariant_index(idx_e):
+        continue
+      consumers: list[ParLoop] = []
+      covered = 0
+      for j in range(i + 1, len(block)):
+        nxt = block[j]
+        if _touches_buf_or_impure(nxt, buf.uid):
+          break
+        if isinstance(nxt, ParLoop) and nxt.shared_tile is None and nxt.monoidal_tile is None:
+          hdr_uses = sum(
+            1
+            for h in (nxt.total, nxt.nchunks, *(() if nxt.work is None else (nxt.work,)))
+            for x in ir.walk_expr(h)
+            if isinstance(x, Var) and x.uid == v.uid
+          )
+          if hdr_uses > 0:
+            break
+          body_uses = _count_var_in_stmts(nxt.body, v.uid)
+          if body_uses > 0:
+            consumers.append(nxt)
+            covered += body_uses
+      if consumers and covered == use_count[v.uid]:
+        if max_bufs is not None and any(len(_loop_buf_uids(pl) | {buf.uid}) > max_bufs for pl in consumers):
+          continue
+        drop.add(i)
+        for pl in consumers:
+          local_v = Var(v.name, v.type)
+          _replace_var_in_block(pl.body, v.uid, local_v)
+          pl.body.insert(0, Assign(local_v, Load(buf, idx_e)))
+    if drop:
+      block[:] = [s for i, s in enumerate(block) if i not in drop]
+
+  walk_block(fn.body)
+
+
 def lower(fn: ir.Function, target=None) -> None:
   """Replace every operator statement of ``fn`` by loops."""
   fn.body[:] = lower_block(fn.body, pure_defs(fn.body), fn.scope, target)
+  if target is not None and target.is_gpu:
+    sink_gpu_scalar_loads(fn, target)
 
 
 __all__ = [
