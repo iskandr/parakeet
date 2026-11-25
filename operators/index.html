@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#data-parallel-operators" class="md-skip">
+        <a href="#data-parallel-operators-parakeetdsl" class="md-skip">
           Skip to content
         </a>
       
@@ -534,6 +534,34 @@
     
   
     Train nanoGPT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bioinformatics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bioinformatics & structural biology
   
 
     
@@ -1339,12 +1367,21 @@
   
 
 
-<h1 id="data-parallel-operators">Data-parallel operators<a class="headerlink" href="#data-parallel-operators" title="Permanent link">&para;</a></h1>
-<p>Most code needs none of these — NumPy expressions and comprehensions compile to
-the same loops. They are useful when you want to apply <em>your own function</em> over
-an array in parallel, and they can be called directly from Python without
-decorating anything.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pk</span>
+<h1 id="data-parallel-operators-parakeetdsl">Data-parallel operators &amp; <code>parakeet.dsl</code><a class="headerlink" href="#data-parallel-operators-parakeetdsl" title="Permanent link">&para;</a></h1>
+<p>Parakeet supports two clean, distinct ways to write compiled code over the same
+algebraic IR:</p>
+<ol>
+<li><strong>NumPy frontend (<code>import numpy as np; import parakeet</code>):</strong> Decorate
+   ordinary NumPy functions with <code>@parakeet.jit</code> (and use <code>parakeet.grad</code> /
+   <code>parakeet.value_and_grad</code> for differentiation).</li>
+<li><strong>Self-contained DSL (<code>from parakeet import dsl</code>):</strong> Write explicit
+   data-parallel kernels with <code>@dsl.kernel</code>, <code>dsl.map</code>, <code>dsl.allpairs</code>,
+   <code>dsl.fold</code>, <code>dsl.imap</code>, <code>dsl.ireduce</code>, <code>dsl.scan</code>, <code>dsl.scatter</code>, and
+   <code>dsl.*</code> primitives (<code>dsl.min</code>, <code>dsl.max</code>, <code>dsl.sum</code>, <code>dsl.argmin</code>,
+   <code>dsl.argmax</code>, <code>dsl.exp</code>, <code>dsl.where</code>, <code>dsl.isnan</code>, <code>dsl.f32</code>, <code>dsl.i64</code>, ...)
+   — completely disjoint from NumPy syntax.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="kn">import</span> <span class="n">dsl</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1355,74 +1392,77 @@ decorating anything.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>pk.map(f, x, y, ..., axis=0)</code> (alias <code>each</code>)</td>
+<td><code>dsl.map(f, x, y, ..., axis=0)</code></td>
 <td><code>f</code> applied to corresponding slices along <code>axis</code>; <code>axis=None</code> applies it to every scalar element</td>
 </tr>
 <tr>
-<td><code>pk.allpairs(f, x, y, axis=0)</code></td>
+<td><code>dsl.allpairs(f, x, y, axis=0)</code></td>
 <td><code>result[i, j] = f(x[i], y[j])</code></td>
 </tr>
 <tr>
-<td><code>pk.outer_map(f, x, y, z, ...)</code></td>
+<td><code>dsl.outer_map(f, x, y, z, ...)</code></td>
 <td>the n-ary generalisation of <code>allpairs</code></td>
 </tr>
 <tr>
-<td><code>pk.reduce(f, x, ..., init=None, axis=None, map=None)</code></td>
+<td><code>dsl.reduce(f, x, ..., init=None, axis=None, map=None)</code></td>
 <td>fold <code>f</code> over all elements, or over slices along <code>axis</code>; with <code>map=g</code> and several arrays, over <code>g(x[i], y[i], ...)</code></td>
 </tr>
 <tr>
-<td><code>pk.scan(f, x, ..., init=None, axis=0, map=None, emit=None)</code></td>
+<td><code>dsl.fold(lift, merge, x, init=None, *, axis=None, indexed=False, emit=None)</code></td>
+<td>associative structured fold over tuple / <code>NamedTuple</code> states (tiles pairwise folds automatically)</td>
+</tr>
+<tr>
+<td><code>dsl.scan(f, x, ..., init=None, axis=0, map=None, emit=None)</code></td>
 <td>running fold (a generalised <code>cumsum</code>); <code>emit=h</code> gives <code>h</code> of each running value</td>
 </tr>
 <tr>
-<td><code>pk.imap(f, shape)</code></td>
-<td><code>result[idx] = f(idx)</code> for every index of <code>shape</code></td>
+<td><code>dsl.imap(f, shape)</code></td>
+<td><code>result[i, j, ...] = f(i, j, ...)</code> for every index of <code>shape</code> (unpacks multi-axis indices automatically; 1-arg tuple <code>lambda ij:</code> also works)</td>
 </tr>
 <tr>
-<td><code>pk.ireduce(f, shape, init=None, combine=add)</code></td>
-<td>reduce <code>f(idx)</code> over every index</td>
+<td><code>dsl.ireduce(f, shape, init=None, combine=dsl.add)</code></td>
+<td>reduce <code>f(i, ...)</code> over every index of <code>shape</code></td>
 </tr>
 <tr>
-<td><code>pk.parfor(f, shape)</code></td>
-<td>call <code>f(idx)</code> for its side effects, in parallel</td>
+<td><code>dsl.parfor(f, shape)</code></td>
+<td>call <code>f(i, ...)</code> for its side effects, in parallel</td>
 </tr>
 <tr>
-<td><code>pk.filter(pred, x, ..., map=None)</code></td>
+<td><code>dsl.filter(pred, x, ..., map=None)</code></td>
 <td>the elements of <code>x</code> for which <code>pred</code> is true; with several arrays, <code>map(x[i], y[i], ...)</code> where <code>pred(x[i], y[i], ...)</code> holds</td>
 </tr>
 <tr>
-<td><code>pk.filter_reduce(f, pred, x, ..., map=None, init=None, axis=None)</code></td>
+<td><code>dsl.filter_reduce(f, pred, x, ..., map=None, init=None, axis=None)</code></td>
 <td>reduce with <code>f</code> over elements where <code>pred</code> holds (fuses into one zero-allocation guarded reduction loop when <code>init</code> is given)</td>
 </tr>
 <tr>
-<td><code>pk.scatter_add(n, idx, vals)</code></td>
+<td><code>dsl.scatter(n, idx, vals)</code> (alias <code>scatter_add</code>)</td>
 <td>index-directed associative scatter-add (<code>IndexScatter</code>) with thread-privatized parallel lowering and exact gather adjoint</td>
 </tr>
 <tr>
-<td><code>pk.pmap1(f, x, w)</code>, <code>pk.pmap2(f, x, (wx, wy))</code></td>
-<td><code>f</code> applied to a sliding window around each element</td>
-</tr>
-<tr>
-<td><code>pk.grad(f, argnum=0)</code>, <code>pk.value_and_grad(f, argnum=0)</code></td>
+<td><code>dsl.grad(f, argnum=0)</code>, <code>dsl.value_and_grad(f, argnum=0)</code></td>
 <td>the gradient of a scalar-valued <code>f</code> — see <a href="../autodiff/">Gradients</a></td>
 </tr>
 <tr>
-<td><code>pk.dsl.show_rewrite(f, *args)</code></td>
+<td><code>dsl.show_rewrite(f, *args)</code></td>
 <td>inspect which of Parakeet's <a href="../algebra/">six algebraic laws</a> rewrote <code>f</code> and view before/after IR</td>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">pk</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">row</span> <span class="o">/</span> <span class="n">row</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># normalise rows</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">pk</span><span class="o">.</span><span class="n">allpairs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">),</span> <span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span>  <span class="c1"># distance matrix, no temporaries</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">pk</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">pk</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># column maxima</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">pk</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">ij</span><span class="p">:</span> <span class="n">ij</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="n">ij</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>  <span class="c1"># an index-defined array</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">dsl</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">row</span> <span class="o">/</span> <span class="n">dsl</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># normalise rows</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">dsl</span><span class="o">.</span><span class="n">allpairs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">dsl</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="n">dsl</span><span class="o">.</span><span class="n">f32</span><span class="p">(</span><span class="mi">2</span><span class="p">)),</span> <span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span>  <span class="c1"># distance matrix</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">dsl</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">dsl</span><span class="o">.</span><span class="n">max</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># column maxima</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">dsl</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>  <span class="c1"># an index-defined 2D array</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">pk</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">pk</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">pk</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span>  <span class="c1"># a dot product; no array of products is built</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">pk</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">pk</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># running sum of differences</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">pk</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">pk</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>  <span class="c1"># x + y where x &gt; y</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">dsl</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">dsl</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">dsl</span><span class="o">.</span><span class="n">mul</span><span class="p">)</span>  <span class="c1"># a dot product; no array of products is built</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">dsl</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">dsl</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># running sum of differences</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">dsl</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">dsl</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>  <span class="c1"># x + y where x &gt; y</span>
 </code></pre></div>
-<p><code>imap</code>, <code>ireduce</code> and <code>parfor</code> pass an integer when <code>shape</code> is an integer and a
-tuple of integers when it is a tuple.</p>
+<p>For multi-dimensional shapes, <code>imap</code>, <code>ireduce</code>, and <code>parfor</code> unpack coordinates
+directly when the function takes <code>len(shape)</code> parameters (<code>lambda i, j: ...</code>),
+and still accept a single index tuple (<code>lambda ij: ...</code>) for backward
+compatibility. All operators are also available on the top-level <code>parakeet</code>
+module (e.g. <code>parakeet.map</code>, <code>parakeet.pmap1</code>, <code>parakeet.pmap2</code>).</p>
 <h2 id="functions-that-return-arrays">Functions that return arrays<a class="headerlink" href="#functions-that-return-arrays" title="Permanent link">&para;</a></h2>
 <p>The function given to <code>map</code> may return an array; the results are stacked.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">pk</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># shape (n, m)</span>
