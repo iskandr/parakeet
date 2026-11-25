@@ -41,7 +41,7 @@ from ..errors import (
   TypeInferenceError,
   UnsupportedError,
 )
-from ..ndtypes import Bool, BufType, ScalarType, WeakBool, WeakFloat, WeakInt, join
+from ..ndtypes import Bool, BufType, Float32, Float64, ScalarType, WeakBool, WeakFloat, WeakInt, join
 from ..ragged import RaggedArray
 from ..syntax import ops
 from ..syntax.ir import (
@@ -71,7 +71,15 @@ from ..syntax.ir import (
   walk_stmts,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
-from ..syntax.records import Record, StructuredRow, StructuredView, record_type
+from ..syntax.records import (
+  ComplexArray,
+  ComplexScalar,
+  ComplexTypeVal,
+  Record,
+  StructuredRow,
+  StructuredView,
+  record_type,
+)
 from ..syntax.values import (
   ArrayVal,
   BatchedVal,
@@ -434,6 +442,8 @@ class Elaborator(ArrayMixin):
       return ("n",)
     if isinstance(v, TypeVal):
       return ("ty", v.type)
+    if isinstance(v, ComplexTypeVal):
+      return ("cty", v.elt, v.weak)
     if isinstance(v, Closure):
       return ("cl", id(v.node))
     if isinstance(v, PyFunc):
@@ -761,7 +771,9 @@ class Elaborator(ArrayMixin):
       self.block = saved
 
   @staticmethod
-  def type_val(t) -> TypeVal:
+  def type_val(t) -> TypeVal | ComplexTypeVal:
+    if isinstance(t, ComplexTypeVal):
+      return t
     if t is bool:
       return TypeVal(WeakBool)
     if t is int:
@@ -799,8 +811,13 @@ class Elaborator(ArrayMixin):
       return Const(int(obj), WeakInt)
     if isinstance(obj, float):
       return Const(obj, WeakFloat)
+    if isinstance(obj, complex):
+      return ComplexScalar(Const(obj.real, WeakFloat), Const(obj.imag, WeakFloat), python_complex=True)
     if obj is None or isinstance(obj, str) or obj is Ellipsis:
       return obj
+    if isinstance(obj, np.complexfloating):
+      elt = Float32 if obj.dtype.itemsize <= 8 else Float64
+      return ComplexScalar(Const(float(obj.real), elt), Const(float(obj.imag), elt))
     if isinstance(obj, np.generic):
       try:
         tv = type_value(obj.dtype)
@@ -967,6 +984,8 @@ class Elaborator(ArrayMixin):
       return ("static", v)
     if isinstance(v, TypeVal):
       return ("static", v.type.dtype if not v.type.weak else v.type.python_type())
+    if isinstance(v, ComplexTypeVal):
+      return ("static", complex if v.weak else v.dtype)
     if isinstance(v, RangeVal):
       for part in (v.start, v.stop, v.step):
         self.results.append(self.tmp(cast(part, WeakInt), "res"))
@@ -1236,6 +1255,10 @@ class Elaborator(ArrayMixin):
       return lib.invoke(self, impl, [fn.obj, *args], kwargs, fn.name)
     if isinstance(fn, TypeVal):
       return lib.invoke(self, lib.convert, [fn.type, *args], kwargs, fn.type.name)
+    if isinstance(fn, ComplexTypeVal):
+      from ..lib import complex_lib
+
+      return complex_lib.call_complex_type(self, fn, args, kwargs)
     if isinstance(fn, Partial):
       return self.call(fn.fn, [*fn.args, *args], {**fn.kwargs, **kwargs}, node)
     if isinstance(fn, prims.UFunc):
@@ -1374,6 +1397,12 @@ class Elaborator(ArrayMixin):
         if isinstance(v, tuple):
           v = self.as_array(v)
         self.setitem(obj, index, v)
+      elif isinstance(obj, ComplexArray):
+        from ..lib import complex_lib
+
+        re_v, im_v = complex_lib.to_parts(self, v, obj.elt)
+        self.setitem(obj.re, index, re_v)
+        self.setitem(obj.im, index, im_v)
       elif isinstance(obj, ListVal):
         self.list_setitem(obj, index, v, target)
       elif isinstance(obj, VecVal):
@@ -1496,10 +1525,35 @@ class Elaborator(ArrayMixin):
           )
         self.force_inplace(cur)
         self.store_array(cur, new)
+      elif isinstance(cur, ComplexArray):
+        from ..lib import complex_lib
+
+        new = self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs)
+        if not isinstance(new, ComplexArray) or new.rank != cur.rank:
+          self.bind(target.id, new)
+          return False
+        re_n, im_n = complex_lib.to_parts(self, new, cur.elt)
+        self.force_inplace(cur.re)
+        self.force_inplace(cur.im)
+        self.store_array(cur.re, re_n)
+        self.store_array(cur.im, im_n)
       else:
         self.bind(target.id, self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs))
     elif isinstance(target, ast.Subscript):
       obj = self.eval(target.value)
+      if isinstance(obj, ComplexArray):
+        from ..lib import complex_lib
+
+        index = self.bindable(self.eval_index(target.slice), "idx")
+        self.force_inplace(obj.re)
+        self.force_inplace(obj.im)
+        cur = self.subscript(obj, index, target)
+        rhs = self.eval(node.value)
+        new = self.matmul(cur, rhs) if op is None else self.binop(op, cur, rhs)
+        re_n, im_n = complex_lib.to_parts(self, new, obj.elt)
+        self.setitem(obj.re, index, re_n)
+        self.setitem(obj.im, index, im_n)
+        return False
       if not isinstance(obj, ArrayVal):
         raise self.error(TypeInferenceError, f"{describe(obj)} does not support item assignment", target)
       index = self.bindable(self.eval_index(target.slice), "idx")
@@ -3115,7 +3169,7 @@ class Elaborator(ArrayMixin):
 
   def eval_Constant(self, node: ast.Constant):
     v = node.value
-    if isinstance(v, bytes):
+    if isinstance(v, (bytes, complex)):
       return self.lift(v)
     if isinstance(v, (bool, int, float)) or v is None or isinstance(v, str) or v is Ellipsis:
       if isinstance(v, int) and not isinstance(v, bool) and not -(2**63) <= v < 2**64:
@@ -3453,6 +3507,16 @@ class Elaborator(ArrayMixin):
       else:
         index = self._index_item(index)
       return self.getitem(obj, index)
+    if isinstance(obj, ComplexArray):
+      if isinstance(index, tuple):
+        index = tuple(self._index_item(x) for x in index)
+      else:
+        index = self._index_item(index)
+      re_i = self.getitem(obj.re, index)
+      im_i = self.getitem(obj.im, index)
+      if isinstance(re_i, Expr) and isinstance(im_i, Expr):
+        return ComplexScalar(re_i, im_i)
+      return ComplexArray(re_i, im_i)
     if isinstance(obj, StructuredView):
       if isinstance(index, str):
         if index not in obj.names:
@@ -3631,6 +3695,34 @@ class Elaborator(ArrayMixin):
         node,
         hint=lib.suggest_attribute(name),
       )
+    if isinstance(obj, ComplexArray):
+      if name == "real":
+        return obj.re
+      if name == "imag":
+        return obj.im
+      if name == "shape":
+        return obj.shape
+      if name == "ndim":
+        return Const(obj.rank, I)
+      if name == "size":
+        return ops.iprod(obj.shape)
+      if name == "dtype":
+        return ComplexTypeVal(obj.elt)
+      if name == "T":
+        return ComplexArray(self.transpose(obj.re), self.transpose(obj.im))
+      if name in ("conj", "conjugate", "astype", "reshape", "transpose", "sum", "mean", "copy", "ravel", "flatten"):
+        return BoundMethod(obj, name)
+      raise self.error(TypeInferenceError, f"complex array has no attribute {name!r}", node)
+    if isinstance(obj, ComplexScalar):
+      if name == "real":
+        return obj.re
+      if name == "imag":
+        return obj.im
+      if name == "dtype":
+        return ComplexTypeVal(obj.elt.strong, weak=obj.python_complex)
+      if name in ("conj", "conjugate", "astype"):
+        return BoundMethod(obj, name)
+      raise self.error(TypeInferenceError, f"complex scalar has no attribute {name!r}", node)
     if isinstance(obj, StructuredView):
       if name == "shape":
         return obj.shape
@@ -3690,6 +3782,13 @@ class Elaborator(ArrayMixin):
       if name in ("append", "extend", "pop", "clear"):
         return BoundMethod(obj, name)
       raise self.error(TypeInferenceError, f"{describe(obj)} has no attribute {name!r}", node)
+    if isinstance(obj, ComplexTypeVal):
+      if name == "itemsize":
+        return Const(obj.itemsize, I)
+      if name == "type":
+        return obj
+      if name == "name":
+        return obj.name
     if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:
       if isinstance(obj, TypeVal):
         if name == "itemsize":
@@ -3729,6 +3828,10 @@ class Elaborator(ArrayMixin):
     return lib.matmul(self, a, b)
 
   def binop(self, op: str, a, b):
+    if isinstance(a, (ComplexArray, ComplexScalar)) or isinstance(b, (ComplexArray, ComplexScalar)):
+      from ..lib import complex_lib
+
+      return complex_lib.complex_binop(self, op, a, b)
     if isinstance(a, tuple) or isinstance(b, tuple):
       if op == "add" and isinstance(a, tuple) and isinstance(b, tuple):
         return a + b
@@ -3752,6 +3855,26 @@ class Elaborator(ArrayMixin):
     raise self.error(TypeInferenceError, f"unsupported {what}: {describe(v)}")
 
   def apply_ufunc(self, uf: prims.UFunc, args: list, python: bool = False, symbol: str = ""):
+    if any(isinstance(a, (ComplexArray, ComplexScalar)) for a in args):
+      from ..lib import complex_lib
+
+      if uf.nin == 2 and uf.name in ("add", "sub", "mul", "div", "pow", "eq", "ne"):
+        return complex_lib.complex_binop(self, uf.name, args[0], args[1])
+      if uf.nin == 1:
+        _c_unary = {
+          "abs": complex_lib.complex_abs,
+          "neg": lambda el, z: complex_lib.complex_unary(el, "neg", z),
+          "exp": complex_lib.complex_exp,
+          "log": complex_lib.complex_log,
+          "sqrt": complex_lib.complex_sqrt,
+          "sin": complex_lib.complex_sin,
+          "cos": complex_lib.complex_cos,
+          "square": complex_lib.complex_square,
+        }
+        fn = _c_unary.get(uf.name)
+        if fn is not None:
+          return fn(self, args[0])
+      raise self.error(TypeInferenceError, f"ufunc '{uf.name}' is not supported for complex operands")
     vals = [self.operand(a, symbol or uf.name) for a in args]
     if len(vals) != uf.nin:
       raise self.error(TypeInferenceError, f"{uf.name} takes {uf.nin} argument(s), got {len(vals)}")
@@ -3789,6 +3912,10 @@ class Elaborator(ArrayMixin):
     if isinstance(node.op, ast.Not):
       return ops.lnot(self.truth(v, node.operand))
     op = _UNARY[type(node.op)]
+    if isinstance(v, (ComplexArray, ComplexScalar)):
+      from ..lib import complex_lib
+
+      return complex_lib.complex_unary(self, op, v)
     if op == "pos" and isinstance(v, (Expr, ArrayVal)):
       return v
     if isinstance(v, Const) and op == "neg" and v.type.weak and v.type.kind != "b":
@@ -3928,6 +4055,12 @@ class Elaborator(ArrayMixin):
       res = cast(self.truth(lib.contains(self, b, a)), WeakBool)
       return res if isinstance(op, ast.In) else ops.lnot(res)
     name = _CMPOPS[type(op)]
+    if isinstance(a, (ComplexArray, ComplexScalar)) or isinstance(b, (ComplexArray, ComplexScalar)):
+      if name in ("eq", "ne"):
+        from ..lib import complex_lib
+
+        return complex_lib.complex_binop(self, name, a, b)
+      raise self.error(TypeInferenceError, "ordering comparisons are not supported for complex numbers", node)
     if (a is None or b is None or isinstance(a, (str, TypeVal)) or isinstance(b, (str, TypeVal))) and name in (
       "eq",
       "ne",

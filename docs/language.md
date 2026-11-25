@@ -9,8 +9,8 @@ code deliberately differs from running the same function in CPython.
 | Python value | Inside compiled code |
 |---|---|
 | `int`, `float`, `bool` | 64-bit integer / double / bool, *weakly typed* like NumPy treats Python scalars |
-| NumPy scalars (`np.float32(1)`, ...) | scalars of exactly that dtype |
-| NumPy arrays | bool, int8–int64, uint8–uint64, float32, float64; any number of dimensions, any strides |
+| NumPy scalars (`np.float32(1)`, `np.complex64(1+2j)`, ...) | scalars of exactly that dtype (`complex` lowers to unboxed `(re, im)` float pairs) |
+| NumPy arrays | bool, int8–int64, uint8–uint64, float32, float64, complex64, complex128; any number of dimensions, any strides |
 | tuples (also nested) | compile-time structures of the above |
 | NamedTuples and `@dataclass` objects (frozen or non-frozen) | fields hold scalar, array, or nested record leaves; supports pure methods, `@property`, `__call__`, and local functional field rebinding (`obj.x = v`) |
 | dictionaries with fixed string keys | key order is part of the structure, with lookup by literal key |
@@ -18,9 +18,11 @@ code deliberately differs from running the same function in CPython.
 | `None`, strings, dtypes, functions, modules | compile-time constants |
 | `slice`, `range`, `zip`, `enumerate`, `itertools` (`pairwise`, `islice`, `chain`, `product`, `batched`) | supported as values and in zero-allocation `for` loops / generator expressions |
 
-`float16` data is widened to `float32`. Complex numbers, object arrays, structured
-dtypes, general-purpose mutable containers, sets and arbitrary class instances are not supported; passing
-one raises a `TypeError` naming the type.
+`float16` data is widened to `float32`. `complex64` and `complex128` lower to
+unboxed `(re, im)` float views across CPU, multicore, Apple Metal (`complex64`),
+and CUDA, and compose with Wirtinger `par.grad` and `par.jvp`. Object arrays,
+general-purpose mutable containers, sets and arbitrary non-dataclass class
+instances are not supported; passing one raises a `TypeError` naming the type.
 
 Type promotion follows NumPy 2 (NEP 50) exactly: `float32_array * 2.0` stays
 `float32`, `int8_array + 1` stays `int8`, `int32_array / 2` is `float64`.

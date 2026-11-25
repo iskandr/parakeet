@@ -153,22 +153,38 @@ def _full(el, shape, value: Expr | None, elt: ScalarType, zero: bool = False) ->
 
 @register(np.zeros)
 def zeros(el, shape, dtype=None, order="C"):
+  from . import complex_lib
+
+  if complex_lib.is_complex_dtype(dtype):
+    return complex_lib.complex_zeros(el, shape, dtype)
   return _full(el, shape, None, _dtype(el, dtype, Float64), zero=True)
 
 
 @register(np.ones)
 def ones(el, shape, dtype=None, order="C"):
+  from . import complex_lib
+
+  if complex_lib.is_complex_dtype(dtype):
+    return complex_lib.complex_ones(el, shape, dtype)
   elt = _dtype(el, dtype, Float64)
   return _full(el, shape, Const(1, elt), elt)
 
 
 @register(np.empty)
 def empty(el, shape, dtype=None, order="C"):
+  from . import complex_lib
+
+  if complex_lib.is_complex_dtype(dtype):
+    return complex_lib.complex_empty(el, shape, dtype)
   return _full(el, shape, None, _dtype(el, dtype, Float64))
 
 
 @register(np.full)
 def full(el, shape, fill_value, dtype=None, order="C"):
+  from . import complex_lib
+
+  if complex_lib.is_complex_dtype(dtype) or complex_lib.is_complex(fill_value):
+    return complex_lib.complex_full(el, shape, fill_value, dtype)
   value = el.as_scalar(fill_value, "fill_value")
   elt = _dtype(el, dtype, value.type.strong)
   return _full(el, shape, cast(value, elt), elt)
@@ -181,24 +197,66 @@ def _like(el, a, dtype):
 
 @register(np.zeros_like)
 def zeros_like(el, a, dtype=None):
+  from ..syntax.records import ComplexArray, ComplexTypeVal
+  from . import complex_lib
+
+  if isinstance(a, ComplexArray) and dtype is None:
+    return complex_lib.complex_zeros(el, a.shape, ComplexTypeVal(a.elt))
+  if complex_lib.is_complex_dtype(dtype):
+    shape = a.shape if isinstance(a, ComplexArray) else _arr(el, a).shape
+    return complex_lib.complex_zeros(el, shape, dtype)
+  if isinstance(a, ComplexArray):
+    return _full(el, a.shape, None, _dtype(el, dtype, Float64), zero=True)
   a, elt = _like(el, a, dtype)
   return _full(el, a.shape, None, elt, zero=True)
 
 
 @register(np.ones_like)
 def ones_like(el, a, dtype=None):
+  from ..syntax.records import ComplexArray, ComplexTypeVal
+  from . import complex_lib
+
+  if isinstance(a, ComplexArray) and dtype is None:
+    return complex_lib.complex_ones(el, a.shape, ComplexTypeVal(a.elt))
+  if complex_lib.is_complex_dtype(dtype):
+    shape = a.shape if isinstance(a, ComplexArray) else _arr(el, a).shape
+    return complex_lib.complex_ones(el, shape, dtype)
+  if isinstance(a, ComplexArray):
+    elt = _dtype(el, dtype, Float64)
+    return _full(el, a.shape, Const(1, elt), elt)
   a, elt = _like(el, a, dtype)
   return _full(el, a.shape, Const(1, elt), elt)
 
 
 @register(np.empty_like)
 def empty_like(el, a, dtype=None):
+  from ..syntax.records import ComplexArray, ComplexTypeVal
+  from . import complex_lib
+
+  if isinstance(a, ComplexArray) and dtype is None:
+    return complex_lib.complex_empty(el, a.shape, ComplexTypeVal(a.elt))
+  if complex_lib.is_complex_dtype(dtype):
+    shape = a.shape if isinstance(a, ComplexArray) else _arr(el, a).shape
+    return complex_lib.complex_empty(el, shape, dtype)
+  if isinstance(a, ComplexArray):
+    return _full(el, a.shape, None, _dtype(el, dtype, Float64))
   a, elt = _like(el, a, dtype)
   return _full(el, a.shape, None, elt)
 
 
 @register(np.full_like)
 def full_like(el, a, fill_value, dtype=None):
+  from ..syntax.records import ComplexArray, ComplexTypeVal
+  from . import complex_lib
+
+  if (
+    (isinstance(a, ComplexArray) and dtype is None)
+    or complex_lib.is_complex_dtype(dtype)
+    or complex_lib.is_complex(fill_value)
+  ):
+    shape = a.shape if isinstance(a, ComplexArray) else _arr(el, a).shape
+    dt = dtype if dtype is not None else (ComplexTypeVal(a.elt) if isinstance(a, ComplexArray) else None)
+    return complex_lib.complex_full(el, shape, fill_value, dt)
   a, elt = _like(el, a, dtype)
   return _full(el, a.shape, cast(el.as_scalar(fill_value, "fill_value"), elt), elt)
 
@@ -255,6 +313,23 @@ def identity(el, n, dtype=None):
 
 @register(np.array, np.asarray, np.ascontiguousarray, np.asanyarray)
 def array(el, obj, dtype=None, copy=None, order=None, ndmin=0):
+  from ..syntax.records import ComplexArray, ComplexScalar
+  from . import complex_lib
+
+  if isinstance(obj, (ComplexArray, ComplexScalar)) or complex_lib.is_complex_dtype(dtype):
+    if dtype is not None:
+      return (
+        complex_lib.complex_astype(el, obj, dtype)
+        if complex_lib.is_complex(obj)
+        else complex_lib.make_complex(el, *complex_lib.to_parts(el, obj, complex_lib.complex_float_elt(el, dtype)))
+      )
+    if isinstance(obj, ComplexScalar):
+      return ComplexArray(el.scalar_to_array(obj.re), el.scalar_to_array(obj.im))
+    return obj
+  if isinstance(obj, (tuple, ListVal)):
+    seq = obj.items if isinstance(obj, ListVal) else obj
+    if seq and any(complex_lib.is_complex(x) for x in seq):
+      return complex_lib.complex_stack(el, seq, axis=0, dtype=dtype)
   elt = None if dtype is None else el.as_dtype(dtype)
   if isinstance(obj, ListVal):
     arr = array_literal(el, list(obj.items), elt)
@@ -282,12 +357,24 @@ def array(el, obj, dtype=None, copy=None, order=None, ndmin=0):
 @register(np.copy)
 @method("copy")
 def copy(el, a, order="C"):
+  from ..syntax.records import ComplexArray
+
+  if isinstance(a, ComplexArray):
+    return ComplexArray(el.materialize(a.re), el.materialize(a.im))
   a = _arr(el, a)
   return el.materialize(a)
 
 
 @method("astype")
 def astype(el, a, dtype, copy=True):
+  from . import complex_lib
+
+  if complex_lib.is_complex(a) or complex_lib.is_complex_dtype(dtype):
+    if complex_lib.is_complex(a):
+      return complex_lib.complex_astype(el, a, dtype)
+    elt = complex_lib.complex_float_elt(el, dtype)
+    re, im = complex_lib.to_parts(el, a, elt)
+    return complex_lib.make_complex(el, re, im)
   a = _arr(el, a)
   elt = el.as_dtype(dtype)
   if a.elt is elt and a.buf is not None:
@@ -328,33 +415,53 @@ def tolist(el, a):
 
 @register(np.reshape)
 def reshape(el, a, shape=None, *more, order="C", newshape=None):
+  from ..syntax.records import ComplexArray
+
   if shape is None:
     shape = newshape
   if more:
     shape = (shape, *more)
-  return el.reshape(_arr(el, a), el.shape_tuple(shape, "new shape"))
+  dims = el.shape_tuple(shape, "new shape")
+  if isinstance(a, ComplexArray):
+    return ComplexArray(el.reshape(a.re, dims), el.reshape(a.im, dims))
+  return el.reshape(_arr(el, a), dims)
 
 
 @method("reshape")
 def _reshape_method(el, a, *shape, order="C"):
   if len(shape) == 1:
     shape = shape[0]
-  return el.reshape(_arr(el, a), el.shape_tuple(shape, "new shape"))
+  return reshape(el, a, shape, order=order)
 
 
 @register(np.ravel)
 @method("ravel")
 def ravel(el, a, order="C"):
+  from ..syntax.records import ComplexArray
+
+  if isinstance(a, ComplexArray):
+    return ComplexArray(el.flat_view(a.re), el.flat_view(a.im))
   return el.flat_view(_arr(el, a))
 
 
 @method("flatten")
 def flatten(el, a, order="C"):
+  from ..syntax.records import ComplexArray
+
+  if isinstance(a, ComplexArray):
+    return ComplexArray(el.materialize(el.flat_view(a.re)), el.materialize(el.flat_view(a.im)))
   return el.materialize(el.flat_view(_arr(el, a)))
 
 
 @register(np.transpose)
 def transpose(el, a, axes=None):
+  from ..syntax.records import ComplexArray
+
+  if isinstance(a, ComplexArray):
+    if axes is None:
+      return ComplexArray(el.transpose(a.re), el.transpose(a.im))
+    perm = [el.static_int(x, "axes") % max(a.rank, 1) for x in (axes if isinstance(axes, tuple) else (axes,))]
+    return ComplexArray(el.transpose(a.re, perm), el.transpose(a.im, perm))
   a = _arr(el, a)
   if axes is None:
     return el.transpose(a)
@@ -500,6 +607,11 @@ def _sequence(el, seq, what: str) -> list[ArrayVal]:
 
 @register(np.concatenate)
 def concatenate(el, arrays, axis=0, dtype=None):
+  from . import complex_lib
+
+  raw = list(arrays.items) if isinstance(arrays, ListVal) else (list(arrays) if isinstance(arrays, tuple) else None)
+  if raw is not None and (any(complex_lib.is_complex(x) for x in raw) or complex_lib.is_complex_dtype(dtype)):
+    return complex_lib.complex_concatenate(el, raw, axis=axis, dtype=dtype)
   arrs = _sequence(el, arrays, "concatenate()")
   if not arrs:
     raise el.error(StaticValueError, "need at least one array to concatenate")
@@ -543,6 +655,11 @@ def concatenate(el, arrays, axis=0, dtype=None):
 
 @register(np.stack)
 def stack(el, arrays, axis=0):
+  from . import complex_lib
+
+  raw = list(arrays.items) if isinstance(arrays, ListVal) else (list(arrays) if isinstance(arrays, tuple) else None)
+  if raw is not None and any(complex_lib.is_complex(x) for x in raw):
+    return complex_lib.complex_stack(el, raw, axis=axis)
   arrs = _sequence(el, arrays, "stack()")
   if not arrs:
     raise el.error(StaticValueError, "need at least one array to stack")
@@ -844,6 +961,11 @@ def reduce_plain(el, op: str, a: ArrayVal, axis, init, what: str, keepdims):
 @register(np.sum)
 @method("sum")
 def sum_(el, a, axis=None, dtype=None, out=None, keepdims=False, initial=None):
+  from ..syntax.records import ComplexArray
+  from . import complex_lib
+
+  if isinstance(a, ComplexArray):
+    return complex_lib.complex_sum(el, a, axis=axis, dtype=dtype, keepdims=keepdims, initial=initial)
   a = _arr(el, a)
   elt = el.as_dtype(dtype) if dtype is not None else _sum_type(a.elt)
   init = Const(0, elt) if initial is None else cast(el.as_scalar(initial, "initial"), elt)
@@ -906,6 +1028,11 @@ def _count(el, a: ArrayVal, axes) -> Expr:
 @register(np.mean)
 @method("mean")
 def mean(el, a, axis=None, dtype=None, out=None, keepdims=False):
+  from ..syntax.records import ComplexArray
+  from . import complex_lib
+
+  if isinstance(a, ComplexArray):
+    return complex_lib.complex_mean(el, a, axis=axis, dtype=dtype, keepdims=keepdims)
   a = _arr(el, a)
   ft = el.as_dtype(dtype) if dtype is not None else _float_type(a.elt)
   if a.rank == 0:
@@ -1054,6 +1181,11 @@ def cumulative_plain(el, a: ArrayVal, axis, op: str):
 @register(np.cumsum)
 @method("cumsum")
 def cumsum(el, a, axis=None, dtype=None, out=None):
+  from ..syntax.records import ComplexArray
+  from . import complex_lib
+
+  if isinstance(a, ComplexArray):
+    return complex_lib.complex_cumsum(el, a, axis=axis, dtype=dtype)
   return _cumulative(el, a, axis, "add", dtype)
 
 
@@ -1128,10 +1260,14 @@ def argsort(el, a, axis=-1, kind=None, order=None, stable=None):
 
 @register(np.where)
 def where(el, condition, x=None, y=None):
+  from . import complex_lib
+
   if x is None and y is None:
     return nonzero(el, condition)
   if x is None or y is None:
     raise el.error(TypeInferenceError, "either both or neither of x and y should be given")
+  if complex_lib.is_complex(x) or complex_lib.is_complex(y):
+    return complex_lib.complex_where(el, condition, x, y)
   c, a, b = (el.operand(v, "where") for v in (condition, x, y))
   ta = a.elt if isinstance(a, ArrayVal) else a.type
   tb = b.elt if isinstance(b, ArrayVal) else b.type
@@ -1548,6 +1684,10 @@ def _dot1(el, a: ArrayVal, b: ArrayVal):
 
 
 def matmul(el, a, b, what: str = "matmul"):
+  from . import complex_lib
+
+  if complex_lib.is_complex(a) or complex_lib.is_complex(b):
+    return complex_lib.complex_matmul(el, a, b, what)
   a, b = el.operand(a, "@"), el.operand(b, "@")
   if not isinstance(a, ArrayVal) or not isinstance(b, ArrayVal) or a.rank == 0 or b.rank == 0:
     if what == "dot":
@@ -1787,6 +1927,10 @@ def dot(el, a, b):
 
 @register(np.vdot)
 def vdot(el, a, b):
+  from . import complex_lib
+
+  if complex_lib.is_complex(a) or complex_lib.is_complex(b):
+    return complex_lib.complex_vdot(el, a, b)
   a, b = _arr(el, a), _arr(el, b)
   return _dot1(el, el.flat_view(a) if a.rank != 1 else a, el.flat_view(b) if b.rank != 1 else b)
 

@@ -3,6 +3,8 @@
 from . import (  # noqa: F401, I001  (index_lib overrides pure.searchsorted)
   adverbs,
   builtins_lib,
+  bytes_lib,
+  complex_lib,
   expand_lib,
   numpy_lib,
   pure,
