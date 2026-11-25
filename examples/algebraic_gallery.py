@@ -16,8 +16,8 @@ from typing import NamedTuple
 
 import numpy as np
 
-import parakeet
-from parakeet import dsl, value_and_grad
+import parakeet as pk
+from parakeet import value_and_grad
 
 # ---------------------------------------------------------------------------
 # 1. Causal FlashAttention + Sliding-Window FlexAttention (Laws 1, 2, 5)
@@ -25,7 +25,7 @@ from parakeet import dsl, value_and_grad
 
 
 # --8<-- [start:causal_flash_attention]
-@parakeet.jit
+@pk.jit
 def causal_flash_attention(q, k, v):
   T = q.shape[-2]
   idx = np.arange(T)
@@ -39,7 +39,7 @@ def causal_flash_attention(q, k, v):
 # --8<-- [end:causal_flash_attention]
 
 
-@parakeet.jit
+@pk.jit
 def sliding_window_attention(q, k, v, window):
   T = q.shape[-2]
   idx = np.arange(T)
@@ -78,7 +78,7 @@ def cut_cross_entropy(h, w, targets):
 
 
 # --8<-- [start:deepseek_mla]
-@parakeet.jit
+@pk.jit
 def deepseek_mla(q, c_kv, w_uk, w_uv):
   k = c_kv @ w_uk
   v = c_kv @ w_uv
@@ -97,7 +97,7 @@ def deepseek_mla(q, c_kv, w_uk, w_uv):
 
 
 # --8<-- [start:gqa_attention]
-@parakeet.jit
+@pk.jit
 def gqa_attention(q, k, v):
   # q: (B, H_kv, G, T_q, D), k, v: (B, H_kv, 1, T_kv, D)
   scale = np.float32(1.0 / np.sqrt(np.float32(q.shape[-1])))
@@ -115,7 +115,7 @@ def gqa_attention(q, k, v):
 
 
 # --8<-- [start:mamba2_ssd]
-@parakeet.jit
+@pk.jit
 def mamba2_ssd(q, k, v, a):
   T = q.shape[0]
   out = np.empty((T, v.shape[1]), dtype=np.float32)
@@ -135,7 +135,7 @@ def mamba2_ssd(q, k, v, a):
 
 
 # --8<-- [start:iir_exponential_filter]
-@parakeet.jit
+@pk.jit
 def iir_exponential_filter(a, b):
   T = a.shape[0]
   out = np.empty_like(b)
@@ -155,7 +155,7 @@ def iir_exponential_filter(a, b):
 
 
 # --8<-- [start:rbf_kernel_regression]
-@parakeet.jit
+@pk.jit
 def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
   d2 = np.sum((x_query[:, None, :] - x_train[None, :, :]) ** np.float32(2.0), axis=-1)
   s = d2 * neg_gamma
@@ -172,13 +172,13 @@ def rbf_kernel_regression(x_query, x_train, y_train, neg_gamma):
 
 
 # --8<-- [start:tropical_min_plus]
-@dsl.kernel
+@pk.jit
 def tropical_min_plus(a, b):
   """One min-plus matrix product: C[i, j] = min_r (A[i, r] + B[r, j])."""
   m, k = a.shape
   _, n = b.shape
-  return dsl.imap(
-    lambda i, j: dsl.ireduce(lambda r: a[i, r] + b[r, j], k, combine=dsl.min),
+  return pk.imap(
+    lambda i, j: pk.ireduce(lambda r: a[i, r] + b[r, j], k, combine=pk.minimum),
     (m, n),
   )
 
@@ -188,18 +188,18 @@ def tropical_min_plus(a, b):
 
 # --8<-- [start:squared_distance]
 def squared_distance(query, reference):
-  return dsl.sum((query - reference) ** dsl.f32(2))
+  return np.sum((query - reference) ** np.float32(2))
 
 
 # --8<-- [end:squared_distance]
 
 
 # --8<-- [start:exact_1nn]
-@dsl.kernel
+@pk.jit
 def exact_1nn(x_query, x_ref):
   """Exact nearest-neighbor index per query row."""
-  return dsl.map(
-    lambda query: dsl.argmin(dsl.map(lambda reference: squared_distance(query, reference), x_ref)),
+  return pk.map(
+    lambda query: np.argmin(pk.map(lambda reference: squared_distance(query, reference), x_ref)),
     x_query,
   )
 
@@ -208,7 +208,7 @@ def exact_1nn(x_query, x_ref):
 
 
 # --8<-- [start:nearest_numpy]
-@parakeet.jit
+@pk.jit
 def nearest_numpy(queries, references):
   delta = queries[:, None, :] - references[None, :, :]
   return np.argmin(np.sum(delta ** np.float32(2), axis=2), axis=1)
@@ -219,27 +219,27 @@ def nearest_numpy(queries, references):
 
 # --8<-- [start:nearest_fold]
 class Winner(NamedTuple):
-  distance: dsl.f32
-  index: dsl.i64
+  distance: np.float32
+  index: np.int64
 
 
 def first_minimum(left, right):
   # Keep the first NaN. Among finite values, replace only on strict improvement.
-  right_wins = dsl.isnan(right.distance) or right.distance < left.distance
-  return right if right_wins and not dsl.isnan(left.distance) else left
+  right_wins = np.isnan(right.distance) or right.distance < left.distance
+  return right if right_wins and not np.isnan(left.distance) else left
 
 
-@dsl.kernel
+@pk.jit
 def nearest_fold(queries, references):
-  scores = dsl.allpairs(squared_distance, queries, references)
-  return dsl.fold(Winner, first_minimum, scores, axis=1, indexed=True, emit=lambda winner: winner.index)
+  scores = pk.allpairs(squared_distance, queries, references)
+  return pk.fold(Winner, first_minimum, scores, axis=1, indexed=True, emit=lambda winner: winner.index)
 
 
 # --8<-- [end:nearest_fold]
 
 
 # --8<-- [start:weighted_numpy]
-@parakeet.jit
+@pk.jit
 def smooth_numpy(queries, references, observations):
   observations = observations.reshape(references.shape[0])
   delta = queries[:, None, :] - references[None, :, :]
@@ -252,18 +252,18 @@ def smooth_numpy(queries, references, observations):
 
 # --8<-- [start:weighted_fold]
 class WeightedSum(NamedTuple):
-  weight: dsl.f32
-  weighted_value: dsl.f32
+  weight: np.float32
+  weighted_value: np.float32
 
 
 def add_sums(left, right):
   return WeightedSum(left.weight + right.weight, left.weighted_value + right.weighted_value)
 
 
-@dsl.kernel
+@pk.jit
 def smooth_fold(queries, references, observations):
   values = observations.reshape(references.shape[0])
-  scores = dsl.allpairs(squared_distance, queries, references)
+  scores = pk.allpairs(squared_distance, queries, references)
 
   def contribution(distance_squared, ref_index):
     weight = 1 / (1 + distance_squared)
@@ -272,7 +272,7 @@ def smooth_fold(queries, references, observations):
   def weighted_mean(total):
     return total.weighted_value / total.weight
 
-  return dsl.fold(contribution, add_sums, scores, axis=1, indexed=True, emit=weighted_mean)
+  return pk.fold(contribution, add_sums, scores, axis=1, indexed=True, emit=weighted_mean)
 
 
 # --8<-- [end:weighted_fold]
@@ -284,19 +284,19 @@ def smooth_fold(queries, references, observations):
 
 
 # --8<-- [start:gbdt_best_split]
-@dsl.kernel
+@pk.jit
 def gbdt_best_split(bin_ids, grads, hess, nbins, reg_lambda):
   """Return the split bin with the highest gain and the gain at that bin."""
-  g_hist = dsl.scatter(nbins, bin_ids, grads)
-  h_hist = dsl.scatter(nbins, bin_ids, hess)
-  g_left = dsl.cumsum(g_hist)
-  h_left = dsl.cumsum(h_hist)
+  g_hist = pk.scatter_add(nbins, bin_ids, grads)
+  h_hist = pk.scatter_add(nbins, bin_ids, hess)
+  g_left = np.cumsum(g_hist)
+  h_left = np.cumsum(h_hist)
   g_tot = g_left[nbins - 1]
   h_tot = h_left[nbins - 1]
   g_right = g_tot - g_left
   h_right = h_tot - h_left
   gain = (g_left * g_left) / (h_left + reg_lambda) + (g_right * g_right) / (h_right + reg_lambda)
-  best_bin = dsl.argmax(gain)
+  best_bin = np.argmax(gain)
   return best_bin, gain[best_bin]
 
 
@@ -319,8 +319,8 @@ def main():
   q = rng.standard_normal((1, 4, 256, 64)).astype(np.float32) * 0.2
   k = rng.standard_normal((1, 4, 256, 64)).astype(np.float32) * 0.2
   v = rng.standard_normal((1, 4, 256, 64)).astype(np.float32) * 0.2
-  rep_fa = dsl.show_rewrite(causal_flash_attention, q, k, v)
-  with parakeet.options(blas=False):
+  rep_fa = pk.show_rewrite(causal_flash_attention, q, k, v)
+  with pk.options(blas=False):
     t_pk, o_pk = _bench(causal_flash_attention, (q, k, v), iters=5)
 
   def np_causal_attn(q, k, v):
@@ -341,7 +341,7 @@ def main():
   w = rng.standard_normal((64, 4096)).astype(np.float32) * 0.2
   tgt = rng.integers(0, 4096, size=(256,), dtype=np.int64)
   cce_vg = value_and_grad(cut_cross_entropy, argnum=(0, 1))
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, (lv, (dh, dw)) = _bench(cce_vg, (h, w, tgt), iters=5)
 
   def np_cce_vg(h, w, tgt):
@@ -368,7 +368,7 @@ def main():
   cm = rng.standard_normal((2048, 64)).astype(np.float32) * 0.2
   wuk = rng.standard_normal((64, 256)).astype(np.float32) * 0.2
   wuv = rng.standard_normal((64, 256)).astype(np.float32) * 0.2
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, om_pk = _bench(deepseek_mla, (qm, cm, wuk, wuv), iters=10)
 
   def np_mla(q, c, wuk, wuv):
@@ -388,7 +388,7 @@ def main():
   ks = rng.standard_normal((2048, 64)).astype(np.float32) * 0.1
   vs = rng.standard_normal((2048, 64)).astype(np.float32) * 0.1
   as_ = rng.uniform(0.9, 0.99, size=(2048,)).astype(np.float32)
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, os_pk = _bench(mamba2_ssd, (qs, ks, vs, as_), iters=5)
 
   def np_ssd(q, k, v, a):
@@ -410,7 +410,7 @@ def main():
   xt = rng.standard_normal((2048, 32)).astype(np.float32)
   yt = rng.standard_normal((2048, 8)).astype(np.float32)
   ng = np.float32(-0.05)
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, or_pk = _bench(rbf_kernel_regression, (xq, xt, yt, ng), iters=5)
 
   def np_rbf(xq, xt, yt, ng):
@@ -428,7 +428,7 @@ def main():
   # 6. Tropical Min-Plus Shortest Path
   ta = rng.uniform(0.1, 5.0, size=(256, 256)).astype(np.float32)
   tb = rng.uniform(0.1, 5.0, size=(256, 256)).astype(np.float32)
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, ot_pk = _bench(tropical_min_plus, (ta, tb), iters=5)
   t_np, ot_np = _bench(lambda a, b: np.min(a[:, :, None] + b[None, :, :], axis=1), (ta, tb), iters=3)
   np.testing.assert_allclose(ot_pk, ot_np, rtol=1e-5, atol=1e-5)
@@ -437,7 +437,7 @@ def main():
   )
 
   # 7. Exact 1-NN (zero N x M matrix!)
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, nn_pk = _bench(exact_1nn, (xq, xt), iters=5)
   t_np, nn_np = _bench(
     lambda a, b: np.argmin(np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=-1), axis=-1), (xq, xt), iters=3
@@ -459,7 +459,7 @@ def main():
   grads = rng.standard_normal((200_000,)).astype(np.float32)
   hess = rng.uniform(0.1, 1.0, size=(200_000,)).astype(np.float32)
   lam = np.float32(1.0)
-  with parakeet.options(blas=False):
+  with pk.options(blas=False):
     t_pk, (b_pk, g_pk) = _bench(gbdt_best_split, (bins, grads, hess, 256, lam), iters=10)
 
   def np_gbdt(bins, grads, hess, nbins, lam):

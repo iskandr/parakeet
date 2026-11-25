@@ -42,7 +42,7 @@ Parakeet computes distances a tile at a time on both CPU and GPU, keeping only
 the winning reference index per tile rather than allocating the full `N × M`
 distance matrix. Ties preserve NumPy's first-index rule.
 
-[Compare timings and allocations](release-benchmarks.md#pairwise-workloads)
+[Compare timings, scaling, and memory](release-benchmarks.md#at-a-glance-nvidia-l4-4-thread-cpu)
 
 </div>
 </div>
@@ -90,8 +90,8 @@ general passes do the heavy lifting:
   the array operators directly, compiling a training step into one native
   function. [Learn about gradients](autodiff.md).
 - **Inspection.** Every stage is visible: inspect the operator IR, see which
-  rewrites fired with `parakeet.dsl.show_rewrite`, or read the generated C,
-  Metal, or CUDA source. [Inspect a rewrite](gallery.md#inspect-a-rewrite).
+  rewrites fired with `parakeet.show_rewrite`, or read the generated C,
+  Metal, or CUDA source. [Inspect a rewrite](gallery.md#inspecting-algebraic-rewrites).
 
 ## Where to go next
 

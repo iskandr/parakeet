@@ -1,28 +1,23 @@
-"""Self-contained data-parallel DSL & algebraic rewrite inspector for Parakeet.
+"""Algebraic rewrite inspector and compatibility namespace for Parakeet operators.
 
-Parakeet offers two distinct, self-contained frontends over the same operator
-IR and algebraic compiler:
+All data-parallel operators (``map``, ``imap``, ``ireduce``, ``allpairs``,
+``fold``, ``scan``, ``scatter_add``, ``grad``, ``value_and_grad``) and
+:func:`show_rewrite` are exported directly on the top-level :mod:`parakeet`
+module and work both inside ``@parakeet.jit`` and directly from Python::
 
-1. **NumPy frontend** (``@parakeet.jit`` + ``numpy``): compile ordinary
-   broadcasting NumPy code directly.
-2. **Explicit DSL** (``@dsl.kernel`` + ``dsl.*``): write data-parallel kernels
-   explicitly with ``dsl.map``, ``dsl.allpairs``, ``dsl.fold``, ``dsl.imap``,
-   ``dsl.ireduce``, ``dsl.scan``, ``dsl.scatter``, and ``dsl.*`` scalar/array
-   primitives — with **no** ``numpy`` or top-level ``parakeet`` syntax needed::
+    import parakeet as pk
 
-       from parakeet import dsl
+    @pk.jit
+    def tropical_min_plus(a, b):
+        m, k = a.shape
+        _, n = b.shape
+        return pk.imap(
+            lambda i, j: pk.ireduce(lambda r: a[i, r] + b[r, j], k, combine=pk.minimum),
+            (m, n),
+        )
 
-       @dsl.kernel
-       def tropical_min_plus(a, b):
-           m, k = a.shape
-           _, n = b.shape
-           return dsl.imap(
-               lambda i, j: dsl.ireduce(lambda r: a[i, r] + b[r, j], k, combine=dsl.min),
-               (m, n),
-           )
-
-Use :func:`show_rewrite` on either frontend to inspect which algebraic laws
-fired and compare the operator IR before and after compilation.
+This module remains available as a thin compatibility alias (including compact
+dtype shorthands like ``f32`` / ``i64`` and ``kernel = parakeet.jit``).
 """
 
 from __future__ import annotations
