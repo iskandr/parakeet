@@ -37,6 +37,7 @@ nav:
   - Gallery:
       - Kernel gallery: gallery.md
       - Train nanoGPT: gallery/nanogpt.md
+      - Bioinformatics & structural biology: bioinformatics.md
   - Benchmarks: release-benchmarks.md
   - Guide:
       - Ideas, history, and boundaries: philosophy.md
