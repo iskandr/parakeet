@@ -31,6 +31,9 @@ compositions with exact O(N)-memory rematerialized VJPs:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+
 from ..ndtypes import Bool, BufType, ScalarType
 from ..syntax import ir, ops
 from ..syntax.clone import Cloner, defined
@@ -436,7 +439,13 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   d_dim = v_view.shape[-1]
 
   # 1. O(B*H*T) pre-pass: lse = m + log(l), D = sum(dO * O, axis=-1)
-  lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_out, el.apply_ufunc(UF["log"], [l_out])]))
+  # Note: lse is only needed as a primal sufficient statistic (HVP computes dlse directly
+  # in O(T) memory without keeping dm/dl alive from forward!).
+  if el.jvp is not None and not el.jvp.muted:
+    with el.jvp.computing(el):
+      lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_out, el.apply_ufunc(UF["log"], [l_out])]))
+  else:
+    lse_arr = el.as_concrete(el.apply_ufunc(UF["add"], [m_out, el.apply_ufunc(UF["log"], [l_out])]))
   d_arr = el.as_concrete(
     reduce_plain(
       el, "add", el.apply_ufunc(UF["mul"], [g, o_out]), Const(o_out.rank - 1, I), Const(0, elt), "sum", False
@@ -672,6 +681,51 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   if db_arr is not None:
     el.record_store(db_arr)
 
+  # --- Zero-O(T^2) Forward-over-Reverse HVP tangent pass when el.jvp is active ---
+  # Run BEFORE tape.add() so transposed/accumulated views (like k_view^T) inherit ddk_arr!
+  jvp = el.jvp
+  if jvp is not None and not jvp.muted and bias_st is None:
+    tq_v = jvp.tangent_array(el, q_view)
+    tk_v = jvp.tangent_array(el, k_view)
+    tv_v = jvp.tangent_array(el, v_view)
+    tdo_v = jvp.tangent_array(el, g)
+    td_v = jvp.tangent_array(el, d_arr)
+    if any(x is not None for x in (tq_v, tk_v, tv_v, tdo_v, td_v)):
+      with jvp.computing(el):
+        _emit_flash_attn_hvp_tangent(
+          el,
+          jvp,
+          q_view=q_view,
+          k_view=k_view,
+          v_view=v_view,
+          g_arr=g,
+          lse_arr=lse_arr,
+          d_arr=d_arr,
+          dq_arr=dq_arr,
+          dk_arr=dk_arr,
+          dv_arr=dv_arr,
+          tq_v=tq_v,
+          tk_v=tk_v,
+          tv_v=tv_v,
+          tdo_v=tdo_v,
+          td_v=td_v,
+          scale_c=scale_c,
+          mask_cond=mask_cond,
+          mask_index_vars=(i_m, j_m),
+          mask_buf=mask_buf,
+          mask_index=mask_index,
+          mask_fill=mask_fill,
+          batch_shape=batch_shape,
+          m_dim=m_dim,
+          n_dim=n_dim,
+          k_dim=k_dim,
+          d_dim=d_dim,
+          elt=elt,
+          active_q=active_q,
+          active_k=active_k,
+          active_v=active_v,
+        )
+
   if active_q:
     tape.add(el, q_view, dq_arr)
   if active_k:
@@ -681,6 +735,254 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     tape.add(el, v_view, dv_arr)
   if active_b and db_arr is not None and bias_arr is not None:
     tape.add(el, bias_arr, _reduce_broadcast_grad(el, db_arr, bias_arr))
+
+
+def _emit_flash_attn_hvp_tangent(
+  el,
+  jvp,
+  *,
+  q_view: ArrayVal,
+  k_view: ArrayVal,
+  v_view: ArrayVal,
+  g_arr: ArrayVal,
+  lse_arr: ArrayVal,
+  d_arr: ArrayVal,
+  dq_arr: ArrayVal,
+  dk_arr: ArrayVal,
+  dv_arr: ArrayVal,
+  tq_v: ArrayVal | None,
+  tk_v: ArrayVal | None,
+  tv_v: ArrayVal | None,
+  tdo_v: ArrayVal | None,
+  td_v: ArrayVal | None,
+  scale_c: Expr | None,
+  mask_cond: Expr | None,
+  mask_index_vars: tuple[Var, Var],
+  mask_buf: Var | None,
+  mask_index: Expr | None,
+  mask_fill: Expr | None,
+  batch_shape: tuple[Expr, ...],
+  m_dim: Expr,
+  n_dim: Expr,
+  k_dim: Expr,
+  d_dim: Expr,
+  elt: ScalarType,
+  active_q: bool,
+  active_k: bool,
+  active_v: bool,
+) -> None:
+  """Zero-O(T^2) data-parallel HVP tangent pass for rematerialized FlashAttention backward."""
+  zero_c = Const(0.0, elt)
+  i_m, j_m = mask_index_vars
+  q_c = el.as_concrete(q_view) if q_view.buf is None else q_view
+  k_c = el.as_concrete(k_view) if k_view.buf is None else k_view
+  v_c = el.as_concrete(v_view) if v_view.buf is None else v_view
+  g_c = el.as_concrete(g_arr) if g_arr.buf is None else g_arr
+  tq_c = el.as_concrete(el.cast_array(tq_v, elt)) if tq_v is not None else None
+  tk_c = el.as_concrete(el.cast_array(tk_v, elt)) if tk_v is not None else None
+  tv_c = el.as_concrete(el.cast_array(tv_v, elt)) if tv_v is not None else None
+  tdo_c = el.as_concrete(el.cast_array(tdo_v, elt)) if tdo_v is not None else None
+  td_c = el.as_concrete(el.cast_array(td_v, elt)) if td_v is not None else None
+
+  def _score_and_dscore(b_idx, i_e, j_e):
+    s_acc = Var("hs", elt)
+    ds_acc = Var("hds", elt)
+    el.mutables.update((s_acc.uid, ds_acc.uid))
+    el.emit(Assign(s_acc, zero_c))
+    el.emit(Assign(ds_acc, zero_c))
+
+    def k_step(kv: Expr) -> None:
+      qv = el.tmp(el.elem(q_c, (*b_idx, i_e, kv)), "hq")
+      kkv = el.tmp(el.elem(k_c, (*b_idx, j_e, kv)), "hk")
+      el.emit(Assign(s_acc, ops.prim("add", (s_acc, ops.prim("mul", (qv, kkv), elt)), elt)))
+      t_sum: Expr | None = None
+      if tq_c is not None:
+        tqv = el.tmp(el.elem(tq_c, (*b_idx, i_e, kv)), "htq")
+        t_sum = ops.prim("mul", (tqv, kkv), elt)
+      if tk_c is not None:
+        tkv = el.tmp(el.elem(tk_c, (*b_idx, j_e, kv)), "htk")
+        term = ops.prim("mul", (qv, tkv), elt)
+        t_sum = term if t_sum is None else ops.prim("add", (t_sum, term), elt)
+      if t_sum is not None:
+        el.emit(Assign(ds_acc, ops.prim("add", (ds_acc, t_sum), elt)))
+
+    el.for_range(ZERO, k_dim, k_step, name="hk")
+    s_val: Expr = ops.prim("mul", (s_acc, scale_c), elt) if scale_c is not None else s_acc
+    ds_val: Expr = ops.prim("mul", (ds_acc, scale_c), elt) if scale_c is not None else ds_acc
+    cond_v: Expr | None = None
+    if mask_fill is not None and (mask_buf is not None or mask_cond is not None):
+      c_cl = Cloner({i_m.uid: i_e, j_m.uid: j_e})
+      cond_v = el.tmp(
+        Load(mask_buf, c_cl.expr(mask_index))
+        if (mask_buf is not None and mask_index is not None)
+        else c_cl.expr(mask_cond),  # type: ignore[arg-type]
+        "hm",
+      )
+      s_val = ops.select(cond_v, s_val, cast(mask_fill, elt))
+      ds_val = ops.select(cond_v, ds_val, zero_c)
+    return el.tmp(s_val, "hs_v"), el.tmp(ds_val, "hds_v"), cond_v
+
+  # 1. O(T) row-wise dlse[b, i] = sum_j P_{ij} * dS_{ij}
+  dlse_arr = el.alloc_array(elt, (*batch_shape, m_dim), zero=False, label="fhvp_dlse")
+
+  def dlse_body(idx):
+    b_idx, i_e = idx[:-1], idx[-1]
+    lse_i = el.tmp(el.elem(lse_arr, (*b_idx, i_e)), "lsei")
+    acc = Var("hdlse", elt)
+    el.mutables.add(acc.uid)
+    el.emit(Assign(acc, zero_c))
+
+    def j_step(jv: Expr) -> None:
+      s_v, ds_v, _ = _score_and_dscore(b_idx, i_e, jv)
+      p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (s_v, lse_i), elt),), elt), "hp")
+      el.emit(Assign(acc, ops.prim("add", (acc, ops.prim("mul", (p_ij, ds_v), elt)), elt)))
+
+    el.for_range(ZERO, n_dim, j_step, name="hj")
+    el.emit(Store(dlse_arr.buf, el.index_expr(dlse_arr, idx), acc))
+
+  el.index_map((*batch_shape, m_dim), dlse_body, ordered=False)
+  el.record_store(dlse_arr)
+
+  def _dp_and_ddp(b_idx, i_e, j_e):
+    dp_a = Var("hdp", elt)
+    ddp_a = Var("hddp", elt)
+    el.mutables.update((dp_a.uid, ddp_a.uid))
+    el.emit(Assign(dp_a, zero_c))
+    el.emit(Assign(ddp_a, zero_c))
+
+    def d_step(dv: Expr) -> None:
+      dov = el.tmp(el.elem(g_c, (*b_idx, i_e, dv)), "hdo")
+      vv = el.tmp(el.elem(v_c, (*b_idx, j_e, dv)), "hv")
+      el.emit(Assign(dp_a, ops.prim("add", (dp_a, ops.prim("mul", (dov, vv), elt)), elt)))
+      t_sum: Expr | None = None
+      if tdo_c is not None:
+        tdov = el.tmp(el.elem(tdo_c, (*b_idx, i_e, dv)), "htdo")
+        t_sum = ops.prim("mul", (tdov, vv), elt)
+      if tv_c is not None:
+        tvv = el.tmp(el.elem(tv_c, (*b_idx, j_e, dv)), "htv")
+        term = ops.prim("mul", (dov, tvv), elt)
+        t_sum = term if t_sum is None else ops.prim("add", (t_sum, term), elt)
+      if t_sum is not None:
+        el.emit(Assign(ddp_a, ops.prim("add", (ddp_a, t_sum), elt)))
+
+    el.for_range(ZERO, d_dim, d_step, name="hd")
+    return dp_a, ddp_a
+
+  # 2. Race-free parallel ddQ[b, i, k] over (*batch, M)
+  if active_q:
+    ddq_arr = el.alloc_array(elt, (*batch_shape, m_dim, k_dim), zero=True, label="fhvp_ddq")
+
+    def ddq_body(idx):
+      b_idx, i_e = idx[:-1], idx[-1]
+      lse_i = el.tmp(el.elem(lse_arr, (*b_idx, i_e)), "lsei")
+      dlse_i = el.tmp(el.elem(dlse_arr, (*b_idx, i_e)), "dlsei")
+      d_i = el.tmp(el.elem(d_arr, (*b_idx, i_e)), "di")
+      td_i = el.tmp(el.elem(td_c, (*b_idx, i_e)), "tdi") if td_c is not None else zero_c
+
+      def j_step(jv: Expr) -> None:
+        s_v, ds_v, cond_v = _score_and_dscore(b_idx, i_e, jv)
+        p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (s_v, lse_i), elt),), elt), "hp")
+        dp_t = el.tmp(ops.prim("mul", (p_ij, ops.prim("sub", (ds_v, dlse_i), elt)), elt), "hdpt")
+        if cond_v is not None:
+          dp_t = el.tmp(ops.select(cond_v, dp_t, zero_c), "hdpt")
+        dp_ij, ddp_ij = _dp_and_ddp(b_idx, i_e, jv)
+        diff = el.tmp(ops.prim("sub", (dp_ij, d_i), elt), "hdiff")
+        ddiff = el.tmp(ops.prim("sub", (ddp_ij, td_i), elt), "hddiff")
+        ds_u = el.tmp(ops.prim("mul", (p_ij, diff), elt), "hdsu")
+        dds_u = el.tmp(
+          ops.prim("add", (ops.prim("mul", (dp_t, diff), elt), ops.prim("mul", (p_ij, ddiff), elt)), elt),
+          "hddsu",
+        )
+        if cond_v is not None:
+          ds_u = el.tmp(ops.select(cond_v, ds_u, zero_c), "hdsu")
+          dds_u = el.tmp(ops.select(cond_v, dds_u, zero_c), "hddsu")
+        ds_sc = el.tmp(ops.prim("mul", (ds_u, scale_c), elt), "hdss") if scale_c is not None else ds_u
+        dds_sc = el.tmp(ops.prim("mul", (dds_u, scale_c), elt), "hddss") if scale_c is not None else dds_u
+
+        def k_acc(kv: Expr) -> None:
+          pos = el.tmp(el.index_expr(ddq_arr, (*b_idx, i_e, kv)), "qpos")
+          kkv = el.tmp(el.elem(k_c, (*b_idx, jv, kv)), "hk")
+          inc = ops.prim("mul", (dds_sc, kkv), elt)
+          if tk_c is not None:
+            tkv = el.tmp(el.elem(tk_c, (*b_idx, jv, kv)), "htk")
+            inc = ops.prim("add", (inc, ops.prim("mul", (ds_sc, tkv), elt)), elt)
+          el.emit(Store(ddq_arr.buf, pos, ops.prim("add", (Load(ddq_arr.buf, pos), inc), elt)))
+
+        el.for_range(ZERO, k_dim, k_acc, name="hqk")
+
+      el.for_range(ZERO, n_dim, j_step, name="hqj")
+
+    el.index_map((*batch_shape, m_dim), ddq_body, ordered=False)
+    el.record_store(ddq_arr)
+    jvp.bind_array(el, dq_arr, ddq_arr)
+
+  # 3. Race-free parallel ddK[b, j, k] and ddV[b, j, d] over (*batch, N)
+  if active_k or active_v:
+    ddk_arr = el.alloc_array(elt, (*batch_shape, n_dim, k_dim), zero=True, label="fhvp_ddk") if active_k else None
+    ddv_arr = el.alloc_array(elt, (*batch_shape, n_dim, d_dim), zero=True, label="fhvp_ddv") if active_v else None
+
+    def ddkv_body(idx):
+      b_idx, j_e = idx[:-1], idx[-1]
+
+      def i_step(iv: Expr) -> None:
+        lse_i = el.tmp(el.elem(lse_arr, (*b_idx, iv)), "lsei")
+        dlse_i = el.tmp(el.elem(dlse_arr, (*b_idx, iv)), "dlsei")
+        d_i = el.tmp(el.elem(d_arr, (*b_idx, iv)), "di")
+        td_i = el.tmp(el.elem(td_c, (*b_idx, iv)), "tdi") if td_c is not None else zero_c
+        s_v, ds_v, cond_v = _score_and_dscore(b_idx, iv, j_e)
+        p_ij = el.tmp(ops.prim("exp", (ops.prim("sub", (s_v, lse_i), elt),), elt), "hp")
+        dp_t = el.tmp(ops.prim("mul", (p_ij, ops.prim("sub", (ds_v, dlse_i), elt)), elt), "hdpt")
+        if cond_v is not None:
+          dp_t = el.tmp(ops.select(cond_v, dp_t, zero_c), "hdpt")
+
+        if ddv_arr is not None:
+
+          def d_acc(dv: Expr) -> None:
+            pos = el.tmp(el.index_expr(ddv_arr, (*b_idx, j_e, dv)), "vpos")
+            dov = el.tmp(el.elem(g_c, (*b_idx, iv, dv)), "hdo")
+            inc = ops.prim("mul", (dp_t, dov), elt)
+            if tdo_c is not None:
+              tdov = el.tmp(el.elem(tdo_c, (*b_idx, iv, dv)), "htdo")
+              inc = ops.prim("add", (inc, ops.prim("mul", (p_ij, tdov), elt)), elt)
+            el.emit(Store(ddv_arr.buf, pos, ops.prim("add", (Load(ddv_arr.buf, pos), inc), elt)))
+
+          el.for_range(ZERO, d_dim, d_acc, name="hvd")
+
+        if ddk_arr is not None:
+          dp_ij, ddp_ij = _dp_and_ddp(b_idx, iv, j_e)
+          diff = el.tmp(ops.prim("sub", (dp_ij, d_i), elt), "hdiff")
+          ddiff = el.tmp(ops.prim("sub", (ddp_ij, td_i), elt), "hddiff")
+          ds_u = el.tmp(ops.prim("mul", (p_ij, diff), elt), "hdsu")
+          dds_u = el.tmp(
+            ops.prim("add", (ops.prim("mul", (dp_t, diff), elt), ops.prim("mul", (p_ij, ddiff), elt)), elt),
+            "hddsu",
+          )
+          if cond_v is not None:
+            ds_u = el.tmp(ops.select(cond_v, ds_u, zero_c), "hdsu")
+            dds_u = el.tmp(ops.select(cond_v, dds_u, zero_c), "hddsu")
+          ds_sc = el.tmp(ops.prim("mul", (ds_u, scale_c), elt), "hdss") if scale_c is not None else ds_u
+          dds_sc = el.tmp(ops.prim("mul", (dds_u, scale_c), elt), "hddss") if scale_c is not None else dds_u
+
+          def k_acc(kv: Expr) -> None:
+            pos = el.tmp(el.index_expr(ddk_arr, (*b_idx, j_e, kv)), "kpos")
+            qv = el.tmp(el.elem(q_c, (*b_idx, iv, kv)), "hq")
+            inc = ops.prim("mul", (dds_sc, qv), elt)
+            if tq_c is not None:
+              tqv = el.tmp(el.elem(tq_c, (*b_idx, iv, kv)), "htq")
+              inc = ops.prim("add", (inc, ops.prim("mul", (ds_sc, tqv), elt)), elt)
+            el.emit(Store(ddk_arr.buf, pos, ops.prim("add", (Load(ddk_arr.buf, pos), inc), elt)))
+
+          el.for_range(ZERO, k_dim, k_acc, name="hkk")
+
+      el.for_range(ZERO, m_dim, i_step, name="hki")
+
+    el.index_map((*batch_shape, n_dim), ddkv_body, ordered=False)
+    if ddk_arr is not None:
+      el.record_store(ddk_arr)
+      jvp.bind_array(el, dk_arr, ddk_arr)
+    if ddv_arr is not None:
+      el.record_store(ddv_arr)
+      jvp.bind_array(el, dv_arr, ddv_arr)
 
 
 def emit_ipa_attention(
@@ -1363,9 +1665,57 @@ def run_algebraic_vjp(tape, el, node, g) -> None:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class AlgebraicADRule:
+  """Declarative descriptor for a Law 2 algebraic AD rematerialization rule."""
+
+  name: str
+  description: str
+  vjp_handler: Callable | None = None
+  jvp_supported: bool = False
+  hvp_supported: bool = False
+
+
+ALGEBRAIC_AD_RULES: tuple[AlgebraicADRule, ...] = (
+  AlgebraicADRule(
+    name="flash_attention",
+    description="Zero-O(T^2) SRAM-rematerialized attention VJP, JVP, and HVP",
+    vjp_handler=_bwd_flash_attn,
+    jvp_supported=True,
+    hvp_supported=True,
+  ),
+  AlgebraicADRule(
+    name="cut_cross_entropy",
+    description="Zero-O(M*V) SRAM-rematerialized linear cross-entropy VJP",
+    vjp_handler=_bwd_cce,
+    jvp_supported=False,
+    hvp_supported=False,
+  ),
+  AlgebraicADRule(
+    name="softmax",
+    description="Shift-invariant closed-form softmax VJP and JVP",
+    vjp_handler=_bwd_softmax,
+    jvp_supported=True,
+    hvp_supported=True,
+  ),
+  AlgebraicADRule(
+    name="layernorm_rmsnorm",
+    description="Single-pass closed-form LayerNorm / RMSNorm VJP, JVP, and HVP",
+    vjp_handler=_bwd_norm,
+    jvp_supported=True,
+    hvp_supported=True,
+  ),
+)
+
+
 def optimize_tape(tape, el, out) -> None:
   """Rewrite recognized algebraic subgraphs on ``tape.nodes`` into compact
-  rematerialized VJPs before reverse-mode traversal (Law 2)."""
+  rematerialized VJPs before reverse-mode traversal (Law 2).
+
+  Supports both top-level straight-line tapes and checkpointed loop-body child
+  tapes, as well as multi-output trees.
+  """
+  from .ad_loops import flatten_tree
   from .autodiff import Node
 
   if tape.dry or el.tape is not None or not tape.nodes:
@@ -1391,7 +1741,14 @@ def optimize_tape(tape, el, out) -> None:
       if p is not None and p < idx:
         consumers[p].add(idx)
 
-  out_idx = prod_by_id.get(id(out))
+  out_leaves, _ = flatten_tree(out)
+  out_idxs: set[int] = set()
+  for ol in out_leaves:
+    oi = prod_by_id.get(id(ol))
+    if oi is None and isinstance(ol, ArrayVal) and ol.buf is not None:
+      oi = prod_by_buf.get(ol.buf.uid)
+    if oi is not None:
+      out_idxs.add(oi)
   replaced: set[int] = set()
   replacements: dict[int, Node] = {}  # end_idx -> replacement Node
 
@@ -1402,7 +1759,7 @@ def optimize_tape(tape, el, out) -> None:
     for u in sub_set:
       if u == end_idx:
         continue
-      if u == out_idx:
+      if u in out_idxs:
         return False
       if not (consumers[u] <= sub_set):
         return False
@@ -1829,4 +2186,4 @@ def optimize_tape(tape, el, out) -> None:
   tape.nodes[:] = new_nodes
 
 
-__all__ = ["emit_ipa_attention", "optimize_tape", "run_algebraic_vjp"]
+__all__ = ["ALGEBRAIC_AD_RULES", "AlgebraicADRule", "emit_ipa_attention", "optimize_tape", "run_algebraic_vjp"]

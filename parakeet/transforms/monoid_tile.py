@@ -2649,6 +2649,497 @@ def _fuse_block(
   return out, changed
 
 
+def _extract_linear_load_expr(e: Expr, locals_map: dict[int, Expr], budget: int = 8) -> Expr:
+  return _resolve_local(e, locals_map, budget)
+
+
+def _match_dual_score_map(s: ir.Stmt, facts: IndexFacts):
+  """Match a dual primal+tangent Q@K^T score IndexMap produced by ``par.jvp`` / ``par.hvp``.
+
+  Returns a dict with ``(batch_shape, batch_idx, m_dim, n_dim, k_dim, i_var, j_var, k_var,
+  elt, s_buf, ds_buf, scale, s_val_expr, ds_val_expr, k_stmts)`` or ``None``.
+  """
+  if not isinstance(s, IndexMap) or len(s.shape) < 2 or s.ordered or s.scope.owned:
+    return None
+  body = [t for t in s.body if not (isinstance(t, ReleaseScope) and t.scope is s.scope)]
+  stores = [t for t in body if isinstance(t, Store)]
+  if len(stores) != 2:
+    return None
+  st_s, st_ds = stores[0], stores[1]
+  s_buf, ds_buf = st_s.buf, st_ds.buf
+  if s_buf.uid == ds_buf.uid or s_buf.type.elt is not ds_buf.type.elt:
+    return None
+  elt = s_buf.type.elt
+  if elt.kind != "f":
+    return None
+  batch_shape = s.shape[:-2]
+  batch_idx = s.index[:-2]
+  m_dim, n_dim = s.shape[-2], s.shape[-1]
+  i_var, j_var = s.index[-2], s.index[-1]
+  expected_pos = row_major_index((*batch_idx, i_var, j_var), (*batch_shape, m_dim, n_dim))
+  f_body = facts.fork()
+  locals_map: dict[int, Expr] = {}
+  reds: list[IndexReduce] = []
+  for t in body:
+    if isinstance(t, Assign):
+      locals_map[t.var.uid] = t.value
+      f_body.record_stmt(t)
+    elif isinstance(t, IndexReduce):
+      reds.append(t)
+    elif isinstance(t, Store):
+      continue
+    else:
+      return None
+  if not (f_body.same_expr(st_s.index, expected_pos) and f_body.same_expr(st_ds.index, expected_pos)):
+    return None
+  # Collect add-folds across 1 or 2 IndexReduce statements with identical 1-D reduction shape (k_dim,)
+  folds_info: list[tuple[IndexReduce, ir.Fold]] = []
+  for red in reds:
+    if len(red.shape) != 1 or red.where is not None or red.scope.owned:
+      return None
+    for f in red.folds:
+      if f.op != "add" or f.combine or f.carries:
+        return None
+      folds_info.append((red, f))
+  if len(folds_info) != 2:
+    return None
+  (red1, f1), (red2, f2) = folds_info
+  if not f_body.same_expr(red1.shape[0], red2.shape[0]):
+    return None
+  k_dim = red1.shape[0]
+  # Match s_val = red1.result (* scale) and ds_val = red2.result (* scale)
+  sv = _resolve_local(st_s.value, locals_map)
+  dsv = _resolve_local(st_ds.value, locals_map)
+
+  def _unwrap_scale(e: Expr, target_uid: int) -> tuple[bool, Expr | None]:
+    if isinstance(e, Var) and e.uid == target_uid:
+      return True, None
+    if isinstance(e, Prim) and e.op == "mul" and len(e.args) == 2:
+      a0, a1 = _resolve_local(e.args[0], locals_map), _resolve_local(e.args[1], locals_map)
+      if isinstance(a0, Var) and a0.uid == target_uid:
+        return True, a1
+      if isinstance(a1, Var) and a1.uid == target_uid:
+        return True, a0
+    return False, None
+
+  ok_s, sc_s = _unwrap_scale(sv, f1.result.uid)
+  ok_ds, sc_ds = _unwrap_scale(dsv, f2.result.uid)
+  if not (ok_s and ok_ds):
+    return None
+  if (sc_s is None) != (sc_ds is None):
+    return None
+  if sc_s is not None and sc_ds is not None and not f_body.same_expr(sc_s, sc_ds):
+    return None
+  # Build a clean merged k-loop body that evaluates both s_term and ds_term given (batch_idx, i_var, j_var, k_var)
+  k_var = Var("fjk", I)
+  cl1 = Cloner({red1.index[0].uid: k_var})
+  for v in defined(red1.body).values():
+    cl1.var(v)
+  k_stmts1 = [cl1.stmt(t) for t in red1.body]
+  s_term = cl1.expr(f1.value)
+
+  cl2 = Cloner({red2.index[0].uid: k_var})
+  for v in defined(red2.body).values():
+    cl2.var(v)
+  k_stmts2 = [cl2.stmt(t) for t in red2.body]
+  ds_term = cl2.expr(f2.value)
+
+  # Capture outer locals referenced in k_stmts (e.g. off_q, off_k)
+  outer_assigns = [t for t in body if isinstance(t, Assign) and t.var.uid not in {f1.result.uid, f2.result.uid}]
+  # Exclude assigns that depend on f1.result or f2.result
+  red_uids = {f1.result.uid, f2.result.uid}
+  pre_assigns = [t for t in outer_assigns if not _expr_uses_uids(t.value, red_uids)]
+
+  return {
+    "batch_shape": batch_shape,
+    "batch_idx": batch_idx,
+    "m_dim": m_dim,
+    "n_dim": n_dim,
+    "k_dim": k_dim,
+    "i_var": i_var,
+    "j_var": j_var,
+    "k_var": k_var,
+    "elt": elt,
+    "s_buf": s_buf,
+    "ds_buf": ds_buf,
+    "scale": sc_s,
+    "pre_assigns": pre_assigns,
+    "k_stmts": k_stmts1 + k_stmts2,
+    "s_term": s_term,
+    "ds_term": ds_term,
+  }
+
+
+def _match_dual_output_map(
+  s: ir.Stmt, p_buf: Var, dp_buf: Var, batch_shape, m_dim, n_dim, elt: ScalarType, facts: IndexFacts
+):
+  """Match dual primal+tangent ``O = P @ V, dO = dP @ V + P @ dV`` IndexMap."""
+  if not isinstance(s, IndexMap) or len(s.shape) != len(batch_shape) + 2 or s.ordered or s.scope.owned:
+    return None
+  if not facts.same_shape(s.shape[:-1], (*batch_shape, m_dim)):
+    return None
+  d_dim = s.shape[-1]
+  body = [t for t in s.body if not (isinstance(t, ReleaseScope) and t.scope is s.scope)]
+  stores = [t for t in body if isinstance(t, Store)]
+  if len(stores) != 2:
+    return None
+  st_o, st_do = stores[0], stores[1]
+  o_buf, do_buf = st_o.buf, st_do.buf
+  if o_buf.uid == do_buf.uid or o_buf.type.elt is not elt or do_buf.type.elt is not elt:
+    return None
+  b_idx, i_var, d_var = s.index[:-2], s.index[-2], s.index[-1]
+  exp_pos = row_major_index((*b_idx, i_var, d_var), (*batch_shape, m_dim, d_dim))
+  f_body = facts.fork()
+  locals_map: dict[int, Expr] = {}
+  reds: list[IndexReduce] = []
+  for t in body:
+    if isinstance(t, Assign):
+      locals_map[t.var.uid] = t.value
+      f_body.record_stmt(t)
+    elif isinstance(t, IndexReduce):
+      reds.append(t)
+    elif isinstance(t, Store):
+      continue
+    else:
+      return None
+  if not (f_body.same_expr(st_o.index, exp_pos) and f_body.same_expr(st_do.index, exp_pos)):
+    return None
+  folds_info: list[tuple[IndexReduce, ir.Fold]] = []
+  for red in reds:
+    if len(red.shape) != 1 or not f_body.same_expr(red.shape[0], n_dim) or red.where is not None or red.scope.owned:
+      return None
+    for f in red.folds:
+      if f.op != "add" or f.combine or f.carries:
+        return None
+      folds_info.append((red, f))
+  if len(folds_info) != 2:
+    return None
+  (red1, f1), (red2, f2) = folds_info
+  ov = _resolve_local(st_o.value, locals_map)
+  dov = _resolve_local(st_do.value, locals_map)
+  if not (isinstance(ov, Var) and ov.uid == f1.result.uid and isinstance(dov, Var) and dov.uid == f2.result.uid):
+    return None
+  # Check that red1 reads p_buf and extracts v_expr, and red2 reads dp_buf and optionally p_buf (for dV)
+  j_v = Var("fj_ov", I)
+  cl1 = Cloner({red1.index[0].uid: j_v})
+  for v in defined(red1.body).values():
+    cl1.var(v)
+  loc1 = dict(locals_map)
+  for t in red1.body:
+    if isinstance(t, Assign):
+      loc1[t.var.uid] = t.value
+  f1_expr = _resolve_local(f1.value, loc1)
+  if not (isinstance(f1_expr, Prim) and f1_expr.op == "mul" and len(f1_expr.args) == 2):
+    return None
+  a0, a1 = _resolve_local(f1_expr.args[0], loc1), _resolve_local(f1_expr.args[1], loc1)
+  if isinstance(a0, Load) and a0.buf.uid == p_buf.uid:
+    v_load_raw = a1
+  elif isinstance(a1, Load) and a1.buf.uid == p_buf.uid:
+    v_load_raw = a0
+  else:
+    return None
+  # Extract dv_load_raw (optional, may be None if V has zero tangent) from red2
+  loc2 = dict(locals_map)
+  for t in red2.body:
+    if isinstance(t, Assign):
+      loc2[t.var.uid] = t.value
+  f2_expr = _resolve_local(f2.value, loc2)
+  # Check red2 mentions dp_buf
+  if not any(isinstance(x, Load) and x.buf.uid == dp_buf.uid for x in ir.walk_expr(f2_expr)):
+    return None
+  dv_load_raw: Expr | None = None
+  # Typical form: (v_load * dp_load) + (p_load * dv_load) or just (v_load * dp_load)
+  terms = [f2_expr]
+  if isinstance(f2_expr, Prim) and f2_expr.op == "add":
+    terms = [_resolve_local(f2_expr.args[0], loc2), _resolve_local(f2_expr.args[1], loc2)]
+  for tm in terms:
+    if isinstance(tm, Prim) and tm.op == "mul" and len(tm.args) == 2:
+      t0, t1 = _resolve_local(tm.args[0], loc2), _resolve_local(tm.args[1], loc2)
+      if isinstance(t0, Load) and t0.buf.uid == p_buf.uid:
+        dv_load_raw = t1
+      elif isinstance(t1, Load) and t1.buf.uid == p_buf.uid:
+        dv_load_raw = t0
+  # Clone v_load and dv_load with red1/red2 index vars mapped to j_v, retaining outer index vars (b_idx, d_var)
+  v_expr = cl1.expr(v_load_raw)
+  cl2 = Cloner({red2.index[0].uid: j_v})
+  dv_expr = cl2.expr(dv_load_raw) if dv_load_raw is not None else None
+  return {
+    "o_buf": o_buf,
+    "do_buf": do_buf,
+    "d_dim": d_dim,
+    "b_idx": b_idx,
+    "i_var": i_var,
+    "d_var": d_var,
+    "j_var": j_v,
+    "v_expr": v_expr,
+    "dv_expr": dv_expr,
+    "outer_assigns": [t for t in body if isinstance(t, Assign) and t.var.uid not in {f1.result.uid, f2.result.uid}],
+  }
+
+
+def _try_fuse_flash_jvp(block: list[Stmt], k: int, facts: IndexFacts, binfo: BufferInfo):
+  """Fuse dual FlashAttention JVP chain ``(S, dS) -> softmax_jvp -> (O, dO)`` into a
+  single zero-O(T^2) streaming parallel ``IndexMap`` over ``(*batch, M)``."""
+  sc = _match_dual_score_map(block[k], facts)
+  if sc is None:
+    return None
+  s_buf, ds_buf = sc["s_buf"], sc["ds_buf"]
+  if s_buf.uid not in binfo.local_allocs or ds_buf.uid not in binfo.local_allocs:
+    return None
+  if s_buf.uid in binfo.escapes or ds_buf.uid in binfo.escapes:
+    return None
+  batch_shape, m_dim, n_dim, elt = sc["batch_shape"], sc["m_dim"], sc["n_dim"], sc["elt"]
+  n = len(block)
+  # Scan forward over softmax_jvp intermediate maps until we hit the dual O/dO output map
+  walk_f = facts.fork()
+  hoisted: list[Stmt] = []
+  chain_stmts: list[Stmt] = [block[k]]
+  mid_bufs: set[int] = {s_buf.uid, ds_buf.uid}
+  m_buf_out: Var | None = None
+  l_buf_out: Var | None = None
+  p_buf: Var | None = None
+  dp_buf: Var | None = None
+  end_pos: int | None = None
+  o_info = None
+
+  idx = k + 1
+  seen_softmax_pair = False
+  while idx < n and idx - k <= 96:
+    st = block[idx]
+    if isinstance(st, (ir.Alloc, ir.Release, Assign, Check, ir.Comment)):
+      walk_f.record_stmt(st)
+      hoisted.append(st)
+      idx += 1
+      continue
+    if not isinstance(st, IndexMap):
+      break
+    # Check if this is the dual O/dO map once we have (p_buf, dp_buf)
+    if seen_softmax_pair and p_buf is not None and dp_buf is not None:
+      cand_o = _match_dual_output_map(st, p_buf, dp_buf, batch_shape, m_dim, n_dim, elt, walk_f)
+      if cand_o is not None:
+        o_info = cand_o
+        end_pos = idx
+        chain_stmts.append(st)
+        break
+    # Check if this map is an independent transpose (bt / d_bt) of V / dV that doesn't read mid_bufs
+    reads_mid = any(
+      isinstance(e, Load) and e.buf.uid in mid_bufs
+      for s_ in ir.walk_stmts([st])
+      for root_e in ir.stmt_exprs(s_)
+      for e in ir.walk_expr(root_e)
+    )
+    if not reads_mid:
+      hoisted.append(st)
+      idx += 1
+      continue
+    # Otherwise this map is part of the softmax_jvp chain: verify it writes local buffers only
+    st_stores = [t for t in ir.walk_stmts([st]) if isinstance(t, Store)]
+    if not st_stores:
+      return None
+    chain_stmts.append(st)
+    # Identify m_buf (first 1-store max reduction of s_buf), l_buf (if stored), and (p_buf, dp_buf)
+    if m_buf_out is None and len(st_stores) == 1:
+      m_cand = _match_row_reduce_map(st, s_buf, batch_shape, m_dim, n_dim, walk_f, want_op="max")
+      down_scale: Expr | None = None
+      if m_cand is None:
+        # Handle downstream scaling `max_j (s_buf[i, j] * scale)` when s_buf came from an unscaled matmul (e.g. blas=False)
+        reds_m = [
+          r for r in ir.walk_stmts([st]) if isinstance(r, IndexReduce) and len(r.folds) == 1 and r.folds[0].op == "max"
+        ]
+        if len(reds_m) == 1 and reds_m[0].where is None:
+          rm = reds_m[0]
+          loc_m = {t.var.uid: t.value for t in ir.walk_stmts([st]) if isinstance(t, Assign)}
+          fv = _resolve_local(rm.folds[0].value, loc_m)
+          loop_uids = {v.uid for v in (*st.index, *rm.index)}
+          if isinstance(fv, Load) and fv.buf.uid == s_buf.uid:
+            m_cand = st_stores[0].buf
+          elif isinstance(fv, Prim) and fv.op == "mul" and len(fv.args) == 2:
+            a0, a1 = _resolve_local(fv.args[0], loc_m), _resolve_local(fv.args[1], loc_m)
+            if isinstance(a0, Load) and a0.buf.uid == s_buf.uid and not _expr_uses_uids(a1, loop_uids):
+              m_cand, down_scale = st_stores[0].buf, a1
+            elif isinstance(a1, Load) and a1.buf.uid == s_buf.uid and not _expr_uses_uids(a0, loop_uids):
+              m_cand, down_scale = st_stores[0].buf, a0
+      if m_cand is not None:
+        if down_scale is not None:
+          sc["scale"] = down_scale if sc["scale"] is None else ops.prim("mul", (sc["scale"], down_scale), elt)
+        m_buf_out = m_cand
+        mid_bufs.add(m_cand.uid)
+        idx += 1
+        continue
+    for st_s in st_stores:
+      mid_bufs.add(st_s.buf.uid)
+    has_exp = any(
+      isinstance(e, Prim) and e.op == "exp"
+      for s_ in ir.walk_stmts([st])
+      for root_e in ir.stmt_exprs(s_)
+      for e in ir.walk_expr(root_e)
+    )
+    has_nested_n = any(
+      isinstance(s_, IndexMap) and s_ is not st and len(s_.shape) == 1 and walk_f.same_expr(s_.shape[0], n_dim)
+      for s_ in ir.walk_stmts([st])
+    )
+    is_mn_map = (
+      len(st.shape) == len(batch_shape) + 2 and walk_f.same_shape(st.shape, (*batch_shape, m_dim, n_dim))
+    ) or (len(st.shape) == len(batch_shape) + 1 and has_nested_n)
+    is_row_map = len(st.shape) == len(batch_shape) + 1 and not has_nested_n
+    if is_row_map and (has_exp or l_buf_out is None and len(st_stores) == 2):
+      l_buf_out = st_stores[0].buf
+    elif is_mn_map and len(st_stores) >= 2 and (has_exp or l_buf_out is not None):
+      p_cand, dp_cand = None, None
+      for st_s in st_stores:
+        if walk_f.same_expr(st_s.index, row_major_index((*st.index,), (*batch_shape, m_dim))) and l_buf_out is None:
+          l_buf_out = st_s.buf
+        elif p_cand is None:
+          p_cand = st_s.buf
+        elif dp_cand is None:
+          dp_cand = st_s.buf
+      if p_cand is not None and dp_cand is not None:
+        p_buf, dp_buf = p_cand, dp_cand
+        seen_softmax_pair = True
+    idx += 1
+
+  if o_info is None or end_pos is None or p_buf is None or dp_buf is None:
+    return None
+
+  # Determine which intermediate buffers are truly dead vs read externally (e.g. m_buf, l_buf in HVP)
+  in_chain = _buf_read_counts(chain_stmts, mid_bufs)
+  dead_uids: set[int] = set()
+  keep_m = False
+  keep_l = False
+  for u in mid_bufs:
+    ext_reads = binfo.readers.get(u, 0) - in_chain.get(u, 0)
+    if ext_reads == 0 and u not in binfo.escapes:
+      dead_uids.add(u)
+    elif m_buf_out is not None and u == m_buf_out.uid:
+      keep_m = True
+    elif l_buf_out is not None and u == l_buf_out.uid:
+      keep_l = True
+    else:
+      # An O(T^2) buffer escapes or is read externally — abort fusion safely
+      return None
+  # Must eliminate S, dS, P, dP
+  if not ({s_buf.uid, ds_buf.uid, p_buf.uid, dp_buf.uid} <= dead_uids):
+    return None
+
+  # Build ONE zero-O(T^2) parallel IndexMap over (*batch, M) computing O, dO (and m, l if kept)
+  zero_c = Const(0.0, elt)
+  neg_inf = Const(float("-inf"), elt)
+  b_vars = tuple(Var(f"fjb{bi}", I) for bi in range(len(batch_shape)))
+  i_var = Var("fji", I)
+  d_dim = o_info["d_dim"]
+  o_buf, do_buf = o_info["o_buf"], o_info["do_buf"]
+  row_i = row_major_index((*b_vars, i_var), (*batch_shape, m_dim))
+  row_out_base = imul(row_i, d_dim)
+
+  def _emit_score_pair(j_e: Expr, dst_blk: list[Stmt]) -> tuple[Var, Var]:
+    sub = {sc["i_var"].uid: i_var, sc["j_var"].uid: j_e}
+    for bv_old, bv_new in zip(sc["batch_idx"], b_vars):
+      sub[bv_old.uid] = bv_new
+    cl_pre = Cloner(sub)
+    for t in sc["pre_assigns"]:
+      cl_pre.var(t.var)
+      dst_blk.append(cl_pre.stmt(t))
+    s_acc = Var("fjs", elt)
+    ds_acc = Var("fjds", elt)
+    dst_blk.append(Assign(s_acc, zero_c))
+    dst_blk.append(Assign(ds_acc, zero_c))
+    k_lp = Var("fjk", I)
+    cl_k = Cloner({**cl_pre.m, sc["k_var"].uid: k_lp})
+    for v in defined(sc["k_stmts"]).values():
+      cl_k.var(v)
+    k_blk: list[Stmt] = [cl_k.stmt(t) for t in sc["k_stmts"]]
+    k_blk.append(Assign(s_acc, ops.prim("add", (s_acc, cl_k.expr(sc["s_term"])), elt)))
+    k_blk.append(Assign(ds_acc, ops.prim("add", (ds_acc, cl_k.expr(sc["ds_term"])), elt)))
+    dst_blk.append(ForRange(k_lp, ZERO, sc["k_dim"], ONE, k_blk, Scope("loop"), simd=True))
+    s_v = Var("fjs_v", elt)
+    ds_v = Var("fjds_v", elt)
+    if sc["scale"] is not None:
+      sc_e = cl_pre.expr(sc["scale"])
+      dst_blk.append(Assign(s_v, ops.prim("mul", (s_acc, sc_e), elt)))
+      dst_blk.append(Assign(ds_v, ops.prim("mul", (ds_acc, sc_e), elt)))
+    else:
+      dst_blk.append(Assign(s_v, s_acc))
+      dst_blk.append(Assign(ds_v, ds_acc))
+    return s_v, ds_v
+
+  map_scope = Scope("loop")
+  map_body: list[Stmt] = []
+
+  # Pass 1: m_i = max_j S_{ij}
+  m_var = Var("fjm", elt)
+  map_body.append(Assign(m_var, neg_inf))
+  j1 = Var("fjj1", I)
+  j1_blk: list[Stmt] = []
+  s1, _ = _emit_score_pair(j1, j1_blk)
+  j1_blk.append(Assign(m_var, ops.prim("max", (m_var, s1), elt)))
+  map_body.append(ForRange(j1, ZERO, n_dim, ONE, j1_blk, Scope("loop")))
+
+  # Pass 2: l_i = sum_j exp(S_{ij} - m_i), ds_num_i = sum_j exp(S_{ij} - m_i) * dS_{ij}
+  l_var = Var("fjl", elt)
+  ds_num = Var("fjdsn", elt)
+  map_body.append(Assign(l_var, zero_c))
+  map_body.append(Assign(ds_num, zero_c))
+  j2 = Var("fjj2", I)
+  j2_blk: list[Stmt] = []
+  s2, ds2 = _emit_score_pair(j2, j2_blk)
+  e2 = Var("fje2", elt)
+  j2_blk.append(Assign(e2, ops.prim("exp", (ops.prim("sub", (s2, m_var), elt),), elt)))
+  j2_blk.append(Assign(l_var, ops.prim("add", (l_var, e2), elt)))
+  j2_blk.append(Assign(ds_num, ops.prim("add", (ds_num, ops.prim("mul", (e2, ds2), elt)), elt)))
+  map_body.append(ForRange(j2, ZERO, n_dim, ONE, j2_blk, Scope("loop")))
+  inv_l = Var("fjil", elt)
+  mu_ds = Var("fjmuds", elt)
+  map_body.append(Assign(inv_l, ops.prim("div", (Const(1.0, elt), l_var), elt)))
+  map_body.append(Assign(mu_ds, ops.prim("mul", (ds_num, inv_l), elt)))
+  if keep_m and m_buf_out is not None:
+    map_body.append(Store(m_buf_out, row_i, m_var))
+  if keep_l and l_buf_out is not None:
+    map_body.append(Store(l_buf_out, row_i, l_var))
+
+  # Pass 3: Zero O[i, :], dO[i, :], then stream over j in 0..N accumulating O & dO
+  d0 = Var("fjd0", I)
+  d0_blk: list[Stmt] = [
+    Store(o_buf, iadd(row_out_base, d0), zero_c),
+    Store(do_buf, iadd(row_out_base, d0), zero_c),
+  ]
+  map_body.append(ForRange(d0, ZERO, d_dim, ONE, d0_blk, Scope("loop"), simd=True))
+
+  j3 = Var("fjj3", I)
+  j3_blk: list[Stmt] = []
+  s3, ds3 = _emit_score_pair(j3, j3_blk)
+  p3 = Var("fjp3", elt)
+  dp3 = Var("fjdp3", elt)
+  j3_blk.append(Assign(p3, ops.prim("mul", (ops.prim("exp", (ops.prim("sub", (s3, m_var), elt),), elt), inv_l), elt)))
+  j3_blk.append(Assign(dp3, ops.prim("mul", (p3, ops.prim("sub", (ds3, mu_ds), elt)), elt)))
+
+  d3 = Var("fjd3", I)
+  o_sub = {o_info["i_var"].uid: i_var, o_info["d_var"].uid: d3, o_info["j_var"].uid: j3}
+  for bv_old, bv_new in zip(o_info["b_idx"], b_vars):
+    o_sub[bv_old.uid] = bv_new
+  cl_o = Cloner(o_sub)
+  d3_blk: list[Stmt] = []
+  for t in o_info["outer_assigns"]:
+    cl_o.var(t.var)
+    d3_blk.append(cl_o.stmt(t))
+  v3 = Var("fjv3", elt)
+  d3_blk.append(Assign(v3, cl_o.expr(o_info["v_expr"])))
+  out_pos = iadd(row_out_base, d3)
+  d3_blk.append(Store(o_buf, out_pos, ops.prim("add", (Load(o_buf, out_pos), ops.prim("mul", (p3, v3), elt)), elt)))
+  do_inc: Expr = ops.prim("mul", (dp3, v3), elt)
+  if o_info["dv_expr"] is not None:
+    dv3 = Var("fjdv3", elt)
+    d3_blk.append(Assign(dv3, cl_o.expr(o_info["dv_expr"])))
+    do_inc = ops.prim("add", (do_inc, ops.prim("mul", (p3, dv3), elt)), elt)
+  d3_blk.append(Store(do_buf, out_pos, ops.prim("add", (Load(do_buf, out_pos), do_inc), elt)))
+  j3_blk.append(ForRange(d3, ZERO, d_dim, ONE, d3_blk, Scope("loop"), simd=True))
+  map_body.append(ForRange(j3, ZERO, n_dim, ONE, j3_blk, Scope("loop")))
+  map_body.append(ReleaseScope(map_scope))
+
+  fused_map = IndexMap((*batch_shape, m_dim), (*b_vars, i_var), map_body, map_scope, False, True, block[k].loc)
+  clean_hoisted = [h for h in hoisted if not (isinstance(h, (ir.Alloc, ir.Release)) and h.var.uid in dead_uids)]
+  return clean_hoisted, fused_map, dead_uids, end_pos, walk_f
+
+
 def fuse_monoidal_tiles(fn: ir.Function, options) -> None:
   """Fuse contraction + rescaled-monoid chains into 1-pass SRAM-tiled
   :class:`~parakeet.syntax.ir.IndexTile` operators (Laws 1 & 5)."""
@@ -2664,6 +3155,32 @@ def fuse_monoidal_tiles(fn: ir.Function, options) -> None:
       drop_buffers(fn, gone, drop_allocs=True)
     if not changed:
       break
+  # Second sweep: fuse dual FlashAttention JVP/HVP chains into zero-O(T^2) streaming passes
+  gone_jvp: set[int] = set()
+  binfo = BufferInfo.analyze(fn)
+  facts = IndexFacts.from_function(fn)
+  out: list[Stmt] = []
+  k = 0
+  n = len(fn.body)
+  jvp_changed = False
+  while k < n:
+    res = _try_fuse_flash_jvp(fn.body, k, facts, binfo)
+    if res is not None:
+      hoisted_st, fused_map, dead_uids, end_pos, walk_f = res
+      out.extend(hoisted_st)
+      out.append(fused_map)
+      gone_jvp.update(dead_uids)
+      facts = walk_f
+      k = end_pos + 1
+      jvp_changed = True
+      continue
+    facts.record_stmt(fn.body[k])
+    out.append(fn.body[k])
+    k += 1
+  if jvp_changed:
+    fn.body[:] = out
+    if gone_jvp:
+      drop_buffers(fn, gone_jvp, drop_allocs=True)
 
 
 __all__ = ["fuse_monoidal_tiles"]

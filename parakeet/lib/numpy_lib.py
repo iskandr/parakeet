@@ -678,8 +678,114 @@ def _reduce_prim(el, op: str, a, axis=None, init: Expr | None = None, what: str 
   return reduce_plain(el, op, a, axis, init, what, keepdims)
 
 
+def _jvp_reduce_special(el, jvp, op: str, a: ArrayVal, res, axis, init, what: str, keepdims):
+  """Exact JVP for ``min``, ``max``, and ``mul`` reductions (matches reverse-mode tie & zero semantics)."""
+  elt = a.elt
+  da = jvp.tangent_array(el, a)
+  d_init = jvp.tangent_expr(el, init) if init is not None else None
+  if da is None and d_init is None:
+    return res
+  axes = _axes(el, axis, a.rank)
+  kd_b = keepdims if isinstance(keepdims, bool) else el.static_bool(keepdims, "keepdims")
+  with jvp.computing(el):
+    a_c = el.as_concrete(a) if a.buf is None else a
+    da_c = (
+      el.as_concrete(el.cast_array(da, elt))
+      if da is not None
+      else el.alloc_array(elt, a_c.shape, zero=True, label="dz")
+    )
+    res_kd = res if kd_b else _keepdims(el, res, a_c, axes, True)
+    if op in ("min", "max"):
+      hit = el.apply_ufunc(UF["eq"], [a_c, res_kd])
+      zero = Const(0.0, elt)
+      one = Const(1.0, elt)
+      hit_f = el.elementwise([hit], lambda c: ops.select(cast(c, Bool), one, zero), elt, cost=1)
+      num_arr = el.elementwise([hit, da_c], lambda c, x: ops.select(cast(c, Bool), cast(x, elt), zero), elt, cost=1)
+      num = reduce_plain(el, "add", num_arr, axis, Const(0.0, elt), what, keepdims)
+      cnt = reduce_plain(el, "add", hit_f, axis, Const(0.0, elt), what, keepdims)
+      if init is not None:
+        init_hit = el.apply_ufunc(UF["eq"], [cast(init, elt), res])
+        di_val = Const(0.0, elt) if d_init is None else cast(d_init, elt)
+        if isinstance(res, ArrayVal):
+          num = el.elementwise(
+            [num, init_hit, di_val],
+            lambda n_, c, di: ops.prim("add", (n_, ops.select(cast(c, Bool), di, zero)), elt),
+            elt,
+            cost=1,
+          )
+          cnt = el.elementwise(
+            [cnt, init_hit],
+            lambda k_, c: ops.prim("add", (k_, ops.select(cast(c, Bool), one, zero)), elt),
+            elt,
+            cost=1,
+          )
+        else:
+          num = ops.prim("add", (num, ops.select(cast(init_hit, Bool), di_val, zero)), elt)
+          cnt = ops.prim("add", (cnt, ops.select(cast(init_hit, Bool), one, zero)), elt)
+      if isinstance(res, ArrayVal):
+        d_res = el.elementwise(
+          [num, cnt],
+          lambda n_, k_: ops.select(cmp("gt", k_, zero), ops.prim("div", (n_, k_), elt), zero),
+          elt,
+          cost=1,
+        )
+      else:
+        d_res = ops.select(cmp("gt", cnt, zero), ops.prim("div", (num, cnt), elt), zero)
+    else:
+      # op == "mul": zero-safe exact product rule
+      zero = Const(0.0, elt)
+      one = Const(1.0, elt)
+      is_z = el.elementwise([a_c], lambda x: ops.prim("eq", (x, zero), Bool), Bool, cost=1)
+      is_z_f = el.elementwise([is_z], lambda c: ops.select(c, one, zero), elt, cost=1)
+      z_cnt = reduce_plain(el, "add", is_z_f, axis, Const(0.0, elt), what, keepdims)
+      # Non-zero path: res * sum(da / a)
+      safe_ratio = el.elementwise(
+        [is_z, da_c, a_c],
+        lambda c, dx, x: ops.select(c, zero, ops.prim("div", (dx, x), elt)),
+        elt,
+        cost=2,
+      )
+      sum_ratio = reduce_plain(el, "add", safe_ratio, axis, Const(0.0, elt), what, keepdims)
+      nz_val = el.apply_ufunc(UF["mul"], [res, sum_ratio])
+      # Single-zero path: sum(where(is_z, da, 0)) * prod(where(is_z, 1, a))
+      z_da = el.elementwise([is_z, da_c], lambda c, dx: ops.select(c, dx, zero), elt, cost=1)
+      nz_a = el.elementwise([is_z, a_c], lambda c, x: ops.select(c, one, x), elt, cost=1)
+      sum_z_da = reduce_plain(el, "add", z_da, axis, Const(0.0, elt), what, keepdims)
+      prod_nz = reduce_plain(el, "mul", nz_a, axis, init if init is not None else one, what, keepdims)
+      one_z_val = el.apply_ufunc(UF["mul"], [sum_z_da, prod_nz])
+      if isinstance(res, ArrayVal):
+        d_res = el.elementwise(
+          [z_cnt, nz_val, one_z_val],
+          lambda zc, nv, oz: ops.select(cmp("eq", zc, zero), nv, ops.select(cmp("eq", zc, one), oz, zero)),
+          elt,
+          cost=2,
+        )
+      else:
+        d_res = ops.select(cmp("eq", z_cnt, zero), nz_val, ops.select(cmp("eq", z_cnt, one), one_z_val, zero))
+      if init is not None and d_init is not None:
+        # Add d_init * prod(a)
+        prod_a = reduce_plain(el, "mul", a_c, axis, one, what, keepdims)
+        extra = el.apply_ufunc(UF["mul"], [cast(d_init, elt), prod_a])
+        d_res = el.apply_ufunc(UF["add"], [d_res, extra])
+  if isinstance(res, ArrayVal):
+    jvp.bind_array(el, res, d_res)
+  elif isinstance(res, Var):
+    jvp.scalar_t[res.uid] = cast(d_res, res.type)
+  return res
+
+
 def reduce_plain(el, op: str, a: ArrayVal, axis, init, what: str, keepdims):
   """Reduce ``a`` with the primitive ``op`` over ``axis`` (None: everything)."""
+  jvp = el.jvp
+  if jvp is not None and not jvp.muted and a.rank > 0 and a.elt.kind == "f" and op in ("min", "max", "mul"):
+    if jvp.has_tangent(el, a) or (init is not None and jvp.has_tangent(el, init)):
+      with jvp.computing(el):
+        res = reduce_plain(el, op, a, axis, init, what, keepdims)
+      if isinstance(res, Expr) and not isinstance(res, Var):
+        rv = Var("red", res.type)
+        el.block.append(Assign(rv, res))
+        res = rv
+      return _jvp_reduce_special(el, jvp, op, a, res, axis, init, what, keepdims)
   spec = UF[op]
 
   def combine(x, y):
@@ -899,7 +1005,7 @@ def _cumulative(el, a, axis, op: str, dtype):
   if tape is not None and not tape.muted and op == "add" and elt.kind == "f" and tape.is_active(el, a):
     if a.buf is None and a.cost > CHEAP_COST:
       a = el.as_concrete(a)
-    return tape.op(el, "cumsum", (a,), axis, lambda: cumulative_plain(el, a, axis, op))
+    return tape.op(el, "cumsum", (a,), axis, lambda: _cumulative(el, a, axis, op, None))
   return cumulative_plain(el, a, axis, op)
 
 
@@ -960,7 +1066,10 @@ def sort(el, a, axis=-1, kind=None, order=None, stable=None):
   from . import index_lib
 
   tape = el.tape
-  if tape is not None and not tape.muted and tape.is_active(el, _arr(el, a)):
+  jvp = el.jvp
+  if (tape is not None and not tape.muted and tape.is_active(el, _arr(el, a))) or (
+    jvp is not None and not jvp.muted and jvp.has_tangent(el, _arr(el, a))
+  ):
     # differentiable: the sorted array is the input indexed by its sorting permutation
     a = _arr(el, a)
     if a.buf is None and a.cost > CHEAP_COST:
@@ -1042,9 +1151,14 @@ def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_e
   if values is not None:
     el.consume(values)
   out = el.alloc_array(out_elt, (n,), zero=True, label="scatter")
+  jvp = el.jvp
+  d_out = None
+  if jvp is not None and not jvp.muted and out_elt.kind == "f" and values is not None and jvp.has_tangent(el, values):
+    d_out = jvp.ensure_zero_buf_tangent(el, out, label="d_scatter")
   iv = Var("i", I)
   sc = Scope("scatter")
   body: list = []
+  updates: list[ScatterUpdate] = []
   with el.in_block(body, sc, loop=True, par=el.par_depth == 0):
     raw = cast(el.tmp(el.elem(idx, (iv,)), "idx"), I)
     if check_bounds:
@@ -1060,13 +1174,97 @@ def _emit_scatter_add(el, n: Expr, idx: ArrayVal, values: ArrayVal | None, out_e
     else:
       pos = raw
     val = cast(el.tmp(el.elem(values, (iv,)), "val"), out_elt) if values is not None else Const(1, out_elt)
-  el.emit(
-    IndexScatter(
-      (idx.shape[0],), (iv,), body, n, pos, [ScatterUpdate(out.buf, val, "add")], sc, el.par_depth == 0, el.loc()
-    )
-  )
+    updates.append(ScatterUpdate(out.buf, val, "add"))
+    if d_out is not None:
+      dval = jvp.tangent_expr(el, val)
+      if dval is not None:
+        with jvp.computing(el):
+          updates.append(ScatterUpdate(d_out.buf, cast(el.tmp(dval, "dval"), out_elt), "add"))
+  el.emit(IndexScatter((idx.shape[0],), (iv,), body, n, pos, updates, sc, el.par_depth == 0, el.loc()))
   el.record_store(out)
   return out
+
+
+def ufunc_at(el, op: str, a, indices, b=None):
+  """In-place unbuffered scatter (``np.add.at(a, idx, b)``) lowered to ``IndexScatter``."""
+  if op != "add":
+    raise el.error(UnsupportedError, f"np.{op}.at() is not supported; currently np.add.at() is supported")
+  if b is None:
+    raise el.error(TypeInferenceError, "add.at() requires a third argument 'b'")
+  out = _arr(el, a)
+  if out.rank != 1 or out.buf is None:
+    raise el.error(UnsupportedError, "np.add.at() requires a concrete 1-d destination array")
+  idx = _arr(el, indices)
+  if idx.rank != 1 or idx.elt.kind not in "iu":
+    raise el.error(TypeInferenceError, f"np.add.at() expects 1-d integer indices, got {describe(idx)}")
+  if isinstance(b, ArrayVal) and b.rank > 0:
+    val_arr = _arr(el, b)
+    if val_arr.rank != 1:
+      raise el.error(TypeInferenceError, f"np.add.at() expects scalar or 1-d values, got {describe(val_arr)}")
+    if not (
+      (isinstance(idx.shape[0], Var) and isinstance(val_arr.shape[0], Var) and idx.shape[0].uid == val_arr.shape[0].uid)
+      or (
+        isinstance(idx.shape[0], Const)
+        and isinstance(val_arr.shape[0], Const)
+        and idx.shape[0].value == val_arr.shape[0].value
+      )
+    ):
+      el.check(cmp("eq", idx.shape[0], val_arr.shape[0]), "ValueError", "np.add.at() indices and values lengths differ")
+  else:
+    val_s = el.as_scalar(b, "b")
+    val_arr = el.delayed(val_s.type.strong, idx.shape, lambda _: val_s, cost=0)
+
+  tape = el.tape
+  if (
+    tape is not None
+    and not tape.muted
+    and out.elt.kind == "f"
+    and (tape.is_active(el, out) or tape.is_active(el, val_arr))
+  ):
+    from .adverbs import scatter_add as _scatter_add_fn
+
+    delta = _scatter_add_fn.impl(el, out.shape[0], idx, el.cast_array(val_arr, out.elt))
+    el.store_array(out, el.apply_ufunc(UF["add"], [out, delta]))
+    return None
+
+  idx_c = el.as_concrete(idx) if idx.buf is None and idx.cost > CHEAP_COST else idx
+  val_c = el.as_concrete(val_arr) if val_arr.buf is None and val_arr.cost > CHEAP_COST else val_arr
+  el.consume(idx_c)
+  el.consume(val_c)
+  n = out.shape[0]
+  jvp = el.jvp
+  d_out_buf = None
+  if jvp is not None and not jvp.muted and out.elt.kind == "f":
+    if out.buf.uid in jvp.buf_t:
+      d_out_buf = jvp.buf_t[out.buf.uid]
+    elif jvp.has_tangent(el, val_c):
+      d_out_buf = jvp.ensure_zero_buf_tangent(el, out, label="d_scatter").buf
+  iv = Var("i", I)
+  sc = Scope("scatter")
+  body: list = []
+  updates: list[ScatterUpdate] = []
+  with el.in_block(body, sc, loop=True, par=el.par_depth == 0):
+    raw = cast(el.tmp(el.elem(idx_c, (iv,)), "idx"), I)
+    pos = el.tmp(ops.select(cmp("lt", raw, ZERO), iadd(raw, n), raw), "pos")
+    if el.options.bounds_check:
+      el.check(
+        ops.prim("and", (cmp("ge", pos, ZERO), cmp("lt", pos, n)), Bool),
+        "IndexError",
+        "index {0} is out of bounds for axis 0 with size {1}",
+        raw,
+        n,
+      )
+    dest_pos = el.tmp(el.index_expr(out, (pos,)), "dpos")
+    val = cast(el.tmp(el.elem(val_c, (iv,)), "val"), out.elt)
+    updates.append(ScatterUpdate(out.buf, val, "add"))
+    if d_out_buf is not None:
+      dval = jvp.tangent_expr(el, val)
+      if dval is not None:
+        with jvp.computing(el):
+          updates.append(ScatterUpdate(d_out_buf, cast(el.tmp(dval, "dval"), out.elt), "add"))
+  el.emit(IndexScatter((idx_c.shape[0],), (iv,), body, n, dest_pos, updates, sc, el.par_depth == 0, el.loc()))
+  el.record_store(out)
+  return None
 
 
 @register(np.bincount)
@@ -1377,6 +1575,21 @@ def matmul_plain(el, a: ArrayVal, b: ArrayVal, what: str = "matmul"):
   if a.rank == 1 and b.rank == 1:
     return _dot1(el, a, b)
   if el.options.blas and el.par_depth == 0 and a.elt is b.elt and a.elt.name in ("float32", "float64"):
+    jvp = el.jvp
+    if jvp is not None and not jvp.muted and (jvp.has_tangent(el, a) or jvp.has_tangent(el, b)):
+      da = jvp.tangent_array(el, a)
+      db = jvp.tangent_array(el, b)
+      with jvp.computing(el):
+        out = _gemm(el, a, b)
+        dout = None
+        if da is not None:
+          dout = _gemm(el, da, b)
+        if db is not None:
+          term = _gemm(el, a, db)
+          dout = term if dout is None else el.apply_ufunc(UF["add"], [dout, term])
+      if dout is not None:
+        jvp.bind_array(el, out, dout)
+      return out
     return _gemm(el, a, b)
   if a.rank == 1:
     # a @ b is b.T @ a: the rows of b.T are what gets multiplied with a

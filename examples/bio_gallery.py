@@ -6,7 +6,7 @@ Run directly to verify every workload against a reference implementation::
 
 The five workloads map sequences, alignments, chemical fingerprints, and 3D
 protein coordinates onto Parakeet's general algebraic operators (IndexScatter,
-ordered structured folds, Law 1 rescaled-monoid tiling, Law 4 chunkwise scans,
+ordered structured folds, online rescaled-monoid tiling, chunkwise scans,
 and reverse-mode AD) without hand-writing C, CUDA, or Metal kernels.
 """
 
@@ -153,7 +153,7 @@ def tanimoto_nearest_hit(queries, library):
 
 
 # ---------------------------------------------------------------------------
-# 4. 3D Protein Coordinate RBF Message Passing & Differentiable Energy (Law 1)
+# 4. 3D Protein Coordinate RBF Message Passing & Differentiable Energy
 # ---------------------------------------------------------------------------
 
 
@@ -162,7 +162,7 @@ def tanimoto_nearest_hit(queries, library):
 def protein_rbf_message_passing(coords, features, neg_inv_2sigma2):
   """3D radial-basis-function message passing over residue coordinates (N, 3).
 
-  Fuses into Law 1 online (m, l, O) monoidal tiles with zero N x N materialization.
+  Fuses into online (m, l, O) monoidal tiles with zero N x N materialization.
   """
   d2 = np.sum((coords[:, None, :] - coords[None, :, :]) ** np.float32(2.0), axis=-1)
   s = d2 * neg_inv_2sigma2
@@ -181,7 +181,7 @@ protein_coord_grad = par.grad(protein_rbf_loss, argnum=0)
 
 
 # ---------------------------------------------------------------------------
-# 5. Banded Smith-Waterman Alignment & Megabase DNA SSM Scan (Law 4)
+# 5. Banded Smith-Waterman Alignment & Megabase DNA SSM Scan
 # ---------------------------------------------------------------------------
 
 
@@ -229,7 +229,7 @@ def banded_smith_waterman(seq_a, seq_b, match_score, mismatch_pen, gap_pen, band
 def dna_ssm_scan(decay, signal):
   """Exponential state-space scan along a DNA track (L,).
 
-  Compiled via Law 4 chunkwise parallel affine prefix scan (TileScan).
+  Compiled via chunkwise parallel affine prefix scan (TileScan).
   """
   length = decay.shape[0]
   out = np.empty_like(signal)

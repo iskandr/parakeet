@@ -128,7 +128,7 @@ def rms(x_1: array[float64, 1d]):
 
 No temporary for `x * x` exists: the multiplication was fused into the parallel
 reduction. To see a high-level summary of which algebraic rewrites fired on a
-function, call `parakeet.dsl.show_rewrite(fn, *example_args).summary()`.
+function, call `par.show_rewrite(fn, *example_args).summary()`.
 
 ## When something is not supported
 

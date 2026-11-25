@@ -36,14 +36,22 @@ from .lib.adverbs import (
   LibFunction,
   allpairs,
   checkpoint,
+  custom_jvp,
   custom_vjp,
   filter,  # noqa: A004
   filter_reduce,
   fold,
   grad,
+  hessian,
+  hvp,
   imap,
   ipa_attention,
   ireduce,
+  jacfwd,
+  jacrev,
+  jvp,
+  linear_transpose,
+  linearize,
   map,  # noqa: A004
   outer_map,
   parfor,
@@ -55,6 +63,7 @@ from .lib.adverbs import (
   topk,
   topk_fold,
   value_and_grad,
+  vjp,
 )
 from .lib.expand_lib import filter_pairs, flatmap
 from .lib.ragged_lib import (
@@ -251,6 +260,10 @@ def _detect_laws(
         s.var.name in ("ckpt", "wckpt", "fckpt") or s.var.name.startswith(("ckpt_", "wckpt_", "fckpt_"))
       ):
         add_law("AD: Checkpointed Reverse Loop")
+      elif isinstance(s, ir.Alloc) and s.var.name.startswith("fhvp_"):
+        add_law("AD: Zero-O(T^2) Rematerialized Attention HVP")
+      elif isinstance(s, ir.IndexMap) and _builtins.any(v.name.startswith("fji") for v in s.index):
+        add_law("AD: Zero-O(T^2) Rematerialized Attention JVP")
 
   return tuple(laws), tuple(plans)
 
@@ -362,6 +375,7 @@ __all__ = [
   "cos",
   "ctz",
   "cumsum",
+  "custom_jvp",
   "custom_vjp",
   "div",
   "empty",
@@ -378,6 +392,8 @@ __all__ = [
   "fold",
   "full",
   "grad",
+  "hessian",
+  "hvp",
   "i32",
   "i64",
   "ifilter_reduce",
@@ -390,7 +406,12 @@ __all__ = [
   "iscatter",
   "isfinite",
   "isnan",
+  "jacfwd",
+  "jacrev",
+  "jvp",
   "kernel",
+  "linear_transpose",
+  "linearize",
   "log",
   "map",
   "max",
@@ -439,6 +460,7 @@ __all__ = [
   "uint64",
   "value_and_grad",
   "varlen_flash_attention",
+  "vjp",
   "wavefront",
   "where",
   "zeros",

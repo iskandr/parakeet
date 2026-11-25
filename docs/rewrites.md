@@ -23,8 +23,8 @@ The short version: the rules are the same algebra, applied in two places.
   passes rewrite those statements in order:
   dead code elimination, normalization, vertical fusion (exact and affine
   map/scan/filter/reduce/scatter), filter fusion, sibling and online monoidal
-  fusion, bilinear contraction reassociation (Law 3), monoidal tiling and
-  tile-interval pruning (Laws 1 & 5), chunkwise affine/bilinear scans (Law 4),
+  fusion, bilinear contraction reassociation, monoidal tiling and
+  tile-interval pruning, chunkwise affine/bilinear scans,
   pairwise fold tiling, reduction interchange, and cache/register/GPU tiling.
   A final pass (`LowerAdverbs` in spirit) lowers operators into loops.
   `parakeet.transforms.pipeline.PASSES` is the authoritative list, and
@@ -57,8 +57,8 @@ map i_27, i_28 over (x_n0_3, y_n0_8):               # x @ y.T, as the passes see
 | `IndexFilter(pred, shape)` | what `x[mask]`, `np.nonzero` and `filter` are built on: an `IndexFilter` statement |
 | `FilterReduce`, `IndexFilterReduce` | `filter_reduce(⊕, pred, x1, ..., xn, map=, init=, axis=)` — and any reduction over a filter also *becomes* one (see fusion) |
 | `IndexScan(f, ⊕, emit, shape)` | what `scan`, `np.cumsum` and `np.cumprod` are built on: an `IndexScan` statement, whose `emit` is a block (it stores the running value) |
-| — | `IndexScatter` (`parakeet.scatter_add`, `np.bincount`): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
-| — | `grad(f)`, `value_and_grad(f)` |
+| — | `IndexScatter` (`par.scatter_add`, `np.bincount`, `np.add.at`, canonical `for i: out[idx[i]] += val` loops): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint |
+| — | `grad`, `value_and_grad`, `jvp`, `vjp`, `linearize`, `linear_transpose`, `hvp`, `jacfwd`, `jacrev`, `hessian` |
 
 Every NumPy function is defined in terms of these: `np.sum` is a `reduce`,
 `np.cumsum` a `scan`, `a @ b` and `np.einsum` a map of reductions, a

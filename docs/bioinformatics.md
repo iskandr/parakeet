@@ -20,13 +20,13 @@ python benchmarks/bio_workloads.py
 
 ## How algebraic primitives map to bio workloads
 
-| Domain task | Algebraic operator / law in Parakeet | What the compiler eliminates |
+| Domain task | Operator / optimization in Parakeet | What the compiler eliminates |
 |---|---|---|
-| FASTQ k-mers & read QC | `parfor` + `uint8` / `uint64` bitwise arithmetic | Python per-character loops and string copies |
+| FASTQ k-mers & read QC | `par.parfor` + `uint8` / `uint64` bitwise arithmetic | Python per-character loops and string copies |
 | Multi-channel BAM pileup | Keyed `IndexScatter` fusion | Redundant passes over alignment positions (`6 -> 1`) |
 | Chemical fingerprint screening | `par.allpairs` + ordered `par.fold` (`pairwise_fold`) | O(N · M) similarity matrix allocation |
-| 3D protein RBF / equivariant attention | Law 1 rescaled-monoid tiling (`flash_monoid`) + `grad` | O(N²) pairwise distance & weight matrices |
-| Banded Smith-Waterman & genome SSMs | Two-row banded DP + Law 4 `TileScan` | Python DP interpreter overhead & sequential scan bottlenecks |
+| 3D protein RBF / equivariant attention | [Online rescaled-monoid tiling](algebra.md#law-1-rescaled-semiring-monoids) + `par.grad` | O(N²) pairwise distance & weight matrices |
+| Banded Smith-Waterman & genome SSMs | Two-row banded DP + [chunkwise affine prefix scan](algebra.md#law-4-chunkwise-state-space-duality) (`TileScan`) | Python DP interpreter overhead & sequential scan bottlenecks |
 
 ## 1. FASTQ 2-bit canonical k-mers and read QC
 
@@ -42,7 +42,7 @@ over reads:
 ## 2. Single-pass multi-channel alignment pileup
 
 A pileup records A/C/G/T base counts, Phred quality sums, and reverse-strand
-counts at each reference coordinate. Because all six `parakeet.scatter_add`
+counts at each reference coordinate. Because all six `par.scatter_add`
 updates share the same index array `ref_pos`, Parakeet's scatter-fusion pass
 combines them into a single privatized traversal (`IndexScatter: 6 -> 1`):
 
@@ -65,9 +65,10 @@ first-index ties:
 ## 4. 3D protein coordinate RBF message passing
 
 Pairwise radial-basis-function smoothing over 3D residue coordinates `(N, 3)`
-uses the same rescaled-monoid structure as softmax attention. Law 1 fuses the
+uses the same [rescaled-monoid](algebra.md#law-1-rescaled-semiring-monoids)
+structure as softmax attention. Online monoidal tiling fuses the
 squared-distance computation, softmax normalization, and feature aggregation
-into a single tiled pass with zero O(N²) score allocation — and `parakeet.grad`
+into a single tiled pass with zero O(N²) score allocation — and `par.grad`
 differentiates through the 3D coordinates directly:
 
 ```python
@@ -78,7 +79,7 @@ differentiates through the 3D coordinates directly:
 
 Compiled two-row banded Smith-Waterman keeps only O(M) score scratch in L1
 cache, while 1D DNA exponential state-space recurrences automatically
-rewrite into Law 4 chunkwise parallel affine prefix scans (`TileScan`):
+rewrite into [chunkwise parallel affine prefix scans](algebra.md#law-4-chunkwise-state-space-duality) (`TileScan`):
 
 ```python
 --8<-- "examples/bio_gallery.py:banded_sw_and_ssm"
@@ -87,7 +88,7 @@ rewrite into Law 4 chunkwise parallel affine prefix scans (`TileScan`):
 ## Inspecting the rewrites
 
 Run `par.show_rewrite` on any workload above to verify that scatter fusion,
-Law 1 monoidal tiling, or Law 4 chunkwise scans fired:
+online monoidal tiling, or chunkwise parallel scans fired:
 
 ```python
 import numpy as np

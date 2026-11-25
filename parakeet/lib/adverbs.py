@@ -1088,8 +1088,6 @@ def topk_fold(el, k, scores, *, axis=-1, largest=True):
   """
   from ..syntax import ir
 
-  if el.tape is not None and not el.tape.muted:
-    raise el.no_derivative("differentiation through topk_fold is not implemented")
   k_int = el.static_int(k, "k")
   if k_int < 0 or k_int > MAX_FOLD_CARRIES // 2:
     raise el.error(
@@ -1102,6 +1100,46 @@ def topk_fold(el, k, scores, *, axis=-1, largest=True):
     raise el.error(TypeInferenceError, "topk_fold() needs an array with at least one dimension")
   ax = norm_axis(el, axis, arr.rank)
   elt = arr.elt.strong
+
+  tape = el.tape
+  jvp = el.jvp
+  need_tape = tape is not None and not tape.muted and elt.kind == "f" and tape.is_active(el, arr)
+  need_jvp = jvp is not None and not jvp.muted and elt.kind == "f" and jvp.has_tangent(el, arr)
+  if need_tape or need_jvp:
+    if need_tape:
+      tape.muted += 1
+    if need_jvp:
+      jvp.muted += 1
+    try:
+      vals, idxs = topk_fold.impl(el, k_int, arr, axis=ax, largest=largest_b)
+    finally:
+      if need_tape:
+        tape.muted -= 1
+      if need_jvp:
+        jvp.muted -= 1
+    if need_jvp:
+      d_arr = jvp.tangent_array(el, arr)
+      if d_arr is not None:
+        with jvp.computing(el):
+          d_arr_c = el.as_concrete(d_arr)
+          idxs_c = el.as_concrete(idxs)
+
+          def _d_at(coord):
+            raw_k = cast(el.tmp(el.elem(idxs_c, coord), "tk"), I)
+            valid = cmp("ge", raw_k, ZERO)
+            safe_k = ops.select(valid, raw_k, ZERO)
+            src_c = tuple(coord[:ax]) + (safe_k,) + tuple(coord[ax + 1 :])
+            return ops.select(valid, el.elem(d_arr_c, src_c), Const(0.0, elt))
+
+          d_vals = el.materialize(el.delayed(elt, vals.shape, _d_at, cost=2), "d_topk")
+        jvp.bind_array(el, vals, d_vals)
+    if need_tape:
+      from ..transforms.autodiff import Node
+
+      node = Node("topk", (arr,), (el.as_concrete(idxs), ax))
+      tape.record(el, node)
+      tape.register(el, node, vals)
+    return (vals, idxs)
   if k_int == 0:
     out_shape = arr.shape[:ax] + (ZERO,) + arr.shape[ax + 1 :]
     return el.alloc_array(elt, out_shape, label="topk_v"), el.alloc_array(I, out_shape, label="topk_i")
@@ -1398,6 +1436,224 @@ def _checkpoint_inline(el, fn):
   return Partial(_checkpoint_staged, (fn,), {})
 
 
+# ---------------------------------------------------------------------------
+# Forward-mode JVP, @custom_jvp, linearize, general VJP, HVP, Jacobians
+# ---------------------------------------------------------------------------
+
+
+@libfunction("jvp_apply")
+def _jvp_staged(el, fn, primals, tangents):
+  from ..transforms.jvp import jvp_call
+
+  return jvp_call(el, fn, primals, tangents, "jvp")
+
+
+def jvp(fn, primals, tangents):
+  """Forward-mode Jacobian-vector product: returns ``(fn(*primals), d_fn)``.
+
+  ``primals`` and ``tangents`` are tuples of arguments matching ``fn`` (or single
+  values for unary functions). Works from plain Python and inside ``@par.jit``
+  or other AD transforms with zero tape and ``O(1)`` extra memory.
+  """
+  from ..api import call_staged
+
+  p = primals if isinstance(primals, tuple) else tuple(primals) if isinstance(primals, list) else (primals,)
+  t = tangents if isinstance(tangents, tuple) else tuple(tangents) if isinstance(tangents, list) else (tangents,)
+  return call_staged(_jvp_staged, (fn, p, t), {})
+
+
+@core.register(jvp)
+def _jvp_inline(el, fn, primals, tangents):
+  from ..transforms.jvp import jvp_call
+
+  return jvp_call(el, fn, primals, tangents, "jvp")
+
+
+@libfunction("custom_jvp_call")
+def _custom_jvp_staged(el, fn, jvp_rule, *args, **kwargs):
+  from ..transforms.jvp import custom_jvp_call
+
+  return custom_jvp_call(el, fn, jvp_rule, list(args), kwargs)
+
+
+class CustomJVP:
+  """Function with a user-defined forward-mode JVP rule (``@par.custom_jvp``).
+
+  Register a tangent rule via ``.defjvp(jvp_rule)``, where:
+  * ``jvp_rule(primals, tangents) -> (primal_out, tangent_out)``
+  """
+
+  def __init__(self, fn):
+    if not callable(fn):
+      raise TypeError(f"custom_jvp expects a callable, got {type(fn).__name__}")
+    self.fn = fn
+    self.jvp_rule = None
+    self.__name__ = getattr(fn, "__name__", "custom_jvp_fn")
+    self.__doc__ = getattr(fn, "__doc__", None)
+
+  def defjvp(self, jvp_rule):
+    if not callable(jvp_rule):
+      raise TypeError("defjvp(jvp_rule) expects a callable")
+    self.jvp_rule = jvp_rule
+    return self
+
+  def __repr__(self) -> str:
+    return f"<parakeet custom_jvp {self.__name__}>"
+
+  def __call__(self, *args, **kwargs):
+    return self.fn(*args, **kwargs)
+
+  def __parakeet_value__(self, el):
+    from ..syntax.values import Partial
+
+    return Partial(_custom_jvp_staged, (el.lift(self.fn), el.lift(self.jvp_rule)), {})
+
+
+def custom_jvp(fn):
+  """Decorate ``fn`` so it can register a custom forward-mode JVP with ``.defjvp(rule)``."""
+  return CustomJVP(fn)
+
+
+@libfunction("vjp_apply")
+def _vjp_apply_staged(el, fn, primals, cotangent):
+  from ..transforms.jvp import vjp_apply
+
+  return vjp_apply(el, fn, primals, cotangent, "vjp")
+
+
+def vjp(fn, *primals):
+  """General non-scalar reverse-mode AD: returns ``(primal_out, vjp_fn)``.
+
+  ``vjp_fn(cotangent)`` returns a tuple of input cotangents matching ``primals``
+  for arbitrary scalar, array, tuple, record, or ``RaggedArray`` outputs.
+  """
+  from ..api import call_staged
+  from ..api import jit as _jit
+
+  primal_out = _jit(fn)(*primals)
+
+  def pull(cotangent):
+    _, grads = call_staged(_vjp_apply_staged, (fn, primals, cotangent), {})
+    return grads
+
+  return primal_out, pull
+
+
+def linearize(fn, *primals):
+  """Linearize ``fn`` at ``primals``: returns ``(primal_out, lin_fn)`` where
+  ``lin_fn(*tangents)`` computes the directional derivative ``JVP(fn, primals, tangents)``."""
+  from ..api import call_staged
+  from ..api import jit as _jit
+
+  primal_out = _jit(fn)(*primals)
+
+  def lin_fn(*tangents):
+    _, dout = call_staged(_jvp_staged, (fn, primals, tangents), {})
+    return dout
+
+  return primal_out, lin_fn
+
+
+@libfunction("linear_transpose_apply")
+def _linear_transpose_staged(el, linear_fn, example_inputs, cotangent):
+  from ..transforms.transpose import linear_transpose_apply
+
+  return linear_transpose_apply(el, linear_fn, example_inputs, cotangent, "linear_transpose")
+
+
+def linear_transpose(linear_fn, *example_inputs):
+  """Return ``transpose_fn(cotangent)`` computing ``L^T(cotangent)`` for a linear function ``L``."""
+  from ..api import call_staged
+
+  def transpose_fn(cotangent):
+    return call_staged(_linear_transpose_staged, (linear_fn, example_inputs, cotangent), {})
+
+  return transpose_fn
+
+
+@libfunction("hvp_apply")
+def _hvp_staged(el, fn, primals, tangents, argnum=None):
+  from ..transforms.jvp import hvp_call
+
+  return hvp_call(el, fn, primals, tangents, argnum=argnum, what="hvp")
+
+
+def hvp(fn, primals, tangents, argnum=None):
+  """Exact Hessian-vector product ``H(fn)(primals) @ tangents`` via forward-over-reverse AD.
+
+  Runs in ~2x reverse-mode cost with zero ``O(N^2)`` Hessian allocation.
+  """
+  from ..api import call_staged
+
+  p = tuple(primals) if isinstance(primals, list) else primals
+  t = tuple(tangents) if isinstance(tangents, list) else tangents
+  return call_staged(_hvp_staged, (fn, p, t), {"argnum": argnum})
+
+
+@core.register(hvp)
+def _hvp_inline(el, fn, primals, tangents, argnum=None):
+  from ..transforms.jvp import hvp_call
+
+  return hvp_call(el, fn, primals, tangents, argnum=argnum, what="hvp")
+
+
+@libfunction("jacfwd_apply")
+def _jacfwd_staged(el, fn, *args, argnum=0, **kwargs):
+  from ..transforms.jvp import jacfwd_call
+
+  return jacfwd_call(el, fn, argnum, list(args), kwargs, "jacfwd")
+
+
+@libfunction("jacrev_apply")
+def _jacrev_staged(el, fn, *args, argnum=0, **kwargs):
+  from ..transforms.jvp import jacrev_call
+
+  return jacrev_call(el, fn, argnum, list(args), kwargs, "jacrev")
+
+
+@libfunction("hessian_apply")
+def _hessian_staged(el, fn, *args, argnum=0, **kwargs):
+  from ..transforms.jvp import hessian_call
+
+  return hessian_call(el, fn, argnum, list(args), kwargs, "hessian")
+
+
+def jacfwd(fn, argnum=0):
+  """Forward-mode Jacobian of ``fn`` with respect to argument ``argnum``."""
+  return Gradient(fn, argnum, _jacfwd_staged)
+
+
+def jacrev(fn, argnum=0):
+  """Reverse-mode Jacobian of ``fn`` with respect to argument ``argnum``."""
+  return Gradient(fn, argnum, _jacrev_staged)
+
+
+def hessian(fn, argnum=0):
+  """Exact Hessian of scalar-valued ``fn`` via forward-over-reverse AD."""
+  return Gradient(fn, argnum, _hessian_staged)
+
+
+@core.register(jacfwd)
+def _jacfwd_inline(el, fn, argnum=0):
+  from ..syntax.values import Partial
+
+  return Partial(_jacfwd_staged, (fn,), {"argnum": argnum})
+
+
+@core.register(jacrev)
+def _jacrev_inline(el, fn, argnum=0):
+  from ..syntax.values import Partial
+
+  return Partial(_jacrev_staged, (fn,), {"argnum": argnum})
+
+
+@core.register(hessian)
+def _hessian_inline(el, fn, argnum=0):
+  from ..syntax.values import Partial
+
+  return Partial(_hessian_staged, (fn,), {"argnum": argnum})
+
+
 @core.register(builtins.map)
 def _builtin_map(el, f, *args):
   return map.impl(el, f, *args, axis=0)
@@ -1412,6 +1668,7 @@ __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
     "parfor", "filter", "filter_reduce", "scatter_add", "scan_axis", "grad", "value_and_grad", "Gradient",
     "topk_fold", "topk", "tanimoto_topk", "ipa_attention", "stop_gradient", "custom_vjp", "CustomVJP",
-    "checkpoint", "Checkpointed",
+    "checkpoint", "Checkpointed", "jvp", "custom_jvp", "CustomJVP", "vjp", "linearize", "linear_transpose",
+    "hvp", "jacfwd", "jacrev", "hessian",
 ]  # fmt: skip
 _ = (Const, I)

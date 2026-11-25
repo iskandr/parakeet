@@ -105,8 +105,10 @@ class ArrayMixin:
       for r in roots:
         if r.param is not None:
           r.param.writes = True
-    if self.tape is not None:
-      self.tape.note_store(self, arr)
+    t = self.tape
+    while t is not None:
+      t.note_store(self, arr)
+      t = t.outer
 
   # --------------------------------------------------------------- creation
 
@@ -140,8 +142,10 @@ class ArrayMixin:
       self.emit(Alloc(buf, self.tmp(iprod(shape), "count"), zero))
     self.scope.owned.append(buf)
     root = Root(self.scope, label)
-    if self.tape is not None:
-      self.tape.note_alloc(root)
+    t = self.tape
+    while t is not None:
+      t.note_alloc(root)
+      t = t.outer
     arr = ArrayVal(
             elt, shape, buf=buf, offset=ZERO, strides=self.c_strides(shape),
             roots=frozenset({root}), contig=True,
@@ -236,6 +240,12 @@ class ArrayMixin:
     """Evaluate ``arr`` into a freshly allocated C-contiguous array."""
     self.consume(arr)
     out = self.alloc_array(arr.elt, arr.shape, label=label)
+    jvp = self.jvp
+    if jvp is not None and not jvp.muted and arr.elt.kind == "f" and jvp.has_tangent_array(self, arr):
+      with jvp.computing(self):
+        dout = self.alloc_array(arr.elt, arr.shape, label=f"d_{label}")
+      jvp.buf_t[out.buf.uid] = dout.buf
+      jvp.buf_roots[out.buf.uid] = dout.roots
     self.fill(out, arr)
     tape = self.tape
     if tape is not None and not tape.muted:
@@ -245,6 +255,41 @@ class ArrayMixin:
   def fill(self, dest: ArrayVal, src, parallel: bool = True) -> None:
     """``dest[...] = src`` where shapes already agree (or ``src`` is a scalar)."""
     elt = dest.elt
+    jvp = self.jvp
+    d_dest = None
+    if jvp is not None and not jvp.muted and elt.kind == "f" and dest.buf is not None:
+      dbuf = jvp.buf_t.get(dest.buf.uid)
+      if dbuf is not None:
+        d_dest = ArrayVal(
+          elt, dest.shape, buf=dbuf, offset=dest.offset, strides=dest.strides, roots=jvp.buf_roots.get(dest.buf.uid)
+        )
+
+    if d_dest is not None:
+      if isinstance(src, ArrayVal):
+
+        def body(idx):
+          pos = self.index_expr(dest, idx)
+          val = self.tmp(ops.cast(self.elem(src, idx), elt), "v")
+          self.emit(Store(dest.buf, pos, val))
+          dval = jvp.tangent_expr(self, val)
+          with jvp.computing(self):
+            self.emit(Store(d_dest.buf, pos, ops.cast(dval, elt) if dval is not None else Const(0.0, elt)))
+
+      else:
+        value = self.tmp(ops.cast(src, elt), "v")
+        dval = jvp.tangent_expr(self, value)
+        with jvp.computing(self):
+          dvalue = self.tmp(ops.cast(dval, elt) if dval is not None else Const(0.0, elt), "dv")
+
+        def body(idx):
+          pos = self.index_expr(dest, idx)
+          self.emit(Store(dest.buf, pos, value))
+          with jvp.computing(self):
+            self.emit(Store(d_dest.buf, pos, dvalue))
+
+      self.loop_nest(dest.shape, body, parallel=parallel)
+      return
+
     if isinstance(src, ArrayVal):
 
       def body(idx):
@@ -950,7 +995,6 @@ class ArrayMixin:
         and not tape.muted
         and not tape.dry
         and tape.parent is None
-        and tape.outer is None
         and arr.elt.kind == "f"
         and tape.is_active(self, arr)
       ):

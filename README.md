@@ -133,7 +133,7 @@ Parakeet compiles a static-type numerical subset of Python:
 * NumPy array expressions (`x[1:, :] + 2 * y[:-1, ::2]`), with broadcasting, boolean masks, integer-array indexing, and in-place updates
 * About 200 NumPy functions and methods (`np.ones`, `np.sin`, `x.sum(axis=0)`, `np.einsum`, `np.bincount`, `np.sort`, `np.argsort`, `np.searchsorted`, `np.random`, and the usual builtins — see the [full list](https://rubinsteyn.com/parakeet/supported/))
 * Explicit data-parallel operators (`par.map`, `par.imap`, `par.ireduce`, `par.reduce`, `par.fold`, `par.scan`, `par.filter`, `par.filter_reduce`, `par.flatmap`, `par.filter_pairs`, `par.allpairs`, `par.outer_map`, `par.parfor`, `par.scatter_add`, `par.wavefront`)
-* Reverse-mode automatic differentiation (`par.grad`, `par.value_and_grad`) with algebraic rematerialization for attention, cross-entropy, norms, and soft sequence alignment
+* Composable reverse-mode, forward-mode, and higher-order automatic differentiation (`par.grad`, `par.value_and_grad`, `par.jvp`, `par.vjp`, `par.linearize`, `par.linear_transpose`, `par.hvp`, `par.jacfwd`, `par.jacrev`, `par.hessian`, `par.stop_gradient`, `@par.checkpoint`, `@par.custom_vjp`, `@par.custom_jvp`) with checkpointed `for`/`while` loops and algebraic rematerialization for attention, cross-entropy, norms, and soft sequence alignment
 
 Unsupported constructs fail loudly at compile time with the exact source line:
 

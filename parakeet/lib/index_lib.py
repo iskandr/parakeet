@@ -224,10 +224,12 @@ def _sorted_index_get(el, idx_obj: SortedIndex, key, default=None):
   )
   if values.rank != 1:
     raise el.error(UnsupportedError, "SortedIndex.get() inside @jit currently expects 1-D values")
-  res = Var("si_val", out_t)
-  el.mutables.add(res.uid)
-  el.emit(If(hit, [Assign(res, cast(el.elem(values, (pos,)), out_t))], [Assign(res, cast(def_e, out_t))]))
-  return res
+  # Branchless select when non-empty so reverse-mode AD and forward-mode JVP differentiate cleanly
+  # into values[pos] (zero gradient on misses and keys).
+  nonempty = cmp("gt", values.shape[0], ZERO)
+  safe_hit = ops.land(nonempty, hit)
+  raw = cast(el.elem(values, (safe_pos,)), out_t)
+  return el.tmp(ops.select(safe_hit, raw, cast(def_e, out_t)), "si_val")
 
 
 def _sorted_index_range(el, idx_obj: SortedIndex, lo, hi):
@@ -281,10 +283,11 @@ def _hashtable_get(el, ht: FrozenHashTable, key, default=None):
   def_e = el.as_scalar(default, "default")
   out_t = join(values.elt, def_e.type).strong
   found, slot = _hashtable_probe(el, ht, key)
-  res = Var("ht_val", out_t)
-  el.mutables.add(res.uid)
-  el.emit(If(found, [Assign(res, cast(el.elem(values, (slot,)), out_t))], [Assign(res, cast(def_e, out_t))]))
-  return res
+  # Branchless select so grad() and jvp() propagate through matched slots via Load(values, slot)
+  # (scatters cotangents into values via IndexScatter, with zero tangent on keys and misses).
+  safe_slot = ops.select(found, slot, ZERO)
+  raw = cast(el.elem(values, (safe_slot,)), out_t)
+  return el.tmp(ops.select(found, raw, cast(def_e, out_t)), "ht_val")
 
 
 @method("get")

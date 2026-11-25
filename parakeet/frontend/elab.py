@@ -53,14 +53,18 @@ from ..syntax.ir import (
   Function,
   If,
   Incref,
+  IndexScatter,
+  Load,
   Null,
   Release,
   ReleaseScope,
   Scope,
+  Store,
   Var,
   While,
   is_trivial,
   walk_expr,
+  walk_stmts,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
 from ..syntax.records import Record, StructuredRow, StructuredView, record_type
@@ -254,9 +258,11 @@ class Elaborator(ArrayMixin):
     self.results: list = []
     self.pure_defs: dict[int, Expr] = {}
     self.jam = None  # set while a tiled map collects its elements' reductions
-    # reverse-mode differentiation (parakeet.transforms.autodiff)
+    # reverse-mode & forward-mode differentiation (autodiff / jvp)
     self.tape = None  # records array operators applied to differentiated values
     self.ad_live = 0  # > 0 between the start of a grad() and the end of its backward pass
+    self.jvp = None  # active forward-mode JVPContext (parakeet.transforms.jvp)
+    self.jvp_live = 0  # > 0 between the start of a jvp() and its completion
     self.ad_vars: set[int] = set()  # float variables that depend on a differentiated value
     self.ad_bufs: set[int] = set()  # buffers holding such values
     self.tainted_vars: dict[int, tuple] = {}  # ... that the tape cannot see through
@@ -290,8 +296,11 @@ class Elaborator(ArrayMixin):
       if self.is_nonneg(e):
         self.nonneg.add(v.uid)
       self.pure_defs[v.uid] = e
-    elif self.ad_live:
-      _autodiff.note_def(self, v, e)
+    elif self.ad_live or self.jvp_live:
+      if self.ad_live:
+        _autodiff.note_def(self, v, e)
+      elif e.type.kind == "f":
+        self.defs[v.uid] = e
     return v
 
   def copy_scalar(self, e: Expr, name: str = "t") -> Expr:
@@ -299,6 +308,14 @@ class Elaborator(ArrayMixin):
       return e
     v = Var(name, e.type)
     self.emit(Assign(v, e))
+    jvp = self.jvp
+    if jvp is not None and not jvp.muted and e.type.kind == "f":
+      dt = jvp.tangent_expr(self, e)
+      if dt is not None:
+        dv = Var(f"d_{name}", v.type)
+        with jvp.computing(self):
+          self.emit(Assign(dv, cast(dt, v.type)))
+        jvp.scalar_t[v.uid] = dv
     return v
 
   def save_facts(self):
@@ -521,8 +538,16 @@ class Elaborator(ArrayMixin):
     return like  # static values merge only with themselves
 
   def assign_target(self, target, v) -> None:
+    jvp = self.jvp
     if isinstance(target, Var):
-      self.emit(Assign(target, cast(self.as_scalar(v, "value"), target.type)))
+      sv = self.as_scalar(v, "value")
+      dv = jvp.tangent_expr(self, sv) if (jvp is not None and not jvp.muted and target.type.kind == "f") else None
+      self.emit(Assign(target, cast(sv, target.type)))
+      if jvp is not None and not jvp.muted and target.uid in jvp.targets:
+        dt_var = jvp.targets[target.uid]
+        with jvp.computing(self):
+          self.emit(Assign(dt_var, cast(dv, dt_var.type) if dv is not None else Const(0.0, dt_var.type)))
+      return
     elif isinstance(target, ArrayVal):
       info = self.targets[id(target)]
       c = self.as_concrete(self.cast_array(v, target.elt))
@@ -557,6 +582,9 @@ class Elaborator(ArrayMixin):
         self.emit(Incref(c.buf))
         self.emit(Release(info.slot))
         self.emit(Assign(info.slot, c.buf))
+      if jvp is not None and not jvp.muted:
+        jvp.assign_tangent_target(self, target, c)
+      return
     elif record := record_type(target):
       self.assign_target(record.values(target), record.values(v))
     elif isinstance(target, tuple):
@@ -1931,6 +1959,9 @@ class Elaborator(ArrayMixin):
     if not self._mergeable(vt, va, vb):
       return Undefined(name, "holds different functions or objects on different paths")
     target = self.make_target(vt, va, name, self.scope)
+    jvp = self.jvp
+    if jvp is not None and not jvp.muted and (jvp.has_tangent(self, va) or jvp.has_tangent(self, vb)):
+      jvp.make_tangent_target(self, target, name, self.scope)
     saved = self.block
     for blk, v in ((blk_a, va), (blk_b, vb)):
       self.block = blk
@@ -1974,6 +2005,10 @@ class Elaborator(ArrayMixin):
       if self.carries_derivative(v):
         self.request_unroll(fr, node)
       target = self.make_target(vt, v, name, self.scope, hint_key)
+      jvp = self.jvp
+      if jvp is not None and not jvp.muted:
+        if jvp.has_tangent(self, v) or self.hint_get((fr.path, id(node), name, "jvp")):
+          jvp.make_tangent_target(self, target, name, self.scope)
       self.assign_target(target, v)
       ctx.carried[name] = (target, vt)
       fr.env[name] = target
@@ -2003,6 +2038,23 @@ class Elaborator(ArrayMixin):
         self.restart("loop variable type")
       if self.carries_derivative(v):
         self.request_unroll(fr, ctx.node)
+      jvp = self.jvp
+      if jvp is not None and not jvp.muted and jvp.has_tangent(self, v):
+        # If a carried variable acquired a tangent during the loop body, restart with a paired tangent target.
+        def _needs_jvp_target(tgt) -> bool:
+          if isinstance(tgt, Var):
+            return tgt.type.kind == "f" and tgt.uid not in jvp.targets
+          if isinstance(tgt, ArrayVal):
+            return tgt.elt.kind == "f" and id(tgt) not in jvp.targets
+          if rec := record_type(tgt):
+            return _needs_jvp_target(rec.values(tgt))
+          if isinstance(tgt, tuple):
+            return any(_needs_jvp_target(x) for x in tgt)
+          return False
+
+        if _needs_jvp_target(target):
+          self.state.hints[(fr.path, id(ctx.node), name, "jvp")] = True
+          self.restart("jvp loop variable")
       pending.append((target, v))
     for name, before in ctx.static.items():
       v = fr.env.get(name, _MISSING)
@@ -2214,11 +2266,249 @@ class Elaborator(ArrayMixin):
     self.emit(While(blk, ctx.scope))
     return self._finish_loop(ctx, node, [])
 
+  def _name_used_after_loop(self, loop_node: ast.For, names: set[str]) -> bool:
+    """Return True if any name in ``names`` may be read after ``loop_node`` without first
+    being reassigned (conservative over parent blocks)."""
+
+    def _walk_parent(parent: ast.AST) -> bool | None:
+      for attr in ("body", "orelse", "finalbody"):
+        stmts = getattr(parent, attr, None)
+        if isinstance(stmts, list):
+          for idx, st in enumerate(stmts):
+            if st is loop_node:
+              # Found loop_node in this statement list; check remaining statements in this block.
+              # Conservatively refuse if any enclosing loop could re-read a name without reassigning.
+              remaining = stmts[idx + 1 :]
+              live = set(names)
+              for rem in remaining:
+                # If a subsequent `for x in ...` immediately rebinds `x` before reading it in its iter:
+                if isinstance(rem, ast.For) and isinstance(rem.target, ast.Name) and rem.target.id in live:
+                  iter_loads = {
+                    n.id for n in ast.walk(rem.iter) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
+                  }
+                  if iter_loads & live:
+                    return True
+                  live.discard(rem.target.id)
+                  if not live:
+                    return False
+                  # Still check body for other names in `live`
+                for sub in ast.walk(rem):
+                  if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load) and sub.id in live:
+                    return True
+              return False
+            res = _walk_parent(st)
+            if res is not None:
+              # If loop_node was nested inside another loop, fall back to loads_outside
+              if isinstance(parent, (ast.For, ast.While)):
+                return bool(names & self.frame.src.loads_outside(loop_node))
+              return res
+      return None
+
+    res = _walk_parent(self.frame.src.node)
+    if res is None:
+      return bool(names & self.frame.src.loads_outside(loop_node))
+    return res
+
+  def _try_lift_scatter_loop(self, node: ast.For, it) -> bool:
+    """Recognize ``for i in range(n): [b = expr; ...] out[idx_expr] += val_expr ...`` and lift
+    directly to ``IndexScatter`` (privatized CPU / GPU atomic scatter-add, differentiable under
+    grad/jvp, and automatically fused across sibling histograms sharing the same indices)."""
+    if (
+      node.orelse
+      or not node.body
+      or not isinstance(node.target, ast.Name)
+      or not isinstance(it, RangeVal)
+      or not (isinstance(it.start, Const) and it.start.value == 0)
+      or not (isinstance(it.step, Const) and it.step.value == 1)
+    ):
+      return False
+    loop_var = node.target.id
+    bindings: list[tuple[str, ast.AST]] = []
+    updates: list[tuple[str, ast.AST, ast.AST, list[tuple[str, ast.AST]]]] = []
+    local_names: set[str] = {loop_var}
+    out_names: list[str] = []
+    out_name_set: set[str] = set()
+    for stmt in node.body:
+      if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
+        bname = stmt.targets[0].id
+        if bname in local_names or bname in out_name_set:
+          return False
+        bindings.append((bname, stmt.value))
+        local_names.add(bname)
+      elif (
+        isinstance(stmt, ast.AugAssign)
+        and isinstance(stmt.op, ast.Add)
+        and isinstance(stmt.target, ast.Subscript)
+        and isinstance(stmt.target.value, ast.Name)
+      ):
+        out_name = stmt.target.value.id
+        if out_name in local_names or out_name in out_name_set:
+          return False
+        out_names.append(out_name)
+        out_name_set.add(out_name)
+        updates.append((out_name, stmt.target.slice, stmt.value, list(bindings)))
+      else:
+        return False
+    if not updates:
+      return False
+    if self._name_used_after_loop(node, local_names):
+      return False
+    # Ensure no output buffer name is read anywhere in bindings, indices, or values (no recurrence)
+    exprs_to_check = [e for _, e in bindings]
+    for _, idx_node, val_node, _ in updates:
+      exprs_to_check.extend((idx_node, val_node))
+    for expr_node in exprs_to_check:
+      for sub in ast.walk(expr_node):
+        if isinstance(sub, ast.Name) and sub.id in out_name_set:
+          return False
+    out_vals: dict[str, ArrayVal] = {}
+    out_buf_uids: set[int] = set()
+    for out_name in out_names:
+      ov = self.frame.env.get(out_name, _MISSING)
+      if not isinstance(ov, ArrayVal) or ov.rank != 1:
+        return False
+      if ov.buf is None:
+        return False
+      if ov.buf.uid in out_buf_uids or self.get_roots(ov) is None:
+        return False
+      out_buf_uids.add(ov.buf.uid)
+      out_vals[out_name] = ov
+
+    # Trial-probe bindings + index & value expressions to confirm scalar int index, scalar value, and no aliasing
+    n = self.tmp(ops.imax(it.stop, ZERO), "n")
+    probe_i = Var("i", I)
+    self.nonneg.add(probe_i.uid)
+    self.upper[probe_i.uid] = n
+    saved_env = dict(self.frame.env)
+    self.loop_depth += 1
+    try:
+      with self.trial() as tblk:
+        self.frame.env[loop_var] = probe_i
+        for bname, bexpr in bindings:
+          bval = self.eval(bexpr)
+          if not isinstance(bval, Expr):
+            return False
+          self.frame.env[bname] = bval
+        probe_exprs: list[Expr] = []
+        for _, idx_node, val_node, _ in updates:
+          idx_p = self.eval(idx_node)
+          val_p = self.eval(val_node)
+          if not isinstance(idx_p, Expr) or idx_p.type.kind not in "iu":
+            return False
+          if not isinstance(val_p, Expr):
+            return False
+          probe_exprs.extend((idx_p, val_p))
+        for st_ir in walk_stmts(tblk):
+          if isinstance(st_ir, (Store, IndexScatter)):
+            return False
+        for expr_p in probe_exprs:
+          for sub_e in walk_expr(expr_p):
+            if isinstance(sub_e, Load) and sub_e.buf.uid in out_buf_uids:
+              return False
+    except Exception:  # noqa: BLE001
+      return False
+    finally:
+      self.frame.env = saved_env
+      self.loop_depth -= 1
+
+    # Lower cleanly to IndexScatter (via ufunc_at, which handles grad + jvp and sibling scatter fusion!)
+    ctx = self.capture()
+    from ..lib.numpy_lib import ufunc_at
+
+    def _same_dim(a: Expr, b: Expr) -> bool:
+      return (isinstance(a, Var) and isinstance(b, Var) and a.uid == b.uid) or (
+        isinstance(a, Const) and isinstance(b, Const) and a.value == b.value
+      )
+
+    def _direct_1d_slice(expr_n: ast.AST, bnds: list[tuple[str, ast.AST]]) -> ArrayVal | None:
+      # Unwrap trivial local binding aliases (e.g. `b = bin_ids[i]` -> `bin_ids[i]`)
+      bnd_map = dict(bnds)
+      cur = expr_n
+      seen_b: set[str] = set()
+      while isinstance(cur, ast.Name) and cur.id in bnd_map and cur.id not in seen_b:
+        seen_b.add(cur.id)
+        cur = bnd_map[cur.id]
+      if (
+        isinstance(cur, ast.Subscript)
+        and isinstance(cur.value, ast.Name)
+        and isinstance(cur.slice, ast.Name)
+        and cur.slice.id == loop_var
+      ):
+        arr = self.frame.env.get(cur.value.id, _MISSING)
+        if isinstance(arr, ArrayVal) and arr.rank == 1:
+          if _same_dim(arr.shape[0], it.stop) or _same_dim(arr.shape[0], n):
+            return arr
+          self.check(
+            ops.cmp("le", n, arr.shape[0]),
+            "IndexError",
+            "index {0} is out of bounds for axis 0 with size {1}",
+            n,
+            arr.shape[0],
+          )
+          return self._slice_leading(arr, ZERO, n)
+      return None
+
+    # Pre-resolve all direct 1-D slices (and hoist their bounds checks) before emitting
+    # any IndexScatter so sibling scatters stay adjacent for scatter fusion.
+    prepared: list[tuple[str, ast.AST, ast.AST, list[tuple[str, ast.AST]], ArrayVal | None, ArrayVal | None]] = []
+    for out_name, idx_node, val_node, up_bindings in updates:
+      prepared.append(
+        (
+          out_name,
+          idx_node,
+          val_node,
+          up_bindings,
+          _direct_1d_slice(idx_node, up_bindings),
+          _direct_1d_slice(val_node, up_bindings),
+        )
+      )
+
+    for out_name, idx_node, val_node, up_bindings, direct_idx, direct_val in prepared:
+      out_val = out_vals[out_name]
+
+      def _make_evals(idx_n, val_n, bnds, elt):
+        idx_refs = {sub.id for sub in ast.walk(idx_n) if isinstance(sub, ast.Name)}
+        val_refs = {sub.id for sub in ast.walk(val_n) if isinstance(sub, ast.Name)}
+
+        def _needed(refs):
+          need = set(refs)
+          for bn, be in reversed(bnds):
+            if bn in need:
+              need.update(sub.id for sub in ast.walk(be) if isinstance(sub, ast.Name))
+          return [(bn, be) for bn, be in bnds if bn in need]
+
+        idx_bnds = _needed(idx_refs)
+        val_bnds = _needed(val_refs)
+
+        def _eval_idx(coord):
+          with self.restored(ctx):
+            self.frame.env[loop_var] = coord[0]
+            for bn, be in idx_bnds:
+              self.frame.env[bn] = self.eval(be)
+            return cast(self.eval(idx_n), I)
+
+        def _eval_val(coord):
+          with self.restored(ctx):
+            self.frame.env[loop_var] = coord[0]
+            for bn, be in val_bnds:
+              self.frame.env[bn] = self.eval(be)
+            return cast(self.eval(val_n), elt)
+
+        return _eval_idx, _eval_val
+
+      eval_idx, eval_val = _make_evals(idx_node, val_node, up_bindings, out_val.elt)
+      idx_arr = direct_idx if direct_idx is not None else self.delayed(I, (n,), eval_idx, cost=2)
+      val_arr = direct_val if direct_val is not None else self.delayed(out_val.elt, (n,), eval_val, cost=2)
+      ufunc_at(self, "add", out_val, idx_arr, val_arr)
+    return True
+
   def exec_For(self, node: ast.For) -> bool:
     it = self.eval(node.iter)
     tuple_domain = isinstance(it, tuple)
     if tuple_domain and (not it or not _loop_transfers(node.body)):
       return self._unrolled_for(node, it)
+    if self._try_lift_scatter_loop(node, it):
+      return False
     if self.hint_get((self.frame.path, id(node), "unroll")):
       return self._unroll(node, it)
     end_checks = []
@@ -2716,6 +3006,12 @@ class Elaborator(ArrayMixin):
   def getattr(self, obj, name: str, node=None):
     from .. import lib
 
+    if isinstance(obj, (np.ufunc, prims.UFunc)) and name == "at":
+      uf_name = obj.name if isinstance(obj, prims.UFunc) else obj.__name__
+      from ..lib.adverbs import LibFunction
+      from ..lib.numpy_lib import ufunc_at
+
+      return LibFunction(f"{uf_name}.at", lambda el, a, indices, b=None, _op=uf_name: ufunc_at(el, _op, a, indices, b))
     if isinstance(obj, (ArrayVal, Expr)):
       prop = lib.lookup_property(name)
       if prop is not None:

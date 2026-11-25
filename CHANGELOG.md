@@ -1,5 +1,62 @@
 # Changelog
 
+## 1.3.0 (November 25, 2026)
+
+Composable forward-mode, general reverse-mode, and higher-order automatic
+differentiation (`jvp`, `vjp`, `linearize`, `linear_transpose`, `hvp`,
+`jacfwd`, `jacrev`, `hessian`, `@custom_jvp`), zero-$O(T^2)$ rematerialized
+attention JVP/HVP, idiomatic `np.add.at` and `for`-loop scatter lifting, and a
+documentation and examples overhaul (AD Upgrade Wave 2, closing `#76`, `#77`,
+and `#78`).
+
+### Forward-mode AD, general VJPs & linear transposes
+
+- **`par.jvp` & `@par.custom_jvp`:** Symbolic forward-mode differentiation over
+  scalars, arrays, matmul/einsum, reductions (tie-averaged `min`/`max`,
+  zero-safe `prod`), scans, folds, `map`, gather/scatter, `if`/`else`,
+  runtime `for`/`while` loops (in $O(1)$ extra memory), `NamedTuple` / frozen
+  `@dataclass` records, and `RaggedArray`s.
+- **General non-scalar `par.vjp`, `par.linearize`, & `par.linear_transpose`:**
+  Full reverse-mode pullbacks for array, tuple, record, and `RaggedArray`
+  outputs, plus exact linear operator transposes satisfying
+  `⟨JVP(x; v), u⟩ == ⟨v, VJP(x; u)⟩`.
+- **Higher-order AD (`par.hvp`, `par.jacfwd`, `par.jacrev`, `par.hessian`):**
+  Forward-over-reverse Hessian-vector products across MLPs, LayerNorm,
+  checkpointed `for` loops, and FlashAttention. Also lifted reverse-over-reverse
+  `grad(grad(...))` cliffs for `np.stack`, `np.cumsum`, gather indexing,
+  scatter-add, and scalar 1-to-1 `par.map`.
+
+### Composable algebraic AD & indexing adjoints
+
+- **Zero-$O(T^2)$ attention JVP & HVP:** Fused dual `(S, dS) -> (O, dO)`
+  monoidal tiling and parallel rematerialized HVP tangent emission drop all
+  quadratic $O(T^2)$ allocations during both `par.jvp` and `par.hvp` (reported
+  by `par.show_rewrite`).
+- **Composable `ALGEBRAIC_AD_RULES` registry:** Unified FlashAttention,
+  Cut Cross-Entropy, softmax, and LayerNorm / RMSNorm rematerialization rules
+  and enabled algebraic tape optimization inside checkpointed runtime `for`
+  loops.
+- **`topk`, `sort`, `FrozenHashTable`, & `SortedIndex` AD:** Added reverse-mode
+  and forward-mode differentiation for `par.topk` / `par.topk_fold`, `np.sort`,
+  `FrozenHashTable.get`, and `SortedIndex.get`.
+- **Multi-store vertical fusion fix:** Hardened `match_single_output_map` and
+  `match_single_output_scan` to reject multi-store prefixes, fixing a compiler
+  bug exposed by fused primal+tangent `IndexMap`s.
+
+### Idiomatic scatter lowering & documentation overhaul
+
+- **`np.add.at` and `for`-loop scatter lifting:** `np.add.at(out, idx, vals)`
+  and canonical `for i in range(n): out[idx[i]] += vals[i]` loops (including
+  multi-histogram bodies sharing an index binding `b = bin_ids[i]`) now lift
+  directly to `IndexScatter`, fuse sibling histograms into one privatized
+  traversal, and differentiate cleanly under both `grad` and `jvp`.
+- **Consistent NumPy idioms & pedagogical gallery:** Standardized docs and
+  examples on `np.*` helpers (`np.minimum`, `np.add`, `np.add.at`, etc.)
+  alongside `@par.jit` / `par.*` operators, replaced bare `Law 1..6` shorthand
+  outside `docs/algebra.md` with plain-English optimization descriptions, and
+  reordered the [Kernel gallery](https://rubinsteyn.com/parakeet/gallery/)
+  progressively from pairwise NumPy fusion to attention and end-to-end training.
+
 ## 1.2.0 (November 25, 2026)
 
 Major automatic differentiation upgrade: IR-level checkpointed reverse loops

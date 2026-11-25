@@ -239,4 +239,85 @@ def backprop(el, root: Expr, seed: Expr, on_var: Callable, on_load: Callable, li
       visit(definition, total, bound=v)
 
 
-__all__ = ["PARTIALS", "backprop", "is_float", "partials"]
+def pushforward(
+  el,
+  root: Expr,
+  tangent_var: Callable[[Var], Expr | None],
+  tangent_load: Callable[[Load], Expr | None],
+  bound: Var | None = None,
+) -> Expr | None:
+  """Forward-mode pushforward of scalar expression tree ``root``.
+
+  Reuses :data:`PARTIALS` so forward and reverse scalar rules stay in one place.
+  Returns ``None`` when ``root`` has an exact structural zero tangent.
+  """
+  memo: dict[int, Expr | None] = {}
+  val_memo: dict[int, Expr] = {}
+  if bound is not None:
+    val_memo[id(root)] = bound
+
+  def eval_once(e: Expr) -> Expr:
+    hit = val_memo.get(id(e))
+    if hit is not None:
+      return hit
+    if isinstance(e, Prim):
+      args = tuple(eval_once(a) if isinstance(a, Prim) and a.op in _USES_RESULT else a for a in e.args)
+      rebuilt = e if all(x is y for x, y in zip(args, e.args)) else Prim(e.op, args, e.type)
+      v = el.tmp(rebuilt, "r")
+      val_memo[id(e)] = v
+      return v
+    return e
+
+  def rec(e: Expr) -> Expr | None:
+    if isinstance(e, Const) or not is_float(e):
+      return None
+    key = id(e)
+    if key in memo:
+      return memo[key]
+    res: Expr | None = None
+    if isinstance(e, Var):
+      res = tangent_var(e)
+    elif isinstance(e, Load):
+      res = tangent_load(e)
+    elif isinstance(e, Cast):
+      if is_float(e.arg):
+        da = rec(e.arg)
+        if da is not None:
+          res = cast(da, e.type)
+    elif isinstance(e, Prim):
+      t = e.type
+      if e.op == "select":
+        c, a, b = e.args
+        da = rec(a) if is_float(a) else None
+        db = rec(b) if is_float(b) else None
+        if da is not None or db is not None:
+          zero = _c(0.0, t)
+          res = ops.select(c, cast(da, t) if da is not None else zero, cast(db, t) if db is not None else zero)
+      else:
+        tangs = [rec(a) if is_float(a) else None for a in e.args]
+        if any(dt is not None for dt in tangs):
+          r = eval_once(e) if e.op in _USES_RESULT else e
+          parts = partials(el, e, r)
+          terms: list[Expr] = []
+          for p, dt in zip(parts, tangs):
+            if p is None or dt is None:
+              continue
+            dtc = cast(dt, t)
+            if isinstance(p, Const) and p.value == 1.0:
+              terms.append(dtc)
+            elif isinstance(p, Const) and p.value == -1.0:
+              terms.append(_f("neg", t, dtc))
+            else:
+              terms.append(_f("mul", t, p, dtc))
+          if terms:
+            acc = terms[0]
+            for tm in terms[1:]:
+              acc = _f("add", t, acc, tm)
+            res = el.tmp(acc, "dt") if len(terms) > 1 else acc
+    memo[key] = res
+    return res
+
+  return rec(root)
+
+
+__all__ = ["PARTIALS", "backprop", "is_float", "partials", "pushforward"]

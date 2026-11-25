@@ -618,7 +618,7 @@
 <circle cx="365.7" cy="499.1" r="3.6" fill="#64748b" stroke="#ffffff" stroke-width="1.2"/>
 <text x="388.0" y="502.6" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="500" fill="#0f172a">17.2 ms<tspan dx="3" font-weight="400" font-size="8.6" fill="#64748b">±0.091</tspan></text>
 <text x="500.0" y="346.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0f172a">D. CPU Gaussian Kernel Regression (4 threads)</text>
-<text x="500.0" y="361.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#475569">Single-pass Law 1 monoidal reduction (11.8× faster than NumPy)</text>
+<text x="500.0" y="361.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#475569">Single-pass online monoidal reduction (11.8× faster than NumPy)</text>
 <rect x="648.0" y="370.0" width="210.0" height="139.0" rx="4" fill="#fafbfc" stroke="#e5e9f0" stroke-width="1"/>
 <line x1="648.0" y1="370.0" x2="648.0" y2="509.0" stroke="#f1f5f9" stroke-width="1"/>
 <text x="648.0" y="522.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#64748b">20</text>
