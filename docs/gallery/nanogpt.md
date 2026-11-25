@@ -58,12 +58,13 @@ vocabulary. `sequence_loss` converts those scores to log probabilities, picks
 the entry for the actual next character at each position, and averages the
 negative values.
 
-This is where Parakeet's explicit operators enter. In `loss`, both `tokens`
-and `targets` have shape `(batch, context)`. The two arguments to
-`loss_for_sequence` are matching rows, and all rows use the same parameters.
-`dsl.map` produces one scalar loss per sequence. Their mean is the batch loss.
-`value_and_grad(loss)` differentiates that scalar with respect to `params`, the
-first argument of `loss`.
+In `loss`, both `tokens` and `targets` have shape `(batch, context)`. The two
+arguments to `loss_for_sequence` are matching rows, and every sequence shares
+the same `params` and `causal` mask. `parakeet.map` maps `loss_for_sequence`
+across the batch to produce one scalar loss per sequence, and `np.mean`
+averages them into the batch loss. `parakeet.value_and_grad(loss)` compiles a
+function returning both that scalar loss and its gradient with respect to
+`params` (the first argument of `loss`).
 
 ```python
 --8<-- "examples/nanogpt.py:gpt_loss"
@@ -111,11 +112,15 @@ its own input when predicting the following character.
 --8<-- "examples/nanogpt.py:gpt_train"
 ```
 
-The first training step includes compilation. The script prints losses at
-steps 1, 20, 40 and 60, and checks that the final loss is below 80% of the
-initial loss. In the seeded Colab run the four losses were **3.173, 2.307,
-1.796 and 1.250**.
+The first training step compiles the forward and gradient kernels; subsequent
+steps reuse the compiled native code. With `--verbose` (the default when run as
+a script), `main` prints the cross-entropy loss at steps 1, 20, 40, and 60 and
+asserts that training makes progress (final loss below 80% of step 1). Using
+the fixed `seed=0` above, the printed loss drops from **3.173** at step 1 to
+**2.307** (step 20), **1.796** (step 40), and **1.250** (step 60) on GPU (with
+nearly identical values on CPU).
 
-The [GPU training benchmark](../release-benchmarks.md#nanogpt-training)
-uses larger four-head models and compiles Adam into the training step. The
-two-head example above applies Adam in Python.
+For larger four-head training runs where the Adam update is also compiled into
+the training step, see the [nanoGPT training benchmark](../release-benchmarks.md#nanogpt-training).
+The compact two-head walkthrough above keeps Adam in plain Python so every line
+is easy to follow.

@@ -1,18 +1,30 @@
 # Kernel gallery
 
-These examples show how short NumPy functions and explicit data-parallel
-operators compile into fused, tiled native kernels.
+Parakeet gives you two clean, self-contained ways to write compiled kernels
+over the same algebraic IR:
 
-Start with [one nearest-neighbor query](#exact-nearest-neighbor), then
-[change what the fold remembers](#inverse-distance-smoothing). For a complete
-training program, try [nanoGPT](gallery/nanogpt.md). Every snippet below is
-included directly from executable examples (`python -m examples.algebraic_gallery`).
+1. **NumPy frontend (`@parakeet.jit` + `np.*`):** Write ordinary NumPy
+   broadcasting, reductions, and matrix products.
+2. **Explicit DSL (`@dsl.kernel` + `dsl.*`):** Write data-parallel kernels
+   directly using `dsl.map`, `dsl.allpairs`, `dsl.fold`, `dsl.imap`,
+   `dsl.ireduce`, `dsl.scatter`, and `dsl.*` primitives (`dsl.min`, `dsl.sum`,
+   `dsl.argmin`, `dsl.isnan`, `dsl.f32`, ...) — no `np.*` or top-level
+   `parakeet.*` syntax required.
+
+Start with [one nearest-neighbor query](#exact-nearest-neighbor) comparing both
+frontends side by side, then [change what the fold remembers](#inverse-distance-smoothing).
+For a complete end-to-end training script, try [nanoGPT](gallery/nanogpt.md).
+Every snippet below is included directly from runnable repository examples
+(`python -m examples.algebraic_gallery`).
 
 ```python
+# NumPy frontend:
 import numpy as np
 import parakeet
-from parakeet import dsl
+
+# Explicit DSL frontend (self-contained — no numpy needed inside @dsl.kernel):
 from typing import NamedTuple
+from parakeet import dsl
 ```
 
 The same `@parakeet.jit` decorator compiles both ordinary NumPy and explicit
@@ -92,8 +104,8 @@ the two totals after the final merge.
 Train a two-layer transformer to predict the next character in a short text.
 The [complete nanoGPT walkthrough](gallery/nanogpt.md) shows the entire runnable
 program in order, from the first import to the final training step. It follows
-one input sequence through causal attention, then uses `dsl.map` and
-`value_and_grad` to train on a batch.
+one input sequence through causal attention, then uses `parakeet.map` and
+`parakeet.value_and_grad` to train on a batch.
 
 ## Gaussian kernel regression
 

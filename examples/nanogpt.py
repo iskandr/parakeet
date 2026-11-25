@@ -11,7 +11,7 @@ import time
 
 import numpy as np
 
-from parakeet import dsl, value_and_grad
+import parakeet
 
 N_HEAD = 2
 
@@ -71,11 +71,11 @@ def loss(params, tokens, targets, causal):
   def loss_for_sequence(input_ids, next_ids):
     return sequence_loss(params, input_ids, next_ids, causal)
 
-  per_sequence = dsl.map(loss_for_sequence, tokens, targets)
+  per_sequence = parakeet.map(loss_for_sequence, tokens, targets)
   return np.mean(per_sequence)
 
 
-loss_and_grad = value_and_grad(loss)
+loss_and_grad = parakeet.value_and_grad(loss)
 # --8<-- [end:gpt_loss]
 
 

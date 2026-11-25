@@ -211,16 +211,15 @@ the middle-end passes:
 
 ```python
 import numpy as np
-import parakeet
 from parakeet import dsl
 
 
-@parakeet.jit
+@dsl.kernel
 def causal_attention(q, k, v):
-  causal = dsl.imap(lambda ij: ij[0] >= ij[1], (q.shape[0], k.shape[0]))
-  s = np.where(causal, (q @ k.T) * np.float32(0.125), np.float32(-1e9))
-  e = np.exp(s - np.max(s, axis=-1, keepdims=True))
-  return (e / np.sum(e, axis=-1, keepdims=True)) @ v
+  causal = dsl.imap(lambda i, j: i >= j, (q.shape[0], k.shape[0]))
+  s = dsl.where(causal, (q @ k.T) * dsl.f32(0.125), dsl.f32(-1e9))
+  e = dsl.exp(s - dsl.max(s, axis=-1, keepdims=True))
+  return (e / dsl.sum(e, axis=-1, keepdims=True)) @ v
 
 
 q = np.zeros((128, 64), np.float32)
