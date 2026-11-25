@@ -54,11 +54,13 @@ from ..syntax.ir import (
   Expr,
   IndexReduce,
   IndexScan,
+  IndexWavefront,
   Load,
   Prim,
   Store,
   Var,
   same,
+  stmt_exprs,
   walk_expr,
   walk_stmts,
 )
@@ -128,6 +130,15 @@ def observe(el, stmt) -> None:
           if isinstance(st, Store):
             el.ad_bufs.add(st.buf.uid)
             el.tainted_bufs.setdefault(st.buf.uid, _info(el, "a scan"))
+    elif isinstance(s, IndexWavefront):
+      active_wf = any(depends(el, e) for e in (*s.init_top, *s.init_left, *s.init_corner, *s.next_vals)) or any(
+        depends(el, e) for st in walk_stmts(s.body) for e in stmt_exprs(st)
+      )
+      if active_wf:
+        for rv in (*s.results, *((s.max_val,) if s.max_val is not None else ())):
+          if is_float(rv):
+            el.ad_vars.add(rv.uid)
+            el.tainted_vars.setdefault(rv.uid, _info(el, "a wavefront DP recurrence"))
     elif isinstance(s, Store):
       if is_float(s.value) and depends(el, s.value):
         el.ad_bufs.add(s.buf.uid)
@@ -1466,6 +1477,12 @@ def _block_sparse_attention_ad(tape: Tape, el, node: Node, g) -> None:
   _block_sparse_attention_vjp(tape, el, node, g)
 
 
+def _soft_align_ad(tape: Tape, el, node: Node, g) -> None:
+  from ..lib.wavefront_lib import _soft_align_vjp
+
+  _soft_align_vjp(tape, el, node, g)
+
+
 _BACKWARD = {
   "elementwise": _elementwise,
   "alias": _alias,
@@ -1485,6 +1502,7 @@ _BACKWARD = {
   "segmented_softmax": _segmented_softmax_ad,
   "varlen_flash_attention": _varlen_flash_attention_ad,
   "block_sparse_attention": _block_sparse_attention_ad,
+  "soft_align": _soft_align_ad,
 }
 
 

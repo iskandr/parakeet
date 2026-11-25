@@ -150,6 +150,8 @@ def depth(block: list) -> int:
       inner += sum(1 for d in s.tile_shape if d is not None)
     elif isinstance(s, (ir.IndexFilter, ir.IndexExpand, ir.IndexScan)):
       inner += 1
+    elif isinstance(s, ir.IndexWavefront):
+      inner += 2
     best = max(best, inner)
   return best
 
@@ -209,6 +211,9 @@ def work(defs: dict[int, Expr], block: list, bound: tuple[Var, ...] = ()) -> Exp
         w = imul(known(s.n), imax(cost(s.body), 1))
       elif isinstance(s, ir.IndexExpand):
         w = imul(known(s.n), imax(iadd(cost(s.count_body), cost(s.emit_body)), 1))
+      elif isinstance(s, ir.IndexWavefront):
+        span = imin(known(s.n), imul(Const(2, I), known(s.band))) if s.band is not None else known(s.n)
+        w = imul(imul(known(s.m), span), imax(cost(s.body), 1))
       elif isinstance(s, ParLoop):
         w = cost(s.body)
       else:
@@ -770,6 +775,122 @@ def lower_scan(lp: Loops, s: ir.IndexScan, scratch: Scope, target=None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# IndexWavefront (2D / banded anti-diagonal semiring DP)
+# ---------------------------------------------------------------------------
+
+
+def lower_wavefront(lp: Loops, s: ir.IndexWavefront) -> None:
+  """Lower 2D anti-diagonal DP over ``(m, n)`` using 3 rolling anti-diagonal
+  ring buffers of length ``m`` (O(m) memory, SIMD-vectorizable inner loop)."""
+  m = lp.tmp(s.m, "wf_m")
+  n = lp.tmp(s.n, "wf_n")
+  k_fields = len(s.results)
+  band = lp.tmp(s.band, "wf_band") if s.band is not None else None
+
+  # Default outputs when m == 0 or n == 0
+  for rvar, ic in zip(s.results, s.init_corner):
+    lp.emit(Assign(rvar, cast(ic, rvar.type)))
+  if s.track_max and s.max_val is not None:
+    lp.emit(Assign(s.max_val, cast(s.init_corner[0], s.max_val.type)))
+    lp.emit(Assign(s.best_i, Const(-1, s.best_i.type)))
+    lp.emit(Assign(s.best_j, Const(-1, s.best_j.type)))
+
+  ring_size = lp.tmp(imul(Const(3, I), imax(m, ONE)), "wf_rsz")
+  rings = [Var(f"wf_r{f}", BufType(rvar.type.strong)) for f, rvar in enumerate(s.results)]
+  for rb in rings:
+    lp.emit(Alloc(rb, ring_size))
+    lp.owner.owned.append(rb)
+
+  non_empty_blk: list = []
+  ne = lp.sub(non_empty_blk)
+  num_diags = ne.tmp(isub(iadd(m, n), ONE), "wf_ndiag")
+  d = Var("wf_d", I)
+  d_body: list = []
+  db = ne.sub(d_body)
+  cur_slot = db.tmp(ops.imod(d, Const(3, I)), "wf_cs")
+  prev1_slot = db.tmp(ops.imod(iadd(d, Const(2, I)), Const(3, I)), "wf_p1")
+  prev2_slot = db.tmp(ops.imod(iadd(d, ONE), Const(3, I)), "wf_p2")
+  cur_base = db.tmp(imul(cur_slot, m), "wf_cb")
+  p1_base = db.tmp(imul(prev1_slot, m), "wf_p1b")
+  p2_base = db.tmp(imul(prev2_slot, m), "wf_p2b")
+
+  i_lo = imax(ZERO, isub(d, isub(n, ONE)))
+  i_hi = imin(isub(m, ONE), d)
+  if band is not None:
+    i_lo = imax(i_lo, idiv(iadd(isub(d, band), ONE), Const(2, I)))
+    i_hi = imin(i_hi, idiv(iadd(d, band), Const(2, I)))
+  i_lo_v = db.tmp(i_lo, "wf_ilo")
+  i_hi_v = db.tmp(iadd(i_hi, ONE), "wf_ihi")
+
+  inner_blk: list = []
+  ib = db.sub(inner_blk)
+  iv = s.i_var
+  jv = s.j_var
+  ib.emit(Assign(jv, isub(d, iv)))
+
+  has_top = cmp("gt", iv, ZERO)
+  has_left = cmp("gt", jv, ZERO)
+  if band is not None:
+    has_top = ops.land(has_top, cmp("le", isub(jv, isub(iv, ONE)), band))
+    has_left = ops.land(has_left, cmp("le", isub(iv, isub(jv, ONE)), band))
+  has_top_v = ib.tmp(has_top, "wf_ht")
+  has_left_v = ib.tmp(has_left, "wf_hl")
+  has_diag_v = ib.tmp(ops.land(cmp("gt", iv, ZERO), cmp("gt", jv, ZERO)), "wf_hd")
+  safe_im1 = ib.tmp(imax(isub(iv, ONE), ZERO), "wf_im1")
+
+  for f in range(k_fields):
+    rb = rings[f]
+    ft = s.results[f].type.strong
+    top_load = Load(rb, iadd(p1_base, safe_im1))
+    left_load = Load(rb, iadd(p1_base, iv))
+    diag_load = Load(rb, iadd(p2_base, safe_im1))
+    diag_fallback = ops.select(
+      cmp("gt", jv, ZERO),
+      cast(s.init_top[f], ft),
+      ops.select(cmp("gt", iv, ZERO), cast(s.init_left[f], ft), cast(s.init_corner[f], ft)),
+    )
+    ib.emit(Assign(s.top_vars[f], ops.select(has_top_v, top_load, cast(s.init_top[f], ft))))
+    ib.emit(Assign(s.left_vars[f], ops.select(has_left_v, left_load, cast(s.init_left[f], ft))))
+    ib.emit(Assign(s.diag_vars[f], ops.select(has_diag_v, diag_load, diag_fallback)))
+
+  inner_blk.extend(s.body)
+  for f in range(k_fields):
+    val_f = ib.tmp(cast(s.next_vals[f], s.results[f].type.strong), f"wf_nv{f}")
+    ib.emit(Store(rings[f], iadd(cur_base, iv), val_f))
+    if f == 0 and s.track_max and s.max_val is not None:
+      better = cmp("gt", val_f, s.max_val)
+      ib.emit(
+        If(
+          better,
+          [
+            Assign(s.max_val, val_f),
+            Assign(s.best_i, cast(iv, s.best_i.type)),
+            Assign(s.best_j, cast(jv, s.best_j.type)),
+          ],
+          [],
+        )
+      )
+  inner_blk.append(ir.ReleaseScope(s.scope))
+
+  db.emit(ForRange(iv, i_lo_v, i_hi_v, ONE, inner_blk, s.scope, simd=not s.track_max))
+  ne.emit(ForRange(d, ZERO, num_diags, ONE, d_body, Scope("loop")))
+
+  # Read final cell (m - 1, n - 1) on anti-diagonal (m + n - 2) if in band
+  last_d = ne.tmp(isub(num_diags, ONE), "wf_ld")
+  last_base = ne.tmp(imul(ops.imod(last_d, Const(3, I)), m), "wf_lb")
+  last_pos = ne.tmp(iadd(last_base, isub(m, ONE)), "wf_lp")
+  read_last = [Assign(rvar, cast(Load(rings[f], last_pos), rvar.type)) for f, rvar in enumerate(s.results)]
+  if s.band is not None:
+    ne.emit(If(cmp("le", imax(isub(m, n), isub(n, m)), s.band), read_last, []))
+  else:
+    ne.block.extend(read_last)
+
+  lp.emit(If(ops.land(cmp("gt", m, ZERO), cmp("gt", n, ZERO)), non_empty_blk, []))
+  for rb in rings:
+    lp.emit(ir.Release(rb))
+
+
+# ---------------------------------------------------------------------------
 # IndexTile
 # ---------------------------------------------------------------------------
 
@@ -1154,6 +1275,10 @@ def lower_block(block: list, defs: dict[int, Expr], owner: Scope, target=None) -
       scratch = Scope("fold")
       s.fold.combine[:] = lower_block(s.fold.combine, defs, scratch, target)
       lower_scan(Loops(out, defs, owner), s, scratch, target)
+      continue
+    if isinstance(s, ir.IndexWavefront):
+      s.body[:] = lower_block(s.body, defs, s.scope, target)
+      lower_wavefront(Loops(out, defs, owner), s)
       continue
     if isinstance(s, If):
       s.then[:] = lower_block(s.then, defs, owner, target)

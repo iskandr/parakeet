@@ -80,6 +80,7 @@ from .lib.ragged_lib import (
   varlen_flash_attention,
 )
 from .lib.spatial_lib import block_sparse_attention, morton_order, spatial_cutoff_sum
+from .lib.wavefront_lib import batched_wavefront, soft_align, wavefront
 from .ndtypes import (
   Bool,
   Float32,
@@ -182,12 +183,12 @@ __all__ = [
     "FrozenHashTable", "MatrixUnit", "ParakeetError", "RaggedArray", "SortedIndex", "Specialization",
     "StaticValueError", "TargetProfile",
     "TypeInferenceError", "UnsupportedError", "__version__",
-    "allpairs", "available_backends", "bf16_to_f32", "block_sparse_attention", "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
+    "allpairs", "available_backends", "batched_wavefront", "bf16_to_f32", "block_sparse_attention", "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
     "f32_to_bf16", "filter", "filter_pairs", "flatmap", "imap",
     "ireduce", "jit", "lib", "map", "morton_order", "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter_add", "seed",
     "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
-    "spatial_cutoff_sum", "varlen_flash_attention",
+    "soft_align", "spatial_cutoff_sum", "varlen_flash_attention", "wavefront",
     "ndtypes", "openmp_available", "prims", "run_python_fn", "specialize", "target_profile",
     "to_device", "to_host", "typed_repr",
     "find_broken_transform", "frontend", "macro", "syntax", "transforms", "grad", "value_and_grad",

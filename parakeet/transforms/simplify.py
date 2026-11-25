@@ -21,7 +21,17 @@ to an input array, an impure runtime call) is kept.
 from __future__ import annotations
 
 from ..syntax import ir
-from ..syntax.ir import Expr, IndexExpand, IndexFilter, IndexMap, IndexReduce, IndexScan, IndexScatter, Var
+from ..syntax.ir import (
+  Expr,
+  IndexExpand,
+  IndexFilter,
+  IndexMap,
+  IndexReduce,
+  IndexScan,
+  IndexScatter,
+  IndexWavefront,
+  Var,
+)
 
 EFFECTS = (
   ir.Store,
@@ -33,6 +43,7 @@ EFFECTS = (
   ir.IndexFilter,
   ir.IndexExpand,
   ir.IndexScan,
+  ir.IndexWavefront,
   ir.IndexScatter,
   ir.ParLoop,
   ir.While,
@@ -210,6 +221,13 @@ def sweep(block: list, live: set[int], dead_bufs: set[int], stored_bufs: set[int
         if not s.values:
           s.emit_body[:] = []
         changed = True
+    elif isinstance(s, IndexWavefront):
+      outs = [v.uid for v in s.results]
+      if s.track_max:
+        outs += [v.uid for v in (s.max_val, s.best_i, s.best_j) if v is not None]
+      if not s.scope.owned and not any(u in live for u in outs) and not has_effects(s.body):
+        changed = True
+        continue
     elif isinstance(s, IndexScan):
       if (
         not s.scope.owned
