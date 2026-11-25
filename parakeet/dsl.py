@@ -58,6 +58,7 @@ from .lib.adverbs import (
   topk_fold,
   value_and_grad,
 )
+from .lib.expand_lib import filter_pairs, flatmap
 from .lib.ragged_lib import (
   segment_ids,
   segmented_map,
@@ -359,7 +360,9 @@ __all__ = [
   "f32_to_bf16",
   "f64",
   "filter",
+  "filter_pairs",
   "filter_reduce",
+  "flatmap",
   "float32",
   "float64",
   "fold",

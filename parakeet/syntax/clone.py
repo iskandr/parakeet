@@ -165,6 +165,22 @@ class Cloner:
         x(s.n), self.var(s.index), b(s.body), x(s.keep), self.var(s.out), self.var(s.count), self.scope(s.scope),
         s.parallel, s.loc,
       )  # fmt: skip
+    if isinstance(s, ir.IndexExpand):
+      return ir.IndexExpand(
+        x(s.n),
+        self.var(s.index),
+        b(s.count_body),
+        x(s.count),
+        self.var(s.emit_index),
+        b(s.emit_body),
+        [(self.var(buf), x(val)) for buf, val in s.values],
+        self.var(s.offsets),
+        self.var(s.total),
+        self.scope(s.count_scope),
+        self.scope(s.emit_scope),
+        s.parallel,
+        s.loc,
+      )
     if isinstance(s, ir.IndexScatter):
       return ir.IndexScatter(
         tuple(x(d) for d in s.shape),

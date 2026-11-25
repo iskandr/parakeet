@@ -1,6 +1,15 @@
 """The library of functions available inside compiled code."""
 
-from . import adverbs, builtins_lib, numpy_lib, pure, index_lib, ragged_lib, random_lib  # noqa: F401, I001  (index_lib overrides pure.searchsorted)
+from . import (  # noqa: F401, I001  (index_lib overrides pure.searchsorted)
+  adverbs,
+  builtins_lib,
+  expand_lib,
+  numpy_lib,
+  pure,
+  index_lib,
+  ragged_lib,
+  random_lib,
+)
 from .core import (
   FUNCTIONS,
   METHODS,

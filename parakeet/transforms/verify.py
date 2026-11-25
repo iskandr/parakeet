@@ -31,6 +31,7 @@ from ..syntax.ir import (
   Function,
   If,
   Incref,
+  IndexExpand,
   IndexFilter,
   IndexMap,
   IndexReduce,
@@ -85,6 +86,10 @@ def verify(fn: Function, phase: str = "") -> Function:
       allocated_bufs.add(s.var.uid)
     elif isinstance(s, IndexFilter):
       allocated_bufs.add(s.out.uid)
+    elif isinstance(s, IndexExpand):
+      allocated_bufs.add(s.offsets.uid)
+      for buf, _ in s.values:
+        allocated_bufs.add(buf.uid)
     elif isinstance(s, IndexTile):
       for st in s.stages:
         allocated_bufs.add(st.buf.uid)
@@ -300,6 +305,39 @@ def verify(fn: Function, phase: str = "") -> Function:
         check_expr(s.keep, body_vis, "IndexFilter predicate")
         visible.add(s.out.uid)
         visible.add(s.count.uid)
+      elif isinstance(s, IndexExpand):
+        if not _is_int(s.n.type):
+          _fail(fn, phase, f"IndexExpand length has non-integer type {s.n.type}")
+        if not _is_int(s.index.type):
+          _fail(fn, phase, f"IndexExpand index {s.index.name} has non-integer type {s.index.type}")
+        if not _is_int(s.emit_index.type):
+          _fail(fn, phase, f"IndexExpand emit_index {s.emit_index.name} has non-integer type {s.emit_index.type}")
+        if not isinstance(s.offsets.type, BufType):
+          _fail(fn, phase, f"IndexExpand offsets {s.offsets.name} has non-buffer type {s.offsets.type}")
+        if not _is_int(s.total.type):
+          _fail(fn, phase, f"IndexExpand total {s.total.name} has non-integer type {s.total.type}")
+        check_expr(s.n, visible, "IndexExpand length")
+        check_scope(s.count_scope)
+        count_vis = set(visible)
+        count_vis.add(s.index.uid)
+        check_block(s.count_body, count_vis)
+        if not _is_int(s.count.type):
+          _fail(fn, phase, f"IndexExpand count has non-integer type {s.count.type}")
+        check_expr(s.count, count_vis, "IndexExpand count")
+        check_scope(s.emit_scope)
+        emit_vis = set(visible)
+        emit_vis.update((s.index.uid, s.emit_index.uid))
+        check_block(s.emit_body, emit_vis)
+        for buf, val in s.values:
+          if not isinstance(buf.type, BufType):
+            _fail(fn, phase, f"IndexExpand output {buf.name} has non-buffer type {buf.type}")
+          if not isinstance(val.type, ScalarType):
+            _fail(fn, phase, f"IndexExpand output value for {buf.name} has non-scalar type {val.type}")
+          check_expr(val, emit_vis, f"IndexExpand value for {buf.name}")
+        visible.add(s.offsets.uid)
+        visible.add(s.total.uid)
+        for buf, _ in s.values:
+          visible.add(buf.uid)
       elif isinstance(s, IndexScatter):
         if len(s.shape) != len(s.index):
           _fail(fn, phase, f"IndexScatter rank mismatch: {len(s.shape)} dims vs {len(s.index)} indices")

@@ -637,6 +637,15 @@ def buffer_accesses(stmts: list) -> tuple[set[int], set[int]]:
             reads.add(x.buf.uid)
           elif isinstance(x, Var) and isinstance(x.type, ir.BufType):
             reads.add(x.uid)
+    elif isinstance(s, ir.IndexExpand):
+      writes.add(s.offsets.uid)
+      writes.update(buf.uid for buf, _ in s.values)
+      for e in (s.n, s.count, *(val for _, val in s.values)):
+        for x in ir.walk_expr(e):
+          if isinstance(x, Load):
+            reads.add(x.buf.uid)
+          elif isinstance(x, Var) and isinstance(x.type, ir.BufType):
+            reads.add(x.uid)
     else:
       for e in ir.stmt_exprs(s):
         for x in ir.walk_expr(e):
@@ -698,6 +707,18 @@ class BufferInfo:
           *(() if s.where is None else (s.where,)),
         ):
           note_expr(e)
+        continue
+      elif isinstance(s, ir.IndexExpand):
+        info.local_allocs.add(s.offsets.uid)
+        info.root_alloc[s.offsets.uid] = s.offsets.uid
+        info.store_counts[s.offsets.uid] = info.store_counts.get(s.offsets.uid, 0) + 1
+        for buf, val in s.values:
+          info.local_allocs.add(buf.uid)
+          info.root_alloc[buf.uid] = buf.uid
+          info.store_counts[buf.uid] = info.store_counts.get(buf.uid, 0) + 1
+          note_expr(val)
+        note_expr(s.n)
+        note_expr(s.count)
         continue
       elif isinstance(s, ir.Incref) and isinstance(s.buf, Var):
         info.escapes.add(s.buf.uid)

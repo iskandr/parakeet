@@ -67,6 +67,7 @@ from .lib.adverbs import (
   scatter_add,
   value_and_grad,
 )
+from .lib.expand_lib import filter_pairs, flatmap
 from .lib.pure import pmap1 as _pmap1
 from .lib.pure import pmap2 as _pmap2
 from .lib.pure import pmap2_trim as _pmap2_trim
@@ -180,7 +181,7 @@ __all__ = [
     "StaticValueError", "TargetProfile",
     "TypeInferenceError", "UnsupportedError", "__version__",
     "allpairs", "available_backends", "bf16_to_f32", "bswap", "clear_cache", "clz", "config", "ctz", "each", "errors",
-    "f32_to_bf16", "filter", "imap",
+    "f32_to_bf16", "filter", "filter_pairs", "flatmap", "imap",
     "ireduce", "jit", "lib", "map", "options", "outer_map", "parfor", "pmap1", "pmap2",
     "pmap2_trim", "popcount", "reduce", "rotl", "rotr", "run", "scan", "scatter_add", "seed",
     "segment_ids", "segmented_map", "segmented_reduce", "segmented_scan", "segmented_softmax",
