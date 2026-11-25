@@ -341,13 +341,55 @@ def _bwd_norm(tape, el, node, g: ArrayVal) -> None:
   tape.add(el, x_val, dx)
 
 
+def _reduce_broadcast_grad(el, full_grad: ArrayVal, target: ArrayVal) -> ArrayVal:
+  """Reduce ``full_grad`` over any leading or size-1 broadcast axes to match ``target.shape``."""
+  from ..lib.numpy_lib import _reduce_prim as reduce_plain
+
+  g = full_grad
+  # Sum out extra leading batch dimensions
+  extra = g.rank - target.rank
+  for _ in range(extra):
+    g = reduce_plain(el, "add", g, Const(0, I), Const(0, g.elt), "sum", False)
+  # Sum out any size-1 broadcast dimensions (keepdims=True)
+  for ax in range(target.rank):
+    if isinstance(target.shape[ax], Const) and int(target.shape[ax].value) == 1:
+      if not (isinstance(g.shape[ax], Const) and int(g.shape[ax].value) == 1):
+        g = reduce_plain(el, "add", g, Const(ax, I), Const(0, g.elt), "sum", True)
+  return g
+
+
+def _stage_from_broadcast_array(
+  el, arr: ArrayVal, batch_vars: tuple[Var, ...], batch_shape: tuple[Expr, ...], prefix: str
+) -> TileStage:
+  """Build a 2D ``TileStage`` indexed by ``(r, c)`` over ``arr`` supporting broadcast batch dims."""
+  r_var = Var(f"{prefix}_r", I)
+  c_var = Var(f"{prefix}_c", I)
+  lead_n = arr.rank - 2
+  b_use = batch_vars[-lead_n:] if lead_n > 0 else ()
+  b_coords: list[Expr] = []
+  for ax_idx, bv in enumerate(b_use):
+    if isinstance(arr.shape[ax_idx], Const) and int(arr.shape[ax_idx].value) == 1:
+      b_coords.append(ZERO)
+    else:
+      b_coords.append(bv)
+  r_coord = ZERO if (isinstance(arr.shape[-2], Const) and int(arr.shape[-2].value) == 1) else r_var
+  c_coord = ZERO if (isinstance(arr.shape[-1], Const) and int(arr.shape[-1].value) == 1) else c_var
+  coords = (*b_coords, r_coord, c_coord)
+  st_body: list[Stmt] = []
+  st_scope = Scope("stage")
+  with el.in_block(st_body, st_scope, loop=True):
+    val = el.elem(arr, coords)
+  return TileStage(
+    Var(f"st_{prefix}", BufType(arr.elt)), (arr.shape[-2], arr.shape[-1]), (r_var, c_var), st_body, val, st_scope
+  )
+
+
 def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   """Law 2 FlashAttention rematerialized backward (D_i form):
-  reads ONLY (Q, K, V, O, m, l, dO) — ZERO N x N tensors saved!"""
+  reads ONLY (Q, K, V[, B], O, m, l, dO) — ZERO N x N tensors saved!"""
   from ..lib.numpy_lib import _reduce_prim as reduce_plain
   from .autodiff import UF
 
-  q_orig, kt_orig, v_orig = node.inputs
   (
     q_view,
     k_view,
@@ -361,6 +403,9 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     active_q,
     active_k,
     active_v,
+    bias_arr,
+    bias_sign,
+    active_b,
   ) = node.info[1]
   tape.stale(el, node, q_view)
   tape.stale(el, node, k_view)
@@ -370,6 +415,8 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   tape.stale(el, node, l_out)
   if mask_arr is not None:
     tape.stale(el, node, mask_arr)
+  if bias_arr is not None:
+    tape.stale(el, node, bias_arr)
 
   elt: ScalarType = q_view.elt
   if g.buf is None or not g.contig:
@@ -391,15 +438,15 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     )
   )
 
-  # Allocate dense zero-initialized gradients dQ, dK, dV
+  # Allocate dense zero-initialized gradients dQ, dK, dV (and optional dB)
   dq_arr = el.alloc_array(elt, (*batch_shape, m_dim, k_dim), zero=True, label="dq")
   dk_arr = el.alloc_array(elt, (*batch_shape, n_dim, k_dim), zero=True, label="dk")
   dv_arr = el.alloc_array(elt, (*batch_shape, n_dim, d_dim), zero=True, label="dv")
+  db_arr = el.alloc_array(elt, (*batch_shape, m_dim, n_dim), zero=True, label="db") if active_b else None
 
   # Build IndexTile parallel over (*batch_shape,) on CPU (zero data races!),
   # with MonoidalTilePlan(kind="flash_monoid_bwd") for SRAM-tiled GPU execution!
   tile_shape_all = (*batch_shape, n_dim) if batch_shape else (n_dim,)
-  # Parallel over batch dims on CPU (tile_shape=1 on batch, None on n_dim so one thread owns each (b,h) slice)
   if batch_shape:
     t_shape: tuple[Expr | None, ...] = (*(ONE,) * len(batch_shape), None)
   else:
@@ -412,6 +459,7 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   k_st = _stage_from_array(el, k_view, b_vars, "bk")
   v_st = _stage_from_array(el, v_view, b_vars, "bv")
   do_st = _stage_from_array(el, g, b_vars, "bdo")
+  bias_st = _stage_from_broadcast_array(el, bias_arr, b_vars, batch_shape, "bbias") if bias_arr is not None else None
 
   # Extract mask buffer/index (or symbolic predicate if mask_arr is delayed!)
   i_m, j_m = Var("bmi", I), Var("bmj", I)
@@ -454,6 +502,7 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   scope = Scope("loop")
   zero_c = Const(0.0, elt)
   scale_c = cast(scale_expr, elt) if scale_expr is not None else None
+  bias_sign_c = Const(float(bias_sign), elt)
 
   j_lp = Var("fbj", I)
   j_blk: list[Stmt] = []
@@ -471,6 +520,9 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   i_blk.append(ForRange(k_lp, ZERO, k_dim, ONE, k_blk, Scope("loop"), simd=True, reduction=("add", [s_acc])))
 
   s_scaled: Expr = ops.prim("mul", (s_acc, scale_c), elt) if scale_c is not None else s_acc
+  if bias_st is not None:
+    bv = cast(_inline_stage(bias_st, (i_lp, j_lp), i_blk), elt)
+    s_scaled = ops.prim("add", (s_scaled, bv if bias_sign > 0 else ops.prim("neg", (bv,), elt)), elt)
   cond_v: Var | None = None
   if mask_fill is not None and (mask_buf is not None or mask_cond is not None):
     c_cl = Cloner({i_m.uid: i_lp, j_m.uid: j_lp})
@@ -502,11 +554,16 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   d_blk.append(Assign(dp_acc, ops.prim("add", (dp_acc, ops.prim("mul", (dov, vv), elt)), elt)))
   i_blk.append(ForRange(d_lp, ZERO, d_dim, ONE, d_blk, Scope("loop"), simd=True, reduction=("add", [dp_acc])))
 
-  ds_raw: Expr = ops.prim("mul", (p_ij, ops.prim("sub", (dp_acc, d_i), elt)), elt)
+  ds_unscaled: Expr = ops.prim("mul", (p_ij, ops.prim("sub", (dp_acc, d_i), elt)), elt)
   if cond_v is not None:
-    ds_raw = ops.select(cond_v, ds_raw, zero_c)
-  if scale_c is not None:
-    ds_raw = ops.prim("mul", (ds_raw, scale_c), elt)
+    ds_unscaled = ops.select(cond_v, ds_unscaled, zero_c)
+  ds_unscaled_v = Var("fbds_u", elt)
+  i_blk.append(Assign(ds_unscaled_v, ds_unscaled))
+  if db_arr is not None:
+    db_pos = iadd(imul(row_i, n_dim), j_lp)
+    db_val = ds_unscaled_v if bias_sign > 0 else ops.prim("neg", (ds_unscaled_v,), elt)
+    i_blk.append(Store(db_arr.buf, db_pos, db_val))
+  ds_raw: Expr = ops.prim("mul", (ds_unscaled_v, scale_c), elt) if scale_c is not None else ds_unscaled_v
   ds_ij = Var("fbds", elt)
   i_blk.append(Assign(ds_ij, ds_raw))
 
@@ -550,6 +607,11 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   body.append(ReleaseScope(scope))
 
   out_bufs: dict[str, Var] = {"dq": dq_arr.buf, "dk": dk_arr.buf, "dv": dv_arr.buf}
+  if db_arr is not None:
+    out_bufs["db"] = db_arr.buf
+  stages: dict[str, TileStage] = {"q": q_st, "k": k_st, "v": v_st, "do": do_st}
+  if bias_st is not None:
+    stages["bias"] = bias_st
   aux_exprs: dict[str, Expr] = {
     "lse_buf": lse_arr.buf,
     "lse_offset": lse_arr.offset,
@@ -558,6 +620,8 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     "active_q": Const(1 if active_q else 0, I),
     "active_k": Const(1 if active_k else 0, I),
     "active_v": Const(1 if active_v else 0, I),
+    "active_b": Const(1 if active_b else 0, I),
+    "bias_sign": bias_sign_c,
   }
   plan = MonoidalTilePlan(
     kind="flash_monoid_bwd",
@@ -568,7 +632,7 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
     n_dim=n_dim,
     k_dim=k_dim,
     d_dim=d_dim,
-    stages={"q": q_st, "k": k_st, "v": v_st, "do": do_st},
+    stages=stages,
     score_op="dot",
     score_scale=scale_c,
     mask_cond=mask_cond,
@@ -600,15 +664,522 @@ def _bwd_flash_attn(tape, el, node, g: ArrayVal) -> None:
   el.record_store(dq_arr)
   el.record_store(dk_arr)
   el.record_store(dv_arr)
+  if db_arr is not None:
+    el.record_store(db_arr)
 
   if active_q:
     tape.add(el, q_view, dq_arr)
   if active_k:
-    # kt_view has shape (*batch, K, N) = k_view^T
     perm = tuple(range(len(batch_shape))) + (len(batch_shape) + 1, len(batch_shape))
     tape.add(el, el.transpose(k_view, perm), el.transpose(dk_arr, perm))
   if active_v:
     tape.add(el, v_view, dv_arr)
+  if active_b and db_arr is not None and bias_arr is not None:
+    tape.add(el, bias_arr, _reduce_broadcast_grad(el, db_arr, bias_arr))
+
+
+def emit_ipa_attention(
+  el,
+  q: ArrayVal,
+  k: ArrayVal,
+  v: ArrayVal,
+  coords_q: ArrayVal,
+  coords_k: ArrayVal,
+  gamma: Expr,
+  *,
+  scale: Expr | None = None,
+  bias: ArrayVal | None = None,
+) -> ArrayVal:
+  """Emit 1-pass Law 1 SRAM-tiled 3D distance-biased IPA attention + Law 2 AD node."""
+  from ..errors import TypeInferenceError
+  from .autodiff import Node
+
+  if q.rank < 2 or k.rank != q.rank or v.rank != q.rank:
+    raise el.error(TypeInferenceError, "ipa_attention() requires q, k, v with matching rank >= 2")
+  if coords_q.rank < 2 or coords_k.rank < 2 or coords_q.rank > q.rank or coords_k.rank > k.rank:
+    raise el.error(TypeInferenceError, "ipa_attention() coords_q/coords_k must have rank in [2, q.rank]")
+  elt = q.elt.strong
+  if elt.kind != "f":
+    raise el.error(TypeInferenceError, "ipa_attention() requires floating-point inputs")
+  batch_shape = q.shape[:-2]
+  m_dim, k_dim = q.shape[-2], q.shape[-1]
+  n_dim, d_dim = k.shape[-2], v.shape[-1]
+  c_dim = coords_q.shape[-1]
+
+  el.check(cmp("eq", k.shape[-1], k_dim), "ValueError", "q and k feature dimensions must match")
+  el.check(cmp("eq", v.shape[-2], n_dim), "ValueError", "k and v sequence lengths must match")
+  el.check(cmp("eq", coords_q.shape[-2], m_dim), "ValueError", "coords_q length must match q")
+  el.check(cmp("eq", coords_k.shape[-2], n_dim), "ValueError", "coords_k length must match k")
+  el.check(cmp("eq", coords_k.shape[-1], c_dim), "ValueError", "coords_q and coords_k coordinate dims must match")
+
+  q_c = el.as_concrete(q) if q.buf is None else q
+  k_c = el.as_concrete(k) if k.buf is None else k
+  v_c = el.as_concrete(v) if v.buf is None else v
+  xq_c = el.as_concrete(coords_q) if coords_q.buf is None else coords_q
+  xk_c = el.as_concrete(coords_k) if coords_k.buf is None else coords_k
+  b_c = None if bias is None else (el.as_concrete(bias) if bias.buf is None else bias)
+
+  scale_c = (
+    cast(scale, elt)
+    if scale is not None
+    else ops.prim("div", (Const(1.0, elt), ops.prim("sqrt", (cast(k_dim, elt),), elt)), elt)
+  )
+  gamma_c = cast(gamma, elt)
+
+  tape = el.tape
+  want_ad = (
+    tape is not None
+    and not tape.muted
+    and any(tape.is_active(el, x) for x in (q, k, v, coords_q, coords_k, *((bias,) if bias is not None else ())))
+  )
+
+  o_arr = el.alloc_array(elt, (*batch_shape, m_dim, d_dim), zero=False, label="ipa_o")
+  lse_arr = el.alloc_array(elt, (*batch_shape, m_dim), zero=False, label="ipa_lse") if want_ad else None
+
+  shape = (*batch_shape, m_dim)
+  tile_shape: tuple[Expr | None, ...] = (ONE,) * len(shape)
+  origin = tuple(Var("io", I) for _ in shape)
+  extent = tuple(Var("ie", I) for _ in shape)
+  b_vars = origin[:-1]
+  i_var = origin[-1]
+
+  q_st = _stage_from_array(el, q_c, b_vars, "iq")
+  k_st = _stage_from_array(el, k_c, b_vars, "ik")
+  v_st = _stage_from_array(el, v_c, b_vars, "iv")
+  xq_st = _stage_from_broadcast_array(el, xq_c, b_vars, batch_shape, "ixq")
+  xk_st = _stage_from_broadcast_array(el, xk_c, b_vars, batch_shape, "ixk")
+  bias_st = _stage_from_broadcast_array(el, b_c, b_vars, batch_shape, "ibias") if b_c is not None else None
+
+  body: list[Stmt] = []
+  scope = Scope("loop")
+  row_flat = row_major_index((*b_vars, i_var), shape)
+  o_row_base = Var("io_base", I)
+  body.append(Assign(o_row_base, imul(row_flat, d_dim)))
+  zero_c = Const(0.0, elt)
+  one_c = Const(1.0, elt)
+  d0 = Var("id0", I)
+  body.append(
+    ForRange(d0, ZERO, d_dim, ONE, [Store(o_arr.buf, iadd(o_row_base, d0), zero_c)], Scope("loop"), simd=True)
+  )
+
+  m_acc = Var("im_acc", elt)
+  l_acc = Var("il_acc", elt)
+  body.append(Assign(m_acc, Const(float("-inf"), elt)))
+  body.append(Assign(l_acc, zero_c))
+
+  j_lp = Var("ij", I)
+  j_blk: list[Stmt] = []
+  k_lp = Var("ik", I)
+  s_acc = Var("is_acc", elt)
+  j_blk.append(Assign(s_acc, zero_c))
+  k_blk: list[Stmt] = []
+  qv = _inline_stage(q_st, (i_var, k_lp), k_blk)
+  kv = _inline_stage(k_st, (j_lp, k_lp), k_blk)
+  k_blk.append(Assign(s_acc, ops.prim("add", (s_acc, ops.prim("mul", (qv, kv), elt)), elt)))
+  j_blk.append(ForRange(k_lp, ZERO, k_dim, ONE, k_blk, Scope("loop"), simd=True, reduction=("add", [s_acc])))
+
+  c_lp = Var("ic", I)
+  sq_acc = Var("isq_acc", elt)
+  j_blk.append(Assign(sq_acc, zero_c))
+  c_blk: list[Stmt] = []
+  xqv = _inline_stage(xq_st, (i_var, c_lp), c_blk)
+  xkv = _inline_stage(xk_st, (j_lp, c_lp), c_blk)
+  cdf = Var("icdf", elt)
+  c_blk.append(Assign(cdf, ops.prim("sub", (xqv, xkv), elt)))
+  c_blk.append(Assign(sq_acc, ops.prim("add", (sq_acc, ops.prim("mul", (cdf, cdf), elt)), elt)))
+  j_blk.append(ForRange(c_lp, ZERO, c_dim, ONE, c_blk, Scope("loop"), simd=True, reduction=("add", [sq_acc])))
+
+  s_val: Expr = ops.prim("sub", (ops.prim("mul", (s_acc, scale_c), elt), ops.prim("mul", (gamma_c, sq_acc), elt)), elt)
+  if bias_st is not None:
+    bv = cast(_inline_stage(bias_st, (i_var, j_lp), j_blk), elt)
+    s_val = ops.prim("add", (s_val, bv), elt)
+  s_cur = Var("is_cur", elt)
+  j_blk.append(Assign(s_cur, s_val))
+
+  m_new = Var("im_new", elt)
+  alpha = Var("ialpha", elt)
+  beta = Var("ibeta", elt)
+  is_first = cmp("eq", j_lp, ZERO)
+  j_blk.append(Assign(m_new, ops.select(is_first, s_cur, ops.prim("max", (m_acc, s_cur), elt))))
+  j_blk.append(
+    Assign(alpha, ops.select(is_first, zero_c, ops.prim("exp", (ops.prim("sub", (m_acc, m_new), elt),), elt)))
+  )
+  j_blk.append(Assign(beta, ops.select(is_first, one_c, ops.prim("exp", (ops.prim("sub", (s_cur, m_new), elt),), elt))))
+  j_blk.append(Assign(l_acc, ops.prim("add", (ops.prim("mul", (l_acc, alpha), elt), beta), elt)))
+  j_blk.append(Assign(m_acc, m_new))
+
+  d_lp = Var("id", I)
+  d_blk: list[Stmt] = []
+  vv = _inline_stage(v_st, (j_lp, d_lp), d_blk)
+  o_pos = iadd(o_row_base, d_lp)
+  d_blk.append(
+    Store(
+      o_arr.buf,
+      o_pos,
+      ops.prim("add", (ops.prim("mul", (Load(o_arr.buf, o_pos), alpha), elt), ops.prim("mul", (beta, vv), elt)), elt),
+    )
+  )
+  j_blk.append(ForRange(d_lp, ZERO, d_dim, ONE, d_blk, Scope("loop"), simd=True))
+  body.append(ForRange(j_lp, ZERO, n_dim, ONE, j_blk, Scope("loop")))
+
+  inv_l = Var("iinv_l", elt)
+  body.append(Assign(inv_l, ops.prim("div", (one_c, l_acc), elt)))
+  d_end = Var("id_end", I)
+  end_pos = iadd(o_row_base, d_end)
+  body.append(
+    ForRange(
+      d_end,
+      ZERO,
+      d_dim,
+      ONE,
+      [Store(o_arr.buf, end_pos, ops.prim("mul", (Load(o_arr.buf, end_pos), inv_l), elt))],
+      Scope("loop"),
+      simd=True,
+    )
+  )
+  out_bufs: dict[str, Var] = {"o": o_arr.buf}
+  if lse_arr is not None:
+    body.append(Store(lse_arr.buf, row_flat, ops.prim("add", (m_acc, ops.prim("log", (l_acc,), elt)), elt)))
+    out_bufs["lse"] = lse_arr.buf
+  body.append(ReleaseScope(scope))
+
+  stages: dict[str, TileStage] = {"q": q_st, "k": k_st, "v": v_st, "xq": xq_st, "xk": xk_st}
+  if bias_st is not None:
+    stages["bias"] = bias_st
+  plan = MonoidalTilePlan(
+    kind="flash_monoid",
+    elt=elt,
+    batch_shape=batch_shape,
+    batch_index=b_vars,
+    m_dim=m_dim,
+    n_dim=n_dim,
+    k_dim=k_dim,
+    d_dim=d_dim,
+    stages=stages,
+    score_op="dot",
+    score_scale=scale_c,
+    out_bufs=out_bufs,
+    aux_exprs={"ipa_gamma": gamma_c, "ipa_c_dim": c_dim},
+    split_k=False,
+  )
+  el.emit(
+    IndexTile(
+      shape=shape,
+      tile_shape=tile_shape,
+      origin=origin,
+      extent=extent,
+      stages=[],
+      body=body,
+      scope=scope,
+      level="shared",
+      parallel=True,
+      loc=el.loc(),
+      monoidal_tile=plan,
+    )
+  )
+  el.record_store(o_arr)
+  if lse_arr is not None:
+    el.record_store(lse_arr)
+
+  if want_ad and tape is not None and lse_arr is not None:
+    act_q = tape.is_active(el, q)
+    act_k = tape.is_active(el, k)
+    act_v = tape.is_active(el, v)
+    act_xq = tape.is_active(el, coords_q)
+    act_xk = tape.is_active(el, coords_k)
+    act_b = bias is not None and tape.is_active(el, bias)
+    inps = (q, k, v, coords_q, coords_k) + ((bias,) if bias is not None else ())
+    node = Node(
+      "algebraic_vjp",
+      inps,
+      (
+        _bwd_ipa_attn,
+        (
+          q,
+          k,
+          v,
+          coords_q,
+          coords_k,
+          bias,
+          q_c,
+          k_c,
+          v_c,
+          xq_c,
+          xk_c,
+          b_c,
+          o_arr,
+          lse_arr,
+          scale_c,
+          gamma_c,
+          act_q,
+          act_k,
+          act_v,
+          act_xq,
+          act_xk,
+          act_b,
+        ),
+      ),
+    )
+    tape.record(el, node)
+    tape.register(el, node, o_arr)
+  return o_arr
+
+
+def _bwd_ipa_attn(tape, el, node, g: ArrayVal) -> None:
+  """Law 2 D_i-recomputed backward for 3D distance-biased IPA attention (ZERO N x N saved)."""
+  from ..lib.numpy_lib import _reduce_prim as reduce_plain
+  from .autodiff import UF
+
+  (
+    q_orig,
+    k_orig,
+    v_orig,
+    xq_orig,
+    xk_orig,
+    b_orig,
+    q_c,
+    k_c,
+    v_c,
+    xq_c,
+    xk_c,
+    b_c,
+    o_out,
+    lse_arr,
+    scale_c,
+    gamma_c,
+    act_q,
+    act_k,
+    act_v,
+    act_xq,
+    act_xk,
+    act_b,
+  ) = node.info[1]
+  for arr in (q_c, k_c, v_c, xq_c, xk_c, o_out, lse_arr):
+    tape.stale(el, node, arr)
+  if b_c is not None:
+    tape.stale(el, node, b_c)
+
+  elt: ScalarType = q_c.elt
+  if g.buf is None or not g.contig:
+    g = el.as_concrete(g)
+  batch_shape = q_c.shape[:-2]
+  m_dim, k_dim = q_c.shape[-2], q_c.shape[-1]
+  n_dim, d_dim = k_c.shape[-2], v_c.shape[-1]
+  c_dim = xq_c.shape[-1]
+
+  d_arr = el.as_concrete(
+    reduce_plain(
+      el, "add", el.apply_ufunc(UF["mul"], [g, o_out]), Const(o_out.rank - 1, I), Const(0, elt), "sum", False
+    )
+  )
+
+  dq_arr = el.alloc_array(elt, (*batch_shape, m_dim, k_dim), zero=True, label="ipa_dq")
+  dk_arr = el.alloc_array(elt, (*batch_shape, n_dim, k_dim), zero=True, label="ipa_dk")
+  dv_arr = el.alloc_array(elt, (*batch_shape, n_dim, d_dim), zero=True, label="ipa_dv")
+  dxq_arr = el.alloc_array(elt, (*batch_shape, m_dim, c_dim), zero=True, label="ipa_dxq") if act_xq else None
+  dxk_arr = el.alloc_array(elt, (*batch_shape, n_dim, c_dim), zero=True, label="ipa_dxk") if act_xk else None
+  db_arr = el.alloc_array(elt, (*batch_shape, m_dim, n_dim), zero=True, label="ipa_db") if act_b else None
+
+  tile_shape_all = (*batch_shape, n_dim) if batch_shape else (n_dim,)
+  t_shape: tuple[Expr | None, ...] = (*(ONE,) * len(batch_shape), None) if batch_shape else (n_dim,)
+  origin = tuple(Var("ibo", I) for _ in tile_shape_all)
+  extent = tuple(Var("ibe", I) for _ in tile_shape_all)
+  b_vars = origin[:-1] if batch_shape else ()
+
+  q_st = _stage_from_array(el, q_c, b_vars, "ibq")
+  k_st = _stage_from_array(el, k_c, b_vars, "ibk")
+  v_st = _stage_from_array(el, v_c, b_vars, "ibv")
+  do_st = _stage_from_array(el, g, b_vars, "ibdo")
+  xq_st = _stage_from_broadcast_array(el, xq_c, b_vars, batch_shape, "ibxq")
+  xk_st = _stage_from_broadcast_array(el, xk_c, b_vars, batch_shape, "ibxk")
+  bias_st = _stage_from_broadcast_array(el, b_c, b_vars, batch_shape, "ibbias") if b_c is not None else None
+
+  body: list[Stmt] = []
+  scope = Scope("loop")
+  zero_c = Const(0.0, elt)
+  neg2_gamma = ops.prim("mul", (Const(-2.0, elt), gamma_c), elt)
+
+  j_lp = Var("ibj", I)
+  j_blk: list[Stmt] = []
+  i_lp = Var("ibi", I)
+  i_blk: list[Stmt] = []
+
+  s_acc = Var("ibs", elt)
+  i_blk.append(Assign(s_acc, zero_c))
+  k_lp = Var("ibk", I)
+  k_blk: list[Stmt] = []
+  qv = _inline_stage(q_st, (i_lp, k_lp), k_blk)
+  kv = _inline_stage(k_st, (j_lp, k_lp), k_blk)
+  k_blk.append(Assign(s_acc, ops.prim("add", (s_acc, ops.prim("mul", (qv, kv), elt)), elt)))
+  i_blk.append(ForRange(k_lp, ZERO, k_dim, ONE, k_blk, Scope("loop"), simd=True, reduction=("add", [s_acc])))
+
+  c_lp = Var("ibc", I)
+  sq_acc = Var("ibsq", elt)
+  i_blk.append(Assign(sq_acc, zero_c))
+  c_blk: list[Stmt] = []
+  xqv = _inline_stage(xq_st, (i_lp, c_lp), c_blk)
+  xkv = _inline_stage(xk_st, (j_lp, c_lp), c_blk)
+  cdf = Var("ibcdf", elt)
+  c_blk.append(Assign(cdf, ops.prim("sub", (xqv, xkv), elt)))
+  c_blk.append(Assign(sq_acc, ops.prim("add", (sq_acc, ops.prim("mul", (cdf, cdf), elt)), elt)))
+  i_blk.append(ForRange(c_lp, ZERO, c_dim, ONE, c_blk, Scope("loop"), simd=True, reduction=("add", [sq_acc])))
+
+  s_eff: Expr = ops.prim("sub", (ops.prim("mul", (s_acc, scale_c), elt), ops.prim("mul", (gamma_c, sq_acc), elt)), elt)
+  if bias_st is not None:
+    s_eff = ops.prim("add", (s_eff, cast(_inline_stage(bias_st, (i_lp, j_lp), i_blk), elt)), elt)
+
+  row_i = row_major_index((*b_vars, i_lp), (*batch_shape, m_dim))
+  row_j = row_major_index((*b_vars, j_lp), (*batch_shape, n_dim))
+  lse_i = Load(lse_arr.buf, iadd(lse_arr.offset, row_i))
+  d_i = Load(d_arr.buf, iadd(d_arr.offset, row_i))
+  p_ij = Var("ibp", elt)
+  i_blk.append(Assign(p_ij, ops.prim("exp", (ops.prim("sub", (s_eff, lse_i), elt),), elt)))
+
+  dp_acc = Var("ibdp", elt)
+  i_blk.append(Assign(dp_acc, zero_c))
+  d_lp = Var("ibd", I)
+  d_blk: list[Stmt] = []
+  dov = _inline_stage(do_st, (i_lp, d_lp), d_blk)
+  vv = _inline_stage(v_st, (j_lp, d_lp), d_blk)
+  d_blk.append(Assign(dp_acc, ops.prim("add", (dp_acc, ops.prim("mul", (dov, vv), elt)), elt)))
+  i_blk.append(ForRange(d_lp, ZERO, d_dim, ONE, d_blk, Scope("loop"), simd=True, reduction=("add", [dp_acc])))
+
+  ds_u = Var("ibds_u", elt)
+  i_blk.append(Assign(ds_u, ops.prim("mul", (p_ij, ops.prim("sub", (dp_acc, d_i), elt)), elt)))
+  if db_arr is not None:
+    i_blk.append(Store(db_arr.buf, iadd(imul(row_i, n_dim), j_lp), ds_u))
+  ds_ij = Var("ibds", elt)
+  i_blk.append(Assign(ds_ij, ops.prim("mul", (ds_u, scale_c), elt)))
+
+  if act_v:
+    dv_base = Var("idv_b", I)
+    i_blk.append(Assign(dv_base, imul(row_j, d_dim)))
+    dv_d = Var("idvd", I)
+    dv_blk: list[Stmt] = []
+    dov2 = _inline_stage(do_st, (i_lp, dv_d), dv_blk)
+    dv_pos = iadd(dv_base, dv_d)
+    dv_blk.append(
+      Store(dv_arr.buf, dv_pos, ops.prim("add", (Load(dv_arr.buf, dv_pos), ops.prim("mul", (p_ij, dov2), elt)), elt))
+    )
+    i_blk.append(ForRange(dv_d, ZERO, d_dim, ONE, dv_blk, Scope("loop"), simd=True))
+
+  if act_k or act_q:
+    dk_base = Var("idk_b", I)
+    dq_base = Var("idq_b", I)
+    i_blk.append(Assign(dk_base, imul(row_j, k_dim)))
+    i_blk.append(Assign(dq_base, imul(row_i, k_dim)))
+    dk_k = Var("idkk", I)
+    dk_blk: list[Stmt] = []
+    if act_k:
+      qv2 = _inline_stage(q_st, (i_lp, dk_k), dk_blk)
+      dk_pos = iadd(dk_base, dk_k)
+      dk_blk.append(
+        Store(dk_arr.buf, dk_pos, ops.prim("add", (Load(dk_arr.buf, dk_pos), ops.prim("mul", (ds_ij, qv2), elt)), elt))
+      )
+    if act_q:
+      kv2 = _inline_stage(k_st, (j_lp, dk_k), dk_blk)
+      dq_pos = iadd(dq_base, dk_k)
+      dk_blk.append(
+        Store(dq_arr.buf, dq_pos, ops.prim("add", (Load(dq_arr.buf, dq_pos), ops.prim("mul", (ds_ij, kv2), elt)), elt))
+      )
+    i_blk.append(ForRange(dk_k, ZERO, k_dim, ONE, dk_blk, Scope("loop"), simd=True))
+
+  if act_xq or act_xk:
+    dc_coef = Var("idc_coef", elt)
+    i_blk.append(Assign(dc_coef, ops.prim("mul", (neg2_gamma, ds_u), elt)))
+    dxq_base = Var("idxq_b", I)
+    dxk_base = Var("idxk_b", I)
+    i_blk.append(Assign(dxq_base, imul(row_i, c_dim)))
+    i_blk.append(Assign(dxk_base, imul(row_j, c_dim)))
+    dc_c = Var("idcc", I)
+    dc_blk: list[Stmt] = []
+    xqv2 = _inline_stage(xq_st, (i_lp, dc_c), dc_blk)
+    xkv2 = _inline_stage(xk_st, (j_lp, dc_c), dc_blk)
+    gc = Var("ibgc", elt)
+    dc_blk.append(Assign(gc, ops.prim("mul", (dc_coef, ops.prim("sub", (xqv2, xkv2), elt)), elt)))
+    if dxq_arr is not None:
+      pos_q = iadd(dxq_base, dc_c)
+      dc_blk.append(Store(dxq_arr.buf, pos_q, ops.prim("add", (Load(dxq_arr.buf, pos_q), gc), elt)))
+    if dxk_arr is not None:
+      pos_k = iadd(dxk_base, dc_c)
+      dc_blk.append(Store(dxk_arr.buf, pos_k, ops.prim("sub", (Load(dxk_arr.buf, pos_k), gc), elt)))
+    i_blk.append(ForRange(dc_c, ZERO, c_dim, ONE, dc_blk, Scope("loop"), simd=True))
+
+  j_blk.append(ForRange(i_lp, ZERO, m_dim, ONE, i_blk, Scope("loop")))
+  body.append(ForRange(j_lp, ZERO, n_dim, ONE, j_blk, Scope("loop")))
+  body.append(ReleaseScope(scope))
+
+  out_bufs: dict[str, Var] = {"dq": dq_arr.buf, "dk": dk_arr.buf, "dv": dv_arr.buf}
+  if dxq_arr is not None:
+    out_bufs["dxq"] = dxq_arr.buf
+  if dxk_arr is not None:
+    out_bufs["dxk"] = dxk_arr.buf
+  if db_arr is not None:
+    out_bufs["db"] = db_arr.buf
+  stages: dict[str, TileStage] = {"q": q_st, "k": k_st, "v": v_st, "do": do_st, "xq": xq_st, "xk": xk_st}
+  if bias_st is not None:
+    stages["bias"] = bias_st
+  aux_exprs: dict[str, Expr] = {
+    "lse_buf": lse_arr.buf,
+    "lse_offset": lse_arr.offset,
+    "d_buf": d_arr.buf,
+    "d_offset": d_arr.offset,
+    "active_q": Const(1 if act_q else 0, I),
+    "active_k": Const(1 if act_k else 0, I),
+    "active_v": Const(1 if act_v else 0, I),
+    "active_b": Const(1 if act_b else 0, I),
+    "bias_sign": Const(1.0, elt),
+    "ipa_gamma": gamma_c,
+    "ipa_c_dim": c_dim,
+    "active_xq": Const(1 if act_xq else 0, I),
+    "active_xk": Const(1 if act_xk else 0, I),
+  }
+  plan = MonoidalTilePlan(
+    kind="flash_monoid_bwd",
+    elt=elt,
+    batch_shape=batch_shape,
+    batch_index=b_vars,
+    m_dim=m_dim,
+    n_dim=n_dim,
+    k_dim=k_dim,
+    d_dim=d_dim,
+    stages=stages,
+    score_op="dot",
+    score_scale=scale_c,
+    out_bufs=out_bufs,
+    aux_exprs=aux_exprs,
+  )
+  el.emit(
+    IndexTile(
+      shape=tile_shape_all,
+      tile_shape=t_shape,
+      origin=origin,
+      extent=extent,
+      stages=[],
+      body=body,
+      scope=scope,
+      level="shared",
+      parallel=True,
+      loc=el.loc(),
+      monoidal_tile=plan,
+    )
+  )
+  for arr in (dq_arr, dk_arr, dv_arr, dxq_arr, dxk_arr, db_arr):
+    if arr is not None:
+      el.record_store(arr)
+
+  if act_q:
+    tape.add(el, q_orig, dq_arr)
+  if act_k:
+    tape.add(el, k_orig, dk_arr)
+  if act_v:
+    tape.add(el, v_orig, dv_arr)
+  if act_xq and dxq_arr is not None:
+    tape.add(el, xq_orig, _reduce_broadcast_grad(el, dxq_arr, xq_orig))
+  if act_xk and dxk_arr is not None:
+    tape.add(el, xk_orig, _reduce_broadcast_grad(el, dxk_arr, xk_orig))
+  if act_b and db_arr is not None and b_orig is not None:
+    tape.add(el, b_orig, _reduce_broadcast_grad(el, db_arr, b_orig))
 
 
 def _bwd_cce(tape, el, node, g: ArrayVal) -> None:
@@ -825,12 +1396,14 @@ def optimize_tape(tape, el, out) -> None:
     if sm_ax != s_in.rank - 1:
       continue
 
-    # Walk optional mask (where) and optional scale (mul) backwards from s_in to Q @ K^T
+    # Walk optional mask (where), optional pair bias (+ B / - B), and optional scale (mul) backwards from s_in to Q @ K^T
     cur_val = s_in
     cur_idx = prod_by_id.get(id(cur_val))
     extra_idxs: list[int] = []
     mask_arr: ArrayVal | None = None
     mask_fill: Expr | None = None
+    bias_arr: ArrayVal | None = None
+    bias_sign: int = 1
     scale_expr: Expr | None = None
 
     if cur_idx is not None and nodes[cur_idx].kind == "elementwise":
@@ -850,6 +1423,53 @@ def optimize_tape(tape, el, out) -> None:
           cur_idx = prod_by_id.get(id(cur_val))
           if cur_idx is None and isinstance(cur_val, ArrayVal) and cur_val.buf is not None:
             cur_idx = prod_by_buf.get(cur_val.buf.uid)
+
+    if cur_idx is not None and nodes[cur_idx].kind == "elementwise":
+      op_b, _, _ = _probe_ew(el, nodes[cur_idx])
+      if op_b in ("add", "sub") and len(nodes[cur_idx].inputs) == 2:
+        b0, b1 = nodes[cur_idx].inputs
+        if isinstance(b0, ArrayVal) and isinstance(b1, ArrayVal) and b0.rank >= 2 and b1.rank >= 2:
+          # Pick whichever side traces back to (mul? ->) batched_matmul
+          def _resolves_to_qk(cand: ArrayVal) -> bool:
+            ci = prod_by_id.get(id(cand))
+            if ci is None and cand.buf is not None:
+              ci = prod_by_buf.get(cand.buf.uid)
+            if ci is None:
+              return False
+            if _match_batched_matmul(el, nodes, prod_by_id, ci) is not None:
+              return True
+            if nodes[ci].kind == "elementwise":
+              op_s, _, _ = _probe_ew(el, nodes[ci])
+              if op_s == "mul" and len(nodes[ci].inputs) == 2:
+                s0, s1 = nodes[ci].inputs
+                inner = (
+                  s0
+                  if isinstance(s0, ArrayVal) and isinstance(s1, Expr)
+                  else (s1 if isinstance(s1, ArrayVal) and isinstance(s0, Expr) else None)
+                )
+                if inner is not None:
+                  ii = prod_by_id.get(id(inner))
+                  if ii is None and inner.buf is not None:
+                    ii = prod_by_buf.get(inner.buf.uid)
+                  return ii is not None and _match_batched_matmul(el, nodes, prod_by_id, ii) is not None
+            return False
+
+          if _resolves_to_qk(b0):
+            bias_arr = b1
+            bias_sign = 1 if op_b == "add" else -1
+            extra_idxs.append(cur_idx)
+            cur_val = b0
+            cur_idx = prod_by_id.get(id(cur_val))
+            if cur_idx is None and cur_val.buf is not None:
+              cur_idx = prod_by_buf.get(cur_val.buf.uid)
+          elif op_b == "add" and _resolves_to_qk(b1):
+            bias_arr = b0
+            bias_sign = 1
+            extra_idxs.append(cur_idx)
+            cur_val = b1
+            cur_idx = prod_by_id.get(id(cur_val))
+            if cur_idx is None and cur_val.buf is not None:
+              cur_idx = prod_by_buf.get(cur_val.buf.uid)
 
     if cur_idx is not None and nodes[cur_idx].kind == "elementwise":
       op_sc, _, _ = _probe_ew(el, nodes[cur_idx])
@@ -876,47 +1496,63 @@ def optimize_tape(tape, el, out) -> None:
     if qk is None:
       continue
     q_view, kt_view, qk_idxs = qk
-    # Original tape inputs for Q, K^T, V (from the matmul/mul nodes so tape.add routes to the exact producers!)
     qk_first = nodes[qk_idxs[0]]
     pv_first = nodes[pv_idxs[0]]
     q_orig, kt_orig = qk_first.inputs[0], qk_first.inputs[1]
     v_orig = pv_first.inputs[1]
     if not (isinstance(q_orig, ArrayVal) and isinstance(kt_orig, ArrayVal) and isinstance(v_orig, ArrayVal)):
       continue
-    # k_view has shape (*batch, N, K) = transpose of kt_view (*batch, K, N)
     perm = tuple(range(kt_view.rank - 2)) + (kt_view.rank - 1, kt_view.rank - 2)
     k_view = el.transpose(kt_view, perm)
 
     all_idxs = qk_idxs + extra_idxs + sm_idxs + pv_idxs
     if not _internal_ok(all_idxs, idx):
       continue
-    # Ensure no original input was overwritten and shapes match (*batch, M, K), (*batch, N, K), (*batch, N, D)
     if q_view.rank != k_view.rank or q_view.rank != v_view.rank:
+      continue
+    if bias_arr is not None and bias_arr.rank > q_view.rank:
       continue
     act_q = tape.is_active(el, q_orig)
     act_k = tape.is_active(el, kt_orig)
     act_v = tape.is_active(el, v_orig)
-    if not (act_q or act_k or act_v):
+    act_b = bias_arr is not None and tape.is_active(el, bias_arr)
+    if not (act_q or act_k or act_v or act_b):
       continue
 
     o_node = nodes[idx]
     m_out = n_max.out
     l_out = n_sum.out
-    # Un-keepdims m_out and l_out for clean 1-element-per-row indexing (same buffer, shape (*batch, M))
     m_flat = el.reshape(m_out, m_out.shape[:-1], checked=False)
     l_flat = el.reshape(l_out, l_out.shape[:-1], checked=False)
 
+    rep_inps = (q_orig, kt_orig, v_orig) + ((bias_arr,) if bias_arr is not None else ())
     rep = Node(
       "algebraic_vjp",
-      (q_orig, kt_orig, v_orig),
+      rep_inps,
       (
         _bwd_flash_attn,
-        (q_view, k_view, v_view, o_node.out, m_flat, l_flat, scale_expr, mask_arr, mask_fill, act_q, act_k, act_v),
+        (
+          q_view,
+          k_view,
+          v_view,
+          o_node.out,
+          m_flat,
+          l_flat,
+          scale_expr,
+          mask_arr,
+          mask_fill,
+          act_q,
+          act_k,
+          act_v,
+          bias_arr,
+          bias_sign,
+          act_b,
+        ),
       ),
     )
     rep.out = o_node.out
     rep.holder = o_node.holder
-    rep.tick = nodes[qk_idxs[0]].tick
+    rep.tick = o_node.tick
     rep.origin = o_node.origin
     replaced.update(all_idxs)
     replacements[idx] = rep
@@ -1161,4 +1797,4 @@ def optimize_tape(tape, el, out) -> None:
   tape.nodes[:] = new_nodes
 
 
-__all__ = ["optimize_tape", "run_algebraic_vjp"]
+__all__ = ["emit_ipa_attention", "optimize_tape", "run_algebraic_vjp"]

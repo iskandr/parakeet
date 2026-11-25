@@ -44,6 +44,7 @@ from .lib.adverbs import (
   fold,
   grad,
   imap,
+  ipa_attention,
   ireduce,
   map,  # noqa: A004
   outer_map,
@@ -51,6 +52,9 @@ from .lib.adverbs import (
   reduce,
   scan,
   scatter_add,
+  tanimoto_topk,
+  topk,
+  topk_fold,
   value_and_grad,
 )
 from .syntax import ir
@@ -354,6 +358,7 @@ __all__ = [
   "imap",
   "int32",
   "int64",
+  "ipa_attention",
   "ireduce",
   "iscan",
   "iscatter",
@@ -390,6 +395,9 @@ __all__ = [
   "sub",
   "sum",
   "tanh",
+  "tanimoto_topk",
+  "topk",
+  "topk_fold",
   "u32",
   "u64",
   "uint32",

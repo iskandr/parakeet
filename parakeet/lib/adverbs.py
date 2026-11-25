@@ -254,17 +254,193 @@ def _zipped(el, xs: tuple, init, fn, axis, what: str):
   return mapped, init, fold_axis
 
 
-@libfunction("fold")
-def fold(el, lift, merge, x, init=None, *, axis=None, indexed=False, emit=None):
-  """Lift elements to scalar tuple states and merge adjacent states in input order.
+MAX_FOLD_CARRIES = 64
 
-  With no axis, lift each leading slice and return one state. With an axis,
-  fold the scalar lanes along that axis and project each state with `emit`.
-  An indexed lift receives (value, index) with the index local to its lane.
-  A supplied seed is applied once on the left; an unseeded empty fold raises.
+
+def _select_tree(vals: list[Expr], idx: Expr, lo: int, hi: int) -> Expr:
+  if hi - lo == 1:
+    return vals[lo]
+  mid = (lo + hi) // 2
+  return ops.select(
+    cmp("lt", idx, Const(mid, I)),
+    _select_tree(vals, idx, lo, mid),
+    _select_tree(vals, idx, mid, hi),
+  )
+
+
+def _packed_const_array(el, elt, cshape: tuple[int, ...], scalars: list[Expr]) -> ArrayVal:
+  """Build a zero-Alloc delayed fixed-size ArrayVal backed by ``scalars``.
+
+  Constant-index reads fold straight to the underlying register scalar; dynamic
+  reads lower to a pure balanced ``select`` tree (no heap allocation).
   """
-  from ..syntax import ir
+  shape = tuple(Const(d, I) for d in cshape)
+  strides: list[int] = [1] * len(cshape)
+  for k in range(len(cshape) - 2, -1, -1):
+    strides[k] = strides[k + 1] * cshape[k + 1]
+
+  def fn(idx):
+    if all(isinstance(i, Const) for i in idx):
+      flat = sum(int(i.value) * s for i, s in zip(idx, strides))
+      if 0 <= flat < len(scalars):
+        return scalars[flat]
+    flat_e: Expr = ZERO
+    for i, s in zip(idx, strides):
+      term = i if s == 1 else ops.imul(i, Const(s, I))
+      flat_e = term if flat_e is ZERO else ops.iadd(flat_e, term)
+    return _select_tree(scalars, flat_e, 0, len(scalars))
+
+  return el.delayed(elt, shape, fn, cost=0)
+
+
+def _flatten_fold_state(el, v, what: str = "fold", expected_tree=None):
+  """Flatten a tuple/NamedTuple of scalars and small fixed-size arrays into
+  ``(schema_tree, flat_scalars)``.  When ``expected_tree`` is supplied (e.g.
+  from ``init``), dynamic slices whose runtime shape equals the expected
+  compile-time shape are runtime-checked and unpacked cleanly."""
   from ..syntax.records import record_type
+
+  def walk(node, exp, out: list[Expr]):
+    if isinstance(node, Expr):
+      out.append(node)
+      return ("scalar", node.type.strong)
+    if isinstance(node, ArrayVal):
+      if node.rank == 0:
+        s = el.as_scalar(node)
+        out.append(s)
+        return ("scalar", s.type.strong)
+      if all(isinstance(d, Const) for d in node.shape):
+        cshape = tuple(int(d.value) for d in node.shape)
+      elif exp is not None and exp[0] == "array" and len(exp[2]) == node.rank:
+        cshape = exp[2]
+        for d, cd in zip(node.shape, cshape):
+          el.check(
+            cmp("eq", d, Const(cd, I)),
+            "ValueError",
+            f"{what} array state dimension mismatch (expected {cd}, got {{0}})",
+            d,
+          )
+      else:
+        raise el.error(TypeInferenceError, f"{what} array state fields must have compile-time constant shapes")
+      size = 1
+      for d in cshape:
+        size *= d
+      if size <= 0 or len(out) + size > MAX_FOLD_CARRIES:
+        raise el.error(
+          TypeInferenceError,
+          f"{what} state has too many scalar fields (max {MAX_FOLD_CARRIES})",
+        )
+      coords: list[tuple[int, ...]] = [()]
+      for d in cshape:
+        coords = [(*c, i) for c in coords for i in range(d)]
+      for c in coords:
+        out.append(el.tmp(el.elem(node, tuple(Const(i, I) for i in c)), "fv"))
+      return ("array", node.elt.strong, cshape)
+    if isinstance(node, tuple):
+      rec = record_type(node)
+      exp_children = (
+        exp[3] if (exp is not None and exp[0] == "tuple" and len(exp[3]) == len(node)) else (None,) * len(node)
+      )
+      children = tuple(walk(item, ec, out) for item, ec in zip(node, exp_children))
+      return ("tuple", rec, type(node), children)
+    raise el.error(TypeInferenceError, f"{what} needs a nonempty tuple of scalar or fixed-size array fields")
+
+  if not isinstance(v, tuple) or not v:
+    raise el.error(TypeInferenceError, f"{what} needs a nonempty tuple of scalar fields")
+  flat: list[Expr] = []
+  tree = walk(v, expected_tree, flat)
+  if not flat:
+    raise el.error(TypeInferenceError, f"{what} needs a nonempty tuple of scalar fields")
+  if len(flat) > MAX_FOLD_CARRIES:
+    raise el.error(TypeInferenceError, f"{what} state exceeds maximum of {MAX_FOLD_CARRIES} scalar fields")
+  return tree, flat
+
+
+def _unflatten_fold_state(el, tree, flat: list[Expr]):
+  cursor = [0]
+
+  def build(node):
+    kind = node[0]
+    if kind == "scalar":
+      v = flat[cursor[0]]
+      cursor[0] += 1
+      return v
+    if kind == "array":
+      _, elt, cshape = node
+      size = 1
+      for d in cshape:
+        size *= d
+      chunk = flat[cursor[0] : cursor[0] + size]
+      cursor[0] += size
+      return _packed_const_array(el, elt, cshape, chunk)
+    _, rec, _cls, children = node
+    items = [build(ch) for ch in children]
+    return rec.build(items) if rec else tuple(items)
+
+  return build(tree)
+
+
+def _same_fold_schema(a, b) -> bool:
+  if a[0] != b[0]:
+    return False
+  kind = a[0]
+  if kind == "scalar":
+    return a[1] is b[1]
+  if kind == "array":
+    return a[1] is b[1] and a[2] == b[2]
+  return a[2] is b[2] and len(a[3]) == len(b[3]) and all(_same_fold_schema(x, y) for x, y in zip(a[3], b[3]))
+
+
+def _flatten_emit_output(el, v):
+  """Flatten an ``emit`` return value (scalar, fixed-size array, or tuple/NamedTuple thereof)
+  into ``(out_tree, leaves)`` where each leaf is ``(elt, cshape, scalars_list)``."""
+  from ..syntax.records import record_type
+
+  leaves: list[tuple] = []
+
+  def walk(node):
+    if isinstance(node, Expr):
+      idx = len(leaves)
+      leaves.append((node.type.strong, (), [node]))
+      return ("leaf", idx)
+    if isinstance(node, ArrayVal):
+      if node.rank == 0:
+        s = el.as_scalar(node)
+        idx = len(leaves)
+        leaves.append((s.type.strong, (), [s]))
+        return ("leaf", idx)
+      if not all(isinstance(d, Const) for d in node.shape):
+        raise el.error(TypeInferenceError, "fold projection arrays must have compile-time constant shapes")
+      cshape = tuple(int(d.value) for d in node.shape)
+      coords: list[tuple[int, ...]] = [()]
+      for d in cshape:
+        coords = [(*c, i) for c in coords for i in range(d)]
+      vals = [el.elem(node, tuple(Const(i, I) for i in c)) for c in coords]
+      idx = len(leaves)
+      leaves.append((node.elt.strong, cshape, vals))
+      return ("leaf", idx)
+    if isinstance(node, tuple) and node:
+      rec = record_type(node)
+      return ("tuple", rec, tuple(walk(item) for item in node))
+    raise el.error(
+      TypeInferenceError, f"fold projection must return scalars or fixed-size arrays, got {describe(node)}"
+    )
+
+  tree = walk(v)
+  return tree, leaves
+
+
+def _rebuild_emit_output(tree, arrays: list[ArrayVal]):
+  if tree[0] == "leaf":
+    return arrays[tree[1]]
+  _, rec, children = tree
+  items = [_rebuild_emit_output(ch, arrays) for ch in children]
+  return rec.build(items) if rec else tuple(items)
+
+
+def _fold_impl(el, lift_cb, merge_cb, x, init=None, *, axis=None, indexed=False, emit_cb=None):
+  """Internal implementation of :func:`fold` accepting host IR-builder callbacks."""
+  from ..syntax import ir
 
   if el.tape is not None and not el.tape.muted:
     raise el.no_derivative("differentiation through a custom fold is not implemented")
@@ -273,20 +449,12 @@ def fold(el, lift, merge, x, init=None, *, axis=None, indexed=False, emit=None):
     raise el.error(TypeInferenceError, "fold needs an array with at least one dimension")
   indexed = indexed if isinstance(indexed, bool) else el.static_bool(indexed, "indexed")
 
-  def scalar_tuple(v):
-    if not isinstance(v, tuple) or not v or not all(isinstance(field, Expr) for field in v):
-      raise el.error(TypeInferenceError, "fold needs a nonempty tuple of scalar fields")
-    return v
-
+  init_tree = None
+  init_flat: list[Expr] | None = None
   if init is not None:
-    scalar_tuple(init)
+    init_tree, init_flat = _flatten_fold_state(el, init, "fold")
 
-  def project(summary):
-    if emit is None:
-      return summary
-    return el.as_scalar(el.call(emit, [summary]), "fold projection")
-
-  def lane(arr):
+  def build_lane_state(arr):
     n = arr.shape[0]
     idx = ir.Var("i", I)
     el.nonneg.add(idx.uid)
@@ -297,24 +465,23 @@ def fold(el, lift, merge, x, init=None, *, axis=None, indexed=False, emit=None):
     body, combine = [], []
     with el.in_block(body, scope, loop=True, par=parallel):
       element = el.axis_view(arr, 0, idx, consumed=True)
-      values = scalar_tuple(el.call(lift, [element, idx] if indexed else [element]))
+      val_raw = lift_cb(element, idx) if indexed else lift_cb(element)
+      val_tree, values = _flatten_fold_state(el, val_raw, "fold", expected_tree=init_tree)
 
-    schema = init if init is not None else values
-    record = record_type(schema)
-    pack = record.build if record else tuple
+    schema_tree = init_tree if init_tree is not None else val_tree
+    schema_flat = init_flat if init_flat is not None else values
+    if not _same_fold_schema(val_tree, schema_tree):
+      raise el.error(TypeInferenceError, "fold lift and merge must preserve the state structure and dtypes")
 
-    def state(v):
-      if type(v) is not type(schema) or len(v) != len(schema):
-        raise el.error(TypeInferenceError, "fold lift and merge must preserve the state structure")
-      if any(not isinstance(t, Expr) or t.type.strong is not field.type.strong for t, field in zip(v, schema)):
-        raise el.error(TypeInferenceError, "fold lift and merge must preserve the state field dtypes")
-      return v
-
-    state(values)
-    left = pack(ir.Var("left", v.type) for v in schema)
-    right = pack(ir.Var("right", v.type) for v in schema)
+    left_flat = [ir.Var("left", v.type.strong) for v in schema_flat]
+    right_flat = [ir.Var("right", v.type.strong) for v in schema_flat]
     with el.in_block(combine, loop=True):
-      merged = state(el.call(merge, [left, right]))
+      left_obj = _unflatten_fold_state(el, schema_tree, left_flat)
+      right_obj = _unflatten_fold_state(el, schema_tree, right_flat)
+      merged_raw = merge_cb(left_obj, right_obj)
+      merged_tree, merged = _flatten_fold_state(el, merged_raw, "fold", expected_tree=schema_tree)
+    if not _same_fold_schema(merged_tree, schema_tree):
+      raise el.error(TypeInferenceError, "fold lift and merge must preserve the state structure and dtypes")
     if any(isinstance(s, ir.Alloc) for s in ir.walk_stmts(combine)) or any(
       isinstance(s, (ir.Store, ir.IndexScatter))
       or any(isinstance(e, ir.RtCall) and not e.pure for expr in ir.stmt_exprs(s) for e in ir.walk_expr(expr))
@@ -322,41 +489,157 @@ def fold(el, lift, merge, x, init=None, *, axis=None, indexed=False, emit=None):
     ):
       raise el.error(UnsupportedError, "fold lift and merge must be pure scalar computations")
 
-    results = pack(ir.Var("field", v.type) for v in schema)
-    carries = [ir.Carry(*parts) for parts in list(zip(results, values, left, right, merged))[1:]]
+    res_flat = [ir.Var("field", v.type.strong) for v in schema_flat]
+    carries = [ir.Carry(*parts) for parts in list(zip(res_flat, values, left_flat, right_flat, merged))[1:]]
     empty = ir.ErrorInfo("ValueError", "cannot fold an empty lane without an initial state", el.loc())
     reduction = ir.Fold(
-      results[0], values[0], left[0], right[0], combine, merged[0], op="structured", empty=empty, carries=carries
+      res_flat[0],
+      values[0],
+      left_flat[0],
+      right_flat[0],
+      combine,
+      merged[0],
+      op="structured",
+      empty=empty,
+      carries=carries,
     )
     el.emit(ir.IndexReduce((n,), (idx,), body, [reduction], scope, home, parallel, el.loc()))
-    return project(results if init is None else state(el.call(merge, [init, results])))
+    results = _unflatten_fold_state(el, schema_tree, res_flat)
+    if init is None:
+      return results
+    seeded_raw = merge_cb(_unflatten_fold_state(el, schema_tree, init_flat), results)
+    seeded_tree, seeded_flat = _flatten_fold_state(el, seeded_raw, "fold", expected_tree=schema_tree)
+    if not _same_fold_schema(seeded_tree, schema_tree):
+      raise el.error(TypeInferenceError, "fold lift and merge must preserve the state structure and dtypes")
+    return _unflatten_fold_state(el, schema_tree, seeded_flat)
+
+  def project_raw(summary):
+    if emit_cb is None:
+      return summary
+    return emit_cb(summary)
 
   k = None if axis is None else norm_axis(el, axis, x.rank)
-  if k is not None and x.rank > 1 and emit is None:
+  if k is not None and x.rank > 1 and emit_cb is None:
     raise el.error(TypeInferenceError, "fold along an axis needs emit= to project each state to an output")
 
-  def reduce_lanes():
-    if k is None or x.rank == 1:
-      return lane(_prepare(el, x))
-    return along_axis(el, x, k, lane, "fold", stream=True)
+  if k is None or x.rank == 1:
+    # Single-lane fold
+    def single_lane():
+      st = build_lane_state(_prepare(el, x))
+      return project_raw(st) if emit_cb is not None else st
+
+    if init is None:
+      return single_lane()
+    nonempty, empty = [], []
+    with el.in_block(nonempty):
+      a = single_lane()
+    with el.in_block(empty):
+      b = project_raw(init) if emit_cb is not None else init
+    result = el.merge_values("fold", a, nonempty, b, empty)
+    el.emit(ir.If(cmp("gt", x.shape[0], ZERO), nonempty, empty))
+    return result
+
+  # Multi-lane fold along axis k: stream delayed `x` directly (like along_axis(stream=True))
+  # so pairwise score producers land inside the lane IndexReduce with zero O(N*M) allocation!
+  lead = x.shape[:k] + x.shape[k + 1 :]
+  with el.trial():
+    probe_idx = tuple(ir.Var("p", I) for _ in lead)
+    lane_view = el.remap(
+      x,
+      (x.shape[k],),
+      [(None, i, ZERO) for i in probe_idx[:k]] + [(0, ZERO, ops.ONE)] + [(None, i, ZERO) for i in probe_idx[k:]],
+      consumed=True,
+    )
+    probe_st = build_lane_state(lane_view)
+    probe_out = project_raw(probe_st)
+    is_scalar_emit = isinstance(probe_out, Expr) or (isinstance(probe_out, ArrayVal) and probe_out.rank == 0)
+    if not is_scalar_emit:
+      out_tree, probe_leaves = _flatten_emit_output(el, probe_out)
+
+  if is_scalar_emit:
+
+    def scalar_lane(arr):
+      return el.as_scalar(project_raw(build_lane_state(arr)), "fold projection")
+
+    if init is None:
+      el.check(cmp("gt", x.shape[k], ZERO), "ValueError", "cannot fold an empty lane without an initial state")
+      return along_axis(el, x, k, scalar_lane, "fold", stream=True)
+    nonempty, empty = [], []
+    with el.in_block(nonempty):
+      a = along_axis(el, x, k, scalar_lane, "fold", stream=True)
+    with el.in_block(empty):
+      b = build_map(el, lead, lambda _: el.as_scalar(project_raw(init), "fold projection"), "fold")
+    result = el.merge_values("fold", a, nonempty, b, empty)
+    el.emit(ir.If(cmp("gt", x.shape[k], ZERO), nonempty, empty))
+    return result
+
+  # Multi-output or fixed-size-array emit: allocate all output arrays once and fill in ONE IndexMap
+  # so pairwise_fold.py can tile all outputs simultaneously on CPU & GPU!
+  out_arrays: list[ArrayVal] = []
+  for elt, cshape, _ in probe_leaves:
+    full_shape = lead + tuple(Const(d, I) for d in cshape)
+    out_arrays.append(el.alloc_array(elt, full_shape, label="fold"))
+
+  def emit_stores(idx, proj_val):
+    _, leaves = _flatten_emit_output(el, proj_val)
+    lead_flat: Expr = ZERO
+    for coord, dim in zip(idx, lead):
+      lead_flat = coord if lead_flat is ZERO else ops.iadd(ops.imul(lead_flat, dim), coord)
+    for arr, (elt, _cshape, scalars) in zip(out_arrays, leaves):
+      n_elem = len(scalars)
+      base = lead_flat if n_elem == 1 else el.tmp(ops.imul(lead_flat, Const(n_elem, I)), "fbase")
+      for off, sv in enumerate(scalars):
+        pos = base if off == 0 else ops.iadd(base, Const(off, I))
+        el.emit(ir.Store(arr.buf, pos, cast(sv, elt)))
+
+  def run_nonempty():
+    el.consume(x)
+
+    def body(idx):
+      lane_view = el.remap(
+        x,
+        (x.shape[k],),
+        [(None, i, ZERO) for i in idx[:k]] + [(0, ZERO, ops.ONE)] + [(None, i, ZERO) for i in idx[k:]],
+        consumed=True,
+      )
+      emit_stores(idx, project_raw(build_lane_state(lane_view)))
+
+    el.index_map(lead, body, ordered=False)
 
   if init is None:
-    if k is not None and x.rank > 1:
-      el.check(cmp("gt", x.shape[k], ZERO), "ValueError", "cannot fold an empty lane without an initial state")
-    return reduce_lanes()
-  # All lanes have the same length. Branch once so the nonempty case is an
-  # ordinary map of unseeded folds and each seed is merged exactly once.
-  nonempty, empty = [], []
-  with el.in_block(nonempty):
-    a = reduce_lanes()
-  with el.in_block(empty):
-    if k is None or x.rank == 1:
-      b = project(init)
-    else:
-      b = build_map(el, x.shape[:k] + x.shape[k + 1 :], lambda _: project(init), "fold")
-  result = el.merge_values("fold", a, nonempty, b, empty)
-  el.emit(ir.If(cmp("gt", x.shape[k if k is not None else 0], ZERO), nonempty, empty))
-  return result
+    el.check(cmp("gt", x.shape[k], ZERO), "ValueError", "cannot fold an empty lane without an initial state")
+    run_nonempty()
+  else:
+    nonempty, empty = [], []
+    with el.in_block(nonempty):
+      run_nonempty()
+    with el.in_block(empty):
+      el.index_map(lead, lambda idx: emit_stores(idx, project_raw(init)), ordered=False)
+    el.emit(ir.If(cmp("gt", x.shape[k], ZERO), nonempty, empty))
+
+  for arr in out_arrays:
+    el.record_store(arr)
+  return _rebuild_emit_output(out_tree, out_arrays)
+
+
+@libfunction("fold")
+def fold(el, lift, merge, x, init=None, *, axis=None, indexed=False, emit=None):
+  """Lift elements to scalar/fixed-vector tuple states and merge adjacent states in input order.
+
+  With no axis, lift each leading slice and return one state. With an axis,
+  fold the lanes along that axis and project each state with `emit` (which may
+  return a scalar, a fixed-size array, or a tuple/NamedTuple of them).
+  An indexed lift receives (value, index) with the index local to its lane.
+  A supplied seed is applied once on the left; an unseeded empty fold raises.
+  """
+  indexed_b = indexed if isinstance(indexed, bool) else el.static_bool(indexed, "indexed")
+
+  def merge_cb(a, b):
+    return el.call(merge, [a, b])
+
+  lift_cb = (lambda elem, idx: el.call(lift, [elem, idx])) if indexed_b else (lambda elem: el.call(lift, [elem]))
+  emit_cb = None if emit is None else (lambda s: el.call(emit, [s]))
+  return _fold_impl(el, lift_cb, merge_cb, x, init=init, axis=axis, indexed=indexed_b, emit_cb=emit_cb)
 
 
 @libfunction("reduce")
@@ -736,6 +1019,276 @@ _DSL_MIN = _make_minmax("min", prims.minimum, _np_adverbs.min, _np_adverbs.minim
 _DSL_MAX = _make_minmax("max", prims.maximum, _np_adverbs.max, _np_adverbs.maximum)
 
 
+def _popcount_u64(el, x: Expr) -> Expr:
+  """Exact branchless 64-bit SWAR popcount (works on C, multicore, CUDA, and Metal)."""
+  from ..ndtypes import UInt64
+
+  u = cast(x, UInt64)
+  m1 = Const(0x5555555555555555, UInt64)
+  m2 = Const(0x3333333333333333, UInt64)
+  m4 = Const(0x0F0F0F0F0F0F0F0F, UInt64)
+  h01 = Const(0x0101010101010101, UInt64)
+  u = el.tmp(
+    ops.prim(
+      "sub",
+      (u, ops.prim("bitand", (ops.prim("rshift", (u, Const(1, UInt64)), UInt64), m1), UInt64)),
+      UInt64,
+    ),
+    "pc1",
+  )
+  u = el.tmp(
+    ops.prim(
+      "add",
+      (
+        ops.prim("bitand", (u, m2), UInt64),
+        ops.prim("bitand", (ops.prim("rshift", (u, Const(2, UInt64)), UInt64), m2), UInt64),
+      ),
+      UInt64,
+    ),
+    "pc2",
+  )
+  u = el.tmp(
+    ops.prim(
+      "bitand",
+      (ops.prim("add", (u, ops.prim("rshift", (u, Const(4, UInt64)), UInt64)), UInt64), m4),
+      UInt64,
+    ),
+    "pc4",
+  )
+  return ops.prim("rshift", (ops.prim("mul", (u, h01), UInt64), Const(56, UInt64)), UInt64)
+
+
+def _topk_sentinel(elt, largest: bool) -> Const:
+  import numpy as np
+
+  if elt.kind == "f":
+    return Const(float("-inf") if largest else float("inf"), elt)
+  if elt.kind == "b":
+    return Const(False if largest else True, elt)
+  info = np.iinfo(elt.strong.name)
+  return Const(int(info.min if largest else info.max), elt)
+
+
+@libfunction("topk_fold")
+def topk_fold(el, k, scores, *, axis=-1, largest=True):
+  """Exact ordered tie-breaking top-``k`` reduction using the associative top-``k`` monoid.
+
+  Returns ``(values, indices)`` sorted by ``(val, index)`` with first-index tie
+  breaking matching ``np.argsort(..., kind="stable")`` (ascending for
+  ``largest=False``, descending for ``largest=True``; NaNs always sort last).
+  When ``k`` exceeds the lane length, unfilled slots have ``index == -1``.
+  On 2D pairwise score expressions, tiles automatically with zero ``O(N * M)``
+  intermediate allocation on CPU, CUDA, and Metal.
+  """
+  from ..syntax import ir
+
+  if el.tape is not None and not el.tape.muted:
+    raise el.no_derivative("differentiation through topk_fold is not implemented")
+  k_int = el.static_int(k, "k")
+  if k_int < 0 or k_int > MAX_FOLD_CARRIES // 2:
+    raise el.error(
+      StaticValueError,
+      f"topk_fold() requires 0 <= k <= {MAX_FOLD_CARRIES // 2}, got {k_int}",
+    )
+  largest_b = largest if isinstance(largest, bool) else el.static_bool(largest, "largest")
+  arr = el.as_array(_arrayish(el, scores))
+  if arr.rank == 0:
+    raise el.error(TypeInferenceError, "topk_fold() needs an array with at least one dimension")
+  ax = norm_axis(el, axis, arr.rank)
+  elt = arr.elt.strong
+  if k_int == 0:
+    out_shape = arr.shape[:ax] + (ZERO,) + arr.shape[ax + 1 :]
+    return el.alloc_array(elt, out_shape, label="topk_v"), el.alloc_array(I, out_shape, label="topk_i")
+
+  sent_v = _topk_sentinel(elt, largest_b)
+  neg1 = Const(-1, I)
+
+  def better(va: Expr, ia: Expr, vb: Expr, ib: Expr) -> Expr:
+    a_val = cmp("ge", ia, ZERO)
+    b_val = cmp("ge", ib, ZERO)
+    if elt.kind == "f":
+      a_nan = cmp("ne", va, va)
+      b_nan = cmp("ne", vb, vb)
+      v_win = cmp("gt" if largest_b else "lt", va, vb)
+      tie = ops.land(cmp("eq", va, vb), cmp("lt", ia, ib))
+      nan_tie = ops.land(a_nan, ops.land(b_nan, cmp("lt", ia, ib)))
+      both = ops.lor(ops.land(ops.lnot(a_nan), ops.lor(b_nan, ops.lor(v_win, tie))), nan_tie)
+    else:
+      v_win = cmp("gt" if largest_b else "lt", va, vb)
+      tie = ops.land(cmp("eq", va, vb), cmp("lt", ia, ib))
+      both = ops.lor(v_win, tie)
+    return ops.land(a_val, ops.lor(ops.lnot(b_val), both))
+
+  def lift(val, idx):
+    v0 = cast(el.as_scalar(val, "topk element"), elt)
+    vs = [v0] + [sent_v] * (k_int - 1)
+    ix = [cast(idx, I)] + [neg1] * (k_int - 1)
+    return (_packed_const_array(el, elt, (k_int,), vs), _packed_const_array(el, I, (k_int,), ix))
+
+  def merge(left, right):
+    lv_arr, li_arr = left
+    rv_arr, ri_arr = right
+    lv = [el.elem(lv_arr, (Const(t, I),)) for t in range(k_int)]
+    li = [el.elem(li_arr, (Const(t, I),)) for t in range(k_int)]
+    rv = [el.elem(rv_arr, (Const(t, I),)) for t in range(k_int)]
+    ri = [el.elem(ri_arr, (Const(t, I),)) for t in range(k_int)]
+    out_v: list[Expr] = []
+    out_i: list[Expr] = []
+    pa: Expr = ZERO
+    for t in range(k_int):
+      if t == 0:
+        av, ai, bv, bi = lv[0], li[0], rv[0], ri[0]
+      else:
+        pb = el.tmp(ops.isub(Const(t, I), pa), "pb")
+        av = el.tmp(_select_tree(lv[: t + 1], pa, 0, t + 1), "av")
+        ai = el.tmp(_select_tree(li[: t + 1], pa, 0, t + 1), "ai")
+        bv = el.tmp(_select_tree(rv[: t + 1], pb, 0, t + 1), "bv")
+        bi = el.tmp(_select_tree(ri[: t + 1], pb, 0, t + 1), "bi")
+      take_a = el.tmp(better(av, ai, bv, bi), "ta")
+      out_v.append(el.tmp(ops.select(take_a, av, bv), "mv"))
+      out_i.append(el.tmp(ops.select(take_a, ai, bi), "mi"))
+      if t + 1 < k_int:
+        pa = el.tmp(ops.select(take_a, ops.iadd(pa, ops.ONE), pa), "pa")
+    return (_packed_const_array(el, elt, (k_int,), out_v), _packed_const_array(el, I, (k_int,), out_i))
+
+  init_state = (
+    _packed_const_array(el, elt, (k_int,), [sent_v] * k_int),
+    _packed_const_array(el, I, (k_int,), [neg1] * k_int),
+  )
+
+  # Build top-k directly via _fold_impl (host IR builders, works for 1D and ND, triggers pairwise_fold on 2D!)
+  if arr.rank == 1:
+    res = _fold_impl(el, lift, merge, arr, init=init_state, axis=0, indexed=True)
+    # Materialize delayed 1D outputs cleanly
+    out_v = el.alloc_array(elt, (Const(k_int, I),), label="topk_v")
+    out_i = el.alloc_array(I, (Const(k_int, I),), label="topk_i")
+    for t in range(k_int):
+      el.emit(ir.Store(out_v.buf, Const(t, I), el.elem(res[0], (Const(t, I),))))
+      el.emit(ir.Store(out_i.buf, Const(t, I), el.elem(res[1], (Const(t, I),))))
+    el.record_store(out_v)
+    el.record_store(out_i)
+    return (out_v, out_i)
+
+  vals, idxs = _fold_impl(
+    el,
+    lift,
+    merge,
+    arr,
+    init=init_state,
+    axis=ax,
+    indexed=True,
+    emit_cb=lambda st: st,
+  )
+  # Move the trailing k-axis back to `ax` if ax != arr.rank - 1
+  if ax != arr.rank - 1:
+    perm = tuple(range(ax)) + (arr.rank - 1,) + tuple(range(ax, arr.rank - 1))
+    vals = el.transpose(vals, perm)
+    idxs = el.transpose(idxs, perm)
+  return (vals, idxs)
+
+
+@libfunction("topk")
+def topk(el, scores, k, *, axis=-1, largest=True):
+  """Alias for :func:`topk_fold` with ``(scores, k)`` argument order."""
+  return topk_fold.impl(el, k, scores, axis=axis, largest=largest)
+
+
+@libfunction("tanimoto_topk")
+def tanimoto_topk(el, queries, refs, k):
+  """Exact top-``k`` Tanimoto similarity search over packed ``uint64`` bit-fingerprints.
+
+  ``queries`` has shape ``(N, W)`` and ``refs`` has shape ``(M, W)`` (e.g., ``W = 32``
+  for 2048-bit Morgan fingerprints). Precomputes per-fingerprint popcounts in
+  ``O((N + M) * W)`` and streams pairwise ``popcount(q & r) / (pop_q + pop_r - inter)``
+  directly into the associative top-``k`` monoid with zero ``O(N * M)`` allocation.
+  Returns ``(similarities: float32[N, k], indices: int64[N, k])``.
+  """
+  from ..ndtypes import Float32, UInt64
+  from ..syntax import ir
+
+  q = _prepare(el, el.as_array(_arrayish(el, queries)))
+  r = _prepare(el, el.as_array(_arrayish(el, refs)))
+  if q.rank != 2 or r.rank != 2:
+    raise el.error(TypeInferenceError, "tanimoto_topk() expects 2D fingerprint arrays (N, W) and (M, W)")
+  if q.elt.kind not in "iu" or r.elt.kind not in "iu":
+    raise el.error(TypeInferenceError, "tanimoto_topk() expects integer/uint64 bit-packed fingerprints")
+  nq, wq = q.shape
+  nr, wr = r.shape
+  if not el.dim_equal(wq, wr):
+    el.check(cmp("eq", wq, wr), "ValueError", "fingerprint word widths do not match ({0} vs {1})", wq, wr)
+
+  def _row_popcounts(mat, nrows):
+    out = el.alloc_array(UInt64, (nrows,), label="pop")
+
+    def row_body(idx):
+      i = idx[0]
+      w = ir.Var("w", I)
+      body: list = []
+      sc = el.new_scope("loop")
+      with el.in_block(body, sc, loop=True):
+        cnt = _popcount_u64(el, el.elem(mat, (i, w)))
+      res = ir.Var("pop_sum", UInt64)
+      a, b = ir.Var("pa", UInt64), ir.Var("pb", UInt64)
+      f = ir.Fold(res, cnt, a, b, [], ops.prim("add", (a, b), UInt64), init=Const(0, UInt64), op="add")
+      el.emit(ir.IndexReduce((wq,), (w,), body, [f], sc, el.scope, False, el.loc()))
+      el.emit(ir.Store(out.buf, i, res))
+
+    el.index_map((nrows,), row_body, ordered=False)
+    el.record_store(out)
+    return out
+
+  pop_q = _row_popcounts(q, nq)
+  pop_r = _row_popcounts(r, nr)
+
+  # Build delayed pairwise Tanimoto matrix so _fold_impl materializes it as a sibling
+  # inside `nonempty` -> fusion.py + pairwise_fold.py eliminate the O(N*M) allocation!
+  def pair_elem(idx):
+    i, j = idx
+    w = ir.Var("w", I)
+    body: list = []
+    sc = el.new_scope("loop")
+    with el.in_block(body, sc, loop=True):
+      qv = cast(el.elem(q, (i, w)), UInt64)
+      rv = cast(el.elem(r, (j, w)), UInt64)
+      inter_w = _popcount_u64(el, ops.prim("bitand", (qv, rv), UInt64))
+    inter = ir.Var("inter", UInt64)
+    a, b = ir.Var("ia", UInt64), ir.Var("ib", UInt64)
+    f = ir.Fold(inter, inter_w, a, b, [], ops.prim("add", (a, b), UInt64), init=Const(0, UInt64), op="add")
+    el.emit(ir.IndexReduce((wq,), (w,), body, [f], sc, el.scope, False, el.loc()))
+    pq = el.elem(pop_q, (i,))
+    pr = el.elem(pop_r, (j,))
+    union = el.tmp(ops.prim("sub", (ops.prim("add", (pq, pr), UInt64), inter), UInt64), "union")
+    return ops.select(
+      cmp("gt", union, Const(0, UInt64)),
+      ops.prim("div", (cast(inter, Float32), cast(union, Float32)), Float32),
+      Const(0.0, Float32),
+    )
+
+  scores = el.delayed(Float32, (nq, nr), pair_elem, cost=CHEAP_COST + 1)
+  return topk_fold.impl(el, k, scores, axis=1, largest=True)
+
+
+@libfunction("ipa_attention")
+def ipa_attention(el, q, k, v, coords_q, coords_k, gamma, *, scale=None, bias=None):
+  """3D distance-biased Invariant Point Attention (AlphaFold2/3 IPA / SE(3) attention).
+
+  Computes ``softmax((Q @ K^T) * scale - gamma * ||coords_q[i] - coords_k[j]||^2 [+ bias]) @ V``
+  in a single Law 1 SRAM-tiled monoidal pass with zero ``O(N^2)`` allocation, and
+  differentiates via Law 2 ``D_i``-recomputed backward w.r.t. ``(q, k, v, coords_q, coords_k, bias)``.
+  """
+  from ..transforms.algebraic_vjp import emit_ipa_attention
+
+  q_a = el.as_array(_arrayish(el, q))
+  k_a = el.as_array(_arrayish(el, k))
+  v_a = el.as_array(_arrayish(el, v))
+  xq_a = el.as_array(_arrayish(el, coords_q))
+  xk_a = el.as_array(_arrayish(el, coords_k))
+  b_a = None if bias is None else el.as_array(_arrayish(el, bias))
+  g_e = el.as_scalar(gamma, "gamma")
+  sc_e = None if scale is None else el.as_scalar(scale, "scale")
+  return emit_ipa_attention(el, q_a, k_a, v_a, xq_a, xk_a, g_e, scale=sc_e, bias=b_a)
+
+
 @core.register(builtins.map)
 def _builtin_map(el, f, *args):
   return map.impl(el, f, *args, axis=0)
@@ -749,5 +1302,6 @@ def _builtin_filter(el, pred, x):
 __all__ = [
     "LibFunction", "map", "each", "allpairs", "outer_map", "reduce", "scan", "imap", "ireduce",
     "parfor", "filter", "filter_reduce", "scatter_add", "scan_axis", "grad", "value_and_grad", "Gradient",
+    "topk_fold", "topk", "tanimoto_topk", "ipa_attention",
 ]  # fmt: skip
 _ = (Const, I)
