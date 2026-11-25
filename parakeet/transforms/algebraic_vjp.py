@@ -343,37 +343,42 @@ def _bwd_norm(tape, el, node, g: ArrayVal) -> None:
 
 def _reduce_broadcast_grad(el, full_grad: ArrayVal, target: ArrayVal) -> ArrayVal:
   """Reduce ``full_grad`` over any leading or size-1 broadcast axes to match ``target.shape``."""
-  from ..lib.numpy_lib import _reduce_prim as reduce_plain
+  from .autodiff import unbroadcast
 
-  g = full_grad
-  # Sum out extra leading batch dimensions
-  extra = g.rank - target.rank
-  for _ in range(extra):
-    g = reduce_plain(el, "add", g, Const(0, I), Const(0, g.elt), "sum", False)
-  # Sum out any size-1 broadcast dimensions (keepdims=True)
-  for ax in range(target.rank):
-    if isinstance(target.shape[ax], Const) and int(target.shape[ax].value) == 1:
-      if not (isinstance(g.shape[ax], Const) and int(g.shape[ax].value) == 1):
-        g = reduce_plain(el, "add", g, Const(ax, I), Const(0, g.elt), "sum", True)
-  return g
+  return unbroadcast(el, full_grad, target)
 
 
 def _stage_from_broadcast_array(
   el, arr: ArrayVal, batch_vars: tuple[Var, ...], batch_shape: tuple[Expr, ...], prefix: str
 ) -> TileStage:
-  """Build a 2D ``TileStage`` indexed by ``(r, c)`` over ``arr`` supporting broadcast batch dims."""
+  """Build a 2D ``TileStage`` indexed by ``(r, c)`` over ``arr`` supporting static and runtime size-1 broadcast dims."""
   r_var = Var(f"{prefix}_r", I)
   c_var = Var(f"{prefix}_c", I)
   lead_n = arr.rank - 2
   b_use = batch_vars[-lead_n:] if lead_n > 0 else ()
   b_coords: list[Expr] = []
   for ax_idx, bv in enumerate(b_use):
-    if isinstance(arr.shape[ax_idx], Const) and int(arr.shape[ax_idx].value) == 1:
+    dim = arr.shape[ax_idx]
+    if isinstance(dim, Const) and int(dim.value) == 1:
       b_coords.append(ZERO)
-    else:
+    elif isinstance(dim, Const) and int(dim.value) > 1:
       b_coords.append(bv)
-  r_coord = ZERO if (isinstance(arr.shape[-2], Const) and int(arr.shape[-2].value) == 1) else r_var
-  c_coord = ZERO if (isinstance(arr.shape[-1], Const) and int(arr.shape[-1].value) == 1) else c_var
+    else:
+      b_coords.append(ops.select(cmp("eq", dim, ONE), ZERO, bv))
+  r_dim = arr.shape[-2]
+  c_dim = arr.shape[-1]
+  if isinstance(r_dim, Const) and int(r_dim.value) == 1:
+    r_coord: Expr = ZERO
+  elif isinstance(r_dim, Const) and int(r_dim.value) > 1:
+    r_coord = r_var
+  else:
+    r_coord = ops.select(cmp("eq", r_dim, ONE), ZERO, r_var)
+  if isinstance(c_dim, Const) and int(c_dim.value) == 1:
+    c_coord: Expr = ZERO
+  elif isinstance(c_dim, Const) and int(c_dim.value) > 1:
+    c_coord = c_var
+  else:
+    c_coord = ops.select(cmp("eq", c_dim, ONE), ZERO, c_var)
   coords = (*b_coords, r_coord, c_coord)
   st_body: list[Stmt] = []
   st_scope = Scope("stage")
@@ -691,7 +696,7 @@ def emit_ipa_attention(
   bias: ArrayVal | None = None,
 ) -> ArrayVal:
   """Emit 1-pass Law 1 SRAM-tiled 3D distance-biased IPA attention + Law 2 AD node."""
-  from ..errors import TypeInferenceError
+  from ..errors import TypeInferenceError, UnsupportedError
   from .autodiff import Node
 
   if q.rank < 2 or k.rank != q.rank or v.rank != q.rank:
@@ -706,11 +711,25 @@ def emit_ipa_attention(
   n_dim, d_dim = k.shape[-2], v.shape[-1]
   c_dim = coords_q.shape[-1]
 
+  for bq_d, bk_d, bv_d in zip(batch_shape, k.shape[:-2], v.shape[:-2]):
+    el.check(cmp("eq", bk_d, bq_d), "ValueError", "q and k batch dimensions must match")
+    el.check(cmp("eq", bv_d, bq_d), "ValueError", "q and v batch dimensions must match")
   el.check(cmp("eq", k.shape[-1], k_dim), "ValueError", "q and k feature dimensions must match")
   el.check(cmp("eq", v.shape[-2], n_dim), "ValueError", "k and v sequence lengths must match")
   el.check(cmp("eq", coords_q.shape[-2], m_dim), "ValueError", "coords_q length must match q")
   el.check(cmp("eq", coords_k.shape[-2], n_dim), "ValueError", "coords_k length must match k")
   el.check(cmp("eq", coords_k.shape[-1], c_dim), "ValueError", "coords_q and coords_k coordinate dims must match")
+
+  if k.elt.strong is not elt:
+    k = el.cast_array(k, elt)
+  if v.elt.strong is not elt:
+    v = el.cast_array(v, elt)
+  if coords_q.elt.strong is not elt:
+    coords_q = el.cast_array(coords_q, elt)
+  if coords_k.elt.strong is not elt:
+    coords_k = el.cast_array(coords_k, elt)
+  if bias is not None and bias.elt.strong is not elt:
+    bias = el.cast_array(bias, elt)
 
   q_c = el.as_concrete(q) if q.buf is None else q
   k_c = el.as_concrete(k) if k.buf is None else k
@@ -722,11 +741,20 @@ def emit_ipa_attention(
   scale_c = (
     cast(scale, elt)
     if scale is not None
-    else ops.prim("div", (Const(1.0, elt), ops.prim("sqrt", (cast(k_dim, elt),), elt)), elt)
+    else ops.select(
+      cmp("gt", k_dim, ZERO),
+      ops.prim("div", (Const(1.0, elt), ops.prim("sqrt", (cast(k_dim, elt),), elt)), elt),
+      Const(0.0, elt),
+    )
   )
   gamma_c = cast(gamma, elt)
 
   tape = el.tape
+  if tape is not None and not tape.muted:
+    if tape.is_active(el, gamma_c):
+      raise el.error(UnsupportedError, "differentiating ipa_attention() with respect to gamma is not supported")
+    if scale is not None and tape.is_active(el, scale_c):
+      raise el.error(UnsupportedError, "differentiating ipa_attention() with respect to scale is not supported")
   want_ad = (
     tape is not None
     and not tape.muted
@@ -823,7 +851,8 @@ def emit_ipa_attention(
   body.append(ForRange(j_lp, ZERO, n_dim, ONE, j_blk, Scope("loop")))
 
   inv_l = Var("iinv_l", elt)
-  body.append(Assign(inv_l, ops.prim("div", (one_c, l_acc), elt)))
+  has_any = cmp("gt", l_acc, zero_c)
+  body.append(Assign(inv_l, ops.select(has_any, ops.prim("div", (one_c, l_acc), elt), zero_c)))
   d_end = Var("id_end", I)
   end_pos = iadd(o_row_base, d_end)
   body.append(
@@ -839,7 +868,10 @@ def emit_ipa_attention(
   )
   out_bufs: dict[str, Var] = {"o": o_arr.buf}
   if lse_arr is not None:
-    body.append(Store(lse_arr.buf, row_flat, ops.prim("add", (m_acc, ops.prim("log", (l_acc,), elt)), elt)))
+    lse_val = ops.select(
+      has_any, ops.prim("add", (m_acc, ops.prim("log", (l_acc,), elt)), elt), Const(float("-inf"), elt)
+    )
+    body.append(Store(lse_arr.buf, row_flat, lse_val))
     out_bufs["lse"] = lse_arr.buf
   body.append(ReleaseScope(scope))
 

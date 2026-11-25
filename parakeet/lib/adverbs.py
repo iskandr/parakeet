@@ -1203,7 +1203,7 @@ def tanimoto_topk(el, queries, refs, k):
   directly into the associative top-``k`` monoid with zero ``O(N * M)`` allocation.
   Returns ``(similarities: float32[N, k], indices: int64[N, k])``.
   """
-  from ..ndtypes import Float32, UInt64
+  from ..ndtypes import Float32, ScalarType, UInt64
   from ..syntax import ir
 
   q = _prepare(el, el.as_array(_arrayish(el, queries)))
@@ -1217,6 +1217,12 @@ def tanimoto_topk(el, queries, refs, k):
   if not el.dim_equal(wq, wr):
     el.check(cmp("eq", wq, wr), "ValueError", "fingerprint word widths do not match ({0} vs {1})", wq, wr)
 
+  def _as_u64_bits(e):
+    """Zero-extend sub-64-bit signed words through their same-width unsigned type before widening to UInt64."""
+    if e.type.kind == "i" and e.type.bits < 64:
+      return cast(cast(e, ScalarType(f"uint{e.type.bits}")), UInt64)
+    return cast(e, UInt64)
+
   def _row_popcounts(mat, nrows):
     out = el.alloc_array(UInt64, (nrows,), label="pop")
 
@@ -1226,7 +1232,7 @@ def tanimoto_topk(el, queries, refs, k):
       body: list = []
       sc = el.new_scope("loop")
       with el.in_block(body, sc, loop=True):
-        cnt = _popcount_u64(el, el.elem(mat, (i, w)))
+        cnt = _popcount_u64(el, _as_u64_bits(el.elem(mat, (i, w))))
       res = ir.Var("pop_sum", UInt64)
       a, b = ir.Var("pa", UInt64), ir.Var("pb", UInt64)
       f = ir.Fold(res, cnt, a, b, [], ops.prim("add", (a, b), UInt64), init=Const(0, UInt64), op="add")
@@ -1248,8 +1254,8 @@ def tanimoto_topk(el, queries, refs, k):
     body: list = []
     sc = el.new_scope("loop")
     with el.in_block(body, sc, loop=True):
-      qv = cast(el.elem(q, (i, w)), UInt64)
-      rv = cast(el.elem(r, (j, w)), UInt64)
+      qv = _as_u64_bits(el.elem(q, (i, w)))
+      rv = _as_u64_bits(el.elem(r, (j, w)))
       inter_w = _popcount_u64(el, ops.prim("bitand", (qv, rv), UInt64))
     inter = ir.Var("inter", UInt64)
     a, b = ir.Var("ia", UInt64), ir.Var("ib", UInt64)
