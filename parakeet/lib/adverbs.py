@@ -477,6 +477,8 @@ def _accepts_unpacked_index(f, ndim: int) -> bool:
     return False
   if isinstance(f, prims.UFunc):
     return f.nin == ndim
+  if isinstance(f, LibFunction) and f.name in ("min", "max"):
+    return ndim == 2
   if isinstance(f, Partial):
     return _accepts_unpacked_index(f.fn, ndim + len(f.args))
   if isinstance(f, Closure):
