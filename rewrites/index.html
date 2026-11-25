@@ -1589,8 +1589,8 @@ the original system:</p>
   passes rewrite those statements in order:
   dead code elimination, normalization, vertical fusion (exact and affine
   map/scan/filter/reduce/scatter), filter fusion, sibling and online monoidal
-  fusion, bilinear contraction reassociation (Law 3), monoidal tiling and
-  tile-interval pruning (Laws 1 &amp; 5), chunkwise affine/bilinear scans (Law 4),
+  fusion, bilinear contraction reassociation, monoidal tiling and
+  tile-interval pruning, chunkwise affine/bilinear scans,
   pairwise fold tiling, reduction interchange, and cache/register/GPU tiling.
   A final pass (<code>LowerAdverbs</code> in spirit) lowers operators into loops.
   <code>parakeet.transforms.pipeline.PASSES</code> is the authoritative list, and
@@ -1661,11 +1661,11 @@ the original system:</p>
 </tr>
 <tr>
 <td>—</td>
-<td><code>IndexScatter</code> (<code>parakeet.scatter_add</code>, <code>np.bincount</code>): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint</td>
+<td><code>IndexScatter</code> (<code>par.scatter_add</code>, <code>np.bincount</code>, <code>np.add.at</code>, canonical <code>for i: out[idx[i]] += val</code> loops): index-directed associative scatter-add with thread-privatized parallel lowering and exact gather adjoint</td>
 </tr>
 <tr>
 <td>—</td>
-<td><code>grad(f)</code>, <code>value_and_grad(f)</code></td>
+<td><code>grad</code>, <code>value_and_grad</code>, <code>jvp</code>, <code>vjp</code>, <code>linearize</code>, <code>linear_transpose</code>, <code>hvp</code>, <code>jacfwd</code>, <code>jacrev</code>, <code>hessian</code></td>
 </tr>
 </tbody>
 </table>

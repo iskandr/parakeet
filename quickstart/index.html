@@ -1515,7 +1515,7 @@ keeping arrays resident on a GPU with <code>parakeet.to_device</code>.</p>
 </code></pre></div>
 <p>No temporary for <code>x * x</code> exists: the multiplication was fused into the parallel
 reduction. To see a high-level summary of which algebraic rewrites fired on a
-function, call <code>parakeet.dsl.show_rewrite(fn, *example_args).summary()</code>.</p>
+function, call <code>par.show_rewrite(fn, *example_args).summary()</code>.</p>
 <h2 id="when-something-is-not-supported">When something is not supported<a class="headerlink" href="#when-something-is-not-supported" title="Permanent link">&para;</a></h2>
 <p>You get a <code>CompileError</code> pointing at your code, not a crash:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>parakeet.errors.UnsupportedError: numpy.fft.fft is not supported in compiled code

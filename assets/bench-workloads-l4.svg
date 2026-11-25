@@ -148,7 +148,7 @@
 <circle cx="333.7" cy="221.0" r="3.6" fill="#64748b" stroke="#ffffff" stroke-width="1.2"/>
 <text x="388.0" y="224.5" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.8" font-weight="500" fill="#0f172a">0.647 ms<tspan dx="3" font-weight="400" font-size="8.6" fill="#64748b">±0.012</tspan></text>
 <text x="500.0" y="80.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0f172a">B. Causal Attention (4 heads × 512 × 64)</text>
-<text x="500.0" y="95.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#475569">Single tiled Law 1 + Law 5 kernel vs cuDNN SDPA / XLA</text>
+<text x="500.0" y="95.0" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10.5" fill="#475569">Single tiled kernel with causal tile pruning vs cuDNN SDPA / XLA</text>
 <rect x="648.0" y="104.0" width="210.0" height="130.0" rx="4" fill="#fafbfc" stroke="#e5e9f0" stroke-width="1"/>
 <line x1="677.3" y1="104.0" x2="677.3" y2="234.0" stroke="#e5e9f0" stroke-width="1"/>
 <text x="677.3" y="247.0" text-anchor="middle" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#64748b">0.1</text>

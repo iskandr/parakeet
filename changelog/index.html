@@ -1182,6 +1182,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#130-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.3.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#forward-mode-ad-general-vjps-linear-transposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward-mode AD, general VJPs &amp; linear transposes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composable-algebraic-ad-indexing-adjoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composable algebraic AD &amp; indexing adjoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idiomatic-scatter-lowering-documentation-overhaul" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Idiomatic scatter lowering &amp; documentation overhaul
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#120-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1363,6 +1413,56 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#130-november-25-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3.0 (November 25, 2026)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1.3.0 (November 25, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#forward-mode-ad-general-vjps-linear-transposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward-mode AD, general VJPs &amp; linear transposes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composable-algebraic-ad-indexing-adjoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composable algebraic AD &amp; indexing adjoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idiomatic-scatter-lowering-documentation-overhaul" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Idiomatic scatter lowering &amp; documentation overhaul
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#120-november-25-2026" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1522,6 +1622,61 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="130-november-25-2026">1.3.0 (November 25, 2026)<a class="headerlink" href="#130-november-25-2026" title="Permanent link">&para;</a></h2>
+<p>Composable forward-mode, general reverse-mode, and higher-order automatic
+differentiation (<code>jvp</code>, <code>vjp</code>, <code>linearize</code>, <code>linear_transpose</code>, <code>hvp</code>,
+<code>jacfwd</code>, <code>jacrev</code>, <code>hessian</code>, <code>@custom_jvp</code>), zero-$O(T^2)$ rematerialized
+attention JVP/HVP, idiomatic <code>np.add.at</code> and <code>for</code>-loop scatter lifting, and a
+documentation and examples overhaul (AD Upgrade Wave 2, closing <code>#76</code>, <code>#77</code>,
+and <code>#78</code>).</p>
+<h3 id="forward-mode-ad-general-vjps-linear-transposes">Forward-mode AD, general VJPs &amp; linear transposes<a class="headerlink" href="#forward-mode-ad-general-vjps-linear-transposes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>par.jvp</code> &amp; <code>@par.custom_jvp</code>:</strong> Symbolic forward-mode differentiation over
+  scalars, arrays, matmul/einsum, reductions (tie-averaged <code>min</code>/<code>max</code>,
+  zero-safe <code>prod</code>), scans, folds, <code>map</code>, gather/scatter, <code>if</code>/<code>else</code>,
+  runtime <code>for</code>/<code>while</code> loops (in $O(1)$ extra memory), <code>NamedTuple</code> / frozen
+  <code>@dataclass</code> records, and <code>RaggedArray</code>s.</li>
+<li><strong>General non-scalar <code>par.vjp</code>, <code>par.linearize</code>, &amp; <code>par.linear_transpose</code>:</strong>
+  Full reverse-mode pullbacks for array, tuple, record, and <code>RaggedArray</code>
+  outputs, plus exact linear operator transposes satisfying
+  <code>⟨JVP(x; v), u⟩ == ⟨v, VJP(x; u)⟩</code>.</li>
+<li><strong>Higher-order AD (<code>par.hvp</code>, <code>par.jacfwd</code>, <code>par.jacrev</code>, <code>par.hessian</code>):</strong>
+  Forward-over-reverse Hessian-vector products across MLPs, LayerNorm,
+  checkpointed <code>for</code> loops, and FlashAttention. Also lifted reverse-over-reverse
+  <code>grad(grad(...))</code> cliffs for <code>np.stack</code>, <code>np.cumsum</code>, gather indexing,
+  scatter-add, and scalar 1-to-1 <code>par.map</code>.</li>
+</ul>
+<h3 id="composable-algebraic-ad-indexing-adjoints">Composable algebraic AD &amp; indexing adjoints<a class="headerlink" href="#composable-algebraic-ad-indexing-adjoints" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Zero-$O(T^2)$ attention JVP &amp; HVP:</strong> Fused dual <code>(S, dS) -&gt; (O, dO)</code>
+  monoidal tiling and parallel rematerialized HVP tangent emission drop all
+  quadratic $O(T^2)$ allocations during both <code>par.jvp</code> and <code>par.hvp</code> (reported
+  by <code>par.show_rewrite</code>).</li>
+<li><strong>Composable <code>ALGEBRAIC_AD_RULES</code> registry:</strong> Unified FlashAttention,
+  Cut Cross-Entropy, softmax, and LayerNorm / RMSNorm rematerialization rules
+  and enabled algebraic tape optimization inside checkpointed runtime <code>for</code>
+  loops.</li>
+<li><strong><code>topk</code>, <code>sort</code>, <code>FrozenHashTable</code>, &amp; <code>SortedIndex</code> AD:</strong> Added reverse-mode
+  and forward-mode differentiation for <code>par.topk</code> / <code>par.topk_fold</code>, <code>np.sort</code>,
+  <code>FrozenHashTable.get</code>, and <code>SortedIndex.get</code>.</li>
+<li><strong>Multi-store vertical fusion fix:</strong> Hardened <code>match_single_output_map</code> and
+  <code>match_single_output_scan</code> to reject multi-store prefixes, fixing a compiler
+  bug exposed by fused primal+tangent <code>IndexMap</code>s.</li>
+</ul>
+<h3 id="idiomatic-scatter-lowering-documentation-overhaul">Idiomatic scatter lowering &amp; documentation overhaul<a class="headerlink" href="#idiomatic-scatter-lowering-documentation-overhaul" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>np.add.at</code> and <code>for</code>-loop scatter lifting:</strong> <code>np.add.at(out, idx, vals)</code>
+  and canonical <code>for i in range(n): out[idx[i]] += vals[i]</code> loops (including
+  multi-histogram bodies sharing an index binding <code>b = bin_ids[i]</code>) now lift
+  directly to <code>IndexScatter</code>, fuse sibling histograms into one privatized
+  traversal, and differentiate cleanly under both <code>grad</code> and <code>jvp</code>.</li>
+<li><strong>Consistent NumPy idioms &amp; pedagogical gallery:</strong> Standardized docs and
+  examples on <code>np.*</code> helpers (<code>np.minimum</code>, <code>np.add</code>, <code>np.add.at</code>, etc.)
+  alongside <code>@par.jit</code> / <code>par.*</code> operators, replaced bare <code>Law 1..6</code> shorthand
+  outside <code>docs/algebra.md</code> with plain-English optimization descriptions, and
+  reordered the <a href="https://rubinsteyn.com/parakeet/gallery/">Kernel gallery</a>
+  progressively from pairwise NumPy fusion to attention and end-to-end training.</li>
+</ul>
 <h2 id="120-november-25-2026">1.2.0 (November 25, 2026)<a class="headerlink" href="#120-november-25-2026" title="Permanent link">&para;</a></h2>
 <p>Major automatic differentiation upgrade: IR-level checkpointed reverse loops
 for runtime-bound <code>for</code>/<code>while</code> loops, <code>par.fold</code>, and general <code>par.scan</code>,

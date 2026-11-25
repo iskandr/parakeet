@@ -839,10 +839,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#automatic-differentiation-grad-value_and_grad" class="md-nav__link">
+  <a href="#automatic-differentiation-grad-jvp-vjp-hvp" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Automatic differentiation (grad / value_and_grad)
+        Automatic differentiation (grad, jvp, vjp, hvp)
       
     </span>
   </a>
@@ -1465,10 +1465,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#automatic-differentiation-grad-value_and_grad" class="md-nav__link">
+  <a href="#automatic-differentiation-grad-jvp-vjp-hvp" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Automatic differentiation (grad / value_and_grad)
+        Automatic differentiation (grad, jvp, vjp, hvp)
       
     </span>
   </a>
@@ -1626,7 +1626,7 @@ the operator statements before loop lowering:</p>
 <li><code>parakeet.verify</code> checks scoping, types, and buffer ownership before passes,
   after every pass, and after lowering.</li>
 <li><code>f.specialize(*args)</code> exposes <code>.operators</code>, <code>.ir</code>, <code>.source</code>, and <code>.kernels</code>.</li>
-<li><code>parakeet.dsl.show_rewrite(f, *args)</code> summarizes which algebraic laws fired.</li>
+<li><code>par.show_rewrite(f, *args)</code> summarizes which algebraic optimizations fired.</li>
 <li><code>parakeet.find_broken_transform</code> bisects the middle-end passes one by one.</li>
 <li>Unsupported Python or NumPy features fail at compile time with the exact
   source caret and inlined call chain instead of silently falling back.</li>
@@ -1678,35 +1678,47 @@ parallel <code>np.random</code>. Not yet built in:</p>
 <li>Variable-cardinality set operations (<code>np.unique</code>, <code>np.lexsort</code>, <code>np.isin</code>)</li>
 <li>SciPy modules (<code>scipy.special</code>, <code>scipy.optimize</code>, <code>scipy.ndimage</code>, ...)</li>
 </ul>
-<h3 id="automatic-differentiation-grad-value_and_grad">Automatic differentiation (<code>grad</code> / <code>value_and_grad</code>)<a class="headerlink" href="#automatic-differentiation-grad-value_and_grad" title="Permanent link">&para;</a></h3>
-<p><code>grad</code> differentiates element-wise operations, reductions (<code>sum</code>, zero-safe
-<code>prod</code>, <code>min</code>, <code>max</code>, general folds), <code>cumsum</code>, <code>sort</code>, <code>@</code>, <code>einsum</code>, views
-and concatenation, gather and <code>scatter_add</code>, <code>map</code>/<code>allpairs</code> with user
-functions, and pure runtime <code>if</code> branches — enough to train small transformers
-(<a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/nanogpt.py"><code>examples/nanogpt.py</code></a>)
+<h3 id="automatic-differentiation-grad-jvp-vjp-hvp">Automatic differentiation (<code>grad</code>, <code>jvp</code>, <code>vjp</code>, <code>hvp</code>)<a class="headerlink" href="#automatic-differentiation-grad-jvp-vjp-hvp" title="Permanent link">&para;</a></h3>
+<p>Parakeet provides reverse-mode (<code>par.grad</code>, <code>par.value_and_grad</code>, general
+non-scalar <code>par.vjp</code>), forward-mode (<code>par.jvp</code>, <code>par.linearize</code>), linear
+transposes (<code>par.linear_transpose</code>), and higher-order differentiation
+(<code>par.hvp</code>, <code>par.jacfwd</code>, <code>par.jacrev</code>, <code>par.hessian</code>) across element-wise
+operations, reductions (<code>sum</code>, zero-safe <code>prod</code>, <code>min</code>, <code>max</code>, general folds),
+<code>cumsum</code> and general <code>par.scan</code>, <code>sort</code> and <code>topk</code>, <code>FrozenHashTable.get</code> and
+<code>SortedIndex.get</code>, <code>@</code>, <code>einsum</code>, views and concatenation, gather and scatter
+(<code>np.add.at</code>, canonical <code>for</code>-loop scatter-add, <code>par.scatter_add</code>),
+<code>map</code>/<code>allpairs</code> with user functions, pure runtime <code>if</code> branches, and
+checkpointed <code>for</code>/<code>while</code> loops — enough to train transformers
+(<a href="https://github.com/iskandr/parakeet/blob/master/examples/nanogpt.py"><code>examples/nanogpt.py</code></a>)
 and convnets
-(<a href="https://github.com/iskandr/parakeet/blob/v1.0.0/examples/convnet.py"><code>examples/convnet.py</code></a>).
+(<a href="https://github.com/iskandr/parakeet/blob/master/examples/convnet.py"><code>examples/convnet.py</code></a>).
 Current boundaries:</p>
 <ul>
-<li><strong>Elaboration-time tape:</strong> differentiation records operators during
-  elaboration (with an algebraic tape optimizer for attention, cross-entropy,
-  and norms) rather than running as an IR-to-IR pass over lowered operators.</li>
+<li><strong>Elaboration-time tape &amp; symbolic JVP:</strong> reverse-mode differentiation
+  records operators on a tape during elaboration (with an algebraic tape
+  optimizer for zero-$O(T^2)$ attention VJP/HVP, linear cross-entropy, softmax,
+  and norms) rather than running as a separate IR-to-IR pass over lowered loops.</li>
 <li><strong>Loops over differentiated values:</strong> small static <code>for</code> loops (<code>&lt;= 32</code>)
   unroll for cross-iteration fusion; runtime-bound and long <code>for</code> loops use
   IR-level <code>O(sqrt(T))</code> checkpointed reverse loops; data-dependent <code>while</code>
-  loops use fixed-slot stride-doubling checkpointing; and <code>par.checkpoint</code>,
-  <code>par.stop_gradient</code>, and <code>@par.custom_vjp</code> provide explicit control over
-  rematerialization and custom/implicit VJPs. Loops with <code>break</code>/<code>continue</code>
+  loops use fixed-slot stride-doubling checkpointing; forward-mode <code>jvp</code>
+  streams tangents in O(1) memory; and <code>par.checkpoint</code>, <code>par.stop_gradient</code>,
+  <code>@par.custom_vjp</code>, and <code>@par.custom_jvp</code> provide explicit control over
+  rematerialization and custom/implicit rules. Loops with <code>break</code>/<code>continue</code>
   over active state remain refused loudly.</li>
-<li><strong>Pure runtime <code>if</code> branches only:</strong> both branches execute and are selected
-  by the condition, so branches touching differentiated values cannot contain
-  array stores, <code>return</code>, <code>break</code>, or <code>raise</code>.</li>
+<li><strong>Pure runtime <code>if</code> branches in reverse mode:</strong> both branches execute and are
+  selected by the condition, so branches touching differentiated values cannot
+  contain array stores, <code>return</code>, <code>break</code>, or <code>raise</code>.</li>
 <li><strong>Missing derivative rules (refused loudly):</strong> <code>cumprod</code>, <code>convolve</code>,
-  user-defined <code>scan</code> combiners, in-place indexed assignment (<code>out[idx] = v</code>;
-  use <code>parakeet.scatter_add</code> or <code>np.bincount(..., weights=w)</code> instead), and
+  arbitrary indexed overwrites (<code>out[idx] = v</code>; use <code>np.add.at</code>,
+  <code>for i: out[idx[i]] += v</code>, or <code>par.scatter_add</code> for scatter-add), and
   overwriting an array still needed by an earlier backward rule.</li>
-<li><strong>Second derivatives:</strong> work through element-wise ops, reductions, <code>@</code>, and
-  views; not yet through <code>map</code>, gather indexing, or <code>cumsum</code>.</li>
+<li><strong>Higher-order derivatives:</strong> forward-over-reverse <code>par.hvp</code> and
+  <code>par.hessian</code> compose through element-wise ops, reductions, <code>@</code>, views,
+  checkpointed loops, LayerNorm, and zero-$O(T^2)$ attention; reverse-over-reverse
+  <code>grad(grad(...))</code> also supports <code>np.stack</code>, <code>np.cumsum</code>, gather indexing,
+  scatter-add, and scalar 1-to-1 <code>par.map</code>, while refusing non-scalar user
+  <code>map</code> bodies loudly.</li>
 </ul>
 <h3 id="gpu-and-locality-boundaries">GPU and locality boundaries<a class="headerlink" href="#gpu-and-locality-boundaries" title="Permanent link">&para;</a></h3>
 <ul>

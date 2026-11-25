@@ -839,15 +839,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#primitive-functions" class="md-nav__link">
+  <a href="#primitive-combiner-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Primitive functions
+        Primitive combiner functions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Primitive functions">
+    <nav class="md-nav" aria-label="Primitive combiner functions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1309,15 +1309,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#primitive-functions" class="md-nav__link">
+  <a href="#primitive-combiner-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Primitive functions
+        Primitive combiner functions
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Primitive functions">
+    <nav class="md-nav" aria-label="Primitive combiner functions">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1412,7 +1412,7 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 <td><code>result[i, j, ...] = f(i, j, ...)</code> for every index of <code>shape</code> (unpacks multi-axis indices automatically; 1-arg tuple <code>lambda ij:</code> also works)</td>
 </tr>
 <tr>
-<td><code>par.ireduce(f, shape, init=None, combine=par.add)</code></td>
+<td><code>par.ireduce(f, shape, init=None, combine=np.add)</code></td>
 <td>reduce <code>f(i, ...)</code> over every index of <code>shape</code></td>
 </tr>
 <tr>
@@ -1433,30 +1433,30 @@ fuses into surrounding NumPy code) <strong>and</strong> directly from ordinary P
 </tr>
 <tr>
 <td><code>par.scatter_add(n, idx, vals)</code> (alias <code>par.scatter</code>)</td>
-<td>index-directed associative scatter-add (<code>IndexScatter</code>) with thread-privatized parallel lowering and exact gather adjoint</td>
+<td>index-directed associative scatter-add (<code>IndexScatter</code>) with thread-privatized parallel lowering and exact gather adjoint (also targeted automatically by <code>np.bincount</code>, <code>np.add.at</code>, and canonical <code>for i: out[idx[i]] += vals[i]</code> loops)</td>
 </tr>
 <tr>
 <td><code>par.wavefront(...)</code> / <code>par.batched_wavefront(...)</code> / <code>par.soft_align(...)</code></td>
 <td>2D and banded semiring dynamic programming (<code>IndexWavefront</code>) with checkpointed VJP</td>
 </tr>
 <tr>
-<td><code>par.grad(f, argnum=0)</code>, <code>par.value_and_grad(f, argnum=0)</code></td>
-<td>reverse-mode gradient of a scalar-valued <code>f</code> — see <a href="../autodiff/">Gradients</a></td>
+<td><code>par.grad</code>, <code>par.value_and_grad</code>, <code>par.jvp</code>, <code>par.vjp</code>, <code>par.hvp</code>, <code>par.linearize</code>, <code>par.linear_transpose</code>, <code>par.jacfwd</code>, <code>par.jacrev</code>, <code>par.hessian</code></td>
+<td>composable reverse-mode, forward-mode, and higher-order AD — see <a href="../autodiff/">Automatic differentiation</a></td>
 </tr>
 <tr>
 <td><code>par.show_rewrite(f, *args)</code></td>
-<td>inspect which of Parakeet's <a href="../algebra/">six algebraic laws</a> rewrote <code>f</code> and view before/after IR</td>
+<td>inspect which algebraic optimizations rewrote <code>f</code> and view before/after IR — see <a href="../algebra/">Algebraic laws</a></td>
 </tr>
 </tbody>
 </table>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">par</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">row</span><span class="p">:</span> <span class="n">row</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">row</span><span class="p">),</span> <span class="n">X</span><span class="p">)</span>  <span class="c1"># normalise rows</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">par</span><span class="o">.</span><span class="n">allpairs</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mi">2</span><span class="p">)),</span> <span class="n">X</span><span class="p">,</span> <span class="n">C</span><span class="p">)</span>  <span class="c1"># distance matrix</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># column maxima</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># column maxima</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">par</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="n">j</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>  <span class="c1"># an index-defined 2D array</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">par</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span>  <span class="c1"># a dot product; no array of products is built</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">par</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># running sum of differences</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">par</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">par</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>  <span class="c1"># x + y where x &gt; y</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">par</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">multiply</span><span class="p">)</span>  <span class="c1"># a dot product; no array of products is built</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">par</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">-</span> <span class="n">b</span><span class="p">)</span>  <span class="c1"># running sum of differences</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">par</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="nb">map</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>  <span class="c1"># x + y where x &gt; y</span>
 </code></pre></div>
 <p>For multi-dimensional shapes, <code>imap</code>, <code>ireduce</code>, and <code>parfor</code> unpack coordinates
 directly when the function takes <code>len(shape)</code> parameters (<code>lambda i, j: ...</code>),
@@ -1474,15 +1474,15 @@ re-exporting these same operators alongside compact dtype shorthands
 <p><code>map</code>-like operators evaluate elements in parallel, in no particular order.
 <code>reduce</code> runs in parallel when the combining function is recognisably one of
 <code>+</code>, <code>*</code>, <code>min</code>, <code>max</code>, <code>and</code>, <code>or</code>, <code>&amp;</code>, <code>|</code>, <code>^</code> (whether written as
-<code>par.add</code>, <code>np.add</code> or <code>lambda a, b: a + b</code>), and sequentially otherwise — so a
+<code>np.add</code>, <code>lambda a, b: a + b</code>, or <code>par.add</code>), and sequentially otherwise — so a
 non-associative function such as <code>lambda acc, x: acc * 0.5 + x</code> still gives the
 same answer as <code>functools.reduce</code>. Floating-point sums are reassociated, like
 NumPy's own pairwise summation: expect differences in the last digits.</p>
-<h2 id="primitive-functions">Primitive functions<a class="headerlink" href="#primitive-functions" title="Permanent link">&para;</a></h2>
-<p><code>par.add</code>, <code>par.subtract</code>, <code>par.multiply</code>, <code>par.divide</code>, <code>par.minimum</code>, <code>par.maximum</code>,
-the comparison and logical/bitwise operators are first-class functions for use
-with the operators above. Outside compiled code they behave like the NumPy
-ufuncs of the same name.</p>
+<h2 id="primitive-combiner-functions">Primitive combiner functions<a class="headerlink" href="#primitive-combiner-functions" title="Permanent link">&para;</a></h2>
+<p>Standard NumPy ufuncs (<code>np.add</code>, <code>np.subtract</code>, <code>np.multiply</code>, <code>np.divide</code>,
+<code>np.minimum</code>, <code>np.maximum</code>) are the idiomatic combiners to pass to <code>par.reduce</code>,
+<code>par.ireduce</code>, <code>par.scan</code>, and <code>par.filter</code>. Parakeet also exports matching
+aliases (<code>par.add</code>, <code>par.minimum</code>, etc.) for backward compatibility.</p>
 <h3 id="structured-reductions">Structured reductions<a class="headerlink" href="#structured-reductions" title="Permanent link">&para;</a></h3>
 <p><code>par.fold(lift, merge, x, init)</code> lifts each axis-0 slice of <code>x</code> to a
 nonempty tuple or named tuple of scalar fields. The pure <code>merge(left, right)</code>

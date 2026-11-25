@@ -1418,14 +1418,14 @@ Run the gallery checks or reproducible benchmarks from a source checkout:</p>
 <thead>
 <tr>
 <th>Domain task</th>
-<th>Algebraic operator / law in Parakeet</th>
+<th>Operator / optimization in Parakeet</th>
 <th>What the compiler eliminates</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>FASTQ k-mers &amp; read QC</td>
-<td><code>parfor</code> + <code>uint8</code> / <code>uint64</code> bitwise arithmetic</td>
+<td><code>par.parfor</code> + <code>uint8</code> / <code>uint64</code> bitwise arithmetic</td>
 <td>Python per-character loops and string copies</td>
 </tr>
 <tr>
@@ -1440,12 +1440,12 @@ Run the gallery checks or reproducible benchmarks from a source checkout:</p>
 </tr>
 <tr>
 <td>3D protein RBF / equivariant attention</td>
-<td>Law 1 rescaled-monoid tiling (<code>flash_monoid</code>) + <code>grad</code></td>
+<td><a href="../algebra/#law-1-rescaled-semiring-monoids">Online rescaled-monoid tiling</a> + <code>par.grad</code></td>
 <td>O(N²) pairwise distance &amp; weight matrices</td>
 </tr>
 <tr>
 <td>Banded Smith-Waterman &amp; genome SSMs</td>
-<td>Two-row banded DP + Law 4 <code>TileScan</code></td>
+<td>Two-row banded DP + <a href="../algebra/#law-4-chunkwise-state-space-duality">chunkwise affine prefix scan</a> (<code>TileScan</code>)</td>
 <td>Python DP interpreter overhead &amp; sequential scan bottlenecks</td>
 </tr>
 </tbody>
@@ -1498,7 +1498,7 @@ over reads:</p>
 </code></pre></div>
 <h2 id="2-single-pass-multi-channel-alignment-pileup">2. Single-pass multi-channel alignment pileup<a class="headerlink" href="#2-single-pass-multi-channel-alignment-pileup" title="Permanent link">&para;</a></h2>
 <p>A pileup records A/C/G/T base counts, Phred quality sums, and reverse-strand
-counts at each reference coordinate. Because all six <code>parakeet.scatter_add</code>
+counts at each reference coordinate. Because all six <code>par.scatter_add</code>
 updates share the same index array <code>ref_pos</code>, Parakeet's scatter-fusion pass
 combines them into a single privatized traversal (<code>IndexScatter: 6 -&gt; 1</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
@@ -1572,15 +1572,16 @@ first-index ties:</p>
 </code></pre></div>
 <h2 id="4-3d-protein-coordinate-rbf-message-passing">4. 3D protein coordinate RBF message passing<a class="headerlink" href="#4-3d-protein-coordinate-rbf-message-passing" title="Permanent link">&para;</a></h2>
 <p>Pairwise radial-basis-function smoothing over 3D residue coordinates <code>(N, 3)</code>
-uses the same rescaled-monoid structure as softmax attention. Law 1 fuses the
+uses the same <a href="../algebra/#law-1-rescaled-semiring-monoids">rescaled-monoid</a>
+structure as softmax attention. Online monoidal tiling fuses the
 squared-distance computation, softmax normalization, and feature aggregation
-into a single tiled pass with zero O(N²) score allocation — and <code>parakeet.grad</code>
+into a single tiled pass with zero O(N²) score allocation — and <code>par.grad</code>
 differentiates through the 3D coordinates directly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">protein_rbf_message_passing</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">neg_inv_2sigma2</span><span class="p">):</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="sd">"""3D radial-basis-function message passing over residue coordinates (N, 3).</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="sd">  Fuses into Law 1 online (m, l, O) monoidal tiles with zero N x N materialization.</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="sd">  Fuses into online (m, l, O) monoidal tiles with zero N x N materialization.</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="sd">  """</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  <span class="n">d2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">((</span><span class="n">coords</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">coords</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:])</span> <span class="o">**</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">(</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 <a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  <span class="n">s</span> <span class="o">=</span> <span class="n">d2</span> <span class="o">*</span> <span class="n">neg_inv_2sigma2</span>
@@ -1599,7 +1600,7 @@ differentiates through the 3D coordinates directly:</p>
 <h2 id="5-banded-smith-waterman-alignment-and-dna-state-space-scan">5. Banded Smith-Waterman alignment and DNA state-space scan<a class="headerlink" href="#5-banded-smith-waterman-alignment-and-dna-state-space-scan" title="Permanent link">&para;</a></h2>
 <p>Compiled two-row banded Smith-Waterman keeps only O(M) score scratch in L1
 cache, while 1D DNA exponential state-space recurrences automatically
-rewrite into Law 4 chunkwise parallel affine prefix scans (<code>TileScan</code>):</p>
+rewrite into <a href="../algebra/#law-4-chunkwise-state-space-duality">chunkwise parallel affine prefix scans</a> (<code>TileScan</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@par</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">banded_smith_waterman</span><span class="p">(</span><span class="n">seq_a</span><span class="p">,</span> <span class="n">seq_b</span><span class="p">,</span> <span class="n">match_score</span><span class="p">,</span> <span class="n">mismatch_pen</span><span class="p">,</span> <span class="n">gap_pen</span><span class="p">,</span> <span class="n">band_width</span><span class="p">):</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="sd">"""Banded Smith-Waterman local alignment score over integer-encoded sequences.</span>
@@ -1643,7 +1644,7 @@ rewrite into Law 4 chunkwise parallel affine prefix scans (<code>TileScan</code>
 <a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a><span class="k">def</span><span class="w"> </span><span class="nf">dna_ssm_scan</span><span class="p">(</span><span class="n">decay</span><span class="p">,</span> <span class="n">signal</span><span class="p">):</span>
 <a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="w">  </span><span class="sd">"""Exponential state-space scan along a DNA track (L,).</span>
 <a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a>
-<a id="__codelineno-5-44" name="__codelineno-5-44" href="#__codelineno-5-44"></a><span class="sd">  Compiled via Law 4 chunkwise parallel affine prefix scan (TileScan).</span>
+<a id="__codelineno-5-44" name="__codelineno-5-44" href="#__codelineno-5-44"></a><span class="sd">  Compiled via chunkwise parallel affine prefix scan (TileScan).</span>
 <a id="__codelineno-5-45" name="__codelineno-5-45" href="#__codelineno-5-45"></a><span class="sd">  """</span>
 <a id="__codelineno-5-46" name="__codelineno-5-46" href="#__codelineno-5-46"></a>  <span class="n">length</span> <span class="o">=</span> <span class="n">decay</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 <a id="__codelineno-5-47" name="__codelineno-5-47" href="#__codelineno-5-47"></a>  <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
@@ -1655,7 +1656,7 @@ rewrite into Law 4 chunkwise parallel affine prefix scans (<code>TileScan</code>
 </code></pre></div>
 <h2 id="inspecting-the-rewrites">Inspecting the rewrites<a class="headerlink" href="#inspecting-the-rewrites" title="Permanent link">&para;</a></h2>
 <p>Run <code>par.show_rewrite</code> on any workload above to verify that scatter fusion,
-Law 1 monoidal tiling, or Law 4 chunkwise scans fired:</p>
+online monoidal tiling, or chunkwise parallel scans fired:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">parakeet</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">par</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">examples.bio_gallery</span><span class="w"> </span><span class="kn">import</span> <span class="n">single_pass_pileup</span><span class="p">,</span> <span class="n">protein_rbf_message_passing</span>
