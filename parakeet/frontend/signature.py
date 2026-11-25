@@ -9,6 +9,7 @@ globals a function reads.
 
 from __future__ import annotations
 
+import mmap
 import threading
 import types as pytypes
 from typing import Any
@@ -24,7 +25,7 @@ from ..ndtypes import (
   from_dtype,
   is_supported_dtype,
 )
-from ..syntax.records import record_type
+from ..syntax.records import StructuredRecord, record_type
 
 Key = tuple
 
@@ -90,7 +91,7 @@ def type_value(obj: Any) -> ScalarType | type | None:
 
 def _convert_array(arr: np.ndarray) -> np.ndarray:
   dt = arr.dtype
-  if dt.name == "float16":
+  if dt.name in ("float16", "bfloat16"):
     return arr.astype(np.float32)
   if dt.kind in "biuf" and dt.name in ("bool",) + tuple(d.name for d in _DIRECT):
     # right dtype but wrong byte order or alignment
@@ -133,6 +134,9 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
       tuple([d == 1 for d in shape]),
     )
   if t is np.ndarray:
+    if value.dtype.names is not None:
+      rec = StructuredRecord(value.dtype, value.dtype.names, value.ndim)
+      return ("rec", rec, classify(rec.values(value), leaves, fixups))
     elt = _DIRECT.get(value.dtype)
     if elt is None or not value.flags.aligned or not value.dtype.isnative:
       converted = _convert_array(value)
@@ -172,12 +176,27 @@ def classify(value: Any, leaves: list, fixups: list | None = None) -> Key:
   if t is bool:
     leaves.append(value)
     return _WEAK_BOOL
+  if isinstance(value, int):  # covers IntEnum / IntFlag as well as int subclasses
+    iv = int(value)
+    if not _INT64_MIN <= iv <= _INT64_MAX:
+      raise Unsupported(f"integer {iv} does not fit in 64 bits")
+    leaves.append(iv)
+    return _WEAK_INT
+  if isinstance(value, (bytes, bytearray, memoryview, mmap.mmap)):
+    mv = value if isinstance(value, memoryview) else memoryview(value)
+    try:
+      arr = np.asarray(mv)
+    except Exception:  # noqa: BLE001 - unusual memoryview format
+      arr = np.frombuffer(mv, dtype=np.uint8)
+    if arr.dtype.kind not in "biuf" and arr.dtype.names is None:
+      arr = np.frombuffer(mv, dtype=np.uint8)
+    return classify(arr, leaves, fixups)
   if t is tuple:
     return ("t", *[classify(v, leaves, fixups) for v in value])
   if value is None:
     return _NONE_KEY
   if isinstance(value, np.generic):
-    if value.dtype.name == "float16":
+    if value.dtype.name in ("float16", "bfloat16"):
       leaves.append(np.float32(value))
       return ("s", Float32)
     if not is_supported_dtype(value.dtype):

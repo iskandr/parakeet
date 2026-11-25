@@ -58,6 +58,7 @@ using namespace metal;
 #define copysignf copysign
 """
   + runtime_c.HELPERS_INT
+  + runtime_c.HELPERS_BITOPS
   + runtime_c.HELPERS_FLOAT_DEF
   + runtime_c.HELPERS_F32
   + runtime_c.HELPERS_RNG

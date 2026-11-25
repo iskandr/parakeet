@@ -20,8 +20,10 @@ from __future__ import annotations
 import ast
 import builtins
 import contextlib
+import enum
+import mmap
 import types as pytypes
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from typing import Any
 
 import numpy as np
@@ -60,7 +62,7 @@ from ..syntax.ir import (
   walk_expr,
 )
 from ..syntax.ops import ONE, ZERO, I, cast, cmp, iadd, imul, isub
-from ..syntax.records import record_type
+from ..syntax.records import Record, StructuredRow, StructuredView, record_type
 from ..syntax.values import (
   ArrayVal,
   BoundMethod,
@@ -745,7 +747,7 @@ class Elaborator(ArrayMixin):
     if isinstance(obj, bool):
       return Const(obj, WeakBool)
     if isinstance(obj, int):
-      return Const(obj, WeakInt)
+      return Const(int(obj), WeakInt)
     if isinstance(obj, float):
       return Const(obj, WeakFloat)
     if obj is None or isinstance(obj, str) or obj is Ellipsis:
@@ -770,7 +772,7 @@ class Elaborator(ArrayMixin):
       obj = obj.__parakeet_fn__
     if isinstance(obj, pytypes.FunctionType) and obj in STAGED:
       return obj
-    if isinstance(obj, (np.ndarray, pytypes.FunctionType, list)):
+    if isinstance(obj, (np.ndarray, bytes, bytearray, memoryview, mmap.mmap, pytypes.FunctionType, list)):
       return self.implicit_value(("const", id(obj)), lambda o=obj: o, obj)
     return obj
 
@@ -983,7 +985,23 @@ class Elaborator(ArrayMixin):
       except ValueError:
         cells[cname] = Undefined(cname, "is a closure variable that has not been assigned yet")
         continue
-      if isinstance(contents, (bool, int, float, np.generic, np.ndarray, tuple, list, pytypes.FunctionType)):
+      if isinstance(
+        contents,
+        (
+          bool,
+          int,
+          float,
+          np.generic,
+          np.ndarray,
+          bytes,
+          bytearray,
+          memoryview,
+          mmap.mmap,
+          tuple,
+          list,
+          pytypes.FunctionType,
+        ),
+      ):
         cells[cname] = self.implicit_value(("cell", id(cell), cname), lambda c=cell: c.cell_contents, contents)
       else:
         cells[cname] = self.lift(contents)
@@ -1061,7 +1079,9 @@ class Elaborator(ArrayMixin):
       def getter(fn=fn, kwname=kwname):
         return fn.__kwdefaults__[kwname]
 
-    if isinstance(obj, (np.ndarray, pytypes.FunctionType, list)) or hasattr(obj, "__parakeet_fn__"):
+    if isinstance(obj, (np.ndarray, bytes, bytearray, memoryview, mmap.mmap, pytypes.FunctionType, list)) or hasattr(
+      obj, "__parakeet_fn__"
+    ):
       return self.implicit_value(key, getter, obj)
     return self.lift(obj)
 
@@ -1085,6 +1105,21 @@ class Elaborator(ArrayMixin):
           for i, (name, value) in enumerate(zip(fn._fields, result))
         ),
       )
+    if (
+      isinstance(fn, type)
+      and is_dataclass(fn)
+      and getattr(fn, "__dataclass_params__", None) is not None
+      and fn.__dataclass_params__.frozen
+      and not fn.__module__.startswith("parakeet.")
+    ):
+      return self._construct_dataclass(fn, args, kwargs, node)
+    if isinstance(fn, type) and issubclass(fn, enum.IntEnum):
+      if len(args) != 1 or kwargs:
+        raise self.error(TypeInferenceError, f"{fn.__name__}() takes 1 positional argument", node)
+      val = self.as_scalar(args[0], f"argument of {fn.__name__}()")
+      if val.type.kind not in "iub":
+        raise self.error(TypeInferenceError, f"{fn.__name__}() expects an integer, got {describe(val)}", node)
+      return cast(val, WeakInt)
     if isinstance(fn, BoundMethod):
       impl = lib.lookup_method(fn.obj, fn.name)
       if impl is None:
@@ -1107,6 +1142,56 @@ class Elaborator(ArrayMixin):
     if isinstance(fn, (Expr, ArrayVal, tuple)) or fn is None:
       raise self.error(TypeInferenceError, f"{describe(fn)} is not callable", node)
     raise self.error(UnsupportedError, lib.unsupported_message(fn), node)
+
+  def _construct_dataclass(self, cls: type, args: list, kwargs: dict, node):
+    if hasattr(cls, "__post_init__"):
+      raise self.error(
+        UnsupportedError,
+        f"frozen dataclass {cls.__name__} with __post_init__ cannot be constructed inside compiled code",
+        node,
+      )
+    dc_fields = fields(cls)
+    pos_fields = [f for f in dc_fields if f.init and not f.kw_only]
+    kw_fields = {f.name: f for f in dc_fields if f.init and f.kw_only}
+    pos_names = {f.name: f for f in pos_fields}
+    if len(args) > len(pos_fields):
+      raise self.error(
+        TypeInferenceError,
+        f"{cls.__name__}() takes {len(pos_fields)} positional argument(s) but {len(args)} were given",
+        node,
+      )
+    bound: dict[str, Any] = {}
+    for f, v in zip(pos_fields, args):
+      bound[f.name] = v
+    for k, v in kwargs.items():
+      if k in bound:
+        raise self.error(TypeInferenceError, f"{cls.__name__}() got multiple values for argument '{k}'", node)
+      if k in pos_names or k in kw_fields:
+        bound[k] = v
+      else:
+        raise self.error(TypeInferenceError, f"{cls.__name__}() got an unexpected keyword argument '{k}'", node)
+    values = []
+    missing = []
+    for f in dc_fields:
+      if f.name in bound:
+        values.append(bound[f.name])
+      elif f.default is not MISSING:
+        values.append(self.lift(f.default))
+      elif f.default_factory is not MISSING:
+        values.append(self.lift(f.default_factory()))
+      elif f.init:
+        missing.append(f.name)
+      else:
+        raise self.error(
+          UnsupportedError, f"frozen dataclass {cls.__name__} field '{f.name}' has init=False and no default", node
+        )
+    if missing:
+      raise self.error(
+        TypeInferenceError,
+        f"{cls.__name__}() missing {len(missing)} required argument(s): " + ", ".join(repr(m) for m in missing),
+        node,
+      )
+    return Record(cls, tuple(f.name for f in dc_fields)).build(values)
 
   # =============================================================== statements
 
@@ -1319,6 +1404,385 @@ class Elaborator(ArrayMixin):
 
   def exec_If(self, node: ast.If) -> bool:
     return self._conditional(node, self.truth(self.eval(node.test), node.test))
+
+  def exec_Match(self, node: ast.Match) -> bool:
+    subject = self.bindable(self.eval(node.subject), "match_subj")
+    return self._exec_match_cases(node, subject, list(node.cases), 0)
+
+  def _expand_match_or(self, pat: ast.pattern) -> list[ast.pattern]:
+    """Expand nested MatchOr patterns that bind names into a flat list of alternatives."""
+    if not self._pattern_binds_names(pat):
+      return [pat]
+    if isinstance(pat, ast.MatchOr):
+      out: list[ast.pattern] = []
+      for sub in pat.patterns:
+        out.extend(self._expand_match_or(sub))
+      return out
+    if isinstance(pat, ast.MatchAs):
+      if pat.pattern is None:
+        return [pat]
+      return [ast.MatchAs(pattern=sub, name=pat.name) for sub in self._expand_match_or(pat.pattern)]
+    if isinstance(pat, ast.MatchSequence):
+      choices = [self._expand_match_or(p) for p in pat.patterns]
+      if all(len(c) == 1 for c in choices):
+        return [pat]
+      combos: list[list[ast.pattern]] = [[]]
+      for c in choices:
+        combos = [[*prev, item] for prev in combos for item in c]
+      return [ast.MatchSequence(patterns=seq) for seq in combos]
+    if isinstance(pat, ast.MatchClass):
+      pos_choices = [self._expand_match_or(p) for p in pat.patterns]
+      kw_choices = [self._expand_match_or(p) for p in pat.kwd_patterns]
+      if all(len(c) == 1 for c in pos_choices) and all(len(c) == 1 for c in kw_choices):
+        return [pat]
+      pos_combos: list[list[ast.pattern]] = [[]]
+      for c in pos_choices:
+        pos_combos = [[*prev, item] for prev in pos_combos for item in c]
+      kw_combos: list[list[ast.pattern]] = [[]]
+      for c in kw_choices:
+        kw_combos = [[*prev, item] for prev in kw_combos for item in c]
+      return [
+        ast.MatchClass(cls=pat.cls, patterns=ps, kwd_attrs=pat.kwd_attrs, kwd_patterns=ks)
+        for ps in pos_combos
+        for ks in kw_combos
+      ]
+    return [pat]
+
+  def _exec_match_cases(self, node: ast.Match, subject, cases: list[ast.match_case], idx: int) -> bool:
+    if idx >= len(cases):
+      return False
+    case = cases[idx]
+    pat = case.pattern
+    # Expand any top-level or nested OR patterns that bind names into sequential cases.
+    if self._pattern_binds_names(pat):
+      alts = self._expand_match_or(pat)
+      if len(alts) > 1:
+        expanded = [ast.match_case(pattern=sub, guard=case.guard, body=case.body) for sub in alts]
+        return self._exec_match_cases(node, subject, cases[:idx] + expanded + cases[idx + 1 :], idx)
+
+    fr = self.frame
+    outer = self.block
+    base_env = fr.env
+    facts = self.save_facts()
+
+    pat_cond, binds = self._match_pattern(pat, subject)
+    if isinstance(pat_cond, Const) and not pat_cond.value:
+      return self._exec_match_cases(node, subject, cases, idx + 1)
+
+    if case.guard is None:
+      if isinstance(pat_cond, Const) and pat_cond.value:
+        for bname, bval in binds:
+          self.bind(bname, bval)
+        return self.exec_block(case.body)
+      cond = self.tmp(pat_cond, "match_cond")
+      then_blk: list = []
+      else_blk: list = []
+      fr.env = dict(base_env)
+      self.block = then_blk
+      for bname, bval in binds:
+        self.bind(bname, bval)
+      t_term = self.exec_block(case.body)
+      then_env, then_end, then_facts = fr.env, self.block, self.save_facts()
+
+      self.restore_facts(facts)
+      fr.env = dict(base_env)
+      self.block = else_blk
+      e_term = self._exec_match_cases(node, subject, cases, idx + 1)
+      else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
+      return self._finish_branch(
+        outer,
+        base_env,
+        facts,
+        cond,
+        then_blk,
+        then_env,
+        then_end,
+        then_facts,
+        t_term,
+        else_blk,
+        else_env,
+        else_end,
+        else_facts,
+        e_term,
+      )
+
+    # Guarded case: evaluate guard only when the pattern matched, with captures in scope.
+    if isinstance(pat_cond, Const) and pat_cond.value:
+      guard_env = dict(base_env)
+      fr.env = guard_env
+      for bname, bval in binds:
+        self.bind(bname, bval)
+      guard_cond = self.truth(self.eval(case.guard), case.guard)
+      if isinstance(guard_cond, Const):
+        if guard_cond.value:
+          return self.exec_block(case.body)
+        fr.env = base_env
+        return self._exec_match_cases(node, subject, cases, idx + 1)
+      cond = self.tmp(guard_cond, "guard_cond")
+      then_blk = []
+      else_blk = []
+      fr.env = dict(guard_env)
+      self.block = then_blk
+      t_term = self.exec_block(case.body)
+      then_env, then_end, then_facts = fr.env, self.block, self.save_facts()
+
+      self.restore_facts(facts)
+      fr.env = dict(base_env)
+      self.block = else_blk
+      e_term = self._exec_match_cases(node, subject, cases, idx + 1)
+      else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
+      return self._finish_branch(
+        outer,
+        base_env,
+        facts,
+        cond,
+        then_blk,
+        then_env,
+        then_end,
+        then_facts,
+        t_term,
+        else_blk,
+        else_env,
+        else_end,
+        else_facts,
+        e_term,
+      )
+
+    # Runtime pattern condition AND guard: short-circuit guard inside If(pat_cond, ...).
+    pat_cond = self.tmp(pat_cond, "match_cond")
+    matched = Var("match_ok", Bool)
+    self.mutables.add(matched.uid)
+    self.emit(Assign(matched, ops.FALSE))
+    guard_blk: list = []
+    fr.env = dict(base_env)
+    with self.in_block(guard_blk):
+      for bname, bval in binds:
+        self.bind(bname, bval)
+      gcond = self.truth(self.eval(case.guard), case.guard)
+      self.emit(Assign(matched, cast(gcond, Bool)))
+    self.emit(If(pat_cond, guard_blk, []))
+
+    then_blk = []
+    else_blk = []
+    fr.env = dict(base_env)
+    self.block = then_blk
+    for bname, bval in binds:
+      self.bind(bname, bval)
+    t_term = self.exec_block(case.body)
+    then_env, then_end, then_facts = fr.env, self.block, self.save_facts()
+
+    self.restore_facts(facts)
+    fr.env = dict(base_env)
+    self.block = else_blk
+    e_term = self._exec_match_cases(node, subject, cases, idx + 1)
+    else_env, else_end, else_facts = fr.env, self.block, self.save_facts()
+    return self._finish_branch(
+      outer,
+      base_env,
+      facts,
+      matched,
+      then_blk,
+      then_env,
+      then_end,
+      then_facts,
+      t_term,
+      else_blk,
+      else_env,
+      else_end,
+      else_facts,
+      e_term,
+    )
+
+  def _finish_branch(
+    self,
+    outer: list,
+    base_env: dict,
+    facts,
+    cond: Expr,
+    then_blk: list,
+    then_env: dict,
+    then_end: list,
+    then_facts,
+    t_term: bool,
+    else_blk: list,
+    else_env: dict,
+    else_end: list,
+    else_facts,
+    e_term: bool,
+  ) -> bool:
+    fr = self.frame
+    outer.append(If(cond, then_blk, else_blk))
+    if t_term and e_term:
+      self.block, fr.env = outer, base_env
+      self.restore_facts(facts)
+      return True
+    if t_term:
+      self.block, fr.env = else_end, else_env
+      self.restore_facts(else_facts)
+      return False
+    if e_term:
+      self.block, fr.env = then_end, then_env
+      self.restore_facts(then_facts)
+      return False
+    self.restore_facts(facts)
+    fr.env = self.merge_envs(then_env, then_end, else_env, else_end, outer)
+    self.block = outer
+    return False
+
+  @staticmethod
+  def _pattern_binds_names(pat: ast.pattern) -> bool:
+    for n in ast.walk(pat):
+      if isinstance(n, ast.MatchAs) and n.name is not None:
+        return True
+      if isinstance(n, ast.MatchStar) and n.name is not None:
+        return True
+      if isinstance(n, ast.MatchMapping) and n.rest is not None:
+        return True
+    return False
+
+  def _match_pattern(self, pat: ast.pattern, subject) -> tuple[Expr, list[tuple[str, Any]]]:
+    if isinstance(pat, ast.MatchAs):
+      if pat.pattern is None:
+        cond: Expr = ops.TRUE
+        binds: list[tuple[str, Any]] = []
+      else:
+        cond, binds = self._match_pattern(pat.pattern, subject)
+      if pat.name is not None:
+        binds = [*binds, (pat.name, subject)]
+      return cond, binds
+    if isinstance(pat, ast.MatchValue):
+      val = self.eval(pat.value)
+      if isinstance(subject, ArrayVal) or isinstance(val, ArrayVal):
+        return ops.FALSE, []
+      if isinstance(subject, (str, type(None))) != isinstance(val, (str, type(None))):
+        return ops.FALSE, []
+      if isinstance(subject, tuple) != isinstance(val, tuple):
+        return ops.FALSE, []
+      if (record_type(subject) is not None) != (record_type(val) is not None):
+        return ops.FALSE, []
+      return self.truth(self.compare(ast.Eq(), subject, val, pat), pat), []
+    if isinstance(pat, ast.MatchSingleton):
+      v = pat.value
+      if v is None:
+        return Const(subject is None, WeakBool), []
+      if isinstance(subject, Expr) and subject.type.kind == "b":
+        return (subject if v else ops.lnot(subject)), []
+      return ops.FALSE, []
+    if isinstance(pat, ast.MatchOr):
+      acc: Expr = ops.FALSE
+      for sub in pat.patterns:
+        c, _ = self._match_pattern(sub, subject)
+        if isinstance(c, Const):
+          if c.value:
+            return ops.TRUE, []
+          continue
+        acc = ops.lor(acc, c)
+      return acc, []
+    if isinstance(pat, ast.MatchSequence):
+      return self._match_sequence(pat, subject)
+    if isinstance(pat, ast.MatchClass):
+      return self._match_class(pat, subject)
+    raise self.error(UnsupportedError, f"pattern '{type(pat).__name__}' is not supported in match statements", pat)
+
+  def _match_sequence(self, pat: ast.MatchSequence, subject) -> tuple[Expr, list[tuple[str, Any]]]:
+    star_idx = next((i for i, p in enumerate(pat.patterns) if isinstance(p, ast.MatchStar)), None)
+    if isinstance(subject, tuple):
+      n = len(subject)
+      if star_idx is None:
+        if n != len(pat.patterns):
+          return ops.FALSE, []
+        elems = subject
+        pats = pat.patterns
+        binds: list[tuple[str, Any]] = []
+      else:
+        n_before = star_idx
+        n_after = len(pat.patterns) - star_idx - 1
+        if n < n_before + n_after:
+          return ops.FALSE, []
+        star_pat = pat.patterns[star_idx]
+        assert isinstance(star_pat, ast.MatchStar)
+        mid = subject[n_before : n - n_after if n_after else n]
+        binds = [(star_pat.name, mid)] if star_pat.name is not None else []
+        elems = subject[:n_before] + (subject[n - n_after :] if n_after else ())
+        pats = pat.patterns[:n_before] + pat.patterns[star_idx + 1 :]
+      cond: Expr = ops.TRUE
+      for sub_p, elem in zip(pats, elems):
+        c, b = self._match_pattern(sub_p, elem)
+        if isinstance(c, Const) and not c.value:
+          return ops.FALSE, []
+        cond = ops.land(cond, c)
+        binds.extend(b)
+      return cond, binds
+    if isinstance(subject, ArrayVal) and subject.rank >= 1:
+      if star_idx is not None:
+        raise self.error(UnsupportedError, "starred sequence patterns on arrays are not supported", pat)
+      dim = subject.shape[0]
+      if not isinstance(dim, Const):
+        raise self.error(
+          StaticValueError,
+          "matching an array with a sequence pattern requires a compile-time length",
+          pat,
+        )
+      if dim.value != len(pat.patterns):
+        return ops.FALSE, []
+      cond = ops.TRUE
+      binds = []
+      for k, sub_p in enumerate(pat.patterns):
+        elem = self.getitem(subject, Const(k, I))
+        c, b = self._match_pattern(sub_p, elem)
+        if isinstance(c, Const) and not c.value:
+          return ops.FALSE, []
+        cond = ops.land(cond, c)
+        binds.extend(b)
+      return cond, binds
+    return ops.FALSE, []
+
+  def _match_class(self, pat: ast.MatchClass, subject) -> tuple[Expr, list[tuple[str, Any]]]:
+    cls = self.eval(pat.cls)
+    if isinstance(cls, TypeVal):
+      t = cls.type
+      if not t.weak:
+        ok = isinstance(subject, Expr) and subject.type.kind == t.kind and subject.type.bits == t.bits
+      else:
+        ok = isinstance(subject, Expr) and (
+          (t.kind == "b" and subject.type.kind == "b")
+          or (t.kind in "iu" and subject.type.kind in "iu")
+          or (t.kind == "f" and subject.type.kind == "f")
+        )
+      if not ok:
+        return ops.FALSE, []
+      if pat.kwd_attrs or len(pat.patterns) > 1:
+        raise self.error(UnsupportedError, "scalar class patterns take at most one positional sub-pattern", pat)
+      if pat.patterns:
+        return self._match_pattern(pat.patterns[0], subject)
+      return ops.TRUE, []
+    rec = record_type(subject)
+    if rec is None or not isinstance(cls, type) or not issubclass(rec.cls, cls):
+      return ops.FALSE, []
+    match_args = getattr(cls, "__match_args__", rec.names)
+    if len(pat.patterns) > len(match_args):
+      raise self.error(
+        TypeInferenceError,
+        f"{cls.__name__}() accepts {len(match_args)} positional sub-patterns ({len(pat.patterns)} given)",
+        pat,
+      )
+    cond: Expr = ops.TRUE
+    binds: list[tuple[str, Any]] = []
+    for attr, sub_p in zip(match_args, pat.patterns):
+      val = self.getattr(subject, attr, pat)
+      c, b = self._match_pattern(sub_p, val)
+      if isinstance(c, Const) and not c.value:
+        return ops.FALSE, []
+      cond = ops.land(cond, c)
+      binds.extend(b)
+    for attr, sub_p in zip(pat.kwd_attrs, pat.kwd_patterns):
+      val = self.getattr(subject, attr, pat)
+      c, b = self._match_pattern(sub_p, val)
+      if isinstance(c, Const) and not c.value:
+        return ops.FALSE, []
+      cond = ops.land(cond, c)
+      binds.extend(b)
+    return cond, binds
 
   def _conditional(self, node: ast.If, cond: Expr) -> bool:
     if isinstance(cond, Const):
@@ -1801,6 +2265,10 @@ class Elaborator(ArrayMixin):
       length, getter = self.iter_source(v.item, node, end_checks)
       start = self.tmp(v.start)
       return length, lambda i: (iadd(start, i), getter(i))
+    if isinstance(v, StructuredView):
+      if v.rank == 0:
+        raise self.error(TypeInferenceError, "iteration over a 0-d structured array", node)
+      return v.shape[0], lambda i: self._struct_index(v, i, node)
     if isinstance(v, tuple):
       arr = self.as_array(v)
       return self.iter_source(arr, node)
@@ -1929,6 +2397,8 @@ class Elaborator(ArrayMixin):
 
   def eval_Constant(self, node: ast.Constant):
     v = node.value
+    if isinstance(v, bytes):
+      return self.lift(v)
     if isinstance(v, (bool, int, float)) or v is None or isinstance(v, str) or v is Ellipsis:
       if isinstance(v, int) and not isinstance(v, bool) and not -(2**63) <= v < 2**64:
         raise self.error(StaticValueError, f"integer literal {v} does not fit in 64 bits", node)
@@ -2023,6 +2493,16 @@ class Elaborator(ArrayMixin):
       else:
         index = self._index_item(index)
       return self.getitem(obj, index)
+    if isinstance(obj, StructuredView):
+      if isinstance(index, str):
+        if index not in obj.names:
+          raise self.error(StaticValueError, f"structured array has no field {index!r}", node)
+        return obj.field(index)
+      return self._struct_index(obj, index, node)
+    if isinstance(obj, StructuredRow):
+      if not isinstance(index, str) or index not in obj.names:
+        raise self.error(StaticValueError, f"structured row has no field {index!r}", node)
+      return obj.field(index)
     if isinstance(obj, dict):
       if not isinstance(index, str) or index not in obj:
         raise self.error(StaticValueError, "dictionary lookup requires a known string key", node)
@@ -2036,6 +2516,37 @@ class Elaborator(ArrayMixin):
         return obj
       raise self.error(TypeInferenceError, f"a scalar ({describe(obj)}) cannot be indexed", node)
     raise self.error(TypeInferenceError, f"{describe(obj)} is not subscriptable", node)
+
+  def _struct_index(self, sv: StructuredView, index, node=None):
+    if not sv._fields:
+      raise self.error(UnsupportedError, "indexing a zero-field structured array is not supported", node)
+    if isinstance(index, tuple):
+      items = tuple(self._index_item(x) for x in index)
+    else:
+      items = (self._index_item(index),)
+    # Expand Ellipsis against sv.rank (not each field's subarray rank!) so subarray
+    # trailing axes are preserved untouched.
+    n_ell = sum(1 for x in items if x is Ellipsis)
+    if n_ell > 1:
+      raise self.error(TypeInferenceError, "an index can only have a single ellipsis ('...')", node)
+    if n_ell == 1:
+      explicit = sum(1 for x in items if x is not Ellipsis and x is not None)
+      fill = max(0, sv.rank - explicit)
+      expanded = []
+      for x in items:
+        if x is Ellipsis:
+          expanded.extend([slice(None)] * fill)
+        else:
+          expanded.append(x)
+      items = tuple(expanded)
+    idx_arg = items[0] if len(items) == 1 else items
+    sliced = tuple(self.getitem(f, idx_arg) for f in sv._fields)
+    sub_rank = sv._fields[0].rank - sv.rank
+    first_rank = sliced[0].rank if isinstance(sliced[0], ArrayVal) else 0
+    new_rank = first_rank - sub_rank
+    if new_rank <= 0:
+      return StructuredRow(sv.dtype, sv.names, sliced)
+    return StructuredView(sv.dtype, sv.names, sliced, new_rank)
 
   def _index_item(self, x):
     if isinstance(x, tuple):  # x[(1, 2), ...]: a sequence index is an integer array
@@ -2091,8 +2602,26 @@ class Elaborator(ArrayMixin):
         node,
         hint=lib.suggest_attribute(name),
       )
+    if isinstance(obj, StructuredView):
+      if name == "shape":
+        return obj.shape
+      if name == "ndim":
+        return Const(obj.rank, I)
+      if name == "size":
+        return ops.iprod(obj.shape)
+      if name == "dtype":
+        return obj.dtype
+      if name in obj.names:
+        return obj.field(name)
+      raise self.error(TypeInferenceError, f"structured array has no attribute or field {name!r}", node)
+    if isinstance(obj, StructuredRow):
+      if name in obj.names:
+        return obj.field(name)
+      raise self.error(TypeInferenceError, f"structured row has no field {name!r}", node)
     if (record := record_type(obj)) and record.cls is not dict and name in record.names:
       return getattr(obj, name)
+    if record is not None and issubclass(record.cls, tuple) and name == "_replace":
+      return BoundMethod(obj, "_replace")
     if isinstance(obj, dict) or record is not None:
       raise self.error(TypeInferenceError, f"unsupported record attribute {name!r}", node)
     if isinstance(obj, (tuple, PyFunc, Closure, BoundMethod, RangeVal, TypeVal)) or obj is None:
@@ -2337,6 +2866,13 @@ class Elaborator(ArrayMixin):
           acc = ops.land(acc, self.truth(self.compare(ast.Eq(), x, y, node)))
         return acc if name == "eq" else ops.lnot(acc)
       raise self.error(UnsupportedError, "ordering comparisons between tuples are not supported", node)
+    if (ra := record_type(a)) is not None and (rb := record_type(b)) is not None and name in ("eq", "ne"):
+      if ra != rb:
+        return Const(name == "ne", WeakBool)
+      acc = ops.TRUE
+      for x, y in zip(ra.values(a), rb.values(b)):
+        acc = ops.land(acc, self.truth(self.compare(ast.Eq(), x, y, node)))
+      return acc if name == "eq" else ops.lnot(acc)
     return self.apply_ufunc(prims.UFUNCS[name], [a, b], python=True, symbol=_SYMBOL[name])
 
   @staticmethod

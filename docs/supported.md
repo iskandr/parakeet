@@ -12,23 +12,23 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 |---|---|---|---|
 | `np.absolute` | `np.add` | `np.arccos` | `np.arccosh` |
 | `np.arcsin` | `np.arcsinh` | `np.arctan` | `np.arctan2` |
-| `np.arctanh` | `np.bitwise_and` | `np.bitwise_or` | `np.bitwise_xor` |
-| `np.cbrt` | `np.ceil` | `np.copysign` | `np.cos` |
-| `np.cosh` | `np.deg2rad` | `np.degrees` | `np.divide` |
-| `np.equal` | `np.exp` | `np.exp2` | `np.expm1` |
-| `np.fabs` | `np.float_power` | `np.floor` | `np.floor_divide` |
-| `np.fmax` | `np.fmin` | `np.fmod` | `np.greater` |
-| `np.greater_equal` | `np.heaviside` | `np.hypot` | `np.invert` |
-| `np.isfinite` | `np.isinf` | `np.isnan` | `np.left_shift` |
-| `np.less` | `np.less_equal` | `np.log` | `np.log10` |
-| `np.log1p` | `np.log2` | `np.logaddexp` | `np.logaddexp2` |
-| `np.logical_and` | `np.logical_not` | `np.logical_or` | `np.logical_xor` |
-| `np.maximum` | `np.minimum` | `np.multiply` | `np.negative` |
-| `np.not_equal` | `np.positive` | `np.power` | `np.rad2deg` |
-| `np.radians` | `np.reciprocal` | `np.remainder` | `np.right_shift` |
-| `np.rint` | `np.sign` | `np.signbit` | `np.sin` |
-| `np.sinh` | `np.sqrt` | `np.square` | `np.subtract` |
-| `np.tan` | `np.tanh` | `np.trunc` |  |
+| `np.arctanh` | `np.bitwise_and` | `np.bitwise_count` | `np.bitwise_or` |
+| `np.bitwise_xor` | `np.cbrt` | `np.ceil` | `np.copysign` |
+| `np.cos` | `np.cosh` | `np.deg2rad` | `np.degrees` |
+| `np.divide` | `np.equal` | `np.exp` | `np.exp2` |
+| `np.expm1` | `np.fabs` | `np.float_power` | `np.floor` |
+| `np.floor_divide` | `np.fmax` | `np.fmin` | `np.fmod` |
+| `np.greater` | `np.greater_equal` | `np.heaviside` | `np.hypot` |
+| `np.invert` | `np.isfinite` | `np.isinf` | `np.isnan` |
+| `np.left_shift` | `np.less` | `np.less_equal` | `np.log` |
+| `np.log10` | `np.log1p` | `np.log2` | `np.logaddexp` |
+| `np.logaddexp2` | `np.logical_and` | `np.logical_not` | `np.logical_or` |
+| `np.logical_xor` | `np.maximum` | `np.minimum` | `np.multiply` |
+| `np.negative` | `np.not_equal` | `np.positive` | `np.power` |
+| `np.rad2deg` | `np.radians` | `np.reciprocal` | `np.remainder` |
+| `np.right_shift` | `np.rint` | `np.sign` | `np.signbit` |
+| `np.sin` | `np.sinh` | `np.sqrt` | `np.square` |
+| `np.subtract` | `np.tan` | `np.tanh` | `np.trunc` |
 
 ## NumPy functions
 
@@ -78,15 +78,16 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 |---|---|---|---|
 | `.T` | `.dtype` | `.flat` | `.imag` |
 | `.itemsize` | `.nbytes` | `.ndim` | `.real` |
-| `.shape` | `.size` | `.all()` | `.any()` |
-| `.argmax()` | `.argmin()` | `.argsort()` | `.astype()` |
-| `.clip()` | `.conj()` | `.conjugate()` | `.copy()` |
-| `.cumprod()` | `.cumsum()` | `.diagonal()` | `.dot()` |
-| `.fill()` | `.flatten()` | `.item()` | `.max()` |
-| `.mean()` | `.min()` | `.nonzero()` | `.prod()` |
-| `.ravel()` | `.reshape()` | `.round()` | `.squeeze()` |
-| `.std()` | `.sum()` | `.swapaxes()` | `.tolist()` |
-| `.trace()` | `.transpose()` | `.var()` |  |
+| `.shape` | `.size` | `._replace()` | `.all()` |
+| `.any()` | `.argmax()` | `.argmin()` | `.argsort()` |
+| `.astype()` | `.bit_count()` | `.clip()` | `.conj()` |
+| `.conjugate()` | `.copy()` | `.cumprod()` | `.cumsum()` |
+| `.diagonal()` | `.dot()` | `.fill()` | `.flatten()` |
+| `.item()` | `.max()` | `.mean()` | `.min()` |
+| `.nonzero()` | `.prod()` | `.ravel()` | `.reshape()` |
+| `.round()` | `.squeeze()` | `.std()` | `.sum()` |
+| `.swapaxes()` | `.tolist()` | `.trace()` | `.transpose()` |
+| `.var()` |  |  |  |
 
 ## Python builtins
 
@@ -95,10 +96,10 @@ All follow NumPy's broadcasting and type promotion rules exactly.
 | `abs` | `all` | `any` | `divmod` |
 | `enumerate` | `filter` | `isinstance` | `len` |
 | `list` | `map` | `max` | `min` |
-| `pow` | `print` | `range` | `reversed` |
-| `round` | `slice` | `sorted` | `sum` |
-| `tuple` | `zip` | `bool` | `float` |
-| `int` |  |  |  |
+| `ord` | `pow` | `print` | `range` |
+| `reversed` | `round` | `slice` | `sorted` |
+| `sum` | `tuple` | `zip` | `bool` |
+| `float` | `int` |  |  |
 
 ## `math`
 

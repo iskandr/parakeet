@@ -187,6 +187,20 @@ class _AssignedNames(ast.NodeVisitor):
     if isinstance(node.ctx, (ast.Store, ast.Del)):
       self.names.add(node.id)
 
+  def visit_MatchAs(self, node: ast.MatchAs) -> None:
+    if node.name is not None:
+      self.names.add(node.name)
+    self.generic_visit(node)
+
+  def visit_MatchStar(self, node: ast.MatchStar) -> None:
+    if node.name is not None:
+      self.names.add(node.name)
+
+  def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+    if node.rest is not None:
+      self.names.add(node.rest)
+    self.generic_visit(node)
+
   def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
     self.names.add(node.name)  # do not descend: inner scopes bind their own names
 
