@@ -37,6 +37,21 @@ def _scalar_code(block):
   )
 
 
+def _pure_output_code(block):
+  """Allow pure scalar Assigns, pure scalar Ifs (e.g. seeded fold merge), and top-level Stores."""
+  for s in block:
+    if isinstance(s, ir.Store):
+      continue
+    if isinstance(s, ir.If):
+      if any(isinstance(t, ir.Store) for t in ir.walk_stmts(s.then + s.orelse)):
+        return False
+      if not is_pure_expr(s.cond) or not _pure_output_code(s.then) or not _pure_output_code(s.orelse):
+        return False
+    elif not _scalar_code([s]):
+      return False
+  return True
+
+
 @dataclass
 class ScoreProgram:
   body: list
@@ -102,7 +117,7 @@ def _match(rows, info):
   stores = [s for s in outputs if isinstance(s, ir.Store)]
   if not stores or any(s.atomic or s.buf.uid not in info.local_allocs for s in stores):
     return None
-  if not _scalar_code([s for s in outputs if not isinstance(s, ir.Store)]):
+  if not _pure_output_code(outputs):
     return None
   writes = {s.buf.uid for s in stores}
   reads, _ = buffer_accesses(rows.body)
@@ -228,11 +243,33 @@ def _gpu_tiles(rows, refs, fold, row_defs, checks, outputs, program, owner, targ
   nq, nr = shape
   blocks = lp.tmp(iadd(ops.idiv(nr, bn), ops.cast(cmp("ne", ops.imod(nr, bn), ZERO), I)), "ref_tiles")
   fields = (fold, *fold.carries)
-  states = [ir.Var("tile_summary", ir.BufType(f.result.type.strong)) for f in fields]
-  owner.owned.extend(states)
+  # Pack same-dtype carry states into one strided partial buffer per unique dtype so
+  # multi-field folds (e.g. top-k with 2*K carries or 3x3 Kabsch) stay well within
+  # GPU kernel buffer limits (e.g. Metal's 28-buffer cap).
+  dtype_groups: dict = {}
+  field_slots: list[tuple[ir.Var, int, int]] = []  # (buf, group_size, slot_idx)
+  for f in fields:
+    t = f.result.type.strong
+    dtype_groups.setdefault(t, []).append(f)
+  states: list[ir.Var] = []
+  state_counts: list[ir.Expr] = []
+  buf_for_type: dict = {}
   count = lp.tmp(imul(nq, blocks), "summary_count")
+  for t, grp in dtype_groups.items():
+    buf = ir.Var("tile_summary", ir.BufType(t))
+    states.append(buf)
+    state_counts.append(count if len(grp) == 1 else lp.tmp(imul(count, len(grp)), "summary_count"))
+    buf_for_type[t] = (buf, len(grp))
+  slot_cursor: dict = {}
+  for f in fields:
+    t = f.result.type.strong
+    buf, gsize = buf_for_type[t]
+    slot = slot_cursor.get(t, 0)
+    slot_cursor[t] = slot + 1
+    field_slots.append((buf, gsize, slot))
+  owner.owned.extend(states)
   prefix.append(ir.If(cmp("gt", nq, ZERO), [*checks, ir.Check(cmp("gt", nr, ZERO), fold.empty)], []))
-  prefix.extend(ir.Alloc(buf, count) for buf in states)
+  prefix.extend(ir.Alloc(buf, cnt) for buf, cnt in zip(states, state_counts))
 
   q0, j0 = ir.Var("query_base", I), ir.Var("ref_base", I)
   height, width = ir.Var("query_count", I), ir.Var("ref_count", I)
@@ -254,7 +291,9 @@ def _gpu_tiles(rows, refs, fold, row_defs, checks, outputs, program, owner, targ
   local.empty = None  # Every dispatched reference tile has positive width.
   row_body.append(ir.IndexReduce((width,), (j,), lift, [local], ir.Scope("loop"), tile_scope))
   dest = iadd(imul(q, blocks), ops.idiv(j0, bn))
-  row_body.extend(ir.Store(buf, dest, f.result) for buf, f in zip(states, (local, *local.carries)))
+  for (buf, gsize, slot), f in zip(field_slots, (local, *local.carries)):
+    idx_e = dest if gsize == 1 else iadd(imul(dest, gsize), slot)
+    row_body.append(ir.Store(buf, idx_e, f.result))
   partial_rows = ir.IndexMap((height,), (r,), row_body, ir.Scope("loop"), parallel=False)
   plan.row_fold = ir.TileRowFold(scores, (q0, j0), width, partial_rows, cfg)
   tile = ir.IndexTile(
@@ -279,8 +318,9 @@ def _gpu_tiles(rows, refs, fold, row_defs, checks, outputs, program, owner, targ
   merge_body = merge_copy.block(row_defs)
   final = merge_copy.fold(fold)
   at = iadd(imul(row, blocks), tile_id)
-  for f, buf in zip((final, *final.carries), states):
-    f.value = ir.Load(buf, at)
+  for f, (buf, gsize, slot) in zip((final, *final.carries), field_slots):
+    idx_e = at if gsize == 1 else iadd(imul(at, gsize), slot)
+    f.value = ir.Load(buf, idx_e)
   final.empty = None  # Checked before the first stage.
   merge_body.append(ir.IndexReduce((blocks,), (tile_id,), [], [final], ir.Scope("loop"), rows.scope))
   merge_body.extend(merge_copy.block(outputs))

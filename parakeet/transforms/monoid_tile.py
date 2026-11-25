@@ -83,6 +83,11 @@ class _ScoreContraction:
   mask_index: Expr | None
   mask_fill: Expr | None
   pre_checks: list[Check]
+  bias_stage: TileStage | None = None
+  ipa_xq_stage: TileStage | None = None
+  ipa_xk_stage: TileStage | None = None
+  ipa_c_dim: Expr | None = None
+  ipa_gamma: Expr | None = None
 
 
 def _expr_uses_uids(e: Expr, uids: set[int]) -> bool:
@@ -134,20 +139,32 @@ def _build_stage(
   return TileStage(sbuf, shape, new_idx, body, val, Scope("stage"))
 
 
-def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreContraction | None:
-  """Recognize an ``IndexMap`` over ``(*batch, M, N)`` computing a 1D contraction
-  (dot product or squared distance) plus optional scale and mask."""
-  if not isinstance(s, IndexMap) or s.ordered or not s.parallel or len(s.shape) < 2 or s.scope.owned:
-    return None
-  body = [
-    t for t in s.body if not (isinstance(t, ReleaseScope) and t.scope is s.scope) and not isinstance(t, ir.Comment)
-  ]
-  reds = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
-  if len(reds) != 1:
-    return None
-  r_pos = reds[0]
-  red = body[r_pos]
-  assert isinstance(red, IndexReduce)
+def _parse_scaled_var(e: Expr, target: Var, inner_uids: set[int], elt: ScalarType) -> tuple[bool, Expr | None]:
+  """Match ``target``, ``target * s``, ``s * target``, ``target / s``, or ``-target``."""
+  if e is target:
+    return True, None
+  if isinstance(e, Prim) and e.op == "mul" and len(e.args) == 2:
+    if e.args[0] is target and not _expr_uses_uids(e.args[1], inner_uids):
+      return True, e.args[1]
+    if e.args[1] is target and not _expr_uses_uids(e.args[0], inner_uids):
+      return True, e.args[0]
+  if isinstance(e, Prim) and e.op == "div" and len(e.args) == 2:
+    if e.args[0] is target and not _expr_uses_uids(e.args[1], inner_uids):
+      return True, ops.prim("div", (Const(1.0, elt), e.args[1]), elt)
+  if isinstance(e, Prim) and e.op == "neg" and len(e.args) == 1 and e.args[0] is target:
+    return True, Const(-1.0, elt)
+  return False, None
+
+
+def _analyze_red_contraction(
+  red: IndexReduce,
+  i_var: Var,
+  j_var: Var,
+  s_index_uids: set[int],
+  base_assigns: list[Assign],
+) -> tuple[str, Expr, TileStage, TileStage, Var, dict[int, Assign], dict[int, int]] | None:
+  """Extract ``(score_op, k_dim, q_stage, k_stage, result_var, assign_map, order_map)``
+  from a 1D float add-reduction computing a dot product or squared distance."""
   if len(red.shape) != 1 or len(red.folds) != 1 or red.where is not None or red.scope.owned:
     return None
   fold = red.folds[0]
@@ -157,41 +174,16 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
     return None
   if any(not isinstance(t, (Assign, ir.Comment)) for t in red.body):
     return None
-
-  before = body[:r_pos]
-  after = body[r_pos + 1 :]
-  if any(not isinstance(t, (Assign, Check, ir.Comment)) for t in before):
-    return None
-  stores = [t for t in after if isinstance(t, Store)]
-  if len(stores) != 1 or any(not isinstance(t, (Assign, Store, ir.Comment)) for t in after):
-    return None
-  store = stores[0]
-  if store.atomic is not None or store.buf.type.elt is not fold.a.type:
-    return None
-
-  # Output store must be dense row-major over s.shape
-  expected_idx = row_major_index(s.index, s.shape)
-  local_facts = facts.fork()
-  for t in before + after:
-    local_facts.record_stmt(t)
-  if not local_facts.same_expr(store.index, expected_idx):
-    return None
-
-  batch_shape = s.shape[:-2]
-  batch_index = s.index[:-2]
-  m_dim, n_dim = s.shape[-2], s.shape[-1]
-  i_var, j_var = s.index[-2], s.index[-1]
   k_var = red.index[0]
   k_dim = red.shape[0]
-  if _expr_uses_uids(k_dim, {v.uid for v in s.index}):
+  if _expr_uses_uids(k_dim, s_index_uids):
     return None
 
-  all_assigns = [t for t in before + red.body if isinstance(t, Assign)]
+  all_assigns = [*base_assigns, *(t for t in red.body if isinstance(t, Assign))]
   assign_map = {t.var.uid: t for t in all_assigns}
   order_map = {t.var.uid: k for k, t in enumerate(all_assigns)}
   val_map = {t.var.uid: t.value for t in all_assigns}
 
-  # Analyze fold.value: either q(i, k) * k(j, k) ("dot") or (q(i, k) - k(j, k))^2 ("sqdist")
   fv = _resolve_local(fold.value, val_map)
   score_op = ""
   lhs_e: Expr | None = None
@@ -228,7 +220,6 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
   if not score_op or lhs_e is None or rhs_e is None:
     return None
 
-  # Classify lhs_e / rhs_e: one must depend on (i, k) without j, the other on (j, k) without i
   def classify(e: Expr) -> str | None:
     if not is_pure_expr(e) or not any(isinstance(x, Load) for x in ir.walk_expr(e)):
       return None
@@ -251,9 +242,114 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
   else:
     return None
 
-  # Parse epilogue: store.value == [select(mask, scaled, fill)] where scaled == red [* scale | / denom | neg]
-  after_vals = {t.var.uid: t.value for t in after if isinstance(t, Assign)}
-  after_vals.update(val_map)
+  q_stage = _build_stage(q_expr, (i_var, k_var), (Const(0, I), k_dim), assign_map, order_map, "q")
+  k_stage = _build_stage(k_expr, (j_var, k_var), (Const(0, I), k_dim), assign_map, order_map, "k")
+  return score_op, k_dim, q_stage, k_stage, fold.result, assign_map, order_map
+
+
+def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreContraction | None:
+  """Recognize an ``IndexMap`` over ``(*batch, M, N)`` computing a 1D contraction
+  (dot product or squared distance), optional 3D IPA squared-distance bias,
+  optional additive pair bias ``B(i, j)``, optional scale, and optional mask."""
+  if not isinstance(s, IndexMap) or s.ordered or len(s.shape) < 2 or s.scope.owned:
+    return None
+  body = [
+    t for t in s.body if not (isinstance(t, ReleaseScope) and t.scope is s.scope) and not isinstance(t, ir.Comment)
+  ]
+  reds = [k for k, t in enumerate(body) if isinstance(t, IndexReduce)]
+  if len(reds) not in (1, 2):
+    return None
+
+  first_r = reds[0]
+  last_r = reds[-1]
+  before = body[:first_r]
+  between = body[first_r + 1 : last_r] if len(reds) == 2 else []
+  after = body[last_r + 1 :]
+  if any(not isinstance(t, (Assign, Check, ir.Comment)) for t in before):
+    return None
+  if any(not isinstance(t, (Assign, Check, ir.Comment)) for t in between):
+    return None
+  stores = [t for t in after if isinstance(t, Store)]
+  if len(stores) != 1 or any(not isinstance(t, (Assign, Store, ir.Comment)) for t in after):
+    return None
+  store = stores[0]
+  if store.atomic is not None:
+    return None
+
+  expected_idx = row_major_index(s.index, s.shape)
+  local_facts = facts.fork()
+  for t in before + between + after:
+    local_facts.record_stmt(t)
+  if not local_facts.same_expr(store.index, expected_idx):
+    return None
+
+  batch_shape = s.shape[:-2]
+  batch_index = s.index[:-2]
+  m_dim, n_dim = s.shape[-2], s.shape[-1]
+  i_var, j_var = s.index[-2], s.index[-1]
+  s_index_uids = {v.uid for v in s.index}
+
+  base_assigns_1 = [t for t in before if isinstance(t, Assign)]
+  red1 = body[reds[0]]
+  assert isinstance(red1, IndexReduce)
+  c1 = _analyze_red_contraction(red1, i_var, j_var, s_index_uids, base_assigns_1)
+  if c1 is None:
+    return None
+  elt = red1.folds[0].a.type
+  if store.buf.type.elt is not elt:
+    return None
+
+  ipa_xq_stage: TileStage | None = None
+  ipa_xk_stage: TileStage | None = None
+  ipa_c_dim: Expr | None = None
+  ipa_gamma: Expr | None = None
+  sq_result: Var | None = None
+
+  if len(reds) == 1:
+    score_op, k_dim, q_stage, k_stage, dot_result, assign_map, order_map = c1
+    k_uids = {red1.index[0].uid}
+  else:
+    base_assigns_2 = [t for t in before + between if isinstance(t, Assign)]
+    red2 = body[reds[1]]
+    assert isinstance(red2, IndexReduce)
+    c2 = _analyze_red_contraction(red2, i_var, j_var, s_index_uids, base_assigns_2)
+    if c2 is None or red2.folds[0].a.type is not elt:
+      return None
+    if c1[0] == "dot" and c2[0] == "sqdist":
+      score_op, k_dim, q_stage, k_stage, dot_result, assign_map, order_map = c1
+      _, ipa_c_dim, ipa_xq_stage, ipa_xk_stage, sq_result, _, _ = c2
+    elif c2[0] == "dot" and c1[0] == "sqdist":
+      score_op, k_dim, q_stage, k_stage, dot_result, assign_map, order_map = c2
+      _, ipa_c_dim, ipa_xq_stage, ipa_xk_stage, sq_result, _, _ = c1
+    else:
+      return None
+    k_uids = {red1.index[0].uid, red2.index[0].uid}
+    ipa_xq_stage = TileStage(
+      Var("st_xq", ipa_xq_stage.buf.type),
+      (m_dim, ipa_c_dim),
+      ipa_xq_stage.index,
+      ipa_xq_stage.body,
+      ipa_xq_stage.value,
+      Scope("stage"),
+    )
+    ipa_xk_stage = TileStage(
+      Var("st_xk", ipa_xk_stage.buf.type),
+      (n_dim, ipa_c_dim),
+      ipa_xk_stage.index,
+      ipa_xk_stage.body,
+      ipa_xk_stage.value,
+      Scope("stage"),
+    )
+
+  # Fix stage shapes with actual m_dim / n_dim
+  q_stage = TileStage(q_stage.buf, (m_dim, k_dim), q_stage.index, q_stage.body, q_stage.value, Scope("stage"))
+  k_stage = TileStage(k_stage.buf, (n_dim, k_dim), k_stage.index, k_stage.body, k_stage.value, Scope("stage"))
+
+  # Parse epilogue: store.value == [select(mask, core, fill)]
+  outer_assigns = [t for t in before + between + after if isinstance(t, Assign)]
+  outer_assign_map = {t.var.uid: t for t in outer_assigns}
+  outer_order_map = {t.var.uid: idx_o for idx_o, t in enumerate(outer_assigns)}
+  after_vals = {t.var.uid: t.value for t in outer_assigns}
   sv = _resolve_local(store.value, after_vals)
   mask_cond: Expr | None = None
   mask_buf: Var | None = None
@@ -262,7 +358,7 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
   core = sv
   if isinstance(sv, Prim) and sv.op == "select" and len(sv.args) == 3:
     cond_e, then_e, else_e = sv.args
-    if _expr_uses_uids(then_e, {fold.result.uid}) and not _expr_uses_uids(else_e, {fold.result.uid}):
+    if _expr_uses_uids(then_e, {dot_result.uid}) and not _expr_uses_uids(else_e, {dot_result.uid}):
       core = then_e
       mask_fill = else_e
       if isinstance(cond_e, Load) and cond_e.buf.type.elt is Bool:
@@ -275,43 +371,92 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
     else:
       return None
 
-  score_scale: Expr | None = None
-  inner_uids = {i_var.uid, j_var.uid, k_var.uid, *(v.uid for v in batch_index)} | set(assign_map)
-  if core is fold.result:
-    score_scale = None
-  elif isinstance(core, Prim) and core.op == "mul" and len(core.args) == 2:
-    if core.args[0] is fold.result and not _expr_uses_uids(core.args[1], inner_uids):
-      score_scale = core.args[1]
-    elif core.args[1] is fold.result and not _expr_uses_uids(core.args[0], inner_uids):
-      score_scale = core.args[0]
-    else:
-      return None
-  elif isinstance(core, Prim) and core.op == "div" and len(core.args) == 2:
-    if core.args[0] is fold.result and not _expr_uses_uids(core.args[1], inner_uids):
-      score_scale = ops.prim("div", (Const(1.0, fold.a.type), core.args[1]), fold.a.type)
-    else:
-      return None
-  elif isinstance(core, Prim) and core.op == "neg" and len(core.args) == 1 and core.args[0] is fold.result:
-    score_scale = Const(-1.0, fold.a.type)
-  else:
-    return None
+  inner_uids = {i_var.uid, j_var.uid, *k_uids, *(v.uid for v in batch_index)} | set(assign_map)
+  bias_expr: Expr | None = None
 
-  # Ensure mask_fill is scalar loop-invariant
+  # Peel optional additive/subtractive bias and/or IPA sqdist term around dot_result
+  if sq_result is not None:
+    # Expect core == dot_part - gamma * sq_part  (or dot_part + (-gamma) * sq_part), plus optional bias_expr
+    terms: list[tuple[int, Expr]] = []
+
+    def _collect_add_terms(ex: Expr, sign: int) -> None:
+      if isinstance(ex, Prim) and ex.op == "add" and len(ex.args) == 2:
+        _collect_add_terms(ex.args[0], sign)
+        _collect_add_terms(ex.args[1], sign)
+      elif isinstance(ex, Prim) and ex.op == "sub" and len(ex.args) == 2:
+        _collect_add_terms(ex.args[0], sign)
+        _collect_add_terms(ex.args[1], -sign)
+      else:
+        terms.append((sign, ex))
+
+    _collect_add_terms(core, 1)
+    dot_term: tuple[int, Expr] | None = None
+    sq_term: tuple[int, Expr] | None = None
+    extra_bias: list[tuple[int, Expr]] = []
+    for sgn, tm in terms:
+      u_dot = _expr_uses_uids(tm, {dot_result.uid})
+      u_sq = _expr_uses_uids(tm, {sq_result.uid})
+      if u_dot and not u_sq and dot_term is None:
+        dot_term = (sgn, tm)
+      elif u_sq and not u_dot and sq_term is None:
+        sq_term = (sgn, tm)
+      elif not u_dot and not u_sq and is_pure_expr(tm) and not _expr_uses_uids(tm, k_uids):
+        extra_bias.append((sgn, tm))
+      else:
+        return None
+    if dot_term is None or sq_term is None:
+      return None
+    ok_d, sc_d = _parse_scaled_var(dot_term[1], dot_result, inner_uids, elt)
+    ok_s, sc_s = _parse_scaled_var(sq_term[1], sq_result, inner_uids, elt)
+    if not ok_d or not ok_s:
+      return None
+    if dot_term[0] < 0:
+      sc_d = Const(-1.0, elt) if sc_d is None else ops.prim("neg", (sc_d,), elt)
+    score_scale = sc_d
+    # Score formula uses: dot * score_scale - ipa_gamma * sqdist
+    raw_sq = Const(1.0, elt) if sc_s is None else sc_s
+    ipa_gamma = raw_sq if sq_term[0] < 0 else ops.prim("neg", (raw_sq,), elt)
+    for sgn, tm in extra_bias:
+      piece = tm if sgn > 0 else ops.prim("neg", (tm,), elt)
+      bias_expr = piece if bias_expr is None else ops.prim("add", (bias_expr, piece), elt)
+  else:
+    # Single contraction: peel optional + bias / - bias
+    if isinstance(core, Prim) and core.op in ("add", "sub") and len(core.args) == 2:
+      op_ab = core.op
+      a, b = core.args
+      ua = _expr_uses_uids(a, {dot_result.uid})
+      ub = _expr_uses_uids(b, {dot_result.uid})
+      if ua and not ub and is_pure_expr(b) and not _expr_uses_uids(b, k_uids):
+        core = a
+        bias_expr = b if b.type is elt else cast(b, elt)
+        if op_ab == "sub":
+          bias_expr = ops.prim("neg", (bias_expr,), elt)
+      elif op_ab == "add" and ub and not ua and is_pure_expr(a) and not _expr_uses_uids(a, k_uids):
+        core = b
+        bias_expr = a if a.type is elt else cast(a, elt)
+    ok_d, score_scale = _parse_scaled_var(core, dot_result, inner_uids, elt)
+    if not ok_d:
+      return None
+
   if mask_fill is not None and _expr_uses_uids(mask_fill, inner_uids):
     return None
 
-  pre_checks = [t for t in before if isinstance(t, Check)]
+  pre_checks = [t for t in before + between if isinstance(t, Check)]
   for chk in pre_checks:
     if any(_expr_uses_uids(e, inner_uids) for e in (chk.cond, *chk.args)):
       return None
 
-  q_stage = _build_stage(q_expr, (i_var, k_var), (m_dim, k_dim), assign_map, order_map, "q")
-  k_stage = _build_stage(k_expr, (j_var, k_var), (n_dim, k_dim), assign_map, order_map, "k")
+  bias_stage: TileStage | None = None
+  if bias_expr is not None:
+    if _expr_uses_uids(bias_expr, {dot_result.uid} | k_uids | ({sq_result.uid} if sq_result is not None else set())):
+      return None
+    bias_stage = _build_stage(bias_expr, (i_var, j_var), (m_dim, n_dim), outer_assign_map, outer_order_map, "bias")
+
   return _ScoreContraction(
     stmt_idx=idx,
     stmt=s,
     out_buf=store.buf,
-    elt=fold.a.type,
+    elt=elt,
     batch_shape=batch_shape,
     batch_index=batch_index,
     m_dim=m_dim,
@@ -328,6 +473,11 @@ def _match_score_contraction(s: Stmt, idx: int, facts: IndexFacts) -> _ScoreCont
     mask_index=mask_index,
     mask_fill=mask_fill,
     pre_checks=pre_checks,
+    bias_stage=bias_stage,
+    ipa_xq_stage=ipa_xq_stage,
+    ipa_xk_stage=ipa_xk_stage,
+    ipa_c_dim=ipa_c_dim,
+    ipa_gamma=ipa_gamma,
   )
 
 
@@ -525,13 +675,14 @@ def _extract_buf_score_mod(
   expected_idx: Expr,
   facts: IndexFacts,
   inner_uids: set[int],
-) -> tuple[bool, Expr | None, Expr | None, Var | None, Expr | None, Expr | None]:
-  """Match ``e == [select(mask, ] in_buf[expected_idx] [* scale | / denom | neg] [, fill)]``.
-  Returns ``(ok, scale, mask_cond, mask_buf, mask_index, mask_fill)``."""
+) -> tuple[bool, Expr | None, Expr | None, Var | None, Expr | None, Expr | None, Expr | None]:
+  """Match ``e == [select(mask, ] in_buf[expected_idx] [* scale | / denom | neg] [+ bias | - bias] [, fill)]``.
+  Returns ``(ok, scale, mask_cond, mask_buf, mask_index, mask_fill, bias_expr)``."""
   mask_cond: Expr | None = None
   mask_buf: Var | None = None
   mask_index: Expr | None = None
   mask_fill: Expr | None = None
+  bias_expr: Expr | None = None
   core = e
   if isinstance(e, Prim) and e.op == "select" and len(e.args) == 3:
     cond_e, then_e, else_e = e.args
@@ -544,13 +695,26 @@ def _extract_buf_score_mod(
       elif is_pure_expr(cond_e) and not any(isinstance(x, Load) for x in ir.walk_expr(cond_e)):
         mask_cond = cond_e
       else:
-        return (False, None, None, None, None, None)
+        return (False, None, None, None, None, None, None)
     else:
-      return (False, None, None, None, None, None)
+      return (False, None, None, None, None, None, None)
+
+  # Optional additive/subtractive pair bias around the contraction load
+  if isinstance(core, Prim) and core.op in ("add", "sub") and len(core.args) == 2:
+    op_ab = core.op
+    a, b = core.args
+    ua = _expr_uses_uids(a, {in_buf.uid})
+    ub = _expr_uses_uids(b, {in_buf.uid})
+    if ua and not ub and is_pure_expr(b):
+      core = a
+      bias_expr = b if op_ab == "add" else ops.prim("neg", (b,), core.type)
+    elif op_ab == "add" and ub and not ua and is_pure_expr(a):
+      core = b
+      bias_expr = a
 
   scale: Expr | None = None
   if isinstance(core, Load) and core.buf is in_buf and facts.same_expr(core.index, expected_idx):
-    return (True, None, mask_cond, mask_buf, mask_index, mask_fill)
+    return (True, None, mask_cond, mask_buf, mask_index, mask_fill, bias_expr)
   if isinstance(core, Prim) and core.op == "mul" and len(core.args) == 2:
     a, b = core.args
     if (
@@ -560,7 +724,7 @@ def _extract_buf_score_mod(
       and not _expr_uses_uids(b, inner_uids)
     ):
       scale = b
-      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
+      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill, bias_expr)
     if (
       isinstance(b, Load)
       and b.buf is in_buf
@@ -568,7 +732,7 @@ def _extract_buf_score_mod(
       and not _expr_uses_uids(a, inner_uids)
     ):
       scale = a
-      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
+      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill, bias_expr)
   if isinstance(core, Prim) and core.op == "div" and len(core.args) == 2:
     a, b = core.args
     if (
@@ -578,13 +742,13 @@ def _extract_buf_score_mod(
       and not _expr_uses_uids(b, inner_uids)
     ):
       scale = ops.prim("div", (Const(1.0, core.type), b), core.type)
-      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
+      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill, bias_expr)
   if isinstance(core, Prim) and core.op == "neg" and len(core.args) == 1:
     a = core.args[0]
     if isinstance(a, Load) and a.buf is in_buf and facts.same_expr(a.index, expected_idx):
       scale = Const(-1.0, core.type)
-      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill)
-  return (False, None, None, None, None, None)
+      return (True, scale, mask_cond, mask_buf, mask_index, mask_fill, bias_expr)
+  return (False, None, None, None, None, None, None)
 
 
 def _match_row_max_score_mod_map(
@@ -633,13 +797,13 @@ def _match_row_max_score_mod_map(
   fv = _resolve_local(f.value, vals)
   expected_r = row_major_index((*row_idx, red.index[0]), (*batch_shape, m_dim, n_dim))
   inner_uids = {v.uid for v in (*s.index, *red.index)} | set(vals)
-  ok, scale, mc, mb, mi, mf = _extract_buf_score_mod(fv, in_buf, expected_r, f_facts, inner_uids)
+  ok, scale, mc, mb, mi, mf, bias_e = _extract_buf_score_mod(fv, in_buf, expected_r, f_facts, inner_uids)
   if not ok:
     return None
   row_flat = row_major_index(row_idx, (*batch_shape, m_dim))
   if _resolve_local(st.value, vals) is not f.result or not f_facts.same_expr(st.index, row_flat):
     return None
-  return st.buf, scale, mc, mb, mi, mf, row_idx, red.index[0]
+  return st.buf, scale, mc, mb, mi, mf, bias_e, row_idx, red.index[0]
 
 
 def _match_row_sum_exp_score_mod_map(
@@ -975,9 +1139,7 @@ def _match_value_contraction(
 ) -> tuple[Var, Expr, TileStage, tuple[Var, ...]] | None:
   """Match ``IndexMap(*batch, M, D)`` doing ``O[b.., i, d] = reduce_j P[b.., i, j] * V[b.., j, d]``.
   Returns ``(out_buf, d_dim, v_stage, o_batch_index)``."""
-  if (
-    not isinstance(s, IndexMap) or s.ordered or not s.parallel or len(s.shape) != len(batch_shape) + 2 or s.scope.owned
-  ):
+  if not isinstance(s, IndexMap) or s.ordered or len(s.shape) != len(batch_shape) + 2 or s.scope.owned:
     return None
   if not facts.same_shape(s.shape[:-1], (*batch_shape, m_dim)):
     return None
@@ -1114,6 +1276,8 @@ def _maybe_fold_gqa_group(
   """
   if not sc.batch_shape or len(v_batch) != len(sc.batch_index):
     return sc, v_stage, v_batch, []
+  if sc.bias_stage is not None or sc.ipa_xq_stage is not None:
+    return sc, v_stage, v_batch, []
   # Keep Law 5 causal/sliding-window interval pruning intact when masked with symbolic M > 1
   if sc.mask_cond is not None or sc.mask_buf is not None:
     if not (isinstance(sc.m_dim, Const) and int(sc.m_dim.value) == 1):
@@ -1204,10 +1368,13 @@ def _build_flash_monoid_tile(
   b_vars = origin[:-1]
   i_var = origin[-1]
 
-  # Rebind q, k, v stages (and mask expr) onto origin batch vars
+  # Rebind q, k, v stages (and optional bias / IPA stages + mask expr) onto origin batch vars
   q_st = _rebind_stage_batch(sc.q_stage, sc.batch_index, b_vars)
   k_st = _rebind_stage_batch(sc.k_stage, sc.batch_index, b_vars)
   v_st = _rebind_stage_batch(v_stage, v_batch, b_vars)
+  bias_st = None if sc.bias_stage is None else _rebind_stage_batch(sc.bias_stage, sc.batch_index, b_vars)
+  xq_st = None if sc.ipa_xq_stage is None else _rebind_stage_batch(sc.ipa_xq_stage, sc.batch_index, b_vars)
+  xk_st = None if sc.ipa_xk_stage is None else _rebind_stage_batch(sc.ipa_xk_stage, sc.batch_index, b_vars)
 
   # Rebind mask_cond / mask_index to fresh (i_m, j_m) and b_vars
   i_m, j_m = Var("mi", I), Var("mj", I)
@@ -1260,6 +1427,21 @@ def _build_flash_monoid_tile(
   s_val: Expr = s_acc
   if sc.score_scale is not None:
     s_val = ops.prim("mul", (s_val, cast(sc.score_scale, elt)), elt)
+  if xq_st is not None and xk_st is not None and sc.ipa_c_dim is not None and sc.ipa_gamma is not None:
+    c_lp = Var("fc", I)
+    sq_acc = Var("fsq_acc", elt)
+    j_blk.append(Assign(sq_acc, zero_c))
+    c_blk: list[Stmt] = []
+    xqv = _inline_stage(xq_st, (i_var, c_lp), c_blk)
+    xkv = _inline_stage(xk_st, (j_lp, c_lp), c_blk)
+    cdf = Var("fcdf", elt)
+    c_blk.append(Assign(cdf, ops.prim("sub", (xqv, xkv), elt)))
+    c_blk.append(Assign(sq_acc, ops.prim("add", (sq_acc, ops.prim("mul", (cdf, cdf), elt)), elt)))
+    j_blk.append(ForRange(c_lp, ZERO, sc.ipa_c_dim, ONE, c_blk, Scope("loop"), simd=True, reduction=("add", [sq_acc])))
+    s_val = ops.prim("sub", (s_val, ops.prim("mul", (cast(sc.ipa_gamma, elt), sq_acc), elt)), elt)
+  if bias_st is not None:
+    bv = _inline_stage(bias_st, (i_var, j_lp), j_blk)
+    s_val = ops.prim("add", (s_val, cast(bv, elt)), elt)
   if sc.mask_fill is not None and (mask_cond is not None or sc.mask_buf is not None):
     c_cl = Cloner({i_m.uid: i_var, j_m.uid: j_lp})
     if sc.mask_buf is not None and mask_index is not None:
@@ -1326,6 +1508,16 @@ def _build_flash_monoid_tile(
     out_bufs["lse"] = lse_buf
   body.append(ReleaseScope(scope))
 
+  stages: dict[str, TileStage] = {"q": q_st, "k": k_st, "v": v_st}
+  aux_exprs: dict[str, Expr] = {}
+  if bias_st is not None:
+    stages["bias"] = bias_st
+  if xq_st is not None and xk_st is not None and sc.ipa_c_dim is not None and sc.ipa_gamma is not None:
+    stages["xq"] = xq_st
+    stages["xk"] = xk_st
+    aux_exprs["ipa_gamma"] = cast(sc.ipa_gamma, elt)
+    aux_exprs["ipa_c_dim"] = sc.ipa_c_dim
+
   plan = MonoidalTilePlan(
     kind="flash_monoid",
     elt=elt,
@@ -1335,7 +1527,7 @@ def _build_flash_monoid_tile(
     n_dim=sc.n_dim,
     k_dim=sc.k_dim,
     d_dim=d_dim,
-    stages={"q": q_st, "k": k_st, "v": v_st},
+    stages=stages,
     score_op=sc.score_op,
     score_scale=sc.score_scale,
     mask_cond=mask_cond,
@@ -1347,6 +1539,7 @@ def _build_flash_monoid_tile(
     tile_true_guard=tile_true_g,
     tile_origin_vars=tile_ov,
     out_bufs=out_bufs,
+    aux_exprs=aux_exprs,
     split_k=True,
   )
   return IndexTile(
@@ -1358,7 +1551,7 @@ def _build_flash_monoid_tile(
     body=body,
     scope=scope,
     level="shared",
-    parallel=True,
+    parallel=sc.stmt.parallel,
     loc=sc.stmt.loc,
     monoidal_tile=plan,
   )
@@ -1381,7 +1574,7 @@ def _maybe_wrap_flash_decoding(
   grid is small (e.g. autoregressive decode ``M <= 16``, ``N >= 128``), split
   ``N`` across ``S`` parallel blocks computing partial ``(m_p, l_p, O_p)`` and
   combine them via the exact same rescaled monoid ``(+)``."""
-  if target is None or not target.is_gpu:
+  if target is None or not target.is_gpu or sc.bias_stage is not None or sc.ipa_xq_stage is not None:
     return [single_tile]
   sm_count = max(int(getattr(target, "num_compute_units", 0)), 4)
   elt = sc.elt
@@ -1437,6 +1630,9 @@ def _maybe_wrap_flash_decoding(
   q_st = _rebind_stage_batch(sc.q_stage, sc.batch_index, b_vars)
   k_st = _rebind_stage_batch(sc.k_stage, sc.batch_index, b_vars)
   v_st = _rebind_stage_batch(v_stage, v_batch, b_vars)
+  bias_st = None if sc.bias_stage is None else _rebind_stage_batch(sc.bias_stage, sc.batch_index, b_vars)
+  xq_st = None if sc.ipa_xq_stage is None else _rebind_stage_batch(sc.ipa_xq_stage, sc.batch_index, b_vars)
+  xk_st = None if sc.ipa_xk_stage is None else _rebind_stage_batch(sc.ipa_xk_stage, sc.batch_index, b_vars)
 
   i_m, j_m = Var("fdmi", I), Var("fdmj", I)
   m_subst = {a.uid: b for a, b in zip(sc.batch_index, b_vars)}
@@ -1485,6 +1681,21 @@ def _maybe_wrap_flash_decoding(
   s_val: Expr = s_acc
   if sc.score_scale is not None:
     s_val = ops.prim("mul", (s_val, cast(sc.score_scale, elt)), elt)
+  if xq_st is not None and xk_st is not None and sc.ipa_c_dim is not None and sc.ipa_gamma is not None:
+    c_lp = Var("fc", I)
+    sq_acc = Var("fsq_acc", elt)
+    j_blk.append(Assign(sq_acc, zero_c))
+    c_blk: list[Stmt] = []
+    xqv = _inline_stage(xq_st, (i_var, c_lp), c_blk)
+    xkv = _inline_stage(xk_st, (j_lp, c_lp), c_blk)
+    cdf = Var("fcdf", elt)
+    c_blk.append(Assign(cdf, ops.prim("sub", (xqv, xkv), elt)))
+    c_blk.append(Assign(sq_acc, ops.prim("add", (sq_acc, ops.prim("mul", (cdf, cdf), elt)), elt)))
+    j_blk.append(ForRange(c_lp, ZERO, sc.ipa_c_dim, ONE, c_blk, Scope("loop"), simd=True, reduction=("add", [sq_acc])))
+    s_val = ops.prim("sub", (s_val, ops.prim("mul", (cast(sc.ipa_gamma, elt), sq_acc), elt)), elt)
+  if bias_st is not None:
+    bv = _inline_stage(bias_st, (i_var, j_lp), j_blk)
+    s_val = ops.prim("add", (s_val, cast(bv, elt)), elt)
   if sc.mask_fill is not None and (mask_cond is not None or sc.mask_buf is not None):
     c_cl = Cloner({i_m.uid: i_var, j_m.uid: j_lp})
     cond_at: Expr = (
@@ -1812,6 +2023,9 @@ def _build_monoid_lse_tile(
 
   h_st = _rebind_stage_batch(sc.q_stage, sc.batch_index, b_vars)
   w_st = _rebind_stage_batch(sc.k_stage, sc.batch_index, b_vars)
+  bias_st = None if sc.bias_stage is None else _rebind_stage_batch(sc.bias_stage, sc.batch_index, b_vars)
+  xq_st = None if sc.ipa_xq_stage is None else _rebind_stage_batch(sc.ipa_xq_stage, sc.batch_index, b_vars)
+  xk_st = None if sc.ipa_xk_stage is None else _rebind_stage_batch(sc.ipa_xk_stage, sc.batch_index, b_vars)
 
   i_m, j_m = Var("lmi", I), Var("lmj", I)
   m_subst = {a.uid: b for a, b in zip(sc.batch_index, b_vars)}
@@ -1880,6 +2094,21 @@ def _build_monoid_lse_tile(
   s_val: Expr = s_acc
   if sc.score_scale is not None:
     s_val = ops.prim("mul", (s_val, cast(sc.score_scale, elt)), elt)
+  if xq_st is not None and xk_st is not None and sc.ipa_c_dim is not None and sc.ipa_gamma is not None:
+    c_lp = Var("fc", I)
+    sq_acc = Var("fsq_acc", elt)
+    j_blk.append(Assign(sq_acc, zero_c))
+    c_blk: list[Stmt] = []
+    xqv = _inline_stage(xq_st, (i_var, c_lp), c_blk)
+    xkv = _inline_stage(xk_st, (j_lp, c_lp), c_blk)
+    cdf = Var("fcdf", elt)
+    c_blk.append(Assign(cdf, ops.prim("sub", (xqv, xkv), elt)))
+    c_blk.append(Assign(sq_acc, ops.prim("add", (sq_acc, ops.prim("mul", (cdf, cdf), elt)), elt)))
+    j_blk.append(ForRange(c_lp, ZERO, sc.ipa_c_dim, ONE, c_blk, Scope("loop"), simd=True, reduction=("add", [sq_acc])))
+    s_val = ops.prim("sub", (s_val, ops.prim("mul", (cast(sc.ipa_gamma, elt), sq_acc), elt)), elt)
+  if bias_st is not None:
+    bv = _inline_stage(bias_st, (i_var, j_lp), j_blk)
+    s_val = ops.prim("add", (s_val, cast(bv, elt)), elt)
   if sc.mask_fill is not None and (mask_cond is not None or sc.mask_buf is not None):
     c_cl = Cloner({i_m.uid: i_var, j_m.uid: j_lp})
     if sc.mask_buf is not None and mask_index is not None:
@@ -1940,6 +2169,14 @@ def _build_monoid_lse_tile(
   # Only attach GPU monoidal_tile if no target checks or target_buf was extracted cleanly
   gpu_plan: MonoidalTilePlan | None = None
   if mode == "lse" or "target_buf" in aux_exprs:
+    lse_stages: dict[str, TileStage] = {"h": h_st, "w": w_st}
+    if bias_st is not None:
+      lse_stages["bias"] = bias_st
+    if xq_st is not None and xk_st is not None and sc.ipa_c_dim is not None and sc.ipa_gamma is not None:
+      lse_stages["xq"] = xq_st
+      lse_stages["xk"] = xk_st
+      aux_exprs["ipa_gamma"] = cast(sc.ipa_gamma, elt)
+      aux_exprs["ipa_c_dim"] = sc.ipa_c_dim
     gpu_plan = MonoidalTilePlan(
       kind="monoid_lse",
       elt=elt,
@@ -1948,7 +2185,7 @@ def _build_monoid_lse_tile(
       m_dim=sc.m_dim,
       n_dim=sc.n_dim,
       k_dim=sc.k_dim,
-      stages={"h": h_st, "w": w_st},
+      stages=lse_stages,
       score_op=sc.score_op,
       score_scale=sc.score_scale,
       mask_cond=mask_cond,
@@ -1971,7 +2208,7 @@ def _build_monoid_lse_tile(
     body=body,
     scope=scope,
     level="shared",
-    parallel=True,
+    parallel=sc.stmt.parallel,
     loc=sc.stmt.loc,
     monoidal_tile=gpu_plan,
   )
@@ -2150,14 +2387,14 @@ def _fuse_block(
                   fused_done = True
 
       # --- Try Pattern 1A-train: S -> M=max(score_mod(S)) -> L=sum(exp(score_mod(S)-M)) -> P=exp(..)/L -> O=P@V ---
-      if not fused_done and sc.score_scale is None and sc.mask_fill is None:
+      if not fused_done and sc.score_scale is None and sc.mask_fill is None and sc.bias_stage is None:
         tf = walk_facts.fork()
         th1: list[Stmt] = []
         tp1 = _scan_to_next_map(j, tf, th1)
         if tp1 is not None:
           ms = _match_row_max_score_mod_map(block[tp1], sc.out_buf, sc.batch_shape, sc.m_dim, sc.n_dim, tf)
           if ms is not None:
-            m_buf_t, t_scale, t_mc, t_mb, t_mi, t_mf, t_ridx, t_jvar = ms
+            m_buf_t, t_scale, t_mc, t_mb, t_mi, t_mf, t_bias_e, t_ridx, t_jvar = ms
             th2: list[Stmt] = []
             tf2 = tf.fork()
             tp2 = _scan_to_next_map(tp1 + 1, tf2, th2)
@@ -2187,11 +2424,16 @@ def _fuse_block(
                         t_stmts = [block[k], block[tp1], block[tp2], block[tp3], block[tp4]]
                         in_chain = _buf_read_counts(t_stmts, dead_uids)
                         if all(binfo.readers.get(u, 0) == in_chain[u] for u in dead_uids):
-                          # Rebind t_mc / t_mi from (t_ridx, t_jvar) onto (sc.batch_index, sc.i_var, sc.j_var)
+                          # Rebind t_mc / t_mi / t_bias_e from (t_ridx, t_jvar) onto (sc.batch_index, sc.i_var, sc.j_var)
                           r_sub = {a.uid: b for a, b in zip(t_ridx[:-1], sc.batch_index)}
                           r_sub[t_ridx[-1].uid] = sc.i_var
                           r_sub[t_jvar.uid] = sc.j_var
                           r_cl = Cloner(r_sub)
+                          t_bias_st: TileStage | None = None
+                          if t_bias_e is not None:
+                            t_bias_st = _build_stage(
+                              r_cl.expr(t_bias_e), (sc.i_var, sc.j_var), (sc.m_dim, sc.n_dim), {}, {}, "bias"
+                            )
                           sc_mod = _ScoreContraction(
                             stmt_idx=sc.stmt_idx,
                             stmt=sc.stmt,
@@ -2213,6 +2455,7 @@ def _fuse_block(
                             mask_index=None if t_mi is None else r_cl.expr(t_mi),
                             mask_fill=t_mf,
                             pre_checks=sc.pre_checks,
+                            bias_stage=t_bias_st,
                           )
                           for h_st in th1 + th2 + th3 + th4:
                             if isinstance(h_st, ir.Alloc) and h_st.var.uid in dead_uids:

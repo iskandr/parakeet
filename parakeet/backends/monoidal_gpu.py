@@ -117,6 +117,28 @@ def _emit_stage_load_2d(
   lines.append(f"{pad}}}")
 
 
+def _emit_inline_stage_2d(
+  em: CFamilyEmitter,
+  st: TileStage,
+  r_expr: str,
+  c_expr: str,
+  target_var: str,
+  ct: str,
+  idx_t: str,
+  lines: list[str],
+  pad: str,
+) -> None:
+  """Evaluate 2D ``TileStage`` ``st`` inline at ``(r_expr, c_expr)`` into ``target_var``."""
+  lines.append(f"{pad}{ct} {target_var};")
+  lines.append(f"{pad}{{")
+  lines.append(f"{pad}  const {idx_t} {st.index[0].name} = {r_expr};")
+  lines.append(f"{pad}  const {idx_t} {st.index[1].name} = {c_expr};")
+  _emit_decl_locals(em, st.body, {st.index[0].uid, st.index[1].uid}, lines, pad + "  ")
+  em.block(st.body, lines, (len(pad) + 2) // 2)
+  lines.append(f"{pad}  {target_var} = ({ct})({em.expr(st.value)});")
+  lines.append(f"{pad}}}")
+
+
 def _emit_header(
   em: CFamilyEmitter,
   target: str,
@@ -266,6 +288,13 @@ def _generate_flash_monoid(
   lines.append(f"  const {idx_t} pk_row_flat = pk_batch_id * pk_M + pk_gi;")
   if plan.score_scale is not None:
     lines.append(f"  const {ct} pk_scale = ({ct})({em.expr(plan.score_scale)});")
+  has_ipa = (
+    "xq" in plan.stages and "xk" in plan.stages and "ipa_gamma" in plan.aux_exprs and "ipa_c_dim" in plan.aux_exprs
+  )
+  if has_ipa:
+    lines.append(f"  const {ct} pk_ipa_gamma = ({ct})({em.expr(plan.aux_exprs['ipa_gamma'])});")
+    lines.append(f"  const {idx_t} pk_C = ({idx_t})({em.expr(plan.aux_exprs['ipa_c_dim'])});")
+  has_bias = "bias" in plan.stages
   if plan.mask_fill is not None:
     lines.append(f"  const {ct} pk_mfill = ({ct})({em.expr(plan.mask_fill)});")
 
@@ -505,6 +534,18 @@ def _generate_flash_monoid(
   lines.append("        pk_sv = pk_s_acc[pk_c];")
   if plan.score_scale is not None:
     lines.append("        pk_sv *= pk_scale;")
+  if has_ipa:
+    lines.append(f"        {ct} pk_sq = {zero_lit};")
+    lines.append(f"        for ({idx_t} pk_cc = 0; pk_cc < pk_C; ++pk_cc) {{")
+    _emit_inline_stage_2d(em, plan.stages["xq"], "pk_gi", "pk_cc", "pk_xqv", ct, idx_t, lines, "          ")
+    _emit_inline_stage_2d(em, plan.stages["xk"], "pk_gj", "pk_cc", "pk_xkv", ct, idx_t, lines, "          ")
+    lines.append(f"          const {ct} pk_df = pk_xqv - pk_xkv;")
+    lines.append("          pk_sq += pk_df * pk_df;")
+    lines.append("        }")
+    lines.append("        pk_sv -= pk_ipa_gamma * pk_sq;")
+  if has_bias:
+    _emit_inline_stage_2d(em, plan.stages["bias"], "pk_gi", "pk_gj", "pk_bv", ct, idx_t, lines, "        ")
+    lines.append("        pk_sv += pk_bv;")
   if has_mask_buf:
     lines.append("        if (!pk_sh_mask[pk_r * 32 + pk_jc]) pk_sv = pk_mfill;")
   elif has_mask_cond:
@@ -692,6 +733,13 @@ def _generate_flash_monoid_bwd(
   lines.append(f"  const {idx_t} pk_jrow_flat = pk_batch_id * pk_N + pk_gj;")
   if plan.score_scale is not None:
     lines.append(f"  const {ct} pk_scale = ({ct})({em.expr(plan.score_scale)});")
+  has_ipa = (
+    "xq" in plan.stages and "xk" in plan.stages and "ipa_gamma" in plan.aux_exprs and "ipa_c_dim" in plan.aux_exprs
+  )
+  if has_ipa:
+    lines.append(f"  const {ct} pk_ipa_gamma = ({ct})({em.expr(plan.aux_exprs['ipa_gamma'])});")
+    lines.append(f"  const {idx_t} pk_C = ({idx_t})({em.expr(plan.aux_exprs['ipa_c_dim'])});")
+  has_bias = "bias" in plan.stages
   if plan.mask_fill is not None:
     lines.append(f"  const {ct} pk_mfill = ({ct})({em.expr(plan.mask_fill)});")
 
@@ -706,6 +754,15 @@ def _generate_flash_monoid_bwd(
   act_q = int(plan.aux_exprs["active_q"].value) if isinstance(plan.aux_exprs.get("active_q"), ir.Const) else 1
   act_k = int(plan.aux_exprs["active_k"].value) if isinstance(plan.aux_exprs.get("active_k"), ir.Const) else 1
   act_v = int(plan.aux_exprs["active_v"].value) if isinstance(plan.aux_exprs.get("active_v"), ir.Const) else 1
+  act_b = int(plan.aux_exprs["active_b"].value) if isinstance(plan.aux_exprs.get("active_b"), ir.Const) else 0
+  act_xq = int(plan.aux_exprs["active_xq"].value) if isinstance(plan.aux_exprs.get("active_xq"), ir.Const) else 0
+  act_xk = int(plan.aux_exprs["active_xk"].value) if isinstance(plan.aux_exprs.get("active_xk"), ir.Const) else 0
+  db_buf = plan.out_bufs.get("db")
+  dxq_buf = plan.out_bufs.get("dxq")
+  dxk_buf = plan.out_bufs.get("dxk")
+  if has_bias:
+    bs_expr = plan.aux_exprs.get("bias_sign", ir.Const(1.0, elt))
+    lines.append(f"  const {ct} pk_bsign = ({ct})({em.expr(bs_expr)});")
 
   s_pad = MONOID_BM + 1
   k_pad = MONOID_BK + 1
@@ -1010,6 +1067,18 @@ def _generate_flash_monoid_bwd(
   lines.append("        " + ct + " pk_sv = pk_s_acc[pk_c];")
   if plan.score_scale is not None:
     lines.append("        pk_sv *= pk_scale;")
+  if has_ipa:
+    lines.append(f"        {ct} pk_sq = {zero_lit};")
+    lines.append(f"        for ({idx_t} pk_cc = 0; pk_cc < pk_C; ++pk_cc) {{")
+    _emit_inline_stage_2d(em, plan.stages["xq"], "pk_gi", "pk_cc", "pk_xqv", ct, idx_t, lines, "          ")
+    _emit_inline_stage_2d(em, plan.stages["xk"], "pk_gj", "pk_cc", "pk_xkv", ct, idx_t, lines, "          ")
+    lines.append(f"          const {ct} pk_df = pk_xqv - pk_xkv;")
+    lines.append("          pk_sq += pk_df * pk_df;")
+    lines.append("        }")
+    lines.append("        pk_sv -= pk_ipa_gamma * pk_sq;")
+  if has_bias:
+    _emit_inline_stage_2d(em, plan.stages["bias"], "pk_gi", "pk_gj", "pk_bv", ct, idx_t, lines, "        ")
+    lines.append("        pk_sv += pk_bsign * pk_bv;")
   lines.append("        bool pk_keep = true;")
   if has_mask_buf:
     lines.append("        pk_keep = (pk_sh_mask[pk_r * 32 + pk_ic] != 0);")
@@ -1023,7 +1092,35 @@ def _generate_flash_monoid_bwd(
     lines.append("        if (!pk_keep) pk_sv = pk_mfill;")
   lines.append(f"        pk_pv = {expf}(pk_sv - pk_sh_lse[pk_ic]);")
   lines.append("        if (pk_keep) {")
-  lines.append("          pk_dsv = pk_pv * (pk_dp_acc[pk_c] - pk_sh_d[pk_ic]);")
+  lines.append(f"          const {ct} pk_dsu = pk_pv * (pk_dp_acc[pk_c] - pk_sh_d[pk_ic]);")
+  if act_b and db_buf is not None:
+    lines.append(f"          {em.data(db_buf)}[(pk_batch_id * pk_M + pk_gi) * pk_N + pk_gj] = pk_bsign * pk_dsu;")
+  if has_ipa and ((act_xq and dxq_buf is not None) or (act_xk and dxk_buf is not None)):
+    lines.append(f"          const {ct} pk_dc_coef = ({_lit(-2.0, elt, is_cuda)} * pk_ipa_gamma) * pk_dsu;")
+    lines.append(f"          for ({idx_t} pk_cc = 0; pk_cc < pk_C; ++pk_cc) {{")
+    _emit_inline_stage_2d(em, plan.stages["xq"], "pk_gi", "pk_cc", "pk_xqv2", ct, idx_t, lines, "            ")
+    _emit_inline_stage_2d(em, plan.stages["xk"], "pk_gj", "pk_cc", "pk_xkv2", ct, idx_t, lines, "            ")
+    lines.append(f"            const {ct} pk_gc = pk_dc_coef * (pk_xqv2 - pk_xkv2);")
+    if act_xq and dxq_buf is not None:
+      _emit_atomic_add(
+        is_cuda,
+        f"&{em.data(dxq_buf)}[(pk_batch_id * pk_M + pk_gi) * pk_C + pk_cc]",
+        "pk_gc",
+        elt,
+        lines,
+        "            ",
+      )
+    if act_xk and dxk_buf is not None:
+      _emit_atomic_add(
+        is_cuda,
+        f"&{em.data(dxk_buf)}[(pk_batch_id * pk_N + pk_gj) * pk_C + pk_cc]",
+        "-pk_gc",
+        elt,
+        lines,
+        "            ",
+      )
+    lines.append("          }")
+  lines.append("          pk_dsv = pk_dsu;")
   if plan.score_scale is not None:
     lines.append("          pk_dsv *= pk_scale;")
   lines.append("        }")
@@ -1313,6 +1410,13 @@ def _generate_monoid_lse(
   lines.append(f"  const {idx_t} pk_row_flat = pk_batch_id * pk_M + pk_gi;")
   if plan.score_scale is not None:
     lines.append(f"  const {ct} pk_scale = ({ct})({em.expr(plan.score_scale)});")
+  has_ipa = (
+    "xq" in plan.stages and "xk" in plan.stages and "ipa_gamma" in plan.aux_exprs and "ipa_c_dim" in plan.aux_exprs
+  )
+  if has_ipa:
+    lines.append(f"  const {ct} pk_ipa_gamma = ({ct})({em.expr(plan.aux_exprs['ipa_gamma'])});")
+    lines.append(f"  const {idx_t} pk_C = ({idx_t})({em.expr(plan.aux_exprs['ipa_c_dim'])});")
+  has_bias = "bias" in plan.stages
 
   k_pad = MONOID_BK + 1
   s_pad = MONOID_BN + 1
@@ -1415,6 +1519,18 @@ def _generate_monoid_lse(
   lines.append("        pk_sv = pk_s_acc[pk_c];")
   if plan.score_scale is not None:
     lines.append("        pk_sv *= pk_scale;")
+  if has_ipa:
+    lines.append(f"        {ct} pk_sq = {zero_lit};")
+    lines.append(f"        for ({idx_t} pk_cc = 0; pk_cc < pk_C; ++pk_cc) {{")
+    _emit_inline_stage_2d(em, plan.stages["xq"], "pk_gi", "pk_cc", "pk_xqv", ct, idx_t, lines, "          ")
+    _emit_inline_stage_2d(em, plan.stages["xk"], "pk_gj", "pk_cc", "pk_xkv", ct, idx_t, lines, "          ")
+    lines.append(f"          const {ct} pk_df = pk_xqv - pk_xkv;")
+    lines.append("          pk_sq += pk_df * pk_df;")
+    lines.append("        }")
+    lines.append("        pk_sv -= pk_ipa_gamma * pk_sq;")
+  if has_bias:
+    _emit_inline_stage_2d(em, plan.stages["bias"], "pk_gi", "pk_gj", "pk_bv", ct, idx_t, lines, "        ")
+    lines.append("        pk_sv += pk_bv;")
   if has_target:
     lines.append("        if (pk_gj == pk_sh_tgt[pk_r]) pk_sh_pick[pk_r] = pk_sv;")
   lines.append(f"        pk_lmax = {fmax}(pk_lmax, pk_sv);")
