@@ -107,6 +107,35 @@ def test_extrema_value_reuse_cpu(backend):
     assert int(im) == 1
     assert float(vm) == -999.0
 
+    # Narrowing cast MUST NOT drop bounds check or treat wrapped index as alias
+    @pk.jit
+    def _narrow_cast_argmax(arr):
+      j = np.uint8(np.argmax(arr))
+      return arr[j]
+
+    big = np.arange(300, dtype=np.float32)
+    big[260] = np.float32(999.0)
+    assert float(_narrow_cast_argmax(big)) == float(big[4])
+
+    # Aliased parameter mutation MUST NOT reuse stale best value
+    @pk.jit
+    def _aliased_argmax_mutate(a, b):
+      i = np.argmax(a)
+      b[i] = np.float32(-999.0)
+      return a[i]
+
+    buf = np.array([1.0, 5.0, 2.0], dtype=np.float32)
+    assert float(_aliased_argmax_mutate(buf, buf)) == -999.0
+
+    # Reassigned alias MUST NOT reuse stale best value
+    @pk.jit
+    def _reassigned_argmax(arr):
+      i = np.argmax(arr)
+      i = np.int64(0)
+      return arr[i]
+
+    assert float(_reassigned_argmax(x)) == 1.0
+
     # Empty array still raises ValueError
     with pytest.raises(ValueError):
       _argmax_and_val(np.array([], dtype=np.float32))

@@ -1070,6 +1070,8 @@ def _replace_var_in_block(block: list, old_uid: int, new_var: Var) -> None:
         s.err,
         tuple(_replace_var_in_expr(a, old_uid, new_var) for a in s.args),
       )
+    elif isinstance(s, Alloc):
+      s.count = _replace_var_in_expr(s.count, old_uid, new_var)
     elif isinstance(s, If):
       s.cond = _replace_var_in_expr(s.cond, old_uid, new_var)
       _replace_var_in_block(s.then, old_uid, new_var)
@@ -1099,12 +1101,16 @@ def _count_var_in_stmts(stmts: list, uid: int) -> int:
   return n
 
 
-def sink_gpu_scalar_loads(fn: ir.Function) -> None:
+def sink_gpu_scalar_loads(fn: ir.Function, target=None) -> None:
   """Move host scalar loads ``v = buf[idx]`` into consuming GPU ``ParLoop``s when
   every use of ``v`` is inside those loops and ``buf`` is not mutated in between.
 
   Prevents unnecessary host-side buffer downloads for scalars like
   ``g_tot = g_left[nbins - 1]`` or ``x - x[-1]``."""
+  from .analysis import BufferInfo
+
+  binfo = BufferInfo.analyze(fn)
+  max_bufs = 28 if (target is not None and getattr(target, "name", None) == "metal") else None
   def_count: dict[int, int] = {}
   use_count: dict[int, int] = {}
   for s in ir.walk_stmts(fn.body):
@@ -1144,17 +1150,29 @@ def sink_gpu_scalar_loads(fn: ir.Function) -> None:
     return True
 
   def _touches_buf_or_impure(st: ir.Stmt, buf_uid: int) -> bool:
+    written: set[int] = set()
     for sub in ir.walk_stmts([st]):
-      if isinstance(sub, Store) and sub.buf.uid == buf_uid:
-        return True
-      if isinstance(sub, ir.Release) and sub.var.uid == buf_uid:
-        return True
-      if isinstance(sub, Assign) and any(
+      if isinstance(sub, Store):
+        written.add(sub.buf.uid)
+      elif isinstance(sub, ir.Release):
+        written.add(sub.var.uid)
+      elif isinstance(sub, Assign) and any(
         isinstance(x, RtCall) and not x.pure and x.name not in ("num_chunks", "num_threads", "rng_key")
         for x in ir.walk_expr(sub.value)
       ):
         return True
-    return False
+    return bool(written) and binfo.may_alias({buf_uid}, written)
+
+  def _loop_buf_uids(pl: ParLoop) -> set[int]:
+    uids: set[int] = set()
+    for sub in ir.walk_stmts(pl.body):
+      if isinstance(sub, Store):
+        uids.add(sub.buf.uid)
+      for e in ir.stmt_exprs(sub):
+        for x in ir.walk_expr(e):
+          if isinstance(x, Var) and isinstance(x.type, BufType):
+            uids.add(x.uid)
+    return uids
 
   def walk_block(block: list) -> None:
     for s in block:
@@ -1191,6 +1209,8 @@ def sink_gpu_scalar_loads(fn: ir.Function) -> None:
             consumers.append(nxt)
             covered += body_uses
       if consumers and covered == use_count[v.uid]:
+        if max_bufs is not None and any(len(_loop_buf_uids(pl) | {buf.uid}) > max_bufs for pl in consumers):
+          continue
         drop.add(i)
         for pl in consumers:
           local_v = Var(v.name, v.type)
@@ -1206,7 +1226,7 @@ def lower(fn: ir.Function, target=None) -> None:
   """Replace every operator statement of ``fn`` by loops."""
   fn.body[:] = lower_block(fn.body, pure_defs(fn.body), fn.scope, target)
   if target is not None and target.is_gpu:
-    sink_gpu_scalar_loads(fn)
+    sink_gpu_scalar_loads(fn, target)
 
 
 __all__ = [

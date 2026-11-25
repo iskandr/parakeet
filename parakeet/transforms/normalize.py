@@ -34,7 +34,7 @@ from ..syntax.ir import (
   Var,
 )
 from ..syntax.ops import ZERO, cast, cmp, iprod
-from .analysis import IndexFacts, is_pure_expr
+from .analysis import BufferInfo, IndexFacts, is_pure_expr
 
 
 def _ekey(e: Expr):
@@ -263,7 +263,7 @@ def _is_inbounds_check_for(cond: Expr, aliases: set[int], shape_k) -> bool:
   return _ekey(hi.args[1]) == shape_k
 
 
-def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
+def reuse_extrema_values(block: list[ir.Stmt], binfo: BufferInfo | None = None) -> tuple[list[ir.Stmt], bool]:
   """Replace ``f(arg)`` after a pure 1-D ``argmin``/``argmax`` reduction ``(best, arg)``
   with ``best`` and drop the redundant bounds check on ``arg``.
 
@@ -297,9 +297,14 @@ def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
     if impure:
       active.clear()
       return
-    active[:] = [
-      rec for rec in active if not (rec["read_bufs"] & written_bufs) and not (rec["read_vars"] & written_vars)
-    ]
+    kept = []
+    for rec in active:
+      buf_conflict = (
+        binfo.may_alias(rec["read_bufs"], written_bufs) if binfo is not None else bool(rec["read_bufs"] & written_bufs)
+      )
+      if not buf_conflict and not (rec["read_vars"] & written_vars):
+        kept.append(rec)
+    active[:] = kept
 
   for s in block:
     if isinstance(s, IndexReduce):
@@ -319,6 +324,7 @@ def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
         if pure_body:
           idx_v = s.index[0]
           shape_k = _ekey(s.shape[0])
+          shape_vars = {x.uid for x in ir.walk_expr(s.shape[0]) if isinstance(x, Var)}
           for f in s.folds:
             if f.op in ("argmin", "argmax") and f.init is None and f.empty is not None and len(f.carries) == 1:
               cy = f.carries[0]
@@ -330,6 +336,7 @@ def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
                 if is_pure_expr(val_expr):
                   rbufs = {x.buf.uid for x in ir.walk_expr(val_expr) if isinstance(x, Load)}
                   rvars = {x.uid for x in ir.walk_expr(val_expr) if isinstance(x, Var) and x.uid != idx_v.uid}
+                  rvars |= shape_vars
                   active.append(
                     {
                       "idx_uid": idx_v.uid,
@@ -350,12 +357,19 @@ def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
 
     if active and isinstance(s, Assign):
       val = s.value
-      # Track pure copies / integer casts / negative-index wraps of arg
+      # Track pure copies / non-narrowing integer casts / negative-index wraps of arg
       for rec in active:
         aliases = rec["aliases"]
         if isinstance(val, Var) and val.uid in aliases:
           aliases.add(s.var.uid)
-        elif isinstance(val, ir.Cast) and isinstance(val.arg, Var) and val.arg.uid in aliases and val.type.kind in "iu":
+        elif (
+          isinstance(val, ir.Cast)
+          and isinstance(val.arg, Var)
+          and val.arg.uid in aliases
+          and val.type.kind in "iu"
+          and val.arg.type.kind in "iu"
+          and val.type.bits >= val.arg.type.bits
+        ):
           aliases.add(s.var.uid)
         elif (
           isinstance(val, ir.Prim)
@@ -376,6 +390,8 @@ def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
           and val.args[2].uid in aliases
         ):
           aliases.add(s.var.uid)
+        else:
+          aliases.discard(s.var.uid)
       # Replace re-evaluation of the reduced expression at arg with best_var
       replaced = False
       for rec in active:
@@ -396,17 +412,19 @@ def reuse_extrema_values(block: list[ir.Stmt]) -> tuple[list[ir.Stmt], bool]:
   return out, changed
 
 
-def normalize_block(block: list[ir.Stmt], facts: IndexFacts) -> tuple[list[ir.Stmt], bool]:
+def normalize_block(
+  block: list[ir.Stmt], facts: IndexFacts, binfo: BufferInfo | None = None
+) -> tuple[list[ir.Stmt], bool]:
   """Recursively normalize every operator in ``block``."""
   changed = False
-  block, reused = reuse_extrema_values(block)
+  block, reused = reuse_extrema_values(block, binfo)
   changed |= reused
   local = facts.fork()
   out: list[ir.Stmt] = []
   for s in block:
     local.record_stmt(s)
     for b in ir.sub_blocks(s):
-      b[:], inner = normalize_block(b, local)
+      b[:], inner = normalize_block(b, local, binfo)
       changed |= inner
     if isinstance(s, IndexMap):
       squeezed = squeeze_unit_map(s)
@@ -460,7 +478,7 @@ def normalize(fn: ir.Function, options) -> None:
   if not options.fusion:
     return
   for _ in range(3):
-    fn.body[:], changed = normalize_block(fn.body, IndexFacts.from_function(fn))
+    fn.body[:], changed = normalize_block(fn.body, IndexFacts.from_function(fn), BufferInfo.analyze(fn))
     if not changed:
       break
 
